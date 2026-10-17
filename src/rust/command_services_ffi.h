@@ -11,6 +11,7 @@
 #include "command_cost_ffi.h"
 struct OpenTTDCommandServices {
 	void (*landscape_clear)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept;
+	void (*ensure_no_vehicle)(OpenTTDCommandCost *, uint32_t) noexcept;
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
 #endif /* RUST_COMMAND_SERVICES_FFI_H */

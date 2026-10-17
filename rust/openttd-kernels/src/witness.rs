@@ -405,8 +405,11 @@ pub const TOWN_ENTRIES: usize = 180;
 /// `town.no_cities` witness: generation with `larger_towns == 0`.
 pub const TOWN_NO_CITIES: usize = 181;
 
+/// First landscape ownership branch counter.
+pub const LANDSCAPE: usize = 182;
+
 /// Counter names, grouped by the prefix the harness selects.
-pub const NAMES: [&str; 182] = [
+pub const NAMES: [&str; 208] = [
     "train.tick_first",
     "train.tick_second",
     "train.reversal",
@@ -589,6 +592,32 @@ pub const NAMES: [&str; 182] = [
     "town.name_set",
     "town.entries",
     "town.no_cities",
+    "landscape.snow_start",
+    "landscape.snow_change",
+    "landscape.snow_clear",
+    "landscape.desert",
+    "landscape.field_fence",
+    "landscape.field_cycle",
+    "landscape.field_orphan",
+    "landscape.rail_ground",
+    "landscape.roadside",
+    "landscape.road_work_start",
+    "landscape.road_work_end",
+    "landscape.road_remove",
+    "landscape.tunnel_ground",
+    "landscape.flood_success",
+    "landscape.flood_fail",
+    "landscape.dry_coast",
+    "landscape.dry_rail",
+    "landscape.dry_tree",
+    "landscape.wakeup",
+    "landscape.half_rail_remove",
+    "landscape.half_rail",
+    "landscape.bridge_start",
+    "landscape.bridge_end",
+    "landscape.airport_member",
+    "landscape.vehicle_crash",
+    "landscape.crashed_skip",
 ];
 
 static ENABLED: AtomicBool = AtomicBool::new(false);

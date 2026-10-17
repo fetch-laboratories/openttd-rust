@@ -8,6 +8,7 @@
 /** @file industry_ffi.h Canonical industry storage and periodic control. */
 #ifndef RUST_INDUSTRY_FFI_H
 #define RUST_INDUSTRY_FFI_H
+#include "command_services_ffi.h"
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -142,7 +143,6 @@ typedef struct OpenTTDIndustryServices {
 	uint8_t (*snow_line)(void) OPENTTD_INDUSTRY_NOEXCEPT;
 	void (*make_field)(uint32_t tile, uint8_t field_type, uint8_t counter, uint16_t industry) OPENTTD_INDUSTRY_NOEXCEPT;
 	bool (*fence_wanted)(uint32_t tile, uint8_t side) OPENTTD_INDUSTRY_NOEXCEPT;
-	void (*set_fence)(uint32_t tile, uint8_t side, uint8_t type) OPENTTD_INDUSTRY_NOEXCEPT;
 	bool (*tile_completed)(void *industry, uint32_t tile) OPENTTD_INDUSTRY_NOEXCEPT;
 	void (*harvest)(uint32_t tile) OPENTTD_INDUSTRY_NOEXCEPT;
 	/* Monthly, daily, builder and command entries. */
@@ -374,7 +374,6 @@ typedef struct OpenTTDIndustryTileServices {
 	uint16_t (*industry_index)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	uint8_t (*toffee_offset)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	bool (*on_water)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
-	void (*water_loop)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	bool (*transport)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	uint16_t (*anim_production)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	uint16_t (*anim_next)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT;
@@ -425,8 +424,7 @@ typedef struct OpenTTDIndustryTransactionServices {
 	uint32_t (*edge_distance)(uint32_t, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	uint8_t (*refinery_limit)(void) OPENTTD_INDUSTRY_NOEXCEPT;
 	uint32_t (*tile_height)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
-	bool (*has_water_class)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
-	void (*ensure_no_vehicle)(OpenTTDIndustryCost *, uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
+	const OpenTTDCommandServices *command_checks;
 	void (*set_company)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	/* Owner/context live on the Rust stack; visit and resolver cannot retain them. */
 	void (*temporary_shell)(OpenTTDIndustry *, void *, OpenTTDIndustryTemporaryVisit) OPENTTD_INDUSTRY_NOEXCEPT;

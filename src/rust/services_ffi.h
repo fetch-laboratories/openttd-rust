@@ -12,7 +12,18 @@
 #include <type_traits>
 #include "station_ffi.h"
 
-/* Immutable function table. All functions are noexcept and cannot reenter Rust.
+/* Allocation-derived base array address, never a reference to tile zero's byte.
+ * Only an audited serialized entry may retain it. It expires before map reset or
+ * mutex yield. Raw reads consume only type@0 of each actual eight-byte base tile;
+ * C++ owns allocation/construction/reset/destruction and every write. */
+struct OpenTTDTileTypeAllocation {
+	const uint8_t *base;
+	uint32_t count;
+};
+OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
+
+/* Immutable function table. All functions are noexcept; world operations may
+ * reenter Rust owners after the caller ends its world/owner accesses.
  * Context may be null in the game; test fixtures supply their own world.
  * No Rust references into the map/pools survive calls. Output is call-scoped.
  * Map predicates take a TileIndex value and return the original accessor's
@@ -22,6 +33,11 @@
  * Industry query returns 0 not industry,1 industry,2 bubble catcher and writes
  * TileVirtXY(x,y). It observes only type and industry graphics.
  * An environmental exception terminates rather than unwinding through Rust. */
+enum ClearGround : uint8_t;
+enum TreeGround : uint8_t;
+enum Slope : uint8_t;
+enum DiagDirection : uint8_t;
+struct OpenTTDFoundationSlope { int32_t z; Slope slope; };
 struct OpenTTDTownHandle; // Opaque native Town shell; never dereferenced in Rust.
 struct OpenTTDTownState;
 struct OpenTTDSharedServices {
@@ -85,8 +101,20 @@ struct OpenTTDSharedServices {
 	int32_t (*economy_date)() noexcept;
 	int32_t (*calendar_date)() noexcept;
 	int32_t (*slope)(int32_t, int32_t) noexcept;
+	ClearGround (*clear_ground)(uint32_t) noexcept;
+	TreeGround (*tree_ground)(uint32_t) noexcept;
+	void (*make_snow)(uint32_t, uint32_t) noexcept;
+	void (*make_shore)(uint32_t) noexcept;
+	void (*tile_loop_water)(uint32_t) noexcept; ///< Native TileLoop_Water; may reenter Rust owners.
+	void (*play_sound)(uint32_t, uint16_t) noexcept;
+	OpenTTDFoundationSlope (*foundation)(uint32_t) noexcept;
+	void (*set_fence)(uint32_t, DiagDirection, uint32_t) noexcept;
+	bool (*has_water_class)(uint32_t) noexcept;
 };
 const OpenTTDSharedServices &GetRustSharedServices() noexcept;
+/* Shared reader ABI used by default allocation/layout/oracle tests, not game
+ * dispatch. Zero count selects the existing callback backend. No pointer retained. */
+extern "C" uint8_t openttd_rust_shared_tile_type(OpenTTDTileTypeAllocation, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
 /** Shared save/reseed/restore of BOTH original RNG streams. */
 struct OpenTTDRandomSeeds { uint32_t random[2], interactive[2]; };
 struct OpenTTDRandomServices {
@@ -201,6 +229,15 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.economy_date = OpenTTDFixtureMapService<int32_t>,
 		.calendar_date = OpenTTDFixtureMapService<int32_t>,
 		.slope = OpenTTDFixtureMapService<int32_t, int32_t, int32_t>,
+		.clear_ground = OpenTTDFixtureMapService<ClearGround, uint32_t>,
+		.tree_ground = OpenTTDFixtureMapService<TreeGround, uint32_t>,
+		.make_snow = OpenTTDFixtureMapService<void, uint32_t, uint32_t>,
+		.make_shore = OpenTTDFixtureMapService<void, uint32_t>,
+		.tile_loop_water = OpenTTDFixtureMapService<void, uint32_t>,
+		.play_sound = OpenTTDFixtureMapService<void, uint32_t, uint16_t>,
+		.foundation = OpenTTDFixtureMapService<OpenTTDFoundationSlope, uint32_t>,
+		.set_fence = OpenTTDFixtureMapService<void, uint32_t, DiagDirection, uint32_t>,
+		.has_water_class = OpenTTDFixtureMapService<bool, uint32_t>,
 	};
 }
 #endif /* RUST_SERVICES_FFI_H */

@@ -4037,8 +4037,15 @@ static TrackStatus GetTileTrackStatus_Station(TileIndex tile, TransportType mode
 }
 
 
+#ifdef WITH_RUST
+static void TileLoop_Station(uint32_t tile_index) noexcept
+#else
 static void TileLoop_Station(TileIndex tile)
+#endif
 {
+#ifdef WITH_RUST
+	const TileIndex tile{tile_index};
+#endif
 	auto *st = BaseStation::GetByTile(tile);
 	switch (GetStationType(tile)) {
 		case StationType::Airport:

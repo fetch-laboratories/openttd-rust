@@ -510,6 +510,36 @@ settings cases spanning all four climates and selected terrain, smoothness, vari
 height and map-shape values. Maximum-map performance and Windows/macOS runtime parity remain
 untested.
 
+### Landscape scheduler, ground and flooding
+
+The #212 owner ([PR #255](https://github.com/fetch-laboratories/openttd-rust/pull/255))
+controls `RunTileLoop`, clear/rail/road/tunnel ground evolution, flooding behaviour,
+half-tile rail removal, dry-up, neighbour wakeups and live flood-victim traversal.
+The process-global saved cursor commits after the complete source batch; DATE,
+legacy loading, reset and zero repair retain their widths/order. Original selected
+bodies compile only without `WITH_RUST`; packed map/pool storage remains native.
+
+The in-entry LFSR keeps native unsigned map-log widths and reads each live type
+byte from audited allocation metadata. All seven Rust tile owners dispatch directly,
+void tiles straight to the water owner, which reuses the dispatched type and reader
+and derives `IsValidTile` from the map size; only house/station/object have native
+scalar handlers with local strong-index construction. Leaves shared by several
+owners (clear/tree ground, snow, shore, water loop, sound, foundation) live in the
+shared table. Ground boundaries use actual native enums, unrestricted transparent
+Rust carriers, exact counters and typed station handles. Legacy protocols adapt
+explicitly. Each native entry owns independent lazy stack command-result storage.
+No hot call allocates a protocol object or copies a complete native tile/vehicle.
+Vehicle iterators advance after crash/events/news/effects; airport membership,
+bridge endpoint order and company restoration follow source. No ordinary tick
+callback unwinds; generation-progress cancellation stays outside tick.
+
+`verify`, the default scheduler comparison and `simulate landscape roads-flooding`
+exercise real ABI calls, declared endpoints and required named branch witnesses;
+`--self`/`--soak` extend evidence. Missing witnesses fail. The unchanged scheduler
+probe covers dimensions/cursor/reentry phases unreachable through ordinary saves.
+Remaining matrix/editor/NewGRF/threaded gaps are in #156. `TreeObservation` remains;
+the scheduler gate does not remove its full facade cost.
+
 ### Landscape partial-pixel height
 
 `GetPartialPixelZ`, the scalar landscape height kernel, runs in Rust behind its

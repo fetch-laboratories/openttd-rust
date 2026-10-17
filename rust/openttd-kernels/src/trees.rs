@@ -228,7 +228,7 @@ pub struct Command {
 }
 
 /// Tree services. Reads are pure. Writes are the named `tree_map.h`/`clear_map.h`
-/// functions. `tile_loop_water`, `ambient` and `landscape_clear` can reenter tree
+/// functions. Shared `tile_loop_water`, `ambient` and `landscape_clear` can reenter tree
 /// entries; `ambient` returns whether its `NewGRF` callback ran. `progress` and
 /// `progress_total` return true when world generation was aborted; C++ then holds
 /// the exception and rethrows it after the entry returns.
@@ -247,12 +247,8 @@ pub struct TreeServices {
     pub add_growth: extern "C" fn(u32, i32),
     pub set_growth: extern "C" fn(u32, u8),
     pub make_clear: extern "C" fn(u32, u8, u32),
-    pub make_shore: extern "C" fn(u32),
-    pub make_snow: extern "C" fn(u32, u32),
     pub clear_neighbour_flooding: extern "C" fn(u32),
-    pub tile_loop_water: extern "C" fn(u32),
     pub ambient: extern "C" fn(u32) -> bool,
-    pub play_sound: extern "C" fn(u32, u16),
     pub progress: extern "C" fn() -> bool,
     pub progress_total: extern "C" fn(u32) -> bool,
     pub clear_square: extern "C" fn(u32),
@@ -621,7 +617,7 @@ impl Trees<'_> {
             ZONE_RAINFOREST => {
                 let r = self.random();
                 if chance16_i(1, 200, r) && s.ambient {
-                    (self.t.play_sound)(tile, RAINFOREST_SOUNDS[((r >> 16) & 3) as usize]);
+                    (self.s.play_sound)(tile, RAINFOREST_SOUNDS[((r >> 16) & 3) as usize]);
                 }
             }
             _ => (),
@@ -660,7 +656,7 @@ impl Trees<'_> {
                         } else {
                             ARCTIC_SNOW_1
                         };
-                        (self.t.play_sound)(tile, sound);
+                        (self.s.play_sound)(tile, sound);
                     }
                 }
                 return;
@@ -674,7 +670,7 @@ impl Trees<'_> {
         let mut t = self.tree_observation(tile);
         let shore = t.ground == GROUND_SHORE;
         if shore {
-            (self.t.tile_loop_water)(tile);
+            (self.s.tile_loop_water)(tile);
         } else {
             match s.climate {
                 TROPIC => self.loop_desert(tile, &mut t, s),
@@ -750,19 +746,19 @@ impl Trees<'_> {
                 } else {
                     let density = u32::from(t.density);
                     match t.ground {
-                        GROUND_SHORE => (self.t.make_shore)(tile),
+                        GROUND_SHORE => (self.s.make_shore)(tile),
                         GROUND_GRASS => (self.t.make_clear)(tile, CLEAR_GRASS, density),
                         GROUND_ROUGH => (self.t.make_clear)(tile, CLEAR_ROUGH, 3),
                         GROUND_ROUGH_SNOW => {
                             (self.t.make_clear)(tile, CLEAR_ROUGH, 3);
-                            (self.t.make_snow)(tile, density);
+                            (self.s.make_snow)(tile, density);
                         }
                         _ if s.climate == TROPIC => {
                             (self.t.make_clear)(tile, CLEAR_DESERT, density);
                         }
                         _ => {
                             (self.t.make_clear)(tile, CLEAR_GRASS, 3);
-                            (self.t.make_snow)(tile, density);
+                            (self.s.make_snow)(tile, density);
                         }
                     }
                 }
@@ -1201,6 +1197,10 @@ mod tests {
             tile_z,
             mark_dirty: dirty,
             set_tropic_zone: set_zone,
+            make_shore,
+            make_snow,
+            tile_loop_water: water,
+            play_sound: sound,
             ..crate::services::fixture(std::ptr::null_mut(), random, industry)
         }
     }
@@ -1354,12 +1354,8 @@ mod tests {
         add_growth,
         set_growth,
         make_clear,
-        make_shore,
-        make_snow,
         clear_neighbour_flooding: neighbours,
-        tile_loop_water: water,
         ambient,
-        play_sound: sound,
         progress,
         progress_total,
         clear_square,

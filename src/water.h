@@ -26,7 +26,12 @@ enum FloodingBehaviour : uint8_t {
 FloodingBehaviour GetFloodingBehaviour(TileIndex tile);
 void ClearNeighbourNonFloodingStates(TileIndex tile);
 
+#ifdef WITH_RUST
+void TileLoop_Water(uint32_t tile) noexcept;
+inline void TileLoop_Water(TileIndex tile) noexcept { TileLoop_Water(tile.base()); }
+#else
 void TileLoop_Water(TileIndex tile);
+#endif
 bool FloodHalftile(TileIndex t);
 
 void ConvertGroundTilesIntoWaterTiles();

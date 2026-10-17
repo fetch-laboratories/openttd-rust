@@ -28,7 +28,7 @@ using TileIndexDiff = int32_t;
 static_assert(sizeof(DiagDirection) == sizeof(uint8_t));
 using RoadBits = uint32_t;
 using RoadType = uint32_t;
-using Slope = uint32_t;
+static_assert(sizeof(Slope) == sizeof(uint8_t)); // Shared FFI declares native Slope.
 constexpr uint32_t DIAGDIR_END = 4, MP_ROAD = 2, MP_RAILWAY = 1, MP_STATION = 5, MP_TUNNELBRIDGE = 9;
 constexpr uint32_t TRANSPORT_ROAD = 1, DRD_NONE = 0;
 constexpr size_t NUM_HOUSE_ZONES = 5;
@@ -92,8 +92,8 @@ static DiagDirection ReverseDiagDir(DiagDirection dir) { return static_cast<Diag
 static uint32_t DiagDirToAxis(DiagDirection dir) { return dir & 1; }
 static RoadBits DiagDirToRoadBits(DiagDirection dir) { return 1 << (3 - dir); }
 static TileIndex TileAddByDiagDir(TileIndex tile, DiagDirection dir) { return tile + TileOffsByDiagDir(dir); }
-static Slope InclinedSlope(DiagDirection dir) { return std::array<uint32_t, 4>{12, 6, 3, 9}[dir]; }
-static Slope GetTileSlope(TileIndex tile) { return At(tile).slope; }
+static Slope InclinedSlope(DiagDirection dir) { return static_cast<Slope>(std::array<uint32_t, 4>{12, 6, 3, 9}[dir]); }
+static Slope GetTileSlope(TileIndex tile) { return static_cast<Slope>(At(tile).slope); }
 static uint32_t GetTileZ(TileIndex tile) { return At(tile).z; }
 static bool IsValidTile(TileIndex tile) { return At(tile).valid; }
 static bool IsTileType(TileIndex tile, uint32_t type) { return At(tile).type == type; }

@@ -482,6 +482,11 @@ def check(scenario, run, mode, role, result):
         require(map_tile(1201) == (2, 10), "input bus is not on a straight road")
         final_chunks = read_save(final)
         require(
+            final_chunks["MAPT"]["raw"][1201] >> 4 == 2
+            and final_chunks["MAP5"]["raw"][1201] == 10,
+            "failed flooded clear did not preserve the occupied road",
+        )
+        require(
             chunks["MAPT"]["raw"][945] >> 4 == 6
             and chunks["MAPO"]["raw"][945] == 33
             and final_chunks["MAPT"]["raw"][945] >> 4 == 6

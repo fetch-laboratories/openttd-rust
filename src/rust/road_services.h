@@ -80,7 +80,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitClose(OpenTTDVehicle *v, int32_t x,
 {
 	const RoadVehicle *front = RoadOf(v);
 	auto offer = [&](const Vehicle *u) {
-		if (u->type != VEH_ROAD || u->First() == front) return true;
+		if (u->type != VEH_ROAD || RustVehicleFirst(u) == front) return true;
 		const RoadVehicle *r = RoadVehicle::From(u);
 		const RoadVehicle *first = r->First();
 		OpenTTDRoadCandidate candidate{.vehicle = RustVehicle(r), .state = r->GetRustState(), .first = RustVehicle(first), .first_state = first->GetRustState(),
@@ -107,7 +107,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitTile(uint32_t tile, OpenTTDRoadTile
 {
 	for (const Vehicle *u : VehiclesOnTile(TileIndex(tile))) {
 		if (u->type != VEH_ROAD) continue;
-		OpenTTDRoadTileVehicle item{.vehicle = RustVehicle(u), .first = RustVehicle(u->First())};
+		OpenTTDRoadTileVehicle item{.vehicle = RustVehicle(u), .first = RustVehicle(RustVehicleFirst(u))};
 		if (!visit(context, &item)) return;
 	}
 }

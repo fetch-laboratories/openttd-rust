@@ -46,6 +46,12 @@
 #include "table/strings.h"
 #include "table/roadtypes.h"
 
+#ifdef WITH_RUST
+#include "rust/ground_services.h"
+#include "rust/services_landscape.h"
+#include "rust/environment_services.h"
+#endif
+
 #include "safeguards.h"
 
 /** Helper type for lists/vectors of road vehicles */
@@ -1981,6 +1987,33 @@ static Foundation GetFoundation_Road(TileIndex tile, Slope tileh)
 	}
 }
 
+#ifdef WITH_RUST
+const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept
+{
+	static_assert(SND_21_ROAD_WORKS == 31 && OWNER_TOWN.base() == 15);
+	static const OpenTTDRoadGroundServices services{
+		.snow = [](uint32_t index) noexcept { TileIndex t{index}; int z = RustFoundationSlope(index).slope == SLOPE_FLAT ? OpenTTDTileMaxZ(t) : RustTileZ(t); return OpenTTDRoadSnowGround{.z = z, .snow = RustRoadSnowOrDesert(Tile{t})}; },
+		.snow_or_desert = RustRoadSnowOrDesert,
+		.toggle_snow_or_desert = [](uint32_t t) noexcept { ToggleSnowOrDesert(TileIndex{t}); },
+		.roadside = [](uint32_t t) noexcept { return GetRoadside(TileIndex{t}); },
+		.set_roadside = [](uint32_t t, Roadside side) noexcept { SetRoadside(TileIndex{t}, side); },
+		.work_counter = [](uint32_t t) noexcept { return GB(Tile(TileIndex{t}).m7(), 0, 4); },
+		.set_work_counter = [](uint32_t t, uint32_t counter) noexcept { SB(Tile(TileIndex{t}).m7(), 0, 4, counter); },
+		.all_bits = [](uint32_t t) noexcept { return GetAllRoadBits(TileIndex{t}); },
+		.bulldozer = [](uint32_t t) noexcept { RustCreateEffectAbove(TileX(TileIndex{t}) * TILE_SIZE + 7, TileY(TileIndex{t}) * TILE_SIZE + 7, 0, EV_BULLDOZER); },
+		.cleanup = [](uint32_t t, RoadBits bits) noexcept { return RustCleanRoadBits(TileIndex{t}, bits); },
+		.remove = [](uint32_t t, RoadBits bits) noexcept { RemoveRoad(TileIndex{t}, {DoCommandFlag::Execute, DoCommandFlag::Auto, DoCommandFlag::NoWater}, bits, RTT_ROAD, true); },
+		.town_road_type = []() noexcept { return GetTownRoadType(); },
+		.set_road_type = [](uint32_t t, RoadType type) noexcept { SetRoadType(TileIndex{t}, RTT_ROAD, type); },
+	};
+	return services;
+}
+static void TileLoop_Road(uint32_t tile) noexcept
+{
+	OpenTTDGroundCall call;
+	openttd_rust_road_tile_loop(tile, OpenTTDLandscape(), _settings_client.sound.ambient, _settings_game.economy.mod_road_rebuild, Map::SizeX(), &call, &GetRustGroundCostServices(), &GetRustRoadGroundServices(), &GetRustSharedServices());
+}
+#else
 static const Roadside _town_road_types[][2] = {
 	{ Roadside::Grass,        Roadside::Grass },
 	{ Roadside::Paved,        Roadside::Paved },
@@ -2105,6 +2138,8 @@ static void TileLoop_Road(TileIndex tile)
 		MarkTileDirtyByTile(tile);
 	}
 }
+
+#endif
 
 static bool ClickTile_Road(TileIndex tile)
 {

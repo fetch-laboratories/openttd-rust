@@ -26,6 +26,7 @@ inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
 }
 
 /** Shared native field definitions, also used by bundled observations. */
+inline Vehicle *RustVehicleFirst(const Vehicle *v) noexcept { return v->First(); }
 inline Vehicle *RustVehicleNext(const Vehicle *v) noexcept { return v->Next(); }
 inline uint32_t RustVehicleTile(const Vehicle *v) noexcept { return v->tile.base(); }
 inline uint32_t RustVehicleDestTile(const Vehicle *v) noexcept { return v->dest_tile.base(); }

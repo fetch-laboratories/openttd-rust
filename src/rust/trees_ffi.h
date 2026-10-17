@@ -69,7 +69,7 @@ struct OpenTTDTreeLandscapeClear {
 struct OpenTTDTreeCommand;
 
 /* Designated, immutable table of noexcept services. Reads are pure. Writes are the
- * same-named tree_map.h/clear_map.h functions. tile_loop_water, ambient and
+ * same-named tree_map.h/clear_map.h functions. Shared tile_loop_water, ambient and
  * landscape_clear can reenter tree entries; Rust holds no borrow across them and
  * reads the tile again afterwards. ambient returns whether its NewGRF callback ran.
  * progress/progress_total return true when world generation was aborted: the C++
@@ -89,12 +89,8 @@ struct OpenTTDTreeServices {
 	void (*add_growth)(uint32_t tile, int32_t growth) noexcept;
 	void (*set_growth)(uint32_t tile, uint8_t growth) noexcept;
 	void (*make_clear)(uint32_t tile, uint8_t ground, uint32_t density) noexcept;
-	void (*make_shore)(uint32_t tile) noexcept;
-	void (*make_snow)(uint32_t tile, uint32_t density) noexcept;
 	void (*clear_neighbour_flooding)(uint32_t tile) noexcept;
-	void (*tile_loop_water)(uint32_t tile) noexcept;
 	bool (*ambient)(uint32_t tile) noexcept;
-	void (*play_sound)(uint32_t tile, uint16_t sound) noexcept;
 	bool (*progress)() noexcept;
 	bool (*progress_total)(uint32_t total) noexcept;
 	void (*clear_square)(uint32_t tile) noexcept;

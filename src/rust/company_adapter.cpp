@@ -10,6 +10,7 @@
 #include "company_adapter.h"
 #include "services_rail.h"
 #include "company_services.h"
+#include "services_landscape.h"
 #include "presentation_services.h"
 #include "settings_services.h"
 #include "../company_base.h"
@@ -381,14 +382,13 @@ static OpenTTDCompanySignalTile Co_signal_tile(uint32_t t) noexcept
 	OpenTTDCompanySignalTile r{IsTileType(tile, MP_RAILWAY), false, 0, false, 0};
 	r.crossing = !r.railway && IsLevelCrossingTile(tile);
 	/* House and industry tiles have no owner; only the two tested kinds are read. */
-	if (r.railway || r.crossing) r.owner = GetTileOwner(tile).base();
+	if (r.railway || r.crossing) r.owner = RustTileOwnerValue(t);
 	r.has_signals = r.railway && RustRailHasSignals(t);
-	if (r.has_signals) r.tracks = RustRailTracks(t);
+	if (r.has_signals) r.tracks = static_cast<uint8_t>(RustRailTracks(t));
 	return r;
 }
 static void Co_add_track_to_signal_buffer(uint32_t tile, uint8_t track, uint8_t owner) noexcept { AddTrackToSignalBuffer(TileIndex(tile), static_cast<Track>(track), CompanyID(owner)); }
 static void Co_update_level_crossing(uint32_t tile) noexcept { UpdateLevelCrossing(TileIndex(tile)); }
-static void Co_update_signals_in_buffer() noexcept { UpdateSignalsInBuffer(); }
 static void Co_add_airport_infrastructure(uint8_t new_owner, uint8_t old_owner) noexcept { Company::Get(new_owner)->infrastructure.airport += Company::Get(old_owner)->infrastructure.airport; }
 static uint32_t Co_station_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Station>(owner, from, [](const Station *st) { return st->owner; }); }
 static uint32_t Co_station_facility_count(uint32_t id) noexcept { return Station::Get(id)->facilities.Count(); }
@@ -471,7 +471,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.map_size = Co_map_size, .change_tile_owner = Co_change_tile_owner,
 		.signal_tile = Co_signal_tile, .has_signal_on_track = RustRailHasSignalTrack,
 		.add_track_to_signal_buffer = Co_add_track_to_signal_buffer, .update_level_crossing = Co_update_level_crossing,
-		.update_signals_in_buffer = Co_update_signals_in_buffer, .add_airport_infrastructure = Co_add_airport_infrastructure,
+		.update_signals_in_buffer = RustUpdateSignals, .add_airport_infrastructure = Co_add_airport_infrastructure,
 		.station_next_owned = Co_station_next_owned, .station_facility_count = Co_station_facility_count,
 		.station_times = Co_station_times, .set_station_owner = Co_set_station_owner,
 		.waypoint_next_owned = Co_waypoint_next_owned, .set_waypoint_owner = Co_set_waypoint_owner,

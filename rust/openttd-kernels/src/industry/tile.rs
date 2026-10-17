@@ -62,7 +62,6 @@ pub struct TileServices {
     pub industry_index: unsafe extern "C" fn(u32) -> u16,
     pub toffee_offset: unsafe extern "C" fn(u8) -> u8,
     pub on_water: unsafe extern "C" fn(u32) -> bool,
-    pub water_loop: unsafe extern "C" fn(u32),
     pub transport: unsafe extern "C" fn(u32) -> bool,
     pub anim_production: unsafe extern "C" fn(u16) -> u16,
     pub anim_next: unsafe extern "C" fn(u16) -> u16,
@@ -349,7 +348,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_loop(
     let (s, c, l, t) = unsafe { (&*s, &*c, &*l, &*t) };
     let map = crate::services::Map { log_x };
     if unsafe { (t.on_water)(tile) } {
-        unsafe { (t.water_loop)(tile) };
+        (s.shared().tile_loop_water)(tile);
     }
     if (s.shared().tile_type)(tile) != 8 {
         return;

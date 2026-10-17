@@ -33,9 +33,11 @@
 #include "../landscape_cmd.h"
 #include "../town.h"
 #include "../timer/timer_game_calendar.h"
+#include "tile_type_access.hpp"
 #include "../safeguards.h"
 #include "settings_services.h"
 #include "environment_services.h"
+#include "services_landscape.h"
 #include "station_services.h"
 #include "../clear_map.h"
 #include "../tree_map.h"
@@ -72,14 +74,23 @@ static void LandscapeClear(OpenTTDCommandCost *out, uint32_t tile, uint16_t flag
 {
 	*NativeCost(out) = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlags(flags), TileIndex{tile});
 }
+static void EnsureNoVehicle(OpenTTDCommandCost *out, uint32_t tile) noexcept
+{
+	*NativeCost(out) = RustEnsureNoVehicleOnGround(tile);
+}
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
-	static const OpenTTDCommandServices services{.landscape_clear = LandscapeClear};
+	static const OpenTTDCommandServices services{.landscape_clear = LandscapeClear, .ensure_no_vehicle = EnsureNoVehicle};
 	return services;
 }
 
 static uint8_t SharedSnowLine() noexcept { return GetSnowLine(); }
 static int32_t SharedCalendarYear() noexcept { return TimerGameCalendar::year.base(); }
+
+OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept
+{
+	return OpenTTDNativeTileTypeAccess::Acquire();
+}
 
 static uint32_t SharedRandom(void *) noexcept { return Random(); }
 const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept
@@ -95,13 +106,13 @@ OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept
 void OpenTTDAssertTownGenerationContext() noexcept { assert(_game_mode == GM_EDITOR || _generating_world); }
 
 bool OpenTTDIsTileFlat(uint32_t tile) noexcept { return IsTileFlat(TileIndex(tile)); }
-ClearGround OpenTTDClearGround(uint32_t tile) noexcept { return GetClearGround(TileIndex(tile)); }
-TreeGround OpenTTDTreeGround(uint32_t tile) noexcept { return GetTreeGround(TileIndex(tile)); }
+ClearGround OpenTTDClearGround(uint32_t tile) noexcept { return RustClearGround(Tile{TileIndex{tile}}); }
+TreeGround OpenTTDTreeGround(uint32_t tile) noexcept { return RustTreeGround(Tile{TileIndex{tile}}); }
 
 static uint8_t SharedTileType(uint32_t tile) noexcept { return GetTileType(TileIndex{tile}); }
 static bool SharedBridgeAbove(uint32_t tile) noexcept { return IsBridgeAbove(TileIndex{tile}); }
 static uint8_t SharedTropicZone(uint32_t tile) noexcept { return GetTropicZone(TileIndex{tile}); }
-static int32_t SharedTileZ(uint32_t tile) noexcept { return GetTileZ(TileIndex{tile}); }
+static int32_t SharedTileZ(uint32_t tile) noexcept { return RustTileZ(TileIndex{tile}); }
 static uint8_t SharedTileSlope(uint32_t tile) noexcept { return GetTileSlope(TileIndex{tile}); }
 static void SharedMarkDirty(uint32_t tile) noexcept { MarkTileDirtyByTile(TileIndex{tile}); }
 static void SharedSetTropicZone(uint32_t tile, uint8_t zone) noexcept { SetTropicZone(TileIndex{tile}, static_cast<TropicZone>(zone)); }
@@ -115,7 +126,6 @@ static uint32_t SharedIndustry(int32_t x, int32_t y, uint32_t *index) noexcept
 	return GetIndustryGfx(tile) == GFX_BUBBLE_CATCHER ? 2 : 1;
 }
 
-static uint8_t MapSvcTileOwner(uint32_t tile) noexcept { return GetTileOwner(TileIndex(tile)).base(); }
 static uint16_t MapSvcStationIndex(uint32_t tile) noexcept { return GetStationIndex(TileIndex(tile)).base(); }
 static uint16_t MapSvcDepotIndex(uint32_t tile) noexcept { return GetDepotIndex(TileIndex(tile)).base(); }
 static bool MapSvcRoadIsLevelCrossing(uint32_t tile) noexcept { return IsLevelCrossing(TileIndex(tile)); }
@@ -141,13 +151,12 @@ static OpenTTDTownState *SharedTownOwner(const OpenTTDTownHandle *town) noexcept
 
 static bool Shared_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileIndex{tile}); }
 static uint32_t Shared_distance_from_edge(uint32_t tile) noexcept { return DistanceFromEdge(TileIndex{tile}); }
-static int32_t Shared_tile_max_z(uint32_t tile) noexcept { return GetTileMaxZ(TileIndex{tile}); }
+static int32_t Shared_tile_max_z(uint32_t tile) noexcept { return OpenTTDTileMaxZ(TileIndex{tile}); }
 static_assert(TILE_HEIGHT == 8);
 static uint32_t Shared_tile_height(uint32_t tile) noexcept { return TileHeight(TileIndex{tile}); }
 static uint8_t Shared_bridge_axis(uint32_t tile) noexcept { return GetBridgeAxis(TileIndex{tile}); }
 static bool Shared_has_water_ground(uint32_t tile) noexcept { return HasTileWaterGround(TileIndex{tile}); }
 static bool Shared_is_sea(uint32_t tile) noexcept { return IsSea(TileIndex{tile}); }
-static bool Shared_is_plain_rail(uint32_t tile) noexcept { return IsPlainRailTile(TileIndex{tile}); }
 static bool Shared_is_bridge(uint32_t tile) noexcept { return IsBridgeTile(TileIndex{tile}); }
 static bool Shared_is_road_depot(uint32_t tile) noexcept { return IsRoadDepotTile(TileIndex{tile}); }
 static uint8_t Shared_road_depot_direction(uint32_t tile) noexcept { return GetRoadDepotDirection(TileIndex{tile}); }
@@ -187,7 +196,7 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.tile_slope = SharedTileSlope,
 		.mark_dirty = SharedMarkDirty,
 		.set_tropic_zone = SharedSetTropicZone,
-		.tile_owner = MapSvcTileOwner,
+		.tile_owner = RustTileOwnerValue,
 		.station_index = MapSvcStationIndex,
 		.depot_index = MapSvcDepotIndex,
 		.is_level_crossing = MapSvcIsLevelCrossing,
@@ -203,7 +212,7 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.bridge_axis = Shared_bridge_axis,
 		.has_water_ground = Shared_has_water_ground,
 		.is_sea = Shared_is_sea,
-		.is_plain_rail = Shared_is_plain_rail,
+		.is_plain_rail = RustPlainRailTile,
 		.is_bridge = Shared_is_bridge,
 		.tunnel_transport = OpenTTDMapQuery<uint8_t, RustTunnelBridgeTransport, uint32_t>,
 		.other_tunnel_end = RustOtherTunnelBridgeEnd,
@@ -234,6 +243,15 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.economy_date = SharedEconomyDate,
 		.calendar_date = SharedCalendarDate,
 		.slope = SharedSlope,
+		.clear_ground = OpenTTDClearGround,
+		.tree_ground = OpenTTDTreeGround,
+		.make_snow = RustMakeSnow,
+		.make_shore = RustMakeShore,
+		.tile_loop_water = RustTileLoopWater,
+		.play_sound = RustPlayTileSound,
+		.foundation = RustFoundationSlope,
+		.set_fence = RustSetFieldFence,
+		.has_water_class = RustHasWaterClass,
 	};
 	return services;
 }
@@ -290,7 +308,7 @@ static OpenTTDRailStationAdmission SharedRail_station_admission(uint32_t tile, u
 	TileIndex t(tile);
 	OpenTTDRailStationAdmission r{.rail = HasStationRail(t), .owner = INVALID_OWNER.base(), .axis = AXIS_X, .blocked = false};
 	if (r.rail) {
-		r.owner = MapSvcTileOwner(tile);
+		r.owner = RustTileOwnerValue(tile);
 		if (r.owner == owner) {
 			r.axis = RustRailStationAxis(tile);
 			if (DiagDirToAxis(static_cast<DiagDirection>(dir)) == r.axis) r.blocked = IsStationTileBlocked(t);
@@ -302,14 +320,14 @@ static OpenTTDRailCrossingAdmission SharedRail_crossing_admission(uint32_t tile,
 {
 	OpenTTDRailCrossingAdmission r{.crossing = MapSvcRoadIsLevelCrossing(tile), .owner = INVALID_OWNER.base(), .axis = AXIS_X};
 	if (r.crossing) {
-		r.owner = MapSvcTileOwner(tile);
+		r.owner = RustTileOwnerValue(tile);
 		if (r.owner == owner) r.axis = RustCrossingRoadAxis(tile);
 	}
 	return r;
 }
 static OpenTTDRailWormholeAdmission SharedRail_wormhole_admission(uint32_t tile, uint8_t owner) noexcept
 {
-	OpenTTDRailWormholeAdmission r{.owner = MapSvcTileOwner(tile), .transport = TRANSPORT_RAIL, .direction = DIAGDIR_NE};
+	OpenTTDRailWormholeAdmission r{.owner = RustTileOwnerValue(tile), .transport = TRANSPORT_RAIL, .direction = DIAGDIR_NE};
 	if (r.owner == owner) {
 		r.transport = RustTunnelBridgeTransport(tile);
 		if (r.transport == TRANSPORT_RAIL) r.direction = static_cast<DiagDirection>(MapSvcTunnelBridgeDirection(tile));
