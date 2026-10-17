@@ -15,6 +15,10 @@
 #include "command_cost_ffi.h"
 #include <cstddef>
 struct OpenTTDTownState;
+struct Town;
+/** One resolved town: native shell, Rust owner and pool index. */
+struct OpenTTDTownRef { Town *shell; OpenTTDTownState *state; uint16_t id; };
+struct OpenTTDHouseServices;
 struct OpenTTDTownGrowthFields { uint16_t counter, rate; uint8_t funding, road, flags; };
 struct OpenTTDTownReceived { uint16_t old_max, new_max, old_act, new_act; };
 struct OpenTTDTownSimulationFields {
@@ -38,13 +42,7 @@ using OpenTTDTownStationActivity = OpenTTDStationActivity;
 struct OpenTTDTownCommandResult { int64_t cost; bool success; };
 struct OpenTTDTownRoadChoice { int32_t introduction_date; uint16_t max_speed; bool town_build; };
 struct OpenTTDTownHouseAvailability { uint16_t zones; uint16_t override_id; uint16_t class_id; uint8_t probability; bool enabled; };
-struct OpenTTDTownHousePlacement { int32_t min_year; int32_t max_year; uint8_t flags; uint8_t extra_flags; };
-struct OpenTTDTownHouseConstruction { uint8_t extra_flags; uint8_t population; };
-struct OpenTTDTownYearlyServices {
-	bool (*completed)(uint32_t) noexcept;
-	uint8_t (*age)(uint32_t) noexcept;
-	void (*set_age)(uint32_t, uint8_t) noexcept;
-};
+struct OpenTTDTownHousePlacement { int32_t min_year; int32_t max_year; };
 struct OpenTTDTownAuthorityServices {
 	uint8_t (*council_tolerance)() noexcept;
 	bool (*bulldozer)() noexcept;
@@ -67,12 +65,12 @@ struct OpenTTDTownLeaves {
 	uint8_t (*road_flags)(uint8_t) noexcept;
 	OpenTTDTownHouseAvailability (*house_availability)(uint16_t) noexcept;
 	OpenTTDTownHousePlacement (*house_placement)(uint16_t) noexcept;
-	OpenTTDTownHouseConstruction (*house_construction)(uint16_t) noexcept;
+	uint8_t (*house_population)(uint16_t) noexcept;
 	uint8_t (*house_flags)(uint16_t) noexcept;
 	uint8_t (*house_extra_flags)(uint16_t) noexcept;
-	bool (*house_allows_callback)(uint16_t) noexcept;
+	uint16_t (*house_callbacks)(uint16_t) noexcept;
 	OpenTTDTownRoadChoice (*road_info)(uint8_t) noexcept;
-	OpenTTDTownState *(*state)(uint32_t) noexcept;
+	OpenTTDTownRef (*resolve_town)(uint32_t) noexcept;
 	void (*stations)(uint32_t, uint32_t, void *, void (*)(void *, const OpenTTDStation *, uint32_t)) noexcept;
 	const OpenTTDStationService *(*station_activity_owner)(const OpenTTDStation *) noexcept;
 	uint8_t (*station_owner)(const OpenTTDStation *) noexcept;
@@ -99,7 +97,7 @@ struct OpenTTDTownLeaves {
 	bool (*build_tunnel)(uint32_t tile, uint32_t road_type, uint32_t execute) noexcept;
 	void (*clear_house_land)(uint32_t tile) noexcept;
 	bool (*allow_construction)(uint32_t town, uint32_t tile, uint32_t house, uint32_t random) noexcept;
-	void (*construction_animation)(uint32_t tile) noexcept;
+	const OpenTTDHouseServices *houses;
 };
 /* Services are synchronous noexcept calls. No owner reference spans one. Commands
  * and bounded NewGRF resolution may reenter; ordinary gameplay does not throw.
@@ -107,11 +105,9 @@ struct OpenTTDTownLeaves {
 extern "C" {
 OpenTTDByteSpan openttd_rust_town_name(const OpenTTDTownState *);
 void openttd_rust_town_set_name(OpenTTDTownState *, OpenTTDByteSpan);
-void openttd_rust_town_yearly(const OpenTTDSharedServices *, const OpenTTDTownYearlyServices *, uint32_t);
 void openttd_rust_town_authority_station(const OpenTTDTownAuthorityServices *, const OpenTTDSharedServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint32_t, bool);
 void openttd_rust_town_authority_remove(const OpenTTDTownAuthorityServices *, const OpenTTDSharedServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, const OpenTTDTownHandle *, bool, uint8_t);
 void openttd_rust_town_update_radius(OpenTTDTownState *);
-void openttd_rust_town_change_population(const OpenTTDTownLeaves *, OpenTTDTownState *, uint32_t, int32_t);
 uint32_t openttd_rust_town_world_population(const OpenTTDTownLeaves *);
 OpenTTDTownSimulationFields *openttd_rust_town_simulation(OpenTTDTownState *);
 OpenTTDTownSlots openttd_rust_town_supplied_view(OpenTTDTownState *);
@@ -128,8 +124,6 @@ OpenTTDTownSlots openttd_rust_town_class_counts(OpenTTDTownState *);
 void openttd_rust_town_class_counts_resize(OpenTTDTownState *, size_t);
 OpenTTDTownSlots openttd_rust_town_global_class_counts();
 void openttd_rust_town_global_class_counts_resize(size_t);
-void openttd_rust_town_increase_building(OpenTTDTownState *, uint16_t, uint16_t);
-void openttd_rust_town_decrease_building(OpenTTDTownState *, uint16_t, uint16_t);
 OpenTTDTownSuppliedHistory openttd_rust_town_sum_history(const OpenTTDTownSuppliedHistory *, size_t);
 void openttd_rust_town_rating_test(bool);
 int32_t openttd_rust_town_rating(const OpenTTDTownState *, uintptr_t, uint8_t);
@@ -138,8 +132,6 @@ void openttd_rust_town_monthly_all(const OpenTTDTownLeaves *, const OpenTTDShare
 OpenTTDTownState *openttd_rust_town_new();
 void openttd_rust_town_destroy(OpenTTDTownState *);
 OpenTTDTownGrowthFields *openttd_rust_town_growth(OpenTTDTownState *);
-bool openttd_rust_town_try_house(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town, uint32_t tile, uint32_t modes);
-void openttd_rust_town_build_house(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town, uint32_t tile, uint32_t house, uint32_t random, bool complete, bool is_protected);
 void openttd_rust_town_tick_all(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_town_update_growth(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town);
 void openttd_rust_town_expand(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town, uint32_t amount, uint32_t modes);

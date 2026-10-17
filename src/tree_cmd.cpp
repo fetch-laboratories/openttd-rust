@@ -170,7 +170,6 @@ static const OpenTTDTreeServices _tree_services{
 	.play_sound = [](uint32_t tile, uint16_t sound) noexcept { SndPlayTileFx(sound, TileIndex{tile}); },
 	.progress = []() noexcept { return TreeProgress([] { IncreaseGeneratingWorldProgress(GWP_TREE); }); },
 	.progress_total = [](uint32_t total) noexcept { return TreeProgress([total] { SetGeneratingWorldProgress(GWP_TREE, total); }); },
-	.clear_square = [](uint32_t tile) noexcept { DoClearSquare(TileIndex{tile}); },
 	.town_rating = TreeTownRating,
 	.command_begin = TreeCommandBegin,
 	.command_tile = [](OpenTTDTreeCommand *ctx) noexcept { return static_cast<TileIndex>(*ctx->iter).base(); },
@@ -245,7 +244,7 @@ static CommandCost ClearTile_Trees(TileIndex tile, DoCommandFlags flags)
 {
 	OpenTTDTreeCommand ctx(flags);
 	return CommandCost(EXPENSES_CONSTRUCTION, Money(openttd_rust_trees_clear_tile(&ctx, tile.base(), static_cast<int64_t>(_price[PR_CLEAR_TREES]),
-		flags.Test(DoCommandFlag::Execute), Company::IsValidID(_current_company), &_tree_services)));
+		flags.Test(DoCommandFlag::Execute), Company::IsValidID(_current_company), &_tree_services, &GetRustSharedServices())));
 }
 
 static void TileLoop_Trees(TileIndex tile)

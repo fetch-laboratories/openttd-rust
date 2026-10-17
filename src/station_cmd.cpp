@@ -637,9 +637,6 @@ static const OpenTTDStationServices _rust_station_services = {
 	.pool_size = []() noexcept -> size_t {
 		return BaseStation::GetPoolSize();
 	},
-	.tick_counter = []() noexcept -> uint64_t {
-		return openttd_orders_tick_counter();
-	},
 	.editor = []() noexcept -> bool {
 		return _game_mode == GM_EDITOR;
 	},

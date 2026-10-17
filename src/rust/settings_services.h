@@ -34,4 +34,6 @@ inline uint8_t OpenTTDTownDensity() noexcept { return _settings_game.difficulty.
 inline uint16_t OpenTTDCustomTownNumber() noexcept { return _settings_newgame.game_creation.custom_town_number; }
 inline uint8_t OpenTTDLargerTowns() noexcept { return _settings_game.economy.larger_towns; }
 inline uint8_t OpenTTDTownNameStyle() noexcept { return _settings_game.game_creation.town_name; }
+inline uint8_t OpenTTDTownCargoGenMode() noexcept { return _settings_game.economy.town_cargogen_mode; }
+inline uint8_t OpenTTDPlaceHouses() noexcept { return _settings_game.economy.place_houses; }
 #endif /* RUST_SETTINGS_SERVICES_H */

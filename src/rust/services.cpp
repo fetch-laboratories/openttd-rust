@@ -41,6 +41,10 @@
 #include "../tree_map.h"
 #include "../cheat_type.h"
 #include "../timer/timer_game_economy.h"
+#include "../economy_func.h"
+#include "../autoslope.h"
+#include "orders_ffi.h"
+#include "tile_animation_services.h"
 
 static CommandCost *NativeCost(OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<CommandCost *>(cost); }
 static const CommandCost *NativeCost(const OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<const CommandCost *>(cost); }
@@ -87,9 +91,10 @@ const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *s
 	return StationOf(station)->rust_service.get();
 }
 
-OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept
+OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept
 {
-	return Town::Get(TownID(id))->growth_owner.get();
+	Town *t = Town::Get(TownID(id));
+	return {.shell = t, .state = GetRustSharedServices().town_owner(reinterpret_cast<const OpenTTDTownHandle *>(t)), .id = static_cast<uint16_t>(id)};
 }
 
 void OpenTTDAssertTownGenerationContext() noexcept { assert(_game_mode == GM_EDITOR || _generating_world); }
@@ -173,6 +178,11 @@ static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
 static int32_t SharedEconomyDate() noexcept { return TimerGameEconomy::date.base(); }
 static int32_t SharedCalendarDate() noexcept { return TimerGameCalendar::date.base(); }
 static int32_t SharedSlope(int32_t x, int32_t y) noexcept { return GetSlopePixelZ(x, y); }
+static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
+static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
+static bool SharedAutoslope() noexcept { return AutoslopeEnabled(); }
+static int64_t SharedFoundationPrice() noexcept { return _price[PR_BUILD_FOUNDATION]; }
+static void SharedClearSquare(uint32_t tile) noexcept { DoClearSquare(TileIndex{tile}); }
 
 const OpenTTDSharedServices &GetRustSharedServices() noexcept
 {
@@ -234,6 +244,13 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.economy_date = SharedEconomyDate,
 		.calendar_date = SharedCalendarDate,
 		.slope = SharedSlope,
+		.town_count = SharedTownCount,
+		.recession = SharedRecession,
+		.autoslope = SharedAutoslope,
+		.foundation_price = SharedFoundationPrice,
+		.tick_counter = openttd_orders_tick_counter,
+		.delete_animated = OpenTTDDeleteAnimatedTile,
+		.clear_square = SharedClearSquare,
 	};
 	return services;
 }

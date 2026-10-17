@@ -203,6 +203,20 @@ pub struct Services {
     pub calendar_date: extern "C" fn() -> i32,
     /// Shared live slope observation.
     pub slope: extern "C" fn(i32, i32) -> i32,
+    /// Number of towns in the pool.
+    pub town_count: extern "C" fn() -> usize,
+    /// Whether the economy is in recession.
+    pub recession: extern "C" fn() -> bool,
+    /// Whether autoslope is enabled for the current company.
+    pub autoslope: extern "C" fn() -> bool,
+    /// Current foundation build price.
+    pub foundation_price: extern "C" fn() -> i64,
+    /// Global game tick counter.
+    pub tick_counter: extern "C" fn() -> u64,
+    /// Remove a tile from the animated tile list.
+    pub delete_animated: extern "C" fn(u32),
+    /// `DoClearSquare`: make the tile bare land.
+    pub clear_square: extern "C" fn(u32),
 }
 impl Services {
     /// Draw one shared random word.
@@ -219,6 +233,7 @@ impl Services {
 /// Standalone test table: map predicates return zero and writes do nothing.
 #[cfg(test)]
 #[must_use]
+#[allow(clippy::too_many_lines)] // One field per shared service.
 pub fn fixture(
     context: *mut c_void,
     random: extern "C" fn(*mut c_void) -> u32,
@@ -260,6 +275,15 @@ pub fn fixture(
         0
     }
     extern "C" fn slope(_: i32, _: i32) -> i32 {
+        0
+    }
+    extern "C" fn count0() -> usize {
+        0
+    }
+    extern "C" fn money0() -> i64 {
+        0
+    }
+    extern "C" fn tick0() -> u64 {
         0
     }
     Services {
@@ -323,6 +347,13 @@ pub fn fixture(
         economy_date: zero_year,
         calendar_date: zero_year,
         slope,
+        town_count: count0,
+        recession: flag0,
+        autoslope: flag0,
+        foundation_price: money0,
+        tick_counter: tick0,
+        delete_animated: tile,
+        clear_square: tile,
     }
 }
 /// Map dimensions read once per entry.

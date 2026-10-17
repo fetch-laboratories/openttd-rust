@@ -8,6 +8,7 @@
 /** @file services_ffi.h Synchronous shared game services for Rust owners. */
 #ifndef RUST_SERVICES_FFI_H
 #define RUST_SERVICES_FFI_H
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 #include "station_ffi.h"
@@ -85,6 +86,13 @@ struct OpenTTDSharedServices {
 	int32_t (*economy_date)() noexcept;
 	int32_t (*calendar_date)() noexcept;
 	int32_t (*slope)(int32_t, int32_t) noexcept;
+	size_t (*town_count)() noexcept;
+	bool (*recession)() noexcept;
+	bool (*autoslope)() noexcept;
+	int64_t (*foundation_price)() noexcept;
+	uint64_t (*tick_counter)() noexcept;
+	void (*delete_animated)(uint32_t) noexcept;
+	void (*clear_square)(uint32_t) noexcept;
 };
 const OpenTTDSharedServices &GetRustSharedServices() noexcept;
 /** Shared save/reseed/restore of BOTH original RNG streams. */
@@ -201,6 +209,13 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.economy_date = OpenTTDFixtureMapService<int32_t>,
 		.calendar_date = OpenTTDFixtureMapService<int32_t>,
 		.slope = OpenTTDFixtureMapService<int32_t, int32_t, int32_t>,
+		.town_count = OpenTTDFixtureMapService<size_t>,
+		.recession = OpenTTDFixtureMapService<bool>,
+		.autoslope = OpenTTDFixtureMapService<bool>,
+		.foundation_price = OpenTTDFixtureMapService<int64_t>,
+		.tick_counter = OpenTTDFixtureMapService<uint64_t>,
+		.delete_animated = OpenTTDFixtureMapService<void, uint32_t>,
+		.clear_square = OpenTTDFixtureMapService<void, uint32_t>,
 	};
 }
 #endif /* RUST_SERVICES_FFI_H */

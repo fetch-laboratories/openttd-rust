@@ -19,9 +19,25 @@
 #include "../subsidy_func.h"
 #include "../strings_func.h"
 #include "../misc/history_func.hpp"
+#ifdef WITH_RUST
+#include "../rust/house_ffi.h"
+#endif
 
 #include "../safeguards.h"
 
+#ifdef WITH_RUST
+/** Rebuild all the cached variables of towns; Rust owns the traversal. */
+void RebuildTownCaches()
+{
+	openttd_rust_house_rebuild_caches(&GetRustTownServices(), &GetRustSharedServices());
+}
+
+/** Check house IDs and footprints, then rebuild town caches; Rust owns the traversal. */
+void UpdateHousesAndTowns()
+{
+	openttd_rust_house_update_all(&GetRustTownServices(), &GetRustSharedServices());
+}
+#else
 /**
  * Rebuild all the cached variables of towns.
  */
@@ -112,6 +128,7 @@ void UpdateHousesAndTowns()
 
 	RebuildTownCaches();
 }
+#endif
 
 
 class SlTownOldSupplied : public DefaultSaveLoadHandler<SlTownOldSupplied, Town> {

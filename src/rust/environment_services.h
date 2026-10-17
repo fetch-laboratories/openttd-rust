@@ -23,7 +23,8 @@ inline LandscapeType OpenTTDLandscape() noexcept { return _settings_game.game_cr
 inline uint8_t OpenTTDLandscapeValue() noexcept { return to_underlying(OpenTTDLandscape()); }
 inline uint8_t OpenTTDHighestSnowLine() noexcept { return HighestSnowLine(); }
 struct OpenTTDTownState;
-OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept;
+struct OpenTTDTownRef;
+OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept;
 inline uint OpenTTDMapScaleSize(uint n) noexcept { return Map::ScaleBySize(n); }
 inline uint OpenTTDMapScaleLandProportion(uint n) noexcept { return Map::ScaleByLandProportion(n); }
 enum ClearGround : uint8_t;

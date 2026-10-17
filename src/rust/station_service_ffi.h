@@ -137,7 +137,6 @@ struct OpenTTDStationServices {
 	OpenTTDBaseStation * (*get)(uint16_t) noexcept;
 	OpenTTDStationService * (*owner)(OpenTTDBaseStation *) noexcept;
 	size_t (*pool_size)() noexcept;
-	uint64_t (*tick_counter)() noexcept;
 	bool (*editor)() noexcept;
 	uint8_t (*facilities)(OpenTTDBaseStation *) noexcept;
 	bool (*in_use)(OpenTTDBaseStation *) noexcept;

@@ -436,7 +436,6 @@ pub struct Services {
     pub company_none: unsafe extern "C" fn() -> u8,
     pub restore_company: unsafe extern "C" fn(u8),
     pub directory_dirty: unsafe extern "C" fn(u8),
-    pub recession: unsafe extern "C" fn() -> bool,
     pub economy_month: unsafe extern "C" fn() -> u8,
     pub economy_year: unsafe extern "C" fn() -> i32,
     pub days_since_last_month: unsafe extern "C" fn() -> u32,
@@ -1115,7 +1114,7 @@ fn build_try(builder: *mut Builder, s: &Services) {
             eligible += 1;
         }
     }
-    if unsafe { (s.recession)() } || (forced == TYPES && (missing <= 0 || probability == 0)) {
+    if (s.shared().recession)() || (forced == TYPES && (missing <= 0 || probability == 0)) {
         eligible = 0;
     }
     if eligible >= 1 {

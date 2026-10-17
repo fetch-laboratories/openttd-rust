@@ -347,7 +347,6 @@ pub struct World {
     pub(crate) get: extern "C" fn(u16) -> *mut BaseStation,
     pub(crate) owner: extern "C" fn(*mut BaseStation) -> *mut Service,
     pub(crate) pool_size: extern "C" fn() -> usize,
-    pub(crate) tick_counter: extern "C" fn() -> u64,
     pub(crate) editor: extern "C" fn() -> bool,
     pub(crate) facilities: extern "C" fn(*mut BaseStation) -> u8,
     pub(crate) in_use: extern "C" fn(*mut BaseStation) -> bool,
@@ -1078,7 +1077,8 @@ pub unsafe extern "C" fn openttd_rust_station_tick(world: *const World, links: *
                     }
                 }
             }
-            let tick = (w.tick_counter)();
+            // SAFETY: the immutable shared table outlives this synchronous entry.
+            let tick = (unsafe { &*w.shared }.tick_counter)();
             let phase = tick.wrapping_add(id as u64);
             if u32::from((w.is_station)(st)) != 0 && phase % 504 == 0 {
                 unsafe {
