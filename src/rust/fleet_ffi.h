@@ -10,6 +10,7 @@
 #define RUST_FLEET_FFI_H
 #include <cstdint>
 #include <cstddef>
+#include "command_services_ffi.h"
 /* Serial game-thread calls only. Group, statistics, renewal and company-head
  * owners are stable Rust allocations with C++ scalar object lifetimes in their
  * prefix; C++ views alias canonical storage. Vehicle::group_id stays C++ shell
@@ -98,7 +99,7 @@ struct OpenTTDFleetTransactionServices {
 	bool (*success)(void *out) noexcept;
 	uint32_t (*error)(void *out) noexcept;
 	int64_t (*money)(void *out) noexcept;
-	void (*ownership)(void *out, uint8_t owner) noexcept;
+	const OpenTTDCommandServices *commands;
 	bool (*rear)(void *shell) noexcept;
 	bool (*articulated)(void *shell) noexcept;
 	bool (*crashed)(void *shell) noexcept;

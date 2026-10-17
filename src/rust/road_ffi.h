@@ -198,11 +198,9 @@ struct OpenTTDRoadLeaves {
 	bool (OPENTTD_VEHICLE_CALL *has_road)(OpenTTDVehicle *, uint32_t) noexcept;
 	uint32_t (OPENTTD_VEHICLE_CALL *track_status)(OpenTTDVehicle *, uint32_t) noexcept;
 	uint8_t (OPENTTD_VEHICLE_CALL *any_road_bits)(OpenTTDVehicle *, uint32_t, bool) noexcept;
-	uint8_t (OPENTTD_VEHICLE_CALL *tram_bits)(uint32_t) noexcept;
 	bool (OPENTTD_VEHICLE_CALL *is_road_depot_tile)(uint32_t) noexcept;
 	uint8_t (OPENTTD_VEHICLE_CALL *depot_direction)(uint32_t) noexcept;
 	bool (OPENTTD_VEHICLE_CALL *is_normal_road)(uint32_t) noexcept;
-	bool (OPENTTD_VEHICLE_CALL *has_road_works)(uint32_t) noexcept;
 	uint8_t (OPENTTD_VEHICLE_CALL *disallowed_directions)(uint32_t) noexcept;
 	bool (OPENTTD_VEHICLE_CALL *is_bay_stop)(uint32_t) noexcept;
 	uint8_t (OPENTTD_VEHICLE_CALL *bay_direction)(uint32_t) noexcept;

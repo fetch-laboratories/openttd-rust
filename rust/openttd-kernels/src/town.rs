@@ -665,7 +665,6 @@ pub unsafe extern "C" fn openttd_rust_town_authority_remove(
 #[derive(Clone, Copy)]
 pub struct Leaves {
     pub map_log_x: extern "C" fn() -> u32,
-    pub build_on_slopes: extern "C" fn() -> bool,
     pub growth_rate: extern "C" fn() -> u8,
     pub snow_line: extern "C" fn() -> u8,
     pub editor: extern "C" fn() -> bool,
@@ -1076,7 +1075,7 @@ impl Engine<'_> {
         {
             return false;
         }
-        let slope = if (self.leaves.build_on_slopes)() {
+        let slope = if (self.services.build_on_slopes)() {
             (self.leaves.foundation_slope)(tile)
         } else {
             u32::from((self.services.tile_slope)(tile))
@@ -1371,7 +1370,7 @@ impl Engine<'_> {
             {
                 return 1;
             }
-            if !(self.leaves.build_on_slopes)() || self.chance(1, 6) {
+            if !(self.services.build_on_slopes)() || self.chance(1, 6) {
                 self.level(at);
             }
             if layout >= 2 {

@@ -98,7 +98,7 @@ TEST_CASE("Fleet - service tables match the Rust layout and fill every slot")
 		offsetof(G, list_size), offsetof(G, list_at), offsetof(G, renew_allocate), offsetof(G, renew_can_allocate), offsetof(G, renew_delete),
 		offsetof(G, recursion_error)}) == -1);
 	CHECK(AbiLayoutMismatch(394, {sizeof(T), alignof(T), offsetof(T, cost_zero), offsetof(T, cost_vehicles), offsetof(T, cost_error), offsetof(T, cost_add), offsetof(T,
-		cost_move), offsetof(T, cost_amount), offsetof(T, success), offsetof(T, error), offsetof(T, money), offsetof(T, ownership), offsetof(T,
+		cost_move), offsetof(T, cost_amount), offsetof(T, success), offsetof(T, error), offsetof(T, money), offsetof(T, commands), offsetof(T,
 		rear), offsetof(T, articulated), offsetof(T, crashed), offsetof(T, stopped), offsetof(T, chain_depot), offsetof(T, first), offsetof(T,
 		next_unit), offsetof(T, prev_unit), offsetof(T, length), offsetof(T, flipped), offsetof(T, cargo_type), offsetof(T, can_carry), offsetof(T,
 		stopped_in_depot), offsetof(T, max_length), offsetof(T, check), offsetof(T, needs_renew), offsetof(T, engine_valid), offsetof(T,
@@ -141,9 +141,9 @@ static bool SameCost(const CommandCost &a, const CommandCost &b)
 TEST_CASE("Commands - shared native stack result layouts and encoded parameters")
 {
 	const auto &commands = GetRustCommandServices();
-	FleetSlotsFilled(621, &commands, 1);
+	FleetSlotsFilled(621, &commands, 6);
 	const auto &w = GetRustCommandCostServices();
-	FleetSlotsFilled(620, &w, 10);
+	FleetSlotsFilled(620, &w, 11);
 	AutoRestoreBackup<CompanyID> current(_current_company, CompanyID(0));
 	AutoRestoreBackup<CompanyID> local(_local_company, CompanyID(0));
 	CommandCost result;

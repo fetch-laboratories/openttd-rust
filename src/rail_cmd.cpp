@@ -215,6 +215,7 @@ static const uint8_t _track_sloped_sprites[14] = {
  *               11uuuudd => rail depot
  */
 
+#ifndef WITH_RUST
 /**
  * Tests if a vehicle interacts with the specified track.
  * All track bits interact except parallel #TRACK_BIT_HORZ or #TRACK_BIT_VERT.
@@ -253,6 +254,7 @@ static CommandCost CheckTrackCombination(TileIndex tile, TrackBits to_build)
 	/* Normally, we may overlap and any combination is valid */
 	return CommandCost();
 }
+#endif /* WITH_RUST */
 
 
 /** Valid TrackBits on a specific (non-steep)-slope without foundation */
@@ -377,6 +379,7 @@ Foundation GetRailFoundation(Slope tileh, TrackBits bits)
 }
 
 
+#ifndef WITH_RUST
 /**
  * Tests if a track can be build on a tile.
  *
@@ -747,6 +750,7 @@ CommandCost CmdRemoveSingleRail(DoCommandFlags flags, TileIndex tile, Track trac
 
 	return cost;
 }
+#endif /* WITH_RUST */
 
 
 /**
@@ -801,6 +805,7 @@ bool FloodHalftile(TileIndex t)
 	return flooded;
 }
 
+#ifndef WITH_RUST
 static const TileIndexDiffC _trackdelta[] = {
 	{ -1,  0 }, {  0,  1 }, { -1,  0 }, {  0,  1 }, {  1,  0 }, {  0,  1 },
 	{  0,  0 },
@@ -1843,6 +1848,7 @@ static CommandCost ClearTile_Track(TileIndex tile, DoCommandFlags flags)
 			return CMD_ERROR;
 	}
 }
+#endif /* WITH_RUST */
 
 /**
  * Get surface height in point (x,y)
@@ -2881,6 +2887,7 @@ static void GetTileDesc_Track(TileIndex tile, TileDesc &td)
 	}
 }
 
+#ifndef WITH_RUST
 static void ChangeTileOwner_Track(TileIndex tile, Owner old_owner, Owner new_owner)
 {
 	if (!IsTileOwner(tile, old_owner)) return;
@@ -2908,6 +2915,7 @@ static void ChangeTileOwner_Track(TileIndex tile, Owner old_owner, Owner new_own
 		Command<CMD_LANDSCAPE_CLEAR>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, tile);
 	}
 }
+#endif /* WITH_RUST */
 
 static const uint8_t _fractcoords_behind[4] = { 0x8F, 0x8, 0x80, 0xF8 };
 static const uint8_t _fractcoords_enter[4] = { 0x8A, 0x48, 0x84, 0xA8 };
@@ -2990,6 +2998,7 @@ static VehicleEnterTileStates VehicleEnter_Track(Vehicle *u, TileIndex tile, int
 	return {};
 }
 
+#ifndef WITH_RUST
 /**
  * Tests if autoslope is allowed.
  *
@@ -3094,6 +3103,305 @@ static CommandCost CheckBuildAbove_Track(TileIndex tile, DoCommandFlags flags, A
 	if (IsPlainRail(tile)) return CommandCost();
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
 }
+#endif /* WITH_RUST */
+
+#ifdef WITH_RUST
+/* Rust owns the rail track, depot and signal commands and the rail clear,
+ * owner, terraform and build-above tile procs (#265). Map, pools, company
+ * counters and every CommandCost stay native; the original bodies remain
+ * under #ifndef WITH_RUST above. */
+#include "rust/rail_command_ffi.h"
+#include "rust/services_water.h"
+#include "rust/command_cost_services.h"
+#include "rust/company_services.h"
+#include "rust/settings_services.h"
+#include "rust/vehicle_services.h"
+#include "tilearea_type.h"
+#include "window_func.h"
+
+static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28);
+static_assert(PR_CLEAR_DEPOT_TRAIN == 30 && PR_CLEAR_WATER == 34 && PR_BUILD_FOUNDATION == 57);
+static_assert(VALID_LEVEL_CROSSING_SLOPES == 0x6CA1 && INVALID_ROADTYPE == 63 && ROAD_X == 10 && ROAD_Y == 5);
+static_assert(to_underlying(RailGroundType::Barren) == 0 && to_underlying(RailGroundType::HalfTileWater) == 13);
+static_assert(to_underlying(RailTileType::Normal) == 0 && to_underlying(RailTileType::Signals) == 1 && to_underlying(RailTileType::Depot) == 3);
+static_assert(LEVELCROSSING_TRACKBIT_FACTOR == 2 && TUNNELBRIDGE_TRACKBIT_FACTOR == 4 && TILE_AXIAL_DISTANCE == 192 && TILE_CORNER_DISTANCE == 128);
+static_assert(OWNER_WATER.base() == 0x11 && OWNER_DEITY.base() == 0x12 && OT_LOADING == 3 && SIGTYPE_LAST == 5);
+static_assert(FOUNDATION_RAIL_W == 10 && FOUNDATION_RAIL_N == 13 && FOUNDATION_INVALID == 0xFF);
+
+/** Caller-owned frame of CmdConvertRail: the area iterator and the affected trains. */
+struct OpenTTDRailConvertFrame {
+	std::unique_ptr<TileIterator> iter;
+	TrainList affected;
+};
+
+static CommandCost &RailCost(OpenTTDCommandCost *cost) noexcept { return *reinterpret_cast<CommandCost *>(cost); }
+
+static void RailBuildSingle(OpenTTDCommandCost *out, uint16_t flags, uint32_t tile, uint8_t rt, uint8_t track, bool auto_remove) noexcept
+{
+	RailCost(out) = Command<CMD_BUILD_SINGLE_RAIL>::Do(DoCommandFlags{flags}, TileIndex{tile}, static_cast<RailType>(rt), static_cast<Track>(track), auto_remove);
+}
+static void RailRemoveSingle(OpenTTDCommandCost *out, uint16_t flags, uint32_t tile, uint8_t track) noexcept
+{
+	RailCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlags{flags}, TileIndex{tile}, static_cast<Track>(track));
+}
+static void RailBuildSignal(OpenTTDCommandCost *out, uint16_t flags, uint32_t tile, uint8_t track, uint8_t sigtype, uint8_t sigvar, bool convert, bool skip, bool ctrl, uint8_t cycle_start, uint8_t cycle_stop, uint8_t num_dir_cycle, uint8_t signals_copy) noexcept
+{
+	RailCost(out) = Command<CMD_BUILD_SINGLE_SIGNAL>::Do(DoCommandFlags{flags}, TileIndex{tile}, static_cast<Track>(track), static_cast<SignalType>(sigtype), static_cast<SignalVariant>(sigvar), convert, skip, ctrl, static_cast<SignalType>(cycle_start), static_cast<SignalType>(cycle_stop), num_dir_cycle, signals_copy);
+}
+static void RailRemoveSignal(OpenTTDCommandCost *out, uint16_t flags, uint32_t tile, uint8_t track) noexcept
+{
+	RailCost(out) = Command<CMD_REMOVE_SINGLE_SIGNAL>::Do(DoCommandFlags{flags}, TileIndex{tile}, static_cast<Track>(track));
+}
+static void RailConvert(OpenTTDCommandCost *out, uint16_t flags, uint32_t tile, uint32_t area_start, uint8_t rt, bool diagonal) noexcept
+{
+	RailCost(out) = Command<CMD_CONVERT_RAIL>::Do(DoCommandFlags{flags}, TileIndex{tile}, TileIndex{area_start}, static_cast<RailType>(rt), diagonal);
+}
+static bool RailShipOnTile(uint32_t tile) noexcept
+{
+	for (const Vehicle *v : VehiclesOnTile(TileIndex{tile})) {
+		if (RustVehicleVehicleType(v) == VEH_SHIP) return true;
+	}
+	return false;
+}
+
+static OpenTTDSlopeZ RailApplyFoundation(uint8_t f, uint8_t tileh) noexcept
+{
+	Slope s = static_cast<Slope>(tileh);
+	int32_t z = ApplyFoundationToSlope(static_cast<Foundation>(f), s);
+	return {.z = z, .slope = s};
+}
+static OpenTTDRailTrainParking RailParking(Train *v) noexcept
+{
+	return {.track = v->GetTrack(), .status = RustVehicleStatus(v), .speed = RustVehicleSpeed(v), .order = RustVehicleOrderType(v)};
+}
+static void RailMakeRoad(uint32_t tile, OpenTTDCrossingRoad r) noexcept
+{
+	MakeRoadNormal(TileIndex{tile}, static_cast<RoadBits>(r.bits), static_cast<RoadType>(r.road_type), static_cast<RoadType>(r.tram_type), TownID(r.town), Owner(r.road_owner), Owner(r.tram_owner));
+}
+static void RailMakeCrossing(uint32_t tile, uint8_t road, uint8_t tram, uint8_t rail, uint8_t axis, uint8_t rt, uint8_t road_rt, uint8_t tram_rt, uint16_t town) noexcept
+{
+	MakeRoadCrossing(TileIndex{tile}, Owner(road), Owner(tram), Owner(rail), static_cast<Axis>(axis), static_cast<RailType>(rt), static_cast<RoadType>(road_rt), static_cast<RoadType>(tram_rt), TownID(town));
+}
+static void RailMakeShore(uint32_t tile) noexcept
+{
+	TileIndex t{tile};
+	bool docking = OpenTTDIsDockingTile(tile);
+	OpenTTDMakeShore(tile);
+	SetDockingTile(t, docking);
+}
+static void RailDockingCheck(uint32_t tile) noexcept
+{
+	if (IsPossibleDockingTile(TileIndex{tile})) CheckForDockingTile(TileIndex{tile});
+}
+static void RailDepotWindows(uint32_t tile) noexcept
+{
+	InvalidateWindowData(WC_VEHICLE_DEPOT, TileIndex{tile});
+	InvalidateWindowData(WC_BUILD_VEHICLE, TileIndex{tile});
+}
+static void RailCollectTrains(OpenTTDRailConvertFrame *frame, uint32_t tile) noexcept
+{
+	for (Vehicle *v : VehiclesOnTile(TileIndex{tile})) {
+		if (RustVehicleVehicleType(v) == VEH_TRAIN) include(frame->affected, RustVehicleFirst(Train::From(v)));
+	}
+}
+static void RailConsistChanged(OpenTTDRailConvertFrame *frame) noexcept
+{
+	for (Train *v : frame->affected) {
+		v->ConsistChanged(CCF_TRACK);
+	}
+}
+
+const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
+{
+	static const OpenTTDRailCommandServices services{
+		.shared = &GetRustSharedServices(),
+		.rail = &GetRustRailMapServices(),
+		.cost = &GetRustCommandCostServices(),
+		.command = &GetRustCommandServices(),
+		.signal = &GetRustSignalServices(),
+		.strings = {
+			.impossible_combination = STR_ERROR_IMPOSSIBLE_TRACK_COMBINATION,
+			.already_built = STR_ERROR_ALREADY_BUILT,
+			.build_on_water = STR_ERROR_CAN_T_BUILD_ON_WATER,
+			.sloped_wrong = STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION,
+			.remove_signals_first = STR_ERROR_MUST_REMOVE_SIGNALS_FIRST,
+			.road_works = STR_ERROR_ROAD_WORKS_IN_PROGRESS,
+			.oneway_road = STR_ERROR_CROSSING_ON_ONEWAY_ROAD,
+			.crossing_rail = STR_ERROR_CROSSING_DISALLOWED_RAIL,
+			.crossing_road = STR_ERROR_CROSSING_DISALLOWED_ROAD,
+			.no_track = STR_ERROR_THERE_IS_NO_RAILROAD_TRACK,
+			.owned_by = STR_ERROR_OWNED_BY,
+			.flat_land = STR_ERROR_FLAT_LAND_REQUIRED,
+			.demolish_bridge = STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
+			.no_suitable_track = STR_ERROR_NO_SUITABLE_RAILROAD_TRACK,
+			.no_signals = STR_ERROR_THERE_ARE_NO_SIGNALS,
+			.owned_by_another = STR_ERROR_AREA_IS_OWNED_BY_ANOTHER,
+			.remove_track = STR_ERROR_MUST_REMOVE_RAILROAD_TRACK,
+			.demolish_building = STR_ERROR_BUILDING_MUST_BE_DEMOLISHED,
+			.ship_in_way = STR_ERROR_SHIP_IN_THE_WAY,
+		},
+		.rail_type_valid = [](uint8_t rt) noexcept { return ValParamRailType(static_cast<RailType>(rt)); },
+		.compatible_rail = [](uint8_t a, uint8_t b) noexcept { return IsCompatibleRail(static_cast<RailType>(a), static_cast<RailType>(b)); },
+		.powered_rail = [](uint8_t a, uint8_t b) noexcept { return HasPowerOnRail(static_cast<RailType>(a), static_cast<RailType>(b)); },
+		.train_powered = [](Train *v, uint8_t rt) noexcept { return HasPowerOnRail(v->GetRailTypes(), static_cast<RailType>(rt)); },
+		.rail_no_crossings = [](uint8_t rt) noexcept { return RailNoLevelCrossings(static_cast<RailType>(rt)); },
+		.road_no_crossing = [](uint8_t rt) noexcept { return RoadNoLevelCrossing(static_cast<RoadType>(rt)); },
+		.rail_build_cost = [](uint8_t rt) noexcept { return RailBuildCost(static_cast<RailType>(rt)).base(); },
+		.rail_clear_cost = [](uint8_t rt) noexcept { return RailClearCost(static_cast<RailType>(rt)).base(); },
+		.rail_convert_cost = [](uint8_t from, uint8_t to) noexcept { return RailConvertCost(static_cast<RailType>(from), static_cast<RailType>(to)).base(); },
+		.road_build_cost = [](uint8_t rt) noexcept { return RoadBuildCost(static_cast<RoadType>(rt)).base(); },
+		.crossing_with_competitor = RustCrossingWithCompetitor,
+		.disable_elrails = RustDisableElrails,
+		.rail_foundation = [](uint8_t tileh, uint8_t bits) noexcept -> Foundation { return GetRailFoundation(static_cast<Slope>(tileh), static_cast<TrackBits>(bits)); },
+		.apply_foundation = RailApplyFoundation,
+		.slope_z_in_corner = [](uint8_t tileh, uint8_t corner) noexcept -> int32_t { return GetSlopeZInCorner(static_cast<Slope>(tileh), static_cast<Corner>(corner)); },
+		.flooding = [](uint32_t tile) noexcept -> FloodingBehaviour { return GetFloodingBehaviour(TileIndex{tile}); },
+		.entrance_edge = [](uint32_t tile, int32_t z, uint8_t tileh, uint8_t dir) noexcept { return AutoslopeCheckForEntranceEdge(TileIndex{tile}, z, static_cast<Slope>(tileh), static_cast<DiagDirection>(dir)); },
+		.ship_on_tile = RailShipOnTile,
+		.build_rail = RailBuildSingle,
+		.remove_rail = RailRemoveSingle,
+		.build_signal = RailBuildSignal,
+		.remove_signal = RailRemoveSignal,
+		.convert_rail = RailConvert,
+		.rail_infrastructure = RustAddRailInfrastructure,
+		.road_infrastructure = RustAddRoadInfrastructure,
+		.signal_infrastructure = RustAddSignalInfrastructure,
+		.infrastructure_dirty = [](uint8_t owner) noexcept { DirtyCompanyInfrastructureWindows(CompanyID(owner)); },
+		.reserving_train = [](uint32_t tile, uint8_t track) noexcept { return GetTrainForReservation(TileIndex{tile}, static_cast<Track>(track)); },
+		.parking = RailParking,
+		.train_position = [](Train *v) noexcept -> OpenTTDRailTrainPosition { return {.tile = RustVehicleTile(v), .trackdir = GetRustSharedServices().train_trackdir(v)}; },
+		.layout_changed = [](uint32_t tile, uint8_t track) noexcept { YapfNotifyTrackLayoutChange(TileIndex{tile}, static_cast<Track>(track)); },
+		.mark_crossings = [](uint32_t tile, uint8_t axis) noexcept { MarkDirtyAdjacentLevelCrossingTiles(TileIndex{tile}, static_cast<Axis>(axis)); },
+		.crossing_removed = [](uint32_t tile, uint8_t axis) noexcept { UpdateAdjacentLevelCrossingTilesOnLevelCrossingRemoval(TileIndex{tile}, static_cast<Axis>(axis)); },
+		.make_crossing = RailMakeCrossing,
+		.make_road = RailMakeRoad,
+		.depot_available = []() noexcept { return Depot::CanAllocateItem(); },
+		.new_depot = [](uint32_t tile) noexcept { return (new Depot(TileIndex{tile}))->index.base(); },
+		.depot_name = [](uint16_t id) noexcept { MakeDefaultName(Depot::Get(DepotID(id))); },
+		.delete_depot = [](uint32_t tile) noexcept { delete Depot::GetByTile(TileIndex{tile}); },
+		.depot_windows = RailDepotWindows,
+		.close_inspect = [](uint32_t tile) noexcept { DeleteNewGRFInspectWindow(GSF_RAILTYPES, tile); },
+		.make_shore = RailMakeShore,
+		.docking_check = RailDockingCheck,
+		.area_begin = [](OpenTTDRailConvertFrame *frame, uint32_t start, uint32_t end, bool diagonal) noexcept { frame->iter = TileIterator::Create(TileIndex{start}, TileIndex{end}, diagonal); },
+		.area_tile = [](OpenTTDRailConvertFrame *frame) noexcept { return (**frame->iter).base(); },
+		.area_next = [](OpenTTDRailConvertFrame *frame) noexcept { ++(*frame->iter); },
+		.area_contains = [](uint32_t start, uint32_t end, bool diagonal, uint32_t tile) noexcept {
+			if (diagonal) return DiagonalTileArea(TileIndex{start}, TileIndex{end}).Contains(TileIndex{tile});
+			return OrthogonalTileArea(TileIndex{start}, TileIndex{end}).Contains(TileIndex{tile});
+		},
+		.collect_trains = RailCollectTrains,
+		.consist_changed = RailConsistChanged,
+	};
+	return services;
+}
+
+static const OpenTTDRailCommandServices *RailServices() noexcept { return &GetRustRailCommandServices(); }
+
+CommandCost CmdBuildSingleRail(DoCommandFlags flags, TileIndex tile, RailType railtype, Track track, bool auto_remove_signals)
+{
+	CommandCost cost, ret, other;
+	openttd_rust_rail_build_single(RailServices(), RustCommandCost(&cost), RustCommandCost(&ret), RustCommandCost(&other), flags.base(), tile.base(), railtype, track, auto_remove_signals);
+	return cost;
+}
+
+CommandCost CmdRemoveSingleRail(DoCommandFlags flags, TileIndex tile, Track track)
+{
+	CommandCost cost, ret;
+	openttd_rust_rail_remove_single(RailServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), track);
+	return cost;
+}
+
+static CommandCost RailTrackDrag(DoCommandFlags flags, TileIndex tile, TileIndex end_tile, RailType railtype, Track track, bool remove, bool auto_remove_signals, bool fail_on_obstacle)
+{
+	CommandCost total, last_error, ret;
+	openttd_rust_rail_track_drag(RailServices(), RustCommandCost(&total), RustCommandCost(&last_error), RustCommandCost(&ret), flags.base(), tile.base(), end_tile.base(), railtype, track, remove, auto_remove_signals, fail_on_obstacle);
+	return total;
+}
+
+CommandCost CmdBuildRailroadTrack(DoCommandFlags flags, TileIndex end_tile, TileIndex start_tile, RailType railtype, Track track, bool auto_remove_signals, bool fail_on_obstacle)
+{
+	return RailTrackDrag(flags, start_tile, end_tile, railtype, track, false, auto_remove_signals, fail_on_obstacle);
+}
+
+CommandCost CmdRemoveRailroadTrack(DoCommandFlags flags, TileIndex end_tile, TileIndex start_tile, Track track)
+{
+	return RailTrackDrag(flags, start_tile, end_tile, INVALID_RAILTYPE, track, true, false, false);
+}
+
+CommandCost CmdBuildTrainDepot(DoCommandFlags flags, TileIndex tile, RailType railtype, DiagDirection dir)
+{
+	CommandCost cost, ret;
+	openttd_rust_rail_build_depot(RailServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), railtype, dir);
+	return cost;
+}
+
+CommandCost CmdBuildSingleSignal(DoCommandFlags flags, TileIndex tile, Track track, SignalType sigtype, SignalVariant sigvar, bool convert_signal, bool skip_existing_signals, bool ctrl_pressed, SignalType cycle_start, SignalType cycle_stop, uint8_t num_dir_cycle, uint8_t signals_copy)
+{
+	CommandCost cost, ret;
+	openttd_rust_rail_build_signal(RailServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), track, sigtype, sigvar, convert_signal, skip_existing_signals, ctrl_pressed, cycle_start, cycle_stop, num_dir_cycle, signals_copy);
+	return cost;
+}
+
+static CommandCost RailSignalDrag(DoCommandFlags flags, TileIndex tile, TileIndex end_tile, Track track, SignalType sigtype, SignalVariant sigvar, bool mode, bool remove, bool autofill, bool minimise_gaps, int signal_density)
+{
+	CommandCost total, last_error, ret;
+	openttd_rust_rail_signal_drag(RailServices(), RustCommandCost(&total), RustCommandCost(&last_error), RustCommandCost(&ret), flags.base(), tile.base(), end_tile.base(), track, sigtype, sigvar, mode, remove, autofill, minimise_gaps, signal_density);
+	return total;
+}
+
+CommandCost CmdBuildSignalTrack(DoCommandFlags flags, TileIndex tile, TileIndex end_tile, Track track, SignalType sigtype, SignalVariant sigvar, bool mode, bool autofill, bool minimise_gaps, uint8_t signal_density)
+{
+	return RailSignalDrag(flags, tile, end_tile, track, sigtype, sigvar, mode, false, autofill, minimise_gaps, signal_density);
+}
+
+CommandCost CmdRemoveSingleSignal(DoCommandFlags flags, TileIndex tile, Track track)
+{
+	CommandCost cost;
+	openttd_rust_rail_remove_signal(RailServices(), RustCommandCost(&cost), flags.base(), tile.base(), track);
+	return cost;
+}
+
+CommandCost CmdRemoveSignalTrack(DoCommandFlags flags, TileIndex tile, TileIndex end_tile, Track track, bool autofill)
+{
+	return RailSignalDrag(flags, tile, end_tile, track, SIGTYPE_BLOCK, SIG_ELECTRIC, false, true, autofill, false, 1);
+}
+
+CommandCost CmdConvertRail(DoCommandFlags flags, TileIndex tile, TileIndex area_start, RailType totype, bool diagonal)
+{
+	OpenTTDRailConvertFrame frame;
+	CommandCost cost, error, ret;
+	openttd_rust_rail_convert(RailServices(), &frame, RustCommandCost(&cost), RustCommandCost(&error), RustCommandCost(&ret), flags.base(), tile.base(), area_start.base(), totype, diagonal);
+	return cost;
+}
+
+static CommandCost ClearTile_Track(TileIndex tile, DoCommandFlags flags)
+{
+	CommandCost cost, ret;
+	openttd_rust_rail_clear_tile(RailServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base());
+	return cost;
+}
+
+static void ChangeTileOwner_Track(TileIndex tile, Owner old_owner, Owner new_owner)
+{
+	CommandCost ret;
+	openttd_rust_rail_change_owner(RailServices(), RustCommandCost(&ret), tile.base(), old_owner.base(), new_owner.base());
+}
+
+static CommandCost TerraformTile_Track(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
+{
+	CommandCost cost;
+	openttd_rust_rail_terraform(RailServices(), RustCommandCost(&cost), flags.base(), tile.base(), z_new, tileh_new);
+	return cost;
+}
+
+static CommandCost CheckBuildAbove_Track(TileIndex tile, DoCommandFlags flags, Axis, int)
+{
+	CommandCost cost;
+	openttd_rust_rail_build_above(RailServices(), RustCommandCost(&cost), flags.base(), tile.base());
+	return cost;
+}
+#endif /* WITH_RUST */
 
 extern const TileTypeProcs _tile_type_rail_procs = {
 	DrawTile_Track,           // draw_tile_proc

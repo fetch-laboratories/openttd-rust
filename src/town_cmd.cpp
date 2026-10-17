@@ -945,7 +945,6 @@ static void ChangeTileOwner_Town(TileIndex, Owner, Owner)
 static_assert(Ticks::TOWN_GROWTH_TICKS == 70 && MAX_BRIDGES == 13);
 static_assert(OWNER_TOWN.base() == 15 && OWNER_NONE.base() == 16);
 static_assert(CalendarTime::MAX_DATE.base() == 1826212865);
-static bool RustTown_build_on_slopes() noexcept { return _settings_game.construction.build_on_slopes; }
 static uint8_t RustTown_growth_rate() noexcept { return _settings_game.economy.town_growth_rate; }
 static bool RustTown_allow_crossings() noexcept { return _settings_game.economy.allow_town_level_crossings; }
 static bool RustTown_allow_roads() noexcept { return _settings_game.economy.allow_town_roads; }
@@ -1095,7 +1094,6 @@ static const OpenTTDTownLeaves &GetRustTownServices() noexcept
 {
 	static const OpenTTDTownLeaves services{
 		.map_log_x = OpenTTDMapLogX,
-		.build_on_slopes = RustTown_build_on_slopes,
 		.growth_rate = RustTown_growth_rate,
 		.snow_line = GetRustSharedServices().snow_line,
 		.editor = OpenTTDEditor,

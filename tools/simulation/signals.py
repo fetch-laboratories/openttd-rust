@@ -54,12 +54,68 @@ def scenarios(soak):
             console=["signals_scenario inspect-live", "unpause"],
         )
     )
+    cases.append(
+        dict(
+            cases[2],
+            name="signals-rail-commands",
+            signals="rail-commands",
+            ticks=45 * core.TICKS_PER_DAY + core.SNAPSHOT_TICKS,
+            console=["signals_scenario rail-commands", "unpause"],
+        )
+    )
     return cases
+
+
+# Rail command owner branches (#265) reached by the rail-commands scenario.
+RAIL_COMMAND_BRANCHES = (
+    "build_rail",
+    "build_not_plain",
+    "build_convert",
+    "build_remove_signals",
+    "build_crossing",
+    "build_clear",
+    "remove_rail",
+    "remove_crossing",
+    "remove_signal_charge",
+    "remove_diagonal_crossing",
+    "drag_build",
+    "drag_remove",
+    "drag_obstacle",
+    "depot_build",
+    "depot_rotate",
+    "signal_build",
+    "signal_convert",
+    "signal_variant",
+    "signal_cycle_type",
+    "signal_cycle_side",
+    "signal_copy",
+    "signal_pbs_state",
+    "signal_reserve",
+    "signal_drag",
+    "signal_drag_remove",
+    "signal_minimise",
+    "signal_autofill",
+    "signal_wormhole",
+    "signal_remove",
+    "convert_rail",
+    "convert_depot",
+    "convert_wormhole",
+    "convert_station_crossing",
+    "convert_reroute",
+    "clear_rail",
+    "clear_depot",
+    "owner_transfer",
+    "owner_clear",
+    "terraform_corner",
+    "terraform_depot",
+    "build_above_clear",
+)
 
 
 def install(scenario, run_dir):
     if "signals" in scenario:
         (run_dir / "signals-live.scr").write_text("signals_scenario inspect-live\n")
+        (run_dir / "rail-live.scr").write_text("signals_scenario rail-live\n")
 
 
 def game_environment(scenario):
@@ -269,6 +325,17 @@ def check(scenario, run, mode, role, result):
     if "signals" not in scenario or run["exit"] or not run["snapshots"]:
         return
     lines = [line for line in run["log"] if line.startswith("SIGNALS ")]
+    if scenario["signals"] == "rail-commands":
+        lines = [line for line in run["log"] if line.startswith("RAILCMD ")]
+        if len(lines) < 150 or not any("live-reserved" in line for line in lines):
+            result["problems"].append(f"{mode}/{role}: missing rail command results")
+        key = mode + "_rail_commands"
+        if role == "reference":
+            result[key] = lines
+        elif result[key] != lines:
+            result["problems"].append(f"{mode}: rail command results differ")
+        core.branch_witnesses(scenario, run, role, "rail_cmd", RAIL_COMMAND_BRANCHES)
+        return
     if scenario["signals"] == "reload":
         for name in ("live-states", "pending live"):
             if not any(line.startswith(f"SIGNALS {name} ") for line in lines):

@@ -6,6 +6,7 @@
  */
 
 #include "services_ffi.h"
+#include "services_water.h"
 
 /** @file ship_control_services.h Typed synchronous shared-world services. */
 #include "settings_services.h"
@@ -64,7 +65,6 @@ static uint32_t Ship_dist_square(uint32_t from, uint32_t to) noexcept { return D
 
 static uint32_t Ship_dist_manhattan(uint32_t from, uint32_t to) noexcept { return DistanceManhattan(TileIndex(from), TileIndex(to)); }
 
-static bool Ship_docking(uint32_t tile) noexcept { return IsDockingTile(TileIndex(tile)); }
 
 static bool Ship_dock(uint32_t tile) noexcept { return IsDockTile(TileIndex(tile)); }
 
@@ -418,7 +418,7 @@ static const OpenTTDShipLeaves &GetShipServices()
 		.tile_min_z = Ship_tile_min_z, .tile_max_z = Ship_tile_max_z,
 		.track_status = Ship_track_status, .offset = Ship_offset,
 		.diag_between = Ship_diag_between, .dist_square = Ship_dist_square,
-		.dist_manhattan = Ship_dist_manhattan, .docking = Ship_docking,
+		.dist_manhattan = Ship_dist_manhattan, .docking = OpenTTDIsDockingTile,
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
 		.station = Ship_station, .industry_station = Ship_industry_station,
 		.oilrig = Ship_oilrig, .station_use = Ship_station_use,

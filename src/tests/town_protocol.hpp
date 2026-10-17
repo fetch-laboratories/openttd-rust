@@ -42,7 +42,6 @@ static inline uint32_t TownProtocolRandom(void *) noexcept { town_protocol_world
 static inline uint32_t TownProtocolIndustry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
 
 static inline uint32_t TownProtocol_map_log_x() noexcept { return 6; }
-static inline bool TownProtocol_build_on_slopes() noexcept { return false; }
 static inline uint8_t TownProtocol_growth_rate() noexcept { return 2; }
 static inline uint8_t TownProtocol_snow_line() noexcept { return 0; }
 static inline bool TownProtocol_editor() noexcept { return false; }
@@ -93,7 +92,6 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 {
 	return {
 		.map_log_x = TownProtocol_map_log_x,
-		.build_on_slopes = TownProtocol_build_on_slopes,
 		.growth_rate = TownProtocol_growth_rate,
 		.snow_line = TownProtocol_snow_line,
 		.editor = TownProtocol_editor,

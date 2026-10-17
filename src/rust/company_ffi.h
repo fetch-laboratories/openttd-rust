@@ -184,7 +184,6 @@ struct OpenTTDCompanyServices {
 	OPENTTD_COMPANY_SERVICE(OpenTTDCompanySignalTile, signal_tile, uint32_t);
 	OPENTTD_COMPANY_SERVICE(bool, has_signal_on_track, uint32_t, uint8_t);
 	OPENTTD_COMPANY_SERVICE(void, add_track_to_signal_buffer, uint32_t, uint8_t, uint8_t);
-	OPENTTD_COMPANY_SERVICE(void, update_level_crossing, uint32_t);
 	OPENTTD_COMPANY_SERVICE(void, update_signals_in_buffer);
 	OPENTTD_COMPANY_SERVICE(void, add_airport_infrastructure, uint8_t, uint8_t);
 	OPENTTD_COMPANY_SERVICE(uint32_t, station_next_owned, uint8_t, uint32_t);

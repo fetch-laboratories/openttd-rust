@@ -333,7 +333,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*enter_tile)(OpenTTDTrainHandle, uint32_t, int32_t, int32_t) noexcept;
 	OpenTTDTrainDepot (*find_depot)(OpenTTDTrainHandle, int32_t) noexcept;
 	uint64_t (*first_track)(OpenTTDTrainHandle, uint8_t) noexcept;
-	void (*free_reservation)(OpenTTDTrainHandle) noexcept;
 	uint64_t (*grf_version)(OpenTTDTrainHandle) noexcept;
 	uint64_t (*handle_breakdown)(OpenTTDTrainHandle) noexcept;
 	uint64_t (*has_depot_res)(OpenTTDTrainHandle, uint32_t) noexcept;
@@ -438,7 +437,6 @@ struct OpenTTDTrainServices {
 	void (*train_list)(OpenTTDTrainHandle) noexcept;
 	uint64_t (*train_visit)(OpenTTDTrainHandle) noexcept;
 	void (*truncate_cargo)(OpenTTDTrainHandle, uint32_t) noexcept;
-	uint64_t (*try_path)(OpenTTDTrainHandle, uint8_t, uint8_t) noexcept;
 	uint64_t (*try_reserve)(OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t) noexcept;
 	uint64_t (*tunnel_dir)(OpenTTDTrainHandle, uint32_t) noexcept;
 	void (*unreserve)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept;

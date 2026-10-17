@@ -112,6 +112,8 @@ pub struct Train {
 #[derive(Clone, Copy)]
 pub struct Input {
     pub context: *mut c_void,
+    pub vehicle: *const crate::services::Train,
+    pub shared: *const crate::services::Services,
     pub settings: Settings,
     pub map_x: u32,
     pub tile: u32,
@@ -144,7 +146,6 @@ pub struct Leaves {
     pub train: unsafe extern "C" fn(*mut c_void) -> Train,
     pub tile: unsafe extern "C" fn(u32, u8) -> Tile,
     pub follow: unsafe extern "C" fn(*mut c_void, u32, u8, u64, u8, u8) -> Follow,
-    pub safe: unsafe extern "C" fn(*mut c_void, u32, u8, u8) -> u8,
     pub free: unsafe extern "C" fn(*mut c_void, u32, u8, u8) -> u8,
     pub compatible_station: unsafe extern "C" fn(u32, u32) -> u8,
     pub platform_length: unsafe extern "C" fn(u32, u8) -> u32,
@@ -552,7 +553,10 @@ impl Search {
         }
     }
     fn safe(&self, tile: u32, td: u8, forbid: u8) -> bool {
-        unsafe { (self.leaves.safe)(self.input.context, tile, td, forbid) != 0 }
+        // SAFETY: The immutable shared table and native train outlive this synchronous search.
+        unsafe {
+            ((*self.input.shared).safe_waiting_position)(self.input.vehicle, tile, td, forbid != 0)
+        }
     }
     fn free(&self, tile: u32, td: u8, forbid: u8) -> bool {
         unsafe { (self.leaves.free)(self.input.context, tile, td, forbid) != 0 }

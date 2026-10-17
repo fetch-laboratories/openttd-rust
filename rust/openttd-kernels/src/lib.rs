@@ -24,6 +24,7 @@ mod linkgraph;
 mod math;
 mod node_hash;
 mod packet;
+mod rail_cmd;
 pub mod rail_yapf;
 mod road;
 mod road_data;

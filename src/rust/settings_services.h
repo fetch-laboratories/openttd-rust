@@ -9,6 +9,7 @@
 #ifndef RUST_SETTINGS_SERVICES_H
 #define RUST_SETTINGS_SERVICES_H
 #include "../settings_type.h"
+#include "../autoslope.h"
 
 inline uint8_t RustRoadAccelerationModel() noexcept { return _settings_game.vehicle.roadveh_acceleration_model; }
 inline uint8_t RustRoadSide() noexcept { return _settings_game.vehicle.road_side; }
@@ -34,4 +35,9 @@ inline uint8_t OpenTTDTownDensity() noexcept { return _settings_game.difficulty.
 inline uint16_t OpenTTDCustomTownNumber() noexcept { return _settings_newgame.game_creation.custom_town_number; }
 inline uint8_t OpenTTDLargerTowns() noexcept { return _settings_game.economy.larger_towns; }
 inline uint8_t OpenTTDTownNameStyle() noexcept { return _settings_game.game_creation.town_name; }
+inline bool RustBuildOnSlopes() noexcept { return _settings_game.construction.build_on_slopes; }
+inline bool RustAutoslopeEnabled() noexcept { return AutoslopeEnabled(); }
+inline bool RustCrossingWithCompetitor() noexcept { return _settings_game.construction.crossing_with_competitor; }
+inline bool RustDisableElrails() noexcept { return _settings_game.vehicle.disable_elrails; }
+inline bool RustForbid90Deg() noexcept { return _settings_game.pf.forbid_90_deg; }
 #endif /* RUST_SETTINGS_SERVICES_H */

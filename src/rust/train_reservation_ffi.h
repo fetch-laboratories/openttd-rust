@@ -106,7 +106,6 @@ struct OpenTTDTrainReservationLeaves {
 	uint64_t (*is_tunnel)(void *, OpenTTDTrainHandle, uint32_t) noexcept;
 	uint64_t (*is_waypoint)(void *, OpenTTDTrainHandle, uint32_t) noexcept;
 	uint64_t (*line_reverse)(void *, OpenTTDTrainHandle) noexcept;
-	void (*mark_bridge)(void *, OpenTTDTrainHandle, uint32_t) noexcept;
 	void (*mark_tile)(void *, OpenTTDTrainHandle, uint32_t) noexcept;
 	uint64_t (*needs_service)(void *, OpenTTDTrainHandle) noexcept;
 	uint64_t (*oneway)(void *, OpenTTDTrainHandle, uint32_t, uint8_t) noexcept;
@@ -122,7 +121,6 @@ struct OpenTTDTrainReservationLeaves {
 	uint64_t (*reserved)(void *, OpenTTDTrainHandle, uint32_t) noexcept;
 	uint64_t (*reserve_paths)(void *, OpenTTDTrainHandle) noexcept;
 	void (*restore_order)(void *, OpenTTDTrainHandle) noexcept;
-	uint64_t (*safe)(void *, OpenTTDTrainHandle, uint32_t, uint8_t) noexcept;
 	void (*save_order)(void *, OpenTTDTrainHandle) noexcept;
 	void (*service)(void *, OpenTTDTrainHandle) noexcept;
 	void (*set_depot)(void *, OpenTTDTrainHandle, uint32_t, uint8_t) noexcept;
@@ -133,6 +131,7 @@ struct OpenTTDTrainReservationLeaves {
 	uint64_t (*show_res)(void *, OpenTTDTrainHandle) noexcept;
 	OpenTTDSignalContext (*signal_context)() noexcept;
 	const OpenTTDVehicleServices *vehicle;
+	const OpenTTDSharedServices *shared;
 	void (*start_stop)(void *, OpenTTDTrainHandle) noexcept;
 	uint64_t (*station)(void *, OpenTTDTrainHandle, uint32_t) noexcept;
 	uint64_t (*station_train)(void *, OpenTTDTrainHandle, uint16_t) noexcept;

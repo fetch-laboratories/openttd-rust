@@ -42,6 +42,9 @@ static_assert(sizeof(DestinationID) >= sizeof(DepotID));
 static_assert(sizeof(DestinationID) >= sizeof(StationID));
 
 #ifdef WITH_RUST
+#include "rust/command_services_ffi.h"
+#include "rust/command_cost_services.h"
+#include "rust/vehicle_services.h"
 static_assert(sizeof(Order) == sizeof(OpenTTDOrderFields) && alignof(Order) == alignof(OpenTTDOrderFields));
 static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructible_v<Order>);
 static_assert(sizeof(VehicleFlags) == sizeof(uint16_t) && alignof(VehicleFlags) == alignof(uint16_t));
@@ -65,12 +68,6 @@ extern "C" void openttd_orders_destroy(void *data, size_t length) noexcept
 #endif
 
 #ifdef WITH_RUST
-extern "C" void *openttd_orders_first_vehicle(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return const_cast<Vehicle *>(v->First());
-}
-
 extern "C" uint64_t openttd_orders_last_station(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
@@ -111,7 +108,8 @@ extern "C" uint64_t openttd_orders_primary_vehicle(void *ctx) noexcept
 extern "C" uint64_t openttd_orders_vehicle_ownership(void *ctx, void *result) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	{ CommandCost cost = CheckOwnership(v->owner); *static_cast<CommandCost *>(result) = cost; return cost.Succeeded(); }
+	GetRustCommandServices().ownership(RustCommandCost(static_cast<CommandCost *>(result)), v->owner.base());
+	return static_cast<CommandCost *>(result)->Succeeded();
 }
 
 extern "C" uint64_t openttd_orders_ticks_per_second() noexcept
@@ -305,7 +303,8 @@ extern "C" uint64_t openttd_orders_can_use_station(void *ctx, uint16_t destinati
 
 extern "C" uint64_t openttd_orders_owner_check(uint8_t owner, void *result) noexcept
 {
-	{ CommandCost cost = CheckOwnership(static_cast<Owner>(owner)); *static_cast<CommandCost *>(result) = cost; return cost.Succeeded(); }
+	GetRustCommandServices().ownership(RustCommandCost(static_cast<CommandCost *>(result)), owner);
+	return static_cast<CommandCost *>(result)->Succeeded();
 }
 
 extern "C" uint64_t openttd_orders_station_error(void *ctx, uint16_t destination) noexcept
@@ -677,7 +676,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	[](void *backup) noexcept { return static_cast<OrderBackup *>(backup)->GetRustState(); },
 	[](void *backup) noexcept { return static_cast<OrderBackup *>(backup)->GetRustOrders(); },
 	[](void *backup) noexcept { return static_cast<OrderBackup *>(backup)->rust_orders.get(); },
-	openttd_orders_first_vehicle,
+	RustVehicleFirstOpaque,
 	openttd_orders_last_station,
 	openttd_orders_ownerless_station,
 	openttd_orders_vehicle_type,

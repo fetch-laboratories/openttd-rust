@@ -754,6 +754,9 @@ impl Context {
     pub(crate) fn both(self, tile: u32, track: u8, owner: u8) {
         both(&self.world(), tile, track, owner);
     }
+    pub(crate) fn add_track(self, tile: u32, track: u8, owner: u8) {
+        add_track(&self.world(), tile, track, owner);
+    }
     pub(crate) fn add_side(self, tile: u32, side: u8, owner: u8) {
         add_side(&self.world(), tile, side, owner);
     }

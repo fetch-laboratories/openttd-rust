@@ -9,6 +9,7 @@
 #ifndef OPENTTD_RUST_RAIL_YAPF_FFI_H
 #define OPENTTD_RUST_RAIL_YAPF_FFI_H
 #include <stdint.h>
+#include "services_ffi.h"
 extern "C" {
 struct OpenTTDRailYapf;
 struct OpenTTDRailSettings {
@@ -39,6 +40,8 @@ struct OpenTTDRailTrain {
 };
 struct OpenTTDRailInput {
 	void *context;
+	const Train *vehicle;
+	const OpenTTDSharedServices *shared;
 	OpenTTDRailSettings settings;
 	uint32_t map_x, tile;
 	int32_t max_cost, desync;
@@ -52,7 +55,6 @@ struct OpenTTDRailLeaves {
 	OpenTTDRailTrain (*train)(void *) noexcept;
 	OpenTTDRailTile (*tile)(uint32_t, uint8_t) noexcept;
 	OpenTTDRailFollow (*follow)(void *, uint32_t, uint8_t, uint64_t, uint8_t, uint8_t) noexcept;
-	uint8_t (*safe)(void *, uint32_t, uint8_t, uint8_t) noexcept;
 	uint8_t (*free)(void *, uint32_t, uint8_t, uint8_t) noexcept;
 	uint8_t (*compatible_station)(uint32_t, uint32_t) noexcept;
 	uint32_t (*platform_length)(uint32_t, uint8_t) noexcept;

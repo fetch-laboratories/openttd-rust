@@ -37,7 +37,6 @@ inline OpenTTDRailFollow Follow(void *, uint32_t tile, uint8_t td, uint64_t, uin
 	follows.push_back((tile << 4) | td);
 	return {tile + 1, 0, 0, INT32_MAX, (1 << 0) | (1 << 2), 1, 0, 0};
 }
-inline uint8_t Safe(void *, uint32_t, uint8_t, uint8_t) noexcept { return 0; }
 inline uint8_t Free(void *, uint32_t, uint8_t, uint8_t) noexcept { return 1; }
 inline uint8_t Station(uint32_t, uint32_t) noexcept { return 0; }
 inline uint32_t Platform(uint32_t, uint8_t) noexcept { return 0; }
@@ -61,11 +60,12 @@ inline void Debug(void *, uint8_t kind, const uint32_t *data, uint32_t count) no
 inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = false, bool reserve = false)
 {
 	follows.clear(); writes.clear(); stats = {}; flushes = limits = red = restored = 0;
-	OpenTTDRailInput input{};
+	const auto shared = OpenTTDFixtureSharedServices(nullptr, OpenTTDFixtureMapService<uint32_t, void *>, OpenTTDFixtureMapService<uint32_t, int32_t, int32_t, uint32_t *>);
+	OpenTTDRailInput input{}; input.shared = &shared;
 	input.settings.max_nodes = limit; input.settings.curve45 = curve;
 	input.settings.slope = 50; input.settings.lookahead = !cache;
 	input.map_x = 128; input.reserve = reserve;
-	const OpenTTDRailLeaves leaves{Train, Tile, Follow, Safe, Free, Station, Platform, Closest, Directions, Origin, Write, Output, Debug};
+	const OpenTTDRailLeaves leaves{.train = Train, .tile = Tile, .follow = Follow, .free = Free, .compatible_station = Station, .platform_length = Platform, .closest_station = Closest, .destination_dirs = Directions, .origin = Origin, .write = Write, .output = Output, .debug = Debug};
 	std::unique_ptr<OpenTTDRailYapf, decltype(&openttd_rust_rail_destroy)> owner{openttd_rust_rail_new(&input, &leaves), openttd_rust_rail_destroy};
 	return openttd_rust_rail_step(owner.get());
 }

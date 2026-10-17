@@ -562,7 +562,6 @@ pub struct Leaves {
     pub enter_tile: extern "C" fn(Handle, u32, i32, i32) -> u64,
     pub find_depot: extern "C" fn(Handle, i32) -> Depot,
     pub first_track: extern "C" fn(Handle, u8) -> u64,
-    pub free_reservation: extern "C" fn(Handle),
     pub grf_version: extern "C" fn(Handle) -> u64,
     pub handle_breakdown: extern "C" fn(Handle) -> u64,
     pub has_depot_res: extern "C" fn(Handle, u32) -> u64,
@@ -667,7 +666,6 @@ pub struct Leaves {
     pub train_list: extern "C" fn(Handle),
     pub train_visit: extern "C" fn(Handle) -> u64,
     pub truncate_cargo: extern "C" fn(Handle, u32),
-    pub try_path: extern "C" fn(Handle, u8, u8) -> u64,
     pub try_reserve: extern "C" fn(Handle, u32, u8, u8) -> u64,
     pub tunnel_dir: extern "C" fn(Handle, u32) -> u64,
     pub unreserve: extern "C" fn(Handle, u32, u8),
@@ -718,13 +716,6 @@ impl Game<'_> {
         (self.leaves.visit_near)(x, y, std::ptr::from_mut(&mut visitor).cast(), visit::<F>) != 0
     }
 
-    fn svc_free_reservation(&self, id: Handle) -> u64 {
-        (self.leaves.free_reservation)(id);
-        0
-    }
-    fn svc_try_path(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.try_path)(id, a as u8, b as u8)
-    }
     fn signal_context(&self) -> crate::signal::Context {
         crate::signal::acquire_context(self.leaves.signal_context)
     }
@@ -1453,7 +1444,8 @@ impl Game<'_> {
             (self.leaves.depot_dirty)(id);
         }
         if !id.flag(8) {
-            self.svc_free_reservation(id);
+            // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
+            unsafe { (self.services.free_train_reservation)(id.shell.cast()) };
         }
         let crossing = self.approaching_crossing(id);
         let mut r = (self.leaves.count_chain)(id) as i32 - 1;
@@ -1524,7 +1516,8 @@ impl Game<'_> {
                     1,
                 );
             }
-            if self.svc_try_path(id, 0, u64::from(okay)) != 0 {
+            // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
+            if unsafe { (self.services.try_path_reserve)(id.shell.cast(), false, okay) } {
                 (self.leaves.check_next)(id);
             } else if (self.leaves.read_order)(id) != 3 {
                 self.mark_stuck(id);
@@ -1936,7 +1929,8 @@ impl Game<'_> {
             if (self.leaves.read_front)(id) != 0 && self.moved_signals(id, new, entered) {
                 if ((self.leaves.has_reserved)(id, new, id.track()) == 0
                     && self.reserve_track(id, new, u64::from(id.track().trailing_zeros())) == 0)
-                    || self.svc_try_path(id, 0, 0) == 0
+                    // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
+                    || !unsafe { (self.services.try_path_reserve)(id.shell.cast(), false, false) }
                 {
                     self.mark_stuck(id);
                 }
@@ -1997,7 +1991,8 @@ impl Game<'_> {
         if (self.leaves.read_front)(id) != 0 {
             victims += 2;
             if !id.flag(8) {
-                self.svc_free_reservation(id);
+                // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
+                unsafe { (self.services.free_train_reservation)(id.shell.cast()) };
             }
             let mut u = id;
             while u != Handle::NONE {
@@ -2285,7 +2280,8 @@ impl Game<'_> {
             return true;
         }
         if segment == (self.leaves.sigseg_pbs)(id)
-            && self.svc_try_path(id, 0, 0) == 0
+            // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
+            && !unsafe { (self.services.try_path_reserve)(id.shell.cast(), false, false) }
             && id.get_force_proceed() == 0
         {
             (self.leaves.train_list)(id);
@@ -2357,7 +2353,8 @@ impl Game<'_> {
             if self.signal_segment(id, tile, dir) == (self.leaves.sigseg_pbs)(id)
                 || (self.leaves.reserve_paths)(id) != 0
             {
-                self.svc_try_path(id, 1, 1);
+                // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
+                unsafe { (self.services.try_path_reserve)(id.shell.cast(), true, true) };
             }
             id.set_flag(9, false);
         }
@@ -2379,7 +2376,8 @@ impl Game<'_> {
             if !turn && wait % (self.leaves.backoff)(id) != 0 && id.get_force_proceed() == 0 {
                 return true;
             }
-            if self.svc_try_path(id, 0, 0) == 0 {
+            // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
+            if !unsafe { (self.services.try_path_reserve)(id.shell.cast(), false, false) } {
                 if turn {
                     crate::witness::hit(crate::witness::TRAIN_STUCK_REVERSE);
                     self.reverse(id);

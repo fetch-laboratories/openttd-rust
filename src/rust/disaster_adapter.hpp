@@ -9,6 +9,8 @@
 #include "disaster_ffi.h"
 #include "disaster_counter.h"
 #include "services_ffi.h"
+#include "command_services_ffi.h"
+#include "command_cost_services.h"
 
 static_assert(VehicleID::Invalid().base() == 1048575);
 static_assert(ST_BIG_SUBMARINE == 14 && ROTOR_Z_OFFSET == 5);
@@ -148,9 +150,14 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 			break;
 		}
 		case 15: response = (new DisasterVehicle(step.a, step.b, static_cast<Direction>(step.c), static_cast<DisasterSubType>(step.id), VehicleID{step.other}))->index.base(); break;
-		case 16: response = EnsureNoVehicleOnGround(TileIndex{step.id}).Failed(); break;
+		case 16: {
+			CommandCost result;
+			GetRustCommandServices().no_vehicle(RustCommandCost(&result), step.id);
+			response = result.Failed();
+			break;
+		}
 		case 18: UpdateSignalsInBuffer(); break;
-		case 19: DoClearSquare(TileIndex{step.id}); break;
+		case 19: GetRustSharedServices().clear_square(step.id); break;
 		case 20: ResetIndustryConstructionStage(TileIndex{step.id}); MarkTileDirtyByTile(TileIndex{step.id}); break;
 		case 21: response = ClosestTownFromTile(TileIndex{step.id}, UINT_MAX)->index.base(); break;
 		case 23: response = TrackStatusToTrackBits(GetTileTrackStatus(TileIndex{step.id}, TRANSPORT_WATER, 0)); break;

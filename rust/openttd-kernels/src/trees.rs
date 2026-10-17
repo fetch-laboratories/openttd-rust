@@ -255,7 +255,6 @@ pub struct TreeServices {
     pub play_sound: extern "C" fn(u32, u16),
     pub progress: extern "C" fn() -> bool,
     pub progress_total: extern "C" fn(u32) -> bool,
-    pub clear_square: extern "C" fn(u32),
     pub town_rating: extern "C" fn(*mut Command, u32, bool),
     pub command_begin: extern "C" fn(*mut Command, u32, u32, bool) -> i32,
     pub command_tile: extern "C" fn(*mut Command) -> u32,
@@ -1103,9 +1102,10 @@ pub unsafe extern "C" fn openttd_rust_trees_clear_tile(
     execute: bool,
     company_valid: bool,
     services: *const TreeServices,
+    shared: *const Services,
 ) -> i64 {
     // SAFETY: Guaranteed by the caller.
-    let t = unsafe { &*services };
+    let (t, s) = unsafe { (&*services, &*shared) };
     if company_valid {
         (t.town_rating)(ctx, tile, false);
     }
@@ -1115,7 +1115,7 @@ pub unsafe extern "C" fn openttd_rust_trees_clear_tile(
         num = num.wrapping_mul(4);
     }
     if execute {
-        (t.clear_square)(tile);
+        (s.clear_square)(tile);
     }
     price.saturating_mul(i64::from(num))
 }
@@ -1201,6 +1201,7 @@ mod tests {
             tile_z,
             mark_dirty: dirty,
             set_tropic_zone: set_zone,
+            clear_square,
             ..crate::services::fixture(std::ptr::null_mut(), random, industry)
         }
     }
@@ -1362,7 +1363,6 @@ mod tests {
         play_sound: sound,
         progress,
         progress_total,
-        clear_square,
         town_rating: rating,
         command_begin: begin,
         command_tile,
@@ -1773,8 +1773,17 @@ mod tests {
             assert!(!events().contains(&Event::Tree));
             WORLD.with_borrow_mut(|w| w.tree.count = 4);
             // SAFETY: The test table is a live constant.
+            let shared = shared();
             let cost = unsafe {
-                openttd_rust_trees_clear_tile(std::ptr::null_mut(), 1, price, true, true, &SERVICES)
+                openttd_rust_trees_clear_tile(
+                    std::ptr::null_mut(),
+                    1,
+                    price,
+                    true,
+                    true,
+                    &SERVICES,
+                    &raw const shared,
+                )
             };
             assert_eq!(cost, price);
         }

@@ -193,7 +193,6 @@ src/town_cmd.cpp | RustTownAuthorityDistance() noexcept | e43037648def52db | 1
 src/town_cmd.cpp | RustTownCouncilTolerance() noexcept | cddd8d4718f9a2cd | 1
 src/town_cmd.cpp | RustTown_allow_crossings() noexcept | 1f8c8aa2e0af5a02 | 1
 src/town_cmd.cpp | RustTown_allow_roads() noexcept | faaf2796b712d57e | 1
-src/town_cmd.cpp | RustTown_build_on_slopes() noexcept | 5ca1f276b3919e81 | 1
 src/town_cmd.cpp | RustTown_growth_rate() noexcept | 6c32e2c93ccbb6f1 | 1
 binding | GetRustSignalContext | 2
 binding | IndustryCommandDeity | 2

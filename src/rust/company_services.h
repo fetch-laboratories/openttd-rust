@@ -39,4 +39,8 @@ inline uint32_t RustNextCompanyID(uint32_t from) noexcept
 inline uint64_t RustCompanyRailTypes(uint8_t id) noexcept { return Company::Get(CompanyID{id})->avail_railtypes.base(); }
 inline uint64_t RustCompanyRoadTypes(uint8_t id) noexcept { return Company::Get(CompanyID{id})->avail_roadtypes.base(); }
 inline bool RustIsInteractiveCompany(uint8_t id) noexcept { return IsInteractiveCompany(CompanyID{id}); }
+/* Infrastructure counters wrap as the uint32_t source fields do. */
+inline void RustAddRailInfrastructure(uint8_t owner, uint8_t rt, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.rail[rt] += delta; }
+inline void RustAddRoadInfrastructure(uint8_t owner, uint8_t rt, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.road[rt] += delta; }
+inline void RustAddSignalInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.signal += delta; }
 #endif /* RUST_COMPANY_SERVICES_H */

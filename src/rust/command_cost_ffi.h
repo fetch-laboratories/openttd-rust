@@ -26,6 +26,7 @@ struct OpenTTDCommandCostServices {
 	bool (*success)(const OpenTTDCommandCost *) noexcept;
 	uint32_t (*error_message)(const OpenTTDCommandCost *) noexcept;
 	int64_t (*money)(const OpenTTDCommandCost *) noexcept;
+	void (*make_error)(OpenTTDCommandCost *, uint32_t) noexcept;
 };
 const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept;
 #endif /* RUST_COMMAND_COST_FFI_H */

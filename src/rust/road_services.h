@@ -80,9 +80,9 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitClose(OpenTTDVehicle *v, int32_t x,
 {
 	const RoadVehicle *front = RoadOf(v);
 	auto offer = [&](const Vehicle *u) {
-		if (u->type != VEH_ROAD || u->First() == front) return true;
+		if (u->type != VEH_ROAD || RustVehicleFirst(u) == front) return true;
 		const RoadVehicle *r = RoadVehicle::From(u);
-		const RoadVehicle *first = r->First();
+		const RoadVehicle *first = RustVehicleFirst(r);
 		OpenTTDRoadCandidate candidate{.vehicle = RustVehicle(r), .state = r->GetRustState(), .first = RustVehicle(first), .first_state = first->GetRustState(),
 			.index = r->index.base(), .x = r->x_pos, .y = r->y_pos, .z = r->z_pos, .first_speed = first->cur_speed, .direction = RustVehicleDirection(r)};
 		return visit(context, &candidate);
@@ -107,7 +107,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitTile(uint32_t tile, OpenTTDRoadTile
 {
 	for (const Vehicle *u : VehiclesOnTile(TileIndex(tile))) {
 		if (u->type != VEH_ROAD) continue;
-		OpenTTDRoadTileVehicle item{.vehicle = RustVehicle(u), .first = RustVehicle(u->First())};
+		OpenTTDRoadTileVehicle item{.vehicle = RustVehicle(u), .first = RustVehicle(RustVehicleFirst(u))};
 		if (!visit(context, &item)) return;
 	}
 }
@@ -121,8 +121,6 @@ static uint8_t OPENTTD_VEHICLE_CALL RoadSvcAnyRoadBits(OpenTTDVehicle *v, uint32
 {
 	return GetAnyRoadBits(TileIndex(tile), GetRoadTramType(RoadOf(v)->roadtype), straight_only);
 }
-static uint8_t OPENTTD_VEHICLE_CALL RoadSvcTramBits(uint32_t tile) noexcept { return GetRoadBits(TileIndex(tile), RTT_TRAM); }
-static bool OPENTTD_VEHICLE_CALL RoadSvcHasRoadWorks(uint32_t tile) noexcept { return HasRoadWorks(TileIndex(tile)); }
 static bool OPENTTD_VEHICLE_CALL RoadSvcIsStationRoadStop(uint32_t tile) noexcept { return IsStationRoadStop(TileIndex(tile)); }
 static uint8_t OPENTTD_VEHICLE_CALL RoadSvcStopType(uint32_t tile) noexcept { return to_underlying(GetRoadStopType(TileIndex(tile))); }
 static bool OPENTTD_VEHICLE_CALL RoadSvcHasFreeBay(uint32_t tile) noexcept
@@ -342,11 +340,9 @@ static const OpenTTDRoadLeaves &GetRoadLeaves()
 		.has_road = RoadSvcHasRoad,
 		.track_status = RoadSvcTrackStatus,
 		.any_road_bits = RoadSvcAnyRoadBits,
-		.tram_bits = RoadSvcTramBits,
 		.is_road_depot_tile = GetRustSharedServices().is_road_depot,
 		.depot_direction = GetRustSharedServices().road_depot_direction,
 		.is_normal_road = GetRustSharedServices().is_normal_road,
-		.has_road_works = RoadSvcHasRoadWorks,
 		.disallowed_directions = GetRustSharedServices().disallowed_road_directions,
 		.is_bay_stop = GetRustSharedServices().is_bay_stop,
 		.bay_direction = GetRustSharedServices().bay_stop_direction,

@@ -20,6 +20,7 @@
 
 #ifdef WITH_RUST
 #include "../../rust/ship_yapf_ffi.h"
+#include "../../rust/services_water.h"
 
 static void ShipDestination(const void *context, uint32_t *tile, uint16_t *dirs) noexcept
 {
@@ -42,7 +43,7 @@ static OpenTTDShipTile ShipTile(const void *context, uint32_t tile, uint8_t cost
 {
 	const Ship *v = static_cast<const Ship *>(context);
 	const TileIndex t{tile};
-	const bool docking = IsDockingTile(t);
+	const bool docking = OpenTTDIsDockingTile(tile);
 	if (cost == 0) return {0, static_cast<uint8_t>(docking), 0, 0,
 		static_cast<uint8_t>(docking && IsShipDestinationTile(t, v->current_order.GetDestination().ToStationID()))};
 	uint count = 0;
@@ -87,7 +88,7 @@ static std::vector<uint32_t> ShipOrigins(const Ship *v)
 	if (v->current_order.IsType(OT_GOTO_STATION)) {
 		StationID station = v->current_order.GetDestination().ToStationID();
 		for (const auto &tile : BaseStation::Get(station)->GetTileArea(StationType::Dock)) {
-			if (IsDockingTile(tile) && IsShipDestinationTile(tile, station)) tiles.push_back(tile.base());
+			if (OpenTTDIsDockingTile(tile.base()) && IsShipDestinationTile(tile, station)) tiles.push_back(tile.base());
 		}
 	} else {
 		tiles.push_back(v->dest_tile.base());

@@ -571,7 +571,6 @@ pub struct TilePolicyServices {
     pub close_game: unsafe extern "C" fn(*mut ShellHandle),
     pub destroy: unsafe extern "C" fn(*mut ShellHandle),
     pub removal_cost: unsafe extern "C" fn(*const SpecHandle) -> i64,
-    pub autoslope_enabled: unsafe extern "C" fn() -> bool,
     pub tile_max_z: unsafe extern "C" fn(u32) -> i32,
     pub autoslope_callback: unsafe extern "C" fn(*const TileSpec) -> bool,
     pub callback_boolean: unsafe extern "C" fn(*const TileSpec, u16, u16) -> bool,
@@ -637,7 +636,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_terraform(
     costs: *const IndustryCostServices,
 ) {
     let (t, p, c) = unsafe { (&*tiles, &*policy, &*costs) };
-    if unsafe { (p.autoslope_enabled)() } {
+    if unsafe { ((*shared).autoslope)() } {
         let old_slope = unsafe { ((*shared).tile_slope)(tile) };
         let max_z = if slope_new == 0 {
             0

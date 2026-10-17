@@ -97,7 +97,6 @@ struct OpenTTDTreeServices {
 	void (*play_sound)(uint32_t tile, uint16_t sound) noexcept;
 	bool (*progress)() noexcept;
 	bool (*progress_total)(uint32_t total) noexcept;
-	void (*clear_square)(uint32_t tile) noexcept;
 	void (*town_rating)(OpenTTDTreeCommand *, uint32_t tile, bool up) noexcept;
 	int32_t (*command_begin)(OpenTTDTreeCommand *, uint32_t end, uint32_t start, bool diagonal) noexcept;
 	uint32_t (*command_tile)(OpenTTDTreeCommand *) noexcept;
@@ -116,7 +115,7 @@ void openttd_rust_trees_place(uint32_t tile, uint32_t r, bool keep_density, uint
 void openttd_rust_trees_plant(uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 bool openttd_rust_trees_can_plant(uint32_t tile, bool allow_desert, const OpenTTDTreeServices *);
 OpenTTDTreeCommandResult openttd_rust_trees_cmd_plant(OpenTTDTreeCommand *, uint32_t tile, uint32_t start, uint8_t tree, bool diagonal, OpenTTDTreeCommandSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
-int64_t openttd_rust_trees_clear_tile(OpenTTDTreeCommand *, uint32_t tile, int64_t price, bool execute, bool company_valid, const OpenTTDTreeServices *);
+int64_t openttd_rust_trees_clear_tile(OpenTTDTreeCommand *, uint32_t tile, int64_t price, bool execute, bool company_valid, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 /* Stable Rust-owned byte; game-thread initialization/ticks and serial save/load access only.
  * C++ never retains a C++ reference across a Rust call. DATE LoadCheck omits this field.
  * The unchanged modern and TTD/TTO descriptors access it only at serialization boundaries. */

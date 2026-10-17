@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <vector>
 
+namespace TownReference {
 using TileIndex = uint32_t;
 using TileIndexDiff = int32_t;
 /* The shared FFI declares native DiagDirection; fixture scalars convert explicitly. */
@@ -357,6 +358,7 @@ static void CompareAuthority()
 		.success = +[](const OpenTTDCommandCost *) noexcept -> bool { std::abort(); },
 		.error_message = +[](const OpenTTDCommandCost *) noexcept -> uint32_t { std::abort(); },
 		.money = +[](const OpenTTDCommandCost *) noexcept -> int64_t { std::abort(); },
+		.make_error = +[](OpenTTDCommandCost *, uint32_t) noexcept { std::abort(); },
 	};
 	costs.zero = +[](OpenTTDCommandCost *out) noexcept { *reinterpret_cast<CommandCost *>(out) = {}; };
 	costs.error_param = +[](OpenTTDCommandCost *out, uint32_t error, uint64_t parameter) noexcept { *reinterpret_cast<CommandCost *>(out) = CommandCostWithParam(error, parameter); };
@@ -411,8 +413,11 @@ static void ComparePercentTransported()
 	}
 	std::printf("\nPASS %u unchanged-reference percent cases\n", checked);
 }
+} // namespace TownReference
+
 int main()
 {
+	using namespace TownReference;
 	CompareHistories();
 	CompareRatings();
 	CompareRadii();

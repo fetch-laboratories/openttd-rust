@@ -24,6 +24,8 @@
 
 #ifdef WITH_RUST
 #include "rust/signal_ffi.h"
+#include "rust/command_services_ffi.h"
+#include "rust/command_cost_services.h"
 #include "rust/services_rail.h"
 #include "rust/company_services.h"
 #include "rust/environment_services.h"
@@ -38,7 +40,9 @@ static bool SignalTrainOnTile(uint32_t tile) noexcept
 }
 static bool SignalTrainOnTracks(uint32_t tile, uint8_t tracks) noexcept
 {
-	return EnsureNoTrainOnTrackBits(TileIndex(tile), static_cast<TrackBits>(tracks)).Failed();
+	CommandCost result;
+	GetRustCommandServices().no_train(RustCommandCost(&result), tile, tracks);
+	return result.Failed();
 }
 static void SignalOverflowTbu() noexcept { Debug(misc, 0, "SignalSegment too complex. Set _tbuset is full (maximum 64)"); }
 static void SignalOverflowTbd() noexcept { Debug(misc, 0, "SignalSegment too complex. Set _tbdset is full (maximum 256)"); }
@@ -65,6 +69,11 @@ static const OpenTTDSignalServices _signal_services{
 	.overflow_global = SignalOverflowGlobal,
 	.assert_company = SignalAssertCompany,
 };
+
+const OpenTTDSignalServices &GetRustSignalServices() noexcept
+{
+	return _signal_services;
+}
 
 OpenTTDSignalContext GetRustSignalContext() noexcept
 {

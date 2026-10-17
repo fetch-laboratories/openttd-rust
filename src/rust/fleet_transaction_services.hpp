@@ -9,6 +9,7 @@
 #include "services_ffi.h"
 #include "company_services.h"
 #include "engine_services.h"
+#include "vehicle_services.h"
 
 /* Named shared services and full native CommandCost storage. All callbacks are
  * noexcept, retain original move/AddCost behavior, and permit ordinary reentry.
@@ -27,13 +28,11 @@ static void FleetTransaction_cost_amount(void *out, int64_t amount) noexcept { G
 static bool FleetTransaction_success(void *out) noexcept { return GetRustCommandCostServices().success(RustCommandCost(static_cast<CommandCost *>(out))); }
 static uint32_t FleetTransaction_error(void *out) noexcept { return GetRustCommandCostServices().error_message(RustCommandCost(static_cast<CommandCost *>(out))); }
 static int64_t FleetTransaction_money(void *out) noexcept { return GetRustCommandCostServices().money(RustCommandCost(static_cast<CommandCost *>(out))); }
-static void FleetTransaction_ownership(void *out, uint8_t owner) noexcept { *static_cast<CommandCost *>(out) = CheckOwnership(CompanyID(owner)); }
 static bool FleetTransaction_rear(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->IsRearDualheaded(); }
 static bool FleetTransaction_articulated(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsArticulatedPart(); }
 static bool FleetTransaction_crashed(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->vehstatus.Test(VehState::Crashed); }
 static bool FleetTransaction_stopped(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->vehstatus.Test(VehState::Stopped); }
 static bool FleetTransaction_chain_depot(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsChainInDepot(); }
-static void * FleetTransaction_first(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->First(); }
 static void * FleetTransaction_next_unit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetNextUnit(); }
 static void * FleetTransaction_prev_unit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetPrevUnit(); }
 static uint16_t FleetTransaction_length(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->gcache.cached_total_length; }
@@ -65,7 +64,7 @@ static bool FleetTransaction_order_refit(void *order) noexcept { return static_c
 static bool FleetTransaction_order_auto(void *order) noexcept { return static_cast<Order *>(order)->IsAutoRefit(); }
 static uint8_t FleetTransaction_order_cargo(void *order) noexcept { return static_cast<Order *>(order)->GetRefitCargo(); }
 static bool FleetTransaction_local() noexcept { return IsLocalCompany(); }
-static void FleetTransaction_refit_news(void *shell, int32_t order) noexcept { auto *v = static_cast<Vehicle *>(shell); VehicleID id = (v->type == VEH_TRAIN) ? v->First()->index : v->index; EncodedString headline = order != -1 ? GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_REFIT, order + 1) : GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_CARGO, CargoSpec::Get(v->cargo_type)->name); AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, std::move(headline), id); }
+static void FleetTransaction_refit_news(void *shell, int32_t order) noexcept { auto *v = static_cast<Vehicle *>(shell); VehicleID id = (v->type == VEH_TRAIN) ? RustVehicleFirst(v)->index : v->index; EncodedString headline = order != -1 ? GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_REFIT, order + 1) : GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_CARGO, CargoSpec::Get(v->cargo_type)->name); AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, std::move(headline), id); }
 static void * FleetTransaction_build(void *out, void *shell, uint16_t engine) noexcept { auto *v = static_cast<Vehicle *>(shell); VehicleID id; std::tie(*static_cast<CommandCost *>(out), id, std::ignore, std::ignore, std::ignore) = Command<CMD_BUILD_VEHICLE>::Do({DoCommandFlag::Execute, DoCommandFlag::AutoReplace}, v->tile, EngineID(engine), true, INVALID_CARGO, INVALID_CLIENT_ID); return static_cast<CommandCost *>(out)->Failed() ? nullptr : Vehicle::Get(id); }
 static void FleetTransaction_refit(void *out, void *shell, uint8_t cargo, uint8_t subtype) noexcept { *static_cast<CommandCost *>(out) = std::get<0>(Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, static_cast<Vehicle *>(shell)->index, cargo, subtype, false, false, 0)); }
 static uint8_t FleetTransaction_subtype(void *old, void *replacement, uint8_t cargo) noexcept { return GetBestFittingSubType(static_cast<Vehicle *>(old), static_cast<Vehicle *>(replacement), cargo); }
@@ -96,13 +95,13 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.success = FleetTransaction_success,
 	.error = FleetTransaction_error,
 	.money = FleetTransaction_money,
-	.ownership = FleetTransaction_ownership,
+	.commands = &GetRustCommandServices(),
 	.rear = FleetTransaction_rear,
 	.articulated = FleetTransaction_articulated,
 	.crashed = FleetTransaction_crashed,
 	.stopped = FleetTransaction_stopped,
 	.chain_depot = FleetTransaction_chain_depot,
-	.first = FleetTransaction_first,
+	.first = RustVehicleFirstOpaque,
 	.next_unit = FleetTransaction_next_unit,
 	.prev_unit = FleetTransaction_prev_unit,
 	.length = FleetTransaction_length,

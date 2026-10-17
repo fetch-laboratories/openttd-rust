@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include "byte_span_ffi.h"
 #include "services_ffi.h"
+#include "command_services_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -311,7 +312,6 @@ typedef struct OpenTTDIndustryTilePolicyServices {
 	void (*close_game)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT;
 	void (*destroy)(OpenTTDIndustryShell *) OPENTTD_INDUSTRY_NOEXCEPT;
 	int64_t (*removal_cost)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT;
-	bool (*autoslope_enabled)(void) OPENTTD_INDUSTRY_NOEXCEPT;
 	int32_t (*tile_max_z)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	bool (*autoslope_callback)(const OpenTTDIndustryTileSpec *) OPENTTD_INDUSTRY_NOEXCEPT;
 	bool (*callback_boolean)(const OpenTTDIndustryTileSpec *, uint16_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT;
@@ -426,7 +426,6 @@ typedef struct OpenTTDIndustryTransactionServices {
 	uint8_t (*refinery_limit)(void) OPENTTD_INDUSTRY_NOEXCEPT;
 	uint32_t (*tile_height)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	bool (*has_water_class)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
-	void (*ensure_no_vehicle)(OpenTTDIndustryCost *, uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	void (*set_company)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	/* Owner/context live on the Rust stack; visit and resolver cannot retain them. */
 	void (*temporary_shell)(OpenTTDIndustry *, void *, OpenTTDIndustryTemporaryVisit) OPENTTD_INDUSTRY_NOEXCEPT;
@@ -459,6 +458,7 @@ typedef struct OpenTTDIndustryTransactionContext {
 	const OpenTTDIndustryTileServices *tiles;
 	const OpenTTDIndustryTilePolicyServices *tile_policy;
 	const OpenTTDIndustryCommandServices *commands;
+	const OpenTTDCommandServices *command_checks;
 	const OpenTTDIndustryCostServices *costs;
 	const OpenTTDIndustryTransactionServices *transaction;
 	const OpenTTDIndustryConstructionErrors *errors;

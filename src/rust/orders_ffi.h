@@ -238,7 +238,6 @@ uint64_t openttd_rust_command_clear_backup(uint32_t, uint32_t, uint8_t, const Op
 uint64_t openttd_rust_remove_destination(uint8_t, uint16_t, uint8_t, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_check_orders(void *, const OpenTTDOrdersLeaves *);
 uint64_t openttd_rust_begin_loading(void *, const OpenTTDOrdersLeaves *);
-void *openttd_orders_first_vehicle(void *ctx) noexcept;
 uint64_t openttd_orders_last_station(void *ctx) noexcept;
 uint64_t openttd_orders_ownerless_station(uint16_t station, uint8_t if_valid) noexcept;
 uint64_t openttd_orders_vehicle_type(void *ctx) noexcept;

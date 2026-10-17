@@ -423,11 +423,9 @@ pub struct Leaves {
     pub has_road: extern "C" fn(VehicleRef, u32) -> bool,
     pub track_status: extern "C" fn(VehicleRef, u32) -> u32,
     pub any_road_bits: extern "C" fn(VehicleRef, u32, bool) -> u8,
-    pub tram_bits: extern "C" fn(u32) -> u8,
     pub is_road_depot_tile: extern "C" fn(u32) -> bool,
     pub depot_direction: extern "C" fn(u32) -> u8,
     pub is_normal_road: extern "C" fn(u32) -> bool,
-    pub has_road_works: extern "C" fn(u32) -> bool,
     pub disallowed_directions: extern "C" fn(u32) -> u8,
     pub is_bay_stop: extern "C" fn(u32) -> bool,
     pub bay_direction: extern "C" fn(u32) -> u8,
@@ -1270,9 +1268,9 @@ impl Game<'_> {
                         let big = (previous.exists && previous.tile == tile)
                             || (s.front
                                 && service!(self.l.is_normal_road)(tile)
-                                && !service!(self.l.has_road_works)(tile)
+                                && !service!(self.ss.has_road_works)(tile)
                                 && service!(self.l.has_road)(v.v, tile)
-                                && needed & service!(self.l.tram_bits)(tile) != 0);
+                                && needed & service!(self.ss.normal_road_bits)(tile, 1).0 != 0);
                         if !big {
                             if !s.front
                                 || !service!(self.l.can_build_tram)(v.v, tile, needed)

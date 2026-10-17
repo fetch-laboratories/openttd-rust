@@ -54,7 +54,6 @@ struct OpenTTDTownAuthorityServices {
 };
 struct OpenTTDTownLeaves {
 	uint32_t (*map_log_x)() noexcept;
-	bool (*build_on_slopes)() noexcept;
 	uint8_t (*growth_rate)() noexcept;
 	uint8_t (*snow_line)() noexcept;
 	bool (*editor)() noexcept;

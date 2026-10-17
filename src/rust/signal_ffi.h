@@ -41,6 +41,7 @@ struct OpenTTDSignalContext {
 	unsigned int log_x;
 };
 OpenTTDSignalContext GetRustSignalContext() noexcept;
+const OpenTTDSignalServices &GetRustSignalServices() noexcept;
 
 struct OpenTTDSignalSetTrace {
 	unsigned int duplicate_count;

@@ -34,7 +34,7 @@ pub struct Services {
     pub(crate) success: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) error: unsafe extern "C" fn(*mut ()) -> u32,
     pub(crate) money: unsafe extern "C" fn(*mut ()) -> i64,
-    pub(crate) ownership: unsafe extern "C" fn(*mut (), u8),
+    pub(crate) commands: *const crate::services::CommandServices,
     pub(crate) rear: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) articulated: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) crashed: unsafe extern "C" fn(*mut ()) -> bool,
@@ -677,7 +677,8 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
         return;
     }
     let owner = unsafe { (gw.vehicle_owner)(v) };
-    unsafe { (w.ownership)(cost, owner) };
+    // Native cost is live caller-owned CommandCost storage; no owner borrow spans the call.
+    unsafe { ((*w.commands).ownership)(cost.cast(), owner) };
     if !unsafe { (w.success)(cost) } {
         return;
     }
