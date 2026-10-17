@@ -863,9 +863,7 @@ static const OpenTTDStationLinks _rust_station_links = {
 	.stopped_in_depot = [](OpenTTDVehicle *handle) noexcept -> bool {
 		return VehicleOf(handle)->IsStoppedInDepot();
 	},
-	.last_service = [](OpenTTDVehicle *handle) noexcept -> int32_t {
-		return VehicleOf(handle)->date_of_last_service.base();
-	},
+	.last_service = RustVehicleLastServiceOf,
 	.cargo_type = RustVehicleCargoType,
 	.refresh = [](OpenTTDVehicle *handle) noexcept -> void {
 		LinkRefresher::Run(VehicleOf(handle), false);

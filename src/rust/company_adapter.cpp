@@ -10,6 +10,7 @@
 #include "company_adapter.h"
 #include "services_rail.h"
 #include "company_services.h"
+#include "vehicle_services.h"
 #include "presentation_services.h"
 #include "settings_services.h"
 #include "../company_base.h"
@@ -309,12 +310,12 @@ static uint32_t Co_vehicle_next_owned(uint8_t owner, uint32_t from, uint8_t *typ
 	return UINT32_MAX;
 }
 static bool Co_aircraft_is_normal(uint32_t id) noexcept { return Aircraft::From(Vehicle::Get(id))->IsNormalAircraft(); }
-static int64_t Co_vehicle_value(uint32_t id) noexcept { return Vehicle::Get(id)->value.base(); }
+static int64_t Co_vehicle_value(uint32_t id) noexcept { return RustVehicleValue(Vehicle::Get(id)); }
 static bool Co_vehicle_is_primary(uint32_t id) noexcept { return Vehicle::Get(id)->IsPrimaryVehicle(); }
 static OpenTTDCompanyVehicleProfit Co_vehicle_profit(uint32_t id) noexcept
 {
 	const Vehicle *v = Vehicle::Get(id);
-	return {v->profit_last_year.base(), v->economy_age.base()};
+	return {v->profit_last_year.base(), RustVehicleEconomyAge(v).base()};
 }
 static uint32_t Co_vehicle_previous(uint32_t id) noexcept
 {

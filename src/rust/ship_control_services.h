@@ -284,7 +284,7 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	v->last_station_visited = StationID::Invalid();
 	v->last_loading_station = StationID::Invalid();
 	v->engine_type = e->index;
-	v->reliability = e->reliability;
+	v->reliability = RustEngineReliability(e);
 	v->reliability_spd_dec = e->reliability_spd_dec;
 	v->max_age = e->GetLifeLengthInDays();
 }
@@ -360,13 +360,11 @@ static uint32_t Ship_z(uint32_t id) noexcept { const Ship *v = Ship::Get(Vehicle
 
 static uint32_t Ship_direction(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(RustVehicleDirection(v)); }
 
-static uint32_t Ship_speed(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->cur_speed); }
 
 static uint32_t Ship_tick(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(RustVehicleTick(v)); }
 
 static uint32_t Ship_running(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->running_ticks); }
 
-static uint32_t Ship_day(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->day_counter); }
 
 static uint32_t Ship_order_time(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->current_order_time); }
 
@@ -469,9 +467,9 @@ static const OpenTTDShipLeaves &GetShipServices()
 		.set_dest = Ship_set_dest, .tile = Ship_tile,
 		.dest = Ship_dest, .x = Ship_x,
 		.y = Ship_y, .z = Ship_z,
-		.direction = Ship_direction, .speed = Ship_speed,
+		.direction = Ship_direction, .speed = RustIndexedVehicleRead<uint32_t, RustVehicleSpeed>,
 		.tick = Ship_tick, .running = Ship_running,
-		.day = Ship_day, .order_time = Ship_order_time,
+		.day = RustIndexedVehicleRead<uint32_t, RustVehicleDay>, .order_time = Ship_order_time,
 		.progress = Ship_progress, .status = Ship_status,
 		.owner = Ship_owner, .last_station = Ship_last_station,
 		.order_destination = Ship_order_destination, .order_type = Ship_order_type,

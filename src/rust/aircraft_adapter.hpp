@@ -160,7 +160,7 @@ static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_engine_sound(OpenTTDAircraftVehic
 static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_engine_reliability(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	const Vehicle *v = VehicleOf(vehicle.handle);
-	return v->GetEngine()->reliability;
+	return RustEngineReliability(v->GetEngine());
 }
 
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_airport_entry(const void * ap, uint8_t direction) noexcept

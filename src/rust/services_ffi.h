@@ -12,6 +12,15 @@
 #include <type_traits>
 #include "station_ffi.h"
 
+enum class LandscapeType : uint8_t;
+
+/* Distinct trivial date carriers. Strong native Date classes stay inside C++;
+ * wrappers convert explicitly so MSVC class-return rules cannot alter this ABI. */
+struct OpenTTDCalendarDate { int32_t value; };
+struct OpenTTDEconomyDate { int32_t value; };
+static_assert(std::is_trivially_copyable_v<OpenTTDCalendarDate> && std::is_standard_layout_v<OpenTTDCalendarDate>);
+static_assert(std::is_trivially_copyable_v<OpenTTDEconomyDate> && std::is_standard_layout_v<OpenTTDEconomyDate>);
+
 /* Immutable function table. All functions are noexcept and cannot reenter Rust.
  * Context may be null in the game; test fixtures supply their own world.
  * No Rust references into the map/pools survive calls. Output is call-scoped.

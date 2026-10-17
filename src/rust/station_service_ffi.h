@@ -299,6 +299,7 @@ struct OpenTTDStationLoading {
 };
 
 const OpenTTDStationServices &GetRustStationServices() noexcept;
+const OpenTTDStationLoading &GetRustStationLoading() noexcept;
 extern "C" {
 OpenTTDStationService *openttd_rust_station_service_new();
 void openttd_rust_station_service_destroy(OpenTTDStationService *);

@@ -63,6 +63,10 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/vehicle_maintenance_ffi.h"
+#include "rust/vehicle_services.h"
+#endif
 #include "safeguards.h"
 
 /* Number of bits in the hash to use from each vehicle coord */
@@ -155,6 +159,9 @@ void VehicleSpriteSeq::Draw(int x, int y, PaletteID default_pal, bool force_pal)
  */
 bool Vehicle::NeedsAutorenewing(const Company *c, bool use_renew_setting) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_needs_renew(RustVehicle(this), &GetRustVehicleServices(), c, use_renew_setting);
+#else
 	/* We can always generate the Company pointer when we have the vehicle.
 	 * However this takes time and since the Company pointer is often present
 	 * when this function is called then it's faster to pass the pointer as an
@@ -168,6 +175,7 @@ bool Vehicle::NeedsAutorenewing(const Company *c, bool use_renew_setting) const
 	if (this->type == VEH_TRAIN && !Train::From(this)->IsEngine()) return false;
 
 	return true;
+#endif
 }
 
 /**
@@ -177,6 +185,10 @@ bool Vehicle::NeedsAutorenewing(const Company *c, bool use_renew_setting) const
  */
 void VehicleServiceInDepot(Vehicle *v)
 {
+#ifdef WITH_RUST
+	assert(v != nullptr);
+	openttd_rust_vehicle_service_depot(RustVehicle(v), &GetRustVehicleServices());
+#else
 	assert(v != nullptr);
 	SetWindowDirty(WC_VEHICLE_DETAILS, v->index); // ensure that last service date and reliability are updated
 
@@ -190,6 +202,7 @@ void VehicleServiceInDepot(Vehicle *v)
 		if (_settings_game.difficulty.vehicle_breakdowns == 1) v->breakdown_chance = 0; // on reduced breakdown
 		v = v->Next();
 	} while (v != nullptr && v->HasEngineType());
+#endif
 }
 
 /**
@@ -200,6 +213,9 @@ void VehicleServiceInDepot(Vehicle *v)
  */
 bool Vehicle::NeedsServicing() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_needs_service(RustVehicle(this), &GetRustVehicleServices());
+#else
 	/* Stopped or crashed vehicles will not move, as such making unmovable
 	 * vehicles to go for service is lame. */
 	if (this->vehstatus.Any({VehState::Stopped, VehState::Crashed})) return false;
@@ -273,6 +289,7 @@ bool Vehicle::NeedsServicing() const
 	}
 
 	return pending_replace;
+#endif
 }
 
 /**
@@ -282,10 +299,14 @@ bool Vehicle::NeedsServicing() const
  */
 bool Vehicle::NeedsAutomaticServicing() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_needs_automatic_service(RustVehicle(this), &GetRustVehicleServices());
+#else
 	if (this->HasDepotOrder()) return false;
 	if (this->current_order.IsType(OT_LOADING)) return false;
 	if (this->current_order.IsType(OT_GOTO_DEPOT) && !this->current_order.GetDepotOrderType().Test(OrderDepotTypeFlag::Service)) return false;
 	return NeedsServicing();
+#endif
 }
 
 uint Vehicle::Crash(bool)
@@ -914,6 +935,25 @@ static void VehicleEnteredDepotThisTick(Vehicle *v)
 	v->vehstatus.Set(VehState::Stopped);
 }
 
+#ifdef WITH_RUST
+#include "rust/vehicle_ffi.h"
+#include "rust/station_service_ffi.h"
+static OpenTTDVehicleSchedulerTables VehicleSchedulerTables() noexcept
+{
+	return {.scheduler = &GetRustVehicleSchedulerServices(), .cargo = CargoStorageServices(), .station = &GetRustStationServices(), .loading = &GetRustStationLoading(), .pending = &_fleet_pending_services, .transaction = &FleetTransactionServices(), .group = &FleetGroupServices()};
+}
+void RunVehicleCalendarDayProc()
+{
+	const auto tables = VehicleSchedulerTables();
+	openttd_rust_vehicle_calendar_day(&tables, _game_mode == GM_NORMAL, TimerGameCalendar::date_fract);
+}
+void CallVehicleTicks()
+{
+	const auto tables = VehicleSchedulerTables();
+	CommandCost replacement_cost;
+	openttd_rust_vehicle_ticks(&tables, _game_mode == GM_NORMAL, TimerGameEconomy::date_fract, &replacement_cost);
+}
+#else
 /**
  * Age all vehicles, spreading out the action using the current TimerGameCalendar::date_fract.
  */
@@ -1103,6 +1143,8 @@ void CallVehicleTicks()
 #endif /* WITH_RUST */
 }
 
+#endif /* WITH_RUST */
+
 /**
  * Add vehicle sprite for drawing to the screen.
  * @param v Vehicle to draw.
@@ -1287,10 +1329,15 @@ Vehicle *CheckClickOnVehicle(const Viewport &vp, int x, int y)
  */
 void DecreaseVehicleValue(Vehicle *v)
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_decrease_value(RustVehicle(v), &GetRustVehicleServices());
+#else
 	v->value -= v->value >> 8;
 	SetWindowDirty(WC_VEHICLE_DETAILS, v->index);
+#endif
 }
 
+#ifndef WITH_RUST
 static const uint8_t _breakdown_chance[64] = {
 	  3,   3,   3,   3,   3,   3,   3,   3,
 	  4,   4,   5,   5,   6,   6,   7,   7,
@@ -1301,9 +1348,13 @@ static const uint8_t _breakdown_chance[64] = {
 	 72,  80,  90, 100, 110, 120, 130, 140,
 	150, 170, 190, 210, 230, 250, 250, 250,
 };
+#endif
 
 void CheckVehicleBreakdown(Vehicle *v)
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_check_breakdown(RustVehicle(v), &GetRustVehicleServices());
+#else
 	int rel, rel_old;
 
 	/* decrease reliability */
@@ -1339,6 +1390,7 @@ void CheckVehicleBreakdown(Vehicle *v)
 		v->breakdown_delay  = GB(r, 24, 7) + 0x80;
 		v->breakdown_chance = 0;
 	}
+#endif
 }
 
 /**
@@ -1349,6 +1401,9 @@ void CheckVehicleBreakdown(Vehicle *v)
  */
 bool Vehicle::HandleBreakdown()
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_handle_breakdown(RustVehicle(this), &GetRustVehicleServices());
+#else
 	/* Possible states for Vehicle::breakdown_ctr
 	 * 0  - vehicle is running normally
 	 * 1  - vehicle is currently broken down
@@ -1407,6 +1462,7 @@ bool Vehicle::HandleBreakdown()
 			if (!this->current_order.IsType(OT_LOADING)) this->breakdown_ctr--;
 			return false;
 	}
+#endif
 }
 
 /**
@@ -1415,10 +1471,14 @@ bool Vehicle::HandleBreakdown()
  */
 void EconomyAgeVehicle(Vehicle *v)
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_economy_age(RustVehicle(v), &GetRustVehicleServices());
+#else
 	if (v->economy_age < EconomyTime::MAX_DATE) {
 		v->economy_age++;
 		if (v->IsPrimaryVehicle() && v->economy_age == VEHICLE_PROFIT_MIN_AGE + 1) GroupStatistics::VehicleReachedMinAge(v);
 	}
+#endif
 }
 
 /**
@@ -1427,6 +1487,9 @@ void EconomyAgeVehicle(Vehicle *v)
  */
 void AgeVehicle(Vehicle *v)
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_age(RustVehicle(v), &GetRustVehicleServices());
+#else
 	if (v->age < CalendarTime::MAX_DATE) v->age++;
 
 	if (!v->IsPrimaryVehicle() && (v->type != VEH_TRAIN || !Train::From(v)->IsEngine())) return;
@@ -1465,6 +1528,7 @@ void AgeVehicle(Vehicle *v)
 	}
 
 	AddVehicleAdviceNewsItem(AdviceType::VehicleOld, GetEncodedString(str, v->index), v->index);
+#endif
 }
 
 /**

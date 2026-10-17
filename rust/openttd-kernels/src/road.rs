@@ -1544,7 +1544,11 @@ impl Game<'_> {
         if status & VS_CRASHED != 0 || self.train_crash(v, service!(self.l.crash_part)(v.v)) {
             return self.crashed(v, tick);
         }
-        let b = service!(self.vs.handle_breakdown)(v.v);
+        let b = if crate::witness::enabled() {
+            unsafe { crate::vehicle::maintenance::handle_breakdown::<true>(v.v, self.vs) }
+        } else {
+            unsafe { crate::vehicle::maintenance::handle_breakdown::<false>(v.v, self.vs) }
+        };
         if b.broken {
             return true;
         }

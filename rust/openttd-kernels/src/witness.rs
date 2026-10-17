@@ -405,8 +405,101 @@ pub const TOWN_ENTRIES: usize = 180;
 /// `town.no_cities` witness: generation with `larger_towns == 0`.
 pub const TOWN_NO_CITIES: usize = 181;
 
+/// Scheduler evidence counter.
+pub const VEHICLE_CALLBACK32: usize = 182;
+/// Scheduler evidence counter.
+pub const VEHICLE_CARGO_AGES: usize = 183;
+/// Scheduler evidence counter.
+pub const VEHICLE_CARGO_OWNER: usize = 184;
+/// Scheduler evidence counter.
+pub const VEHICLE_CROSSINGS: usize = 185;
+/// Scheduler evidence counter.
+pub const VEHICLE_DAYS: usize = 186;
+/// Scheduler evidence counter.
+pub const VEHICLE_DELETED: usize = 187;
+/// Scheduler evidence counter.
+pub const VEHICLE_DESCRIPTOR_BYTES: usize = 188;
+/// Scheduler evidence counter.
+pub const VEHICLE_MOTION: usize = 189;
+/// Scheduler evidence counter.
+pub const VEHICLE_OBSERVED_BYTES: usize = 190;
+/// Scheduler evidence counter.
+pub const VEHICLE_OUTER_VISITS: usize = 191;
+/// Scheduler evidence counter.
+pub const VEHICLE_PACKET_LOOKUPS: usize = 192;
+/// Scheduler evidence counter.
+pub const VEHICLE_PERIODIC_SOUND: usize = 193;
+/// Scheduler evidence counter.
+pub const VEHICLE_POOL_GROWTH: usize = 194;
+/// Scheduler evidence counter.
+pub const VEHICLE_POST_TICK: usize = 195;
+/// Scheduler evidence counter.
+pub const VEHICLE_RUNNING_SOUND: usize = 196;
+/// Scheduler evidence counter.
+pub const VEHICLE_SCALAR_READ_BYTES: usize = 197;
+/// Scheduler evidence counter.
+pub const VEHICLE_SCALAR_WRITE_BYTES: usize = 198;
+/// Scheduler evidence counter.
+pub const VEHICLE_STATIONS: usize = 199;
+/// Scheduler evidence counter.
+pub const VEHICLE_VISITS: usize = 200;
+
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_AGE: usize = 208;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_AIRCRAFT: usize = 209;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_BYTES: usize = 210;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_CHECK: usize = 211;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_COUNTDOWN: usize = 212;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_CROSSINGS: usize = 213;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_DAYS: usize = 214;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_DECAY: usize = 215;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_DELAY: usize = 216;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_ENDED: usize = 217;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_LOADING: usize = 218;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_MAX_AGE: usize = 219;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_MINUTES: usize = 220;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_OLD_NEWS: usize = 221;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_PERCENT: usize = 222;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_PROFIT_AGE: usize = 223;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_RENEW: usize = 224;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_REPLACE: usize = 225;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_RESET: usize = 226;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_RESET_REDUCED: usize = 227;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_SERVICE: usize = 228;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_SMOKE: usize = 229;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_STARTED: usize = 230;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_TRIGGER: usize = 231;
+/// Base vehicle maintenance witness.
+pub const VEHICLE_MAINT_VALUE: usize = 232;
+
+/// Native-to-Rust base maintenance entries (separate from outgoing services).
+pub const VEHICLE_MAINT_ENTRIES: usize = 233;
+
 /// Counter names, grouped by the prefix the harness selects.
-pub const NAMES: [&str; 182] = [
+pub const NAMES: [&str; 234] = [
     "train.tick_first",
     "train.tick_second",
     "train.reversal",
@@ -589,6 +682,58 @@ pub const NAMES: [&str; 182] = [
     "town.name_set",
     "town.entries",
     "town.no_cities",
+    "vehicle.callback32",
+    "vehicle.cargo_ages",
+    "vehicle.cargo_owner",
+    "vehicle.crossings",
+    "vehicle.days",
+    "vehicle.deleted",
+    "vehicle.descriptor_bytes",
+    "vehicle.motion",
+    "vehicle.observed_bytes",
+    "vehicle.outer_visits",
+    "vehicle.packet_lookups",
+    "vehicle.periodic_sound",
+    "vehicle.pool_growth",
+    "vehicle.post_tick",
+    "vehicle.running_sound",
+    "vehicle.scalar_read_bytes",
+    "vehicle.scalar_write_bytes",
+    "vehicle.stations",
+    "vehicle.visits.train",
+    "vehicle.visits.road",
+    "vehicle.visits.ship",
+    "vehicle.visits.aircraft",
+    "vehicle.visits.effect",
+    "vehicle.visits.disaster",
+    "vehicle.visits.end",
+    "vehicle.visits.invalid",
+    "vehicle_maintenance.age",
+    "vehicle_maintenance.aircraft",
+    "vehicle_maintenance.bytes",
+    "vehicle_maintenance.check",
+    "vehicle_maintenance.countdown",
+    "vehicle_maintenance.crossings",
+    "vehicle_maintenance.days",
+    "vehicle_maintenance.decay",
+    "vehicle_maintenance.delay",
+    "vehicle_maintenance.ended",
+    "vehicle_maintenance.loading",
+    "vehicle_maintenance.max_age",
+    "vehicle_maintenance.minutes",
+    "vehicle_maintenance.old_news",
+    "vehicle_maintenance.percent",
+    "vehicle_maintenance.profit_age",
+    "vehicle_maintenance.renew",
+    "vehicle_maintenance.replace",
+    "vehicle_maintenance.reset",
+    "vehicle_maintenance.reset_reduced",
+    "vehicle_maintenance.service",
+    "vehicle_maintenance.smoke",
+    "vehicle_maintenance.started",
+    "vehicle_maintenance.trigger",
+    "vehicle_maintenance.value",
+    "vehicle_maintenance.entries",
 ];
 
 static ENABLED: AtomicBool = AtomicBool::new(false);

@@ -188,7 +188,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         461 => layout!(crate::vehicle::NewPosition, item; x, y, tile),
         462 => layout!(crate::vehicle::Breakdown, item; broken, status),
         460 => {
-            layout!(crate::vehicle::VehicleServices, item; write_counters, handle_breakdown, waiting_for_unbunching, leave_unbunching_depot, reset_depot_unbunching, service_in_depot, needs_automatic_servicing, enter_depot, pathfinding_result, new_position, move_then_status, base_viewport, property, length_callback, unknown_length_result, length_changed, play_start_sound, play_sound, large_explosion, order_free, order_dummy, start_stop_dirty, destroy, age, economy_age, decrease_value, check_breakdown, check_orders, write_day, write_direction, write_speed, last_station, write_last_station, write_dest, write_progress, write_max_speed, previous_tile, detach_last, next, engine_id, engine_for_length, write_tick, direction, status, tile, progress, dest_tile, order_type, order_destination, order_nonstop, subtype, x, y, z, tick, owner, speed, subspeed, running, order_time, vehicle_type, write_x, write_y, write_z, write_tile, write_status, write_subspeed, write_breakdown_counter, write_running, write_order_time, write_profit, write_economy_service, write_calendar_service, write_breakdowns, write_reliability, write_cargo_age, coordinates, xy, speed_inputs, direction_progress, tick_status, day_cost, make_dummy, loading, breakdown, check_orders_only, write_coordinates, altitude_inputs)
+            layout!(crate::vehicle::VehicleServices, item; write_counters, handle_breakdown, waiting_for_unbunching, leave_unbunching_depot, reset_depot_unbunching, service_in_depot, needs_automatic_servicing, enter_depot, pathfinding_result, new_position, move_then_status, base_viewport, property, length_callback, unknown_length_result, length_changed, play_start_sound, play_sound, large_explosion, order_free, order_dummy, start_stop_dirty, destroy, age, economy_age, decrease_value, check_breakdown, check_orders, write_day, write_direction, write_speed, last_station, write_last_station, write_dest, write_progress, write_max_speed, previous_tile, detach_last, next, engine_id, engine_for_length, write_tick, direction, status, tile, progress, dest_tile, order_type, order_destination, order_nonstop, subtype, x, y, z, tick, owner, speed, subspeed, running, order_time, vehicle_type, write_x, write_y, write_z, write_tile, write_status, write_subspeed, write_breakdown_counter, write_running, write_order_time, write_profit, write_economy_service, write_calendar_service, write_breakdowns, write_reliability, write_cargo_age, coordinates, xy, speed_inputs, direction_progress, tick_status, day_cost, make_dummy, loading, breakdown, check_orders_only, write_coordinates, altitude_inputs, maintenance)
         }
         464 => layout!(crate::vehicle::Moved, item; old_z, z, cur_speed, max_track_speed),
         465 => layout!(crate::vehicle::Speed, item; distance, cur_speed),
@@ -612,6 +612,81 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         677 => layout!(crate::aircraft::LayoutRoute, item; node, next, next_position, heading),
         678 => layout!(crate::vehicle::AltitudeInputs, item; max_speed, direction),
         679 => layout!(crate::aircraft::HangarCandidate, item; owner, airport, hangar),
+        740 => layout!(crate::vehicle::scheduler::PoolCursor, item; slots, slots_len, first_unused),
+        741 => {
+            layout!(crate::vehicle::scheduler::PostTick, item; vehicle_type, period, counter, motion, speed, front_type, subtype, tick, front_status, status)
+        }
+        743 => layout!(crate::vehicle::scheduler::DayCallback, item; day, has_engine),
+        748 => layout!(crate::vehicle::scheduler::StationLookup, item; station, id),
+        749 => {
+            layout!(crate::vehicle::scheduler::SchedulerServices, item; pool, assertions, tick, calendar_day, economy_day, day_callback_read, day_callback, randomise_callback, first_dirty, unknown_day_callback, cargo_owner, running_sound, periodic_sound, next_station, with_loading_timer, reset_accumulators)
+        }
+        750 => {
+            layout!(crate::vehicle::scheduler::Tables, item; scheduler, cargo, station, loading, pending, transaction, group)
+        }
+        751 => {
+            layout!(crate::vehicle::maintenance::Renewal, item; age, max_age, months, enabled, kind, subtype)
+        }
+        752 => {
+            layout!(crate::vehicle::maintenance::Reset, item; economy_date, calendar_date, reliability, chance, breakdowns)
+        }
+        753 => {
+            layout!(crate::vehicle::maintenance::ResetWrite, item; economy_date, calendar_date, reliability, chance, since)
+        }
+        754 => {
+            layout!(crate::vehicle::maintenance::Interval, item; company, last_service, now, interval, reliability, percent, wallclock, no_service, breakdowns)
+        }
+        755 => layout!(crate::vehicle::maintenance::Replacement, item; engine, when_old),
+        756 => layout!(crate::vehicle::maintenance::Budget, item; needed, available),
+        757 => layout!(crate::vehicle::maintenance::ReplacementCost, item; cost, available),
+        758 => layout!(crate::vehicle::maintenance::Automatic, item; has_depot_order, order_type),
+        759 => {
+            layout!(crate::vehicle::maintenance::CheckBreakdown, item; reliability, decay, no_service, breakdowns)
+        }
+        760 => {
+            layout!(crate::vehicle::maintenance::BreakdownGuard, item; speed, counter, status, breakdowns, menu)
+        }
+        761 => {
+            layout!(crate::vehicle::maintenance::BreakdownTrigger, item; reliability, chance, kind, breakdowns)
+        }
+        762 => layout!(crate::vehicle::maintenance::BreakdownProbe, item; counter, status),
+        763 => layout!(crate::vehicle::maintenance::BreakdownStart, item; since, kind),
+        764 => layout!(crate::vehicle::maintenance::BreakdownActive, item; kind, tick, delay),
+        765 => layout!(crate::vehicle::maintenance::BreakdownCountdown, item; order_type, counter),
+        766 => layout!(crate::vehicle::maintenance::BreakdownSoundState, item; kind, landscape),
+        767 => layout!(crate::vehicle::maintenance::BreakdownSmoke, item; shell, delay),
+        768 => layout!(crate::vehicle::maintenance::Age, item; age, max_age, decay),
+        769 => {
+            layout!(crate::vehicle::maintenance::Warning, item; enabled, has_previous, local, status)
+        }
+        770 => layout!(crate::vehicle::maintenance::WarningCompany, item; company, renewal),
+        771 => {
+            layout!(crate::vehicle::maintenance::Services, item; shared, transaction, group, renewal, reset, reset_write, has_engine, interval, engine_reliability, budget, replacement, replacement_available, replacement_cost, automatic, depot_service, check_breakdown, breakdown_guard, breakdown_trigger, chance_write, trigger, breakdown_counter, breakdown_probe, breakdown_start, breakdown_start_write, breakdown_active, breakdown_countdown, breakdown_sound_state, breakdown_delay_write, breakdown_sound, smoke_disabled, smoke, smoke_animation, aircraft_broken, mark_dirty, view_dirty, details_dirty, age, age_write, decay_write, warning, warning_company, engine_available_any, replacement_active, old_news, economy_age, economy_age_write, reached_min_age, value, value_write, max_calendar_date, max_economy_date, profit_min_age, anniversaries, before_zero, news_getting_old, news_very_old, news_very_old_and)
+        }
+        772 => match item {
+            0 => std::mem::size_of::<crate::services::CalendarDate>(),
+            1 => std::mem::align_of::<crate::services::CalendarDate>(),
+            2 => std::mem::offset_of!(crate::services::CalendarDate, 0),
+            _ => usize::MAX,
+        },
+        773 => match item {
+            0 => std::mem::size_of::<crate::services::EconomyDate>(),
+            1 => std::mem::align_of::<crate::services::EconomyDate>(),
+            2 => std::mem::offset_of!(crate::services::EconomyDate, 0),
+            _ => usize::MAX,
+        },
+        774 => match item {
+            0 => std::mem::size_of::<crate::vehicle::OrderType>(),
+            1 => std::mem::align_of::<crate::vehicle::OrderType>(),
+            _ => usize::MAX,
+        },
+
+        775 => match item {
+            0 => std::mem::size_of::<crate::services::LandscapeType>(),
+            1 => std::mem::align_of::<crate::services::LandscapeType>(),
+            _ => usize::MAX,
+        },
+
         _ => usize::MAX,
     }
 }
