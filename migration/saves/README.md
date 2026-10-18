@@ -137,7 +137,7 @@ pinned original with the GPLv2 committed deterministic setup AI in
 It runs a small plane and helicopter between a city and metropolitan airport,
 with passengers and mail, no GameScript or NewGRFs. Comparison loads omit
 the setup AI and require the idle dummy AI replacement. The JSON manifest
-records source/provenance hashes and generation settings; the linked README
+records input/script hashes and generation settings; the linked README
 gives exact reproduction and comparison commands and coverage limits.
 Only optional input GLOG history is removed; every other chunk is unchanged.
 The original owner-built and road saves retain their original bytes.
@@ -151,8 +151,8 @@ and 411-tick reference reload. Plane 2 naturally reaches state16/position34,
 speed293/target0 with passenger and mail cargo; the target station also has both.
 Typed DATE seeds are the only field edits; optional GLOG is removed. The event
 case additionally restores the setup's exact AIPL configuration for a passive
-observer. Preparation receipts record input hashes/assignments; the harness
-freezes and hashes the unchanged-reference runtime and scenario AI files.
+observer. Preparation records record input hashes/assignments; the harness
+freezes the unchanged-reference runtime and scenario AI files.
 
 With crashes enabled (setting1), seeds `(2443390976,1012692424)` produce the
 third shared draw21 and crash at threshold equality; `(2443382784,1011643848)`
@@ -186,7 +186,7 @@ Declared typed edits set its current order to automatic non-stop service
 (type 66, flags 1), depot 5 / tile 3091, and last service date 727700.
 The refresh case sets both DATE RNG words to 8; retain keeps the original RNG.
 As in the other short road windows, link-job join dates move forward 32 days;
-only optional input GLOG history is removed. The receipt lists every assignment.
+only optional input GLOG history is removed. The record lists every assignment.
 
 At 37 ticks the unchanged original's `CheckIfRoadVehNeedsService` has run once:
 day counter 31 becomes 32 and blocked counter 185 becomes 222. The order stays
@@ -215,13 +215,13 @@ coverage domains remain open. It changes no production behavior or reference sou
 ## Reference-built road crossing (#156)
 
 `road-crossing.sav` adds one level crossing to the existing water-ferry fixture
-through unchanged reference game commands. Its JSON receipt and
-[`tools/road-scenario-ai`](../../tools/road-scenario-ai/README.md) record provenance
+through unchanged reference game commands. Its JSON record and
+[`tools/road-scenario-ai`](../../tools/road-scenario-ai/README.md) record preparation
 and reproduction. Comparison uses typed vehicle-position inputs and a read-only
 AI crash-event observer; it changes no map bytes and compares every saved chunk.
 
 `road-flooding.sav` uses the same constructor to enclose three sea-level road tiles
-with twelve canals. Its receipt records the source, typed stopped-bus/link-job
+with twelve canals. Its record lists the source, typed stopped-bus/link-job
 preparation and unchanged-reference commands. During comparison a single legal
 canal removal lets ordinary sea flooding crash the bus; position edits preserve
 its existing 18 passengers. The road scenario README records the fixed event,
