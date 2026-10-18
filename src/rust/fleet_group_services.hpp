@@ -22,7 +22,6 @@ static uint8_t FleetGroup_vehicle_owner(void *shell) noexcept { auto *v = static
 static uint16_t FleetGroup_vehicle_group(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->group_id.base(); }
 static uint16_t FleetGroup_vehicle_engine(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return RustVehicleEngineID(v); }
 static int64_t FleetGroup_profit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->GetDisplayProfitLastYear(); }
-static bool FleetGroup_old_enough(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->economy_age > VEHICLE_PROFIT_MIN_AGE; }
 static bool FleetGroup_primary(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsPrimaryVehicle(); }
 static bool FleetGroup_countable(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsEngineCountable(); }
 static bool FleetGroup_ground(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsGroundVehicle(); }
@@ -80,7 +79,7 @@ static const OpenTTDFleetGroupServices _fleet_group_services{
 	.vehicle_group = FleetGroup_vehicle_group,
 	.vehicle_engine = FleetGroup_vehicle_engine,
 	.profit = FleetGroup_profit,
-	.old_enough = FleetGroup_old_enough,
+	.old_enough = RustOpaqueVehicleRead<bool, RustVehicleOldEnough>,
 	.primary = FleetGroup_primary,
 	.countable = FleetGroup_countable,
 	.ground = FleetGroup_ground,

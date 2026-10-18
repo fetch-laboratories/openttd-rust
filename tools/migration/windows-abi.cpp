@@ -7,59 +7,67 @@
 
 /** @file windows-abi.cpp Bounded first-32-bit layout and real C ABI call checks. */
 #include "stdafx.h"
-#include "rust/tile_type_access.hpp"
+#include "3rdparty/monocypher/monocypher.h"
+#include "aircraft-boundary.hpp"
+#include "misc/history_type.hpp"
 #include "rust/abi_ffi.h"
-#include "rust/command_cost_ffi.h"
-#include "rust/command_services_ffi.h"
-#include "rust/water_regions_ffi.h"
+#include "rust/aircraft_ffi.h"
+#include "rust/alternating_ffi.h"
+#include "rust/blake2b_ffi.h"
+#include "rust/builder_ffi.h"
+#include "rust/byte_strings_ffi.h"
+#include "rust/cargo_flow_ffi.h"
 #include "rust/cargo_payment_ffi.h"
 #include "rust/cargo_storage_ffi.h"
-#include "rust/cargo_flow_ffi.h"
-#include "rust/ship_yapf_ffi.h"
-#include "rust/rail_yapf_ffi.h"
-#include "rust/rail_command_ffi.h"
-#include "rust/train_ffi.h"
-#include "rust/train_reservation_ffi.h"
-#include "rust/linkgraph_ffi.h"
-#include "rust/trees_ffi.h"
-#include "rust/landscape_loop_ffi.h"
-#include "rust/ground_ffi.h"
-#include "tests/landscape_protocol.hpp"
-#include "tests/ground_protocol.hpp"
-#include "rust/disaster_ffi.h"
-#include "rust/aircraft_ffi.h"
-#include "aircraft-boundary.hpp"
-#include "rust/townname_ffi.h"
-#include "rust/town_founding_ffi.h"
-#include "rust/effect_ffi.h"
-#include "rust/road_ffi.h"
-#include "rust/ship_control_ffi.h"
-#include "rust/orders_ffi.h"
-#include "rust/road_yapf_ffi.h"
-#include "tests/abi_layout.hpp"
-#include "tests/effect_protocol.hpp"
-#include "tests/water_regions_protocol.hpp"
-#include "tests/ship_yapf_protocol.hpp"
-#include "tests/town_protocol.hpp"
-#include "rust/ffi.h"
-#include "rust/utf8_ffi.h"
-#include "rust/builder_ffi.h"
-#include "rust/alternating_ffi.h"
+#include "rust/command_cost_ffi.h"
+#include "rust/command_services_ffi.h"
 #include "rust/consumer_ffi.h"
+#include "rust/crypto_primitives_ffi.h"
+#include "rust/disaster_ffi.h"
+#include "rust/effect_ffi.h"
 #include "rust/encoded_ffi.h"
-#include "rust/spiral_ffi.h"
-#include "rust/byte_strings_ffi.h"
+#include "rust/ffi.h"
 #include "rust/history_ffi.h"
+#include "rust/linkgraph_ffi.h"
 #include "rust/math_ffi.h"
+#include "rust/orders_ffi.h"
+#include "rust/packet_ffi.h"
+#include "rust/rail_command_ffi.h"
+#include "rust/rail_yapf_ffi.h"
+#include "rust/road_ffi.h"
+#include "rust/road_yapf_ffi.h"
+#include "rust/script_list_ffi.h"
+#include "rust/ship_control_ffi.h"
+#include "rust/ship_yapf_ffi.h"
+#include "rust/spiral_ffi.h"
 #include "rust/station_cargo_ffi.h"
 #include "rust/station_service_ffi.h"
-#include "rust/script_list_ffi.h"
-#include "rust/packet_ffi.h"
 #include "rust/string_validation_ffi.h"
-#include "rust/crypto_primitives_ffi.h"
-#include "rust/blake2b_ffi.h"
+#include "rust/town_founding_ffi.h"
+#include "rust/townname_ffi.h"
+#include "rust/train_ffi.h"
+#include "rust/train_reservation_ffi.h"
+#include "rust/trees_ffi.h"
+#include "rust/utf8_ffi.h"
+#include "rust/vehicle_ffi.h"
+#include "rust/vehicle_maintenance_ffi.h"
+#include "rust/vehicle_services.h"
+#include "rust/water_regions_ffi.h"
 #include "rust/x25519_ffi.h"
-#include "3rdparty/monocypher/monocypher.h"
+#include "tests/abi_layout.hpp"
+#include "tests/effect_protocol.hpp"
+#include "tests/ship_yapf_protocol.hpp"
+#include "tests/town_protocol.hpp"
+#include "tests/water_regions_protocol.hpp"
+// Registry: house (#256).
+
+// Registry: landscape (#212).
+#include "rust/ground_ffi.h"
+#include "rust/landscape_loop_ffi.h"
+#include "rust/tile_type_access.hpp"
+#include "tests/ground_protocol.hpp"
+#include "tests/landscape_protocol.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -70,10 +78,9 @@
 #include <initializer_list>
 #include <limits>
 #include <memory>
-#include <string>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
-#include "misc/history_type.hpp"
 
 #define CHECK(condition) do { if (!(condition)) { std::fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #condition); std::abort(); } } while (0)
 
@@ -88,6 +95,38 @@ static void Layout(uint16_t type, const char *name, std::initializer_list<size_t
 
 static void Layouts()
 {
+	Layout(740, "OpenTTDVehiclePoolCursor", {sizeof(OpenTTDVehiclePoolCursor), alignof(OpenTTDVehiclePoolCursor), offsetof(OpenTTDVehiclePoolCursor, slots), offsetof(OpenTTDVehiclePoolCursor, slots_len), offsetof(OpenTTDVehiclePoolCursor, first_unused)});
+	Layout(741, "OpenTTDVehiclePostTick", {sizeof(OpenTTDVehiclePostTick), alignof(OpenTTDVehiclePostTick), offsetof(OpenTTDVehiclePostTick, type), offsetof(OpenTTDVehiclePostTick, period), offsetof(OpenTTDVehiclePostTick, counter), offsetof(OpenTTDVehiclePostTick, motion), offsetof(OpenTTDVehiclePostTick, speed), offsetof(OpenTTDVehiclePostTick, front_type), offsetof(OpenTTDVehiclePostTick, subtype), offsetof(OpenTTDVehiclePostTick, tick), offsetof(OpenTTDVehiclePostTick, front_status), offsetof(OpenTTDVehiclePostTick, status)});
+	Layout(743, "OpenTTDVehicleDayCallback", {sizeof(OpenTTDVehicleDayCallback), alignof(OpenTTDVehicleDayCallback), offsetof(OpenTTDVehicleDayCallback, day), offsetof(OpenTTDVehicleDayCallback, has_engine)});
+	Layout(748, "OpenTTDVehicleStationLookup", {sizeof(OpenTTDVehicleStationLookup), alignof(OpenTTDVehicleStationLookup), offsetof(OpenTTDVehicleStationLookup, station), offsetof(OpenTTDVehicleStationLookup, id)});
+	Layout(749, "OpenTTDVehicleSchedulerServices", {sizeof(OpenTTDVehicleSchedulerServices), alignof(OpenTTDVehicleSchedulerServices), offsetof(OpenTTDVehicleSchedulerServices, pool), offsetof(OpenTTDVehicleSchedulerServices, assertions), offsetof(OpenTTDVehicleSchedulerServices, tick), offsetof(OpenTTDVehicleSchedulerServices, calendar_day), offsetof(OpenTTDVehicleSchedulerServices, economy_day), offsetof(OpenTTDVehicleSchedulerServices, day_callback_read), offsetof(OpenTTDVehicleSchedulerServices, day_callback), offsetof(OpenTTDVehicleSchedulerServices, randomise_callback), offsetof(OpenTTDVehicleSchedulerServices, first_dirty), offsetof(OpenTTDVehicleSchedulerServices, unknown_day_callback), offsetof(OpenTTDVehicleSchedulerServices, cargo_owner), offsetof(OpenTTDVehicleSchedulerServices, running_sound), offsetof(OpenTTDVehicleSchedulerServices, periodic_sound), offsetof(OpenTTDVehicleSchedulerServices, next_station), offsetof(OpenTTDVehicleSchedulerServices, with_loading_timer), offsetof(OpenTTDVehicleSchedulerServices, reset_accumulators)});
+	Layout(750, "OpenTTDVehicleSchedulerTables", {sizeof(OpenTTDVehicleSchedulerTables), alignof(OpenTTDVehicleSchedulerTables), offsetof(OpenTTDVehicleSchedulerTables, scheduler), offsetof(OpenTTDVehicleSchedulerTables, cargo), offsetof(OpenTTDVehicleSchedulerTables, station), offsetof(OpenTTDVehicleSchedulerTables, loading), offsetof(OpenTTDVehicleSchedulerTables, pending), offsetof(OpenTTDVehicleSchedulerTables, transaction), offsetof(OpenTTDVehicleSchedulerTables, group)});
+	Layout(751, "OpenTTDVehicleMaintenanceRenewal", {sizeof(OpenTTDVehicleMaintenanceRenewal), alignof(OpenTTDVehicleMaintenanceRenewal), offsetof(OpenTTDVehicleMaintenanceRenewal, age), offsetof(OpenTTDVehicleMaintenanceRenewal, max_age), offsetof(OpenTTDVehicleMaintenanceRenewal, months), offsetof(OpenTTDVehicleMaintenanceRenewal, enabled), offsetof(OpenTTDVehicleMaintenanceRenewal, kind), offsetof(OpenTTDVehicleMaintenanceRenewal, subtype)});
+	Layout(752, "OpenTTDVehicleMaintenanceReset", {sizeof(OpenTTDVehicleMaintenanceReset), alignof(OpenTTDVehicleMaintenanceReset), offsetof(OpenTTDVehicleMaintenanceReset, economy_date), offsetof(OpenTTDVehicleMaintenanceReset, calendar_date), offsetof(OpenTTDVehicleMaintenanceReset, reliability), offsetof(OpenTTDVehicleMaintenanceReset, chance), offsetof(OpenTTDVehicleMaintenanceReset, breakdowns)});
+	Layout(753, "OpenTTDVehicleMaintenanceResetWrite", {sizeof(OpenTTDVehicleMaintenanceResetWrite), alignof(OpenTTDVehicleMaintenanceResetWrite), offsetof(OpenTTDVehicleMaintenanceResetWrite, economy_date), offsetof(OpenTTDVehicleMaintenanceResetWrite, calendar_date), offsetof(OpenTTDVehicleMaintenanceResetWrite, reliability), offsetof(OpenTTDVehicleMaintenanceResetWrite, chance), offsetof(OpenTTDVehicleMaintenanceResetWrite, since)});
+	Layout(754, "OpenTTDVehicleMaintenanceInterval", {sizeof(OpenTTDVehicleMaintenanceInterval), alignof(OpenTTDVehicleMaintenanceInterval), offsetof(OpenTTDVehicleMaintenanceInterval, company), offsetof(OpenTTDVehicleMaintenanceInterval, last_service), offsetof(OpenTTDVehicleMaintenanceInterval, now), offsetof(OpenTTDVehicleMaintenanceInterval, interval), offsetof(OpenTTDVehicleMaintenanceInterval, reliability), offsetof(OpenTTDVehicleMaintenanceInterval, percent), offsetof(OpenTTDVehicleMaintenanceInterval, wallclock), offsetof(OpenTTDVehicleMaintenanceInterval, no_service), offsetof(OpenTTDVehicleMaintenanceInterval, breakdowns)});
+	Layout(755, "OpenTTDVehicleMaintenanceReplacement", {sizeof(OpenTTDVehicleMaintenanceReplacement), alignof(OpenTTDVehicleMaintenanceReplacement), offsetof(OpenTTDVehicleMaintenanceReplacement, engine), offsetof(OpenTTDVehicleMaintenanceReplacement, when_old)});
+	Layout(756, "OpenTTDVehicleMaintenanceBudget", {sizeof(OpenTTDVehicleMaintenanceBudget), alignof(OpenTTDVehicleMaintenanceBudget), offsetof(OpenTTDVehicleMaintenanceBudget, needed), offsetof(OpenTTDVehicleMaintenanceBudget, available)});
+	Layout(757, "OpenTTDVehicleMaintenanceReplacementCost", {sizeof(OpenTTDVehicleMaintenanceReplacementCost), alignof(OpenTTDVehicleMaintenanceReplacementCost), offsetof(OpenTTDVehicleMaintenanceReplacementCost, cost), offsetof(OpenTTDVehicleMaintenanceReplacementCost, available)});
+	Layout(758, "OpenTTDVehicleMaintenanceAutomatic", {sizeof(OpenTTDVehicleMaintenanceAutomatic), alignof(OpenTTDVehicleMaintenanceAutomatic), offsetof(OpenTTDVehicleMaintenanceAutomatic, has_depot_order), offsetof(OpenTTDVehicleMaintenanceAutomatic, order_type)});
+	Layout(759, "OpenTTDVehicleMaintenanceCheckBreakdown", {sizeof(OpenTTDVehicleMaintenanceCheckBreakdown), alignof(OpenTTDVehicleMaintenanceCheckBreakdown), offsetof(OpenTTDVehicleMaintenanceCheckBreakdown, reliability), offsetof(OpenTTDVehicleMaintenanceCheckBreakdown, decay), offsetof(OpenTTDVehicleMaintenanceCheckBreakdown, no_service), offsetof(OpenTTDVehicleMaintenanceCheckBreakdown, breakdowns)});
+	Layout(760, "OpenTTDVehicleMaintenanceBreakdownGuard", {sizeof(OpenTTDVehicleMaintenanceBreakdownGuard), alignof(OpenTTDVehicleMaintenanceBreakdownGuard), offsetof(OpenTTDVehicleMaintenanceBreakdownGuard, speed), offsetof(OpenTTDVehicleMaintenanceBreakdownGuard, counter), offsetof(OpenTTDVehicleMaintenanceBreakdownGuard, status), offsetof(OpenTTDVehicleMaintenanceBreakdownGuard, breakdowns), offsetof(OpenTTDVehicleMaintenanceBreakdownGuard, menu)});
+	Layout(761, "OpenTTDVehicleMaintenanceBreakdownTrigger", {sizeof(OpenTTDVehicleMaintenanceBreakdownTrigger), alignof(OpenTTDVehicleMaintenanceBreakdownTrigger), offsetof(OpenTTDVehicleMaintenanceBreakdownTrigger, reliability), offsetof(OpenTTDVehicleMaintenanceBreakdownTrigger, chance), offsetof(OpenTTDVehicleMaintenanceBreakdownTrigger, kind), offsetof(OpenTTDVehicleMaintenanceBreakdownTrigger, breakdowns)});
+	Layout(762, "OpenTTDVehicleMaintenanceBreakdownProbe", {sizeof(OpenTTDVehicleMaintenanceBreakdownProbe), alignof(OpenTTDVehicleMaintenanceBreakdownProbe), offsetof(OpenTTDVehicleMaintenanceBreakdownProbe, counter), offsetof(OpenTTDVehicleMaintenanceBreakdownProbe, status)});
+	Layout(763, "OpenTTDVehicleMaintenanceBreakdownStart", {sizeof(OpenTTDVehicleMaintenanceBreakdownStart), alignof(OpenTTDVehicleMaintenanceBreakdownStart), offsetof(OpenTTDVehicleMaintenanceBreakdownStart, since), offsetof(OpenTTDVehicleMaintenanceBreakdownStart, kind)});
+	Layout(764, "OpenTTDVehicleMaintenanceBreakdownActive", {sizeof(OpenTTDVehicleMaintenanceBreakdownActive), alignof(OpenTTDVehicleMaintenanceBreakdownActive), offsetof(OpenTTDVehicleMaintenanceBreakdownActive, kind), offsetof(OpenTTDVehicleMaintenanceBreakdownActive, tick), offsetof(OpenTTDVehicleMaintenanceBreakdownActive, delay)});
+	Layout(765, "OpenTTDVehicleMaintenanceBreakdownCountdown", {sizeof(OpenTTDVehicleMaintenanceBreakdownCountdown), alignof(OpenTTDVehicleMaintenanceBreakdownCountdown), offsetof(OpenTTDVehicleMaintenanceBreakdownCountdown, order_type), offsetof(OpenTTDVehicleMaintenanceBreakdownCountdown, counter)});
+	Layout(766, "OpenTTDVehicleMaintenanceBreakdownSoundState", {sizeof(OpenTTDVehicleMaintenanceBreakdownSoundState), alignof(OpenTTDVehicleMaintenanceBreakdownSoundState), offsetof(OpenTTDVehicleMaintenanceBreakdownSoundState, kind), offsetof(OpenTTDVehicleMaintenanceBreakdownSoundState, landscape)});
+	Layout(767, "OpenTTDVehicleMaintenanceBreakdownSmoke", {sizeof(OpenTTDVehicleMaintenanceBreakdownSmoke), alignof(OpenTTDVehicleMaintenanceBreakdownSmoke), offsetof(OpenTTDVehicleMaintenanceBreakdownSmoke, shell), offsetof(OpenTTDVehicleMaintenanceBreakdownSmoke, delay)});
+	Layout(768, "OpenTTDVehicleMaintenanceAge", {sizeof(OpenTTDVehicleMaintenanceAge), alignof(OpenTTDVehicleMaintenanceAge), offsetof(OpenTTDVehicleMaintenanceAge, age), offsetof(OpenTTDVehicleMaintenanceAge, max_age), offsetof(OpenTTDVehicleMaintenanceAge, decay)});
+	Layout(769, "OpenTTDVehicleMaintenanceWarning", {sizeof(OpenTTDVehicleMaintenanceWarning), alignof(OpenTTDVehicleMaintenanceWarning), offsetof(OpenTTDVehicleMaintenanceWarning, enabled), offsetof(OpenTTDVehicleMaintenanceWarning, has_previous), offsetof(OpenTTDVehicleMaintenanceWarning, local), offsetof(OpenTTDVehicleMaintenanceWarning, status)});
+	Layout(770, "OpenTTDVehicleMaintenanceWarningCompany", {sizeof(OpenTTDVehicleMaintenanceWarningCompany), alignof(OpenTTDVehicleMaintenanceWarningCompany), offsetof(OpenTTDVehicleMaintenanceWarningCompany, company), offsetof(OpenTTDVehicleMaintenanceWarningCompany, renewal)});
+	Layout(771, "OpenTTDVehicleMaintenanceServices", {sizeof(OpenTTDVehicleMaintenanceServices), alignof(OpenTTDVehicleMaintenanceServices), offsetof(OpenTTDVehicleMaintenanceServices, shared), offsetof(OpenTTDVehicleMaintenanceServices, transaction), offsetof(OpenTTDVehicleMaintenanceServices, group), offsetof(OpenTTDVehicleMaintenanceServices, renewal), offsetof(OpenTTDVehicleMaintenanceServices, reset), offsetof(OpenTTDVehicleMaintenanceServices, reset_write), offsetof(OpenTTDVehicleMaintenanceServices, has_engine), offsetof(OpenTTDVehicleMaintenanceServices, interval), offsetof(OpenTTDVehicleMaintenanceServices, engine_reliability), offsetof(OpenTTDVehicleMaintenanceServices, budget), offsetof(OpenTTDVehicleMaintenanceServices, replacement), offsetof(OpenTTDVehicleMaintenanceServices, replacement_available), offsetof(OpenTTDVehicleMaintenanceServices, replacement_cost), offsetof(OpenTTDVehicleMaintenanceServices, automatic), offsetof(OpenTTDVehicleMaintenanceServices, depot_service), offsetof(OpenTTDVehicleMaintenanceServices, check_breakdown), offsetof(OpenTTDVehicleMaintenanceServices, breakdown_guard), offsetof(OpenTTDVehicleMaintenanceServices, breakdown_trigger), offsetof(OpenTTDVehicleMaintenanceServices, chance_write), offsetof(OpenTTDVehicleMaintenanceServices, trigger), offsetof(OpenTTDVehicleMaintenanceServices, breakdown_counter), offsetof(OpenTTDVehicleMaintenanceServices, breakdown_probe), offsetof(OpenTTDVehicleMaintenanceServices, breakdown_start), offsetof(OpenTTDVehicleMaintenanceServices, breakdown_start_write), offsetof(OpenTTDVehicleMaintenanceServices, breakdown_active), offsetof(OpenTTDVehicleMaintenanceServices, breakdown_countdown), offsetof(OpenTTDVehicleMaintenanceServices, breakdown_sound_state), offsetof(OpenTTDVehicleMaintenanceServices, breakdown_delay_write), offsetof(OpenTTDVehicleMaintenanceServices, breakdown_sound), offsetof(OpenTTDVehicleMaintenanceServices, smoke_disabled), offsetof(OpenTTDVehicleMaintenanceServices, smoke), offsetof(OpenTTDVehicleMaintenanceServices, smoke_animation), offsetof(OpenTTDVehicleMaintenanceServices, aircraft_broken), offsetof(OpenTTDVehicleMaintenanceServices, mark_dirty), offsetof(OpenTTDVehicleMaintenanceServices, view_dirty), offsetof(OpenTTDVehicleMaintenanceServices, details_dirty), offsetof(OpenTTDVehicleMaintenanceServices, age), offsetof(OpenTTDVehicleMaintenanceServices, age_write), offsetof(OpenTTDVehicleMaintenanceServices, decay_write), offsetof(OpenTTDVehicleMaintenanceServices, warning), offsetof(OpenTTDVehicleMaintenanceServices, warning_company), offsetof(OpenTTDVehicleMaintenanceServices, engine_available_any), offsetof(OpenTTDVehicleMaintenanceServices, replacement_active), offsetof(OpenTTDVehicleMaintenanceServices, old_news), offsetof(OpenTTDVehicleMaintenanceServices, economy_age), offsetof(OpenTTDVehicleMaintenanceServices, economy_age_write), offsetof(OpenTTDVehicleMaintenanceServices, reached_min_age), offsetof(OpenTTDVehicleMaintenanceServices, value), offsetof(OpenTTDVehicleMaintenanceServices, value_write), offsetof(OpenTTDVehicleMaintenanceServices, max_calendar_date), offsetof(OpenTTDVehicleMaintenanceServices, max_economy_date), offsetof(OpenTTDVehicleMaintenanceServices, profit_min_age), offsetof(OpenTTDVehicleMaintenanceServices, anniversaries), offsetof(OpenTTDVehicleMaintenanceServices, before_zero), offsetof(OpenTTDVehicleMaintenanceServices, news_getting_old), offsetof(OpenTTDVehicleMaintenanceServices, news_very_old), offsetof(OpenTTDVehicleMaintenanceServices, news_very_old_and)});
+	Layout(772, "OpenTTDCalendarDate", {sizeof(OpenTTDCalendarDate), alignof(OpenTTDCalendarDate), offsetof(OpenTTDCalendarDate, value)});
+	Layout(773, "OpenTTDEconomyDate", {sizeof(OpenTTDEconomyDate), alignof(OpenTTDEconomyDate), offsetof(OpenTTDEconomyDate, value)});
+	Layout(774, "OrderType", {sizeof(OrderType), alignof(OrderType)});
+	Layout(775, "LandscapeType", {sizeof(LandscapeType), alignof(LandscapeType)});
+
 	Layout(630, "OpenTTDTownRef", {sizeof(OpenTTDTownRef), alignof(OpenTTDTownRef), offsetof(OpenTTDTownRef, shell), offsetof(OpenTTDTownRef, state), offsetof(OpenTTDTownRef, id)});
 	Layout(631, "OpenTTDTownNameServices", {sizeof(OpenTTDTownNameServices), alignof(OpenTTDTownNameServices), offsetof(OpenTTDTownNameServices, next), offsetof(OpenTTDTownNameServices, render), offsetof(OpenTTDTownNameServices, render_other), offsetof(OpenTTDTownNameServices, utf8_length), offsetof(OpenTTDTownNameServices, random_next)});
 	Layout(632, "OpenTTDTownNameMetadata", {sizeof(OpenTTDTownNameMetadata), alignof(OpenTTDTownNameMetadata), offsetof(OpenTTDTownNameMetadata, grfid), offsetof(OpenTTDTownNameMetadata, type)});
@@ -204,14 +243,103 @@ static void Layouts()
 	Layout(982, "OpenTTDSlopeZ", {sizeof(OpenTTDSlopeZ), alignof(OpenTTDSlopeZ), offsetof(OpenTTDSlopeZ, z), offsetof(OpenTTDSlopeZ, slope)});
 	Layout(983, "OpenTTDRailTrainParking", {sizeof(OpenTTDRailTrainParking), alignof(OpenTTDRailTrainParking), offsetof(OpenTTDRailTrainParking, track), offsetof(OpenTTDRailTrainParking, status), offsetof(OpenTTDRailTrainParking, speed), offsetof(OpenTTDRailTrainParking, order)});
 	Layout(985, "OpenTTDCrossingRoad", {sizeof(OpenTTDCrossingRoad), alignof(OpenTTDCrossingRoad), offsetof(OpenTTDCrossingRoad, bits), offsetof(OpenTTDCrossingRoad, road_type), offsetof(OpenTTDCrossingRoad, tram_type), offsetof(OpenTTDCrossingRoad, town), offsetof(OpenTTDCrossingRoad, road_owner), offsetof(OpenTTDCrossingRoad, tram_owner)});
-	Layout(42, "OpenTTDSharedServices", {sizeof(OpenTTDSharedServices), alignof(OpenTTDSharedServices), offsetof(OpenTTDSharedServices, context), offsetof(OpenTTDSharedServices, random), offsetof(OpenTTDSharedServices, industry), offsetof(OpenTTDSharedServices, tile_type), offsetof(OpenTTDSharedServices, bridge_above), offsetof(OpenTTDSharedServices, tropic_zone), offsetof(OpenTTDSharedServices, tile_z), offsetof(OpenTTDSharedServices, tile_slope), offsetof(OpenTTDSharedServices, mark_dirty), offsetof(OpenTTDSharedServices, set_tropic_zone), offsetof(OpenTTDSharedServices, tile_owner), offsetof(OpenTTDSharedServices, station_index), offsetof(OpenTTDSharedServices, depot_index), offsetof(OpenTTDSharedServices, is_level_crossing), offsetof(OpenTTDSharedServices, tunnel_bridge_direction), offsetof(OpenTTDSharedServices, bridge_speed), offsetof(OpenTTDSharedServices, is_water_tile), offsetof(OpenTTDSharedServices, company_valid), offsetof(OpenTTDSharedServices, next_company), offsetof(OpenTTDSharedServices, current_company), offsetof(OpenTTDSharedServices, closest_town), offsetof(OpenTTDSharedServices, town_owner), offsetof(OpenTTDSharedServices, tile_valid), offsetof(OpenTTDSharedServices, distance_from_edge), offsetof(OpenTTDSharedServices, tile_max_z), offsetof(OpenTTDSharedServices, tile_height), offsetof(OpenTTDSharedServices, bridge_axis), offsetof(OpenTTDSharedServices, has_water_ground), offsetof(OpenTTDSharedServices, is_sea), offsetof(OpenTTDSharedServices, is_plain_rail), offsetof(OpenTTDSharedServices, is_bridge), offsetof(OpenTTDSharedServices, tunnel_transport), offsetof(OpenTTDSharedServices, other_tunnel_end), offsetof(OpenTTDSharedServices, is_road_depot), offsetof(OpenTTDSharedServices, road_depot_direction), offsetof(OpenTTDSharedServices, is_normal_road), offsetof(OpenTTDSharedServices, disallowed_road_directions), offsetof(OpenTTDSharedServices, is_bay_stop), offsetof(OpenTTDSharedServices, bay_stop_direction), offsetof(OpenTTDSharedServices, is_drive_through_stop), offsetof(OpenTTDSharedServices, drive_through_axis), offsetof(OpenTTDSharedServices, is_any_road_stop), offsetof(OpenTTDSharedServices, road_type), offsetof(OpenTTDSharedServices, has_road_type), offsetof(OpenTTDSharedServices, road_owner), offsetof(OpenTTDSharedServices, town_index), offsetof(OpenTTDSharedServices, road_bits), offsetof(OpenTTDSharedServices, snow_line), offsetof(OpenTTDSharedServices, calendar_year), offsetof(OpenTTDSharedServices, map_log_x), offsetof(OpenTTDSharedServices, map_max_x), offsetof(OpenTTDSharedServices, map_max_y), offsetof(OpenTTDSharedServices, plane_speed), offsetof(OpenTTDSharedServices, no_jetcrash), offsetof(OpenTTDSharedServices, plane_crashes), offsetof(OpenTTDSharedServices, service_at_helipad), offsetof(OpenTTDSharedServices, disaster_sound), offsetof(OpenTTDSharedServices, economy_date), offsetof(OpenTTDSharedServices, calendar_date), offsetof(OpenTTDSharedServices, slope), offsetof(OpenTTDSharedServices, build_on_slopes), offsetof(OpenTTDSharedServices, autoslope), offsetof(OpenTTDSharedServices, clear_square), offsetof(OpenTTDSharedServices, free_train_reservation), offsetof(OpenTTDSharedServices, try_path_reserve), offsetof(OpenTTDSharedServices, safe_waiting_position), offsetof(OpenTTDSharedServices, has_road_works), offsetof(OpenTTDSharedServices, tram_type), offsetof(OpenTTDSharedServices, tram_owner), offsetof(OpenTTDSharedServices, normal_road_bits), offsetof(OpenTTDSharedServices, crossing_road_bits), offsetof(OpenTTDSharedServices, forbid_90_deg), offsetof(OpenTTDSharedServices, update_level_crossing), offsetof(OpenTTDSharedServices, mark_bridge_dirty), offsetof(OpenTTDSharedServices, train_trackdir), offsetof(OpenTTDSharedServices, clear_ground), offsetof(OpenTTDSharedServices, tree_ground), offsetof(OpenTTDSharedServices, make_snow), offsetof(OpenTTDSharedServices, make_shore), offsetof(OpenTTDSharedServices, water_services), offsetof(OpenTTDSharedServices, play_sound), offsetof(OpenTTDSharedServices, foundation), offsetof(OpenTTDSharedServices, set_fence), offsetof(OpenTTDSharedServices, has_water_class)});
+	Layout(42, "OpenTTDSharedServices", {sizeof(OpenTTDSharedServices), alignof(OpenTTDSharedServices),
+		offsetof(OpenTTDSharedServices, autoslope),
+		offsetof(OpenTTDSharedServices, bay_stop_direction),
+		offsetof(OpenTTDSharedServices, bridge_above),
+		offsetof(OpenTTDSharedServices, bridge_axis),
+		offsetof(OpenTTDSharedServices, bridge_speed),
+		offsetof(OpenTTDSharedServices, build_on_slopes),
+		offsetof(OpenTTDSharedServices, calendar_date),
+		offsetof(OpenTTDSharedServices, calendar_year),
+		offsetof(OpenTTDSharedServices, clear_square),
+		offsetof(OpenTTDSharedServices, closest_town),
+		offsetof(OpenTTDSharedServices, company_valid),
+		offsetof(OpenTTDSharedServices, context),
+		offsetof(OpenTTDSharedServices, crossing_road_bits),
+		offsetof(OpenTTDSharedServices, current_company),
+		offsetof(OpenTTDSharedServices, depot_index),
+		offsetof(OpenTTDSharedServices, disallowed_road_directions),
+		offsetof(OpenTTDSharedServices, disaster_sound),
+		offsetof(OpenTTDSharedServices, distance_from_edge),
+		offsetof(OpenTTDSharedServices, drive_through_axis),
+		offsetof(OpenTTDSharedServices, economy_date),
+		offsetof(OpenTTDSharedServices, forbid_90_deg),
+		offsetof(OpenTTDSharedServices, free_train_reservation),
+		offsetof(OpenTTDSharedServices, has_road_type),
+		offsetof(OpenTTDSharedServices, has_road_works),
+		offsetof(OpenTTDSharedServices, has_water_ground),
+		offsetof(OpenTTDSharedServices, industry),
+		offsetof(OpenTTDSharedServices, is_any_road_stop),
+		offsetof(OpenTTDSharedServices, is_bay_stop),
+		offsetof(OpenTTDSharedServices, is_bridge),
+		offsetof(OpenTTDSharedServices, is_drive_through_stop),
+		offsetof(OpenTTDSharedServices, is_level_crossing),
+		offsetof(OpenTTDSharedServices, is_normal_road),
+		offsetof(OpenTTDSharedServices, is_plain_rail),
+		offsetof(OpenTTDSharedServices, is_road_depot),
+		offsetof(OpenTTDSharedServices, is_sea),
+		offsetof(OpenTTDSharedServices, is_water_tile),
+		offsetof(OpenTTDSharedServices, map_log_x),
+		offsetof(OpenTTDSharedServices, map_max_x),
+		offsetof(OpenTTDSharedServices, map_max_y),
+		offsetof(OpenTTDSharedServices, mark_bridge_dirty),
+		offsetof(OpenTTDSharedServices, mark_dirty),
+		offsetof(OpenTTDSharedServices, next_company),
+		offsetof(OpenTTDSharedServices, no_jetcrash),
+		offsetof(OpenTTDSharedServices, normal_road_bits),
+		offsetof(OpenTTDSharedServices, other_tunnel_end),
+		offsetof(OpenTTDSharedServices, plane_crashes),
+		offsetof(OpenTTDSharedServices, plane_speed),
+		offsetof(OpenTTDSharedServices, random),
+		offsetof(OpenTTDSharedServices, road_bits),
+		offsetof(OpenTTDSharedServices, road_depot_direction),
+		offsetof(OpenTTDSharedServices, road_owner),
+		offsetof(OpenTTDSharedServices, road_type),
+		offsetof(OpenTTDSharedServices, safe_waiting_position),
+		offsetof(OpenTTDSharedServices, service_at_helipad),
+		offsetof(OpenTTDSharedServices, set_tropic_zone),
+		offsetof(OpenTTDSharedServices, slope),
+		offsetof(OpenTTDSharedServices, snow_line),
+		offsetof(OpenTTDSharedServices, station_index),
+		offsetof(OpenTTDSharedServices, tile_height),
+		offsetof(OpenTTDSharedServices, tile_max_z),
+		offsetof(OpenTTDSharedServices, tile_owner),
+		offsetof(OpenTTDSharedServices, tile_slope),
+		offsetof(OpenTTDSharedServices, tile_type),
+		offsetof(OpenTTDSharedServices, tile_valid),
+		offsetof(OpenTTDSharedServices, tile_z),
+		offsetof(OpenTTDSharedServices, town_index),
+		offsetof(OpenTTDSharedServices, town_owner),
+		offsetof(OpenTTDSharedServices, train_trackdir),
+		offsetof(OpenTTDSharedServices, tram_owner),
+		offsetof(OpenTTDSharedServices, tram_type),
+		offsetof(OpenTTDSharedServices, tropic_zone),
+		offsetof(OpenTTDSharedServices, try_path_reserve),
+		offsetof(OpenTTDSharedServices, tunnel_bridge_direction),
+		offsetof(OpenTTDSharedServices, tunnel_transport),
+		offsetof(OpenTTDSharedServices, update_level_crossing),
+		// Registry: house (#256).
+
+		// Registry: landscape (#212).
+		offsetof(OpenTTDSharedServices, clear_ground),
+		offsetof(OpenTTDSharedServices, foundation),
+		offsetof(OpenTTDSharedServices, has_water_class),
+		offsetof(OpenTTDSharedServices, make_shore),
+		offsetof(OpenTTDSharedServices, make_snow),
+		offsetof(OpenTTDSharedServices, play_sound),
+		offsetof(OpenTTDSharedServices, set_fence),
+		offsetof(OpenTTDSharedServices, tree_ground),
+		offsetof(OpenTTDSharedServices, water_services),
+
+	});
 	Layout(37, "OpenTTDLinkGraphShare", {sizeof(OpenTTDLinkGraphShare), alignof(OpenTTDLinkGraphShare), offsetof(OpenTTDLinkGraphShare, node), offsetof(OpenTTDLinkGraphShare, origin), offsetof(OpenTTDLinkGraphShare, via), offsetof(OpenTTDLinkGraphShare, cumulative), offsetof(OpenTTDLinkGraphShare, unrestricted), offsetof(OpenTTDLinkGraphShare, has_share)});
 	Layout(39, "OpenTTDEffectView", {sizeof(OpenTTDEffectView), alignof(OpenTTDEffectView), offsetof(OpenTTDEffectView, x), offsetof(OpenTTDEffectView, y), offsetof(OpenTTDEffectView, z), offsetof(OpenTTDEffectView, sprite), offsetof(OpenTTDEffectView, progress), offsetof(OpenTTDEffectView, spritenum), offsetof(OpenTTDEffectView, subtype), offsetof(OpenTTDEffectView, ambient)});
 	Layout(41, "OpenTTDEffectLeaves", {sizeof(OpenTTDEffectLeaves), alignof(OpenTTDEffectLeaves), offsetof(OpenTTDEffectLeaves, observe), offsetof(OpenTTDEffectLeaves, write), offsetof(OpenTTDEffectLeaves, viewport), offsetof(OpenTTDEffectLeaves, sound), offsetof(OpenTTDEffectLeaves, animated)});
 	// ABI reservations: train 380-385; tree additions 386-389; fleet 390-399; company 400-429; town 430-459; shared vehicle/road 460-499; station 500-559; industry 560-619; shared CommandCost 620-629 (town-owned). Trees retain existing low IDs.
 	Layout(461, "OpenTTDVehicleNewPosition", {sizeof(OpenTTDVehicleNewPosition), alignof(OpenTTDVehicleNewPosition), offsetof(OpenTTDVehicleNewPosition, x), offsetof(OpenTTDVehicleNewPosition, y), offsetof(OpenTTDVehicleNewPosition, tile)});
 	Layout(462, "OpenTTDVehicleBreakdown", {sizeof(OpenTTDVehicleBreakdown), alignof(OpenTTDVehicleBreakdown), offsetof(OpenTTDVehicleBreakdown, broken), offsetof(OpenTTDVehicleBreakdown, status)});
-	Layout(460, "OpenTTDVehicleServices", {sizeof(OpenTTDVehicleServices), alignof(OpenTTDVehicleServices), offsetof(OpenTTDVehicleServices, write_counters), offsetof(OpenTTDVehicleServices, handle_breakdown), offsetof(OpenTTDVehicleServices, waiting_for_unbunching), offsetof(OpenTTDVehicleServices, leave_unbunching_depot), offsetof(OpenTTDVehicleServices, reset_depot_unbunching), offsetof(OpenTTDVehicleServices, service_in_depot), offsetof(OpenTTDVehicleServices, needs_automatic_servicing), offsetof(OpenTTDVehicleServices, enter_depot), offsetof(OpenTTDVehicleServices, pathfinding_result), offsetof(OpenTTDVehicleServices, new_position), offsetof(OpenTTDVehicleServices, move_then_status), offsetof(OpenTTDVehicleServices, base_viewport), offsetof(OpenTTDVehicleServices, property), offsetof(OpenTTDVehicleServices, length_callback), offsetof(OpenTTDVehicleServices, unknown_length_result), offsetof(OpenTTDVehicleServices, length_changed), offsetof(OpenTTDVehicleServices, play_start_sound), offsetof(OpenTTDVehicleServices, play_sound), offsetof(OpenTTDVehicleServices, large_explosion), offsetof(OpenTTDVehicleServices, order_free), offsetof(OpenTTDVehicleServices, order_dummy), offsetof(OpenTTDVehicleServices, start_stop_dirty), offsetof(OpenTTDVehicleServices, destroy), offsetof(OpenTTDVehicleServices, age), offsetof(OpenTTDVehicleServices, economy_age), offsetof(OpenTTDVehicleServices, decrease_value), offsetof(OpenTTDVehicleServices, check_breakdown), offsetof(OpenTTDVehicleServices, check_orders), offsetof(OpenTTDVehicleServices, write_day), offsetof(OpenTTDVehicleServices, write_direction), offsetof(OpenTTDVehicleServices, write_speed), offsetof(OpenTTDVehicleServices, last_station), offsetof(OpenTTDVehicleServices, write_last_station), offsetof(OpenTTDVehicleServices, write_dest), offsetof(OpenTTDVehicleServices, write_progress), offsetof(OpenTTDVehicleServices, write_max_speed), offsetof(OpenTTDVehicleServices, previous_tile), offsetof(OpenTTDVehicleServices, detach_last), offsetof(OpenTTDVehicleServices, next), offsetof(OpenTTDVehicleServices, engine_id), offsetof(OpenTTDVehicleServices, engine_for_length), offsetof(OpenTTDVehicleServices, write_tick), offsetof(OpenTTDVehicleServices, direction), offsetof(OpenTTDVehicleServices, status), offsetof(OpenTTDVehicleServices, tile), offsetof(OpenTTDVehicleServices, progress), offsetof(OpenTTDVehicleServices, dest_tile), offsetof(OpenTTDVehicleServices, order_type), offsetof(OpenTTDVehicleServices, order_destination), offsetof(OpenTTDVehicleServices, order_nonstop), offsetof(OpenTTDVehicleServices, subtype), offsetof(OpenTTDVehicleServices, x), offsetof(OpenTTDVehicleServices, y), offsetof(OpenTTDVehicleServices, z), offsetof(OpenTTDVehicleServices, tick), offsetof(OpenTTDVehicleServices, owner), offsetof(OpenTTDVehicleServices, speed), offsetof(OpenTTDVehicleServices, subspeed), offsetof(OpenTTDVehicleServices, running), offsetof(OpenTTDVehicleServices, order_time), offsetof(OpenTTDVehicleServices, vehicle_type), offsetof(OpenTTDVehicleServices, write_x), offsetof(OpenTTDVehicleServices, write_y), offsetof(OpenTTDVehicleServices, write_z), offsetof(OpenTTDVehicleServices, write_tile), offsetof(OpenTTDVehicleServices, write_status), offsetof(OpenTTDVehicleServices, write_subspeed), offsetof(OpenTTDVehicleServices, write_breakdown_counter), offsetof(OpenTTDVehicleServices, write_running), offsetof(OpenTTDVehicleServices, write_order_time), offsetof(OpenTTDVehicleServices, write_profit), offsetof(OpenTTDVehicleServices, write_economy_service), offsetof(OpenTTDVehicleServices, write_calendar_service), offsetof(OpenTTDVehicleServices, write_breakdowns), offsetof(OpenTTDVehicleServices, write_reliability), offsetof(OpenTTDVehicleServices, write_cargo_age), offsetof(OpenTTDVehicleServices, coordinates), offsetof(OpenTTDVehicleServices, xy), offsetof(OpenTTDVehicleServices, speed_inputs), offsetof(OpenTTDVehicleServices, direction_progress), offsetof(OpenTTDVehicleServices, tick_status), offsetof(OpenTTDVehicleServices, day_cost), offsetof(OpenTTDVehicleServices, make_dummy), offsetof(OpenTTDVehicleServices, loading), offsetof(OpenTTDVehicleServices, breakdown), offsetof(OpenTTDVehicleServices, check_orders_only), offsetof(OpenTTDVehicleServices, write_coordinates), offsetof(OpenTTDVehicleServices, altitude_inputs)});
+	Layout(460, "OpenTTDVehicleServices", {sizeof(OpenTTDVehicleServices), alignof(OpenTTDVehicleServices), offsetof(OpenTTDVehicleServices, write_counters), offsetof(OpenTTDVehicleServices, handle_breakdown), offsetof(OpenTTDVehicleServices, waiting_for_unbunching), offsetof(OpenTTDVehicleServices, leave_unbunching_depot), offsetof(OpenTTDVehicleServices, reset_depot_unbunching), offsetof(OpenTTDVehicleServices, service_in_depot), offsetof(OpenTTDVehicleServices, needs_automatic_servicing), offsetof(OpenTTDVehicleServices, enter_depot), offsetof(OpenTTDVehicleServices, pathfinding_result), offsetof(OpenTTDVehicleServices, new_position), offsetof(OpenTTDVehicleServices, move_then_status), offsetof(OpenTTDVehicleServices, base_viewport), offsetof(OpenTTDVehicleServices, property), offsetof(OpenTTDVehicleServices, length_callback), offsetof(OpenTTDVehicleServices, unknown_length_result), offsetof(OpenTTDVehicleServices, length_changed), offsetof(OpenTTDVehicleServices, play_start_sound), offsetof(OpenTTDVehicleServices, play_sound), offsetof(OpenTTDVehicleServices, large_explosion), offsetof(OpenTTDVehicleServices, order_free), offsetof(OpenTTDVehicleServices, order_dummy), offsetof(OpenTTDVehicleServices, start_stop_dirty), offsetof(OpenTTDVehicleServices, destroy), offsetof(OpenTTDVehicleServices, age), offsetof(OpenTTDVehicleServices, economy_age), offsetof(OpenTTDVehicleServices, decrease_value), offsetof(OpenTTDVehicleServices, check_breakdown), offsetof(OpenTTDVehicleServices, check_orders), offsetof(OpenTTDVehicleServices, write_day), offsetof(OpenTTDVehicleServices, write_direction), offsetof(OpenTTDVehicleServices, write_speed), offsetof(OpenTTDVehicleServices, last_station), offsetof(OpenTTDVehicleServices, write_last_station), offsetof(OpenTTDVehicleServices, write_dest), offsetof(OpenTTDVehicleServices, write_progress), offsetof(OpenTTDVehicleServices, write_max_speed), offsetof(OpenTTDVehicleServices, previous_tile), offsetof(OpenTTDVehicleServices, detach_last), offsetof(OpenTTDVehicleServices, next), offsetof(OpenTTDVehicleServices, engine_id), offsetof(OpenTTDVehicleServices, engine_for_length), offsetof(OpenTTDVehicleServices, write_tick), offsetof(OpenTTDVehicleServices, direction), offsetof(OpenTTDVehicleServices, status), offsetof(OpenTTDVehicleServices, tile), offsetof(OpenTTDVehicleServices, progress), offsetof(OpenTTDVehicleServices, dest_tile), offsetof(OpenTTDVehicleServices, order_type), offsetof(OpenTTDVehicleServices, order_destination), offsetof(OpenTTDVehicleServices, order_nonstop), offsetof(OpenTTDVehicleServices, subtype), offsetof(OpenTTDVehicleServices, x), offsetof(OpenTTDVehicleServices, y), offsetof(OpenTTDVehicleServices, z), offsetof(OpenTTDVehicleServices, tick), offsetof(OpenTTDVehicleServices, owner), offsetof(OpenTTDVehicleServices, speed), offsetof(OpenTTDVehicleServices, subspeed), offsetof(OpenTTDVehicleServices, running), offsetof(OpenTTDVehicleServices, order_time), offsetof(OpenTTDVehicleServices, vehicle_type), offsetof(OpenTTDVehicleServices, write_x), offsetof(OpenTTDVehicleServices, write_y), offsetof(OpenTTDVehicleServices, write_z), offsetof(OpenTTDVehicleServices, write_tile), offsetof(OpenTTDVehicleServices, write_status), offsetof(OpenTTDVehicleServices, write_subspeed), offsetof(OpenTTDVehicleServices, write_breakdown_counter), offsetof(OpenTTDVehicleServices, write_running), offsetof(OpenTTDVehicleServices, write_order_time), offsetof(OpenTTDVehicleServices, write_profit), offsetof(OpenTTDVehicleServices, write_economy_service), offsetof(OpenTTDVehicleServices, write_calendar_service), offsetof(OpenTTDVehicleServices, write_breakdowns), offsetof(OpenTTDVehicleServices, write_reliability), offsetof(OpenTTDVehicleServices, write_cargo_age), offsetof(OpenTTDVehicleServices, coordinates), offsetof(OpenTTDVehicleServices, xy), offsetof(OpenTTDVehicleServices, speed_inputs), offsetof(OpenTTDVehicleServices, direction_progress), offsetof(OpenTTDVehicleServices, tick_status), offsetof(OpenTTDVehicleServices, day_cost), offsetof(OpenTTDVehicleServices, make_dummy), offsetof(OpenTTDVehicleServices, loading), offsetof(OpenTTDVehicleServices, breakdown), offsetof(OpenTTDVehicleServices, check_orders_only), offsetof(OpenTTDVehicleServices, write_coordinates), offsetof(OpenTTDVehicleServices, altitude_inputs), offsetof(OpenTTDVehicleServices, maintenance)});
 	Layout(464, "OpenTTDGroundMoved", {sizeof(OpenTTDGroundMoved), alignof(OpenTTDGroundMoved), offsetof(OpenTTDGroundMoved, old_z), offsetof(OpenTTDGroundMoved, z), offsetof(OpenTTDGroundMoved, cur_speed), offsetof(OpenTTDGroundMoved, max_track_speed)});
 	Layout(465, "OpenTTDGroundSpeed", {sizeof(OpenTTDGroundSpeed), alignof(OpenTTDGroundSpeed), offsetof(OpenTTDGroundSpeed, distance), offsetof(OpenTTDGroundSpeed, cur_speed)});
 	Layout(466, "OpenTTDGroundLastSpeed", {sizeof(OpenTTDGroundLastSpeed), alignof(OpenTTDGroundLastSpeed), offsetof(OpenTTDGroundLastSpeed, status)});
@@ -1033,6 +1161,7 @@ struct VehicleUnused<Result (OPENTTD_VEHICLE_CALL *)(Args...) noexcept> {
 	}
 };
 #define VEHICLE_UNUSED(table, field) table.field = VehicleUnused<decltype(table.field)>::Call
+static OpenTTDVehicleMaintenanceServices _vehicle_maintenance_probe;
 struct RoadTestTables {
 	OpenTTDVehicleServices vehicle;
 	OpenTTDGroundServices ground;
@@ -1040,6 +1169,7 @@ struct RoadTestTables {
 	OpenTTDRoadLeaves leaves;
 	explicit RoadTestTables(const OpenTTDSharedServices *world) : shared(*world)
 	{
+		vehicle.maintenance = &_vehicle_maintenance_probe;
 		VEHICLE_UNUSED(vehicle, write_counters);
 
 
@@ -1381,7 +1511,6 @@ static void RoadBoundary()
 	openttd_rust_road_set(probe.state, 6, 0);
 
 	/* A front tick reenters the setter from ProcessOrders and the speed getter from ShowVisualEffect. */
-	t.vehicle.handle_breakdown = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleBreakdown { return {.broken = false, .status = 0}; };
 	t.leaves.process_orders_then_loading = [](OpenTTDVehicle *u) noexcept -> uint8_t {
 		auto &p = *road_abi_probe;
 		openttd_rust_road_set_dest(u, p.state, 100, p.dest, p.leaves);
@@ -1936,40 +2065,189 @@ static void AircraftOwnership()
 	std::printf("aircraft_airport_canonical_scalar_lifetime passed\n");
 }
 
+/* Explicit trivial Date and actual VehicleType carriers and aggregate return/write call ABI. Opaque
+ * shells are never dereferenced; the game target checks real member stores. */
+static void VehicleMaintenanceBoundary()
+{
+	static size_t dirty;
+	static size_t resets;
+	static size_t values;
+	dirty = resets = values = 0;
+	auto &maintenance = _vehicle_maintenance_probe;
+	maintenance.renewal = AircraftUnexpectedService<decltype(maintenance.renewal)>::Call;
+	maintenance.reset = AircraftUnexpectedService<decltype(maintenance.reset)>::Call;
+	maintenance.reset_write = AircraftUnexpectedService<decltype(maintenance.reset_write)>::Call;
+	maintenance.has_engine = AircraftUnexpectedService<decltype(maintenance.has_engine)>::Call;
+	maintenance.interval = AircraftUnexpectedService<decltype(maintenance.interval)>::Call;
+	maintenance.engine_reliability = AircraftUnexpectedService<decltype(maintenance.engine_reliability)>::Call;
+	maintenance.budget = AircraftUnexpectedService<decltype(maintenance.budget)>::Call;
+	maintenance.replacement = AircraftUnexpectedService<decltype(maintenance.replacement)>::Call;
+	maintenance.replacement_available = AircraftUnexpectedService<decltype(maintenance.replacement_available)>::Call;
+	maintenance.replacement_cost = AircraftUnexpectedService<decltype(maintenance.replacement_cost)>::Call;
+	maintenance.automatic = AircraftUnexpectedService<decltype(maintenance.automatic)>::Call;
+	maintenance.depot_service = AircraftUnexpectedService<decltype(maintenance.depot_service)>::Call;
+	maintenance.check_breakdown = AircraftUnexpectedService<decltype(maintenance.check_breakdown)>::Call;
+	maintenance.breakdown_guard = AircraftUnexpectedService<decltype(maintenance.breakdown_guard)>::Call;
+	maintenance.breakdown_trigger = AircraftUnexpectedService<decltype(maintenance.breakdown_trigger)>::Call;
+	maintenance.chance_write = AircraftUnexpectedService<decltype(maintenance.chance_write)>::Call;
+	maintenance.trigger = AircraftUnexpectedService<decltype(maintenance.trigger)>::Call;
+	maintenance.breakdown_counter = AircraftUnexpectedService<decltype(maintenance.breakdown_counter)>::Call;
+	maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicleMaintenanceBreakdownProbe { return {.counter = 0, .status = 0}; };
+	maintenance.breakdown_start = AircraftUnexpectedService<decltype(maintenance.breakdown_start)>::Call;
+	maintenance.breakdown_start_write = AircraftUnexpectedService<decltype(maintenance.breakdown_start_write)>::Call;
+	maintenance.breakdown_active = AircraftUnexpectedService<decltype(maintenance.breakdown_active)>::Call;
+	maintenance.breakdown_countdown = AircraftUnexpectedService<decltype(maintenance.breakdown_countdown)>::Call;
+	maintenance.breakdown_sound_state = AircraftUnexpectedService<decltype(maintenance.breakdown_sound_state)>::Call;
+	maintenance.breakdown_delay_write = AircraftUnexpectedService<decltype(maintenance.breakdown_delay_write)>::Call;
+	maintenance.breakdown_sound = AircraftUnexpectedService<decltype(maintenance.breakdown_sound)>::Call;
+	maintenance.smoke_disabled = AircraftUnexpectedService<decltype(maintenance.smoke_disabled)>::Call;
+	maintenance.smoke = AircraftUnexpectedService<decltype(maintenance.smoke)>::Call;
+	maintenance.smoke_animation = AircraftUnexpectedService<decltype(maintenance.smoke_animation)>::Call;
+	maintenance.aircraft_broken = AircraftUnexpectedService<decltype(maintenance.aircraft_broken)>::Call;
+	maintenance.mark_dirty = AircraftUnexpectedService<decltype(maintenance.mark_dirty)>::Call;
+	maintenance.view_dirty = AircraftUnexpectedService<decltype(maintenance.view_dirty)>::Call;
+	maintenance.details_dirty = AircraftUnexpectedService<decltype(maintenance.details_dirty)>::Call;
+	maintenance.age = AircraftUnexpectedService<decltype(maintenance.age)>::Call;
+	maintenance.age_write = AircraftUnexpectedService<decltype(maintenance.age_write)>::Call;
+	maintenance.decay_write = AircraftUnexpectedService<decltype(maintenance.decay_write)>::Call;
+	maintenance.warning = AircraftUnexpectedService<decltype(maintenance.warning)>::Call;
+	maintenance.warning_company = AircraftUnexpectedService<decltype(maintenance.warning_company)>::Call;
+	maintenance.engine_available_any = AircraftUnexpectedService<decltype(maintenance.engine_available_any)>::Call;
+	maintenance.replacement_active = AircraftUnexpectedService<decltype(maintenance.replacement_active)>::Call;
+	maintenance.old_news = AircraftUnexpectedService<decltype(maintenance.old_news)>::Call;
+	maintenance.economy_age = AircraftUnexpectedService<decltype(maintenance.economy_age)>::Call;
+	maintenance.economy_age_write = AircraftUnexpectedService<decltype(maintenance.economy_age_write)>::Call;
+	maintenance.reached_min_age = AircraftUnexpectedService<decltype(maintenance.reached_min_age)>::Call;
+	maintenance.value = AircraftUnexpectedService<decltype(maintenance.value)>::Call;
+	maintenance.value_write = AircraftUnexpectedService<decltype(maintenance.value_write)>::Call;
+	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept { dirty++; };
+	maintenance.reset = [](OpenTTDVehicle *) noexcept {
+		return OpenTTDVehicleMaintenanceReset{.economy_date = OpenTTDEconomyDate{0x1020304}, .calendar_date = OpenTTDCalendarDate{-0x12345}, .reliability = 0x9876, .chance = 12, .breakdowns = 2};
+	};
+	maintenance.reset_write = [](OpenTTDVehicle *, OpenTTDVehicleMaintenanceResetWrite value) noexcept {
+		CHECK(value.economy_date.value == 0x1020304);
+		CHECK(value.calendar_date.value == -0x12345);
+		CHECK(value.reliability == 0x9876 && value.chance == 3 && value.since == 0);
+		resets++;
+	};
+	maintenance.value = [](OpenTTDVehicle *) noexcept { return int64_t{-257}; };
+	maintenance.value_write = [](OpenTTDVehicle *, int64_t value) noexcept { CHECK(value == -255); values++; };
+	maintenance.renewal = [](OpenTTDVehicle *, const Company *) noexcept {
+		return OpenTTDVehicleMaintenanceRenewal{.age = OpenTTDCalendarDate{100}, .max_age = OpenTTDCalendarDate{100}, .months = -4, .enabled = false, .kind = static_cast<VehicleType>(254), .subtype = 0};
+	};
+	const auto shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom, EffectTestIndustry);
+	RoadTestTables tables(&shared);
+	auto &base = tables.vehicle;
+	base.maintenance = &maintenance;
+	base.next = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { return nullptr; };
+	uint8_t opaque;
+	auto *shell = reinterpret_cast<OpenTTDVehicle *>(&opaque);
+	openttd_rust_vehicle_service_depot(shell, &base);
+	openttd_rust_vehicle_decrease_value(shell, &base);
+	CHECK(openttd_rust_vehicle_needs_renew(shell, &base, nullptr, false));
+	CHECK(!openttd_rust_vehicle_needs_renew(shell, &base, nullptr, true));
+	CHECK(dirty == 2 && resets == 1 && values == 1);
+}
+
+/* Actual native storage type is checked by the game-side shell probe; this
+ * standalone ABI target also exercises const BaseBitSet member identity and
+ * native size_t/pointer cursor calls on every platform. */
+static void VehicleSchedulerBoundary()
+{
+	using Status = decltype(std::declval<Vehicle>().vehstatus);
+	static_assert(std::is_same_v<Status::BaseType, uint8_t>);
+	static_assert(std::is_same_v<decltype(RustVehicleStatusAddress(nullptr)), const uint8_t *>);
+	Status status;
+	const uint8_t *address = status.base_address();
+	static_assert(std::is_same_v<decltype(status.base_address()), const uint8_t *>);
+	CHECK(address == status.base_address());
+	status.Set(VehState::Hidden);
+	CHECK(*address == status.base());
+	status.Set(VehState::Crashed);
+	CHECK(*address == 129);
+	status.Reset(VehState::Hidden);
+	CHECK(*address == 128);
+	/* Opaque shells are never dereferenced: this target tests the pointer/size_t
+	 * call ABI; the game target compares real pool mutations to PoolIterator. */
+	static Vehicle *slots[5];
+	static size_t live;
+	static size_t size;
+	std::array<uint8_t, 2> opaque{};
+	slots[0] = reinterpret_cast<Vehicle *>(&opaque[0]);
+	slots[1] = nullptr;
+	slots[2] = reinterpret_cast<Vehicle *>(&opaque[1]);
+	slots[3] = slots[4] = nullptr;
+	live = size = 2;
+	OpenTTDVehicleSchedulerServices services{};
+	services.tick = AircraftUnexpectedService<decltype(services.tick)>::Call;
+	services.calendar_day = AircraftUnexpectedService<decltype(services.calendar_day)>::Call;
+	services.economy_day = AircraftUnexpectedService<decltype(services.economy_day)>::Call;
+	services.day_callback_read = AircraftUnexpectedService<decltype(services.day_callback_read)>::Call;
+	services.day_callback = AircraftUnexpectedService<decltype(services.day_callback)>::Call;
+	services.randomise_callback = AircraftUnexpectedService<decltype(services.randomise_callback)>::Call;
+	services.first_dirty = AircraftUnexpectedService<decltype(services.first_dirty)>::Call;
+	services.unknown_day_callback = AircraftUnexpectedService<decltype(services.unknown_day_callback)>::Call;
+	services.cargo_owner = AircraftUnexpectedService<decltype(services.cargo_owner)>::Call;
+	services.running_sound = AircraftUnexpectedService<decltype(services.running_sound)>::Call;
+	services.periodic_sound = AircraftUnexpectedService<decltype(services.periodic_sound)>::Call;
+	services.next_station = AircraftUnexpectedService<decltype(services.next_station)>::Call;
+	services.with_loading_timer = AircraftUnexpectedService<decltype(services.with_loading_timer)>::Call;
+	services.reset_accumulators = AircraftUnexpectedService<decltype(services.reset_accumulators)>::Call;
+	services.pool = []() noexcept { return OpenTTDVehiclePoolCursor{.slots = slots, .slots_len = size, .first_unused = &live}; };
+	auto cursor = services.pool();
+	size_t from = 0;
+	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == reinterpret_cast<OpenTTDVehicle *>(slots[0]));
+	CHECK(from == 1);
+	live = 3;
+	size = 5;
+	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == reinterpret_cast<OpenTTDVehicle *>(slots[2]));
+	CHECK(cursor.slots_len == 5);
+	CHECK(cursor.first_unused == &live);
+	CHECK(from == 3);
+	CHECK(openttd_rust_vehicle_cursor_next(&services, &cursor, &from) == nullptr);
+}
 int main()
 {
 	Layouts();
-	CHECK(GroundProbe::Run());
-	LandscapeProbe::Run([](bool result) { CHECK(result); });
-	ShipBoundary();
+	/* These initialize the shared maintenance table consumed by road probes. */
+	VehicleSchedulerBoundary();
+	VehicleMaintenanceBoundary();
+	/* Independent component probes are alphabetical. */
+	AircraftDirectBoundary();
+	AircraftOwnership();
+	AircraftPhaseBoundary();
+	CheckEffectProtocol([](bool result) { CHECK(result); });
+	Disasters();
+	LinkGraphJob();
 	RoadBoundary();
 	RoadServiceBoundary();
-	WaterProbe::Run([](bool result) { CHECK(result); });
+	ShipBoundary();
 	ShipYapfProbe::Run([](bool result) { CHECK(result); });
-	CheckEffectProtocol([](bool result) { CHECK(result); });
-	LinkGraphJob();
 	Trees();
-	Disasters();
-	AircraftOwnership();
-	AircraftDirectBoundary();
-	AircraftPhaseBoundary();
+	WaterProbe::Run([](bool result) { CHECK(result); });
+	// Registry: house (#256).
+
+	// Registry: landscape (#212).
+	CHECK(GroundProbe::Run());
+	LandscapeProbe::Run([](bool result) { CHECK(result); });
+
 	/* Opaque owner, native size_t, immutable byte borrow and complete UTF-8 output. */
 	auto *townname = openttd_rust_townname_generate(1, UINT32_MAX);
 	size_t name_length;
 	const char *name = openttd_rust_townname_data(townname, &name_length);
 	CHECK(name_length == 8 && std::memcmp(name, "Alen\xc3\xa7on", name_length) == 0);
 	openttd_rust_townname_destroy(townname);
+	Blake2b();
 	Calls();
+	CryptoPrimitives();
 	Encoded();
 	History();
-	Math();
-	CryptoPrimitives();
-	Blake2b();
-	X25519();
-	StationCargo();
-	PacketState();
-	StringValidation();
-	ScriptListControl();
 	Locale();
+	Math();
+	PacketState();
+	ScriptListControl();
+	StationCargo();
+	StringValidation();
+	X25519();
 	std::printf("ABI audit passed\n");
 }

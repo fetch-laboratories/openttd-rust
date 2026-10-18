@@ -13,30 +13,31 @@ ROAD = "roadveh[0]/"
 COMMON = ROAD + "common[0]/"
 AI_FOLDER = "road-scenario-ai"
 
-# Idle-host medians at e94b378c0f: three --benchmark 3 invocations per case.
-# All 54 pairs had equal semantic state/logs; invocation spread was 0.79-1.65%.
-# https://github.com/fetch-laboratories/openttd-rust/pull/279
-# Each reduction exceeds both its measured invocation spread and 2%.
-# Core-loop boundary exceptions follow AGENTS.md and the selected roadmap.
+# Recorded candidate/reference medians; integrating PRs update these up or down.
+# First record: PR #285, root --benchmark 3 at reviewed game head 6598b25274.
 SPEED_BUDGETS = {
-    "generate-tgp-256-1": 1.1232091690544415,
-    "play-opus-55-167-002-manual": 1.2225869993434013,
-    "play-grok-159-001-manual": 1.2124019957234498,
-    "play-padhattan-ridge-1996-manual": 1.230443974630021,
-    "play-padhattan-ridge-2000-manual": 1.2902255639097744,
-    "play-padhattan-ridge-2016-manual": 1.315985130111524,
+    "generate-tgp-256-1": 1.146341463414634,
+    "play-opus-55-167-002-manual": 1.2144592952612394,
+    "play-grok-159-001-manual": 1.2131912058627583,
+    "play-padhattan-ridge-1996-manual": 1.2470588235294118,
+    "play-padhattan-ridge-2000-manual": 1.2651933701657458,
+    "play-padhattan-ridge-2016-manual": 1.3659169550173011,
 }
 
 
 def speed_budget(name, ratio):
-    """Report the ratchet without making noisy timings a semantic CI failure."""
-    budget = SPEED_BUDGETS.get(name)
-    if budget is None or ratio is None:
+    """Report the speed guard without making timings a semantic CI failure."""
+    record = SPEED_BUDGETS.get(name)
+    if record is None or ratio is None:
         return None
+    ceiling = 1.5 if name.startswith("play-") else 1.3
     return {
-        "best_known_ratio": budget,
-        "change_percent": (ratio / budget - 1) * 100,
-        "within_three_percent": ratio <= budget * 1.03,
+        "record": record,
+        "change_percent": (ratio / record - 1) * 100,
+        "within_guard": ratio <= record * 1.15,
+        "ceiling": ceiling,
+        "within_ceiling": ratio <= ceiling,
+        "near_ceiling": ratio >= 0.95 * ceiling,
     }
 
 

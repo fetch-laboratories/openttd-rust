@@ -221,6 +221,9 @@ public:
 		return this->data;
 	}
 
+	/** Read-only address of the actual storage member; valid for this object lifetime. */
+	inline constexpr const Tstorage *base_address() const noexcept { return &this->data; }
+
 	/**
 	 * Test that the raw value of this bit set is valid.
 	 * @returns true iff the no bits outside the masked value are set.

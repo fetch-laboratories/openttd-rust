@@ -779,11 +779,24 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_has(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_list_age(l: *mut List, s: *const Services) {
+    unsafe { age::<false>(l, s) };
+}
+
+/// Scheduler accounting includes every packet lookup, erased for ordinary callers.
+pub(crate) unsafe fn age<const COUNTED: bool>(l: *mut List, s: *const Services) {
     let s = unsafe { *s };
     let mut node = unsafe { first(l) };
     while let Some(current) = node {
         node = unsafe { after(l, current.token) };
         let p = (s.packet)(current.shell);
+        if COUNTED {
+            crate::witness::hit(crate::witness::VEHICLE_CROSSINGS);
+            crate::witness::hit(crate::witness::VEHICLE_PACKET_LOOKUPS);
+            crate::witness::add(
+                crate::witness::VEHICLE_OBSERVED_BYTES,
+                std::mem::size_of_val(&p) as u64,
+            );
+        }
         let old = unsafe { read(p) };
         if old.periods_in_transit == u16::MAX {
             continue;

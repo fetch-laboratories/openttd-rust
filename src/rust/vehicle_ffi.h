@@ -9,6 +9,8 @@
 #ifndef RUST_VEHICLE_FFI_H
 #define RUST_VEHICLE_FFI_H
 #include <cstdint>
+#include <cstddef>
+enum VehicleType : uint8_t;
 #if defined(_MSC_VER)
 #define OPENTTD_VEHICLE_CALL __cdecl
 #elif defined(__i386__)
@@ -69,6 +71,7 @@ struct OpenTTDVehicleDayCost {
 	uint8_t running;
 };
 struct OpenTTDVehicleAltitudeInputs { uint16_t max_speed; uint8_t direction; };
+struct OpenTTDVehicleMaintenanceServices;
 struct OpenTTDVehicleServices {
 	void (OPENTTD_VEHICLE_CALL *write_counters)(OpenTTDVehicle *, uint8_t, uint8_t, int32_t) noexcept;
 	OpenTTDVehicleBreakdown (OPENTTD_VEHICLE_CALL *handle_breakdown)(OpenTTDVehicle *) noexcept;
@@ -158,6 +161,7 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_VEHICLE_CALL *check_orders_only)(OpenTTDVehicle *) noexcept;
 	void (OPENTTD_VEHICLE_CALL *write_coordinates)(OpenTTDVehicle *, int32_t, int32_t, int32_t) noexcept;
 	OpenTTDVehicleAltitudeInputs (OPENTTD_VEHICLE_CALL *altitude_inputs)(OpenTTDVehicle *) noexcept;
+	const OpenTTDVehicleMaintenanceServices *maintenance;
 };
 struct OpenTTDGroundMoved {
 	int32_t old_z;
@@ -197,4 +201,70 @@ struct OpenTTDGroundServices {
 	bool (OPENTTD_VEHICLE_CALL *has_articulated)(OpenTTDVehicle *) noexcept;
 };
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept;
+
+struct Vehicle;
+struct OpenTTDCargoList;
+struct OpenTTDCargoStorageServices;
+struct OpenTTDStationService;
+struct OpenTTDStationServices;
+struct OpenTTDStationLoading;
+struct OpenTTDFleetPendingServices;
+struct OpenTTDFleetTransactionServices;
+struct OpenTTDFleetGroupServices;
+/** Call-scoped actual indexing storage; growth invalidates slots but not first_unused. */
+struct OpenTTDVehiclePoolCursor {
+	Vehicle *const *slots;
+	size_t slots_len;
+	const size_t *first_unused;
+};
+/** Named actual scalar members. No reference into the shell crosses a callback. */
+struct OpenTTDVehiclePostTick {
+	VehicleType type;
+	const uint16_t *period;
+	uint16_t *counter;
+	uint32_t *motion;
+	const uint16_t *speed;
+	const VehicleType *front_type;
+	const uint8_t *subtype;
+	const uint8_t *tick;
+	const uint8_t *front_status;
+	const uint8_t *status;
+};
+struct OpenTTDVehicleDayCallback { uint8_t day; bool has_engine; };
+struct OpenTTDVehicleStationLookup { OpenTTDStationService *station; uint32_t id; };
+struct OpenTTDVehicleSchedulerTables;
+struct OpenTTDVehicleSchedulerServices {
+	OpenTTDVehiclePoolCursor (OPENTTD_VEHICLE_CALL *pool)() noexcept;
+	bool assertions;
+	/** Runs the virtual Tick; fills the bundle only when the vehicle survives. */
+	bool (OPENTTD_VEHICLE_CALL *tick)(OpenTTDVehicle *, OpenTTDVehiclePostTick *) noexcept;
+	void (OPENTTD_VEHICLE_CALL *calendar_day)(OpenTTDVehicle *) noexcept;
+	void (OPENTTD_VEHICLE_CALL *economy_day)(OpenTTDVehicle *) noexcept;
+	OpenTTDVehicleDayCallback (OPENTTD_VEHICLE_CALL *day_callback_read)(OpenTTDVehicle *) noexcept;
+	uint16_t (OPENTTD_VEHICLE_CALL *day_callback)(OpenTTDVehicle *) noexcept;
+	void (OPENTTD_VEHICLE_CALL *randomise_callback)(OpenTTDVehicle *) noexcept;
+	void (OPENTTD_VEHICLE_CALL *first_dirty)(OpenTTDVehicle *) noexcept;
+	void (OPENTTD_VEHICLE_CALL *unknown_day_callback)(OpenTTDVehicle *, uint16_t) noexcept;
+	OpenTTDCargoList *(OPENTTD_VEHICLE_CALL *cargo_owner)(OpenTTDVehicle *) noexcept;
+	void (OPENTTD_VEHICLE_CALL *running_sound)(OpenTTDVehicle *) noexcept;
+	void (OPENTTD_VEHICLE_CALL *periodic_sound)(OpenTTDVehicle *, bool) noexcept;
+	OpenTTDVehicleStationLookup (OPENTTD_VEHICLE_CALL *next_station)(uint32_t) noexcept;
+	void (OPENTTD_VEHICLE_CALL *with_loading_timer)(const OpenTTDVehicleSchedulerTables *, void (OPENTTD_VEHICLE_CALL *)(const OpenTTDVehicleSchedulerTables *)) noexcept;
+	void (OPENTTD_VEHICLE_CALL *reset_accumulators)() noexcept;
+};
+struct OpenTTDVehicleSchedulerTables {
+	const OpenTTDVehicleSchedulerServices *scheduler;
+	const OpenTTDCargoStorageServices *cargo;
+	const OpenTTDStationServices *station;
+	const OpenTTDStationLoading *loading;
+	const OpenTTDFleetPendingServices *pending;
+	const OpenTTDFleetTransactionServices *transaction;
+	const OpenTTDFleetGroupServices *group;
+};
+const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcept;
+extern "C" {
+OpenTTDVehicle *openttd_rust_vehicle_cursor_next(const OpenTTDVehicleSchedulerServices *, OpenTTDVehiclePoolCursor *, size_t *);
+void openttd_rust_vehicle_calendar_day(const OpenTTDVehicleSchedulerTables *, bool, size_t);
+void openttd_rust_vehicle_ticks(const OpenTTDVehicleSchedulerTables *, bool, size_t, void *);
+}
 #endif /* RUST_VEHICLE_FFI_H */

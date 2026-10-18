@@ -13,6 +13,9 @@
 //! A handle is a live `Vehicle *`, valid until the service that deletes it.
 //! Services are synchronous and `noexcept`; none retains a Rust reference, and
 //! callers end every owner borrow before calling one that can reenter Rust.
+pub(crate) mod maintenance;
+pub(crate) mod scheduler;
+
 use std::ptr::NonNull;
 
 /// Opaque C++ `Vehicle`.
@@ -37,6 +40,11 @@ impl VehicleType {
     /// Native `VEH_AIRCRAFT`.
     pub const AIRCRAFT: Self = Self(3);
 }
+
+/// Native `OrderType : uint8_t`, including every unnamed byte pattern.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct OrderType(pub u8);
 
 /// Native `RailVehicleTypes : uint8_t`, with the same unrestricted byte domain.
 #[repr(transparent)]
@@ -287,6 +295,7 @@ pub struct VehicleServices {
     pub check_orders_only: extern "C" fn(VehicleRef),
     pub write_coordinates: extern "C" fn(VehicleRef, i32, i32, i32),
     pub altitude_inputs: extern "C" fn(VehicleRef) -> AltitudeInputs,
+    pub maintenance: *const maintenance::Services,
 }
 
 /// Position step result: `UpdateInclination`'s old height, then the new height,

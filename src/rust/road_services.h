@@ -43,7 +43,7 @@ static OpenTTDRoadStep OPENTTD_VEHICLE_CALL RoadSvcStep(OpenTTDVehicle *v) noexc
 {
 	const RoadVehicle *u = RoadOf(v);
 	return {.tile = RustVehicleTile(u), .x = u->x_pos, .y = u->y_pos, .z = u->z_pos,
-		.cur_speed = u->cur_speed, .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = RoadTypeIsTram(u->roadtype)};
+		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = RoadTypeIsTram(u->roadtype)};
 }
 static OpenTTDRoadCrashPart OPENTTD_VEHICLE_CALL RoadSvcCrashPart(OpenTTDVehicle *v) noexcept
 {
@@ -72,7 +72,7 @@ static OpenTTDRoadEntered OPENTTD_VEHICLE_CALL RoadSvcEnterTile(OpenTTDVehicle *
 {
 	RoadVehicle *u = RoadOf(v);
 	uint8_t flags = VehicleEnterTile(u, TileIndex(tile), x, y).base();
-	return {.tile = RustVehicleTile(u), .cur_speed = u->cur_speed, .flags = flags, .direction = RustVehicleDirection(u), .order_type = RustVehicleOrderType(u)};
+	return {.tile = RustVehicleTile(u), .cur_speed = RustVehicleSpeed(u), .flags = flags, .direction = RustVehicleDirection(u), .order_type = RustVehicleOrderType(u)};
 }
 
 /** Pool-order traversals; C++ skips what the original predicate rejects by type or consist, Rust decides the rest. */
@@ -84,7 +84,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitClose(OpenTTDVehicle *v, int32_t x,
 		const RoadVehicle *r = RoadVehicle::From(u);
 		const RoadVehicle *first = RustVehicleFirst(r);
 		OpenTTDRoadCandidate candidate{.vehicle = RustVehicle(r), .state = r->GetRustState(), .first = RustVehicle(first), .first_state = first->GetRustState(),
-			.index = r->index.base(), .x = r->x_pos, .y = r->y_pos, .z = r->z_pos, .first_speed = first->cur_speed, .direction = RustVehicleDirection(r)};
+			.index = r->index.base(), .x = r->x_pos, .y = r->y_pos, .z = r->z_pos, .first_speed = RustVehicleSpeed(first), .direction = RustVehicleDirection(r)};
 		return visit(context, &candidate);
 	};
 	if (wormhole) {
@@ -219,7 +219,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcBeginLoadingAt(OpenTTDVehicle *v, uint16
 static OpenTTDRoadOvertakeRead OPENTTD_VEHICLE_CALL RoadSvcOvertakeRead(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	return {.tile = RustVehicleTile(u), .cur_speed = u->cur_speed, .direction = RustVehicleDirection(u), .status = RustVehicleStatus(u)};
+	return {.tile = RustVehicleTile(u), .cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .status = RustVehicleStatus(u)};
 }
 static OpenTTDRoadSoundRead OPENTTD_VEHICLE_CALL RoadSvcSoundRead(OpenTTDVehicle *v) noexcept
 {
@@ -295,12 +295,12 @@ static void OPENTTD_VEHICLE_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t am
 static OpenTTDRoadServiceRead OPENTTD_VEHICLE_CALL RoadSvcServiceRead(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	return {.tile = RustVehicleTile(u), .servint = Company::Get(u->owner)->settings.vehicle.servint_roadveh, .cur_speed = u->cur_speed};
+	return {.tile = RustVehicleTile(u), .servint = Company::Get(u->owner)->settings.vehicle.servint_roadveh, .cur_speed = RustVehicleSpeed(u)};
 }
 static OpenTTDRoadTurnRead OPENTTD_VEHICLE_CALL RoadSvcTurnRead(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	return {.tile = RustVehicleTile(u), .breakdown_ctr = u->breakdown_ctr, .direction = RustVehicleDirection(u), .order_type = RustVehicleOrderType(u), .status = RustVehicleStatus(u)};
+	return {.tile = RustVehicleTile(u), .breakdown_ctr = RustVehicleBreakdownCounter(u), .direction = RustVehicleDirection(u), .order_type = RustVehicleOrderType(u), .status = RustVehicleStatus(u)};
 }
 static OpenTTDRoadTrackdirRead OPENTTD_VEHICLE_CALL RoadSvcTrackdirRead(OpenTTDVehicle *v) noexcept
 {

@@ -68,20 +68,31 @@ fork; the remaining upstream documentation explains behavior and architecture.
   initializers. Existing ports convert under #168 and #199. Root grants no
   exceptions at integration: a port whose hot path allocates per call,
   dispatches by opcode or copies whole records is fixed before it integrates.
-- A port that misses a speed budget gets a profile-guided fix round before it
-  is deferred. Attribute the cost per function (callgrind instruction counts
-  work on this host, where hardware counters do not) and fix the attributed
-  overhead. Deferral needs a profile showing the remaining cost is inherent,
-  and names an owned issue whose result can lift it. A re-selection condition
-  that waits on another deferred or unscheduled item is circular; fix it before
-  deferring. A core loop (tile loop, vehicle tick) that misses its gate or the
-  retirement ratio gets a boundary fix, not abandonment. It integrates over
-  budget when its profile attributes the remaining miss to per-call boundary
-  crossings (map or vehicle reads) that an open, owned boundary issue such as
-  #274 removes; the PR names that issue and its measured cost, and the cap
-  rises to the measured median. A miss within the spread of earlier runs is
-  not a miss. Design faults (per-call allocation, opcode dispatch, whole-record
-  copies) still block integration.
+- Speed is guarded per PR and optimized in periodic passes (#282). A PR that
+  changes compiled game code passes speed when no benchmark scenario is more
+  than 15% slower than the ratio recorded for current `rust-migration` in
+  `SPEED_BUDGETS`, and none exceeds its ceiling: 1.5x the original for play
+  saves, 1.3x for generation. One `simulate <name> --benchmark 3 --jobs 2`
+  median per scenario suffices and holds no other agent; rerun on a quiet host
+  only when a result lands within 3% of a limit. The integrating PR records
+  its measured medians, up or down. There are no per-port CPU budgets.
+- A PR that fails the speed guard gets a profile-guided fix round before it is
+  deferred. Attribute the cost per function (callgrind instruction counts work
+  on this host, where hardware counters do not) and fix the attributed
+  overhead. Deferral names an owned issue whose result can lift it; a
+  re-selection condition that waits on another deferred or unscheduled item is
+  circular. A core loop (tile loop, vehicle tick) that misses the guard or the
+  retirement ratio gets a boundary fix, not abandonment. Design faults
+  (per-call allocation, opcode dispatch, whole-record copies, a
+  Rust-to-C++-to-Rust bounce into code Rust owns) block integration whatever
+  the timing.
+- Root runs a speed pass after every fourth ownership integration (a PR that
+  moves a component's state and control loop to Rust), and sooner when a
+  scenario comes within 5% of its ceiling. The pass profiles the play saves
+  and generation with callgrind, counting boundary cost as the overhead
+  beyond what the original spends inline on the same work. It turns the two or
+  three largest attributed costs into maintenance PRs, then re-measures all six
+  ratios on a quiet host as the new record.
 - Evidence for game-logic ports is the semantic simulation harness (`python3
   tools/migration.py simulate`, #72) plus the existing tests; a new game-logic
   port integrates only after the harness exists and its scenarios exercise the
@@ -117,14 +128,17 @@ checks that run; do not restate them in paragraphs.
 - Roadmap: forward-looking, about 200 lines at most. A completed item becomes
   one table row (issue, PR, commit, metrics); its evidence stays in the PR. The
   resume checkpoint is a short status table, not a log: CI run IDs, executable
-  hashes, probe values and per-PR plans go in the PR or issue. Committed docs do
-  not cite `.local/` receipts, which nobody else can check.
+  hashes, probe values and per-PR plans go in the PR or issue.
+- Evidence is the exact-head CI runs plus the commands recorded in the PR.
+  Comments and docs carry no receipt bundles, executable hashes or `.local/`
+  paths, which nobody else can check; #283 retires the receipt tooling.
 - Harness tooling for a port goes in that component's scenario module. Tooling
   is code to maintain; keep it proportionate to the C++ the port retires.
 - Infrastructure work (CI, caches, evidence plumbing) states a tooling budget in
   its issue and prefers platform defaults and settings (LRU cache eviction,
-  concurrency groups) over custom controllers. A draft that outgrows its budget
-  returns to root for re-selection, not another review round.
+  concurrency groups) over custom controllers. Root may accept a draft up to
+  about 25% over its budget; beyond that it returns to root for re-selection,
+  not another review round.
 - Review report: reviewed commit, findings with their fixing commits (or why one
   went to root), plus one line naming the functions or files compared against
   the original body and one line naming any new callback that duplicates a
@@ -132,17 +146,18 @@ checks that run; do not restate them in paragraphs.
   are no findings. Branches the harness does not reach go in the coverage
   tracker (#156), not only in the disposition.
 - One PR per component, targeting `rust-migration` directly. Use an integration
-  branch only when CI capacity forces batching. Updating a PR branch from its
-  base (merge or rebase) is fine; do not add merges whose only purpose is to
-  keep reviewed commit ancestry.
+  branch only when CI capacity forces batching. Update a PR branch from its base
+  (merge or rebase) only when it is about to integrate or a conflict blocks its
+  own work; do not add merges whose only purpose is to keep reviewed commit
+  ancestry or to track base.
 
 ## Agent team and review
 
 The root agent (`gpt-6.1-sol`, xhigh effort) orchestrates and delegates heavily,
-owns component selection and integration, and verifies delegated diffs and
-evidence. Target concurrency is six agents total: the root plus five subagents,
-matching `.codex/config.toml`. Respect the running host's actual limit; this
-document cannot raise a session limit.
+owns component selection and integration, and spot-checks delegated diffs.
+Target concurrency is six agents total: the root plus five subagents, matching
+`.codex/config.toml`. Respect the running host's actual limit; this document
+cannot raise a session limit.
 
 Every spawn must specify a model and reasoning effort rather than inherit them:
 
@@ -164,7 +179,9 @@ effort than root, and a fresh reviewer per round.
 
 Sessions can end without warning (usage limits, host restarts). Implementation
 agents commit and push their branch at every passing milestone, not only at the
-end, and each task records its state on its issue or PR when it starts or stops.
+end. Each task keeps one status comment on its PR (or on its issue before the
+PR), edited in place when it starts, reaches a milestone or stops. A PR's other
+comments are review reports and root's integration note.
 A review that stops before recording findings and a disposition counts as no
 review.
 
@@ -174,9 +191,9 @@ carries over. Each review round, including a re-review, gets a fresh reviewer; i
 reads the PR's earlier attributed review reports for context.
 
 Close each agent when its task ends. When the host's slot limit is reached, root
-works through its own queue (integration, verifying fix commits, roadmap) until a
-slot frees. Root leaves host state alone: no archiving threads or editing host
-databases to free slots.
+works through its own queue (integration, spot-checking fix commits, roadmap)
+until a slot frees. Root leaves host state alone: no archiving threads or
+editing host databases to free slots.
 
 For substantive changes:
 
@@ -184,15 +201,23 @@ For substantive changes:
    acceptance criteria. Give each task a clear owner.
 2. Use an isolated branch/worktree based on `rust-migration`. The implementation
    agent opens a draft PR targeting `rust-migration`, linking the issue and
-   recording exact validation commands and limitations.
+   recording exact validation commands and limitations. When implementation
+   completes, it requests `python3 tools/ci.py request PR --profile platform`
+   so platform failures surface while review runs.
 3. Assign a separate reviewer agent to examine the final commit and check evidence.
    The reviewer fixes what it finds: it commits each fix to the PR branch, reruns
-   the affected checks, and lists each finding with its fixing commit. Root
-   verifies the reviewer's fix commits before integration. Findings that need a
-   scope or policy decision go to root unfixed. Updating a reviewed PR from its
-   base needs no new review when the update has no conflicts in `src/`,
-   `rust/`, `tools/` or `.github/` and CI passes; otherwise a fresh reviewer
-   checks and fixes only the conflict resolution.
+   only the checks its own fixes affect, and lists each finding with its fixing
+   commit. A review without fixes reruns nothing; Full CI covers the suite.
+   Root spot-checks the reviewer's fix commits before integration. Findings that
+   need a scope or policy decision go to root unfixed. Commits that only fix CI
+   warnings or platform errors, or only record speed medians, need no new
+   review: the implementer or root makes them and CI checks them. Updating a
+   reviewed PR from its base needs no new review when CI passes and the update
+   either has no conflicts in `src/`, `rust/`, `tools/` or `.github/`, or
+   resolves each one by keeping both sides' lines unchanged (`git show
+   --remerge-diff` of the merge removes only conflict markers; root records this
+   on the PR). Otherwise a fresh reviewer checks and fixes only the conflict
+   resolution.
 4. Root integrates after review and required checks, records completion, and
    removes the merged worktree. A red check on `rust-migration` itself is fixed
    before more integrations.
@@ -202,10 +227,10 @@ Keep at most six unintegrated component branches, counting drafts and WIP
 component starts from integrated `rust-migration`, not from an unmerged
 component branch, unless the roadmap names the dependency. A shared accessor
 or service is never such a dependency: the first PR to integrate adds it to the
-shared layer in its final typed form, and other drafts adopt it when they next
-update from base. Integrate drafts in order of readiness: none waits for
-another draft's services, and a reviewed PR gains no new scope before it
-integrates.
+shared layer in its final typed form, and other drafts adopt it when they
+update from base to integrate. Integrate drafts in order of readiness: none
+waits for another draft's services, and a reviewed PR gains no new scope before
+it integrates.
 
 Do not self-approve or imply that agents sharing GitHub credentials are independent
 GitHub accounts. With shared credentials, publish an explicitly attributed review
@@ -227,7 +252,7 @@ Python tools use `uvx --from ruff==0.16.8 ruff check tools/` and
 `uvx --from ruff==0.16.8 ruff format --check tools/`.
 
 `python3 tools/migration.py verify` builds and tests the pinned original and fork,
-checks that the candidate retains reference test names, and records evidence under
+checks that the candidate retains reference test names, and keeps its logs under
 `.local/`. `python3 tools/migration.py build` builds both without running tests.
 `python3 tools/migration.py tools` builds the native Rust generators.
 `python3 tools/migration.py rust-checks` runs only the four Cargo checks.
@@ -264,13 +289,13 @@ re-validates only a merged tree no full run covered; a red `rust-migration` is
 still fixed before more integrations.
 
 Before pushing, run `python3 tools/preflight.py --base origin/rust-migration` for
-the inherited commit checker. Check receipts with `tools/evidence.py` rather than
-a hand-written script. Compare preflight's warnings against the reference build
-log instead of cleaning them up.
+the inherited commit checker.
 
 A worktree and its local branch exist only while their PR is open, or before
-the PR while the roadmap's work order holds the issue. Once the PR merges,
-remove them with `git worktree remove PATH` and `git branch -d BRANCH`, both of
+the PR while the roadmap's work order holds the issue. An open PR keeps one
+worktree: when a review or update task that ran in its own worktree ends and
+its commits are pushed, root removes that worktree. Once the PR merges,
+remove the worktree and branch with `git worktree remove PATH` and `git branch -d BRANCH`, both of
 which refuse dirty, locked or unmerged state; GitHub deletes the merged head
 branch. When work stops for good (closed, superseded, or paused with no next
 step), close its draft PR, keep the branch on origin, record its head on the

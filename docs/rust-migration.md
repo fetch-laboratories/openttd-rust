@@ -225,8 +225,8 @@ Simulation speed (#155) is reported for every scenario as `plain_speed`:
 paired process wall seconds and candidate/reference ratios, plus their median.
 Ratios are null when exit saves are missing, runs fail, end moments differ, or
 semantic differences remain; timing never changes the pass/fail result.
-Parallel runs are noisy. Use an idle host, profiling counters off, the same
-build settings and pinned manual-distribution play save:
+Use profiling counters off, the same build settings and pinned manual-distribution
+play save:
 
 ```sh
 python3 tools/migration.py simulate play-opus-55-167-002-manual --benchmark 3 --jobs 2
@@ -243,8 +243,12 @@ directories and runtime libraries; keep profiling separate from timing samples.
 Timings include startup, loading, serial link-graph work and save I/O. Benchmark
 games wait directly for child exit with a timeout watchdog; ordinary runs retain
 subprocess timeout polling, which can add about 50 ms.
-The lock excludes harness games, not unrelated host activity. Port PRs record
-before/after ratios and commits; the roadmap sets the regression budget.
+The lock excludes harness games, not unrelated host activity. `SPEED_BUDGETS` in
+`tools/simulation/roads.py` records current ratios, updated up or down by integrating
+PRs. Reports show a 15% guard against that record, fixed ceilings of 1.5x for play
+saves and 1.3x for generation, and a flag within 5% of the ceiling. Take one median
+of three without holding other agents; rerun on a quiet host only within 3% of a
+limit. The roadmap schedules periodic speed passes.
 
 ## Native macOS arm64 Rust linkage
 
@@ -343,6 +347,12 @@ steering review; `/start-development`, root's restart prompt; and `/wind-down`,
 which writes the user's message pausing root. Steering reviews put their
 corrections in the roadmap and edit `/start-development` only to improve it;
 root follows these skills and leaves them unedited.
+
+Shared append lists group by component (reserve sections for concurrent ports),
+then sort entries by name: includes after stdafx/before safeguards, independent
+ABI probe calls, and shared table fields/mirrors/initializers/layouts (one field per line).
+Witness blocks are alphabetical; keep names and consecutive local indices
+together in `witness_blocks!`; global indices/array lengths are derived.
 
 The driver and CI enforce native build/tests, nonempty test inventories, reference test-name preservation, and Cargo checks listed in `AGENTS.md`.
 

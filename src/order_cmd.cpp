@@ -178,40 +178,16 @@ extern "C" uint64_t openttd_orders_percent_filled(void *ctx) noexcept
 	return CalcPercentVehicleFilled(v, nullptr);
 }
 
-extern "C" uint64_t openttd_orders_reliability(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->reliability;
-}
-
-extern "C" uint64_t openttd_orders_engine_reliability(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->GetEngine()->reliability;
-}
-
 extern "C" uint64_t openttd_orders_display_speed(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
 	return v->GetDisplayMaxSpeed();
 }
 
-extern "C" uint64_t openttd_orders_age_years(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return TimerGameCalendar::DateToYear(v->age).base();
-}
-
 extern "C" uint64_t openttd_orders_needs_service(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
 	return v->NeedsServicing();
-}
-
-extern "C" uint64_t openttd_orders_remaining_years(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return std::max(TimerGameCalendar::DateToYear(v->max_age - v->age + CalendarTime::DAYS_IN_LEAP_YEAR - 1), TimerGameCalendar::Year(0)).base();
 }
 
 extern "C" uint64_t openttd_orders_airport_tile(uint16_t destination) noexcept
@@ -464,12 +440,6 @@ extern "C" uint64_t openttd_orders_local_owner(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
 	return v->owner == _local_company;
-}
-
-extern "C" uint64_t openttd_orders_day_counter(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->day_counter;
 }
 
 extern "C" uint64_t openttd_orders_fast_aircraft(void *ctx) noexcept

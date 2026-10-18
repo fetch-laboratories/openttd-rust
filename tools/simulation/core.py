@@ -92,6 +92,7 @@ def scenario_modules():
         stations,
         towns,
         trees,
+        vehicles,
     )
 
     return (
@@ -115,6 +116,7 @@ def scenario_modules():
         industries,
         cargo_storage,
         orders,
+        vehicles,
     )
 
 
@@ -1167,7 +1169,7 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
             budget = result["plain_speed"].get("budget")
             if budget is not None:
                 speed += (
-                    f", best {budget['best_known_ratio']:.3f}x "
+                    f", record {budget['record']:.3f}x "
                     f"({budget['change_percent']:+.1f}%)"
                 )
             print(
