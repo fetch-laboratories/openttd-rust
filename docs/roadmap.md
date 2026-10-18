@@ -4,12 +4,13 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-18, `600dca4e27`)
+## Where the fork stands (2026-10-18, `83bd72774e`)
 
-- Twenty-nine ownership ports. Whole fork: Rust 64,552 / tooling 31,760 / glue 28,235 / original retired 40,145 of 470,612 `src/` lines (8.53%). Simulation: 32,218 / 102,615 (31.40%).
-- Since the thirteenth review: #270 rail commands (1,578 retired) and #257 vehicle scheduling (388), plus #268, #273, #277 and #279. Retirement +1,922; glue plus tooling +2,033.
-- Drafts: #269 houses (891) and #255 landscape (844), in fourteenth-steering fix rounds; #280 removes their registry conflicts.
-- Speed at `600dca4e27` (median of three): TGP 1.139 (ceiling 1.3), play saves 1.22-1.38 (ceiling 1.5). The 3% ratchet is replaced by a 15% guard (#282).
+- Twenty-nine ownership ports. Whole fork: Rust 64,134 / tooling 31,966 / glue 28,250 / original retired 40,145 of 470,612 `src/` lines (8.53%). Simulation: 32,218 / 102,615 (31.40%).
+- This round integrated #286 registries and #285 speed guard: no original retirement, Rust net -418, tooling +206 and glue +15. Ownership progress is unchanged.
+- Three component branches: #269 houses (891 retired) and #255 landscape (846), adopting the integrated registry base; #266 road commands starts from it. Three maintenance slots hold #287, #284 and #288.
+- First speed record (#285, median of three): TGP 1.146 (ceiling 1.3), play saves 1.21-1.37 (ceiling 1.5). The 15% guard is integrated; no result triggers an early speed pass.
+- Coverage (#156): vehicle deletion/pool-growth assertions, NewGRF/legacy branches and the unintegrated house/landscape gaps remain open.
 - The largest remaining simulation C++: `station_cmd.cpp` 4,424 lines, `road_cmd.cpp` 2,669, `vehicle.cpp` 2,573, `tunnelbridge_cmd.cpp` 2,135, `town_cmd.cpp` 1,929, `train_cmd.cpp` 1,778, `landscape.cpp` 1,665, `rail_cmd.cpp` 1,531, `water_cmd.cpp` 1,471.
 
 ## Fourteenth steering review (2026-10-18, merge churn and honest exceptions)
@@ -108,6 +109,8 @@ evidence in their PRs; rows below use original retirement and net glue (#223).
 | #261 R3 part (train/orders forwarders and unsafe contracts) | #273 | direct | `bdab12a31b` | 1571 / 0 / 0 / 0; Rust net -532, net glue 0 |
 | #276 (#275 native inline ClampTo) | #277 | direct | `08e5372c8f` | 0 / 7 / 0 / 0; Rust net -44, net glue -33 |
 | #278 (#275 retained road YAPF scratch) | #279 | direct | `35d872ca3c` | 86 / 11 / 0 / 0; net glue 0 |
+| #280 (component registries and append sections) | #286 | direct | `762a56477f` | 633 / 232 / 226 / 0; Rust net -418, net glue +15 |
+| #282 (15% speed guard and fixed ceilings) | #285 | direct | `83bd72774e` | 0 / 49 / 0 / 0; net glue 0 |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -135,7 +138,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in parallel.
 
-1. **#280 conflict-free registries, then #284 generated ABI layouts**, as maintenance PRs; #283 when a maintenance slot frees.
+1. **#284 generated ABI layouts** is active; reviewed **#283/#287** has integrated #285 and entered workflow bootstrap/Full. #280 and #282 are integrated above.
 2. **Drafts:** #269 houses, then #255 landscape, each with the must-change items from its 2026-10-18 PR comment, adopting #280 on its base update.
 3. **#275 speed, revised order (2026-10-18 comment):**
    - road YAPF single tile read and speed-limit/height folding; the effect/disaster table copy; ship YAPF scratch; `constinit` service tables;
@@ -146,7 +149,7 @@ unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in 
 4. **#281** vehicle maintenance direct calls, then the callee-copy check.
 5. **#274 map view**, one shared PR after #255 integrates.
 6. **Commands:**
-   - #266 road commands once #280 integrates, reusing #270's shared command checks and crossing services;
+   - #266 road commands is active from the integrated #280 base, reusing #270's command checks and crossing services;
    - #267 station construction on the #125 owner;
    - #247 town commands, authority and deletion.
 
@@ -159,18 +162,19 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Resumed 2026-10-18. Root is gpt-6.1-sol, xhigh; implementations and reviews use
-gpt-6.1-sol, high. Base CI is green; two component branches are unintegrated.
+Root is gpt-6.1-sol, xhigh; five implementations use gpt-6.1-sol, high. Three
+component branches are unintegrated; postmerge CI is running. CI_ON_DEMAND is
+temporarily absent for #287 bootstrap; root must restore true after merge.
 
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
-| #280 / #286 | `t3/reduce-registry-merge-conflicts`, `64a7aeecfc` | Review has no findings; exact-head Full requested. Integrate, then #255/#269 adopt their reserved sections and #266 starts. |
-| #282 / #285 | `t3/recorded-ratios-speed-guard`, `9abf7a225e` | Review has no code findings; root resolved quiet-record finding with six medians at reviewed head, then a median-only commit. New exact-head Full requested; earlier Full cancelled. |
-| #284 | none | Plan complete; root's issue comment sets a 650-line support/test budget plus mechanical edits. Implementation follows #280/#282. |
-| #283 / #287 | `t3/retire-evidence-receipts`, `d7af2e73da` | Four review findings fixed, root spot-checked all fixes and workflow changes; tooling 337/350 lines. Adopt integrated #285, then bootstrap/Full and actual docs-only postmerge acceptance. Read-only merge proof remains clean. |
-| #256 / #269 | `house-lifecycle-256`, `b09c16d78e` | Override/RNG probe and canonical town fixes pushed; affected checks and speed pass. Adopt #280 before fresh review/Full; platform blocked by base conflicts. P2016 near-ceiling result tracks the next speed pass. |
-| #212 / #255 | `landscape-owner-212`, `9d077039bf` | Six steering fixes pushed; verify, 141 semantic scenarios/980 snapshots, comparison and six speed medians pass. Adopt #280 before fresh review/platform/Full. |
-| #275 / #281 | none | #275 road-YAPF read/order plan complete (Astra/high); root's issue comment sets a 400-added-line slice with no Python tooling. Implementation awaits a maintenance slot; #281 follows. |
+| #284 | `generated-abi-284` | Implementation active; 650 handwritten support/test lines plus mechanical conversions. |
+| #283 / #287 | `t3/retire-evidence-receipts`, `ecbd157836` | Four review findings fixed and root-checked; 337/350 tooling. Conflict-free integrated-base update retains speed tests; bootstrap Full requested. Restore CI_ON_DEMAND, then observe docs-only postmerge skip. |
+| #256 / #269 | `house-lifecycle-256`, `b09c16d78e` | Registry/base adoption active; preserve override/RNG probe and canonical town fixes. Fresh review/platform/Full follow. Earlier P2016 near-ceiling result tracks the next speed pass. |
+| #212 / #255 | `landscape-owner-212`, `9d077039bf` | Registry/base adoption active; six steering fixes and prior 141 scenarios/980 snapshots pass. Fresh review/platform/final-head speed/Full follow. |
+| #266 | `road-commands-266` | Ownership implementation active from integrated `83bd72774e`; 200-300 tooling lines. |
+| #288 (#275) | `road-yapf-reads-288` | First road-YAPF read/order fix active; 400 added lines, no new Python tooling. |
+| #281 | none | Follows the revised #275 fix order when a maintenance slot frees. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Shared map-view PR after #255; retain attribution and #282's shared profile-lock/concurrency acceptance. |
 | #64 / #66 | remote `issue/64-curve-family`, `aab5211801` | #66 closed unmerged; #64 and older paused work stay untouched. |
 
