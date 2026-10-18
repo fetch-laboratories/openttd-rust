@@ -279,6 +279,9 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.tunnel_bridge_direction = MapSvcTunnelBridgeDirection,
 		.tunnel_transport = OpenTTDMapQuery<uint8_t, RustTunnelBridgeTransport, uint32_t>,
 		.update_level_crossing = SharedUpdateLevelCrossing,
+		// Registry: house (#256).
+
+		// Registry: landscape (#212).
 	};
 	return services;
 }

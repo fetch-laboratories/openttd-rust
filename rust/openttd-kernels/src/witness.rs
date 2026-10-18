@@ -68,6 +68,10 @@ witness_blocks! {
         ENGINE_RENAME = 12 => "engine.rename",
         ENGINE_ENTRIES = 13 => "engine.entries",
     }
+    // Registry: house (#256).
+
+    // Registry: landscape (#212).
+
     rail {
         RAIL_CHOOSE = 0 => "rail.choose",
         RAIL_REVERSE = 1 => "rail.reverse",

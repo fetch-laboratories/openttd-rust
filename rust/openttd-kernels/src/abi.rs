@@ -10,7 +10,7 @@
 use std::mem::{align_of, offset_of, size_of};
 
 macro_rules! layout {
-    ($type:ty, $item:expr; $($field:ident),+) => {
+    ($type:ty, $item:expr; $($field:ident),+ $(,)?) => {
         match $item {
             0 => size_of::<$type>(),
             1 => align_of::<$type>(),
@@ -270,7 +270,11 @@ pub fn layout(type_id: u16, item: u8) -> usize {
                 try_path_reserve,
                 tunnel_bridge_direction,
                 tunnel_transport,
-                update_level_crossing
+                update_level_crossing,
+                // Registry: house (#256).
+
+                // Registry: landscape (#212).
+
             )
         }
         // ABI reservations: train 380-385; tree additions 386-389; fleet 390-399; company 400-429; town 430-459; shared vehicle/road 460-499; station 500-559; industry 560-619; shared CommandCost 620-629 (town-owned). Trees retain existing low IDs.

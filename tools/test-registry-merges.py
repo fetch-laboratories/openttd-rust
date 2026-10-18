@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Merge two fictitious ports against the real registries (#280), in a temp repo."""
+"""Merge two fictitious ports off HEAD against the real registries (#280)."""
 
 import re
 import subprocess
@@ -14,7 +14,6 @@ HEADER = "src/rust/services_ffi.h"
 NATIVE = "src/rust/services.cpp"
 ADAPTER = "src/rust/company_adapter.cpp"
 LAYOUT = "rust/openttd-kernels/src/abi.rs"
-FILES = (WITNESS, ABI, RUST, HEADER, NATIVE, ADAPTER, LAYOUT)
 
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
@@ -22,92 +21,64 @@ with tempfile.TemporaryDirectory() as directory:
     def git(*args):
         return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
 
-    git("init", "-q")
+    subprocess.run(
+        ["git", "clone", "-q", "--shared", "--no-checkout", str(ROOT), str(root)],
+        check=True,
+    )
+    base = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    git("checkout", "-q", "--detach", base)
     git("config", "user.name", "Registry merge regression")
     git("config", "user.email", "registry@example.invalid")
-    for name in FILES:
-        path = root / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text((ROOT / name).read_text())
-    git("add", ".")
-    git("commit", "-qm", "Add: Registry fixture")
-    base = git("rev-parse", "HEAD")
     original_names = set(re.findall(r'=> "([^"]+)"', (root / WITNESS).read_text()))
     assert original_names, "missing component witness blocks"
-    expected = {name: [] for name in FILES}
-    for component, block, field, include, probe, adapter in [
-        ("harbor", "rail", "has_road_type", "history", "History", "presentation"),
-        ("tram", "train", "tram_type", "train", "Trees", "vehicle"),
-    ]:
+    expected = {}
+    for component, issue in [("house", 256), ("landscape", 212)]:
         git("checkout", "-qb", component, base)
+        marker = f"// Registry: {component} (#{issue}).\n"
+        field = f"{component}_probe"
         additions = {
             WITNESS: [
-                (
-                    f"    {block} {{",
-                    f"    {component} {{\n"
-                    f'        {component.upper()}_PROBE = 0 => "{component}.probe",\n'
-                    "    }\n",
-                )
+                f'    {field} {{\n        {field.upper()} = 0 => "{field}.hit",\n    }}\n'
             ],
             ABI: [
-                (
-                    f'#include "rust/{include}_ffi.h"',
-                    f'#include "rust/{component}_ffi.h"\n',
-                ),
-                (f"\t{probe}();", f"\t{component.title()}Probe();\n"),
-                (
-                    f"\t\toffsetof(OpenTTDSharedServices, {field})",
-                    f"\t\toffsetof(OpenTTDSharedServices, {component}_probe),\n",
-                ),
+                f'#include "rust/{field}.h"\n',
+                f"\t\toffsetof(OpenTTDSharedServices, {field}),\n",
+                f"\t{component.title()}Probe();\n",
+            ],
+            RUST: [
+                f'    /// Fictitious merge probe.\n    pub {field}: extern "C" fn() -> bool,\n',
+                f"        {field}: fixture_{field},\n",
             ],
             HEADER: [
-                (
-                    f"\t{'bool' if field == 'has_road_type' else 'RoadType'} (*{field})",
-                    f"\tbool (*{component}_probe)() noexcept;\n",
-                )
+                f"\tbool (*{field})() noexcept;\n",
+                f"\t\t.{field} = Fixture{component.title()}Probe,\n",
             ],
-            NATIVE: [
-                (
-                    f"\t\t.{field} =",
-                    f"\t\t.{component}_probe = {component.title()}Probe,\n",
-                )
-            ],
-            ADAPTER: [
-                (
-                    f'#include "{adapter}_services.h"',
-                    f'#include "{component}_services.h"\n',
-                )
-            ],
-            LAYOUT: [
-                (f"                {field},", f"                {component}_probe,\n")
-            ],
+            NATIVE: [f"\t\t.{field} = {component.title()}Probe,\n"],
+            ADAPTER: [f'#include "{field}.h"\n'],
+            LAYOUT: [f"                {field},\n"],
         }
-        # Insert a Rust field before its existing documentation, without splitting it.
-        source = (root / RUST).read_text()
-        match = re.search(rf"(?:    ///[^\n]*\n)+    pub {field}:", source)
-        assert match, field
-        additions[RUST] = [
-            (
-                match[0],
-                f'    /// Fictitious merge probe.\n    pub {component}_probe: extern "C" fn() -> bool,\n',
-            )
-        ]
-        for name, edits in additions.items():
+        for name, entries in additions.items():
             path = root / name
-            source = path.read_text()
-            for anchor, addition in edits:
-                assert source.count(anchor) == 1, (name, anchor)
-                source = source.replace(anchor, addition + anchor)
-                expected[name].append(addition)
-            path.write_text(source)
+            parts = path.read_text().split(marker)
+            assert len(parts) == len(entries) + 1, (name, marker)
+            path.write_text(
+                parts[0]
+                + "".join(
+                    marker + entry + tail
+                    for entry, tail in zip(entries, parts[1:], strict=True)
+                )
+            )
+            expected.setdefault(name, []).extend(entries)
         git("commit", "-qam", f"Add: Fictitious {component} registry entries")
-    tree = git("merge-tree", "--write-tree", "harbor", "tram")
-    for name in FILES:
+    tree = git("merge-tree", "--write-tree", "house", "landscape")
+    for name, entries in expected.items():
         merged = git("show", f"{tree}:{name}")
-        assert all(addition in merged for addition in expected[name]), name
+        assert all(entry in merged for entry in entries), name
         assert "<<<<<<<" not in merged, name
     names = set(re.findall(r'=> "([^"]+)"', git("show", f"{tree}:{WITNESS}")))
-    assert names == original_names | {"harbor.probe", "tram.probe"}
+    assert names == original_names | {"house_probe.hit", "landscape_probe.hit"}
     print(
-        "git merge-tree --write-tree harbor tram: clean; both ports and all witness names retained"
+        "git merge-tree --write-tree house landscape: clean; both ports and all witness names retained"
     )

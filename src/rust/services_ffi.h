@@ -117,6 +117,9 @@ struct OpenTTDSharedServices {
 	uint8_t (*tunnel_bridge_direction)(uint32_t) noexcept;
 	uint8_t (*tunnel_transport)(uint32_t) noexcept;
 	void (*update_level_crossing)(uint32_t, bool) noexcept;
+	// Registry: house (#256).
+
+	// Registry: landscape (#212).
 };
 const OpenTTDSharedServices &GetRustSharedServices() noexcept;
 /** Shared save/reseed/restore of BOTH original RNG streams. */
@@ -287,6 +290,9 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.tunnel_bridge_direction = OpenTTDFixtureMapService<uint8_t, uint32_t>,
 		.tunnel_transport = OpenTTDFixtureMapService<uint8_t, uint32_t>,
 		.update_level_crossing = OpenTTDFixtureMapService<void, uint32_t, bool>,
+		// Registry: house (#256).
+
+		// Registry: landscape (#212).
 	};
 }
 #endif /* RUST_SERVICES_FFI_H */

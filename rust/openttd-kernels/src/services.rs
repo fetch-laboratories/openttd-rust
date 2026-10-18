@@ -273,6 +273,9 @@ pub struct Services {
     pub tunnel_transport: extern "C" fn(u32) -> u8,
     /// Original `UpdateLevelCrossing`; callers retain their original sound argument.
     pub update_level_crossing: extern "C" fn(u32, bool),
+    // Registry: house (#256).
+
+    // Registry: landscape (#212).
 }
 impl Services {
     /// Draw one shared random word.
@@ -416,6 +419,9 @@ pub fn fixture(
         tunnel_bridge_direction: byte,
         tunnel_transport: byte,
         update_level_crossing: fixture_crossing_update,
+        // Registry: house (#256).
+
+        // Registry: landscape (#212).
     }
 }
 #[cfg(test)]

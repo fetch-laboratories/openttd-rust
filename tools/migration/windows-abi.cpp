@@ -59,6 +59,10 @@
 #include "tests/ship_yapf_protocol.hpp"
 #include "tests/town_protocol.hpp"
 #include "tests/water_regions_protocol.hpp"
+// Registry: house (#256).
+
+// Registry: landscape (#212).
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -284,7 +288,11 @@ static void Layouts()
 		offsetof(OpenTTDSharedServices, try_path_reserve),
 		offsetof(OpenTTDSharedServices, tunnel_bridge_direction),
 		offsetof(OpenTTDSharedServices, tunnel_transport),
-		offsetof(OpenTTDSharedServices, update_level_crossing)
+		offsetof(OpenTTDSharedServices, update_level_crossing),
+		// Registry: house (#256).
+
+		// Registry: landscape (#212).
+
 	});
 	Layout(37, "OpenTTDLinkGraphShare", {sizeof(OpenTTDLinkGraphShare), alignof(OpenTTDLinkGraphShare), offsetof(OpenTTDLinkGraphShare, node), offsetof(OpenTTDLinkGraphShare, origin), offsetof(OpenTTDLinkGraphShare, via), offsetof(OpenTTDLinkGraphShare, cumulative), offsetof(OpenTTDLinkGraphShare, unrestricted), offsetof(OpenTTDLinkGraphShare, has_share)});
 	Layout(39, "OpenTTDEffectView", {sizeof(OpenTTDEffectView), alignof(OpenTTDEffectView), offsetof(OpenTTDEffectView, x), offsetof(OpenTTDEffectView, y), offsetof(OpenTTDEffectView, z), offsetof(OpenTTDEffectView, sprite), offsetof(OpenTTDEffectView, progress), offsetof(OpenTTDEffectView, spritenum), offsetof(OpenTTDEffectView, subtype), offsetof(OpenTTDEffectView, ambient)});
@@ -2137,6 +2145,10 @@ int main()
 	VehicleMaintenanceBoundary();
 	VehicleSchedulerBoundary();
 	WaterProbe::Run([](bool result) { CHECK(result); });
+	// Registry: house (#256).
+
+	// Registry: landscape (#212).
+
 	/* Opaque owner, native size_t, immutable byte borrow and complete UTF-8 output. */
 	auto *townname = openttd_rust_townname_generate(1, UINT32_MAX);
 	size_t name_length;

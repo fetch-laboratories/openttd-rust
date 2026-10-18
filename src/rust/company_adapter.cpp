@@ -60,6 +60,10 @@
 #include "services_rail.h"
 #include "settings_services.h"
 #include "vehicle_services.h"
+// Registry: house (#256).
+
+// Registry: landscape (#212).
+
 #include <memory>
 #include "../safeguards.h"
 
