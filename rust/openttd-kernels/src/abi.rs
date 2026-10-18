@@ -1772,9 +1772,7 @@ layouts! {
         occupied,
         bay,
         curve,
-        display_speed,
         order_destination,
-        order_speed,
         order_type,
         bus,
         articulated,
@@ -1797,8 +1795,6 @@ layouts! {
     "OpenTTDRoadYapfFollow" ["probe"] => crate::road_yapf::Follow {
         tile,
         skipped,
-        max_speed,
-        min_speed,
         dirs,
         followed,
     };
@@ -1811,11 +1807,19 @@ layouts! {
         drive_through,
         next,
     };
+    "OpenTTDRoadYapfTraversal" ["probe"] => crate::road_yapf::Traversal {
+        current_z,
+        next_z,
+        display_speed,
+        max_speed,
+        min_speed,
+        order_speed,
+    };
     "OpenTTDRoadYapfLeaves" ["probe"] => crate::road_yapf::Leaves {
         tile,
         follow,
         tracks,
-        height,
+        traversal,
         closest,
         area,
     };

@@ -4,12 +4,13 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-18, `600dca4e27`)
+## Where the fork stands (2026-10-18, `bb2f242ddc`)
 
-- Twenty-nine ownership ports. Whole fork: Rust 64,552 / tooling 31,760 / glue 28,235 / original retired 40,145 of 470,612 `src/` lines (8.53%). Simulation: 32,218 / 102,615 (31.40%).
-- Since the thirteenth review: #270 rail commands (1,578 retired) and #257 vehicle scheduling (388), plus #268, #273, #277 and #279. Retirement +1,922; glue plus tooling +2,033.
-- Drafts: #269 houses (891) and #255 landscape (844), in fourteenth-steering fix rounds; #280 removes their registry conflicts.
-- Speed at `600dca4e27` (median of three): TGP 1.139 (ceiling 1.3), play saves 1.22-1.38 (ceiling 1.5). The 3% ratchet is replaced by a 15% guard (#282).
+- Twenty-nine ownership ports. Whole fork: Rust 64,134 / tooling 30,077 / glue 28,250 / original retired 40,145 of 470,612 `src/` lines (8.53%). Simulation: 32,218 / 102,615 (31.40%).
+- This pair integrated #292 cleanup repair and #287 receipt removal: tooling net -1,889, no game-code retirement or ownership change. Exact-head Full passed; protected Quick recovered. The actual docs-only postmerge skip passed. Followup #296/#297 closes a separate filename-only gitlink shortcut.
+- Four component branches: #269 houses (891 retired), #255 landscape (846), #266/#290 road commands and #267 station commands. Maintenance #289 is integrated; #284 continues implementation after preserved provider failures, and #297 is in workflow bootstrap.
+- Current speed record (#289): TGP 1.169, play saves 1.21-1.43. P2016 is within 5% of its 1.5 ceiling; the early #275 speed pass is active. All guards pass; no quiet repeat was warranted.
+- Coverage (#156): vehicle deletion/pool-growth assertions, NewGRF/legacy branches and the unintegrated house/landscape gaps remain open.
 - The largest remaining simulation C++: `station_cmd.cpp` 4,424 lines, `road_cmd.cpp` 2,669, `vehicle.cpp` 2,573, `tunnelbridge_cmd.cpp` 2,135, `town_cmd.cpp` 1,929, `train_cmd.cpp` 1,778, `landscape.cpp` 1,665, `rail_cmd.cpp` 1,531, `water_cmd.cpp` 1,471.
 
 ## Fourteenth steering review (2026-10-18, merge churn and honest exceptions)
@@ -108,6 +109,11 @@ evidence in their PRs; rows below use original retirement and net glue (#223).
 | #261 R3 part (train/orders forwarders and unsafe contracts) | #273 | direct | `bdab12a31b` | 1571 / 0 / 0 / 0; Rust net -532, net glue 0 |
 | #276 (#275 native inline ClampTo) | #277 | direct | `08e5372c8f` | 0 / 7 / 0 / 0; Rust net -44, net glue -33 |
 | #278 (#275 retained road YAPF scratch) | #279 | direct | `35d872ca3c` | 86 / 11 / 0 / 0; net glue 0 |
+| #280 (component registries and append sections) | #286 | direct | `762a56477f` | 633 / 232 / 226 / 0; Rust net -418, net glue +15 |
+| #282 (15% speed guard and fixed ceilings) | #285 | direct | `83bd72774e` | 0 / 49 / 0 / 0; net glue 0 |
+| #291 (temporary clone cleanup) | #292 | direct | `c93cf6701e` | 0 / 15 / 0 / 0; net glue 0 |
+| #283 (receipt tooling retirement) | #287 | direct | `bb2f242ddc` | 0 / 337 / 0 / 0; tooling net -1904 |
+| #288 (#275 road YAPF observations) | #289 | direct | `62622e60d3` | 53 / 4 / 200 / 0; net glue +126 |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -118,6 +124,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings.
 2. **Speed guard and passes (#155, #282, AGENTS.md).**
+   - **Coordination followup #301:** the inherited timed-game lock can wait behind a shared profile. Root uses shared coordination for current unsampled runs; a bounded default concurrency regression and shared normal benchmark path follow after #297 frees a maintenance slot (80 added tooling/test lines).
    - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios. Each integrating PR records its medians, and each speed pass re-measures all six on a quiet host.
    - **Per PR:** no scenario more than 15% slower than its record and none over its ceiling (1.5x play saves, 1.3x generation). Misses get a callgrind fix round.
    - **Speed pass:** after every fourth ownership integration, or when a scenario is within 5% of its ceiling (1.425x play, 1.235x generation). The 2026-10-18 profile at `600dca4e27` is the current pass (#275). Count the next four from there; #269 and #255 count.
@@ -135,10 +142,10 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in parallel.
 
-1. **#280 conflict-free registries, then #284 generated ABI layouts**, as maintenance PRs; #283 when a maintenance slot frees.
+1. **#291/#292, #283/#287 and #288/#289 are integrated.** Protected Quick recovered; actual docs-only postmerge skip passed. **#296/#297** fixes the separate Markdown-named gitlink shortcut within 80 added logic/test lines; fresh review has no findings, root workflow bootstrap is active. **#284/#298 generated ABI layouts** finishes native generators/comparisons/benchmarks after preserved provider failures.
 2. **Drafts:** #269 houses, then #255 landscape, each with the must-change items from its 2026-10-18 PR comment, adopting #280 on its base update.
 3. **#275 speed, revised order (2026-10-18 comment):**
-   - road YAPF single tile read and speed-limit/height folding; the effect/disaster table copy; ship YAPF scratch; `constinit` service tables;
+   - road YAPF tile reads (#288/#289) integrated; the early pass profiles all six scenarios. Next: effect/disaster table copy (#299, active, 100 added support/test lines); ship YAPF scratch; `constinit` service tables;
    - road `GetCurrentMaxSpeed`;
    - trees facade and industry `next_tick` (TGP has 1% headroom);
    - fold the road per-tick C++ (tick-front, `DoUpdateSpeed`, incline, crash check) into Rust;
@@ -146,11 +153,14 @@ unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in 
 4. **#281** vehicle maintenance direct calls, then the callee-copy check.
 5. **#274 map view**, one shared PR after #255 integrates.
 6. **Commands:**
-   - #266 road commands once #280 integrates, reusing #270's shared command checks and crossing services;
-   - #267 station construction on the #125 owner;
-   - #247 town commands, authority and deletion.
+   - #266 road commands is active from the integrated #280 base, reusing #270's command checks and crossing services;
+   - #267 station construction on the #125 owner is active from integrated base;
+   - #247 town commands, authority and deletion, after #256/#269 integrates;
+   - #293 tunnel/bridge construction, removal and ownership, once #247 and #212 settle;
+   - #294 water construction/restoration, leaving docking with #267 and flooding with #212;
+   - #295 object construction, generation and HQ lifecycle, including canonical counts and cleared-area scratch.
 
-   Tunnel/bridge follows once #247 and #212 settle.
+   Fresh Astra planning selected #293-#295. Reuse canonical services; none waits on draft wrappers. Object generation's cancellation services need return-before-rethrow handling.
 7. **#168 tail, largest first.** `order_cmd.cpp` and `economy.cpp` hold 65 of the 198 baseline copies. Train, ship, effect and cargo-packet C-layout blocks wait for nothing.
 
 New owners reuse integrated services, never draft copies. A Rust-allocated
@@ -159,18 +169,21 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Resumed 2026-10-18. Root is gpt-6.1-sol, xhigh; implementations and reviews use
-gpt-6.1-sol, high. Base CI is green; two component branches are unintegrated.
+Root is gpt-6.1-sol, xhigh; implementation and review use gpt-6.1-sol, high.
+Four component branches are unintegrated. #292 repaired protected Quick; #287's actual docs-only skip passed. #289 integrated; its near-ceiling result triggered the early #275 pass. CI_ON_DEMAND is temporarily absent for #297 workflow bootstrap; root restores true after merge. Keep at most three maintenance PRs (#297, #284/#298 and selected #299 active).
 
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
-| #280 / #286 | `t3/reduce-registry-merge-conflicts`, `64a7aeecfc` | Review has no findings; exact-head Full requested. Integrate, then #255/#269 adopt their reserved sections and #266 starts. |
-| #282 / #285 | `t3/recorded-ratios-speed-guard`, `9abf7a225e` | Review has no code findings; root resolved quiet-record finding with six medians at reviewed head, then a median-only commit. New exact-head Full requested; earlier Full cancelled. |
-| #284 | none | Plan complete; root's issue comment sets a 650-line support/test budget plus mechanical edits. Implementation follows #280/#282. |
-| #283 / #287 | `t3/retire-evidence-receipts`, `d7af2e73da` | Four review findings fixed, root spot-checked all fixes and workflow changes; tooling 337/350 lines. Adopt integrated #285, then bootstrap/Full and actual docs-only postmerge acceptance. Read-only merge proof remains clean. |
-| #256 / #269 | `house-lifecycle-256`, `b09c16d78e` | Override/RNG probe and canonical town fixes pushed; affected checks and speed pass. Adopt #280 before fresh review/Full; platform blocked by base conflicts. P2016 near-ceiling result tracks the next speed pass. |
-| #212 / #255 | `landscape-owner-212`, `9d077039bf` | Six steering fixes pushed; verify, 141 semantic scenarios/980 snapshots, comparison and six speed medians pass. Adopt #280 before fresh review/platform/Full. |
-| #275 / #281 | none | #275 road-YAPF read/order plan complete (Astra/high); root's issue comment sets a 400-added-line slice with no Python tooling. Implementation awaits a maintenance slot; #281 follows. |
+| #284 / #298 | `generated-abi-284`, `be764d1cb6` | Native verify/Cargo4, generated-list and all default maintenance tests pass; generators/comparisons/six medians remain. About 790/650 handwritten lines, within the 25% limit; mechanical conversions separate. Fresh review follows implementation. |
+| #296 / #297 | `fix-markdown-gitlinks-296`, `d61092f302` | 71/80 added logic/test lines; actual-script regression and 25 policy tests pass. Fresh review has no findings; root workflow review complete, exact-head Full/bootstrap requested. |
+| #256 / #269 | `house-lifecycle-256`, `af9e189521` | Steering review passed; adopting integrated #289 changes the shared slope wrapper and speed record. Fresh scoped conflict review passed; final source benchmarks use shared coordination, then record medians and request exact-head Full. |
+| #212 / #255 | `landscape-owner-212`, `6c108195ef` | Three review fixes root-checked; adopting integrated #289 combines four shared-accessor conflicts. Fresh scoped review passed; final-source shared benchmark medians and Full follow. Older near-limit timing is superseded. |
+| #266 / #290 | `road-commands-266`, `cc2fc00809` | Ownership implementation active from integrated `83bd72774e`; 200-300 tooling lines. |
+| #267 | `station-commands-267` | Whole station command implementation assigned from integrated `5a32ef6945`; 300-400 tooling lines. Docking includes IsPossibleDockingTile/CheckForDockingTile. |
+| #247, #293-#295 | none | Selected future whole owners, with prerequisites and budgets in their issues; fresh Astra plan completed. |
+| #299 | `effect-disaster-tables-299` | Remove copied shared service tables with real effect-call/disaster-Run lifetimes; stabilize temporary Rust fixtures. Implementation assigned, 100 added support/test lines. |
+| #275 early pass | integrated `62622e60d3` | Fresh profiling task compares five play saves and generation with the pinned original, attributing boundary excess before selecting the next two or three fixes. No holds or new evidence controller. |
+| #281 | none | Follows the revised #275 fix order when a maintenance slot frees. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Shared map-view PR after #255; retain attribution and #282's shared profile-lock/concurrency acceptance. |
 | #64 / #66 | remote `issue/64-curve-family`, `aab5211801` | #66 closed unmerged; #64 and older paused work stay untouched. |
 

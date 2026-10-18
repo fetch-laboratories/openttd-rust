@@ -520,7 +520,7 @@ static void TrainOrderFree(OpenTTDTrainHandle id) noexcept
 static uint64_t TrainOrderMaxSpeed(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return v->current_order.GetMaxSpeed();
+	return RustVehicleOrderMaxSpeed(v);
 }
 static uint64_t TrainOrderStop(OpenTTDTrainHandle id, uint16_t a) noexcept
 {

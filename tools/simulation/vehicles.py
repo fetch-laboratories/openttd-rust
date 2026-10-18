@@ -87,14 +87,14 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             "reliability": 0,
         }
     destination = folder / "maintenance.sav"
-    receipt = patch(
+    record = patch(
         source,
         destination,
         {"VEHS": {3: {COMMON + key: value for key, value in changes.items()}}},
     )
     result["vehicle_maintenance_input"] = {
         "normalization": normalization,
-        "patch": receipt,
+        "patch": record,
     }
     return dict(scenario, save=str(destination))
 

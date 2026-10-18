@@ -43,8 +43,9 @@ enum ExtraTreePlacement : uint8_t {
 
 #ifdef WITH_RUST
 #include "rust/trees_ffi.h"
-#include "rust/services_water.h"
 #include "rust/services_ffi.h"
+#include "rust/services_map.h"
+#include "rust/services_water.h"
 #include <exception>
 #include <utility>
 
@@ -76,7 +77,7 @@ static OpenTTDTreePlantObservation TreePlantObservation(uint32_t index) noexcept
 {
 	TileIndex tile{index};
 	OpenTTDTreePlantObservation o{};
-	o.tile_type = GetTileType(tile);
+	o.tile_type = SharedTileType(index);
 	o.zone = GetTropicZone(tile);
 	if (o.tile_type == MP_CLEAR) {
 		o.bridge = IsBridgeAbove(tile);

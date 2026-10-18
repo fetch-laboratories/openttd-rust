@@ -92,8 +92,7 @@ python3 tools/migration.py tools
 python3 tools/run-comparisons.py
 ```
 
-Each driver invocation retains command logs, test reports, executable hashes,
-source revision, and local changes under `.local/verification/<timestamp>/`.
+Each driver invocation retains command logs, test reports and the source revision under `.local/verification/<timestamp>/`.
 Passing establishes only covered behavior. The driver does not itself compare
 every game state or prove full game equivalence.
 
@@ -104,10 +103,8 @@ lock waits identify live holders. POSIX commands run under a pipe supervisor;
 driver death (including SIGKILL) closes the pipe and kills the command session. Reference and candidate configure/build/test
 operations use separate locks, and simulation captures immutable runtime copies
 under those locks. Standalone fixture games share the benchmark coordination lock.
-Successful candidate game builds write a versioned executable identity containing
-source and configuration digests plus the executable hash. Receipts associate
-that identity only with a matching executable and configuration; external or
-otherwise unrecorded builds retain unknown provenance.
+Validation is established by the exact-head CI run and the commands in the PR.
+Local logs and semantic reports help diagnose failures.
 
 Windows Rust linkage is supported for the scoped native MSVC configurations below.
 
@@ -211,7 +208,7 @@ or complete log/stdout difference fails. Both modes compare their exit saves.
   aircraft fixture (`tools/simulation/aircraft.py`) observes a small plane and
   helicopter between two airports, requiring movement, loaded cargo, flying
   state and paid delivery. `tools/aircraft-scenario-ai/README.md` records its
-  setup provenance, reproduction commands and limits.
+  setup details, reproduction commands and limits.
 - Masks (`MASKS`, with reasons and hit counts in the report): the random save
   id, build revision/NewGRF version, and `round_trip_time`, which the original
   saves uninitialized (#83); ports touching it need their own check.
@@ -234,9 +231,9 @@ or complete log/stdout difference fails. Both modes compare their exit saves.
 - Both executable/runtime trees are copied before scenarios, dereferencing data
   symlinks; the reference copy holds its shared build lock. Keep the candidate
   build idle during its initial copy; later builds cannot change the test run.
-  `--candidate` uses data beside that executable. Reports hash the executed
-  copies before running; `candidate_commit`/`candidate_status` describe the
-  initial checkout, not proof of an arbitrary binary's source revision (#97).
+  `--candidate` uses data beside that executable. Reports retain semantic
+  comparisons; `candidate_commit`/`candidate_status` describe the initial
+  checkout (#97).
   Evidence: `.local/simulation/<time>-<pid>/report.json`.
 
 Simulation speed (#155) is reported for every scenario as `plain_speed`:
@@ -411,15 +408,16 @@ Required checks must pass on the PR head; branches need not be up to date with t
 base. The publisher records the immutable tested merge tree separately from the
 head status.
 Protected pushes have per-SHA concurrency, so a later docs push cannot cancel
-the code merge run. A merged push whose tree matches the tree marker from the same successful full
-request refreshes native compiler caches without repeating tests or scenarios.
+the code merge run. A merged push whose non-Markdown files match the tree marker from the same successful
+full request refreshes native compiler caches without repeating tests or scenarios.
 Covered protected pushes also rebuild the cached Linux GCC, macOS and Windows
 targets to refresh their compiler caches. This path skips Cargo checks, CTest,
 comparison/configuration probes, annotation checks and platform evidence; Clang
 and Emscripten have no compiler cache to refresh. The path is derived only from
-the protected push's matching tree, and requested PR validation always runs the
+the protected push's matching non-Markdown tree entries, and requested PR validation always runs the
 complete selected suite. A combined tree no full request
-covered receives all native and platform checks. Markdown-only pushes skip heavy
+covered receives all native and platform checks. Tree comparisons must be complete;
+missing or truncated GitHub inventories retain heavy validation. Markdown-only pushes skip heavy
 builds after complete file classification. A post-merge failure is fixed forward first. Force pushes and branch deletion are disallowed,
 including for administrators. The approving-review count is zero because agents
 share credentials; the attributed independent review report is the process gate
@@ -430,15 +428,11 @@ Native validation exports both frozen runtimes and once-built fleet/orders adapt
 then runs component comparisons and six simulation shards concurrently. Recorded
 scenario seconds assign work while keeping effects/disasters/aircraft fixture
 families whole. The gate requires every job and exactly the current default
-`simulate.py --list` inventory, with matching executable and manifest hashes.
-Export requires canonical binary/configuration identity matching clean current
-source. Exports strip debug sections only on copies, proving identical
-loadable/allocated code and data and retaining parent/derived hashes; widget
-objects also preserve resolved symbols, relocations and COMDAT groups.
-Original verification binaries stay intact; `tools/evidence.py` joins explicit
-derived simulation identities to their verified parent hashes. Probe
-workers receive prebuilt generators/archives and the widget probe's real link
-objects; build metadata relocation has its own receipt. Reports/logs and retained
+`simulate.py --list` inventory. GitHub's run-scoped artifacts carry the runtimes
+and reports between jobs. Exports strip debug sections only on copies; original
+verification binaries stay intact. Probe workers receive prebuilt
+generators/archives and the widget probe's real link objects; build metadata is
+relocated for the receiving checkout. Reports/logs and retained
 failing saves are artifacts; build inputs expire after one day. Tests and their results are never cached. Cache writers trim native roles
 to 750 MB, Linux flavours to 600 MB and macOS flavours to 650 MB. The trusted
 cache-retention workflow keeps the latest entry per prefix and bounds total usage
@@ -464,15 +458,10 @@ sharding: `stats` gives each Blacksmith job's CPU and memory timeseries. Agents
 authenticate with an org token (`blacksmith org-token create`, admin only), never
 a copy of a person's `~/.blacksmith/credentials`.
 
-`python3 tools/preflight.py --base origin/rust-migration --verification REPORT`
-runs the pinned inherited commit checker and checks explicit candidate compiler
-logs for warnings in branch-changed files and diagnostics without source locations;
-unchanged upstream warnings remain outside this scan. Its first run downloads the pinned hooks into ignored shared storage;
-`--hooks PATH` uses an existing clean pinned checkout offline. Without supplied
-logs it explicitly leaves warnings unchecked. `tools/evidence.py` exports explicit
-verification and optional repeated simulation receipts with committed port metrics
-and agent attribution; unsupported, failed or mismatched receipts fail. Narrow
-checks, legacy receipts, dirty source and unknown provenance remain labelled.
+`python3 tools/preflight.py --base origin/rust-migration` runs the pinned inherited
+commit checker. Its first run downloads the pinned hooks into ignored shared
+storage; `--hooks PATH` uses an existing clean pinned checkout offline.
+Record validation commands and limits in the PR; CI runs identify the tested head.
 
 `python3 tools/shared-accessors.py --base-ref origin/rust-migration` enforces
 #249 in quick CI. It checks fork-added functions/lambdas outside the named shared
@@ -1225,30 +1214,30 @@ saves or every signal family. Controller reservation extension belongs to #130.
 
 ### Road YAPF search and path construction
 
-Issue #124 moves both track/depot searches, road exit-direction keys, node arena,
-lookup maps, exact-order heap, segment traversal/cost, heuristic, limits and best
-intermediate fallback into Rust. Reconstruction and station-area trimming write
-#121's sole canonical path directly; cache ownership is not counted twice.
-Original road specialization and node types compile only in portable builds.
-C++ keeps map/pools/settings, closest station-area and road-stop observations,
-and shared `CFollowTrackRoad` behind copied scalar `noexcept` leaves. None runs
-scripts, mutates/reenters the search or canonical road owner, or throws during
-ordinary play. Short owner access ends before leaves. RNG is unchanged (neither
-search draws); integer narrowing/wrapping, exit-key replacement, strict ties and
-follow-before-limit timing retain source behavior. Panics/OOM abort.
-Arena, lookup maps and heap retain process-wide scratch capacity between searches
-(#278). Each active search owns the scratch; the cache keeps no native pointers.
-Inputs, destination state and counters reset per call under the game-state mutex.
+Issue #124 moves track/depot searches, exit-direction keys, node arena, lookup
+maps, exact-order heap, segment traversal/cost, heuristic, limits and intermediate
+fallback into Rust. Reconstruction and station-area trimming write #121's sole
+canonical path. Original specialization/node types compile only portably.
+C++ retains map/pools/settings, station/stop observations and `CFollowTrackRoad`
+behind copied scalar `noexcept` leaves. None runs scripts, mutates/reenters the
+search/road owner or throws in ordinary play. Short owner access ends before
+leaves. Neither search draws RNG; wrapping, exit-key replacement, strict ties
+and follow-before-limit timing retain source behavior. Panics/OOM abort.
+Arena/maps/heap retain process-wide scratch capacity (#278); active searches own
+it, with no cached native pointers. Inputs/destinations/counters reset per call.
+#288 shares one tile observation across segment cost/destination/depot checks.
+Endpoint predicates invalidate on advance; startup and >4096 exits remain
+unevaluated until needed, without stop-cost lookups. Only accepted continuations
+read ordered current/next ground-vehicle center Z, vehicle speed fields and
+old-tile follower limits; arithmetic stays Rust and Follow is never repeated.
 
-`python3 tools/migration.py simulate roads` covers the controller's original eight
-cases, actual station-area prefix trimming and a forced cache miss with competing
-penalties; paired reference/candidate runs compare saved fields in plain/desync modes. Native
-tests compare actual heap and origin masks with unchanged C++ and depot-search transcript/counters
-with `CYapfBaseT` at node limits 0/1/2/7 and depot cost bounds 0/70/71/100
-(loaded node settings clamp to >=500). Native ABI checks
-cover every field on supported hosts. Arbitrary maps/NewGRFs, articulated/tram,
-road waypoints, exhaustive occupied-stop/loop/segment-length branches and actual
-legacy saves remain limits; shared follower logic is deliberately unported.
+`python3 tools/migration.py simulate roads --jobs 2` compares plain/desync state,
+station trimming and competing penalties. Native tests compare heap/origin masks
+and depot transcripts with unchanged C++ at node limits 0/1/2/7 and cost bounds
+0/70/71/100; a transient trace checks rejected/accepted queries, costs and long
+segment cache invalidation. Native ABI checks cover every field. Arbitrary maps,
+NewGRFs, articulated/tram, waypoints, exhaustive stop/loop/segment branches and
+legacy saves remain #156 gaps; shared follower logic remains native.
 
 ### Orders lifecycle ownership
 

@@ -247,7 +247,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             )
             if trial["exit"] or not fixture.exists():
                 raise RuntimeError(f"disaster preparation {label} failed")
-            (cache / "provenance.json").write_text(
+            (cache / "preparation.json").write_text(
                 json.dumps(
                     {
                         "ticks": ticks,
@@ -353,7 +353,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if kind.startswith("train"):
             changes["PLYR"] = {1: {"is_ai": 0}}
         target = folder / "input.sav"
-        receipt = patch(
+        record = patch(
             base, target, changes, "human" if kind.startswith("train") else None
         )
         schema = next(
@@ -391,7 +391,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             main = next(
                 index for index, row in live.items() if row["subtype"] == subtype
             )
-            receipt["negative_fields"] = negative_probes(natural, folder, main)
+            record["negative_fields"] = negative_probes(natural, folder, main)
             edits = {"DATE": {0: {"next_disaster_start": 65535}}}
             params = {}
             if kind.startswith("industry"):
@@ -434,7 +434,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 )
             edits["VEHS"] = {main: fields}
             modified = folder / "live-input.sav"
-            receipt["live_input"] = patch(natural, modified, edits)
+            record["live_input"] = patch(natural, modified, edits)
             console = [
                 "setting difficulty.disasters 0",
                 *(
@@ -458,10 +458,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 if not saved or saved["state"] != 1 or saved["dest_tile"] != 21:
                     raise RuntimeError("reload input lacks live UFO/road target")
                 modified = folder / "reload-input.sav"
-                receipt["reload"] = patch(reload, modified, {})
+                record["reload"] = patch(reload, modified, {})
                 scenario = dict(scenario, save=str(modified), before=saved)
-        receipt["moment"] = save_moment(Path(scenario["save"]))
-        result["disaster_input"] = receipt
+        record["moment"] = save_moment(Path(scenario["save"]))
+        result["disaster_input"] = record
     return scenario
 
 

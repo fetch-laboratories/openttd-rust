@@ -44,6 +44,7 @@ static_assert(sizeof(DestinationID) >= sizeof(StationID));
 #ifdef WITH_RUST
 #include "rust/command_services_ffi.h"
 #include "rust/command_cost_services.h"
+#include "rust/services_map.h"
 #include "rust/vehicle_services.h"
 static_assert(sizeof(Order) == sizeof(OpenTTDOrderFields) && alignof(Order) == alignof(OpenTTDOrderFields));
 static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructible_v<Order>);
@@ -250,12 +251,6 @@ extern "C" uint64_t openttd_orders_at_station(void *ctx) noexcept
 	return IsTileType(v->tile, MP_STATION);
 }
 
-extern "C" uint64_t openttd_orders_tile_station(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return GetStationIndex(v->tile).base();
-}
-
 extern "C" uint64_t openttd_orders_ship_station_tile(uint16_t destination) noexcept
 {
 	return Station::Get(StationID(destination))->ship_station.tile.base();
@@ -311,7 +306,7 @@ extern "C" uint64_t openttd_orders_rail_depot(uint16_t destination) noexcept
 
 extern "C" uint64_t openttd_orders_road_depot(uint16_t destination) noexcept
 {
-	return IsRoadDepotTile(Depot::Get(DepotID(destination))->xy);
+	return Shared_is_road_depot(Depot::Get(DepotID(destination))->xy.base());
 }
 
 extern "C" uint64_t openttd_orders_ship_depot(uint16_t destination) noexcept
@@ -683,7 +678,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	openttd_orders_target_airport,
 	openttd_orders_waypoint_tile,
 	openttd_orders_at_station,
-	openttd_orders_tile_station,
+	RustOpaqueVehicleTileRead<uint64_t, MapSvcStationIndex>,
 	openttd_orders_ship_station_tile,
 	openttd_orders_valid_station,
 	openttd_orders_station_owner,

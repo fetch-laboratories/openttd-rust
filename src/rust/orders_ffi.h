@@ -275,7 +275,6 @@ uint64_t openttd_orders_aircraft_flying(void *ctx) noexcept;
 uint64_t openttd_orders_target_airport(void *ctx) noexcept;
 uint64_t openttd_orders_waypoint_tile(uint16_t destination) noexcept;
 uint64_t openttd_orders_at_station(void *ctx) noexcept;
-uint64_t openttd_orders_tile_station(void *ctx) noexcept;
 uint64_t openttd_orders_ship_station_tile(uint16_t destination) noexcept;
 uint64_t openttd_orders_valid_station(uint16_t destination) noexcept;
 uint64_t openttd_orders_station_owner(uint16_t destination) noexcept;
