@@ -37,13 +37,15 @@ with tempfile.TemporaryDirectory() as directory:
     for component, issue in [("house", 256), ("landscape", 212)]:
         git("checkout", "-qb", component, base)
         marker = f"// Registry: {component} (#{issue}).\n"
-        field = f"{component}_probe"
+        probe = f"{component}_probe"
+        field = "foundation_price" if component == "house" else "foundation"
+        header = "house_ffi" if component == "house" else "landscape_loop_ffi"
         additions = {
             WITNESS: [
-                f'    {field} {{\n        {field.upper()} = 0 => "{field}.hit",\n    }}\n'
+                f'    {probe} {{\n        {probe.upper()} = 0 => "{probe}.hit",\n    }}\n'
             ],
             ABI: [
-                f'#include "rust/{field}.h"\n',
+                f'#include "rust/{header}.h"\n',
                 f"\t\toffsetof(OpenTTDSharedServices, {field}),\n",
                 f"\t{component.title()}Probe();\n",
             ],
