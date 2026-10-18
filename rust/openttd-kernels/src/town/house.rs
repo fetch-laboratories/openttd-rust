@@ -68,22 +68,22 @@ const DC_NO_MODIFY_RATING: u16 = 1 << 9;
 
 // Branch witnesses, in `witness::NAMES` order from `witness::HOUSE`.
 const W_STAGE: usize = witness::HOUSE;
-const W_COMPLETE: usize = W_STAGE + 1;
-const W_LIFT_START: usize = W_STAGE + 2;
-const W_LIFT_STOP: usize = W_STAGE + 3;
-const W_ORIGINAL: usize = W_STAGE + 4;
-const W_BINOMIAL: usize = W_STAGE + 5;
-const W_RECESSION: usize = W_STAGE + 6;
-const W_REBUILD: usize = W_STAGE + 7;
-const W_REPLACE: usize = W_STAGE + 8;
-const W_CLEAR_AUTO: usize = W_STAGE + 9;
-const W_CLEAR_REFUSED: usize = W_STAGE + 10;
-const W_CLEAR_EXECUTE: usize = W_STAGE + 11;
-const W_AUTOSLOPE: usize = W_STAGE + 12;
-const W_PLACE: usize = W_STAGE + 13;
-const W_PLACE_ERROR: usize = W_STAGE + 14;
-const W_STATION_REMOVED: usize = W_STAGE + 15;
-const W_PROTECTED: usize = W_STAGE + 16;
+const W_COMPLETE: usize = witness::HOUSE_COMPLETE;
+const W_LIFT_START: usize = witness::HOUSE_LIFT_START;
+const W_LIFT_STOP: usize = witness::HOUSE_LIFT_STOP;
+const W_ORIGINAL: usize = witness::HOUSE_ORIGINAL;
+const W_BINOMIAL: usize = witness::HOUSE_BINOMIAL;
+const W_RECESSION: usize = witness::HOUSE_RECESSION;
+const W_REBUILD: usize = witness::HOUSE_REBUILD;
+const W_REPLACE: usize = witness::HOUSE_REPLACE;
+const W_CLEAR_AUTO: usize = witness::HOUSE_CLEAR_AUTO;
+const W_CLEAR_REFUSED: usize = witness::HOUSE_CLEAR_REFUSED;
+const W_CLEAR_EXECUTE: usize = witness::HOUSE_CLEAR_EXECUTE;
+const W_AUTOSLOPE: usize = witness::HOUSE_AUTOSLOPE;
+const W_PLACE: usize = witness::HOUSE_PLACE;
+const W_PLACE_ERROR: usize = witness::HOUSE_PLACE_ERROR;
+const W_STATION_REMOVED: usize = witness::HOUSE_STATION_REMOVED;
+const W_PROTECTED: usize = witness::HOUSE_PROTECTED;
 
 /// Narrow observations at their original map read points. No owner or map
 /// reference survives a service; these contain only fields used by that phase.

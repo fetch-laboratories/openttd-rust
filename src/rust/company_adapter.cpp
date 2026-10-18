@@ -7,58 +7,63 @@
 /** @file company_adapter.cpp Typed noexcept shared-world services for the Rust company owner. */
 #include "../stdafx.h"
 #ifdef WITH_RUST
-#include "company_adapter.h"
-#include "services_rail.h"
-#include "company_services.h"
-#include "presentation_services.h"
-#include "settings_services.h"
-#include "../company_base.h"
-#include "../company_func.h"
-#include "../company_cmd.h"
-#include "../company_gui.h"
-#include "../economy_func.h"
-#include "../economy_base.h"
-#include "../command_func.h"
-#include "../vehicle_base.h"
-#include "../vehicle_func.h"
-#include "../vehicle_cmd.h"
+#include "../ai/ai.hpp"
 #include "../aircraft.h"
-#include "../station_base.h"
-#include "../waypoint_base.h"
-#include "../subsidy_base.h"
-#include "../subsidy_func.h"
-#include "../town.h"
-#include "../signs_base.h"
+#include "../autoreplace_func.h"
+#include "../cargomonitor.h"
+#include "../command_func.h"
+#include "../company_base.h"
+#include "../company_cmd.h"
+#include "../company_func.h"
+#include "../company_gui.h"
+#include "../economy_base.h"
+#include "../economy_func.h"
+#include "../game/game.hpp"
 #include "../goal_base.h"
-#include "../story_base.h"
+#include "../group.h"
 #include "../landscape.h"
+#include "../network/network.h"
+#include "../network/network_admin.h"
+#include "../network/network_func.h"
+#include "../news_func.h"
+#include "../object.h"
 #include "../rail.h"
+#include "../rail_map.h"
 #include "../road.h"
 #include "../road_func.h"
-#include "../station_func.h"
-#include "../rail_map.h"
 #include "../road_map.h"
-#include "../signal_func.h"
-#include "../cargomonitor.h"
-#include "../autoreplace_func.h"
-#include "../group.h"
-#include "../network/network.h"
-#include "../network/network_func.h"
-#include "../network/network_admin.h"
-#include "../ai/ai.hpp"
-#include "../game/game.hpp"
-#include "../script/api/script_object.hpp"
 #include "../script/api/script_event_types.hpp"
-#include "../news_func.h"
-#include "../strings_func.h"
+#include "../script/api/script_object.hpp"
+#include "../signal_func.h"
+#include "../signs_base.h"
 #include "../sound_func.h"
-#include "../texteff.hpp"
-#include "../timer/timer_game_tick.h"
-#include "../timer/timer.h"
-#include "../window_func.h"
-#include "../object.h"
-#include "../water.h"
+#include "../station_base.h"
+#include "../station_func.h"
+#include "../story_base.h"
+#include "../strings_func.h"
+#include "../subsidy_base.h"
+#include "../subsidy_func.h"
 #include "../table/strings.h"
+#include "../texteff.hpp"
+#include "../timer/timer.h"
+#include "../timer/timer_game_tick.h"
+#include "../town.h"
+#include "../vehicle_base.h"
+#include "../vehicle_cmd.h"
+#include "../vehicle_func.h"
+#include "../water.h"
+#include "../waypoint_base.h"
+#include "../window_func.h"
+#include "company_adapter.h"
+#include "company_services.h"
+#include "presentation_services.h"
+#include "services_rail.h"
+#include "settings_services.h"
+#include "vehicle_services.h"
+// Registry: house (#256).
+
+// Registry: landscape (#212).
+
 #include <memory>
 #include "../safeguards.h"
 
@@ -309,12 +314,12 @@ static uint32_t Co_vehicle_next_owned(uint8_t owner, uint32_t from, uint8_t *typ
 	return UINT32_MAX;
 }
 static bool Co_aircraft_is_normal(uint32_t id) noexcept { return Aircraft::From(Vehicle::Get(id))->IsNormalAircraft(); }
-static int64_t Co_vehicle_value(uint32_t id) noexcept { return Vehicle::Get(id)->value.base(); }
+static int64_t Co_vehicle_value(uint32_t id) noexcept { return RustVehicleValue(Vehicle::Get(id)); }
 static bool Co_vehicle_is_primary(uint32_t id) noexcept { return Vehicle::Get(id)->IsPrimaryVehicle(); }
 static OpenTTDCompanyVehicleProfit Co_vehicle_profit(uint32_t id) noexcept
 {
 	const Vehicle *v = Vehicle::Get(id);
-	return {v->profit_last_year.base(), v->economy_age.base()};
+	return {v->profit_last_year.base(), RustVehicleEconomyAge(v).base()};
 }
 static uint32_t Co_vehicle_previous(uint32_t id) noexcept
 {

@@ -14,7 +14,7 @@ static void FleetPending_restart(void *shell) noexcept { static_cast<Vehicle *>(
 static int32_t FleetPending_x(void *shell) noexcept { return static_cast<Vehicle *>(shell)->x_pos; }
 static int32_t FleetPending_y(void *shell) noexcept { return static_cast<Vehicle *>(shell)->y_pos; }
 static int32_t FleetPending_z(void *shell) noexcept { return static_cast<Vehicle *>(shell)->z_pos; }
-static uint32_t FleetPending_reserve(uint8_t company) noexcept { return Company::Get(CompanyID(company))->settings.engine_renew_money; }
+static uint32_t FleetPending_reserve(uint8_t company) noexcept { return RustCompanyRenewReserve(Company::Get(CompanyID(company))); }
 static void FleetPending_subtract(int64_t amount) noexcept { SubtractMoneyFromCompany(CommandCost(EXPENSES_NEW_VEHICLES, Money(amount))); }
 static void FleetPending_command(void *out, uint32_t id) noexcept { *static_cast<CommandCost *>(out) = Command<CMD_AUTOREPLACE_VEHICLE>::Do(DoCommandFlag::Execute, VehicleID(id)); }
 static void FleetPending_animation(int32_t x, int32_t y, int32_t z, int64_t amount) noexcept { ShowCostOrIncomeAnimation(x, y, z, Money(amount)); }

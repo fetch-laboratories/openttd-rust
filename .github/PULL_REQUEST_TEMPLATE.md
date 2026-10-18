@@ -14,11 +14,11 @@ Agent: <agent path> | Model: <exact model> | Reasoning effort: <effort>
 
 ## Checks
 
-<!-- Exact commands run, and their results. Harness scenarios that exercise this component. -->
+<!-- Exact commands run, and their results. Harness scenarios that exercise this component. No receipt bundles or executable hashes; exact-head CI is the evidence. -->
 
 ## Simulation speed
 
-<!-- Play-save benchmark before/after candidate/reference median wall ratios, commits and exact command; explain regressions above the roadmap budget. For non-simulation changes, say not applicable. -->
+<!-- Per-scenario candidate/reference median ratios from `simulate <name> --benchmark 3 --jobs 2`, against the SPEED_BUDGETS record: the guard is 15%, the ceilings 1.5x play and 1.3x generation (AGENTS.md). For non-simulation changes, say not applicable. -->
 
 ## Metrics
 

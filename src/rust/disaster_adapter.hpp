@@ -7,6 +7,7 @@
 /** @file disaster_adapter.hpp Copied canonical observations and returned shared services. */
 #include "services_rail.h"
 #include "disaster_ffi.h"
+#include "vehicle_services.h"
 #include "disaster_counter.h"
 #include "services_ffi.h"
 #include "command_services_ffi.h"
@@ -41,9 +42,9 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 		case 1: {
 			const Vehicle *v = Vehicle::Get(id);
 			out[0] = v->subtype; out[1] = v->x_pos; out[2] = v->y_pos; out[3] = v->z_pos; out[4] = v->tile.base(); out[5] = v->dest_tile.base();
-			out[6] = v->direction; out[7] = v->age.base(); out[8] = v->tick_counter; out[9] = v->owner.base(); out[10] = v->vehstatus.base();
+			out[6] = v->direction; out[7] = RustVehicleAge(v).base(); out[8] = v->tick_counter; out[9] = v->owner.base(); out[10] = v->vehstatus.base();
 			out[11] = v->Next() == nullptr ? VehicleID::Invalid().base() : v->Next()->index.base(); out[12] = v->sprite_cache.sprite_seq.seq[0].sprite;
-			out[13] = v->IsFrontEngine(); out[14] = v->IsGroundVehicle(); out[15] = v->type; out[16] = v->breakdown_ctr; out[17] = v->breakdown_delay;
+			out[13] = v->IsFrontEngine(); out[14] = v->IsGroundVehicle(); out[15] = v->type; out[16] = RustVehicleBreakdownCounter(v); out[17] = RustVehicleBreakdownDelay(v);
 			if (v->type == VEH_ROAD) { const RoadVehicle *r = RoadVehicle::From(v); out[18] = r->GetCrashedCounter(); out[19] = r->disaster_vehicle.base(); }
 			break;
 		}

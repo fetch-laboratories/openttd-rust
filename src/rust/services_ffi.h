@@ -13,6 +13,15 @@
 #include <type_traits>
 #include "station_ffi.h"
 
+enum class LandscapeType : uint8_t;
+
+/* Distinct trivial date carriers. Strong native Date classes stay inside C++;
+ * wrappers convert explicitly so MSVC class-return rules cannot alter this ABI. */
+struct OpenTTDCalendarDate { int32_t value; };
+struct OpenTTDEconomyDate { int32_t value; };
+static_assert(std::is_trivially_copyable_v<OpenTTDCalendarDate> && std::is_standard_layout_v<OpenTTDCalendarDate>);
+static_assert(std::is_trivially_copyable_v<OpenTTDEconomyDate> && std::is_standard_layout_v<OpenTTDEconomyDate>);
+
 /* Immutable function table. All functions are noexcept; command/PBS/viewport effects may reenter Rust.
  * Context may be null in the game; test fixtures supply their own world.
  * No Rust references into the map/pools survive calls. Output is call-scoped.
@@ -34,88 +43,90 @@ enum RoadType : uint8_t;
 enum RoadBits : uint8_t;
 enum Trackdir : uint8_t;
 struct OpenTTDSharedServices {
-	void *context;
-	uint32_t (*random)(void *) noexcept;
-	uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept;
-	uint8_t (*tile_type)(uint32_t) noexcept;
-	bool (*bridge_above)(uint32_t) noexcept;
-	uint8_t (*tropic_zone)(uint32_t) noexcept;
-	int32_t (*tile_z)(uint32_t) noexcept;
-	uint8_t (*tile_slope)(uint32_t) noexcept;
-	void (*mark_dirty)(uint32_t) noexcept;
-	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept;
-	uint8_t (*tile_owner)(uint32_t) noexcept;
-	uint16_t (*station_index)(uint32_t) noexcept;
-	uint16_t (*depot_index)(uint32_t) noexcept;
-	bool (*is_level_crossing)(uint32_t) noexcept;
-	uint8_t (*tunnel_bridge_direction)(uint32_t) noexcept;
-	uint16_t (*bridge_speed)(uint32_t) noexcept;
-	bool (*is_water_tile)(uint32_t) noexcept;
-	bool (*company_valid)(uint8_t) noexcept;
-	uint8_t (*next_company)(uint8_t) noexcept;
-	uint8_t (*current_company)() noexcept;
-	const OpenTTDTownHandle *(*closest_town)(uint32_t, uint32_t) noexcept;
-	OpenTTDTownState *(*town_owner)(const OpenTTDTownHandle *) noexcept;
-	bool (*tile_valid)(uint32_t) noexcept;
-	uint32_t (*distance_from_edge)(uint32_t) noexcept;
-	int32_t (*tile_max_z)(uint32_t) noexcept;
-	uint32_t (*tile_height)(uint32_t) noexcept;
-	uint8_t (*bridge_axis)(uint32_t) noexcept;
-	bool (*has_water_ground)(uint32_t) noexcept;
-	bool (*is_sea)(uint32_t) noexcept;
-	bool (*is_plain_rail)(uint32_t) noexcept;
-	bool (*is_bridge)(uint32_t) noexcept;
-	uint8_t (*tunnel_transport)(uint32_t) noexcept;
-	uint32_t (*other_tunnel_end)(uint32_t) noexcept;
-	bool (*is_road_depot)(uint32_t) noexcept;
-	uint8_t (*road_depot_direction)(uint32_t) noexcept;
-	bool (*is_normal_road)(uint32_t) noexcept;
-	uint8_t (*disallowed_road_directions)(uint32_t) noexcept;
-	bool (*is_bay_stop)(uint32_t) noexcept;
+	bool (*autoslope)() noexcept;
 	uint8_t (*bay_stop_direction)(uint32_t) noexcept;
-	bool (*is_drive_through_stop)(uint32_t) noexcept;
-	uint8_t (*drive_through_axis)(uint32_t) noexcept;
-	bool (*is_any_road_stop)(uint32_t) noexcept;
-	uint8_t (*road_type)(uint32_t) noexcept;
-	bool (*has_road_type)(uint32_t) noexcept;
-	uint8_t (*road_owner)(uint32_t) noexcept;
-	uint16_t (*town_index)(uint32_t) noexcept;
-	uint8_t (*road_bits)(uint32_t, uint8_t, bool) noexcept;
-	uint8_t (*snow_line)() noexcept;
+	bool (*bridge_above)(uint32_t) noexcept;
+	uint8_t (*bridge_axis)(uint32_t) noexcept;
+	uint16_t (*bridge_speed)(uint32_t) noexcept;
+	bool (*build_on_slopes)() noexcept;
+	int32_t (*calendar_date)() noexcept;
 	int32_t (*calendar_year)() noexcept;
+	void (*clear_square)(uint32_t) noexcept;
+	const OpenTTDTownHandle *(*closest_town)(uint32_t, uint32_t) noexcept;
+	bool (*company_valid)(uint8_t) noexcept;
+	void *context;
+	RoadBits (*crossing_road_bits)(uint32_t) noexcept;
+	uint8_t (*current_company)() noexcept;
+	uint16_t (*depot_index)(uint32_t) noexcept;
+	uint8_t (*disallowed_road_directions)(uint32_t) noexcept;
+	bool (*disaster_sound)() noexcept;
+	uint32_t (*distance_from_edge)(uint32_t) noexcept;
+	uint8_t (*drive_through_axis)(uint32_t) noexcept;
+	int32_t (*economy_date)() noexcept;
+	bool (*forbid_90_deg)() noexcept;
+	void (*free_train_reservation)(const Train *) noexcept;
+	bool (*has_road_type)(uint32_t) noexcept;
+	bool (*has_road_works)(uint32_t) noexcept;
+	bool (*has_water_ground)(uint32_t) noexcept;
+	uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept;
+	bool (*is_any_road_stop)(uint32_t) noexcept;
+	bool (*is_bay_stop)(uint32_t) noexcept;
+	bool (*is_bridge)(uint32_t) noexcept;
+	bool (*is_drive_through_stop)(uint32_t) noexcept;
+	bool (*is_level_crossing)(uint32_t) noexcept;
+	bool (*is_normal_road)(uint32_t) noexcept;
+	bool (*is_plain_rail)(uint32_t) noexcept;
+	bool (*is_road_depot)(uint32_t) noexcept;
+	bool (*is_sea)(uint32_t) noexcept;
+	bool (*is_water_tile)(uint32_t) noexcept;
 	uint32_t (*map_log_x)() noexcept;
 	uint32_t (*map_max_x)() noexcept;
 	uint32_t (*map_max_y)() noexcept;
-	uint8_t (*plane_speed)() noexcept;
-	bool (*no_jetcrash)() noexcept;
-	uint8_t (*plane_crashes)() noexcept;
-	bool (*service_at_helipad)() noexcept;
-	bool (*disaster_sound)() noexcept;
-	int32_t (*economy_date)() noexcept;
-	int32_t (*calendar_date)() noexcept;
-	int32_t (*slope)(int32_t, int32_t) noexcept;
-	bool (*build_on_slopes)() noexcept;
-	bool (*autoslope)() noexcept;
-	void (*clear_square)(uint32_t) noexcept;
-	void (*free_train_reservation)(const Train *) noexcept;
-	bool (*try_path_reserve)(Train *, bool, bool) noexcept;
-	bool (*safe_waiting_position)(const Train *, uint32_t, uint8_t, bool) noexcept;
-	bool (*has_road_works)(uint32_t) noexcept;
-	RoadType (*tram_type)(uint32_t) noexcept;
-	uint8_t (*tram_owner)(uint32_t) noexcept;
-	RoadBits (*normal_road_bits)(uint32_t, uint8_t) noexcept;
-	RoadBits (*crossing_road_bits)(uint32_t) noexcept;
-	bool (*forbid_90_deg)() noexcept;
-	void (*update_level_crossing)(uint32_t, bool) noexcept;
 	void (*mark_bridge_dirty)(uint32_t) noexcept;
+	void (*mark_dirty)(uint32_t) noexcept;
+	uint8_t (*next_company)(uint8_t) noexcept;
+	bool (*no_jetcrash)() noexcept;
+	RoadBits (*normal_road_bits)(uint32_t, uint8_t) noexcept;
+	uint32_t (*other_tunnel_end)(uint32_t) noexcept;
+	uint8_t (*plane_crashes)() noexcept;
+	uint8_t (*plane_speed)() noexcept;
+	uint32_t (*random)(void *) noexcept;
+	uint8_t (*road_bits)(uint32_t, uint8_t, bool) noexcept;
+	uint8_t (*road_depot_direction)(uint32_t) noexcept;
+	uint8_t (*road_owner)(uint32_t) noexcept;
+	uint8_t (*road_type)(uint32_t) noexcept;
+	bool (*safe_waiting_position)(const Train *, uint32_t, uint8_t, bool) noexcept;
+	bool (*service_at_helipad)() noexcept;
+	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept;
+	int32_t (*slope)(int32_t, int32_t) noexcept;
+	uint8_t (*snow_line)() noexcept;
+	uint16_t (*station_index)(uint32_t) noexcept;
+	uint32_t (*tile_height)(uint32_t) noexcept;
+	int32_t (*tile_max_z)(uint32_t) noexcept;
+	uint8_t (*tile_owner)(uint32_t) noexcept;
+	uint8_t (*tile_slope)(uint32_t) noexcept;
+	uint8_t (*tile_type)(uint32_t) noexcept;
+	bool (*tile_valid)(uint32_t) noexcept;
+	int32_t (*tile_z)(uint32_t) noexcept;
+	uint16_t (*town_index)(uint32_t) noexcept;
+	OpenTTDTownState *(*town_owner)(const OpenTTDTownHandle *) noexcept;
 	Trackdir (*train_trackdir)(const Train *) noexcept;
-
-	size_t (*town_count)() noexcept;
-	bool (*recession)() noexcept;
-	int64_t (*foundation_price)() noexcept;
-	uint64_t (*tick_counter)() noexcept;
+	uint8_t (*tram_owner)(uint32_t) noexcept;
+	RoadType (*tram_type)(uint32_t) noexcept;
+	uint8_t (*tropic_zone)(uint32_t) noexcept;
+	bool (*try_path_reserve)(Train *, bool, bool) noexcept;
+	uint8_t (*tunnel_bridge_direction)(uint32_t) noexcept;
+	uint8_t (*tunnel_transport)(uint32_t) noexcept;
+	void (*update_level_crossing)(uint32_t, bool) noexcept;
+	// Registry: house (#256).
 	void (*delete_animated)(uint32_t) noexcept;
+	int64_t (*foundation_price)() noexcept;
 	void (*rebuild_town_tree)() noexcept;
+	bool (*recession)() noexcept;
+	uint64_t (*tick_counter)() noexcept;
+	size_t (*town_count)() noexcept;
+
+	// Registry: landscape (#212).
 };
 const OpenTTDSharedServices &GetRustSharedServices() noexcept;
 /** Shared save/reseed/restore of BOTH original RNG streams. */
@@ -211,87 +222,90 @@ Result OpenTTDFixtureMapService(Args...) noexcept
 inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_t (*random)(void *) noexcept, uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept) noexcept
 {
 	return {
-		.context = context,
-		.random = random,
-		.industry = industry,
-		.tile_type = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.bridge_above = OpenTTDFixtureMapService<bool, uint32_t>,
-		.tropic_zone = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.tile_z = OpenTTDFixtureMapService<int32_t, uint32_t>,
-		.tile_slope = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.mark_dirty = OpenTTDFixtureMapService<void, uint32_t>,
-		.set_tropic_zone = OpenTTDFixtureMapService<void, uint32_t, uint8_t>,
-		.tile_owner = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.station_index = OpenTTDFixtureMapService<uint16_t, uint32_t>,
-		.depot_index = OpenTTDFixtureMapService<uint16_t, uint32_t>,
-		.is_level_crossing = OpenTTDFixtureMapService<bool, uint32_t>,
-		.tunnel_bridge_direction = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.bridge_speed = OpenTTDFixtureMapService<uint16_t, uint32_t>,
-		.is_water_tile = OpenTTDFixtureMapService<bool, uint32_t>,
-		.company_valid = OpenTTDFixtureMapService<bool, uint8_t>,
-		.next_company = [](uint8_t) noexcept -> uint8_t { return UINT8_MAX; },
-		.current_company = []() noexcept -> uint8_t { return UINT8_MAX; },
-		.closest_town = OpenTTDFixtureMapService<const OpenTTDTownHandle *, uint32_t, uint32_t>,
-		.town_owner = OpenTTDFixtureMapService<OpenTTDTownState *, const OpenTTDTownHandle *>,
-		.tile_valid = OpenTTDFixtureMapService<bool, uint32_t>,
-		.distance_from_edge = OpenTTDFixtureMapService<uint32_t, uint32_t>,
-		.tile_max_z = OpenTTDFixtureMapService<int32_t, uint32_t>,
-		.tile_height = OpenTTDFixtureMapService<uint32_t, uint32_t>,
-		.bridge_axis = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.has_water_ground = OpenTTDFixtureMapService<bool, uint32_t>,
-		.is_sea = OpenTTDFixtureMapService<bool, uint32_t>,
-		.is_plain_rail = OpenTTDFixtureMapService<bool, uint32_t>,
-		.is_bridge = OpenTTDFixtureMapService<bool, uint32_t>,
-		.tunnel_transport = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.other_tunnel_end = OpenTTDFixtureMapService<uint32_t, uint32_t>,
-		.is_road_depot = OpenTTDFixtureMapService<bool, uint32_t>,
-		.road_depot_direction = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.is_normal_road = OpenTTDFixtureMapService<bool, uint32_t>,
-		.disallowed_road_directions = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.is_bay_stop = OpenTTDFixtureMapService<bool, uint32_t>,
+		.autoslope = OpenTTDFixtureMapService<bool>,
 		.bay_stop_direction = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.is_drive_through_stop = OpenTTDFixtureMapService<bool, uint32_t>,
-		.drive_through_axis = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.is_any_road_stop = OpenTTDFixtureMapService<bool, uint32_t>,
-		.road_type = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.has_road_type = OpenTTDFixtureMapService<bool, uint32_t>,
-		.road_owner = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.town_index = OpenTTDFixtureMapService<uint16_t, uint32_t>,
-		.road_bits = OpenTTDFixtureMapService<uint8_t, uint32_t, uint8_t, bool>,
-		.snow_line = OpenTTDFixtureMapService<uint8_t>,
+		.bridge_above = OpenTTDFixtureMapService<bool, uint32_t>,
+		.bridge_axis = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.bridge_speed = OpenTTDFixtureMapService<uint16_t, uint32_t>,
+		.build_on_slopes = OpenTTDFixtureMapService<bool>,
+		.calendar_date = OpenTTDFixtureMapService<int32_t>,
 		.calendar_year = OpenTTDFixtureMapService<int32_t>,
+		.clear_square = OpenTTDFixtureMapService<void, uint32_t>,
+		.closest_town = OpenTTDFixtureMapService<const OpenTTDTownHandle *, uint32_t, uint32_t>,
+		.company_valid = OpenTTDFixtureMapService<bool, uint8_t>,
+		.context = context,
+		.crossing_road_bits = OpenTTDFixtureMapService<RoadBits, uint32_t>,
+		.current_company = []() noexcept -> uint8_t { return UINT8_MAX; },
+		.depot_index = OpenTTDFixtureMapService<uint16_t, uint32_t>,
+		.disallowed_road_directions = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.disaster_sound = OpenTTDFixtureMapService<bool>,
+		.distance_from_edge = OpenTTDFixtureMapService<uint32_t, uint32_t>,
+		.drive_through_axis = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.economy_date = OpenTTDFixtureMapService<int32_t>,
+		.forbid_90_deg = OpenTTDFixtureMapService<bool>,
+		.free_train_reservation = OpenTTDFixtureMapService<void, const Train *>,
+		.has_road_type = OpenTTDFixtureMapService<bool, uint32_t>,
+		.has_road_works = OpenTTDFixtureMapService<bool, uint32_t>,
+		.has_water_ground = OpenTTDFixtureMapService<bool, uint32_t>,
+		.industry = industry,
+		.is_any_road_stop = OpenTTDFixtureMapService<bool, uint32_t>,
+		.is_bay_stop = OpenTTDFixtureMapService<bool, uint32_t>,
+		.is_bridge = OpenTTDFixtureMapService<bool, uint32_t>,
+		.is_drive_through_stop = OpenTTDFixtureMapService<bool, uint32_t>,
+		.is_level_crossing = OpenTTDFixtureMapService<bool, uint32_t>,
+		.is_normal_road = OpenTTDFixtureMapService<bool, uint32_t>,
+		.is_plain_rail = OpenTTDFixtureMapService<bool, uint32_t>,
+		.is_road_depot = OpenTTDFixtureMapService<bool, uint32_t>,
+		.is_sea = OpenTTDFixtureMapService<bool, uint32_t>,
+		.is_water_tile = OpenTTDFixtureMapService<bool, uint32_t>,
 		.map_log_x = OpenTTDFixtureMapService<uint32_t>,
 		.map_max_x = OpenTTDFixtureMapService<uint32_t>,
 		.map_max_y = OpenTTDFixtureMapService<uint32_t>,
-		.plane_speed = OpenTTDFixtureMapService<uint8_t>,
-		.no_jetcrash = OpenTTDFixtureMapService<bool>,
-		.plane_crashes = OpenTTDFixtureMapService<uint8_t>,
-		.service_at_helipad = OpenTTDFixtureMapService<bool>,
-		.disaster_sound = OpenTTDFixtureMapService<bool>,
-		.economy_date = OpenTTDFixtureMapService<int32_t>,
-		.calendar_date = OpenTTDFixtureMapService<int32_t>,
-		.slope = OpenTTDFixtureMapService<int32_t, int32_t, int32_t>,
-		.build_on_slopes = OpenTTDFixtureMapService<bool>,
-		.autoslope = OpenTTDFixtureMapService<bool>,
-		.clear_square = OpenTTDFixtureMapService<void, uint32_t>,
-		.free_train_reservation = OpenTTDFixtureMapService<void, const Train *>,
-		.try_path_reserve = OpenTTDFixtureMapService<bool, Train *, bool, bool>,
-		.safe_waiting_position = OpenTTDFixtureMapService<bool, const Train *, uint32_t, uint8_t, bool>,
-		.has_road_works = OpenTTDFixtureMapService<bool, uint32_t>,
-		.tram_type = OpenTTDFixtureMapService<RoadType, uint32_t>,
-		.tram_owner = OpenTTDFixtureMapService<uint8_t, uint32_t>,
-		.normal_road_bits = OpenTTDFixtureMapService<RoadBits, uint32_t, uint8_t>,
-		.crossing_road_bits = OpenTTDFixtureMapService<RoadBits, uint32_t>,
-		.forbid_90_deg = OpenTTDFixtureMapService<bool>,
-		.update_level_crossing = OpenTTDFixtureMapService<void, uint32_t, bool>,
 		.mark_bridge_dirty = OpenTTDFixtureMapService<void, uint32_t>,
+		.mark_dirty = OpenTTDFixtureMapService<void, uint32_t>,
+		.next_company = [](uint8_t) noexcept -> uint8_t { return UINT8_MAX; },
+		.no_jetcrash = OpenTTDFixtureMapService<bool>,
+		.normal_road_bits = OpenTTDFixtureMapService<RoadBits, uint32_t, uint8_t>,
+		.other_tunnel_end = OpenTTDFixtureMapService<uint32_t, uint32_t>,
+		.plane_crashes = OpenTTDFixtureMapService<uint8_t>,
+		.plane_speed = OpenTTDFixtureMapService<uint8_t>,
+		.random = random,
+		.road_bits = OpenTTDFixtureMapService<uint8_t, uint32_t, uint8_t, bool>,
+		.road_depot_direction = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.road_owner = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.road_type = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.safe_waiting_position = OpenTTDFixtureMapService<bool, const Train *, uint32_t, uint8_t, bool>,
+		.service_at_helipad = OpenTTDFixtureMapService<bool>,
+		.set_tropic_zone = OpenTTDFixtureMapService<void, uint32_t, uint8_t>,
+		.slope = OpenTTDFixtureMapService<int32_t, int32_t, int32_t>,
+		.snow_line = OpenTTDFixtureMapService<uint8_t>,
+		.station_index = OpenTTDFixtureMapService<uint16_t, uint32_t>,
+		.tile_height = OpenTTDFixtureMapService<uint32_t, uint32_t>,
+		.tile_max_z = OpenTTDFixtureMapService<int32_t, uint32_t>,
+		.tile_owner = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.tile_slope = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.tile_type = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.tile_valid = OpenTTDFixtureMapService<bool, uint32_t>,
+		.tile_z = OpenTTDFixtureMapService<int32_t, uint32_t>,
+		.town_index = OpenTTDFixtureMapService<uint16_t, uint32_t>,
+		.town_owner = OpenTTDFixtureMapService<OpenTTDTownState *, const OpenTTDTownHandle *>,
 		.train_trackdir = OpenTTDFixtureMapService<Trackdir, const Train *>,
-		.town_count = OpenTTDFixtureMapService<size_t>,
-		.recession = OpenTTDFixtureMapService<bool>,
-		.foundation_price = OpenTTDFixtureMapService<int64_t>,
-		.tick_counter = OpenTTDFixtureMapService<uint64_t>,
+		.tram_owner = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.tram_type = OpenTTDFixtureMapService<RoadType, uint32_t>,
+		.tropic_zone = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.try_path_reserve = OpenTTDFixtureMapService<bool, Train *, bool, bool>,
+		.tunnel_bridge_direction = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.tunnel_transport = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.update_level_crossing = OpenTTDFixtureMapService<void, uint32_t, bool>,
+		// Registry: house (#256).
 		.delete_animated = OpenTTDFixtureMapService<void, uint32_t>,
+		.foundation_price = OpenTTDFixtureMapService<int64_t>,
 		.rebuild_town_tree = OpenTTDFixtureMapService<void>,
+		.recession = OpenTTDFixtureMapService<bool>,
+		.tick_counter = OpenTTDFixtureMapService<uint64_t>,
+		.town_count = OpenTTDFixtureMapService<size_t>,
+
+		// Registry: landscape (#212).
 	};
 }
 #endif /* RUST_SERVICES_FFI_H */
