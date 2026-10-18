@@ -1015,7 +1015,8 @@ it on ordinary deletion and pool cleanup.
 
 Copied call-scoped observations and immediate scalar writes keep original mutation order. Rust
 calls common Random/map and effect-specific sound, viewport and animated-tile noexcept wrappers
-directly; none can reenter Rust.
+directly; none can reenter Rust. The immutable shared service table is borrowed only
+until the controller returns (#299); no full table is copied.
 
 `python3 tools/migration.py simulate effects` compares save chunks across subtypes, expiry,
 reload and natural creation. Viewport pixels, audible output, full legacy fixtures and every
@@ -1056,7 +1057,11 @@ portable builds.
 
 Copied observations and direct noexcept shared services preserve original ordering and shared
 RNG draws. Private scalar addresses remain stable through modern and legacy save staging; flight
-helpers borrow only the flags scalar for their call.
+helpers borrow only the flags scalar for their call. World clones share an immutable
+service-table borrow tied to the Run/future lifetime (#299), ending on destruction,
+including cancellation. Production uses the process-wide const table; Rust fixtures
+own separate tables through destruction, and native partial tables stay in scope.
+Callbacks may mutate their separate context, never the borrowed table.
 
 The default `disasters` simulation checks scheduling, crashes, removal, industry reset,
 submarine movement and reload. Legacy save fixtures, viewport pixels, sound output, allocator

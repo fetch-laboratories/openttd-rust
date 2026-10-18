@@ -67,12 +67,12 @@ impl Future for Request {
     }
 }
 #[derive(Clone)]
-struct World {
+struct World<'a> {
     context: *mut c_void,
     read: unsafe extern "C" fn(*mut c_void, u32, u32, i64, i64, *mut i64),
     write: unsafe extern "C" fn(*mut c_void, u32, u32, i64),
     channel: Rc<Channel>,
-    services: Services,
+    services: &'a Services,
     service: unsafe extern "C" fn(*mut c_void, *const Action) -> i64,
 }
 // The fixed copied-record slots below are shared with disaster_adapter.hpp.
@@ -97,7 +97,7 @@ const CRASHED: usize = 18;
 const BACKLINK: usize = 19;
 const INVALID: u32 = 1_048_575;
 const INVALID_TILE: u32 = u32::MAX;
-impl World {
+impl World<'_> {
     fn read(&self, kind: u32, id: u32, a: i64, b: i64) -> [i64; 24] {
         // Reuse observations between canonical scalar writes. Direct services
         // and returned actions discard these copies before the next observation.
@@ -398,7 +398,7 @@ fn distance(ax: i64, ay: i64, bx: i64, by: i64) -> i64 {
     i64::from((delta(ax, bx) as i32).wrapping_add(delta(ay, by) as i32))
 }
 
-async fn zeppelin(w: World, id: u32) -> i64 {
+async fn zeppelin(w: World<'_>, id: u32) -> i64 {
     let tick = w.increment(id, TICK);
     if w.state(id) < 2 {
         if tick & 1 != 0 {
@@ -479,7 +479,7 @@ async fn zeppelin(w: World, id: u32) -> i64 {
     }
     1
 }
-async fn small_ufo(w: World, id: u32) -> i64 {
+async fn small_ufo(w: World<'_>, id: u32) -> i64 {
     let tick = w.increment(id, TICK);
     w.set_image(id, if tick & 8 != 0 { 3909 } else { 3908 });
     if w.state(id) == 0 {
@@ -557,7 +557,7 @@ async fn small_ufo(w: World, id: u32) -> i64 {
     }
     1
 }
-async fn aircraft(w: World, id: u32, leave_top: bool) -> i64 {
+async fn aircraft(w: World<'_>, id: u32, leave_top: bool) -> i64 {
     let tick = w.increment(id, TICK);
     w.set_image(
         id,
@@ -624,7 +624,7 @@ async fn aircraft(w: World, id: u32, leave_top: bool) -> i64 {
     }
     1
 }
-fn rotors(w: &World, id: u32) -> i64 {
+fn rotors(w: &World<'_>, id: u32) -> i64 {
     if w.increment(id, TICK) & 1 != 0 {
         return 1;
     }
@@ -637,14 +637,14 @@ fn rotors(w: &World, id: u32) -> i64 {
     w.viewport(id);
     1
 }
-fn valid_train(w: &World, id: u32) -> bool {
+fn valid_train(w: &World<'_>, id: u32) -> bool {
     let t = w.vehicle(id);
     t[FRONT] != 0
         && w.read(15, t[OWNER] as u32, 0, 0)[0] != 0
         && w.tile(t[TILE] as u32)[8] != 0
         && t[STATUS] & 128 == 0
 }
-async fn big_ufo(w: World, id: u32) -> i64 {
+async fn big_ufo(w: World<'_>, id: u32) -> i64 {
     w.increment(id, TICK);
     if w.state(id) == 1 {
         let dest = w.v(id, DEST) as u32;
@@ -725,7 +725,7 @@ async fn big_ufo(w: World, id: u32) -> i64 {
     }
     1
 }
-async fn destroyer(w: World, id: u32) -> i64 {
+async fn destroyer(w: World<'_>, id: u32) -> i64 {
     w.increment(id, TICK);
     let gp = w.position(id);
     let z = w.flight(id);
@@ -762,7 +762,7 @@ async fn destroyer(w: World, id: u32) -> i64 {
     }
     1
 }
-async fn submarine(w: World, id: u32) -> i64 {
+async fn submarine(w: World<'_>, id: u32) -> i64 {
     w.increment(id, TICK);
     if w.increment(id, AGE) > 8880 {
         return w.delete(id).await;
@@ -785,7 +785,7 @@ async fn submarine(w: World, id: u32) -> i64 {
     w.set(id, DIR, dir);
     1
 }
-async fn tick(w: World, id: u32) -> i64 {
+async fn tick(w: World<'_>, id: u32) -> i64 {
     match w.v(id, SUBTYPE) {
         0 => zeppelin(w, id).await,
         2 => small_ufo(w, id).await,
@@ -798,7 +798,7 @@ async fn tick(w: World, id: u32) -> i64 {
         _ => 1,
     }
 }
-async fn initialize(w: World, kind: u32) -> i64 {
+async fn initialize(w: World<'_>, kind: u32) -> i64 {
     let count = if kind == 3 {
         3
     } else if kind >= 5 {
@@ -916,14 +916,14 @@ async fn initialize(w: World, kind: u32) -> i64 {
     }
     0
 }
-fn reset_delay(w: &World) {
+fn reset_delay(w: &World<'_>) {
     let delay = (w.random() & 511) + 730;
     // SAFETY: Stable Rust-owned scalar, game thread only; no reference is formed.
     unsafe {
         DELAY = delay as u16;
     }
 }
-async fn schedule(w: World, startup: bool) -> i64 {
+async fn schedule(w: World<'_>, startup: bool) -> i64 {
     if !startup {
         // SAFETY: Same exclusive game-thread scalar boundary as serialization.
         let delay = unsafe { DELAY.wrapping_sub(1) };
@@ -964,7 +964,7 @@ async fn schedule(w: World, startup: bool) -> i64 {
     let kind = available[w.range(length as u32) as usize];
     initialize(w, kind).await
 }
-fn construct(w: &World, id: u32, x: i64, y: i64, dir: i64, subtype: u32) -> i64 {
+fn construct(w: &World<'_>, id: u32, x: i64, y: i64, dir: i64, subtype: u32) -> i64 {
     w.set(id, STATUS, 4);
     w.set(id, X, x);
     w.set(id, Y, y);
@@ -989,7 +989,7 @@ fn construct(w: &World, id: u32, x: i64, y: i64, dir: i64, subtype: u32) -> i64 
     w.viewport(id);
     0
 }
-fn release_industry(w: &World, industry: u32) -> i64 {
+fn release_industry(w: &World<'_>, industry: u32) -> i64 {
     let mut id = w.next(6, INVALID);
     while id != INVALID {
         let subtype = w.v(id, SUBTYPE);
@@ -1000,7 +1000,7 @@ fn release_industry(w: &World, industry: u32) -> i64 {
     }
     0
 }
-fn release_vehicle(w: &World, id: u32) -> i64 {
+fn release_vehicle(w: &World<'_>, id: u32) -> i64 {
     if w.read(14, id, 0, 0)[0] == 0 {
         return 0;
     }
@@ -1012,7 +1012,7 @@ fn release_vehicle(w: &World, id: u32) -> i64 {
     w.set(id, AGE, 0);
     0
 }
-async fn run(w: World, operation: u32, id: u32, a: i64, b: i64, c: i64, d: i64) -> i64 {
+async fn run(w: World<'_>, operation: u32, id: u32, a: i64, b: i64, c: i64, d: i64) -> i64 {
     match operation {
         0 => tick(w, id).await,
         1 => schedule(w, false).await,
@@ -1036,9 +1036,9 @@ async fn run(w: World, operation: u32, id: u32, a: i64, b: i64, c: i64, d: i64) 
         _ => 0,
     }
 }
-pub struct Run {
+pub struct Run<'a> {
     channel: Rc<Channel>,
-    future: Pin<Box<dyn Future<Output = i64>>>,
+    future: Pin<Box<dyn Future<Output = i64> + 'a>>,
 }
 /// Allocate the private owner. The target uses the original `VehicleID` sentinel.
 #[unsafe(no_mangle)]
@@ -1068,7 +1068,10 @@ pub extern "C" fn openttd_rust_disaster_delay() -> *mut u16 {
 /// Create one component continuation; arguments and IDs follow original preconditions.
 /// # Safety
 /// Context/callbacks remain live until destruction. Leaf callbacks cannot throw or
-/// reenter, and copy/write only source-valid canonical scalars. Services are
+/// reenter, and copy/write only source-valid canonical scalars. The shared table
+/// stays immutable and live through Run destruction, including suspension and
+/// all World clones. Its context may mutate independently; no world storage is
+/// borrowed by the table reference. Services are
 /// synchronous and noexcept; allocation may construct a separate owner. No raw
 /// State reference spans any service; flight helpers access flags only during
 /// their call. Returned actions 2/14/17 allow deletion/Crash/clear callbacks on
@@ -1084,9 +1087,9 @@ pub unsafe extern "C" fn openttd_rust_disaster_create(
     context: *mut c_void,
     read: unsafe extern "C" fn(*mut c_void, u32, u32, i64, i64, *mut i64),
     write: unsafe extern "C" fn(*mut c_void, u32, u32, i64),
-    services: *const Services,
+    services: &Services,
     service: unsafe extern "C" fn(*mut c_void, *const Action) -> i64,
-) -> *mut Run {
+) -> *mut Run<'_> {
     let channel = Rc::new(Channel {
         action: Cell::new(Action::default()),
         response: Cell::new(0),
@@ -1097,7 +1100,7 @@ pub unsafe extern "C" fn openttd_rust_disaster_create(
         context,
         read,
         write,
-        services: unsafe { *services },
+        services,
         service,
         channel: channel.clone(),
     };
@@ -1111,7 +1114,10 @@ pub unsafe extern "C" fn openttd_rust_disaster_create(
 /// `owner` is live/exclusive for this call; source-valid callback contracts hold.
 /// Returned actions retain no Rust owner/world references. Panics abort, never unwind.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_disaster_advance(owner: *mut Run, response: i64) -> Action {
+pub unsafe extern "C" fn openttd_rust_disaster_advance(
+    owner: *mut Run<'_>,
+    response: i64,
+) -> Action {
     // SAFETY: One invocation exclusively polls its separate continuation allocation.
     let run = unsafe { &mut *owner };
     run.channel.response.set(response);
@@ -1130,8 +1136,9 @@ pub unsafe extern "C" fn openttd_rust_disaster_advance(owner: *mut Run, response
 /// # Safety
 /// Owner is a live create result with no active advance call; no action borrows it.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_disaster_destroy(owner: *mut Run) {
-    // SAFETY: Future contains owned scalars/Rc channels only; cancellation calls no world service.
+pub unsafe extern "C" fn openttd_rust_disaster_destroy(owner: *mut Run<'_>) {
+    // SAFETY: Table stays live through drop of the future and its World clones.
+    // Cancellation calls no world service and releases every table borrow.
     unsafe {
         drop(Box::from_raw(owner));
     }
@@ -1257,8 +1264,14 @@ mod tests {
             _ => 0,
         }
     }
-    fn owner(fixture: &mut Fixture, operation: u32, id: u32) -> *mut Run {
-        // SAFETY: Fixture remains stable until its run is destroyed; leaves never reenter.
+    fn owner<'a>(
+        fixture: &mut Fixture,
+        services: &'a Services,
+        operation: u32,
+        id: u32,
+    ) -> *mut Run<'a> {
+        // SAFETY: Fixture and immutable table remain stable through run destruction;
+        // leaves never reenter. The table is separate from mutable fixture storage.
         unsafe {
             openttd_rust_disaster_create(
                 operation,
@@ -1270,16 +1283,16 @@ mod tests {
                 std::ptr::from_mut(fixture).cast(),
                 read,
                 write,
-                &crate::services::fixture(std::ptr::from_mut(fixture).cast(), random, industry),
+                services,
                 service,
             )
         }
     }
-    fn advance(run: *mut Run, response: i64) -> Action {
+    fn advance(run: *mut Run<'_>, response: i64) -> Action {
         // SAFETY: Tests hold the live exclusive owner and complete each action before resuming.
         unsafe { openttd_rust_disaster_advance(run, response) }
     }
-    fn destroy(run: *mut Run) {
+    fn destroy(run: *mut Run<'_>) {
         // SAFETY: No advance or world reference is active.
         unsafe {
             openttd_rust_disaster_destroy(run);
@@ -1290,7 +1303,9 @@ mod tests {
         let mut fixture = Fixture::default();
         fixture.vehicle[SUBTYPE] = 13;
         fixture.vehicle[AGE] = 8880;
-        let run = owner(&mut fixture, 0, 17);
+        let services =
+            crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
+        let run = owner(&mut fixture, &services, 0, 17);
         let channel = unsafe { Rc::downgrade(&(*run).channel) };
         assert_eq!(advance(run, 0).kind, 2);
         let counts = (fixture.reads, fixture.writes, fixture.draws);
@@ -1304,7 +1319,9 @@ mod tests {
         fixture.vehicle[SUBTYPE] = 13;
         fixture.vehicle[TICK] = 255;
         fixture.vehicle[AGE] = 8880;
-        let run = owner(&mut fixture, 0, 17);
+        let services =
+            crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
+        let run = owner(&mut fixture, &services, 0, 17);
         let action = advance(run, 0);
         assert_eq!((action.kind, action.id), (2, 17));
         assert_eq!((fixture.vehicle[TICK], fixture.vehicle[AGE]), (0, 8881));
@@ -1316,7 +1333,9 @@ mod tests {
         let mut fixture = Fixture::default();
         fixture.vehicle[TICK] = 1;
         let address = &raw mut fixture.private;
-        let run = owner(&mut fixture, 0, 17);
+        let services =
+            crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
+        let run = owner(&mut fixture, &services, 0, 17);
         assert_eq!(advance(run, 0).kind, 0);
         assert_eq!(
             (&raw mut fixture.private, fixture.private.flags),
@@ -1331,7 +1350,9 @@ mod tests {
     #[test]
     fn big_ufo_initializer_uses_map_max_x_for_y_on_rectangular_maps() {
         let mut fixture = Fixture::default();
-        let run = owner(&mut fixture, 8, 4);
+        let services =
+            crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
+        let run = owner(&mut fixture, &services, 8, 4);
         assert_eq!(advance(run, 0).kind, 0);
         let creations: Vec<_> = fixture.calls.iter().filter(|a| a.kind == 15).collect();
         assert_eq!(
@@ -1359,7 +1380,9 @@ mod tests {
         fixture.private.state = 1;
         fixture.vehicle[DEST] = 99;
         fixture.disaster_in_pool = true;
-        let release = owner(&mut fixture, 5, 99);
+        let services =
+            crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
+        let release = owner(&mut fixture, &services, 5, 99);
         assert_eq!(advance(release, 0).kind, 0);
         assert_eq!(fixture.private.state, 3);
         destroy(release);
@@ -1370,7 +1393,9 @@ mod tests {
         fixture.vehicle[TICK] = 1;
         fixture.private.state = 1;
         fixture.viewport_age = Some(37);
-        let run = owner(&mut fixture, 0, 17);
+        let services =
+            crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
+        let run = owner(&mut fixture, &services, 0, 17);
         assert_eq!(advance(run, 0).kind, 0);
         assert_eq!((fixture.private.state, fixture.vehicle[AGE]), (2, 0));
         destroy(run);
@@ -1380,7 +1405,9 @@ mod tests {
         for kind in 0..7 {
             let mut fixture = Fixture::default();
             fixture.world[9] = 0;
-            let run = owner(&mut fixture, 8, kind);
+            let services =
+                crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
+            let run = owner(&mut fixture, &services, 8, kind);
             assert_eq!(advance(run, 0).kind, 0);
             assert_eq!((fixture.writes, fixture.draws), (0, 0));
             destroy(run);
