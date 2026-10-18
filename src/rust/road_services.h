@@ -6,6 +6,8 @@
  */
 
 /** @file road_services.h Typed road services; each resolves its vehicle once and reads only what it returns. */
+#include "services_map.h"
+
 static_assert(RVSB_IN_DEPOT == 254 && RVSB_WORMHOLE == 255 && RVSB_IN_ROAD_STOP == 32 && RVSB_IN_DT_ROAD_STOP == 64);
 static_assert(to_underlying(RoadStopType::Bus) == 0 && to_underlying(RoadStopType::Truck) == 1);
 static_assert(PROP_ROADVEH_SHORTEN_FACTOR == 0x23 && PROP_ROADVEH_CARGO_AGE_PERIOD == 0x22 && PROP_ROADVEH_SPEED == 0x15 && PROP_ROADVEH_RUNNING_COST_FACTOR == 0x09);
@@ -127,10 +129,6 @@ static bool OPENTTD_VEHICLE_CALL RoadSvcHasFreeBay(uint32_t tile) noexcept
 {
 	TileIndex t(tile);
 	return RoadStop::GetByTile(t, GetRoadStopType(t))->HasFreeBay();
-}
-static bool OPENTTD_VEHICLE_CALL RoadSvcContinuation(uint32_t tile, uint32_t next) noexcept
-{
-	return RoadStop::IsDriveThroughRoadStopContinuation(TileIndex(tile), TileIndex(next));
 }
 /** `old_tile = v->tile; v->tile = tile;` then both road types of the vehicle's road/tram kind. */
 static OpenTTDRoadRoadTypes OPENTTD_VEHICLE_CALL RoadSvcMoveTile(OpenTTDVehicle *v, uint32_t tile) noexcept

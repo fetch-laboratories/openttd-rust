@@ -35,9 +35,7 @@ pub struct Input {
     pub occupied: i32,
     pub bay: i32,
     pub curve: i32,
-    pub display_speed: i32,
     pub order_destination: u16,
-    pub order_speed: u16,
     pub order_type: u8,
     pub bus: u8,
     pub articulated: u8,
@@ -64,10 +62,18 @@ pub struct Tile {
 pub struct Follow {
     pub tile: u32,
     pub skipped: i32,
-    pub max_speed: i32,
-    pub min_speed: i32,
     pub dirs: u16,
     pub followed: u8,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Traversal {
+    pub current_z: i32,
+    pub next_z: i32,
+    pub display_speed: i32,
+    pub max_speed: i32,
+    pub min_speed: i32,
+    pub order_speed: u16,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -83,10 +89,10 @@ pub struct Area {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
-    pub tile: unsafe extern "C" fn(*const c_void, u32, u8) -> Tile,
+    pub tile: unsafe extern "C" fn(*const c_void, u32, u8, bool) -> Tile,
     pub follow: unsafe extern "C" fn(*const c_void, u32, u8) -> Follow,
     pub tracks: unsafe extern "C" fn(*const c_void, u32, u8) -> u16,
-    pub height: unsafe extern "C" fn(u32) -> i32,
+    pub traversal: unsafe extern "C" fn(*const c_void, u32, u32) -> Traversal,
     pub closest: unsafe extern "C" fn(*const c_void, u16, u8) -> u32,
     pub area: unsafe extern "C" fn(*const c_void, u16) -> Area,
 }
@@ -121,6 +127,7 @@ struct Node {
     cost: i32,
     estimate: i32,
     choice: bool,
+    destination: Option<bool>,
 }
 impl Node {
     fn key(self) -> (u32, u8) {
@@ -136,6 +143,7 @@ impl Node {
             cost: 0,
             estimate: 0,
             choice,
+            destination: None,
         }
     }
 }
@@ -249,9 +257,9 @@ impl Search {
         // SAFETY: Copied queries; the opaque game-thread vehicle stays live.
         unsafe { (self.leaves.tracks)(self.context, tile, status) }
     }
-    fn tile(&self, tile: u32, td: u8) -> Tile {
+    fn tile(&self, tile: u32, td: u8, cost: bool) -> Tile {
         // SAFETY: Shared map/pool query has no owner access or reentry.
-        unsafe { (self.leaves.tile)(self.context, tile, td) }
+        unsafe { (self.leaves.tile)(self.context, tile, td, cost) }
     }
     fn follow(&self, tile: u32, td: u8) -> Follow {
         // SAFETY: Existing shared follower, opaque live context, copied output.
@@ -281,18 +289,26 @@ impl Search {
             self.dest_dirs = self.tracks(self.destination, 1);
         }
     }
-    fn detected(&self, tile: u32, td: u8) -> bool {
+    fn detected(&self, tile: u32, td: u8, t: Tile) -> bool {
         if self.depot {
-            return self.tile(tile, td).depot != 0;
+            return t.depot != 0;
         }
         if let Some(station) = self.dest_station {
-            let t = self.tile(tile, td);
             return t.r#type == 5
                 && t.station == station
                 && t.station_type == self.station_type
                 && (self.input.articulated == 0 || t.drive_through != 0);
         }
         tile == self.destination && self.dest_dirs & (1 << td) != 0
+    }
+    fn endpoint_detected(&self, n: Node) -> bool {
+        n.destination.unwrap_or_else(|| {
+            self.detected(
+                n.last_tile,
+                n.last_td,
+                self.tile(n.last_tile, n.last_td, false),
+            )
+        })
     }
     fn less(&self, a: usize, b: usize) -> bool {
         self.arena[a].estimate < self.arena[b].estimate
@@ -351,11 +367,10 @@ impl Search {
             }
         }
     }
-    fn one_tile(&self, tile: u32, td: u8) -> i32 {
+    fn one_tile(&self, t: Tile, td: u8) -> i32 {
         if td & 7 > 1 {
             return 71_i32.wrapping_add(self.input.curve);
         }
-        let t = self.tile(tile, td);
         let mut cost: i32 = 100;
         if t.r#type == 2 && t.crossing != 0 {
             cost = cost.wrapping_add(self.input.crossing);
@@ -382,14 +397,16 @@ impl Search {
         let parent_cost = n.parent.map_or(0, |i| self.arena[i].cost);
         let (mut tile, mut td, mut cost, mut tiles) = (n.tile, n.td, 0_i32, 0_u32);
         loop {
-            cost = cost.wrapping_add(self.one_tile(tile, td));
-            if self.detected(tile, td) {
+            let t = self.tile(tile, td, true);
+            cost = cost.wrapping_add(self.one_tile(t, td));
+            let destination = self.detected(tile, td, t);
+            n.destination = Some(destination);
+            if destination {
                 break;
             }
             if self.max_cost > 0 && parent_cost.wrapping_add(cost) > self.max_cost {
                 return false;
             }
-            let t = self.tile(tile, td);
             if t.depot != 0 && td == DIAGONAL[usize::from((t.depot_dir + 2) & 3)] {
                 break;
             }
@@ -403,27 +420,25 @@ impl Search {
             }
             cost = cost.wrapping_add(f.skipped.wrapping_mul(100));
             tiles = tiles.wrapping_add(f.skipped.wrapping_add(1) as u32);
-            // SAFETY: Center-height observations copy scalars and do not mutate world.
-            let z1 = unsafe { (self.leaves.height)(tile) };
-            let z2 = unsafe { (self.leaves.height)(f.tile) };
-            if z2.wrapping_sub(z1) > 1 {
+            // SAFETY: After accepted continuation, observe current/next height,
+            // then vehicle and old-tile follower limits, without world mutation.
+            let facts = unsafe { (self.leaves.traversal)(self.context, tile, f.tile) };
+            if facts.next_z.wrapping_sub(facts.current_z) > 1 {
                 cost = cost.wrapping_add(self.input.slope);
             }
-            let speed = self
-                .input
-                .display_speed
-                .min(i32::from(self.input.order_speed) * 2);
-            if f.max_speed < speed {
+            let speed = facts.display_speed.min(i32::from(facts.order_speed) * 2);
+            if facts.max_speed < speed {
                 cost = cost.wrapping_add(
                     100_i32
-                        .wrapping_mul(speed.wrapping_sub(f.max_speed))
+                        .wrapping_mul(speed.wrapping_sub(facts.max_speed))
                         .wrapping_mul(4_i32.wrapping_add(f.skipped))
                         / speed,
                 );
             }
-            if f.min_speed > speed {
-                cost = cost.wrapping_add(100_i32.wrapping_mul(f.min_speed.wrapping_sub(speed)));
+            if facts.min_speed > speed {
+                cost = cost.wrapping_add(100_i32.wrapping_mul(facts.min_speed.wrapping_sub(speed)));
             }
+            n.destination = None; // The advanced endpoint has not been observed.
             tile = f.tile;
             td = new_td;
             if tiles > 4096 {
@@ -436,7 +451,7 @@ impl Search {
         true
     }
     fn estimate(&self, n: Node) -> i32 {
-        if self.depot || self.detected(n.last_tile, n.last_td) {
+        if self.depot || self.endpoint_detected(n) {
             return n.cost;
         }
         let dir = usize::from(EXIT[usize::from(n.last_td)]);
@@ -495,7 +510,7 @@ impl Search {
                 break;
             };
             let n = self.arena[best];
-            if self.detected(n.last_tile, n.last_td) {
+            if self.endpoint_detected(n) {
                 self.best_dest = Some(best);
                 break;
             }

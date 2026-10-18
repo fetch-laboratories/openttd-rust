@@ -1207,30 +1207,30 @@ saves or every signal family. Controller reservation extension belongs to #130.
 
 ### Road YAPF search and path construction
 
-Issue #124 moves both track/depot searches, road exit-direction keys, node arena,
-lookup maps, exact-order heap, segment traversal/cost, heuristic, limits and best
-intermediate fallback into Rust. Reconstruction and station-area trimming write
-#121's sole canonical path directly; cache ownership is not counted twice.
-Original road specialization and node types compile only in portable builds.
-C++ keeps map/pools/settings, closest station-area and road-stop observations,
-and shared `CFollowTrackRoad` behind copied scalar `noexcept` leaves. None runs
-scripts, mutates/reenters the search or canonical road owner, or throws during
-ordinary play. Short owner access ends before leaves. RNG is unchanged (neither
-search draws); integer narrowing/wrapping, exit-key replacement, strict ties and
-follow-before-limit timing retain source behavior. Panics/OOM abort.
-Arena, lookup maps and heap retain process-wide scratch capacity between searches
-(#278). Each active search owns the scratch; the cache keeps no native pointers.
-Inputs, destination state and counters reset per call under the game-state mutex.
+Issue #124 moves track/depot searches, exit-direction keys, node arena, lookup
+maps, exact-order heap, segment traversal/cost, heuristic, limits and intermediate
+fallback into Rust. Reconstruction and station-area trimming write #121's sole
+canonical path. Original specialization/node types compile only portably.
+C++ retains map/pools/settings, station/stop observations and `CFollowTrackRoad`
+behind copied scalar `noexcept` leaves. None runs scripts, mutates/reenters the
+search/road owner or throws in ordinary play. Short owner access ends before
+leaves. Neither search draws RNG; wrapping, exit-key replacement, strict ties
+and follow-before-limit timing retain source behavior. Panics/OOM abort.
+Arena/maps/heap retain process-wide scratch capacity (#278); active searches own
+it, with no cached native pointers. Inputs/destinations/counters reset per call.
+#288 shares one tile observation across segment cost/destination/depot checks.
+Endpoint predicates invalidate on advance; startup and >4096 exits remain
+unevaluated until needed, without stop-cost lookups. Only accepted continuations
+read ordered current/next ground-vehicle center Z, vehicle speed fields and
+old-tile follower limits; arithmetic stays Rust and Follow is never repeated.
 
-`python3 tools/migration.py simulate roads` covers the controller's original eight
-cases, actual station-area prefix trimming and a forced cache miss with competing
-penalties; paired reference/candidate runs compare saved fields in plain/desync modes. Native
-tests compare actual heap and origin masks with unchanged C++ and depot-search transcript/counters
-with `CYapfBaseT` at node limits 0/1/2/7 and depot cost bounds 0/70/71/100
-(loaded node settings clamp to >=500). Native ABI checks
-cover every field on supported hosts. Arbitrary maps/NewGRFs, articulated/tram,
-road waypoints, exhaustive occupied-stop/loop/segment-length branches and actual
-legacy saves remain limits; shared follower logic is deliberately unported.
+`python3 tools/migration.py simulate roads --jobs 2` compares plain/desync state,
+station trimming and competing penalties. Native tests compare heap/origin masks
+and depot transcripts with unchanged C++ at node limits 0/1/2/7 and cost bounds
+0/70/71/100; a transient trace checks rejected/accepted queries, costs and long
+segment cache invalidation. Native ABI checks cover every field. Arbitrary maps,
+NewGRFs, articulated/tram, waypoints, exhaustive stop/loop/segment branches and
+legacy saves remain #156 gaps; shared follower logic remains native.
 
 ### Orders lifecycle ownership
 
