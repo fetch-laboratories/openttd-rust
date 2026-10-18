@@ -543,13 +543,24 @@ class PolicyTests(unittest.TestCase):
             ({"truncated": False, "tree": [dict(code, sha=MERGE)]}, "true"),
             ({"truncated": False, "tree": [dict(code, mode="100755")]}, "true"),
             ({"truncated": False, "tree": [dict(code, path="src/other.cpp")]}, "true"),
-            ({"truncated": False, "tree": [dict(code, type="commit")]}, "true"),
+            (
+                {
+                    "truncated": False,
+                    "tree": [dict(code, type="commit", mode="160000")],
+                },
+                "true",
+            ),
             ({"truncated": False, "tree": [changed_doc]}, "true"),
             ({"truncated": True, "tree": [code]}, "true"),
             ({"tree": [code]}, "true"),
             ({"truncated": False}, "true"),
             ({"truncated": False, "tree": []}, "true"),
             ({"truncated": False, "tree": [{}]}, "true"),
+            ({"truncated": False, "tree": [code, dict(doc, sha="bad")]}, "true"),
+            ({"truncated": False, "tree": [code, dict(doc, mode="bad")]}, "true"),
+            ({"truncated": False, "tree": [code, doc, doc]}, "true"),
+            ({"truncated": False, "tree": [code, dict(doc, path="../a.md")]}, "true"),
+            ({"truncated": False, "tree": [code], "sha": None}, "true"),
         ]
         for after, expected in cases:
             for incomplete_side in (False, True):
@@ -564,7 +575,7 @@ class PolicyTests(unittest.TestCase):
                   {{context: 'Validated tree', state: 'success', target_url: '{RUN}', description: '{BASE}'}}
                 ];
                 const github = {{paginate: async () => [{{...{json.dumps(PULL)}, merged_at: 'date'}}], rest: {{
-                  git: {{getTree: async args => ({{data: args.tree_sha === '{BASE}' ? {json.dumps(left)} : {json.dumps(right)}}})}},
+                  git: {{getTree: async args => ({{data: {{sha: args.tree_sha, ...(args.tree_sha === '{BASE}' ? {json.dumps(left)} : {json.dumps(right)})}}}})}},
                   repos: {{
                     getCommit: async () => ({{data: {{commit: {{tree: {{sha: '{TREE}'}}}}}}}}),
                     getCombinedStatusForRef: async () => ({{data: {{statuses}}}}),

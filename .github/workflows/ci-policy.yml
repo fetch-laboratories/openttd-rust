@@ -75,9 +75,13 @@ jobs:
             if (!matches) {
               const entries = async sha => {
                 const {data} = await github.rest.git.getTree({...context.repo, tree_sha: sha, recursive: 'true'});
-                if (data.truncated !== false || !Array.isArray(data.tree) || !data.tree.length ||
-                    data.tree.some(entry => !entry.path || !entry.mode || !entry.sha ||
-                      !['tree', 'blob', 'commit'].includes(entry.type))) return null;
+                const modes = {'040000': 'tree', '100644': 'blob', '100755': 'blob', '120000': 'blob', '160000': 'commit'};
+                if (!data || data.sha !== sha || data.truncated !== false || !Array.isArray(data.tree) || !data.tree.length ||
+                    data.tree.some(entry => !entry || typeof entry.path !== 'string' || entry.path.includes('\0') ||
+                      entry.path.split('/').some(part => !part || part === '.' || part === '..') ||
+                      typeof entry.sha !== 'string' || !/^[0-9a-f]{40}$/.test(entry.sha) ||
+                      typeof entry.mode !== 'string' || typeof entry.type !== 'string' || modes[entry.mode] !== entry.type) ||
+                    new Set(data.tree.map(entry => entry.path)).size !== data.tree.length) return null;
                 return data.tree.filter(entry => entry.type !== 'tree' && !entry.path.endsWith('.md'))
                   .map(({path, mode, type, sha}) => [path, mode, type, sha]).sort((a, b) => a[0].localeCompare(b[0]));
               };
