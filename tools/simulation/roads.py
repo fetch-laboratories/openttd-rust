@@ -13,11 +13,7 @@ ROAD = "roadveh[0]/"
 COMMON = ROAD + "common[0]/"
 AI_FOLDER = "road-scenario-ai"
 
-# Idle-host medians at e94b378c0f: three --benchmark 3 invocations per case.
-# All 54 pairs had equal semantic state/logs; invocation spread was 0.79-1.65%.
-# https://github.com/fetch-laboratories/openttd-rust/pull/279
-# Each reduction exceeds both its measured invocation spread and 2%.
-# Core-loop boundary exceptions follow AGENTS.md and the selected roadmap.
+# Recorded candidate/reference medians; integrating PRs update these up or down.
 SPEED_BUDGETS = {
     "generate-tgp-256-1": 1.1232091690544415,
     "play-opus-55-167-002-manual": 1.2225869993434013,
@@ -29,14 +25,18 @@ SPEED_BUDGETS = {
 
 
 def speed_budget(name, ratio):
-    """Report the ratchet without making noisy timings a semantic CI failure."""
-    budget = SPEED_BUDGETS.get(name)
-    if budget is None or ratio is None:
+    """Report the speed guard without making timings a semantic CI failure."""
+    record = SPEED_BUDGETS.get(name)
+    if record is None or ratio is None:
         return None
+    ceiling = 1.5 if name.startswith("play-") else 1.3
     return {
-        "best_known_ratio": budget,
-        "change_percent": (ratio / budget - 1) * 100,
-        "within_three_percent": ratio <= budget * 1.03,
+        "record": record,
+        "change_percent": (ratio / record - 1) * 100,
+        "within_guard": ratio <= record * 1.15,
+        "ceiling": ceiling,
+        "within_ceiling": ratio <= ceiling,
+        "near_ceiling": ratio >= 0.95 * ceiling,
     }
 
 

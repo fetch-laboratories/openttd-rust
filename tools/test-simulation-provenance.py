@@ -363,6 +363,33 @@ class SimulationProvenanceTests(unittest.TestCase):
 
 
 class SimulationSpeedTests(unittest.TestCase):
+    def test_record_guard_and_fixed_ceilings(self):
+        from math import inf, nextafter
+
+        from simulation.roads import SPEED_BUDGETS, speed_budget
+
+        for name, ceiling in (("play-test", 1.5), ("generate-test", 1.3)):
+            with self.subTest(name=name), patch.dict(SPEED_BUDGETS, {name: 1.0}):
+                report = speed_budget(name, 1.15)
+                self.assertEqual(report["record"], 1.0)
+                self.assertAlmostEqual(report["change_percent"], 15.0)
+                self.assertTrue(report["within_guard"])
+                self.assertFalse(
+                    speed_budget(name, nextafter(1.15, inf))["within_guard"]
+                )
+                self.assertEqual(report["ceiling"], ceiling)
+                self.assertTrue(speed_budget(name, ceiling)["within_ceiling"])
+                self.assertFalse(
+                    speed_budget(name, nextafter(ceiling, inf))["within_ceiling"]
+                )
+                self.assertTrue(speed_budget(name, 0.95 * ceiling)["near_ceiling"])
+                self.assertFalse(
+                    speed_budget(name, nextafter(0.95 * ceiling, 0))["near_ceiling"]
+                )
+                self.assertLess(speed_budget(name, 0.9)["change_percent"], 0)
+                self.assertIsNone(speed_budget(name, None))
+        self.assertIsNone(speed_budget("unrecorded", 1.0))
+
     def exercise(self, *, difference=False, exit_code=0):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory)
