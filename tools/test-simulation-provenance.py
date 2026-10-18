@@ -371,13 +371,13 @@ class SimulationSpeedTests(unittest.TestCase):
         from math import inf, nextafter
 
         for name, ceiling in (("play-test", 1.5), ("generate-test", 1.3)):
-            with self.subTest(name=name), patch.dict(SPEED_BUDGETS, {name: 1.0}):
-                report = speed_budget(name, 1.15)
-                self.assertEqual(report["record"], 1.0)
+            with self.subTest(name=name), patch.dict(SPEED_BUDGETS, {name: 1.25}):
+                report = speed_budget(name, 1.4375)
+                self.assertEqual(report["record"], 1.25)
                 self.assertAlmostEqual(report["change_percent"], 15.0)
                 self.assertTrue(report["within_guard"])
                 self.assertFalse(
-                    speed_budget(name, nextafter(1.15, inf))["within_guard"]
+                    speed_budget(name, nextafter(1.4375, inf))["within_guard"]
                 )
                 self.assertEqual(report["ceiling"], ceiling)
                 self.assertTrue(speed_budget(name, ceiling)["within_ceiling"])
