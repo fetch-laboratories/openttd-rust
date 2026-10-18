@@ -70,7 +70,7 @@ TEST_CASE("Road YAPF origin masks match shared track constants", "[road][rust]")
 			uint16_t tracks = 1U << td;
 			auto result = openttd_rust_road_yapf_choose(state, &input, &leaves, &tracks, 0, entry, TRACKDIR_BIT_Y_NW, true);
 			bool reachable = (tracks & DiagdirReachesTrackdirs(static_cast<DiagDirection>(entry))) != 0;
-			REQUIRE(result.direction == (reachable ? td : TRACKDIR_Y_NW));
+			REQUIRE(result.direction == (reachable ? td : static_cast<uint8_t>(TRACKDIR_Y_NW)));
 			REQUIRE(result.found == static_cast<uint8_t>(reachable));
 		}
 	}
