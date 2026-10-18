@@ -71,10 +71,9 @@ static void HouseOverridePlacement(TileIndex tile, HouseID house)
 	if (flags.Any(BUILDING_2_TILES_Y)) parts.push_back(TileAddXY(tile, 0, 1));
 	if (flags.Any(BUILDING_2_TILES_X)) parts.push_back(TileAddXY(tile, 1, 0));
 	if (flags.Any(BUILDING_HAS_4_TILES)) parts.push_back(TileAddXY(tile, 1, 1));
-	/* These original target slots are disjoint from the selected source IDs. */
-	assert(house + parts.size() <= 100);
-	std::vector<HouseSpec> saved;
-	for (size_t i = 0; i < parts.size(); ++i) saved.push_back(*HouseSpec::Get(100 + i));
+	const HouseID override = static_cast<HouseID>(HouseSpec::Specs().size());
+	assert(override >= NEW_HOUSE_OFFSET);
+	HouseSpec::Specs().resize(override + parts.size());
 	CallbackResultSpriteGroup frame(7);
 	for (uint mask : {0U, 5U, 15U}) {
 		CommandCost clear = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile);
@@ -82,12 +81,12 @@ static void HouseOverridePlacement(TileIndex tile, HouseID house)
 		if (clear.Failed()) std::abort();
 		for (size_t i = 0; i < parts.size(); ++i) {
 			auto *source = HouseSpec::Get(house + i);
-			auto *target = HouseSpec::Get(100 + i);
+			auto *target = HouseSpec::Get(override + i);
 			*target = *source;
 			target->callback_mask.Reset();
 			if ((mask & (1U << i)) != 0) target->callback_mask.Set(HouseCallbackMask::AnimationTriggerConstructionStageChanged);
 			target->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, &frame);
-			source->grf_prop.override_id = 100 + i;
+			source->grf_prop.override_id = override + i;
 		}
 		Randomizer trace = _random;
 		CommandCost placed = Place::Do(DoCommandFlag::Execute, tile, house, false, false);
@@ -103,14 +102,14 @@ static void HouseOverridePlacement(TileIndex tile, HouseID house)
 		}
 		for (TileIndex part : parts) {
 			fmt::print(stderr, " part={}/{}/{}", GetCleanHouseType(part), GetHouseType(part), GetAnimationFrame(part));
-			DeleteAnimatedTile(part);
+			DeleteAnimatedTile(part, true);
 		}
 		fmt::print(stderr, "\n");
 		for (size_t i = 0; i < parts.size(); ++i) {
 			HouseSpec::Get(house + i)->grf_prop.override_id = INVALID_HOUSE_ID;
-			*HouseSpec::Get(100 + i) = saved[i];
 		}
 	}
+	HouseSpec::Specs().resize(override);
 }
 /* Every original house through CmdPlaceHouse, replacement, protection,
  * autoslope and company clearance; aged houses then reach the rebuild path. */
