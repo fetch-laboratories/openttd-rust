@@ -10,8 +10,8 @@ and metropolitan airport near two passenger-accepting towns. A small plane
 and a helicopter carry passengers and mail between them. Towns and engines
 are scanned in deterministic list order; construction uses unchanged AI APIs.
 
-`migration/saves/aircraft-route.json` records the baseline, executable and
-script hashes, complete generation settings, vehicle IDs, airport tiles,
+`migration/saves/aircraft-route.json` records the baseline and script
+hashes, complete generation settings, vehicle IDs, airport tiles,
 setup marker, raw/normalized hashes and save moment. The uncompressed save
 is under 1 MB. Preparation removes only optional input GLOG history and checks
 every other chunk byte-for-byte. No funding or vehicle field is patched.

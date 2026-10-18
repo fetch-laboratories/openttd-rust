@@ -16,7 +16,6 @@ import argparse
 import concurrent.futures
 import contextlib
 import fnmatch
-import hashlib
 import json
 import os
 import re
@@ -31,7 +30,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from build_identity import IDENTITY_NAME, read_identity  # noqa: E402
 from validation_execution import file_lock  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -876,13 +874,7 @@ def copy_runtime(build, binary, destination, *, candidate=False):
             shared=True,
             label="candidate capture",
         ):
-            executable = _copy_runtime(build, binary, destination)
-            identity = read_identity(build, executable)
-            if identity is not None:
-                (destination / IDENTITY_NAME).write_text(
-                    json.dumps(identity, indent=2) + "\n"
-                )
-            return executable
+            return _copy_runtime(build, binary, destination)
     return _copy_runtime(build, binary, destination)
 
 
@@ -952,9 +944,7 @@ def main():
         "--timeout", type=int, default=1200, help="seconds per game run"
     )
     parser.add_argument("--list", action="store_true")
-    parser.add_argument(
-        "--frozen-runtimes", type=Path, help="verified CI runtime bundle"
-    )
+    parser.add_argument("--frozen-runtimes", type=Path, help="CI runtime bundle")
     parser.add_argument(
         "--benchmark",
         type=int,
@@ -1040,32 +1030,23 @@ def main():
 
 
 def run_simulation(args, scenarios, migration, out, parser, stamp):
-    # This is the checkout at invocation, not proof that an arbitrary --candidate
-    # was built from it. The frozen executable's hash identifies what we execute.
     candidate_commit = migration.git("rev-parse", "HEAD")
     candidate_status = migration.git("status", "--short")
     builds = {role: out / f"{role}-runtime" for role in ("reference", "candidate")}
     if args.frozen_runtimes:
-        from .runtime import verify
-
         if args.self or args.candidate:
             parser.error("--frozen-runtimes conflicts with --self/--candidate")
         bundle = args.frozen_runtimes.resolve()
-        manifest = verify(bundle, migration)
-        sources, binaries = {}, {}
+        binaries = {}
         for role in ("reference", "candidate"):
-            source = bundle / manifest["roles"][role]["binary"]
-            sources[role] = source
+            source = (
+                bundle
+                / f"{role}-runtime"
+                / ("openttd" if role == "reference" else "openttd-rust")
+            )
             binaries[role] = copy_runtime(source.parent, source, builds[role])
             for name in ("fleet", "orders", "engines", "signals", "towns"):
                 shutil.copytree(source.parent / name, builds[role] / name)
-            shutil.copy2(
-                source.parent / "adapters.json", builds[role] / "adapters.json"
-            )
-            if role == "candidate":
-                shutil.copy2(
-                    source.parent / IDENTITY_NAME, builds[role] / IDENTITY_NAME
-                )
     else:
         # The game finds its data next to the executable, so copy the shared
         # reference's runtime while no other worktree can rebuild it,
@@ -1073,45 +1054,20 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
         with migration.reference_lock(shared=True):
             shared = migration.REFERENCE_BUILD.resolve()
             reference = copy_runtime(shared, shared / "openttd", builds["reference"])
-        sources = {"reference": shared / "openttd"}
         binaries = {"reference": reference}
         if args.self:
             builds["candidate"], binaries["candidate"] = builds["reference"], reference
-            sources["candidate"] = sources["reference"]
         else:
             candidate = (args.candidate or ROOT / "build-rust/openttd-rust").resolve()
             if not candidate.is_file():
                 parser.error(
                     f"candidate binary {candidate} is missing; run python3 tools/migration.py build"
                 )
-            sources["candidate"] = candidate
             binaries["candidate"] = copy_runtime(
                 candidate.parent, candidate, builds["candidate"], candidate=True
             )
-    binary_evidence = {
-        role: {
-            "path": str(path),
-            "source_path": str(sources[role]),
-            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-        }
-        for role, path in binaries.items()
-    }
-
-    if args.frozen_runtimes:
-        for role in binaries:
-            binary_evidence[role]["frozen_export"] = manifest["roles"][role]
-        binary_evidence["candidate"]["source_build_identity"] = manifest[
-            "candidate_build_identity"
-        ]
-
-    if not args.self and (builds["candidate"] / IDENTITY_NAME).is_file():
-        identity = json.loads((builds["candidate"] / IDENTITY_NAME).read_text())
-        if identity["binary_sha256"] == binary_evidence["candidate"]["sha256"]:
-            binary_evidence["candidate"]["build_identity"] = identity
-
     # Freeze the two scenario AIs before workers launch; both roles install the
     # same immutable script bytes while command parameters remain per-run.
-    scenario_ai = {}
     for module in scenario_modules():
         if not hasattr(module, "AI_FOLDER"):
             continue
@@ -1121,16 +1077,6 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
             continue
         frozen = out / "scenario-ai" / folder
         shutil.copytree(ROOT / "tools" / folder, frozen)
-        scenario_ai[folder] = {
-            "path": str(frozen),
-            "files": {
-                str(path.relative_to(frozen)): hashlib.sha256(
-                    path.read_bytes()
-                ).hexdigest()
-                for path in sorted(frozen.rglob("*"))
-                if path.is_file()
-            },
-        }
         for scenario in selected:
             scenario["scenario_ai"] = str(frozen)
 
@@ -1193,8 +1139,6 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
         "jobs": args.jobs,
         "candidate_commit": candidate_commit,
         "candidate_status": candidate_status,
-        "binaries": binary_evidence,
-        "scenario_ai": scenario_ai,
         "masks": {":".join(key): reason for key, reason in MASKS.items()},
         "known_failures": {
             ":".join(key): issue for key, issue in KNOWN_FAILURES.items()

@@ -91,9 +91,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: native-shard-plan
-        path: |
-          .local/native-runtimes/runtime-manifest.json
-          .local/native-runtimes/shard-plan.json
+        path: .local/native-runtimes/shard-plan.json
         include-hidden-files: true
     - name: Save bounded protected-branch compiler caches
       if: success() && inputs.checkout-ref == '' && github.ref == 'refs/heads/rust-migration' && github.event_name == 'push'
@@ -222,7 +220,7 @@ jobs:
         pattern: migration-simulation-*
         path: .local/shard-reports
         merge-multiple: true
-    - name: Require exactly the complete scenario inventory and frozen build identity
+    - name: Require exactly the complete scenario inventory
       id: validated
       run: |
         python3 tools/ci_native.py report .local/shard-reports

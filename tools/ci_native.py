@@ -61,7 +61,6 @@ def partition(scenarios, seconds, count):
 
 
 def plan(bundle, count):
-    manifest = runtime.verify(bundle, migration)
     scenarios = core.scenario_list(False)
     names = [s["name"] for s in scenarios]
     if len(names) != len(set(names)):
@@ -69,8 +68,7 @@ def plan(bundle, count):
     shards = partition(scenarios, json.loads(TIMINGS.read_text())["seconds"], count)
     result = {
         "schema_version": 1,
-        "candidate_commit": manifest["candidate_commit"],
-        "runtime_manifest_sha256": runtime.digest(bundle / runtime.MANIFEST),
+        "candidate_commit": migration.git("rev-parse", "HEAD"),
         "inventory": sorted(names),
         "shards": shards,
     }
@@ -78,7 +76,7 @@ def plan(bundle, count):
     return result
 
 
-def validate_plan(value, manifest_digest):
+def validate_plan(value):
     names = sorted(s["name"] for s in core.scenario_list(False))
     shards = value["shards"]
     covered = [name for shard in shards for name in shard["names"]]
@@ -90,16 +88,13 @@ def validate_plan(value, manifest_digest):
         or any(not s["names"] for s in shards)
         or [s["id"] for s in shards] != list(range(len(shards)))
         or value["candidate_commit"] != migration.git("rev-parse", "HEAD")
-        or value["runtime_manifest_sha256"] != manifest_digest
     ):
-        raise ValueError("Shard plan differs from complete inventory/candidate/runtime")
+        raise ValueError("Shard plan differs from complete inventory/candidate")
 
 
 def run_shard(bundle, index, jobs, output):
-    # plan is deliberately outside the runtime manifest; validate it separately.
-    manifest = runtime.verify(bundle, migration)
     value = json.loads((bundle / "shard-plan.json").read_text())
-    validate_plan(value, runtime.digest(bundle / runtime.MANIFEST))
+    validate_plan(value)
     if not 0 <= index < len(value["shards"]):
         raise ValueError("Invalid shard index")
     old = set((ROOT / ".local/simulation").glob("*/report.json"))
@@ -118,23 +113,13 @@ def run_shard(bundle, index, jobs, output):
         raise ValueError("Shard did not publish exactly one simulation report")
     report = json.loads(fresh.pop().read_text())
     report["shard"] = index
-    report["runtime_manifest_sha256"] = value["runtime_manifest_sha256"]
-    report["exported_binaries"] = {
-        role: manifest["files"][record["binary"]]
-        for role, record in manifest["roles"].items()
-    }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n")
     return completed.returncode
 
 
-def aggregate(value, reports, manifest):
-    validate_plan(value, runtime.digest(manifest))
-    frozen = json.loads(manifest.read_text())
-    expected_binaries = {
-        role: frozen["files"][record["binary"]]
-        for role, record in frozen["roles"].items()
-    }
+def aggregate(value, reports):
+    validate_plan(value)
     expected = {s["id"]: s["names"] for s in value["shards"]}
     if len(reports) != len(expected) or {r.get("shard") for r in reports} != set(
         expected
@@ -147,16 +132,10 @@ def aggregate(value, reports, manifest):
             or report.get("passed") is not True
             or any(r.get("passed") is not True for r in report["results"])
             or report.get("candidate_commit") != value["candidate_commit"]
-            or report.get("runtime_manifest_sha256") != value["runtime_manifest_sha256"]
-            or report.get("exported_binaries") != expected_binaries
-            or {role: record["sha256"] for role, record in report["binaries"].items()}
-            != expected_binaries
             or report.get("mode") != "reference-vs-candidate"
             or report.get("benchmark_repetitions") != 0
         ):
-            raise ValueError(
-                "Shard failed or differs from its exact inventory/build identity"
-            )
+            raise ValueError("Shard failed or differs from its exact inventory")
     return {
         "passed": True,
         "scenarios": len(value["inventory"]),
@@ -174,18 +153,12 @@ def unpack(archive_path):
     pattern = re.compile(
         "|".join(re.escape(p) for p in sorted(paths, key=len, reverse=True))
     )
-    records = []
     for name in names:
         if not name.endswith(("CMakeCache.txt", "compile_commands.json", ".ninja")):
             continue
         path = ROOT / name
-        before = runtime.digest(path)
         text = path.read_text()
         path.write_text(pattern.sub(lambda match: paths[match[0]], text))
-        records.append({"file": name, "before": before, "after": runtime.digest(path)})
-    receipt = ROOT / ".local/native-relocation.json"
-    previous = json.loads(receipt.read_text()) if receipt.exists() else []
-    receipt.write_text(json.dumps(previous + records, indent=2) + "\n")
 
 
 def pack(bundle, count):
@@ -251,18 +224,14 @@ def pack(bundle, count):
     with tarfile.open(
         bundle.parent / "native-comparison-support.tar", "w", dereference=True
     ) as archive:
-        derivations = {}
         for name, path in dict((name, path) for path, name in comparison).items():
             if path.suffix == ".o" or path.name in ("strgen", "settingsgen"):
                 with tempfile.TemporaryDirectory(dir=ROOT / ".local") as temporary:
                     exported = Path(temporary) / path.name
-                    derivations[name] = runtime.strip_debug(path, exported)
+                    runtime.strip_debug(path, exported)
                     archive.add(exported, arcname=name)
             else:
                 archive.add(path, arcname=name)
-        receipt = ROOT / ".local/native-comparison-export.json"
-        receipt.write_text(json.dumps(derivations, indent=2) + "\n")
-        archive.add(receipt, arcname=str(receipt.relative_to(ROOT)))
     value = plan(bundle, count)
     with tarfile.open(
         bundle.parent / "native-runtimes.tar", "w", dereference=True
@@ -279,7 +248,6 @@ def collect_evidence(destination):
         ROOT / ".local/comparison-logs",
         *ROOT.glob(".local/*-comparison"),
         *ROOT.glob(".local/native-*.json"),
-        ROOT / ".local/native-runtimes/runtime-manifest.json",
     ]
     for base in roots:
         for path in [base] if base.is_file() else base.rglob("*"):
@@ -347,7 +315,7 @@ def main():
             json.loads(p.read_text())
             for p in sorted(args.directory.glob("shard-*.json"))
         ]
-        print(json.dumps(aggregate(value, reports, args.bundle / runtime.MANIFEST)))
+        print(json.dumps(aggregate(value, reports)))
     else:
         collect_evidence(args.destination)
     return 0

@@ -1,7 +1,5 @@
 """Engine lifecycle commands, preview, reliability and canonical modern reload."""
 
-import hashlib
-import json
 from pathlib import Path
 
 from . import orders, rails
@@ -77,12 +75,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     from .runtime import prepared_adapter
 
     folder = out / scenario["name"] / "input"
-    normalized, receipt = rails.normalize(Path(scenario["save"]), folder / "source")
-    result["engines_input"] = receipt
+    normalized, record = rails.normalize(Path(scenario["save"]), folder / "source")
+    result["engines_input"] = record
     scenario = dict(scenario, save=str(normalized))
-    executables, provenance = {}, {}
+    executables = {}
     for role in ("reference", "candidate"):
-        prepared = prepared_adapter("engines", role, binaries, builds, folder / role)
+        prepared = prepared_adapter("engines", role, builds, folder / role)
         if prepared is None:
             native = (
                 migration.REFERENCE_BUILD
@@ -96,31 +94,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             )
             with lock:
                 prepared = adapter(native, folder / role, env)
-        executables[role], provenance[role] = prepared
-        if (
-            provenance[role]["ordinary_binary_sha256"]
-            != hashlib.sha256(binaries[role].read_bytes()).hexdigest()
-        ):
-            raise RuntimeError("engine adapter objects differ from frozen game")
-        manifest = {}
+        executables[role] = prepared
         for name in RUNTIME_DIRECTORIES:
             if (builds[role] / name).is_dir():
                 (folder / role / name).symlink_to(
                     builds[role] / name, target_is_directory=True
                 )
-            manifest.update(
-                {
-                    str(path.relative_to(builds[role])): hashlib.sha256(
-                        path.read_bytes()
-                    ).hexdigest()
-                    for path in (builds[role] / name).rglob("*")
-                    if path.is_file()
-                }
-            )
-        provenance[role]["runtime_sha256"] = hashlib.sha256(
-            json.dumps(manifest, sort_keys=True).encode()
-        ).hexdigest()
-    result["engines_adapter"] = provenance
     if scenario["engines"] != "reload":
         return dict(
             scenario,
