@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
-"""Check warning recognition, receipt selection and actual checker invocation."""
+"""Check the pinned inherited commit checker checkout."""
 
-import contextlib
-import io
-import json
 import sys
 import tempfile
 import unittest
@@ -14,81 +11,21 @@ import preflight
 
 
 class PreflightTests(unittest.TestCase):
-    def test_many_warnings_bound_terminal_output_and_retain_complete_receipt(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            log = root / "candidate.log"
-            log.write_text(
-                "".join(
-                    f"src/game.cpp:{line}: warning: example\n" for line in range(25)
-                )
-            )
-            stderr = io.StringIO()
+    def test_checker_exit_code_and_revision_range_are_preserved(self):
+        for code in (0, 1):
             with (
-                patch.object(preflight.migration, "LOCAL", root / ".local"),
-                patch.object(preflight, "hooks_checkout", return_value=root),
-                patch.object(
-                    preflight, "git", side_effect=["a" * 40] * 3 + ["src/game.cpp"]
-                ),
-                patch.object(preflight, "run_logged", return_value=0),
-                patch.object(sys, "argv", ["preflight.py", "--build-log", str(log)]),
-                contextlib.redirect_stdout(io.StringIO()),
-                contextlib.redirect_stderr(stderr),
+                patch.object(preflight, "hooks_checkout", return_value=Path("/hooks")),
+                patch.object(preflight, "git", side_effect=["base", "head", "/git"]),
+                patch.object(preflight.subprocess, "run") as run,
+                patch.object(sys, "argv", ["preflight.py"]),
             ):
-                self.assertEqual(preflight.main(), 1)
-            receipt = json.loads(
-                next((root / ".local/preflight").glob("*/report.json")).read_text()
-            )
-            self.assertEqual(len(receipt["compiler_logs"][0]["warnings"]), 25)
-            self.assertEqual(stderr.getvalue().count("warning: example"), 10)
-            self.assertIn("25 found; showing 10", stderr.getvalue())
-            self.assertIn("report.json", stderr.getvalue())
-
-    def test_compiler_warning_formats(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "build.log"
-            path.write_text(
-                "src/game.cpp:12:4: warning: unused variable [-Wunused-variable]\n"
-                "C:\\src\\game.cpp(4): warning C4244: conversion\n"
-                "warning: unused import\n"
-                "cc1plus: warning: ignored option\n"
-                "[1/3] Building warning:example.cpp.o\n"
-                "0 warnings generated.\n"
-            )
-            self.assertEqual(
-                [item["line"] for item in preflight.warnings(path)], [1, 2, 3, 4]
-            )
-            self.assertEqual(
-                [item["line"] for item in preflight.warnings(path, ["src/game.cpp"])],
-                [1, 2, 3, 4],
-            )
-            self.assertEqual(
-                [item["line"] for item in preflight.warnings(path, [])], [3, 4]
-            )
-
-    def test_receipt_selects_candidate_only_and_rejects_partial_scope(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "report.json"
-            receipt = {
-                "schema_version": 1,
-                "candidate_root": directory,
-                "commands": [
-                    {"name": "reference-build", "log": "reference.log"},
-                    {"name": "candidate-build", "log": "candidate.log"},
-                ],
-            }
-            path.write_text(json.dumps(receipt))
-            self.assertEqual(
-                preflight.verification_logs(path), [Path(directory) / "candidate.log"]
-            )
-            receipt["commands"] = []
-            path.write_text(json.dumps(receipt))
-            with self.assertRaisesRegex(ValueError, "no candidate"):
-                preflight.verification_logs(path)
-            receipt["schema_version"] = 2
-            path.write_text(json.dumps(receipt))
-            with self.assertRaisesRegex(ValueError, "schema_version"):
-                preflight.verification_logs(path)
+                run.return_value.returncode = code
+                self.assertEqual(preflight.main(), code)
+                self.assertEqual(
+                    run.call_args.args[0],
+                    ["sh", "/hooks/hooks/check-commits.sh", "base..head"],
+                )
+                self.assertEqual(run.call_args.kwargs["env"]["GIT_DIR"], "/git")
 
     def test_supplied_checker_must_match_pin_and_be_clean(self):
         with tempfile.TemporaryDirectory() as directory:

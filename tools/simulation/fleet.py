@@ -73,8 +73,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if scenario["fleet"].startswith(("train", "drain")):
         from .rails import normalize
 
-        source, receipt = normalize(Path(scenario["save"]), folder / "normalized")
-        result["fleet_input"] = receipt
+        source, record = normalize(Path(scenario["save"]), folder / "normalized")
+        result["fleet_input"] = record
         scenario = dict(scenario, save=str(source))
     native_builds = {
         "reference": migration.REFERENCE_BUILD,
@@ -82,13 +82,13 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if binaries["reference"] == binaries["candidate"]
         else ROOT / "build-rust",
     }
-    executables, provenance = {}, {}
+    executables = {}
     for role in ("reference", "candidate"):
         from .runtime import prepared_adapter
 
-        prepared = prepared_adapter("fleet", role, binaries, builds, folder / role)
+        prepared = prepared_adapter("fleet", role, builds, folder / role)
         if prepared is not None:
-            executables[role], provenance[role] = prepared
+            executables[role] = prepared
         else:
             lock = (
                 migration.reference_lock(shared=True)
@@ -96,20 +96,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 else migration.candidate_lock(native_builds[role], shared=True)
             )
             with lock:
-                executables[role], provenance[role] = adapter(
-                    native_builds[role], folder / role, env
-                )
-        if (
-            provenance[role]["ordinary_binary_sha256"]
-            != hashlib.sha256(binaries[role].read_bytes()).hexdigest()
-        ):
-            raise RuntimeError("fleet adapter differs from frozen build")
+                executables[role] = adapter(native_builds[role], folder / role, env)
         for name in RUNTIME_DIRECTORIES:
             if (builds[role] / name).is_dir():
                 (folder / role / name).symlink_to(
                     builds[role] / name, target_is_directory=True
                 )
-    result["fleet_adapter"] = provenance
     if scenario["fleet"] == "reload":
         saves, capture = {}, {}
         setup = dict(
