@@ -78,8 +78,6 @@ TEST_CASE("Fleet - service tables match the Rust layout and fill every slot")
 {
 	using G = OpenTTDFleetGroupServices;
 	using T = OpenTTDFleetTransactionServices;
-	using C = OpenTTDFleetCosts;
-	using P = OpenTTDFleetPendingServices;
 
 	const G &group = FleetGroupServices();
 	const T &transaction = FleetTransactionServices();
