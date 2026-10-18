@@ -908,8 +908,5 @@ void YapfNotifyTrackLayoutChange(TileIndex tile, Track track)
 #ifdef WITH_RUST
 #include "../../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDRailLeaves.hpp"
-bool CheckAbi_yapf_rail()
-{
-	return AbiServicesComplete(_rail_leaves);
-}
+bool CheckAbi_yapf_rail() { return AbiServicesComplete(_rail_leaves); }
 #endif

@@ -1294,8 +1294,5 @@ extern const TileTypeProcs _tile_type_trees_procs = {
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDTreeServices.hpp"
-bool CheckAbi_tree_cmd()
-{
-	return AbiServicesComplete(_tree_services);
-}
+bool CheckAbi_tree_cmd() { return AbiServicesComplete(_tree_services); }
 #endif

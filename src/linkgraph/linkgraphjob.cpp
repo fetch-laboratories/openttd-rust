@@ -378,8 +378,5 @@ void LinkGraphJob::RunRust()
 #ifdef WITH_RUST
 #include "../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDCargoFlowServices.hpp"
-bool CheckAbi_linkgraphjob()
-{
-	return AbiServicesComplete(CargoFlowServices(nullptr));
-}
+bool CheckAbi_linkgraphjob() { return AbiServicesComplete(CargoFlowServices(nullptr)); }
 #endif

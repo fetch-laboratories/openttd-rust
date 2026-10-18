@@ -552,8 +552,5 @@ bool YapfShipCheckReverse(const Ship *v, Trackdir *trackdir)
 #ifdef WITH_RUST
 #include "../../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDShipYapfLeaves.hpp"
-bool CheckAbi_yapf_ship()
-{
-	return AbiServicesComplete(_ship_yapf_leaves);
-}
+bool CheckAbi_yapf_ship() { return AbiServicesComplete(_ship_yapf_leaves); }
 #endif

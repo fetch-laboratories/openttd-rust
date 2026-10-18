@@ -1037,8 +1037,5 @@ void GenerateTownNameString(StringBuilder &builder, size_t lang, uint32_t seed)
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDTownNameServices.hpp"
-bool CheckAbi_townname()
-{
-	return AbiServicesComplete(GetRustTownNameServices());
-}
+bool CheckAbi_townname() { return AbiServicesComplete(GetRustTownNameServices()); }
 #endif

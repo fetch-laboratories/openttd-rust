@@ -760,7 +760,7 @@ mod abi;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_abi_layout_named(
     name: *const std::ffi::c_char,
-    item: u8,
+    item: usize,
 ) -> usize {
     // SAFETY: caller supplies the terminated name for this synchronous call.
     let name = unsafe { std::ffi::CStr::from_ptr(name) };

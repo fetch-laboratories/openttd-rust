@@ -701,8 +701,5 @@ TransparencyOption EffectVehicle::GetTransparencyOption() const
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDEffectLeaves.hpp"
-bool CheckAbi_effectvehicle()
-{
-	return AbiServicesComplete(EffectServices());
-}
+bool CheckAbi_effectvehicle() { return AbiServicesComplete(EffectServices()); }
 #endif

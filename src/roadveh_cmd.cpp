@@ -1940,8 +1940,5 @@ bool RoadVehicle::HasToUseGetSlopePixelZ()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDRoadLeaves.hpp"
-bool CheckAbi_roadveh_cmd()
-{
-	return AbiServicesComplete(GetRoadLeaves());
-}
+bool CheckAbi_roadveh_cmd() { return AbiServicesComplete(GetRoadLeaves()); }
 #endif

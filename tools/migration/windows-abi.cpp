@@ -95,6 +95,7 @@ static void Layouts()
 #include "abi-layout-maintenance.inc"
 
 	CHECK(openttd_rust_abi_layout_named("unknown", 0) == SIZE_MAX);
+	CHECK(openttd_rust_abi_layout_named("OpenTTDTrainServices", SIZE_MAX) == SIZE_MAX);
 	static_assert(std::is_same_v<decltype(OpenTTDSignalContext::log_x), unsigned int>);
 	CHECK(static_cast<size_t>(PTRDIFF_MAX) == (SIZE_MAX >> 1));
 	std::printf("pointer_bytes %zu sentinel %zu borrow_limit %zu\n", sizeof(void *), SIZE_MAX, static_cast<size_t>(PTRDIFF_MAX));

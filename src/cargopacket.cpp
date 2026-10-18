@@ -871,8 +871,5 @@ template uint VehicleCargoList::Reassign<VehicleCargoList::MTA_DELIVER, VehicleC
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDCargoStorageServices.hpp"
-bool CheckAbi_cargopacket()
-{
-	return AbiServicesComplete(_cargo_storage_services);
-}
+bool CheckAbi_cargopacket() { return AbiServicesComplete(_cargo_storage_services); }
 #endif

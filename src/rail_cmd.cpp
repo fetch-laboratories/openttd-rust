@@ -3424,8 +3424,5 @@ extern const TileTypeProcs _tile_type_rail_procs = {
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDRailCommandServices.hpp"
-bool CheckAbi_rail_cmd()
-{
-	return AbiServicesComplete(GetRustRailCommandServices());
-}
+bool CheckAbi_rail_cmd() { return AbiServicesComplete(GetRustRailCommandServices()); }
 #endif

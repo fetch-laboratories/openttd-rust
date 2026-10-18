@@ -11,7 +11,7 @@ macro_rules! layouts {
     (fn $function:ident; $( $cpp:literal [$group:literal] => $type:ty {
         $($field:tt $(=> $alias:ident)?),* $(,)?
     } $(width $width:ident : $width_type:ty)?; )*) => {
-        pub(crate) fn $function(name: &str, item: u8) -> usize {
+        pub(crate) fn $function(name: &str, item: usize) -> usize {
             match name {
                 $($cpp => [
                     std::mem::size_of::<$type>(),
@@ -21,7 +21,7 @@ macro_rules! layouts {
                         let _: fn(&$type) -> &$width_type = |value| &value.$width;
                         std::mem::size_of::<$width_type>()
                     },)?
-                ].get(usize::from(item)).copied().unwrap_or(usize::MAX),)*
+                ].get(item).copied().unwrap_or(usize::MAX),)*
                 _ => usize::MAX,
             }
         }
@@ -3968,7 +3968,7 @@ layouts! {
     } width log_x: std::ffi::c_uint;
 }
 
-pub fn layout(name: &str, item: u8) -> usize {
+pub fn layout(name: &str, item: usize) -> usize {
     let local = local_layout(name, item);
     if local != usize::MAX {
         return local;

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Generate native ABI probes and typed service visitors from Rust declarations."""
+"""Generate native ABI probes and typed service visitors from Rust declarations.
+
+Fragments are rebuildable build outputs; Rust is the only field inventory.
+"""
 
 import argparse
 import re
@@ -30,6 +33,10 @@ def declarations(root=ROOT):
                 if not all(re.fullmatch(r"(?:r#)?\w+", part) for part in pair):
                     raise ValueError(f"invalid ABI field: {field}")
                 fields.append((pair[0], pair[-1]))
+            if len(fields) != len({cpp for _, cpp in fields}):
+                raise ValueError(f"duplicate C++ fields: {name}")
+            if width and width not in dict(fields):
+                raise ValueError(f"unknown width field: {name}.{width}")
             yield name, group, rust.strip(), fields, width, width_type
     if not seen:
         raise ValueError("no ABI declarations")
@@ -49,7 +56,7 @@ def generate(root=ROOT):
         values = [f"sizeof({name})", f"alignof({name})"]
         values += [f"offsetof({name}, {cpp})" for _, cpp in fields]
         if width:
-            values.append(f"sizeof(decltype({name}::{width}))")
+            values.append(f"sizeof(decltype({name}::{dict(fields)[width]}))")
         output[f"abi-layout-{group}.inc"].append(
             f'Layout("{name}", {{{", ".join(values)}}});'
         )
@@ -72,15 +79,23 @@ def generate(root=ROOT):
     return {name: "\n".join(lines) + "\n" for name, lines in output.items()}
 
 
+def write_fragments(output, fragments):
+    """Retire obsolete fragments too, so an old include cannot hide a removed list."""
+    output.mkdir(parents=True, exist_ok=True)
+    for path in output.glob("abi-*"):
+        if path.is_file() and path.name not in fragments:
+            path.unlink()
+    for name, contents in fragments.items():
+        path = output / name
+        if not path.exists() or path.read_text() != contents:
+            path.write_text(contents)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
-    args.output.mkdir(parents=True, exist_ok=True)
-    for name, contents in generate().items():
-        path = args.output / name
-        if not path.exists() or path.read_text() != contents:
-            path.write_text(contents)
+    write_fragments(args.output, generate())
 
 
 if __name__ == "__main__":

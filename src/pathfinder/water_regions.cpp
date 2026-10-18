@@ -548,8 +548,5 @@ void PrintWaterRegionDebugInfo(TileIndex tile)
 #ifdef WITH_RUST
 #include "../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDWaterLeaves.hpp"
-bool CheckAbi_water_regions()
-{
-	return AbiServicesComplete(_water_leaves);
-}
+bool CheckAbi_water_regions() { return AbiServicesComplete(_water_leaves); }
 #endif

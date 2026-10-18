@@ -99,6 +99,34 @@ class GeneratedAbiTests(unittest.TestCase):
             )
         self.assertFalse(list((ROOT / "src").rglob("abi-layout-*.inc")))
 
+    def test_new_tables_aliases_and_callback_retirement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = root / "rust/openttd-kernels/src"
+            headers = root / "src/rust"
+            rust.mkdir(parents=True)
+            headers.mkdir(parents=True)
+            for module in GENERATOR["SOURCES"]:
+                (rust / f"{module}.rs").write_text("")
+            source = rust / "abi.rs"
+            source.write_text('"Probe" ["new"] => Local { call => callback };')
+            (headers / "probe.h").write_text(
+                "struct Probe { void (*callback)() noexcept; };"
+            )
+            fragments = GENERATOR["generate"](root)
+            self.assertIn("offsetof(Probe, callback)", fragments["abi-layout-new.inc"])
+            self.assertIn(
+                'visit("callback", table.callback)', fragments["abi-visit-Probe.hpp"]
+            )
+            output = root / "build"
+            GENERATOR["write_fragments"](output, fragments)
+            source.write_text('"Replacement" ["new"] => Local {};')
+            GENERATOR["write_fragments"](output, GENERATOR["generate"](root))
+            self.assertFalse((output / "abi-visit-Probe.hpp").exists())
+            source.write_text('"Probe" ["new"] => Local {};')
+            with self.assertRaisesRegex(ValueError, "callbacks absent"):
+                GENERATOR["generate"](root)
+
     def test_aliases_width_metadata_and_private_layout_modules(self):
         declarations = list(GENERATOR["declarations"]())
         self.assertTrue(any(width for *_, width, _ in declarations))

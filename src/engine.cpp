@@ -1419,8 +1419,5 @@ void CheckEngines()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDEngineServices.hpp"
-bool CheckAbi_engine()
-{
-	return AbiServicesComplete(EngineServices());
-}
+bool CheckAbi_engine() { return AbiServicesComplete(EngineServices()); }
 #endif

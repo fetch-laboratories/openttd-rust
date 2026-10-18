@@ -10,5 +10,5 @@
 #define RUST_ABI_FFI_H
 #include <cstddef>
 #include <cstdint>
-extern "C" size_t openttd_rust_abi_layout_named(const char *name, uint8_t item);
+extern "C" size_t openttd_rust_abi_layout_named(const char *name, size_t item);
 #endif /* RUST_ABI_FFI_H */

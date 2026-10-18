@@ -754,8 +754,5 @@ void SetSignalsOnBothDir(TileIndex tile, Track track, Owner owner)
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDSignalServices.hpp"
-bool CheckAbi_signal()
-{
-	return AbiServicesComplete(_signal_services);
-}
+bool CheckAbi_signal() { return AbiServicesComplete(_signal_services); }
 #endif

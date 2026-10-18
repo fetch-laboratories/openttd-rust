@@ -2221,8 +2221,5 @@ void UpdateAirplanesOnNewStation(const Station *st)
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDAircraftLeaves.hpp"
-bool CheckAbi_aircraft_cmd()
-{
-	return AbiServicesComplete(_aircraft_leaves);
-}
+bool CheckAbi_aircraft_cmd() { return AbiServicesComplete(_aircraft_leaves); }
 #endif

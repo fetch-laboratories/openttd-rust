@@ -645,8 +645,5 @@ FindDepotData YapfRoadVehicleFindNearestDepot(const RoadVehicle *v, int max_dist
 #ifdef WITH_RUST
 #include "../../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDRoadYapfLeaves.hpp"
-bool CheckAbi_yapf_road()
-{
-	return AbiServicesComplete(_road_yapf_leaves);
-}
+bool CheckAbi_yapf_road() { return AbiServicesComplete(_road_yapf_leaves); }
 #endif

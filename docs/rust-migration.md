@@ -125,6 +125,24 @@ LD_LIBRARY_PATH="$PWD/.local/deps/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$L
 
 `-X` avoids global game folders. Use separate development configuration and saves.
 
+### Generated ABI probes and fixture defaults (#284)
+
+`layouts!` in `abi.rs`, `company.rs`, `crypto_primitives.rs`, `blake2b.rs` and
+`x25519.rs` names the C++ type, probe group and ordered Rust fields. Use
+`rust_field => cpp_field` for aliases and `width field: RustType` for an extra
+native-width check. Native-only groups remain in their owning unit tests.
+CMake runs `tools/generate-abi.py` into the build directory; probes compare the
+complete list and its `SIZE_MAX` terminator through the named metadata API.
+Add declarations there, never a second C++ field list or numeric type ID.
+
+Callback declarations inherit signature-correct abort defaults. Fixtures specify
+only callbacks they actually use; data pointers and scalar carriers retain their
+own initialization rules. Generated typed visitors check actual production
+instances for null callbacks and abort defaults in the default native tests.
+`tools/test-generated-abi.py` checks the historical conversion against the deleted
+lists and tests current generation separately, allowing later ABI changes.
+Cross-language signature assertions remain outside this maintenance change.
+
 ## Compiler cache, shared reference and CI time
 
 Every worktree of a clone shares the main checkout's pinned reference checkout

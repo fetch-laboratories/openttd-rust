@@ -3409,7 +3409,8 @@ bool VehiclesHaveSameOrderList(const Vehicle *v1, const Vehicle *v2)
 #include "abi-visit-OpenTTDFleetPendingServices.hpp"
 bool CheckAbi_vehicle()
 {
-	return AbiServicesComplete(GetRustGroundServices()) &&
+	return AbiServicesComplete(GetRustGroundServices<Train>()) &&
+		AbiServicesComplete(GetRustGroundServices<RoadVehicle>()) &&
 		AbiServicesComplete(_fleet_pending_services);
 }
 #endif

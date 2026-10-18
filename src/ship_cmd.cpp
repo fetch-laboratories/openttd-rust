@@ -1007,8 +1007,5 @@ ClosestDepot Ship::FindClosestDepot()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDShipLeaves.hpp"
-bool CheckAbi_ship_cmd()
-{
-	return AbiServicesComplete(GetShipServices());
-}
+bool CheckAbi_ship_cmd() { return AbiServicesComplete(GetShipServices()); }
 #endif

@@ -20,7 +20,7 @@
  */
 inline int AbiLayoutMismatch(const char *type, std::initializer_list<size_t> values)
 {
-	uint8_t item = 0;
+	size_t item = 0;
 	for (size_t expected : values) {
 		if (openttd_rust_abi_layout_named(type, item) != expected) return item;
 		item++;
