@@ -2130,20 +2130,22 @@ static void VehicleSchedulerBoundary()
 }
 int main()
 {
+	Layouts();
+	/* These initialize the shared maintenance table consumed by road probes. */
+	VehicleSchedulerBoundary();
+	VehicleMaintenanceBoundary();
+	/* Independent component probes are alphabetical. */
 	AircraftDirectBoundary();
 	AircraftOwnership();
 	AircraftPhaseBoundary();
 	CheckEffectProtocol([](bool result) { CHECK(result); });
 	Disasters();
-	Layouts();
 	LinkGraphJob();
 	RoadBoundary();
 	RoadServiceBoundary();
 	ShipBoundary();
 	ShipYapfProbe::Run([](bool result) { CHECK(result); });
 	Trees();
-	VehicleMaintenanceBoundary();
-	VehicleSchedulerBoundary();
 	WaterProbe::Run([](bool result) { CHECK(result); });
 	// Registry: house (#256).
 
