@@ -167,10 +167,10 @@ gpt-6.1-sol, high. Base CI is green; two component branches are unintegrated.
 | #280 / #286 | `t3/reduce-registry-merge-conflicts`, `64a7aeecfc` | Review has no findings; exact-head Full requested. Integrate, then #255/#269 adopt their reserved sections and #266 starts. |
 | #282 / #285 | `t3/recorded-ratios-speed-guard`, `9abf7a225e` | Review has no code findings; root resolved quiet-record finding with six medians at reviewed head, then a median-only commit. New exact-head Full requested; earlier Full cancelled. |
 | #284 | none | Plan complete; root's issue comment sets a 650-line support/test budget plus mechanical edits. Implementation follows #280/#282. |
-| #283 / #287 | `t3/retire-evidence-receipts`, `e6525de515` | Fresh review active; 345 added/2270 deleted, checks/package smoke pass. Root workflow bootstrap/Full follow review and integrated #285 adoption; read-only merge proof retains speed tests without conflicts. |
+| #283 / #287 | `t3/retire-evidence-receipts`, `d7af2e73da` | Four review findings fixed, root spot-checked all fixes and workflow changes; tooling 337/350 lines. Adopt integrated #285, then bootstrap/Full and actual docs-only postmerge acceptance. Read-only merge proof remains clean. |
 | #256 / #269 | `house-lifecycle-256`, `b09c16d78e` | Override/RNG probe and canonical town fixes pushed; affected checks and speed pass. Adopt #280 before fresh review/Full; platform blocked by base conflicts. P2016 near-ceiling result tracks the next speed pass. |
 | #212 / #255 | `landscape-owner-212`, `9d077039bf` | Six steering fixes pushed; verify, 141 semantic scenarios/980 snapshots, comparison and six speed medians pass. Adopt #280 before fresh review/platform/Full. |
-| #275 / #281 | none | #275 road-YAPF read/order slice has a read-only Astra/high plan active; implementation awaits a maintenance slot. #281 follows in revised order. |
+| #275 / #281 | none | #275 road-YAPF read/order plan complete (Astra/high); root's issue comment sets a 400-added-line slice with no Python tooling. Implementation awaits a maintenance slot; #281 follows. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Shared map-view PR after #255; retain attribution and #282's shared profile-lock/concurrency acceptance. |
 | #64 / #66 | remote `issue/64-curve-family`, `aab5211801` | #66 closed unmerged; #64 and older paused work stay untouched. |
 
