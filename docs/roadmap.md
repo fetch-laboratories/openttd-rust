@@ -7,7 +7,7 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 ## Where the fork stands (2026-10-18, `629262509e`)
 
 - Twenty-nine ownership ports. Whole fork: Rust 64,154 / tooling 30,126 / glue 28,376 / original retired 40,145 of 470,612 `src/` lines (8.53%). Simulation: 32,218 / 102,615 (31.40%).
-- This pair integrated #289 road YAPF reads and #297 typed Markdown classification: Rust net +20 / tooling net +49 / glue net +126 / original retirement 0. All exact-head Full gates passed. #297's deployed docs-only acceptance is next; CI_ON_DEMAND=true.
+- This pair integrated #289 road YAPF reads and #297 typed Markdown classification: Rust net +20 / tooling net +49 / glue net +126 / original retirement 0. All exact-head Full gates passed. #297's deployed docs-only acceptance passed; CI_ON_DEMAND=true.
 - Four component branches remain: #269 houses, #255 landscape, #266/#290 roads and #267 stations. House's final speed misses require profile-guided fixes; landscape needs two quiet repeats. Maintenance #284/#298 and #299/#300 are active; root takes the small #301 coordination fix while agent slots are full.
 - Current speed record (#289): TGP 1.169, play saves 1.21-1.43. P2016 is within 5% of its 1.5 ceiling; the early #275 speed pass is active. All guards pass; no quiet repeat was warranted.
 - Coverage (#156): vehicle deletion/pool-growth assertions, NewGRF/legacy branches and the unintegrated house/landscape gaps remain open.
@@ -143,7 +143,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in parallel.
 
-1. **#291/#292, #283/#287, #288/#289 and #296/#297 are integrated.** Protected Quick recovered; #287's actual docs-only skip passed, #297's deployed check is next. CI_ON_DEMAND=true. **#284/#298** finishes generators/comparisons/benchmarks; root implements **#301** shared benchmark coordination within 80 tooling/test lines.
+1. **#291/#292, #283/#287, #288/#289 and #296/#297 are integrated.** Protected Quick recovered; Both actual docs-only postmerge checks passed. CI_ON_DEMAND=true. **#284/#298** finishes generators/comparisons/benchmarks; root implements **#301** shared benchmark coordination within 80 tooling/test lines.
 2. **Drafts:** #269 houses, then #255 landscape, each with the must-change items from its 2026-10-18 PR comment, adopting #280 on its base update.
 3. **#275 speed, revised order (2026-10-18 comment):**
    - road YAPF tile reads (#288/#289) integrated; the early pass profiles all six scenarios. Next: effect/disaster table copy (#299, active, 100 added support/test lines); ship YAPF scratch; `constinit` service tables;
@@ -172,18 +172,18 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 Root is gpt-6.1-sol, xhigh; implementation and review use gpt-6.1-sol, high.
 Four component branches are unintegrated. #297 merged after Full/bootstrap and
-CI_ON_DEMAND=true is restored. Its deployed docs-only check is next. Keep at most
+CI_ON_DEMAND=true is restored. Its actual deployed docs-only check passed. Keep at most
 three maintenance PRs (#298, #300 and root's selected #301).
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
 | #284 / #298 | `generated-abi-284`, `be764d1cb6` | Native verify/Cargo4, generated-list and all default maintenance tests pass; generators/comparisons/six medians remain. About 790/650 handwritten lines, within the 25% limit; mechanical conversions separate. Fresh review follows implementation. |
-| #301 | none | Root implements shared ordinary benchmark coordination plus a bounded real-lock default regression; 80 added tooling/test lines. Current PR commands use the exact shared wrapper. |
+| #301 / #302 | `benchmark-coordination-301`, `98e768b3e8` | Root implementation: 34/80 tooling/test lines. Old real-lock regression fails, new 12 execution/13 simulation tests and Ruff/preflight pass. Fresh fixing review active; platform requested. |
 | #256 / #269 | `house-lifecycle-256`, `af9e189521` | Steering review passed; adopting integrated #289 changes the shared slope wrapper and speed record. Fresh scoped review passed. All 18 pairs match, but Grok 1.493 (+19.44%) and P2016 1.677 fail speed; #275 profiler prioritizes original/integrated/house attribution and root owns fixes. No final Full yet. |
 | #212 / #255 | `landscape-owner-212`, `c44c62da4c` | Three review fixes root-checked; adopting integrated #289 combines four shared-accessor conflicts. Fresh scoped review passed. All 18 pairs match and all first medians pass; P2000 1.488/P2016 1.475 require natural quiet repeats against the integrated record. Median-only record committed; Full follows. |
 | #266 / #290 | `road-commands-266`, `cc2fc00809` | Ownership implementation active from integrated `83bd72774e`; 200-300 tooling lines. |
 | #267 | `station-commands-267` | Whole station command implementation assigned from integrated `5a32ef6945`; 300-400 tooling lines. Docking includes IsPossibleDockingTile/CheckForDockingTile. |
 | #247, #293-#295 | none | Selected future whole owners, with prerequisites and budgets in their issues; fresh Astra plan completed. |
-| #299 / #300 | `effect-disaster-tables-299` | Remove copied shared service tables with real effect-call/disaster-Run lifetimes; stabilize temporary Rust fixtures. Implementation assigned, 100 added support/test lines. |
+| #299 / #300 | `effect-disaster-tables-299`, `64b63d70aa` | Implementation complete: 79/100 added lines, real table lifetimes/fixture ownership, Cargo4/native/47 scenarios pass. Generated copies removed; first six medians pass, P2000 needs quiet confirmation. Fresh review next. |
 | #275 early pass | integrated `62622e60d3` | Fresh profiling task compares five play saves and generation with the pinned original, attributing boundary excess; house Grok/P2016 failures take priority before the remaining pass. No holds or new evidence controller. |
 | #281 | none | Follows the revised #275 fix order when a maintenance slot frees. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Shared map-view PR after #255; retain attribution and #282's shared profile-lock/concurrency acceptance. |
