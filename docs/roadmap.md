@@ -35,8 +35,10 @@ Independent audits of #270, #257, #269 and #255 and a fresh profile found **one 
 
 **Speed policy (user decision, 2026-10-18).** The 3% ratchet blocked on noise. Padhattan 2000/2016 noise is about 2%, and today's caps fail an unchanged build most of the time. Speed gating took about 20-30% of subagent time, and the real finds came from periodic profiles. AGENTS.md now has a 15% per-PR guard, ceilings of 1.5x (play saves) and 1.3x (generation), no per-port CPU budgets, and a speed pass after every fourth ownership integration. #282 changes the harness.
 
+**Process changes (user decision, 2026-10-18).** 87% of ready-to-merge time passed with no root session running, 22 of 43 review rounds found nothing or only evidence items, and root's re-verification of fix commits rejected nothing. AGENTS.md now makes exact-head CI plus the PR's commands the evidence, with no receipts; #283 retires that tooling and stops Markdown commits from forcing post-merge runs. Reviewers rerun only what their fixes touch. Drafts update from base only to integrate or to clear a blocking conflict. Root spot-checks fix commits. Commits that only fix warnings or platform errors, or only record medians, need no review. Platform CI starts when implementation completes. Each task keeps one status comment. Tooling budgets allow about 25% over. Hand-written ABI lists were involved in 46 of 97 conflicted merges, and #284 generates them and gives fixtures aborting default slots.
+
 Actions, in order:
-1. **#280 and #282 first** (small maintenance PRs): per-component witness blocks and an ordering convention for shared append lists; the speed guard fields and the first measured record. AGENTS.md now lets a base update that keeps both sides' lines skip review.
+1. **#280, #282, then #284** (maintenance PRs): per-component witness blocks and an ordering convention for shared append lists; the speed guard fields and the first measured record; generated ABI layout lists and default fixture slots. AGENTS.md now lets a base update that keeps both sides' lines skip review.
 2. **#269:** fix the override divergence and the `RustHouseTown` copy, add a probe that places an overridden house, adopt #280, then review, Full and integrate (PR comment).
 3. **#255:** the six must-change items in its PR comment (canonical rail leaves, no bounces, orphan exports, Windows warnings, the speed guard at the final head instead of the old exception, glue explained or cut), then review, Full and integration.
 4. **#275 in its revised order** (issue comment): road YAPF tile reads and the other cheap rule fixes, then `GetCurrentMaxSpeed`, then trees and industry `next_tick`, then folding the road per-tick C++ into Rust; aircraft last. This is the current speed pass's fix list.
@@ -48,7 +50,7 @@ Actions, in order:
 
 - **Core loops (thirteenth):** #257 integrated; #255 integrates under the 15% guard once its design faults are fixed. The vehicle raw-offset view is closed (#274). Command ports share one set of command checks. Duplicate wrappers found at review are deleted before integration.
 - **Housekeeping (twelfth):** #259 H1-H4, #260 and #261 R1/R3-part/R4 are done. R2 follows #269, and H5 comes last. At most three maintenance PRs are in flight. They never count against the component cap or block an ownership port.
-- **Direct shared services and boundaries:** direct shared services (#107/#168/#199) and one definition per shared accessor, enforced in quick CI by #249, whose baseline only shrinks. Use a fixed hasher for lookup-only YAPF maps; ABI blocks stay per component.
+- **Direct shared services and boundaries:** direct shared services (#107/#168/#199) and one definition per shared accessor, enforced in quick CI by #249, whose baseline only shrinks. Use a fixed hasher for lookup-only YAPF maps; ABI blocks stay per component until #284 removes numeric IDs.
 - **Ownership:** prioritize simulation ownership. Keep state at the original's process scope.
 - **Map storage:** #108 retains C++ map arrays with direct bundled services until #274's map view lands.
 - **Harness evidence:** end moments (#154), default branch witnesses and reference probes (#198/#204/#210/#211), the speed guard (#155/#282) and documented coverage gaps (#156).
@@ -133,7 +135,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in parallel.
 
-1. **#280 conflict-free registries**, first, as a maintenance PR.
+1. **#280 conflict-free registries, then #284 generated ABI layouts**, as maintenance PRs; #283 when a maintenance slot frees.
 2. **Drafts:** #269 houses, then #255 landscape, each with the must-change items from its 2026-10-18 PR comment, adopting #280 on its base update.
 3. **#275 speed, revised order (2026-10-18 comment):**
    - road YAPF single tile read and speed-limit/height folding; the effect/disaster table copy; ship YAPF scratch; `constinit` service tables;
@@ -173,15 +175,13 @@ Ten finished review/update worktrees under `~/.t3/worktrees/openttd-rust/` are
 clean and pushed. On resumption remove them and keep only the `house-lifecycle-256`
 and `landscape-owner-212` checkouts (AGENTS.md worktree rule).
 
-ABI blocks:
+ABI blocks (check only consumed layouts; #284 deletes this registry):
 - train through 385, tree additions 386-389, fleet 390-399
 - company 400-429, town 430-459, road 460-499
 - station/loading 500-559, industry 560-619 (572 is the shared ByteSpan), CommandCost 620-629
 - town lifecycle 630-669, aircraft 670-739
 - vehicle 740-779, landscape 780-819, signals 820-859, engines 860-919
 - house lifecycle 920-979, rail commands 980-1019, road commands 1020-1059, station construction 1060-1119
-
-Check only consumed layouts.
 
 Preserve the pinned reference. Do not reapply effect helper `73ccd511fb`.
 Build and test with `--jobs 2`; standalone fixture games share the benchmark lock.
