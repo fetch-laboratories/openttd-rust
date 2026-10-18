@@ -169,8 +169,8 @@ gpt-6.1-sol, high. Base CI is green; two component branches are unintegrated.
 | #284 | none | Plan complete; root's issue comment sets a 650-line support/test budget plus mechanical edits. Implementation follows #280/#282. |
 | #283 / #287 | `t3/retire-evidence-receipts`, `e6525de515` | Fresh review active; 345 added/2270 deleted, checks/package smoke pass. Root workflow bootstrap/Full follow review and integrated #285 adoption; read-only merge proof retains speed tests without conflicts. |
 | #256 / #269 | `house-lifecycle-256`, `b09c16d78e` | Override/RNG probe and canonical town fixes pushed; affected checks and speed pass. Adopt #280 before fresh review/Full; platform blocked by base conflicts. P2016 near-ceiling result tracks the next speed pass. |
-| #212 / #255 | `landscape-owner-212`, `13db617a86` | Fix agent active: canonical leaves, direct Rust calls, orphan removal, Windows casts and glue; then #280, review, final-head speed and Full. |
-| #275 / #281 | none | Unstarted maintenance, in the revised order. |
+| #212 / #255 | `landscape-owner-212`, `9d077039bf` | Six steering fixes pushed; verify, 141 semantic scenarios/980 snapshots, comparison and six speed medians pass. Adopt #280 before fresh review/platform/Full. |
+| #275 / #281 | none | #275 road-YAPF read/order slice has a read-only Astra/high plan active; implementation awaits a maintenance slot. #281 follows in revised order. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Shared map-view PR after #255; retain attribution and #282's shared profile-lock/concurrency acceptance. |
 | #64 / #66 | remote `issue/64-curve-family`, `aab5211801` | #66 closed unmerged; #64 and older paused work stay untouched. |
 
