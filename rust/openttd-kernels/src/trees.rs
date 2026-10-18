@@ -980,6 +980,7 @@ unsafe fn trees<'a>(services: *const TreeServices, shared: *const Services) -> T
 /// `TileLoop_Trees` for one `MP_TREES` tile.
 /// # Safety
 /// Tables are live and immutable; game thread only. Services are `noexcept`.
+/// Any reached water command uses the caller's live, independent stack result context.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_tile_loop(
     tile: u32,
