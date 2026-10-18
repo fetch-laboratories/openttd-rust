@@ -213,9 +213,9 @@ or complete log/stdout difference fails. Both modes compare their exit saves.
 - Both executable/runtime trees are copied before scenarios, dereferencing data
   symlinks; the reference copy holds its shared build lock. Keep the candidate
   build idle during its initial copy; later builds cannot change the test run.
-  `--candidate` uses data beside that executable. Reports hash the executed
-  copies before running; `candidate_commit`/`candidate_status` describe the
-  initial checkout, not proof of an arbitrary binary's source revision (#97).
+  `--candidate` uses data beside that executable. Reports retain semantic
+  comparisons; `candidate_commit`/`candidate_status` describe the initial
+  checkout (#97).
   Evidence: `.local/simulation/<time>-<pid>/report.json`.
 
 Simulation speed (#155) is reported for every scenario as `plain_speed`:
