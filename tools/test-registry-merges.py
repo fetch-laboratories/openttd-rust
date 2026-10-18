@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory() as directory:
         marker = f"// Registry: {component} (#{issue}).\n"
         probe = f"{component}_probe"
         field = f"{component}_registry_probe"
-        header = "house_ffi" if component == "house" else "landscape_loop_ffi"
+        header = f"{component}_registry_probe_ffi"
         additions = {
             WITNESS: [
                 f'    {probe} {{\n        {probe.upper()} = 0 => "{probe}.hit",\n    }}\n'
