@@ -1249,14 +1249,12 @@ impl House<'_> {
 }
 
 /// Construction-stage trigger used by town growth's house construction.
-pub(super) fn stage_changed(
-    leaves: &Leaves,
-    services: &Services,
-    town: TownRef,
-    tile: u32,
-    house_id: u16,
-) {
-    house(leaves, services).stage_changed(town, tile, house_id, true);
+pub(super) fn stage_changed(leaves: &Leaves, services: &Services, town: TownRef, tile: u32) {
+    let engine = house(leaves, services);
+    // The original reads GetHouseType after construction for each part: the
+    // stored ID can have a NewGRF override, including on CmdPlaceHouse.
+    let house_id = (engine.h.house_type)(tile);
+    engine.stage_changed(town, tile, house_id, true);
 }
 
 // Native entries: immutable static tables outlive each synchronous call; native

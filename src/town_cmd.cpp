@@ -1123,9 +1123,7 @@ static uint8_t RustHouseAge(uint32_t tile) noexcept { return static_cast<uint8_t
 static bool RustHouseLiftHasDestination(uint32_t tile) noexcept { return LiftHasDestination(TileIndex{tile}); }
 static OpenTTDTownRef RustHouseTown(uint32_t tile) noexcept
 {
-	Town *t = Town::GetByTile(TileIndex{tile});
-	const auto *town = reinterpret_cast<const OpenTTDTownHandle *>(t);
-	return {t, GetRustSharedServices().town_owner(town), RustTownAuthorityServices().town_index(town)};
+	return OpenTTDTownResolveByID(GetRustSharedServices().town_index(tile));
 }
 static OpenTTDHouseEntry RustHouseEntry(uint32_t tile) noexcept
 {

@@ -1788,14 +1788,13 @@ impl Engine<'_> {
             // SAFETY: Static house table referenced by the town leaves.
             (unsafe { &*self.leaves.houses }.town)(tile)
         });
-        house::stage_changed(self.leaves, self.services, town_ref, tile, house as u16);
+        house::stage_changed(self.leaves, self.services, town_ref, tile);
         if size & 24 != 0 {
             house::stage_changed(
                 self.leaves,
                 self.services,
                 town_ref,
                 self.offset(tile, 0, 1),
-                (house + 1) as u16,
             );
         }
         if size & 20 != 0 {
@@ -1804,7 +1803,6 @@ impl Engine<'_> {
                 self.services,
                 town_ref,
                 self.offset(tile, 1, 0),
-                (house + if size & 16 != 0 { 2 } else { 1 }) as u16,
             );
         }
         if size & 16 != 0 {
@@ -1813,7 +1811,6 @@ impl Engine<'_> {
                 self.services,
                 town_ref,
                 self.offset(tile, 1, 1),
-                (house + 3) as u16,
             );
         }
     }
