@@ -159,17 +159,18 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Resumed 2026-10-18. Root is gpt-6.1-sol, xhigh; three implementations and a
-fresh review (gpt-6.1-sol, high) are active. Base CI is green; two component branches are unintegrated.
+Resumed 2026-10-18. Root is gpt-6.1-sol, xhigh; implementations and reviews use
+gpt-6.1-sol, high. Base CI is green; two component branches are unintegrated.
 
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
-| #280 / #286 | `t3/reduce-registry-merge-conflicts` | Implementation validation active; first maintenance integration. |
-| #282 / #285 | `t3/recorded-ratios-speed-guard`, `6598b25274` | Implementation/checks and six medians complete; fresh review and Full requested. First review attempt stopped on provider capacity without a report. |
+| #280 / #286 | `t3/reduce-registry-merge-conflicts`, `64a7aeecfc` | Review has no findings; exact-head Full requested. Integrate, then #255/#269 adopt their reserved sections and #266 starts. |
+| #282 / #285 | `t3/recorded-ratios-speed-guard`, `9abf7a225e` | Review has no code findings; root resolved quiet-record finding with six medians at reviewed head, then a median-only commit. New exact-head Full requested; earlier Full cancelled. |
 | #284 | none | Plan complete; root's issue comment sets a 650-line support/test budget plus mechanical edits. Implementation follows #280/#282. |
-| #256 / #269 | `house-lifecycle-256`, `e65bfcccc9` | Fix agent active: override/RNG probe and canonical town resolution, then adopt #280, scoped review and Full. Old-base Full passed. |
-| #212 / #255 | `landscape-owner-212`, `13db617a86` | Fix agent active: canonical leaves, direct Rust calls, orphan removal, Windows casts and glue; then #280, review, final-head speed and Full. |
-| #275 / #281 | none | Unstarted maintenance, in the revised order. |
+| #283 / #287 | `t3/retire-evidence-receipts`, `d7af2e73da` | Four review findings fixed, root spot-checked all fixes and workflow changes; tooling 337/350 lines. Adopt integrated #285, then bootstrap/Full and actual docs-only postmerge acceptance. Read-only merge proof remains clean. |
+| #256 / #269 | `house-lifecycle-256`, `b09c16d78e` | Override/RNG probe and canonical town fixes pushed; affected checks and speed pass. Adopt #280 before fresh review/Full; platform blocked by base conflicts. P2016 near-ceiling result tracks the next speed pass. |
+| #212 / #255 | `landscape-owner-212`, `9d077039bf` | Six steering fixes pushed; verify, 141 semantic scenarios/980 snapshots, comparison and six speed medians pass. Adopt #280 before fresh review/platform/Full. |
+| #275 / #281 | none | #275 road-YAPF read/order plan complete (Astra/high); root's issue comment sets a 400-added-line slice with no Python tooling. Implementation awaits a maintenance slot; #281 follows. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Shared map-view PR after #255; retain attribution and #282's shared profile-lock/concurrency acceptance. |
 | #64 / #66 | remote `issue/64-curve-family`, `aab5211801` | #66 closed unmerged; #64 and older paused work stay untouched. |
 

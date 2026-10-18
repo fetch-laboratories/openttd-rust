@@ -7,57 +7,62 @@
 
 /** @file windows-abi.cpp Bounded first-32-bit layout and real C ABI call checks. */
 #include "stdafx.h"
-#include "rust/vehicle_services.h"
+#include "3rdparty/monocypher/monocypher.h"
+#include "aircraft-boundary.hpp"
+#include "misc/history_type.hpp"
 #include "rust/abi_ffi.h"
-#include "rust/vehicle_ffi.h"
-#include "rust/vehicle_maintenance_ffi.h"
-#include "rust/command_cost_ffi.h"
-#include "rust/command_services_ffi.h"
-#include "rust/water_regions_ffi.h"
+#include "rust/aircraft_ffi.h"
+#include "rust/alternating_ffi.h"
+#include "rust/blake2b_ffi.h"
+#include "rust/builder_ffi.h"
+#include "rust/byte_strings_ffi.h"
+#include "rust/cargo_flow_ffi.h"
 #include "rust/cargo_payment_ffi.h"
 #include "rust/cargo_storage_ffi.h"
-#include "rust/cargo_flow_ffi.h"
-#include "rust/ship_yapf_ffi.h"
-#include "rust/rail_yapf_ffi.h"
-#include "rust/rail_command_ffi.h"
-#include "rust/train_ffi.h"
-#include "rust/train_reservation_ffi.h"
-#include "rust/linkgraph_ffi.h"
-#include "rust/trees_ffi.h"
-#include "rust/disaster_ffi.h"
-#include "rust/aircraft_ffi.h"
-#include "aircraft-boundary.hpp"
-#include "rust/townname_ffi.h"
-#include "rust/town_founding_ffi.h"
-#include "rust/effect_ffi.h"
-#include "rust/road_ffi.h"
-#include "rust/ship_control_ffi.h"
-#include "rust/orders_ffi.h"
-#include "rust/road_yapf_ffi.h"
-#include "tests/abi_layout.hpp"
-#include "tests/effect_protocol.hpp"
-#include "tests/water_regions_protocol.hpp"
-#include "tests/ship_yapf_protocol.hpp"
-#include "tests/town_protocol.hpp"
-#include "rust/ffi.h"
-#include "rust/utf8_ffi.h"
-#include "rust/builder_ffi.h"
-#include "rust/alternating_ffi.h"
+#include "rust/command_cost_ffi.h"
+#include "rust/command_services_ffi.h"
 #include "rust/consumer_ffi.h"
+#include "rust/crypto_primitives_ffi.h"
+#include "rust/disaster_ffi.h"
+#include "rust/effect_ffi.h"
 #include "rust/encoded_ffi.h"
-#include "rust/spiral_ffi.h"
-#include "rust/byte_strings_ffi.h"
+#include "rust/ffi.h"
 #include "rust/history_ffi.h"
+#include "rust/linkgraph_ffi.h"
 #include "rust/math_ffi.h"
+#include "rust/orders_ffi.h"
+#include "rust/packet_ffi.h"
+#include "rust/rail_command_ffi.h"
+#include "rust/rail_yapf_ffi.h"
+#include "rust/road_ffi.h"
+#include "rust/road_yapf_ffi.h"
+#include "rust/script_list_ffi.h"
+#include "rust/ship_control_ffi.h"
+#include "rust/ship_yapf_ffi.h"
+#include "rust/spiral_ffi.h"
 #include "rust/station_cargo_ffi.h"
 #include "rust/station_service_ffi.h"
-#include "rust/script_list_ffi.h"
-#include "rust/packet_ffi.h"
 #include "rust/string_validation_ffi.h"
-#include "rust/crypto_primitives_ffi.h"
-#include "rust/blake2b_ffi.h"
+#include "rust/town_founding_ffi.h"
+#include "rust/townname_ffi.h"
+#include "rust/train_ffi.h"
+#include "rust/train_reservation_ffi.h"
+#include "rust/trees_ffi.h"
+#include "rust/utf8_ffi.h"
+#include "rust/vehicle_ffi.h"
+#include "rust/vehicle_maintenance_ffi.h"
+#include "rust/vehicle_services.h"
+#include "rust/water_regions_ffi.h"
 #include "rust/x25519_ffi.h"
-#include "3rdparty/monocypher/monocypher.h"
+#include "tests/abi_layout.hpp"
+#include "tests/effect_protocol.hpp"
+#include "tests/ship_yapf_protocol.hpp"
+#include "tests/town_protocol.hpp"
+#include "tests/water_regions_protocol.hpp"
+// Registry: house (#256).
+
+// Registry: landscape (#212).
+
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -68,10 +73,9 @@
 #include <initializer_list>
 #include <limits>
 #include <memory>
-#include <string>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
-#include "misc/history_type.hpp"
 
 #define CHECK(condition) do { if (!(condition)) { std::fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #condition); std::abort(); } } while (0)
 
@@ -209,7 +213,87 @@ static void Layouts()
 	Layout(982, "OpenTTDSlopeZ", {sizeof(OpenTTDSlopeZ), alignof(OpenTTDSlopeZ), offsetof(OpenTTDSlopeZ, z), offsetof(OpenTTDSlopeZ, slope)});
 	Layout(983, "OpenTTDRailTrainParking", {sizeof(OpenTTDRailTrainParking), alignof(OpenTTDRailTrainParking), offsetof(OpenTTDRailTrainParking, track), offsetof(OpenTTDRailTrainParking, status), offsetof(OpenTTDRailTrainParking, speed), offsetof(OpenTTDRailTrainParking, order)});
 	Layout(985, "OpenTTDCrossingRoad", {sizeof(OpenTTDCrossingRoad), alignof(OpenTTDCrossingRoad), offsetof(OpenTTDCrossingRoad, bits), offsetof(OpenTTDCrossingRoad, road_type), offsetof(OpenTTDCrossingRoad, tram_type), offsetof(OpenTTDCrossingRoad, town), offsetof(OpenTTDCrossingRoad, road_owner), offsetof(OpenTTDCrossingRoad, tram_owner)});
-	Layout(42, "OpenTTDSharedServices", {sizeof(OpenTTDSharedServices), alignof(OpenTTDSharedServices), offsetof(OpenTTDSharedServices, context), offsetof(OpenTTDSharedServices, random), offsetof(OpenTTDSharedServices, industry), offsetof(OpenTTDSharedServices, tile_type), offsetof(OpenTTDSharedServices, bridge_above), offsetof(OpenTTDSharedServices, tropic_zone), offsetof(OpenTTDSharedServices, tile_z), offsetof(OpenTTDSharedServices, tile_slope), offsetof(OpenTTDSharedServices, mark_dirty), offsetof(OpenTTDSharedServices, set_tropic_zone), offsetof(OpenTTDSharedServices, tile_owner), offsetof(OpenTTDSharedServices, station_index), offsetof(OpenTTDSharedServices, depot_index), offsetof(OpenTTDSharedServices, is_level_crossing), offsetof(OpenTTDSharedServices, tunnel_bridge_direction), offsetof(OpenTTDSharedServices, bridge_speed), offsetof(OpenTTDSharedServices, is_water_tile), offsetof(OpenTTDSharedServices, company_valid), offsetof(OpenTTDSharedServices, next_company), offsetof(OpenTTDSharedServices, current_company), offsetof(OpenTTDSharedServices, closest_town), offsetof(OpenTTDSharedServices, town_owner), offsetof(OpenTTDSharedServices, tile_valid), offsetof(OpenTTDSharedServices, distance_from_edge), offsetof(OpenTTDSharedServices, tile_max_z), offsetof(OpenTTDSharedServices, tile_height), offsetof(OpenTTDSharedServices, bridge_axis), offsetof(OpenTTDSharedServices, has_water_ground), offsetof(OpenTTDSharedServices, is_sea), offsetof(OpenTTDSharedServices, is_plain_rail), offsetof(OpenTTDSharedServices, is_bridge), offsetof(OpenTTDSharedServices, tunnel_transport), offsetof(OpenTTDSharedServices, other_tunnel_end), offsetof(OpenTTDSharedServices, is_road_depot), offsetof(OpenTTDSharedServices, road_depot_direction), offsetof(OpenTTDSharedServices, is_normal_road), offsetof(OpenTTDSharedServices, disallowed_road_directions), offsetof(OpenTTDSharedServices, is_bay_stop), offsetof(OpenTTDSharedServices, bay_stop_direction), offsetof(OpenTTDSharedServices, is_drive_through_stop), offsetof(OpenTTDSharedServices, drive_through_axis), offsetof(OpenTTDSharedServices, is_any_road_stop), offsetof(OpenTTDSharedServices, road_type), offsetof(OpenTTDSharedServices, has_road_type), offsetof(OpenTTDSharedServices, road_owner), offsetof(OpenTTDSharedServices, town_index), offsetof(OpenTTDSharedServices, road_bits), offsetof(OpenTTDSharedServices, snow_line), offsetof(OpenTTDSharedServices, calendar_year), offsetof(OpenTTDSharedServices, map_log_x), offsetof(OpenTTDSharedServices, map_max_x), offsetof(OpenTTDSharedServices, map_max_y), offsetof(OpenTTDSharedServices, plane_speed), offsetof(OpenTTDSharedServices, no_jetcrash), offsetof(OpenTTDSharedServices, plane_crashes), offsetof(OpenTTDSharedServices, service_at_helipad), offsetof(OpenTTDSharedServices, disaster_sound), offsetof(OpenTTDSharedServices, economy_date), offsetof(OpenTTDSharedServices, calendar_date), offsetof(OpenTTDSharedServices, slope), offsetof(OpenTTDSharedServices, build_on_slopes), offsetof(OpenTTDSharedServices, autoslope), offsetof(OpenTTDSharedServices, clear_square), offsetof(OpenTTDSharedServices, free_train_reservation), offsetof(OpenTTDSharedServices, try_path_reserve), offsetof(OpenTTDSharedServices, safe_waiting_position), offsetof(OpenTTDSharedServices, has_road_works), offsetof(OpenTTDSharedServices, tram_type), offsetof(OpenTTDSharedServices, tram_owner), offsetof(OpenTTDSharedServices, normal_road_bits), offsetof(OpenTTDSharedServices, crossing_road_bits), offsetof(OpenTTDSharedServices, forbid_90_deg), offsetof(OpenTTDSharedServices, update_level_crossing), offsetof(OpenTTDSharedServices, mark_bridge_dirty), offsetof(OpenTTDSharedServices, train_trackdir)});
+	Layout(42, "OpenTTDSharedServices", {sizeof(OpenTTDSharedServices), alignof(OpenTTDSharedServices),
+		offsetof(OpenTTDSharedServices, autoslope),
+		offsetof(OpenTTDSharedServices, bay_stop_direction),
+		offsetof(OpenTTDSharedServices, bridge_above),
+		offsetof(OpenTTDSharedServices, bridge_axis),
+		offsetof(OpenTTDSharedServices, bridge_speed),
+		offsetof(OpenTTDSharedServices, build_on_slopes),
+		offsetof(OpenTTDSharedServices, calendar_date),
+		offsetof(OpenTTDSharedServices, calendar_year),
+		offsetof(OpenTTDSharedServices, clear_square),
+		offsetof(OpenTTDSharedServices, closest_town),
+		offsetof(OpenTTDSharedServices, company_valid),
+		offsetof(OpenTTDSharedServices, context),
+		offsetof(OpenTTDSharedServices, crossing_road_bits),
+		offsetof(OpenTTDSharedServices, current_company),
+		offsetof(OpenTTDSharedServices, depot_index),
+		offsetof(OpenTTDSharedServices, disallowed_road_directions),
+		offsetof(OpenTTDSharedServices, disaster_sound),
+		offsetof(OpenTTDSharedServices, distance_from_edge),
+		offsetof(OpenTTDSharedServices, drive_through_axis),
+		offsetof(OpenTTDSharedServices, economy_date),
+		offsetof(OpenTTDSharedServices, forbid_90_deg),
+		offsetof(OpenTTDSharedServices, free_train_reservation),
+		offsetof(OpenTTDSharedServices, has_road_type),
+		offsetof(OpenTTDSharedServices, has_road_works),
+		offsetof(OpenTTDSharedServices, has_water_ground),
+		offsetof(OpenTTDSharedServices, industry),
+		offsetof(OpenTTDSharedServices, is_any_road_stop),
+		offsetof(OpenTTDSharedServices, is_bay_stop),
+		offsetof(OpenTTDSharedServices, is_bridge),
+		offsetof(OpenTTDSharedServices, is_drive_through_stop),
+		offsetof(OpenTTDSharedServices, is_level_crossing),
+		offsetof(OpenTTDSharedServices, is_normal_road),
+		offsetof(OpenTTDSharedServices, is_plain_rail),
+		offsetof(OpenTTDSharedServices, is_road_depot),
+		offsetof(OpenTTDSharedServices, is_sea),
+		offsetof(OpenTTDSharedServices, is_water_tile),
+		offsetof(OpenTTDSharedServices, map_log_x),
+		offsetof(OpenTTDSharedServices, map_max_x),
+		offsetof(OpenTTDSharedServices, map_max_y),
+		offsetof(OpenTTDSharedServices, mark_bridge_dirty),
+		offsetof(OpenTTDSharedServices, mark_dirty),
+		offsetof(OpenTTDSharedServices, next_company),
+		offsetof(OpenTTDSharedServices, no_jetcrash),
+		offsetof(OpenTTDSharedServices, normal_road_bits),
+		offsetof(OpenTTDSharedServices, other_tunnel_end),
+		offsetof(OpenTTDSharedServices, plane_crashes),
+		offsetof(OpenTTDSharedServices, plane_speed),
+		offsetof(OpenTTDSharedServices, random),
+		offsetof(OpenTTDSharedServices, road_bits),
+		offsetof(OpenTTDSharedServices, road_depot_direction),
+		offsetof(OpenTTDSharedServices, road_owner),
+		offsetof(OpenTTDSharedServices, road_type),
+		offsetof(OpenTTDSharedServices, safe_waiting_position),
+		offsetof(OpenTTDSharedServices, service_at_helipad),
+		offsetof(OpenTTDSharedServices, set_tropic_zone),
+		offsetof(OpenTTDSharedServices, slope),
+		offsetof(OpenTTDSharedServices, snow_line),
+		offsetof(OpenTTDSharedServices, station_index),
+		offsetof(OpenTTDSharedServices, tile_height),
+		offsetof(OpenTTDSharedServices, tile_max_z),
+		offsetof(OpenTTDSharedServices, tile_owner),
+		offsetof(OpenTTDSharedServices, tile_slope),
+		offsetof(OpenTTDSharedServices, tile_type),
+		offsetof(OpenTTDSharedServices, tile_valid),
+		offsetof(OpenTTDSharedServices, tile_z),
+		offsetof(OpenTTDSharedServices, town_index),
+		offsetof(OpenTTDSharedServices, town_owner),
+		offsetof(OpenTTDSharedServices, train_trackdir),
+		offsetof(OpenTTDSharedServices, tram_owner),
+		offsetof(OpenTTDSharedServices, tram_type),
+		offsetof(OpenTTDSharedServices, tropic_zone),
+		offsetof(OpenTTDSharedServices, try_path_reserve),
+		offsetof(OpenTTDSharedServices, tunnel_bridge_direction),
+		offsetof(OpenTTDSharedServices, tunnel_transport),
+		offsetof(OpenTTDSharedServices, update_level_crossing),
+		// Registry: house (#256).
+
+		// Registry: landscape (#212).
+
+	});
 	Layout(37, "OpenTTDLinkGraphShare", {sizeof(OpenTTDLinkGraphShare), alignof(OpenTTDLinkGraphShare), offsetof(OpenTTDLinkGraphShare, node), offsetof(OpenTTDLinkGraphShare, origin), offsetof(OpenTTDLinkGraphShare, via), offsetof(OpenTTDLinkGraphShare, cumulative), offsetof(OpenTTDLinkGraphShare, unrestricted), offsetof(OpenTTDLinkGraphShare, has_share)});
 	Layout(39, "OpenTTDEffectView", {sizeof(OpenTTDEffectView), alignof(OpenTTDEffectView), offsetof(OpenTTDEffectView, x), offsetof(OpenTTDEffectView, y), offsetof(OpenTTDEffectView, z), offsetof(OpenTTDEffectView, sprite), offsetof(OpenTTDEffectView, progress), offsetof(OpenTTDEffectView, spritenum), offsetof(OpenTTDEffectView, subtype), offsetof(OpenTTDEffectView, ambient)});
 	Layout(41, "OpenTTDEffectLeaves", {sizeof(OpenTTDEffectLeaves), alignof(OpenTTDEffectLeaves), offsetof(OpenTTDEffectLeaves, observe), offsetof(OpenTTDEffectLeaves, write), offsetof(OpenTTDEffectLeaves, viewport), offsetof(OpenTTDEffectLeaves, sound), offsetof(OpenTTDEffectLeaves, animated)});
@@ -2047,37 +2131,43 @@ static void VehicleSchedulerBoundary()
 int main()
 {
 	Layouts();
+	/* These initialize the shared maintenance table consumed by road probes. */
 	VehicleSchedulerBoundary();
 	VehicleMaintenanceBoundary();
-	ShipBoundary();
+	/* Independent component probes are alphabetical. */
+	AircraftDirectBoundary();
+	AircraftOwnership();
+	AircraftPhaseBoundary();
+	CheckEffectProtocol([](bool result) { CHECK(result); });
+	Disasters();
+	LinkGraphJob();
 	RoadBoundary();
 	RoadServiceBoundary();
-	WaterProbe::Run([](bool result) { CHECK(result); });
+	ShipBoundary();
 	ShipYapfProbe::Run([](bool result) { CHECK(result); });
-	CheckEffectProtocol([](bool result) { CHECK(result); });
-	LinkGraphJob();
 	Trees();
-	Disasters();
-	AircraftOwnership();
-	AircraftDirectBoundary();
-	AircraftPhaseBoundary();
+	WaterProbe::Run([](bool result) { CHECK(result); });
+	// Registry: house (#256).
+
+	// Registry: landscape (#212).
+
 	/* Opaque owner, native size_t, immutable byte borrow and complete UTF-8 output. */
 	auto *townname = openttd_rust_townname_generate(1, UINT32_MAX);
 	size_t name_length;
 	const char *name = openttd_rust_townname_data(townname, &name_length);
 	CHECK(name_length == 8 && std::memcmp(name, "Alen\xc3\xa7on", name_length) == 0);
 	openttd_rust_townname_destroy(townname);
+	Blake2b();
 	Calls();
+	CryptoPrimitives();
 	Encoded();
 	History();
-	Math();
-	CryptoPrimitives();
-	Blake2b();
-	X25519();
-	StationCargo();
-	PacketState();
-	StringValidation();
-	ScriptListControl();
 	Locale();
+	Math();
+	PacketState();
+	ScriptListControl();
+	StationCargo();
+	StringValidation();
+	X25519();
 	std::printf("ABI audit passed\n");
 }

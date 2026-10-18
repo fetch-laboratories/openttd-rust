@@ -12,868 +12,350 @@
 #![allow(unsafe_code)]
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-#[cfg(test)]
-/// First train controller/reservation counter; indices follow the train order.
-pub const TRAIN: usize = 0;
-/// First ship controller counter.
-#[cfg(test)]
-pub const SHIP: usize = 31;
-/// First ship YAPF counter; 0..13 are the search statistics.
-#[cfg(test)]
-pub const SHIP_YAPF: usize = 47;
-/// First rail YAPF counter.
-#[cfg(test)]
-pub const RAIL: usize = 64;
-/// First water-region map-query counter.
-#[cfg(test)]
-pub const WATER: usize = 87;
+// Component blocks are alphabetical. Local indices and names live together;
+// adding a block never requires editing another component or an array length.
+macro_rules! witness_blocks {
+    ($($component:ident { $($counter:ident = $local:literal => $name:literal,)+ })+) => {
+        const BLOCKS: &[&[&str]] = &[$(&[$($name),+]),+];
+        #[derive(Clone, Copy)]
+        #[allow(non_camel_case_types)]
+        enum Block { $($component),+ }
+        $( $(
+            #[doc = concat!("`", $name, "`")]
+            pub const $counter: usize = block_base(Block::$component) + $local;
+        )+ )+
+        /// Counter names in the same order as the component blocks.
+        pub const NAMES: &[&str] = &[$($($name),+),+];
+        const _: () = { $($(assert!($counter < NAMES.len());)+)+ };
+        #[cfg(test)]
+        const INDICES: &[usize] = &[$($($counter),+),+];
+    };
+}
 
-/// `train.tick_first` witness.
-pub const TRAIN_TICK_FIRST: usize = 0;
-/// `train.tick_second` witness.
-pub const TRAIN_TICK_SECOND: usize = 1;
-/// `train.reversal` witness.
-pub const TRAIN_REVERSAL: usize = 2;
-/// `train.wormhole_swap` witness.
-pub const TRAIN_WORMHOLE_SWAP: usize = 3;
-/// `train.unequal_before` witness.
-pub const TRAIN_UNEQUAL_BEFORE: usize = 4;
-/// `train.unequal_after` witness.
-pub const TRAIN_UNEQUAL_AFTER: usize = 5;
-/// `train.depot_start` witness.
-pub const TRAIN_DEPOT_START: usize = 6;
-/// `train.depot_service` witness.
-pub const TRAIN_DEPOT_SERVICE: usize = 7;
-/// `train.red_oneway` witness.
-pub const TRAIN_RED_ONEWAY: usize = 8;
-/// `train.red_twoway` witness.
-pub const TRAIN_RED_TWOWAY: usize = 9;
-/// `train.force_signal` witness.
-pub const TRAIN_FORCE_SIGNAL: usize = 10;
-/// `train.stuck_retry` witness.
-pub const TRAIN_STUCK_RETRY: usize = 11;
-/// `train.stuck_reverse` witness.
-pub const TRAIN_STUCK_REVERSE: usize = 12;
-/// `train.cross_bar` witness.
-pub const TRAIN_CROSS_BAR: usize = 13;
-/// `train.cross_unbar` witness.
-pub const TRAIN_CROSS_UNBAR: usize = 14;
-/// `train.collision` witness.
-pub const TRAIN_COLLISION: usize = 15;
-/// `train.crash_delete` witness.
-pub const TRAIN_CRASH_DELETE: usize = 16;
-/// `train.free_wagon_delete` witness.
-pub const TRAIN_FREE_WAGON_DELETE: usize = 17;
-/// `train.articulated_move` witness.
-pub const TRAIN_ARTICULATED_MOVE: usize = 18;
-/// `train.first_tile_rail` witness.
-pub const TRAIN_FIRST_TILE_RAIL: usize = 19;
-/// `train.wormhole_exit` witness.
-pub const TRAIN_WORMHOLE_EXIT: usize = 20;
-/// `train.depot_reentry` witness.
-pub const TRAIN_DEPOT_REENTRY: usize = 21;
-/// `train.controller_extension` witness.
-pub const TRAIN_CONTROLLER_EXTENSION: usize = 22;
-/// `train.extension_fail` witness.
-pub const TRAIN_EXTENSION_FAIL: usize = 23;
-/// `train.extension_rollback` witness.
-pub const TRAIN_EXTENSION_ROLLBACK: usize = 24;
-/// `train.extension_opposing_red` witness.
-pub const TRAIN_EXTENSION_OPPOSING_RED: usize = 25;
-/// `train.extension_restore` witness.
-pub const TRAIN_EXTENSION_RESTORE: usize = 26;
-/// `train.free_path` witness.
-pub const TRAIN_FREE_PATH: usize = 27;
-/// `train.choose_track` witness.
-pub const TRAIN_CHOOSE_TRACK: usize = 28;
-/// `train.order_lookahead` witness.
-pub const TRAIN_ORDER_LOOKAHEAD: usize = 29;
-/// `train.order_restore` witness.
-pub const TRAIN_ORDER_RESTORE: usize = 30;
-/// `ship.lock_up` witness.
-pub const SHIP_LOCK_UP: usize = 31;
-/// `ship.lock_down` witness.
-pub const SHIP_LOCK_DOWN: usize = 32;
-/// `ship.reverse` witness.
-pub const SHIP_REVERSE: usize = 33;
-/// `ship.rotate` witness.
-pub const SHIP_ROTATE: usize = 34;
-/// `ship.depot_leave` witness.
-pub const SHIP_DEPOT_LEAVE: usize = 35;
-/// `ship.auto_service` witness.
-pub const SHIP_AUTO_SERVICE: usize = 36;
-/// `ship.buoy` witness.
-pub const SHIP_BUOY: usize = 37;
-/// `ship.loading` witness.
-pub const SHIP_LOADING: usize = 38;
-/// `ship.water_change` witness.
-pub const SHIP_WATER_CHANGE: usize = 39;
-/// `ship.aqueduct` witness.
-pub const SHIP_AQUEDUCT: usize = 40;
-/// `ship.rotation_reload` witness.
-pub const SHIP_ROTATION_RELOAD: usize = 41;
-/// `ship.depot_search` witness.
-pub const SHIP_DEPOT_SEARCH: usize = 42;
-/// `ship.build` witness.
-pub const SHIP_BUILD: usize = 43;
-/// `ship.economy_day` witness.
-pub const SHIP_ECONOMY_DAY: usize = 44;
-/// `ship.path_cache` witness.
-pub const SHIP_PATH_CACHE: usize = 45;
-/// `ship.depot_enter` witness.
-pub const SHIP_DEPOT_ENTER: usize = 46;
-/// `ship_yapf.region_nodes` witness.
-pub const SHIP_YAPF_REGION_NODES: usize = 47;
-/// `ship_yapf.track_nodes` witness.
-pub const SHIP_YAPF_TRACK_NODES: usize = 48;
-/// `ship_yapf.retries` witness.
-pub const SHIP_YAPF_RETRIES: usize = 49;
-/// `ship_yapf.track_limits` witness.
-pub const SHIP_YAPF_TRACK_LIMITS: usize = 50;
-/// `ship_yapf.intermediate` witness.
-pub const SHIP_YAPF_INTERMEDIATE: usize = 51;
-/// `ship_yapf.cache_truncations` witness.
-pub const SHIP_YAPF_CACHE_TRUNCATIONS: usize = 52;
-/// `ship_yapf.final_region_clears` witness.
-pub const SHIP_YAPF_FINAL_REGION_CLEARS: usize = 53;
-/// `ship_yapf.lost` witness.
-pub const SHIP_YAPF_LOST: usize = 54;
-/// `ship_yapf.random_draws` witness.
-pub const SHIP_YAPF_RANDOM_DRAWS: usize = 55;
-/// `ship_yapf.reverse_origins` witness.
-pub const SHIP_YAPF_REVERSE_ORIGINS: usize = 56;
-/// `ship_yapf.blocked_fallbacks` witness.
-pub const SHIP_YAPF_BLOCKED_FALLBACKS: usize = 57;
-/// `ship_yapf.region_limits` witness.
-pub const SHIP_YAPF_REGION_LIMITS: usize = 58;
-/// `ship_yapf.alternate_docking` witness.
-pub const SHIP_YAPF_ALTERNATE_DOCKING: usize = 59;
-/// `ship_yapf.choose_calls` witness.
-pub const SHIP_YAPF_CHOOSE_CALLS: usize = 60;
-/// `ship_yapf.reverse_calls` witness.
-pub const SHIP_YAPF_REVERSE_CALLS: usize = 61;
-/// `ship_yapf.blocked_calls` witness.
-pub const SHIP_YAPF_BLOCKED_CALLS: usize = 62;
-/// `ship_yapf.reverse_chosen` witness.
-pub const SHIP_YAPF_REVERSE_CHOSEN: usize = 63;
-/// `rail.choose` witness.
-pub const RAIL_CHOOSE: usize = 64;
-/// `rail.reverse` witness.
-pub const RAIL_REVERSE: usize = 65;
-/// `rail.depot` witness.
-pub const RAIL_DEPOT: usize = 66;
-/// `rail.safe` witness.
-pub const RAIL_SAFE: usize = 67;
-/// `rail.cached` witness.
-pub const RAIL_CACHED: usize = 68;
-/// `rail.uncached` witness.
-pub const RAIL_UNCACHED: usize = 69;
-/// `rail.partial_paths` witness.
-pub const RAIL_PARTIAL_PATHS: usize = 70;
-/// `rail.bounded_depot` witness.
-pub const RAIL_BOUNDED_DEPOT: usize = 71;
-/// `rail.found` witness.
-pub const RAIL_FOUND: usize = 72;
-/// `rail.allow90` witness.
-pub const RAIL_ALLOW90: usize = 73;
-/// `rail.forbid90` witness.
-pub const RAIL_FORBID90: usize = 74;
-/// `rail.cache_flushes` witness.
-pub const RAIL_CACHE_FLUSHES: usize = 75;
-/// `rail.reserve_attempts` witness.
-pub const RAIL_RESERVE_ATTEMPTS: usize = 76;
-/// `rail.target_busy` witness.
-pub const RAIL_TARGET_BUSY: usize = 77;
-/// `rail.reserve_success` witness.
-pub const RAIL_RESERVE_SUCCESS: usize = 78;
-/// `rail.rollback` witness.
-pub const RAIL_ROLLBACK: usize = 79;
-/// `rail.invalidations` witness.
-pub const RAIL_INVALIDATIONS: usize = 80;
-/// `rail.reverse_chosen` witness.
-pub const RAIL_REVERSE_CHOSEN: usize = 81;
-/// `rail.depot_found` witness.
-pub const RAIL_DEPOT_FOUND: usize = 82;
-/// `rail.safe_found` witness.
-pub const RAIL_SAFE_FOUND: usize = 83;
-/// `rail.limit_stops` witness.
-pub const RAIL_LIMIT_STOPS: usize = 84;
-/// `rail.signals_red` witness.
-pub const RAIL_SIGNALS_RED: usize = 85;
-/// `rail.signals_restored` witness.
-pub const RAIL_SIGNALS_RESTORED: usize = 86;
-/// `water.tracks` witness.
-pub const WATER_TRACKS: usize = 87;
-/// `water.follows` witness.
-pub const WATER_FOLLOWS: usize = 88;
-/// `water.aqueducts` witness.
-pub const WATER_AQUEDUCTS: usize = 89;
-/// `water.rebuilds` witness.
-pub const WATER_REBUILDS: usize = 90;
+const fn block_base(block: Block) -> usize {
+    let mut base = 0;
+    let mut index = 0;
+    while index < block as usize {
+        base += BLOCKS[index].len();
+        index += 1;
+    }
+    base
+}
 
-/// Road tick entries.
-pub const ROAD_TICKS: usize = 91;
-/// Road calls into typed C++ services.
-pub const ROAD_SERVICES: usize = 92;
-/// Native traversal calls back into the road Rust visitor.
-pub const ROAD_VISITORS: usize = 93;
+witness_blocks! {
+    aircraft {
+        AIRCRAFT_TICKS = 0 => "aircraft.ticks",
+        AIRCRAFT_SERVICES = 1 => "aircraft.services",
+        AIRCRAFT_ENTRIES = 2 => "aircraft.entries",
+        AIRCRAFT_STATIONS = 3 => "aircraft.station_resolutions",
+        AIRCRAFT_BYTES = 4 => "aircraft.observation_bytes",
+        AIRCRAFT_CACHE_ENTRIES = 5 => "aircraft.cache_entries",
+        AIRCRAFT_DISASTER_ENTRIES = 6 => "aircraft.disaster_entries",
+    }
+    engine {
+        ENGINE_SERVICES = 0 => "engine.services",
+        ENGINE_BYTES = 1 => "engine.bytes",
+        ENGINE_SYNC = 2 => "engine.sync",
+        ENGINE_RETIRE = 3 => "engine.retire",
+        ENGINE_NEVER_EXPIRE = 4 => "engine.never_expire",
+        ENGINE_ACCEPT = 5 => "engine.accept",
+        ENGINE_JOIN = 6 => "engine.join",
+        ENGINE_OFFER = 7 => "engine.offer",
+        ENGINE_PENALTY = 8 => "engine.penalty",
+        ENGINE_CUTOFF = 9 => "engine.cutoff",
+        ENGINE_VISIBILITY = 10 => "engine.visibility",
+        ENGINE_CONTROL = 11 => "engine.control",
+        ENGINE_RENAME = 12 => "engine.rename",
+        ENGINE_ENTRIES = 13 => "engine.entries",
+    }
+    // Registry: house (#256).
 
-/// Selected road controller entries, including reentrant helpers.
-pub const ROAD_ENTRIES: usize = 94;
+    // Registry: landscape (#212).
 
-/// `station.rejected_delivery` branch.
-pub const STATION_REJECTED_DELIVERY: usize = 95;
-/// `station.stale_remove` branch.
-pub const STATION_STALE_REMOVE: usize = 96;
-/// `station.stale_refresh` branch.
-pub const STATION_STALE_REFRESH: usize = 97;
-/// `station.unload_cargo` branch.
-pub const STATION_UNLOAD_CARGO: usize = 98;
-/// `station.gradual_unload` branch.
-pub const STATION_GRADUAL_UNLOAD: usize = 99;
-
-/// `station.full_load_reserve` branch.
-pub const STATION_FULL_LOAD_RESERVE: usize = 100;
-/// `station.stale_restrict` branch.
-pub const STATION_STALE_RESTRICT: usize = 101;
-/// `station.stale_release` branch.
-pub const STATION_STALE_RELEASE: usize = 102;
-
-/// Primary aircraft ticks, including both event passes.
-pub const AIRCRAFT_TICKS: usize = 103;
-/// Aircraft calls into native services, including shared services.
-pub const AIRCRAFT_SERVICES: usize = 104;
-/// Native calls into aircraft controllers/helpers (excluding owner allocation).
-pub const AIRCRAFT_ENTRIES: usize = 105;
-/// Aircraft service station-pool resolutions.
-pub const AIRCRAFT_STATIONS: usize = 106;
-/// Bytes returned by aircraft observations (including record padding).
-pub const AIRCRAFT_BYTES: usize = 107;
-/// Cache helper ingress, also included in total entries.
-pub const AIRCRAFT_CACHE_ENTRIES: usize = 108;
-/// Ownerless flight helper ingress, also included in total entries.
-pub const AIRCRAFT_DISASTER_ENTRIES: usize = 109;
-
-/// Engine services witness.
-pub const ENGINE_SERVICES: usize = 110;
-/// Engine bytes witness.
-pub const ENGINE_BYTES: usize = 111;
-/// Engine sync witness.
-pub const ENGINE_SYNC: usize = 112;
-/// Engine retire witness.
-pub const ENGINE_RETIRE: usize = 113;
-/// Engine `never_expire` witness.
-pub const ENGINE_NEVER_EXPIRE: usize = 114;
-/// Engine accept witness.
-pub const ENGINE_ACCEPT: usize = 115;
-/// Engine join witness.
-pub const ENGINE_JOIN: usize = 116;
-/// Engine offer witness.
-pub const ENGINE_OFFER: usize = 117;
-/// Engine penalty witness.
-pub const ENGINE_PENALTY: usize = 118;
-/// Engine cutoff witness.
-pub const ENGINE_CUTOFF: usize = 119;
-/// Engine visibility witness.
-pub const ENGINE_VISIBILITY: usize = 120;
-/// Engine control witness.
-pub const ENGINE_CONTROL: usize = 121;
-/// Engine rename witness.
-pub const ENGINE_RENAME: usize = 122;
-
-/// Engine native entry witness.
-pub const ENGINE_ENTRIES: usize = 123;
-
-/// Signal `updates` witness.
-pub const SIGNAL_UPDATES: usize = 124;
-/// Signal `tiles` witness.
-pub const SIGNAL_TILES: usize = 125;
-/// Signal `services` witness.
-pub const SIGNAL_SERVICES: usize = 126;
-/// Signal `tbu_overflow` witness.
-pub const SIGNAL_TBU_OVERFLOW: usize = 127;
-/// Signal `tbd_overflow` witness.
-pub const SIGNAL_TBD_OVERFLOW: usize = 128;
-/// Signal `global_overflow` witness.
-pub const SIGNAL_GLOBAL_OVERFLOW: usize = 129;
-/// Signal `train` witness.
-pub const SIGNAL_TRAIN: usize = 130;
-/// Signal `owner_barrier` witness.
-pub const SIGNAL_OWNER_BARRIER: usize = 131;
-/// Signal `depot` witness.
-pub const SIGNAL_DEPOT: usize = 132;
-/// Signal `split` witness.
-pub const SIGNAL_SPLIT: usize = 133;
-/// Signal `pbs` witness.
-pub const SIGNAL_PBS: usize = 134;
-/// Signal `multi_enter` witness.
-pub const SIGNAL_MULTI_ENTER: usize = 135;
-/// Signal `exit` witness.
-pub const SIGNAL_EXIT: usize = 136;
-/// Signal `green_exit` witness.
-pub const SIGNAL_GREEN_EXIT: usize = 137;
-/// Signal `station` witness.
-pub const SIGNAL_STATION: usize = 138;
-/// Signal `crossing` witness.
-pub const SIGNAL_CROSSING: usize = 139;
-/// Signal `wormhole` witness.
-pub const SIGNAL_WORMHOLE: usize = 140;
-/// Signal `reserved_skip` witness.
-pub const SIGNAL_RESERVED_SKIP: usize = 141;
-/// Signal `combo` witness.
-pub const SIGNAL_COMBO: usize = 142;
-/// Signal `propagate` witness.
-pub const SIGNAL_PROPAGATE: usize = 143;
-/// Signal `changed` witness.
-pub const SIGNAL_CHANGED: usize = 144;
-/// Signal `reset` witness.
-pub const SIGNAL_RESET: usize = 145;
-/// Signal `forced_flush` witness.
-pub const SIGNAL_FORCED_FLUSH: usize = 146;
-
-/// Bytes returned by signal-facing typed native services.
-pub const SIGNAL_BYTES: usize = 147;
-
-/// Signal boundary `entries` counter.
-pub const SIGNAL_ENTRIES: usize = 148;
-/// Signal boundary `context_acquisitions` counter.
-pub const SIGNAL_CONTEXT_ACQUISITIONS: usize = 149;
-/// Signal boundary `context_owner_reads` counter.
-pub const SIGNAL_CONTEXT_OWNER_READS: usize = 150;
-/// Signal boundary `occupancy_accessors` counter.
-pub const SIGNAL_OCCUPANCY_ACCESSORS: usize = 151;
-/// Signal boundary `context_bytes` counter.
-pub const SIGNAL_CONTEXT_BYTES: usize = 152;
-/// Signal boundary `classification_bytes` counter.
-pub const SIGNAL_CLASSIFICATION_BYTES: usize = 153;
-
-/// Signal multiple exit detection.
-pub const SIGNAL_MULTI_EXIT: usize = 154;
-/// Signal multiple green exit detection.
-pub const SIGNAL_MULTI_GREEN: usize = 155;
-/// Signal combo red rule with multiple exits.
-pub const SIGNAL_COMBO_RED: usize = 156;
-/// Signal empty neighbour buffer continue.
-pub const SIGNAL_NEIGHBOUR_CONTINUE: usize = 157;
-
-/// `town.services` witness.
-pub const TOWN_SERVICES: usize = 158;
-/// `town.bytes` witness.
-pub const TOWN_BYTES: usize = 159;
-/// `town.placement` witness.
-pub const TOWN_PLACEMENT: usize = 160;
-/// `town.growth` witness.
-pub const TOWN_GROWTH: usize = 161;
-/// `town.generated` witness.
-pub const TOWN_GENERATED: usize = 162;
-/// `town.coast` witness.
-pub const TOWN_COAST: usize = 163;
-/// `town.manual` witness.
-pub const TOWN_MANUAL: usize = 164;
-/// `town.deity` witness.
-pub const TOWN_DEITY: usize = 165;
-/// `town.editor` witness.
-pub const TOWN_EDITOR: usize = 166;
-/// `town.invalid` witness.
-pub const TOWN_INVALID: usize = 167;
-/// `town.duplicate` witness.
-pub const TOWN_DUPLICATE: usize = 168;
-/// `town.money` witness.
-pub const TOWN_MONEY: usize = 169;
-/// `town.zero_growth` witness.
-pub const TOWN_ZERO_GROWTH: usize = 170;
-/// `town.retry` witness.
-pub const TOWN_RETRY: usize = 171;
-/// `town.rename` witness.
-pub const TOWN_RENAME: usize = 172;
-/// `town.name_retry` witness.
-pub const TOWN_NAME_RETRY: usize = 173;
-/// `town.name_exhausted` witness.
-pub const TOWN_NAME_EXHAUSTED: usize = 174;
-/// `town.name_duplicate` witness.
-pub const TOWN_NAME_DUPLICATE: usize = 175;
-/// `town.fallback` witness.
-pub const TOWN_FALLBACK: usize = 176;
-/// `town.cancelled` witness.
-pub const TOWN_CANCELLED: usize = 177;
-/// `town.grid` witness.
-pub const TOWN_GRID: usize = 178;
-/// `town.name_set` witness.
-pub const TOWN_NAME_SET: usize = 179;
-/// `town.entries` witness.
-pub const TOWN_ENTRIES: usize = 180;
-/// `town.no_cities` witness: generation with `larger_towns == 0`.
-pub const TOWN_NO_CITIES: usize = 181;
-
-/// `rail_cmd.entries` witness.
-pub const RAIL_CMD_ENTRIES: usize = 182;
-/// `rail_cmd.build_rail` witness.
-pub const RAIL_CMD_BUILD_RAIL: usize = 183;
-/// `rail_cmd.build_not_plain` witness.
-pub const RAIL_CMD_BUILD_NOT_PLAIN: usize = 184;
-/// `rail_cmd.build_remove_signals` witness.
-pub const RAIL_CMD_BUILD_REMOVE_SIGNALS: usize = 185;
-/// `rail_cmd.build_convert` witness.
-pub const RAIL_CMD_BUILD_CONVERT: usize = 186;
-/// `rail_cmd.build_crossing` witness.
-pub const RAIL_CMD_BUILD_CROSSING: usize = 187;
-/// `rail_cmd.build_clear` witness.
-pub const RAIL_CMD_BUILD_CLEAR: usize = 188;
-/// `rail_cmd.build_half_water` witness.
-pub const RAIL_CMD_BUILD_HALF_WATER: usize = 189;
-/// `rail_cmd.remove_rail` witness.
-pub const RAIL_CMD_REMOVE_RAIL: usize = 190;
-/// `rail_cmd.remove_crossing` witness.
-pub const RAIL_CMD_REMOVE_CROSSING: usize = 191;
-/// `rail_cmd.remove_shore` witness.
-pub const RAIL_CMD_REMOVE_SHORE: usize = 192;
-/// `rail_cmd.remove_signal_charge` witness.
-pub const RAIL_CMD_REMOVE_SIGNAL_CHARGE: usize = 193;
-/// `rail_cmd.remove_diagonal_crossing` witness.
-pub const RAIL_CMD_REMOVE_DIAGONAL_CROSSING: usize = 194;
-/// `rail_cmd.drag_build` witness.
-pub const RAIL_CMD_DRAG_BUILD: usize = 195;
-/// `rail_cmd.drag_remove` witness.
-pub const RAIL_CMD_DRAG_REMOVE: usize = 196;
-/// `rail_cmd.drag_obstacle` witness.
-pub const RAIL_CMD_DRAG_OBSTACLE: usize = 197;
-/// `rail_cmd.depot_build` witness.
-pub const RAIL_CMD_DEPOT_BUILD: usize = 198;
-/// `rail_cmd.depot_rotate` witness.
-pub const RAIL_CMD_DEPOT_ROTATE: usize = 199;
-/// `rail_cmd.signal_build` witness.
-pub const RAIL_CMD_SIGNAL_BUILD: usize = 200;
-/// `rail_cmd.signal_convert` witness.
-pub const RAIL_CMD_SIGNAL_CONVERT: usize = 201;
-/// `rail_cmd.signal_variant` witness.
-pub const RAIL_CMD_SIGNAL_VARIANT: usize = 202;
-/// `rail_cmd.signal_cycle_type` witness.
-pub const RAIL_CMD_SIGNAL_CYCLE_TYPE: usize = 203;
-/// `rail_cmd.signal_cycle_side` witness.
-pub const RAIL_CMD_SIGNAL_CYCLE_SIDE: usize = 204;
-/// `rail_cmd.signal_copy` witness.
-pub const RAIL_CMD_SIGNAL_COPY: usize = 205;
-/// `rail_cmd.signal_pbs_state` witness.
-pub const RAIL_CMD_SIGNAL_PBS_STATE: usize = 206;
-/// `rail_cmd.signal_reserve` witness.
-pub const RAIL_CMD_SIGNAL_RESERVE: usize = 207;
-/// `rail_cmd.signal_drag` witness.
-pub const RAIL_CMD_SIGNAL_DRAG: usize = 208;
-/// `rail_cmd.signal_drag_remove` witness.
-pub const RAIL_CMD_SIGNAL_DRAG_REMOVE: usize = 209;
-/// `rail_cmd.signal_minimise` witness.
-pub const RAIL_CMD_SIGNAL_MINIMISE: usize = 210;
-/// `rail_cmd.signal_autofill` witness.
-pub const RAIL_CMD_SIGNAL_AUTOFILL: usize = 211;
-/// `rail_cmd.signal_wormhole` witness.
-pub const RAIL_CMD_SIGNAL_WORMHOLE: usize = 212;
-/// `rail_cmd.signal_remove` witness.
-pub const RAIL_CMD_SIGNAL_REMOVE: usize = 213;
-/// `rail_cmd.signal_remove_path_end` witness.
-pub const RAIL_CMD_SIGNAL_REMOVE_PATH_END: usize = 214;
-/// `rail_cmd.convert_rail` witness.
-pub const RAIL_CMD_CONVERT_RAIL: usize = 215;
-/// `rail_cmd.convert_depot` witness.
-pub const RAIL_CMD_CONVERT_DEPOT: usize = 216;
-/// `rail_cmd.convert_wormhole` witness.
-pub const RAIL_CMD_CONVERT_WORMHOLE: usize = 217;
-/// `rail_cmd.convert_station_crossing` witness.
-pub const RAIL_CMD_CONVERT_STATION_CROSSING: usize = 218;
-/// `rail_cmd.convert_reroute` witness.
-pub const RAIL_CMD_CONVERT_REROUTE: usize = 219;
-/// `rail_cmd.clear_rail` witness.
-pub const RAIL_CMD_CLEAR_RAIL: usize = 220;
-/// `rail_cmd.clear_water` witness.
-pub const RAIL_CMD_CLEAR_WATER: usize = 221;
-/// `rail_cmd.clear_depot` witness.
-pub const RAIL_CMD_CLEAR_DEPOT: usize = 222;
-/// `rail_cmd.owner_transfer` witness.
-pub const RAIL_CMD_OWNER_TRANSFER: usize = 223;
-/// `rail_cmd.owner_clear` witness.
-pub const RAIL_CMD_OWNER_CLEAR: usize = 224;
-/// `rail_cmd.terraform_corner` witness.
-pub const RAIL_CMD_TERRAFORM_CORNER: usize = 225;
-/// `rail_cmd.terraform_depot` witness.
-pub const RAIL_CMD_TERRAFORM_DEPOT: usize = 226;
-/// `rail_cmd.build_above_clear` witness.
-pub const RAIL_CMD_BUILD_ABOVE_CLEAR: usize = 227;
-
-/// Scheduler evidence counter.
-pub const VEHICLE_CALLBACK32: usize = 228;
-/// Scheduler evidence counter.
-pub const VEHICLE_CARGO_AGES: usize = 229;
-/// Scheduler evidence counter.
-pub const VEHICLE_CARGO_OWNER: usize = 230;
-/// Scheduler evidence counter.
-pub const VEHICLE_CROSSINGS: usize = 231;
-/// Scheduler evidence counter.
-pub const VEHICLE_DAYS: usize = 232;
-/// Scheduler evidence counter.
-pub const VEHICLE_DELETED: usize = 233;
-/// Scheduler evidence counter.
-pub const VEHICLE_DESCRIPTOR_BYTES: usize = 234;
-/// Scheduler evidence counter.
-pub const VEHICLE_MOTION: usize = 235;
-/// Scheduler evidence counter.
-pub const VEHICLE_OBSERVED_BYTES: usize = 236;
-/// Scheduler evidence counter.
-pub const VEHICLE_OUTER_VISITS: usize = 237;
-/// Scheduler evidence counter.
-pub const VEHICLE_PACKET_LOOKUPS: usize = 238;
-/// Scheduler evidence counter.
-pub const VEHICLE_PERIODIC_SOUND: usize = 239;
-/// Scheduler evidence counter.
-pub const VEHICLE_POOL_GROWTH: usize = 240;
-/// Scheduler evidence counter.
-pub const VEHICLE_POST_TICK: usize = 241;
-/// Scheduler evidence counter.
-pub const VEHICLE_RUNNING_SOUND: usize = 242;
-/// Scheduler evidence counter.
-pub const VEHICLE_SCALAR_READ_BYTES: usize = 243;
-/// Scheduler evidence counter.
-pub const VEHICLE_SCALAR_WRITE_BYTES: usize = 244;
-/// Scheduler evidence counter.
-pub const VEHICLE_STATIONS: usize = 245;
-/// Scheduler evidence counter.
-pub const VEHICLE_VISITS: usize = 246;
-
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_AGE: usize = 254;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_AIRCRAFT: usize = 255;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_BYTES: usize = 256;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_CHECK: usize = 257;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_COUNTDOWN: usize = 258;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_CROSSINGS: usize = 259;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_DAYS: usize = 260;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_DECAY: usize = 261;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_DELAY: usize = 262;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_ENDED: usize = 263;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_LOADING: usize = 264;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_MAX_AGE: usize = 265;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_MINUTES: usize = 266;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_OLD_NEWS: usize = 267;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_PERCENT: usize = 268;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_PROFIT_AGE: usize = 269;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_RENEW: usize = 270;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_REPLACE: usize = 271;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_RESET: usize = 272;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_RESET_REDUCED: usize = 273;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_SERVICE: usize = 274;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_SMOKE: usize = 275;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_STARTED: usize = 276;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_TRIGGER: usize = 277;
-/// Base vehicle maintenance witness.
-pub const VEHICLE_MAINT_VALUE: usize = 278;
-
-/// Native-to-Rust base maintenance entries (separate from outgoing services).
-pub const VEHICLE_MAINT_ENTRIES: usize = 279;
-
-/// Counter names, grouped by the prefix the harness selects.
-pub const NAMES: [&str; 280] = [
-    "train.tick_first",
-    "train.tick_second",
-    "train.reversal",
-    "train.wormhole_swap",
-    "train.unequal_before",
-    "train.unequal_after",
-    "train.depot_start",
-    "train.depot_service",
-    "train.red_oneway",
-    "train.red_twoway",
-    "train.force_signal",
-    "train.stuck_retry",
-    "train.stuck_reverse",
-    "train.cross_bar",
-    "train.cross_unbar",
-    "train.collision",
-    "train.crash_delete",
-    "train.free_wagon_delete",
-    "train.articulated_move",
-    "train.first_tile_rail",
-    "train.wormhole_exit",
-    "train.depot_reentry",
-    "train.controller_extension",
-    "train.extension_fail",
-    "train.extension_rollback",
-    "train.extension_opposing_red",
-    "train.extension_restore",
-    "train.free_path",
-    "train.choose_track",
-    "train.order_lookahead",
-    "train.order_restore",
-    "ship.lock_up",
-    "ship.lock_down",
-    "ship.reverse",
-    "ship.rotate",
-    "ship.depot_leave",
-    "ship.auto_service",
-    "ship.buoy",
-    "ship.loading",
-    "ship.water_change",
-    "ship.aqueduct",
-    "ship.rotation_reload",
-    "ship.depot_search",
-    "ship.build",
-    "ship.economy_day",
-    "ship.path_cache",
-    "ship.depot_enter",
-    "ship_yapf.region_nodes",
-    "ship_yapf.track_nodes",
-    "ship_yapf.retries",
-    "ship_yapf.track_limits",
-    "ship_yapf.intermediate",
-    "ship_yapf.cache_truncations",
-    "ship_yapf.final_region_clears",
-    "ship_yapf.lost",
-    "ship_yapf.random_draws",
-    "ship_yapf.reverse_origins",
-    "ship_yapf.blocked_fallbacks",
-    "ship_yapf.region_limits",
-    "ship_yapf.alternate_docking",
-    "ship_yapf.choose_calls",
-    "ship_yapf.reverse_calls",
-    "ship_yapf.blocked_calls",
-    "ship_yapf.reverse_chosen",
-    "rail.choose",
-    "rail.reverse",
-    "rail.depot",
-    "rail.safe",
-    "rail.cached",
-    "rail.uncached",
-    "rail.partial_paths",
-    "rail.bounded_depot",
-    "rail.found",
-    "rail.allow90",
-    "rail.forbid90",
-    "rail.cache_flushes",
-    "rail.reserve_attempts",
-    "rail.target_busy",
-    "rail.reserve_success",
-    "rail.rollback",
-    "rail.invalidations",
-    "rail.reverse_chosen",
-    "rail.depot_found",
-    "rail.safe_found",
-    "rail.limit_stops",
-    "rail.signals_red",
-    "rail.signals_restored",
-    "water.tracks",
-    "water.follows",
-    "water.aqueducts",
-    "water.rebuilds",
-    "road.ticks",
-    "road.services",
-    "road.visitors",
-    "road.entries",
-    "station.rejected_delivery",
-    "station.stale_remove",
-    "station.stale_refresh",
-    "station.unload_cargo",
-    "station.gradual_unload",
-    "station.full_load_reserve",
-    "station.stale_restrict",
-    "station.stale_release",
-    "aircraft.ticks",
-    "aircraft.services",
-    "aircraft.entries",
-    "aircraft.station_resolutions",
-    "aircraft.observation_bytes",
-    "aircraft.cache_entries",
-    "aircraft.disaster_entries",
-    "engine.services",
-    "engine.bytes",
-    "engine.sync",
-    "engine.retire",
-    "engine.never_expire",
-    "engine.accept",
-    "engine.join",
-    "engine.offer",
-    "engine.penalty",
-    "engine.cutoff",
-    "engine.visibility",
-    "engine.control",
-    "engine.rename",
-    "engine.entries",
-    "signal.updates",
-    "signal.tiles",
-    "signal.services",
-    "signal.tbu_overflow",
-    "signal.tbd_overflow",
-    "signal.global_overflow",
-    "signal.train",
-    "signal.owner_barrier",
-    "signal.depot",
-    "signal.split",
-    "signal.pbs",
-    "signal.multi_enter",
-    "signal.exit",
-    "signal.green_exit",
-    "signal.station",
-    "signal.crossing",
-    "signal.wormhole",
-    "signal.reserved_skip",
-    "signal.combo",
-    "signal.propagate",
-    "signal.changed",
-    "signal.reset",
-    "signal.forced_flush",
-    "signal.bytes",
-    "signal.entries",
-    "signal.context_acquisitions",
-    "signal.context_owner_reads",
-    "signal.occupancy_accessors",
-    "signal.context_bytes",
-    "signal.classification_bytes",
-    "signal.multi_exit",
-    "signal.multi_green",
-    "signal.combo_red",
-    "signal.neighbour_continue",
-    "town.services",
-    "town.bytes",
-    "town.placement",
-    "town.growth",
-    "town.generated",
-    "town.coast",
-    "town.manual",
-    "town.deity",
-    "town.editor",
-    "town.invalid",
-    "town.duplicate",
-    "town.money",
-    "town.zero_growth",
-    "town.retry",
-    "town.rename",
-    "town.name_retry",
-    "town.name_exhausted",
-    "town.name_duplicate",
-    "town.fallback",
-    "town.cancelled",
-    "town.grid",
-    "town.name_set",
-    "town.entries",
-    "town.no_cities",
-    "rail_cmd.entries",
-    "rail_cmd.build_rail",
-    "rail_cmd.build_not_plain",
-    "rail_cmd.build_remove_signals",
-    "rail_cmd.build_convert",
-    "rail_cmd.build_crossing",
-    "rail_cmd.build_clear",
-    "rail_cmd.build_half_water",
-    "rail_cmd.remove_rail",
-    "rail_cmd.remove_crossing",
-    "rail_cmd.remove_shore",
-    "rail_cmd.remove_signal_charge",
-    "rail_cmd.remove_diagonal_crossing",
-    "rail_cmd.drag_build",
-    "rail_cmd.drag_remove",
-    "rail_cmd.drag_obstacle",
-    "rail_cmd.depot_build",
-    "rail_cmd.depot_rotate",
-    "rail_cmd.signal_build",
-    "rail_cmd.signal_convert",
-    "rail_cmd.signal_variant",
-    "rail_cmd.signal_cycle_type",
-    "rail_cmd.signal_cycle_side",
-    "rail_cmd.signal_copy",
-    "rail_cmd.signal_pbs_state",
-    "rail_cmd.signal_reserve",
-    "rail_cmd.signal_drag",
-    "rail_cmd.signal_drag_remove",
-    "rail_cmd.signal_minimise",
-    "rail_cmd.signal_autofill",
-    "rail_cmd.signal_wormhole",
-    "rail_cmd.signal_remove",
-    "rail_cmd.signal_remove_path_end",
-    "rail_cmd.convert_rail",
-    "rail_cmd.convert_depot",
-    "rail_cmd.convert_wormhole",
-    "rail_cmd.convert_station_crossing",
-    "rail_cmd.convert_reroute",
-    "rail_cmd.clear_rail",
-    "rail_cmd.clear_water",
-    "rail_cmd.clear_depot",
-    "rail_cmd.owner_transfer",
-    "rail_cmd.owner_clear",
-    "rail_cmd.terraform_corner",
-    "rail_cmd.terraform_depot",
-    "rail_cmd.build_above_clear",
-    "vehicle.callback32",
-    "vehicle.cargo_ages",
-    "vehicle.cargo_owner",
-    "vehicle.crossings",
-    "vehicle.days",
-    "vehicle.deleted",
-    "vehicle.descriptor_bytes",
-    "vehicle.motion",
-    "vehicle.observed_bytes",
-    "vehicle.outer_visits",
-    "vehicle.packet_lookups",
-    "vehicle.periodic_sound",
-    "vehicle.pool_growth",
-    "vehicle.post_tick",
-    "vehicle.running_sound",
-    "vehicle.scalar_read_bytes",
-    "vehicle.scalar_write_bytes",
-    "vehicle.stations",
-    "vehicle.visits.train",
-    "vehicle.visits.road",
-    "vehicle.visits.ship",
-    "vehicle.visits.aircraft",
-    "vehicle.visits.effect",
-    "vehicle.visits.disaster",
-    "vehicle.visits.end",
-    "vehicle.visits.invalid",
-    "vehicle_maintenance.age",
-    "vehicle_maintenance.aircraft",
-    "vehicle_maintenance.bytes",
-    "vehicle_maintenance.check",
-    "vehicle_maintenance.countdown",
-    "vehicle_maintenance.crossings",
-    "vehicle_maintenance.days",
-    "vehicle_maintenance.decay",
-    "vehicle_maintenance.delay",
-    "vehicle_maintenance.ended",
-    "vehicle_maintenance.loading",
-    "vehicle_maintenance.max_age",
-    "vehicle_maintenance.minutes",
-    "vehicle_maintenance.old_news",
-    "vehicle_maintenance.percent",
-    "vehicle_maintenance.profit_age",
-    "vehicle_maintenance.renew",
-    "vehicle_maintenance.replace",
-    "vehicle_maintenance.reset",
-    "vehicle_maintenance.reset_reduced",
-    "vehicle_maintenance.service",
-    "vehicle_maintenance.smoke",
-    "vehicle_maintenance.started",
-    "vehicle_maintenance.trigger",
-    "vehicle_maintenance.value",
-    "vehicle_maintenance.entries",
-];
+    rail {
+        RAIL_CHOOSE = 0 => "rail.choose",
+        RAIL_REVERSE = 1 => "rail.reverse",
+        RAIL_DEPOT = 2 => "rail.depot",
+        RAIL_SAFE = 3 => "rail.safe",
+        RAIL_CACHED = 4 => "rail.cached",
+        RAIL_UNCACHED = 5 => "rail.uncached",
+        RAIL_PARTIAL_PATHS = 6 => "rail.partial_paths",
+        RAIL_BOUNDED_DEPOT = 7 => "rail.bounded_depot",
+        RAIL_FOUND = 8 => "rail.found",
+        RAIL_ALLOW90 = 9 => "rail.allow90",
+        RAIL_FORBID90 = 10 => "rail.forbid90",
+        RAIL_CACHE_FLUSHES = 11 => "rail.cache_flushes",
+        RAIL_RESERVE_ATTEMPTS = 12 => "rail.reserve_attempts",
+        RAIL_TARGET_BUSY = 13 => "rail.target_busy",
+        RAIL_RESERVE_SUCCESS = 14 => "rail.reserve_success",
+        RAIL_ROLLBACK = 15 => "rail.rollback",
+        RAIL_INVALIDATIONS = 16 => "rail.invalidations",
+        RAIL_REVERSE_CHOSEN = 17 => "rail.reverse_chosen",
+        RAIL_DEPOT_FOUND = 18 => "rail.depot_found",
+        RAIL_SAFE_FOUND = 19 => "rail.safe_found",
+        RAIL_LIMIT_STOPS = 20 => "rail.limit_stops",
+        RAIL_SIGNALS_RED = 21 => "rail.signals_red",
+        RAIL_SIGNALS_RESTORED = 22 => "rail.signals_restored",
+    }
+    rail_cmd {
+        RAIL_CMD_ENTRIES = 0 => "rail_cmd.entries",
+        RAIL_CMD_BUILD_RAIL = 1 => "rail_cmd.build_rail",
+        RAIL_CMD_BUILD_NOT_PLAIN = 2 => "rail_cmd.build_not_plain",
+        RAIL_CMD_BUILD_REMOVE_SIGNALS = 3 => "rail_cmd.build_remove_signals",
+        RAIL_CMD_BUILD_CONVERT = 4 => "rail_cmd.build_convert",
+        RAIL_CMD_BUILD_CROSSING = 5 => "rail_cmd.build_crossing",
+        RAIL_CMD_BUILD_CLEAR = 6 => "rail_cmd.build_clear",
+        RAIL_CMD_BUILD_HALF_WATER = 7 => "rail_cmd.build_half_water",
+        RAIL_CMD_REMOVE_RAIL = 8 => "rail_cmd.remove_rail",
+        RAIL_CMD_REMOVE_CROSSING = 9 => "rail_cmd.remove_crossing",
+        RAIL_CMD_REMOVE_SHORE = 10 => "rail_cmd.remove_shore",
+        RAIL_CMD_REMOVE_SIGNAL_CHARGE = 11 => "rail_cmd.remove_signal_charge",
+        RAIL_CMD_REMOVE_DIAGONAL_CROSSING = 12 => "rail_cmd.remove_diagonal_crossing",
+        RAIL_CMD_DRAG_BUILD = 13 => "rail_cmd.drag_build",
+        RAIL_CMD_DRAG_REMOVE = 14 => "rail_cmd.drag_remove",
+        RAIL_CMD_DRAG_OBSTACLE = 15 => "rail_cmd.drag_obstacle",
+        RAIL_CMD_DEPOT_BUILD = 16 => "rail_cmd.depot_build",
+        RAIL_CMD_DEPOT_ROTATE = 17 => "rail_cmd.depot_rotate",
+        RAIL_CMD_SIGNAL_BUILD = 18 => "rail_cmd.signal_build",
+        RAIL_CMD_SIGNAL_CONVERT = 19 => "rail_cmd.signal_convert",
+        RAIL_CMD_SIGNAL_VARIANT = 20 => "rail_cmd.signal_variant",
+        RAIL_CMD_SIGNAL_CYCLE_TYPE = 21 => "rail_cmd.signal_cycle_type",
+        RAIL_CMD_SIGNAL_CYCLE_SIDE = 22 => "rail_cmd.signal_cycle_side",
+        RAIL_CMD_SIGNAL_COPY = 23 => "rail_cmd.signal_copy",
+        RAIL_CMD_SIGNAL_PBS_STATE = 24 => "rail_cmd.signal_pbs_state",
+        RAIL_CMD_SIGNAL_RESERVE = 25 => "rail_cmd.signal_reserve",
+        RAIL_CMD_SIGNAL_DRAG = 26 => "rail_cmd.signal_drag",
+        RAIL_CMD_SIGNAL_DRAG_REMOVE = 27 => "rail_cmd.signal_drag_remove",
+        RAIL_CMD_SIGNAL_MINIMISE = 28 => "rail_cmd.signal_minimise",
+        RAIL_CMD_SIGNAL_AUTOFILL = 29 => "rail_cmd.signal_autofill",
+        RAIL_CMD_SIGNAL_WORMHOLE = 30 => "rail_cmd.signal_wormhole",
+        RAIL_CMD_SIGNAL_REMOVE = 31 => "rail_cmd.signal_remove",
+        RAIL_CMD_SIGNAL_REMOVE_PATH_END = 32 => "rail_cmd.signal_remove_path_end",
+        RAIL_CMD_CONVERT_RAIL = 33 => "rail_cmd.convert_rail",
+        RAIL_CMD_CONVERT_DEPOT = 34 => "rail_cmd.convert_depot",
+        RAIL_CMD_CONVERT_WORMHOLE = 35 => "rail_cmd.convert_wormhole",
+        RAIL_CMD_CONVERT_STATION_CROSSING = 36 => "rail_cmd.convert_station_crossing",
+        RAIL_CMD_CONVERT_REROUTE = 37 => "rail_cmd.convert_reroute",
+        RAIL_CMD_CLEAR_RAIL = 38 => "rail_cmd.clear_rail",
+        RAIL_CMD_CLEAR_WATER = 39 => "rail_cmd.clear_water",
+        RAIL_CMD_CLEAR_DEPOT = 40 => "rail_cmd.clear_depot",
+        RAIL_CMD_OWNER_TRANSFER = 41 => "rail_cmd.owner_transfer",
+        RAIL_CMD_OWNER_CLEAR = 42 => "rail_cmd.owner_clear",
+        RAIL_CMD_TERRAFORM_CORNER = 43 => "rail_cmd.terraform_corner",
+        RAIL_CMD_TERRAFORM_DEPOT = 44 => "rail_cmd.terraform_depot",
+        RAIL_CMD_BUILD_ABOVE_CLEAR = 45 => "rail_cmd.build_above_clear",
+    }
+    road {
+        ROAD_TICKS = 0 => "road.ticks",
+        ROAD_SERVICES = 1 => "road.services",
+        ROAD_VISITORS = 2 => "road.visitors",
+        ROAD_ENTRIES = 3 => "road.entries",
+    }
+    ship {
+        SHIP_LOCK_UP = 0 => "ship.lock_up",
+        SHIP_LOCK_DOWN = 1 => "ship.lock_down",
+        SHIP_REVERSE = 2 => "ship.reverse",
+        SHIP_ROTATE = 3 => "ship.rotate",
+        SHIP_DEPOT_LEAVE = 4 => "ship.depot_leave",
+        SHIP_AUTO_SERVICE = 5 => "ship.auto_service",
+        SHIP_BUOY = 6 => "ship.buoy",
+        SHIP_LOADING = 7 => "ship.loading",
+        SHIP_WATER_CHANGE = 8 => "ship.water_change",
+        SHIP_AQUEDUCT = 9 => "ship.aqueduct",
+        SHIP_ROTATION_RELOAD = 10 => "ship.rotation_reload",
+        SHIP_DEPOT_SEARCH = 11 => "ship.depot_search",
+        SHIP_BUILD = 12 => "ship.build",
+        SHIP_ECONOMY_DAY = 13 => "ship.economy_day",
+        SHIP_PATH_CACHE = 14 => "ship.path_cache",
+        SHIP_DEPOT_ENTER = 15 => "ship.depot_enter",
+    }
+    ship_yapf {
+        SHIP_YAPF_REGION_NODES = 0 => "ship_yapf.region_nodes",
+        SHIP_YAPF_TRACK_NODES = 1 => "ship_yapf.track_nodes",
+        SHIP_YAPF_RETRIES = 2 => "ship_yapf.retries",
+        SHIP_YAPF_TRACK_LIMITS = 3 => "ship_yapf.track_limits",
+        SHIP_YAPF_INTERMEDIATE = 4 => "ship_yapf.intermediate",
+        SHIP_YAPF_CACHE_TRUNCATIONS = 5 => "ship_yapf.cache_truncations",
+        SHIP_YAPF_FINAL_REGION_CLEARS = 6 => "ship_yapf.final_region_clears",
+        SHIP_YAPF_LOST = 7 => "ship_yapf.lost",
+        SHIP_YAPF_RANDOM_DRAWS = 8 => "ship_yapf.random_draws",
+        SHIP_YAPF_REVERSE_ORIGINS = 9 => "ship_yapf.reverse_origins",
+        SHIP_YAPF_BLOCKED_FALLBACKS = 10 => "ship_yapf.blocked_fallbacks",
+        SHIP_YAPF_REGION_LIMITS = 11 => "ship_yapf.region_limits",
+        SHIP_YAPF_ALTERNATE_DOCKING = 12 => "ship_yapf.alternate_docking",
+        SHIP_YAPF_CHOOSE_CALLS = 13 => "ship_yapf.choose_calls",
+        SHIP_YAPF_REVERSE_CALLS = 14 => "ship_yapf.reverse_calls",
+        SHIP_YAPF_BLOCKED_CALLS = 15 => "ship_yapf.blocked_calls",
+        SHIP_YAPF_REVERSE_CHOSEN = 16 => "ship_yapf.reverse_chosen",
+    }
+    signal {
+        SIGNAL_UPDATES = 0 => "signal.updates",
+        SIGNAL_TILES = 1 => "signal.tiles",
+        SIGNAL_SERVICES = 2 => "signal.services",
+        SIGNAL_TBU_OVERFLOW = 3 => "signal.tbu_overflow",
+        SIGNAL_TBD_OVERFLOW = 4 => "signal.tbd_overflow",
+        SIGNAL_GLOBAL_OVERFLOW = 5 => "signal.global_overflow",
+        SIGNAL_TRAIN = 6 => "signal.train",
+        SIGNAL_OWNER_BARRIER = 7 => "signal.owner_barrier",
+        SIGNAL_DEPOT = 8 => "signal.depot",
+        SIGNAL_SPLIT = 9 => "signal.split",
+        SIGNAL_PBS = 10 => "signal.pbs",
+        SIGNAL_MULTI_ENTER = 11 => "signal.multi_enter",
+        SIGNAL_EXIT = 12 => "signal.exit",
+        SIGNAL_GREEN_EXIT = 13 => "signal.green_exit",
+        SIGNAL_STATION = 14 => "signal.station",
+        SIGNAL_CROSSING = 15 => "signal.crossing",
+        SIGNAL_WORMHOLE = 16 => "signal.wormhole",
+        SIGNAL_RESERVED_SKIP = 17 => "signal.reserved_skip",
+        SIGNAL_COMBO = 18 => "signal.combo",
+        SIGNAL_PROPAGATE = 19 => "signal.propagate",
+        SIGNAL_CHANGED = 20 => "signal.changed",
+        SIGNAL_RESET = 21 => "signal.reset",
+        SIGNAL_FORCED_FLUSH = 22 => "signal.forced_flush",
+        SIGNAL_BYTES = 23 => "signal.bytes",
+        SIGNAL_ENTRIES = 24 => "signal.entries",
+        SIGNAL_CONTEXT_ACQUISITIONS = 25 => "signal.context_acquisitions",
+        SIGNAL_CONTEXT_OWNER_READS = 26 => "signal.context_owner_reads",
+        SIGNAL_OCCUPANCY_ACCESSORS = 27 => "signal.occupancy_accessors",
+        SIGNAL_CONTEXT_BYTES = 28 => "signal.context_bytes",
+        SIGNAL_CLASSIFICATION_BYTES = 29 => "signal.classification_bytes",
+        SIGNAL_MULTI_EXIT = 30 => "signal.multi_exit",
+        SIGNAL_MULTI_GREEN = 31 => "signal.multi_green",
+        SIGNAL_COMBO_RED = 32 => "signal.combo_red",
+        SIGNAL_NEIGHBOUR_CONTINUE = 33 => "signal.neighbour_continue",
+    }
+    station {
+        STATION_REJECTED_DELIVERY = 0 => "station.rejected_delivery",
+        STATION_STALE_REMOVE = 1 => "station.stale_remove",
+        STATION_STALE_REFRESH = 2 => "station.stale_refresh",
+        STATION_UNLOAD_CARGO = 3 => "station.unload_cargo",
+        STATION_GRADUAL_UNLOAD = 4 => "station.gradual_unload",
+        STATION_FULL_LOAD_RESERVE = 5 => "station.full_load_reserve",
+        STATION_STALE_RESTRICT = 6 => "station.stale_restrict",
+        STATION_STALE_RELEASE = 7 => "station.stale_release",
+    }
+    town {
+        TOWN_SERVICES = 0 => "town.services",
+        TOWN_BYTES = 1 => "town.bytes",
+        TOWN_PLACEMENT = 2 => "town.placement",
+        TOWN_GROWTH = 3 => "town.growth",
+        TOWN_GENERATED = 4 => "town.generated",
+        TOWN_COAST = 5 => "town.coast",
+        TOWN_MANUAL = 6 => "town.manual",
+        TOWN_DEITY = 7 => "town.deity",
+        TOWN_EDITOR = 8 => "town.editor",
+        TOWN_INVALID = 9 => "town.invalid",
+        TOWN_DUPLICATE = 10 => "town.duplicate",
+        TOWN_MONEY = 11 => "town.money",
+        TOWN_ZERO_GROWTH = 12 => "town.zero_growth",
+        TOWN_RETRY = 13 => "town.retry",
+        TOWN_RENAME = 14 => "town.rename",
+        TOWN_NAME_RETRY = 15 => "town.name_retry",
+        TOWN_NAME_EXHAUSTED = 16 => "town.name_exhausted",
+        TOWN_NAME_DUPLICATE = 17 => "town.name_duplicate",
+        TOWN_FALLBACK = 18 => "town.fallback",
+        TOWN_CANCELLED = 19 => "town.cancelled",
+        TOWN_GRID = 20 => "town.grid",
+        TOWN_NAME_SET = 21 => "town.name_set",
+        TOWN_ENTRIES = 22 => "town.entries",
+        TOWN_NO_CITIES = 23 => "town.no_cities",
+    }
+    train {
+        TRAIN_TICK_FIRST = 0 => "train.tick_first",
+        TRAIN_TICK_SECOND = 1 => "train.tick_second",
+        TRAIN_REVERSAL = 2 => "train.reversal",
+        TRAIN_WORMHOLE_SWAP = 3 => "train.wormhole_swap",
+        TRAIN_UNEQUAL_BEFORE = 4 => "train.unequal_before",
+        TRAIN_UNEQUAL_AFTER = 5 => "train.unequal_after",
+        TRAIN_DEPOT_START = 6 => "train.depot_start",
+        TRAIN_DEPOT_SERVICE = 7 => "train.depot_service",
+        TRAIN_RED_ONEWAY = 8 => "train.red_oneway",
+        TRAIN_RED_TWOWAY = 9 => "train.red_twoway",
+        TRAIN_FORCE_SIGNAL = 10 => "train.force_signal",
+        TRAIN_STUCK_RETRY = 11 => "train.stuck_retry",
+        TRAIN_STUCK_REVERSE = 12 => "train.stuck_reverse",
+        TRAIN_CROSS_BAR = 13 => "train.cross_bar",
+        TRAIN_CROSS_UNBAR = 14 => "train.cross_unbar",
+        TRAIN_COLLISION = 15 => "train.collision",
+        TRAIN_CRASH_DELETE = 16 => "train.crash_delete",
+        TRAIN_FREE_WAGON_DELETE = 17 => "train.free_wagon_delete",
+        TRAIN_ARTICULATED_MOVE = 18 => "train.articulated_move",
+        TRAIN_FIRST_TILE_RAIL = 19 => "train.first_tile_rail",
+        TRAIN_WORMHOLE_EXIT = 20 => "train.wormhole_exit",
+        TRAIN_DEPOT_REENTRY = 21 => "train.depot_reentry",
+        TRAIN_CONTROLLER_EXTENSION = 22 => "train.controller_extension",
+        TRAIN_EXTENSION_FAIL = 23 => "train.extension_fail",
+        TRAIN_EXTENSION_ROLLBACK = 24 => "train.extension_rollback",
+        TRAIN_EXTENSION_OPPOSING_RED = 25 => "train.extension_opposing_red",
+        TRAIN_EXTENSION_RESTORE = 26 => "train.extension_restore",
+        TRAIN_FREE_PATH = 27 => "train.free_path",
+        TRAIN_CHOOSE_TRACK = 28 => "train.choose_track",
+        TRAIN_ORDER_LOOKAHEAD = 29 => "train.order_lookahead",
+        TRAIN_ORDER_RESTORE = 30 => "train.order_restore",
+    }
+    vehicle {
+        VEHICLE_CALLBACK32 = 0 => "vehicle.callback32",
+        VEHICLE_CARGO_AGES = 1 => "vehicle.cargo_ages",
+        VEHICLE_CARGO_OWNER = 2 => "vehicle.cargo_owner",
+        VEHICLE_CROSSINGS = 3 => "vehicle.crossings",
+        VEHICLE_DAYS = 4 => "vehicle.days",
+        VEHICLE_DELETED = 5 => "vehicle.deleted",
+        VEHICLE_DESCRIPTOR_BYTES = 6 => "vehicle.descriptor_bytes",
+        VEHICLE_MOTION = 7 => "vehicle.motion",
+        VEHICLE_OBSERVED_BYTES = 8 => "vehicle.observed_bytes",
+        VEHICLE_OUTER_VISITS = 9 => "vehicle.outer_visits",
+        VEHICLE_PACKET_LOOKUPS = 10 => "vehicle.packet_lookups",
+        VEHICLE_PERIODIC_SOUND = 11 => "vehicle.periodic_sound",
+        VEHICLE_POOL_GROWTH = 12 => "vehicle.pool_growth",
+        VEHICLE_POST_TICK = 13 => "vehicle.post_tick",
+        VEHICLE_RUNNING_SOUND = 14 => "vehicle.running_sound",
+        VEHICLE_SCALAR_READ_BYTES = 15 => "vehicle.scalar_read_bytes",
+        VEHICLE_SCALAR_WRITE_BYTES = 16 => "vehicle.scalar_write_bytes",
+        VEHICLE_STATIONS = 17 => "vehicle.stations",
+        VEHICLE_VISITS = 18 => "vehicle.visits.train",
+        VEHICLE_VISITS_ROAD = 19 => "vehicle.visits.road",
+        VEHICLE_VISITS_SHIP = 20 => "vehicle.visits.ship",
+        VEHICLE_VISITS_AIRCRAFT = 21 => "vehicle.visits.aircraft",
+        VEHICLE_VISITS_EFFECT = 22 => "vehicle.visits.effect",
+        VEHICLE_VISITS_DISASTER = 23 => "vehicle.visits.disaster",
+        VEHICLE_VISITS_END = 24 => "vehicle.visits.end",
+        VEHICLE_VISITS_INVALID = 25 => "vehicle.visits.invalid",
+    }
+    vehicle_maintenance {
+        VEHICLE_MAINT_AGE = 0 => "vehicle_maintenance.age",
+        VEHICLE_MAINT_AIRCRAFT = 1 => "vehicle_maintenance.aircraft",
+        VEHICLE_MAINT_BYTES = 2 => "vehicle_maintenance.bytes",
+        VEHICLE_MAINT_CHECK = 3 => "vehicle_maintenance.check",
+        VEHICLE_MAINT_COUNTDOWN = 4 => "vehicle_maintenance.countdown",
+        VEHICLE_MAINT_CROSSINGS = 5 => "vehicle_maintenance.crossings",
+        VEHICLE_MAINT_DAYS = 6 => "vehicle_maintenance.days",
+        VEHICLE_MAINT_DECAY = 7 => "vehicle_maintenance.decay",
+        VEHICLE_MAINT_DELAY = 8 => "vehicle_maintenance.delay",
+        VEHICLE_MAINT_ENDED = 9 => "vehicle_maintenance.ended",
+        VEHICLE_MAINT_LOADING = 10 => "vehicle_maintenance.loading",
+        VEHICLE_MAINT_MAX_AGE = 11 => "vehicle_maintenance.max_age",
+        VEHICLE_MAINT_MINUTES = 12 => "vehicle_maintenance.minutes",
+        VEHICLE_MAINT_OLD_NEWS = 13 => "vehicle_maintenance.old_news",
+        VEHICLE_MAINT_PERCENT = 14 => "vehicle_maintenance.percent",
+        VEHICLE_MAINT_PROFIT_AGE = 15 => "vehicle_maintenance.profit_age",
+        VEHICLE_MAINT_RENEW = 16 => "vehicle_maintenance.renew",
+        VEHICLE_MAINT_REPLACE = 17 => "vehicle_maintenance.replace",
+        VEHICLE_MAINT_RESET = 18 => "vehicle_maintenance.reset",
+        VEHICLE_MAINT_RESET_REDUCED = 19 => "vehicle_maintenance.reset_reduced",
+        VEHICLE_MAINT_SERVICE = 20 => "vehicle_maintenance.service",
+        VEHICLE_MAINT_SMOKE = 21 => "vehicle_maintenance.smoke",
+        VEHICLE_MAINT_STARTED = 22 => "vehicle_maintenance.started",
+        VEHICLE_MAINT_TRIGGER = 23 => "vehicle_maintenance.trigger",
+        VEHICLE_MAINT_VALUE = 24 => "vehicle_maintenance.value",
+        VEHICLE_MAINT_ENTRIES = 25 => "vehicle_maintenance.entries",
+    }
+    water {
+        WATER_TRACKS = 0 => "water.tracks",
+        WATER_FOLLOWS = 1 => "water.follows",
+        WATER_AQUEDUCTS = 2 => "water.aqueducts",
+        WATER_REBUILDS = 3 => "water.rebuilds",
+    }
+}
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static COUNTS: [AtomicU64; NAMES.len()] = [const { AtomicU64::new(0) }; NAMES.len()];
@@ -927,25 +409,39 @@ pub extern "C" fn openttd_rust_witness_count(index: usize) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn groups_start_at_their_prefix() {
-        fn group(name: &str) -> &str {
-            name.split_once('.').map_or(name, |(group, _)| group)
+    fn blocks_do_not_overlap() {
+        // Every local index is consecutive inside its block; all blocks together
+        // cover the dense counter array exactly once, with no overlaps or holes.
+        assert_eq!(INDICES, (0..NAMES.len()).collect::<Vec<_>>());
+        let prefixes: Vec<_> = BLOCKS
+            .iter()
+            .map(|block| block[0].split_once('.').unwrap().0)
+            .collect();
+        assert!(prefixes.windows(2).all(|pair| pair[0] < pair[1]));
+        for (block, prefix) in BLOCKS.iter().zip(prefixes) {
+            assert!(
+                block
+                    .iter()
+                    .all(|name| name.split_once('.').unwrap().0 == prefix)
+            );
         }
-        for (base, prefix) in [
-            (TRAIN, "train."),
-            (SHIP, "ship."),
-            (SHIP_YAPF, "ship_yapf."),
-            (RAIL, "rail."),
-            (WATER, "water."),
-        ] {
-            assert!(NAMES[base].starts_with(prefix));
-            assert!(base == 0 || !NAMES[base - 1].starts_with(prefix));
-        }
-        for (index, name) in NAMES.iter().enumerate().skip(1) {
-            if group(name) != group(NAMES[index - 1]) {
-                assert!(!NAMES[..index].iter().any(|n| group(n) == group(name)));
-            }
+    }
+
+    #[test]
+    fn names_are_unique_and_exported() {
+        let unique: std::collections::BTreeSet<_> = NAMES.iter().collect();
+        assert_eq!(unique.len(), NAMES.len());
+        for (index, name) in NAMES.iter().enumerate() {
+            let mut length = 0;
+            let pointer = unsafe { openttd_rust_witness_name(index, &raw mut length) };
+            assert_eq!(length, name.len());
+            // SAFETY: The export supplies static readable bytes of this length.
+            assert_eq!(
+                unsafe { std::slice::from_raw_parts(pointer, length) },
+                name.as_bytes()
+            );
         }
         let mut length = 0;
         assert!(unsafe { openttd_rust_witness_name(NAMES.len(), &raw mut length) }.is_null());
