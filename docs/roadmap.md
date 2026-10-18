@@ -151,9 +151,12 @@ unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in 
 6. **Commands:**
    - #266 road commands is active from the integrated #280 base, reusing #270's command checks and crossing services;
    - #267 station construction on the #125 owner is active from integrated base;
-   - #247 town commands, authority and deletion.
+   - #247 town commands, authority and deletion, after #256/#269 integrates;
+   - #293 tunnel/bridge construction, removal and ownership, once #247 and #212 settle;
+   - #294 water construction/restoration, leaving docking with #267 and flooding with #212;
+   - #295 object construction, generation and HQ lifecycle, including canonical counts and cleared-area scratch.
 
-   Tunnel/bridge follows once #247 and #212 settle.
+   Fresh Astra planning selected #293-#295. Reuse canonical services; none waits on draft wrappers. Object generation's cancellation services need return-before-rethrow handling.
 7. **#168 tail, largest first.** `order_cmd.cpp` and `economy.cpp` hold 65 of the 198 baseline copies. Train, ship, effect and cargo-packet C-layout blocks wait for nothing.
 
 New owners reuse integrated services, never draft copies. A Rust-allocated
@@ -170,12 +173,13 @@ CI_ON_DEMAND=true; #287 bootstrap Full passed. Keep at most three maintenance PR
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
 | #291 / #292 | `fix-registry-maintenance-291`, `7d0a69899d` | Fresh review has no findings; exact-head Full requested. Integrate, then observe protected Quick recovery before other merges. |
-| #284 | `generated-abi-284` | Same unfinished implementation resumed after provider-capacity failure; dirty work preserved. 650 handwritten support/test lines plus mechanical conversions; push milestone before opening a draft when a maintenance PR slot frees. |
+| #284 | `generated-abi-284` | Retry also hit provider capacity; root continues the preserved conversion. Generated-list tests/Cargo4 pass; native verify pending after factory and abort-default cleanup. 650 handwritten support/test lines plus mechanical conversions; no fourth maintenance PR. |
 | #283 / #287 | `t3/retire-evidence-receipts`, `ecbd157836` | Four review findings fixed and root-checked; 337/350 tooling. Conflict-free base update retains speed tests. Full passed; held for #292 and protected Quick recovery, then actual docs-only postmerge skip. |
 | #256 / #269 | `house-lifecycle-256`, `bc691107d2` | Fresh review of steering fixes/probes and conflict resolution has no findings; Full pending. Platform requested; 45 scenarios/439 snapshots and final six medians pass locally, P2016 1.353. |
 | #212 / #255 | `landscape-owner-212`, `cc6e1172e5` | Registry/base adoption active; six steering fixes and prior 141 scenarios/980 snapshots pass. Platform requested; fresh review/final-head speed/Full follow. |
 | #266 / #290 | `road-commands-266`, `6b89dcd222` | Ownership implementation active from integrated `83bd72774e`; 200-300 tooling lines. |
-| #267 | `station-commands-267` | Whole station command implementation assigned from integrated `5a32ef6945`; 300-400 tooling lines. #247 is the last unstarted selected owner; fresh Astra planning takes the next free slot. |
+| #267 | `station-commands-267` | Whole station command implementation assigned from integrated `5a32ef6945`; 300-400 tooling lines. Docking includes IsPossibleDockingTile/CheckForDockingTile. |
+| #247, #293-#295 | none | Selected future whole owners, with prerequisites and budgets in their issues; fresh Astra plan completed. |
 | #288 / #289 (#275) | `road-yapf-reads-288`, `45a4a1adfe` | Fresh fixing review and exact-head Full requested. Cargo/native/20 road scenarios and all six speed guards pass; 216/400 added implementation/test/ABI lines, no new Python tooling. |
 | #281 | none | Follows the revised #275 fix order when a maintenance slot frees. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Shared map-view PR after #255; retain attribution and #282's shared profile-lock/concurrency acceptance. |
