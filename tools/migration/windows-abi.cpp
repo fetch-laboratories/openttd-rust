@@ -966,6 +966,7 @@ static void Trees()
 		.remove_rail = TreeUnused<void, OpenTTDCommandCost *, uint32_t, Track>,
 		.apply_foundation = TreeUnused<OpenTTDFoundationSlope, Foundation, Slope>,
 		.iterator_begin = TreeUnused<void, OpenTTDTileVehicleCursor *, uint32_t>,
+		.iterator_current = TreeUnused<OpenTTDVehicle *, OpenTTDTileVehicleCursor *>,
 		.iterator_next = TreeUnused<void, OpenTTDTileVehicleCursor *>,
 		.iterator_end = TreeUnused<void, OpenTTDTileVehicleCursor *>,
 		.airport_tile = TreeUnused<bool, uint32_t>,
