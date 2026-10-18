@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Check generated probes against the deleted lists, without keeping another inventory."""
 
+import io
 import re
 import runpy
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 # Last integrated tree before #284; Quick checks fetch full history.
 BEFORE = "83bd72774e5cc62157f8415ee8c0e9d82fa4eff9"
+CONVERSION = "df9a6c22da0462ef68a918debdc5e715a757291d"
 GENERATOR = runpy.run_path(str(ROOT / "tools/generate-abi.py"))
 
 
@@ -23,12 +26,13 @@ def original(path):
 def legacy_lists():
     result = {}
     paths = ["tools/migration/windows-abi.cpp"]
-    paths += [
-        str(path.relative_to(ROOT)) for path in (ROOT / "src/tests").glob("*.cpp")
-    ]
+    paths += subprocess.check_output(
+        ["git", "ls-tree", "-r", "--name-only", BEFORE, "src/tests"],
+        cwd=ROOT,
+        text=True,
+    ).splitlines()
     for path in paths:
-        # A newly added test has no inventory in the pre-conversion tree.
-        if path == "src/tests/service_tables.cpp":
+        if not path.endswith(".cpp"):
             continue
         source = original(path)
         aliases = dict(re.findall(r"using\s+(\w+)\s*=\s*([^;]+);", source))
@@ -55,7 +59,24 @@ def legacy_lists():
 
 class GeneratedAbiTests(unittest.TestCase):
     def test_every_deleted_probe_and_native_only_list_is_preserved(self):
-        generated = GENERATOR["generate"]()
+        # Freeze the conversion inputs, never today's evolving ABI. Current generation
+        # is tested independently below, so later additions/retirements remain valid.
+        with tempfile.TemporaryDirectory() as directory:
+            archive = subprocess.check_output(
+                [
+                    "git",
+                    "archive",
+                    CONVERSION,
+                    "tools/generate-abi.py",
+                    "rust/openttd-kernels/src",
+                    "src/rust",
+                ],
+                cwd=ROOT,
+            )
+            with tarfile.open(fileobj=io.BytesIO(archive)) as files:
+                files.extractall(directory, filter="data")
+            converter = runpy.run_path(str(Path(directory) / "tools/generate-abi.py"))
+            generated = converter["generate"]()
         actual = {}
         for path, contents in generated.items():
             if not path.endswith(".inc"):
@@ -66,15 +87,6 @@ class GeneratedAbiTests(unittest.TestCase):
                 self.assertNotIn(name, actual)
                 actual[name] = re.sub(r"\s+", "", values)
         self.assertEqual(legacy_lists(), actual)
-        for name, group, *_ in GENERATOR["declarations"]():
-            if group in {
-                "industry",
-                "company_economy",
-                "engine",
-                "fleet",
-                "station_service",
-            }:
-                self.assertIn(f'Layout("{name}"', generated[f"abi-layout-{group}.inc"])
 
     def test_generation_is_deterministic_and_build_directory_only(self):
         with tempfile.TemporaryDirectory() as directory:
