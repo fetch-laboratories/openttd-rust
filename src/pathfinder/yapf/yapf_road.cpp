@@ -202,7 +202,7 @@ protected:
 						/* Increase the cost for drive-through road stops */
 						cost += Yapf().PfGetSettings().road_stop_penalty;
 						DiagDirection dir = TrackdirToExitdir(trackdir);
-						if (!RoadSvcContinuation(index, (tile - TileOffsByDiagDir(dir)).base())) {
+						if (!RoadStop::IsDriveThroughRoadStopContinuation(tile, tile - TileOffsByDiagDir(dir))) {
 							/* When we're the first road stop in a 'queue' of them we increase
 							 * cost based on the fill percentage of the whole queue. */
 							const RoadStop::Entry &entry = rs->GetEntry(dir);
@@ -286,7 +286,7 @@ public:
 
 			/* add min/max speed penalties */
 			int min_speed = 0;
-			int max_veh_speed = std::min<int>(v->current_order.GetMaxSpeed() * 2);
+			int max_veh_speed = std::min<int>(v->GetDisplayMaxSpeed(), v->current_order.GetMaxSpeed() * 2);
 			int max_speed = F.GetSpeedLimit(&min_speed);
 			if (max_speed < max_veh_speed) segment_cost += YAPF_TILE_LENGTH * (max_veh_speed - max_speed) * (4 + F.tiles_skipped) / max_veh_speed;
 			if (min_speed > max_veh_speed) segment_cost += YAPF_TILE_LENGTH * (min_speed - max_veh_speed);
