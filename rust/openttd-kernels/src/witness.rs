@@ -180,6 +180,7 @@ witness_blocks! {
         ROAD_COMMANDS_CONVERT_TILE = 25 => "road_commands.convert_tile",
         ROAD_COMMANDS_CONVERT_WORMHOLE = 26 => "road_commands.convert_wormhole",
         ROAD_COMMANDS_BUILD_ABOVE = 27 => "road_commands.build_above",
+        ROAD_COMMANDS_FLOOD_WORKS = 28 => "road_commands.flood_works",
     }
     ship {
         SHIP_LOCK_UP = 0 => "ship.lock_up",

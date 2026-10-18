@@ -257,7 +257,7 @@ pub struct RailCommandServices {
     pub consist_changed: unsafe extern "C" fn(*mut ConvertFrame),
 }
 
-const INVALID_STRING: u32 = 0xFFFF;
+pub(crate) const INVALID_STRING: u32 = 0xFFFF;
 const CONSTRUCTION: u8 = 0;
 const EXECUTE: u16 = 1 << 0;
 const AUTO: u16 = 1 << 1;

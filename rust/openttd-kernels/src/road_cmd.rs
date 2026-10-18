@@ -35,6 +35,12 @@ pub struct TownEdge {
     pub tile: u32,
     pub radius: u32,
 }
+/// Fields needed to advance the original ascending effect iterator.
+#[repr(C)]
+pub struct WorksEffect {
+    pub id: u32,
+    pub tile: u32,
+}
 /// Native `StringID` constants.
 #[repr(C)]
 pub struct Strings {
@@ -81,8 +87,10 @@ pub struct RoadCommandServices {
     pub make_depot: extern "C" fn(u32, u8, u16, u8, u8),
     /// Native `depot_exit` service.
     pub depot_exit: extern "C" fn(u32, u8),
-    /// Native `remove_works_effects` service.
-    pub remove_works_effects: extern "C" fn(u32),
+    /// Next effect in native pool order; `u32::MAX` denotes end.
+    pub next_effect: extern "C" fn(u32) -> WorksEffect,
+    /// Delete the source-valid effect shell and its owner.
+    pub delete_effect: extern "C" fn(u32),
     /// Native `available_money` service.
     pub available_money: extern "C" fn() -> i64,
     /// Native `owned_by_town` service.
@@ -98,7 +106,7 @@ pub struct RoadCommandServices {
     /// Native `cargo_changed` service.
     pub cargo_changed: unsafe extern "C" fn(*mut ConvertFrame),
 }
-use crate::rail_cmd::Cost;
+use crate::rail_cmd::{Cost, INVALID_STRING};
 const ROAD: u8 = 2;
 const RAIL: u8 = 1;
 const STATION: u8 = 5;
@@ -196,7 +204,7 @@ impl<'a> Ctx<'a> {
         (self.shared.tile_type)(tile)
     }
     fn kind(&self, tile: u32) -> u8 {
-        (self.shared.road_tile_kind)(tile)
+        (self.shared.road_tile_kind)(tile).0
     }
     fn rt(&self, tile: u32, rtt: u8) -> u8 {
         if rtt == 0 {
@@ -379,20 +387,20 @@ impl<'a> Ctx<'a> {
             ROAD => self.no_vehicle(cost, tile),
             STATION => {
                 if !(self.shared.is_drive_through_stop)(tile) {
-                    cost.error(u32::MAX);
+                    cost.error(INVALID_STRING);
                     return;
                 }
                 self.no_vehicle(cost, tile);
             }
             WORMHOLE => {
                 if (self.shared.tunnel_transport)(tile) != 1 {
-                    cost.error(u32::MAX);
+                    cost.error(INVALID_STRING);
                     return;
                 }
                 self.free(cost, tile, (self.rail.other_tunnel_bridge_end)(tile));
             }
             _ => {
-                cost.error(u32::MAX);
+                cost.error(INVALID_STRING);
                 return;
             }
         }
@@ -480,13 +488,24 @@ impl<'a> Ctx<'a> {
                     && present != 0
                     && present & INVALID_SLOPES[0][usize::from(slope & 15)] == present
                 {
-                    cost.error(u32::MAX);
+                    cost.error(INVALID_STRING);
                     return;
                 }
                 if flags & EXEC != 0 {
                     if (self.shared.has_road_works)(tile) {
                         debug_assert_eq!((self.shared.current_company)(), WATER);
-                        (self.s.remove_works_effects)(tile);
+                        w::hit(w::ROAD_COMMANDS_FLOOD_WORKS);
+                        let mut from = 0;
+                        loop {
+                            let effect = (self.s.next_effect)(from);
+                            if effect.id == u32::MAX {
+                                break;
+                            }
+                            from = effect.id.wrapping_add(1);
+                            if effect.tile == tile {
+                                (self.s.delete_effect)(effect.id);
+                            }
+                        }
                     }
                     self.infrastructure(rt, self.owner(tile, rtt), -(pieces.count_ones() as i32));
                     if present == 0 {
@@ -519,7 +538,7 @@ impl<'a> Ctx<'a> {
             1 => {
                 w::hit(w::ROAD_COMMANDS_REMOVE_CROSSING);
                 if pieces & ((self.shared.crossing_road_bits)(tile).0 ^ 15) != 0 {
-                    cost.error(u32::MAX);
+                    cost.error(INVALID_STRING);
                     return;
                 }
                 if flags & EXEC != 0 {
@@ -555,7 +574,7 @@ impl<'a> Ctx<'a> {
                 }
                 cost.set((self.s.clear_cost)(rt).saturating_mul(2));
             }
-            _ => cost.error(u32::MAX),
+            _ => cost.error(INVALID_STRING),
         }
         // ret is a separate native slot reserved by callers for nested command paths.
         let _ = ret;
@@ -563,7 +582,7 @@ impl<'a> Ctx<'a> {
     fn slope(&self, cost: Cost<'_>, mut slope: u8, pieces: &mut u8, existing: u8, other: u8) {
         *pieces &= !existing;
         if *pieces == 0 {
-            cost.error(u32::MAX);
+            cost.error(INVALID_STRING);
             return;
         }
         cost.zero();
@@ -601,7 +620,7 @@ impl<'a> Ctx<'a> {
                 return;
             }
         }
-        cost.error(u32::MAX);
+        cost.error(INVALID_STRING);
     }
     fn length(&self, tile: u32, end: u32) -> u32 {
         let a = (self.map.tile_x(tile) + self.map.tile_y(tile)) as i32;
@@ -636,7 +655,7 @@ impl<'a> Ctx<'a> {
             || (company == TOWN && !(self.s.town_valid)(town_id))
             || (company == DEITY && town_id != INVALID_TOWN)
         {
-            cost.error(u32::MAX);
+            cost.error(INVALID_STRING);
             return;
         }
         if company != TOWN {
@@ -659,7 +678,7 @@ impl<'a> Ctx<'a> {
             }
         }
         if pieces == 0 || pieces & !15 != 0 || toggle >= 4 || !(self.shared.road_type_valid)(rt) {
-            cost.error(u32::MAX);
+            cost.error(INVALID_STRING);
             return;
         }
         let slope = (self.shared.tile_slope)(tile);
@@ -912,7 +931,7 @@ impl<'a> Ctx<'a> {
                         }
                         cost.add_money(ret.money());
                     } else {
-                        cost.error(u32::MAX);
+                        cost.error(INVALID_STRING);
                         return;
                     }
                 }
@@ -1032,7 +1051,7 @@ impl<'a> Ctx<'a> {
     ) {
         w::hit(w::ROAD_COMMANDS_BUILD_LONG);
         if !self.valid_drag(start, end, rt, axis) || drd >= 4 {
-            cost.error(u32::MAX);
+            cost.error(INVALID_STRING);
             return;
         }
         let mut dir = if axis == 0 { 2 } else { 1 };
@@ -1048,7 +1067,7 @@ impl<'a> Ctx<'a> {
             drd ^= 3;
         }
         cost.set(0);
-        last.error(u32::MAX);
+        last.error(INVALID_STRING);
         let mut tile = start;
         let (mut bridge, mut tunnel, mut success) = (false, false, false);
         loop {
@@ -1129,7 +1148,7 @@ impl<'a> Ctx<'a> {
         w::hit(w::ROAD_COMMANDS_REMOVE_LONG);
         cost.set(0);
         if !self.valid_drag(start, end, rt, axis) {
-            cost.error(u32::MAX);
+            cost.error(INVALID_STRING);
             return 0;
         }
         if start > end || (start == end && start_half) {
@@ -1139,7 +1158,7 @@ impl<'a> Ctx<'a> {
         let available = (self.s.available_money)();
         let mut spent = 0_i64;
         let mut tile = start;
-        last.error(u32::MAX);
+        last.error(INVALID_STRING);
         let mut success = false;
         loop {
             let mut bits = axis_bits(axis);
@@ -1190,7 +1209,7 @@ impl<'a> Ctx<'a> {
     fn build_depot(&self, cost: Cost<'_>, ret: Cost<'_>, flags: u16, tile: u32, rt: u8, dir: u8) {
         w::hit(w::ROAD_COMMANDS_DEPOT_BUILD);
         if !(self.shared.road_type_valid)(rt) || dir >= 4 {
-            cost.error(u32::MAX);
+            cost.error(INVALID_STRING);
             return;
         }
         cost.set(0);
@@ -1239,7 +1258,7 @@ impl<'a> Ctx<'a> {
                 return;
             }
             if !(self.r.depot_available)() {
-                cost.error(u32::MAX);
+                cost.error(INVALID_STRING);
                 return;
             }
         }
@@ -1499,7 +1518,7 @@ impl<'a> Ctx<'a> {
     ) {
         w::hit(w::ROAD_COMMANDS_CONVERT);
         if !(self.shared.road_type_valid)(to) || start >= self.size() {
-            cost.error(u32::MAX);
+            cost.error(INVALID_STRING);
             return;
         }
         let rtt = u8::from((self.shared.road_tram_type)(to).0);
@@ -1965,4 +1984,23 @@ pub unsafe extern "C" fn openttd_rust_road_build_above(
     // SAFETY: caller supplies valid immutable native tables.
     let c = unsafe { Ctx::new(services) };
     c.build_above(c.c(out), flags, tile);
+}
+
+/// Removal entry also used by the native road tile loop pending #212.
+/// # Safety
+/// Immutable tables and distinct live cost slots outlive this synchronous call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_remove(
+    services: *const RoadCommandServices,
+    out: *mut CommandCost,
+    ret: *mut CommandCost,
+    flags: u16,
+    tile: u32,
+    pieces: u8,
+    rtt: u8,
+    town_check: bool,
+) {
+    // SAFETY: caller supplies valid tables and source-valid map inputs.
+    let c = unsafe { Ctx::new(services) };
+    c.remove(c.c(out), c.c(ret), tile, flags, pieces, rtt, town_check);
 }

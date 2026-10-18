@@ -48,6 +48,10 @@
 
 #include "safeguards.h"
 
+#ifdef WITH_RUST
+static CommandCost RemoveRoad(TileIndex tile, DoCommandFlags flags, RoadBits pieces, RoadTramType rtt, bool town_check);
+#endif
+
 /** Helper type for lists/vectors of road vehicles */
 typedef std::vector<RoadVehicle *> RoadVehicleList;
 
@@ -2713,11 +2717,10 @@ static void RoadOwnedByTown(OpenTTDCommandCost *out, uint32_t tile) noexcept
 		RoadCost(out).SetEncodedMessage(GetEncodedStringWithArgs(STR_ERROR_OWNED_BY, params));
 	}
 }
-static void RoadRemoveWorksEffects(uint32_t tile) noexcept
+static OpenTTDRoadWorksEffect RoadNextEffect(uint32_t from) noexcept
 {
-	for (EffectVehicle *v : EffectVehicle::Iterate()) {
-		if (TileVirtXY(v->x_pos, v->y_pos) == TileIndex{tile}) delete v;
-	}
+	for (const EffectVehicle *v : EffectVehicle::Iterate(from)) return {.id = v->index.base(), .tile = TileVirtXY(v->x_pos, v->y_pos).base()};
+	return {.id = UINT32_MAX, .tile = 0};
 }
 static void RoadCollectVehicles(OpenTTDRoadConvertFrame *frame, uint32_t tile) noexcept
 {
@@ -2748,7 +2751,8 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 		.depot_slope = [](uint8_t dir, uint8_t slope) noexcept { return CanBuildDepotByTileh(static_cast<DiagDirection>(dir), static_cast<Slope>(slope)); },
 		.make_depot = [](uint32_t tile, uint8_t owner, uint16_t depot, uint8_t dir, uint8_t rt) noexcept { MakeRoadDepot(TileIndex{tile}, Owner(owner), DepotID(depot), static_cast<DiagDirection>(dir), static_cast<RoadType>(rt)); },
 		.depot_exit = [](uint32_t tile, uint8_t dir) noexcept { SetRoadDepotExitDirection(TileIndex{tile}, static_cast<DiagDirection>(dir)); },
-		.remove_works_effects = RoadRemoveWorksEffects,
+		.next_effect = RoadNextEffect,
+		.delete_effect = [](uint32_t id) noexcept { delete EffectVehicle::Get(VehicleID(id)); },
 		.available_money = []() noexcept { return GetAvailableMoneyForCommand().base(); },
 		.owned_by_town = RoadOwnedByTown,
 		.build = [](OpenTTDCommandCost *out, uint16_t flags, uint32_t tile, uint8_t bits, uint8_t rt, uint8_t drd, uint16_t town) noexcept {
@@ -2772,6 +2776,12 @@ CommandCost CheckAllowRemoveRoad(TileIndex tile, RoadBits bits, Owner owner, Roa
 {
 	CommandCost cost;
 	openttd_rust_road_allow_remove(RoadServices(), RustCommandCost(&cost), tile.base(), bits, owner.base(), rtt, flags.base(), town_check);
+	return cost;
+}
+static CommandCost RemoveRoad(TileIndex tile, DoCommandFlags flags, RoadBits pieces, RoadTramType rtt, bool town_check)
+{
+	CommandCost cost, ret;
+	openttd_rust_road_remove(RoadServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), pieces, rtt, town_check);
 	return cost;
 }
 CommandCost CmdBuildRoad(DoCommandFlags flags, TileIndex tile, RoadBits bits, RoadType rt, DisallowedRoadDirections drd, TownID town)

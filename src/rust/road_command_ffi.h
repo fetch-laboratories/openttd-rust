@@ -17,6 +17,7 @@
  * Tile/pool shells, packed map, CommandCost and ordered affected list stay native. */
 struct OpenTTDRoadConvertFrame;
 struct OpenTTDRoadTownEdge { uint32_t tile, radius; };
+struct OpenTTDRoadWorksEffect { uint32_t id, tile; };
 struct OpenTTDRoadCommandStrings { uint32_t no_road, no_tram, junction, remove_road, no_suitable_road, no_suitable_tram, authority; };
 struct OpenTTDRoadCommandServices {
 	const OpenTTDRailCommandServices *rail_commands;
@@ -35,7 +36,8 @@ struct OpenTTDRoadCommandServices {
 	bool (*depot_slope)(uint8_t, uint8_t) noexcept;
 	void (*make_depot)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept;
 	void (*depot_exit)(uint32_t, uint8_t) noexcept;
-	void (*remove_works_effects)(uint32_t) noexcept;
+	OpenTTDRoadWorksEffect (*next_effect)(uint32_t) noexcept;
+	void (*delete_effect)(uint32_t) noexcept;
 	int64_t (*available_money)() noexcept;
 	void (*owned_by_town)(OpenTTDCommandCost *, uint32_t) noexcept;
 	void (*build)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t) noexcept;
@@ -49,6 +51,7 @@ extern "C" {
 bool openttd_rust_road_vehicles_built(const OpenTTDRoadCommandServices *);
 void openttd_rust_road_infrastructure(const OpenTTDRoadCommandServices *, uint8_t, uint8_t, int32_t);
 void openttd_rust_road_allow_remove(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t, bool);
+void openttd_rust_road_remove(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, bool);
 void openttd_rust_road_build(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t);
 void openttd_rust_road_build_long(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, uint8_t, uint8_t, bool, bool, bool);
 int64_t openttd_rust_road_remove_long(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, uint8_t, bool, bool);

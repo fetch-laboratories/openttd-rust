@@ -233,7 +233,7 @@ pub struct Services {
     /// Canonical native `SetCrossingReservation`.
     pub set_crossing_reserved: extern "C" fn(u32, bool),
     /// Canonical native `road_tile_kind` service.
-    pub road_tile_kind: extern "C" fn(u32) -> u8,
+    pub road_tile_kind: extern "C" fn(u32) -> RoadTileKind,
     /// Canonical native `set_road_bits` service.
     pub set_road_bits: extern "C" fn(u32, u8, u8),
     /// Canonical native `set_road_type` service.
@@ -366,6 +366,9 @@ pub fn fixture(
         0
     }
     extern "C" fn set_three(_: u32, _: u8, _: u8) {}
+    extern "C" fn road_kind(_: u32) -> RoadTileKind {
+        RoadTileKind(0)
+    }
     extern "C" fn road_tram(_: u8) -> RoadTramType {
         RoadTramType(false)
     }
@@ -431,7 +434,7 @@ pub fn fixture(
         // Registry: road commands (#266).
         crossing_reserved: flag,
         set_crossing_reserved: set_reserved,
-        road_tile_kind: byte,
+        road_tile_kind: road_kind,
         set_road_bits: set_three,
         set_road_type: set_three,
         set_road_owner: set_three,
@@ -842,3 +845,8 @@ pub struct RailMapServices {
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct RoadTramType(pub bool);
+
+/// Native uint8-backed `RoadTileType`.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct RoadTileKind(pub u8);

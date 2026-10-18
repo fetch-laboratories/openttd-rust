@@ -108,7 +108,7 @@ extern "C" uint64_t openttd_orders_primary_vehicle(void *ctx) noexcept
 extern "C" uint64_t openttd_orders_vehicle_ownership(void *ctx, void *result) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	GetRustCommandServices().ownership(RustCommandCost(static_cast<CommandCost *>(result)), v->owner.base());
+	GetRustCommandServices().ownership(RustCommandCost(static_cast<CommandCost *>(result)), v->owner.base(), 0);
 	return static_cast<CommandCost *>(result)->Succeeded();
 }
 
@@ -279,7 +279,7 @@ extern "C" uint64_t openttd_orders_can_use_station(void *ctx, uint16_t destinati
 
 extern "C" uint64_t openttd_orders_owner_check(uint8_t owner, void *result) noexcept
 {
-	GetRustCommandServices().ownership(RustCommandCost(static_cast<CommandCost *>(result)), owner);
+	GetRustCommandServices().ownership(RustCommandCost(static_cast<CommandCost *>(result)), owner, 0);
 	return static_cast<CommandCost *>(result)->Succeeded();
 }
 

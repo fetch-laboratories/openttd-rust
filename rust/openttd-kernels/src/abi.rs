@@ -84,11 +84,12 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::signal::SignalServices, item; assertions, assert_condition, assert_wormhole_start, train_on_tile, train_on_tracks, overflow_tbu, overflow_tbd, overflow_global, assert_company)
         }
         1020 => {
-            layout!(crate::road_cmd::RoadCommandServices, item; rail_commands, town, authority, strings, vehicles_built, town_valid, nearest_town, town_edge, set_town, foundation, clear_cost, convert_cost, extra_dynamite, depot_slope, make_depot, depot_exit, remove_works_effects, available_money, owned_by_town, build, convert, remove_long_cost, collect_vehicles, cargo_changed)
+            layout!(crate::road_cmd::RoadCommandServices, item; rail_commands, town, authority, strings, vehicles_built, town_valid, nearest_town, town_edge, set_town, foundation, clear_cost, convert_cost, extra_dynamite, depot_slope, make_depot, depot_exit, next_effect, delete_effect, available_money, owned_by_town, build, convert, remove_long_cost, collect_vehicles, cargo_changed)
         }
         1021 => {
             layout!(crate::road_cmd::Strings, item; no_road, no_tram, junction, remove_road, no_suitable_road, no_suitable_tram, authority)
         }
+        1023 => layout!(crate::road_cmd::WorksEffect, item; id, tile),
         1022 => layout!(crate::road_cmd::TownEdge, item; tile, radius),
         980 => {
             layout!(crate::rail_cmd::RailCommandServices, item; shared, rail, cost, command, signal, strings, rail_type_valid, compatible_rail, powered_rail, train_powered, rail_no_crossings, road_no_crossing, rail_build_cost, rail_clear_cost, rail_convert_cost, road_build_cost, crossing_with_competitor, disable_elrails, rail_foundation, apply_foundation, slope_z_in_corner, flooding, entrance_edge, ship_on_tile, build_rail, remove_rail, build_signal, remove_signal, convert_rail, rail_infrastructure, road_infrastructure, signal_infrastructure, infrastructure_dirty, reserving_train, parking, train_position, layout_changed, mark_crossings, crossing_removed, make_crossing, make_road, depot_available, new_depot, depot_name, delete_depot, depot_windows, close_inspect, make_shore, docking_check, area_begin, area_tile, area_next, area_contains, collect_trains, consist_changed)
