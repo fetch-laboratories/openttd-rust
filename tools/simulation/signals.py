@@ -160,8 +160,13 @@ def adapter(build, folder, env):
     )
     source.write_text(
         native
-        + ADAPTER.read_text().replace(
+        + ADAPTER.read_text()
+        .replace(
             "../../../src/rust/signal_ffi.h", str(core.ROOT / "src/rust/signal_ffi.h")
+        )
+        .replace(
+            '#include "roads-console.cpp"',
+            (core.ROOT / "tools/simulation/roads-console.cpp").read_text(),
         )
     )
     binary, receipt = console_adapter(

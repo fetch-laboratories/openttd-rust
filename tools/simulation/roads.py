@@ -105,6 +105,18 @@ def scenarios(soak):
         dict(crossing, name=f"roads-crash-{phase}", ticks=ticks, crash_expiry=phase)
         for phase, ticks in (("before-expiry", 2238), ("expiry", 2239))
     )
+    cases.extend(
+        {
+            "name": f"roads-commands{suffix}",
+            "kind": "save",
+            "save": str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
+            "road_commands": "reload" if suffix else "commands",
+            "short_checkpoint": True,
+            "ticks": 74,
+            "console": ["road_commands build", "unpause"],
+        }
+        for suffix in ("", "-reload")
+    )
     return cases
 
 
@@ -129,6 +141,8 @@ def position(row):
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
+    if scenario.get("road_commands"):
+        return prepare_commands(scenario, binaries, builds, out, timeout, env, result)
     if "roads" not in scenario:
         return scenario
     folder = out / scenario["name"] / "input"
@@ -270,6 +284,28 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 
 def check(scenario, run, mode, role, result):
+    if scenario.get("road_commands"):
+        from . import core
+
+        lines = [line for line in run["log"] if line.startswith("ROADCMD ")]
+        required = (
+            "ROADCMD reload "
+            if scenario["road_commands"] == "reload"
+            else "ROADCMD rng "
+        )
+        if not any(line.startswith(required) for line in lines):
+            result["problems"].append(f"{mode}/{role}: missing road command outcomes")
+        key = mode + "_road_commands"
+        if role == "reference":
+            result[key] = lines
+        elif result[key] != lines:
+            result["problems"].append(f"{mode}: road command outcomes differ")
+        if scenario["road_commands"] != "reload":
+            core.branch_witnesses(
+                scenario, run, role, "road_commands", COMMAND_BRANCHES
+            )
+        return
+
     if "roads" not in scenario:
         return
     if not run["snapshots"]:
@@ -760,3 +796,86 @@ if __name__ == "__main__":
     migration.COMMON_LOCAL.mkdir(parents=True, exist_ok=True)
     core.GAME_LOCK = migration.COMMON_LOCAL / "simulation-game.lock"
     prepare_crossing(migration, out, operation)
+
+
+COMMAND_BRANCHES = (
+    "build",
+    "build_clear",
+    "oneway",
+    "build_long",
+    "drag_obstacle",
+    "remove",
+    "remove_long",
+    "remove_money",
+    "remove_crossing",
+    "slope",
+    "depot_build",
+    "depot_rotate",
+    "depot_remove",
+    "clear",
+    "owner",
+    "terraform",
+    "autoslope",
+    "convert",
+    "convert_tile",
+    "build_above",
+    "flood_works",
+    "town_remove",
+    "build_crossing",
+    "build_wormhole",
+    "remove_wormhole",
+    "convert_wormhole",
+    "build_stop",
+    "remove_stop",
+)
+
+
+def game_environment(scenario):
+    from . import core
+
+    return (
+        core.WITNESS_ENVIRONMENT
+        if scenario.get("road_commands") and scenario.get("witnesses")
+        else {}
+    )
+
+
+def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
+    # Reuse the integrated signal fixture and its frozen-object relinking path.
+    from . import core, signals
+
+    prepared = signals.prepare(
+        dict(scenario, signals="road-commands"),
+        binaries,
+        builds,
+        out,
+        timeout,
+        env,
+        result,
+    )
+    prepared.pop("signals")
+    if scenario["road_commands"] != "reload":
+        return prepared
+    saves = {}
+    for role in ("reference", "candidate"):
+        run = core.run_game(
+            prepared,
+            prepared["executables"][role],
+            builds[role],
+            out / scenario["name"] / role / "capture",
+            timeout,
+            env,
+            desync=False,
+        )
+        if run["exit"] or not run["snapshots"]:
+            raise RuntimeError("road command reload capture failed")
+        saves[role] = run["snapshots"][-1]
+    if core.compare_saves(
+        saves["reference"], saves["candidate"], scenario["name"], 20, result["stats"]
+    ):
+        raise RuntimeError("road command reload input differs")
+    return dict(
+        prepared,
+        role_inputs={role: {"save": str(save)} for role, save in saves.items()},
+        console=["road_commands inspect", "unpause"],
+    )

@@ -498,9 +498,12 @@ static bool SignalsScenario(std::span<std::string_view> args)
 	company.Restore();
 	return true;
 }
+#include "roads-console.cpp"
+
 extern "C" void __real__Z22IConsoleStdLibRegisterv();
 extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 {
 	__real__Z22IConsoleStdLibRegisterv();
 	IConsole::CmdRegister("signals_scenario", SignalsScenario);
+	IConsole::CmdRegister("road_commands", RoadCommandsScenario);
 }

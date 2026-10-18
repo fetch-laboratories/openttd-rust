@@ -1454,3 +1454,21 @@ crossings/depots/slopes, signal cycling/conversion/copy/autofill through a bridg
 conversion/reroutes, clearing/terraforming, company transfer/deletion and reservations.
 Coast/half-tile water and PBS path-end removal remain #156 gaps. PR #270 records
 exact-head checks and outstanding full-simulation, speed and CI gates.
+
+### Road track, depot and conversion commands (#266)
+
+Rust (`road_cmd.rs`) owns road removal permissions and slopes, single and long
+build/removal, depots, clear/owner/nearest-town updates, terraform, conversion and
+build-above. Portable originals remain. Native road-type allocation, drawing,
+track-status/vehicle-enter and tile loops stay outside this command port.
+The boundary reuses shared command checks and native stack costs, road/rail map
+leaves, company counters, depots, crossings and the rail conversion cursor.
+Town authority and rating policy call the integrated Rust owner directly.
+Crossing reservation reads/writes now have one canonical definition shared with
+trains. No world-state borrow spans nested commands or vehicle/town callbacks.
+The default `roads-commands` and `roads-commands-reload` scenarios compare test and
+execute outcomes, costs/extra cash, semantic maps, company/town state and RNG,
+including drags, one-way/tram coexistence, reserved crossings, stops, bridges,
+depots, slopes, town removal, owner changes and low-funds removal.
+The fixture declares builtin-like road-type inputs; external NewGRF programs and
+legacy save variants remain corpus gaps. PR #290 records validation and speed.
