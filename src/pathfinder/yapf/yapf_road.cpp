@@ -18,6 +18,7 @@
 #ifdef WITH_RUST
 #include "../../rust/road_yapf_ffi.h"
 #include "../../rust/services_map.h"
+#include "../../rust/vehicle_services.h"
 
 static OpenTTDRoadYapfInput RoadInput(const RoadVehicle *v)
 {
@@ -39,7 +40,7 @@ static OpenTTDRoadYapfTile RoadTile(const void *, uint32_t index, uint8_t td, bo
 		out.waypoint = IsRoadWaypoint(tile);
 		out.drive_through = Shared_is_drive_through_stop(index);
 		if (cost && IsStationRoadStopTile(tile) && !out.waypoint && IsDiagonalTrackdir(static_cast<Trackdir>(td))) {
-			const RoadStop *rs = RoadStop::GetByTile(tile, GetRoadStopType(tile));
+			const RoadStop *rs = SharedRoadStopAt(index);
 			if (out.drive_through) {
 				DiagDirection dir = TrackdirToExitdir(static_cast<Trackdir>(td));
 				out.continuation = RoadSvcContinuation(index, (tile - TileOffsByDiagDir(dir)).base());
@@ -82,8 +83,8 @@ static OpenTTDRoadYapfTraversal RoadTraversal(const void *ctx, uint32_t tile, ui
 	OpenTTDRoadYapfTraversal out{};
 	out.current_z = SharedSlopePixelZ(TileX(TileIndex(tile)) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex(tile)) * TILE_SIZE + TILE_SIZE / 2, true);
 	out.next_z = SharedSlopePixelZ(TileX(TileIndex(next)) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex(next)) * TILE_SIZE + TILE_SIZE / 2, true);
-	out.display_speed = v->GetDisplayMaxSpeed();
-	out.order_speed = v->current_order.GetMaxSpeed();
+	out.display_speed = RustVehicleDisplayMaxSpeed(v);
+	out.order_speed = RustVehicleOrderMaxSpeed(v);
 	CFollowTrackRoad follower(v);
 	follower.old_tile = TileIndex(tile);
 	out.max_speed = follower.GetSpeedLimit(&out.min_speed);

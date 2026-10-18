@@ -21,7 +21,9 @@
 
 #ifdef WITH_RUST
 #include "../../rust/rail_yapf_ffi.h"
+#include "../../rust/services_map.h"
 #include "../../rust/services_rail.h"
+#include "../../rust/vehicle_services.h"
 #include <cstdio>
 
 struct RailYapfContext {
@@ -36,7 +38,7 @@ static OpenTTDRailTrain RailTrain(void *context) noexcept
 	const Train *rear = v->Last();
 	return {v->GetCompatibleRailTypes().base(), GetAllCompatibleRailTypes(v->GetRailTypes()).base(),
 		v->tile.base(), rear->tile.base(), TileVirtXY(v->x_pos, v->y_pos).base(), TileVirtXY(rear->x_pos, rear->y_pos).base(),
-		v->dest_tile.base(), v->gcache.cached_total_length, static_cast<uint32_t>(std::min<int>(v->GetDisplayMaxSpeed(), v->current_order.GetMaxSpeed())),
+		v->dest_tile.base(), v->gcache.cached_total_length, static_cast<uint32_t>(std::min<int>(RustVehicleDisplayMaxSpeed(v), RustVehicleOrderMaxSpeed(v))),
 		v->current_order.GetDestination().base(), GetRustSharedServices().train_trackdir(v), GetRustSharedServices().train_trackdir(rear),
 		static_cast<uint8_t>(v->GetTrack() == TRACK_BIT_WORMHOLE), static_cast<uint8_t>(rear->GetTrack() == TRACK_BIT_WORMHOLE),
 		static_cast<uint8_t>(v->current_order.GetType()), static_cast<uint8_t>(v->current_order.GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot)),
@@ -56,7 +58,7 @@ static OpenTTDRailTile RailTile(uint32_t tile, uint8_t direction) noexcept
 	result.reserved = RustReservedTracks(tile);
 	if (IsPlainRailTile(t)) result.tracks = RustRailTracks(tile);
 	if (HasStationTileRail(t)) {
-		result.station = GetStationIndex(t).base();
+		result.station = MapSvcStationIndex(tile);
 		result.station_track = RustRailStationTrack(tile);
 		if (RustIsRailStation(tile) && HasStationReservation(t)) result.flags |= 1024U;
 	}

@@ -40,6 +40,8 @@ inline uint32_t RustVehicleTile(const Vehicle *v) noexcept { return v->tile.base
 inline uint32_t RustVehicleDestTile(const Vehicle *v) noexcept { return v->dest_tile.base(); }
 inline OrderType RustVehicleOrderType(const Vehicle *v) noexcept { return v->current_order.GetType(); }
 inline uint16_t RustVehicleOrderDestination(const Vehicle *v) noexcept { return v->current_order.GetDestination().base(); }
+inline uint16_t RustVehicleOrderMaxSpeed(const Vehicle *v) noexcept { return v->current_order.GetMaxSpeed(); }
+template <class T> inline int RustVehicleDisplayMaxSpeed(const T *v) noexcept { return v->GetDisplayMaxSpeed(); }
 inline uint8_t RustVehicleOrderNonStop(const Vehicle *v) noexcept { return v->current_order.GetNonStopType().base(); }
 inline uint8_t RustVehicleOwner(const Vehicle *v) noexcept { return v->owner.base(); }
 inline Direction RustVehicleDirection(const Vehicle *v) noexcept { return v->direction; }
@@ -94,6 +96,9 @@ inline uint32_t *RustVehicleMotionAddress(Vehicle *v) noexcept { return &v->moti
 /** Shared legacy opaque-owner adapter; the actual typed read is defined once. */
 template <typename Result, auto Read>
 static Result RustOpaqueVehicleRead(void *shell) noexcept { return Read(static_cast<Vehicle *>(shell)); }
+/** Legacy orders width/handle adapter for a shared map read at a vehicle's tile. */
+template <typename Result, auto Read>
+static Result RustOpaqueVehicleTileRead(void *shell) noexcept { return Read(RustVehicleTile(static_cast<const Vehicle *>(shell))); }
 inline bool RustVehicleOldEnough(const Vehicle *v) noexcept { return RustVehicleEconomyAge(v) > VEHICLE_PROFIT_MIN_AGE; }
 
 /** Legacy indexed callback adapter; canonical read stays shared, owner resolves once. */
