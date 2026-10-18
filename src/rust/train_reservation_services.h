@@ -101,11 +101,6 @@ static void TrainReservationIncrementOrder(void *, OpenTTDTrainHandle id) noexce
 	Train *v = static_cast<Train *>(id.shell);
 	v->IncrementRealOrderIndex();
 }
-static uint64_t TrainReservationIsBridge(void *, OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	TileIndex t(static_cast<uint32_t>(a));
-	return IsBridge(t);
-}
 static uint64_t TrainReservationIsDepot(void *, OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	TileIndex t(static_cast<uint32_t>(a));

@@ -1838,7 +1838,7 @@ static void GetTileDesc_TunnelBridge(TileIndex tile, TileDesc &td)
 const OpenTTDTunnelServices &GetRustTunnelGroundServices() noexcept
 {
 	static const OpenTTDTunnelServices services{
-		.snow = [](uint32_t index) noexcept { TileIndex t{index}; return OpenTTDTunnelGround{.z = IsBridge(t) ? OpenTTDTileMaxZ(t) : RustTileZ(t), .snow = RustTunnelSnowOrDesert(Tile{t})}; },
+		.snow = [](uint32_t index) noexcept { TileIndex t{index}; return OpenTTDTunnelGround{.z = RustTunnelBridgeIsBridge(Tile{t}) ? OpenTTDTileMaxZ(t) : RustTileZ(t), .snow = RustTunnelSnowOrDesert(Tile{t})}; },
 		.snow_or_desert = RustTunnelSnowOrDesert,
 		.set_snow_or_desert = [](uint32_t t, bool value) noexcept { SetTunnelBridgeSnowOrDesert(TileIndex{t}, value); },
 	};

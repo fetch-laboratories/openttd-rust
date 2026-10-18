@@ -4825,7 +4825,7 @@ static const OpenTTDTrainReservationLeaves &GetTrainReservationServices()
 		.has_reserved = TrainReservationHasReserved,
 		.has_signal = OpenTTDLegacyContextMapQuery<uint64_t, RustRailHasSignalTrackdir, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.increment_order = TrainReservationIncrementOrder,
-		.is_bridge = TrainReservationIsBridge,
+		.is_bridge = OpenTTDLegacyContextMapQuery<uint64_t, RustTunnelBridgeIsBridge, OpenTTDTrainHandle, uint32_t>,
 		.is_depot = TrainReservationIsDepot,
 		.is_pbs = TrainReservationIsPbs,
 		.is_plain = TrainReservationIsPlain,

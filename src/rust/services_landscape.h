@@ -55,6 +55,7 @@ inline bool RustRoadSnowOrDesert(Tile tile) noexcept { return IsOnSnowOrDesert(t
 inline bool RustRoadSnowOrDesert(uint32_t tile) noexcept { return RustRoadSnowOrDesert(Tile{TileIndex{tile}}); }
 inline bool RustTunnelSnowOrDesert(Tile tile) noexcept { return HasTunnelBridgeSnowOrDesert(tile); }
 inline bool RustTunnelSnowOrDesert(uint32_t tile) noexcept { return RustTunnelSnowOrDesert(Tile{TileIndex{tile}}); }
+inline bool RustTunnelBridgeIsBridge(Tile tile) noexcept { return IsBridge(tile); }
 inline bool RustAirportTile(uint32_t tile) noexcept { return IsAirportTile(TileIndex{tile}); }
 inline EffectVehicle *RustCreateEffectAbove(int32_t x, int32_t y, int32_t z, EffectVehicleType type) noexcept { return CreateEffectVehicleAbove(x, y, z, type); }
 inline EffectVehicle *RustCreateEffectAboveValue(int32_t x, int32_t y, int32_t z, uint8_t type) noexcept { return RustCreateEffectAbove(x, y, z, static_cast<EffectVehicleType>(type)); }
