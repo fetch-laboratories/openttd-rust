@@ -124,6 +124,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings.
 2. **Speed guard and passes (#155, #282, AGENTS.md).**
+   - **Coordination followup #301:** the inherited timed-game lock can wait behind a shared profile. Root uses shared coordination for current unsampled runs; a bounded default concurrency regression and shared normal benchmark path follow after #297 frees a maintenance slot (80 added tooling/test lines).
    - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios. Each integrating PR records its medians, and each speed pass re-measures all six on a quiet host.
    - **Per PR:** no scenario more than 15% slower than its record and none over its ceiling (1.5x play saves, 1.3x generation). Misses get a callgrind fix round.
    - **Speed pass:** after every fourth ownership integration, or when a scenario is within 5% of its ceiling (1.425x play, 1.235x generation). The 2026-10-18 profile at `600dca4e27` is the current pass (#275). Count the next four from there; #269 and #255 count.
@@ -175,8 +176,8 @@ Four component branches are unintegrated. #292 repaired protected Quick; #287's 
 | --- | --- | --- |
 | #284 / #298 | `generated-abi-284`, `be764d1cb6` | Native verify/Cargo4, generated-list and all default maintenance tests pass; generators/comparisons/six medians remain. About 790/650 handwritten lines, within the 25% limit; mechanical conversions separate. Fresh review follows implementation. |
 | #296 / #297 | `fix-markdown-gitlinks-296`, `d61092f302` | 71/80 added logic/test lines; actual-script regression and 25 policy tests pass. Fresh review has no findings; root workflow review complete, exact-head Full/bootstrap requested. |
-| #256 / #269 | `house-lifecycle-256`, `af9e189521` | Steering review passed; adopting integrated #289 changes the shared slope wrapper and speed record. Fresh scoped conflict review, new six medians and exact-head Full follow. |
-| #212 / #255 | `landscape-owner-212`, `6c108195ef` | Three review fixes root-checked; adopting integrated #289 combines four shared-accessor conflicts. Fresh scoped review active; final-source six medians and Full follow. Older near-limit timing is superseded. |
+| #256 / #269 | `house-lifecycle-256`, `af9e189521` | Steering review passed; adopting integrated #289 changes the shared slope wrapper and speed record. Fresh scoped conflict review passed; final source benchmarks use shared coordination, then record medians and request exact-head Full. |
+| #212 / #255 | `landscape-owner-212`, `6c108195ef` | Three review fixes root-checked; adopting integrated #289 combines four shared-accessor conflicts. Fresh scoped review passed; final-source shared benchmark medians and Full follow. Older near-limit timing is superseded. |
 | #266 / #290 | `road-commands-266`, `cc2fc00809` | Ownership implementation active from integrated `83bd72774e`; 200-300 tooling lines. |
 | #267 | `station-commands-267` | Whole station command implementation assigned from integrated `5a32ef6945`; 300-400 tooling lines. Docking includes IsPossibleDockingTile/CheckForDockingTile. |
 | #247, #293-#295 | none | Selected future whole owners, with prerequisites and budgets in their issues; fresh Astra plan completed. |
