@@ -48,7 +48,6 @@ inline RailTileType RustRailTileType(uint32_t tile) noexcept { return GetRailTil
 inline Foundation RustRailFoundation(Slope slope, TrackBits tracks) noexcept { return GetRailFoundation(slope, tracks); }
 inline RailGroundType RustRailGround(uint32_t tile) noexcept { return GetRailGroundType(TileIndex(tile)); }
 inline void RustSetRailGroundTyped(uint32_t tile, RailGroundType ground) noexcept { SetRailGroundType(TileIndex(tile), ground); }
-inline void RustSetRailGround(uint32_t tile, uint8_t ground) noexcept { RustSetRailGroundTyped(tile, static_cast<RailGroundType>(ground)); }
 inline void RustSetTrackBits(uint32_t tile, uint8_t bits) noexcept { SetTrackBits(TileIndex(tile), static_cast<TrackBits>(bits)); }
 inline void RustSetPresentSignals(uint32_t tile, uint8_t signals) noexcept { SetPresentSignals(TileIndex(tile), signals); }
 inline uint RustSignalStates(uint32_t tile) noexcept { return GetSignalStates(TileIndex(tile)); }

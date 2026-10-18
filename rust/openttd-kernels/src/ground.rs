@@ -109,6 +109,7 @@ pub struct RailFenceGround {
 }
 #[repr(C)]
 pub struct RailServices {
+    pub tracks: extern "C" fn(u32) -> TrackBits,
     pub ground: extern "C" fn(u32) -> RailGroundType,
     pub set_ground: extern "C" fn(u32, RailGroundType),
     pub snow: extern "C" fn(u32) -> RailSnowGround,
@@ -159,31 +160,6 @@ fn field_fence(
     true
 }
 
-/// # Safety
-/// Tables are live for this serialized synchronous entry; callbacks do not unwind.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_clear_tile_loop(
-    tile: u32,
-    climate: LandscapeType,
-    editor: bool,
-    ambient_callback: bool,
-    size_x: u32,
-    clear: *const ClearServices,
-    shared: *const Services,
-) {
-    // SAFETY: Same synchronous table contract as the in-crate scheduler entry.
-    unsafe {
-        clear_tile_loop(
-            tile,
-            climate,
-            editor,
-            ambient_callback,
-            size_x,
-            clear,
-            shared,
-        );
-    };
-}
 #[allow(clippy::inline_always)]
 #[inline(always)]
 pub(crate) unsafe fn clear_tile_loop(
@@ -325,38 +301,6 @@ pub(crate) unsafe fn clear_tile_loop(
     (s.mark_dirty)(tile);
 }
 
-/// # Safety
-/// Tables are live for this serialized synchronous entry; callbacks do not unwind.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_rail_tile_loop(
-    tile: u32,
-    climate: LandscapeType,
-    ambient_callback: bool,
-    size_x: u32,
-    size_y: u32,
-    call: *mut Call,
-    water: *const crate::water::WaterServices,
-    rail: *const RailServices,
-    shared: *const Services,
-) {
-    // SAFETY: Same synchronous table contract; this native entry keeps the
-    // original callback tile-type reader.
-    unsafe {
-        let types = crate::services::TileTypeAccess::callback((*shared).tile_type);
-        rail_tile_loop(
-            tile,
-            climate,
-            ambient_callback,
-            size_x,
-            size_y,
-            call,
-            water,
-            rail,
-            shared,
-            &types,
-        );
-    }
-}
 /// Original `TileLoop_Track`; `types` is the caller's tile-type reader.
 pub(crate) unsafe fn rail_tile_loop(
     tile: u32,
@@ -534,7 +478,7 @@ pub struct RoadServices {
     pub bulldozer: extern "C" fn(u32),
     pub cleanup: extern "C" fn(u32, RoadBits) -> RoadBits,
     pub remove: extern "C" fn(u32, RoadBits),
-    pub town_road_type: extern "C" fn() -> RoadType,
+    pub town: *const crate::town::Leaves,
     pub set_road_type: extern "C" fn(u32, RoadType),
 }
 
@@ -659,7 +603,9 @@ pub unsafe extern "C" fn openttd_rust_road_tile_loop(
             }
         }
         if (s.road_owner)(tile) == 15 {
-            let road_type = (r.town_road_type)();
+            // SAFETY: The immutable town table is live; road selection borrows no owner.
+            let road_type =
+                RoadType(unsafe { crate::town::openttd_rust_town_road_type(r.town, s) } as u8);
             if road_type.0 != (s.road_type)(tile) {
                 (r.set_road_type)(tile, road_type);
             }

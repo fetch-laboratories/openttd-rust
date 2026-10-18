@@ -1071,7 +1071,6 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.possible_docking = RustPossibleDocking,
 		.check_docking = RustCheckDocking,
 		.invalidate_region = [](uint32_t t) noexcept { InvalidateWaterRegion(TileIndex{t}); },
-		.tracks = [](uint32_t tile) noexcept { return GetRustRailMapServices().rail_tracks(tile); },
 		.remove_rail = [](OpenTTDCommandCost *out, uint32_t t, Track track) noexcept { *NativeGroundCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlag::Execute, TileIndex{t}, track); },
 		.apply_foundation = RustApplyFoundation,
 		.iterator_begin = [](OpenTTDTileVehicleCursor *c, uint32_t t) noexcept { new (c) VehiclesOnTile::Iterator(TileIndex{t}); },

@@ -72,7 +72,6 @@ pub struct WaterServices {
     pub possible_docking: extern "C" fn(u32) -> bool,
     pub check_docking: extern "C" fn(u32),
     pub invalidate_region: extern "C" fn(u32),
-    pub tracks: extern "C" fn(u32) -> TrackBits,
     pub remove_rail: unsafe extern "C" fn(*mut services::CommandCost, u32, Track),
     pub apply_foundation: extern "C" fn(Foundation, Slope) -> FoundationSlope,
     // Caller supplies aligned native-iterator storage and follows its construction/lifetime.
@@ -145,11 +144,6 @@ fn wrap(tile: u32, direction: usize, size_x: u32, size_y: u32) -> u32 {
 struct World<'a> {
     w: &'a WaterServices,
     s: &'a Services,
-    r: &'a RailServices,
-    c: &'a ClearServices,
-    v: &'a VehicleServices,
-    costs: &'a CostServices,
-    co: &'a crate::company::Services,
     types: &'a TileTypeAccess,
     size_x: u32,
     size_y: u32,
@@ -167,16 +161,31 @@ impl<'a> World<'a> {
             Self {
                 w: &*w,
                 s: &*s,
-                r: &*(*w).rail,
-                c: &*(*w).clear,
-                v: &*(*w).vehicles,
-                costs: &*(*w).costs,
-                co: &*(*w).company,
                 types,
                 size_x,
                 size_y,
             }
         }
+    }
+    fn r(&self) -> &RailServices {
+        // SAFETY: Entry supplies this immutable nested table when its branch consumes it.
+        unsafe { &*self.w.rail }
+    }
+    fn c(&self) -> &ClearServices {
+        // SAFETY: Entry supplies this immutable nested table when its branch consumes it.
+        unsafe { &*self.w.clear }
+    }
+    fn v(&self) -> &VehicleServices {
+        // SAFETY: Entry supplies this immutable nested table when its branch consumes it.
+        unsafe { &*self.w.vehicles }
+    }
+    fn costs(&self) -> &CostServices {
+        // SAFETY: Entry supplies this immutable nested table when its branch consumes it.
+        unsafe { &*self.w.costs }
+    }
+    fn co(&self) -> &crate::company::Services {
+        // SAFETY: Entry supplies this immutable nested table when its branch consumes it.
+        unsafe { &*self.w.company }
     }
     fn tile_type(&self, tile: u32) -> u8 {
         self.types.read(tile)
@@ -196,11 +205,11 @@ impl<'a> World<'a> {
                         3
                     };
                 }
-                u8::from((self.c.water_class)(tile).0 == 0)
+                u8::from((self.c().water_class)(tile).0 == 0)
             }
-            5 | 8 | 10 => u8::from((self.c.water_class)(tile).0 == 0),
+            5 | 8 | 10 => u8::from((self.c().water_class)(tile).0 == 0),
             1 => {
-                if (self.r.ground)(tile).0 == 13 {
+                if (self.r().ground)(tile).0 == 13 {
                     if one_corner((self.s.tile_slope)(tile)) {
                         1
                     } else {
@@ -223,40 +232,40 @@ impl<'a> World<'a> {
     }
     fn result(&self, call: *mut Call, out: *const services::CommandCost) -> bool {
         // SAFETY: prepare constructed this result; release ends its native lifetime.
-        let success = unsafe { ((*self.costs.costs).success)(out) };
+        let success = unsafe { ((*self.costs().costs).success)(out) };
         // SAFETY: The live result is no longer read, ending its native lifetime.
-        unsafe { (self.costs.release)(call) };
+        unsafe { (self.costs().release)(call) };
         success
     }
     fn clear(&self, tile: u32, call: *mut Call) -> bool {
         // SAFETY: Each native entry owns this live independent stack context.
-        let out = unsafe { (self.costs.prepare)(call) };
+        let out = unsafe { (self.costs().prepare)(call) };
         // SAFETY: Immutable shared table; native storage outlives command/reentry.
         unsafe {
-            ((*self.costs.commands).landscape_clear)(out, tile, 1);
+            ((*self.costs().commands).landscape_clear)(out, tile, 1);
         }
         self.result(call, out)
     }
     fn half_flood(&self, tile: u32, call: *mut Call) -> bool {
         let mut flooded = false;
-        if (self.r.ground)(tile).0 == 13 {
+        if (self.r().ground)(tile).0 == 13 {
             return false;
         }
         let slope = (self.s.tile_slope)(tile);
-        let mut tracks = (self.w.tracks)(tile).0;
+        let mut tracks = (self.r().tracks)(tile).0;
         if one_corner(slope) {
             let corner = (slope.trailing_zeros() ^ 2) as usize;
             let lower = [16, 8, 32, 4][corner];
             let remove = lower & tracks;
             if remove != 0 {
                 let company = (self.s.current_company)();
-                (self.co.finance.set_current_company)(17);
+                (self.co().finance.set_current_company)(17);
                 // SAFETY: Each native entry owns this live independent stack context.
-                let out = unsafe { (self.costs.prepare)(call) };
+                let out = unsafe { (self.costs().prepare)(call) };
                 // SAFETY: prepare constructed out, and no owner borrow spans the command.
                 unsafe { (self.w.remove_rail)(out, tile, Track(remove.trailing_zeros() as u8)) };
                 flooded = self.result(call, out);
-                (self.co.finance.set_current_company)(company);
+                (self.co().finance.set_current_company)(company);
                 if !flooded {
                     return false;
                 }
@@ -268,22 +277,22 @@ impl<'a> World<'a> {
                     return true;
                 }
             }
-            if (5..10).contains(&(self.r.foundation)(Slope(slope), TrackBits(tracks)).0) {
+            if (5..10).contains(&(self.r().foundation)(Slope(slope), TrackBits(tracks)).0) {
                 flooded = true;
-                (self.r.set_ground)(tile, RailGroundType(13));
+                (self.r().set_ground)(tile, RailGroundType(13));
                 (self.s.mark_dirty)(tile);
                 crate::ground::hit(crate::ground::Witness::HalfRail);
             }
         } else {
             let foundation = (self.w.apply_foundation)(
-                (self.r.foundation)(Slope(slope), TrackBits(tracks)),
+                (self.r().foundation)(Slope(slope), TrackBits(tracks)),
                 Slope(slope),
             );
             if foundation.z == 0
                 && (foundation.slope.0 & 16 != 0 || three_corners(foundation.slope.0))
             {
                 flooded = true;
-                (self.r.set_ground)(tile, RailGroundType(13));
+                (self.r().set_ground)(tile, RailGroundType(13));
                 (self.s.mark_dirty)(tile);
                 crate::ground::hit(crate::ground::Witness::HalfRail);
             }
@@ -295,9 +304,9 @@ impl<'a> World<'a> {
         (self.w.ai_event)(v, victims);
         (self.w.game_event)(v, victims);
         (self.w.news)(v, victims);
-        (self.v.large_explosion)(v);
+        (self.v().large_explosion)(v);
         if (self.s.disaster_sound)() {
-            (self.v.play_sound)(v, 16);
+            (self.v().play_sound)(v, 16);
         }
         crate::ground::hit(crate::ground::Witness::VehicleCrash);
     }
@@ -392,7 +401,7 @@ impl<'a> World<'a> {
     }
     fn flood(&self, tile: u32, call: *mut Call) {
         let company = (self.s.current_company)();
-        (self.co.finance.set_current_company)(17);
+        (self.co().finance.set_current_company)(17);
         let slope = (self.s.tile_slope)(tile);
         let flooded = if slope != 0 {
             match self.tile_type(tile) {
@@ -432,7 +441,7 @@ impl<'a> World<'a> {
         };
         if flooded {
             self.dirty_neighbours(tile);
-            (self.co.update_signals_in_buffer)();
+            (self.co().update_signals_in_buffer)();
             if (self.w.possible_docking)(tile) {
                 (self.w.check_docking)(tile);
             }
@@ -441,21 +450,21 @@ impl<'a> World<'a> {
         } else {
             crate::ground::hit(crate::ground::Witness::FloodFail);
         }
-        (self.co.finance.set_current_company)(company);
+        (self.co().finance.set_current_company)(company);
     }
     fn dry(&self, tile: u32, call: *mut Call) {
         let company = (self.s.current_company)();
-        (self.co.finance.set_current_company)(17);
+        (self.co().finance.set_current_company)(17);
         match self.tile_type(tile) {
             1 => {
-                let ground = match (self.w.tracks)(tile).0 {
+                let ground = match (self.r().tracks)(tile).0 {
                     4 => 10,
                     8 => 11,
                     16 => 8,
                     32 => 9,
                     _ => unreachable!("original drying rail track"),
                 };
-                (self.r.set_ground)(tile, RailGroundType(ground));
+                (self.r().set_ground)(tile, RailGroundType(ground));
                 (self.s.mark_dirty)(tile);
                 crate::ground::hit(crate::ground::Witness::DryRail);
             }
@@ -466,14 +475,14 @@ impl<'a> World<'a> {
             }
             6 => {
                 if self.clear(tile, call) {
-                    (self.c.make_clear)(tile, ClearGroundType(0), 3);
+                    (self.c().make_clear)(tile, ClearGroundType(0), 3);
                     (self.s.mark_dirty)(tile);
                     crate::ground::hit(crate::ground::Witness::DryCoast);
                 }
             }
             _ => unreachable!("original drying tile type"),
         }
-        (self.co.finance.set_current_company)(company);
+        (self.co().finance.set_current_company)(company);
     }
     fn tile_loop(&self, tile: u32, call: *mut Call) {
         match self.behaviour(tile) {
@@ -647,5 +656,67 @@ pub unsafe extern "C" fn openttd_rust_clear_neighbour_flooding(
             (world.w.set_non_flooding)(target, false);
             crate::ground::hit(crate::ground::Witness::Wakeup);
         }
+    }
+}
+
+/// Direct water call from a tree/industry tile loop. Both callers have just read
+/// their own tile type through pure observations, so the water-only ambient and
+/// non-flooding prelude is inactive. Nested commands use the native caller's stack.
+/// # Safety
+/// Live immutable tables and independent lazy-result context, serialized with map reset.
+pub(crate) unsafe fn tree_industry_water_loop(tile: u32, call: *mut Call, s: &Services) {
+    let size_x = (s.map_max_x)().wrapping_add(1);
+    let size_y = (s.map_max_y)().wrapping_add(1);
+    // SAFETY: Same serialized table/context contract as the native water entry.
+    unsafe {
+        openttd_rust_water_tile_loop(tile, size_x, size_y, false, call, (s.water_services)(), s);
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn fixture() -> WaterServices {
+    extern "C" fn unused1<A, R>(_: A) -> R {
+        panic!("unexpected water fixture service");
+    }
+    extern "C" fn unused2<A, B, R>(_: A, _: B) -> R {
+        panic!("unexpected water fixture service");
+    }
+    extern "C" fn unused3<A, B, C, R>(_: A, _: B, _: C) -> R {
+        panic!("unexpected water fixture service");
+    }
+    WaterServices {
+        rail: std::ptr::null(),
+        clear: std::ptr::null(),
+        vehicles: std::ptr::null(),
+        costs: std::ptr::null(),
+        company: std::ptr::null(),
+        non_flooding: unused1,
+        set_non_flooding: unused2,
+        coast: unused1,
+        set_tree_ground: unused3,
+        make_sea: unused1,
+        buoy_or_dock: unused1,
+        canal_or_river: unused1,
+        possible_docking: unused1,
+        check_docking: unused1,
+        invalidate_region: unused1,
+        remove_rail: unused3,
+        apply_foundation: unused2,
+        iterator_begin: unused2,
+        iterator_current: unused1,
+        iterator_next: unused1,
+        iterator_end: unused1,
+        airport_tile: unused1,
+        airport: unused1,
+        airport_member: unused2,
+        airport_z: unused1,
+        victim: unused1,
+        aircraft_pose: unused1,
+        ground_pose: unused1,
+        crash: unused1,
+        ai_event: unused2,
+        game_event: unused2,
+        news: unused2,
+        bridge_height: unused1,
     }
 }

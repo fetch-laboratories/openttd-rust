@@ -70,8 +70,6 @@ inline void RustMakeClearValue(uint32_t tile, uint8_t ground, uint32_t density) 
 inline void RustMakeSnow(uint32_t tile, uint32_t density) noexcept { MakeSnow(TileIndex{tile}, density); }
 inline void RustSetTreeGroundDensity(uint32_t tile, TreeGround ground, uint32_t density) noexcept { SetTreeGroundDensity(TileIndex{tile}, ground, density); }
 inline void RustSetTreeGroundDensityValue(uint32_t tile, uint8_t ground, uint32_t density) noexcept { RustSetTreeGroundDensity(tile, static_cast<TreeGround>(ground), density); }
-inline void RustClearNeighbourFlooding(uint32_t tile) noexcept { ClearNeighbourNonFloodingStates(TileIndex{tile}); }
-inline void RustTileLoopWater(uint32_t tile) noexcept { TileLoop_Water(tile); }
 inline bool RustAmbientSoundEnabled() noexcept { return HasGrfMiscBit(GrfMiscBit::AmbientSoundCallback); }
 inline void RustAmbientSound(uint32_t tile) noexcept { AmbientSoundEffect(TileIndex{tile}); }
 /* The existing tree ABI uses this post-callback flag to refresh its observation. */

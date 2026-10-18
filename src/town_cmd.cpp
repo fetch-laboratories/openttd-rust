@@ -99,7 +99,7 @@ void RebuildTownKdtree()
 #ifndef WITH_RUST
 static bool _generating_town = false;
 #else
-static const OpenTTDTownLeaves &GetRustTownServices() noexcept;
+const OpenTTDTownLeaves &GetRustTownServices() noexcept;
 #endif
 
 /**
@@ -1094,7 +1094,7 @@ static void RustTownStations(uint32_t tile, uint32_t radius, void *context, void
 static uint8_t RustTownStationOwner(const OpenTTDStation *station) noexcept { return OpenTTDStationOwner(StationOf(station)).base(); }
 static void RustTownDirtyAuthority(uint32_t town) noexcept { SetWindowDirty(WC_TOWN_AUTHORITY, TownID(town)); }
 
-static const OpenTTDTownLeaves &GetRustTownServices() noexcept
+const OpenTTDTownLeaves &GetRustTownServices() noexcept
 {
 	static const OpenTTDTownLeaves services{
 		.map_log_x = OpenTTDMapLogX,

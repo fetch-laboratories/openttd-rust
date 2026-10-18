@@ -42,6 +42,7 @@
 #include "settings_services.h"
 #include "environment_services.h"
 #include "services_landscape.h"
+#include "ground_ffi.h"
 #include "station_services.h"
 #include "../clear_map.h"
 #include "../tree_map.h"
@@ -285,7 +286,7 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.tree_ground = OpenTTDTreeGround,
 		.make_snow = RustMakeSnow,
 		.make_shore = OpenTTDMakeShore,
-		.tile_loop_water = RustTileLoopWater,
+		.water_services = []() noexcept { return &GetRustWaterGroundServices(); },
 		.play_sound = RustPlayTileSound,
 		.foundation = RustFoundationSlope,
 		.set_fence = RustSetFieldFence,
@@ -375,6 +376,7 @@ static OpenTTDRailWormholeAdmission SharedRail_wormhole_admission(uint32_t tile,
 const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 {
 	static const OpenTTDRailMapServices services{
+		.ground = &GetRustRailGroundServices(),
 		.traversal = SharedRail_traversal,
 		.signal_presence = SharedRail_signal_presence,
 		.signal_update = SharedRail_signal_update,
@@ -389,14 +391,11 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.set_signal_state = RustRailSetSignalState,
 		.other_tunnel_bridge_end = RustOtherTunnelBridgeEnd,
 		.rail_track_status = RustRailTrackStatus,
-		.rail_tracks = RustRailTracks,
 		.has_signals = RustRailHasSignals,
 		.signal_type = RustRailSignalType,
 		.rail_type = RustRailType,
 		.set_rail_type = RustSetRailType,
 		.rail_tile_type = RustRailTileType,
-		.rail_ground = RustRailGround,
-		.set_rail_ground = RustSetRailGround,
 		.set_track_bits = RustSetTrackBits,
 		.present_signals = RustRailPresentSignals,
 		.set_present_signals = RustSetPresentSignals,

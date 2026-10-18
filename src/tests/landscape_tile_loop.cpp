@@ -33,7 +33,7 @@ TEST_CASE("Rust shared tile-type allocation and all native byte values")
 	using Base = OpenTTDNativeTileTypeAccess::BaseTile;
 	const std::array<size_t, 9> layout{sizeof(Base), alignof(Base), offsetof(Base, type), offsetof(Base, height), offsetof(Base, m2), offsetof(Base, m1), offsetof(Base, m3), offsetof(Base, m4), offsetof(Base, m5)};
 	for (uint8_t item = 0; item < layout.size(); item++) CHECK(openttd_rust_abi_layout(783, item) == layout[item]);
-	CHECK(openttd_rust_abi_layout(783, layout.size()) == SIZE_MAX);
+	CHECK(openttd_rust_abi_layout(783, static_cast<uint8_t>(layout.size())) == SIZE_MAX);
 	Map::Allocate(128, 64);
 	const auto allocation = GetRustTileTypeAllocation();
 	const auto &shared = GetRustSharedServices();

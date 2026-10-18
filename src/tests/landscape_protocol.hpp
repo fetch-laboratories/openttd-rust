@@ -39,7 +39,7 @@ template<typename Check> void Run(Check check)
 {
 	const std::array<size_t, 13> layout{sizeof(OpenTTDGroundLoopServices), alignof(OpenTTDGroundLoopServices), offsetof(OpenTTDGroundLoopServices, clear), offsetof(OpenTTDGroundLoopServices, rail), offsetof(OpenTTDGroundLoopServices, road), offsetof(OpenTTDGroundLoopServices, tunnel), offsetof(OpenTTDGroundLoopServices, water), offsetof(OpenTTDGroundLoopServices, costs), offsetof(OpenTTDGroundLoopServices, call), offsetof(OpenTTDGroundLoopServices, climate), offsetof(OpenTTDGroundLoopServices, editor), offsetof(OpenTTDGroundLoopServices, rebuild), offsetof(OpenTTDGroundLoopServices, ambient_callback)};
 	for (uint8_t item = 0; item < layout.size(); item++) check(openttd_rust_abi_layout(802, item) == layout[item]);
-	check(openttd_rust_abi_layout(802, layout.size()) == SIZE_MAX);
+	check(openttd_rust_abi_layout(802, static_cast<uint8_t>(layout.size())) == SIZE_MAX);
 	calls = reads = seen = 0;
 	expected_tile = 1;
 	passed = true;

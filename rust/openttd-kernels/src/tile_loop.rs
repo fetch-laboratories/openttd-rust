@@ -162,7 +162,9 @@ unsafe fn dispatch(
             );
         },
         3 => (s.house_loop)(tile),
-        4 => unsafe { trees::openttd_rust_trees_tile_loop(tile, settings, s.trees, s.shared) },
+        4 => unsafe {
+            trees::openttd_rust_trees_tile_loop(tile, settings, g.call, s.trees, s.shared);
+        },
         5 => (s.station_loop)(tile),
         // `TileLoop_Void` is exactly `TileLoop_Water(tile)`.
         6 | 7 => unsafe {
@@ -183,6 +185,7 @@ unsafe fn dispatch(
                 tile,
                 // Existing industry ABI stores legal map logarithms in a byte.
                 log_x as u8,
+                g.call,
                 s.industry.production,
                 s.industry.construction,
                 s.industry.lifecycle,

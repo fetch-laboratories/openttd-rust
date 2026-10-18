@@ -339,6 +339,7 @@ fn bubble(tile: u32, s: &Services, map: crate::services::Map, t: &TileServices) 
 pub unsafe extern "C" fn openttd_rust_industry_tile_loop(
     tile: u32,
     log_x: u8,
+    call: *mut crate::ground::Call,
     s: *const Services,
     c: *const ConstructionServices,
     l: *const LifecycleServices,
@@ -348,7 +349,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_loop(
     let (s, c, l, t) = unsafe { (&*s, &*c, &*l, &*t) };
     let map = crate::services::Map { log_x };
     if unsafe { (t.on_water)(tile) } {
-        (s.shared().tile_loop_water)(tile);
+        unsafe { crate::water::tree_industry_water_loop(tile, call, s.shared()) };
     }
     if (s.shared().tile_type)(tile) != 8 {
         return;

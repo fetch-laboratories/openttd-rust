@@ -191,11 +191,6 @@ const OpenTTDClearServices &GetRustClearServices() noexcept
 	};
 	return services;
 }
-static void TileLoop_Clear(uint32_t tile) noexcept
-{
-	const uint32_t size_x = Map::SizeX();
-	openttd_rust_clear_tile_loop(tile, OpenTTDLandscape(), OpenTTDEditor(), RustAmbientSoundEnabled(), size_x, &GetRustClearServices(), &GetRustSharedServices());
-}
 #else
 static void UpdateFences(TileIndex tile)
 {
@@ -437,7 +432,11 @@ extern const TileTypeProcs _tile_type_clear_procs = {
 	GetTileTrackStatus_Clear, ///< get_tile_track_status_proc
 	nullptr,                     ///< click_tile_proc
 	nullptr,                     ///< animate_tile_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust scheduler calls the owner directly.
+#else
 	TileLoop_Clear,           ///< tile_loop_proc
+#endif
 	ChangeTileOwner_Clear,    ///< change_tile_owner_proc
 	nullptr,                     ///< add_produced_cargo_proc
 	nullptr,                     ///< vehicle_enter_tile_proc

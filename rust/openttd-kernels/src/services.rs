@@ -390,8 +390,8 @@ pub struct Services {
     pub make_snow: extern "C" fn(u32, u32),
     /// `MakeShore`.
     pub make_shore: extern "C" fn(u32),
-    /// Native `TileLoop_Water` facade; may reenter Rust owners.
-    pub tile_loop_water: extern "C" fn(u32),
+    /// Immutable water table, resolved lazily to avoid native static-init cycles.
+    pub water_services: extern "C" fn() -> *const crate::water::WaterServices,
     /// `SndPlayTileFx(sound, tile)`.
     pub play_sound: extern "C" fn(u32, u16),
     /// `GetFoundationSlope`, returning both the foundation slope and its z.
@@ -570,7 +570,7 @@ pub fn fixture(
         tree_ground,
         make_snow,
         make_shore: tile,
-        tile_loop_water: tile,
+        water_services: fixture_water_services,
         play_sound,
         foundation,
         set_fence,
@@ -853,6 +853,8 @@ pub struct RailWormholeAdmission {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RailMapServices {
+    /// Canonical track bits and terrain leaves, shared with water and tile loops.
+    pub ground: *const crate::ground::RailServices,
     /// Consumed source-phase observation; guarded fields are not hoisted.
     pub traversal: extern "C" fn(u32) -> RailTraversal,
     /// Consumed source-phase observation; guarded fields are not hoisted.
@@ -880,8 +882,6 @@ pub struct RailMapServices {
     pub other_tunnel_bridge_end: extern "C" fn(u32) -> u32,
     /// Native `rail_track_status` map operation at the original observation point.
     pub rail_track_status: extern "C" fn(u32, u8) -> u32,
-    /// Native `GetTrackBits`.
-    pub rail_tracks: extern "C" fn(u32) -> TrackBits,
     /// Native `HasSignals`.
     pub has_signals: extern "C" fn(u32) -> bool,
     /// Native `GetSignalType`.
@@ -892,10 +892,6 @@ pub struct RailMapServices {
     pub set_rail_type: extern "C" fn(u32, u8),
     /// Native `GetRailTileType`.
     pub rail_tile_type: extern "C" fn(u32) -> RailTileType,
-    /// Native `GetRailGroundType`.
-    pub rail_ground: extern "C" fn(u32) -> RailGroundType,
-    /// Native `SetRailGroundType`.
-    pub set_rail_ground: extern "C" fn(u32, u8),
     /// Native `SetTrackBits`.
     pub set_track_bits: extern "C" fn(u32, u8),
     /// Native `GetPresentSignals`.
@@ -946,4 +942,9 @@ pub struct RailMapServices {
     pub wormhole_reserved: extern "C" fn(u32) -> bool,
     /// Native `SetTileOwner`.
     pub set_tile_owner: extern "C" fn(u32, u8),
+}
+
+#[cfg(test)]
+extern "C" fn fixture_water_services() -> *const crate::water::WaterServices {
+    panic!("unexpected water service access");
 }

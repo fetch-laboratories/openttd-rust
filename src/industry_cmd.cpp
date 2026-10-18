@@ -58,6 +58,7 @@
 #ifdef WITH_RUST
 #include "rust/industry_generation_adapter.hpp"
 #include "rust/landscape_loop_ffi.h"
+#include "rust/ground_services.h"
 #include "rust/company_services.h"
 #include "rust/environment_services.h"
 #include "rust/command_cost_native_services.h"
@@ -925,7 +926,8 @@ static void TileLoop_Industry(TileIndex tile)
 	const TileIndex tile{tile_index};
 #endif
 #ifdef WITH_RUST
-	openttd_rust_industry_tile_loop(tile.base(), Map::LogX(), &GetIndustryRustServices(), &GetIndustryConstructionServices(), &GetIndustryLifecycleRustServices(), &GetIndustryTileServices(), &GetIndustryGenerationServices());
+	OpenTTDGroundCall call;
+	openttd_rust_industry_tile_loop(tile.base(), Map::LogX(), &call, &GetIndustryRustServices(), &GetIndustryConstructionServices(), &GetIndustryLifecycleRustServices(), &GetIndustryTileServices(), &GetIndustryGenerationServices());
 #else
 	if (IsTileOnWater(tile)) TileLoop_Water(tile);
 

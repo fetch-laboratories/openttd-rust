@@ -228,7 +228,7 @@ pub struct Command {
 }
 
 /// Tree services. Reads are pure. Writes are the named `tree_map.h`/`clear_map.h`
-/// functions. Shared `tile_loop_water`, `ambient` and `landscape_clear` can reenter tree
+/// functions. Direct water calls, `ambient` and `landscape_clear` can reenter tree
 /// entries; `ambient` returns whether its `NewGRF` callback ran. `progress` and
 /// `progress_total` return true when world generation was aborted; C++ then holds
 /// the exception and rethrows it after the entry returns.
@@ -247,7 +247,6 @@ pub struct TreeServices {
     pub add_growth: extern "C" fn(u32, i32),
     pub set_growth: extern "C" fn(u32, u8),
     pub make_clear: extern "C" fn(u32, u8, u32),
-    pub clear_neighbour_flooding: extern "C" fn(u32),
     pub ambient: extern "C" fn(u32) -> bool,
     pub progress: extern "C" fn() -> bool,
     pub progress_total: extern "C" fn(u32) -> bool,
@@ -365,7 +364,16 @@ impl Trees<'_> {
     fn plant(&self, tile: u32, p: PlantObservation, tree: u8, count: u32, growth: u8) -> u8 {
         let mut density = 3;
         let ground = if p.tile_type == MP_WATER {
-            (self.t.clear_neighbour_flooding)(tile);
+            // SAFETY: Immutable tables and source-valid map dimensions; no owner borrow.
+            unsafe {
+                crate::water::openttd_rust_clear_neighbour_flooding(
+                    tile,
+                    (self.s.map_max_x)().wrapping_add(1),
+                    (self.s.map_max_y)().wrapping_add(1),
+                    (self.s.water_services)(),
+                    self.s,
+                );
+            }
             GROUND_SHORE
         } else {
             let ground = if p.snow {
@@ -665,11 +673,13 @@ impl Trees<'_> {
     }
 
     /// `TileLoop_Trees`.
-    fn tile_loop(&self, tile: u32, s: &LoopSettings) {
+    fn tile_loop(&self, tile: u32, s: &LoopSettings, call: *mut crate::ground::Call) {
         let mut t = self.tree_observation(tile);
         let shore = t.ground == GROUND_SHORE;
         if shore {
-            (self.s.tile_loop_water)(tile);
+            // SAFETY: The native caller owns an independent stack result context;
+            // flooding may reenter trees but no owner state is borrowed here.
+            unsafe { crate::water::tree_industry_water_loop(tile, call, self.s) };
         } else {
             match s.climate {
                 TROPIC => self.loop_desert(tile, &mut t, s),
@@ -974,11 +984,12 @@ unsafe fn trees<'a>(services: *const TreeServices, shared: *const Services) -> T
 pub unsafe extern "C" fn openttd_rust_trees_tile_loop(
     tile: u32,
     settings: LoopSettings,
+    call: *mut crate::ground::Call,
     services: *const TreeServices,
     shared: *const Services,
 ) {
     // SAFETY: Guaranteed by the caller.
-    unsafe { trees(services, shared) }.tile_loop(tile, &settings);
+    unsafe { trees(services, shared) }.tile_loop(tile, &settings, call);
 }
 
 /// `OnTick_Trees`.
@@ -1199,7 +1210,9 @@ mod tests {
             set_tropic_zone: set_zone,
             make_shore,
             make_snow,
-            tile_loop_water: water,
+            water_services,
+            tile_type: water_type,
+            tree_ground: water,
             play_sound: sound,
             clear_square,
             ..crate::services::fixture(std::ptr::null_mut(), random, industry)
@@ -1272,11 +1285,16 @@ mod tests {
     extern "C" fn make_snow(_: u32, _: u32) {
         log(Event::Write("snow"));
     }
-    extern "C" fn neighbours(_: u32) {
-        log(Event::Write("neighbours"));
-    }
-    extern "C" fn water(_: u32) {
+    extern "C" fn water(_: u32) -> crate::services::TreeGround {
         log(Event::Water);
+        crate::services::TreeGround(0)
+    }
+    extern "C" fn water_type(_: u32) -> u8 {
+        MP_TREES
+    }
+    extern "C" fn water_services() -> *const crate::water::WaterServices {
+        thread_local! { static WATER: crate::water::WaterServices = crate::water::fixture(); }
+        WATER.with(std::ptr::from_ref)
     }
     extern "C" fn ambient(_: u32) -> bool {
         log(Event::Ambient);
@@ -1355,7 +1373,6 @@ mod tests {
         add_growth,
         set_growth,
         make_clear,
-        clear_neighbour_flooding: neighbours,
         ambient,
         progress,
         progress_total,
@@ -1512,7 +1529,7 @@ mod tests {
             extra: ETP_SPREAD_ALL,
             ambient: true,
         };
-        with(|t| t.tile_loop(0, &s));
+        with(|t| t.tile_loop(0, &s, std::ptr::null_mut()));
         assert_eq!(events(), [Event::Tree, Event::Ambient]);
     }
 
@@ -1536,7 +1553,7 @@ mod tests {
             tree,
             ..World::default()
         });
-        with(|t| t.tile_loop(2, &s));
+        with(|t| t.tile_loop(2, &s, std::ptr::null_mut()));
         assert_eq!(
             events(),
             [
@@ -1552,7 +1569,7 @@ mod tests {
             ambient_growth: Some(DEAD),
             ..World::default()
         });
-        with(|t| t.tile_loop(2, &s));
+        with(|t| t.tile_loop(2, &s, std::ptr::null_mut()));
         assert_eq!(
             events(),
             [
@@ -1570,7 +1587,7 @@ mod tests {
             },
             ..World::default()
         });
-        with(|t| t.tile_loop(2, &s));
+        with(|t| t.tile_loop(2, &s, std::ptr::null_mut()));
         assert_eq!(
             events(),
             [
@@ -1604,7 +1621,7 @@ mod tests {
             extra: ETP_SPREAD_ALL,
             ambient: true,
         };
-        with(|t| t.tile_loop(0, &s));
+        with(|t| t.tile_loop(0, &s, std::ptr::null_mut()));
         assert_eq!(
             events(),
             [

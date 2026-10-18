@@ -391,7 +391,7 @@ void openttd_rust_industry_tile_clear(OpenTTDIndustryCost *, uint32_t tile, uint
 void openttd_rust_industry_tile_terraform(OpenTTDIndustryCost *, uint32_t tile, uint16_t flags, int32_t z_new, uint8_t slope_new, const OpenTTDSharedServices *shared, const OpenTTDIndustryTileServices *, const OpenTTDIndustryTilePolicyServices *, const OpenTTDIndustryCostServices *);
 void openttd_rust_industry_tile_acceptance(uint32_t tile, uint32_t *acceptance, uint64_t *always_accepted, const OpenTTDIndustryTileServices *);
 void openttd_rust_industry_tile_animate(uint32_t tile, const OpenTTDIndustryServices *, const OpenTTDIndustryConstructionServices *, const OpenTTDIndustryTileServices *);
-void openttd_rust_industry_tile_loop(uint32_t tile, uint8_t log_x, const OpenTTDIndustryServices *, const OpenTTDIndustryConstructionServices *, const OpenTTDIndustryLifecycleServices *, const OpenTTDIndustryTileServices *, const OpenTTDIndustryGenerationServices *);
+void openttd_rust_industry_tile_loop(uint32_t tile, uint8_t log_x, struct OpenTTDGroundCall *, const OpenTTDIndustryServices *, const OpenTTDIndustryConstructionServices *, const OpenTTDIndustryLifecycleServices *, const OpenTTDIndustryTileServices *, const OpenTTDIndustryGenerationServices *);
 /** Industry-owned scratch value, matching the actual shared cleared-object entry. */
 typedef struct OpenTTDIndustryClearArea { uint32_t first_tile; OpenTTDIndustryLocation area; } OpenTTDIndustryClearArea;
 typedef struct OpenTTDIndustryClearAreas { const OpenTTDIndustryClearArea *data; size_t size; } OpenTTDIndustryClearAreas;

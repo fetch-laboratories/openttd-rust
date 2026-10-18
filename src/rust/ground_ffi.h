@@ -56,6 +56,7 @@ struct OpenTTDClearServices {
 struct OpenTTDRailSnowGround { int32_t z; Slope slope; TrackBits tracks; bool plain; };
 struct OpenTTDRailFenceGround { TrackBits tracks; uint8_t owner; bool plain; };
 struct OpenTTDRailServices {
+	TrackBits (*tracks)(uint32_t) noexcept;
 	RailGroundType (*ground)(uint32_t) noexcept;
 	void (*set_ground)(uint32_t, RailGroundType) noexcept;
 	OpenTTDRailSnowGround (*snow)(uint32_t) noexcept;
@@ -77,6 +78,7 @@ struct OpenTTDGroundCostServices {
 	void (*release)(OpenTTDGroundCall *) noexcept;
 };
 struct OpenTTDRoadSnowGround { int32_t z; bool snow; };
+struct OpenTTDTownLeaves;
 struct OpenTTDRoadGroundServices {
 	OpenTTDRoadSnowGround (*snow)(uint32_t) noexcept;
 	bool (*snow_or_desert)(uint32_t) noexcept;
@@ -89,7 +91,7 @@ struct OpenTTDRoadGroundServices {
 	void (*bulldozer)(uint32_t) noexcept;
 	RoadBits (*cleanup)(uint32_t, RoadBits) noexcept;
 	void (*remove)(uint32_t, RoadBits) noexcept;
-	RoadType (*town_road_type)() noexcept;
+	const OpenTTDTownLeaves *town;
 	void (*set_road_type)(uint32_t, RoadType) noexcept;
 };
 const OpenTTDGroundCostServices &GetRustGroundCostServices() noexcept;
@@ -100,8 +102,6 @@ const OpenTTDTunnelServices &GetRustTunnelGroundServices() noexcept;
 struct OpenTTDWaterGroundServices;
 extern "C" {
 void openttd_rust_road_tile_loop(uint32_t, LandscapeType, bool, bool, uint32_t, OpenTTDGroundCall *, const OpenTTDGroundCostServices *, const OpenTTDRoadGroundServices *, const OpenTTDSharedServices *);
-void openttd_rust_clear_tile_loop(uint32_t, LandscapeType, bool, bool, uint32_t, const OpenTTDClearServices *, const OpenTTDSharedServices *);
-void openttd_rust_rail_tile_loop(uint32_t, LandscapeType, bool, uint32_t, uint32_t, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDRailServices *, const OpenTTDSharedServices *);
 void openttd_rust_tunnel_tile_loop(uint32_t, LandscapeType, const OpenTTDTunnelServices *, const OpenTTDSharedServices *);
 }
 struct OpenTTDVehicle;
@@ -130,7 +130,6 @@ struct OpenTTDWaterGroundServices {
 	bool (*possible_docking)(uint32_t) noexcept;
 	void (*check_docking)(uint32_t) noexcept;
 	void (*invalidate_region)(uint32_t) noexcept;
-	TrackBits (*tracks)(uint32_t) noexcept;
 	void (*remove_rail)(OpenTTDCommandCost *, uint32_t, Track) noexcept;
 	OpenTTDFoundationSlope (*apply_foundation)(Foundation, Slope) noexcept;
 	void (*iterator_begin)(OpenTTDTileVehicleCursor *, uint32_t) noexcept;

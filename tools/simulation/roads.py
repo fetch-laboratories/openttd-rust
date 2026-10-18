@@ -18,10 +18,8 @@ AI_FOLDER = "road-scenario-ai"
 # https://github.com/fetch-laboratories/openttd-rust/pull/279
 # Each reduction exceeds both its measured invocation spread and 2%.
 # Core-loop boundary exceptions follow AGENTS.md and the selected roadmap.
-# #255 / #274: TGP median 1.1875 at 5f19f52dea, three quiet benchmark-3 runs.
-# The owned map-read boundary accounts for the miss; root retains its fix.
 SPEED_BUDGETS = {
-    "generate-tgp-256-1": 1.1875,
+    "generate-tgp-256-1": 1.1232091690544415,
     "play-opus-55-167-002-manual": 1.2225869993434013,
     "play-grok-159-001-manual": 1.2124019957234498,
     "play-padhattan-ridge-1996-manual": 1.230443974630021,

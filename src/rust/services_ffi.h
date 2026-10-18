@@ -48,6 +48,7 @@ struct Train; // Native Train shell; never dereferenced in Rust.
 enum RoadType : uint8_t;
 enum RoadBits : uint8_t;
 enum Trackdir : uint8_t;
+struct OpenTTDWaterGroundServices;
 struct OpenTTDSharedServices {
 	void *context;
 	uint32_t (*random)(void *) noexcept;
@@ -129,7 +130,7 @@ struct OpenTTDSharedServices {
 	TreeGround (*tree_ground)(uint32_t) noexcept;
 	void (*make_snow)(uint32_t, uint32_t) noexcept;
 	void (*make_shore)(uint32_t) noexcept;
-	void (*tile_loop_water)(uint32_t) noexcept; ///< Native TileLoop_Water; may reenter Rust owners.
+	const OpenTTDWaterGroundServices *(*water_services)() noexcept; ///< Immutable table; getter avoids recursive static initialization.
 	void (*play_sound)(uint32_t, uint16_t) noexcept;
 	OpenTTDFoundationSlope (*foundation)(uint32_t) noexcept;
 	void (*set_fence)(uint32_t, DiagDirection, uint32_t) noexcept;
@@ -171,7 +172,9 @@ struct OpenTTDRailWormholeAdmission { uint8_t owner; TransportType transport; Di
 /* Canonical rail/signal map leaves. A consuming owner calls each phase only at
  * the source observation point; signal writes are immediate. No map pointer,
  * whole tile record, opcode or allocation crosses this boundary. */
+struct OpenTTDRailServices;
 struct OpenTTDRailMapServices {
+	const OpenTTDRailServices *ground;
 	OpenTTDRailTraversal (*traversal)(uint32_t) noexcept;
 	OpenTTDRailSignalPresence (*signal_presence)(uint32_t, uint8_t, uint8_t) noexcept;
 	OpenTTDRailSignalUpdate (*signal_update)(uint32_t, uint8_t) noexcept;
@@ -187,14 +190,11 @@ struct OpenTTDRailMapServices {
 	uint32_t (*other_tunnel_bridge_end)(uint32_t) noexcept;
 	uint32_t (*rail_track_status)(uint32_t, uint8_t) noexcept;
 	/* Rail command, depot and level-crossing leaves (#265). */
-	TrackBits (*rail_tracks)(uint32_t) noexcept;
 	bool (*has_signals)(uint32_t) noexcept;
 	SignalType (*signal_type)(uint32_t, uint8_t) noexcept;
 	RailType (*rail_type)(uint32_t) noexcept;
 	void (*set_rail_type)(uint32_t, uint8_t) noexcept;
 	RailTileType (*rail_tile_type)(uint32_t) noexcept;
-	RailGroundType (*rail_ground)(uint32_t) noexcept;
-	void (*set_rail_ground)(uint32_t, uint8_t) noexcept;
 	void (*set_track_bits)(uint32_t, uint8_t) noexcept;
 	unsigned int (*present_signals)(uint32_t) noexcept;
 	void (*set_present_signals)(uint32_t, uint8_t) noexcept;
@@ -311,7 +311,7 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.tree_ground = OpenTTDFixtureMapService<TreeGround, uint32_t>,
 		.make_snow = OpenTTDFixtureMapService<void, uint32_t, uint32_t>,
 		.make_shore = OpenTTDFixtureMapService<void, uint32_t>,
-		.tile_loop_water = OpenTTDFixtureMapService<void, uint32_t>,
+		.water_services = OpenTTDFixtureMapService<const OpenTTDWaterGroundServices *>,
 		.play_sound = OpenTTDFixtureMapService<void, uint32_t, uint16_t>,
 		.foundation = OpenTTDFixtureMapService<OpenTTDFoundationSlope, uint32_t>,
 		.set_fence = OpenTTDFixtureMapService<void, uint32_t, DiagDirection, uint32_t>,

@@ -47,6 +47,7 @@ enum ExtraTreePlacement : uint8_t {
 
 #ifdef WITH_RUST
 #include "rust/trees_ffi.h"
+#include "rust/ground_services.h"
 #include "rust/landscape_loop_ffi.h"
 #include "rust/services_ffi.h"
 #include <exception>
@@ -164,7 +165,6 @@ static const OpenTTDTreeServices _tree_services{
 	.add_growth = [](uint32_t tile, int32_t growth) noexcept { AddTreeGrowth(TileIndex{tile}, growth); },
 	.set_growth = [](uint32_t tile, uint8_t growth) noexcept { SetTreeGrowth(TileIndex{tile}, static_cast<TreeGrowthStage>(growth)); },
 	.make_clear = RustMakeClearValue,
-	.clear_neighbour_flooding = RustClearNeighbourFlooding,
 	.ambient = RustAmbientSoundLegacy,
 	.progress = []() noexcept { return TreeProgress([] { IncreaseGeneratingWorldProgress(GWP_TREE); }); },
 	.progress_total = [](uint32_t total) noexcept { return TreeProgress([total] { SetGeneratingWorldProgress(GWP_TREE, total); }); },
@@ -261,7 +261,8 @@ OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept
 static void TileLoop_Trees(uint32_t tile_index) noexcept
 {
 	const TileIndex tile{tile_index};
-	openttd_rust_trees_tile_loop(tile.base(), GetRustTreeLoopSettings(), &_tree_services, &GetRustSharedServices());
+	OpenTTDGroundCall call;
+	openttd_rust_trees_tile_loop(tile.base(), GetRustTreeLoopSettings(), &call, &_tree_services, &GetRustSharedServices());
 }
 
 void OnTick_Trees()

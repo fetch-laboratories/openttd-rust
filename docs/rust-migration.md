@@ -524,8 +524,10 @@ byte from audited allocation metadata. All seven Rust tile owners dispatch direc
 void tiles straight to the water owner, which reuses the dispatched type and reader
 and derives `IsValidTile` from the map size; only house/station/object have native
 scalar handlers with local strong-index construction. Leaves shared by several
-owners (clear/tree ground, snow, shore, water loop, sound, foundation) live in the
-shared table. Ground boundaries use actual native enums, unrestricted transparent
+owners (clear/tree ground, snow, shore, sound, foundation) live in shared tables.
+Tree/industry water loops, tree wakeups, rail flooding queries and road town-type
+selection call Rust directly; canonical rail leaves have one binding. Ground
+boundaries use actual native enums, unrestricted transparent
 Rust carriers, exact counters and typed station handles. Legacy protocols adapt
 explicitly. Each native entry owns independent lazy stack command-result storage.
 No hot call allocates a protocol object or copies a complete native tile/vehicle.

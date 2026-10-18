@@ -2618,7 +2618,8 @@ static Foundation GetFoundation_Track(TileIndex tile, Slope tileh)
 const OpenTTDRailServices &GetRustRailGroundServices() noexcept
 {
 	static const OpenTTDRailServices services{
-		.ground = [](uint32_t t) noexcept { return GetRustRailMapServices().rail_ground(t); },
+		.tracks = RustRailTracks,
+		.ground = RustRailGround,
 		.set_ground = RustSetRailGroundTyped,
 		.snow = [](uint32_t index) noexcept { TileIndex t{index}; auto [slope, z] = GetTileSlopeZ(t); bool plain = RustPlainRailTile(index); return OpenTTDRailSnowGround{.z = z, .slope = slope, .tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .plain = plain}; },
 		.fences = [](uint32_t index) noexcept { bool plain = RustPlainRailTile(index); return OpenTTDRailFenceGround{.tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .owner = plain ? RustTileOwnerValue(index) : uint8_t{}, .plain = plain}; },
@@ -2626,12 +2627,6 @@ const OpenTTDRailServices &GetRustRailGroundServices() noexcept
 		.owned_land = [](uint32_t t) noexcept { return IsObjectType(TileIndex{t}, OBJECT_OWNED_LAND); },
 	};
 	return services;
-}
-static void TileLoop_Track(uint32_t tile) noexcept
-{
-	const uint32_t size_x = Map::SizeX();
-	OpenTTDGroundCall call;
-	openttd_rust_rail_tile_loop(tile, OpenTTDLandscape(), RustAmbientSoundEnabled(), size_x, Map::SizeY(), &call, &GetRustWaterGroundServices(), &GetRustRailGroundServices(), &GetRustSharedServices());
 }
 #else
 static void TileLoop_Track(TileIndex tile)
@@ -3292,7 +3287,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.rail_foundation = OpenTTDEnumMapQuery<RustRailFoundation, Slope, TrackBits>,
 		.apply_foundation = RailApplyFoundation,
 		.slope_z_in_corner = [](uint8_t tileh, uint8_t corner) noexcept -> int32_t { return GetSlopeZInCorner(static_cast<Slope>(tileh), static_cast<Corner>(corner)); },
-		.flooding = [](uint32_t tile) noexcept -> FloodingBehaviour { return GetFloodingBehaviour(TileIndex{tile}); },
 		.entrance_edge = [](uint32_t tile, int32_t z, uint8_t tileh, uint8_t dir) noexcept { return AutoslopeCheckForEntranceEdge(TileIndex{tile}, z, static_cast<Slope>(tileh), static_cast<DiagDirection>(dir)); },
 		.ship_on_tile = RailShipOnTile,
 		.build_rail = RailBuildSingle,
@@ -3449,7 +3443,11 @@ extern const TileTypeProcs _tile_type_rail_procs = {
 	GetTileTrackStatus_Track, // get_tile_track_status_proc
 	ClickTile_Track,          // click_tile_proc
 	nullptr,                     // animate_tile_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust scheduler calls the owner directly.
+#else
 	TileLoop_Track,           // tile_loop_proc
+#endif
 	ChangeTileOwner_Track,    // change_tile_owner_proc
 	nullptr,                     // add_produced_cargo_proc
 	VehicleEnter_Track,       // vehicle_enter_tile_proc

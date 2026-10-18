@@ -84,7 +84,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::signal::SignalServices, item; assertions, assert_condition, assert_wormhole_start, train_on_tile, train_on_tracks, overflow_tbu, overflow_tbd, overflow_global, assert_company)
         }
         980 => {
-            layout!(crate::rail_cmd::RailCommandServices, item; shared, rail, cost, command, signal, strings, rail_type_valid, compatible_rail, powered_rail, train_powered, rail_no_crossings, road_no_crossing, rail_build_cost, rail_clear_cost, rail_convert_cost, road_build_cost, crossing_with_competitor, disable_elrails, rail_foundation, apply_foundation, slope_z_in_corner, flooding, entrance_edge, ship_on_tile, build_rail, remove_rail, build_signal, remove_signal, convert_rail, rail_infrastructure, road_infrastructure, signal_infrastructure, infrastructure_dirty, reserving_train, parking, train_position, layout_changed, mark_crossings, crossing_removed, make_crossing, make_road, depot_available, new_depot, depot_name, delete_depot, depot_windows, close_inspect, make_shore, docking_check, area_begin, area_tile, area_next, area_contains, collect_trains, consist_changed)
+            layout!(crate::rail_cmd::RailCommandServices, item; shared, rail, cost, command, signal, strings, rail_type_valid, compatible_rail, powered_rail, train_powered, rail_no_crossings, road_no_crossing, rail_build_cost, rail_clear_cost, rail_convert_cost, road_build_cost, crossing_with_competitor, disable_elrails, rail_foundation, apply_foundation, slope_z_in_corner, entrance_edge, ship_on_tile, build_rail, remove_rail, build_signal, remove_signal, convert_rail, rail_infrastructure, road_infrastructure, signal_infrastructure, infrastructure_dirty, reserving_train, parking, train_position, layout_changed, mark_crossings, crossing_removed, make_crossing, make_road, depot_available, new_depot, depot_name, delete_depot, depot_windows, close_inspect, make_shore, docking_check, area_begin, area_tile, area_next, area_contains, collect_trains, consist_changed)
         }
         981 => {
             layout!(crate::rail_cmd::Strings, item; impossible_combination, already_built, build_on_water, sloped_wrong, remove_signals_first, road_works, oneway_road, crossing_rail, crossing_road, no_track, owned_by, flat_land, demolish_bridge, no_suitable_track, no_signals, owned_by_another, remove_track, demolish_building, ship_in_way)
@@ -95,7 +95,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::rail_cmd::CrossingRoad, item; bits, road_type, tram_type, town, road_owner, tram_owner)
         }
         821 => {
-            layout!(crate::services::RailMapServices, item; traversal, signal_presence, signal_update, station_admission, crossing_admission, wormhole_admission, is_rail_depot, rail_depot_direction, has_signal_trackdir, signal_state, set_signal_state, other_tunnel_bridge_end, rail_track_status, rail_tracks, has_signals, signal_type, rail_type, set_rail_type, rail_tile_type, rail_ground, set_rail_ground, set_track_bits, present_signals, set_present_signals, signal_states, set_signal_states, set_has_signals, set_signal_type, signal_variant, set_signal_variant, cycle_signal_side, reserved_tracks, rail_reservation, set_track_reservation, depot_reserved, set_depot_exit, make_rail_normal, make_rail_depot, crossing_rail_bits, crossing_road_axis, has_station_rail, is_rail_station, station_blocked, station_track, wormhole_reserved, set_tile_owner)
+            layout!(crate::services::RailMapServices, item; ground, traversal, signal_presence, signal_update, station_admission, crossing_admission, wormhole_admission, is_rail_depot, rail_depot_direction, has_signal_trackdir, signal_state, set_signal_state, other_tunnel_bridge_end, rail_track_status, has_signals, signal_type, rail_type, set_rail_type, rail_tile_type, set_track_bits, present_signals, set_present_signals, signal_states, set_signal_states, set_has_signals, set_signal_type, signal_variant, set_signal_variant, cycle_signal_side, reserved_tracks, rail_reservation, set_track_reservation, depot_reserved, set_depot_exit, make_rail_normal, make_rail_depot, crossing_rail_bits, crossing_road_axis, has_station_rail, is_rail_station, station_blocked, station_track, wormhole_reserved, set_tile_owner)
         }
         445 => layout!(crate::town::YearlyServices, item; completed, age, set_age),
         444 => layout!(crate::town::SuppliedEntry, item; entry, created),
@@ -112,12 +112,12 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         793 => layout!(crate::ground::CostServices, item; commands, costs, prepare, release),
         794 => layout!(crate::ground::RoadSnowGround, item; z, snow),
         795 => {
-            layout!(crate::ground::RoadServices, item; snow, snow_or_desert, toggle_snow_or_desert, roadside, set_roadside, work_counter, set_work_counter, all_bits, bulldozer, cleanup, remove, town_road_type, set_road_type)
+            layout!(crate::ground::RoadServices, item; snow, snow_or_desert, toggle_snow_or_desert, roadside, set_roadside, work_counter, set_work_counter, all_bits, bulldozer, cleanup, remove, town, set_road_type)
         }
         796 => layout!(crate::water::AirportGround, item; station, tile, width, height),
         797 => layout!(crate::water::TileVehicleCursor, item; storage),
         798 => {
-            layout!(crate::water::WaterServices, item; rail, clear, vehicles, costs, company, non_flooding, set_non_flooding, coast, set_tree_ground, make_sea, buoy_or_dock, canal_or_river, possible_docking, check_docking, invalidate_region, tracks, remove_rail, apply_foundation, iterator_begin, iterator_current, iterator_next, iterator_end, airport_tile, airport, airport_member, airport_z, victim, aircraft_pose, ground_pose, crash, ai_event, game_event, news, bridge_height)
+            layout!(crate::water::WaterServices, item; rail, clear, vehicles, costs, company, non_flooding, set_non_flooding, coast, set_tree_ground, make_sea, buoy_or_dock, canal_or_river, possible_docking, check_docking, invalidate_region, remove_rail, apply_foundation, iterator_begin, iterator_current, iterator_next, iterator_end, airport_tile, airport, airport_member, airport_z, victim, aircraft_pose, ground_pose, crash, ai_event, game_event, news, bridge_height)
         }
         799 => layout!(crate::water::FloodVictim, item; status, kind),
         800 => layout!(crate::water::AircraftFloodPose, item; tile, z, subtype),
@@ -131,7 +131,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         787 => layout!(crate::ground::RailSnowGround, item; z, slope, tracks, plain),
         788 => layout!(crate::ground::RailFenceGround, item; tracks, owner, plain),
         789 => {
-            layout!(crate::ground::RailServices, item; ground, set_ground, snow, fences, foundation, owned_land)
+            layout!(crate::ground::RailServices, item; tracks, ground, set_ground, snow, fences, foundation, owned_land)
         }
         790 => layout!(crate::ground::TunnelGround, item; z, snow),
         791 => {
@@ -206,7 +206,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::linkgraph::OutputShare, item; node, origin, via, cumulative, unrestricted, has_share)
         }
         38 => {
-            layout!(crate::trees::TreeServices, item; plant_observation, tree_observation, tree_count, clear_observation, snow_line, sin, cos, make_tree, set_ground_density, add_count, add_growth, set_growth, make_clear, clear_neighbour_flooding, ambient, progress, progress_total, town_rating, command_begin, command_tile, command_next, command_debit, landscape_clear)
+            layout!(crate::trees::TreeServices, item; plant_observation, tree_observation, tree_count, clear_observation, snow_line, sin, cos, make_tree, set_ground_density, add_count, add_growth, set_growth, make_clear, ambient, progress, progress_total, town_rating, command_begin, command_tile, command_next, command_debit, landscape_clear)
         }
         28 => {
             layout!(crate::trees::PlantObservation, item; tile_type, bridge, ground, density, snow, coast, zone)
@@ -235,7 +235,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::effect::Leaves, item; observe, write, viewport, sound, animated)
         }
         42 => {
-            layout!(crate::services::Services, item; context, random, industry, tile_type, bridge_above, tropic_zone, tile_z, tile_slope, mark_dirty, set_tropic_zone, tile_owner, station_index, depot_index, is_level_crossing, tunnel_bridge_direction, bridge_speed, is_water_tile, company_valid, next_company, current_company, closest_town, town_owner, tile_valid, distance_from_edge, tile_max_z, tile_height, bridge_axis, has_water_ground, is_sea, is_plain_rail, is_bridge, tunnel_transport, other_tunnel_end, is_road_depot, road_depot_direction, is_normal_road, disallowed_road_directions, is_bay_stop, bay_stop_direction, is_drive_through_stop, drive_through_axis, is_any_road_stop, road_type, has_road_type, road_owner, town_index, road_bits, snow_line, calendar_year, map_log_x, map_max_x, map_max_y, plane_speed, no_jetcrash, plane_crashes, service_at_helipad, disaster_sound, economy_date, calendar_date, slope, build_on_slopes, autoslope, clear_square, free_train_reservation, try_path_reserve, safe_waiting_position, has_road_works, tram_type, tram_owner, normal_road_bits, crossing_road_bits, forbid_90_deg, update_level_crossing, mark_bridge_dirty, train_trackdir, clear_ground, tree_ground, make_snow, make_shore, tile_loop_water, play_sound, foundation, set_fence, has_water_class)
+            layout!(crate::services::Services, item; context, random, industry, tile_type, bridge_above, tropic_zone, tile_z, tile_slope, mark_dirty, set_tropic_zone, tile_owner, station_index, depot_index, is_level_crossing, tunnel_bridge_direction, bridge_speed, is_water_tile, company_valid, next_company, current_company, closest_town, town_owner, tile_valid, distance_from_edge, tile_max_z, tile_height, bridge_axis, has_water_ground, is_sea, is_plain_rail, is_bridge, tunnel_transport, other_tunnel_end, is_road_depot, road_depot_direction, is_normal_road, disallowed_road_directions, is_bay_stop, bay_stop_direction, is_drive_through_stop, drive_through_axis, is_any_road_stop, road_type, has_road_type, road_owner, town_index, road_bits, snow_line, calendar_year, map_log_x, map_max_x, map_max_y, plane_speed, no_jetcrash, plane_crashes, service_at_helipad, disaster_sound, economy_date, calendar_date, slope, build_on_slopes, autoslope, clear_square, free_train_reservation, try_path_reserve, safe_waiting_position, has_road_works, tram_type, tram_owner, normal_road_bits, crossing_road_bits, forbid_90_deg, update_level_crossing, mark_bridge_dirty, train_trackdir, clear_ground, tree_ground, make_snow, make_shore, water_services, play_sound, foundation, set_fence, has_water_class)
         }
         // ABI reservations: train 380-385; tree additions 386-389; fleet 390-399; company 400-429; town 430-459; shared vehicle/road 460-499; station 500-559; industry 560-619; shared CommandCost 620-629 (town-owned). Trees retain existing low IDs.
         461 => layout!(crate::vehicle::NewPosition, item; x, y, tile),
