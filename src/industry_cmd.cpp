@@ -62,6 +62,7 @@
 #include "rust/company_services.h"
 #include "rust/environment_services.h"
 #include "rust/command_cost_native_services.h"
+#include "rust/services_map.h"
 #include "rust/sound_services.h"
 #include "rust/tile_animation_services.h"
 #include "rust/orders_ffi.h"
@@ -3642,10 +3643,11 @@ static const OpenTTDIndustryServices _industry_services = {
 	.tile_add_wrap = [](uint32_t tile, int32_t x, int32_t y) noexcept -> uint32_t { return TileAddWrap(TileIndex(tile), x, y).base(); },
 	.farm_tile = [](uint32_t index) noexcept -> OpenTTDIndustryFarmTile {
 		TileIndex tile(index);
-		switch (GetTileType(tile)) {
+		const auto type = SharedTileType(index);
+		switch (type) {
 			case MP_CLEAR: return {MP_CLEAR, RustSnowTile(index), static_cast<uint8_t>(RustClearGround(Tile{tile})), 0};
 			case MP_TREES: return {MP_TREES, 0, static_cast<uint8_t>(RustTreeGround(Tile{tile})), GetTreeGrowth(tile) >= TreeGrowthStage::Grown};
-			default: return {static_cast<uint8_t>(GetTileType(tile)), 0, 0, 0};
+			default: return {type, 0, 0, 0};
 		}
 	},
 	.snow_line = GetRustSharedServices().snow_line,
@@ -3734,7 +3736,7 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.neutral_station = [](void *shell) noexcept -> OpenTTDIndustryStationHandle * { return reinterpret_cast<OpenTTDIndustryStationHandle *>(RustIndustry(shell)->neutral_station); },
 	.cleanup_tile = [](uint32_t index) noexcept -> OpenTTDIndustryCleanupTile {
 		TileIndex tile(index);
-		TileType type = GetTileType(tile);
+		auto type = SharedTileType(index);
 		return {type == MP_INDUSTRY ? GetIndustryIndex(tile).base() : uint16_t{0xFFFF}, static_cast<uint8_t>(type), type == MP_STATION && IsOilRig(tile)};
 	},
 	.delete_tile_inspect = [](uint32_t tile) noexcept { DeleteNewGRFInspectWindow(GSF_INDUSTRYTILES, tile); },

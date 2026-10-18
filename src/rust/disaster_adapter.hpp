@@ -8,6 +8,7 @@
 #include "services_landscape.h"
 #include "station_services.h"
 #include "command_services.h"
+#include "services_map.h"
 #include "services_rail.h"
 #include "disaster_ffi.h"
 #include "vehicle_services.h"
@@ -61,10 +62,10 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 		case 4: out[0] = Company::Get(id)->group_all[VEH_ROAD].num_vehicle; break;
 		case 5: {
 			TileIndex tile{id}; out[0] = IsValidTile(tile); if (!out[0]) break;
-			out[1] = GetTileType(tile);
+			out[1] = SharedTileType(id);
 			if (out[1] == MP_RAILWAY) out[2] = RustTileOwnerValue(id);
 			out[4] = IsTileType(tile, MP_RAILWAY) && RustRailIsDepot(id); out[5] = RustAirportTile(id);
-			if (out[5]) out[6] = GetStationIndex(tile).base();
+			if (out[5]) out[6] = MapSvcStationIndex(id);
 			if (IsTileType(tile, MP_INDUSTRY)) out[7] = GetIndustryIndex(tile).base();
 			out[8] = RustPlainRailTile(id); break;
 		}
@@ -82,7 +83,7 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 			break;
 		}
 		case 7: out[0] = reinterpret_cast<intptr_t>(DisasterVehicle::Get(id)->rust_state.get()); break;
-		case 8: out[0] = GetSlopePixelZ(a, b); break;
+		case 8: out[0] = SharedSlopePixelZ(a, b, false); break;
 		case 9: out[0] = GetDirectionTowards(Vehicle::Get(id), a, b); break;
 		case 10: { auto gp = GetNewVehiclePos(Vehicle::Get(id)); out[0] = gp.x; out[1] = gp.y; break; }
 		case 11: out[0] = Industry::Get(id)->TileBelongsToIndustry(TileIndex{static_cast<uint32_t>(a)}); break;
@@ -139,8 +140,8 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 			}
 			break;
 		case 12:
-			if (step.other == 0) { TileIndex tile{step.id}; AI::NewEvent(CompanyID{RustTileOwnerValue(step.id)}, new ScriptEventDisasterZeppelinerCrashed(GetStationIndex(tile))); }
-			else if (step.other == 1) { TileIndex tile{step.id}; AI::NewEvent(CompanyID{RustTileOwnerValue(step.id)}, new ScriptEventDisasterZeppelinerCleared(StationID{static_cast<uint16_t>(step.a)})); }
+			if (step.other == 0) { AI::NewEvent(CompanyID{RustTileOwnerValue(step.id)}, new ScriptEventDisasterZeppelinerCrashed(StationID(MapSvcStationIndex(step.id)))); }
+			else if (step.other == 1) { AI::NewEvent(CompanyID{RustTileOwnerValue(step.id)}, new ScriptEventDisasterZeppelinerCleared(StationID{static_cast<uint16_t>(step.a)})); }
 			else {
 				RoadVehicle *target = RoadVehicle::Get(step.id);
 				AI::NewEvent(target->owner, new ScriptEventVehicleCrashed(target->index, target->tile, ScriptEventVehicleCrashed::CRASH_RV_UFO, step.a, target->owner));
