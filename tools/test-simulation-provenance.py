@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from simulation import core as simulate
+from simulation.roads import SPEED_BUDGETS, speed_budget
 
 
 class SimulationDeterminismTests(unittest.TestCase):
@@ -220,7 +221,10 @@ class SimulationProvenanceTests(unittest.TestCase):
                     (root / "status").write_text("")
                 return {
                     "scenario": scenario["name"],
-                    "plain_speed": {"median_candidate_reference_ratio": None},
+                    "plain_speed": {
+                        "median_candidate_reference_ratio": 1.0,
+                        "budget": speed_budget("generate-tgp-256-1", 1.0),
+                    },
                     "passed": passed,
                     "snapshots": 1,
                     "stats": {"chunks": 1, "elements": 1, "masked": {}},
@@ -365,8 +369,6 @@ class SimulationProvenanceTests(unittest.TestCase):
 class SimulationSpeedTests(unittest.TestCase):
     def test_record_guard_and_fixed_ceilings(self):
         from math import inf, nextafter
-
-        from simulation.roads import SPEED_BUDGETS, speed_budget
 
         for name, ceiling in (("play-test", 1.5), ("generate-test", 1.3)):
             with self.subTest(name=name), patch.dict(SPEED_BUDGETS, {name: 1.0}):
