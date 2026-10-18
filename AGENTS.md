@@ -79,9 +79,12 @@ fork; the remaining upstream documentation explains behavior and architecture.
   budget when its profile attributes the remaining miss to per-call boundary
   crossings (map or vehicle reads) that an open, owned boundary issue such as
   #274 removes; the PR names that issue and its measured cost, and the cap
-  rises to the measured median. A miss within the spread of earlier runs is
-  not a miss. Design faults (per-call allocation, opcode dispatch, whole-record
-  copies) still block integration.
+  rises to the median measured at the integrating head. Boundary cost is the
+  crossing overhead beyond what the original spends inline on the same work,
+  not a leaf's inclusive cost. A miss within the spread of earlier runs is
+  not a miss; the integrating PR still raises the cap to its measured median.
+  Design faults (per-call allocation, opcode dispatch, whole-record copies,
+  a Rust-to-C++-to-Rust bounce into code Rust owns) still block integration.
 - Evidence for game-logic ports is the semantic simulation harness (`python3
   tools/migration.py simulate`, #72) plus the existing tests; a new game-logic
   port integrates only after the harness exists and its scenarios exercise the
@@ -190,9 +193,11 @@ For substantive changes:
    the affected checks, and lists each finding with its fixing commit. Root
    verifies the reviewer's fix commits before integration. Findings that need a
    scope or policy decision go to root unfixed. Updating a reviewed PR from its
-   base needs no new review when the update has no conflicts in `src/`,
-   `rust/`, `tools/` or `.github/` and CI passes; otherwise a fresh reviewer
-   checks and fixes only the conflict resolution.
+   base needs no new review when CI passes and the update either has no
+   conflicts in `src/`, `rust/`, `tools/` or `.github/`, or resolves each one by
+   keeping both sides' lines unchanged (`git show --remerge-diff` of the merge
+   removes only conflict markers; root records this on the PR). Otherwise a
+   fresh reviewer checks and fixes only the conflict resolution.
 4. Root integrates after review and required checks, records completion, and
    removes the merged worktree. A red check on `rust-migration` itself is fixed
    before more integrations.
@@ -269,8 +274,10 @@ a hand-written script. Compare preflight's warnings against the reference build
 log instead of cleaning them up.
 
 A worktree and its local branch exist only while their PR is open, or before
-the PR while the roadmap's work order holds the issue. Once the PR merges,
-remove them with `git worktree remove PATH` and `git branch -d BRANCH`, both of
+the PR while the roadmap's work order holds the issue. An open PR keeps one
+worktree: when a review or update task that ran in its own worktree ends and
+its commits are pushed, root removes that worktree. Once the PR merges,
+remove the worktree and branch with `git worktree remove PATH` and `git branch -d BRANCH`, both of
 which refuse dirty, locked or unmerged state; GitHub deletes the merged head
 branch. When work stops for good (closed, superseded, or paused with no next
 step), close its draft PR, keep the branch on origin, record its head on the
