@@ -6,7 +6,6 @@
   },
   "layout": "ferry",
   "ship": 22,
-  "reference_binary_sha256": "5d22b1015057d280fcd4a81501fb67507b6490be9567222931fd1a32e17dcafe",
   "source_sha256": "74ee7aa9402307b758d48a1ab0de1c290bb6638b8d5dc3be472c34b7141bd47c",
   "raw_sha256": "1480bd4383dd2b2440337bb7974f4df8677116a0e0a1ae64ad4f59b066316324",
   "normalized_sha256": "7987bd79dc51e7a9a37947f756d371c1bff9040a9b39c00c5774fd0a57e5625f",

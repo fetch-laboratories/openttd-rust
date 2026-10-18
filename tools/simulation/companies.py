@@ -147,7 +147,7 @@ def rows(path, cid):
     }
 
 
-def configure_competitors(path, receipt):
+def configure_competitors(path, record):
     """Declare fixed local scripts for vacant slots; preserve running AI data."""
     original, chunks = path.read_bytes(), read_save(path)
     chunk = chunks["AIPL"]
@@ -164,7 +164,7 @@ def configure_competitors(path, receipt):
         if elements[index] != b"\0\0\xff\xff\xff\xff":
             raise RuntimeError("competitor input slot already has an AI configured")
         elements[index] = config
-        receipt["assignments"].append(["AIPL", index, "configuration", name.decode()])
+        record["assignments"].append(["AIPL", index, "configuration", name.decode()])
     reader = Reader(original, chunk["span"][0] + 5)
     reader.take(reader.gamma() - 1)
     begin, end = reader.pos, chunk["span"][1]
@@ -180,7 +180,7 @@ def configure_competitors(path, receipt):
             != prepared[slice(*after[cid]["span"])]
         ):
             raise RuntimeError(f"competitor configuration changed unrelated {cid}")
-    receipt["sha256"] = hashlib.sha256(prepared).hexdigest()
+    record["sha256"] = hashlib.sha256(prepared).hexdigest()
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
@@ -198,7 +198,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     )
     jobs = rows(raw, "LGRJ")
     setup_input = folder / "setup-input.sav"
-    setup_receipt = patch(
+    setup_record = patch(
         raw,
         setup_input,
         {
@@ -348,13 +348,13 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             ],
         )
     prepared = folder / "company-input.sav"
-    receipt = patch(fixture, prepared, changes)
+    record = patch(fixture, prepared, changes)
     if operation.startswith("competitor"):
-        configure_competitors(prepared, receipt)
-    receipt.update(
+        configure_competitors(prepared, record)
+    record.update(
         committed_source=str(source),
         committed_sha256=hashlib.sha256(packed).hexdigest(),
-        setup_input=setup_receipt,
+        setup_input=setup_record,
         setup_console=setup["console"],
         assets=[int(x) for x in assets[0].split()],
         console=scenario["console"],
@@ -374,8 +374,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if operation == "competitor-reload":
             check_competitors(scenario, live, prepared, live["snapshots"][-1])
         prepared = folder / "reload-input.sav"
-        receipt["reload"] = patch(live["snapshots"][-1], prepared, {})
-    result["company_input"] = receipt
+        record["reload"] = patch(live["snapshots"][-1], prepared, {})
+    result["company_input"] = record
     return dict(scenario, save=str(prepared))
 
 

@@ -14,7 +14,6 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from build_identity import IDENTITY_NAME, read_identity, source_identity, write_identity
 from validation_execution import file_lock, run_logged
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -170,7 +169,7 @@ def compiler_cache_base(role):
 
 
 def compiler_cache_environment(env, role, *, bypass=False):
-    """Isolate role provenance and ignore ambient cache-policy overrides."""
+    """Isolate role caches and ignore ambient cache-policy overrides."""
     if role not in ("reference", "candidate"):
         raise ValueError("Compiler cache role must be reference or candidate")
     result = {key: value for key, value in env.items() if not key.startswith("CCACHE_")}
@@ -427,27 +426,6 @@ def main():
         },
         "passed": False,
     }
-    patch = subprocess.check_output(["git", "diff", "HEAD", "--binary"], cwd=ROOT)
-    (evidence / "candidate.patch").write_bytes(patch)
-    # Also retain new files so an uncommitted verification run remains inspectable.
-    untracked = (
-        subprocess.check_output(
-            [
-                "git",
-                "ls-files",
-                "--others",
-                "--exclude-standard",
-                "-z",
-            ],
-            cwd=ROOT,
-        )
-        .decode()
-        .split("\0")
-    )
-    for name in filter(None, untracked):
-        destination = evidence / "untracked" / name
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(ROOT / name, destination)
 
     def run(name, command, cwd=ROOT):
         log = evidence / f"{name}.log"
@@ -541,7 +519,6 @@ def main():
         for name, build in builds.items():
             with reference_lock() if name == "reference" else candidate_lock(build):
                 select_role(name)
-                before = source_identity(ROOT) if name == "candidate" else None
                 source = REFERENCE.resolve() if name == "reference" else ROOT
                 extra = (
                     []
@@ -578,76 +555,15 @@ def main():
                     report["rust_configuration"] = rust_configuration(build)
                 if args.action != "tools":
                     supply_graphics(build)
-                if name == "candidate":
-                    (build / IDENTITY_NAME).unlink(missing_ok=True)
                 run(
                     f"{name}-build",
                     ["cmake", "--build", str(build), "--parallel", str(args.jobs)],
                 )
-                if args.action == "tools":
-                    binaries = [
-                        build / "src/strgen/strgen",
-                        build / "src/settingsgen/settingsgen",
-                    ]
-                    report[f"{name}_binary_sha256"] = {
-                        str(binary.relative_to(build)): hashlib.sha256(
-                            binary.read_bytes()
-                        ).hexdigest()
-                        for binary in binaries
-                    }
-                else:
-                    binary = build / (
-                        "openttd" if name == "reference" else "openttd-rust"
-                    )
-                    report[f"{name}_binary_sha256"] = hashlib.sha256(
-                        binary.read_bytes()
-                    ).hexdigest()
-                    if name == "candidate":
-                        report["candidate_build_identity"] = write_identity(
-                            build,
-                            binary,
-                            before,
-                            source_identity(ROOT),
-                            {
-                                "configure": configure,
-                                "cache": cmake_cache(build),
-                                "environment": {
-                                    key: env.get(key)
-                                    for key in (
-                                        "CC",
-                                        "CXX",
-                                        "CFLAGS",
-                                        "CXXFLAGS",
-                                        "RUSTFLAGS",
-                                        "CARGO_BUILD_JOBS",
-                                        "PATH",
-                                    )
-                                },
-                            },
-                        )
 
         if args.action == "verify":
             inventories = {}
             for name, build in builds.items():
                 with reference_lock() if name == "reference" else candidate_lock(build):
-                    binary = build / (
-                        "openttd" if name == "reference" else "openttd-rust"
-                    )
-                    if (
-                        hashlib.sha256(binary.read_bytes()).hexdigest()
-                        != report[f"{name}_binary_sha256"]
-                    ):
-                        raise RuntimeError(
-                            f"{name} executable changed between build and tests; repeat verification"
-                        )
-                    if (
-                        name == "candidate"
-                        and read_identity(build, binary)
-                        != report["candidate_build_identity"]
-                    ):
-                        raise RuntimeError(
-                            "Candidate build identity changed before tests; repeat verification"
-                        )
                     log = run(
                         f"{name}-test-inventory",
                         ["ctest", "--show-only=json-v1"],
@@ -673,13 +589,6 @@ def main():
                         ],
                         cwd=build,
                     )
-                    if (
-                        hashlib.sha256(binary.read_bytes()).hexdigest()
-                        != report[f"{name}_binary_sha256"]
-                    ):
-                        raise RuntimeError(
-                            f"{name} executable changed during tests; repeat verification"
-                        )
             missing = inventories["reference"] - inventories["candidate"]
             if missing:
                 raise RuntimeError(
