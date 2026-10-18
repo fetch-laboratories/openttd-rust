@@ -230,7 +230,7 @@ python3 tools/migration.py simulate play-opus-55-167-002-manual --benchmark 3 --
 ```
 
 The driver builds with two jobs, then runs one scenario worker. Benchmark mode
-runs only plain pairs, isolates each timed game from other clone-wide harness
+runs only plain pairs, shares the clone-wide coordination lock with other harness
 games, and compares each exit save and full logs. Both roles use #154's serial
 offline thread-failure fallback, recorded as `execution` in the report. These
 are total offline times, not normal threaded frame latency. It retains the final
@@ -240,7 +240,7 @@ directories and runtime libraries; keep profiling separate from timing samples.
 Timings include startup, loading, serial link-graph work and save I/O. Benchmark
 games wait directly for child exit with a timeout watchdog; ordinary runs retain
 subprocess timeout polling, which can add about 50 ms.
-The lock excludes harness games, not unrelated host activity. `SPEED_BUDGETS` in
+Shared coordination does not reserve a quiet host. `SPEED_BUDGETS` in
 `tools/simulation/roads.py` records current ratios, updated up or down by integrating
 PRs. Reports show a 15% guard against that record, fixed ceilings of 1.5x for play
 saves and 1.3x for generation, and a flag within 5% of the ceiling. Take one median
