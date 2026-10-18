@@ -9,7 +9,7 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 - Twenty-nine ownership ports. Whole fork: Rust 64,552 / tooling 31,760 / glue 28,235 / original retired 40,145 of 470,612 `src/` lines (8.53%). Simulation: 32,218 / 102,615 (31.40%).
 - Since the thirteenth review: #270 rail commands (1,578 retired) and #257 vehicle scheduling (388), plus #268, #273, #277 and #279. Retirement +1,922; glue plus tooling +2,033.
 - Drafts: #269 houses (891) and #255 landscape (844), both stopped at base conflicts during the 2026-10-17 wind-down.
-- Speed at `600dca4e27` (median of three): TGP 1.139 (target 1.15), play saves 1.22-1.38. Padhattan 2000/2016 exceed their caps by 3.7%/4.6% because #257's accepted overrun never raised them (#275).
+- Speed at `600dca4e27` (median of three): TGP 1.139 (ceiling 1.3), play saves 1.22-1.38 (ceiling 1.5). The 3% ratchet is replaced by a 15% guard (#282).
 - The largest remaining simulation C++: `station_cmd.cpp` 4,424 lines, `road_cmd.cpp` 2,669, `vehicle.cpp` 2,573, `tunnelbridge_cmd.cpp` 2,135, `town_cmd.cpp` 1,929, `train_cmd.cpp` 1,778, `landscape.cpp` 1,665, `rail_cmd.cpp` 1,531, `water_cmd.cpp` 1,471.
 
 ## Fourteenth steering review (2026-10-18, merge churn and honest exceptions)
@@ -18,7 +18,7 @@ Independent audits of #270, #257, #269 and #255 and a fresh profile found **one 
 
 - **Merge churn is the largest cost.** In the last session, 9 of 17 agent tasks on component PRs were base updates or conflict reviews. Every conflict was an append collision: witness IDs from one global sequence, include lines, probe calls, service-table tails.
 - **#269 R1 regressed fidelity.** The construction-stage trigger reads the untranslated house ID, so a placed house that a NewGRF overrides skips a `Random()` draw. All four earlier #269 findings are fixed.
-- **#255's exception is overstated.**
+- **#255's speed exception was overstated.** The exception is gone now; these design faults still block:
   - Most of the cited 275M `RustClearSurface` is reads the original also makes inline.
   - The final head added two rail trampolines after the timing.
   - Four Rust-to-C++-to-Rust bounces into Rust-owned code remain.
@@ -33,26 +33,28 @@ Independent audits of #270, #257, #269 and #255 and a fresh profile found **one 
   - The planned road C-layout block would save about 1M Ir.
 - **#274's map view clears its gate,** but at 1,549M against the native loop's 1,853M it beats inline C++, so its saving is not yet attributed.
 
+**Speed policy (user decision, 2026-10-18).** The 3% ratchet blocked on noise. Padhattan 2000/2016 noise is about 2%, and today's caps fail an unchanged build most of the time. Speed gating took about 20-30% of subagent time, and the real finds came from periodic profiles. AGENTS.md now has a 15% per-PR guard, ceilings of 1.5x (play saves) and 1.3x (generation), no per-port CPU budgets, and a speed pass after every fourth ownership integration. #282 changes the harness.
+
 Actions, in order:
-1. **#280 first** (small maintenance PR): per-component witness blocks and an ordering convention for shared append lists. AGENTS.md now lets a base update that keeps both sides' lines skip review.
+1. **#280 and #282 first** (small maintenance PRs): per-component witness blocks and an ordering convention for shared append lists; the speed guard fields and the first measured record. AGENTS.md now lets a base update that keeps both sides' lines skip review.
 2. **#269:** fix the override divergence and the `RustHouseTown` copy, add a probe that places an overridden house, adopt #280, then review, Full and integrate (PR comment).
-3. **#255:** the six must-change items in its PR comment (canonical rail leaves, no bounces, orphan exports, Windows warnings, re-timing at the final head with honest attribution, glue explained or cut), then review, Full, and integration under the exception.
-4. **#275 in its revised order** (issue comment): road YAPF tile reads and the other cheap rule fixes, then `GetCurrentMaxSpeed`, then trees and industry `next_tick`, then folding the road per-tick C++ into Rust; aircraft last. The first #275 PR re-bases the six caps at its head.
+3. **#255:** the six must-change items in its PR comment (canonical rail leaves, no bounces, orphan exports, Windows warnings, the speed guard at the final head instead of the old exception, glue explained or cut), then review, Full and integration.
+4. **#275 in its revised order** (issue comment): road YAPF tile reads and the other cheap rule fixes, then `GetCurrentMaxSpeed`, then trees and industry `next_tick`, then folding the road per-tick C++ into Rust; aircraft last. This is the current speed pass's fix list.
 5. **#281, two maintenance PRs:** direct vehicle maintenance calls with wrapper deletion, then the callee-copy check in quick CI.
 6. **#274 map view** as one shared PR after #255 integrates, with the attribution in the #274 comment.
 7. **#266 road commands starts once #280 integrates**, without waiting for #269 or #255. Then #267 and #247.
 
 ## Earlier steering, still in force
 
-- **Core loops (thirteenth):** #257 integrated; #255 integrates under the AGENTS.md boundary exception, which the fourteenth review sharpened. The vehicle raw-offset view is closed (#274). Command ports share one set of command checks. Duplicate wrappers found at review are deleted before integration.
+- **Core loops (thirteenth):** #257 integrated; #255 integrates under the 15% guard once its design faults are fixed. The vehicle raw-offset view is closed (#274). Command ports share one set of command checks. Duplicate wrappers found at review are deleted before integration.
 - **Housekeeping (twelfth):** #259 H1-H4, #260 and #261 R1/R3-part/R4 are done. R2 follows #269, and H5 comes last. At most three maintenance PRs are in flight. They never count against the component cap or block an ownership port.
 - **Direct shared services and boundaries:** direct shared services (#107/#168/#199) and one definition per shared accessor, enforced in quick CI by #249, whose baseline only shrinks. Use a fixed hasher for lookup-only YAPF maps; ABI blocks stay per component.
 - **Ownership:** prioritize simulation ownership. Keep state at the original's process scope.
 - **Map storage:** #108 retains C++ map arrays with direct bundled services until #274's map view lands.
-- **Harness evidence:** end moments (#154), default branch witnesses and reference probes (#198/#204/#210/#211), speed ratchets (#155) and documented coverage gaps (#156).
+- **Harness evidence:** end moments (#154), default branch witnesses and reference probes (#198/#204/#210/#211), the speed guard (#155/#282) and documented coverage gaps (#156).
 - **Tooling and WIP:** proportionate tooling (#109) and a stated budget for infrastructure work. Prefer platform defaults to controllers (#233). The WIP cap is six component branches.
 - **CI and review:** full CI is exact-head and on demand (#171), with concurrent validation (#233) and no admin bypass. Fresh reviewers fix their findings.
-- **Metrics and caps:** original retirement excludes removed fork glue (#223). Caps use three invocation medians and are lowered only beyond measured spread.
+- **Metrics:** original retirement excludes removed fork glue (#223).
 
 ## Completed ownership ports
 
@@ -113,12 +115,10 @@ The default semantic harness runs in CI; regressions come first. Port difference
 go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings.
-2. **Speed ratchet (#155).**
-   - **Caps:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds them. Each cap is the median of three `simulate <name> --benchmark 3 --jobs 2` invocations on an idle host.
-   - **Exceeding a cap:** a PR may exceed a cap by 3%, unless root accepts a stated reason that is not a boundary exception. Core loops follow the AGENTS.md boundary rule instead. A PR whose miss root accepts raises the cap to its measured median, so the next PR starts from the truth.
-   - **Lowering a cap:** a PR lowers a cap only when its median of three beats it by more than the invocation spread, about 2%.
-   - **Targets:** play saves 1.5x, generation 1.15x.
-   - **Misses:** attribute any miss with callgrind before changing scope (AGENTS.md).
+2. **Speed guard and passes (#155, #282, AGENTS.md).**
+   - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios. Each integrating PR records its medians, and each speed pass re-measures all six on a quiet host.
+   - **Per PR:** no scenario more than 15% slower than its record and none over its ceiling (1.5x play saves, 1.3x generation). Misses get a callgrind fix round.
+   - **Speed pass:** after every fourth ownership integration, or when a scenario is within 5% of its ceiling (1.425x play, 1.235x generation). The 2026-10-18 profile at `600dca4e27` is the current pass (#275). Count the next four from there; #269 and #255 count.
    - **Redraw inflation:** the null driver redraws whenever 1 ms has elapsed, so a slower candidate draws more frames, which inflates play-save ratios. Say so in a PR when it decides a miss.
 3. **#156 coverage, standing capacity.** Random and crash branches come first. These remain:
    - signal tbd/global propagation overflow and arbitrary mod layouts;

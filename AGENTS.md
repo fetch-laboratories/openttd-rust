@@ -68,23 +68,31 @@ fork; the remaining upstream documentation explains behavior and architecture.
   initializers. Existing ports convert under #168 and #199. Root grants no
   exceptions at integration: a port whose hot path allocates per call,
   dispatches by opcode or copies whole records is fixed before it integrates.
-- A port that misses a speed budget gets a profile-guided fix round before it
-  is deferred. Attribute the cost per function (callgrind instruction counts
-  work on this host, where hardware counters do not) and fix the attributed
-  overhead. Deferral needs a profile showing the remaining cost is inherent,
-  and names an owned issue whose result can lift it. A re-selection condition
-  that waits on another deferred or unscheduled item is circular; fix it before
-  deferring. A core loop (tile loop, vehicle tick) that misses its gate or the
-  retirement ratio gets a boundary fix, not abandonment. It integrates over
-  budget when its profile attributes the remaining miss to per-call boundary
-  crossings (map or vehicle reads) that an open, owned boundary issue such as
-  #274 removes; the PR names that issue and its measured cost, and the cap
-  rises to the median measured at the integrating head. Boundary cost is the
-  crossing overhead beyond what the original spends inline on the same work,
-  not a leaf's inclusive cost. A miss within the spread of earlier runs is
-  not a miss; the integrating PR still raises the cap to its measured median.
-  Design faults (per-call allocation, opcode dispatch, whole-record copies,
-  a Rust-to-C++-to-Rust bounce into code Rust owns) still block integration.
+- Speed is guarded per PR and optimized in periodic passes (#282). A PR that
+  changes compiled game code passes speed when no benchmark scenario is more
+  than 15% slower than the ratio recorded for current `rust-migration` in
+  `SPEED_BUDGETS`, and none exceeds its ceiling: 1.5x the original for play
+  saves, 1.3x for generation. One `simulate <name> --benchmark 3 --jobs 2`
+  median per scenario suffices and holds no other agent; rerun on a quiet host
+  only when a result lands within 3% of a limit. The integrating PR records
+  its measured medians, up or down. There are no per-port CPU budgets.
+- A PR that fails the speed guard gets a profile-guided fix round before it is
+  deferred. Attribute the cost per function (callgrind instruction counts work
+  on this host, where hardware counters do not) and fix the attributed
+  overhead. Deferral names an owned issue whose result can lift it; a
+  re-selection condition that waits on another deferred or unscheduled item is
+  circular. A core loop (tile loop, vehicle tick) that misses the guard or the
+  retirement ratio gets a boundary fix, not abandonment. Design faults
+  (per-call allocation, opcode dispatch, whole-record copies, a
+  Rust-to-C++-to-Rust bounce into code Rust owns) block integration whatever
+  the timing.
+- Root runs a speed pass after every fourth ownership integration (a PR that
+  moves a component's state and control loop to Rust), and sooner when a
+  scenario comes within 5% of its ceiling. The pass profiles the play saves
+  and generation with callgrind, counting boundary cost as the overhead
+  beyond what the original spends inline on the same work. It turns the two or
+  three largest attributed costs into maintenance PRs, then re-measures all six
+  ratios on a quiet host as the new record.
 - Evidence for game-logic ports is the semantic simulation harness (`python3
   tools/migration.py simulate`, #72) plus the existing tests; a new game-logic
   port integrates only after the harness exists and its scenarios exercise the
