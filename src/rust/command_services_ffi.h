@@ -13,7 +13,7 @@ struct Train;
 struct OpenTTDCommandServices {
 	void (*landscape_clear)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept;
 	void (*tile_ownership)(OpenTTDCommandCost *, uint32_t) noexcept;
-	void (*ownership)(OpenTTDCommandCost *, uint8_t) noexcept;
+	void (*ownership)(OpenTTDCommandCost *, uint8_t, uint32_t) noexcept;
 	void (*no_vehicle)(OpenTTDCommandCost *, uint32_t) noexcept;
 	void (*no_train)(OpenTTDCommandCost *, uint32_t, uint8_t) noexcept;
 	void (*wormhole_free)(OpenTTDCommandCost *, uint32_t, uint32_t, const Train *) noexcept;

@@ -4631,7 +4631,6 @@ static const OpenTTDTrainServices &GetTrainServices()
 		.crash_sound = TrainCrashSound,
 		.crossing_barred = TrainCrossingBarred,
 		.crossing_rail_axis = TrainCrossingRailAxis,
-		.crossing_reserved = TrainCrossingReserved,
 		.crossing_road_axis = OpenTTDLegacyMapQuery<uint64_t, RustCrossingRoadAxis, OpenTTDTrainHandle, uint32_t>,
 		.crossing_sound = TrainCrossingSound,
 		.curve_advantage = TrainCurveAdvantage,
@@ -4780,7 +4779,6 @@ static const OpenTTDTrainServices &GetTrainServices()
 		.wait_twoway = TrainWaitTwoway,
 		.wait_unbunch = TrainWaitUnbunch,
 		.write_crossing_bar = TrainWriteCrossingBar,
-		.write_crossing_res = TrainWriteCrossingRes,
 		.write_visit_type = TrainWriteVisitType,
 		.visit_tile = TrainVisitTile,
 		.visit_near = TrainVisitNear

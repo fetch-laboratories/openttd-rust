@@ -79,7 +79,7 @@ pub struct CommandServices {
     /// Original `CheckTileOwnership`, preserving native encoded errors.
     pub tile_ownership: unsafe extern "C" fn(*mut CommandCost, u32),
     /// Original `CheckOwnership`.
-    pub ownership: unsafe extern "C" fn(*mut CommandCost, u8),
+    pub ownership: unsafe extern "C" fn(*mut CommandCost, u8, u32),
     /// Original `EnsureNoVehicleOnGround`.
     pub no_vehicle: unsafe extern "C" fn(*mut CommandCost, u32),
     /// Original `EnsureNoTrainOnTrackBits`.
@@ -227,6 +227,27 @@ pub struct Services {
     pub road_owner: extern "C" fn(u32) -> u8,
     /// Original native `road_type` map observation.
     pub road_type: extern "C" fn(u32) -> u8,
+    // Registry: road commands (#266).
+    /// Canonical native `HasCrossingReservation`.
+    pub crossing_reserved: extern "C" fn(u32) -> bool,
+    /// Canonical native `SetCrossingReservation`.
+    pub set_crossing_reserved: extern "C" fn(u32, bool),
+    /// Canonical native `road_tile_kind` service.
+    pub road_tile_kind: extern "C" fn(u32) -> u8,
+    /// Canonical native `set_road_bits` service.
+    pub set_road_bits: extern "C" fn(u32, u8, u8),
+    /// Canonical native `set_road_type` service.
+    pub set_road_type: extern "C" fn(u32, u8, u8),
+    /// Canonical native `set_road_owner` service.
+    pub set_road_owner: extern "C" fn(u32, u8, u8),
+    /// Canonical native `set_road_directions` service.
+    pub set_road_directions: extern "C" fn(u32, u8),
+    /// Canonical native `road_tram_type` service.
+    pub road_tram_type: extern "C" fn(u8) -> RoadTramType,
+    /// Canonical native `road_powered` service.
+    pub road_powered: extern "C" fn(u8, u8) -> bool,
+    /// Canonical native `road_type_valid` service.
+    pub road_type_valid: extern "C" fn(u8) -> bool,
     /// `IsSafeWaitingPosition(v, tile, trackdir, true, forbid_90_deg)`.
     pub safe_waiting_position: unsafe extern "C" fn(*const Train, u32, u8, bool) -> bool,
     /// Shared live service at helipad observation.
@@ -324,6 +345,7 @@ pub fn fixture(
     extern "C" fn train_safe(_: *const Train, _: u32, _: u8, _: bool) -> bool {
         false
     }
+    extern "C" fn set_reserved(_: u32, _: bool) {}
     extern "C" fn zone(_: u32, _: u8) {}
     extern "C" fn word(_: u32) -> u32 {
         0
@@ -342,6 +364,16 @@ pub fn fixture(
     }
     extern "C" fn slope(_: i32, _: i32) -> i32 {
         0
+    }
+    extern "C" fn set_three(_: u32, _: u8, _: u8) {}
+    extern "C" fn road_tram(_: u8) -> RoadTramType {
+        RoadTramType(false)
+    }
+    extern "C" fn two_types(_: u8, _: u8) -> bool {
+        false
+    }
+    extern "C" fn type_valid(_: u8) -> bool {
+        false
     }
     Services {
         autoslope: flag0,
@@ -396,6 +428,17 @@ pub fn fixture(
         road_depot_direction: byte,
         road_owner: byte,
         road_type: byte,
+        // Registry: road commands (#266).
+        crossing_reserved: flag,
+        set_crossing_reserved: set_reserved,
+        road_tile_kind: byte,
+        set_road_bits: set_three,
+        set_road_type: set_three,
+        set_road_owner: set_three,
+        set_road_directions: zone,
+        road_tram_type: road_tram,
+        road_powered: two_types,
+        road_type_valid: type_valid,
         safe_waiting_position: train_safe,
         service_at_helipad: flag0,
         set_tropic_zone: zone,
@@ -794,3 +837,8 @@ pub struct RailMapServices {
     /// Native `SetTileOwner`.
     pub set_tile_owner: extern "C" fn(u32, u8),
 }
+
+/// Native bool-backed `RoadTramType`.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct RoadTramType(pub bool);

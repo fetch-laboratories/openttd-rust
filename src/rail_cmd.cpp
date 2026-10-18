@@ -3128,11 +3128,7 @@ static_assert(LEVELCROSSING_TRACKBIT_FACTOR == 2 && TUNNELBRIDGE_TRACKBIT_FACTOR
 static_assert(OWNER_WATER.base() == 0x11 && OWNER_DEITY.base() == 0x12 && OT_LOADING == 3 && SIGTYPE_LAST == 5);
 static_assert(FOUNDATION_RAIL_W == 10 && FOUNDATION_RAIL_N == 13 && FOUNDATION_INVALID == 0xFF);
 
-/** Caller-owned frame of CmdConvertRail: the area iterator and the affected trains. */
-struct OpenTTDRailConvertFrame {
-	std::unique_ptr<TileIterator> iter;
-	TrainList affected;
-};
+#include "rust/rail_command_services.h"
 
 static CommandCost &RailCost(OpenTTDCommandCost *cost) noexcept { return *reinterpret_cast<CommandCost *>(cost); }
 

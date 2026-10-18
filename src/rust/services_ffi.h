@@ -40,6 +40,8 @@ struct OpenTTDTownState;
 struct Train; // Native Train shell; never dereferenced in Rust.
 enum RoadType : uint8_t;
 enum RoadBits : uint8_t;
+enum RoadTramType : bool;
+enum class RoadTileType : uint8_t;
 enum Trackdir : uint8_t;
 struct OpenTTDSharedServices {
 	bool (*autoslope)() noexcept;
@@ -94,6 +96,17 @@ struct OpenTTDSharedServices {
 	uint8_t (*road_depot_direction)(uint32_t) noexcept;
 	uint8_t (*road_owner)(uint32_t) noexcept;
 	uint8_t (*road_type)(uint32_t) noexcept;
+	// Registry: road commands (#266).
+	bool (*crossing_reserved)(uint32_t) noexcept;
+	void (*set_crossing_reserved)(uint32_t, bool) noexcept;
+	RoadTileType (*road_tile_kind)(uint32_t) noexcept;
+	void (*set_road_bits)(uint32_t, uint8_t, uint8_t) noexcept;
+	void (*set_road_type)(uint32_t, uint8_t, uint8_t) noexcept;
+	void (*set_road_owner)(uint32_t, uint8_t, uint8_t) noexcept;
+	void (*set_road_directions)(uint32_t, uint8_t) noexcept;
+	RoadTramType (*road_tram_type)(uint8_t) noexcept;
+	bool (*road_powered)(uint8_t, uint8_t) noexcept;
+	bool (*road_type_valid)(uint8_t) noexcept;
 	bool (*safe_waiting_position)(const Train *, uint32_t, uint8_t, bool) noexcept;
 	bool (*service_at_helipad)() noexcept;
 	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept;
@@ -267,6 +280,17 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.road_depot_direction = OpenTTDFixtureMapService<uint8_t, uint32_t>,
 		.road_owner = OpenTTDFixtureMapService<uint8_t, uint32_t>,
 		.road_type = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		// Registry: road commands (#266).
+		.crossing_reserved = OpenTTDFixtureMapService<bool, uint32_t>,
+		.set_crossing_reserved = OpenTTDFixtureMapService<void, uint32_t, bool>,
+		.road_tile_kind = OpenTTDFixtureMapService<RoadTileType, uint32_t>,
+		.set_road_bits = OpenTTDFixtureMapService<void, uint32_t, uint8_t, uint8_t>,
+		.set_road_type = OpenTTDFixtureMapService<void, uint32_t, uint8_t, uint8_t>,
+		.set_road_owner = OpenTTDFixtureMapService<void, uint32_t, uint8_t, uint8_t>,
+		.set_road_directions = OpenTTDFixtureMapService<void, uint32_t, uint8_t>,
+		.road_tram_type = OpenTTDFixtureMapService<RoadTramType, uint8_t>,
+		.road_powered = OpenTTDFixtureMapService<bool, uint8_t, uint8_t>,
+		.road_type_valid = OpenTTDFixtureMapService<bool, uint8_t>,
 		.safe_waiting_position = OpenTTDFixtureMapService<bool, const Train *, uint32_t, uint8_t, bool>,
 		.service_at_helipad = OpenTTDFixtureMapService<bool>,
 		.set_tropic_zone = OpenTTDFixtureMapService<void, uint32_t, uint8_t>,

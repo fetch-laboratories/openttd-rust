@@ -15,6 +15,7 @@
 #include "../industry_map.h"
 #include "../bridge_map.h"
 #include "services_rail.h"
+#include "services_road.h"
 #include "../road_map.h"
 #include "../station_map.h"
 #include "../tunnelbridge_map.h"
@@ -79,7 +80,7 @@ static void LandscapeClear(OpenTTDCommandCost *out, uint32_t tile, uint16_t flag
 	*NativeCost(out) = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlags(flags), TileIndex{tile});
 }
 static void CommandTileOwnership(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = CheckTileOwnership(TileIndex{tile}); }
-static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner) noexcept { *NativeCost(out) = CheckOwnership(Owner(owner)); }
+static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner, uint32_t tile) noexcept { *NativeCost(out) = CheckOwnership(Owner(owner), TileIndex{tile}); }
 static void CommandNoVehicle(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = EnsureNoVehicleOnGround(TileIndex{tile}); }
 static void CommandNoTrain(OpenTTDCommandCost *out, uint32_t tile, uint8_t bits) noexcept { *NativeCost(out) = EnsureNoTrainOnTrackBits(TileIndex{tile}, static_cast<TrackBits>(bits)); }
 static void CommandWormholeFree(OpenTTDCommandCost *out, uint32_t tile, uint32_t end, const Train *ignore) noexcept { *NativeCost(out) = TunnelBridgeIsFree(TileIndex{tile}, TileIndex{end}, ignore); }
@@ -122,6 +123,14 @@ static void SharedMarkDirty(uint32_t tile) noexcept { MarkTileDirtyByTile(TileIn
 static void SharedClearSquare(uint32_t tile) noexcept { DoClearSquare(TileIndex{tile}); }
 static void SharedFreeTrainReservation(const Train *v) noexcept { FreeTrainTrackReservation(v); }
 static bool SharedTryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_okay) noexcept { return TryPathReserve(v, mark_as_stuck, first_tile_okay); }
+static RoadTileType Shared_road_tile_kind(uint32_t tile) noexcept { return GetRoadTileType(TileIndex{tile}); }
+static void Shared_set_road_bits(uint32_t tile, uint8_t bits, uint8_t rtt) noexcept { SetRoadBits(TileIndex{tile}, static_cast<RoadBits>(bits), static_cast<RoadTramType>(rtt)); }
+static void Shared_set_road_type(uint32_t tile, uint8_t rtt, uint8_t rt) noexcept { SetRoadType(TileIndex{tile}, static_cast<RoadTramType>(rtt), static_cast<RoadType>(rt)); }
+static void Shared_set_road_owner(uint32_t tile, uint8_t rtt, uint8_t owner) noexcept { SetRoadOwner(TileIndex{tile}, static_cast<RoadTramType>(rtt), Owner(owner)); }
+static void Shared_set_road_directions(uint32_t tile, uint8_t drd) noexcept { SetDisallowedRoadDirections(TileIndex{tile}, static_cast<DisallowedRoadDirections>(drd)); }
+static RoadTramType Shared_road_tram_type(uint8_t rt) noexcept { return GetRoadTramType(static_cast<RoadType>(rt)); }
+static bool Shared_road_powered(uint8_t from, uint8_t to) noexcept { return HasPowerOnRoad(static_cast<RoadType>(from), static_cast<RoadType>(to)); }
+static bool Shared_road_type_valid(uint8_t rt) noexcept { return ValParamRoadType(static_cast<RoadType>(rt)); }
 static bool SharedSafeWaitingPosition(const Train *v, uint32_t tile, uint8_t trackdir, bool forbid_90_deg) noexcept { return IsSafeWaitingPosition(v, TileIndex{tile}, static_cast<Trackdir>(trackdir), true, forbid_90_deg); }
 static void SharedSetTropicZone(uint32_t tile, uint8_t zone) noexcept { SetTropicZone(TileIndex{tile}, static_cast<TropicZone>(zone)); }
 
@@ -256,6 +265,17 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.road_depot_direction = Shared_road_depot_direction,
 		.road_owner = Shared_road_owner,
 		.road_type = Shared_road_type,
+		// Registry: road commands (#266).
+		.crossing_reserved = RustCrossingReserved,
+		.set_crossing_reserved = RustSetCrossingReserved,
+		.road_tile_kind = Shared_road_tile_kind,
+		.set_road_bits = Shared_set_road_bits,
+		.set_road_type = Shared_set_road_type,
+		.set_road_owner = Shared_set_road_owner,
+		.set_road_directions = Shared_set_road_directions,
+		.road_tram_type = Shared_road_tram_type,
+		.road_powered = Shared_road_powered,
+		.road_type_valid = Shared_road_type_valid,
 		.safe_waiting_position = SharedSafeWaitingPosition,
 		.service_at_helipad = SharedServiceAtHelipad,
 		.set_tropic_zone = SharedSetTropicZone,

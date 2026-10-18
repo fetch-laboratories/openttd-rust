@@ -1,0 +1,1968 @@
+/*
+ * This file is part of OpenTTD.
+ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
+ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
+ */
+
+//! Complete selected road command policy. Shared map and pool storage remain
+//! native. Calls retain only copied identities; no Rust world borrow spans a
+//! command, town rating update, vehicle callback or other reentry. Native costs
+//! are stack-owned opaque objects, and panics/environmental exceptions abort.
+#![allow(
+    unsafe_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::if_not_else,
+    clippy::fn_params_excessive_bools
+)]
+use crate::rail_cmd::{ConvertFrame as Area, CrossingRoad, Foundation, RailCommandServices};
+use crate::services::{
+    CommandCost, CommandCostServices, CommandServices, Map, RailMapServices, Services, TownHandle,
+};
+use crate::witness as w;
+/// Opaque caller-owned native affected-road-vehicle list.
+#[repr(C)]
+pub struct ConvertFrame {
+    _private: [u8; 0],
+}
+/// Fields read together only in the deity town-boundary branch.
+#[repr(C)]
+pub struct TownEdge {
+    pub tile: u32,
+    pub radius: u32,
+}
+/// Native `StringID` constants.
+#[repr(C)]
+pub struct Strings {
+    pub no_road: u32,
+    pub no_tram: u32,
+    pub junction: u32,
+    pub remove_road: u32,
+    pub no_suitable_road: u32,
+    pub no_suitable_tram: u32,
+    pub authority: u32,
+}
+/// Native immutable table; pointer callbacks require live stack costs/frames.
+#[repr(C)]
+pub struct RoadCommandServices {
+    /// Native `rail_commands` service.
+    pub rail_commands: *const RailCommandServices,
+    /// Native `town` service.
+    pub town: *const crate::town::Leaves,
+    /// Native `authority` service.
+    pub authority: *const crate::town::AuthorityServices,
+    /// Native `strings` service.
+    pub strings: Strings,
+    /// Native `vehicles_built` service.
+    pub vehicles_built: extern "C" fn() -> bool,
+    /// Native `town_valid` service.
+    pub town_valid: extern "C" fn(u16) -> bool,
+    /// Native `nearest_town` service.
+    pub nearest_town: extern "C" fn(u32) -> *const TownHandle,
+    /// Native `town_edge` service.
+    pub town_edge: extern "C" fn(*const TownHandle) -> TownEdge,
+    /// Native `set_town` service.
+    pub set_town: extern "C" fn(u32, u16),
+    /// Native `foundation` service.
+    pub foundation: extern "C" fn(u8, u8) -> Foundation,
+    /// Native `clear_cost` service.
+    pub clear_cost: extern "C" fn(u8) -> i64,
+    /// Native `convert_cost` service.
+    pub convert_cost: extern "C" fn(u8, u8) -> i64,
+    /// Native `extra_dynamite` service.
+    pub extra_dynamite: extern "C" fn() -> bool,
+    /// Native `depot_slope` service.
+    pub depot_slope: extern "C" fn(u8, u8) -> bool,
+    /// Native `make_depot` service.
+    pub make_depot: extern "C" fn(u32, u8, u16, u8, u8),
+    /// Native `depot_exit` service.
+    pub depot_exit: extern "C" fn(u32, u8),
+    /// Native `remove_works_effects` service.
+    pub remove_works_effects: extern "C" fn(u32),
+    /// Native `available_money` service.
+    pub available_money: extern "C" fn() -> i64,
+    /// Native `owned_by_town` service.
+    pub owned_by_town: unsafe extern "C" fn(*mut CommandCost, u32),
+    /// Native `build` service.
+    pub build: unsafe extern "C" fn(*mut CommandCost, u16, u32, u8, u8, u8, u16),
+    /// Native `convert` service.
+    pub convert: unsafe extern "C" fn(*mut CommandCost, u16, u32, u32, u8, bool),
+    /// Native `remove_long_cost` service.
+    pub remove_long_cost: extern "C" fn(u16, u32, u32, u8, u8, bool, bool) -> i64,
+    /// Native `collect_vehicles` service.
+    pub collect_vehicles: unsafe extern "C" fn(*mut ConvertFrame, u32),
+    /// Native `cargo_changed` service.
+    pub cargo_changed: unsafe extern "C" fn(*mut ConvertFrame),
+}
+use crate::rail_cmd::Cost;
+const ROAD: u8 = 2;
+const RAIL: u8 = 1;
+const STATION: u8 = 5;
+const WORMHOLE: u8 = 9;
+const NONE: u8 = 16;
+const TOWN: u8 = 15;
+const WATER: u8 = 17;
+const DEITY: u8 = 18;
+const INVALID: u8 = 63;
+const INVALID_TOWN: u16 = u16::MAX;
+const EXEC: u16 = 1;
+const AUTO: u16 = 2;
+const BANKRUPT: u16 = 32;
+const INVALID_SLOPES: [[u8; 15]; 2] = [
+    [0, 12, 9, 8, 3, 0, 1, 0, 6, 4, 0, 0, 2, 0, 0],
+    [0, 0, 0, 5, 0, 15, 10, 15, 0, 10, 15, 15, 5, 15, 15],
+];
+fn mirror(bits: u8) -> u8 {
+    ((bits << 2) | (bits >> 2)) & 15
+}
+fn straight(bits: u8) -> bool {
+    bits == 10 || bits == 5
+}
+fn axis_bits(axis: u8) -> u8 {
+    if axis == 0 { 10 } else { 5 }
+}
+fn dir_bit(dir: u8) -> u8 {
+    8 >> dir
+}
+fn steep(slope: u8) -> bool {
+    slope & 16 != 0
+}
+fn one_corner(slope: u8) -> bool {
+    matches!(slope, 1 | 2 | 4 | 8)
+}
+fn simple_slope(slope: u8) -> u8 {
+    if !steep(slope) {
+        return slope;
+    }
+    // Steep W/S/E/N have every corner except the opposite corner raised.
+    match slope & 15 {
+        11 => 1,
+        7 => 2,
+        14 => 4,
+        13 => 8,
+        _ => unreachable!(),
+    }
+}
+fn price(index: usize) -> i64 {
+    crate::company::price(index)
+}
+struct Ctx<'a> {
+    s: &'a RoadCommandServices,
+    r: &'a RailCommandServices,
+    shared: &'a Services,
+    rail: &'a RailMapServices,
+    costs: &'a CommandCostServices,
+    commands: &'a CommandServices,
+    town: &'a crate::town::Leaves,
+    authority: &'a crate::town::AuthorityServices,
+    map: Map,
+}
+impl<'a> Ctx<'a> {
+    /// # Safety
+    /// Native immutable process-lifetime tables and nested tables are valid.
+    unsafe fn new(s: *const RoadCommandServices) -> Self {
+        w::hit(w::ROAD_COMMANDS_ENTRIES);
+        // SAFETY: caller supplies immutable process-lifetime tables.
+        let s = unsafe { &*s };
+        let r = unsafe { &*s.rail_commands };
+        let shared = unsafe { &*r.shared };
+        Self {
+            s,
+            r,
+            shared,
+            rail: unsafe { &*r.rail },
+            costs: unsafe { &*r.cost },
+            commands: unsafe { &*r.command },
+            town: unsafe { &*s.town },
+            authority: unsafe { &*s.authority },
+            map: Map {
+                log_x: (shared.map_log_x)() as u8,
+            },
+        }
+    }
+    fn c(&self, p: *mut CommandCost) -> Cost<'a> {
+        Cost(p, self.costs)
+    }
+    fn size(&self) -> u32 {
+        self.map
+            .size_x()
+            .wrapping_mul((self.shared.map_max_y)() + 1)
+    }
+    fn tile_type(&self, tile: u32) -> u8 {
+        (self.shared.tile_type)(tile)
+    }
+    fn kind(&self, tile: u32) -> u8 {
+        (self.shared.road_tile_kind)(tile)
+    }
+    fn rt(&self, tile: u32, rtt: u8) -> u8 {
+        if rtt == 0 {
+            (self.shared.road_type)(tile)
+        } else {
+            (self.shared.tram_type)(tile).0
+        }
+    }
+    fn owner(&self, tile: u32, rtt: u8) -> u8 {
+        if rtt == 0 {
+            (self.shared.road_owner)(tile)
+        } else {
+            (self.shared.tram_owner)(tile)
+        }
+    }
+    fn bits(&self, tile: u32, rtt: u8) -> u8 {
+        (self.shared.normal_road_bits)(tile, rtt).0
+    }
+    fn any_bits(&self, tile: u32, rtt: u8) -> u8 {
+        (self.shared.road_bits)(tile, rtt, false)
+    }
+    fn may_have(&self, tile: u32) -> bool {
+        matches!(self.tile_type(tile), ROAD | STATION | WORMHOLE)
+    }
+    fn no_road(&self, c: Cost<'_>, rtt: u8) {
+        c.error(if rtt == 1 {
+            self.s.strings.no_tram
+        } else {
+            self.s.strings.no_road
+        });
+    }
+    fn clear(&self, c: Cost<'_>, flags: u16, tile: u32) {
+        (self.commands.landscape_clear)(c.0, tile, flags);
+    }
+    fn no_vehicle(&self, c: Cost<'_>, tile: u32) {
+        unsafe {
+            (self.commands.no_vehicle)(c.0, tile);
+        }
+    }
+    fn ownership(&self, c: Cost<'_>, owner: u8, tile: u32) {
+        unsafe {
+            (self.commands.ownership)(c.0, owner, tile);
+        }
+    }
+    fn tile_ownership(&self, c: Cost<'_>, tile: u32) {
+        unsafe {
+            (self.commands.tile_ownership)(c.0, tile);
+        }
+    }
+    fn free(&self, c: Cost<'_>, tile: u32, end: u32) {
+        unsafe {
+            (self.commands.wormhole_free)(c.0, tile, end, core::ptr::null());
+        }
+    }
+    fn infrastructure(&self, rt: u8, owner: u8, count: i32) {
+        if rt == INVALID || !(self.shared.company_valid)(owner) {
+            return;
+        }
+        (self.r.road_infrastructure)(owner, rt, count as u32);
+        (self.r.infrastructure_dirty)(owner);
+    }
+    fn update_town(&self, tile: u32) {
+        let town = (self.s.nearest_town)(tile);
+        let id = if town.is_null() {
+            INVALID_TOWN
+        } else {
+            (self.authority.town_index)(town)
+        };
+        (self.s.set_town)(tile, id);
+    }
+    fn rating(&self, c: Cost<'_>, town: *const TownHandle, flags: u16, kind: u8) {
+        // SAFETY: live native town identity (or null), immutable tables and stack cost.
+        unsafe {
+            crate::town::openttd_rust_town_authority_remove(
+                self.s.authority,
+                self.r.shared,
+                self.r.cost,
+                c.0,
+                town,
+                flags & 16 != 0,
+                kind,
+            );
+        }
+    }
+    fn allow_remove(
+        &self,
+        c: Cost<'_>,
+        tile: u32,
+        remove: u8,
+        owner: u8,
+        rtt: u8,
+        flags: u16,
+        town_check: bool,
+    ) {
+        c.zero();
+        if (self.town.editor)() || remove == 0 {
+            return;
+        }
+        let company = (self.shared.current_company)();
+        if company == WATER || (rtt == 0 && !(self.shared.company_valid)(company)) {
+            return;
+        }
+        if owner != TOWN {
+            if owner != NONE {
+                self.ownership(c, owner, 0);
+            }
+            return;
+        }
+        if !town_check || (self.authority.bulldozer)() {
+            return;
+        }
+        let town = (self.shared.closest_town)(tile, u32::MAX);
+        if town.is_null() {
+            return;
+        }
+        w::hit(w::ROAD_COMMANDS_TOWN_REMOVE);
+        self.rating(c, town, flags, 0);
+        if !c.ok() {
+            return;
+        }
+        let present = self.any_bits(tile, rtt);
+        let mut neighbours = 0;
+        for dir in 0..4 {
+            if present & dir_bit(dir) != 0
+                && self.any_bits(self.map.add_diag(tile, dir), rtt) & dir_bit(dir ^ 2) != 0
+            {
+                neighbours |= dir_bit(dir);
+            }
+        }
+        let mut decrease = -18;
+        if neighbours & neighbours.wrapping_sub(1) != 0 && neighbours & remove != 0 {
+            if !(self.s.extra_dynamite)() {
+                (self.costs.error_param)(
+                    c.0,
+                    self.s.strings.authority,
+                    u64::from((self.authority.town_index)(town)),
+                );
+                return;
+            }
+            decrease = -50;
+        }
+        // SAFETY: owner access resolves here and ends before the reentrant dirty-window service.
+        unsafe {
+            crate::town::openttd_rust_town_change_rating(
+                self.s.town,
+                self.r.shared,
+                (self.shared.town_owner)(town),
+                u32::from((self.authority.town_index)(town)),
+                town as usize,
+                company,
+                decrease,
+                -100,
+                flags & 512 != 0,
+                (self.authority.bulldozer)(),
+            );
+        }
+    }
+    fn remove(
+        &self,
+        cost: Cost<'_>,
+        ret: Cost<'_>,
+        tile: u32,
+        flags: u16,
+        mut pieces: u8,
+        rtt: u8,
+        town_check: bool,
+    ) {
+        debug_assert!(pieces != 0);
+        w::hit(w::ROAD_COMMANDS_REMOVE);
+        let rt = if self.may_have(tile) {
+            self.rt(tile, rtt)
+        } else {
+            INVALID
+        };
+        if rt == INVALID {
+            self.no_road(cost, rtt);
+            return;
+        }
+        match self.tile_type(tile) {
+            ROAD => self.no_vehicle(cost, tile),
+            STATION => {
+                if !(self.shared.is_drive_through_stop)(tile) {
+                    cost.error(u32::MAX);
+                    return;
+                }
+                self.no_vehicle(cost, tile);
+            }
+            WORMHOLE => {
+                if (self.shared.tunnel_transport)(tile) != 1 {
+                    cost.error(u32::MAX);
+                    return;
+                }
+                self.free(cost, tile, (self.rail.other_tunnel_bridge_end)(tile));
+            }
+            _ => {
+                cost.error(u32::MAX);
+                return;
+            }
+        }
+        if !cost.ok() {
+            return;
+        }
+        self.allow_remove(
+            cost,
+            tile,
+            pieces,
+            self.owner(tile, rtt),
+            rtt,
+            flags,
+            town_check,
+        );
+        if !cost.ok() {
+            return;
+        }
+        if self.tile_type(tile) != ROAD {
+            if self.rt(tile, rtt ^ 1) == INVALID {
+                self.clear(cost, flags, tile);
+                return;
+            }
+            cost.set(0);
+            if self.tile_type(tile) == WORMHOLE {
+                w::hit(w::ROAD_COMMANDS_REMOVE_WORMHOLE);
+                if axis_bits((self.shared.tunnel_bridge_direction)(tile) & 1) & pieces == 0 {
+                    self.no_road(cost, rtt);
+                    return;
+                }
+                let end = (self.rail.other_tunnel_bridge_end)(tile);
+                let len = self.length(tile, end).wrapping_add(2);
+                cost.add_money(
+                    (self.s.clear_cost)(rt).saturating_mul(i64::from(len.wrapping_mul(2))),
+                );
+                if flags & EXEC != 0 {
+                    self.infrastructure(
+                        rt,
+                        self.owner(tile, rtt),
+                        len.wrapping_mul(8).wrapping_neg() as i32,
+                    );
+                    (self.shared.set_road_type)(end, rtt, INVALID);
+                    (self.shared.set_road_type)(tile, rtt, INVALID);
+                    let other_owner = self.owner(tile, rtt ^ 1);
+                    let owner = (self.shared.tile_owner)(tile);
+                    if owner != other_owner && owner != TOWN {
+                        (self.rail.set_tile_owner)(tile, other_owner);
+                        (self.rail.set_tile_owner)(end, other_owner);
+                    }
+                    self.dirty_wormhole(tile, end);
+                }
+            } else {
+                w::hit(w::ROAD_COMMANDS_REMOVE_STOP);
+                cost.add_money((self.s.clear_cost)(rt).saturating_mul(2));
+                if flags & EXEC != 0 {
+                    self.infrastructure(rt, self.owner(tile, rtt), -2);
+                    (self.shared.set_road_type)(tile, rtt, INVALID);
+                    (self.shared.mark_dirty)(tile);
+                }
+            }
+            return;
+        }
+        match self.kind(tile) {
+            0 => {
+                let slope = simple_slope((self.shared.tile_slope)(tile));
+                let mut present = self.bits(tile, rtt);
+                let other = self.bits(tile, rtt ^ 1);
+                let foundation = (self.s.foundation)(slope, present).0;
+                if (self.shared.has_road_works)(tile) && (self.shared.current_company)() != WATER {
+                    cost.error(self.r.strings.road_works);
+                    return;
+                }
+                if (straight(other) && other & INVALID_SLOPES[0][usize::from(slope & 15)] != 0)
+                    || (slope != 0 && !(self.shared.build_on_slopes)())
+                {
+                    pieces |= mirror(pieces);
+                }
+                pieces &= present;
+                if pieces == 0 {
+                    self.no_road(cost, rtt);
+                    return;
+                }
+                present ^= pieces;
+                if slope != 0
+                    && present != 0
+                    && present & INVALID_SLOPES[0][usize::from(slope & 15)] == present
+                {
+                    cost.error(u32::MAX);
+                    return;
+                }
+                if flags & EXEC != 0 {
+                    if (self.shared.has_road_works)(tile) {
+                        debug_assert_eq!((self.shared.current_company)(), WATER);
+                        (self.s.remove_works_effects)(tile);
+                    }
+                    self.infrastructure(rt, self.owner(tile, rtt), -(pieces.count_ones() as i32));
+                    if present == 0 {
+                        if self.rt(tile, rtt ^ 1) == INVALID {
+                            (self.shared.clear_square)(tile);
+                        } else {
+                            if rtt == 0 && self.owner(tile, rtt) == TOWN {
+                                self.update_town(tile);
+                            }
+                            if rtt == 0 {
+                                (self.shared.set_road_directions)(tile, 0);
+                            }
+                            (self.shared.set_road_bits)(tile, 0, rtt);
+                            (self.shared.set_road_type)(tile, rtt, INVALID);
+                            (self.shared.mark_dirty)(tile);
+                        }
+                    } else {
+                        if rtt == 0 {
+                            (self.shared.set_road_directions)(tile, 0);
+                        }
+                        (self.shared.set_road_bits)(tile, present, rtt);
+                        (self.shared.mark_dirty)(tile);
+                    }
+                }
+                cost.set((self.s.clear_cost)(rt).saturating_mul(i64::from(pieces.count_ones())));
+                if foundation == 0 && (self.s.foundation)(slope, present).0 != 0 {
+                    cost.add_money(price(57));
+                }
+            }
+            1 => {
+                w::hit(w::ROAD_COMMANDS_REMOVE_CROSSING);
+                if pieces & ((self.shared.crossing_road_bits)(tile).0 ^ 15) != 0 {
+                    cost.error(u32::MAX);
+                    return;
+                }
+                if flags & EXEC != 0 {
+                    (self.r.crossing_removed)(tile, (self.rail.crossing_road_axis)(tile).0);
+                    self.infrastructure(rt, self.owner(tile, rtt), -2);
+                    let track = (self.rail.crossing_road_axis)(tile).0 ^ 1;
+                    if self.rt(tile, rtt ^ 1) == INVALID {
+                        let tracks = (self.rail.crossing_rail_bits)(tile).0;
+                        let reserved = (self.shared.crossing_reserved)(tile);
+                        (self.rail.make_rail_normal)(
+                            tile,
+                            (self.shared.tile_owner)(tile),
+                            tracks,
+                            (self.rail.rail_type)(tile).0,
+                        );
+                        if reserved {
+                            (self.rail.set_track_reservation)(tile, tracks);
+                        }
+                        let owner = (self.shared.tile_owner)(tile);
+                        if (self.shared.company_valid)(owner) {
+                            (self.r.rail_infrastructure)(
+                                owner,
+                                (self.rail.rail_type)(tile).0,
+                                u32::MAX,
+                            );
+                            (self.r.infrastructure_dirty)(owner);
+                        }
+                    } else {
+                        (self.shared.set_road_type)(tile, rtt, INVALID);
+                    }
+                    (self.shared.mark_dirty)(tile);
+                    (self.r.layout_changed)(tile, track);
+                }
+                cost.set((self.s.clear_cost)(rt).saturating_mul(2));
+            }
+            _ => cost.error(u32::MAX),
+        }
+        // ret is a separate native slot reserved by callers for nested command paths.
+        let _ = ret;
+    }
+    fn slope(&self, cost: Cost<'_>, mut slope: u8, pieces: &mut u8, existing: u8, other: u8) {
+        *pieces &= !existing;
+        if *pieces == 0 {
+            cost.error(u32::MAX);
+            return;
+        }
+        cost.zero();
+        if slope == 0 {
+            return;
+        }
+        w::hit(w::ROAD_COMMANDS_SLOPE);
+        slope = simple_slope(slope);
+        let mut type_bits = existing | *pieces;
+        if (self.shared.build_on_slopes)()
+            && INVALID_SLOPES[0][usize::from(slope)] & (other | type_bits) == 0
+        {
+            if other | existing == 0 {
+                cost.set(price(57));
+            }
+            return;
+        }
+        *pieces |= mirror(*pieces);
+        type_bits = existing | *pieces;
+        if straight(type_bits)
+            && (other == type_bits || other == 0)
+            && INVALID_SLOPES[1][usize::from(slope)] & (other | type_bits) == 0
+        {
+            if one_corner(slope) {
+                if (self.shared.build_on_slopes)() {
+                    if other | existing == 0 {
+                        cost.set(price(57));
+                    }
+                    return;
+                }
+            } else {
+                if existing.is_power_of_two() && (self.s.foundation)(slope, existing).0 == 0 {
+                    cost.set(price(57));
+                }
+                return;
+            }
+        }
+        cost.error(u32::MAX);
+    }
+    fn length(&self, tile: u32, end: u32) -> u32 {
+        let a = (self.map.tile_x(tile) + self.map.tile_y(tile)) as i32;
+        let b = (self.map.tile_x(end) + self.map.tile_y(end)) as i32;
+        a.abs_diff(b).wrapping_sub(1)
+    }
+    fn dirty_wormhole(&self, tile: u32, end: u32) {
+        if (self.shared.is_bridge)(tile) {
+            (self.shared.mark_bridge_dirty)(tile);
+        } else {
+            (self.shared.mark_dirty)(tile);
+            (self.shared.mark_dirty)(end);
+        }
+    }
+    fn build(
+        &self,
+        cost: Cost<'_>,
+        ret: Cost<'_>,
+        flags: u16,
+        tile: u32,
+        mut pieces: u8,
+        mut rt: u8,
+        toggle: u8,
+        mut town_id: u16,
+    ) {
+        w::hit(w::ROAD_COMMANDS_BUILD);
+        let mut company = (self.shared.current_company)();
+        cost.set(0);
+        let mut existing = 0;
+        let mut other = 0;
+        if ((self.shared.company_valid)(company) && town_id != INVALID_TOWN)
+            || (company == TOWN && !(self.s.town_valid)(town_id))
+            || (company == DEITY && town_id != INVALID_TOWN)
+        {
+            cost.error(u32::MAX);
+            return;
+        }
+        if company != TOWN {
+            let town = (self.s.nearest_town)(tile);
+            town_id = if town.is_null() {
+                INVALID_TOWN
+            } else {
+                (self.authority.town_index)(town)
+            };
+            if company == DEITY {
+                company = TOWN;
+                if town.is_null() {
+                    company = NONE;
+                } else {
+                    let edge = (self.s.town_edge)(town);
+                    if self.map.distance_square(tile, edge.tile) > edge.radius {
+                        company = NONE;
+                    }
+                }
+            }
+        }
+        if pieces == 0 || pieces & !15 != 0 || toggle >= 4 || !(self.shared.road_type_valid)(rt) {
+            cost.error(u32::MAX);
+            return;
+        }
+        let slope = (self.shared.tile_slope)(tile);
+        let rtt = u8::from((self.shared.road_tram_type)(rt).0);
+        let mut clear = false;
+        match self.tile_type(tile) {
+            ROAD => match self.kind(tile) {
+                0 => {
+                    if (self.shared.has_road_works)(tile) {
+                        cost.error(self.r.strings.road_works);
+                        return;
+                    }
+                    other = self.bits(tile, rtt ^ 1);
+                    if self.rt(tile, rtt) != INVALID {
+                        existing = self.bits(tile, rtt);
+                        if rtt == 0
+                            && ((self.shared.disallowed_road_directions)(tile) != 0 || toggle != 0)
+                            && !straight(existing | pieces)
+                        {
+                            cost.error(self.s.strings.junction);
+                            return;
+                        }
+                        if existing & pieces == pieces {
+                            if toggle != 0 && rtt == 0 {
+                                w::hit(w::ROAD_COMMANDS_ONEWAY);
+                                let owner = self.owner(tile, rtt);
+                                if owner != NONE {
+                                    self.ownership(ret, owner, tile);
+                                    if !ret.ok() {
+                                        cost.take(ret);
+                                        return;
+                                    }
+                                }
+                                let old = (self.shared.disallowed_road_directions)(tile);
+                                let new = old ^ toggle;
+                                if old.count_ones() <= new.count_ones() {
+                                    self.no_vehicle(ret, tile);
+                                    if !ret.ok() {
+                                        cost.take(ret);
+                                        return;
+                                    }
+                                }
+                                if flags & EXEC != 0 && straight(existing) {
+                                    (self.shared.set_road_directions)(tile, new);
+                                    (self.shared.mark_dirty)(tile);
+                                }
+                                cost.zero();
+                                return;
+                            }
+                            cost.error(self.r.strings.already_built);
+                            return;
+                        }
+                        if rtt == 1 && existing.is_power_of_two() {
+                            let owner = self.owner(tile, rtt);
+                            if (self.shared.company_valid)(owner) {
+                                self.ownership(ret, owner, 0);
+                                if !ret.ok() {
+                                    cost.take(ret);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+                1 => {
+                    if (self.r.road_no_crossing)(rt) {
+                        cost.error(self.r.strings.crossing_road);
+                        return;
+                    }
+                    other = (self.shared.crossing_road_bits)(tile).0;
+                    if pieces & (other ^ 15) != 0 {
+                        clear = true;
+                    } else {
+                        pieces = other;
+                        if self.rt(tile, rtt) != INVALID {
+                            cost.error(self.r.strings.already_built);
+                            return;
+                        }
+                    }
+                }
+                2 => {
+                    if self.any_bits(tile, rtt) & pieces == pieces {
+                        cost.error(self.r.strings.already_built);
+                        return;
+                    }
+                    clear = true;
+                }
+                _ => unreachable!(),
+            },
+            RAIL => {
+                if steep(slope) || 0x6CA1_u32 & (1 << slope) == 0 {
+                    cost.error(self.r.strings.sloped_wrong);
+                    return;
+                }
+                if !(self.r.crossing_with_competitor)() && company != TOWN && company != DEITY {
+                    self.tile_ownership(ret, tile);
+                    if !ret.ok() {
+                        cost.take(ret);
+                        return;
+                    }
+                }
+                if (self.rail.rail_tile_type)(tile).0 != 0 {
+                    clear = true;
+                } else {
+                    if (self.r.road_no_crossing)(rt) {
+                        cost.error(self.r.strings.crossing_road);
+                        return;
+                    }
+                    if (self.r.rail_no_crossings)((self.rail.rail_type)(tile).0) {
+                        cost.error(self.r.strings.crossing_rail);
+                        return;
+                    }
+                    let tracks = (self.rail.rail_tracks)(tile).0;
+                    let axis = match tracks {
+                        1 if pieces & 0b1010 == 0 => 1,
+                        2 if pieces & 5 == 0 => 0,
+                        _ => {
+                            clear = true;
+                            0
+                        }
+                    };
+                    if !clear {
+                        self.no_vehicle(ret, tile);
+                        if !ret.ok() {
+                            cost.take(ret);
+                            return;
+                        }
+                        w::hit(w::ROAD_COMMANDS_BUILD_CROSSING);
+                        if flags & EXEC != 0 {
+                            let track = axis ^ 1;
+                            (self.r.layout_changed)(tile, track);
+                            self.infrastructure(rt, company, 2);
+                            let owner = (self.shared.tile_owner)(tile);
+                            if (self.shared.company_valid)(owner) {
+                                (self.r.rail_infrastructure)(
+                                    owner,
+                                    (self.rail.rail_type)(tile).0,
+                                    1,
+                                );
+                                (self.r.infrastructure_dirty)(owner);
+                            }
+                            let reserved = (self.rail.reserved_tracks)(tile).0 & (1 << track) != 0;
+                            (self.r.make_crossing)(
+                                tile,
+                                company,
+                                company,
+                                (self.shared.tile_owner)(tile),
+                                axis,
+                                (self.rail.rail_type)(tile).0,
+                                if rtt == 0 { rt } else { INVALID },
+                                if rtt == 1 { rt } else { INVALID },
+                                town_id,
+                            );
+                            (self.shared.set_crossing_reserved)(tile, reserved);
+                            (self.shared.update_level_crossing)(tile, false);
+                            (self.r.mark_crossings)(tile, (self.rail.crossing_road_axis)(tile).0);
+                            (self.shared.mark_dirty)(tile);
+                        }
+                        cost.set((self.r.road_build_cost)(rt).saturating_mul(2));
+                        return;
+                    }
+                }
+            }
+            STATION => {
+                if self.any_bits(tile, rtt) & pieces == pieces {
+                    cost.error(self.r.strings.already_built);
+                    return;
+                }
+                if !(self.shared.is_drive_through_stop)(tile) {
+                    clear = true;
+                } else {
+                    let bits = axis_bits((self.shared.drive_through_axis)(tile));
+                    if pieces & !bits != 0 {
+                        clear = true;
+                    } else {
+                        pieces = bits;
+                        if self.rt(tile, rtt) != INVALID {
+                            cost.error(self.r.strings.already_built);
+                            return;
+                        }
+                    }
+                }
+            }
+            WORMHOLE => {
+                if (self.shared.tunnel_transport)(tile) != 1
+                    || mirror(dir_bit((self.shared.tunnel_bridge_direction)(tile))) != pieces
+                {
+                    clear = true;
+                } else {
+                    if self.rt(tile, rtt) != INVALID {
+                        cost.error(self.r.strings.already_built);
+                        return;
+                    }
+                    self.free(ret, tile, (self.rail.other_tunnel_bridge_end)(tile));
+                    if !ret.ok() {
+                        cost.take(ret);
+                        return;
+                    }
+                }
+            }
+            _ => clear = true,
+        }
+        if clear {
+            w::hit(w::ROAD_COMMANDS_BUILD_CLEAR);
+            self.clear(ret, flags, tile);
+            if !ret.ok() {
+                cost.take(ret);
+                return;
+            }
+            cost.add_money(ret.money());
+        }
+        if other != pieces {
+            self.slope(ret, slope, &mut pieces, existing, other);
+            if !ret.ok() || (ret.money() != 0 && !(self.shared.build_on_slopes)()) {
+                cost.error(self.r.strings.sloped_wrong);
+                return;
+            }
+            cost.add_money(ret.money());
+        }
+        if !clear {
+            if self.tile_type(tile) == ROAD {
+                pieces &= existing ^ 15;
+                if (self.shared.is_normal_road)(tile) {
+                    let slope = (self.shared.tile_slope)(tile);
+                    let new = (self.s.foundation)(slope, pieces | existing).0;
+                    let bits = self.bits(tile, rtt ^ 1);
+                    if bits != 0 && (self.s.foundation)(slope, bits).0 != new {
+                        cost.error(self.r.strings.sloped_wrong);
+                        return;
+                    }
+                }
+            }
+            self.no_vehicle(ret, tile);
+            if !ret.ok() {
+                cost.take(ret);
+                return;
+            }
+            if self.tile_type(tile) == ROAD && (self.shared.is_normal_road)(tile) {
+                let old = self.rt(tile, rtt);
+                if old != INVALID && old != rt {
+                    if (self.shared.road_powered)(rt, old) {
+                        rt = old;
+                    } else if (self.shared.road_powered)(old, rt) {
+                        unsafe {
+                            (self.s.convert)(ret.0, flags, tile, tile, rt, false);
+                        }
+                        if !ret.ok() {
+                            cost.take(ret);
+                            return;
+                        }
+                        cost.add_money(ret.money());
+                    } else {
+                        cost.error(u32::MAX);
+                        return;
+                    }
+                }
+            }
+        }
+        let mut num = if !clear && self.tile_type(tile) == WORMHOLE {
+            self.length(tile, (self.rail.other_tunnel_bridge_end)(tile))
+                .wrapping_add(2)
+                .wrapping_mul(2)
+        } else {
+            pieces.count_ones()
+        };
+        cost.add_money((self.r.road_build_cost)(rt).saturating_mul(i64::from(num)));
+        if flags & EXEC != 0 {
+            match self.tile_type(tile) {
+                ROAD => {
+                    let kind = self.kind(tile);
+                    if existing == 0 || kind == 1 {
+                        (self.shared.set_road_type)(tile, rtt, rt);
+                        (self.shared.set_road_owner)(tile, rtt, company);
+                        if rtt == 0 {
+                            (self.s.set_town)(tile, town_id);
+                        }
+                    }
+                    if kind != 1 {
+                        (self.shared.set_road_bits)(tile, existing | pieces, rtt);
+                    }
+                }
+                WORMHOLE => {
+                    w::hit(w::ROAD_COMMANDS_BUILD_WORMHOLE);
+                    let end = (self.rail.other_tunnel_bridge_end)(tile);
+                    (self.shared.set_road_type)(end, rtt, rt);
+                    (self.shared.set_road_type)(tile, rtt, rt);
+                    (self.shared.set_road_owner)(end, rtt, company);
+                    (self.shared.set_road_owner)(tile, rtt, company);
+                    if (self.shared.is_bridge)(tile) {
+                        (self.shared.mark_bridge_dirty)(tile);
+                    } else {
+                        (self.shared.mark_dirty)(end);
+                        (self.shared.mark_dirty)(tile);
+                    }
+                }
+                STATION => {
+                    w::hit(w::ROAD_COMMANDS_BUILD_STOP);
+                    debug_assert!((self.shared.is_drive_through_stop)(tile));
+                    (self.shared.set_road_type)(tile, rtt, rt);
+                    (self.shared.set_road_owner)(tile, rtt, company);
+                }
+                _ => (self.r.make_road)(
+                    tile,
+                    CrossingRoad {
+                        bits: pieces,
+                        road_type: if rtt == 0 { rt } else { INVALID },
+                        tram_type: if rtt == 1 { rt } else { INVALID },
+                        town: town_id,
+                        road_owner: company,
+                        tram_owner: company,
+                    },
+                ),
+            }
+            if self.tile_type(tile) == WORMHOLE {
+                num = num.wrapping_mul(4);
+            }
+            self.infrastructure(rt, self.owner(tile, rtt), num as i32);
+            if rtt == 0 && self.tile_type(tile) == ROAD && (self.shared.is_normal_road)(tile) {
+                existing |= pieces;
+                (self.shared.set_road_directions)(
+                    tile,
+                    if straight(existing) {
+                        (self.shared.disallowed_road_directions)(tile) ^ toggle
+                    } else {
+                        0
+                    },
+                );
+            }
+            (self.shared.mark_dirty)(tile);
+        }
+    }
+    fn connect(&self, tile: u32, rt: u8, dir: u8) -> bool {
+        let tile = self.map.add_diag(tile, dir);
+        if !(self.shared.tile_valid)(tile) || !self.may_have(tile) {
+            return false;
+        }
+        let rtt = u8::from((self.shared.road_tram_type)(rt).0);
+        let old = self.rt(tile, rtt);
+        if old == INVALID
+            || (!(self.shared.road_powered)(old, rt) && !(self.shared.road_powered)(rt, old))
+        {
+            return false;
+        }
+        (self.shared.road_bits)(tile, rtt, false) & dir_bit(dir ^ 2) != 0
+    }
+    fn valid_drag(&self, start: u32, end: u32, rt: u8, axis: u8) -> bool {
+        start < self.size()
+            && (self.shared.road_type_valid)(rt)
+            && axis < 2
+            && (if axis == 0 {
+                self.map.tile_y(start) == self.map.tile_y(end)
+            } else {
+                self.map.tile_x(start) == self.map.tile_x(end)
+            })
+    }
+    fn build_long(
+        &self,
+        cost: Cost<'_>,
+        last: Cost<'_>,
+        ret: Cost<'_>,
+        flags: u16,
+        end: u32,
+        start: u32,
+        rt: u8,
+        axis: u8,
+        mut drd: u8,
+        mut start_half: bool,
+        mut end_half: bool,
+        ai: bool,
+    ) {
+        w::hit(w::ROAD_COMMANDS_BUILD_LONG);
+        if !self.valid_drag(start, end, rt, axis) || drd >= 4 {
+            cost.error(u32::MAX);
+            return;
+        }
+        let mut dir = if axis == 0 { 2 } else { 1 };
+        if start > end || (start == end && start_half) {
+            dir ^= 2;
+            start_half = !start_half;
+            end_half = !end_half;
+            if drd == 1 || drd == 2 {
+                drd ^= 3;
+            }
+        }
+        if (drd == 1 || drd == 2) && (axis == 1) == (start == end && start_half == end_half) {
+            drd ^= 3;
+        }
+        cost.set(0);
+        last.error(u32::MAX);
+        let mut tile = start;
+        let (mut bridge, mut tunnel, mut success) = (false, false, false);
+        loop {
+            let mut bits = axis_bits(axis);
+            if !ai && start != end {
+                if tile == end && !self.connect(tile, rt, dir) {
+                    bits = dir_bit(dir ^ 2);
+                } else if tile == start && !self.connect(tile, rt, dir ^ 2) {
+                    bits = dir_bit(dir);
+                }
+            } else {
+                if tile == end && !end_half {
+                    bits &= dir_bit(dir ^ 2);
+                }
+                if tile == start && start_half {
+                    bits &= dir_bit(dir);
+                }
+            }
+            unsafe {
+                (self.s.build)(ret.0, flags, tile, bits, rt, drd, INVALID_TOWN);
+            }
+            if !ai && ret.message() == self.r.strings.already_built {
+                success = true;
+            }
+            if !ret.ok() {
+                last.take(ret);
+                if last.message() != self.r.strings.already_built {
+                    if ai {
+                        cost.take(last);
+                        return;
+                    }
+                    if success {
+                        w::hit(w::ROAD_COMMANDS_DRAG_OBSTACLE);
+                        break;
+                    }
+                }
+            } else {
+                success = true;
+                if self.tile_type(tile) == WORMHOLE {
+                    if (self.shared.is_bridge)(tile) {
+                        if !bridge || (self.shared.tunnel_bridge_direction)(tile) == dir {
+                            cost.add_money(ret.money());
+                        }
+                        bridge = true;
+                    } else {
+                        if !tunnel || (self.shared.tunnel_bridge_direction)(tile) == dir {
+                            cost.add_money(ret.money());
+                        }
+                        tunnel = true;
+                    }
+                } else {
+                    cost.add_money(ret.money());
+                }
+            }
+            if tile == end {
+                break;
+            }
+            tile = self.map.add_diag(tile, dir);
+        }
+        if !success {
+            cost.take(last);
+        }
+    }
+    fn remove_long(
+        &self,
+        cost: Cost<'_>,
+        last: Cost<'_>,
+        ret: Cost<'_>,
+        scratch: Cost<'_>,
+        flags: u16,
+        mut end: u32,
+        mut start: u32,
+        rt: u8,
+        axis: u8,
+        mut start_half: bool,
+        mut end_half: bool,
+    ) -> i64 {
+        w::hit(w::ROAD_COMMANDS_REMOVE_LONG);
+        cost.set(0);
+        if !self.valid_drag(start, end, rt, axis) {
+            cost.error(u32::MAX);
+            return 0;
+        }
+        if start > end || (start == end && start_half) {
+            core::mem::swap(&mut start, &mut end);
+            core::mem::swap(&mut start_half, &mut end_half);
+        }
+        let available = (self.s.available_money)();
+        let mut spent = 0_i64;
+        let mut tile = start;
+        last.error(u32::MAX);
+        let mut success = false;
+        loop {
+            let mut bits = axis_bits(axis);
+            if tile == end && !end_half {
+                bits &= 1 | 8;
+            }
+            if tile == start && start_half {
+                bits &= 4 | 2;
+            }
+            if bits != 0 {
+                let rtt = u8::from((self.shared.road_tram_type)(rt).0);
+                self.remove(ret, scratch, tile, flags & !EXEC, bits, rtt, true);
+                if ret.ok() {
+                    if flags & EXEC != 0 {
+                        spent = spent.saturating_add(ret.money());
+                        if spent > 0 && spent > available {
+                            w::hit(w::ROAD_COMMANDS_REMOVE_MONEY);
+                            return (self.s.remove_long_cost)(
+                                flags & !EXEC,
+                                end,
+                                start,
+                                rt,
+                                axis,
+                                start_half,
+                                end_half,
+                            );
+                        }
+                        self.remove(scratch, last, tile, flags, bits, rtt, false);
+                    }
+                    cost.add_money(ret.money());
+                    success = true;
+                } else if last.message() != self.r.strings.owned_by
+                    && last.message() != self.s.strings.authority
+                {
+                    last.take(ret);
+                }
+            }
+            if tile == end {
+                break;
+            }
+            tile = tile.wrapping_add(if axis == 0 { 1 } else { self.map.size_x() });
+        }
+        if !success {
+            cost.take(last);
+        }
+        0
+    }
+    fn build_depot(&self, cost: Cost<'_>, ret: Cost<'_>, flags: u16, tile: u32, rt: u8, dir: u8) {
+        w::hit(w::ROAD_COMMANDS_DEPOT_BUILD);
+        if !(self.shared.road_type_valid)(rt) || dir >= 4 {
+            cost.error(u32::MAX);
+            return;
+        }
+        cost.set(0);
+        let slope = (self.shared.tile_slope)(tile);
+        if slope != 0 {
+            if !(self.shared.build_on_slopes)() || !(self.s.depot_slope)(dir, slope) {
+                cost.error(self.r.strings.flat_land);
+                return;
+            }
+            cost.add_money(price(57));
+        }
+        let mut rotate = false;
+        if self.tile_type(tile) == ROAD
+            && (self.shared.is_road_depot)(tile)
+            && rt
+                == if self.rt(tile, 1) != INVALID {
+                    self.rt(tile, 1)
+                } else {
+                    self.rt(tile, 0)
+                }
+        {
+            self.tile_ownership(ret, tile);
+            if !ret.ok() {
+                cost.take(ret);
+                return;
+            }
+            if dir == (self.shared.road_depot_direction)(tile) {
+                cost.zero();
+                return;
+            }
+            self.no_vehicle(ret, tile);
+            if !ret.ok() {
+                cost.take(ret);
+                return;
+            }
+            rotate = true;
+        }
+        if !rotate {
+            self.clear(ret, flags, tile);
+            cost.add(ret);
+            if !cost.ok() {
+                return;
+            }
+            if (self.shared.bridge_above)(tile) {
+                cost.error(self.r.strings.demolish_bridge);
+                return;
+            }
+            if !(self.r.depot_available)() {
+                cost.error(u32::MAX);
+                return;
+            }
+        }
+        if flags & EXEC != 0 {
+            if rotate {
+                w::hit(w::ROAD_COMMANDS_DEPOT_ROTATE);
+                (self.s.depot_exit)(tile, dir);
+            } else {
+                let depot = (self.r.new_depot)(tile);
+                (self.s.make_depot)(tile, (self.shared.current_company)(), depot, dir, rt);
+                (self.r.depot_name)(depot);
+                self.infrastructure(rt, (self.shared.current_company)(), 2);
+            }
+            (self.shared.mark_dirty)(tile);
+        }
+        cost.add_money(price(6));
+    }
+    fn remove_depot(&self, cost: Cost<'_>, flags: u16, tile: u32) {
+        w::hit(w::ROAD_COMMANDS_DEPOT_REMOVE);
+        if (self.shared.current_company)() != WATER {
+            self.tile_ownership(cost, tile);
+            if !cost.ok() {
+                return;
+            }
+        }
+        self.no_vehicle(cost, tile);
+        if !cost.ok() {
+            return;
+        }
+        if flags & EXEC != 0 {
+            let owner = (self.shared.tile_owner)(tile);
+            if (self.shared.company_valid)(owner) {
+                let mut rt = self.rt(tile, 0);
+                if rt == INVALID {
+                    rt = self.rt(tile, 1);
+                }
+                // The original skips INVALID_ROADTYPE only for the public update helper;
+                // a depot is guaranteed to have one valid type here.
+                (self.r.road_infrastructure)(owner, rt, 2_u32.wrapping_neg());
+                (self.r.infrastructure_dirty)(owner);
+            }
+            (self.r.delete_depot)(tile);
+            (self.shared.clear_square)(tile);
+        }
+        cost.set(price(31));
+    }
+    fn clear_tile(&self, cost: Cost<'_>, ret: Cost<'_>, scratch: Cost<'_>, flags: u16, tile: u32) {
+        w::hit(w::ROAD_COMMANDS_CLEAR);
+        match self.kind(tile) {
+            0 => {
+                let bits = self.bits(tile, 0) | self.bits(tile, 1);
+                if (bits.is_power_of_two() && self.bits(tile, 1) == 0) || flags & AUTO == 0 {
+                    cost.set(0);
+                    for rtt in [0, 1] {
+                        if !self.may_have(tile) || self.rt(tile, rtt) == INVALID {
+                            continue;
+                        }
+                        self.remove(ret, scratch, tile, flags, self.bits(tile, rtt), rtt, true);
+                        if !ret.ok() {
+                            cost.take(ret);
+                            return;
+                        }
+                        cost.add_money(ret.money());
+                    }
+                } else {
+                    cost.error(self.s.strings.remove_road);
+                }
+            }
+            1 => {
+                cost.set(0);
+                if flags & AUTO != 0 {
+                    cost.error(self.s.strings.remove_road);
+                    return;
+                }
+                for rtt in [1, 0] {
+                    if !self.may_have(tile) || self.rt(tile, rtt) == INVALID {
+                        continue;
+                    }
+                    self.remove(
+                        ret,
+                        scratch,
+                        tile,
+                        flags,
+                        (self.shared.crossing_road_bits)(tile).0,
+                        rtt,
+                        true,
+                    );
+                    if !ret.ok() {
+                        cost.take(ret);
+                        return;
+                    }
+                    cost.add_money(ret.money());
+                }
+                if flags & EXEC != 0 {
+                    self.clear(ret, flags, tile);
+                }
+            }
+            _ => {
+                if flags & AUTO != 0 {
+                    cost.error(self.r.strings.demolish_building);
+                    return;
+                }
+                self.remove_depot(cost, flags, tile);
+            }
+        }
+    }
+    fn nearest_towns(&self, invalidate: bool) {
+        for tile in 0..self.size() {
+            if self.tile_type(tile) == ROAD
+                && !(self.shared.is_road_depot)(tile)
+                && !(self.rt(tile, 0) != INVALID && self.owner(tile, 0) == TOWN)
+            {
+                if invalidate {
+                    (self.s.set_town)(tile, INVALID_TOWN);
+                } else {
+                    self.update_town(tile);
+                }
+            }
+        }
+    }
+    fn change_owner(&self, ret: Cost<'_>, tile: u32, old: u8, new: u8) {
+        w::hit(w::ROAD_COMMANDS_OWNER);
+        if (self.shared.is_road_depot)(tile) {
+            if (self.shared.tile_owner)(tile) == old {
+                if new == 255 {
+                    self.clear(ret, EXEC | BANKRUPT, tile);
+                } else {
+                    let mut rt = self.rt(tile, 0);
+                    if rt == INVALID {
+                        rt = self.rt(tile, 1);
+                    }
+                    (self.r.road_infrastructure)(old, rt, 2_u32.wrapping_neg());
+                    (self.r.road_infrastructure)(new, rt, 2);
+                    (self.rail.set_tile_owner)(tile, new);
+                    for rtt in [0, 1] {
+                        if self.owner(tile, rtt) == old {
+                            (self.shared.set_road_owner)(tile, rtt, new);
+                        }
+                    }
+                }
+            }
+            return;
+        }
+        for rtt in [0, 1] {
+            if self.owner(tile, rtt) == old {
+                let rt = self.rt(tile, rtt);
+                if rt != INVALID {
+                    let num = if (self.shared.is_level_crossing)(tile) {
+                        2
+                    } else {
+                        self.bits(tile, rtt).count_ones()
+                    };
+                    (self.r.road_infrastructure)(old, rt, num.wrapping_neg());
+                    if new != 255 {
+                        (self.r.road_infrastructure)(new, rt, num);
+                    }
+                }
+                (self.shared.set_road_owner)(tile, rtt, if new == 255 { NONE } else { new });
+            }
+        }
+        if (self.shared.is_level_crossing)(tile) && (self.shared.tile_owner)(tile) == old {
+            if new == 255 {
+                let track = (self.rail.crossing_road_axis)(tile).0 ^ 1;
+                unsafe {
+                    (self.r.remove_rail)(ret.0, EXEC | BANKRUPT, tile, track);
+                }
+            } else {
+                let rt = (self.rail.rail_type)(tile).0;
+                (self.r.rail_infrastructure)(old, rt, 2_u32.wrapping_neg());
+                (self.r.rail_infrastructure)(new, rt, 2);
+                (self.rail.set_tile_owner)(tile, new);
+            }
+        }
+    }
+    fn terraform(
+        &self,
+        cost: Cost<'_>,
+        scratch: Cost<'_>,
+        flags: u16,
+        tile: u32,
+        mut z: i32,
+        mut slope: u8,
+    ) {
+        w::hit(w::ROAD_COMMANDS_TERRAFORM);
+        if (self.shared.build_on_slopes)() && (self.shared.autoslope)() {
+            let valid = match self.kind(tile) {
+                1 => {
+                    !steep(slope)
+                        && (self.shared.tile_max_z)(tile) == z + slope_max_z(slope)
+                        && 0x6CA1_u32 & (1 << slope) != 0
+                }
+                2 => {
+                    (self.r.entrance_edge)(tile, z, slope, (self.shared.road_depot_direction)(tile))
+                }
+                0 => {
+                    let bits = self.bits(tile, 0) | self.bits(tile, 1);
+                    let mut copy = bits;
+                    self.slope(scratch, slope, &mut copy, 0, 0);
+                    if scratch.ok() && bits == copy {
+                        let mut old_slope = (self.shared.tile_slope)(tile);
+                        let mut old_z = (self.shared.tile_z)(tile);
+                        let old = (self.r.apply_foundation)(
+                            (self.s.foundation)(old_slope, bits).0,
+                            old_slope,
+                        );
+                        old_z += old.z;
+                        old_slope = old.slope;
+                        let new =
+                            (self.r.apply_foundation)((self.s.foundation)(slope, bits).0, slope);
+                        z += new.z;
+                        slope = new.slope;
+                        old_z == z && old_slope == slope
+                    } else {
+                        false
+                    }
+                }
+                _ => unreachable!(),
+            };
+            if valid {
+                w::hit(w::ROAD_COMMANDS_AUTOSLOPE);
+                cost.set(price(57));
+                return;
+            }
+        }
+        self.clear(cost, flags, tile);
+    }
+    fn convert_owner(&self, tile: u32, num: u32, owner: u8, from: u8, to: u8) {
+        let company = (self.shared.current_company)();
+        if company >= 15 || (owner >= 15 && owner != NONE) {
+            return;
+        }
+        if owner == NONE {
+            (self.shared.set_road_owner)(
+                tile,
+                u8::from((self.shared.road_tram_type)(to).0),
+                company,
+            );
+            self.infrastructure(to, company, num as i32);
+        } else {
+            (self.r.road_infrastructure)(owner, from, num.wrapping_neg());
+            (self.r.road_infrastructure)(owner, to, num);
+            (self.r.infrastructure_dirty)(owner);
+        }
+    }
+    fn convert(
+        &self,
+        frame: *mut ConvertFrame,
+        area: *mut Area,
+        cost: Cost<'_>,
+        error: Cost<'_>,
+        ret: Cost<'_>,
+        flags: u16,
+        end: u32,
+        start: u32,
+        to: u8,
+        diagonal: bool,
+    ) {
+        w::hit(w::ROAD_COMMANDS_CONVERT);
+        if !(self.shared.road_type_valid)(to) || start >= self.size() {
+            cost.error(u32::MAX);
+            return;
+        }
+        let rtt = u8::from((self.shared.road_tram_type)(to).0);
+        cost.set(0);
+        error.error(if rtt == 1 {
+            self.s.strings.no_suitable_tram
+        } else {
+            self.s.strings.no_suitable_road
+        });
+        let mut found = false;
+        unsafe {
+            (self.r.area_begin)(area, start, end, diagonal);
+        }
+        loop {
+            let tile = unsafe { (self.r.area_tile)(area) };
+            if tile == u32::MAX {
+                break;
+            }
+            // Advance at the bottom even when this tile fails, preserving the native iterator order.
+            self.convert_tile(
+                frame, cost, error, ret, flags, tile, start, end, to, rtt, diagonal, &mut found,
+            );
+            unsafe {
+                (self.r.area_next)(area);
+            }
+        }
+        if flags & EXEC != 0 {
+            unsafe {
+                (self.s.cargo_changed)(frame);
+            }
+        }
+        if !found {
+            cost.take(error);
+        }
+    }
+    fn convert_tile(
+        &self,
+        frame: *mut ConvertFrame,
+        cost: Cost<'_>,
+        error: Cost<'_>,
+        ret: Cost<'_>,
+        flags: u16,
+        tile: u32,
+        start: u32,
+        end: u32,
+        to: u8,
+        rtt: u8,
+        diagonal: bool,
+        found: &mut bool,
+    ) {
+        if !self.may_have(tile) {
+            return;
+        }
+        let from = self.rt(tile, rtt);
+        if from == INVALID || from == to {
+            return;
+        }
+        let tt = self.tile_type(tile);
+        match tt {
+            STATION => {
+                if !(self.shared.is_any_road_stop)(tile) {
+                    return;
+                }
+            }
+            ROAD => {
+                if (self.shared.is_level_crossing)(tile) && (self.r.road_no_crossing)(to) {
+                    error.make_error(self.r.strings.crossing_road);
+                    return;
+                }
+            }
+            WORMHOLE => {
+                if (self.shared.tunnel_transport)(tile) != 1 {
+                    return;
+                }
+            }
+            _ => return,
+        }
+        let owner = self.owner(tile, rtt);
+        if owner != NONE && !(owner == TOWN && rtt == 0) {
+            self.ownership(ret, owner, tile);
+            if !ret.ok() {
+                error.take(ret);
+                return;
+            }
+        }
+        if owner == TOWN {
+            let town =
+                (self.shared.closest_town)(tile, u32::from((self.authority.authority_distance)()));
+            self.rating(ret, town, 0, u8::from(tt == WORMHOLE));
+            if !ret.ok() {
+                error.take(ret);
+                return;
+            }
+        }
+        if tt != WORMHOLE {
+            if !(self.shared.road_powered)(from, to) {
+                self.no_vehicle(ret, tile);
+                if !ret.ok() {
+                    error.take(ret);
+                    return;
+                }
+                if rtt == 0 && owner == TOWN {
+                    unsafe {
+                        (self.s.owned_by_town)(error.0, tile);
+                    }
+                    return;
+                }
+            }
+            let mut num = self.any_bits(tile, rtt).count_ones();
+            if (tt == STATION && (self.shared.is_bay_stop)(tile))
+                || (tt == ROAD && (self.shared.is_road_depot)(tile))
+            {
+                num = num.wrapping_mul(2);
+            }
+            *found = true;
+            cost.add_money((self.s.convert_cost)(from, to).saturating_mul(i64::from(num)));
+            if flags & EXEC != 0 {
+                w::hit(w::ROAD_COMMANDS_CONVERT_TILE);
+                if owner == (self.shared.current_company)() {
+                    self.convert_owner(tile, num, owner, from, to);
+                }
+                (self.shared.set_road_type)(tile, rtt, to);
+                (self.shared.mark_dirty)(tile);
+                unsafe {
+                    (self.s.collect_vehicles)(frame, tile);
+                }
+                if self.tile_type(tile) == ROAD && (self.shared.is_road_depot)(tile) {
+                    (self.r.depot_windows)(tile);
+                }
+            }
+        } else {
+            let other = (self.rail.other_tunnel_bridge_end)(tile);
+            if other < tile && (self.r.area_contains)(start, end, diagonal, other) {
+                return;
+            }
+            if !(self.shared.road_powered)(from, to) {
+                self.free(ret, tile, other);
+                if !ret.ok() {
+                    error.take(ret);
+                    return;
+                }
+                if rtt == 0 && owner == TOWN {
+                    unsafe {
+                        (self.s.owned_by_town)(error.0, tile);
+                    }
+                    return;
+                }
+            }
+            let num = self.length(tile, other).wrapping_add(2).wrapping_mul(2);
+            *found = true;
+            cost.add_money((self.s.convert_cost)(from, to).saturating_mul(i64::from(num)));
+            if flags & EXEC != 0 {
+                w::hit(w::ROAD_COMMANDS_CONVERT_WORMHOLE);
+                if owner == (self.shared.current_company)() {
+                    self.convert_owner(tile, num.wrapping_mul(4), owner, from, to);
+                    (self.rail.set_tile_owner)(tile, (self.shared.current_company)());
+                    (self.rail.set_tile_owner)(other, (self.shared.current_company)());
+                }
+                (self.shared.set_road_type)(tile, rtt, to);
+                (self.shared.set_road_type)(other, rtt, to);
+                unsafe {
+                    (self.s.collect_vehicles)(frame, tile);
+                    (self.s.collect_vehicles)(frame, other);
+                }
+                self.dirty_wormhole(tile, other);
+            }
+        }
+    }
+    fn build_above(&self, cost: Cost<'_>, flags: u16, tile: u32) {
+        cost.zero();
+        if (self.shared.is_road_depot)(tile) {
+            w::hit(w::ROAD_COMMANDS_BUILD_ABOVE);
+            self.clear(cost, flags, tile);
+        }
+    }
+}
+fn slope_max_z(slope: u8) -> i32 {
+    if slope == 0 {
+        0
+    } else if steep(slope) {
+        16
+    } else {
+        8
+    }
+}
+
+/// Original road `vehicles_built` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_vehicles_built(
+    services: *const RoadCommandServices,
+) -> bool {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    (c.s.vehicles_built)()
+}
+
+/// Original road `infrastructure` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_infrastructure(
+    services: *const RoadCommandServices,
+    rt: u8,
+    owner: u8,
+    count: i32,
+) {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    c.infrastructure(rt, owner, count);
+}
+
+/// Original road `allow_remove` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_allow_remove(
+    services: *const RoadCommandServices,
+    out: *mut CommandCost,
+    tile: u32,
+    bits: u8,
+    owner: u8,
+    rtt: u8,
+    flags: u16,
+    town_check: bool,
+) {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    c.allow_remove(c.c(out), tile, bits, owner, rtt, flags, town_check);
+}
+
+/// Original road `build` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_build(
+    services: *const RoadCommandServices,
+    out: *mut CommandCost,
+    ret: *mut CommandCost,
+    flags: u16,
+    tile: u32,
+    bits: u8,
+    rt: u8,
+    drd: u8,
+    town: u16,
+) {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    c.build(c.c(out), c.c(ret), flags, tile, bits, rt, drd, town);
+}
+
+/// Original road `build_long` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_build_long(
+    services: *const RoadCommandServices,
+    out: *mut CommandCost,
+    last: *mut CommandCost,
+    ret: *mut CommandCost,
+    flags: u16,
+    end: u32,
+    start: u32,
+    rt: u8,
+    axis: u8,
+    drd: u8,
+    start_half: bool,
+    end_half: bool,
+    ai: bool,
+) {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    c.build_long(
+        c.c(out),
+        c.c(last),
+        c.c(ret),
+        flags,
+        end,
+        start,
+        rt,
+        axis,
+        drd,
+        start_half,
+        end_half,
+        ai,
+    );
+}
+
+/// Original road `remove_long` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_remove_long(
+    services: *const RoadCommandServices,
+    out: *mut CommandCost,
+    last: *mut CommandCost,
+    ret: *mut CommandCost,
+    scratch: *mut CommandCost,
+    flags: u16,
+    end: u32,
+    start: u32,
+    rt: u8,
+    axis: u8,
+    start_half: bool,
+    end_half: bool,
+) -> i64 {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    c.remove_long(
+        c.c(out),
+        c.c(last),
+        c.c(ret),
+        c.c(scratch),
+        flags,
+        end,
+        start,
+        rt,
+        axis,
+        start_half,
+        end_half,
+    )
+}
+
+/// Original road `build_depot` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_build_depot(
+    services: *const RoadCommandServices,
+    out: *mut CommandCost,
+    ret: *mut CommandCost,
+    flags: u16,
+    tile: u32,
+    rt: u8,
+    dir: u8,
+) {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    c.build_depot(c.c(out), c.c(ret), flags, tile, rt, dir);
+}
+
+/// Original road `clear` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_clear(
+    services: *const RoadCommandServices,
+    out: *mut CommandCost,
+    ret: *mut CommandCost,
+    scratch: *mut CommandCost,
+    flags: u16,
+    tile: u32,
+) {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    c.clear_tile(c.c(out), c.c(ret), c.c(scratch), flags, tile);
+}
+
+/// Original road `nearest_towns` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_nearest_towns(
+    services: *const RoadCommandServices,
+    invalidate: bool,
+) {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    c.nearest_towns(invalidate);
+}
+
+/// Original road `change_owner` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_change_owner(
+    services: *const RoadCommandServices,
+    ret: *mut CommandCost,
+    tile: u32,
+    old: u8,
+    new: u8,
+) {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    c.change_owner(c.c(ret), tile, old, new);
+}
+
+/// Original road `terraform` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_terraform(
+    services: *const RoadCommandServices,
+    out: *mut CommandCost,
+    scratch: *mut CommandCost,
+    flags: u16,
+    tile: u32,
+    z: i32,
+    slope: u8,
+) {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    c.terraform(c.c(out), c.c(scratch), flags, tile, z, slope);
+}
+
+/// Original road `convert` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_convert(
+    services: *const RoadCommandServices,
+    frame: *mut ConvertFrame,
+    area: *mut Area,
+    out: *mut CommandCost,
+    error: *mut CommandCost,
+    ret: *mut CommandCost,
+    flags: u16,
+    end: u32,
+    start: u32,
+    rt: u8,
+    diagonal: bool,
+) {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    c.convert(
+        frame,
+        area,
+        c.c(out),
+        c.c(error),
+        c.c(ret),
+        flags,
+        end,
+        start,
+        rt,
+        diagonal,
+    );
+}
+
+/// Original road `build_above` entry.
+/// # Safety
+/// Immutable tables and live native cost/frame slots outlive this synchronous
+/// invocation. Slots are distinct; no native borrow survives reentrant calls.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_build_above(
+    services: *const RoadCommandServices,
+    out: *mut CommandCost,
+    flags: u16,
+    tile: u32,
+) {
+    // SAFETY: caller supplies valid immutable native tables.
+    let c = unsafe { Ctx::new(services) };
+    c.build_above(c.c(out), flags, tile);
+}

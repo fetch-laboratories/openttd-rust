@@ -5,6 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
+#include "services_road.h"
 #include "services_ffi.h"
 #include "services_rail.h"
 
@@ -263,10 +264,6 @@ static uint64_t TrainCrossingBarred(OpenTTDTrainHandle, uint32_t a) noexcept
 static uint64_t TrainCrossingRailAxis(OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	return GetCrossingRailAxis(TileIndex(a));
-}
-static uint64_t TrainCrossingReserved(OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	return HasCrossingReservation(TileIndex(a));
 }
 static void TrainCrossingSound(OpenTTDTrainHandle, uint32_t a) noexcept
 {
@@ -843,10 +840,6 @@ static uint64_t TrainWaitUnbunch(OpenTTDTrainHandle id) noexcept
 static void TrainWriteCrossingBar(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
 {
 	SetCrossingBarred(TileIndex(a), b != 0);
-}
-static void TrainWriteCrossingRes(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	SetCrossingReservation(TileIndex(a), b != 0);
 }
 static void TrainWriteVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
 {

@@ -49,6 +49,7 @@
 #include "rust/station_services.h"
 #include "rust/settings_services.h"
 #include "rust/town_founding_ffi.h"
+#include "rust/services_road.h"
 #include "rust/generation_services.hpp"
 #endif
 #include "town_kdtree.h"
@@ -98,7 +99,7 @@ void RebuildTownKdtree()
 #ifndef WITH_RUST
 static bool _generating_town = false;
 #else
-static const OpenTTDTownLeaves &GetRustTownServices() noexcept;
+const OpenTTDTownLeaves &GetRustTownServices() noexcept;
 #endif
 
 /**
@@ -990,7 +991,7 @@ static uint32_t RustTown_clean_road_bits(uint32_t tile, uint32_t bits) noexcept
 }
 static void RustTown_set_road_town(uint32_t tile, uint32_t town) noexcept
 {
-	SetRoadOwner(TileIndex{tile}, RTT_ROAD, OWNER_TOWN); SetTownIndex(TileIndex{tile}, TownID(town));
+	GetRustSharedServices().set_road_owner(tile, RTT_ROAD, OWNER_TOWN.base()); RustSetTownIndex(tile, static_cast<uint16_t>(town));
 }
 static uint32_t RustTown_exchange_company(uint32_t company) noexcept
 {
@@ -1090,7 +1091,7 @@ static void RustTownStations(uint32_t tile, uint32_t radius, void *context, void
 static uint8_t RustTownStationOwner(const OpenTTDStation *station) noexcept { return OpenTTDStationOwner(StationOf(station)).base(); }
 static void RustTownDirtyAuthority(uint32_t town) noexcept { SetWindowDirty(WC_TOWN_AUTHORITY, TownID(town)); }
 
-static const OpenTTDTownLeaves &GetRustTownServices() noexcept
+const OpenTTDTownLeaves &GetRustTownServices() noexcept
 {
 	static const OpenTTDTownLeaves services{
 		.map_log_x = OpenTTDMapLogX,
@@ -4315,7 +4316,7 @@ static uint8_t RustTownCouncilTolerance() noexcept { return _settings_game.diffi
 static bool RustTownBulldozer() noexcept { return _cheats.magic_bulldozer.value; }
 static uint8_t RustTownAuthorityDistance() noexcept { return _settings_game.economy.dist_local_authority; }
 static uint16_t RustTownAuthorityIndex(const OpenTTDTownHandle *town) noexcept { return reinterpret_cast<const Town *>(town)->index.base(); }
-static const OpenTTDTownAuthorityServices &RustTownAuthorityServices() noexcept
+const OpenTTDTownAuthorityServices &RustTownAuthorityServices() noexcept
 {
 	static const OpenTTDTownAuthorityServices services{
 		.council_tolerance = RustTownCouncilTolerance, .bulldozer = RustTownBulldozer,

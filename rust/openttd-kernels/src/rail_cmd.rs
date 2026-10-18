@@ -427,37 +427,40 @@ fn price(index: usize) -> i64 {
 
 /// A live native `CommandCost` borrowed for the synchronous entry.
 #[derive(Clone, Copy)]
-struct Cost<'a>(*mut CommandCost, &'a CommandCostServices);
+pub(crate) struct Cost<'a>(
+    pub(crate) *mut CommandCost,
+    pub(crate) &'a CommandCostServices,
+);
 impl Cost<'_> {
-    fn zero(self) {
+    pub(crate) fn zero(self) {
         (self.1.zero)(self.0);
     }
-    fn error(self, message: u32) {
+    pub(crate) fn error(self, message: u32) {
         (self.1.error)(self.0, message);
     }
-    fn set(self, money: i64) {
+    pub(crate) fn set(self, money: i64) {
         (self.1.expense_money)(self.0, CONSTRUCTION, money);
     }
-    fn add_money(self, money: i64) {
+    pub(crate) fn add_money(self, money: i64) {
         (self.1.amount)(self.0, money);
     }
     /// `AddCost(CommandCost &&)`.
-    fn add(self, other: Self) {
+    pub(crate) fn add(self, other: Self) {
         (self.1.add)(self.0, other.0);
     }
-    fn take(self, other: Self) {
+    pub(crate) fn take(self, other: Self) {
         (self.1.move_cost)(self.0, other.0);
     }
-    fn make_error(self, message: u32) {
+    pub(crate) fn make_error(self, message: u32) {
         unsafe { (self.1.make_error)(self.0, message) };
     }
-    fn ok(self) -> bool {
+    pub(crate) fn ok(self) -> bool {
         (self.1.success)(self.0)
     }
-    fn message(self) -> u32 {
+    pub(crate) fn message(self) -> u32 {
         (self.1.error_message)(self.0)
     }
-    fn money(self) -> i64 {
+    pub(crate) fn money(self) -> i64 {
         (self.1.money)(self.0)
     }
 }
@@ -793,7 +796,7 @@ impl<'a> Ctx<'a> {
         let tram_owner = (self.shared.tram_owner)(tile);
         if (self.shared.company_valid)(tram_owner) && road.tram_bits.is_power_of_two() {
             // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-            unsafe { (self.command.ownership)(ret.0, tram_owner) };
+            unsafe { (self.command.ownership)(ret.0, tram_owner, 0) };
             if !ret.ok() {
                 cost.take(ret);
                 return None;

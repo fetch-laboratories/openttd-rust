@@ -27,6 +27,7 @@ mod packet;
 mod rail_cmd;
 pub mod rail_yapf;
 mod road;
+mod road_cmd;
 mod road_data;
 mod road_yapf;
 mod script_list;
