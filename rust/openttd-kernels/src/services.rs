@@ -123,156 +123,159 @@ pub struct Train {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
-    /// Opaque context for test fixtures; production leaves ignore it.
-    pub context: *mut c_void,
-    /// One shared game Random draw, including debug logging.
-    pub random: extern "C" fn(*mut c_void) -> u32,
-    /// `TileVirtXY` query: 0 not industry, 1 industry, 2 bubble catcher; writes tile.
-    pub industry: extern "C" fn(i32, i32, *mut u32) -> u32,
-    /// `GetTileType`.
-    pub tile_type: extern "C" fn(u32) -> u8,
-    /// `IsBridgeAbove`.
-    pub bridge_above: extern "C" fn(u32) -> bool,
-    /// `GetTropicZone`.
-    pub tropic_zone: extern "C" fn(u32) -> u8,
-    /// `GetTileZ`.
-    pub tile_z: extern "C" fn(u32) -> i32,
-    /// `GetTileSlope`.
-    pub tile_slope: extern "C" fn(u32) -> u8,
-    /// `MarkTileDirtyByTile` with the default bridge offset.
-    pub mark_dirty: extern "C" fn(u32),
-    /// `SetTropicZone`.
-    pub set_tropic_zone: extern "C" fn(u32, u8),
-    /// `GetTileOwner`.
-    pub tile_owner: extern "C" fn(u32) -> u8,
-    /// `GetStationIndex`.
-    pub station_index: extern "C" fn(u32) -> u16,
-    /// `GetDepotIndex`.
-    pub depot_index: extern "C" fn(u32) -> u16,
-    /// `IsLevelCrossingTile`.
-    pub is_level_crossing: extern "C" fn(u32) -> bool,
-    /// `GetTunnelBridgeDirection`.
-    pub tunnel_bridge_direction: extern "C" fn(u32) -> u8,
-    /// Bridge specification speed at this bridge tile.
-    pub bridge_speed: extern "C" fn(u32) -> u16,
-    /// `IsWaterTile`: water category and clear subtype (sea, canal or river).
-    pub is_water_tile: extern "C" fn(u32) -> bool,
-    /// Whether this company pool ID is live.
-    pub company_valid: extern "C" fn(u8) -> bool,
-    /// Next live company at or after this ID; 255 denotes end.
-    pub next_company: extern "C" fn(u8) -> u8,
-    /// Current native command actor, read at the original short-circuit point.
-    pub current_company: extern "C" fn() -> u8,
-    /// Original native nearest-town spatial lookup; the result may be null.
-    pub closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
-    /// Resolve the single Rust owner of a live native town shell.
-    pub town_owner: extern "C" fn(*const TownHandle) -> *mut crate::town::State,
-    /// Original native `tile_valid` map observation.
-    pub tile_valid: extern "C" fn(u32) -> bool,
-    /// Original native `distance_from_edge` map observation.
-    pub distance_from_edge: extern "C" fn(u32) -> u32,
-    /// Original native `tile_max_z` map observation.
-    pub tile_max_z: extern "C" fn(u32) -> i32,
-    /// Original native `tile_height` map observation.
-    pub tile_height: extern "C" fn(u32) -> u32,
-    /// Original native `bridge_axis` map observation.
-    pub bridge_axis: extern "C" fn(u32) -> u8,
-    /// Original native `has_water_ground` map observation.
-    pub has_water_ground: extern "C" fn(u32) -> bool,
-    /// Original native `is_sea` map observation.
-    pub is_sea: extern "C" fn(u32) -> bool,
-    /// Original native `is_plain_rail` map observation.
-    pub is_plain_rail: extern "C" fn(u32) -> bool,
-    /// Original native `is_bridge` map observation.
-    pub is_bridge: extern "C" fn(u32) -> bool,
-    /// Original native `tunnel_transport` map observation.
-    pub tunnel_transport: extern "C" fn(u32) -> u8,
-    /// Original native `other_tunnel_end` map observation.
-    pub other_tunnel_end: extern "C" fn(u32) -> u32,
-    /// Original native `is_road_depot` map observation.
-    pub is_road_depot: extern "C" fn(u32) -> bool,
-    /// Original native `road_depot_direction` map observation.
-    pub road_depot_direction: extern "C" fn(u32) -> u8,
-    /// Original native `is_normal_road` map observation.
-    pub is_normal_road: extern "C" fn(u32) -> bool,
-    /// Original native `disallowed_road_directions` map observation.
-    pub disallowed_road_directions: extern "C" fn(u32) -> u8,
-    /// Original native `is_bay_stop` map observation.
-    pub is_bay_stop: extern "C" fn(u32) -> bool,
+    /// `AutoslopeEnabled()`.
+    pub autoslope: extern "C" fn() -> bool,
     /// Original native `bay_stop_direction` map observation.
     pub bay_stop_direction: extern "C" fn(u32) -> u8,
-    /// Original native `is_drive_through_stop` map observation.
-    pub is_drive_through_stop: extern "C" fn(u32) -> bool,
-    /// Original native `drive_through_axis` map observation.
-    pub drive_through_axis: extern "C" fn(u32) -> u8,
-    /// Original native `is_any_road_stop` map observation.
-    pub is_any_road_stop: extern "C" fn(u32) -> bool,
-    /// Original native `road_type` map observation.
-    pub road_type: extern "C" fn(u32) -> u8,
-    /// Original native `has_road_type` map observation.
-    pub has_road_type: extern "C" fn(u32) -> bool,
-    /// Original native `road_owner` map observation.
-    pub road_owner: extern "C" fn(u32) -> u8,
-    /// Original native `town_index` map observation.
-    pub town_index: extern "C" fn(u32) -> u16,
-    /// Original `GetAnyRoadBits`, parameterized by `RoadTramType`.
-    pub road_bits: extern "C" fn(u32, u8, bool) -> u8,
-    /// Current snow line used by town, industry and trees.
-    pub snow_line: extern "C" fn() -> u8,
+    /// `IsBridgeAbove`.
+    pub bridge_above: extern "C" fn(u32) -> bool,
+    /// Original native `bridge_axis` map observation.
+    pub bridge_axis: extern "C" fn(u32) -> u8,
+    /// Bridge specification speed at this bridge tile.
+    pub bridge_speed: extern "C" fn(u32) -> u16,
+    /// `construction.build_on_slopes`.
+    pub build_on_slopes: extern "C" fn() -> bool,
+    /// Shared live calendar date observation.
+    pub calendar_date: extern "C" fn() -> i32,
     /// Current calendar year used by town and industry.
     pub calendar_year: extern "C" fn() -> i32,
+    /// `DoClearSquare`.
+    pub clear_square: extern "C" fn(u32),
+    /// Original native nearest-town spatial lookup; the result may be null.
+    pub closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
+    /// Whether this company pool ID is live.
+    pub company_valid: extern "C" fn(u8) -> bool,
+    /// Opaque context for test fixtures; production leaves ignore it.
+    pub context: *mut c_void,
+    /// Original `GetCrossingRoadBits`.
+    pub crossing_road_bits: extern "C" fn(u32) -> RoadBits,
+    /// Current native command actor, read at the original short-circuit point.
+    pub current_company: extern "C" fn() -> u8,
+    /// `GetDepotIndex`.
+    pub depot_index: extern "C" fn(u32) -> u16,
+    /// Original native `disallowed_road_directions` map observation.
+    pub disallowed_road_directions: extern "C" fn(u32) -> u8,
+    /// Shared live disaster sound observation.
+    pub disaster_sound: extern "C" fn() -> bool,
+    /// Original native `distance_from_edge` map observation.
+    pub distance_from_edge: extern "C" fn(u32) -> u32,
+    /// Original native `drive_through_axis` map observation.
+    pub drive_through_axis: extern "C" fn(u32) -> u8,
+    /// Shared live economy date observation.
+    pub economy_date: extern "C" fn() -> i32,
+    /// Original pathfinding setting, observed at the calling branch.
+    pub forbid_90_deg: extern "C" fn() -> bool,
+    /// `FreeTrainTrackReservation(v)`.
+    pub free_train_reservation: unsafe extern "C" fn(*const Train),
+    /// Original native `has_road_type` map observation.
+    pub has_road_type: extern "C" fn(u32) -> bool,
+    /// Original normal-road works predicate.
+    pub has_road_works: extern "C" fn(u32) -> bool,
+    /// Original native `has_water_ground` map observation.
+    pub has_water_ground: extern "C" fn(u32) -> bool,
+    /// `TileVirtXY` query: 0 not industry, 1 industry, 2 bubble catcher; writes tile.
+    pub industry: extern "C" fn(i32, i32, *mut u32) -> u32,
+    /// Original native `is_any_road_stop` map observation.
+    pub is_any_road_stop: extern "C" fn(u32) -> bool,
+    /// Original native `is_bay_stop` map observation.
+    pub is_bay_stop: extern "C" fn(u32) -> bool,
+    /// Original native `is_bridge` map observation.
+    pub is_bridge: extern "C" fn(u32) -> bool,
+    /// Original native `is_drive_through_stop` map observation.
+    pub is_drive_through_stop: extern "C" fn(u32) -> bool,
+    /// `IsLevelCrossingTile`.
+    pub is_level_crossing: extern "C" fn(u32) -> bool,
+    /// Original native `is_normal_road` map observation.
+    pub is_normal_road: extern "C" fn(u32) -> bool,
+    /// Original native `is_plain_rail` map observation.
+    pub is_plain_rail: extern "C" fn(u32) -> bool,
+    /// Original native `is_road_depot` map observation.
+    pub is_road_depot: extern "C" fn(u32) -> bool,
+    /// Original native `is_sea` map observation.
+    pub is_sea: extern "C" fn(u32) -> bool,
+    /// `IsWaterTile`: water category and clear subtype (sea, canal or river).
+    pub is_water_tile: extern "C" fn(u32) -> bool,
     /// Shared live map log x observation.
     pub map_log_x: extern "C" fn() -> u32,
     /// Shared live map max x observation.
     pub map_max_x: extern "C" fn() -> u32,
     /// Shared live map max y observation.
     pub map_max_y: extern "C" fn() -> u32,
-    /// Shared live plane speed observation.
-    pub plane_speed: extern "C" fn() -> u8,
-    /// Shared live no jetcrash observation.
-    pub no_jetcrash: extern "C" fn() -> bool,
-    /// Shared live plane crashes observation.
-    pub plane_crashes: extern "C" fn() -> u8,
-    /// Shared live service at helipad observation.
-    pub service_at_helipad: extern "C" fn() -> bool,
-    /// Shared live disaster sound observation.
-    pub disaster_sound: extern "C" fn() -> bool,
-    /// Shared live economy date observation.
-    pub economy_date: extern "C" fn() -> i32,
-    /// Shared live calendar date observation.
-    pub calendar_date: extern "C" fn() -> i32,
-    /// Shared live slope observation.
-    pub slope: extern "C" fn(i32, i32) -> i32,
-    /// `construction.build_on_slopes`.
-    pub build_on_slopes: extern "C" fn() -> bool,
-    /// `AutoslopeEnabled()`.
-    pub autoslope: extern "C" fn() -> bool,
-    /// `DoClearSquare`.
-    pub clear_square: extern "C" fn(u32),
-    /// `FreeTrainTrackReservation(v)`.
-    pub free_train_reservation: unsafe extern "C" fn(*const Train),
-    /// `TryPathReserve(v, mark_as_stuck, first_tile_okay)`.
-    pub try_path_reserve: unsafe extern "C" fn(*mut Train, bool, bool) -> bool,
-    /// `IsSafeWaitingPosition(v, tile, trackdir, true, forbid_90_deg)`.
-    pub safe_waiting_position: unsafe extern "C" fn(*const Train, u32, u8, bool) -> bool,
-    /// Original normal-road works predicate.
-    pub has_road_works: extern "C" fn(u32) -> bool,
-    /// Original tram road type (including `INVALID_ROADTYPE`).
-    pub tram_type: extern "C" fn(u32) -> RoadType,
-    /// Original tram owner.
-    pub tram_owner: extern "C" fn(u32) -> u8,
-    /// Original `GetRoadBits`; only called for a normal road tile.
-    pub normal_road_bits: extern "C" fn(u32, u8) -> RoadBits,
-    /// Original `GetCrossingRoadBits`.
-    pub crossing_road_bits: extern "C" fn(u32) -> RoadBits,
-    /// Original pathfinding setting, observed at the calling branch.
-    pub forbid_90_deg: extern "C" fn() -> bool,
-    /// Original `UpdateLevelCrossing`; callers retain their original sound argument.
-    pub update_level_crossing: extern "C" fn(u32, bool),
     /// Original `MarkBridgeDirty`.
     pub mark_bridge_dirty: extern "C" fn(u32),
+    /// `MarkTileDirtyByTile` with the default bridge offset.
+    pub mark_dirty: extern "C" fn(u32),
+    /// Next live company at or after this ID; 255 denotes end.
+    pub next_company: extern "C" fn(u8) -> u8,
+    /// Shared live no jetcrash observation.
+    pub no_jetcrash: extern "C" fn() -> bool,
+    /// Original `GetRoadBits`; only called for a normal road tile.
+    pub normal_road_bits: extern "C" fn(u32, u8) -> RoadBits,
+    /// Original native `other_tunnel_end` map observation.
+    pub other_tunnel_end: extern "C" fn(u32) -> u32,
+    /// Shared live plane crashes observation.
+    pub plane_crashes: extern "C" fn() -> u8,
+    /// Shared live plane speed observation.
+    pub plane_speed: extern "C" fn() -> u8,
+    /// One shared game Random draw, including debug logging.
+    pub random: extern "C" fn(*mut c_void) -> u32,
+    /// Original `GetAnyRoadBits`, parameterized by `RoadTramType`.
+    pub road_bits: extern "C" fn(u32, u8, bool) -> u8,
+    /// Original native `road_depot_direction` map observation.
+    pub road_depot_direction: extern "C" fn(u32) -> u8,
+    /// Original native `road_owner` map observation.
+    pub road_owner: extern "C" fn(u32) -> u8,
+    /// Original native `road_type` map observation.
+    pub road_type: extern "C" fn(u32) -> u8,
+    /// `IsSafeWaitingPosition(v, tile, trackdir, true, forbid_90_deg)`.
+    pub safe_waiting_position: unsafe extern "C" fn(*const Train, u32, u8, bool) -> bool,
+    /// Shared live service at helipad observation.
+    pub service_at_helipad: extern "C" fn() -> bool,
+    /// `SetTropicZone`.
+    pub set_tropic_zone: extern "C" fn(u32, u8),
+    /// Shared live slope observation.
+    pub slope: extern "C" fn(i32, i32) -> i32,
+    /// Current snow line used by town, industry and trees.
+    pub snow_line: extern "C" fn() -> u8,
+    /// `GetStationIndex`.
+    pub station_index: extern "C" fn(u32) -> u16,
+    /// Original native `tile_height` map observation.
+    pub tile_height: extern "C" fn(u32) -> u32,
+    /// Original native `tile_max_z` map observation.
+    pub tile_max_z: extern "C" fn(u32) -> i32,
+    /// `GetTileOwner`.
+    pub tile_owner: extern "C" fn(u32) -> u8,
+    /// `GetTileSlope`.
+    pub tile_slope: extern "C" fn(u32) -> u8,
+    /// `GetTileType`.
+    pub tile_type: extern "C" fn(u32) -> u8,
+    /// Original native `tile_valid` map observation.
+    pub tile_valid: extern "C" fn(u32) -> bool,
+    /// `GetTileZ`.
+    pub tile_z: extern "C" fn(u32) -> i32,
+    /// Original native `town_index` map observation.
+    pub town_index: extern "C" fn(u32) -> u16,
+    /// Resolve the single Rust owner of a live native town shell.
+    pub town_owner: extern "C" fn(*const TownHandle) -> *mut crate::town::State,
     /// Original train track direction, computed lazily at the consuming branch.
     pub train_trackdir: unsafe extern "C" fn(*const Train) -> Trackdir,
+    /// Original tram owner.
+    pub tram_owner: extern "C" fn(u32) -> u8,
+    /// Original tram road type (including `INVALID_ROADTYPE`).
+    pub tram_type: extern "C" fn(u32) -> RoadType,
+    /// `GetTropicZone`.
+    pub tropic_zone: extern "C" fn(u32) -> u8,
+    /// `TryPathReserve(v, mark_as_stuck, first_tile_okay)`.
+    pub try_path_reserve: unsafe extern "C" fn(*mut Train, bool, bool) -> bool,
+    /// `GetTunnelBridgeDirection`.
+    pub tunnel_bridge_direction: extern "C" fn(u32) -> u8,
+    /// Original native `tunnel_transport` map observation.
+    pub tunnel_transport: extern "C" fn(u32) -> u8,
+    /// Original `UpdateLevelCrossing`; callers retain their original sound argument.
+    pub update_level_crossing: extern "C" fn(u32, bool),
+    // Registry: house (#256).
+
+    // Registry: landscape (#212).
 }
 impl Services {
     /// Draw one shared random word.
@@ -341,81 +344,84 @@ pub fn fixture(
         0
     }
     Services {
-        context,
-        random,
-        industry,
-        tile_type: byte,
-        bridge_above: flag,
-        tropic_zone: byte,
-        tile_z: height,
-        tile_slope: byte,
-        mark_dirty: tile,
-        set_tropic_zone: zone,
-        tile_owner: byte,
-        station_index: short,
-        depot_index: short,
-        is_level_crossing: flag,
-        tunnel_bridge_direction: byte,
-        bridge_speed: short,
-        is_water_tile: flag,
-        company_valid: unused_company_valid,
-        next_company: unused_next_company,
-        current_company: unused_current_company,
-        closest_town: unused_closest_town,
-        town_owner: unused_town_owner,
-        tile_valid: flag,
-        distance_from_edge: word,
-        tile_max_z: height,
-        tile_height: word,
-        bridge_axis: byte,
-        has_water_ground: flag,
-        is_sea: flag,
-        is_plain_rail: flag,
-        is_bridge: flag,
-        tunnel_transport: byte,
-        other_tunnel_end: word,
-        is_road_depot: flag,
-        road_depot_direction: byte,
-        is_normal_road: flag,
-        disallowed_road_directions: byte,
-        is_bay_stop: flag,
+        autoslope: flag0,
         bay_stop_direction: byte,
-        is_drive_through_stop: flag,
-        drive_through_axis: byte,
-        is_any_road_stop: flag,
-        road_type: byte,
-        has_road_type: flag,
-        road_owner: byte,
-        town_index: index,
-        road_bits: bits,
-        snow_line: zero_byte,
+        bridge_above: flag,
+        bridge_axis: byte,
+        bridge_speed: short,
+        build_on_slopes: flag0,
+        calendar_date: zero_year,
         calendar_year: zero_year,
+        clear_square: tile,
+        closest_town: unused_closest_town,
+        company_valid: unused_company_valid,
+        context,
+        crossing_road_bits: fixture_crossing_road_bits,
+        current_company: unused_current_company,
+        depot_index: short,
+        disallowed_road_directions: byte,
+        disaster_sound: flag0,
+        distance_from_edge: word,
+        drive_through_axis: byte,
+        economy_date: zero_year,
+        forbid_90_deg: flag0,
+        free_train_reservation: train,
+        has_road_type: flag,
+        has_road_works: flag,
+        has_water_ground: flag,
+        industry,
+        is_any_road_stop: flag,
+        is_bay_stop: flag,
+        is_bridge: flag,
+        is_drive_through_stop: flag,
+        is_level_crossing: flag,
+        is_normal_road: flag,
+        is_plain_rail: flag,
+        is_road_depot: flag,
+        is_sea: flag,
+        is_water_tile: flag,
         map_log_x: word0,
         map_max_x: word0,
         map_max_y: word0,
-        plane_speed: zero_byte,
-        no_jetcrash: flag0,
-        plane_crashes: zero_byte,
-        service_at_helipad: flag0,
-        disaster_sound: flag0,
-        economy_date: zero_year,
-        calendar_date: zero_year,
-        slope,
-        build_on_slopes: flag0,
-        autoslope: flag0,
-        clear_square: tile,
-        free_train_reservation: train,
-        try_path_reserve: train_path,
-        safe_waiting_position: train_safe,
-        has_road_works: flag,
-        tram_type: fixture_tram_type,
-        tram_owner: byte,
-        normal_road_bits: fixture_normal_road_bits,
-        crossing_road_bits: fixture_crossing_road_bits,
-        forbid_90_deg: flag0,
-        update_level_crossing: fixture_crossing_update,
         mark_bridge_dirty: tile,
+        mark_dirty: tile,
+        next_company: unused_next_company,
+        no_jetcrash: flag0,
+        normal_road_bits: fixture_normal_road_bits,
+        other_tunnel_end: word,
+        plane_crashes: zero_byte,
+        plane_speed: zero_byte,
+        random,
+        road_bits: bits,
+        road_depot_direction: byte,
+        road_owner: byte,
+        road_type: byte,
+        safe_waiting_position: train_safe,
+        service_at_helipad: flag0,
+        set_tropic_zone: zone,
+        slope,
+        snow_line: zero_byte,
+        station_index: short,
+        tile_height: word,
+        tile_max_z: height,
+        tile_owner: byte,
+        tile_slope: byte,
+        tile_type: byte,
+        tile_valid: flag,
+        tile_z: height,
+        town_index: index,
+        town_owner: unused_town_owner,
         train_trackdir: fixture_train_trackdir,
+        tram_owner: byte,
+        tram_type: fixture_tram_type,
+        tropic_zone: byte,
+        try_path_reserve: train_path,
+        tunnel_bridge_direction: byte,
+        tunnel_transport: byte,
+        update_level_crossing: fixture_crossing_update,
+        // Registry: house (#256).
+
+        // Registry: landscape (#212).
     }
 }
 #[cfg(test)]

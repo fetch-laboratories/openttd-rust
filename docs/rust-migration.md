@@ -344,6 +344,12 @@ which writes the user's message pausing root. Steering reviews put their
 corrections in the roadmap and edit `/start-development` only to improve it;
 root follows these skills and leaves them unedited.
 
+Shared append lists group by component (reserve sections for concurrent ports),
+then sort entries by name: includes after stdafx/before safeguards, independent
+ABI probe calls, and shared table fields/mirrors/initializers/layouts (one field per line).
+Witness blocks are alphabetical; keep names and consecutive local indices
+together in `witness_blocks!`; global indices/array lengths are derived.
+
 The driver and CI enforce native build/tests, nonempty test inventories, reference test-name preservation, and Cargo checks listed in `AGENTS.md`.
 
 Server-side protection on `rust-migration` requires `Full validation`, the cheap
