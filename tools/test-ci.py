@@ -17,6 +17,7 @@ HEAD = "a" * 40
 BASE = "b" * 40
 MERGE = "d" * 40
 TREE = "f" * 40
+RUN = "https://github.com/example/fork/actions/runs/123"
 PULL = {
     "state": "open",
     "head": {"sha": HEAD},
@@ -489,21 +490,26 @@ class PolicyTests(unittest.TestCase):
 
     def test_only_matching_successful_merged_tree_skips_validation(self):
         script = script_for("ci-policy.yml", "policy")
-        for full, marker, same_run, tree, merged, expected in (
-            ("success", "success", True, TREE, True, "false"),
-            ("success", "success", True, "other", True, "true"),
-            ("pending", "success", True, TREE, True, "true"),
-            ("failure", "success", True, TREE, True, "true"),
-            ("success", "failure", True, TREE, True, "true"),
-            ("success", "success", False, TREE, True, "true"),
-            ("success", "success", True, TREE, False, "true"),
+        bad_runs = (None, "", "run", RUN + "/extra", RUN.replace("fork", "other"))
+        for full, marker, same_run, tree, merged, run, expected in (
+            ("success", "success", True, TREE, True, RUN, "false"),
+            ("success", "success", True, "other", True, RUN, "true"),
+            ("pending", "success", True, TREE, True, RUN, "true"),
+            ("failure", "success", True, TREE, True, RUN, "true"),
+            ("success", "failure", True, TREE, True, RUN, "true"),
+            ("success", "success", False, TREE, True, RUN, "true"),
+            ("success", "success", True, TREE, False, RUN, "true"),
+            *(
+                ("success", "success", True, TREE, True, run, "true")
+                for run in bad_runs
+            ),
         ):
             statuses = [
-                {"context": "Full validation", "state": full, "target_url": "run"},
+                {"context": "Full validation", "state": full, "target_url": run},
                 {
                     "context": "Validated tree",
                     "state": marker,
-                    "target_url": "run" if same_run else "old",
+                    "target_url": run if same_run else "old",
                     "description": tree,
                 },
             ]
@@ -511,7 +517,7 @@ class PolicyTests(unittest.TestCase):
             harness = f"""
             process.env.CI_ON_DEMAND = 'true';
             const outputs = {{}};
-            const context = {{eventName: 'push', repo: {{}}, sha: 'head', payload: {{before: 'base'}}}};
+            const context = {{eventName: 'push', repo: {{owner: 'example', repo: 'fork'}}, serverUrl: 'https://github.com', sha: 'head', payload: {{before: 'base'}}}};
             const core = {{setOutput: (k, v) => outputs[k] = v, info: () => {{}}}};
             const github = {{paginate: async () => [{json.dumps(pull)}], rest: {{repos: {{
               getCommit: async () => ({{data: {{commit: {{tree: {{sha: {json.dumps(TREE)}}}}}}}}}),
@@ -551,11 +557,11 @@ class PolicyTests(unittest.TestCase):
                 harness = f"""
                 process.env.CI_ON_DEMAND = 'true';
                 const outputs = {{}};
-                const context = {{eventName: 'push', repo: {{}}, sha: 'head', payload: {{before: 'base'}}}};
+                const context = {{eventName: 'push', repo: {{owner: 'example', repo: 'fork'}}, serverUrl: 'https://github.com', sha: 'head', payload: {{before: 'base'}}}};
                 const core = {{setOutput: (k,v) => outputs[k] = v, info: () => {{}}}};
                 const statuses = [
-                  {{context: 'Full validation', state: 'success', target_url: 'run'}},
-                  {{context: 'Validated tree', state: 'success', target_url: 'run', description: '{BASE}'}}
+                  {{context: 'Full validation', state: 'success', target_url: '{RUN}'}},
+                  {{context: 'Validated tree', state: 'success', target_url: '{RUN}', description: '{BASE}'}}
                 ];
                 const github = {{paginate: async () => [{{...{json.dumps(PULL)}, merged_at: 'date'}}], rest: {{
                   git: {{getTree: async args => ({{data: args.tree_sha === '{BASE}' ? {json.dumps(left)} : {json.dumps(right)}}})}},
