@@ -85,7 +85,7 @@ static OpenTTDTreePlantObservation TreePlantObservation(uint32_t index) noexcept
 	o.zone = GetTropicZone(tile);
 	if (o.tile_type == MP_CLEAR) {
 		o.bridge = IsBridgeAbove(tile);
-		o.ground = GetClearGround(tile);
+		o.ground = RustClearGround(Tile{tile});
 		o.density = static_cast<uint8_t>(RustClearDensity(index));
 		o.snow = RustSnowTile(index);
 	} else if (o.tile_type == MP_WATER) {
@@ -99,7 +99,7 @@ static OpenTTDTreeObservation TreeObservation(uint32_t index) noexcept
 {
 	TileIndex tile{index};
 	return {
-		.ground = GetTreeGround(tile),
+		.ground = RustTreeGround(Tile{tile}),
 		.density = static_cast<uint8_t>(GetTreeDensity(tile)),
 		.species = GetTreeType(tile),
 		.count = static_cast<uint8_t>(GetTreeCount(tile)),
