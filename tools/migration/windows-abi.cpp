@@ -274,6 +274,7 @@ static void Layouts()
 		// Registry: road commands (#266).
 		offsetof(OpenTTDSharedServices, crossing_reserved),
 		offsetof(OpenTTDSharedServices, set_crossing_reserved),
+		offsetof(OpenTTDSharedServices, may_have_road),
 		offsetof(OpenTTDSharedServices, road_tile_kind),
 		offsetof(OpenTTDSharedServices, set_road_bits),
 		offsetof(OpenTTDSharedServices, set_road_type),

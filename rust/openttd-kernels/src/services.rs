@@ -232,6 +232,8 @@ pub struct Services {
     pub crossing_reserved: extern "C" fn(u32) -> bool,
     /// Canonical native `SetCrossingReservation`.
     pub set_crossing_reserved: extern "C" fn(u32, bool),
+    /// Original `MayHaveRoad`, including road-stop and transport guards.
+    pub may_have_road: extern "C" fn(u32) -> bool,
     /// Canonical native `road_tile_kind` service.
     pub road_tile_kind: extern "C" fn(u32) -> RoadTileKind,
     /// Canonical native `set_road_bits` service.
@@ -434,6 +436,7 @@ pub fn fixture(
         // Registry: road commands (#266).
         crossing_reserved: flag,
         set_crossing_reserved: set_reserved,
+        may_have_road: flag,
         road_tile_kind: road_kind,
         set_road_bits: set_three,
         set_road_type: set_three,

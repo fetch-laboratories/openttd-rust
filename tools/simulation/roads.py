@@ -301,6 +301,11 @@ def check(scenario, run, mode, role, result):
         elif result[key] != lines:
             result["problems"].append(f"{mode}: road command outcomes differ")
         if scenario["road_commands"] != "reload":
+            for kind in (0, 1):
+                for action in ("remove", "convert"):
+                    prefix = f"ROADCMD non-road-{action}-{kind}-exec false "
+                    if not any(line.startswith(prefix) for line in lines):
+                        result["problems"].append(f"{mode}/{role}: missing {prefix}")
             core.branch_witnesses(
                 scenario, run, role, "road_commands", COMMAND_BRANCHES
             )
@@ -820,6 +825,7 @@ COMMAND_BRANCHES = (
     "convert_tile",
     "build_above",
     "flood_works",
+    "non_road",
     "town_remove",
     "build_crossing",
     "build_wormhole",

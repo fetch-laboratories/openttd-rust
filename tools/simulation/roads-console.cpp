@@ -63,6 +63,18 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	_roadtypes_road.Set(alternate);
 	Company::Get(owner)->avail_roadtypes.Set(alternate);
 	Company::Get(owner)->avail_roadtypes.Set(ROADTYPE_TRAM);
+	RoadRun<CMD_BUILD_BRIDGE>("non-road-bridge", t(14, 22), t(20, 22), TRANSPORT_RAIL, 0, RAILTYPE_RAIL);
+	/* MayHaveRoad excludes rail stations and non-road tunnel/bridge heads. */
+	std::array<bool, 2> non_road_seen{};
+	for (TileIndex tile : Map::Iterate()) {
+		int kind = IsTileType(tile, MP_STATION) && !IsAnyRoadStop(tile) ? 0 : IsTileType(tile, MP_TUNNELBRIDGE) && GetTunnelBridgeTransportType(tile) != TRANSPORT_ROAD ? 1 : -1;
+		if (kind < 0 || non_road_seen[kind]) continue;
+		RoadRun<CMD_REMOVE_LONG_ROAD>(fmt::format("non-road-remove-{}", kind), tile, tile, ROADTYPE_ROAD, AXIS_X, false, true);
+		RoadRun<CMD_CONVERT_ROAD>(fmt::format("non-road-convert-{}", kind), tile, tile, alternate, false);
+		non_road_seen[kind] = true;
+		if (non_road_seen[0] && non_road_seen[1]) break;
+	}
+	if (!non_road_seen[0] || !non_road_seen[1]) SignalFixtureAbort(__LINE__);
 	CompanyID other = RailCompany();
 	SavedRandomSeeds before, after;
 	SaveRandomSeeds(&before);

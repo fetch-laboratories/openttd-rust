@@ -1465,7 +1465,8 @@ The boundary reuses shared command checks and native stack costs, road/rail map
 leaves, company counters, depots, crossings and the rail conversion cursor.
 Town authority and rating policy call the integrated Rust owner directly.
 Crossing reservation reads/writes now have one canonical definition shared with
-trains. No world-state borrow spans nested commands or vehicle/town callbacks.
+trains. The canonical `MayHaveRoad` predicate preserves rail-station/head guards.
+No world-state borrow spans nested commands or vehicle/town callbacks.
 The default `roads-commands` and `roads-commands-reload` scenarios compare test and
 execute outcomes, costs/extra cash, semantic maps, company/town state and RNG,
 including drags, one-way/tram coexistence, reserved crossings, stops, bridges,

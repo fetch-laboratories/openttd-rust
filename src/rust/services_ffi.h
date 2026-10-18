@@ -99,6 +99,7 @@ struct OpenTTDSharedServices {
 	// Registry: road commands (#266).
 	bool (*crossing_reserved)(uint32_t) noexcept;
 	void (*set_crossing_reserved)(uint32_t, bool) noexcept;
+	bool (*may_have_road)(uint32_t) noexcept;
 	RoadTileType (*road_tile_kind)(uint32_t) noexcept;
 	void (*set_road_bits)(uint32_t, uint8_t, uint8_t) noexcept;
 	void (*set_road_type)(uint32_t, uint8_t, uint8_t) noexcept;
@@ -283,6 +284,7 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		// Registry: road commands (#266).
 		.crossing_reserved = OpenTTDFixtureMapService<bool, uint32_t>,
 		.set_crossing_reserved = OpenTTDFixtureMapService<void, uint32_t, bool>,
+		.may_have_road = OpenTTDFixtureMapService<bool, uint32_t>,
 		.road_tile_kind = OpenTTDFixtureMapService<RoadTileType, uint32_t>,
 		.set_road_bits = OpenTTDFixtureMapService<void, uint32_t, uint8_t, uint8_t>,
 		.set_road_type = OpenTTDFixtureMapService<void, uint32_t, uint8_t, uint8_t>,

@@ -227,7 +227,11 @@ impl<'a> Ctx<'a> {
         (self.shared.road_bits)(tile, rtt, false)
     }
     fn may_have(&self, tile: u32) -> bool {
-        matches!(self.tile_type(tile), ROAD | STATION | WORMHOLE)
+        let present = (self.shared.may_have_road)(tile);
+        if !present {
+            w::hit(w::ROAD_COMMANDS_NON_ROAD);
+        }
+        present
     }
     fn no_road(&self, c: Cost<'_>, rtt: u8) {
         c.error(if rtt == 1 {

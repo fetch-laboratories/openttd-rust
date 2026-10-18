@@ -259,6 +259,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
                 // Registry: road commands (#266).
                 crossing_reserved,
                 set_crossing_reserved,
+                may_have_road,
                 road_tile_kind,
                 set_road_bits,
                 set_road_type,
