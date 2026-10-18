@@ -40,7 +40,8 @@ with tempfile.TemporaryDirectory() as directory:
         probe = f"{component}_probe"
         field = f"{component}_registry_probe"
         assert f"pub {field}:" not in (root / RUST).read_text(), field
-        header = "house_ffi" if component == "house" else "landscape_loop_ffi"
+        header = f"{component}_registry_probe"
+        assert f'#include "rust/{header}.h"' not in (root / ABI).read_text(), header
         additions = {
             WITNESS: [
                 f'    {probe} {{\n        {probe.upper()} = 0 => "{probe}.hit",\n    }}\n'
