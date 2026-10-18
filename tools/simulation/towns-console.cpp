@@ -26,6 +26,8 @@
 #include "terraform_cmd.h"
 #include "economy_func.h"
 #include "town_map.h"
+#include "newgrf_spritegroup.h"
+#include "animated_tile_func.h"
 #include <map>
 #ifdef WITH_RUST
 #include "rust/town_founding_ffi.h"
@@ -57,6 +59,58 @@ static TileIndex Site()
 		if (cost.Succeeded()) return tile;
 	}
 	std::abort();
+}
+/* Real CmdPlaceHouse and animation bodies in both games, with controlled spec
+ * overrides. The save corpus has no external NewGRF providing callback 0x1C.
+ * Restore specs before returning so ordinary simulation and saves stay valid. */
+static void HouseOverridePlacement(TileIndex tile, HouseID house)
+{
+	using Place = Command<CMD_PLACE_HOUSE>;
+	const auto flags = HouseSpec::Get(house)->building_flags;
+	std::vector<TileIndex> parts{tile};
+	if (flags.Any(BUILDING_2_TILES_Y)) parts.push_back(TileAddXY(tile, 0, 1));
+	if (flags.Any(BUILDING_2_TILES_X)) parts.push_back(TileAddXY(tile, 1, 0));
+	if (flags.Any(BUILDING_HAS_4_TILES)) parts.push_back(TileAddXY(tile, 1, 1));
+	/* These original target slots are disjoint from the selected source IDs. */
+	assert(house + parts.size() <= 100);
+	std::vector<HouseSpec> saved;
+	for (size_t i = 0; i < parts.size(); ++i) saved.push_back(*HouseSpec::Get(100 + i));
+	CallbackResultSpriteGroup frame(7);
+	for (uint mask : {0U, 5U, 15U}) {
+		CommandCost clear = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile);
+		Cost("house-override-clear", clear);
+		if (clear.Failed()) std::abort();
+		for (size_t i = 0; i < parts.size(); ++i) {
+			auto *source = HouseSpec::Get(house + i);
+			auto *target = HouseSpec::Get(100 + i);
+			*target = *source;
+			target->callback_mask.Reset();
+			if ((mask & (1U << i)) != 0) target->callback_mask.Set(HouseCallbackMask::AnimationTriggerConstructionStageChanged);
+			target->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, &frame);
+			source->grf_prop.override_id = 100 + i;
+		}
+		Randomizer trace = _random;
+		CommandCost placed = Place::Do(DoCommandFlag::Execute, tile, house, false, false);
+		Cost("house-override-place", placed);
+		if (placed.Failed()) std::abort();
+		/* Emit every actual draw by replaying the pre-command generator up to
+		 * its post-command state. Both missing and extra draws change the log. */
+		fmt::print(stderr, "TOWN house-override {} {} {}", house, parts.size(), mask);
+		uint draws = 0;
+		while (trace.state[0] != _random.state[0] || trace.state[1] != _random.state[1]) {
+			if (++draws > 16) std::abort();
+			fmt::print(stderr, " rng={}", trace.Next());
+		}
+		for (TileIndex part : parts) {
+			fmt::print(stderr, " part={}/{}/{}", GetCleanHouseType(part), GetHouseType(part), GetAnimationFrame(part));
+			DeleteAnimatedTile(part);
+		}
+		fmt::print(stderr, "\n");
+		for (size_t i = 0; i < parts.size(); ++i) {
+			HouseSpec::Get(house + i)->grf_prop.override_id = INVALID_HOUSE_ID;
+			*HouseSpec::Get(100 + i) = saved[i];
+		}
+	}
 }
 /* Every original house through CmdPlaceHouse, replacement, protection,
  * autoslope and company clearance; aged houses then reach the rebuild path. */
@@ -93,6 +147,11 @@ static bool HousesScenario(std::span<std::string_view> args)
 		for (const auto &[message, count] : errors) fmt::print(stderr, "TOWN house-errors {} {} {}\n", house, message, count);
 	}
 	fmt::print(stderr, "TOWN house-sites {}\n", sites.size());
+	BuildingFlags covered;
+	for (const auto &[tile, house] : sites) {
+		const auto size = HouseSpec::Get(house)->building_flags & BUILDING_HAS_1_TILE;
+		if (house < 96 && !IsHouseProtected(tile) && !covered.Any(size)) { HouseOverridePlacement(tile, house); covered |= size; }
+	}
 	auto single = std::ranges::find_if(sites, [](const auto &site) { return HouseSpec::Get(site.second)->building_flags.Test(BuildingFlag::Size1x1); });
 	if (single != sites.end()) {
 		HouseID other = single == sites.begin() ? sites.back().second : sites.front().second;

@@ -890,6 +890,19 @@ def check(scenario, run, mode, role, result):
             result[mode + "_house_branches"] = counts
         if not any(line.startswith("TOWN house-done ") for line in run["log"]):
             raise RuntimeError("house command witness missing")
+        overrides = [
+            line.split()
+            for line in run["log"]
+            if line.startswith("TOWN house-override ")
+        ]
+        if (
+            len(overrides) != 12
+            or {int(line[3]) for line in overrides} != {1, 2, 4}
+            or any(
+                not any(word.startswith("rng=") for word in line) for line in overrides
+            )
+        ):
+            raise RuntimeError("overridden-house placement/RNG trace missing")
     elif "town_founding" in scenario and not run["exit"] and run["snapshots"]:
         required = () if scenario["town_founding"] == "reload" else FOUNDING_BRANCHES
         required = [*required, *scenario.get("town_branches", ())]
