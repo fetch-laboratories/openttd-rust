@@ -14,14 +14,14 @@ COMMON = ROAD + "common[0]/"
 AI_FOLDER = "road-scenario-ai"
 
 # Recorded candidate/reference medians; integrating PRs update these up or down.
-# First record: PR #285, root --benchmark 3 at reviewed game head 6598b25274.
+# Current record: PR #289, root --benchmark 3 at reviewed game head 6da6e30c18.
 SPEED_BUDGETS = {
-    "generate-tgp-256-1": 1.146341463414634,
-    "play-opus-55-167-002-manual": 1.2144592952612394,
-    "play-grok-159-001-manual": 1.2131912058627583,
-    "play-padhattan-ridge-1996-manual": 1.2470588235294118,
-    "play-padhattan-ridge-2000-manual": 1.2651933701657458,
-    "play-padhattan-ridge-2016-manual": 1.3659169550173011,
+    "generate-tgp-256-1": 1.1693548387096775,
+    "play-opus-55-167-002-manual": 1.2058465286236297,
+    "play-grok-159-001-manual": 1.249667994687915,
+    "play-padhattan-ridge-1996-manual": 1.2264150943396226,
+    "play-padhattan-ridge-2000-manual": 1.2980769230769231,
+    "play-padhattan-ridge-2016-manual": 1.429305912596401,
 }
 
 
