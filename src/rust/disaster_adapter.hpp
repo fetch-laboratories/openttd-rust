@@ -6,6 +6,7 @@
  */
 /** @file disaster_adapter.hpp Copied canonical observations and returned shared services. */
 #include "services_landscape.h"
+#include "station_services.h"
 #include "command_services.h"
 #include "services_rail.h"
 #include "disaster_ffi.h"
@@ -56,7 +57,7 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 			out[3] = behaviour.Test(IndustryBehaviour::ChopperAttacks); out[4] = behaviour.Test(IndustryBehaviour::CanSubsidence); out[5] = i->town->index.base();
 			break;
 		}
-		case 3: { const Station *s = Station::Get(id); out[0] = s->airport.tile.base(); out[1] = s->airport.type; break; }
+		case 3: { const Station *s = Station::Get(id); out[0] = RustStationAirportTile(s); out[1] = s->airport.type; break; }
 		case 4: out[0] = Company::Get(id)->group_all[VEH_ROAD].num_vehicle; break;
 		case 5: {
 			TileIndex tile{id}; out[0] = IsValidTile(tile); if (!out[0]) break;

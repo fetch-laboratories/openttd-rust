@@ -49,6 +49,7 @@
 #include "rust/environment_services.h"
 #include "rust/company_adapter.h"
 #include "rust/vehicle_services.h"
+#include "rust/services_station.h"
 #include "rail_cmd.h"
 #endif
 
@@ -1078,9 +1079,9 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.iterator_next = [](OpenTTDTileVehicleCursor *c) noexcept { ++*WaterIterator(c); },
 		.iterator_end = [](OpenTTDTileVehicleCursor *c) noexcept { WaterIterator(c)->~Iterator(); },
 		.airport_tile = RustAirportTile,
-		.airport = [](uint32_t t) noexcept { const Station *st = Station::GetByTile(TileIndex{t}); return OpenTTDAirportGround{.station = st, .tile = st->airport.tile.base(), .width = st->airport.w, .height = st->airport.h}; },
+		.airport = [](uint32_t t) noexcept { const Station *st = Station::GetByTile(TileIndex{t}); return OpenTTDAirportGround{.station = st, .tile = RustStationAirportTile(st), .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st)}; },
 		.airport_member = [](const OpenTTDStation *st, uint32_t t) noexcept { return st->TileBelongsToAirport(TileIndex{t}); },
-		.airport_z = [](uint32_t t) noexcept { return int32_t{Station::GetByTile(TileIndex{t})->airport.GetFTA()->delta_z} + 1; },
+		.airport_z = [](uint32_t t) noexcept { return int32_t{RustAirportDeltaZ(RustStationAirportFTA(Station::GetByTile(TileIndex{t})))} + 1; },
 		.victim = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDFloodVictim{.status = RustVehicleStatus(u), .type = RustVehicleVehicleType(u)}; },
 		.aircraft_pose = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDAircraftFloodPose{.tile = RustVehicleTile(u), .z = RustVehicleZ(u), .subtype = RustVehicleSubtype(u)}; },
 		.ground_pose = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDGroundFloodPose{.z = RustVehicleZ(u), .first = RustVehicle(RustVehicleFirst(u))}; },
