@@ -5753,3 +5753,14 @@ extern const TileTypeProcs _tile_type_station_procs = {
 	TerraformTile_Station,      // terraform_tile_proc
 	CheckBuildAbove_Station, // check_build_above_proc
 };
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDStationServices.hpp"
+#include "abi-visit-OpenTTDStationLinks.hpp"
+bool CheckAbi_station_cmd()
+{
+	return AbiServicesComplete(_rust_station_services) &&
+		AbiServicesComplete(_rust_station_links);
+}
+#endif

@@ -1051,3 +1051,12 @@ bool GroupIsInGroup(GroupID search, GroupID group)
 	return false;
 #endif /* WITH_RUST */
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDFleetGroupServices.hpp"
+bool CheckAbi_group_cmd()
+{
+	return AbiServicesComplete(_fleet_group_services);
+}
+#endif

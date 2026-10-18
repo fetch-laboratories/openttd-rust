@@ -136,6 +136,18 @@ static void CargoFlowFinish(void *context, uint16_t node, uint8_t clear) noexcep
 	if (clear != 0) st->goods[job.Cargo()].ClearData();
 	InvalidateWindowData(WC_STATION_VIEW, st->index, job.Cargo());
 }
+
+static OpenTTDCargoFlowServices CargoFlowServices(LinkGraphJob *job)
+{
+	return {
+		.context = job,
+		.read = ReadCargoFlowJob,
+		.job_flows = CargoJobFlows,
+		.live_flows = CargoLiveFlows,
+		.reroute = CargoFlowReroute,
+		.finish = CargoFlowFinish,
+	};
+}
 #endif /* WITH_RUST */
 
 /**
@@ -155,7 +167,7 @@ LinkGraphJob::~LinkGraphJob()
 	assert(!this->IsJobAborted());
 
 #ifdef WITH_RUST
-	OpenTTDCargoFlowServices services{this, ReadCargoFlowJob, CargoJobFlows, CargoLiveFlows, CargoFlowReroute, CargoFlowFinish};
+	auto services = CargoFlowServices(this);
 	openttd_rust_flow_apply(&services);
 #else
 	/* Link graph has been merged into another one. */
@@ -362,3 +374,12 @@ void LinkGraphJob::RunRust()
 	}
 }
 #endif /* WITH_RUST */
+
+#ifdef WITH_RUST
+#include "../rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDCargoFlowServices.hpp"
+bool CheckAbi_linkgraphjob()
+{
+	return AbiServicesComplete(CargoFlowServices(nullptr));
+}
+#endif

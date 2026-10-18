@@ -8,6 +8,7 @@
 /** @file services_ffi.h Synchronous shared game services for Rust owners. */
 #ifndef RUST_SERVICES_FFI_H
 #define RUST_SERVICES_FFI_H
+#include "service_defaults.hpp"
 #include <cstdint>
 #include <type_traits>
 #include "station_ffi.h"
@@ -42,81 +43,81 @@ enum RoadType : uint8_t;
 enum RoadBits : uint8_t;
 enum Trackdir : uint8_t;
 struct OpenTTDSharedServices {
-	bool (*autoslope)() noexcept;
-	uint8_t (*bay_stop_direction)(uint32_t) noexcept;
-	bool (*bridge_above)(uint32_t) noexcept;
-	uint8_t (*bridge_axis)(uint32_t) noexcept;
-	uint16_t (*bridge_speed)(uint32_t) noexcept;
-	bool (*build_on_slopes)() noexcept;
-	int32_t (*calendar_date)() noexcept;
-	int32_t (*calendar_year)() noexcept;
-	void (*clear_square)(uint32_t) noexcept;
-	const OpenTTDTownHandle *(*closest_town)(uint32_t, uint32_t) noexcept;
-	bool (*company_valid)(uint8_t) noexcept;
+	bool (*autoslope)() noexcept OPENTTD_SERVICE_DEFAULT(autoslope);
+	uint8_t (*bay_stop_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bay_stop_direction);
+	bool (*bridge_above)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_above);
+	uint8_t (*bridge_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_axis);
+	uint16_t (*bridge_speed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_speed);
+	bool (*build_on_slopes)() noexcept OPENTTD_SERVICE_DEFAULT(build_on_slopes);
+	int32_t (*calendar_date)() noexcept OPENTTD_SERVICE_DEFAULT(calendar_date);
+	int32_t (*calendar_year)() noexcept OPENTTD_SERVICE_DEFAULT(calendar_year);
+	void (*clear_square)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_square);
+	const OpenTTDTownHandle *(*closest_town)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_town);
+	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	void *context;
-	RoadBits (*crossing_road_bits)(uint32_t) noexcept;
-	uint8_t (*current_company)() noexcept;
-	uint16_t (*depot_index)(uint32_t) noexcept;
-	uint8_t (*disallowed_road_directions)(uint32_t) noexcept;
-	bool (*disaster_sound)() noexcept;
-	uint32_t (*distance_from_edge)(uint32_t) noexcept;
-	uint8_t (*drive_through_axis)(uint32_t) noexcept;
-	int32_t (*economy_date)() noexcept;
-	bool (*forbid_90_deg)() noexcept;
-	void (*free_train_reservation)(const Train *) noexcept;
-	bool (*has_road_type)(uint32_t) noexcept;
-	bool (*has_road_works)(uint32_t) noexcept;
-	bool (*has_water_ground)(uint32_t) noexcept;
-	uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept;
-	bool (*is_any_road_stop)(uint32_t) noexcept;
-	bool (*is_bay_stop)(uint32_t) noexcept;
-	bool (*is_bridge)(uint32_t) noexcept;
-	bool (*is_drive_through_stop)(uint32_t) noexcept;
-	bool (*is_level_crossing)(uint32_t) noexcept;
-	bool (*is_normal_road)(uint32_t) noexcept;
-	bool (*is_plain_rail)(uint32_t) noexcept;
-	bool (*is_road_depot)(uint32_t) noexcept;
-	bool (*is_sea)(uint32_t) noexcept;
-	bool (*is_water_tile)(uint32_t) noexcept;
-	uint32_t (*map_log_x)() noexcept;
-	uint32_t (*map_max_x)() noexcept;
-	uint32_t (*map_max_y)() noexcept;
-	void (*mark_bridge_dirty)(uint32_t) noexcept;
-	void (*mark_dirty)(uint32_t) noexcept;
-	uint8_t (*next_company)(uint8_t) noexcept;
-	bool (*no_jetcrash)() noexcept;
-	RoadBits (*normal_road_bits)(uint32_t, uint8_t) noexcept;
-	uint32_t (*other_tunnel_end)(uint32_t) noexcept;
-	uint8_t (*plane_crashes)() noexcept;
-	uint8_t (*plane_speed)() noexcept;
-	uint32_t (*random)(void *) noexcept;
-	uint8_t (*road_bits)(uint32_t, uint8_t, bool) noexcept;
-	uint8_t (*road_depot_direction)(uint32_t) noexcept;
-	uint8_t (*road_owner)(uint32_t) noexcept;
-	uint8_t (*road_type)(uint32_t) noexcept;
-	bool (*safe_waiting_position)(const Train *, uint32_t, uint8_t, bool) noexcept;
-	bool (*service_at_helipad)() noexcept;
-	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept;
-	int32_t (*slope)(int32_t, int32_t) noexcept;
-	uint8_t (*snow_line)() noexcept;
-	uint16_t (*station_index)(uint32_t) noexcept;
-	uint32_t (*tile_height)(uint32_t) noexcept;
-	int32_t (*tile_max_z)(uint32_t) noexcept;
-	uint8_t (*tile_owner)(uint32_t) noexcept;
-	uint8_t (*tile_slope)(uint32_t) noexcept;
-	uint8_t (*tile_type)(uint32_t) noexcept;
-	bool (*tile_valid)(uint32_t) noexcept;
-	int32_t (*tile_z)(uint32_t) noexcept;
-	uint16_t (*town_index)(uint32_t) noexcept;
-	OpenTTDTownState *(*town_owner)(const OpenTTDTownHandle *) noexcept;
-	Trackdir (*train_trackdir)(const Train *) noexcept;
-	uint8_t (*tram_owner)(uint32_t) noexcept;
-	RoadType (*tram_type)(uint32_t) noexcept;
-	uint8_t (*tropic_zone)(uint32_t) noexcept;
-	bool (*try_path_reserve)(Train *, bool, bool) noexcept;
-	uint8_t (*tunnel_bridge_direction)(uint32_t) noexcept;
-	uint8_t (*tunnel_transport)(uint32_t) noexcept;
-	void (*update_level_crossing)(uint32_t, bool) noexcept;
+	RoadBits (*crossing_road_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_road_bits);
+	uint8_t (*current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
+	uint16_t (*depot_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_index);
+	uint8_t (*disallowed_road_directions)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(disallowed_road_directions);
+	bool (*disaster_sound)() noexcept OPENTTD_SERVICE_DEFAULT(disaster_sound);
+	uint32_t (*distance_from_edge)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(distance_from_edge);
+	uint8_t (*drive_through_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(drive_through_axis);
+	int32_t (*economy_date)() noexcept OPENTTD_SERVICE_DEFAULT(economy_date);
+	bool (*forbid_90_deg)() noexcept OPENTTD_SERVICE_DEFAULT(forbid_90_deg);
+	void (*free_train_reservation)(const Train *) noexcept OPENTTD_SERVICE_DEFAULT(free_train_reservation);
+	bool (*has_road_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_road_type);
+	bool (*has_road_works)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_road_works);
+	bool (*has_water_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_water_ground);
+	uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(industry);
+	bool (*is_any_road_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_any_road_stop);
+	bool (*is_bay_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bay_stop);
+	bool (*is_bridge)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_bridge);
+	bool (*is_drive_through_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_drive_through_stop);
+	bool (*is_level_crossing)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_level_crossing);
+	bool (*is_normal_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_normal_road);
+	bool (*is_plain_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_plain_rail);
+	bool (*is_road_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_road_depot);
+	bool (*is_sea)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_sea);
+	bool (*is_water_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_water_tile);
+	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
+	uint32_t (*map_max_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_max_x);
+	uint32_t (*map_max_y)() noexcept OPENTTD_SERVICE_DEFAULT(map_max_y);
+	void (*mark_bridge_dirty)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(mark_bridge_dirty);
+	void (*mark_dirty)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(mark_dirty);
+	uint8_t (*next_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(next_company);
+	bool (*no_jetcrash)() noexcept OPENTTD_SERVICE_DEFAULT(no_jetcrash);
+	RoadBits (*normal_road_bits)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(normal_road_bits);
+	uint32_t (*other_tunnel_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_tunnel_end);
+	uint8_t (*plane_crashes)() noexcept OPENTTD_SERVICE_DEFAULT(plane_crashes);
+	uint8_t (*plane_speed)() noexcept OPENTTD_SERVICE_DEFAULT(plane_speed);
+	uint32_t (*random)(void *) noexcept OPENTTD_SERVICE_DEFAULT(random);
+	uint8_t (*road_bits)(uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(road_bits);
+	uint8_t (*road_depot_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_depot_direction);
+	uint8_t (*road_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_owner);
+	uint8_t (*road_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type);
+	bool (*safe_waiting_position)(const Train *, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(safe_waiting_position);
+	bool (*service_at_helipad)() noexcept OPENTTD_SERVICE_DEFAULT(service_at_helipad);
+	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tropic_zone);
+	int32_t (*slope)(int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(slope);
+	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
+	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
+	uint32_t (*tile_height)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_height);
+	int32_t (*tile_max_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_max_z);
+	uint8_t (*tile_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_owner);
+	uint8_t (*tile_slope)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_slope);
+	uint8_t (*tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_type);
+	bool (*tile_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_valid);
+	int32_t (*tile_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_z);
+	uint16_t (*town_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_index);
+	OpenTTDTownState *(*town_owner)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_owner);
+	Trackdir (*train_trackdir)(const Train *) noexcept OPENTTD_SERVICE_DEFAULT(train_trackdir);
+	uint8_t (*tram_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tram_owner);
+	RoadType (*tram_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tram_type);
+	uint8_t (*tropic_zone)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tropic_zone);
+	bool (*try_path_reserve)(Train *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(try_path_reserve);
+	uint8_t (*tunnel_bridge_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_bridge_direction);
+	uint8_t (*tunnel_transport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_transport);
+	void (*update_level_crossing)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(update_level_crossing);
 	// Registry: house (#256).
 
 	// Registry: landscape (#212).
@@ -125,9 +126,9 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept;
 /** Shared save/reseed/restore of BOTH original RNG streams. */
 struct OpenTTDRandomSeeds { uint32_t random[2], interactive[2]; };
 struct OpenTTDRandomServices {
-	OpenTTDRandomSeeds (*save)() noexcept;
-	void (*restore)(OpenTTDRandomSeeds) noexcept;
-	void (*set_seed)(uint32_t) noexcept;
+	OpenTTDRandomSeeds (*save)() noexcept OPENTTD_SERVICE_DEFAULT(save);
+	void (*restore)(OpenTTDRandomSeeds) noexcept OPENTTD_SERVICE_DEFAULT(restore);
+	void (*set_seed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_seed);
 };
 const OpenTTDRandomServices &GetRustRandomServices() noexcept;
 
@@ -155,54 +156,54 @@ struct OpenTTDRailWormholeAdmission { uint8_t owner; TransportType transport; Di
  * the source observation point; signal writes are immediate. No map pointer,
  * whole tile record, opcode or allocation crosses this boundary. */
 struct OpenTTDRailMapServices {
-	OpenTTDRailTraversal (*traversal)(uint32_t) noexcept;
-	OpenTTDRailSignalPresence (*signal_presence)(uint32_t, uint8_t, uint8_t) noexcept;
-	OpenTTDRailSignalUpdate (*signal_update)(uint32_t, uint8_t) noexcept;
-	OpenTTDRailStationAdmission (*station_admission)(uint32_t, uint8_t, uint8_t) noexcept;
-	OpenTTDRailCrossingAdmission (*crossing_admission)(uint32_t, uint8_t) noexcept;
-	OpenTTDRailWormholeAdmission (*wormhole_admission)(uint32_t, uint8_t) noexcept;
+	OpenTTDRailTraversal (*traversal)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(traversal);
+	OpenTTDRailSignalPresence (*signal_presence)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_presence);
+	OpenTTDRailSignalUpdate (*signal_update)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_update);
+	OpenTTDRailStationAdmission (*station_admission)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_admission);
+	OpenTTDRailCrossingAdmission (*crossing_admission)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_admission);
+	OpenTTDRailWormholeAdmission (*wormhole_admission)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_admission);
 
-	bool (*is_rail_depot)(uint32_t) noexcept;
-	DiagDirection (*rail_depot_direction)(uint32_t) noexcept;
-	bool (*has_signal_trackdir)(uint32_t, uint8_t) noexcept;
-	SignalState (*signal_state)(uint32_t, uint8_t) noexcept;
-	void (*set_signal_state)(uint32_t, uint8_t, uint8_t) noexcept;
-	uint32_t (*other_tunnel_bridge_end)(uint32_t) noexcept;
-	uint32_t (*rail_track_status)(uint32_t, uint8_t) noexcept;
+	bool (*is_rail_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_rail_depot);
+	DiagDirection (*rail_depot_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_depot_direction);
+	bool (*has_signal_trackdir)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signal_trackdir);
+	SignalState (*signal_state)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_state);
+	void (*set_signal_state)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_state);
+	uint32_t (*other_tunnel_bridge_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_tunnel_bridge_end);
+	uint32_t (*rail_track_status)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_track_status);
 	/* Rail command, depot and level-crossing leaves (#265). */
-	TrackBits (*rail_tracks)(uint32_t) noexcept;
-	bool (*has_signals)(uint32_t) noexcept;
-	SignalType (*signal_type)(uint32_t, uint8_t) noexcept;
-	RailType (*rail_type)(uint32_t) noexcept;
-	void (*set_rail_type)(uint32_t, uint8_t) noexcept;
-	RailTileType (*rail_tile_type)(uint32_t) noexcept;
-	RailGroundType (*rail_ground)(uint32_t) noexcept;
-	void (*set_rail_ground)(uint32_t, uint8_t) noexcept;
-	void (*set_track_bits)(uint32_t, uint8_t) noexcept;
-	unsigned int (*present_signals)(uint32_t) noexcept;
-	void (*set_present_signals)(uint32_t, uint8_t) noexcept;
-	unsigned int (*signal_states)(uint32_t) noexcept;
-	void (*set_signal_states)(uint32_t, uint8_t) noexcept;
-	void (*set_has_signals)(uint32_t, bool) noexcept;
-	void (*set_signal_type)(uint32_t, uint8_t, uint8_t) noexcept;
-	SignalVariant (*signal_variant)(uint32_t, uint8_t) noexcept;
-	void (*set_signal_variant)(uint32_t, uint8_t, uint8_t) noexcept;
-	void (*cycle_signal_side)(uint32_t, uint8_t) noexcept;
-	TrackBits (*reserved_tracks)(uint32_t) noexcept;
-	TrackBits (*rail_reservation)(uint32_t) noexcept;
-	void (*set_track_reservation)(uint32_t, uint8_t) noexcept;
-	bool (*depot_reserved)(uint32_t) noexcept;
-	void (*set_depot_exit)(uint32_t, uint8_t) noexcept;
-	void (*make_rail_normal)(uint32_t, uint8_t, uint8_t, uint8_t) noexcept;
-	void (*make_rail_depot)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept;
-	TrackBits (*crossing_rail_bits)(uint32_t) noexcept;
-	Axis (*crossing_road_axis)(uint32_t) noexcept;
-	bool (*has_station_rail)(uint32_t) noexcept;
-	bool (*is_rail_station)(uint32_t) noexcept;
-	bool (*station_blocked)(uint32_t) noexcept;
-	Track (*station_track)(uint32_t) noexcept;
-	bool (*wormhole_reserved)(uint32_t) noexcept;
-	void (*set_tile_owner)(uint32_t, uint8_t) noexcept;
+	TrackBits (*rail_tracks)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_tracks);
+	bool (*has_signals)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signals);
+	SignalType (*signal_type)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_type);
+	RailType (*rail_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_type);
+	void (*set_rail_type)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_rail_type);
+	RailTileType (*rail_tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_tile_type);
+	RailGroundType (*rail_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_ground);
+	void (*set_rail_ground)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_rail_ground);
+	void (*set_track_bits)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_track_bits);
+	unsigned int (*present_signals)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(present_signals);
+	void (*set_present_signals)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_present_signals);
+	unsigned int (*signal_states)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_states);
+	void (*set_signal_states)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_states);
+	void (*set_has_signals)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_has_signals);
+	void (*set_signal_type)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_type);
+	SignalVariant (*signal_variant)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_variant);
+	void (*set_signal_variant)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_variant);
+	void (*cycle_signal_side)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cycle_signal_side);
+	TrackBits (*reserved_tracks)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reserved_tracks);
+	TrackBits (*rail_reservation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_reservation);
+	void (*set_track_reservation)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_track_reservation);
+	bool (*depot_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_reserved);
+	void (*set_depot_exit)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_depot_exit);
+	void (*make_rail_normal)(uint32_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_rail_normal);
+	void (*make_rail_depot)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_rail_depot);
+	TrackBits (*crossing_rail_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_rail_bits);
+	Axis (*crossing_road_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_road_axis);
+	bool (*has_station_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_station_rail);
+	bool (*is_rail_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_rail_station);
+	bool (*station_blocked)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_blocked);
+	Track (*station_track)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_track);
+	bool (*wormhole_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_reserved);
+	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
 };
 const OpenTTDRailMapServices &GetRustRailMapServices() noexcept;
 
@@ -212,7 +213,7 @@ Result OpenTTDFixtureMapService(Args...) noexcept
 {
 	if constexpr (!std::is_void_v<Result>) return Result{};
 }
-inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_t (*random)(void *) noexcept, uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept) noexcept
+inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_t (*random)(void *) noexcept, uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept = OpenTTDAbortService<uint32_t (*)(int32_t, int32_t, uint32_t *) noexcept>::Call) noexcept
 {
 	return {
 		.autoslope = OpenTTDFixtureMapService<bool>,

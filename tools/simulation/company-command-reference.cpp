@@ -69,7 +69,7 @@ static void NetworkTextMessage(int, int, bool, const std::string &, const std::s
 /* The game ABI test checks complete layouts. This probe addresses only fields
  * touched by these unchanged command bodies, through their audited ABI offsets. */
 static std::array<void *, 3> owners;
-static int64_t &Field(void *p, uint8_t item) { return *reinterpret_cast<int64_t *>(static_cast<char *>(p) + openttd_rust_abi_layout(211, item)); }
+static int64_t &Field(void *p, uint8_t item) { return *reinterpret_cast<int64_t *>(static_cast<char *>(p) + openttd_rust_abi_layout_named("CompanyFinances", item)); }
 static uint8_t CurrentCompany() noexcept { return _current_company; }
 static void SetCurrentCompany(uint8_t id) noexcept { _current_company = id; }
 static bool Networking() noexcept { return _networking; }
@@ -87,7 +87,7 @@ static void Reset(int64_t money, int64_t loan, int64_t max, bool infinite, bool 
 	_current_company = current; _networking = networking; _settings_game = {{infinite}, {give}}; trace.clear();
 	for (uint32_t i = 0; i < owners.size(); i++) {
 		companies[i] = {}; companies[i].index = i; companies[i].money = money; companies[i].current_loan = loan; companies[i].max_loan = max;
-		std::memset(owners[i], 0, openttd_rust_abi_layout(211, 0)); Field(owners[i], 2) = money; Field(owners[i], 4) = loan; Field(owners[i], 5) = max;
+		std::memset(owners[i], 0, openttd_rust_abi_layout_named("CompanyFinances", 0)); Field(owners[i], 2) = money; Field(owners[i], 4) = loan; Field(owners[i], 5) = max;
 	}
 	*static_cast<int64_t *>(openttd_rust_economy_state()) = 300000;
 }
@@ -97,10 +97,10 @@ static bool Equal(const CommandCost &expected, const OpenTTDCompanyCost &actual)
 	for (uint32_t i = 0; i < owners.size(); i++) {
 		const auto &c = companies[i]; void *p = owners[i];
 		if (c.money.base() != Field(p, 2) || c.current_loan.base() != Field(p, 4) || c.max_loan.base() != Field(p, 5)) return false;
-		auto *expense = reinterpret_cast<int64_t *>(static_cast<char *>(p) + openttd_rust_abi_layout(211, 16));
+		auto *expense = reinterpret_cast<int64_t *>(static_cast<char *>(p) + openttd_rust_abi_layout_named("CompanyFinances", 16));
 		for (uint32_t year = 0; year < 3; year++) for (uint32_t type = 0; type < 13; type++) if (c.yearly_expenses[year][type].base() != expense[year * 13 + type]) return false;
-		auto *entry = static_cast<char *>(p) + openttd_rust_abi_layout(211, 17);
-		if (c.cur_economy.income.base() != *reinterpret_cast<int64_t *>(entry + openttd_rust_abi_layout(210, 2)) || c.cur_economy.expenses.base() != *reinterpret_cast<int64_t *>(entry + openttd_rust_abi_layout(210, 3))) return false;
+		auto *entry = static_cast<char *>(p) + openttd_rust_abi_layout_named("CompanyFinances", 17);
+		if (c.cur_economy.income.base() != *reinterpret_cast<int64_t *>(entry + openttd_rust_abi_layout_named("CompanyEconomyEntry", 2)) || c.cur_economy.expenses.base() != *reinterpret_cast<int64_t *>(entry + openttd_rust_abi_layout_named("CompanyEconomyEntry", 3))) return false;
 	}
 	return true;
 }

@@ -3160,3 +3160,14 @@ int crypto_aead_unlock(u8 *plain_text, const u8  mac[16], const u8 key[32],
 #ifdef MONOCYPHER_CPP_NAMESPACE
 }
 #endif
+
+#ifdef WITH_RUST
+#include "../../rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDCryptoLeaves.hpp"
+#include "abi-visit-OpenTTDX25519Leaves.hpp"
+bool CheckAbi_monocypher()
+{
+	return AbiServicesComplete(rust_crypto_leaves) &&
+		AbiServicesComplete(rust_x25519_leaves);
+}
+#endif

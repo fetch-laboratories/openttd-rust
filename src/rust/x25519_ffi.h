@@ -54,13 +54,14 @@
 /** @file x25519_ffi.h Fixed byte spans and complete Montgomery ladder. */
 #ifndef OPENTTD_X25519_FFI_H
 #define OPENTTD_X25519_FFI_H
+#include "service_defaults.hpp"
 #include "crypto_primitives_ffi.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
 struct OpenTTDX25519Leaves {
-	void (OPENTTD_CRYPTO_CALL *wipe)(void *, size_t);
-	int32_t (OPENTTD_CRYPTO_CALL *verify32)(const uint8_t *, const uint8_t *);
+	void (OPENTTD_CRYPTO_CALL *wipe)(void *, size_t) OPENTTD_SERVICE_DEFAULT(wipe);
+	int32_t (OPENTTD_CRYPTO_CALL *verify32)(const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(verify32);
 };
 /* Immutable initialized table borrowed synchronously, containing only original
  * nonthrowing wipe/constant-time verify32 leaves. No global registration,

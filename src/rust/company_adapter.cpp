@@ -501,3 +501,14 @@ CommandCost RustCompanyCost(const OpenTTDCompanyCost &x)
 	}
 }
 #endif /* WITH_RUST */
+
+#ifdef WITH_RUST
+#include "service_table_check.hpp"
+#include "abi-visit-OpenTTDCompanyServices.hpp"
+#include "abi-visit-OpenTTDCompanyFinanceServices.hpp"
+bool CheckAbi_company_adapter()
+{
+	return AbiServicesComplete(GetRustCompanyServices()) &&
+		AbiServicesComplete(GetRustCompanyFinanceServices());
+}
+#endif

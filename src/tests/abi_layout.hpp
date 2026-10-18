@@ -13,19 +13,18 @@
 
 /**
  * Compare every Rust layout item of a type, then its SIZE_MAX terminator.
- * Each type's list appears once: in the ABI probe (tools/migration/windows-abi.cpp)
- * or, for lists of native game structures, in the owning test.
- * @param type Rust ABI layout type id.
+ * Lists and field aliases are generated from the Rust declarations.
+ * @param type Native C++ type name.
  * @param values Expected size, alignment and field offsets, in order.
  * @return The first differing item, or -1 when all items and the terminator match.
  */
-inline int AbiLayoutMismatch(uint16_t type, std::initializer_list<size_t> values)
+inline int AbiLayoutMismatch(const char *type, std::initializer_list<size_t> values)
 {
 	uint8_t item = 0;
 	for (size_t expected : values) {
-		if (openttd_rust_abi_layout(type, item) != expected) return item;
+		if (openttd_rust_abi_layout_named(type, item) != expected) return item;
 		item++;
 	}
-	return openttd_rust_abi_layout(type, item) == SIZE_MAX ? -1 : item;
+	return openttd_rust_abi_layout_named(type, item) == SIZE_MAX ? -1 : item;
 }
 #endif /* ABI_LAYOUT_HPP */

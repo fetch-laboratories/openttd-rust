@@ -3115,3 +3115,12 @@ bool Order::CanLeaveWithCargo(bool has_cargo) const
 			this->GetUnloadType() != OrderUnloadType::Transfer);
 #endif
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDOrdersLeaves.hpp"
+bool CheckAbi_order_cmd()
+{
+	return AbiServicesComplete(_rust_orders_leaves);
+}
+#endif

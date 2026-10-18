@@ -8,6 +8,7 @@
 /** @file road_yapf_ffi.h Complete road search and canonical road-cache construction. */
 #ifndef RUST_ROAD_YAPF_FFI_H
 #define RUST_ROAD_YAPF_FFI_H
+#include "service_defaults.hpp"
 #include "road_ffi.h"
 extern "C" {
 struct OpenTTDRoadYapfInput {
@@ -24,12 +25,12 @@ struct OpenTTDRoadYapfTile {
 struct OpenTTDRoadYapfFollow { uint32_t tile; int32_t skipped, max_speed, min_speed; uint16_t dirs; uint8_t followed; };
 struct OpenTTDRoadYapfArea { uint32_t tile; uint16_t width, height; uint8_t valid, stop, drive_through, next; };
 struct OpenTTDRoadYapfLeaves {
-	OpenTTDRoadYapfTile (OPENTTD_VEHICLE_CALL *tile)(const void *, uint32_t, uint8_t) noexcept;
-	OpenTTDRoadYapfFollow (OPENTTD_VEHICLE_CALL *follow)(const void *, uint32_t, uint8_t) noexcept;
-	uint16_t (OPENTTD_VEHICLE_CALL *tracks)(const void *, uint32_t, uint8_t) noexcept;
-	int32_t (OPENTTD_VEHICLE_CALL *height)(uint32_t) noexcept;
-	uint32_t (OPENTTD_VEHICLE_CALL *closest)(const void *, uint16_t, uint8_t) noexcept;
-	OpenTTDRoadYapfArea (OPENTTD_VEHICLE_CALL *area)(const void *, uint16_t) noexcept;
+	OpenTTDRoadYapfTile (OPENTTD_VEHICLE_CALL *tile)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
+	OpenTTDRoadYapfFollow (OPENTTD_VEHICLE_CALL *follow)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(follow);
+	uint16_t (OPENTTD_VEHICLE_CALL *tracks)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tracks);
+	int32_t (OPENTTD_VEHICLE_CALL *height)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(height);
+	uint32_t (OPENTTD_VEHICLE_CALL *closest)(const void *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest);
+	OpenTTDRoadYapfArea (OPENTTD_VEHICLE_CALL *area)(const void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(area);
 };
 struct OpenTTDRoadYapfResult { uint32_t tile; int32_t cost; uint8_t direction, found; int32_t rounds, open, closed, calcs, distance; };
 /* Input is copied; the opaque vehicle context stays live through this synchronous

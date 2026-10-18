@@ -3420,3 +3420,12 @@ extern const TileTypeProcs _tile_type_rail_procs = {
 	TerraformTile_Track,      // terraform_tile_proc
 	CheckBuildAbove_Track, // check_build_above_proc
 };
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDRailCommandServices.hpp"
+bool CheckAbi_rail_cmd()
+{
+	return AbiServicesComplete(GetRustRailCommandServices());
+}
+#endif
