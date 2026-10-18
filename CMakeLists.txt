@@ -452,6 +452,7 @@ link_package(SSE)
 add_definitions_based_on_options()
 
 if(OPTION_RUST AND BUILD_TESTING)
+    set_property(SOURCE src/3rdparty/monocypher/monocypher.cpp APPEND PROPERTY COMPILE_DEFINITIONS WITH_RUST_ABI_CHECKS)
     add_executable(openttd_rust_abi tools/migration/windows-abi.cpp src/3rdparty/monocypher/monocypher.cpp)
     target_include_directories(openttd_rust_abi PRIVATE "${CMAKE_SOURCE_DIR}/src")
     target_link_libraries(openttd_rust_abi PRIVATE openttd_rust)

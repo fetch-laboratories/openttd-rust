@@ -3161,7 +3161,7 @@ int crypto_aead_unlock(u8 *plain_text, const u8  mac[16], const u8 key[32],
 }
 #endif
 
-#ifdef WITH_RUST
+#if defined(WITH_RUST) && defined(WITH_RUST_ABI_CHECKS)
 #include "../../rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDCryptoLeaves.hpp"
 #include "abi-visit-OpenTTDX25519Leaves.hpp"
