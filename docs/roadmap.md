@@ -141,10 +141,10 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in parallel.
 
-1. **#291/#292, #283/#287 and #288/#289 are integrated.** Protected Quick recovered; actual docs-only postmerge skip passed. **#296/#297** fixes the separate Markdown-named gitlink shortcut within 80 added logic/test lines; fresh review has no findings, root workflow bootstrap is active. **#284 generated ABI layouts** continues preserved implementation after provider-capacity failures.
+1. **#291/#292, #283/#287 and #288/#289 are integrated.** Protected Quick recovered; actual docs-only postmerge skip passed. **#296/#297** fixes the separate Markdown-named gitlink shortcut within 80 added logic/test lines; fresh review has no findings, root workflow bootstrap is active. **#284/#298 generated ABI layouts** finishes native generators/comparisons/benchmarks after preserved provider failures.
 2. **Drafts:** #269 houses, then #255 landscape, each with the must-change items from its 2026-10-18 PR comment, adopting #280 on its base update.
 3. **#275 speed, revised order (2026-10-18 comment):**
-   - road YAPF tile reads (#288/#289) integrated; the early pass profiles all six scenarios. Next: effect/disaster table copy; ship YAPF scratch; `constinit` service tables;
+   - road YAPF tile reads (#288/#289) integrated; the early pass profiles all six scenarios. Next: effect/disaster table copy (#299, active, 100 added support/test lines); ship YAPF scratch; `constinit` service tables;
    - road `GetCurrentMaxSpeed`;
    - trees facade and industry `next_tick` (TGP has 1% headroom);
    - fold the road per-tick C++ (tick-front, `DoUpdateSpeed`, incline, crash check) into Rust;
@@ -169,17 +169,18 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 ## Resume checkpoint
 
 Root is gpt-6.1-sol, xhigh; implementation and review use gpt-6.1-sol, high.
-Four component branches are unintegrated. #292 repaired protected Quick; #287's actual docs-only skip passed. #289 integrated; its near-ceiling result triggered the early #275 pass. CI_ON_DEMAND is temporarily absent for #297 workflow bootstrap; root restores true after merge. Keep at most three maintenance PRs (#297 and #284 active).
+Four component branches are unintegrated. #292 repaired protected Quick; #287's actual docs-only skip passed. #289 integrated; its near-ceiling result triggered the early #275 pass. CI_ON_DEMAND is temporarily absent for #297 workflow bootstrap; root restores true after merge. Keep at most three maintenance PRs (#297, #284/#298 and selected #299 active).
 
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
-| #284 | `generated-abi-284`, `ecf7e7152c` | Historical equivalence scoped to the conversion tree; implementation resumed with preserved native-completeness work. Generated-list tests/Cargo4 pass; final native verify pending. 650 handwritten support/test lines plus mechanical conversions. |
+| #284 / #298 | `generated-abi-284`, `be764d1cb6` | Native verify/Cargo4, generated-list and all default maintenance tests pass; generators/comparisons/six medians remain. About 790/650 handwritten lines, within the 25% limit; mechanical conversions separate. Fresh review follows implementation. |
 | #296 / #297 | `fix-markdown-gitlinks-296`, `d61092f302` | 71/80 added logic/test lines; actual-script regression and 25 policy tests pass. Fresh review has no findings; root workflow review complete, exact-head Full/bootstrap requested. |
 | #256 / #269 | `house-lifecycle-256`, `af9e189521` | Steering review passed; adopting integrated #289 changes the shared slope wrapper and speed record. Fresh scoped conflict review, new six medians and exact-head Full follow. |
 | #212 / #255 | `landscape-owner-212`, `6c108195ef` | Three review fixes root-checked; adopting integrated #289 combines four shared-accessor conflicts. Fresh scoped review active; final-source six medians and Full follow. Older near-limit timing is superseded. |
 | #266 / #290 | `road-commands-266`, `cc2fc00809` | Ownership implementation active from integrated `83bd72774e`; 200-300 tooling lines. |
 | #267 | `station-commands-267` | Whole station command implementation assigned from integrated `5a32ef6945`; 300-400 tooling lines. Docking includes IsPossibleDockingTile/CheckForDockingTile. |
 | #247, #293-#295 | none | Selected future whole owners, with prerequisites and budgets in their issues; fresh Astra plan completed. |
+| #299 | `effect-disaster-tables-299` | Remove copied shared service tables with real effect-call/disaster-Run lifetimes; stabilize temporary Rust fixtures. Implementation assigned, 100 added support/test lines. |
 | #275 early pass | integrated `62622e60d3` | Fresh profiling task compares five play saves and generation with the pinned original, attributing boundary excess before selecting the next two or three fixes. No holds or new evidence controller. |
 | #281 | none | Follows the revised #275 fix order when a maintenance slot frees. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Shared map-view PR after #255; retain attribution and #282's shared profile-lock/concurrency acceptance. |
