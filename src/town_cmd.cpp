@@ -98,8 +98,6 @@ void RebuildTownKdtree()
 /** Set if a town is being generated. */
 #ifndef WITH_RUST
 static bool _generating_town = false;
-#else
-const OpenTTDTownLeaves &GetRustTownServices() noexcept;
 #endif
 
 /**
