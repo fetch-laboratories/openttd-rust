@@ -159,15 +159,15 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Resumed 2026-10-18. Root is gpt-6.1-sol, xhigh; three implementations
-(gpt-6.1-sol, high) are active. Base CI is green; two component branches are unintegrated.
+Resumed 2026-10-18. Root is gpt-6.1-sol, xhigh; implementations and reviews use
+gpt-6.1-sol, high. Base CI is green; two component branches are unintegrated.
 
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
-| #280 / #286 | `t3/reduce-registry-merge-conflicts` | Implementation validation active; first maintenance integration. |
-| #282 / #285 | `t3/recorded-ratios-speed-guard`, `6598b25274` | Review has no code findings. Root accepted the quiet-record finding; benchmark build ready, refresh all six when naturally quiet without agent holds, then a median-only commit and Full. Earlier Full cancelled. |
+| #280 / #286 | `t3/reduce-registry-merge-conflicts`, `64a7aeecfc` | Review has no findings; exact-head Full requested. Integrate, then #255/#269 adopt their reserved sections and #266 starts. |
+| #282 / #285 | `t3/recorded-ratios-speed-guard`, `9abf7a225e` | Review has no code findings; root resolved quiet-record finding with six medians at reviewed head, then a median-only commit. New exact-head Full requested; earlier Full cancelled. |
 | #284 | none | Plan complete; root's issue comment sets a 650-line support/test budget plus mechanical edits. Implementation follows #280/#282. |
-| #283 | task branch | Implementation active in the third maintenance slot; root's issue comment sets the 350-line budget and workflow bootstrap boundary. Retain #285's speed tests on final base update. |
+| #283 / #287 | `t3/retire-evidence-receipts`, `e6525de515` | Fresh review active; 345 added/2270 deleted, checks/package smoke pass. Root workflow bootstrap/Full follow review and integrated #285 adoption; read-only merge proof retains speed tests without conflicts. |
 | #256 / #269 | `house-lifecycle-256`, `b09c16d78e` | Override/RNG probe and canonical town fixes pushed; affected checks and speed pass. Adopt #280 before fresh review/Full; platform blocked by base conflicts. P2016 near-ceiling result tracks the next speed pass. |
 | #212 / #255 | `landscape-owner-212`, `13db617a86` | Fix agent active: canonical leaves, direct Rust calls, orphan removal, Windows casts and glue; then #280, review, final-head speed and Full. |
 | #275 / #281 | none | Unstarted maintenance, in the revised order. |
