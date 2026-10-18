@@ -79,12 +79,12 @@ def scenarios(soak):
 
 def check_water(scenario, run, desync):
     source = Path(scenario["save"])
-    receipt = scenario.get("water_receipt") or json.loads(
+    record = scenario.get("water_record") or json.loads(
         source.with_suffix(".json").read_text()
     )
-    if hashlib.sha256(source.read_bytes()).hexdigest() != receipt["normalized_sha256"]:
-        raise RuntimeError("water fixture differs from its preparation receipt")
-    ship = receipt["ship"]
+    if hashlib.sha256(source.read_bytes()).hexdigest() != record["normalized_sha256"]:
+        raise RuntimeError("water fixture differs from its preparation record")
+    ship = record["ship"]
 
     def observe(path):
         chunk = read_save(path)["VEHS"]
@@ -180,7 +180,7 @@ def check_water(scenario, run, desync):
             "motion_counter": reused["ship[0]/common[0]/motion_counter"],
         }
     return {
-        "input": receipt,
+        "input": record,
         "lifecycle": lifecycle,
         "elapsed_ticks": elapsed,
         "observations": rows,
@@ -210,14 +210,14 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         folder.mkdir(parents=True, exist_ok=True)
         prepared = folder / "river-input.sav"
         prepared.write_bytes(data)
-        receipt = {
+        record = {
             "ship": 22,
             "reference_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
             "normalized_sha256": hashlib.sha256(data).hexdigest(),
             "changed": {"chunk": "MAPO", "tile": tile, "old": 33, "new": 81},
         }
-        result["water_class_input"] = receipt
-        return dict(scenario, save=str(prepared), water_receipt=receipt)
+        result["water_class_input"] = record
+        return dict(scenario, save=str(prepared), water_record=record)
     if scenario.get("water_operation") != "reload":
         return scenario
     setup = dict(scenario, water_operation="route", ticks=3 * SNAPSHOT_TICKS)
@@ -259,14 +259,14 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         for cid in chunks
     ):
         raise RuntimeError("ship reload input changed outside GLOG")
-    receipt = {
+    record = {
         "ship": ship,
         "reference_sha256": hashlib.sha256(data).hexdigest(),
         "normalized_sha256": hashlib.sha256(normalized.read_bytes()).hexdigest(),
         "removed_chunk": "GLOG",
     }
-    result["water_reload_input"] = receipt
-    return dict(scenario, save=str(normalized), water_receipt=receipt)
+    result["water_reload_input"] = record
+    return dict(scenario, save=str(normalized), water_record=record)
 
 
 def check(scenario, run, mode, role, result):
@@ -452,11 +452,10 @@ def prepare_water_save(layout, migration, out, timeout):
             raise RuntimeError("water normalization changed unrelated bytes")
     if destination.stat().st_size >= 1_000_000:
         raise RuntimeError("water fixture exceeds the committed-save budget")
-    receipt = {
+    record = {
         "baseline": migration.BASELINE,
         "layout": layout,
         "ship": int(markers[0].split()[1]),
-        "reference_binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
         "source_sha256": hashlib.sha256(
             Path(initial["snapshots"][-1]).read_bytes()
         ).hexdigest(),
@@ -471,5 +470,5 @@ def prepare_water_save(layout, migration, out, timeout):
         "setup_markers": markers,
         "elapsed_ticks": save_moment(raw)[2] - save_moment(funded)[2],
     }
-    destination.with_suffix(".json").write_text(json.dumps(receipt, indent=2) + "\n")
+    destination.with_suffix(".json").write_text(json.dumps(record, indent=2) + "\n")
     print(f"Prepared {destination}; raw inputs and logs: {out}")

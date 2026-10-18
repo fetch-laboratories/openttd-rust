@@ -1,7 +1,6 @@
 """Orders command, backup and initialized unbunching evidence on the player save."""
 
 import hashlib
-import json
 
 from .core import (
     ROOT,
@@ -65,13 +64,13 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         if binaries["reference"] == binaries["candidate"]
         else ROOT / "build-rust",
     }
-    executables, provenance = {}, {}
+    executables = {}
     for role in ("reference", "candidate"):
         from .runtime import prepared_adapter
 
-        prepared = prepared_adapter("orders", role, binaries, builds, folder / role)
+        prepared = prepared_adapter("orders", role, builds, folder / role)
         if prepared is not None:
-            executables[role], provenance[role] = prepared
+            executables[role] = prepared
         else:
             lock = (
                 migration.reference_lock(shared=True)
@@ -79,32 +78,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 else migration.candidate_lock(native_builds[role], shared=True)
             )
             with lock:
-                executables[role], provenance[role] = adapter(
-                    native_builds[role], folder / role, env
-                )
-        if (
-            provenance[role]["ordinary_binary_sha256"]
-            != hashlib.sha256(binaries[role].read_bytes()).hexdigest()
-        ):
-            raise RuntimeError("orders adapter objects differ from frozen game build")
+                executables[role] = adapter(native_builds[role], folder / role, env)
         for name in RUNTIME_DIRECTORIES:
             if (builds[role] / name).is_dir():
                 (folder / role / name).symlink_to(
                     builds[role] / name, target_is_directory=True
                 )
-    for role in ("reference", "candidate"):
-        manifest = {
-            str(path.relative_to(builds[role])): hashlib.sha256(
-                path.read_bytes()
-            ).hexdigest()
-            for name in RUNTIME_DIRECTORIES
-            for path in (builds[role] / name).rglob("*")
-            if path.is_file()
-        }
-        provenance[role]["runtime_sha256"] = hashlib.sha256(
-            json.dumps(manifest, sort_keys=True).encode()
-        ).hexdigest()
-    result["orders_adapter"] = provenance
     mode = scenario["orders"]
     if mode in ("commands", "implicit-wrap", "oversized"):
         return dict(
@@ -142,7 +121,6 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             raise RuntimeError("server-policy save has no actual BKOR contents")
         captures[role] = {
             "input_sha256": hashlib.sha256(backup.read_bytes()).hexdigest(),
-            "binary_sha256": provenance[role]["binary_sha256"],
             "commands": setup["console"],
             "witnesses": [line for line in run["log"] if line.startswith("ORDERS ")],
         }

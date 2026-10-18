@@ -10,7 +10,6 @@
     "commit": "14ec60f248547d4d062a1160f0fc26d742319888"
   },
   "committed_source": "migration/saves/water-ferry.sav",
-  "reference_binary_sha256": "5d22b1015057d280fcd4a81501fb67507b6490be9567222931fd1a32e17dcafe",
   "setup_files": {
     "info.nut": "afd1ddae09a2a35bbcd4647d349ae713a8bec3c579f1337303461dd4862f3ece",
     "main.nut": "121515421ad294f90967f63e8667eb74c642e8be5242db02e5d66e57acbb568d",

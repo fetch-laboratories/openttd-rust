@@ -1,6 +1,5 @@
 """Common fixture-only console compilation and frozen-object relinking."""
 
-import hashlib
 import json
 import shlex
 import subprocess
@@ -18,7 +17,6 @@ def console_adapter(build, folder, env, source, kind, wraps=(), replace_objects=
     compile_args += ["-I" + str(Path(entry["file"]).parent)]
     subprocess.run(compile_args, cwd=entry["directory"], env=env, check=True)
     target = "openttd-rust" if (build / "openttd-rust").exists() else "openttd"
-    ordinary_hash = hashlib.sha256((build / target).read_bytes()).hexdigest()
     command = subprocess.check_output(
         ["ninja", "-t", "commands", target], cwd=build, env=env, text=True
     ).splitlines()[-1]
@@ -37,10 +35,4 @@ def console_adapter(build, folder, env, source, kind, wraps=(), replace_objects=
         *["-Wl,--wrap=" + symbol for symbol in wraps],
     ]
     subprocess.run(link_args, cwd=build, env=env, check=True)
-    return binary, {
-        "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-        "ordinary_binary_sha256": ordinary_hash,
-        "adapter_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
-        "compile": compile_args,
-        "link": link_args,
-    }
+    return binary

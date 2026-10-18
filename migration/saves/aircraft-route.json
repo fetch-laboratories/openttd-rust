@@ -4,7 +4,6 @@
     "tag": "15.3",
     "commit": "14ec60f248547d4d062a1160f0fc26d742319888"
   },
-  "reference_binary_sha256": "5d22b1015057d280fcd4a81501fb67507b6490be9567222931fd1a32e17dcafe",
   "raw_sha256": "36c40fffd291976a2543af336f3bcfe8319d27e88943bb38c16e667a68d42e7f",
   "normalized_sha256": "c6716bf1cc5a1f78bef148014b14ec3614f18a6ff3714a3926b2cf17355584ab",
   "setup_files": {

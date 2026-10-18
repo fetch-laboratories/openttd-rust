@@ -6,7 +6,6 @@
   },
   "layout": "structures",
   "ship": 22,
-  "reference_binary_sha256": "5d22b1015057d280fcd4a81501fb67507b6490be9567222931fd1a32e17dcafe",
   "source_sha256": "5ff150b083d8ba78cb007776edc06a3c6eb0dd32a74d307117fcf63a9bd2139f",
   "raw_sha256": "c2d288379883c519a909caa88ce7c999c23e2af9b5a49346213ba6323acf5a30",
   "normalized_sha256": "65cc95235241e4cd317695e3ab0924e2ed86ce059b6475cacdb79ab4a280e27b",

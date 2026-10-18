@@ -17,6 +17,7 @@ HEAD = "a" * 40
 BASE = "b" * 40
 MERGE = "d" * 40
 TREE = "f" * 40
+RUN = "https://github.com/example/fork/actions/runs/123"
 PULL = {
     "state": "open",
     "head": {"sha": HEAD},
@@ -464,9 +465,14 @@ class PolicyTests(unittest.TestCase):
             ),
             ("true", "push", [{"filename": "docs/new.md"}] * 300, "true"),
             ("true", "push", [], "true"),
+            ("true", "push", None, "true"),
         ]
         for variable, event, files, expected in cases:
-            with self.subTest(variable=variable, event=event, files=len(files)):
+            with self.subTest(
+                variable=variable,
+                event=event,
+                files=len(files) if files is not None else None,
+            ):
                 harness = f"""
                 process.env.CI_ON_DEMAND = {json.dumps(variable)};
                 const outputs = {{}};
@@ -484,21 +490,26 @@ class PolicyTests(unittest.TestCase):
 
     def test_only_matching_successful_merged_tree_skips_validation(self):
         script = script_for("ci-policy.yml", "policy")
-        for full, marker, same_run, tree, merged, expected in (
-            ("success", "success", True, TREE, True, "false"),
-            ("success", "success", True, "other", True, "true"),
-            ("pending", "success", True, TREE, True, "true"),
-            ("failure", "success", True, TREE, True, "true"),
-            ("success", "failure", True, TREE, True, "true"),
-            ("success", "success", False, TREE, True, "true"),
-            ("success", "success", True, TREE, False, "true"),
+        bad_runs = (None, "", "run", RUN + "/extra", RUN.replace("fork", "other"))
+        for full, marker, same_run, tree, merged, run, expected in (
+            ("success", "success", True, TREE, True, RUN, "false"),
+            ("success", "success", True, "other", True, RUN, "true"),
+            ("pending", "success", True, TREE, True, RUN, "true"),
+            ("failure", "success", True, TREE, True, RUN, "true"),
+            ("success", "failure", True, TREE, True, RUN, "true"),
+            ("success", "success", False, TREE, True, RUN, "true"),
+            ("success", "success", True, TREE, False, RUN, "true"),
+            *(
+                ("success", "success", True, TREE, True, run, "true")
+                for run in bad_runs
+            ),
         ):
             statuses = [
-                {"context": "Full validation", "state": full, "target_url": "run"},
+                {"context": "Full validation", "state": full, "target_url": run},
                 {
                     "context": "Validated tree",
                     "state": marker,
-                    "target_url": "run" if same_run else "old",
+                    "target_url": run if same_run else "old",
                     "description": tree,
                 },
             ]
@@ -506,7 +517,7 @@ class PolicyTests(unittest.TestCase):
             harness = f"""
             process.env.CI_ON_DEMAND = 'true';
             const outputs = {{}};
-            const context = {{eventName: 'push', repo: {{}}, sha: 'head', payload: {{before: 'base'}}}};
+            const context = {{eventName: 'push', repo: {{owner: 'example', repo: 'fork'}}, serverUrl: 'https://github.com', sha: 'head', payload: {{before: 'base'}}}};
             const core = {{setOutput: (k, v) => outputs[k] = v, info: () => {{}}}};
             const github = {{paginate: async () => [{json.dumps(pull)}], rest: {{repos: {{
               getCommit: async () => ({{data: {{commit: {{tree: {{sha: {json.dumps(TREE)}}}}}}}}}),
@@ -520,6 +531,68 @@ class PolicyTests(unittest.TestCase):
             ):
                 self.assertEqual(node(harness)["heavy"], expected)
 
+    def test_markdown_tree_differences_require_complete_inventories(self):
+        script = script_for("ci-policy.yml", "policy")
+        code = {"path": "src/game.cpp", "type": "blob", "mode": "100644", "sha": HEAD}
+        doc = {"path": "README.md", "type": "blob", "mode": "100644", "sha": BASE}
+        before = {"truncated": False, "tree": [code, doc]}
+        changed_doc = dict(doc, sha=MERGE, path="docs/new.md")
+        gitlink = dict(doc, type="commit", mode="160000")
+        cases = [
+            ({"truncated": False, "tree": [changed_doc, code]}, "false"),
+            ({"truncated": False, "tree": [code]}, "false"),
+            ({"truncated": False, "tree": [dict(code, sha=MERGE)]}, "true"),
+            ({"truncated": False, "tree": [dict(code, mode="100755")]}, "true"),
+            ({"truncated": False, "tree": [dict(code, path="src/other.cpp")]}, "true"),
+            (
+                {
+                    "truncated": False,
+                    "tree": [dict(code, type="commit", mode="160000")],
+                },
+                "true",
+            ),
+            ({"truncated": False, "tree": [changed_doc]}, "true"),
+            ({"truncated": True, "tree": [code]}, "true"),
+            ({"tree": [code]}, "true"),
+            ({"truncated": False}, "true"),
+            ({"truncated": False, "tree": []}, "true"),
+            ({"truncated": False, "tree": [{}]}, "true"),
+            ({"truncated": False, "tree": [code, dict(doc, sha="bad")]}, "true"),
+            ({"truncated": False, "tree": [code, dict(doc, mode="bad")]}, "true"),
+            ({"truncated": False, "tree": [code, doc, doc]}, "true"),
+            ({"truncated": False, "tree": [code, gitlink]}, "true"),
+            ({"truncated": False, "tree": [code, dict(doc, path="../a.md")]}, "true"),
+            ({"truncated": False, "tree": [code], "sha": None}, "true"),
+        ]
+        for after, expected in cases:
+            for incomplete_side in (False, True):
+                left, right = (after, before) if incomplete_side else (before, after)
+                harness = f"""
+                process.env.CI_ON_DEMAND = 'true';
+                const outputs = {{}};
+                const context = {{eventName: 'push', repo: {{owner: 'example', repo: 'fork'}}, serverUrl: 'https://github.com', sha: 'head', payload: {{before: 'base'}}}};
+                const core = {{setOutput: (k,v) => outputs[k] = v, info: () => {{}}}};
+                const statuses = [
+                  {{context: 'Full validation', state: 'success', target_url: '{RUN}'}},
+                  {{context: 'Validated tree', state: 'success', target_url: '{RUN}', description: '{BASE}'}}
+                ];
+                const github = {{paginate: async () => [{{...{json.dumps(PULL)}, merged_at: 'date'}}], rest: {{
+                  git: {{getTree: async args => ({{data: {{sha: args.tree_sha, ...(args.tree_sha === '{BASE}' ? {json.dumps(left)} : {json.dumps(right)})}}}})}},
+                  repos: {{
+                    getCommit: async () => ({{data: {{commit: {{tree: {{sha: '{TREE}'}}}}}}}}),
+                    getCombinedStatusForRef: async () => ({{data: {{statuses}}}}),
+                    compareCommitsWithBasehead: async () => ({{data: {{files: [{{filename: 'src/game.cpp'}}]}}}})
+                  }}
+                }}}};
+                (async () => {{{script}}})().then(() => console.log(JSON.stringify(outputs)));
+                """
+                with self.subTest(after=after, incomplete_side=incomplete_side):
+                    outputs = node(harness)
+                    self.assertEqual(outputs["heavy"], expected)
+                    self.assertEqual(
+                        outputs.get("covered"), "true" if expected == "false" else None
+                    )
+
 
 class RequestTests(unittest.TestCase):
     def test_each_profile_dispatches_captured_head_on_protected_ref(self):
@@ -530,26 +603,26 @@ class RequestTests(unittest.TestCase):
                     pr=170,
                     profile=profile,
                     bootstrap=False,
-                    receipt=Path(directory) / "request.json",
+                    request_file=Path(directory) / "request.json",
                 )
                 with (
                     patch.object(ci, "api", return_value=PULL),
                     patch.object(ci, "gh") as gh,
                 ):
-                    receipt_path = ci.request(args)
+                    request_path = ci.request(args)
                 invocation = gh.call_args.args
                 self.assertIn(f"head={HEAD}", invocation)
                 self.assertIn(f"profile={profile}", invocation)
                 self.assertEqual(
                     invocation[invocation.index("--ref") + 1], "rust-migration"
                 )
-                receipt = json.loads(receipt_path.read_text())
-                self.assertEqual(receipt["head"], HEAD)
-                self.assertEqual(receipt["base"], BASE)
-                self.assertEqual(len(receipt["request"]), 32)
+                record = json.loads(request_path.read_text())
+                self.assertEqual(record["head"], HEAD)
+                self.assertEqual(record["base"], BASE)
+                self.assertEqual(len(record["request"]), 32)
 
     def test_run_discovery_uses_unique_request_identity(self):
-        receipt = {
+        record = {
             "profile": "rust",
             "pr": 170,
             "request": "unique",
@@ -562,12 +635,12 @@ class RequestTests(unittest.TestCase):
             "head_branch": "rust-migration",
         }
         other = dict(run, id=2, display_title="CI rust PR 170 other")
-        self.assertEqual(ci.find_run(receipt, [other, run]), run)
-        self.assertIsNone(ci.find_run(receipt, [dict(run, head_branch="untrusted")]))
+        self.assertEqual(ci.find_run(record, [other, run]), run)
+        self.assertIsNone(ci.find_run(record, [dict(run, head_branch="untrusted")]))
         with self.assertRaises(ValueError):
-            ci.find_run(receipt, [run, dict(run, id=3)])
+            ci.find_run(record, [run, dict(run, id=3)])
 
-    def test_push_invalidates_receipt_head(self):
+    def test_push_invalidates_record_head(self):
         with self.assertRaisesRegex(ValueError, "head changed"):
             ci.validate_pull(PULL, "c" * 40)
 
@@ -591,7 +664,7 @@ class RequestTests(unittest.TestCase):
                 ci.validate_pull(pull)
             with tempfile.TemporaryDirectory() as directory:
                 path = Path(directory) / "request.json"
-                receipt = {
+                record = {
                     "schema_version": 1,
                     "repository": "example/fork",
                     "pr": 170,
@@ -599,20 +672,20 @@ class RequestTests(unittest.TestCase):
                     "profile": "full",
                     "run_id": 123,
                 }
-                ci.write_receipt(path, receipt)
+                ci.write_request(path, record)
                 with patch.object(ci, "api", side_effect=[pull, run]):
-                    self.assertEqual(ci.status(path), (receipt, run))
+                    self.assertEqual(ci.status(path), (record, run))
                 with patch.object(
                     ci, "api", side_effect=[pull, {"statuses": statuses}]
                 ):
-                    ci.verify_completion(receipt, run)
+                    ci.verify_completion(record, run)
                 moved = dict(pull, head={"sha": "c" * 40})
                 with patch.object(ci, "api", side_effect=[moved, run]):
                     with self.assertRaisesRegex(ValueError, "head changed"):
                         ci.status(path)
 
     def test_successful_run_without_full_status_is_rejected(self):
-        receipt = {
+        record = {
             "repository": "example/fork",
             "pr": 170,
             "head": HEAD,
@@ -624,14 +697,14 @@ class RequestTests(unittest.TestCase):
         }
         with patch.object(ci, "api", side_effect=[PULL, {"statuses": []}]):
             with self.assertRaisesRegex(ValueError, "did not publish"):
-                ci.verify_completion(receipt, run)
+                ci.verify_completion(record, run)
         for state in ("pending", "failure"):
             statuses = [
                 {"context": ci.CONTEXT, "target_url": run["html_url"], "state": state}
             ]
             with patch.object(ci, "api", side_effect=[PULL, {"statuses": statuses}]):
                 with self.assertRaises(ValueError):
-                    ci.verify_completion(receipt, run)
+                    ci.verify_completion(record, run)
 
 
 if __name__ == "__main__":
