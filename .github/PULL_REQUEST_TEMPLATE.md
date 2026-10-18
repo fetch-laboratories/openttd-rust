@@ -14,7 +14,7 @@ Agent: <agent path> | Model: <exact model> | Reasoning effort: <effort>
 
 ## Checks
 
-<!-- Exact commands run, and their results. Harness scenarios that exercise this component. No receipt bundles or executable hashes; exact-head CI is the evidence. -->
+<!-- Exact commands run, and their results. Harness scenarios that exercise this component. Exact-head CI is the evidence. -->
 
 ## Simulation speed
 

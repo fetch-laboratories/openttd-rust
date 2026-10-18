@@ -48,20 +48,20 @@ def validate_pull(pull: dict, head: str | None = None) -> str:
     return current
 
 
-def find_run(receipt: dict, runs: list[dict]) -> dict | None:
-    if receipt.get("run_id"):
-        return next((run for run in runs if run["id"] == receipt["run_id"]), None)
-    if receipt["bootstrap"]:
-        prefix = f"CI full PR {receipt['pr']} bootstrap-"
+def find_run(record: dict, runs: list[dict]) -> dict | None:
+    if record.get("run_id"):
+        return next((run for run in runs if run["id"] == record["run_id"]), None)
+    if record["bootstrap"]:
+        prefix = f"CI full PR {record['pr']} bootstrap-"
         matches = [
             run
             for run in runs
             if run.get("display_title", "").startswith(prefix)
             and run.get("event") == "pull_request"
-            and run.get("created_at", "") >= receipt["created_at"]
+            and run.get("created_at", "") >= record["created_at"]
         ]
     else:
-        title = f"CI {receipt['profile']} PR {receipt['pr']} {receipt['request']}"
+        title = f"CI {record['profile']} PR {record['pr']} {record['request']}"
         matches = [
             run
             for run in runs
@@ -74,9 +74,9 @@ def find_run(receipt: dict, runs: list[dict]) -> dict | None:
     return matches[0] if matches else None
 
 
-def write_receipt(path: Path, receipt: dict) -> None:
+def write_request(path: Path, record: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(receipt, indent=2) + "\n")
+    path.write_text(json.dumps(record, indent=2) + "\n")
 
 
 def request(args: argparse.Namespace) -> Path:
@@ -89,7 +89,7 @@ def request(args: argparse.Namespace) -> Path:
     if args.bootstrap and args.profile != "full":
         raise ValueError("Bootstrap label requests only support --profile full")
     request_id = uuid.uuid4().hex
-    receipt = {
+    record = {
         "schema_version": 1,
         "repository": repository,
         "pr": args.pr,
@@ -100,8 +100,8 @@ def request(args: argparse.Namespace) -> Path:
         "bootstrap": args.bootstrap,
         "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    path = args.receipt or Path(".local/ci-requests") / f"{request_id}.json"
-    write_receipt(path, receipt)
+    path = args.request_file or Path(".local/ci-requests") / f"{request_id}.json"
+    write_request(path, record)
     if args.bootstrap:
         variables = json.loads(
             gh("variable", "list", "--repo", repository, "--json", "name,value")
@@ -145,40 +145,42 @@ def request(args: argparse.Namespace) -> Path:
             "-f",
             f"request={request_id}",
         )
-    print(f"Requested {args.profile} CI for PR #{args.pr} at {head}\nReceipt: {path}")
+    print(
+        f"Requested {args.profile} CI for PR #{args.pr} at {head}\nRequest file: {path}"
+    )
     return path
 
 
 def status(path: Path) -> tuple[dict, dict | None]:
-    receipt = json.loads(path.read_text())
-    if receipt.get("schema_version") != 1:
-        raise ValueError("Unsupported CI request receipt schema")
-    repository = receipt["repository"]
-    current_head(api(repository, f"pulls/{receipt['pr']}"), receipt["head"])
-    if receipt.get("run_id"):
-        run = api(repository, f"actions/runs/{receipt['run_id']}")
+    record = json.loads(path.read_text())
+    if record.get("schema_version") != 1:
+        raise ValueError("Unsupported CI request record schema")
+    repository = record["repository"]
+    current_head(api(repository, f"pulls/{record['pr']}"), record["head"])
+    if record.get("run_id"):
+        run = api(repository, f"actions/runs/{record['run_id']}")
     else:
         runs = api(repository, f"actions/workflows/{WORKFLOW}/runs?per_page=100")[
             "workflow_runs"
         ]
-        run = find_run(receipt, runs)
+        run = find_run(record, runs)
         if run:
-            receipt["run_id"] = run["id"]
-            receipt["run_url"] = run["html_url"]
-            write_receipt(path, receipt)
-    return receipt, run
+            record["run_id"] = run["id"]
+            record["run_url"] = run["html_url"]
+            write_request(path, record)
+    return record, run
 
 
-def verify_completion(receipt: dict, run: dict) -> None:
+def verify_completion(record: dict, run: dict) -> None:
     if run["conclusion"] != "success":
         raise ValueError(
             f"Requested CI concluded {run['conclusion']}: {run['html_url']}"
         )
-    if receipt["profile"] != "full":
+    if record["profile"] != "full":
         return
-    repository = receipt["repository"]
-    current_head(api(repository, f"pulls/{receipt['pr']}"), receipt["head"])
-    combined = api(repository, f"commits/{receipt['head']}/status")
+    repository = record["repository"]
+    current_head(api(repository, f"pulls/{record['pr']}"), record["head"])
+    combined = api(repository, f"commits/{record['head']}/status")
     matching = [
         item
         for item in combined["statuses"]
@@ -194,14 +196,14 @@ def wait(path: Path, timeout: int, interval: int) -> None:
     deadline = time.monotonic() + timeout
     previous = None
     while True:
-        receipt, run = status(path)
+        record, run = status(path)
         state = "awaiting workflow run" if run is None else run["status"]
         if state != previous:
             print(state + (f": {run['html_url']}" if run else ""), flush=True)
             previous = state
         if run and run["status"] == "completed":
-            verify_completion(receipt, run)
-            print(f"{receipt['profile']} CI passed for {receipt['head']}")
+            verify_completion(record, run)
+            print(f"{record['profile']} CI passed for {record['head']}")
             return
         if time.monotonic() >= deadline:
             raise ValueError(
@@ -217,7 +219,7 @@ def main() -> int:
     submit.add_argument("pr", type=int)
     submit.add_argument("--profile", choices=PROFILES, default="rust")
     submit.add_argument("--repo")
-    submit.add_argument("--receipt", type=Path)
+    submit.add_argument("--request-file", type=Path)
     submit.add_argument(
         "--bootstrap",
         action="store_true",
@@ -226,7 +228,7 @@ def main() -> int:
     submit.add_argument("--wait", action="store_true")
     for command in ("status", "wait"):
         check = commands.add_parser(command)
-        check.add_argument("receipt", type=Path)
+        check.add_argument("request_file", type=Path)
         check.add_argument("--timeout", type=int, default=3600)
         check.add_argument("--interval", type=int, default=15)
     args = parser.parse_args()
@@ -238,12 +240,12 @@ def main() -> int:
         elif args.command == "wait":
             if args.timeout <= 0 or args.interval <= 0:
                 raise ValueError("Timeout and interval must be positive")
-            wait(args.receipt, args.timeout, args.interval)
+            wait(args.request_file, args.timeout, args.interval)
         else:
-            receipt, run = status(args.receipt)
-            print(json.dumps({"request": receipt, "run": run}, indent=2))
+            record, run = status(args.request_file)
+            print(json.dumps({"request": record, "run": run}, indent=2))
             if run and run["status"] == "completed":
-                verify_completion(receipt, run)
+                verify_completion(record, run)
         return 0
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f"CI request failed: {error}", file=sys.stderr)

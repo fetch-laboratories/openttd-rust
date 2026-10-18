@@ -45,9 +45,10 @@ jobs:
             ...context.repo, basehead: `${context.payload.before}...${context.sha}`
           });
           // GitHub caps comparison files at 300: fail closed if the list may be truncated.
-          const files = comparison.data.files || [];
-          const docsOnly = files.length > 0 && files.length < 300 && files.every(file =>
-            file.filename.endsWith('.md') && (!file.previous_filename || file.previous_filename.endsWith('.md')));
+          const markdownOnly = files => Array.isArray(files) &&
+            files.length > 0 && files.length < 300 && files.every(file =>
+              file.filename.endsWith('.md') && (!file.previous_filename || file.previous_filename.endsWith('.md')));
+          const docsOnly = markdownOnly(comparison.data.files);
           if (docsOnly) {
             core.info('Markdown-only push: skip native/platform builds');
             core.setOutput('heavy', 'false');
@@ -65,8 +66,29 @@ jobs:
             });
             const full = combined.statuses.find(status => status.context === 'Full validation');
             const covered = combined.statuses.find(status => status.context === 'Validated tree');
-            if (full?.state === 'success' && covered?.state === 'success' &&
-                full.target_url === covered.target_url && covered.description === tree) {
+            const runPrefix = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/`;
+            const run = full?.target_url;
+            if (full?.state !== 'success' || covered?.state !== 'success' ||
+                typeof run !== 'string' || !run.startsWith(runPrefix) || !/^[1-9][0-9]*$/.test(run.slice(runPrefix.length)) ||
+                full.target_url !== covered.target_url || !/^[0-9a-f]{40}$/.test(covered.description)) continue;
+            let matches = covered.description === tree;
+            if (!matches) {
+              const entries = async sha => {
+                const {data} = await github.rest.git.getTree({...context.repo, tree_sha: sha, recursive: 'true'});
+                const modes = {'040000': 'tree', '100644': 'blob', '100755': 'blob', '120000': 'blob', '160000': 'commit'};
+                if (!data || data.sha !== sha || data.truncated !== false || !Array.isArray(data.tree) || !data.tree.length ||
+                    data.tree.some(entry => !entry || typeof entry.path !== 'string' || entry.path.includes('\0') ||
+                      entry.path.split('/').some(part => !part || part === '.' || part === '..') ||
+                      typeof entry.sha !== 'string' || !/^[0-9a-f]{40}$/.test(entry.sha) ||
+                      typeof entry.mode !== 'string' || typeof entry.type !== 'string' || modes[entry.mode] !== entry.type) ||
+                    new Set(data.tree.map(entry => entry.path)).size !== data.tree.length) return null;
+                return data.tree.filter(entry => entry.type !== 'tree' && !(entry.type === 'blob' && entry.path.endsWith('.md')))
+                  .map(({path, mode, type, sha}) => [path, mode, type, sha]).sort((a, b) => a[0].localeCompare(b[0]));
+              };
+              const [validated, merged] = await Promise.all([entries(covered.description), entries(tree)]);
+              matches = validated !== null && merged !== null && JSON.stringify(validated) === JSON.stringify(merged);
+            }
+            if (matches) {
               core.info(`Merged tree ${tree} already passed full validation; refresh caches only`);
               core.setOutput('heavy', 'false');
               core.setOutput('covered', 'true');

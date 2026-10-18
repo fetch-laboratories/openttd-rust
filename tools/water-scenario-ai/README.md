@@ -5,7 +5,7 @@ Original fixture preparation: /root | Model: gpt-6-astra | Reasoning effort: xhi
 
 These GPLv2 scripts build through unchanged game APIs. `setup.nut` replaces
 StationList only in an isolated reference runtime. The two saves are inputs,
-with JSON manifests recording executable/script/input hashes, optional funding,
+with JSON manifests recording script/input hashes, optional funding,
 and normalization. Only setup-AI identity is renamed and input GLOG removed;
 other bytes remain unchanged. Ferry runs use the idle dummy AI. Structure runs
 install WaterScenes with frozen scripts and per-run parameters. Route/reload
