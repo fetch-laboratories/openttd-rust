@@ -439,18 +439,23 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::rail_yapf::Train, item; compatible, all_compatible, tile, rear_tile, virtual_tile, rear_virtual_tile, dest_tile, length, speed, order_destination, td, rear_td, wormhole, rear_wormhole, order, nearest_depot, complex_waypoint)
         }
         100 => {
-            layout!(crate::road_yapf::Input, item; map_x, map_y, tile, dest_tile, max_nodes, slope, crossing, stop, occupied, bay, curve, display_speed, order_destination, order_speed, order_type, bus, articulated, trackdir)
+            layout!(crate::road_yapf::Input, item; map_x, map_y, tile, dest_tile, max_nodes, slope, crossing, stop, occupied, bay, curve, order_destination, order_type, bus, articulated, trackdir)
         }
         101 => {
             layout!(crate::road_yapf::Tile, item; occupied, length, station, r#type, station_type, depot, depot_dir, crossing, waypoint, drive_through, continuation, busy_bays)
         }
         102 => {
-            layout!(crate::road_yapf::Follow, item; tile, skipped, max_speed, min_speed, dirs, followed)
+            layout!(crate::road_yapf::Follow, item; tile, skipped, dirs, followed)
         }
         103 => {
             layout!(crate::road_yapf::Area, item; tile, width, height, valid, stop, drive_through, next)
         }
-        104 => layout!(crate::road_yapf::Leaves, item; tile, follow, tracks, height, closest, area),
+        106 => {
+            layout!(crate::road_yapf::Traversal, item; current_z, next_z, display_speed, max_speed, min_speed, order_speed)
+        }
+        104 => {
+            layout!(crate::road_yapf::Leaves, item; tile, follow, tracks, traversal, closest, area)
+        }
         105 => {
             layout!(crate::road_yapf::Result, item; tile, cost, direction, found, rounds, open, closed, calcs, distance)
         }

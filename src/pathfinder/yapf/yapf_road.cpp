@@ -17,31 +17,33 @@
 
 #ifdef WITH_RUST
 #include "../../rust/road_yapf_ffi.h"
+#include "../../rust/services_map.h"
+#include "../../rust/vehicle_services.h"
 
 static OpenTTDRoadYapfInput RoadInput(const RoadVehicle *v)
 {
 	const auto &s = _settings_game.pf.yapf;
-	return {Map::SizeX(), Map::SizeY(), v->tile.base(), v->dest_tile.base(), static_cast<int32_t>(s.max_search_nodes), static_cast<int32_t>(s.road_slope_penalty), static_cast<int32_t>(s.road_crossing_penalty), static_cast<int32_t>(s.road_stop_penalty), static_cast<int32_t>(s.road_stop_occupied_penalty), static_cast<int32_t>(s.road_stop_bay_occupied_penalty), static_cast<int32_t>(s.road_curve_penalty), v->GetDisplayMaxSpeed(), v->current_order.GetDestination().base(), v->current_order.GetMaxSpeed(), static_cast<uint8_t>(v->current_order.GetType()), v->IsBus(), v->HasArticulatedPart(), static_cast<uint8_t>(v->GetVehicleTrackdir())};
+	return {Map::SizeX(), Map::SizeY(), v->tile.base(), v->dest_tile.base(), static_cast<int32_t>(s.max_search_nodes), static_cast<int32_t>(s.road_slope_penalty), static_cast<int32_t>(s.road_crossing_penalty), static_cast<int32_t>(s.road_stop_penalty), static_cast<int32_t>(s.road_stop_occupied_penalty), static_cast<int32_t>(s.road_stop_bay_occupied_penalty), static_cast<int32_t>(s.road_curve_penalty), v->current_order.GetDestination().base(), static_cast<uint8_t>(v->current_order.GetType()), v->IsBus(), v->HasArticulatedPart(), static_cast<uint8_t>(v->GetVehicleTrackdir())};
 }
 
-static OpenTTDRoadYapfTile RoadTile(const void *, uint32_t index, uint8_t td) noexcept
+static OpenTTDRoadYapfTile RoadTile(const void *, uint32_t index, uint8_t td, bool cost) noexcept
 {
 	TileIndex tile(index);
 	OpenTTDRoadYapfTile out{};
-	out.type = GetTileType(tile);
-	out.depot = IsRoadDepotTile(tile);
-	if (out.depot) out.depot_dir = GetRoadDepotDirection(tile);
-	if (IsTileType(tile, MP_ROAD)) out.crossing = IsLevelCrossing(tile);
-	if (IsTileType(tile, MP_STATION)) {
-		out.station = GetStationIndex(tile).base();
+	out.type = SharedTileType(index);
+	out.depot = Shared_is_road_depot(index);
+	if (out.depot) out.depot_dir = Shared_road_depot_direction(index);
+	if (cost && out.type == MP_ROAD && IsDiagonalTrackdir(static_cast<Trackdir>(td))) out.crossing = MapSvcRoadIsLevelCrossing(index);
+	if (out.type == MP_STATION) {
+		out.station = MapSvcStationIndex(index);
 		out.station_type = static_cast<uint8_t>(GetStationType(tile));
 		out.waypoint = IsRoadWaypoint(tile);
-		out.drive_through = IsDriveThroughStopTile(tile);
-		if (IsStationRoadStopTile(tile) && !out.waypoint && IsDiagonalTrackdir(static_cast<Trackdir>(td))) {
-			const RoadStop *rs = RoadStop::GetByTile(tile, GetRoadStopType(tile));
+		out.drive_through = Shared_is_drive_through_stop(index);
+		if (cost && IsStationRoadStopTile(tile) && !out.waypoint && IsDiagonalTrackdir(static_cast<Trackdir>(td))) {
+			const RoadStop *rs = SharedRoadStopAt(index);
 			if (out.drive_through) {
 				DiagDirection dir = TrackdirToExitdir(static_cast<Trackdir>(td));
-				out.continuation = RoadStop::IsDriveThroughRoadStopContinuation(tile, tile - TileOffsByDiagDir(dir));
+				out.continuation = RoadSvcContinuation(index, (tile - TileOffsByDiagDir(dir)).base());
 				if (!out.continuation) {
 					const RoadStop::Entry &entry = rs->GetEntry(dir);
 					out.occupied = entry.GetOccupied();
@@ -64,7 +66,6 @@ static OpenTTDRoadYapfFollow RoadFollow(const void *ctx, uint32_t tile, uint8_t 
 		out.tile = follower.new_tile.base();
 		out.skipped = follower.tiles_skipped;
 		out.dirs = follower.new_td_bits;
-		out.max_speed = follower.GetSpeedLimit(&out.min_speed);
 	}
 	return out;
 }
@@ -75,9 +76,19 @@ static uint16_t RoadTracks(const void *ctx, uint32_t tile, uint8_t status) noexc
 	return status ? TrackStatusToTrackdirBits(GetTileTrackStatus(TileIndex(tile), TRANSPORT_ROAD, GetRoadTramType(v->roadtype))) : GetTrackdirBitsForRoad(TileIndex(tile), GetRoadTramType(v->roadtype));
 }
 
-static int32_t RoadHeight(uint32_t tile) noexcept
+/** No Follow here: GetSpeedLimit reads only old_tile and the live vehicle. */
+static OpenTTDRoadYapfTraversal RoadTraversal(const void *ctx, uint32_t tile, uint32_t next) noexcept
 {
-	return GetSlopePixelZ(TileX(TileIndex(tile)) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex(tile)) * TILE_SIZE + TILE_SIZE / 2, true);
+	const auto *v = static_cast<const RoadVehicle *>(ctx);
+	OpenTTDRoadYapfTraversal out{};
+	out.current_z = SharedSlopePixelZ(TileX(TileIndex(tile)) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex(tile)) * TILE_SIZE + TILE_SIZE / 2, true);
+	out.next_z = SharedSlopePixelZ(TileX(TileIndex(next)) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex(next)) * TILE_SIZE + TILE_SIZE / 2, true);
+	out.display_speed = RustVehicleDisplayMaxSpeed(v);
+	out.order_speed = RustVehicleOrderMaxSpeed(v);
+	CFollowTrackRoad follower(v);
+	follower.old_tile = TileIndex(tile);
+	out.max_speed = follower.GetSpeedLimit(&out.min_speed);
+	return out;
 }
 
 static uint32_t RoadClosest(const void *ctx, uint16_t station, uint8_t type) noexcept
@@ -95,7 +106,7 @@ static OpenTTDRoadYapfArea RoadArea(const void *ctx, uint16_t station) noexcept
 	const RoadStop *stop = st->GetPrimaryRoadStop(v);
 	if (stop == nullptr) return out;
 	out.stop = true;
-	out.drive_through = IsDriveThroughStopTile(stop->xy);
+	out.drive_through = Shared_is_drive_through_stop(stop->xy.base());
 	out.next = stop->GetNextRoadStop(v) != nullptr;
 	const TileArea &area = v->IsBus() ? st->bus_station : st->truck_station;
 	out.tile = area.tile.base();
@@ -104,7 +115,7 @@ static OpenTTDRoadYapfArea RoadArea(const void *ctx, uint16_t station) noexcept
 	return out;
 }
 
-static const OpenTTDRoadYapfLeaves _road_yapf_leaves{RoadTile, RoadFollow, RoadTracks, RoadHeight, RoadClosest, RoadArea};
+static const OpenTTDRoadYapfLeaves _road_yapf_leaves{.tile = RoadTile, .follow = RoadFollow, .tracks = RoadTracks, .traversal = RoadTraversal, .closest = RoadClosest, .area = RoadArea};
 
 static void RoadDebug(const RoadVehicle *v, const OpenTTDRoadYapfResult &result)
 {
