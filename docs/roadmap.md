@@ -8,7 +8,7 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 
 - Twenty-nine ownership ports. Whole fork: Rust 64,552 / tooling 31,760 / glue 28,235 / original retired 40,145 of 470,612 `src/` lines (8.53%). Simulation: 32,218 / 102,615 (31.40%).
 - Since the thirteenth review: #270 rail commands (1,578 retired) and #257 vehicle scheduling (388), plus #268, #273, #277 and #279. Retirement +1,922; glue plus tooling +2,033.
-- Drafts: #269 houses (891) and #255 landscape (844), both stopped at base conflicts during the 2026-10-17 wind-down.
+- Drafts: #269 houses (891) and #255 landscape (844), in fourteenth-steering fix rounds; #280 removes their registry conflicts.
 - Speed at `600dca4e27` (median of three): TGP 1.139 (ceiling 1.3), play saves 1.22-1.38 (ceiling 1.5). The 3% ratchet is replaced by a 15% guard (#282).
 - The largest remaining simulation C++: `station_cmd.cpp` 4,424 lines, `road_cmd.cpp` 2,669, `vehicle.cpp` 2,573, `tunnelbridge_cmd.cpp` 2,135, `town_cmd.cpp` 1,929, `train_cmd.cpp` 1,778, `landscape.cpp` 1,665, `rail_cmd.cpp` 1,531, `water_cmd.cpp` 1,471.
 
@@ -159,21 +159,24 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Resumes from the user's 2026-10-17 pause. Root is gpt-6.1-sol, xhigh. Apply the
-fourteenth steering review first. No agent is running; `rust-migration` CI is green.
+Resumed 2026-10-18. Root is gpt-6.1-sol, xhigh; four implementation agents
+(gpt-6.1-sol, high) and one #284 planning agent (gpt-6-astra, high) are active.
+Fourteenth-steering fixes come first; `rust-migration` CI is green. Two component branches are unintegrated.
 
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
-| #280 | none | Unstarted; first maintenance PR. |
-| #256 / #269 | `house-lifecycle-256`, `e65bfcccc9` | Reviewed, final-head Full passed on the old base; `witness.rs` conflicts with `8bfcbd3abd`. Next: divergence fix and the other PR-comment items, #280, scoped review, Full. |
-| #212 / #255 | `landscape-owner-212`, `13db617a86` | Windows narrowing warnings and five base conflicts. Next: the six PR-comment items, review, comparisons, semantics, re-timing, Full. |
+| #280 | `t3/reduce-registry-merge-conflicts` | Implementation active; first maintenance integration. |
+| #282 / #285 | `t3/recorded-ratios-speed-guard`, `7e15042a55` | Implementation active; measured record, review and Full pending. |
+| #284 | none | Read-only plan active; implementation follows #280/#282. |
+| #256 / #269 | `house-lifecycle-256`, `e65bfcccc9` | Fix agent active: override/RNG probe and canonical town resolution, then adopt #280, scoped review and Full. Old-base Full passed. |
+| #212 / #255 | `landscape-owner-212`, `13db617a86` | Fix agent active: canonical leaves, direct Rust calls, orphan removal, Windows casts and glue; then #280, review, final-head speed and Full. |
 | #275 / #281 | none | Unstarted maintenance, in the revised order. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Map view measured; vehicle view closed. Next: shared map-view PR after #255. |
 | #64 / #66 | remote `issue/64-curve-family`, `aab5211801` | #66 closed unmerged; #64 and older paused work stay untouched. |
 
-Ten finished review/update worktrees under `~/.t3/worktrees/openttd-rust/` are
-clean and pushed. On resumption remove them and keep only the `house-lifecycle-256`
-and `landscape-owner-212` checkouts (AGENTS.md worktree rule).
+Ten finished worktrees were removed after checking clean, pushed heads. Both open
+drafts now use one fresh task checkout each; their old checkouts were removed.
+Temporary local review branches that `git branch -d` refused remain until integration.
 
 ABI blocks (check only consumed layouts; #284 deletes this registry):
 - train through 385, tree additions 386-389, fleet 390-399
