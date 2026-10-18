@@ -120,9 +120,9 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	/* Low-funds removal returns the full remaining estimate, retaining prior effects. */
 	RoadRun<CMD_BUILD_LONG_ROAD>("money-road", t(12, 20), t(2, 20), ROADTYPE_ROAD, AXIS_X, DRD_NONE, false, true, true);
 #ifdef WITH_RUST
-	Company::Get(owner)->Finances().money = Money(1);
+	Company::Get(owner)->Finances().money = Money(700);
 #else
-	Company::Get(owner)->money = Money(1);
+	Company::Get(owner)->money = Money(700);
 #endif
 	RoadRun<CMD_REMOVE_LONG_ROAD>("money-remove", t(12, 20), t(2, 20), ROADTYPE_ROAD, AXIS_X, false, true);
 	for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
