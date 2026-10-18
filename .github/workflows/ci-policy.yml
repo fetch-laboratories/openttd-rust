@@ -82,7 +82,7 @@ jobs:
                       typeof entry.sha !== 'string' || !/^[0-9a-f]{40}$/.test(entry.sha) ||
                       typeof entry.mode !== 'string' || typeof entry.type !== 'string' || modes[entry.mode] !== entry.type) ||
                     new Set(data.tree.map(entry => entry.path)).size !== data.tree.length) return null;
-                return data.tree.filter(entry => entry.type !== 'tree' && !entry.path.endsWith('.md'))
+                return data.tree.filter(entry => entry.type !== 'tree' && !(entry.type === 'blob' && entry.path.endsWith('.md')))
                   .map(({path, mode, type, sha}) => [path, mode, type, sha]).sort((a, b) => a[0].localeCompare(b[0]));
               };
               const [validated, merged] = await Promise.all([entries(covered.description), entries(tree)]);

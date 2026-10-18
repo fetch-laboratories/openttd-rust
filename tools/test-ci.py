@@ -537,6 +537,7 @@ class PolicyTests(unittest.TestCase):
         doc = {"path": "README.md", "type": "blob", "mode": "100644", "sha": BASE}
         before = {"truncated": False, "tree": [code, doc]}
         changed_doc = dict(doc, sha=MERGE, path="docs/new.md")
+        gitlink = dict(doc, type="commit", mode="160000")
         cases = [
             ({"truncated": False, "tree": [changed_doc, code]}, "false"),
             ({"truncated": False, "tree": [code]}, "false"),
@@ -559,6 +560,7 @@ class PolicyTests(unittest.TestCase):
             ({"truncated": False, "tree": [code, dict(doc, sha="bad")]}, "true"),
             ({"truncated": False, "tree": [code, dict(doc, mode="bad")]}, "true"),
             ({"truncated": False, "tree": [code, doc, doc]}, "true"),
+            ({"truncated": False, "tree": [code, gitlink]}, "true"),
             ({"truncated": False, "tree": [code, dict(doc, path="../a.md")]}, "true"),
             ({"truncated": False, "tree": [code], "sha": None}, "true"),
         ]
