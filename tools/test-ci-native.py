@@ -85,7 +85,7 @@ class ShardTests(unittest.TestCase):
     def test_real_partition_is_complete_and_keeps_fixture_families_whole(self):
         scenarios = ci_native.core.scenario_list(False)
         weights = json.loads(ci_native.TIMINGS.read_text())["seconds"]
-        shards = ci_native.partition(scenarios, weights, 6)
+        shards = ci_native.partition(scenarios, weights, 3)
         self.assertEqual(
             sorted(n for s in shards for n in s["names"]),
             sorted(s["name"] for s in scenarios),
