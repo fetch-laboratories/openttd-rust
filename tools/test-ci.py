@@ -479,7 +479,10 @@ class PolicyTests(unittest.TestCase):
                 const context = {{eventName: {json.dumps(event)}, repo: {{}}, sha: 'head',
                   payload: {{before: 'base', pull_request: {{base: {{ref: 'rust-migration'}}}}}}}};
                 const core = {{setOutput: (key, value) => outputs[key] = value, info: () => {{}}}};
-                const github = {{paginate: async () => [], rest: {{repos: {{
+                const github = {{paginate: async () => [], rest: {{
+                  git: {{getTree: async args => ({{data: {{sha: args.tree_sha, truncated: false,
+                    tree: [{{path: 'README.md', type: 'blob', mode: '100644', sha: '{HEAD}'}}]}}}})}},
+                  repos: {{
                   getCommit: async () => ({{data: {{commit: {{tree: {{sha: "tree"}}}}}}}}),
                   compareCommitsWithBasehead: async () => ({{data: {{files: {json.dumps(files)}}}}})
                 }}}}}};
@@ -487,6 +490,52 @@ class PolicyTests(unittest.TestCase):
                 """
                 result = node(harness)
                 self.assertEqual(result["heavy"], expected)
+
+    def test_docs_fast_path_checks_tree_types_and_complete_inventories(self):
+        script = script_for("ci-policy.yml", "policy")
+        code = {"path": "src/game.cpp", "type": "blob", "mode": "100644", "sha": HEAD}
+        link = {"path": "module.md", "type": "commit", "mode": "160000", "sha": HEAD}
+        doc = dict(link, type="blob", mode="100644")
+        before = {"truncated": False, "tree": [code, link]}
+        after = {"truncated": False, "tree": [code, dict(link, sha=MERGE)]}
+        files = [{"filename": "module.md"}]
+        cases = [
+            (before, after, files, "true"),
+            ({"truncated": False, "tree": [code]}, after, files, "true"),
+            (before, {"truncated": False, "tree": [code]}, files, "true"),
+            (
+                before,
+                {"truncated": False, "tree": [code, dict(link, path="new.md")]},
+                [{"filename": "new.md", "previous_filename": "module.md"}],
+                "true",
+            ),
+        ]
+        docs_before = {"truncated": False, "tree": [code, doc]}
+        docs_after = {"truncated": False, "tree": [code, dict(doc, sha=MERGE)]}
+        cases.append((docs_before, docs_after, files, "false"))
+        for bad in (dict(docs_before, truncated=True), dict(docs_before, tree=[{}])):
+            cases.extend(
+                [(bad, docs_after, files, "true"), (docs_before, bad, files, "true")]
+            )
+        for left, right, changed, expected in cases:
+            harness = f"""
+            process.env.CI_ON_DEMAND = 'true';
+            const outputs = {{}};
+            const context = {{eventName: 'push', repo: {{owner: 'example', repo: 'fork'}},
+              sha: 'head', payload: {{before: 'base'}}}};
+            const core = {{setOutput: (k,v) => outputs[k] = v, info: () => {{}}}};
+            const github = {{paginate: async () => [], rest: {{
+              git: {{getTree: async args => ({{data: {{sha: args.tree_sha,
+                ...(args.tree_sha === '{BASE}' ? {json.dumps(left)} : {json.dumps(right)})}}}})}},
+              repos: {{
+                getCommit: async args => ({{data: {{commit: {{tree: {{sha: args.ref === 'base' ? '{BASE}' : '{TREE}'}}}}}}}}),
+                compareCommitsWithBasehead: async () => ({{data: {{files: {json.dumps(changed)}}}}})
+              }}
+            }}}};
+            (async () => {{{script}}})().then(() => console.log(JSON.stringify(outputs)));
+            """
+            with self.subTest(left=left, right=right, files=changed):
+                self.assertEqual(node(harness)["heavy"], expected)
 
     def test_only_matching_successful_merged_tree_skips_validation(self):
         script = script_for("ci-policy.yml", "policy")

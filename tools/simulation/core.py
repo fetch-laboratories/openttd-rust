@@ -399,20 +399,20 @@ def write_config(scenario, build, run_dir):
     (run_dir / "openttd.cfg").write_text(text)
 
 
-GAME_LOCK = None  # Set by main to the clone-wide benchmark coordination file.
+GAME_LOCK = None  # Set by main to the clone-wide game coordination file.
 
 
 @contextlib.contextmanager
 def game_slot(isolate):
-    """Ordinary games share the lock; a timed benchmark game holds it alone."""
+    """All games share coordination; timed games never reserve a quiet host."""
     path = GAME_LOCK
     if path is None:
-        # Fixture entry points also coordinate with benchmark runs, without
-        # requiring main() or mutable global setup.
+        # Fixture entry points use the same coordination without requiring
+        # main() or mutable global setup.
         import migration
 
         path = migration.COMMON_LOCAL / "simulation-game.lock"
-    with file_lock(path, shared=not isolate, label="simulation game"):
+    with file_lock(path, shared=True, label="simulation game"):
         yield
 
 
