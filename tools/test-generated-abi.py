@@ -130,11 +130,8 @@ class GeneratedAbiTests(unittest.TestCase):
     def test_aliases_width_metadata_and_private_layout_modules(self):
         declarations = list(GENERATOR["declarations"]())
         self.assertTrue(any(width for *_, width, _ in declarations))
-        self.assertTrue(
-            any(
-                rust != cpp for *_, fields, _, _ in declarations for rust, cpp in fields
-            )
-        )
+        pairs = (pair for record in declarations for pair in record[3])
+        self.assertTrue(any(rust != cpp for rust, cpp in pairs))
         for module in GENERATOR["SOURCES"]:
             source = (ROOT / f"rust/openttd-kernels/src/{module}.rs").read_text()
             self.assertRegex(source, GENERATOR["DECLARATION"])
