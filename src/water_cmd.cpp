@@ -43,6 +43,16 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/ground_services.h"
+#include "rust/services_landscape.h"
+#include "rust/environment_services.h"
+#include "rust/company_adapter.h"
+#include "rust/vehicle_services.h"
+#include "rust/services_station.h"
+#include "rail_cmd.h"
+#endif
+
 #include "safeguards.h"
 
 /**
@@ -72,6 +82,16 @@ static const Directions _flood_from_dirs[] = {
  *
  * @param tile tile to check
  */
+#ifdef WITH_RUST
+static void MarkCanalsAndRiversAroundDirty(TileIndex tile)
+{
+	openttd_rust_dirty_water_neighbours(tile.base(), Map::SizeX(), Map::SizeY(), &GetRustWaterGroundServices(), &GetRustSharedServices());
+}
+void ClearNeighbourNonFloodingStates(TileIndex tile)
+{
+	openttd_rust_clear_neighbour_flooding(tile.base(), Map::SizeX(), Map::SizeY(), &GetRustWaterGroundServices(), &GetRustSharedServices());
+}
+#else
 static inline void MarkTileDirtyIfCanalOrRiver(TileIndex tile)
 {
 	if (IsValidTile(tile) && IsTileType(tile, MP_WATER) && (IsCanal(tile) || IsRiver(tile))) MarkTileDirtyByTile(tile);
@@ -101,6 +121,8 @@ void ClearNeighbourNonFloodingStates(TileIndex tile)
 		if (IsValidTile(dest) && IsTileType(dest, MP_WATER)) SetNonFloodingWaterTile(dest, false);
 	}
 }
+
+#endif
 
 /**
  * Build a ship depot.
@@ -1025,6 +1047,62 @@ static void GetTileDesc_Water(TileIndex tile, TileDesc &td)
  * creates a newsitem and dirties the necessary windows.
  * @param v The vehicle to flood.
  */
+#ifdef WITH_RUST
+/* Only leaves remain native. Virtual Crash and event insertion can reenter Rust,
+ * but queueing AI/Game events never executes a script VM; allocation exceptions
+ * terminate under noexcept. Commands use independent lazy stack result contexts. */
+static VehiclesOnTile::Iterator *WaterIterator(OpenTTDTileVehicleCursor *cursor) noexcept
+{
+	return std::launder(reinterpret_cast<VehiclesOnTile::Iterator *>(cursor));
+}
+const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
+{
+	static_assert(sizeof(VehiclesOnTile::Iterator) <= sizeof(OpenTTDTileVehicleCursor));
+	static_assert(alignof(VehiclesOnTile::Iterator) <= alignof(OpenTTDTileVehicleCursor));
+	static_assert(AIR_SHADOW == 4 && to_underlying(VehState::Crashed) == 7 && SND_12_EXPLOSION == 16 && OWNER_WATER.base() == 17 && VEH_AIRCRAFT == 3 && TREE_GROUND_SHORE == 3);
+	static const OpenTTDWaterGroundServices services{
+		.rail = &GetRustRailGroundServices(), .clear = &GetRustClearServices(), .vehicles = &GetRustVehicleServices(), .costs = &GetRustGroundCostServices(), .company = &GetRustCompanyServices(),
+		.non_flooding = [](uint32_t t) noexcept { return IsNonFloodingWaterTile(TileIndex{t}); },
+		.set_non_flooding = [](uint32_t t, bool value) noexcept { SetNonFloodingWaterTile(TileIndex{t}, value); },
+		.coast = RustIsCoast,
+		.set_tree_ground = RustSetTreeGroundDensity,
+		.make_sea = [](uint32_t t) noexcept { MakeSea(TileIndex{t}); },
+		.buoy_or_dock = [](uint32_t t) noexcept { return IsBuoy(TileIndex{t}) || IsDock(TileIndex{t}); },
+		.canal_or_river = [](uint32_t t) noexcept { return IsCanal(TileIndex{t}) || IsRiver(TileIndex{t}); },
+		.possible_docking = RustPossibleDocking,
+		.check_docking = RustCheckDocking,
+		.invalidate_region = [](uint32_t t) noexcept { InvalidateWaterRegion(TileIndex{t}); },
+		.remove_rail = [](OpenTTDCommandCost *out, uint32_t t, Track track) noexcept { *NativeGroundCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlag::Execute, TileIndex{t}, track); },
+		.apply_foundation = RustApplyFoundation,
+		.iterator_begin = [](OpenTTDTileVehicleCursor *c, uint32_t t) noexcept { new (c) VehiclesOnTile::Iterator(TileIndex{t}); },
+		.iterator_current = [](OpenTTDTileVehicleCursor *c) noexcept { return RustVehicle(**WaterIterator(c)); },
+		.iterator_next = [](OpenTTDTileVehicleCursor *c) noexcept { ++*WaterIterator(c); },
+		.iterator_end = [](OpenTTDTileVehicleCursor *c) noexcept { WaterIterator(c)->~Iterator(); },
+		.airport_tile = RustAirportTile,
+		.airport = [](uint32_t t) noexcept { const Station *st = Station::GetByTile(TileIndex{t}); return OpenTTDAirportGround{.station = st, .tile = RustStationAirportTile(st), .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st)}; },
+		.airport_member = [](const OpenTTDStation *st, uint32_t t) noexcept { return st->TileBelongsToAirport(TileIndex{t}); },
+		.airport_z = [](uint32_t t) noexcept { return int32_t{RustAirportDeltaZ(RustStationAirportFTA(Station::GetByTile(TileIndex{t})))} + 1; },
+		.victim = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDFloodVictim{.status = RustVehicleStatus(u), .type = RustVehicleVehicleType(u)}; },
+		.aircraft_pose = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDAircraftFloodPose{.tile = RustVehicleTile(u), .z = RustVehicleZ(u), .subtype = RustVehicleSubtype(u)}; },
+		.ground_pose = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDGroundFloodPose{.z = RustVehicleZ(u), .first = RustVehicle(RustVehicleFirst(u))}; },
+		.crash = [](OpenTTDVehicle *v) noexcept { return VehicleOf(v)->Crash(true); },
+		.ai_event = [](OpenTTDVehicle *v, uint32_t victims) noexcept { Vehicle *u = VehicleOf(v); AI::NewEvent(u->owner, new ScriptEventVehicleCrashed(u->index, u->tile, ScriptEventVehicleCrashed::CRASH_FLOODED, victims, u->owner)); },
+		.game_event = [](OpenTTDVehicle *v, uint32_t victims) noexcept { Vehicle *u = VehicleOf(v); Game::NewEvent(new ScriptEventVehicleCrashed(u->index, u->tile, ScriptEventVehicleCrashed::CRASH_FLOODED, victims, u->owner)); },
+		.news = [](OpenTTDVehicle *v, uint32_t victims) noexcept { AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_FLOOD_VEHICLE, victims), NewsType::Accident, TileIndex{RustVehicleTile(VehicleOf(v))}); },
+		.bridge_height = [](uint32_t t) noexcept { return GetBridgePixelHeight(TileIndex{t}); },
+	};
+	return services;
+}
+FloodingBehaviour GetFloodingBehaviour(TileIndex tile)
+{
+	return openttd_rust_flooding_behaviour(tile.base(), &GetRustWaterGroundServices(), &GetRustSharedServices());
+}
+void TileLoop_Water(uint32_t tile) noexcept
+{
+	OpenTTDGroundCall call;
+	openttd_rust_water_tile_loop(tile, Map::SizeX(), Map::SizeY(), RustAmbientSoundEnabled(), &call, &GetRustWaterGroundServices(), &GetRustSharedServices());
+}
+#else
 static void FloodVehicle(Vehicle *v)
 {
 	uint victims = v->Crash(true);
@@ -1320,6 +1398,8 @@ void TileLoop_Water(TileIndex tile)
 		default: return;
 	}
 }
+
+#endif
 
 void ConvertGroundTilesIntoWaterTiles()
 {

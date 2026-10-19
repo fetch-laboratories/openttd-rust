@@ -14,15 +14,14 @@ COMMON = ROAD + "common[0]/"
 AI_FOLDER = "road-scenario-ai"
 
 # Recorded candidate/reference medians; integrating PRs update these up or down.
-# PR #300 game head 64b63d70aa; quiet P2000 repeat at test-only 117dd7f3fa.
-# Current record: PR #289, root --benchmark 3 at reviewed game head 6da6e30c18.
+# PR #255 game head 6c108195ef; quiet P2000/P2016 repeats at c44c62da4c.
 SPEED_BUDGETS = {
-    "generate-tgp-256-1": 1.1391076115485563,
-    "play-opus-55-167-002-manual": 1.2161348585189644,
-    "play-grok-159-001-manual": 1.1997430956968531,
-    "play-padhattan-ridge-1996-manual": 1.2359346642468239,
-    "play-padhattan-ridge-2000-manual": 1.2921810699588476,
-    "play-padhattan-ridge-2016-manual": 1.4454253611556982,
+    "generate-tgp-256-1": 1.1888297872340425,
+    "play-opus-55-167-002-manual": 1.2146282973621103,
+    "play-grok-159-001-manual": 1.265459088069956,
+    "play-padhattan-ridge-1996-manual": 1.152073732718894,
+    "play-padhattan-ridge-2000-manual": 1.3619718309859155,
+    "play-padhattan-ridge-2016-manual": 1.3938325991189429,
 }
 
 
@@ -483,6 +482,11 @@ def check(scenario, run, mode, role, result):
         )
         require(map_tile(1201) == (2, 10), "input bus is not on a straight road")
         final_chunks = read_save(final)
+        require(
+            final_chunks["MAPT"]["raw"][1201] >> 4 == 2
+            and final_chunks["MAP5"]["raw"][1201] == 10,
+            "failed flooded clear did not preserve the occupied road",
+        )
         require(
             chunks["MAPT"]["raw"][945] >> 4 == 6
             and chunks["MAPO"]["raw"][945] == 33

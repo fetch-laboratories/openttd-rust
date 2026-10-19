@@ -170,6 +170,37 @@ pub(crate) unsafe fn population(state: *const State) -> u32 {
     // SAFETY: Caller establishes owner lifetime and serialized access.
     unsafe { (*state).simulation.population }
 }
+fn radius_group(funded: bool, radii: &[u32; 5], distance: u32) -> u8 {
+    if funded && distance <= 25 {
+        return 4;
+    }
+    let mut zone = 0;
+    for (index, radius) in radii.iter().enumerate() {
+        if distance < *radius {
+            zone = index as u8;
+        }
+    }
+    zone
+}
+/// Copied canonical road-work policy inputs; no owner reference spans a service.
+/// SAFETY: Caller supplies a live, serialized owner.
+pub(crate) unsafe fn road_context(state: *const State, tile: u32, size_x: u32) -> (u8, u8, u32) {
+    // SAFETY: Immediate reads only, caller establishes owner lifetime.
+    let state = unsafe { &*state };
+    let xy = state.simulation.xy;
+    // Native TileX/TileY operate on the power-of-two map dimensions.
+    let mask = size_x - 1;
+    let shift = size_x.trailing_zeros();
+    let dx = (tile & mask).abs_diff(xy & mask);
+    let dy = (tile >> shift).abs_diff(xy >> shift);
+    let distance = dx * dx + dy * dy;
+    let zone = radius_group(
+        state.growth.funding != 0,
+        &state.simulation.radius,
+        distance,
+    );
+    (state.growth.road, zone, dx + dy)
+}
 static GENERATING_TOWN: GameState<bool> = GameState::new(false);
 pub extern "C" fn openttd_rust_town_generating_exchange(generating: bool) -> bool {
     GENERATING_TOWN.with(|flag| {
@@ -1815,17 +1846,7 @@ impl Engine<'_> {
         let slope = u32::from((self.services.tile_slope)(base));
         let maxz = (self.services.tile_max_z)(base);
         let distance = self.distance(self.position(), base);
-        let radius = self.radius();
-        let mut zone = 0;
-        if self.funding() != 0 && distance <= 25 {
-            zone = 4;
-        } else {
-            for (i, r) in radius.iter().enumerate() {
-                if distance < *r {
-                    zone = i as u32;
-                }
-            }
-        }
+        let zone = u32::from(radius_group(self.funding() != 0, &self.radius(), distance));
         let climate = match (self.leaves.climate)() {
             0 => 12,
             1 => {

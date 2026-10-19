@@ -39,8 +39,6 @@ native_byte!(
     TownLayout,
     CompanyId,
     TownFounding,
-    ClearGround,
-    TreeGround,
     AcceptanceEffect
 );
 #[repr(transparent)]
@@ -66,8 +64,6 @@ pub struct FoundingServices {
     pub can_allocate: extern "C" fn() -> bool,
     pub close_to_town: extern "C" fn(Tile, u32) -> bool,
     pub flat: extern "C" fn(Tile) -> bool,
-    pub clear_ground: extern "C" fn(Tile) -> ClearGround,
-    pub tree_ground: extern "C" fn(Tile) -> TreeGround,
     pub water_distance: extern "C" fn(Tile, bool) -> u32,
     pub scale_size: extern "C" fn(u32) -> u32,
     pub scale_land: extern "C" fn(u32) -> u32,
@@ -216,8 +212,8 @@ impl<'a> Founding<'a> {
                         .wrapping_add(spiral.y.wrapping_mul(self.map().size_x())),
                 );
                 let valid = match observed!((self.shared.tile_type)(at.0)) {
-                    0 => observed!((self.s.clear_ground)(at)).0 != 1,
-                    4 => observed!((self.s.tree_ground)(at)).0 != 1,
+                    0 => observed!((self.shared.clear_ground)(at.0)).0 != 1,
+                    4 => observed!((self.shared.tree_ground)(at.0)).0 != 1,
                     _ => false,
                 };
                 if valid
