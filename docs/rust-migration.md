@@ -389,8 +389,10 @@ organizes dependent PRs but does not itself combine validation runs.
 Required checks must pass on the PR head; branches need not be up to date with the
 base. The publisher records the immutable tested merge tree separately from the
 head status.
-Protected pushes have per-SHA concurrency, so a later docs push cannot cancel
-the code merge run. A merged push whose non-Markdown files match the tree marker from the same successful
+Protected pushes queue without cancelling a running validation; a newer push
+replaces a pending one, so a burst of merges validates the newest tip and the
+intermediate pushes show as cancelled. Markdown-only pushes do not start these
+workflows, so they cannot displace a pending code push. A merged push whose non-Markdown files match the tree marker from the same successful
 full request refreshes native compiler caches without repeating tests or scenarios.
 Covered protected pushes also rebuild the cached Linux GCC, macOS and Windows
 targets to refresh their compiler caches. This path skips Cargo checks, CTest,
@@ -399,15 +401,16 @@ and Emscripten have no compiler cache to refresh. The path is derived only from
 the protected push's matching non-Markdown tree entries, and requested PR validation always runs the
 complete selected suite. A combined tree no full request
 covered receives all native and platform checks. Tree comparisons must be complete;
-missing or truncated GitHub inventories retain heavy validation. Markdown-only pushes skip heavy
-builds after complete file classification. A post-merge failure is fixed forward first. Force pushes and branch deletion are disallowed,
+missing or truncated GitHub inventories retain heavy validation. Markdown-only pushes too large
+for the path filter skip heavy builds after complete file classification. A post-merge failure is fixed forward first. Force pushes and branch deletion are disallowed,
 including for administrators. The approving-review count is zero because agents
 share credentials; the attributed independent review report is the process gate
 before root integrates. Repository controls are enforced separately from these
 documents.
 
 Native validation exports both frozen runtimes and once-built fleet/orders adapters,
-then runs component comparisons and six simulation shards concurrently. Recorded
+then runs component comparisons and three simulation shards concurrently
+(each about as long as the comparisons job). Recorded
 scenario seconds assign work while keeping effects/disasters/aircraft fixture
 families whole. The gate requires every job and exactly the current default
 `simulate.py --list` inventory. GitHub's run-scoped artifacts carry the runtimes
@@ -421,10 +424,11 @@ cache-retention workflow keeps the latest entry per prefix and bounds total usag
 to 8 GiB (below the 10 GiB repository limit).
 
 Runner settings are `CI_LINUX_HEAVY`, `CI_LINUX_COMPARISONS`,
-`CI_LINUX_SIMULATION`, `CI_LINUX_PLATFORM` (default `ubuntu-24.04`), and
+`CI_LINUX_SIMULATION`, `CI_LINUX_PLATFORM` (default `ubuntu-24.04`; Clang only,
+the cached GCC flavours always use free `ubuntu-24.04`), and
 `CI_MACOS_HEAVY` (default `macos-latest`) and `CI_WINDOWS_HEAVY` (default
 `windows-2022`). Heavy native jobs use `nproc` slots.
-One full request peaks around 16 jobs; overlapping requests may queue against
+One full request peaks around 13 jobs; overlapping requests may queue against
 account/runner capacity. Runner size and account plan remain repository settings.
 The repository belongs to the `fetch-laboratories` organization, where Blacksmith
 serves the Linux jobs: `CI_LINUX_HEAVY` is `blacksmith-8vcpu-ubuntu-2404` and the

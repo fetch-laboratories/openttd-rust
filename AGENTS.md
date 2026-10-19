@@ -285,8 +285,9 @@ about 15 minutes by adding parallel jobs or shards, never by adding steps to one
 job's critical path, and keep caches under the repository limit. Validate
 reviewed PRs concurrently: a merge or docs push to `rust-migration` does not
 invalidate another PR's run at an unchanged head. Post-merge CI fully
-re-validates only a merged tree no full run covered; a red `rust-migration` is
-still fixed before more integrations.
+re-validates only a merged tree no full run covered, and queued pushes coalesce
+to the newest tip; a red `rust-migration` is still fixed before more
+integrations.
 
 Before pushing, run `python3 tools/preflight.py --base origin/rust-migration` for
 the inherited commit checker.

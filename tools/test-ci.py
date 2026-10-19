@@ -424,8 +424,8 @@ class PolicyTests(unittest.TestCase):
                         )
                         self.assertEqual(result, expected)
 
-    def test_doc_after_code_push_has_separate_non_cancelling_groups(self):
-        for filename in ("ci-build.yml", "rust-migration.yml", "ci-quick.yml"):
+    def test_protected_push_groups(self):
+        def groups(filename):
             workflow = (ROOT / ".github/workflows" / filename).read_text()
             expression = re.search(r"^  group: (.+)$", workflow, re.MULTILINE)[1]
             expression = (
@@ -433,21 +433,29 @@ class PolicyTests(unittest.TestCase):
                 .removesuffix(" }}")
                 .replace("inputs.checkout-ref", 'inputs["checkout-ref"]')
             )
-            groups = []
-            for sha in ("code-merge", "later-docs"):
-                groups.append(
-                    evaluate(
-                        expression,
-                        inputs={},
-                        github={
-                            "ref": "refs/heads/rust-migration",
-                            "sha": sha,
-                            "run_id": 1,
-                        },
-                    )
-                )
-            self.assertNotEqual(*groups)
             self.assertIn("github.ref != 'refs/heads/rust-migration'", workflow)
+            return workflow, [
+                evaluate(
+                    expression,
+                    inputs={},
+                    github={
+                        "ref": "refs/heads/rust-migration",
+                        "sha": sha,
+                        "run_id": 1,
+                    },
+                )
+                for sha in ("code-merge", "later-merge")
+            ]
+
+        # Heavy post-merge validation coalesces queued pushes to the newest tip.
+        # Markdown-only pushes never start, so they cannot displace a code push.
+        for filename in ("ci-build.yml", "rust-migration.yml"):
+            workflow, (first, second) = groups(filename)
+            self.assertEqual(first, second)
+            push = re.search(r"^  push:\n((?:    .*\n)+)", workflow, re.MULTILINE)[1]
+            self.assertIn("paths-ignore: ['**.md']", push)
+        _, (first, second) = groups("ci-quick.yml")
+        self.assertNotEqual(first, second)
 
     def test_bootstrap_on_demand_and_docs_classification(self):
         script = script_for("ci-policy.yml", "policy")
