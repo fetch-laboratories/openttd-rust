@@ -9,10 +9,12 @@
 #ifndef RUST_SERVICES_FFI_H
 #define RUST_SERVICES_FFI_H
 #include <cstdint>
+#include <cstddef>
 #include <type_traits>
 #include "station_ffi.h"
 
 enum class LandscapeType : uint8_t;
+enum class StationType : uint8_t;
 
 /* Distinct trivial date carriers. Strong native Date classes stay inside C++;
  * wrappers convert explicitly so MSVC class-return rules cannot alter this ABI. */
@@ -37,6 +39,7 @@ static_assert(std::is_trivially_copyable_v<OpenTTDEconomyDate> && std::is_standa
  * An environmental exception terminates rather than unwinding through Rust. */
 struct OpenTTDTownHandle; // Opaque native Town shell; never dereferenced in Rust.
 struct OpenTTDTownState;
+struct OpenTTDVehicle;
 struct Train; // Native Train shell; never dereferenced in Rust.
 enum RoadType : uint8_t;
 enum RoadBits : uint8_t;
@@ -100,6 +103,21 @@ struct OpenTTDSharedServices {
 	int32_t (*slope)(int32_t, int32_t) noexcept;
 	uint8_t (*snow_line)() noexcept;
 	uint16_t (*station_index)(uint32_t) noexcept;
+	// Registry: station construction (#267).
+	bool (*docking_tile)(uint32_t) noexcept;
+	uint8_t (*station_gfx)(uint32_t) noexcept;
+	bool (*station_serve_neutral)() noexcept;
+	StationType (*station_type)(uint32_t) noexcept;
+	void (*tile_animation_add)(uint32_t, bool) noexcept;
+	void (*tile_animation_delete)(uint32_t) noexcept;
+	void (*tile_animation_set_frame)(uint32_t, uint8_t) noexcept;
+	void (*tile_change_owner)(uint32_t, uint8_t, uint8_t) noexcept;
+	uint32_t (*town_next_id)(uint32_t) noexcept;
+	OpenTTDTownState *(*town_owner_by_id)(uint32_t) noexcept;
+	size_t (*utf8_length)(const uint8_t *, size_t) noexcept;
+	OpenTTDVehicle *(*vehicle_next)(uint32_t) noexcept;
+	bool (*water_has_class)(uint32_t) noexcept;
+	bool (*water_middle_lock)(uint32_t) noexcept;
 	uint32_t (*tile_height)(uint32_t) noexcept;
 	int32_t (*tile_max_z)(uint32_t) noexcept;
 	uint8_t (*tile_owner)(uint32_t) noexcept;
@@ -273,6 +291,20 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.slope = OpenTTDFixtureMapService<int32_t, int32_t, int32_t>,
 		.snow_line = OpenTTDFixtureMapService<uint8_t>,
 		.station_index = OpenTTDFixtureMapService<uint16_t, uint32_t>,
+		.docking_tile = OpenTTDFixtureMapService<bool, uint32_t>,
+		.station_gfx = OpenTTDFixtureMapService<uint8_t, uint32_t>,
+		.station_serve_neutral = OpenTTDFixtureMapService<bool>,
+		.station_type = OpenTTDFixtureMapService<StationType, uint32_t>,
+		.tile_animation_add = OpenTTDFixtureMapService<void, uint32_t, bool>,
+		.tile_animation_delete = OpenTTDFixtureMapService<void, uint32_t>,
+		.tile_animation_set_frame = OpenTTDFixtureMapService<void, uint32_t, uint8_t>,
+		.tile_change_owner = OpenTTDFixtureMapService<void, uint32_t, uint8_t, uint8_t>,
+		.town_next_id = OpenTTDFixtureMapService<uint32_t, uint32_t>,
+		.town_owner_by_id = OpenTTDFixtureMapService<OpenTTDTownState *, uint32_t>,
+		.utf8_length = OpenTTDFixtureMapService<size_t, const uint8_t *, size_t>,
+		.vehicle_next = OpenTTDFixtureMapService<OpenTTDVehicle *, uint32_t>,
+		.water_has_class = OpenTTDFixtureMapService<bool, uint32_t>,
+		.water_middle_lock = OpenTTDFixtureMapService<bool, uint32_t>,
 		.tile_height = OpenTTDFixtureMapService<uint32_t, uint32_t>,
 		.tile_max_z = OpenTTDFixtureMapService<int32_t, uint32_t>,
 		.tile_owner = OpenTTDFixtureMapService<uint8_t, uint32_t>,

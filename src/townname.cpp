@@ -119,7 +119,7 @@ const OpenTTDTownNameServices &GetRustTownNameServices() noexcept
 			frame->other = GetTownName(town);
 			return {reinterpret_cast<const uint8_t *>(frame->other.data()), frame->other.size()};
 		},
-		.utf8_length = RustUtf8Length,
+		.utf8_length = GetRustSharedServices().utf8_length,
 		.random_next = [](Randomizer *randomizer) noexcept -> uint32_t { return randomizer->Next(); },
 	};
 	return services;

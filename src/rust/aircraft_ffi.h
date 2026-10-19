@@ -16,6 +16,11 @@
 #else
 #define OPENTTD_AIRCRAFT_CALL
 #endif
+struct OpenTTDAircraftLeaves;
+struct OpenTTDAircraftVehicle;
+const OpenTTDAircraftLeaves &GetRustAircraftLeaves() noexcept;
+OpenTTDAircraftVehicle GetRustAircraftVehicle(OpenTTDVehicle *) noexcept;
+
 extern "C" {
 struct OpenTTDAircraftState {
 	uint32_t cached_max_range_sqr;

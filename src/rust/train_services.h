@@ -7,6 +7,7 @@
 
 #include "services_ffi.h"
 #include "services_rail.h"
+#include "services_station.h"
 
 /** @file train_services.h Direct shared-world operations; no train policy. */
 #include "sound_services.h"
@@ -441,7 +442,7 @@ static void TrainLeaveSound(OpenTTDTrainHandle id) noexcept
 static void TrainLeaveStation(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	v->LeaveStation();
+	RustVehicleLeaveStation(RustVehicle(v));
 }
 static void TrainLeaveUnbunch(OpenTTDTrainHandle id) noexcept
 {
@@ -637,10 +638,6 @@ static void TrainSetNext(OpenTTDTrainHandle id, OpenTTDTrainHandle a) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	v->SetNext(static_cast<Train *>(a.shell));
 }
-static void TrainSetPlatformRes(OpenTTDTrainHandle, uint32_t a, uint8_t b, uint8_t c) noexcept
-{
-	SetRailStationPlatformReservation(TileIndex(a), static_cast<DiagDirection>(b), c != 0);
-}
 static void TrainSetTunnelRes(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
 {
 	SetTunnelBridgeReservation(TileIndex(a), b != 0);
@@ -684,10 +681,6 @@ static void TrainStartStopDirty(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP);
-}
-static uint64_t TrainStationCompatible(OpenTTDTrainHandle, uint32_t a, uint32_t b) noexcept
-{
-	return IsCompatibleTrainStationTile(TileIndex(a), TileIndex(b));
 }
 static uint64_t TrainStationDest(OpenTTDTrainHandle id) noexcept
 {
@@ -890,7 +883,7 @@ static OpenTTDTrainHandle TrainReadNextUnit(OpenTTDTrainHandle id) noexcept
 static OpenTTDTrainHandle TrainReadLast(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return TrainHandle(v->Last());
+	return TrainHandle(RustVehicleLast(v));
 }
 static int32_t TrainReadOrderTime(OpenTTDTrainHandle id) noexcept
 {

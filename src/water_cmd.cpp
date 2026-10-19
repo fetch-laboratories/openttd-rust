@@ -43,6 +43,10 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/station_command_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /**
@@ -171,6 +175,9 @@ CommandCost CmdBuildShipDepot(DoCommandFlags flags, TileIndex tile, Axis axis)
 
 bool IsPossibleDockingTile(Tile t)
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_possible_docking(&GetRustStationCommandServices(), TileIndex(t).base());
+#else
 	assert(IsValidTile(t));
 	switch (GetTileType(t)) {
 		case MP_WATER:
@@ -184,6 +191,7 @@ bool IsPossibleDockingTile(Tile t)
 		default:
 			return false;
 	}
+#endif
 }
 
 /**
@@ -193,6 +201,9 @@ bool IsPossibleDockingTile(Tile t)
  */
 void CheckForDockingTile(TileIndex t)
 {
+#ifdef WITH_RUST
+	openttd_rust_station_check_docking(&GetRustStationCommandServices(), t.base());
+#else
 	for (DiagDirection d = DIAGDIR_BEGIN; d != DIAGDIR_END; d++) {
 		TileIndex tile = t + TileOffsByDiagDir(d);
 		if (!IsValidTile(tile)) continue;
@@ -213,6 +224,7 @@ void CheckForDockingTile(TileIndex t)
 			SetDockingTile(t, true);
 		}
 	}
+#endif
 }
 
 void MakeWaterKeepingClass(TileIndex tile, Owner o)

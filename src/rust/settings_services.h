@@ -9,6 +9,7 @@
 #ifndef RUST_SETTINGS_SERVICES_H
 #define RUST_SETTINGS_SERVICES_H
 #include "../settings_type.h"
+#include "../road.h"
 #include "../autoslope.h"
 
 inline uint8_t RustRoadAccelerationModel() noexcept { return _settings_game.vehicle.roadveh_acceleration_model; }
@@ -40,4 +41,11 @@ inline bool RustAutoslopeEnabled() noexcept { return AutoslopeEnabled(); }
 inline bool RustCrossingWithCompetitor() noexcept { return _settings_game.construction.crossing_with_competitor; }
 inline bool RustDisableElrails() noexcept { return _settings_game.vehicle.disable_elrails; }
 inline bool RustForbid90Deg() noexcept { return _settings_game.pf.forbid_90_deg; }
+inline bool RustRoadTypeIsRoad(uint8_t rt) noexcept { return RoadTypeIsRoad(static_cast<RoadType>(rt)); }
+inline bool RustServeNeutralIndustries() noexcept { return _settings_game.station.serve_neutral_industries; }
+inline uint8_t RustStationSpread() noexcept { return _settings_game.station.station_spread; }
+inline bool RustStationStopOnTownRoad() noexcept { return _settings_game.construction.road_stop_on_town_road; }
+inline bool RustStationStopOnCompetitorRoad() noexcept { return _settings_game.construction.road_stop_on_competitor_road; }
+inline bool RustStationNoiseEnabled() noexcept { return _settings_game.economy.station_noise_level; }
+inline bool RustStationDistantJoin() noexcept { return _settings_game.station.distant_join_stations; }
 #endif /* RUST_SETTINGS_SERVICES_H */

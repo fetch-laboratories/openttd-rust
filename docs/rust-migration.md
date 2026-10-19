@@ -1261,6 +1261,31 @@ loading queues, fractional admission, acceptance loss, full/gradual loading, rat
 expiry/decay/capping, stale-link refresh/removal/restriction/release and active reload. Legacy, NewGRF and refit
 gaps remain in #156.
 
+### Station construction, joining and removal (#267)
+
+Rust owns the station command policy for rail platforms and waypoints, bay and
+through road stops, airports, docks and oil rigs, plus sign/name/owner, terrain,
+bridge clearance, joining, deletion/reuse and docking-neighbour decisions.
+`water_cmd.cpp` docking eligibility and registration belong to this owner.
+Original command bodies compile only in portable builds. The existing #125/#214
+station state remains canonical; there is no second station owner or save layout.
+
+C++ retains shell/spec/road-stop allocation, NewGRF resolvers, spatial indices,
+rendering/description and the hot tile-loop/animation/vehicle-entry/track/slope
+services. Entries use borrowed typed synchronous tables (ABI 1060-1072), shared
+command checks and native result slots. Services are direct `noexcept` calls;
+no ordinary-play script VM or save/load exception crosses this command boundary.
+Rust ends owner access before reentry and calls owned aircraft/station policy
+directly. Native pool/container allocation follows the original lifetime.
+
+`python3 tools/migration.py simulate stations-commands aircraft-controller-removal
+water-structures-mutate --jobs 2` compares command costs/errors, RNG, STNN/STNS,
+map, town and company state, including partial removal, joins, delete/reuse and
+modern reload. The station module includes unchanged-reference private callbacks
+in fixture executables and requires `station_command` witnesses in default CI.
+Remaining NewGRF, legacy decoding and unusual occupied-reservation branches need
+a #156 disposition. Final semantic checks and six speed medians remain at wind-down.
+
 ### Ship controller and private state (#146)
 
 Rust owns the complete ship tick/movement, locks, acceleration, rotation/reversal,

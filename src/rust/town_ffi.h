@@ -103,6 +103,9 @@ struct OpenTTDTownLeaves {
 /* Services are synchronous noexcept calls. No owner reference spans one. Commands
  * and bounded NewGRF resolution may reenter; ordinary gameplay does not throw.
  * Environmental failures and Rust panics abort. Save/load staging stays native. */
+uint32_t OpenTTDNextTownID(uint32_t from) noexcept;
+const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept;
+
 extern "C" {
 OpenTTDByteSpan openttd_rust_town_name(const OpenTTDTownState *);
 void openttd_rust_town_set_name(OpenTTDTownState *, OpenTTDByteSpan);

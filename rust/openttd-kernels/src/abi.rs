@@ -83,6 +83,27 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         820 => {
             layout!(crate::signal::SignalServices, item; assertions, assert_condition, assert_wormhole_start, train_on_tile, train_on_tracks, overflow_tbu, overflow_tbd, overflow_global, assert_company)
         }
+        1060 => {
+            layout!(crate::station_cmd::CommandServicesTable, item; shared, station, rail, cost, command, authority, strings, spread, default_bridge_info, rail_bridge_info, road_bridge_info, southern_bridge_end, bridge_height, train_area, rail_spec, road_spec, links, bounds, location, move_sign, node_location, virtual_coord, catchment, catchment_dirty, facility_widget, select_invalidate, radius, station_available, new_station, index_insert, set_town, default_name, have_rating, before_add_rect, road_waypoint, name_equals, set_name, rect_contains, flip_airport_closed, closed_widget, distant_join, rail_class_count, rail_waypoint_class, rail_spec_count, class_rail_spec, rail_spec_info, station_slope_check, rail_layout, rail_callback, platform_info, allocate_rail_spec, assign_rail_spec, deallocate_rail_spec, rail_boolean, rail_callback_error, set_train_area, add_facility, rail_triggers, reserved, last_train, platform_reservation, compatible_tiles, custom_rail_index, make_rail_station, close_station_inspect, set_custom_rail_index, set_random_bits, set_gfx, rail_animation, tile_flag_count, tile_flags, set_tile_flags, station_infrastructure, mark_tiles, after_remove_tile, reset_facilities, orders_dirty, vehicle, road_type_valid, road_type_is_road, powered_road, stop_on_town_road, stop_on_competitor_road, road_class_count, road_waypoint_class, road_spec_count, class_road_spec, road_spec_info, road_spec_build_cost, road_spec_clear_cost, stops_available, allocate_road_spec, assign_road_spec, deallocate_road_spec, road_callback, road_boolean, road_triggers, new_stop, get_stop, stop_head, set_stop_head, stop_next, set_stop_next, stop_tile, add_stop_area, clear_stop_area, before_add_tile, make_drive_stop, make_bay_stop, stop_make_drive, stop_clear_drive, delete_stop, set_custom_road_index, custom_road_index, stop_random_bits, road_animation, remove_stop_tile_data, close_stop_inspect, road_waypoint_area, set_road_waypoint_area, vehicles_on_tile, road_vehicle_owner, order_station_location, aircraft, airport_spec, airport_available, airport_layout_count, airport_in_bounds, airport_size, airport_layout, airport_layout_tile, iterator_tile, iterator_next, calc_closest_town, airport_noise, noise_enabled, town_max_noise, station_town, airport_tile, airport_type, airport_geometry, airport_airplanes, set_airport_details, make_airport, airport_add, airport_animated, airport_animation, airport_infrastructure, station_view_invalidate, town_view_dirty, aircraft_vehicle, hangar_count, hangar_tile, close_hangar, close_airport_tile_inspect, delete_airport_storage, after_remove_rect, clear_airport, close_airport_inspect, ship, water_class, water_restore, water_tracks, set_docking, ship_area, set_ship_area, ship_area_add, docking_clear, docking_add, water_infrastructure, make_dock, neutral_for_tile, leave_station, oilrig_unavailable, associate_industry, make_oilrig, set_station_owner, set_airport_kind_rotation, set_facilities, set_build_date, with_nearby, associated_industry, industry_neutral, clear_industry_neutral, industry_area, remove_buoy, autoslope_axis, set_road_owner, station_list_classes_invalidate)
+        }
+        1061 => {
+            layout!(crate::station_cmd::Strings, item; demolish_bridge, flat_land, spread, bridge_too_low, too_many_stations, adjoins_multiple, remove_station, remove_rail_waypoint, remove_road_waypoint, remove_road_stop, name_unique, unsuitable, too_many_specs, disallowed_tracks, disallowed_length, remove_signals, no_station, drive_direction, drive_corner, drive_junction, drive_town, no_road, unsuitable_road, too_many_truck, too_many_bus, refuse_noise, refuse_airport, close_airport, aircraft_in_way, demolish_railroad, demolish_building, demolish_airport, demolish_cargo_tram, demolish_truck, demolish_passenger_tram, demolish_bus, buoy_in_way, demolish_dock, object_in_way, oilrig_name)
+        }
+        1062 => layout!(crate::station_cmd::Area, item; tile, w, h),
+        1063 => layout!(crate::station_cmd::BridgeInfo, item; height, pillars),
+        1064 => layout!(crate::station_cmd::BridgeSpan, item; data, size),
+        1065 => layout!(crate::station_cmd::Bounds, item; left, top, right, bottom),
+        1066 => layout!(crate::station_cmd::SpecIndex, item; value, valid),
+        1067 => {
+            layout!(crate::station_cmd::RailSpecInfo, item; platforms, lengths, slope_callback, availability_callback)
+        }
+        1068 => {
+            layout!(crate::station_cmd::RoadSpecInfo, item; stop_type, drive_only, availability_callback)
+        }
+        1069 => layout!(crate::station_cmd::AirportSize, item; w, h),
+        1070 => layout!(crate::station_cmd::AirportLayout, item; size, rotation),
+        1071 => layout!(crate::station_cmd::AirportTile, item; tile, gfx),
+        1072 => layout!(crate::station_cmd::AirportGeometry, item; area, spec, rotation),
         980 => {
             layout!(crate::rail_cmd::RailCommandServices, item; shared, rail, cost, command, signal, strings, rail_type_valid, compatible_rail, powered_rail, train_powered, rail_no_crossings, road_no_crossing, rail_build_cost, rail_clear_cost, rail_convert_cost, road_build_cost, crossing_with_competitor, disable_elrails, rail_foundation, apply_foundation, slope_z_in_corner, flooding, entrance_edge, ship_on_tile, build_rail, remove_rail, build_signal, remove_signal, convert_rail, rail_infrastructure, road_infrastructure, signal_infrastructure, infrastructure_dirty, reserving_train, parking, train_position, layout_changed, mark_crossings, crossing_removed, make_crossing, make_road, depot_available, new_depot, depot_name, delete_depot, depot_windows, close_inspect, make_shore, docking_check, area_begin, area_tile, area_next, area_contains, collect_trains, consist_changed)
         }
@@ -102,8 +123,9 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         443 => {
             layout!(crate::town::AuthorityServices, item; council_tolerance, bulldozer, authority_distance, town_index, refusal)
         }
+        622 => layout!(crate::services::CommandNesting, item; storage),
         621 => {
-            layout!(crate::services::CommandServices, item; landscape_clear, tile_ownership, ownership, no_vehicle, no_train, wormhole_free)
+            layout!(crate::services::CommandServices, item; landscape_clear, tile_ownership, ownership, no_vehicle, no_train, wormhole_free, nest_begin, nest_end, before, after, allow_remove_road)
         }
         620 => {
             layout!(crate::services::CommandCostServices, item; zero, error, expense_money, error_param, add, move_cost, amount, success, error_message, money, make_error)
@@ -254,6 +276,20 @@ pub fn layout(type_id: u16, item: u8) -> usize {
                 slope,
                 snow_line,
                 station_index,
+                docking_tile,
+                station_gfx,
+                station_serve_neutral,
+                station_type,
+                tile_animation_add,
+                tile_animation_delete,
+                tile_animation_set_frame,
+                tile_change_owner,
+                town_next_id,
+                town_owner_by_id,
+                utf8_length,
+                vehicle_next,
+                water_has_class,
+                water_middle_lock,
                 tile_height,
                 tile_max_z,
                 tile_owner,
@@ -453,7 +489,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::station_service::LoadEngine, item; engine, amount)
         }
         508 => layout!(crate::station_service::LoadingWait, item; lateness, wait),
-        509 => layout!(crate::station_service::OrderDestination, item; destination, is_station),
+        509 => layout!(crate::station_service::OrderDestination, item; destination, kind),
         510 => layout!(crate::station_service::TruncatedSource, item; amount, source, present),
         511 => layout!(crate::cargo_storage::Source, item; id, source_type),
         512 => {

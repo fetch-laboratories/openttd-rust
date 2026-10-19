@@ -112,9 +112,10 @@ struct OpenTTDLoadingStats {
 	uint8_t cargo;
 };
 using OpenTTDStationScope = void (*)(void *, void *) noexcept;
+enum OrderType : uint8_t;
 struct OpenTTDOrderDestination {
 	uint16_t destination;
-	bool is_station;
+	OrderType kind;
 };
 struct OpenTTDTruncatedSource {
 	uint32_t amount;
@@ -161,7 +162,7 @@ struct OpenTTDStationServices {
 	void (*watched_animation)(uint32_t, uint64_t) noexcept;
 	void (*append_packet)(OpenTTDBaseStation *, uint8_t, uint32_t, OpenTTDCargoSource) noexcept;
 	void (*update_supply)(OpenTTDBaseStation *, uint8_t, uint32_t) noexcept;
-	void (*station_list_invalidation)(OpenTTDBaseStation *) noexcept;
+	void (*station_list_invalidation)(OpenTTDBaseStation *, int32_t) noexcept;
 	void (*new_cargo_animation)(OpenTTDBaseStation *, uint8_t) noexcept;
 	void (*waiting_redraw)(OpenTTDBaseStation *) noexcept;
 	uint16_t (*rating_callback)(OpenTTDBaseStation *, uint8_t, uint32_t, uint32_t) noexcept;

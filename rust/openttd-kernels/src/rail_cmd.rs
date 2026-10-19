@@ -22,7 +22,7 @@
 )]
 pub use crate::services::Train;
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Map, RailMapServices, Services,
+    CommandCost, CommandCostServices, CommandServices, Cost, Map, RailMapServices, Services,
 };
 use crate::witness as w;
 
@@ -258,7 +258,6 @@ pub struct RailCommandServices {
 }
 
 const INVALID_STRING: u32 = 0xFFFF;
-const CONSTRUCTION: u8 = 0;
 const EXECUTE: u16 = 1 << 0;
 const AUTO: u16 = 1 << 1;
 const BANKRUPT: u16 = 1 << 5;
@@ -423,43 +422,6 @@ fn negate(money: i64) -> i64 {
 }
 fn price(index: usize) -> i64 {
     crate::company::price(index)
-}
-
-/// A live native `CommandCost` borrowed for the synchronous entry.
-#[derive(Clone, Copy)]
-struct Cost<'a>(*mut CommandCost, &'a CommandCostServices);
-impl Cost<'_> {
-    fn zero(self) {
-        (self.1.zero)(self.0);
-    }
-    fn error(self, message: u32) {
-        (self.1.error)(self.0, message);
-    }
-    fn set(self, money: i64) {
-        (self.1.expense_money)(self.0, CONSTRUCTION, money);
-    }
-    fn add_money(self, money: i64) {
-        (self.1.amount)(self.0, money);
-    }
-    /// `AddCost(CommandCost &&)`.
-    fn add(self, other: Self) {
-        (self.1.add)(self.0, other.0);
-    }
-    fn take(self, other: Self) {
-        (self.1.move_cost)(self.0, other.0);
-    }
-    fn make_error(self, message: u32) {
-        unsafe { (self.1.make_error)(self.0, message) };
-    }
-    fn ok(self) -> bool {
-        (self.1.success)(self.0)
-    }
-    fn message(self) -> u32 {
-        (self.1.error_message)(self.0)
-    }
-    fn money(self) -> i64 {
-        (self.1.money)(self.0)
-    }
 }
 
 struct Ctx<'a> {

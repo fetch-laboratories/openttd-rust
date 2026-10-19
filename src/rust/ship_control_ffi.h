@@ -161,6 +161,8 @@ struct OpenTTDShipLeaves {
 	size_t (*neighbours)(OpenTTDWaterPatch, OpenTTDWaterPatch *) noexcept;
 	bool (*next_depot)(uint32_t, OpenTTDShipDepot *) noexcept;
 };
+struct OpenTTDShipLeaves;
+const OpenTTDShipLeaves &GetRustShipServices() noexcept;
 extern "C" {
 /* Game-thread shell ownership; new zeroes state/coordinates and sets INVALID_DIR.
  * Typed fields are state:u8, rotation:u8, rotation-x:i16, rotation-y:i16.

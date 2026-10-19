@@ -35,6 +35,7 @@ mod ship_control;
 mod signal;
 mod station;
 mod station_cargo;
+mod station_cmd;
 mod station_service;
 mod string_validation;
 mod tgp;

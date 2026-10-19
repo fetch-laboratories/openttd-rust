@@ -41,21 +41,11 @@ static uint32_t Ship_tile_type(uint32_t tile) noexcept { return GetRustSharedSer
 
 static uint32_t Ship_water_class(uint32_t tile) noexcept { return to_underlying(GetEffectiveWaterClass(TileIndex(tile))); }
 
-static bool Ship_lock_middle(uint32_t tile) noexcept
-{
-	return IsTileType(TileIndex(tile), MP_WATER) && IsLock(TileIndex(tile)) && GetLockPart(TileIndex(tile)) == LockPart::Middle;
-}
-
 static uint32_t Ship_lock_dir(uint32_t tile) noexcept { return GetInclinedSlopeDirection(static_cast<Slope>(GetRustSharedServices().tile_slope(tile))); }
 
 static uint32_t Ship_tile_min_z(uint32_t tile) noexcept { return GetRustSharedServices().tile_z(tile); }
 
 static uint32_t Ship_tile_max_z(uint32_t tile) noexcept { return OpenTTDTileMaxZ(TileIndex(tile)); }
-
-static uint32_t Ship_track_status(uint32_t tile, uint32_t entry_dir) noexcept
-{
-	return TrackStatusToTrackBits(GetTileTrackStatus(TileIndex(tile), TRANSPORT_WATER, 0, static_cast<DiagDirection>(entry_dir)));
-}
 
 static uint32_t Ship_offset(uint32_t direction) noexcept { return static_cast<uint32_t>(TileOffsByDiagDir(static_cast<DiagDirection>(direction))); }
 
@@ -75,7 +65,8 @@ static uint32_t Ship_station(uint32_t tile) noexcept { return GetRustSharedServi
 static uint32_t Ship_industry_station(uint32_t tile) noexcept
 {
 	const Industry *i = Industry::GetByTile(TileIndex(tile));
-	return i->neutral_station == nullptr ? UINT32_MAX : i->neutral_station->index.base();
+	const Station *station = RustIndustryNeutralStation(i);
+	return station == nullptr ? UINT32_MAX : station->index.base();
 }
 
 static bool Ship_oilrig(uint32_t tile) noexcept { return IsTileType(TileIndex(tile), MP_STATION) && IsOilRig(TileIndex(tile)); }
@@ -403,7 +394,7 @@ static bool Ship_next_depot(uint32_t first, OpenTTDShipDepot *out) noexcept
 	}
 	return false;
 }
-static const OpenTTDShipLeaves &GetShipServices()
+const OpenTTDShipLeaves &GetRustShipServices() noexcept
 {
 	static const OpenTTDShipLeaves leaves{
 		.depot_dir = Ship_depot_dir, .depot_axis = Ship_depot_axis,
@@ -412,11 +403,11 @@ static const OpenTTDShipLeaves &GetShipServices()
 		.servint = Ship_servint, .needs_service = Ship_needs_service,
 		.max_distance = Ship_max_distance, .tile_valid = Ship_tile_valid,
 		.tile_type = Ship_tile_type, .water_class = Ship_water_class,
-		.lock_middle = Ship_lock_middle, .lock_dir = Ship_lock_dir,
+		.lock_middle = GetRustSharedServices().water_middle_lock, .lock_dir = Ship_lock_dir,
 		.tile_min_z = Ship_tile_min_z, .tile_max_z = Ship_tile_max_z,
-		.track_status = Ship_track_status, .offset = Ship_offset,
+		.track_status = OpenTTDLegacyWaterTracks, .offset = Ship_offset,
 		.diag_between = Ship_diag_between, .dist_square = Ship_dist_square,
-		.dist_manhattan = Ship_dist_manhattan, .docking = OpenTTDIsDockingTile,
+		.dist_manhattan = Ship_dist_manhattan, .docking = GetRustSharedServices().docking_tile,
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
 		.station = Ship_station, .industry_station = Ship_industry_station,
 		.oilrig = Ship_oilrig, .station_use = Ship_station_use,

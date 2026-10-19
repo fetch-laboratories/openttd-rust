@@ -255,7 +255,7 @@ def candidate_identity(build, binary, checkout):
 
 def export(destination, migration):
     """Capture under build locks; adapters must come from these exact game objects."""
-    from . import engines, fleet, orders, signals, towns
+    from . import engines, fleet, orders, signals, stations, towns
 
     checkout = source_identity(core.ROOT)
     if checkout["source_status"]:
@@ -283,7 +283,7 @@ def export(destination, migration):
             ordinary_source_sha256 = digest(binary)
             adapters = {}
             derivations = {}
-            for module in (fleet, orders, engines, signals, towns):
+            for module in (fleet, orders, engines, signals, stations, towns):
                 folder = runtime / module.__name__.rsplit(".", 1)[1]
                 executable, receipt = module.adapter(
                     build, folder, migration.environment()

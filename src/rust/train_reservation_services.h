@@ -8,6 +8,7 @@
 #include "services_ffi.h"
 #include "command_services.h"
 #include "services_rail.h"
+#include "services_station.h"
 
 /** @file train_reservation_services.h Direct map/PBS/follower services. */
 
@@ -43,7 +44,7 @@ static uint64_t TrainReservationCheckReverse(void *, OpenTTDTrainHandle id) noex
 static uint64_t TrainReservationCompatStation(void *, OpenTTDTrainHandle, uint32_t a, uint32_t b) noexcept
 {
 	TileIndex t(static_cast<uint32_t>(a));
-	return IsCompatibleTrainStationTile(t, TileIndex(static_cast<uint32_t>(b)));
+	return RustCompatibleStationTiles(t.base(), b);
 }
 static uint64_t TrainReservationConditional(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
 {
@@ -220,7 +221,7 @@ static void TrainReservationSetDepotDest(void *, OpenTTDTrainHandle id, uint32_t
 static void TrainReservationSetPlatform(void *, OpenTTDTrainHandle, uint32_t a, uint8_t b, uint8_t c) noexcept
 {
 	TileIndex t(static_cast<uint32_t>(a));
-	SetRailStationPlatformReservation(t, static_cast<DiagDirection>(b), c != 0);
+	RustStationPlatformReservation(t.base(), b, c != 0);
 }
 static void TrainReservationSetTunnel(void *, OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
 {

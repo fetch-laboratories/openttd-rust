@@ -86,6 +86,17 @@ pub struct CommandServices {
     pub no_train: unsafe extern "C" fn(*mut CommandCost, u32, u8),
     /// Original `TunnelBridgeIsFree`, with the source optional ignored train.
     pub wormhole_free: unsafe extern "C" fn(*mut CommandCost, u32, u32, *const Train),
+    // Registry: station command nesting (#267).
+    /// Construct the native recursion counter in caller-owned storage.
+    pub nest_begin: unsafe extern "C" fn(*mut CommandNesting) -> bool,
+    /// End exactly one native recursion counter lifetime.
+    pub nest_end: unsafe extern "C" fn(*mut CommandNesting),
+    /// Native `CommandHelperBase::InternalDoBefore`.
+    pub before: extern "C" fn(bool, bool),
+    /// Native `CommandHelperBase::InternalDoAfter`.
+    pub after: unsafe extern "C" fn(*mut CommandCost, u16, bool, bool),
+    /// `CheckAllowRemoveRoad`, shared by road/station command owners.
+    pub allow_remove_road: unsafe extern "C" fn(*mut CommandCost, u32, u8, u8, u8, u16, bool),
 }
 
 /// Opaque native town shell. Its address identifies the shell, not the Rust owner.
@@ -239,6 +250,35 @@ pub struct Services {
     pub snow_line: extern "C" fn() -> u8,
     /// `GetStationIndex`.
     pub station_index: extern "C" fn(u32) -> u16,
+    // Registry: station construction (#267).
+    /// Canonical shared `docking_tile` service.
+    pub docking_tile: extern "C" fn(u32) -> bool,
+    /// Canonical shared `station_gfx` service.
+    pub station_gfx: extern "C" fn(u32) -> u8,
+    /// Canonical shared `station_serve_neutral` service.
+    pub station_serve_neutral: extern "C" fn() -> bool,
+    /// Canonical shared `station_type` service.
+    pub station_type: extern "C" fn(u32) -> StationType,
+    /// Canonical shared `tile_animation_add` service.
+    pub tile_animation_add: extern "C" fn(u32, bool),
+    /// Canonical shared `tile_animation_delete` service.
+    pub tile_animation_delete: extern "C" fn(u32),
+    /// Canonical shared `tile_animation_set_frame` service.
+    pub tile_animation_set_frame: extern "C" fn(u32, u8),
+    /// Canonical shared `tile_change_owner` service.
+    pub tile_change_owner: extern "C" fn(u32, u8, u8),
+    /// Canonical shared `town_next_id` service.
+    pub town_next_id: extern "C" fn(u32) -> u32,
+    /// Canonical shared `town_owner_by_id` service.
+    pub town_owner_by_id: extern "C" fn(u32) -> *mut crate::town::State,
+    /// Canonical shared `utf8_length` service.
+    pub utf8_length: extern "C" fn(*const u8, usize) -> usize,
+    /// Canonical shared `vehicle_next` service.
+    pub vehicle_next: extern "C" fn(u32) -> Option<crate::vehicle::VehicleRef>,
+    /// Whether a tile carries a native water class.
+    pub water_has_class: extern "C" fn(u32) -> bool,
+    /// Whether a water tile is the middle of a lock.
+    pub water_middle_lock: extern "C" fn(u32) -> bool,
     /// Original native `tile_height` map observation.
     pub tile_height: extern "C" fn(u32) -> u32,
     /// Original native `tile_max_z` map observation.
@@ -402,6 +442,20 @@ pub fn fixture(
         slope,
         snow_line: zero_byte,
         station_index: short,
+        docking_tile: flag,
+        station_gfx: byte,
+        station_serve_neutral: flag0,
+        station_type: fixture_station_type,
+        tile_animation_add: unused_animation_add,
+        tile_animation_delete: tile,
+        tile_animation_set_frame: zone,
+        tile_change_owner: unused_tile_change_owner,
+        town_next_id: word,
+        town_owner_by_id: unused_town_owner_by_id,
+        utf8_length: unused_utf8_length,
+        vehicle_next: unused_vehicle_next,
+        water_has_class: flag,
+        water_middle_lock: flag,
         tile_height: word,
         tile_max_z: height,
         tile_owner: byte,
@@ -793,4 +847,82 @@ pub struct RailMapServices {
     pub wormhole_reserved: extern "C" fn(u32) -> bool,
     /// Native `SetTileOwner`.
     pub set_tile_owner: extern "C" fn(u32, u8),
+}
+
+/// A live native `CommandCost` borrowed for the synchronous entry.
+#[derive(Clone, Copy)]
+pub(crate) struct Cost<'a>(
+    pub(crate) *mut CommandCost,
+    pub(crate) &'a CommandCostServices,
+);
+impl Cost<'_> {
+    pub(crate) fn zero(self) {
+        (self.1.zero)(self.0);
+    }
+    pub(crate) fn error(self, message: u32) {
+        (self.1.error)(self.0, message);
+    }
+    pub(crate) fn set(self, money: i64) {
+        (self.1.expense_money)(self.0, 0, money);
+    }
+    pub(crate) fn add_money(self, money: i64) {
+        (self.1.amount)(self.0, money);
+    }
+    /// `AddCost(CommandCost &&)`.
+    pub(crate) fn add(self, other: Self) {
+        (self.1.add)(self.0, other.0);
+    }
+    pub(crate) fn take(self, other: Self) {
+        (self.1.move_cost)(self.0, other.0);
+    }
+    pub(crate) fn make_error(self, message: u32) {
+        unsafe { (self.1.make_error)(self.0, message) };
+    }
+    pub(crate) fn ok(self) -> bool {
+        (self.1.success)(self.0)
+    }
+    pub(crate) fn message(self) -> u32 {
+        (self.1.error_message)(self.0)
+    }
+    pub(crate) fn money(self) -> i64 {
+        (self.1.money)(self.0)
+    }
+}
+
+/// Native station tile kind (uint8).
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct StationType(pub u8);
+#[cfg(test)]
+extern "C" fn fixture_station_type(_: u32) -> StationType {
+    panic!("unused station type")
+}
+
+/// Caller-owned empty native recursion counter; its lifetime is exactly one
+/// synchronous nested command. Native ABI assertions check size and alignment.
+#[repr(C)]
+pub struct CommandNesting {
+    /// Opaque native placement storage, never accessed while the counter lives.
+    pub storage: u8,
+}
+
+#[cfg(test)]
+extern "C" fn unused_animation_add(_: u32, _: bool) {
+    panic!("unused animation add");
+}
+#[cfg(test)]
+extern "C" fn unused_tile_change_owner(_: u32, _: u8, _: u8) {
+    panic!("unused tile ownership");
+}
+#[cfg(test)]
+extern "C" fn unused_town_owner_by_id(_: u32) -> *mut crate::town::State {
+    panic!("unused town lookup");
+}
+#[cfg(test)]
+extern "C" fn unused_utf8_length(_: *const u8, _: usize) -> usize {
+    panic!("unused text length");
+}
+#[cfg(test)]
+extern "C" fn unused_vehicle_next(_: u32) -> Option<crate::vehicle::VehicleRef> {
+    panic!("unused vehicle iteration");
 }

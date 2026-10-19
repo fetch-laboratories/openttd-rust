@@ -30,7 +30,7 @@ static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcVisualThenSpeed(OpenTTDV
 	RoadVehicle *u = RoadOf(v);
 	u->ShowVisualEffect();
 	return {.max = RoadMaxSpeedRead(u), .x = u->x_pos, .y = u->y_pos, .z = u->z_pos, .acceleration = realistic ? u->GetAcceleration() : 0,
-		.length = RustGroundCachedLength(u), .tram = RoadTypeIsTram(u->roadtype)};
+		.length = RustGroundCachedLength(u), .tram = !RustRoadTypeIsRoad(u->roadtype)};
 }
 static OpenTTDRoadMaxSpeedRead OPENTTD_VEHICLE_CALL RoadSvcMaxSpeedRead(OpenTTDVehicle *v) noexcept { return RoadMaxSpeedRead(RoadOf(v)); }
 static OpenTTDRoadSpeedPart OPENTTD_VEHICLE_CALL RoadSvcSpeedPart(OpenTTDVehicle *v) noexcept
@@ -43,7 +43,7 @@ static OpenTTDRoadStep OPENTTD_VEHICLE_CALL RoadSvcStep(OpenTTDVehicle *v) noexc
 {
 	const RoadVehicle *u = RoadOf(v);
 	return {.tile = RustVehicleTile(u), .x = u->x_pos, .y = u->y_pos, .z = u->z_pos,
-		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = RoadTypeIsTram(u->roadtype)};
+		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = !RustRoadTypeIsRoad(u->roadtype)};
 }
 static OpenTTDRoadCrashPart OPENTTD_VEHICLE_CALL RoadSvcCrashPart(OpenTTDVehicle *v) noexcept
 {
@@ -55,7 +55,7 @@ static OpenTTDRoadPartRead OPENTTD_VEHICLE_CALL RoadSvcPart(OpenTTDVehicle *v) n
 {
 	const RoadVehicle *u = RoadOf(v);
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(u));
-	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = u->z_pos, .tram = RoadTypeIsTram(u->roadtype)};
+	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = u->z_pos, .tram = !RustRoadTypeIsRoad(u->roadtype)};
 }
 static OpenTTDRoadLink OPENTTD_VEHICLE_CALL RoadSvcLink(OpenTTDVehicle *v) noexcept
 {

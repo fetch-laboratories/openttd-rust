@@ -10,6 +10,7 @@
 #define RUST_COMMAND_SERVICES_FFI_H
 #include "command_cost_ffi.h"
 struct Train;
+struct OpenTTDCommandNesting { uint8_t storage; };
 struct OpenTTDCommandServices {
 	void (*landscape_clear)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept;
 	void (*tile_ownership)(OpenTTDCommandCost *, uint32_t) noexcept;
@@ -17,6 +18,12 @@ struct OpenTTDCommandServices {
 	void (*no_vehicle)(OpenTTDCommandCost *, uint32_t) noexcept;
 	void (*no_train)(OpenTTDCommandCost *, uint32_t, uint8_t) noexcept;
 	void (*wormhole_free)(OpenTTDCommandCost *, uint32_t, uint32_t, const Train *) noexcept;
+	// Registry: station command nesting (#267).
+	bool (*nest_begin)(OpenTTDCommandNesting *) noexcept;
+	void (*nest_end)(OpenTTDCommandNesting *) noexcept;
+	void (*before)(bool, bool) noexcept;
+	void (*after)(OpenTTDCommandCost *, uint16_t, bool, bool) noexcept;
+	void (*allow_remove_road)(OpenTTDCommandCost *, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t, bool) noexcept;
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
 #endif /* RUST_COMMAND_SERVICES_FFI_H */

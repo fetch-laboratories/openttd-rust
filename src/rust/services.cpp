@@ -8,6 +8,11 @@
 /** @file services.cpp Direct shared-world leaves for Rust game owners. */
 #include "../stdafx.h"
 #include "services_ffi.h"
+#include "presentation_services.h"
+#include "tile_animation_services.h"
+#include "vehicle_services.h"
+#include "services_water.h"
+#include "town_ffi.h"
 #include "command_services.h"
 #include "command_cost_native_services.h"
 #include "company_services.h"
@@ -25,6 +30,7 @@
 #include "../depot_map.h"
 #include "../bridge.h"
 #include "../road_func.h"
+#include "../road_internal.h"
 #include "../water_map.h"
 #include "../pbs.h"
 #include "../train.h"
@@ -40,7 +46,7 @@
 #include "../safeguards.h"
 #include "settings_services.h"
 #include "environment_services.h"
-#include "station_services.h"
+#include "services_station.h"
 #include "../clear_map.h"
 #include "../tree_map.h"
 #include "../cheat_type.h"
@@ -83,12 +89,28 @@ static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner) noexcept { 
 static void CommandNoVehicle(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = EnsureNoVehicleOnGround(TileIndex{tile}); }
 static void CommandNoTrain(OpenTTDCommandCost *out, uint32_t tile, uint8_t bits) noexcept { *NativeCost(out) = EnsureNoTrainOnTrackBits(TileIndex{tile}, static_cast<TrackBits>(bits)); }
 static void CommandWormholeFree(OpenTTDCommandCost *out, uint32_t tile, uint32_t end, const Train *ignore) noexcept { *NativeCost(out) = TunnelBridgeIsFree(TileIndex{tile}, TileIndex{end}, ignore); }
+/* The empty RAII counter is constructed in aligned caller-owned storage. It
+ * only tracks global nesting; no allocation or command policy runs here. */
+static_assert(sizeof(RecursiveCommandCounter) == sizeof(OpenTTDCommandNesting));
+static_assert(alignof(RecursiveCommandCounter) == alignof(OpenTTDCommandNesting));
+struct RustCommandLifecycle : CommandHelperBase {
+	using CommandHelperBase::InternalDoBefore;
+	using CommandHelperBase::InternalDoAfter;
+};
+static bool CommandNestBegin(OpenTTDCommandNesting *storage) noexcept { return (new (storage) RecursiveCommandCounter())->IsTopLevel(); }
+static void CommandNestEnd(OpenTTDCommandNesting *storage) noexcept { std::launder(reinterpret_cast<RecursiveCommandCounter *>(storage))->~RecursiveCommandCounter(); }
+static void CommandBefore(bool top, bool test) noexcept { RustCommandLifecycle::InternalDoBefore(top, test); }
+static void CommandAfter(OpenTTDCommandCost *out, uint16_t flags, bool top, bool test) noexcept { RustCommandLifecycle::InternalDoAfter(*NativeCost(out), DoCommandFlags(flags), top, test); }
+static void CommandAllowRemoveRoad(OpenTTDCommandCost *out, uint32_t tile, uint8_t bits, uint8_t owner, uint8_t rtt, uint16_t flags, bool town_check) noexcept { *NativeCost(out) = CheckAllowRemoveRoad(TileIndex{tile}, static_cast<RoadBits>(bits), Owner(owner), static_cast<RoadTramType>(rtt), DoCommandFlags(flags), town_check); }
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
 	static const OpenTTDCommandServices services{
 		.landscape_clear = LandscapeClear,
 		.tile_ownership = CommandTileOwnership, .ownership = CommandOwnership,
 		.no_vehicle = CommandNoVehicle, .no_train = CommandNoTrain, .wormhole_free = CommandWormholeFree,
+		.nest_begin = CommandNestBegin, .nest_end = CommandNestEnd,
+		.before = CommandBefore, .after = CommandAfter,
+		.allow_remove_road = CommandAllowRemoveRoad,
 	};
 	return services;
 }
@@ -262,6 +284,20 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.slope = SharedSlope,
 		.snow_line = SharedSnowLine,
 		.station_index = MapSvcStationIndex,
+		.docking_tile = OpenTTDIsDockingTile,
+		.station_gfx = [](uint32_t tile) noexcept { return GetStationGfx(TileIndex{tile}); },
+		.station_serve_neutral = RustServeNeutralIndustries,
+		.station_type = [](uint32_t tile) noexcept { return GetStationType(TileIndex{tile}); },
+		.tile_animation_add = OpenTTDAddAnimatedTile,
+		.tile_animation_delete = OpenTTDDeleteAnimatedTile,
+		.tile_animation_set_frame = OpenTTDSetAnimationFrame,
+		.tile_change_owner = OpenTTDChangeTileOwner,
+		.town_next_id = OpenTTDNextTownID,
+		.town_owner_by_id = OpenTTDTownOwnerByID,
+		.utf8_length = RustUtf8Length,
+		.vehicle_next = RustNextVehicle,
+		.water_has_class = OpenTTDHasWaterClass,
+		.water_middle_lock = OpenTTDIsMiddleLock,
 		.tile_height = Shared_tile_height,
 		.tile_max_z = Shared_tile_max_z,
 		.tile_owner = MapSvcTileOwner,

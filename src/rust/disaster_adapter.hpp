@@ -5,6 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 /** @file disaster_adapter.hpp Copied canonical observations and returned shared services. */
+#include "services_water.h"
 #include "services_rail.h"
 #include "disaster_ffi.h"
 #include "vehicle_services.h"
@@ -161,7 +162,7 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 		case 19: GetRustSharedServices().clear_square(step.id); break;
 		case 20: ResetIndustryConstructionStage(TileIndex{step.id}); MarkTileDirtyByTile(TileIndex{step.id}); break;
 		case 21: response = ClosestTownFromTile(TileIndex{step.id}, UINT_MAX)->index.base(); break;
-		case 23: response = TrackStatusToTrackBits(GetTileTrackStatus(TileIndex{step.id}, TRANSPORT_WATER, 0)); break;
+		case 23: response = OpenTTDWaterTracks(step.id, INVALID_DIAGDIR); break;
 		case 24: DisasterVehicle::Get(step.id)->UpdateDeltaXY(); break;
 	}
 	return response;
