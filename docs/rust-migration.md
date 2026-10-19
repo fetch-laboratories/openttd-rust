@@ -433,7 +433,8 @@ account/runner capacity. Runner size and account plan remain repository settings
 The repository belongs to the `fetch-laboratories` organization, where Blacksmith
 serves the Linux jobs: `CI_LINUX_HEAVY` is `blacksmith-8vcpu-ubuntu-2404` and the
 other Linux variables are `blacksmith-4vcpu-ubuntu-2404`. Windows uses
-`blacksmith-8vcpu-windows-2025` after #252 compatibility/warm acceptance; macOS and light jobs stay
+`blacksmith-4vcpu-windows-2025` (#252 accepted the image; #304 matched the
+size to its `--parallel 4` build); macOS and light jobs stay
 on GitHub-hosted runners (free for this public repository; Blacksmith
 bills macOS at 20x). Blacksmith serves `actions/cache` from its own co-located
 store on its runners, so the GitHub cache budget above covers only GitHub-hosted
