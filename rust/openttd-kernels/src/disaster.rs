@@ -1264,14 +1264,10 @@ mod tests {
             _ => 0,
         }
     }
-    fn owner<'a>(
-        fixture: &mut Fixture,
-        services: &'a Services,
-        operation: u32,
-        id: u32,
-    ) -> *mut Run<'a> {
+    fn owner(services: &Services, operation: u32, id: u32) -> *mut Run<'_> {
         // SAFETY: Fixture and immutable table remain stable through run destruction;
-        // leaves never reenter. The table is separate from mutable fixture storage.
+        // leaves never reenter. Reuse the table's raw context so no new exclusive
+        // fixture borrow invalidates it. The table is separate from fixture storage.
         unsafe {
             openttd_rust_disaster_create(
                 operation,
@@ -1280,7 +1276,7 @@ mod tests {
                 0,
                 0,
                 0,
-                std::ptr::from_mut(fixture).cast(),
+                services.context,
                 read,
                 write,
                 services,
@@ -1305,7 +1301,7 @@ mod tests {
         fixture.vehicle[AGE] = 8880;
         let services =
             crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-        let run = owner(&mut fixture, &services, 0, 17);
+        let run = owner(&services, 0, 17);
         let channel = unsafe { Rc::downgrade(&(*run).channel) };
         assert_eq!(advance(run, 0).kind, 2);
         let counts = (fixture.reads, fixture.writes, fixture.draws);
@@ -1321,7 +1317,7 @@ mod tests {
         fixture.vehicle[AGE] = 8880;
         let services =
             crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-        let run = owner(&mut fixture, &services, 0, 17);
+        let run = owner(&services, 0, 17);
         let action = advance(run, 0);
         assert_eq!((action.kind, action.id), (2, 17));
         assert_eq!((fixture.vehicle[TICK], fixture.vehicle[AGE]), (0, 8881));
@@ -1335,7 +1331,7 @@ mod tests {
         let address = &raw mut fixture.private;
         let services =
             crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-        let run = owner(&mut fixture, &services, 0, 17);
+        let run = owner(&services, 0, 17);
         assert_eq!(advance(run, 0).kind, 0);
         assert_eq!(
             (&raw mut fixture.private, fixture.private.flags),
@@ -1352,7 +1348,7 @@ mod tests {
         let mut fixture = Fixture::default();
         let services =
             crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-        let run = owner(&mut fixture, &services, 8, 4);
+        let run = owner(&services, 8, 4);
         assert_eq!(advance(run, 0).kind, 0);
         let creations: Vec<_> = fixture.calls.iter().filter(|a| a.kind == 15).collect();
         assert_eq!(
@@ -1382,7 +1378,7 @@ mod tests {
         fixture.disaster_in_pool = true;
         let services =
             crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-        let release = owner(&mut fixture, &services, 5, 99);
+        let release = owner(&services, 5, 99);
         assert_eq!(advance(release, 0).kind, 0);
         assert_eq!(fixture.private.state, 3);
         destroy(release);
@@ -1395,7 +1391,7 @@ mod tests {
         fixture.viewport_age = Some(37);
         let services =
             crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-        let run = owner(&mut fixture, &services, 0, 17);
+        let run = owner(&services, 0, 17);
         assert_eq!(advance(run, 0).kind, 0);
         assert_eq!((fixture.private.state, fixture.vehicle[AGE]), (2, 0));
         destroy(run);
@@ -1407,7 +1403,7 @@ mod tests {
             fixture.world[9] = 0;
             let services =
                 crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
-            let run = owner(&mut fixture, &services, 8, kind);
+            let run = owner(&services, 8, kind);
             assert_eq!(advance(run, 0).kind, 0);
             assert_eq!((fixture.writes, fixture.draws), (0, 0));
             destroy(run);
