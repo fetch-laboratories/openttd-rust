@@ -301,6 +301,12 @@ def check(scenario, run, mode, role, result):
         elif result[key] != lines:
             result["problems"].append(f"{mode}: road command outcomes differ")
         if scenario["road_commands"] != "reload":
+            if not any(
+                line.startswith("ROADCMD crossing-autoslope true ") for line in lines
+            ):
+                result["problems"].append(
+                    f"{mode}/{role}: missing non-flat crossing autoslope outcome"
+                )
             for kind in (0, 1):
                 for action in ("remove", "convert"):
                     prefix = f"ROADCMD non-road-{action}-{kind}-exec false "

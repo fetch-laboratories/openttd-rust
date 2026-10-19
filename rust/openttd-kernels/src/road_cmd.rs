@@ -1700,12 +1700,13 @@ impl<'a> Ctx<'a> {
     }
 }
 fn slope_max_z(slope: u8) -> i32 {
+    // GetSlopeMaxZ returns tile levels, unlike GetSlopeMaxPixelZ.
     if slope == 0 {
         0
     } else if steep(slope) {
-        16
+        2
     } else {
-        8
+        1
     }
 }
 

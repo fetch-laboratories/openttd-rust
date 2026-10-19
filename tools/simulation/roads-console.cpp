@@ -101,6 +101,8 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	SetTrackReservation(t(3, 9), TRACK_BIT_Y);
 	RoadRun<CMD_BUILD_ROAD>("crossing", t(3, 9), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
 	RoadRun<CMD_BUILD_ROAD>("crossing-tram", t(3, 9), ROAD_X, ROADTYPE_TRAM, DRD_NONE, TownID::Invalid());
+	/* Terraform heights are tile levels, including non-flat crossing surfaces. */
+	RoadPrint("crossing-autoslope", _tile_type_road_procs.terraform_tile_proc(t(3, 9), {}, GetTileMaxZ(t(3, 9)) - 1, SLOPE_WSE));
 	RoadRun<CMD_REMOVE_LONG_ROAD>("crossing-remove-tram", t(3, 9), t(3, 9), ROADTYPE_TRAM, AXIS_X, false, true);
 	RoadRun<CMD_REMOVE_LONG_ROAD>("crossing-remove", t(3, 9), t(3, 9), ROADTYPE_ROAD, AXIS_X, false, true);
 	RoadRun<CMD_BUILD_ROAD>("crossing-again", t(3, 9), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
