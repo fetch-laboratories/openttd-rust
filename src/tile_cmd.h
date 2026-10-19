@@ -112,7 +112,12 @@ typedef TrackStatus GetTileTrackStatusProc(TileIndex tile, TransportType mode, u
 typedef void AddProducedCargoProc(TileIndex tile, CargoArray &produced);
 typedef bool ClickTileProc(TileIndex tile);
 typedef void AnimateTileProc(TileIndex tile);
+#ifdef WITH_RUST
+/** Scalar native ABI also called directly by the Rust scheduler. */
+using TileLoopProc = void(uint32_t tile) noexcept;
+#else
 typedef void TileLoopProc(TileIndex tile);
+#endif
 typedef void ChangeTileOwnerProc(TileIndex tile, Owner old_owner, Owner new_owner);
 
 typedef VehicleEnterTileStates VehicleEnterTileProc(Vehicle *v, TileIndex tile, int x, int y);

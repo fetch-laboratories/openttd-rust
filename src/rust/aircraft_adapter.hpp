@@ -8,6 +8,7 @@
 #include "aircraft_ffi.h"
 #include "vehicle_services.h"
 #include "station_services.h"
+#include "services_station.h"
 #include "company_services.h"
 static_assert(ORIGINAL_SAMPLE_COUNT == 73 && SND_18_TAKEOFF_HELICOPTER == 22 && SND_12_EXPLOSION == 16 && SND_17_SKID_PLANE == 21);
 static_assert(NUM_CARGO == 64 && AT_OILRIG == 9);
@@ -75,12 +76,6 @@ static bool OPENTTD_AIRCRAFT_CALL Aircraft_has_hangar(const OpenTTDStation *s) n
 	return RustStationHasHangar(st);
 }
 
-static const void * OPENTTD_AIRCRAFT_CALL Aircraft_airport_fta(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return st->airport.GetFTA();
-}
-
 static uint64_t * OPENTTD_AIRCRAFT_CALL Aircraft_airport_blocks(const OpenTTDStation *s) noexcept
 {
 	const Station *st = StationOf(s);
@@ -114,12 +109,6 @@ static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_airport_flags(const void * airport
 {
 	const auto *ap = static_cast<const AirportFTAClass *>(airport);
 	return ap->flags.base();
-}
-
-static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_airport_delta_z(const void * airport) noexcept
-{
-	const auto *ap = static_cast<const AirportFTAClass *>(airport);
-	return ap->delta_z;
 }
 
 static const void * OPENTTD_AIRCRAFT_CALL Aircraft_node(const void * airport, uint8_t pos) noexcept
@@ -455,7 +444,7 @@ static OpenTTDAircraftGeometry OPENTTD_AIRCRAFT_CALL Aircraft_geometry(const Ope
 	const Station *st = StationOf(s);
 	const uint32_t tile = RustStationAirportTile(st);
 	if (tile == INVALID_TILE.base()) return {.tile = RustStationLocation(st), .rotation = 0, .width = 1, .height = 1, .airport = false};
-	return {.tile = tile, .rotation = st->airport.rotation, .width = st->airport.w, .height = st->airport.h, .airport = true};
+	return {.tile = tile, .rotation = st->airport.rotation, .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st), .airport = true};
 }
 static uint64_t OPENTTD_AIRCRAFT_CALL Aircraft_layout_blocks(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].blocks.base(); }
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_layout_heading(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].heading; }
@@ -491,14 +480,14 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.airport_type = Aircraft_airport_type,
 	.station_owner = Aircraft_station_owner,
 	.has_hangar = Aircraft_has_hangar,
-	.airport_fta = Aircraft_airport_fta,
+	.airport_fta = OpenTTDStationAirportFTA,
 	.airport_blocks = Aircraft_airport_blocks,
 	.had_vehicle = Aircraft_had_vehicle,
 	.dummy_airport = Aircraft_dummy_airport,
 	.airport_elements = Aircraft_airport_elements,
 	.helipads = Aircraft_helipads,
 	.airport_flags = Aircraft_airport_flags,
-	.airport_delta_z = Aircraft_airport_delta_z,
+	.airport_delta_z = OpenTTDAirportDeltaZ,
 	.node = Aircraft_node,
 	.fta = Aircraft_fta,
 	.moving = Aircraft_moving,
@@ -593,7 +582,7 @@ Station *GetTargetAirportIfValid(const Aircraft *v)
 {
 	assert(v->type == VEH_AIRCRAFT);
 	Station *st = Station::GetIfValid(v->targetairport);
-	return st == nullptr || st->airport.tile == INVALID_TILE ? nullptr : st;
+	return st == nullptr || RustStationAirportTile(st) == INVALID_TILE.base() ? nullptr : st;
 }
 void ReleaseAircraftAirportBlocks(const Aircraft *v) { openttd_rust_aircraft_release_blocks(&_aircraft_leaves, AircraftVehicle(const_cast<Aircraft *>(v))); }
 void InvalidateAircraftTargetStation(StationID station) { openttd_rust_aircraft_invalidate_target(&_aircraft_leaves, station.base()); }

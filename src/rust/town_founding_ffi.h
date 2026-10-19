@@ -41,8 +41,6 @@ struct OpenTTDTownFoundingServices {
 	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	bool (*close_to_town)(uint32_t, uint) noexcept OPENTTD_SERVICE_DEFAULT(close_to_town);
 	bool (*flat)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(flat);
-	ClearGround (*clear_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_ground);
-	TreeGround (*tree_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_ground);
 	uint (*water_distance)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(water_distance);
 	uint (*scale_size)(uint) noexcept OPENTTD_SERVICE_DEFAULT(scale_size);
 	uint (*scale_land)(uint) noexcept OPENTTD_SERVICE_DEFAULT(scale_land);

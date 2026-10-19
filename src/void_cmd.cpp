@@ -56,8 +56,15 @@ static void GetTileDesc_Void(TileIndex, TileDesc &td)
 	td.owner[0] = OWNER_NONE;
 }
 
+#ifdef WITH_RUST
+static void TileLoop_Void(uint32_t tile_index) noexcept
+#else
 static void TileLoop_Void(TileIndex tile)
+#endif
 {
+#ifdef WITH_RUST
+	const TileIndex tile{tile_index};
+#endif
 	/* Floods adjacent edge tile to prevent maps without water. */
 	TileLoop_Water(tile);
 }

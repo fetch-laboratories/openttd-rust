@@ -15,6 +15,8 @@ add_test_files(
     industry.cpp
     history_func.cpp
     landscape_partial_pixel_z.cpp
+    landscape_tile_loop.cpp
+    landscape_protocol.hpp
     math_func.cpp
     mock_environment.h
     mock_fontcache.h

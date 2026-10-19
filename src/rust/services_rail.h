@@ -8,7 +8,9 @@
 /** @file services_rail.h Canonical inline rail-map reads for native consumers. */
 #ifndef RUST_SERVICES_RAIL_H
 #define RUST_SERVICES_RAIL_H
+#include <type_traits>
 #include "../rail_map.h"
+#include "../rail.h"
 #include "../road_map.h"
 #include "../station_map.h"
 #include "../tunnelbridge_map.h"
@@ -43,8 +45,9 @@ inline uint32_t RustOtherTunnelBridgeEnd(uint32_t tile) noexcept { return GetOth
 inline RailType RustRailType(uint32_t tile) noexcept { return GetRailType(TileIndex(tile)); }
 inline void RustSetRailType(uint32_t tile, uint8_t rt) noexcept { SetRailType(TileIndex(tile), static_cast<RailType>(rt)); }
 inline RailTileType RustRailTileType(uint32_t tile) noexcept { return GetRailTileType(TileIndex(tile)); }
+inline Foundation RustRailFoundation(Slope slope, TrackBits tracks) noexcept { return GetRailFoundation(slope, tracks); }
 inline RailGroundType RustRailGround(uint32_t tile) noexcept { return GetRailGroundType(TileIndex(tile)); }
-inline void RustSetRailGround(uint32_t tile, uint8_t ground) noexcept { SetRailGroundType(TileIndex(tile), static_cast<RailGroundType>(ground)); }
+inline void RustSetRailGroundTyped(uint32_t tile, RailGroundType ground) noexcept { SetRailGroundType(TileIndex(tile), ground); }
 inline void RustSetTrackBits(uint32_t tile, uint8_t bits) noexcept { SetTrackBits(TileIndex(tile), static_cast<TrackBits>(bits)); }
 inline void RustSetPresentSignals(uint32_t tile, uint8_t signals) noexcept { SetPresentSignals(TileIndex(tile), signals); }
 inline uint RustSignalStates(uint32_t tile) noexcept { return GetSignalStates(TileIndex(tile)); }
@@ -71,6 +74,11 @@ inline void RustSetTileOwner(uint32_t tile, uint8_t owner) noexcept { SetTileOwn
 
 /* Shared signature adapters preserve existing legacy callback ABIs. Query is
  * compile-time and inline: each entry makes the same native query. */
+template <auto Query, typename First, typename Second>
+auto OpenTTDEnumMapQuery(std::underlying_type_t<First> first, std::underlying_type_t<Second> second) noexcept
+{
+	return Query(static_cast<First>(first), static_cast<Second>(second));
+}
 template <typename Result, auto Query, typename... Args>
 Result OpenTTDMapQuery(Args... args) noexcept
 {

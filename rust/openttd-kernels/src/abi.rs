@@ -31,6 +31,211 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "OpenTTDFoundationSlope" ["landscape"] => crate::services::FoundationSlope {
+        z,
+        slope,
+    };
+    "OpenTTDGroundCostServices" ["landscape"] => crate::ground::CostServices {
+        commands,
+        costs,
+        prepare,
+        release,
+    };
+    "OpenTTDRoadSnowGround" ["landscape"] => crate::ground::RoadSnowGround {
+        z,
+        snow,
+    };
+    "OpenTTDRoadGroundServices" ["landscape"] => crate::ground::RoadServices {
+        snow,
+        snow_or_desert,
+        toggle_snow_or_desert,
+        roadside,
+        set_roadside,
+        work_counter,
+        set_work_counter,
+        all_bits,
+        bulldozer,
+        cleanup,
+        remove,
+        town,
+        set_road_type,
+    };
+    "OpenTTDAirportGround" ["landscape"] => crate::water::AirportGround {
+        station,
+        tile,
+        width,
+        height,
+    };
+    "OpenTTDTileVehicleCursor" ["landscape"] => crate::water::TileVehicleCursor {
+        storage,
+    };
+    "OpenTTDWaterGroundServices" ["landscape"] => crate::water::WaterServices {
+        rail,
+        clear,
+        vehicles,
+        costs,
+        company,
+        non_flooding,
+        set_non_flooding,
+        coast,
+        set_tree_ground,
+        make_sea,
+        buoy_or_dock,
+        canal_or_river,
+        possible_docking,
+        check_docking,
+        invalidate_region,
+        remove_rail,
+        apply_foundation,
+        iterator_begin,
+        iterator_current,
+        iterator_next,
+        iterator_end,
+        airport_tile,
+        airport,
+        airport_member,
+        airport_z,
+        victim,
+        aircraft_pose,
+        ground_pose,
+        crash,
+        ai_event,
+        game_event,
+        news,
+        bridge_height,
+    };
+    "OpenTTDFloodVictim" ["landscape"] => crate::water::FloodVictim {
+        status,
+        kind => type,
+    };
+    "OpenTTDAircraftFloodPose" ["landscape"] => crate::water::AircraftFloodPose {
+        tile,
+        z,
+        subtype,
+    };
+    "OpenTTDGroundFloodPose" ["landscape"] => crate::water::GroundFloodPose {
+        z,
+        first,
+    };
+    "OpenTTDClearSurface" ["landscape"] => crate::ground::ClearSurface {
+        ground,
+        density,
+        snow,
+    };
+    "OpenTTDFieldFences" ["landscape"] => crate::ground::FieldFences {
+        ne,
+        se,
+        sw,
+        nw,
+    };
+    "OpenTTDFieldGround" ["landscape"] => crate::ground::FieldGround {
+        industry,
+        field_type => type,
+    };
+    "OpenTTDClearServices" ["landscape"] => crate::ground::ClearServices {
+        field_tile,
+        density,
+        counter,
+        snow,
+        surface,
+        set_ground,
+        set_density,
+        set_counter,
+        clear_snow,
+        make_clear,
+        fences,
+        field,
+        set_field,
+        water_class,
+        ambient,
+    };
+    "OpenTTDRailSnowGround" ["landscape"] => crate::ground::RailSnowGround {
+        z,
+        slope,
+        tracks,
+        plain,
+    };
+    "OpenTTDRailFenceGround" ["landscape"] => crate::ground::RailFenceGround {
+        tracks,
+        owner,
+        plain,
+    };
+    "OpenTTDRailServices" ["landscape"] => crate::ground::RailServices {
+        tracks,
+        ground,
+        set_ground,
+        snow,
+        fences,
+        foundation,
+        owned_land,
+    };
+    "OpenTTDTunnelGround" ["landscape"] => crate::ground::TunnelGround {
+        z,
+        snow,
+    };
+    "OpenTTDTunnelServices" ["landscape"] => crate::ground::TunnelServices {
+        snow,
+        snow_or_desert,
+        set_snow_or_desert,
+    };
+    "OpenTTDTileTypeAllocation" ["landscape"] => crate::services::TileTypeAllocation {
+        base,
+        count,
+    };
+    "OpenTTDNativeTileTypeAccess::BaseTile" ["landscape"] => crate::services::BaseTileLayout {
+        kind => type,
+        height,
+        m2,
+        m1,
+        m3,
+        m4,
+        m5,
+    };
+    "OpenTTDGroundLoopServices" ["landscape"] => crate::tile_loop::GroundServices {
+        clear,
+        rail,
+        road,
+        tunnel,
+        water,
+        costs,
+        call,
+        climate,
+        editor,
+        rebuild,
+        ambient_callback,
+    };
+    "OpenTTDIndustryLoopServices" ["landscape"] => crate::tile_loop::IndustryServices {
+        production,
+        construction,
+        lifecycle,
+        tiles,
+        generation,
+    };
+    "OpenTTDLandscapeLoopServices" ["landscape"] => crate::tile_loop::Services {
+        shared,
+        tile_types,
+        trees,
+        industry,
+        ground,
+        house_loop,
+        station_loop,
+        object_loop,
+    };
+    "OpenTTDGroundABICalls" ["landscape"] => crate::ground::ABICalls {
+        fences,
+        surface,
+        field,
+        rail_snow,
+        rail_fence,
+        foundation,
+        road_snow,
+        tunnel,
+        airport,
+        victim,
+        aircraft,
+        ground,
+        enums,
+    };
     "OpenTTDEngineLifecycle" ["engine"] => crate::engine::Lifecycle {
         company_avail,
         company_hidden,
@@ -282,7 +487,6 @@ layouts! {
         rail_foundation,
         apply_foundation,
         slope_z_in_corner,
-        flooding,
         entrance_edge,
         ship_on_tile,
         build_rail,
@@ -357,6 +561,7 @@ layouts! {
         tram_owner,
     };
     "OpenTTDRailMapServices" ["probe"] => crate::services::RailMapServices {
+        ground,
         traversal,
         signal_presence,
         signal_update,
@@ -370,14 +575,11 @@ layouts! {
         set_signal_state,
         other_tunnel_bridge_end,
         rail_track_status,
-        rail_tracks,
         has_signals,
         signal_type,
         rail_type,
         set_rail_type,
         rail_tile_type,
-        rail_ground,
-        set_rail_ground,
         set_track_bits,
         present_signals,
         set_present_signals,
@@ -795,12 +997,7 @@ layouts! {
         add_growth,
         set_growth,
         make_clear,
-        make_shore,
-        make_snow,
-        clear_neighbour_flooding,
-        tile_loop_water,
         ambient,
-        play_sound,
         progress,
         progress_total,
         town_rating,
@@ -967,6 +1164,15 @@ layouts! {
         // Registry: house (#256).
 
         // Registry: landscape (#212).
+        clear_ground,
+        foundation,
+        has_water_class,
+        make_shore,
+        make_snow,
+        play_sound,
+        set_fence,
+        tree_ground,
+        water_services,
     };
     "OpenTTDVehicleNewPosition" ["probe"] => crate::vehicle::NewPosition {
         x,
@@ -1471,8 +1677,6 @@ layouts! {
         can_allocate,
         close_to_town,
         flat,
-        clear_ground,
-        tree_ground,
         water_distance,
         scale_size,
         scale_land,
@@ -2311,7 +2515,6 @@ layouts! {
         edge_distance,
         refinery_limit,
         tile_height,
-        has_water_class,
         set_company,
         temporary_shell,
         resolve_location,
@@ -2408,7 +2611,6 @@ layouts! {
         industry_index,
         toffee_offset,
         on_water,
-        water_loop,
         transport,
         anim_production,
         anim_next,
@@ -2625,7 +2827,6 @@ layouts! {
         snow_line,
         make_field,
         fence_wanted,
-        set_fence,
         tile_completed,
         harvest,
         observe,

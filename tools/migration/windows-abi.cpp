@@ -63,6 +63,11 @@
 // Registry: house (#256).
 
 // Registry: landscape (#212).
+#include "rust/ground_ffi.h"
+#include "rust/landscape_loop_ffi.h"
+#include "rust/tile_type_access.hpp"
+#include "tests/ground_protocol.hpp"
+#include "tests/landscape_protocol.hpp"
 
 #include <algorithm>
 #include <array>
@@ -94,6 +99,7 @@ static void Layouts()
 #include "abi-layout-probe.inc"
 #include "abi-layout-scheduler.inc"
 #include "abi-layout-maintenance.inc"
+#include "abi-layout-landscape.inc"
 
 	CHECK(openttd_rust_abi_layout_named("unknown", 0) == SIZE_MAX);
 	CHECK(openttd_rust_abi_layout_named("OpenTTDTrainServices", SIZE_MAX) == SIZE_MAX);
@@ -655,16 +661,7 @@ static const OpenTTDTreeServices tree_probe_services{
 	.add_growth = TreeUnused<void, uint32_t, int32_t>,
 	.set_growth = TreeUnused<void, uint32_t, uint8_t>,
 	.make_clear = TreeUnused<void, uint32_t, uint8_t, uint32_t>,
-	.make_shore = TreeUnused<void, uint32_t>,
-	.make_snow = TreeUnused<void, uint32_t, uint32_t>,
-	.clear_neighbour_flooding = TreeUnused<void, uint32_t>,
-	.tile_loop_water = [](uint32_t tile) noexcept {
-		/* Flooding reenters tree code through a nested clear of a neighbouring tile. */
-		++tree_probe.waters;
-		tree_probe.nested_cost = openttd_rust_trees_clear_tile(nullptr, tile + 1, 5, true, false, &tree_probe_services, tree_probe.shared);
-	},
 	.ambient = TreeUnused<bool, uint32_t>,
-	.play_sound = TreeUnused<void, uint32_t, uint16_t>,
 	.progress = []() noexcept { return tree_probe.abort; },
 	.progress_total = TreeUnused<bool, uint32_t>,
 	.town_rating = TreeUnused<void, OpenTTDTreeCommand *, uint32_t, bool>,
@@ -677,6 +674,54 @@ static const OpenTTDTreeServices tree_probe_services{
 static void Trees()
 {
 	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, TreeRandom, EffectTestIndustry);
+	shared.make_shore = TreeUnused<void, uint32_t>;
+	shared.make_snow = TreeUnused<void, uint32_t, uint32_t>;
+	shared.play_sound = TreeUnused<void, uint32_t, uint16_t>;
+	static const OpenTTDWaterGroundServices water{
+		.rail = nullptr,
+		.clear = nullptr,
+		.vehicles = nullptr,
+		.costs = nullptr,
+		.company = nullptr,
+		.non_flooding = TreeUnused<bool, uint32_t>,
+		.set_non_flooding = TreeUnused<void, uint32_t, bool>,
+		.coast = TreeUnused<bool, uint32_t>,
+		.set_tree_ground = TreeUnused<void, uint32_t, TreeGround, uint32_t>,
+		.make_sea = TreeUnused<void, uint32_t>,
+		.buoy_or_dock = TreeUnused<bool, uint32_t>,
+		.canal_or_river = TreeUnused<bool, uint32_t>,
+		.possible_docking = TreeUnused<bool, uint32_t>,
+		.check_docking = TreeUnused<void, uint32_t>,
+		.invalidate_region = TreeUnused<void, uint32_t>,
+		.remove_rail = TreeUnused<void, OpenTTDCommandCost *, uint32_t, Track>,
+		.apply_foundation = TreeUnused<OpenTTDFoundationSlope, Foundation, Slope>,
+		.iterator_begin = TreeUnused<void, OpenTTDTileVehicleCursor *, uint32_t>,
+		.iterator_current = TreeUnused<OpenTTDVehicle *, OpenTTDTileVehicleCursor *>,
+		.iterator_next = TreeUnused<void, OpenTTDTileVehicleCursor *>,
+		.iterator_end = TreeUnused<void, OpenTTDTileVehicleCursor *>,
+		.airport_tile = TreeUnused<bool, uint32_t>,
+		.airport = TreeUnused<OpenTTDAirportGround, uint32_t>,
+		.airport_member = TreeUnused<bool, const OpenTTDStation *, uint32_t>,
+		.airport_z = TreeUnused<int32_t, uint32_t>,
+		.victim = TreeUnused<OpenTTDFloodVictim, OpenTTDVehicle *>,
+		.aircraft_pose = TreeUnused<OpenTTDAircraftFloodPose, OpenTTDVehicle *>,
+		.ground_pose = TreeUnused<OpenTTDGroundFloodPose, OpenTTDVehicle *>,
+		.crash = TreeUnused<uint32_t, OpenTTDVehicle *>,
+		.ai_event = TreeUnused<void, OpenTTDVehicle *, uint32_t>,
+		.game_event = TreeUnused<void, OpenTTDVehicle *, uint32_t>,
+		.news = TreeUnused<void, OpenTTDVehicle *, uint32_t>,
+		.bridge_height = TreeUnused<int32_t, uint32_t>,
+	};
+	shared.water_services = []() noexcept { return &water; };
+	shared.map_max_x = []() noexcept { return 63U; };
+	shared.map_max_y = []() noexcept { return 63U; };
+	shared.tile_type = [](uint32_t) noexcept { return uint8_t{4}; };
+	shared.tree_ground = [](uint32_t tile) noexcept {
+		/* A water observation reenters trees; no owner borrow spans the call. */
+		++tree_probe.waters;
+		tree_probe.nested_cost = openttd_rust_trees_clear_tile(nullptr, tile + 1, 5, true, false, &tree_probe_services, tree_probe.shared);
+		return static_cast<TreeGround>(0);
+	};
 	shared.clear_square = [](uint32_t) noexcept { ++tree_probe.clears; };
 	tree_probe.shared = &shared;
 	uint8_t *counter = openttd_rust_tree_counter();
@@ -695,7 +740,7 @@ static void Trees()
 		{.build_price = 15, .size = 4096, .climate = 0, .editor = false, .execute = false, .company_valid = false}, &tree_probe_services, &shared);
 	CHECK(command.cost == 30 && command.status == 0);
 	tree_probe.plant.tile_type = 0;
-	openttd_rust_trees_tile_loop(1, {.tick_counter = 0, .size_x = 64, .climate = 0, .extra = 2, .ambient = false}, &tree_probe_services, &shared);
+	openttd_rust_trees_tile_loop(1, {.tick_counter = 0, .size_x = 64, .climate = 0, .extra = 2, .ambient = false}, nullptr, &tree_probe_services, &shared);
 	CHECK(tree_probe.waters == 1 && tree_probe.clears == 1 && tree_probe.nested_cost == 40 && tree_probe.writes == 1);
 	openttd_rust_trees_initialize();
 	CHECK(*counter == 0 && counter == openttd_rust_tree_counter());
@@ -1724,6 +1769,8 @@ int main()
 	// Registry: house (#256).
 
 	// Registry: landscape (#212).
+	CHECK(GroundProbe::Run());
+	LandscapeProbe::Run([](bool result) { CHECK(result); });
 
 	/* Opaque owner, native size_t, immutable byte borrow and complete UTF-8 output. */
 	auto *townname = openttd_rust_townname_generate(1, UINT32_MAX);

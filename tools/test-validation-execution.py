@@ -248,6 +248,35 @@ class RuntimeTests(unittest.TestCase):
                 with core.game_slot(False):
                     self.assertTrue((Path(directory) / "simulation-game.lock").exists())
 
+    @unittest.skipUnless(os.name == "posix", "POSIX cross-process locks")
+    def test_benchmark_enters_while_another_shared_game_is_running(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lock = Path(directory) / "simulation-game.lock"
+            script = (
+                "from simulation import core; from pathlib import Path; import sys\n"
+                "core.GAME_LOCK = Path(sys.argv[1])\n"
+                "with core.game_slot(True): print('entered', flush=True)\n"
+            )
+            with file_lock(lock, shared=True, label="ordinary game"):
+                with subprocess.Popen(
+                    [sys.executable, "-c", script, str(lock)],
+                    cwd=TOOLS,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                ) as child:
+                    try:
+                        output, errors = child.communicate(timeout=5)
+                    finally:
+                        if child.poll() is None:
+                            child.kill()
+                            child.communicate(timeout=5)
+                    self.assertEqual(child.returncode, 0, errors)
+                    self.assertIn("entered", output)
+            self.assertEqual(
+                list(lock.with_name(lock.name + ".holders").glob("*.json")), []
+            )
+
 
 class NarrowChecksTests(unittest.TestCase):
     initialize_repo = RuntimeTests.initialize_repo

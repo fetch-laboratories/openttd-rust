@@ -124,7 +124,7 @@ LD_LIBRARY_PATH="$PWD/.local/deps/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$L
 
 ### Generated ABI probes and fixture defaults (#284)
 
-`layouts!` in `abi.rs`, `company.rs`, `crypto_primitives.rs`, `blake2b.rs` and
+`layouts!` declarations in `abi.rs`, `company.rs`, `crypto_primitives.rs`, `blake2b.rs`,
 `x25519.rs` and `auth.rs` name the C++ type, probe group and ordered Rust fields. Use
 `rust_field => cpp_field` for aliases and `width field: RustType` for an extra
 native-width check. Native-only groups remain in their owning unit tests.
@@ -248,7 +248,7 @@ python3 tools/migration.py simulate play-opus-55-167-002-manual --benchmark 3 --
 ```
 
 The driver builds with two jobs, then runs one scenario worker. Benchmark mode
-runs only plain pairs, isolates each timed game from other clone-wide harness
+runs only plain pairs, shares the clone-wide coordination lock with other harness
 games, and compares each exit save and full logs. Both roles use #154's serial
 offline thread-failure fallback, recorded as `execution` in the report. These
 are total offline times, not normal threaded frame latency. It retains the final
@@ -258,7 +258,7 @@ directories and runtime libraries; keep profiling separate from timing samples.
 Timings include startup, loading, serial link-graph work and save I/O. Benchmark
 games wait directly for child exit with a timeout watchdog; ordinary runs retain
 subprocess timeout polling, which can add about 50 ms.
-The lock excludes harness games, not unrelated host activity. `SPEED_BUDGETS` in
+Shared coordination does not reserve a quiet host. `SPEED_BUDGETS` in
 `tools/simulation/roads.py` records current ratios, updated up or down by integrating
 PRs. Reports show a 15% guard against that record, fixed ceilings of 1.5x for play
 saves and 1.3x for generation, and a flag within 5% of the ceiling. Take one median
@@ -526,6 +526,38 @@ Default CI verifies the build and runs `python3 tools/migration.py simulate` wit
 settings cases spanning all four climates and selected terrain, smoothness, variety, sea/border,
 height and map-shape values. Maximum-map performance and Windows/macOS runtime parity remain
 untested.
+
+### Landscape scheduler, ground and flooding
+
+The #212 owner ([PR #255](https://github.com/fetch-laboratories/openttd-rust/pull/255))
+controls `RunTileLoop`, clear/rail/road/tunnel ground evolution, flooding behaviour,
+half-tile rail removal, dry-up, neighbour wakeups and live flood-victim traversal.
+The process-global saved cursor commits after the complete source batch; DATE,
+legacy loading, reset and zero repair retain their widths/order. Original selected
+bodies compile only without `WITH_RUST`; packed map/pool storage remains native.
+
+The in-entry LFSR keeps native unsigned map-log widths and reads each live type
+byte from audited allocation metadata. All seven Rust tile owners dispatch directly,
+void tiles straight to the water owner, which reuses the dispatched type and reader
+and derives `IsValidTile` from the map size; only house/station/object have native
+scalar handlers with local strong-index construction. Leaves shared by several
+owners (clear/tree ground, snow, shore, sound, foundation) live in shared tables.
+Tree/industry water loops, tree wakeups, rail flooding queries and road town-type
+selection call Rust directly; canonical rail leaves have one binding. Ground
+boundaries use actual native enums, unrestricted transparent
+Rust carriers, exact counters and typed station handles. Legacy protocols adapt
+explicitly. Each native entry owns independent lazy stack command-result storage.
+No hot call allocates a protocol object or copies a complete native tile/vehicle.
+Vehicle iterators advance after crash/events/news/effects; airport membership,
+bridge endpoint order and company restoration follow source. No ordinary tick
+callback unwinds; generation-progress cancellation stays outside tick.
+
+`verify`, the default scheduler comparison and `simulate landscape roads-flooding`
+exercise real ABI calls, declared endpoints and required named branch witnesses;
+`--self`/`--soak` extend evidence. Missing witnesses fail. The unchanged scheduler
+probe covers dimensions/cursor/reentry phases unreachable through ordinary saves.
+Remaining matrix/editor/NewGRF/threaded gaps are in #156. `TreeObservation` remains;
+the scheduler gate does not remove its full facade cost.
 
 ### Landscape partial-pixel height
 
@@ -1033,7 +1065,8 @@ it on ordinary deletion and pool cleanup.
 
 Copied call-scoped observations and immediate scalar writes keep original mutation order. Rust
 calls common Random/map and effect-specific sound, viewport and animated-tile noexcept wrappers
-directly; none can reenter Rust.
+directly; none can reenter Rust. The immutable shared service table is borrowed only
+until the controller returns (#299); no full table is copied.
 
 `python3 tools/migration.py simulate effects` compares save chunks across subtypes, expiry,
 reload and natural creation. Viewport pixels, audible output, full legacy fixtures and every
@@ -1074,7 +1107,11 @@ portable builds.
 
 Copied observations and direct noexcept shared services preserve original ordering and shared
 RNG draws. Private scalar addresses remain stable through modern and legacy save staging; flight
-helpers borrow only the flags scalar for their call.
+helpers borrow only the flags scalar for their call. World clones share an immutable
+service-table borrow tied to the Run/future lifetime (#299), ending on destruction,
+including cancellation. Production uses the process-wide const table; Rust fixtures
+own separate tables through destruction, and native partial tables stay in scope.
+Callbacks may mutate their separate context, never the borrowed table.
 
 The default `disasters` simulation checks scheduling, crashes, removal, industry reset,
 submarine movement and reload. Legacy save fixtures, viewport pixels, sound output, allocator

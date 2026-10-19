@@ -4,11 +4,11 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-18, `bb2f242ddc`)
+## Where the fork stands (2026-10-18, `629262509e`)
 
-- Twenty-nine ownership ports. Whole fork: Rust 64,134 / tooling 30,077 / glue 28,250 / original retired 40,145 of 470,612 `src/` lines (8.53%). Simulation: 32,218 / 102,615 (31.40%).
-- This pair integrated #292 cleanup repair and #287 receipt removal: tooling net -1,889, no game-code retirement or ownership change. Exact-head Full passed; protected Quick recovered. The actual docs-only postmerge skip passed. Followup #296/#297 closes a separate filename-only gitlink shortcut.
-- Four component branches: #269 houses (891 retired), #255 landscape (846), #266/#290 road commands and #267 station commands. Maintenance #289 is integrated; #284 continues implementation after preserved provider failures, and #297 is in workflow bootstrap.
+- Twenty-nine ownership ports. Whole fork: Rust 64,154 / tooling 30,126 / glue 28,376 / original retired 40,145 of 470,612 `src/` lines (8.53%). Simulation: 32,218 / 102,615 (31.40%).
+- This pair integrated #289 road YAPF reads and #297 typed Markdown classification: Rust net +20 / tooling net +49 / glue net +126 / original retirement 0. All exact-head Full gates passed. #297's deployed docs-only acceptance passed; CI_ON_DEMAND=true.
+- Four component branches remain: #269 houses, #255 landscape, #266/#290 roads and #267 stations. House's final speed misses require profile-guided fixes; landscape needs two quiet repeats. Maintenance #284/#298 and #299/#300 are active; root takes the small #301 coordination fix while agent slots are full.
 - Current speed record (#289): TGP 1.169, play saves 1.21-1.43. P2016 is within 5% of its 1.5 ceiling; the early #275 speed pass is active. All guards pass; no quiet repeat was warranted.
 - Coverage (#156): vehicle deletion/pool-growth assertions, NewGRF/legacy branches and the unintegrated house/landscape gaps remain open.
 - The largest remaining simulation C++: `station_cmd.cpp` 4,424 lines, `road_cmd.cpp` 2,669, `vehicle.cpp` 2,573, `tunnelbridge_cmd.cpp` 2,135, `town_cmd.cpp` 1,929, `train_cmd.cpp` 1,778, `landscape.cpp` 1,665, `rail_cmd.cpp` 1,531, `water_cmd.cpp` 1,471.
@@ -114,6 +114,7 @@ evidence in their PRs; rows below use original retirement and net glue (#223).
 | #291 (temporary clone cleanup) | #292 | direct | `c93cf6701e` | 0 / 15 / 0 / 0; net glue 0 |
 | #283 (receipt tooling retirement) | #287 | direct | `bb2f242ddc` | 0 / 337 / 0 / 0; tooling net -1904 |
 | #288 (#275 road YAPF observations) | #289 | direct | `62622e60d3` | 53 / 4 / 200 / 0; net glue +126 |
+| #296 (typed Markdown classification) | #297 | direct | `629262509e` | 0 / 50 / 0 / 0; tooling net +49 |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -124,7 +125,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings.
 2. **Speed guard and passes (#155, #282, AGENTS.md).**
-   - **Coordination followup #301:** the inherited timed-game lock can wait behind a shared profile. Root uses shared coordination for current unsampled runs; a bounded default concurrency regression and shared normal benchmark path follow after #297 frees a maintenance slot (80 added tooling/test lines).
+   - **Coordination followup #301:** the inherited timed-game lock can wait behind a shared profile. Root uses shared coordination for current unsampled runs; root implements the shared normal path and a bounded default concurrency regression now that #297 freed a maintenance slot (80 added tooling/test lines).
    - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios. Each integrating PR records its medians, and each speed pass re-measures all six on a quiet host.
    - **Per PR:** no scenario more than 15% slower than its record and none over its ceiling (1.5x play saves, 1.3x generation). Misses get a callgrind fix round.
    - **Speed pass:** after every fourth ownership integration, or when a scenario is within 5% of its ceiling (1.425x play, 1.235x generation). The 2026-10-18 profile at `600dca4e27` is the current pass (#275). Count the next four from there; #269 and #255 count.
@@ -142,7 +143,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in parallel.
 
-1. **#291/#292, #283/#287 and #288/#289 are integrated.** Protected Quick recovered; actual docs-only postmerge skip passed. **#296/#297** fixes the separate Markdown-named gitlink shortcut within 80 added logic/test lines; fresh review has no findings, root workflow bootstrap is active. **#284/#298 generated ABI layouts** finishes native generators/comparisons/benchmarks after preserved provider failures.
+1. **#291/#292, #283/#287, #288/#289 and #296/#297 are integrated.** Protected Quick recovered; Both actual docs-only postmerge checks passed. CI_ON_DEMAND=true. **#284/#298** finishes generators/comparisons/benchmarks; root implements **#301** shared benchmark coordination within 80 tooling/test lines.
 2. **Drafts:** #269 houses, then #255 landscape, each with the must-change items from its 2026-10-18 PR comment, adopting #280 on its base update.
 3. **#275 speed, revised order (2026-10-18 comment):**
    - road YAPF tile reads (#288/#289) integrated; the early pass profiles all six scenarios. Next: effect/disaster table copy (#299, active, 100 added support/test lines); ship YAPF scratch; `constinit` service tables;
@@ -170,19 +171,20 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 ## Resume checkpoint
 
 Root is gpt-6.1-sol, xhigh; implementation and review use gpt-6.1-sol, high.
-Four component branches are unintegrated. #292 repaired protected Quick; #287's actual docs-only skip passed. #289 integrated; its near-ceiling result triggered the early #275 pass. CI_ON_DEMAND is temporarily absent for #297 workflow bootstrap; root restores true after merge. Keep at most three maintenance PRs (#297, #284/#298 and selected #299 active).
-
+Four component branches are unintegrated. #297 merged after Full/bootstrap and
+CI_ON_DEMAND=true is restored. Its actual deployed docs-only check passed. Keep at most
+three maintenance PRs (#298, #300 and root's selected #301).
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
 | #284 / #298 | `generated-abi-284`, `be764d1cb6` | Native verify/Cargo4, generated-list and all default maintenance tests pass; generators/comparisons/six medians remain. About 790/650 handwritten lines, within the 25% limit; mechanical conversions separate. Fresh review follows implementation. |
-| #296 / #297 | `fix-markdown-gitlinks-296`, `d61092f302` | 71/80 added logic/test lines; actual-script regression and 25 policy tests pass. Fresh review has no findings; root workflow review complete, exact-head Full/bootstrap requested. |
-| #256 / #269 | `house-lifecycle-256`, `af9e189521` | Steering review passed; adopting integrated #289 changes the shared slope wrapper and speed record. Fresh scoped conflict review passed; final source benchmarks use shared coordination, then record medians and request exact-head Full. |
-| #212 / #255 | `landscape-owner-212`, `6c108195ef` | Three review fixes root-checked; adopting integrated #289 combines four shared-accessor conflicts. Fresh scoped review passed; final-source shared benchmark medians and Full follow. Older near-limit timing is superseded. |
+| #301 / #302 | `benchmark-coordination-301`, `98e768b3e8` | Root implementation: 34/80 tooling/test lines. Old real-lock regression fails, new 12 execution/13 simulation tests and Ruff/preflight pass. Fresh fixing review active; platform requested. |
+| #256 / #269 | `house-lifecycle-256`, `af9e189521` | Steering review passed; adopting integrated #289 changes the shared slope wrapper and speed record. Fresh scoped review passed. All 18 pairs match, but Grok 1.493 (+19.44%) and P2016 1.677 fail speed; #275 profiler prioritizes original/integrated/house attribution and root owns fixes. No final Full yet. |
+| #212 / #255 | `landscape-owner-212`, `c44c62da4c` | Three review fixes root-checked; adopting integrated #289 combines four shared-accessor conflicts. Fresh scoped review passed. All 18 pairs match and all first medians pass; P2000 1.488/P2016 1.475 require natural quiet repeats against the integrated record. Median-only record committed; Full follows. |
 | #266 / #290 | `road-commands-266`, `cc2fc00809` | Ownership implementation active from integrated `83bd72774e`; 200-300 tooling lines. |
 | #267 | `station-commands-267` | Whole station command implementation assigned from integrated `5a32ef6945`; 300-400 tooling lines. Docking includes IsPossibleDockingTile/CheckForDockingTile. |
 | #247, #293-#295 | none | Selected future whole owners, with prerequisites and budgets in their issues; fresh Astra plan completed. |
-| #299 | `effect-disaster-tables-299` | Remove copied shared service tables with real effect-call/disaster-Run lifetimes; stabilize temporary Rust fixtures. Implementation assigned, 100 added support/test lines. |
-| #275 early pass | integrated `62622e60d3` | Fresh profiling task compares five play saves and generation with the pinned original, attributing boundary excess before selecting the next two or three fixes. No holds or new evidence controller. |
+| #299 / #300 | `effect-disaster-tables-299`, `64b63d70aa` | Implementation complete: 79/100 added lines, real table lifetimes/fixture ownership, Cargo4/native/47 scenarios pass. Generated copies removed; first six medians pass, P2000 needs quiet confirmation. Fresh review next. |
+| #275 early pass | integrated `62622e60d3` | Fresh profiling task compares five play saves and generation with the pinned original, attributing boundary excess; house Grok/P2016 failures take priority before the remaining pass. No holds or new evidence controller. |
 | #281 | none | Follows the revised #275 fix order when a maintenance slot frees. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Shared map-view PR after #255; retain attribution and #282's shared profile-lock/concurrency acceptance. |
 | #64 / #66 | remote `issue/64-curve-family`, `aab5211801` | #66 closed unmerged; #64 and older paused work stay untouched. |

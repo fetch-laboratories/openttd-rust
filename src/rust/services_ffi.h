@@ -22,7 +22,18 @@ struct OpenTTDEconomyDate { int32_t value; };
 static_assert(std::is_trivially_copyable_v<OpenTTDCalendarDate> && std::is_standard_layout_v<OpenTTDCalendarDate>);
 static_assert(std::is_trivially_copyable_v<OpenTTDEconomyDate> && std::is_standard_layout_v<OpenTTDEconomyDate>);
 
-/* Immutable function table. All functions are noexcept; command/PBS/viewport effects may reenter Rust.
+/* Allocation-derived base array address, never a reference to tile zero's byte.
+ * Only an audited serialized entry may retain it. It expires before map reset or
+ * mutex yield. Raw reads consume only type@0 of each actual eight-byte base tile;
+ * C++ owns allocation/construction/reset/destruction and every write. */
+struct OpenTTDTileTypeAllocation {
+	const uint8_t *base;
+	uint32_t count;
+};
+OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
+
+/* Immutable function table. All functions are noexcept; world operations may
+ * reenter Rust owners after the caller ends its world/owner accesses.
  * Context may be null in the game; test fixtures supply their own world.
  * No Rust references into the map/pools survive calls. Output is call-scoped.
  * Map predicates take a TileIndex value and return the original accessor's
@@ -36,12 +47,18 @@ static_assert(std::is_trivially_copyable_v<OpenTTDEconomyDate> && std::is_standa
  * Industry query returns 0 not industry,1 industry,2 bubble catcher and writes
  * TileVirtXY(x,y). It observes only type and industry graphics.
  * An environmental exception terminates rather than unwinding through Rust. */
+enum ClearGround : uint8_t;
+enum TreeGround : uint8_t;
+enum Slope : uint8_t;
+enum DiagDirection : uint8_t;
+struct OpenTTDFoundationSlope { int32_t z; Slope slope; };
 struct OpenTTDTownHandle; // Opaque native Town shell; never dereferenced in Rust.
 struct OpenTTDTownState;
 struct Train; // Native Train shell; never dereferenced in Rust.
 enum RoadType : uint8_t;
 enum RoadBits : uint8_t;
 enum Trackdir : uint8_t;
+struct OpenTTDWaterGroundServices;
 struct OpenTTDSharedServices {
 	bool (*autoslope)() noexcept OPENTTD_SERVICE_DEFAULT(autoslope);
 	uint8_t (*bay_stop_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bay_stop_direction);
@@ -121,8 +138,20 @@ struct OpenTTDSharedServices {
 	// Registry: house (#256).
 
 	// Registry: landscape (#212).
+	ClearGround (*clear_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_ground);
+	OpenTTDFoundationSlope (*foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(foundation);
+	bool (*has_water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_water_class);
+	void (*make_shore)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_shore);
+	void (*make_snow)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_snow);
+	void (*play_sound)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(play_sound);
+	void (*set_fence)(uint32_t, DiagDirection, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_fence);
+	TreeGround (*tree_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_ground);
+	const OpenTTDWaterGroundServices *(*water_services)() noexcept OPENTTD_SERVICE_DEFAULT(water_services); ///< Immutable table; getter avoids recursive static initialization.
 };
 const OpenTTDSharedServices &GetRustSharedServices() noexcept;
+/* Shared reader ABI used by default allocation/layout/oracle tests, not game
+ * dispatch. Zero count selects the existing callback backend. No pointer retained. */
+extern "C" uint8_t openttd_rust_shared_tile_type(OpenTTDTileTypeAllocation, uint8_t (*callback)(uint32_t) noexcept, uint32_t tile);
 /** Shared save/reseed/restore of BOTH original RNG streams. */
 struct OpenTTDRandomSeeds { uint32_t random[2], interactive[2]; };
 struct OpenTTDRandomServices {
@@ -155,7 +184,9 @@ struct OpenTTDRailWormholeAdmission { uint8_t owner; TransportType transport; Di
 /* Canonical rail/signal map leaves. A consuming owner calls each phase only at
  * the source observation point; signal writes are immediate. No map pointer,
  * whole tile record, opcode or allocation crosses this boundary. */
+struct OpenTTDRailServices;
 struct OpenTTDRailMapServices {
+	const OpenTTDRailServices *ground;
 	OpenTTDRailTraversal (*traversal)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(traversal);
 	OpenTTDRailSignalPresence (*signal_presence)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_presence);
 	OpenTTDRailSignalUpdate (*signal_update)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_update);
@@ -171,14 +202,11 @@ struct OpenTTDRailMapServices {
 	uint32_t (*other_tunnel_bridge_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_tunnel_bridge_end);
 	uint32_t (*rail_track_status)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_track_status);
 	/* Rail command, depot and level-crossing leaves (#265). */
-	TrackBits (*rail_tracks)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_tracks);
 	bool (*has_signals)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signals);
 	SignalType (*signal_type)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_type);
 	RailType (*rail_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_type);
 	void (*set_rail_type)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_rail_type);
 	RailTileType (*rail_tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_tile_type);
-	RailGroundType (*rail_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_ground);
-	void (*set_rail_ground)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_rail_ground);
 	void (*set_track_bits)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_track_bits);
 	unsigned int (*present_signals)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(present_signals);
 	void (*set_present_signals)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_present_signals);

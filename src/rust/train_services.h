@@ -12,6 +12,7 @@
 #include "sound_services.h"
 
 #include "vehicle_services.h"
+#include "services_landscape.h"
 #include "settings_services.h"
 
 /* Compile-time adapters retain the legacy callback widths while sharing the actual reads. */
@@ -268,10 +269,6 @@ static uint64_t TrainCrossingReserved(OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	return HasCrossingReservation(TileIndex(a));
 }
-static void TrainCrossingSound(OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	SndPlayTileFx(SND_0E_LEVEL_CROSSING, TileIndex(a));
-}
 static uint64_t TrainCurveAdvantage(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -406,10 +403,6 @@ static uint64_t TrainIsBridge(OpenTTDTrainHandle, uint32_t a) noexcept
 static uint64_t TrainIsDepot(OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	return IsRailDepotTile(TileIndex(a));
-}
-static uint64_t TrainIsPlainRail(OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	return IsPlainRailTile(TileIndex(a));
 }
 static uint64_t TrainIsRailway(OpenTTDTrainHandle, uint32_t a) noexcept
 {

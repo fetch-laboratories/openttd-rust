@@ -47,6 +47,7 @@
 #include "rust/environment_services.h"
 #include "rust/tile_animation_services.h"
 #include "rust/station_services.h"
+#include "rust/services_landscape.h"
 #include "rust/settings_services.h"
 #include "rust/town_founding_ffi.h"
 #include "rust/generation_services.hpp"
@@ -97,8 +98,6 @@ void RebuildTownKdtree()
 /** Set if a town is being generated. */
 #ifndef WITH_RUST
 static bool _generating_town = false;
-#else
-static const OpenTTDTownLeaves &GetRustTownServices() noexcept;
 #endif
 
 /**
@@ -627,8 +626,15 @@ static void TownGenerateCargoBinomial(Town *t, TownProductionEffect tpe, uint8_t
  * Tile callback function. Periodic tick handler for the tiles of a town.
  * @param tile been asked to do its stuff
  */
+#ifdef WITH_RUST
+static void TileLoop_Town(uint32_t tile_index) noexcept
+#else
 static void TileLoop_Town(TileIndex tile)
+#endif
 {
+#ifdef WITH_RUST
+	TileIndex tile{tile_index};
+#endif
 	HouseID house_id = GetHouseType(tile);
 
 	/* NewHouseTileLoop returns false if Callback 21 succeeded, i.e. the house
@@ -976,17 +982,13 @@ static void RustTown_dirty_town(uint32_t town) noexcept
 {
 	SetWindowDirty(WC_TOWN_VIEW, TownID(town));
 }
-static uint32_t RustTown_foundation_slope(uint32_t tile) noexcept
-{
-	return std::get<0>(GetFoundationSlope(TileIndex{tile}));
-}
 static int64_t RustTown_terraform_price() noexcept
 {
 	return _price[PR_TERRAFORM];
 }
 static uint32_t RustTown_clean_road_bits(uint32_t tile, uint32_t bits) noexcept
 {
-	return CleanUpRoadBits(TileIndex{tile}, static_cast<RoadBits>(bits));
+	return RustCleanRoadBits(TileIndex{tile}, static_cast<RoadBits>(bits));
 }
 static void RustTown_set_road_town(uint32_t tile, uint32_t town) noexcept
 {
@@ -1090,7 +1092,7 @@ static void RustTownStations(uint32_t tile, uint32_t radius, void *context, void
 static uint8_t RustTownStationOwner(const OpenTTDStation *station) noexcept { return OpenTTDStationOwner(StationOf(station)).base(); }
 static void RustTownDirtyAuthority(uint32_t town) noexcept { SetWindowDirty(WC_TOWN_AUTHORITY, TownID(town)); }
 
-static const OpenTTDTownLeaves &GetRustTownServices() noexcept
+const OpenTTDTownLeaves &GetRustTownServices() noexcept
 {
 	static const OpenTTDTownLeaves services{
 		.map_log_x = OpenTTDMapLogX,
@@ -1117,7 +1119,7 @@ static const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.station_owner = RustTownStationOwner,
 		.dirty_authority = RustTownDirtyAuthority,
 		.dirty_town = RustTown_dirty_town,
-		.foundation_slope = RustTown_foundation_slope,
+		.foundation_slope = RustFoundationSlopeValue,
 		.terraform_price = RustTown_terraform_price,
 		.clean_road_bits = RustTown_clean_road_bits,
 		.set_road_town = RustTown_set_road_town,
@@ -2302,8 +2304,6 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.can_allocate = []() noexcept { return Town::CanAllocateItem(); },
 		.close_to_town = [](uint32_t tile, uint distance) noexcept { return IsCloseToTown(TileIndex(tile), distance); },
 		.flat = OpenTTDIsTileFlat,
-		.clear_ground = OpenTTDClearGround,
-		.tree_ground = OpenTTDTreeGround,
 		.water_distance = [](uint32_t tile, bool water) noexcept { return GetClosestWaterDistance(TileIndex(tile), water); },
 		.scale_size = OpenTTDMapScaleSize,
 		.scale_land = OpenTTDMapScaleLandProportion,

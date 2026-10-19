@@ -55,7 +55,6 @@ struct OpenTTDRailCommandServices {
 	Foundation (*rail_foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_foundation);
 	OpenTTDSlopeZ (*apply_foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
 	int32_t (*slope_z_in_corner)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(slope_z_in_corner);
-	FloodingBehaviour (*flooding)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(flooding);
 	bool (*entrance_edge)(uint32_t, int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(entrance_edge);
 	bool (*ship_on_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_on_tile);
 	void (*build_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(build_rail);

@@ -52,8 +52,8 @@ with tempfile.TemporaryDirectory() as directory:
         git("checkout", "-qb", component, base)
         marker = f"// Registry: {component} (#{issue}).\n"
         probe = f"{component}_probe"
-        field = "foundation_price" if component == "house" else "foundation"
-        header = "house_ffi" if component == "house" else "landscape_loop_ffi"
+        field = f"{component}_registry_probe"
+        header = f"{component}_registry_probe_ffi"
         additions = {
             WITNESS: [
                 f'    {probe} {{\n        {probe.upper()} = 0 => "{probe}.hit",\n    }}\n'

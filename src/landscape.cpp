@@ -48,6 +48,10 @@
 
 #ifdef WITH_RUST
 #include "rust/ffi.h"
+#include "rust/landscape_loop_ffi.h"
+#include "rust/ground_services.h"
+#include "rust/environment_services.h"
+#include "rust/services_landscape.h"
 #endif
 
 #include "safeguards.h"
@@ -810,7 +814,25 @@ std::tuple<CommandCost, Money> CmdClearArea(DoCommandFlags flags, TileIndex tile
 }
 
 
+#ifndef WITH_RUST
 TileIndex _cur_tileloop_tile;
+#endif
+
+#ifdef WITH_RUST
+static OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call)
+{
+	return {
+		.shared = &GetRustSharedServices(),
+		.tile_types = GetRustTileTypeAllocation(),
+		.trees = &GetRustTreeServices(),
+		.industry = GetRustIndustryLoopServices(),
+		.ground = {.clear = &GetRustClearServices(), .rail = &GetRustRailGroundServices(), .road = &GetRustRoadGroundServices(), .tunnel = &GetRustTunnelGroundServices(), .water = &GetRustWaterGroundServices(), .costs = &GetRustGroundCostServices(), .call = call, .climate = OpenTTDLandscape(), .editor = OpenTTDEditor(), .rebuild = _settings_game.economy.mod_road_rebuild, .ambient_callback = RustAmbientSoundEnabled()},
+		.house_loop = _tile_type_town_procs.tile_loop_proc,
+		.station_loop = _tile_type_station_procs.tile_loop_proc,
+		.object_loop = _tile_type_object_procs.tile_loop_proc,
+	};
+}
+#endif
 
 /**
  * Gradually iterate over all tiles on the map, calling their TileLoopProcs once every TILE_UPDATE_FREQUENCY ticks.
@@ -818,6 +840,15 @@ TileIndex _cur_tileloop_tile;
 void RunTileLoop()
 {
 	PerformanceAccumulator framerate(PFE_GL_LANDSCAPE);
+#ifdef WITH_RUST
+	static_assert(MIN_MAP_SIZE_BITS == 6 && MAX_MAP_SIZE_BITS == 12 && TILE_UPDATE_FREQUENCY_LOG == 8);
+	static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_VOID == 7 && MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && MP_OBJECT == 10);
+	OpenTTDGroundCall call;
+	const auto services = RustLandscapeLoopServices(&call);
+	/* Preserve the original assertion under the native build assertion policy. */
+	assert(*openttd_rust_tile_loop_cursor() != 0);
+	openttd_rust_run_tile_loop(Map::LogX(), Map::LogY(), GetRustTreeLoopSettings(), &services);
+#else
 
 	/* The pseudorandom sequence of tiles is generated using a Galois linear feedback
 	 * shift register (LFSR). This allows a deterministic pseudorandom ordering, but
@@ -853,6 +884,7 @@ void RunTileLoop()
 	}
 
 	_cur_tileloop_tile = tile;
+#endif
 }
 
 void InitializeLandscape()
@@ -1748,3 +1780,22 @@ void CallLandscapeTick()
 	OnTick_Companies();
 	OnTick_LinkGraph();
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDLandscapeLoopServices.hpp"
+#include "abi-visit-OpenTTDClearServices.hpp"
+#include "abi-visit-OpenTTDRailServices.hpp"
+#include "abi-visit-OpenTTDRoadGroundServices.hpp"
+#include "abi-visit-OpenTTDTunnelServices.hpp"
+#include "abi-visit-OpenTTDWaterGroundServices.hpp"
+#include "abi-visit-OpenTTDGroundCostServices.hpp"
+bool CheckAbi_landscape()
+{
+	OpenTTDGroundCall call;
+	return AbiServicesComplete(RustLandscapeLoopServices(&call)) &&
+		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
+		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&
+		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices());
+}
+#endif

@@ -70,12 +70,13 @@ struct OpenTTDTreeLandscapeClear {
 struct OpenTTDTreeCommand;
 
 /* Designated, immutable table of noexcept services. Reads are pure. Writes are the
- * same-named tree_map.h/clear_map.h functions. tile_loop_water, ambient and
+ * same-named tree_map.h/clear_map.h functions. Direct water calls, ambient and
  * landscape_clear can reenter tree entries; Rust holds no borrow across them and
  * reads the tile again afterwards. ambient returns whether its NewGRF callback ran.
  * progress/progress_total return true when world generation was aborted: the C++
  * wrapper keeps the exception, Rust returns without another draw or write, and the
  * entry's caller rethrows it. No other C++ exception reaches these services. */
+struct OpenTTDGroundCall;
 struct OpenTTDTreeServices {
 	OpenTTDTreePlantObservation (*plant_observation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(plant_observation);
 	OpenTTDTreeObservation (*tree_observation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_observation);
@@ -90,12 +91,7 @@ struct OpenTTDTreeServices {
 	void (*add_growth)(uint32_t tile, int32_t growth) noexcept OPENTTD_SERVICE_DEFAULT(add_growth);
 	void (*set_growth)(uint32_t tile, uint8_t growth) noexcept OPENTTD_SERVICE_DEFAULT(set_growth);
 	void (*make_clear)(uint32_t tile, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(make_clear);
-	void (*make_shore)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(make_shore);
-	void (*make_snow)(uint32_t tile, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(make_snow);
-	void (*clear_neighbour_flooding)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(clear_neighbour_flooding);
-	void (*tile_loop_water)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(tile_loop_water);
 	bool (*ambient)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(ambient);
-	void (*play_sound)(uint32_t tile, uint16_t sound) noexcept OPENTTD_SERVICE_DEFAULT(play_sound);
 	bool (*progress)() noexcept OPENTTD_SERVICE_DEFAULT(progress);
 	bool (*progress_total)(uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_total);
 	void (*town_rating)(OpenTTDTreeCommand *, uint32_t tile, bool up) noexcept OPENTTD_SERVICE_DEFAULT(town_rating);
@@ -107,8 +103,9 @@ struct OpenTTDTreeServices {
 };
 
 extern "C" {
-/* Plain synchronous entries; original game preconditions apply. Panics abort. */
-void openttd_rust_trees_tile_loop(uint32_t tile, OpenTTDTreeLoopSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
+/* Plain synchronous entries; original game preconditions apply. Panics abort.
+ * The tile loop borrows an independent native stack result context for water commands. */
+void openttd_rust_trees_tile_loop(uint32_t tile, OpenTTDTreeLoopSettings, OpenTTDGroundCall *, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 void openttd_rust_trees_tick(OpenTTDTreeTickSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 bool openttd_rust_trees_generate(OpenTTDTreeGenerateSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 bool openttd_rust_trees_place_randomly(OpenTTDTreeGenerateSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
