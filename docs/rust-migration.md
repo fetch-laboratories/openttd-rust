@@ -152,7 +152,7 @@ macOS keep vcpkg binaries in an actions/cache files store keyed by runner image;
 vcpkg's ABI hashes make stale entries miss. Their Rust jobs also compile through
 ccache 4.14.1 (checksummed download) with PCH off; MSVC uses embedded `/Z7` debug
 info (CMP0141), which ccache requires. Platform CI also runs on `rust-migration`
-pushes, which checks each merge.
+pushes; queued pushes coalesce, so it checks the newest merged tip.
 
 ## Simulation comparison
 
@@ -401,8 +401,9 @@ and Emscripten have no compiler cache to refresh. The path is derived only from
 the protected push's matching non-Markdown tree entries, and requested PR validation always runs the
 complete selected suite. A combined tree no full request
 covered receives all native and platform checks. Tree comparisons must be complete;
-missing or truncated GitHub inventories retain heavy validation. Markdown-only pushes too large
-for the path filter skip heavy builds after complete file classification. A post-merge failure is fixed forward first. Force pushes and branch deletion are disallowed,
+missing or truncated GitHub inventories retain heavy validation. A Markdown-only push that still
+starts (GitHub runs path-filtered workflows when it cannot compute the diff) skips heavy
+builds only after complete classification of fewer than 300 changed files. A post-merge failure is fixed forward first. Force pushes and branch deletion are disallowed,
 including for administrators. The approving-review count is zero because agents
 share credentials; the attributed independent review report is the process gate
 before root integrates. Repository controls are enforced separately from these
