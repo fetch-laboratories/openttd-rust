@@ -12,6 +12,7 @@
 #include "misc/history_type.hpp"
 #include "rust/abi_ffi.h"
 #include "rust/aircraft_ffi.h"
+#include "rust/auth_ffi.h"
 #include "rust/alternating_ffi.h"
 #include "rust/blake2b_ffi.h"
 #include "rust/builder_ffi.h"

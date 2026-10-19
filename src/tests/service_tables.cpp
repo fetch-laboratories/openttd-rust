@@ -34,6 +34,7 @@ extern bool CheckAbi_yapf_rail();
 extern bool CheckAbi_yapf_road();
 extern bool CheckAbi_yapf_ship();
 extern bool CheckAbi_monocypher();
+extern bool CheckAbi_network_crypto();
 
 TEST_CASE("Rust ABI - actual production callback tables are complete")
 {
@@ -65,6 +66,7 @@ TEST_CASE("Rust ABI - actual production callback tables are complete")
 	CHECK(CheckAbi_yapf_road());
 	CHECK(CheckAbi_yapf_ship());
 	CHECK(CheckAbi_monocypher());
+	CHECK(CheckAbi_network_crypto());
 }
 TEST_CASE("Rust ABI - omitted and explicit null callbacks fail completeness")
 {

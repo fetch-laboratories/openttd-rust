@@ -10,7 +10,7 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCES = ("abi", "company", "crypto_primitives", "blake2b", "x25519")
+SOURCES = ("abi", "company", "crypto_primitives", "blake2b", "x25519", "auth")
 DECLARATION = re.compile(
     r'"([^"]+)"\s*\["([^"]+)"\]\s*=>\s*([^{}]+)\{([^{}]*)\}'
     r"\s*(?:width\s+(\w+)\s*:\s*([^;]+))?;"
@@ -52,7 +52,12 @@ def generate(root=ROOT):
             r"(?:typedef\s+)?struct\s*(\w+)?\s*\{([^{}]*)\}\s*(\w+)?\s*;", text, re.S
         ):
             headers[alias or tag] = (header.name, body)
-    for name, group, _, fields, width, _ in declarations(root):
+    records = list(declarations(root))
+    for name, (_, body) in headers.items():
+        if re.search(r"\(\s*(?:\w+\s+)?\*\w+\)\s*\(", body):
+            if name not in {record[0] for record in records}:
+                raise ValueError(f"callback table absent from Rust layouts: {name}")
+    for name, group, _, fields, width, _ in records:
         values = [f"sizeof({name})", f"alignof({name})"]
         values += [f"offsetof({name}, {cpp})" for _, cpp in fields]
         if width:

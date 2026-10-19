@@ -619,3 +619,9 @@ std::unique_ptr<NetworkAuthenticationServerHandler> NetworkAuthenticationServerH
 	}
 	return handler;
 }
+
+#if defined(WITH_RUST) && defined(WITH_RUST_ABI_CHECKS)
+#include "../rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDAuthPrimitives.hpp"
+bool CheckAbi_network_crypto() { return AbiServicesComplete(GetAuthPrimitives()); }
+#endif

@@ -125,7 +125,7 @@ LD_LIBRARY_PATH="$PWD/.local/deps/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$L
 ### Generated ABI probes and fixture defaults (#284)
 
 `layouts!` in `abi.rs`, `company.rs`, `crypto_primitives.rs`, `blake2b.rs` and
-`x25519.rs` names the C++ type, probe group and ordered Rust fields. Use
+`x25519.rs` and `auth.rs` name the C++ type, probe group and ordered Rust fields. Use
 `rust_field => cpp_field` for aliases and `width field: RustType` for an extra
 native-width check. Native-only groups remain in their owning unit tests.
 CMake runs `tools/generate-abi.py` into the build directory; probes compare the

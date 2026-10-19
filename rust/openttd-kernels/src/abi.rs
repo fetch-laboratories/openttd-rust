@@ -3982,6 +3982,7 @@ pub fn layout(name: &str, item: usize) -> usize {
         crate::crypto_primitives::abi_layout,
         crate::blake2b::abi_layout,
         crate::x25519::abi_layout,
+        crate::auth::abi_layout,
     ] {
         let value = layout(name, item);
         if value != usize::MAX {

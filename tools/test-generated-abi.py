@@ -121,8 +121,12 @@ class GeneratedAbiTests(unittest.TestCase):
             output = root / "build"
             GENERATOR["write_fragments"](output, fragments)
             source.write_text('"Replacement" ["new"] => Local {};')
+            with self.assertRaisesRegex(ValueError, "callback table absent"):
+                GENERATOR["generate"](root)
+            (headers / "probe.h").rename(headers / "probe.retired")
             GENERATOR["write_fragments"](output, GENERATOR["generate"](root))
             self.assertFalse((output / "abi-visit-Probe.hpp").exists())
+            (headers / "probe.retired").rename(headers / "probe.h")
             source.write_text('"Probe" ["new"] => Local {};')
             with self.assertRaisesRegex(ValueError, "callbacks absent"):
                 GENERATOR["generate"](root)
