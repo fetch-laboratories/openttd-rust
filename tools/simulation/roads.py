@@ -304,6 +304,7 @@ def check(scenario, run, mode, role, result):
             for expected in (
                 "protocol-outside false",
                 "protocol-void false",
+                "protocol-alltiles false",
                 "protocol-money false",
                 "protocol-query true",
                 "protocol-bankrupt true",
