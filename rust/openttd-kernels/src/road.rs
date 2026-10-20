@@ -188,6 +188,14 @@ pub struct MaxSpeedRead {
     pub status: u8,
 }
 
+/// Shared native eligibility gate, followed by max-speed inputs only when eligible.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct VisualRead {
+    pub max: MaxSpeedRead,
+    pub eligible: bool,
+}
+
 /// Speed and first-step inputs observed after visual effects return.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -408,6 +416,8 @@ pub struct Leaves {
     pub tick_front: extern "C" fn(VehicleRef) -> FrontTickRead,
     pub max_depot_penalty: extern "C" fn() -> u32,
     pub process_orders_then_loading: extern "C" fn(VehicleRef) -> u8,
+    pub visual_read: extern "C" fn(VehicleRef) -> VisualRead,
+    pub visual_effect_then_speed: extern "C" fn(VehicleRef, u32, bool) -> SpeedRead,
     pub speed_read: extern "C" fn(VehicleRef, bool) -> SpeedRead,
     pub max_speed_read: extern "C" fn(VehicleRef) -> MaxSpeedRead,
     pub speed_part: extern "C" fn(VehicleRef) -> SpeedPart,
@@ -662,14 +672,16 @@ impl Game<'_> {
     }
 
     fn visual_effect_and_speed(&self, v: Part) -> SpeedRead {
-        // The shared gate asserts primary status before checking smoke eligibility.
-        if service!(self.vs.visual_effect_eligible)(v.v) {
-            let r = service!(self.l.max_speed_read)(v.v);
-            let speed = max_speed(v, r, self.acceleration_model, self.l);
-            service!(self.vs.show_visual_effect_at_speed)(v.v, speed as u32);
+        // The shared gate asserts primary status before observing max-speed inputs.
+        let r = service!(self.l.visual_read)(v.v);
+        if r.eligible {
+            let speed = max_speed(v, r.max, self.acceleration_model, self.l);
+            // Effects can reenter: the native tail then reobserves all speed/movement
+            // inputs. No owner borrow or earlier max-speed observation crosses it.
+            service!(self.l.visual_effect_then_speed)(v.v, speed as u32, self.realistic())
+        } else {
+            service!(self.l.speed_read)(v.v, self.realistic())
         }
-        // Effects can reenter and change the consist: retain no earlier observation.
-        service!(self.l.speed_read)(v.v, self.realistic())
     }
     /// `RoadVehicle::UpdateSpeed`, returning the distance and stored speed.
     fn update_speed(&self, front: Part, r: &SpeedRead) -> (i32, u16) {

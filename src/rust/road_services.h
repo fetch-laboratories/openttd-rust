@@ -27,11 +27,23 @@ static OpenTTDRoadMaxSpeedRead RoadMaxSpeedRead(const RoadVehicle *u) noexcept
 	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .max_track_speed = u->gcache.cached_max_track_speed,
 		.order_max_speed = RustVehicleOrderMaxSpeed(u), .direction = RustVehicleDirection(u), .status = RustVehicleStatus(u)};
 }
-static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcSpeedRead(OpenTTDVehicle *v, bool realistic) noexcept
+static OpenTTDRoadVisualRead OPENTTD_VEHICLE_CALL RoadSvcVisualRead(OpenTTDVehicle *v) noexcept
 {
-	RoadVehicle *u = RoadOf(v);
+	const RoadVehicle *u = RoadOf(v);
+	if (!u->VisualEffectEligible()) return {};
+	return {.max = RoadMaxSpeedRead(u), .eligible = true};
+}
+static OpenTTDRoadSpeedRead RoadSpeedRead(const RoadVehicle *u, bool realistic) noexcept
+{
 	return {.max = RoadMaxSpeedRead(u), .x = u->x_pos, .y = u->y_pos, .z = u->z_pos, .acceleration = realistic ? u->GetAcceleration() : 0,
 		.length = RustGroundCachedLength(u), .tram = RoadTypeIsTram(u->roadtype)};
+}
+static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcSpeedRead(OpenTTDVehicle *v, bool realistic) noexcept { return RoadSpeedRead(RoadOf(v), realistic); }
+static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcVisualEffectThenSpeed(OpenTTDVehicle *v, uint32_t speed, bool realistic) noexcept
+{
+	const RoadVehicle *u = RoadOf(v);
+	u->ShowVisualEffectAtSpeed(speed);
+	return RoadSpeedRead(u, realistic);
 }
 static OpenTTDRoadMaxSpeedRead OPENTTD_VEHICLE_CALL RoadSvcMaxSpeedRead(OpenTTDVehicle *v) noexcept { return RoadMaxSpeedRead(RoadOf(v)); }
 static OpenTTDRoadSpeedPart OPENTTD_VEHICLE_CALL RoadSvcSpeedPart(OpenTTDVehicle *v) noexcept
@@ -320,6 +332,8 @@ static const OpenTTDRoadLeaves &GetRoadLeaves()
 		.tick_front = RoadSvcTickFront,
 		.max_depot_penalty = RustMaximumDepotPenalty,
 		.process_orders_then_loading = RoadSvcProcessOrdersThenLoading,
+		.visual_read = RoadSvcVisualRead,
+		.visual_effect_then_speed = RoadSvcVisualEffectThenSpeed,
 		.speed_read = RoadSvcSpeedRead,
 		.max_speed_read = RoadSvcMaxSpeedRead,
 		.speed_part = RoadSvcSpeedPart,

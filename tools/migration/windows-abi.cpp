@@ -1119,18 +1119,20 @@ static void RoadBoundary()
 		openttd_rust_road_set_dest(u, p.state, 100, p.dest, p.leaves);
 		return 0;
 	};
-	t.vehicle.visual_effect_eligible = [](OpenTTDVehicle *) noexcept { road_abi_probe->visual_stage = 1; return road_abi_probe->visual_eligible; };
-	t.leaves.max_speed_read = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadMaxSpeedRead {
-		CHECK(road_abi_probe->visual_stage++ == 1 && road_abi_probe->visual_eligible);
-		return RoadAbiMaxSpeed();
+	t.leaves.visual_read = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadVisualRead {
+		auto &p = *road_abi_probe; p.visual_stage = 1;
+		auto read = RoadAbiMaxSpeed();
+		if (!p.visual_eligible) { read.next = reinterpret_cast<OpenTTDVehicle *>(&road_abi_second); read.next_state = p.state; } // A skipped lookup must not traverse.
+		return {.max = read, .eligible = p.visual_eligible};
 	};
-	t.vehicle.show_visual_effect_at_speed = [](OpenTTDVehicle *u, uint32_t max) noexcept {
+	t.leaves.visual_effect_then_speed = [](OpenTTDVehicle *u, uint32_t max, bool realistic) noexcept -> OpenTTDRoadSpeedRead {
 		auto &p = *road_abi_probe;
-		CHECK(p.visual_stage++ == 2 && max == 80);
+		CHECK(p.visual_stage == 1 && p.visual_eligible && max == 80); p.visual_stage = 3;
 		openttd_rust_road_set(p.state, 3, 1); // Reentry changes overtaking before UpdateSpeed.
 		openttd_rust_road_set_dest(u, p.state, 100, p.dest, p.leaves);
 		p.post_effect_max = 40;
 		++p.nested;
+		return p.leaves->speed_read(u, realistic);
 	};
 	t.leaves.speed_read = [](OpenTTDVehicle *, bool realistic) noexcept -> OpenTTDRoadSpeedRead {
 		auto &p = *road_abi_probe;

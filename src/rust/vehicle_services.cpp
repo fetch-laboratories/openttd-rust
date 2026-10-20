@@ -59,9 +59,6 @@ static_assert(SND_19_DEPARTURE_OLD_RV_1 == 23 && SND_1A_DEPARTURE_OLD_RV_2 == 24
 static_assert(PROP_AIRCRAFT_SPEED == 0x0C);
 static_assert(HVOT_BUS == 4 && HVOT_TRUCK == 8);
 
-static bool OPENTTD_VEHICLE_CALL VehicleSvcVisualEffectEligible(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->VisualEffectEligible(); }
-static void OPENTTD_VEHICLE_CALL VehicleSvcShowVisualEffectAtSpeed(OpenTTDVehicle *v, uint32_t speed) noexcept { VehicleOf(v)->ShowVisualEffectAtSpeed(speed); }
-
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteCounters(OpenTTDVehicle *v, uint8_t tick, uint8_t running, int32_t order_time) noexcept
 {
 	Vehicle *u = VehicleOf(v);
@@ -346,8 +343,6 @@ const OpenTTDVehicleServices &GetRustVehicleServices() noexcept
 		.check_orders_only = VehicleSvcCheckOrdersOnly,
 		.write_coordinates = VehicleSvcWriteCoordinates,
 		.altitude_inputs = VehicleSvcAltitudeInputs,
-		.visual_effect_eligible = VehicleSvcVisualEffectEligible,
-		.show_visual_effect_at_speed = VehicleSvcShowVisualEffectAtSpeed,
 		.maintenance = &_rust_vehicle_maintenance_services,
 	};
 	return services;
