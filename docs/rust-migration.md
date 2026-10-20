@@ -261,9 +261,11 @@ subprocess timeout polling, which can add about 50 ms.
 Shared coordination does not reserve a quiet host. `SPEED_BUDGETS` in
 `tools/simulation/roads.py` records current ratios, updated up or down by integrating
 PRs. Reports show a 15% guard against that record, fixed ceilings of 1.5x for play
-saves and 1.3x for generation, and a flag within 5% of the ceiling. Take one median
-of three without holding other agents; rerun on a quiet host only within 3% of a
-limit. The roadmap schedules periodic speed passes.
+saves and 1.3x for generation, and a flag within 5% of the ceiling. Compile load
+moves P2016 medians 2-7% and concurrent timed games about 10% either way, so a
+wall median counts only when no builds, links or other timed games run. #321
+moves the per-PR guard to game-loop callgrind counts, which load does not move.
+The roadmap schedules periodic speed passes.
 
 ## Native macOS arm64 Rust linkage
 
