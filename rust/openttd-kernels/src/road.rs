@@ -2045,3 +2045,17 @@ pub extern "C" fn openttd_rust_road_drive_entry(tram: u8, state: u8, frame: u8) 
     let (x, y) = crate::road_data::entry(tram != 0, state as usize, frame as usize);
     u16::from(x) | (u16::from(y) << 8)
 }
+
+/// Construction removal clears only drive-through stop state bits. The raw
+/// field access ends before any callback can reenter this canonical owner.
+/// # Safety
+/// `state` is live and serialized by the game-state mutex.
+pub(crate) unsafe fn clear_removed_drive_stop(state: *mut State) {
+    let p = unsafe { (&raw mut (*state).scalars).cast::<u16>().add(STATE) };
+    let value = unsafe { p.read() } as u8;
+    if value & DT_STOP != 0 {
+        unsafe {
+            p.write(u16::from(value & 9));
+        }
+    }
+}

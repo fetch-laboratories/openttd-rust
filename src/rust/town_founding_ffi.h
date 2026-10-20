@@ -9,6 +9,7 @@
 #ifndef RUST_TOWN_FOUNDING_FFI_H
 #define RUST_TOWN_FOUNDING_FFI_H
 #include "service_defaults.hpp"
+#include "command_services_ffi.h"
 #include "town_name_ffi.h"
 #include "../clear_map.h"
 #include "../tree_map.h"
@@ -66,7 +67,7 @@ struct OpenTTDTownFoundingServices {
 	void (*assert_random_context)() noexcept OPENTTD_SERVICE_DEFAULT(assert_random_context);
 	void (*assert_allocation)() noexcept OPENTTD_SERVICE_DEFAULT(assert_allocation);
 	void (*initialize_cost)(OpenTTDCommandCost *, int) noexcept OPENTTD_SERVICE_DEFAULT(initialize_cost);
-	bool (*sufficient_money)(const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(sufficient_money);
+	const OpenTTDCommandServices *command;
 	void (*money_deficit)(OpenTTDTownFoundingFrame *, const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(money_deficit);
 	void (*set_result)(OpenTTDTownFoundingFrame *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_result);
 	bool (*exchange_generating)(bool) noexcept OPENTTD_SERVICE_DEFAULT(exchange_generating);

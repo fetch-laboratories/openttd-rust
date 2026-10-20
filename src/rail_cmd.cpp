@@ -3216,14 +3216,9 @@ static void RailMakeCrossing(uint32_t tile, uint8_t road, uint8_t tram, uint8_t 
 }
 static void RailMakeShore(uint32_t tile) noexcept
 {
-	TileIndex t{tile};
 	bool docking = OpenTTDIsDockingTile(tile);
 	OpenTTDMakeShore(tile);
-	SetDockingTile(t, docking);
-}
-static void RailDockingCheck(uint32_t tile) noexcept
-{
-	if (RustPossibleDocking(tile)) RustCheckDocking(tile);
+	OpenTTDSetDockingTile(tile, docking);
 }
 static void RailDepotWindows(uint32_t tile) noexcept
 {
@@ -3281,7 +3276,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.rail_build_cost = [](uint8_t rt) noexcept { return RailBuildCost(static_cast<RailType>(rt)).base(); },
 		.rail_clear_cost = [](uint8_t rt) noexcept { return RailClearCost(static_cast<RailType>(rt)).base(); },
 		.rail_convert_cost = [](uint8_t from, uint8_t to) noexcept { return RailConvertCost(static_cast<RailType>(from), static_cast<RailType>(to)).base(); },
-		.road_build_cost = [](uint8_t rt) noexcept { return RoadBuildCost(static_cast<RoadType>(rt)).base(); },
 		.crossing_with_competitor = RustCrossingWithCompetitor,
 		.disable_elrails = RustDisableElrails,
 		.rail_foundation = OpenTTDEnumMapQuery<RustRailFoundation, Slope, TrackBits>,
@@ -3297,7 +3291,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.rail_infrastructure = RustAddRailInfrastructure,
 		.road_infrastructure = RustAddRoadInfrastructure,
 		.signal_infrastructure = RustAddSignalInfrastructure,
-		.infrastructure_dirty = [](uint8_t owner) noexcept { DirtyCompanyInfrastructureWindows(CompanyID(owner)); },
 		.reserving_train = [](uint32_t tile, uint8_t track) noexcept { return GetTrainForReservation(TileIndex{tile}, static_cast<Track>(track)); },
 		.parking = RailParking,
 		.train_position = [](Train *v) noexcept -> OpenTTDRailTrainPosition { return {.tile = RustVehicleTile(v), .trackdir = GetRustSharedServices().train_trackdir(v)}; },
@@ -3313,7 +3306,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.depot_windows = RailDepotWindows,
 		.close_inspect = [](uint32_t tile) noexcept { DeleteNewGRFInspectWindow(GSF_RAILTYPES, tile); },
 		.make_shore = RailMakeShore,
-		.docking_check = RailDockingCheck,
 		.area_begin = [](OpenTTDRailConvertFrame *frame, uint32_t start, uint32_t end, bool diagonal) noexcept { frame->iter = TileIterator::Create(TileIndex{start}, TileIndex{end}, diagonal); },
 		.area_tile = [](OpenTTDRailConvertFrame *frame) noexcept { return (**frame->iter).base(); },
 		.area_next = [](OpenTTDRailConvertFrame *frame) noexcept { ++(*frame->iter); },

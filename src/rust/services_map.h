@@ -25,7 +25,8 @@ inline bool SharedRoadTypeIsTram(RoadType roadtype) noexcept { return RoadTypeIs
 inline RoadStopType SharedRoadStopType(uint32_t tile) noexcept { return GetRoadStopType(TileIndex(tile)); }
 /** Width adapter for the existing road service table; the typed read stays above. */
 inline uint8_t SharedRoadStopTypeByte(uint32_t tile) noexcept { return to_underlying(SharedRoadStopType(tile)); }
-inline RoadStop *SharedRoadStopAt(uint32_t tile) noexcept { return RoadStop::GetByTile(TileIndex(tile), SharedRoadStopType(tile)); }
+inline RoadStop *RustRoadStopAt(TileIndex tile, RoadStopType type) noexcept { return RoadStop::GetByTile(tile, type); }
+inline RoadStop *SharedRoadStopAt(uint32_t tile) noexcept { return RustRoadStopAt(TileIndex(tile), SharedRoadStopType(tile)); }
 inline bool RoadSvcContinuation(uint32_t tile, uint32_t next) noexcept
 {
 	return RoadStop::IsDriveThroughRoadStopContinuation(TileIndex(tile), TileIndex(next));

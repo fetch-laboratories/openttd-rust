@@ -8,7 +8,9 @@
 /** @file ground_ffi.h Consumed terrain fields and direct synchronous leaves. */
 #ifndef RUST_GROUND_FFI_H
 #define RUST_GROUND_FFI_H
+#include "service_defaults.hpp"
 #include "services_ffi.h"
+#include "water_regions_ffi.h"
 /* Actual fixed-underlying native enums, not byte aliases. Rust transparent
  * carriers preserve every stored bit pattern without enum-discriminant guards. */
 enum ClearGround : uint8_t;
@@ -99,6 +101,14 @@ const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept;
 const OpenTTDClearServices &GetRustClearServices() noexcept;
 const OpenTTDRailServices &GetRustRailGroundServices() noexcept;
 const OpenTTDTunnelServices &GetRustTunnelGroundServices() noexcept;
+struct OpenTTDWaterRestorationServices {
+	OpenTTDFoundationSlope (*slope_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(slope_z);
+	void (*infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure);
+	void (*infrastructure_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure_dirty);
+	void (*make_canal)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_canal);
+	void (*make_river)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_river);
+};
+const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept;
 struct OpenTTDWaterGroundServices;
 extern "C" {
 void openttd_rust_road_tile_loop(uint32_t, LandscapeType, bool, bool, uint32_t, OpenTTDGroundCall *, const OpenTTDGroundCostServices *, const OpenTTDRoadGroundServices *, const OpenTTDSharedServices *);
@@ -127,9 +137,7 @@ struct OpenTTDWaterGroundServices {
 	void (*make_sea)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_sea);
 	bool (*buoy_or_dock)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(buoy_or_dock);
 	bool (*canal_or_river)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(canal_or_river);
-	bool (*possible_docking)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(possible_docking);
-	void (*check_docking)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(check_docking);
-	void (*invalidate_region)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_region);
+	OpenTTDWaterRegionContext (*region_context)() noexcept OPENTTD_SERVICE_DEFAULT(region_context);
 	void (*remove_rail)(OpenTTDCommandCost *, uint32_t, Track) noexcept OPENTTD_SERVICE_DEFAULT(remove_rail);
 	OpenTTDFoundationSlope (*apply_foundation)(Foundation, Slope) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
 	void (*iterator_begin)(OpenTTDTileVehicleCursor *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(iterator_begin);
@@ -175,4 +183,6 @@ struct OpenTTDGroundABICalls {
 	bool (*enums)(ClearGround, RailGroundType, Slope, TrackBits, Track, Foundation, Roadside, RoadBits, RoadType, TreeGround, WaterClass, FloodingBehaviour, DiagDirection, LandscapeType, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(enums);
 };
 extern "C" bool openttd_rust_ground_abi_calls(const OpenTTDGroundABICalls *);
+extern "C" void openttd_rust_water_restore(uint32_t, uint8_t, const OpenTTDSharedServices *, const OpenTTDWaterGroundServices *, const OpenTTDWaterRestorationServices *);
+extern "C" void openttd_rust_clear_square(uint32_t, const OpenTTDSharedServices *);
 #endif /* RUST_GROUND_FFI_H */

@@ -45,13 +45,12 @@
 #include "rust/train_ffi.h"
 #include "rust/train_reservation_ffi.h"
 #include "rust/vehicle_services.h"
-static const OpenTTDTrainServices &GetTrainServices();
-static const OpenTTDTrainReservationLeaves &GetTrainReservationServices();
-static inline OpenTTDTrainHandle TrainHandle(const Train *v) noexcept
+OpenTTDTrainHandle TrainHandle(const Train *v) noexcept
 {
 	return {const_cast<Train *>(v), v == nullptr ? nullptr : v->GetRustState()};
 }
-struct TrainReservationContext { std::optional<Order> saved_order; };
+static_assert(sizeof(Order) == sizeof(OpenTTDOrderFields) && alignof(Order) == alignof(OpenTTDOrderFields));
+static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructible_v<Order>);
 
 #endif
 
@@ -2344,7 +2343,7 @@ void Train::PlayLeaveStationSound(bool force) const
 static void CheckNextTrainTile(Train *v)
 {
 #ifdef WITH_RUST
-	([&]() { TrainReservationContext context; return openttd_rust_train_reservation_check_next(TrainHandle(v), RustVehicle(v), &GetTrainReservationServices(), &context); }());
+	openttd_rust_train_reservation_check_next(TrainHandle(v), RustVehicle(v), &GetTrainReservationServices(), nullptr);
 #else
 	/* Don't do any look-ahead if path_backoff_interval is 255. */
 	if (_settings_game.pf.path_backoff_interval == 255) return;
@@ -2494,7 +2493,7 @@ static bool CheckTrainStayInDepot(Train *v)
 static void ClearPathReservation(const Train *v, TileIndex tile, Trackdir track_dir)
 {
 #ifdef WITH_RUST
-	([&]() { TrainReservationContext context; return openttd_rust_train_reservation_clear(TrainHandle(v), RustVehicle(v), static_cast<uint32_t>(tile.base()), static_cast<uint8_t>(track_dir), &GetTrainReservationServices(), &context); }());
+	openttd_rust_train_reservation_clear(TrainHandle(v), RustVehicle(v), static_cast<uint32_t>(tile.base()), static_cast<uint8_t>(track_dir), &GetTrainReservationServices(), nullptr);
 #else
 	DiagDirection dir = TrackdirToExitdir(track_dir);
 
@@ -2539,7 +2538,7 @@ static void ClearPathReservation(const Train *v, TileIndex tile, Trackdir track_
 void FreeTrainTrackReservation(const Train *v)
 {
 #ifdef WITH_RUST
-	([&]() { TrainReservationContext context; return openttd_rust_train_reservation_free(TrainHandle(v), RustVehicle(v), &GetTrainReservationServices(), &context); }());
+	openttd_rust_train_reservation_free(TrainHandle(v), RustVehicle(v), &GetTrainReservationServices(), nullptr);
 #else
 	assert(v->IsFrontEngine());
 
@@ -2861,7 +2860,7 @@ public:
 static Track ChooseTrainTrack(Train *v, TileIndex tile, DiagDirection enterdir, TrackBits tracks, bool force_res, bool *got_reservation, bool mark_stuck)
 {
 #ifdef WITH_RUST
-	OpenTTDTrainReservationChoice result = ([&]() { TrainReservationContext context; return openttd_rust_train_reservation_choose(TrainHandle(v), RustVehicle(v), static_cast<uint32_t>(tile.base()), static_cast<uint8_t>(enterdir), static_cast<uint8_t>(tracks), static_cast<uint8_t>(force_res), static_cast<uint8_t>(mark_stuck), &GetTrainReservationServices(), &context); }());
+	OpenTTDTrainReservationChoice result = openttd_rust_train_reservation_choose(TrainHandle(v), RustVehicle(v), static_cast<uint32_t>(tile.base()), static_cast<uint8_t>(enterdir), static_cast<uint8_t>(tracks), static_cast<uint8_t>(force_res), static_cast<uint8_t>(mark_stuck), &GetTrainReservationServices(), nullptr);
 	if (got_reservation != nullptr) *got_reservation = result.reserved != 0;
 	return static_cast<Track>(result.track);
 #else
@@ -3039,7 +3038,7 @@ static Track ChooseTrainTrack(Train *v, TileIndex tile, DiagDirection enterdir, 
 bool TryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_okay)
 {
 #ifdef WITH_RUST
-	return ([&]() { TrainReservationContext context; return openttd_rust_train_reservation_try_path(TrainHandle(v), RustVehicle(v), static_cast<uint8_t>(mark_as_stuck), static_cast<uint8_t>(first_tile_okay), &GetTrainReservationServices(), &context); }()) != 0;
+	return (openttd_rust_train_reservation_try_path(TrainHandle(v), RustVehicle(v), static_cast<uint8_t>(mark_as_stuck), static_cast<uint8_t>(first_tile_okay), &GetTrainReservationServices(), nullptr)) != 0;
 #else
 	assert(v->IsFrontEngine());
 
@@ -3110,7 +3109,7 @@ bool TryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_okay)
 static bool CheckReverseTrain(const Train *v)
 {
 #ifdef WITH_RUST
-	return ([&]() { TrainReservationContext context; return openttd_rust_train_reservation_check_reverse(TrainHandle(v), RustVehicle(v), &GetTrainReservationServices(), &context); }()) != 0;
+	return (openttd_rust_train_reservation_check_reverse(TrainHandle(v), RustVehicle(v), &GetTrainReservationServices(), nullptr)) != 0;
 #else
 	if (_settings_game.difficulty.line_reverse_mode != 0 ||
 			v->GetTrack() == TRACK_BIT_DEPOT || v->GetTrack() == TRACK_BIT_WORMHOLE ||
@@ -3132,7 +3131,7 @@ static bool CheckReverseTrain(const Train *v)
 TileIndex Train::GetOrderStationLocation(StationID station)
 {
 #ifdef WITH_RUST
-	return TileIndex(static_cast<uint32_t>(([&]() { TrainReservationContext context; return openttd_rust_train_reservation_station_location(TrainHandle(this), RustVehicle(this), static_cast<uint16_t>(station.base()), &GetTrainReservationServices(), &context); }())));
+	return TileIndex(static_cast<uint32_t>(openttd_rust_train_reservation_station_location(TrainHandle(this), RustVehicle(this), static_cast<uint16_t>(station.base()), &GetTrainReservationServices(), nullptr)));
 #else
 	if (station == this->last_station_visited) this->last_station_visited = StationID::Invalid();
 
@@ -3292,7 +3291,7 @@ static bool TrainMovedChangeSignals(TileIndex tile, DiagDirection dir)
 void Train::ReserveTrackUnderConsist() const
 {
 #ifdef WITH_RUST
-	([&]() { TrainReservationContext context; return openttd_rust_train_reservation_reserve_under(TrainHandle(this), RustVehicle(this), &GetTrainReservationServices(), &context); }());
+	openttd_rust_train_reservation_reserve_under(TrainHandle(this), RustVehicle(this), &GetTrainReservationServices(), nullptr);
 #else
 	for (const Train *u = this; u != nullptr; u = u->Next()) {
 		switch (u->GetTrack()) {
@@ -4506,7 +4505,7 @@ uint16_t Train::GetMaxWeight() const
 
 #ifdef WITH_RUST
 
-static const OpenTTDTrainServices &GetTrainServices()
+const OpenTTDTrainServices &GetTrainServices() noexcept
 {
 	static const OpenTTDTrainServices services{
 		.read_first = TrainReadFirst,
@@ -4724,7 +4723,7 @@ static const OpenTTDTrainServices &GetTrainServices()
 		.servint = TrainServint,
 		.set_depot_res = TrainSetDepotRes,
 		.set_next = TrainSetNext,
-		.set_platform_res = TrainSetPlatformRes,
+		.set_platform_res = RustStationLegacyPlatformReservation<OpenTTDTrainHandle>,
 		.set_signal_state = OpenTTDLegacyMapQuery<void, RustRailSetSignalState, OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t>,
 		.set_tunnel_res = TrainSetTunnelRes,
 		.show_effect = TrainShowEffect,
@@ -4740,7 +4739,7 @@ static const OpenTTDTrainServices &GetTrainServices()
 		.start_stop_dirty = TrainStartStopDirty,
 		.station = TrainSharedMap<uint64_t, &OpenTTDSharedServices::station_index>,
 		.station_axis = OpenTTDLegacyMapQuery<uint64_t, RustRailStationAxis, OpenTTDTrainHandle, uint32_t>,
-		.station_compatible = TrainStationCompatible,
+		.station_compatible = RustStationLegacyCompatible<OpenTTDTrainHandle>,
 		.station_dest = TrainStationDest,
 		.stopped_in_depot = TrainStoppedInDepot,
 		.stop_location = TrainStopLocation,
@@ -4787,7 +4786,7 @@ static const OpenTTDTrainServices &GetTrainServices()
 	};
 	return services;
 }
-static const OpenTTDTrainReservationLeaves &GetTrainReservationServices()
+const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 {
 	static const OpenTTDTrainReservationLeaves services{
 		.read_tile = TrainVehicleRead<uint32_t, RustVehicleTile>,

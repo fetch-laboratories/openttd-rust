@@ -7,6 +7,7 @@
 
 #include "services_ffi.h"
 #include "services_rail.h"
+#include "services_station.h"
 
 /** @file train_services.h Direct shared-world operations; no train policy. */
 #include "sound_services.h"
@@ -118,7 +119,7 @@ static void TrainArrivalNews(OpenTTDTrainHandle id, uint16_t a) noexcept
 static void TrainArrivalTriggers(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	Station *st = Station::Get(StationID(a)); TriggerStationRandomisation(st, v->tile, StationRandomTrigger::VehicleArrives); TriggerStationAnimation(st, v->tile, StationAnimationTrigger::VehicleArrives);
+	Station *st = Station::Get(StationID(a)); TriggerStationRandomisation(st, v->tile, StationRandomTrigger::VehicleArrives); RustStationAnimation(st, v->tile, StationAnimationTrigger::VehicleArrives);
 }
 static uint64_t TrainAxisDiag(OpenTTDTrainHandle, uint8_t a) noexcept
 {
@@ -434,7 +435,7 @@ static void TrainLeaveSound(OpenTTDTrainHandle id) noexcept
 static void TrainLeaveStation(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	v->LeaveStation();
+	RustVehicleLeaveStation(RustVehicle(v));
 }
 static void TrainLeaveUnbunch(OpenTTDTrainHandle id) noexcept
 {
@@ -459,7 +460,7 @@ static uint64_t TrainLengthDefault(OpenTTDTrainHandle id) noexcept
 static void TrainLengthError(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	ErrorUnknownCallbackResult(v->GetEngine()->GetGRFID(), CBID_VEHICLE_LENGTH, static_cast<uint16_t>(a));
+	RustUnknownCallbackResult(v->GetEngine()->GetGRFID(), CBID_VEHICLE_LENGTH, static_cast<uint16_t>(a));
 }
 static void TrainLoading(OpenTTDTrainHandle id, uint8_t a) noexcept
 {
@@ -630,10 +631,6 @@ static void TrainSetNext(OpenTTDTrainHandle id, OpenTTDTrainHandle a) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	v->SetNext(static_cast<Train *>(a.shell));
 }
-static void TrainSetPlatformRes(OpenTTDTrainHandle, uint32_t a, uint8_t b, uint8_t c) noexcept
-{
-	SetRailStationPlatformReservation(TileIndex(a), static_cast<DiagDirection>(b), c != 0);
-}
 static void TrainSetTunnelRes(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
 {
 	SetTunnelBridgeReservation(TileIndex(a), b != 0);
@@ -677,10 +674,6 @@ static void TrainStartStopDirty(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP);
-}
-static uint64_t TrainStationCompatible(OpenTTDTrainHandle, uint32_t a, uint32_t b) noexcept
-{
-	return IsCompatibleTrainStationTile(TileIndex(a), TileIndex(b));
 }
 static uint64_t TrainStationDest(OpenTTDTrainHandle id) noexcept
 {
@@ -847,7 +840,7 @@ static void TrainWriteVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
 }
 static uint8_t TrainVisitTile(uint32_t tile, void *context, uint8_t (*visit)(void *, OpenTTDTrainHandle)) noexcept
 {
-	for (const Vehicle *v : VehiclesOnTile(TileIndex(tile))) {
+	for (const Vehicle *v : RustVehiclesOnTile(TileIndex(tile))) {
 		if (v->type == VEH_TRAIN && visit(context, TrainHandle(Train::From(v))) != 0) return 1;
 	}
 	return 0;
@@ -883,7 +876,7 @@ static OpenTTDTrainHandle TrainReadNextUnit(OpenTTDTrainHandle id) noexcept
 static OpenTTDTrainHandle TrainReadLast(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return TrainHandle(v->Last());
+	return TrainHandle(RustVehicleLast(v));
 }
 static int32_t TrainReadOrderTime(OpenTTDTrainHandle id) noexcept
 {
