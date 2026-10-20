@@ -229,3 +229,14 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     # Public symbols in actual MSVC linker maps establish archive linkage.
     target_link_options(openttd_rust INTERFACE "/MAP:${CMAKE_BINARY_DIR}/$<TARGET_PROPERTY:NAME>.map")
 endif()
+
+# Derive native ABI checks from the same declarations compiled by Rust.
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+file(GLOB RUST_ABI_INPUTS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/rust/openttd-kernels/src/*.rs" "${CMAKE_SOURCE_DIR}/src/rust/*.h")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${RUST_ABI_INPUTS} "${CMAKE_SOURCE_DIR}/tools/generate-abi.py")
+execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/generate-abi.py" "${CMAKE_BINARY_DIR}/generated-abi"
+    RESULT_VARIABLE RUST_ABI_RESULT)
+if(NOT RUST_ABI_RESULT EQUAL 0)
+    message(FATAL_ERROR "Rust ABI generation failed")
+endif()
+include_directories("${CMAKE_BINARY_DIR}/generated-abi" "${CMAKE_SOURCE_DIR}/src/rust")

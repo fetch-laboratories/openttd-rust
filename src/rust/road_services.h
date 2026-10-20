@@ -7,6 +7,7 @@
 
 /** @file road_services.h Typed road services; each resolves its vehicle once and reads only what it returns. */
 #include "services_map.h"
+#include "services_station.h"
 
 static_assert(RVSB_IN_DEPOT == 254 && RVSB_WORMHOLE == 255 && RVSB_IN_ROAD_STOP == 32 && RVSB_IN_DT_ROAD_STOP == 64);
 static_assert(to_underlying(RoadStopType::Bus) == 0 && to_underlying(RoadStopType::Truck) == 1);
@@ -27,12 +28,23 @@ static OpenTTDRoadMaxSpeedRead RoadMaxSpeedRead(const RoadVehicle *u) noexcept
 	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .max_track_speed = u->gcache.cached_max_track_speed,
 		.order_max_speed = RustVehicleOrderMaxSpeed(u), .direction = RustVehicleDirection(u), .status = RustVehicleStatus(u)};
 }
-static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcVisualThenSpeed(OpenTTDVehicle *v, bool realistic) noexcept
+static OpenTTDRoadVisualRead OPENTTD_VEHICLE_CALL RoadSvcVisualRead(OpenTTDVehicle *v) noexcept
 {
-	RoadVehicle *u = RoadOf(v);
-	u->ShowVisualEffect();
-	return {.max = RoadMaxSpeedRead(u), .x = u->x_pos, .y = u->y_pos, .z = u->z_pos, .acceleration = realistic ? u->GetAcceleration() : 0,
-		.length = RustGroundCachedLength(u), .tram = RoadTypeIsTram(u->roadtype)};
+	const RoadVehicle *u = RoadOf(v);
+	if (!u->VisualEffectEligible()) return {};
+	return {.max = RoadMaxSpeedRead(u), .eligible = true};
+}
+static OpenTTDRoadSpeedRead RoadSpeedRead(const RoadVehicle *u, bool realistic) noexcept
+{
+	return {.max = RoadMaxSpeedRead(u), .x = RustVehicleX(u), .y = RustVehicleY(u), .z = RustVehicleZ(u), .acceleration = realistic ? RustGroundAcceleration(u) : 0,
+		.length = RustGroundCachedLength(u), .tram = SharedRoadTypeIsTram(u->roadtype)};
+}
+static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcSpeedRead(OpenTTDVehicle *v, bool realistic) noexcept { return RoadSpeedRead(RoadOf(v), realistic); }
+static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcVisualEffectThenSpeed(OpenTTDVehicle *v, uint32_t speed, bool realistic) noexcept
+{
+	const RoadVehicle *u = RoadOf(v);
+	u->ShowVisualEffectAtSpeed(speed);
+	return RoadSpeedRead(u, realistic);
 }
 static OpenTTDRoadMaxSpeedRead OPENTTD_VEHICLE_CALL RoadSvcMaxSpeedRead(OpenTTDVehicle *v) noexcept { return RoadMaxSpeedRead(RoadOf(v)); }
 static OpenTTDRoadSpeedPart OPENTTD_VEHICLE_CALL RoadSvcSpeedPart(OpenTTDVehicle *v) noexcept
@@ -45,7 +57,7 @@ static OpenTTDRoadStep OPENTTD_VEHICLE_CALL RoadSvcStep(OpenTTDVehicle *v) noexc
 {
 	const RoadVehicle *u = RoadOf(v);
 	return {.tile = RustVehicleTile(u), .x = u->x_pos, .y = u->y_pos, .z = u->z_pos,
-		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = RoadTypeIsTram(u->roadtype)};
+		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = SharedRoadTypeIsTram(u->roadtype)};
 }
 static OpenTTDRoadCrashPart OPENTTD_VEHICLE_CALL RoadSvcCrashPart(OpenTTDVehicle *v) noexcept
 {
@@ -57,7 +69,7 @@ static OpenTTDRoadPartRead OPENTTD_VEHICLE_CALL RoadSvcPart(OpenTTDVehicle *v) n
 {
 	const RoadVehicle *u = RoadOf(v);
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(u));
-	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = u->z_pos, .tram = RoadTypeIsTram(u->roadtype)};
+	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = u->z_pos, .tram = SharedRoadTypeIsTram(u->roadtype)};
 }
 static OpenTTDRoadLink OPENTTD_VEHICLE_CALL RoadSvcLink(OpenTTDVehicle *v) noexcept
 {
@@ -90,8 +102,8 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitClose(OpenTTDVehicle *v, int32_t x,
 		return visit(context, &candidate);
 	};
 	if (wormhole) {
-		for (const Vehicle *u : VehiclesOnTile(front->tile)) if (!offer(u)) return;
-		for (const Vehicle *u : VehiclesOnTile(GetOtherTunnelBridgeEnd(front->tile))) if (!offer(u)) return;
+		for (const Vehicle *u : RustVehiclesOnTile(front->tile)) if (!offer(u)) return;
+		for (const Vehicle *u : RustVehiclesOnTile(GetOtherTunnelBridgeEnd(front->tile))) if (!offer(u)) return;
 	} else {
 		for (const Vehicle *u : VehiclesNearTileXY(x, y, 8)) if (!offer(u)) return;
 	}
@@ -107,7 +119,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitTrains(OpenTTDVehicle *v, OpenTTDRo
 }
 static void OPENTTD_VEHICLE_CALL RoadSvcVisitTile(uint32_t tile, OpenTTDRoadTileVisitor visit, void *context) noexcept
 {
-	for (const Vehicle *u : VehiclesOnTile(TileIndex(tile))) {
+	for (const Vehicle *u : RustVehiclesOnTile(TileIndex(tile))) {
 		if (u->type != VEH_ROAD) continue;
 		OpenTTDRoadTileVehicle item{.vehicle = RustVehicle(u), .first = RustVehicle(RustVehicleFirst(u))};
 		if (!visit(context, &item)) return;
@@ -210,7 +222,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcBeginLoadingAt(OpenTTDVehicle *v, uint16
 	Station *st = Station::Get(StationID(station));
 	u->BeginLoading();
 	TriggerRoadStopRandomisation(st, u->tile, StationRandomTrigger::VehicleArrives);
-	TriggerRoadStopAnimation(st, u->tile, StationAnimationTrigger::VehicleArrives);
+	RustRoadStopAnimation(st, u->tile, StationAnimationTrigger::VehicleArrives);
 }
 static OpenTTDRoadOvertakeRead OPENTTD_VEHICLE_CALL RoadSvcOvertakeRead(OpenTTDVehicle *v) noexcept
 {
@@ -319,7 +331,9 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.tick_front = RoadSvcTickFront,
 	.max_depot_penalty = RustMaximumDepotPenalty,
 	.process_orders_then_loading = RoadSvcProcessOrdersThenLoading,
-	.visual_then_speed = RoadSvcVisualThenSpeed,
+	.visual_read = RoadSvcVisualRead,
+	.visual_effect_then_speed = RoadSvcVisualEffectThenSpeed,
+	.speed_read = RoadSvcSpeedRead,
 	.max_speed_read = RoadSvcMaxSpeedRead,
 	.speed_part = RoadSvcSpeedPart,
 	.step = RoadSvcStep,

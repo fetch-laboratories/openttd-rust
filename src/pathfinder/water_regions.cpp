@@ -54,6 +54,8 @@ static const OpenTTDWaterLeaves _water_leaves{WaterTracks, WaterFollow, WaterAqu
 using WaterOwner = std::unique_ptr<OpenTTDWaterRegions, decltype(&openttd_rust_water_destroy)>;
 static WaterOwner _water_regions{nullptr, openttd_rust_water_destroy};
 
+OpenTTDWaterRegionContext GetRustWaterRegionContext() noexcept { return {_water_regions.get(), &_water_leaves}; }
+
 int CalculateWaterRegionPatchHash(const WaterRegionPatchDesc &patch)
 {
 	return patch.label.base() | (Map::SizeX() / WATER_REGION_EDGE_LENGTH * patch.y + patch.x) << 8;
@@ -544,3 +546,9 @@ void PrintWaterRegionDebugInfo(TileIndex tile)
 }
 
 #endif /* WITH_RUST */
+
+#ifdef WITH_RUST
+#include "../rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDWaterLeaves.hpp"
+bool CheckAbi_water_regions() { return AbiServicesComplete(_water_leaves); }
+#endif

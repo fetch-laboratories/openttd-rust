@@ -119,7 +119,7 @@ const OpenTTDTownNameServices &GetRustTownNameServices() noexcept
 			frame->other = GetTownName(town);
 			return {reinterpret_cast<const uint8_t *>(frame->other.data()), frame->other.size()};
 		},
-		.utf8_length = RustUtf8Length,
+		.utf8_length = GetRustSharedServices().utf8_length,
 		.random_next = [](Randomizer *randomizer) noexcept -> uint32_t { return randomizer->Next(); },
 	};
 	return services;
@@ -1033,3 +1033,9 @@ void GenerateTownNameString(StringBuilder &builder, size_t lang, uint32_t seed)
 	return _town_name_generators[lang](builder, seed);
 #endif
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDTownNameServices.hpp"
+bool CheckAbi_townname() { return AbiServicesComplete(GetRustTownNameServices()); }
+#endif

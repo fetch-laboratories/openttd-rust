@@ -13,6 +13,10 @@
 #include "../engine_base.h"
 #include "../vehicle_func.h"
 #include "../newgrf.h"
+#include "../newgrf_commons.h"
+
+inline void RustUnknownCallbackResult(uint32_t grfid, uint16_t callback, uint16_t result) noexcept { ErrorUnknownCallbackResult(grfid, callback, result); }
+inline VehiclesOnTile RustVehiclesOnTile(TileIndex tile) noexcept { return VehiclesOnTile(tile); }
 
 /** The Rust handle of a live vehicle; null stays null. */
 inline OpenTTDVehicle *RustVehicle(const Vehicle *v) noexcept { return reinterpret_cast<OpenTTDVehicle *>(const_cast<Vehicle *>(v)); }
@@ -28,8 +32,12 @@ inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
 
 /** Shared native field definitions, also used by bundled observations. */
 template <class T> inline auto RustVehicleFirst(T *v) noexcept { return v->First(); }
+template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last(); }
 /** Signature adapter for existing opaque fleet and orders callbacks. */
 inline void *RustVehicleFirstOpaque(void *v) noexcept { return RustVehicleFirst(static_cast<const Vehicle *>(v)); }
+inline void RustVehicleLeaveStation(OpenTTDVehicle *v) noexcept { VehicleOf(v)->LeaveStation(); }
+inline uint32_t RustVehicleOrderStationLocation(OpenTTDVehicle *v, uint16_t station) noexcept { return VehicleOf(v)->GetOrderStationLocation(StationID(station)).base(); }
+inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station) noexcept { return RustVehicleOrderStationLocation(RustVehicle(static_cast<Vehicle *>(v)), station); }
 inline Vehicle *RustVehicleNext(const Vehicle *v) noexcept { return v->Next(); }
 #ifdef WITH_RUST
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }
@@ -70,6 +78,8 @@ inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return reinte
 inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return reinterpret_cast<const Engine *>(e); }
 template <class T>
 inline uint8_t RustGroundCachedLength(const T *v) noexcept { return v->gcache.cached_veh_length; }
+template <class T>
+inline int32_t RustGroundAcceleration(const T *v) noexcept { return v->GetAcceleration(); }
 template <class T>
 inline bool RustGroundHasArticulated(const T *v) noexcept { return v->HasArticulatedPart(); }
 
@@ -161,7 +171,7 @@ inline OpenTTDGroundLastSpeed OPENTTD_VEHICLE_CALL GroundSvcSetLastSpeed(OpenTTD
 template <class T>
 inline int32_t OPENTTD_VEHICLE_CALL GroundSvcAcceleration(OpenTTDVehicle *v) noexcept
 {
-	return T::From(VehicleOf(v))->GetAcceleration();
+	return RustGroundAcceleration(T::From(VehicleOf(v)));
 }
 template <class T>
 inline OpenTTDGroundCrash OPENTTD_VEHICLE_CALL GroundSvcCrash(OpenTTDVehicle *v, bool flooded) noexcept

@@ -63,7 +63,6 @@ static void * FleetTransaction_order_at(void *orders, size_t index) noexcept { r
 static bool FleetTransaction_order_refit(void *order) noexcept { return static_cast<Order *>(order)->IsRefit(); }
 static bool FleetTransaction_order_auto(void *order) noexcept { return static_cast<Order *>(order)->IsAutoRefit(); }
 static uint8_t FleetTransaction_order_cargo(void *order) noexcept { return static_cast<Order *>(order)->GetRefitCargo(); }
-static bool FleetTransaction_local() noexcept { return IsLocalCompany(); }
 static void FleetTransaction_refit_news(void *shell, int32_t order) noexcept { auto *v = static_cast<Vehicle *>(shell); VehicleID id = (v->type == VEH_TRAIN) ? RustVehicleFirst(v)->index : v->index; EncodedString headline = order != -1 ? GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_REFIT, order + 1) : GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_CARGO, CargoSpec::Get(v->cargo_type)->name); AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, std::move(headline), id); }
 static void * FleetTransaction_build(void *out, void *shell, uint16_t engine) noexcept { auto *v = static_cast<Vehicle *>(shell); VehicleID id; std::tie(*static_cast<CommandCost *>(out), id, std::ignore, std::ignore, std::ignore) = Command<CMD_BUILD_VEHICLE>::Do({DoCommandFlag::Execute, DoCommandFlag::AutoReplace}, v->tile, EngineID(engine), true, INVALID_CARGO, INVALID_CLIENT_ID); return static_cast<CommandCost *>(out)->Failed() ? nullptr : Vehicle::Get(id); }
 static void FleetTransaction_refit(void *out, void *shell, uint8_t cargo, uint8_t subtype) noexcept { *static_cast<CommandCost *>(out) = std::get<0>(Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, static_cast<Vehicle *>(shell)->index, cargo, subtype, false, false, 0)); }
@@ -131,7 +130,7 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.order_refit = FleetTransaction_order_refit,
 	.order_auto = FleetTransaction_order_auto,
 	.order_cargo = FleetTransaction_order_cargo,
-	.local = FleetTransaction_local,
+	.local = RustIsLocalCompany,
 	.refit_news = FleetTransaction_refit_news,
 	.build = FleetTransaction_build,
 	.refit = FleetTransaction_refit,

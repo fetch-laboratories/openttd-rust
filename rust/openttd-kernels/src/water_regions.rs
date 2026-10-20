@@ -37,6 +37,14 @@ pub struct Leaves {
     pub debug: unsafe extern "C" fn(u8, i32, i32),
 }
 
+/// Current native-owned region allocation and its immutable leaves.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Context {
+    pub owner: *mut Regions,
+    pub leaves: *const Leaves,
+}
+
 #[derive(Default)]
 struct Region {
     edges: [u16; 4],

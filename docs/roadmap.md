@@ -4,14 +4,14 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-19, code at `377b374579`)
+## Where the fork stands (2026-10-19, code at `79dea34092`)
 
-- Thirty ownership ports. Whole fork: Rust 66,144 / tooling 30,679 / glue 29,338 / original retired 40,991 of 470,612 `src/` lines (8.71%). Simulation: 33,058 / 102,615 (32.22%).
+- Thirty ownership ports. Whole fork: Rust 69,545 / tooling 30,291 / glue 29,608 / original retired 40,991 of 470,612 `src/` lines (8.71%). Simulation: 33,058 / 102,615 (32.22%).
 - Wind-down integrated #302 shared benchmark coordination, #300 borrowed effect/disaster tables and #255 landscape ownership after review and exact-head Full. All three requested quiet repeats passed. Earlier #285/#286/#287/#289/#292/#297 are integrated; deployed docs-only acceptance passed; CI_ON_DEMAND=true.
-- Development resumed on 2026-10-19. Five component branches (including #294/#295 WIP) and three maintenance drafts remain. #269/#308 have clean source reviews but failed speed gates; #309 and repaired #298 have Full requested.
-- Current speed record (#255): TGP 1.189, play saves 1.15-1.39. The #275 attribution is posted; no follow-up fix PRs were started. Protected-branch CI passed at the latest code head.
-- Coverage (#156): vehicle deletion/pool-growth assertions, NewGRF/legacy branches and house/landscape coverage gaps remain open.
-- The selected work order and prerequisites below remain unchanged. Selected ship-scratch maintenance and #257 deletion/pool-growth coverage run alongside the inherited drafts, within the three-maintenance limit.
+- Development resumed on 2026-10-19. Five component drafts remain. #309 coverage and #298 generated ABI are integrated after review and Full; their worktrees/branches are removed. #269/#308 have clean source reviews but failed speed gates.
+- Current speed record (#298): TGP 1.189, play saves 1.21-1.41. Protected-branch CI is green. #310/#318 profiles its speed miss; #311/#319 repairs the selected road speed/effect path.
+- Coverage (#156): #309 adds deletion/pool-growth assertions. NewGRF/legacy branches and house/landscape coverage gaps remain open.
+- Integrate reviewed work first. Three maintenance PRs remain: #308, #318 and #319. #311 proceeds independently of #318's speed disposition.
 
 ## Fourteenth steering review (2026-10-18, merge churn and honest exceptions)
 
@@ -35,7 +35,7 @@ Actions, in order:
 
 - **Core loops (thirteenth):** #257 and #255 integrated under the current guard. The vehicle raw-offset view is closed (#274). Command ports share one set of command checks. Duplicate wrappers found at review are deleted before integration.
 - **Housekeeping (twelfth):** #259 H1-H4, #260 and #261 R1/R3-part/R4 are done. R2 follows #269, and H5 comes last. At most three maintenance PRs are in flight. They never count against the component cap or block an ownership port.
-- **Direct shared services and boundaries:** direct shared services (#107/#168/#199) and one definition per shared accessor, enforced in quick CI by #249, whose baseline only shrinks. Use a fixed hasher for lookup-only YAPF maps; ABI blocks stay per component until #284 removes numeric IDs.
+- **Direct shared services and boundaries:** direct shared services (#107/#168/#199) and one definition per shared accessor, enforced in quick CI by #249, whose baseline only shrinks. Use a fixed hasher for lookup-only YAPF maps; #284 generates named ABI layouts and fixture defaults.
 - **Ownership:** prioritize simulation ownership. Keep state at the original's process scope.
 - **Map storage:** #108 retains C++ map arrays with direct bundled services until #274's map view lands.
 - **Harness evidence:** end moments (#154), default branch witnesses and reference probes (#198/#204/#210/#211), the speed guard (#155/#282) and documented coverage gaps (#156).
@@ -102,6 +102,8 @@ evidence in their PRs; rows below use original retirement and net glue (#223).
 | #296 (typed Markdown classification) | #297 | direct | `629262509e` | 0 / 50 / 0 / 0; tooling net +49 |
 | #301 (shared benchmark coordination) | #302 | direct | `e2e3aa074f` | 0 / 34 / 0 / 0; net glue 0 |
 | #299 (borrow effect/disaster tables) | #300 | direct | `363502a424` | 70 / 7 / 6 / 0; net glue +4 |
+| #307 (#156 scheduler deletion/pool growth) | #309 | direct | `ad58d65c10` | 0 / 7 / 74 / 0; tests only |
+| #284 (generated ABI and typed defaults) | #298 | direct | `79dea34092` | 4541 / 287 / 2650 / 0; net glue +196 |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -123,14 +125,14 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
    - engine external NewGRF/retire_early and legacy save branches;
    - #218's NewGRF and game-script paths;
    - the #268, #269 and #270 audit gaps (#156 comment, 2026-10-16);
-   - the #257, #270, #269 and #255 audit gaps (#156 comment, 2026-10-18), first the #257 deletion and pool-growth assertions.
+   - the #257, #270, #269 and #255 audit gaps (#156 comment, 2026-10-18); #309 covers the selected deletion and pool-growth assertions.
 
 ## Phase 2: current work, in order
 
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in parallel.
 
-1. **#291/#292, #283/#287, #288/#289, #296/#297 and #301/#302 are integrated.** Protected CI and deployed docs-only acceptance passed. CI_ON_DEMAND=true. **#284/#298** has reviewed platform/fixture fixes after its first Full failed; root owns the retry. **#307/#309** coverage has a clean independent review and Full requested.
+1. **#291/#292, #283/#287, #288/#289, #296/#297, #301/#302, #307/#309 and #284/#298 are integrated.** CI_ON_DEMAND=true. **#310/#318** and **#311/#319** are draft.
 2. **Drafts:** #269 houses retains its owned speed fix round; #255 landscape is integrated. Priorities are unchanged.
 3. **#275 speed, revised order (2026-10-18 comment):**
    - road YAPF tile reads (#288/#289) and effect/disaster borrowing (#299/#300) integrated; six-scenario attribution is posted on #275. Ship scratch is reviewed in #306/#308; #310 constant-initializes the actual road service guard next;
@@ -141,14 +143,15 @@ unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in 
 4. **#281** vehicle maintenance direct calls, then the callee-copy check.
 5. **#274 map view**, one shared PR after #255 integrates.
 6. **Commands:**
-   - #266/#290 road commands is draft: height fix saved; command-owner bounces/shared leaves need a fix round and fresh review;
-   - #267/#303 station construction is draft at its requested passing-verify milestone;
+   - #266/#290 road commands: a deeper audit found indirect rating/finance owner bounces. The selected fix moves complete ordinary command pre/post helpers to shared Rust with native facades/storage services; fresh fixing review, medians and Full follow;
+   - #267/#303 station construction: direct command/reservation repairs and evidence pass; fresh fixing review removes shared command owner bounces before new medians/Full;
    - #247 town commands, authority and deletion, after #256/#269 integrates;
    - #293 tunnel/bridge construction, removal and ownership, once #247 and #212 settle;
-   - #294 water construction/restoration starts concurrently now: #247 waits on houses; #293 keeps its prerequisites. Leave docking with #267 and flooding with #212, with no draft dependency;
-   - #295 object construction, generation and HQ lifecycle, including canonical counts and cleared-area scratch.
+   - #294 water construction/restoration is in fresh fixing review. Selected support moves complete `DoClearSquare` control to shared Rust and calls water-region invalidation directly through typed owner/leaves context; preserve native map/animation/docking leaves. No draft dependency;
+   - #295 object construction, generation and HQ lifecycle, including canonical counts/scratch. Fix indirect command/finance/price bounces, narrow scratch operations and redundant table bindings before reassessing its retirement ratio; no waiver or draft service dependency.
 
    Fresh Astra planning selected #293-#295. Reuse canonical services; none waits on draft wrappers. Object generation's cancellation services need return-before-rethrow handling.
+   Next whole owners: **#314** common vehicle transactions/nonrail construction/articulated assembly; **#315** rail construction/consist transactions; **#316** subsidy state and award/expiry. They start in that order after active work, without draft service dependencies; subsidy glue+tooling targets <=450 lines.
 7. **#168 tail, largest first.** `order_cmd.cpp` and `economy.cpp` hold 65 of the 198 baseline copies. Train, ship, effect and cargo-packet C-layout blocks wait for nothing.
 
 New owners reuse integrated services, never draft copies. A Rust-allocated
@@ -160,34 +163,25 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 Resumed by the user's `/start-development` on 2026-10-19.
 Root is gpt-6.1-sol, xhigh; implementation/review used gpt-6.1-sol, high.
 Five component branches and three maintenance drafts remain; #294/#295 started from integrated base.
-Fresh owners cover component fixes, ship scratch, coverage and independent reviews.
+Fresh owners cover component evidence, the speed fix round and independent review.
 
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
-| #284 / #298 | `generated-abi-284`, `e4a7fafdaa` | Root: platform/portable/fixture omissions fixed; scoped review clean. Native/town rechecks and fresh Full next. Prior six medians pass; support about 812/650 lines. |
-| #256 / #269 | `house-lifecycle-256`, `64f133b059` | Fix, 45-scenario checks and fresh review complete. P1996 1.416 fails guard; P2016 1.558 fails ceiling. Root owns selected #275 follow-up and integration gates. |
-| #266 / #290 | `road-commands-266`, `56f25ba222` | `/root/road_boundary_266`: remove owner bounces and shared-leaf copies while preserving native command protocol; then fresh review, medians/Full. |
-| #267 / #303 | `station-commands-267`, `7144c9cb78` | Commands/reload, generators and focused aircraft/ship checks pass. Canonical radius/rail fixes pushed; direct train-reservation repair underway, then base/medians/review/Full. |
+| #256 / #269 | `house-lifecycle-256`, `64f133b059` | Fix, 45-scenario checks and fresh review complete. P2016 1.558 fails ceiling; P1996 1.416 missed the prior #255 guard. Root owns selected #275 follow-up and integration gates. |
+| #266 / #290 | `road-commands-266`, `2a28bc736d` | Full hit an external fetch503. Fresh fixer owns shared command/finance/price support and clearing boundary adoption, then new medians/Full. Old timings remain historical evidence. |
+| #267 / #303 | `station-commands-267`, `0bac491fb1` | Verify/Cargo4, 40 scenarios and 18 comparisons pass; P2016 1.618 fails. Fresh whole-PR fixer includes shared command and clearing boundaries before new medians/Full. |
 | #306 / #308 | `t3/reuse-ship-search-scratch`, `9675566fb9` | Scratch/profile/native/water checks and fresh review pass. P2016 1.618 fails; root owns speed disposition and remaining gates. |
-| #307 / #309 | `t3/vehicle-deletion-pool-growth-coverage`, `52c3bd2925` | Default-CI deletion and live-growth tests pass; independent review clean. Exact-head Full requested; root owns integration. |
-| #294 | fresh isolated task | Water construction/restoration selected from integrated base; preserve separate docking/flooding owners and reuse integrated services. |
-| #295 | fresh isolated task | Object construction/generation/HQ and canonical counts/scratch; preserve progress-cancellation return before rethrow. |
-| #275 / #310-#312 | root-owned selection | Fresh source plan complete; assign #310 after a maintenance slot opens, then #311 and corrected #312. Next whole-owner planning is read-only. |
+| #294 / #317 | `t3/port-water-commands-to-rust`, `4afc992b76` | Actual-base ABI/defaults, seven cases and six medians pass. Fresh reviewer fixes ship accessor adoption and shared clearing/region bounces, then new medians/Full. |
+| #295 / #313 | `t3/rust-object-lifecycle-owner`, `fb33d20414` | Whole lifecycle and old-head 356-scenario corpus pass; tooling324. Shared command, scratch and price fixes underway before ratio reassessment/base adoption/medians/review. |
+| #310 / #318 | `road-tables-310`, `9b74be9011` | Native/Cargo4, 349-scenario corpus and clean source review pass. P2016 1.594463 fails; bounded profile retained. Active #311 owns selected speed repair before integration gates. |
+| #311 / #319 | `t3/repair-road-speed-effect-path`, `7db2cb4d4c` | Two-call boundary passes native/Cargo4 and P2000 witness: 12.291 outgoing/tick under13. Final profiles/corpus and six medians pending; initial four-call witness failure retained. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Paused measurement branch; #255 prerequisite is settled. Shared map view/attribution remain in the existing work order; no new PR. |
 | #64 / #66 | remote `issue/64-curve-family`, `aab5211801` | #66 closed unmerged; #64 and older paused work stay untouched. |
 
-#68/#69 and older paused work are unchanged. Future #247/#293-#295 retain their prerequisites; #281 follows the revised #275 order.
+#68/#69 and older paused work are unchanged. Future #247/#293 retain their prerequisites; #281 follows the revised #275 order.
 Merged worktrees/branches, all 17 merged `t3/*` branches and requested profiler/old timing outputs are removed.
 Each open PR keeps one clean worktree; unmerged house review branches, shared
 caches, locks and the reference are retained.
-
-ABI blocks (check only consumed layouts; #284 deletes this registry):
-- train through 385, tree additions 386-389, fleet 390-399
-- company 400-429, town 430-459, road 460-499
-- station/loading 500-559, industry 560-619 (572 is the shared ByteSpan), CommandCost 620-629
-- town lifecycle 630-669, aircraft 670-739
-- vehicle 740-779, landscape 780-819, signals 820-859, engines 860-919
-- house lifecycle 920-979, rail commands 980-1019, road commands 1020-1059, station construction 1060-1119
 
 Preserve the pinned reference. Do not reapply effect helper `73ccd511fb`.
 Build and test with `--jobs 2`; standalone fixture games share the benchmark lock.

@@ -122,6 +122,24 @@ LD_LIBRARY_PATH="$PWD/.local/deps/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$L
 
 `-X` avoids global game folders. Use separate development configuration and saves.
 
+### Generated ABI probes and fixture defaults (#284)
+
+`layouts!` declarations in `abi.rs`, `company.rs`, `crypto_primitives.rs`, `blake2b.rs`,
+`x25519.rs` and `auth.rs` name the C++ type, probe group and ordered Rust fields. Use
+`rust_field => cpp_field` for aliases and `width field: RustType` for an extra
+native-width check. Native-only groups remain in their owning unit tests.
+CMake runs `tools/generate-abi.py` into the build directory; probes compare the
+complete list and its `SIZE_MAX` terminator through the named metadata API.
+Add declarations there, never a second C++ field list or numeric type ID.
+
+Callback declarations inherit signature-correct abort defaults. Fixtures specify
+only callbacks they actually use; data pointers and scalar carriers retain their
+own initialization rules. Generated typed visitors check actual production
+instances for null callbacks and abort defaults in the default native tests.
+`tools/test-generated-abi.py` checks the historical conversion against the deleted
+lists and tests current generation separately, allowing later ABI changes.
+Cross-language signature assertions remain outside this maintenance change.
+
 ## Compiler cache, shared reference and CI time
 
 Every worktree of a clone shares the main checkout's pinned reference checkout
@@ -1187,6 +1205,11 @@ retain field widths through C++ staging.
 `vehicle_services.{h,cpp}`). No owner, path or world borrow spans callbacks, reentry or
 deletion.
 
+#311 shares one lean max-speed calculation across road control and native queries. Road
+control supplies that limit between the shared native visual-effect gate and tail, then
+observes movement/speed inputs again after effects. Default native/ABI checks cover the
+front-state/curve/bridge domains and pre/post-effect ordering; train callers keep the shared policy.
+
 The default `roads-` simulation compares acceleration, servicing, path, RNG, crash expiry and
 reload. Legacy saves, custom NewGRFs, articulated/tram turns, sounds and viewport pixels remain
 limits tracked by #156.
@@ -1292,6 +1315,33 @@ remain unchanged.
 loading queues, fractional admission, acceptance loss, full/gradual loading, rating
 expiry/decay/capping, stale-link refresh/removal/restriction/release and active reload. Legacy, NewGRF and refit
 gaps remain in #156.
+
+### Station construction, joining and removal (#267)
+
+Rust owns the station command policy for rail platforms and waypoints, bay and
+through road stops, airports, docks and oil rigs, plus sign/name/owner, terrain,
+bridge clearance, joining, deletion/reuse and docking-neighbour decisions.
+`water_cmd.cpp` docking eligibility and registration belong to this owner.
+Original command bodies compile only in portable builds. The existing #125/#214
+station state remains canonical; there is no second station owner or save layout.
+
+C++ retains shell/spec/road-stop allocation, NewGRF resolvers, spatial indices,
+rendering/description and the hot tile-loop/animation/vehicle-entry/track/slope
+services. Entries use borrowed typed synchronous tables (ABI 1060-1072), shared
+Rust command pre/post checks, prices, clear-square/water restoration and native
+result slots. No ordinary-play script VM or save/load exception crosses the boundary.
+Rust ends owner access before reentry and calls owned aircraft/station/reservation
+policy directly. Reservation lookahead saves the existing layout-checked order
+value in each Rust stack guard; native pool/container allocation follows the original.
+
+`python3 tools/migration.py simulate stations-commands aircraft-controller-removal
+water-structures-mutate --jobs 2` compares command costs/errors, RNG, STNN/STNS,
+map, town and company state, including partial removal, joins, delete/reuse and
+modern reload. The station module includes unchanged-reference private callbacks
+in fixture executables and requires `station_command` witnesses in default CI.
+Builtin tram stops and a forced airport noise refusal share the controlled crossing
+fixture; terrain preparation preserves live ground-vehicle corner heights. NewGRF,
+legacy decoding and unusual occupied/reservation branches remain tracked by #156.
 
 ### Ship controller and private state (#146)
 

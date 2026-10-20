@@ -180,6 +180,7 @@ static bool Candidate()
 	leaves.map_log_x = Read_map_log_x; leaves.road_info = Read_road_info;
 	leaves.state = State; leaves.stations = Stations; leaves.road_mask = RoadTypes; leaves.build_road = BuildRoad; leaves.build_tunnel = BuildTunnel;
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
+	services.calendar_date = []() noexcept { return 0; }; // The controlled road type is available from date zero.
 	services.tile_type = Read_tile_type; services.tile_valid = Read_tile_valid;
 	services.tile_slope = Read_tile_slope; services.tile_z = Read_tile_z; services.road_bits = Read_road_bits;
 	services.tunnel_transport = [](uint32_t id) noexcept { return uint8_t(GetTunnelBridgeTransportType(id)); };
