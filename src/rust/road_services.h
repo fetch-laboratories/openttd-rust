@@ -7,6 +7,7 @@
 
 /** @file road_services.h Typed road services; each resolves its vehicle once and reads only what it returns. */
 #include "services_map.h"
+#include "services_station.h"
 
 static_assert(RVSB_IN_DEPOT == 254 && RVSB_WORMHOLE == 255 && RVSB_IN_ROAD_STOP == 32 && RVSB_IN_DT_ROAD_STOP == 64);
 static_assert(to_underlying(RoadStopType::Bus) == 0 && to_underlying(RoadStopType::Truck) == 1);
