@@ -29,6 +29,19 @@ use crate::witness as w;
 pub struct ConvertFrame {
     _private: [u8; 0],
 }
+/// Caller-owned native stack results and lazy conversion cursor. Never dereferenced.
+#[repr(C)]
+pub struct CommandScratch {
+    _private: [u8; 0],
+}
+/// Only the native stack objects needed by a nested conversion.
+#[repr(C)]
+pub struct ConversionScratch {
+    pub frame: *mut ConvertFrame,
+    pub area: *mut Area,
+    pub error: *mut CommandCost,
+    pub ret: *mut CommandCost,
+}
 /// Fields read together only in the deity town-boundary branch.
 #[repr(C)]
 pub struct TownEdge {
@@ -91,16 +104,12 @@ pub struct RoadCommandServices {
     pub next_effect: extern "C" fn(u32) -> WorksEffect,
     /// Delete the source-valid effect shell and its owner.
     pub delete_effect: extern "C" fn(u32),
-    /// Native `available_money` service.
-    pub available_money: extern "C" fn() -> i64,
-    /// Native `owned_by_town` service.
+    /// Native encoded owned-by-town result.
     pub owned_by_town: unsafe extern "C" fn(*mut CommandCost, u32),
-    /// Native `build` service.
-    pub build: unsafe extern "C" fn(*mut CommandCost, u16, u32, u8, u8, u8, u16),
-    /// Native `convert` service.
-    pub convert: unsafe extern "C" fn(*mut CommandCost, u16, u32, u32, u8, bool),
-    /// Native `remove_long_cost` service.
-    pub remove_long_cost: extern "C" fn(u16, u32, u32, u8, u8, bool, bool) -> i64,
+    /// One extra native result for nested build or low-money remove test.
+    pub scratch_cost: unsafe extern "C" fn(*mut CommandScratch) -> *mut CommandCost,
+    /// Lazily construct the nested conversion stack objects, resetting prior use.
+    pub conversion_scratch: unsafe extern "C" fn(*mut CommandScratch) -> ConversionScratch,
     /// Native `collect_vehicles` service.
     pub collect_vehicles: unsafe extern "C" fn(*mut ConvertFrame, u32),
     /// Native `cargo_changed` service.
@@ -108,6 +117,7 @@ pub struct RoadCommandServices {
 }
 use crate::rail_cmd::{Cost, INVALID_STRING};
 const ROAD: u8 = 2;
+const VOID: u8 = 7;
 const RAIL: u8 = 1;
 const STATION: u8 = 5;
 const WORMHOLE: u8 = 9;
@@ -119,6 +129,7 @@ const INVALID: u8 = 63;
 const INVALID_TOWN: u16 = u16::MAX;
 const EXEC: u16 = 1;
 const AUTO: u16 = 2;
+const ALL_TILES: u16 = 256;
 const BANKRUPT: u16 = 32;
 const INVALID_SLOPES: [[u8; 15]; 2] = [
     [0, 12, 9, 8, 3, 0, 1, 0, 6, 4, 0, 0, 2, 0, 0],
@@ -191,6 +202,87 @@ impl<'a> Ctx<'a> {
                 log_x: (shared.map_log_x)() as u8,
             },
         }
+    }
+    fn command(
+        &self,
+        cost: Cost<'_>,
+        flags: u16,
+        tile: u32,
+        mut body: impl FnMut(u16) -> i64,
+    ) -> i64 {
+        struct Scope<'a>(&'a CommandServices);
+        impl Drop for Scope<'_> {
+            fn drop(&mut self) {
+                (self.0.leave)();
+            }
+        }
+        // CommandHelper::Do exempts tile zero, and always rejects out-of-map tiles.
+        if tile != 0
+            && (tile >= self.size() || (self.tile_type(tile) == VOID && flags & ALL_TILES == 0))
+        {
+            cost.error(INVALID_STRING);
+            return 0;
+        }
+        let top_level = (self.commands.enter)();
+        let _scope = Scope(self.commands);
+        if top_level || flags & EXEC == 0 {
+            (self.commands.before)(top_level, true);
+            let extra = body(flags & !EXEC);
+            (self.commands.after)(cost.0, flags, top_level, true);
+            if !cost.ok() || flags & EXEC == 0 {
+                return extra;
+            }
+        }
+        (self.commands.before)(top_level, false);
+        let extra = body(flags);
+        (self.commands.after)(cost.0, flags, top_level, false);
+        extra
+    }
+    fn do_build(
+        &self,
+        nested: *mut CommandScratch,
+        cost: Cost<'_>,
+        ret: Cost<'_>,
+        flags: u16,
+        tile: u32,
+        bits: u8,
+        rt: u8,
+        drd: u8,
+        town: u16,
+    ) {
+        self.command(cost, flags, tile, |f| {
+            self.build(nested, cost, ret, f, tile, bits, rt, drd, town);
+            0
+        });
+    }
+    fn do_convert(
+        &self,
+        nested: *mut CommandScratch,
+        cost: Cost<'_>,
+        flags: u16,
+        end: u32,
+        start: u32,
+        rt: u8,
+        diagonal: bool,
+    ) {
+        self.command(cost, flags, end, |f| {
+            // SAFETY: native caller owns the stack frame. Reset for each actual
+            // proc call, just as the native test and execute have separate locals.
+            let scratch = unsafe { (self.s.conversion_scratch)(nested) };
+            self.convert(
+                scratch.frame,
+                scratch.area,
+                cost,
+                self.c(scratch.error),
+                self.c(scratch.ret),
+                f,
+                end,
+                start,
+                rt,
+                diagonal,
+            );
+            0
+        });
     }
     fn c(&self, p: *mut CommandCost) -> Cost<'a> {
         Cost(p, self.costs)
@@ -641,6 +733,7 @@ impl<'a> Ctx<'a> {
     }
     fn build(
         &self,
+        nested: *mut CommandScratch,
         cost: Cost<'_>,
         ret: Cost<'_>,
         flags: u16,
@@ -926,9 +1019,7 @@ impl<'a> Ctx<'a> {
                     if (self.shared.road_powered)(rt, old) {
                         rt = old;
                     } else if (self.shared.road_powered)(old, rt) {
-                        unsafe {
-                            (self.s.convert)(ret.0, flags, tile, tile, rt, false);
-                        }
+                        self.do_convert(nested, ret, flags, tile, tile, rt, false);
                         if !ret.ok() {
                             cost.take(ret);
                             return;
@@ -1040,6 +1131,7 @@ impl<'a> Ctx<'a> {
     }
     fn build_long(
         &self,
+        nested: *mut CommandScratch,
         cost: Cost<'_>,
         last: Cost<'_>,
         ret: Cost<'_>,
@@ -1074,6 +1166,9 @@ impl<'a> Ctx<'a> {
         last.error(INVALID_STRING);
         let mut tile = start;
         let (mut bridge, mut tunnel, mut success) = (false, false, false);
+        // SAFETY: the native extra result is distinct and retains its address
+        // through this synchronous drag, including nested conversion/reentry.
+        let build_ret = self.c(unsafe { (self.s.scratch_cost)(nested) });
         loop {
             let mut bits = axis_bits(axis);
             if !ai && start != end {
@@ -1090,9 +1185,17 @@ impl<'a> Ctx<'a> {
                     bits &= dir_bit(dir);
                 }
             }
-            unsafe {
-                (self.s.build)(ret.0, flags, tile, bits, rt, drd, INVALID_TOWN);
-            }
+            self.do_build(
+                nested,
+                ret,
+                build_ret,
+                flags,
+                tile,
+                bits,
+                rt,
+                drd,
+                INVALID_TOWN,
+            );
             if !ai && ret.message() == self.r.strings.already_built {
                 success = true;
             }
@@ -1137,6 +1240,7 @@ impl<'a> Ctx<'a> {
     }
     fn remove_long(
         &self,
+        nested: *mut CommandScratch,
         cost: Cost<'_>,
         last: Cost<'_>,
         ret: Cost<'_>,
@@ -1159,7 +1263,7 @@ impl<'a> Ctx<'a> {
             core::mem::swap(&mut start, &mut end);
             core::mem::swap(&mut start_half, &mut end_half);
         }
-        let available = (self.s.available_money)();
+        let available = (self.commands.available_money)();
         let mut spent = 0_i64;
         let mut tile = start;
         last.error(INVALID_STRING);
@@ -1180,15 +1284,17 @@ impl<'a> Ctx<'a> {
                         spent = spent.saturating_add(ret.money());
                         if spent > 0 && spent > available {
                             w::hit(w::ROAD_COMMANDS_REMOVE_MONEY);
-                            return (self.s.remove_long_cost)(
-                                flags & !EXEC,
-                                end,
-                                start,
-                                rt,
-                                axis,
-                                start_half,
-                                end_half,
-                            );
+                            // Parent cost retains its partial executed result. The
+                            // other three costs can be reused: we return immediately.
+                            // SAFETY: native extra slot is distinct from parent slots.
+                            let nested_ret = self.c(unsafe { (self.s.scratch_cost)(nested) });
+                            self.command(ret, flags & !EXEC, end, |f| {
+                                self.remove_long(
+                                    nested, ret, last, nested_ret, scratch, f, end, start, rt,
+                                    axis, start_half, end_half,
+                                )
+                            });
+                            return ret.money();
                         }
                         self.remove(scratch, last, tile, flags, bits, rtt, false);
                     }
@@ -1766,6 +1872,7 @@ pub unsafe extern "C" fn openttd_rust_road_allow_remove(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_build(
     services: *const RoadCommandServices,
+    nested: *mut CommandScratch,
     out: *mut CommandCost,
     ret: *mut CommandCost,
     flags: u16,
@@ -1777,7 +1884,28 @@ pub unsafe extern "C" fn openttd_rust_road_build(
 ) {
     // SAFETY: caller supplies valid immutable native tables.
     let c = unsafe { Ctx::new(services) };
-    c.build(c.c(out), c.c(ret), flags, tile, bits, rt, drd, town);
+    c.build(nested, c.c(out), c.c(ret), flags, tile, bits, rt, drd, town);
+}
+
+/// Shared ordinary road-build command for native callers, including town growth.
+/// # Safety
+/// Same caller-owned distinct native slots and synchronous lifetime as `road_build`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_do_build(
+    services: *const RoadCommandServices,
+    nested: *mut CommandScratch,
+    out: *mut CommandCost,
+    ret: *mut CommandCost,
+    flags: u16,
+    tile: u32,
+    bits: u8,
+    rt: u8,
+    drd: u8,
+    town: u16,
+) {
+    // SAFETY: native caller supplies the immutable tables and live stack slots.
+    let c = unsafe { Ctx::new(services) };
+    c.do_build(nested, c.c(out), c.c(ret), flags, tile, bits, rt, drd, town);
 }
 
 /// Original road `build_long` entry.
@@ -1787,6 +1915,7 @@ pub unsafe extern "C" fn openttd_rust_road_build(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_build_long(
     services: *const RoadCommandServices,
+    nested: *mut CommandScratch,
     out: *mut CommandCost,
     last: *mut CommandCost,
     ret: *mut CommandCost,
@@ -1803,6 +1932,7 @@ pub unsafe extern "C" fn openttd_rust_road_build_long(
     // SAFETY: caller supplies valid immutable native tables.
     let c = unsafe { Ctx::new(services) };
     c.build_long(
+        nested,
         c.c(out),
         c.c(last),
         c.c(ret),
@@ -1825,6 +1955,7 @@ pub unsafe extern "C" fn openttd_rust_road_build_long(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_remove_long(
     services: *const RoadCommandServices,
+    nested: *mut CommandScratch,
     out: *mut CommandCost,
     last: *mut CommandCost,
     ret: *mut CommandCost,
@@ -1840,6 +1971,7 @@ pub unsafe extern "C" fn openttd_rust_road_remove_long(
     // SAFETY: caller supplies valid immutable native tables.
     let c = unsafe { Ctx::new(services) };
     c.remove_long(
+        nested,
         c.c(out),
         c.c(last),
         c.c(ret),

@@ -5,6 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
+#include "road_command_services.h"
+
 /** @file road_services.h Typed road services; each resolves its vehicle once and reads only what it returns. */
 static_assert(RVSB_IN_DEPOT == 254 && RVSB_WORMHOLE == 255 && RVSB_IN_ROAD_STOP == 32 && RVSB_IN_DT_ROAD_STOP == 64);
 static_assert(to_underlying(RoadStopType::Bus) == 0 && to_underlying(RoadStopType::Truck) == 1);
@@ -162,7 +164,7 @@ static bool OPENTTD_VEHICLE_CALL RoadSvcCanBuildTram(OpenTTDVehicle *v, uint32_t
 {
 	const RoadVehicle *u = RoadOf(v);
 	Backup<CompanyID> cur_company(_current_company, u->owner);
-	CommandCost ret = Command<CMD_BUILD_ROAD>::Do(DoCommandFlag::NoWater, TileIndex(tile), static_cast<RoadBits>(bits), u->roadtype, DRD_NONE, TownID::Invalid());
+	CommandCost ret = RustRoadBuildCommand(DoCommandFlag::NoWater, TileIndex(tile), static_cast<RoadBits>(bits), u->roadtype, DRD_NONE, TownID::Invalid());
 	cur_company.Restore();
 	return ret.Succeeded();
 }

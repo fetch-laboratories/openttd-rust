@@ -93,7 +93,7 @@ pub struct FoundingServices {
     pub assert_random_context: extern "C" fn(),
     pub assert_allocation: extern "C" fn(),
     pub initialize_cost: extern "C" fn(*mut CommandCost, i32),
-    pub sufficient_money: extern "C" fn(*const CommandCost) -> bool,
+    pub available_money: extern "C" fn() -> i64,
     pub money_deficit: extern "C" fn(*mut Frame, *const CommandCost),
     pub set_result: extern "C" fn(*mut Frame, TownId),
     pub exchange_generating: extern "C" fn(bool) -> bool,
@@ -555,7 +555,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
         MULT[usize::from(city)][usize::from(size.0)],
     ));
     if execute {
-        if !observed!((f.s.sufficient_money)(result)) {
+        if observed!((f.cost.money)(result)) > observed!((f.s.available_money)()) {
             w::hit(w::TOWN_MONEY);
             observed!((f.s.money_deficit)(frame, result));
             observed!((f.cost.expense_money)(result, 12, 0));

@@ -43,6 +43,7 @@
 #include "town.h"
 #ifdef WITH_RUST
 #include "rust/command_services.h"
+#include "rust/road_command_services.h"
 #include "rust/company_services.h"
 #include "rust/environment_services.h"
 #include "rust/tile_animation_services.h"
@@ -1039,7 +1040,7 @@ static bool RustTown_build_road(uint32_t town, uint32_t tile, uint32_t bits, uin
 	DoCommandFlags flags{DoCommandFlag::Auto};
 	if (mode != 2) flags.Set(DoCommandFlag::NoWater);
 	if (mode != 0) flags.Set(DoCommandFlag::Execute);
-	return Command<CMD_BUILD_ROAD>::Do(flags, TileIndex{tile}, static_cast<RoadBits>(bits), static_cast<RoadType>(road_type), DRD_NONE, TownID(town)).Succeeded();
+	return RustRoadBuildCommand(flags, TileIndex{tile}, static_cast<RoadBits>(bits), static_cast<RoadType>(road_type), DRD_NONE, TownID(town)).Succeeded();
 }
 static bool RustTown_clear_land(uint32_t tile, uint32_t execute) noexcept
 {
@@ -2328,7 +2329,7 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.assert_random_context = OpenTTDAssertTownGenerationContext,
 		.assert_allocation = []() noexcept { assert(Town::CanAllocateItem()); },
 		.initialize_cost = [](OpenTTDCommandCost *cost, int multiplier) noexcept { auto *native = reinterpret_cast<CommandCost *>(cost); *native = CommandCost(EXPENSES_OTHER, _price[PR_BUILD_TOWN]); native->MultiplyCost(multiplier); },
-		.sufficient_money = [](const OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<const CommandCost *>(cost)->GetCost() <= GetAvailableMoneyForCommand(); },
+		.available_money = GetRustCommandServices().available_money,
 		.money_deficit = [](OpenTTDTownFoundingFrame *frame, const OpenTTDCommandCost *cost) noexcept { frame->extra_money = reinterpret_cast<const CommandCost *>(cost)->GetCost(); },
 		.set_result = [](OpenTTDTownFoundingFrame *frame, uint16_t id) noexcept { frame->town_id = TownID(id); },
 		.exchange_generating = OpenTTDExchangeGeneratingWorld,

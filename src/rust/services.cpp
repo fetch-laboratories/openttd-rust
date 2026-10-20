@@ -84,9 +84,14 @@ static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner, uint32_t ti
 static void CommandNoVehicle(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = EnsureNoVehicleOnGround(TileIndex{tile}); }
 static void CommandNoTrain(OpenTTDCommandCost *out, uint32_t tile, uint8_t bits) noexcept { *NativeCost(out) = EnsureNoTrainOnTrackBits(TileIndex{tile}, static_cast<TrackBits>(bits)); }
 static void CommandWormholeFree(OpenTTDCommandCost *out, uint32_t tile, uint32_t end, const Train *ignore) noexcept { *NativeCost(out) = TunnelBridgeIsFree(TileIndex{tile}, TileIndex{end}, ignore); }
+static void CommandBefore(bool top_level, bool test) noexcept { CommandHelperBase::InternalDoBefore(top_level, test); }
+static void CommandAfter(OpenTTDCommandCost *out, uint16_t flags, bool top_level, bool test) noexcept { CommandHelperBase::InternalDoAfter(*NativeCost(out), DoCommandFlags{flags}, top_level, test); }
+static int64_t CommandAvailableMoney() noexcept { return GetAvailableMoneyForCommand().base(); }
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
 	static const OpenTTDCommandServices services{
+		.enter = RecursiveCommandCounter::Enter, .leave = RecursiveCommandCounter::Leave,
+		.before = CommandBefore, .after = CommandAfter, .available_money = CommandAvailableMoney,
 		.landscape_clear = LandscapeClear,
 		.tile_ownership = CommandTileOwnership, .ownership = CommandOwnership,
 		.no_vehicle = CommandNoVehicle, .no_train = CommandNoTrain, .wormhole_free = CommandWormholeFree,

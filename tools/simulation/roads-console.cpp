@@ -22,6 +22,12 @@ static void RoadPrint(std::string_view name, const CommandCost &cost, Money extr
 {
 	fmt::print(stderr, "ROADCMD {} {} {} {} {} {}\n", name, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), static_cast<int>(cost.GetExpensesType()), extra);
 }
+#ifdef WITH_RUST
+#include "rust/road_command_services.h"
+static constexpr auto RoadBuild = RustRoadBuildCommand;
+#else
+static constexpr auto RoadBuild = Command<CMD_BUILD_ROAD>::Do;
+#endif
 template <Commands Tcmd, typename... Args>
 static void RoadRun(std::string_view name, Args... args)
 {
@@ -30,7 +36,10 @@ static void RoadRun(std::string_view name, Args... args)
 		SaveRandomSeeds(&before);
 		DoCommandFlags command_flags = flags;
 		if constexpr (Tcmd == CMD_BUILD_ROAD || Tcmd == CMD_BUILD_LONG_ROAD || Tcmd == CMD_BUILD_ROAD_DEPOT || Tcmd == CMD_BUILD_SINGLE_RAIL) command_flags.Set(DoCommandFlag::Auto);
-		auto result = Command<Tcmd>::Do(command_flags, args...);
+		auto result = [&]() {
+			if constexpr (Tcmd == CMD_BUILD_ROAD) return RoadBuild(command_flags, args...);
+			else return Command<Tcmd>::Do(command_flags, args...);
+		}();
 		SaveRandomSeeds(&after);
 		if constexpr (Tcmd == CMD_BUILD_ROAD || Tcmd == CMD_BUILD_LONG_ROAD || Tcmd == CMD_REMOVE_LONG_ROAD || Tcmd == CMD_BUILD_ROAD_DEPOT || Tcmd == CMD_CONVERT_ROAD) {
 			bool same = before.random.state[0] == after.random.state[0] && before.random.state[1] == after.random.state[1] && before.interactive_random.state[0] == after.interactive_random.state[0] && before.interactive_random.state[1] == after.interactive_random.state[1];
@@ -79,6 +88,9 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	SavedRandomSeeds before, after;
 	SaveRandomSeeds(&before);
 	RoadRun<CMD_BUILD_ROAD>("zero", t(2, 2), ROAD_NONE, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
+	RoadPrint("protocol-outside", RoadBuild({}, TileIndex{Map::Size()}, ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
+	RoadPrint("protocol-void", RoadBuild({}, TileXY(Map::MaxX(), 2), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
+	RoadPrint("protocol-alltiles", RoadBuild(DoCommandFlag::AllTiles, TileXY(Map::MaxX(), 2), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
 	RoadRun<CMD_BUILD_LONG_ROAD>("drag", t(12, 2), t(2, 2), ROADTYPE_ROAD, AXIS_X, DRD_NONE, false, true, false);
 	RoadRun<CMD_BUILD_LONG_ROAD>("reverse", t(2, 2), t(12, 2), ROADTYPE_ROAD, AXIS_X, DRD_SOUTHBOUND, true, false, true);
 	RoadRun<CMD_BUILD_ROAD>("oneway", t(5, 2), ROAD_X, ROADTYPE_ROAD, DRD_NORTHBOUND, TownID::Invalid());
@@ -94,6 +106,15 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	RoadRun<CMD_BUILD_LONG_ROAD>("invalid-drag", t(12, 6), t(2, 5), ROADTYPE_ROAD, AXIS_X, DRD_NONE, false, true, false);
 	RoadRun<CMD_CONVERT_ROAD>("convert", t(12, 2), t(2, 2), alternate, false);
 	RoadRun<CMD_CONVERT_ROAD>("convert-back", t(12, 2), t(2, 2), ROADTYPE_ROAD, true);
+	/* Force build's nested conversion path with declared asymmetric power masks. */
+	Backup<RoadTypes> old_power(_roadtypes[ROADTYPE_ROAD].powered_roadtypes);
+	Backup<RoadTypes> new_power(_roadtypes[alternate].powered_roadtypes);
+	_roadtypes[ROADTYPE_ROAD].powered_roadtypes.Set(alternate);
+	_roadtypes[alternate].powered_roadtypes.Reset(ROADTYPE_ROAD);
+	if (GetRoadType(t(7, 5), RTT_ROAD) != ROADTYPE_ROAD) SignalFixtureAbort(__LINE__);
+	RoadRun<CMD_BUILD_ROAD>("automatic-convert", t(7, 5), ROAD_Y, alternate, DRD_NONE, TownID::Invalid());
+	if (GetRoadType(t(7, 5), RTT_ROAD) != alternate) SignalFixtureAbort(__LINE__);
+	old_power.Restore(); new_power.Restore();
 	RoadRun<CMD_REMOVE_LONG_ROAD>("remove-halves", t(12, 2), t(2, 2), ROADTYPE_ROAD, AXIS_X, true, false);
 	RoadRun<CMD_REMOVE_LONG_ROAD>("remove-tram", t(6, 2), t(6, 2), ROADTYPE_TRAM, AXIS_X, false, true);
 	/* Crossing construction over a reserved track and tram-first clearing. */
@@ -138,6 +159,15 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 #else
 	Company::Get(owner)->money = Money(700);
 #endif
+#ifdef WITH_RUST
+	Backup<Money> protocol_money(Company::Get(owner)->Finances().money, Money(0));
+#else
+	Backup<Money> protocol_money(Company::Get(owner)->money, Money(0));
+#endif
+	RoadPrint("protocol-money", RoadBuild({}, t(21, 2), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
+	RoadPrint("protocol-query", RoadBuild(DoCommandFlag::QueryCost, t(21, 2), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
+	RoadPrint("protocol-bankrupt", RoadBuild(DoCommandFlag::Bankrupt, t(21, 2), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
+	protocol_money.Restore();
 	RoadRun<CMD_REMOVE_LONG_ROAD>("money-remove", t(12, 20), t(2, 20), ROADTYPE_ROAD, AXIS_X, false, true);
 	for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
 		auto [cost, extra] = CmdRemoveLongRoad(flags, t(12, 20), t(2, 20), ROADTYPE_ROAD, AXIS_X, false, true);

@@ -2696,6 +2696,7 @@ static CommandCost CheckBuildAbove_Road(TileIndex tile, DoCommandFlags flags, Ax
 
 #ifdef WITH_RUST
 #include "rust/road_command_ffi.h"
+#include "rust/road_command_services.h"
 #include "rust/rail_command_services.h"
 #include "rust/command_cost_services.h"
 #include "rust/vehicle_services.h"
@@ -2703,11 +2704,23 @@ static CommandCost CheckBuildAbove_Road(TileIndex tile, DoCommandFlags flags, Ax
 #include "rust/settings_services.h"
 #include "rust/services_road.h"
 #include "window_func.h"
+static_assert(MP_VOID == 7 && DoCommandFlags{DoCommandFlag::AllTiles}.base() == 256);
 static_assert(ROAD_DEPOT_TRACKBIT_FACTOR == 2 && ROAD_STOP_TRACKBIT_FACTOR == 2 && MAX_COMPANIES == 15);
 static_assert(PR_BUILD_DEPOT_ROAD == 6 && PR_CLEAR_DEPOT_ROAD == 31 && PR_BUILD_FOUNDATION == 57);
 static_assert(OWNER_TOWN.base() == 15 && OWNER_NONE.base() == 16 && INVALID_OWNER.base() == 255);
 static_assert(FOUNDATION_NONE == 0 && FOUNDATION_LEVELED == 1 && FOUNDATION_INCLINED_X == 2 && FOUNDATION_INCLINED_Y == 3);
 struct OpenTTDRoadConvertFrame { RoadVehicleList affected; };
+struct RoadConversionScratch {
+	OpenTTDRoadConvertFrame frame;
+	OpenTTDRailConvertFrame area;
+	CommandCost error, ret;
+};
+/* No world layout enters Rust. This caller-owned stack slot supplies only the
+ * extra results a direct nested owner call needs. Conversion remains lazy. */
+struct OpenTTDRoadCommandScratch {
+	CommandCost ret;
+	std::optional<RoadConversionScratch> conversion;
+};
 static CommandCost &RoadCost(OpenTTDCommandCost *cost) noexcept { return *reinterpret_cast<CommandCost *>(cost); }
 static void RoadOwnedByTown(OpenTTDCommandCost *out, uint32_t tile) noexcept
 {
@@ -2753,23 +2766,25 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 		.depot_exit = [](uint32_t tile, uint8_t dir) noexcept { SetRoadDepotExitDirection(TileIndex{tile}, static_cast<DiagDirection>(dir)); },
 		.next_effect = RoadNextEffect,
 		.delete_effect = [](uint32_t id) noexcept { delete EffectVehicle::Get(VehicleID(id)); },
-		.available_money = []() noexcept { return GetAvailableMoneyForCommand().base(); },
 		.owned_by_town = RoadOwnedByTown,
-		.build = [](OpenTTDCommandCost *out, uint16_t flags, uint32_t tile, uint8_t bits, uint8_t rt, uint8_t drd, uint16_t town) noexcept {
-			RoadCost(out) = Command<CMD_BUILD_ROAD>::Do(DoCommandFlags{flags}, TileIndex{tile}, static_cast<RoadBits>(bits), static_cast<RoadType>(rt), static_cast<DisallowedRoadDirections>(drd), TownID(town));
-		},
-		.convert = [](OpenTTDCommandCost *out, uint16_t flags, uint32_t tile, uint32_t start, uint8_t rt, bool diagonal) noexcept {
-			RoadCost(out) = Command<CMD_CONVERT_ROAD>::Do(DoCommandFlags{flags}, TileIndex{tile}, TileIndex{start}, static_cast<RoadType>(rt), diagonal);
-		},
-		.remove_long_cost = [](uint16_t flags, uint32_t tile, uint32_t start, uint8_t rt, uint8_t axis, bool start_half, bool end_half) noexcept {
-			return std::get<0>(Command<CMD_REMOVE_LONG_ROAD>::Do(DoCommandFlags{flags}, TileIndex{tile}, TileIndex{start}, static_cast<RoadType>(rt), static_cast<Axis>(axis), start_half, end_half)).GetCost().base();
+		.scratch_cost = [](OpenTTDRoadCommandScratch *scratch) noexcept { return RustCommandCost(&scratch->ret); },
+		.conversion_scratch = [](OpenTTDRoadCommandScratch *scratch) noexcept -> OpenTTDRoadConversionScratch {
+			auto &s = scratch->conversion.emplace();
+			return {.frame = &s.frame, .area = &s.area, .error = RustCommandCost(&s.error), .ret = RustCommandCost(&s.ret)};
 		},
 		.collect_vehicles = RoadCollectVehicles,
-		.cargo_changed = [](OpenTTDRoadConvertFrame *frame) noexcept { for (RoadVehicle *v : frame->affected) v->CargoChanged(); },
+		.cargo_changed = [](OpenTTDRoadConvertFrame *frame) noexcept { for (RoadVehicle *v : frame->affected) RustGroundCargoChanged(v); },
 	};
 	return services;
 }
 static const OpenTTDRoadCommandServices *RoadServices() noexcept { return &GetRustRoadCommandServices(); }
+CommandCost RustRoadBuildCommand(DoCommandFlags flags, TileIndex tile, RoadBits bits, RoadType rt, DisallowedRoadDirections drd, TownID town) noexcept
+{
+	CommandCost cost, ret;
+	OpenTTDRoadCommandScratch nested;
+	openttd_rust_road_do_build(RoadServices(), &nested, RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), bits, rt, drd, town.base());
+	return cost;
+}
 bool RoadVehiclesAreBuilt() { return openttd_rust_road_vehicles_built(RoadServices()); }
 void UpdateCompanyRoadInfrastructure(RoadType rt, Owner owner, int count) { openttd_rust_road_infrastructure(RoadServices(), rt, owner.base(), count); }
 CommandCost CheckAllowRemoveRoad(TileIndex tile, RoadBits bits, Owner owner, RoadTramType rtt, DoCommandFlags flags, bool town_check)
@@ -2786,20 +2801,23 @@ static CommandCost RemoveRoad(TileIndex tile, DoCommandFlags flags, RoadBits pie
 }
 CommandCost CmdBuildRoad(DoCommandFlags flags, TileIndex tile, RoadBits bits, RoadType rt, DisallowedRoadDirections drd, TownID town)
 {
+	OpenTTDRoadCommandScratch nested;
 	CommandCost cost, ret;
-	openttd_rust_road_build(RoadServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), bits, rt, drd, town.base());
+	openttd_rust_road_build(RoadServices(), &nested, RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), bits, rt, drd, town.base());
 	return cost;
 }
 CommandCost CmdBuildLongRoad(DoCommandFlags flags, TileIndex tile, TileIndex start, RoadType rt, Axis axis, DisallowedRoadDirections drd, bool start_half, bool end_half, bool is_ai)
 {
+	OpenTTDRoadCommandScratch nested;
 	CommandCost cost, last, ret;
-	openttd_rust_road_build_long(RoadServices(), RustCommandCost(&cost), RustCommandCost(&last), RustCommandCost(&ret), flags.base(), tile.base(), start.base(), rt, axis, drd, start_half, end_half, is_ai);
+	openttd_rust_road_build_long(RoadServices(), &nested, RustCommandCost(&cost), RustCommandCost(&last), RustCommandCost(&ret), flags.base(), tile.base(), start.base(), rt, axis, drd, start_half, end_half, is_ai);
 	return cost;
 }
 std::tuple<CommandCost, Money> CmdRemoveLongRoad(DoCommandFlags flags, TileIndex tile, TileIndex start, RoadType rt, Axis axis, bool start_half, bool end_half)
 {
+	OpenTTDRoadCommandScratch nested;
 	CommandCost cost, last, ret, scratch;
-	Money extra(openttd_rust_road_remove_long(RoadServices(), RustCommandCost(&cost), RustCommandCost(&last), RustCommandCost(&ret), RustCommandCost(&scratch), flags.base(), tile.base(), start.base(), rt, axis, start_half, end_half));
+	Money extra(openttd_rust_road_remove_long(RoadServices(), &nested, RustCommandCost(&cost), RustCommandCost(&last), RustCommandCost(&ret), RustCommandCost(&scratch), flags.base(), tile.base(), start.base(), rt, axis, start_half, end_half));
 	return {std::move(cost), extra};
 }
 CommandCost CmdBuildRoadDepot(DoCommandFlags flags, TileIndex tile, RoadType rt, DiagDirection dir)

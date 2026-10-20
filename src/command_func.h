@@ -57,8 +57,12 @@ static constexpr inline DoCommandFlags CommandFlagsToDCFlags(CommandFlags cmd_fl
 
 /** Helper class to keep track of command nesting level. */
 struct RecursiveCommandCounter {
-	RecursiveCommandCounter() noexcept { _counter++; }
-	~RecursiveCommandCounter() noexcept { _counter--; }
+	RecursiveCommandCounter() noexcept { Enter(); }
+	~RecursiveCommandCounter() noexcept { Leave(); }
+
+	/** Shared nesting scope for native and Rust command owners. */
+	static bool Enter() noexcept { return ++_counter == 1; }
+	static void Leave() noexcept { --_counter; }
 
 	/** Are we in the top-level command execution? */
 	bool IsTopLevel() const { return _counter == 1; }
@@ -84,9 +88,11 @@ private:
 template <Commands TCmd, typename T, bool THasTile> struct CommandHelper;
 
 class CommandHelperBase {
-protected:
+public:
+	/* Shared ordinary Do protocol leaves, also called by Rust command owners. */
 	static void InternalDoBefore(bool top_level, bool test);
 	static void InternalDoAfter(CommandCost &res, DoCommandFlags flags, bool top_level, bool test);
+protected:
 	static std::tuple<bool, bool, bool> InternalPostBefore(Commands cmd, CommandFlags flags, TileIndex tile, StringID err_message, bool network_command);
 	static void InternalPostResult(CommandCost &res, TileIndex tile, bool estimate_only, bool only_sending, StringID err_message, bool my_cmd);
 	static bool InternalExecutePrepTest(CommandFlags cmd_flags, TileIndex tile, Backup<CompanyID> &cur_company);

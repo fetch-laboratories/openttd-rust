@@ -1463,6 +1463,9 @@ build-above. Portable originals remain. Native road-type allocation, drawing,
 track-status/vehicle-enter and tile loops stay outside this command port.
 The boundary reuses shared command checks and native stack costs, road/rail map
 leaves, company counters, depots, crossings and the rail conversion cursor.
+Rust calls its nested road bodies directly and retains the ordinary command
+protocol through shared native nesting, pre/post and money leaves. Town and tram
+checks share one typed road-build adapter; ground cargo updates share one leaf.
 Town authority and rating policy call the integrated Rust owner directly.
 Crossing reservation reads/writes now have one canonical definition shared with
 trains. The canonical `MayHaveRoad` predicate preserves rail-station/head guards.

@@ -67,7 +67,7 @@ struct OpenTTDTownFoundingServices {
 	void (*assert_random_context)() noexcept;
 	void (*assert_allocation)() noexcept;
 	void (*initialize_cost)(OpenTTDCommandCost *, int) noexcept;
-	bool (*sufficient_money)(const OpenTTDCommandCost *) noexcept;
+	int64_t (*available_money)() noexcept;
 	void (*money_deficit)(OpenTTDTownFoundingFrame *, const OpenTTDCommandCost *) noexcept;
 	void (*set_result)(OpenTTDTownFoundingFrame *, uint16_t) noexcept;
 	bool (*exchange_generating)(bool) noexcept;

@@ -84,8 +84,9 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::signal::SignalServices, item; assertions, assert_condition, assert_wormhole_start, train_on_tile, train_on_tracks, overflow_tbu, overflow_tbd, overflow_global, assert_company)
         }
         1020 => {
-            layout!(crate::road_cmd::RoadCommandServices, item; rail_commands, town, authority, strings, vehicles_built, town_valid, nearest_town, town_edge, set_town, foundation, clear_cost, convert_cost, extra_dynamite, depot_slope, make_depot, depot_exit, next_effect, delete_effect, available_money, owned_by_town, build, convert, remove_long_cost, collect_vehicles, cargo_changed)
+            layout!(crate::road_cmd::RoadCommandServices, item; rail_commands, town, authority, strings, vehicles_built, town_valid, nearest_town, town_edge, set_town, foundation, clear_cost, convert_cost, extra_dynamite, depot_slope, make_depot, depot_exit, next_effect, delete_effect, owned_by_town, scratch_cost, conversion_scratch, collect_vehicles, cargo_changed)
         }
+        1024 => layout!(crate::road_cmd::ConversionScratch, item; frame, area, error, ret),
         1021 => {
             layout!(crate::road_cmd::Strings, item; no_road, no_tram, junction, remove_road, no_suitable_road, no_suitable_tram, authority)
         }
@@ -111,7 +112,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::town::AuthorityServices, item; council_tolerance, bulldozer, authority_distance, town_index, refusal)
         }
         621 => {
-            layout!(crate::services::CommandServices, item; landscape_clear, tile_ownership, ownership, no_vehicle, no_train, wormhole_free)
+            layout!(crate::services::CommandServices, item; enter, leave, before, after, available_money, landscape_clear, tile_ownership, ownership, no_vehicle, no_train, wormhole_free)
         }
         620 => {
             layout!(crate::services::CommandCostServices, item; zero, error, expense_money, error_param, add, move_cost, amount, success, error_message, money, make_error)
@@ -387,7 +388,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         }
         632 => layout!(crate::town::founding::Metadata, item; grfid, kind),
         633 => {
-            layout!(crate::town::founding::FoundingServices, item; shared, growth, names, cost, allocate, resolve, can_allocate, close_to_town, flat, clear_ground, tree_ground, water_distance, scale_size, scale_land, found_setting, layout_setting, initial_city_size, town_density, custom_number, larger_towns, parameters, metadata, initialize_counts, insert_town, cargo_effect_exists, prepare_rename, name_changed, update_virt, directory_rebuild, directory_resort, update_noise, rebuild_tree, delete_town, assert_random_context, assert_allocation, initialize_cost, sufficient_money, money_deficit, set_result, exchange_generating, nearest_town_roads, founded_news, founded_events, clear_station_names, clear_industry_names, update_station_coords, cached_name, set_progress, increase_progress, no_town_error, town_count, random, edge_error, close_error, unsuitable_error, unique_error, too_many_error, no_space_error)
+            layout!(crate::town::founding::FoundingServices, item; shared, growth, names, cost, allocate, resolve, can_allocate, close_to_town, flat, clear_ground, tree_ground, water_distance, scale_size, scale_land, found_setting, layout_setting, initial_city_size, town_density, custom_number, larger_towns, parameters, metadata, initialize_counts, insert_town, cargo_effect_exists, prepare_rename, name_changed, update_virt, directory_rebuild, directory_resort, update_noise, rebuild_tree, delete_town, assert_random_context, assert_allocation, initialize_cost, available_money, money_deficit, set_result, exchange_generating, nearest_town_roads, founded_news, founded_events, clear_station_names, clear_industry_names, update_station_coords, cached_name, set_progress, increase_progress, no_town_error, town_count, random, edge_error, close_error, unsuitable_error, unique_error, too_many_error, no_space_error)
         }
         432 => {
             layout!(crate::town::SimulationFields, item; valid_history, xy, num_houses, population, radius, goal, ratings, received, noise_reached, time_until_rebuild, statues, have_ratings, unwanted, exclusivity, exclusive_counter, larger_town, layout, townnamegrfid, townnametype, townnameparts)

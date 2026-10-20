@@ -74,6 +74,16 @@ pub struct CommandCostServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandServices {
+    /// Enter the canonical process-wide recursive command scope; return top level.
+    pub enter: extern "C" fn() -> bool,
+    /// Leave that scope on every return path.
+    pub leave: extern "C" fn(),
+    /// Original clear-area and town-rating test preparation.
+    pub before: extern "C" fn(bool, bool),
+    /// Original town-rating, money check and subtraction result processing.
+    pub after: extern "C" fn(*mut CommandCost, u16, bool, bool),
+    /// Original command actor available money.
+    pub available_money: extern "C" fn() -> i64,
     /// Original `CMD_LANDSCAPE_CLEAR`, with actual `DoCommandFlags` width.
     pub landscape_clear: extern "C" fn(*mut CommandCost, u32, u16),
     /// Original `CheckTileOwnership`, preserving native encoded errors.

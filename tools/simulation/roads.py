@@ -301,6 +301,18 @@ def check(scenario, run, mode, role, result):
         elif result[key] != lines:
             result["problems"].append(f"{mode}: road command outcomes differ")
         if scenario["road_commands"] != "reload":
+            for expected in (
+                "protocol-outside false",
+                "protocol-void false",
+                "protocol-money false",
+                "protocol-query true",
+                "protocol-bankrupt true",
+                "automatic-convert-exec true",
+            ):
+                if not any(
+                    line.startswith("ROADCMD " + expected + " ") for line in lines
+                ):
+                    result["problems"].append(f"{mode}/{role}: missing {expected}")
             if not any(
                 line.startswith("ROADCMD crossing-autoslope true ") for line in lines
             ):

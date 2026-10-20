@@ -166,7 +166,7 @@ static uint64_t TrainCargoAgeDefault(OpenTTDTrainHandle id) noexcept
 static void TrainCargoChanged(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	v->CargoChanged();
+	RustGroundCargoChanged(v);
 }
 static uint64_t TrainChainDepot(OpenTTDTrainHandle id) noexcept
 {
