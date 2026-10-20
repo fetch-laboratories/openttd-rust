@@ -139,7 +139,7 @@ static bool SharedTryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_o
 static bool Shared_may_have_road(uint32_t tile) noexcept { return MayHaveRoad(TileIndex{tile}); }
 static RoadTileType Shared_road_tile_kind(uint32_t tile) noexcept { return GetRoadTileType(TileIndex{tile}); }
 static void Shared_set_road_bits(uint32_t tile, uint8_t bits, uint8_t rtt) noexcept { SetRoadBits(TileIndex{tile}, static_cast<RoadBits>(bits), static_cast<RoadTramType>(rtt)); }
-static void Shared_set_road_type(uint32_t tile, uint8_t rtt, uint8_t rt) noexcept { SetRoadType(TileIndex{tile}, static_cast<RoadTramType>(rtt), static_cast<RoadType>(rt)); }
+static void Shared_set_road_type(uint32_t tile, uint8_t rtt, uint8_t rt) noexcept { RustSetRoadType(TileIndex{tile}, static_cast<RoadTramType>(rtt), static_cast<RoadType>(rt)); }
 static void Shared_set_road_owner(uint32_t tile, uint8_t rtt, uint8_t owner) noexcept { SetRoadOwner(TileIndex{tile}, static_cast<RoadTramType>(rtt), Owner(owner)); }
 static void Shared_set_road_directions(uint32_t tile, uint8_t drd) noexcept { SetDisallowedRoadDirections(TileIndex{tile}, static_cast<DisallowedRoadDirections>(drd)); }
 static RoadTramType Shared_road_tram_type(uint8_t rt) noexcept { return GetRoadTramType(static_cast<RoadType>(rt)); }

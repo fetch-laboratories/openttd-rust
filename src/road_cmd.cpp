@@ -48,6 +48,7 @@
 
 #ifdef WITH_RUST
 #include "rust/ground_services.h"
+#include "rust/services_road.h"
 #include "rust/town_ffi.h"
 #include "rust/services_landscape.h"
 #include "rust/environment_services.h"
@@ -2035,7 +2036,7 @@ const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept
 		.cleanup = [](uint32_t t, RoadBits bits) noexcept { return RustCleanRoadBits(TileIndex{t}, bits); },
 		.remove = [](uint32_t t, RoadBits bits) noexcept { RemoveRoad(TileIndex{t}, {DoCommandFlag::Execute, DoCommandFlag::Auto, DoCommandFlag::NoWater}, bits, RTT_ROAD, true); },
 		.town = &GetRustTownServices(),
-		.set_road_type = [](uint32_t t, RoadType type) noexcept { SetRoadType(TileIndex{t}, RTT_ROAD, type); },
+		.set_road_type = [](uint32_t t, RoadType type) noexcept { RustSetRoadType(TileIndex{t}, RTT_ROAD, type); },
 	};
 	return services;
 }
