@@ -1516,7 +1516,7 @@ conditional RNG draws, narrowing and wrapping retain the original sequence.
 C++ keeps packed map primitives, depot identities, drawing, native stack
 `CommandCost` objects and a lazy stack area iterator. Generic landscape commands
 retain the complete native `Command::Do` lifecycle. Rust helpers call the
-integrated flooding/neighbor owner directly; docking retains its native owner.
+integrated flooding/neighbor and economy owners directly; docking stays native.
 Shared command/depot/environment services replace touched rail/town/industry
 copies. Named generated layouts, aborting unused fixture slots and actual
 production table checks cover the boundary; no native world borrow spans reentry.

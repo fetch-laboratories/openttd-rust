@@ -42,14 +42,6 @@ struct OpenTTDWaterCommandServices {
 	void (*area_begin)(OpenTTDWaterArea *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(area_begin);
 	uint32_t (*area_tile)(OpenTTDWaterArea *) noexcept OPENTTD_SERVICE_DEFAULT(area_tile);
 	void (*area_next)(OpenTTDWaterArea *) noexcept OPENTTD_SERVICE_DEFAULT(area_next);
-	int64_t (*build_depot_price)() noexcept OPENTTD_SERVICE_DEFAULT(build_depot_price);
-	int64_t (*clear_depot_price)() noexcept OPENTTD_SERVICE_DEFAULT(clear_depot_price);
-	int64_t (*build_lock_price)() noexcept OPENTTD_SERVICE_DEFAULT(build_lock_price);
-	int64_t (*clear_lock_price)() noexcept OPENTTD_SERVICE_DEFAULT(clear_lock_price);
-	int64_t (*build_canal_price)() noexcept OPENTTD_SERVICE_DEFAULT(build_canal_price);
-	int64_t (*clear_canal_price)() noexcept OPENTTD_SERVICE_DEFAULT(clear_canal_price);
-	int64_t (*clear_water_price)() noexcept OPENTTD_SERVICE_DEFAULT(clear_water_price);
-	int64_t (*clear_rough_price)() noexcept OPENTTD_SERVICE_DEFAULT(clear_rough_price);
 	OpenTTDWaterCommandStrings strings;
 };
 const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept;

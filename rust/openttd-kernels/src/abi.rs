@@ -68,14 +68,6 @@ layouts! {
         area_begin,
         area_tile,
         area_next,
-        build_depot_price,
-        clear_depot_price,
-        build_lock_price,
-        clear_lock_price,
-        build_canal_price,
-        clear_canal_price,
-        clear_water_price,
-        clear_rough_price,
         strings,
     };
 

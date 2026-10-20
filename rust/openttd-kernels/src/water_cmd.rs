@@ -69,14 +69,6 @@ pub struct WaterCommandServices {
     pub area_begin: unsafe extern "C" fn(*mut Area, u32, u32, bool),
     pub area_tile: unsafe extern "C" fn(*mut Area) -> u32,
     pub area_next: unsafe extern "C" fn(*mut Area),
-    pub build_depot_price: extern "C" fn() -> i64,
-    pub clear_depot_price: extern "C" fn() -> i64,
-    pub build_lock_price: extern "C" fn() -> i64,
-    pub clear_lock_price: extern "C" fn() -> i64,
-    pub build_canal_price: extern "C" fn() -> i64,
-    pub clear_canal_price: extern "C" fn() -> i64,
-    pub clear_water_price: extern "C" fn() -> i64,
-    pub clear_rough_price: extern "C" fn() -> i64,
     pub strings: Strings,
 }
 const EXEC: u16 = 1;
@@ -286,7 +278,7 @@ impl World<'_> {
         }
         let wc1 = self.class(tile);
         let wc2 = self.class(tile2);
-        self.expense(out, (self.a.build_depot_price)());
+        self.expense(out, crate::company::price(7));
         for t in [tile, tile2] {
             let add = !(self.s.is_water_tile)(t);
             self.clear_command(ret, t, flags | AUTO);
@@ -360,7 +352,7 @@ impl World<'_> {
                 w::hit(w::WATER_CMD_FORCE);
             }
         }
-        self.expense(out, (self.a.clear_depot_price)());
+        self.expense(out, crate::company::price(32));
     }
     fn do_build_lock(
         &self,
@@ -398,7 +390,7 @@ impl World<'_> {
                     return;
                 }
                 (self.c.amount)(out, (self.c.money)(ret));
-                (self.c.amount)(out, (self.a.build_canal_price)());
+                (self.c.amount)(out, crate::company::price(60));
             }
             if !self.flat(t) {
                 self.error(out, self.a.strings.sloped_wrong);
@@ -458,7 +450,7 @@ impl World<'_> {
             (self.water.invalidate_region)(upper);
             w::hit(w::WATER_CMD_LOCK);
         }
-        (self.c.amount)(out, (self.a.build_lock_price)());
+        (self.c.amount)(out, crate::company::price(64));
     }
     fn build_lock(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
         let dir = Self::inclined((self.s.tile_slope)(tile));
@@ -507,7 +499,7 @@ impl World<'_> {
             }
             w::hit(w::WATER_CMD_REMOVE_LOCK);
         }
-        self.expense(out, (self.a.clear_lock_price)());
+        self.expense(out, crate::company::price(65));
     }
     fn desert(&self, tile: u32) {
         let mut iter = crate::spiral::square(
@@ -598,7 +590,7 @@ impl World<'_> {
                     (self.water.check_docking)(tile);
                     w::hit(w::WATER_CMD_CANAL);
                 }
-                (self.c.amount)(out, (self.a.build_canal_price)());
+                (self.c.amount)(out, crate::company::price(60));
             } else {
                 w::hit(w::WATER_CMD_SKIP);
             }
@@ -620,9 +612,9 @@ impl World<'_> {
                     return;
                 }
                 let price = if self.canal(tile) {
-                    (self.a.clear_canal_price)()
+                    crate::company::price(61)
                 } else {
-                    (self.a.clear_water_price)()
+                    crate::company::price(34)
                 };
                 if !(self.a.environment.freeform_edges)() && self.edge(tile) {
                     self.error(out, self.a.strings.edge);
@@ -664,9 +656,9 @@ impl World<'_> {
                 self.expense(
                     out,
                     if matches!(slope, 1 | 2 | 4 | 8) {
-                        (self.a.clear_water_price)()
+                        crate::company::price(34)
                     } else {
-                        (self.a.clear_rough_price)()
+                        crate::company::price(23)
                     },
                 );
             }

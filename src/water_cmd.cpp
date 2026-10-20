@@ -271,6 +271,9 @@ void MakeRiverAndModifyDesertZoneAround(TileIndex tile)
 struct OpenTTDWaterArea {
 	std::optional<std::variant<OrthogonalTileIterator, DiagonalTileIterator>> iter;
 };
+// Direct Rust economy reads use these source Price indices.
+static_assert(PR_BUILD_DEPOT_SHIP == 7 && PR_CLEAR_DEPOT_SHIP == 32 && PR_BUILD_LOCK == 64 && PR_CLEAR_LOCK == 65);
+static_assert(PR_BUILD_CANAL == 60 && PR_CLEAR_CANAL == 61 && PR_CLEAR_WATER == 34 && PR_CLEAR_ROUGH == 23);
 const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
 {
 	static const OpenTTDWaterCommandServices services{
@@ -293,14 +296,6 @@ const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
 		},
 		.area_tile = [](OpenTTDWaterArea *a) noexcept { return std::visit([](auto &i) { return (*i).base(); }, *a->iter); },
 		.area_next = [](OpenTTDWaterArea *a) noexcept { std::visit([](auto &i) { ++i; }, *a->iter); },
-		.build_depot_price = []() noexcept { return _price[PR_BUILD_DEPOT_SHIP].base(); },
-		.clear_depot_price = []() noexcept { return _price[PR_CLEAR_DEPOT_SHIP].base(); },
-		.build_lock_price = []() noexcept { return _price[PR_BUILD_LOCK].base(); },
-		.clear_lock_price = []() noexcept { return _price[PR_CLEAR_LOCK].base(); },
-		.build_canal_price = []() noexcept { return _price[PR_BUILD_CANAL].base(); },
-		.clear_canal_price = []() noexcept { return _price[PR_CLEAR_CANAL].base(); },
-		.clear_water_price = []() noexcept { return _price[PR_CLEAR_WATER].base(); },
-		.clear_rough_price = []() noexcept { return _price[PR_CLEAR_ROUGH].base(); },
 		.strings = {
 			.built_on_water = STR_ERROR_MUST_BE_BUILT_ON_WATER,
 			.demolish_bridge = STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
