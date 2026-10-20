@@ -559,6 +559,9 @@ void DrawFoundation(TileInfo *ti, Foundation f)
 
 void DoClearSquare(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_clear_square(tile.base(), &GetRustSharedServices());
+#else
 	/* If the tile can have animation and we clear it, delete it from the animated tile list. */
 	if (MayAnimateTile(tile)) DeleteAnimatedTile(tile, true);
 
@@ -569,6 +572,7 @@ void DoClearSquare(TileIndex tile)
 
 	ClearNeighbourNonFloodingStates(tile);
 	InvalidateWaterRegion(tile);
+#endif /* WITH_RUST */
 }
 
 /**
