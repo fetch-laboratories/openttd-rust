@@ -10,7 +10,10 @@
 #define RUST_COMMAND_SERVICES_FFI_H
 #include "command_cost_ffi.h"
 struct Train;
+struct OpenTTDCompanyFinanceServices;
 struct OpenTTDCommandServices {
+	bool (*enter)() noexcept;
+	void (*leave)() noexcept;
 	void (*landscape_clear)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept;
 	void (*tile_ownership)(OpenTTDCommandCost *, uint32_t) noexcept;
 	void (*ownership)(OpenTTDCommandCost *, uint8_t) noexcept;
@@ -18,13 +21,16 @@ struct OpenTTDCommandServices {
 	void (*no_train)(OpenTTDCommandCost *, uint32_t, uint8_t) noexcept;
 	void (*wormhole_free)(OpenTTDCommandCost *, uint32_t, uint32_t, const Train *) noexcept;
 	void (*ownership_at)(OpenTTDCommandCost *, uint8_t, uint32_t) noexcept;
+	const OpenTTDCompanyFinanceServices *finance;
+	bool (*infinite_money)() noexcept;
+	void (*money_error)(OpenTTDCommandCost *, int64_t) noexcept;
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
-struct OpenTTDCommandProtocolServices {
-	bool (*enter)() noexcept;
-	void (*leave)() noexcept;
-	void (*before)(bool, bool) noexcept;
-	void (*after)(OpenTTDCommandCost *, uint16_t, bool, bool) noexcept;
-};
-const OpenTTDCommandProtocolServices &GetRustCommandProtocolServices() noexcept;
+extern "C" {
+void openttd_rust_command_before(const OpenTTDCommandServices *, bool, bool);
+void openttd_rust_command_after(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint16_t, bool, bool);
+int64_t openttd_rust_command_available_money(const OpenTTDCommandServices *);
+bool openttd_rust_command_check_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *);
+void openttd_rust_command_subtract_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, const OpenTTDCommandCost *);
+}
 #endif /* RUST_COMMAND_SERVICES_FFI_H */

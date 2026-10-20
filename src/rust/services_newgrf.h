@@ -10,6 +10,16 @@
 #define RUST_SERVICES_NEWGRF_H
 #include "../newgrf_commons.h"
 #include "../command_type.h"
+#include "../newgrf_debug.h"
+inline void RustUnknownCallbackResult(uint32_t grfid, uint16_t callback, uint16_t result) noexcept { ErrorUnknownCallbackResult(grfid, callback, result); }
+template <typename Spec, typename Handle>
+inline void RustSpecCallbackError(const Handle *handle, uint16_t callback, uint16_t result) noexcept
+{
+	const Spec *spec = reinterpret_cast<const Spec *>(handle);
+	RustUnknownCallbackResult(spec->grf_prop.grfid, callback, result);
+}
+template <uint16_t Callback, typename Spec>
+inline void RustFixedSpecCallbackError(const Spec *spec, uint16_t result) noexcept { RustSpecCallbackError<Spec, Spec>(spec, Callback, result); }
 template <typename Spec>
 inline bool RustSpecBooleanCallback(const Spec *spec, uint16_t callback, uint16_t result) noexcept
 {
@@ -21,4 +31,6 @@ inline void RustLocationCallbackError(Cost *out, const Result *result, const Han
 	const Spec *spec = reinterpret_cast<const Spec *>(handle);
 	*reinterpret_cast<CommandCost *>(out) = GetErrorMessageFromLocationCallbackResult(result->callback, result->registers, spec->grf_prop.grffile, Error);
 }
+template <GrfSpecFeature Feature, typename Id>
+inline void RustCloseInspect(Id id) noexcept { DeleteNewGRFInspectWindow(Feature, id); }
 #endif /* RUST_SERVICES_NEWGRF_H */

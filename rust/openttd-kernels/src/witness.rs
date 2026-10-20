@@ -119,6 +119,7 @@ witness_blocks! {
         OBJECT_TRANSMITTER = 15 => "object.transmitter",
         OBJECT_GENERATE = 16 => "object.generate",
         OBJECT_SLOPE_CALLBACK = 17 => "object.slope_callback",
+        OBJECT_BUILD_ABOVE = 18 => "object.build_above",
     }
     rail {
         RAIL_CHOOSE = 0 => "rail.choose",

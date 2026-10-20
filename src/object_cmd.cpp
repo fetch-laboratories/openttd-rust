@@ -569,58 +569,36 @@ static void ReallyClearObjectTile(Object *o)
 
 #ifndef WITH_RUST
 std::vector<ClearedObjectArea> _cleared_object_areas;
-#endif
 
-size_t FindClearedObjectIndex(TileIndex tile)
+static size_t FindClearedObjectIndex(TileIndex tile)
 {
-#ifdef WITH_RUST
-	return openttd_rust_object_areas_find(tile.base(), Map::LogX());
-#else
 	TileArea ta(tile, 1, 1);
 	for (size_t i = 0; i < _cleared_object_areas.size(); i++) {
 		if (_cleared_object_areas[i].area.Intersects(ta)) return i;
 	}
 	return SIZE_MAX;
-#endif
 }
 
-ClearedObjectArea GetClearedObjectArea(size_t index)
+bool IsObjectIndirectlyCleared(TileIndex tile)
 {
-#ifdef WITH_RUST
-	auto a = openttd_rust_object_areas_get(index);
-	return {TileIndex(a.first_tile), TileArea(TileIndex(a.tile), a.width, a.height)};
-#else
-	return _cleared_object_areas[index];
-#endif
+	size_t index = FindClearedObjectIndex(tile);
+	return index != SIZE_MAX && _cleared_object_areas[index].first_tile != tile;
 }
-
-size_t AppendClearedObjectArea(TileIndex first_tile, TileArea area)
+HiddenObjectArea HideObjectForTunnel(TileIndex tile)
 {
-#ifdef WITH_RUST
-	return openttd_rust_object_areas_append({first_tile.base(), area.tile.base(), area.w, area.h});
-#else
-	_cleared_object_areas.emplace_back(first_tile, area);
-	return _cleared_object_areas.size() - 1;
-#endif
+	size_t index = FindClearedObjectIndex(tile);
+	if (index == SIZE_MAX) {
+		index = _cleared_object_areas.size();
+		_cleared_object_areas.emplace_back(tile, TileArea(tile, 1, 1));
+	}
+	auto &entry = _cleared_object_areas[index];
+	HiddenObjectArea hidden{index, entry.first_tile.base()};
+	entry.first_tile = INVALID_TILE;
+	return hidden;
 }
-
-void SetClearedObjectFirstTile(size_t index, TileIndex first_tile)
-{
-#ifdef WITH_RUST
-	openttd_rust_object_areas_set_first(index, first_tile.base());
-#else
-	_cleared_object_areas[index].first_tile = first_tile;
+void RestoreObjectFirstTile(HiddenObjectArea hidden) { _cleared_object_areas[hidden.index].first_tile = TileIndex(hidden.first_tile); }
+void ClearObjectAreas() { _cleared_object_areas.clear(); }
 #endif
-}
-
-void ClearObjectAreas()
-{
-#ifdef WITH_RUST
-	openttd_rust_object_areas_clear();
-#else
-	_cleared_object_areas.clear();
-#endif
-}
 
 static CommandCost ClearTile_Object(TileIndex tile, DoCommandFlags flags)
 {
@@ -699,7 +677,7 @@ static CommandCost ClearTile_Object(TileIndex tile, DoCommandFlags flags)
 			break;
 	}
 
-	AppendClearedObjectArea(tile, ta);
+	_cleared_object_areas.emplace_back(tile, ta);
 
 	if (flags.Test(DoCommandFlag::Execute)) ReallyClearObjectTile(o);
 
@@ -1101,7 +1079,7 @@ extern const TileTypeProcs _tile_type_object_procs = {
 const OpenTTDObjectServices &GetRustObjectServices() noexcept
 {
 	static_assert(NUM_OBJECTS == 64000 && OBJECT_HQ == 4 && OBJECT_OWNED_LAND == 3 && OBJECT_STATUE == 2);
-	static_assert(EXPENSES_CONSTRUCTION == 0 && CBID_OBJECT_AUTOSLOPE == 0x15D && PR_BUILD_FOUNDATION == 57);
+	static_assert(EXPENSES_CONSTRUCTION == 0 && CBID_OBJECT_AUTOSLOPE == 0x15D && PR_BUILD_FOUNDATION == 57 && PR_BUILD_OBJECT == 50 && PR_CLEAR_OBJECT == 51);
 	static_assert(OWNER_NONE.base() == 16 && OWNER_WATER.base() == 17 && OWNER_DEITY.base() == 18 && MAX_COMPANIES == 15);
 	static const OpenTTDObjectServices services{
 		.shared = &GetRustSharedServices(),
@@ -1109,75 +1087,66 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.command = &GetRustCommandServices(),
 		.company = &GetRustCompanyServices(),
 		.cargo = CargoStorageServices(),
-		.protocol = &GetRustCommandProtocolServices(),
+		.town = &GetRustTownServices(),
+		.founding = &GetRustTownFoundingServices(),
+		.industry_tiles = GetRustIndustryLoopServices().tiles,
 		.strings = {STR_ERROR_TOO_MANY_OBJECTS,STR_ERROR_MUST_FOUND_TOWN_FIRST,STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP_SUB,STR_ERROR_CAN_T_BUILD_ON_WATER,STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP,STR_ERROR_MUST_BE_BUILT_ON_WATER,STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,STR_ERROR_FLAT_LAND_REQUIRED,STR_ERROR_YOU_ALREADY_OWN_IT,STR_ERROR_ALREADY_BUILT,STR_ERROR_BUILD_OBJECT_LIMIT_REACHED,STR_ERROR_COMPANY_HEADQUARTERS_IN,STR_ERROR_OBJECT_IN_THE_WAY},
 		.spec_count = []() noexcept -> size_t { return ObjectSpec::Count(); },
 		.spec = [](uint16_t type) noexcept -> const ObjectSpec * { return ObjectSpec::Get(type); },
-		.policy = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectPolicy { return {RustObjectSpecFlags(spec), RustObjectSpecCallbacks(spec)}; },
+		.callbacks = RustObjectSpecCallbacks,
+		.colour_policy = [](Object *o) noexcept -> OpenTTDObjectPolicy { const ObjectSpec *spec = ObjectSpec::Get(o->type); return {RustObjectSpecFlags(spec), RustObjectSpecCallbacks(spec)}; },
 		.flags = RustObjectSpecFlags,
 		.footprint = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectFootprint { return {RustObjectSpecFlags(spec), RustObjectSpecCallbacks(spec), spec->size}; },
 		.clearance = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectClearance { return {RustObjectSpecFlags(spec), spec->height}; },
-		.admission = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectAdmission { return {spec->views, spec->height, spec->IsAvailable(), spec->WasEverAvailable()}; },
-		.generation = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectGeneration { return {RustObjectSpecFlags(spec), spec->generate_amount, spec->views, spec->WasEverAvailable()}; },
+		.available = [](const ObjectSpec *spec) noexcept -> bool { return spec->IsAvailable(); },
+		.ever = RustObjectEverAvailable,
+		.area_shape = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectAreaShape { return {spec->views, spec->size}; },
+		.admission = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectAdmission { return {spec->views, spec->height}; },
+		.generation = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectGeneration { return {RustObjectSpecFlags(spec), spec->generate_amount, spec->views, RustObjectEverAvailable(spec)}; },
 		.can_allocate = []() noexcept -> bool { return Object::CanAllocateItem(); },
 		.allocate = [](uint16_t type, const Town *town, OpenTTDObjectArea area, uint8_t view) noexcept -> OpenTTDObjectAllocation { Object *o = new Object(type, const_cast<Town *>(town), TileArea(TileIndex(area.tile), area.width, area.height), TimerGameCalendar::date, view); return {o, o->index.base()}; },
-		.closest_town = [](uint32_t tile) noexcept -> const Town * { return CalcClosestTownFromTile(TileIndex(tile)); },
+		.nearest_town = [](uint32_t tile) noexcept -> const Town * { return CalcClosestTownFromTile(TileIndex(tile)); },
 		.object_type = [](uint32_t tile) noexcept { return GetObjectType(TileIndex(tile)); },
+		.loop_policy = [](uint32_t tile) noexcept -> OpenTTDObjectLoopPolicy { Object *o = Object::GetByTile(TileIndex(tile)); const auto kind = o->type; const ObjectSpec *spec = ObjectSpec::Get(kind); const auto flags = RustObjectSpecFlags(spec); return {spec, o, ObjectFlags{flags}.Test(ObjectFlag::Animation) ? o->location.tile.base() : 0, flags, kind}; },
+		.reference = [](uint32_t tile) noexcept -> OpenTTDObjectReference { Object *o = Object::GetByTile(TileIndex(tile)); return {o, o->type}; },
 		.identity = [](uint32_t tile) noexcept -> OpenTTDObjectIdentity { Object *o = Object::GetByTile(TileIndex(tile)); return {o, {o->location.tile.base(), o->location.w, o->location.h}, o->type}; },
 		.location = [](uint32_t tile) noexcept -> OpenTTDObjectArea { const auto &a = Object::GetByTile(TileIndex(tile))->location; return {a.tile.base(), a.w, a.h}; },
 		.next = [](uint32_t from) noexcept -> OpenTTDObjectNext { for (Object *o : Object::Iterate(from)) return {o, o->index.base(), o->location.tile.base()}; return {nullptr, UINT32_MAX, 0}; },
 		.set_colour = [](Object *o, uint8_t colour) noexcept -> void { o->colour = colour; },
 		.recolour = RustObjectRecolour,
 		.colour_callback = [](const ObjectSpec *spec, Object *o, uint8_t colour, uint32_t tile) noexcept -> uint16_t { return GetObjectCallback(CBID_OBJECT_COLOUR, colour, 0, spec, o, TileIndex(tile)); },
-		.colour_error = [](const ObjectSpec *spec, uint16_t result) noexcept -> void { ErrorUnknownCallbackResult(spec->grf_prop.grfid, CBID_OBJECT_COLOUR, result); },
+		.colour_error = RustFixedSpecCallbackError<CBID_OBJECT_COLOUR, ObjectSpec>,
 		.make = [](uint32_t tile, uint8_t owner, uint32_t id, WaterClass water, uint32_t random) noexcept -> void { MakeObject(TileIndex(tile), Owner(owner), ObjectID(id), water, random); },
 		.delete_object = [](Object *o) noexcept -> void { delete o; },
 		.trigger = [](Object *o, ObjectAnimationTrigger trigger, const ObjectSpec *spec) noexcept -> void { TriggerObjectAnimation(o, trigger, spec); },
 		.trigger_tile = [](Object *o, uint32_t tile, const ObjectSpec *spec) noexcept -> void { TriggerObjectTileAnimation(o, TileIndex(tile), ObjectAnimationTrigger::TileLoop, spec); },
-		.slope_callback = [](const ObjectSpec *spec, uint32_t tile, uint32_t offset, uint8_t view) noexcept -> OpenTTDObjectSlopeResult { OpenTTDObjectSlopeResult r{}; r.callback = GetObjectCallback(CBID_OBJECT_LAND_SLOPE_CHECK, GetTileSlope(TileIndex(tile)), offset, spec, nullptr, TileIndex(tile), r.registers, view); if (r.callback != CALLBACK_FAILED) r.version = spec->grf_prop.grffile->grf_version; return r; },
+		.slope_callback = [](const ObjectSpec *spec, uint32_t tile, Slope slope, uint32_t offset, uint8_t view) noexcept -> OpenTTDObjectSlopeResult { OpenTTDObjectSlopeResult r{}; r.callback = GetObjectCallback(CBID_OBJECT_LAND_SLOPE_CHECK, slope, offset, spec, nullptr, TileIndex(tile), r.registers, view); if (r.callback != CALLBACK_FAILED) r.version = spec->grf_prop.grffile->grf_version; return r; },
 		.slope_error = RustLocationCallbackError<ObjectSpec, ObjectSpec, OpenTTDObjectSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
 		.buildable = [](OpenTTDCommandCost *out, uint32_t tile, int32_t *z) noexcept -> void { *reinterpret_cast<CommandCost *>(out) = CheckBuildableTile(TileIndex(tile), {}, *z, false, false); },
-		.build_cost = [](const ObjectSpec *spec) noexcept -> int64_t { return spec->GetBuildCost(); },
-		.clear_cost = [](const ObjectSpec *spec) noexcept -> int64_t { return spec->GetClearCost(); },
+		.build_price = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectPrice { return {spec->build_cost_multiplier, spec->grf_prop.grffile == nullptr ? 0 : spec->grf_prop.grffile->price_base_multipliers[PR_BUILD_OBJECT]}; },
+		.clear_price = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectPrice { return {spec->clear_cost_multiplier, spec->grf_prop.grffile == nullptr ? 0 : spec->grf_prop.grffile->price_base_multipliers[PR_CLEAR_OBJECT]}; },
 		.set_hq = [](uint8_t owner, uint32_t tile) noexcept -> void { Company::Get(CompanyID(owner))->location_of_HQ = TileIndex(tile); SetWindowDirty(WC_COMPANY, owner); },
 		.statue_town = [](Object *o) noexcept -> OpenTTDTownRef { Town *t = o->town; return {t, t->growth_owner.get(), t->index.base()}; },
-		.statue_dirty = GetRustTownServices().dirty_authority,
-		.hq_begin = [](OpenTTDObjectLoopFrame *frame, uint32_t tile) noexcept -> void { frame->stations.emplace(TileArea(TileIndex(tile), 2, 2)); },
+		.hq_begin = [](OpenTTDObjectLoopFrame *frame, uint32_t tile, [[maybe_unused]] uint32_t level) noexcept -> void { assert(level < 6); frame->stations.emplace(TileArea(TileIndex(tile), 2, 2)); },
 		.hq_deliver = [](OpenTTDObjectLoopFrame *frame, uint8_t cargo, uint32_t amount, uint8_t owner) noexcept -> void { MoveGoodsToStation(cargo, amount, {owner, SourceType::Headquarters}, frame->stations->GetStations()); },
 		.hq_end = [](OpenTTDObjectLoopFrame *frame) noexcept -> void { frame->stations.reset(); },
 		.autoslope_callback = [](const ObjectSpec *spec, Object *o, uint32_t tile) noexcept -> uint16_t { return GetObjectCallback(CBID_OBJECT_AUTOSLOPE, 0, 0, spec, o, TileIndex(tile)); },
 		.boolean_callback = RustSpecBooleanCallback<ObjectSpec>,
-		.water_regions = GetRustWaterRegionContext,
 		.enabled = [](const ObjectSpec *spec) noexcept -> bool { return spec->IsEnabled(); },
 		.bridge_top = [](uint32_t tile) noexcept -> int32_t { return GetBridgeHeight(GetSouthernBridgeEnd(TileIndex(tile))); },
-		.close_inspect = [](uint32_t tile) noexcept -> void { DeleteNewGRFInspectWindow(GSF_OBJECTS, tile); },
+		.close_inspect = RustCloseInspect<GSF_OBJECTS, uint32_t>,
 		.progress_set = [](OpenTTDObjectGenerationFrame *frame, uint32_t total) noexcept -> bool { return RunGenerationProgress(frame, [total] { SetGeneratingWorldProgress(GWP_OBJECT, total); }); },
 		.progress_increase = [](OpenTTDObjectGenerationFrame *frame) noexcept -> bool { return RunGenerationProgress(frame, [] { IncreaseGeneratingWorldProgress(GWP_OBJECT); }); },
-		.town_count = GetRustTownFoundingServices().town_count,
-		.hq_location = GetRustCompanyServices().hq_location,
-		.editor = GetRustTownServices().editor,
-		.generating = GetRustTownServices().generating_world,
 		.normal = RustNormalGame,
 		.freeform = RustFreeformEdges,
 		.bulldozer = GetRustTownAuthorityServices().bulldozer,
-		.set_company = GetRustCompanyFinanceServices().set_current_company,
-		.on_water = GetRustIndustryLoopServices().tiles->on_water,
 		.water_class = GetRustClearServices().water_class,
-		.docking = GetRustShipControlServices().docking,
-		.remove_docking = RustRemoveDocking,
-		.make_water = RustMakeWaterKeepingClass,
+		.restoration = &GetRustWaterRestorationServices(),
 		.set_owner = GetRustRailMapServices().set_tile_owner,
-		.infrastructure = RustAddWaterInfrastructure,
-		.infrastructure_dirty = GetRustRailCommandServices().infrastructure_dirty,
-		.change_owner = GetRustCompanyServices().change_tile_owner,
-		.animation = GetRustIndustryLoopServices().tiles->frame,
-		.set_animation = GetRustIndustryLoopServices().tiles->set_frame,
-		.scale_size = GetRustTownFoundingServices().scale_size,
 		.scale_size_1d = GetRustIndustryLoopServices().generation->scale_by_size_1d,
 		.passengers = GetRustIndustryLoopServices().production->passengers,
 		.mail = RustMailCargo,
-		.scale_cargo = RustScaleCargo,
-		.available_money = RustAvailableMoney,
+		.scale_cargo = RustScaleCargo<true>,
 	};
 	return services;
 }

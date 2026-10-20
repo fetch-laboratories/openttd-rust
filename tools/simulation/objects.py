@@ -6,8 +6,6 @@ from . import core, generated, rails
 from .console_adapter import console_adapter, prepared_console
 from .core import ROOT, WITNESS_ENVIRONMENT, branch_witnesses
 
-ADAPTER = ROOT / "tools/simulation/objects-console.cpp"
-
 
 def scenarios(soak):
     worlds = [s for s in generated.scenarios(soak) if "settings-" in s["name"]][:4]
@@ -37,7 +35,7 @@ def adapter(build, folder, env):
         build,
         folder,
         env,
-        ADAPTER,
+        ROOT / "tools/simulation/objects-console.cpp",
         "objects",
         replace_objects=("/src/object_cmd.cpp.o",),
     )
@@ -56,12 +54,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             executables=executables,
             console=["objects_scenario " + scenario["objects"], "unpause"],
         )
-    saves = {}
+    saves = {role: folder / role / "objects.sav" for role in ("reference", "candidate")}
     for role in ("reference", "candidate"):
-        saves[role] = folder / role / "objects.sav"
         setup = dict(
             scenario,
-            ticks=1,
             console=[f'objects_scenario commands "{saves[role]}"', "unpause"],
         )
         capture = core.run_game(
@@ -117,7 +113,7 @@ def check(scenario, run, mode, role, result):
         if "OBJECT " + text not in run["log"]:
             raise RuntimeError(f"{mode}/{role}: missing object evidence: {text}")
     branches = {
-        "commands": "build clear hq_grow hq_relocate area cargo hq_pass hq_mail owner colours".split(),
+        "commands": "build clear hq_grow hq_relocate area cargo hq_pass hq_mail owner colours autoslope build_above".split(),
         "gaps": ("slope_callback",),
         "reload": (),
     }[scenario["objects"]]

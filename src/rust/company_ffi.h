@@ -216,7 +216,6 @@ void *OPENTTD_COMPANY_CALL openttd_rust_economy_state();
 int64_t *OPENTTD_COMPANY_CALL openttd_rust_economy_prices();
 int64_t *OPENTTD_COMPANY_CALL openttd_rust_company_scores();
 uint32_t *OPENTTD_COMPANY_CALL openttd_rust_company_tick();
-void OPENTTD_COMPANY_CALL openttd_rust_company_subtract(const OpenTTDCompanyFinanceServices *, CompanyFinances *, uint8_t, int64_t, uint8_t);
 void OPENTTD_COMPANY_CALL openttd_rust_company_subtract_fraction(const OpenTTDCompanyFinanceServices *, CompanyFinances *, uint8_t, int64_t, uint8_t);
 void OPENTTD_COMPANY_CALL openttd_rust_company_update_landscaping_limits(const OpenTTDCompanyServices *, const OpenTTDCompanyLandscaping *);
 int64_t OPENTTD_COMPANY_CALL openttd_rust_company_value(const OpenTTDCompanyServices *, const CompanyFinances *, uint8_t, bool);
@@ -232,7 +231,6 @@ void OPENTTD_COMPANY_CALL openttd_rust_economy_startup(const OpenTTDCompanyServi
 void OPENTTD_COMPANY_CALL openttd_rust_economy_initialize(const OpenTTDCompanyServices *);
 int64_t OPENTTD_COMPANY_CALL openttd_rust_economy_price(uint32_t, uint32_t, int32_t);
 int64_t OPENTTD_COMPANY_CALL openttd_rust_company_available_money(const CompanyFinances *, bool);
-bool OPENTTD_COMPANY_CALL openttd_rust_company_has_money(const CompanyFinances *, bool, int64_t);
 int64_t OPENTTD_COMPANY_CALL openttd_rust_company_max_loan(const CompanyFinances *);
 bool OPENTTD_COMPANY_CALL openttd_rust_company_startup(const OpenTTDCompanyServices *, OpenTTDCompanyStartup *);
 bool OPENTTD_COMPANY_CALL openttd_rust_company_competitor_timeout(const OpenTTDCompanyServices *, const OpenTTDCompanyCompetitors *);

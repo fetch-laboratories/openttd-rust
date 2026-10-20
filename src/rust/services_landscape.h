@@ -24,6 +24,7 @@
 #include "tile_animation_services.h"
 
 inline OpenTTDFoundationSlope RustApplyFoundation(Foundation foundation, Slope slope) noexcept { int z = ApplyFoundationToSlope(foundation, slope); return {.z = z, .slope = slope}; }
+inline OpenTTDFoundationSlope RustTileSlopeZ(uint32_t tile) noexcept { auto [slope, z] = GetTileSlopeZ(TileIndex(tile)); return {.z = z, .slope = slope}; }
 inline OpenTTDFoundationSlope RustFoundationSlope(uint32_t tile) noexcept { auto [slope, z] = GetFoundationSlope(TileIndex{tile}); return {.z = z, .slope = slope}; }
 inline RoadBits RustCleanRoadBits(TileIndex tile, RoadBits bits) noexcept { return CleanUpRoadBits(tile, bits); }
 inline uint8_t RustTileOwnerValue(uint32_t tile) noexcept { return GetTileOwner(TileIndex{tile}).base(); }

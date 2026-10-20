@@ -42,6 +42,7 @@ inline bool RustAutoslopeEnabled() noexcept { return AutoslopeEnabled(); }
 inline bool RustCrossingWithCompetitor() noexcept { return _settings_game.construction.crossing_with_competitor; }
 inline bool RustDisableElrails() noexcept { return _settings_game.vehicle.disable_elrails; }
 inline bool RustForbid90Deg() noexcept { return _settings_game.pf.forbid_90_deg; }
+inline bool RustInfiniteMoney() noexcept { return _settings_game.difficulty.infinite_money; }
 inline bool RustNormalGame() noexcept { return _game_mode == GM_NORMAL; }
 inline bool RustFreeformEdges() noexcept { return _settings_game.construction.freeform_edges; }
 inline bool RustMagicBulldozer() noexcept { return _cheats.magic_bulldozer.value; }

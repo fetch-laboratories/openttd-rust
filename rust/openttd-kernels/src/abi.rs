@@ -103,10 +103,10 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::town::AuthorityServices, item; council_tolerance, bulldozer, authority_distance, town_index, refusal)
         }
         621 => {
-            layout!(crate::services::CommandServices, item; landscape_clear, tile_ownership, ownership, no_vehicle, no_train, wormhole_free, ownership_at)
+            layout!(crate::services::CommandServices, item; enter, leave, landscape_clear, tile_ownership, ownership, no_vehicle, no_train, wormhole_free, ownership_at, finance, infinite_money, money_error)
         }
         620 => {
-            layout!(crate::services::CommandCostServices, item; zero, error, expense_money, error_param, add, move_cost, amount, success, error_message, money, make_error)
+            layout!(crate::services::CommandCostServices, item; zero, error, expense_money, error_param, add, move_cost, amount, success, error_message, money, make_error, expense)
         }
         792 => layout!(crate::services::FoundationSlope, item; z, slope),
         793 => layout!(crate::ground::CostServices, item; commands, costs, prepare, release),
@@ -117,7 +117,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         796 => layout!(crate::water::AirportGround, item; station, tile, width, height),
         797 => layout!(crate::water::TileVehicleCursor, item; storage),
         798 => {
-            layout!(crate::water::WaterServices, item; rail, clear, vehicles, costs, company, non_flooding, set_non_flooding, coast, set_tree_ground, make_sea, buoy_or_dock, canal_or_river, possible_docking, check_docking, invalidate_region, remove_rail, apply_foundation, iterator_begin, iterator_current, iterator_next, iterator_end, airport_tile, airport, airport_member, airport_z, victim, aircraft_pose, ground_pose, crash, ai_event, game_event, news, bridge_height)
+            layout!(crate::water::WaterServices, item; rail, clear, vehicles, costs, company, non_flooding, set_non_flooding, coast, set_tree_ground, make_sea, buoy_or_dock, canal_or_river, possible_docking, check_docking, region_context, remove_rail, apply_foundation, iterator_begin, iterator_current, iterator_next, iterator_end, airport_tile, airport, airport_member, airport_z, victim, aircraft_pose, ground_pose, crash, ai_event, game_event, news, bridge_height)
         }
         799 => layout!(crate::water::FloodVictim, item; status, kind),
         800 => layout!(crate::water::AircraftFloodPose, item; tile, z, subtype),
@@ -245,6 +245,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
                 calendar_date,
                 calendar_year,
                 clear_square,
+                clear_square_services,
                 closest_town,
                 company_valid,
                 context,
@@ -416,7 +417,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         }
         632 => layout!(crate::town::founding::Metadata, item; grfid, kind),
         633 => {
-            layout!(crate::town::founding::FoundingServices, item; shared, growth, names, cost, allocate, resolve, can_allocate, close_to_town, flat, water_distance, scale_size, scale_land, found_setting, layout_setting, initial_city_size, town_density, custom_number, larger_towns, parameters, metadata, initialize_counts, insert_town, cargo_effect_exists, prepare_rename, name_changed, update_virt, directory_rebuild, directory_resort, update_noise, rebuild_tree, delete_town, assert_random_context, assert_allocation, initialize_cost, sufficient_money, money_deficit, set_result, exchange_generating, nearest_town_roads, founded_news, founded_events, clear_station_names, clear_industry_names, update_station_coords, cached_name, set_progress, increase_progress, no_town_error, town_count, random, edge_error, close_error, unsuitable_error, unique_error, too_many_error, no_space_error)
+            layout!(crate::town::founding::FoundingServices, item; shared, growth, names, cost, allocate, resolve, can_allocate, close_to_town, flat, water_distance, scale_size, scale_land, found_setting, layout_setting, initial_city_size, town_density, custom_number, larger_towns, parameters, metadata, initialize_counts, insert_town, cargo_effect_exists, prepare_rename, name_changed, update_virt, directory_rebuild, directory_resort, update_noise, rebuild_tree, delete_town, assert_random_context, assert_allocation, initialize_cost, command, money_deficit, set_result, exchange_generating, nearest_town_roads, founded_news, founded_events, clear_station_names, clear_industry_names, update_station_coords, cached_name, set_progress, increase_progress, no_town_error, town_count, random, edge_error, close_error, unsuitable_error, unique_error, too_many_error, no_space_error)
         }
         432 => {
             layout!(crate::town::SimulationFields, item; valid_history, xy, num_houses, population, radius, goal, ratings, received, noise_reached, time_until_rebuild, statues, have_ratings, unwanted, exclusivity, exclusive_counter, larger_town, layout, townnamegrfid, townnametype, townnameparts)
@@ -591,7 +592,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         563 => layout!(crate::industry::RandomisationSpec, item; gfx, enabled),
         564 => layout!(crate::industry::AnimationSpec, item; spec, triggers),
         565 => {
-            layout!(crate::industry::LifecycleServices, item; neutral_station, cleanup_tile, delete_tile_inspect, make_water, delete_oilrig, clear_docking, industry_field, disassociate_field, release_disasters, delete_storage, delete_news, close_view, close_production, delete_inspect, delete_subsidies, invalidate_cargo, next_near_station, remove_delivery, belongs, randomisation_spec, random_triggers, set_random_triggers, resolve_reseed, random_bits, set_random_bits, animation_spec, change_frame)
+            layout!(crate::industry::LifecycleServices, item; neutral_station, cleanup_tile, delete_tile_inspect, restoration, delete_oilrig, clear_docking, industry_field, disassociate_field, release_disasters, delete_storage, delete_news, close_view, close_production, delete_inspect, delete_subsidies, invalidate_cargo, next_near_station, remove_delivery, belongs, randomisation_spec, random_triggers, set_random_triggers, resolve_reseed, random_bits, set_random_bits, animation_spec, change_frame)
         }
         130 => {
             layout!(crate::industry::Fields, item; valid_history, last_prod_year, counter, prod_level, was_cargo_delivered, ctlflags)

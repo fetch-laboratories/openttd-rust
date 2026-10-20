@@ -758,13 +758,10 @@ CommandCost CmdBuildTunnel(DoCommandFlags flags, TileIndex start_tile, Transport
 	if (end_tileh != ComplementSlope(start_tileh)) {
 		/* Mark the tile as already cleared for the terraform command.
 		 * Do this for all tiles (like trees), not only objects. */
-		size_t coa_index = FindClearedObjectIndex(end_tile);
-		if (coa_index == SIZE_MAX) coa_index = AppendClearedObjectArea(end_tile, TileArea(end_tile, 1, 1));
-		TileIndex old_first_tile = GetClearedObjectArea(coa_index).first_tile;
-		SetClearedObjectFirstTile(coa_index, INVALID_TILE);
+		const auto hidden = HideObjectForTunnel(end_tile);
 		/* Nested terraform may append; only the index survives that call. */
 		ret = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(flags, end_tile, end_tileh & start_tileh, false));
-		SetClearedObjectFirstTile(coa_index, old_first_tile);
+		RestoreObjectFirstTile(hidden);
 		if (ret.Failed()) return CommandCost(STR_ERROR_UNABLE_TO_EXCAVATE_LAND);
 		cost.AddCost(ret.GetCost());
 	}

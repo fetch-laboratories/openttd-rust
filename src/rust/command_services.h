@@ -13,5 +13,4 @@
 #include "../command_type.h"
 #include "../company_func.h"
 #include "../vehicle_func.h"
-inline int64_t RustAvailableMoney() noexcept { return GetAvailableMoneyForCommand(); }
 #endif /* RUST_COMMAND_SERVICES_H */

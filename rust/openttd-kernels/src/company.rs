@@ -510,7 +510,13 @@ fn available(p: *const Finances, infinite: bool) -> i64 {
         get!(p, money)
     }
 }
-fn subtract(f: &FinanceServices, p: *mut Finances, id: u8, cost: i64, expense: usize) {
+pub(crate) fn subtract_money(
+    f: &FinanceServices,
+    p: *mut Finances,
+    id: u8,
+    cost: i64,
+    expense: usize,
+) {
     if cost == 0 {
         return;
     }
@@ -544,7 +550,7 @@ fn subtract_fraction(f: &FinanceServices, p: *mut Finances, id: u8, mut cost: i6
         cost = cost.saturating_add(1);
     }
     if cost != 0 {
-        subtract(f, p, id, cost, expense);
+        subtract_money(f, p, id, cost, expense);
     }
 }
 fn assets(s: &Services, id: u8) -> i64 {
@@ -769,7 +775,7 @@ fn maintenance(s: &Services, p: *mut Finances, id: u8) {
     cost = cost.saturating_add((s.canal_maintenance_cost)(infra.water));
     cost = cost.saturating_add((s.station_maintenance_cost)(infra.station));
     cost = cost.saturating_add((s.airport_maintenance_cost)(id));
-    subtract(s.finance, p, id, cost, EXPENSES_PROPERTY);
+    subtract_money(s.finance, p, id, cost, EXPENSES_PROPERTY);
 }
 fn statistics(s: &Services, m: &Month) {
     companies(s, |p, id| bankruptcy(s, m, p, id));
@@ -893,14 +899,14 @@ fn interest(s: &Services, m: &Month) {
         let month = i64::from(m.month);
         let previous = fee.saturating_mul(month) / 12;
         let now = fee.saturating_mul(month + 1) / 12;
-        subtract(
+        subtract_money(
             s.finance,
             p,
             id,
             now.saturating_sub(previous),
             EXPENSES_LOAN_INTEREST,
         );
-        subtract(
+        subtract_money(
             s.finance,
             p,
             id,
@@ -1487,19 +1493,6 @@ fn loan(
 // live for the call; finance pointers are live canonical owners resolved once by
 // the facade or through `company_finances`. Panics abort (`panic = "abort"`).
 
-/// `SubtractMoneyFromAnyCompany`.
-/// # Safety
-/// `p` is the live finance owner of company `id`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_company_subtract(
-    f: &FinanceServices,
-    p: *mut Finances,
-    id: u8,
-    cost: i64,
-    expense: u8,
-) {
-    subtract(f, p, id, cost, usize::from(expense));
-}
 /// `SubtractMoneyFromCompanyFract`.
 /// # Safety
 /// `p` is the live finance owner of company `id`.
@@ -1662,12 +1655,7 @@ pub unsafe extern "C" fn openttd_rust_company_available_money(
 /// Money test of `CheckCompanyHasMoney`; `p` is the current company or null.
 /// # Safety
 /// `p` is null or a live finance owner.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_company_has_money(
-    p: *const Finances,
-    infinite: bool,
-    cost: i64,
-) -> bool {
+pub(crate) unsafe fn has_money(p: *const Finances, infinite: bool, cost: i64) -> bool {
     cost <= 0 || infinite || p.is_null() || cost <= get!(p, money)
 }
 /// `Company::GetMaxLoan`.
@@ -1772,7 +1760,7 @@ pub extern "C" fn openttd_rust_company_give_money(
     }
     if execute {
         (f.set_current_company)(dest);
-        subtract(f, q, dest, neg(amount), usize::from(EXPENSES_OTHER));
+        subtract_money(f, q, dest, neg(amount), usize::from(EXPENSES_OTHER));
         (f.set_current_company)(current);
         if (f.networking)() {
             (f.give_money_message)(dest, amount);
@@ -1851,7 +1839,7 @@ pub extern "C" fn openttd_rust_company_change_bank_balance(
     }
     if execute {
         (f.set_current_company)(id);
-        subtract(f, p, id, neg(delta), usize::from(expense));
+        subtract_money(f, p, id, neg(delta), usize::from(expense));
         (f.set_current_company)(current);
         if tile != 0 {
             (f.money_animation)(tile, neg(delta));

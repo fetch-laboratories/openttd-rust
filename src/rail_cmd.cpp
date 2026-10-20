@@ -42,6 +42,7 @@
 #include "rust/ground_services.h"
 #include "rust/services_landscape.h"
 #include "rust/environment_services.h"
+#include "rust/services_newgrf.h"
 #endif
 
 #include "safeguards.h"
@@ -3297,7 +3298,7 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.rail_infrastructure = RustAddRailInfrastructure,
 		.road_infrastructure = RustAddRoadInfrastructure,
 		.signal_infrastructure = RustAddSignalInfrastructure,
-		.infrastructure_dirty = RustInfrastructureDirty,
+		.infrastructure_dirty = GetRustWaterRestorationServices().infrastructure_dirty,
 		.reserving_train = [](uint32_t tile, uint8_t track) noexcept { return GetTrainForReservation(TileIndex{tile}, static_cast<Track>(track)); },
 		.parking = RailParking,
 		.train_position = [](Train *v) noexcept -> OpenTTDRailTrainPosition { return {.tile = RustVehicleTile(v), .trackdir = GetRustSharedServices().train_trackdir(v)}; },
@@ -3311,7 +3312,7 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.depot_name = [](uint16_t id) noexcept { MakeDefaultName(Depot::Get(DepotID(id))); },
 		.delete_depot = [](uint32_t tile) noexcept { delete Depot::GetByTile(TileIndex{tile}); },
 		.depot_windows = RailDepotWindows,
-		.close_inspect = [](uint32_t tile) noexcept { DeleteNewGRFInspectWindow(GSF_RAILTYPES, tile); },
+		.close_inspect = RustCloseInspect<GSF_RAILTYPES, uint32_t>,
 		.make_shore = RailMakeShore,
 		.docking_check = RailDockingCheck,
 		.area_begin = [](OpenTTDRailConvertFrame *frame, uint32_t start, uint32_t end, bool diagonal) noexcept { frame->iter = TileIterator::Create(TileIndex{start}, TileIndex{end}, diagonal); },

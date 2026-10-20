@@ -15,6 +15,10 @@
 #include "command_cost_ffi.h"
 #include <cstddef>
 struct OpenTTDTownState;
+struct Town;
+/** Pool IDs cross as their uint16_t wire value; native PoolID classes stay native. */
+struct OpenTTDTownRef { Town *shell; OpenTTDTownState *state; uint16_t id; };
+
 struct OpenTTDTownGrowthFields { uint16_t counter, rate; uint8_t funding, road, flags; };
 struct OpenTTDTownReceived { uint16_t old_max, new_max, old_act, new_act; };
 struct OpenTTDTownSimulationFields {

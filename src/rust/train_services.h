@@ -12,6 +12,7 @@
 #include "sound_services.h"
 
 #include "vehicle_services.h"
+#include "services_newgrf.h"
 #include "services_landscape.h"
 #include "settings_services.h"
 
@@ -459,7 +460,7 @@ static uint64_t TrainLengthDefault(OpenTTDTrainHandle id) noexcept
 static void TrainLengthError(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	ErrorUnknownCallbackResult(v->GetEngine()->GetGRFID(), CBID_VEHICLE_LENGTH, static_cast<uint16_t>(a));
+	RustUnknownCallbackResult(v->GetEngine()->GetGRFID(), CBID_VEHICLE_LENGTH, static_cast<uint16_t>(a));
 }
 static void TrainLoading(OpenTTDTrainHandle id, uint8_t a) noexcept
 {

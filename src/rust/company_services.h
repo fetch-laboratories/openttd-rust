@@ -22,6 +22,7 @@ inline uint32_t RustCompanyRenewReserve(const Company *company) noexcept { retur
 inline uint16_t RustCompanyAircraftServiceInterval(CompanyID owner) noexcept { return Company::Get(owner)->settings.vehicle.servint_aircraft; }
 inline uint8_t RustCurrentCompanyID() noexcept { return OpenTTDCurrentCompany().base(); }
 inline void RustSetCurrentCompanyID(uint8_t company) noexcept { OpenTTDSetCurrentCompany(CompanyID(company)); }
+inline bool RustIsLocalCompany() noexcept { return IsLocalCompany(); }
 inline uint8_t RustLocalCompanyID() noexcept { return _local_company.base(); }
 /** Shared pool traversal preserves the native ascending ID order. */
 inline Company *RustCompanyNext(uint32_t from) noexcept

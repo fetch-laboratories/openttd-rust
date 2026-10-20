@@ -968,7 +968,7 @@ impl<'a> Ctx<'a> {
                             w::hit(w::RAIL_CMD_REMOVE_SHORE);
                             (self.s.make_shore)(tile);
                         } else {
-                            (self.shared.clear_square)(tile);
+                            unsafe { crate::ground::clear_square(tile, self.shared) };
                         }
                         (self.s.close_inspect)(tile);
                     } else {
@@ -2011,7 +2011,7 @@ impl<'a> Ctx<'a> {
             self.rail_infra(owner, (self.rail.rail_type)(tile).0, 1_u32.wrapping_neg());
             (self.s.infrastructure_dirty)(owner);
             (self.s.delete_depot)(tile);
-            (self.shared.clear_square)(tile);
+            unsafe { crate::ground::clear_square(tile, self.shared) };
             self.add_side(tile, dir, owner);
             (self.s.layout_changed)(tile, dir & 1);
             if !v.is_null() {
@@ -2061,7 +2061,7 @@ impl<'a> Ctx<'a> {
                     }
                     if flags & EXECUTE != 0 {
                         w::hit(w::RAIL_CMD_CLEAR_WATER);
-                        (self.shared.clear_square)(tile);
+                        unsafe { crate::ground::clear_square(tile, self.shared) };
                     }
                     cost.add_money(price(PR_CLEAR_WATER));
                 }

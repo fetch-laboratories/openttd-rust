@@ -15,6 +15,7 @@
  * mutations/moves preserve all native fields, including encoded error params.
  * These ordinary services are noexcept; environmental failures terminate. */
 struct OpenTTDCommandCost;
+enum ExpensesType : uint8_t;
 struct OpenTTDCommandCostServices {
 	void (*zero)(OpenTTDCommandCost *) noexcept;
 	void (*error)(OpenTTDCommandCost *, uint32_t) noexcept;
@@ -27,6 +28,7 @@ struct OpenTTDCommandCostServices {
 	uint32_t (*error_message)(const OpenTTDCommandCost *) noexcept;
 	int64_t (*money)(const OpenTTDCommandCost *) noexcept;
 	void (*make_error)(OpenTTDCommandCost *, uint32_t) noexcept;
+	ExpensesType (*expense)(const OpenTTDCommandCost *) noexcept;
 };
 const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept;
 #endif /* RUST_COMMAND_COST_FFI_H */

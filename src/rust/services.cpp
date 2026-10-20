@@ -41,6 +41,10 @@
 #include "tile_type_access.hpp"
 #include "../safeguards.h"
 #include "settings_services.h"
+#include "company_adapter.h"
+#include "company_services.h"
+#include "../strings_func.h"
+#include "../table/strings.h"
 #include "environment_services.h"
 #include "services_landscape.h"
 #include "ground_ffi.h"
@@ -70,6 +74,7 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 		.error_param = CostErrorParam, .add = CostAdd, .move = CostMove,
 		.amount = CostAmount, .success = CostSuccess, .error_message = CostErrorMessage, .money = CostMoney,
 		.make_error = CostMakeError,
+		.expense = [](const OpenTTDCommandCost *cost) noexcept { assert(NativeCost(cost)->GetExpensesType() != INVALID_EXPENSES); return NativeCost(cost)->GetExpensesType(); },
 	};
 	return services;
 }
@@ -91,10 +96,26 @@ static void CommandWormholeFree(OpenTTDCommandCost *out, uint32_t tile, uint32_t
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
 	static const OpenTTDCommandServices services{
+		.enter = RecursiveCommandCounter::Enter, .leave = RecursiveCommandCounter::Leave,
 		.landscape_clear = LandscapeClear,
 		.tile_ownership = CommandTileOwnership, .ownership = CommandOwnership,
 		.no_vehicle = CommandNoVehicle, .no_train = CommandNoTrain, .wormhole_free = CommandWormholeFree,
 		.ownership_at = CommandOwnershipAt,
+		.finance = &GetRustCompanyFinanceServices(),
+		.infinite_money = RustInfiniteMoney,
+		.money_error = [](OpenTTDCommandCost *cost, int64_t amount) noexcept {
+			NativeCost(cost)->MakeError(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY);
+			if (RustIsLocalCompany()) NativeCost(cost)->SetEncodedMessage(GetEncodedString(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, Money(amount)));
+		},
+	};
+	return services;
+}
+
+const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept
+{
+	static const OpenTTDWaterRestorationServices services{
+		.slope_z = RustTileSlopeZ, .infrastructure = RustAddWaterInfrastructure,
+		.infrastructure_dirty = RustInfrastructureDirty, .make_canal = RustMakeCanal, .make_river = RustMakeRiver,
 	};
 	return services;
 }
@@ -216,6 +237,7 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.calendar_date = SharedCalendarDate,
 		.calendar_year = SharedCalendarYear,
 		.clear_square = SharedClearSquare,
+		.clear_square_services = {.may_animate = OpenTTDMayAnimateTile, .delete_animated = RustDeleteAnimatedTile, .docking = OpenTTDIsDockingTile, .remove_docking = RustRemoveDocking, .generating_world = OpenTTDGeneratingWorld},
 		.closest_town = SharedClosestTown,
 		.company_valid = OpenTTDCompanyIsValid,
 		.context = nullptr,

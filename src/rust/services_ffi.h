@@ -58,6 +58,13 @@ enum RoadType : uint8_t;
 enum RoadBits : uint8_t;
 enum Trackdir : uint8_t;
 struct OpenTTDWaterGroundServices;
+struct OpenTTDClearSquareServices {
+	bool (*may_animate)(uint32_t) noexcept;
+	void (*delete_animated)(uint32_t, bool) noexcept;
+	bool (*docking)(uint32_t) noexcept;
+	void (*remove_docking)(uint32_t) noexcept;
+	bool (*generating_world)() noexcept;
+};
 struct OpenTTDSharedServices {
 	bool (*autoslope)() noexcept;
 	uint8_t (*bay_stop_direction)(uint32_t) noexcept;
@@ -68,6 +75,7 @@ struct OpenTTDSharedServices {
 	int32_t (*calendar_date)() noexcept;
 	int32_t (*calendar_year)() noexcept;
 	void (*clear_square)(uint32_t) noexcept;
+	OpenTTDClearSquareServices clear_square_services;
 	const OpenTTDTownHandle *(*closest_town)(uint32_t, uint32_t) noexcept;
 	bool (*company_valid)(uint8_t) noexcept;
 	void *context;
@@ -252,6 +260,13 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.calendar_date = OpenTTDFixtureMapService<int32_t>,
 		.calendar_year = OpenTTDFixtureMapService<int32_t>,
 		.clear_square = OpenTTDFixtureMapService<void, uint32_t>,
+		.clear_square_services = {
+			.may_animate = OpenTTDFixtureMapService<bool, uint32_t>,
+			.delete_animated = OpenTTDFixtureMapService<void, uint32_t, bool>,
+			.docking = OpenTTDFixtureMapService<bool, uint32_t>,
+			.remove_docking = OpenTTDFixtureMapService<void, uint32_t>,
+			.generating_world = OpenTTDFixtureMapService<bool>,
+		},
 		.closest_town = OpenTTDFixtureMapService<const OpenTTDTownHandle *, uint32_t, uint32_t>,
 		.company_valid = OpenTTDFixtureMapService<bool, uint8_t>,
 		.context = context,

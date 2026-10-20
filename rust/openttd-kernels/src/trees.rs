@@ -1123,7 +1123,7 @@ pub unsafe extern "C" fn openttd_rust_trees_clear_tile(
         num = num.wrapping_mul(4);
     }
     if execute {
-        (s.clear_square)(tile);
+        unsafe { crate::ground::clear_square(tile, s) };
     }
     price.saturating_mul(i64::from(num))
 }
@@ -1294,7 +1294,19 @@ mod tests {
         MP_TREES
     }
     extern "C" fn water_services() -> *const crate::water::WaterServices {
-        thread_local! { static WATER: crate::water::WaterServices = crate::water::fixture(); }
+        extern "C" fn square_map(tile: u32, _: crate::services::ClearGroundType, _: u32) {
+            clear_square(tile);
+        }
+        thread_local! {
+            static CLEAR: crate::ground::ClearServices = crate::ground::ClearServices {
+                make_clear: square_map, ..crate::ground::fixture_clear()
+            };
+            static WATER: crate::water::WaterServices = {
+                let mut water = crate::water::fixture();
+                water.clear = CLEAR.with(std::ptr::from_ref);
+                water
+            };
+        }
         WATER.with(std::ptr::from_ref)
     }
     extern "C" fn ambient(_: u32) -> bool {
@@ -1803,11 +1815,12 @@ mod tests {
         }
         let log = events();
         assert_eq!(
-            &log[log.len() - 3..],
+            &log[log.len() - 4..],
             [
                 Event::Rating(false),
                 Event::ClearTree,
-                Event::Write("clear_square")
+                Event::Write("clear_square"),
+                Event::Dirty,
             ]
         );
     }

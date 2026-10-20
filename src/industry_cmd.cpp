@@ -3639,7 +3639,7 @@ static const OpenTTDIndustryServices _industry_services = {
 		TriggerIndustryAnimation(i, IndustryAnimationTrigger::IndustryTick);
 	},
 	.production_callback = [](void *i, uint8_t reason) noexcept { IndustryProductionCallback(RustIndustry(i), reason); },
-	.scale_cargo = [](uint32_t amount) noexcept -> uint32_t { return ScaleByCargoScale(amount, false); },
+	.scale_cargo = RustScaleCargo<false>,
 	.move_goods = [](void *handle, uint32_t slot, uint32_t amount) noexcept -> uint32_t {
 		Industry *i = RustIndustry(handle);
 		return MoveGoodsToStation(i->produced[slot].cargo, amount, {i->index, SourceType::Industry}, i->stations_near, i->exclusive_consumer);
@@ -3743,8 +3743,8 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 		auto type = SharedTileType(index);
 		return {type == MP_INDUSTRY ? GetIndustryIndex(tile).base() : uint16_t{0xFFFF}, static_cast<uint8_t>(type), type == MP_STATION && IsOilRig(tile)};
 	},
-	.delete_tile_inspect = [](uint32_t tile) noexcept { DeleteNewGRFInspectWindow(GSF_INDUSTRYTILES, tile); },
-	.make_water = RustMakeUnownedWater,
+	.delete_tile_inspect = RustCloseInspect<GSF_INDUSTRYTILES, uint32_t>,
+	.restoration = &GetRustWaterRestorationServices(),
 	.delete_oilrig = [](uint32_t tile) noexcept { DeleteOilRig(TileIndex(tile)); },
 	.clear_docking = [](uint32_t tile) noexcept { ClearDockingTilesCheckingNeighbours(TileIndex(tile)); },
 	.industry_field = RustFieldOfIndustryValue,
@@ -3754,7 +3754,7 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.delete_news = [](uint16_t industry) noexcept { DeleteIndustryNews(IndustryID(industry)); },
 	.close_view = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_VIEW, industry); },
 	.close_production = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_PRODUCTION, industry); },
-	.delete_inspect = [](uint16_t industry) noexcept { DeleteNewGRFInspectWindow(GSF_INDUSTRIES, industry); },
+	.delete_inspect = RustCloseInspect<GSF_INDUSTRIES, uint16_t>,
 	.delete_subsidies = [](uint16_t industry) noexcept { DeleteSubsidyWith({IndustryID(industry), SourceType::Industry}); },
 	.invalidate_cargo = [](uint16_t industry) noexcept { CargoPacket::InvalidateAllFrom({IndustryID(industry), SourceType::Industry}); },
 	.next_near_station = [](void *shell, void *previous) noexcept -> void * {
@@ -3827,12 +3827,12 @@ static const OpenTTDIndustryConstructionServices &GetIndustryConstructionService
 		.callback_mask = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> uint16_t { return reinterpret_cast<const IndustrySpec *>(handle)->callback_mask.base(); },
 		.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { RustIndustry(shell)->town = const_cast<Town *>(reinterpret_cast<const Town *>(town)); },
 		.calendar_date = GetRustSharedServices().calendar_date,
-		.generating = OpenTTDGeneratingWorld,
+		.generating = GetRustSharedServices().clear_square_services.generating_world,
 		.callback = [](void *shell, uint16_t callback, uint32_t parameter, uint32_t random) noexcept -> uint16_t {
 			Industry *i = RustIndustry(shell);
 			return GetIndustryCallback(static_cast<CallbackID>(callback), parameter, random, i, i->type, INVALID_TILE);
 		},
-		.callback_error = [](const OpenTTDIndustrySpecHandle *spec, uint16_t callback, uint16_t result) noexcept { ErrorUnknownCallbackResult(reinterpret_cast<const IndustrySpec *>(spec)->grf_prop.grfid, callback, result); },
+		.callback_error = RustSpecCallbackError<IndustrySpec, OpenTTDIndustrySpecHandle>,
 		.grf_version = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint8_t { return reinterpret_cast<const IndustrySpec *>(spec)->grf_prop.grffile->grf_version; },
 		.cargo_translation = [](const OpenTTDIndustrySpecHandle *spec, uint8_t cargo) noexcept -> uint8_t { return GetCargoTranslation(cargo, reinterpret_cast<const IndustrySpec *>(spec)->grf_prop.grffile); },
 		.layout_size = [](const OpenTTDIndustryLayoutHandle *layout) noexcept -> size_t { return reinterpret_cast<const IndustryTileLayout *>(layout)->size(); },

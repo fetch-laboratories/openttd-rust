@@ -59,6 +59,11 @@ pub struct EconomyDate(pub i32);
 /// Original `TILE_HEIGHT`, shared by raw-to-pixel map consumers.
 pub const TILE_HEIGHT: u32 = 8;
 
+/// Native command expense category, including `INVALID_EXPENSES`.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct ExpensesType(pub u8);
+
 /// Native stack-owned command result, including encoded error parameters.
 /// Rust only borrows its address and invokes the native operations below.
 #[repr(C)]
@@ -93,6 +98,8 @@ pub struct CommandCostServices {
     pub money: extern "C" fn(*const CommandCost) -> i64,
     /// Native `MakeError`, keeping owner and encoded message.
     pub make_error: unsafe extern "C" fn(*mut CommandCost, u32),
+    /// Original expense category; queried only for nonzero company spending.
+    pub expense: extern "C" fn(*const CommandCost) -> ExpensesType,
 }
 
 /// Ordinary direct commands. Native result storage retains complete errors and
@@ -102,6 +109,10 @@ pub struct CommandCostServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandServices {
+    /// Increment the single native recursion counter; true at top level.
+    pub enter: extern "C" fn() -> bool,
+    /// Decrement that same recursion counter.
+    pub leave: extern "C" fn(),
     /// Original `CMD_LANDSCAPE_CLEAR`, with actual `DoCommandFlags` width.
     pub landscape_clear: extern "C" fn(*mut CommandCost, u32, u16),
     /// Original `CheckTileOwnership`, preserving native encoded errors.
@@ -116,19 +127,12 @@ pub struct CommandServices {
     pub wormhole_free: unsafe extern "C" fn(*mut CommandCost, u32, u32, *const Train),
     /// Ownership check with the optional tile needed for town error parameters.
     pub ownership_at: unsafe extern "C" fn(*mut CommandCost, u8, u32),
-}
-
-/// Shared original command nesting and before/after semantics.
-#[repr(C)]
-pub struct CommandProtocolServices {
-    /// Increment the native nesting counter and return whether this is top level.
-    pub enter: extern "C" fn() -> bool,
-    /// Decrement the same counter.
-    pub leave: extern "C" fn(),
-    /// Original `InternalDoBefore`.
-    pub before: extern "C" fn(bool, bool),
-    /// Original `InternalDoAfter` with a live native cost.
-    pub after: unsafe extern "C" fn(*mut CommandCost, u16, bool, bool),
+    /// Canonical company finance accessors, shared by ordinary money operations.
+    pub finance: &'static crate::company::FinanceServices,
+    /// Infinite-money setting at the original observation point.
+    pub infinite_money: extern "C" fn() -> bool,
+    /// Preserve the full native cost while formatting an insufficient-cash error.
+    pub money_error: unsafe extern "C" fn(*mut CommandCost, i64),
 }
 
 /// Opaque native town shell. Its address identifies the shell, not the Rust owner.
@@ -251,6 +255,21 @@ pub struct Train {
     _private: [u8; 0],
 }
 
+/// Native animation, docking and generation observations for square clearing.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ClearSquareServices {
+    /// Original tile animation predicate.
+    pub may_animate: extern "C" fn(u32) -> bool,
+    /// Native animated-list removal with the original immediate flag.
+    pub delete_animated: extern "C" fn(u32, bool),
+    /// Original docking marker before map clearing.
+    pub docking: extern "C" fn(u32) -> bool,
+    /// Remove the old docking marker after clearing and dirtying the tile.
+    pub remove_docking: extern "C" fn(u32),
+    /// Preserve generation's initial grass density.
+    pub generating_world: extern "C" fn() -> bool,
+}
 /// Immutable call table supplied by the game (or isolated test world). No global
 /// registration or game symbol imports are needed by standalone Cargo binaries.
 /// The context and function addresses outlive the component invocation; callbacks
@@ -278,6 +297,8 @@ pub struct Services {
     pub calendar_year: extern "C" fn() -> i32,
     /// `DoClearSquare`.
     pub clear_square: extern "C" fn(u32),
+    /// Direct square-clear leaves; the callback above is for native disaster actions.
+    pub clear_square_services: ClearSquareServices,
     /// Original native nearest-town spatial lookup; the result may be null.
     pub closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
     /// Whether this company pool ID is live.
@@ -531,6 +552,13 @@ pub fn fixture(
         calendar_date: zero_year,
         calendar_year: zero_year,
         clear_square: tile,
+        clear_square_services: ClearSquareServices {
+            may_animate: flag,
+            delete_animated: fixture_crossing_update,
+            docking: flag,
+            remove_docking: tile,
+            generating_world: flag0,
+        },
         closest_town: unused_closest_town,
         company_valid: unused_company_valid,
         context,

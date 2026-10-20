@@ -39,6 +39,6 @@ void OpenTTDAssertTownGenerationContext() noexcept;
 inline uint32_t OpenTTDMapScaleSize1D(uint32_t n) noexcept { return Map::ScaleBySize1D(n); }
 inline uint8_t RustPassengerCargo() noexcept { return GetCargoTypeByLabel(CT_PASSENGERS); }
 inline uint8_t RustMailCargo() noexcept { return GetCargoTypeByLabel(CT_MAIL); }
-inline uint32_t RustScaleCargo(uint32_t amount, bool town) noexcept { return ScaleByCargoScale(amount, town); }
+template <bool Town> inline uint32_t RustScaleCargo(uint32_t amount) noexcept { return ScaleByCargoScale(amount, Town); }
 inline size_t OpenTTDTownCount() noexcept { return Town::GetNumItems(); }
 #endif /* RUST_ENVIRONMENT_SERVICES_H */

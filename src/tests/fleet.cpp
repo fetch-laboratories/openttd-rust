@@ -141,9 +141,9 @@ static bool SameCost(const CommandCost &a, const CommandCost &b)
 TEST_CASE("Commands - shared native stack result layouts and encoded parameters")
 {
 	const auto &commands = GetRustCommandServices();
-	FleetSlotsFilled(621, &commands, 6);
+	FleetSlotsFilled(621, &commands, 12);
 	const auto &w = GetRustCommandCostServices();
-	FleetSlotsFilled(620, &w, 11);
+	FleetSlotsFilled(620, &w, 12);
 	AutoRestoreBackup<CompanyID> current(_current_company, CompanyID(0));
 	AutoRestoreBackup<CompanyID> local(_local_company, CompanyID(0));
 	CommandCost result;

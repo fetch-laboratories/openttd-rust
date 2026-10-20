@@ -14,6 +14,7 @@ mod auth;
 mod byte_strings;
 mod cargo_flow;
 mod cargo_payment;
+mod command;
 mod company;
 mod consumer;
 mod disaster;

@@ -560,6 +560,9 @@ void DrawFoundation(TileInfo *ti, Foundation f)
 
 void DoClearSquare(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_clear_square(tile.base(), &GetRustSharedServices());
+#else
 	/* If the tile can have animation and we clear it, delete it from the animated tile list. */
 	if (MayAnimateTile(tile)) DeleteAnimatedTile(tile, true);
 
@@ -570,6 +573,7 @@ void DoClearSquare(TileIndex tile)
 
 	ClearNeighbourNonFloodingStates(tile);
 	InvalidateWaterRegion(tile);
+#endif /* WITH_RUST */
 }
 
 /**
@@ -720,11 +724,9 @@ CommandCost CmdLandscapeClear(DoCommandFlags flags, TileIndex tile)
 		return CommandCost(STR_ERROR_CLEARING_LIMIT_REACHED);
 	}
 
-	const size_t coa = FindClearedObjectIndex(tile);
-
 	/* If this tile was the first tile which caused object destruction, always
 	 * pass it on to the tile_type_proc. That way multiple test runs and the exec run stay consistent. */
-	if (coa != SIZE_MAX && GetClearedObjectArea(coa).first_tile != tile) {
+	if (IsObjectIndirectlyCleared(tile)) {
 		/* If this tile belongs to an object which was already cleared via another tile, pretend it has been
 		 * already removed.
 		 * However, we need to check stuff, which is not the same for all object tiles. (e.g. being on water or not) */

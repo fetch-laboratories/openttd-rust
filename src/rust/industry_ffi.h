@@ -186,11 +186,12 @@ typedef struct OpenTTDIndustryCleanupTile { uint16_t industry; uint8_t type; boo
 typedef struct OpenTTDIndustryReseed { uint32_t self, parent; uint8_t used; } OpenTTDIndustryReseed;
 typedef struct OpenTTDIndustryRandomisationSpec { uint16_t gfx; bool enabled; } OpenTTDIndustryRandomisationSpec;
 typedef struct OpenTTDIndustryAnimationSpec { const void *spec; uint8_t triggers; } OpenTTDIndustryAnimationSpec;
+struct OpenTTDWaterRestorationServices;
 typedef struct OpenTTDIndustryLifecycleServices {
 	OpenTTDIndustryStationHandle *(*neutral_station)(void *) OPENTTD_INDUSTRY_NOEXCEPT;
 	OpenTTDIndustryCleanupTile (*cleanup_tile)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	void (*delete_tile_inspect)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
-	void (*make_water)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
+	const struct OpenTTDWaterRestorationServices *restoration;
 	void (*delete_oilrig)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	void (*clear_docking)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	bool (*industry_field)(uint32_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT;

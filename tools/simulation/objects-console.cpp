@@ -14,17 +14,20 @@
 #undef SetGeneratingWorldProgress
 #undef IncreaseGeneratingWorldProgress
 #include "console_internal.h"
-#include "console_func.h"
 #include "saveload/saveload.h"
-#include "newgrf.h"
-
-#ifndef WITH_RUST
+#ifdef WITH_RUST
+static void ResetScratch() { openttd_rust_command_before(&GetRustCommandServices(), true, false); }
+#else
 class AbortGenerateWorldSignal {};
-static void ClearObjectAreas() { _cleared_object_areas.clear(); }
-static size_t FindClearedObjectIndex(TileIndex t) { auto *p = FindClearedObject(t); return p == nullptr ? SIZE_MAX : p - _cleared_object_areas.data(); }
-static ClearedObjectArea GetClearedObjectArea(size_t i) { return _cleared_object_areas[i]; }
-static void AppendClearedObjectArea(TileIndex t, TileArea a) { _cleared_object_areas.emplace_back(t, a); }
-static void SetClearedObjectFirstTile(size_t i, TileIndex t) { _cleared_object_areas[i].first_tile = t; }
+struct HiddenObjectArea { size_t index; uint32_t first_tile; };
+static void ResetScratch() { _cleared_object_areas.clear(); }
+static HiddenObjectArea HideObjectForTunnel(TileIndex t) {
+	auto *p = FindClearedObject(t); size_t i = p == nullptr ? _cleared_object_areas.size() : p - _cleared_object_areas.data();
+	if (p == nullptr) _cleared_object_areas.emplace_back(t, TileArea(t, 1, 1));
+	uint32_t first = _cleared_object_areas[i].first_tile.base(); _cleared_object_areas[i].first_tile = INVALID_TILE; return {i, first};
+}
+static void RestoreObjectFirstTile(HiddenObjectArea h) { _cleared_object_areas[h.index].first_tile = TileIndex(h.first_tile); }
+static bool IsObjectIndirectlyCleared(TileIndex t) { auto *p = FindClearedObject(t); return p != nullptr && p->first_tile != t; }
 #endif
 uint16_t GetObjectCallback(CallbackID, uint32_t, uint32_t, const ObjectSpec *, Object *, TileIndex, std::span<int32_t>, uint8_t);
 void SetGeneratingWorldProgress(GenWorldProgress, uint);
@@ -55,13 +58,8 @@ static void Result(const char *name, const CommandCost &cost)
 {
 	fmt::print(stderr, "OBJECT cost {} {} {} {}\n", name, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage());
 }
-static void Loop(TileIndex tile)
-{
-#ifdef WITH_RUST
-	TileLoop_Object(tile.base());
-#else
-	TileLoop_Object(tile);
-#endif
+template<typename Tile> static void Loop(Tile tile) {
+	if constexpr (std::is_invocable_v<decltype(&TileLoop_Object), Tile>) TileLoop_Object(tile); else TileLoop_Object(tile.base());
 }
 static bool ObjectsScenario(std::span<std::string_view> args)
 {
@@ -77,19 +75,16 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		return true;
 	}
 #ifdef WITH_RUST
-	c->Finances().money = 1000000000;
-	c->Finances().build_object_limit = UINT32_MAX;
-	c->Finances().clear_limit = UINT32_MAX;
+	auto &finances = c->Finances();
 #else
-	c->money = 1000000000;
-	c->build_object_limit = UINT32_MAX;
-	c->clear_limit = UINT32_MAX;
+	auto &finances = *c;
 #endif
+	finances.money = 1000000000;
+	finances.build_object_limit = finances.clear_limit = UINT32_MAX;
 	TileIndex tile = INVALID_TILE; std::vector<uint8_t> heights;
 	for (uint y = 2; y + 14 < Map::MaxY() && tile == INVALID_TILE; y++) for (uint x = 2; x + 14 < Map::MaxX(); x++) {
 		TileArea area(TileXY(x, y), 14, 14);
-		bool clear = true; for (TileIndex t : area) clear &= IsTileType(t, MP_CLEAR);
-		if (!clear) continue;
+		bool clear = true; for (TileIndex t : area) clear &= IsTileType(t, MP_CLEAR); if (!clear) continue;
 		tile = TileXY(x + 3, y + 3);
 		for (TileIndex t : area) { heights.push_back(TileHeight(t)); SetTileHeight(t, 4); }
 		break;
@@ -102,11 +97,13 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		Object::CanAllocateItem(); Object *discarded = new Object(); discarded->type = 63999; delete discarded;
 		fmt::print(stderr, "OBJECT count-wrap {}\n", Object::GetTypeCount(63999) == before);
 		for (uint i = 0; i < 65536; i++) Object::DecTypeCount(63999);
-		ClearObjectAreas(); AppendClearedObjectArea(tile, TileArea(tile, 1, 1)); size_t index = FindClearedObjectIndex(tile); SetClearedObjectFirstTile(index, INVALID_TILE);
-		for (uint i = 0; i < 4096; i++) AppendClearedObjectArea(tile + 1, TileArea(tile + 1, 1, 1));
-		SetClearedObjectFirstTile(index, tile);
-		fmt::print(stderr, "OBJECT scratch-growth {} {}\n", GetClearedObjectArea(index).first_tile == tile, FindClearedObjectIndex(tile + 1) == 1);
-		ClearObjectAreas();
+		Backup<bool> bulldozer(_cheats.magic_bulldozer.value, true);
+		Result("scratch-hq", build(OBJECT_HQ, tile)); Result("scratch-clear", Command<CMD_LANDSCAPE_CLEAR>::Do({}, tile));
+		auto hidden = HideObjectForTunnel(tile + 1);
+		for (uint i = 0; i < 4096; i++) HideObjectForTunnel(tile + TileDiffXY(0, 3) + i);
+		RestoreObjectFirstTile(hidden); auto first = HideObjectForTunnel(tile + 1); RestoreObjectFirstTile(first);
+		fmt::print(stderr, "OBJECT scratch-growth {} {}\n", !IsObjectIndirectlyCleared(tile), first.index == hidden.index && first.first_tile == tile.base());
+		Result("scratch-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile));
 		GRFFile file; file.grf_version = 8;
 		ObjectSpec *spec = const_cast<ObjectSpec *>(ObjectSpec::Get(OBJECT_TRANSMITTER));
 		Backup<ObjectSpec> backup(*spec);
@@ -114,7 +111,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		callbacks = true;
 		for (uint8_t version : {7, 8}) {
 			file.grf_version = version; Result("owned", build(OBJECT_OWNED_LAND, tile));
-			ClearObjectAreas(); SetBridgeMiddle(tile, AXIS_X);
+			ResetScratch(); SetBridgeMiddle(tile, AXIS_X);
 			RecursiveCommandCounter nested;
 			Result("bridge-after-clear", CmdBuildObject(DoCommandFlag::Execute, tile, OBJECT_TRANSMITTER, 0));
 			fmt::print(stderr, "OBJECT cleared-before-bridge {}\n", IsTileType(tile, MP_CLEAR));
@@ -136,6 +133,9 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		Result("same-hq", build(OBJECT_HQ, tile));
 		TileIndex relocated = tile + 3; Result("relocate", build(OBJECT_HQ, relocated));
 		UpdateCompanyHQ(relocated, 1000); UpdateObjectColours(c);
+		Backup<bool> autoslope(_settings_game.construction.autoslope, true);
+		Result("hq-terraform", TerraformTile_Object(relocated, {}, GetTileMaxZ(relocated) - 1, SLOPE_W));
+		Result("hq-build-above", CheckBuildAbove_Object(relocated, {}, AXIS_X, GetTileMaxZ(relocated) + 10));
 		CargoArray accepted{}, produced{}; CargoTypes always = 0;
 		AddAcceptedCargo_Object(relocated, accepted, always); AddProducedCargo_Object(relocated, produced);
 		fmt::print(stderr, "OBJECT hq-cargo {} {} {}\n", accepted[GetCargoTypeByLabel(CT_PASSENGERS)], accepted[GetCargoTypeByLabel(CT_MAIL)], produced[GetCargoTypeByLabel(CT_MAIL)]);
@@ -152,8 +152,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 	}
 	uint index = 0; for (TileIndex t : TileArea(tile - TileDiffXY(3, 3), 14, 14)) SetTileHeight(t, heights[index++]);
 	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
-	std::fflush(stderr);
-	return true;
+	std::fflush(stderr); return true;
 }
 extern "C" void __real__Z22IConsoleStdLibRegisterv();
 extern "C" void __wrap__Z22IConsoleStdLibRegisterv()

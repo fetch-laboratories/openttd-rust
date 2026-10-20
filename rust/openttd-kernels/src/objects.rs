@@ -78,13 +78,11 @@ pub extern "C" fn openttd_rust_object_count(kind: u16) -> u16 {
     // SAFETY: serialized native entry; original kind precondition.
     unsafe { (*STATE.0.get()).counts[usize::from(kind)] }
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_object_areas_clear() {
+pub(crate) fn clear_areas() {
     // SAFETY: serialized native entry.
     unsafe { (*STATE.0.get()).areas.clear() };
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_object_areas_find(tile: u32, log_x: u32) -> usize {
+fn openttd_rust_object_areas_find(tile: u32, log_x: u32) -> usize {
     let mask = (1 << log_x) - 1;
     let x = tile & mask;
     let y = tile >> log_x;
@@ -102,28 +100,68 @@ pub extern "C" fn openttd_rust_object_areas_find(tile: u32, log_x: u32) -> usize
         })
         .unwrap_or(usize::MAX)
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_object_areas_get(index: usize) -> ClearArea {
+fn openttd_rust_object_areas_get(index: usize) -> ClearArea {
     // SAFETY: serialized entry; index was returned by find/append.
     unsafe { (&(*STATE.0.get()).areas)[index] }
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_object_areas_append(area: ClearArea) -> usize {
+fn openttd_rust_object_areas_append(area: ClearArea) -> usize {
     // SAFETY: serialized entry; allocation failure aborts.
     let areas = unsafe { &mut (*STATE.0.get()).areas };
     areas.push(area);
     areas.len() - 1
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_object_areas_set_first(index: usize, first: u32) {
+fn openttd_rust_object_areas_set_first(index: usize, first: u32) {
     // SAFETY: serialized entry; append preserves indices returned by find/append.
     unsafe { (&mut (*STATE.0.get()).areas)[index].first_tile = first };
+}
+
+/// Stable tunnel scratch token; append never invalidates its index.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct HiddenArea {
+    pub index: usize,
+    pub first_tile: u32,
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_indirectly_cleared(tile: u32, log_x: u32) -> bool {
+    let i = openttd_rust_object_areas_find(tile, log_x);
+    i != usize::MAX && openttd_rust_object_areas_get(i).first_tile != tile
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_tunnel_hide(tile: u32, log_x: u32) -> HiddenArea {
+    let mut index = openttd_rust_object_areas_find(tile, log_x);
+    if index == usize::MAX {
+        index = openttd_rust_object_areas_append(ClearArea {
+            first_tile: tile,
+            tile,
+            width: 1,
+            height: 1,
+        });
+    }
+    let first_tile = openttd_rust_object_areas_get(index).first_tile;
+    openttd_rust_object_areas_set_first(index, u32::MAX);
+    HiddenArea { index, first_tile }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_restore_first(hidden: HiddenArea) {
+    openttd_rust_object_areas_set_first(hidden.index, hidden.first_tile);
 }
 
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Services, TownHandle, WaterClass,
 };
 use std::ptr;
+
+#[repr(C)]
+pub struct Price {
+    pub factor: u32,
+    pub shift: i32,
+}
+impl Price {
+    fn money(self, index: u32) -> i64 {
+        crate::company::openttd_rust_economy_price(index, self.factor, self.shift)
+    }
+}
 
 #[repr(C)]
 pub struct Spec {
@@ -156,6 +194,12 @@ pub struct Identity {
     pub kind: u16,
 }
 #[repr(C)]
+pub struct Reference {
+    pub object: *mut Object,
+    pub kind: u16,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Allocation {
     pub object: *mut Object,
     pub id: u32,
@@ -165,6 +209,15 @@ pub struct Next {
     pub object: *mut Object,
     pub id: u32,
     pub tile: u32,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LoopPolicy {
+    pub spec: *const Spec,
+    pub object: *mut Object,
+    pub north: u32,
+    pub flags: u16,
+    pub kind: u16,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -189,8 +242,12 @@ pub struct Clearance {
 pub struct Admission {
     pub views: u8,
     pub height: u8,
-    pub available: bool,
-    pub ever: bool,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct AreaShape {
+    pub views: u8,
+    pub size: u8,
 }
 #[repr(C)]
 pub struct Generation {
@@ -228,20 +285,28 @@ pub struct ObjectServices {
     pub command: *const CommandServices,
     pub company: *const crate::company::Services,
     pub cargo: *const crate::cargo_storage::Services,
-    pub protocol: *const crate::services::CommandProtocolServices,
+    pub town: *const crate::town::Leaves,
+    pub founding: *const crate::town::founding::FoundingServices,
+    pub industry_tiles: *const crate::industry::TileServices,
     pub strings: Strings,
     pub spec_count: unsafe extern "C" fn() -> usize,
     pub spec: unsafe extern "C" fn(u16) -> *const Spec,
-    pub policy: unsafe extern "C" fn(*const Spec) -> Policy,
+    pub callbacks: unsafe extern "C" fn(*const Spec) -> u8,
+    pub colour_policy: unsafe extern "C" fn(*mut Object) -> Policy,
     pub flags: unsafe extern "C" fn(*const Spec) -> u16,
     pub footprint: unsafe extern "C" fn(*const Spec) -> Footprint,
     pub clearance: unsafe extern "C" fn(*const Spec) -> Clearance,
+    pub available: unsafe extern "C" fn(*const Spec) -> bool,
+    pub ever: unsafe extern "C" fn(*const Spec) -> bool,
+    pub area_shape: unsafe extern "C" fn(*const Spec) -> AreaShape,
     pub admission: unsafe extern "C" fn(*const Spec) -> Admission,
     pub generation: unsafe extern "C" fn(*const Spec) -> Generation,
     pub can_allocate: unsafe extern "C" fn() -> bool,
     pub allocate: unsafe extern "C" fn(u16, *const TownHandle, Area, u8) -> Allocation,
-    pub closest_town: unsafe extern "C" fn(u32) -> *const TownHandle,
+    pub nearest_town: unsafe extern "C" fn(u32) -> *const TownHandle,
     pub object_type: unsafe extern "C" fn(u32) -> u16,
+    pub loop_policy: unsafe extern "C" fn(u32) -> LoopPolicy,
+    pub reference: unsafe extern "C" fn(u32) -> Reference,
     pub identity: unsafe extern "C" fn(u32) -> Identity,
     pub location: unsafe extern "C" fn(u32) -> Area,
     pub next: unsafe extern "C" fn(u32) -> Next,
@@ -253,50 +318,34 @@ pub struct ObjectServices {
     pub delete_object: unsafe extern "C" fn(*mut Object) -> (),
     pub trigger: unsafe extern "C" fn(*mut Object, u8, *const Spec) -> (),
     pub trigger_tile: unsafe extern "C" fn(*mut Object, u32, *const Spec) -> (),
-    pub slope_callback: unsafe extern "C" fn(*const Spec, u32, u32, u8) -> SlopeResult,
+    pub slope_callback:
+        unsafe extern "C" fn(*const Spec, u32, crate::services::Slope, u32, u8) -> SlopeResult,
     pub slope_error: unsafe extern "C" fn(*mut CommandCost, *const SlopeResult, *const Spec) -> (),
     pub buildable: unsafe extern "C" fn(*mut CommandCost, u32, *mut i32) -> (),
-    pub build_cost: unsafe extern "C" fn(*const Spec) -> i64,
-    pub clear_cost: unsafe extern "C" fn(*const Spec) -> i64,
+    pub build_price: unsafe extern "C" fn(*const Spec) -> Price,
+    pub clear_price: unsafe extern "C" fn(*const Spec) -> Price,
     pub set_hq: unsafe extern "C" fn(u8, u32) -> (),
     pub statue_town: unsafe extern "C" fn(*mut Object) -> crate::town::TownRef,
-    pub statue_dirty: unsafe extern "C" fn(u32),
-    pub hq_begin: unsafe extern "C" fn(*mut LoopFrame, u32) -> (),
+    pub hq_begin: unsafe extern "C" fn(*mut LoopFrame, u32, u32) -> (),
     pub hq_deliver: unsafe extern "C" fn(*mut LoopFrame, u8, u32, u8) -> (),
     pub hq_end: unsafe extern "C" fn(*mut LoopFrame) -> (),
     pub autoslope_callback: unsafe extern "C" fn(*const Spec, *mut Object, u32) -> u16,
     pub boolean_callback: unsafe extern "C" fn(*const Spec, u16, u16) -> bool,
-    pub water_regions: unsafe extern "C" fn() -> crate::water_regions::Context,
     pub enabled: unsafe extern "C" fn(*const Spec) -> bool,
     pub bridge_top: unsafe extern "C" fn(u32) -> i32,
     pub close_inspect: unsafe extern "C" fn(u32) -> (),
     pub progress_set: unsafe extern "C" fn(*mut GenerationFrame, u32) -> bool,
     pub progress_increase: unsafe extern "C" fn(*mut GenerationFrame) -> bool,
-    pub town_count: unsafe extern "C" fn() -> usize,
-    pub hq_location: unsafe extern "C" fn(u8) -> u32,
-    pub editor: unsafe extern "C" fn() -> bool,
-    pub generating: unsafe extern "C" fn() -> bool,
     pub normal: unsafe extern "C" fn() -> bool,
     pub freeform: unsafe extern "C" fn() -> bool,
     pub bulldozer: unsafe extern "C" fn() -> bool,
-    pub set_company: unsafe extern "C" fn(u8) -> (),
-    pub on_water: unsafe extern "C" fn(u32) -> bool,
     pub water_class: unsafe extern "C" fn(u32) -> WaterClass,
-    pub docking: unsafe extern "C" fn(u32) -> bool,
-    pub remove_docking: unsafe extern "C" fn(u32) -> (),
-    pub make_water: unsafe extern "C" fn(u32, u8) -> (),
+    pub restoration: *const crate::water::RestorationServices,
     pub set_owner: unsafe extern "C" fn(u32, u8) -> (),
-    pub infrastructure: unsafe extern "C" fn(u8, u32) -> (),
-    pub infrastructure_dirty: unsafe extern "C" fn(u8) -> (),
-    pub change_owner: unsafe extern "C" fn(u32, u8, u8) -> (),
-    pub animation: unsafe extern "C" fn(u32) -> u8,
-    pub set_animation: unsafe extern "C" fn(u32, u8) -> (),
-    pub scale_size: unsafe extern "C" fn(u32) -> u32,
     pub scale_size_1d: unsafe extern "C" fn(u32) -> u32,
     pub passengers: unsafe extern "C" fn() -> u8,
     pub mail: unsafe extern "C" fn() -> u8,
-    pub scale_cargo: unsafe extern "C" fn(u32, bool) -> u32,
-    pub available_money: unsafe extern "C" fn() -> i64,
+    pub scale_cargo: unsafe extern "C" fn(u32) -> u32,
 }
 
 const NONE: u8 = 16;
@@ -361,23 +410,31 @@ impl Cost<'_> {
 struct World<'a> {
     s: &'a ObjectServices,
     shared: &'a Services,
-    commands: &'a CommandServices,
-    company: &'a crate::company::Services,
     map: crate::services::Map,
 }
 impl<'a> World<'a> {
-    unsafe fn new(s: &'a ObjectServices) -> Self {
+    unsafe fn new<const NEEDS_MAP: bool>(s: &'a ObjectServices) -> Self {
         // SAFETY: immutable native tables live throughout the entry.
         let shared = unsafe { &*s.shared };
         Self {
             s,
             shared,
-            commands: unsafe { &*s.command },
-            company: unsafe { &*s.company },
             map: crate::services::Map {
-                log_x: (shared.map_log_x)() as u8,
+                log_x: if NEEDS_MAP {
+                    (shared.map_log_x)() as u8
+                } else {
+                    0
+                },
             },
         }
+    }
+    fn commands(&self) -> &CommandServices {
+        // SAFETY: entry provides the immutable table when commands are used.
+        unsafe { &*self.s.command }
+    }
+    fn company(&self) -> &crate::company::Services {
+        // SAFETY: entry provides the immutable table when company services are used.
+        unsafe { &*self.s.company }
     }
     fn tiles(&self, a: Area) -> impl Iterator<Item = u32> {
         let stride = self.map.size_x();
@@ -408,7 +465,7 @@ impl<'a> World<'a> {
         (self.shared.current_company)()
     }
     fn finance(&self, owner: u8) -> *mut crate::company::Finances {
-        (self.company.finance.company_finances)(owner)
+        (self.company().finance.company_finances)(owner)
     }
     fn object_limit(finance: *const crate::company::Finances) -> u32 {
         if finance.is_null() {
@@ -429,7 +486,7 @@ impl<'a> World<'a> {
             let shape = (self.s.footprint)(spec);
             let area = Self::footprint(tile, shape, view);
             let town = if town.is_null() {
-                (self.s.closest_town)(tile)
+                (self.s.nearest_town)(tile)
             } else {
                 town
             };
@@ -462,13 +519,8 @@ impl<'a> World<'a> {
                         self.shared,
                     );
                 }
-                if (self.shared.has_water_ground)(t) && (self.shared.tile_valid)(t) {
-                    let context = (self.s.water_regions)();
-                    crate::water_regions::openttd_rust_water_invalidate(
-                        context.owner,
-                        context.leaves,
-                        t,
-                    );
+                if (self.shared.has_water_ground)(t) {
+                    (&*(self.shared.water_services)()).invalidate_region(t, self.shared);
                 }
                 let wc = if (self.shared.is_water_tile)(t) {
                     (self.s.water_class)(t)
@@ -476,13 +528,13 @@ impl<'a> World<'a> {
                     WaterClass(3)
                 };
                 if wc.0 == 1 && owner != NONE && matches!(self.owner(t), NONE | WATER) {
-                    (self.s.infrastructure)(owner, 1);
-                    (self.s.infrastructure_dirty)(owner);
+                    ((*self.s.restoration).infrastructure)(owner, 1);
+                    ((*self.s.restoration).infrastructure_dirty)(owner);
                 }
-                let remove = (self.s.docking)(t);
+                let remove = (self.shared.clear_square_services.docking)(t);
                 (self.s.make)(t, owner, object.id, wc, self.shared.random());
                 if remove {
-                    (self.s.remove_docking)(t);
+                    (self.shared.clear_square_services.remove_docking)(t);
                 }
                 (self.shared.mark_dirty)(t);
             }
@@ -502,10 +554,13 @@ impl<'a> World<'a> {
             .filter(|&n| score >= n)
             .count() as u8;
         unsafe {
-            while (self.s.animation)(tile) < target {
+            while ((*self.s.industry_tiles).frame)(tile) < target {
                 let area = (self.s.location)(tile);
                 for t in self.tiles(area) {
-                    (self.s.set_animation)(t, (self.s.animation)(t).wrapping_add(1));
+                    ((*self.s.industry_tiles).set_frame)(
+                        t,
+                        ((*self.s.industry_tiles).frame)(t).wrapping_add(1),
+                    );
                     (self.shared.mark_dirty)(t);
                 }
                 crate::witness::hit(crate::witness::OBJECT_HQ_GROW);
@@ -517,7 +572,13 @@ impl<'a> World<'a> {
         unsafe {
             for tile in self.tiles(object.area) {
                 (self.s.close_inspect)(tile);
-                (self.s.make_water)(tile, self.owner(tile));
+                crate::water::restore(
+                    tile,
+                    self.owner(tile),
+                    self.shared,
+                    &*(self.shared.water_services)(),
+                    &*self.s.restoration,
+                );
             }
             (self.s.delete_object)(object.object);
         }
@@ -528,7 +589,8 @@ impl<'a> World<'a> {
             let object = (self.s.identity)(tile);
             let spec = (self.s.spec)(object.kind);
             let flags_spec = (self.s.flags)(spec);
-            let price = (self.s.clear_cost)(spec)
+            let price = (self.s.clear_price)(spec)
+                .money(51)
                 .saturating_mul(i64::from(object.area.width))
                 .saturating_mul(i64::from(object.area.height))
                 / 5;
@@ -543,7 +605,7 @@ impl<'a> World<'a> {
                 return;
             }
             if company != WATER {
-                if flags & NO_WATER != 0 && (self.s.on_water)(tile) {
+                if flags & NO_WATER != 0 && ((*self.s.industry_tiles).on_water)(tile) {
                     out.fail(self.s.strings.water);
                     return;
                 }
@@ -555,14 +617,14 @@ impl<'a> World<'a> {
                     });
                     return;
                 }
-                if (self.s.editor)() {
+                if ((*self.s.town).editor)() {
                 } else if self.owner(tile) == NONE {
                     if !(self.s.bulldozer)() && flags_spec & CANNOT_REMOVE != 0 {
                         out.error();
                         return;
                     }
                 } else {
-                    (self.commands.tile_ownership)(tmp.0, tile);
+                    (self.commands().tile_ownership)(tmp.0, tile);
                     if !tmp.ok() {
                         out.take(tmp);
                         return;
@@ -595,7 +657,7 @@ impl<'a> World<'a> {
                 }
                 out.set(
                     crate::company::openttd_rust_company_value(
-                        self.company,
+                        self.company(),
                         self.finance(owner),
                         owner,
                         true,
@@ -605,7 +667,7 @@ impl<'a> World<'a> {
                 let town = (self.s.statue_town)(object.object);
                 let fields = crate::town::openttd_rust_town_simulation(town.state);
                 (*fields).statues &= !((1_u64 << self.owner(tile)) as u16);
-                (self.s.statue_dirty)(u32::from(town.id.0));
+                ((*self.s.town).dirty_authority)(u32::from(town.id.0));
             }
             openttd_rust_object_areas_append(ClearArea {
                 first_tile: tile,
@@ -637,23 +699,31 @@ impl<'a> World<'a> {
             }
             let spec = (self.s.spec)(kind);
             let admission = (self.s.admission)(spec);
-            if (self.s.normal)() && !admission.available && !(self.s.generating)() {
+            if (self.s.normal)()
+                && !(self.s.available)(spec)
+                && !((*self.s.town).generating_world)()
+            {
                 out.error();
                 return;
             }
-            if ((self.s.editor)() || (self.s.generating)()) && !admission.ever {
+            if (((*self.s.town).editor)() || ((*self.s.town).generating_world)())
+                && !(self.s.ever)(spec)
+            {
                 out.error();
                 return;
             }
             let shape = (self.s.footprint)(spec);
             if shape.flags & SCENEDIT != 0
-                && ((!(self.s.generating)() && !(self.s.editor)()) || self.current() != NONE)
+                && ((!((*self.s.town).generating_world)() && !((*self.s.town).editor)())
+                    || self.current() != NONE)
             {
                 out.error();
                 return;
             }
             if shape.flags & IN_GAME != 0
-                && ((self.s.generating)() || !(self.s.normal)() || self.current() > 15)
+                && (((*self.s.town).generating_world)()
+                    || !(self.s.normal)()
+                    || self.current() > 15)
             {
                 out.error();
                 return;
@@ -666,7 +736,7 @@ impl<'a> World<'a> {
                 out.fail(self.s.strings.too_many);
                 return;
             }
-            if (self.s.town_count)() == 0 {
+            if ((*self.s.founding).town_count)() == 0 {
                 out.fail(self.s.strings.no_town);
                 return;
             }
@@ -678,7 +748,7 @@ impl<'a> World<'a> {
                 }
             }
             if kind == OWNED {
-                (self.commands.landscape_clear)(tmp.0, tile, flags);
+                (self.commands().landscape_clear)(tmp.0, tile, flags);
                 out.add(tmp);
             } else {
                 let water = shape.flags & (BUILT_ON_WATER | NOT_ON_LAND) != 0;
@@ -690,7 +760,7 @@ impl<'a> World<'a> {
                             return;
                         }
                         if !(self.shared.is_water_tile)(t) {
-                            (self.commands.landscape_clear)(
+                            (self.commands().landscape_clear)(
                                 tmp.0,
                                 t,
                                 flags & !(NO_WATER | EXECUTE),
@@ -699,7 +769,7 @@ impl<'a> World<'a> {
                         } else {
                             let owner = self.owner(t);
                             if owner != NONE && owner != WATER {
-                                (self.commands.ownership_at)(tmp.0, owner, t);
+                                (self.commands().ownership_at)(tmp.0, owner, t);
                                 out.add(tmp);
                             }
                             if !(self.s.freeform)()
@@ -711,7 +781,7 @@ impl<'a> World<'a> {
                                 out.fail(self.s.strings.edge);
                                 return;
                             }
-                            (self.commands.no_vehicle)(tmp.0, t);
+                            (self.commands().no_vehicle)(tmp.0, t);
                             out.add(tmp);
                         }
                     } else {
@@ -724,7 +794,7 @@ impl<'a> World<'a> {
                             && self.owner(t) == self.current()
                             && self.is_type(t, HQ))
                         {
-                            (self.commands.landscape_clear)(tmp.0, t, flags & !EXECUTE);
+                            (self.commands().landscape_clear)(tmp.0, t, flags & !EXECUTE);
                             out.add(tmp);
                         }
                     }
@@ -744,6 +814,7 @@ impl<'a> World<'a> {
                         result = (self.s.slope_callback)(
                             spec,
                             t,
+                            crate::services::Slope((self.shared.tile_slope)(t)),
                             self.map.tile_y(diff) << 4 | self.map.tile_x(diff),
                             view,
                         );
@@ -767,10 +838,10 @@ impl<'a> World<'a> {
                     for t in self.tiles(area) {
                         if (self.shared.has_water_ground)(t) {
                             if !(self.shared.is_water_tile)(t) {
-                                (self.commands.landscape_clear)(tmp.0, t, flags & !NO_WATER);
+                                (self.commands().landscape_clear)(tmp.0, t, flags & !NO_WATER);
                             }
                         } else {
-                            (self.commands.landscape_clear)(tmp.0, t, flags);
+                            (self.commands().landscape_clear)(tmp.0, t, flags);
                         }
                     }
                 }
@@ -808,21 +879,21 @@ impl<'a> World<'a> {
                 }
                 HQ => {
                     let company = self.current();
-                    let old = (self.s.hq_location)(company);
+                    let old = (self.company().hq_location)(company);
                     if old != INVALID_TILE {
                         if old == tile {
                             out.fail(self.s.strings.built);
                             return;
                         }
-                        (self.s.set_company)(WATER);
+                        (self.company().finance.set_current_company)(WATER);
                         self.clear(tmp, aux, old, flags);
-                        (self.s.set_company)(company);
+                        (self.company().finance.set_current_company)(company);
                         out.add(tmp);
                         crate::witness::hit(crate::witness::OBJECT_HQ_RELOCATE);
                     }
                     if flags & EXECUTE != 0 {
                         score = crate::company::openttd_rust_company_update_rating(
-                            self.company,
+                            self.company(),
                             self.finance(company),
                             company,
                             false,
@@ -863,7 +934,11 @@ impl<'a> World<'a> {
                     (*finance).object = (*finance).object.wrapping_sub(size << 16);
                 }
             }
-            out.amount((self.s.build_cost)(spec).saturating_mul(i64::from(size)));
+            out.amount(
+                (self.s.build_price)(spec)
+                    .money(50)
+                    .saturating_mul(i64::from(size)),
+            );
         }
         crate::witness::hit(crate::witness::OBJECT_BUILD_COMMAND);
     }
@@ -892,21 +967,21 @@ impl World<'_> {
             return;
         }
         unsafe {
-            let protocol = &*self.s.protocol;
+            let protocol = self.commands();
             let top = (protocol.enter)();
             if top || flags & EXECUTE == 0 {
-                (protocol.before)(top, true);
+                crate::command::before(protocol, top, true);
                 self.build_command(test, tmp, aux, flags & !EXECUTE, tile, kind, view);
-                (protocol.after)(test.0, flags, top, true);
+                crate::command::after(protocol, &*self.s.cost, test.0, flags, top, true);
                 if !test.ok() || flags & EXECUTE == 0 {
                     out.take(test);
                     (protocol.leave)();
                     return;
                 }
             }
-            (protocol.before)(top, false);
+            crate::command::before(protocol, top, false);
             self.build_command(out, tmp, aux, flags, tile, kind, view);
-            (protocol.after)(out.0, flags, top, false);
+            crate::command::after(protocol, &*self.s.cost, out.0, flags, top, false);
             (protocol.leave)();
         }
     }
@@ -932,11 +1007,12 @@ impl World<'_> {
                 return;
             }
             let spec = (self.s.spec)(kind);
-            if view >= (self.s.admission)(spec).views || (self.s.footprint)(spec).size != 0x11 {
+            let shape = (self.s.area_shape)(spec);
+            if view >= shape.views || shape.size != 0x11 {
                 out.error();
                 return;
             }
-            let mut money = (self.s.available_money)();
+            let mut money = crate::command::available_money(self.commands());
             out.set(0);
             last.error();
             let mut success = false;
@@ -978,9 +1054,9 @@ impl World<'_> {
     }
     fn terraform(&self, out: Cost<'_>, tile: u32, flags: u16, z: i32, slope: u8) {
         unsafe {
-            let object = (self.s.identity)(tile);
+            let object = (self.s.reference)(tile);
             if object.kind == OWNED {
-                (self.commands.tile_ownership)(out.0, tile);
+                (self.commands().tile_ownership)(out.0, tile);
                 if out.ok() {
                     out.zero();
                     return;
@@ -1002,8 +1078,8 @@ impl World<'_> {
                     && (self.shared.tile_max_z)(tile) == z + new_max
                 {
                     let spec = (self.s.spec)(object.kind);
-                    let shape = (self.s.policy)(spec);
-                    if if shape.callbacks & 32 != 0 {
+                    let callbacks = (self.s.callbacks)(spec);
+                    if if callbacks & 32 != 0 {
                         {
                             let result = (self.s.autoslope_callback)(spec, object.object, tile);
                             result == FAILED || !(self.s.boolean_callback)(spec, 0x15D, result)
@@ -1017,10 +1093,11 @@ impl World<'_> {
                     }
                 }
             }
-            (self.commands.landscape_clear)(out.0, tile, flags);
+            (self.commands().landscape_clear)(out.0, tile, flags);
         }
     }
     fn build_above(&self, out: Cost<'_>, tile: u32, flags: u16, height: i32) {
+        crate::witness::hit(crate::witness::OBJECT_BUILD_ABOVE);
         unsafe {
             let spec = (self.s.spec)((self.s.object_type)(tile));
             let clearance = (self.s.clearance)(spec);
@@ -1030,7 +1107,7 @@ impl World<'_> {
                 out.zero();
                 return;
             }
-            (self.commands.landscape_clear)(out.0, tile, flags);
+            (self.commands().landscape_clear)(out.0, tile, flags);
         }
     }
     fn change_owner(&self, tile: u32, old: u8, new: u8) {
@@ -1043,8 +1120,8 @@ impl World<'_> {
             if (object.kind == OWNED || object.kind >= 5) && new != INVALID_OWNER {
                 (self.s.set_owner)(tile, new);
                 if (self.s.water_class)(tile).0 == 1 {
-                    (self.s.infrastructure)(old, u32::MAX);
-                    (self.s.infrastructure)(new, 1);
+                    ((*self.s.restoration).infrastructure)(old, u32::MAX);
+                    ((*self.s.restoration).infrastructure)(new, 1);
                 }
             } else if object.kind == STATUE {
                 let town = (self.s.statue_town)(object.object);
@@ -1056,13 +1133,13 @@ impl World<'_> {
                 } else {
                     clear = true;
                 }
-                (self.s.statue_dirty)(u32::from(town.id.0));
+                ((*self.s.town).dirty_authority)(u32::from(town.id.0));
             } else {
                 clear = true;
             }
             if clear {
                 self.really_clear(object);
-                (self.s.change_owner)(tile, old, new);
+                (self.company().change_tile_owner)(tile, old, new);
             }
         }
         crate::witness::hit(crate::witness::OBJECT_OWNER);
@@ -1079,8 +1156,7 @@ impl World<'_> {
                 if self.owner(object.tile) != company {
                     continue;
                 }
-                let spec = (self.s.spec)((self.s.object_type)(object.tile));
-                let shape = (self.s.policy)(spec);
+                let shape = (self.s.colour_policy)(object.object);
                 if shape.callbacks & 8 != 0 {
                     continue;
                 }
@@ -1100,7 +1176,7 @@ impl World<'_> {
             let level = if accepted.is_null() {
                 1
             } else {
-                u32::from((self.s.animation)(tile)) + 1
+                u32::from(((*self.s.industry_tiles).frame)(tile)) + 1
             };
             let pass = (self.s.passengers)();
             if pass < 64 {
@@ -1127,42 +1203,46 @@ impl World<'_> {
     }
     fn tile_loop(&self, tile: u32, frame: *mut LoopFrame, call: *mut crate::ground::Call) {
         unsafe {
-            let spec = (self.s.spec)((self.s.object_type)(tile));
-            if (self.s.flags)(spec) & ANIMATION != 0 {
-                let object = (self.s.identity)(tile);
-                (self.s.trigger_tile)(object.object, tile, spec);
-                if object.area.tile == tile {
-                    (self.s.trigger)(object.object, 2, spec);
+            let policy = (self.s.loop_policy)(tile);
+            if policy.flags & ANIMATION != 0 {
+                (self.s.trigger_tile)(policy.object, tile, policy.spec);
+                if policy.north == tile {
+                    (self.s.trigger)(policy.object, 2, policy.spec);
                 }
             }
-            if (self.s.on_water)(tile) {
+            let water = ((*self.s.industry_tiles).on_water)(tile);
+            if water {
                 self.water_loop(tile, call);
             }
-            // The water loop can change the tile: query the current object type again.
-            if (self.s.object_type)(tile) != HQ {
+            // Only animation/water services can mutate the type before this check.
+            let kind = if water || policy.flags & ANIMATION != 0 {
+                (self.s.object_type)(tile)
+            } else {
+                policy.kind
+            };
+            if kind != HQ {
                 return;
             }
-            let level = u32::from((self.s.animation)(tile)) + 1;
-            assert!(level < 6);
-            (self.s.hq_begin)(frame, tile);
+            let level = u32::from(((*self.s.industry_tiles).frame)(tile)) + 1;
+            (self.s.hq_begin)(frame, tile, level);
             let random = self.shared.random();
             let pass = (self.s.passengers)();
-            if pass < 64 && random & 255 < 256 / 4 / (6 - level) {
+            if pass < 64 && random & 255 < 256 / 4 / (6_u32.wrapping_sub(level)) {
                 let mut amount = (random & 255) / 8 / 4 + 1;
                 if crate::company::in_recession() {
                     amount = (amount + 1) >> 1;
                 }
-                amount = (self.s.scale_cargo)(amount, true);
+                amount = (self.s.scale_cargo)(amount);
                 (self.s.hq_deliver)(frame, pass, amount, self.owner(tile));
                 crate::witness::hit(crate::witness::OBJECT_HQ_PASS);
             }
             let mail = (self.s.mail)();
-            if mail < 64 && (random >> 8) & 255 < 196 / 4 / (6 - level) {
+            if mail < 64 && (random >> 8) & 255 < 196 / 4 / (6_u32.wrapping_sub(level)) {
                 let mut amount = ((random >> 8) & 255) / 8 / 4 + 1;
                 if crate::company::in_recession() {
                     amount = (amount + 1) >> 1;
                 }
-                amount = (self.s.scale_cargo)(amount, true);
+                amount = (self.s.scale_cargo)(amount);
                 (self.s.hq_deliver)(frame, mail, amount, self.owner(tile));
                 crate::witness::hit(crate::witness::OBJECT_HQ_MAIL);
             }
@@ -1290,9 +1370,9 @@ impl World<'_> {
                 } else if generation.flags & SCALE_WATER != 0 {
                     (self.s.scale_size_1d)(u32::from(generation.amount))
                 } else {
-                    (self.s.scale_size)(u32::from(generation.amount))
+                    ((*self.s.founding).scale_size)(u32::from(generation.amount))
                 } as u16;
-                let mut retry = (self.s.scale_size)(1000);
+                let mut retry = ((*self.s.founding).scale_size)(1000);
                 while retry != 0 && amount != 0 && (self.s.can_allocate)() {
                     let success = match kind as u16 {
                         TRANSMITTER => self.transmitter(),
@@ -1451,7 +1531,7 @@ pub unsafe extern "C" fn openttd_rust_object_build(
     view: u8,
 ) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new(&*s) };
+    let w = unsafe { World::new::<true>(&*s) };
     w.build(kind, tile, owner, town, view);
 }
 
@@ -1468,7 +1548,7 @@ pub unsafe extern "C" fn openttd_rust_object_update_hq(
     score: u32,
 ) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new(&*s) };
+    let w = unsafe { World::new::<true>(&*s) };
     w.update_hq(tile, score);
 }
 
@@ -1481,7 +1561,7 @@ pub unsafe extern "C" fn openttd_rust_object_update_hq(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_colours(s: *const ObjectServices, company: u8) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new(&*s) };
+    let w = unsafe { World::new::<false>(&*s) };
     w.colours(company);
 }
 
@@ -1503,7 +1583,7 @@ pub unsafe extern "C" fn openttd_rust_object_build_command(
     view: u8,
 ) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new(&*s) };
+    let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
     let tmp = Cost(tmp, costs);
@@ -1534,7 +1614,7 @@ pub unsafe extern "C" fn openttd_rust_object_build_area(
     diagonal: bool,
 ) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new(&*s) };
+    let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
     let ret = Cost(ret, costs);
@@ -1562,7 +1642,7 @@ pub unsafe extern "C" fn openttd_rust_object_clear(
     flags: u16,
 ) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new(&*s) };
+    let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
     let tmp = Cost(tmp, costs);
@@ -1583,7 +1663,7 @@ pub unsafe extern "C" fn openttd_rust_object_cargo(
     accepted: *mut u64,
 ) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new(&*s) };
+    let w = unsafe { World::new::<false>(&*s) };
     w.cargo(tile, cargo, accepted);
 }
 
@@ -1601,7 +1681,7 @@ pub unsafe extern "C" fn openttd_rust_object_tile_loop(
     tile: u32,
 ) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new(&*s) };
+    let w = unsafe { World::new::<false>(&*s) };
     w.tile_loop(tile, frame, call);
 }
 
@@ -1620,7 +1700,7 @@ pub unsafe extern "C" fn openttd_rust_object_generate(
     frame: *mut GenerationFrame,
 ) -> bool {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new(&*s) };
+    let w = unsafe { World::new::<true>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
     let tmp = Cost(tmp, costs);
@@ -1642,7 +1722,7 @@ pub unsafe extern "C" fn openttd_rust_object_change_owner(
     new_owner: u8,
 ) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new(&*s) };
+    let w = unsafe { World::new::<true>(&*s) };
     w.change_owner(tile, old, new_owner);
 }
 
@@ -1662,7 +1742,7 @@ pub unsafe extern "C" fn openttd_rust_object_terraform(
     slope: u8,
 ) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new(&*s) };
+    let w = unsafe { World::new::<false>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
     w.terraform(out, tile, flags, z, slope);
@@ -1683,7 +1763,7 @@ pub unsafe extern "C" fn openttd_rust_object_build_above(
     height: i32,
 ) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new(&*s) };
+    let w = unsafe { World::new::<false>(&*s) };
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
     w.build_above(out, tile, flags, height);
@@ -1709,7 +1789,7 @@ mod tests {
         .unwrap();
         assert_eq!(openttd_rust_object_count(3), 2);
 
-        openttd_rust_object_areas_clear();
+        clear_areas();
         let entry = ClearArea {
             first_tile: 10,
             tile: 10,
@@ -1731,7 +1811,7 @@ mod tests {
         assert_eq!(openttd_rust_object_areas_get(index).first_tile, 10);
         assert_eq!(openttd_rust_object_areas_find(75, 6), index);
         assert_eq!(openttd_rust_object_areas_find(76, 6), usize::MAX);
-        openttd_rust_object_areas_clear();
+        clear_areas();
         openttd_rust_object_counts_reset();
     }
 }

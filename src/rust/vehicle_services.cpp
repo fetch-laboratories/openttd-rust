@@ -10,6 +10,7 @@
 #include "vehicle_ffi.h"
 #ifdef WITH_RUST
 #include "vehicle_services.h"
+#include "services_newgrf.h"
 #include "../vehicle_func.h"
 #include "../order_func.h"
 #include "../newgrf_engine.h"
@@ -118,7 +119,7 @@ static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcLengthCallback(OpenTTDVehicle *v)
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcUnknownLengthResult(const OpenTTDEngine *e, uint16_t result) noexcept
 {
-	ErrorUnknownCallbackResult(EngineOf(e)->GetGRFID(), CBID_VEHICLE_LENGTH, result);
+	RustUnknownCallbackResult(EngineOf(e)->GetGRFID(), CBID_VEHICLE_LENGTH, result);
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcLengthChanged(OpenTTDVehicle *v) noexcept { VehicleLengthChanged(VehicleOf(v)); }
 static bool OPENTTD_VEHICLE_CALL VehicleSvcPlayStartSound(OpenTTDVehicle *v) noexcept { return PlayVehicleSound(VehicleOf(v), VSE_START); }
@@ -395,7 +396,7 @@ static void OPENTTD_VEHICLE_CALL VehicleSchedulerRandomiseCallback(OpenTTDVehicl
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerFirstDirty(OpenTTDVehicle *shell) noexcept { RustVehicleFirst(VehicleOf(shell))->MarkDirty(); }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerUnknownDayCallback(OpenTTDVehicle *shell, uint16_t result) noexcept
 {
-	ErrorUnknownCallbackResult(VehicleOf(shell)->GetGRFID(), CBID_VEHICLE_32DAY_CALLBACK, result);
+	RustUnknownCallbackResult(VehicleOf(shell)->GetGRFID(), CBID_VEHICLE_32DAY_CALLBACK, result);
 }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerRunningSound(OpenTTDVehicle *shell) noexcept { PlayVehicleSound(VehicleOf(shell), VSE_RUNNING); }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerPeriodicSound(OpenTTDVehicle *shell, bool running) noexcept { PlayVehicleSound(VehicleOf(shell), running ? VSE_RUNNING_16 : VSE_STOPPED_16); }

@@ -9,6 +9,7 @@
 #ifndef RUST_GROUND_FFI_H
 #define RUST_GROUND_FFI_H
 #include "services_ffi.h"
+#include "water_regions_ffi.h"
 /* Actual fixed-underlying native enums, not byte aliases. Rust transparent
  * carriers preserve every stored bit pattern without enum-discriminant guards. */
 enum ClearGround : uint8_t;
@@ -129,7 +130,7 @@ struct OpenTTDWaterGroundServices {
 	bool (*canal_or_river)(uint32_t) noexcept;
 	bool (*possible_docking)(uint32_t) noexcept;
 	void (*check_docking)(uint32_t) noexcept;
-	void (*invalidate_region)(uint32_t) noexcept;
+	OpenTTDWaterRegionContext (*region_context)() noexcept;
 	void (*remove_rail)(OpenTTDCommandCost *, uint32_t, Track) noexcept;
 	OpenTTDFoundationSlope (*apply_foundation)(Foundation, Slope) noexcept;
 	void (*iterator_begin)(OpenTTDTileVehicleCursor *, uint32_t) noexcept;
@@ -149,8 +150,18 @@ struct OpenTTDWaterGroundServices {
 	void (*news)(OpenTTDVehicle *, uint32_t) noexcept;
 	int32_t (*bridge_height)(uint32_t) noexcept;
 };
+struct OpenTTDWaterRestorationServices {
+	OpenTTDFoundationSlope (*slope_z)(uint32_t) noexcept;
+	void (*infrastructure)(uint8_t, uint32_t) noexcept;
+	void (*infrastructure_dirty)(uint8_t) noexcept;
+	void (*make_canal)(uint32_t, uint8_t, uint8_t) noexcept;
+	void (*make_river)(uint32_t, uint8_t) noexcept;
+};
+const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept;
 const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept;
 extern "C" {
+void openttd_rust_clear_square(uint32_t, const OpenTTDSharedServices *);
+void openttd_rust_water_restore(uint32_t, uint8_t, const OpenTTDSharedServices *, const OpenTTDWaterGroundServices *, const OpenTTDWaterRestorationServices *);
 void openttd_rust_water_tile_loop(uint32_t, uint32_t, uint32_t, bool, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 bool openttd_rust_flood_halftile(uint32_t, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 FloodingBehaviour openttd_rust_flooding_behaviour(uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);

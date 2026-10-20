@@ -20,6 +20,9 @@
 #include "town.h"
 #include "timer/timer_game_economy.h"
 #include "company_func.h"
+#ifdef WITH_RUST
+#include "rust/command_services.h"
+#endif
 #include "company_base.h"
 #include "signal_func.h"
 #include "core/backup_type.hpp"
@@ -172,8 +175,12 @@ bool IsCommandAllowedWhilePaused(Commands cmd)
  */
 void CommandHelperBase::InternalDoBefore(bool top_level, bool test)
 {
+#ifdef WITH_RUST
+	openttd_rust_command_before(&GetRustCommandServices(), top_level, test);
+#else
 	if (top_level) ClearObjectAreas();
 	if (test) SetTownRatingTestMode(true);
+#endif
 }
 
 /**
@@ -185,6 +192,9 @@ void CommandHelperBase::InternalDoBefore(bool top_level, bool test)
  */
 void CommandHelperBase::InternalDoAfter(CommandCost &res, DoCommandFlags flags, bool top_level, bool test)
 {
+#ifdef WITH_RUST
+	openttd_rust_command_after(&GetRustCommandServices(), &GetRustCommandCostServices(), reinterpret_cast<OpenTTDCommandCost *>(&res), flags.base(), top_level, test);
+#else
 	if (test) {
 		SetTownRatingTestMode(false);
 
@@ -197,6 +207,7 @@ void CommandHelperBase::InternalDoAfter(CommandCost &res, DoCommandFlags flags, 
 			SubtractMoneyFromCompany(res);
 		}
 	}
+#endif
 }
 
 /**
@@ -288,8 +299,7 @@ bool CommandHelperBase::InternalExecutePrepTest(CommandFlags cmd_flags, TileInde
 	if (exec_as_spectator) cur_company.Change(COMPANY_SPECTATOR);
 
 	/* Enter test mode. */
-	ClearObjectAreas();
-	SetTownRatingTestMode(true);
+	InternalDoBefore(true, true);
 	BasePersistentStorageArray::SwitchMode(PSM_ENTER_TESTMODE);
 	return true;
 }
@@ -325,7 +335,7 @@ std::tuple<bool, bool, bool> CommandHelperBase::InternalExecuteValidateTestAndPr
 
 	if (!send_net) {
 		/* Prepare for command execution. */
-		ClearObjectAreas();
+		InternalDoBefore(true, false);
 		BasePersistentStorageArray::SwitchMode(PSM_ENTER_COMMAND);
 	}
 
@@ -426,24 +436,3 @@ CommandCost CommandCostWithParam(StringID str, uint64_t value)
 	}
 	return error;
 }
-
-#ifdef WITH_RUST
-/** Typed access to the existing command protocol, without a second counter. */
-struct RustCommandProtocol : CommandHelperBase {
-	static void Before(bool top, bool test) noexcept { InternalDoBefore(top, test); }
-	static void After(OpenTTDCommandCost *out, uint16_t flags, bool top, bool test) noexcept
-	{
-		InternalDoAfter(*reinterpret_cast<CommandCost *>(out), DoCommandFlags{flags}, top, test);
-	}
-};
-const OpenTTDCommandProtocolServices &GetRustCommandProtocolServices() noexcept
-{
-	static const OpenTTDCommandProtocolServices services{
-		.enter = RecursiveCommandCounter::Enter,
-		.leave = RecursiveCommandCounter::Leave,
-		.before = RustCommandProtocol::Before,
-		.after = RustCommandProtocol::After,
-	};
-	return services;
-}
-#endif
