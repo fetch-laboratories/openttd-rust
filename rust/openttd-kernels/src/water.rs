@@ -69,7 +69,7 @@ pub struct WaterServices {
     pub make_sea: extern "C" fn(u32),
     pub buoy_or_dock: extern "C" fn(u32) -> bool,
     pub canal_or_river: extern "C" fn(u32) -> bool,
-    pub invalidate_region: extern "C" fn(u32),
+    pub region_context: extern "C" fn() -> crate::water_regions::Context,
     pub remove_rail: unsafe extern "C" fn(*mut services::CommandCost, u32, Track),
     pub apply_foundation: extern "C" fn(Foundation, Slope) -> FoundationSlope,
     // Caller supplies aligned native-iterator storage and follows its construction/lifetime.
@@ -89,6 +89,90 @@ pub struct WaterServices {
     pub game_event: extern "C" fn(VehicleRef, u32),
     pub news: extern "C" fn(VehicleRef, u32),
     pub bridge_height: extern "C" fn(u32) -> i32,
+}
+impl WaterServices {
+    /// # Safety
+    /// The context resolves the current live map-lifetime region owner and leaves.
+    pub(crate) unsafe fn invalidate_region(&self, tile: u32, s: &Services) {
+        if !(s.tile_valid)(tile) {
+            return;
+        }
+        let context = (self.region_context)();
+        unsafe {
+            crate::water_regions::openttd_rust_water_invalidate(
+                context.owner,
+                context.leaves,
+                tile,
+            );
+        }
+    }
+}
+/// Native packed-map/storage leaves for water class restoration.
+#[repr(C)]
+pub struct RestorationServices {
+    pub slope_z: extern "C" fn(u32) -> FoundationSlope,
+    pub infrastructure: extern "C" fn(u8, u32),
+    pub infrastructure_dirty: extern "C" fn(u8),
+    pub make_canal: extern "C" fn(u32, u8, u8),
+    pub make_river: extern "C" fn(u32, u8),
+}
+/// # Safety
+/// All tables refer to the current live serialized map; callbacks retain no owner borrow.
+pub(crate) unsafe fn restore(
+    tile: u32,
+    owner: u8,
+    s: &Services,
+    water: &WaterServices,
+    r: &RestorationServices,
+) {
+    let mut class = unsafe { (&*water.clear).water_class }(tile).0;
+    let slope_z = (r.slope_z)(tile);
+    if slope_z.slope.0 != 0 {
+        if class == 1 {
+            if (s.company_valid)(owner) {
+                (r.infrastructure)(owner, u32::MAX);
+                (r.infrastructure_dirty)(owner);
+            }
+            class = 3;
+        }
+        if class != 2 || !matches!(slope_z.slope.0, 3 | 6 | 9 | 12) {
+            class = 3;
+        }
+    }
+    if class == 0 && slope_z.z > 0 {
+        if (s.company_valid)(owner) {
+            (r.infrastructure)(owner, 1);
+            (r.infrastructure_dirty)(owner);
+        }
+        class = 1;
+    }
+    crate::ground::clear_square(tile, s);
+    match class {
+        0 => (water.make_sea)(tile),
+        1 => (r.make_canal)(tile, owner, s.random() as u8),
+        2 => (r.make_river)(tile, s.random() as u8),
+        _ => (),
+    }
+    if class != 3 {
+        unsafe {
+            crate::station_cmd::openttd_rust_station_check_docking((s.station_commands)(), tile);
+        }
+    }
+    (s.mark_dirty)(tile);
+}
+/// # Safety
+/// Tables and map are live throughout this serialized native call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_water_restore(
+    tile: u32,
+    owner: u8,
+    s: *const Services,
+    water: *const WaterServices,
+    r: *const RestorationServices,
+) {
+    unsafe {
+        restore(tile, owner, &*s, &*water, &*r);
+    }
 }
 const OFFSETS: [(i32, i32); 8] = [
     (-1, -1),
@@ -444,7 +528,9 @@ impl<'a> World<'a> {
             // SAFETY: the getter supplies the borrowed process-lifetime table;
             // docking runs synchronously without a live owner borrow.
             unsafe { crate::station_cmd::check_possible_docking(stations, tile) };
-            (self.w.invalidate_region)(tile);
+            unsafe {
+                self.w.invalidate_region(tile, self.s);
+            }
             crate::ground::hit(crate::ground::Witness::FloodSuccess);
         } else {
             crate::ground::hit(crate::ground::Witness::FloodFail);
@@ -696,7 +782,7 @@ pub(crate) fn fixture() -> WaterServices {
         make_sea: unused1,
         buoy_or_dock: unused1,
         canal_or_river: unused1,
-        invalidate_region: unused1,
+        region_context: unused_region_context,
         remove_rail: unused3,
         apply_foundation: unused2,
         iterator_begin: unused2,
@@ -716,4 +802,9 @@ pub(crate) fn fixture() -> WaterServices {
         news: unused2,
         bridge_height: unused1,
     }
+}
+
+#[cfg(test)]
+extern "C" fn unused_region_context() -> crate::water_regions::Context {
+    panic!("unused water region context")
 }

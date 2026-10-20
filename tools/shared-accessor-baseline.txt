@@ -86,7 +86,6 @@ src/rust/aircraft_adapter.hpp | Aircraft_engine_sound(OpenTTDAircraftVehicle veh
 src/rust/aircraft_adapter.hpp | Aircraft_engine_speed(OpenTTDAircraftVehicle vehicle) noexcept | a6cd81a57940c095 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_engine_subtype(OpenTTDAircraftVehicle vehicle) noexcept | d686df951ef1732d | 1
 src/rust/aircraft_adapter.hpp | Aircraft_had_vehicle(const OpenTTDStation *s) noexcept | 20ea2629b76c3ff3 | 1
-src/rust/aircraft_adapter.hpp | Aircraft_hangar_height(uint16_t station) noexcept | 3529f4ff9ef3df01 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_nearest_depot_order(OpenTTDAircraftVehicle vehicle) noexcept | c2837c0411ced584 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_part_of_orders(OpenTTDAircraftVehicle vehicle) noexcept | 42a2fa6130a76f6a | 1
 src/rust/aircraft_adapter.hpp | Aircraft_range_property(OpenTTDAircraftVehicle vehicle) noexcept | 7307bcd5feec8b72 | 1
@@ -177,7 +176,6 @@ src/town_cmd.cpp | RustTown_growth_rate() noexcept | 6c32e2c93ccbb6f1 | 1
 binding | GetRustSignalContext | 2
 binding | IndustryCommandDeity | 2
 binding | OpenTTDEditor | 2
-binding | OpenTTDGeneratingWorld | 2
 binding | OpenTTDHighestSnowLine | 2
 binding | OpenTTDLandscapeValue | 2
 binding | OpenTTDMapLogX | 2

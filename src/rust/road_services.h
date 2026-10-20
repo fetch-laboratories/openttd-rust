@@ -90,8 +90,8 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitClose(OpenTTDVehicle *v, int32_t x,
 		return visit(context, &candidate);
 	};
 	if (wormhole) {
-		for (const Vehicle *u : VehiclesOnTile(front->tile)) if (!offer(u)) return;
-		for (const Vehicle *u : VehiclesOnTile(GetOtherTunnelBridgeEnd(front->tile))) if (!offer(u)) return;
+		for (const Vehicle *u : RustVehiclesOnTile(front->tile)) if (!offer(u)) return;
+		for (const Vehicle *u : RustVehiclesOnTile(GetOtherTunnelBridgeEnd(front->tile))) if (!offer(u)) return;
 	} else {
 		for (const Vehicle *u : VehiclesNearTileXY(x, y, 8)) if (!offer(u)) return;
 	}
@@ -107,7 +107,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitTrains(OpenTTDVehicle *v, OpenTTDRo
 }
 static void OPENTTD_VEHICLE_CALL RoadSvcVisitTile(uint32_t tile, OpenTTDRoadTileVisitor visit, void *context) noexcept
 {
-	for (const Vehicle *u : VehiclesOnTile(TileIndex(tile))) {
+	for (const Vehicle *u : RustVehiclesOnTile(TileIndex(tile))) {
 		if (u->type != VEH_ROAD) continue;
 		OpenTTDRoadTileVehicle item{.vehicle = RustVehicle(u), .first = RustVehicle(RustVehicleFirst(u))};
 		if (!visit(context, &item)) return;
@@ -210,7 +210,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcBeginLoadingAt(OpenTTDVehicle *v, uint16
 	Station *st = Station::Get(StationID(station));
 	u->BeginLoading();
 	TriggerRoadStopRandomisation(st, u->tile, StationRandomTrigger::VehicleArrives);
-	TriggerRoadStopAnimation(st, u->tile, StationAnimationTrigger::VehicleArrives);
+	RustRoadStopAnimation(st, u->tile, StationAnimationTrigger::VehicleArrives);
 }
 static OpenTTDRoadOvertakeRead OPENTTD_VEHICLE_CALL RoadSvcOvertakeRead(OpenTTDVehicle *v) noexcept
 {

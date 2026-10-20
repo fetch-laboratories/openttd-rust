@@ -119,7 +119,7 @@ static void TrainArrivalNews(OpenTTDTrainHandle id, uint16_t a) noexcept
 static void TrainArrivalTriggers(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	Station *st = Station::Get(StationID(a)); TriggerStationRandomisation(st, v->tile, StationRandomTrigger::VehicleArrives); TriggerStationAnimation(st, v->tile, StationAnimationTrigger::VehicleArrives);
+	Station *st = Station::Get(StationID(a)); TriggerStationRandomisation(st, v->tile, StationRandomTrigger::VehicleArrives); RustStationAnimation(st, v->tile, StationAnimationTrigger::VehicleArrives);
 }
 static uint64_t TrainAxisDiag(OpenTTDTrainHandle, uint8_t a) noexcept
 {
@@ -460,7 +460,7 @@ static uint64_t TrainLengthDefault(OpenTTDTrainHandle id) noexcept
 static void TrainLengthError(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	ErrorUnknownCallbackResult(v->GetEngine()->GetGRFID(), CBID_VEHICLE_LENGTH, static_cast<uint16_t>(a));
+	RustUnknownCallbackResult(v->GetEngine()->GetGRFID(), CBID_VEHICLE_LENGTH, static_cast<uint16_t>(a));
 }
 static void TrainLoading(OpenTTDTrainHandle id, uint8_t a) noexcept
 {
@@ -840,7 +840,7 @@ static void TrainWriteVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
 }
 static uint8_t TrainVisitTile(uint32_t tile, void *context, uint8_t (*visit)(void *, OpenTTDTrainHandle)) noexcept
 {
-	for (const Vehicle *v : VehiclesOnTile(TileIndex(tile))) {
+	for (const Vehicle *v : RustVehiclesOnTile(TileIndex(tile))) {
 		if (v->type == VEH_TRAIN && visit(context, TrainHandle(Train::From(v))) != 0) return 1;
 	}
 	return 0;

@@ -12,6 +12,7 @@
 #include "../company_func.h"
 #include "../company_base.h"
 #include "company_ffi.h"
+#include "../company_gui.h"
 
 inline bool OpenTTDCompanyIsValid(uint8_t company) noexcept { return Company::IsValidID(CompanyID(company)); }
 inline CompanyID OpenTTDCurrentCompany() noexcept { return _current_company; }
@@ -20,6 +21,8 @@ inline uint32_t RustCompanyRenewReserve(const Company *company) noexcept { retur
 inline uint16_t RustCompanyAircraftServiceInterval(CompanyID owner) noexcept { return Company::Get(owner)->settings.vehicle.servint_aircraft; }
 inline uint8_t RustCurrentCompanyID() noexcept { return OpenTTDCurrentCompany().base(); }
 inline void RustSetCurrentCompanyID(uint8_t company) noexcept { OpenTTDSetCurrentCompany(CompanyID(company)); }
+inline void RustInfrastructureDirty(uint8_t owner) noexcept { DirtyCompanyInfrastructureWindows(CompanyID(owner)); }
+inline bool RustIsLocalCompany() noexcept { return IsLocalCompany(); }
 inline uint8_t RustLocalCompanyID() noexcept { return _local_company.base(); }
 /** Shared pool traversal preserves the native ascending ID order. */
 inline Company *RustCompanyNext(uint32_t from) noexcept

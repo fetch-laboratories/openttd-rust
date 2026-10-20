@@ -248,6 +248,9 @@ void CheckForDockingTile(TileIndex t)
 
 void MakeWaterKeepingClass(TileIndex tile, Owner o)
 {
+#ifdef WITH_RUST
+	openttd_rust_water_restore(tile.base(), o.base(), &GetRustSharedServices(), &GetRustWaterGroundServices(), &GetRustWaterRestorationServices());
+#else
 	WaterClass wc = GetWaterClass(tile);
 
 	/* Autoslope might turn an originally canal or river tile into land */
@@ -295,6 +298,7 @@ void MakeWaterKeepingClass(TileIndex tile, Owner o)
 
 	if (wc != WaterClass::Invalid) CheckForDockingTile(tile);
 	MarkTileDirtyByTile(tile);
+#endif /* WITH_RUST */
 }
 
 static CommandCost RemoveShipDepot(TileIndex tile, DoCommandFlags flags)
@@ -1078,7 +1082,7 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.make_sea = [](uint32_t t) noexcept { MakeSea(TileIndex{t}); },
 		.buoy_or_dock = [](uint32_t t) noexcept { return IsBuoy(TileIndex{t}) || IsDock(TileIndex{t}); },
 		.canal_or_river = [](uint32_t t) noexcept { return IsCanal(TileIndex{t}) || IsRiver(TileIndex{t}); },
-		.invalidate_region = [](uint32_t t) noexcept { InvalidateWaterRegion(TileIndex{t}); },
+		.region_context = GetRustWaterRegionContext,
 		.remove_rail = [](OpenTTDCommandCost *out, uint32_t t, Track track) noexcept { *NativeGroundCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlag::Execute, TileIndex{t}, track); },
 		.apply_foundation = RustApplyFoundation,
 		.iterator_begin = [](OpenTTDTileVehicleCursor *c, uint32_t t) noexcept { new (c) VehiclesOnTile::Iterator(TileIndex{t}); },

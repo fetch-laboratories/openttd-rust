@@ -716,8 +716,8 @@ static const OpenTTDStationServices _rust_station_services = {
 	},
 	.acceptance_animation = [](OpenTTDBaseStation *handle) noexcept -> void {
 		BaseStation *bst = static_cast<BaseStation *>(handle);
-		TriggerStationAnimation(bst, bst->xy, StationAnimationTrigger::AcceptanceTick);
-		TriggerRoadStopAnimation(bst, bst->xy, StationAnimationTrigger::AcceptanceTick);
+		RustStationAnimation(bst, bst->xy, StationAnimationTrigger::AcceptanceTick);
+		RustRoadStopAnimation(bst, bst->xy, StationAnimationTrigger::AcceptanceTick);
 		if (Station::IsExpected(bst)) TriggerAirportAnimation(Station::From(bst), AirportAnimationTrigger::AcceptanceTick);
 	},
 	.watched_animation = [](uint32_t tile, uint64_t cargoes) noexcept -> void {
@@ -750,14 +750,14 @@ static const OpenTTDStationServices _rust_station_services = {
 	.new_cargo_animation = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> void {
 		Station *st = Station::From(static_cast<BaseStation *>(handle));
 		TriggerStationRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
-		TriggerStationAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
+		RustStationAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
 		TriggerAirportAnimation(st, AirportAnimationTrigger::NewCargo, cargo);
 		TriggerRoadStopRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
-		TriggerRoadStopAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
+		RustRoadStopAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
 	},
 	.waiting_redraw = [](OpenTTDBaseStation *handle) noexcept -> void {
 		SetWindowDirty(WC_STATION_VIEW, static_cast<BaseStation *>(handle)->index);
-		Station::From(static_cast<BaseStation *>(handle))->MarkTilesDirty(true);
+		RustStationMarkTilesDirty(static_cast<BaseStation *>(handle), true);
 	},
 	.rating_callback = [](OpenTTDBaseStation *, uint8_t cargo, uint32_t var10, uint32_t var18) noexcept -> uint16_t {
 		return GetCargoCallback(CBID_CARGO_STATION_RATING_CALC, var10, var18, CargoSpec::Get(cargo));

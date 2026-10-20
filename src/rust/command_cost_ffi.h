@@ -10,6 +10,7 @@
 #define RUST_COMMAND_COST_FFI_H
 #include "service_defaults.hpp"
 #include <cstdint>
+#include "../economy_type.h"
 
 /* Opaque live native CommandCost. Rust cannot construct, inspect or destroy it.
  * Every pointer denotes C++ stack storage that outlives the synchronous call;
@@ -27,6 +28,7 @@ struct OpenTTDCommandCostServices {
 	bool (*success)(const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(success);
 	uint32_t (*error_message)(const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(error_message);
 	int64_t (*money)(const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(money);
+	ExpensesType (*expense)(const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(expense);
 	void (*make_error)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_error);
 };
 const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept;

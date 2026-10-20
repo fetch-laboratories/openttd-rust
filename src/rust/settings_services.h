@@ -8,6 +8,7 @@
 /** @file settings_services.h Shared native setting definitions consumed by game ports. */
 #ifndef RUST_SETTINGS_SERVICES_H
 #define RUST_SETTINGS_SERVICES_H
+#include "services_road.h"
 #include "../settings_type.h"
 #include "../road.h"
 #include "../autoslope.h"
@@ -41,7 +42,6 @@ inline bool RustAutoslopeEnabled() noexcept { return AutoslopeEnabled(); }
 inline bool RustCrossingWithCompetitor() noexcept { return _settings_game.construction.crossing_with_competitor; }
 inline bool RustDisableElrails() noexcept { return _settings_game.vehicle.disable_elrails; }
 inline bool RustForbid90Deg() noexcept { return _settings_game.pf.forbid_90_deg; }
-inline bool RustRoadTypeIsRoad(uint8_t rt) noexcept { return RoadTypeIsRoad(static_cast<RoadType>(rt)); }
 inline bool RustServeNeutralIndustries() noexcept { return _settings_game.station.serve_neutral_industries; }
 inline uint8_t RustStationSpread() noexcept { return _settings_game.station.station_spread; }
 inline bool RustStationStopOnTownRoad() noexcept { return _settings_game.construction.road_stop_on_town_road; }

@@ -1323,8 +1323,8 @@ station state remains canonical; there is no second station owner or save layout
 C++ retains shell/spec/road-stop allocation, NewGRF resolvers, spatial indices,
 rendering/description and the hot tile-loop/animation/vehicle-entry/track/slope
 services. Entries use borrowed typed synchronous tables (ABI 1060-1072), shared
-command checks and native result slots. Services are direct `noexcept` calls;
-no ordinary-play script VM or save/load exception crosses this command boundary.
+Rust command pre/post checks, prices, clear-square/water restoration and native
+result slots. No ordinary-play script VM or save/load exception crosses the boundary.
 Rust ends owner access before reentry and calls owned aircraft/station/reservation
 policy directly. Reservation lookahead saves the existing layout-checked order
 value in each Rust stack guard; native pool/container allocation follows the original.

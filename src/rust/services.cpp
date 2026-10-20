@@ -19,10 +19,15 @@
 #include "command_services.h"
 #include "command_cost_native_services.h"
 #include "company_services.h"
+#include "company_adapter.h"
+#include "../object_base.h"
+#include "../strings_func.h"
+#include "../table/strings.h"
 #ifdef WITH_RUST
 #include "../industry_map.h"
 #include "../bridge_map.h"
 #include "services_rail.h"
+#include "services_road.h"
 #include "../road_map.h"
 #include "../station_map.h"
 #include "../tunnelbridge_map.h"
@@ -69,6 +74,7 @@ static void CostAmount(OpenTTDCommandCost *out, int64_t amount) noexcept { Nativ
 static bool CostSuccess(const OpenTTDCommandCost *cost) noexcept { return OpenTTDCommandCostSuccess(NativeCost(cost)); }
 static uint32_t CostErrorMessage(const OpenTTDCommandCost *cost) noexcept { return NativeCost(cost)->GetErrorMessage(); }
 static int64_t CostMoney(const OpenTTDCommandCost *cost) noexcept { return NativeCost(cost)->GetCost(); }
+static ExpensesType CostExpense(const OpenTTDCommandCost *cost) noexcept { const auto expense = NativeCost(cost)->GetExpensesType(); assert(expense != INVALID_EXPENSES); return expense; }
 static void CostMakeError(OpenTTDCommandCost *cost, uint32_t message) noexcept { NativeCost(cost)->MakeError(message); }
 const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 {
@@ -76,7 +82,7 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 		.zero = CostZero, .error = CostError, .expense_money = CostExpenseMoney,
 		.error_param = CostErrorParam, .add = CostAdd, .move = CostMove,
 		.amount = CostAmount, .success = CostSuccess, .error_message = CostErrorMessage, .money = CostMoney,
-		.make_error = CostMakeError,
+		.expense = CostExpense, .make_error = CostMakeError,
 	};
 	return services;
 }
@@ -94,14 +100,21 @@ static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner) noexcept { 
 static void CommandNoVehicle(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = EnsureNoVehicleOnGround(TileIndex{tile}); }
 static void CommandNoTrain(OpenTTDCommandCost *out, uint32_t tile, uint8_t bits) noexcept { *NativeCost(out) = EnsureNoTrainOnTrackBits(TileIndex{tile}, static_cast<TrackBits>(bits)); }
 static void CommandWormholeFree(OpenTTDCommandCost *out, uint32_t tile, uint32_t end, const Train *ignore) noexcept { *NativeCost(out) = TunnelBridgeIsFree(TileIndex{tile}, TileIndex{end}, ignore); }
-static void CommandBefore(bool top_level, bool test) noexcept { CommandHelperBase::InternalDoBefore(top_level, test); }
-static void CommandAfter(OpenTTDCommandCost *out, uint16_t flags, bool top_level, bool test) noexcept { CommandHelperBase::InternalDoAfter(*NativeCost(out), DoCommandFlags{flags}, top_level, test); }
+static void CommandClearObjectAreas() noexcept { _cleared_object_areas.clear(); }
+static bool CommandInfiniteMoney() noexcept { return _settings_game.difficulty.infinite_money; }
+static void CommandMoneyError(OpenTTDCommandCost *cost, int64_t amount) noexcept
+{
+	NativeCost(cost)->MakeError(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY);
+	if (RustIsLocalCompany()) NativeCost(cost)->SetEncodedMessage(GetEncodedString(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, Money(amount)));
+}
 static void CommandAllowRemoveRoad(OpenTTDCommandCost *out, uint32_t tile, uint8_t bits, uint8_t owner, uint8_t rtt, uint16_t flags, bool town_check) noexcept { *NativeCost(out) = CheckAllowRemoveRoad(TileIndex{tile}, static_cast<RoadBits>(bits), Owner(owner), static_cast<RoadTramType>(rtt), DoCommandFlags(flags), town_check); }
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
 	static const OpenTTDCommandServices services{
 		.enter = RecursiveCommandCounter::Enter, .leave = RecursiveCommandCounter::Leave,
-		.before = CommandBefore, .after = CommandAfter,
+		.finance = &GetRustCompanyFinanceServices(),
+		.clear_object_areas = CommandClearObjectAreas, .infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
+		.infrastructure_dirty = RustInfrastructureDirty,
 		.landscape_clear = LandscapeClear,
 		.tile_ownership = CommandTileOwnership, .ownership = CommandOwnership,
 		.no_vehicle = CommandNoVehicle, .no_train = CommandNoTrain, .wormhole_free = CommandWormholeFree,
@@ -109,6 +122,18 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 	};
 	return services;
 }
+
+const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept
+{
+	static const OpenTTDWaterRestorationServices services{
+		.slope_z = RustTileSlopeZ, .infrastructure = RustAddWaterInfrastructure,
+		.infrastructure_dirty = GetRustCommandServices().infrastructure_dirty,
+		.make_canal = RustMakeCanal, .make_river = RustMakeRiver,
+	};
+	return services;
+}
+
+static RoadTramType Shared_road_tram_type(uint8_t type) noexcept { return RustRoadTramType(static_cast<RoadType>(type)); }
 
 static uint8_t SharedSnowLine() noexcept { return GetSnowLine(); }
 static int32_t SharedCalendarYear() noexcept { return TimerGameCalendar::year.base(); }
@@ -231,6 +256,11 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.calendar_date = SharedCalendarDate,
 		.calendar_year = SharedCalendarYear,
 		.clear_square = SharedClearSquare,
+		.clear_square_services = {
+			.may_animate = OpenTTDMayAnimateTile, .delete_animated = OpenTTDDeleteAnimatedTileWithMode,
+			.docking = OpenTTDIsDockingTile,
+			.generating_world = OpenTTDGeneratingWorld,
+		},
 		.calc_closest_town = SharedCalcClosestTown,
 		.closest_town = SharedClosestTown,
 		.company_valid = OpenTTDCompanyIsValid,
@@ -272,6 +302,7 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.plane_speed = SharedPlaneSpeed,
 		.random = SharedRandom,
 		.road_bits = Shared_road_bits,
+		.road_tram_type = Shared_road_tram_type, .road_type_is_road = RustRoadTypeIsRoad, .road_cost_multiplier = RustRoadCostMultiplier,
 		.road_depot_direction = Shared_road_depot_direction,
 		.road_owner = Shared_road_owner,
 		.road_type = Shared_road_type,
@@ -282,7 +313,7 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.snow_line = SharedSnowLine,
 		.station_index = MapSvcStationIndex,
 		.station_commands = []() noexcept { return &GetRustStationCommandServices(); },
-		.docking_tile = OpenTTDIsDockingTile,
+		.docking_tile = services.clear_square_services.docking,
 		.station_gfx = [](uint32_t tile) noexcept { return GetStationGfx(TileIndex{tile}); },
 		.station_serve_neutral = RustServeNeutralIndustries,
 		.station_type = [](uint32_t tile) noexcept { return GetStationType(TileIndex{tile}); },
@@ -466,12 +497,16 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDCommandServices.hpp"
 #include "abi-visit-OpenTTDCommandCostServices.hpp"
 #include "abi-visit-OpenTTDSharedServices.hpp"
+#include "abi-visit-OpenTTDClearSquareServices.hpp"
+#include "abi-visit-OpenTTDWaterRestorationServices.hpp"
 bool CheckAbi_services()
 {
 	return AbiServicesComplete(GetRustRandomServices()) &&
 		AbiServicesComplete(GetRustRailMapServices()) &&
 		AbiServicesComplete(GetRustCommandServices()) &&
 		AbiServicesComplete(GetRustCommandCostServices()) &&
-		AbiServicesComplete(GetRustSharedServices());
+		AbiServicesComplete(GetRustSharedServices()) &&
+		AbiServicesComplete(GetRustSharedServices().clear_square_services) &&
+		AbiServicesComplete(GetRustWaterRestorationServices());
 }
 #endif

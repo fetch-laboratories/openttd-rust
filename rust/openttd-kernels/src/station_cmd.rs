@@ -73,6 +73,12 @@ pub struct RailSpecInfo {
     pub slope_callback: bool,
     pub availability_callback: bool,
 }
+/// Only the spec fields needed by one build/clear price calculation.
+#[repr(C)]
+pub struct RoadSpecCost {
+    pub multiplier: u8,
+    pub shift: i32,
+}
 #[repr(C)]
 pub struct Stop {
     _private: [u8; 0],
@@ -245,7 +251,6 @@ pub struct CommandServicesTable {
     pub orders_dirty: extern "C" fn(),
     pub vehicle: *const crate::vehicle::VehicleServices,
     pub road_type_valid: extern "C" fn(u8) -> bool,
-    pub road_type_is_road: extern "C" fn(u8) -> bool,
     pub powered_road: extern "C" fn(u8, u8) -> bool,
     pub stop_on_town_road: extern "C" fn() -> bool,
     pub stop_on_competitor_road: extern "C" fn() -> bool,
@@ -254,8 +259,8 @@ pub struct CommandServicesTable {
     pub road_spec_count: extern "C" fn(u16) -> u32,
     pub class_road_spec: extern "C" fn(u16, u16) -> *const RoadSpec,
     pub road_spec_info: extern "C" fn(*const RoadSpec) -> RoadSpecInfo,
-    pub road_spec_build_cost: extern "C" fn(*const RoadSpec, u8) -> i64,
-    pub road_spec_clear_cost: extern "C" fn(*const RoadSpec, u8) -> i64,
+    pub road_spec_build_cost: extern "C" fn(*const RoadSpec, u8) -> RoadSpecCost,
+    pub road_spec_clear_cost: extern "C" fn(*const RoadSpec, u8) -> RoadSpecCost,
     pub stops_available: extern "C" fn(usize) -> bool,
     pub allocate_road_spec: extern "C" fn(*const RoadSpec, *mut BaseStation) -> SpecIndex,
     pub assign_road_spec: extern "C" fn(*const RoadSpec, *mut BaseStation, u8),
@@ -330,7 +335,7 @@ pub struct CommandServicesTable {
     pub close_airport_inspect: extern "C" fn(*mut BaseStation),
     pub ship: *const crate::ship_control::Leaves,
     pub clear: *const crate::ground::ClearServices,
-    pub water_restore: extern "C" fn(u32, u8),
+    pub restoration: *const crate::water::RestorationServices,
     pub water_tracks: extern "C" fn(u32, u8) -> crate::services::TrackBits,
     pub set_docking: extern "C" fn(u32, bool),
     pub ship_area: extern "C" fn(*mut BaseStation) -> Area,
@@ -761,8 +766,7 @@ impl Ctx<'_> {
     }
     fn tiles_changed(&self, st: *mut BaseStation, adding: bool, kind: u8) {
         (self.s.virtual_coord)(st);
-        let rail = unsafe { &*self.s.rail };
-        (rail.infrastructure_dirty)((self.world().station_owner)(st));
+        (self.command.infrastructure_dirty)((self.world().station_owner)(st));
         if adding {
             (self.s.catchment)(st, false);
             (self.s.catchment_dirty)();
@@ -1773,19 +1777,19 @@ impl Ctx<'_> {
             services: self.command,
         };
         if top || flags & 1 == 0 {
-            (self.command.before)(top, true);
+            crate::command::before(self.command, top, true);
             body(flags & !1);
             unsafe {
-                (self.command.after)(out.0, flags, top, true);
+                crate::command::after(self.command, self.cost, out.0, flags, top, true);
             }
             if !out.ok() || flags & 1 == 0 {
                 return;
             }
         }
-        (self.command.before)(top, false);
+        crate::command::before(self.command, top, false);
         body(flags);
         unsafe {
-            (self.command.after)(out.0, flags, top, false);
+            crate::command::after(self.command, self.cost, out.0, flags, top, false);
         }
         drop(guard);
     }
@@ -1856,13 +1860,13 @@ impl Ctx<'_> {
             if !build_rail && !(self.rail_map().station_blocked)(tile) {
                 (self.rail().rail_infrastructure)(owner, rt, u32::MAX);
             }
-            (self.shared.clear_square)(tile);
+            crate::ground::clear_square(tile, self.shared);
             (self.s.close_station_inspect)(tile);
             if build_rail {
                 (self.rail_map().make_rail_normal)(tile, owner, 1 << track, rt);
             }
             (self.s.station_infrastructure)(owner, u32::MAX);
-            (self.rail().infrastructure_dirty)(owner);
+            (self.command.infrastructure_dirty)(owner);
             (self.s.after_remove_tile)(st, tile);
             self.signals().add_track(tile, track, owner);
             (self.rail().layout_changed)(tile, track);
@@ -2080,7 +2084,7 @@ impl Ctx<'_> {
             return;
         }
         (self.rail().road_infrastructure)(owner, rt, delta as u32);
-        (self.rail().infrastructure_dirty)(owner);
+        (self.command.infrastructure_dirty)(owner);
     }
     fn road_bridge(&self, out: Cost<'_>, tile: u32, spec: *const RoadSpec, kind: u8, gfx: u8) {
         if !(self.shared.bridge_above)(tile) {
@@ -2191,7 +2195,7 @@ impl Ctx<'_> {
                     }
                     let pieces = (self.shared.normal_road_bits)(tile, 0).0.count_ones();
                     if rt != 63
-                        && (self.s.road_type_is_road)(rt)
+                        && (self.shared.road_type_is_road)(rt)
                         && !(self.s.powered_road)(rt, road)
                     {
                         return cost.error(self.s.strings.unsuitable_road);
@@ -2208,11 +2212,11 @@ impl Ctx<'_> {
                         }
                     }
                     cost.add_money(
-                        (self.rail().road_build_cost)(road)
+                        crate::road_cost::build_cost(self.shared, road)
                             .saturating_mul(i64::from(2_u32.wrapping_sub(pieces))),
                     );
-                } else if rt != 63 && (self.s.road_type_is_road)(rt) {
-                    cost.add_money((self.rail().road_build_cost)(rt).saturating_mul(2));
+                } else if rt != 63 && (self.shared.road_type_is_road)(rt) {
+                    cost.add_money(crate::road_cost::build_cost(self.shared, rt).saturating_mul(2));
                 }
                 let tram = self.road_type(tile, true);
                 if tram != 63 {
@@ -2230,17 +2234,17 @@ impl Ctx<'_> {
                     }
                     let pieces = (self.shared.normal_road_bits)(tile, 1).0.count_ones();
                     if rt != 63
-                        && !(self.s.road_type_is_road)(rt)
+                        && !(self.shared.road_type_is_road)(rt)
                         && !(self.s.powered_road)(rt, tram)
                     {
                         return cost.error(self.s.strings.unsuitable_road);
                     }
                     cost.add_money(
-                        (self.rail().road_build_cost)(tram)
+                        crate::road_cost::build_cost(self.shared, tram)
                             .saturating_mul(i64::from(2_u32.wrapping_sub(pieces))),
                     );
-                } else if rt != 63 && !(self.s.road_type_is_road)(rt) {
-                    cost.add_money((self.rail().road_build_cost)(rt).saturating_mul(2));
+                } else if rt != 63 && !(self.shared.road_type_is_road)(rt) {
+                    cost.add_money(crate::road_cost::build_cost(self.shared, rt).saturating_mul(2));
                 }
             } else if rt == 63 {
                 cost.error(self.s.strings.no_road);
@@ -2250,7 +2254,7 @@ impl Ctx<'_> {
                     return cost.take(ret);
                 }
                 cost.add_money(ret.money());
-                cost.add_money((self.rail().road_build_cost)(rt).saturating_mul(2));
+                cost.add_money(crate::road_cost::build_cost(self.shared, rt).saturating_mul(2));
             }
         }
     }
@@ -2363,7 +2367,7 @@ impl Ctx<'_> {
         if distant && (!(self.s.distant_join)() || self.full_station(target).is_null()) {
             return cost.error(0xffff);
         }
-        if !drive && !(self.s.road_type_is_road)(rt) {
+        if !drive && !(self.shared.road_type_is_road)(rt) {
             return cost.error(0xffff);
         }
         let axis = dir & 1;
@@ -2377,7 +2381,14 @@ impl Ctx<'_> {
         let unit = if spec.is_null() {
             crate::company::price(usize::from(category))
         } else {
-            (self.s.road_spec_build_cost)(spec, category)
+            {
+                let factor = (self.s.road_spec_build_cost)(spec, category);
+                crate::company::openttd_rust_economy_price(
+                    u32::from(category),
+                    u32::from(factor.multiplier),
+                    factor.shift,
+                )
+            }
         };
         let mut est = 0xffff;
         self.road_cost(
@@ -2482,10 +2493,10 @@ impl Ctx<'_> {
                         -((self.shared.normal_road_bits)(tile, 1).0.count_ones() as i32),
                     );
                 }
-                if road == 63 && (self.s.road_type_is_road)(rt) {
+                if road == 63 && (self.shared.road_type_is_road)(rt) {
                     road = rt;
                 }
-                if tram == 63 && !(self.s.road_type_is_road)(rt) {
+                if tram == 63 && !(self.shared.road_type_is_road)(rt) {
                     tram = rt;
                 }
                 (self.s.make_drive_stop)(
@@ -2493,10 +2504,10 @@ impl Ctx<'_> {
                 );
                 (self.s.stop_make_drive)(stop);
             } else {
-                if road == 63 && (self.s.road_type_is_road)(rt) {
+                if road == 63 && (self.shared.road_type_is_road)(rt) {
                     road = rt;
                 }
-                if tram == 63 && !(self.s.road_type_is_road)(rt) {
+                if tram == 63 && !(self.shared.road_type_is_road)(rt) {
                     tram = rt;
                 }
                 (self.s.make_bay_stop)(tile, owner, id, stop_type, road, tram, dir);
@@ -2635,14 +2646,14 @@ impl Ctx<'_> {
             }
             let owner = (self.world().station_owner)(st);
             (self.s.station_infrastructure)(owner, u32::MAX);
-            (self.rail().infrastructure_dirty)(owner);
+            (self.command.infrastructure_dirty)(owner);
             let specindex = (self.s.custom_road_index)(tile);
             (self.s.close_stop_inspect)(tile);
             if !waypoint && (self.shared.is_drive_through_stop)(tile) {
                 (self.s.stop_clear_drive)(stop);
                 (self.shared.tile_animation_delete)(tile);
             } else {
-                (self.shared.clear_square)(tile);
+                crate::ground::clear_square(tile, self.shared);
             }
             if !waypoint {
                 (self.s.delete_stop)(stop);
@@ -2681,7 +2692,14 @@ impl Ctx<'_> {
         cost.set(if spec.is_null() {
             crate::company::price(usize::from(category))
         } else {
-            (self.s.road_spec_clear_cost)(spec, category)
+            {
+                let factor = (self.s.road_spec_clear_cost)(spec, category);
+                crate::company::openttd_rust_economy_price(
+                    u32::from(category),
+                    u32::from(factor.multiplier),
+                    factor.shift,
+                )
+            }
         });
         let _ = ret;
     }
@@ -3243,7 +3261,7 @@ impl Ctx<'_> {
             }
             cost.add_money(crate::company::price(36));
             if flags & 1 != 0 {
-                (self.shared.clear_square)(tile);
+                crate::ground::clear_square(tile, self.shared);
                 (self.s.close_airport_tile_inspect)(tile);
             }
         }
@@ -3608,9 +3626,17 @@ impl Ctx<'_> {
             return;
         }
         if flags & 1 != 0 {
-            (self.shared.clear_square)(land);
+            crate::ground::clear_square(land, self.shared);
             (self.shared.mark_dirty)(land);
-            (self.s.water_restore)(water, owner);
+            unsafe {
+                crate::water::restore(
+                    water,
+                    owner,
+                    self.shared,
+                    &*(self.shared.water_services)(),
+                    &*self.s.restoration,
+                );
+            }
             (self.s.after_remove_tile)(st, land);
             (self.s.after_remove_tile)(st, water);
             let area = self.shrink(st, (self.s.ship_area)(st), 5);
@@ -3721,7 +3747,15 @@ impl Ctx<'_> {
     fn delete_oilrig(&self, tile: u32) {
         crate::witness::hit(crate::witness::STATION_CMD_DELETE_OILRIG);
         let st = self.full_station((self.shared.station_index)(tile));
-        (self.s.water_restore)(tile, 0x10);
+        unsafe {
+            crate::water::restore(
+                tile,
+                0x10,
+                self.shared,
+                &*(self.shared.water_services)(),
+                &*self.s.restoration,
+            );
+        }
         assert!((self.world().facilities)(st) == 24 && (self.s.airport_type)(st) == 9);
         let industry = (self.s.associated_industry)(st);
         if !industry.is_null() && (self.s.industry_neutral)(industry) == st {

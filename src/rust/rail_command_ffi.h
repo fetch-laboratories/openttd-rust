@@ -49,7 +49,6 @@ struct OpenTTDRailCommandServices {
 	int64_t (*rail_build_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_build_cost);
 	int64_t (*rail_clear_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_clear_cost);
 	int64_t (*rail_convert_cost)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_convert_cost);
-	int64_t (*road_build_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_build_cost);
 	bool (*crossing_with_competitor)() noexcept OPENTTD_SERVICE_DEFAULT(crossing_with_competitor);
 	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
 	Foundation (*rail_foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_foundation);
@@ -65,7 +64,6 @@ struct OpenTTDRailCommandServices {
 	void (*rail_infrastructure)(uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_infrastructure);
 	void (*road_infrastructure)(uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_infrastructure);
 	void (*signal_infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_infrastructure);
-	void (*infrastructure_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure_dirty);
 	Train *(*reserving_train)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reserving_train);
 	OpenTTDRailTrainParking (*parking)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(parking);
 	OpenTTDRailTrainPosition (*train_position)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(train_position);

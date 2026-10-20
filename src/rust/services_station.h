@@ -18,12 +18,27 @@
 #include "../newgrf_station.h"
 #include "../newgrf_storage.h"
 #include "../newgrf_roadstop.h"
+#include "../newgrf_airporttiles.h"
 #include "station_activity_ffi.h"
+#include "vehicle_services.h"
 #include "services_ffi.h"
 #include "../base_station_base.h"
 #include "../station_map.h"
 #include "../pbs.h"
 
+inline const AirportFTAClass *RustAirportFTA(uint8_t type) noexcept { return GetAirport(type); }
+inline const void *RustDummyAirportFTA() noexcept { return RustAirportFTA(AT_DUMMY); }
+inline TileIndex RustStationHangarTile(const BaseStation *st, uint32_t index) noexcept { return Station::From(st)->airport.GetHangarTile(index); }
+inline void RustCloseNewGRFInspect(GrfSpecFeature feature, uint32_t index) noexcept { DeleteNewGRFInspectWindow(feature, index); }
+inline void RustStationCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_STATIONS, tile); }
+inline void RustRoadStopCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_ROADSTOPS, tile); }
+inline void RustAirportTileCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_AIRPORTTILES, tile); }
+inline uint32_t RustStationHangarTileValue(BaseStation *st, uint32_t index) noexcept { return RustStationHangarTile(st, index).base(); }
+inline void RustStationRailCallbackError(const StationSpec *spec, uint16_t callback, uint16_t result) noexcept { RustUnknownCallbackResult(spec->grf_prop.grfid, callback, result); }
+inline void RustStationMarkTilesDirty(BaseStation *st, bool cargo) noexcept { Station::From(st)->MarkTilesDirty(cargo); }
+inline void RustStationAnimation(BaseStation *st, TileIndex tile, StationAnimationTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerStationAnimation(st, tile, trigger, cargo); }
+inline void RustRoadStopAnimation(BaseStation *st, TileIndex tile, StationAnimationTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerRoadStopAnimation(st, tile, trigger, cargo); }
+inline bool RustAirportTileAnimation(Station *st, TileIndex tile, AirportAnimationTrigger trigger) noexcept { return TriggerAirportTileAnimation(st, tile, trigger); }
 inline const OpenTTDStation *RustStation(const Station *s) noexcept { return reinterpret_cast<const OpenTTDStation *>(s); }
 inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s); }
 inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return Station::From(s)->airport.tile.base(); }
@@ -99,7 +114,7 @@ inline bool Aircraft_has_hangar(const OpenTTDStation *s) noexcept
 
 inline void RustStationIndexInsert(BaseStation *st) noexcept { _station_kdtree.Insert(st->index); }
 inline void RustStationClosedWidget(BaseStation *st) noexcept { SetWindowWidgetDirty(WC_STATION_VIEW, st->index, WID_SV_CLOSE_AIRPORT); }
-inline void RustStationCloseAirportInspect(BaseStation *st) noexcept { DeleteNewGRFInspectWindow(GSF_AIRPORTS, st->index); }
+inline void RustStationCloseAirportInspect(BaseStation *st) noexcept { RustCloseNewGRFInspect(GSF_AIRPORTS, st->index.base()); }
 
 inline uint16_t RustStationAirportWidth(const Station *station) noexcept { return station->airport.w; }
 inline uint16_t RustStationAirportHeight(const Station *station) noexcept { return station->airport.h; }

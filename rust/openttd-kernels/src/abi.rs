@@ -114,7 +114,6 @@ layouts! {
         orders_dirty,
         vehicle,
         road_type_valid,
-        road_type_is_road,
         powered_road,
         stop_on_town_road,
         stop_on_competitor_road,
@@ -195,7 +194,7 @@ layouts! {
         close_airport_inspect,
         ship,
         clear,
-        water_restore,
+        restoration,
         water_tracks,
         set_docking,
         ship_area,
@@ -295,6 +294,10 @@ layouts! {
         slope_callback,
         availability_callback,
     };
+    "OpenTTDRoadStationSpecCost" ["probe"] => crate::station_cmd::RoadSpecCost {
+        multiplier,
+        shift,
+    };
     "OpenTTDRoadStationSpecInfo" ["probe"] => crate::station_cmd::RoadSpecInfo {
         stop_type,
         drive_only,
@@ -368,7 +371,7 @@ layouts! {
         make_sea,
         buoy_or_dock,
         canal_or_river,
-        invalidate_region,
+        region_context,
         remove_rail,
         apply_foundation,
         iterator_begin,
@@ -765,7 +768,6 @@ layouts! {
         rail_build_cost,
         rail_clear_cost,
         rail_convert_cost,
-        road_build_cost,
         crossing_with_competitor,
         disable_elrails,
         rail_foundation,
@@ -781,7 +783,6 @@ layouts! {
         rail_infrastructure,
         road_infrastructure,
         signal_infrastructure,
-        infrastructure_dirty,
         reserving_train,
         parking,
         train_position,
@@ -908,8 +909,11 @@ layouts! {
     "OpenTTDCommandServices" ["probe"] => crate::services::CommandServices {
         enter,
         leave,
-        before,
-        after,
+        finance,
+        clear_object_areas,
+        infinite_money,
+        money_error,
+        infrastructure_dirty,
         landscape_clear,
         tile_ownership,
         ownership,
@@ -929,6 +933,7 @@ layouts! {
         success,
         error_message,
         money,
+        expense,
         make_error,
     };
     "OpenTTDShipPosition" ["probe"] => crate::ship_control::Position {
@@ -1373,6 +1378,23 @@ layouts! {
         sound,
         animated,
     };
+    "OpenTTDClearSquareServices" ["probe"] => crate::services::ClearSquareServices {
+        may_animate,
+        delete_animated,
+        docking,
+        generating_world,
+    };
+    "OpenTTDWaterRestorationServices" ["common"] => crate::water::RestorationServices {
+        slope_z,
+        infrastructure,
+        infrastructure_dirty,
+        make_canal,
+        make_river,
+    };
+    "OpenTTDWaterRegionContext" ["common"] => crate::water_regions::Context {
+        owner,
+        leaves,
+    };
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
         autoslope,
         bay_stop_direction,
@@ -1383,6 +1405,7 @@ layouts! {
         calendar_date,
         calendar_year,
         clear_square,
+        clear_square_services,
         calc_closest_town,
         closest_town,
         company_valid,
@@ -1424,6 +1447,9 @@ layouts! {
         plane_speed,
         random,
         road_bits,
+        road_tram_type,
+        road_type_is_road,
+        road_cost_multiplier,
         road_depot_direction,
         road_owner,
         road_type,
@@ -2005,7 +2031,7 @@ layouts! {
         assert_random_context,
         assert_allocation,
         initialize_cost,
-        sufficient_money,
+        command,
         money_deficit,
         set_result,
         exchange_generating,

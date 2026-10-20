@@ -32,6 +32,7 @@ struct OpenTTDStationBounds { int32_t left, top, right, bottom; };
 struct OpenTTDStationSpecIndex { uint8_t value; bool valid; };
 struct OpenTTDRailStationSpecInfo { uint8_t platforms, lengths; bool slope_callback, availability_callback; };
 struct RoadStop;
+struct OpenTTDRoadStationSpecCost { uint8_t multiplier; int32_t shift; };
 struct OpenTTDRoadStationSpecInfo { uint8_t stop_type; bool drive_only, availability_callback; };
 struct AirportSpec;
 class TileIterator;
@@ -137,7 +138,6 @@ struct OpenTTDStationCommandServices {
 	void (*orders_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(orders_dirty);
 	const OpenTTDVehicleServices *vehicle;
 	bool (*road_type_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_valid);
-	bool (*road_type_is_road)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_is_road);
 	bool (*powered_road)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(powered_road);
 	bool (*stop_on_town_road)() noexcept OPENTTD_SERVICE_DEFAULT(stop_on_town_road);
 	bool (*stop_on_competitor_road)() noexcept OPENTTD_SERVICE_DEFAULT(stop_on_competitor_road);
@@ -146,8 +146,8 @@ struct OpenTTDStationCommandServices {
 	uint32_t (*road_spec_count)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_count);
 	const RoadStopSpec *(*class_road_spec)(uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(class_road_spec);
 	OpenTTDRoadStationSpecInfo (*road_spec_info)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_info);
-	int64_t (*road_spec_build_cost)(const RoadStopSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_build_cost);
-	int64_t (*road_spec_clear_cost)(const RoadStopSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_clear_cost);
+	OpenTTDRoadStationSpecCost (*road_spec_build_cost)(const RoadStopSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_build_cost);
+	OpenTTDRoadStationSpecCost (*road_spec_clear_cost)(const RoadStopSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_clear_cost);
 	bool (*stops_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(stops_available);
 	OpenTTDStationSpecIndex (*allocate_road_spec)(const RoadStopSpec *, BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(allocate_road_spec);
 	void (*assign_road_spec)(const RoadStopSpec *, BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assign_road_spec);
@@ -218,7 +218,7 @@ struct OpenTTDStationCommandServices {
 	void (*close_airport_inspect)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(close_airport_inspect);
 	const OpenTTDShipLeaves *ship;
 	const OpenTTDClearServices *clear;
-	void (*water_restore)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(water_restore);
+	const OpenTTDWaterRestorationServices *restoration;
 	TrackBits (*water_tracks)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(water_tracks);
 	void (*set_docking)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_docking);
 	OpenTTDStationArea (*ship_area)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(ship_area);

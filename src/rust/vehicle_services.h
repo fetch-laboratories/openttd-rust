@@ -13,6 +13,10 @@
 #include "../engine_base.h"
 #include "../vehicle_func.h"
 #include "../newgrf.h"
+#include "../newgrf_commons.h"
+
+inline void RustUnknownCallbackResult(uint32_t grfid, uint16_t callback, uint16_t result) noexcept { ErrorUnknownCallbackResult(grfid, callback, result); }
+inline VehiclesOnTile RustVehiclesOnTile(TileIndex tile) noexcept { return VehiclesOnTile(tile); }
 
 /** The Rust handle of a live vehicle; null stays null. */
 inline OpenTTDVehicle *RustVehicle(const Vehicle *v) noexcept { return reinterpret_cast<OpenTTDVehicle *>(const_cast<Vehicle *>(v)); }

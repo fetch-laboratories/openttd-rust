@@ -59,10 +59,6 @@ static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_had_vehicle(const OpenTTDStation *
 	return st->had_vehicle_of_type;
 }
 
-static const void * OPENTTD_AIRCRAFT_CALL Aircraft_dummy_airport() noexcept
-{
-	return GetAirport(AT_DUMMY);
-}
 
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_airport_elements(const void * airport) noexcept
 {
@@ -135,7 +131,7 @@ static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_direction_towards(OpenTTDAircraftV
 
 static int32_t OPENTTD_AIRCRAFT_CALL Aircraft_hangar_height(uint16_t station) noexcept
 {
-	return GetTileMaxPixelZ(Station::Get(station)->airport.GetHangarTile(0));
+	return GetTileMaxPixelZ(RustStationHangarTile(Station::Get(station), 0));
 }
 
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_terminal_count(const void * ap, uint32_t index) noexcept
@@ -269,7 +265,7 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_update_delta(OpenTTDAircraftVehicle v
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_touchdown_animation(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept
 {
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); TriggerAirportTileAnimation(Station::Get(station), TileVirtXY(v->x_pos, v->y_pos), AirportAnimationTrigger::AirplaneTouchdown);
+	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustAirportTileAnimation(Station::Get(station), TileVirtXY(v->x_pos, v->y_pos), AirportAnimationTrigger::AirplaneTouchdown);
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_destination_too_far(OpenTTDAircraftVehicle vehicle) noexcept
@@ -454,7 +450,7 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.airport_fta = OpenTTDStationAirportFTA,
 	.airport_blocks = Aircraft_airport_blocks,
 	.had_vehicle = Aircraft_had_vehicle,
-	.dummy_airport = Aircraft_dummy_airport,
+	.dummy_airport = RustDummyAirportFTA,
 	.airport_elements = Aircraft_airport_elements,
 	.helipads = Aircraft_helipads,
 	.airport_flags = Aircraft_airport_flags,

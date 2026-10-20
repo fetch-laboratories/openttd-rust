@@ -9,5 +9,9 @@
 #ifndef RUST_SERVICES_ROAD_H
 #define RUST_SERVICES_ROAD_H
 #include "../road_map.h"
+#include "../road.h"
 inline void RustSetRoadOwner(uint32_t tile, uint8_t kind, uint8_t owner) noexcept { SetRoadOwner(TileIndex{tile}, static_cast<RoadTramType>(kind), Owner(owner)); }
+inline RoadTramType RustRoadTramType(RoadType type) noexcept { return GetRoadTramType(type); }
+inline bool RustRoadTypeIsRoad(uint8_t rt) noexcept { return RoadTypeIsRoad(static_cast<RoadType>(rt)); }
+inline uint16_t RustRoadCostMultiplier(uint8_t type) noexcept { return GetRoadTypeInfo(static_cast<RoadType>(type))->cost_multiplier; }
 #endif /* RUST_SERVICES_ROAD_H */
