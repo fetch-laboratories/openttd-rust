@@ -18,6 +18,8 @@ on:
     branches:
     - master
     - rust-migration
+    # Markdown-only pushes never queue, so they cannot displace a pending code push below.
+    paths-ignore: ['**.md']
 
 permissions:
   contents: read
@@ -29,8 +31,10 @@ permissions:
 env:
   CTEST_OUTPUT_ON_FAILURE: 1
 
+# Protected pushes queue without cancelling the running validation; a newer
+# push replaces a pending one, so a burst of merges validates the newest tip.
 concurrency:
-  group: ${{ github.workflow }}-build-${{ inputs.checkout-ref && github.run_id || github.ref == 'refs/heads/rust-migration' && github.sha || github.ref }}
+  group: ${{ github.workflow }}-build-${{ inputs.checkout-ref && github.run_id || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.ref != 'refs/heads/rust-migration' }}
 
 jobs:

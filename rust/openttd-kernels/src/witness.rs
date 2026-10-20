@@ -71,6 +71,34 @@ witness_blocks! {
     // Registry: house (#256).
 
     // Registry: landscape (#212).
+    landscape {
+        LANDSCAPE = 0 => "landscape.snow_start",
+        LANDSCAPE_SNOW_CHANGE = 1 => "landscape.snow_change",
+        LANDSCAPE_SNOW_CLEAR = 2 => "landscape.snow_clear",
+        LANDSCAPE_DESERT = 3 => "landscape.desert",
+        LANDSCAPE_FIELD_FENCE = 4 => "landscape.field_fence",
+        LANDSCAPE_FIELD_CYCLE = 5 => "landscape.field_cycle",
+        LANDSCAPE_FIELD_ORPHAN = 6 => "landscape.field_orphan",
+        LANDSCAPE_RAIL_GROUND = 7 => "landscape.rail_ground",
+        LANDSCAPE_ROADSIDE = 8 => "landscape.roadside",
+        LANDSCAPE_ROAD_WORK_START = 9 => "landscape.road_work_start",
+        LANDSCAPE_ROAD_WORK_END = 10 => "landscape.road_work_end",
+        LANDSCAPE_ROAD_REMOVE = 11 => "landscape.road_remove",
+        LANDSCAPE_TUNNEL_GROUND = 12 => "landscape.tunnel_ground",
+        LANDSCAPE_FLOOD_SUCCESS = 13 => "landscape.flood_success",
+        LANDSCAPE_FLOOD_FAIL = 14 => "landscape.flood_fail",
+        LANDSCAPE_DRY_COAST = 15 => "landscape.dry_coast",
+        LANDSCAPE_DRY_RAIL = 16 => "landscape.dry_rail",
+        LANDSCAPE_DRY_TREE = 17 => "landscape.dry_tree",
+        LANDSCAPE_WAKEUP = 18 => "landscape.wakeup",
+        LANDSCAPE_HALF_RAIL_REMOVE = 19 => "landscape.half_rail_remove",
+        LANDSCAPE_HALF_RAIL = 20 => "landscape.half_rail",
+        LANDSCAPE_BRIDGE_START = 21 => "landscape.bridge_start",
+        LANDSCAPE_BRIDGE_END = 22 => "landscape.bridge_end",
+        LANDSCAPE_AIRPORT_MEMBER = 23 => "landscape.airport_member",
+        LANDSCAPE_VEHICLE_CRASH = 24 => "landscape.vehicle_crash",
+        LANDSCAPE_CRASHED_SKIP = 25 => "landscape.crashed_skip",
+    }
 
     rail {
         RAIL_CHOOSE = 0 => "rail.choose",

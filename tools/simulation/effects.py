@@ -85,9 +85,9 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
     )
     cache = out / "effect-fixtures" / folder
     fixture = cache / "save/autosave/exit.sav"
-    provenance = cache / "provenance.json"
+    preparation = cache / "preparation.json"
     with EFFECT_PREPARE_LOCK:
-        if not provenance.is_file():
+        if not preparation.is_file():
             attempts = []
             for iterations in (
                 (6000, 12000, 24000) if scenario["effects"] == "breakdown" else (600,)
@@ -128,7 +128,7 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
                 raise RuntimeError(
                     "short road fixture still has a job due within 4099 ticks"
                 )
-            provenance.write_text(json.dumps(attempts, indent=2) + "\n")
+            preparation.write_text(json.dumps(attempts, indent=2) + "\n")
     chunks, source = read_save(fixture), fixture.read_bytes()
     vehicles = chunks["VEHS"]
     effect_header = next(
@@ -344,11 +344,11 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
                 if expected[offset : offset + len(bytes.fromhex(old))] != bytes.fromhex(
                     old
                 ):
-                    raise RuntimeError("effect patch old-byte provenance mismatch")
+                    raise RuntimeError("effect patch old-byte preparation mismatch")
                 expected[offset : offset + len(bytes.fromhex(new))] = bytes.fromhex(new)
         if expected != normalized_data[slice(*check[cid]["span"])]:
             raise RuntimeError("effect input changed unrelated bytes")
-    receipt = {
+    record = {
         "reference": str(fixture),
         "normalized": str(normalized),
         "reference_sha256": hashlib.sha256(source).hexdigest(),
@@ -357,7 +357,7 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
         "patches": patches,
         "assignments": assignments,
         "natural_effects": natural,
-        "preparation": json.loads(provenance.read_text()),
+        "preparation": json.loads(preparation.read_text()),
         "road_position": road_position,
     }
     if scenario["effects"] == "reload":
@@ -392,7 +392,7 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
             for cid in reloaded
         ):
             raise RuntimeError("effect reload input changed unrelated chunks")
-        receipt["reload"] = {
+        record["reload"] = {
             "reference": str(fixture),
             "reference_sha256": hashlib.sha256(original).hexdigest(),
             "normalized_sha256": hashlib.sha256(normalized.read_bytes()).hexdigest(),
@@ -404,7 +404,7 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
         save=str(normalized),
         effect_assignments=assignments,
         effect_road=road_position,
-    ), receipt
+    ), record
 
 
 def check_effects(scenario, path):

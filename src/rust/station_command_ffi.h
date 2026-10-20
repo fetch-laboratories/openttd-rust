@@ -13,6 +13,7 @@
 #include "station_service_ffi.h"
 #include "rail_command_ffi.h"
 #include "train_reservation_ffi.h"
+#include "ground_ffi.h"
 #include "town_ffi.h"
 #include "byte_span_ffi.h"
 #include "vehicle_ffi.h"
@@ -215,7 +216,7 @@ struct OpenTTDStationCommandServices {
 	void (*clear_airport)(BaseStation *) noexcept;
 	void (*close_airport_inspect)(BaseStation *) noexcept;
 	const OpenTTDShipLeaves *ship;
-	WaterClass (*water_class)(uint32_t) noexcept;
+	const OpenTTDClearServices *clear;
 	void (*water_restore)(uint32_t, uint8_t) noexcept;
 	TrackBits (*water_tracks)(uint32_t, uint8_t) noexcept;
 	void (*set_docking)(uint32_t, bool) noexcept;

@@ -8,6 +8,7 @@
 /** @file industry_ffi.h Canonical industry storage and periodic control. */
 #ifndef RUST_INDUSTRY_FFI_H
 #define RUST_INDUSTRY_FFI_H
+#include "command_services_ffi.h"
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -143,7 +144,6 @@ typedef struct OpenTTDIndustryServices {
 	uint8_t (*snow_line)(void) OPENTTD_INDUSTRY_NOEXCEPT;
 	void (*make_field)(uint32_t tile, uint8_t field_type, uint8_t counter, uint16_t industry) OPENTTD_INDUSTRY_NOEXCEPT;
 	bool (*fence_wanted)(uint32_t tile, uint8_t side) OPENTTD_INDUSTRY_NOEXCEPT;
-	void (*set_fence)(uint32_t tile, uint8_t side, uint8_t type) OPENTTD_INDUSTRY_NOEXCEPT;
 	bool (*tile_completed)(void *industry, uint32_t tile) OPENTTD_INDUSTRY_NOEXCEPT;
 	void (*harvest)(uint32_t tile) OPENTTD_INDUSTRY_NOEXCEPT;
 	/* Monthly, daily, builder and command entries. */
@@ -374,7 +374,6 @@ typedef struct OpenTTDIndustryTileServices {
 	uint16_t (*industry_index)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	uint8_t (*toffee_offset)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	bool (*on_water)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
-	void (*water_loop)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	bool (*transport)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	uint16_t (*anim_production)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	uint16_t (*anim_next)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT;
@@ -392,7 +391,7 @@ void openttd_rust_industry_tile_clear(OpenTTDIndustryCost *, uint32_t tile, uint
 void openttd_rust_industry_tile_terraform(OpenTTDIndustryCost *, uint32_t tile, uint16_t flags, int32_t z_new, uint8_t slope_new, const OpenTTDSharedServices *shared, const OpenTTDIndustryTileServices *, const OpenTTDIndustryTilePolicyServices *, const OpenTTDIndustryCostServices *);
 void openttd_rust_industry_tile_acceptance(uint32_t tile, uint32_t *acceptance, uint64_t *always_accepted, const OpenTTDIndustryTileServices *);
 void openttd_rust_industry_tile_animate(uint32_t tile, const OpenTTDIndustryServices *, const OpenTTDIndustryConstructionServices *, const OpenTTDIndustryTileServices *);
-void openttd_rust_industry_tile_loop(uint32_t tile, uint8_t log_x, const OpenTTDIndustryServices *, const OpenTTDIndustryConstructionServices *, const OpenTTDIndustryLifecycleServices *, const OpenTTDIndustryTileServices *, const OpenTTDIndustryGenerationServices *);
+void openttd_rust_industry_tile_loop(uint32_t tile, uint8_t log_x, struct OpenTTDGroundCall *, const OpenTTDIndustryServices *, const OpenTTDIndustryConstructionServices *, const OpenTTDIndustryLifecycleServices *, const OpenTTDIndustryTileServices *, const OpenTTDIndustryGenerationServices *);
 /** Industry-owned scratch value, matching the actual shared cleared-object entry. */
 typedef struct OpenTTDIndustryClearArea { uint32_t first_tile; OpenTTDIndustryLocation area; } OpenTTDIndustryClearArea;
 typedef struct OpenTTDIndustryClearAreas { const OpenTTDIndustryClearArea *data; size_t size; } OpenTTDIndustryClearAreas;
@@ -425,7 +424,6 @@ typedef struct OpenTTDIndustryTransactionServices {
 	uint32_t (*edge_distance)(uint32_t, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	uint8_t (*refinery_limit)(void) OPENTTD_INDUSTRY_NOEXCEPT;
 	uint32_t (*tile_height)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
-	bool (*has_water_class)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	void (*set_company)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT;
 	/* Owner/context live on the Rust stack; visit and resolver cannot retain them. */
 	void (*temporary_shell)(OpenTTDIndustry *, void *, OpenTTDIndustryTemporaryVisit) OPENTTD_INDUSTRY_NOEXCEPT;

@@ -13,10 +13,10 @@
 #include "../track_func.h"
 #include "../landscape.h"
 
+inline bool RustHasWaterClass(uint32_t tile) noexcept { return HasTileWaterClass(TileIndex{tile}); }
+inline WaterClass RustWaterClass(uint32_t tile) noexcept { return GetWaterClass(TileIndex{tile}); }
 inline bool OpenTTDIsDockingTile(uint32_t tile) noexcept { return IsDockingTile(TileIndex(tile)); }
 inline void OpenTTDMakeShore(uint32_t tile) noexcept { MakeShore(TileIndex(tile)); }
-inline WaterClass OpenTTDGetWaterClass(uint32_t tile) noexcept { return GetWaterClass(TileIndex{tile}); }
-inline bool OpenTTDHasWaterClass(uint32_t tile) noexcept { return HasTileWaterClass(TileIndex{tile}); }
 inline void OpenTTDMakeWaterKeepingClass(uint32_t tile, uint8_t owner) noexcept { MakeWaterKeepingClass(TileIndex{tile}, Owner(owner)); }
 inline bool OpenTTDIsMiddleLock(uint32_t tile) noexcept { return IsTileType(TileIndex{tile}, MP_WATER) && IsLock(TileIndex{tile}) && GetLockPart(TileIndex{tile}) == LockPart::Middle; }
 inline TrackBits OpenTTDWaterTracks(uint32_t tile, uint8_t entry) noexcept { return TrackStatusToTrackBits(GetTileTrackStatus(TileIndex{tile}, TRANSPORT_WATER, 0, static_cast<DiagDirection>(entry))); }

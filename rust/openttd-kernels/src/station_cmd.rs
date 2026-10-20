@@ -112,9 +112,6 @@ pub struct AirportGeometry {
     pub spec: *const AirportSpec,
     pub rotation: u8,
 }
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct WaterClass(pub u8);
 #[repr(C)]
 pub struct Strings {
     pub demolish_bridge: u32,
@@ -332,7 +329,7 @@ pub struct CommandServicesTable {
     pub clear_airport: extern "C" fn(*mut BaseStation),
     pub close_airport_inspect: extern "C" fn(*mut BaseStation),
     pub ship: *const crate::ship_control::Leaves,
-    pub water_class: extern "C" fn(u32) -> WaterClass,
+    pub clear: *const crate::ground::ClearServices,
     pub water_restore: extern "C" fn(u32, u8),
     pub water_tracks: extern "C" fn(u32, u8) -> crate::services::TrackBits,
     pub set_docking: extern "C" fn(u32, bool),
@@ -1286,7 +1283,7 @@ impl Ctx<'_> {
                     return cost.error(self.s.strings.remove_signals);
                 }
                 if (self.rail().powered_rail)((self.rail_map().rail_type)(tile).0, rt) {
-                    let bits = (self.rail_map().rail_tracks)(tile).0;
+                    let bits = (self.rail_map().traversal)(tile).tracks.0;
                     let track = bits.trailing_zeros() as u8;
                     if bits & bits.wrapping_sub(1) == 0 && track == axis {
                         if (self.rail_map().reserved_tracks)(tile).0 & (1 << track) != 0 {
@@ -1762,10 +1759,8 @@ impl Ctx<'_> {
         {
             return out.error(0xffff);
         }
-        let mut storage = crate::services::CommandNesting { storage: 0 };
-        let top = unsafe { (self.command.nest_begin)(&raw mut storage) };
+        let top = (self.command.enter)();
         let guard = NestGuard {
-            storage: &raw mut storage,
             services: self.command,
         };
         if top || flags & 1 == 0 {
@@ -2011,14 +2006,11 @@ impl Ctx<'_> {
     }
 }
 struct NestGuard<'a> {
-    storage: *mut crate::services::CommandNesting,
     services: &'a CommandServices,
 }
 impl Drop for NestGuard<'_> {
     fn drop(&mut self) {
-        unsafe {
-            (self.services.nest_end)(self.storage);
-        }
+        (self.services.leave)();
     }
 }
 /// # Safety
@@ -3499,7 +3491,7 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        let water = (self.s.water_class)(flat).0;
+        let water = (unsafe { &*self.s.clear }.water_class)(flat).0;
         let add_cost = !(self.shared.is_water_tile)(flat);
         (self.command.landscape_clear)(ret.0, flat, flags);
         if !ret.ok() {
@@ -3549,8 +3541,8 @@ impl Ctx<'_> {
             (self.s.before_add_rect)(ret.0, st, area, 1);
             let owner = (self.world().station_owner)(st);
             if water == 1
-                && !((self.shared.water_has_class)(flat)
-                    && (self.s.water_class)(flat).0 == 1
+                && !((self.shared.has_water_class)(flat)
+                    && (unsafe { &*self.s.clear }.water_class)(flat).0 == 1
                     && (self.shared.tile_owner)(flat) == (self.shared.current_company)())
             {
                 (self.s.water_infrastructure)(owner, 1);
@@ -3695,7 +3687,7 @@ impl Ctx<'_> {
         (self.s.make_oilrig)(
             tile,
             (self.links().station_id)(st),
-            (self.s.water_class)(tile).0,
+            (unsafe { &*self.s.clear }.water_class)(tile).0,
         );
         (self.s.set_station_owner)(st, 0x10);
         (self.s.set_airport_kind_rotation)(st, 9, 0);
@@ -3800,6 +3792,16 @@ pub unsafe extern "C" fn openttd_rust_station_clear_docking_neighbours(
     tile: u32,
 ) {
     unsafe { Ctx::new(s) }.clear_docking_neighbours(tile);
+}
+/// Shared direct Rust entry for the original guarded docking registration.
+/// # Safety
+/// Services and the original valid tile remain live for the synchronous call.
+pub(crate) unsafe fn check_possible_docking(s: *const CommandServicesTable, tile: u32) {
+    // SAFETY: the caller supplies the process-lifetime tables under the game-state mutex.
+    let c = unsafe { Ctx::new(s) };
+    if c.possible_docking(tile) {
+        c.check_docking(tile);
+    }
 }
 /// # Safety
 /// Tables and the original valid tile remain live for this call.
@@ -4031,7 +4033,7 @@ impl Ctx<'_> {
                         (self.rail().rail_infrastructure)(new, rt, 1);
                     }
                 }
-                5 | 6 if (self.s.water_class)(tile).0 == 1 => {
+                5 | 6 if (unsafe { &*self.s.clear }.water_class)(tile).0 == 1 => {
                     (self.s.water_infrastructure)(old, u32::MAX);
                     (self.s.water_infrastructure)(new, 1);
                 }

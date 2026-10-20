@@ -226,7 +226,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.clear_airport = RustStationClearAirport,
 		.close_airport_inspect = RustStationCloseAirportInspect,
 		.ship = &GetRustShipServices(),
-		.water_class = OpenTTDGetWaterClass,
+		.clear = &GetRustClearServices(),
 		.water_restore = OpenTTDMakeWaterKeepingClass,
 		.water_tracks = OpenTTDWaterTracks,
 		.set_docking = OpenTTDSetDockingTile,

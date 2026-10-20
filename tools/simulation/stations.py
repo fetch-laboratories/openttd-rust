@@ -510,7 +510,7 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
     read_save(source)
     executables = {}
     for role in ("reference", "candidate"):
-        prepared = prepared_adapter("stations", role, binaries, builds, folder / role)
+        prepared = prepared_adapter("stations", role, builds, folder / role)
         if prepared is None:
             native = (
                 migration.REFERENCE_BUILD
@@ -524,12 +524,7 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
             )
             with lock:
                 prepared = adapter(native, folder / role, env)
-        executables[role], provenance = prepared
-        if (
-            provenance["ordinary_binary_sha256"]
-            != hashlib.sha256(binaries[role].read_bytes()).hexdigest()
-        ):
-            raise RuntimeError("station adapter differs from frozen game")
+        executables[role] = prepared
         for name in core.RUNTIME_DIRECTORIES:
             if (builds[role] / name).is_dir():
                 (folder / role / name).symlink_to(

@@ -8,7 +8,7 @@ Crash expiry: /root | Model: gpt-6-astra | Reasoning effort: xhigh
 runtime and constructs one crossing through `AIRoad.BuildRoad`. The first legal
 owned, flat, straight rail tile is 10005. The save retains the existing map,
 vehicles and company; only optional input GLOG history is removed. Its JSON
-receipt records the source, reference binary, scripts, construction marker and
+record lists the source, scripts, construction marker and
 raw/normalized hashes. No map bytes are patched. The scripts retain the source
 AI name `WaterScenes` so the existing company runs them without an AIPL edit.
 

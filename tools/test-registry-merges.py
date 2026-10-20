@@ -21,8 +21,22 @@ with tempfile.TemporaryDirectory() as directory:
     def git(*args):
         return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
 
+    # Detached housekeeping could still write while TemporaryDirectory removes
+    # this short-lived clone. Configure it before fetch/checkout can start it.
     subprocess.run(
-        ["git", "clone", "-q", "--shared", "--no-checkout", str(ROOT), str(root)],
+        [
+            "git",
+            "clone",
+            "-q",
+            "--shared",
+            "--no-checkout",
+            "-c",
+            "maintenance.auto=false",
+            "-c",
+            "gc.auto=0",
+            str(ROOT),
+            str(root),
+        ],
         check=True,
     )
     base = subprocess.check_output(
@@ -38,8 +52,8 @@ with tempfile.TemporaryDirectory() as directory:
         git("checkout", "-qb", component, base)
         marker = f"// Registry: {component} (#{issue}).\n"
         probe = f"{component}_probe"
-        field = "foundation_price" if component == "house" else "foundation"
-        header = "house_ffi" if component == "house" else "landscape_loop_ffi"
+        field = f"{component}_registry_probe"
+        header = f"{component}_registry_probe_ffi"
         additions = {
             WITNESS: [
                 f'    {probe} {{\n        {probe.upper()} = 0 => "{probe}.hit",\n    }}\n'

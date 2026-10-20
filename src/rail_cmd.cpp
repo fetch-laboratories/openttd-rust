@@ -38,6 +38,12 @@
 #include "table/railtypes.h"
 #include "table/track_land.h"
 
+#ifdef WITH_RUST
+#include "rust/ground_services.h"
+#include "rust/services_landscape.h"
+#include "rust/environment_services.h"
+#endif
+
 #include "safeguards.h"
 
 /** Helper type for lists/vectors of trains */
@@ -760,6 +766,14 @@ CommandCost CmdRemoveSingleRail(DoCommandFlags flags, TileIndex tile, Track trac
  * @param t The tile to flood.
  * @return true if something was flooded.
  */
+#ifdef WITH_RUST
+bool FloodHalftile(TileIndex tile)
+{
+	assert(IsPlainRailTile(tile));
+	OpenTTDGroundCall call;
+	return openttd_rust_flood_halftile(tile.base(), &call, &GetRustWaterGroundServices(), &GetRustSharedServices());
+}
+#else
 bool FloodHalftile(TileIndex t)
 {
 	assert(IsPlainRailTile(t));
@@ -804,6 +818,8 @@ bool FloodHalftile(TileIndex t)
 	}
 	return flooded;
 }
+
+#endif
 
 #ifndef WITH_RUST
 static const TileIndexDiffC _trackdelta[] = {
@@ -2598,6 +2614,21 @@ static Foundation GetFoundation_Track(TileIndex tile, Slope tileh)
 	return IsPlainRail(tile) ? GetRailFoundation(tileh, GetTrackBits(tile)) : FlatteningFoundation(tileh);
 }
 
+#ifdef WITH_RUST
+const OpenTTDRailServices &GetRustRailGroundServices() noexcept
+{
+	static const OpenTTDRailServices services{
+		.tracks = RustRailTracks,
+		.ground = RustRailGround,
+		.set_ground = RustSetRailGroundTyped,
+		.snow = [](uint32_t index) noexcept { TileIndex t{index}; auto [slope, z] = GetTileSlopeZ(t); bool plain = RustPlainRailTile(index); return OpenTTDRailSnowGround{.z = z, .slope = slope, .tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .plain = plain}; },
+		.fences = [](uint32_t index) noexcept { bool plain = RustPlainRailTile(index); return OpenTTDRailFenceGround{.tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .owner = plain ? RustTileOwnerValue(index) : uint8_t{}, .plain = plain}; },
+		.foundation = RustRailFoundation,
+		.owned_land = [](uint32_t t) noexcept { return IsObjectType(TileIndex{t}, OBJECT_OWNED_LAND); },
+	};
+	return services;
+}
+#else
 static void TileLoop_Track(TileIndex tile)
 {
 	RailGroundType old_ground = GetRailGroundType(tile);
@@ -2722,6 +2753,8 @@ set_ground:
 		MarkTileDirtyByTile(tile);
 	}
 }
+
+#endif
 
 
 static TrackStatus GetTileTrackStatus_Track(TileIndex tile, TransportType mode, uint, DiagDirection side)
@@ -3166,9 +3199,8 @@ static bool RailShipOnTile(uint32_t tile) noexcept
 
 static OpenTTDSlopeZ RailApplyFoundation(uint8_t f, uint8_t tileh) noexcept
 {
-	Slope s = static_cast<Slope>(tileh);
-	int32_t z = ApplyFoundationToSlope(static_cast<Foundation>(f), s);
-	return {.z = z, .slope = s};
+	auto result = RustApplyFoundation(static_cast<Foundation>(f), static_cast<Slope>(tileh));
+	return {.z = result.z, .slope = result.slope};
 }
 static OpenTTDRailTrainParking RailParking(Train *v) noexcept
 {
@@ -3184,14 +3216,9 @@ static void RailMakeCrossing(uint32_t tile, uint8_t road, uint8_t tram, uint8_t 
 }
 static void RailMakeShore(uint32_t tile) noexcept
 {
-	TileIndex t{tile};
 	bool docking = OpenTTDIsDockingTile(tile);
 	OpenTTDMakeShore(tile);
-	SetDockingTile(t, docking);
-}
-static void RailDockingCheck(uint32_t tile) noexcept
-{
-	if (IsPossibleDockingTile(TileIndex{tile})) CheckForDockingTile(TileIndex{tile});
+	OpenTTDSetDockingTile(tile, docking);
 }
 static void RailDepotWindows(uint32_t tile) noexcept
 {
@@ -3252,10 +3279,9 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.road_build_cost = [](uint8_t rt) noexcept { return RoadBuildCost(static_cast<RoadType>(rt)).base(); },
 		.crossing_with_competitor = RustCrossingWithCompetitor,
 		.disable_elrails = RustDisableElrails,
-		.rail_foundation = [](uint8_t tileh, uint8_t bits) noexcept -> Foundation { return GetRailFoundation(static_cast<Slope>(tileh), static_cast<TrackBits>(bits)); },
+		.rail_foundation = OpenTTDEnumMapQuery<RustRailFoundation, Slope, TrackBits>,
 		.apply_foundation = RailApplyFoundation,
 		.slope_z_in_corner = [](uint8_t tileh, uint8_t corner) noexcept -> int32_t { return GetSlopeZInCorner(static_cast<Slope>(tileh), static_cast<Corner>(corner)); },
-		.flooding = [](uint32_t tile) noexcept -> FloodingBehaviour { return GetFloodingBehaviour(TileIndex{tile}); },
 		.entrance_edge = [](uint32_t tile, int32_t z, uint8_t tileh, uint8_t dir) noexcept { return AutoslopeCheckForEntranceEdge(TileIndex{tile}, z, static_cast<Slope>(tileh), static_cast<DiagDirection>(dir)); },
 		.ship_on_tile = RailShipOnTile,
 		.build_rail = RailBuildSingle,
@@ -3282,7 +3308,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.depot_windows = RailDepotWindows,
 		.close_inspect = [](uint32_t tile) noexcept { DeleteNewGRFInspectWindow(GSF_RAILTYPES, tile); },
 		.make_shore = RailMakeShore,
-		.docking_check = RailDockingCheck,
 		.area_begin = [](OpenTTDRailConvertFrame *frame, uint32_t start, uint32_t end, bool diagonal) noexcept { frame->iter = TileIterator::Create(TileIndex{start}, TileIndex{end}, diagonal); },
 		.area_tile = [](OpenTTDRailConvertFrame *frame) noexcept { return (**frame->iter).base(); },
 		.area_next = [](OpenTTDRailConvertFrame *frame) noexcept { ++(*frame->iter); },
@@ -3412,7 +3437,11 @@ extern const TileTypeProcs _tile_type_rail_procs = {
 	GetTileTrackStatus_Track, // get_tile_track_status_proc
 	ClickTile_Track,          // click_tile_proc
 	nullptr,                     // animate_tile_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust scheduler calls the owner directly.
+#else
 	TileLoop_Track,           // tile_loop_proc
+#endif
 	ChangeTileOwner_Track,    // change_tile_owner_proc
 	nullptr,                     // add_produced_cargo_proc
 	VehicleEnter_Track,       // vehicle_enter_tile_proc

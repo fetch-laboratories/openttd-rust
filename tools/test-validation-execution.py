@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise bounded validation, lock coordination, and executable identity."""
+"""Exercise bounded validation, lock coordination, and runtime capture."""
 
 import contextlib
 import io
@@ -14,7 +14,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from build_identity import IDENTITY_NAME, read_identity, source_identity, write_identity
 from simulation import core
 from validation_execution import file_lock, run_logged
 
@@ -38,7 +37,7 @@ class ExecutionTests(unittest.TestCase):
             [
                 sys.executable,
                 "-c",
-                "from tools.simulation import core; import migration; assert core.read_identity and core.file_lock and migration.COMMON_LOCAL",
+                "from tools.simulation import core; import migration; assert core.file_lock and migration.COMMON_LOCAL",
             ],
             cwd=TOOLS.parent,
             env=dict(os.environ, PYTHONPATH=""),
@@ -188,7 +187,7 @@ class ExecutionTests(unittest.TestCase):
             )
 
 
-class IdentityTests(unittest.TestCase):
+class RuntimeTests(unittest.TestCase):
     def initialize_repo(self, root):
         for arguments in (
             ("init", "-q"),
@@ -205,53 +204,8 @@ class IdentityTests(unittest.TestCase):
             ["git", "-C", str(root), "commit", "-qm", "Add: Fixture"], check=True
         )
 
-    def test_dirty_source_and_during_build_changes_are_recorded(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.initialize_repo(root)
-            clean = source_identity(root)
-            (root / "source").write_text("changed")
-            dirty = source_identity(root)
-            self.assertNotEqual(clean["source_digest"], dirty["source_digest"])
-            self.assertIn("source", dirty["source_status"])
-            build = root / "build"
-            build.mkdir()
-            binary = build / "openttd-rust"
-            binary.write_text("executable")
-            (build / "CMakeCache.txt").write_text("configuration")
-            manifest = write_identity(build, binary, clean, dirty, {"flag": "value"})
-            self.assertFalse(manifest["source_stable"])
-            self.assertEqual(read_identity(build, binary), manifest)
-            binary.write_text("replaced")
-            self.assertIsNone(read_identity(build, binary))
-
-    def test_capture_keeps_matching_identity_and_rejects_changed_configuration(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            build = root / "build"
-            build.mkdir()
-            binary = build / "openttd-rust"
-            binary.write_text("first")
-            (build / "CMakeCache.txt").write_text("configuration")
-            source = {
-                "source_commit": "older-build-head",
-                "source_status": "",
-                "source_digest": "1" * 64,
-            }
-            manifest = write_identity(build, binary, source, source, {})
-            frozen = core.copy_runtime(build, binary, root / "frozen", candidate=True)
-            self.assertEqual(frozen.read_text(), "first")
-            self.assertEqual(
-                json.loads((frozen.parent / IDENTITY_NAME).read_text()), manifest
-            )
-            (build / "CMakeCache.txt").write_text("other configuration")
-            unknown = core.copy_runtime(build, binary, root / "unknown", candidate=True)
-            self.assertFalse((unknown.parent / IDENTITY_NAME).exists())
-            (build / IDENTITY_NAME).unlink()
-            self.assertIsNone(read_identity(build, binary))
-
     @unittest.skipUnless(os.name == "posix", "POSIX cross-process locks")
-    def test_capture_waits_for_build_and_freezes_completed_identity(self):
+    def test_capture_waits_for_build_and_copies_completed_runtime(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             build = root / "build"
@@ -280,19 +234,10 @@ class IdentityTests(unittest.TestCase):
                 self.assertIn("candidate capture: waiting", child.stdout.readline())
                 self.assertFalse((root / "frozen").exists())
                 binary.write_text("new")
-                source = {
-                    "source_commit": "build-head",
-                    "source_status": "",
-                    "source_digest": "2" * 64,
-                }
-                identity = write_identity(build, binary, source, source, {})
             with child:
                 child.stdout.read()
                 self.assertEqual(child.wait(timeout=5), 0)
             self.assertEqual((root / "frozen/openttd-rust").read_text(), "new")
-            self.assertEqual(
-                json.loads((root / "frozen" / IDENTITY_NAME).read_text()), identity
-            )
 
     def test_direct_game_call_initializes_clone_lock(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -303,9 +248,38 @@ class IdentityTests(unittest.TestCase):
                 with core.game_slot(False):
                     self.assertTrue((Path(directory) / "simulation-game.lock").exists())
 
+    @unittest.skipUnless(os.name == "posix", "POSIX cross-process locks")
+    def test_benchmark_enters_while_another_shared_game_is_running(self):
+        with tempfile.TemporaryDirectory() as directory:
+            lock = Path(directory) / "simulation-game.lock"
+            script = (
+                "from simulation import core; from pathlib import Path; import sys\n"
+                "core.GAME_LOCK = Path(sys.argv[1])\n"
+                "with core.game_slot(True): print('entered', flush=True)\n"
+            )
+            with file_lock(lock, shared=True, label="ordinary game"):
+                with subprocess.Popen(
+                    [sys.executable, "-c", script, str(lock)],
+                    cwd=TOOLS,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                ) as child:
+                    try:
+                        output, errors = child.communicate(timeout=5)
+                    finally:
+                        if child.poll() is None:
+                            child.kill()
+                            child.communicate(timeout=5)
+                    self.assertEqual(child.returncode, 0, errors)
+                    self.assertIn("entered", output)
+            self.assertEqual(
+                list(lock.with_name(lock.name + ".holders").glob("*.json")), []
+            )
+
 
 class NarrowChecksTests(unittest.TestCase):
-    initialize_repo = IdentityTests.initialize_repo
+    initialize_repo = RuntimeTests.initialize_repo
 
     def exercise_checks(self, *, failing=False):
         with tempfile.TemporaryDirectory() as directory:
@@ -364,7 +338,6 @@ class NarrowChecksTests(unittest.TestCase):
             self.assertEqual(report["schema_version"], 1)
             self.assertEqual(report["action"], "rust-checks")
             self.assertFalse(report["candidate_rust_enabled"])
-            self.assertNotIn("candidate_build_identity", report)
             self.assertFalse(report["compiler_cache"]["enabled"])
             self.assertEqual(report["passed"], not failing)
             names = [c["name"] for c in report["commands"]]
@@ -380,12 +353,12 @@ class NarrowChecksTests(unittest.TestCase):
     def test_rust_checks_never_prepares_native_or_reference_build(self):
         self.exercise_checks()
 
-    def test_rust_checks_retains_failed_receipt(self):
+    def test_rust_checks_retains_failure_log(self):
         self.exercise_checks(failing=True)
 
 
 class NativeJobLimitTests(unittest.TestCase):
-    initialize_repo = IdentityTests.initialize_repo
+    initialize_repo = RuntimeTests.initialize_repo
 
     def test_cmake_child_cargo_inherits_driver_job_budget(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -441,11 +414,6 @@ class NativeJobLimitTests(unittest.TestCase):
                 next((root / ".local/verification").glob("*/report.json")).read_text()
             )
             self.assertTrue(report["passed"])
-            self.assertTrue(report["candidate_build_identity"]["source_stable"])
-            self.assertEqual(
-                read_identity(root / "build-rust", root / "build-rust/openttd-rust"),
-                report["candidate_build_identity"],
-            )
             for role in ("reference", "candidate"):
                 command = next(
                     c for c in report["commands"] if c["name"] == f"{role}-build"

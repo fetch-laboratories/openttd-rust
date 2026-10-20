@@ -31,6 +31,10 @@
 #include "table/tree_land.h"
 #include "table/clear_land.h"
 
+#ifdef WITH_RUST
+#include "rust/services_landscape.h"
+#endif
+
 #include "safeguards.h"
 
 /** Where to place trees while in-game? */
@@ -43,8 +47,11 @@ enum ExtraTreePlacement : uint8_t {
 
 #ifdef WITH_RUST
 #include "rust/trees_ffi.h"
-#include "rust/services_water.h"
+#include "rust/ground_services.h"
+#include "rust/landscape_loop_ffi.h"
 #include "rust/services_ffi.h"
+#include "rust/services_map.h"
+#include "rust/services_water.h"
 #include <exception>
 #include <utility>
 
@@ -76,16 +83,16 @@ static OpenTTDTreePlantObservation TreePlantObservation(uint32_t index) noexcept
 {
 	TileIndex tile{index};
 	OpenTTDTreePlantObservation o{};
-	o.tile_type = GetTileType(tile);
+	o.tile_type = SharedTileType(index);
 	o.zone = GetTropicZone(tile);
 	if (o.tile_type == MP_CLEAR) {
 		o.bridge = IsBridgeAbove(tile);
-		o.ground = GetClearGround(tile);
-		o.density = GetClearDensity(tile);
-		o.snow = IsSnowTile(tile);
+		o.ground = RustClearGround(Tile{tile});
+		o.density = static_cast<uint8_t>(RustClearDensity(index));
+		o.snow = RustSnowTile(index);
 	} else if (o.tile_type == MP_WATER) {
 		o.bridge = IsBridgeAbove(tile);
-		o.coast = IsCoast(tile) && !IsSlopeWithOneCornerRaised(GetTileSlope(tile));
+		o.coast = RustIsCoast(index) && !IsSlopeWithOneCornerRaised(GetTileSlope(tile));
 	}
 	return o;
 }
@@ -94,7 +101,7 @@ static OpenTTDTreeObservation TreeObservation(uint32_t index) noexcept
 {
 	TileIndex tile{index};
 	return {
-		.ground = GetTreeGround(tile),
+		.ground = RustTreeGround(Tile{tile}),
 		.density = static_cast<uint8_t>(GetTreeDensity(tile)),
 		.species = GetTreeType(tile),
 		.count = static_cast<uint8_t>(GetTreeCount(tile)),
@@ -155,20 +162,12 @@ static const OpenTTDTreeServices _tree_services{
 	.make_tree = [](uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept {
 		MakeTree(TileIndex{tile}, static_cast<TreeType>(type), count, static_cast<TreeGrowthStage>(growth), static_cast<TreeGround>(ground), density);
 	},
-	.set_ground_density = [](uint32_t tile, uint8_t ground, uint32_t density) noexcept { SetTreeGroundDensity(TileIndex{tile}, static_cast<TreeGround>(ground), density); },
+	.set_ground_density = RustSetTreeGroundDensityValue,
 	.add_count = [](uint32_t tile, int32_t count) noexcept { AddTreeCount(TileIndex{tile}, count); },
 	.add_growth = [](uint32_t tile, int32_t growth) noexcept { AddTreeGrowth(TileIndex{tile}, growth); },
 	.set_growth = [](uint32_t tile, uint8_t growth) noexcept { SetTreeGrowth(TileIndex{tile}, static_cast<TreeGrowthStage>(growth)); },
-	.make_clear = [](uint32_t tile, uint8_t ground, uint32_t density) noexcept { MakeClear(TileIndex{tile}, static_cast<ClearGround>(ground), density); },
-	.make_shore = OpenTTDMakeShore,
-	.make_snow = [](uint32_t tile, uint32_t density) noexcept { MakeSnow(TileIndex{tile}, density); },
-	.clear_neighbour_flooding = [](uint32_t tile) noexcept { ClearNeighbourNonFloodingStates(TileIndex{tile}); },
-	.tile_loop_water = [](uint32_t tile) noexcept { TileLoop_Water(TileIndex{tile}); },
-	.ambient = [](uint32_t tile) noexcept {
-		AmbientSoundEffect(TileIndex{tile});
-		return HasGrfMiscBit(GrfMiscBit::AmbientSoundCallback);
-	},
-	.play_sound = [](uint32_t tile, uint16_t sound) noexcept { SndPlayTileFx(sound, TileIndex{tile}); },
+	.make_clear = RustMakeClearValue,
+	.ambient = RustAmbientSoundLegacy,
 	.progress = []() noexcept { return TreeProgress([] { IncreaseGeneratingWorldProgress(GWP_TREE); }); },
 	.progress_total = [](uint32_t total) noexcept { return TreeProgress([total] { SetGeneratingWorldProgress(GWP_TREE, total); }); },
 	.town_rating = TreeTownRating,
@@ -248,16 +247,24 @@ static CommandCost ClearTile_Trees(TileIndex tile, DoCommandFlags flags)
 		flags.Test(DoCommandFlag::Execute), Company::IsValidID(_current_company), &_tree_services, &GetRustSharedServices())));
 }
 
-static void TileLoop_Trees(TileIndex tile)
+const OpenTTDTreeServices &GetRustTreeServices() noexcept { return _tree_services; }
+
+OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept
 {
-	const OpenTTDTreeLoopSettings settings{
+	return {
 		.tick_counter = TimerGameTick::counter,
 		.size_x = Map::SizeX(),
 		.climate = to_underlying(_settings_game.game_creation.landscape),
 		.extra = _settings_game.construction.extra_tree_placement,
 		.ambient = _settings_client.sound.ambient,
 	};
-	openttd_rust_trees_tile_loop(tile.base(), settings, &_tree_services, &GetRustSharedServices());
+}
+
+static void TileLoop_Trees(uint32_t tile_index) noexcept
+{
+	const TileIndex tile{tile_index};
+	OpenTTDGroundCall call;
+	openttd_rust_trees_tile_loop(tile.base(), GetRustTreeLoopSettings(), &call, &_tree_services, &GetRustSharedServices());
 }
 
 void OnTick_Trees()

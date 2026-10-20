@@ -27,9 +27,10 @@
 #include "../rust/tree_counter.h"
 #include "../rust/disaster_counter.h"
 
+#include "../rust/tile_loop_cursor.h"
+
 #include "../safeguards.h"
 
-extern TileIndex _cur_tileloop_tile;
 
 /* Keep track of current game position */
 int _saved_scrollpos_x;

@@ -75,7 +75,6 @@ pub struct TransactionServices {
     pub edge_distance: unsafe extern "C" fn(u32, u8) -> u32,
     pub refinery_limit: unsafe extern "C" fn() -> u8,
     pub tile_height: unsafe extern "C" fn(u32) -> u32,
-    pub has_water_class: unsafe extern "C" fn(u32) -> bool,
     pub set_company: unsafe extern "C" fn(u8),
     pub temporary_shell: unsafe extern "C" fn(
         *mut Industry,
@@ -322,7 +321,7 @@ impl Engine<'_> {
                 }
                 let spec = unsafe { (self.t.spec)(gfx) };
                 if unsafe { (self.p.slopes_refused)(spec) } & 32 == 0
-                    && (unsafe { (self.x.has_water_class)(current) }
+                    && ((self.s.shared().has_water_class)(current)
                         && unsafe { (self.t.on_water)(current) })
                         != (behaviour & 4 != 0)
                 {

@@ -28,6 +28,7 @@ extern "C" {
  * 49 cargo specification, 50 cargo payment saved fields, 51 cargo services.
  * 52 ship YAPF input, 53 leaves, 54 follower, 55 tile, 56 choice result.
  * 60-61 retired town action/leaves; 430 town command result, 431 town services; 432-438 canonical town records; 439-442 narrow town spec reads.
+ * 100-105 road YAPF input/tile/follow/area/leaves/result; 106 accepted traversal facts.
  * 110 station cargo metadata, 111 station scalars, 112 station services,
  * 113 station edge observations, 114 station links, 115 station loading.
  * 130-138 industry storage, observation, world services and production result.
@@ -46,6 +47,7 @@ extern "C" {
  * 630-633 town founding references, name/render services, metadata and direct services.
  * Reserved component blocks: company 400-429, town 430-459,
  * shared vehicle/road services 460-499. Allocate within the component's block.
+ * Landscape block: 780-781 scheduler services, 782 allocation, 783 native base-tile layout; 784-801 ground/flood tables and consumed fields; 802 direct ground owner bundle; 803 guarded clear surface.
  * 820 signal services, 821 canonical rail-map services; 822 diagnostic snapshot, 823 tile/direction; 824-829 phase observations, 830 direct context; 831 fixed-set probe trace; 832-859 reserved.
  * 980 rail command services, 981 rail command strings, 982 foundation slope/height,
  * 983 train parking fields, 984 normal road fields, 985 crossing road fields; 986-1019 reserved.

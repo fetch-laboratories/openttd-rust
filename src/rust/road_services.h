@@ -6,6 +6,8 @@
  */
 
 /** @file road_services.h Typed road services; each resolves its vehicle once and reads only what it returns. */
+#include "services_map.h"
+
 static_assert(RVSB_IN_DEPOT == 254 && RVSB_WORMHOLE == 255 && RVSB_IN_ROAD_STOP == 32 && RVSB_IN_DT_ROAD_STOP == 64);
 static_assert(to_underlying(RoadStopType::Bus) == 0 && to_underlying(RoadStopType::Truck) == 1);
 static_assert(PROP_ROADVEH_SHORTEN_FACTOR == 0x23 && PROP_ROADVEH_CARGO_AGE_PERIOD == 0x22 && PROP_ROADVEH_SPEED == 0x15 && PROP_ROADVEH_RUNNING_COST_FACTOR == 0x09);
@@ -23,7 +25,7 @@ static OpenTTDRoadMaxSpeedRead RoadMaxSpeedRead(const RoadVehicle *u) noexcept
 {
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(u));
 	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .max_track_speed = u->gcache.cached_max_track_speed,
-		.order_max_speed = u->current_order.GetMaxSpeed(), .direction = RustVehicleDirection(u), .status = RustVehicleStatus(u)};
+		.order_max_speed = RustVehicleOrderMaxSpeed(u), .direction = RustVehicleDirection(u), .status = RustVehicleStatus(u)};
 }
 static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcVisualThenSpeed(OpenTTDVehicle *v, bool realistic) noexcept
 {
@@ -122,15 +124,9 @@ static uint8_t OPENTTD_VEHICLE_CALL RoadSvcAnyRoadBits(OpenTTDVehicle *v, uint32
 	return GetAnyRoadBits(TileIndex(tile), GetRoadTramType(RoadOf(v)->roadtype), straight_only);
 }
 static bool OPENTTD_VEHICLE_CALL RoadSvcIsStationRoadStop(uint32_t tile) noexcept { return IsStationRoadStop(TileIndex(tile)); }
-static uint8_t OPENTTD_VEHICLE_CALL RoadSvcStopType(uint32_t tile) noexcept { return to_underlying(GetRoadStopType(TileIndex(tile))); }
 static bool OPENTTD_VEHICLE_CALL RoadSvcHasFreeBay(uint32_t tile) noexcept
 {
-	TileIndex t(tile);
-	return RoadStop::GetByTile(t, GetRoadStopType(t))->HasFreeBay();
-}
-static bool OPENTTD_VEHICLE_CALL RoadSvcContinuation(uint32_t tile, uint32_t next) noexcept
-{
-	return RoadStop::IsDriveThroughRoadStopContinuation(TileIndex(tile), TileIndex(next));
+	return SharedRoadStopAt(tile)->HasFreeBay();
 }
 /** `old_tile = v->tile; v->tile = tile;` then both road types of the vehicle's road/tram kind. */
 static OpenTTDRoadRoadTypes OPENTTD_VEHICLE_CALL RoadSvcMoveTile(OpenTTDVehicle *v, uint32_t tile) noexcept
@@ -180,17 +176,17 @@ static bool OPENTTD_VEHICLE_CALL RoadSvcShouldStop(OpenTTDVehicle *v, uint32_t t
 static void OPENTTD_VEHICLE_CALL RoadSvcStopLeave(OpenTTDVehicle *v) noexcept
 {
 	RoadVehicle *u = RoadOf(v);
-	RoadStop::GetByTile(u->tile, GetRoadStopType(u->tile))->Leave(u);
+	SharedRoadStopAt(u->tile.base())->Leave(u);
 }
 static void OPENTTD_VEHICLE_CALL RoadSvcStopEntrance(OpenTTDVehicle *v, bool busy) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	RoadStop::GetByTile(u->tile, GetRoadStopType(u->tile))->SetEntranceBusy(busy);
+	SharedRoadStopAt(u->tile.base())->SetEntranceBusy(busy);
 }
 static bool OPENTTD_VEHICLE_CALL RoadSvcStopEntranceBusy(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	return RoadStop::GetByTile(u->tile, GetRoadStopType(u->tile))->IsEntranceBusy();
+	return SharedRoadStopAt(u->tile.base())->IsEntranceBusy();
 }
 static OpenTTDRoadArrivalRead OPENTTD_VEHICLE_CALL RoadSvcArrivalRead(OpenTTDVehicle *v, uint16_t station) noexcept
 {
@@ -348,7 +344,7 @@ static const OpenTTDRoadLeaves &GetRoadLeaves()
 		.bay_direction = GetRustSharedServices().bay_stop_direction,
 		.is_drive_through = GetRustSharedServices().is_drive_through_stop,
 		.is_station_road_stop = RoadSvcIsStationRoadStop,
-		.stop_type = RoadSvcStopType,
+		.stop_type = SharedRoadStopTypeByte,
 		.has_free_bay = RoadSvcHasFreeBay,
 		.continuation = RoadSvcContinuation,
 		.move_tile = RoadSvcMoveTile,

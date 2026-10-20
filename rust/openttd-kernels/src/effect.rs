@@ -207,15 +207,15 @@ const BUBBLES: [&[(i32, i32, i32, u32)]; 6] = [
 
 // No Rust reference to the private owner survives a service call. Its lifetime
 // ends only after run returns false and the C++ facade deletes the shell.
-struct Controller {
+struct Controller<'a> {
     owner: *mut State,
     context: *mut c_void,
     leaves: Leaves,
-    services: Services,
+    services: &'a Services,
     v: View,
 }
 #[allow(unsafe_code)]
-impl Controller {
+impl Controller<'_> {
     // Every call-scoped borrow ends at its statement, before any service call.
     fn state(&mut self) -> &mut State {
         unsafe { &mut *self.owner }
@@ -470,7 +470,8 @@ pub unsafe extern "C" fn openttd_rust_effect_get(owner: *const State, field: u8)
 }
 /// # Safety
 /// Owner is live/exclusive for this invocation. Context identifies its live C++
-/// shell. Tables and observation output are call-scoped and disjoint from owner;
+/// shell. Tables are live, aligned, immutable and disjoint from owner until return;
+/// observation output is call-scoped. The shared table borrow ends on return;
 /// leaves cannot throw, reenter, destroy owner or retain output pointers. They may
 /// allocate (environmental failures terminate). No private-owner borrow survives
 /// a leaf. Shared mutations are immediate; only private animation bytes persist.
@@ -493,7 +494,7 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
         owner,
         context,
         leaves,
-        services: unsafe { *services },
+        services: unsafe { &*services },
         v,
     };
     if initialize != 0 {

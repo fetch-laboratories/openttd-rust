@@ -201,6 +201,7 @@ static OpenTTDAircraftLeaves AircraftTestLeaves(OpenTTDVehicleServices &vehicle,
 	shared.set_tropic_zone = AircraftUnexpectedService<decltype(shared.set_tropic_zone)>::Call;
 	shared.tile_owner = AircraftUnexpectedService<decltype(shared.tile_owner)>::Call;
 	shared.station_index = AircraftUnexpectedService<decltype(shared.station_index)>::Call;
+	shared.station_commands = AircraftUnexpectedService<decltype(shared.station_commands)>::Call;
 	shared.docking_tile = AircraftUnexpectedService<decltype(shared.docking_tile)>::Call;
 	shared.station_gfx = AircraftUnexpectedService<decltype(shared.station_gfx)>::Call;
 	shared.station_serve_neutral = AircraftUnexpectedService<decltype(shared.station_serve_neutral)>::Call;
@@ -213,7 +214,6 @@ static OpenTTDAircraftLeaves AircraftTestLeaves(OpenTTDVehicleServices &vehicle,
 	shared.town_owner_by_id = AircraftUnexpectedService<decltype(shared.town_owner_by_id)>::Call;
 	shared.utf8_length = AircraftUnexpectedService<decltype(shared.utf8_length)>::Call;
 	shared.vehicle_next = AircraftUnexpectedService<decltype(shared.vehicle_next)>::Call;
-	shared.water_has_class = AircraftUnexpectedService<decltype(shared.water_has_class)>::Call;
 	shared.water_middle_lock = AircraftUnexpectedService<decltype(shared.water_middle_lock)>::Call;
 	shared.depot_index = AircraftUnexpectedService<decltype(shared.depot_index)>::Call;
 	shared.is_level_crossing = AircraftUnexpectedService<decltype(shared.is_level_crossing)>::Call;

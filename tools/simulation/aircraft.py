@@ -201,9 +201,8 @@ def prepare_aircraft_save(migration, out, timeout):
     if core.read_value(core.Reader(chunks["GSDT"]["elements"][0][1]), 10):
         raise RuntimeError("aircraft fixture contains a GameScript")
     first, last, plane, helicopter = map(int, markers[0].split())
-    receipt = {
+    record = {
         "baseline": migration.BASELINE,
-        "reference_binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
         "raw_sha256": hashlib.sha256(data).hexdigest(),
         "normalized_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
         "setup_files": {
@@ -217,7 +216,7 @@ def prepare_aircraft_save(migration, out, timeout):
         "setup_markers": markers,
         "save_moment": save_moment(raw),
     }
-    destination.with_suffix(".json").write_text(json.dumps(receipt, indent=2) + "\n")
+    destination.with_suffix(".json").write_text(json.dumps(record, indent=2) + "\n")
     print(f"Prepared {destination}; raw input and logs: {out}")
 
 
@@ -304,9 +303,9 @@ def check(scenario, run, mode, role, result):
     if not scenario.get("aircraft_fixture"):
         return
     source = Path(scenario["save"])
-    receipt = json.loads(source.with_suffix(".json").read_text())
-    if hashlib.sha256(source.read_bytes()).hexdigest() != receipt["normalized_sha256"]:
-        raise RuntimeError("aircraft fixture differs from its preparation receipt")
+    record = json.loads(source.with_suffix(".json").read_text())
+    if hashlib.sha256(source.read_bytes()).hexdigest() != record["normalized_sha256"]:
+        raise RuntimeError("aircraft fixture differs from its preparation record")
     if not any("loading 'dummy' AI" in line for line in run["log"]) or any(
         "AIRCRAFT-BUILD" in line or "AIRCRAFT-SETUP-END" in line for line in run["log"]
     ):
@@ -321,7 +320,7 @@ def check(scenario, run, mode, role, result):
             {index: decode_element(chunk, body) for index, body in chunk["elements"]}
         )
     witnesses = {}
-    for name, head in receipt["aircraft"].items():
+    for name, head in record["aircraft"].items():
         if any(head not in snapshot for snapshot in observations):
             raise RuntimeError(f"{name} disappeared from aircraft snapshots")
         rows = [snapshot[head] for snapshot in observations]
@@ -690,24 +689,24 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                     action = {"aircraft_action": "landing-event"}
         destination = out / scenario["name"] / "input.sav"
         destination.parent.mkdir(parents=True, exist_ok=True)
-        receipt = patch(source, destination, edits)
+        record = patch(source, destination, edits)
         if action:
             # Reference stepping installed a dummy AI. Restore only the setup's
             # exact AIPL configuration so both roles execute the frozen command.
             data = destination.read_bytes()
             begin, end = read_save(destination)["AIPL"]["span"]
             destination.write_bytes(data[:begin] + ai_configuration + data[end:])
-            receipt["assignments"].append(
+            record["assignments"].append(
                 ["AIPL", "configuration", "reference setup AI restored"]
             )
-            receipt["sha256"] = hashlib.sha256(destination.read_bytes()).hexdigest()
+            record["sha256"] = hashlib.sha256(destination.read_bytes()).hexdigest()
         if "range_probe" not in scenario and not (folder / "range-check.log").exists():
             import migration
 
             result["aircraft_range_gap"] = finite_range_probe(
                 folder, migration.ROOT / "build-rust", env
             )
-        result["aircraft_input"] = receipt
+        result["aircraft_input"] = record
         result["aircraft_input"]["heads"] = heads
         result["aircraft_input"]["airports"] = sorted(airports)
         result["aircraft_input"]["selected"] = flight

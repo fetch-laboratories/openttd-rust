@@ -201,9 +201,9 @@ For substantive changes:
    acceptance criteria. Give each task a clear owner.
 2. Use an isolated branch/worktree based on `rust-migration`. The implementation
    agent opens a draft PR targeting `rust-migration`, linking the issue and
-   recording exact validation commands and limitations. When implementation
-   completes, it requests `python3 tools/ci.py request PR --profile platform`
-   so platform failures surface while review runs.
+   recording exact validation commands and limitations. The pre-merge full
+   run covers the platform matrix; request `--profile platform` only to
+   diagnose a suspected platform failure.
 3. Assign a separate reviewer agent to examine the final commit and check evidence.
    The reviewer fixes what it finds: it commits each fix to the PR branch, reruns
    only the checks its own fixes affect, and lists each finding with its fixing
@@ -285,8 +285,9 @@ about 15 minutes by adding parallel jobs or shards, never by adding steps to one
 job's critical path, and keep caches under the repository limit. Validate
 reviewed PRs concurrently: a merge or docs push to `rust-migration` does not
 invalidate another PR's run at an unchanged head. Post-merge CI fully
-re-validates only a merged tree no full run covered; a red `rust-migration` is
-still fixed before more integrations.
+re-validates only a merged tree no full run covered, and queued pushes coalesce
+to the newest tip; a red `rust-migration` is still fixed before more
+integrations.
 
 Before pushing, run `python3 tools/preflight.py --base origin/rust-migration` for
 the inherited commit checker.

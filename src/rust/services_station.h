@@ -100,4 +100,13 @@ inline bool Aircraft_has_hangar(const OpenTTDStation *s) noexcept
 inline void RustStationIndexInsert(BaseStation *st) noexcept { _station_kdtree.Insert(st->index); }
 inline void RustStationClosedWidget(BaseStation *st) noexcept { SetWindowWidgetDirty(WC_STATION_VIEW, st->index, WID_SV_CLOSE_AIRPORT); }
 inline void RustStationCloseAirportInspect(BaseStation *st) noexcept { DeleteNewGRFInspectWindow(GSF_AIRPORTS, st->index); }
+
+inline uint16_t RustStationAirportWidth(const Station *station) noexcept { return station->airport.w; }
+inline uint16_t RustStationAirportHeight(const Station *station) noexcept { return station->airport.h; }
+inline const AirportFTAClass *RustStationAirportFTA(const Station *station) noexcept { return station->airport.GetFTA(); }
+inline uint8_t RustAirportDeltaZ(const AirportFTAClass *airport) noexcept { return airport->delta_z; }
+
+/* The existing aircraft table retains its opaque pointers and return widths. */
+inline const void *OpenTTDStationAirportFTA(const OpenTTDStation *station) noexcept { return RustStationAirportFTA(StationOf(station)); }
+inline uint8_t OpenTTDAirportDeltaZ(const void *airport) noexcept { return RustAirportDeltaZ(static_cast<const AirportFTAClass *>(airport)); }
 #endif /* RUST_SERVICES_STATION_H */

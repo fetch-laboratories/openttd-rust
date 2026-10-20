@@ -10,6 +10,34 @@
 #![allow(unsafe_code, clippy::cast_possible_truncation)]
 use std::ffi::c_void;
 
+/// Native `ClearGround` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct ClearGroundType(pub u8);
+/// Native `Slope` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Slope(pub u8);
+/// Native `Foundation` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Foundation(pub u8);
+/// Native `Roadside` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Roadside(pub u8);
+/// Native `TreeGround` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct TreeGround(pub u8);
+/// Native `WaterClass` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct WaterClass(pub u8);
+/// Native `FloodingBehaviour` representation; every byte pattern is retained.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct FloodingBehaviour(pub u8);
 /// Native `LandscapeType : uint8_t`; every underlying byte remains valid.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -74,6 +102,14 @@ pub struct CommandCostServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandServices {
+    /// Enter native command nesting and report whether this entry is top-level.
+    pub enter: extern "C" fn() -> bool,
+    /// Leave exactly one command nesting level.
+    pub leave: extern "C" fn(),
+    /// Native `CommandHelperBase::InternalDoBefore`.
+    pub before: extern "C" fn(bool, bool),
+    /// Native `CommandHelperBase::InternalDoAfter`.
+    pub after: unsafe extern "C" fn(*mut CommandCost, u16, bool, bool),
     /// Original `CMD_LANDSCAPE_CLEAR`, with actual `DoCommandFlags` width.
     pub landscape_clear: extern "C" fn(*mut CommandCost, u32, u16),
     /// Original `CheckTileOwnership`, preserving native encoded errors.
@@ -86,15 +122,6 @@ pub struct CommandServices {
     pub no_train: unsafe extern "C" fn(*mut CommandCost, u32, u8),
     /// Original `TunnelBridgeIsFree`, with the source optional ignored train.
     pub wormhole_free: unsafe extern "C" fn(*mut CommandCost, u32, u32, *const Train),
-    // Registry: station command nesting (#267).
-    /// Construct the native recursion counter in caller-owned storage.
-    pub nest_begin: unsafe extern "C" fn(*mut CommandNesting) -> bool,
-    /// End exactly one native recursion counter lifetime.
-    pub nest_end: unsafe extern "C" fn(*mut CommandNesting),
-    /// Native `CommandHelperBase::InternalDoBefore`.
-    pub before: extern "C" fn(bool, bool),
-    /// Native `CommandHelperBase::InternalDoAfter`.
-    pub after: unsafe extern "C" fn(*mut CommandCost, u16, bool, bool),
     /// `CheckAllowRemoveRoad`, shared by road/station command owners.
     pub allow_remove_road: unsafe extern "C" fn(*mut CommandCost, u32, u8, u8, u8, u16, bool),
 }
@@ -118,6 +145,101 @@ pub struct ByteSpan {
     pub size: usize,
 }
 
+/// Allocation descriptor acquired once by an audited native entry. The base
+/// pointer comes from `Tile::base_tiles.get()`, with the full allocation's provenance.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct TileTypeAllocation {
+    /// Allocation-derived bytes; null only together with a zero count.
+    pub base: *const u8,
+    /// Actual native `Map::Size()` at acquisition, not a copied tile snapshot;
+    /// zero selects the original callback backend for every read.
+    pub count: u32,
+}
+
+/// Layout-only shell for the actual native base tile. Never create a reference,
+/// read or copy a value of this type; it supplies stride/ABI metadata only.
+#[repr(C)]
+pub(crate) struct BaseTileLayout {
+    pub kind: u8,
+    pub height: u8,
+    pub m2: u16,
+    pub m1: u8,
+    pub m3: u8,
+    pub m4: u8,
+    pub m5: u8,
+}
+
+/// One shared reader with callback and audited entry-resolved raw backends.
+/// No clone/copy implementation: allocation validity covers this entry-local
+/// reader's entire lifetime. No map reference or slice is ever formed.
+pub(crate) struct TileTypeAccess {
+    allocation: TileTypeAllocation,
+    callback: extern "C" fn(u32) -> u8,
+}
+impl TileTypeAccess {
+    /// Resolve the audited allocation once, retaining only descriptor metadata.
+    /// # Safety
+    /// A nonzero count needs a nonnull base that retains provenance for `count * sizeof(TileBase)` live,
+    /// initialized bytes, within `isize::MAX`, until this reader is dropped. Map
+    /// reset and game-state-mutex yield are excluded throughout the entry. Each
+    /// read must be serialized with native writes; native aliases are permitted.
+    pub(crate) unsafe fn raw(
+        allocation: TileTypeAllocation,
+        callback: extern "C" fn(u32) -> u8,
+    ) -> Self {
+        Self {
+            allocation,
+            callback,
+        }
+    }
+
+    /// Reader for entries without an audited allocation: every read uses the
+    /// original noexcept accessor.
+    pub(crate) fn callback(callback: extern "C" fn(u32) -> u8) -> Self {
+        Self {
+            allocation: TileTypeAllocation {
+                base: std::ptr::null(),
+                count: 0,
+            },
+            callback,
+        }
+    }
+
+    /// Read the original high nibble at this observation point. Out-of-range
+    /// reads go through the original native accessor/assertion policy; no new
+    /// rejection, panic or unchecked in-range-only timing shortcut is added.
+    #[inline]
+    #[allow(clippy::cast_possible_truncation)]
+    pub(crate) fn read(&self, tile: u32) -> u8 {
+        if tile < self.allocation.count {
+            // SAFETY: Constructor contract gives live allocation provenance and
+            // serialization. Original map bounds keep the byte offset in isize
+            // even on 32-bit targets. Exactly one initialized u8 is read; no
+            // Rust/C++ field reference is made or retained across a callback.
+            let offset = (tile as usize) * std::mem::size_of::<BaseTileLayout>()
+                + std::mem::offset_of!(BaseTileLayout, kind);
+            unsafe { self.allocation.base.add(offset).read() >> 4 }
+        } else {
+            (self.callback)(tile)
+        }
+    }
+}
+
+/// Default native ABI probe of the same shared reader used by every owner.
+/// # Safety
+/// For nonzero counts, uphold `TileTypeAccess::raw`'s validity/serialization
+/// contract for this call. The callback is the original noexcept accessor or an
+/// equivalent live fixture; it keeps the native out-of-range assertion policy.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_shared_tile_type(
+    allocation: TileTypeAllocation,
+    callback: extern "C" fn(u32) -> u8,
+    tile: u32,
+) -> u8 {
+    unsafe { TileTypeAccess::raw(allocation, callback) }.read(tile)
+}
+
 /// Opaque native `Train` shell; never dereferenced in Rust.
 #[repr(C)]
 pub struct Train {
@@ -127,9 +249,8 @@ pub struct Train {
 /// Immutable call table supplied by the game (or isolated test world). No global
 /// registration or game symbol imports are needed by standalone Cargo binaries.
 /// The context and function addresses outlive the component invocation; callbacks
-/// do not throw, only the train reservation entries reenter Rust train owners
-/// (callers hold no borrow across them), and output pointers are borrowed for
-/// that call only.
+/// do not throw; world operations may reenter after owner accesses end. Output
+/// pointers are borrowed for that call only.
 /// Map predicates take a `TileIndex` value and return the accessor's underlying type.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -252,6 +373,8 @@ pub struct Services {
     pub station_index: extern "C" fn(u32) -> u16,
     // Registry: station construction (#267).
     /// Canonical shared `docking_tile` service.
+    pub station_commands: extern "C" fn() -> *const crate::station_cmd::CommandServicesTable,
+    /// Original docking flag.
     pub docking_tile: extern "C" fn(u32) -> bool,
     /// Canonical shared `station_gfx` service.
     pub station_gfx: extern "C" fn(u32) -> u8,
@@ -275,8 +398,6 @@ pub struct Services {
     pub utf8_length: extern "C" fn(*const u8, usize) -> usize,
     /// Canonical shared `vehicle_next` service.
     pub vehicle_next: extern "C" fn(u32) -> Option<crate::vehicle::VehicleRef>,
-    /// Whether a tile carries a native water class.
-    pub water_has_class: extern "C" fn(u32) -> bool,
     /// Whether a water tile is the middle of a lock.
     pub water_middle_lock: extern "C" fn(u32) -> bool,
     /// Original native `tile_height` map observation.
@@ -316,6 +437,32 @@ pub struct Services {
     // Registry: house (#256).
 
     // Registry: landscape (#212).
+    /// `GetClearGround`.
+    pub clear_ground: extern "C" fn(u32) -> ClearGroundType,
+    /// `GetFoundationSlope`, returning both the foundation slope and its z.
+    pub foundation: extern "C" fn(u32) -> FoundationSlope,
+    /// Original `HasTileWaterClass` predicate.
+    pub has_water_class: extern "C" fn(u32) -> bool,
+    /// `MakeShore`.
+    pub make_shore: extern "C" fn(u32),
+    /// `MakeSnow(tile, density)`.
+    pub make_snow: extern "C" fn(u32, u32),
+    /// `SndPlayTileFx(sound, tile)`.
+    pub play_sound: extern "C" fn(u32, u16),
+    /// Canonical clear-field fence write, retaining native enum and integer widths.
+    pub set_fence: extern "C" fn(u32, DiagDirection, u32),
+    /// `GetTreeGround`.
+    pub tree_ground: extern "C" fn(u32) -> TreeGround,
+    /// Immutable water table, resolved lazily to avoid native static-init cycles.
+    pub water_services: extern "C" fn() -> *const crate::water::WaterServices,
+}
+/// `GetFoundationSlope` result: height and slope after the tile's foundation.
+#[repr(C)]
+pub struct FoundationSlope {
+    /// Height of the foundation.
+    pub z: i32,
+    /// Slope after applying the foundation.
+    pub slope: Slope,
 }
 impl Services {
     /// Draw one shared random word.
@@ -383,6 +530,21 @@ pub fn fixture(
     extern "C" fn slope(_: i32, _: i32) -> i32 {
         0
     }
+    extern "C" fn clear_ground(_: u32) -> ClearGroundType {
+        ClearGroundType(0)
+    }
+    extern "C" fn tree_ground(_: u32) -> TreeGround {
+        TreeGround(0)
+    }
+    extern "C" fn make_snow(_: u32, _: u32) {}
+    extern "C" fn play_sound(_: u32, _: u16) {}
+    extern "C" fn set_fence(_: u32, _: DiagDirection, _: u32) {}
+    extern "C" fn foundation(_: u32) -> FoundationSlope {
+        FoundationSlope {
+            z: 0,
+            slope: Slope(0),
+        }
+    }
     Services {
         autoslope: flag0,
         bay_stop_direction: byte,
@@ -442,6 +604,7 @@ pub fn fixture(
         slope,
         snow_line: zero_byte,
         station_index: short,
+        station_commands: fixture_station_commands,
         docking_tile: flag,
         station_gfx: byte,
         station_serve_neutral: flag0,
@@ -454,7 +617,6 @@ pub fn fixture(
         town_owner_by_id: unused_town_owner_by_id,
         utf8_length: unused_utf8_length,
         vehicle_next: unused_vehicle_next,
-        water_has_class: flag,
         water_middle_lock: flag,
         tile_height: word,
         tile_max_z: height,
@@ -476,6 +638,15 @@ pub fn fixture(
         // Registry: house (#256).
 
         // Registry: landscape (#212).
+        clear_ground,
+        foundation,
+        has_water_class: flag,
+        make_shore: tile,
+        make_snow,
+        play_sound,
+        set_fence,
+        tree_ground,
+        water_services: fixture_water_services,
     }
 }
 #[cfg(test)]
@@ -639,7 +810,7 @@ pub struct RailType(pub u8);
 pub struct RailTileType(pub u8);
 /// Native `RailGroundType` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct RailGroundType(pub u8);
 /// Native `SignalVariant` with its unchanged uint8 representation.
 #[repr(transparent)]
@@ -647,23 +818,23 @@ pub struct RailGroundType(pub u8);
 pub struct SignalVariant(pub u8);
 /// Native `RoadType` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct RoadType(pub u8);
 /// Native `RoadBits` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct RoadBits(pub u8);
 /// Native `Trackdir` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Trackdir(pub u8);
 /// Native `Track` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Track(pub u8);
 /// Native `TrackBits` with its unchanged uint8 representation.
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TrackBits(pub u8);
 /// Native `SignalType` with its unchanged uint8 representation.
 #[repr(transparent)]
@@ -754,6 +925,8 @@ pub struct RailWormholeAdmission {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RailMapServices {
+    /// Canonical track bits and terrain leaves, shared with water and tile loops.
+    pub ground: *const crate::ground::RailServices,
     /// Consumed source-phase observation; guarded fields are not hoisted.
     pub traversal: extern "C" fn(u32) -> RailTraversal,
     /// Consumed source-phase observation; guarded fields are not hoisted.
@@ -781,8 +954,6 @@ pub struct RailMapServices {
     pub other_tunnel_bridge_end: extern "C" fn(u32) -> u32,
     /// Native `rail_track_status` map operation at the original observation point.
     pub rail_track_status: extern "C" fn(u32, u8) -> u32,
-    /// Native `GetTrackBits`.
-    pub rail_tracks: extern "C" fn(u32) -> TrackBits,
     /// Native `HasSignals`.
     pub has_signals: extern "C" fn(u32) -> bool,
     /// Native `GetSignalType`.
@@ -793,10 +964,6 @@ pub struct RailMapServices {
     pub set_rail_type: extern "C" fn(u32, u8),
     /// Native `GetRailTileType`.
     pub rail_tile_type: extern "C" fn(u32) -> RailTileType,
-    /// Native `GetRailGroundType`.
-    pub rail_ground: extern "C" fn(u32) -> RailGroundType,
-    /// Native `SetRailGroundType`.
-    pub set_rail_ground: extern "C" fn(u32, u8),
     /// Native `SetTrackBits`.
     pub set_track_bits: extern "C" fn(u32, u8),
     /// Native `GetPresentSignals`.
@@ -898,14 +1065,6 @@ extern "C" fn fixture_station_type(_: u32) -> StationType {
     panic!("unused station type")
 }
 
-/// Caller-owned empty native recursion counter; its lifetime is exactly one
-/// synchronous nested command. Native ABI assertions check size and alignment.
-#[repr(C)]
-pub struct CommandNesting {
-    /// Opaque native placement storage, never accessed while the counter lives.
-    pub storage: u8,
-}
-
 #[cfg(test)]
 extern "C" fn unused_animation_add(_: u32, _: bool) {
     panic!("unused animation add");
@@ -925,4 +1084,14 @@ extern "C" fn unused_utf8_length(_: *const u8, _: usize) -> usize {
 #[cfg(test)]
 extern "C" fn unused_vehicle_next(_: u32) -> Option<crate::vehicle::VehicleRef> {
     panic!("unused vehicle iteration");
+}
+
+#[cfg(test)]
+extern "C" fn fixture_water_services() -> *const crate::water::WaterServices {
+    panic!("unexpected water service access");
+}
+
+#[cfg(test)]
+extern "C" fn fixture_station_commands() -> *const crate::station_cmd::CommandServicesTable {
+    panic!("unused station command table");
 }
