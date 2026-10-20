@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file road_command_ffi.h Whole road command policy boundary (ABI 1020-1059). */
+/** @file road_command_ffi.h Whole road command policy boundary (named layout metadata). */
 #ifndef RUST_ROAD_COMMAND_FFI_H
 #define RUST_ROAD_COMMAND_FFI_H
 #include "rail_command_ffi.h"
@@ -30,25 +30,25 @@ struct OpenTTDRoadCommandServices {
 	const OpenTTDTownLeaves *town;
 	const OpenTTDTownAuthorityServices *authority;
 	OpenTTDRoadCommandStrings strings;
-	bool (*vehicles_built)() noexcept;
-	bool (*town_valid)(uint16_t) noexcept;
-	const OpenTTDTownHandle *(*nearest_town)(uint32_t) noexcept;
-	OpenTTDRoadTownEdge (*town_edge)(const OpenTTDTownHandle *) noexcept;
-	void (*set_town)(uint32_t, uint16_t) noexcept;
-	Foundation (*foundation)(uint8_t, uint8_t) noexcept;
-	int64_t (*clear_cost)(uint8_t) noexcept;
-	int64_t (*convert_cost)(uint8_t, uint8_t) noexcept;
-	bool (*extra_dynamite)() noexcept;
-	bool (*depot_slope)(uint8_t, uint8_t) noexcept;
-	void (*make_depot)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept;
-	void (*depot_exit)(uint32_t, uint8_t) noexcept;
-	OpenTTDRoadWorksEffect (*next_effect)(uint32_t) noexcept;
-	void (*delete_effect)(uint32_t) noexcept;
-	void (*owned_by_town)(OpenTTDCommandCost *, uint32_t) noexcept;
-	OpenTTDCommandCost *(*scratch_cost)(OpenTTDRoadCommandScratch *) noexcept;
-	OpenTTDRoadConversionScratch (*conversion_scratch)(OpenTTDRoadCommandScratch *) noexcept;
-	void (*collect_vehicles)(OpenTTDRoadConvertFrame *, uint32_t) noexcept;
-	void (*cargo_changed)(OpenTTDRoadConvertFrame *) noexcept;
+	bool (*vehicles_built)() noexcept OPENTTD_SERVICE_DEFAULT(vehicles_built);
+	bool (*town_valid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(town_valid);
+	const OpenTTDTownHandle *(*nearest_town)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearest_town);
+	OpenTTDRoadTownEdge (*town_edge)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_edge);
+	void (*set_town)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_town);
+	Foundation (*foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(foundation);
+	int64_t (*clear_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_cost);
+	int64_t (*convert_cost)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_cost);
+	bool (*extra_dynamite)() noexcept OPENTTD_SERVICE_DEFAULT(extra_dynamite);
+	bool (*depot_slope)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_slope);
+	void (*make_depot)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_depot);
+	void (*depot_exit)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_exit);
+	OpenTTDRoadWorksEffect (*next_effect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_effect);
+	void (*delete_effect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_effect);
+	void (*owned_by_town)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(owned_by_town);
+	OpenTTDCommandCost *(*scratch_cost)(OpenTTDRoadCommandScratch *) noexcept OPENTTD_SERVICE_DEFAULT(scratch_cost);
+	OpenTTDRoadConversionScratch (*conversion_scratch)(OpenTTDRoadCommandScratch *) noexcept OPENTTD_SERVICE_DEFAULT(conversion_scratch);
+	void (*collect_vehicles)(OpenTTDRoadConvertFrame *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(collect_vehicles);
+	void (*cargo_changed)(OpenTTDRoadConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_changed);
 };
 const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept;
 extern "C" {

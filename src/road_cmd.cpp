@@ -2920,3 +2920,9 @@ extern const TileTypeProcs _tile_type_road_procs = {
 	TerraformTile_Road,      // terraform_tile_proc
 	CheckBuildAbove_Road, // check_build_above_proc
 };
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDRoadCommandServices.hpp"
+bool CheckAbi_road_cmd() { return AbiServicesComplete(GetRustRoadCommandServices()); }
+#endif

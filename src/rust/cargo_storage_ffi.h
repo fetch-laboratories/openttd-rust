@@ -8,6 +8,7 @@
 /** @file cargo_storage_ffi.h Canonical packets, cargo lists and movement. */
 #ifndef RUST_CARGO_STORAGE_FFI_H
 #define RUST_CARGO_STORAGE_FFI_H
+#include "service_defaults.hpp"
 #include <cstdint>
 #include <cstddef>
 struct OpenTTDCargoList;
@@ -51,18 +52,18 @@ struct OpenTTDCargoListFields {
  * for first flow origin, selector4 asks whether any flows exist.
  */
 struct OpenTTDCargoStorageServices {
-	uint8_t (*can_allocate)() noexcept;
-	void *(*create)(const OpenTTDCargoPacketFields *) noexcept;
-	OpenTTDCargoPacket *(*packet)(void *) noexcept;
-	void (*destroy)(void *) noexcept;
-	uint32_t (*random)(uint32_t) noexcept;
-	uint32_t (*coordinate)(uint32_t, uint8_t) noexcept;
-	uint16_t (*flow)(const void *, uint8_t, uint16_t, uint16_t, uint16_t, const uint16_t *, size_t, uint8_t *) noexcept;
-	int64_t (*pay)(void *, uint8_t, uint8_t, const void *, uint32_t, uint32_t) noexcept;
-	void (*origin)(void *, uint16_t, uint32_t, uint8_t) noexcept;
-	OpenTTDCargoFlow *(*flow_owner)(const void *, uint16_t) noexcept;
-	uint32_t (*random_draw)() noexcept;
-	void *(*packet_next)(void *) noexcept;
+	uint8_t (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
+	void *(*create)(const OpenTTDCargoPacketFields *) noexcept OPENTTD_SERVICE_DEFAULT(create);
+	OpenTTDCargoPacket *(*packet)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet);
+	void (*destroy)(void *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
+	uint32_t (*random)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random);
+	uint32_t (*coordinate)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(coordinate);
+	uint16_t (*flow)(const void *, uint8_t, uint16_t, uint16_t, uint16_t, const uint16_t *, size_t, uint8_t *) noexcept OPENTTD_SERVICE_DEFAULT(flow);
+	int64_t (*pay)(void *, uint8_t, uint8_t, const void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pay);
+	void (*origin)(void *, uint16_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(origin);
+	OpenTTDCargoFlow *(*flow_owner)(const void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(flow_owner);
+	uint32_t (*random_draw)() noexcept OPENTTD_SERVICE_DEFAULT(random_draw);
+	void *(*packet_next)(void *) noexcept OPENTTD_SERVICE_DEFAULT(packet_next);
 };
 struct OpenTTDCargoCapacityVehicle {
 	OpenTTDCargoList *list;
@@ -70,10 +71,10 @@ struct OpenTTDCargoCapacityVehicle {
 	uint8_t cargo, train, articulated;
 };
 struct OpenTTDCargoCapacityServices {
-	void (*read)(void *, OpenTTDCargoCapacityVehicle *) noexcept;
-	void *(*next_part)(void *) noexcept;
-	void *(*last_engine_part)(void *) noexcept;
-	void *(*other_multiheaded_part)(void *) noexcept;
+	void (*read)(void *, OpenTTDCargoCapacityVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(read);
+	void *(*next_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(next_part);
+	void *(*last_engine_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(last_engine_part);
+	void *(*other_multiheaded_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(other_multiheaded_part);
 	const OpenTTDCargoStorageServices *cargo;
 };
 /* capacity mode0 spreads/shrinks, mode1 transfers. Return1 requires the native

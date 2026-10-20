@@ -4588,15 +4588,23 @@ static const IntervalTimer<TimerGameEconomy> _economy_towns_monthly({TimerGameEc
 #endif
 });
 
-static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::TOWN}, [](auto)
-{
 #ifdef WITH_RUST
+static const OpenTTDTownYearlyServices &TownYearlyServices()
+{
 	static const OpenTTDTownYearlyServices houses{
 		.completed = [](uint32_t tile) noexcept { return IsHouseCompleted(TileIndex{tile}); },
 		.age = [](uint32_t tile) noexcept { return Tile(TileIndex{tile}).m5(); },
 		.set_age = [](uint32_t tile, uint8_t age) noexcept { Tile(TileIndex{tile}).m5() = age; },
 	};
-	openttd_rust_town_yearly(&GetRustSharedServices(), &houses, Map::Size());
+	return houses;
+}
+#endif
+
+static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::TOWN}, [](auto)
+{
+#ifdef WITH_RUST
+
+	openttd_rust_town_yearly(&GetRustSharedServices(), &TownYearlyServices(), Map::Size());
 #else
 	/* Increment house ages */
 	for (const auto t : Map::Iterate()) {
@@ -4657,3 +4665,18 @@ std::span<const DrawBuildingsTileStruct> GetTownDrawTileData()
 {
 	return _town_draw_tile_data;
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDTownLeaves.hpp"
+#include "abi-visit-OpenTTDTownFoundingServices.hpp"
+#include "abi-visit-OpenTTDTownAuthorityServices.hpp"
+#include "abi-visit-OpenTTDTownYearlyServices.hpp"
+bool CheckAbi_town_cmd()
+{
+	return AbiServicesComplete(GetRustTownServices()) &&
+		AbiServicesComplete(GetRustTownFoundingServices()) &&
+		AbiServicesComplete(RustTownAuthorityServices()) &&
+		AbiServicesComplete(TownYearlyServices());
+}
+#endif

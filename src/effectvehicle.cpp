@@ -593,10 +593,15 @@ static void OPENTTD_EFFECT_CALL EffectAnimated(uint32_t tile) noexcept
 	AddAnimatedTile(TileIndex{tile});
 }
 
-static bool RunEffect(EffectVehicle *v, bool initialize)
+static const OpenTTDEffectLeaves &EffectServices()
 {
 	static const OpenTTDEffectLeaves leaves{EffectObserve, EffectWrite, EffectViewport, EffectSound, EffectAnimated};
-	if (openttd_rust_effect_run(v->rust_state.get(), v, &leaves, &GetRustSharedServices(), initialize) != 0) return true;
+	return leaves;
+}
+
+static bool RunEffect(EffectVehicle *v, bool initialize)
+{
+	if (openttd_rust_effect_run(v->rust_state.get(), v, &EffectServices(), &GetRustSharedServices(), initialize) != 0) return true;
 	/* Expiry returns before destroying the Rust owner. Vehicle::~Vehicle and
 	 * Pool::FreeItem/PostDestructor run wholly outside any Rust frame/borrow. */
 	delete v;
@@ -692,3 +697,9 @@ TransparencyOption EffectVehicle::GetTransparencyOption() const
 	return _effect_procs[this->subtype].transparency;
 #endif
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDEffectLeaves.hpp"
+bool CheckAbi_effectvehicle() { return AbiServicesComplete(EffectServices()); }
+#endif

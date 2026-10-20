@@ -690,3 +690,16 @@ extern "C" uint64_t openttd_orders_remaining_years(void *ctx) noexcept
 	return std::max(TimerGameCalendar::DateToYear(RustVehicleMaxAge(v) - RustVehicleAge(v) + CalendarTime::DAYS_IN_LEAP_YEAR - 1), TimerGameCalendar::Year(0)).base();
 }
 #endif /* WITH_RUST */
+
+#ifdef WITH_RUST
+#include "service_table_check.hpp"
+#include "abi-visit-OpenTTDVehicleServices.hpp"
+#include "abi-visit-OpenTTDVehicleSchedulerServices.hpp"
+#include "abi-visit-OpenTTDVehicleMaintenanceServices.hpp"
+bool CheckAbi_vehicle_services()
+{
+	return AbiServicesComplete(GetRustVehicleServices()) &&
+		AbiServicesComplete(GetRustVehicleSchedulerServices()) &&
+		AbiServicesComplete(_rust_vehicle_maintenance_services);
+}
+#endif

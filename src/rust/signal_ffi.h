@@ -8,6 +8,7 @@
 /** @file signal_ffi.h Rail signal-block owner boundary (ABI 820-859). */
 #ifndef RUST_SIGNAL_FFI_H
 #define RUST_SIGNAL_FFI_H
+#include "service_defaults.hpp"
 #include "services_ffi.h"
 
 /* Signal work sets have process lifetime. The game-state mutex serializes all
@@ -16,14 +17,14 @@
  * map, occupancy and dirtying cannot unwind ordinary-play exceptions. */
 struct OpenTTDSignalServices {
 	bool assertions;
-	void (*assert_condition)(bool) noexcept;
-	void (*assert_wormhole_start)(uint32_t, uint8_t) noexcept;
-	bool (*train_on_tile)(uint32_t) noexcept;
-	bool (*train_on_tracks)(uint32_t, uint8_t) noexcept;
-	void (*overflow_tbu)() noexcept;
-	void (*overflow_tbd)() noexcept;
-	void (*overflow_global)() noexcept;
-	void (*assert_company)(uint8_t) noexcept;
+	void (*assert_condition)(bool) noexcept OPENTTD_SERVICE_DEFAULT(assert_condition);
+	void (*assert_wormhole_start)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_wormhole_start);
+	bool (*train_on_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(train_on_tile);
+	bool (*train_on_tracks)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(train_on_tracks);
+	void (*overflow_tbu)() noexcept OPENTTD_SERVICE_DEFAULT(overflow_tbu);
+	void (*overflow_tbd)() noexcept OPENTTD_SERVICE_DEFAULT(overflow_tbd);
+	void (*overflow_global)() noexcept OPENTTD_SERVICE_DEFAULT(overflow_global);
+	void (*assert_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_company);
 };
 
 struct OpenTTDSignalItem { uint32_t tile; uint8_t dir; };

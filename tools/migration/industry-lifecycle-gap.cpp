@@ -239,7 +239,7 @@ int main()
 {
 	const auto lifecycle = Lifecycle();
 	OpenTTDIndustryServices services{};
-	auto shared = OpenTTDFixtureSharedServices(nullptr, [](void *) noexcept -> uint32_t { return Random(); }, nullptr);
+	auto shared = OpenTTDFixtureSharedServices(nullptr, [](void *) noexcept -> uint32_t { return Random(); });
 	shared.mark_dirty = [](uint32_t tile) noexcept { MarkTileDirtyByTile(tile); };
 	services.shared = &shared;
 	services.play_sound = [](uint16_t sound, uint32_t tile) noexcept { SndPlayTileFx(sound, tile); };
