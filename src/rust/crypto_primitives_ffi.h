@@ -54,6 +54,7 @@
 /** @file crypto_primitives_ffi.h Borrowed cipher/MAC contexts and primitive-only leaves. */
 #ifndef OPENTTD_CRYPTO_PRIMITIVES_FFI_H
 #define OPENTTD_CRYPTO_PRIMITIVES_FFI_H
+#include "service_defaults.hpp"
 #include <stddef.h>
 #include <stdint.h>
 #if defined(_MSC_VER)
@@ -67,8 +68,8 @@
 extern "C" {
 #endif
 struct OpenTTDCryptoLeaves {
-	void (OPENTTD_CRYPTO_CALL *wipe)(void *, size_t);
-	int32_t (OPENTTD_CRYPTO_CALL *verify16)(const uint8_t *, const uint8_t *);
+	void (OPENTTD_CRYPTO_CALL *wipe)(void *, size_t) OPENTTD_SERVICE_DEFAULT(wipe);
+	int32_t (OPENTTD_CRYPTO_CALL *verify16)(const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(verify16);
 };
 struct OpenTTDPolyLayout {
 	size_t size, alignment, c, c_idx, r, pad, h;

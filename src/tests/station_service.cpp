@@ -24,9 +24,9 @@ extern void OnTick_Station();
 
 TEST_CASE("Station service - scalar ABI layouts")
 {
-	CHECK(AbiLayoutMismatch(110, {sizeof(OpenTTDStationCargo), alignof(OpenTTDStationCargo), offsetof(OpenTTDStationCargo, max_waiting_cargo), offsetof(OpenTTDStationCargo, status), offsetof(OpenTTDStationCargo, time_since_pickup), offsetof(OpenTTDStationCargo, rating), offsetof(OpenTTDStationCargo, last_speed), offsetof(OpenTTDStationCargo, last_age), offsetof(OpenTTDStationCargo, amount_fract)}) == -1);
-	CHECK(AbiLayoutMismatch(111, {sizeof(OpenTTDStationFields), alignof(OpenTTDStationFields), offsetof(OpenTTDStationFields, always_accepted), offsetof(OpenTTDStationFields, delete_ctr), offsetof(OpenTTDStationFields, time_since_load), offsetof(OpenTTDStationFields, time_since_unload), offsetof(OpenTTDStationFields, last_vehicle_type)}) == -1);
-	CHECK(AbiLayoutMismatch(113, {sizeof(OpenTTDStationEdge), alignof(OpenTTDStationEdge), offsetof(OpenTTDStationEdge, destination), offsetof(OpenTTDStationEdge, last_update), offsetof(OpenTTDStationEdge, distance)}) == -1);
+	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
+#include "abi-layout-station_service.inc"
+
 }
 struct StationLoadingProbe {
 	OpenTTDStationService *owner;

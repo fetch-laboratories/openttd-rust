@@ -3402,3 +3402,15 @@ bool VehiclesHaveSameOrderList(const Vehicle *v1, const Vehicle *v2)
 {
 	return std::ranges::equal(v1->Orders(), v2->Orders(), [](const Order &o1, const Order &o2) { return o1.Equals(o2); });
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDGroundServices.hpp"
+#include "abi-visit-OpenTTDFleetPendingServices.hpp"
+bool CheckAbi_vehicle()
+{
+	return AbiServicesComplete(GetRustGroundServices<Train>()) &&
+		AbiServicesComplete(GetRustGroundServices<RoadVehicle>()) &&
+		AbiServicesComplete(_fleet_pending_services);
+}
+#endif

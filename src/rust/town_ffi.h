@@ -8,6 +8,7 @@
 /** @file town_ffi.h Canonical town state and synchronous typed services. */
 #ifndef RUST_TOWN_FFI_H
 #define RUST_TOWN_FFI_H
+#include "service_defaults.hpp"
 #include "services_ffi.h"
 #include "byte_span_ffi.h"
 #include "station_activity_ffi.h"
@@ -41,64 +42,64 @@ struct OpenTTDTownHouseAvailability { uint16_t zones; uint16_t override_id; uint
 struct OpenTTDTownHousePlacement { int32_t min_year; int32_t max_year; uint8_t flags; uint8_t extra_flags; };
 struct OpenTTDTownHouseConstruction { uint8_t extra_flags; uint8_t population; };
 struct OpenTTDTownYearlyServices {
-	bool (*completed)(uint32_t) noexcept;
-	uint8_t (*age)(uint32_t) noexcept;
-	void (*set_age)(uint32_t, uint8_t) noexcept;
+	bool (*completed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(completed);
+	uint8_t (*age)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(age);
+	void (*set_age)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_age);
 };
 struct OpenTTDTownAuthorityServices {
-	uint8_t (*council_tolerance)() noexcept;
-	bool (*bulldozer)() noexcept;
-	uint8_t (*authority_distance)() noexcept;
-	uint16_t (*town_index)(const OpenTTDTownHandle *) noexcept;
+	uint8_t (*council_tolerance)() noexcept OPENTTD_SERVICE_DEFAULT(council_tolerance);
+	bool (*bulldozer)() noexcept OPENTTD_SERVICE_DEFAULT(bulldozer);
+	uint8_t (*authority_distance)() noexcept OPENTTD_SERVICE_DEFAULT(authority_distance);
+	uint16_t (*town_index)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_index);
 	uint32_t refusal;
 };
 struct OpenTTDTownLeaves {
-	uint32_t (*map_log_x)() noexcept;
-	uint8_t (*growth_rate)() noexcept;
-	uint8_t (*snow_line)() noexcept;
-	bool (*editor)() noexcept;
-	bool (*generating_world)() noexcept;
-	bool (*allow_crossings)() noexcept;
-	uint8_t (*climate)() noexcept;
-	uint8_t (*highest_snow_line)() noexcept;
-	int32_t (*calendar_year)() noexcept;
-	bool (*allow_roads)() noexcept;
-	uint8_t (*road_flags)(uint8_t) noexcept;
-	OpenTTDTownHouseAvailability (*house_availability)(uint16_t) noexcept;
-	OpenTTDTownHousePlacement (*house_placement)(uint16_t) noexcept;
-	OpenTTDTownHouseConstruction (*house_construction)(uint16_t) noexcept;
-	uint8_t (*house_flags)(uint16_t) noexcept;
-	uint8_t (*house_extra_flags)(uint16_t) noexcept;
-	bool (*house_allows_callback)(uint16_t) noexcept;
-	OpenTTDTownRoadChoice (*road_info)(uint8_t) noexcept;
-	OpenTTDTownState *(*state)(uint32_t) noexcept;
-	void (*stations)(uint32_t, uint32_t, void *, void (*)(void *, const OpenTTDStation *, uint32_t)) noexcept;
-	const OpenTTDStationService *(*station_activity_owner)(const OpenTTDStation *) noexcept;
-	uint8_t (*station_owner)(const OpenTTDStation *) noexcept;
-	void (*dirty_authority)(uint32_t) noexcept;
-	void (*dirty_town)(uint32_t town) noexcept;
-	uint32_t (*foundation_slope)(uint32_t tile) noexcept;
-	int64_t (*terraform_price)() noexcept;
-	uint32_t (*clean_road_bits)(uint32_t tile, uint32_t bits) noexcept;
-	void (*set_road_town)(uint32_t tile, uint32_t town) noexcept;
-	uint32_t (*exchange_company)(uint32_t company) noexcept;
-	uint16_t (*house_class)(uint16_t house) noexcept;
-	void (*make_house)(uint32_t tile, uint32_t town, uint32_t house, uint32_t construction) noexcept;
-	void (*add_animation)(uint32_t tile, bool) noexcept;
-	void (*population_changed)(uint32_t town) noexcept;
-	void (*nearby_stations)(uint32_t town, uint32_t tile, uint32_t size) noexcept;
-	uint32_t (*house_count)() noexcept;
-	void (*update_max_pass)(uint32_t town) noexcept;
-	uint32_t (*next_town)(uint32_t from) noexcept;
-	uint64_t (*road_mask)() noexcept;
-	bool (*build_road)(uint32_t town, uint32_t tile, uint32_t bits, uint32_t road_type, uint32_t mode) noexcept;
-	bool (*clear_land)(uint32_t tile, uint32_t execute) noexcept;
-	OpenTTDTownCommandResult (*terraform_land)(uint32_t tile, uint32_t slope, uint32_t up, uint32_t execute) noexcept;
-	bool (*build_bridge)(uint32_t tile, uint32_t end, uint32_t bridge, uint32_t road_type, uint32_t execute) noexcept;
-	bool (*build_tunnel)(uint32_t tile, uint32_t road_type, uint32_t execute) noexcept;
-	void (*clear_house_land)(uint32_t tile) noexcept;
-	bool (*allow_construction)(uint32_t town, uint32_t tile, uint32_t house, uint32_t random) noexcept;
-	void (*construction_animation)(uint32_t tile) noexcept;
+	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
+	uint8_t (*growth_rate)() noexcept OPENTTD_SERVICE_DEFAULT(growth_rate);
+	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
+	bool (*editor)() noexcept OPENTTD_SERVICE_DEFAULT(editor);
+	bool (*generating_world)() noexcept OPENTTD_SERVICE_DEFAULT(generating_world);
+	bool (*allow_crossings)() noexcept OPENTTD_SERVICE_DEFAULT(allow_crossings);
+	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);
+	uint8_t (*highest_snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(highest_snow_line);
+	int32_t (*calendar_year)() noexcept OPENTTD_SERVICE_DEFAULT(calendar_year);
+	bool (*allow_roads)() noexcept OPENTTD_SERVICE_DEFAULT(allow_roads);
+	uint8_t (*road_flags)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_flags);
+	OpenTTDTownHouseAvailability (*house_availability)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_availability);
+	OpenTTDTownHousePlacement (*house_placement)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_placement);
+	OpenTTDTownHouseConstruction (*house_construction)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_construction);
+	uint8_t (*house_flags)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_flags);
+	uint8_t (*house_extra_flags)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_extra_flags);
+	bool (*house_allows_callback)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_allows_callback);
+	OpenTTDTownRoadChoice (*road_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_info);
+	OpenTTDTownState *(*state)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(state);
+	void (*stations)(uint32_t, uint32_t, void *, void (*)(void *, const OpenTTDStation *, uint32_t)) noexcept OPENTTD_SERVICE_DEFAULT(stations);
+	const OpenTTDStationService *(*station_activity_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_activity_owner);
+	uint8_t (*station_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
+	void (*dirty_authority)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(dirty_authority);
+	void (*dirty_town)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(dirty_town);
+	uint32_t (*foundation_slope)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(foundation_slope);
+	int64_t (*terraform_price)() noexcept OPENTTD_SERVICE_DEFAULT(terraform_price);
+	uint32_t (*clean_road_bits)(uint32_t tile, uint32_t bits) noexcept OPENTTD_SERVICE_DEFAULT(clean_road_bits);
+	void (*set_road_town)(uint32_t tile, uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(set_road_town);
+	uint32_t (*exchange_company)(uint32_t company) noexcept OPENTTD_SERVICE_DEFAULT(exchange_company);
+	uint16_t (*house_class)(uint16_t house) noexcept OPENTTD_SERVICE_DEFAULT(house_class);
+	void (*make_house)(uint32_t tile, uint32_t town, uint32_t house, uint32_t construction) noexcept OPENTTD_SERVICE_DEFAULT(make_house);
+	void (*add_animation)(uint32_t tile, bool) noexcept OPENTTD_SERVICE_DEFAULT(add_animation);
+	void (*population_changed)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(population_changed);
+	void (*nearby_stations)(uint32_t town, uint32_t tile, uint32_t size) noexcept OPENTTD_SERVICE_DEFAULT(nearby_stations);
+	uint32_t (*house_count)() noexcept OPENTTD_SERVICE_DEFAULT(house_count);
+	void (*update_max_pass)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(update_max_pass);
+	uint32_t (*next_town)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_town);
+	uint64_t (*road_mask)() noexcept OPENTTD_SERVICE_DEFAULT(road_mask);
+	bool (*build_road)(uint32_t town, uint32_t tile, uint32_t bits, uint32_t road_type, uint32_t mode) noexcept OPENTTD_SERVICE_DEFAULT(build_road);
+	bool (*clear_land)(uint32_t tile, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(clear_land);
+	OpenTTDTownCommandResult (*terraform_land)(uint32_t tile, uint32_t slope, uint32_t up, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(terraform_land);
+	bool (*build_bridge)(uint32_t tile, uint32_t end, uint32_t bridge, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_bridge);
+	bool (*build_tunnel)(uint32_t tile, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_tunnel);
+	void (*clear_house_land)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(clear_house_land);
+	bool (*allow_construction)(uint32_t town, uint32_t tile, uint32_t house, uint32_t random) noexcept OPENTTD_SERVICE_DEFAULT(allow_construction);
+	void (*construction_animation)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(construction_animation);
 };
 /* Services are synchronous noexcept calls. No owner reference spans one. Commands
  * and bounded NewGRF resolution may reenter; ordinary gameplay does not throw.

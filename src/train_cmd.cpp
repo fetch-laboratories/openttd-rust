@@ -4887,3 +4887,14 @@ static const OpenTTDTrainReservationLeaves &GetTrainReservationServices()
 }
 
 #endif
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDTrainServices.hpp"
+#include "abi-visit-OpenTTDTrainReservationLeaves.hpp"
+bool CheckAbi_train_cmd()
+{
+	return AbiServicesComplete(GetTrainServices()) &&
+		AbiServicesComplete(GetTrainReservationServices());
+}
+#endif
