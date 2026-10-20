@@ -143,12 +143,12 @@ unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in 
 4. **#281** vehicle maintenance direct calls, then the callee-copy check.
 5. **#274 map view**, one shared PR after #255 integrates.
 6. **Commands:**
-   - #266/#290 road commands: fixing review/ABI adoption complete; final initial medians pass, Full requested alongside the required quiet P2016 repeat;
+   - #266/#290 road commands: a deeper audit found indirect rating/finance owner bounces. The selected fix moves complete ordinary command pre/post helpers to shared Rust with native facades/storage services; fresh fixing review, medians and Full follow;
    - #267/#303 station construction: direct command/reservation repairs pass native verify; final semantic checks, medians and fresh review precede Full;
    - #247 town commands, authority and deletion, after #256/#269 integrates;
    - #293 tunnel/bridge construction, removal and ownership, once #247 and #212 settle;
    - #294 water construction/restoration starts concurrently now: #247 waits on houses; #293 keeps its prerequisites. Leave docking with #267 and flooding with #212, with no draft dependency;
-   - #295 object construction, generation and HQ lifecycle, including canonical counts and cleared-area scratch.
+   - #295 object construction, generation and HQ lifecycle, including canonical counts/scratch. Fix indirect command/finance/price bounces, narrow scratch operations and redundant table bindings before reassessing its retirement ratio; no waiver or draft service dependency.
 
    Fresh Astra planning selected #293-#295. Reuse canonical services; none waits on draft wrappers. Object generation's cancellation services need return-before-rethrow handling.
    Next whole owners: **#314** common vehicle transactions/nonrail construction/articulated assembly; **#315** rail construction/consist transactions; **#316** subsidy state and award/expiry. They start in that order after active work, without draft service dependencies; subsidy glue+tooling targets <=450 lines.
@@ -168,7 +168,7 @@ Fresh owners cover component evidence, the speed fix round and independent revie
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
 | #256 / #269 | `house-lifecycle-256`, `64f133b059` | Fix, 45-scenario checks and fresh review complete. P2016 1.558 fails ceiling; P1996 1.416 missed the prior #255 guard. Root owns selected #275 follow-up and integration gates. |
-| #266 / #290 | `road-commands-266`, `2a28bc736d` | Fixing review/ABI adoption and final initial medians pass. Full requested; root also owns quiet P2016 repeat (1.462585 initial). No merge until both pass. |
+| #266 / #290 | `road-commands-266`, `2a28bc736d` | Full hit an external fetch503. New transitive rating/finance bounces block integration; fresh fixer owns shared pre/post support, then new medians/Full. Prior quiet-repeat result remains pending historical source. |
 | #267 / #303 | `station-commands-267`, `0bac491fb1` | Actual-base named ABI/defaults and completeness-call repairs pass verify/Cargo4. Final 40 scenarios/18 comparisons/medians underway, then fresh review/Full. |
 | #306 / #308 | `t3/reuse-ship-search-scratch`, `9675566fb9` | Scratch/profile/native/water checks and fresh review pass. P2016 1.618 fails; root owns speed disposition and remaining gates. |
 | #294 / #317 | `t3/port-water-commands-to-rust`, `260efba613` | Verify/Cargo4, 350 scenarios and 18 comparisons pass. Actual-base ABI/default adoption underway, then affected checks/medians/fresh review. |
