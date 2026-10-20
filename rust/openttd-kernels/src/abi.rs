@@ -1464,6 +1464,9 @@ layouts! {
         tunnel_bridge_direction,
         tunnel_transport,
         update_level_crossing,
+        // Registry: house (#256).
+
+        // Registry: landscape (#212).
         clear_ground,
         foundation,
         has_water_class,
