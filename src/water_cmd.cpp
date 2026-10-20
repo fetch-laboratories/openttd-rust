@@ -51,6 +51,12 @@
 #include "rust/vehicle_services.h"
 #include "rust/services_station.h"
 #include "rail_cmd.h"
+#include "rust/water_command_ffi.h"
+#include "rust/command_services.h"
+#include "rust/company_services.h"
+#include "rust/services_depot.h"
+#include "rust/services_rail.h"
+#include <variant>
 #endif
 
 #include "safeguards.h"
@@ -131,6 +137,15 @@ void ClearNeighbourNonFloodingStates(TileIndex tile)
  * @param axis depot orientation (Axis)
  * @return the cost of this operation or an error
  */
+#ifdef WITH_RUST
+CommandCost CmdBuildShipDepot(DoCommandFlags flags, TileIndex tile, Axis axis)
+{
+	CommandCost cost, ret;
+	openttd_rust_water_build_depot(&GetRustWaterCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), axis);
+	return cost;
+}
+
+#else
 CommandCost CmdBuildShipDepot(DoCommandFlags flags, TileIndex tile, Axis axis)
 {
 	if (!IsValidAxis(axis)) return CMD_ERROR;
@@ -191,6 +206,8 @@ CommandCost CmdBuildShipDepot(DoCommandFlags flags, TileIndex tile, Axis axis)
 	return cost;
 }
 
+#endif /* WITH_RUST */
+
 bool IsPossibleDockingTile(Tile t)
 {
 	assert(IsValidTile(t));
@@ -237,6 +254,89 @@ void CheckForDockingTile(TileIndex t)
 	}
 }
 
+#ifdef WITH_RUST
+void MakeWaterKeepingClass(TileIndex tile, Owner owner)
+{
+	openttd_rust_water_restore(&GetRustWaterCommandServices(), tile.base(), owner.base());
+}
+CommandCost CmdBuildLock(DoCommandFlags flags, TileIndex tile)
+{
+	CommandCost cost, ret;
+	openttd_rust_water_build_lock(&GetRustWaterCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base());
+	return cost;
+}
+void MakeRiverAndModifyDesertZoneAround(TileIndex tile)
+{
+	openttd_rust_water_make_river(&GetRustWaterCommandServices(), tile.base());
+}
+/* The selected command owns traversal; the established map iterator stays a
+ * call-local native value. Variant construction has no per-command allocation. */
+struct OpenTTDWaterArea {
+	std::variant<OrthogonalTileIterator, DiagonalTileIterator> iter;
+	OpenTTDWaterArea(TileIndex tile, TileIndex start, bool diagonal) : iter(OrthogonalTileIterator(tile, start))
+	{
+		if (diagonal) this->iter.emplace<DiagonalTileIterator>(tile, start);
+	}
+};
+const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
+{
+	static const OpenTTDWaterCommandServices services{
+		.shared = &GetRustSharedServices(), .cost = &GetRustCommandCostServices(), .command = &GetRustCommandServices(), .water = &GetRustWaterGroundServices(),
+		.water_type = [](uint32_t t) noexcept { return GetWaterTileType(TileIndex{t}); },
+		.lock_part = [](uint32_t t) noexcept { return GetLockPart(TileIndex{t}); },
+		.lock_direction = [](uint32_t t) noexcept { return GetLockDirection(TileIndex{t}); },
+		.other_depot_tile = [](uint32_t t) noexcept { return GetOtherShipDepotTile(TileIndex{t}).base(); },
+		.slope_z = RustTileSlopeZ,
+		.environment = GetRustEnvironmentServices(),
+		.infrastructure = RustAddWaterInfrastructure,
+		.make_depot = [](uint32_t t, uint8_t o, uint16_t id, DepotPart part, Axis axis, WaterClass wc) noexcept { MakeShipDepot(TileIndex{t}, Owner{o}, DepotID{id}, part, axis, wc); },
+		.make_lock_tile = [](uint32_t t, uint8_t o, LockPart part, DiagDirection dir, WaterClass wc) noexcept { MakeLockTile(TileIndex{t}, Owner{o}, part, dir, wc); },
+		.make_canal = [](uint32_t t, uint8_t o, uint8_t random) noexcept { MakeCanal(TileIndex{t}, Owner{o}, random); },
+		.make_river = [](uint32_t t, uint8_t random) noexcept { MakeRiver(TileIndex{t}, random); },
+		.bridge_height_above = [](uint32_t t) noexcept { return GetBridgeHeight(GetSouthernBridgeEnd(TileIndex{t})); },
+		.area_tile = [](OpenTTDWaterArea *a) noexcept { return std::visit([](auto &i) { return (*i).base(); }, a->iter); },
+		.area_next = [](OpenTTDWaterArea *a) noexcept { std::visit([](auto &i) { ++i; }, a->iter); },
+		.build_depot_price = []() noexcept { return _price[PR_BUILD_DEPOT_SHIP].base(); },
+		.clear_depot_price = []() noexcept { return _price[PR_CLEAR_DEPOT_SHIP].base(); },
+		.build_lock_price = []() noexcept { return _price[PR_BUILD_LOCK].base(); },
+		.clear_lock_price = []() noexcept { return _price[PR_CLEAR_LOCK].base(); },
+		.build_canal_price = []() noexcept { return _price[PR_BUILD_CANAL].base(); },
+		.clear_canal_price = []() noexcept { return _price[PR_CLEAR_CANAL].base(); },
+		.clear_water_price = []() noexcept { return _price[PR_CLEAR_WATER].base(); },
+		.clear_rough_price = []() noexcept { return _price[PR_CLEAR_ROUGH].base(); },
+		.strings = {
+			.built_on_water = STR_ERROR_MUST_BE_BUILT_ON_WATER,
+			.demolish_bridge = STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
+			.unsuitable = STR_ERROR_SITE_UNSUITABLE,
+			.sloped_wrong = STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION,
+			.edge = STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP,
+			.low_bridge = STR_ERROR_BRIDGE_TOO_LOW_FOR_LOCK,
+			.flat = STR_ERROR_FLAT_LAND_REQUIRED,
+			.already_built = STR_ERROR_ALREADY_BUILT,
+			.build_on_water = STR_ERROR_CAN_T_BUILD_ON_WATER,
+			.demolish_building = STR_ERROR_BUILDING_MUST_BE_DEMOLISHED,
+			.demolish_canal = STR_ERROR_MUST_DEMOLISH_CANAL_FIRST,
+		},
+	};
+	return services;
+}
+CommandCost CmdBuildCanal(DoCommandFlags flags, TileIndex tile, TileIndex start_tile, WaterClass wc, bool diagonal)
+{
+	/* Preserve parameter validation before constructing an iterator. */
+	if (start_tile >= Map::Size() || !IsValidWaterClass(wc)) return CMD_ERROR;
+	OpenTTDWaterArea area(tile, start_tile, diagonal);
+	CommandCost cost, ret;
+	openttd_rust_water_build_canal(&GetRustWaterCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), &area, flags.base(), start_tile.base(), wc);
+	return cost;
+}
+static CommandCost ClearTile_Water(TileIndex tile, DoCommandFlags flags)
+{
+	CommandCost cost, ret;
+	openttd_rust_water_clear(&GetRustWaterCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base());
+	return cost;
+}
+
+#else
 void MakeWaterKeepingClass(TileIndex tile, Owner o)
 {
 	WaterClass wc = GetWaterClass(tile);
@@ -668,6 +768,8 @@ static CommandCost ClearTile_Water(TileIndex tile, DoCommandFlags flags)
 			NOT_REACHED();
 	}
 }
+
+#endif /* WITH_RUST */
 
 /**
  * return true if a tile is a water tile wrt. a certain direction.
@@ -1472,6 +1574,14 @@ static bool ClickTile_Water(TileIndex tile)
 	return false;
 }
 
+#ifdef WITH_RUST
+static void ChangeTileOwner_Water(TileIndex tile, Owner old_owner, Owner new_owner)
+{
+	CommandCost ret;
+	openttd_rust_water_change_owner(&GetRustWaterCommandServices(), RustCommandCost(&ret), tile.base(), old_owner.base(), new_owner.base());
+}
+
+#else
 static void ChangeTileOwner_Water(TileIndex tile, Owner old_owner, Owner new_owner)
 {
 	if (!IsTileOwner(tile, old_owner)) return;
@@ -1508,11 +1618,28 @@ static void ChangeTileOwner_Water(TileIndex tile, Owner old_owner, Owner new_own
 	}
 }
 
+#endif /* WITH_RUST */
+
 static VehicleEnterTileStates VehicleEnter_Water(Vehicle *, TileIndex, int, int)
 {
 	return {};
 }
 
+#ifdef WITH_RUST
+static CommandCost TerraformTile_Water(TileIndex tile, DoCommandFlags flags, int, Slope)
+{
+	CommandCost cost;
+	openttd_rust_water_terraform(&GetRustWaterCommandServices(), RustCommandCost(&cost), flags.base(), tile.base());
+	return cost;
+}
+static CommandCost CheckBuildAbove_Water(TileIndex tile, DoCommandFlags flags, Axis, int height)
+{
+	CommandCost cost;
+	openttd_rust_water_build_above(&GetRustWaterCommandServices(), RustCommandCost(&cost), flags.base(), tile.base(), height);
+	return cost;
+}
+
+#else
 static CommandCost TerraformTile_Water(TileIndex tile, DoCommandFlags flags, int, Slope)
 {
 	/* Canals can't be terraformed */
@@ -1531,6 +1658,8 @@ static CommandCost CheckBuildAbove_Water(TileIndex tile, DoCommandFlags flags, A
 	}
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
 }
+
+#endif /* WITH_RUST */
 
 extern const TileTypeProcs _tile_type_water_procs = {
 	DrawTile_Water,           // draw_tile_proc

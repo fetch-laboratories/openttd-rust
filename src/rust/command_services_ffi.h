@@ -11,6 +11,11 @@
 #include "command_cost_ffi.h"
 struct Train;
 struct OpenTTDCommandServices {
+	bool (*depot_available)() noexcept;
+	uint16_t (*new_depot)(uint32_t) noexcept;
+	void (*depot_name)(uint16_t) noexcept;
+	void (*delete_depot)(uint32_t) noexcept;
+	void (*infrastructure_dirty)(uint8_t) noexcept;
 	void (*landscape_clear)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept;
 	void (*tile_ownership)(OpenTTDCommandCost *, uint32_t) noexcept;
 	void (*ownership)(OpenTTDCommandCost *, uint8_t) noexcept;

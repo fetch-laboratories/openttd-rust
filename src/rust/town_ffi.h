@@ -56,7 +56,7 @@ struct OpenTTDTownLeaves {
 	uint32_t (*map_log_x)() noexcept;
 	uint8_t (*growth_rate)() noexcept;
 	uint8_t (*snow_line)() noexcept;
-	bool (*editor)() noexcept;
+	OpenTTDEnvironmentServices environment;
 	bool (*generating_world)() noexcept;
 	bool (*allow_crossings)() noexcept;
 	uint8_t (*climate)() noexcept;

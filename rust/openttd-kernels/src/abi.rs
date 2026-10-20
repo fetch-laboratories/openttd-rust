@@ -83,8 +83,15 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         820 => {
             layout!(crate::signal::SignalServices, item; assertions, assert_condition, assert_wormhole_start, train_on_tile, train_on_tracks, overflow_tbu, overflow_tbd, overflow_global, assert_company)
         }
+        1122 => layout!(crate::services::EnvironmentServices, item; editor, freeform_edges),
+        1120 => {
+            layout!(crate::water_cmd::WaterCommandServices, item; shared, cost, command, water, water_type, lock_part, lock_direction, other_depot_tile, slope_z, environment, infrastructure, make_depot, make_lock_tile, make_canal, make_river, bridge_height_above, area_tile, area_next, build_depot_price, clear_depot_price, build_lock_price, clear_lock_price, build_canal_price, clear_canal_price, clear_water_price, clear_rough_price, strings)
+        }
+        1121 => {
+            layout!(crate::water_cmd::Strings, item; built_on_water, demolish_bridge, unsuitable, sloped_wrong, edge, low_bridge, flat, already_built, build_on_water, demolish_building, demolish_canal)
+        }
         980 => {
-            layout!(crate::rail_cmd::RailCommandServices, item; shared, rail, cost, command, signal, strings, rail_type_valid, compatible_rail, powered_rail, train_powered, rail_no_crossings, road_no_crossing, rail_build_cost, rail_clear_cost, rail_convert_cost, road_build_cost, crossing_with_competitor, disable_elrails, rail_foundation, apply_foundation, slope_z_in_corner, entrance_edge, ship_on_tile, build_rail, remove_rail, build_signal, remove_signal, convert_rail, rail_infrastructure, road_infrastructure, signal_infrastructure, infrastructure_dirty, reserving_train, parking, train_position, layout_changed, mark_crossings, crossing_removed, make_crossing, make_road, depot_available, new_depot, depot_name, delete_depot, depot_windows, close_inspect, make_shore, docking_check, area_begin, area_tile, area_next, area_contains, collect_trains, consist_changed)
+            layout!(crate::rail_cmd::RailCommandServices, item; shared, rail, cost, command, signal, strings, rail_type_valid, compatible_rail, powered_rail, train_powered, rail_no_crossings, road_no_crossing, rail_build_cost, rail_clear_cost, rail_convert_cost, road_build_cost, crossing_with_competitor, disable_elrails, rail_foundation, apply_foundation, slope_z_in_corner, entrance_edge, ship_on_tile, build_rail, remove_rail, build_signal, remove_signal, convert_rail, rail_infrastructure, road_infrastructure, signal_infrastructure, reserving_train, parking, train_position, layout_changed, mark_crossings, crossing_removed, make_crossing, make_road, depot_windows, close_inspect, make_shore, docking_check, area_begin, area_tile, area_next, area_contains, collect_trains, consist_changed)
         }
         981 => {
             layout!(crate::rail_cmd::Strings, item; impossible_combination, already_built, build_on_water, sloped_wrong, remove_signals_first, road_works, oneway_road, crossing_rail, crossing_road, no_track, owned_by, flat_land, demolish_bridge, no_suitable_track, no_signals, owned_by_another, remove_track, demolish_building, ship_in_way)
@@ -95,7 +102,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::rail_cmd::CrossingRoad, item; bits, road_type, tram_type, town, road_owner, tram_owner)
         }
         821 => {
-            layout!(crate::services::RailMapServices, item; ground, traversal, signal_presence, signal_update, station_admission, crossing_admission, wormhole_admission, is_rail_depot, rail_depot_direction, has_signal_trackdir, signal_state, set_signal_state, other_tunnel_bridge_end, rail_track_status, has_signals, signal_type, rail_type, set_rail_type, rail_tile_type, set_track_bits, present_signals, set_present_signals, signal_states, set_signal_states, set_has_signals, set_signal_type, signal_variant, set_signal_variant, cycle_signal_side, reserved_tracks, rail_reservation, set_track_reservation, depot_reserved, set_depot_exit, make_rail_normal, make_rail_depot, crossing_rail_bits, crossing_road_axis, has_station_rail, is_rail_station, station_blocked, station_track, wormhole_reserved, set_tile_owner)
+            layout!(crate::services::RailMapServices, item; ground, traversal, signal_presence, signal_update, station_admission, crossing_admission, wormhole_admission, is_rail_depot, rail_depot_direction, has_signal_trackdir, signal_state, set_signal_state, other_tunnel_bridge_end, rail_track_status, has_signals, signal_type, rail_type, set_rail_type, rail_tile_type, set_track_bits, present_signals, set_present_signals, signal_states, set_signal_states, set_has_signals, set_signal_type, signal_variant, set_signal_variant, cycle_signal_side, reserved_tracks, rail_reservation, set_track_reservation, depot_reserved, set_depot_exit, make_rail_normal, make_rail_depot, crossing_rail_bits, crossing_road_axis, has_station_rail, is_rail_station, station_blocked, station_track, wormhole_reserved)
         }
         445 => layout!(crate::town::YearlyServices, item; completed, age, set_age),
         444 => layout!(crate::town::SuppliedEntry, item; entry, created),
@@ -103,7 +110,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::town::AuthorityServices, item; council_tolerance, bulldozer, authority_distance, town_index, refusal)
         }
         621 => {
-            layout!(crate::services::CommandServices, item; landscape_clear, tile_ownership, ownership, no_vehicle, no_train, wormhole_free)
+            layout!(crate::services::CommandServices, item; depot_available, new_depot, depot_name, delete_depot, infrastructure_dirty, landscape_clear, tile_ownership, ownership, no_vehicle, no_train, wormhole_free)
         }
         620 => {
             layout!(crate::services::CommandCostServices, item; zero, error, expense_money, error_param, add, move_cost, amount, success, error_message, money, make_error)
@@ -235,7 +242,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::effect::Leaves, item; observe, write, viewport, sound, animated)
         }
         42 => {
-            layout!(crate::services::Services, item;
+            layout!(crate::services::Services, item; set_tile_owner,
                 autoslope,
                 bay_stop_direction,
                 bridge_above,
@@ -435,7 +442,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         436 => layout!(crate::town::Slots, item; data, size),
         430 => layout!(crate::town::CommandResult, item; cost, success),
         431 => {
-            layout!(crate::town::Leaves, item; map_log_x, growth_rate, snow_line, editor, generating_world, allow_crossings, climate, highest_snow_line, calendar_year, allow_roads, road_flags, house_availability, house_placement, house_construction, house_flags, house_extra_flags, house_allows_callback, road_info, state, stations, station_activity_owner, station_owner, dirty_authority, dirty_town, foundation_slope, terraform_price, clean_road_bits, set_road_town, exchange_company, house_class, make_house, add_animation, population_changed, nearby_stations, house_count, update_max_pass, next_town, road_mask, build_road, clear_land, terraform_land, build_bridge, build_tunnel, clear_house_land, allow_construction, construction_animation)
+            layout!(crate::town::Leaves, item; map_log_x, growth_rate, snow_line, environment, generating_world, allow_crossings, climate, highest_snow_line, calendar_year, allow_roads, road_flags, house_availability, house_placement, house_construction, house_flags, house_extra_flags, house_allows_callback, road_info, state, stations, station_activity_owner, station_owner, dirty_authority, dirty_town, foundation_slope, terraform_price, clean_road_bits, set_road_town, exchange_company, house_class, make_house, add_animation, population_changed, nearby_stations, house_count, update_max_pass, next_town, road_mask, build_road, clear_land, terraform_land, build_bridge, build_tunnel, clear_house_land, allow_construction, construction_animation)
         }
         90 => {
             layout!(crate::rail_yapf::Settings, item; max_nodes, firstred, firstred_exit, lastred, lastred_exit, station, slope, curve45, curve90, depot_reverse, crossing, lookahead, p0, p1, p2, pbs_cross, pbs_station, pbs_back, doubleslip, longer, longer_tile, shorter, shorter_tile, firstred_eol)
@@ -583,7 +590,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         }
         566 => layout!(crate::industry::GenerationInfo, item; appear, enabled, layouts),
         567 => {
-            layout!(crate::industry::GenerationServices, item; spec, spec_behaviour, info, coastal, editor, density, custom_number, scale_by_size_1d, scale_by_land_proportion, set_progress, increase_progress, missing_warning)
+            layout!(crate::industry::GenerationServices, item; spec, spec_behaviour, info, coastal, environment, density, custom_number, scale_by_size_1d, scale_by_land_proportion, set_progress, increase_progress, missing_warning)
         }
         560 => {
             layout!(crate::industry::Metadata, item; tile, width, height, construction_date, random, kind, owner, random_colour, founder, construction_type, selected_layout, exclusive_supplier, exclusive_consumer)

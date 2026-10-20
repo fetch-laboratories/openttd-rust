@@ -2621,7 +2621,7 @@ const OpenTTDRailServices &GetRustRailGroundServices() noexcept
 		.tracks = RustRailTracks,
 		.ground = RustRailGround,
 		.set_ground = RustSetRailGroundTyped,
-		.snow = [](uint32_t index) noexcept { TileIndex t{index}; auto [slope, z] = GetTileSlopeZ(t); bool plain = RustPlainRailTile(index); return OpenTTDRailSnowGround{.z = z, .slope = slope, .tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .plain = plain}; },
+		.snow = [](uint32_t index) noexcept { auto [z, slope] = RustTileSlopeZ(index); bool plain = RustPlainRailTile(index); return OpenTTDRailSnowGround{.z = z, .slope = slope, .tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .plain = plain}; },
 		.fences = [](uint32_t index) noexcept { bool plain = RustPlainRailTile(index); return OpenTTDRailFenceGround{.tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .owner = plain ? RustTileOwnerValue(index) : uint8_t{}, .plain = plain}; },
 		.foundation = RustRailFoundation,
 		.owned_land = [](uint32_t t) noexcept { return IsObjectType(TileIndex{t}, OBJECT_OWNED_LAND); },
@@ -3144,6 +3144,7 @@ static CommandCost CheckBuildAbove_Track(TileIndex tile, DoCommandFlags flags, A
  * counters and every CommandCost stay native; the original bodies remain
  * under #ifndef WITH_RUST above. */
 #include "rust/rail_command_ffi.h"
+#include "rust/services_depot.h"
 #include "rust/services_water.h"
 #include "rust/command_cost_services.h"
 #include "rust/company_services.h"
@@ -3297,7 +3298,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.rail_infrastructure = RustAddRailInfrastructure,
 		.road_infrastructure = RustAddRoadInfrastructure,
 		.signal_infrastructure = RustAddSignalInfrastructure,
-		.infrastructure_dirty = [](uint8_t owner) noexcept { DirtyCompanyInfrastructureWindows(CompanyID(owner)); },
 		.reserving_train = [](uint32_t tile, uint8_t track) noexcept { return GetTrainForReservation(TileIndex{tile}, static_cast<Track>(track)); },
 		.parking = RailParking,
 		.train_position = [](Train *v) noexcept -> OpenTTDRailTrainPosition { return {.tile = RustVehicleTile(v), .trackdir = GetRustSharedServices().train_trackdir(v)}; },
@@ -3306,10 +3306,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.crossing_removed = [](uint32_t tile, uint8_t axis) noexcept { UpdateAdjacentLevelCrossingTilesOnLevelCrossingRemoval(TileIndex{tile}, static_cast<Axis>(axis)); },
 		.make_crossing = RailMakeCrossing,
 		.make_road = RailMakeRoad,
-		.depot_available = []() noexcept { return Depot::CanAllocateItem(); },
-		.new_depot = [](uint32_t tile) noexcept { return (new Depot(TileIndex{tile}))->index.base(); },
-		.depot_name = [](uint16_t id) noexcept { MakeDefaultName(Depot::Get(DepotID(id))); },
-		.delete_depot = [](uint32_t tile) noexcept { delete Depot::GetByTile(TileIndex{tile}); },
 		.depot_windows = RailDepotWindows,
 		.close_inspect = [](uint32_t tile) noexcept { DeleteNewGRFInspectWindow(GSF_RAILTYPES, tile); },
 		.make_shore = RailMakeShore,

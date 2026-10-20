@@ -64,7 +64,6 @@ struct OpenTTDRailCommandServices {
 	void (*rail_infrastructure)(uint8_t, uint8_t, uint32_t) noexcept;
 	void (*road_infrastructure)(uint8_t, uint8_t, uint32_t) noexcept;
 	void (*signal_infrastructure)(uint8_t, uint32_t) noexcept;
-	void (*infrastructure_dirty)(uint8_t) noexcept;
 	Train *(*reserving_train)(uint32_t, uint8_t) noexcept;
 	OpenTTDRailTrainParking (*parking)(Train *) noexcept;
 	OpenTTDRailTrainPosition (*train_position)(Train *) noexcept;
@@ -73,10 +72,6 @@ struct OpenTTDRailCommandServices {
 	void (*crossing_removed)(uint32_t, uint8_t) noexcept;
 	void (*make_crossing)(uint32_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint16_t) noexcept;
 	void (*make_road)(uint32_t, OpenTTDCrossingRoad) noexcept;
-	bool (*depot_available)() noexcept;
-	uint16_t (*new_depot)(uint32_t) noexcept;
-	void (*depot_name)(uint16_t) noexcept;
-	void (*delete_depot)(uint32_t) noexcept;
 	void (*depot_windows)(uint32_t) noexcept;
 	void (*close_inspect)(uint32_t) noexcept;
 	void (*make_shore)(uint32_t) noexcept;

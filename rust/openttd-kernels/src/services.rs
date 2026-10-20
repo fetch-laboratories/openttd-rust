@@ -102,6 +102,16 @@ pub struct CommandCostServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandServices {
+    /// Native depot pool capacity.
+    pub depot_available: extern "C" fn() -> bool,
+    /// Allocate a native depot at a tile.
+    pub new_depot: extern "C" fn(u32) -> u16,
+    /// Assign the native default depot name.
+    pub depot_name: extern "C" fn(u16),
+    /// Delete the depot identified by its tile.
+    pub delete_depot: extern "C" fn(u32),
+    /// Refresh construction infrastructure windows.
+    pub infrastructure_dirty: extern "C" fn(u8),
     /// Original `CMD_LANDSCAPE_CLEAR`, with actual `DoCommandFlags` width.
     pub landscape_clear: extern "C" fn(*mut CommandCost, u32, u16),
     /// Original `CheckTileOwnership`, preserving native encoded errors.
@@ -236,6 +246,16 @@ pub struct Train {
     _private: [u8; 0],
 }
 
+/// Canonical immutable world settings shared by owner tables.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct EnvironmentServices {
+    /// Scenario editor mode.
+    pub editor: extern "C" fn() -> bool,
+    /// Construction freeform edges.
+    pub freeform_edges: extern "C" fn() -> bool,
+}
+
 /// Immutable call table supplied by the game (or isolated test world). No global
 /// registration or game symbol imports are needed by standalone Cargo binaries.
 /// The context and function addresses outlive the component invocation; callbacks
@@ -245,6 +265,8 @@ pub struct Train {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
+    /// Canonical native tile owner write.
+    pub set_tile_owner: extern "C" fn(u32, u8),
     /// `AutoslopeEnabled()`.
     pub autoslope: extern "C" fn() -> bool,
     /// Original native `bay_stop_direction` map observation.
@@ -507,6 +529,7 @@ pub fn fixture(
         }
     }
     Services {
+        set_tile_owner: zone,
         autoslope: flag0,
         bay_stop_direction: byte,
         bridge_above: flag,
@@ -959,8 +982,6 @@ pub struct RailMapServices {
     pub station_track: extern "C" fn(u32) -> Track,
     /// Native `HasTunnelBridgeReservation`.
     pub wormhole_reserved: extern "C" fn(u32) -> bool,
-    /// Native `SetTileOwner`.
-    pub set_tile_owner: extern "C" fn(u32, u8),
 }
 
 #[cfg(test)]

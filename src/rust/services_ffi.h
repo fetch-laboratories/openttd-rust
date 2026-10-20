@@ -58,7 +58,13 @@ enum RoadType : uint8_t;
 enum RoadBits : uint8_t;
 enum Trackdir : uint8_t;
 struct OpenTTDWaterGroundServices;
+struct OpenTTDEnvironmentServices {
+	bool (*editor)() noexcept;
+	bool (*freeform_edges)() noexcept;
+};
+const OpenTTDEnvironmentServices &GetRustEnvironmentServices() noexcept;
 struct OpenTTDSharedServices {
+	void (*set_tile_owner)(uint32_t, uint8_t) noexcept;
 	bool (*autoslope)() noexcept;
 	uint8_t (*bay_stop_direction)(uint32_t) noexcept;
 	bool (*bridge_above)(uint32_t) noexcept;
@@ -230,7 +236,6 @@ struct OpenTTDRailMapServices {
 	bool (*station_blocked)(uint32_t) noexcept;
 	Track (*station_track)(uint32_t) noexcept;
 	bool (*wormhole_reserved)(uint32_t) noexcept;
-	void (*set_tile_owner)(uint32_t, uint8_t) noexcept;
 };
 const OpenTTDRailMapServices &GetRustRailMapServices() noexcept;
 
@@ -243,6 +248,7 @@ Result OpenTTDFixtureMapService(Args...) noexcept
 inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_t (*random)(void *) noexcept, uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept) noexcept
 {
 	return {
+		.set_tile_owner = OpenTTDFixtureMapService<void, uint32_t, uint8_t>,
 		.autoslope = OpenTTDFixtureMapService<bool>,
 		.bay_stop_direction = OpenTTDFixtureMapService<uint8_t, uint32_t>,
 		.bridge_above = OpenTTDFixtureMapService<bool, uint32_t>,

@@ -3786,7 +3786,7 @@ static const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 			auto proc = reinterpret_cast<const IndustrySpec *>(handle)->check_proc;
 			return proc == CHECK_REFINERY || proc == CHECK_OIL_RIG;
 		},
-		.editor = OpenTTDEditor,
+		.environment = GetRustEnvironmentServices(),
 		.density = []() noexcept -> uint8_t { return _settings_game.difficulty.industry_density; },
 		.custom_number = []() noexcept -> uint32_t { return _settings_game.game_creation.custom_industry_number; },
 		.scale_by_size_1d = [](uint32_t n) noexcept -> uint32_t { return Map::ScaleBySize1D(n); },

@@ -10,6 +10,7 @@
 #include "services_ffi.h"
 #include "services_map.h"
 #include "command_services.h"
+#include "services_depot.h"
 #include "command_cost_native_services.h"
 #include "company_services.h"
 #ifdef WITH_RUST
@@ -87,9 +88,16 @@ static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner) noexcept { 
 static void CommandNoVehicle(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = EnsureNoVehicleOnGround(TileIndex{tile}); }
 static void CommandNoTrain(OpenTTDCommandCost *out, uint32_t tile, uint8_t bits) noexcept { *NativeCost(out) = EnsureNoTrainOnTrackBits(TileIndex{tile}, static_cast<TrackBits>(bits)); }
 static void CommandWormholeFree(OpenTTDCommandCost *out, uint32_t tile, uint32_t end, const Train *ignore) noexcept { *NativeCost(out) = TunnelBridgeIsFree(TileIndex{tile}, TileIndex{end}, ignore); }
+const OpenTTDEnvironmentServices &GetRustEnvironmentServices() noexcept
+{
+	static const OpenTTDEnvironmentServices services{.editor = OpenTTDEditor, .freeform_edges = OpenTTDFreeformEdges};
+	return services;
+}
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
 	static const OpenTTDCommandServices services{
+		.depot_available = RustDepotAvailable, .new_depot = RustNewDepot, .depot_name = RustDepotName, .delete_depot = RustDeleteDepot,
+		.infrastructure_dirty = RustInfrastructureDirty,
 		.landscape_clear = LandscapeClear,
 		.tile_ownership = CommandTileOwnership, .ownership = CommandOwnership,
 		.no_vehicle = CommandNoVehicle, .no_train = CommandNoTrain, .wormhole_free = CommandWormholeFree,
@@ -205,6 +213,7 @@ static int32_t SharedSlope(int32_t x, int32_t y) noexcept { return SharedSlopePi
 const OpenTTDSharedServices &GetRustSharedServices() noexcept
 {
 	static const OpenTTDSharedServices services{
+		.set_tile_owner = RustSetTileOwner,
 		.autoslope = RustAutoslopeEnabled,
 		.bay_stop_direction = Shared_bay_stop_direction,
 		.bridge_above = SharedBridgeAbove,
@@ -421,7 +430,6 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.station_blocked = RustStationBlocked,
 		.station_track = RustRailStationTrack,
 		.wormhole_reserved = RustWormholeReserved,
-		.set_tile_owner = RustSetTileOwner,
 	};
 	return services;
 }

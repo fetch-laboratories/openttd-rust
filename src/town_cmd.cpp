@@ -1098,7 +1098,7 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.map_log_x = OpenTTDMapLogX,
 		.growth_rate = RustTown_growth_rate,
 		.snow_line = GetRustSharedServices().snow_line,
-		.editor = OpenTTDEditor,
+		.environment = GetRustEnvironmentServices(),
 		.generating_world = OpenTTDGeneratingWorld,
 		.allow_crossings = RustTown_allow_crossings,
 		.climate = OpenTTDLandscapeValue,

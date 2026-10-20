@@ -187,7 +187,6 @@ src/town_cmd.cpp | RustTown_growth_rate() noexcept | 6c32e2c93ccbb6f1 | 1
 binding | GetRustSignalContext | 2
 binding | IndustryCommandDeity | 2
 binding | OpenTTDAddAnimatedTile | 2
-binding | OpenTTDEditor | 2
 binding | OpenTTDGeneratingWorld | 2
 binding | OpenTTDHighestSnowLine | 2
 binding | OpenTTDLandscapeValue | 2
