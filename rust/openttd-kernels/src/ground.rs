@@ -23,6 +23,49 @@ use crate::services::{
     RoadBits, RoadType, Roadside, Services, Slope, TrackBits, WaterClass,
 };
 
+/// Complete `DoClearSquare` control flow shared by every Rust caller.
+/// # Safety
+/// The game-state mutex protects the live map and cache. Only immutable service
+/// tables are borrowed; no map, animation or station borrow spans a native call.
+pub(crate) unsafe fn clear_square(tile: u32, s: &Services) {
+    let c = &s.clear_square_services;
+    if (c.may_animate)(tile) {
+        (c.delete_animated)(tile, true);
+    }
+    let remove = (c.docking)(tile);
+    let density = if (c.generating_world)() { 3 } else { 0 };
+    // SAFETY: Canonical immutable tables outlive the serialized call.
+    let water = unsafe { &*(s.water_services)() };
+    unsafe {
+        ((*water.clear).make_clear)(tile, ClearGroundType(0), density);
+    }
+    (s.mark_dirty)(tile);
+    if remove {
+        (c.remove_docking)(tile);
+    }
+    // SAFETY: No native map borrow survives any of the operations above.
+    unsafe {
+        crate::water::openttd_rust_clear_neighbour_flooding(
+            tile,
+            (s.map_max_x)() + 1,
+            (s.map_max_y)() + 1,
+            water,
+            s,
+        );
+        water.invalidate_region(tile, s);
+    }
+}
+/// Native facade for the complete clear-square owner.
+/// # Safety
+/// Live immutable shared table and original tile preconditions under the world mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_clear_square(tile: u32, s: *const Services) {
+    // SAFETY: Native callers uphold the shared synchronous map contract.
+    unsafe {
+        clear_square(tile, &*s);
+    }
+}
+
 #[repr(usize)]
 pub(crate) enum Witness {
     SnowStart,
@@ -93,6 +136,35 @@ pub struct ClearServices {
     pub set_field: extern "C" fn(u32, u32),
     pub water_class: extern "C" fn(u32) -> WaterClass,
     pub ambient: extern "C" fn(u32),
+}
+#[cfg(test)]
+pub(crate) fn clear_fixture() -> ClearServices {
+    extern "C" fn unused1<A, R>(_: A) -> R {
+        panic!("unexpected clear fixture service");
+    }
+    extern "C" fn unused2<A, B, R>(_: A, _: B) -> R {
+        panic!("unexpected clear fixture service");
+    }
+    extern "C" fn unused3<A, B, C, R>(_: A, _: B, _: C) -> R {
+        panic!("unexpected clear fixture service");
+    }
+    ClearServices {
+        field_tile: unused1,
+        density: unused1,
+        counter: unused1,
+        snow: unused1,
+        surface: unused1,
+        set_ground: unused3,
+        set_density: unused2,
+        set_counter: unused2,
+        clear_snow: unused1,
+        make_clear: unused3,
+        fences: unused1,
+        field: unused1,
+        set_field: unused2,
+        water_class: unused1,
+        ambient: unused1,
+    }
 }
 #[repr(C)]
 pub struct RailSnowGround {

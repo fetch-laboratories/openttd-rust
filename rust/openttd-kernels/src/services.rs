@@ -256,6 +256,22 @@ pub struct EnvironmentServices {
     pub freeform_edges: extern "C" fn() -> bool,
 }
 
+/// Native leaves used by the shared Rust clear-square orchestration.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ClearSquareServices {
+    /// Whether the tile type has an animation handler.
+    pub may_animate: extern "C" fn(u32) -> bool,
+    /// Remove animation, preserving the source immediate/deferred mode.
+    pub delete_animated: extern "C" fn(u32, bool),
+    /// Current docking membership bit.
+    pub docking: extern "C" fn(u32) -> bool,
+    /// Recompute affected station docking membership after the map write.
+    pub remove_docking: extern "C" fn(u32),
+    /// Current generation mode, read at the map write.
+    pub generating_world: extern "C" fn() -> bool,
+}
+
 /// Immutable call table supplied by the game (or isolated test world). No global
 /// registration or game symbol imports are needed by standalone Cargo binaries.
 /// The context and function addresses outlive the component invocation; callbacks
@@ -285,6 +301,8 @@ pub struct Services {
     pub calendar_year: extern "C" fn() -> i32,
     /// `DoClearSquare`.
     pub clear_square: extern "C" fn(u32),
+    /// Shared clear-square native leaves; Rust callers use `ground::clear_square`.
+    pub clear_square_services: ClearSquareServices,
     /// Original native nearest-town spatial lookup; the result may be null.
     pub closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
     /// Whether this company pool ID is live.
@@ -487,6 +505,7 @@ pub fn fixture(
         0
     }
     extern "C" fn tile(_: u32) {}
+    extern "C" fn animated(_: u32, _: bool) {}
     extern "C" fn train(_: *const Train) {}
     extern "C" fn train_path(_: *mut Train, _: bool, _: bool) -> bool {
         false
@@ -539,6 +558,13 @@ pub fn fixture(
         calendar_date: zero_year,
         calendar_year: zero_year,
         clear_square: tile,
+        clear_square_services: ClearSquareServices {
+            may_animate: flag,
+            delete_animated: animated,
+            docking: flag,
+            remove_docking: tile,
+            generating_world: flag0,
+        },
         closest_town: unused_closest_town,
         company_valid: unused_company_valid,
         context,

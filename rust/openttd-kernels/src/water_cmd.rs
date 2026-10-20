@@ -20,9 +20,7 @@
     clippy::cast_sign_loss,
     clippy::if_not_else
 )]
-use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, FoundationSlope, Services, WaterClass,
-};
+use crate::services::{CommandCost, CommandCostServices, CommandServices, Services, WaterClass};
 use crate::{water::WaterServices, witness as w};
 
 macro_rules! carrier {
@@ -57,14 +55,11 @@ pub struct WaterCommandServices {
     pub lock_part: extern "C" fn(u32) -> LockPart,
     pub lock_direction: extern "C" fn(u32) -> crate::services::DiagDirection,
     pub other_depot_tile: extern "C" fn(u32) -> u32,
-    pub slope_z: extern "C" fn(u32) -> FoundationSlope,
+    pub restoration: crate::water::RestorationServices,
     pub environment: crate::services::EnvironmentServices,
-    pub infrastructure: extern "C" fn(u8, u32),
     pub make_depot: extern "C" fn(u32, u8, u16, DepotPart, Axis, WaterClass),
     pub make_lock_tile:
         extern "C" fn(u32, u8, LockPart, crate::services::DiagDirection, WaterClass),
-    pub make_canal: extern "C" fn(u32, u8, u8),
-    pub make_river: extern "C" fn(u32, u8),
     pub bridge_height_above: extern "C" fn(u32) -> i32,
     pub area_begin: unsafe extern "C" fn(*mut Area, u32, u32, bool),
     pub area_tile: unsafe extern "C" fn(*mut Area) -> u32,
@@ -182,7 +177,7 @@ impl World<'_> {
         !(1..self.size_x - 2).contains(&x) || !(1..self.size_y - 2).contains(&y)
     }
     fn infra(&self, owner: u8, delta: u32, dirty: bool) {
-        (self.a.infrastructure)(owner, delta);
+        (self.a.restoration.infrastructure)(owner, delta);
         if dirty {
             (self.cmd.infrastructure_dirty)(owner);
         }
@@ -215,36 +210,10 @@ impl World<'_> {
         }
     }
     fn restore(&self, tile: u32, owner: u8) {
-        let mut wc = self.class(tile);
-        let slope = (self.a.slope_z)(tile);
-        if slope.slope.0 != 0 {
-            if wc == 1 {
-                if (self.s.company_valid)(owner) {
-                    self.infra(owner, u32::MAX, true);
-                }
-                wc = 3;
-            }
-            if wc != 2 || Self::inclined(slope.slope.0) == 255 {
-                wc = 3;
-            }
+        // SAFETY: All tables are immutable and world operations are serialized.
+        unsafe {
+            crate::water::restore(tile, owner, self.s, self.water, &self.a.restoration);
         }
-        if wc == 0 && slope.z > 0 {
-            if (self.s.company_valid)(owner) {
-                self.infra(owner, 1, true);
-            }
-            wc = 1;
-        }
-        (self.s.clear_square)(tile);
-        match wc {
-            0 => (self.water.make_sea)(tile),
-            1 => (self.a.make_canal)(tile, owner, self.random()),
-            2 => (self.a.make_river)(tile, self.random()),
-            _ => {}
-        }
-        if wc != 3 {
-            (self.water.check_docking)(tile);
-        }
-        (self.s.mark_dirty)(tile);
         w::hit(w::WATER_CMD_RESTORE);
     }
     fn build_depot(
@@ -446,8 +415,12 @@ impl World<'_> {
             }
             self.dirty_neighbours(lower);
             self.dirty_neighbours(upper);
-            (self.water.invalidate_region)(lower);
-            (self.water.invalidate_region)(upper);
+            unsafe {
+                self.water.invalidate_region(lower, self.s);
+            }
+            unsafe {
+                self.water.invalidate_region(upper, self.s);
+            }
             w::hit(w::WATER_CMD_LOCK);
         }
         (self.c.amount)(out, crate::company::price(64));
@@ -487,9 +460,11 @@ impl World<'_> {
                 self.infra(owner, 0u32.wrapping_sub(3 * FACTOR), true);
             }
             if self.class(tile) == 2 {
-                (self.a.make_river)(tile, self.random());
+                (self.a.restoration.make_river)(tile, self.random());
             } else {
-                (self.s.clear_square)(tile);
+                unsafe {
+                    crate::ground::clear_square(tile, self.s);
+                }
                 self.wake_neighbours(tile);
             }
             self.restore(upper, (self.s.tile_owner)(upper));
@@ -571,7 +546,7 @@ impl World<'_> {
                     }
                     match wc.0 {
                         2 => {
-                            (self.a.make_river)(tile, self.random());
+                            (self.a.restoration.make_river)(tile, self.random());
                             if (self.a.environment.editor)() {
                                 self.desert(tile);
                             }
@@ -579,7 +554,7 @@ impl World<'_> {
                         0 if (self.s.tile_height)(tile) == 0 => (self.water.make_sea)(tile),
                         _ => {
                             let owner = (self.s.current_company)();
-                            (self.a.make_canal)(tile, owner, self.random());
+                            (self.a.restoration.make_canal)(tile, owner, self.random());
                             if (self.s.company_valid)(owner) {
                                 self.infra(owner, 1, true);
                             }
@@ -635,7 +610,9 @@ impl World<'_> {
                     if self.canal(tile) && (self.s.company_valid)(owner) {
                         self.infra(owner, u32::MAX, true);
                     }
-                    (self.s.clear_square)(tile);
+                    unsafe {
+                        crate::ground::clear_square(tile, self.s);
+                    }
                     self.dirty_neighbours(tile);
                     self.wake_neighbours(tile);
                     w::hit(w::WATER_CMD_CLEAR);
@@ -649,7 +626,9 @@ impl World<'_> {
                     return;
                 }
                 if flags & EXEC != 0 {
-                    (self.s.clear_square)(tile);
+                    unsafe {
+                        crate::ground::clear_square(tile, self.s);
+                    }
                     self.dirty_neighbours(tile);
                     self.wake_neighbours(tile);
                 }
@@ -751,9 +730,8 @@ entry!(openttd_rust_water_build_canal(out:*mut CommandCost,ret:*mut CommandCost,
 |world:&World<'_>| { // SAFETY: The facade owns the iterator and native result slots.
     unsafe { world.build_canal(out,ret,area,flags,end,start,wc,diagonal); }
 });
-entry!(openttd_rust_water_restore(tile:u32,owner:u8) |world:&World<'_>| world.restore(tile,owner));
 entry!(openttd_rust_water_make_river(tile:u32) |world:&World<'_>| {
-    (world.a.make_river)(tile,world.random()); (world.s.mark_dirty)(tile); world.desert(tile);
+    (world.a.restoration.make_river)(tile,world.random()); (world.s.mark_dirty)(tile); world.desert(tile);
 });
 entry!(openttd_rust_water_clear(out:*mut CommandCost,ret:*mut CommandCost,flags:u16,tile:u32)
     |world:&World<'_>| world.clear(out,ret,flags,tile));

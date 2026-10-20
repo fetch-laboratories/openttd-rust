@@ -3823,7 +3823,7 @@ static const OpenTTDIndustryConstructionServices &GetIndustryConstructionService
 		.callback_mask = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> uint16_t { return reinterpret_cast<const IndustrySpec *>(handle)->callback_mask.base(); },
 		.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { RustIndustry(shell)->town = const_cast<Town *>(reinterpret_cast<const Town *>(town)); },
 		.calendar_date = GetRustSharedServices().calendar_date,
-		.generating = OpenTTDGeneratingWorld,
+		.generating = GetRustSharedServices().clear_square_services.generating_world,
 		.callback = [](void *shell, uint16_t callback, uint32_t parameter, uint32_t random) noexcept -> uint16_t {
 			Industry *i = RustIndustry(shell);
 			return GetIndustryCallback(static_cast<CallbackID>(callback), parameter, random, i, i->type, INVALID_TILE);

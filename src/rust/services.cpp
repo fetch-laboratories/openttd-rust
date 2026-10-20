@@ -105,6 +105,18 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 	return services;
 }
 
+const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept
+{
+	static const OpenTTDWaterRestorationServices services{
+		.slope_z = RustTileSlopeZ,
+		.infrastructure = RustAddWaterInfrastructure,
+		.infrastructure_dirty = GetRustCommandServices().infrastructure_dirty,
+		.make_canal = RustMakeCanal,
+		.make_river = RustMakeRiver,
+	};
+	return services;
+}
+
 static uint8_t SharedSnowLine() noexcept { return GetSnowLine(); }
 static int32_t SharedCalendarYear() noexcept { return TimerGameCalendar::year.base(); }
 
@@ -223,6 +235,13 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.calendar_date = SharedCalendarDate,
 		.calendar_year = SharedCalendarYear,
 		.clear_square = SharedClearSquare,
+		.clear_square_services = {
+			.may_animate = OpenTTDMayAnimateTile,
+			.delete_animated = OpenTTDDeleteAnimatedTileWithMode,
+			.docking = OpenTTDIsDockingTile,
+			.remove_docking = RustRemoveDockingTile,
+			.generating_world = OpenTTDGeneratingWorld,
+		},
 		.closest_town = SharedClosestTown,
 		.company_valid = OpenTTDCompanyIsValid,
 		.context = nullptr,
@@ -443,9 +462,13 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDCommandCostServices.hpp"
 #include "abi-visit-OpenTTDSharedServices.hpp"
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
+#include "abi-visit-OpenTTDClearSquareServices.hpp"
+#include "abi-visit-OpenTTDWaterRestorationServices.hpp"
 bool CheckAbi_services()
 {
-	return AbiServicesComplete(GetRustEnvironmentServices()) &&
+	return AbiServicesComplete(GetRustWaterRestorationServices()) &&
+		AbiServicesComplete(GetRustSharedServices().clear_square_services) &&
+		AbiServicesComplete(GetRustEnvironmentServices()) &&
 		AbiServicesComplete(GetRustRandomServices()) &&
 		AbiServicesComplete(GetRustRailMapServices()) &&
 		AbiServicesComplete(GetRustCommandServices()) &&

@@ -31,6 +31,24 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "OpenTTDClearSquareServices" ["common"] => crate::services::ClearSquareServices {
+        may_animate,
+        delete_animated,
+        docking,
+        remove_docking,
+        generating_world,
+    };
+    "OpenTTDWaterRestorationServices" ["common"] => crate::water::RestorationServices {
+        slope_z,
+        infrastructure,
+        infrastructure_dirty,
+        make_canal,
+        make_river,
+    };
+    "OpenTTDWaterRegionContext" ["common"] => crate::water_regions::Context {
+        owner,
+        leaves,
+    };
     "OpenTTDEnvironmentServices" ["common"] => crate::services::EnvironmentServices {
         editor,
         freeform_edges,
@@ -57,13 +75,10 @@ layouts! {
         lock_part,
         lock_direction,
         other_depot_tile,
-        slope_z,
+        restoration,
         environment,
-        infrastructure,
         make_depot,
         make_lock_tile,
-        make_canal,
-        make_river,
         bridge_height_above,
         area_begin,
         area_tile,
@@ -124,7 +139,7 @@ layouts! {
         canal_or_river,
         possible_docking,
         check_docking,
-        invalidate_region,
+        region_context,
         remove_rail,
         apply_foundation,
         iterator_begin,
@@ -1135,6 +1150,7 @@ layouts! {
         calendar_date,
         calendar_year,
         clear_square,
+        clear_square_services,
         closest_town,
         company_valid,
         context,

@@ -13,7 +13,6 @@
 #include "company_func.h"
 #include "core/backup_type.hpp"
 #include "core/random_func.hpp"
-#include "depot_base.h"
 #include "landscape_cmd.h"
 #include "tile_cmd.h"
 #include "station_base.h"

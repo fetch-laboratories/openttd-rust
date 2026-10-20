@@ -254,7 +254,7 @@ void CheckForDockingTile(TileIndex t)
 #ifdef WITH_RUST
 void MakeWaterKeepingClass(TileIndex tile, Owner owner)
 {
-	openttd_rust_water_restore(&GetRustWaterCommandServices(), tile.base(), owner.base());
+	openttd_rust_water_restore(tile.base(), owner.base(), &GetRustSharedServices(), &GetRustWaterGroundServices(), &GetRustWaterRestorationServices());
 }
 CommandCost CmdBuildLock(DoCommandFlags flags, TileIndex tile)
 {
@@ -282,13 +282,10 @@ const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
 		.lock_part = RustLockPart,
 		.lock_direction = [](uint32_t t) noexcept { return GetLockDirection(TileIndex{t}); },
 		.other_depot_tile = [](uint32_t t) noexcept { return GetOtherShipDepotTile(TileIndex{t}).base(); },
-		.slope_z = RustTileSlopeZ,
+		.restoration = GetRustWaterRestorationServices(),
 		.environment = GetRustEnvironmentServices(),
-		.infrastructure = RustAddWaterInfrastructure,
 		.make_depot = [](uint32_t t, uint8_t o, uint16_t id, DepotPart part, Axis axis, WaterClass wc) noexcept { MakeShipDepot(TileIndex{t}, Owner{o}, DepotID{id}, part, axis, wc); },
 		.make_lock_tile = [](uint32_t t, uint8_t o, LockPart part, DiagDirection dir, WaterClass wc) noexcept { MakeLockTile(TileIndex{t}, Owner{o}, part, dir, wc); },
-		.make_canal = [](uint32_t t, uint8_t o, uint8_t random) noexcept { MakeCanal(TileIndex{t}, Owner{o}, random); },
-		.make_river = [](uint32_t t, uint8_t random) noexcept { MakeRiver(TileIndex{t}, random); },
 		.bridge_height_above = [](uint32_t t) noexcept { return GetBridgeHeight(GetSouthernBridgeEnd(TileIndex{t})); },
 		.area_begin = [](OpenTTDWaterArea *a, uint32_t tile, uint32_t start, bool diagonal) noexcept {
 			if (diagonal) a->iter.emplace(std::in_place_type<DiagonalTileIterator>, TileIndex{tile}, TileIndex{start});
@@ -1163,7 +1160,7 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.canal_or_river = [](uint32_t t) noexcept { return IsCanal(TileIndex{t}) || IsRiver(TileIndex{t}); },
 		.possible_docking = RustPossibleDocking,
 		.check_docking = RustCheckDocking,
-		.invalidate_region = [](uint32_t t) noexcept { InvalidateWaterRegion(TileIndex{t}); },
+		.region_context = GetRustWaterRegionContext,
 		.remove_rail = [](OpenTTDCommandCost *out, uint32_t t, Track track) noexcept { *NativeGroundCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlag::Execute, TileIndex{t}, track); },
 		.apply_foundation = RustApplyFoundation,
 		.iterator_begin = [](OpenTTDTileVehicleCursor *c, uint32_t t) noexcept { new (c) VehiclesOnTile::Iterator(TileIndex{t}); },
@@ -1673,8 +1670,9 @@ extern const TileTypeProcs _tile_type_water_procs = {
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDWaterCommandServices.hpp"
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
+#include "abi-visit-OpenTTDWaterRestorationServices.hpp"
 bool CheckAbi_water_cmd()
 {
-	return AbiServicesComplete(GetRustWaterCommandServices()) && AbiServicesComplete(GetRustWaterCommandServices().environment);
+	return AbiServicesComplete(GetRustWaterCommandServices().restoration) && AbiServicesComplete(GetRustWaterCommandServices()) && AbiServicesComplete(GetRustWaterCommandServices().environment);
 }
 #endif

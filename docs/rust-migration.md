@@ -1507,8 +1507,8 @@ exact-head checks and outstanding full-simulation, speed and CI gates.
 
 ### Water construction, clearing and restoration (#294)
 
-Rust (`water_cmd.rs`) owns ship depot/lock/canal commands and removal, water
-clearing, class restoration, river/desert traversal, and water owner/terraform/
+Rust (`water_cmd.rs`, shared `water.rs`/`ground.rs`) owns ship depot/lock/canal
+commands/removal, water clearing/restoration, river/desert traversal and owner/terraform/
 build-above policy. Original command bodies and `MakeLock` remain portable-only.
 Lock checks/build/removal order, depot partial clears and post-clear accounting,
 conditional RNG draws, narrowing and wrapping retain the original sequence.
@@ -1516,7 +1516,8 @@ conditional RNG draws, narrowing and wrapping retain the original sequence.
 C++ keeps packed map primitives, depot identities, drawing, native stack
 `CommandCost` objects and a lazy stack area iterator. Generic landscape commands
 retain the complete native `Command::Do` lifecycle. Rust helpers call the
-integrated flooding/neighbor and economy owners directly; docking stays native.
+integrated clear-square, flooding/neighbor, region-cache and economy owners directly.
+Shared restoration retains class/accounting/RNG order; docking stays native.
 Shared command/depot/environment services replace touched rail/town/industry
 copies. Named generated layouts, aborting unused fixture slots and actual
 production table checks cover the boundary; no native world borrow spans reentry.

@@ -30,6 +30,7 @@ typedef struct OpenTTDWaterLeaves {
 	uint32_t (OPENTTD_WATER_CALL *aqueduct)(uint32_t) OPENTTD_SERVICE_DEFAULT(aqueduct);
 	void (OPENTTD_WATER_CALL *debug)(uint8_t, int32_t, int32_t) OPENTTD_SERVICE_DEFAULT(debug);
 } OpenTTDWaterLeaves;
+typedef struct { OpenTTDWaterRegions *owner; const OpenTTDWaterLeaves *leaves; } OpenTTDWaterRegionContext;
 /* One map-lifetime owner, replaced at Map::Allocate; no map/STL pointer enters
  * Rust. Leaves are synchronous noexcept/nonreentrant shared map/follower queries
  * and debug output. follow returns INVALID_TILE on failure; aqueduct returns its
@@ -52,4 +53,5 @@ uint8_t OPENTTD_WATER_CALL openttd_rust_water_visit_next(OpenTTDWaterRegions *, 
 #ifdef __cplusplus
 }
 #endif
+OpenTTDWaterRegionContext GetRustWaterRegionContext() noexcept;
 #endif /* OPENTTD_RUST_WATER_REGIONS_FFI_H */

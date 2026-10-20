@@ -1123,7 +1123,9 @@ pub unsafe extern "C" fn openttd_rust_trees_clear_tile(
         num = num.wrapping_mul(4);
     }
     if execute {
-        (s.clear_square)(tile);
+        unsafe {
+            crate::ground::clear_square(tile, s);
+        }
     }
     price.saturating_mul(i64::from(num))
 }
@@ -1215,7 +1217,7 @@ mod tests {
             tile_type: water_type,
             tree_ground: water,
             play_sound: sound,
-            clear_square,
+
             ..crate::services::fixture(std::ptr::null_mut(), random, industry)
         }
     }
@@ -1294,7 +1296,16 @@ mod tests {
         MP_TREES
     }
     extern "C" fn water_services() -> *const crate::water::WaterServices {
-        thread_local! { static WATER: crate::water::WaterServices = crate::water::fixture(); }
+        thread_local! {
+            static CLEAR: crate::ground::ClearServices = crate::ground::ClearServices {
+                make_clear: clear_square,
+                ..crate::ground::clear_fixture()
+            };
+            static WATER: crate::water::WaterServices = crate::water::WaterServices {
+                clear: CLEAR.with(std::ptr::from_ref),
+                ..crate::water::fixture()
+            };
+        }
         WATER.with(std::ptr::from_ref)
     }
     extern "C" fn ambient(_: u32) -> bool {
@@ -1323,7 +1334,7 @@ mod tests {
             w.abort_at == Some(w.progress)
         })
     }
-    extern "C" fn clear_square(_: u32) {
+    extern "C" fn clear_square(_: u32, _: crate::services::ClearGroundType, _: u32) {
         log(Event::Write("clear_square"));
     }
     extern "C" fn rating(_: *mut Command, _: u32, up: bool) {
@@ -1803,11 +1814,12 @@ mod tests {
         }
         let log = events();
         assert_eq!(
-            &log[log.len() - 3..],
+            &log[log.len() - 4..],
             [
                 Event::Rating(false),
                 Event::ClearTree,
-                Event::Write("clear_square")
+                Event::Write("clear_square"),
+                Event::Dirty
             ]
         );
     }

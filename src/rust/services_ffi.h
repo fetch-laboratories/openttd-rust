@@ -64,6 +64,13 @@ struct OpenTTDEnvironmentServices {
 	bool (*freeform_edges)() noexcept OPENTTD_SERVICE_DEFAULT(freeform_edges);
 };
 const OpenTTDEnvironmentServices &GetRustEnvironmentServices() noexcept;
+struct OpenTTDClearSquareServices {
+	bool (*may_animate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(may_animate);
+	void (*delete_animated)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(delete_animated);
+	bool (*docking)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking);
+	void (*remove_docking)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_docking);
+	bool (*generating_world)() noexcept OPENTTD_SERVICE_DEFAULT(generating_world);
+};
 struct OpenTTDSharedServices {
 	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
 	bool (*autoslope)() noexcept OPENTTD_SERVICE_DEFAULT(autoslope);
@@ -75,6 +82,7 @@ struct OpenTTDSharedServices {
 	int32_t (*calendar_date)() noexcept OPENTTD_SERVICE_DEFAULT(calendar_date);
 	int32_t (*calendar_year)() noexcept OPENTTD_SERVICE_DEFAULT(calendar_year);
 	void (*clear_square)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_square);
+	OpenTTDClearSquareServices clear_square_services;
 	const OpenTTDTownHandle *(*closest_town)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_town);
 	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	void *context;
@@ -249,6 +257,7 @@ Result OpenTTDFixtureMapService(Args...) noexcept
 inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_t (*random)(void *) noexcept, uint32_t (*industry)(int32_t, int32_t, uint32_t *) noexcept = OpenTTDAbortService<uint32_t (*)(int32_t, int32_t, uint32_t *) noexcept>::Call) noexcept
 {
 	return {
+		.clear_square_services = {},
 		.context = context,
 		.current_company = []() noexcept -> uint8_t { return UINT8_MAX; },
 		.industry = industry,

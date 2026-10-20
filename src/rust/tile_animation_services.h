@@ -11,10 +11,13 @@
 #include "../animated_tile_func.h"
 #include "../map_func.h"
 #include "../landscape.h"
+#include "../tile_cmd.h"
 inline uint8_t OpenTTDAnimationFrame(uint32_t tile) noexcept { return GetAnimationFrame(TileIndex(tile)); }
 inline void OpenTTDSetAnimationFrame(uint32_t tile, uint8_t frame) noexcept { SetAnimationFrame(TileIndex(tile), frame); }
 inline void OpenTTDAddAnimatedTile(uint32_t tile, bool mark_dirty) noexcept { AddAnimatedTile(TileIndex(tile), mark_dirty); }
-inline void OpenTTDDeleteAnimatedTile(uint32_t tile) noexcept { DeleteAnimatedTile(TileIndex(tile)); }
+inline bool OpenTTDMayAnimateTile(uint32_t tile) noexcept { return MayAnimateTile(TileIndex{tile}); }
+inline void OpenTTDDeleteAnimatedTileWithMode(uint32_t tile, bool immediate) noexcept { DeleteAnimatedTile(TileIndex(tile), immediate); }
+inline void OpenTTDDeleteAnimatedTile(uint32_t tile) noexcept { OpenTTDDeleteAnimatedTileWithMode(tile, false); }
 inline int32_t OpenTTDTileMaxPixelZ(uint32_t tile) noexcept { return GetTileMaxPixelZ(TileIndex(tile)); }
 inline int OpenTTDTileMaxZ(TileIndex tile) noexcept { return GetTileMaxZ(tile); }
 #endif

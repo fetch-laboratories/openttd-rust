@@ -31,13 +31,10 @@ struct OpenTTDWaterCommandServices {
 	LockPart (*lock_part)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(lock_part);
 	DiagDirection (*lock_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(lock_direction);
 	uint32_t (*other_depot_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_depot_tile);
-	OpenTTDFoundationSlope (*slope_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(slope_z);
+	OpenTTDWaterRestorationServices restoration;
 	OpenTTDEnvironmentServices environment;
-	void (*infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure);
 	void (*make_depot)(uint32_t, uint8_t, uint16_t, DepotPart, Axis, WaterClass) noexcept OPENTTD_SERVICE_DEFAULT(make_depot);
 	void (*make_lock_tile)(uint32_t, uint8_t, LockPart, DiagDirection, WaterClass) noexcept OPENTTD_SERVICE_DEFAULT(make_lock_tile);
-	void (*make_canal)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_canal);
-	void (*make_river)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_river);
 	int32_t (*bridge_height_above)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_height_above);
 	void (*area_begin)(OpenTTDWaterArea *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(area_begin);
 	uint32_t (*area_tile)(OpenTTDWaterArea *) noexcept OPENTTD_SERVICE_DEFAULT(area_tile);
@@ -49,7 +46,6 @@ extern "C" {
 void openttd_rust_water_build_depot(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, Axis);
 void openttd_rust_water_build_lock(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t);
 void openttd_rust_water_build_canal(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDWaterArea *, uint16_t, uint32_t, uint32_t, WaterClass, bool);
-void openttd_rust_water_restore(const OpenTTDWaterCommandServices *, uint32_t, uint8_t);
 void openttd_rust_water_make_river(const OpenTTDWaterCommandServices *, uint32_t);
 void openttd_rust_water_clear(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t);
 void openttd_rust_water_change_owner(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, uint32_t, uint8_t, uint8_t);

@@ -557,6 +557,12 @@ void DrawFoundation(TileInfo *ti, Foundation f)
 	}
 }
 
+#ifdef WITH_RUST
+void DoClearSquare(TileIndex tile)
+{
+	openttd_rust_clear_square(tile.base(), &GetRustSharedServices());
+}
+#else
 void DoClearSquare(TileIndex tile)
 {
 	/* If the tile can have animation and we clear it, delete it from the animated tile list. */
@@ -570,6 +576,8 @@ void DoClearSquare(TileIndex tile)
 	ClearNeighbourNonFloodingStates(tile);
 	InvalidateWaterRegion(tile);
 }
+
+#endif /* WITH_RUST */
 
 /**
  * Returns information about trackdirs and signal states.
