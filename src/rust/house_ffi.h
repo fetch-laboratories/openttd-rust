@@ -114,6 +114,4 @@ void openttd_rust_house_rebuild_caches(const OpenTTDTownLeaves *, const OpenTTDS
 void openttd_rust_house_update_all(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_house_age_all(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 }
-/* Town leaves/shared services for native house entry points outside town_cmd.cpp. */
-const OpenTTDTownLeaves &GetRustTownServices() noexcept;
 #endif /* RUST_HOUSE_FFI_H */
