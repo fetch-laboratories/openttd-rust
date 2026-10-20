@@ -692,8 +692,6 @@ static void Trees()
 		.make_sea = TreeUnused<void, uint32_t>,
 		.buoy_or_dock = TreeUnused<bool, uint32_t>,
 		.canal_or_river = TreeUnused<bool, uint32_t>,
-		.possible_docking = TreeUnused<bool, uint32_t>,
-		.check_docking = TreeUnused<void, uint32_t>,
 		.invalidate_region = TreeUnused<void, uint32_t>,
 		.remove_rail = TreeUnused<void, OpenTTDCommandCost *, uint32_t, Track>,
 		.apply_foundation = TreeUnused<OpenTTDFoundationSlope, Foundation, Slope>,
