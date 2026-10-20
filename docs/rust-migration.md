@@ -1486,3 +1486,25 @@ crossings/depots/slopes, signal cycling/conversion/copy/autofill through a bridg
 conversion/reroutes, clearing/terraforming, company transfer/deletion and reservations.
 Coast/half-tile water and PBS path-end removal remain #156 gaps. PR #270 records
 exact-head checks and outstanding full-simulation, speed and CI gates.
+
+### Object construction, generation and HQ lifecycle (#295)
+
+Rust (`objects.rs`) owns build/area commands, clear and ownership policy,
+terraform/build-above, HQ growth/acceptance/production, colour updates,
+object tile loops and generation including lighthouse/transmitter searches.
+Process-wide wrapping type counts and ordered cleared-area command scratch
+have one Rust owner. Tunnel clients retain indices over nested append, and
+industry transactions snapshot/restore the same scratch at the original points.
+C++ retains the native object pool/specs/map/save/render records, stack command
+results and typed shared services; original bodies remain portable-only.
+
+Generation progress cancellation returns before native rethrow. Other leaves
+are synchronous noexcept calls. Borrows end before callbacks; HQ passenger/mail
+production shares one random word and lazily discovers stations. Command calls
+reuse the native recursion counter and before/after protocol.
+
+Default `objects` semantic scenarios cover four climates/borders, HQ relocation,
+cargo, owned-land area construction, statues, ownership, ID reuse and afterload
+counts. Compact unchanged-body probes cover count wrapping/destruction, scratch
+growth, cancellation and NewGRF pre-clear/bridge/colour ordering. External NewGRF
+animation/autoslope and generation branches remain tracked in #156.

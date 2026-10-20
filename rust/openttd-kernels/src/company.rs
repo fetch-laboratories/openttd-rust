@@ -273,7 +273,8 @@ pub struct Services {
     pub company_admin_update: extern "C" fn(u8),
     pub company_in_trouble: extern "C" fn(u8),
     pub post_company_delete: extern "C" fn(u8),
-    pub update_company_hq: extern "C" fn(u8, i32),
+    pub hq_location: extern "C" fn(u8) -> u32,
+    pub object_services: extern "C" fn() -> *const crate::objects::ObjectServices,
     pub performance_detail_dirty: extern "C" fn(),
     pub company_graphs_dirty: extern "C" fn(),
     pub company_infrastructure: extern "C" fn(u8, *mut Infrastructure),
@@ -668,7 +669,14 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
     }
     if update {
         put!(p, score as i32, old[0].performance);
-        (s.update_company_hq)(id, score as i32);
+        // SAFETY: Native immutable object table, no finance borrow spans HQ updates.
+        unsafe {
+            crate::objects::openttd_rust_object_update_hq(
+                (s.object_services)(),
+                (s.hq_location)(id),
+                score as u32,
+            );
+        }
         let v = value(s, p, id, true);
         put!(p, v, old[0].value);
     }
@@ -1936,7 +1944,8 @@ pub fn abi_layout(type_id: u16, item: u8) -> usize {
             company_admin_update,
             company_in_trouble,
             post_company_delete,
-            update_company_hq,
+            hq_location,
+            object_services,
             performance_detail_dirty,
             company_graphs_dirty,
             company_infrastructure,
@@ -2114,4 +2123,9 @@ pub fn abi_layout(type_id: u16, item: u8) -> usize {
         ),
         _ => usize::MAX,
     }
+}
+
+/// Source `EconomyIsInRecession`, reading the single canonical economy owner.
+pub(crate) fn in_recession() -> bool {
+    get!(e(), fluct) <= 0
 }

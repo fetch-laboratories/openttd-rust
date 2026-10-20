@@ -14,7 +14,7 @@ def strip_debug(source, destination=None):
 
 
 def export(destination, migration):
-    from . import engines, fleet, orders, signals, towns
+    from . import engines, fleet, objects, orders, signals, towns
 
     destination.mkdir(parents=True)
     builds = {
@@ -31,7 +31,7 @@ def export(destination, migration):
             source = build / ("openttd" if role == "reference" else "openttd-rust")
             runtime = destination / f"{role}-runtime"
             binary = core._copy_runtime(build, source, runtime)
-            for module in (fleet, orders, engines, signals, towns):
+            for module in (fleet, orders, engines, objects, signals, towns):
                 folder = runtime / module.__name__.rsplit(".", 1)[1]
                 executable = module.adapter(build, folder, migration.environment())
                 for object_file in folder.glob("*.o"):

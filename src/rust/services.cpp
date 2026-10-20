@@ -83,7 +83,8 @@ static void LandscapeClear(OpenTTDCommandCost *out, uint32_t tile, uint16_t flag
 	*NativeCost(out) = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlags(flags), TileIndex{tile});
 }
 static void CommandTileOwnership(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = CheckTileOwnership(TileIndex{tile}); }
-static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner) noexcept { *NativeCost(out) = CheckOwnership(Owner(owner)); }
+static void CommandOwnershipAt(OpenTTDCommandCost *out, uint8_t owner, uint32_t tile) noexcept { *NativeCost(out) = CheckOwnership(Owner(owner), TileIndex(tile)); }
+static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner) noexcept { CommandOwnershipAt(out, owner, 0); }
 static void CommandNoVehicle(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = EnsureNoVehicleOnGround(TileIndex{tile}); }
 static void CommandNoTrain(OpenTTDCommandCost *out, uint32_t tile, uint8_t bits) noexcept { *NativeCost(out) = EnsureNoTrainOnTrackBits(TileIndex{tile}, static_cast<TrackBits>(bits)); }
 static void CommandWormholeFree(OpenTTDCommandCost *out, uint32_t tile, uint32_t end, const Train *ignore) noexcept { *NativeCost(out) = TunnelBridgeIsFree(TileIndex{tile}, TileIndex{end}, ignore); }
@@ -93,6 +94,7 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 		.landscape_clear = LandscapeClear,
 		.tile_ownership = CommandTileOwnership, .ownership = CommandOwnership,
 		.no_vehicle = CommandNoVehicle, .no_train = CommandNoTrain, .wormhole_free = CommandWormholeFree,
+		.ownership_at = CommandOwnershipAt,
 	};
 	return services;
 }

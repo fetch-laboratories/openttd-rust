@@ -2351,7 +2351,7 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.set_progress = [](OpenTTDTownFoundingFrame *frame, uint total) noexcept { return RunGenerationProgress(frame, [total] { SetGeneratingWorldProgress(GWP_TOWN, total); }); },
 		.increase_progress = [](OpenTTDTownFoundingFrame *frame) noexcept { return RunGenerationProgress(frame, [] { IncreaseGeneratingWorldProgress(GWP_TOWN); }); },
 		.no_town_error = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_COULD_NOT_CREATE_TOWN), {}, WL_CRITICAL); },
-		.town_count = []() noexcept -> size_t { return Town::GetNumItems(); },
+		.town_count = OpenTTDTownCount,
 		.random = &_random,
 		.edge_error = STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP_SUB,
 		.close_error = STR_ERROR_TOO_CLOSE_TO_ANOTHER_TOWN,
@@ -4312,13 +4312,12 @@ static void UpdateTownGrowth(Town *t)
  */
 #ifdef WITH_RUST
 static uint8_t RustTownCouncilTolerance() noexcept { return _settings_game.difficulty.town_council_tolerance; }
-static bool RustTownBulldozer() noexcept { return _cheats.magic_bulldozer.value; }
 static uint8_t RustTownAuthorityDistance() noexcept { return _settings_game.economy.dist_local_authority; }
 static uint16_t RustTownAuthorityIndex(const OpenTTDTownHandle *town) noexcept { return reinterpret_cast<const Town *>(town)->index.base(); }
-static const OpenTTDTownAuthorityServices &RustTownAuthorityServices() noexcept
+const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept
 {
 	static const OpenTTDTownAuthorityServices services{
-		.council_tolerance = RustTownCouncilTolerance, .bulldozer = RustTownBulldozer,
+		.council_tolerance = RustTownCouncilTolerance, .bulldozer = RustMagicBulldozer,
 		.authority_distance = RustTownAuthorityDistance, .town_index = RustTownAuthorityIndex,
 		.refusal = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
 	};
@@ -4330,7 +4329,7 @@ CommandCost CheckIfAuthorityAllowsNewStation(TileIndex tile, DoCommandFlags flag
 {
 #ifdef WITH_RUST
 	CommandCost result;
-	openttd_rust_town_authority_station(&RustTownAuthorityServices(), &GetRustSharedServices(), &GetRustCommandCostServices(), RustCommandCost(&result), tile.base(), flags.Test(DoCommandFlag::NoTestTownRating));
+	openttd_rust_town_authority_station(&GetRustTownAuthorityServices(), &GetRustSharedServices(), &GetRustCommandCostServices(), RustCommandCost(&result), tile.base(), flags.Test(DoCommandFlag::NoTestTownRating));
 	return result;
 #else
 
@@ -4505,7 +4504,7 @@ CommandCost CheckforTownRating(DoCommandFlags flags, Town *t, TownRatingCheckTyp
 {
 #ifdef WITH_RUST
 	CommandCost result;
-	openttd_rust_town_authority_remove(&RustTownAuthorityServices(), &GetRustSharedServices(), &GetRustCommandCostServices(), RustCommandCost(&result), reinterpret_cast<const OpenTTDTownHandle *>(t), flags.Test(DoCommandFlag::NoTestTownRating), to_underlying(type));
+	openttd_rust_town_authority_remove(&GetRustTownAuthorityServices(), &GetRustSharedServices(), &GetRustCommandCostServices(), RustCommandCost(&result), reinterpret_cast<const OpenTTDTownHandle *>(t), flags.Test(DoCommandFlag::NoTestTownRating), to_underlying(type));
 	return result;
 #else
 

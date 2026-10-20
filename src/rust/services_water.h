@@ -15,4 +15,8 @@ inline bool OpenTTDIsDockingTile(uint32_t tile) noexcept { return IsDockingTile(
 inline bool RustPossibleDocking(uint32_t tile) noexcept { return IsPossibleDockingTile(TileIndex{tile}); }
 inline void RustCheckDocking(uint32_t tile) noexcept { CheckForDockingTile(TileIndex{tile}); }
 inline void OpenTTDMakeShore(uint32_t tile) noexcept { MakeShore(TileIndex(tile)); }
+inline bool RustOnWater(uint32_t tile) noexcept { return IsTileOnWater(TileIndex(tile)); }
+inline void RustRemoveDocking(uint32_t tile) noexcept { RemoveDockingTile(TileIndex(tile)); }
+inline void RustMakeWaterKeepingClass(uint32_t tile, uint8_t owner) noexcept { MakeWaterKeepingClass(TileIndex(tile), Owner(owner)); }
+inline void RustMakeUnownedWater(uint32_t tile) noexcept { RustMakeWaterKeepingClass(tile, OWNER_NONE.base()); }
 #endif /* RUST_SERVICES_WATER_H */

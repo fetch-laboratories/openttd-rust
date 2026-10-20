@@ -402,8 +402,6 @@ typedef struct OpenTTDIndustryLocationResult { uint16_t callback; int32_t regist
 typedef void (*OpenTTDIndustryTemporaryVisit)(void *, OpenTTDIndustryShell *);
 OpenTTDIndustryLocationResult openttd_industry_resolve_location(OpenTTDIndustryShell *, uint32_t tile, uint8_t type, uint32_t seed, uint8_t creation) OPENTTD_INDUSTRY_NOEXCEPT;
 OpenTTDIndustryLocationResult openttd_industry_resolve_shape(OpenTTDIndustryShell *, uint32_t tile, uint16_t gfx, uint32_t parameter) OPENTTD_INDUSTRY_NOEXCEPT;
-void openttd_industry_location_error(OpenTTDIndustryCost *, const OpenTTDIndustryLocationResult *, const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT;
-void openttd_industry_shape_error(OpenTTDIndustryCost *, const OpenTTDIndustryLocationResult *, const OpenTTDIndustryTileSpec *) OPENTTD_INDUSTRY_NOEXCEPT;
 typedef struct OpenTTDIndustryTransactionServices {
 	bool (*enabled)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT;
 	size_t (*layout_count)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT;

@@ -193,4 +193,5 @@ uint32_t openttd_rust_ship_station_destination(uint32_t, uint32_t, const OpenTTD
 uint8_t openttd_rust_ship_trackdir(uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_ship_build(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 }
+const OpenTTDShipLeaves &GetRustShipControlServices() noexcept;
 #endif

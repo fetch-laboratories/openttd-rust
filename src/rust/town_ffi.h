@@ -148,4 +148,5 @@ uint32_t openttd_rust_town_road_type(const OpenTTDTownLeaves *, const OpenTTDSha
 bool openttd_rust_town_tunnel(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town, uint32_t tile, uint32_t dir);
 }
 const OpenTTDTownLeaves &GetRustTownServices() noexcept;
+const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept;
 #endif /* RUST_TOWN_FFI_H */

@@ -56,6 +56,7 @@
 #include "../window_func.h"
 #include "company_adapter.h"
 #include "company_services.h"
+#include "object_ffi.h"
 #include "presentation_services.h"
 #include "services_rail.h"
 #include "settings_services.h"
@@ -143,7 +144,6 @@ static void Co_company_in_trouble(uint8_t id) noexcept
 	Game::NewEvent(new ScriptEventCompanyInTrouble(cid));
 }
 static void Co_post_company_delete(uint8_t id) noexcept { Command<CMD_COMPANY_CTRL>::Post(CCA_DELETE, CompanyID(id), CRR_BANKRUPT, INVALID_CLIENT_ID); }
-static void Co_update_company_hq(uint8_t id, int32_t score) noexcept { UpdateCompanyHQ(Company::Get(id)->location_of_HQ, score); }
 static void Co_performance_detail_dirty() noexcept { SetWindowDirty(WC_PERFORMANCE_DETAIL, 0); }
 static void Co_company_graphs_dirty() noexcept
 {
@@ -380,7 +380,6 @@ static void Co_copy_service_interval_defaults(uint8_t old_owner, uint8_t new_own
 }
 static void Co_update_autoreplace(uint8_t id) noexcept { GroupStatistics::UpdateAutoreplace(CompanyID(id)); }
 static uint32_t Co_map_size() noexcept { return Map::Size(); }
-static void Co_change_tile_owner(uint32_t tile, uint8_t old_owner, uint8_t new_owner) noexcept { ChangeTileOwner(TileIndex(tile), CompanyID(old_owner), CompanyID(new_owner)); }
 static OpenTTDCompanySignalTile Co_signal_tile(uint32_t t) noexcept
 {
 	TileIndex tile(t);
@@ -434,7 +433,8 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.local_company = RustLocalCompanyID, .network_server = Co_network_server,
 		.company_vehicle_counts = Co_company_vehicle_counts, .vehicle_limits = Co_vehicle_limits,
 		.company_admin_update = Co_company_admin_update, .company_in_trouble = Co_company_in_trouble,
-		.post_company_delete = Co_post_company_delete, .update_company_hq = Co_update_company_hq,
+		.post_company_delete = Co_post_company_delete, .hq_location = RustCompanyHQ,
+		.object_services = []() noexcept { return &GetRustObjectServices(); },
 		.performance_detail_dirty = Co_performance_detail_dirty, .company_graphs_dirty = Co_company_graphs_dirty,
 		.company_infrastructure = Co_company_infrastructure,
 		.rail_maintenance_cost = Co_rail_maintenance_cost, .signal_maintenance_cost = Co_signal_maintenance_cost,
@@ -472,7 +472,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.remove_engine_replacements = Co_remove_engine_replacements, .group_next_owned = Co_group_next_owned,
 		.delete_group = Co_delete_group, .transfer_group = Co_transfer_group,
 		.copy_service_interval_defaults = Co_copy_service_interval_defaults, .update_autoreplace = Co_update_autoreplace,
-		.map_size = Co_map_size, .change_tile_owner = Co_change_tile_owner,
+		.map_size = Co_map_size, .change_tile_owner = RustChangeTileOwner,
 		.signal_tile = Co_signal_tile, .has_signal_on_track = RustRailHasSignalTrack,
 		.add_track_to_signal_buffer = Co_add_track_to_signal_buffer,
 		.update_signals_in_buffer = RustUpdateSignals, .add_airport_infrastructure = Co_add_airport_infrastructure,

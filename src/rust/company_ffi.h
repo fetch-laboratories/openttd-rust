@@ -90,6 +90,7 @@ struct OpenTTDCompanyFinanceServices {
  * every raw field access it may invalidate. *_next_owned scans a pool from an
  * index for the next item of that owner, in pool order.
  */
+struct OpenTTDObjectServices;
 struct OpenTTDCompanyServices {
 	const OpenTTDCompanyFinanceServices *finance;
 	const OpenTTDSharedServices *shared;
@@ -104,7 +105,8 @@ struct OpenTTDCompanyServices {
 	OPENTTD_COMPANY_SERVICE(void, company_admin_update, uint8_t);
 	OPENTTD_COMPANY_SERVICE(void, company_in_trouble, uint8_t);
 	OPENTTD_COMPANY_SERVICE(void, post_company_delete, uint8_t);
-	OPENTTD_COMPANY_SERVICE(void, update_company_hq, uint8_t, int32_t);
+	OPENTTD_COMPANY_SERVICE(uint32_t, hq_location, uint8_t);
+	OPENTTD_COMPANY_SERVICE(const OpenTTDObjectServices *, object_services);
 	OPENTTD_COMPANY_SERVICE(void, performance_detail_dirty);
 	OPENTTD_COMPANY_SERVICE(void, company_graphs_dirty);
 	OPENTTD_COMPANY_SERVICE(void, company_infrastructure, uint8_t, OpenTTDCompanyInfrastructure *);

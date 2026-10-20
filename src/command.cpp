@@ -61,6 +61,10 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/command_services.h"
+#endif
+
 #include "safeguards.h"
 
 
@@ -422,3 +426,24 @@ CommandCost CommandCostWithParam(StringID str, uint64_t value)
 	}
 	return error;
 }
+
+#ifdef WITH_RUST
+/** Typed access to the existing command protocol, without a second counter. */
+struct RustCommandProtocol : CommandHelperBase {
+	static void Before(bool top, bool test) noexcept { InternalDoBefore(top, test); }
+	static void After(OpenTTDCommandCost *out, uint16_t flags, bool top, bool test) noexcept
+	{
+		InternalDoAfter(*reinterpret_cast<CommandCost *>(out), DoCommandFlags{flags}, top, test);
+	}
+};
+const OpenTTDCommandProtocolServices &GetRustCommandProtocolServices() noexcept
+{
+	static const OpenTTDCommandProtocolServices services{
+		.enter = RecursiveCommandCounter::Enter,
+		.leave = RecursiveCommandCounter::Leave,
+		.before = RustCommandProtocol::Before,
+		.after = RustCommandProtocol::After,
+	};
+	return services;
+}
+#endif

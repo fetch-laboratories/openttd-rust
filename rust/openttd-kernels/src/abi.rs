@@ -103,7 +103,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::town::AuthorityServices, item; council_tolerance, bulldozer, authority_distance, town_index, refusal)
         }
         621 => {
-            layout!(crate::services::CommandServices, item; landscape_clear, tile_ownership, ownership, no_vehicle, no_train, wormhole_free)
+            layout!(crate::services::CommandServices, item; landscape_clear, tile_ownership, ownership, no_vehicle, no_train, wormhole_free, ownership_at)
         }
         620 => {
             layout!(crate::services::CommandCostServices, item; zero, error, expense_money, error_param, add, move_cost, amount, success, error_message, money, make_error)
@@ -146,7 +146,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::tile_loop::IndustryServices, item; production, construction, lifecycle, tiles, generation)
         }
         781 => {
-            layout!(crate::tile_loop::Services, item; shared, tile_types, trees, industry, ground, house_loop, station_loop, object_loop)
+            layout!(crate::tile_loop::Services, item; shared, tile_types, trees, industry, ground, house_loop, station_loop, object_loop, objects, object_frame)
         }
         210..=214 | 400..=417 => crate::company::abi_layout(type_id, item),
         320 => layout!(crate::ship_control::Position, item; x, y, old_tile, new_tile),

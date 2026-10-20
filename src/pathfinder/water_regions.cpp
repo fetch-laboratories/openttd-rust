@@ -75,6 +75,11 @@ WaterRegionPatchDesc GetWaterRegionPatchInfo(TileIndex tile)
 	return WaterRegionPatchDesc{region.x, region.y, WaterRegionPatchLabel{openttd_rust_water_label(_water_regions.get(), &_water_leaves, tile.base())}};
 }
 
+OpenTTDWaterRegionContext GetRustWaterRegionContext() noexcept
+{
+	return {_water_regions.get(), &_water_leaves};
+}
+
 void InvalidateWaterRegion(TileIndex tile)
 {
 	if (!IsValidTile(tile)) return;

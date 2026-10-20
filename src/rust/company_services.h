@@ -10,6 +10,8 @@
 #define RUST_COMPANY_SERVICES_H
 #include "../company_type.h"
 #include "../company_func.h"
+#include "../company_gui.h"
+#include "../landscape.h"
 #include "../company_base.h"
 #include "company_ffi.h"
 
@@ -44,4 +46,9 @@ inline bool RustIsInteractiveCompany(uint8_t id) noexcept { return IsInteractive
 inline void RustAddRailInfrastructure(uint8_t owner, uint8_t rt, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.rail[rt] += delta; }
 inline void RustAddRoadInfrastructure(uint8_t owner, uint8_t rt, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.road[rt] += delta; }
 inline void RustAddSignalInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.signal += delta; }
+inline uint32_t RustCompanyHQ(uint8_t owner) noexcept { return Company::Get(CompanyID(owner))->location_of_HQ.base(); }
+inline void RustAddWaterInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.water += delta; }
+inline void RustInfrastructureDirty(uint8_t owner) noexcept { DirtyCompanyInfrastructureWindows(CompanyID(owner)); }
+inline void RustChangeTileOwner(uint32_t tile, uint8_t old_owner, uint8_t new_owner) noexcept { ChangeTileOwner(TileIndex(tile), CompanyID(old_owner), CompanyID(new_owner)); }
+inline uint8_t RustObjectRecolour(uint8_t owner, bool two) noexcept { return Company::Get(CompanyID(owner))->GetCompanyRecolourOffset(LS_DEFAULT, two); }
 #endif /* RUST_COMPANY_SERVICES_H */

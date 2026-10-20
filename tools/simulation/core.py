@@ -81,6 +81,7 @@ def scenario_modules():
         generated,
         industries,
         landscape,
+        objects,
         orders,
         play_saves,
         rails,
@@ -96,6 +97,7 @@ def scenario_modules():
     return (
         generated,
         landscape,
+        objects,
         play_saves,
         towns,
         trees,

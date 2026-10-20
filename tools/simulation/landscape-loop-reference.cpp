@@ -72,6 +72,8 @@ static OpenTTDLandscapeLoopServices services{
 	.house_loop = House,
 	.station_loop = LandscapeStationLoop,
 	.object_loop = Object,
+		.objects = nullptr,
+		.object_frame = nullptr,
 };
 static void RustRun()
 {

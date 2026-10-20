@@ -10,6 +10,8 @@
 #define RUST_SETTINGS_SERVICES_H
 #include "../settings_type.h"
 #include "../autoslope.h"
+#include "../cheat_type.h"
+#include "../openttd.h"
 
 inline uint8_t RustRoadAccelerationModel() noexcept { return _settings_game.vehicle.roadveh_acceleration_model; }
 inline uint8_t RustRoadSide() noexcept { return _settings_game.vehicle.road_side; }
@@ -40,4 +42,7 @@ inline bool RustAutoslopeEnabled() noexcept { return AutoslopeEnabled(); }
 inline bool RustCrossingWithCompetitor() noexcept { return _settings_game.construction.crossing_with_competitor; }
 inline bool RustDisableElrails() noexcept { return _settings_game.vehicle.disable_elrails; }
 inline bool RustForbid90Deg() noexcept { return _settings_game.pf.forbid_90_deg; }
+inline bool RustNormalGame() noexcept { return _game_mode == GM_NORMAL; }
+inline bool RustFreeformEdges() noexcept { return _settings_game.construction.freeform_edges; }
+inline bool RustMagicBulldozer() noexcept { return _cheats.magic_bulldozer.value; }
 #endif /* RUST_SETTINGS_SERVICES_H */

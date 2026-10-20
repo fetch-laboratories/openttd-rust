@@ -257,6 +257,9 @@ add_files(
     rust/command_cost_ffi.h
     rust/command_cost_services.h
     rust/command_services_ffi.h
+    rust/object_ffi.h
+    rust/services_newgrf.h
+    rust/services_object.h
     rust/command_services.h
     rust/ffi.h
     landscape.h

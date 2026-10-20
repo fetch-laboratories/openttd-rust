@@ -57,11 +57,13 @@ static constexpr inline DoCommandFlags CommandFlagsToDCFlags(CommandFlags cmd_fl
 
 /** Helper class to keep track of command nesting level. */
 struct RecursiveCommandCounter {
-	RecursiveCommandCounter() noexcept { _counter++; }
-	~RecursiveCommandCounter() noexcept { _counter--; }
+	RecursiveCommandCounter() noexcept { Enter(); }
+	~RecursiveCommandCounter() noexcept { Leave(); }
 
 	/** Are we in the top-level command execution? */
 	bool IsTopLevel() const { return _counter == 1; }
+	static bool Enter() noexcept { return ++_counter == 1; }
+	static void Leave() noexcept { --_counter; }
 private:
 	static int _counter;
 };

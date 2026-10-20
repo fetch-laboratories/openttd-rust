@@ -17,6 +17,14 @@ struct OpenTTDCommandServices {
 	void (*no_vehicle)(OpenTTDCommandCost *, uint32_t) noexcept;
 	void (*no_train)(OpenTTDCommandCost *, uint32_t, uint8_t) noexcept;
 	void (*wormhole_free)(OpenTTDCommandCost *, uint32_t, uint32_t, const Train *) noexcept;
+	void (*ownership_at)(OpenTTDCommandCost *, uint8_t, uint32_t) noexcept;
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
+struct OpenTTDCommandProtocolServices {
+	bool (*enter)() noexcept;
+	void (*leave)() noexcept;
+	void (*before)(bool, bool) noexcept;
+	void (*after)(OpenTTDCommandCost *, uint16_t, bool, bool) noexcept;
+};
+const OpenTTDCommandProtocolServices &GetRustCommandProtocolServices() noexcept;
 #endif /* RUST_COMMAND_SERVICES_FFI_H */

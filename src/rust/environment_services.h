@@ -9,6 +9,9 @@
 #ifndef RUST_ENVIRONMENT_SERVICES_H
 #define RUST_ENVIRONMENT_SERVICES_H
 #include "../genworld.h"
+#include "../town.h"
+#include "../cargotype.h"
+#include "../economy_func.h"
 #include <utility>
 #include "../map_func.h"
 #include "../openttd.h"
@@ -33,4 +36,9 @@ ClearGround OpenTTDClearGround(uint32_t tile) noexcept;
 TreeGround OpenTTDTreeGround(uint32_t tile) noexcept;
 inline bool OpenTTDExchangeGeneratingWorld(bool value) noexcept { return std::exchange(_generating_world, value); }
 void OpenTTDAssertTownGenerationContext() noexcept;
+inline uint32_t OpenTTDMapScaleSize1D(uint32_t n) noexcept { return Map::ScaleBySize1D(n); }
+inline uint8_t RustPassengerCargo() noexcept { return GetCargoTypeByLabel(CT_PASSENGERS); }
+inline uint8_t RustMailCargo() noexcept { return GetCargoTypeByLabel(CT_MAIL); }
+inline uint32_t RustScaleCargo(uint32_t amount, bool town) noexcept { return ScaleByCargoScale(amount, town); }
+inline size_t OpenTTDTownCount() noexcept { return Town::GetNumItems(); }
 #endif /* RUST_ENVIRONMENT_SERVICES_H */

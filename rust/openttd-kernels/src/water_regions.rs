@@ -13,6 +13,13 @@
     clippy::cast_possible_wrap
 )]
 
+/// Call-local addresses of the canonical map-lifetime owner and native leaves.
+#[repr(C)]
+pub struct Context {
+    pub owner: *mut Regions,
+    pub leaves: *const Leaves,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Patch {

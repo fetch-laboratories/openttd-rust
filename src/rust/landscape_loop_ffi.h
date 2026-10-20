@@ -11,6 +11,7 @@
 #include "trees_ffi.h"
 #include "industry_ffi.h"
 #include "ground_ffi.h"
+#include "object_ffi.h"
 
 /* Only existing tables consumed by the industry tile loop; borrowed for a batch. */
 struct OpenTTDIndustryLoopServices {
@@ -46,7 +47,9 @@ struct OpenTTDLandscapeLoopServices {
 	OpenTTDGroundLoopServices ground;
 	void (*house_loop)(uint32_t) noexcept;
 	void (*station_loop)(uint32_t) noexcept;
-	void (*object_loop)(uint32_t) noexcept;
+	void (*object_loop)(uint32_t) noexcept; ///< Only standalone oracle fixtures; null in the game.
+	const OpenTTDObjectServices *objects;
+	OpenTTDObjectLoopFrame *object_frame;
 };
 const OpenTTDTreeServices &GetRustTreeServices() noexcept;
 OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept;

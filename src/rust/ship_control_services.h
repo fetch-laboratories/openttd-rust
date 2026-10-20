@@ -404,7 +404,7 @@ static bool Ship_next_depot(uint32_t first, OpenTTDShipDepot *out) noexcept
 	}
 	return false;
 }
-static const OpenTTDShipLeaves &GetShipServices()
+const OpenTTDShipLeaves &GetRustShipControlServices() noexcept
 {
 	static const OpenTTDShipLeaves leaves{
 		.depot_dir = Ship_depot_dir, .depot_axis = Ship_depot_axis,

@@ -51,4 +51,8 @@ uint8_t OPENTTD_WATER_CALL openttd_rust_water_visit_next(OpenTTDWaterRegions *, 
 #ifdef __cplusplus
 }
 #endif
+#ifdef __cplusplus
+struct OpenTTDWaterRegionContext { OpenTTDWaterRegions *owner; const OpenTTDWaterLeaves *leaves; };
+OpenTTDWaterRegionContext GetRustWaterRegionContext() noexcept;
+#endif
 #endif /* OPENTTD_RUST_WATER_REGIONS_FFI_H */

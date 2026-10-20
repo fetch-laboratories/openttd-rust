@@ -114,6 +114,21 @@ pub struct CommandServices {
     pub no_train: unsafe extern "C" fn(*mut CommandCost, u32, u8),
     /// Original `TunnelBridgeIsFree`, with the source optional ignored train.
     pub wormhole_free: unsafe extern "C" fn(*mut CommandCost, u32, u32, *const Train),
+    /// Ownership check with the optional tile needed for town error parameters.
+    pub ownership_at: unsafe extern "C" fn(*mut CommandCost, u8, u32),
+}
+
+/// Shared original command nesting and before/after semantics.
+#[repr(C)]
+pub struct CommandProtocolServices {
+    /// Increment the native nesting counter and return whether this is top level.
+    pub enter: extern "C" fn() -> bool,
+    /// Decrement the same counter.
+    pub leave: extern "C" fn(),
+    /// Original `InternalDoBefore`.
+    pub before: extern "C" fn(bool, bool),
+    /// Original `InternalDoAfter` with a live native cost.
+    pub after: unsafe extern "C" fn(*mut CommandCost, u16, bool, bool),
 }
 
 /// Opaque native town shell. Its address identifies the shell, not the Rust owner.
