@@ -8,10 +8,10 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 
 - Thirty ownership ports. Whole fork: Rust 66,144 / tooling 30,679 / glue 29,338 / original retired 40,991 of 470,612 `src/` lines (8.71%). Simulation: 33,058 / 102,615 (32.22%).
 - Wind-down integrated #302 shared benchmark coordination, #300 borrowed effect/disaster tables and #255 landscape ownership after review and exact-head Full. All three requested quiet repeats passed. Earlier #285/#286/#287/#289/#292/#297 are integrated; deployed docs-only acceptance passed; CI_ON_DEMAND=true.
-- Four drafts remain: #269 houses, #290 roads, #303 stations and maintenance #298 generated ABI. #298's single review/local checks passed, but Full was cancelled at the user's request. No new work, fix rounds or integrations while paused.
+- Development resumed on 2026-10-19. Four inherited drafts remain: #269 houses, #290 roads, #303 stations and maintenance #298 generated ABI. Root finishes #298's resolution spot-check and exact-head Full; fresh owners resume the three component drafts.
 - Current speed record (#255): TGP 1.189, play saves 1.15-1.39. The #275 attribution is posted; no follow-up fix PRs were started. Protected-branch CI passed at the latest code head.
 - Coverage (#156): vehicle deletion/pool-growth assertions, NewGRF/legacy branches and house/landscape coverage gaps remain open.
-- The selected work order and prerequisites below remain unchanged. No new component, planner or issue was started during wind-down.
+- The selected work order and prerequisites below remain unchanged. Selected ship-scratch maintenance and #257 deletion/pool-growth coverage run alongside the inherited drafts, within the three-maintenance limit.
 
 ## Fourteenth steering review (2026-10-18, merge churn and honest exceptions)
 
@@ -130,7 +130,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in parallel.
 
-1. **#291/#292, #283/#287, #288/#289, #296/#297 and #301/#302 are integrated.** Protected CI and deployed docs-only acceptance passed. CI_ON_DEMAND=true. **#284/#298** has a completed single review and local validation; final Full is cancelled while paused.
+1. **#291/#292, #283/#287, #288/#289, #296/#297 and #301/#302 are integrated.** Protected CI and deployed docs-only acceptance passed. CI_ON_DEMAND=true. **#284/#298** has a completed single review and local validation; root resumes the resolution spot-check and exact-head Full.
 2. **Drafts:** #269 houses retains its owned speed fix round; #255 landscape is integrated. Priorities are unchanged.
 3. **#275 speed, revised order (2026-10-18 comment):**
    - road YAPF tile reads (#288/#289) and effect/disaster borrowing (#299/#300) integrated; six-scenario attribution is posted on #275. Remaining order: ship YAPF scratch; `constinit` service tables;
@@ -157,17 +157,19 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Paused at the user's request. No new work or integrations until resume.
+Resumed by the user's `/start-development` on 2026-10-19.
 Root is gpt-6.1-sol, xhigh; implementation/review used gpt-6.1-sol, high.
-Three component drafts and one maintenance draft remain; all heads are pushed.
-#298 Full was cancelled on request. All agents ended and PR watches are off.
+Three component drafts and one inherited maintenance draft remain; saved heads are pushed.
+Five fresh task owners cover the component fixes, ship scratch and vehicle coverage.
 
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
-| #284 / #298 | `generated-abi-284`, `43c8d1809e` | Single fixing review complete; verify/Cargo4, 18 comparisons and final six medians pass after integrated #255 adoption. About 811/650 support lines; mechanical inventory separate. Full cancelled. Resume root's remaining resolution spot-check, then exact-head Full; merge only if clean. |
-| #256 / #269 | `house-lifecycle-256`, `af9e189521` | Grok +19.44% and P2016 1.677 fail speed; #275 attribution is posted. Next: owned profile-guided fix round, current-base adoption, final measurements/review/Full. |
-| #266 / #290 | `road-commands-266`, `56f25ba222` | Tile-height fix and affected soak pass. Review interrupted before final disposition; own-command C++ bounces and shared-leaf copies block. Next: boundary/shared-service fix, base adoption, fresh review, medians/Full. |
-| #267 / #303 | `station-commands-267`, `4d4b3cf8cb` | Passing verify saved as draft. Next: base adoption, generators/missing comparison, final command/reload semantic runs and remaining audit, then medians/review/CI. |
+| #284 / #298 | `generated-abi-284`, `43c8d1809e` | Root: finish reviewed-resolution spot-check, then exact-head Full and integration if clean. Prior local checks and six medians pass; support budget about 811/650 lines. |
+| #256 / #269 | `house-lifecycle-256`, `af9e189521` | `/root/house_speed_256`: profile-guided fix round and base adoption, then final measurements/review/Full. Retained Grok/P2016 misses remain failures. |
+| #266 / #290 | `road-commands-266`, `56f25ba222` | `/root/road_boundary_266`: remove owner bounces and shared-leaf copies while preserving native command protocol; then fresh review, medians/Full. |
+| #267 / #303 | `station-commands-267`, `4d4b3cf8cb` | `/root/station_finish_267`: final command/reload runs, generators/comparisons and callee audit; base adoption when needed, then medians/review/Full. |
+| #275 ship scratch | fresh isolated task | `/root/ship_scratch_275`: issue/PR, retained process-wide search scratch and targeted attribution; root owns review/integration. |
+| #156 / #257 coverage | fresh isolated task | `/root/vehicle_coverage_156`: narrow default-CI deletion/pool-growth assertions; root owns review/integration. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Paused measurement branch; #255 prerequisite is settled. Shared map view/attribution remain in the existing work order; no new PR. |
 | #64 / #66 | remote `issue/64-curve-family`, `aab5211801` | #66 closed unmerged; #64 and older paused work stay untouched. |
 
