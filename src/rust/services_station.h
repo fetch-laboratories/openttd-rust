@@ -30,6 +30,10 @@ inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return S
 inline uint8_t RustStationAirportType(const BaseStation *s) noexcept { return Station::From(s)->airport.type; }
 inline Direction RustStationAirportRotation(const BaseStation *s) noexcept { return Station::From(s)->airport.rotation; }
 inline uint32_t RustStationLocation(const BaseStation *s) noexcept { return s->xy.base(); }
+inline void RustStationRadius(uint32_t tile, uint32_t radius, void *context, void (*visit)(void *, BaseStation *)) noexcept
+{
+	ForAllStationsRadius(TileIndex{tile}, radius, [context, visit](Station *st) { visit(context, st); });
+}
 inline Owner OpenTTDStationOwner(const BaseStation *station) noexcept { return station->owner; }
 const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept;
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->facilities.Test(StationFacility::Airport); }

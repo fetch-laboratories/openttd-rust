@@ -1283,8 +1283,9 @@ water-structures-mutate --jobs 2` compares command costs/errors, RNG, STNN/STNS,
 map, town and company state, including partial removal, joins, delete/reuse and
 modern reload. The station module includes unchanged-reference private callbacks
 in fixture executables and requires `station_command` witnesses in default CI.
-Remaining NewGRF, legacy decoding and unusual occupied-reservation branches need
-a #156 disposition. Final semantic checks and six speed medians remain at wind-down.
+Builtin tram stops and a forced airport noise refusal share the controlled crossing
+fixture; terrain preparation preserves live ground-vehicle corner heights. NewGRF,
+legacy decoding and unusual occupied/reservation branches remain tracked by #156.
 
 ### Ship controller and private state (#146)
 

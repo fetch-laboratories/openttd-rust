@@ -90,7 +90,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 			}
 		},
 		.select_invalidate = []() noexcept { InvalidateWindowData(WC_SELECT_STATION, 0, 0); },
-		.radius = [](uint32_t tile, uint32_t radius, void *context, void (*visit)(void *, BaseStation *)) noexcept { ForAllStationsRadius(TileIndex{tile}, radius, [&](Station *st) { visit(context, st); }); },
+		.radius = RustStationRadius,
 		.station_available = RustStationStationAvailable,
 		.new_station = [](uint32_t tile) noexcept -> BaseStation * { return new Station(TileIndex{tile}); },
 		.index_insert = RustStationIndexInsert,

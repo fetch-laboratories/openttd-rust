@@ -1084,7 +1084,11 @@ static bool RustTown_allow_construction(uint32_t town, uint32_t tile, uint32_t h
 static void RustTown_construction_animation(uint32_t tile) noexcept { TriggerHouseAnimation_ConstructionStageChanged(TileIndex{tile}, true); }
 static void RustTownStations(uint32_t tile, uint32_t radius, void *context, void (*visit)(void *, const OpenTTDStation *, uint32_t)) noexcept
 {
-	ForAllStationsRadius(TileIndex{tile}, radius, [context, visit](const Station *st) { visit(context, RustStation(st), RustStationLocation(st)); });
+	struct Context { void *context; void (*visit)(void *, const OpenTTDStation *, uint32_t); } state{context, visit};
+	RustStationRadius(tile, radius, &state, [](void *opaque, BaseStation *base) {
+		const auto &state = *static_cast<Context *>(opaque);
+		state.visit(state.context, RustStation(Station::From(base)), RustStationLocation(base));
+	});
 }
 /* Thin FFI conversion facades over the shared station observations. */
 static void RustTownDirtyAuthority(uint32_t town) noexcept { SetWindowDirty(WC_TOWN_AUTHORITY, TownID(town)); }

@@ -1279,9 +1279,20 @@ impl Ctx<'_> {
                                 affected.push(train);
                             }
                         }
-                        unsafe {
-                            (self.rail().remove_rail)(ret.0, flags, tile, track);
-                        }
+                        // Reuse the two native slots across the nested command;
+                        // the accumulated station cost is scalar and already successful.
+                        let saved = cost.money();
+                        self.nested(ret, tile, flags, |flags| unsafe {
+                            crate::rail_cmd::openttd_rust_rail_remove_single(
+                                self.s.rail,
+                                ret.0,
+                                cost.0,
+                                flags,
+                                tile,
+                                track,
+                            );
+                        });
+                        cost.set(saved);
                         if !ret.ok() {
                             return cost.take(ret);
                         }

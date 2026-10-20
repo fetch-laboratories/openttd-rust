@@ -60,7 +60,7 @@ def scenarios(soak):
         {
             "name": "stations-commands-" + mode,
             "kind": "save",
-            "save": str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+            "save": str(ROOT / "migration/saves/road-crossing.sav"),
             "station_commands": mode,
             "ticks": 1,
             "short_checkpoint": True,
@@ -342,12 +342,19 @@ static TileIndex StationPatch()
 		TileArea area(TileXY(x, y), 32, 32);
 		bool usable = true;
 		for (TileIndex t : area) if ((GetTileType(t) != MP_CLEAR && GetTileType(t) != MP_TREES && GetTileType(t) != MP_WATER) || IsBridgeAbove(t) || VehiclesOnTile(t).begin() != VehiclesOnTile(t).end()) usable = false;
+		auto height = [x, y](uint xx, uint yy) {
+			int d = std::max({int(x) - int(xx), int(xx) - int(x + 32), int(y) - int(yy), int(yy) - int(y + 32), 0});
+			return static_cast<uint>(std::clamp<int>(TileHeight(TileXY(xx, yy)), std::max(0, 1 - d), 1 + d));
+		};
+		/* Preserve live vehicle corner heights so their saved z remains valid. */
+		for (const Vehicle *v : Vehicle::Iterate()) {
+			if (!v->IsGroundVehicle()) continue;
+			uint xx = TileX(v->tile), yy = TileY(v->tile);
+			for (uint dy = 0; dy < 2; dy++) for (uint dx = 0; dx < 2; dx++) if (height(xx + dx, yy + dy) != TileHeight(TileXY(xx + dx, yy + dy))) usable = false;
+		}
 		if (!usable) continue;
 		/* Clamp a one-level plateau with a valid one-level transition for reload. */
-		for (uint yy = 0; yy < Map::SizeY(); yy++) for (uint xx = 0; xx < Map::SizeX(); xx++) {
-			int d = std::max({int(x) - int(xx), int(xx) - int(x + 32), int(y) - int(yy), int(yy) - int(y + 32), 0});
-			TileIndex t = TileXY(xx, yy); SetTileHeight(t, std::clamp<int>(TileHeight(t), std::max(0, 1 - d), 1 + d));
-		}
+		for (uint yy = 0; yy < Map::SizeY(); yy++) for (uint xx = 0; xx < Map::SizeX(); xx++) SetTileHeight(TileXY(xx, yy), height(xx, yy));
 		for (TileIndex t : area) MakeClear(t, CLEAR_GRASS, 3);
 		return area.tile;
 	}
@@ -358,6 +365,8 @@ static bool StationCommands(std::span<std::string_view> args)
 	if (args.size() < 2) return false;
 	Company *company = *Company::Iterate().begin();
 	Backup<CompanyID> current(_current_company, company->index);
+	/* Declare the builtin tram type available without an external vehicle GRF. */
+	company->avail_roadtypes.Set(ROADTYPE_TRAM);
 	_settings_game.station.distant_join_stations = true;
 	_settings_game.station.never_expire_airports = true;
 	_settings_game.construction.road_stop_on_town_road = true;
@@ -418,6 +427,10 @@ static bool StationCommands(std::span<std::string_view> args)
 		StationNeed(IsDriveThroughStopTile(tile(12, 4)), __LINE__);
 		StationCost("drive-remove", Command<CMD_REMOVE_ROAD_STOP>::Do(exec, tile(12, 4), 2, 1, RoadStopType::Bus, false));
 		fmt::print(stderr, "STCMD road-owner {}\n", GetRoadOwner(tile(12, 4), RTT_ROAD) == OWNER_TOWN);
+		StationCost("tram-test", Command<CMD_BUILD_ROAD_STOP>::Do(test, tile(12, 7), 1, 1, RoadStopType::Bus, true, DIAGDIR_NE, ROADTYPE_TRAM, ROADSTOP_CLASS_DFLT, 0, NEW_STATION, true));
+		StationCost("tram-build", Command<CMD_BUILD_ROAD_STOP>::Do(exec, tile(12, 7), 1, 1, RoadStopType::Bus, true, DIAGDIR_NE, ROADTYPE_TRAM, ROADSTOP_CLASS_DFLT, 0, NEW_STATION, true));
+		StationNeed(IsDriveThroughStopTile(tile(12, 7)), __LINE__);
+		StationCost("tram-remove", Command<CMD_REMOVE_ROAD_STOP>::Do(exec, tile(12, 7), 1, 1, RoadStopType::Bus, false));
 		StationCost("road-waypoint-test", Command<CMD_BUILD_ROAD_WAYPOINT>::Do(test, tile(12, 4), AXIS_X, 1, 1, ROADSTOP_CLASS_WAYP, 0, NEW_STATION, true));
 		StationCost("road-waypoint-build", Command<CMD_BUILD_ROAD_WAYPOINT>::Do(exec, tile(12, 4), AXIS_X, 1, 1, ROADSTOP_CLASS_WAYP, 0, NEW_STATION, true));
 		StationNeed(IsRoadWaypointTile(tile(12, 4)), __LINE__);
@@ -426,6 +439,12 @@ static bool StationCommands(std::span<std::string_view> args)
 		StationCost("airport-build", Command<CMD_BUILD_AIRPORT>::Do(exec, tile(20, 1), AT_SMALL, 0, NEW_STATION, true));
 		StationNeed(IsAirportTile(tile(20, 1)), __LINE__);
 		StationID airport = GetStationIndex(tile(20, 1));
+		Backup<bool> noise_setting(_settings_game.economy.station_noise_level, true);
+		uint distance; Town *nearest = AirportGetNearestTown(AirportSpec::Get(AT_SMALL), Station::Get(airport)->airport.rotation, tile(20, 1), AirportTileIterator(Station::Get(airport)), distance);
+		Backup<uint16_t> noise(nearest->noise_reached, UINT16_MAX);
+		auto noisy = Command<CMD_BUILD_AIRPORT>::Do(test, tile(20, 1), AT_SMALL, 0, NEW_STATION, true);
+		StationCost("airport-noise-limit", noisy); StationNeed(noisy.GetErrorMessage() == STR_ERROR_LOCAL_AUTHORITY_REFUSES_NOISE, __LINE__);
+		noise.Restore(); noise_setting.Restore();
 		StationCost("airport-bridge-low", CheckBuildAbove_Station(tile(20, 1), test, AXIS_Y, 4));
 		StationCost("airport-bridge-high", CheckBuildAbove_Station(tile(20, 1), test, AXIS_Y, 12));
 		StationCost("airport-close-test", Command<CMD_OPEN_CLOSE_AIRPORT>::Do(test, airport));
@@ -484,11 +503,11 @@ def adapter(build, folder, env):
 def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
     import migration
 
-    from .rails import normalize
     from .runtime import prepared_adapter
 
     folder = out / scenario["name"] / "input"
-    source, _ = normalize(Path(scenario["save"]), folder / "normalized")
+    source = Path(scenario["save"])
+    read_save(source)
     executables = {}
     for role in ("reference", "candidate"):
         prepared = prepared_adapter("stations", role, binaries, builds, folder / role)
