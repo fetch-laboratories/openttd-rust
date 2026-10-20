@@ -8,20 +8,21 @@
 /** @file command_services_ffi.h Direct ordinary command leaves with native result storage. */
 #ifndef RUST_COMMAND_SERVICES_FFI_H
 #define RUST_COMMAND_SERVICES_FFI_H
+#include "service_defaults.hpp"
 #include "command_cost_ffi.h"
 struct Train;
 struct OpenTTDCommandServices {
-	bool (*depot_available)() noexcept;
-	uint16_t (*new_depot)(uint32_t) noexcept;
-	void (*depot_name)(uint16_t) noexcept;
-	void (*delete_depot)(uint32_t) noexcept;
-	void (*infrastructure_dirty)(uint8_t) noexcept;
-	void (*landscape_clear)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept;
-	void (*tile_ownership)(OpenTTDCommandCost *, uint32_t) noexcept;
-	void (*ownership)(OpenTTDCommandCost *, uint8_t) noexcept;
-	void (*no_vehicle)(OpenTTDCommandCost *, uint32_t) noexcept;
-	void (*no_train)(OpenTTDCommandCost *, uint32_t, uint8_t) noexcept;
-	void (*wormhole_free)(OpenTTDCommandCost *, uint32_t, uint32_t, const Train *) noexcept;
+	bool (*depot_available)() noexcept OPENTTD_SERVICE_DEFAULT(depot_available);
+	uint16_t (*new_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_depot);
+	void (*depot_name)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_name);
+	void (*delete_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_depot);
+	void (*infrastructure_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure_dirty);
+	void (*landscape_clear)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(landscape_clear);
+	void (*tile_ownership)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_ownership);
+	void (*ownership)(OpenTTDCommandCost *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(ownership);
+	void (*no_vehicle)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(no_vehicle);
+	void (*no_train)(OpenTTDCommandCost *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(no_train);
+	void (*wormhole_free)(OpenTTDCommandCost *, uint32_t, uint32_t, const Train *) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_free);
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
 #endif /* RUST_COMMAND_SERVICES_FFI_H */

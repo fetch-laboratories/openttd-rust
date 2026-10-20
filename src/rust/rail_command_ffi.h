@@ -8,6 +8,7 @@
 /** @file rail_command_ffi.h Rail track, depot and signal command owner boundary (ABI 980-1019). */
 #ifndef RUST_RAIL_COMMAND_FFI_H
 #define RUST_RAIL_COMMAND_FFI_H
+#include "service_defaults.hpp"
 #include "services_ffi.h"
 #include "command_services_ffi.h"
 #include "signal_ffi.h"
@@ -39,49 +40,49 @@ struct OpenTTDRailCommandServices {
 	const OpenTTDCommandServices *command;
 	const OpenTTDSignalServices *signal;
 	OpenTTDRailCommandStrings strings;
-	bool (*rail_type_valid)(uint8_t) noexcept;
-	bool (*compatible_rail)(uint8_t, uint8_t) noexcept;
-	bool (*powered_rail)(uint8_t, uint8_t) noexcept;
-	bool (*train_powered)(Train *, uint8_t) noexcept;
-	bool (*rail_no_crossings)(uint8_t) noexcept;
-	bool (*road_no_crossing)(uint8_t) noexcept;
-	int64_t (*rail_build_cost)(uint8_t) noexcept;
-	int64_t (*rail_clear_cost)(uint8_t) noexcept;
-	int64_t (*rail_convert_cost)(uint8_t, uint8_t) noexcept;
-	int64_t (*road_build_cost)(uint8_t) noexcept;
-	bool (*crossing_with_competitor)() noexcept;
-	bool (*disable_elrails)() noexcept;
-	Foundation (*rail_foundation)(uint8_t, uint8_t) noexcept;
-	OpenTTDSlopeZ (*apply_foundation)(uint8_t, uint8_t) noexcept;
-	int32_t (*slope_z_in_corner)(uint8_t, uint8_t) noexcept;
-	bool (*entrance_edge)(uint32_t, int32_t, uint8_t, uint8_t) noexcept;
-	bool (*ship_on_tile)(uint32_t) noexcept;
-	void (*build_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, bool) noexcept;
-	void (*remove_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t) noexcept;
-	void (*build_signal)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, bool, bool, bool, uint8_t, uint8_t, uint8_t, uint8_t) noexcept;
-	void (*remove_signal)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t) noexcept;
-	void (*convert_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, bool) noexcept;
-	void (*rail_infrastructure)(uint8_t, uint8_t, uint32_t) noexcept;
-	void (*road_infrastructure)(uint8_t, uint8_t, uint32_t) noexcept;
-	void (*signal_infrastructure)(uint8_t, uint32_t) noexcept;
-	Train *(*reserving_train)(uint32_t, uint8_t) noexcept;
-	OpenTTDRailTrainParking (*parking)(Train *) noexcept;
-	OpenTTDRailTrainPosition (*train_position)(Train *) noexcept;
-	void (*layout_changed)(uint32_t, uint8_t) noexcept;
-	void (*mark_crossings)(uint32_t, uint8_t) noexcept;
-	void (*crossing_removed)(uint32_t, uint8_t) noexcept;
-	void (*make_crossing)(uint32_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint16_t) noexcept;
-	void (*make_road)(uint32_t, OpenTTDCrossingRoad) noexcept;
-	void (*depot_windows)(uint32_t) noexcept;
-	void (*close_inspect)(uint32_t) noexcept;
-	void (*make_shore)(uint32_t) noexcept;
-	void (*docking_check)(uint32_t) noexcept;
-	void (*area_begin)(OpenTTDRailConvertFrame *, uint32_t, uint32_t, bool) noexcept;
-	uint32_t (*area_tile)(OpenTTDRailConvertFrame *) noexcept;
-	void (*area_next)(OpenTTDRailConvertFrame *) noexcept;
-	bool (*area_contains)(uint32_t, uint32_t, bool, uint32_t) noexcept;
-	void (*collect_trains)(OpenTTDRailConvertFrame *, uint32_t) noexcept;
-	void (*consist_changed)(OpenTTDRailConvertFrame *) noexcept;
+	bool (*rail_type_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_valid);
+	bool (*compatible_rail)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_rail);
+	bool (*powered_rail)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(powered_rail);
+	bool (*train_powered)(Train *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(train_powered);
+	bool (*rail_no_crossings)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_no_crossings);
+	bool (*road_no_crossing)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_no_crossing);
+	int64_t (*rail_build_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_build_cost);
+	int64_t (*rail_clear_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_clear_cost);
+	int64_t (*rail_convert_cost)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_convert_cost);
+	int64_t (*road_build_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_build_cost);
+	bool (*crossing_with_competitor)() noexcept OPENTTD_SERVICE_DEFAULT(crossing_with_competitor);
+	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
+	Foundation (*rail_foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_foundation);
+	OpenTTDSlopeZ (*apply_foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
+	int32_t (*slope_z_in_corner)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(slope_z_in_corner);
+	bool (*entrance_edge)(uint32_t, int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(entrance_edge);
+	bool (*ship_on_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_on_tile);
+	void (*build_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(build_rail);
+	void (*remove_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_rail);
+	void (*build_signal)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, bool, bool, bool, uint8_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(build_signal);
+	void (*remove_signal)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_signal);
+	void (*convert_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(convert_rail);
+	void (*rail_infrastructure)(uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_infrastructure);
+	void (*road_infrastructure)(uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_infrastructure);
+	void (*signal_infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_infrastructure);
+	Train *(*reserving_train)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reserving_train);
+	OpenTTDRailTrainParking (*parking)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(parking);
+	OpenTTDRailTrainPosition (*train_position)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(train_position);
+	void (*layout_changed)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_changed);
+	void (*mark_crossings)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(mark_crossings);
+	void (*crossing_removed)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_removed);
+	void (*make_crossing)(uint32_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(make_crossing);
+	void (*make_road)(uint32_t, OpenTTDCrossingRoad) noexcept OPENTTD_SERVICE_DEFAULT(make_road);
+	void (*depot_windows)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_windows);
+	void (*close_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_inspect);
+	void (*make_shore)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_shore);
+	void (*docking_check)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking_check);
+	void (*area_begin)(OpenTTDRailConvertFrame *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(area_begin);
+	uint32_t (*area_tile)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(area_tile);
+	void (*area_next)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(area_next);
+	bool (*area_contains)(uint32_t, uint32_t, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(area_contains);
+	void (*collect_trains)(OpenTTDRailConvertFrame *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(collect_trains);
+	void (*consist_changed)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(consist_changed);
 };
 const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept;
 

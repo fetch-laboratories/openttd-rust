@@ -919,3 +919,14 @@ CommandCost CmdSetAutoReplace(DoCommandFlags flags, GroupID id_g, EngineID old_e
 #endif /* WITH_RUST */
 }
 
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDFleetTransactionServices.hpp"
+#include "abi-visit-OpenTTDCargoCapacityServices.hpp"
+bool CheckAbi_autoreplace_cmd()
+{
+	return AbiServicesComplete(_fleet_transaction_services) &&
+		AbiServicesComplete(CargoCapacityServices());
+}
+#endif

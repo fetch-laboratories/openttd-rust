@@ -338,6 +338,8 @@ def check(scenario, run, mode, role, result):
         }.items():
             if sum(row.startswith(f"cost {command} true ") for row in markers) != count:
                 raise RuntimeError("water fixture did not exercise " + command)
+        if "docking true true" not in markers:
+            raise RuntimeError("water restoration did not preserve docking membership")
         key = mode + "_water_commands"
         if role == "reference":
             result[key] = markers

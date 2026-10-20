@@ -1936,3 +1936,9 @@ bool RoadVehicle::HasToUseGetSlopePixelZ()
 	return openttd_rust_road_slope_pixel(RustVehicle(this), RustVehicle(first), first->GetRustState(), this->direction, &GetRoadLeaves());
 }
 #endif
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDRoadLeaves.hpp"
+bool CheckAbi_roadveh_cmd() { return AbiServicesComplete(GetRoadLeaves()); }
+#endif

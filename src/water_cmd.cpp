@@ -1673,3 +1673,13 @@ extern const TileTypeProcs _tile_type_water_procs = {
 	TerraformTile_Water,      // terraform_tile_proc
 	CheckBuildAbove_Water, // check_build_above_proc
 };
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDWaterCommandServices.hpp"
+#include "abi-visit-OpenTTDEnvironmentServices.hpp"
+bool CheckAbi_water_cmd()
+{
+	return AbiServicesComplete(GetRustWaterCommandServices()) && AbiServicesComplete(GetRustWaterCommandServices().environment);
+}
+#endif

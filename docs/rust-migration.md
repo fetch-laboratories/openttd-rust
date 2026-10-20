@@ -122,6 +122,24 @@ LD_LIBRARY_PATH="$PWD/.local/deps/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$L
 
 `-X` avoids global game folders. Use separate development configuration and saves.
 
+### Generated ABI probes and fixture defaults (#284)
+
+`layouts!` declarations in `abi.rs`, `company.rs`, `crypto_primitives.rs`, `blake2b.rs`,
+`x25519.rs` and `auth.rs` name the C++ type, probe group and ordered Rust fields. Use
+`rust_field => cpp_field` for aliases and `width field: RustType` for an extra
+native-width check. Native-only groups remain in their owning unit tests.
+CMake runs `tools/generate-abi.py` into the build directory; probes compare the
+complete list and its `SIZE_MAX` terminator through the named metadata API.
+Add declarations there, never a second C++ field list or numeric type ID.
+
+Callback declarations inherit signature-correct abort defaults. Fixtures specify
+only callbacks they actually use; data pointers and scalar carriers retain their
+own initialization rules. Generated typed visitors check actual production
+instances for null callbacks and abort defaults in the default native tests.
+`tools/test-generated-abi.py` checks the historical conversion against the deleted
+lists and tests current generation separately, allowing later ABI changes.
+Cross-language signature assertions remain outside this maintenance change.
+
 ## Compiler cache, shared reference and CI time
 
 Every worktree of a clone shares the main checkout's pinned reference checkout
@@ -1486,3 +1504,27 @@ crossings/depots/slopes, signal cycling/conversion/copy/autofill through a bridg
 conversion/reroutes, clearing/terraforming, company transfer/deletion and reservations.
 Coast/half-tile water and PBS path-end removal remain #156 gaps. PR #270 records
 exact-head checks and outstanding full-simulation, speed and CI gates.
+
+### Water construction, clearing and restoration (#294)
+
+Rust (`water_cmd.rs`) owns ship depot/lock/canal commands and removal, water
+clearing, class restoration, river/desert traversal, and water owner/terraform/
+build-above policy. Original command bodies and `MakeLock` remain portable-only.
+Lock checks/build/removal order, depot partial clears and post-clear accounting,
+conditional RNG draws, narrowing and wrapping retain the original sequence.
+
+C++ keeps packed map primitives, depot identities, drawing, native stack
+`CommandCost` objects and a lazy stack area iterator. Generic landscape commands
+retain the complete native `Command::Do` lifecycle. Rust helpers call the
+integrated flooding/neighbor owner directly; docking retains its native owner.
+Shared command/depot/environment services replace touched rail/town/industry
+copies. Named generated layouts, aborting unused fixture slots and actual
+production table checks cover the boundary; no native world borrow spans reentry.
+
+`python3 tools/migration.py verify --jobs 2`, default `water-commands` and existing
+water traffic/mutation/reload scenarios compare semantic saves and require
+restoration/clear witnesses. The console fixture compares results/parameters,
+map/depot fields, infrastructure, docking membership and RNG across both axes,
+all lock directions/parts, occupied/bankrupt queries, force/partial clearing,
+editor/desert and restoration inputs. Pool exhaustion, construction under bridges,
+water objects, arbitrary NewGRF/legacy layouts and GUI remain #156 coverage gaps.

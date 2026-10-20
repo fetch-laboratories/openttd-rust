@@ -8,6 +8,7 @@
 /** @file trees_ffi.h Rust tree generation, simulation and command ownership. */
 #ifndef TREES_FFI_H
 #define TREES_FFI_H
+#include "service_defaults.hpp"
 #include <cstdint>
 #include "services_ffi.h"
 
@@ -77,28 +78,28 @@ struct OpenTTDTreeCommand;
  * entry's caller rethrows it. No other C++ exception reaches these services. */
 struct OpenTTDGroundCall;
 struct OpenTTDTreeServices {
-	OpenTTDTreePlantObservation (*plant_observation)(uint32_t) noexcept;
-	OpenTTDTreeObservation (*tree_observation)(uint32_t) noexcept;
-	uint32_t (*tree_count)(uint32_t) noexcept;
-	OpenTTDTreeClearObservation (*clear_observation)(uint32_t) noexcept;
-	uint8_t (*snow_line)() noexcept;
-	float (*sin)(float) noexcept;
-	float (*cos)(float) noexcept;
-	void (*make_tree)(uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept;
-	void (*set_ground_density)(uint32_t tile, uint8_t ground, uint32_t density) noexcept;
-	void (*add_count)(uint32_t tile, int32_t count) noexcept;
-	void (*add_growth)(uint32_t tile, int32_t growth) noexcept;
-	void (*set_growth)(uint32_t tile, uint8_t growth) noexcept;
-	void (*make_clear)(uint32_t tile, uint8_t ground, uint32_t density) noexcept;
-	bool (*ambient)(uint32_t tile) noexcept;
-	bool (*progress)() noexcept;
-	bool (*progress_total)(uint32_t total) noexcept;
-	void (*town_rating)(OpenTTDTreeCommand *, uint32_t tile, bool up) noexcept;
-	int32_t (*command_begin)(OpenTTDTreeCommand *, uint32_t end, uint32_t start, bool diagonal) noexcept;
-	uint32_t (*command_tile)(OpenTTDTreeCommand *) noexcept;
-	uint32_t (*command_next)(OpenTTDTreeCommand *) noexcept;
-	void (*command_debit)(OpenTTDTreeCommand *) noexcept;
-	OpenTTDTreeLandscapeClear (*landscape_clear)(OpenTTDTreeCommand *, uint32_t tile) noexcept;
+	OpenTTDTreePlantObservation (*plant_observation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(plant_observation);
+	OpenTTDTreeObservation (*tree_observation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_observation);
+	uint32_t (*tree_count)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_count);
+	OpenTTDTreeClearObservation (*clear_observation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_observation);
+	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
+	float (*sin)(float) noexcept OPENTTD_SERVICE_DEFAULT(sin);
+	float (*cos)(float) noexcept OPENTTD_SERVICE_DEFAULT(cos);
+	void (*make_tree)(uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(make_tree);
+	void (*set_ground_density)(uint32_t tile, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(set_ground_density);
+	void (*add_count)(uint32_t tile, int32_t count) noexcept OPENTTD_SERVICE_DEFAULT(add_count);
+	void (*add_growth)(uint32_t tile, int32_t growth) noexcept OPENTTD_SERVICE_DEFAULT(add_growth);
+	void (*set_growth)(uint32_t tile, uint8_t growth) noexcept OPENTTD_SERVICE_DEFAULT(set_growth);
+	void (*make_clear)(uint32_t tile, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(make_clear);
+	bool (*ambient)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(ambient);
+	bool (*progress)() noexcept OPENTTD_SERVICE_DEFAULT(progress);
+	bool (*progress_total)(uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_total);
+	void (*town_rating)(OpenTTDTreeCommand *, uint32_t tile, bool up) noexcept OPENTTD_SERVICE_DEFAULT(town_rating);
+	int32_t (*command_begin)(OpenTTDTreeCommand *, uint32_t end, uint32_t start, bool diagonal) noexcept OPENTTD_SERVICE_DEFAULT(command_begin);
+	uint32_t (*command_tile)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_tile);
+	uint32_t (*command_next)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_next);
+	void (*command_debit)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_debit);
+	OpenTTDTreeLandscapeClear (*landscape_clear)(OpenTTDTreeCommand *, uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(landscape_clear);
 };
 
 extern "C" {

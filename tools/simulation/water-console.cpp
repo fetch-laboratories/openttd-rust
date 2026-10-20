@@ -121,6 +121,16 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 	MakeCanal(tile, _current_company, 0); MakeCanal(tile + 1, CompanyID(0), 0);
 	WaterCost("second-clear-failure", CmdBuildShipDepot(DoCommandFlag::Execute, tile, AXIS_X));
 	WaterState("partial-first", tile); WaterState("partial-second", tile + 1);
+	bool checked_docking = false;
+	for (Station *st : Station::Iterate()) {
+		for (TileIndex t : st->docking_station) {
+			if (!IsWaterTile(t) || !IsDockingTile(t)) continue;
+			MakeWaterKeepingClass(t, GetTileOwner(t));
+			fmt::print(stderr, "WATER-CMD docking {} {}\n", st->docking_station.Contains(t), IsDockingTile(t));
+			checked_docking = true; break;
+		}
+		if (checked_docking) break;
+	}
 	fmt::print(stderr, "WATER-CMD complete\n");
 	local.Restore(); company.Restore();
 	return true;

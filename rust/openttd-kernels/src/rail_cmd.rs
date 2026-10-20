@@ -198,7 +198,6 @@ pub struct RailCommandServices {
     pub road_infrastructure: extern "C" fn(u8, u8, u32),
     /// `infrastructure.signal += delta` with uint32 wrap.
     pub signal_infrastructure: extern "C" fn(u8, u32),
-    /// `DirtyCompanyInfrastructureWindows`.
     /// `GetTrainForReservation`.
     pub reserving_train: extern "C" fn(u32, u8) -> *mut Train,
     /// Train fields read at the signal re-reservation branch.
@@ -215,10 +214,6 @@ pub struct RailCommandServices {
     pub make_crossing: extern "C" fn(u32, u8, u8, u8, u8, u8, u8, u8, u16),
     /// `MakeRoadNormal(tile, bits, road_rt, tram_rt, town, road_owner, tram_owner)`.
     pub make_road: extern "C" fn(u32, CrossingRoad),
-    /// `Depot::CanAllocateItem`.
-    /// `new Depot(tile)`, returning its ID.
-    /// `MakeDefaultName(Depot::Get(id))`.
-    /// `delete Depot::GetByTile(tile)`.
     /// `InvalidateWindowData` of the depot and build-vehicle windows.
     pub depot_windows: extern "C" fn(u32),
     /// `DeleteNewGRFInspectWindow(GSF_RAILTYPES, tile)`.
