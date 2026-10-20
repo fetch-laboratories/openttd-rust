@@ -9,6 +9,7 @@
 #ifndef RUST_GROUND_FFI_H
 #define RUST_GROUND_FFI_H
 #include "services_ffi.h"
+#include "water_regions_ffi.h"
 /* Actual fixed-underlying native enums, not byte aliases. Rust transparent
  * carriers preserve every stored bit pattern without enum-discriminant guards. */
 enum ClearGround : uint8_t;
