@@ -5,6 +5,7 @@
 	* See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
 	*/
 
+#include "services_landscape.h"
 #include "services_ffi.h"
 #include "command_services.h"
 #include "services_rail.h"
@@ -99,11 +100,6 @@ static void TrainReservationIncrementOrder(void *, OpenTTDTrainHandle id) noexce
 {
 	Train *v = static_cast<Train *>(id.shell);
 	v->IncrementRealOrderIndex();
-}
-static uint64_t TrainReservationIsBridge(void *, OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	TileIndex t(static_cast<uint32_t>(a));
-	return IsBridge(t);
 }
 static uint64_t TrainReservationIsDepot(void *, OpenTTDTrainHandle, uint32_t a) noexcept
 {

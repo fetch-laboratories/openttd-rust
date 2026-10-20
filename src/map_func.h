@@ -25,6 +25,9 @@
 class Tile {
 private:
 	friend struct Map;
+#ifdef WITH_RUST
+	friend struct OpenTTDNativeTileTypeAccess;
+#endif
 	/**
 	 * Data that is stored per tile. Also used TileExtended for this.
 	 * Look at docs/landscape.html for the exact meaning of the members.

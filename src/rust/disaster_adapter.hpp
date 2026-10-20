@@ -5,6 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 /** @file disaster_adapter.hpp Copied canonical observations and returned shared services. */
+#include "services_landscape.h"
+#include "station_services.h"
+#include "command_services.h"
+#include "services_map.h"
 #include "services_rail.h"
 #include "disaster_ffi.h"
 #include "vehicle_services.h"
@@ -54,16 +58,16 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 			out[3] = behaviour.Test(IndustryBehaviour::ChopperAttacks); out[4] = behaviour.Test(IndustryBehaviour::CanSubsidence); out[5] = i->town->index.base();
 			break;
 		}
-		case 3: { const Station *s = Station::Get(id); out[0] = s->airport.tile.base(); out[1] = s->airport.type; break; }
+		case 3: { const Station *s = Station::Get(id); out[0] = RustStationAirportTile(s); out[1] = s->airport.type; break; }
 		case 4: out[0] = Company::Get(id)->group_all[VEH_ROAD].num_vehicle; break;
 		case 5: {
 			TileIndex tile{id}; out[0] = IsValidTile(tile); if (!out[0]) break;
-			out[1] = GetTileType(tile);
-			if (out[1] == MP_RAILWAY) out[2] = GetTileOwner(tile).base();
-			out[4] = IsTileType(tile, MP_RAILWAY) && RustRailIsDepot(id); out[5] = IsAirportTile(tile);
-			if (out[5]) out[6] = GetStationIndex(tile).base();
+			out[1] = SharedTileType(id);
+			if (out[1] == MP_RAILWAY) out[2] = RustTileOwnerValue(id);
+			out[4] = IsTileType(tile, MP_RAILWAY) && RustRailIsDepot(id); out[5] = RustAirportTile(id);
+			if (out[5]) out[6] = MapSvcStationIndex(id);
 			if (IsTileType(tile, MP_INDUSTRY)) out[7] = GetIndustryIndex(tile).base();
-			out[8] = IsPlainRailTile(tile); break;
+			out[8] = RustPlainRailTile(id); break;
 		}
 		case 6: {
 			size_t from = static_cast<uint32_t>(a) == VehicleID::Invalid().base() ? 0 : a + 1;
@@ -79,7 +83,7 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 			break;
 		}
 		case 7: out[0] = reinterpret_cast<intptr_t>(DisasterVehicle::Get(id)->rust_state.get()); break;
-		case 8: out[0] = GetSlopePixelZ(a, b); break;
+		case 8: out[0] = SharedSlopePixelZ(a, b, false); break;
 		case 9: out[0] = GetDirectionTowards(Vehicle::Get(id), a, b); break;
 		case 10: { auto gp = GetNewVehiclePos(Vehicle::Get(id)); out[0] = gp.x; out[1] = gp.y; break; }
 		case 11: out[0] = Industry::Get(id)->TileBelongsToIndustry(TileIndex{static_cast<uint32_t>(a)}); break;
@@ -122,9 +126,9 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 		case 5: response = GetAircraftFlightLevel(DisasterVehicle::Get(step.id)); break;
 		case 6: { int z; GetAircraftFlightLevelBounds(DisasterVehicle::Get(step.id), &z, nullptr); response = z; break; }
 		case 7: CreateEffectVehicleRel(Vehicle::Get(step.id), step.a, step.b, step.c, static_cast<EffectVehicleType>(step.other)); break;
-		case 8: CreateEffectVehicleAbove(step.a, step.b, step.c, static_cast<EffectVehicleType>(step.other)); break;
+		case 8: RustCreateEffectAbove(step.a, step.b, step.c, static_cast<EffectVehicleType>(step.other)); break;
 		case 9: SndPlayVehicleFx(SND_12_EXPLOSION, Vehicle::Get(step.id)); break;
-		case 10: SndPlayTileFx(SND_12_EXPLOSION, TileIndex{step.id}); break;
+		case 10: RustPlayTileSound(step.id, SND_12_EXPLOSION); break;
 		case 11:
 			switch (step.other) {
 				case 0: AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_ZEPPELIN, step.a), NewsType::Accident, TileIndex{step.id}); break;
@@ -136,8 +140,8 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 			}
 			break;
 		case 12:
-			if (step.other == 0) { TileIndex tile{step.id}; AI::NewEvent(GetTileOwner(tile), new ScriptEventDisasterZeppelinerCrashed(GetStationIndex(tile))); }
-			else if (step.other == 1) { TileIndex tile{step.id}; AI::NewEvent(GetTileOwner(tile), new ScriptEventDisasterZeppelinerCleared(StationID{static_cast<uint16_t>(step.a)})); }
+			if (step.other == 0) { AI::NewEvent(CompanyID{RustTileOwnerValue(step.id)}, new ScriptEventDisasterZeppelinerCrashed(StationID(MapSvcStationIndex(step.id)))); }
+			else if (step.other == 1) { AI::NewEvent(CompanyID{RustTileOwnerValue(step.id)}, new ScriptEventDisasterZeppelinerCleared(StationID{static_cast<uint16_t>(step.a)})); }
 			else {
 				RoadVehicle *target = RoadVehicle::Get(step.id);
 				AI::NewEvent(target->owner, new ScriptEventVehicleCrashed(target->index, target->tile, ScriptEventVehicleCrashed::CRASH_RV_UFO, step.a, target->owner));
@@ -157,7 +161,7 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 			response = result.Failed();
 			break;
 		}
-		case 18: UpdateSignalsInBuffer(); break;
+		case 18: RustUpdateSignals(); break;
 		case 19: GetRustSharedServices().clear_square(step.id); break;
 		case 20: ResetIndustryConstructionStage(TileIndex{step.id}); MarkTileDirtyByTile(TileIndex{step.id}); break;
 		case 21: response = ClosestTownFromTile(TileIndex{step.id}, UINT_MAX)->index.base(); break;

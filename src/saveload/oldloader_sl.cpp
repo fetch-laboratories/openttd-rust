@@ -40,6 +40,8 @@
 #include "../rust/tree_counter.h"
 #include "../rust/disaster_counter.h"
 
+#include "../rust/tile_loop_cursor.h"
+
 #include "../safeguards.h"
 
 static bool _read_ttdpatch_flags;    ///< Have we (tried to) read TTDPatch extra flags?
@@ -1700,7 +1702,6 @@ static bool LoadTTDPatchExtraChunks(LoadgameState &ls, int)
 	return true;
 }
 
-extern TileIndex _cur_tileloop_tile;
 extern uint8_t _age_cargo_skip_counter; // From misc_sl.cpp
 extern uint8_t _old_diff_level;
 extern uint8_t _old_units;

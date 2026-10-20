@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise simulation runtime provenance and semantic speed-report validity."""
+"""Exercise simulation determinism, runtime isolation and semantic speed reports."""
 
 import contextlib
 import hashlib
@@ -125,7 +125,7 @@ class SimulationDeterminismTests(unittest.TestCase):
             self.assertEqual(result.stdout.splitlines(), ["(0, 0)", "denied"])
 
 
-class SimulationProvenanceTests(unittest.TestCase):
+class SimulationRuntimeTests(unittest.TestCase):
     def exercise(
         self,
         *,
@@ -139,7 +139,7 @@ class SimulationProvenanceTests(unittest.TestCase):
             (root / "tools").mkdir()
             (root / "head").write_text("initial-checkout")
             (root / "status").write_text(" M tracked-file")
-            # A tiny driver fixture supplies paths/identity; actual simulation
+            # A tiny driver fixture supplies paths; actual simulation
             # main(), runtime copying and executable launches stay exercised.
             (root / "tools/migration.py").write_text(
                 "from contextlib import nullcontext\n"
@@ -160,7 +160,7 @@ class SimulationProvenanceTests(unittest.TestCase):
                 ai_initial[folder] = hashlib.sha256(
                     (ai / "main.nut").read_bytes()
                 ).hexdigest()
-            originals, initial, assets = {}, {}, {}
+            originals, assets = {}, {}
             for role in ("reference", "candidate"):
                 if role == "candidate" and self_compare:
                     continue
@@ -179,7 +179,6 @@ class SimulationProvenanceTests(unittest.TestCase):
                 binary = build / ("openttd" if role == "reference" else "openttd-rust")
                 binary.write_text(f"print('{role}-before')\n")
                 originals[role], assets[role] = binary, asset
-                initial[role] = hashlib.sha256(binary.read_bytes()).hexdigest()
 
             invocations = []
 
@@ -261,27 +260,17 @@ class SimulationProvenanceTests(unittest.TestCase):
                     self.assertFalse((run / "report.json").exists())
                     return
                 self.assertEqual(simulate.main(), 0 if passed else 1)
-            report = json.loads(
-                next((root / ".local/simulation").glob("*/report.json")).read_text()
-            )
+            report_path = next((root / ".local/simulation").glob("*/report.json"))
+            report = json.loads(report_path.read_text())
             self.assertEqual(report["passed"], passed)
             self.assertEqual(invocations, ["a", "b"])
             self.assertEqual(report["candidate_commit"], "initial-checkout")
             self.assertEqual(report["candidate_status"], " M tracked-file")
-            for folder, digest in ai_initial.items():
-                evidence = report["scenario_ai"][folder]
-                self.assertEqual(evidence["files"], {"main.nut": digest})
-                self.assertEqual(
-                    (Path(evidence["path"]) / "main.nut").read_text(),
-                    f"{folder}-before",
-                )
-            for role, evidence in report["binaries"].items():
-                original_role = "reference" if self_compare else role
-                self.assertEqual(evidence["sha256"], initial[original_role])
-                self.assertEqual(
-                    Path(evidence["source_path"]), originals[original_role]
-                )
-                self.assertFalse(Path(evidence["path"]).parent.exists())
+            for folder in ai_initial:
+                frozen = report_path.parent / "scenario-ai" / folder
+                self.assertEqual((frozen / "main.nut").read_text(), f"{folder}-before")
+            for role in ("reference", "candidate"):
+                self.assertFalse((report_path.parent / f"{role}-runtime").exists())
 
     def test_default_candidate_survives_rebuild(self):
         self.exercise()

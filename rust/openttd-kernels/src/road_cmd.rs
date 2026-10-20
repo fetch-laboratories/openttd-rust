@@ -174,6 +174,7 @@ struct Ctx<'a> {
     r: &'a RailCommandServices,
     shared: &'a Services,
     rail: &'a RailMapServices,
+    ground: &'a crate::ground::RailServices,
     costs: &'a CommandCostServices,
     commands: &'a CommandServices,
     town: &'a crate::town::Leaves,
@@ -189,11 +190,13 @@ impl<'a> Ctx<'a> {
         let s = unsafe { &*s };
         let r = unsafe { &*s.rail_commands };
         let shared = unsafe { &*r.shared };
+        let rail = unsafe { &*r.rail };
         Self {
             s,
             r,
             shared,
-            rail: unsafe { &*r.rail },
+            rail,
+            ground: unsafe { &*rail.ground },
             costs: unsafe { &*r.cost },
             commands: unsafe { &*r.command },
             town: unsafe { &*s.town },
@@ -228,14 +231,16 @@ impl<'a> Ctx<'a> {
         if top_level || flags & EXEC == 0 {
             (self.commands.before)(top_level, true);
             let extra = body(flags & !EXEC);
-            (self.commands.after)(cost.0, flags, top_level, true);
+            // SAFETY: the native result slot stays live throughout this scope.
+            unsafe { (self.commands.after)(cost.0, flags, top_level, true) };
             if !cost.ok() || flags & EXEC == 0 {
                 return extra;
             }
         }
         (self.commands.before)(top_level, false);
         let extra = body(flags);
-        (self.commands.after)(cost.0, flags, top_level, false);
+        // SAFETY: the native result slot stays live throughout this scope.
+        unsafe { (self.commands.after)(cost.0, flags, top_level, false) };
         extra
     }
     fn do_build(
@@ -290,7 +295,7 @@ impl<'a> Ctx<'a> {
     fn size(&self) -> u32 {
         self.map
             .size_x()
-            .wrapping_mul((self.shared.map_max_y)() + 1)
+            .wrapping_mul((self.shared.map_max_y)().wrapping_add(1))
     }
     fn tile_type(&self, tile: u32) -> u8 {
         (self.shared.tile_type)(tile)
@@ -888,7 +893,7 @@ impl<'a> Ctx<'a> {
                         cost.error(self.r.strings.crossing_rail);
                         return;
                     }
-                    let tracks = (self.rail.rail_tracks)(tile).0;
+                    let tracks = (self.ground.tracks)(tile).0;
                     let axis = match tracks {
                         1 if pieces & 0b1010 == 0 => 1,
                         2 if pieces & 5 == 0 => 0,

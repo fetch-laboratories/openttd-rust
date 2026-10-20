@@ -6,6 +6,7 @@
  */
 
 #include "services_ffi.h"
+#include "services_map.h"
 #include "services_water.h"
 
 /** @file ship_control_services.h Typed synchronous shared-world services. */
@@ -268,7 +269,7 @@ static void Ship_update_delta(uint32_t id) noexcept { Ship *v = Ship::Get(Vehicl
 
 static void Ship_build_owner(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->owner = _current_company; }
 
-static void Ship_build_z(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->z_pos = GetSlopePixelZ(v->x_pos, v->y_pos); }
+static void Ship_build_z(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->z_pos = SharedSlopePixelZ(v->x_pos, v->y_pos, false); }
 
 static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 {
@@ -380,7 +381,7 @@ static uint32_t Ship_order_destination(uint32_t id) noexcept { const Ship *v = S
 
 static uint32_t Ship_order_type(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(RustVehicleOrderType(v)); }
 
-static uint32_t Ship_order_max_speed(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->current_order.GetMaxSpeed()); }
+static uint32_t Ship_order_max_speed(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return RustVehicleOrderMaxSpeed(v); }
 
 static uint32_t Ship_acceleration(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->acceleration); }
 

@@ -412,7 +412,6 @@ pub struct Services {
     pub snow_line: unsafe extern "C" fn() -> u8,
     pub make_field: unsafe extern "C" fn(u32, u8, u8, u16),
     pub fence_wanted: unsafe extern "C" fn(u32, u8) -> bool,
-    pub set_fence: unsafe extern "C" fn(u32, u8, u8),
     pub tile_completed: unsafe extern "C" fn(*mut c_void, u32) -> bool,
     pub harvest: unsafe extern "C" fn(u32),
     pub observe: unsafe extern "C" fn(*mut c_void, *mut Observation),
@@ -1296,7 +1295,7 @@ fn fence(mut tile: u32, mut size: u32, kind: u8, side: u8, map: Map, s: &Service
             if kind == 1 && chance(s, 1, 7) {
                 kind = 2;
             }
-            unsafe { (s.set_fence)(tile, side, kind) };
+            (s.shared().set_fence)(tile, crate::services::DiagDirection(side), u32::from(kind));
         }
         tile = tile.wrapping_add(stride);
         size -= 1;

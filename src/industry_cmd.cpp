@@ -57,9 +57,12 @@
 
 #ifdef WITH_RUST
 #include "rust/industry_generation_adapter.hpp"
+#include "rust/landscape_loop_ffi.h"
+#include "rust/ground_services.h"
 #include "rust/company_services.h"
 #include "rust/environment_services.h"
 #include "rust/command_cost_native_services.h"
+#include "rust/services_map.h"
 #include "rust/sound_services.h"
 #include "rust/tile_animation_services.h"
 #include "rust/orders_ffi.h"
@@ -73,6 +76,11 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext();
 static Industry *IndustryIfValid(uint16_t id) noexcept { return Industry::GetIfValid(IndustryID(id)); }
 static OpenTTDIndustry *IndustryOwner(Industry *shell) noexcept { return shell->production_owner.get(); }
 static bool IndustryCommandDeity() noexcept { return OpenTTDCurrentCompany() == OWNER_DEITY; }
+#endif
+
+#ifdef WITH_RUST
+#include "rust/services_landscape.h"
+#include "rust/command_services.h"
 #endif
 
 #include "safeguards.h"
@@ -896,10 +904,31 @@ static void TileLoopIndustry_BubbleGenerator(TileIndex tile)
 
 #endif
 
+#ifdef WITH_RUST
+OpenTTDIndustryLoopServices GetRustIndustryLoopServices() noexcept
+{
+	return {
+		.production = &GetIndustryRustServices(),
+		.construction = &GetIndustryConstructionServices(),
+		.lifecycle = &GetIndustryLifecycleRustServices(),
+		.tiles = &GetIndustryTileServices(),
+		.generation = &GetIndustryGenerationServices(),
+	};
+}
+#endif
+
+#ifdef WITH_RUST
+static void TileLoop_Industry(uint32_t tile_index) noexcept
+#else
 static void TileLoop_Industry(TileIndex tile)
+#endif
 {
 #ifdef WITH_RUST
-	openttd_rust_industry_tile_loop(tile.base(), Map::LogX(), &GetIndustryRustServices(), &GetIndustryConstructionServices(), &GetIndustryLifecycleRustServices(), &GetIndustryTileServices(), &GetIndustryGenerationServices());
+	const TileIndex tile{tile_index};
+#endif
+#ifdef WITH_RUST
+	OpenTTDGroundCall call;
+	openttd_rust_industry_tile_loop(tile.base(), Map::LogX(), &call, &GetIndustryRustServices(), &GetIndustryConstructionServices(), &GetIndustryLifecycleRustServices(), &GetIndustryTileServices(), &GetIndustryGenerationServices());
 #else
 	if (IsTileOnWater(tile)) TileLoop_Water(tile);
 
@@ -3592,9 +3621,9 @@ static const OpenTTDIndustryServices _industry_services = {
 	},
 	.industry_sound = [](void *handle, uint32_t index) noexcept {
 		Industry *i = RustIndustry(handle);
-		SndPlayTileFx(static_cast<SoundFx>(GetIndustrySpec(i->type)->random_sounds[index]), i->location.tile);
+		RustPlayTileSound(i->location.tile.base(), GetIndustrySpec(i->type)->random_sounds[index]);
 	},
-	.play_sound = [](uint16_t sound, uint32_t tile) noexcept { SndPlayTileFx(static_cast<SoundFx>(sound), TileIndex(tile)); },
+	.play_sound = RustPlayTileSoundBySound,
 	.special_effect = [](void *handle, uint32_t random, uint32_t parameter) noexcept -> uint16_t {
 		Industry *i = RustIndustry(handle);
 		uint16_t result = GetIndustryCallback(CBID_INDUSTRY_SPECIAL_EFFECT, random, parameter, i, i->type, i->location.tile);
@@ -3614,30 +3643,31 @@ static const OpenTTDIndustryServices _industry_services = {
 	.tile_add_wrap = [](uint32_t tile, int32_t x, int32_t y) noexcept -> uint32_t { return TileAddWrap(TileIndex(tile), x, y).base(); },
 	.farm_tile = [](uint32_t index) noexcept -> OpenTTDIndustryFarmTile {
 		TileIndex tile(index);
-		switch (GetTileType(tile)) {
-			case MP_CLEAR: return {MP_CLEAR, IsSnowTile(tile), static_cast<uint8_t>(GetClearGround(tile)), 0};
-			case MP_TREES: return {MP_TREES, 0, static_cast<uint8_t>(GetTreeGround(tile)), GetTreeGrowth(tile) >= TreeGrowthStage::Grown};
-			default: return {static_cast<uint8_t>(GetTileType(tile)), 0, 0, 0};
+		const auto type = SharedTileType(index);
+		switch (type) {
+			case MP_CLEAR: return {MP_CLEAR, RustSnowTile(index), static_cast<uint8_t>(RustClearGround(Tile{tile})), 0};
+			case MP_TREES: return {MP_TREES, 0, static_cast<uint8_t>(RustTreeGround(Tile{tile})), GetTreeGrowth(tile) >= TreeGrowthStage::Grown};
+			default: return {type, 0, 0, 0};
 		}
 	},
 	.snow_line = GetRustSharedServices().snow_line,
 	.make_field = [](uint32_t index, uint8_t field_type, uint8_t counter, uint16_t industry) noexcept {
 		TileIndex tile(index);
 		MakeField(tile, field_type, IndustryID(industry));
-		SetClearCounter(tile, counter);
+		RustSetClearCounter(Tile{tile}, counter);
 		MarkTileDirtyByTile(tile);
 	},
 	.fence_wanted = [](uint32_t index, uint8_t side) noexcept -> bool {
-		TileIndex tile(index);
+		TileIndex index_tile{index};
+		Tile tile{index_tile};
 		auto dir = static_cast<DiagDirection>(side);
-		if (!IsTileType(tile, MP_CLEAR) || !IsClearGround(tile, CLEAR_FIELDS)) return false;
-		TileIndex neighbour = tile + TileOffsByDiagDir(dir);
-		return !IsTileType(neighbour, MP_CLEAR) || !IsClearGround(neighbour, CLEAR_FIELDS) || GetFence(neighbour, ReverseDiagDir(dir)) == 0;
+		if (!RustClearFieldTile(tile)) return false;
+		Tile neighbour{index_tile + TileOffsByDiagDir(dir)};
+		return !RustClearFieldTile(neighbour) || RustFieldFence(neighbour, ReverseDiagDir(dir)) == 0;
 	},
-	.set_fence = [](uint32_t tile, uint8_t side, uint8_t type) noexcept { SetFence(TileIndex(tile), static_cast<DiagDirection>(side), type); },
 	.tile_completed = [](void *i, uint32_t tile) noexcept -> bool { return !RustIndustry(i)->TileBelongsToIndustry(TileIndex(tile)) || IsIndustryCompleted(TileIndex(tile)); },
 	.harvest = [](uint32_t tile) noexcept {
-		if (_settings_client.sound.ambient) SndPlayTileFx(SND_38_LUMBER_MILL_1, TileIndex(tile));
+		if (_settings_client.sound.ambient) RustPlayTileSound(tile, SND_38_LUMBER_MILL_1);
 		AutoRestoreBackup<CompanyID> current(_current_company, OWNER_NONE);
 		Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, TileIndex(tile));
 	},
@@ -3706,14 +3736,14 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.neutral_station = [](void *shell) noexcept -> OpenTTDIndustryStationHandle * { return reinterpret_cast<OpenTTDIndustryStationHandle *>(RustIndustry(shell)->neutral_station); },
 	.cleanup_tile = [](uint32_t index) noexcept -> OpenTTDIndustryCleanupTile {
 		TileIndex tile(index);
-		TileType type = GetTileType(tile);
+		auto type = SharedTileType(index);
 		return {type == MP_INDUSTRY ? GetIndustryIndex(tile).base() : uint16_t{0xFFFF}, static_cast<uint8_t>(type), type == MP_STATION && IsOilRig(tile)};
 	},
 	.delete_tile_inspect = [](uint32_t tile) noexcept { DeleteNewGRFInspectWindow(GSF_INDUSTRYTILES, tile); },
 	.make_water = [](uint32_t tile) noexcept { MakeWaterKeepingClass(TileIndex(tile), OWNER_NONE); },
 	.delete_oilrig = [](uint32_t tile) noexcept { DeleteOilRig(TileIndex(tile)); },
 	.clear_docking = [](uint32_t tile) noexcept { ClearDockingTilesCheckingNeighbours(TileIndex(tile)); },
-	.industry_field = [](uint32_t index, uint16_t industry) noexcept -> bool { TileIndex tile(index); return IsTileType(tile, MP_CLEAR) && IsClearGround(tile, CLEAR_FIELDS) && GetIndustryIndexOfField(tile) == IndustryID(industry); },
+	.industry_field = RustFieldOfIndustryValue,
 	.disassociate_field = [](uint32_t tile) noexcept { SetIndustryIndexOfField(TileIndex(tile), IndustryID::Invalid()); },
 	.release_disasters = [](uint16_t industry) noexcept { ReleaseDisastersTargetingIndustry(IndustryID(industry)); },
 	.delete_storage = [](void *shell) noexcept { delete static_cast<Industry *>(shell)->psa; },
@@ -3806,7 +3836,7 @@ static const OpenTTDIndustryConstructionServices &GetIndustryConstructionService
 			const auto &tile = (*reinterpret_cast<const IndustryTileLayout *>(layout))[index];
 			return {tile.ti.x, tile.ti.y, tile.gfx};
 		},
-		.water_class = [](uint32_t tile) noexcept -> uint8_t { return to_underlying(IsWaterTile(TileIndex(tile)) ? GetWaterClass(TileIndex(tile)) : WaterClass::Invalid); },
+		.water_class = [](uint32_t tile) noexcept -> uint8_t { return IsWaterTile(TileIndex(tile)) ? to_underlying(RustWaterClass(tile)) : to_underlying(WaterClass::Invalid); },
 		.clear_tile = [](uint32_t tile, uint16_t flags) noexcept { Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlags{flags}, TileIndex(tile)); },
 		.make_industry = [](uint32_t tile, uint16_t industry, uint16_t gfx, uint32_t random, uint8_t water) noexcept { MakeIndustry(TileIndex(tile), IndustryID(industry), gfx, random, static_cast<WaterClass>(water)); },
 		.set_construction_counter = [](uint32_t tile, uint8_t counter) noexcept { SetIndustryConstructionCounter(TileIndex(tile), counter); },
@@ -3849,14 +3879,13 @@ static const OpenTTDIndustryTileServices &GetIndustryTileServices()
 		.industry_index = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryIndex(TileIndex(tile)).base(); },
 		.toffee_offset = [](uint8_t frame) noexcept -> uint8_t { return _industry_anim_offs_toffee[frame]; },
 		.on_water = [](uint32_t tile) noexcept -> bool { return IsTileOnWater(TileIndex(tile)); },
-		.water_loop = [](uint32_t tile) noexcept { TileLoop_Water(TileIndex(tile)); },
 		.transport = [](uint32_t tile) noexcept -> bool { return TransportIndustryGoods(TileIndex(tile)); },
 		.anim_production = [](uint16_t gfx) noexcept -> uint16_t { return GetIndustryTileSpec(gfx)->anim_production; },
 		.anim_next = [](uint16_t gfx) noexcept -> uint16_t { return GetIndustryTileSpec(gfx)->anim_next; },
 		.build_oilrig = [](uint32_t tile) noexcept { BuildOilRig(TileIndex(tile)); },
 		.pixel_max_z = OpenTTDTileMaxPixelZ,
 		.create_effect = [](int32_t x, int32_t y, int32_t z, uint8_t type) noexcept -> OpenTTDEffectVehicle * { return CreateEffectVehicle(x, y, z, static_cast<EffectVehicleType>(type)); },
-		.create_effect_above = [](int32_t x, int32_t y, int32_t z, uint8_t type) noexcept -> OpenTTDEffectVehicle * { return CreateEffectVehicleAbove(x, y, z, static_cast<EffectVehicleType>(type)); },
+		.create_effect_above = RustCreateEffectAboveValue,
 		.set_effect_substate = [](OpenTTDEffectVehicle *vehicle, uint8_t state) noexcept { vehicle->SetAnimationSubstate(state); },
 		.spec = [](uint16_t gfx) noexcept -> const OpenTTDIndustryTileSpec * { return GetIndustryTileSpec(gfx); },
 		.acceptance = [](const OpenTTDIndustryTileSpec *spec) noexcept -> OpenTTDIndustryTileAcceptance {
@@ -3942,7 +3971,6 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.edge_distance = [](uint32_t tile, uint8_t direction) noexcept -> uint32_t { return DistanceFromEdgeDir(TileIndex(tile), static_cast<DiagDirection>(direction)); },
 		.refinery_limit = []() noexcept -> uint8_t { return _settings_game.game_creation.oil_refinery_limit; },
 		.tile_height = [](uint32_t tile) noexcept -> uint32_t { return TileHeight(TileIndex(tile)); },
-		.has_water_class = [](uint32_t tile) noexcept -> bool { return HasTileWaterClass(TileIndex(tile)); },
 		.set_company = [](uint8_t company) noexcept { OpenTTDSetCurrentCompany(CompanyID(company)); },
 		.temporary_shell = [](OpenTTDIndustry *owner, void *context, OpenTTDIndustryTemporaryVisit visit) noexcept { Industry industry(owner); industry.index = IndustryID::Invalid(); visit(context, &industry); },
 		.resolve_location = openttd_industry_resolve_location,

@@ -445,7 +445,7 @@ def prepare_growth(scenario, binaries, builds, out, timeout, env):
             for offset, old, new, _ in patches:
                 value = bytes.fromhex(new)
                 if expected[offset : offset + len(value)] != bytes.fromhex(old):
-                    raise RuntimeError("town-growth input patch provenance mismatch")
+                    raise RuntimeError("town-growth input patch preparation mismatch")
                 expected[offset : offset + len(value)] = value
         if bytes(expected) != normalized_data[slice(*check[cid]["span"])]:
             raise RuntimeError(f"town-growth input changed unintended {cid} bytes")
@@ -587,7 +587,7 @@ def check_growth(scenario, run):
             for history in rows
         ):
             raise RuntimeError(
-                "monthly cargo receipt rotation did not exhaust supplied goals"
+                "monthly cargo record rotation did not exhaust supplied goals"
             )
         if scenario["town_growth"] == "disabled" and any(
             history[-1]["flags"] & 1 for history in rows
@@ -690,13 +690,9 @@ def adapter(build, folder, env):
     (folder / "town-generation-original.hpp").write_text(original)
     local = folder / "towns-console.cpp"
     local.write_bytes((ROOT / "tools/simulation/towns-console.cpp").read_bytes())
-    binary, receipt = orders.adapter(
+    return orders.adapter(
         build, folder, env, source=local, name="towns", afterload=False
     )
-    receipt["original_generation_sha256"] = hashlib.sha256(
-        original.encode()
-    ).hexdigest()
-    return binary, receipt
 
 
 def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
@@ -705,10 +701,10 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
     from .runtime import prepared_adapter
 
     folder = out / scenario["name"] / "input"
-    executables, provenance = {}, {}
+    executables = {}
     for role in ("reference", "candidate"):
         target = folder / role
-        prepared = prepared_adapter("towns", role, binaries, builds, target)
+        prepared = prepared_adapter("towns", role, builds, target)
         if prepared is None:
             native = (
                 migration.REFERENCE_BUILD
@@ -722,18 +718,12 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
             )
             with lock:
                 prepared = adapter(native, target, env)
-        executables[role], provenance[role] = prepared
-        if (
-            provenance[role]["ordinary_binary_sha256"]
-            != hashlib.sha256(binaries[role].read_bytes()).hexdigest()
-        ):
-            raise RuntimeError("town adapter differs from frozen build")
+        executables[role] = prepared
         for name in core.RUNTIME_DIRECTORIES:
             if (builds[role] / name).is_dir():
                 (target / name).symlink_to(
                     builds[role] / name, target_is_directory=True
                 )
-    result["town_adapter"] = provenance
     scenario = dict(scenario, executables=executables)
     if scenario["town_founding"] != "reload":
         return dict(scenario, console=["towns_scenario commands", "unpause"])

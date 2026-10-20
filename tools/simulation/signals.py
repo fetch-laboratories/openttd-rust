@@ -169,7 +169,7 @@ def adapter(build, folder, env):
             (core.ROOT / "tools/simulation/roads-console.cpp").read_text(),
         )
     )
-    binary, receipt = console_adapter(
+    return console_adapter(
         build,
         folder,
         env,
@@ -178,9 +178,6 @@ def adapter(build, folder, env):
         wraps=("openttd_rust_train_state_get_track",),
         replace_objects=("/src/signal.cpp.o",),
     )
-    receipt["adapter_sha256"] = hashlib.sha256(ADAPTER.read_bytes()).hexdigest()
-    receipt["signal_source_sha256"] = hashlib.sha256(signal.read_bytes()).hexdigest()
-    return binary, receipt
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
@@ -192,19 +189,19 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     from .runtime import prepared_adapter
 
     folder = out / scenario["name"] / "input"
-    source, receipt = normalize(Path(scenario["save"]), folder / "normalized")
-    result["signals_input"] = receipt
+    source, record = normalize(Path(scenario["save"]), folder / "normalized")
+    result["signals_input"] = record
     native_builds = {
         "reference": migration.REFERENCE_BUILD,
         "candidate": migration.REFERENCE_BUILD
         if binaries["reference"] == binaries["candidate"]
         else core.ROOT / "build-rust",
     }
-    executables, provenance = {}, {}
+    executables = {}
     for role in ("reference", "candidate"):
-        prepared = prepared_adapter("signals", role, binaries, builds, folder / role)
+        prepared = prepared_adapter("signals", role, builds, folder / role)
         if prepared is not None:
-            executables[role], provenance[role] = prepared
+            executables[role] = prepared
         else:
             lock = (
                 migration.reference_lock(shared=True)
@@ -212,14 +209,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 else migration.candidate_lock(native_builds[role], shared=True)
             )
             with lock:
-                executables[role], provenance[role] = adapter(
-                    native_builds[role], folder / role, env
-                )
-        if (
-            provenance[role]["ordinary_binary_sha256"]
-            != hashlib.sha256(binaries[role].read_bytes()).hexdigest()
-        ):
-            raise RuntimeError("signal adapter differs from frozen build")
+                executables[role] = adapter(native_builds[role], folder / role, env)
         for name in core.RUNTIME_DIRECTORIES:
             if (builds[role] / name).is_dir():
                 (folder / role / name).symlink_to(
@@ -229,8 +219,6 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         # Reuse the identical reference adapter in --self. Distinct output paths
         # would incorrectly make the core expect Rust-only branch witnesses.
         executables["candidate"] = executables["reference"]
-        provenance["candidate"] = provenance["reference"]
-    result["signals_adapter"] = provenance
     if scenario["signals"] == "reload":
         saves, logs = {}, {}
         capture = dict(

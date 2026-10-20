@@ -12,8 +12,8 @@
 extern "C" {
 struct OpenTTDRoadYapfInput {
 	uint32_t map_x, map_y, tile, dest_tile;
-	int32_t max_nodes, slope, crossing, stop, occupied, bay, curve, display_speed;
-	uint16_t order_destination, order_speed;
+	int32_t max_nodes, slope, crossing, stop, occupied, bay, curve;
+	uint16_t order_destination;
 	uint8_t order_type, bus, articulated, trackdir;
 };
 struct OpenTTDRoadYapfTile {
@@ -21,13 +21,14 @@ struct OpenTTDRoadYapfTile {
 	uint16_t station;
 	uint8_t type, station_type, depot, depot_dir, crossing, waypoint, drive_through, continuation, busy_bays;
 };
-struct OpenTTDRoadYapfFollow { uint32_t tile; int32_t skipped, max_speed, min_speed; uint16_t dirs; uint8_t followed; };
+struct OpenTTDRoadYapfFollow { uint32_t tile; int32_t skipped; uint16_t dirs; uint8_t followed; };
+struct OpenTTDRoadYapfTraversal { int32_t current_z, next_z, display_speed, max_speed, min_speed; uint16_t order_speed; };
 struct OpenTTDRoadYapfArea { uint32_t tile; uint16_t width, height; uint8_t valid, stop, drive_through, next; };
 struct OpenTTDRoadYapfLeaves {
-	OpenTTDRoadYapfTile (OPENTTD_VEHICLE_CALL *tile)(const void *, uint32_t, uint8_t) noexcept;
+	OpenTTDRoadYapfTile (OPENTTD_VEHICLE_CALL *tile)(const void *, uint32_t, uint8_t, bool) noexcept;
 	OpenTTDRoadYapfFollow (OPENTTD_VEHICLE_CALL *follow)(const void *, uint32_t, uint8_t) noexcept;
 	uint16_t (OPENTTD_VEHICLE_CALL *tracks)(const void *, uint32_t, uint8_t) noexcept;
-	int32_t (OPENTTD_VEHICLE_CALL *height)(uint32_t) noexcept;
+	OpenTTDRoadYapfTraversal (OPENTTD_VEHICLE_CALL *traversal)(const void *, uint32_t, uint32_t) noexcept;
 	uint32_t (OPENTTD_VEHICLE_CALL *closest)(const void *, uint16_t, uint8_t) noexcept;
 	OpenTTDRoadYapfArea (OPENTTD_VEHICLE_CALL *area)(const void *, uint16_t) noexcept;
 };
@@ -38,6 +39,10 @@ struct OpenTTDRoadYapfResult { uint32_t tile; int32_t cost; uint8_t direction, f
  * Rust reference into world or canonical road state survives a leaf. The search
  * owns arena, lookup maps, exact-order heap and reconstruction. Only brief direct
  * writes modify #121's canonical path; no second cache or result bridge exists.
+ * Tile cost facts are requested only in calc_cost; startup and unevaluated
+ * segment endpoints request destination facts without road-stop cost lookups.
+ * Traversal reads current/next ground-vehicle center Z, vehicle speed fields,
+ * then CFollowTrackRoad limits for old_tile; it never follows again.
  * Panics/OOM abort; environment failures terminate inside noexcept leaves. */
 OpenTTDRoadYapfResult OPENTTD_VEHICLE_CALL openttd_rust_road_yapf_choose(OpenTTDRoadState *, const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const void *, uint32_t, uint8_t, uint16_t, uint8_t);
 OpenTTDRoadYapfResult OPENTTD_VEHICLE_CALL openttd_rust_road_yapf_depot(const OpenTTDRoadYapfInput *, const OpenTTDRoadYapfLeaves *, const void *, int32_t);

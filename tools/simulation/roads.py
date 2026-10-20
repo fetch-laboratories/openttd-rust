@@ -14,14 +14,14 @@ COMMON = ROAD + "common[0]/"
 AI_FOLDER = "road-scenario-ai"
 
 # Recorded candidate/reference medians; integrating PRs update these up or down.
-# First record: PR #285, root --benchmark 3 at reviewed game head 6598b25274.
+# PR #255 game head 6c108195ef; quiet P2000/P2016 repeats at c44c62da4c.
 SPEED_BUDGETS = {
-    "generate-tgp-256-1": 1.146341463414634,
-    "play-opus-55-167-002-manual": 1.2144592952612394,
-    "play-grok-159-001-manual": 1.2131912058627583,
-    "play-padhattan-ridge-1996-manual": 1.2470588235294118,
-    "play-padhattan-ridge-2000-manual": 1.2651933701657458,
-    "play-padhattan-ridge-2016-manual": 1.3659169550173011,
+    "generate-tgp-256-1": 1.1888297872340425,
+    "play-opus-55-167-002-manual": 1.2146282973621103,
+    "play-grok-159-001-manual": 1.265459088069956,
+    "play-padhattan-ridge-1996-manual": 1.152073732718894,
+    "play-padhattan-ridge-2000-manual": 1.3619718309859155,
+    "play-padhattan-ridge-2016-manual": 1.3938325991189429,
 }
 
 
@@ -173,7 +173,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     elif operation in ("level-crossing", "flooding"):
         frozen = json.loads(source.with_suffix(".json").read_text())
         if hashlib.sha256(packed).hexdigest() != frozen["sha256"]:
-            raise RuntimeError("road crash fixture differs from preparation receipt")
+            raise RuntimeError("road crash fixture differs from preparation record")
         # Position existing vehicles on the command-built crossing. The stopped
         # visible train remains fixed; normal road control detects the collision.
         changes = {
@@ -252,8 +252,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         for index, body in jobs["elements"]
     }
     fixture = folder / "road-input.sav"
-    receipt = patch(unpacked, fixture, changes)
-    receipt.update(
+    record = patch(unpacked, fixture, changes)
+    record.update(
         committed_source=str(source),
         committed_sha256=hashlib.sha256(packed).hexdigest(),
         console=scenario["console"],
@@ -277,9 +277,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 "road reload lacks a live path and active blocked counter"
             )
         fixture = folder / "reload-input.sav"
-        receipt["reload"] = patch(reference, fixture, {})
-        receipt["reload"]["head"] = 65
-    result["road_input"] = receipt
+        record["reload"] = patch(reference, fixture, {})
+        record["reload"]["head"] = 65
+    result["road_input"] = record
     return dict(scenario, save=str(fixture))
 
 
@@ -542,6 +542,11 @@ def check(scenario, run, mode, role, result):
         require(map_tile(1201) == (2, 10), "input bus is not on a straight road")
         final_chunks = read_save(final)
         require(
+            final_chunks["MAPT"]["raw"][1201] >> 4 == 2
+            and final_chunks["MAP5"]["raw"][1201] == 10,
+            "failed flooded clear did not preserve the occupied road",
+        )
+        require(
             chunks["MAPT"]["raw"][945] >> 4 == 6
             and chunks["MAPO"]["raw"][945] == 33
             and final_chunks["MAPT"]["raw"][945] >> 4 == 6
@@ -772,15 +777,14 @@ def prepare_crossing(migration, out, operation="crossing"):
     if run["exit"] != 0 or markers != expected or not run["snapshots"]:
         raise RuntimeError("reference road crash construction failed")
     destination = ROOT / "migration/saves" / f"road-{operation}.sav"
-    receipt = patch(run["snapshots"][-1], destination, {})
+    record = patch(run["snapshots"][-1], destination, {})
     if destination.stat().st_size >= 1_000_000:
         raise RuntimeError("road crossing exceeds committed-save budget")
-    receipt["raw_sha256"] = receipt["source_sha256"]
-    receipt.update(
+    record["raw_sha256"] = record["source_sha256"]
+    record.update(
         baseline=migration.BASELINE,
         committed_source="migration/saves/water-ferry.sav",
         source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
-        reference_binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
         setup_files={
             p.name: hashlib.sha256(p.read_bytes()).hexdigest()
             for p in sorted(scripts.glob("*.nut"))
@@ -792,11 +796,11 @@ def prepare_crossing(migration, out, operation="crossing"):
         },
         setup_markers=markers,
     )
-    receipt.pop("source", None)
+    record.pop("source", None)
     if preparation is not None:
         preparation["source"] = "migration/saves/water-ferry.sav"
-        receipt["preparation"] = preparation
-    destination.with_suffix(".json").write_text(json.dumps(receipt, indent=2) + "\n")
+        record["preparation"] = preparation
+    destination.with_suffix(".json").write_text(json.dumps(record, indent=2) + "\n")
     print(f"Prepared {destination}; construction evidence: {out}")
 
 

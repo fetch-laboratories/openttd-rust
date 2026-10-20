@@ -73,6 +73,8 @@
 
 #include "table/strings.h"
 
+#include "../rust/tile_loop_cursor.h"
+
 #include "../safeguards.h"
 
 extern Company *DoStartupNewCompany(bool is_ai, CompanyID company = CompanyID::Invalid());
@@ -561,9 +563,8 @@ bool AfterLoadGame()
 {
 	SetSignalHandlers();
 
-	extern TileIndex _cur_tileloop_tile; // From landscape.cpp.
 	/* The LFSR used in RunTileLoop iteration cannot have a zeroed state, make it non-zeroed. */
-	if (_cur_tileloop_tile == 0) _cur_tileloop_tile = TileIndex{1};
+	if (_cur_tileloop_tile == 0) _cur_tileloop_tile = TileLoopCursorType{1};
 
 	if (IsSavegameVersionBefore(SLV_98)) _gamelog.Oldver();
 

@@ -25,7 +25,10 @@ typedef struct { uint32_t image_override, target; uint16_t state; uint8_t flags;
 typedef struct { uint32_t kind, id, other; int64_t a, b, c, d; } OpenTTDDisasterAction;
 typedef struct OpenTTDDisasterRun OpenTTDDisasterRun;
 /* Rust state follows its shell's lifetime; scalar serialization addresses are
- * stable until destruction. No Rust reference spans a shared-service call.
+ * stable until destruction. The shared service table is borrowed: keep it live
+ * and immutable through run destruction, including suspended actions and nested
+ * owners. Its context may mutate independently. No world/state reference spans
+ * a shared-service call.
  * Read/write leaves are noexcept and cannot reenter. Direct services are noexcept;
  * shell allocation may construct a separate Rust owner, and the shared flight
  * helper accesses the raw flags field only during its call. RNG is synchronous.

@@ -20,10 +20,10 @@
     clippy::too_many_lines,
     clippy::fn_params_excessive_bools
 )]
-pub use crate::services::Train;
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Map, RailMapServices, Services,
 };
+pub use crate::services::{Foundation, Train};
 use crate::witness as w;
 
 /// Opaque caller-owned native frame holding the conversion area iterator and
@@ -32,15 +32,6 @@ use crate::witness as w;
 pub struct ConvertFrame {
     _private: [u8; 0],
 }
-
-/// Native `Foundation` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct Foundation(pub u8);
-/// Native `FloodingBehaviour` with its unchanged uint8 representation.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct FloodingBehaviour(pub u8);
 
 /// `ApplyFoundationToSlope` result: height increase and the modified slope.
 #[repr(C)]
@@ -173,8 +164,6 @@ pub struct RailCommandServices {
     pub apply_foundation: extern "C" fn(u8, u8) -> SlopeZ,
     /// `GetSlopeZInCorner`.
     pub slope_z_in_corner: extern "C" fn(u8, u8) -> i32,
-    /// `GetFloodingBehaviour`.
-    pub flooding: extern "C" fn(u32) -> FloodingBehaviour,
     /// `AutoslopeCheckForEntranceEdge`.
     pub entrance_edge: extern "C" fn(u32, i32, u8, u8) -> bool,
     /// `HasVehicleOnTile(tile, ship)`.
@@ -469,6 +458,7 @@ struct Ctx<'a> {
     s: &'a RailCommandServices,
     shared: &'a Services,
     rail: &'a RailMapServices,
+    ground: &'a crate::ground::RailServices,
     cost: &'a CommandCostServices,
     command: &'a CommandServices,
     map: Map,
@@ -485,6 +475,7 @@ impl<'a> Ctx<'a> {
             s,
             shared,
             rail: unsafe { &*s.rail },
+            ground: unsafe { &*(*s.rail).ground },
             cost: unsafe { &*s.cost },
             command: unsafe { &*s.command },
             map: Map {
@@ -505,7 +496,7 @@ impl<'a> Ctx<'a> {
         (self.shared.current_company)()
     }
     fn tracks(&self, tile: u32) -> u8 {
-        (self.rail.rail_tracks)(tile).0
+        (self.ground.tracks)(tile).0
     }
     /// The native uint query contains only the four signal-presence bits.
     fn present_signals(&self, tile: u32) -> u8 {
@@ -556,7 +547,15 @@ impl<'a> Ctx<'a> {
 
     /// `CheckRailSlope`.
     fn check_rail_slope(&self, out: Cost<'_>, tileh: u8, bits: u8, existing: u8, tile: u32) {
-        if (self.s.flooding)(tile).0 != 0
+        // SAFETY: Immutable shared tables outlive this synchronous command entry.
+        if unsafe {
+            crate::water::openttd_rust_flooding_behaviour(
+                tile,
+                (self.shared.water_services)(),
+                self.shared,
+            )
+        }
+        .0 != 0
             && !steep(tileh)
             && !LEVELED_TRACKS[usize::from(tileh)] & (bits | existing) != 0
         {
@@ -661,7 +660,7 @@ impl<'a> Ctx<'a> {
                 }
                 if flags & EXECUTE != 0 {
                     w::hit(w::RAIL_CMD_BUILD_RAIL);
-                    (self.rail.set_rail_ground)(tile, GROUND_BARREN);
+                    (self.ground.set_ground)(tile, crate::services::RailGroundType(GROUND_BARREN));
                     let bits = self.tracks(tile);
                     (self.rail.set_track_bits)(tile, bits | trackbit);
                     let owner = (self.shared.tile_owner)(tile);
@@ -766,7 +765,10 @@ impl<'a> Ctx<'a> {
                 (self.rail.make_rail_normal)(tile, current, trackbit, railtype);
                 if water_ground {
                     w::hit(w::RAIL_CMD_BUILD_HALF_WATER);
-                    (self.rail.set_rail_ground)(tile, GROUND_HALF_WATER);
+                    (self.ground.set_ground)(
+                        tile,
+                        crate::services::RailGroundType(GROUND_HALF_WATER),
+                    );
                     (self.s.docking_check)(tile);
                 }
                 self.rail_infra(self.current(), railtype, 1);
@@ -963,7 +965,7 @@ impl<'a> Ctx<'a> {
                     (self.s.infrastructure_dirty)(owner);
                     if present == 0 {
                         let tileh = (self.shared.tile_slope)(tile);
-                        if (self.rail.rail_ground)(tile).0 == GROUND_HALF_WATER
+                        if (self.ground.ground)(tile).0 == GROUND_HALF_WATER
                             && one_corner_raised(tileh)
                         {
                             w::hit(w::RAIL_CMD_REMOVE_SHORE);
@@ -2039,8 +2041,8 @@ impl<'a> Ctx<'a> {
             RAIL_TILE_SIGNALS | RAIL_TILE_NORMAL => {
                 w::hit(w::RAIL_CMD_CLEAR_RAIL);
                 let tileh = (self.shared.tile_slope)(tile);
-                let water_ground = (self.rail.rail_ground)(tile).0 == GROUND_HALF_WATER
-                    && one_corner_raised(tileh);
+                let water_ground =
+                    (self.ground.ground)(tile).0 == GROUND_HALF_WATER && one_corner_raised(tileh);
                 let mut tracks = self.tracks(tile);
                 while tracks != 0 {
                     let track = tracks.trailing_zeros() as u8;
@@ -2144,12 +2146,11 @@ impl<'a> Ctx<'a> {
         }
         cost.set(price(PR_BUILD_FOUNDATION));
         if tileh_old != tileh_new {
-            if (self.rail.rail_ground)(tile).0 == GROUND_HALF_WATER && one_corner_raised(tileh_old)
-            {
+            if (self.ground.ground)(tile).0 == GROUND_HALF_WATER && one_corner_raised(tileh_old) {
                 cost.add_money(price(PR_CLEAR_WATER));
             }
             if flags & EXECUTE != 0 {
-                (self.rail.set_rail_ground)(tile, GROUND_BARREN);
+                (self.ground.set_ground)(tile, crate::services::RailGroundType(GROUND_BARREN));
             }
         }
     }
@@ -2160,8 +2161,8 @@ impl<'a> Ctx<'a> {
         let z_old = (self.shared.tile_z)(tile);
         if (self.shared.is_plain_rail)(tile) {
             let bits = self.tracks(tile);
-            let was_water = (self.rail.rail_ground)(tile).0 == GROUND_HALF_WATER
-                && one_corner_raised(tileh_old);
+            let was_water =
+                (self.ground.ground)(tile).0 == GROUND_HALF_WATER && one_corner_raised(tileh_old);
             if was_water && (self.s.ship_on_tile)(tile) {
                 return cost.error(self.s.strings.ship_in_way);
             }
@@ -2192,7 +2193,7 @@ impl<'a> Ctx<'a> {
             }
             w::hit(w::RAIL_CMD_TERRAFORM_CORNER);
             if flags & EXECUTE != 0 {
-                (self.rail.set_rail_ground)(tile, GROUND_BARREN);
+                (self.ground.set_ground)(tile, crate::services::RailGroundType(GROUND_BARREN));
             }
             return cost.set(if was_water { price(PR_CLEAR_WATER) } else { 0 });
         }

@@ -263,8 +263,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if not scenario.get("rail_fixture"):
         return scenario
     directory = out / scenario["name"] / "prepare"
-    normalized, receipt = normalize(Path(scenario["save"]), directory)
-    result["rail_input"] = receipt
+    normalized, record = normalize(Path(scenario["save"]), directory)
+    result["rail_input"] = record
     if scenario.get("owner_structures"):
         result["owner_structure_inventory"] = structure_inventory(normalized)
         vehicles = vehicle_rows(normalized)
@@ -279,8 +279,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         }
     scenario = dict(scenario, save=str(normalized))
     if "rail_control" in scenario:
-        normalized, receipt = controller_input(normalized, directory, scenario)
-        result["rail_controller_input"] = receipt
+        normalized, record = controller_input(normalized, directory, scenario)
+        result["rail_controller_input"] = record
         scenario = dict(scenario, save=str(normalized))
     if scenario.get("owner_structure_reload"):
         # Reach this actual upper-lock pose from the immutable owner save.
@@ -306,8 +306,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         )
         if warm["exit"] != 0 or fixture is None:
             raise RuntimeError("owner structure reload lacks reference upper-lock pose")
-        normalized, receipt = normalize(fixture, directory / "reload")
-        result["owner_structure_reload_input"] = receipt
+        normalized, record = normalize(fixture, directory / "reload")
+        result["owner_structure_reload_input"] = record
         scenario = dict(scenario, save=str(normalized))
     if scenario.get("rail_reload"):
         setup = dict(scenario, ticks=8 * SNAPSHOT_TICKS)
@@ -331,8 +331,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         )
         if fixture is None:
             raise RuntimeError("rail reload lacks live track/platform reservations")
-        normalized, receipt = normalize(fixture, directory / "reload")
-        result["rail_reload_input"] = receipt
+        normalized, record = normalize(fixture, directory / "reload")
+        result["rail_reload_input"] = record
         scenario = dict(scenario, save=str(normalized))
     return scenario
 
@@ -383,7 +383,7 @@ def controller_input(source, directory, scenario):
                 common + "direction": original[common + "direction"],
             }
     target = directory / "controller-input.sav"
-    receipt = patch(source, target, changes)
+    record = patch(source, target, changes)
     if scenario["rail_control"] == "reservation":
         data, chunks = target.read_bytes(), read_save(target)
         work, allowed = bytearray(data), set()
@@ -400,7 +400,7 @@ def controller_input(source, directory, scenario):
             )
             struct.pack_into(">H", work, begin + tile * 2, (before & ~0xF00) | reserved)
             allowed.update((begin + tile * 2, begin + tile * 2 + 1))
-            receipt["assignments"].append(
+            record["assignments"].append(
                 ["MAP2", tile, "reserved_track", before, (before & ~0xF00) | reserved]
             )
         if any(
@@ -429,9 +429,9 @@ def controller_input(source, directory, scenario):
     for cid in set(chunks) - {"AIPL"}:
         if data[slice(*chunks[cid]["span"])] != prepared[slice(*after[cid]["span"])]:
             raise RuntimeError(f"rail AI configuration changed unrelated {cid}")
-    receipt["assignments"].append(["AIPL", 0, "configuration", "MigrationRails"])
-    receipt["sha256"] = hashlib.sha256(prepared).hexdigest()
-    return target, receipt
+    record["assignments"].append(["AIPL", 0, "configuration", "MigrationRails"])
+    record["sha256"] = hashlib.sha256(prepared).hexdigest()
+    return target, record
 
 
 def reservation_rows(path):
