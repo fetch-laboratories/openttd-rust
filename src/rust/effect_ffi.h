@@ -27,7 +27,7 @@ typedef struct {
 	uint32_t sprite;
 	uint8_t progress, spritenum, subtype, ambient;
 } OpenTTDEffectView;
-typedef struct {
+typedef struct OpenTTDEffectLeaves {
 	void (OPENTTD_EFFECT_CALL *observe)(void *, OpenTTDEffectView *) noexcept OPENTTD_SERVICE_DEFAULT(observe);
 	void (OPENTTD_EFFECT_CALL *write)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write);
 	void (OPENTTD_EFFECT_CALL *viewport)(void *) noexcept OPENTTD_SERVICE_DEFAULT(viewport);

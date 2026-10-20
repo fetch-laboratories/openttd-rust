@@ -17,10 +17,9 @@
 
 TEST_CASE("Engine lifecycle canonical ABI", "[rust][engine][abi]")
 {
+#ifdef WITH_RUST
 	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
 #include "abi-layout-engine.inc"
-#ifdef WITH_RUST
-
 #endif
 }
 

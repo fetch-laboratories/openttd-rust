@@ -26,7 +26,7 @@ typedef struct {
 	uint16_t origin;
 	uint8_t found;
 } OpenTTDCargoOrigin;
-typedef struct {
+typedef struct OpenTTDCargoFlowServices {
 	void *context;
 	uint32_t (*read)(void *, uint8_t, uint16_t, uint16_t) OPENTTD_SERVICE_DEFAULT(read);
 	OpenTTDCargoFlowMap *(*job_flows)(void *, uint16_t) OPENTTD_SERVICE_DEFAULT(job_flows);

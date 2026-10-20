@@ -22,9 +22,9 @@ inline int AbiLayoutMismatch(const char *type, std::initializer_list<size_t> val
 {
 	size_t item = 0;
 	for (size_t expected : values) {
-		if (openttd_rust_abi_layout_named(type, item) != expected) return item;
+		if (openttd_rust_abi_layout_named(type, item) != expected) return static_cast<int>(item);
 		item++;
 	}
-	return openttd_rust_abi_layout_named(type, item) == SIZE_MAX ? -1 : item;
+	return openttd_rust_abi_layout_named(type, item) == SIZE_MAX ? -1 : static_cast<int>(item);
 }
 #endif /* ABI_LAYOUT_HPP */
