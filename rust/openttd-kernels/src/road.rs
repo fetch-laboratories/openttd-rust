@@ -1980,6 +1980,7 @@ pub unsafe extern "C" fn openttd_rust_road_max_speed(
     read: *const MaxSpeedRead,
     leaves: *const Leaves,
 ) -> i32 {
+    crate::witness::hit(crate::witness::ROAD_ENTRIES);
     // SAFETY: Records borrowed for this call only.
     let r = unsafe { *read };
     // SAFETY: The static table and live state outlive this synchronous query.
