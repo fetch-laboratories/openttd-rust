@@ -289,7 +289,7 @@ def main():
     restore.add_argument("archive", type=Path)
     export = commands.add_parser("pack")
     export.add_argument("--bundle", type=Path, default=ROOT / ".local/native-runtimes")
-    export.add_argument("--shards", type=int, default=6)
+    export.add_argument("--shards", type=int, default=3)
     run = commands.add_parser("shard")
     run.add_argument("index", type=int)
     run.add_argument("--bundle", type=Path, default=ROOT / ".local/native-runtimes")

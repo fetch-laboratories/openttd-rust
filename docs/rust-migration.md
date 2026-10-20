@@ -152,7 +152,7 @@ macOS keep vcpkg binaries in an actions/cache files store keyed by runner image;
 vcpkg's ABI hashes make stale entries miss. Their Rust jobs also compile through
 ccache 4.14.1 (checksummed download) with PCH off; MSVC uses embedded `/Z7` debug
 info (CMP0141), which ccache requires. Platform CI also runs on `rust-migration`
-pushes, which checks each merge.
+pushes; queued pushes coalesce, so it checks the newest merged tip.
 
 ## Simulation comparison
 
@@ -230,7 +230,7 @@ python3 tools/migration.py simulate play-opus-55-167-002-manual --benchmark 3 --
 ```
 
 The driver builds with two jobs, then runs one scenario worker. Benchmark mode
-runs only plain pairs, isolates each timed game from other clone-wide harness
+runs only plain pairs, shares the clone-wide coordination lock with other harness
 games, and compares each exit save and full logs. Both roles use #154's serial
 offline thread-failure fallback, recorded as `execution` in the report. These
 are total offline times, not normal threaded frame latency. It retains the final
@@ -240,7 +240,7 @@ directories and runtime libraries; keep profiling separate from timing samples.
 Timings include startup, loading, serial link-graph work and save I/O. Benchmark
 games wait directly for child exit with a timeout watchdog; ordinary runs retain
 subprocess timeout polling, which can add about 50 ms.
-The lock excludes harness games, not unrelated host activity. `SPEED_BUDGETS` in
+Shared coordination does not reserve a quiet host. `SPEED_BUDGETS` in
 `tools/simulation/roads.py` records current ratios, updated up or down by integrating
 PRs. Reports show a 15% guard against that record, fixed ceilings of 1.5x for play
 saves and 1.3x for generation, and a flag within 5% of the ceiling. Take one median
@@ -389,8 +389,10 @@ organizes dependent PRs but does not itself combine validation runs.
 Required checks must pass on the PR head; branches need not be up to date with the
 base. The publisher records the immutable tested merge tree separately from the
 head status.
-Protected pushes have per-SHA concurrency, so a later docs push cannot cancel
-the code merge run. A merged push whose non-Markdown files match the tree marker from the same successful
+Protected pushes queue without cancelling a running validation; a newer push
+replaces a pending one, so a burst of merges validates the newest tip and the
+intermediate pushes show as cancelled. Markdown-only pushes do not start these
+workflows, so they cannot displace a pending code push. A merged push whose non-Markdown files match the tree marker from the same successful
 full request refreshes native compiler caches without repeating tests or scenarios.
 Covered protected pushes also rebuild the cached Linux GCC, macOS and Windows
 targets to refresh their compiler caches. This path skips Cargo checks, CTest,
@@ -399,15 +401,17 @@ and Emscripten have no compiler cache to refresh. The path is derived only from
 the protected push's matching non-Markdown tree entries, and requested PR validation always runs the
 complete selected suite. A combined tree no full request
 covered receives all native and platform checks. Tree comparisons must be complete;
-missing or truncated GitHub inventories retain heavy validation. Markdown-only pushes skip heavy
-builds after complete file classification. A post-merge failure is fixed forward first. Force pushes and branch deletion are disallowed,
+missing or truncated GitHub inventories retain heavy validation. A Markdown-only push that still
+starts (GitHub runs path-filtered workflows when it cannot compute the diff) skips heavy
+builds only after complete classification of fewer than 300 changed files. A post-merge failure is fixed forward first. Force pushes and branch deletion are disallowed,
 including for administrators. The approving-review count is zero because agents
 share credentials; the attributed independent review report is the process gate
 before root integrates. Repository controls are enforced separately from these
 documents.
 
 Native validation exports both frozen runtimes and once-built fleet/orders adapters,
-then runs component comparisons and six simulation shards concurrently. Recorded
+then runs component comparisons and three simulation shards concurrently
+(each about as long as the comparisons job). Recorded
 scenario seconds assign work while keeping effects/disasters/aircraft fixture
 families whole. The gate requires every job and exactly the current default
 `simulate.py --list` inventory. GitHub's run-scoped artifacts carry the runtimes
@@ -421,15 +425,17 @@ cache-retention workflow keeps the latest entry per prefix and bounds total usag
 to 8 GiB (below the 10 GiB repository limit).
 
 Runner settings are `CI_LINUX_HEAVY`, `CI_LINUX_COMPARISONS`,
-`CI_LINUX_SIMULATION`, `CI_LINUX_PLATFORM` (default `ubuntu-24.04`), and
+`CI_LINUX_SIMULATION`, `CI_LINUX_PLATFORM` (default `ubuntu-24.04`; Clang only,
+the cached GCC flavours always use free `ubuntu-24.04`), and
 `CI_MACOS_HEAVY` (default `macos-latest`) and `CI_WINDOWS_HEAVY` (default
 `windows-2022`). Heavy native jobs use `nproc` slots.
-One full request peaks around 16 jobs; overlapping requests may queue against
+One full request peaks around 13 jobs; overlapping requests may queue against
 account/runner capacity. Runner size and account plan remain repository settings.
 The repository belongs to the `fetch-laboratories` organization, where Blacksmith
 serves the Linux jobs: `CI_LINUX_HEAVY` is `blacksmith-8vcpu-ubuntu-2404` and the
 other Linux variables are `blacksmith-4vcpu-ubuntu-2404`. Windows uses
-`blacksmith-8vcpu-windows-2025` after #252 compatibility/warm acceptance; macOS and light jobs stay
+`blacksmith-4vcpu-windows-2025` (#252 accepted the image; #304 matched the
+size to its `--parallel 4` build); macOS and light jobs stay
 on GitHub-hosted runners (free for this public repository; Blacksmith
 bills macOS at 20x). Blacksmith serves `actions/cache` from its own co-located
 store on its runners, so the GitHub cache budget above covers only GitHub-hosted
@@ -508,6 +514,38 @@ Default CI verifies the build and runs `python3 tools/migration.py simulate` wit
 settings cases spanning all four climates and selected terrain, smoothness, variety, sea/border,
 height and map-shape values. Maximum-map performance and Windows/macOS runtime parity remain
 untested.
+
+### Landscape scheduler, ground and flooding
+
+The #212 owner ([PR #255](https://github.com/fetch-laboratories/openttd-rust/pull/255))
+controls `RunTileLoop`, clear/rail/road/tunnel ground evolution, flooding behaviour,
+half-tile rail removal, dry-up, neighbour wakeups and live flood-victim traversal.
+The process-global saved cursor commits after the complete source batch; DATE,
+legacy loading, reset and zero repair retain their widths/order. Original selected
+bodies compile only without `WITH_RUST`; packed map/pool storage remains native.
+
+The in-entry LFSR keeps native unsigned map-log widths and reads each live type
+byte from audited allocation metadata. All seven Rust tile owners dispatch directly,
+void tiles straight to the water owner, which reuses the dispatched type and reader
+and derives `IsValidTile` from the map size; only house/station/object have native
+scalar handlers with local strong-index construction. Leaves shared by several
+owners (clear/tree ground, snow, shore, sound, foundation) live in shared tables.
+Tree/industry water loops, tree wakeups, rail flooding queries and road town-type
+selection call Rust directly; canonical rail leaves have one binding. Ground
+boundaries use actual native enums, unrestricted transparent
+Rust carriers, exact counters and typed station handles. Legacy protocols adapt
+explicitly. Each native entry owns independent lazy stack command-result storage.
+No hot call allocates a protocol object or copies a complete native tile/vehicle.
+Vehicle iterators advance after crash/events/news/effects; airport membership,
+bridge endpoint order and company restoration follow source. No ordinary tick
+callback unwinds; generation-progress cancellation stays outside tick.
+
+`verify`, the default scheduler comparison and `simulate landscape roads-flooding`
+exercise real ABI calls, declared endpoints and required named branch witnesses;
+`--self`/`--soak` extend evidence. Missing witnesses fail. The unchanged scheduler
+probe covers dimensions/cursor/reentry phases unreachable through ordinary saves.
+Remaining matrix/editor/NewGRF/threaded gaps are in #156. `TreeObservation` remains;
+the scheduler gate does not remove its full facade cost.
 
 ### Landscape partial-pixel height
 
@@ -1015,7 +1053,8 @@ it on ordinary deletion and pool cleanup.
 
 Copied call-scoped observations and immediate scalar writes keep original mutation order. Rust
 calls common Random/map and effect-specific sound, viewport and animated-tile noexcept wrappers
-directly; none can reenter Rust.
+directly; none can reenter Rust. The immutable shared service table is borrowed only
+until the controller returns (#299); no full table is copied.
 
 `python3 tools/migration.py simulate effects` compares save chunks across subtypes, expiry,
 reload and natural creation. Viewport pixels, audible output, full legacy fixtures and every
@@ -1056,7 +1095,11 @@ portable builds.
 
 Copied observations and direct noexcept shared services preserve original ordering and shared
 RNG draws. Private scalar addresses remain stable through modern and legacy save staging; flight
-helpers borrow only the flags scalar for their call.
+helpers borrow only the flags scalar for their call. World clones share an immutable
+service-table borrow tied to the Run/future lifetime (#299), ending on destruction,
+including cancellation. Production uses the process-wide const table; Rust fixtures
+own separate tables through destruction, and native partial tables stay in scope.
+Callbacks may mutate their separate context, never the borrowed table.
 
 The default `disasters` simulation checks scheduling, crashes, removal, industry reset,
 submarine movement and reload. Legacy save fixtures, viewport pixels, sound output, allocator

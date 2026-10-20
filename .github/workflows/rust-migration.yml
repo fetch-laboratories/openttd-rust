@@ -3,6 +3,8 @@ name: Migration baseline validation
 on:
   push:
     branches: [rust-migration]
+    # Markdown-only pushes never queue, so they cannot displace a pending code push below.
+    paths-ignore: ['**.md']
   pull_request:
     branches: [rust-migration]
   workflow_dispatch:
@@ -21,8 +23,10 @@ permissions:
   pull-requests: read
   statuses: read
 
+# Protected pushes queue without cancelling the running validation; a newer
+# push replaces a pending one, so a burst of merges validates the newest tip.
 concurrency:
-  group: ${{ github.workflow }}-migration-${{ inputs.checkout-ref && github.run_id || github.ref == 'refs/heads/rust-migration' && github.sha || github.ref }}
+  group: ${{ github.workflow }}-migration-${{ inputs.checkout-ref && github.run_id || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/rust-migration' }}
 
 jobs:
@@ -58,7 +62,7 @@ jobs:
       id: pack
       if: needs.policy.outputs.covered != 'true'
       run: |
-        python3 tools/ci_native.py pack --shards 6
+        python3 tools/ci_native.py pack --shards 3
         python3 - <<'PY'
         import json, os
         from pathlib import Path

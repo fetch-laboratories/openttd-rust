@@ -670,8 +670,15 @@ static void GetTileDesc_Object(TileIndex tile, TileDesc &td)
 	}
 }
 
+#ifdef WITH_RUST
+static void TileLoop_Object(uint32_t tile_index) noexcept
+#else
 static void TileLoop_Object(TileIndex tile)
+#endif
 {
+#ifdef WITH_RUST
+	const TileIndex tile{tile_index};
+#endif
 	const ObjectSpec *spec = ObjectSpec::GetByTile(tile);
 	if (spec->flags.Test(ObjectFlag::Animation)) {
 		Object *o = Object::GetByTile(tile);

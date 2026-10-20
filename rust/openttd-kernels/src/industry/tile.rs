@@ -60,7 +60,6 @@ pub struct TileServices {
     pub industry_index: unsafe extern "C" fn(u32) -> u16,
     pub toffee_offset: unsafe extern "C" fn(u8) -> u8,
     pub on_water: unsafe extern "C" fn(u32) -> bool,
-    pub water_loop: unsafe extern "C" fn(u32),
     pub transport: unsafe extern "C" fn(u32) -> bool,
     pub anim_production: unsafe extern "C" fn(u16) -> u16,
     pub anim_next: unsafe extern "C" fn(u16) -> u16,
@@ -334,10 +333,12 @@ fn bubble(tile: u32, s: &Services, map: crate::services::Map, t: &TileServices) 
 /// # Safety
 /// Live map tile. Water can destroy its industry, so no owner is resolved until
 /// the source's post-water type recheck. Later callbacks retain no Rust borrow.
+/// Any reached water command uses the caller's live, independent stack result context.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_tile_loop(
     tile: u32,
     log_x: u8,
+    call: *mut crate::ground::Call,
     s: *const Services,
     c: *const ConstructionServices,
     l: *const LifecycleServices,
@@ -347,7 +348,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_loop(
     let (s, c, l, t) = unsafe { (&*s, &*c, &*l, &*t) };
     let map = crate::services::Map { log_x };
     if unsafe { (t.on_water)(tile) } {
-        unsafe { (t.water_loop)(tile) };
+        unsafe { crate::water::tree_industry_water_loop(tile, call, s.shared()) };
     }
     if (s.shared().tile_type)(tile) != 8 {
         return;

@@ -40,8 +40,6 @@ struct OpenTTDTownFoundingServices {
 	bool (*can_allocate)() noexcept;
 	bool (*close_to_town)(uint32_t, uint) noexcept;
 	bool (*flat)(uint32_t) noexcept;
-	ClearGround (*clear_ground)(uint32_t) noexcept;
-	TreeGround (*tree_ground)(uint32_t) noexcept;
 	uint (*water_distance)(uint32_t, bool) noexcept;
 	uint (*scale_size)(uint) noexcept;
 	uint (*scale_land)(uint) noexcept;

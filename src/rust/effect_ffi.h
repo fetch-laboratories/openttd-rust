@@ -35,7 +35,8 @@ typedef struct {
 } OpenTTDEffectLeaves;
 /* One shell owns one zero-created state; destroy once after final use. get/set:
  * field0 uint16 animation, field1 uint8 substate. No persistent C++ mirror.
- * Tables are copied for a synchronous invocation. Context is its live C++ shell;
+ * Shared services are borrowed, live and immutable until run returns; leaves
+ * are copied for that invocation. Context is its live C++ shell;
  * observe output is call-scoped. Leaves cannot reenter, throw, retain pointers or
  * destroy the shell. Environmental allocation/log failures terminate.
  * Write fields:0 x,1 y,2 z,3 sprite sequence.Set,4 scalar sprite,5 progress,
