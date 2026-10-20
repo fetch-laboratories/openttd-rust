@@ -60,7 +60,8 @@ inline void Debug(void *, uint8_t kind, const uint32_t *data, uint32_t count) no
 inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = false, bool reserve = false)
 {
 	follows.clear(); writes.clear(); stats = {}; flushes = limits = red = restored = 0;
-	const auto shared = OpenTTDFixtureSharedServices(nullptr, OpenTTDFixtureMapService<uint32_t, void *>, OpenTTDFixtureMapService<uint32_t, int32_t, int32_t, uint32_t *>);
+	auto shared = OpenTTDFixtureSharedServices(nullptr, OpenTTDFixtureMapService<uint32_t, void *>, OpenTTDFixtureMapService<uint32_t, int32_t, int32_t, uint32_t *>);
+	shared.safe_waiting_position = [](const ::Train *, uint32_t, uint8_t, bool) noexcept { return false; };
 	OpenTTDRailInput input{}; input.shared = &shared;
 	input.settings.max_nodes = limit; input.settings.curve45 = curve;
 	input.settings.slope = 50; input.settings.lookahead = !cache;

@@ -8,6 +8,7 @@
 /** @file water_regions_ffi.h Rust water-region cache owner and visitor boundary. */
 #ifndef OPENTTD_RUST_WATER_REGIONS_FFI_H
 #define OPENTTD_RUST_WATER_REGIONS_FFI_H
+#include "service_defaults.hpp"
 #include <stdint.h>
 #if defined(_MSC_VER)
 #define OPENTTD_WATER_CALL __cdecl
@@ -23,11 +24,11 @@ typedef struct OpenTTDWaterRegions OpenTTDWaterRegions;
 typedef struct OpenTTDWaterVisit OpenTTDWaterVisit;
 typedef struct { int32_t x, y; uint8_t label; } OpenTTDWaterPatch;
 typedef struct { uint16_t edges[4]; uint8_t labels[256], patches, aqueducts; } OpenTTDWaterSnapshot;
-typedef struct {
-	uint16_t (OPENTTD_WATER_CALL *tracks)(uint32_t);
-	uint32_t (OPENTTD_WATER_CALL *follow)(uint32_t, uint8_t, uint8_t *);
-	uint32_t (OPENTTD_WATER_CALL *aqueduct)(uint32_t);
-	void (OPENTTD_WATER_CALL *debug)(uint8_t, int32_t, int32_t);
+typedef struct OpenTTDWaterLeaves {
+	uint16_t (OPENTTD_WATER_CALL *tracks)(uint32_t) OPENTTD_SERVICE_DEFAULT(tracks);
+	uint32_t (OPENTTD_WATER_CALL *follow)(uint32_t, uint8_t, uint8_t *) OPENTTD_SERVICE_DEFAULT(follow);
+	uint32_t (OPENTTD_WATER_CALL *aqueduct)(uint32_t) OPENTTD_SERVICE_DEFAULT(aqueduct);
+	void (OPENTTD_WATER_CALL *debug)(uint8_t, int32_t, int32_t) OPENTTD_SERVICE_DEFAULT(debug);
 } OpenTTDWaterLeaves;
 /* One map-lifetime owner, replaced at Map::Allocate; no map/STL pointer enters
  * Rust. Leaves are synchronous noexcept/nonreentrant shared map/follower queries

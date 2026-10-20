@@ -63,7 +63,7 @@
 )]
 // Original unrolled field notation/order and proven-range/modular narrowing.
 use std::ffi::c_void;
-use std::mem::{MaybeUninit, align_of, offset_of, size_of};
+use std::mem::{MaybeUninit, size_of};
 type Fe = [i32; 10];
 #[repr(C)]
 pub(crate) struct Leaves {
@@ -1027,14 +1027,10 @@ pub(crate) unsafe extern "C" fn openttd_rust_x25519_public_key(
 ) {
     x25519(unsafe { &*leaves }, out, secret, BASE.as_ptr());
 }
-pub(crate) fn abi_layout(item: u8) -> usize {
-    [
-        size_of::<Leaves>(),
-        align_of::<Leaves>(),
-        offset_of!(Leaves, wipe),
-        offset_of!(Leaves, verify32),
-    ]
-    .get(usize::from(item))
-    .copied()
-    .unwrap_or(usize::MAX)
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDX25519Leaves" ["probe"] => Leaves {
+        wipe,
+        verify32,
+    };
 }

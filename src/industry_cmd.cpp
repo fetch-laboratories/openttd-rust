@@ -4046,3 +4046,30 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 	};
 }
 #endif
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDIndustryServices.hpp"
+#include "abi-visit-OpenTTDIndustryLifecycleServices.hpp"
+#include "abi-visit-OpenTTDIndustryGenerationServices.hpp"
+#include "abi-visit-OpenTTDIndustryConstructionServices.hpp"
+#include "abi-visit-OpenTTDIndustryTileServices.hpp"
+#include "abi-visit-OpenTTDIndustryCommandServices.hpp"
+#include "abi-visit-OpenTTDIndustryCostServices.hpp"
+#include "abi-visit-OpenTTDIndustryTilePolicyServices.hpp"
+#include "abi-visit-OpenTTDIndustryTransactionServices.hpp"
+#include "abi-visit-OpenTTDIndustryTransactionContext.hpp"
+bool CheckAbi_industry_cmd()
+{
+	return AbiServicesComplete(GetIndustryRustServices()) &&
+		AbiServicesComplete(GetIndustryLifecycleRustServices()) &&
+		AbiServicesComplete(GetIndustryGenerationServices()) &&
+		AbiServicesComplete(GetIndustryConstructionServices()) &&
+		AbiServicesComplete(GetIndustryTileServices()) &&
+		AbiServicesComplete(GetIndustryCommandServices()) &&
+		AbiServicesComplete(GetIndustryCostServices()) &&
+		AbiServicesComplete(GetIndustryTilePolicyServices()) &&
+		AbiServicesComplete(GetIndustryTransactionServices()) &&
+		AbiServicesComplete(GetIndustryTransactionContext());
+}
+#endif

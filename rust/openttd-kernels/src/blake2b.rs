@@ -57,7 +57,6 @@
 // Narrowing matches little-endian serialization; arity preserves the vendor ABI.
 use crate::crypto_primitives::Leaves;
 use std::ffi::c_void;
-use std::mem::{align_of, offset_of, size_of};
 use std::ptr;
 
 #[repr(C)]
@@ -397,19 +396,15 @@ pub(crate) unsafe extern "C" fn openttd_rust_blake2b(
         );
     }
 }
-pub(crate) fn abi_layout(item: u8) -> usize {
-    [
-        size_of::<Layout>(),
-        align_of::<Layout>(),
-        offset_of!(Layout, size),
-        offset_of!(Layout, alignment),
-        offset_of!(Layout, hash),
-        offset_of!(Layout, input_offset),
-        offset_of!(Layout, input),
-        offset_of!(Layout, input_idx),
-        offset_of!(Layout, hash_size),
-    ]
-    .get(usize::from(item))
-    .copied()
-    .unwrap_or(usize::MAX)
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDBlake2bLayout" ["probe"] => Layout {
+        size,
+        alignment,
+        hash,
+        input_offset,
+        input,
+        input_idx,
+        hash_size,
+    };
 }

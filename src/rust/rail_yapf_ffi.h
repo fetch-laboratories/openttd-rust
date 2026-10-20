@@ -8,6 +8,7 @@
 /** @file rail_yapf_ffi.h Complete rail search/cache/reservation owner. */
 #ifndef OPENTTD_RUST_RAIL_YAPF_FFI_H
 #define OPENTTD_RUST_RAIL_YAPF_FFI_H
+#include "service_defaults.hpp"
 #include <stdint.h>
 #include "services_ffi.h"
 extern "C" {
@@ -52,18 +53,18 @@ struct OpenTTDRailStep {
 	uint8_t action, td, found, reverse, value, target_td, target_okay;
 };
 struct OpenTTDRailLeaves {
-	OpenTTDRailTrain (*train)(void *) noexcept;
-	OpenTTDRailTile (*tile)(uint32_t, uint8_t) noexcept;
-	OpenTTDRailFollow (*follow)(void *, uint32_t, uint8_t, uint64_t, uint8_t, uint8_t) noexcept;
-	uint8_t (*free)(void *, uint32_t, uint8_t, uint8_t) noexcept;
-	uint8_t (*compatible_station)(uint32_t, uint32_t) noexcept;
-	uint32_t (*platform_length)(uint32_t, uint8_t) noexcept;
-	uint32_t (*closest_station)(void *, uint8_t) noexcept;
-	uint16_t (*destination_dirs)(uint32_t) noexcept;
-	void (*origin)(void *, uint32_t *, uint8_t *) noexcept;
-	uint8_t (*write)(uint32_t, uint8_t, uint8_t) noexcept;
-	void (*output)(void *, uint8_t, const OpenTTDRailStep *) noexcept;
-	void (*debug)(void *, uint8_t, const uint32_t *, uint32_t) noexcept;
+	OpenTTDRailTrain (*train)(void *) noexcept OPENTTD_SERVICE_DEFAULT(train);
+	OpenTTDRailTile (*tile)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
+	OpenTTDRailFollow (*follow)(void *, uint32_t, uint8_t, uint64_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(follow);
+	uint8_t (*free)(void *, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(free);
+	uint8_t (*compatible_station)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_station);
+	uint32_t (*platform_length)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(platform_length);
+	uint32_t (*closest_station)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_station);
+	uint16_t (*destination_dirs)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(destination_dirs);
+	void (*origin)(void *, uint32_t *, uint8_t *) noexcept OPENTTD_SERVICE_DEFAULT(origin);
+	uint8_t (*write)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write);
+	void (*output)(void *, uint8_t, const OpenTTDRailStep *) noexcept OPENTTD_SERVICE_DEFAULT(output);
+	void (*debug)(void *, uint8_t, const uint32_t *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug);
 };
 /* One serialized game-thread owner holds the rail-change counter and six cache
  * banks. Searches hold private arenas/queues and per-search segments. The opaque

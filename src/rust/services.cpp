@@ -7,6 +7,7 @@
 
 /** @file services.cpp Direct shared-world leaves for Rust game owners. */
 #include "../stdafx.h"
+#include "town_services.h"
 #include "services_ffi.h"
 #include "station_command_ffi.h"
 #include "presentation_services.h"
@@ -168,7 +169,7 @@ static uint8_t SharedNextCompany(uint8_t from) noexcept
 
 static const OpenTTDTownHandle *SharedCalcClosestTown(uint32_t tile, uint32_t threshold) noexcept
 {
-	return reinterpret_cast<const OpenTTDTownHandle *>(CalcClosestTownFromTile(TileIndex{tile}, threshold));
+	return reinterpret_cast<const OpenTTDTownHandle *>(RustCalcClosestTown(TileIndex{tile}, threshold));
 }
 static const OpenTTDTownHandle *SharedClosestTown(uint32_t tile, uint32_t threshold) noexcept
 {
@@ -457,3 +458,20 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 	return services;
 }
 #endif /* WITH_RUST */
+
+#ifdef WITH_RUST
+#include "service_table_check.hpp"
+#include "abi-visit-OpenTTDRandomServices.hpp"
+#include "abi-visit-OpenTTDRailMapServices.hpp"
+#include "abi-visit-OpenTTDCommandServices.hpp"
+#include "abi-visit-OpenTTDCommandCostServices.hpp"
+#include "abi-visit-OpenTTDSharedServices.hpp"
+bool CheckAbi_services()
+{
+	return AbiServicesComplete(GetRustRandomServices()) &&
+		AbiServicesComplete(GetRustRailMapServices()) &&
+		AbiServicesComplete(GetRustCommandServices()) &&
+		AbiServicesComplete(GetRustCommandCostServices()) &&
+		AbiServicesComplete(GetRustSharedServices());
+}
+#endif

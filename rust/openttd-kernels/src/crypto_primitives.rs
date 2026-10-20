@@ -851,41 +851,26 @@ pub(crate) unsafe extern "C" fn openttd_rust_aead_unlock(
 }
 
 // Metadata only; no secret context layout is mirrored across languages.
-pub(crate) fn abi_layout(type_id: u8, item: u8) -> usize {
-    let result = match type_id {
-        19 => [
-            size_of::<Leaves>(),
-            align_of::<Leaves>(),
-            offset_of!(Leaves, wipe),
-            offset_of!(Leaves, verify16),
-        ]
-        .get(usize::from(item))
-        .copied(),
-        20 => [
-            size_of::<PolyLayout>(),
-            align_of::<PolyLayout>(),
-            offset_of!(PolyLayout, size),
-            offset_of!(PolyLayout, alignment),
-            offset_of!(PolyLayout, c),
-            offset_of!(PolyLayout, c_idx),
-            offset_of!(PolyLayout, r),
-            offset_of!(PolyLayout, pad),
-            offset_of!(PolyLayout, h),
-        ]
-        .get(usize::from(item))
-        .copied(),
-        21 => [
-            size_of::<AeadLayout>(),
-            align_of::<AeadLayout>(),
-            offset_of!(AeadLayout, size),
-            offset_of!(AeadLayout, alignment),
-            offset_of!(AeadLayout, counter),
-            offset_of!(AeadLayout, key),
-            offset_of!(AeadLayout, nonce),
-        ]
-        .get(usize::from(item))
-        .copied(),
-        _ => None,
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDCryptoLeaves" ["probe"] => Leaves {
+        wipe,
+        verify16,
     };
-    result.unwrap_or(usize::MAX)
+    "OpenTTDPolyLayout" ["probe"] => PolyLayout {
+        size,
+        alignment,
+        c,
+        c_idx,
+        r,
+        pad,
+        h,
+    };
+    "OpenTTDAeadLayout" ["probe"] => AeadLayout {
+        size,
+        alignment,
+        counter,
+        key,
+        nonce,
+    };
 }
