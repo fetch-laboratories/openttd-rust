@@ -66,6 +66,7 @@ pub struct WaterCommandServices {
     pub make_canal: extern "C" fn(u32, u8, u8),
     pub make_river: extern "C" fn(u32, u8),
     pub bridge_height_above: extern "C" fn(u32) -> i32,
+    pub area_begin: unsafe extern "C" fn(*mut Area, u32, u32, bool),
     pub area_tile: unsafe extern "C" fn(*mut Area) -> u32,
     pub area_next: unsafe extern "C" fn(*mut Area),
     pub build_depot_price: extern "C" fn() -> i64,
@@ -200,7 +201,7 @@ impl World<'_> {
     fn dirty_neighbours(&self, tile: u32) {
         // SAFETY: Direct call to the integrated Rust owner with the same tables.
         unsafe {
-            crate::water::openttd_rust_dirty_water_neighbours(
+            crate::water::dirty_water_neighbours(
                 tile,
                 self.size_x,
                 self.size_y,
@@ -520,6 +521,7 @@ impl World<'_> {
             let t = iter.y * self.size_x + iter.x;
             if (self.s.tropic_zone)(t) == 1 {
                 (self.s.set_tropic_zone)(t, 0);
+                w::hit(w::WATER_CMD_DESERT);
             }
             iter = iter.advance(self.size_x, self.size_y);
         }
@@ -530,8 +532,10 @@ impl World<'_> {
         ret: *mut CommandCost,
         area: *mut Area,
         flags: u16,
+        end: u32,
         start: u32,
         wc: WaterClass,
+        diagonal: bool,
     ) {
         if start >= self.size_x * self.size_y
             || wc.0 >= 3
@@ -542,7 +546,10 @@ impl World<'_> {
         }
         self.expense(out, 0);
         // SAFETY: The facade supplies a live, independent stack area iterator.
-        let mut tile = unsafe { (self.a.area_tile)(area) };
+        let mut tile = unsafe {
+            (self.a.area_begin)(area, end, start, diagonal);
+            (self.a.area_tile)(area)
+        };
         while tile != u32::MAX {
             let slope = (self.s.tile_slope)(tile);
             if slope != 0 && (wc.0 != 2 || Self::inclined(slope) == 255) {
@@ -748,9 +755,9 @@ entry!(openttd_rust_water_build_depot(out:*mut CommandCost,ret:*mut CommandCost,
     |world:&World<'_>| world.build_depot(out,ret,flags,tile,axis));
 entry!(openttd_rust_water_build_lock(out:*mut CommandCost,ret:*mut CommandCost,flags:u16,tile:u32)
     |world:&World<'_>| world.build_lock(out,ret,flags,tile));
-entry!(openttd_rust_water_build_canal(out:*mut CommandCost,ret:*mut CommandCost,area:*mut Area,flags:u16,start:u32,wc:WaterClass)
+entry!(openttd_rust_water_build_canal(out:*mut CommandCost,ret:*mut CommandCost,area:*mut Area,flags:u16,end:u32,start:u32,wc:WaterClass,diagonal:bool)
 |world:&World<'_>| { // SAFETY: The facade owns the iterator and native result slots.
-    unsafe { world.build_canal(out,ret,area,flags,start,wc); }
+    unsafe { world.build_canal(out,ret,area,flags,end,start,wc,diagonal); }
 });
 entry!(openttd_rust_water_restore(tile:u32,owner:u8) |world:&World<'_>| world.restore(tile,owner));
 entry!(openttd_rust_water_make_river(tile:u32) |world:&World<'_>| {

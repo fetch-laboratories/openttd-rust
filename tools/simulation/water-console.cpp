@@ -102,10 +102,12 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 	tile = TileXY(160, 160); WaterLand(tile);
 	{
 		Backup<GameMode> mode(_game_mode, GM_EDITOR);
+		for (int y = -2; y <= 2; ++y) for (int x = -2; x <= 2; ++x) SetTropicZone(tile + TileDiffXY(x, y), TROPICZONE_DESERT);
 		WaterCost("editor-sea", Command<CMD_BUILD_CANAL>::Do(DoCommandFlag::Execute, tile, tile, WaterClass::Sea, false));
 		WaterState("editor-sea", tile);
 		WaterCost("editor-river", Command<CMD_BUILD_CANAL>::Do(DoCommandFlag::Execute, tile, tile, WaterClass::River, false));
 		WaterState("editor-river", tile);
+		fmt::print(stderr, "WATER-CMD desert {}\n", GetTropicZone(tile) == TROPICZONE_NORMAL);
 		MakeRiverAndModifyDesertZoneAround(tile);
 		mode.Restore();
 	}
@@ -116,6 +118,10 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 	WaterCost("bankrupt-depot", Command<CMD_BUILD_SHIP_DEPOT>::Do(DoCommandFlag::Execute, tile, AXIS_X));
 	_tile_type_water_procs.change_tile_owner_proc(tile, _current_company, INVALID_OWNER);
 	WaterState("bankrupt", tile); WaterState("bankrupt-other", tile + 1);
+	tile = TileXY(180, 160); WaterLand(tile);
+	MakeCanal(tile, _current_company, 0); MakeCanal(tile + 1, CompanyID(0), 0);
+	WaterCost("second-clear-failure", CmdBuildShipDepot(DoCommandFlag::Execute, tile, AXIS_X));
+	WaterState("partial-first", tile); WaterState("partial-second", tile + 1);
 	fmt::print(stderr, "WATER-CMD complete\n");
 	local.Restore(); company.Restore();
 	return true;

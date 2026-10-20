@@ -39,6 +39,7 @@ struct OpenTTDWaterCommandServices {
 	void (*make_canal)(uint32_t, uint8_t, uint8_t) noexcept;
 	void (*make_river)(uint32_t, uint8_t) noexcept;
 	int32_t (*bridge_height_above)(uint32_t) noexcept;
+	void (*area_begin)(OpenTTDWaterArea *, uint32_t, uint32_t, bool) noexcept;
 	uint32_t (*area_tile)(OpenTTDWaterArea *) noexcept;
 	void (*area_next)(OpenTTDWaterArea *) noexcept;
 	int64_t (*build_depot_price)() noexcept;
@@ -55,7 +56,7 @@ const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept;
 extern "C" {
 void openttd_rust_water_build_depot(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, Axis);
 void openttd_rust_water_build_lock(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t);
-void openttd_rust_water_build_canal(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDWaterArea *, uint16_t, uint32_t, WaterClass);
+void openttd_rust_water_build_canal(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDWaterArea *, uint16_t, uint32_t, uint32_t, WaterClass, bool);
 void openttd_rust_water_restore(const OpenTTDWaterCommandServices *, uint32_t, uint8_t);
 void openttd_rust_water_make_river(const OpenTTDWaterCommandServices *, uint32_t);
 void openttd_rust_water_clear(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t);

@@ -57,6 +57,7 @@
 #include "rust/services_depot.h"
 #include "rust/services_rail.h"
 #include <variant>
+#include <optional>
 #endif
 
 #include "safeguards.h"
@@ -89,10 +90,6 @@ static const Directions _flood_from_dirs[] = {
  * @param tile tile to check
  */
 #ifdef WITH_RUST
-static void MarkCanalsAndRiversAroundDirty(TileIndex tile)
-{
-	openttd_rust_dirty_water_neighbours(tile.base(), Map::SizeX(), Map::SizeY(), &GetRustWaterGroundServices(), &GetRustSharedServices());
-}
 void ClearNeighbourNonFloodingStates(TileIndex tile)
 {
 	openttd_rust_clear_neighbour_flooding(tile.base(), Map::SizeX(), Map::SizeY(), &GetRustWaterGroundServices(), &GetRustSharedServices());
@@ -272,18 +269,14 @@ void MakeRiverAndModifyDesertZoneAround(TileIndex tile)
 /* The selected command owns traversal; the established map iterator stays a
  * call-local native value. Variant construction has no per-command allocation. */
 struct OpenTTDWaterArea {
-	std::variant<OrthogonalTileIterator, DiagonalTileIterator> iter;
-	OpenTTDWaterArea(TileIndex tile, TileIndex start, bool diagonal) : iter(OrthogonalTileIterator(tile, start))
-	{
-		if (diagonal) this->iter.emplace<DiagonalTileIterator>(tile, start);
-	}
+	std::optional<std::variant<OrthogonalTileIterator, DiagonalTileIterator>> iter;
 };
 const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
 {
 	static const OpenTTDWaterCommandServices services{
 		.shared = &GetRustSharedServices(), .cost = &GetRustCommandCostServices(), .command = &GetRustCommandServices(), .water = &GetRustWaterGroundServices(),
-		.water_type = [](uint32_t t) noexcept { return GetWaterTileType(TileIndex{t}); },
-		.lock_part = [](uint32_t t) noexcept { return GetLockPart(TileIndex{t}); },
+		.water_type = RustWaterTileType,
+		.lock_part = RustLockPart,
 		.lock_direction = [](uint32_t t) noexcept { return GetLockDirection(TileIndex{t}); },
 		.other_depot_tile = [](uint32_t t) noexcept { return GetOtherShipDepotTile(TileIndex{t}).base(); },
 		.slope_z = RustTileSlopeZ,
@@ -294,8 +287,12 @@ const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
 		.make_canal = [](uint32_t t, uint8_t o, uint8_t random) noexcept { MakeCanal(TileIndex{t}, Owner{o}, random); },
 		.make_river = [](uint32_t t, uint8_t random) noexcept { MakeRiver(TileIndex{t}, random); },
 		.bridge_height_above = [](uint32_t t) noexcept { return GetBridgeHeight(GetSouthernBridgeEnd(TileIndex{t})); },
-		.area_tile = [](OpenTTDWaterArea *a) noexcept { return std::visit([](auto &i) { return (*i).base(); }, a->iter); },
-		.area_next = [](OpenTTDWaterArea *a) noexcept { std::visit([](auto &i) { ++i; }, a->iter); },
+		.area_begin = [](OpenTTDWaterArea *a, uint32_t tile, uint32_t start, bool diagonal) noexcept {
+			if (diagonal) a->iter.emplace(std::in_place_type<DiagonalTileIterator>, TileIndex{tile}, TileIndex{start});
+			else a->iter.emplace(std::in_place_type<OrthogonalTileIterator>, TileIndex{tile}, TileIndex{start});
+		},
+		.area_tile = [](OpenTTDWaterArea *a) noexcept { return std::visit([](auto &i) { return (*i).base(); }, *a->iter); },
+		.area_next = [](OpenTTDWaterArea *a) noexcept { std::visit([](auto &i) { ++i; }, *a->iter); },
 		.build_depot_price = []() noexcept { return _price[PR_BUILD_DEPOT_SHIP].base(); },
 		.clear_depot_price = []() noexcept { return _price[PR_CLEAR_DEPOT_SHIP].base(); },
 		.build_lock_price = []() noexcept { return _price[PR_BUILD_LOCK].base(); },
@@ -322,11 +319,9 @@ const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
 }
 CommandCost CmdBuildCanal(DoCommandFlags flags, TileIndex tile, TileIndex start_tile, WaterClass wc, bool diagonal)
 {
-	/* Preserve parameter validation before constructing an iterator. */
-	if (start_tile >= Map::Size() || !IsValidWaterClass(wc)) return CMD_ERROR;
-	OpenTTDWaterArea area(tile, start_tile, diagonal);
+	OpenTTDWaterArea area;
 	CommandCost cost, ret;
-	openttd_rust_water_build_canal(&GetRustWaterCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), &area, flags.base(), start_tile.base(), wc);
+	openttd_rust_water_build_canal(&GetRustWaterCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), &area, flags.base(), tile.base(), start_tile.base(), wc, diagonal);
 	return cost;
 }
 static CommandCost ClearTile_Water(TileIndex tile, DoCommandFlags flags)

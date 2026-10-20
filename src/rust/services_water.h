@@ -11,6 +11,8 @@
 #include "../water_map.h"
 #include "../water.h"
 
+inline WaterTileType RustWaterTileType(uint32_t tile) noexcept { return GetWaterTileType(TileIndex{tile}); }
+inline LockPart RustLockPart(uint32_t tile) noexcept { return GetLockPart(TileIndex{tile}); }
 inline bool OpenTTDIsDockingTile(uint32_t tile) noexcept { return IsDockingTile(TileIndex(tile)); }
 inline bool RustPossibleDocking(uint32_t tile) noexcept { return IsPossibleDockingTile(TileIndex{tile}); }
 inline void RustCheckDocking(uint32_t tile) noexcept { CheckForDockingTile(TileIndex{tile}); }

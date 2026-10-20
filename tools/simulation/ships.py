@@ -348,7 +348,7 @@ def check(scenario, run, mode, role, result):
             run,
             role,
             "water_cmd",
-            "restore depot remove_depot force lock remove_lock canal skip clear owner".split(),
+            "restore depot remove_depot force lock remove_lock canal skip clear owner desert".split(),
         )
         if branches is not None:
             result[f"{mode}_{role}_water_command_profile"] = branches

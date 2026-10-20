@@ -625,8 +625,7 @@ pub unsafe extern "C" fn openttd_rust_flooding_behaviour(
 }
 /// # Safety
 /// Live immutable service tables for the synchronous no-unwind invocation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_dirty_water_neighbours(
+pub(crate) unsafe fn dirty_water_neighbours(
     tile: u32,
     size_x: u32,
     size_y: u32,

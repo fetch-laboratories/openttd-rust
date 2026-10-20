@@ -44,7 +44,7 @@ static uint32_t Ship_water_class(uint32_t tile) noexcept { return to_underlying(
 
 static bool Ship_lock_middle(uint32_t tile) noexcept
 {
-	return IsTileType(TileIndex(tile), MP_WATER) && IsLock(TileIndex(tile)) && GetLockPart(TileIndex(tile)) == LockPart::Middle;
+	return IsTileType(TileIndex(tile), MP_WATER) && RustWaterTileType(tile) == WaterTileType::Lock && RustLockPart(tile) == LockPart::Middle;
 }
 
 static uint32_t Ship_lock_dir(uint32_t tile) noexcept { return GetInclinedSlopeDirection(static_cast<Slope>(GetRustSharedServices().tile_slope(tile))); }

@@ -10,6 +10,7 @@
 #define RUST_DEPOT_SERVICES_H
 #include "../depot_base.h"
 #include "../depot_func.h"
+#include "../town.h"
 inline bool RustDepotAvailable() noexcept { return Depot::CanAllocateItem(); }
 inline uint16_t RustNewDepot(uint32_t tile) noexcept { return (new Depot(TileIndex{tile}))->index.base(); }
 inline void RustDepotName(uint16_t id) noexcept { MakeDefaultName(Depot::Get(DepotID(id))); }

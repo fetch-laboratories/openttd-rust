@@ -394,6 +394,7 @@ witness_blocks! {
         WATER_CMD_SKIP = 7 => "water_cmd.skip",
         WATER_CMD_CLEAR = 8 => "water_cmd.clear",
         WATER_CMD_OWNER = 9 => "water_cmd.owner",
+        WATER_CMD_DESERT = 10 => "water_cmd.desert",
     }
 
 }

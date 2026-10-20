@@ -155,7 +155,6 @@ void openttd_rust_water_tile_loop(uint32_t, uint32_t, uint32_t, bool, OpenTTDGro
 bool openttd_rust_flood_halftile(uint32_t, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 FloodingBehaviour openttd_rust_flooding_behaviour(uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 void openttd_rust_clear_neighbour_flooding(uint32_t, uint32_t, uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
-void openttd_rust_dirty_water_neighbours(uint32_t, uint32_t, uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 }
 /* Default native and Windows ABI call fixture: actual record returns and enum
  * parameters, including all-byte values, not just size/offset metadata. */

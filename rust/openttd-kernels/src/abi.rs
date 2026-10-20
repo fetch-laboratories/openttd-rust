@@ -85,7 +85,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         }
         1122 => layout!(crate::services::EnvironmentServices, item; editor, freeform_edges),
         1120 => {
-            layout!(crate::water_cmd::WaterCommandServices, item; shared, cost, command, water, water_type, lock_part, lock_direction, other_depot_tile, slope_z, environment, infrastructure, make_depot, make_lock_tile, make_canal, make_river, bridge_height_above, area_tile, area_next, build_depot_price, clear_depot_price, build_lock_price, clear_lock_price, build_canal_price, clear_canal_price, clear_water_price, clear_rough_price, strings)
+            layout!(crate::water_cmd::WaterCommandServices, item; shared, cost, command, water, water_type, lock_part, lock_direction, other_depot_tile, slope_z, environment, infrastructure, make_depot, make_lock_tile, make_canal, make_river, bridge_height_above, area_begin, area_tile, area_next, build_depot_price, clear_depot_price, build_lock_price, clear_lock_price, build_canal_price, clear_canal_price, clear_water_price, clear_rough_price, strings)
         }
         1121 => {
             layout!(crate::water_cmd::Strings, item; built_on_water, demolish_bridge, unsuitable, sloped_wrong, edge, low_bridge, flat, already_built, build_on_water, demolish_building, demolish_canal)
