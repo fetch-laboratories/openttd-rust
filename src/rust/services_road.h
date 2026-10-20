@@ -11,6 +11,8 @@
 #include "../road_map.h"
 #include "../town_map.h"
 inline RoadTramType RustRoadTramType(RoadType rt) noexcept { return GetRoadTramType(rt); }
+inline bool RustRoadTypeIsRoad(uint8_t rt) noexcept { return RoadTypeIsRoad(static_cast<RoadType>(rt)); }
+inline uint16_t RustRoadCostMultiplier(uint8_t rt) noexcept { return GetRoadTypeInfo(static_cast<RoadType>(rt))->cost_multiplier; }
 inline void RustSetRoadType(TileIndex tile, RoadTramType rtt, RoadType rt) noexcept { SetRoadType(tile, rtt, rt); }
 inline bool RustCrossingReserved(uint32_t tile) noexcept { return HasCrossingReservation(TileIndex{tile}); }
 inline void RustSetCrossingReserved(uint32_t tile, bool reserved) noexcept { SetCrossingReservation(TileIndex{tile}, reserved); }

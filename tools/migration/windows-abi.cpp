@@ -678,9 +678,10 @@ static void Trees()
 	shared.make_shore = TreeUnused<void, uint32_t>;
 	shared.make_snow = TreeUnused<void, uint32_t, uint32_t>;
 	shared.play_sound = TreeUnused<void, uint32_t, uint16_t>;
+	static const OpenTTDClearServices clear{.make_clear = [](uint32_t, ClearGround, uint32_t) noexcept { ++tree_probe.clears; }};
 	static const OpenTTDWaterGroundServices water{
 		.rail = nullptr,
-		.clear = nullptr,
+		.clear = &clear,
 		.vehicles = nullptr,
 		.costs = nullptr,
 		.company = nullptr,
@@ -693,7 +694,7 @@ static void Trees()
 		.canal_or_river = TreeUnused<bool, uint32_t>,
 		.possible_docking = TreeUnused<bool, uint32_t>,
 		.check_docking = TreeUnused<void, uint32_t>,
-		.invalidate_region = TreeUnused<void, uint32_t>,
+		.region_context = TreeUnused<OpenTTDWaterRegionContext>,
 		.remove_rail = TreeUnused<void, OpenTTDCommandCost *, uint32_t, Track>,
 		.apply_foundation = TreeUnused<OpenTTDFoundationSlope, Foundation, Slope>,
 		.iterator_begin = TreeUnused<void, OpenTTDTileVehicleCursor *, uint32_t>,
@@ -723,7 +724,11 @@ static void Trees()
 		tree_probe.nested_cost = openttd_rust_trees_clear_tile(nullptr, tile + 1, 5, true, false, &tree_probe_services, tree_probe.shared);
 		return static_cast<TreeGround>(0);
 	};
-	shared.clear_square = [](uint32_t) noexcept { ++tree_probe.clears; };
+	shared.clear_square_services.may_animate = [](uint32_t) noexcept { return false; };
+	shared.clear_square_services.docking = [](uint32_t) noexcept { return false; };
+	shared.clear_square_services.generating_world = []() noexcept { return false; };
+	shared.mark_dirty = [](uint32_t) noexcept {};
+	shared.tile_valid = [](uint32_t) noexcept { return false; };
 	tree_probe.shared = &shared;
 	uint8_t *counter = openttd_rust_tree_counter();
 	openttd_rust_trees_initialize();

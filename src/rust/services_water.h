@@ -12,6 +12,7 @@
 #include "../water.h"
 
 inline bool OpenTTDIsDockingTile(uint32_t tile) noexcept { return IsDockingTile(TileIndex(tile)); }
+inline void RustRemoveDockingTile(uint32_t tile) noexcept { RemoveDockingTile(TileIndex{tile}); }
 inline bool RustPossibleDocking(uint32_t tile) noexcept { return IsPossibleDockingTile(TileIndex{tile}); }
 inline void RustCheckDocking(uint32_t tile) noexcept { CheckForDockingTile(TileIndex{tile}); }
 inline void OpenTTDMakeShore(uint32_t tile) noexcept { MakeShore(TileIndex(tile)); }

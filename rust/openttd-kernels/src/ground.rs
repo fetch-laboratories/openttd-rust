@@ -23,6 +23,50 @@ use crate::services::{
     RoadBits, RoadType, Roadside, Services, Slope, TrackBits, WaterClass,
 };
 
+/// Native storage/presentation leaves of `DoClearSquare` in source order.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ClearSquareServices {
+    pub may_animate: extern "C" fn(u32) -> bool,
+    pub delete_animated: extern "C" fn(u32, bool),
+    pub docking: extern "C" fn(u32) -> bool,
+    pub remove_docking: extern "C" fn(u32),
+    pub generating_world: extern "C" fn() -> bool,
+}
+
+/// Full `DoClearSquare` control; no world/region borrow spans a callback.
+pub(crate) fn clear_square(tile: u32, s: &Services) {
+    let leaves = &s.clear_square_services;
+    if (leaves.may_animate)(tile) {
+        (leaves.delete_animated)(tile, true);
+    }
+    let remove = (leaves.docking)(tile);
+    // SAFETY: Canonical native tables outlive this serialized invocation.
+    let water = unsafe { &*(s.water_services)() };
+    let clear = unsafe { &*water.clear };
+    (clear.make_clear)(
+        tile,
+        ClearGroundType(0),
+        if (leaves.generating_world)() { 3 } else { 0 },
+    );
+    (s.mark_dirty)(tile);
+    if remove {
+        (leaves.remove_docking)(tile);
+    }
+    let width = (s.map_max_x)().wrapping_add(1);
+    let height = (s.map_max_y)().wrapping_add(1);
+    // SAFETY: Live canonical tables, no map or owner borrow survives either call.
+    unsafe {
+        crate::water::openttd_rust_clear_neighbour_flooding(tile, width, height, water, s);
+        water.invalidate_region(tile, s);
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_clear_square(tile: u32, s: &Services) {
+    clear_square(tile, s);
+}
+
 #[repr(usize)]
 pub(crate) enum Witness {
     SnowStart,

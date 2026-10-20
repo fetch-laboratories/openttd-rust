@@ -14,6 +14,11 @@
 #include "../economy_type.h"
 #include "abi_layout.hpp"
 #include "../rust/company_adapter.h"
+#include "../rust/command_services.h"
+#include "../core/backup_type.hpp"
+#include "../strings_func.h"
+#include "../table/strings.h"
+#include "../road.h"
 #endif
 #include "../safeguards.h"
 #ifdef WITH_RUST
@@ -101,6 +106,99 @@ static void FixtureReset(bool networking, bool server)
 	fixture_services.company_league_dirty = FixtureVoid; fixture_services.company_ctrl_windows = FixtureVoid;
 	fixture_services.assert_new_ai_slot = FixtureNoop; fixture_services.network_company_new = FixtureNetworkNew;
 }
+/* The default maps do not load unclassified NewGRF road masks or extreme prices. */
+TEST_CASE("Commands - road price saturation, rounding and independent type masks")
+{
+	extern RoadTypes _roadtypes_road, _roadtypes_tram;
+	extern RoadTypeInfo _roadtypes[ROADTYPE_END];
+	AutoRestoreBackup<Money> build(_price[PR_BUILD_ROAD], Money(7));
+	AutoRestoreBackup<Money> clear(_price[PR_CLEAR_ROAD], Money(-27));
+	AutoRestoreBackup<RoadTypes> roads(_roadtypes_road, {ROADTYPE_ROAD});
+	AutoRestoreBackup<RoadTypes> trams(_roadtypes_tram, {ROADTYPE_TRAM});
+	AutoRestoreBackup<uint16_t> road_multiplier(_roadtypes[ROADTYPE_ROAD].cost_multiplier, 3);
+	AutoRestoreBackup<uint16_t> tram_multiplier(_roadtypes[ROADTYPE_TRAM].cost_multiplier, UINT16_MAX);
+	CHECK(RoadBuildCost(ROADTYPE_ROAD) == Money(2));
+	CHECK(RoadClearCost(ROADTYPE_ROAD) == Money(-27));
+	CHECK(RoadConvertCost(ROADTYPE_ROAD, ROADTYPE_ROAD) == Money(0));
+	_roadtypes_road.Reset(); // neither road nor tram: source clear policy still earns removal value
+	CHECK(RoadClearCost(ROADTYPE_ROAD) == Money(-28));
+	_price[PR_BUILD_ROAD] = -7;
+	CHECK(RoadBuildCost(ROADTYPE_ROAD) == Money(-3));
+	CHECK(RoadClearCost(ROADTYPE_ROAD) == Money(-25));
+	_price[PR_BUILD_ROAD] = INT64_MAX;
+	CHECK(RoadBuildCost(ROADTYPE_TRAM) == Money(1152921504606846975LL));
+	CHECK(RoadClearCost(ROADTYPE_TRAM) == Money(-864691128455135258LL));
+	_price[PR_BUILD_ROAD] = INT64_MIN;
+	CHECK(RoadBuildCost(ROADTYPE_TRAM) == Money(-1152921504606846976LL));
+	CHECK(RoadClearCost(ROADTYPE_TRAM) == Money(864691128455135205LL));
+}
+
+/* Save comparison cannot observe skipped metadata reads or local encoded errors.
+ * Unreachable callbacks retain their generated abort defaults. */
+TEST_CASE("Commands - pre-post money short circuits and local error encoding")
+{
+	FixtureReset(false, false);
+	auto command = GetRustCommandServices();
+	const auto &costs = GetRustCommandCostServices();
+	OpenTTDCompanyFinanceServices unread{};
+	command.finance = &unread;
+	command.infinite_money = OpenTTDCommandServices{}.infinite_money;
+	auto skipped = costs;
+	skipped.money = OpenTTDCommandCostServices{}.money;
+	for (bool test : {false, true}) {
+		CommandCost failed(STR_ERROR_INSUFFICIENT_FUNDS);
+		openttd_rust_command_before(&command, false, test);
+		openttd_rust_command_after(&command, &skipped, RustCommandCost(&failed), 0, true, test);
+		CHECK(failed.Failed());
+		for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Bankrupt}, DoCommandFlags{DoCommandFlag::QueryCost}}) {
+			bool top = flags.Any();
+			if (!test && flags.Test(DoCommandFlag::QueryCost)) continue;
+			CommandCost result(EXPENSES_CONSTRUCTION, Money(50));
+			openttd_rust_command_before(&command, false, test);
+			openttd_rust_command_after(&command, &skipped, RustCommandCost(&result), flags.base(), top, test);
+			CHECK(result.Succeeded());
+		}
+	}
+	for (int64_t amount : {-5, 0}) {
+		CommandCost result(EXPENSES_CONSTRUCTION, Money(amount));
+		CHECK(openttd_rust_command_check_money(&command, &costs, RustCommandCost(&result)));
+	}
+	command.infinite_money = []() noexcept { return true; };
+	CommandCost infinite(EXPENSES_CONSTRUCTION, Money(INT64_MAX));
+	CHECK(openttd_rust_command_check_money(&command, &costs, RustCommandCost(&infinite)));
+	command.infinite_money = []() noexcept { return false; };
+	command.finance = &fixture_finance;
+	fixture_companies[0] = std::make_unique<CompanyProperties>();
+	fixture_companies[0]->Finances().money = 20;
+	fixture_current = 0;
+	AutoRestoreBackup<CompanyID> current(_current_company, CompanyID(0));
+	AutoRestoreBackup<CompanyID> local(_local_company, CompanyID(0));
+	for (CompanyID local_id : {CompanyID(0), CompanyID(1)}) {
+		_local_company = local_id;
+		CommandCost result(EXPENSES_CONSTRUCTION, Money(21));
+		CHECK_FALSE(openttd_rust_command_check_money(&command, &costs, RustCommandCost(&result)));
+		CHECK(result.GetCost() == Money(21));
+		CHECK(result.GetErrorMessage() == STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY);
+		CHECK(result.GetEncodedMessage() == (local_id == 0 ? GetEncodedString(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, Money(21)) : EncodedString{}));
+	}
+	CommandCost zero;
+	skipped = costs; skipped.expense = OpenTTDCommandCostServices{}.expense;
+	openttd_rust_command_subtract_money(&command, &skipped, RustCommandCost(&zero));
+	for (auto [amount, expense] : {std::pair{5, EXPENSES_CONSTRUCTION}, std::pair{-3, EXPENSES_ROADVEH_REVENUE}, std::pair{2, EXPENSES_ROADVEH_RUN}}) {
+		CommandCost result(expense, Money(amount));
+		openttd_rust_command_after(&command, &costs, RustCommandCost(&result), 0, true, false);
+	}
+	const auto &finances = fixture_companies[0]->Finances();
+	CHECK(finances.money == Money(16));
+	CHECK(finances.yearly_expenses[0][EXPENSES_CONSTRUCTION] == Money(5));
+	CHECK(finances.cur_economy.income == Money(3));
+	CHECK(finances.cur_economy.expenses == Money(-2));
+	fixture_current = 18;
+	openttd_rust_command_subtract_money(&command, &skipped, RustCommandCost(&infinite));
+	CHECK(finances.money == Money(16));
+	fixture_companies[0].reset();
+}
+
 TEST_CASE("Company economy - network deferred deletion and synchronous pool iteration")
 {
 	for (int mode : {0, 1, 2}) {

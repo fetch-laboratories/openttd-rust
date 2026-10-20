@@ -36,8 +36,6 @@ struct OpenTTDRoadCommandServices {
 	OpenTTDRoadTownEdge (*town_edge)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_edge);
 	void (*set_town)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_town);
 	Foundation (*foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(foundation);
-	int64_t (*clear_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_cost);
-	int64_t (*convert_cost)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_cost);
 	bool (*extra_dynamite)() noexcept OPENTTD_SERVICE_DEFAULT(extra_dynamite);
 	bool (*depot_slope)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_slope);
 	void (*make_depot)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_depot);

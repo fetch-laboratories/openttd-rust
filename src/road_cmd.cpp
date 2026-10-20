@@ -2737,6 +2737,8 @@ static CommandCost CheckBuildAbove_Road(TileIndex tile, DoCommandFlags flags, Ax
 #include "rust/town_services.h"
 #include "rust/rail_command_services.h"
 #include "rust/command_cost_services.h"
+#include "rust/command_cost_native_services.h"
+#include "rust/company_services.h"
 #include "rust/vehicle_services.h"
 #include "rust/environment_services.h"
 #include "rust/settings_services.h"
@@ -2763,10 +2765,7 @@ static CommandCost &RoadCost(OpenTTDCommandCost *cost) noexcept { return *reinte
 static void RoadOwnedByTown(OpenTTDCommandCost *out, uint32_t tile) noexcept
 {
 	RoadCost(out).MakeError(STR_ERROR_OWNED_BY);
-	if (IsLocalCompany()) {
-		auto params = GetParamsForOwnedBy(OWNER_TOWN, TileIndex{tile});
-		RoadCost(out).SetEncodedMessage(GetEncodedStringWithArgs(STR_ERROR_OWNED_BY, params));
-	}
+	if (RustIsLocalCompany()) RustEncodeOwnedBy(RoadCost(out), OWNER_TOWN, TileIndex{tile});
 }
 static OpenTTDRoadWorksEffect RoadNextEffect(uint32_t from) noexcept
 {
@@ -2796,8 +2795,6 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 		},
 		.set_town = RustSetTownIndex,
 		.foundation = [](uint8_t slope, uint8_t bits) noexcept { return GetRoadFoundation(static_cast<Slope>(slope), static_cast<RoadBits>(bits)); },
-		.clear_cost = [](uint8_t rt) noexcept { return RoadClearCost(static_cast<RoadType>(rt)).base(); },
-		.convert_cost = [](uint8_t from, uint8_t to) noexcept { return RoadConvertCost(static_cast<RoadType>(from), static_cast<RoadType>(to)).base(); },
 		.extra_dynamite = RustExtraDynamite,
 		.depot_slope = [](uint8_t dir, uint8_t slope) noexcept { return CanBuildDepotByTileh(static_cast<DiagDirection>(dir), static_cast<Slope>(slope)); },
 		.make_depot = [](uint32_t tile, uint8_t owner, uint16_t depot, uint8_t dir, uint8_t rt) noexcept { MakeRoadDepot(TileIndex{tile}, Owner(owner), DepotID(depot), static_cast<DiagDirection>(dir), static_cast<RoadType>(rt)); },

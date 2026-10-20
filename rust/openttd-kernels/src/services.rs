@@ -91,9 +91,15 @@ pub struct CommandCostServices {
     pub error_message: extern "C" fn(*const CommandCost) -> u32,
     /// Query native `GetCost()`.
     pub money: extern "C" fn(*const CommandCost) -> i64,
+    /// Read native expense classification only for a nonzero executed cost.
+    pub expense: extern "C" fn(*const CommandCost) -> ExpenseType,
     /// Native `MakeError`, keeping owner and encoded message.
     pub make_error: unsafe extern "C" fn(*mut CommandCost, u32),
 }
+
+/// Native `ExpensesType` classification retained across the result-storage ABI.
+#[repr(transparent)]
+pub struct ExpenseType(pub u8);
 
 /// Ordinary direct commands. Native result storage retains complete errors and
 /// parameters; owner accesses must end before a command can reenter Rust.
@@ -106,12 +112,16 @@ pub struct CommandServices {
     pub enter: extern "C" fn() -> bool,
     /// Leave that scope on every return path.
     pub leave: extern "C" fn(),
-    /// Original clear-area and town-rating test preparation.
-    pub before: extern "C" fn(bool, bool),
-    /// Original town-rating, money check and subtraction result processing.
-    pub after: unsafe extern "C" fn(*mut CommandCost, u16, bool, bool),
-    /// Original command actor available money.
-    pub available_money: extern "C" fn() -> i64,
+    /// Canonical company identity, owner resolution and expense invalidation leaves.
+    pub finance: &'static crate::company::FinanceServices,
+    /// Native scratch remains native until object ownership integrates.
+    pub clear_object_areas: extern "C" fn(),
+    /// Shared difficulty setting, read only when the source reaches it.
+    pub infinite_money: extern "C" fn() -> bool,
+    /// Format insufficient cash after the Rust finance decision (including local encoding).
+    pub money_error: unsafe extern "C" fn(*mut CommandCost, i64),
+    /// Shared native infrastructure-window invalidation for command owners.
+    pub infrastructure_dirty: extern "C" fn(u8),
     /// Original `CMD_LANDSCAPE_CLEAR`, with actual `DoCommandFlags` width.
     pub landscape_clear: extern "C" fn(*mut CommandCost, u32, u16),
     /// Original `CheckTileOwnership`, preserving native encoded errors.
@@ -273,6 +283,8 @@ pub struct Services {
     pub calendar_year: extern "C" fn() -> i32,
     /// `DoClearSquare`.
     pub clear_square: extern "C" fn(u32),
+    /// Native storage leaves; Rust owns the complete tile-clear sequence.
+    pub clear_square_services: crate::ground::ClearSquareServices,
     /// Original native nearest-town spatial lookup; the result may be null.
     pub closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
     /// Whether this company pool ID is live.
@@ -378,6 +390,10 @@ pub struct Services {
     pub set_road_directions: extern "C" fn(u32, u8),
     /// Canonical native `road_tram_type` service.
     pub road_tram_type: extern "C" fn(u8) -> RoadTramType,
+    /// Original `RoadTypeIsRoad` membership (distinct from the inverse tram mask).
+    pub road_type_is_road: extern "C" fn(u8) -> bool,
+    /// Only the road-type construction cost multiplier; prices are Rust owned.
+    pub road_cost_multiplier: extern "C" fn(u8) -> u16,
     /// Canonical native `road_powered` service.
     pub road_powered: extern "C" fn(u8, u8) -> bool,
     /// Canonical native `road_type_valid` service.
@@ -532,6 +548,9 @@ pub fn fixture(
     extern "C" fn road_tram(_: u8) -> RoadTramType {
         RoadTramType(false)
     }
+    extern "C" fn road_multiplier(_: u8) -> u16 {
+        panic!("unused road cost multiplier");
+    }
     extern "C" fn two_types(_: u8, _: u8) -> bool {
         false
     }
@@ -563,6 +582,13 @@ pub fn fixture(
         calendar_date: zero_year,
         calendar_year: zero_year,
         clear_square: tile,
+        clear_square_services: crate::ground::ClearSquareServices {
+            may_animate: flag,
+            delete_animated: set_reserved,
+            docking: flag,
+            remove_docking: tile,
+            generating_world: flag0,
+        },
         closest_town: unused_closest_town,
         company_valid: unused_company_valid,
         context,
@@ -616,6 +642,8 @@ pub fn fixture(
         set_road_owner: set_three,
         set_road_directions: zone,
         road_tram_type: road_tram,
+        road_type_is_road: type_valid,
+        road_cost_multiplier: road_multiplier,
         road_powered: two_types,
         road_type_valid: type_valid,
         safe_waiting_position: train_safe,

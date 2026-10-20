@@ -11,12 +11,15 @@
 #include "service_defaults.hpp"
 #include "command_cost_ffi.h"
 struct Train;
+struct OpenTTDCompanyFinanceServices;
 struct OpenTTDCommandServices {
 	bool (*enter)() noexcept OPENTTD_SERVICE_DEFAULT(enter);
 	void (*leave)() noexcept OPENTTD_SERVICE_DEFAULT(leave);
-	void (*before)(bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(before);
-	void (*after)(OpenTTDCommandCost *, uint16_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(after);
-	int64_t (*available_money)() noexcept OPENTTD_SERVICE_DEFAULT(available_money);
+	const OpenTTDCompanyFinanceServices *finance;
+	void (*clear_object_areas)() noexcept OPENTTD_SERVICE_DEFAULT(clear_object_areas);
+	bool (*infinite_money)() noexcept OPENTTD_SERVICE_DEFAULT(infinite_money);
+	void (*money_error)(OpenTTDCommandCost *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(money_error);
+	void (*infrastructure_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure_dirty);
 	void (*landscape_clear)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(landscape_clear);
 	void (*tile_ownership)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_ownership);
 	void (*ownership)(OpenTTDCommandCost *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ownership);
@@ -25,4 +28,10 @@ struct OpenTTDCommandServices {
 	void (*wormhole_free)(OpenTTDCommandCost *, uint32_t, uint32_t, const Train *) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_free);
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
+extern "C" {
+void openttd_rust_command_before(const OpenTTDCommandServices *, bool, bool);
+void openttd_rust_command_after(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint16_t, bool, bool);
+void openttd_rust_command_subtract_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, const OpenTTDCommandCost *);
+bool openttd_rust_command_check_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *);
+}
 #endif /* RUST_COMMAND_SERVICES_FFI_H */

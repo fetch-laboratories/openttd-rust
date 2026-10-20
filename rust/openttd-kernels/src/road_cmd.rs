@@ -88,10 +88,6 @@ pub struct RoadCommandServices {
     pub set_town: extern "C" fn(u32, u16),
     /// Native `foundation` service.
     pub foundation: extern "C" fn(u8, u8) -> Foundation,
-    /// Native `clear_cost` service.
-    pub clear_cost: extern "C" fn(u8) -> i64,
-    /// Native `convert_cost` service.
-    pub convert_cost: extern "C" fn(u8, u8) -> i64,
     /// Native `extra_dynamite` service.
     pub extra_dynamite: extern "C" fn() -> bool,
     /// Native `depot_slope` service.
@@ -229,18 +225,22 @@ impl<'a> Ctx<'a> {
         let top_level = (self.commands.enter)();
         let _scope = Scope(self.commands);
         if top_level || flags & EXEC == 0 {
-            (self.commands.before)(top_level, true);
+            crate::command::before(self.commands, top_level, true);
             let extra = body(flags & !EXEC);
             // SAFETY: the native result slot stays live throughout this scope.
-            unsafe { (self.commands.after)(cost.0, flags, top_level, true) };
+            unsafe {
+                crate::command::after(self.commands, self.costs, cost.0, flags, top_level, true);
+            };
             if !cost.ok() || flags & EXEC == 0 {
                 return extra;
             }
         }
-        (self.commands.before)(top_level, false);
+        crate::command::before(self.commands, top_level, false);
         let extra = body(flags);
         // SAFETY: the native result slot stays live throughout this scope.
-        unsafe { (self.commands.after)(cost.0, flags, top_level, false) };
+        unsafe {
+            crate::command::after(self.commands, self.costs, cost.0, flags, top_level, false);
+        };
         extra
     }
     fn do_build(
@@ -365,7 +365,7 @@ impl<'a> Ctx<'a> {
             return;
         }
         (self.r.road_infrastructure)(owner, rt, count as u32);
-        (self.r.infrastructure_dirty)(owner);
+        (self.commands.infrastructure_dirty)(owner);
     }
     fn update_town(&self, tile: u32) {
         let town = (self.s.nearest_town)(tile);
@@ -535,7 +535,8 @@ impl<'a> Ctx<'a> {
                 let end = (self.rail.other_tunnel_bridge_end)(tile);
                 let len = self.length(tile, end).wrapping_add(2);
                 cost.add_money(
-                    (self.s.clear_cost)(rt).saturating_mul(i64::from(len.wrapping_mul(2))),
+                    crate::road_cost::clear_cost(self.shared, rt)
+                        .saturating_mul(i64::from(len.wrapping_mul(2))),
                 );
                 if flags & EXEC != 0 {
                     self.infrastructure(
@@ -555,7 +556,7 @@ impl<'a> Ctx<'a> {
                 }
             } else {
                 w::hit(w::ROAD_COMMANDS_REMOVE_STOP);
-                cost.add_money((self.s.clear_cost)(rt).saturating_mul(2));
+                cost.add_money(crate::road_cost::clear_cost(self.shared, rt).saturating_mul(2));
                 if flags & EXEC != 0 {
                     self.infrastructure(rt, self.owner(tile, rtt), -2);
                     (self.shared.set_road_type)(tile, rtt, INVALID);
@@ -611,7 +612,7 @@ impl<'a> Ctx<'a> {
                     self.infrastructure(rt, self.owner(tile, rtt), -(pieces.count_ones() as i32));
                     if present == 0 {
                         if self.rt(tile, rtt ^ 1) == INVALID {
-                            (self.shared.clear_square)(tile);
+                            crate::ground::clear_square(tile, self.shared);
                         } else {
                             if rtt == 0 && self.owner(tile, rtt) == TOWN {
                                 self.update_town(tile);
@@ -631,7 +632,10 @@ impl<'a> Ctx<'a> {
                         (self.shared.mark_dirty)(tile);
                     }
                 }
-                cost.set((self.s.clear_cost)(rt).saturating_mul(i64::from(pieces.count_ones())));
+                cost.set(
+                    crate::road_cost::clear_cost(self.shared, rt)
+                        .saturating_mul(i64::from(pieces.count_ones())),
+                );
                 if foundation == 0 && (self.s.foundation)(slope, present).0 != 0 {
                     cost.add_money(price(57));
                 }
@@ -665,7 +669,7 @@ impl<'a> Ctx<'a> {
                                 (self.rail.rail_type)(tile).0,
                                 u32::MAX,
                             );
-                            (self.r.infrastructure_dirty)(owner);
+                            (self.commands.infrastructure_dirty)(owner);
                         }
                     } else {
                         (self.shared.set_road_type)(tile, rtt, INVALID);
@@ -673,7 +677,7 @@ impl<'a> Ctx<'a> {
                     (self.shared.mark_dirty)(tile);
                     (self.r.layout_changed)(tile, track);
                 }
-                cost.set((self.s.clear_cost)(rt).saturating_mul(2));
+                cost.set(crate::road_cost::clear_cost(self.shared, rt).saturating_mul(2));
             }
             _ => cost.error(INVALID_STRING),
         }
@@ -920,7 +924,7 @@ impl<'a> Ctx<'a> {
                                     (self.rail.rail_type)(tile).0,
                                     1,
                                 );
-                                (self.r.infrastructure_dirty)(owner);
+                                (self.commands.infrastructure_dirty)(owner);
                             }
                             let reserved = (self.rail.reserved_tracks)(tile).0 & (1 << track) != 0;
                             (self.r.make_crossing)(
@@ -939,7 +943,7 @@ impl<'a> Ctx<'a> {
                             (self.r.mark_crossings)(tile, (self.rail.crossing_road_axis)(tile).0);
                             (self.shared.mark_dirty)(tile);
                         }
-                        cost.set((self.r.road_build_cost)(rt).saturating_mul(2));
+                        cost.set(crate::road_cost::build_cost(self.shared, rt).saturating_mul(2));
                         return;
                     }
                 }
@@ -1044,7 +1048,9 @@ impl<'a> Ctx<'a> {
         } else {
             pieces.count_ones()
         };
-        cost.add_money((self.r.road_build_cost)(rt).saturating_mul(i64::from(num)));
+        cost.add_money(
+            crate::road_cost::build_cost(self.shared, rt).saturating_mul(i64::from(num)),
+        );
         if flags & EXEC != 0 {
             match self.tile_type(tile) {
                 ROAD => {
@@ -1268,7 +1274,7 @@ impl<'a> Ctx<'a> {
             core::mem::swap(&mut start, &mut end);
             core::mem::swap(&mut start_half, &mut end_half);
         }
-        let available = (self.commands.available_money)();
+        let available = crate::command::available_money(self.commands);
         let mut spent = 0_i64;
         let mut tile = start;
         last.error(INVALID_STRING);
@@ -1413,10 +1419,10 @@ impl<'a> Ctx<'a> {
                 // The original skips INVALID_ROADTYPE only for the public update helper;
                 // a depot is guaranteed to have one valid type here.
                 (self.r.road_infrastructure)(owner, rt, 2_u32.wrapping_neg());
-                (self.r.infrastructure_dirty)(owner);
+                (self.commands.infrastructure_dirty)(owner);
             }
             (self.r.delete_depot)(tile);
-            (self.shared.clear_square)(tile);
+            crate::ground::clear_square(tile, self.shared);
         }
         cost.set(price(31));
     }
@@ -1615,7 +1621,7 @@ impl<'a> Ctx<'a> {
         } else {
             (self.r.road_infrastructure)(owner, from, num.wrapping_neg());
             (self.r.road_infrastructure)(owner, to, num);
-            (self.r.infrastructure_dirty)(owner);
+            (self.commands.infrastructure_dirty)(owner);
         }
     }
     fn convert(
@@ -1749,7 +1755,10 @@ impl<'a> Ctx<'a> {
                 num = num.wrapping_mul(2);
             }
             *found = true;
-            cost.add_money((self.s.convert_cost)(from, to).saturating_mul(i64::from(num)));
+            cost.add_money(
+                crate::road_cost::convert_cost(self.shared, from, to)
+                    .saturating_mul(i64::from(num)),
+            );
             if flags & EXEC != 0 {
                 w::hit(w::ROAD_COMMANDS_CONVERT_TILE);
                 if owner == (self.shared.current_company)() {
@@ -1784,7 +1793,10 @@ impl<'a> Ctx<'a> {
             }
             let num = self.length(tile, other).wrapping_add(2).wrapping_mul(2);
             *found = true;
-            cost.add_money((self.s.convert_cost)(from, to).saturating_mul(i64::from(num)));
+            cost.add_money(
+                crate::road_cost::convert_cost(self.shared, from, to)
+                    .saturating_mul(i64::from(num)),
+            );
             if flags & EXEC != 0 {
                 w::hit(w::ROAD_COMMANDS_CONVERT_WORMHOLE);
                 if owner == (self.shared.current_company)() {

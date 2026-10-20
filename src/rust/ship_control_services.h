@@ -417,7 +417,7 @@ static const OpenTTDShipLeaves &GetShipServices()
 		.tile_min_z = Ship_tile_min_z, .tile_max_z = Ship_tile_max_z,
 		.track_status = Ship_track_status, .offset = Ship_offset,
 		.diag_between = Ship_diag_between, .dist_square = Ship_dist_square,
-		.dist_manhattan = Ship_dist_manhattan, .docking = OpenTTDIsDockingTile,
+		.dist_manhattan = Ship_dist_manhattan, .docking = GetRustSharedServices().clear_square_services.docking,
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
 		.station = Ship_station, .industry_station = Ship_industry_station,
 		.oilrig = Ship_oilrig, .station_use = Ship_station_use,

@@ -19,6 +19,9 @@
 #include "newgrf.h"
 #include "newgrf_badge_type.h"
 #include "economy_func.h"
+#ifdef WITH_RUST
+#include "rust/road_cost_ffi.h"
+#endif
 
 /** Roadtype flag bit numbers. */
 enum class RoadTypeFlag : uint8_t {
@@ -239,8 +242,13 @@ inline bool HasPowerOnRoad(RoadType enginetype, RoadType tiletype)
  */
 inline Money RoadBuildCost(RoadType roadtype)
 {
+#ifdef WITH_RUST
+	assert(roadtype < ROADTYPE_END);
+	return openttd_rust_road_build_cost(&GetRustSharedServices(), static_cast<uint8_t>(roadtype));
+#else
 	assert(roadtype < ROADTYPE_END);
 	return (_price[PR_BUILD_ROAD] * GetRoadTypeInfo(roadtype)->cost_multiplier) >> 3;
+#endif /* WITH_RUST */
 }
 
 /**
@@ -250,6 +258,10 @@ inline Money RoadBuildCost(RoadType roadtype)
  */
 inline Money RoadClearCost(RoadType roadtype)
 {
+#ifdef WITH_RUST
+	assert(roadtype < ROADTYPE_END);
+	return openttd_rust_road_clear_cost(&GetRustSharedServices(), static_cast<uint8_t>(roadtype));
+#else
 	assert(roadtype < ROADTYPE_END);
 
 	/* Flat fee for removing road. */
@@ -258,6 +270,7 @@ inline Money RoadClearCost(RoadType roadtype)
 	/* Clearing tram earns a little money, but also incurs the standard clear road cost,
 	 * so no profit can be made. */
 	return _price[PR_CLEAR_ROAD] - RoadBuildCost(roadtype) * 3 / 4;
+#endif /* WITH_RUST */
 }
 
 /**
@@ -268,11 +281,15 @@ inline Money RoadClearCost(RoadType roadtype)
  */
 inline Money RoadConvertCost(RoadType from, RoadType to)
 {
+#ifdef WITH_RUST
+	return openttd_rust_road_convert_cost(&GetRustSharedServices(), static_cast<uint8_t>(from), static_cast<uint8_t>(to));
+#else
 	/* Don't apply convert costs when converting to the same roadtype (ex. building a roadstop over existing road) */
 	if (from == to) return (Money)0;
 
 	/* Same cost as removing and then building. */
 	return RoadBuildCost(to) + RoadClearCost(from);
+#endif /* WITH_RUST */
 }
 
 /**

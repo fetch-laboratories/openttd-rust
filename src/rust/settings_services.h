@@ -40,5 +40,6 @@ inline bool RustAutoslopeEnabled() noexcept { return AutoslopeEnabled(); }
 inline bool RustCrossingWithCompetitor() noexcept { return _settings_game.construction.crossing_with_competitor; }
 inline bool RustDisableElrails() noexcept { return _settings_game.vehicle.disable_elrails; }
 inline bool RustForbid90Deg() noexcept { return _settings_game.pf.forbid_90_deg; }
+inline bool RustInfiniteMoney() noexcept { return _settings_game.difficulty.infinite_money; }
 inline bool RustExtraDynamite() noexcept { return _settings_game.construction.extra_dynamite; }
 #endif /* RUST_SETTINGS_SERVICES_H */

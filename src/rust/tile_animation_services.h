@@ -14,7 +14,9 @@
 inline uint8_t OpenTTDAnimationFrame(uint32_t tile) noexcept { return GetAnimationFrame(TileIndex(tile)); }
 inline void OpenTTDSetAnimationFrame(uint32_t tile, uint8_t frame) noexcept { SetAnimationFrame(TileIndex(tile), frame); }
 inline void OpenTTDAddAnimatedTile(uint32_t tile, bool mark_dirty) noexcept { AddAnimatedTile(TileIndex(tile), mark_dirty); }
-inline void OpenTTDDeleteAnimatedTile(uint32_t tile) noexcept { DeleteAnimatedTile(TileIndex(tile)); }
+inline bool OpenTTDMayAnimateTile(uint32_t tile) noexcept { return MayAnimateTile(TileIndex{tile}); }
+inline void OpenTTDDeleteAnimatedTileWithMode(uint32_t tile, bool force) noexcept { DeleteAnimatedTile(TileIndex{tile}, force); }
+inline void OpenTTDDeleteAnimatedTile(uint32_t tile) noexcept { OpenTTDDeleteAnimatedTileWithMode(tile, false); }
 inline int32_t OpenTTDTileMaxPixelZ(uint32_t tile) noexcept { return GetTileMaxPixelZ(TileIndex(tile)); }
 inline int OpenTTDTileMaxZ(TileIndex tile) noexcept { return GetTileMaxZ(tile); }
 #endif

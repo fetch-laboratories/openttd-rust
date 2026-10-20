@@ -1123,7 +1123,7 @@ pub unsafe extern "C" fn openttd_rust_trees_clear_tile(
         num = num.wrapping_mul(4);
     }
     if execute {
-        (s.clear_square)(tile);
+        crate::ground::clear_square(tile, s);
     }
     price.saturating_mul(i64::from(num))
 }
@@ -1215,7 +1215,6 @@ mod tests {
             tile_type: water_type,
             tree_ground: water,
             play_sound: sound,
-            clear_square,
             ..crate::services::fixture(std::ptr::null_mut(), random, industry)
         }
     }
@@ -1293,8 +1292,40 @@ mod tests {
     extern "C" fn water_type(_: u32) -> u8 {
         MP_TREES
     }
+    extern "C" fn unused_clear1<A, R>(_: A) -> R {
+        panic!("unexpected clear service");
+    }
+    extern "C" fn unused_clear2<A, B, R>(_: A, _: B) -> R {
+        panic!("unexpected clear service");
+    }
+    extern "C" fn unused_clear3<A, B, C, R>(_: A, _: B, _: C) -> R {
+        panic!("unexpected clear service");
+    }
+    extern "C" fn clear_square(_: u32, _: crate::services::ClearGroundType, _: u32) {
+        log(Event::Write("clear_square"));
+    }
+    static CLEAR: crate::ground::ClearServices = crate::ground::ClearServices {
+        field_tile: unused_clear1,
+        density: unused_clear1,
+        counter: unused_clear1,
+        snow: unused_clear1,
+        surface: unused_clear1,
+        set_ground: unused_clear3,
+        set_density: unused_clear2,
+        set_counter: unused_clear2,
+        clear_snow: unused_clear1,
+        make_clear: clear_square,
+        fences: unused_clear1,
+        field: unused_clear1,
+        set_field: unused_clear2,
+        water_class: unused_clear1,
+        ambient: unused_clear1,
+    };
     extern "C" fn water_services() -> *const crate::water::WaterServices {
-        thread_local! { static WATER: crate::water::WaterServices = crate::water::fixture(); }
+        thread_local! { static WATER: crate::water::WaterServices = crate::water::WaterServices {
+            clear: &raw const CLEAR,
+            ..crate::water::fixture()
+        }; }
         WATER.with(std::ptr::from_ref)
     }
     extern "C" fn ambient(_: u32) -> bool {
@@ -1322,9 +1353,6 @@ mod tests {
             w.progress += 1;
             w.abort_at == Some(w.progress)
         })
-    }
-    extern "C" fn clear_square(_: u32) {
-        log(Event::Write("clear_square"));
     }
     extern "C" fn rating(_: *mut Command, _: u32, up: bool) {
         log(Event::Rating(up));
@@ -1803,11 +1831,12 @@ mod tests {
         }
         let log = events();
         assert_eq!(
-            &log[log.len() - 3..],
+            &log[log.len() - 4..],
             [
                 Event::Rating(false),
                 Event::ClearTree,
-                Event::Write("clear_square")
+                Event::Write("clear_square"),
+                Event::Dirty
             ]
         );
     }

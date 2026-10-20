@@ -58,6 +58,7 @@
 #include "company_services.h"
 #include "presentation_services.h"
 #include "services_rail.h"
+#include "services_road.h"
 #include "settings_services.h"
 #include "vehicle_services.h"
 // Registry: house (#256).
@@ -161,7 +162,7 @@ static void Co_company_infrastructure(uint8_t id, OpenTTDCompanyInfrastructure *
 	out->road_is_road = 0;
 	for (RoadType rt = ROADTYPE_BEGIN; rt < ROADTYPE_END; rt++) {
 		out->road[rt] = i.road[rt];
-		if (RoadTypeIsRoad(rt)) out->road_is_road |= uint64_t{1} << rt;
+		if (RustRoadTypeIsRoad(rt)) out->road_is_road |= uint64_t{1} << rt;
 	}
 	out->rail_total = i.GetRailTotal();
 	out->road_total = i.GetRoadTotal();

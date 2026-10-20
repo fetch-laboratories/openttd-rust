@@ -101,6 +101,7 @@ const OpenTTDRailServices &GetRustRailGroundServices() noexcept;
 const OpenTTDTunnelServices &GetRustTunnelGroundServices() noexcept;
 struct OpenTTDWaterGroundServices;
 extern "C" {
+void openttd_rust_clear_square(uint32_t, const OpenTTDSharedServices *);
 void openttd_rust_road_tile_loop(uint32_t, LandscapeType, bool, bool, uint32_t, OpenTTDGroundCall *, const OpenTTDGroundCostServices *, const OpenTTDRoadGroundServices *, const OpenTTDSharedServices *);
 void openttd_rust_tunnel_tile_loop(uint32_t, LandscapeType, const OpenTTDTunnelServices *, const OpenTTDSharedServices *);
 }
@@ -129,7 +130,7 @@ struct OpenTTDWaterGroundServices {
 	bool (*canal_or_river)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(canal_or_river);
 	bool (*possible_docking)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(possible_docking);
 	void (*check_docking)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(check_docking);
-	void (*invalidate_region)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_region);
+	OpenTTDWaterRegionContext (*region_context)() noexcept OPENTTD_SERVICE_DEFAULT(region_context);
 	void (*remove_rail)(OpenTTDCommandCost *, uint32_t, Track) noexcept OPENTTD_SERVICE_DEFAULT(remove_rail);
 	OpenTTDFoundationSlope (*apply_foundation)(Foundation, Slope) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
 	void (*iterator_begin)(OpenTTDTileVehicleCursor *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(iterator_begin);

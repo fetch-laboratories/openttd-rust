@@ -1482,8 +1482,7 @@ fn loan(
 /// `SubtractMoneyFromAnyCompany`.
 /// # Safety
 /// `p` is the live finance owner of company `id`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_company_subtract(
+pub(crate) unsafe fn subtract_money(
     f: &FinanceServices,
     p: *mut Finances,
     id: u8,
@@ -1654,12 +1653,7 @@ pub unsafe extern "C" fn openttd_rust_company_available_money(
 /// Money test of `CheckCompanyHasMoney`; `p` is the current company or null.
 /// # Safety
 /// `p` is null or a live finance owner.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_company_has_money(
-    p: *const Finances,
-    infinite: bool,
-    cost: i64,
-) -> bool {
+pub(crate) unsafe fn has_money(p: *const Finances, infinite: bool, cost: i64) -> bool {
     cost <= 0 || infinite || p.is_null() || cost <= get!(p, money)
 }
 /// `Company::GetMaxLoan`.

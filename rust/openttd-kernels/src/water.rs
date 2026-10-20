@@ -71,7 +71,7 @@ pub struct WaterServices {
     pub canal_or_river: extern "C" fn(u32) -> bool,
     pub possible_docking: extern "C" fn(u32) -> bool,
     pub check_docking: extern "C" fn(u32),
-    pub invalidate_region: extern "C" fn(u32),
+    pub region_context: extern "C" fn() -> crate::water_regions::Context,
     pub remove_rail: unsafe extern "C" fn(*mut services::CommandCost, u32, Track),
     pub apply_foundation: extern "C" fn(Foundation, Slope) -> FoundationSlope,
     // Caller supplies aligned native-iterator storage and follows its construction/lifetime.
@@ -92,6 +92,25 @@ pub struct WaterServices {
     pub news: extern "C" fn(VehicleRef, u32),
     pub bridge_height: extern "C" fn(u32) -> i32,
 }
+impl WaterServices {
+    /// # Safety
+    /// Tables and context identify the live map owner under the game mutex.
+    pub(crate) unsafe fn invalidate_region(&self, tile: u32, s: &Services) {
+        if !(s.tile_valid)(tile) {
+            return;
+        }
+        let context = (self.region_context)();
+        // SAFETY: No cache borrow survives this synchronous owner invocation.
+        unsafe {
+            crate::water_regions::openttd_rust_water_invalidate(
+                context.owner,
+                context.leaves,
+                tile,
+            );
+        };
+    }
+}
+
 const OFFSETS: [(i32, i32); 8] = [
     (-1, -1),
     (-1, 0),
@@ -445,7 +464,7 @@ impl<'a> World<'a> {
             if (self.w.possible_docking)(tile) {
                 (self.w.check_docking)(tile);
             }
-            (self.w.invalidate_region)(tile);
+            unsafe { self.w.invalidate_region(tile, self.s) };
             crate::ground::hit(crate::ground::Witness::FloodSuccess);
         } else {
             crate::ground::hit(crate::ground::Witness::FloodFail);
@@ -675,6 +694,9 @@ pub(crate) unsafe fn tree_industry_water_loop(tile: u32, call: *mut Call, s: &Se
 
 #[cfg(test)]
 pub(crate) fn fixture() -> WaterServices {
+    extern "C" fn unused0<R>() -> R {
+        panic!("unexpected water fixture service");
+    }
     extern "C" fn unused1<A, R>(_: A) -> R {
         panic!("unexpected water fixture service");
     }
@@ -699,7 +721,7 @@ pub(crate) fn fixture() -> WaterServices {
         canal_or_river: unused1,
         possible_docking: unused1,
         check_docking: unused1,
-        invalidate_region: unused1,
+        region_context: unused0,
         remove_rail: unused3,
         apply_foundation: unused2,
         iterator_begin: unused2,
