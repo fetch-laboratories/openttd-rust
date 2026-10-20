@@ -2733,6 +2733,7 @@ static CommandCost CheckBuildAbove_Road(TileIndex tile, DoCommandFlags flags, Ax
 #ifdef WITH_RUST
 #include "rust/road_command_ffi.h"
 #include "rust/road_command_services.h"
+#include "rust/town_services.h"
 #include "rust/rail_command_services.h"
 #include "rust/command_cost_services.h"
 #include "rust/vehicle_services.h"
@@ -2787,7 +2788,7 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 			.authority = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS },
 		.vehicles_built = []() noexcept { return !RoadVehicle::Iterate().empty(); },
 		.town_valid = [](uint16_t town) noexcept { return Town::IsValidID(TownID(town)); },
-		.nearest_town = [](uint32_t tile) noexcept { return reinterpret_cast<const OpenTTDTownHandle *>(CalcClosestTownFromTile(TileIndex{tile})); },
+		.nearest_town = [](uint32_t tile) noexcept { return reinterpret_cast<const OpenTTDTownHandle *>(RustCalcClosestTown(TileIndex{tile}, UINT_MAX)); },
 		.town_edge = [](const OpenTTDTownHandle *handle) noexcept -> OpenTTDRoadTownEdge {
 			const Town *town = reinterpret_cast<const Town *>(handle);
 			return {.tile = town->xy.base(), .radius = town->cache.squared_town_zone_radius[to_underlying(HouseZone::TownEdge)]};
