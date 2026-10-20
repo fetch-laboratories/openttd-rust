@@ -197,18 +197,20 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 	const OpenTTDSharedServices shared{.bridge_speed = BridgeSpeed};
 	const OpenTTDRoadLeaves leaves{.shared = &shared, .speed_part = SpeedPart};
 	for (uint16_t model = 0; model < 2; ++model) for (uint16_t state = 0; state < 256; ++state) for (uint16_t tail_state = 0; tail_state < 256; ++tail_state) {
-		for (uint8_t hidden : {0, 1}) for (uint8_t direction : {0, 1}) {
+		for (uint8_t hidden : {0, 1, 2, 3}) for (uint8_t direction : {0, 1}) {
 			openttd_rust_road_set(front, 0, state); openttd_rust_road_set(tail, 0, tail_state);
-			OpenTTDRoadMaxSpeedRead r{.next = v, .next_state = tail, .max_track_speed = static_cast<uint16_t>(tail_state * 257), .order_max_speed = static_cast<uint16_t>(state * 257), .direction = 1, .status = hidden};
-			speed_parts[0] = {.direction = direction, .status = hidden};
+			OpenTTDRoadMaxSpeedRead r{.next = v, .next_state = tail, .max_track_speed = static_cast<uint16_t>(tail_state * 257), .order_max_speed = static_cast<uint16_t>(state * 257), .direction = 1, .status = static_cast<uint8_t>((hidden & 1) | 128)};
+			speed_parts[0] = {.direction = direction, .status = static_cast<uint8_t>((hidden >> 1) | 64)};
 			/* Pinned GetCurrentMaxSpeed loop: this->state, assignment (not min), then bridge. */
 			int expected = r.max_track_speed, reads = 0;
+			auto part_hidden = hidden & 1;
 			for (auto [part_state, dir] : {std::pair{state, uint16_t{1}}, std::pair{tail_state, uint16_t{direction}}}) {
 				if (model == AM_REALISTIC) {
 					if (state <= RVSB_TRACKDIR_MASK && IsReversingRoadTrackdir(static_cast<Trackdir>(state))) { expected = r.max_track_speed / 2; break; }
 					else if ((dir & 1) == 0) expected = r.max_track_speed * 3 / 4;
 				}
-				if (part_state == RVSB_WORMHOLE && !hidden) { expected = std::min(expected, 37 * 2); ++reads; }
+				if (part_state == RVSB_WORMHOLE && !part_hidden) { expected = std::min(expected, 37 * 2); ++reads; }
+				part_hidden = hidden >> 1;
 			}
 			bridge_reads = 0;
 			CHECK(openttd_rust_road_max_speed(v, front, model, &r, &leaves) == std::min(expected, r.order_max_speed * 2));
