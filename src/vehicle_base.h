@@ -795,6 +795,8 @@ public:
 
 	void UpdateVisualEffect(bool allow_power_change = true);
 	void ShowVisualEffect() const;
+	bool VisualEffectEligible() const;
+	void ShowVisualEffectAtSpeed(uint max_speed) const;
 
 	void UpdatePosition();
 	void UpdateViewport(bool dirty);

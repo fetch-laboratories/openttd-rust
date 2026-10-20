@@ -1205,6 +1205,11 @@ retain field widths through C++ staging.
 `vehicle_services.{h,cpp}`). No owner, path or world borrow spans callbacks, reentry or
 deletion.
 
+#311 shares one lean max-speed calculation across road control and native queries. Road
+control supplies that limit between the shared native visual-effect gate and tail, then
+observes movement/speed inputs again after effects. Default native/ABI checks cover the
+front-state/curve/bridge domains and pre/post-effect ordering; train callers keep the shared policy.
+
 The default `roads-` simulation compares acceleration, servicing, path, RNG, crash expiry and
 reload. Legacy saves, custom NewGRFs, articulated/tram turns, sounds and viewport pixels remain
 limits tracked by #156.

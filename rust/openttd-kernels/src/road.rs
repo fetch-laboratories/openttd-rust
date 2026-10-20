@@ -188,7 +188,15 @@ pub struct MaxSpeedRead {
     pub status: u8,
 }
 
-/// `ShowVisualEffect()`, then the speed and first-step inputs it leaves.
+/// Shared native eligibility gate, followed by max-speed inputs only when eligible.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct VisualRead {
+    pub max: MaxSpeedRead,
+    pub eligible: bool,
+}
+
+/// Speed and first-step inputs observed after visual effects return.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct SpeedRead {
@@ -408,7 +416,9 @@ pub struct Leaves {
     pub tick_front: extern "C" fn(VehicleRef) -> FrontTickRead,
     pub max_depot_penalty: extern "C" fn() -> u32,
     pub process_orders_then_loading: extern "C" fn(VehicleRef) -> u8,
-    pub visual_then_speed: extern "C" fn(VehicleRef, bool) -> SpeedRead,
+    pub visual_read: extern "C" fn(VehicleRef) -> VisualRead,
+    pub visual_effect_then_speed: extern "C" fn(VehicleRef, u32, bool) -> SpeedRead,
+    pub speed_read: extern "C" fn(VehicleRef, bool) -> SpeedRead,
     pub max_speed_read: extern "C" fn(VehicleRef) -> MaxSpeedRead,
     pub speed_part: extern "C" fn(VehicleRef) -> SpeedPart,
     pub step: extern "C" fn(VehicleRef) -> Step,
@@ -575,6 +585,40 @@ fn diag(dir: u8) -> u8 {
     (dir >> 1) & 3
 }
 
+/// `RoadVehicle::GetCurrentMaxSpeed`.
+fn max_speed(front: Part, r: MaxSpeedRead, acceleration_model: u8, l: &Leaves) -> i32 {
+    let mut speed = i32::from(r.max_track_speed);
+    let mut u = SpeedPart {
+        next: r.next,
+        next_state: r.next_state,
+        tile: r.tile,
+        direction: r.direction,
+        status: r.status,
+    };
+    let mut part = front;
+    loop {
+        if acceleration_model == AM_REALISTIC {
+            let state = front.state();
+            if state <= 15 && reversing(state) {
+                speed = i32::from(r.max_track_speed) / 2;
+                break;
+            } else if u.direction & 1 == 0 {
+                speed = i32::from(r.max_track_speed) * 3 / 4;
+            }
+        }
+        if part.state() == WORMHOLE && u.status & VS_HIDDEN == 0 {
+            // SAFETY: The static shared table outlives this synchronous query.
+            speed = speed.min(i32::from(service!(unsafe { (*l.shared).bridge_speed })(u.tile)) * 2);
+        }
+        let Some(next) = Part::link(u.next, u.next_state) else {
+            break;
+        };
+        part = next;
+        u = service!(l.speed_part)(next.v);
+    }
+    speed.min(i32::from(r.order_max_speed) * 2)
+}
+
 impl Game<'_> {
     /// # Safety
     /// Tables outlive the synchronous entry and every nested entry.
@@ -627,37 +671,17 @@ impl Game<'_> {
         s.direction = e.direction;
     }
 
-    /// `RoadVehicle::GetCurrentMaxSpeed`.
-    fn max_speed(&self, front: Part, r: MaxSpeedRead) -> i32 {
-        let mut speed = i32::from(r.max_track_speed);
-        let mut u = SpeedPart {
-            next: r.next,
-            next_state: r.next_state,
-            tile: r.tile,
-            direction: r.direction,
-            status: r.status,
-        };
-        let mut part = front;
-        loop {
-            if self.realistic() {
-                let state = front.state();
-                if state <= 15 && reversing(state) {
-                    speed = i32::from(r.max_track_speed) / 2;
-                    break;
-                } else if u.direction & 1 == 0 {
-                    speed = i32::from(r.max_track_speed) * 3 / 4;
-                }
-            }
-            if part.state() == WORMHOLE && u.status & VS_HIDDEN == 0 {
-                speed = speed.min(i32::from(service!(self.ss.bridge_speed)(u.tile)) * 2);
-            }
-            let Some(next) = Part::link(u.next, u.next_state) else {
-                break;
-            };
-            part = next;
-            u = service!(self.l.speed_part)(next.v);
+    fn visual_effect_and_speed(&self, v: Part) -> SpeedRead {
+        // The shared gate asserts primary status before observing max-speed inputs.
+        let r = service!(self.l.visual_read)(v.v);
+        if r.eligible {
+            let speed = max_speed(v, r.max, self.acceleration_model, self.l);
+            // Effects can reenter: the native tail then reobserves all speed/movement
+            // inputs. No owner borrow or earlier max-speed observation crosses it.
+            service!(self.l.visual_effect_then_speed)(v.v, speed as u32, self.realistic())
+        } else {
+            service!(self.l.speed_read)(v.v, self.realistic())
         }
-        speed.min(i32::from(r.order_max_speed) * 2)
     }
     /// `RoadVehicle::UpdateSpeed`, returning the distance and stored speed.
     fn update_speed(&self, front: Part, r: &SpeedRead) -> (i32, u16) {
@@ -670,8 +694,12 @@ impl Game<'_> {
         } else {
             (if over { 512 } else { 256 }, 0)
         };
-        let speed =
-            service!(self.gs.do_update_speed)(front.v, accel, min, self.max_speed(front, r.max));
+        let speed = service!(self.gs.do_update_speed)(
+            front.v,
+            accel,
+            min,
+            max_speed(front, r.max, self.acceleration_model, self.l),
+        );
         (speed.distance, speed.cur_speed)
     }
     /// `RoadVehFindCloseTo`; `v` is always the front part.
@@ -776,11 +804,22 @@ impl Game<'_> {
             return;
         }
         let u_speed = if self.original() || service!(self.gs.acceleration)(u.v) > 0 {
-            self.max_speed(u, service!(self.l.max_speed_read)(u.v))
+            max_speed(
+                u,
+                service!(self.l.max_speed_read)(u.v),
+                self.acceleration_model,
+                self.l,
+            )
         } else {
             i32::from(ur.cur_speed)
         };
-        if u_speed >= self.max_speed(v, service!(self.l.max_speed_read)(v.v))
+        if u_speed
+            >= max_speed(
+                v,
+                service!(self.l.max_speed_read)(v.v),
+                self.acceleration_model,
+                self.l,
+            )
             && ur.status & VS_STOPPED == 0
             && ur.cur_speed != 0
         {
@@ -1565,7 +1604,7 @@ impl Game<'_> {
                 return true;
             }
         }
-        let r = service!(self.l.visual_then_speed)(v.v, self.realistic());
+        let r = self.visual_effect_and_speed(v);
         let mut s = Step {
             tile: r.max.tile,
             x: r.x,
@@ -1941,11 +1980,13 @@ pub unsafe extern "C" fn openttd_rust_road_max_speed(
     read: *const MaxSpeedRead,
     leaves: *const Leaves,
 ) -> i32 {
+    crate::witness::hit(crate::witness::ROAD_ENTRIES);
     // SAFETY: Records borrowed for this call only.
     let r = unsafe { *read };
-    let mut game = entry!(leaves, None);
-    game.acceleration_model = acceleration_model;
-    game.max_speed(Part::new(v, state), r)
+    // SAFETY: The static table and live state outlive this synchronous query.
+    max_speed(Part::new(v, state), r, acceleration_model, unsafe {
+        &*leaves
+    })
 }
 /// # Safety
 /// As `openttd_rust_road_tick`.

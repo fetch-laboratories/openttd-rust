@@ -44,6 +44,10 @@ struct OpenTTDRoadMaxSpeedRead {
 	uint8_t direction;
 	uint8_t status;
 };
+struct OpenTTDRoadVisualRead {
+	OpenTTDRoadMaxSpeedRead max;
+	bool eligible;
+};
 struct OpenTTDRoadSpeedRead {
 	OpenTTDRoadMaxSpeedRead max;
 	int32_t x;
@@ -184,7 +188,9 @@ struct OpenTTDRoadLeaves {
 	OpenTTDRoadFrontTickRead (OPENTTD_VEHICLE_CALL *tick_front)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tick_front);
 	uint32_t (OPENTTD_VEHICLE_CALL *max_depot_penalty)() noexcept OPENTTD_SERVICE_DEFAULT(max_depot_penalty);
 	uint8_t (OPENTTD_VEHICLE_CALL *process_orders_then_loading)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(process_orders_then_loading);
-	OpenTTDRoadSpeedRead (OPENTTD_VEHICLE_CALL *visual_then_speed)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(visual_then_speed);
+	OpenTTDRoadVisualRead (OPENTTD_VEHICLE_CALL *visual_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(visual_read);
+	OpenTTDRoadSpeedRead (OPENTTD_VEHICLE_CALL *visual_effect_then_speed)(OpenTTDVehicle *, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(visual_effect_then_speed);
+	OpenTTDRoadSpeedRead (OPENTTD_VEHICLE_CALL *speed_read)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(speed_read);
 	OpenTTDRoadMaxSpeedRead (OPENTTD_VEHICLE_CALL *max_speed_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(max_speed_read);
 	OpenTTDRoadSpeedPart (OPENTTD_VEHICLE_CALL *speed_part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(speed_part);
 	OpenTTDRoadStep (OPENTTD_VEHICLE_CALL *step)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(step);

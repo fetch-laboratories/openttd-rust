@@ -82,7 +82,7 @@ static void TrainWriteStatus(OpenTTDTrainHandle id, uint8_t value) noexcept
 static uint64_t TrainAcceleration(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return static_cast<uint64_t>(v->GetAcceleration());
+	return static_cast<uint64_t>(RustGroundAcceleration(v));
 }
 static uint64_t TrainAccModel(OpenTTDTrainHandle) noexcept
 {

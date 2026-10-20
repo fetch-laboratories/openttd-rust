@@ -79,6 +79,8 @@ inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return reinterp
 template <class T>
 inline uint8_t RustGroundCachedLength(const T *v) noexcept { return v->gcache.cached_veh_length; }
 template <class T>
+inline int32_t RustGroundAcceleration(const T *v) noexcept { return v->GetAcceleration(); }
+template <class T>
 inline bool RustGroundHasArticulated(const T *v) noexcept { return v->HasArticulatedPart(); }
 
 inline const uint8_t *RustVehicleSubtypeAddress(const Vehicle *v) noexcept { return &v->subtype; }
@@ -169,7 +171,7 @@ static OpenTTDGroundLastSpeed OPENTTD_VEHICLE_CALL GroundSvcSetLastSpeed(OpenTTD
 template <class T>
 static int32_t OPENTTD_VEHICLE_CALL GroundSvcAcceleration(OpenTTDVehicle *v) noexcept
 {
-	return T::From(VehicleOf(v))->GetAcceleration();
+	return RustGroundAcceleration(T::From(VehicleOf(v)));
 }
 template <class T>
 static OpenTTDGroundCrash OPENTTD_VEHICLE_CALL GroundSvcCrash(OpenTTDVehicle *v, bool flooded) noexcept

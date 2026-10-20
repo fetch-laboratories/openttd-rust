@@ -1659,6 +1659,10 @@ layouts! {
         direction,
         status,
     };
+    "OpenTTDRoadVisualRead" ["probe"] => crate::road::VisualRead {
+        max,
+        eligible,
+    };
     "OpenTTDRoadSpeedRead" ["probe"] => crate::road::SpeedRead {
         max,
         x,
@@ -1814,7 +1818,9 @@ layouts! {
         tick_front,
         max_depot_penalty,
         process_orders_then_loading,
-        visual_then_speed,
+        visual_read,
+        visual_effect_then_speed,
+        speed_read,
         max_speed_read,
         speed_part,
         step,
