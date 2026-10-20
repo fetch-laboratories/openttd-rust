@@ -114,10 +114,9 @@ const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *s
 	return StationOf(station)->rust_service.get();
 }
 
-OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept
+Town *OpenTTDTownShellByID(uint32_t id) noexcept
 {
-	Town *t = Town::Get(TownID(id));
-	return {.shell = t, .state = GetRustSharedServices().town_owner(reinterpret_cast<const OpenTTDTownHandle *>(t)), .id = static_cast<uint16_t>(id)};
+	return Town::Get(TownID(id));
 }
 
 void OpenTTDAssertTownGenerationContext() noexcept { assert(_game_mode == GM_EDITOR || _generating_world); }
@@ -165,6 +164,17 @@ static const OpenTTDTownHandle *SharedClosestTown(uint32_t tile, uint32_t thresh
 static OpenTTDTownState *SharedTownOwner(const OpenTTDTownHandle *town) noexcept
 {
 	return reinterpret_cast<const Town *>(town)->growth_owner.get();
+}
+
+OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept
+{
+	return SharedTownOwner(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDTownShellByID(id)));
+}
+
+OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept
+{
+	Town *t = OpenTTDTownShellByID(id);
+	return {.shell = t, .state = SharedTownOwner(reinterpret_cast<const OpenTTDTownHandle *>(t)), .id = static_cast<uint16_t>(id)};
 }
 
 static bool Shared_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileIndex{tile}); }

@@ -654,15 +654,8 @@ static void TownGenerateCargoBinomial(Town *t, TownProductionEffect tpe, uint8_t
  * Tile callback function. Periodic tick handler for the tiles of a town.
  * @param tile been asked to do its stuff
  */
-#ifdef WITH_RUST
-static void TileLoop_Town(uint32_t tile_index) noexcept
-#else
 static void TileLoop_Town(TileIndex tile)
-#endif
 {
-#ifdef WITH_RUST
-	TileIndex tile{tile_index};
-#endif
 	HouseID house_id = GetHouseType(tile);
 
 	/* NewHouseTileLoop returns false if Callback 21 succeeded, i.e. the house
@@ -1211,6 +1204,7 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.processing = [](uint32_t tile) noexcept -> uint8_t { return GetHouseProcessingTime(TileIndex{tile}); },
 		.clean_type = [](uint32_t tile) noexcept -> uint16_t { return GetCleanHouseType(TileIndex{tile}); },
 		.town = RustHouseTown,
+		.town_shell = OpenTTDTownShellByID,
 		.loop_spec = RustHouseLoopSpec,
 		.animation_spec = RustHouseAnimationSpec,
 		.new_spec = RustHouseNewSpec,
@@ -1289,7 +1283,7 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.house_extra_flags = [](uint16_t house) noexcept -> uint8_t { return RustTownHouseExtraFlags(HouseSpec::Get(house)); },
 		.house_callbacks = [](uint16_t house) noexcept -> uint16_t { return RustTownHouseCallbacks(HouseSpec::Get(house)); },
 		.road_info = RustTownRoadInfo,
-		.resolve_town = OpenTTDTownResolveByID,
+		.resolve_owner = OpenTTDTownOwnerByID,
 		.stations = RustTownStations,
 		.station_activity_owner = OpenTTDStationActivityOwner,
 		.station_owner = RustTownStationOwner,

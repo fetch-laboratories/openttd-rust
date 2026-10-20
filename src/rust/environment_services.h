@@ -24,6 +24,9 @@ inline uint8_t OpenTTDLandscapeValue() noexcept { return to_underlying(OpenTTDLa
 inline uint8_t OpenTTDHighestSnowLine() noexcept { return HighestSnowLine(); }
 struct OpenTTDTownState;
 struct OpenTTDTownRef;
+struct Town;
+Town *OpenTTDTownShellByID(uint32_t id) noexcept;
+OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept;
 OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept;
 inline uint OpenTTDMapScaleSize(uint n) noexcept { return Map::ScaleBySize(n); }
 inline uint OpenTTDMapScaleLandProportion(uint n) noexcept { return Map::ScaleByLandProportion(n); }

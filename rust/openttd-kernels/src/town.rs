@@ -286,7 +286,7 @@ pub unsafe extern "C" fn openttd_rust_town_world_population(leaves: *const Leave
     let mut total = 0_u32;
     let mut town = (leaves.next_town)(0);
     while town != u32::MAX {
-        let owner = (leaves.resolve_town)(town).state;
+        let owner = (leaves.resolve_owner)(town);
         // SAFETY: Iterator supplied a live shell; copy read ends before next callback.
         total = total.wrapping_add(unsafe { population(owner) });
         town = (leaves.next_town)(town.wrapping_add(1));
@@ -686,7 +686,7 @@ pub struct Leaves {
     pub house_extra_flags: extern "C" fn(u16) -> u8,
     pub house_callbacks: extern "C" fn(u16) -> u16,
     pub road_info: extern "C" fn(u8) -> RoadChoice,
-    pub resolve_town: extern "C" fn(u32) -> TownRef,
+    pub resolve_owner: extern "C" fn(u32) -> *mut State,
     pub stations: extern "C" fn(
         u32,
         u32,
@@ -734,7 +734,7 @@ struct Engine<'a> {
     services: &'a Services,
     map: OnceCell<Map>,
     owner: *mut State,
-    house_town: Option<TownRef>,
+    house_shell: OnceCell<*mut crate::services::TownHandle>,
 }
 impl Engine<'_> {
     fn map(&self) -> Map {
@@ -784,9 +784,7 @@ impl Engine<'_> {
         unsafe { u32::from((*self.owner).simulation.received[at].old_act) }
     }
     fn bind(mut self, town: u32) -> Self {
-        let resolved = (self.leaves.resolve_town)(town);
-        self.owner = resolved.state;
-        self.house_town = Some(resolved);
+        self.owner = (self.leaves.resolve_owner)(town);
         self
     }
     fn modify_flags(&self, clear: u16, set: u16) {
@@ -1009,7 +1007,7 @@ fn engine<'a>(leaves: *const Leaves, services: *const Services) -> Engine<'a> {
         services,
         map: OnceCell::new(),
         owner: std::ptr::null_mut(),
-        house_town: None,
+        house_shell: OnceCell::new(),
     }
 }
 fn round_div(a: i32, b: u32) -> i32 {
@@ -1813,12 +1811,18 @@ impl Engine<'_> {
         }
         self.update_rate(town);
         let size = u32::from((self.leaves.house_flags)(house as u16));
-        // Resolve the shell once for all construction-stage triggers. House
-        // lifecycle callers already supplied the entry's town and map context.
-        let town_ref = self.house_town.unwrap_or_else(|| {
+        // Resolve only the native shell at the first construction trigger; the
+        // entry already resolved its owner. House lifecycle callers also supplied
+        // their shell. No owner reference spans any construction callback.
+        let shell = *self.house_shell.get_or_init(|| {
             // SAFETY: Static house table referenced by the town leaves.
-            (unsafe { &*self.leaves.houses }.town)(tile)
+            (unsafe { &*self.leaves.houses }.town_shell)(town)
         });
+        let town_ref = TownRef {
+            shell,
+            state: self.owner,
+            id: TownId(town as u16),
+        };
         house::stage_changed(self.leaves, self.services, town_ref, tile);
         if size & 24 != 0 {
             house::stage_changed(
@@ -1985,11 +1989,16 @@ impl Engine<'_> {
         }
         (self.leaves.update_max_pass)(town);
     }
-    fn tick_all(&self) {
+    fn tick_all(mut self) {
         if !(self.leaves.editor)() {
             let mut id = (self.leaves.next_town)(0);
             while id != u32::MAX {
-                self.clone().bind(id).tick(id);
+                // Each town starts with an empty map/shell cache, as the previous
+                // per-town engine did, without copying that engine each tick.
+                self.map.take();
+                self.house_shell.take();
+                self.owner = (self.leaves.resolve_owner)(id);
+                self.tick(id);
                 id = (self.leaves.next_town)(id + 1);
             }
         }

@@ -152,7 +152,7 @@ impl<'a> Founding<'a> {
             services: self.shared,
             map,
             owner: town.state,
-            house_town: Some(town),
+            house_shell: std::cell::OnceCell::from(town.shell),
         }
     }
     fn random(&self) -> u32 {

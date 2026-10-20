@@ -69,7 +69,7 @@ struct OpenTTDTownLeaves {
 	uint8_t (*house_extra_flags)(uint16_t) noexcept;
 	uint16_t (*house_callbacks)(uint16_t) noexcept;
 	OpenTTDTownRoadChoice (*road_info)(uint8_t) noexcept;
-	OpenTTDTownRef (*resolve_town)(uint32_t) noexcept;
+	OpenTTDTownState *(*resolve_owner)(uint32_t) noexcept;
 	void (*stations)(uint32_t, uint32_t, void *, void (*)(void *, const OpenTTDStation *, uint32_t)) noexcept;
 	const OpenTTDStationService *(*station_activity_owner)(const OpenTTDStation *) noexcept;
 	uint8_t (*station_owner)(const OpenTTDStation *) noexcept;

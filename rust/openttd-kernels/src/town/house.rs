@@ -218,6 +218,7 @@ pub struct HouseServices {
     pub processing: extern "C" fn(u32) -> u8,
     pub clean_type: extern "C" fn(u32) -> u16,
     pub town: extern "C" fn(u32) -> TownRef,
+    pub town_shell: extern "C" fn(u32) -> *mut TownHandle,
     pub loop_spec: extern "C" fn(u16) -> HouseLoopSpec,
     pub animation_spec: extern "C" fn(u16) -> HouseAnimationSpec,
     pub new_spec: extern "C" fn(u16) -> HouseNewSpec,
@@ -299,7 +300,7 @@ impl House<'_> {
     fn engine(&self, town: TownRef) -> super::Engine<'_> {
         let mut engine = engine(self.l, self.s);
         engine.owner = town.state;
-        engine.house_town = Some(town);
+        let _ = engine.house_shell.set(town.shell);
         engine.map = self.map.clone();
         engine
     }
@@ -1147,7 +1148,7 @@ impl House<'_> {
     fn towns(&self, mut visit: impl FnMut(*mut State)) {
         let mut town = (self.l.next_town)(0);
         while town != u32::MAX {
-            visit((self.l.resolve_town)(town).state);
+            visit((self.l.resolve_owner)(town));
             town = (self.l.next_town)(town.wrapping_add(1));
         }
     }
@@ -1166,7 +1167,7 @@ impl House<'_> {
                 continue;
             }
             let rec = (self.h.cache)(tile);
-            let state = (self.l.resolve_town)(u32::from(rec.town)).state;
+            let state = (self.l.resolve_owner)(u32::from(rec.town));
             let class = (self.l.house_class)(rec.house);
             // SAFETY: Live owner; each access ends before the next spec query.
             unsafe { super::increase_building(state, rec.house, class) };

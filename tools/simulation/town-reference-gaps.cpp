@@ -161,7 +161,8 @@ static Town *ClosestTownFromTile(TileIndex tile, uint32_t threshold)
 static uint64_t Leaf(uint32_t op, uint32_t, uint32_t, uint32_t, uint32_t) noexcept { assert(op == 21); RoadMask(); return 1; }
 /* Rust retains this fixture shell only as an opaque identity; the native FFI
  * tag is global Town, while the reference body uses TownReference::Town. */
-static OpenTTDTownRef ResolveTown(uint32_t id) noexcept { assert(id == world->town.index); return {reinterpret_cast<::Town *>(&world->town), world->owner, static_cast<uint16_t>(id)}; }
+static OpenTTDTownState *ResolveOwner(uint32_t id) noexcept { assert(id == world->town.index); return world->owner; }
+static ::Town *ResolveShell(uint32_t id) noexcept { assert(id == world->town.index); return reinterpret_cast<::Town *>(&world->town); }
 static void Stations(uint32_t, uint32_t, void *, void (*)(void *, const OpenTTDStation *, uint32_t)) noexcept {}
 static uint32_t Random(void *) noexcept { world->draws++; return 0; }
 static uint32_t Industry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
@@ -180,7 +181,11 @@ static bool Candidate()
 	openttd_rust_town_simulation(world->owner)->population = world->town.cache.population;
 	auto leaves = TownProtocolServices();
 	leaves.map_log_x = Read_map_log_x; leaves.road_info = Read_road_info;
-	leaves.resolve_town = ResolveTown; leaves.stations = Stations; leaves.road_mask = RoadTypes; leaves.build_road = BuildRoad; leaves.build_tunnel = BuildTunnel;
+	leaves.resolve_owner = ResolveOwner;
+	auto house_services = *leaves.houses;
+	house_services.town_shell = ResolveShell;
+	leaves.houses = &house_services;
+	leaves.stations = Stations; leaves.road_mask = RoadTypes; leaves.build_road = BuildRoad; leaves.build_tunnel = BuildTunnel;
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
 	services.tile_type = Read_tile_type; services.tile_valid = Read_tile_valid;
 	services.tile_slope = Read_tile_slope; services.tile_z = Read_tile_z; services.road_bits = Read_road_bits;

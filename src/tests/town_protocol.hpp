@@ -37,7 +37,7 @@ static inline uint64_t TownProtocolLeaf(uint32_t op, uint32_t id, uint32_t a, ui
 	}
 	return 0;
 }
-static inline OpenTTDTownRef TownProtocolResolveTown(uint32_t id) noexcept { town_protocol_world->owner_reads++; return {nullptr, town_protocol_world->owner, static_cast<uint16_t>(id)}; }
+static inline OpenTTDTownState *TownProtocolResolveOwner(uint32_t) noexcept { town_protocol_world->owner_reads++; return town_protocol_world->owner; }
 static inline void TownProtocolStations(uint32_t, uint32_t, void *, void (*)(void *, const OpenTTDStation *, uint32_t)) noexcept {}
 static inline const OpenTTDStationService *TownProtocolStationActivityOwner(const OpenTTDStation *) noexcept { return nullptr; }
 static inline uint8_t TownProtocolStationOwner(const OpenTTDStation *) noexcept { return UINT8_MAX; }
@@ -127,6 +127,7 @@ static inline OpenTTDHouseServices TownProtocolHouses()
 	houses.loop_tile = TownProtocol_house_tile;
 	houses.house_type = [](uint32_t) noexcept -> uint16_t { return 2; };
 	houses.completed = [](uint32_t) noexcept { return true; };
+	houses.town_shell = [](uint32_t) noexcept -> Town * { return nullptr; };
 	houses.town = [](uint32_t) noexcept -> OpenTTDTownRef { town_protocol_world->owner_reads++; return {nullptr, town_protocol_world->owner, 0}; };
 	houses.loop_spec = [](uint16_t id) noexcept -> OpenTTDHouseLoopSpec { return {.callbacks = TownProtocol_house_callbacks(id), .flags = TownProtocol_house_flags(id), .population = TownProtocol_house_population(id), .mail = 0, .minimum_life = 0}; };
 	houses.delete_inspect = [](uint32_t) noexcept {};
@@ -160,7 +161,7 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.house_extra_flags = TownProtocol_house_extra_flags,
 		.house_callbacks = TownProtocol_house_callbacks,
 		.road_info = TownProtocol_road_info,
-		.resolve_town = TownProtocolResolveTown,
+		.resolve_owner = TownProtocolResolveOwner,
 		.stations = TownProtocolStations,
 		.station_activity_owner = TownProtocolStationActivityOwner,
 		.station_owner = TownProtocolStationOwner,
