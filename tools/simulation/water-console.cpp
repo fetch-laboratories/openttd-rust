@@ -40,7 +40,6 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 {
 	Backup<CompanyID> company(_current_company, CompanyID(1));
 	Backup<CompanyID> local(_local_company, CompanyID(1));
-	Company::Get(_current_company)->money = 10000000;
 	TileIndex tile = TileXY(40, 40);
 	WaterLand(tile);
 	for (Axis axis : {AXIS_X, AXIS_Y}) {
