@@ -11,21 +11,10 @@
 use super::{
     Builder, ConstructionRequest, ConstructionServices, GenerationServices, Industry,
     IndustryCommandServices, IndustryCost, IndustryCostServices, LayoutHandle, LifecycleServices,
-    Location, Services, ShellHandle, SpecHandle, TilePolicyServices, TileServices, TownHandle,
+    Services, ShellHandle, SpecHandle, TilePolicyServices, TileServices, TownHandle,
 };
-use std::{ffi::c_void, ptr, slice};
+use std::{ffi::c_void, ptr};
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct ClearArea {
-    pub first_tile: u32,
-    pub area: Location,
-}
-#[repr(C)]
-pub struct ClearAreas {
-    pub data: *const ClearArea,
-    pub size: usize,
-}
 #[repr(C)]
 pub struct ConflictKinds {
     pub kinds: [u8; 3],
@@ -117,8 +106,6 @@ pub struct TransactionContext {
     pub costs: *const IndustryCostServices,
     pub transaction: *const TransactionServices,
     pub errors: *const ConstructionErrors,
-    pub clear_areas: unsafe extern "C" fn() -> ClearAreas,
-    pub restore_clear_areas: unsafe extern "C" fn(*const ClearArea, usize),
 }
 struct Engine<'a> {
     context: &'a TransactionContext,
@@ -585,14 +572,9 @@ impl Engine<'_> {
         if !self.allowed(tile, kind, town) {
             return false;
         }
-        let areas = unsafe { (self.context.clear_areas)() };
-        let scratch = if areas.size == 0 {
-            Vec::new()
-        } else {
-            unsafe { slice::from_raw_parts(areas.data, areas.size) }.to_vec()
-        };
+        let scratch = crate::objects::snapshot_areas();
         let free = self.free(tile, layout, kind);
-        unsafe { (self.context.restore_clear_areas)(scratch.as_ptr(), scratch.len()) };
+        crate::objects::restore_areas(scratch);
         if !free {
             return false;
         }

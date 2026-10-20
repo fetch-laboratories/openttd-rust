@@ -719,11 +719,11 @@ CommandCost CmdLandscapeClear(DoCommandFlags flags, TileIndex tile)
 		return CommandCost(STR_ERROR_CLEARING_LIMIT_REACHED);
 	}
 
-	const ClearedObjectArea *coa = FindClearedObject(tile);
+	const size_t coa = FindClearedObjectIndex(tile);
 
 	/* If this tile was the first tile which caused object destruction, always
 	 * pass it on to the tile_type_proc. That way multiple test runs and the exec run stay consistent. */
-	if (coa != nullptr && coa->first_tile != tile) {
+	if (coa != SIZE_MAX && GetClearedObjectArea(coa).first_tile != tile) {
 		/* If this tile belongs to an object which was already cleared via another tile, pretend it has been
 		 * already removed.
 		 * However, we need to check stuff, which is not the same for all object tiles. (e.g. being on water or not) */

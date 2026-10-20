@@ -168,7 +168,7 @@ bool IsCommandAllowedWhilePaused(Commands cmd)
  */
 void CommandHelperBase::InternalDoBefore(bool top_level, bool test)
 {
-	if (top_level) _cleared_object_areas.clear();
+	if (top_level) ClearObjectAreas();
 	if (test) SetTownRatingTestMode(true);
 }
 
@@ -284,7 +284,7 @@ bool CommandHelperBase::InternalExecutePrepTest(CommandFlags cmd_flags, TileInde
 	if (exec_as_spectator) cur_company.Change(COMPANY_SPECTATOR);
 
 	/* Enter test mode. */
-	_cleared_object_areas.clear();
+	ClearObjectAreas();
 	SetTownRatingTestMode(true);
 	BasePersistentStorageArray::SwitchMode(PSM_ENTER_TESTMODE);
 	return true;
@@ -321,7 +321,7 @@ std::tuple<bool, bool, bool> CommandHelperBase::InternalExecuteValidateTestAndPr
 
 	if (!send_net) {
 		/* Prepare for command execution. */
-		_cleared_object_areas.clear();
+		ClearObjectAreas();
 		BasePersistentStorageArray::SwitchMode(PSM_ENTER_COMMAND);
 	}
 

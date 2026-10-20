@@ -393,8 +393,6 @@ void openttd_rust_industry_tile_acceptance(uint32_t tile, uint32_t *acceptance, 
 void openttd_rust_industry_tile_animate(uint32_t tile, const OpenTTDIndustryServices *, const OpenTTDIndustryConstructionServices *, const OpenTTDIndustryTileServices *);
 void openttd_rust_industry_tile_loop(uint32_t tile, uint8_t log_x, struct OpenTTDGroundCall *, const OpenTTDIndustryServices *, const OpenTTDIndustryConstructionServices *, const OpenTTDIndustryLifecycleServices *, const OpenTTDIndustryTileServices *, const OpenTTDIndustryGenerationServices *);
 /** Industry-owned scratch value, matching the actual shared cleared-object entry. */
-typedef struct OpenTTDIndustryClearArea { uint32_t first_tile; OpenTTDIndustryLocation area; } OpenTTDIndustryClearArea;
-typedef struct OpenTTDIndustryClearAreas { const OpenTTDIndustryClearArea *data; size_t size; } OpenTTDIndustryClearAreas;
 typedef struct OpenTTDIndustryAllocation { OpenTTDIndustryShell *shell; OpenTTDIndustry *owner; uint16_t id; } OpenTTDIndustryAllocation;
 typedef struct OpenTTDIndustryConflictKinds { uint8_t kinds[3]; } OpenTTDIndustryConflictKinds;
 typedef struct OpenTTDIndustryConstructionErrors {
@@ -460,8 +458,6 @@ typedef struct OpenTTDIndustryTransactionContext {
 	const OpenTTDIndustryCostServices *costs;
 	const OpenTTDIndustryTransactionServices *transaction;
 	const OpenTTDIndustryConstructionErrors *errors;
-	OpenTTDIndustryClearAreas (*clear_areas)(void) OPENTTD_INDUSTRY_NOEXCEPT;
-	void (*restore_clear_areas)(const OpenTTDIndustryClearArea *, size_t) OPENTTD_INDUSTRY_NOEXCEPT;
 } OpenTTDIndustryTransactionContext;
 void openttd_rust_industry_build(OpenTTDIndustryCost *, uint32_t tile, uint8_t type, uint16_t flags, uint32_t first_layout, bool fund, uint32_t seed, const OpenTTDIndustryTransactionContext *);
 void openttd_rust_industry_create(OpenTTDIndustryCost *, OpenTTDIndustryShell **industry, uint32_t tile, uint8_t type, uint8_t creation_type, const OpenTTDIndustryTransactionContext *);

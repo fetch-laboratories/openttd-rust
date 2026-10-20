@@ -15,6 +15,9 @@
 #include "tilearea_type.h"
 #include "town_type.h"
 #include "timer/timer_game_calendar.h"
+#ifdef WITH_RUST
+#include "rust/object_ffi.h"
+#endif
 
 using ObjectPool = Pool<Object, ObjectID, 64>;
 extern ObjectPool _object_pool;
@@ -45,7 +48,11 @@ struct Object : ObjectPool::PoolItem<&_object_pool> {
 	static inline void IncTypeCount(ObjectType type)
 	{
 		assert(type < NUM_OBJECTS);
+#ifdef WITH_RUST
+		openttd_rust_object_count_increment(type);
+#else
 		Object::counts[type]++;
+#endif
 	}
 
 	/**
@@ -56,7 +63,11 @@ struct Object : ObjectPool::PoolItem<&_object_pool> {
 	static inline void DecTypeCount(ObjectType type)
 	{
 		assert(type < NUM_OBJECTS);
+#ifdef WITH_RUST
+		openttd_rust_object_count_decrement(type);
+#else
 		Object::counts[type]--;
+#endif
 	}
 
 	/**
@@ -67,17 +78,27 @@ struct Object : ObjectPool::PoolItem<&_object_pool> {
 	static inline uint16_t GetTypeCount(ObjectType type)
 	{
 		assert(type < NUM_OBJECTS);
+#ifdef WITH_RUST
+		return openttd_rust_object_count(type);
+#else
 		return Object::counts[type];
+#endif
 	}
 
 	/** Resets object counts. */
 	static inline void ResetTypeCounts()
 	{
+#ifdef WITH_RUST
+		openttd_rust_object_counts_reset();
+#else
 		Object::counts.fill(0);
+#endif
 	}
 
 protected:
+#ifndef WITH_RUST
 	static std::array<uint16_t, NUM_OBJECTS> counts; ///< Number of objects per type ingame
+#endif
 };
 
 /**
@@ -88,7 +109,14 @@ struct ClearedObjectArea {
 	TileArea area;         ///< The area of the object.
 };
 
-ClearedObjectArea *FindClearedObject(TileIndex tile);
+/** Indices survive append by nested commands; no element pointer escapes. */
+size_t FindClearedObjectIndex(TileIndex tile);
+ClearedObjectArea GetClearedObjectArea(size_t index);
+size_t AppendClearedObjectArea(TileIndex first_tile, TileArea area);
+void SetClearedObjectFirstTile(size_t index, TileIndex first_tile);
+void ClearObjectAreas();
+#ifndef WITH_RUST
 extern std::vector<ClearedObjectArea> _cleared_object_areas;
+#endif
 
 #endif /* OBJECT_BASE_H */

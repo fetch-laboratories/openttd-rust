@@ -758,32 +758,13 @@ CommandCost CmdBuildTunnel(DoCommandFlags flags, TileIndex start_tile, Transport
 	if (end_tileh != ComplementSlope(start_tileh)) {
 		/* Mark the tile as already cleared for the terraform command.
 		 * Do this for all tiles (like trees), not only objects. */
-		ClearedObjectArea *coa = FindClearedObject(end_tile);
-		if (coa == nullptr) {
-			coa = &_cleared_object_areas.emplace_back(end_tile, TileArea(end_tile, 1, 1));
-		}
-
-		/* Hide the tile from the terraforming command */
-		TileIndex old_first_tile = coa->first_tile;
-		coa->first_tile = INVALID_TILE;
-
-		/* CMD_TERRAFORM_LAND may append further items to _cleared_object_areas,
-		 * however it will never erase or re-order existing items.
-		 * _cleared_object_areas is a value-type self-resizing vector, therefore appending items
-		 * may result in a backing-store re-allocation, which would invalidate the coa pointer.
-		 * The index of the coa pointer into the _cleared_object_areas vector remains valid,
-		 * and can be used safely after the CMD_TERRAFORM_LAND operation.
-		 * Deliberately clear the coa pointer to avoid leaving dangling pointers which could
-		 * inadvertently be dereferenced.
-		 */
-		ClearedObjectArea *begin = _cleared_object_areas.data();
-		assert(coa >= begin && coa < begin + _cleared_object_areas.size());
-		size_t coa_index = coa - begin;
-		assert(coa_index < UINT_MAX); // more than 2**32 cleared areas would be a bug in itself
-		coa = nullptr;
-
+		size_t coa_index = FindClearedObjectIndex(end_tile);
+		if (coa_index == SIZE_MAX) coa_index = AppendClearedObjectArea(end_tile, TileArea(end_tile, 1, 1));
+		TileIndex old_first_tile = GetClearedObjectArea(coa_index).first_tile;
+		SetClearedObjectFirstTile(coa_index, INVALID_TILE);
+		/* Nested terraform may append; only the index survives that call. */
 		ret = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(flags, end_tile, end_tileh & start_tileh, false));
-		_cleared_object_areas[(uint)coa_index].first_tile = old_first_tile;
+		SetClearedObjectFirstTile(coa_index, old_first_tile);
 		if (ret.Failed()) return CommandCost(STR_ERROR_UNABLE_TO_EXCAVATE_LAND);
 		cost.AddCost(ret.GetCost());
 	}

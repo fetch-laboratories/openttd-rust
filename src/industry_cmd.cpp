@@ -3993,21 +3993,6 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 	};
 	return services;
 }
-/* The borrowed native vector is copied immediately into Rust-owned scratch.
- * No caller retains an element pointer/iterator across the original restoration;
- * restore ends all element lifetimes and consumes the Rust values synchronously. */
-static OpenTTDIndustryClearAreas IndustryClearedAreas() noexcept
-{
-	return {reinterpret_cast<const OpenTTDIndustryClearArea *>(_cleared_object_areas.data()), _cleared_object_areas.size()};
-}
-static void IndustryRestoreClearedAreas(const OpenTTDIndustryClearArea *areas, size_t size) noexcept
-{
-	_cleared_object_areas.clear();
-	for (size_t n = 0; n < size; n++) {
-		const auto &area = areas[n];
-		_cleared_object_areas.emplace_back(TileIndex(area.first_tile), TileArea(TileIndex(area.area.tile), area.area.width, area.area.height));
-	}
-}
 static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 {
 	static const OpenTTDIndustryConstructionErrors errors = {
@@ -4038,8 +4023,6 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 		.costs = &GetIndustryCostServices(),
 		.transaction = &GetIndustryTransactionServices(),
 		.errors = &errors,
-		.clear_areas = IndustryClearedAreas,
-		.restore_clear_areas = IndustryRestoreClearedAreas,
 	};
 }
 #endif

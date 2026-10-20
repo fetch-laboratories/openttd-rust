@@ -539,8 +539,6 @@ pub fn layout(type_id: u16, item: u8) -> usize {
         }
 
         586 => layout!(crate::industry::LocationResult, item; callback, registers),
-        579 => layout!(crate::industry::ClearArea, item; first_tile, area),
-        580 => layout!(crate::industry::ClearAreas, item; data, size),
         581 => layout!(crate::industry::Allocation, item; shell, owner, id),
         582 => layout!(crate::industry::ConflictKinds, item; kinds),
         583 => {
@@ -550,7 +548,7 @@ pub fn layout(type_id: u16, item: u8) -> usize {
             layout!(crate::industry::TransactionServices, item; enabled, layout_count, layout, raw, raw_setting, check_proc, conflicting, multiple_per_town, closest_town, town, population, town_position, industry, highest_snow_line, edge_distance, refinery_limit, tile_height, set_company, temporary_shell, resolve_location, resolve_shape, location_error, shape_error, tile_grf_version, shape_callback, terragenesis, ignore_restrictions, platform, terraform, can_allocate, allocate, prospecting_chance, local_company, prospect_no_place, prospect_unlucky, construction_cost)
         }
         585 => {
-            layout!(crate::industry::TransactionContext, item; map, builder, production, generation, construction, lifecycle, tiles, tile_policy, commands, command_checks, costs, transaction, errors, clear_areas, restore_clear_areas)
+            layout!(crate::industry::TransactionContext, item; map, builder, production, generation, construction, lifecycle, tiles, tile_policy, commands, command_checks, costs, transaction, errors)
         }
         578 => {
             layout!(crate::industry::TilePolicyServices, item; current_company, magic_bulldozer, object_in_way, slopes_refused, close_ai, close_game, destroy, removal_cost, tile_max_z, autoslope_callback, callback_boolean, foundation_cost, landscape_clear)

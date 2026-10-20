@@ -45,7 +45,9 @@
 
 ObjectPool _object_pool("Object");
 INSTANTIATE_POOL_METHODS(Object)
+#ifndef WITH_RUST
 /* static */ std::array<uint16_t, NUM_OBJECTS> Object::counts;
+#endif
 
 /**
  * Get the object associated with a tile.
@@ -521,22 +523,59 @@ static void ReallyClearObjectTile(Object *o)
 	delete o;
 }
 
+#ifndef WITH_RUST
 std::vector<ClearedObjectArea> _cleared_object_areas;
+#endif
 
-/**
- * Find the entry in _cleared_object_areas which occupies a certain tile.
- * @param tile Tile of interest
- * @return Occupying entry, or nullptr if none
- */
-ClearedObjectArea *FindClearedObject(TileIndex tile)
+size_t FindClearedObjectIndex(TileIndex tile)
 {
-	TileArea ta = TileArea(tile, 1, 1);
-
-	for (ClearedObjectArea &coa : _cleared_object_areas) {
-		if (coa.area.Intersects(ta)) return &coa;
+#ifdef WITH_RUST
+	return openttd_rust_object_areas_find(tile.base(), Map::LogX());
+#else
+	TileArea ta(tile, 1, 1);
+	for (size_t i = 0; i < _cleared_object_areas.size(); i++) {
+		if (_cleared_object_areas[i].area.Intersects(ta)) return i;
 	}
+	return SIZE_MAX;
+#endif
+}
 
-	return nullptr;
+ClearedObjectArea GetClearedObjectArea(size_t index)
+{
+#ifdef WITH_RUST
+	auto a = openttd_rust_object_areas_get(index);
+	return {TileIndex(a.first_tile), TileArea(TileIndex(a.tile), a.width, a.height)};
+#else
+	return _cleared_object_areas[index];
+#endif
+}
+
+size_t AppendClearedObjectArea(TileIndex first_tile, TileArea area)
+{
+#ifdef WITH_RUST
+	return openttd_rust_object_areas_append({first_tile.base(), area.tile.base(), area.w, area.h});
+#else
+	_cleared_object_areas.emplace_back(first_tile, area);
+	return _cleared_object_areas.size() - 1;
+#endif
+}
+
+void SetClearedObjectFirstTile(size_t index, TileIndex first_tile)
+{
+#ifdef WITH_RUST
+	openttd_rust_object_areas_set_first(index, first_tile.base());
+#else
+	_cleared_object_areas[index].first_tile = first_tile;
+#endif
+}
+
+void ClearObjectAreas()
+{
+#ifdef WITH_RUST
+	openttd_rust_object_areas_clear();
+#else
+	_cleared_object_areas.clear();
+#endif
 }
 
 static CommandCost ClearTile_Object(TileIndex tile, DoCommandFlags flags)
@@ -611,7 +650,7 @@ static CommandCost ClearTile_Object(TileIndex tile, DoCommandFlags flags)
 			break;
 	}
 
-	_cleared_object_areas.emplace_back(tile, ta);
+	AppendClearedObjectArea(tile, ta);
 
 	if (flags.Test(DoCommandFlag::Execute)) ReallyClearObjectTile(o);
 
