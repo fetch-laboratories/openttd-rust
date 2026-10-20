@@ -4676,7 +4676,7 @@ bool CheckAbi_town_cmd()
 {
 	return AbiServicesComplete(GetRustTownServices()) &&
 		AbiServicesComplete(GetRustTownFoundingServices()) &&
-		AbiServicesComplete(RustTownAuthorityServices()) &&
+		AbiServicesComplete(GetRustTownAuthorityServices()) &&
 		AbiServicesComplete(TownYearlyServices());
 }
 #endif
