@@ -10,11 +10,85 @@
 #include "../3rdparty/catch2/catch.hpp"
 #include "../roadveh.h"
 #include "../vehicle_func.h"
+#include "../openttd.h"
 #include "../rust/vehicle_services.h"
 #include "../rust/vehicle_maintenance_ffi.h"
 #include "../rust/abi_ffi.h"
 #include "../rust/fleet_ffi.h"
 #include "../safeguards.h"
+
+/* Exercise CallVehicleTicks itself, with the original PoolIterator as oracle.
+ * Effect shells avoid unrelated transport post-tick policy. Both traversals run
+ * identical virtual Ticks on real pools; no copied pool metadata drives them. */
+static std::vector<uint32_t> _lifetime_visits;
+static bool _lifetime_mutate;
+static uint32_t _lifetime_growth;
+struct SchedulerLifetimeVehicle final : Vehicle {
+	SchedulerLifetimeVehicle() : Vehicle(VEH_EFFECT) { this->vehstatus.Set(VehState::Hidden); }
+	bool Tick() override
+	{
+		const auto id = this->index.base();
+		_lifetime_visits.push_back(id);
+		if (!_lifetime_mutate) return true;
+		if (id == 0) {
+			delete this; // Also deletes the unvisited chain member at ID 1.
+			CHECK_FALSE(Vehicle::IsValidID(VehicleID(1)));
+			return false; // Original survival assertion requires ID 0 to remain empty.
+		}
+		if (id == 2) {
+			REQUIRE(Vehicle::CanAllocateItem(3));
+			new (VehicleID(0)) SchedulerLifetimeVehicle(); // Behind: waits one tick.
+			delete Vehicle::Get(VehicleID(4));
+			new (VehicleID(4)) SchedulerLifetimeVehicle(); // Ahead: visited this tick.
+			new (VehicleID(3)) SchedulerLifetimeVehicle(); // Inside initialized storage.
+			delete Vehicle::Get(VehicleID(5)); // Hole ahead must be skipped.
+			const auto old_slots = reinterpret_cast<uintptr_t>(_vehicle_pool.data.data());
+			_lifetime_growth = static_cast<uint32_t>(_vehicle_pool.data.capacity());
+			REQUIRE(Vehicle::CanAllocateItem(2));
+			new (VehicleID(_lifetime_growth)) SchedulerLifetimeVehicle();
+			new (VehicleID(_lifetime_growth + 1)) SchedulerLifetimeVehicle();
+			CHECK(reinterpret_cast<uintptr_t>(_vehicle_pool.data.data()) != old_slots);
+		}
+		if (id == _lifetime_growth) {
+			delete this; // Newly discovered shell dies before the next slot is read.
+			return false;
+		}
+		return true;
+	}
+};
+TEST_CASE("Base vehicle scheduler - production deletion, reuse and reallocation order")
+{
+	struct Restore {
+		GameMode mode = _game_mode;
+		~Restore() { _vehicle_pool.CleanPool(); _game_mode = this->mode; }
+	} restore;
+	_game_mode = GM_MENU; // Exclude calendar/economy day work, as in the source.
+	const auto Trace = [](bool production) {
+		_vehicle_pool.CleanPool();
+		_lifetime_visits.clear();
+		_lifetime_growth = UINT32_MAX;
+		REQUIRE(Vehicle::CanAllocateItem(5));
+		auto *head = new (VehicleID(0)) SchedulerLifetimeVehicle();
+		head->SetNext(new (VehicleID(1)) SchedulerLifetimeVehicle());
+		new (VehicleID(2)) SchedulerLifetimeVehicle();
+		new (VehicleID(4)) SchedulerLifetimeVehicle();
+		new (VehicleID(5)) SchedulerLifetimeVehicle();
+		for (bool mutate : {true, false}) {
+			_lifetime_mutate = mutate;
+			if (production) {
+				CallVehicleTicks();
+			} else {
+				for (Vehicle *v : Vehicle::Iterate()) v->Tick();
+			}
+		}
+		CHECK(_vehicle_pool.items == 5);
+		CHECK(_lifetime_visits == std::vector<uint32_t>{0, 2, 3, 4, _lifetime_growth, _lifetime_growth + 1, 0, 2, 3, 4, _lifetime_growth + 1});
+		_vehicle_pool.CleanPool();
+		return _lifetime_visits;
+	};
+	const auto source = Trace(false);
+	CHECK(Trace(true) == source);
+}
 #ifdef WITH_RUST
 TEST_CASE("Base vehicle scheduler - consumed boundary layouts")
 {
