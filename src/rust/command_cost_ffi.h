@@ -10,7 +10,7 @@
 #define RUST_COMMAND_COST_FFI_H
 #include "service_defaults.hpp"
 #include <cstdint>
-#include "../economy_type.h"
+enum ExpensesType : uint8_t;
 
 /* Opaque live native CommandCost. Rust cannot construct, inspect or destroy it.
  * Every pointer denotes C++ stack storage that outlives the synchronous call;
