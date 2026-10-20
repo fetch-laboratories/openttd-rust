@@ -326,6 +326,9 @@ PR or issue records what it showed.
 
 Docs-only changes (only `docs/` or `*.md` files, such as roadmap updates) are
 committed directly to `rust-migration` as a single commit, without a PR.
+Any agent, including a user-directed Claude Code session, commits and pushes
+its docs-only change, skill edits under `docs/skills/` included, as soon as it
+is done, without asking the user first.
 Everything else (code, tools, workflows, saves) goes through a PR that passes
 CI before it merges; never merge a PR past CI with `--admin`.
 
