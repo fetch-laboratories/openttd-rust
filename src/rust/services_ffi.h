@@ -179,6 +179,7 @@ struct OpenTTDSharedServices {
 	TreeGround (*tree_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_ground);
 	const OpenTTDWaterGroundServices *(*water_services)() noexcept OPENTTD_SERVICE_DEFAULT(water_services); ///< Immutable table; getter avoids recursive static initialization.
 };
+extern const OpenTTDSharedServices _rust_shared_services;
 const OpenTTDSharedServices &GetRustSharedServices() noexcept;
 /* Shared reader ABI used by default allocation/layout/oracle tests, not game
  * dispatch. Zero count selects the existing callback backend. No pointer retained. */

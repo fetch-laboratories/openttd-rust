@@ -201,6 +201,7 @@ struct OpenTTDGroundServices {
 	uint8_t (OPENTTD_VEHICLE_CALL *cached_length)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cached_length);
 	bool (OPENTTD_VEHICLE_CALL *has_articulated)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated);
 };
+extern const OpenTTDVehicleServices _rust_vehicle_services;
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept;
 
 struct Vehicle;

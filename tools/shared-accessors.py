@@ -153,13 +153,19 @@ def boundary_hits(files, wrappers, originals):
                 if counts[name] == 1 + declarations[name]:
                     hits[f"orphan | {name}"] = 1
     native = "\n".join(
-        s for p, s in files.items() if Path(p).suffix in {".cpp", ".h", ".hpp"}
+        s
+        for p, s in files.items()
+        if Path(p).suffix in {".cpp", ".h", ".hpp"} and not SHARED.fullmatch(p)
     )
+    # Direct bindings may reuse one definition in the canonical shared layer.
+    # A port-local definition with the same name must still be checked.
     functions = set(re.findall(r"\b(\w+)\s*\([^{};]*\)\s*noexcept\s*\{", native))
     bindings = Counter()
     for table in re.findall(
         r"OpenTTD\w*(?:Services|Leaves)\s+\w+\s*(?:=\s*)?\{(.*?)\n\s*};",
-        native,
+        "\n".join(
+            s for p, s in files.items() if Path(p).suffix in {".cpp", ".h", ".hpp"}
+        ),
         re.S,
     ):
         bindings.update(

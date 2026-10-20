@@ -128,7 +128,7 @@ inline uint8_t RustEngineGRFVersion(const Engine *engine) noexcept
 }
 
 template <class T>
-static OpenTTDGroundMoved OPENTTD_VEHICLE_CALL GroundSvcMoveIncline(OpenTTDVehicle *v, int32_t x, int32_t y, bool new_tile, bool update_delta) noexcept
+inline OpenTTDGroundMoved OPENTTD_VEHICLE_CALL GroundSvcMoveIncline(OpenTTDVehicle *v, int32_t x, int32_t y, bool new_tile, bool update_delta) noexcept
 {
 	T *u = T::From(VehicleOf(v));
 	u->x_pos = x;
@@ -138,7 +138,7 @@ static OpenTTDGroundMoved OPENTTD_VEHICLE_CALL GroundSvcMoveIncline(OpenTTDVehic
 	return {.old_z = old_z, .z = u->z_pos, .cur_speed = RustVehicleSpeed(u), .max_track_speed = u->gcache.cached_max_track_speed};
 }
 template <class T>
-static OpenTTDGroundViewportNext OPENTTD_VEHICLE_CALL GroundSvcUpdateViewportThenNext(OpenTTDVehicle *part, OpenTTDVehicle *front) noexcept
+inline OpenTTDGroundViewportNext OPENTTD_VEHICLE_CALL GroundSvcUpdateViewportThenNext(OpenTTDVehicle *part, OpenTTDVehicle *front) noexcept
 {
 	T *u = T::From(VehicleOf(part));
 	/* UpdateViewport may reenter Rust; no Rust borrow survives this call. */
@@ -148,57 +148,57 @@ static OpenTTDGroundViewportNext OPENTTD_VEHICLE_CALL GroundSvcUpdateViewportThe
 	return {.next = RustVehicle(next), .final_progress = next == nullptr ? RustVehicleProgress(VehicleOf(front)) : uint8_t(0)};
 }
 template <class T>
-static void OPENTTD_VEHICLE_CALL GroundSvcTurn(OpenTTDVehicle *v, uint8_t direction) noexcept
+inline void OPENTTD_VEHICLE_CALL GroundSvcTurn(OpenTTDVehicle *v, uint8_t direction) noexcept
 {
 	T *u = T::From(VehicleOf(v));
 	u->direction = static_cast<Direction>(direction);
 	u->UpdateViewport(true, true);
 }
 template <class T>
-static OpenTTDGroundSpeed OPENTTD_VEHICLE_CALL GroundSvcDoUpdateSpeed(OpenTTDVehicle *v, uint32_t accel, int32_t min_speed, int32_t max_speed) noexcept
+inline OpenTTDGroundSpeed OPENTTD_VEHICLE_CALL GroundSvcDoUpdateSpeed(OpenTTDVehicle *v, uint32_t accel, int32_t min_speed, int32_t max_speed) noexcept
 {
 	T *u = T::From(VehicleOf(v));
 	int distance = u->RustDoUpdateSpeed(accel, min_speed, max_speed);
 	return {.distance = distance, .cur_speed = RustVehicleSpeed(u)};
 }
 template <class T>
-static OpenTTDGroundLastSpeed OPENTTD_VEHICLE_CALL GroundSvcSetLastSpeed(OpenTTDVehicle *v) noexcept
+inline OpenTTDGroundLastSpeed OPENTTD_VEHICLE_CALL GroundSvcSetLastSpeed(OpenTTDVehicle *v) noexcept
 {
 	T *u = T::From(VehicleOf(v));
 	u->SetLastSpeed();
 	return {.status = RustVehicleStatus(u)};
 }
 template <class T>
-static int32_t OPENTTD_VEHICLE_CALL GroundSvcAcceleration(OpenTTDVehicle *v) noexcept
+inline int32_t OPENTTD_VEHICLE_CALL GroundSvcAcceleration(OpenTTDVehicle *v) noexcept
 {
 	return RustGroundAcceleration(T::From(VehicleOf(v)));
 }
 template <class T>
-static OpenTTDGroundCrash OPENTTD_VEHICLE_CALL GroundSvcCrash(OpenTTDVehicle *v, bool flooded) noexcept
+inline OpenTTDGroundCrash OPENTTD_VEHICLE_CALL GroundSvcCrash(OpenTTDVehicle *v, bool flooded) noexcept
 {
 	T *u = T::From(VehicleOf(v));
 	uint victims = u->T::GroundVehicleBase::Crash(flooded);
 	return {.victims = victims, .front = u->IsFrontEngine()};
 }
 template <class T>
-static void OPENTTD_VEHICLE_CALL GroundSvcFirstCargoChanged(OpenTTDVehicle *v) noexcept
+inline void OPENTTD_VEHICLE_CALL GroundSvcFirstCargoChanged(OpenTTDVehicle *v) noexcept
 {
 	RustVehicleFirst(T::From(VehicleOf(v)))->CargoChanged();
 }
 template <class T>
-static void OPENTTD_VEHICLE_CALL GroundSvcGoToDepotService(OpenTTDVehicle *v, uint16_t depot) noexcept
+inline void OPENTTD_VEHICLE_CALL GroundSvcGoToDepotService(OpenTTDVehicle *v, uint16_t depot) noexcept
 {
 	T *u = T::From(VehicleOf(v));
 	SetBit(u->gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS);
 	u->current_order.MakeGoToDepot(DepotID(depot), OrderDepotTypeFlag::Service);
 }
 template <class T>
-static void OPENTTD_VEHICLE_CALL GroundSvcWriteFirstEngine(OpenTTDVehicle *v, uint16_t engine) noexcept
+inline void OPENTTD_VEHICLE_CALL GroundSvcWriteFirstEngine(OpenTTDVehicle *v, uint16_t engine) noexcept
 {
 	T::From(VehicleOf(v))->gcache.first_engine = EngineID(engine);
 }
 template <class T>
-static void OPENTTD_VEHICLE_CALL GroundSvcWriteLength(OpenTTDVehicle *part, uint8_t length, OpenTTDVehicle *front, uint16_t total_length) noexcept
+inline void OPENTTD_VEHICLE_CALL GroundSvcWriteLength(OpenTTDVehicle *part, uint8_t length, OpenTTDVehicle *front, uint16_t total_length) noexcept
 {
 	T *u = T::From(VehicleOf(part));
 	u->gcache.cached_veh_length = length;
@@ -208,7 +208,7 @@ static void OPENTTD_VEHICLE_CALL GroundSvcWriteLength(OpenTTDVehicle *part, uint
 
 template <class T>
 /** The head of `RoadVehUpdateCache`. */
-static void OPENTTD_VEHICLE_CALL GroundSvcCacheBegin(OpenTTDVehicle *v) noexcept
+inline void OPENTTD_VEHICLE_CALL GroundSvcCacheBegin(OpenTTDVehicle *v) noexcept
 {
 	T *u = T::From(VehicleOf(v));
 	u->InvalidateNewGRFCacheOfChain();
@@ -216,37 +216,39 @@ static void OPENTTD_VEHICLE_CALL GroundSvcCacheBegin(OpenTTDVehicle *v) noexcept
 }
 
 template <class T>
-static uint8_t OPENTTD_VEHICLE_CALL GroundSvcCachedLength(OpenTTDVehicle *v) noexcept
+inline uint8_t OPENTTD_VEHICLE_CALL GroundSvcCachedLength(OpenTTDVehicle *v) noexcept
 {
 	return RustGroundCachedLength(T::From(VehicleOf(v)));
 }
 
 template <class T>
-static bool OPENTTD_VEHICLE_CALL GroundSvcHasArticulated(OpenTTDVehicle *v) noexcept
+inline bool OPENTTD_VEHICLE_CALL GroundSvcHasArticulated(OpenTTDVehicle *v) noexcept
 {
 	return RustGroundHasArticulated(T::From(VehicleOf(v)));
 }
 
-/** One GroundVehicle service table per vehicle type. */
+/** One immutable process-wide GroundVehicle table per vehicle type. */
+template <class T>
+inline constinit const OpenTTDGroundServices _rust_ground_services{
+	.cache_begin = GroundSvcCacheBegin<T>,
+	.move_incline = GroundSvcMoveIncline<T>,
+	.update_viewport_then_next = GroundSvcUpdateViewportThenNext<T>,
+	.turn = GroundSvcTurn<T>,
+	.do_update_speed = GroundSvcDoUpdateSpeed<T>,
+	.set_last_speed = GroundSvcSetLastSpeed<T>,
+	.acceleration = GroundSvcAcceleration<T>,
+	.crash = GroundSvcCrash<T>,
+	.first_cargo_changed = GroundSvcFirstCargoChanged<T>,
+	.go_to_depot_service = GroundSvcGoToDepotService<T>,
+	.write_first_engine = GroundSvcWriteFirstEngine<T>,
+	.write_length = GroundSvcWriteLength<T>,
+	.cached_length = GroundSvcCachedLength<T>,
+	.has_articulated = GroundSvcHasArticulated<T>,
+};
+
 template <class T>
 const OpenTTDGroundServices &GetRustGroundServices() noexcept
 {
-	static const OpenTTDGroundServices services{
-		.cache_begin = GroundSvcCacheBegin<T>,
-		.move_incline = GroundSvcMoveIncline<T>,
-		.update_viewport_then_next = GroundSvcUpdateViewportThenNext<T>,
-		.turn = GroundSvcTurn<T>,
-		.do_update_speed = GroundSvcDoUpdateSpeed<T>,
-		.set_last_speed = GroundSvcSetLastSpeed<T>,
-		.acceleration = GroundSvcAcceleration<T>,
-		.crash = GroundSvcCrash<T>,
-		.first_cargo_changed = GroundSvcFirstCargoChanged<T>,
-		.go_to_depot_service = GroundSvcGoToDepotService<T>,
-		.write_first_engine = GroundSvcWriteFirstEngine<T>,
-		.write_length = GroundSvcWriteLength<T>,
-		.cached_length = GroundSvcCachedLength<T>,
-		.has_articulated = GroundSvcHasArticulated<T>,
-	};
-	return services;
+	return _rust_ground_services<T>;
 }
 #endif /* RUST_VEHICLE_SERVICES_H */
