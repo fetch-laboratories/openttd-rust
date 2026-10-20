@@ -225,7 +225,9 @@ pub struct CommandServicesTable {
     pub rail_triggers: extern "C" fn(*mut BaseStation, *const RailSpec),
     pub reserved: extern "C" fn(u32) -> bool,
     pub last_train:
-        unsafe extern "C" fn(*const crate::services::Train) -> *mut crate::services::Train,
+        unsafe extern "C" fn(*mut crate::services::Train) -> *mut crate::services::Train,
+    pub train_handle: extern "C" fn(*const crate::services::Train) -> crate::train::Handle,
+    pub reservation: *const crate::train_reservation::Leaves,
     pub platform_reservation: extern "C" fn(u32, u8, bool),
     pub compatible_tiles: extern "C" fn(u32, u32) -> bool,
     pub custom_rail_index: extern "C" fn(u32) -> u32,
@@ -1202,7 +1204,13 @@ impl Ctx<'_> {
     }
     fn free_reservation(&self, train: *mut crate::services::Train) {
         unsafe {
-            (self.shared.free_train_reservation)(train);
+            let handle = (self.s.train_handle)(train);
+            crate::train_reservation::openttd_rust_train_reservation_free(
+                handle,
+                crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast())),
+                self.s.reservation,
+                std::ptr::null_mut(),
+            );
         }
         self.platform_end(train, false, false);
         let last = unsafe { (self.s.last_train)(train) };
@@ -1211,7 +1219,15 @@ impl Ctx<'_> {
     fn restore_reservation(&self, train: *mut crate::services::Train) {
         self.platform_end(train, false, true);
         unsafe {
-            (self.shared.try_path_reserve)(train, true, true);
+            let handle = (self.s.train_handle)(train);
+            crate::train_reservation::openttd_rust_train_reservation_try_path(
+                handle,
+                crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast())),
+                1,
+                1,
+                self.s.reservation,
+                std::ptr::null_mut(),
+            );
         }
         let last = unsafe { (self.s.last_train)(train) };
         self.platform_end(last, true, true);

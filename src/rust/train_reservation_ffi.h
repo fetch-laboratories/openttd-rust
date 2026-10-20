@@ -11,6 +11,9 @@
 #include <stdint.h>
 #include "train_ffi.h"
 #include "vehicle_ffi.h"
+#include "orders_ffi.h"
+struct OpenTTDTrainReservationLeaves;
+const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept;
 extern "C" {
 struct OpenTTDTrainState;
 struct OpenTTDTrainReservationFollow {
@@ -120,8 +123,8 @@ struct OpenTTDTrainReservationLeaves {
 	uint64_t (*reach_tracks)(void *, OpenTTDTrainHandle, uint8_t) noexcept;
 	uint64_t (*reserved)(void *, OpenTTDTrainHandle, uint32_t) noexcept;
 	uint64_t (*reserve_paths)(void *, OpenTTDTrainHandle) noexcept;
-	void (*restore_order)(void *, OpenTTDTrainHandle) noexcept;
-	void (*save_order)(void *, OpenTTDTrainHandle) noexcept;
+	void (*restore_order)(OpenTTDTrainHandle, const OpenTTDOrderFields *) noexcept;
+	OpenTTDOrderFields (*save_order)(OpenTTDTrainHandle) noexcept;
 	void (*service)(void *, OpenTTDTrainHandle) noexcept;
 	void (*set_depot)(void *, OpenTTDTrainHandle, uint32_t, uint8_t) noexcept;
 	void (*set_depot_dest)(void *, OpenTTDTrainHandle, uint32_t) noexcept;

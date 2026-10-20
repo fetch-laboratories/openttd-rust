@@ -1275,8 +1275,9 @@ rendering/description and the hot tile-loop/animation/vehicle-entry/track/slope
 services. Entries use borrowed typed synchronous tables (ABI 1060-1072), shared
 command checks and native result slots. Services are direct `noexcept` calls;
 no ordinary-play script VM or save/load exception crosses this command boundary.
-Rust ends owner access before reentry and calls owned aircraft/station policy
-directly. Native pool/container allocation follows the original lifetime.
+Rust ends owner access before reentry and calls owned aircraft/station/reservation
+policy directly. Reservation lookahead saves the existing layout-checked order
+value in each Rust stack guard; native pool/container allocation follows the original.
 
 `python3 tools/migration.py simulate stations-commands aircraft-controller-removal
 water-structures-mutate --jobs 2` compares command costs/errors, RNG, STNN/STNS,

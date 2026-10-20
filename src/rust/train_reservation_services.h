@@ -190,17 +190,15 @@ static uint64_t TrainReservationReservePaths(void *, OpenTTDTrainHandle) noexcep
 {
 	return _settings_game.pf.reserve_paths;
 }
-static void TrainReservationRestoreOrder(void *context, OpenTTDTrainHandle id) noexcept
+/* Order has the existing OrderFields layout and trivial copy/destruction. Rust
+ * owns each nested snapshot on its stack; no native context survives a call. */
+static void TrainReservationRestoreOrder(OpenTTDTrainHandle id, const OpenTTDOrderFields *order) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
-	auto *ctx = static_cast<TrainReservationContext *>(context);
-	v->current_order = *ctx->saved_order;
+	static_cast<Train *>(id.shell)->current_order = std::bit_cast<Order>(*order);
 }
-static void TrainReservationSaveOrder(void *context, OpenTTDTrainHandle id) noexcept
+static OpenTTDOrderFields TrainReservationSaveOrder(OpenTTDTrainHandle id) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
-	auto *ctx = static_cast<TrainReservationContext *>(context);
-	ctx->saved_order.emplace(v->current_order);
+	return std::bit_cast<OpenTTDOrderFields>(static_cast<Train *>(id.shell)->current_order);
 }
 static void TrainReservationService(void *, OpenTTDTrainHandle id) noexcept
 {

@@ -12,6 +12,7 @@
 #include "command_services_ffi.h"
 #include "station_service_ffi.h"
 #include "rail_command_ffi.h"
+#include "train_reservation_ffi.h"
 #include "town_ffi.h"
 #include "byte_span_ffi.h"
 #include "vehicle_ffi.h"
@@ -112,6 +113,8 @@ struct OpenTTDStationCommandServices {
 	void (*rail_triggers)(BaseStation *, const StationSpec *) noexcept;
 	bool (*reserved)(uint32_t) noexcept;
 	Train *(*last_train)(Train *) noexcept;
+	OpenTTDTrainHandle (*train_handle)(const Train *) noexcept;
+	const OpenTTDTrainReservationLeaves *reservation;
 	void (*platform_reservation)(uint32_t, uint8_t, bool) noexcept;
 	bool (*compatible_tiles)(uint32_t, uint32_t) noexcept;
 	uint32_t (*custom_rail_index)(uint32_t) noexcept;

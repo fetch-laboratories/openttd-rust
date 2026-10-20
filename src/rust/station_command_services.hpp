@@ -124,6 +124,8 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.rail_triggers = RustStationRailTriggers,
 		.reserved = RustStationReserved,
 		.last_train = RustVehicleLast<Train>,
+		.train_handle = TrainHandle,
+		.reservation = &GetTrainReservationServices(),
 		.platform_reservation = RustStationPlatformReservation,
 		.compatible_tiles = RustCompatibleStationTiles,
 		.custom_rail_index = [](uint32_t tile) noexcept { return GetCustomStationSpecIndex(TileIndex{tile}); },
