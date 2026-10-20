@@ -878,7 +878,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(shared, is_level_crossing);
 		VEHICLE_UNUSED(shared, tunnel_bridge_direction);
 		VEHICLE_UNUSED(shared, bridge_speed);
-		VEHICLE_UNUSED(leaves, visual_then_speed);
+		VEHICLE_UNUSED(leaves, speed_read);
 		VEHICLE_UNUSED(leaves, max_speed_read);
 		VEHICLE_UNUSED(leaves, speed_part);
 		VEHICLE_UNUSED(leaves, step);
@@ -954,7 +954,9 @@ struct RoadAbiProbe {
 	uint32_t dest = 0, nested = 0, destroyed = 0, departures = 0, progress = 255;
 	uint8_t tick = 0, running = 0;
 	uint32_t cache_properties = 0, cargo_ages = 0, length_changes = 0, viewports = 0, turns = 0, next_reads = 0;
-	uint32_t progress_writes = 0;
+	uint32_t progress_writes = 0, visual_stage = 0;
+	uint16_t post_effect_max = 80;
+	bool visual_eligible = true;
 	bool fallback_cache = false, engine_replaced = false;
 	bool hidden_viewport_tail = false;
 	int32_t order_time = 0;
@@ -1111,22 +1113,34 @@ static void RoadBoundary()
 	openttd_rust_road_set(probe.state, 0, 0);
 	openttd_rust_road_set(probe.state, 6, 0);
 
-	/* A front tick reenters the setter from ProcessOrders and the speed getter from ShowVisualEffect. */
+	/* Visual eligibility precedes lookup; effect reentry changes the later speed inputs. */
 	t.leaves.process_orders_then_loading = [](OpenTTDVehicle *u) noexcept -> uint8_t {
 		auto &p = *road_abi_probe;
 		openttd_rust_road_set_dest(u, p.state, 100, p.dest, p.leaves);
 		return 0;
 	};
-	t.leaves.visual_then_speed = [](OpenTTDVehicle *u, bool realistic) noexcept -> OpenTTDRoadSpeedRead {
+	t.vehicle.visual_effect_eligible = [](OpenTTDVehicle *) noexcept { road_abi_probe->visual_stage = 1; return road_abi_probe->visual_eligible; };
+	t.leaves.max_speed_read = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadMaxSpeedRead {
+		CHECK(road_abi_probe->visual_stage++ == 1 && road_abi_probe->visual_eligible);
+		return RoadAbiMaxSpeed();
+	};
+	t.vehicle.show_visual_effect_at_speed = [](OpenTTDVehicle *u, uint32_t max) noexcept {
 		auto &p = *road_abi_probe;
-		CHECK(!realistic);
-		const OpenTTDRoadMaxSpeedRead read = RoadAbiMaxSpeed();
-		CHECK(openttd_rust_road_max_speed(u, p.state, p.entry.acceleration_model, &read, p.leaves) == 80);
+		CHECK(p.visual_stage++ == 2 && max == 80);
+		openttd_rust_road_set(p.state, 3, 1); // Reentry changes overtaking before UpdateSpeed.
+		openttd_rust_road_set_dest(u, p.state, 100, p.dest, p.leaves);
+		p.post_effect_max = 40;
 		++p.nested;
-		return {.max = read, .x = 0, .y = 0, .z = 0, .acceleration = 0, .length = 8, .tram = false};
+	};
+	t.leaves.speed_read = [](OpenTTDVehicle *, bool realistic) noexcept -> OpenTTDRoadSpeedRead {
+		auto &p = *road_abi_probe;
+		CHECK(p.visual_stage == (p.visual_eligible ? 3U : 1U));
+		p.visual_stage = 4;
+		auto read = RoadAbiMaxSpeed(); read.max_track_speed = p.post_effect_max;
+		return {.max = read, .x = 0, .y = 0, .z = 0, .acceleration = realistic ? 256 : 0, .length = 8, .tram = false};
 	};
 	t.ground.do_update_speed = [](OpenTTDVehicle *, uint32_t acceleration, int32_t minimum, int32_t maximum) noexcept -> OpenTTDGroundSpeed {
-		CHECK(acceleration == 256 && minimum == 0 && maximum == 80);
+		CHECK(road_abi_probe->visual_stage == 4 && acceleration == 512 && minimum == (road_abi_probe->entry.acceleration_model == 1 ? 4 : 0) && maximum == 40);
 		return {.distance = 0, .cur_speed = 0};
 	};
 	t.ground.set_last_speed = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundLastSpeed { road_abi_probe->progress = 0; return {.status = 0}; };
@@ -1143,12 +1157,15 @@ static void RoadBoundary()
 	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves));
 	CHECK(probe.nested == 3 && probe.dest == 100 && probe.order_time == 6 && probe.running == 1 && probe.progress == 7 && probe.next_reads == 1 && world.draws == 0);
 
+	/* Skip effects with no lookup; realistic UpdateSpeed still observes post-effect inputs. */
+	probe.visual_eligible = false; probe.entry.acceleration_model = 1;
 	/* Hidden vehicles skip viewport callbacks, then use the direct canonical link. */
 	t.ground.set_last_speed = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundLastSpeed { return {.status = 1}; };
 	t.vehicle.next = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { CHECK(road_abi_probe->viewports == 1); ++road_abi_probe->next_reads; return nullptr; };
 	t.vehicle.progress = [](OpenTTDVehicle *) noexcept -> uint8_t { CHECK(road_abi_probe->viewports == 1 && road_abi_probe->next_reads == 2); return static_cast<uint8_t>(road_abi_probe->progress); };
 	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves));
 	CHECK(probe.viewports == 1 && probe.next_reads == 2 && probe.progress == 7);
+	probe.visual_eligible = true; probe.entry.acceleration_model = 0;
 
 	/* Viewport reentry can add a later visible part. Its progress mutation is
 	 * observed only after that viewport and any hidden final part's Next read. */

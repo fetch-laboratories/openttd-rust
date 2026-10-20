@@ -2892,8 +2892,15 @@ static bool IsBridgeAboveVehicle(const Vehicle *v)
  */
 void Vehicle::ShowVisualEffect() const
 {
+	if (!this->VisualEffectEligible()) return;
+	/* Use the speed as limited by underground and orders. */
+	this->ShowVisualEffectAtSpeed(this->GetCurrentMaxSpeed());
+}
+
+/** Shared assertion and eligibility gate, before any maximum-speed query. */
+bool Vehicle::VisualEffectEligible() const
+{
 	assert(this->IsPrimaryVehicle());
-	bool sound = false;
 
 	/* Do not show any smoke when:
 	 * - vehicle smoke is disabled by the player
@@ -2903,12 +2910,15 @@ void Vehicle::ShowVisualEffect() const
 	if (_settings_game.vehicle.smoke_amount == 0 ||
 			this->vehstatus.Any({VehState::TrainSlowing, VehState::Stopped}) ||
 			this->cur_speed < 2) {
-		return;
+		return false;
 	}
+	return true;
+}
 
-	/* Use the speed as limited by underground and orders. */
-	uint max_speed = this->GetCurrentMaxSpeed();
-
+/** Draw effects after VisualEffectEligible(), using the owner's current speed limit. */
+void Vehicle::ShowVisualEffectAtSpeed(uint max_speed) const
+{
+	bool sound = false;
 	if (this->type == VEH_TRAIN) {
 		const Train *t = Train::From(this);
 		/* For trains, do not show any smoke when:

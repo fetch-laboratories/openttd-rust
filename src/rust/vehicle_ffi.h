@@ -162,6 +162,8 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_VEHICLE_CALL *check_orders_only)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_orders_only);
 	void (OPENTTD_VEHICLE_CALL *write_coordinates)(OpenTTDVehicle *, int32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_coordinates);
 	OpenTTDVehicleAltitudeInputs (OPENTTD_VEHICLE_CALL *altitude_inputs)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(altitude_inputs);
+	bool (OPENTTD_VEHICLE_CALL *visual_effect_eligible)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(visual_effect_eligible);
+	void (OPENTTD_VEHICLE_CALL *show_visual_effect_at_speed)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_visual_effect_at_speed);
 	const OpenTTDVehicleMaintenanceServices *maintenance;
 };
 struct OpenTTDGroundMoved {

@@ -1272,6 +1272,8 @@ layouts! {
         check_orders_only,
         write_coordinates,
         altitude_inputs,
+        visual_effect_eligible,
+        show_visual_effect_at_speed,
         maintenance,
     };
     "OpenTTDGroundMoved" ["probe"] => crate::vehicle::Moved {
@@ -1485,7 +1487,7 @@ layouts! {
         tick_front,
         max_depot_penalty,
         process_orders_then_loading,
-        visual_then_speed,
+        speed_read,
         max_speed_read,
         speed_part,
         step,

@@ -295,6 +295,8 @@ pub struct VehicleServices {
     pub check_orders_only: extern "C" fn(VehicleRef),
     pub write_coordinates: extern "C" fn(VehicleRef, i32, i32, i32),
     pub altitude_inputs: extern "C" fn(VehicleRef) -> AltitudeInputs,
+    pub visual_effect_eligible: extern "C" fn(VehicleRef) -> bool,
+    pub show_visual_effect_at_speed: extern "C" fn(VehicleRef, u32),
     pub maintenance: *const maintenance::Services,
 }
 
