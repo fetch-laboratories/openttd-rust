@@ -10,6 +10,7 @@
 #define RUST_SERVICES_MAP_H
 
 #include "../landscape.h"
+#include "../road.h"
 #include "../road_map.h"
 #include "../roadstop_base.h"
 #include "../station_map.h"
@@ -20,6 +21,7 @@ inline bool MapSvcRoadIsLevelCrossing(uint32_t tile) noexcept { return IsLevelCr
 inline bool Shared_is_road_depot(uint32_t tile) noexcept { return IsRoadDepotTile(TileIndex{tile}); }
 inline uint8_t Shared_road_depot_direction(uint32_t tile) noexcept { return GetRoadDepotDirection(TileIndex{tile}); }
 inline bool Shared_is_drive_through_stop(uint32_t tile) noexcept { return IsDriveThroughStopTile(TileIndex{tile}); }
+inline bool SharedRoadTypeIsTram(RoadType roadtype) noexcept { return RoadTypeIsTram(roadtype); }
 inline RoadStopType SharedRoadStopType(uint32_t tile) noexcept { return GetRoadStopType(TileIndex(tile)); }
 /** Width adapter for the existing road service table; the typed read stays above. */
 inline uint8_t SharedRoadStopTypeByte(uint32_t tile) noexcept { return to_underlying(SharedRoadStopType(tile)); }

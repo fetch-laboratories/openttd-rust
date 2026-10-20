@@ -35,8 +35,8 @@ static OpenTTDRoadVisualRead OPENTTD_VEHICLE_CALL RoadSvcVisualRead(OpenTTDVehic
 }
 static OpenTTDRoadSpeedRead RoadSpeedRead(const RoadVehicle *u, bool realistic) noexcept
 {
-	return {.max = RoadMaxSpeedRead(u), .x = u->x_pos, .y = u->y_pos, .z = u->z_pos, .acceleration = realistic ? u->GetAcceleration() : 0,
-		.length = RustGroundCachedLength(u), .tram = RoadTypeIsTram(u->roadtype)};
+	return {.max = RoadMaxSpeedRead(u), .x = RustVehicleX(u), .y = RustVehicleY(u), .z = RustVehicleZ(u), .acceleration = realistic ? RustGroundAcceleration(u) : 0,
+		.length = RustGroundCachedLength(u), .tram = SharedRoadTypeIsTram(u->roadtype)};
 }
 static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcSpeedRead(OpenTTDVehicle *v, bool realistic) noexcept { return RoadSpeedRead(RoadOf(v), realistic); }
 static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcVisualEffectThenSpeed(OpenTTDVehicle *v, uint32_t speed, bool realistic) noexcept
@@ -56,7 +56,7 @@ static OpenTTDRoadStep OPENTTD_VEHICLE_CALL RoadSvcStep(OpenTTDVehicle *v) noexc
 {
 	const RoadVehicle *u = RoadOf(v);
 	return {.tile = RustVehicleTile(u), .x = u->x_pos, .y = u->y_pos, .z = u->z_pos,
-		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = RoadTypeIsTram(u->roadtype)};
+		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = SharedRoadTypeIsTram(u->roadtype)};
 }
 static OpenTTDRoadCrashPart OPENTTD_VEHICLE_CALL RoadSvcCrashPart(OpenTTDVehicle *v) noexcept
 {
@@ -68,7 +68,7 @@ static OpenTTDRoadPartRead OPENTTD_VEHICLE_CALL RoadSvcPart(OpenTTDVehicle *v) n
 {
 	const RoadVehicle *u = RoadOf(v);
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(u));
-	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = u->z_pos, .tram = RoadTypeIsTram(u->roadtype)};
+	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = u->z_pos, .tram = SharedRoadTypeIsTram(u->roadtype)};
 }
 static OpenTTDRoadLink OPENTTD_VEHICLE_CALL RoadSvcLink(OpenTTDVehicle *v) noexcept
 {
