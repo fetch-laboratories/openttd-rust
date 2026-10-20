@@ -219,6 +219,7 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 }
 TEST_CASE("Road visual eligibility precedes maximum-speed lookup")
 {
+	REQUIRE(Vehicle::CanAllocateItem());
 	auto *road = new RoadVehicle(); road->subtype = 1 << GVSF_FRONT;
 	const auto saved_smoke = _settings_game.vehicle.smoke_amount;
 	for (uint8_t smoke : {0, 1, 2}) for (uint8_t status : {0, 1, 2, 16, 128}) for (uint16_t speed : {0, 1, 2}) {
