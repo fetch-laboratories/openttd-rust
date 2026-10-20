@@ -6,6 +6,7 @@
  */
 
 #include "road_command_services.h"
+#include "services_road.h"
 
 /** @file road_services.h Typed road services; each resolves its vehicle once and reads only what it returns. */
 #include "services_map.h"
@@ -119,11 +120,11 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitTile(uint32_t tile, OpenTTDRoadTile
 static bool OPENTTD_VEHICLE_CALL RoadSvcHasRoad(OpenTTDVehicle *v, uint32_t tile) noexcept { return HasTileAnyRoadType(TileIndex(tile), RoadOf(v)->compatible_roadtypes); }
 static uint32_t OPENTTD_VEHICLE_CALL RoadSvcTrackStatus(OpenTTDVehicle *v, uint32_t tile) noexcept
 {
-	return GetTileTrackStatus(TileIndex(tile), TRANSPORT_ROAD, GetRoadTramType(RoadOf(v)->roadtype));
+	return GetTileTrackStatus(TileIndex(tile), TRANSPORT_ROAD, RustRoadTramType(RoadOf(v)->roadtype));
 }
 static uint8_t OPENTTD_VEHICLE_CALL RoadSvcAnyRoadBits(OpenTTDVehicle *v, uint32_t tile, bool straight_only) noexcept
 {
-	return GetAnyRoadBits(TileIndex(tile), GetRoadTramType(RoadOf(v)->roadtype), straight_only);
+	return GetAnyRoadBits(TileIndex(tile), RustRoadTramType(RoadOf(v)->roadtype), straight_only);
 }
 static bool OPENTTD_VEHICLE_CALL RoadSvcIsStationRoadStop(uint32_t tile) noexcept { return IsStationRoadStop(TileIndex(tile)); }
 static bool OPENTTD_VEHICLE_CALL RoadSvcHasFreeBay(uint32_t tile) noexcept
@@ -136,7 +137,7 @@ static OpenTTDRoadRoadTypes OPENTTD_VEHICLE_CALL RoadSvcMoveTile(OpenTTDVehicle 
 	RoadVehicle *u = RoadOf(v);
 	TileIndex old_tile = u->tile;
 	u->tile = TileIndex(tile);
-	RoadTramType rtt = GetRoadTramType(u->roadtype);
+	RoadTramType rtt = RustRoadTramType(u->roadtype);
 	return {.before = GetRoadType(old_tile, rtt), .after = GetRoadType(u->tile, rtt)};
 }
 static OpenTTDRoadPathRead OPENTTD_VEHICLE_CALL RoadSvcPathRead(OpenTTDVehicle *v) noexcept

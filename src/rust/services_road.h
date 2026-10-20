@@ -10,6 +10,7 @@
 #define RUST_SERVICES_ROAD_H
 #include "../road_map.h"
 #include "../town_map.h"
+inline RoadTramType RustRoadTramType(RoadType rt) noexcept { return GetRoadTramType(rt); }
 inline void RustSetRoadType(TileIndex tile, RoadTramType rtt, RoadType rt) noexcept { SetRoadType(tile, rtt, rt); }
 inline bool RustCrossingReserved(uint32_t tile) noexcept { return HasCrossingReservation(TileIndex{tile}); }
 inline void RustSetCrossingReserved(uint32_t tile, bool reserved) noexcept { SetCrossingReservation(TileIndex{tile}, reserved); }

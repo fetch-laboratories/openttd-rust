@@ -11,6 +11,9 @@
 #include "yapf.hpp"
 #include "yapf_node_road.hpp"
 #include "../../roadstop_base.h"
+#ifdef WITH_RUST
+#include "../../rust/services_road.h"
+#endif
 
 #include "../../safeguards.h"
 
@@ -73,7 +76,7 @@ static OpenTTDRoadYapfFollow RoadFollow(const void *ctx, uint32_t tile, uint8_t 
 static uint16_t RoadTracks(const void *ctx, uint32_t tile, uint8_t status) noexcept
 {
 	const auto *v = static_cast<const RoadVehicle *>(ctx);
-	return status ? TrackStatusToTrackdirBits(GetTileTrackStatus(TileIndex(tile), TRANSPORT_ROAD, GetRoadTramType(v->roadtype))) : GetTrackdirBitsForRoad(TileIndex(tile), GetRoadTramType(v->roadtype));
+	return status ? TrackStatusToTrackdirBits(GetTileTrackStatus(TileIndex(tile), TRANSPORT_ROAD, RustRoadTramType(v->roadtype))) : GetTrackdirBitsForRoad(TileIndex(tile), RustRoadTramType(v->roadtype));
 }
 
 /** No Follow here: GetSpeedLimit reads only old_tile and the live vehicle. */

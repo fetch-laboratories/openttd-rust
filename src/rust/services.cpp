@@ -142,7 +142,7 @@ static void Shared_set_road_bits(uint32_t tile, uint8_t bits, uint8_t rtt) noexc
 static void Shared_set_road_type(uint32_t tile, uint8_t rtt, uint8_t rt) noexcept { RustSetRoadType(TileIndex{tile}, static_cast<RoadTramType>(rtt), static_cast<RoadType>(rt)); }
 static void Shared_set_road_owner(uint32_t tile, uint8_t rtt, uint8_t owner) noexcept { SetRoadOwner(TileIndex{tile}, static_cast<RoadTramType>(rtt), Owner(owner)); }
 static void Shared_set_road_directions(uint32_t tile, uint8_t drd) noexcept { SetDisallowedRoadDirections(TileIndex{tile}, static_cast<DisallowedRoadDirections>(drd)); }
-static RoadTramType Shared_road_tram_type(uint8_t rt) noexcept { return GetRoadTramType(static_cast<RoadType>(rt)); }
+static RoadTramType Shared_road_tram_type(uint8_t rt) noexcept { return RustRoadTramType(static_cast<RoadType>(rt)); }
 static bool Shared_road_powered(uint8_t from, uint8_t to) noexcept { return HasPowerOnRoad(static_cast<RoadType>(from), static_cast<RoadType>(to)); }
 static bool Shared_road_type_valid(uint8_t rt) noexcept { return ValParamRoadType(static_cast<RoadType>(rt)); }
 static bool SharedSafeWaitingPosition(const Train *v, uint32_t tile, uint8_t trackdir, bool forbid_90_deg) noexcept { return IsSafeWaitingPosition(v, TileIndex{tile}, static_cast<Trackdir>(trackdir), true, forbid_90_deg); }
