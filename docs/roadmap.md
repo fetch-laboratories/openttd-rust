@@ -144,10 +144,10 @@ unintegrated component branches. Maintenance (#259, #261, #275) and #156 run in 
 5. **#274 map view**, one shared PR after #255 integrates.
 6. **Commands:**
    - #266/#290 road commands: a deeper audit found indirect rating/finance owner bounces. The selected fix moves complete ordinary command pre/post helpers to shared Rust with native facades/storage services; fresh fixing review, medians and Full follow;
-   - #267/#303 station construction: direct command/reservation repairs pass native verify; final semantic checks, medians and fresh review precede Full;
+   - #267/#303 station construction: direct command/reservation repairs and evidence pass; fresh fixing review removes shared command owner bounces before new medians/Full;
    - #247 town commands, authority and deletion, after #256/#269 integrates;
    - #293 tunnel/bridge construction, removal and ownership, once #247 and #212 settle;
-   - #294 water construction/restoration starts concurrently now: #247 waits on houses; #293 keeps its prerequisites. Leave docking with #267 and flooding with #212, with no draft dependency;
+   - #294 water construction/restoration is in fresh fixing review. Selected support moves complete `DoClearSquare` control to shared Rust and calls water-region invalidation directly through typed owner/leaves context; preserve native map/animation/docking leaves. No draft dependency;
    - #295 object construction, generation and HQ lifecycle, including canonical counts/scratch. Fix indirect command/finance/price bounces, narrow scratch operations and redundant table bindings before reassessing its retirement ratio; no waiver or draft service dependency.
 
    Fresh Astra planning selected #293-#295. Reuse canonical services; none waits on draft wrappers. Object generation's cancellation services need return-before-rethrow handling.
@@ -168,13 +168,13 @@ Fresh owners cover component evidence, the speed fix round and independent revie
 | Issue / PR | Branch, head | State and next step |
 | --- | --- | --- |
 | #256 / #269 | `house-lifecycle-256`, `64f133b059` | Fix, 45-scenario checks and fresh review complete. P2016 1.558 fails ceiling; P1996 1.416 missed the prior #255 guard. Root owns selected #275 follow-up and integration gates. |
-| #266 / #290 | `road-commands-266`, `2a28bc736d` | Full hit an external fetch503. New transitive rating/finance bounces block integration; fresh fixer owns shared pre/post support, then new medians/Full. Prior quiet-repeat result remains pending historical source. |
-| #267 / #303 | `station-commands-267`, `0bac491fb1` | Actual-base named ABI/defaults and completeness-call repairs pass verify/Cargo4. Final 40 scenarios/18 comparisons/medians underway, then fresh review/Full. |
+| #266 / #290 | `road-commands-266`, `2a28bc736d` | Full hit an external fetch503. Fresh fixer owns shared command/finance/price support and clearing boundary adoption, then new medians/Full. Old timings remain historical evidence. |
+| #267 / #303 | `station-commands-267`, `0bac491fb1` | Verify/Cargo4, 40 scenarios and 18 comparisons pass; P2016 1.618 fails. Fresh whole-PR fixer includes shared command and clearing boundaries before new medians/Full. |
 | #306 / #308 | `t3/reuse-ship-search-scratch`, `9675566fb9` | Scratch/profile/native/water checks and fresh review pass. P2016 1.618 fails; root owns speed disposition and remaining gates. |
-| #294 / #317 | `t3/port-water-commands-to-rust`, `260efba613` | Verify/Cargo4, 350 scenarios and 18 comparisons pass. Actual-base ABI/default adoption underway, then affected checks/medians/fresh review. |
-| #295 / #313 | `t3/rust-object-lifecycle-owner`, `fb33d20414` | Whole lifecycle verify/Cargo4 and seven cases pass; tooling324. Trim net glue499 plus tooling below retirement683, then actual-base adoption/medians/review. |
-| #310 / #318 | `road-tables-310`, `9b74be9011` | Native/Cargo4 and 349-scenario corpus pass. P2016 1.594463 fails ceiling; bounded original/candidate profile runs before root disposition. |
-| #311 / #319 | `t3/repair-road-speed-effect-path`, `c3567ec6ae` | Direct visual gate/tail and lean max-speed milestone pushed; Cargo4/audit pass. Native evidence and same-base profiles underway; support/tests73 lines. |
+| #294 / #317 | `t3/port-water-commands-to-rust`, `4afc992b76` | Actual-base ABI/defaults, seven cases and six medians pass. Fresh reviewer fixes ship accessor adoption and shared clearing/region bounces, then new medians/Full. |
+| #295 / #313 | `t3/rust-object-lifecycle-owner`, `fb33d20414` | Whole lifecycle and old-head 356-scenario corpus pass; tooling324. Shared command, scratch and price fixes underway before ratio reassessment/base adoption/medians/review. |
+| #310 / #318 | `road-tables-310`, `9b74be9011` | Native/Cargo4, 349-scenario corpus and clean source review pass. P2016 1.594463 fails; bounded profile retained. Active #311 owns selected speed repair before integration gates. |
+| #311 / #319 | `t3/repair-road-speed-effect-path`, `7db2cb4d4c` | Two-call boundary passes native/Cargo4 and P2000 witness: 12.291 outgoing/tick under13. Final profiles/corpus and six medians pending; initial four-call witness failure retained. |
 | #274 | `measurement-274-map-dd68ca46`, `162843acbd` | Paused measurement branch; #255 prerequisite is settled. Shared map view/attribution remain in the existing work order; no new PR. |
 | #64 / #66 | remote `issue/64-curve-family`, `aab5211801` | #66 closed unmerged; #64 and older paused work stay untouched. |
 
