@@ -28,6 +28,8 @@ struct OpenTTDTrainHandle {
 	OpenTTDTrainState *owner;
 };
 struct Train;
+struct OpenTTDTrainServices;
+const OpenTTDTrainServices &GetTrainServices() noexcept;
 OpenTTDTrainHandle TrainHandle(const Train *) noexcept;
 extern "C" {
 struct OpenTTDTrainConsistChangedRead {

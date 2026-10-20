@@ -115,6 +115,7 @@ struct OpenTTDStationCommandServices {
 	bool (*reserved)(uint32_t) noexcept;
 	Train *(*last_train)(Train *) noexcept;
 	OpenTTDTrainHandle (*train_handle)(const Train *) noexcept;
+	const OpenTTDTrainServices *train;
 	const OpenTTDTrainReservationLeaves *reservation;
 	void (*platform_reservation)(uint32_t, uint8_t, bool) noexcept;
 	bool (*compatible_tiles)(uint32_t, uint32_t) noexcept;
@@ -189,7 +190,6 @@ struct OpenTTDStationCommandServices {
 	OpenTTDAirportLayoutTile (*airport_layout_tile)(const AirportSpec *, uint8_t, uint32_t, size_t) noexcept;
 	uint32_t (*iterator_tile)(TileIterator *) noexcept;
 	void (*iterator_next)(TileIterator *) noexcept;
-	const OpenTTDTownHandle *(*calc_closest_town)(uint32_t, uint32_t) noexcept;
 	uint8_t (*airport_noise)(const AirportSpec *) noexcept;
 	bool (*noise_enabled)() noexcept;
 	uint16_t (*town_max_noise)(const OpenTTDTownHandle *) noexcept;

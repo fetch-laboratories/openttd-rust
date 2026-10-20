@@ -224,6 +224,7 @@ pub struct CommandServicesTable {
     pub last_train:
         unsafe extern "C" fn(*mut crate::services::Train) -> *mut crate::services::Train,
     pub train_handle: extern "C" fn(*const crate::services::Train) -> crate::train::Handle,
+    pub train: *const crate::train::Leaves,
     pub reservation: *const crate::train_reservation::Leaves,
     pub platform_reservation: extern "C" fn(u32, u8, bool),
     pub compatible_tiles: extern "C" fn(u32, u32) -> bool,
@@ -302,7 +303,6 @@ pub struct CommandServicesTable {
     pub airport_layout_tile: extern "C" fn(*const AirportSpec, u8, u32, usize) -> AirportTile,
     pub iterator_tile: extern "C" fn(*mut TileIterator) -> u32,
     pub iterator_next: extern "C" fn(*mut TileIterator),
-    pub calc_closest_town: extern "C" fn(u32, u32) -> *const crate::services::TownHandle,
     pub airport_noise: extern "C" fn(*const AirportSpec) -> u8,
     pub noise_enabled: extern "C" fn() -> bool,
     pub town_max_noise: extern "C" fn(*const crate::services::TownHandle) -> u16,
@@ -1231,10 +1231,19 @@ impl Ctx<'_> {
     }
     fn platform_end(&self, train: *mut crate::services::Train, reverse: bool, reserved: bool) {
         const EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
-        let position = unsafe { (self.rail().train_position)(train) };
-        if self.rail_station(position.tile) {
-            let td = position.trackdir ^ if reverse { 8 } else { 0 };
-            (self.s.platform_reservation)(position.tile, EXIT[usize::from(td)], reserved);
+        let handle = (self.s.train_handle)(train);
+        // SAFETY: The reached platform update always supplies a live train shell.
+        let vehicle = unsafe {
+            crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast()))
+        };
+        let tile = (self.vehicle().tile)(vehicle);
+        if self.rail_station(tile) {
+            // SAFETY: The shell and canonical immutable tables remain live for this call.
+            let trackdir = unsafe {
+                crate::train::openttd_rust_train_trackdir(handle, self.s.train, self.s.shared)
+            };
+            let td = trackdir ^ if reverse { 8 } else { 0 };
+            (self.s.platform_reservation)(tile, EXIT[usize::from(td)], reserved);
         }
     }
     fn flat_rail(
@@ -2961,7 +2970,7 @@ impl Ctx<'_> {
             if x != min_x && x != max_x && y != min_y && y != max_y {
                 continue;
             }
-            let town = (self.s.calc_closest_town)(tile, distance.wrapping_add(1));
+            let town = (self.shared.calc_closest_town)(tile, distance.wrapping_add(1));
             if town.is_null() {
                 continue;
             }

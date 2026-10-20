@@ -72,6 +72,7 @@ struct OpenTTDSharedServices {
 	int32_t (*calendar_date)() noexcept;
 	int32_t (*calendar_year)() noexcept;
 	void (*clear_square)(uint32_t) noexcept;
+	const OpenTTDTownHandle *(*calc_closest_town)(uint32_t, uint32_t) noexcept;
 	const OpenTTDTownHandle *(*closest_town)(uint32_t, uint32_t) noexcept;
 	bool (*company_valid)(uint8_t) noexcept;
 	void *context;
@@ -271,6 +272,7 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.calendar_date = OpenTTDFixtureMapService<int32_t>,
 		.calendar_year = OpenTTDFixtureMapService<int32_t>,
 		.clear_square = OpenTTDFixtureMapService<void, uint32_t>,
+		.calc_closest_town = OpenTTDFixtureMapService<const OpenTTDTownHandle *, uint32_t, uint32_t>,
 		.closest_town = OpenTTDFixtureMapService<const OpenTTDTownHandle *, uint32_t, uint32_t>,
 		.company_valid = OpenTTDFixtureMapService<bool, uint8_t>,
 		.context = context,

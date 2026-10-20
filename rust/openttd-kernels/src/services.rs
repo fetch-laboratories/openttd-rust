@@ -273,6 +273,8 @@ pub struct Services {
     pub calendar_year: extern "C" fn() -> i32,
     /// `DoClearSquare`.
     pub clear_square: extern "C" fn(u32),
+    /// Original native uncached nearest-town spatial lookup.
+    pub calc_closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
     /// Original native nearest-town spatial lookup; the result may be null.
     pub closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
     /// Whether this company pool ID is live.
@@ -555,6 +557,7 @@ pub fn fixture(
         calendar_date: zero_year,
         calendar_year: zero_year,
         clear_square: tile,
+        calc_closest_town: unused_closest_town,
         closest_town: unused_closest_town,
         company_valid: unused_company_valid,
         context,

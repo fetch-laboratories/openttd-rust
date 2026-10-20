@@ -166,6 +166,10 @@ static uint8_t SharedNextCompany(uint8_t from) noexcept
 	return static_cast<uint8_t>(RustNextCompanyID(from));
 }
 
+static const OpenTTDTownHandle *SharedCalcClosestTown(uint32_t tile, uint32_t threshold) noexcept
+{
+	return reinterpret_cast<const OpenTTDTownHandle *>(CalcClosestTownFromTile(TileIndex{tile}, threshold));
+}
 static const OpenTTDTownHandle *SharedClosestTown(uint32_t tile, uint32_t threshold) noexcept
 {
 	return reinterpret_cast<const OpenTTDTownHandle *>(ClosestTownFromTile(TileIndex{tile}, threshold));
@@ -226,6 +230,7 @@ const OpenTTDSharedServices &GetRustSharedServices() noexcept
 		.calendar_date = SharedCalendarDate,
 		.calendar_year = SharedCalendarYear,
 		.clear_square = SharedClearSquare,
+		.calc_closest_town = SharedCalcClosestTown,
 		.closest_town = SharedClosestTown,
 		.company_valid = OpenTTDCompanyIsValid,
 		.context = nullptr,
