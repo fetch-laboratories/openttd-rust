@@ -166,7 +166,7 @@ struct OpenTTDSharedServices {
 	void (*play_sound)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(play_sound);
 	void (*set_fence)(uint32_t, DiagDirection, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_fence);
 	TreeGround (*tree_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_ground);
-	const OpenTTDWaterGroundServices *(*water_services)() noexcept; ///< Immutable table; getter avoids recursive static initialization.
+	const OpenTTDWaterGroundServices *(*water_services)() noexcept OPENTTD_SERVICE_DEFAULT(water_services); ///< Immutable table; getter avoids recursive static initialization.
 };
 const OpenTTDSharedServices &GetRustSharedServices() noexcept;
 /* Shared reader ABI used by default allocation/layout/oracle tests, not game
