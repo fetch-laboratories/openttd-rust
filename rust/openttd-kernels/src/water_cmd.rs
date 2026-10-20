@@ -415,9 +415,9 @@ impl World<'_> {
                 && (self.a.bridge_height_above)(t) < (self.s.tile_max_z)(t) + [2, 3, 2][part]
             {
                 // The original error deliberately uses the MIDDLE tile height.
-                let diff = ((self.s.tile_max_z)(tile) + [2, 3, 2][part]
-                    - (self.a.bridge_height_above)(t))
-                    * 50;
+                let diff = ((self.s.tile_max_z)(tile) + [2, 3, 2][part])
+                    .wrapping_sub((self.a.bridge_height_above)(t))
+                    .wrapping_mul(50);
                 (self.c.error_param)(out, self.a.strings.low_bridge, diff as u64);
                 return;
             }
@@ -777,7 +777,7 @@ entry!(openttd_rust_water_build_above(out:*mut CommandCost,flags:u16,tile:u32,he
         2=>{
             let required=(world.s.tile_max_z)(tile)+[2,3,2][usize::from((world.a.lock_part)(tile).0)];
             if required<=height { (world.c.zero)(out); }
-            else { (world.c.error_param)(out,world.a.strings.low_bridge,((required-height)*50) as u64); }
+            else { (world.c.error_param)(out,world.a.strings.low_bridge,required.wrapping_sub(height).wrapping_mul(50) as u64); }
         },
         _=>world.clear_command(out,tile,flags),
     }

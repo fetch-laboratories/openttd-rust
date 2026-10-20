@@ -84,6 +84,7 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 			WaterState("lock", tile);
 			WaterCost("auto-lock", _tile_type_water_procs.clear_tile_proc(tile, DoCommandFlag::Auto));
 			WaterCost("above-lock", _tile_type_water_procs.check_build_above_proc(lower, {}, AXIS_X, GetTileMaxZ(lower)));
+			WaterCost("above-lock-int-min", _tile_type_water_procs.check_build_above_proc(lower, {}, AXIS_X, INT32_MIN));
 			TileIndex selected = part == LockPart::Middle ? tile : part == LockPart::Lower ? lower : upper;
 			WaterCost("remove-lock-test", Command<CMD_LANDSCAPE_CLEAR>::Do({}, selected));
 			WaterCost("remove-lock", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, selected));
