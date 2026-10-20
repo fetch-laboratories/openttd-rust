@@ -8,6 +8,7 @@
 /** @file station_command_services.hpp Native leaves for station construction. */
 #ifndef RUST_STATION_COMMAND_SERVICES_HPP
 #define RUST_STATION_COMMAND_SERVICES_HPP
+#include "services_map.h"
 
 const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 {
