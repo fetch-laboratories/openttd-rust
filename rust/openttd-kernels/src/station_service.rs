@@ -337,6 +337,21 @@ pub struct TruncatedSource {
     pub(crate) source: u16,
     pub(crate) present: bool,
 }
+/// One `OnTick_Station` slot read; `in_use` is evaluated only for non-waypoints.
+#[repr(C)]
+pub struct TickSlot {
+    pub(crate) pool_size: usize,
+    pub(crate) station: *mut BaseStation,
+    pub(crate) state: *mut Service,
+    pub(crate) waypoint: bool,
+    pub(crate) in_use: bool,
+}
+/// `Station::IsExpected` and the tick counter, read after the small tick.
+#[repr(C)]
+pub struct TickPhase {
+    pub(crate) tick: u64,
+    pub(crate) station: bool,
+}
 #[repr(C)]
 pub struct World {
     pub(crate) station: extern "C" fn(u16) -> LoadingStation,
@@ -351,6 +366,8 @@ pub struct World {
     pub(crate) facilities: extern "C" fn(*mut BaseStation) -> u8,
     pub(crate) in_use: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) is_station: extern "C" fn(*mut BaseStation) -> bool,
+    pub(crate) tick_slot: extern "C" fn(u16) -> TickSlot,
+    pub(crate) tick_phase: extern "C" fn(*mut BaseStation) -> TickPhase,
     pub(crate) local_owner: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) rectangle_empty: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) town_statue: extern "C" fn(*mut BaseStation) -> bool,
@@ -1059,11 +1076,17 @@ pub unsafe extern "C" fn openttd_rust_station_tick(world: *const World, links: *
         return;
     }
     let mut id = 0_usize;
-    while id < (w.pool_size)() {
-        let st = (w.get)(id as u16);
+    loop {
+        // BaseStation::Iterate reloads the pool bound before each slot, so
+        // callback growth and deletion are seen. Station IDs fit in u16.
+        let slot = (w.tick_slot)(id as u16);
+        if id >= slot.pool_size {
+            break;
+        }
+        let st = slot.station;
         if !st.is_null() {
-            let state = (w.owner)(st);
-            if u32::from((w.facilities)(st)) & 128 == 0 && u32::from((w.in_use)(st)) != 0 {
+            let state = slot.state;
+            if !slot.waypoint && slot.in_use {
                 let mut b = unsafe { (*state).fields.delete_ctr }.wrapping_add(1);
                 if b >= 185 {
                     b = 0;
@@ -1077,10 +1100,10 @@ pub unsafe extern "C" fn openttd_rust_station_tick(world: *const World, links: *
                     }
                 }
             }
-            // SAFETY: the immutable shared table outlives this synchronous entry.
-            let tick = (unsafe { &*w.shared }.tick_counter)();
-            let phase = tick.wrapping_add(id as u64);
-            if u32::from((w.is_station)(st)) != 0 && phase % 504 == 0 {
+            // Slot observations end with the small tick; rating may change them.
+            let read = (w.tick_phase)(st);
+            let phase = read.tick.wrapping_add(id as u64);
+            if read.station && phase % 504 == 0 {
                 unsafe {
                     stale(st, w, l);
                 }

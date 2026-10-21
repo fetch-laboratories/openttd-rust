@@ -37,6 +37,7 @@
 #include "services_ffi.h"
 #include "company_services.h"
 #include "environment_services.h"
+#include "services_station.h"
 #include "../company_base.h"
 #include "../company_func.h"
 #include "../autoreplace_func.h"
@@ -429,7 +430,7 @@ static OpenTTDVehicleStationLookup OPENTTD_VEHICLE_CALL VehicleSchedulerNextStat
 	auto it = range.begin();
 	if (it == range.end()) return {};
 	Station *st = *it;
-	return {.station = st->rust_service.get(), .id = st->index.base()};
+	return {.station = RustStationServiceOwner(st), .id = st->index.base()};
 }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerWithLoadingTimer(const OpenTTDVehicleSchedulerTables *tables, void (OPENTTD_VEHICLE_CALL *load)(const OpenTTDVehicleSchedulerTables *)) noexcept
 {

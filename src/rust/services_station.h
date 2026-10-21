@@ -52,7 +52,9 @@ inline void RustStationRadius(uint32_t tile, uint32_t radius, void *context, voi
 	ForAllStationsRadius(TileIndex{tile}, radius, [context, visit](Station *st) { visit(context, st); });
 }
 inline Owner OpenTTDStationOwner(const BaseStation *station) noexcept { return station->owner; }
-const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept;
+/** The canonical Rust state owned by a station shell. */
+template <class T> inline OpenTTDStationService *RustStationServiceOwner(T *station) noexcept { return station->rust_service.get(); }
+inline const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept { return RustStationServiceOwner(StationOf(station)); }
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->facilities.Test(StationFacility::Airport); }
 inline bool RustStationHasHangar(const Station *s) noexcept { return s->airport.HasHangar(); }
 inline bool RustStationReserved(uint32_t tile) noexcept { return HasStationReservation(TileIndex{tile}); }

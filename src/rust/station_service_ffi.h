@@ -130,6 +130,20 @@ struct OpenTTDLoadingStation {
 	OpenTTDBaseStation *base;
 	OpenTTDStationService *state;
 };
+/* OnTick_Station slot entry: live pool bound, nullable shell, canonical owner,
+ * waypoint gate and the IsInUse result it short-circuits. Phase: IsExpected and
+ * the tick counter after the small tick. Both end before any world callback. */
+struct OpenTTDStationTickSlot {
+	size_t pool_size;
+	OpenTTDBaseStation *station;
+	OpenTTDStationService *state;
+	bool waypoint;
+	bool in_use;
+};
+struct OpenTTDStationTickPhase {
+	uint64_t tick;
+	bool station;
+};
 struct OpenTTDStationServices {
 	OpenTTDLoadingStation (*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	uint8_t (*station_owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
@@ -143,6 +157,8 @@ struct OpenTTDStationServices {
 	uint8_t (*facilities)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(facilities);
 	bool (*in_use)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(in_use);
 	bool (*is_station)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
+	OpenTTDStationTickSlot (*tick_slot)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(tick_slot);
+	OpenTTDStationTickPhase (*tick_phase)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(tick_phase);
 	bool (*local_owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(local_owner);
 	bool (*rectangle_empty)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(rectangle_empty);
 	bool (*town_statue)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(town_statue);

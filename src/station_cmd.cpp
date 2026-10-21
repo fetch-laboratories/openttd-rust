@@ -623,7 +623,7 @@ struct RustStationTruncation {
 static const OpenTTDStationServices _rust_station_services = {
 	.station = [](uint16_t id) noexcept -> OpenTTDLoadingStation {
 		Station *st = Station::Get(StationID(id));
-		return {.native = st, .base = st, .state = st->rust_service.get()};
+		return {.native = st, .base = st, .state = RustStationServiceOwner(st)};
 	},
 	.station_owner = RustStationOwnerByte<BaseStation>,
 	.station_exclusivity = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationExclusivity {
@@ -646,9 +646,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.get = [](uint16_t id) noexcept -> OpenTTDBaseStation * {
 		return BaseStation::GetIfValid(StationID(id));
 	},
-	.owner = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationService * {
-		return static_cast<BaseStation *>(handle)->rust_service.get();
-	},
+	.owner = RustStationServiceOwner<BaseStation>,
 	.pool_size = []() noexcept -> size_t {
 		return BaseStation::GetPoolSize();
 	},
@@ -661,6 +659,16 @@ static const OpenTTDStationServices _rust_station_services = {
 	},
 	.is_station = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return Station::IsExpected(static_cast<BaseStation *>(handle));
+	},
+	.tick_slot = [](uint16_t id) noexcept -> OpenTTDStationTickSlot {
+		const size_t size = BaseStation::GetPoolSize();
+		BaseStation *st = BaseStation::GetIfValid(StationID(id));
+		if (st == nullptr) return {.pool_size = size, .station = nullptr, .state = nullptr, .waypoint = false, .in_use = false};
+		const bool waypoint = st->facilities.Test(StationFacility::Waypoint);
+		return {.pool_size = size, .station = st, .state = RustStationServiceOwner(st), .waypoint = waypoint, .in_use = !waypoint && st->IsInUse()};
+	},
+	.tick_phase = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationTickPhase {
+		return {.tick = openttd_orders_tick_counter(), .station = Station::IsExpected(static_cast<BaseStation *>(handle))};
 	},
 	.local_owner = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return static_cast<BaseStation *>(handle)->owner == _local_company;
@@ -4959,7 +4967,7 @@ void ModifyStationRatingAround(TileIndex tile, Owner owner, int amount, uint rad
 	ForAllStationsRadius(tile, radius, [&](Station *st) {
 		if (st->owner == owner && DistanceManhattan(tile, st->xy) <= radius) {
 #ifdef WITH_RUST
-			openttd_rust_station_modify_rating(st->rust_service.get(), amount);
+			openttd_rust_station_modify_rating(RustStationServiceOwner(st), amount);
 #else
 			for (GoodsEntry &ge : st->goods) {
 				if (ge.status.Any()) {

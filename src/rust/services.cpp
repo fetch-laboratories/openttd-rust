@@ -151,10 +151,6 @@ OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept
 }
 
 static uint32_t SharedRandom(void *) noexcept { return Random(); }
-const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept
-{
-	return StationOf(station)->rust_service.get();
-}
 
 Town *OpenTTDTownShellByID(uint32_t id) noexcept
 {

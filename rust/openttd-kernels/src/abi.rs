@@ -2785,6 +2785,17 @@ layouts! {
         base,
         state,
     };
+    "OpenTTDStationTickSlot" ["probe"] => crate::station_service::TickSlot {
+        pool_size,
+        station,
+        state,
+        waypoint,
+        in_use,
+    };
+    "OpenTTDStationTickPhase" ["probe"] => crate::station_service::TickPhase {
+        tick,
+        station,
+    };
     "OpenTTDRatingCounts" ["probe"] => crate::station_service::RatingCounts {
         available,
         destinations,
@@ -2889,6 +2900,8 @@ layouts! {
         facilities,
         in_use,
         is_station,
+        tick_slot,
+        tick_phase,
         local_owner,
         rectangle_empty,
         town_statue,

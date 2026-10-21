@@ -236,10 +236,78 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 	CHECK(indexed->last_vehicle_type == VEH_INVALID);
 	auto *waypoint = new (StationID(19)) Waypoint(TileIndex(3));
 	CHECK(waypoint->delete_ctr == 0);
+	TimerGameTick::counter = 233; // Past the holes, unused 17 gets its big tick.
+	OnTick_Station();
+	CHECK(indexed->delete_ctr == 1);
+	CHECK(waypoint->delete_ctr == 0);
 	indexed->goods[0].last_speed = 255;
 	_station_pool.CleanPool(); // Derived cleanup early returns still drop owners.
 	RebuildStationKdtree();
 	TimerGameTick::counter = old_counter;
 	_game_mode = old_mode;
+}
+
+struct TickShell {
+	std::unique_ptr<OpenTTDStationService, decltype(&openttd_rust_station_service_destroy)> owner{openttd_rust_station_service_new(), openttd_rust_station_service_destroy};
+	bool waypoint = false, in_use = true;
+	int animations = 0, stale = 0;
+	uint8_t &Counter() { return openttd_rust_station_service_fields(this->owner.get())->delete_ctr; }
+};
+static std::vector<TickShell *> _tick_slots;
+static TickShell *_tick_grown;
+static uint64_t _tick_counter;
+static TickShell *Shell(OpenTTDBaseStation *handle) { return reinterpret_cast<TickShell *>(handle); }
+
+TEST_CASE("Station service - tick slots: holes, growth, deletion before animation and fresh predicates")
+{
+	/* Unset services abort, so only the reads this tick sequence makes are allowed. */
+	OpenTTDStationServices w{};
+	OpenTTDStationLinks l{};
+	w.environment.editor = []() noexcept { return false; };
+	w.tick_slot = [](uint16_t id) noexcept -> OpenTTDStationTickSlot {
+		TickShell *s = id < _tick_slots.size() ? _tick_slots[id] : nullptr;
+		if (s == nullptr) return {_tick_slots.size(), nullptr, nullptr, false, false};
+		return {_tick_slots.size(), reinterpret_cast<OpenTTDBaseStation *>(s), s->owner.get(), s->waypoint, !s->waypoint && s->in_use};
+	};
+	w.tick_phase = [](OpenTTDBaseStation *h) noexcept -> OpenTTDStationTickPhase { return {_tick_counter, !Shell(h)->waypoint}; };
+	w.in_use = [](OpenTTDBaseStation *h) noexcept { return Shell(h)->in_use; };
+	w.is_station = [](OpenTTDBaseStation *h) noexcept { return !Shell(h)->waypoint; };
+	w.facilities = [](OpenTTDBaseStation *h) noexcept -> uint8_t { return Shell(h)->waypoint ? 128 : 0; };
+	w.owner = [](OpenTTDBaseStation *h) noexcept { return Shell(h)->owner.get(); };
+	w.cargo_valid = [](uint8_t) noexcept { _tick_slots[2]->waypoint = true; return false; }; // Rating converts slot 2.
+	w.rating_redraw = [](OpenTTDBaseStation *, bool) noexcept {};
+	w.delete_station = [](OpenTTDBaseStation *) noexcept { _tick_slots[0] = nullptr; };
+	w.acceptance_animation = [](OpenTTDBaseStation *h) noexcept { Shell(h)->animations++; };
+	l.automatic_distribution = [](uint8_t) noexcept { return false; };
+	l.graph = [](OpenTTDBaseStation *h, uint8_t) noexcept -> OpenTTDLinkGraph * {
+		/* Stale work retires its station and allocates a higher slot. */
+		Shell(h)->stale++;
+		Shell(h)->in_use = false;
+		_tick_slots.resize(251);
+		_tick_slots[250] = _tick_grown;
+		return nullptr;
+	};
+	TickShell expiring, grown, rated, reused;
+	_tick_grown = &grown;
+	grown.waypoint = true;
+	expiring.Counter() = 7;
+	rated.Counter() = 183;
+	_tick_slots = {&expiring, nullptr, &rated};
+	_tick_counter = 0;
+	openttd_rust_station_tick(&w, &l);
+	CHECK(expiring.stale == 64);
+	CHECK(_tick_slots[0] == nullptr);
+	CHECK(expiring.animations == 0);
+	CHECK(grown.animations == 1);
+	CHECK(grown.Counter() == 0);
+	CHECK(rated.Counter() == 184);
+	_tick_slots[0] = &reused;
+	_tick_counter = 502; // Slot 2 reaches its link-graph phase after rating.
+	openttd_rust_station_tick(&w, &l);
+	CHECK(reused.Counter() == 1);
+	CHECK(rated.Counter() == 0);
+	CHECK(rated.waypoint);
+	CHECK(rated.stale == 0);
+	_tick_slots.clear();
 }
 #endif
