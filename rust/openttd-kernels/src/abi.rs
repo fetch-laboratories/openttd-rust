@@ -592,17 +592,17 @@ layouts! {
         nw,
     };
     "OpenTTDTileOwnerServices" ["landscape"] => crate::tile_owner::Services {
-        shared,
-        industry,
-        rail,
-        station,
-        water,
         clear,
         house,
-        trees,
-        void => void_tile,
-        tunnel_bridge,
+        industry,
         object,
+        rail,
+        shared,
+        station,
+        trees,
+        tunnel_bridge,
+        void => void_tile,
+        water,
     };
     "OpenTTDTileOwnerContext" ["landscape"] => crate::tile_owner::Context {
         services,

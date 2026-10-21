@@ -596,17 +596,17 @@ TrackStatus GetTileTrackStatus(TileIndex tile, TransportType mode, uint sub_mode
 const OpenTTDTileOwnerServices &GetRustTileOwnerServices() noexcept
 {
 	static const OpenTTDTileOwnerServices services{
-		.shared = &GetRustSharedServices(),
-		.industry = &GetIndustryTileServices(),
-		.rail = &GetRustRailCommandServices(),
-		.station = &GetRustStationCommandServices(),
-		.water = &GetRustWaterCommandServices(),
 		.clear = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_clear_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
 		.house = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_town_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
-		.trees = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_trees_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
-		.void_tile = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_void_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
-		.tunnel_bridge = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_tunnelbridge_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.industry = &GetIndustryTileServices(),
 		.object = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_object_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.rail = &GetRustRailCommandServices(),
+		.shared = &GetRustSharedServices(),
+		.station = &GetRustStationCommandServices(),
+		.trees = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_trees_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.tunnel_bridge = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_tunnelbridge_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.void_tile = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_void_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.water = &GetRustWaterCommandServices(),
 	};
 	return services;
 }

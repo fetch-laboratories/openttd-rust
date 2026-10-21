@@ -14,17 +14,17 @@ use crate::{industry, rail_cmd, road_cmd, services, station_cmd, water_cmd};
 
 #[repr(C)]
 pub struct Services {
-    pub shared: *const services::Services,
-    pub industry: *const industry::TileServices,
-    pub rail: *const rail_cmd::RailCommandServices,
-    pub station: *const station_cmd::CommandServicesTable,
-    pub water: *const water_cmd::WaterCommandServices,
     pub clear: extern "C" fn(u32, u8, u8),
     pub house: extern "C" fn(u32, u8, u8),
-    pub trees: extern "C" fn(u32, u8, u8),
-    pub void: extern "C" fn(u32, u8, u8),
-    pub tunnel_bridge: extern "C" fn(u32, u8, u8),
+    pub industry: *const industry::TileServices,
     pub object: extern "C" fn(u32, u8, u8),
+    pub rail: *const rail_cmd::RailCommandServices,
+    pub shared: *const services::Services,
+    pub station: *const station_cmd::CommandServicesTable,
+    pub trees: extern "C" fn(u32, u8, u8),
+    pub tunnel_bridge: extern "C" fn(u32, u8, u8),
+    pub void: extern "C" fn(u32, u8, u8),
+    pub water: *const water_cmd::WaterCommandServices,
 }
 #[repr(C)]
 pub struct Context {

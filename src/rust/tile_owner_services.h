@@ -16,6 +16,12 @@
 struct RustTileOwnerContext {
 	RustRoadCommandContext road;
 	CommandCost error;
-	OpenTTDTileOwnerContext view{&GetRustTileOwnerServices(), RustCommandCost(&road.cost), RustCommandCost(&road.ret), RustCommandCost(&error), &road.view};
+	OpenTTDTileOwnerContext view{
+		.services = &GetRustTileOwnerServices(),
+		.cost = RustCommandCost(&road.cost),
+		.ret = RustCommandCost(&road.ret),
+		.error = RustCommandCost(&error),
+		.road = &road.view,
+	};
 };
 #endif /* RUST_TILE_OWNER_SERVICES_H */

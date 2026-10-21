@@ -13,21 +13,23 @@
 #include "water_command_ffi.h"
 #include "industry_ffi.h"
 struct OpenTTDTileOwnerServices {
-	const OpenTTDSharedServices *shared;
-	const OpenTTDIndustryTileServices *industry;
-	const OpenTTDRailCommandServices *rail;
-	const OpenTTDStationCommandServices *station;
-	const OpenTTDWaterCommandServices *water;
 	void (*clear)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	void (*house)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(house);
-	void (*trees)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(trees);
-	void (*void_tile)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(void_tile);
-	void (*tunnel_bridge)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_bridge);
+	const OpenTTDIndustryTileServices *industry;
 	void (*object)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(object);
+	const OpenTTDRailCommandServices *rail;
+	const OpenTTDSharedServices *shared;
+	const OpenTTDStationCommandServices *station;
+	void (*trees)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(trees);
+	void (*tunnel_bridge)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_bridge);
+	void (*void_tile)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(void_tile);
+	const OpenTTDWaterCommandServices *water;
 };
 struct OpenTTDTileOwnerContext {
 	const OpenTTDTileOwnerServices *services;
-	OpenTTDCommandCost *cost, *ret, *error;
+	OpenTTDCommandCost *cost;
+	OpenTTDCommandCost *ret;
+	OpenTTDCommandCost *error;
 	const OpenTTDRoadCommandContext *road;
 };
 const OpenTTDTileOwnerServices &GetRustTileOwnerServices() noexcept;
