@@ -1239,6 +1239,10 @@ The default `water-commands` scenario compares captured ownership errors,
 restored-tile transfer/bankruptcy, native objects, depot bankruptcy, map state,
 both water balances, docking and RNG. This is shared boundary maintenance, with
 no new subsystem ownership or retirement completion claim.
+The default `ownership-dispatch` scenario builds company-owned road stops and
+waypoints, level crossings, rail stations, an airport, dock, buoy, lock, ship depot,
+tunnels and bridges, and sets industry founder/exclusivity, then runs a merger and a
+bankruptcy through `ChangeOwnershipOfCompanyItems` (#156), with required witnesses.
 
 ### Company finances and economy lifecycle
 
