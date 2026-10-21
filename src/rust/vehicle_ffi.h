@@ -36,10 +36,6 @@ struct OpenTTDVehicleNewPosition {
 	int32_t y;
 	uint32_t tile;
 };
-struct OpenTTDVehicleBreakdown {
-	bool broken;
-	uint8_t status;
-};
 struct OpenTTDVehiclePreviousTile {
 	uint32_t tile;
 	bool exists;
@@ -90,33 +86,27 @@ struct OpenTTDVehicleMaintenanceServices;
 struct OpenTTDVehicleServices {
 	void (*vehicles_on_tile)(uint32_t, void *, void (*)(void *, OpenTTDVehicle *)) noexcept OPENTTD_SERVICE_DEFAULT(vehicles_on_tile);
 	void (OPENTTD_VEHICLE_CALL *write_counters)(OpenTTDVehicle *, uint8_t, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_counters);
-	OpenTTDVehicleBreakdown (OPENTTD_VEHICLE_CALL *handle_breakdown)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(handle_breakdown);
 	bool (OPENTTD_VEHICLE_CALL *waiting_for_unbunching)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_for_unbunching);
 	void (OPENTTD_VEHICLE_CALL *leave_unbunching_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(leave_unbunching_depot);
 	void (OPENTTD_VEHICLE_CALL *reset_depot_unbunching)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reset_depot_unbunching);
-	void (OPENTTD_VEHICLE_CALL *service_in_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(service_in_depot);
-	bool (OPENTTD_VEHICLE_CALL *needs_automatic_servicing)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(needs_automatic_servicing);
 	void (OPENTTD_VEHICLE_CALL *enter_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(enter_depot);
 	void (OPENTTD_VEHICLE_CALL *pathfinding_result)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(pathfinding_result);
 	OpenTTDVehicleNewPosition (OPENTTD_VEHICLE_CALL *new_position)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(new_position);
 	uint8_t (OPENTTD_VEHICLE_CALL *move_then_status)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(move_then_status);
 	void (OPENTTD_VEHICLE_CALL *base_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
 	int32_t (OPENTTD_VEHICLE_CALL *property)(OpenTTDVehicle *, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(property);
-	uint16_t (OPENTTD_VEHICLE_CALL *length_callback)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(length_callback);
-	void (OPENTTD_VEHICLE_CALL *unknown_length_result)(const OpenTTDEngine *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_length_result);
+	uint16_t (OPENTTD_VEHICLE_CALL *callback)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(callback);
+	void (OPENTTD_VEHICLE_CALL *unknown_callback_result)(const OpenTTDEngine *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_callback_result);
 	void (OPENTTD_VEHICLE_CALL *length_changed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(length_changed);
-	bool (OPENTTD_VEHICLE_CALL *play_start_sound)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(play_start_sound);
+	bool (OPENTTD_VEHICLE_CALL *play_vehicle_sound)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(play_vehicle_sound);
 	void (OPENTTD_VEHICLE_CALL *play_sound)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(play_sound);
 	void (OPENTTD_VEHICLE_CALL *large_explosion)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(large_explosion);
 	void (OPENTTD_VEHICLE_CALL *order_free)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_free);
 	void (OPENTTD_VEHICLE_CALL *order_dummy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_dummy);
 	void (OPENTTD_VEHICLE_CALL *start_stop_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(start_stop_dirty);
 	void (OPENTTD_VEHICLE_CALL *destroy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
-	void (OPENTTD_VEHICLE_CALL *age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(age);
-	uint8_t (OPENTTD_VEHICLE_CALL *economy_age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(economy_age);
-	void (OPENTTD_VEHICLE_CALL *decrease_value)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(decrease_value);
-	void (OPENTTD_VEHICLE_CALL *check_breakdown)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_breakdown);
 	uint8_t (OPENTTD_VEHICLE_CALL *check_orders)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_orders);
+	uint8_t (OPENTTD_VEHICLE_CALL *day)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(day);
 	void (OPENTTD_VEHICLE_CALL *write_day)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_day);
 	void (OPENTTD_VEHICLE_CALL *write_direction)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_direction);
 	void (OPENTTD_VEHICLE_CALL *write_speed)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_speed);
@@ -174,7 +164,6 @@ struct OpenTTDVehicleServices {
 	OpenTTDVehicleDayCost (OPENTTD_VEHICLE_CALL *day_cost)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(day_cost);
 	void (OPENTTD_VEHICLE_CALL *make_dummy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(make_dummy);
 	void (OPENTTD_VEHICLE_CALL *loading)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(loading);
-	uint8_t (OPENTTD_VEHICLE_CALL *breakdown)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown);
 	void (OPENTTD_VEHICLE_CALL *check_orders_only)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_orders_only);
 	void (OPENTTD_VEHICLE_CALL *write_coordinates)(OpenTTDVehicle *, int32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_coordinates);
 	OpenTTDVehicleAltitudeInputs (OPENTTD_VEHICLE_CALL *altitude_inputs)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(altitude_inputs);
@@ -226,7 +215,7 @@ const OpenTTDVehicleServices &GetRustVehicleServices() noexcept;
 struct Vehicle;
 struct OpenTTDCargoList;
 struct OpenTTDCargoStorageServices;
-struct OpenTTDStationService;
+struct OpenTTDSharedServices;
 struct OpenTTDStationServices;
 struct OpenTTDStationLoading;
 struct OpenTTDFleetPendingServices;
@@ -252,7 +241,6 @@ struct OpenTTDVehiclePostTick {
 	const uint8_t *status;
 };
 struct OpenTTDVehicleDayCallback { uint8_t day; bool has_engine; };
-struct OpenTTDVehicleStationLookup { OpenTTDStationService *station; uint32_t id; };
 struct OpenTTDVehicleSchedulerTables;
 struct OpenTTDVehicleSchedulerServices {
 	OpenTTDVehiclePoolCursor (OPENTTD_VEHICLE_CALL *pool)() noexcept OPENTTD_SERVICE_DEFAULT(pool);
@@ -262,14 +250,11 @@ struct OpenTTDVehicleSchedulerServices {
 	void (OPENTTD_VEHICLE_CALL *calendar_day)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(calendar_day);
 	void (OPENTTD_VEHICLE_CALL *economy_day)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(economy_day);
 	OpenTTDVehicleDayCallback (OPENTTD_VEHICLE_CALL *day_callback_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(day_callback_read);
-	uint16_t (OPENTTD_VEHICLE_CALL *day_callback)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(day_callback);
 	void (OPENTTD_VEHICLE_CALL *randomise_callback)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(randomise_callback);
 	void (OPENTTD_VEHICLE_CALL *first_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first_dirty);
-	void (OPENTTD_VEHICLE_CALL *unknown_day_callback)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_day_callback);
 	OpenTTDCargoList *(OPENTTD_VEHICLE_CALL *cargo_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_owner);
-	void (OPENTTD_VEHICLE_CALL *running_sound)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(running_sound);
-	void (OPENTTD_VEHICLE_CALL *periodic_sound)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(periodic_sound);
-	OpenTTDVehicleStationLookup (OPENTTD_VEHICLE_CALL *next_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_station);
+	const OpenTTDVehicleServices *vehicle; ///< Base vehicle table, immutable for the process.
+	const OpenTTDSharedServices *shared; ///< Shared table, immutable for the process.
 	void (OPENTTD_VEHICLE_CALL *with_loading_timer)(const OpenTTDVehicleSchedulerTables *, void (OPENTTD_VEHICLE_CALL *)(const OpenTTDVehicleSchedulerTables *)) noexcept OPENTTD_SERVICE_DEFAULT(with_loading_timer);
 	void (OPENTTD_VEHICLE_CALL *reset_accumulators)() noexcept OPENTTD_SERVICE_DEFAULT(reset_accumulators);
 };

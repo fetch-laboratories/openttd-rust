@@ -13,8 +13,8 @@
     clippy::struct_field_names
 )]
 use super::{
-    Breakdown, OT_GOTO_DEPOT, OT_LOADING, OrderType, VS_CRASHED, VS_HIDDEN, VS_STOPPED, VehicleRef,
-    VehicleServices, VehicleType,
+    Breakdown, OT_GOTO_DEPOT, OT_LOADING, OrderType, VS_CRASHED, VS_HIDDEN, VS_STOPPED,
+    VSE_BREAKDOWN, VehicleRef, VehicleServices, VehicleType,
 };
 use crate::{company::OpenTTDCompany, fleet, services};
 
@@ -36,14 +36,6 @@ pub struct Reset {
     pub reliability: u16,
     pub chance: u8,
     pub breakdowns: u8,
-}
-#[repr(C)]
-pub struct ResetWrite {
-    pub economy_date: EconomyDate,
-    pub calendar_date: CalendarDate,
-    pub reliability: u16,
-    pub chance: u8,
-    pub since: u8,
 }
 #[repr(C)]
 pub struct Interval {
@@ -159,7 +151,6 @@ pub struct Services {
     /// Company pointers must name the live owner for the synchronous call.
     pub renewal: unsafe extern "C" fn(VehicleRef, *const OpenTTDCompany) -> Renewal,
     pub reset: extern "C" fn(VehicleRef) -> Reset,
-    pub reset_write: extern "C" fn(VehicleRef, ResetWrite),
     pub has_engine: extern "C" fn(VehicleRef) -> bool,
     pub interval: extern "C" fn(VehicleRef) -> Interval,
     pub engine_reliability: extern "C" fn(VehicleRef) -> u16,
@@ -182,7 +173,6 @@ pub struct Services {
     pub breakdown_countdown: extern "C" fn(VehicleRef) -> BreakdownCountdown,
     pub breakdown_sound_state: extern "C" fn(VehicleRef) -> BreakdownSoundState,
     pub breakdown_delay_write: extern "C" fn(VehicleRef, u8),
-    pub breakdown_sound: extern "C" fn(VehicleRef) -> bool,
     pub smoke_disabled: extern "C" fn(VehicleRef) -> bool,
     pub smoke: extern "C" fn(VehicleRef) -> BreakdownSmoke,
     pub smoke_animation: extern "C" fn(VehicleRef, u16),
@@ -260,18 +250,11 @@ unsafe fn reset<const C: bool>(mut v: VehicleRef, base: &VehicleServices) {
         } else {
             r.chance / 4
         };
-        svc!(
-            C,
-            s.reset_write,
-            v,
-            ResetWrite {
-                economy_date: r.economy_date,
-                calendar_date: r.calendar_date,
-                reliability: r.reliability,
-                chance,
-                since: 0
-            }
-        );
+        svc!(C, base.write_economy_service, v, r.economy_date.0);
+        svc!(C, base.write_calendar_service, v, r.calendar_date.0);
+        svc!(C, base.write_breakdowns, v, 0);
+        svc!(C, base.write_reliability, v, r.reliability);
+        svc!(C, s.chance_write, v, chance);
         branch!(C, VEHICLE_MAINT_RESET);
         let Some(next) = svc!(C, base.next, v) else {
             break;
@@ -488,7 +471,7 @@ unsafe fn breakdown_state<const C: bool>(
                 branch!(C, VEHICLE_MAINT_AIRCRAFT);
             } else {
                 svc!(C, base.write_speed, v, 0);
-                if !svc!(C, s.breakdown_sound, v) {
+                if !svc!(C, base.play_vehicle_sound, v, VSE_BREAKDOWN) {
                     let sound = svc!(C, s.breakdown_sound_state, v);
                     let train_ship =
                         sound.kind == VehicleType::TRAIN || sound.kind == VehicleType::SHIP;
@@ -580,6 +563,16 @@ pub(crate) unsafe fn handle_breakdown<const C: bool>(
 ) -> Breakdown {
     unsafe { breakdown_result::<C>(v, base) }
 }
+/// `HandleBreakdown()`, then the status it leaves, selecting the witness once.
+/// # Safety
+/// As `handle_breakdown`.
+pub(crate) unsafe fn handle_breakdown_status(v: VehicleRef, base: &VehicleServices) -> Breakdown {
+    if crate::witness::enabled() {
+        unsafe { breakdown_result::<true>(v, base) }
+    } else {
+        unsafe { breakdown_result::<false>(v, base) }
+    }
+}
 unsafe fn age<const C: bool>(v: VehicleRef, base: &VehicleServices) {
     let s = unsafe { &*base.maintenance };
     let r = svc!(C, s.age, v);
@@ -660,13 +653,12 @@ unsafe fn decrease_value<const C: bool>(v: VehicleRef, base: &VehicleServices) {
     branch!(C, VEHICLE_MAINT_VALUE);
 }
 macro_rules! entry {
-    ($name:ident, $body:ident) => {
+    ($name:ident, $direct:ident, $body:ident) => {
+        /// Direct Rust call for the vehicle ports; the native facade calls the same.
         /// # Safety
-        /// Native facade supplies a live shell and immutable tables; no borrow
-        /// into canonical storage survives any synchronous callback/reentry.
-        #[unsafe(no_mangle)]
-        pub unsafe extern "C" fn $name(v: VehicleRef, base: *const VehicleServices) {
-            let base = unsafe { &*base };
+        /// A live serialized shell and immutable tables; no borrow into canonical
+        /// storage survives any synchronous callback/reentry.
+        pub(crate) unsafe fn $direct(v: VehicleRef, base: &VehicleServices) {
             if crate::witness::enabled() {
                 crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
                 unsafe { $body::<true>(v, base) }
@@ -674,13 +666,31 @@ macro_rules! entry {
                 unsafe { $body::<false>(v, base) }
             }
         }
+        /// # Safety
+        /// As the direct call; `base` is the live immutable native table.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $name(v: VehicleRef, base: *const VehicleServices) {
+            unsafe { $direct(v, &*base) }
+        }
     };
 }
-entry!(openttd_rust_vehicle_service_depot, reset);
-entry!(openttd_rust_vehicle_age, age);
-entry!(openttd_rust_vehicle_economy_age, economy_age);
-entry!(openttd_rust_vehicle_decrease_value, decrease_value);
-entry!(openttd_rust_vehicle_check_breakdown, check_breakdown);
+entry!(openttd_rust_vehicle_service_depot, service_in_depot, reset);
+entry!(openttd_rust_vehicle_age, age_vehicle, age);
+entry!(
+    openttd_rust_vehicle_economy_age,
+    economy_age_vehicle,
+    economy_age
+);
+entry!(
+    openttd_rust_vehicle_decrease_value,
+    decrease_vehicle_value,
+    decrease_value
+);
+entry!(
+    openttd_rust_vehicle_check_breakdown,
+    check_vehicle_breakdown,
+    check_breakdown
+);
 /// # Safety
 /// As the maintenance entries; company is the live native owner at source scope.
 #[unsafe(no_mangle)]
@@ -697,6 +707,17 @@ pub unsafe extern "C" fn openttd_rust_vehicle_needs_renew(
         unsafe { renew::<false>(v, &*base, company, settings) }
     }
 }
+/// `Vehicle::NeedsServicing`.
+/// # Safety
+/// As the direct maintenance calls.
+pub(crate) unsafe fn needs_servicing(v: VehicleRef, base: &VehicleServices) -> bool {
+    if crate::witness::enabled() {
+        crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
+        unsafe { needs_service::<true>(v, base) }
+    } else {
+        unsafe { needs_service::<false>(v, base) }
+    }
+}
 /// # Safety
 /// As the maintenance entries.
 #[unsafe(no_mangle)]
@@ -704,11 +725,17 @@ pub unsafe extern "C" fn openttd_rust_vehicle_needs_service(
     v: VehicleRef,
     base: *const VehicleServices,
 ) -> bool {
+    unsafe { needs_servicing(v, &*base) }
+}
+/// `Vehicle::NeedsAutomaticServicing`.
+/// # Safety
+/// As the direct maintenance calls.
+pub(crate) unsafe fn needs_automatic_servicing(v: VehicleRef, base: &VehicleServices) -> bool {
     if crate::witness::enabled() {
         crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
-        unsafe { needs_service::<true>(v, &*base) }
+        unsafe { automatic::<true>(v, base) }
     } else {
-        unsafe { needs_service::<false>(v, &*base) }
+        unsafe { automatic::<false>(v, base) }
     }
 }
 /// # Safety
@@ -718,21 +745,12 @@ pub unsafe extern "C" fn openttd_rust_vehicle_needs_automatic_service(
     v: VehicleRef,
     base: *const VehicleServices,
 ) -> bool {
-    if crate::witness::enabled() {
-        crate::witness::hit(crate::witness::VEHICLE_MAINT_ENTRIES);
-        unsafe { automatic::<true>(v, &*base) }
-    } else {
-        unsafe { automatic::<false>(v, &*base) }
-    }
+    unsafe { needs_automatic_servicing(v, &*base) }
 }
+/// `Vehicle::HandleBreakdown`, for callers that consume only its result.
 /// # Safety
-/// As the maintenance entries; this native API consumes only the stop result.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_handle_breakdown(
-    v: VehicleRef,
-    base: *const VehicleServices,
-) -> bool {
-    let base = unsafe { &*base };
+/// As the direct maintenance calls.
+pub(crate) unsafe fn vehicle_handle_breakdown(v: VehicleRef, base: &VehicleServices) -> bool {
     let s = unsafe { &*base.maintenance };
     if crate::witness::enabled() {
         const C: bool = true;
@@ -744,4 +762,13 @@ pub unsafe extern "C" fn openttd_rust_vehicle_handle_breakdown(
         let counter = svc!(C, s.breakdown_counter, v);
         unsafe { breakdown_state::<false>(v, base, counter) }
     }
+}
+/// # Safety
+/// As the maintenance entries; this native API consumes only the stop result.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_vehicle_handle_breakdown(
+    v: VehicleRef,
+    base: *const VehicleServices,
+) -> bool {
+    unsafe { vehicle_handle_breakdown(v, &*base) }
 }

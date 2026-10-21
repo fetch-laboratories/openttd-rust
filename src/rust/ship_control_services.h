@@ -32,7 +32,6 @@ static bool Ship_chain_depot(uint32_t id) noexcept { Ship *v = Ship::Get(Vehicle
 
 static uint32_t Ship_servint(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return Company::Get(v->owner)->settings.vehicle.servint_ships; }
 
-static bool Ship_needs_service(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return v->NeedsAutomaticServicing(); }
 
 static uint32_t Ship_max_distance() noexcept { return RustMaximumDepotPenalty() / YAPF_TILE_LENGTH; }
 
@@ -95,7 +94,6 @@ static void Ship_arrival(uint32_t id, uint32_t station) noexcept
 	Game::NewEvent(new ScriptEventStationFirstVehicle(StationID(station), v->index));
 }
 
-static void Ship_service(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); VehicleServiceInDepot(v); }
 
 static void Ship_leave_unbunch(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->LeaveUnbunchingDepot(); }
 
@@ -127,15 +125,10 @@ static void Ship_depot_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(Ve
 
 static void Ship_ships_dirty() noexcept { SetWindowClassesDirty(WC_SHIPS_LIST); }
 
-static void Ship_details_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); SetWindowDirty(WC_VEHICLE_DETAILS, v->index); }
 
-static void Ship_age(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); AgeVehicle(v); }
 
-static void Ship_economy_age(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); EconomyAgeVehicle(v); }
 
-static void Ship_decrease_value(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); DecreaseVehicleValue(v); }
 
-static void Ship_check_breakdown(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); CheckVehicleBreakdown(v); }
 
 static void Ship_check_orders(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); CheckOrders(v); }
 
@@ -228,7 +221,6 @@ static void Ship_loading(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(i
 
 static void Ship_begin_loading(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->BeginLoading(); }
 
-static bool Ship_breakdown(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return v->HandleBreakdown(); }
 
 static void Ship_viewport(uint32_t id, bool update_delta, bool force) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateViewport(update_delta, force); }
 
@@ -391,7 +383,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.depot_dir = Ship_depot_dir, .depot_axis = Ship_depot_axis,
 		.is_depot = Ship_is_depot, .depot_index = Ship_depot_index,
 		.wait_unbunch = Ship_wait_unbunch, .chain_depot = Ship_chain_depot,
-		.servint = Ship_servint, .needs_service = Ship_needs_service,
+		.servint = Ship_servint,
 		.max_distance = Ship_max_distance, .tile_valid = Ship_tile_valid,
 		.tile_type = Ship_tile_type, .water_class = Ship_water_class,
 		.lock_middle = GetRustSharedServices().water_middle_lock, .lock_dir = Ship_lock_dir,
@@ -405,16 +397,14 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.station_xy = Ship_station_xy, .station_contains = Ship_station_contains,
 		.station_dock = Ship_station_dock, .station_visits = Ship_station_visits,
 		.visit_set = Ship_visit_set, .arrival = Ship_arrival,
-		.service = Ship_service, .leave_unbunch = Ship_leave_unbunch,
+		.leave_unbunch = Ship_leave_unbunch,
 		.path_result = Ship_path_result, .order_free = Ship_order_free,
 		.order_dummy = Ship_order_dummy, .order_depot = Ship_order_depot,
 		.order_leave = Ship_order_leave, .order_increment = Ship_order_increment,
 		.timetable = Ship_timetable, .position = Ship_position,
 		.start_dirty = Ship_start_dirty, .depot_dirty = Ship_depot_dirty,
 		.depot_invalidate = Ship_depot_invalidate, .ships_dirty = Ship_ships_dirty,
-		.details_dirty = Ship_details_dirty, .age = Ship_age,
-		.economy_age = Ship_economy_age, .decrease_value = Ship_decrease_value,
-		.check_breakdown = Ship_check_breakdown, .check_orders = Ship_check_orders,
+		.check_orders = Ship_check_orders,
 		.running_cost = Ship_running_cost, .cost_divisor = Ship_cost_divisor,
 		.pay_running = Ship_pay_running, .speed_default = Ship_speed_default,
 		.age_default = Ship_age_default, .speed_frac = Ship_speed_frac,
@@ -430,7 +420,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.path_clear = Ship_path_clear, .enter_tile = Ship_enter_tile,
 		.enter_depot = Ship_enter_depot, .process_orders = Ship_process_orders,
 		.loading = Ship_loading, .begin_loading = Ship_begin_loading,
-		.breakdown = Ship_breakdown, .viewport = Ship_viewport,
+		.viewport = Ship_viewport,
 		.base_viewport = Ship_base_viewport, .visual = Ship_visual,
 		.cache = Ship_cache, .play_sound = Ship_play_sound,
 		.yapf_reverse = Ship_yapf_reverse, .yapf_choose = Ship_yapf_choose,
@@ -458,7 +448,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.order_max_speed = Ship_order_max_speed, .acceleration = Ship_acceleration,
 		.max_speed = RustIndexedVehicleRead<uint32_t, RustVehicleMaxSpeed>, .state_owner = Ship_state_owner,
 		.patch = Ship_patch, .neighbours = Ship_neighbours,
-		.next_depot = Ship_next_depot
+		.next_depot = Ship_next_depot, .vehicle = &GetRustVehicleServices(),
 	};
 	return leaves;
 }

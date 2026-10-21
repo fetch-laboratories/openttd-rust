@@ -266,6 +266,10 @@ static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
 static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
 static void SharedRebuildTownTree() noexcept { RebuildTownKdtree(); }
 static int64_t SharedFoundationPrice() noexcept { return _price[PR_BUILD_FOUNDATION]; }
+static void SharedForEachStation(void *context, void (*visit)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept
+{
+	for (Station *st : Station::Iterate()) visit(context, RustStation(st), st->rust_service.get(), st->index.base());
+}
 
 constinit const OpenTTDSharedServices _rust_shared_services{
 	.set_tile_owner = RustSetTileOwner,
@@ -392,6 +396,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.set_fence = RustSetFieldFence,
 	.tree_ground = OpenTTDTreeGround,
 	.water_services = []() noexcept { return &GetRustWaterGroundServices(); },
+	.for_each_station = SharedForEachStation,
 };
 
 const OpenTTDSharedServices &GetRustSharedServices() noexcept

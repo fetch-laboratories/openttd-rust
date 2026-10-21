@@ -74,7 +74,6 @@ struct OpenTTDAircraftLeaves {
 	uint16_t (OPENTTD_AIRCRAFT_CALL *engine_speed)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(engine_speed);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *engine_subtype)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(engine_subtype);
 	uint16_t (OPENTTD_AIRCRAFT_CALL *engine_sound)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(engine_sound);
-	uint16_t (OPENTTD_AIRCRAFT_CALL *engine_reliability)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(engine_reliability);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *airport_entry)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_entry);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *direction_towards)(OpenTTDAircraftVehicle, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(direction_towards);
 	int32_t (OPENTTD_AIRCRAFT_CALL *hangar_height)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(hangar_height);
@@ -85,7 +84,6 @@ struct OpenTTDAircraftLeaves {
 	bool (OPENTTD_AIRCRAFT_CALL *chain_in_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(chain_in_depot);
 	bool (OPENTTD_AIRCRAFT_CALL *nearest_depot_order)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(nearest_depot_order);
 	bool (OPENTTD_AIRCRAFT_CALL *part_of_orders)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(part_of_orders);
-	uint16_t (OPENTTD_AIRCRAFT_CALL *next_station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(next_station);
 	OpenTTDAircraftVehicle (OPENTTD_AIRCRAFT_CALL *next_aircraft)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_aircraft);
 	void (OPENTTD_AIRCRAFT_CALL *update_position)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(update_position);
 	void (OPENTTD_AIRCRAFT_CALL *rotor_image)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(rotor_image);
@@ -99,7 +97,6 @@ struct OpenTTDAircraftLeaves {
 	void (OPENTTD_AIRCRAFT_CALL *dirty_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_depot);
 	void (OPENTTD_AIRCRAFT_CALL *first_arrival)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(first_arrival);
 	void (OPENTTD_AIRCRAFT_CALL *begin_loading)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(begin_loading);
-	void (OPENTTD_AIRCRAFT_CALL *dirty_details)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_details);
 	void (OPENTTD_AIRCRAFT_CALL *update_delta)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(update_delta);
 	void (OPENTTD_AIRCRAFT_CALL *touchdown_animation)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(touchdown_animation);
 	void (OPENTTD_AIRCRAFT_CALL *destination_too_far)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(destination_too_far);

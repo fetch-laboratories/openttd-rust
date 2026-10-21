@@ -135,11 +135,6 @@ static uint64_t TrainReservationLineReverse(void *, OpenTTDTrainHandle) noexcept
 {
 	return _settings_game.difficulty.line_reverse_mode;
 }
-static uint64_t TrainReservationNeedsService(void *, OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return v->NeedsServicing();
-}
 static uint64_t TrainReservationOneway(void *, OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
 {
 	TileIndex t(static_cast<uint32_t>(a));

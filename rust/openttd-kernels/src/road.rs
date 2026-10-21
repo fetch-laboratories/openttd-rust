@@ -30,12 +30,13 @@
     clippy::if_not_else
 )]
 use crate::services::{Map, Services};
+use crate::vehicle::maintenance;
 use crate::vehicle::{
-    AM_REALISTIC, CALLBACK_FAILED, GroundServices, HVOT_BUS, HVOT_TRUCK, INVALID_ENGINE,
-    INVALID_PRICE, INVALID_TRACKDIR, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, OT_GOTO_DEPOT,
-    OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING, SND_DEPARTURE_OLD_RV_1, SND_DEPARTURE_OLD_RV_2,
-    VEHICLE_LENGTH, VETS_CANNOT_ENTER, VETS_ENTERED_WORMHOLE, VS_CRASHED, VS_HIDDEN, VS_STOPPED,
-    VehicleRef, VehicleServices, YEAR_TICKS, advance_distance,
+    AM_REALISTIC, CALLBACK_FAILED, CBID_VEHICLE_LENGTH, GroundServices, HVOT_BUS, HVOT_TRUCK,
+    INVALID_ENGINE, INVALID_PRICE, INVALID_TRACKDIR, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE,
+    OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING, SND_DEPARTURE_OLD_RV_1,
+    SND_DEPARTURE_OLD_RV_2, VEHICLE_LENGTH, VETS_CANNOT_ENTER, VETS_ENTERED_WORMHOLE, VS_CRASHED,
+    VS_HIDDEN, VS_STOPPED, VSE_START, VehicleRef, VehicleServices, YEAR_TICKS, advance_distance,
 };
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -906,7 +907,7 @@ impl Game<'_> {
     }
     /// `StartRoadVehSound`.
     fn start_sound(&self, v: Part) {
-        if !service!(self.vs.play_start_sound)(v.v) {
+        if !service!(self.vs.play_vehicle_sound)(v.v, VSE_START) {
             let r = service!(self.l.sound_read)(v.v);
             let mut sound = r.sound;
             if sound == SND_DEPARTURE_OLD_RV_1 && r.tick & 3 == 0 {
@@ -1011,11 +1012,15 @@ impl Game<'_> {
             let mut factor = if engine.grf_version >= 8 {
                 let value = service!(self.vs.property)(u, 0x23, i32::from(CALLBACK_FAILED)) as u16;
                 if value != CALLBACK_FAILED && value >= u16::from(VEHICLE_LENGTH) {
-                    service!(self.vs.unknown_length_result)(engine.engine, value);
+                    service!(self.vs.unknown_callback_result)(
+                        engine.engine,
+                        CBID_VEHICLE_LENGTH,
+                        value,
+                    );
                 }
                 value
             } else {
-                service!(self.vs.length_callback)(u)
+                service!(self.vs.callback)(u, CBID_VEHICLE_LENGTH)
             };
             if factor == CALLBACK_FAILED {
                 factor = u16::from(service!(self.l.shorten_factor)(engine.engine));
@@ -1176,7 +1181,8 @@ impl Game<'_> {
             if self.close(v, d.z, x, y, direction, false).is_some() {
                 return true;
             }
-            service!(self.vs.service_in_depot)(v.v);
+            // SAFETY: Live serialized shell; no owner borrow spans the call.
+            unsafe { maintenance::service_in_depot(v.v, self.vs) };
             service!(self.vs.leave_unbunching_depot)(v.v);
             self.start_sound(v);
             service!(self.vs.write_speed)(v.v, 0);
@@ -1596,9 +1602,9 @@ impl Game<'_> {
             return self.crashed(v, tick);
         }
         let b = if crate::witness::enabled() {
-            unsafe { crate::vehicle::maintenance::handle_breakdown::<true>(v.v, self.vs) }
+            unsafe { maintenance::handle_breakdown::<true>(v.v, self.vs) }
         } else {
-            unsafe { crate::vehicle::maintenance::handle_breakdown::<false>(v.v, self.vs) }
+            unsafe { maintenance::handle_breakdown::<false>(v.v, self.vs) }
         };
         if b.broken {
             return true;
@@ -1736,7 +1742,7 @@ impl Game<'_> {
     /// `CheckIfRoadVehNeedsService`; `IsChainInDepot` and `FindClosestRoadDepot` inline.
     fn service(&self, v: Part) {
         let r = service!(self.l.service_read)(v.v);
-        if r.servint == 0 || !service!(self.vs.needs_automatic_servicing)(v.v) {
+        if r.servint == 0 || !unsafe { maintenance::needs_automatic_servicing(v.v, self.vs) } {
             return;
         }
         let depot_tile = service!(self.l.is_road_depot_tile)(r.tile);
@@ -1759,7 +1765,8 @@ impl Game<'_> {
             }
         }
         if all_in_depot {
-            service!(self.vs.service_in_depot)(v.v);
+            // SAFETY: Live serialized shell; no owner borrow spans the call.
+            unsafe { maintenance::service_in_depot(v.v, self.vs) };
             return;
         }
         let penalty = service!(self.l.max_depot_penalty)();
@@ -1790,13 +1797,15 @@ impl Game<'_> {
     }
     /// `RoadVehicle::OnNewEconomyDay`.
     fn economy_day(&self, v: Part) {
-        let day = service!(self.vs.economy_age)(v.v).wrapping_add(1);
+        // SAFETY: Live serialized shell; no owner borrow spans these calls.
+        unsafe { maintenance::economy_age_vehicle(v.v, self.vs) };
+        let day = service!(self.vs.day)(v.v).wrapping_add(1);
         service!(self.vs.write_day)(v.v, day);
         if day & 7 == 0 {
-            service!(self.vs.decrease_value)(v.v);
+            unsafe { maintenance::decrease_vehicle_value(v.v, self.vs) };
         }
         if v.get(BLOCKED) == 0 {
-            service!(self.vs.check_breakdown)(v.v);
+            unsafe { maintenance::check_vehicle_breakdown(v.v, self.vs) };
         }
         self.service(v);
         let running = service!(self.vs.check_orders)(v.v);
@@ -1964,8 +1973,8 @@ pub unsafe extern "C" fn openttd_rust_road_calendar_day(
 ) {
     crate::witness::hit(crate::witness::ROAD_ENTRIES);
     if front {
-        // SAFETY: Static tables.
-        unsafe { service!((*(*leaves).vehicle).age)(v) };
+        // SAFETY: Static tables and a live serialized shell.
+        unsafe { maintenance::age_vehicle(v, &*(*leaves).vehicle) };
     }
 }
 /// # Safety
