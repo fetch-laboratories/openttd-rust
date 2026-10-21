@@ -117,7 +117,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings.
 2. **Speed guard and passes (#155, #282, #321, AGENTS.md).**
-   - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios; #321 adds fixed measured anchors and separately rolling integrated instruction projections. Root reselected its tooling/test budget to 250 added lines for compatibility identity, build reconfiguration and default regressions; no new controller.
+   - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios; #321 adds their game-loop instruction counts.
    - **Per PR:** no scenario's projected ratio more than 15% above its record and none over its ceiling (1.5x play saves, 1.3x generation). Until #321 lands, use quiet wall medians. Misses get a callgrind fix round.
    - **Speed pass:** after every fourth ownership integration (#255 and #303 count two since the #275 profile), or when a projection comes within 5% of its ceiling (1.425x play, 1.235x generation). The fifteenth steering profile on #275 is the current attribution.
    - **Redraw:** `-r 64x64` leaves the ratios unchanged, so redraw does not inflate them. It does make whole-process counts timing-dependent, which is why only the game loop is counted.
@@ -155,23 +155,22 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Resumed on 2026-10-20 with the fifteenth steering actions. Root on this host:
-gpt-6.1-sol, ultra; implementation and reviews: gpt-6.1-sol, high. Five agents
-own the active tasks below; #290 waits for capacity behind their integration.
+Paused at the user's request on 2026-10-20. Resume with the fifteenth steering
+actions. Root: gpt-6.1-sol, xhigh; implementation and reviews: gpt-6.1-sol, high.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #306 / #308 | `9675566fb9` | Quiet medians recorded; exact-head Full requested. Root integrates when green. |
-| #320 | implementation active | Station fidelity fixes, cleanup and default failing-before witnesses; fresh review follows. |
-| #321 | implementation active | Instruction-count speed guard; 250-line budget. Root coordinates quiet anchors/calibration. |
-| #256 / #269 | `64f133b059` | Agent adopts actual base; scoped conflict review, quiet medians and Full follow. No new fix round. |
-| #294 / #317 | `5410774ff7` | Agent adopts #303's shared layer and deletes parallel copies; scoped review and gates follow. |
-| #295 / #313 | `b64cfe4cf0` | Agent adopts shared layer/ABI and reassesses retirement; fresh review and gates follow. |
+| #306 / #308 | `9675566fb9` | Quiet medians pass (PR comment). Exact-head Full, integrate. |
+| #320 | new | Station fidelity fixes and witnesses. |
+| #321 | new | Instruction-count speed guard (maintenance, about 150 lines). |
+| #256 / #269 | `64f133b059` | Quiet medians pass (PR comment). Base update (12 conflicted files), scoped review, Full. |
+| #294 / #317 | `5410774ff7` | Adopt #303's shared layer (PR comment), conflict review, gates. |
+| #295 / #313 | `b64cfe4cf0` | Adopt the shared layer, reassess retirement, fresh review, gates. |
 | #266 / #290 | `17bc99cd5a` | Remove five bounces, adopt the shared layer, remeasure (PR comment). |
 | #274 | `162843acbd` | Paused measurement branch; map view stays in the work order. |
 | #64 / #66 | `aab5211801` | #66 closed unmerged; #64 and older paused work untouched. |
 
-#68/#69 are unchanged. Each open draft keeps one worktree and branch. Preserve the
+#68/#69 are unchanged. Stopped drafts keep one worktree and branch. Preserve the
 pinned reference. Do not reapply effect helper `73ccd511fb`. Build/test with `--jobs 2`.
 
 ## Out of scope for the near term
