@@ -1752,32 +1752,8 @@ impl Ctx<'_> {
             log_x: u32::from(self.map().log_x),
         }
     }
-    fn nested(&self, out: Cost<'_>, tile: u32, flags: u16, mut body: impl FnMut(u16)) {
-        let size = ((self.shared.map_max_y)() + 1) << self.map().log_x;
-        if tile != 0 && (tile >= size || (!(self.shared.tile_valid)(tile) && flags & (1 << 8) == 0))
-        {
-            return out.error(0xffff);
-        }
-        let top = (self.command.enter)();
-        let guard = NestGuard {
-            services: self.command,
-        };
-        if top || flags & 1 == 0 {
-            crate::command::before(self.command, top, true);
-            body(flags & !1);
-            unsafe {
-                crate::command::after(self.command, self.cost, out.0, flags, top, true);
-            }
-            if !out.ok() || flags & 1 == 0 {
-                return;
-            }
-        }
-        crate::command::before(self.command, top, false);
-        body(flags);
-        unsafe {
-            crate::command::after(self.command, self.cost, out.0, flags, top, false);
-        }
-        drop(guard);
+    fn nested(&self, out: Cost<'_>, tile: u32, flags: u16, body: impl FnMut(u16)) {
+        crate::command::nested(self.command, self.shared, out, tile, flags, body);
     }
     fn remove_rail_area(
         &self,
@@ -2002,14 +1978,6 @@ impl Ctx<'_> {
         if !waypoint && flags & 1 != 0 {
             (self.s.catchment)(st, false);
         }
-    }
-}
-struct NestGuard<'a> {
-    services: &'a CommandServices,
-}
-impl Drop for NestGuard<'_> {
-    fn drop(&mut self) {
-        (self.services.leave)();
     }
 }
 /// # Safety
