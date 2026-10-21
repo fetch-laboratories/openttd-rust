@@ -38,7 +38,8 @@ def export(destination, migration):
                 for object_file in folder.glob("*.o"):
                     object_file.unlink()
                 strip_debug(executable)
-            strip_debug(binary)
+            if not (runtime / "instruction-build.json").is_file():
+                strip_debug(binary)
 
 
 def prepared_adapter(kind, role, builds, folder):

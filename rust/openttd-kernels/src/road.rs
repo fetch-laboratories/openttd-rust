@@ -177,20 +177,15 @@ pub struct Entry {
     pub map_log_x: u8,
 }
 
-/// The tick/front gate; non-front entries consume only these fields.
+/// Tick/front values and named read-only native places. Nonfront places are null.
 #[repr(C)]
 pub struct TickRead {
     pub tick: u8,
     pub front: bool,
-}
-/// Counters/status and movement settings consumed only after the Rust front gate.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct FrontTickRead {
     pub movement: Entry,
-    pub order_time: i32,
-    pub running: u8,
-    pub status: u8,
+    pub order_time: *const i32,
+    pub running: *const u8,
+    pub status: *const u8,
 }
 
 /// `GetCurrentMaxSpeed` inputs of the front part.
@@ -431,7 +426,6 @@ pub struct Leaves {
     pub vehicle: *const VehicleServices,
     pub ground: *const GroundServices,
     pub shared: *const Services,
-    pub tick_front: extern "C" fn(VehicleRef) -> FrontTickRead,
     pub max_depot_penalty: extern "C" fn() -> u32,
     pub process_orders_then_loading: extern "C" fn(VehicleRef) -> u8,
     pub visual_read: extern "C" fn(VehicleRef) -> VisualRead,
@@ -466,7 +460,7 @@ pub struct Leaves {
     pub path_read: extern "C" fn(VehicleRef) -> PathRead,
     pub choose_track: extern "C" fn(VehicleRef, u32, u8, u16) -> TrackChoice,
     pub find_depot: extern "C" fn(VehicleRef, i32) -> DepotResult,
-    pub can_build_tram: extern "C" fn(VehicleRef, u32, u8) -> bool,
+    pub tram_build_read: extern "C" fn(VehicleRef) -> TramBuildRead,
     pub disconnect: extern "C" fn(),
     pub stop_read: extern "C" fn(VehicleRef) -> StopRead,
     pub should_stop: extern "C" fn(VehicleRef, u32) -> bool,
@@ -571,6 +565,12 @@ fn visit<T, F: FnMut(&T) -> bool>(
     call(dispatch::<T, F>, (&raw mut visitor).cast());
 }
 
+/// Fields consumed together by `CanBuildTramTrackOnTile`.
+#[repr(C)]
+pub struct TramBuildRead {
+    pub owner: u8,
+    pub road_type: u8,
+}
 /// Count one actual typed outgoing call; returns the unchanged function pointer.
 macro_rules! service {
     ($function:expr) => {{
@@ -580,6 +580,7 @@ macro_rules! service {
 }
 
 struct Game<'a> {
+    road: *const crate::road_cmd::CommandContext,
     l: &'a Leaves,
     vs: &'a VehicleServices,
     gs: &'a GroundServices,
@@ -649,6 +650,7 @@ impl Game<'_> {
         // SAFETY: As above; the shared tables are static.
         unsafe {
             Game {
+                road: std::ptr::null(),
                 l,
                 vs: &*l.vehicle,
                 gs: &*l.ground,
@@ -658,6 +660,18 @@ impl Game<'_> {
                 queue,
                 map: Map { log_x },
             }
+        }
+    }
+    fn can_build_tram(&self, v: VehicleRef, tile: u32, bits: u8) -> bool {
+        let read = service!(self.l.tram_build_read)(v);
+        // SAFETY: movement entries supply live native stack scratch and results.
+        unsafe {
+            let context = &*self.road;
+            let town = &*(*context.services).town;
+            let old = (town.exchange_company)(u32::from(read.owner));
+            let success = context.build(8, tile, bits, read.road_type, u16::MAX);
+            (town.exchange_company)(old);
+            success
         }
     }
     fn realistic(&self) -> bool {
@@ -1330,7 +1344,7 @@ impl Game<'_> {
                                 && needed & service!(self.ss.normal_road_bits)(tile, 1).0 != 0);
                         if !big {
                             if !s.front
-                                || !service!(self.l.can_build_tram)(v.v, tile, needed)
+                                || !self.can_build_tram(v.v, tile, needed)
                                 || (!needed & service!(self.l.any_road_bits)(v.v, s.tile, false))
                                     == 0
                             {
@@ -1700,18 +1714,22 @@ impl Game<'_> {
             service!(self.vs.write_tick)(v.v, tick);
             return true;
         }
-        let front = service!(self.l.tick_front)(v.v);
-        self.acceleration_model = front.movement.acceleration_model;
-        self.road_side = front.movement.road_side;
-        self.queue = front.movement.queue;
-        self.map.log_x = front.movement.map_log_x;
-        let running = if front.status & VS_STOPPED == 0 {
-            front.running.wrapping_add(1)
+        self.acceleration_model = t.movement.acceleration_model;
+        self.road_side = t.movement.road_side;
+        self.queue = t.movement.queue;
+        self.map.log_x = t.movement.map_log_x;
+        // SAFETY: The front entry supplies actual scalar addresses of the live shell.
+        // Load at the original branches; no native-field reference spans a service.
+        let running = if unsafe { t.status.read() } & VS_STOPPED == 0 {
+            unsafe { t.running.read() }.wrapping_add(1)
         } else {
-            front.running
+            unsafe { t.running.read() }
         };
-        service!(self.vs.write_counters)(v.v, tick, running, front.order_time.wrapping_add(1));
-        self.controller(v, front.status, tick)
+        let order_time = unsafe { t.order_time.read() }.wrapping_add(1);
+        service!(self.vs.write_counters)(v.v, tick, running, order_time);
+        // Reload after native writes; discard all places before controller callbacks.
+        let status = unsafe { t.status.read() };
+        self.controller(v, status, tick)
     }
     /// `RoadVehicle::SetDestTile`.
     fn set_dest(&self, v: Part, tile: u32, current: u32) {
@@ -1890,11 +1908,14 @@ pub unsafe extern "C" fn openttd_rust_road_tick(
     state: *mut State,
     read: *const TickRead,
     leaves: *const Leaves,
+    road: *const crate::road_cmd::CommandContext,
 ) -> bool {
     crate::witness::hit(crate::witness::ROAD_TICKS);
     // SAFETY: Records are borrowed for this call only.
     let t = unsafe { &*read };
-    entry!(leaves, None).tick(Part::new(v, state), t)
+    let mut g = entry!(leaves, None);
+    g.road = road;
+    g.tick(Part::new(v, state), t)
 }
 /// # Safety
 /// As `openttd_rust_road_tick`; `prev` is null or a live pair.
@@ -1906,10 +1927,12 @@ pub unsafe extern "C" fn openttd_rust_road_individual(
     prev_state: *mut State,
     entry: *const Entry,
     leaves: *const Leaves,
+    road: *const crate::road_cmd::CommandContext,
 ) -> bool {
     // SAFETY: Entry record borrowed for this call only.
     let e = unsafe { &*entry };
-    let g = entry!(leaves, Some(e));
+    let mut g = entry!(leaves, Some(e));
+    g.road = road;
     let mut s = service!(g.l.step)(v);
     g.individual(Part::new(v, state), Part::link(prev, prev_state), &mut s)
 }

@@ -712,7 +712,6 @@ pub struct Leaves {
     pub update_max_pass: extern "C" fn(u32),
     pub next_town: extern "C" fn(u32) -> u32,
     pub road_mask: extern "C" fn() -> u64,
-    pub build_road: extern "C" fn(u32, u32, u32, u32, u32) -> bool,
     pub clear_land: extern "C" fn(u32, u32) -> bool,
     pub terraform_land: extern "C" fn(u32, u32, u32, u32) -> CommandResult,
     pub build_bridge: extern "C" fn(u32, u32, u32, u32, u32) -> bool,
@@ -730,6 +729,7 @@ pub struct CommandResult {
 }
 #[derive(Clone)]
 struct Engine<'a> {
+    road: *const crate::road_cmd::CommandContext,
     leaves: &'a Leaves,
     services: &'a Services,
     map: OnceCell<Map>,
@@ -863,9 +863,20 @@ impl Engine<'_> {
     fn distance(&self, a: u32, b: u32) -> u32 {
         self.map().distance_square(a, b)
     }
+    fn build_road(&self, town: u32, tile: u32, bits: u32, rt: u32, mode: u32) -> bool {
+        let mut flags = 2;
+        if mode != 2 {
+            flags |= 8;
+        }
+        if mode != 0 {
+            flags |= 1;
+        }
+        // SAFETY: growth entries supply a live outer native stack context.
+        unsafe { (&*self.road).build(flags, tile, bits as u8, rt as u8, town as u16) }
+    }
     fn road(&self, town: u32, tile: u32, bits: u32, flags: u32) -> bool {
         let rt = self.road_type();
-        (self.leaves.build_road)(town, tile, bits, rt, flags)
+        self.build_road(town, tile, bits, rt, flags)
     }
     fn clear(&self, tile: u32, execute: bool) -> bool {
         (self.leaves.clear_land)(tile, u32::from(execute))
@@ -1003,6 +1014,7 @@ fn engine<'a>(leaves: *const Leaves, services: *const Services) -> Engine<'a> {
     let leaves = unsafe { &*leaves };
     let services = unsafe { &*services };
     Engine {
+        road: std::ptr::null(),
         leaves,
         services,
         map: OnceCell::new(),
@@ -1202,7 +1214,7 @@ impl Engine<'_> {
             }
             _ => {}
         }
-        (self.leaves.build_road)(town, next, bit(reverse(dir)), rt, 0)
+        self.build_road(town, next, bit(reverse(dir)), rt, 0)
     }
     fn bridge(&self, town: u32, tile: u32, dir: u32) -> bool {
         let slope = u32::from((self.services.tile_slope)(tile));
@@ -1600,7 +1612,7 @@ impl Engine<'_> {
                     if a == b {
                         b ^= 2;
                     }
-                    (self.leaves.build_road)(town, tile, (1 << a) + (1 << b), rt, 2);
+                    self.build_road(town, tile, (1 << a) + (1 << b), rt, 2);
                     (self.leaves.exchange_company)(company);
                     return true;
                 }
@@ -2032,8 +2044,11 @@ impl Engine<'_> {
 pub unsafe extern "C" fn openttd_rust_town_tick_all(
     leaves: *const Leaves,
     services: *const Services,
+    road: *const crate::road_cmd::CommandContext,
 ) {
-    engine(leaves, services).tick_all();
+    let mut engine = engine(leaves, services);
+    engine.road = road;
+    engine.tick_all();
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_update_growth(
@@ -2047,13 +2062,14 @@ pub unsafe extern "C" fn openttd_rust_town_update_growth(
 pub unsafe extern "C" fn openttd_rust_town_expand(
     leaves: *const Leaves,
     services: *const Services,
+    road: *const crate::road_cmd::CommandContext,
     town: u32,
     amount: u32,
     modes: u32,
 ) {
-    engine(leaves, services)
-        .bind(town)
-        .expand(town, amount, modes);
+    let mut engine = engine(leaves, services);
+    engine.road = road;
+    engine.bind(town).expand(town, amount, modes);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_custom_rate(
@@ -2083,11 +2099,14 @@ pub unsafe extern "C" fn openttd_rust_town_road_type(
 pub unsafe extern "C" fn openttd_rust_town_tunnel(
     leaves: *const Leaves,
     services: *const Services,
+    road: *const crate::road_cmd::CommandContext,
     town: u32,
     tile: u32,
     dir: u32,
 ) -> bool {
-    engine(leaves, services).bind(town).tunnel(town, tile, dir)
+    let mut engine = engine(leaves, services);
+    engine.road = road;
+    engine.bind(town).tunnel(town, tile, dir)
 }
 
 // Original std::accumulate's literal 0 deduces an int accumulator. Each lambda

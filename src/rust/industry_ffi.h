@@ -467,4 +467,7 @@ bool openttd_rust_industry_slope_refused(uint8_t current, uint8_t refused);
 #ifdef __cplusplus
 }
 #endif
+#ifdef __cplusplus
+const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept;
+#endif
 #endif

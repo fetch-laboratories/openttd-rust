@@ -95,6 +95,39 @@ TEST_CASE("Base vehicle scheduler - consumed boundary layouts")
 	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
 #include "abi-layout-scheduler.inc"
 }
+TEST_CASE("Aircraft phase boundary - canonical movement scalar address identity")
+{
+	REQUIRE(Vehicle::CanAllocateItem());
+	auto *v = new Vehicle(VEH_ROAD);
+	const auto &services = GetRustVehicleServices();
+	{
+		const auto movement = services.movement_observations(RustVehicle(v));
+		const auto position = services.position_observations(RustVehicle(v));
+		static_assert(std::is_same_v<decltype(movement.x), const decltype(v->x_pos) *>);
+		static_assert(std::is_same_v<decltype(movement.y), const decltype(v->y_pos) *>);
+		static_assert(std::is_same_v<decltype(position.z), const decltype(v->z_pos) *>);
+		static_assert(std::is_same_v<decltype(movement.speed), const decltype(v->cur_speed) *>);
+		static_assert(std::is_same_v<decltype(movement.direction), const Direction *>);
+		static_assert(sizeof(Direction) == sizeof(uint8_t));
+		CHECK(movement.x == &v->x_pos);
+		CHECK(movement.y == &v->y_pos);
+		CHECK(movement.speed == &v->cur_speed);
+		CHECK(movement.direction == &v->direction);
+		CHECK(movement.position.subtype == &v->subtype);
+		CHECK(movement.position.z == &v->z_pos);
+		CHECK(position.z == movement.position.z);
+		CHECK(position.subtype == movement.position.subtype);
+		services.write_coordinates(RustVehicle(v), -31, 49, 77);
+		services.write_speed(RustVehicle(v), 123);
+		services.write_direction(RustVehicle(v), DIR_SW);
+		CHECK(*movement.x == -31);
+		CHECK(*movement.y == 49);
+		CHECK(*position.z == 77);
+		CHECK(*movement.speed == 123);
+		CHECK(*movement.direction == DIR_SW);
+	} // End descriptors before destruction, not after ID reuse.
+	delete v;
+}
 /* Base Vehicle::Tick survives without a controller, so the Tick facade fills
  * the actual post-Tick member addresses of these road-typed shells. */
 static OpenTTDVehiclePostTick SurvivingPostTick(Vehicle *v)

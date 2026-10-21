@@ -104,6 +104,17 @@ layouts! {
         shared, commands, cost, groups, target, name, clear_name, set_name, name_dirty,
         interval_percent, interval_default, interval_clamp, set_interval, unique_name, max_name,
     };
+    "OpenTTDRoadNearestTownTile" ["probe"] => crate::road_cmd::NearestTownTile { road, depot, town_owned, };
+
+    "OpenTTDRoadTramBuildRead" ["probe"] => crate::road::TramBuildRead { owner, road_type, };
+
+    "OpenTTDRoadCommandContext" ["probe"] => crate::road_cmd::CommandContext {
+        services,
+        scratch,
+        cost,
+        ret,
+    };
+
     "OpenTTDHouseLoopTile" ["probe"] => crate::town::house::HouseLoopTile {
         age,
         completed,
@@ -362,8 +373,6 @@ layouts! {
         reset_facilities,
         orders_dirty,
         vehicle,
-        road_type_valid,
-        powered_road,
         stop_on_town_road,
         stop_on_competitor_road,
         road_class_count,
@@ -468,7 +477,6 @@ layouts! {
         industry_area,
         remove_buoy,
         autoslope_axis,
-        set_road_owner,
         station_list_classes_invalidate,
     };
     "OpenTTDStationCommandStrings" ["probe"] => crate::station_cmd::Strings {
@@ -593,7 +601,6 @@ layouts! {
         all_bits,
         bulldozer,
         cleanup,
-        remove,
         town,
         set_road_type,
     };
@@ -657,6 +664,27 @@ layouts! {
         sw,
         nw,
     };
+    "OpenTTDTileOwnerServices" ["landscape"] => crate::tile_owner::Services {
+        clear,
+        house,
+        industry,
+        object,
+        rail,
+        shared,
+        station,
+        trees,
+        tunnel_bridge,
+        void => void_tile,
+        water,
+    };
+    "OpenTTDTileOwnerContext" ["landscape"] => crate::tile_owner::Context {
+        services,
+        cost,
+        ret,
+        error,
+        road,
+    };
+
     "OpenTTDFieldGround" ["landscape"] => crate::ground::FieldGround {
         industry,
         field_type => type,
@@ -724,6 +752,7 @@ layouts! {
         clear,
         rail,
         road,
+        road_command,
         tunnel,
         water,
         costs,
@@ -1143,6 +1172,52 @@ layouts! {
         town_index,
         refusal,
     };
+    "OpenTTDRoadCommandServices" ["probe"] => crate::road_cmd::RoadCommandServices {
+        do_build,
+        rail_commands,
+        town,
+        authority,
+        strings,
+        nearest_tile,
+        town_valid,
+        town_edge,
+        set_town,
+        foundation,
+        extra_dynamite,
+        depot_slope,
+        make_depot,
+        depot_exit,
+        next_effect,
+        delete_effect,
+        owned_by_town,
+        scratch_cost,
+        conversion_scratch,
+        collect_vehicles,
+        cargo_changed,
+    };
+    "OpenTTDRoadConversionScratch" ["probe"] => crate::road_cmd::ConversionScratch {
+        frame,
+        area,
+        error,
+        ret,
+    };
+    "OpenTTDRoadTownEdge" ["probe"] => crate::road_cmd::TownEdge {
+        tile,
+        radius,
+    };
+    "OpenTTDRoadWorksEffect" ["probe"] => crate::road_cmd::WorksEffect {
+        id,
+        tile,
+    };
+    "OpenTTDRoadCommandStrings" ["probe"] => crate::road_cmd::Strings {
+        no_road,
+        no_tram,
+        junction,
+        remove_road,
+        no_suitable_road,
+        no_suitable_tram,
+        authority,
+    };
     "OpenTTDCommandServices" ["probe"] => crate::services::CommandServices {
         enter,
         leave,
@@ -1157,7 +1232,6 @@ layouts! {
         no_vehicle,
         no_train,
         wormhole_free,
-        allow_remove_road,
     };
     "OpenTTDCommandCostServices" ["probe"] => crate::services::CommandCostServices {
         zero,
@@ -1690,12 +1764,23 @@ layouts! {
         road_depot_direction,
         road_owner,
         road_type,
+        crossing_reserved,
+        set_crossing_reserved,
+        may_have_road,
+        road_tile_kind,
+        set_road_bits,
+        set_road_type,
+        set_road_owner,
+        set_road_directions,
+        road_powered,
+        road_type_valid,
         safe_waiting_position,
         service_at_helipad,
         set_tropic_zone,
         slope,
         snow_line,
         station_index,
+        road_commands,
         station_commands,
         docking_tile,
         station_gfx,
@@ -1704,7 +1789,6 @@ layouts! {
         tile_animation_add,
         tile_animation_delete,
         tile_animation_set_frame,
-        tile_change_owner,
         town_next_id,
         town_owner_by_id,
         utf8_length,
@@ -1845,6 +1929,9 @@ layouts! {
         check_orders_only,
         write_coordinates,
         altitude_inputs,
+        position_observations,
+        movement_observations,
+        max_speed,
         maintenance,
     };
     "OpenTTDGroundMoved" ["probe"] => crate::vehicle::Moved {
@@ -1893,6 +1980,10 @@ layouts! {
     "OpenTTDRoadTickRead" ["probe"] => crate::road::TickRead {
         tick,
         front,
+        movement,
+        order_time,
+        running,
+        status,
     };
     "OpenTTDRoadMaxSpeedRead" ["probe"] => crate::road::MaxSpeedRead {
         next,
@@ -2023,12 +2114,6 @@ layouts! {
         link,
         tile,
     };
-    "OpenTTDRoadFrontTickRead" ["probe"] => crate::road::FrontTickRead {
-        movement,
-        order_time,
-        running,
-        status,
-    };
     "OpenTTDEngineForLength" ["probe"] => crate::vehicle::EngineForLength {
         engine,
         grf_version,
@@ -2059,7 +2144,6 @@ layouts! {
         vehicle,
         ground,
         shared,
-        tick_front,
         max_depot_penalty,
         process_orders_then_loading,
         visual_read,
@@ -2094,7 +2178,7 @@ layouts! {
         path_read,
         choose_track,
         find_depot,
-        can_build_tram,
+        tram_build_read,
         disconnect,
         stop_read,
         should_stop,
@@ -2284,7 +2368,6 @@ layouts! {
         money_deficit,
         set_result,
         exchange_generating,
-        nearest_town_roads,
         founded_news,
         founded_events,
         clear_station_names,
@@ -2412,7 +2495,6 @@ layouts! {
         update_max_pass,
         next_town,
         road_mask,
-        build_road,
         clear_land,
         terraform_land,
         build_bridge,
@@ -3888,7 +3970,6 @@ layouts! {
         crash_sound,
         crossing_barred,
         crossing_rail_axis,
-        crossing_reserved,
         crossing_road_axis,
         crossing_sound,
         curve_advantage,
@@ -4037,7 +4118,6 @@ layouts! {
         wait_twoway,
         wait_unbunch,
         write_crossing_bar,
-        write_crossing_res,
         write_visit_type,
         visit_tile,
         visit_near,
@@ -4484,6 +4564,17 @@ layouts! {
         next_position,
         heading,
     };
+    "OpenTTDVehiclePositionObservations" ["probe"] => crate::vehicle::PositionObservations {
+        subtype,
+        z,
+    } width z: *const i32;
+    "OpenTTDVehicleMovementObservations" ["probe"] => crate::vehicle::MovementObservations {
+        position,
+        x,
+        y,
+        speed,
+        direction,
+    } width direction: *const crate::vehicle::Direction;
     "OpenTTDVehicleAltitudeInputs" ["probe"] => crate::vehicle::AltitudeInputs {
         max_speed,
         direction,

@@ -59,6 +59,8 @@ inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
 
 /** Shared native field definitions, also used by bundled observations. */
 template <class T> inline auto RustVehicleFirst(T *v) noexcept { return v->First(); }
+/** Canonical typed ground-vehicle cargo update for command/list adapters. */
+template <class T> inline void RustGroundCargoChanged(T *v) noexcept { v->CargoChanged(); }
 template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last(); }
 /** Signature adapter for existing opaque fleet and orders callbacks. */
 inline void *RustVehicleFirstOpaque(void *v) noexcept { return RustVehicleFirst(static_cast<const Vehicle *>(v)); }
@@ -88,7 +90,8 @@ bool RustTrainMultiheaded(const Vehicle *v) noexcept;
 Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept;
 inline bool RustVehiclePrimary(const Vehicle *v) noexcept { return v->IsPrimaryVehicle(); }
 inline uint8_t RustVehicleOwner(const Vehicle *v) noexcept { return v->owner.base(); }
-inline Direction RustVehicleDirection(const Vehicle *v) noexcept { return v->direction; }
+inline const Direction *RustVehicleDirectionAddress(const Vehicle *v) noexcept { return &v->direction; }
+inline Direction RustVehicleDirection(const Vehicle *v) noexcept { return *RustVehicleDirectionAddress(v); }
 inline uint8_t RustVehicleProgress(const Vehicle *v) noexcept { return v->progress; }
 inline void RustWriteVehicleProgress(Vehicle *v, uint8_t progress) noexcept { v->progress = progress; }
 inline const uint8_t *RustVehicleTickAddress(const Vehicle *v) noexcept { return &v->tick_counter; }
@@ -131,16 +134,21 @@ inline bool RustGroundHasArticulated(const T *v) noexcept { return v->HasArticul
 
 inline const uint8_t *RustVehicleSubtypeAddress(const Vehicle *v) noexcept { return &v->subtype; }
 inline uint8_t RustVehicleSubtype(const Vehicle *v) noexcept { return *RustVehicleSubtypeAddress(v); }
-inline int32_t RustVehicleX(const Vehicle *v) noexcept { return v->x_pos; }
-inline int32_t RustVehicleY(const Vehicle *v) noexcept { return v->y_pos; }
-inline int32_t RustVehicleZ(const Vehicle *v) noexcept { return v->z_pos; }
+inline const int32_t *RustVehicleXAddress(const Vehicle *v) noexcept { return &v->x_pos; }
+inline int32_t RustVehicleX(const Vehicle *v) noexcept { return *RustVehicleXAddress(v); }
+inline const int32_t *RustVehicleYAddress(const Vehicle *v) noexcept { return &v->y_pos; }
+inline int32_t RustVehicleY(const Vehicle *v) noexcept { return *RustVehicleYAddress(v); }
+inline const int32_t *RustVehicleZAddress(const Vehicle *v) noexcept { return &v->z_pos; }
+inline int32_t RustVehicleZ(const Vehicle *v) noexcept { return *RustVehicleZAddress(v); }
 inline const uint16_t *RustVehicleSpeedAddress(const Vehicle *v) noexcept { return &v->cur_speed; }
 inline uint16_t RustVehicleSpeed(const Vehicle *v) noexcept { return *RustVehicleSpeedAddress(v); }
 inline uint8_t RustVehicleSubspeed(const Vehicle *v) noexcept { return v->subspeed; }
 inline uint8_t RustVehicleAcceleration(const Vehicle *v) noexcept { return v->acceleration; }
 inline uint16_t RustVehicleMaxSpeed(const Vehicle *v) noexcept { return v->vcache.cached_max_speed; }
-inline uint8_t RustVehicleRunning(const Vehicle *v) noexcept { return v->running_ticks; }
-inline int32_t RustVehicleOrderTime(const Vehicle *v) noexcept { return v->current_order_time; }
+inline const uint8_t *RustVehicleRunningAddress(const Vehicle *v) noexcept { return &v->running_ticks; }
+inline uint8_t RustVehicleRunning(const Vehicle *v) noexcept { return *RustVehicleRunningAddress(v); }
+inline const int32_t *RustVehicleOrderTimeAddress(const Vehicle *v) noexcept { return &v->current_order_time; }
+inline int32_t RustVehicleOrderTime(const Vehicle *v) noexcept { return *RustVehicleOrderTimeAddress(v); }
 inline int64_t RustVehicleProfit(const Vehicle *v) noexcept { return v->profit_this_year; }
 inline const VehicleType *RustVehicleVehicleTypeAddress(const Vehicle *v) noexcept { return &v->type; }
 inline VehicleType RustVehicleVehicleType(const Vehicle *v) noexcept { return *RustVehicleVehicleTypeAddress(v); }
@@ -186,7 +194,7 @@ inline OpenTTDGroundMoved OPENTTD_VEHICLE_CALL GroundSvcMoveIncline(OpenTTDVehic
 	u->y_pos = y;
 	RustVehicleUpdatePosition(u);
 	int old_z = u->UpdateInclination(new_tile, update_delta);
-	return {.old_z = old_z, .z = u->z_pos, .cur_speed = RustVehicleSpeed(u), .max_track_speed = u->gcache.cached_max_track_speed};
+	return {.old_z = old_z, .z = RustVehicleZ(u), .cur_speed = RustVehicleSpeed(u), .max_track_speed = u->gcache.cached_max_track_speed};
 }
 template <class T>
 inline OpenTTDGroundViewportNext OPENTTD_VEHICLE_CALL GroundSvcUpdateViewportThenNext(OpenTTDVehicle *part, OpenTTDVehicle *front) noexcept
@@ -234,7 +242,7 @@ inline OpenTTDGroundCrash OPENTTD_VEHICLE_CALL GroundSvcCrash(OpenTTDVehicle *v,
 template <class T>
 inline void OPENTTD_VEHICLE_CALL GroundSvcFirstCargoChanged(OpenTTDVehicle *v) noexcept
 {
-	RustVehicleFirst(T::From(VehicleOf(v)))->CargoChanged();
+	RustGroundCargoChanged(RustVehicleFirst(T::From(VehicleOf(v))));
 }
 template <class T>
 inline void OPENTTD_VEHICLE_CALL GroundSvcGoToDepotService(OpenTTDVehicle *v, uint16_t depot) noexcept

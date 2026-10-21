@@ -48,6 +48,10 @@ static void AirportGoToNextPosition(Aircraft *) {}
 struct Fixture {
 	Aircraft aircraft;
 	std::unique_ptr<OpenTTDAircraftState, decltype(&openttd_rust_aircraft_state_destroy)> state{openttd_rust_aircraft_state_new(), openttd_rust_aircraft_state_destroy};
+	int32_t x = 0, y = 0, z = 1;
+	uint16_t speed = 0;
+	uint8_t subtype = 2;
+	Direction direction{};
 	uint64_t blocks = 0;
 	std::array<unsigned, 4> messages{};
 };
@@ -74,6 +78,12 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	leaves.station_tile = [](const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s)->airport.tile; };
 	leaves.rotation = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
 	leaves.geometry = [](const OpenTTDStation *s) noexcept { auto tile = reinterpret_cast<const Station *>(s)->airport.tile; return OpenTTDAircraftGeometry{tile, 0, 7, 7, true}; };
+	vehicle.position_observations = [](OpenTTDVehicle *) noexcept { return OpenTTDVehiclePositionObservations{.subtype = &fixture->subtype, .z = &fixture->z}; };
+	vehicle.movement_observations = [](OpenTTDVehicle *) noexcept {
+		return OpenTTDVehicleMovementObservations{.position = {.subtype = &fixture->subtype, .z = &fixture->z},
+			.x = &fixture->x, .y = &fixture->y, .speed = &fixture->speed, .direction = &fixture->direction};
+	};
+	vehicle.max_speed = [](OpenTTDVehicle *) noexcept { return uint16_t{100}; };
 	vehicle.x = vehicle.y = [](OpenTTDVehicle *) noexcept { return int32_t{0}; };
 	vehicle.direction = [](OpenTTDVehicle *) noexcept { return uint8_t{0}; };
 	leaves.dummy_airport = []() noexcept -> const void * { return &fixture->blocks; };

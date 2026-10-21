@@ -61,7 +61,16 @@ def scenarios(soak):
             short_checkpoint=True,
             ticks=1,
             console=["water_scenario", "unpause"],
-        )
+        ),
+        dict(
+            name="ownership-dispatch",
+            kind="save",
+            water_commands="ownership",
+            save=str(ROOT / "migration/saves/water-structures.sav"),
+            short_checkpoint=True,
+            ticks=1,
+            console=["owner_scenario", "unpause"],
+        ),
     ]
     for distribution, commands in DISTRIBUTIONS.items():
         scenarios.append(
@@ -319,7 +328,83 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     return dict(scenario, save=str(normalized), water_record=record)
 
 
+# Successful builds per kind over both areas, and each bankrupt tile's (type, owner).
+OWNER_BUILDS = dict(rail=8, road=20, stop=8, station=10, water=6, bridge=4, tunnel=4)
+OWNER_BANKRUPT = {
+    **dict.fromkeys(["drive-bus", "drive-truck", "road-waypoint", "crossing"], (2, 16)),
+    **dict.fromkeys(["rail", "bay", "rail-station", "airport", "dock"], (0, 16)),
+    **dict.fromkeys(
+        [
+            "dock-water",
+            "buoy",
+            "lock",
+            "lock-upper",
+            "lock-lower",
+            "canal",
+            "depot",
+            "depot-other",
+        ],
+        (6, 16),
+    ),
+    **dict.fromkeys(["rail-bridge", "rail-tunnel"], (0, 16)),
+    **dict.fromkeys(["road-bridge", "road-tunnel"], (9, 16)),
+    "foreign-crossing": (2, 0),
+}
+OWNER_INDUSTRIES = {
+    "merge 0": "0 0 0",
+    "merge 1": "16 0 255",
+    "bankrupt 2": "16 255 255",
+    "bankrupt 3": "16 255 255",
+}
+
+
+def check_ownership(scenario, run, role, markers):
+    for kind, count in OWNER_BUILDS.items():
+        if sum(row.startswith(f"cost owner-{kind} true ") for row in markers) != count:
+            raise RuntimeError("ownership fixture did not build " + kind)
+    tiles = {}
+    for row in markers:
+        if row.startswith("owner "):
+            _, phase, name, kind, m1 = row.split()[:5]
+            tiles.setdefault(phase, {})[name] = (int(kind), int(m1) & 31)
+    if any(
+        tiles["merge"][name] != (kind, 0) for name, (kind, _) in tiles["built"].items()
+    ):
+        raise RuntimeError("merger did not transfer every owned tile")
+    if any(tiles["bankrupt"][name] != want for name, want in OWNER_BANKRUPT.items()):
+        raise RuntimeError("bankruptcy left unexpected tiles: " + str(tiles))
+    industries = {
+        " ".join(row.split()[1:3]): " ".join(row.split()[3:])
+        for row in markers
+        if row.startswith("owner-industry ") and row.split()[1] != "built"
+    }
+    if industries != OWNER_INDUSTRIES:
+        raise RuntimeError("industry ownership roles differ: " + str(industries))
+    for prefix, required in (
+        ("station_command", ["change_owner", "remove_road_tile", "clear"]),
+        ("road_commands", ["owner"]),
+        ("rail_cmd", ["owner_transfer", "owner_clear", "remove_crossing"]),
+        ("water_cmd", ["owner"]),
+    ):
+        branch_witnesses(scenario, run, role, prefix, required)
+
+
 def check(scenario, run, mode, role, result):
+    if scenario.get("water_commands") == "ownership":
+        markers = [
+            line.split("WATER-CMD ", 1)[1]
+            for line in run["log"]
+            if "WATER-CMD " in line
+        ]
+        if not markers or markers[-1] != "complete":
+            raise RuntimeError("ownership fixture did not finish")
+        check_ownership(scenario, run, role, markers)
+        key = mode + "_ownership"
+        if role == "reference":
+            result[key] = markers
+        elif result[key] != markers:
+            raise RuntimeError("ownership dispatch results differ")
+        return
     if scenario.get("water_commands"):
         markers = [
             line.split("WATER-CMD ", 1)[1]
@@ -335,6 +420,7 @@ def check(scenario, run, mode, role, result):
             "remove-lock": 12,
             "force": 2,
             "bankrupt-occupied": 2,
+            "native-object": 1,
         }.items():
             if sum(row.startswith(f"cost {command} true ") for row in markers) != count:
                 raise RuntimeError("water fixture did not exercise " + command)
@@ -343,6 +429,47 @@ def check(scenario, run, mode, role, result):
             != 12
         ):
             raise RuntimeError("water fixture did not exercise wrapping bridge errors")
+        required = {
+            f"restored-owner {kind} {mismatch} {bankrupt}"
+            for kind in (
+                "clear",
+                "sea",
+                "elevated-sea-canal",
+                "canal",
+                "river",
+                "sloped-canal-land",
+                "sloped-river-land",
+            )
+            for mismatch in ("false", "true")
+            for bankrupt in ("false", "true")
+        }
+        if {
+            " ".join(row.split()[:4])
+            for row in markers
+            if row.startswith("restored-owner ")
+        } != required:
+            raise RuntimeError("water fixture missed restored-owner cases")
+        captured = {
+            f"captured {viewer} {owner} {tile}"
+            for viewer in (0, 1)
+            for owner in (0, 1, 15)
+            for tile in (0, 10280)
+            if owner != 15 or tile != 0
+        }
+        if {row for row in markers if row.startswith("captured ")} != captured:
+            raise RuntimeError("water fixture missed captured-owner checks")
+        if sum(row.startswith("parameter captured-owner ") for row in markers) != 3:
+            raise RuntimeError("water fixture missed encoded ownership errors")
+        if not any(row.startswith("cost bankrupt-depot true ") for row in markers):
+            raise RuntimeError("water fixture missed live depot bankruptcy")
+        for name, kind in (
+            ("native-object-transfer", 10),
+            ("native-object-bankrupt", 0),
+        ):
+            if not any(
+                row.startswith(f"state {name} 10280 {kind} ") for row in markers
+            ):
+                raise RuntimeError("water fixture missed " + name)
         if "docking true true" not in markers:
             raise RuntimeError("water restoration did not preserve docking membership")
         key = mode + "_water_commands"

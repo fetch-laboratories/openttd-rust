@@ -38,5 +38,4 @@ ClearGround OpenTTDClearGround(uint32_t tile) noexcept;
 TreeGround OpenTTDTreeGround(uint32_t tile) noexcept;
 inline bool OpenTTDExchangeGeneratingWorld(bool value) noexcept { return std::exchange(_generating_world, value); }
 void OpenTTDAssertTownGenerationContext() noexcept;
-inline void OpenTTDChangeTileOwner(uint32_t tile, uint8_t old_owner, uint8_t new_owner) noexcept { ChangeTileOwner(TileIndex{tile}, Owner(old_owner), Owner(new_owner)); }
 #endif /* RUST_ENVIRONMENT_SERVICES_H */

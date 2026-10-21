@@ -537,7 +537,6 @@ pub struct Leaves {
     pub crash_sound: extern "C" fn(Handle),
     pub crossing_barred: extern "C" fn(Handle, u32) -> u64,
     pub crossing_rail_axis: extern "C" fn(Handle, u32) -> u64,
-    pub crossing_reserved: extern "C" fn(Handle, u32) -> u64,
     pub crossing_road_axis: extern "C" fn(Handle, u32) -> u64,
     pub crossing_sound: extern "C" fn(Handle, u32),
     pub curve_advantage: extern "C" fn(Handle) -> u64,
@@ -686,7 +685,6 @@ pub struct Leaves {
     pub wait_twoway: extern "C" fn(Handle) -> u64,
     pub wait_unbunch: extern "C" fn(Handle) -> u64,
     pub write_crossing_bar: extern "C" fn(Handle, u32, u8),
-    pub write_crossing_res: extern "C" fn(Handle, u32, u8),
     pub write_visit_type: extern "C" fn(Handle, u16),
 
     pub visit_tile: extern "C" fn(
@@ -1156,7 +1154,7 @@ impl Game<'_> {
         false
     }
     fn check_crossing(&self, tile: u32) -> bool {
-        (self.leaves.crossing_reserved)(Handle::NONE, tile) != 0
+        (self.services.crossing_reserved)(tile)
             || self.train_on_tile(tile)
             || self.crossing_approach(tile)
     }
@@ -1258,7 +1256,7 @@ impl Game<'_> {
     }
     fn bar_crossing(&self, tile: u32) {
         if (self.leaves.crossing_barred)(Handle::NONE, tile) == 0 {
-            (self.leaves.write_crossing_res)(Handle::NONE, tile, 1);
+            (self.services.set_crossing_reserved)(tile, true);
             self.update_crossing(tile, true, false);
         }
     }
@@ -1886,7 +1884,7 @@ impl Game<'_> {
                     id.set_wait_counter(0);
                     let crossing = self.approaching_crossing(id);
                     if crossing != INVALID
-                        && (self.leaves.crossing_reserved)(Handle::NONE, crossing) != 0
+                        && (self.services.crossing_reserved)(crossing)
                         && (self.leaves.ambient_sound)(id) != 0
                     {
                         (self.leaves.crossing_sound)(Handle::NONE, crossing);

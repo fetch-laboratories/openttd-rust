@@ -8,7 +8,6 @@ src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> OpenTTDNativeCargoPayme
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c1ccb7a99eba675e | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c63db387bfa123f1 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | cb5a17d7b102cbc0 | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> int32_t | 06f31620cb63fe04 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | 02b8967881717dcf | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | 43fc64270dcd8062 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | e1d76fdb813b3717 | 1
@@ -111,9 +110,6 @@ src/rust/fleet_group_services.hpp | FleetGroup_vehicle_owner(void *shell) noexce
 src/rust/fleet_group_services.hpp | FleetGroup_vehicle_type(void *shell) noexcept | 725e4daef5bcf650 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_viewport(void *shell) noexcept | 5fe83f6e19b74226 | 1
 src/rust/fleet_pending_services.hpp | FleetPending_restart(void *shell) noexcept | 88efe79b36574162 | 1
-src/rust/fleet_pending_services.hpp | FleetPending_x(void *shell) noexcept | 120dda9fffb13878 | 1
-src/rust/fleet_pending_services.hpp | FleetPending_y(void *shell) noexcept | 74d8c7f4eebe01d8 | 1
-src/rust/fleet_pending_services.hpp | FleetPending_z(void *shell) noexcept | 201cc2b4aeb0c16e | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_copy_configuration(void *old, void *replacement) noexcept | 727c7c448c7843d3 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_crashed(void *shell) noexcept | 4e8240e91be2f979 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_max_length() noexcept | 27d4365792c77eba | 1

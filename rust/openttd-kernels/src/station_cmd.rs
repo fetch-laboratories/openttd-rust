@@ -250,8 +250,6 @@ pub struct CommandServicesTable {
     pub reset_facilities: extern "C" fn(*mut BaseStation, u8),
     pub orders_dirty: extern "C" fn(),
     pub vehicle: *const crate::vehicle::VehicleServices,
-    pub road_type_valid: extern "C" fn(u8) -> bool,
-    pub powered_road: extern "C" fn(u8, u8) -> bool,
     pub stop_on_town_road: extern "C" fn() -> bool,
     pub stop_on_competitor_road: extern "C" fn() -> bool,
     pub road_class_count: extern "C" fn() -> u32,
@@ -360,7 +358,6 @@ pub struct CommandServicesTable {
     pub industry_area: extern "C" fn(*mut Industry) -> Area,
     pub remove_buoy: extern "C" fn(*mut CommandCost, u32, u16),
     pub autoslope_axis: extern "C" fn(u32, i32, u8, u8) -> bool,
-    pub set_road_owner: extern "C" fn(u32, u8, u8),
     pub station_list_classes_invalidate: extern "C" fn(),
 }
 struct Ctx<'a> {
@@ -961,7 +958,7 @@ impl Ctx<'_> {
             return out.error(0xffff);
         }
         unsafe {
-            (self.command.ownership)(out.0, (self.world().station_owner)(st));
+            (self.command.ownership)(out.0, (self.world().station_owner)(st), 0);
         }
         if !out.ok() {
             return;
@@ -994,7 +991,7 @@ impl Ctx<'_> {
         let owner = (self.world().station_owner)(st);
         if owner != 0x10 {
             unsafe {
-                (self.command.ownership)(out.0, owner);
+                (self.command.ownership)(out.0, owner, 0);
             }
             if !out.ok() {
                 return 0xffff;
@@ -1141,7 +1138,7 @@ pub unsafe extern "C" fn openttd_rust_station_open_close_airport(
         return out.error(0xffff);
     }
     unsafe {
-        (c.command.ownership)(out.0, owner);
+        (c.command.ownership)(out.0, owner, 0);
     }
     if !out.ok() {
         return;
@@ -1755,6 +1752,7 @@ impl Ctx<'_> {
     fn nested(&self, out: Cost<'_>, tile: u32, flags: u16, body: impl FnMut(u16)) {
         crate::command::nested(self.command, self.shared, out, tile, flags, body);
     }
+
     fn remove_rail_area(
         &self,
         cost: Cost<'_>,
@@ -1793,7 +1791,7 @@ impl Ctx<'_> {
             }
             if (self.shared.current_company)() != 0x11 {
                 unsafe {
-                    (self.command.ownership)(ret.0, (self.world().station_owner)(st));
+                    (self.command.ownership)(ret.0, (self.world().station_owner)(st), 0);
                 }
                 error.add(ret);
                 if !error.ok() {
@@ -1918,7 +1916,7 @@ impl Ctx<'_> {
     ) {
         if (self.shared.current_company)() != 0x11 {
             unsafe {
-                (self.command.ownership)(cost.0, (self.world().station_owner)(st));
+                (self.command.ownership)(cost.0, (self.world().station_owner)(st), 0);
             }
             if !cost.ok() {
                 return;
@@ -2141,7 +2139,7 @@ impl Ctx<'_> {
                         }
                     } else if !(self.s.stop_on_competitor_road)() && owner != 0x10 {
                         unsafe {
-                            (self.command.ownership)(ret.0, owner);
+                            (self.command.ownership)(ret.0, owner, 0);
                         }
                         if !ret.ok() {
                             return cost.take(ret);
@@ -2150,7 +2148,7 @@ impl Ctx<'_> {
                     let pieces = (self.shared.normal_road_bits)(tile, 0).0.count_ones();
                     if rt != 63
                         && (self.shared.road_type_is_road)(rt)
-                        && !(self.s.powered_road)(rt, road)
+                        && !(self.shared.road_powered)(rt, road)
                     {
                         return cost.error(self.s.strings.unsuitable_road);
                     }
@@ -2159,7 +2157,7 @@ impl Ctx<'_> {
                         && owner != 0x10
                     {
                         unsafe {
-                            (self.command.ownership)(ret.0, owner);
+                            (self.command.ownership)(ret.0, owner, 0);
                         }
                         if !ret.ok() {
                             return cost.take(ret);
@@ -2180,7 +2178,7 @@ impl Ctx<'_> {
                         && (!(self.s.stop_on_competitor_road)() || bits.is_power_of_two())
                     {
                         unsafe {
-                            (self.command.ownership)(ret.0, owner);
+                            (self.command.ownership)(ret.0, owner, 0);
                         }
                         if !ret.ok() {
                             return cost.take(ret);
@@ -2189,7 +2187,7 @@ impl Ctx<'_> {
                     let pieces = (self.shared.normal_road_bits)(tile, 1).0.count_ones();
                     if rt != 63
                         && (self.shared.road_tram_type)(rt).0
-                        && !(self.s.powered_road)(rt, tram)
+                        && !(self.shared.road_powered)(rt, tram)
                     {
                         return cost.error(self.s.strings.unsuitable_road);
                     }
@@ -2279,7 +2277,7 @@ impl Ctx<'_> {
         adjacent: bool,
     ) {
         crate::witness::hit(crate::witness::STATION_CMD_BUILD_ROAD);
-        if !(self.s.road_type_valid)(rt) || dir >= 4 || stop_type >= 2 {
+        if !(self.shared.road_type_valid)(rt) || dir >= 4 || stop_type >= 2 {
             return cost.error(0xffff);
         }
         let reuse = target != 0xfffd;
@@ -2536,7 +2534,7 @@ impl Ctx<'_> {
         };
         if (self.shared.current_company)() != 0x11 {
             unsafe {
-                (self.command.ownership)(cost.0, (self.world().station_owner)(st));
+                (self.command.ownership)(cost.0, (self.world().station_owner)(st), 0);
             }
             if !cost.ok() {
                 return;
@@ -3151,7 +3149,7 @@ impl Ctx<'_> {
         let st = self.full_station((self.shared.station_index)(tile));
         if (self.shared.current_company)() != 0x11 {
             unsafe {
-                (self.command.ownership)(cost.0, (self.world().station_owner)(st));
+                (self.command.ownership)(cost.0, (self.world().station_owner)(st), 0);
             }
             if !cost.ok() {
                 return;
@@ -3543,7 +3541,7 @@ impl Ctx<'_> {
         let st = self.full_station((self.shared.station_index)(tile));
         let owner = (self.world().station_owner)(st);
         unsafe {
-            (self.command.ownership)(cost.0, owner);
+            (self.command.ownership)(cost.0, owner, 0);
         }
         if !cost.ok() {
             return;
@@ -3880,7 +3878,7 @@ impl Ctx<'_> {
             let owner = self.road_owner(tile, true);
             if owner != 0x10 {
                 unsafe {
-                    (self.command.ownership)(cost.0, owner);
+                    (self.command.ownership)(cost.0, owner, 0);
                 }
                 if !cost.ok() {
                     return;
@@ -3892,14 +3890,23 @@ impl Ctx<'_> {
             if owner == 0x0f {
                 let bits = (self.shared.road_bits)(tile, 0, false);
                 unsafe {
-                    (self.command.allow_remove_road)(cost.0, tile, bits, 0x0f, 0, flags, true);
+                    crate::road_cmd::openttd_rust_road_allow_remove(
+                        (self.shared.road_commands)(),
+                        cost.0,
+                        tile,
+                        bits,
+                        0x0f,
+                        0,
+                        flags,
+                        true,
+                    );
                 }
                 if !cost.ok() {
                     return;
                 }
             } else if owner != 0x10 {
                 unsafe {
-                    (self.command.ownership)(cost.0, owner);
+                    (self.command.ownership)(cost.0, owner, 0);
                 }
                 if !cost.ok() {
                     return;
@@ -3979,6 +3986,7 @@ impl Ctx<'_> {
     }
     fn change_owner(
         &self,
+        ownership: &crate::tile_owner::Context,
         cost: Cost<'_>,
         ret: Cost<'_>,
         error: Cost<'_>,
@@ -3997,7 +4005,7 @@ impl Ctx<'_> {
                             (self.rail().road_infrastructure)(new, rt, 2);
                         }
                     }
-                    (self.s.set_road_owner)(
+                    (self.shared.set_road_owner)(
                         tile,
                         u8::from(tram),
                         if new == 255 { 0x10 } else { new },
@@ -4048,7 +4056,8 @@ impl Ctx<'_> {
                 );
             });
             assert_eq!((self.shared.tile_type)(tile), 2);
-            (self.shared.tile_change_owner)(tile, old, new);
+            // SAFETY: Nested removal has returned; the native slots can be reused.
+            unsafe { crate::tile_owner::openttd_rust_tile_change_owner(ownership, tile, old, new) };
         } else {
             (self.command.landscape_clear)(cost.0, tile, 33);
             let kind = (self.shared.tile_type)(tile);
@@ -4093,15 +4102,21 @@ pub unsafe extern "C" fn openttd_rust_station_terraform(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_change_owner(
     s: *const CommandServicesTable,
-    cost: *mut CommandCost,
-    ret: *mut CommandCost,
-    error: *mut CommandCost,
+    ownership: &crate::tile_owner::Context,
     tile: u32,
     old: u8,
     new: u8,
 ) {
     let c = unsafe { Ctx::new(s) };
-    c.change_owner(c.c(cost), c.c(ret), c.c(error), tile, old, new);
+    c.change_owner(
+        ownership,
+        c.c(ownership.cost),
+        c.c(ownership.ret),
+        c.c(ownership.error),
+        tile,
+        old,
+        new,
+    );
 }
 
 /// # Safety

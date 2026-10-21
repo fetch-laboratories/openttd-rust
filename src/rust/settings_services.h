@@ -50,4 +50,5 @@ inline bool RustStationStopOnTownRoad() noexcept { return _settings_game.constru
 inline bool RustStationStopOnCompetitorRoad() noexcept { return _settings_game.construction.road_stop_on_competitor_road; }
 inline bool RustStationNoiseEnabled() noexcept { return _settings_game.economy.station_noise_level; }
 inline bool RustStationDistantJoin() noexcept { return _settings_game.station.distant_join_stations; }
+inline bool RustExtraDynamite() noexcept { return _settings_game.construction.extra_dynamite; }
 #endif /* RUST_SETTINGS_SERVICES_H */
