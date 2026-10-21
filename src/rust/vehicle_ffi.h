@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstddef>
 enum VehicleType : uint8_t;
+enum Direction : uint8_t;
 #if defined(_MSC_VER)
 #define OPENTTD_VEHICLE_CALL __cdecl
 #elif defined(__i386__)
@@ -70,6 +71,19 @@ struct OpenTTDVehicleTickStatus {
 struct OpenTTDVehicleDayCost {
 	int64_t profit;
 	uint8_t running;
+};
+/** Read-only named scalar addresses, valid only while the synchronous caller
+ * preserves this shell. No Vehicle layout or native reference is exposed. */
+struct OpenTTDVehiclePositionObservations {
+	const uint8_t *subtype;
+	const int32_t *z;
+};
+struct OpenTTDVehicleMovementObservations {
+	OpenTTDVehiclePositionObservations position;
+	const int32_t *x;
+	const int32_t *y;
+	const uint16_t *speed;
+	const Direction *direction;
 };
 struct OpenTTDVehicleAltitudeInputs { uint16_t max_speed; uint8_t direction; };
 struct OpenTTDVehicleMaintenanceServices;
@@ -164,6 +178,9 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_VEHICLE_CALL *check_orders_only)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_orders_only);
 	void (OPENTTD_VEHICLE_CALL *write_coordinates)(OpenTTDVehicle *, int32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_coordinates);
 	OpenTTDVehicleAltitudeInputs (OPENTTD_VEHICLE_CALL *altitude_inputs)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(altitude_inputs);
+	OpenTTDVehiclePositionObservations (OPENTTD_VEHICLE_CALL *position_observations)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(position_observations);
+	OpenTTDVehicleMovementObservations (OPENTTD_VEHICLE_CALL *movement_observations)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(movement_observations);
+	uint16_t (OPENTTD_VEHICLE_CALL *max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(max_speed);
 	const OpenTTDVehicleMaintenanceServices *maintenance;
 };
 struct OpenTTDGroundMoved {

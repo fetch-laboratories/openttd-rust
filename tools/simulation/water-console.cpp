@@ -15,12 +15,20 @@
 #include "core/random_func.hpp"
 #include "landscape_cmd.h"
 #include "tile_cmd.h"
+#include "landscape.h"
+#include "road_map.h"
+#include "town.h"
+#include "object_cmd.h"
+#include "object_type.h"
+#ifdef WITH_RUST
+#include "rust/command_services.h"
+#endif
 #include "station_base.h"
 #include "openttd.h"
 extern const TileTypeProcs _tile_type_water_procs;
 static void WaterCost(const char *name, CommandCost cost)
 {
-	fmt::print(stderr, "WATER-CMD cost {} {} {} {}\n", name, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage());
+	fmt::print(stderr, "WATER-CMD cost {} {} {} {} {}\n", name, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), cost.GetErrorOwner().base());
 	if (!cost.GetEncodedMessage().empty()) fmt::print(stderr, "WATER-CMD parameter {} {}\n", name, cost.GetEncodedMessage().GetDecodedString());
 }
 static void WaterState(const char *name, TileIndex tile)
@@ -40,7 +48,43 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 	Backup<CompanyID> company(_current_company, CompanyID(1));
 	Backup<CompanyID> local(_local_company, CompanyID(1));
 	TileIndex tile = TileXY(40, 40);
+	/* Captured-owner checks intentionally differ from the tile's owner. */
+	MakeRoadNormal(tile, ROAD_X, ROADTYPE_ROAD, INVALID_ROADTYPE, (*Town::Iterate().begin())->index, OWNER_TOWN, OWNER_NONE);
+	for (CompanyID viewer : {CompanyID(0), CompanyID(1)}) {
+		_local_company = viewer;
+		for (Owner captured : {Owner(0), Owner(1), OWNER_TOWN}) for (TileIndex at : {TileIndex{0}, tile}) {
+			if (captured == OWNER_TOWN && at == 0) continue; // original precondition
+			CommandCost cost;
+#ifdef WITH_RUST
+			GetRustCommandServices().ownership(RustCommandCost(&cost), captured.base(), at.base());
+#else
+			cost = CheckOwnership(captured, at);
+#endif
+			fmt::print(stderr, "WATER-CMD captured {} {} {}\n", viewer.base(), captured.base(), at.base());
+			WaterCost("captured-owner", cost);
+		}
+	}
+	_local_company = CompanyID(1);
+	/* Restore first, then dispatch only the originally requested tile. */
+	const char *restored[] = {"clear", "sea", "elevated-sea-canal", "canal", "river", "sloped-canal-land", "sloped-river-land"};
+	for (uint kind = 0; kind < 7; ++kind) for (bool mismatch : {false, true}) for (bool bankrupt : {false, true}) {
+		WaterLand(tile, kind == 1 ? 0 : 3);
+		if (kind != 0) {
+			WaterClass wc = kind == 1 || kind == 2 ? WaterClass::Sea : kind == 4 || kind == 6 ? WaterClass::River : WaterClass::Canal;
+			MakeWater(tile, _current_company, wc, 7);
+			if (kind >= 5) SetTileHeight(tile, 4);
+			MakeWaterKeepingClass(tile, _current_company);
+		}
+		Owner old = mismatch ? Owner(0) : GetTileOwner(tile);
+		ChangeTileOwner(tile, old, bankrupt ? INVALID_OWNER : Owner(0));
+		fmt::print(stderr, "WATER-CMD restored-owner {} {} {} {} {} {} {} {} {}\n", restored[kind], mismatch, bankrupt, Company::Get(CompanyID(0))->infrastructure.water, IsWaterTile(tile) && IsDockingTile(tile), Tile{tile}.m3(), Tile{tile}.m6(), Tile{tile}.m7(), Tile{tile}.m8());
+		WaterState("restored-owner", tile);
+	}
+
 	WaterLand(tile);
+	WaterCost("native-object", Command<CMD_BUILD_OBJECT>::Do(DoCommandFlag::Execute, tile, OBJECT_OWNED_LAND, 0));
+	ChangeTileOwner(tile, _current_company, Owner(0)); WaterState("native-object-transfer", tile);
+	ChangeTileOwner(tile, Owner(0), INVALID_OWNER); WaterState("native-object-bankrupt", tile);
 	for (Axis axis : {AXIS_X, AXIS_Y}) {
 		TileIndex other = tile + TileOffsByAxis(axis);
 		WaterCost("canal-test", Command<CMD_BUILD_CANAL>::Do({}, tile, other, WaterClass::Canal, false));
@@ -112,10 +156,10 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 	}
 	WaterLand(tile, 0); MakeSea(tile); MakeWaterKeepingClass(tile, _current_company); WaterState("sea-zero", tile);
 	MakeShore(tile); SetTileHeight(tile, 1); WaterCost("coast", _tile_type_water_procs.clear_tile_proc(tile, DoCommandFlag::NoWater));
-	MakeCanal(tile, _current_company, 0); _tile_type_water_procs.change_tile_owner_proc(tile, _current_company, CompanyID(0)); WaterState("transfer", tile);
+	MakeCanal(tile, _current_company, 0); ChangeTileOwner(tile, _current_company, CompanyID(0)); WaterState("transfer", tile);
 	WaterLand(tile); MakeCanal(tile, _current_company, 0); MakeCanal(tile + 1, _current_company, 0);
 	WaterCost("bankrupt-depot", Command<CMD_BUILD_SHIP_DEPOT>::Do(DoCommandFlag::Execute, tile, AXIS_X));
-	_tile_type_water_procs.change_tile_owner_proc(tile, _current_company, INVALID_OWNER);
+	ChangeTileOwner(tile, _current_company, INVALID_OWNER);
 	WaterState("bankrupt", tile); WaterState("bankrupt-other", tile + 1);
 	tile = TileXY(180, 160); WaterLand(tile);
 	MakeCanal(tile, _current_company, 0); MakeCanal(tile + 1, CompanyID(0), 0);
@@ -126,6 +170,7 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 		for (TileIndex t : st->docking_station) {
 			if (!IsWaterTile(t) || !IsDockingTile(t)) continue;
 			MakeWaterKeepingClass(t, GetTileOwner(t));
+			ChangeTileOwner(t, GetTileOwner(t), Owner(0));
 			fmt::print(stderr, "WATER-CMD docking {} {}\n", st->docking_station.Contains(t), IsDockingTile(t));
 			checked_docking = true; break;
 		}

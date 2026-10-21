@@ -311,7 +311,6 @@ struct OpenTTDTrainServices {
 	void (*crash_sound)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(crash_sound);
 	uint64_t (*crossing_barred)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_barred);
 	uint64_t (*crossing_rail_axis)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_rail_axis);
-	uint64_t (*crossing_reserved)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_reserved);
 	uint64_t (*crossing_road_axis)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_road_axis);
 	void (*crossing_sound)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_sound);
 	uint64_t (*curve_advantage)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(curve_advantage);
@@ -460,7 +459,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*wait_twoway)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(wait_twoway);
 	uint64_t (*wait_unbunch)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(wait_unbunch);
 	void (*write_crossing_bar)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_crossing_bar);
-	void (*write_crossing_res)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_crossing_res);
 	void (*write_visit_type)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_visit_type);
 
 	uint8_t (*visit_tile)(uint32_t, void *, uint8_t (*)(void *, OpenTTDTrainHandle)) noexcept OPENTTD_SERVICE_DEFAULT(visit_tile);

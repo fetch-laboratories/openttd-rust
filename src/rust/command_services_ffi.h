@@ -22,11 +22,10 @@ struct OpenTTDCommandServices {
 	void (*infrastructure_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure_dirty);
 	void (*landscape_clear)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(landscape_clear);
 	void (*tile_ownership)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_ownership);
-	void (*ownership)(OpenTTDCommandCost *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(ownership);
+	void (*ownership)(OpenTTDCommandCost *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ownership);
 	void (*no_vehicle)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(no_vehicle);
 	void (*no_train)(OpenTTDCommandCost *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(no_train);
 	void (*wormhole_free)(OpenTTDCommandCost *, uint32_t, uint32_t, const Train *) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_free);
-	void (*allow_remove_road)(OpenTTDCommandCost *, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(allow_remove_road);
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
 extern "C" {

@@ -190,6 +190,24 @@ pub struct AltitudeInputs {
     pub direction: u8,
 }
 
+/// Native Direction's complete uint8 domain, without a Rust enum validity rule.
+#[repr(transparent)]
+pub struct Direction(pub u8);
+/// Stack-only descriptors of actual named members, never a Vehicle layout.
+#[repr(C)]
+pub struct PositionObservations {
+    pub subtype: *const u8,
+    pub z: *const i32,
+}
+#[repr(C)]
+pub struct MovementObservations {
+    pub position: PositionObservations,
+    pub x: *const i32,
+    pub y: *const i32,
+    pub speed: *const u16,
+    pub direction: *const Direction,
+}
+
 /// Base `Vehicle` operations and writes shared by every vehicle type.
 #[repr(C)]
 pub struct VehicleServices {
@@ -303,6 +321,9 @@ pub struct VehicleServices {
     pub check_orders_only: extern "C" fn(VehicleRef),
     pub write_coordinates: extern "C" fn(VehicleRef, i32, i32, i32),
     pub altitude_inputs: extern "C" fn(VehicleRef) -> AltitudeInputs,
+    pub position_observations: extern "C" fn(VehicleRef) -> PositionObservations,
+    pub movement_observations: extern "C" fn(VehicleRef) -> MovementObservations,
+    pub max_speed: extern "C" fn(VehicleRef) -> u16,
     pub maintenance: *const maintenance::Services,
 }
 

@@ -10,6 +10,10 @@
 #include "../3rdparty/catch2/catch.hpp"
 #include "../roadveh.h"
 #include "../settings_type.h"
+#ifdef WITH_RUST
+#include "../rust/services_road.h"
+#include "../rust/vehicle_services.h"
+#endif
 #include "../safeguards.h"
 
 #ifdef WITH_RUST
@@ -218,6 +222,34 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 		}
 	}
 	openttd_rust_road_destroy(front); openttd_rust_road_destroy(tail);
+}
+TEST_CASE("Road tick prologue - actual scalar places and nonfront entry")
+{
+	REQUIRE(Vehicle::CanAllocateItem());
+	auto *v = new RoadVehicle();
+	v->subtype = 1 << GVSF_FRONT;
+	{
+		const auto read = RustRoadTickRead(v);
+		static_assert(std::is_same_v<decltype(read.status), const uint8_t *>);
+		static_assert(std::is_same_v<decltype(read.running), const decltype(v->running_ticks) *>);
+		static_assert(std::is_same_v<decltype(read.order_time), const std::remove_reference_t<decltype(v->current_order_time)> *>);
+		CHECK(read.status == v->vehstatus.base_address());
+		CHECK(read.running == &v->running_ticks);
+		CHECK(read.order_time == &v->current_order_time);
+		v->running_ticks = UINT8_MAX;
+		v->current_order_time = INT32_MAX;
+		v->vehstatus = {VehState::Stopped};
+		CHECK(*read.running == RustVehicleRunning(v));
+		CHECK(*read.order_time == RustVehicleOrderTime(v));
+		CHECK(*read.status == RustVehicleStatus(v));
+	}
+	v->subtype = 0;
+	v->tick_counter = UINT8_MAX;
+	CHECK(v->Tick()); // Actual nonfront entry consumes no front-only place or callback.
+	CHECK(v->tick_counter == 0);
+	CHECK(v->running_ticks == UINT8_MAX);
+	CHECK(v->current_order_time == INT32_MAX);
+	_vehicle_pool.CleanPool();
 }
 TEST_CASE("Road visual eligibility precedes maximum-speed lookup")
 {

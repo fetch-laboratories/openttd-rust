@@ -138,3 +138,46 @@ pub unsafe extern "C" fn openttd_rust_command_check_money(
 ) -> bool {
     unsafe { check_money(s, c, result) }
 }
+
+/// Ordinary `CommandHelper::Do` lifecycle around a Rust-owned command body.
+/// Native callbacks operate on caller-owned stack results and serialized state.
+pub(crate) fn nested<T: Default>(
+    s: &CommandServices,
+    shared: &crate::services::Services,
+    out: crate::services::Cost<'_>,
+    tile: u32,
+    flags: u16,
+    mut body: impl FnMut(u16) -> T,
+) -> T {
+    struct Guard<'a>(&'a CommandServices);
+    impl Drop for Guard<'_> {
+        fn drop(&mut self) {
+            (self.0.leave)();
+        }
+    }
+    let size = ((shared.map_max_y)() + 1) << (shared.map_log_x)();
+    if tile != 0 && (tile >= size || (!(shared.tile_valid)(tile) && flags & 256 == 0)) {
+        out.error(0xffff);
+        return T::default();
+    }
+    let top = (s.enter)();
+    let _guard = Guard(s);
+    if top || flags & 1 == 0 {
+        before(s, top, true);
+        let extra = body(flags & !1);
+        // SAFETY: the command caller supplies live exclusive native result storage.
+        unsafe {
+            after(s, out.1, out.0, flags, top, true);
+        }
+        if !out.ok() || flags & 1 == 0 {
+            return extra;
+        }
+    }
+    before(s, top, false);
+    let extra = body(flags);
+    // SAFETY: the command caller supplies live exclusive native result storage.
+    unsafe {
+        after(s, out.1, out.0, flags, top, false);
+    }
+    extra
+}

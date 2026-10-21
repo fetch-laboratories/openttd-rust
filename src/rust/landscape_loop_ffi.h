@@ -26,6 +26,7 @@ struct OpenTTDGroundLoopServices {
 	const OpenTTDClearServices *clear;
 	const OpenTTDRailServices *rail;
 	const OpenTTDRoadGroundServices *road;
+	const OpenTTDRoadCommandContext *road_command;
 	const OpenTTDTunnelServices *tunnel;
 	const OpenTTDWaterGroundServices *water;
 	const OpenTTDGroundCostServices *costs;

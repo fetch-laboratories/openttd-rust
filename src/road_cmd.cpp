@@ -48,12 +48,15 @@
 
 #ifdef WITH_RUST
 #include "rust/ground_services.h"
+#include "rust/road_command_services.h"
+#include "rust/services_road.h"
 #include "rust/town_ffi.h"
 #include "rust/services_landscape.h"
 #include "rust/environment_services.h"
 #endif
 
 #include "safeguards.h"
+
 
 /** Helper type for lists/vectors of road vehicles */
 typedef std::vector<RoadVehicle *> RoadVehicleList;
@@ -178,6 +181,7 @@ bool RoadVehiclesAreBuilt()
 	return !RoadVehicle::Iterate().empty();
 }
 
+
 /**
  * Update road infrastructure counts for a company.
  * @param rt Road type to update count of.
@@ -194,6 +198,7 @@ void UpdateCompanyRoadInfrastructure(RoadType rt, Owner o, int count)
 	c->infrastructure.road[rt] += count;
 	DirtyCompanyInfrastructureWindows(c->index);
 }
+
 
 /** Invalid RoadBits on slopes.  */
 static const RoadBits _invalid_tileh_slopes_road[2][15] = {
@@ -256,6 +261,7 @@ static Foundation GetRoadFoundation(Slope tileh, RoadBits bits);
  * @param town_check Shall the town rating checked/affected
  * @return A succeeded command when it is allowed to remove the road bits, a failed command otherwise.
  */
+#ifndef WITH_RUST
 CommandCost CheckAllowRemoveRoad(TileIndex tile, RoadBits remove, Owner owner, RoadTramType rtt, DoCommandFlags flags, bool town_check)
 {
 	if (_game_mode == GM_EDITOR || remove == ROAD_NONE) return CommandCost();
@@ -308,6 +314,7 @@ CommandCost CheckAllowRemoveRoad(TileIndex tile, RoadBits remove, Owner owner, R
 
 	return CommandCost();
 }
+#endif /* WITH_RUST */
 
 
 /**
@@ -318,6 +325,7 @@ CommandCost CheckAllowRemoveRoad(TileIndex tile, RoadBits remove, Owner owner, R
  * @param rt roadtype to remove
  * @param town_check should we check if the town allows removal?
  */
+#ifndef WITH_RUST
 static CommandCost RemoveRoad(TileIndex tile, DoCommandFlags flags, RoadBits pieces, RoadTramType rtt, bool town_check)
 {
 	assert(pieces != ROAD_NONE);
@@ -525,6 +533,7 @@ static CommandCost RemoveRoad(TileIndex tile, DoCommandFlags flags, RoadBits pie
 			return CMD_ERROR;
 	}
 }
+#endif /* WITH_RUST */
 
 
 /**
@@ -538,6 +547,7 @@ static CommandCost RemoveRoad(TileIndex tile, DoCommandFlags flags, RoadBits pie
  * @param other The other existent RoadBits
  * @return The costs for these RoadBits on this slope
  */
+#ifndef WITH_RUST
 static CommandCost CheckRoadSlope(Slope tileh, RoadBits *pieces, RoadBits existing, RoadBits other)
 {
 	/* Remove already build pieces */
@@ -592,6 +602,7 @@ static CommandCost CheckRoadSlope(Slope tileh, RoadBits *pieces, RoadBits existi
 	}
 	return CMD_ERROR;
 }
+#endif /* WITH_RUST */
 
 /**
  * Build a piece of road.
@@ -603,6 +614,7 @@ static CommandCost CheckRoadSlope(Slope tileh, RoadBits *pieces, RoadBits existi
  * @param town_id the town that is building the road (TownID::Invalid() if not applicable)
  * @return the cost of this operation or an error
  */
+#ifndef WITH_RUST
 CommandCost CmdBuildRoad(DoCommandFlags flags, TileIndex tile, RoadBits pieces, RoadType rt, DisallowedRoadDirections toggle_drd, TownID town_id)
 {
 	CompanyID company = _current_company;
@@ -933,6 +945,7 @@ do_clear:;
 	}
 	return cost;
 }
+#endif /* WITH_RUST */
 
 /**
  * Checks whether a road or tram connection can be found when building a new road or tram.
@@ -941,6 +954,7 @@ do_clear:;
  * @param dir Direction that the road is following.
  * @return True if the next tile at dir direction is suitable for being connected directly by a second roadbit at the end of the road being built.
  */
+#ifndef WITH_RUST
 static bool CanConnectToRoad(TileIndex tile, RoadType rt, DiagDirection dir)
 {
 	tile += TileOffsByDiagDir(dir);
@@ -954,6 +968,7 @@ static bool CanConnectToRoad(TileIndex tile, RoadType rt, DiagDirection dir)
 	RoadBits bits = GetAnyRoadBits(tile, rtt, false);
 	return (bits & DiagDirToRoadBits(ReverseDiagDir(dir))) != 0;
 }
+#endif /* WITH_RUST */
 
 /**
  * Build a long piece of road.
@@ -970,6 +985,7 @@ static bool CanConnectToRoad(TileIndex tile, RoadType rt, DiagDirection dir)
  *      - true = Fail if an obstacle is found. Always take into account start_half and end_half. This behavior is used for scripts
  * @return the cost of this operation or an error
  */
+#ifndef WITH_RUST
 CommandCost CmdBuildLongRoad(DoCommandFlags flags, TileIndex end_tile, TileIndex start_tile, RoadType rt, Axis axis, DisallowedRoadDirections drd, bool start_half, bool end_half, bool is_ai)
 {
 	if (start_tile >= Map::Size()) return CMD_ERROR;
@@ -1055,6 +1071,7 @@ CommandCost CmdBuildLongRoad(DoCommandFlags flags, TileIndex end_tile, TileIndex
 
 	return had_success ? cost : last_error;
 }
+#endif /* WITH_RUST */
 
 /**
  * Remove a long piece of road.
@@ -1067,6 +1084,7 @@ CommandCost CmdBuildLongRoad(DoCommandFlags flags, TileIndex end_tile, TileIndex
  * @param end_half end tile starts in the 2nd half of tile (p2 & 2)
  * @return the cost of this operation or an error
  */
+#ifndef WITH_RUST
 std::tuple<CommandCost, Money> CmdRemoveLongRoad(DoCommandFlags flags, TileIndex end_tile, TileIndex start_tile, RoadType rt, Axis axis, bool start_half, bool end_half)
 {
 	CommandCost cost(EXPENSES_CONSTRUCTION);
@@ -1129,6 +1147,7 @@ std::tuple<CommandCost, Money> CmdRemoveLongRoad(DoCommandFlags flags, TileIndex
 
 	return { had_success ? cost : last_error, 0 };
 }
+#endif /* WITH_RUST */
 
 /**
  * Build a road depot.
@@ -1141,6 +1160,7 @@ std::tuple<CommandCost, Money> CmdRemoveLongRoad(DoCommandFlags flags, TileIndex
  * @todo When checking for the tile slope,
  * distinguish between "Flat land required" and "land sloped in wrong direction"
  */
+#ifndef WITH_RUST
 CommandCost CmdBuildRoadDepot(DoCommandFlags flags, TileIndex tile, RoadType rt, DiagDirection dir)
 {
 	if (!ValParamRoadType(rt) || !IsValidDiagDirection(dir)) return CMD_ERROR;
@@ -1197,7 +1217,9 @@ CommandCost CmdBuildRoadDepot(DoCommandFlags flags, TileIndex tile, RoadType rt,
 	cost.AddCost(_price[PR_BUILD_DEPOT_ROAD]);
 	return cost;
 }
+#endif /* WITH_RUST */
 
+#ifndef WITH_RUST
 static CommandCost RemoveRoadDepot(TileIndex tile, DoCommandFlags flags)
 {
 	if (_current_company != OWNER_WATER) {
@@ -1224,7 +1246,9 @@ static CommandCost RemoveRoadDepot(TileIndex tile, DoCommandFlags flags)
 
 	return CommandCost(EXPENSES_CONSTRUCTION, _price[PR_CLEAR_DEPOT_ROAD]);
 }
+#endif /* WITH_RUST */
 
+#ifndef WITH_RUST
 static CommandCost ClearTile_Road(TileIndex tile, DoCommandFlags flags)
 {
 	switch (GetRoadTileType(tile)) {
@@ -1275,6 +1299,7 @@ static CommandCost ClearTile_Road(TileIndex tile, DoCommandFlags flags)
 			return RemoveRoadDepot(tile, flags);
 	}
 }
+#endif /* WITH_RUST */
 
 
 struct DrawRoadTileStruct {
@@ -1948,6 +1973,7 @@ void DrawRoadDepotSprite(int x, int y, DiagDirection dir, RoadType rt)
  * @param invalidate are we just invalidating cached data?
  * @pre invalidate == true implies _generating_world == true
  */
+#ifndef WITH_RUST
 void UpdateNearestTownForRoadTiles(bool invalidate)
 {
 	assert(!invalidate || _generating_world);
@@ -1963,6 +1989,7 @@ void UpdateNearestTownForRoadTiles(bool invalidate)
 		}
 	}
 }
+#endif /* WITH_RUST */
 
 static int GetSlopePixelZ_Road(TileIndex tile, uint x, uint y, bool)
 {
@@ -2003,9 +2030,8 @@ const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept
 		.all_bits = [](uint32_t t) noexcept { return GetAllRoadBits(TileIndex{t}); },
 		.bulldozer = [](uint32_t t) noexcept { RustCreateEffectAbove(TileX(TileIndex{t}) * TILE_SIZE + 7, TileY(TileIndex{t}) * TILE_SIZE + 7, 0, EV_BULLDOZER); },
 		.cleanup = [](uint32_t t, RoadBits bits) noexcept { return RustCleanRoadBits(TileIndex{t}, bits); },
-		.remove = [](uint32_t t, RoadBits bits) noexcept { RemoveRoad(TileIndex{t}, {DoCommandFlag::Execute, DoCommandFlag::Auto, DoCommandFlag::NoWater}, bits, RTT_ROAD, true); },
 		.town = &GetRustTownServices(),
-		.set_road_type = [](uint32_t t, RoadType type) noexcept { SetRoadType(TileIndex{t}, RTT_ROAD, type); },
+		.set_road_type = [](uint32_t t, RoadType type) noexcept { RustSetRoadType(TileIndex{t}, RTT_ROAD, type); },
 	};
 	return services;
 }
@@ -2341,6 +2367,7 @@ static VehicleEnterTileStates VehicleEnter_Road(Vehicle *v, TileIndex tile, int,
 }
 
 
+#ifndef WITH_RUST
 static void ChangeTileOwner_Road(TileIndex tile, Owner old_owner, Owner new_owner)
 {
 	if (IsRoadDepot(tile)) {
@@ -2394,7 +2421,9 @@ static void ChangeTileOwner_Road(TileIndex tile, Owner old_owner, Owner new_owne
 		}
 	}
 }
+#endif /* WITH_RUST */
 
+#ifndef WITH_RUST
 static CommandCost TerraformTile_Road(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
 {
 	if (_settings_game.construction.build_on_slopes && AutoslopeEnabled()) {
@@ -2433,6 +2462,7 @@ static CommandCost TerraformTile_Road(TileIndex tile, DoCommandFlags flags, int 
 
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
 }
+#endif /* WITH_RUST */
 
 /**
  * Checks the tile and returns whether the current player is allowed to convert the roadtype to another roadtype without taking ownership
@@ -2440,10 +2470,12 @@ static CommandCost TerraformTile_Road(TileIndex tile, DoCommandFlags flags, int 
  * @param rtt Road/tram type.
  * @return whether the road is convertible
  */
+#ifndef WITH_RUST
 static bool CanConvertUnownedRoadType(Owner owner, RoadTramType rtt)
 {
 	return (owner == OWNER_NONE || (owner == OWNER_TOWN && rtt == RTT_ROAD));
 }
+#endif /* WITH_RUST */
 
 /**
  * Convert the ownership of the RoadType of the tile if applicable
@@ -2453,6 +2485,7 @@ static bool CanConvertUnownedRoadType(Owner owner, RoadTramType rtt)
  * @param from_type the old road type
  * @param to_type the new road type
  */
+#ifndef WITH_RUST
 static void ConvertRoadTypeOwner(TileIndex tile, uint num_pieces, Owner owner, RoadType from_type, RoadType to_type)
 {
 	/* Scenario editor, maybe? Don't touch the owners when converting roadtypes... */
@@ -2477,6 +2510,7 @@ static void ConvertRoadTypeOwner(TileIndex tile, uint num_pieces, Owner owner, R
 		break;
 	}
 }
+#endif /* WITH_RUST */
 
 /**
  * Convert one road subtype to another.
@@ -2488,6 +2522,7 @@ static void ConvertRoadTypeOwner(TileIndex tile, uint num_pieces, Owner owner, R
  * @param to_type new roadtype to convert to.
  * @return the cost of this operation or an error
  */
+#ifndef WITH_RUST
 CommandCost CmdConvertRoad(DoCommandFlags flags, TileIndex tile, TileIndex area_start, RoadType to_type, bool diagonal)
 {
 	TileIndex area_end = tile;
@@ -2676,12 +2711,155 @@ CommandCost CmdConvertRoad(DoCommandFlags flags, TileIndex tile, TileIndex area_
 
 	return found_convertible_road ? cost : error;
 }
+#endif /* WITH_RUST */
 
+#ifndef WITH_RUST
 static CommandCost CheckBuildAbove_Road(TileIndex tile, DoCommandFlags flags, Axis, int)
 {
 	if (!IsRoadDepot(tile)) return CommandCost();
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
 }
+#endif /* WITH_RUST */
+
+#ifdef WITH_RUST
+#include "rust/road_command_ffi.h"
+#include "rust/road_command_services.h"
+#include "rust/town_services.h"
+#include "rust/rail_command_services.h"
+#include "rust/command_cost_services.h"
+#include "rust/command_cost_native_services.h"
+#include "rust/company_services.h"
+#include "rust/vehicle_services.h"
+#include "rust/environment_services.h"
+#include "rust/settings_services.h"
+#include "rust/services_road.h"
+#include "window_func.h"
+static_assert(MP_VOID == 7 && DoCommandFlags{DoCommandFlag::AllTiles}.base() == 256);
+static_assert(ROAD_DEPOT_TRACKBIT_FACTOR == 2 && ROAD_STOP_TRACKBIT_FACTOR == 2 && MAX_COMPANIES == 15);
+static_assert(PR_BUILD_DEPOT_ROAD == 6 && PR_CLEAR_DEPOT_ROAD == 31 && PR_BUILD_FOUNDATION == 57);
+static_assert(OWNER_TOWN.base() == 15 && OWNER_NONE.base() == 16 && INVALID_OWNER.base() == 255);
+static_assert(FOUNDATION_NONE == 0 && FOUNDATION_LEVELED == 1 && FOUNDATION_INCLINED_X == 2 && FOUNDATION_INCLINED_Y == 3);
+static CommandCost &RoadCost(OpenTTDCommandCost *cost) noexcept { return *reinterpret_cast<CommandCost *>(cost); }
+static void RoadOwnedByTown(OpenTTDCommandCost *out, uint32_t tile) noexcept
+{
+	RoadCost(out).MakeError(STR_ERROR_OWNED_BY);
+	if (RustIsLocalCompany()) RustEncodeOwnedBy(RoadCost(out), OWNER_TOWN, TileIndex{tile});
+}
+static OpenTTDRoadWorksEffect RoadNextEffect(uint32_t from) noexcept
+{
+	for (const EffectVehicle *v : EffectVehicle::Iterate(from)) return {.id = v->index.base(), .tile = TileVirtXY(v->x_pos, v->y_pos).base()};
+	return {.id = UINT32_MAX, .tile = 0};
+}
+static void RoadCollectVehicles(OpenTTDRoadConvertFrame *frame, uint32_t tile) noexcept
+{
+	for (Vehicle *v : RustVehiclesOnTile(TileIndex{tile})) {
+		if (RustVehicleVehicleType(v) == VEH_ROAD) include(frame->affected, RustVehicleFirst(RoadVehicle::From(v)));
+	}
+}
+const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
+{
+	static const OpenTTDRoadCommandServices services{
+		.do_build = openttd_rust_road_do_build,
+		.rail_commands = &GetRustRailCommandServices(), .town = &GetRustTownServices(), .authority = &GetRustTownAuthorityServices(),
+		.strings = { .no_road = STR_ERROR_THERE_IS_NO_ROAD, .no_tram = STR_ERROR_THERE_IS_NO_TRAMWAY,
+			.junction = STR_ERROR_ONEWAY_ROADS_CAN_T_HAVE_JUNCTION, .remove_road = STR_ERROR_MUST_REMOVE_ROAD_FIRST,
+			.no_suitable_road = STR_ERROR_NO_SUITABLE_ROAD, .no_suitable_tram = STR_ERROR_NO_SUITABLE_TRAMWAY,
+			.authority = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS },
+		.nearest_tile = [](uint32_t index) noexcept -> OpenTTDRoadNearestTownTile {
+			TileIndex tile{index};
+			bool road = IsTileType(tile, MP_ROAD);
+			bool depot = road && IsRoadDepot(tile);
+			return {.road = road, .depot = depot, .town_owned = road && !depot && HasTownOwnedRoad(tile)};
+		},
+		.town_valid = [](uint16_t town) noexcept { return Town::IsValidID(TownID(town)); },
+		.town_edge = [](const OpenTTDTownHandle *handle) noexcept -> OpenTTDRoadTownEdge {
+			const Town *town = reinterpret_cast<const Town *>(handle);
+			return {.tile = town->xy.base(), .radius = town->cache.squared_town_zone_radius[to_underlying(HouseZone::TownEdge)]};
+		},
+		.set_town = RustSetTownIndex,
+		.foundation = [](uint8_t slope, uint8_t bits) noexcept { return GetRoadFoundation(static_cast<Slope>(slope), static_cast<RoadBits>(bits)); },
+		.extra_dynamite = RustExtraDynamite,
+		.depot_slope = [](uint8_t dir, uint8_t slope) noexcept { return CanBuildDepotByTileh(static_cast<DiagDirection>(dir), static_cast<Slope>(slope)); },
+		.make_depot = [](uint32_t tile, uint8_t owner, uint16_t depot, uint8_t dir, uint8_t rt) noexcept { MakeRoadDepot(TileIndex{tile}, Owner(owner), DepotID(depot), static_cast<DiagDirection>(dir), static_cast<RoadType>(rt)); },
+		.depot_exit = [](uint32_t tile, uint8_t dir) noexcept { SetRoadDepotExitDirection(TileIndex{tile}, static_cast<DiagDirection>(dir)); },
+		.next_effect = RoadNextEffect,
+		.delete_effect = [](uint32_t id) noexcept { delete EffectVehicle::Get(VehicleID(id)); },
+		.owned_by_town = RoadOwnedByTown,
+		.scratch_cost = [](OpenTTDRoadCommandScratch *scratch) noexcept { return RustCommandCost(&scratch->ret.emplace()); },
+		.conversion_scratch = [](OpenTTDRoadCommandScratch *scratch) noexcept -> OpenTTDRoadConversionScratch {
+			auto &s = scratch->conversion.emplace();
+			return {.frame = &s.frame, .area = &s.area, .error = RustCommandCost(&s.error), .ret = RustCommandCost(&s.ret)};
+		},
+		.collect_vehicles = RoadCollectVehicles,
+		.cargo_changed = [](OpenTTDRoadConvertFrame *frame) noexcept { for (RoadVehicle *v : frame->affected) RustGroundCargoChanged(v); },
+	};
+	return services;
+}
+static const OpenTTDRoadCommandServices *RoadServices() noexcept { return &GetRustRoadCommandServices(); }
+CommandCost CmdBuildRoad(DoCommandFlags flags, TileIndex tile, RoadBits bits, RoadType rt, DisallowedRoadDirections drd, TownID town)
+{
+	OpenTTDRoadCommandScratch nested;
+	CommandCost cost, ret;
+	openttd_rust_road_build(RoadServices(), &nested, RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), bits, rt, drd, town.base());
+	return cost;
+}
+CommandCost CmdBuildLongRoad(DoCommandFlags flags, TileIndex tile, TileIndex start, RoadType rt, Axis axis, DisallowedRoadDirections drd, bool start_half, bool end_half, bool is_ai)
+{
+	OpenTTDRoadCommandScratch nested;
+	CommandCost cost, last, ret;
+	openttd_rust_road_build_long(RoadServices(), &nested, RustCommandCost(&cost), RustCommandCost(&last), RustCommandCost(&ret), flags.base(), tile.base(), start.base(), rt, axis, drd, start_half, end_half, is_ai);
+	return cost;
+}
+std::tuple<CommandCost, Money> CmdRemoveLongRoad(DoCommandFlags flags, TileIndex tile, TileIndex start, RoadType rt, Axis axis, bool start_half, bool end_half)
+{
+	OpenTTDRoadCommandScratch nested;
+	CommandCost cost, last, ret, scratch;
+	Money extra(openttd_rust_road_remove_long(RoadServices(), &nested, RustCommandCost(&cost), RustCommandCost(&last), RustCommandCost(&ret), RustCommandCost(&scratch), flags.base(), tile.base(), start.base(), rt, axis, start_half, end_half));
+	return {std::move(cost), extra};
+}
+CommandCost CmdBuildRoadDepot(DoCommandFlags flags, TileIndex tile, RoadType rt, DiagDirection dir)
+{
+	CommandCost cost, ret;
+	openttd_rust_road_build_depot(RoadServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), rt, dir);
+	return cost;
+}
+static CommandCost ClearTile_Road(TileIndex tile, DoCommandFlags flags)
+{
+	CommandCost cost, ret, scratch;
+	openttd_rust_road_clear(RoadServices(), RustCommandCost(&cost), RustCommandCost(&ret), RustCommandCost(&scratch), flags.base(), tile.base());
+	return cost;
+}
+void UpdateNearestTownForRoadTiles(bool invalidate)
+{
+	assert(!invalidate || _generating_world);
+	openttd_rust_road_nearest_towns(RoadServices(), invalidate);
+}
+static void ChangeTileOwner_Road(TileIndex tile, Owner old_owner, Owner new_owner)
+{
+	CommandCost ret, scratch;
+	openttd_rust_road_change_owner(RoadServices(), RustCommandCost(&ret), RustCommandCost(&scratch), tile.base(), old_owner.base(), new_owner.base());
+}
+static CommandCost TerraformTile_Road(TileIndex tile, DoCommandFlags flags, int z_new, Slope slope)
+{
+	CommandCost cost, scratch;
+	openttd_rust_road_terraform(RoadServices(), RustCommandCost(&cost), RustCommandCost(&scratch), flags.base(), tile.base(), z_new, slope);
+	return cost;
+}
+CommandCost CmdConvertRoad(DoCommandFlags flags, TileIndex tile, TileIndex start, RoadType rt, bool diagonal)
+{
+	CommandCost cost, error, ret;
+	OpenTTDRoadConvertFrame frame;
+	OpenTTDRailConvertFrame area;
+	openttd_rust_road_convert(RoadServices(), &frame, &area, RustCommandCost(&cost), RustCommandCost(&error), RustCommandCost(&ret), flags.base(), tile.base(), start.base(), rt, diagonal);
+	return cost;
+}
+static CommandCost CheckBuildAbove_Road(TileIndex tile, DoCommandFlags flags, Axis, int)
+{
+	CommandCost cost;
+	openttd_rust_road_build_above(RoadServices(), RustCommandCost(&cost), flags.base(), tile.base());
+	return cost;
+}
+#endif /* WITH_RUST */
 
 /** Tile callback functions for road tiles */
 extern const TileTypeProcs _tile_type_road_procs = {
@@ -2705,3 +2883,9 @@ extern const TileTypeProcs _tile_type_road_procs = {
 	TerraformTile_Road,      // terraform_tile_proc
 	CheckBuildAbove_Road, // check_build_above_proc
 };
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDRoadCommandServices.hpp"
+bool CheckAbi_road_cmd() { return AbiServicesComplete(GetRustRoadCommandServices()); }
+#endif

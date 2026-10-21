@@ -258,10 +258,11 @@ directories and runtime libraries; keep profiling separate from timing samples.
 Timings include startup, loading, serial link-graph work and save I/O. Benchmark
 games wait directly for child exit with a timeout watchdog; ordinary runs retain
 subprocess timeout polling, which can add about 50 ms.
-Shared coordination does not reserve a quiet host. Wall medians count only when
-no builds, links or other timed games run. Compile load moves P2016 medians 2-7%
-and concurrent timed games about 10% either way. Quiet passes take four medians
-per scenario separately from instruction profiles and establish complete anchors.
+Shared coordination does not reserve a quiet host. Wall medians are taken only
+in speed passes, with no builds, links or other timed games running. Compile load
+moves P2016 medians 2-7% and concurrent timed games about 10% either way. A speed
+pass takes four medians per scenario separately from instruction profiles and
+establishes complete anchors.
 
 `python3 tools/migration.py simulate --instructions --jobs 2` profiles the six
 speed scenarios with witnesses off, `-r 64x64`, and exact Callgrind selectors
@@ -279,15 +280,15 @@ separate from the compatibility identity checked against anchors.
 `SPEED_ANCHORS` in `tools/simulation/roads.py` holds each measured anchor
 `{head, ratio, Ir, identity}` and a separate latest `integrated` record with its
 head and Ir. Empty anchors mean collection only, never a passing speed guard.
-Root fills them from the initial same-head quiet pass. Compute each projection
+Each speed pass fills them from its same-head quiet medians. Compute each projection
 as `R0 * (1 + 2 * max(0, I / I0 - 1))`, directly from the fixed anchor. The
 rolling guard is 15% above the integrated head's projection from that same
 anchor; ceilings remain 1.5x play and 1.3x generation, with a speed-pass trigger
 within 5%. Integration updates only `integrated`; quiet passes replace the whole
-anchor and refresh `integrated` together. Never reset anchor Ir alone. Factor 2
-is provisional, not a proven latency bound: historical changes across all six
-workloads must calibrate it. Memory stalls, excluded work and kernel/I/O costs
-remain outside the proxy. The roadmap schedules periodic quiet speed passes.
+anchor and refresh `integrated` together. Never reset anchor Ir alone. Profiles
+run alongside other agents; a PR does not answer for wall-ratio layout spread,
+which speed passes measure. Factor 2 is provisional. Memory stalls, excluded work
+and kernel/I/O costs remain outside the proxy. AGENTS.md schedules speed passes.
 
 ## Native macOS arm64 Rust linkage
 
@@ -1239,9 +1240,28 @@ control supplies that limit between the shared native visual-effect gate and tai
 observes movement/speed inputs again after effects. Default native/ABI checks cover the
 front-state/curve/bridge domains and pre/post-effect ordering; train callers keep the shared policy.
 
+#330 folds tick-front capture into the native tick entry. Named read-only scalar places
+are loaded at the prologue branches, then discarded before controller callbacks; counter
+writes stay native and wrap explicitly in Rust. Default native fixtures cover real address
+identity, fresh loads, status resets, front/nonfront policy and counter boundaries.
+
 The default `roads-` simulation compares acceleration, servicing, path, RNG, crash expiry and
 reload. Legacy saves, custom NewGRFs, articulated/tram turns, sounds and viewport pixels remain
 limits tracked by #156.
+
+### Shared tile ownership dispatch (#331)
+
+Rust owns the general `ChangeTileOwner` tile-kind dispatch and directly calls the
+integrated rail, road, station, water and industry owners. Native clear, house,
+tree, void, tunnel/bridge and object handlers remain separate typed leaves; the
+original general dispatcher remains portable. Company transfer/control/buy and
+native landscape/station entries own call-local constructed costs and the full
+canonical road context. Nested station removal returns before scratch reuse;
+AI startup still returns to its native outer frame before it can throw.
+The default `water-commands` scenario compares captured ownership errors,
+restored-tile transfer/bankruptcy, native objects, depot bankruptcy, map state,
+both water balances, docking and RNG. This is shared boundary maintenance, with
+no new subsystem ownership or retirement completion claim.
 
 ### Company finances and economy lifecycle
 
@@ -1476,6 +1496,13 @@ private counters/cache and airport masks; trivial C++ save aliases preserve thei
 #237 borrows shared vehicle/map/settings/RNG services directly. No owner borrow crosses
 ProcessOrders/loading, depot/refit, animation, crash or deletion. Runtime dimensions are
 captured per entry; wrapping arithmetic/RNG order remain.
+#325 gives the controller one stack descriptor of named canonical native x/y/z,
+speed, Direction and subtype addresses; position alone acquires only subtype/z.
+Raw reads end before callbacks, with fresh loads after native mutations. Geometry,
+map, speed/dirty, direction/new-position, NewGRF cache/image, sound and crash-marking
+services preserve the shell; pool growth moves slots, not vehicles. Descriptors end
+before airport state handlers/depot work, deleting crash cleanup, replacement or
+load/reset. Standalone flight/disaster entries retain their narrow services.
 
 The default `aircraft` and `disasters` scenarios exercise traffic, service, removal, crash and
 reload. Real NewGRF/refit/airport rotations, threaded GUI, legacy-save fixtures and presentation
@@ -1568,6 +1595,31 @@ conversion/reroutes, clearing/terraforming, company transfer/deletion and reserv
 Coast/half-tile water and PBS path-end removal remain #156 gaps. PR #270 records
 exact-head checks and outstanding full-simulation, speed and CI gates.
 
+### Road track, depot and conversion commands (#266)
+
+Rust (`road_cmd.rs`) owns road removal permissions and slopes, single and long
+build/removal, depots, clear/owner/nearest-town updates, terraform, conversion and
+build-above. Portable originals remain. Native road-type allocation, drawing,
+track-status/vehicle-enter and tile loops stay outside this command port.
+The boundary reuses shared command checks and native stack costs, road/rail map
+leaves, company counters, depots, crossings and the rail conversion cursor.
+Rust road/station helpers share the ordinary nesting, test/execute, rating and
+finance lifecycle. Outer native town, founding, controller and tile-loop frames
+provide one stack scratch and two result slots for direct Rust owner calls.
+Shared Rust also owns road prices and tile clearing; native facades retain portable
+originals and typed storage/error leaves. Town/tram builds enter the Rust road
+owner directly; ground removal, nearest-town and bankrupt rail calls are direct.
+Town authority and rating policy call the integrated Rust owner directly.
+Crossing reservation reads/writes now have one canonical definition shared with
+trains. The canonical `MayHaveRoad` predicate preserves rail-station/head guards.
+The nearest-town map scan bundles only its reached original predicates per tile.
+No world-state borrow spans nested commands or vehicle/town callbacks.
+The default `roads-commands` and `roads-commands-reload` scenarios compare test and
+execute outcomes, costs/extra cash, semantic maps, company/town state and RNG,
+including drags, one-way/tram coexistence, reserved crossings, stops, bridges,
+depots, slopes, town removal, owner changes and low-funds removal.
+The fixture declares builtin-like road-type inputs; external NewGRF programs and
+legacy save variants remain corpus gaps. PR #290 records validation and speed.
 ### House lifecycle and tile simulation (#256)
 
 `town/house.rs` owns `TileLoop_Town` (construction stages, rebuild/replacement, original and
