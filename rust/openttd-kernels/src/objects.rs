@@ -391,7 +391,6 @@ const PR_BUILD_FOUNDATION: usize = 57;
 const EXECUTE: u16 = 1;
 const AUTO: u16 = 2;
 const NO_WATER: u16 = 8;
-const ALL_TILES: u16 = 1 << 8;
 const CONSTRUCTION: u8 = 0;
 const FAILED: u16 = 0xffff;
 const SCENEDIT: u16 = 1;
@@ -1291,7 +1290,7 @@ impl World<'_> {
     ) {
         let result = crate::services::Cost(out.0, out.1);
         crate::command::nested(self.commands(), self.shared, result, tile, flags, |flags| {
-            self.build_command(out, tmp, aux, flags, tile, kind, view)
+            self.build_command(out, tmp, aux, flags, tile, kind, view);
         });
     }
     fn build_area(
@@ -2092,14 +2091,12 @@ pub unsafe extern "C" fn openttd_rust_object_generate(
     w.generate(frame, out, tmp, aux)
 }
 
-/// Synchronous object owner entry.
+/// `ChangeTileOwner_Object`, entered only from the shared ownership dispatcher.
 /// # Safety
-/// Immutable tables, live native cost/frame/array storage and original tile/ID
-/// preconditions; serialized with reset/save/load. No native pointer is retained.
-/// Services may reenter after all state accesses end. Native cancellation is
-/// returned before C++ rethrows; other leaves are noexcept. Panics abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_change_owner(
+/// Immutable tables and the dispatcher's live native scratch outlive the
+/// synchronous call; original tile/ID preconditions. No native pointer is
+/// retained. Services may reenter after all state accesses end. Panics abort.
+pub(crate) unsafe fn openttd_rust_object_change_owner(
     s: *const ObjectServices,
     ownership: &crate::tile_owner::Context,
     tile: u32,

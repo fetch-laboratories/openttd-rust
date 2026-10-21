@@ -23,7 +23,6 @@ struct OpenTTDGroundCall;
 struct OpenTTDTownFoundingServices;
 struct OpenTTDIndustryTileServices;
 struct OpenTTDWaterRestorationServices;
-struct OpenTTDTileOwnerContext;
 struct ObjectSpec;
 struct Object;
 struct Town;
@@ -165,7 +164,6 @@ void openttd_rust_object_clear(const OpenTTDObjectServices * services, OpenTTDCo
 void openttd_rust_object_cargo(const OpenTTDObjectServices * services, uint32_t tile, uint32_t * cargo, uint64_t * accepted);
 void openttd_rust_object_tile_loop(const OpenTTDObjectServices * services, OpenTTDObjectLoopFrame * frame, OpenTTDGroundCall * call, uint32_t tile);
 bool openttd_rust_object_generate(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, OpenTTDCommandCost * tmp, OpenTTDCommandCost * aux, OpenTTDObjectGenerationFrame * frame);
-void openttd_rust_object_change_owner(const OpenTTDObjectServices * services, const OpenTTDTileOwnerContext * ownership, uint32_t tile, uint8_t old, uint8_t new_owner);
 void openttd_rust_object_terraform(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, uint32_t tile, uint16_t flags, int32_t z, Slope slope);
 void openttd_rust_object_build_above(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, uint32_t tile, uint16_t flags, int32_t height);
 }
