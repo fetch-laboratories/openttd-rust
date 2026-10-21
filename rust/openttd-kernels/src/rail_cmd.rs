@@ -1922,7 +1922,7 @@ impl<'a> Ctx<'a> {
                     let track = if tt == MP_STATION {
                         (self.rail.station_track)(tile).0
                     } else {
-                        (self.rail.crossing_road_axis)(tile).0 ^ 1
+                        crate::ground::crossing_rail_track(tile, self.rail).0
                     };
                     (self.s.layout_changed)(tile, track);
                 }

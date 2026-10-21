@@ -19,9 +19,36 @@
     clippy::too_many_arguments
 )]
 use crate::services::{
-    ClearGroundType, DiagDirection, Foundation, FoundationSlope, LandscapeType, RailGroundType,
-    RoadBits, RoadType, Roadside, Services, Slope, TrackBits, WaterClass,
+    Axis, ClearGroundType, DiagDirection, Foundation, FoundationSlope, LandscapeType,
+    RailGroundType, RailMapServices, RoadBits, RoadType, Roadside, Services, Slope, Track,
+    TrackBits, WaterClass,
 };
+
+/// Original `SetTunnelBridgeOwner`, preserving begin/end store order.
+pub(crate) fn set_tunnel_bridge_owner(begin: u32, end: u32, owner: u8, s: &Services) {
+    (s.set_tile_owner)(begin, owner);
+    (s.set_tile_owner)(end, owner);
+}
+
+/// Original `OtherAxis` for a source-valid axis.
+fn other_axis(axis: Axis) -> Axis {
+    Axis(axis.0 ^ 1)
+}
+
+/// Original `AxisToTrack`; valid axes and axial tracks share their encoding.
+fn axis_to_track(axis: Axis) -> Track {
+    Track(axis.0)
+}
+
+/// Original `GetCrossingRailAxis`, over the canonical road-axis accessor.
+fn crossing_rail_axis(tile: u32, rail: &RailMapServices) -> Axis {
+    other_axis((rail.crossing_road_axis)(tile))
+}
+
+/// Original `GetCrossingRailTrack`, retaining its named helper composition.
+pub(crate) fn crossing_rail_track(tile: u32, rail: &RailMapServices) -> Track {
+    axis_to_track(crossing_rail_axis(tile, rail))
+}
 
 /// Complete original `DoClearSquare` control. Native leaves cannot throw and no
 /// owner borrow survives their invocation; world access is serialized.

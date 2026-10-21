@@ -19,6 +19,7 @@
     clippy::if_not_else,
     clippy::fn_params_excessive_bools
 )]
+use crate::company::COMPANIES as MAX_COMPANIES;
 use crate::rail_cmd::{
     CROSSING_SLOPES, ConvertFrame as Area, CrossingRoad, Foundation, LEVELCROSSING_TRACKBIT_FACTOR,
     RailCommandServices, TUNNELBRIDGE_TRACKBIT_FACTOR,
@@ -182,6 +183,7 @@ const RATING_ROAD_DOWN_STEP_EDGE: i32 = -18;
 const RATING_ROAD_DOWN_STEP_INNER: i32 = -50;
 const RATING_ROAD_MINIMUM: i32 = -100;
 const ROAD_DEPOT_TRACKBIT_FACTOR: u32 = 2;
+const ROAD_STOP_TRACKBIT_FACTOR: u32 = 2;
 const INVALID_SLOPES: [[u8; 15]; 2] = [
     [0, 12, 9, 8, 3, 0, 1, 0, 6, 4, 0, 0, 2, 0, 0],
     [0, 0, 0, 5, 0, 15, 10, 15, 0, 10, 15, 15, 5, 15, 15],
@@ -219,6 +221,10 @@ fn simple_slope(slope: u8) -> u8 {
 }
 fn price(index: usize) -> i64 {
     crate::company::price(index)
+}
+/// Original `CanConvertUnownedRoadType` permission helper.
+fn can_convert_unowned_road_type(owner: u8, rtt: u8) -> bool {
+    owner == NONE || (owner == TOWN && rtt == 0)
 }
 struct Ctx<'a> {
     s: &'a RoadCommandServices,
@@ -669,7 +675,7 @@ impl<'a> Ctx<'a> {
                 if flags & EXEC != 0 {
                     (self.r.crossing_removed)(tile, (self.rail.crossing_road_axis)(tile).0);
                     self.infrastructure(rt, self.owner(tile, rtt), -2);
-                    let track = (self.rail.crossing_road_axis)(tile).0 ^ 1;
+                    let track = crate::ground::crossing_rail_track(tile, self.rail).0;
                     if self.rt(tile, rtt ^ 1) == INVALID {
                         let tracks = (self.rail.crossing_rail_bits)(tile).0;
                         let reserved = (self.shared.crossing_reserved)(tile);
@@ -1533,8 +1539,12 @@ impl<'a> Ctx<'a> {
                     if rt == INVALID {
                         rt = self.rt(tile, 1);
                     }
-                    (self.r.road_infrastructure)(old, rt, 2_u32.wrapping_neg());
-                    (self.r.road_infrastructure)(new, rt, 2);
+                    (self.r.road_infrastructure)(
+                        old,
+                        rt,
+                        ROAD_DEPOT_TRACKBIT_FACTOR.wrapping_neg(),
+                    );
+                    (self.r.road_infrastructure)(new, rt, ROAD_DEPOT_TRACKBIT_FACTOR);
                     (self.shared.set_tile_owner)(tile, new);
                     for rtt in [0, 1] {
                         if self.owner(tile, rtt) == old {
@@ -1564,7 +1574,7 @@ impl<'a> Ctx<'a> {
         }
         if (self.shared.is_level_crossing)(tile) && (self.shared.tile_owner)(tile) == old {
             if new == 255 {
-                let track = (self.rail.crossing_road_axis)(tile).0 ^ 1;
+                let track = crate::ground::crossing_rail_track(tile, self.rail).0;
                 self.command(ret, EXEC | BANKRUPT, tile, |flags| {
                     // SAFETY: the outer owner-change frame owns both native results.
                     unsafe {
@@ -1581,8 +1591,8 @@ impl<'a> Ctx<'a> {
                 });
             } else {
                 let rt = (self.rail.rail_type)(tile).0;
-                (self.r.rail_infrastructure)(old, rt, 2_u32.wrapping_neg());
-                (self.r.rail_infrastructure)(new, rt, 2);
+                (self.r.rail_infrastructure)(old, rt, LEVELCROSSING_TRACKBIT_FACTOR.wrapping_neg());
+                (self.r.rail_infrastructure)(new, rt, LEVELCROSSING_TRACKBIT_FACTOR);
                 (self.shared.set_tile_owner)(tile, new);
             }
         }
@@ -1641,7 +1651,9 @@ impl<'a> Ctx<'a> {
     }
     fn convert_owner(&self, tile: u32, num: u32, owner: u8, from: u8, to: u8) {
         let company = (self.shared.current_company)();
-        if company >= 15 || (owner >= 15 && owner != NONE) {
+        if u32::from(company) >= MAX_COMPANIES
+            || (u32::from(owner) >= MAX_COMPANIES && owner != NONE)
+        {
             return;
         }
         if owner == NONE {
@@ -1751,7 +1763,7 @@ impl<'a> Ctx<'a> {
             _ => return,
         }
         let owner = self.owner(tile, rtt);
-        if owner != NONE && !(owner == TOWN && rtt == 0) {
+        if !can_convert_unowned_road_type(owner, rtt) {
             self.ownership(ret, owner, tile);
             if !ret.ok() {
                 error.take(ret);
@@ -1782,10 +1794,10 @@ impl<'a> Ctx<'a> {
                 }
             }
             let mut num = self.any_bits(tile, rtt).count_ones();
-            if (tt == STATION && (self.shared.is_bay_stop)(tile))
-                || (tt == ROAD && (self.shared.is_road_depot)(tile))
-            {
-                num = num.wrapping_mul(2);
+            if tt == STATION && (self.shared.is_bay_stop)(tile) {
+                num = num.wrapping_mul(ROAD_STOP_TRACKBIT_FACTOR);
+            } else if tt == ROAD && (self.shared.is_road_depot)(tile) {
+                num = num.wrapping_mul(ROAD_DEPOT_TRACKBIT_FACTOR);
             }
             *found = true;
             cost.add_money(
@@ -1833,9 +1845,19 @@ impl<'a> Ctx<'a> {
             if flags & EXEC != 0 {
                 w::hit(w::ROAD_COMMANDS_CONVERT_WORMHOLE);
                 if owner == (self.shared.current_company)() {
-                    self.convert_owner(tile, num.wrapping_mul(4), owner, from, to);
-                    (self.shared.set_tile_owner)(tile, (self.shared.current_company)());
-                    (self.shared.set_tile_owner)(other, (self.shared.current_company)());
+                    self.convert_owner(
+                        tile,
+                        num.wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR),
+                        owner,
+                        from,
+                        to,
+                    );
+                    crate::ground::set_tunnel_bridge_owner(
+                        tile,
+                        other,
+                        (self.shared.current_company)(),
+                        self.shared,
+                    );
                 }
                 (self.shared.set_road_type)(tile, rtt, to);
                 (self.shared.set_road_type)(other, rtt, to);
