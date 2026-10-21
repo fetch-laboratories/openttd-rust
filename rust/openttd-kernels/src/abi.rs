@@ -154,7 +154,6 @@ layouts! {
         close_stop_inspect,
         road_waypoint_area,
         set_road_waypoint_area,
-        vehicles_on_tile,
         road_vehicle_owner,
         order_station_location,
         aircraft,
@@ -355,9 +354,6 @@ layouts! {
         width,
         height,
     };
-    "OpenTTDTileVehicleCursor" ["landscape"] => crate::water::TileVehicleCursor {
-        storage,
-    };
     "OpenTTDWaterGroundServices" ["landscape"] => crate::water::WaterServices {
         rail,
         clear,
@@ -374,10 +370,6 @@ layouts! {
         region_context,
         remove_rail,
         apply_foundation,
-        iterator_begin,
-        iterator_current,
-        iterator_next,
-        iterator_end,
         airport_tile,
         airport,
         airport_member,
@@ -861,6 +853,7 @@ layouts! {
         rail_track_status,
         has_signals,
         signal_type,
+        invalid_rail_type,
         rail_type,
         set_rail_type,
         rail_tile_type,
@@ -1404,7 +1397,6 @@ layouts! {
         build_on_slopes,
         calendar_date,
         calendar_year,
-        clear_square,
         clear_square_services,
         calc_closest_town,
         closest_town,
@@ -1478,6 +1470,7 @@ layouts! {
         tile_owner,
         tile_slope,
         tile_type,
+        tile_add_wrap,
         tile_valid,
         tile_z,
         town_index,
@@ -1513,6 +1506,7 @@ layouts! {
         status,
     };
     "OpenTTDVehicleServices" ["probe"] => crate::vehicle::VehicleServices {
+        vehicles_on_tile,
         write_counters,
         handle_breakdown,
         waiting_for_unbunching,
@@ -1546,6 +1540,7 @@ layouts! {
         write_speed,
         last_station,
         write_last_station,
+        set_dest_tile,
         write_dest,
         write_progress,
         write_max_speed,

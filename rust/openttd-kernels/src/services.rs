@@ -301,8 +301,6 @@ pub struct Services {
     pub calendar_date: extern "C" fn() -> i32,
     /// Current calendar year used by town and industry.
     pub calendar_year: extern "C" fn() -> i32,
-    /// `DoClearSquare`.
-    pub clear_square: extern "C" fn(u32),
     /// Native leaves for direct shared Rust clear-square control.
     pub clear_square_services: ClearSquareServices,
     /// Original native uncached nearest-town spatial lookup.
@@ -450,6 +448,8 @@ pub struct Services {
     pub tile_slope: extern "C" fn(u32) -> u8,
     /// `GetTileType`.
     pub tile_type: extern "C" fn(u32) -> u8,
+    /// Original `TileAddWrap`, including map and freeform-edge checks.
+    pub tile_add_wrap: extern "C" fn(u32, i32, i32) -> u32,
     /// Original native `tile_valid` map observation.
     pub tile_valid: extern "C" fn(u32) -> bool,
     /// `GetTileZ`.
@@ -594,7 +594,6 @@ pub fn fixture(
         build_on_slopes: flag0,
         calendar_date: zero_year,
         calendar_year: zero_year,
-        clear_square: tile,
         clear_square_services: ClearSquareServices {
             may_animate: flag,
             delete_animated: unused_clear_animation,
@@ -673,6 +672,7 @@ pub fn fixture(
         tile_owner: byte,
         tile_slope: byte,
         tile_type: byte,
+        tile_add_wrap: unused_tile_add_wrap,
         tile_valid: flag,
         tile_z: height,
         town_index: index,
@@ -1008,6 +1008,8 @@ pub struct RailMapServices {
     pub has_signals: extern "C" fn(u32) -> bool,
     /// Native `GetSignalType`.
     pub signal_type: extern "C" fn(u32, u8) -> SignalType,
+    /// Native `INVALID_RAILTYPE`.
+    pub invalid_rail_type: extern "C" fn() -> RailType,
     /// Native `GetRailType`.
     pub rail_type: extern "C" fn(u32) -> RailType,
     /// Native `SetRailType`.
@@ -1159,4 +1161,9 @@ extern "C" fn unused_road_tram_type(_: u8) -> RoadTramType {
 #[cfg(test)]
 extern "C" fn unused_clear_animation(_: u32, _: bool) {
     panic!("unused clear animation")
+}
+
+#[cfg(test)]
+extern "C" fn unused_tile_add_wrap(_: u32, _: i32, _: i32) -> u32 {
+    panic!("unused tile addition")
 }

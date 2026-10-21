@@ -2448,13 +2448,7 @@ CommandCost RemoveRoadWaypointStop(TileIndex tile, DoCommandFlags flags, int rep
 #ifndef WITH_RUST
 static CommandCost FindJoiningRoadStop(StationID existing_stop, StationID station_to_join, bool adjacent, TileArea ta, Station **st)
 {
-#ifdef WITH_RUST
-	CommandCost cost;
-	*st = static_cast<Station *>(openttd_rust_station_join_waypoint(&GetRustStationCommandServices(), RustCommandCost(&cost), existing_stop.base(), station_to_join.base(), adjacent, {ta.tile.base(), ta.w, ta.h}, false, false, STR_ERROR_MUST_REMOVE_ROAD_STOP_FIRST));
-	return cost;
-#else
 	return FindJoiningBaseStation<Station, STR_ERROR_MUST_REMOVE_ROAD_STOP_FIRST>(existing_stop, station_to_join, adjacent, ta, st, [](const Station *) -> bool { return true; });
-#endif
 }
 
 #endif

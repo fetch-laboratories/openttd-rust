@@ -1343,9 +1343,11 @@ water-structures-mutate --jobs 2` compares command costs/errors, RNG, STNN/STNS,
 map, town and company state, including partial removal, joins, delete/reuse and
 modern reload. The station module includes unchanged-reference private callbacks
 in fixture executables and requires `station_command` witnesses in default CI.
-Builtin tram stops and a forced airport noise refusal share the controlled crossing
-fixture; terrain preparation preserves live ground-vehicle corner heights. NewGRF,
-legacy decoding and unusual occupied/reservation branches remain tracked by #156.
+Default #320 cases require removed-destination path clearing, `TileAddWrap` border
+refusals and type-63 overbuilding through `AllocateRailType`. Retargeting uses virtual
+`SetDestTile`; shared native traversal serves stations and flooding. Builtin tram,
+airport noise and reload cases remain required. External NewGRF programs, legacy
+and unusual occupied/reservation branches remain tracked by #156.
 
 ### Ship controller and private state (#146)
 
