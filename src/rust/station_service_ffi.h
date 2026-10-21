@@ -162,7 +162,7 @@ struct OpenTTDStationServices {
 	void (*watched_animation)(uint32_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(watched_animation);
 	void (*append_packet)(OpenTTDBaseStation *, uint8_t, uint32_t, OpenTTDCargoSource) noexcept OPENTTD_SERVICE_DEFAULT(append_packet);
 	void (*update_supply)(OpenTTDBaseStation *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(update_supply);
-	void (*station_list_invalidation)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_list_invalidation);
+	void (*station_list_invalidation)(OpenTTDBaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_list_invalidation);
 	void (*new_cargo_animation)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(new_cargo_animation);
 	void (*waiting_redraw)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_redraw);
 	uint16_t (*rating_callback)(OpenTTDBaseStation *, uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rating_callback);
