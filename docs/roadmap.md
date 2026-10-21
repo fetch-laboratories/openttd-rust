@@ -181,10 +181,14 @@ and independent review on gpt-6.1-sol (high) through T3 `delegate_task`.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #321 / #322 | `535761dc9d` | Action 1: adopt base, refresh counts, one quiet pass (four medians) as anchors, Full, integrate. |
-| #295 / #313 | `d6297bdeef` | Action 2: steering PR comment items 1-6, scoped review, count guard, Full. |
-| #314 / #329 | `de32f6f990` | Non-passing (171/173): null fleet list context first; last passing head `da9f1c0464`. |
+| #321 / #322 | `535761dc9d` | Action 1 (`/root/speed_anchors_322`): adopt base, refresh counts, one quiet pass (four medians) as anchors; then root's workflow-bootstrap Full and integration. |
+| #295 / #313 | `d6297bdeef` | Action 2 (`/root/object_adopt_313`): steering PR comment items 1-6; then scoped review, count guard, Full. |
+| #314 / #329 | `de32f6f990` | Action 3 (`/root/vehicle_transactions_314_r2`): null fleet list context first; last passing head `da9f1c0464`. |
+| #156 / #335 | `2a14a97a08` | Action 4: ownership-dispatch rows closed; review `/root/review_ownership_coverage_335_r1`, then Full. |
+| #261 R6 / #334 | `58fb82abd3` | Action 5 (`/root/shared_header_helpers_261_r6`): shared header modules, house bounce, orphaned facades. |
 | #274 | `162843acbd` | Paused measurement branch; map view stays in the work order. |
+
+Only `/root/speed_anchors_322` takes a quiet window; other agents wait while `.local/quiet-window` exists. A stale marker with no live #322 task is deleted.
 
 #64/#68/#69 are paused. Each open draft keeps one worktree and branch. Preserve the
 pinned reference. Do not reapply effect helper `73ccd511fb`. Build and test with `--jobs 2`.
