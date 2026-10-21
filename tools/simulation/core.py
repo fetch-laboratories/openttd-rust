@@ -1097,6 +1097,7 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
                 "fleet",
                 "orders",
                 "engines",
+                "objects",
                 "ships",
                 "signals",
                 "stations",
