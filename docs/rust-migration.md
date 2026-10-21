@@ -1451,6 +1451,13 @@ private counters/cache and airport masks; trivial C++ save aliases preserve thei
 #237 borrows shared vehicle/map/settings/RNG services directly. No owner borrow crosses
 ProcessOrders/loading, depot/refit, animation, crash or deletion. Runtime dimensions are
 captured per entry; wrapping arithmetic/RNG order remain.
+#325 gives the controller one stack descriptor of named canonical native x/y/z,
+speed, Direction and subtype addresses; position alone acquires only subtype/z.
+Raw reads end before callbacks, with fresh loads after native mutations. Geometry,
+map, speed/dirty, direction/new-position, NewGRF cache/image, sound and crash-marking
+services preserve the shell; pool growth moves slots, not vehicles. Descriptors end
+before airport state handlers/depot work, deleting crash cleanup, replacement or
+load/reset. Standalone flight/disaster entries retain their narrow services.
 
 The default `aircraft` and `disasters` scenarios exercise traffic, service, removal, crash and
 reload. Real NewGRF/refit/airport rotations, threaded GUI, legacy-save fixtures and presentation

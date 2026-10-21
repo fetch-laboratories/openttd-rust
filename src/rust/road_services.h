@@ -56,20 +56,20 @@ static OpenTTDRoadSpeedPart OPENTTD_VEHICLE_CALL RoadSvcSpeedPart(OpenTTDVehicle
 static OpenTTDRoadStep OPENTTD_VEHICLE_CALL RoadSvcStep(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	return {.tile = RustVehicleTile(u), .x = u->x_pos, .y = u->y_pos, .z = u->z_pos,
+	return {.tile = RustVehicleTile(u), .x = RustVehicleX(u), .y = RustVehicleY(u), .z = RustVehicleZ(u),
 		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = SharedRoadTypeIsTram(u->roadtype)};
 }
 static OpenTTDRoadCrashPart OPENTTD_VEHICLE_CALL RoadSvcCrashPart(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(u));
-	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = u->z_pos, .crossing = MapSvcIsLevelCrossing(u->tile.base())};
+	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = RustVehicleZ(u), .crossing = MapSvcIsLevelCrossing(u->tile.base())};
 }
 static OpenTTDRoadPartRead OPENTTD_VEHICLE_CALL RoadSvcPart(OpenTTDVehicle *v) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(u));
-	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = u->z_pos, .tram = SharedRoadTypeIsTram(u->roadtype)};
+	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = RustVehicleZ(u), .tram = SharedRoadTypeIsTram(u->roadtype)};
 }
 static OpenTTDRoadLink OPENTTD_VEHICLE_CALL RoadSvcLink(OpenTTDVehicle *v) noexcept
 {
@@ -98,7 +98,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitClose(OpenTTDVehicle *v, int32_t x,
 		const RoadVehicle *r = RoadVehicle::From(u);
 		const RoadVehicle *first = RustVehicleFirst(r);
 		OpenTTDRoadCandidate candidate{.vehicle = RustVehicle(r), .state = RoadStateOf(r), .first = RustVehicle(first), .first_state = RoadStateOf(first),
-			.index = r->index.base(), .x = r->x_pos, .y = r->y_pos, .z = r->z_pos, .first_speed = RustVehicleSpeed(first), .direction = RustVehicleDirection(r)};
+			.index = r->index.base(), .x = RustVehicleX(r), .y = RustVehicleY(r), .z = RustVehicleZ(r), .first_speed = RustVehicleSpeed(first), .direction = RustVehicleDirection(r)};
 		return visit(context, &candidate);
 	};
 	if (wormhole) {
@@ -111,9 +111,9 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitClose(OpenTTDVehicle *v, int32_t x,
 static void OPENTTD_VEHICLE_CALL RoadSvcVisitTrains(OpenTTDVehicle *v, OpenTTDRoadTrainVisitor visit, void *context) noexcept
 {
 	const RoadVehicle *front = RoadOf(v);
-	for (const Vehicle *t : VehiclesNearTileXY(front->x_pos, front->y_pos, 4)) {
+	for (const Vehicle *t : VehiclesNearTileXY(RustVehicleX(front), RustVehicleY(front), 4)) {
 		if (t->type != VEH_TRAIN) continue;
-		int32_t z = t->z_pos;
+		int32_t z = RustVehicleZ(t);
 		if (!visit(context, &z)) return;
 	}
 }
