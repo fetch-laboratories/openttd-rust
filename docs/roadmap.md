@@ -183,12 +183,18 @@ and independent review on gpt-6.1-sol (high) through T3 `delegate_task`.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #295 / #313 | `204a384c9d` | Action 2 (`/root/object_adopt_313`): steering PR comment items 1-6; then scoped review, count guard, Full. |
-| #314 / #329 | `fef56b0238` | Action 3 (`/root/vehicle_transactions_314_r2`): null fleet list context first; last passing head `da9f1c0464`. |
-| #261 R6 / #334 | `58fb82abd3` | Action 5 (`/root/shared_header_helpers_261_r6`): shared header modules, house bounce, orphaned facades. |
-| #156 road/water | new branch | Action 4 (`/root/coverage_156_road_water_commands`): #290 and #317 rows of the 2026-10-21 #156 comment. |
-| #275 road context | new branch | Action 6 (`/root/road_command_context_275`): build the road command context only on the tram-turn path; count guard. |
+| #295 / #313 | `b497480981` | Reviewed; counts pass. Full waits on macOS runner capacity; integrate. |
+| #156 / #337 | `113a6070bf` | Reviewed. Full waits on macOS runner capacity; integrate. |
+| #338 / #339 | `46ba81fcf4` | Root's count-guard identity and reference-record fix; review r1, then record the integrated Ir, Full. |
+| #275 / #336 | `c472210a9f` | Road command context. Reviewed, no findings; Full running. |
+| #261 R6 / #334 | `48e819f364` | Reviewed (3 fixes); baseline-shrink item accepted. Full running; counts at the local base merge. |
+| #314 / #329 | `d3fbf2de39` | All three function groups reviewed. After #334: adopt its modules, `interval_default` returns int; counts, Full. |
+| #281 | `vehicle-maintenance-281` | `/root/vehicle_maintenance_direct_281` resumed after a rate limit; draft PR next. |
+| #275 station | new branch | `/root/station_slot_reads_275`: station per-slot reads (#275 plan item 3). |
+| #156 tram turn | new branch | `/root/coverage_156_tram_turn`: default witness for the tram-turn build query. |
 | #274 | `162843acbd` | Paused measurement branch; map view stays in the work order. |
+
+#261 R7 inputs from the #329 reviews are listed on #261. Six component branches are open, the limit.
 
 #64/#68/#69 are paused. Each open draft keeps one worktree and branch. Preserve the
 pinned reference. Do not reapply effect helper `73ccd511fb`. Build and test with `--jobs 2`.
