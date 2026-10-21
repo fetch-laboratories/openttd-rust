@@ -452,6 +452,7 @@ def run_game(
     desync=True,
     *,
     isolate=False,
+    instructions=False,
 ):
     """Run one binary on one scenario in an isolated personal directory.
 
@@ -501,6 +502,14 @@ def run_game(
     for module in scenario_modules():
         if game_environment := getattr(module, "game_environment", None):
             env.update(game_environment(scenario))
+    instruction_info = None
+    if instructions:
+        from . import instructions as profiler
+
+        command += ["-r", "64x64"]
+        command, instruction_info = profiler.prepare(
+            scenario, command, binary, build, run_dir, env, run_dir.name == "reference"
+        )
     with (
         game_slot(isolate),
         open(run_dir / "stdout.log", "wb") as out,
@@ -532,6 +541,7 @@ def run_game(
     if (autosave / "exit.sav").is_file():
         snapshots.append(autosave / "exit.sav")
     return {
+        "instructions": instruction_info,
         "dir": run_dir,
         "exit": code,
         "seconds": seconds,
@@ -629,13 +639,23 @@ def field_spans(body, header):
 
 
 def run_scenario(
-    scenario, binaries, builds, out, limit, timeout, env, benchmark_repetitions=0
+    scenario,
+    binaries,
+    builds,
+    out,
+    limit,
+    timeout,
+    env,
+    benchmark_repetitions=0,
+    instructions=False,
 ):
     """Run both binaries twice (with and without desync snapshots) and compare.
 
     The child launcher denies worker threads, selecting the original synchronous
     fallback for link graph computation. No wall-time-dependent join pauses
     consume null-driver iterations, so every save and complete log is compared."""
+    if instructions:
+        benchmark_repetitions = 1
     name = scenario["name"]
     started = time.monotonic()
     result = {
@@ -699,6 +719,7 @@ def run_scenario(
                     env,
                     desync,
                     isolate=bool(benchmark_repetitions),
+                    **({"instructions": True} if instructions else {}),
                 )
                 for role in ("reference", "candidate")
             }
@@ -801,7 +822,17 @@ def run_scenario(
                             "candidate": repr(cand_line),
                         }
                     )
-            if mode == "plain":
+            if instructions:
+                from . import instructions as profiler
+                from .roads import SPEED_ANCHORS
+
+                result["instruction_speed"] = profiler.finish(runs, result)
+                if name in SPEED_ANCHORS:
+                    candidate = result["instruction_speed"]["candidate"]
+                    result["instruction_speed"]["budget"] = profiler.budget(
+                        name, candidate, SPEED_ANCHORS[name]
+                    )
+            if mode == "plain" and not instructions:
                 reference_seconds = runs["reference"]["seconds"]
                 candidate_seconds = runs["candidate"]["seconds"]
                 ratio = (
@@ -895,6 +926,8 @@ def _copy_runtime(build, binary, destination):
     destination.mkdir()
     executable = destination / binary.name
     shutil.copy2(binary, executable)
+    if (build / "instruction-build.json").is_file():
+        shutil.copy2(build / "instruction-build.json", destination)
     for name in RUNTIME_DIRECTORIES:
         if (build / name).is_dir():
             shutil.copytree(build / name, destination / name, ignore=missing_links)
@@ -948,6 +981,11 @@ def main():
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--frozen-runtimes", type=Path, help="CI runtime bundle")
     parser.add_argument(
+        "--instructions",
+        action="store_true",
+        help="profile six speed scenarios; no wall-speed samples",
+    )
+    parser.add_argument(
         "--benchmark",
         type=int,
         metavar="REPETITIONS",
@@ -972,7 +1010,13 @@ def main():
     if args.benchmark and args.jobs != 1:
         parser.error("--benchmark requires --jobs 1")
 
+    if args.instructions and (args.benchmark or args.soak):
+        parser.error("--instructions conflicts with --benchmark/--soak")
     every = scenario_list(args.soak)
+    if args.instructions:
+        from .roads import SPEED_BUDGETS
+
+        every = [s for s in every if s["name"] in SPEED_BUDGETS]
     # An exact scenario name selects only that scenario; anything else is a substring filter.
     unmatched = [
         name for name in args.names if not any(name in s["name"] for s in every)
@@ -1106,6 +1150,7 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
                 args.timeout,
                 env,
                 args.benchmark or 0,
+                args.instructions,
             ): s
             for s in scenarios
         }

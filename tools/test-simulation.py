@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -14,7 +15,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from simulation import core as simulate
+from simulation import instructions as ir
+from simulation import runtime
 from simulation.roads import SPEED_BUDGETS, speed_budget
+
+import migration
 
 
 class SimulationDeterminismTests(unittest.TestCase):
@@ -381,29 +386,63 @@ class SimulationSpeedTests(unittest.TestCase):
                 self.assertIsNone(speed_budget(name, None))
         self.assertIsNone(speed_budget("unrecorded", 1.0))
 
-    def exercise(self, *, difference=False, exit_code=0):
+    def exercise(self, *, instructions=False, **failure):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory)
             scenario = {"name": "speed", "ticks": 74}
             runs = [
                 {
-                    "exit": exit_code,
+                    "exit": failure.get("exit_code", 0),
+                    "dir": out,
+                    "instructions": dict(
+                        identity={"compatible": role},
+                        cached=None if failure else 42,
+                        cache=out / "cache",
+                    ),
                     "seconds": seconds,
                     "command": [role],
                     "snapshots": [out / role / "exit.sav"],
-                    "log": [],
+                    "log": [role] if failure.get("log") else [],
                     "stdout": b"",
                 }
                 for role, seconds in (("reference", 1.0), ("candidate", 2.0))
             ]
+            if instructions:
+                identity = {"compatible": "reference"}
+                cache = out / "instruction-cache" / f"{ir.digest(identity)}.json"
+                cache.parent.mkdir()
+                cache.write_text("42")
+                with (
+                    patch.object(migration, "COMMON_LOCAL", out),
+                    patch.object(ir, "identity", return_value=identity),
+                ):
+                    command, runs[0]["instructions"] = ir.prepare(
+                        scenario,
+                        ["reference"],
+                        Path("reference"),
+                        out,
+                        out,
+                        {"VALGRIND_LIB": "/unused"},
+                        True,
+                    )
+                self.assertEqual(command, ["reference"])  # Actual reference cache hit.
             with (
                 patch.object(simulate, "scenario_modules", return_value=()),
                 patch.object(simulate, "run_game", side_effect=runs * 3) as game,
-                patch.object(simulate, "save_moment", return_value=(1, 0, 74)),
+                patch.object(
+                    simulate,
+                    "save_moment",
+                    side_effect=[(1, 0, 74), (1, 0, 75)] * 3
+                    if failure.get("moment")
+                    else None,
+                    return_value=(1, 0, 74),
+                ),
                 patch.object(
                     simulate,
                     "compare_saves",
-                    return_value=[{"field": "world"}] if difference else [],
+                    return_value=[{"field": "world"}]
+                    if failure.get("difference")
+                    else [],
                 ),
             ):
                 result = simulate.run_scenario(
@@ -415,10 +454,18 @@ class SimulationSpeedTests(unittest.TestCase):
                     10,
                     {},
                     benchmark_repetitions=3,
+                    instructions=instructions,
                 )
+            if instructions and failure:
+                self.assertNotIn("instruction_speed", result)
+                self.assertRegex(result["problems"][-1], "semantically unequal")
+                self.assertEqual(cache.read_text(), "42")
             return result, game.call_count, game.call_args_list
 
     def test_speed_ratio_needs_matching_semantic_pairs(self):
+        result, _, _ = self.exercise(instructions=True)
+        self.assertEqual(result["plain_speed"]["samples"], [])
+        self.assertEqual(result["instruction_speed"]["reference"]["Ir"], 42)
         result, calls, locks = self.exercise()
         self.assertTrue(result["passed"])
         self.assertEqual(calls, 6)
@@ -433,6 +480,237 @@ class SimulationSpeedTests(unittest.TestCase):
                 self.assertIsNone(
                     result["plain_speed"]["median_candidate_reference_ratio"]
                 )
+        for failure in (
+            {"difference": True},
+            {"exit_code": 1},
+            {"log": True},
+            {"moment": True},
+        ):
+            with self.subTest(instructions=True, **failure):
+                result, calls, _ = self.exercise(instructions=True, **failure)
+                self.assertFalse(result["passed"])
+                self.assertEqual(calls, 2)
+
+
+class InstructionSpeedTests(unittest.TestCase):
+    def test_fixed_anchor_cumulative_projection_and_replacement(self):
+        anchor = dict(
+            head="quiet", ratio=1.2314, Ir=100, identity={"compatible": "same"}
+        )
+        record = dict(anchor=anchor, integrated=dict(head="base", Ir=100))
+        measurement = dict(Ir=100, identity={"compatible": "same"})
+        for step in range(1, 4):
+            measurement["Ir"] = 100 * 1.04**step
+            report = ir.budget("play-test", measurement, record)
+            self.assertTrue(report["within_guard"])
+            record["integrated"] = dict(head=str(step), Ir=measurement["Ir"])
+        self.assertAlmostEqual(report["projected_ratio"], 1.5389150592)
+        self.assertFalse(report["within_ceiling"])
+        self.assertEqual(anchor["Ir"], 100)
+        self.assertEqual(ir.projection(anchor, 90), 1.2314)
+        record["anchor"] = dict(anchor, ratio=1.1, Ir=measurement["Ir"])
+        report = ir.budget("play-test", measurement, record)
+        self.assertEqual(report["projected_ratio"], 1.1)
+        incompatible = dict(measurement, identity={"compatible": "other"})
+        with self.assertRaises(ValueError):
+            ir.budget("play-test", incompatible, record)
+
+    def test_real_nested_scope_extraction_identity_and_semantic_rejection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, binary, run = root / "probe.cpp", root / "openttd", root / "run"
+            run.mkdir()
+            (root / "CMakeCache.txt").write_text("settings")
+            source.write_text(
+                "volatile int n; void StateGameLoop_LinkGraphPauseControl(){for(int i=0;i<10000;i++)n=n+1;}\n"
+                "void StateGameLoop(){StateGameLoop_LinkGraphPauseControl();}\n"
+                "void _GenerateWorld(){for(int i=0;i<20000;i++)n=n+1;}\n"
+                "int main(){_GenerateWorld(); StateGameLoop();}"
+            )
+            subprocess.run(
+                ["g++", "-g", "-O0", str(source), "-o", str(binary)], check=True
+            )
+            scenario = dict(kind="save", ticks=1, save=str(source))
+            env = dict(
+                migration.environment(), VALGRIND_OPTS="--toggle-collect=StateGameLoop*"
+            )
+            ir.record_build(root, root, "reference", env)
+            context = binary, root, run, env
+            candidate = root / "build-rust"
+            candidate.mkdir()
+            shutil.copy2(binary, candidate / "openttd-rust")
+            shutil.copy2(root / "instruction-build.json", candidate)
+
+            # Adapter copies exercise export stripping without another compiler fixture.
+            def adapter(build, folder, env):
+                folder.mkdir()
+                return Path(shutil.copy2(binary, folder / "adapter"))
+
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(patch.object(simulate, "ROOT", root))
+                stack.enter_context(patch.object(migration, "REFERENCE_BUILD", root))
+                for module in simulate.scenario_modules():
+                    if hasattr(module, "adapter"):
+                        stack.enter_context(patch.object(module, "adapter", adapter))
+                runtime.export(root / "bundle", migration)
+            counts = []
+            scenario["name"] = next(iter(SPEED_BUDGETS))
+
+            def collect(case, binaries, builds, out, *args):
+                self.assertTrue(args[-1])
+                frozen = binaries["candidate"]
+                context = frozen, builds["candidate"], run, env
+                for kind in ("save", "generate"):
+                    case = dict(scenario, kind=kind)
+                    command, info = ir.prepare(case, [str(frozen)], *context, False)
+                    subprocess.run(command, env=env, check=True)
+                    counts.append(ir.count(run / "callgrind.out"))
+                    (run / "callgrind.out").unlink()
+                    (run / "callgrind.log").unlink()
+                frozen.write_bytes(frozen.read_bytes() + b"changed")
+                with self.assertRaisesRegex(ValueError, "stale instruction build"):
+                    ir.prepare(case, [str(frozen)], *context, False)
+                (builds["candidate"] / "instruction-build.json").unlink()
+                with self.assertRaises(FileNotFoundError):
+                    ir.prepare(case, [str(frozen)], *context, False)
+                shutil.rmtree(out)
+                raise RuntimeError("collected frozen profiles")
+
+            cli = ["sim", "--instructions", f"--frozen-runtimes={root / 'bundle'}"]
+            with (
+                patch.object(simulate, "scenario_list", return_value=[scenario]),
+                patch.object(simulate, "run_scenario", side_effect=collect),
+                patch.object(sys, "argv", cli),
+                self.assertRaisesRegex(RuntimeError, "collected frozen profiles"),
+            ):
+                simulate.main()
+            # Wildcard nested toggle loses this work.
+            self.assertGreater(counts[0], 50000)
+            self.assertGreater(counts[1], counts[0] * 2)
+            command, _ = ir.prepare(scenario, [str(binary)], *context, False)
+            baseline = ir.identity(scenario, *context, Path(command[0]))
+            (root / ".cargo").mkdir()
+            for field, value in (("ticks", 2), ("console", ["unpause"])):
+                changed = ir.identity(
+                    dict(scenario, **{field: value}), *context, Path(command[0])
+                )
+                self.assertNotEqual(baseline, changed)
+            for name in (
+                "probe.cpp",
+                "CMakeCache.txt",
+                "Cargo.toml",
+                ".cargo/config.toml",
+                "run/script",
+            ):
+                previous = ir.identity(scenario, *context, Path(command[0]))
+                with (root / name).open("ab") as asset:
+                    asset.write(b"changed")
+                ir.record_build(root, root, "reference", env)
+                current = ir.identity(scenario, *context, Path(command[0]))
+                self.assertNotEqual(previous, current)
+            with binary.open("ab") as asset:
+                asset.write(b"changed")
+            with self.assertRaisesRegex(ValueError, "stale instruction build"):
+                ir.identity(scenario, *context, Path(command[0]))
+            ir.record_build(root, root, "reference", env)
+            refreshed = ir.identity(scenario, *context, Path(command[0]))
+            self.assertEqual(current["compatible"], refreshed["compatible"])
+            self.assertNotEqual(current["executable"], refreshed["executable"])
+            tools = root / "valgrind-tools"
+            tools.mkdir()
+            for path in Path(env["VALGRIND_LIB"]).glob("memcheck-*"):
+                (tools / path.name).symlink_to(path)
+            context = binary, root, run, dict(env, VALGRIND_LIB=str(tools))
+            for name in ("callgrind-test", "vgpreload_core-test.so"):
+                (tools / name).write_bytes(b"original")
+            for name in ("callgrind-test", "vgpreload_core-test.so"):
+                previous = ir.identity(scenario, *context, Path(command[0]))
+                (tools / name).write_bytes(b"changed")
+                self.assertNotEqual(
+                    previous, ir.identity(scenario, *context, Path(command[0]))
+                )
+            (tools / "vgpreload_core-test.so").unlink()
+            with self.assertRaisesRegex(ValueError, "incomplete selected Valgrind"):
+                ir.identity(scenario, *context, Path(command[0]))
+            profile = run / "callgrind.out"
+            good = "desc: Trigger: Program termination\nevents: Dr Ir\nsummary: 999 999\ntotals: 2 42\n"
+            profile.write_text(good)
+            self.assertEqual(ir.count(profile), 42)
+            for bad in (
+                "",
+                good.replace("2 42", "2 0"),
+                good.replace("2 42", "oops"),
+                good.replace("Ir", "Dw"),
+                good.replace("Program termination", "Client Request"),
+            ):
+                profile.write_text(bad)
+                with self.assertRaises(ValueError):
+                    ir.count(profile)
+            profile.unlink()
+            with self.assertRaises(FileNotFoundError):
+                ir.count(profile)
+            for key in ("differences", "known_failures", "problems"):
+                failure = dict(differences=[], known_failures=[], problems=[])
+                failure[key] = ["failure"]
+                with self.assertRaises(ValueError):
+                    ir.finish({}, failure)  # Reject before extraction/cache writes.
+
+    def test_effective_compiled_debug_rejects_overrides_and_stripping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Cargo.toml").write_text(
+                '[package]\nname="openttd-kernels"\nversion="0.0.0"\nedition="2024"\n'
+                '[lib]\npath="lib.rs"\ncrate-type=["staticlib"]\n'
+            )
+            (root / "lib.rs").write_text(
+                "use std::{cell::RefCell, collections::BTreeMap};\n"
+                '#[unsafe(no_mangle)] #[inline(never)] pub extern "C" fn probe(x: u32)->usize {\n'
+                "let map = RefCell::new(BTreeMap::new());\n"
+                "for i in 0..x { map.borrow_mut().insert(i, i as usize); }\n"
+                "*map.borrow().get(&x.wrapping_sub(1)).unwrap_or(&0) }"
+            )
+            for flags in (
+                "",
+                "-Cdebuginfo=0",
+                "-Cdebuginfo=1",
+                "-Cdebuginfo=2",
+                "-Cstrip=debuginfo",
+            ):
+                env = dict(
+                    migration.environment(),
+                    CARGO_PROFILE_RELEASE_DEBUG="line-tables-only",
+                    RUSTFLAGS=flags,
+                )
+                subprocess.run(
+                    ["cargo", "build", "--release", "--offline"],
+                    cwd=root,
+                    env=env,
+                    check=True,
+                    capture_output=True,
+                )
+                archive = root / "target/release/libopenttd_kernels.a"
+                if flags.startswith("-Cdebuginfo="):
+                    with self.assertRaisesRegex(
+                        ValueError, "effective line-tables-only", msg=flags
+                    ):
+                        ir.verify_debug(archive)
+                else:
+                    ir.verify_debug(archive)
+
+    def test_reused_build_restores_captured_release_debug(self):
+        with tempfile.TemporaryDirectory() as directory:
+            build = Path(directory)
+            (build / "build.ninja").touch()
+            (build / "CMakeCache.txt").write_text(
+                f"CMAKE_HOME_DIRECTORY:PATH={build}\nOPTION_RUST:BOOL=ON\n"
+            )
+            configuration = build / "rust-build-configuration.txt"
+            profile_env = {"CARGO_PROFILE_RELEASE_DEBUG": "line-tables-only"}
+            configured = migration.configured_as
+            for effective, expected in (("line-tables-only", True), ("<unset>", False)):
+                configuration.write_text(f"CARGO_PROFILE_RELEASE_DEBUG={effective}\n")
+                self.assertEqual(configured(build, build, [], profile_env), expected)
+                self.assertEqual(configured(build, build, [], {}), not expected)
 
 
 if __name__ == "__main__":
