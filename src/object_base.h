@@ -122,7 +122,6 @@ struct HiddenObjectArea { size_t index; uint32_t first_tile; };
 bool IsObjectIndirectlyCleared(TileIndex tile);
 HiddenObjectArea HideObjectForTunnel(TileIndex tile);
 void RestoreObjectFirstTile(HiddenObjectArea hidden);
-void ClearObjectAreas();
 extern std::vector<ClearedObjectArea> _cleared_object_areas;
 #endif
 

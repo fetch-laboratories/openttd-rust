@@ -83,20 +83,22 @@ pub(crate) fn clear_areas() {
     unsafe { (*STATE.0.get()).areas.clear() };
 }
 fn openttd_rust_object_areas_find(tile: u32, log_x: u32) -> usize {
-    let mask = (1 << log_x) - 1;
-    let x = tile & mask;
-    let y = tile >> log_x;
+    let map = crate::services::Map { log_x: log_x as u8 };
+    let tile_area = Area {
+        tile,
+        width: 1,
+        height: 1,
+    };
     // SAFETY: serialized entry, no callbacks while reading.
     unsafe { &(*STATE.0.get()).areas }
         .iter()
         .position(|a| {
-            if a.width == 0 {
-                return false;
+            Area {
+                tile: a.tile,
+                width: a.width,
+                height: a.height,
             }
-            assert!(a.height != 0);
-            let left = a.tile & mask;
-            let top = a.tile >> log_x;
-            x >= left && x < left + u32::from(a.width) && y >= top && y < top + u32::from(a.height)
+            .intersects(tile_area, map)
         })
         .unwrap_or(usize::MAX)
 }
@@ -158,7 +160,7 @@ pub struct Price {
     pub shift: i32,
 }
 impl Price {
-    fn money(self, index: u32) -> i64 {
+    fn get_price(self, index: u32) -> i64 {
         crate::company::openttd_rust_economy_price(index, self.factor, self.shift)
     }
 }
@@ -196,16 +198,29 @@ pub struct Area {
     pub width: u16,
     pub height: u16,
 }
+impl Area {
+    /// Original `OrthogonalTileArea::Intersects`, including empty-area handling.
+    fn intersects(self, other: Self, map: crate::services::Map) -> bool {
+        if other.width == 0 || self.width == 0 {
+            return false;
+        }
+        assert!(other.height != 0 && self.height != 0);
+        let left1 = map.tile_x(self.tile);
+        let top1 = map.tile_y(self.tile);
+        let right1 = left1 + u32::from(self.width) - 1;
+        let bottom1 = top1 + u32::from(self.height) - 1;
+        let left2 = map.tile_x(other.tile);
+        let top2 = map.tile_y(other.tile);
+        let right2 = left2 + u32::from(other.width) - 1;
+        let bottom2 = top2 + u32::from(other.height) - 1;
+        !(left2 > right1 || right2 < left1 || top2 > bottom1 || bottom2 < top1)
+    }
+}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Identity {
     pub object: *mut Object,
     pub area: Area,
-    pub kind: u16,
-}
-#[repr(C)]
-pub struct Reference {
-    pub object: *mut Object,
     pub kind: u16,
 }
 #[repr(C)]
@@ -305,7 +320,7 @@ pub struct ObjectServices {
     pub colour_policy: unsafe extern "C" fn(*mut Object) -> Policy,
     pub flags: unsafe extern "C" fn(*const Spec) -> u16,
     pub footprint: unsafe extern "C" fn(*const Spec) -> Footprint,
-    pub clearance: unsafe extern "C" fn(*const Spec) -> Clearance,
+    pub clearance: unsafe extern "C" fn(u32) -> Clearance,
     pub available: unsafe extern "C" fn(*const Spec) -> bool,
     pub ever: unsafe extern "C" fn(*const Spec) -> bool,
     pub area_shape: unsafe extern "C" fn(*const Spec) -> AreaShape,
@@ -315,7 +330,6 @@ pub struct ObjectServices {
     pub allocate: unsafe extern "C" fn(u16, *const TownHandle, Area, u8) -> Allocation,
     pub object_type: unsafe extern "C" fn(u32) -> u16,
     pub loop_policy: unsafe extern "C" fn(u32) -> LoopPolicy,
-    pub reference: unsafe extern "C" fn(u32) -> Reference,
     pub identity: unsafe extern "C" fn(u32) -> Identity,
     pub location: unsafe extern "C" fn(*mut Object) -> Area,
     pub next: unsafe extern "C" fn(u32) -> Next,
@@ -329,7 +343,6 @@ pub struct ObjectServices {
     pub slope_callback:
         unsafe extern "C" fn(*const Spec, u32, crate::services::Slope, u32, u8) -> SlopeResult,
     pub slope_error: unsafe extern "C" fn(*mut CommandCost, *const SlopeResult, *const Spec) -> (),
-    pub buildable: unsafe extern "C" fn(*mut CommandCost, u32, *mut i32) -> (),
     pub build_price: unsafe extern "C" fn(*const Spec) -> Price,
     pub clear_price: unsafe extern "C" fn(*const Spec) -> Price,
     pub set_hq: unsafe extern "C" fn(u8, u32) -> (),
@@ -340,7 +353,6 @@ pub struct ObjectServices {
     pub autoslope_callback: unsafe extern "C" fn(*const Spec, *mut Object, u32) -> u16,
     pub boolean_callback: unsafe extern "C" fn(*const Spec, u16, u16) -> bool,
     pub enabled: unsafe extern "C" fn(*const Spec) -> bool,
-    pub bridge_top: unsafe extern "C" fn(u32) -> i32,
     pub close_inspect: unsafe extern "C" fn(u32) -> (),
     pub progress_set: unsafe extern "C" fn(*mut GenerationFrame, u32) -> bool,
     pub progress_increase: unsafe extern "C" fn(*mut GenerationFrame) -> bool,
@@ -366,6 +378,10 @@ const OWNED: u16 = 3;
 const STATUE: u16 = 2;
 const LIGHTHOUSE: u16 = 1;
 const TRANSMITTER: u16 = 0;
+const NEW_OBJECT_OFFSET: u16 = 5;
+const PR_BUILD_OBJECT: u32 = 50;
+const PR_CLEAR_OBJECT: u32 = 51;
+const PR_BUILD_FOUNDATION: usize = 57;
 const EXECUTE: u16 = 1;
 const AUTO: u16 = 2;
 const NO_WATER: u16 = 8;
@@ -718,10 +734,26 @@ impl<'a> World<'a> {
         }
     }
     fn is_type(&self, tile: u32, kind: u16) -> bool {
-        (self.shared.tile_type)(tile) == 10 && unsafe { (self.s.object_type)(tile) == kind }
+        (self.shared.tile_type)(tile) == 10 && self.object_type_is(tile, kind)
+    }
+    /// Original `IsObjectType`; callers uphold its object-tile precondition.
+    fn object_type_is(&self, tile: u32, kind: u16) -> bool {
+        unsafe { (self.s.object_type)(tile) == kind }
     }
     fn owner(&self, tile: u32) -> u8 {
         (self.shared.tile_owner)(tile)
+    }
+    /// Original `IsTileOwner`.
+    fn is_owner(&self, tile: u32, owner: u8) -> bool {
+        self.owner(tile) == owner
+    }
+    /// Original `ObjectSpec::GetBuildCost`; native storage supplies its factors.
+    unsafe fn get_build_cost(&self, spec: *const Spec) -> i64 {
+        unsafe { (self.s.build_price)(spec) }.get_price(PR_BUILD_OBJECT)
+    }
+    /// Original `ObjectSpec::GetClearCost`; native storage supplies its factors.
+    unsafe fn get_clear_cost(&self, spec: *const Spec) -> i64 {
+        unsafe { (self.s.clear_price)(spec) }.get_price(PR_CLEAR_OBJECT)
     }
     fn current(&self) -> u8 {
         (self.shared.current_company)()
@@ -789,7 +821,8 @@ impl<'a> World<'a> {
                 } else {
                     WaterClass(3)
                 };
-                if wc.0 == 1 && owner != NONE && matches!(self.owner(t), NONE | WATER) {
+                if wc.0 == 1 && owner != NONE && (self.is_owner(t, NONE) || self.is_owner(t, WATER))
+                {
                     ((*self.s.restoration).infrastructure)(owner, 1);
                     ((*self.s.restoration).infrastructure_dirty)(owner);
                 }
@@ -854,8 +887,8 @@ impl<'a> World<'a> {
             let object = (self.s.identity)(tile);
             let spec = (self.s.spec)(object.kind);
             let flags_spec = (self.s.flags)(spec);
-            let price = (self.s.clear_price)(spec)
-                .money(51)
+            let price = self
+                .get_clear_cost(spec)
                 .saturating_mul(i64::from(object.area.width))
                 .saturating_mul(i64::from(object.area.height))
                 / 5;
@@ -1039,10 +1072,15 @@ impl<'a> World<'a> {
                                 out.add(tmp);
                             }
                             if !((*self.s.town).environment.freeform_edges)()
-                                && (self.map.tile_x(t) < 1
-                                    || self.map.tile_x(t) >= (self.shared.map_max_x)() - 1
-                                    || self.map.tile_y(t) < 1
-                                    || self.map.tile_y(t) >= (self.shared.map_max_y)() - 1)
+                                && (!crate::math::is_inside_mm(
+                                    self.map.tile_x(t) as usize,
+                                    1,
+                                    ((self.shared.map_max_x)() - 1) as usize,
+                                ) || !crate::math::is_inside_mm(
+                                    self.map.tile_y(t) as usize,
+                                    1,
+                                    ((self.shared.map_max_y)() - 1) as usize,
+                                ))
                             {
                                 out.fail(self.s.strings.edge);
                                 return;
@@ -1057,8 +1095,8 @@ impl<'a> World<'a> {
                         }
                         if !(kind == HQ
                             && (self.shared.tile_type)(t) == 10
-                            && self.owner(t) == self.current()
-                            && self.is_type(t, HQ))
+                            && self.is_owner(t, self.current())
+                            && self.object_type_is(t, HQ))
                         {
                             (self.commands().landscape_clear)(tmp.0, t, flags & !EXECUTE);
                             out.add(tmp);
@@ -1088,7 +1126,15 @@ impl<'a> World<'a> {
                         crate::witness::hit(crate::witness::OBJECT_SLOPE_CALLBACK);
                     }
                     if result.callback == FAILED {
-                        (self.s.buildable)(tmp.0, t, &raw mut z);
+                        crate::station_cmd::openttd_rust_station_check_buildable(
+                            (self.shared.station_commands)(),
+                            tmp.0,
+                            t,
+                            0,
+                            &raw mut z,
+                            false,
+                            false,
+                        );
                         out.add(tmp);
                     } else {
                         if result.version < 8 {
@@ -1119,8 +1165,10 @@ impl<'a> World<'a> {
             for t in self.tiles(area) {
                 if (self.shared.bridge_above)(t)
                     && (shape.flags & UNDER_BRIDGE == 0
-                        || (self.shared.tile_max_z)(t) + i32::from(admission.height)
-                            >= (self.s.bridge_top)(t))
+                        || (self.shared.tile_max_z)(t) + i32::from(admission.height) >= {
+                            let station = &*(self.shared.station_commands)();
+                            (station.bridge_height)((station.southern_bridge_end)(t))
+                        })
                 {
                     out.fail(self.s.strings.bridge);
                     return;
@@ -1137,8 +1185,8 @@ impl<'a> World<'a> {
                 }
                 OWNED => {
                     if (self.shared.tile_type)(tile) == 10
-                        && self.owner(tile) == self.current()
-                        && self.is_type(tile, OWNED)
+                        && self.is_owner(tile, self.current())
+                        && self.object_type_is(tile, OWNED)
                     {
                         out.fail(self.s.strings.own);
                         return;
@@ -1201,11 +1249,7 @@ impl<'a> World<'a> {
                     (*finance).object = (*finance).object.wrapping_sub(size << 16);
                 }
             }
-            out.amount(
-                (self.s.build_price)(spec)
-                    .money(50)
-                    .saturating_mul(i64::from(size)),
-            );
+            out.amount(self.get_build_cost(spec).saturating_mul(i64::from(size)));
         }
         crate::witness::hit(crate::witness::OBJECT_BUILD_COMMAND);
     }
@@ -1321,34 +1365,35 @@ impl World<'_> {
     }
     fn terraform(&self, out: Cost<'_>, tile: u32, flags: u16, z: i32, slope: u8) {
         unsafe {
-            let object = (self.s.reference)(tile);
-            if object.kind == OWNED {
+            let kind = (self.s.object_type)(tile);
+            if kind == OWNED {
                 (self.commands().tile_ownership)(out.0, tile);
                 if out.ok() {
                     out.zero();
                     return;
                 }
-            } else if (self.shared.autoslope)()
-                && object.kind != TRANSMITTER
-                && object.kind != LIGHTHOUSE
-            {
+            } else if (self.shared.autoslope)() && kind != TRANSMITTER && kind != LIGHTHOUSE {
                 let old_slope = (self.shared.tile_slope)(tile);
                 let new_slope = crate::services::Slope(slope);
                 if !crate::services::Slope(old_slope).is_steep()
                     && !new_slope.is_steep()
                     && (self.shared.tile_max_z)(tile) == z + new_slope.max_z()
                 {
-                    let spec = (self.s.spec)(object.kind);
+                    let spec = (self.s.spec)(kind);
                     let callbacks = (self.s.callbacks)(spec);
                     if if callbacks & 32 != 0 {
                         {
-                            let result = (self.s.autoslope_callback)(spec, object.object, tile);
+                            let result = (self.s.autoslope_callback)(
+                                spec,
+                                (self.query().by_tile)(tile),
+                                tile,
+                            );
                             result == FAILED || !(self.s.boolean_callback)(spec, 0x15D, result)
                         }
                     } else {
                         (self.s.enabled)(spec)
                     } {
-                        out.set(crate::company::price(57));
+                        out.set(crate::company::price(PR_BUILD_FOUNDATION));
                         crate::witness::hit(crate::witness::OBJECT_AUTOSLOPE);
                         return;
                     }
@@ -1360,8 +1405,7 @@ impl World<'_> {
     fn build_above(&self, out: Cost<'_>, tile: u32, flags: u16, height: i32) {
         crate::witness::hit(crate::witness::OBJECT_BUILD_ABOVE);
         unsafe {
-            let spec = (self.s.spec)((self.s.object_type)(tile));
-            let clearance = (self.s.clearance)(spec);
+            let clearance = (self.s.clearance)(tile);
             if clearance.flags & UNDER_BRIDGE != 0
                 && (self.shared.tile_max_z)(tile) + i32::from(clearance.height) <= height
             {
@@ -1372,20 +1416,20 @@ impl World<'_> {
         }
     }
     fn change_owner(&self, tile: u32, old: u8, new: u8) {
-        if self.owner(tile) != old {
+        if !self.is_owner(tile, old) {
             return;
         }
         unsafe {
-            let object = (self.s.identity)(tile);
+            let kind = (self.s.object_type)(tile);
             let mut clear = false;
-            if (object.kind == OWNED || object.kind >= 5) && new != INVALID_OWNER {
+            if (kind == OWNED || kind >= NEW_OBJECT_OFFSET) && new != INVALID_OWNER {
                 (self.s.set_owner)(tile, new);
                 if (self.s.water_class)(tile).0 == 1 {
                     ((*self.s.restoration).infrastructure)(old, u32::MAX);
                     ((*self.s.restoration).infrastructure)(new, 1);
                 }
-            } else if object.kind == STATUE {
-                let town = (self.s.statue_town)(object.object);
+            } else if kind == STATUE {
+                let town = (self.s.statue_town)((self.query().by_tile)(tile));
                 let fields = crate::town::openttd_rust_town_simulation(town.state);
                 (*fields).statues &= !((1_u64 << old) as u16);
                 if new != INVALID_OWNER && (*fields).statues & ((1_u64 << new) as u16) == 0 {
@@ -1399,7 +1443,7 @@ impl World<'_> {
                 clear = true;
             }
             if clear {
-                self.really_clear(object);
+                self.really_clear((self.s.identity)(tile));
                 (self.company().change_tile_owner)(tile, old, new);
             }
         }

@@ -49,10 +49,6 @@ layouts! {
         area,
         kind,
     };
-    "OpenTTDObjectReference" ["landscape"] => crate::objects::Reference {
-        object,
-        kind,
-    };
     "OpenTTDObjectAllocation" ["landscape"] => crate::objects::Allocation {
         object,
         id,
@@ -176,7 +172,6 @@ layouts! {
         allocate,
         object_type,
         loop_policy,
-        reference,
         identity,
         location,
         next,
@@ -189,7 +184,6 @@ layouts! {
         query,
         slope_callback,
         slope_error,
-        buildable,
         build_price,
         clear_price,
         set_hq,
@@ -200,7 +194,6 @@ layouts! {
         autoslope_callback,
         boolean_callback,
         enabled,
-        bridge_top,
         close_inspect,
         progress_set,
         progress_increase,

@@ -32,7 +32,6 @@ struct OpenTTDObjectLoopFrame;
 struct OpenTTDObjectGenerationFrame;
 struct OpenTTDObjectArea { uint32_t tile; uint16_t width, height; };
 struct OpenTTDObjectIdentity { Object *object; OpenTTDObjectArea area; uint16_t kind; };
-struct OpenTTDObjectReference { Object *object; uint16_t kind; };
 struct OpenTTDObjectAllocation { Object *object; uint32_t id; };
 struct OpenTTDObjectNext { Object *object; uint32_t id, tile; };
 struct OpenTTDObjectLoopPolicy { const ObjectSpec *spec; Object *object; uint32_t north; uint16_t flags, kind; };
@@ -95,7 +94,7 @@ struct OpenTTDObjectServices {
 	OpenTTDObjectPolicy (*colour_policy)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(colour_policy);
 	uint16_t (*flags)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(flags);
 	OpenTTDObjectFootprint (*footprint)(const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(footprint);
-	OpenTTDObjectClearance (*clearance)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(clearance);
+	OpenTTDObjectClearance (*clearance)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(clearance);
 	bool (*available)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(available);
 	bool (*ever)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(ever);
 	OpenTTDObjectAreaShape (*area_shape)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(area_shape);
@@ -105,7 +104,6 @@ struct OpenTTDObjectServices {
 	OpenTTDObjectAllocation (*allocate)(uint16_t type, const Town *town, OpenTTDObjectArea area, uint8_t view) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
 	uint16_t (*object_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(object_type);
 	OpenTTDObjectLoopPolicy (*loop_policy)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(loop_policy);
-	OpenTTDObjectReference (*reference)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reference);
 	OpenTTDObjectIdentity (*identity)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(identity);
 	OpenTTDObjectArea (*location)(Object *object) noexcept OPENTTD_SERVICE_DEFAULT(location);
 	OpenTTDObjectNext (*next)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next);
@@ -118,7 +116,6 @@ struct OpenTTDObjectServices {
 	const OpenTTDObjectQueryServices *query;
 	OpenTTDObjectSlopeResult (*slope_callback)(const ObjectSpec *spec, uint32_t tile, Slope slope, uint32_t offset, uint8_t view) noexcept OPENTTD_SERVICE_DEFAULT(slope_callback);
 	void (*slope_error)(OpenTTDCommandCost *out, const OpenTTDObjectSlopeResult *result, const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(slope_error);
-	void (*buildable)(OpenTTDCommandCost *out, uint32_t tile, int32_t *z) noexcept OPENTTD_SERVICE_DEFAULT(buildable);
 	OpenTTDObjectPrice (*build_price)(const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(build_price);
 	OpenTTDObjectPrice (*clear_price)(const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(clear_price);
 	void (*set_hq)(uint8_t owner, uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(set_hq);
@@ -129,7 +126,6 @@ struct OpenTTDObjectServices {
 	uint16_t (*autoslope_callback)(const ObjectSpec *spec, Object *o, uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(autoslope_callback);
 	bool (*boolean_callback)(const ObjectSpec *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(boolean_callback);
 	bool (*enabled)(const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(enabled);
-	int32_t (*bridge_top)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(bridge_top);
 	void (*close_inspect)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(close_inspect);
 	bool (*progress_set)(OpenTTDObjectGenerationFrame *frame, uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_set);
 	bool (*progress_increase)(OpenTTDObjectGenerationFrame *frame) noexcept OPENTTD_SERVICE_DEFAULT(progress_increase);

@@ -598,7 +598,6 @@ HiddenObjectArea HideObjectForTunnel(TileIndex tile)
 	return hidden;
 }
 void RestoreObjectFirstTile(HiddenObjectArea hidden) { _cleared_object_areas[hidden.index].first_tile = TileIndex(hidden.first_tile); }
-void ClearObjectAreas() { _cleared_object_areas.clear(); }
 #endif
 
 static CommandCost ClearTile_Object(TileIndex tile, DoCommandFlags flags)
@@ -1099,7 +1098,7 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.colour_policy = [](Object *o) noexcept -> OpenTTDObjectPolicy { const ObjectSpec *spec = ObjectSpec::GetByTile(o->location.tile); return {RustObjectSpecFlags(spec), RustObjectSpecCallbacks(spec)}; },
 		.flags = RustObjectSpecFlags,
 		.footprint = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectFootprint { return {RustObjectSpecFlags(spec), RustObjectSpecCallbacks(spec), spec->size}; },
-		.clearance = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectClearance { return {RustObjectSpecFlags(spec), spec->height}; },
+		.clearance = [](uint32_t tile) noexcept -> OpenTTDObjectClearance { const ObjectSpec *spec = ObjectSpec::GetByTile(TileIndex(tile)); return {RustObjectSpecFlags(spec), spec->height}; },
 		.available = [](const ObjectSpec *spec) noexcept -> bool { return spec->IsAvailable(); },
 		.ever = RustObjectEverAvailable,
 		.area_shape = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectAreaShape { return {spec->views, spec->size}; },
@@ -1109,7 +1108,6 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.allocate = [](uint16_t type, const Town *town, OpenTTDObjectArea area, uint8_t view) noexcept -> OpenTTDObjectAllocation { Object *o = new Object(type, const_cast<Town *>(town), TileArea(TileIndex(area.tile), area.width, area.height), TimerGameCalendar::date, view); return {o, o->index.base()}; },
 		.object_type = [](uint32_t tile) noexcept { return GetObjectType(TileIndex(tile)); },
 		.loop_policy = [](uint32_t tile) noexcept -> OpenTTDObjectLoopPolicy { Object *o = Object::GetByTile(TileIndex(tile)); const auto kind = o->type; const ObjectSpec *spec = ObjectSpec::GetByTile(TileIndex(tile)); const auto flags = RustObjectSpecFlags(spec); return {spec, o, ObjectFlags{flags}.Test(ObjectFlag::Animation) ? o->location.tile.base() : 0, flags, kind}; },
-		.reference = [](uint32_t tile) noexcept -> OpenTTDObjectReference { Object *o = Object::GetByTile(TileIndex(tile)); return {o, o->type}; },
 		.identity = [](uint32_t tile) noexcept -> OpenTTDObjectIdentity { Object *o = Object::GetByTile(TileIndex(tile)); return {o, {o->location.tile.base(), o->location.w, o->location.h}, o->type}; },
 		.location = [](Object *o) noexcept -> OpenTTDObjectArea { const auto &a = o->location; return {a.tile.base(), a.w, a.h}; },
 		.next = [](uint32_t from) noexcept -> OpenTTDObjectNext { for (Object *o : Object::Iterate(from)) return {o, o->index.base(), o->location.tile.base()}; return {nullptr, UINT32_MAX, 0}; },
@@ -1122,7 +1120,6 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.query = &GetRustObjectQueryServices(),
 		.slope_callback = [](const ObjectSpec *spec, uint32_t tile, Slope slope, uint32_t offset, uint8_t view) noexcept -> OpenTTDObjectSlopeResult { OpenTTDObjectSlopeResult r{}; r.callback = GetObjectCallback(CBID_OBJECT_LAND_SLOPE_CHECK, slope, offset, spec, nullptr, TileIndex(tile), r.registers, view); if (r.callback != CALLBACK_FAILED) r.version = spec->grf_prop.grffile->grf_version; return r; },
 		.slope_error = RustLocationCallbackError<ObjectSpec, ObjectSpec, OpenTTDObjectSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
-		.buildable = [](OpenTTDCommandCost *out, uint32_t tile, int32_t *z) noexcept -> void { *reinterpret_cast<CommandCost *>(out) = CheckBuildableTile(TileIndex(tile), {}, *z, false, false); },
 		.build_price = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectPrice { return {spec->build_cost_multiplier, spec->grf_prop.grffile == nullptr ? 0 : spec->grf_prop.grffile->price_base_multipliers[PR_BUILD_OBJECT]}; },
 		.clear_price = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectPrice { return {spec->clear_cost_multiplier, spec->grf_prop.grffile == nullptr ? 0 : spec->grf_prop.grffile->price_base_multipliers[PR_CLEAR_OBJECT]}; },
 		.set_hq = [](uint8_t owner, uint32_t tile) noexcept -> void { Company::Get(CompanyID(owner))->location_of_HQ = TileIndex(tile); SetWindowDirty(WC_COMPANY, owner); },
@@ -1133,7 +1130,6 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.autoslope_callback = [](const ObjectSpec *spec, Object *o, uint32_t tile) noexcept -> uint16_t { return GetObjectCallback(CBID_OBJECT_AUTOSLOPE, 0, 0, spec, o, TileIndex(tile)); },
 		.boolean_callback = RustSpecBooleanCallback<ObjectSpec>,
 		.enabled = [](const ObjectSpec *spec) noexcept -> bool { return spec->IsEnabled(); },
-		.bridge_top = [](uint32_t tile) noexcept -> int32_t { return GetBridgeHeight(GetSouthernBridgeEnd(TileIndex(tile))); },
 		.close_inspect = RustCloseInspect<GSF_OBJECTS, uint32_t>,
 		.progress_set = [](OpenTTDObjectGenerationFrame *frame, uint32_t total) noexcept -> bool { return RunGenerationProgress(frame, [total] { SetGeneratingWorldProgress(GWP_OBJECT, total); }); },
 		.progress_increase = [](OpenTTDObjectGenerationFrame *frame) noexcept -> bool { return RunGenerationProgress(frame, [] { IncreaseGeneratingWorldProgress(GWP_OBJECT); }); },
