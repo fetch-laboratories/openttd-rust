@@ -1082,6 +1082,7 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 	static_assert(NUM_OBJECTS == 64000 && OBJECT_HQ == 4 && OBJECT_OWNED_LAND == 3 && OBJECT_STATUE == 2);
 	static_assert(EXPENSES_CONSTRUCTION == 0 && CBID_OBJECT_AUTOSLOPE == 0x15D && PR_BUILD_FOUNDATION == 57 && PR_BUILD_OBJECT == 50 && PR_CLEAR_OBJECT == 51);
 	static_assert(OWNER_NONE.base() == 16 && OWNER_WATER.base() == 17 && OWNER_DEITY.base() == 18 && MAX_COMPANIES == 15);
+	static_assert(NEW_OBJECT_OFFSET == 5 && OBJECT_SIZE_1X1 == 0x11 && INVALID_STRING_ID == 0xFFFF && WaterClass::Invalid == static_cast<WaterClass>(3) && SourceType::Headquarters == static_cast<SourceType>(2) && DoCommandFlags{DoCommandFlag::AllTiles}.base() == 256);
 	static const OpenTTDObjectServices services{
 		.shared = &GetRustSharedServices(),
 		.cost = &GetRustCommandCostServices(),

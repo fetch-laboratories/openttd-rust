@@ -379,12 +379,19 @@ const STATUE: u16 = 2;
 const LIGHTHOUSE: u16 = 1;
 const TRANSMITTER: u16 = 0;
 const NEW_OBJECT_OFFSET: u16 = 5;
+const MAX_COMPANIES: u8 = 15;
+const OBJECT_SIZE_1X1: u8 = 0x11;
+const INVALID_STRING_ID: u32 = 0xffff;
+const INVALID_WATER_CLASS: WaterClass = WaterClass(3);
+const SOURCE_HEADQUARTERS: u8 = 2;
+const CBID_OBJECT_AUTOSLOPE: u16 = 0x15D;
 const PR_BUILD_OBJECT: u32 = 50;
 const PR_CLEAR_OBJECT: u32 = 51;
 const PR_BUILD_FOUNDATION: usize = 57;
 const EXECUTE: u16 = 1;
 const AUTO: u16 = 2;
 const NO_WATER: u16 = 8;
+const ALL_TILES: u16 = 1 << 8;
 const CONSTRUCTION: u8 = 0;
 const FAILED: u16 = 0xffff;
 const SCENEDIT: u16 = 1;
@@ -456,7 +463,7 @@ impl Cost<'_> {
         (self.1.error)(self.0, error);
     }
     fn error(self) {
-        self.fail(0xffff);
+        self.fail(INVALID_STRING_ID);
     }
     fn add(self, cost: Self) {
         (self.1.add)(self.0, cost.0);
@@ -819,7 +826,7 @@ impl<'a> World<'a> {
                 let wc = if (self.shared.is_water_tile)(t) {
                     (self.s.water_class)(t)
                 } else {
-                    WaterClass(3)
+                    INVALID_WATER_CLASS
                 };
                 if wc.0 == 1 && owner != NONE && (self.is_owner(t, NONE) || self.is_owner(t, WATER))
                 {
@@ -950,7 +957,7 @@ impl<'a> World<'a> {
                     crate::cargo_storage::openttd_rust_cargo_invalidate(
                         self.s.cargo,
                         u16::from(owner),
-                        2,
+                        SOURCE_HEADQUARTERS,
                     );
                 }
                 out.set(
@@ -1022,7 +1029,7 @@ impl<'a> World<'a> {
             if shape.flags & IN_GAME != 0
                 && (((*self.s.town).generating_world)()
                     || !(self.s.normal)()
-                    || self.current() > 15)
+                    || self.current() > MAX_COMPANIES)
             {
                 out.error();
                 return;
@@ -1272,7 +1279,7 @@ impl World<'_> {
     ) {
         if tile != 0
             && (tile >= self.map.size_x() * ((self.shared.map_max_y)() + 1)
-                || (!(self.shared.tile_valid)(tile) && flags & 256 == 0))
+                || (!(self.shared.tile_valid)(tile) && flags & ALL_TILES == 0))
         {
             out.error();
             return;
@@ -1319,7 +1326,7 @@ impl World<'_> {
             }
             let spec = (self.s.spec)(kind);
             let shape = (self.s.area_shape)(spec);
-            if view >= shape.views || shape.size != 0x11 {
+            if view >= shape.views || shape.size != OBJECT_SIZE_1X1 {
                 out.error();
                 return;
             }
@@ -1388,7 +1395,8 @@ impl World<'_> {
                                 (self.query().by_tile)(tile),
                                 tile,
                             );
-                            result == FAILED || !(self.s.boolean_callback)(spec, 0x15D, result)
+                            result == FAILED
+                                || !(self.s.boolean_callback)(spec, CBID_OBJECT_AUTOSLOPE, result)
                         }
                     } else {
                         (self.s.enabled)(spec)
