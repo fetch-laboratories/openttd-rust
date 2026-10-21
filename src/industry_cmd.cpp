@@ -3643,7 +3643,7 @@ static const OpenTTDIndustryServices _industry_services = {
 		Industry *i = RustIndustry(handle);
 		return MoveGoodsToStation(i->produced[slot].cargo, amount, {i->index, SourceType::Industry}, i->stations_near, i->exclusive_consumer);
 	},
-	.tile_add_wrap = [](uint32_t tile, int32_t x, int32_t y) noexcept -> uint32_t { return TileAddWrap(TileIndex(tile), x, y).base(); },
+	.tile_add_wrap = SharedTileAddWrap,
 	.farm_tile = [](uint32_t index) noexcept -> OpenTTDIndustryFarmTile {
 		TileIndex tile(index);
 		const auto type = SharedTileType(index);

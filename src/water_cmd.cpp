@@ -1064,14 +1064,8 @@ static void GetTileDesc_Water(TileIndex tile, TileDesc &td)
 /* Only leaves remain native. Virtual Crash and event insertion can reenter Rust,
  * but queueing AI/Game events never executes a script VM; allocation exceptions
  * terminate under noexcept. Commands use independent lazy stack result contexts. */
-static VehiclesOnTile::Iterator *WaterIterator(OpenTTDTileVehicleCursor *cursor) noexcept
-{
-	return std::launder(reinterpret_cast<VehiclesOnTile::Iterator *>(cursor));
-}
 const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 {
-	static_assert(sizeof(VehiclesOnTile::Iterator) <= sizeof(OpenTTDTileVehicleCursor));
-	static_assert(alignof(VehiclesOnTile::Iterator) <= alignof(OpenTTDTileVehicleCursor));
 	static_assert(AIR_SHADOW == 4 && to_underlying(VehState::Crashed) == 7 && SND_12_EXPLOSION == 16 && OWNER_WATER.base() == 17 && VEH_AIRCRAFT == 3 && TREE_GROUND_SHORE == 3);
 	static const OpenTTDWaterGroundServices services{
 		.rail = &GetRustRailGroundServices(), .clear = &GetRustClearServices(), .vehicles = &GetRustVehicleServices(), .costs = &GetRustGroundCostServices(), .company = &GetRustCompanyServices(),
@@ -1085,10 +1079,6 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.region_context = GetRustWaterRegionContext,
 		.remove_rail = [](OpenTTDCommandCost *out, uint32_t t, Track track) noexcept { *NativeGroundCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlag::Execute, TileIndex{t}, track); },
 		.apply_foundation = RustApplyFoundation,
-		.iterator_begin = [](OpenTTDTileVehicleCursor *c, uint32_t t) noexcept { new (c) VehiclesOnTile::Iterator(TileIndex{t}); },
-		.iterator_current = [](OpenTTDTileVehicleCursor *c) noexcept { return RustVehicle(**WaterIterator(c)); },
-		.iterator_next = [](OpenTTDTileVehicleCursor *c) noexcept { ++*WaterIterator(c); },
-		.iterator_end = [](OpenTTDTileVehicleCursor *c) noexcept { WaterIterator(c)->~Iterator(); },
 		.airport_tile = RustAirportTile,
 		.airport = [](uint32_t t) noexcept { const Station *st = Station::GetByTile(TileIndex{t}); return OpenTTDAirportGround{.station = st, .tile = RustStationAirportTile(st), .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st)}; },
 		.airport_member = [](const OpenTTDStation *st, uint32_t t) noexcept { return st->TileBelongsToAirport(TileIndex{t}); },

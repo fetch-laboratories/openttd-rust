@@ -165,7 +165,6 @@ static uint8_t SharedTropicZone(uint32_t tile) noexcept { return GetTropicZone(T
 static int32_t SharedTileZ(uint32_t tile) noexcept { return RustTileZ(TileIndex{tile}); }
 static uint8_t SharedTileSlope(uint32_t tile) noexcept { return GetTileSlope(TileIndex{tile}); }
 static void SharedMarkDirty(uint32_t tile) noexcept { MarkTileDirtyByTile(TileIndex{tile}); }
-static void SharedClearSquare(uint32_t tile) noexcept { DoClearSquare(TileIndex{tile}); }
 static void SharedFreeTrainReservation(const Train *v) noexcept { FreeTrainTrackReservation(v); }
 static bool SharedTryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_okay) noexcept { return TryPathReserve(v, mark_as_stuck, first_tile_okay); }
 static bool SharedSafeWaitingPosition(const Train *v, uint32_t tile, uint8_t trackdir, bool forbid_90_deg) noexcept { return IsSafeWaitingPosition(v, TileIndex{tile}, static_cast<Trackdir>(trackdir), true, forbid_90_deg); }
@@ -248,7 +247,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.build_on_slopes = RustBuildOnSlopes,
 	.calendar_date = SharedCalendarDate,
 	.calendar_year = SharedCalendarYear,
-	.clear_square = SharedClearSquare,
 	.clear_square_services = {
 		.may_animate = OpenTTDMayAnimateTile, .delete_animated = OpenTTDDeleteAnimatedTileWithMode,
 		.docking = OpenTTDIsDockingTile,
@@ -324,6 +322,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tile_owner = RustTileOwnerValue,
 	.tile_slope = SharedTileSlope,
 	.tile_type = SharedTileType,
+	.tile_add_wrap = SharedTileAddWrap,
 	.tile_valid = Shared_tile_valid,
 	.tile_z = SharedTileZ,
 	.town_index = Shared_town_index,
@@ -453,6 +452,7 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.rail_track_status = RustRailTrackStatus,
 		.has_signals = RustRailHasSignals,
 		.signal_type = RustRailSignalType,
+		.invalid_rail_type = RustInvalidRailType,
 		.rail_type = RustRailType,
 		.set_rail_type = RustSetRailType,
 		.rail_tile_type = RustRailTileType,

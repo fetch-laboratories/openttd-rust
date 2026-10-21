@@ -253,6 +253,7 @@ static OpenTTDVehicleAltitudeInputs OPENTTD_VEHICLE_CALL VehicleSvcAltitudeInput
 }
 
 constinit const OpenTTDVehicleServices _rust_vehicle_services{
+	.vehicles_on_tile = RustVisitVehiclesOnTile,
 	.write_counters = VehicleSvcWriteCounters,
 	.handle_breakdown = VehicleSvcHandleBreakdown,
 	.waiting_for_unbunching = VehicleSvcWaitingForUnbunching,
@@ -286,6 +287,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.write_speed = VehicleSvcWriteSpeed,
 	.last_station = VehicleSvcLastStation,
 	.write_last_station = VehicleSvcWriteLastStation,
+	.set_dest_tile = RustVehicleSetDestTile,
 	.write_dest = VehicleSvcWriteDest,
 	.write_progress = VehicleSvcWriteProgress,
 	.write_max_speed = VehicleSvcWriteMaxSpeed,

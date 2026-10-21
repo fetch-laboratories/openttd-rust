@@ -7,6 +7,7 @@
 
 /** @file road_services.h Typed road services; each resolves its vehicle once and reads only what it returns. */
 #include "services_map.h"
+#include "services_road.h"
 #include "services_station.h"
 
 static_assert(RVSB_IN_DEPOT == 254 && RVSB_WORMHOLE == 255 && RVSB_IN_ROAD_STOP == 32 && RVSB_IN_DT_ROAD_STOP == 64);
@@ -14,7 +15,6 @@ static_assert(to_underlying(RoadStopType::Bus) == 0 && to_underlying(RoadStopTyp
 static_assert(PROP_ROADVEH_SHORTEN_FACTOR == 0x23 && PROP_ROADVEH_CARGO_AGE_PERIOD == 0x22 && PROP_ROADVEH_SPEED == 0x15 && PROP_ROADVEH_RUNNING_COST_FACTOR == 0x09);
 
 static RoadVehicle *RoadOf(OpenTTDVehicle *v) noexcept { return RoadVehicle::From(VehicleOf(v)); }
-static OpenTTDRoadState *RoadStateOf(const RoadVehicle *u) noexcept { return u == nullptr ? nullptr : u->GetRustState(); }
 
 static OpenTTDRoadFrontTickRead OPENTTD_VEHICLE_CALL RoadSvcTickFront(OpenTTDVehicle *v) noexcept
 {
