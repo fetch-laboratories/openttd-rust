@@ -1147,7 +1147,9 @@ exhaustive in the semantic corpus; the narrow fixture supplies callback results.
 
 Rust owns both region and track searches, arena indices/parent chains, open and closed
 membership, the original binary-heap tie/removal rules, destination estimates, region corridor,
-two attempts, random lost paths and cache extraction (#119). Each Ship owns one opaque Rust path
+two attempts, random lost paths and cache extraction (#119). Search arenas/maps/heaps retain
+process-wide capacity (#306); active searches own storage, with no cached world pointers.
+Each Ship owns one opaque Rust path
 with copied controller access; modern VEHS stages one byte across C++ load errors and commits it
 on unwind, while the pre-struct-list loader retains its reversed path order.
 
