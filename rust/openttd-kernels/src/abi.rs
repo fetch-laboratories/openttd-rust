@@ -45,8 +45,15 @@ layouts! {
     "OpenTTDVehicleBuildResult" ["probe"] => crate::vehicle_transactions::build::Result { id, capacity, };
     "OpenTTDVehicleBuildServices" ["probe"] => crate::vehicle_transactions::build::Services {
         refit, mass, random, depot_kind, engine_cost, default_cargo, articulate_count, pool_available,
-        free_unit, rail, road, aircraft, ship_tile, new_ship, set_purchase, articulated_capacity,
+        free_unit, construct, rail, ship_tile, new_ship, set_purchase, articulated_capacity,
         display_capacity, is_engine, normalize, presentation, use_unit, too_many, unavailable,
+    };
+    "OpenTTDAircraftInfo" ["probe"] => crate::vehicle_transactions::construct::AircraftInfo { image, passengers, mail, subtype, };
+    "OpenTTDVehicleConstructServices" ["probe"] => crate::vehicle_transactions::construct::Services {
+        articulated, powered_roadtypes, any_roadtype, new_road, road_front, station, can_use_station,
+        hangar_tile, pos_on_build, new_aircraft, aircraft_place, aircraft_info, aircraft_properties,
+        rotor, aircraft_capacity, road_capacity, set_cargo_type, engine_common, service_dates,
+        build_stamp, exclusive_preview, service_flags, wrong_depot,
     };
     "OpenTTDVehicleListId" ["probe"] => crate::vehicle_transactions::mass::ListId { kind, vehicle_type, company, index, valid, };
     "OpenTTDVehicleMassServices" ["probe"] => crate::vehicle_transactions::mass::Services { common, selection, is_depot, is_tile_owner, send, service, mass_send, dont_cancel, invalid_client, };

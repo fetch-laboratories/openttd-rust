@@ -55,6 +55,13 @@
 #include "rust/orders_ffi.h"
 #include "rust/vehicle_maintenance_ffi.h"
 #include "rust/ship_control_ffi.h"
+#include "rust/services_station.h"
+#include "road_map.h"
+#include "landscape.h"
+#include "station_base.h"
+#include "timer/timer_game_calendar.h"
+#include "timer/timer_game_economy.h"
+#include "table/sprites.h"
 
 /* Synchronous native storage/presentation leaves only. No Rust borrow crosses
  * these calls; allocation or formatting failures terminate in noexcept leaves. */
@@ -1374,5 +1381,6 @@ CommandCost CmdChangeServiceInt(DoCommandFlags flags, VehicleID veh_id, uint16_t
 #include "abi-visit-OpenTTDVehicleBuildServices.hpp"
 #include "abi-visit-OpenTTDVehicleCloneServices.hpp"
 #include "abi-visit-OpenTTDVehicleArticulatedServices.hpp"
-bool CheckAbi_vehicle_cmd() { return AbiServicesComplete(GetRustVehicleTransactionServices()) && AbiServicesComplete(GetRustVehicleCommonServices()) && AbiServicesComplete(GetRustVehicleRefitServices()) && AbiServicesComplete(GetVehicleMassServices()) && AbiServicesComplete(GetRustVehicleBuildServices()) && AbiServicesComplete(GetRustVehicleCloneServices()) && AbiServicesComplete(GetRustVehicleArticulatedServices()); }
+#include "abi-visit-OpenTTDVehicleConstructServices.hpp"
+bool CheckAbi_vehicle_cmd() { return AbiServicesComplete(GetRustVehicleTransactionServices()) && AbiServicesComplete(GetRustVehicleCommonServices()) && AbiServicesComplete(GetRustVehicleRefitServices()) && AbiServicesComplete(GetVehicleMassServices()) && AbiServicesComplete(GetRustVehicleBuildServices()) && AbiServicesComplete(GetRustVehicleCloneServices()) && AbiServicesComplete(GetRustVehicleArticulatedServices()) && AbiServicesComplete(GetVehicleConstructServices()); }
 #endif

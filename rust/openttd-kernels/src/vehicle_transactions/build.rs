@@ -1,6 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Common build transaction, including speculative construction and RNG rollback.
-use super::{AUTOREPLACE, ERROR, EXECUTE, mass, refit};
+use super::{AUTOREPLACE, ERROR, EXECUTE, construct, mass, refit};
 use crate::services::{CommandCost, Cost, RandomServices};
 use crate::vehicle::{OpenTTDEngine, RailVehicleTypes, VehicleType};
 use std::ptr;
@@ -31,9 +31,8 @@ pub struct Services {
     pub articulate_count: extern "C" fn(u16, bool) -> u32,
     pub pool_available: extern "C" fn(usize) -> bool,
     pub free_unit: extern "C" fn(VehicleType) -> u16,
+    pub construct: &'static construct::Services,
     pub rail: extern "C" fn(*mut CommandCost, u16, u32, *const OpenTTDEngine) -> *mut (),
-    pub road: extern "C" fn(*mut CommandCost, u16, u32, *const OpenTTDEngine) -> *mut (),
-    pub aircraft: extern "C" fn(*mut CommandCost, u16, u32, *const OpenTTDEngine) -> *mut (),
     pub ship_tile: extern "C" fn(u32) -> u32,
     pub new_ship: extern "C" fn(u32) -> *mut (),
     pub set_purchase: extern "C" fn(*mut (), u16, i64),
@@ -130,7 +129,7 @@ pub(crate) unsafe fn build(
     let seeds = unsafe { (s.random.save)() };
     let v = match kind.0 {
         0 => (s.rail)(temporary, subflags, tile, e),
-        1 => (s.road)(temporary, subflags, tile, e),
+        1 => unsafe { construct::road(s, temporary, subflags, tile, e) },
         2 => {
             let north = (s.ship_tile)(tile);
             let v = if subflags & EXECUTE != 0 {
@@ -151,7 +150,7 @@ pub(crate) unsafe fn build(
             (b.cost.zero)(temporary);
             v
         }
-        3 => (s.aircraft)(temporary, subflags, tile, e),
+        3 => unsafe { construct::aircraft(s, temporary, subflags, tile, e) },
         _ => unreachable!("depot kind is a buildable vehicle type"),
     };
     value.add(Cost(temporary, b.cost));
@@ -241,6 +240,7 @@ pub(crate) unsafe fn build(
         }
     }
     if flags != subflags {
+        crate::witness::hit(crate::witness::VT_RESTORE);
         unsafe { (s.random.restore)(seeds) };
     }
     result

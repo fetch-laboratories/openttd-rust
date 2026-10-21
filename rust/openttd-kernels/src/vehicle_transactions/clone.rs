@@ -180,6 +180,7 @@ unsafe fn clone(
             new_id = built.id;
             if !(b.cost.success)(part) {
                 if !front.is_null() {
+                    crate::witness::hit(crate::witness::VT_CLONE_BUILD_SELL);
                     unsafe { sell(s, temporary, flags, front) };
                 }
                 total.take(Cost(part, b.cost));
@@ -202,6 +203,7 @@ unsafe fn clone(
                         (c.transactions.move_vehicle)(part.cast(), w, rear, u32::from(flags), true);
                     };
                     if !(b.cost.success)(part) {
+                        crate::witness::hit(crate::witness::VT_CLONE_JOIN_SELL);
                         unsafe {
                             sell(s, temporary, flags, front);
                             sell(s, temporary, flags, w);

@@ -98,6 +98,32 @@ struct OpenTTDVehicleArticulatedServices {
 };
 const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noexcept;
 struct OpenTTDVehicleBuildResult { uint32_t id; OpenTTDVehicleRefitCapacity capacity; };
+struct OpenTTDAircraftInfo { uint8_t image; uint16_t passengers, mail; uint8_t subtype; };
+struct OpenTTDVehicleConstructServices {
+	const OpenTTDVehicleArticulatedServices *articulated;
+	uint64_t (*powered_roadtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(powered_roadtypes);
+	bool (*any_roadtype)(uint32_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(any_roadtype);
+	void *(*new_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_road);
+	void (*road_front)(void *, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(road_front);
+	const OpenTTDStation *(*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
+	bool (*can_use_station)(const OpenTTDEngine *, const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(can_use_station);
+	uint32_t (*hangar_tile)(const OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(hangar_tile);
+	uint8_t (*pos_on_build)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pos_on_build);
+	void *(*new_aircraft)() noexcept OPENTTD_SERVICE_DEFAULT(new_aircraft);
+	void (*aircraft_place)(void *, void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_place);
+	OpenTTDAircraftInfo (*aircraft_info)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_info);
+	void (*aircraft_properties)(void *, void *, const OpenTTDEngine *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_properties);
+	void (*rotor)(void *, void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(rotor);
+	void (*aircraft_capacity)(const OpenTTDEngine *, void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_capacity);
+	void (*road_capacity)(void *, void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_capacity);
+	void (*set_cargo_type)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_type);
+	void (*engine_common)(void *, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_common);
+	void (*service_dates)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(service_dates);
+	void (*build_stamp)(void *) noexcept OPENTTD_SERVICE_DEFAULT(build_stamp);
+	bool (*exclusive_preview)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(exclusive_preview);
+	void (*service_flags)(void *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(service_flags);
+	uint32_t wrong_depot;
+};
 struct OpenTTDVehicleBuildServices {
 	const OpenTTDVehicleRefitServices *refit;
 	const OpenTTDVehicleMassServices *mass;
@@ -108,9 +134,8 @@ struct OpenTTDVehicleBuildServices {
 	uint32_t (*articulate_count)(uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(articulate_count);
 	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);
 	uint16_t (*free_unit)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(free_unit);
+	const OpenTTDVehicleConstructServices *construct;
 	void *(*rail)(OpenTTDCommandCost *, uint16_t, uint32_t, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail);
-	void *(*road)(OpenTTDCommandCost *, uint16_t, uint32_t, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(road);
-	void *(*aircraft)(OpenTTDCommandCost *, uint16_t, uint32_t, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft);
 	uint32_t (*ship_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_tile);
 	void *(*new_ship)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_ship);
 	void (*set_purchase)(void *, uint16_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_purchase);

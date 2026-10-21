@@ -11,6 +11,7 @@ pub(crate) mod articulated;
 pub(crate) mod build;
 pub(crate) mod clone;
 mod clone_name;
+pub(crate) mod construct;
 pub(crate) mod mass;
 pub(crate) mod refit;
 use crate::fleet::GroupServices;

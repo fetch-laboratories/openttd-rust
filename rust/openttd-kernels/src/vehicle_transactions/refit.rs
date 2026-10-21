@@ -199,7 +199,7 @@ pub(super) unsafe fn get_cost(
     );
     automatic
 }
-unsafe fn next(s: &Services, v: *mut ()) -> *mut () {
+pub(super) unsafe fn next(s: &Services, v: *mut ()) -> *mut () {
     (s.common.vehicles.next)(unsafe { vehicle_ref(v) })
         .map_or(ptr::null_mut(), |v| v.0.as_ptr().cast())
 }

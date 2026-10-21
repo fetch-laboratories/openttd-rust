@@ -71,6 +71,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
         if !(s.pool_available)(1) {
             return;
         }
+        crate::witness::hit(crate::witness::VT_ARTICULATED);
         let cache = (s.prepare_previous)(previous);
         let e = (r.engine)(engine);
         let v = match kind {

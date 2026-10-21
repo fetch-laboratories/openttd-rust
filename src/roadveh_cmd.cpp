@@ -276,6 +276,7 @@ void RoadVehUpdateCache(RoadVehicle *v, bool same_length)
 #endif
 }
 
+#ifndef WITH_RUST
 /**
  * Build a road vehicle.
  * @param flags    type of operation.
@@ -362,6 +363,7 @@ CommandCost CmdBuildRoadVehicle(DoCommandFlags flags, TileIndex tile, const Engi
 
 	return CommandCost();
 }
+#endif /* !WITH_RUST */
 
 static FindDepotData FindClosestRoadDepot(const RoadVehicle *v, int max_distance)
 {

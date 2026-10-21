@@ -3,9 +3,22 @@
 import hashlib
 from pathlib import Path
 
-from .core import ROOT, RUNTIME_DIRECTORIES, compare_saves, run_game
+from .core import (
+    ROOT,
+    RUNTIME_DIRECTORIES,
+    WITNESS_ENVIRONMENT,
+    branch_witnesses,
+    compare_saves,
+    run_game,
+)
 
 ADAPTER = ROOT / "tools/simulation/fleet-console.cpp"
+# Rust construction and clone branches each transaction scenario must reach.
+BRANCHES = {
+    "transaction-build-road": ["road", "restore"],
+    "transaction-build-aircraft": ["aircraft", "rotor", "restore"],
+    "transaction-clone": ["clone_join_sell"],
+}
 
 
 def scenarios(soak):
@@ -19,7 +32,12 @@ def scenarios(soak):
                 / (
                     "padhattan-ridge-1996.sav"
                     if mode.startswith("train")
-                    or mode in ("transaction-refit-train", "transaction-mass-train")
+                    or mode
+                    in (
+                        "transaction-refit-train",
+                        "transaction-mass-train",
+                        "transaction-clone",
+                    )
                     else "padhattan-ridge-2000.sav"
                     if mode.startswith("drain") or mode == "transaction-meta"
                     else "water-ferry.sav"
@@ -31,6 +49,7 @@ def scenarios(soak):
                         "aircraft",
                         "transaction-refit-aircraft",
                         "transaction-mass-aircraft",
+                        "transaction-build-aircraft",
                     )
                     else "opus-55-167-002.sav"
                 )
@@ -52,6 +71,9 @@ def scenarios(soak):
             "transaction-refit-road",
             "transaction-refit-ship",
             "transaction-refit-aircraft",
+            "transaction-build-road",
+            "transaction-build-aircraft",
+            "transaction-clone",
             "list",
             "replace",
             "cash",
@@ -67,6 +89,11 @@ def scenarios(soak):
 
     cases.append(dict(cases[0], name="fleet-reload", fleet="reload"))
     return cases
+
+
+def game_environment(scenario):
+    witnessed = scenario.get("fleet") in BRANCHES and scenario.get("witnesses")
+    return WITNESS_ENVIRONMENT if witnessed else {}
 
 
 def install(scenario, run_dir):
@@ -90,6 +117,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         "transaction-meta",
         "transaction-refit-train",
         "transaction-mass-train",
+        "transaction-clone",
     ):
         from .rails import normalize
 
@@ -187,6 +215,11 @@ def check(scenario, run, mode, role, result):
             "transaction-refit-" + kind: ["FLEET refit-loaded true true true"]
             for kind in ("train", "road", "ship", "aircraft")
         },
+        **{
+            "transaction-build-" + kind: ["FLEET build-restored true true"]
+            for kind in ("road", "aircraft")
+        },
+        "transaction-clone": ["FLEET clone-join false true true true"],
         "transaction-meta": [
             f"FLEET transaction-meta {kind} true 50 true true" for kind in range(4)
         ],
@@ -243,6 +276,10 @@ def check(scenario, run, mode, role, result):
     for line in required:
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
+    if scenario["fleet"] in BRANCHES:
+        result[mode + "_" + role + "_branches"] = branch_witnesses(
+            scenario, run, role, "vehicle_transactions", BRANCHES[scenario["fleet"]]
+        )
     witnesses = [line for line in run["log"] if line.startswith("FLEET ")]
     key = mode + "_fleet_witnesses"
     if role == "reference":

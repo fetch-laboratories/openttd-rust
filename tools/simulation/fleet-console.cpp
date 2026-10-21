@@ -24,6 +24,7 @@
 #include "depot_base.h"
 #include "station_base.h"
 #include "engine_func.h"
+#include "cargotype.h"
 #include "rail_map.h"
 #include "road_map.h"
 #include "water_map.h"
@@ -31,6 +32,7 @@
 #include "vehiclelist.h"
 #include "console_func.h"
 #include "news_gui.h"
+#include "table/strings.h"
 
 [[noreturn]] static void FixtureAbort(int line) { fmt::print(stderr, "FLEET setup-failure {}\n", line); std::fflush(stderr); std::abort(); }
 
@@ -178,6 +180,48 @@ static bool FleetScenario(std::span<std::string_view> args)
 		Cost("refit-invalid-cargo", std::get<0>(Command<CMD_REFIT_VEHICLE>::Do({}, v->index, NUM_CARGO, 0, false, false, 0)));
 		Checked("start-refit-fixture", Command<CMD_START_STOP_VEHICLE>::Do(DoCommandFlag::Execute, v->index, false));
 		Cost("refit-running", std::get<0>(Command<CMD_REFIT_VEHICLE>::Do({}, v->index, v->cargo_type, 0, false, false, 0)));
+		return true;
+	}
+	if (args[1].starts_with("transaction-build-")) {
+		VehicleType type = args[1].ends_with("road") ? VEH_ROAD : VEH_AIRCRAFT;
+		Vehicle *v = BuildFixture(type);
+		SavedRandomSeeds before, after;
+		bool restored = true;
+		/* Every buildable engine through query, test and execute, then one speculative build for another cargo. */
+		for (const Engine *e : Engine::Iterate()) {
+			if (!IsEngineBuildable(e->index, type, _current_company)) continue;
+			for (DoCommandFlags flags : {DoCommandFlags{DoCommandFlag::QueryCost}, DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
+				auto [cost, id, cap, mail, cargo] = Command<CMD_BUILD_VEHICLE>::Do(flags, v->tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID);
+				fmt::print(stderr, "FLEET build {} {} {} {} {} {} {}\n", e->index, flags.base(), cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), cap, mail);
+				for (const Vehicle *u = Vehicle::GetIfValid(id); u != nullptr; u = u->Next()) fmt::print(stderr, "FLEET part {} {} {} {} {}\n", u->subtype, u->cargo_type, u->cargo_cap, u->z_pos, u->random_bits);
+			}
+			for (const CargoSpec *cs : CargoSpec::Iterate()) {
+				CargoType cargo = cs->Index();
+				if (cargo == e->GetDefaultCargoType()) continue;
+				SaveRandomSeeds(&before);
+				auto [cost, id, cap, mail, cargoes] = Command<CMD_BUILD_VEHICLE>::Do({}, v->tile, e->index, false, cargo, INVALID_CLIENT_ID);
+				SaveRandomSeeds(&after);
+				restored = restored && SameRandom(before, after);
+				fmt::print(stderr, "FLEET build-refit {} {} {} {} {} {}\n", e->index, cargo, cost.Succeeded(), cost.GetCost(), cap, mail);
+				break;
+			}
+		}
+		auto [clone_cost, clone] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, v->tile, v->index, true);
+		Checked("clone-shared", clone_cost);
+		fmt::print(stderr, "FLEET build-restored {} {}\n", restored, Vehicle::Get(clone)->IsOrderListShared());
+		return true;
+	}
+	if (args[1] == "transaction-clone") {
+		/* A train longer than one tile cannot rejoin: execute sells the front and the unjoined wagon. */
+		Vehicle *v = BuildFixture(VEH_TRAIN);
+		uint before = 0, after = 0;
+		for (const Vehicle *u : Vehicle::Iterate()) if (u->owner == _current_company) ++before;
+		Backup<uint8_t> max_length(_settings_game.vehicle.max_train_length);
+		max_length.Change(1);
+		auto [cost, id] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, v->tile, v->index, false);
+		max_length.Restore();
+		for (const Vehicle *u : Vehicle::Iterate()) if (u->owner == _current_company) ++after;
+		fmt::print(stderr, "FLEET clone-join {} {} {} {}\n", cost.Succeeded(), cost.GetErrorMessage() == STR_ERROR_TRAIN_TOO_LONG, id == VehicleID::Invalid(), before == after);
 		return true;
 	}
 	if (args[1] == "transaction-meta") {
