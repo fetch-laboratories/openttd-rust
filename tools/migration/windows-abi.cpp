@@ -38,6 +38,7 @@
 #include "rust/water_command_ffi.h"
 #include "bridge_type.h"
 #include "rust/rail_yapf_ffi.h"
+#include "rust/road_command_ffi.h"
 #include "rust/road_ffi.h"
 #include "rust/road_yapf_ffi.h"
 #include "rust/script_list_ffi.h"
@@ -133,7 +134,7 @@ static void Calls()
 		founding.close_to_town = [](uint32_t tile, uint distance) noexcept { CHECK(tile == UINT32_MAX && distance == 20); return true; };
 		founding.resolve = [](uint16_t id) noexcept -> OpenTTDTownRef { CHECK(id == UINT16_MAX); return {nullptr, nullptr, id}; };
 		uint32_t error = 0; auto *cost = reinterpret_cast<OpenTTDCommandCost *>(&error); OpenTTDTownFoundingFrame frame; const uint8_t text = 'x';
-		openttd_rust_town_found(&founding, &frame, &frame.names, cost, UINT32_MAX, TSZ_SMALL, false, TL_ORIGINAL, false, 0, {&text, 1}, false);
+		openttd_rust_town_found(&founding, nullptr, &frame, &frame.names, cost, UINT32_MAX, TSZ_SMALL, false, TL_ORIGINAL, false, 0, {&text, 1}, false);
 		CHECK(error == 0x87654321); openttd_rust_town_rename(&founding, cost, UINT16_MAX, {nullptr, 0}, false);
 		CHECK(error == UINT16_MAX); openttd_rust_town_destroy(owner);
 	}
@@ -914,7 +915,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, path_read);
 		VEHICLE_UNUSED(leaves, choose_track);
 		VEHICLE_UNUSED(leaves, find_depot);
-		VEHICLE_UNUSED(leaves, can_build_tram);
+		VEHICLE_UNUSED(leaves, tram_build_read);
 		VEHICLE_UNUSED(vehicle, previous_tile);
 		VEHICLE_UNUSED(leaves, disconnect);
 		VEHICLE_UNUSED(leaves, stop_read);
@@ -996,7 +997,7 @@ static void RoadBoundary()
 	};
 	t.vehicle.write_tick = [](OpenTTDVehicle *u, uint8_t tick) noexcept { CHECK(u == RoadAbiHandle()); road_abi_probe->tick = tick; };
 	const OpenTTDRoadTickRead part{.tick = 255, .front = false};
-	CHECK(openttd_rust_road_tick(v, probe.state, &part, &t.leaves));
+	CHECK(openttd_rust_road_tick(v, probe.state, &part, &t.leaves, nullptr));
 	CHECK(probe.tick == 0 && probe.running == 0 && probe.order_time == 0 && world.draws == 0);
 
 	/* A direct callback changes canonical state before Rust reobserves it. */
@@ -1114,7 +1115,7 @@ static void RoadBoundary()
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
 	t.leaves.enter_tile = [](OpenTTDVehicle *, uint32_t, int32_t, int32_t) noexcept -> OpenTTDRoadEntered { return {.tile = 100, .cur_speed = 0, .flags = 4, .direction = 1, .order_type = 0}; };
 	t.vehicle.write_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == 0); };
-	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &probe.entry, &t.leaves));
+	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &probe.entry, &t.leaves, nullptr));
 	CHECK(openttd_rust_road_get(probe.state, 0) == 36);
 	openttd_rust_road_set(probe.state, 0, 0);
 	openttd_rust_road_set(probe.state, 6, 0);
@@ -1162,7 +1163,7 @@ static void RoadBoundary()
 	t.leaves.tick_front = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadFrontTickRead { return {.movement = road_abi_probe->entry, .order_time = 5, .running = 0, .status = 0}; };
 	t.leaves.crash_part = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadCrashPart { return {.next = nullptr, .next_state = nullptr, .tile = 100, .z = 0, .crossing = false}; };
 	const OpenTTDRoadTickRead front{.tick = 0, .front = true};
-	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves));
+	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
 	CHECK(probe.nested == 3 && probe.dest == 100 && probe.order_time == 6 && probe.running == 1 && probe.progress == 7 && probe.next_reads == 1 && world.draws == 0);
 
 	/* Skip effects with no lookup; realistic UpdateSpeed still observes post-effect inputs. */
@@ -1171,7 +1172,7 @@ static void RoadBoundary()
 	t.ground.set_last_speed = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundLastSpeed { return {.status = 1}; };
 	t.vehicle.next = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { CHECK(road_abi_probe->viewports == 1); ++road_abi_probe->next_reads; return nullptr; };
 	t.vehicle.progress = [](OpenTTDVehicle *) noexcept -> uint8_t { CHECK(road_abi_probe->viewports == 1 && road_abi_probe->next_reads == 2); return static_cast<uint8_t>(road_abi_probe->progress); };
-	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves));
+	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
 	CHECK(probe.viewports == 1 && probe.next_reads == 2 && probe.progress == 7);
 	probe.visual_eligible = true; probe.entry.acceleration_model = 0;
 
@@ -1212,7 +1213,7 @@ static void RoadBoundary()
 	for (bool hidden : {false, true}) {
 		probe.hidden_viewport_tail = hidden;
 		probe.viewports = probe.next_reads = probe.progress_writes = 0;
-		CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves));
+		CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
 		CHECK(probe.viewports == 2 && probe.next_reads == (hidden ? 3U : 2U) && probe.progress_writes == 1 && probe.progress == 0 && probe.dest == 202);
 	}
 
@@ -1223,7 +1224,7 @@ static void RoadBoundary()
 	t.ground.turn = [](OpenTTDVehicle *u, uint8_t direction) noexcept { CHECK(u == RoadAbiHandle() && direction < 8); ++road_abi_probe->turns; };
 	t.vehicle.next = [](OpenTTDVehicle *u) noexcept -> OpenTTDVehicle * { CHECK(u == RoadAbiHandle() && road_abi_probe->turns == 1); return nullptr; };
 	const OpenTTDRoadTickRead animation{.tick = 7, .front = true};
-	CHECK(openttd_rust_road_tick(v, probe.state, &animation, &t.leaves));
+	CHECK(openttd_rust_road_tick(v, probe.state, &animation, &t.leaves, nullptr));
 	CHECK(probe.turns == 1 && world.draws == 1);
 
 	/* The final-part deletion returns its copied alive result only. */
@@ -1241,7 +1242,7 @@ static void RoadBoundary()
 	};
 	t.leaves.tick_front = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadFrontTickRead { return {.movement = road_abi_probe->entry, .order_time = 0, .running = 0, .status = 128}; };
 	const OpenTTDRoadTickRead crashed{.tick = 31, .front = true};
-	CHECK(!openttd_rust_road_tick(v, probe.state, &crashed, &t.leaves));
+	CHECK(!openttd_rust_road_tick(v, probe.state, &crashed, &t.leaves, nullptr));
 	CHECK(probe.state == nullptr && probe.destroyed == 1 && world.draws == 1);
 	std::printf("road_native_typed_reentry_path_and_owner_destruction passed\n");
 }

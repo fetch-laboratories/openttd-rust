@@ -137,8 +137,6 @@ struct OpenTTDStationCommandServices {
 	void (*reset_facilities)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reset_facilities);
 	void (*orders_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(orders_dirty);
 	const OpenTTDVehicleServices *vehicle;
-	bool (*road_type_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_valid);
-	bool (*powered_road)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(powered_road);
 	bool (*stop_on_town_road)() noexcept OPENTTD_SERVICE_DEFAULT(stop_on_town_road);
 	bool (*stop_on_competitor_road)() noexcept OPENTTD_SERVICE_DEFAULT(stop_on_competitor_road);
 	uint32_t (*road_class_count)() noexcept OPENTTD_SERVICE_DEFAULT(road_class_count);
@@ -243,7 +241,6 @@ struct OpenTTDStationCommandServices {
 	OpenTTDStationArea (*industry_area)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(industry_area);
 	void (*remove_buoy)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_buoy);
 	bool (*autoslope_axis)(uint32_t, int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(autoslope_axis);
-	void (*set_road_owner)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_owner);
 	void (*station_list_classes_invalidate)() noexcept OPENTTD_SERVICE_DEFAULT(station_list_classes_invalidate);
 };
 const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept;

@@ -146,9 +146,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.reset_facilities = RustStationResetFacilities,
 		.orders_dirty = []() noexcept { SetWindowClassesDirty(WC_VEHICLE_ORDERS); },
 		.vehicle = &GetRustVehicleServices(),
-		.road_type_valid = [](uint8_t rt) noexcept { return ValParamRoadType(static_cast<RoadType>(rt)); },
-		.powered_road = [](uint8_t a, uint8_t b) noexcept { return HasPowerOnRoad(static_cast<RoadType>(a), static_cast<RoadType>(b)); },
-		.stop_on_town_road = RustStationStopOnTownRoad,
+				.stop_on_town_road = RustStationStopOnTownRoad,
 		.stop_on_competitor_road = RustStationStopOnCompetitorRoad,
 		.road_class_count = []() noexcept { return RoadStopClass::GetClassCount(); },
 		.road_waypoint_class = [](uint16_t cls) noexcept { return IsWaypointClass(*RoadStopClass::Get(static_cast<RoadStopClassID>(cls))); },
@@ -252,8 +250,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.industry_area = [](Industry *industry) noexcept -> OpenTTDStationArea { const auto &a = industry->location; return {a.tile.base(), a.w, a.h}; },
 		.remove_buoy = [](OpenTTDCommandCost *out, uint32_t tile, uint16_t flags) noexcept { *reinterpret_cast<CommandCost *>(out) = RemoveBuoy(TileIndex{tile}, DoCommandFlags(flags)); },
 		.autoslope_axis = [](uint32_t tile, int32_t z, uint8_t slope, uint8_t axis) noexcept { return AutoslopeCheckForAxis(TileIndex{tile}, z, static_cast<Slope>(slope), static_cast<Axis>(axis)); },
-		.set_road_owner = RustSetRoadOwner,
-		.station_list_classes_invalidate = []() noexcept { InvalidateWindowClassesData(WC_STATION_LIST, 0); },
+			.station_list_classes_invalidate = []() noexcept { InvalidateWindowClassesData(WC_STATION_LIST, 0); },
 	};
 	return services;
 }

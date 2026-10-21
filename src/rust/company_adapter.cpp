@@ -58,6 +58,7 @@
 #include "company_services.h"
 #include "presentation_services.h"
 #include "services_rail.h"
+#include "services_road.h"
 #include "settings_services.h"
 #include "environment_services.h"
 #include "vehicle_services.h"

@@ -17,6 +17,8 @@
 enum class LandscapeType : uint8_t;
 enum class StationType : uint8_t;
 struct OpenTTDStationCommandServices;
+struct OpenTTDRoadCommandServices;
+enum class RoadTileType : uint8_t;
 
 /* Distinct trivial date carriers. Strong native Date classes stay inside C++;
  * wrappers convert explicitly so MSVC class-return rules cannot alter this ABI. */
@@ -133,6 +135,16 @@ struct OpenTTDSharedServices {
 	uint8_t (*road_depot_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_depot_direction);
 	uint8_t (*road_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_owner);
 	uint8_t (*road_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type);
+	bool (*crossing_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_reserved);
+	void (*set_crossing_reserved)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_crossing_reserved);
+	bool (*may_have_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(may_have_road);
+	RoadTileType (*road_tile_kind)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_tile_kind);
+	void (*set_road_bits)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_bits);
+	void (*set_road_type)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_type);
+	void (*set_road_owner)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_owner);
+	void (*set_road_directions)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_directions);
+	bool (*road_powered)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_powered);
+	bool (*road_type_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_valid);
 	bool (*safe_waiting_position)(const Train *, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(safe_waiting_position);
 	bool (*service_at_helipad)() noexcept OPENTTD_SERVICE_DEFAULT(service_at_helipad);
 	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tropic_zone);
@@ -140,6 +152,7 @@ struct OpenTTDSharedServices {
 	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
 	// Registry: station construction (#267).
+	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);
 	const OpenTTDStationCommandServices *(*station_commands)() noexcept OPENTTD_SERVICE_DEFAULT(station_commands);
 	bool (*docking_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking_tile);
 	uint8_t (*station_gfx)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_gfx);

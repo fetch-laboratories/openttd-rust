@@ -19,9 +19,36 @@
     clippy::too_many_arguments
 )]
 use crate::services::{
-    ClearGroundType, DiagDirection, Foundation, FoundationSlope, LandscapeType, RailGroundType,
-    RoadBits, RoadType, Roadside, Services, Slope, TrackBits, WaterClass,
+    Axis, ClearGroundType, DiagDirection, Foundation, FoundationSlope, LandscapeType,
+    RailGroundType, RailMapServices, RoadBits, RoadType, Roadside, Services, Slope, Track,
+    TrackBits, WaterClass,
 };
+
+/// Original `SetTunnelBridgeOwner`, preserving begin/end store order.
+pub(crate) fn set_tunnel_bridge_owner(begin: u32, end: u32, owner: u8, s: &Services) {
+    (s.set_tile_owner)(begin, owner);
+    (s.set_tile_owner)(end, owner);
+}
+
+/// Original `OtherAxis` for a source-valid axis.
+fn other_axis(axis: Axis) -> Axis {
+    Axis(axis.0 ^ 1)
+}
+
+/// Original `AxisToTrack`; valid axes and axial tracks share their encoding.
+fn axis_to_track(axis: Axis) -> Track {
+    Track(axis.0)
+}
+
+/// Original `GetCrossingRailAxis`, over the canonical road-axis accessor.
+fn crossing_rail_axis(tile: u32, rail: &RailMapServices) -> Axis {
+    other_axis((rail.crossing_road_axis)(tile))
+}
+
+/// Original `GetCrossingRailTrack`, retaining its named helper composition.
+pub(crate) fn crossing_rail_track(tile: u32, rail: &RailMapServices) -> Track {
+    axis_to_track(crossing_rail_axis(tile, rail))
+}
 
 /// Complete original `DoClearSquare` control. Native leaves cannot throw and no
 /// owner borrow survives their invocation; world access is serialized.
@@ -525,7 +552,6 @@ pub struct RoadServices {
     pub all_bits: extern "C" fn(u32) -> RoadBits,
     pub bulldozer: extern "C" fn(u32),
     pub cleanup: extern "C" fn(u32, RoadBits) -> RoadBits,
-    pub remove: extern "C" fn(u32, RoadBits),
     pub town: *const crate::town::Leaves,
     pub set_road_type: extern "C" fn(u32, RoadType),
 }
@@ -542,6 +568,7 @@ pub(crate) unsafe fn road_tile_loop(
     call: *mut Call,
     costs: *const CostServices,
     roads: *const RoadServices,
+    command: *const crate::road_cmd::CommandContext,
     shared: *const Services,
 ) {
     let climate = climate.0;
@@ -641,7 +668,20 @@ pub(crate) unsafe fn road_tile_loop(
             let old = RoadBits((s.road_bits)(tile, 0, false));
             let new = (r.cleanup)(tile, old);
             if old != new {
-                (r.remove)(tile, RoadBits(old.0 ^ new.0));
+                // SAFETY: the outer tile-loop entry owns both native result slots.
+                unsafe {
+                    let c = &*command;
+                    crate::road_cmd::openttd_rust_road_remove(
+                        c.services,
+                        c.cost,
+                        c.ret,
+                        11,
+                        tile,
+                        old.0 ^ new.0,
+                        0,
+                        true,
+                    );
+                }
                 hit(Witness::RoadRemove);
                 if new.0 == 0 {
                     (s.mark_dirty)(tile);

@@ -40,6 +40,8 @@ inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
 
 /** Shared native field definitions, also used by bundled observations. */
 template <class T> inline auto RustVehicleFirst(T *v) noexcept { return v->First(); }
+/** Canonical typed ground-vehicle cargo update for command/list adapters. */
+template <class T> inline void RustGroundCargoChanged(T *v) noexcept { v->CargoChanged(); }
 template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last(); }
 /** Signature adapter for existing opaque fleet and orders callbacks. */
 inline void *RustVehicleFirstOpaque(void *v) noexcept { return RustVehicleFirst(static_cast<const Vehicle *>(v)); }
@@ -196,7 +198,7 @@ inline OpenTTDGroundCrash OPENTTD_VEHICLE_CALL GroundSvcCrash(OpenTTDVehicle *v,
 template <class T>
 inline void OPENTTD_VEHICLE_CALL GroundSvcFirstCargoChanged(OpenTTDVehicle *v) noexcept
 {
-	RustVehicleFirst(T::From(VehicleOf(v)))->CargoChanged();
+	RustGroundCargoChanged(RustVehicleFirst(T::From(VehicleOf(v))));
 }
 template <class T>
 inline void OPENTTD_VEHICLE_CALL GroundSvcGoToDepotService(OpenTTDVehicle *v, uint16_t depot) noexcept

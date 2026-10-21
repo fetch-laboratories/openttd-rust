@@ -49,7 +49,9 @@
 
 #ifdef WITH_RUST
 #include "rust/company_adapter.h"
+#include "rust/company_services.h"
 #include "rust/command_services_ffi.h"
+#include "rust/command_cost_native_services.h"
 #endif
 
 #include "safeguards.h"
@@ -433,9 +435,17 @@ CommandCost CheckOwnership(Owner owner, TileIndex tile)
 	if (owner == _current_company) return CommandCost();
 
 	CommandCost error{STR_ERROR_OWNED_BY};
+#ifdef WITH_RUST
+	if (RustIsLocalCompany()) {
+#else
 	if (IsLocalCompany()) {
+#endif
+#ifdef WITH_RUST
+		RustEncodeOwnedBy(error, owner, tile);
+#else
 		auto params = GetParamsForOwnedBy(owner, tile);
 		error.SetEncodedMessage(GetEncodedStringWithArgs(STR_ERROR_OWNED_BY, params));
+#endif
 		if (owner != OWNER_TOWN) error.SetErrorOwner(owner);
 	}
 	return error;
