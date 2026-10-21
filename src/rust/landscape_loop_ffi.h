@@ -11,6 +11,7 @@
 #include "trees_ffi.h"
 #include "industry_ffi.h"
 #include "ground_ffi.h"
+struct OpenTTDTownLeaves;
 
 /* Only existing tables consumed by the industry tile loop; borrowed for a batch. */
 struct OpenTTDIndustryLoopServices {
@@ -36,7 +37,8 @@ struct OpenTTDGroundLoopServices {
 	bool rebuild;
 	bool ambient_callback;
 };
-/* Native handlers retain their complete original bodies. No generic dispatch slot.
+/* Native handlers retain their complete original bodies; houses dispatch to the
+ * Rust owner with the town table. No generic dispatch slot.
  * World callbacks may mutate/reenter; no cursor borrow spans a callback. Tables are
  * immutable and live for the synchronous invocation. All wrappers are noexcept. */
 struct OpenTTDLandscapeLoopServices {
@@ -45,7 +47,7 @@ struct OpenTTDLandscapeLoopServices {
 	const OpenTTDTreeServices *trees;
 	OpenTTDIndustryLoopServices industry;
 	OpenTTDGroundLoopServices ground;
-	void (*house_loop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(house_loop);
+	const OpenTTDTownLeaves *town;
 	void (*station_loop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_loop);
 	void (*object_loop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(object_loop);
 };

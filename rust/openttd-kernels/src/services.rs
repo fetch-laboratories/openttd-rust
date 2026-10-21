@@ -8,6 +8,7 @@
 //! Copied, synchronous shared-world leaves. C++ wrappers are noexcept: environmental
 //! failures terminate there. No world reference or borrow crosses a leaf call.
 #![allow(unsafe_code, clippy::cast_possible_truncation)]
+pub use crate::map_func::Map;
 use std::ffi::c_void;
 
 /// Native `RoadTramType : bool`; true denotes the tram mask.
@@ -59,9 +60,6 @@ pub struct CalendarDate(pub i32);
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct EconomyDate(pub i32);
-
-/// Original `TILE_HEIGHT`, shared by raw-to-pixel map consumers.
-pub const TILE_HEIGHT: u32 = 8;
 
 /// Native stack-owned command result, including encoded error parameters.
 /// Rust only borrows its address and invokes the native operations below.
@@ -146,8 +144,6 @@ pub struct TownHandle {
     _private: [u8; 0],
 }
 
-/// Source `TileType::MP_HOUSE`.
-pub const MP_HOUSE: u8 = 3;
 /// Synchronous borrowed bytes, including embedded NULs. The producing entry
 /// specifies lifetime; no native callback may retain this view after mutation.
 #[repr(C)]
@@ -506,8 +502,6 @@ pub struct Services {
     /// Original `UpdateLevelCrossing`; callers retain their original sound argument.
     pub update_level_crossing: extern "C" fn(u32, bool),
     // Registry: house (#256).
-    /// Current foundation build price.
-    pub foundation_price: extern "C" fn() -> i64,
     /// Rebuild the canonical town spatial index.
     pub rebuild_town_tree: extern "C" fn(),
     /// Whether the economy is in recession.
@@ -612,9 +606,6 @@ pub fn fixture(
         0
     }
     extern "C" fn count0() -> usize {
-        0
-    }
-    extern "C" fn money0() -> i64 {
         0
     }
     extern "C" fn tick0() -> u64 {
@@ -758,7 +749,6 @@ pub fn fixture(
         tunnel_transport: byte,
         update_level_crossing: fixture_crossing_update,
         // Registry: house (#256).
-        foundation_price: money0,
         rebuild_town_tree: noop,
         recession: flag0,
         tick_counter: tick0,
@@ -793,67 +783,6 @@ extern "C" fn fixture_crossing_update(_: u32, _: bool) {}
 extern "C" fn fixture_train_trackdir(_: *const Train) -> Trackdir {
     Trackdir(0)
 }
-/// Map dimensions read once per entry.
-#[derive(Clone, Copy)]
-pub struct Map {
-    /// `Map::LogX()` captured for this synchronous entry.
-    pub log_x: u8,
-}
-impl Map {
-    /// `Map::SizeX()`, from the dimension captured at entry.
-    #[must_use]
-    pub fn size_x(self) -> u32 {
-        1_u32 << self.log_x
-    }
-    /// `TileX`.
-    #[must_use]
-    pub fn tile_x(self, tile: u32) -> u32 {
-        tile & (self.size_x() - 1)
-    }
-    /// `TileY`.
-    #[must_use]
-    pub fn tile_y(self, tile: u32) -> u32 {
-        tile >> self.log_x
-    }
-    /// Original `DistanceSquare` over captured map dimensions.
-    #[must_use]
-    pub fn distance_square(self, a: u32, b: u32) -> u32 {
-        let x = self.tile_x(a).cast_signed() - self.tile_x(b).cast_signed();
-        let y = self.tile_y(a).cast_signed() - self.tile_y(b).cast_signed();
-        (x * x + y * y).cast_unsigned()
-    }
-    /// `TileDiffXY`: `y * Map::SizeX() + x` in unsigned arithmetic.
-    #[must_use]
-    pub fn diff(self, x: i32, y: i32) -> u32 {
-        y.cast_unsigned()
-            .wrapping_mul(self.size_x())
-            .wrapping_add(x.cast_unsigned())
-    }
-    /// `tile + TileOffsByDiagDir(dir)`.
-    #[must_use]
-    pub fn add_diag(self, tile: u32, dir: u8) -> u32 {
-        const OFFSETS: [(i32, i32); 4] = [(-1, 0), (0, 1), (1, 0), (0, -1)];
-        let (x, y) = OFFSETS[usize::from(dir)];
-        tile.wrapping_add(self.diff(x, y))
-    }
-    /// `TileAddByDir(tile, dir)`.
-    #[must_use]
-    pub fn add_dir(self, tile: u32, dir: u8) -> u32 {
-        const OFFSETS: [(i32, i32); 8] = [
-            (-1, -1),
-            (-1, 0),
-            (-1, 1),
-            (0, 1),
-            (1, 1),
-            (1, 0),
-            (1, -1),
-            (0, -1),
-        ];
-        let (x, y) = OFFSETS[usize::from(dir)];
-        tile.wrapping_add(self.diff(x, y))
-    }
-}
-
 /// Source `Chance16I` uses uint32 multiplication/addition after uint16 truncation.
 #[must_use]
 pub fn chance16_i(a: u32, b: u32, r: u32) -> bool {

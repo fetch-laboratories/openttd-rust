@@ -36,7 +36,7 @@
 //! and arbitrary `NewGRF` corpus limits remain source-review obligations in #156.
 #![allow(unsafe_code)]
 
-use crate::{ground, industry, services, trees, water};
+use crate::{ground, industry, services, town, trees, water};
 use std::ffi::c_uint;
 
 const FEEDBACKS: [u32; 13] = [
@@ -102,7 +102,7 @@ pub struct Services {
     pub trees: *const trees::TreeServices,
     pub industry: IndustryServices,
     pub ground: GroundServices,
-    pub house_loop: extern "C" fn(u32),
+    pub town: *const town::Leaves,
     pub station_loop: extern "C" fn(u32),
     pub object_loop: extern "C" fn(u32),
 }
@@ -163,7 +163,7 @@ unsafe fn dispatch(
                 s.shared,
             );
         },
-        3 => (s.house_loop)(tile),
+        3 => unsafe { town::house::openttd_rust_house_tile_loop(s.town, s.shared, tile) },
         4 => unsafe {
             trees::openttd_rust_trees_tile_loop(tile, settings, g.call, s.trees, s.shared);
         },

@@ -14,6 +14,9 @@ use super::{
     ConstructionServices, GenerationServices, Industry, IndustryCost, IndustryCostServices,
     LifecycleServices, Services, SpecHandle,
 };
+use crate::economy_type::PR_BUILD_FOUNDATION;
+use crate::newgrf_callbacks::CALLBACK_FAILED;
+use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use std::{ffi::c_void, ptr};
 
 #[repr(C)]
@@ -520,7 +523,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
     }
     if info.accepts_callback {
         let result = unsafe { (t.callback)(tile, gfx, 0x2c, 0, 0) };
-        if result != 0xffff {
+        if result != CALLBACK_FAILED {
             info.cargo.fill(255);
             for n in 0..3 {
                 info.cargo[n] =
@@ -530,7 +533,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_acceptance(
     }
     if info.amount_callback {
         let result = unsafe { (t.callback)(tile, gfx, 0x2b, 0, 0) };
-        if result != 0xffff {
+        if result != CALLBACK_FAILED {
             info.amount.fill(0);
             for n in 0..3 {
                 info.amount[n] = ((result >> (n * 4)) & 15) as i8;
@@ -636,27 +639,20 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_terraform(
     let (shared, t, p, c) = unsafe { (&*shared, &*tiles, &*policy, &*costs) };
     if (shared.autoslope)() {
         let old_slope = (shared.tile_slope)(tile);
-        let max_z = if slope_new == 0 {
-            0
-        } else if slope_new & 16 != 0 {
-            2
-        } else {
-            1
-        };
-        if old_slope & 16 == 0
-            && slope_new & 16 == 0
-            && unsafe { (p.tile_max_z)(tile) } == z_new.wrapping_add(max_z)
+        if !is_steep_slope(old_slope)
+            && !is_steep_slope(slope_new)
+            && unsafe { (p.tile_max_z)(tile) } == z_new.wrapping_add(get_slope_max_z(slope_new))
         {
             let gfx = unsafe { (t.gfx)(tile) };
             let spec = unsafe { (t.spec)(gfx) };
             let allowed = if unsafe { (p.autoslope_callback)(spec) } {
                 let result = unsafe { (t.callback)(tile, gfx, 0x3c, 0, 0) };
-                result == 0xffff || !unsafe { (p.callback_boolean)(spec, 0x3c, result) }
+                result == CALLBACK_FAILED || !unsafe { (p.callback_boolean)(spec, 0x3c, result) }
             } else {
                 true
             };
             if allowed {
-                let foundation = (shared.foundation_price)();
+                let foundation = crate::company::price(PR_BUILD_FOUNDATION);
                 unsafe { (c.expense_money)(out, 0, foundation) };
                 return;
             }
