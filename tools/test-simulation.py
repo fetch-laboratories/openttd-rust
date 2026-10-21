@@ -15,8 +15,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from simulation import core as simulate
-from simulation import engines, fleet, orders, runtime, signals, stations, towns
 from simulation import instructions as ir
+from simulation import runtime
 from simulation.roads import SPEED_BUDGETS, speed_budget
 
 import migration
@@ -549,8 +549,9 @@ class InstructionSpeedTests(unittest.TestCase):
             with contextlib.ExitStack() as stack:
                 stack.enter_context(patch.object(simulate, "ROOT", root))
                 stack.enter_context(patch.object(migration, "REFERENCE_BUILD", root))
-                for module in (engines, fleet, orders, signals, stations, towns):
-                    stack.enter_context(patch.object(module, "adapter", adapter))
+                for module in simulate.scenario_modules():
+                    if hasattr(module, "adapter"):
+                        stack.enter_context(patch.object(module, "adapter", adapter))
                 runtime.export(root / "bundle", migration)
             counts = []
             scenario["name"] = next(iter(SPEED_BUDGETS))
