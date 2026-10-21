@@ -83,6 +83,12 @@ pub fn get_slope_max_z(s: u8) -> i32 {
     1
 }
 
+/// `GetSlopeMaxPixelZ`.
+#[must_use]
+pub fn get_slope_max_pixel_z(s: u8) -> i32 {
+    get_slope_max_z(s) * crate::tile_type::TILE_HEIGHT.cast_signed()
+}
+
 /// `IsInclinedSlope`.
 #[must_use]
 pub fn is_inclined_slope(s: u8) -> bool {
