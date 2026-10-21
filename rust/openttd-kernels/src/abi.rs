@@ -31,6 +31,43 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "OpenTTDEnvironmentServices" ["common"] => crate::services::EnvironmentServices {
+        editor,
+        freeform_edges,
+    };
+    "OpenTTDWaterCommandStrings" ["common"] => crate::water_cmd::Strings {
+        built_on_water,
+        demolish_bridge,
+        unsuitable,
+        sloped_wrong,
+        edge,
+        low_bridge,
+        flat,
+        already_built,
+        build_on_water,
+        demolish_building,
+        demolish_canal,
+    };
+    "OpenTTDWaterCommandServices" ["common"] => crate::water_cmd::WaterCommandServices {
+        shared,
+        cost,
+        command,
+        water,
+        rail,
+        water_type,
+        lock_part,
+        lock_direction,
+        other_depot_tile,
+        restoration,
+        environment,
+        make_depot,
+        make_lock_tile,
+        area_begin,
+        area_tile,
+        area_next,
+        strings,
+    };
+
     "OpenTTDStationCommandServices" ["probe"] => crate::station_cmd::CommandServicesTable {
         shared,
         station,
@@ -154,7 +191,6 @@ layouts! {
         close_stop_inspect,
         road_waypoint_area,
         set_road_waypoint_area,
-        vehicles_on_tile,
         road_vehicle_owner,
         order_station_location,
         aircraft,
@@ -355,9 +391,6 @@ layouts! {
         width,
         height,
     };
-    "OpenTTDTileVehicleCursor" ["landscape"] => crate::water::TileVehicleCursor {
-        storage,
-    };
     "OpenTTDWaterGroundServices" ["landscape"] => crate::water::WaterServices {
         rail,
         clear,
@@ -375,10 +408,6 @@ layouts! {
         region_context,
         remove_rail,
         apply_foundation,
-        iterator_begin,
-        iterator_current,
-        iterator_next,
-        iterator_end,
         airport_tile,
         airport,
         airport_member,
@@ -862,6 +891,7 @@ layouts! {
         rail_track_status,
         has_signals,
         signal_type,
+        invalid_rail_type,
         rail_type,
         set_rail_type,
         rail_tile_type,
@@ -889,7 +919,6 @@ layouts! {
         station_blocked,
         station_track,
         wormhole_reserved,
-        set_tile_owner,
     };
     "OpenTTDTownYearlyServices" ["probe"] => crate::town::YearlyServices {
         completed,
@@ -1397,6 +1426,7 @@ layouts! {
         leaves,
     };
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
+        set_tile_owner,
         autoslope,
         bay_stop_direction,
         bridge_above,
@@ -1405,7 +1435,6 @@ layouts! {
         build_on_slopes,
         calendar_date,
         calendar_year,
-        clear_square,
         clear_square_services,
         calc_closest_town,
         closest_town,
@@ -1479,6 +1508,7 @@ layouts! {
         tile_owner,
         tile_slope,
         tile_type,
+        tile_add_wrap,
         tile_valid,
         tile_z,
         town_index,
@@ -1514,6 +1544,7 @@ layouts! {
         status,
     };
     "OpenTTDVehicleServices" ["probe"] => crate::vehicle::VehicleServices {
+        vehicles_on_tile,
         write_counters,
         handle_breakdown,
         waiting_for_unbunching,
@@ -1547,6 +1578,7 @@ layouts! {
         write_speed,
         last_station,
         write_last_station,
+        set_dest_tile,
         write_dest,
         write_progress,
         write_max_speed,
@@ -2142,7 +2174,7 @@ layouts! {
         map_log_x,
         growth_rate,
         snow_line,
-        editor,
+        environment,
         generating_world,
         allow_crossings,
         climate,
@@ -2642,7 +2674,7 @@ layouts! {
         owner,
         pool_size,
         tick_counter,
-        editor,
+        environment,
         facilities,
         in_use,
         is_station,
@@ -3023,7 +3055,7 @@ layouts! {
         spec_behaviour,
         info,
         coastal,
-        editor,
+        environment,
         density,
         custom_number,
         scale_by_size_1d,

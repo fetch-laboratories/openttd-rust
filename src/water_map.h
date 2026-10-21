@@ -509,6 +509,7 @@ inline void MakeLockTile(Tile t, Owner o, LockPart part, DiagDirection dir, Wate
  * @param wc_upper Original water class of the upper part.
  * @param wc_middle Original water class of the middle part.
  */
+#ifndef WITH_RUST
 inline void MakeLock(Tile t, Owner o, DiagDirection d, WaterClass wc_lower, WaterClass wc_upper, WaterClass wc_middle)
 {
 	TileIndexDiff delta = TileOffsByDiagDir(d);
@@ -521,6 +522,7 @@ inline void MakeLock(Tile t, Owner o, DiagDirection d, WaterClass wc_lower, Wate
 	MakeLockTile(lower_tile, IsWaterTile(lower_tile) ? GetTileOwner(lower_tile) : o, LockPart::Lower, d, wc_lower);
 	MakeLockTile(upper_tile, IsWaterTile(upper_tile) ? GetTileOwner(upper_tile) : o, LockPart::Upper, d, wc_upper);
 }
+#endif /* WITH_RUST */
 
 /**
  * Set the non-flooding water tile state of a tile.
