@@ -116,7 +116,7 @@ static inline const OpenTTDTownAuthorityServices town_protocol_authority{
 	.town_index = [](const OpenTTDTownHandle *) noexcept -> uint16_t { return 0; },
 	.refusal = 0,
 };
-/* Services reached by the house tile-loop rebuild and CmdPlaceHouse; the rest stay null. */
+/* Services reached by the house tile-loop rebuild and CmdPlaceHouse; unused callbacks abort. */
 static inline OpenTTDHouseServices TownProtocolHouses()
 {
 	auto houses = OpenTTDHouseServices{};
@@ -218,8 +218,13 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
 	services.tile_slope = [](uint32_t) noexcept -> uint8_t { return 0; };
 	services.tile_max_z = [](uint32_t) noexcept -> int32_t { return 0; };
+	services.tile_z = [](uint32_t) noexcept -> int32_t { return 0; };
+	services.calendar_date = []() noexcept { return 0; };
 	services.bridge_above = [](uint32_t) noexcept { return false; };
+	services.has_water_ground = [](uint32_t) noexcept { return false; };
 	services.mark_dirty = [](uint32_t) noexcept {};
+	services.clear_square = [](uint32_t) noexcept {};
+	services.closest_town = [](uint32_t, uint32_t) noexcept -> const OpenTTDTownHandle * { return nullptr; };
 	services.tile_valid = [](uint32_t) noexcept { return true; };
 	services.distance_from_edge = [](uint32_t) noexcept { return uint32_t(1); };
 	services.road_type = [](uint32_t) noexcept { return uint8_t(63); };
@@ -268,7 +273,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	const auto *ids = static_cast<const uint16_t *>(counts.data);
 	check(ids[0] == 1 && ids[1] == 1 && ids[2] == 1 && ids[3] == 1 && ids[4] == 1);
 	/* A skipped builtin lift tick must not observe lift state, owner or map.
-	 * This fixture leaves the lift observation null, making eager reads fail. */
+	 * This fixture leaves the lift observation at its abort default, making eager reads fail. */
 	services.tick_counter = []() noexcept -> uint64_t { return 1; };
 	w.owner_reads = 0; w.map_reads = 0;
 	openttd_rust_house_animate(&leaves, &services, 2080);
