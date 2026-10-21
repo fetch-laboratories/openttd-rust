@@ -19,7 +19,10 @@
     clippy::if_not_else,
     clippy::fn_params_excessive_bools
 )]
-use crate::rail_cmd::{ConvertFrame as Area, CrossingRoad, Foundation, RailCommandServices};
+use crate::rail_cmd::{
+    CROSSING_SLOPES, ConvertFrame as Area, CrossingRoad, Foundation, LEVELCROSSING_TRACKBIT_FACTOR,
+    RailCommandServices, TUNNELBRIDGE_TRACKBIT_FACTOR,
+};
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Map, RailMapServices, Services, TownHandle,
 };
@@ -175,6 +178,10 @@ const INVALID_TOWN: u16 = u16::MAX;
 const EXEC: u16 = 1;
 const AUTO: u16 = 2;
 const BANKRUPT: u16 = 32;
+const RATING_ROAD_DOWN_STEP_EDGE: i32 = -18;
+const RATING_ROAD_DOWN_STEP_INNER: i32 = -50;
+const RATING_ROAD_MINIMUM: i32 = -100;
+const ROAD_DEPOT_TRACKBIT_FACTOR: u32 = 2;
 const INVALID_SLOPES: [[u8; 15]; 2] = [
     [0, 12, 9, 8, 3, 0, 1, 0, 6, 4, 0, 0, 2, 0, 0],
     [0, 0, 0, 5, 0, 15, 10, 15, 0, 10, 15, 15, 5, 15, 15],
@@ -446,7 +453,7 @@ impl<'a> Ctx<'a> {
                 neighbours |= dir_bit(dir);
             }
         }
-        let mut decrease = -18;
+        let mut decrease = RATING_ROAD_DOWN_STEP_EDGE;
         if neighbours & neighbours.wrapping_sub(1) != 0 && neighbours & remove != 0 {
             if !(self.s.extra_dynamite)() {
                 (self.costs.error_param)(
@@ -456,7 +463,7 @@ impl<'a> Ctx<'a> {
                 );
                 return;
             }
-            decrease = -50;
+            decrease = RATING_ROAD_DOWN_STEP_INNER;
         }
         // SAFETY: owner access resolves here and ends before the reentrant dirty-window service.
         unsafe {
@@ -468,7 +475,7 @@ impl<'a> Ctx<'a> {
                 town as usize,
                 company,
                 decrease,
-                -100,
+                RATING_ROAD_MINIMUM,
                 flags & 512 != 0,
                 (self.authority.bulldozer)(),
             );
@@ -553,7 +560,9 @@ impl<'a> Ctx<'a> {
                     self.infrastructure(
                         rt,
                         self.owner(tile, rtt),
-                        len.wrapping_mul(8).wrapping_neg() as i32,
+                        len.wrapping_mul(2)
+                            .wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR)
+                            .wrapping_neg() as i32,
                     );
                     (self.shared.set_road_type)(end, rtt, INVALID);
                     (self.shared.set_road_type)(tile, rtt, INVALID);
@@ -678,7 +687,7 @@ impl<'a> Ctx<'a> {
                             (self.r.rail_infrastructure)(
                                 owner,
                                 (self.rail.rail_type)(tile).0,
-                                u32::MAX,
+                                (LEVELCROSSING_TRACKBIT_FACTOR - 1).wrapping_neg(),
                             );
                             (self.commands.infrastructure_dirty)(owner);
                         }
@@ -886,7 +895,7 @@ impl<'a> Ctx<'a> {
                 _ => unreachable!(),
             },
             RAIL => {
-                if steep(slope) || 0x6CA1_u32 & (1 << slope) == 0 {
+                if steep(slope) || CROSSING_SLOPES & (1 << slope) == 0 {
                     cost.error(self.r.strings.sloped_wrong);
                     return;
                 }
@@ -933,7 +942,7 @@ impl<'a> Ctx<'a> {
                                 (self.r.rail_infrastructure)(
                                     owner,
                                     (self.rail.rail_type)(tile).0,
-                                    1,
+                                    LEVELCROSSING_TRACKBIT_FACTOR - 1,
                                 );
                                 (self.commands.infrastructure_dirty)(owner);
                             }
@@ -1110,7 +1119,7 @@ impl<'a> Ctx<'a> {
                 ),
             }
             if self.tile_type(tile) == WORMHOLE {
-                num = num.wrapping_mul(4);
+                num = num.wrapping_mul(TUNNELBRIDGE_TRACKBIT_FACTOR);
             }
             self.infrastructure(rt, self.owner(tile, rtt), num as i32);
             if rtt == 0 && self.tile_type(tile) == ROAD && (self.shared.is_normal_road)(tile) {
@@ -1402,7 +1411,11 @@ impl<'a> Ctx<'a> {
                 let depot = (self.r.new_depot)(tile);
                 (self.s.make_depot)(tile, (self.shared.current_company)(), depot, dir, rt);
                 (self.r.depot_name)(depot);
-                self.infrastructure(rt, (self.shared.current_company)(), 2);
+                self.infrastructure(
+                    rt,
+                    (self.shared.current_company)(),
+                    ROAD_DEPOT_TRACKBIT_FACTOR as i32,
+                );
             }
             (self.shared.mark_dirty)(tile);
         }
@@ -1429,7 +1442,7 @@ impl<'a> Ctx<'a> {
                 }
                 // The original skips INVALID_ROADTYPE only for the public update helper;
                 // a depot is guaranteed to have one valid type here.
-                (self.r.road_infrastructure)(owner, rt, 2_u32.wrapping_neg());
+                (self.r.road_infrastructure)(owner, rt, ROAD_DEPOT_TRACKBIT_FACTOR.wrapping_neg());
                 (self.commands.infrastructure_dirty)(owner);
             }
             (self.r.delete_depot)(tile);
@@ -1589,7 +1602,7 @@ impl<'a> Ctx<'a> {
                 1 => {
                     !steep(slope)
                         && (self.shared.tile_max_z)(tile) == z + slope_max_z(slope)
-                        && 0x6CA1_u32 & (1 << slope) != 0
+                        && CROSSING_SLOPES & (1 << slope) != 0
                 }
                 2 => {
                     (self.r.entrance_edge)(tile, z, slope, (self.shared.road_depot_direction)(tile))

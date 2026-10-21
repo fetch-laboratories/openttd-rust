@@ -284,7 +284,7 @@ const SLOPE_EW: u8 = 5;
 const SLOPE_NS: u8 = 10;
 const SLOPE_HALFTILE_MASK: u8 = 0xE0;
 /// `VALID_LEVEL_CROSSING_SLOPES`.
-const CROSSING_SLOPES: u32 =
+pub(crate) const CROSSING_SLOPES: u32 =
     (1 << 14) | (1 << 13) | (1 << 11) | (1 << 10) | (1 << 7) | (1 << 5) | 1;
 
 const FOUNDATION_NONE: u8 = 0;
@@ -315,8 +315,8 @@ const OT_LOADING: u8 = 3;
 
 const TILE_AXIAL_DISTANCE: i32 = 192;
 const TILE_CORNER_DISTANCE: i32 = 128;
-const LEVELCROSSING_TRACKBIT_FACTOR: u32 = 2;
-const TUNNELBRIDGE_TRACKBIT_FACTOR: u32 = 4;
+pub(crate) const LEVELCROSSING_TRACKBIT_FACTOR: u32 = 2;
+pub(crate) const TUNNELBRIDGE_TRACKBIT_FACTOR: u32 = 4;
 
 const PR_BUILD_SIGNALS: usize = 3;
 const PR_BUILD_DEPOT_TRAIN: usize = 5;
