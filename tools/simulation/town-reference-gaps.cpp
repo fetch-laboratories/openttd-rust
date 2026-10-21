@@ -178,7 +178,7 @@ static bool Candidate()
 	openttd_rust_town_simulation(world->owner)->population = world->town.cache.population;
 	auto leaves = TownProtocolServices();
 	leaves.map_log_x = Read_map_log_x; leaves.road_info = Read_road_info;
-	leaves.state = State; leaves.stations = Stations; leaves.road_mask = RoadTypes; leaves.build_road = BuildRoad; leaves.build_tunnel = BuildTunnel;
+	leaves.state = State; leaves.stations = Stations; leaves.road_mask = RoadTypes; leaves.build_tunnel = BuildTunnel;
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
 	services.calendar_date = []() noexcept { return 0; }; // The controlled road type is available from date zero.
 	services.tile_type = Read_tile_type; services.tile_valid = Read_tile_valid;
@@ -192,7 +192,14 @@ static bool Candidate()
 	services.is_road_depot = [](uint32_t id) noexcept { return IsRoadDepot(id); };
 	services.road_depot_direction = [](uint32_t id) noexcept { return uint8_t(GetRoadDepotDirection(id)); };
 	leaves.allow_crossings = []() noexcept { return _settings_game.economy.allow_town_level_crossings; };
-	return openttd_rust_town_tunnel(&leaves, &services, world->town.index, world->start, world->direction);
+	bool road_ok = false;
+	OpenTTDCommandCostServices costs{}; costs.success = [](const OpenTTDCommandCost *out) noexcept { return *reinterpret_cast<const bool *>(out); };
+	OpenTTDRailCommandServices rail{}; rail.cost = &costs;
+	OpenTTDRoadCommandServices roads{}; roads.do_build = [](const OpenTTDRoadCommandServices *, OpenTTDRoadCommandScratch *, OpenTTDCommandCost *out, OpenTTDCommandCost *, uint16_t flags, uint32_t tile, uint8_t bits, uint8_t rt, uint8_t, uint16_t town) noexcept {
+		assert(flags == 10); *reinterpret_cast<bool *>(out) = BuildRoad(town, tile, bits, rt, 0);
+	}; roads.rail_commands = &rail;
+	OpenTTDRoadCommandContext road{&roads, nullptr, reinterpret_cast<OpenTTDCommandCost *>(&road_ok), nullptr};
+	return openttd_rust_town_tunnel(&leaves, &services, &road, world->town.index, world->start, world->direction);
 }
 static uint32_t Along(const World &w, int distance) { return w.start + distance * TileOffsByDiagDir(static_cast<DiagDirection>(w.direction)); }
 static World Fixture(uint32_t dir, uint32_t length, bool mountain)

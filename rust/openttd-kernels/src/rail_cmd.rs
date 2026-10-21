@@ -21,7 +21,7 @@
     clippy::fn_params_excessive_bools
 )]
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Map, RailMapServices, Services,
+    CommandCost, CommandCostServices, CommandServices, Cost, Map, RailMapServices, Services,
 };
 pub use crate::services::{Foundation, Train};
 use crate::witness as w;
@@ -152,6 +152,7 @@ pub struct RailCommandServices {
     pub rail_clear_cost: extern "C" fn(u8) -> i64,
     /// `RailConvertCost`.
     pub rail_convert_cost: extern "C" fn(u8, u8) -> i64,
+    /// `RoadBuildCost`.
     /// `construction.crossing_with_competitor`.
     pub crossing_with_competitor: extern "C" fn() -> bool,
     /// `vehicle.disable_elrails`.
@@ -196,6 +197,7 @@ pub struct RailCommandServices {
     pub road_infrastructure: extern "C" fn(u8, u8, u32),
     /// `infrastructure.signal += delta` with uint32 wrap.
     pub signal_infrastructure: extern "C" fn(u8, u32),
+    /// `DirtyCompanyInfrastructureWindows`.
     /// `GetTrainForReservation`.
     pub reserving_train: extern "C" fn(u32, u8) -> *mut Train,
     /// Train fields read at the signal re-reservation branch.
@@ -227,7 +229,6 @@ pub struct RailCommandServices {
     /// `MakeShore`, keeping the docking flag as the original does.
     pub make_shore: extern "C" fn(u32),
     /// `IsPossibleDockingTile` then `CheckForDockingTile`.
-    pub docking_check: extern "C" fn(u32),
     /// Begin `TileIterator::Create(start, end, diagonal)` in the frame.
     pub area_begin: unsafe extern "C" fn(*mut ConvertFrame, u32, u32, bool),
     /// Current iterator tile (`INVALID_TILE` at end).
@@ -242,8 +243,7 @@ pub struct RailCommandServices {
     pub consist_changed: unsafe extern "C" fn(*mut ConvertFrame),
 }
 
-pub(crate) const INVALID_STRING: u32 = 0xFFFF;
-const CONSTRUCTION: u8 = 0;
+const INVALID_STRING: u32 = 0xFFFF;
 const EXECUTE: u16 = 1 << 0;
 const AUTO: u16 = 1 << 1;
 const BANKRUPT: u16 = 1 << 5;
@@ -408,46 +408,6 @@ fn negate(money: i64) -> i64 {
 }
 fn price(index: usize) -> i64 {
     crate::company::price(index)
-}
-
-/// A live native `CommandCost` borrowed for the synchronous entry.
-#[derive(Clone, Copy)]
-pub(crate) struct Cost<'a>(
-    pub(crate) *mut CommandCost,
-    pub(crate) &'a CommandCostServices,
-);
-impl Cost<'_> {
-    pub(crate) fn zero(self) {
-        (self.1.zero)(self.0);
-    }
-    pub(crate) fn error(self, message: u32) {
-        (self.1.error)(self.0, message);
-    }
-    pub(crate) fn set(self, money: i64) {
-        (self.1.expense_money)(self.0, CONSTRUCTION, money);
-    }
-    pub(crate) fn add_money(self, money: i64) {
-        (self.1.amount)(self.0, money);
-    }
-    /// `AddCost(CommandCost &&)`.
-    pub(crate) fn add(self, other: Self) {
-        (self.1.add)(self.0, other.0);
-    }
-    pub(crate) fn take(self, other: Self) {
-        (self.1.move_cost)(self.0, other.0);
-    }
-    pub(crate) fn make_error(self, message: u32) {
-        unsafe { (self.1.make_error)(self.0, message) };
-    }
-    pub(crate) fn ok(self) -> bool {
-        (self.1.success)(self.0)
-    }
-    pub(crate) fn message(self) -> u32 {
-        (self.1.error_message)(self.0)
-    }
-    pub(crate) fn money(self) -> i64 {
-        (self.1.money)(self.0)
-    }
 }
 
 struct Ctx<'a> {
@@ -765,7 +725,9 @@ impl<'a> Ctx<'a> {
                         tile,
                         crate::services::RailGroundType(GROUND_HALF_WATER),
                     );
-                    (self.s.docking_check)(tile);
+                    let stations = (self.shared.station_commands)();
+                    // SAFETY: borrowed process-lifetime services; no owner borrow spans docking.
+                    unsafe { crate::station_cmd::check_possible_docking(stations, tile) };
                 }
                 self.rail_infra(self.current(), railtype, 1);
                 (self.command.infrastructure_dirty)(self.current());

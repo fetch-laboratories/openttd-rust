@@ -8,6 +8,28 @@
 /** @file road_command_services.h Canonical typed road-build command adapter for native callers. */
 #ifndef RUST_ROAD_COMMAND_SERVICES_H
 #define RUST_ROAD_COMMAND_SERVICES_H
-#include "../road_cmd.h"
-CommandCost RustRoadBuildCommand(DoCommandFlags, TileIndex, RoadBits, RoadType, DisallowedRoadDirections, TownID) noexcept;
+#include "road_command_ffi.h"
+#include "rail_command_services.h"
+#include "command_cost_services.h"
+#include "../roadveh.h"
+#include <optional>
+struct OpenTTDRoadConvertFrame { std::vector<RoadVehicle *> affected; };
+struct RoadConversionScratch {
+	OpenTTDRoadConvertFrame frame;
+	OpenTTDRailConvertFrame area;
+	CommandCost error, ret;
+};
+/* No world layout enters Rust. This caller-owned stack slot supplies only the
+ * extra results a direct nested owner call needs. Conversion remains lazy. */
+struct OpenTTDRoadCommandScratch {
+	std::optional<CommandCost> ret;
+	std::optional<RoadConversionScratch> conversion;
+};
+/* Each outer native entry owns one scratch and two results. No table copies,
+ * heap allocation or state is introduced by this context. Conversion is lazy. */
+struct RustRoadCommandContext {
+	OpenTTDRoadCommandScratch scratch;
+	CommandCost cost, ret;
+	OpenTTDRoadCommandContext view{&GetRustRoadCommandServices(), &scratch, RustCommandCost(&cost), RustCommandCost(&ret)};
+};
 #endif /* RUST_ROAD_COMMAND_SERVICES_H */

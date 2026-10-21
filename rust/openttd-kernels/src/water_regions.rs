@@ -37,7 +37,7 @@ pub struct Leaves {
     pub debug: unsafe extern "C" fn(u8, i32, i32),
 }
 
-/// Live map-lifetime owner and immutable native leaves, observed together.
+/// Current native-owned region allocation and its immutable leaves.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Context {

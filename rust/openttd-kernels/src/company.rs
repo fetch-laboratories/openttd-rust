@@ -1650,7 +1650,7 @@ pub unsafe extern "C" fn openttd_rust_company_available_money(
 ) -> i64 {
     available(p, infinite)
 }
-/// Money test of `CheckCompanyHasMoney`; `p` is the current company or null.
+/// Original positive-cost finance predicate; null denotes an invalid company.
 /// # Safety
 /// `p` is null or a live finance owner.
 pub(crate) unsafe fn has_money(p: *const Finances, infinite: bool, cost: i64) -> bool {

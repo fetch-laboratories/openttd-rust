@@ -9,6 +9,7 @@
 #include "services_ffi.h"
 #include "command_services.h"
 #include "services_rail.h"
+#include "services_station.h"
 
 /** @file train_reservation_services.h Direct map/PBS/follower services. */
 
@@ -44,7 +45,7 @@ static uint64_t TrainReservationCheckReverse(void *, OpenTTDTrainHandle id) noex
 static uint64_t TrainReservationCompatStation(void *, OpenTTDTrainHandle, uint32_t a, uint32_t b) noexcept
 {
 	TileIndex t(static_cast<uint32_t>(a));
-	return IsCompatibleTrainStationTile(t, TileIndex(static_cast<uint32_t>(b)));
+	return RustCompatibleStationTiles(t.base(), b);
 }
 static uint64_t TrainReservationConditional(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
 {
@@ -185,17 +186,15 @@ static uint64_t TrainReservationReservePaths(void *, OpenTTDTrainHandle) noexcep
 {
 	return _settings_game.pf.reserve_paths;
 }
-static void TrainReservationRestoreOrder(void *context, OpenTTDTrainHandle id) noexcept
+/* Order has the existing OrderFields layout and trivial copy/destruction. Rust
+ * owns each nested snapshot on its stack; no native context survives a call. */
+static void TrainReservationRestoreOrder(OpenTTDTrainHandle id, const OpenTTDOrderFields *order) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
-	auto *ctx = static_cast<TrainReservationContext *>(context);
-	v->current_order = *ctx->saved_order;
+	static_cast<Train *>(id.shell)->current_order = std::bit_cast<Order>(*order);
 }
-static void TrainReservationSaveOrder(void *context, OpenTTDTrainHandle id) noexcept
+static OpenTTDOrderFields TrainReservationSaveOrder(OpenTTDTrainHandle id) noexcept
 {
-	Train *v = static_cast<Train *>(id.shell);
-	auto *ctx = static_cast<TrainReservationContext *>(context);
-	ctx->saved_order.emplace(v->current_order);
+	return std::bit_cast<OpenTTDOrderFields>(static_cast<Train *>(id.shell)->current_order);
 }
 static void TrainReservationService(void *, OpenTTDTrainHandle id) noexcept
 {
@@ -216,7 +215,7 @@ static void TrainReservationSetDepotDest(void *, OpenTTDTrainHandle id, uint32_t
 static void TrainReservationSetPlatform(void *, OpenTTDTrainHandle, uint32_t a, uint8_t b, uint8_t c) noexcept
 {
 	TileIndex t(static_cast<uint32_t>(a));
-	SetRailStationPlatformReservation(t, static_cast<DiagDirection>(b), c != 0);
+	RustStationPlatformReservation(t.base(), b, c != 0);
 }
 static void TrainReservationSetTunnel(void *, OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
 {

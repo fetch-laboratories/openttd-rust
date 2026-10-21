@@ -79,7 +79,6 @@ struct OpenTTDRailCommandServices {
 	void (*depot_windows)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_windows);
 	void (*close_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_inspect);
 	void (*make_shore)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_shore);
-	void (*docking_check)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking_check);
 	void (*area_begin)(OpenTTDRailConvertFrame *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(area_begin);
 	uint32_t (*area_tile)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(area_tile);
 	void (*area_next)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(area_next);

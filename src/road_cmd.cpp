@@ -48,6 +48,7 @@
 
 #ifdef WITH_RUST
 #include "rust/ground_services.h"
+#include "rust/road_command_services.h"
 #include "rust/services_road.h"
 #include "rust/town_ffi.h"
 #include "rust/services_landscape.h"
@@ -56,9 +57,6 @@
 
 #include "safeguards.h"
 
-#ifdef WITH_RUST
-static CommandCost RemoveRoad(TileIndex tile, DoCommandFlags flags, RoadBits pieces, RoadTramType rtt, bool town_check);
-#endif
 
 /** Helper type for lists/vectors of road vehicles */
 typedef std::vector<RoadVehicle *> RoadVehicleList;
@@ -178,12 +176,11 @@ RoadType AllocateRoadType(RoadTypeLabel label, RoadTramType rtt)
  * Verify whether a road vehicle is available.
  * @return \c true if at least one road vehicle is available, \c false if not
  */
-#ifndef WITH_RUST
 bool RoadVehiclesAreBuilt()
 {
 	return !RoadVehicle::Iterate().empty();
 }
-#endif /* WITH_RUST */
+
 
 /**
  * Update road infrastructure counts for a company.
@@ -191,7 +188,6 @@ bool RoadVehiclesAreBuilt()
  * @param o Owner of road piece.
  * @param count Number of road pieces to adjust.
  */
-#ifndef WITH_RUST
 void UpdateCompanyRoadInfrastructure(RoadType rt, Owner o, int count)
 {
 	if (rt == INVALID_ROADTYPE) return;
@@ -202,7 +198,7 @@ void UpdateCompanyRoadInfrastructure(RoadType rt, Owner o, int count)
 	c->infrastructure.road[rt] += count;
 	DirtyCompanyInfrastructureWindows(c->index);
 }
-#endif /* WITH_RUST */
+
 
 /** Invalid RoadBits on slopes.  */
 static const RoadBits _invalid_tileh_slopes_road[2][15] = {
@@ -2034,7 +2030,6 @@ const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept
 		.all_bits = [](uint32_t t) noexcept { return GetAllRoadBits(TileIndex{t}); },
 		.bulldozer = [](uint32_t t) noexcept { RustCreateEffectAbove(TileX(TileIndex{t}) * TILE_SIZE + 7, TileY(TileIndex{t}) * TILE_SIZE + 7, 0, EV_BULLDOZER); },
 		.cleanup = [](uint32_t t, RoadBits bits) noexcept { return RustCleanRoadBits(TileIndex{t}, bits); },
-		.remove = [](uint32_t t, RoadBits bits) noexcept { RemoveRoad(TileIndex{t}, {DoCommandFlag::Execute, DoCommandFlag::Auto, DoCommandFlag::NoWater}, bits, RTT_ROAD, true); },
 		.town = &GetRustTownServices(),
 		.set_road_type = [](uint32_t t, RoadType type) noexcept { RustSetRoadType(TileIndex{t}, RTT_ROAD, type); },
 	};
@@ -2043,7 +2038,8 @@ const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept
 static void TileLoop_Road(uint32_t tile) noexcept
 {
 	OpenTTDGroundCall call;
-	openttd_rust_road_tile_loop(tile, OpenTTDLandscape(), _settings_client.sound.ambient, _settings_game.economy.mod_road_rebuild, Map::SizeX(), &call, &GetRustGroundCostServices(), &GetRustRoadGroundServices(), &GetRustSharedServices());
+	RustRoadCommandContext command;
+	openttd_rust_road_tile_loop(tile, OpenTTDLandscape(), _settings_client.sound.ambient, _settings_game.economy.mod_road_rebuild, Map::SizeX(), &call, &GetRustGroundCostServices(), &GetRustRoadGroundServices(), &command.view, &GetRustSharedServices());
 }
 #else
 static const Roadside _town_road_types[][2] = {
@@ -2749,18 +2745,6 @@ static_assert(ROAD_DEPOT_TRACKBIT_FACTOR == 2 && ROAD_STOP_TRACKBIT_FACTOR == 2 
 static_assert(PR_BUILD_DEPOT_ROAD == 6 && PR_CLEAR_DEPOT_ROAD == 31 && PR_BUILD_FOUNDATION == 57);
 static_assert(OWNER_TOWN.base() == 15 && OWNER_NONE.base() == 16 && INVALID_OWNER.base() == 255);
 static_assert(FOUNDATION_NONE == 0 && FOUNDATION_LEVELED == 1 && FOUNDATION_INCLINED_X == 2 && FOUNDATION_INCLINED_Y == 3);
-struct OpenTTDRoadConvertFrame { RoadVehicleList affected; };
-struct RoadConversionScratch {
-	OpenTTDRoadConvertFrame frame;
-	OpenTTDRailConvertFrame area;
-	CommandCost error, ret;
-};
-/* No world layout enters Rust. This caller-owned stack slot supplies only the
- * extra results a direct nested owner call needs. Conversion remains lazy. */
-struct OpenTTDRoadCommandScratch {
-	std::optional<CommandCost> ret;
-	std::optional<RoadConversionScratch> conversion;
-};
 static CommandCost &RoadCost(OpenTTDCommandCost *cost) noexcept { return *reinterpret_cast<CommandCost *>(cost); }
 static void RoadOwnedByTown(OpenTTDCommandCost *out, uint32_t tile) noexcept
 {
@@ -2774,21 +2758,26 @@ static OpenTTDRoadWorksEffect RoadNextEffect(uint32_t from) noexcept
 }
 static void RoadCollectVehicles(OpenTTDRoadConvertFrame *frame, uint32_t tile) noexcept
 {
-	for (Vehicle *v : VehiclesOnTile(TileIndex{tile})) {
+	for (Vehicle *v : RustVehiclesOnTile(TileIndex{tile})) {
 		if (RustVehicleVehicleType(v) == VEH_ROAD) include(frame->affected, RustVehicleFirst(RoadVehicle::From(v)));
 	}
 }
 const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 {
 	static const OpenTTDRoadCommandServices services{
-		.rail_commands = &GetRustRailCommandServices(), .town = &GetRustTownServices(), .authority = &RustTownAuthorityServices(),
+		.do_build = openttd_rust_road_do_build,
+		.rail_commands = &GetRustRailCommandServices(), .town = &GetRustTownServices(), .authority = &GetRustTownAuthorityServices(),
 		.strings = { .no_road = STR_ERROR_THERE_IS_NO_ROAD, .no_tram = STR_ERROR_THERE_IS_NO_TRAMWAY,
 			.junction = STR_ERROR_ONEWAY_ROADS_CAN_T_HAVE_JUNCTION, .remove_road = STR_ERROR_MUST_REMOVE_ROAD_FIRST,
 			.no_suitable_road = STR_ERROR_NO_SUITABLE_ROAD, .no_suitable_tram = STR_ERROR_NO_SUITABLE_TRAMWAY,
 			.authority = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS },
-		.vehicles_built = []() noexcept { return !RoadVehicle::Iterate().empty(); },
+		.nearest_tile = [](uint32_t index) noexcept -> OpenTTDRoadNearestTownTile {
+			TileIndex tile{index};
+			bool road = IsTileType(tile, MP_ROAD);
+			bool depot = road && IsRoadDepot(tile);
+			return {.road = road, .depot = depot, .town_owned = road && !depot && HasTownOwnedRoad(tile)};
+		},
 		.town_valid = [](uint16_t town) noexcept { return Town::IsValidID(TownID(town)); },
-		.nearest_town = [](uint32_t tile) noexcept { return reinterpret_cast<const OpenTTDTownHandle *>(RustCalcClosestTown(TileIndex{tile}, UINT_MAX)); },
 		.town_edge = [](const OpenTTDTownHandle *handle) noexcept -> OpenTTDRoadTownEdge {
 			const Town *town = reinterpret_cast<const Town *>(handle);
 			return {.tile = town->xy.base(), .radius = town->cache.squared_town_zone_radius[to_underlying(HouseZone::TownEdge)]};
@@ -2813,27 +2802,6 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 	return services;
 }
 static const OpenTTDRoadCommandServices *RoadServices() noexcept { return &GetRustRoadCommandServices(); }
-CommandCost RustRoadBuildCommand(DoCommandFlags flags, TileIndex tile, RoadBits bits, RoadType rt, DisallowedRoadDirections drd, TownID town) noexcept
-{
-	CommandCost cost, ret;
-	OpenTTDRoadCommandScratch nested;
-	openttd_rust_road_do_build(RoadServices(), &nested, RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), bits, rt, drd, town.base());
-	return cost;
-}
-bool RoadVehiclesAreBuilt() { return openttd_rust_road_vehicles_built(RoadServices()); }
-void UpdateCompanyRoadInfrastructure(RoadType rt, Owner owner, int count) { openttd_rust_road_infrastructure(RoadServices(), rt, owner.base(), count); }
-CommandCost CheckAllowRemoveRoad(TileIndex tile, RoadBits bits, Owner owner, RoadTramType rtt, DoCommandFlags flags, bool town_check)
-{
-	CommandCost cost;
-	openttd_rust_road_allow_remove(RoadServices(), RustCommandCost(&cost), tile.base(), bits, owner.base(), rtt, flags.base(), town_check);
-	return cost;
-}
-static CommandCost RemoveRoad(TileIndex tile, DoCommandFlags flags, RoadBits pieces, RoadTramType rtt, bool town_check)
-{
-	CommandCost cost, ret;
-	openttd_rust_road_remove(RoadServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), pieces, rtt, town_check);
-	return cost;
-}
 CommandCost CmdBuildRoad(DoCommandFlags flags, TileIndex tile, RoadBits bits, RoadType rt, DisallowedRoadDirections drd, TownID town)
 {
 	OpenTTDRoadCommandScratch nested;
@@ -2874,8 +2842,8 @@ void UpdateNearestTownForRoadTiles(bool invalidate)
 }
 static void ChangeTileOwner_Road(TileIndex tile, Owner old_owner, Owner new_owner)
 {
-	CommandCost ret;
-	openttd_rust_road_change_owner(RoadServices(), RustCommandCost(&ret), tile.base(), old_owner.base(), new_owner.base());
+	CommandCost ret, scratch;
+	openttd_rust_road_change_owner(RoadServices(), RustCommandCost(&ret), RustCommandCost(&scratch), tile.base(), old_owner.base(), new_owner.base());
 }
 static CommandCost TerraformTile_Road(TileIndex tile, DoCommandFlags flags, int z_new, Slope slope)
 {

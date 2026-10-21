@@ -3212,14 +3212,9 @@ static void RailMakeCrossing(uint32_t tile, uint8_t road, uint8_t tram, uint8_t 
 }
 static void RailMakeShore(uint32_t tile) noexcept
 {
-	TileIndex t{tile};
 	bool docking = OpenTTDIsDockingTile(tile);
 	OpenTTDMakeShore(tile);
-	SetDockingTile(t, docking);
-}
-static void RailDockingCheck(uint32_t tile) noexcept
-{
-	if (RustPossibleDocking(tile)) RustCheckDocking(tile);
+	OpenTTDSetDockingTile(tile, docking);
 }
 static void RailDepotWindows(uint32_t tile) noexcept
 {
@@ -3307,7 +3302,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.depot_windows = RailDepotWindows,
 		.close_inspect = [](uint32_t tile) noexcept { DeleteNewGRFInspectWindow(GSF_RAILTYPES, tile); },
 		.make_shore = RailMakeShore,
-		.docking_check = RailDockingCheck,
 		.area_begin = [](OpenTTDRailConvertFrame *frame, uint32_t start, uint32_t end, bool diagonal) noexcept { frame->iter = TileIterator::Create(TileIndex{start}, TileIndex{end}, diagonal); },
 		.area_tile = [](OpenTTDRailConvertFrame *frame) noexcept { return (**frame->iter).base(); },
 		.area_next = [](OpenTTDRailConvertFrame *frame) noexcept { ++(*frame->iter); },

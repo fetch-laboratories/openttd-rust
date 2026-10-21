@@ -34,6 +34,38 @@ pub struct ConvertFrame {
 pub struct CommandScratch {
     _private: [u8; 0],
 }
+/// Borrowed native stack context supplied by the outer command/controller frame.
+#[repr(C)]
+pub struct CommandContext {
+    pub services: *const RoadCommandServices,
+    pub scratch: *mut CommandScratch,
+    pub cost: *mut CommandCost,
+    pub ret: *mut CommandCost,
+}
+impl CommandContext {
+    /// # Safety
+    /// All context pointers denote live exclusive caller-owned stack storage.
+    pub(crate) unsafe fn build(&self, flags: u16, tile: u32, bits: u8, rt: u8, town: u16) -> bool {
+        // SAFETY: immutable native table and exclusive stack slots outlive the call.
+        let s = unsafe { &*self.services };
+        unsafe {
+            (s.do_build)(
+                self.services,
+                self.scratch,
+                self.cost,
+                self.ret,
+                flags,
+                tile,
+                bits,
+                rt,
+                0,
+                town,
+            );
+        }
+        let costs = unsafe { &*(*s.rail_commands).cost };
+        (costs.success)(self.cost)
+    }
+}
 /// Only the native stack objects needed by a nested conversion.
 #[repr(C)]
 pub struct ConversionScratch {
@@ -41,6 +73,13 @@ pub struct ConversionScratch {
     pub area: *mut Area,
     pub error: *mut CommandCost,
     pub ret: *mut CommandCost,
+}
+/// Only the three original predicates reached by the nearest-town map scan.
+#[repr(C)]
+pub struct NearestTownTile {
+    pub road: bool,
+    pub depot: bool,
+    pub town_owned: bool,
 }
 /// Fields read together only in the deity town-boundary branch.
 #[repr(C)]
@@ -69,6 +108,19 @@ pub struct Strings {
 #[repr(C)]
 pub struct RoadCommandServices {
     /// Native `rail_commands` service.
+    /// Direct Rust owner entry; production binds `openttd_rust_road_do_build`.
+    pub do_build: unsafe extern "C" fn(
+        *const RoadCommandServices,
+        *mut CommandScratch,
+        *mut CommandCost,
+        *mut CommandCost,
+        u16,
+        u32,
+        u8,
+        u8,
+        u8,
+        u16,
+    ),
     pub rail_commands: *const RailCommandServices,
     /// Native `town` service.
     pub town: *const crate::town::Leaves,
@@ -76,12 +128,9 @@ pub struct RoadCommandServices {
     pub authority: *const crate::town::AuthorityServices,
     /// Native `strings` service.
     pub strings: Strings,
-    /// Native `vehicles_built` service.
-    pub vehicles_built: extern "C" fn() -> bool,
     /// Native `town_valid` service.
+    pub nearest_tile: extern "C" fn(u32) -> NearestTownTile,
     pub town_valid: extern "C" fn(u16) -> bool,
-    /// Native `nearest_town` service.
-    pub nearest_town: extern "C" fn(u32) -> *const TownHandle,
     /// Native `town_edge` service.
     pub town_edge: extern "C" fn(*const TownHandle) -> TownEdge,
     /// Native `set_town` service.
@@ -111,9 +160,9 @@ pub struct RoadCommandServices {
     /// Native `cargo_changed` service.
     pub cargo_changed: unsafe extern "C" fn(*mut ConvertFrame),
 }
-use crate::rail_cmd::{Cost, INVALID_STRING};
+use crate::services::Cost;
+const INVALID_STRING: u32 = 0xffff;
 const ROAD: u8 = 2;
-const VOID: u8 = 7;
 const RAIL: u8 = 1;
 const STATION: u8 = 5;
 const WORMHOLE: u8 = 9;
@@ -125,7 +174,6 @@ const INVALID: u8 = 63;
 const INVALID_TOWN: u16 = u16::MAX;
 const EXEC: u16 = 1;
 const AUTO: u16 = 2;
-const ALL_TILES: u16 = 256;
 const BANKRUPT: u16 = 32;
 const INVALID_SLOPES: [[u8; 15]; 2] = [
     [0, 12, 9, 8, 3, 0, 1, 0, 6, 4, 0, 0, 2, 0, 0],
@@ -202,47 +250,10 @@ impl<'a> Ctx<'a> {
             },
         }
     }
-    fn command(
-        &self,
-        cost: Cost<'_>,
-        flags: u16,
-        tile: u32,
-        mut body: impl FnMut(u16) -> i64,
-    ) -> i64 {
-        struct Scope<'a>(&'a CommandServices);
-        impl Drop for Scope<'_> {
-            fn drop(&mut self) {
-                (self.0.leave)();
-            }
-        }
-        // CommandHelper::Do exempts tile zero, and always rejects out-of-map tiles.
-        if tile != 0
-            && (tile >= self.size() || (self.tile_type(tile) == VOID && flags & ALL_TILES == 0))
-        {
-            cost.error(INVALID_STRING);
-            return 0;
-        }
-        let top_level = (self.commands.enter)();
-        let _scope = Scope(self.commands);
-        if top_level || flags & EXEC == 0 {
-            crate::command::before(self.commands, top_level, true);
-            let extra = body(flags & !EXEC);
-            // SAFETY: the native result slot stays live throughout this scope.
-            unsafe {
-                crate::command::after(self.commands, self.costs, cost.0, flags, top_level, true);
-            };
-            if !cost.ok() || flags & EXEC == 0 {
-                return extra;
-            }
-        }
-        crate::command::before(self.commands, top_level, false);
-        let extra = body(flags);
-        // SAFETY: the native result slot stays live throughout this scope.
-        unsafe {
-            crate::command::after(self.commands, self.costs, cost.0, flags, top_level, false);
-        };
-        extra
+    fn command(&self, cost: Cost<'_>, flags: u16, tile: u32, body: impl FnMut(u16) -> i64) -> i64 {
+        crate::command::nested(self.commands, self.shared, cost, tile, flags, body)
     }
+
     fn do_build(
         &self,
         nested: *mut CommandScratch,
@@ -368,7 +379,7 @@ impl<'a> Ctx<'a> {
         (self.commands.infrastructure_dirty)(owner);
     }
     fn update_town(&self, tile: u32) {
-        let town = (self.s.nearest_town)(tile);
+        let town = (self.shared.calc_closest_town)(tile, u32::MAX);
         let id = if town.is_null() {
             INVALID_TOWN
         } else {
@@ -765,7 +776,7 @@ impl<'a> Ctx<'a> {
             return;
         }
         if company != TOWN {
-            let town = (self.s.nearest_town)(tile);
+            let town = (self.shared.calc_closest_town)(tile, u32::MAX);
             town_id = if town.is_null() {
                 INVALID_TOWN
             } else {
@@ -1488,10 +1499,8 @@ impl<'a> Ctx<'a> {
     }
     fn nearest_towns(&self, invalidate: bool) {
         for tile in 0..self.size() {
-            if self.tile_type(tile) == ROAD
-                && !(self.shared.is_road_depot)(tile)
-                && !(self.rt(tile, 0) != INVALID && self.owner(tile, 0) == TOWN)
-            {
+            let read = (self.s.nearest_tile)(tile);
+            if read.road && !read.depot && !read.town_owned {
                 if invalidate {
                     (self.s.set_town)(tile, INVALID_TOWN);
                 } else {
@@ -1500,7 +1509,7 @@ impl<'a> Ctx<'a> {
             }
         }
     }
-    fn change_owner(&self, ret: Cost<'_>, tile: u32, old: u8, new: u8) {
+    fn change_owner(&self, ret: Cost<'_>, scratch: Cost<'_>, tile: u32, old: u8, new: u8) {
         w::hit(w::ROAD_COMMANDS_OWNER);
         if (self.shared.is_road_depot)(tile) {
             if (self.shared.tile_owner)(tile) == old {
@@ -1543,9 +1552,20 @@ impl<'a> Ctx<'a> {
         if (self.shared.is_level_crossing)(tile) && (self.shared.tile_owner)(tile) == old {
             if new == 255 {
                 let track = (self.rail.crossing_road_axis)(tile).0 ^ 1;
-                unsafe {
-                    (self.r.remove_rail)(ret.0, EXEC | BANKRUPT, tile, track);
-                }
+                self.command(ret, EXEC | BANKRUPT, tile, |flags| {
+                    // SAFETY: the outer owner-change frame owns both native results.
+                    unsafe {
+                        crate::rail_cmd::openttd_rust_rail_remove_single(
+                            self.s.rail_commands,
+                            ret.0,
+                            scratch.0,
+                            flags,
+                            tile,
+                            track,
+                        );
+                    }
+                    0
+                });
             } else {
                 let rt = (self.rail.rail_type)(tile).0;
                 (self.r.rail_infrastructure)(old, rt, 2_u32.wrapping_neg());
@@ -1833,35 +1853,6 @@ fn slope_max_z(slope: u8) -> i32 {
     }
 }
 
-/// Original road `vehicles_built` entry.
-/// # Safety
-/// Immutable tables and live native cost/frame slots outlive this synchronous
-/// invocation. Slots are distinct; no native borrow survives reentrant calls.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_vehicles_built(
-    services: *const RoadCommandServices,
-) -> bool {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
-    (c.s.vehicles_built)()
-}
-
-/// Original road `infrastructure` entry.
-/// # Safety
-/// Immutable tables and live native cost/frame slots outlive this synchronous
-/// invocation. Slots are distinct; no native borrow survives reentrant calls.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_infrastructure(
-    services: *const RoadCommandServices,
-    rt: u8,
-    owner: u8,
-    count: i32,
-) {
-    // SAFETY: caller supplies valid immutable native tables.
-    let c = unsafe { Ctx::new(services) };
-    c.infrastructure(rt, owner, count);
-}
-
 /// Original road `allow_remove` entry.
 /// # Safety
 /// Immutable tables and live native cost/frame slots outlive this synchronous
@@ -2062,13 +2053,14 @@ pub unsafe extern "C" fn openttd_rust_road_nearest_towns(
 pub unsafe extern "C" fn openttd_rust_road_change_owner(
     services: *const RoadCommandServices,
     ret: *mut CommandCost,
+    scratch: *mut CommandCost,
     tile: u32,
     old: u8,
     new: u8,
 ) {
     // SAFETY: caller supplies valid immutable native tables.
     let c = unsafe { Ctx::new(services) };
-    c.change_owner(c.c(ret), tile, old, new);
+    c.change_owner(c.c(ret), c.c(scratch), tile, old, new);
 }
 
 /// Original road `terraform` entry.

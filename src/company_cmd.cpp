@@ -49,7 +49,8 @@
 
 #ifdef WITH_RUST
 #include "rust/company_adapter.h"
-#include "rust/command_services.h"
+#include "rust/company_services.h"
+#include "rust/command_services_ffi.h"
 #include "rust/command_cost_native_services.h"
 #endif
 
@@ -284,7 +285,7 @@ Money GetAvailableMoneyForCommand()
 bool CheckCompanyHasMoney(CommandCost &cost)
 {
 #ifdef WITH_RUST
-	return openttd_rust_command_check_money(&GetRustCommandServices(), &GetRustCommandCostServices(), RustCommandCost(&cost));
+	return openttd_rust_command_check_money(&GetRustCommandServices(), &GetRustCommandCostServices(), reinterpret_cast<OpenTTDCommandCost *>(&cost));
 #else
 	if (cost.GetCost() <= 0) return true;
 	if (_settings_game.difficulty.infinite_money) return true;
@@ -340,7 +341,7 @@ static void SubtractMoneyFromAnyCompany(Company *c, const CommandCost &cost)
 void SubtractMoneyFromCompany(const CommandCost &cost)
 {
 #ifdef WITH_RUST
-	openttd_rust_command_subtract_money(&GetRustCommandServices(), &GetRustCommandCostServices(), RustCommandCost(&cost));
+	openttd_rust_command_subtract_money(&GetRustCommandServices(), &GetRustCommandCostServices(), reinterpret_cast<const OpenTTDCommandCost *>(&cost));
 #else
 	Company *c = Company::GetIfValid(_current_company);
 	if (c != nullptr) SubtractMoneyFromAnyCompany(c, cost);
@@ -434,13 +435,17 @@ CommandCost CheckOwnership(Owner owner, TileIndex tile)
 	if (owner == _current_company) return CommandCost();
 
 	CommandCost error{STR_ERROR_OWNED_BY};
+#ifdef WITH_RUST
+	if (RustIsLocalCompany()) {
+#else
 	if (IsLocalCompany()) {
+#endif
 #ifdef WITH_RUST
 		RustEncodeOwnedBy(error, owner, tile);
 #else
 		auto params = GetParamsForOwnedBy(owner, tile);
 		error.SetEncodedMessage(GetEncodedStringWithArgs(STR_ERROR_OWNED_BY, params));
-#endif /* WITH_RUST */
+#endif
 		if (owner != OWNER_TOWN) error.SetErrorOwner(owner);
 	}
 	return error;

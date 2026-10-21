@@ -16,6 +16,7 @@
 #include "command_cost_ffi.h"
 #include <cstddef>
 struct OpenTTDTownState;
+struct OpenTTDRoadCommandContext;
 struct OpenTTDTownGrowthFields { uint16_t counter, rate; uint8_t funding, road, flags; };
 struct OpenTTDTownReceived { uint16_t old_max, new_max, old_act, new_act; };
 struct OpenTTDTownSimulationFields {
@@ -92,7 +93,6 @@ struct OpenTTDTownLeaves {
 	void (*update_max_pass)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(update_max_pass);
 	uint32_t (*next_town)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_town);
 	uint64_t (*road_mask)() noexcept OPENTTD_SERVICE_DEFAULT(road_mask);
-	bool (*build_road)(uint32_t town, uint32_t tile, uint32_t bits, uint32_t road_type, uint32_t mode) noexcept OPENTTD_SERVICE_DEFAULT(build_road);
 	bool (*clear_land)(uint32_t tile, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(clear_land);
 	OpenTTDTownCommandResult (*terraform_land)(uint32_t tile, uint32_t slope, uint32_t up, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(terraform_land);
 	bool (*build_bridge)(uint32_t tile, uint32_t end, uint32_t bridge, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_bridge);
@@ -104,8 +104,8 @@ struct OpenTTDTownLeaves {
 /* Services are synchronous noexcept calls. No owner reference spans one. Commands
  * and bounded NewGRF resolution may reenter; ordinary gameplay does not throw.
  * Environmental failures and Rust panics abort. Save/load staging stays native. */
-const OpenTTDTownLeaves &GetRustTownServices() noexcept;
-const OpenTTDTownAuthorityServices &RustTownAuthorityServices() noexcept;
+uint32_t OpenTTDNextTownID(uint32_t from) noexcept;
+const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept;
 
 extern "C" {
 OpenTTDByteSpan openttd_rust_town_name(const OpenTTDTownState *);
@@ -143,12 +143,13 @@ void openttd_rust_town_destroy(OpenTTDTownState *);
 OpenTTDTownGrowthFields *openttd_rust_town_growth(OpenTTDTownState *);
 bool openttd_rust_town_try_house(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town, uint32_t tile, uint32_t modes);
 void openttd_rust_town_build_house(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town, uint32_t tile, uint32_t house, uint32_t random, bool complete, bool is_protected);
-void openttd_rust_town_tick_all(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
+void openttd_rust_town_tick_all(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *);
 void openttd_rust_town_update_growth(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town);
-void openttd_rust_town_expand(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town, uint32_t amount, uint32_t modes);
+void openttd_rust_town_expand(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t amount, uint32_t modes);
 void openttd_rust_town_custom_rate(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town, uint32_t rate);
 void openttd_rust_town_fund(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town);
 uint32_t openttd_rust_town_road_type(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
-bool openttd_rust_town_tunnel(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town, uint32_t tile, uint32_t dir);
+bool openttd_rust_town_tunnel(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t tile, uint32_t dir);
 }
+const OpenTTDTownLeaves &GetRustTownServices() noexcept;
 #endif /* RUST_TOWN_FFI_H */

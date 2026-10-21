@@ -18,7 +18,7 @@ Agent: <agent path> | Model: <exact model> | Reasoning effort: <effort>
 
 ## Simulation speed
 
-<!-- Per-scenario candidate/reference median ratios from `simulate <name> --benchmark 3 --jobs 2`, against the SPEED_BUDGETS record: the guard is 15%, the ceilings 1.5x play and 1.3x generation (AGENTS.md). For non-simulation changes, say not applicable. -->
+<!-- Per-scenario projected ratios from game-loop instruction counts (#321), or until it lands quiet `simulate <name> --benchmark 3 --jobs 2` medians taken with no builds or other timed games, against the SPEED_BUDGETS record: the guard is 15%, the ceilings 1.5x play and 1.3x generation (AGENTS.md). For non-simulation changes, say not applicable. -->
 
 ## Metrics
 

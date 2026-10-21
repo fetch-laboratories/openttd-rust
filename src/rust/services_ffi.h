@@ -10,10 +10,15 @@
 #define RUST_SERVICES_FFI_H
 #include "service_defaults.hpp"
 #include <cstdint>
+#include <cstddef>
 #include <type_traits>
 #include "station_ffi.h"
 
 enum class LandscapeType : uint8_t;
+enum class StationType : uint8_t;
+struct OpenTTDStationCommandServices;
+struct OpenTTDRoadCommandServices;
+enum class RoadTileType : uint8_t;
 
 /* Distinct trivial date carriers. Strong native Date classes stay inside C++;
  * wrappers convert explicitly so MSVC class-return rules cannot alter this ABI. */
@@ -54,18 +59,17 @@ enum DiagDirection : uint8_t;
 struct OpenTTDFoundationSlope { int32_t z; Slope slope; };
 struct OpenTTDTownHandle; // Opaque native Town shell; never dereferenced in Rust.
 struct OpenTTDTownState;
+struct OpenTTDVehicle;
 struct Train; // Native Train shell; never dereferenced in Rust.
 enum RoadType : uint8_t;
-enum RoadTramType : bool;
-enum class RoadTileType : uint8_t;
 enum RoadBits : uint8_t;
 enum Trackdir : uint8_t;
 struct OpenTTDWaterGroundServices;
+enum RoadTramType : bool;
 struct OpenTTDClearSquareServices {
 	bool (*may_animate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(may_animate);
 	void (*delete_animated)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(delete_animated);
 	bool (*docking)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking);
-	void (*remove_docking)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_docking);
 	bool (*generating_world)() noexcept OPENTTD_SERVICE_DEFAULT(generating_world);
 };
 struct OpenTTDSharedServices {
@@ -79,6 +83,7 @@ struct OpenTTDSharedServices {
 	int32_t (*calendar_year)() noexcept OPENTTD_SERVICE_DEFAULT(calendar_year);
 	void (*clear_square)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_square);
 	OpenTTDClearSquareServices clear_square_services;
+	const OpenTTDTownHandle *(*calc_closest_town)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(calc_closest_town);
 	const OpenTTDTownHandle *(*closest_town)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_town);
 	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	void *context;
@@ -119,10 +124,12 @@ struct OpenTTDSharedServices {
 	uint8_t (*plane_speed)() noexcept OPENTTD_SERVICE_DEFAULT(plane_speed);
 	uint32_t (*random)(void *) noexcept OPENTTD_SERVICE_DEFAULT(random);
 	uint8_t (*road_bits)(uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(road_bits);
+	RoadTramType (*road_tram_type)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_tram_type);
+	bool (*road_type_is_road)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_is_road);
+	uint16_t (*road_cost_multiplier)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_cost_multiplier);
 	uint8_t (*road_depot_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_depot_direction);
 	uint8_t (*road_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_owner);
 	uint8_t (*road_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type);
-	// Registry: road commands (#266).
 	bool (*crossing_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_reserved);
 	void (*set_crossing_reserved)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_crossing_reserved);
 	bool (*may_have_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(may_have_road);
@@ -131,9 +138,6 @@ struct OpenTTDSharedServices {
 	void (*set_road_type)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_type);
 	void (*set_road_owner)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_owner);
 	void (*set_road_directions)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_directions);
-	RoadTramType (*road_tram_type)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_tram_type);
-	bool (*road_type_is_road)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_is_road);
-	uint16_t (*road_cost_multiplier)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_cost_multiplier);
 	bool (*road_powered)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_powered);
 	bool (*road_type_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_valid);
 	bool (*safe_waiting_position)(const Train *, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(safe_waiting_position);
@@ -142,6 +146,22 @@ struct OpenTTDSharedServices {
 	int32_t (*slope)(int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(slope);
 	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
+	// Registry: station construction (#267).
+	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);
+	const OpenTTDStationCommandServices *(*station_commands)() noexcept OPENTTD_SERVICE_DEFAULT(station_commands);
+	bool (*docking_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking_tile);
+	uint8_t (*station_gfx)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_gfx);
+	bool (*station_serve_neutral)() noexcept OPENTTD_SERVICE_DEFAULT(station_serve_neutral);
+	StationType (*station_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_type);
+	void (*tile_animation_add)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(tile_animation_add);
+	void (*tile_animation_delete)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_animation_delete);
+	void (*tile_animation_set_frame)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_animation_set_frame);
+	void (*tile_change_owner)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_change_owner);
+	uint32_t (*town_next_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_next_id);
+	OpenTTDTownState *(*town_owner_by_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_owner_by_id);
+	size_t (*utf8_length)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);
+	OpenTTDVehicle *(*vehicle_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next);
+	bool (*water_middle_lock)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_middle_lock);
 	uint32_t (*tile_height)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_height);
 	int32_t (*tile_max_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_max_z);
 	uint8_t (*tile_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_owner);
@@ -172,6 +192,7 @@ struct OpenTTDSharedServices {
 	TreeGround (*tree_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_ground);
 	const OpenTTDWaterGroundServices *(*water_services)() noexcept OPENTTD_SERVICE_DEFAULT(water_services); ///< Immutable table; getter avoids recursive static initialization.
 };
+extern const OpenTTDSharedServices _rust_shared_services;
 const OpenTTDSharedServices &GetRustSharedServices() noexcept;
 /* Shared reader ABI used by default allocation/layout/oracle tests, not game
  * dispatch. Zero count selects the existing callback backend. No pointer retained. */
@@ -259,7 +280,7 @@ struct OpenTTDRailMapServices {
 };
 const OpenTTDRailMapServices &GetRustRailMapServices() noexcept;
 
-/* Explicit empty-world behavior for fixtures that need a constant callback. */
+/* Standalone fixtures without a game map: map predicates return zero and writes do nothing. */
 template <typename Result, typename... Args>
 Result OpenTTDFixtureMapService(Args...) noexcept
 {

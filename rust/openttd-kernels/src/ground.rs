@@ -23,25 +23,15 @@ use crate::services::{
     RoadBits, RoadType, Roadside, Services, Slope, TrackBits, WaterClass,
 };
 
-/// Native storage/presentation leaves of `DoClearSquare` in source order.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct ClearSquareServices {
-    pub may_animate: extern "C" fn(u32) -> bool,
-    pub delete_animated: extern "C" fn(u32, bool),
-    pub docking: extern "C" fn(u32) -> bool,
-    pub remove_docking: extern "C" fn(u32),
-    pub generating_world: extern "C" fn() -> bool,
-}
-
-/// Full `DoClearSquare` control; no world/region borrow spans a callback.
+/// Complete original `DoClearSquare` control. Native leaves cannot throw and no
+/// owner borrow survives their invocation; world access is serialized.
 pub(crate) fn clear_square(tile: u32, s: &Services) {
     let leaves = &s.clear_square_services;
     if (leaves.may_animate)(tile) {
         (leaves.delete_animated)(tile, true);
     }
     let remove = (leaves.docking)(tile);
-    // SAFETY: Canonical native tables outlive this serialized invocation.
+    // SAFETY: the native getter supplies immutable process-lifetime service tables.
     let water = unsafe { &*(s.water_services)() };
     let clear = unsafe { &*water.clear };
     (clear.make_clear)(
@@ -51,20 +41,35 @@ pub(crate) fn clear_square(tile: u32, s: &Services) {
     );
     (s.mark_dirty)(tile);
     if remove {
-        (leaves.remove_docking)(tile);
+        // SAFETY: the native getter supplies the process-lifetime station table.
+        unsafe {
+            crate::station_cmd::openttd_rust_station_remove_docking_tile(
+                (s.station_commands)(),
+                tile,
+            );
+        }
     }
-    let width = (s.map_max_x)().wrapping_add(1);
-    let height = (s.map_max_y)().wrapping_add(1);
-    // SAFETY: Live canonical tables, no map or owner borrow survives either call.
+    // SAFETY: services reference the current serialized map; no borrow of region
+    // state crosses a callback. Source map dimensions are read at this operation.
     unsafe {
-        crate::water::openttd_rust_clear_neighbour_flooding(tile, width, height, water, s);
+        crate::water::openttd_rust_clear_neighbour_flooding(
+            tile,
+            (s.map_max_x)() + 1,
+            (s.map_max_y)() + 1,
+            water,
+            s,
+        );
         water.invalidate_region(tile, s);
     }
 }
 
+/// # Safety
+/// The table and its native map services stay live under the game-state mutex.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_clear_square(tile: u32, s: &Services) {
-    clear_square(tile, s);
+pub unsafe extern "C" fn openttd_rust_clear_square(tile: u32, s: *const Services) {
+    unsafe {
+        clear_square(tile, &*s);
+    }
 }
 
 #[repr(usize)]
@@ -521,7 +526,6 @@ pub struct RoadServices {
     pub all_bits: extern "C" fn(u32) -> RoadBits,
     pub bulldozer: extern "C" fn(u32),
     pub cleanup: extern "C" fn(u32, RoadBits) -> RoadBits,
-    pub remove: extern "C" fn(u32, RoadBits),
     pub town: *const crate::town::Leaves,
     pub set_road_type: extern "C" fn(u32, RoadType),
 }
@@ -539,6 +543,7 @@ pub unsafe extern "C" fn openttd_rust_road_tile_loop(
     call: *mut Call,
     costs: *const CostServices,
     roads: *const RoadServices,
+    command: *const crate::road_cmd::CommandContext,
     shared: *const Services,
 ) {
     let climate = climate.0;
@@ -638,7 +643,20 @@ pub unsafe extern "C" fn openttd_rust_road_tile_loop(
             let old = RoadBits((s.road_bits)(tile, 0, false));
             let new = (r.cleanup)(tile, old);
             if old != new {
-                (r.remove)(tile, RoadBits(old.0 ^ new.0));
+                // SAFETY: the outer tile-loop entry owns both native result slots.
+                unsafe {
+                    let c = &*command;
+                    crate::road_cmd::openttd_rust_road_remove(
+                        c.services,
+                        c.cost,
+                        c.ret,
+                        11,
+                        tile,
+                        old.0 ^ new.0,
+                        0,
+                        true,
+                    );
+                }
                 hit(Witness::RoadRemove);
                 if new.0 == 0 {
                     (s.mark_dirty)(tile);

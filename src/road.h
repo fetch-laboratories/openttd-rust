@@ -10,6 +10,10 @@
 #ifndef ROAD_H
 #define ROAD_H
 
+#ifdef WITH_RUST
+#include "rust/road_cost_ffi.h"
+#endif
+
 #include "road_type.h"
 #include "gfx_type.h"
 #include "core/flatset_type.hpp"
@@ -19,9 +23,6 @@
 #include "newgrf.h"
 #include "newgrf_badge_type.h"
 #include "economy_func.h"
-#ifdef WITH_RUST
-#include "rust/road_cost_ffi.h"
-#endif
 
 /** Roadtype flag bit numbers. */
 enum class RoadTypeFlag : uint8_t {
@@ -243,8 +244,7 @@ inline bool HasPowerOnRoad(RoadType enginetype, RoadType tiletype)
 inline Money RoadBuildCost(RoadType roadtype)
 {
 #ifdef WITH_RUST
-	assert(roadtype < ROADTYPE_END);
-	return openttd_rust_road_build_cost(&GetRustSharedServices(), static_cast<uint8_t>(roadtype));
+	return openttd_rust_road_build_cost(&GetRustSharedServices(), roadtype);
 #else
 	assert(roadtype < ROADTYPE_END);
 	return (_price[PR_BUILD_ROAD] * GetRoadTypeInfo(roadtype)->cost_multiplier) >> 3;
@@ -259,8 +259,7 @@ inline Money RoadBuildCost(RoadType roadtype)
 inline Money RoadClearCost(RoadType roadtype)
 {
 #ifdef WITH_RUST
-	assert(roadtype < ROADTYPE_END);
-	return openttd_rust_road_clear_cost(&GetRustSharedServices(), static_cast<uint8_t>(roadtype));
+	return openttd_rust_road_clear_cost(&GetRustSharedServices(), roadtype);
 #else
 	assert(roadtype < ROADTYPE_END);
 
@@ -282,7 +281,7 @@ inline Money RoadClearCost(RoadType roadtype)
 inline Money RoadConvertCost(RoadType from, RoadType to)
 {
 #ifdef WITH_RUST
-	return openttd_rust_road_convert_cost(&GetRustSharedServices(), static_cast<uint8_t>(from), static_cast<uint8_t>(to));
+	return openttd_rust_road_convert_cost(&GetRustSharedServices(), from, to);
 #else
 	/* Don't apply convert costs when converting to the same roadtype (ex. building a roadstop over existing road) */
 	if (from == to) return (Money)0;

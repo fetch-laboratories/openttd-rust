@@ -17,22 +17,29 @@
  * Tile/pool shells, packed map, CommandCost and ordered affected list stay native. */
 struct OpenTTDRoadConvertFrame;
 struct OpenTTDRoadCommandScratch;
+struct OpenTTDRoadCommandServices;
+struct OpenTTDRoadCommandContext {
+	const OpenTTDRoadCommandServices *services;
+	OpenTTDRoadCommandScratch *scratch;
+	OpenTTDCommandCost *cost, *ret;
+};
 struct OpenTTDRoadConversionScratch {
 	OpenTTDRoadConvertFrame *frame;
 	OpenTTDRailConvertFrame *area;
 	OpenTTDCommandCost *error, *ret;
 };
+struct OpenTTDRoadNearestTownTile { bool road, depot, town_owned; };
 struct OpenTTDRoadTownEdge { uint32_t tile, radius; };
 struct OpenTTDRoadWorksEffect { uint32_t id, tile; };
 struct OpenTTDRoadCommandStrings { uint32_t no_road, no_tram, junction, remove_road, no_suitable_road, no_suitable_tram, authority; };
 struct OpenTTDRoadCommandServices {
+	void (*do_build)(const OpenTTDRoadCommandServices *, OpenTTDRoadCommandScratch *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(do_build);
 	const OpenTTDRailCommandServices *rail_commands;
 	const OpenTTDTownLeaves *town;
 	const OpenTTDTownAuthorityServices *authority;
 	OpenTTDRoadCommandStrings strings;
-	bool (*vehicles_built)() noexcept OPENTTD_SERVICE_DEFAULT(vehicles_built);
+	OpenTTDRoadNearestTownTile (*nearest_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearest_tile);
 	bool (*town_valid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(town_valid);
-	const OpenTTDTownHandle *(*nearest_town)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearest_town);
 	OpenTTDRoadTownEdge (*town_edge)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_edge);
 	void (*set_town)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_town);
 	Foundation (*foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(foundation);
@@ -50,9 +57,7 @@ struct OpenTTDRoadCommandServices {
 };
 const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept;
 extern "C" {
-void openttd_rust_road_do_build(const OpenTTDRoadCommandServices *, OpenTTDRoadCommandScratch *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t);
-bool openttd_rust_road_vehicles_built(const OpenTTDRoadCommandServices *);
-void openttd_rust_road_infrastructure(const OpenTTDRoadCommandServices *, uint8_t, uint8_t, int32_t);
+void openttd_rust_road_do_build(const OpenTTDRoadCommandServices *, OpenTTDRoadCommandScratch *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t) noexcept;
 void openttd_rust_road_allow_remove(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t, bool);
 void openttd_rust_road_remove(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, bool);
 void openttd_rust_road_build(const OpenTTDRoadCommandServices *, OpenTTDRoadCommandScratch *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t);
@@ -61,7 +66,7 @@ int64_t openttd_rust_road_remove_long(const OpenTTDRoadCommandServices *, OpenTT
 void openttd_rust_road_build_depot(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t);
 void openttd_rust_road_clear(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t);
 void openttd_rust_road_nearest_towns(const OpenTTDRoadCommandServices *, bool);
-void openttd_rust_road_change_owner(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, uint32_t, uint8_t, uint8_t);
+void openttd_rust_road_change_owner(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint32_t, uint8_t, uint8_t);
 void openttd_rust_road_terraform(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, int32_t, uint8_t);
 void openttd_rust_road_convert(const OpenTTDRoadCommandServices *, OpenTTDRoadConvertFrame *, OpenTTDRailConvertFrame *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, bool);
 void openttd_rust_road_build_above(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, uint16_t, uint32_t);

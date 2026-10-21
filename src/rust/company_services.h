@@ -47,4 +47,7 @@ inline bool RustIsInteractiveCompany(uint8_t id) noexcept { return IsInteractive
 inline void RustAddRailInfrastructure(uint8_t owner, uint8_t rt, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.rail[rt] += delta; }
 inline void RustAddRoadInfrastructure(uint8_t owner, uint8_t rt, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.road[rt] += delta; }
 inline void RustAddSignalInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.signal += delta; }
+inline void RustAddWaterInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.water += delta; }
+inline void RustStationStationInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.station += delta; }
+inline void RustStationAirportInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.airport += delta; }
 #endif /* RUST_COMPANY_SERVICES_H */

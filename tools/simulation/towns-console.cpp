@@ -122,7 +122,7 @@ static bool TownsScenario(std::span<std::string_view> args)
 		auto services = GetRustTownFoundingServices(); OpenTTDTownFoundingFrame frame; bool result;
 		services.set_progress = [](OpenTTDTownFoundingFrame *f, uint total) noexcept { return RunGenerationProgress(f, [total] { TownCancellationReference::SetProgress(GWP_TOWN, total); }); };
 		services.increase_progress = [](OpenTTDTownFoundingFrame *f) noexcept { return RunGenerationProgress(f, [] { TownCancellationReference::IncreaseProgress(GWP_TOWN); }); };
-		try { if (!openttd_rust_town_generate(&services, &frame, &frame.names, TL_ORIGINAL, true, phase == 0 ? UINT_MAX : 0, &result)) std::rethrow_exception(frame.cancellation); } catch (AbortGenerateWorldSignal &) { candidate = true; }
+		try { if (!openttd_rust_town_generate(&services, nullptr, &frame, &frame.names, TL_ORIGINAL, true, phase == 0 ? UINT_MAX : 0, &result)) std::rethrow_exception(frame.cancellation); } catch (AbortGenerateWorldSignal &) { candidate = true; }
 #else
 		try { TownCancellationReference::GenerateTowns(TL_ORIGINAL, phase == 0 ? UINT_MAX : 0); } catch (AbortGenerateWorldSignal &) { candidate = true; }
 #endif

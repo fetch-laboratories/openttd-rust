@@ -261,9 +261,11 @@ subprocess timeout polling, which can add about 50 ms.
 Shared coordination does not reserve a quiet host. `SPEED_BUDGETS` in
 `tools/simulation/roads.py` records current ratios, updated up or down by integrating
 PRs. Reports show a 15% guard against that record, fixed ceilings of 1.5x for play
-saves and 1.3x for generation, and a flag within 5% of the ceiling. Take one median
-of three without holding other agents; rerun on a quiet host only within 3% of a
-limit. The roadmap schedules periodic speed passes.
+saves and 1.3x for generation, and a flag within 5% of the ceiling. Compile load
+moves P2016 medians 2-7% and concurrent timed games about 10% either way, so a
+wall median counts only when no builds, links or other timed games run. #321
+moves the per-PR guard to game-loop callgrind counts, which load does not move.
+The roadmap schedules periodic speed passes.
 
 ## Native macOS arm64 Rust linkage
 
@@ -1145,7 +1147,9 @@ exhaustive in the semantic corpus; the narrow fixture supplies callback results.
 
 Rust owns both region and track searches, arena indices/parent chains, open and closed
 membership, the original binary-heap tie/removal rules, destination estimates, region corridor,
-two attempts, random lost paths and cache extraction (#119). Each Ship owns one opaque Rust path
+two attempts, random lost paths and cache extraction (#119). Search arenas/maps/heaps retain
+process-wide capacity (#306); active searches own storage, with no cached world pointers.
+Each Ship owns one opaque Rust path
 with copied controller access; modern VEHS stages one byte across C++ load errors and commits it
 on unwind, while the pre-struct-list loader retains its reversed path order.
 
@@ -1204,6 +1208,11 @@ retain field widths through C++ staging.
 #199 adds shared typed vehicle and GroundVehicle services (`vehicle.rs`, `vehicle_ffi.h`,
 `vehicle_services.{h,cpp}`). No owner, path or world borrow spans callbacks, reentry or
 deletion.
+
+#311 shares one lean max-speed calculation across road control and native queries. Road
+control supplies that limit between the shared native visual-effect gate and tail, then
+observes movement/speed inputs again after effects. Default native/ABI checks cover the
+front-state/curve/bridge domains and pre/post-effect ordering; train callers keep the shared policy.
 
 The default `roads-` simulation compares acceleration, servicing, path, RNG, crash expiry and
 reload. Legacy saves, custom NewGRFs, articulated/tram turns, sounds and viewport pixels remain
@@ -1310,6 +1319,33 @@ remain unchanged.
 loading queues, fractional admission, acceptance loss, full/gradual loading, rating
 expiry/decay/capping, stale-link refresh/removal/restriction/release and active reload. Legacy, NewGRF and refit
 gaps remain in #156.
+
+### Station construction, joining and removal (#267)
+
+Rust owns the station command policy for rail platforms and waypoints, bay and
+through road stops, airports, docks and oil rigs, plus sign/name/owner, terrain,
+bridge clearance, joining, deletion/reuse and docking-neighbour decisions.
+`water_cmd.cpp` docking eligibility and registration belong to this owner.
+Original command bodies compile only in portable builds. The existing #125/#214
+station state remains canonical; there is no second station owner or save layout.
+
+C++ retains shell/spec/road-stop allocation, NewGRF resolvers, spatial indices,
+rendering/description and the hot tile-loop/animation/vehicle-entry/track/slope
+services. Entries use borrowed typed synchronous tables (ABI 1060-1072), shared
+Rust command pre/post checks, prices, clear-square/water restoration and native
+result slots. No ordinary-play script VM or save/load exception crosses the boundary.
+Rust ends owner access before reentry and calls owned aircraft/station/reservation
+policy directly. Reservation lookahead saves the existing layout-checked order
+value in each Rust stack guard; native pool/container allocation follows the original.
+
+`python3 tools/migration.py simulate stations-commands aircraft-controller-removal
+water-structures-mutate --jobs 2` compares command costs/errors, RNG, STNN/STNS,
+map, town and company state, including partial removal, joins, delete/reuse and
+modern reload. The station module includes unchanged-reference private callbacks
+in fixture executables and requires `station_command` witnesses in default CI.
+Builtin tram stops and a forced airport noise refusal share the controlled crossing
+fixture; terrain preparation preserves live ground-vehicle corner heights. NewGRF,
+legacy decoding and unusual occupied/reservation branches remain tracked by #156.
 
 ### Ship controller and private state (#146)
 
@@ -1513,13 +1549,16 @@ build-above. Portable originals remain. Native road-type allocation, drawing,
 track-status/vehicle-enter and tile loops stay outside this command port.
 The boundary reuses shared command checks and native stack costs, road/rail map
 leaves, company counters, depots, crossings and the rail conversion cursor.
-Rust calls its nested road bodies directly and retains the ordinary command
-protocol through native nesting and shared Rust pre/post and finance helpers.
+Rust road/station helpers share the ordinary nesting, test/execute, rating and
+finance lifecycle. Outer native town, founding, controller and tile-loop frames
+provide one stack scratch and two result slots for direct Rust owner calls.
 Shared Rust also owns road prices and tile clearing; native facades retain portable
-originals and typed storage/error leaves. Town/tram builds and cargo updates share leaves.
+originals and typed storage/error leaves. Town/tram builds enter the Rust road
+owner directly; ground removal, nearest-town and bankrupt rail calls are direct.
 Town authority and rating policy call the integrated Rust owner directly.
 Crossing reservation reads/writes now have one canonical definition shared with
 trains. The canonical `MayHaveRoad` predicate preserves rail-station/head guards.
+The nearest-town map scan bundles only its reached original predicates per tile.
 No world-state borrow spans nested commands or vehicle/town callbacks.
 The default `roads-commands` and `roads-commands-reload` scenarios compare test and
 execute outcomes, costs/extra cash, semantic maps, company/town state and RNG,

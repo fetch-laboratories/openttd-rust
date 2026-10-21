@@ -60,7 +60,6 @@ struct RecursiveCommandCounter {
 	RecursiveCommandCounter() noexcept { Enter(); }
 	~RecursiveCommandCounter() noexcept { Leave(); }
 
-	/** Shared nesting scope for native and Rust command owners. */
 	static bool Enter() noexcept { return ++_counter == 1; }
 	static void Leave() noexcept { --_counter; }
 
@@ -89,7 +88,6 @@ template <Commands TCmd, typename T, bool THasTile> struct CommandHelper;
 
 class CommandHelperBase {
 public:
-	/* Shared ordinary Do protocol leaves, also called by Rust command owners. */
 	static void InternalDoBefore(bool top_level, bool test);
 	static void InternalDoAfter(CommandCost &res, DoCommandFlags flags, bool top_level, bool test);
 protected:

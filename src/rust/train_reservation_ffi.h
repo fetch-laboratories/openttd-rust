@@ -12,6 +12,9 @@
 #include <stdint.h>
 #include "train_ffi.h"
 #include "vehicle_ffi.h"
+#include "orders_ffi.h"
+struct OpenTTDTrainReservationLeaves;
+const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept;
 extern "C" {
 struct OpenTTDTrainState;
 struct OpenTTDTrainReservationFollow {
@@ -121,8 +124,8 @@ struct OpenTTDTrainReservationLeaves {
 	uint64_t (*reach_tracks)(void *, OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reach_tracks);
 	uint64_t (*reserved)(void *, OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reserved);
 	uint64_t (*reserve_paths)(void *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(reserve_paths);
-	void (*restore_order)(void *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(restore_order);
-	void (*save_order)(void *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(save_order);
+	void (*restore_order)(OpenTTDTrainHandle, const OpenTTDOrderFields *) noexcept OPENTTD_SERVICE_DEFAULT(restore_order);
+	OpenTTDOrderFields (*save_order)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(save_order);
 	void (*service)(void *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(service);
 	void (*set_depot)(void *, OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_depot);
 	void (*set_depot_dest)(void *, OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_depot_dest);

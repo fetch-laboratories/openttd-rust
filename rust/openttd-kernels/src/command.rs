@@ -1,15 +1,6 @@
-/*
- * This file is part of OpenTTD.
- * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
- * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
- */
-
-//! Shared ordinary command preparation and result processing. Native stack costs
-//! and company owners remain live for synchronous calls under the game mutex.
-//! No owner borrow crosses a callback; panics and native exceptions abort.
+/* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
+//! Ordinary command pre/post control, shared by native and Rust command owners.
 #![allow(unsafe_code)]
-use crate::company;
 use crate::services::{CommandCost, CommandCostServices, CommandServices};
 
 pub(crate) fn before(s: &CommandServices, top_level: bool, test: bool) {
@@ -22,46 +13,44 @@ pub(crate) fn before(s: &CommandServices, top_level: bool, test: bool) {
 }
 
 pub(crate) fn available_money(s: &CommandServices) -> i64 {
-    let infinite = (s.infinite_money)();
-    if infinite {
+    if (s.infinite_money)() {
         return i64::MAX;
     }
-    let finance = s.finance;
-    let owner = (finance.company_finances)((finance.current_company)());
-    // SAFETY: Native resolution returns null or the live canonical finance owner.
-    unsafe { company::openttd_rust_company_available_money(owner, infinite) }
+    let id = (s.finance.current_company)();
+    let owner = (s.finance.company_finances)(id);
+    // SAFETY: the canonical resolver returns null or the live finance owner.
+    unsafe { crate::company::openttd_rust_company_available_money(owner, false) }
 }
 
-/// `cost` is a live native result; all native callbacks are synchronous.
 /// # Safety
-/// `cost` remains writable and exclusively accessed for the call.
+/// `result` is a live native result, exclusively mutated for this call.
 pub(crate) unsafe fn check_money(
     s: &CommandServices,
-    costs: &CommandCostServices,
-    cost: *mut CommandCost,
+    c: &CommandCostServices,
+    result: *mut CommandCost,
 ) -> bool {
-    let amount = (costs.money)(cost);
+    let amount = (c.money)(result);
     if amount <= 0 || (s.infinite_money)() {
         return true;
     }
-    let finance = s.finance;
-    let owner = (finance.company_finances)((finance.current_company)());
-    // SAFETY: Native resolution returns null or the live canonical finance owner.
-    if unsafe { company::has_money(owner, false, amount) } {
+    let owner = (s.finance.company_finances)((s.finance.current_company)());
+    // SAFETY: the canonical resolver returns null or a live finance owner.
+    if unsafe { crate::company::has_money(owner, false, amount) } {
         return true;
     }
-    // SAFETY: The error formatter mutates the same live cost without reentry.
-    unsafe { (s.money_error)(cost, amount) };
+    // SAFETY: the caller supplies exclusive live native result storage.
+    unsafe {
+        (s.money_error)(result, amount);
+    }
     false
 }
 
-/// Complete `InternalDoAfter`; read native result fields only on reached paths.
 /// # Safety
-/// `cost` remains writable and exclusively accessed for the call.
+/// `result` is live caller-owned native command storage for the whole call.
 pub(crate) unsafe fn after(
     s: &CommandServices,
-    costs: &CommandCostServices,
-    cost: *mut CommandCost,
+    c: &CommandCostServices,
+    result: *mut CommandCost,
     flags: u16,
     top_level: bool,
     test: bool,
@@ -70,37 +59,53 @@ pub(crate) unsafe fn after(
     const BANKRUPT: u16 = 1 << 5;
     if test {
         crate::town::openttd_rust_town_rating_test(false);
-        if (costs.success)(cost) && top_level && flags & (QUERY_COST | BANKRUPT) == 0 {
-            // SAFETY: The caller owns this live native result.
-            unsafe { check_money(s, costs, cost) };
+        if (c.success)(result) && top_level && flags & (QUERY_COST | BANKRUPT) == 0 {
+            // SAFETY: caller guarantees live exclusive storage.
+            unsafe {
+                check_money(s, c, result);
+            }
         }
-    } else if (costs.success)(cost) && top_level && flags & BANKRUPT == 0 {
-        // SAFETY: The caller owns this live native result.
-        unsafe { subtract_money(s, costs, cost) };
+    } else if (c.success)(result) && top_level && flags & BANKRUPT == 0 {
+        // SAFETY: caller guarantees live native result storage.
+        unsafe {
+            subtract_money(s, c, result);
+        }
     }
 }
 
-/// `SubtractMoneyFromCompany`, preserving the valid-company then zero-cost order.
 /// # Safety
-/// `cost` remains live and exclusively accessed for the call.
+/// `result` is a live native result for this call.
 pub(crate) unsafe fn subtract_money(
     s: &CommandServices,
-    costs: &CommandCostServices,
-    cost: *const CommandCost,
+    c: &CommandCostServices,
+    result: *const CommandCost,
 ) {
-    let finance = s.finance;
-    let id = (finance.current_company)();
-    let owner = (finance.company_finances)(id);
-    if !owner.is_null() {
-        let amount = (costs.money)(cost);
-        if amount != 0 {
-            let expense = (costs.expense)(cost).0;
-            // SAFETY: The resolved finance owner stays live; subtraction ends
-            // its field accesses before the invalidation callback.
-            unsafe {
-                company::subtract_money(finance, owner, id, amount, expense);
-            };
-        }
+    let id = (s.finance.current_company)();
+    let owner = (s.finance.company_finances)(id);
+    if owner.is_null() {
+        return;
+    }
+    let amount = (c.money)(result);
+    if amount == 0 {
+        return;
+    }
+    let expense = (c.expense)(result);
+    // SAFETY: resolver returned the live owner; no borrow crosses invalidation.
+    unsafe {
+        crate::company::subtract_money(s.finance, owner, id, amount, expense.0);
+    }
+}
+
+/// # Safety
+/// `result` is a live native result for this call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_command_subtract_money(
+    s: &CommandServices,
+    c: &CommandCostServices,
+    result: *const CommandCost,
+) {
+    unsafe {
+        subtract_money(s, c, result);
     }
 }
 
@@ -109,39 +114,70 @@ pub extern "C" fn openttd_rust_command_before(s: &CommandServices, top_level: bo
     before(s, top_level, test);
 }
 /// # Safety
-/// `cost` points to a live writable native stack result throughout the call.
+/// `result` is a live exclusive native command result.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_command_after(
     s: &CommandServices,
-    costs: &CommandCostServices,
-    cost: *mut CommandCost,
+    c: &CommandCostServices,
+    result: *mut CommandCost,
     flags: u16,
     top_level: bool,
     test: bool,
 ) {
-    // SAFETY: Forwarded caller-owned result.
-    unsafe { after(s, costs, cost, flags, top_level, test) };
+    unsafe {
+        after(s, c, result, flags, top_level, test);
+    }
 }
 /// # Safety
-/// `cost` points to a live writable native stack result throughout the call.
+/// `result` is a live exclusive native command result.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_command_check_money(
     s: &CommandServices,
-    costs: &CommandCostServices,
-    cost: *mut CommandCost,
+    c: &CommandCostServices,
+    result: *mut CommandCost,
 ) -> bool {
-    // SAFETY: Forwarded caller-owned result.
-    unsafe { check_money(s, costs, cost) }
+    unsafe { check_money(s, c, result) }
 }
 
-/// # Safety
-/// `cost` points to a live native stack result throughout the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_command_subtract_money(
+/// Ordinary `CommandHelper::Do` lifecycle around a Rust-owned command body.
+/// Native callbacks operate on caller-owned stack results and serialized state.
+pub(crate) fn nested<T: Default>(
     s: &CommandServices,
-    costs: &CommandCostServices,
-    cost: *const CommandCost,
-) {
-    // SAFETY: Forwarded caller-owned result.
-    unsafe { subtract_money(s, costs, cost) };
+    shared: &crate::services::Services,
+    out: crate::services::Cost<'_>,
+    tile: u32,
+    flags: u16,
+    mut body: impl FnMut(u16) -> T,
+) -> T {
+    struct Guard<'a>(&'a CommandServices);
+    impl Drop for Guard<'_> {
+        fn drop(&mut self) {
+            (self.0.leave)();
+        }
+    }
+    let size = ((shared.map_max_y)() + 1) << (shared.map_log_x)();
+    if tile != 0 && (tile >= size || (!(shared.tile_valid)(tile) && flags & 256 == 0)) {
+        out.error(0xffff);
+        return T::default();
+    }
+    let top = (s.enter)();
+    let _guard = Guard(s);
+    if top || flags & 1 == 0 {
+        before(s, top, true);
+        let extra = body(flags & !1);
+        // SAFETY: the command caller supplies live exclusive native result storage.
+        unsafe {
+            after(s, out.1, out.0, flags, top, true);
+        }
+        if !out.ok() || flags & 1 == 0 {
+            return extra;
+        }
+    }
+    before(s, top, false);
+    let extra = body(flags);
+    // SAFETY: the command caller supplies live exclusive native result storage.
+    unsafe {
+        after(s, out.1, out.0, flags, top, false);
+    }
+    extra
 }
