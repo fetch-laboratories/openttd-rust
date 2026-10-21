@@ -27,6 +27,7 @@ inline uint OpenTTDMoveGoodsToStation(CargoType cargo, uint amount, Source sourc
 /* Legacy tables specialize the shared meanings without another native copy. */
 inline uint OpenTTDScaleTownCargo(uint amount) noexcept { return OpenTTDScaleCargo(amount, true); }
 inline uint OpenTTDScaleIndustryCargo(uint amount) noexcept { return OpenTTDScaleCargo(amount, false); }
+inline bool OpenTTDIsValidCargo(CargoType cargo) noexcept { return IsValidCargoType(cargo); }
 inline CargoType OpenTTDMailCargo() noexcept { return OpenTTDCargoByLabel(CT_MAIL); }
 inline CargoType OpenTTDFoodCargo() noexcept { return OpenTTDCargoByLabel(CT_FOOD); }
 inline CargoType OpenTTDPassengerCargo() noexcept { return OpenTTDCargoByLabel(CT_PASSENGERS); }

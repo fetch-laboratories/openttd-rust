@@ -52,6 +52,8 @@ pub struct OrderType(pub u8);
 pub struct RailVehicleTypes(pub u8);
 
 impl RailVehicleTypes {
+    /// Native `RAILVEH_MULTIHEAD`.
+    pub const MULTIHEAD: Self = Self(1);
     /// Native `RAILVEH_WAGON`.
     pub const WAGON: Self = Self(2);
 }

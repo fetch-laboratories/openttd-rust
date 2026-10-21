@@ -9,6 +9,7 @@
 #include "company_services.h"
 #include "services_map.h"
 #include "services_water.h"
+#include "services_cargo.h"
 
 /** @file ship_control_services.h Typed synchronous shared-world services. */
 #include "settings_services.h"
@@ -119,7 +120,7 @@ static void Ship_order_increment(uint32_t id) noexcept { Ship *v = Ship::Get(Veh
 
 static void Ship_timetable(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); UpdateVehicleTimetable(v, true); }
 
-static void Ship_position(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdatePosition(); }
+static void Ship_position(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleUpdatePosition(v); }
 
 static void Ship_start_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP); }
 
@@ -189,7 +190,7 @@ static uint32_t Ship_tile_y(uint32_t tile) noexcept { return TileY(TileIndex(til
 
 static bool Ship_build_flag(uint32_t engine) noexcept { return Engine::Get(EngineID(engine))->flags.Test(EngineFlag::ExclusivePreview); }
 
-static void Ship_build_random(uint32_t id, uint16_t random) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->random_bits = random; }
+static void Ship_build_random(uint32_t id, uint16_t random) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleSetRandomBits(v, random); }
 
 static OpenTTDShipPosition Ship_new_position(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); auto gp = GetNewVehiclePos(v); return {gp.x, gp.y, gp.old_tile.base(), gp.new_tile.base()}; }
 
@@ -271,8 +272,8 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	const auto &svi = e->VehInfo<ShipVehicleInfo>();
 	v->vehstatus = {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette};
 	v->spritenum = svi.image_index;
-	RustVehicleSetCargoType(RustVehicle(v), e->GetDefaultCargoType());
-	assert(IsValidCargoType(v->cargo_type));
+	RustVehicleSetCargoType(RustVehicle(v), RustEngineDefaultCargo(RustEngine(e)));
+	assert(OpenTTDIsValidCargo(RustVehicleCargoType(RustVehicle(v))));
 	RustVehicleSetCargoCap(RustVehicle(v), svi.capacity);
 	RustVehicleSetRefitCap(RustVehicle(v), 0);
 	v->last_station_visited = StationID::Invalid();

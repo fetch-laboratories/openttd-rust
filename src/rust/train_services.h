@@ -66,7 +66,7 @@ static void TrainWriteLength(OpenTTDTrainHandle id, uint8_t value) noexcept
 static void TrainWriteTotalLength(OpenTTDTrainHandle id, uint16_t value) noexcept
 {Train *v=static_cast<Train *>(id.shell); v->gcache.cached_total_length = static_cast<uint16_t>(value);}
 static void TrainWriteFirstEngine(OpenTTDTrainHandle id, uint16_t value) noexcept
-{Train *v=static_cast<Train *>(id.shell); v->gcache.first_engine = EngineID(static_cast<uint16_t>(value));}
+{Train *v=static_cast<Train *>(id.shell); RustGroundSetFirstEngine(&v->gcache, EngineID(static_cast<uint16_t>(value)));}
 static void TrainWriteMaxSpeed(OpenTTDTrainHandle id, uint16_t value) noexcept
 {Train *v=static_cast<Train *>(id.shell); v->vcache.cached_max_speed = static_cast<uint16_t>(value);}
 static void TrainWriteCargoCap(OpenTTDTrainHandle id, uint16_t value) noexcept
@@ -544,7 +544,7 @@ static uint64_t TrainPlatformLength(OpenTTDTrainHandle, uint16_t a, uint32_t b) 
 static void TrainPosition(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	v->UpdatePosition();
+	RustVehicleUpdatePosition(v);
 }
 static uint64_t TrainPowWagPower(OpenTTDTrainHandle id) noexcept
 {
@@ -602,7 +602,7 @@ static uint64_t TrainReverseAtSignals(OpenTTDTrainHandle) noexcept
 static uint64_t TrainReverseSingleBlocked(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return EngInfo(v->engine_type)->callback_mask.Test(VehicleCallbackMask::ArticEngine);
+	return RustEngineHasArticulatedCallback(v->engine_type.base());
 }
 static void TrainReverseWindows(OpenTTDTrainHandle id) noexcept
 {
@@ -873,7 +873,7 @@ static OpenTTDTrainHandle TrainReadPrevious(OpenTTDTrainHandle id) noexcept
 static OpenTTDTrainHandle TrainReadNextUnit(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return TrainHandle(v->GetNextVehicle());
+	return TrainHandle(RustVehicleNextVehicle(v));
 }
 static OpenTTDTrainHandle TrainReadLast(OpenTTDTrainHandle id) noexcept
 {
@@ -943,7 +943,7 @@ static OpenTTDTrainConsistChangedRead TrainReadConsistChanged(OpenTTDTrainHandle
 static OpenTTDTrainConsistChanged1Read TrainReadConsistChanged1(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return {RustVehicleEngineID(v), v->IsEngine()};
+	return {RustVehicleEngineID(v), RustTrainIsEngine(v)};
 }
 static OpenTTDTrainConsistChanged2Read TrainReadConsistChanged2(OpenTTDTrainHandle id) noexcept
 {

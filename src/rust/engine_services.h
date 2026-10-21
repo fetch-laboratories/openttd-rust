@@ -16,6 +16,10 @@
 #include "../rail.h"
 #include "../road.h"
 inline const OpenTTDEngine *RustEngineByID(uint16_t id) noexcept { return RustEngine(Engine::Get(EngineID(id))); }
+inline bool RustEngineHasArticulatedCallback(uint16_t engine) noexcept { return EngInfo(EngineID(engine))->callback_mask.Test(VehicleCallbackMask::ArticEngine); }
+inline void RustArticulatedCapacity(uint16_t engine, uint32_t *out) noexcept { auto capacity = GetCapacityOfArticulatedParts(EngineID(engine)); std::copy(capacity.begin(), capacity.end(), out); }
+inline int64_t RustEngineCost(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetCost().base(); }
+inline uint8_t RustEngineDefaultCargo(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetDefaultCargoType(); }
 inline VehicleType RustEngineType(const OpenTTDEngine *e) noexcept { return EngineOf(e)->type; }
 inline bool RustEngineHasGRF(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetGRF() != nullptr; }
 inline uint8_t RustEngineRefitCost(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.refit_cost; }

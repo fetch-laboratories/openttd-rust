@@ -770,7 +770,7 @@ impl Game {
     }
 }
 impl Order {
-    fn kind(self) -> u8 {
+    fn kind(&self) -> u8 {
         self.kind & 15
     }
     fn non_stop(self) -> u8 {
@@ -782,7 +782,7 @@ impl Order {
     fn unload(self) -> u8 {
         self.flags & 7
     }
-    fn action(self) -> u8 {
+    fn action(&self) -> u8 {
         (self.flags >> 3) & 15
     }
     fn depot_type(self) -> u8 {
@@ -4877,7 +4877,7 @@ impl OrderHandle {
     /// Handle denotes a live Order under the serial game-state mutex.
     pub(crate) unsafe fn is_type(&self, kind: u8) -> bool {
         // SAFETY: One scalar read from the live canonical record.
-        unsafe { ptr::addr_of!((*self.0).kind).read() & 15 == kind }
+        unsafe { (&*self.0).kind() == kind }
     }
     /// # Safety
     /// Handle denotes a live Order under the serial game-state mutex.
@@ -4889,6 +4889,6 @@ impl OrderHandle {
     /// Handle denotes a live depot Order under the serial game-state mutex.
     pub(crate) unsafe fn nearest_depot(&self) -> bool {
         // SAFETY: One scalar read; native OrderDepotActionFlag::NearestDepot = 1.
-        unsafe { ptr::addr_of!((*self.0).flags).read() & (1 << 4) != 0 }
+        unsafe { (&*self.0).action() & 2 != 0 }
     }
 }

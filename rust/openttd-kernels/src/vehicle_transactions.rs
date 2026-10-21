@@ -7,6 +7,10 @@
     clippy::cast_sign_loss,
     clippy::too_many_arguments
 )]
+pub(crate) mod articulated;
+pub(crate) mod build;
+pub(crate) mod clone;
+mod clone_name;
 pub(crate) mod mass;
 pub(crate) mod refit;
 use crate::fleet::GroupServices;
@@ -368,7 +372,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         }
         // Preserve the distinct predicate order of group and standard lists.
         if unsafe { (s.groups.vehicle_type)(v) } == vehicle_type {
-            let selected = if kind == 4 && index as u16 != 65533 {
+            let selected = if kind == 4 && index as u16 != crate::fleet::ALL_GROUP {
                 unsafe {
                     (s.groups.primary)(v)
                         && (s.groups.vehicle_owner)(v) == company
@@ -429,6 +433,11 @@ pub struct TransactionStrings {
     pub terminal7: u8,
     pub direct_descent: u8,
     pub new_vehicle_expense: u8,
+    pub invalid_client: u32,
+    pub share_orders: u8,
+    pub copy_orders: u8,
+    pub cargo_count: u8,
+    pub invalid_cargo: u8,
 }
 #[repr(C)]
 pub struct CommonServices {
@@ -447,13 +456,14 @@ pub struct CommonServices {
     pub startstop_ui: extern "C" fn(*mut ()),
     pub sell_rail: extern "C" fn(*mut CommandCost, u16, *mut (), bool, bool, u32),
     pub value: extern "C" fn(*mut ()) -> i64,
+    pub valid_cargo: extern "C" fn(u8) -> bool,
 }
 /// # Safety
 /// `v` denotes a live shell, established by the caller's source preconditions.
 unsafe fn vehicle_ref(v: *mut ()) -> crate::vehicle::VehicleRef {
     crate::vehicle::VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast()) })
 }
-unsafe fn sell(
+pub(crate) unsafe fn sell(
     s: &CommonServices,
     cost: *mut CommandCost,
     flags: u16,
@@ -497,7 +507,7 @@ unsafe fn sell(
         (s.vehicles.destroy)(unsafe { vehicle_ref(front) });
     }
 }
-unsafe fn startstop(
+pub(crate) unsafe fn startstop(
     s: &CommonServices,
     cost: *mut CommandCost,
     flags: u16,

@@ -90,7 +90,13 @@ struct OpenTTDFleetGroupServices {
 	uint32_t recursion_error;
 };
 struct OpenTTDFleetCosts { void *result; void *replace; void *build; void *copy; void *temporary; void *seeds; };
+struct OpenTTDVehicleCommonServices;
+struct OpenTTDVehicleRefitServices;
+struct OpenTTDVehicleBuildServices;
 struct OpenTTDFleetTransactionServices {
+	const OpenTTDVehicleCommonServices &(*common)() noexcept OPENTTD_SERVICE_DEFAULT(common);
+	const OpenTTDVehicleRefitServices &(*refit_services)() noexcept OPENTTD_SERVICE_DEFAULT(refit_services);
+	const OpenTTDVehicleBuildServices &(*build_services)() noexcept OPENTTD_SERVICE_DEFAULT(build_services);
 	void (*cost_zero)(void *out) noexcept OPENTTD_SERVICE_DEFAULT(cost_zero);
 	void (*cost_vehicles)(void *out) noexcept OPENTTD_SERVICE_DEFAULT(cost_vehicles);
 	void (*cost_error)(void *out, uint32_t error) noexcept OPENTTD_SERVICE_DEFAULT(cost_error);
@@ -110,7 +116,6 @@ struct OpenTTDFleetTransactionServices {
 	void * (*next_unit)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(next_unit);
 	void * (*prev_unit)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(prev_unit);
 	uint16_t (*length)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(length);
-	bool (*flipped)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(flipped);
 	uint8_t (*cargo_type)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
 	bool (*can_carry)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(can_carry);
 	bool (*stopped_in_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
@@ -138,16 +143,10 @@ struct OpenTTDFleetTransactionServices {
 	uint8_t (*order_cargo)(void *order) noexcept OPENTTD_SERVICE_DEFAULT(order_cargo);
 	bool (*local)() noexcept OPENTTD_SERVICE_DEFAULT(local);
 	void (*refit_news)(void *shell, int32_t order) noexcept OPENTTD_SERVICE_DEFAULT(refit_news);
-	void * (*build)(void *out, void *shell, uint16_t engine) noexcept OPENTTD_SERVICE_DEFAULT(build);
-	void (*refit)(void *out, void *shell, uint8_t cargo, uint8_t subtype) noexcept OPENTTD_SERVICE_DEFAULT(refit);
 	uint8_t (*subtype)(void *old, void *replacement, uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(subtype);
 	bool (*reverse_probability)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(reverse_probability);
 	void (*reverse)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(reverse);
-	void (*start_stop)(void *out, void *shell, bool evaluate) noexcept OPENTTD_SERVICE_DEFAULT(start_stop);
 	void (*move)(void *out, void *shell, void *after, uint32_t flags, bool whole) noexcept OPENTTD_SERVICE_DEFAULT(move);
-	void (*sell)(void *out, void *shell, uint32_t flags) noexcept OPENTTD_SERVICE_DEFAULT(sell);
-	void (*clone_order)(void *out, void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(clone_order);
-	void (*copy_group)(void *out, void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(copy_group);
 	void (*copy_configuration)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(copy_configuration);
 	void (*viewports)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(viewports);
 	void (*view_window)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(view_window);

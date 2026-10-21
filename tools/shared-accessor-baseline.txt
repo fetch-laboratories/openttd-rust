@@ -120,7 +120,6 @@ src/rust/fleet_transaction_services.hpp | FleetTransaction_max_length() noexcept
 src/rust/fleet_transaction_services.hpp | FleetTransaction_needs_renew(void *shell, bool settings) noexcept | 0c9267b6cb5b5b22 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_orders(void *shell) noexcept | fad29c81879d9cca | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_reverse(void *shell) noexcept | fc5bd727a0ec52f9 | 1
-src/rust/fleet_transaction_services.hpp | FleetTransaction_reverse_probability(void *shell) noexcept | 7787d751d28b6c79 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_stopped(void *shell) noexcept | 3b5f024ebad01d63 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_stopped_in_depot(void *shell) noexcept | 7eb686328ee6a83e | 1
 src/rust/road_services.h | RoadSvcShortenFactor(const OpenTTDEngine *e) noexcept | 0e64e34569c25c86 | 1

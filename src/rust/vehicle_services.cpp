@@ -10,6 +10,7 @@
 #include "vehicle_ffi.h"
 #ifdef WITH_RUST
 #include "vehicle_services.h"
+#include "engine_services.h"
 #include "../vehicle_func.h"
 #include "../order_func.h"
 #include "../newgrf_engine.h"
@@ -83,6 +84,7 @@ Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept { return Train::From(v)->
 bool RustTrainMultiheaded(const Vehicle *v) noexcept { return Train::From(v)->IsMultiheaded(); }
 Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept { return Train::From(v)->other_multiheaded_part; }
 
+bool RustTrainIsEngine(const Vehicle *v) noexcept { return Train::From(v)->IsEngine(); }
 uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept { return RustVehicleCallback(CBID_VEHICLE_START_STOP_CHECK, 0, 0, v->engine_type, v, std::span(reg, 1)); }
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_power; }
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept { return v->GetGRF()->grf_version; }
@@ -154,7 +156,7 @@ static uint8_t OPENTTD_VEHICLE_CALL VehicleSvcMoveThenStatus(OpenTTDVehicle *v, 
 	Vehicle *u = VehicleOf(v);
 	u->x_pos = x;
 	u->y_pos = y;
-	u->UpdatePosition();
+	RustVehicleUpdatePosition(u);
 	return RustVehicleStatus(u);
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcBaseViewport(OpenTTDVehicle *v) noexcept { VehicleOf(v)->Vehicle::UpdateViewport(true); }
@@ -548,7 +550,7 @@ static OpenTTDVehicleMaintenanceReplacement OPENTTD_VEHICLE_CALL MaintenanceRepl
 	return {.engine = engine.base(), .when_old = when_old};
 }
 static bool OPENTTD_VEHICLE_CALL MaintenanceReplacementAvailable(OpenTTDVehicle *handle, uint16_t engine) noexcept { return Engine::Get(EngineID(engine))->company_avail.Test(VehicleOf(handle)->owner); }
-static OpenTTDVehicleMaintenanceReplacementCost OPENTTD_VEHICLE_CALL MaintenanceReplacementCost(const Company *company, uint16_t engine) noexcept { return {.cost = Engine::Get(EngineID(engine))->GetCost().base(), .available = GetAvailableMoney(company->index).base()}; }
+static OpenTTDVehicleMaintenanceReplacementCost OPENTTD_VEHICLE_CALL MaintenanceReplacementCost(const Company *company, uint16_t engine) noexcept { return {.cost = RustEngineCost(RustEngineByID(engine)), .available = GetAvailableMoney(company->index).base()}; }
 static OpenTTDVehicleMaintenanceAutomatic OPENTTD_VEHICLE_CALL MaintenanceAutomatic(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);

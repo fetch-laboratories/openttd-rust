@@ -31,6 +31,23 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "OpenTTDArticulatedPart" ["probe"] => crate::vehicle_transactions::articulated::Part { image, capacity, };
+    "OpenTTDArticulatedProbability" ["probe"] => crate::vehicle_transactions::articulated::Probability { present, value, };
+    "OpenTTDVehicleArticulatedServices" ["probe"] => crate::vehicle_transactions::articulated::Services {
+        refit, default_cargo, capacity, pool_available, has_callback, next_part, prepare_previous,
+        new_train, new_road, road_length, copy_roadtype, train_info, road_info, set_part, mark_train,
+        mark_road, copy_common, random_bits, flip_image, reverse, position, available_cargo, warning,
+        has_articulated, next_articulated, max_parts, all_cargo,
+    };
+    "OpenTTDVehicleCloneServices" ["probe"] => crate::vehicle_transactions::clone::Services {
+        build, next_vehicle, has_articulated, next_articulated, copy_service, parse_suffix,
+    };
+    "OpenTTDVehicleBuildResult" ["probe"] => crate::vehicle_transactions::build::Result { id, capacity, };
+    "OpenTTDVehicleBuildServices" ["probe"] => crate::vehicle_transactions::build::Services {
+        refit, mass, random, depot_kind, engine_cost, default_cargo, articulate_count, pool_available,
+        free_unit, rail, road, aircraft, ship_tile, new_ship, set_purchase, articulated_capacity,
+        display_capacity, is_engine, normalize, presentation, use_unit, too_many, unavailable,
+    };
     "OpenTTDVehicleListId" ["probe"] => crate::vehicle_transactions::mass::ListId { kind, vehicle_type, company, index, valid, };
     "OpenTTDVehicleMassServices" ["probe"] => crate::vehicle_transactions::mass::Services { common, selection, is_depot, is_tile_owner, send, service, mass_send, dont_cancel, invalid_client, };
     "GRFStringID" ["probe"] => crate::vehicle_transactions::GrfStringId { };
@@ -62,11 +79,12 @@ layouts! {
     "OpenTTDVehicleTransactionStrings" ["probe"] => crate::vehicle_transactions::TransactionStrings {
         destroyed, stopped_in_depot, no_power, in_flight, incompatible_rail, null_string,
         grf_text, takeoff, terminal7, direct_descent, new_vehicle_expense,
+        invalid_client, share_orders, copy_orders, cargo_count, invalid_cargo,
     };
     "OpenTTDVehicleCommonServices" ["probe"] => crate::vehicle_transactions::CommonServices {
         base, transactions, vehicles, orders, strings, train_power, aircraft_start,
         startstop_callback, grf_version, grf_string, waiting_news, flip_stopped,
-        startstop_ui, sell_rail, value,
+        startstop_ui, sell_rail, value, valid_cargo,
     };
     "OpenTTDVehicleSelectionServices" ["probe"] => crate::vehicle_transactions::SelectionServices {
         groups, transactions, vehicles, in_depot, free_wagon, first_engine_part,
@@ -4329,6 +4347,7 @@ layouts! {
         recursion_error,
     };
     "OpenTTDFleetTransactionServices" ["fleet"] => crate::fleet::transactions::Services {
+        common, refit_services, build_services,
         cost_zero,
         cost_vehicles,
         cost_error,
@@ -4348,7 +4367,6 @@ layouts! {
         next_unit,
         prev_unit,
         length,
-        flipped,
         cargo_type,
         can_carry,
         stopped_in_depot,
@@ -4376,16 +4394,10 @@ layouts! {
         order_cargo,
         local,
         refit_news,
-        build,
-        refit,
         subtype,
         reverse_probability,
         reverse,
-        start_stop,
         move_vehicle => move,
-        sell,
-        clone_order,
-        copy_group,
         copy_configuration,
         viewports,
         view_window,

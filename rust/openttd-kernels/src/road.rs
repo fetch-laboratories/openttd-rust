@@ -85,11 +85,29 @@ pub unsafe extern "C" fn openttd_rust_road_get(state: *const State, field: u8) -
     // SAFETY: Game-thread caller supplies a live owner and selector 0..6.
     unsafe { (*state).scalars[field as usize] }
 }
+/// Original `RoadVehicle::SetState`, also used by the native selector facade.
+/// # Safety
+/// The serialized native shell owns this live state for the whole scalar access.
+pub(crate) unsafe fn set_state(state: *mut State, value: u8) {
+    unsafe {
+        (*state).scalars[STATE] = u16::from(value);
+    }
+}
+/// Original `RoadVehicle::SetState(RVSB_IN_DEPOT)` without a native-owner bounce.
+/// # Safety
+/// A live serialized road owner; the scalar access ends before any callback.
+pub(crate) unsafe fn set_depot_state(state: *mut State) {
+    unsafe { set_state(state, DEPOT) };
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_set(state: *mut State, field: u8, value: u16) {
     // SAFETY: Exclusive game-thread access, with no retained owner reference.
     unsafe {
-        (*state).scalars[field as usize] = narrow(field as usize, value);
+        if usize::from(field) == STATE {
+            set_state(state, value as u8);
+        } else {
+            (*state).scalars[field as usize] = narrow(field as usize, value);
+        }
     }
 }
 /// Fields 2 and 5 are `uint16_t`; the others are `uint8_t`.

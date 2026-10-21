@@ -20,7 +20,7 @@ use crate::vehicle::OpenTTDVehicle;
 use std::collections::{BTreeMap, BTreeSet};
 const NONE: u32 = u32::MAX;
 /// `VehicleID::Invalid()` (`vehicle_type.h`), the list-selection sentinel.
-const INVALID_VEHICLE: u32 = 0xF_FFFF;
+pub(crate) const INVALID_VEHICLE: u32 = 0xF_FFFF;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct GroupFields {
@@ -318,7 +318,7 @@ pub struct GroupServices {
 
 const INVALID_GROUP: u16 = 65535;
 const DEFAULT_GROUP: u16 = 65534;
-const ALL_GROUP: u16 = 65533;
+pub(crate) const ALL_GROUP: u16 = 65533;
 const NEW_GROUP: u16 = 65532;
 const OK: u32 = u32::MAX;
 const ERROR: u32 = 65535;

@@ -54,6 +54,7 @@
 #include "rust/company_services.h"
 #include "rust/orders_ffi.h"
 #include "rust/vehicle_maintenance_ffi.h"
+#include "rust/ship_control_ffi.h"
 
 /* Synchronous native storage/presentation leaves only. No Rust borrow crosses
  * these calls; allocation or formatting failures terminate in noexcept leaves. */
@@ -135,6 +136,8 @@ const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
 			.terminal7 = TERM7,
 			.direct_descent = 1 << VAF_HELI_DIRECT_DESCENT,
 			.new_vehicle_expense = EXPENSES_NEW_VEHICLES,
+			.invalid_client = INVALID_CLIENT_ID, .share_orders = CO_SHARE, .copy_orders = CO_COPY,
+			.cargo_count = NUM_CARGO, .invalid_cargo = INVALID_CARGO,
 		},
 		.train_power = RustOpaqueVehicleRead<uint32_t, RustTrainCachedPower>,
 		.aircraft_start = VehicleTransactionAircraftStart,
@@ -146,6 +149,7 @@ const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
 		.startstop_ui = VehicleTransactionStartstopUI,
 		.sell_rail = VehicleTransactionSellRail,
 		.value = RustOpaqueVehicleRead<int64_t, RustVehicleValue>,
+		.valid_cargo = OpenTTDIsValidCargo,
 	};
 	return services;
 }
@@ -164,6 +168,8 @@ static const OpenTTDVehicleMassServices &GetVehicleMassServices() noexcept
 	};
 	return services;
 }
+
+#include "rust/vehicle_build_services.hpp"
 
 #endif /* WITH_RUST */
 
@@ -225,6 +231,13 @@ const StringID _send_to_depot_msg_table[] = {
  */
 std::tuple<CommandCost, VehicleID, uint, uint16_t, CargoArray> CmdBuildVehicle(DoCommandFlags flags, TileIndex tile, EngineID eid, bool use_free_vehicles, CargoType cargo, ClientID client_id)
 {
+#ifdef WITH_RUST
+	CommandCost cost, temporary, refit_temporary;
+	auto result = openttd_rust_vehicle_build(&GetRustVehicleBuildServices(), RustCommandCost(&cost), RustCommandCost(&temporary), RustCommandCost(&refit_temporary), flags.base(), tile.base(), eid.base(), use_free_vehicles, cargo, client_id);
+	CargoArray capacity;
+	std::copy(std::begin(result.capacity.cargo), std::end(result.capacity.cargo), capacity.begin());
+	return {std::move(cost), VehicleID(result.id), result.capacity.total, result.capacity.mail, capacity};
+#else
 	/* Elementary check for valid location. */
 	if (!IsDepotTile(tile) || !IsTileOwner(tile, _current_company)) return { CMD_ERROR, VehicleID::Invalid(), 0, 0, {} };
 
@@ -348,6 +361,7 @@ std::tuple<CommandCost, VehicleID, uint, uint16_t, CargoArray> CmdBuildVehicle(D
 	if (flags != subflags) RestoreRandomSeeds(saved_seeds);
 
 	return { value, veh_id, refitted_capacity, refitted_mail_capacity, cargo_capacities };
+#endif
 }
 
 /**
@@ -437,13 +451,9 @@ static int GetRefitCostFactor(const Vehicle *v, EngineID engine_type, CargoType 
  * @param[out] auto_refit_allowed The refit is allowed as an auto-refit.
  * @return Price for refitting
  */
+#ifndef WITH_RUST
 static CommandCost GetRefitCost(const Vehicle *v, EngineID engine_type, CargoType new_cargo_type, uint8_t new_subtype, bool *auto_refit_allowed)
 {
-#ifdef WITH_RUST
-	CommandCost cost;
-	openttd_rust_vehicle_refit_cost(&GetRustVehicleRefitServices(), reinterpret_cast<OpenTTDCommandCost *>(&cost), RustVehicle(v), engine_type.base(), new_cargo_type, new_subtype, auto_refit_allowed);
-	return cost;
-#else
 	ExpensesType expense_type;
 	const Engine *e = Engine::Get(engine_type);
 	Price base_price;
@@ -477,10 +487,12 @@ static CommandCost GetRefitCost(const Vehicle *v, EngineID engine_type, CargoTyp
 	} else {
 		return CommandCost(expense_type, GetPrice(base_price, cost_factor, e->GetGRF(), -10));
 	}
-#endif
 }
 
+#endif
+
 #ifndef WITH_RUST
+
 /** Helper structure for RefitVehicle() */
 struct RefitResult {
 	Vehicle *v;         ///< Vehicle to refit
@@ -955,6 +967,7 @@ bool IsUniqueVehicleName(const std::string &name)
  * @param src Source vehicle, with a custom name.
  * @param dst Destination vehicle.
  */
+#ifndef WITH_RUST
 static void CloneVehicleName(const Vehicle *src, Vehicle *dst)
 {
 	std::string buf;
@@ -1001,6 +1014,7 @@ static void CloneVehicleName(const Vehicle *src, Vehicle *dst)
 
 	/* All done. If we didn't find a name, it'll just use its default. */
 }
+#endif
 
 /**
  * Clone a vehicle. If it is a train, it will clone all the cars too
@@ -1012,6 +1026,11 @@ static void CloneVehicleName(const Vehicle *src, Vehicle *dst)
  */
 std::tuple<CommandCost, VehicleID> CmdCloneVehicle(DoCommandFlags flags, TileIndex tile, VehicleID veh_id, bool share_orders)
 {
+#ifdef WITH_RUST
+	CommandCost total, part, temporary, refit_temporary;
+	uint32_t id = openttd_rust_vehicle_clone(&GetRustVehicleCloneServices(), RustCommandCost(&total), RustCommandCost(&part), RustCommandCost(&temporary), RustCommandCost(&refit_temporary), flags.base(), tile.base(), veh_id.base(), share_orders);
+	return {std::move(total), VehicleID(id)};
+#else
 	CommandCost total_cost(EXPENSES_NEW_VEHICLES);
 
 	Vehicle *v = Vehicle::GetIfValid(veh_id);
@@ -1193,6 +1212,7 @@ std::tuple<CommandCost, VehicleID> CmdCloneVehicle(DoCommandFlags flags, TileInd
 	}
 
 	return { total_cost, new_veh_id };
+#endif
 }
 
 /**
@@ -1351,5 +1371,8 @@ CommandCost CmdChangeServiceInt(DoCommandFlags flags, VehicleID veh_id, uint16_t
 #include "abi-visit-OpenTTDVehicleCommonServices.hpp"
 #include "abi-visit-OpenTTDVehicleMassServices.hpp"
 #include "abi-visit-OpenTTDVehicleRefitServices.hpp"
-bool CheckAbi_vehicle_cmd() { return AbiServicesComplete(GetRustVehicleTransactionServices()) && AbiServicesComplete(GetRustVehicleCommonServices()) && AbiServicesComplete(GetRustVehicleRefitServices()) && AbiServicesComplete(GetVehicleMassServices()); }
+#include "abi-visit-OpenTTDVehicleBuildServices.hpp"
+#include "abi-visit-OpenTTDVehicleCloneServices.hpp"
+#include "abi-visit-OpenTTDVehicleArticulatedServices.hpp"
+bool CheckAbi_vehicle_cmd() { return AbiServicesComplete(GetRustVehicleTransactionServices()) && AbiServicesComplete(GetRustVehicleCommonServices()) && AbiServicesComplete(GetRustVehicleRefitServices()) && AbiServicesComplete(GetVehicleMassServices()) && AbiServicesComplete(GetRustVehicleBuildServices()) && AbiServicesComplete(GetRustVehicleCloneServices()) && AbiServicesComplete(GetRustVehicleArticulatedServices()); }
 #endif

@@ -300,7 +300,7 @@ unsafe fn refit_chain(
         mail_total = mail_total.wrapping_add(u32::from(mail));
         total.cargo[usize::from(cargo)] = total.cargo[usize::from(cargo)].wrapping_add(amount);
         let mail_cargo = (s.mail_cargo)();
-        if mail_cargo != 0xff {
+        if (s.common.valid_cargo)(mail_cargo) {
             total.cargo[usize::from(mail_cargo)] =
                 total.cargo[usize::from(mail_cargo)].wrapping_add(u32::from(mail));
         }
@@ -431,7 +431,7 @@ pub(crate) unsafe fn refit(
         (b.cost.error)(cost, c.strings.destroyed);
         return Capacity::default();
     }
-    if cargo >= 64 {
+    if cargo >= c.strings.cargo_count {
         (b.cost.error)(cost, ERROR);
         return Capacity::default();
     }
@@ -523,22 +523,5 @@ pub unsafe extern "C" fn openttd_rust_vehicle_refit(
         refit(
             s, cost, temp, flags, id, cargo, subtype, automatic, only, count,
         )
-    }
-}
-/// # Safety
-/// Live native cost, optional source shell and writable original out-parameter.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_vehicle_refit_cost(
-    s: &Services,
-    cost: *mut CommandCost,
-    v: *mut OpenTTDVehicle,
-    engine: u16,
-    cargo: u8,
-    subtype: u8,
-    automatic: *mut bool,
-) {
-    let allowed = unsafe { get_cost(s, cost, v.cast(), engine, cargo, subtype) };
-    unsafe {
-        automatic.write(allowed);
     }
 }

@@ -25,6 +25,11 @@ pub struct Costs {
 }
 #[repr(C)]
 pub struct Services {
+    pub(crate) common: extern "C" fn() -> &'static crate::vehicle_transactions::CommonServices,
+    pub(crate) refit_services:
+        extern "C" fn() -> &'static crate::vehicle_transactions::refit::Services,
+    pub(crate) build_services:
+        extern "C" fn() -> &'static crate::vehicle_transactions::build::Services,
     pub(crate) cost_zero: unsafe extern "C" fn(*mut ()),
     pub(crate) cost_vehicles: unsafe extern "C" fn(*mut ()),
     pub(crate) cost_error: unsafe extern "C" fn(*mut (), u32),
@@ -44,7 +49,6 @@ pub struct Services {
     pub(crate) next_unit: unsafe extern "C" fn(*mut ()) -> *mut (),
     pub(crate) prev_unit: unsafe extern "C" fn(*mut ()) -> *mut (),
     pub(crate) length: unsafe extern "C" fn(*mut ()) -> u16,
-    pub(crate) flipped: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) cargo_type: unsafe extern "C" fn(*mut ()) -> u8,
     pub(crate) can_carry: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) stopped_in_depot: unsafe extern "C" fn(*mut ()) -> bool,
@@ -72,16 +76,10 @@ pub struct Services {
     pub(crate) order_cargo: unsafe extern "C" fn(*mut ()) -> u8,
     pub(crate) local: unsafe extern "C" fn() -> bool,
     pub(crate) refit_news: unsafe extern "C" fn(*mut (), i32),
-    pub(crate) build: unsafe extern "C" fn(*mut (), *mut (), u16) -> *mut (),
-    pub(crate) refit: unsafe extern "C" fn(*mut (), *mut (), u8, u8),
     pub(crate) subtype: unsafe extern "C" fn(*mut (), *mut (), u8) -> u8,
     pub(crate) reverse_probability: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) reverse: unsafe extern "C" fn(*mut ()),
-    pub(crate) start_stop: unsafe extern "C" fn(*mut (), *mut (), bool),
     pub(crate) move_vehicle: unsafe extern "C" fn(*mut (), *mut (), *mut (), u32, bool),
-    pub(crate) sell: unsafe extern "C" fn(*mut (), *mut (), u32),
-    pub(crate) clone_order: unsafe extern "C" fn(*mut (), *mut (), *mut ()),
-    pub(crate) copy_group: unsafe extern "C" fn(*mut (), *mut (), *mut ()),
     pub(crate) copy_configuration: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) viewports: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) view_window: unsafe extern "C" fn(*mut (), *mut ()),
@@ -97,6 +95,179 @@ pub struct Services {
     pub(crate) too_long: u32,
     pub(crate) too_long_replacement: u32,
     pub(crate) nothing: u32,
+}
+
+/// `DoCommandFlag::NoCargoCapacityCheck`, set by every original autoreplace move.
+const NO_CARGO_CAPACITY_CHECK: u32 = 1 << 7;
+unsafe fn move_vehicle(
+    w: &Services,
+    out: *mut (),
+    v: *mut (),
+    after: *mut (),
+    flags: u32,
+    whole: bool,
+) {
+    unsafe { (w.move_vehicle)(out, v, after, flags | NO_CARGO_CAPACITY_CHECK, whole) };
+}
+
+unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) -> *mut () {
+    let s = (w.build_services)();
+    let b = s.refit.common.base;
+    let v = unsafe { vehicle_ref_for_build(old) };
+    let tile = (s.refit.common.vehicles.tile)(v);
+    let result = crate::command::nested(
+        b.commands,
+        b.shared,
+        crate::services::Cost(costs.build.cast(), b.cost),
+        tile,
+        (EXECUTE | AUTOREPLACE) as u16,
+        |flags| unsafe {
+            crate::vehicle_transactions::build::build(
+                s,
+                costs.build.cast(),
+                costs.temporary.cast(),
+                costs.copy.cast(),
+                flags,
+                tile,
+                engine,
+                true,
+                s.refit.common.strings.invalid_cargo,
+                s.refit.common.strings.invalid_client,
+            )
+        },
+    );
+    if (b.cost.success)(costs.build.cast()) {
+        unsafe { (b.groups.vehicle)(result.id) }
+    } else {
+        std::ptr::null_mut()
+    }
+}
+unsafe fn vehicle_ref_for_build(v: *mut ()) -> crate::vehicle::VehicleRef {
+    crate::vehicle::VehicleRef(std::ptr::NonNull::new(v.cast()).unwrap())
+}
+
+unsafe fn direct_start(w: &Services, out: *mut (), v: *mut (), evaluate: bool) {
+    let s = (w.common)();
+    let b = s.base;
+    let id = unsafe { (b.groups.vehicle_id)(v) };
+    crate::command::nested(
+        b.commands,
+        b.shared,
+        crate::services::Cost(out.cast(), b.cost),
+        0,
+        (EXECUTE | AUTOREPLACE) as u16,
+        |flags| unsafe {
+            crate::vehicle_transactions::startstop(s, out.cast(), flags, id, evaluate);
+        },
+    );
+}
+unsafe fn direct_sell(w: &Services, out: *mut (), v: *mut (), flags: u32) {
+    let s = (w.common)();
+    let b = s.base;
+    let id = unsafe { (b.groups.vehicle_id)(v) };
+    crate::command::nested(
+        b.commands,
+        b.shared,
+        crate::services::Cost(out.cast(), b.cost),
+        0,
+        flags as u16,
+        |flags| unsafe {
+            crate::vehicle_transactions::sell(
+                s,
+                out.cast(),
+                flags,
+                id,
+                false,
+                false,
+                s.strings.invalid_client,
+            );
+        },
+    );
+}
+unsafe fn direct_refit(
+    w: &Services,
+    out: *mut (),
+    temporary: *mut (),
+    v: *mut (),
+    cargo: u8,
+    subtype: u8,
+) {
+    let s = (w.refit_services)();
+    let b = s.common.base;
+    let id = unsafe { (b.groups.vehicle_id)(v) };
+    crate::command::nested(
+        b.commands,
+        b.shared,
+        crate::services::Cost(out.cast(), b.cost),
+        0,
+        EXECUTE as u16,
+        |flags| unsafe {
+            crate::vehicle_transactions::refit::refit(
+                s,
+                out.cast(),
+                temporary.cast(),
+                flags,
+                id,
+                cargo,
+                subtype,
+                false,
+                false,
+                0,
+            )
+        },
+    );
+}
+unsafe fn direct_clone_order(w: &Services, out: *mut (), old: *mut (), new: *mut ()) {
+    let s = (w.common)();
+    let b = s.base;
+    crate::command::nested(
+        b.commands,
+        b.shared,
+        crate::services::Cost(out.cast(), b.cost),
+        0,
+        EXECUTE as u16,
+        |flags| unsafe {
+            crate::orders::openttd_rust_command_clone(
+                new.cast(),
+                old.cast(),
+                s.strings.share_orders,
+                u8::from(flags & 1 != 0),
+                out.cast(),
+                s.orders,
+            );
+        },
+    );
+}
+unsafe fn direct_copy_group(w: &Services, out: *mut (), old: *mut (), new: *mut ()) {
+    let s = (w.common)();
+    let b = s.base;
+    let group = unsafe { (b.groups.vehicle_group)(old) };
+    let id = unsafe { (b.groups.vehicle_id)(new) };
+    crate::command::nested(
+        b.commands,
+        b.shared,
+        crate::services::Cost(out.cast(), b.cost),
+        0,
+        EXECUTE as u16,
+        |flags| unsafe {
+            let mut group_out = 0;
+            let error = crate::fleet::openttd_rust_fleet_add_vehicle_group(
+                b.groups,
+                u32::from(flags),
+                group,
+                id,
+                false,
+                std::ptr::null_mut(),
+                true,
+                &raw mut group_out,
+            );
+            if error == u32::MAX {
+                (b.cost.zero)(out.cast());
+            } else {
+                (b.cost.error)(out.cast(), error);
+            }
+        },
+    );
 }
 
 const EXECUTE: u32 = 1;
@@ -303,20 +474,22 @@ unsafe fn build(
         }
         return ptr::null_mut();
     }
-    let new = unsafe { (w.build)(cost, old, engine) };
+    let new = unsafe { direct_build(w, costs, old, engine) };
     if !unsafe { (w.success)(cost) } {
         return ptr::null_mut();
     }
     if cargo != NO_REFIT {
         let subtype = unsafe { (w.subtype)(old, new, cargo) };
         unsafe {
-            (w.refit)(costs.temporary, new, cargo, subtype);
+            direct_refit(w, costs.temporary, costs.copy, new, cargo, subtype);
             (w.cost_add)(cost, costs.temporary);
         }
         check!(w, unsafe { (w.success)(cost) });
     }
     if unsafe { (gw.vehicle_type)(new) } == 0
-        && unsafe { (w.flipped)(old) }
+        && ((w.refit_services)().train_handle)(old.cast()).get_flags()
+            & (1 << crate::train::FLIPPED)
+            != 0
         && !unsafe { (w.reverse_probability)(old) }
         && !unsafe { (w.reverse_probability)(new) }
     {
@@ -336,25 +509,25 @@ unsafe fn copy_head(
     unsafe { (w.cost_zero)(cost) };
     if old != new {
         unsafe {
-            (w.clone_order)(costs.temporary, old, new);
+            direct_clone_order(w, costs.temporary, old, new);
             (w.cost_add)(cost, costs.temporary);
         }
     }
     if unsafe { (w.success)(cost) } && old != new {
         unsafe {
-            (w.copy_group)(costs.temporary, old, new);
+            direct_copy_group(w, costs.temporary, old, new);
             (w.cost_add)(cost, costs.temporary);
         }
     }
     if unsafe { (w.success)(cost) } {
         check!(w, unsafe { (w.stopped)(new) });
         unsafe {
-            (w.start_stop)(costs.temporary, new, true);
+            direct_start(w, costs.temporary, new, true);
             (w.cost_add)(cost, costs.temporary);
         }
         if unsafe { (w.success)(cost) } {
             unsafe {
-                (w.start_stop)(costs.temporary, new, false);
+                direct_start(w, costs.temporary, new, false);
                 (w.cost_add)(cost, costs.temporary);
             };
         }
@@ -390,18 +563,18 @@ unsafe fn replace_free(
         *nothing = false;
         if flags & EXECUTE != 0 {
             unsafe {
-                (w.move_vehicle)(costs.temporary, new, old, EXECUTE, false);
+                move_vehicle(w, costs.temporary, new, old, EXECUTE, false);
                 (w.transfer_cargo)(old, new, false);
             }
             *unit = new;
             unsafe { (w.event)(old, new) };
         }
         unsafe {
-            (w.sell)(costs.temporary, old, flags);
+            direct_sell(w, costs.temporary, old, flags);
             (w.cost_add)(cost, costs.temporary);
         }
         if flags & EXECUTE == 0 {
-            unsafe { (w.sell)(costs.temporary, new, EXECUTE) };
+            unsafe { direct_sell(w, costs.temporary, new, EXECUTE) };
         }
     }
 }
@@ -464,7 +637,8 @@ unsafe fn replace_chain(
             let second = unsafe { (w.next_unit)(old_head) };
             if !second.is_null() {
                 unsafe {
-                    (w.move_vehicle)(
+                    move_vehicle(
+                        w,
                         costs.temporary,
                         second,
                         ptr::null_mut(),
@@ -485,7 +659,8 @@ unsafe fn replace_chain(
                     }
                     if !item.new.is_null() {
                         unsafe {
-                            (w.move_vehicle)(
+                            move_vehicle(
+                                w,
                                 costs.temporary,
                                 item.old,
                                 ptr::null_mut(),
@@ -498,7 +673,7 @@ unsafe fn replace_chain(
                         last_engine = append;
                     }
                     unsafe {
-                        (w.move_vehicle)(costs.temporary, append, new_head, EXECUTE, false);
+                        move_vehicle(w, costs.temporary, append, new_head, EXECUTE, false);
                         (w.cost_add)(cost, costs.temporary);
                     }
                     if !unsafe { (w.success)(cost) } {
@@ -522,7 +697,7 @@ unsafe fn replace_chain(
                     let engine = unsafe { (gw.vehicle_engine)(append) };
                     if unsafe { (w.wagon)(engine) } {
                         unsafe {
-                            (w.move_vehicle)(costs.temporary, append, last_engine, EXECUTE, false);
+                            move_vehicle(w, costs.temporary, append, last_engine, EXECUTE, false);
                         };
                         if wagon_removal
                             && if unsafe { (w.success)(costs.temporary) } {
@@ -532,7 +707,8 @@ unsafe fn replace_chain(
                             }
                         {
                             unsafe {
-                                (w.move_vehicle)(
+                                move_vehicle(
+                                    w,
                                     costs.temporary,
                                     append,
                                     ptr::null_mut(),
@@ -567,7 +743,7 @@ unsafe fn replace_chain(
                         break;
                     }
                     check!(w, unsafe { (w.wagon)((gw.vehicle_engine)(wagon)) });
-                    unsafe { (w.sell)(costs.temporary, wagon, EXECUTE) };
+                    unsafe { direct_sell(w, costs.temporary, wagon, EXECUTE) };
                     check!(w, unsafe { (w.success)(costs.temporary) });
                     item.new = ptr::null_mut();
                     unsafe { (w.cost_amount)(cost, item.cost.saturating_neg()) };
@@ -593,7 +769,7 @@ unsafe fn replace_chain(
                         unsafe { (w.transfer_cargo)(old, new_head, true) };
                     }
                     unsafe {
-                        (w.sell)(costs.temporary, old, flags | AUTOREPLACE);
+                        direct_sell(w, costs.temporary, old, flags | AUTOREPLACE);
                         (w.cost_add)(cost, costs.temporary);
                     }
                     if flags & EXECUTE != 0 {
@@ -611,7 +787,8 @@ unsafe fn replace_chain(
                 let second = unsafe { (w.next_unit)(old_head) };
                 if !second.is_null() {
                     unsafe {
-                        (w.move_vehicle)(
+                        move_vehicle(
+                            w,
                             costs.temporary,
                             second,
                             ptr::null_mut(),
@@ -623,7 +800,8 @@ unsafe fn replace_chain(
                 check!(w, unsafe { (w.next_unit)(old_head) }.is_null());
                 for item in replacements.iter().rev() {
                     unsafe {
-                        (w.move_vehicle)(
+                        move_vehicle(
+                            w,
                             costs.temporary,
                             item.old,
                             old_head,
@@ -638,7 +816,7 @@ unsafe fn replace_chain(
         if flags & EXECUTE == 0 {
             for item in replacements.iter_mut().rev() {
                 if !item.new.is_null() {
-                    unsafe { (w.sell)(costs.temporary, item.new, EXECUTE) };
+                    unsafe { direct_sell(w, costs.temporary, item.new, EXECUTE) };
                     item.new = ptr::null_mut();
                 }
             }
@@ -659,12 +837,12 @@ unsafe fn replace_chain(
                     unsafe { (w.event)(old_head, new_head) };
                 }
                 unsafe {
-                    (w.sell)(costs.temporary, old_head, flags);
+                    direct_sell(w, costs.temporary, old_head, flags);
                     (w.cost_add)(cost, costs.temporary);
                 }
             }
             if flags & EXECUTE == 0 {
-                unsafe { (w.sell)(costs.temporary, new_head, EXECUTE) };
+                unsafe { direct_sell(w, costs.temporary, new_head, EXECUTE) };
             }
         }
     }
@@ -735,7 +913,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
         let stopped = free || unsafe { (w.stopped)(v) };
         if !stopped {
             unsafe {
-                (w.start_stop)(costs.temporary, v, true);
+                direct_start(w, costs.temporary, v, true);
                 (w.cost_add)(cost, costs.temporary);
             };
         }
@@ -778,7 +956,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
         }
         if !stopped {
             unsafe {
-                (w.start_stop)(costs.temporary, v, false);
+                direct_start(w, costs.temporary, v, false);
                 (w.cost_add)(cost, costs.temporary);
             };
         }

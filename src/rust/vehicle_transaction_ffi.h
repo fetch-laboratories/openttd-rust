@@ -54,6 +54,8 @@ struct OpenTTDVehicleTransactionStrings {
 	uint32_t destroyed, stopped_in_depot, no_power, in_flight, incompatible_rail, null_string;
 	GRFStringID grf_text;
 	uint8_t takeoff, terminal7, direct_descent, new_vehicle_expense;
+	uint32_t invalid_client;
+	uint8_t share_orders, copy_orders, cargo_count, invalid_cargo;
 };
 struct OpenTTDVehicleCommonServices {
 	const OpenTTDVehicleTransactionServices *base;
@@ -71,6 +73,7 @@ struct OpenTTDVehicleCommonServices {
 	void (*startstop_ui)(void *) noexcept OPENTTD_SERVICE_DEFAULT(startstop_ui);
 	void (*sell_rail)(OpenTTDCommandCost *, uint16_t, void *, bool, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sell_rail);
 	int64_t (*value)(void *) noexcept OPENTTD_SERVICE_DEFAULT(value);
+	bool (*valid_cargo)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(valid_cargo);
 };
 struct OpenTTDVehicleListId { uint8_t kind, vehicle_type, company; uint32_t index; bool valid; };
 struct OpenTTDVehicleMassServices {

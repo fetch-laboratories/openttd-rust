@@ -241,7 +241,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcDepotExit(OpenTTDVehicle *v, int32_t x, 
 	u->vehstatus.Reset(VehState::Hidden);
 	u->x_pos = x;
 	u->y_pos = y;
-	u->UpdatePosition();
+	RustVehicleUpdatePosition(u);
 	u->UpdateInclination(true, true);
 	InvalidateWindowData(WC_VEHICLE_DEPOT, u->tile);
 }

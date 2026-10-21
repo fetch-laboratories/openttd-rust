@@ -19,6 +19,7 @@
 
 inline uint16_t RustVehicleCallback(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, std::span<int32_t> registers = {}) noexcept { return GetVehicleCallback(callback, param1, param2, engine, v, registers); }
 uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept;
+bool RustTrainIsEngine(const Vehicle *v) noexcept;
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
 uint32_t RustVehicleGRFString(Vehicle *v, GRFStringID string) noexcept;
@@ -34,6 +35,12 @@ inline OpenTTDVehicle *RustVehicle(const Vehicle *v) noexcept { return reinterpr
 /** The vehicle behind a Rust handle. */
 inline Vehicle *VehicleOf(OpenTTDVehicle *v) noexcept { return reinterpret_cast<Vehicle *>(v); }
 
+inline std::optional<bool> RustVehicleBuildProbability(Vehicle *v, EngineID engine, BuildProbabilityType type) noexcept { return TestVehicleBuildProbability(v, engine, type); }
+inline bool RustVehicleHasReverseProbability(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); return RustVehicleBuildProbability(v, v->engine_type, BuildProbabilityType::Reversed).has_value(); }
+inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine; }
+template <class T> inline void RustVehicleUpdatePosition(T *v) noexcept { v->UpdatePosition(); }
+inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
+inline bool RustVehicleCanAllocate(size_t count) noexcept { return Vehicle::CanAllocateItem(count); }
 inline VehiclesOnTile RustVehiclesOnTile(TileIndex tile) noexcept { return VehiclesOnTile(tile); }
 
 /** Callback may reenter Rust but must preserve the current native shell. Advance
@@ -59,6 +66,8 @@ inline void OPENTTD_VEHICLE_CALL RustVehicleSetDestTile(OpenTTDVehicle *v, uint3
 inline void RustVehicleLeaveStation(OpenTTDVehicle *v) noexcept { VehicleOf(v)->LeaveStation(); }
 inline uint32_t RustVehicleOrderStationLocation(OpenTTDVehicle *v, uint16_t station) noexcept { return VehicleOf(v)->GetOrderStationLocation(StationID(station)).base(); }
 inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station) noexcept { return RustVehicleOrderStationLocation(RustVehicle(static_cast<Vehicle *>(v)), station); }
+template <class T> inline auto RustVehicleNextVehicle(const T *v) noexcept { return v->GetNextVehicle(); }
+template <class T> inline auto RustVehicleNextArticulated(const T *v) noexcept { return v->GetNextArticulatedPart(); }
 inline Vehicle *RustVehicleNext(const Vehicle *v) noexcept { return v->Next(); }
 #ifdef WITH_RUST
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }
@@ -175,7 +184,7 @@ inline OpenTTDGroundMoved OPENTTD_VEHICLE_CALL GroundSvcMoveIncline(OpenTTDVehic
 	T *u = T::From(VehicleOf(v));
 	u->x_pos = x;
 	u->y_pos = y;
-	u->UpdatePosition();
+	RustVehicleUpdatePosition(u);
 	int old_z = u->UpdateInclination(new_tile, update_delta);
 	return {.old_z = old_z, .z = u->z_pos, .cur_speed = RustVehicleSpeed(u), .max_track_speed = u->gcache.cached_max_track_speed};
 }
@@ -237,7 +246,7 @@ inline void OPENTTD_VEHICLE_CALL GroundSvcGoToDepotService(OpenTTDVehicle *v, ui
 template <class T>
 inline void OPENTTD_VEHICLE_CALL GroundSvcWriteFirstEngine(OpenTTDVehicle *v, uint16_t engine) noexcept
 {
-	T::From(VehicleOf(v))->gcache.first_engine = EngineID(engine);
+	RustGroundSetFirstEngine(&T::From(VehicleOf(v))->gcache, EngineID(engine));
 }
 template <class T>
 inline void OPENTTD_VEHICLE_CALL GroundSvcWriteLength(OpenTTDVehicle *part, uint8_t length, OpenTTDVehicle *front, uint16_t total_length) noexcept
