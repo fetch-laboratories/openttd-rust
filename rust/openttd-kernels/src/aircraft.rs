@@ -37,8 +37,8 @@ use crate::services::{Map, Services, chance16_i};
 use crate::station::Station;
 use crate::vehicle::PROP_AIRCRAFT_SPEED;
 use crate::vehicle::{
-    AltitudeInputs, Coordinates, DayCost, DirectionProgress, OpenTTDVehicle, SpeedInputs,
-    TickStatus, VehicleRef, VehicleServices, XY, YEAR_TICKS,
+    AltitudeInputs, Coordinates, DayCost, DirectionProgress, MovementObservations, OpenTTDVehicle,
+    PositionObservations, SpeedInputs, TickStatus, VehicleRef, VehicleServices, XY, YEAR_TICKS,
 };
 use std::cell::Cell;
 use std::ffi::c_void;
@@ -49,6 +49,36 @@ pub struct Vehicle {
     pub handle: *mut OpenTTDVehicle,
     pub state: *mut State,
     pub id: u32,
+}
+// SAFETY for these named loads: descriptors name live aligned canonical members
+// under the game-state mutex. Each read ends here, before any native callback.
+impl PositionObservations {
+    fn subtype(&self) -> i64 {
+        i64::from(unsafe { self.subtype.read() })
+    }
+    fn z(&self) -> i64 {
+        i64::from(unsafe { self.z.read() })
+    }
+}
+impl MovementObservations {
+    fn x(&self) -> i64 {
+        i64::from(unsafe { self.x.read() })
+    }
+    fn y(&self) -> i64 {
+        i64::from(unsafe { self.y.read() })
+    }
+    fn direction(&self) -> i64 {
+        i64::from(unsafe { self.direction.read().0 })
+    }
+    fn speed(&self) -> i64 {
+        i64::from(unsafe { self.speed.read() })
+    }
+    fn xy(&self) -> XY {
+        XY {
+            x: self.x() as i32,
+            y: self.y() as i32,
+        }
+    }
 }
 impl Vehicle {
     fn base(self) -> VehicleRef {
@@ -479,6 +509,9 @@ impl World<'_> {
     }
     direct_services! {
         hangar_candidate(self; s: *const Station, owner: u8) -> HangarCandidate => unsafe { (self.leaves.hangar_candidate)(s, owner) };
+        movement_observations(self; v: Vehicle) -> MovementObservations => (self.vs.movement_observations)(v.base());
+        position_observations(self; v: Vehicle) -> PositionObservations => (self.vs.position_observations)(v.base());
+        maximum_speed(self; v: Vehicle) -> u16 => (self.vs.max_speed)(v.base());
         altitude_inputs(self; v: Vehicle) -> AltitudeInputs => (self.vs.altitude_inputs)(v.base());
         geometry(self; s: *const Station) -> Geometry => unsafe { (self.leaves.geometry)(s) };
         layout_blocks(self; ap: *const c_void, pos: u8) -> u64 => unsafe { (self.leaves.layout_blocks)(ap, pos) };
@@ -675,29 +708,45 @@ impl World<'_> {
             .wrapping_mul(self.map().size_x())
             .wrapping_add((x as i32 as u32) >> 4)
     }
-    fn height(&self, id: Vehicle) -> i64 {
-        let point = self.xy(id);
+    fn height(&self, id: Vehicle, observed: Option<&MovementObservations>) -> i64 {
+        let point = observed.map_or_else(|| self.xy(id), MovementObservations::xy);
         let x = i64::from(point.x).clamp(0, self.map_max_x() * 16);
         let y = i64::from(point.y).clamp(0, self.map_max_y() * 16);
         self.tile_height(i64::from(self.tile_virt(x, y)))
     }
-    fn bounds(&self, id: Vehicle) -> (i64, i64) {
-        let mut base = self.height(id);
-        if self.subtype(id) == 0 && self.vehicle_type(id) == 3 {
+    fn bounds(&self, id: Vehicle, observed: Option<&MovementObservations>) -> (i64, i64) {
+        let mut base = self.height(id, observed);
+        if observed.map_or_else(|| self.subtype(id), |o| o.position.subtype()) == 0
+            && self.vehicle_type(id) == 3
+        {
             base += 34;
         }
-        let inputs = self.altitude_inputs(id);
-        if inputs.direction <= 3 {
-            base += 10;
-        }
+        let max_speed = if let Some(o) = observed {
+            if o.direction() <= 3 {
+                base += 10;
+            }
+            self.maximum_speed(id)
+        } else {
+            let inputs = self.altitude_inputs(id);
+            if inputs.direction <= 3 {
+                base += 10;
+            }
+            inputs.max_speed
+        };
         // C++ cached_max_speed is uint16; arithmetic promotes to signed int.
-        base += (20 * (i64::from(inputs.max_speed) / 200) - 90).min(0);
+        base += (20 * (i64::from(max_speed) / 200) - 90).min(0);
         (base + 120, base + 360)
     }
-    fn flight_flags(&self, id: Vehicle, ptr: *mut u8, takeoff: bool) -> i64 {
-        let (min, max) = self.bounds(id);
+    fn flight_flags(
+        &self,
+        id: Vehicle,
+        ptr: *mut u8,
+        takeoff: bool,
+        observed: Option<&MovementObservations>,
+    ) -> i64 {
+        let (min, max) = self.bounds(id, observed);
         let middle = (min + max) / 2;
-        let mut z = self.z(id);
+        let mut z = observed.map_or_else(|| self.z(id), |o| o.position.z());
         // SAFETY: Scalar pointer belongs to the live aircraft/disaster owner for this synchronous access.
         let mut flags = unsafe { ptr.read() };
         if z < min || (flags & 4 != 0 && z < middle) {
@@ -717,25 +766,44 @@ impl World<'_> {
         }
         z
     }
-    fn flight(&self, id: Vehicle, takeoff: bool) -> i64 {
+    fn flight(&self, id: Vehicle, takeoff: bool, observed: &MovementObservations) -> i64 {
         let ptr = id.state;
         // SAFETY: Computing a raw field address creates no reference or access scope.
-        self.flight_flags(id, unsafe { &raw mut (*ptr).flags }, takeoff)
+        self.flight_flags(
+            id,
+            unsafe { &raw mut (*ptr).flags },
+            takeoff,
+            Some(observed),
+        )
     }
     fn effect(&self, id: Vehicle, x: i64, y: i64, z: i64, kind: u32) {
         self.create_effect(id, i64::from(kind), x, y, z);
     }
     fn position(&self, id: Vehicle, x: i64, y: i64, z: i64) {
+        let observed = self.position_observations(id);
+        self.position_observed(id, &observed, x, y, z);
+    }
+    fn position_observed(
+        &self,
+        id: Vehicle,
+        observed: &PositionObservations,
+        x: i64,
+        y: i64,
+        z: i64,
+    ) {
         self.write_coordinates(id, x, y, z);
         self.update_position(id);
-        if self.subtype(id) == 0 {
+        if observed.subtype() == 0 {
             self.rotor_image(id);
         }
         let shadow = self.next(id);
         let safe_x = x.clamp(0, self.map_max_x() * 16);
         let mut safe_y = (y - 1).clamp(0, self.map_max_y() * 16);
         self.set_x(shadow, x);
-        self.set_y(shadow, y - ((self.z(id) - self.slope(safe_x, safe_y)) >> 3));
+        self.set_y(
+            shadow,
+            y - ((observed.z() - self.slope(safe_x, safe_y)) >> 3),
+        );
         safe_y = self.y(shadow).clamp(0, self.map_max_y() * 16);
         self.set_z(shadow, self.slope(safe_x, safe_y));
         self.copy_sprite(shadow, id);
@@ -746,9 +814,13 @@ impl World<'_> {
             self.position_viewport(rotor);
         }
     }
-    fn position_current(&self, id: Vehicle) {
-        let p = self.coordinates(id);
-        self.position(id, i64::from(p.x), i64::from(p.y), i64::from(p.z));
+    fn position_current(&self, id: Vehicle, observed: Option<&MovementObservations>) {
+        if let Some(o) = observed {
+            self.position_observed(id, &o.position, o.x(), o.y(), o.position.z());
+        } else {
+            let p = self.coordinates(id);
+            self.position(id, i64::from(p.x), i64::from(p.y), i64::from(p.z));
+        }
     }
     fn enter_hangar(&self, id: Vehicle) {
         self.set_subspeed(id, 0);
@@ -760,7 +832,7 @@ impl World<'_> {
             self.status(rotor, HIDDEN, true);
             self.set_current_speed(rotor, 0);
         }
-        self.position_current(id);
+        self.position_current(id, None);
     }
     fn cache(&self, id: Vehicle, update_range: bool) {
         let speed = self.speed_property(id) as u32;
@@ -922,6 +994,15 @@ impl World<'_> {
         self.set_previous(id, pos);
     }
     fn controller(&self, id: Vehicle) -> bool {
+        // Acquired after event's orders/loading, never in deleting crashed_tick.
+        // Geometry/layout/map, speed writes/dirtying, direction/new-position,
+        // cache/NewGRF property, sound, position/viewport/rotor and MaybeCrash
+        // callbacks preserve this shell and chain. They may reenter or allocate
+        // other vehicles; pool growth does not move existing shells. MaybeCrash
+        // marks a crash, but destruction occurs on a later crashed_tick only.
+        // This descriptor ends before airport_next's state-handler/depot work;
+        // no load/reset, replacement command or deleting callback is reachable.
+        let observed = self.movement_observations(id);
         let s = self.target_station(id);
         let valid = !s.is_null();
         let mut tile = INVALID_TILE;
@@ -951,7 +1032,13 @@ impl World<'_> {
                 self.set_state(id, FLYING);
                 self.cache(id, false);
                 self.next_airport(id);
-                self.position(id, self.x(id), self.y(id), self.flight(id, false));
+                self.position_observed(
+                    id,
+                    &observed.position,
+                    observed.x(),
+                    observed.y(),
+                    self.flight(id, false, &observed),
+                );
                 return false;
             }
         }
@@ -1001,16 +1088,17 @@ impl World<'_> {
                 let count = self.speed(id, 65535, true);
                 if count > 0 {
                     self.set_tile(id, 0);
-                    let dest = self.bounds(id).0;
-                    if self.z(id) >= dest {
+                    let dest = self.bounds(id, Some(&observed)).0;
+                    if observed.position.z() >= dest {
                         self.set_current_speed(id, 0);
                         return true;
                     }
-                    self.position(
+                    self.position_observed(
                         id,
-                        self.x(id),
-                        self.y(id),
-                        (self.z(id) + i64::from(count)).min(dest),
+                        &observed.position,
+                        observed.x(),
+                        observed.y(),
+                        (observed.position.z() + i64::from(count)).min(dest),
                     );
                 }
             }
@@ -1025,13 +1113,13 @@ impl World<'_> {
                 return false;
             }
             if self.airport_type(s) != OILRIG {
-                x = self.x(id);
-                y = self.y(id);
+                x = observed.x();
+                y = observed.y();
                 tile = self.tile_virt(x, y);
             }
             self.set_tile(id, i64::from(tile));
             let z = self.slope(x, y) + 1 + self.airport_delta_z(ap);
-            if z == self.z(id) {
+            if z == observed.position.z() {
                 let rotor = self.next(self.next(id));
                 if self.current_speed(rotor) >= 80 {
                     self.flag(id, 3, false);
@@ -1041,25 +1129,31 @@ impl World<'_> {
             } else {
                 let count = self.speed(id, 65535, true);
                 if count > 0 {
-                    let current = self.z(id);
+                    let current = observed.position.z();
                     let dest = if current > z {
                         (current - i64::from(count)).max(z)
                     } else {
                         (current + i64::from(count)).min(z)
                     };
-                    self.position(id, self.x(id), self.y(id), dest);
+                    self.position_observed(
+                        id,
+                        &observed.position,
+                        observed.x(),
+                        observed.y(),
+                        dest,
+                    );
                 }
             }
             return false;
         }
-        let point = self.xy(id);
+        let point = observed.xy();
         let dist = ((x + amd.x - i64::from(point.x)).abs() + (y + amd.y - i64::from(point.y)).abs())
             as u32;
         if flags & EXACT == 0 && dist <= if flags & SLOW_TURN != 0 { 8 } else { 4 } {
             return true;
         }
         if dist == 0 {
-            let difference = (amd.direction - self.direction(id)) & 7;
+            let difference = (amd.direction - observed.direction()) & 7;
             if difference == 0 {
                 self.set_current_speed(id, 0);
                 return true;
@@ -1069,13 +1163,13 @@ impl World<'_> {
             }
             self.set_direction(
                 id,
-                (self.direction(id) + if difference > 4 { 7 } else { 1 }) & 7,
+                (observed.direction() + if difference > 4 { 7 } else { 1 }) & 7,
             );
-            self.set_current_speed(id, self.current_speed(id) >> 1);
-            self.position_current(id);
+            self.set_current_speed(id, observed.speed() >> 1);
+            self.position_current(id, Some(&observed));
             return false;
         }
-        if flags & BRAKE != 0 && self.current_speed(id) > 50 * self.plane_speed() {
+        if flags & BRAKE != 0 && observed.speed() > 50 * self.plane_speed() {
             self.maybe_crash(id);
             if self.vehicle_status(id) & CRASHED != 0 {
                 return false;
@@ -1111,7 +1205,7 @@ impl World<'_> {
             let py;
             let next_tile;
             if nudge || flags & LAND != 0 {
-                let point = self.xy(id);
+                let point = observed.xy();
                 let vx = i64::from(point.x);
                 let vy = i64::from(point.y);
                 px = vx + (x + amd.x - vx).signum();
@@ -1123,8 +1217,11 @@ impl World<'_> {
                 };
             } else {
                 let newdir = self.direction_towards(id, x + amd.x, y + amd.y);
-                if newdir != self.direction(id) {
-                    if flags & SLOW_TURN != 0 && self.turns(id) < 8 && self.subtype(id) == 2 {
+                if newdir != observed.direction() {
+                    if flags & SLOW_TURN != 0
+                        && self.turns(id) < 8
+                        && observed.position.subtype() == 2
+                    {
                         if self.turn(id) == 0 || newdir == i64::from(self.lastdir(id)) {
                             if newdir == i64::from(self.lastdir(id)) {
                                 self.set_turns(id, 0);
@@ -1132,7 +1229,7 @@ impl World<'_> {
                                 self.set_turns(id, self.turns(id).wrapping_add(1));
                             }
                             self.set_turn(id, (2 * self.plane_speed()) as u8);
-                            self.set_lastdir(id, self.direction(id) as u8);
+                            self.set_lastdir(id, observed.direction() as u8);
                             self.set_direction(id, newdir);
                         }
                         let gp = self.new_position(id);
@@ -1140,10 +1237,10 @@ impl World<'_> {
                         py = gp.y;
                         next_tile = gp.tile;
                     } else {
-                        self.set_current_speed(id, self.current_speed(id) >> 1);
+                        self.set_current_speed(id, observed.speed() >> 1);
                         self.set_direction(id, newdir);
-                        px = self.x(id);
-                        py = self.y(id);
+                        px = observed.x();
+                        py = observed.y();
                         next_tile = self.tile(id) as u32;
                     }
                 } else {
@@ -1158,17 +1255,23 @@ impl World<'_> {
             if flags & (TAKING_OFF | SLOW_TURN | LAND) != 0 {
                 self.set_tile(id, 0);
             }
-            let mut z = self.z(id);
+            let mut z = observed.position.z();
             if flags & TAKING_OFF != 0 {
-                z = self.flight(id, true);
+                z = self.flight(id, true, &observed);
             } else if flags & HOLD != 0 {
-                if z > self.height(id) + if self.subtype(id) == 0 { 184 } else { 150 } {
+                if z > self.height(id, Some(&observed))
+                    + if observed.position.subtype() == 0 {
+                        184
+                    } else {
+                        150
+                    }
+                {
                     z -= 1;
                 }
             } else if flags & (SLOW_TURN | NO_CLAMP) == SLOW_TURN | NO_CLAMP {
-                z = self.flight(id, false);
+                z = self.flight(id, false, &observed);
             }
-            let mut airport_z = self.z(id);
+            let mut airport_z = observed.position.z();
             if flags & (LAND | BRAKE) != 0 && valid {
                 airport_z = self.hangar_height(i64::from(self.target(id))) + 1;
             }
@@ -1176,7 +1279,13 @@ impl World<'_> {
                 if self.blocks(u32::from(self.target(id))) & ZEPPELIN != 0 {
                     self.set_state(id, FLYING);
                     self.cache(id, false);
-                    self.position(id, px, py, self.flight(id, false));
+                    self.position_observed(
+                        id,
+                        &observed.position,
+                        px,
+                        py,
+                        self.flight(id, false, &observed),
+                    );
                     self.set_pos(id, self.previous(id));
                     count -= 1;
                     if count == 0 {
@@ -1188,7 +1297,13 @@ impl World<'_> {
                     self.set_state(id, FLYING);
                     self.cache(id, false);
                     self.next_airport(id);
-                    self.position(id, px, py, self.flight(id, false));
+                    self.position_observed(
+                        id,
+                        &observed.position,
+                        px,
+                        py,
+                        self.flight(id, false, &observed),
+                    );
                     count -= 1;
                     if count == 0 {
                         break;
@@ -1207,7 +1322,7 @@ impl World<'_> {
             if flags & BRAKE != 0 {
                 z += (airport_z - z).signum();
             }
-            self.position(id, px, py, z);
+            self.position_observed(id, &observed.position, px, py, z);
             count -= 1;
             if count == 0 {
                 break;
@@ -1231,14 +1346,14 @@ impl World<'_> {
             } else {
                 self.set_crashed(id, 0);
             }
-            self.position_current(id);
+            self.position_current(id, None);
         }
         if self.crashed(id) < 650 {
             let r = self.random();
             if chance16_i(1, 32, r) {
                 let delta = [7, 0, 0, 1][((r >> 16) & 3) as usize];
                 self.set_direction(id, (self.direction(id) + delta) & 7);
-                self.position_current(id);
+                self.position_current(id, None);
                 let r = self.random();
                 self.effect(
                     id,
@@ -1352,7 +1467,7 @@ impl World<'_> {
         }
         self.service_in_depot(id);
         self.leave_unbunching(id);
-        self.position_current(id);
+        self.position_current(id, None);
         self.dirty_depot(id);
     }
     fn terminal(&self, id: Vehicle) {
@@ -2116,7 +2231,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_bounds(
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     let w = unsafe { World::new(leaves) };
     {
-        let (lo, hi) = w.bounds(id);
+        let (lo, hi) = w.bounds(id, None);
         if !min.is_null() {
             unsafe {
                 min.write(lo as i32);
@@ -2145,7 +2260,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
     }
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     let w = unsafe { World::new(leaves) };
-    w.flight_flags(id, flags, takeoff) as i32
+    w.flight_flags(id, flags, takeoff, None) as i32
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2155,7 +2270,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
 pub unsafe extern "C" fn openttd_rust_aircraft_height(leaves: *const Leaves, id: Vehicle) -> i32 {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     let w = unsafe { World::new(leaves) };
-    w.height(id) as i32
+    w.height(id, None) as i32
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2171,7 +2286,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_hold_altitude(
     }
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     let w = unsafe { World::new(leaves) };
-    (w.height(id) + if w.subtype(id) == 0 { 184 } else { 150 }) as i32
+    (w.height(id, None) + if w.subtype(id) == 0 { 184 } else { 150 }) as i32
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety

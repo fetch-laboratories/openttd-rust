@@ -11,9 +11,6 @@
  * and presentation encoding stay on the native caller stack. Vehicle, owner,
  * locality and CommandCost reads reuse the group and transaction tables. */
 static void FleetPending_restart(void *shell) noexcept { static_cast<Vehicle *>(shell)->vehstatus.Reset(VehState::Stopped); }
-static int32_t FleetPending_x(void *shell) noexcept { return static_cast<Vehicle *>(shell)->x_pos; }
-static int32_t FleetPending_y(void *shell) noexcept { return static_cast<Vehicle *>(shell)->y_pos; }
-static int32_t FleetPending_z(void *shell) noexcept { return static_cast<Vehicle *>(shell)->z_pos; }
 static uint32_t FleetPending_reserve(uint8_t company) noexcept { return RustCompanyRenewReserve(Company::Get(CompanyID(company))); }
 static void FleetPending_subtract(int64_t amount) noexcept { SubtractMoneyFromCompany(CommandCost(EXPENSES_NEW_VEHICLES, Money(amount))); }
 static void FleetPending_command(void *out, uint32_t id) noexcept { *static_cast<CommandCost *>(out) = Command<CMD_AUTOREPLACE_VEHICLE>::Do(DoCommandFlag::Execute, VehicleID(id)); }
@@ -23,9 +20,9 @@ static void FleetPending_failed_news(uint32_t id, uint32_t error) noexcept { Add
 static const OpenTTDFleetPendingServices _fleet_pending_services{
 	.set_current = RustSetCurrentCompanyID,
 	.restart = FleetPending_restart,
-	.x = FleetPending_x,
-	.y = FleetPending_y,
-	.z = FleetPending_z,
+	.x = RustOpaqueVehicleRead<int32_t, RustVehicleX>,
+	.y = RustOpaqueVehicleRead<int32_t, RustVehicleY>,
+	.z = RustOpaqueVehicleRead<int32_t, RustVehicleZ>,
 	.reserve = FleetPending_reserve,
 	.subtract = FleetPending_subtract,
 	.command = FleetPending_command,

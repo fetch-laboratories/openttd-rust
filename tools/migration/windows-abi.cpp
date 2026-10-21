@@ -1531,8 +1531,9 @@ static struct AircraftBoundaryProbe {
 	OpenTTDAircraftVehicle vehicle;
 	uint64_t blocks = UINT64_MAX;
 	unsigned orders = 0, deleted = 0, ticks = 0, rotor_reads = 0, moves = 0;
-	int32_t order_time = 0, x = 0, y = 0;
-	uint8_t order_kind = 0, direction = 0, progress = 0;
+	int32_t order_time = 0, x = 0, y = 0, z = 1;
+	uint8_t order_kind = 0, progress = 0, subtype = 2;
+	Direction direction = DIR_N;
 	uint16_t maximum_speed = 0, cargo_age = 0;
 	bool live = true;
 } aircraft_probe;
@@ -1639,7 +1640,13 @@ static void AircraftPhaseBoundary()
 
 	/* A speed change dirties the native widget before direction/progress are
 	 * read. Their mutation yields exactly one move; a stale snapshot yields none. */
-	v.subtype = [](OpenTTDVehicle *) noexcept { return uint8_t{2}; };
+	v.subtype = [](OpenTTDVehicle *) noexcept { return aircraft_probe.subtype; };
+	v.movement_observations = [](OpenTTDVehicle *shell) noexcept {
+		auto &p = aircraft_probe;
+		CHECK(shell == p.vehicle.handle);
+		return OpenTTDVehicleMovementObservations{.position = {.subtype = &p.subtype, .z = &p.z},
+			.x = &p.x, .y = &p.y, .speed = &p.maximum_speed, .direction = &p.direction};
+	};
 	v.status = [](OpenTTDVehicle *) noexcept { return uint8_t{0}; };
 	leaves.process_orders = [](OpenTTDAircraftVehicle) noexcept {};
 	v.loading = [](OpenTTDVehicle *, bool) noexcept {};
@@ -1656,26 +1663,36 @@ static void AircraftPhaseBoundary()
 	v.speed_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleSpeedInputs{0, 100, 8, 0, 0}; };
 	v.write_subspeed = [](OpenTTDVehicle *, uint8_t sub) noexcept { CHECK(sub == 104); };
 	v.write_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == 2); aircraft_probe.maximum_speed = speed; };
-	v.start_stop_dirty = [](OpenTTDVehicle *) noexcept { aircraft_probe.direction = 1; aircraft_probe.progress = 255; };
+	v.start_stop_dirty = [](OpenTTDVehicle *) noexcept { aircraft_probe.direction = DIR_NE; aircraft_probe.progress = 255; };
 	v.direction_progress = [](OpenTTDVehicle *) noexcept { CHECK(aircraft_probe.progress == 255); return OpenTTDVehicleDirectionProgress{aircraft_probe.direction, aircraft_probe.progress}; };
 	v.write_progress = [](OpenTTDVehicle *, uint8_t progress) noexcept { CHECK(progress == 1); aircraft_probe.progress = progress; };
 	leaves.direction_towards = [](OpenTTDAircraftVehicle, int32_t, int32_t) noexcept { return uint8_t{1}; };
-	v.direction = [](OpenTTDVehicle *) noexcept { return aircraft_probe.direction; };
+	v.direction = [](OpenTTDVehicle *) noexcept { return static_cast<uint8_t>(aircraft_probe.direction); };
 	v.new_position = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleNewPosition{aircraft_probe.x + 1, aircraft_probe.y, 0}; };
 	v.write_tile = [](OpenTTDVehicle *, uint32_t) noexcept {};
 	v.z = [](OpenTTDVehicle *) noexcept { return int32_t{1}; };
 	v.write_coordinates = [](OpenTTDVehicle *, int32_t x, int32_t y, int32_t z) noexcept { CHECK(z == 1); aircraft_probe.x = x; aircraft_probe.y = y; };
-	leaves.update_position = [](OpenTTDAircraftVehicle) noexcept { aircraft_probe.moves++; };
+	/* Both callbacks mutate canonical inputs. Subtype must be loaded after
+	 * UpdatePosition, then z after the rotor callback, rather than on acquisition. */
+	leaves.update_position = [](OpenTTDAircraftVehicle) noexcept { aircraft_probe.moves++; aircraft_probe.subtype = 0; aircraft_probe.z = 17; };
+	leaves.rotor_image = [](OpenTTDAircraftVehicle) noexcept { CHECK(aircraft_probe.z == 17); aircraft_probe.z = 25; };
 	leaves.next = [](OpenTTDAircraftVehicle u) noexcept { if (u.id != 17) return OpenTTDAircraftVehicle{nullptr, nullptr, 1048575}; u.id = 18; u.handle = reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}); return u; };
 	v.write_x = [](OpenTTDVehicle *, int32_t x) noexcept { CHECK(x == 1); };
-	v.write_y = [](OpenTTDVehicle *, int32_t y) noexcept { CHECK(y == 0); };
-	v.y = [](OpenTTDVehicle *) noexcept { return int32_t{0}; };
+	v.write_y = [](OpenTTDVehicle *, int32_t y) noexcept { CHECK(y == -3); };
+	v.y = [](OpenTTDVehicle *) noexcept { return int32_t{-3}; };
 	v.write_z = [](OpenTTDVehicle *, int32_t z) noexcept { CHECK(z == 0); };
 	s.slope = [](int32_t, int32_t) noexcept { return int32_t{0}; };
 	leaves.copy_sprite = [](OpenTTDAircraftVehicle, OpenTTDAircraftVehicle) noexcept {};
 	leaves.position_viewport = [](OpenTTDAircraftVehicle) noexcept {};
 	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.moves == 1 && p.x == 1 && p.y == 0 && p.progress == 1);
+	p.subtype = 2; p.z = 1;
+	v.position_observations = [](OpenTTDVehicle *shell) noexcept {
+		CHECK(shell == aircraft_probe.vehicle.handle);
+		return OpenTTDVehiclePositionObservations{.subtype = &aircraft_probe.subtype, .z = &aircraft_probe.z};
+	};
+	openttd_rust_aircraft_position(&leaves, p.vehicle, 1, 0, 1);
+	CHECK(p.moves == 2 && p.z == 25);
 	std::printf("aircraft rotor/order/loading phases and post-dirty motion mutation passed\n");
 }
 

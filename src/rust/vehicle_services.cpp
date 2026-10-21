@@ -252,6 +252,18 @@ static OpenTTDVehicleDayCost OPENTTD_VEHICLE_CALL VehicleSvcDayCost(OpenTTDVehic
 static void OPENTTD_VEHICLE_CALL VehicleSvcMakeDummy(OpenTTDVehicle *v) noexcept { VehicleOf(v)->current_order.MakeDummy(); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcLoading(OpenTTDVehicle *v, bool second) noexcept { VehicleOf(v)->HandleLoading(second); }
 
+static OpenTTDVehiclePositionObservations OPENTTD_VEHICLE_CALL VehicleSvcPositionObservations(OpenTTDVehicle *shell) noexcept
+{
+	const Vehicle *v = VehicleOf(shell);
+	return {.subtype = RustVehicleSubtypeAddress(v), .z = RustVehicleZAddress(v)};
+}
+static OpenTTDVehicleMovementObservations OPENTTD_VEHICLE_CALL VehicleSvcMovementObservations(OpenTTDVehicle *shell) noexcept
+{
+	const Vehicle *v = VehicleOf(shell);
+	return {.position = {.subtype = RustVehicleSubtypeAddress(v), .z = RustVehicleZAddress(v)},
+		.x = RustVehicleXAddress(v), .y = RustVehicleYAddress(v), .speed = RustVehicleSpeedAddress(v), .direction = RustVehicleDirectionAddress(v)};
+}
+static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcMaxSpeed(OpenTTDVehicle *shell) noexcept { return RustVehicleMaxSpeed(VehicleOf(shell)); }
 static OpenTTDVehicleAltitudeInputs OPENTTD_VEHICLE_CALL VehicleSvcAltitudeInputs(OpenTTDVehicle *v) noexcept
 {
 	const Vehicle *u = VehicleOf(v);
@@ -349,6 +361,9 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.check_orders_only = VehicleSvcCheckOrdersOnly,
 	.write_coordinates = VehicleSvcWriteCoordinates,
 	.altitude_inputs = VehicleSvcAltitudeInputs,
+	.position_observations = VehicleSvcPositionObservations,
+	.movement_observations = VehicleSvcMovementObservations,
+	.max_speed = VehicleSvcMaxSpeed,
 	.maintenance = &_rust_vehicle_maintenance_services,
 };
 

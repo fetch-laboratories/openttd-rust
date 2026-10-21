@@ -1772,6 +1772,9 @@ layouts! {
         check_orders_only,
         write_coordinates,
         altitude_inputs,
+        position_observations,
+        movement_observations,
+        max_speed,
         maintenance,
     };
     "OpenTTDGroundMoved" ["probe"] => crate::vehicle::Moved {
@@ -4420,6 +4423,17 @@ layouts! {
         next_position,
         heading,
     };
+    "OpenTTDVehiclePositionObservations" ["probe"] => crate::vehicle::PositionObservations {
+        subtype,
+        z,
+    } width z: *const i32;
+    "OpenTTDVehicleMovementObservations" ["probe"] => crate::vehicle::MovementObservations {
+        position,
+        x,
+        y,
+        speed,
+        direction,
+    } width direction: *const crate::vehicle::Direction;
     "OpenTTDVehicleAltitudeInputs" ["probe"] => crate::vehicle::AltitudeInputs {
         max_speed,
         direction,
