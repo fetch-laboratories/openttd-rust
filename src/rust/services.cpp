@@ -108,6 +108,11 @@ static void CommandMoneyError(OpenTTDCommandCost *cost, int64_t amount) noexcept
 	NativeCost(cost)->MakeError(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY);
 	if (RustIsLocalCompany()) NativeCost(cost)->SetEncodedMessage(GetEncodedString(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, Money(amount)));
 }
+const OpenTTDEnvironmentServices &GetRustEnvironmentServices() noexcept
+{
+	static const OpenTTDEnvironmentServices services{.editor = OpenTTDEditor, .freeform_edges = OpenTTDFreeformEdges};
+	return services;
+}
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
 	static const OpenTTDCommandServices services{
@@ -164,7 +169,6 @@ static uint8_t SharedTropicZone(uint32_t tile) noexcept { return GetTropicZone(T
 static int32_t SharedTileZ(uint32_t tile) noexcept { return RustTileZ(TileIndex{tile}); }
 static uint8_t SharedTileSlope(uint32_t tile) noexcept { return GetTileSlope(TileIndex{tile}); }
 static void SharedMarkDirty(uint32_t tile) noexcept { MarkTileDirtyByTile(TileIndex{tile}); }
-static void SharedClearSquare(uint32_t tile) noexcept { DoClearSquare(TileIndex{tile}); }
 static void SharedFreeTrainReservation(const Train *v) noexcept { FreeTrainTrackReservation(v); }
 static bool SharedTryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_okay) noexcept { return TryPathReserve(v, mark_as_stuck, first_tile_okay); }
 static bool Shared_may_have_road(uint32_t tile) noexcept { return MayHaveRoad(TileIndex{tile}); }
@@ -246,6 +250,7 @@ static int32_t SharedCalendarDate() noexcept { return TimerGameCalendar::date.ba
 static int32_t SharedSlope(int32_t x, int32_t y) noexcept { return SharedSlopePixelZ(x, y, false); }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
+	.set_tile_owner = RustSetTileOwner,
 	.autoslope = RustAutoslopeEnabled,
 	.bay_stop_direction = Shared_bay_stop_direction,
 	.bridge_above = SharedBridgeAbove,
@@ -254,7 +259,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.build_on_slopes = RustBuildOnSlopes,
 	.calendar_date = SharedCalendarDate,
 	.calendar_year = SharedCalendarYear,
-	.clear_square = SharedClearSquare,
 	.clear_square_services = {
 		.may_animate = OpenTTDMayAnimateTile, .delete_animated = OpenTTDDeleteAnimatedTileWithMode,
 		.docking = OpenTTDIsDockingTile,
@@ -341,6 +345,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tile_owner = RustTileOwnerValue,
 	.tile_slope = SharedTileSlope,
 	.tile_type = SharedTileType,
+	.tile_add_wrap = SharedTileAddWrap,
 	.tile_valid = Shared_tile_valid,
 	.tile_z = SharedTileZ,
 	.town_index = Shared_town_index,
@@ -470,6 +475,7 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.rail_track_status = RustRailTrackStatus,
 		.has_signals = RustRailHasSignals,
 		.signal_type = RustRailSignalType,
+		.invalid_rail_type = RustInvalidRailType,
 		.rail_type = RustRailType,
 		.set_rail_type = RustSetRailType,
 		.rail_tile_type = RustRailTileType,
@@ -497,7 +503,6 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.station_blocked = RustStationBlocked,
 		.station_track = RustRailStationTrack,
 		.wormhole_reserved = RustWormholeReserved,
-		.set_tile_owner = RustSetTileOwner,
 	};
 	return services;
 }
@@ -510,11 +515,13 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDCommandServices.hpp"
 #include "abi-visit-OpenTTDCommandCostServices.hpp"
 #include "abi-visit-OpenTTDSharedServices.hpp"
+#include "abi-visit-OpenTTDEnvironmentServices.hpp"
 #include "abi-visit-OpenTTDClearSquareServices.hpp"
 #include "abi-visit-OpenTTDWaterRestorationServices.hpp"
 bool CheckAbi_services()
 {
-	return AbiServicesComplete(GetRustRandomServices()) &&
+	return AbiServicesComplete(GetRustEnvironmentServices()) &&
+		AbiServicesComplete(GetRustRandomServices()) &&
 		AbiServicesComplete(GetRustRailMapServices()) &&
 		AbiServicesComplete(GetRustCommandServices()) &&
 		AbiServicesComplete(GetRustCommandCostServices()) &&

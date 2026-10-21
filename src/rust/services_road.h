@@ -11,6 +11,8 @@
 #include "../road_map.h"
 #include "../town_map.h"
 #include "../road.h"
+#include "../roadveh.h"
+inline OpenTTDRoadState *RoadStateOf(const RoadVehicle *u) noexcept { return u == nullptr ? nullptr : u->GetRustState(); }
 inline void RustSetRoadOwner(uint32_t tile, uint8_t kind, uint8_t owner) noexcept { SetRoadOwner(TileIndex{tile}, static_cast<RoadTramType>(kind), Owner(owner)); }
 inline RoadTramType RustRoadTramType(RoadType type) noexcept { return GetRoadTramType(type); }
 inline bool RustRoadTypeIsRoad(uint8_t rt) noexcept { return RoadTypeIsRoad(static_cast<RoadType>(rt)); }

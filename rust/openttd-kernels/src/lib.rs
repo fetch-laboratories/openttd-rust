@@ -50,6 +50,7 @@ mod townname_data;
 mod trees;
 mod vehicle;
 mod water;
+mod water_cmd;
 mod widget_parser;
 mod witness;
 

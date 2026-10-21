@@ -176,7 +176,6 @@ struct OpenTTDStationCommandServices {
 	void (*close_stop_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_stop_inspect);
 	OpenTTDStationArea (*road_waypoint_area)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(road_waypoint_area);
 	void (*set_road_waypoint_area)(BaseStation *, OpenTTDStationArea) noexcept OPENTTD_SERVICE_DEFAULT(set_road_waypoint_area);
-	void (*vehicles_on_tile)(uint32_t, void *, void (*)(void *, OpenTTDVehicle *)) noexcept OPENTTD_SERVICE_DEFAULT(vehicles_on_tile);
 	OpenTTDRoadState *(*road_vehicle_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_vehicle_owner);
 	uint32_t (*order_station_location)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(order_station_location);
 	const OpenTTDAircraftLeaves *aircraft;

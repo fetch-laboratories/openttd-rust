@@ -3643,7 +3643,7 @@ static const OpenTTDIndustryServices _industry_services = {
 		Industry *i = RustIndustry(handle);
 		return MoveGoodsToStation(i->produced[slot].cargo, amount, {i->index, SourceType::Industry}, i->stations_near, i->exclusive_consumer);
 	},
-	.tile_add_wrap = [](uint32_t tile, int32_t x, int32_t y) noexcept -> uint32_t { return TileAddWrap(TileIndex(tile), x, y).base(); },
+	.tile_add_wrap = SharedTileAddWrap,
 	.farm_tile = [](uint32_t index) noexcept -> OpenTTDIndustryFarmTile {
 		TileIndex tile(index);
 		const auto type = SharedTileType(index);
@@ -3789,7 +3789,7 @@ static const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 			auto proc = reinterpret_cast<const IndustrySpec *>(handle)->check_proc;
 			return proc == CHECK_REFINERY || proc == CHECK_OIL_RIG;
 		},
-		.editor = OpenTTDEditor,
+		.environment = GetRustEnvironmentServices(),
 		.density = []() noexcept -> uint8_t { return _settings_game.difficulty.industry_density; },
 		.custom_number = []() noexcept -> uint32_t { return _settings_game.game_creation.custom_industry_number; },
 		.scale_by_size_1d = [](uint32_t n) noexcept -> uint32_t { return Map::ScaleBySize1D(n); },
@@ -4058,10 +4058,12 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 #include "abi-visit-OpenTTDIndustryCostServices.hpp"
 #include "abi-visit-OpenTTDIndustryTilePolicyServices.hpp"
 #include "abi-visit-OpenTTDIndustryTransactionServices.hpp"
+#include "abi-visit-OpenTTDEnvironmentServices.hpp"
 #include "abi-visit-OpenTTDIndustryTransactionContext.hpp"
 bool CheckAbi_industry_cmd()
 {
-	return AbiServicesComplete(GetIndustryRustServices()) &&
+	return AbiServicesComplete(GetIndustryGenerationServices().environment) &&
+		AbiServicesComplete(GetIndustryRustServices()) &&
 		AbiServicesComplete(GetIndustryLifecycleRustServices()) &&
 		AbiServicesComplete(GetIndustryGenerationServices()) &&
 		AbiServicesComplete(GetIndustryConstructionServices()) &&

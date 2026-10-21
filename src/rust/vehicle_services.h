@@ -16,12 +16,20 @@
 #include "../newgrf_commons.h"
 
 inline void RustUnknownCallbackResult(uint32_t grfid, uint16_t callback, uint16_t result) noexcept { ErrorUnknownCallbackResult(grfid, callback, result); }
-inline VehiclesOnTile RustVehiclesOnTile(TileIndex tile) noexcept { return VehiclesOnTile(tile); }
 
 /** The Rust handle of a live vehicle; null stays null. */
 inline OpenTTDVehicle *RustVehicle(const Vehicle *v) noexcept { return reinterpret_cast<OpenTTDVehicle *>(const_cast<Vehicle *>(v)); }
 /** The vehicle behind a Rust handle. */
 inline Vehicle *VehicleOf(OpenTTDVehicle *v) noexcept { return reinterpret_cast<Vehicle *>(v); }
+
+inline VehiclesOnTile RustVehiclesOnTile(TileIndex tile) noexcept { return VehiclesOnTile(tile); }
+
+/** Callback may reenter Rust but must preserve the current native shell. Advance
+ * after it returns, matching the original live hash traversal. No allocation. */
+inline void RustVisitVehiclesOnTile(uint32_t tile, void *context, void (*visit)(void *, OpenTTDVehicle *)) noexcept
+{
+	for (Vehicle *v : RustVehiclesOnTile(TileIndex(tile))) visit(context, RustVehicle(v));
+}
 
 /** Shared ascending vehicle pool traversal for lifecycle and fleet ports. */
 inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
@@ -37,6 +45,7 @@ template <class T> inline void RustGroundCargoChanged(T *v) noexcept { v->CargoC
 template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last(); }
 /** Signature adapter for existing opaque fleet and orders callbacks. */
 inline void *RustVehicleFirstOpaque(void *v) noexcept { return RustVehicleFirst(static_cast<const Vehicle *>(v)); }
+inline void OPENTTD_VEHICLE_CALL RustVehicleSetDestTile(OpenTTDVehicle *v, uint32_t tile) noexcept { VehicleOf(v)->SetDestTile(TileIndex(tile)); }
 inline void RustVehicleLeaveStation(OpenTTDVehicle *v) noexcept { VehicleOf(v)->LeaveStation(); }
 inline uint32_t RustVehicleOrderStationLocation(OpenTTDVehicle *v, uint16_t station) noexcept { return VehicleOf(v)->GetOrderStationLocation(StationID(station)).base(); }
 inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station) noexcept { return RustVehicleOrderStationLocation(RustVehicle(static_cast<Vehicle *>(v)), station); }

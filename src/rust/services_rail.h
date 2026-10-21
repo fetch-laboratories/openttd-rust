@@ -42,6 +42,7 @@ inline TransportType RustTunnelBridgeTransport(uint32_t tile) noexcept { return 
 inline uint32_t RustOtherTunnelBridgeEnd(uint32_t tile) noexcept { return GetOtherTunnelBridgeEnd(TileIndex(tile)).base(); }
 
 /* Rail command, depot and crossing leaves (#265): one native definition each. */
+inline RailType RustInvalidRailType() noexcept { return INVALID_RAILTYPE; }
 inline RailType RustRailType(uint32_t tile) noexcept { return GetRailType(TileIndex(tile)); }
 inline void RustSetRailType(uint32_t tile, uint8_t rt) noexcept { SetRailType(TileIndex(tile), static_cast<RailType>(rt)); }
 inline RailTileType RustRailTileType(uint32_t tile) noexcept { return GetRailTileType(TileIndex(tile)); }

@@ -7,7 +7,7 @@
 
 //! Flooding ownership, including live vehicle-hash traversal and nested command
 //! results. Native leaves are noexcept. No Rust borrow denotes a native pool/map
-//! object across calls; each opaque iterator is native-constructed stack storage.
+//! object across calls; shared native traversal advances after each callback.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -26,7 +26,6 @@ use crate::{
     },
     vehicle::{VehicleRef, VehicleServices, VehicleType},
 };
-use std::mem::MaybeUninit;
 
 #[repr(C)]
 pub struct AirportGround {
@@ -34,10 +33,6 @@ pub struct AirportGround {
     pub tile: u32,
     pub width: u16,
     pub height: u16,
-}
-#[repr(C)]
-pub struct TileVehicleCursor {
-    pub storage: [usize; 2],
 }
 #[repr(C)]
 pub struct FloodVictim {
@@ -72,11 +67,6 @@ pub struct WaterServices {
     pub region_context: extern "C" fn() -> crate::water_regions::Context,
     pub remove_rail: unsafe extern "C" fn(*mut services::CommandCost, u32, Track),
     pub apply_foundation: extern "C" fn(Foundation, Slope) -> FoundationSlope,
-    // Caller supplies aligned native-iterator storage and follows its construction/lifetime.
-    pub iterator_begin: unsafe extern "C" fn(*mut TileVehicleCursor, u32),
-    pub iterator_current: unsafe extern "C" fn(*mut TileVehicleCursor) -> Option<VehicleRef>,
-    pub iterator_next: unsafe extern "C" fn(*mut TileVehicleCursor),
-    pub iterator_end: unsafe extern "C" fn(*mut TileVehicleCursor),
     pub airport_tile: extern "C" fn(u32) -> bool,
     pub airport: extern "C" fn(u32) -> AirportGround,
     pub airport_member: unsafe extern "C" fn(*const crate::station::Station, u32) -> bool,
@@ -173,6 +163,7 @@ pub unsafe extern "C" fn openttd_rust_water_restore(
     unsafe {
         restore(tile, owner, &*s, &*water, &*r);
     }
+    crate::witness::hit(crate::witness::WATER_CMD_RESTORE);
 }
 const OFFSETS: [(i32, i32); 8] = [
     (-1, -1),
@@ -431,20 +422,9 @@ impl<'a> World<'a> {
         }
     }
     fn vehicles_on_tile(&self, tile: u32, z: i32) {
-        let mut cursor = MaybeUninit::<TileVehicleCursor>::uninit();
-        let cursor = cursor.as_mut_ptr();
-        // SAFETY: Aligned uninitialized storage has the native size; begin constructs it.
-        unsafe { (self.w.iterator_begin)(cursor, tile) };
-        // SAFETY: The native iterator remains constructed until iterator_end.
-        while let Some(v) = unsafe { (self.w.iterator_current)(cursor) } {
-            self.victim(v, z);
-            // Original iterator reads current->hash_tile_next AFTER Crash, both
-            // event queues, news and explosion creation have all returned.
-            // SAFETY: Crash does not delete the current shell; advance only after callbacks.
-            unsafe { (self.w.iterator_next)(cursor) };
-        }
-        // SAFETY: Exactly one destruction follows construction and the last access.
-        unsafe { (self.w.iterator_end)(cursor) };
+        // Original traversal reads hash_tile_next only after Crash, event queues,
+        // news and explosion creation return. Crash preserves the current shell.
+        self.v().for_each_on_tile(tile, |v| self.victim(v, z));
     }
     fn flood_vehicles(&self, tile: u32) {
         if (self.w.airport_tile)(tile) {
@@ -710,16 +690,15 @@ pub unsafe extern "C" fn openttd_rust_flooding_behaviour(
 }
 /// # Safety
 /// Live immutable service tables for the synchronous no-unwind invocation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_dirty_water_neighbours(
+pub(crate) unsafe fn dirty_water_neighbours(
     tile: u32,
     size_x: u32,
     size_y: u32,
-    w: *const WaterServices,
-    s: *const Services,
+    w: &WaterServices,
+    s: &Services,
 ) {
     // SAFETY: Serialized native entry; no map references are formed.
-    let types = TileTypeAccess::callback(unsafe { (*s).tile_type });
+    let types = TileTypeAccess::callback(s.tile_type);
     unsafe { World::new(w, s, &types, size_x, size_y) }.dirty_neighbours(tile);
 }
 /// # Safety
@@ -785,10 +764,6 @@ pub(crate) fn fixture() -> WaterServices {
         region_context: unused_region_context,
         remove_rail: unused3,
         apply_foundation: unused2,
-        iterator_begin: unused2,
-        iterator_current: unused1,
-        iterator_next: unused1,
-        iterator_end: unused1,
         airport_tile: unused1,
         airport: unused1,
         airport_member: unused2,

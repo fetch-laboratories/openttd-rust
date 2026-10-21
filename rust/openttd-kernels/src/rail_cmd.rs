@@ -2057,7 +2057,7 @@ impl<'a> Ctx<'a> {
             (self.s.signal_infrastructure)(old_owner, signals.wrapping_neg());
             (self.s.signal_infrastructure)(new_owner, signals);
         }
-        (self.rail.set_tile_owner)(tile, new_owner);
+        (self.shared.set_tile_owner)(tile, new_owner);
     }
 
     /// `TestAutoslopeOnRailTile`.

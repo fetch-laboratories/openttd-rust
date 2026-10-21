@@ -58,7 +58,7 @@ struct OpenTTDTownLeaves {
 	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
 	uint8_t (*growth_rate)() noexcept OPENTTD_SERVICE_DEFAULT(growth_rate);
 	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
-	bool (*editor)() noexcept OPENTTD_SERVICE_DEFAULT(editor);
+	OpenTTDEnvironmentServices environment;
 	bool (*generating_world)() noexcept OPENTTD_SERVICE_DEFAULT(generating_world);
 	bool (*allow_crossings)() noexcept OPENTTD_SERVICE_DEFAULT(allow_crossings);
 	uint8_t (*climate)() noexcept OPENTTD_SERVICE_DEFAULT(climate);

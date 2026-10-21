@@ -289,11 +289,6 @@ pub struct CommandServicesTable {
     pub close_stop_inspect: extern "C" fn(u32),
     pub road_waypoint_area: extern "C" fn(*mut BaseStation) -> Area,
     pub set_road_waypoint_area: extern "C" fn(*mut BaseStation, Area),
-    pub vehicles_on_tile: unsafe extern "C" fn(
-        u32,
-        *mut std::ffi::c_void,
-        unsafe extern "C" fn(*mut std::ffi::c_void, crate::vehicle::VehicleRef),
-    ),
     pub road_vehicle_owner: extern "C" fn(crate::vehicle::VehicleRef) -> *mut crate::road::State,
     pub order_station_location: extern "C" fn(crate::vehicle::VehicleRef, u16) -> u32,
     pub aircraft: *const crate::aircraft::Leaves,
@@ -1189,16 +1184,7 @@ impl Ctx<'_> {
     }
     fn buildable_area(&self, tile: u32, w: u16, h: u16) -> bool {
         (self.shared.tile_valid)(tile)
-            && self
-                .map()
-                .tile_x(tile)
-                .wrapping_add(u32::from(w).wrapping_sub(1))
-                <= (self.shared.map_max_x)()
-            && self
-                .map()
-                .tile_y(tile)
-                .wrapping_add(u32::from(h).wrapping_sub(1))
-                <= (self.shared.map_max_y)()
+            && (self.shared.tile_add_wrap)(tile, i32::from(w) - 1, i32::from(h) - 1) != u32::MAX
     }
     fn free_reservation(&self, train: *mut crate::services::Train) {
         unsafe {
@@ -1288,7 +1274,7 @@ impl Ctx<'_> {
                 cost.error(self.s.strings.adjoins_multiple);
             }
         } else {
-            if rt != 0x3f && (self.shared.is_plain_rail)(tile) {
+            if rt != (self.rail_map().invalid_rail_type)().0 && (self.shared.is_plain_rail)(tile) {
                 if (self.rail_map().has_signals)(tile) {
                     return cost.error(self.s.strings.remove_signals);
                 }
@@ -2517,7 +2503,7 @@ impl Ctx<'_> {
                         && (self.vehicle().dest_tile)(vehicle) == tile
                     {
                         let destination = (self.s.order_station_location)(vehicle, station);
-                        (self.vehicle().write_dest)(vehicle, destination);
+                        (self.vehicle().set_dest_tile)(vehicle, destination);
                     }
                     let next = (self.links().next_shared)(vehicle);
                     if let Some(v) = next {
@@ -2571,10 +2557,13 @@ impl Ctx<'_> {
             }
         } else if (self.shared.is_drive_through_stop)(tile) && flags & 32 != 0 {
             if flags & 1 != 0 {
-                let mut context = BankruptRoad { c: self };
-                unsafe {
-                    (self.s.vehicles_on_tile)(tile, (&raw mut context).cast(), bankrupt_road_visit);
-                }
+                self.vehicle().for_each_on_tile(tile, |vehicle| {
+                    if (self.vehicle().vehicle_type)(vehicle) == 1 {
+                        let state = (self.s.road_vehicle_owner)(vehicle);
+                        // SAFETY: Live road owner; no borrow crosses this access.
+                        unsafe { crate::road::clear_removed_drive_stop(state) };
+                    }
+                });
             }
         } else {
             unsafe {
@@ -2780,21 +2769,6 @@ impl Ctx<'_> {
             }
         };
         self.remove_generic_road(cost, ret, error, flags, area, waypoint, remove_road);
-    }
-}
-struct BankruptRoad<'a> {
-    c: &'a Ctx<'a>,
-}
-unsafe extern "C" fn bankrupt_road_visit(
-    context: *mut std::ffi::c_void,
-    vehicle: crate::vehicle::VehicleRef,
-) {
-    let c = unsafe { (*context.cast::<BankruptRoad<'_>>()).c };
-    if (c.vehicle().vehicle_type)(vehicle) == 1 {
-        let state = (c.s.road_vehicle_owner)(vehicle);
-        unsafe {
-            crate::road::clear_removed_drive_stop(state);
-        }
     }
 }
 /// # Safety
@@ -4061,7 +4035,7 @@ impl Ctx<'_> {
                 (self.s.station_infrastructure)(old, u32::MAX);
                 (self.s.station_infrastructure)(new, 1);
             }
-            (self.rail_map().set_tile_owner)(tile, new);
+            (self.shared.set_tile_owner)(tile, new);
             (self.s.station_list_classes_invalidate)();
         } else if (self.shared.is_drive_through_stop)(tile) {
             let kind = (self.shared.station_type)(tile).0;
@@ -4088,7 +4062,7 @@ impl Ctx<'_> {
             if (kind == 6 || (kind == 5 && (self.shared.station_type)(tile).0 == 6))
                 && (self.shared.tile_owner)(tile) == old
             {
-                (self.rail_map().set_tile_owner)(tile, 0x10);
+                (self.shared.set_tile_owner)(tile, 0x10);
             }
         }
     }

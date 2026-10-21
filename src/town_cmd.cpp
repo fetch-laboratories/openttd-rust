@@ -1095,7 +1095,7 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.map_log_x = OpenTTDMapLogX,
 		.growth_rate = RustTown_growth_rate,
 		.snow_line = GetRustSharedServices().snow_line,
-		.editor = OpenTTDEditor,
+		.environment = GetRustEnvironmentServices(),
 		.generating_world = GetRustSharedServices().clear_square_services.generating_world,
 		.allow_crossings = RustTown_allow_crossings,
 		.climate = OpenTTDLandscapeValue,
@@ -4667,10 +4667,12 @@ std::span<const DrawBuildingsTileStruct> GetTownDrawTileData()
 #include "abi-visit-OpenTTDTownLeaves.hpp"
 #include "abi-visit-OpenTTDTownFoundingServices.hpp"
 #include "abi-visit-OpenTTDTownAuthorityServices.hpp"
+#include "abi-visit-OpenTTDEnvironmentServices.hpp"
 #include "abi-visit-OpenTTDTownYearlyServices.hpp"
 bool CheckAbi_town_cmd()
 {
-	return AbiServicesComplete(GetRustTownServices()) &&
+	return AbiServicesComplete(GetRustTownServices().environment) &&
+		AbiServicesComplete(GetRustTownServices()) &&
 		AbiServicesComplete(GetRustTownFoundingServices()) &&
 		AbiServicesComplete(GetRustTownAuthorityServices()) &&
 		AbiServicesComplete(TownYearlyServices());

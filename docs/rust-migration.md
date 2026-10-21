@@ -1343,9 +1343,11 @@ water-structures-mutate --jobs 2` compares command costs/errors, RNG, STNN/STNS,
 map, town and company state, including partial removal, joins, delete/reuse and
 modern reload. The station module includes unchanged-reference private callbacks
 in fixture executables and requires `station_command` witnesses in default CI.
-Builtin tram stops and a forced airport noise refusal share the controlled crossing
-fixture; terrain preparation preserves live ground-vehicle corner heights. NewGRF,
-legacy decoding and unusual occupied/reservation branches remain tracked by #156.
+Default #320 cases require removed-destination path clearing, `TileAddWrap` border
+refusals and type-63 overbuilding through `AllocateRailType`. Retargeting uses virtual
+`SetDestTile`; shared native traversal serves stations and flooding. Builtin tram,
+airport noise and reload cases remain required. External NewGRF programs, legacy
+and unusual occupied/reservation branches remain tracked by #156.
 
 ### Ship controller and private state (#146)
 
@@ -1566,3 +1568,28 @@ including drags, one-way/tram coexistence, reserved crossings, stops, bridges,
 depots, slopes, town removal, owner changes and low-funds removal.
 The fixture declares builtin-like road-type inputs; external NewGRF programs and
 legacy save variants remain corpus gaps. PR #290 records validation and speed.
+
+### Water construction, clearing and restoration (#294)
+
+Rust (`water_cmd.rs`, shared `water.rs`/`ground.rs`) owns ship depot/lock/canal
+commands/removal, water clearing/restoration, river/desert traversal and owner/terraform/
+build-above policy. Original command bodies and `MakeLock` remain portable-only.
+Lock checks/build/removal order, depot partial clears and post-clear accounting,
+conditional RNG draws, narrowing and wrapping retain the original sequence.
+
+C++ keeps packed map primitives, depot identities, drawing, native stack
+`CommandCost` objects and a lazy stack area iterator. Generic landscape commands
+retain the complete native `Command::Do` lifecycle. Rust helpers call the
+integrated clear-square, flooding/neighbor, region-cache and economy owners directly.
+Shared restoration retains class/accounting/RNG order; docking calls its Rust owner.
+Shared command/depot/environment services replace touched rail/town/industry
+copies. Named generated layouts, aborting unused fixture slots and actual
+production table checks cover the boundary; no native world borrow spans reentry.
+
+`python3 tools/migration.py verify --jobs 2`, default `water-commands` and existing
+water traffic/mutation/reload scenarios compare semantic saves and require
+restoration/clear witnesses. The console fixture compares results/parameters,
+map/depot fields, infrastructure, docking membership and RNG across both axes,
+all lock directions/parts, occupied/bankrupt queries, force/partial clearing,
+editor/desert and restoration inputs. Pool exhaustion, construction under bridges,
+water objects, arbitrary NewGRF/legacy layouts and GUI remain #156 coverage gaps.

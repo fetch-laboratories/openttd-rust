@@ -65,7 +65,13 @@ def scenarios(soak):
             "ticks": 1,
             "short_checkpoint": True,
         }
-        for mode in ("commands", "reload")
+        for mode in (
+            "commands",
+            "reload",
+            "removed-destination",
+            "map-edges",
+            "railtype-63",
+        )
     ]
 
 
@@ -329,12 +335,29 @@ COMMAND_SOURCE = r"""
 #include "station_cmd.cpp"
 #include "console_internal.h"
 #include "clear_map.h"
+#include "order_cmd.h"
 #include "waypoint_cmd.h"
 #include "saveload/saveload.h"
 static void StationNeed(bool value, int line) { if (!value) { fmt::print(stderr, "STCMD setup-failure {}\n", line); std::abort(); } }
 static void StationCost(const char *label, const CommandCost &cost)
 {
 	fmt::print(stderr, "STCMD cost {} {} {} {} rng {} {}\n", label, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), _random.state[0], _random.state[1]);
+}
+static size_t StationPathSize(const RoadVehicle *v)
+{
+#ifdef WITH_RUST
+	return v->PathSize();
+#else
+	return v->path.size();
+#endif
+}
+static void StationPathPush(RoadVehicle *v, Trackdir trackdir, TileIndex tile)
+{
+#ifdef WITH_RUST
+	v->PathPush(trackdir, tile);
+#else
+	v->path.emplace_back(trackdir, tile);
+#endif
 }
 static TileIndex StationPatch()
 {
@@ -364,6 +387,12 @@ static bool StationCommands(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
 	Company *company = *Company::Iterate().begin();
+	RoadVehicle *bus = nullptr;
+	if (args[1] == "removed-destination") {
+		for (RoadVehicle *v : RoadVehicle::Iterate()) if (v->IsPrimaryVehicle() && v->cargo_type == 0 && !v->IsInDepot()) { bus = v; break; }
+		StationNeed(bus != nullptr, __LINE__);
+		company = Company::Get(bus->owner);
+	}
 	Backup<CompanyID> current(_current_company, company->index);
 	/* Declare the builtin tram type available without an external vehicle GRF. */
 	company->avail_roadtypes.Set(ROADTYPE_TRAM);
@@ -383,6 +412,74 @@ static bool StationCommands(std::span<std::string_view> args)
 	} else {
 		TileIndex origin = StationPatch();
 		auto tile = [origin](int x, int y) { return origin + TileDiffXY(x, y); };
+		if (args[1] == "removed-destination") {
+			TileIndex stop = tile(12, 1);
+			StationNeed(Command<CMD_BUILD_ROAD_STOP>::Do(exec, stop, 1, 1, RoadStopType::Bus, false, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, NEW_STATION, true).Succeeded(), __LINE__);
+			StationID id = GetStationIndex(stop);
+			StationNeed(Command<CMD_DELETE_ORDER>::Do(exec, bus->index, VehicleOrderID(255)).Succeeded(), __LINE__);
+			Order order; order.MakeGoToStation(id);
+			StationNeed(OrderList::CanAllocateItem(), __LINE__);
+			InsertOrder(bus, Order(order), 0);
+			bus->current_order = order;
+			bus->cur_implicit_order_index = bus->cur_real_order_index = 0;
+			bus->SetDestTile(stop);
+			/* A cached route while en route, through the vehicle owner's public API. */
+			StationPathPush(bus, TRACKDIR_X_NE, bus->tile);
+			StationNeed(bus->tile != stop && StationPathSize(bus) != 0 && bus->GetNumOrders() == 1, __LINE__);
+			StationCost("removed-destination", Command<CMD_REMOVE_ROAD_STOP>::Do(exec, stop, 1, 1, RoadStopType::Bus, false));
+			fmt::print(stderr, "STCMD removed-destination {} {} {}\n", bus->dest_tile.base(), StationPathSize(bus), IsAnyRoadStopTile(stop));
+			StationNeed(bus->dest_tile == TileIndex{} && StationPathSize(bus) == 0 && !IsAnyRoadStopTile(stop), __LINE__);
+			fmt::print(stderr, "STCMD complete\n");
+			current.Restore(); return true;
+		}
+		if (args[1] == "map-edges") {
+			bool all_edges = true;
+			DoCommandFlags edge_test = test; edge_test.Set(DoCommandFlag::Auto);
+			for (Axis axis : {AXIS_X, AXIS_Y}) {
+				TileIndex start = axis == AXIS_X ? TileXY(Map::MaxX() - 1, 8) : TileXY(8, Map::MaxY() - 1);
+				uint8_t w = axis == AXIS_X ? 2 : 1, h = axis == AXIS_Y ? 2 : 1;
+				for (uint dy = 0; dy < 2; dy++) for (uint dx = 0; dx < 2; dx++) SetTileHeight(start + TileDiffXY(dx, dy), 1);
+				/* An obstacle on the first tile exposes early-error precedence. */
+				MakeRoadNormal(start, ROAD_ALL, ROADTYPE_ROAD, INVALID_ROADTYPE, TownID(0), OWNER_TOWN, OWNER_NONE);
+				auto rejected = [&](const char *label, const CommandCost &cost) {
+					StationCost(label, cost);
+					all_edges &= cost.Failed() && cost.GetErrorMessage() == INVALID_STRING_ID;
+				};
+				rejected("edge-rail", Command<CMD_BUILD_RAIL_STATION>::Do(edge_test, start, RAILTYPE_RAIL, AXIS_X, h, w, STAT_CLASS_DFLT, 0, NEW_STATION, true));
+				rejected("edge-road", Command<CMD_BUILD_ROAD_STOP>::Do(edge_test, start, w, h, RoadStopType::Bus, false, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, NEW_STATION, true));
+				MakeClear(start, CLEAR_GRASS, 3);
+				StationNeed(Command<CMD_BUILD_ROAD_STOP>::Do(exec, start, 1, 1, RoadStopType::Bus, false, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, NEW_STATION, true).Succeeded(), __LINE__);
+				rejected("edge-remove-test", Command<CMD_REMOVE_ROAD_STOP>::Do(test, start, w, h, RoadStopType::Bus, false));
+				rejected("edge-remove-exec", Command<CMD_REMOVE_ROAD_STOP>::Do(exec, start, w, h, RoadStopType::Bus, false));
+				all_edges &= IsBayRoadStopTile(start);
+				if (IsBayRoadStopTile(start)) StationNeed(Command<CMD_REMOVE_ROAD_STOP>::Do(exec, start, 1, 1, RoadStopType::Bus, false).Succeeded(), __LINE__);
+				fmt::print(stderr, "STCMD map-edge {} preserved {}\n", axis, all_edges);
+			}
+			StationNeed(all_edges, __LINE__);
+			fmt::print(stderr, "STCMD complete\n");
+			current.Restore(); return true;
+		}
+		if (args[1] == "railtype-63") {
+			RailType last = RAILTYPE_RAIL;
+			for (uint32_t label = 1; ; label++) {
+				RailType rt = AllocateRailType(label);
+				if (rt == INVALID_RAILTYPE) break;
+				company->avail_railtypes.Set(rt); last = rt;
+			}
+			StationNeed(last == 63, __LINE__);
+			TileIndex plain = tile(1, 1);
+			StationNeed(Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, plain, last, TRACK_X, false).Succeeded(), __LINE__);
+			for (DoCommandFlags flags : {test, exec}) {
+				flags.Set(DoCommandFlag::Auto);
+				auto cost = Command<CMD_BUILD_RAIL_STATION>::Do(flags, plain, last, AXIS_X, 1, 1, STAT_CLASS_DFLT, 0, NEW_STATION, true);
+				StationCost("railtype-63", cost); StationNeed(cost.Succeeded(), __LINE__);
+			}
+			StationNeed(IsRailStationTile(plain) && GetRailType(plain) == last, __LINE__);
+			/* Remove the synthetic type before saving; no external GRF is required. */
+			StationNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(exec, plain).Succeeded(), __LINE__);
+			fmt::print(stderr, "STCMD railtype-63 overbuilt\nSTCMD complete\n");
+			current.Restore(); return true;
+		}
 		auto rail = [&](DoCommandFlags f, TileIndex t, StationID join, uint8_t n = 2, uint8_t len = 3) { return Command<CMD_BUILD_RAIL_STATION>::Do(f, t, RAILTYPE_RAIL, AXIS_X, n, len, STAT_CLASS_DFLT, 0, join, true); };
 		StationCost("rail-test", rail(test, tile(1, 1), NEW_STATION));
 		StationCost("rail-build", rail(exec, tile(1, 1), NEW_STATION));
@@ -569,7 +666,10 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
             role_inputs={role: {"save": str(save)} for role, save in saves.items()},
             console=["stations_scenario inspect", "unpause"],
         )
-    return dict(scenario, console=["stations_scenario commands", "unpause"])
+    return dict(
+        scenario,
+        console=["stations_scenario " + scenario["station_commands"], "unpause"],
+    )
 
 
 def check_commands(scenario, run, mode, role, result):
@@ -599,6 +699,22 @@ def check_commands(scenario, run, mode, role, result):
             "build_above",
         ]
     )
+    fidelity = {
+        "removed-destination": (
+            ["remove_road_tile"],
+            ["STCMD removed-destination 0 0 false"],
+        ),
+        "map-edges": (
+            ["build_rail", "build_road", "remove_road_tile"],
+            ["STCMD map-edge 0 preserved true", "STCMD map-edge 1 preserved true"],
+        ),
+        "railtype-63": (["build_rail"], ["STCMD railtype-63 overbuilt"]),
+    }
+    if scenario["station_commands"] in fidelity:
+        required, evidence = fidelity[scenario["station_commands"]]
+        for line in evidence:
+            if line not in run["log"]:
+                raise RuntimeError("station fidelity witness missing: " + line)
     core.branch_witnesses(scenario, run, role, "station_command", required)
     lines = [line for line in run["log"] if line.startswith("STCMD ")]
     expected = (

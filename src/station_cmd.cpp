@@ -654,7 +654,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.tick_counter = []() noexcept -> uint64_t {
 		return openttd_orders_tick_counter();
 	},
-	.editor = OpenTTDEditor,
+	.environment = GetRustEnvironmentServices(),
 	.facilities = [](OpenTTDBaseStation *handle) noexcept -> uint8_t {
 		return static_cast<BaseStation *>(handle)->facilities.base();
 	},
@@ -2446,13 +2446,7 @@ CommandCost RemoveRoadWaypointStop(TileIndex tile, DoCommandFlags flags, int rep
 #ifndef WITH_RUST
 static CommandCost FindJoiningRoadStop(StationID existing_stop, StationID station_to_join, bool adjacent, TileArea ta, Station **st)
 {
-#ifdef WITH_RUST
-	CommandCost cost;
-	*st = static_cast<Station *>(openttd_rust_station_join_waypoint(&GetRustStationCommandServices(), RustCommandCost(&cost), existing_stop.base(), station_to_join.base(), adjacent, {ta.tile.base(), ta.w, ta.h}, false, false, STR_ERROR_MUST_REMOVE_ROAD_STOP_FIRST));
-	return cost;
-#else
 	return FindJoiningBaseStation<Station, STR_ERROR_MUST_REMOVE_ROAD_STOP_FIRST>(existing_stop, station_to_join, adjacent, ta, st, [](const Station *) -> bool { return true; });
-#endif
 }
 
 #endif
@@ -6059,12 +6053,14 @@ extern const TileTypeProcs _tile_type_station_procs = {
 
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDEnvironmentServices.hpp"
 #include "abi-visit-OpenTTDStationServices.hpp"
 #include "abi-visit-OpenTTDStationLinks.hpp"
 #include "abi-visit-OpenTTDStationCommandServices.hpp"
 bool CheckAbi_station_cmd()
 {
-	return AbiServicesComplete(_rust_station_services) &&
+	return AbiServicesComplete(_rust_station_services.environment) &&
+		AbiServicesComplete(_rust_station_services) &&
 		AbiServicesComplete(_rust_station_links) &&
 		AbiServicesComplete(GetRustStationCommandServices());
 }

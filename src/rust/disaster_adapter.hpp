@@ -88,7 +88,7 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 		case 9: out[0] = GetDirectionTowards(Vehicle::Get(id), a, b); break;
 		case 10: { auto gp = GetNewVehiclePos(Vehicle::Get(id)); out[0] = gp.x; out[1] = gp.y; break; }
 		case 11: out[0] = Industry::Get(id)->TileBelongsToIndustry(TileIndex{static_cast<uint32_t>(a)}); break;
-		case 12: out[0] = TileAddWrap(TileIndex{id}, a, b).base(); break;
+		case 12: out[0] = SharedTileAddWrap(id, a, b); break;
 		case 13: out[0] = TileOffsByDiagDir(static_cast<DiagDirection>(a)); break;
 		case 14: out[0] = DisasterVehicle::GetIfValid(id) != nullptr; break;
 		case 15: out[0] = Company::IsHumanID(CompanyID{static_cast<uint8_t>(id)}); break;
@@ -163,7 +163,6 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 			break;
 		}
 		case 18: RustUpdateSignals(); break;
-		case 19: GetRustSharedServices().clear_square(step.id); break;
 		case 20: ResetIndustryConstructionStage(TileIndex{step.id}); MarkTileDirtyByTile(TileIndex{step.id}); break;
 		case 21: response = ClosestTownFromTile(TileIndex{step.id}, UINT_MAX)->index.base(); break;
 		case 23: response = OpenTTDWaterTracks(step.id, INVALID_DIAGDIR); break;

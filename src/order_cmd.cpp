@@ -579,12 +579,6 @@ extern "C" void openttd_orders_next_airport(void *ctx) noexcept
 	AircraftNextAirportPos_and_Order(Aircraft::From(v));
 }
 
-extern "C" void openttd_orders_set_destination(void *ctx, uint32_t tile) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(ctx);
-	v->SetDestTile(TileIndex(tile));
-}
-
 extern "C" void openttd_orders_closest_depot(void *ctx, OpenTTDOrdersClosest *result) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(ctx);

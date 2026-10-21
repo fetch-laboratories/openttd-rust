@@ -412,7 +412,7 @@ impl<'a> Ctx<'a> {
         town_check: bool,
     ) {
         c.zero();
-        if (self.town.editor)() || remove == 0 {
+        if (self.town.environment.editor)() || remove == 0 {
             return;
         }
         let company = (self.shared.current_company)();
@@ -560,8 +560,8 @@ impl<'a> Ctx<'a> {
                     let other_owner = self.owner(tile, rtt ^ 1);
                     let owner = (self.shared.tile_owner)(tile);
                     if owner != other_owner && owner != TOWN {
-                        (self.rail.set_tile_owner)(tile, other_owner);
-                        (self.rail.set_tile_owner)(end, other_owner);
+                        (self.shared.set_tile_owner)(tile, other_owner);
+                        (self.shared.set_tile_owner)(end, other_owner);
                     }
                     self.dirty_wormhole(tile, end);
                 }
@@ -1522,7 +1522,7 @@ impl<'a> Ctx<'a> {
                     }
                     (self.r.road_infrastructure)(old, rt, 2_u32.wrapping_neg());
                     (self.r.road_infrastructure)(new, rt, 2);
-                    (self.rail.set_tile_owner)(tile, new);
+                    (self.shared.set_tile_owner)(tile, new);
                     for rtt in [0, 1] {
                         if self.owner(tile, rtt) == old {
                             (self.shared.set_road_owner)(tile, rtt, new);
@@ -1570,7 +1570,7 @@ impl<'a> Ctx<'a> {
                 let rt = (self.rail.rail_type)(tile).0;
                 (self.r.rail_infrastructure)(old, rt, 2_u32.wrapping_neg());
                 (self.r.rail_infrastructure)(new, rt, 2);
-                (self.rail.set_tile_owner)(tile, new);
+                (self.shared.set_tile_owner)(tile, new);
             }
         }
     }
@@ -1821,8 +1821,8 @@ impl<'a> Ctx<'a> {
                 w::hit(w::ROAD_COMMANDS_CONVERT_WORMHOLE);
                 if owner == (self.shared.current_company)() {
                     self.convert_owner(tile, num.wrapping_mul(4), owner, from, to);
-                    (self.rail.set_tile_owner)(tile, (self.shared.current_company)());
-                    (self.rail.set_tile_owner)(other, (self.shared.current_company)());
+                    (self.shared.set_tile_owner)(tile, (self.shared.current_company)());
+                    (self.shared.set_tile_owner)(other, (self.shared.current_company)());
                 }
                 (self.shared.set_road_type)(tile, rtt, to);
                 (self.shared.set_road_type)(other, rtt, to);
