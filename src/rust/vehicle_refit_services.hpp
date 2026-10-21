@@ -6,6 +6,8 @@
  */
 
 /** @file vehicle_refit_services.hpp Native refit observations, scalar stores and UI leaves. */
+#include "services_road.h"
+
 static OpenTTDRefitCargo VehicleRefitCargo(const OpenTTDEngine *e, uint8_t cargo) noexcept { return {.classes = CargoSpec::Get(cargo)->classes.base(), .local = EngineOf(e)->GetGRF()->cargo_map[cargo]}; }
 static uint16_t VehicleRefitCostCallback(OpenTTDVehicle *v, uint16_t engine, uint32_t param) noexcept { return RustVehicleCallback(CBID_VEHICLE_REFIT_COST, param, 0, EngineID(engine), VehicleOf(v)); }
 static OpenTTDRefitEngine VehicleRefitEngine(const OpenTTDEngine *e) noexcept { return {.mask = EngineOf(e)->info.refit_mask, .automatic = EngineOf(e)->info.misc_flags.Test(EngineMiscFlag::AutoRefit)}; }
@@ -22,7 +24,7 @@ static void VehicleRefitWrite(OpenTTDVehicle *handle, uint8_t cargo, uint16_t ca
 	RustVehicleSetCargoSubtype(handle, subtype);
 }
 static OpenTTDTrainHandle VehicleRefitTrain(OpenTTDVehicle *v) noexcept { return TrainHandle(Train::From(VehicleOf(v))); }
-static OpenTTDRoadState *VehicleRefitRoadState(OpenTTDVehicle *v) noexcept { return RoadVehicle::From(VehicleOf(v))->GetRustState(); }
+static OpenTTDRoadState *VehicleRefitRoadState(OpenTTDVehicle *v) noexcept { return RoadStateOf(RoadVehicle::From(VehicleOf(v))); }
 static void VehicleRefitDetailsUI(OpenTTDVehicle *v) noexcept { InvalidateWindowData(WC_VEHICLE_DETAILS, VehicleOf(v)->index); }
 static void VehicleRefitListsUI(uint8_t type) noexcept { InvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<VehicleType>(type)), 0); }
 const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
