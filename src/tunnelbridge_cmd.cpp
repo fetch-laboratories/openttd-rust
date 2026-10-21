@@ -1844,10 +1844,6 @@ const OpenTTDTunnelServices &GetRustTunnelGroundServices() noexcept
 	};
 	return services;
 }
-static void TileLoop_TunnelBridge(uint32_t tile) noexcept
-{
-	openttd_rust_tunnel_tile_loop(tile, OpenTTDLandscape(), &GetRustTunnelGroundServices(), &GetRustSharedServices());
-}
 #else
 static void TileLoop_TunnelBridge(TileIndex tile)
 {
@@ -2167,7 +2163,11 @@ extern const TileTypeProcs _tile_type_tunnelbridge_procs = {
 	GetTileTrackStatus_TunnelBridge, // get_tile_track_status_proc
 	nullptr,                            // click_tile_proc
 	nullptr,                            // animate_tile_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust scheduler calls the owner directly.
+#else
 	TileLoop_TunnelBridge,           // tile_loop_proc
+#endif
 	ChangeTileOwner_TunnelBridge,    // change_tile_owner_proc
 	nullptr,                            // add_produced_cargo_proc
 	VehicleEnter_TunnelBridge,       // vehicle_enter_tile_proc

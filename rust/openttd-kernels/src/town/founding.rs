@@ -84,7 +84,6 @@ pub struct FoundingServices {
     pub directory_rebuild: extern "C" fn(),
     pub directory_resort: extern "C" fn(),
     pub update_noise: extern "C" fn(),
-    pub rebuild_tree: extern "C" fn(),
     pub delete_town: extern "C" fn(TownId),
     pub assert_random_context: extern "C" fn(),
     pub assert_allocation: extern "C" fn(),
@@ -102,7 +101,6 @@ pub struct FoundingServices {
     pub set_progress: extern "C" fn(*mut Frame, u32) -> bool,
     pub increase_progress: extern "C" fn(*mut Frame) -> bool,
     pub no_town_error: extern "C" fn(),
-    pub town_count: extern "C" fn() -> usize,
     pub random: *mut names::Randomizer,
     pub edge_error: u32,
     pub close_error: u32,
@@ -156,6 +154,7 @@ impl<'a> Founding<'a> {
             services: self.shared,
             map,
             owner: town.state,
+            house_shell: std::cell::OnceCell::from(town.shell),
         }
     }
     fn random(&self) -> u32 {
@@ -669,7 +668,7 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
         }
     }
     scratch.clear();
-    observed!((f.s.rebuild_tree)());
+    observed!((f.shared.rebuild_town_tree)());
     if current != 0 {
         unsafe {
             result.write(true);
@@ -690,7 +689,9 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
                 )
             }
             .is_some();
-    if !success && observed!((f.s.town_count)()) == 0 && !observed!((f.leaves.environment.editor)())
+    if !success
+        && observed!((f.shared.town_count)()) == 0
+        && !observed!((f.leaves.environment.editor)())
     {
         observed!((f.s.no_town_error)());
     }

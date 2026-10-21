@@ -1154,6 +1154,7 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 	static_assert(AIR_SHADOW == 4 && to_underlying(VehState::Crashed) == 7 && SND_12_EXPLOSION == 16 && OWNER_WATER.base() == 17 && VEH_AIRCRAFT == 3 && TREE_GROUND_SHORE == 3);
 	static const OpenTTDWaterGroundServices services{
 		.rail = &GetRustRailGroundServices(), .clear = &GetRustClearServices(), .vehicles = &GetRustVehicleServices(), .costs = &GetRustGroundCostServices(), .company = &GetRustCompanyServices(),
+		.signal_context = GetRustSignalContext,
 		.non_flooding = [](uint32_t t) noexcept { return IsNonFloodingWaterTile(TileIndex{t}); },
 		.set_non_flooding = [](uint32_t t, bool value) noexcept { SetNonFloodingWaterTile(TileIndex{t}, value); },
 		.coast = RustIsCoast,

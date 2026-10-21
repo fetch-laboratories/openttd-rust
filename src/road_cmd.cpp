@@ -2035,12 +2035,6 @@ const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept
 	};
 	return services;
 }
-static void TileLoop_Road(uint32_t tile) noexcept
-{
-	OpenTTDGroundCall call;
-	RustRoadCommandContext command;
-	openttd_rust_road_tile_loop(tile, OpenTTDLandscape(), _settings_client.sound.ambient, _settings_game.economy.mod_road_rebuild, Map::SizeX(), &call, &GetRustGroundCostServices(), &GetRustRoadGroundServices(), &command.view, &GetRustSharedServices());
-}
 #else
 static const Roadside _town_road_types[][2] = {
 	{ Roadside::Grass,        Roadside::Grass },
@@ -2877,7 +2871,11 @@ extern const TileTypeProcs _tile_type_road_procs = {
 	GetTileTrackStatus_Road, // get_tile_track_status_proc
 	ClickTile_Road,          // click_tile_proc
 	nullptr,                    // animate_tile_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust scheduler calls the owner directly.
+#else
 	TileLoop_Road,           // tile_loop_proc
+#endif
 	ChangeTileOwner_Road,    // change_tile_owner_proc
 	nullptr,                    // add_produced_cargo_proc
 	VehicleEnter_Road,       // vehicle_enter_tile_proc

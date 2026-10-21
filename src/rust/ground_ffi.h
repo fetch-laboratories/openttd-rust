@@ -11,6 +11,7 @@
 #include "service_defaults.hpp"
 #include "services_ffi.h"
 #include "water_regions_ffi.h"
+#include "signal_ffi.h"
 /* Actual fixed-underlying native enums, not byte aliases. Rust transparent
  * carriers preserve every stored bit pattern without enum-discriminant guards. */
 enum ClearGround : uint8_t;
@@ -110,10 +111,6 @@ struct OpenTTDWaterRestorationServices {
 };
 const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept;
 struct OpenTTDWaterGroundServices;
-extern "C" {
-void openttd_rust_road_tile_loop(uint32_t, LandscapeType, bool, bool, uint32_t, OpenTTDGroundCall *, const OpenTTDGroundCostServices *, const OpenTTDRoadGroundServices *, const OpenTTDRoadCommandContext *, const OpenTTDSharedServices *);
-void openttd_rust_tunnel_tile_loop(uint32_t, LandscapeType, const OpenTTDTunnelServices *, const OpenTTDSharedServices *);
-}
 struct OpenTTDVehicle;
 struct OpenTTDVehicleServices;
 struct OpenTTDAirportGround { const OpenTTDStation *station; uint32_t tile; uint16_t width; uint16_t height; };
@@ -126,7 +123,8 @@ struct OpenTTDWaterGroundServices {
 	const OpenTTDClearServices *clear;
 	const OpenTTDVehicleServices *vehicles;
 	const OpenTTDGroundCostServices *costs;
-	const OpenTTDCompanyServices *company; ///< Current-company exchange and signal-buffer update.
+	const OpenTTDCompanyServices *company; ///< Current-company exchange.
+	OpenTTDSignalContext (*signal_context)() noexcept OPENTTD_SERVICE_DEFAULT(signal_context);
 	bool (*non_flooding)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(non_flooding);
 	void (*set_non_flooding)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_non_flooding);
 	bool (*coast)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(coast);

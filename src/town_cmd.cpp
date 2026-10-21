@@ -47,12 +47,15 @@
 #include "rust/services_road.h"
 #include "rust/company_services.h"
 #include "rust/environment_services.h"
+#include "rust/services_cargo.h"
+#include "rust/services_newgrf.h"
 #include "rust/tile_animation_services.h"
 #include "rust/services_station.h"
 #include "rust/services_landscape.h"
 #include "rust/settings_services.h"
 #include "rust/town_founding_ffi.h"
 #include "rust/generation_services.hpp"
+#include "rust/house_ffi.h"
 #endif
 #include "town_kdtree.h"
 #include "townname_func.h"
@@ -250,8 +253,8 @@ Money HouseSpec::GetRemovalCost() const
 	return (_price[PR_CLEAR_HOUSE] * this->removal_cost) >> 8;
 }
 
-static bool TryBuildTownHouse(Town *t, TileIndex tile, TownExpandModes modes);
 #ifndef WITH_RUST
+static bool TryBuildTownHouse(Town *t, TileIndex tile, TownExpandModes modes);
 static Town *CreateRandomTown(uint attempts, uint32_t townnameparts, TownSize size, bool city, TownLayout layout);
 #endif
 
@@ -356,6 +359,9 @@ static Foundation GetFoundation_Town(TileIndex tile, Slope tileh)
  * The newhouses animation supersedes regular ones.
  * @param tile TileIndex of the house to animate.
  */
+#ifdef WITH_RUST
+static void AnimateTile_Town(TileIndex tile) { openttd_rust_house_animate(&GetRustTownServices(), &GetRustSharedServices(), tile.base()); }
+#else
 static void AnimateTile_Town(TileIndex tile)
 {
 	if (GetHouseType(tile) >= NEW_HOUSE_OFFSET) {
@@ -400,6 +406,7 @@ static void AnimateTile_Town(TileIndex tile)
 
 	MarkTileDirtyByTile(tile);
 }
+#endif
 
 /**
  * Determines if a town is close to a tile.
@@ -459,9 +466,7 @@ void ClearAllTownCachedNames()
  * @param t The town which has changed.
  * @param mod The population change (can be positive or negative).
  */
-#ifdef WITH_RUST
-static void ChangePopulation(Town *t, int mod) { openttd_rust_town_change_population(&GetRustTownServices(), t->growth_owner.get(), t->index.base(), mod); }
-#else
+#ifndef WITH_RUST
 static void ChangePopulation(Town *t, int mod)
 {
 	t->cache.population += mod;
@@ -489,6 +494,29 @@ uint32_t GetWorldPopulation()
 }
 #endif
 
+#ifdef WITH_RUST
+/* The lazy finder is stack-owned here, preserving the original station caching. */
+static void TileLoop_Town(uint32_t tile_index) noexcept
+{
+	TileIndex tile{tile_index};
+	StationFinder stations(TileArea(tile, 1, 1));
+	openttd_rust_house_tile_loop(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), &stations);
+}
+static CommandCost ClearTile_Town(TileIndex tile, DoCommandFlags flags)
+{
+	CommandCost result;
+	openttd_rust_house_clear(&GetRustTownServices(), &GetRustSharedServices(), RustCommandCost(&result), tile.base(), flags.base());
+	return result;
+}
+static void AddProducedCargo_Town(TileIndex tile, CargoArray &produced)
+{
+	openttd_rust_house_produced(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), &produced);
+}
+void AddAcceptedCargoOfHouse(TileIndex tile, HouseID house, const HouseSpec *, Town *t, CargoArray &acceptance, CargoTypes &always_accepted)
+{
+	openttd_rust_house_accepted(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), house, t, &acceptance, &always_accepted);
+}
+#else
 /**
  * Remove stations from nearby station list if a town is no longer in the catchment area of each.
  * To improve performance only checks stations that cover the provided house area (doesn't need to contain an actual house).
@@ -627,15 +655,8 @@ static void TownGenerateCargoBinomial(Town *t, TownProductionEffect tpe, uint8_t
  * Tile callback function. Periodic tick handler for the tiles of a town.
  * @param tile been asked to do its stuff
  */
-#ifdef WITH_RUST
-static void TileLoop_Town(uint32_t tile_index) noexcept
-#else
 static void TileLoop_Town(TileIndex tile)
-#endif
 {
-#ifdef WITH_RUST
-	TileIndex tile{tile_index};
-#endif
 	HouseID house_id = GetHouseType(tile);
 
 	/* NewHouseTileLoop returns false if Callback 21 succeeded, i.e. the house
@@ -879,6 +900,8 @@ void AddAcceptedCargoOfHouse(TileIndex tile, HouseID house, const HouseSpec *hs,
 	}
 }
 
+#endif
+
 static void AddAcceptedCargo_Town(TileIndex tile, CargoArray &acceptance, CargoTypes &always_accepted)
 {
 	HouseID house = GetHouseType(tile);
@@ -964,16 +987,12 @@ static OpenTTDTownHouseAvailability RustTownHouseAvailability(uint16_t id) noexc
 static OpenTTDTownHousePlacement RustTownHousePlacement(uint16_t id) noexcept
 {
 	const auto *hs = HouseSpec::Get(id);
-	return {.min_year = hs->min_year.base(), .max_year = hs->max_year.base(), .flags = hs->building_flags.base(), .extra_flags = hs->extra_flags.base()};
+	return {.min_year = hs->min_year.base(), .max_year = hs->max_year.base()};
 }
-static OpenTTDTownHouseConstruction RustTownHouseConstruction(uint16_t id) noexcept
-{
-	const auto *hs = HouseSpec::Get(id);
-	return {.extra_flags = hs->extra_flags.base(), .population = hs->population};
-}
-static uint8_t RustTownHouseFlags(uint16_t id) noexcept { return HouseSpec::Get(id)->building_flags.base(); }
-static uint8_t RustTownHouseExtraFlags(uint16_t id) noexcept { return HouseSpec::Get(id)->extra_flags.base(); }
-static bool RustTownHouseAllowsCallback(uint16_t id) noexcept { return HouseSpec::Get(id)->callback_mask.Test(HouseCallbackMask::AllowConstruction); }
+static uint8_t RustTownHousePopulation(const HouseSpec *spec) noexcept { return spec->population; }
+static uint8_t RustTownHouseFlags(const HouseSpec *spec) noexcept { return spec->building_flags.base(); }
+static uint8_t RustTownHouseExtraFlags(const HouseSpec *spec) noexcept { return spec->extra_flags.base(); }
+static uint16_t RustTownHouseCallbacks(const HouseSpec *spec) noexcept { return spec->callback_mask.base(); }
 static OpenTTDTownRoadChoice RustTownRoadInfo(uint8_t id) noexcept
 {
 	const auto *rti = GetRoadTypeInfo(static_cast<RoadType>(id));
@@ -1074,10 +1093,9 @@ static void RustTown_clear_house_land(uint32_t tile) noexcept
 static bool RustTown_allow_construction(uint32_t town, uint32_t tile, uint32_t house, uint32_t random) noexcept
 {
 	const auto *hs = HouseSpec::Get(house);
-	uint16_t cb = GetHouseCallback(CBID_HOUSE_ALLOW_CONSTRUCTION, 0, 0, house, Town::Get(TownID(town)), TileIndex{tile}, {}, true, random);
-	return cb == CALLBACK_FAILED || Convert8bitBooleanCallback(hs->grf_prop.grffile, CBID_HOUSE_ALLOW_CONSTRUCTION, cb);
+	uint16_t cb = OpenTTDHouseCallback(CBID_HOUSE_ALLOW_CONSTRUCTION, 0, 0, house, Town::Get(TownID(town)), TileIndex{tile}, true, random);
+	return cb == CALLBACK_FAILED || OpenTTDConvert8bitBooleanCallback(hs->grf_prop.grffile, CBID_HOUSE_ALLOW_CONSTRUCTION, cb);
 }
-static void RustTown_construction_animation(uint32_t tile) noexcept { TriggerHouseAnimation_ConstructionStageChanged(TileIndex{tile}, true); }
 static void RustTownStations(uint32_t tile, uint32_t radius, void *context, void (*visit)(void *, const OpenTTDStation *, uint32_t)) noexcept
 {
 	struct Context { void *context; void (*visit)(void *, const OpenTTDStation *, uint32_t); } state{context, visit};
@@ -1089,6 +1107,157 @@ static void RustTownStations(uint32_t tile, uint32_t radius, void *context, void
 /* Thin FFI conversion facades over the shared station observations. */
 static void RustTownDirtyAuthority(uint32_t town) noexcept { SetWindowDirty(WC_TOWN_AUTHORITY, TownID(town)); }
 
+static_assert(NEW_HOUSE_OFFSET == 110 && HOUSE_NUM_ACCEPTS == 16 && MP_HOUSE == 3 && TOWN_PRODUCTION_DIVISOR == 256);
+static_assert(OWNER_WATER.base() == 0x11 && CALLBACK_HOUSEPRODCARGO_END == 0x20FF && TOWN_COUNCIL_PERMISSIVE == 3);
+static_assert(RATING_MAXIMUM == 1000 && RATING_HOUSE_MINIMUM == -1000 && PH_ALLOWED_CONSTRUCTED == 2 && EXPENSES_CONSTRUCTION == 0);
+/* Canonical packed-map readers shared by the narrow phase observations below. */
+static uint16_t RustHouseType(uint32_t tile) noexcept { return GetHouseType(TileIndex{tile}); }
+static bool RustHouseCompleted(uint32_t tile) noexcept { return IsHouseCompleted(TileIndex{tile}); }
+static uint8_t RustHouseAge(uint32_t tile) noexcept { return static_cast<uint8_t>(GetHouseAge(TileIndex{tile}).base()); }
+static bool RustHouseLiftHasDestination(uint32_t tile) noexcept { return LiftHasDestination(TileIndex{tile}); }
+static OpenTTDTownRef RustHouseTown(uint32_t tile) noexcept
+{
+	return OpenTTDTownResolveByID(GetRustSharedServices().town_index(tile));
+}
+static OpenTTDHouseEntry RustHouseEntry(uint32_t tile) noexcept
+{
+	return {.town = RustHouseTown(tile), .house = RustHouseType(tile)};
+}
+static OpenTTDHouseLoopTile RustHouseLoopTile(uint32_t tile) noexcept
+{
+	return {.age = RustHouseAge(tile), .completed = RustHouseCompleted(tile), .lift_has_destination = RustHouseLiftHasDestination(tile)};
+}
+static OpenTTDHouseLift RustHouseLift(uint32_t tile) noexcept
+{
+	return {.position = GetLiftPosition(TileIndex{tile}), .destination = GetLiftDestination(TileIndex{tile}), .has_destination = RustHouseLiftHasDestination(tile)};
+}
+static OpenTTDHouseRandom RustHouseRandom(uint32_t tile) noexcept
+{
+	return {.bits = GetHouseRandomBits(TileIndex{tile}), .triggers = GetHouseRandomTriggers(TileIndex{tile}).base()};
+}
+static OpenTTDHouseConstruction RustHouseConstruction(uint32_t tile) noexcept
+{
+	return {.house = RustHouseType(tile), .tick = GetHouseConstructionTick(TileIndex{tile}), .completed = RustHouseCompleted(tile)};
+}
+static OpenTTDHouseCache RustHouseCache(uint32_t tile) noexcept
+{
+	return {.house = RustHouseType(tile), .town = GetRustSharedServices().town_index(tile), .completed = RustHouseCompleted(tile)};
+}
+static OpenTTDHouseAge RustHouseAgeObservation(uint32_t tile) noexcept
+{
+	return {.age = RustHouseAge(tile), .completed = RustHouseCompleted(tile)};
+}
+/* These phase projections call each field's single typed reader. Keep field
+ * definitions here rather than repeating HouseSpec reads in a projection. */
+static uint8_t RustHouseMail(const HouseSpec *spec) noexcept { return spec->mail_generation; }
+static uint8_t RustHouseMinimumLife(const HouseSpec *spec) noexcept { return spec->minimum_life; }
+static uint8_t RustHouseProcessingTime(const HouseSpec *spec) noexcept { return spec->processing_time; }
+static OpenTTDHouseLoopSpec RustHouseLoopSpec(uint16_t house) noexcept
+{
+	const HouseSpec *spec = HouseSpec::Get(house);
+	return {.callbacks = RustTownHouseCallbacks(spec), .flags = RustTownHouseFlags(spec), .population = RustTownHousePopulation(spec), .mail = RustHouseMail(spec), .minimum_life = RustHouseMinimumLife(spec)};
+}
+static OpenTTDHouseAnimationSpec RustHouseAnimationSpec(uint16_t house) noexcept
+{
+	const HouseSpec *spec = HouseSpec::Get(house);
+	return {.callbacks = RustTownHouseCallbacks(spec), .extra_flags = RustTownHouseExtraFlags(spec)};
+}
+static OpenTTDHouseNewSpec RustHouseNewSpec(uint16_t house) noexcept
+{
+	const HouseSpec *spec = HouseSpec::Get(house);
+	return {.callbacks = RustTownHouseCallbacks(spec), .flags = RustTownHouseFlags(spec), .processing_time = RustHouseProcessingTime(spec)};
+}
+static OpenTTDHouseProduction RustHouseProduction(uint16_t house) noexcept
+{
+	const HouseSpec *spec = HouseSpec::Get(house);
+	return {.callbacks = RustTownHouseCallbacks(spec), .population = RustTownHousePopulation(spec), .mail = RustHouseMail(spec)};
+}
+static OpenTTDHouseAcceptance RustHouseAcceptance(uint16_t house) noexcept
+{
+	const HouseSpec *hs = HouseSpec::Get(house);
+	OpenTTDHouseAcceptance result{};
+	std::copy(std::begin(hs->accepts_cargo), std::end(hs->accepts_cargo), result.accepts);
+	std::copy(std::begin(hs->cargo_acceptance), std::end(hs->cargo_acceptance), result.amounts);
+	return result;
+}
+static const GRFFile *RustHouseGrf(uint16_t house) noexcept { return HouseSpec::Get(house)->grf_prop.grffile; }
+static const OpenTTDHouseServices &GetRustHouseServices() noexcept
+{
+	static const OpenTTDHouseServices services{
+		.cost = &GetRustCommandCostServices(),
+		.commands = &GetRustCommandServices(),
+		.authority = &GetRustTownAuthorityServices(),
+		.entry = RustHouseEntry,
+		.loop_tile = RustHouseLoopTile,
+		.house_type = RustHouseType,
+		.completed = RustHouseCompleted,
+		.is_protected = [](uint32_t tile) noexcept { return IsHouseProtected(TileIndex{tile}); },
+		.lift = RustHouseLift,
+		.random = RustHouseRandom,
+		.construction = RustHouseConstruction,
+		.cache = RustHouseCache,
+		.age = RustHouseAgeObservation,
+		.processing = [](uint32_t tile) noexcept -> uint8_t { return GetHouseProcessingTime(TileIndex{tile}); },
+		.clean_type = [](uint32_t tile) noexcept -> uint16_t { return GetCleanHouseType(TileIndex{tile}); },
+		.town = RustHouseTown,
+		.town_shell = OpenTTDTownShellByID,
+		.loop_spec = RustHouseLoopSpec,
+		.animation_spec = RustHouseAnimationSpec,
+		.new_spec = RustHouseNewSpec,
+		.production = RustHouseProduction,
+		.sprite_groups = [](uint16_t house) noexcept { return HouseSpec::Get(house)->grf_prop.HasSpriteGroups(); },
+		.removal = [](uint16_t house) noexcept -> OpenTTDHouseRemoval { const HouseSpec *hs = HouseSpec::Get(house); return {static_cast<int64_t>(hs->GetRemovalCost()), hs->remove_rating_decrease}; },
+		.acceptance = RustHouseAcceptance,
+		.watched = [](uint16_t house) noexcept -> uint64_t { return HouseSpec::Get(house)->watched_cargoes; },
+		.substitute = [](uint16_t house) noexcept -> uint16_t { return _house_mngr.GetSubstituteID(house); },
+		.inc_construction = [](uint32_t tile) noexcept { IncHouseConstructionTick(TileIndex{tile}); },
+		.reset_age = [](uint32_t tile) noexcept { ResetHouseAge(TileIndex{tile}); },
+		.set_age = [](uint32_t tile, uint8_t age) noexcept { Tile(TileIndex{tile}).m5() = age; },
+		.set_lift_destination = [](uint32_t tile, uint8_t destination) noexcept { SetLiftDestination(TileIndex{tile}, destination); },
+		.set_lift_position = [](uint32_t tile, uint8_t position) noexcept { SetLiftPosition(TileIndex{tile}, position); },
+		.halt_lift = [](uint32_t tile) noexcept { HaltLift(TileIndex{tile}); },
+		.dec_processing = [](uint32_t tile) noexcept { DecHouseProcessingTime(TileIndex{tile}); },
+		.set_processing = [](uint32_t tile, uint8_t time) noexcept { SetHouseProcessingTime(TileIndex{tile}, time); },
+		.set_random_bits = [](uint32_t tile, uint8_t bits) noexcept { SetHouseRandomBits(TileIndex{tile}, bits); },
+		.set_random_triggers = [](uint32_t tile, uint8_t triggers) noexcept { SetHouseRandomTriggers(TileIndex{tile}, HouseRandomTriggers{triggers}); },
+		.set_type = [](uint32_t tile, uint16_t house) noexcept { SetHouseType(TileIndex{tile}, house); },
+		.animate_new = OpenTTDAnimateNewHouse,
+		.delete_inspect = OpenTTDDeleteHouseInspect,
+		.callback = [](uint16_t callback, uint32_t param1, uint32_t param2, uint16_t house, Town *town, uint32_t tile, bool not_yet_constructed) noexcept -> uint16_t {
+			return OpenTTDHouseCallback(static_cast<CallbackID>(callback), param1, param2, house, town, TileIndex{tile}, not_yet_constructed);
+		},
+		.cargo_translation = [](uint16_t house, uint8_t cargo) noexcept -> uint8_t { return OpenTTDCargoTranslation(cargo, RustHouseGrf(house)); },
+		.convert_boolean = [](uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvertBooleanCallback(RustHouseGrf(house), callback, result); },
+		.convert_8bit = [](uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvert8bitBooleanCallback(RustHouseGrf(house), callback, result); },
+		.resolve_reseed = OpenTTDHouseResolveReseed,
+		.change_frame = OpenTTDHouseChangeFrame,
+		.next_near_station = [](Town *t, Station *previous) noexcept -> Station * {
+			auto next = previous == nullptr ? t->stations_near.begin() : t->stations_near.upper_bound(previous);
+			return next == t->stations_near.end() ? nullptr : *next;
+		},
+		.erase_near_station = [](Town *t, Station *st) noexcept { t->stations_near.erase(st); },
+		.station_catchment = [](const Station *st, uint32_t tile) noexcept { return st->TileIsInCatchment(TileIndex{tile}); },
+		.station_covers_town = [](const Station *st, uint16_t town) noexcept { return st->CatchmentCoversTown(TownID(town)); },
+		.move_goods = [](void *finder, uint8_t cargo, uint32_t amount, uint16_t town) noexcept -> uint32_t {
+			return OpenTTDMoveGoodsToStation(cargo, amount, {TownID(town), SourceType::Town}, static_cast<StationFinder *>(finder)->GetStations());
+		},
+		.production_cargo = [](uint8_t effect, uint32_t at) noexcept -> OpenTTDHouseCargo {
+			const auto &cargoes = CargoSpec::town_production_cargoes[effect];
+			if (at >= cargoes.size()) return {INVALID_CARGO, 0};
+			return {cargoes[at]->Index(), cargoes[at]->town_production_multiplier};
+		},
+		.add_cargo = [](void *cargoes, uint8_t cargo, uint32_t amount) noexcept { (*static_cast<CargoArray *>(cargoes))[cargo] += amount; },
+		.food_cargo = OpenTTDFoodCargo,
+		.scale_cargo = OpenTTDScaleTownCargo,
+		.cargogen_mode = OpenTTDTownCargoGenMode,
+		.place_houses = OpenTTDPlaceHouses,
+		.company_human = OpenTTDCompanyIsValidHuman,
+		.init_counts = []() noexcept { InitializeBuildingCounts(); },
+		.errors = {STR_ERROR_BUILDING_MUST_BE_DEMOLISHED, STR_ERROR_BUILDING_IS_PROTECTED, STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
+			STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_FLAT_LAND_REQUIRED, STR_ERROR_MUST_FOUND_TOWN_FIRST},
+	};
+	return services;
+}
 const OpenTTDTownLeaves &GetRustTownServices() noexcept
 {
 	static const OpenTTDTownLeaves services{
@@ -1105,12 +1274,12 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.road_flags = RustTownRoadFlags,
 		.house_availability = RustTownHouseAvailability,
 		.house_placement = RustTownHousePlacement,
-		.house_construction = RustTownHouseConstruction,
-		.house_flags = RustTownHouseFlags,
-		.house_extra_flags = RustTownHouseExtraFlags,
-		.house_allows_callback = RustTownHouseAllowsCallback,
+		.house_population = [](uint16_t house) noexcept -> uint8_t { return RustTownHousePopulation(HouseSpec::Get(house)); },
+		.house_flags = [](uint16_t house) noexcept -> uint8_t { return RustTownHouseFlags(HouseSpec::Get(house)); },
+		.house_extra_flags = [](uint16_t house) noexcept -> uint8_t { return RustTownHouseExtraFlags(HouseSpec::Get(house)); },
+		.house_callbacks = [](uint16_t house) noexcept -> uint16_t { return RustTownHouseCallbacks(HouseSpec::Get(house)); },
 		.road_info = RustTownRoadInfo,
-		.state = GetRustSharedServices().town_owner_by_id,
+		.resolve_owner = OpenTTDTownOwnerByID,
 		.stations = RustTownStations,
 		.station_activity_owner = OpenTTDStationActivityOwner,
 		.station_owner = RustStationOwnerByte<const Station>,
@@ -1136,7 +1305,7 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.build_tunnel = RustTown_build_tunnel,
 		.clear_house_land = RustTown_clear_house_land,
 		.allow_construction = RustTown_allow_construction,
-		.construction_animation = RustTown_construction_animation,
+		.houses = &GetRustHouseServices(),
 	};
 	return services;
 }
@@ -2320,7 +2489,6 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.directory_rebuild = []() noexcept { InvalidateWindowData(WC_TOWN_DIRECTORY, 0, TDIWD_FORCE_REBUILD); },
 		.directory_resort = []() noexcept { InvalidateWindowData(WC_TOWN_DIRECTORY, 0, TDIWD_FORCE_RESORT); },
 		.update_noise = []() noexcept { UpdateAirportsNoise(); },
-		.rebuild_tree = []() noexcept { RebuildTownKdtree(); },
 		.delete_town = [](uint16_t id) noexcept { [[maybe_unused]] CommandCost rc = Command<CMD_DELETE_TOWN>::Do(DoCommandFlag::Execute, TownID(id)); assert(rc.Succeeded()); },
 		.assert_random_context = OpenTTDAssertTownGenerationContext,
 		.assert_allocation = []() noexcept { assert(Town::CanAllocateItem()); },
@@ -2346,7 +2514,6 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.set_progress = [](OpenTTDTownFoundingFrame *frame, uint total) noexcept { return RunGenerationProgress(frame, [total] { SetGeneratingWorldProgress(GWP_TOWN, total); }); },
 		.increase_progress = [](OpenTTDTownFoundingFrame *frame) noexcept { return RunGenerationProgress(frame, [] { IncreaseGeneratingWorldProgress(GWP_TOWN); }); },
 		.no_town_error = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_COULD_NOT_CREATE_TOWN), {}, WL_CRITICAL); },
-		.town_count = []() noexcept -> size_t { return Town::GetNumItems(); },
 		.random = &_random,
 		.edge_error = STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP_SUB,
 		.close_error = STR_ERROR_TOO_CLOSE_TO_ANOTHER_TOWN,
@@ -2893,13 +3060,7 @@ HouseZone GetTownRadiusGroup(const Town *t, TileIndex tile)
  * @param is_protected Whether the house is protected from the town upgrading it.
  * @pre The house can be built here.
  */
-#ifdef WITH_RUST
-static void BuildTownHouse(Town *t, TileIndex tile, const HouseSpec *, HouseID house, uint8_t random_bits, bool house_completed, bool is_protected)
-{
-	openttd_rust_town_build_house(&GetRustTownServices(), &GetRustSharedServices(), t->index.base(), tile.base(), house, random_bits, house_completed, is_protected);
-}
-static bool TryBuildTownHouse(Town *t, TileIndex tile, TownExpandModes modes) { return openttd_rust_town_try_house(&GetRustTownServices(), &GetRustSharedServices(), t->index.base(), tile.base(), modes.base()); }
-#else
+#ifndef WITH_RUST
 static inline void ClearMakeHouseTile(TileIndex tile, Town *t, uint8_t counter, uint8_t stage, HouseID type, uint8_t random_bits, bool is_protected)
 {
 	[[maybe_unused]] CommandCost cc = Command<CMD_LANDSCAPE_CLEAR>::Do({DoCommandFlag::Execute, DoCommandFlag::Auto, DoCommandFlag::NoWater}, tile);
@@ -3300,6 +3461,33 @@ static bool TryBuildTownHouse(Town *t, TileIndex tile, TownExpandModes modes)
 
 
 /**
+ * Determines if a given HouseID is part of a multitile house.
+ * The given ID is set to the ID of the north tile and the TileDiff to the north tile is returned.
+ *
+ * @param house Is changed to the HouseID of the north tile of the same house
+ * @return TileDiff from the tile of the given HouseID to the north tile
+ */
+TileIndexDiff GetHouseNorthPart(HouseID &house)
+{
+	if (house >= 3) { // house id 0,1,2 MUST be single tile houses, or this code breaks.
+		if (HouseSpec::Get(house - 1)->building_flags.Test(BuildingFlag::Size2x1)) {
+			house--;
+			return TileDiffXY(-1, 0);
+		} else if (HouseSpec::Get(house - 1)->building_flags.Any(BUILDING_2_TILES_Y)) {
+			house--;
+			return TileDiffXY(0, -1);
+		} else if (HouseSpec::Get(house - 2)->building_flags.Any(BUILDING_HAS_4_TILES)) {
+			house -= 2;
+			return TileDiffXY(-1, 0);
+		} else if (HouseSpec::Get(house - 3)->building_flags.Any(BUILDING_HAS_4_TILES)) {
+			house -= 3;
+			return TileDiffXY(-1, -1);
+		}
+	}
+	return TileDiffXY(0, 0);
+}
+
+/**
  * Place an individual house.
  * @param flags Type of operation.
  * @param tile Tile on which to place the house.
@@ -3308,6 +3496,14 @@ static bool TryBuildTownHouse(Town *t, TileIndex tile, TownExpandModes modes)
  * @param replace Whether to automatically demolish an existing house on this tile, if present.
  * @return Empty cost or an error.
  */
+#ifdef WITH_RUST
+CommandCost CmdPlaceHouse(DoCommandFlags flags, TileIndex tile, HouseID house, bool is_protected, bool replace)
+{
+	CommandCost result;
+	openttd_rust_house_place(&GetRustTownServices(), &GetRustSharedServices(), RustCommandCost(&result), flags.base(), tile.base(), house, is_protected, replace);
+	return result;
+}
+#else
 CommandCost CmdPlaceHouse(DoCommandFlags flags, TileIndex tile, HouseID house, bool is_protected, bool replace)
 {
 	if (_game_mode != GM_EDITOR && _settings_game.economy.place_houses == PH_FORBIDDEN) return CMD_ERROR;
@@ -3380,33 +3576,6 @@ static void DoClearTownHouseHelper(TileIndex tile, Town *t, HouseID house)
 }
 
 /**
- * Determines if a given HouseID is part of a multitile house.
- * The given ID is set to the ID of the north tile and the TileDiff to the north tile is returned.
- *
- * @param house Is changed to the HouseID of the north tile of the same house
- * @return TileDiff from the tile of the given HouseID to the north tile
- */
-TileIndexDiff GetHouseNorthPart(HouseID &house)
-{
-	if (house >= 3) { // house id 0,1,2 MUST be single tile houses, or this code breaks.
-		if (HouseSpec::Get(house - 1)->building_flags.Test(BuildingFlag::Size2x1)) {
-			house--;
-			return TileDiffXY(-1, 0);
-		} else if (HouseSpec::Get(house - 1)->building_flags.Any(BUILDING_2_TILES_Y)) {
-			house--;
-			return TileDiffXY(0, -1);
-		} else if (HouseSpec::Get(house - 2)->building_flags.Any(BUILDING_HAS_4_TILES)) {
-			house -= 2;
-			return TileDiffXY(-1, 0);
-		} else if (HouseSpec::Get(house - 3)->building_flags.Any(BUILDING_HAS_4_TILES)) {
-			house -= 3;
-			return TileDiffXY(-1, -1);
-		}
-	}
-	return TileDiffXY(0, 0);
-}
-
-/**
  * Clear a town house.
  * @param t The town which owns the house.
  * @param tile The tile to clear.
@@ -3446,6 +3615,8 @@ void ClearTownHouse(Town *t, TileIndex tile)
 
 	UpdateTownRadius(t);
 }
+
+#endif
 
 /**
  * Rename a town (server-only).
@@ -4584,23 +4755,10 @@ static const IntervalTimer<TimerGameEconomy> _economy_towns_monthly({TimerGameEc
 #endif
 });
 
-#ifdef WITH_RUST
-static const OpenTTDTownYearlyServices &TownYearlyServices()
-{
-	static const OpenTTDTownYearlyServices houses{
-		.completed = [](uint32_t tile) noexcept { return IsHouseCompleted(TileIndex{tile}); },
-		.age = [](uint32_t tile) noexcept { return Tile(TileIndex{tile}).m5(); },
-		.set_age = [](uint32_t tile, uint8_t age) noexcept { Tile(TileIndex{tile}).m5() = age; },
-	};
-	return houses;
-}
-#endif
-
 static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::TOWN}, [](auto)
 {
 #ifdef WITH_RUST
-
-	openttd_rust_town_yearly(&GetRustSharedServices(), &TownYearlyServices(), Map::Size());
+	openttd_rust_house_age_all(&GetRustTownServices(), &GetRustSharedServices());
 #else
 	/* Increment house ages */
 	for (const auto t : Map::Iterate()) {
@@ -4610,6 +4768,14 @@ static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEco
 #endif
 });
 
+#ifdef WITH_RUST
+static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
+{
+	CommandCost result;
+	openttd_rust_house_terraform(&GetRustTownServices(), &GetRustSharedServices(), RustCommandCost(&result), tile.base(), flags.base(), z_new, tileh_new);
+	return result;
+}
+#else
 static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
 {
 	if (AutoslopeEnabled()) {
@@ -4637,6 +4803,7 @@ static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int 
 
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
 }
+#endif
 
 /** Tile callback functions for a town */
 extern const TileTypeProcs _tile_type_town_procs = {
@@ -4667,14 +4834,14 @@ std::span<const DrawBuildingsTileStruct> GetTownDrawTileData()
 #include "abi-visit-OpenTTDTownLeaves.hpp"
 #include "abi-visit-OpenTTDTownFoundingServices.hpp"
 #include "abi-visit-OpenTTDTownAuthorityServices.hpp"
+#include "abi-visit-OpenTTDHouseServices.hpp"
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
-#include "abi-visit-OpenTTDTownYearlyServices.hpp"
 bool CheckAbi_town_cmd()
 {
 	return AbiServicesComplete(GetRustTownServices().environment) &&
 		AbiServicesComplete(GetRustTownServices()) &&
 		AbiServicesComplete(GetRustTownFoundingServices()) &&
 		AbiServicesComplete(GetRustTownAuthorityServices()) &&
-		AbiServicesComplete(TownYearlyServices());
+		AbiServicesComplete(*GetRustTownServices().houses);
 }
 #endif

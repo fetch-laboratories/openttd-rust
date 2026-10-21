@@ -75,11 +75,6 @@ const OpenTTDSignalServices &GetRustSignalServices() noexcept
 	return _signal_services;
 }
 
-OpenTTDSignalContext GetRustSignalContext() noexcept
-{
-	return {&GetRustSharedServices(), &GetRustRailMapServices(), &_signal_services, OpenTTDMapLogX()};
-}
-
 void UpdateSignalsInBuffer()
 {
 	openttd_rust_signal_flush(&GetRustSharedServices(), &GetRustRailMapServices(), &_signal_services, Map::LogX());

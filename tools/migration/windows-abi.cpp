@@ -65,6 +65,7 @@
 #include "tests/town_protocol.hpp"
 #include "tests/water_regions_protocol.hpp"
 // Registry: house (#256).
+#include "rust/house_ffi.h"
 
 // Registry: landscape (#212).
 #include "rust/ground_ffi.h"

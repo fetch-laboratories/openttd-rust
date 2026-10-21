@@ -56,18 +56,13 @@ static void GetTileDesc_Void(TileIndex, TileDesc &td)
 	td.owner[0] = OWNER_NONE;
 }
 
-#ifdef WITH_RUST
-static void TileLoop_Void(uint32_t tile_index) noexcept
-#else
+#ifndef WITH_RUST
 static void TileLoop_Void(TileIndex tile)
-#endif
 {
-#ifdef WITH_RUST
-	const TileIndex tile{tile_index};
-#endif
 	/* Floods adjacent edge tile to prevent maps without water. */
 	TileLoop_Water(tile);
 }
+#endif
 
 static void ChangeTileOwner_Void(TileIndex, Owner, Owner)
 {
@@ -93,7 +88,11 @@ extern const TileTypeProcs _tile_type_void_procs = {
 	GetTileTrackStatus_Void,  // get_tile_track_status_proc
 	nullptr,                     // click_tile_proc
 	nullptr,                     // animate_tile_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust scheduler calls the owner directly.
+#else
 	TileLoop_Void,            // tile_loop_proc
+#endif
 	ChangeTileOwner_Void,     // change_tile_owner_proc
 	nullptr,                     // add_produced_cargo_proc
 	nullptr,                     // vehicle_enter_tile_proc
