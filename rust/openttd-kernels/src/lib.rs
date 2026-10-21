@@ -14,6 +14,7 @@ mod auth;
 mod byte_strings;
 mod cargo_flow;
 mod cargo_payment;
+mod command;
 mod company;
 mod consumer;
 mod disaster;
@@ -28,6 +29,7 @@ mod packet;
 mod rail_cmd;
 pub mod rail_yapf;
 mod road;
+mod road_cost;
 mod road_data;
 mod road_yapf;
 mod script_list;
@@ -36,6 +38,7 @@ mod ship_control;
 mod signal;
 mod station;
 mod station_cargo;
+mod station_cmd;
 mod station_service;
 mod string_validation;
 mod tgp;
@@ -754,16 +757,21 @@ pub unsafe extern "C" fn openttd_rust_history_destroy(handle: *mut std::ffi::c_v
 
 mod abi;
 
-/// Return size, alignment or field offsets for the bounded public ABI audit.
+/// Return size, alignment and offsets by native type name; unknown names/items return MAX.
 ///
-/// Type IDs 0..27 follow `abi_ffi.h`, including cargo, crypto, Packet and string layouts.
-/// Item 0 is size, 1 alignment, then fields in
-/// declaration order. Unknown IDs/items return `usize::MAX` (C++ `SIZE_MAX`).
-/// Scalar metadata only: no allocation, pointers, ownership or callbacks.
-#[allow(unsafe_code)] // Exported scalar C symbol, like the existing kernel entry points.
+/// # Safety
+/// `name` is a live NUL-terminated C string for this call. No pointer is retained.
+/// Metadata only; panics abort and callbacks/allocation are absent.
+#[allow(unsafe_code)]
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_abi_layout(type_id: u16, item: u8) -> usize {
-    abi::layout(type_id, item)
+pub unsafe extern "C" fn openttd_rust_abi_layout_named(
+    name: *const std::ffi::c_char,
+    item: usize,
+) -> usize {
+    // SAFETY: caller supplies the terminated name for this synchronous call.
+    let name = unsafe { std::ffi::CStr::from_ptr(name) };
+    name.to_str()
+        .map_or(usize::MAX, |name| abi::layout(name, item))
 }
 
 /// Create independent admin conversion control; typed VM/JSON state stays in C++.

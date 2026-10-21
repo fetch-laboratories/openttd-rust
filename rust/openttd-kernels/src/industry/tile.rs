@@ -215,7 +215,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             }
             if frame >= 96 {
                 frame = 0;
-                (s.shared().delete_animated)(tile);
+                (s.shared().tile_animation_delete)(tile);
             }
             unsafe { (t.set_frame)(tile, frame) };
             dirty(tile, s);
@@ -228,7 +228,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             frame = frame.wrapping_add(1);
             if frame >= 70 {
                 frame = 0;
-                (s.shared().delete_animated)(tile);
+                (s.shared().tile_animation_delete)(tile);
             }
             unsafe { (t.set_frame)(tile, frame) };
             dirty(tile, s);
@@ -237,7 +237,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             let mut frame = unsafe { (t.frame)(tile) }.wrapping_add(1);
             if frame >= 40 {
                 frame = 0;
-                (s.shared().delete_animated)(tile);
+                (s.shared().tile_animation_delete)(tile);
             }
             unsafe { (t.set_frame)(tile, frame) };
             dirty(tile, s);
@@ -247,7 +247,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             if frame == 6 {
                 unsafe {
                     (t.set_frame)(tile, 0);
-                    (s.shared().delete_animated)(tile);
+                    (s.shared().tile_animation_delete)(tile);
                 }
             } else {
                 unsafe { (t.set_frame)(tile, frame.wrapping_add(1)) };
@@ -267,7 +267,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
                         frame = 0;
                         if count >= 8 {
                             count = 0;
-                            (s.shared().delete_animated)(tile);
+                            (s.shared().tile_animation_delete)(tile);
                         }
                         unsafe { (t.set_animation_loop)(tile, count as u8) };
                     }
@@ -300,7 +300,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
                 unsafe {
                     (t.set_gfx)(tile, 29);
                     (c.set_construction_stage)(tile, 3);
-                    (s.shared().delete_animated)(tile);
+                    (s.shared().tile_animation_delete)(tile);
                 }
             } else {
                 unsafe {
@@ -445,7 +445,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_loop(
                     (t.set_gfx)(tile, gfx);
                     (t.set_completed)(tile);
                     (c.set_construction_stage)(tile, 3);
-                    (s.shared().delete_animated)(tile);
+                    (s.shared().tile_animation_delete)(tile);
                 }
                 dirty(tile, s);
             }

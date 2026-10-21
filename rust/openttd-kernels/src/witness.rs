@@ -281,6 +281,28 @@ witness_blocks! {
         STATION_STALE_RESTRICT = 6 => "station.stale_restrict",
         STATION_STALE_RELEASE = 7 => "station.stale_release",
     }
+    station_command {
+        STATION_CMD_BUILD_RAIL = 0 => "station_command.build_rail",
+        STATION_CMD_BUILD_ROAD = 1 => "station_command.build_road",
+        STATION_CMD_BUILD_AIRPORT = 2 => "station_command.build_airport",
+        STATION_CMD_REMOVE_AIRPORT = 3 => "station_command.remove_airport",
+        STATION_CMD_BUILD_DOCK = 4 => "station_command.build_dock",
+        STATION_CMD_REMOVE_DOCK = 5 => "station_command.remove_dock",
+        STATION_CMD_BUILD_OILRIG = 6 => "station_command.build_oilrig",
+        STATION_CMD_DELETE_OILRIG = 7 => "station_command.delete_oilrig",
+        STATION_CMD_CHECK_DOCKING = 8 => "station_command.check_docking",
+        STATION_CMD_RENAME = 9 => "station_command.rename",
+        STATION_CMD_MOVE_NAME = 10 => "station_command.move_name",
+        STATION_CMD_CHANGE_OWNER = 11 => "station_command.change_owner",
+        STATION_CMD_CLEAR = 12 => "station_command.clear",
+        STATION_CMD_TERRAFORM = 13 => "station_command.terraform",
+        STATION_CMD_REMOVE_ROAD_TILE = 14 => "station_command.remove_road_tile",
+        STATION_CMD_REMOVE_RAIL_AREA = 15 => "station_command.remove_rail_area",
+        STATION_CMD_JOIN = 16 => "station_command.join",
+        STATION_CMD_REUSE = 17 => "station_command.reuse",
+        STATION_CMD_PARTIAL_RAIL = 18 => "station_command.partial_rail",
+        STATION_CMD_BUILD_ABOVE = 19 => "station_command.build_above",
+    }
     town {
         TOWN_SERVICES = 0 => "town.services",
         TOWN_BYTES = 1 => "town.bytes",

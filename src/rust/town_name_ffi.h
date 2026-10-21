@@ -8,6 +8,7 @@
 /** @file town_name_ffi.h Town name policy and borrowed rendering frames. */
 #ifndef RUST_TOWN_NAME_FFI_H
 #define RUST_TOWN_NAME_FFI_H
+#include "service_defaults.hpp"
 #include <string>
 #include <set>
 #include "town_ffi.h"
@@ -21,11 +22,11 @@ struct OpenTTDTownNameFrame { std::string candidate, other; };
  * objects. Candidate bytes survive other-name rendering; no view survives its
  * own next render. Only resolver services run here; they cannot unwind. */
 struct OpenTTDTownNameServices {
-	OpenTTDTownRef (*next)(uint) noexcept;
-	OpenTTDByteSpan (*render)(OpenTTDTownNameFrame *, const TownNameParams *, uint32_t) noexcept;
-	OpenTTDByteSpan (*render_other)(OpenTTDTownNameFrame *, const Town *) noexcept;
-	size_t (*utf8_length)(const uint8_t *, size_t) noexcept;
-	uint32_t (*random_next)(Randomizer *) noexcept;
+	OpenTTDTownRef (*next)(uint) noexcept OPENTTD_SERVICE_DEFAULT(next);
+	OpenTTDByteSpan (*render)(OpenTTDTownNameFrame *, const TownNameParams *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(render);
+	OpenTTDByteSpan (*render_other)(OpenTTDTownNameFrame *, const Town *) noexcept OPENTTD_SERVICE_DEFAULT(render_other);
+	size_t (*utf8_length)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);
+	uint32_t (*random_next)(Randomizer *) noexcept OPENTTD_SERVICE_DEFAULT(random_next);
 };
 const OpenTTDTownNameServices &GetRustTownNameServices() noexcept;
 extern "C" {

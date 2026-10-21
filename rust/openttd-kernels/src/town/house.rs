@@ -788,7 +788,7 @@ impl House<'_> {
             return;
         }
         if (self.l.house_flags)(house) & ANIMATED == 0 {
-            (self.s.delete_animated)(tile);
+            (self.s.tile_animation_delete)(tile);
             return;
         }
         let rec = (self.h.lift)(tile);
@@ -812,7 +812,7 @@ impl House<'_> {
         if pos == dest {
             witness::hit(W_LIFT_STOP);
             (self.h.halt_lift)(tile);
-            (self.s.delete_animated)(tile);
+            (self.s.tile_animation_delete)(tile);
         }
         self.dirty(tile);
     }

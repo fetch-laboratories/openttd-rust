@@ -124,6 +124,13 @@ def check(scenario, run, mode, role, result):
         ):
             raise RuntimeError("maintenance age/value boundary was not reached")
     required = ["outer_visits", "crossings", "observed_bytes", "scalar_read_bytes"]
+    # These existing inputs already require actual expiry in semantic state.
+    # Require the surrounding production scheduler to observe Tick returning false.
+    if (
+        scenario.get("crash_expiry") == "expiry"
+        or scenario.get("effects") == "controllers"
+    ):
+        required.append("deleted")
     if scenario.get("name") == OPUS:
         required += [
             "visits.road",

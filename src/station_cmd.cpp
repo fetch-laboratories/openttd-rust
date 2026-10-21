@@ -81,7 +81,17 @@
 
 #ifdef WITH_RUST
 #include "rust/vehicle_services.h"
-#include "rust/station_services.h"
+#include "rust/services_station.h"
+#include "rust/station_command_ffi.h"
+#include "rust/command_services.h"
+#include "rust/presentation_services.h"
+#include "rust/tile_animation_services.h"
+#include "rust/settings_services.h"
+#include "rust/environment_services.h"
+#include "rust/services_water.h"
+#include "rust/company_services.h"
+#include "rust/industry_shell_services.h"
+#include "rust/services_road.h"
 #endif
 
 #include "safeguards.h"
@@ -127,6 +137,7 @@ bool IsHangar(Tile t)
  * @param filter Filter function
  * @return Succeeded command (if zero or one station found) or failed command (for two or more stations found).
  */
+#ifndef WITH_RUST
 template <class T, class F>
 CommandCost GetStationAround(TileArea ta, StationID closest_station, CompanyID company, T **st, F filter)
 {
@@ -147,6 +158,8 @@ CommandCost GetStationAround(TileArea ta, StationID closest_station, CompanyID c
 	*st = (closest_station == StationID::Invalid()) ? nullptr : T::Get(closest_station);
 	return CommandCost();
 }
+
+#endif
 
 /**
  * Function to check whether the given tile matches some criterion.
@@ -397,6 +410,7 @@ static StringID GenerateStationName(Station *st, TileIndex tile, StationNaming n
  * @param tile the tile to search from.
  * @return the closest station or nullptr if too far.
  */
+#ifndef WITH_RUST
 static Station *GetClosestDeletedStation(TileIndex tile)
 {
 	uint threshold = 8;
@@ -419,6 +433,8 @@ static Station *GetClosestDeletedStation(TileIndex tile)
 	return best_station;
 }
 
+
+#endif
 
 TileArea Station::GetTileArea(StationType type) const
 {
@@ -608,9 +624,7 @@ static const OpenTTDStationServices _rust_station_services = {
 		Station *st = Station::Get(StationID(id));
 		return {.native = st, .base = st, .state = st->rust_service.get()};
 	},
-	.station_owner = [](OpenTTDBaseStation *handle) noexcept -> uint8_t {
-		return OpenTTDStationOwner(handle).base();
-	},
+	.station_owner = RustStationOwnerByte<BaseStation>,
 	.station_exclusivity = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationExclusivity {
 		BaseStation *st = static_cast<BaseStation *>(handle);
 		return {
@@ -699,8 +713,8 @@ static const OpenTTDStationServices _rust_station_services = {
 	},
 	.acceptance_animation = [](OpenTTDBaseStation *handle) noexcept -> void {
 		BaseStation *bst = static_cast<BaseStation *>(handle);
-		TriggerStationAnimation(bst, bst->xy, StationAnimationTrigger::AcceptanceTick);
-		TriggerRoadStopAnimation(bst, bst->xy, StationAnimationTrigger::AcceptanceTick);
+		RustStationAnimation(bst, bst->xy, StationAnimationTrigger::AcceptanceTick);
+		RustRoadStopAnimation(bst, bst->xy, StationAnimationTrigger::AcceptanceTick);
 		if (Station::IsExpected(bst)) TriggerAirportAnimation(Station::From(bst), AirportAnimationTrigger::AcceptanceTick);
 	},
 	.watched_animation = [](uint32_t tile, uint64_t cargoes) noexcept -> void {
@@ -729,20 +743,18 @@ static const OpenTTDStationServices _rust_station_services = {
 			lg = LinkGraph::Get(ge.link_graph);
 		} if (lg != nullptr) (*lg)[ge.node].UpdateSupply(amount);
 	},
-	.station_list_invalidation = [](OpenTTDBaseStation *handle) noexcept -> void {
-		InvalidateWindowData(WC_STATION_LIST, static_cast<BaseStation *>(handle)->owner);
-	},
+	.station_list_invalidation = RustStationListInvalidation,
 	.new_cargo_animation = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> void {
 		Station *st = Station::From(static_cast<BaseStation *>(handle));
 		TriggerStationRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
-		TriggerStationAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
+		RustStationAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
 		TriggerAirportAnimation(st, AirportAnimationTrigger::NewCargo, cargo);
 		TriggerRoadStopRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
-		TriggerRoadStopAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
+		RustRoadStopAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
 	},
 	.waiting_redraw = [](OpenTTDBaseStation *handle) noexcept -> void {
 		SetWindowDirty(WC_STATION_VIEW, static_cast<BaseStation *>(handle)->index);
-		Station::From(static_cast<BaseStation *>(handle))->MarkTilesDirty(true);
+		RustStationMarkTilesDirty(static_cast<BaseStation *>(handle), true);
 	},
 	.rating_callback = [](OpenTTDBaseStation *, uint8_t cargo, uint32_t var10, uint32_t var18) noexcept -> uint16_t {
 		return GetCargoCallback(CBID_CARGO_STATION_RATING_CALC, var10, var18, CargoSpec::Get(cargo));
@@ -795,7 +807,7 @@ static const OpenTTDStationLinks _rust_station_links = {
 		return TimerGameEconomy::date.base();
 	},
 	.station_id = [](OpenTTDBaseStation *handle) noexcept -> uint16_t {
-		return static_cast<Station *>(handle)->index.base();
+		return handle->index.base();
 	},
 	.edge_last_update = [](OpenTTDLinkGraph *handle, uint16_t node, size_t index) noexcept -> int32_t {
 		return (*static_cast<LinkGraph *>(handle))[node].edges[index].LastUpdate().base();
@@ -847,8 +859,7 @@ static const OpenTTDStationLinks _rust_station_links = {
 	},
 	.order_destination = [](OpenTTDOrderList *handle, size_t index) noexcept -> OpenTTDOrderDestination {
 		const Order *order = &static_cast<OrderList *>(handle)->GetOrders()[index];
-		if (!order->IsType(OT_GOTO_STATION) && !order->IsType(OT_IMPLICIT)) return {0, false};
-		return {order->GetDestination().base(), true};
+		return {order->GetDestination().base(), order->GetType()};
 	},
 	.order_vehicle = [](OpenTTDOrderList *handle) noexcept -> OpenTTDVehicle * {
 		return RustVehicle(static_cast<OrderList *>(handle)->GetFirstSharedVehicle());
@@ -956,6 +967,7 @@ void UpdateStationAcceptance(Station *st, bool show_msg)
 #endif
 }
 
+#ifndef WITH_RUST
 static void UpdateStationSignCoord(BaseStation *st)
 {
 	const StationRect *r = &st->rect;
@@ -974,6 +986,7 @@ static void UpdateStationSignCoord(BaseStation *st)
 		(*LinkGraph::Get(lg))[ge.node].UpdateLocation(st->xy);
 	}
 }
+#endif
 
 /**
  * Common part of building various station parts and possibly attaching them to an existing one.
@@ -984,6 +997,7 @@ static void UpdateStationSignCoord(BaseStation *st)
  * @param name_class Station naming class to use to generate the new station's name
  * @return Command error that occurred, if any
  */
+#ifndef WITH_RUST
 static CommandCost BuildStationPart(Station **st, DoCommandFlags flags, bool reuse, TileArea area, StationNaming name_class)
 {
 	/* Find a deleted station close to us */
@@ -1014,6 +1028,7 @@ static CommandCost BuildStationPart(Station **st, DoCommandFlags flags, bool reu
 	}
 	return CommandCost();
 }
+#endif
 
 /**
  * This is called right after a station was deleted.
@@ -1021,6 +1036,7 @@ static CommandCost BuildStationPart(Station **st, DoCommandFlags flags, bool reu
  * deleted after a little while.
  * @param st Station
  */
+#ifndef WITH_RUST
 static void DeleteStationIfEmpty(BaseStation *st)
 {
 	if (!st->IsInUse()) {
@@ -1030,6 +1046,7 @@ static void DeleteStationIfEmpty(BaseStation *st)
 	/* station remains but it probably lost some parts - station sign should stay in the station boundaries */
 	UpdateStationSignCoord(st);
 }
+#endif
 
 /**
  * After adding/removing tiles to station, update some station-related stuff.
@@ -1038,6 +1055,9 @@ static void DeleteStationIfEmpty(BaseStation *st)
  */
 void Station::AfterStationTileSetChange(bool adding, StationType type)
 {
+#ifdef WITH_RUST
+	openttd_rust_station_tiles_changed(&GetRustStationCommandServices(), this, adding, to_underlying(type));
+#else
 	this->UpdateVirtCoord();
 	DirtyCompanyInfrastructureWindows(this->owner);
 
@@ -1073,6 +1093,7 @@ void Station::AfterStationTileSetChange(bool adding, StationType type)
 		this->RecomputeCatchment();
 	}
 
+#endif
 }
 
 CommandCost ClearTile_Station(TileIndex tile, DoCommandFlags flags);
@@ -1088,6 +1109,11 @@ CommandCost ClearTile_Station(TileIndex tile, DoCommandFlags flags);
  */
 CommandCost CheckBuildableTile(TileIndex tile, DiagDirections invalid_dirs, int &allowed_z, bool allow_steep, bool check_bridge = true)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_station_check_buildable(&GetRustStationCommandServices(), RustCommandCost(&cost), tile.base(), invalid_dirs.base(), &allowed_z, allow_steep, check_bridge);
+	return cost;
+#else
 	if (check_bridge && IsBridgeAbove(tile)) {
 		return CommandCost(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST);
 	}
@@ -1127,6 +1153,7 @@ CommandCost CheckBuildableTile(TileIndex tile, DiagDirections invalid_dirs, int 
 	}
 
 	return cost;
+#endif
 }
 
 /**
@@ -1135,6 +1162,7 @@ CommandCost CheckBuildableTile(TileIndex tile, DiagDirections invalid_dirs, int 
  * @param flags Operation to perform.
  * @return The cost in case of success, or an error code if it failed.
  */
+#ifndef WITH_RUST
 static CommandCost CheckFlatLandAirport(AirportTileTableIterator tile_iter, DoCommandFlags flags)
 {
 	CommandCost cost(EXPENSES_CONSTRUCTION);
@@ -1153,11 +1181,14 @@ static CommandCost CheckFlatLandAirport(AirportTileTableIterator tile_iter, DoCo
 	return cost;
 }
 
+#endif
+
 /**
  * Get station-type-specific string for a bridge that is too low.
  * @param type Station type.
  * @return bridge too low string.
  */
+#ifndef WITH_RUST
 static StringID GetBridgeTooLowMessageForStationType(StationType type)
 {
 	static constexpr std::array<StringID, to_underlying(StationType::End)> too_low_msgs = {
@@ -1201,6 +1232,8 @@ static CommandCost IsStationBridgeAboveOk(TileIndex tile, std::span<const Bridge
 	return CommandCost{};
 }
 
+#endif
+
 /**
  * Get bridgeable tile information for a station type.
  * @param type Station type.
@@ -1221,11 +1254,17 @@ static std::span<const BridgeableTileInfo> GetStationBridgeableTileInfo(StationT
  */
 CommandCost IsRailStationBridgeAboveOk(TileIndex tile, const StationSpec *spec, StationType type, StationGfx layout)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_station_rail_bridge_ok(&GetRustStationCommandServices(), RustCommandCost(&cost), tile.base(), spec, to_underlying(type), layout);
+	return cost;
+#else
 	if (!IsBridgeAbove(tile)) return CommandCost();
 
 	TileIndex rampsouth = GetSouthernBridgeEnd(tile);
 	auto bridgeable_info = spec == nullptr ? GetStationBridgeableTileInfo(type) : spec->bridgeable_info;
 	return IsStationBridgeAboveOk(tile, bridgeable_info, type, layout, GetBridgeHeight(rampsouth), STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST);
+#endif
 }
 
 /**
@@ -1238,11 +1277,17 @@ CommandCost IsRailStationBridgeAboveOk(TileIndex tile, const StationSpec *spec, 
  */
 CommandCost IsRoadStationBridgeAboveOk(TileIndex tile, const RoadStopSpec *spec, StationType type, StationGfx layout)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_station_road_bridge_ok(&GetRustStationCommandServices(), RustCommandCost(&cost), tile.base(), spec, to_underlying(type), layout);
+	return cost;
+#else
 	if (!IsBridgeAbove(tile)) return CommandCost();
 
 	TileIndex rampsouth = GetSouthernBridgeEnd(tile);
 	auto bridgeable_info = spec == nullptr ? GetStationBridgeableTileInfo(type) : spec->bridgeable_info;
 	return IsStationBridgeAboveOk(tile, bridgeable_info, type, layout, GetBridgeHeight(rampsouth), STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST);
+#endif
 }
 
 /**
@@ -1251,6 +1296,7 @@ CommandCost IsRoadStationBridgeAboveOk(TileIndex tile, const RoadStopSpec *spec,
  * @param layout Layout piece of station to test.
  * @return Command result.
  */
+#ifndef WITH_RUST
 static CommandCost IsDockBridgeAboveOk(TileIndex tile, StationGfx layout)
 {
 	if (!IsBridgeAbove(tile)) return CommandCost();
@@ -1259,6 +1305,7 @@ static CommandCost IsDockBridgeAboveOk(TileIndex tile, StationGfx layout)
 	auto bridgeable_info = GetStationBridgeableTileInfo(StationType::Dock);
 	return IsStationBridgeAboveOk(tile, bridgeable_info, StationType::Dock, layout, GetBridgeHeight(rampsouth), STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST);
 }
+#endif
 
 /**
  * Test if a buoy can be built below a bridge.
@@ -1267,11 +1314,17 @@ static CommandCost IsDockBridgeAboveOk(TileIndex tile, StationGfx layout)
  */
 CommandCost IsBuoyBridgeAboveOk(TileIndex tile)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_station_default_bridge_ok(&GetRustStationCommandServices(), RustCommandCost(&cost), tile.base(), to_underlying(StationType::Buoy), 0);
+	return cost;
+#else
 	if (!IsBridgeAbove(tile)) return CommandCost();
 
 	TileIndex rampsouth = GetSouthernBridgeEnd(tile);
 	auto bridgeable_info = GetStationBridgeableTileInfo(StationType::Buoy);
 	return IsStationBridgeAboveOk(tile, bridgeable_info, StationType::Buoy, 0, GetBridgeHeight(rampsouth), STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST);
+#endif
 }
 
 /**
@@ -1290,6 +1343,7 @@ CommandCost IsBuoyBridgeAboveOk(TileIndex tile)
  * @param numtracks Number of platforms.
  * @return The cost in case of success, or an error code if it failed.
  */
+#ifndef WITH_RUST
 static CommandCost CheckFlatLandRailStation(TileIndex tile_cur, TileIndex north_tile, int &allowed_z, DoCommandFlags flags, Axis axis, StationID *station, RailType rt, std::vector<Train *> &affected_vehicles, StationClassID spec_class, uint16_t spec_index, uint8_t plat_len, uint8_t numtracks)
 {
 	CommandCost cost(EXPENSES_CONSTRUCTION);
@@ -1359,6 +1413,8 @@ static CommandCost CheckFlatLandRailStation(TileIndex tile_cur, TileIndex north_
 	return cost;
 }
 
+#endif
+
 /**
  * Checks if a road stop can be built at the given tile.
  * @param cur_tile Tile to check.
@@ -1373,6 +1429,7 @@ static CommandCost CheckFlatLandRailStation(TileIndex tile_cur, TileIndex north_
  * @param rt Road type to build, may be INVALID_ROADTYPE if an existing road is required.
  * @return The cost in case of success, or an error code if it failed.
  */
+#ifndef WITH_RUST
 static CommandCost CheckFlatLandRoadStop(TileIndex cur_tile, int &allowed_z, const RoadStopSpec *spec, DoCommandFlags flags, DiagDirections invalid_dirs, bool is_drive_through, StationType station_type, Axis axis, StationID *station, RoadType rt)
 {
 	CommandCost cost(EXPENSES_CONSTRUCTION);
@@ -1483,6 +1540,8 @@ static CommandCost CheckFlatLandRoadStop(TileIndex cur_tile, int &allowed_z, con
 	return cost;
 }
 
+#endif
+
 /**
  * Check whether we can expand the rail part of the given station.
  * @param st the station to expand
@@ -1491,6 +1550,12 @@ static CommandCost CheckFlatLandRoadStop(TileIndex cur_tile, int &allowed_z, con
  */
 CommandCost CanExpandRailStation(const BaseStation *st, TileArea &new_ta)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	auto area = openttd_rust_station_expand_rail(&GetRustStationCommandServices(), RustCommandCost(&cost), st, {new_ta.tile.base(), new_ta.w, new_ta.h});
+	new_ta = TileArea(TileIndex{area.tile}, area.w, area.h);
+	return cost;
+#else
 	TileArea cur_ta = st->train_station;
 
 	/* determine new size of train station region.. */
@@ -1506,6 +1571,7 @@ CommandCost CanExpandRailStation(const BaseStation *st, TileArea &new_ta)
 	}
 
 	return CommandCost();
+#endif
 }
 
 RailStationTileLayout::RailStationTileLayout(const StationSpec *spec, uint8_t platforms, uint8_t length) : platforms(platforms), length(length)
@@ -1553,9 +1619,11 @@ StationGfx RailStationTileLayout::Iterator::operator*() const
  * @param st 'return' pointer for the found station
  * @return command cost with the error or 'okay'
  */
+#ifndef WITH_RUST
 template <class T, StringID error_message, class F>
 CommandCost FindJoiningBaseStation(StationID existing_station, StationID station_to_join, bool adjacent, TileArea ta, T **st, F filter)
 {
+
 	assert(*st == nullptr);
 	bool check_surrounding = true;
 
@@ -1589,6 +1657,8 @@ CommandCost FindJoiningBaseStation(StationID existing_station, StationID station
 	return CommandCost();
 }
 
+#endif
+
 /**
  * Find a nearby station that joins this station.
  * @param existing_station an existing station we build over
@@ -1598,10 +1668,12 @@ CommandCost FindJoiningBaseStation(StationID existing_station, StationID station
  * @param st 'return' pointer for the found station
  * @return command cost with the error or 'okay'
  */
+#ifndef WITH_RUST
 static CommandCost FindJoiningStation(StationID existing_station, StationID station_to_join, bool adjacent, TileArea ta, Station **st)
 {
 	return FindJoiningBaseStation<Station, STR_ERROR_MUST_REMOVE_RAILWAY_STATION_FIRST>(existing_station, station_to_join, adjacent, ta, st, [](const Station *) -> bool { return true; });
 }
+#endif
 
 /**
  * Find a nearby waypoint that joins this waypoint.
@@ -1615,17 +1687,24 @@ static CommandCost FindJoiningStation(StationID existing_station, StationID stat
  */
 CommandCost FindJoiningWaypoint(StationID existing_waypoint, StationID waypoint_to_join, bool adjacent, TileArea ta, Waypoint **wp, bool is_road)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	*wp = static_cast<Waypoint *>(openttd_rust_station_join_waypoint(&GetRustStationCommandServices(), RustCommandCost(&cost), existing_waypoint.base(), waypoint_to_join.base(), adjacent, {ta.tile.base(), ta.w, ta.h}, is_road));
+	return cost;
+#else
 	if (is_road) {
 		return FindJoiningBaseStation<Waypoint, STR_ERROR_MUST_REMOVE_ROADWAYPOINT_FIRST>(existing_waypoint, waypoint_to_join, adjacent, ta, wp, [](const Waypoint *wp) -> bool { return HasBit(wp->waypoint_flags, WPF_ROAD); });
 	} else {
 		return FindJoiningBaseStation<Waypoint, STR_ERROR_MUST_REMOVE_RAILWAYPOINT_FIRST>(existing_waypoint, waypoint_to_join, adjacent, ta, wp, [](const Waypoint *wp) -> bool { return !HasBit(wp->waypoint_flags, WPF_ROAD); });
 	}
+#endif
 }
 
 /**
  * Clear platform reservation during station building/removing.
  * @param v vehicle which holds reservation
  */
+#ifndef WITH_RUST
 static void FreeTrainReservation(Train *v)
 {
 	FreeTrainTrackReservation(v);
@@ -1695,18 +1774,23 @@ static CommandCost CalculateRailStationCost(TileArea tile_area, DoCommandFlags f
 	return cost;
 }
 
+#endif
+
 /**
  * Get station tile flags for the given StationGfx.
  * @param gfx StationGfx of station tile.
  * @param statspec Station spec of station tile.
  * @return Tile flags to apply.
  */
+#ifndef WITH_RUST
 static StationSpec::TileFlags GetStationTileFlags(StationGfx gfx, const StationSpec *statspec)
 {
 	/* Default stations do not draw pylons under roofs (gfx >= 4) */
 	if (statspec == nullptr || gfx >= statspec->tileflags.size()) return gfx < 4 ? StationSpec::TileFlag::Pylons : StationSpec::TileFlags{};
 	return statspec->tileflags[gfx];
 }
+
+#endif
 
 /**
  * Set rail station tile flags for the given tile.
@@ -1715,10 +1799,14 @@ static StationSpec::TileFlags GetStationTileFlags(StationGfx gfx, const StationS
  */
 void SetRailStationTileFlags(TileIndex tile, const StationSpec *statspec)
 {
+#ifdef WITH_RUST
+	openttd_rust_station_set_rail_flags(&GetRustStationCommandServices(), tile.base(), statspec);
+#else
 	const auto flags = GetStationTileFlags(GetStationGfx(tile), statspec);
 	SetStationTileBlocked(tile, flags.Test(StationSpec::TileFlag::Blocked));
 	SetStationTileHavePylons(tile, flags.Test(StationSpec::TileFlag::Pylons));
 	SetStationTileHaveWires(tile, !flags.Test(StationSpec::TileFlag::NoWires));
+#endif
 }
 
 /**
@@ -1737,6 +1825,11 @@ void SetRailStationTileFlags(TileIndex tile, const StationSpec *statspec)
  */
 CommandCost CmdBuildRailStation(DoCommandFlags flags, TileIndex tile_org, RailType rt, Axis axis, uint8_t numtracks, uint8_t plat_len, StationClassID spec_class, uint16_t spec_index, StationID station_to_join, bool adjacent)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret;
+	openttd_rust_station_build_rail(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile_org.base(), rt, axis, numtracks, plat_len, spec_class, spec_index, station_to_join.base(), adjacent);
+	return cost;
+#else
 	/* Does the authority allow this? */
 	CommandCost ret = CheckIfAuthorityAllowsNewStation(tile_org, flags);
 	if (ret.Failed()) return ret;
@@ -1951,8 +2044,10 @@ CommandCost CmdBuildRailStation(DoCommandFlags flags, TileIndex tile_org, RailTy
 	}
 
 	return cost;
+#endif
 }
 
+#ifndef WITH_RUST
 static TileArea MakeStationAreaSmaller(BaseStation *st, TileArea ta, bool (*func)(BaseStation *, TileIndex))
 {
 restart:
@@ -2008,31 +2103,47 @@ static bool TileBelongsToRailStation(BaseStation *st, TileIndex tile)
 	return st->TileBelongsToRailStation(tile);
 }
 
+#endif
+
+#ifndef WITH_RUST
 static void MakeRailStationAreaSmaller(BaseStation *st)
 {
 	st->train_station = MakeStationAreaSmaller(st, st->train_station, TileBelongsToRailStation);
 }
 
+#endif
+
+#ifndef WITH_RUST
 static bool TileBelongsToShipStation(BaseStation *st, TileIndex tile)
 {
 	return IsDockTile(tile) && GetStationIndex(tile) == st->index;
 }
 
+#endif
+
+#ifndef WITH_RUST
 static void MakeShipStationAreaSmaller(Station *st)
 {
 	st->ship_station = MakeStationAreaSmaller(st, st->ship_station, TileBelongsToShipStation);
 	UpdateStationDockingTiles(st);
 }
 
+#endif
+
+#ifndef WITH_RUST
 static bool TileBelongsToRoadWaypointStation(BaseStation *st, TileIndex tile)
 {
 	return IsRoadWaypointTile(tile) && GetStationIndex(tile) == st->index;
 }
 
+#endif
+
+#ifndef WITH_RUST
 void MakeRoadWaypointStationAreaSmaller(BaseStation *st, TileArea &road_waypoint_area)
 {
 	road_waypoint_area = MakeStationAreaSmaller(st, road_waypoint_area, TileBelongsToRoadWaypointStation);
 }
+#endif
 
 /**
  * Remove a number of tiles from any rail station within the area.
@@ -2044,6 +2155,7 @@ void MakeRoadWaypointStationAreaSmaller(BaseStation *st, TileArea &road_waypoint
  * @tparam T the type of station to remove.
  * @return the number of cleared tiles or an error.
  */
+#ifndef WITH_RUST
 template <class T>
 CommandCost RemoveFromRailBaseStation(TileArea ta, std::vector<T *> &affected_stations, DoCommandFlags flags, Money removal_cost, bool keep_rail)
 {
@@ -2143,6 +2255,8 @@ CommandCost RemoveFromRailBaseStation(TileArea ta, std::vector<T *> &affected_st
 	return total_cost;
 }
 
+#endif
+
 /**
  * Remove a single tile from a rail station.
  * This allows for custom-built station with holes and weird layouts
@@ -2154,6 +2268,11 @@ CommandCost RemoveFromRailBaseStation(TileArea ta, std::vector<T *> &affected_st
  */
 CommandCost CmdRemoveFromRailStation(DoCommandFlags flags, TileIndex start, TileIndex end, bool keep_rail)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret, error;
+	openttd_rust_station_remove_rail_area(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), RustCommandCost(&error), flags.base(), start.base(), end.base(), keep_rail, false);
+	return cost;
+#else
 	if (end == 0) end = start;
 	if (start >= Map::Size() || end >= Map::Size()) return CMD_ERROR;
 
@@ -2174,6 +2293,7 @@ CommandCost CmdRemoveFromRailStation(DoCommandFlags flags, TileIndex start, Tile
 
 	/* Now apply the rail cost to the number that we deleted */
 	return ret;
+#endif
 }
 
 /**
@@ -2187,6 +2307,11 @@ CommandCost CmdRemoveFromRailStation(DoCommandFlags flags, TileIndex start, Tile
  */
 CommandCost CmdRemoveFromRailWaypoint(DoCommandFlags flags, TileIndex start, TileIndex end, bool keep_rail)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret, error;
+	openttd_rust_station_remove_rail_area(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), RustCommandCost(&error), flags.base(), start.base(), end.base(), keep_rail, true);
+	return cost;
+#else
 	if (end == 0) end = start;
 	if (start >= Map::Size() || end >= Map::Size()) return CMD_ERROR;
 
@@ -2194,6 +2319,7 @@ CommandCost CmdRemoveFromRailWaypoint(DoCommandFlags flags, TileIndex start, Til
 	std::vector<Waypoint *> affected_stations;
 
 	return RemoveFromRailBaseStation(ta, affected_stations, flags, _price[PR_CLEAR_WAYPOINT_RAIL], keep_rail);
+#endif
 }
 
 
@@ -2205,6 +2331,7 @@ CommandCost CmdRemoveFromRailWaypoint(DoCommandFlags flags, TileIndex start, Til
  * @tparam T the type of station to remove
  * @return cost or failure of operation
  */
+#ifndef WITH_RUST
 template <class T>
 CommandCost RemoveRailStation(T *st, DoCommandFlags flags, Money removal_cost)
 {
@@ -2234,12 +2361,15 @@ CommandCost RemoveRailStation(T *st, DoCommandFlags flags, Money removal_cost)
 	return cost;
 }
 
+#endif
+
 /**
  * Remove a rail station
  * @param tile Tile of the station.
  * @param flags operation to perform
  * @return cost or failure of operation
  */
+#ifndef WITH_RUST
 static CommandCost RemoveRailStation(TileIndex tile, DoCommandFlags flags)
 {
 	/* if there is flooding, remove platforms tile by tile */
@@ -2254,6 +2384,7 @@ static CommandCost RemoveRailStation(TileIndex tile, DoCommandFlags flags)
 
 	return cost;
 }
+#endif
 
 /**
  * Remove a rail waypoint
@@ -2261,6 +2392,7 @@ static CommandCost RemoveRailStation(TileIndex tile, DoCommandFlags flags)
  * @param flags operation to perform
  * @return cost or failure of operation
  */
+#ifndef WITH_RUST
 static CommandCost RemoveRailWaypoint(TileIndex tile, DoCommandFlags flags)
 {
 	/* if there is flooding, remove waypoints tile by tile */
@@ -2270,6 +2402,7 @@ static CommandCost RemoveRailWaypoint(TileIndex tile, DoCommandFlags flags)
 
 	return RemoveRailStation(Waypoint::GetByTile(tile), flags, _price[PR_CLEAR_WAYPOINT_RAIL]);
 }
+#endif
 
 
 /**
@@ -2277,6 +2410,7 @@ static CommandCost RemoveRailWaypoint(TileIndex tile, DoCommandFlags flags)
  * @param st The Station to do the whole procedure for
  * @return a pointer to where to link a new RoadStop*
  */
+#ifndef WITH_RUST
 static RoadStop **FindRoadStopSpot(bool truck_station, Station *st)
 {
 	RoadStop **primary_stop = (truck_station) ? &st->truck_stops : &st->bus_stops;
@@ -2292,7 +2426,11 @@ static RoadStop **FindRoadStopSpot(bool truck_station, Station *st)
 	}
 }
 
+#endif
+
+#ifndef WITH_RUST
 static CommandCost RemoveRoadStop(TileIndex tile, DoCommandFlags flags, int replacement_spec_index = -1);
+#endif
 CommandCost RemoveRoadWaypointStop(TileIndex tile, DoCommandFlags flags, int replacement_spec_index = -1);
 
 /**
@@ -2304,10 +2442,19 @@ CommandCost RemoveRoadWaypointStop(TileIndex tile, DoCommandFlags flags, int rep
  * @param st 'return' pointer for the found station
  * @return command cost with the error or 'okay'
  */
+#ifndef WITH_RUST
 static CommandCost FindJoiningRoadStop(StationID existing_stop, StationID station_to_join, bool adjacent, TileArea ta, Station **st)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	*st = static_cast<Station *>(openttd_rust_station_join_waypoint(&GetRustStationCommandServices(), RustCommandCost(&cost), existing_stop.base(), station_to_join.base(), adjacent, {ta.tile.base(), ta.w, ta.h}, false, false, STR_ERROR_MUST_REMOVE_ROAD_STOP_FIRST));
+	return cost;
+#else
 	return FindJoiningBaseStation<Station, STR_ERROR_MUST_REMOVE_ROAD_STOP_FIRST>(existing_stop, station_to_join, adjacent, ta, st, [](const Station *) -> bool { return true; });
+#endif
 }
+
+#endif
 
 /**
  * Calculates cost of new road stops within the area.
@@ -2325,6 +2472,13 @@ static CommandCost FindJoiningRoadStop(StationID existing_stop, StationID statio
  */
 CommandCost CalculateRoadStopCost(TileArea tile_area, DoCommandFlags flags, bool is_drive_through, StationType station_type, const RoadStopSpec *roadstopspec, Axis axis, DiagDirection ddir, StationID *est, RoadType rt, Money unit_cost)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret;
+	uint16_t station = est->base();
+	openttd_rust_station_road_cost(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), {tile_area.tile.base(), tile_area.w, tile_area.h}, flags.base(), is_drive_through, to_underlying(station_type), roadstopspec, axis, ddir, &station, rt, unit_cost.base());
+	*est = StationID(station);
+	return cost;
+#else
 	DiagDirections invalid_dirs{};
 	if (is_drive_through) {
 		invalid_dirs.Set(AxisToDiagDir(axis));
@@ -2350,6 +2504,7 @@ CommandCost CalculateRoadStopCost(TileArea tile_area, DoCommandFlags flags, bool
 	}
 
 	return cost;
+#endif
 }
 
 /**
@@ -2371,6 +2526,11 @@ CommandCost CalculateRoadStopCost(TileArea tile_area, DoCommandFlags flags, bool
 CommandCost CmdBuildRoadStop(DoCommandFlags flags, TileIndex tile, uint8_t width, uint8_t length, RoadStopType stop_type, bool is_drive_through,
 		DiagDirection ddir, RoadType rt, RoadStopClassID spec_class, uint16_t spec_index, StationID station_to_join, bool adjacent)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret;
+	openttd_rust_station_build_road(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), width, length, to_underlying(stop_type), is_drive_through, ddir, rt, spec_class, spec_index, station_to_join.base(), adjacent);
+	return cost;
+#else
 	if (!ValParamRoadType(rt) || !IsValidDiagDirection(ddir) || stop_type >= RoadStopType::End) return CMD_ERROR;
 	bool reuse = (station_to_join != NEW_STATION);
 	if (!reuse) station_to_join = StationID::Invalid();
@@ -2518,6 +2678,7 @@ CommandCost CmdBuildRoadStop(DoCommandFlags flags, TileIndex tile, uint8_t width
 		}
 	}
 	return cost;
+#endif
 }
 
 /**
@@ -2527,6 +2688,7 @@ CommandCost CmdBuildRoadStop(DoCommandFlags flags, TileIndex tile, uint8_t width
  * @param replacement_spec_index replacement spec index to avoid deallocating, if < 0, tile is not being replaced
  * @return cost or failure of operation
  */
+#ifndef WITH_RUST
 static CommandCost RemoveRoadStop(TileIndex tile, DoCommandFlags flags, int replacement_spec_index)
 {
 	Station *st = Station::GetByTile(tile);
@@ -2645,6 +2807,7 @@ static CommandCost RemoveRoadStop(TileIndex tile, DoCommandFlags flags, int repl
 	Price category = is_truck ? PR_CLEAR_STATION_TRUCK : PR_CLEAR_STATION_BUS;
 	return CommandCost(EXPENSES_CONSTRUCTION, spec != nullptr ? spec->GetClearCost(category) : _price[category]);
 }
+#endif
 
 /**
  * Remove a road waypoint
@@ -2655,6 +2818,11 @@ static CommandCost RemoveRoadStop(TileIndex tile, DoCommandFlags flags, int repl
  */
 CommandCost RemoveRoadWaypointStop(TileIndex tile, DoCommandFlags flags, int replacement_spec_index)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret;
+	openttd_rust_station_remove_road_tile(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), tile.base(), flags.base(), replacement_spec_index, true);
+	return cost;
+#else
 	Waypoint *wp = Waypoint::GetByTile(tile);
 
 	if (_current_company != OWNER_WATER) {
@@ -2707,6 +2875,7 @@ CommandCost RemoveRoadWaypointStop(TileIndex tile, DoCommandFlags flags, int rep
 	}
 
 	return CommandCost(EXPENSES_CONSTRUCTION, spec != nullptr ? spec->GetClearCost(PR_CLEAR_STATION_TRUCK) : _price[PR_CLEAR_STATION_TRUCK]);
+#endif
 }
 
 /**
@@ -2717,6 +2886,7 @@ CommandCost RemoveRoadWaypointStop(TileIndex tile, DoCommandFlags flags, int rep
  * @param remove_road Remove roads of drive-through stops?
  * @return the cost of this operation or an error
  */
+#ifndef WITH_RUST
 static CommandCost RemoveGenericRoadStop(DoCommandFlags flags, const TileArea &roadstop_area, bool road_waypoint, bool remove_road)
 {
 	CommandCost cost(EXPENSES_CONSTRUCTION);
@@ -2770,6 +2940,8 @@ static CommandCost RemoveGenericRoadStop(DoCommandFlags flags, const TileArea &r
 	return had_success ? cost : last_error;
 }
 
+#endif
+
 /**
  * Remove bus or truck stops.
  * @param flags Operation to perform.
@@ -2782,6 +2954,11 @@ static CommandCost RemoveGenericRoadStop(DoCommandFlags flags, const TileArea &r
  */
 CommandCost CmdRemoveRoadStop(DoCommandFlags flags, TileIndex tile, uint8_t width, uint8_t height, RoadStopType stop_type, bool remove_road)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret, error;
+	openttd_rust_station_remove_road_area(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), RustCommandCost(&error), flags.base(), tile.base(), 0, width, height, to_underlying(stop_type), remove_road, false);
+	return cost;
+#else
 	if (stop_type >= RoadStopType::End) return CMD_ERROR;
 	/* Check for incorrect width / height. */
 	if (width == 0 || height == 0) return CMD_ERROR;
@@ -2793,6 +2970,7 @@ CommandCost CmdRemoveRoadStop(DoCommandFlags flags, TileIndex tile, uint8_t widt
 	TileArea roadstop_area(tile, width, height);
 
 	return RemoveGenericRoadStop(flags, roadstop_area, false, remove_road);
+#endif
 }
 
 /**
@@ -2804,12 +2982,18 @@ CommandCost CmdRemoveRoadStop(DoCommandFlags flags, TileIndex tile, uint8_t widt
  */
 CommandCost CmdRemoveFromRoadWaypoint(DoCommandFlags flags, TileIndex start, TileIndex end)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret, error;
+	openttd_rust_station_remove_road_area(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), RustCommandCost(&error), flags.base(), start.base(), end.base(), 0, 0, 0, false, true);
+	return cost;
+#else
 	if (end == 0) end = start;
 	if (start >= Map::Size() || end >= Map::Size()) return CMD_ERROR;
 
 	TileArea roadstop_area(start, end);
 
 	return RemoveGenericRoadStop(flags, roadstop_area, true, false);
+#endif
 }
 
 /**
@@ -2822,6 +3006,9 @@ CommandCost CmdRemoveFromRoadWaypoint(DoCommandFlags flags, TileIndex start, Til
  */
 uint8_t GetAirportNoiseLevelForDistance(const AirportSpec *as, uint distance)
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_airport_noise(&GetRustStationCommandServices(), as->noise_level, distance);
+#else
 	/* 0 cannot be accounted, and 1 is the lowest that can be reduced from town.
 	 * So no need to go any further*/
 	if (as->noise_level < 2) return as->noise_level;
@@ -2839,6 +3026,7 @@ uint8_t GetAirportNoiseLevelForDistance(const AirportSpec *as, uint distance)
 	/* If the noise reduction equals the airport noise itself, don't give it for free.
 	 * Otherwise, simply reduce the airport's level. */
 	return noise_reduction >= as->noise_level ? 1 : as->noise_level - noise_reduction;
+#endif
 }
 
 /**
@@ -2853,6 +3041,10 @@ uint8_t GetAirportNoiseLevelForDistance(const AirportSpec *as, uint distance)
  */
 Town *AirportGetNearestTown(const AirportSpec *as, Direction rotation, TileIndex tile, TileIterator &&it, uint &mindist)
 {
+#ifdef WITH_RUST
+	const auto *town = openttd_rust_station_airport_nearest(&GetRustStationCommandServices(), as, rotation, tile.base(), &it, &mindist);
+	return const_cast<Town *>(reinterpret_cast<const Town *>(town));
+#else
 	assert(Town::GetNumItems() > 0);
 
 	Town *nearest = nullptr;
@@ -2885,6 +3077,7 @@ Town *AirportGetNearestTown(const AirportSpec *as, Direction rotation, TileIndex
 	}
 
 	return nearest;
+#endif
 }
 
 /**
@@ -2894,15 +3087,21 @@ Town *AirportGetNearestTown(const AirportSpec *as, Direction rotation, TileIndex
  * @param[out] mindist Minimum distance to town
  * @return nearest town to airport
  */
+#ifndef WITH_RUST
 static Town *AirportGetNearestTown(const Station *st, uint &mindist)
 {
 	return AirportGetNearestTown(st->airport.GetSpec(), st->airport.rotation, st->airport.tile, AirportTileIterator(st), mindist);
 }
 
 
+#endif
+
 /** Recalculate the noise generated by the airports of each town */
 void UpdateAirportsNoise()
 {
+#ifdef WITH_RUST
+	openttd_rust_station_update_airport_noise(&GetRustStationCommandServices());
+#else
 	for (Town *t : Town::Iterate()) t->noise_reached = 0;
 
 	for (const Station *st : Station::Iterate()) {
@@ -2912,6 +3111,7 @@ void UpdateAirportsNoise()
 			nearest->noise_reached += GetAirportNoiseLevelForDistance(st->airport.GetSpec(), dist);
 		}
 	}
+#endif
 }
 
 /**
@@ -2926,6 +3126,11 @@ void UpdateAirportsNoise()
  */
 CommandCost CmdBuildAirport(DoCommandFlags flags, TileIndex tile, uint8_t airport_type, uint8_t layout, StationID station_to_join, bool allow_adjacent)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret;
+	openttd_rust_station_build_airport(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), airport_type, layout, station_to_join.base(), allow_adjacent);
+	return cost;
+#else
 	bool reuse = (station_to_join != NEW_STATION);
 	if (!reuse) station_to_join = StationID::Invalid();
 	bool distant_join = (station_to_join != StationID::Invalid());
@@ -3044,6 +3249,7 @@ CommandCost CmdBuildAirport(DoCommandFlags flags, TileIndex tile, uint8_t airpor
 	}
 
 	return cost;
+#endif
 }
 
 /**
@@ -3052,6 +3258,7 @@ CommandCost CmdBuildAirport(DoCommandFlags flags, TileIndex tile, uint8_t airpor
  * @param flags operation to perform
  * @return cost or failure of operation
  */
+#ifndef WITH_RUST
 static CommandCost RemoveAirport(TileIndex tile, DoCommandFlags flags)
 {
 	Station *st = Station::GetByTile(tile);
@@ -3126,6 +3333,7 @@ static CommandCost RemoveAirport(TileIndex tile, DoCommandFlags flags)
 
 	return cost;
 }
+#endif
 
 /**
  * Open/close an airport to incoming aircraft.
@@ -3135,6 +3343,11 @@ static CommandCost RemoveAirport(TileIndex tile, DoCommandFlags flags)
  */
 CommandCost CmdOpenCloseAirport(DoCommandFlags flags, StationID station_id)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_station_open_close_airport(&GetRustStationCommandServices(), RustCommandCost(&cost), flags.base(), station_id.base());
+	return cost;
+#else
 	if (!Station::IsValidID(station_id)) return CMD_ERROR;
 	Station *st = Station::Get(station_id);
 
@@ -3148,6 +3361,7 @@ CommandCost CmdOpenCloseAirport(DoCommandFlags flags, StationID station_id)
 		SetWindowWidgetDirty(WC_STATION_VIEW, st->index, WID_SV_CLOSE_AIRPORT);
 	}
 	return CommandCost();
+#endif
 }
 
 /**
@@ -3158,6 +3372,9 @@ CommandCost CmdOpenCloseAirport(DoCommandFlags flags, StationID station_id)
  */
 bool HasStationInUse(StationID station, bool include_company, CompanyID company)
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_in_orders(&GetRustStationCommandServices(), station.base(), include_company, company.base());
+#else
 	for (const OrderList *orderlist : OrderList::Iterate()) {
 		const Vehicle *v = orderlist->GetFirstSharedVehicle();
 		assert(v != nullptr);
@@ -3170,8 +3387,10 @@ bool HasStationInUse(StationID station, bool include_company, CompanyID company)
 		}
 	}
 	return false;
+#endif
 }
 
+#ifndef WITH_RUST
 static const TileIndexDiffC _dock_tileoffs_chkaround[] = {
 	{-1,  0},
 	{ 0,  0},
@@ -3180,6 +3399,8 @@ static const TileIndexDiffC _dock_tileoffs_chkaround[] = {
 };
 static const uint8_t _dock_w_chk[4] = { 2, 1, 2, 1 };
 static const uint8_t _dock_h_chk[4] = { 1, 2, 1, 2 };
+
+#endif
 
 /**
  * Build a dock/haven.
@@ -3191,6 +3412,11 @@ static const uint8_t _dock_h_chk[4] = { 1, 2, 1, 2 };
  */
 CommandCost CmdBuildDock(DoCommandFlags flags, TileIndex tile, StationID station_to_join, bool adjacent)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret;
+	openttd_rust_station_build_dock(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), station_to_join.base(), adjacent);
+	return cost;
+#else
 	bool reuse = (station_to_join != NEW_STATION);
 	if (!reuse) station_to_join = StationID::Invalid();
 	bool distant_join = (station_to_join != StationID::Invalid());
@@ -3275,10 +3501,14 @@ CommandCost CmdBuildDock(DoCommandFlags flags, TileIndex tile, StationID station
 	}
 
 	return cost;
+#endif
 }
 
 void RemoveDockingTile(TileIndex t)
 {
+#ifdef WITH_RUST
+	openttd_rust_station_remove_docking_tile(&GetRustStationCommandServices(), t.base());
+#else
 	for (DiagDirection d = DIAGDIR_BEGIN; d != DIAGDIR_END; d++) {
 		TileIndex tile = t + TileOffsByDiagDir(d);
 		if (!IsValidTile(tile)) continue;
@@ -3291,6 +3521,7 @@ void RemoveDockingTile(TileIndex t)
 			if (neutral != nullptr) UpdateStationDockingTiles(neutral);
 		}
 	}
+#endif
 }
 
 /**
@@ -3300,6 +3531,9 @@ void RemoveDockingTile(TileIndex t)
  */
 void ClearDockingTilesCheckingNeighbours(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_station_clear_docking_neighbours(&GetRustStationCommandServices(), tile.base());
+#else
 	assert(IsValidTile(tile));
 
 	/* Clear and maybe re-set docking tile */
@@ -3312,6 +3546,7 @@ void ClearDockingTilesCheckingNeighbours(TileIndex tile)
 			CheckForDockingTile(docking_tile);
 		}
 	}
+#endif
 }
 
 /**
@@ -3319,6 +3554,7 @@ void ClearDockingTilesCheckingNeighbours(TileIndex tile)
  * @param t Dock tile to find land part of
  * @return tile of land part of dock
  */
+#ifndef WITH_RUST
 static TileIndex FindDockLandPart(TileIndex t)
 {
 	assert(IsDockTile(t));
@@ -3336,12 +3572,15 @@ static TileIndex FindDockLandPart(TileIndex t)
 	return INVALID_TILE;
 }
 
+#endif
+
 /**
  * Remove a dock
  * @param tile TileIndex been queried
  * @param flags operation to perform
  * @return cost or failure of operation
  */
+#ifndef WITH_RUST
 static CommandCost RemoveDock(TileIndex tile, DoCommandFlags flags)
 {
 	Station *st = Station::GetByTile(tile);
@@ -3405,6 +3644,7 @@ static CommandCost RemoveDock(TileIndex tile, DoCommandFlags flags)
 
 	return CommandCost(EXPENSES_CONSTRUCTION, _price[PR_CLEAR_STATION_DOCK]);
 }
+#endif
 
 /**
  * Get station tile layout for a station type and its station gfx.
@@ -4789,6 +5029,7 @@ static uint UpdateStationWaiting(Station *st, CargoType cargo, uint amount, Sour
 
 #endif
 
+#ifndef WITH_RUST
 static bool IsUniqueStationName(const std::string &name)
 {
 	for (const Station *st : Station::Iterate()) {
@@ -4797,6 +5038,8 @@ static bool IsUniqueStationName(const std::string &name)
 
 	return true;
 }
+
+#endif
 
 /**
  * Rename a station
@@ -4807,6 +5050,11 @@ static bool IsUniqueStationName(const std::string &name)
  */
 CommandCost CmdRenameStation(DoCommandFlags flags, StationID station_id, const std::string &text)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_station_rename(&GetRustStationCommandServices(), RustCommandCost(&cost), flags.base(), station_id.base(), reinterpret_cast<const uint8_t *>(text.data()), text.size());
+	return cost;
+#else
 	Station *st = Station::GetIfValid(station_id);
 	if (st == nullptr) return CMD_ERROR;
 
@@ -4833,6 +5081,7 @@ CommandCost CmdRenameStation(DoCommandFlags flags, StationID station_id, const s
 	}
 
 	return CommandCost();
+#endif
 }
 
 /**
@@ -4844,6 +5093,11 @@ CommandCost CmdRenameStation(DoCommandFlags flags, StationID station_id, const s
  */
 std::tuple<CommandCost, StationID> CmdMoveStationName(DoCommandFlags flags, StationID station_id, TileIndex tile)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	auto id = openttd_rust_station_move_name(&GetRustStationCommandServices(), RustCommandCost(&cost), flags.base(), station_id.base(), tile.base());
+	return {cost, StationID(id)};
+#else
 	Station *st = Station::GetIfValid(station_id);
 	if (st == nullptr) return { CMD_ERROR, StationID::Invalid() };
 
@@ -4872,6 +5126,7 @@ std::tuple<CommandCost, StationID> CmdMoveStationName(DoCommandFlags flags, Stat
 		st->UpdateVirtCoord();
 	}
 	return { CommandCost(), station_id };
+#endif
 }
 
 /**
@@ -5034,6 +5289,9 @@ uint MoveGoodsToStation(CargoType cargo, uint amount, Source source, const Stati
 
 void UpdateStationDockingTiles(Station *st)
 {
+#ifdef WITH_RUST
+	openttd_rust_station_update_docking(&GetRustStationCommandServices(), st);
+#else
 	st->docking_station.Clear();
 
 	/* For neutral stations, start with the industry area instead of dock area */
@@ -5056,10 +5314,15 @@ void UpdateStationDockingTiles(Station *st)
 	for (TileIndex tile : ta) {
 		if (IsValidTile(tile) && IsPossibleDockingTile(tile)) CheckForDockingTile(tile);
 	}
+#endif
 }
 
 void BuildOilRig(TileIndex tile)
 {
+#ifdef WITH_RUST
+	CommandCost ignored;
+	openttd_rust_station_build_oilrig(&GetRustStationCommandServices(), RustCommandCost(&ignored), tile.base());
+#else
 	if (!Station::CanAllocateItem()) {
 		Debug(misc, 0, "Can't allocate station for oilrig at 0x{:X}, reverting to oilrig only", tile);
 		return;
@@ -5105,10 +5368,14 @@ void BuildOilRig(TileIndex tile)
 
 	st->RecomputeCatchment();
 	UpdateStationAcceptance(st, false);
+#endif
 }
 
 void DeleteOilRig(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_station_delete_oilrig(&GetRustStationCommandServices(), tile.base());
+#else
 	Station *st = Station::GetByTile(tile);
 
 	MakeWaterKeepingClass(tile, OWNER_NONE);
@@ -5121,10 +5388,15 @@ void DeleteOilRig(TileIndex tile)
 		st->industry->neutral_station = nullptr;
 	}
 	delete st;
+#endif
 }
 
 static void ChangeTileOwner_Station(TileIndex tile, Owner old_owner, Owner new_owner)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret, error;
+	openttd_rust_station_change_owner(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), RustCommandCost(&error), tile.base(), old_owner.base(), new_owner.base());
+#else
 
 	if (IsAnyRoadStopTile(tile)) {
 		for (RoadTramType rtt : _roadtramtypes) {
@@ -5207,6 +5479,7 @@ static void ChangeTileOwner_Station(TileIndex tile, Owner old_owner, Owner new_o
 			if ((IsTileType(tile, MP_WATER) || IsBuoyTile(tile)) && IsTileOwner(tile, old_owner)) SetTileOwner(tile, OWNER_NONE);
 		}
 	}
+#endif
 }
 
 /**
@@ -5217,6 +5490,7 @@ static void ChangeTileOwner_Station(TileIndex tile, Owner old_owner, Owner new_o
  * @param flags Command flags.
  * @return A succeeded command if the road can be removed, a failed command with the relevant error message otherwise.
  */
+#ifndef WITH_RUST
 static CommandCost CanRemoveRoadWithStop(TileIndex tile, DoCommandFlags flags)
 {
 	/* Water flooding can always clear road stops. */
@@ -5246,6 +5520,8 @@ static CommandCost CanRemoveRoadWithStop(TileIndex tile, DoCommandFlags flags)
 	return CommandCost();
 }
 
+#endif
+
 /**
  * Clear a single tile of a station.
  * @param tile The tile to clear.
@@ -5254,6 +5530,11 @@ static CommandCost CanRemoveRoadWithStop(TileIndex tile, DoCommandFlags flags)
  */
 CommandCost ClearTile_Station(TileIndex tile, DoCommandFlags flags)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret, error;
+	openttd_rust_station_clear(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), RustCommandCost(&error), tile.base(), flags.base());
+	return cost;
+#else
 	if (flags.Test(DoCommandFlag::Auto)) {
 		switch (GetStationType(tile)) {
 			default: break;
@@ -5292,10 +5573,16 @@ CommandCost ClearTile_Station(TileIndex tile, DoCommandFlags flags)
 	}
 
 	return CMD_ERROR;
+#endif
 }
 
 static CommandCost TerraformTile_Station(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_station_terraform(&GetRustStationCommandServices(), RustCommandCost(&cost), tile.base(), flags.base(), z_new, tileh_new);
+	return cost;
+#else
 	if (_settings_game.construction.build_on_slopes && AutoslopeEnabled()) {
 		/* TODO: If you implement newgrf callback 149 'land slope check', you have to decide what to do with it here.
 		 *       TTDP does not call it.
@@ -5327,6 +5614,7 @@ static CommandCost TerraformTile_Station(TileIndex tile, DoCommandFlags flags, i
 		}
 	}
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
+#endif
 }
 
 #ifndef WITH_RUST
@@ -5719,6 +6007,11 @@ uint FlowStatMap::GetFlowFromVia(StationID from, StationID via) const
 
 static CommandCost CheckBuildAbove_Station(TileIndex tile, DoCommandFlags, Axis, int height)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_station_build_above(&GetRustStationCommandServices(), RustCommandCost(&cost), tile.base(), height);
+	return cost;
+#else
 	StationType type = GetStationType(tile);
 	auto bridgeable_info = GetStationBridgeableTileInfo(type);
 
@@ -5738,7 +6031,12 @@ static CommandCost CheckBuildAbove_Station(TileIndex tile, DoCommandFlags, Axis,
 	}
 
 	return IsStationBridgeAboveOk(tile, bridgeable_info, type, GetStationGfx(tile), height);
+#endif
 }
+
+#ifdef WITH_RUST
+#include "rust/station_command_services.hpp"
+#endif
 
 extern const TileTypeProcs _tile_type_station_procs = {
 	DrawTile_Station,           // draw_tile_proc
@@ -5757,3 +6055,16 @@ extern const TileTypeProcs _tile_type_station_procs = {
 	TerraformTile_Station,      // terraform_tile_proc
 	CheckBuildAbove_Station, // check_build_above_proc
 };
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDStationServices.hpp"
+#include "abi-visit-OpenTTDStationLinks.hpp"
+#include "abi-visit-OpenTTDStationCommandServices.hpp"
+bool CheckAbi_station_cmd()
+{
+	return AbiServicesComplete(_rust_station_services) &&
+		AbiServicesComplete(_rust_station_links) &&
+		AbiServicesComplete(GetRustStationCommandServices());
+}
+#endif

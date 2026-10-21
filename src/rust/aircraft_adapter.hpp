@@ -7,7 +7,6 @@
 /** @file aircraft_adapter.hpp Canonical pool observations and direct shared leaves. */
 #include "aircraft_ffi.h"
 #include "vehicle_services.h"
-#include "station_services.h"
 #include "services_station.h"
 #include "company_services.h"
 static_assert(ORIGINAL_SAMPLE_COUNT == 73 && SND_18_TAKEOFF_HELICOPTER == 22 && SND_12_EXPLOSION == 16 && SND_17_SKID_PLANE == 21);
@@ -30,6 +29,8 @@ static OpenTTDAircraftVehicle AircraftVehicle(Vehicle *v) noexcept
 	return {RustVehicle(v), v->type == VEH_AIRCRAFT ? Aircraft::From(v)->rust_state.get() : nullptr, v->index.base()};
 }
 
+OpenTTDAircraftVehicle GetRustAircraftVehicle(OpenTTDVehicle *v) noexcept { return AircraftVehicle(VehicleOf(v)); }
+
 static OpenTTDAircraftVehicle OPENTTD_AIRCRAFT_CALL Aircraft_next(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	return AircraftVehicle(RustVehicleNext(VehicleOf(vehicle.handle)));
@@ -40,41 +41,11 @@ static const OpenTTDStation *OPENTTD_AIRCRAFT_CALL Aircraft_station(uint16_t id)
 	return RustStation(Station::GetIfValid(id));
 }
 
-static uint32_t OPENTTD_AIRCRAFT_CALL Aircraft_airport_tile(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return RustStationAirportTile(st);
-}
 
-static uint32_t OPENTTD_AIRCRAFT_CALL Aircraft_station_tile(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return RustStationLocation(st);
-}
 
-static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_rotation(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return st->airport.rotation;
-}
 
-static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_airport_type(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return st->airport.type;
-}
 
-static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_station_owner(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return OpenTTDStationOwner(st).base();
-}
 
-static bool OPENTTD_AIRCRAFT_CALL Aircraft_has_hangar(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return RustStationHasHangar(st);
-}
 
 static uint64_t * OPENTTD_AIRCRAFT_CALL Aircraft_airport_blocks(const OpenTTDStation *s) noexcept
 {
@@ -88,10 +59,6 @@ static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_had_vehicle(const OpenTTDStation *
 	return st->had_vehicle_of_type;
 }
 
-static const void * OPENTTD_AIRCRAFT_CALL Aircraft_dummy_airport() noexcept
-{
-	return GetAirport(AT_DUMMY);
-}
 
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_airport_elements(const void * airport) noexcept
 {
@@ -164,7 +131,7 @@ static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_direction_towards(OpenTTDAircraftV
 
 static int32_t OPENTTD_AIRCRAFT_CALL Aircraft_hangar_height(uint16_t station) noexcept
 {
-	return GetTileMaxPixelZ(Station::Get(station)->airport.GetHangarTile(0));
+	return GetTileMaxPixelZ(RustStationHangarTile(Station::Get(station), 0));
 }
 
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_terminal_count(const void * ap, uint32_t index) noexcept
@@ -298,7 +265,7 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_update_delta(OpenTTDAircraftVehicle v
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_touchdown_animation(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept
 {
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); TriggerAirportTileAnimation(Station::Get(station), TileVirtXY(v->x_pos, v->y_pos), AirportAnimationTrigger::AirplaneTouchdown);
+	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustAirportTileAnimation(Station::Get(station), TileVirtXY(v->x_pos, v->y_pos), AirportAnimationTrigger::AirplaneTouchdown);
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_destination_too_far(OpenTTDAircraftVehicle vehicle) noexcept
@@ -483,7 +450,7 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.airport_fta = OpenTTDStationAirportFTA,
 	.airport_blocks = Aircraft_airport_blocks,
 	.had_vehicle = Aircraft_had_vehicle,
-	.dummy_airport = Aircraft_dummy_airport,
+	.dummy_airport = RustDummyAirportFTA,
 	.airport_elements = Aircraft_airport_elements,
 	.helipads = Aircraft_helipads,
 	.airport_flags = Aircraft_airport_flags,
@@ -548,6 +515,8 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.route_node = Aircraft_route_node,
 	.block_choice = Aircraft_block_choice,
 };
+const OpenTTDAircraftLeaves &GetRustAircraftLeaves() noexcept { return _aircraft_leaves; }
+
 bool Aircraft::Tick()
 {
 	if (!this->IsNormalAircraft()) return true;

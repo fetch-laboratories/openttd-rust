@@ -8,6 +8,7 @@
 /** @file cargo_flow_ffi.h Canonical flow owners and completed-job live application. */
 #ifndef RUST_CARGO_FLOW_FFI_H
 #define RUST_CARGO_FLOW_FFI_H
+#include "service_defaults.hpp"
 #include <stdint.h>
 #include <stddef.h>
 #ifdef __cplusplus
@@ -25,13 +26,13 @@ typedef struct {
 	uint16_t origin;
 	uint8_t found;
 } OpenTTDCargoOrigin;
-typedef struct {
+typedef struct OpenTTDCargoFlowServices {
 	void *context;
-	uint32_t (*read)(void *, uint8_t, uint16_t, uint16_t);
-	OpenTTDCargoFlowMap *(*job_flows)(void *, uint16_t);
-	OpenTTDCargoFlowMap *(*live_flows)(void *, uint16_t);
-	void (*reroute)(void *, uint16_t, uint16_t);
-	void (*finish)(void *, uint16_t, uint8_t);
+	uint32_t (*read)(void *, uint8_t, uint16_t, uint16_t) OPENTTD_SERVICE_DEFAULT(read);
+	OpenTTDCargoFlowMap *(*job_flows)(void *, uint16_t) OPENTTD_SERVICE_DEFAULT(job_flows);
+	OpenTTDCargoFlowMap *(*live_flows)(void *, uint16_t) OPENTTD_SERVICE_DEFAULT(live_flows);
+	void (*reroute)(void *, uint16_t, uint16_t) OPENTTD_SERVICE_DEFAULT(reroute);
+	void (*finish)(void *, uint16_t, uint8_t) OPENTTD_SERVICE_DEFAULT(finish);
 } OpenTTDCargoFlowServices;
 /* Each facade has one opaque owner or a nonowning borrow of a stable map entry.
  * Maps own raw-allocated flow nodes, unchanged by insertion or unrelated erase.

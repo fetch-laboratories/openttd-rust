@@ -8,6 +8,7 @@
 /** @file effect_ffi.h Rust effect owners and direct synchronous services. */
 #ifndef OPENTTD_RUST_EFFECT_FFI_H
 #define OPENTTD_RUST_EFFECT_FFI_H
+#include "service_defaults.hpp"
 #include <stdint.h>
 #include "services_ffi.h"
 #if defined(_MSC_VER)
@@ -26,12 +27,12 @@ typedef struct {
 	uint32_t sprite;
 	uint8_t progress, spritenum, subtype, ambient;
 } OpenTTDEffectView;
-typedef struct {
-	void (OPENTTD_EFFECT_CALL *observe)(void *, OpenTTDEffectView *) noexcept;
-	void (OPENTTD_EFFECT_CALL *write)(void *, uint8_t, uint32_t) noexcept;
-	void (OPENTTD_EFFECT_CALL *viewport)(void *) noexcept;
-	void (OPENTTD_EFFECT_CALL *sound)(void *, uint8_t) noexcept;
-	void (OPENTTD_EFFECT_CALL *animated)(uint32_t) noexcept;
+typedef struct OpenTTDEffectLeaves {
+	void (OPENTTD_EFFECT_CALL *observe)(void *, OpenTTDEffectView *) noexcept OPENTTD_SERVICE_DEFAULT(observe);
+	void (OPENTTD_EFFECT_CALL *write)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write);
+	void (OPENTTD_EFFECT_CALL *viewport)(void *) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
+	void (OPENTTD_EFFECT_CALL *sound)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
+	void (OPENTTD_EFFECT_CALL *animated)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(animated);
 } OpenTTDEffectLeaves;
 /* One shell owns one zero-created state; destroy once after final use. get/set:
  * field0 uint16 animation, field1 uint8 substate. No persistent C++ mirror.

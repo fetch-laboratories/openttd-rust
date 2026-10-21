@@ -210,6 +210,16 @@ template <typename Check> void CheckTownProtocol(Check check)
 	auto *fields = openttd_rust_town_simulation(owner.get()); fields->xy = 2080; std::fill_n(fields->radius, 5, 100);
 	const auto leaves = TownProtocolServices();
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, TownProtocolRandom, TownProtocolIndustry);
+	/* This fixture models flat, empty ground without roads, depots or bridges. */
+	services.is_road_depot = [](uint32_t) noexcept { return false; };
+	services.is_any_road_stop = [](uint32_t) noexcept { return false; };
+	services.is_bay_stop = [](uint32_t) noexcept { return false; };
+	services.road_bits = [](uint32_t, uint8_t, bool) noexcept -> uint8_t { return 0; };
+	services.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
+	services.tile_slope = [](uint32_t) noexcept -> uint8_t { return 0; };
+	services.tile_max_z = [](uint32_t) noexcept -> int32_t { return 0; };
+	services.bridge_above = [](uint32_t) noexcept { return false; };
+	services.mark_dirty = [](uint32_t) noexcept {};
 	services.tile_valid = [](uint32_t) noexcept { return true; };
 	services.distance_from_edge = [](uint32_t) noexcept { return uint32_t(1); };
 	services.road_type = [](uint32_t) noexcept { return uint8_t(63); };

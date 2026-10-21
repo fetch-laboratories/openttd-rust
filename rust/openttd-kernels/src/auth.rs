@@ -509,3 +509,27 @@ pub(crate) unsafe extern "C" fn openttd_rust_auth_stream_decrypt(
         )
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDAuthPrimitives" ["probe"] => Primitives {
+        version,
+        reserved,
+        aead_size,
+        aead_alignment,
+        hash_size,
+        hash_alignment,
+        wipe,
+        x25519,
+        public_key,
+        hash_init,
+        hash_update,
+        hash_final,
+        aead_init,
+        aead_copy,
+        aead_write,
+        aead_read,
+        lock,
+        unlock,
+    };
+}

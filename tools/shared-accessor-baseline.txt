@@ -31,7 +31,6 @@ src/economy.cpp | [](const OpenTTDEngine *handle) noexcept -> uint8_t | fff9535f
 src/industry_cmd.cpp | IndustryCommandDeity() noexcept | a3c89e002d00e907 | 1
 src/industry_cmd.cpp | []() noexcept -> bool | 04692d80b1b4e782 | 1
 src/industry_cmd.cpp | []() noexcept -> bool | 076c7d2608a7c129 | 1
-src/industry_cmd.cpp | []() noexcept -> bool | 62f14eafd13bb8e2 | 1
 src/industry_cmd.cpp | []() noexcept -> bool | d1bc23e0230f0b75 | 1
 src/industry_cmd.cpp | []() noexcept -> int32_t | 93a33073ca76ba44 | 1
 src/industry_cmd.cpp | []() noexcept -> uint32_t | aa6c27bca6e249bf | 1
@@ -82,17 +81,14 @@ src/order_cmd.cpp | openttd_orders_vehicle_type(void *ctx) noexcept | 548f4cd5ca
 src/pathfinder/water_regions.cpp | CalculateWaterRegionPatchHash(const WaterRegionPatchDesc &patch) | 43ab4b50224ccf7a | 1
 src/pathfinder/yapf/yapf_rail.cpp | YapfTrainFindNearestSafeTile(const Train *v, TileIndex tile, Trackdir td, bool override_railtype) | 02526afd5bf0c047 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_airport_blocks(const OpenTTDStation *s) noexcept | 97ae30fe84ad813b | 1
-src/rust/aircraft_adapter.hpp | Aircraft_airport_type(const OpenTTDStation *s) noexcept | a1c047f7e81e7801 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_cargo_age_property(OpenTTDAircraftVehicle vehicle) noexcept | e353390d8a0ed3b7 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_engine_sound(OpenTTDAircraftVehicle vehicle) noexcept | ab16a3a16a30787d | 1
 src/rust/aircraft_adapter.hpp | Aircraft_engine_speed(OpenTTDAircraftVehicle vehicle) noexcept | a6cd81a57940c095 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_engine_subtype(OpenTTDAircraftVehicle vehicle) noexcept | d686df951ef1732d | 1
 src/rust/aircraft_adapter.hpp | Aircraft_had_vehicle(const OpenTTDStation *s) noexcept | 20ea2629b76c3ff3 | 1
-src/rust/aircraft_adapter.hpp | Aircraft_hangar_height(uint16_t station) noexcept | 3529f4ff9ef3df01 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_nearest_depot_order(OpenTTDAircraftVehicle vehicle) noexcept | c2837c0411ced584 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_part_of_orders(OpenTTDAircraftVehicle vehicle) noexcept | 42a2fa6130a76f6a | 1
 src/rust/aircraft_adapter.hpp | Aircraft_range_property(OpenTTDAircraftVehicle vehicle) noexcept | 7307bcd5feec8b72 | 1
-src/rust/aircraft_adapter.hpp | Aircraft_rotation(const OpenTTDStation *s) noexcept | 497625155a4c2fda | 1
 src/rust/aircraft_adapter.hpp | Aircraft_service_interval(OpenTTDAircraftVehicle vehicle) noexcept | 0841847ee09aa8ff | 1
 src/rust/aircraft_adapter.hpp | UpdateAirplanesOnNewStation(const Station *st) | 3385f4a0c2f65978 | 1
 src/rust/company_adapter.cpp | Co_aircraft_is_normal(uint32_t id) noexcept | 83a0e1036f160164 | 1
@@ -136,11 +132,6 @@ src/rust/ship_control_services.h | Ship_station_dock(uint32_t station) noexcept 
 src/rust/ship_control_services.h | Ship_station_visits(uint32_t station) noexcept | d145d1722eb9a141 | 1
 src/rust/ship_control_services.h | Ship_station_xy(uint32_t station) noexcept | efc252da0f94199f | 1
 src/rust/sound_services.h | OpenTTDAmbientSound() noexcept | d25b0cbd8aa2d19e | 1
-src/rust/station_services.h | OpenTTDStationOwner(const BaseStation *station) noexcept | aeacdaed578ac71a | 1
-src/rust/station_services.h | RustStationAirportTile(const Station *s) noexcept | afc031b1b93ed402 | 1
-src/rust/station_services.h | RustStationHasAirport(const Station *s) noexcept | aa92b59f9633a60c | 1
-src/rust/station_services.h | RustStationHasHangar(const Station *s) noexcept | efb8225051e673c3 | 1
-src/rust/station_services.h | RustStationLocation(const Station *s) noexcept | 24c036bf15cf4898 | 1
 src/rust/train_reservation_services.h | TrainReservationBackoff(void *, OpenTTDTrainHandle) noexcept | 9313c60aa144dfac | 1
 src/rust/train_reservation_services.h | TrainReservationLineReverse(void *, OpenTTDTrainHandle) noexcept | 1960f2e4194b13e4 | 1
 src/rust/train_reservation_services.h | TrainReservationReservePaths(void *, OpenTTDTrainHandle) noexcept | ca4028cc43e737ca | 1
@@ -172,10 +163,8 @@ src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationS
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 204197618397b80a | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 525f6f2cbe8d180f | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | b2d9366ff90c20df | 1
-src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> uint16_t | dcf77e5dc6a7f925 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> uint8_t | 06dab3257089f706 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> void | 13c7c5aa49806d75 | 1
-src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> void | c186468c6851a5c6 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> OpenTTDLinkGraph * | a0c4a048bc6596fd | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> uint16_t | 8c14257fe50590c2 | 1
 src/station_cmd.cpp | [](uint8_t cargo) noexcept -> bool | 5e6e087028374bc5 | 1
@@ -186,20 +175,6 @@ src/town_cmd.cpp | RustTown_allow_roads() noexcept | faaf2796b712d57e | 1
 src/town_cmd.cpp | RustTown_growth_rate() noexcept | 6c32e2c93ccbb6f1 | 1
 binding | GetRustSignalContext | 2
 binding | IndustryCommandDeity | 2
-binding | OpenTTDAddAnimatedTile | 2
-binding | OpenTTDEditor | 2
-binding | OpenTTDGeneratingWorld | 2
-binding | OpenTTDHighestSnowLine | 2
-binding | OpenTTDLandscapeValue | 2
-binding | OpenTTDMapLogX | 2
-binding | OpenTTDMapScaleLandProportion | 2
-binding | OpenTTDMapScaleSize | 2
-binding | RustCurrentCompanyID | 4
-binding | RustLocalCompanyID | 2
-binding | RustOtherTunnelBridgeEnd | 2
-binding | RustScreenDirty | 3
-binding | RustSetCurrentCompanyID | 2
-binding | RustUtf8Length | 3
 binding | TrainReadLastStation | 2
 binding | TrainReadNext | 2
 write | src/economy.cpp | [](OpenTTDVehicle *handle, int64_t value) noexcept -> void | e49661d6b53b5cb0 | 1

@@ -23,11 +23,11 @@ inline uint16_t OpenTTDHouseCallback(CallbackID callback, uint32_t param1, uint3
 {
 	return GetHouseCallback(callback, param1, param2, house, town, tile, {}, not_yet_constructed, initial_random);
 }
-inline void OpenTTDDeleteInspect(GrfSpecFeature feature, uint index) noexcept { DeleteNewGRFInspectWindow(feature, index); }
+inline void RustCloseNewGRFInspect(GrfSpecFeature feature, uint32_t index) noexcept { DeleteNewGRFInspectWindow(feature, index); }
 /* Typed adapters retain the existing per-component table signatures. */
-inline void OpenTTDDeleteRailInspect(uint32_t tile) noexcept { OpenTTDDeleteInspect(GSF_RAILTYPES, tile); }
-inline void OpenTTDDeleteHouseInspect(uint32_t tile) noexcept { OpenTTDDeleteInspect(GSF_HOUSES, tile); }
-inline void OpenTTDDeleteIndustryTileInspect(uint32_t tile) noexcept { OpenTTDDeleteInspect(GSF_INDUSTRYTILES, tile); }
-inline void OpenTTDDeleteIndustryInspect(uint16_t industry) noexcept { OpenTTDDeleteInspect(GSF_INDUSTRIES, industry); }
+inline void OpenTTDDeleteRailInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_RAILTYPES, tile); }
+inline void OpenTTDDeleteHouseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_HOUSES, tile); }
+inline void OpenTTDDeleteIndustryTileInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_INDUSTRYTILES, tile); }
+inline void OpenTTDDeleteIndustryInspect(uint16_t industry) noexcept { RustCloseNewGRFInspect(GSF_INDUSTRIES, industry); }
 inline bool OpenTTDIndustryTileBooleanCallback(const IndustryTileSpec *spec, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvertBooleanCallback(spec->grf_prop.grffile, callback, result); }
 #endif /* RUST_SERVICES_NEWGRF_H */

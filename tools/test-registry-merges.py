@@ -62,7 +62,6 @@ with tempfile.TemporaryDirectory() as directory:
             ],
             ABI: [
                 f'#include "rust/{header}.h"\n',
-                f"\t\toffsetof(OpenTTDSharedServices, {field}),\n",
                 f"\t{component.title()}Probe();\n",
             ],
             RUST: [
@@ -75,7 +74,7 @@ with tempfile.TemporaryDirectory() as directory:
             ],
             NATIVE: [f"\t\t.{field} = {component.title()}Probe,\n"],
             ADAPTER: [f'#include "{field}.h"\n'],
-            LAYOUT: [f"                {field},\n"],
+            LAYOUT: [f"        {field},\n"],
         }
         for name, entries in additions.items():
             path = root / name
