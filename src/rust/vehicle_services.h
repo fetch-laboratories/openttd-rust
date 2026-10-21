@@ -14,8 +14,15 @@
 #include "../engine_base.h"
 #include "../vehicle_func.h"
 #include "../newgrf.h"
+#include "../newgrf_engine.h"
 #include "../newgrf_commons.h"
 
+inline uint16_t RustVehicleCallback(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, std::span<int32_t> registers = {}) noexcept { return GetVehicleCallback(callback, param1, param2, engine, v, registers); }
+uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept;
+uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
+uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
+uint32_t RustVehicleGRFString(Vehicle *v, GRFStringID string) noexcept;
+void RustVehicleFlipStopped(Vehicle *v) noexcept;
 inline void RustUnknownCallbackResult(uint32_t grfid, uint16_t callback, uint16_t result) noexcept { ErrorUnknownCallbackResult(grfid, callback, result); }
 
 OpenTTDByteSpan RustVehicleName(void *shell) noexcept;
@@ -96,6 +103,16 @@ inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->reli
 inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->engine_type.base(); }
 inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return reinterpret_cast<const OpenTTDEngine *>(e); }
 inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return reinterpret_cast<const Engine *>(e); }
+inline const OpenTTDEngine *RustVehicleGetEngine(OpenTTDVehicle *v) noexcept { return RustEngine(VehicleOf(v)->GetEngine()); }
+uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept;
+uint16_t RustVehicleCargoCap(OpenTTDVehicle *v) noexcept;
+void RustVehicleSetRefitCap(OpenTTDVehicle *v, uint16_t cap) noexcept;
+void RustVehicleSetCargoCap(OpenTTDVehicle *v, uint16_t cap) noexcept;
+void RustVehicleSetCargoKind(OpenTTDVehicle *v, uint8_t cargo, uint8_t subtype) noexcept;
+void RustVehicleSetCargoType(OpenTTDVehicle *v, uint8_t cargo) noexcept;
+void RustVehicleSetCargoSubtype(OpenTTDVehicle *v, uint8_t subtype) noexcept;
+void RustVehicleInvalidateChain(OpenTTDVehicle *v) noexcept;
+ExpensesType RustVehicleExpense(OpenTTDVehicle *v, bool income) noexcept;
 template <class T>
 inline uint8_t RustGroundCachedLength(const T *v) noexcept { return v->gcache.cached_veh_length; }
 template <class T>
@@ -126,6 +143,11 @@ inline uint32_t *RustVehicleMotionAddress(Vehicle *v) noexcept { return &v->moti
 /** Shared legacy opaque-owner adapter; the actual typed read is defined once. */
 template <typename Result, auto Read>
 static Result RustOpaqueVehicleRead(void *shell) noexcept { return Read(static_cast<Vehicle *>(shell)); }
+template <typename Result, auto Read>
+static Result RustOpaqueHandleRead(void *shell) noexcept { return Read(RustVehicle(static_cast<Vehicle *>(shell))); }
+/** Typed legacy-context adapter; the native operation remains defined once. */
+template <auto Operation, typename... Args>
+static auto RustOpaqueVehicleInvoke(void *shell, Args... args) noexcept { return Operation(static_cast<Vehicle *>(shell), args...); }
 /** Legacy orders width/handle adapter for a shared map read at a vehicle's tile. */
 template <typename Result, auto Read>
 static Result RustOpaqueVehicleTileRead(void *shell) noexcept { return Read(RustVehicleTile(static_cast<const Vehicle *>(shell))); }

@@ -31,6 +31,41 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "GRFStringID" ["probe"] => crate::vehicle_transactions::GrfStringId { };
+    "OpenTTDVehicleRefitCapacity" ["probe"] => crate::vehicle_transactions::refit::Capacity {
+        total, mail, cargo,
+    };
+    "OpenTTDRefitCargoKind" ["probe"] => crate::vehicle_transactions::refit::CargoKind {
+        cargo, subtype,
+    };
+    "OpenTTDRefitCommit" ["probe"] => crate::vehicle_transactions::refit::Commit {
+        cargo, capacity,
+    };
+    "OpenTTDRefitEngine" ["probe"] => crate::vehicle_transactions::refit::Engine {
+        mask, automatic,
+    };
+    "OpenTTDRefitCargo" ["probe"] => crate::vehicle_transactions::refit::Cargo {
+        classes, local,
+    };
+    "OpenTTDRefitPrices" ["probe"] => crate::vehicle_transactions::refit::Prices {
+        train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
+    };
+    "OpenTTDVehicleRefitServices" ["probe"] => crate::vehicle_transactions::refit::Services {
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, has_grf, refit_cost, refit_cargo, cost_callback, engine_kind, rail_kind, price_shift, can_carry, refit_engine, capacity, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, set_refit_cap, refit_cap, cargo_cap, set_capacity, write_refit, mail_cargo, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
+    };
+
+    "OpenTTDAircraftStartState" ["probe"] => crate::vehicle_transactions::AircraftStartState {
+        state, flags,
+    };
+    "OpenTTDVehicleTransactionStrings" ["probe"] => crate::vehicle_transactions::TransactionStrings {
+        destroyed, stopped_in_depot, no_power, in_flight, incompatible_rail, null_string,
+        grf_text, takeoff, terminal7, direct_descent, new_vehicle_expense,
+    };
+    "OpenTTDVehicleCommonServices" ["probe"] => crate::vehicle_transactions::CommonServices {
+        base, transactions, vehicles, orders, strings, train_power, aircraft_start,
+        startstop_callback, grf_version, grf_string, waiting_news, flip_stopped,
+        startstop_ui, sell_rail, value,
+    };
     "OpenTTDVehicleSelectionServices" ["probe"] => crate::vehicle_transactions::SelectionServices {
         groups, transactions, vehicles, in_depot, free_wagon, first_engine_part,
         multiheaded, other_multihead, with_orders, list_clear, list_push,

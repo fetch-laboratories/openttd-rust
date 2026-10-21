@@ -13,6 +13,7 @@
 #include "../vehicle_func.h"
 #include "../order_func.h"
 #include "../newgrf_engine.h"
+#include "../newgrf_text.h"
 #include "../engine_base.h"
 #include "../newgrf_sound.h"
 #include "../newgrf_callbacks.h"
@@ -34,6 +35,7 @@
 #include "../train.h"
 #include "../station_base.h"
 #include "vehicle_maintenance_ffi.h"
+#include "aircraft_ffi.h"
 #include "fleet_ffi.h"
 #include "services_ffi.h"
 #include "company_services.h"
@@ -46,7 +48,26 @@
 #include "../news_func.h"
 #include "../strings_func.h"
 #include "../table/strings.h"
+OpenTTDAircraftVehicle RustAircraftVehicle(Vehicle *v) noexcept
+{
+	if (v == nullptr) return {nullptr, nullptr, VehicleID::Invalid().base()};
+	return {RustVehicle(v), v->type == VEH_AIRCRAFT ? Aircraft::From(v)->rust_state.get() : nullptr, v->index.base()};
+}
+OpenTTDAircraftVehicle GetRustAircraftVehicle(OpenTTDVehicle *v) noexcept { return RustAircraftVehicle(VehicleOf(v)); }
+
+OpenTTDAircraftVehicle OPENTTD_AIRCRAFT_CALL RustAircraftNext(OpenTTDAircraftVehicle vehicle) noexcept
+{
+	return RustAircraftVehicle(RustVehicleNext(VehicleOf(vehicle.handle)));
+}
+uint16_t OPENTTD_AIRCRAFT_CALL RustAircraftEngineReliability(OpenTTDAircraftVehicle vehicle) noexcept
+{
+	const Vehicle *v = VehicleOf(vehicle.handle);
+	return RustEngineReliability(EngineOf(RustVehicleGetEngine(RustVehicle(v))));
+}
+
 #include "../safeguards.h"
+
+int32_t RustGRFPriceShift(const GRFFile *grf, uint32_t price) noexcept { return grf == nullptr ? 0 : grf->price_base_multipliers[price]; }
 
 OpenTTDByteSpan RustVehicleName(void *shell) noexcept
 {
@@ -62,6 +83,21 @@ Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept { return Train::From(v)->
 bool RustTrainMultiheaded(const Vehicle *v) noexcept { return Train::From(v)->IsMultiheaded(); }
 Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept { return Train::From(v)->other_multiheaded_part; }
 
+uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept { return RustVehicleCallback(CBID_VEHICLE_START_STOP_CHECK, 0, 0, v->engine_type, v, std::span(reg, 1)); }
+uint32_t RustTrainCachedPower(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_power; }
+uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept { return v->GetGRF()->grf_version; }
+uint32_t RustVehicleGRFString(Vehicle *v, GRFStringID string) noexcept { return GetGRFStringID(v->GetGRFID(), string); }
+void RustVehicleFlipStopped(Vehicle *v) noexcept { v->vehstatus.Flip(VehState::Stopped); }
+
+uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->refit_cap; }
+uint16_t RustVehicleCargoCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->cargo_cap; }
+void RustVehicleSetRefitCap(OpenTTDVehicle *v, uint16_t cap) noexcept { VehicleOf(v)->refit_cap = cap; }
+void RustVehicleSetCargoCap(OpenTTDVehicle *v, uint16_t cap) noexcept { VehicleOf(v)->cargo_cap = cap; }
+void RustVehicleSetCargoType(OpenTTDVehicle *v, uint8_t cargo) noexcept { VehicleOf(v)->cargo_type = cargo; }
+void RustVehicleSetCargoSubtype(OpenTTDVehicle *v, uint8_t subtype) noexcept { VehicleOf(v)->cargo_subtype = subtype; }
+void RustVehicleSetCargoKind(OpenTTDVehicle *v, uint8_t cargo, uint8_t subtype) noexcept { RustVehicleSetCargoType(v, cargo); RustVehicleSetCargoSubtype(v, subtype); }
+void RustVehicleInvalidateChain(OpenTTDVehicle *v) noexcept { VehicleOf(v)->InvalidateNewGRFCacheOfChain(); }
+ExpensesType RustVehicleExpense(OpenTTDVehicle *v, bool income) noexcept { return VehicleOf(v)->GetExpenseType(income); }
 /* Values the Rust side names in rust/openttd-kernels/src/vehicle.rs. */
 static_assert(MP_ROAD == 2 && MP_STATION == 5 && MP_TUNNELBRIDGE == 9);
 static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4);
@@ -129,7 +165,7 @@ static int32_t OPENTTD_VEHICLE_CALL VehicleSvcProperty(OpenTTDVehicle *v, uint8_
 static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcLengthCallback(OpenTTDVehicle *v) noexcept
 {
 	Vehicle *u = VehicleOf(v);
-	return GetVehicleCallback(CBID_VEHICLE_LENGTH, 0, 0, u->engine_type, u);
+	return RustVehicleCallback(CBID_VEHICLE_LENGTH, 0, 0, u->engine_type, u);
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcUnknownLengthResult(const OpenTTDEngine *e, uint16_t result) noexcept
 {
@@ -410,7 +446,7 @@ static OpenTTDVehicleDayCallback OPENTTD_VEHICLE_CALL VehicleSchedulerDayCallbac
 static uint16_t OPENTTD_VEHICLE_CALL VehicleSchedulerDayCallback(OpenTTDVehicle *shell) noexcept
 {
 	Vehicle *v = VehicleOf(shell);
-	return GetVehicleCallback(CBID_VEHICLE_32DAY_CALLBACK, 0, 0, v->engine_type, v);
+	return RustVehicleCallback(CBID_VEHICLE_32DAY_CALLBACK, 0, 0, v->engine_type, v);
 }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerRandomiseCallback(OpenTTDVehicle *shell) noexcept
 {

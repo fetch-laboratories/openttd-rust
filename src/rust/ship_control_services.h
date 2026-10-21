@@ -14,6 +14,7 @@
 #include "settings_services.h"
 #include "tile_animation_services.h"
 #include "vehicle_services.h"
+#include "engine_services.h"
 static_assert(MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && TILE_HEIGHT == 8 && TILE_SIZE == 16);
 static_assert(TRACK_BIT_DEPOT == 128 && TRACK_BIT_WORMHOLE == 64 && HVOT_SHIP == 32);
 static_assert(to_underlying(WaterClass::Sea) == 0 && DIRDIFF_REVERSE == 4);
@@ -176,9 +177,9 @@ static uint32_t Ship_age_property(uint32_t id, uint32_t default_period) noexcept
 
 static void Ship_update_visual(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateVisualEffect(); }
 
-static void Ship_cache_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->InvalidateNewGRFCacheOfChain(); }
+static void Ship_cache_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleInvalidateChain(RustVehicle(v)); }
 
-static uint32_t Ship_capacity(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return v->GetEngine()->DetermineCapacity(v); }
+static uint32_t Ship_capacity(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return RustEngineDetermineCapacity(RustVehicleGetEngine(RustVehicle(v)), RustVehicle(v), nullptr); }
 
 static void Ship_sprite_direction(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->sprite_cache.last_direction = INVALID_DIR; }
 
@@ -270,10 +271,10 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	const auto &svi = e->VehInfo<ShipVehicleInfo>();
 	v->vehstatus = {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette};
 	v->spritenum = svi.image_index;
-	v->cargo_type = e->GetDefaultCargoType();
+	RustVehicleSetCargoType(RustVehicle(v), e->GetDefaultCargoType());
 	assert(IsValidCargoType(v->cargo_type));
-	v->cargo_cap = svi.capacity;
-	v->refit_cap = 0;
+	RustVehicleSetCargoCap(RustVehicle(v), svi.capacity);
+	RustVehicleSetRefitCap(RustVehicle(v), 0);
 	v->last_station_visited = StationID::Invalid();
 	v->last_loading_station = StationID::Invalid();
 	v->engine_type = e->index;
@@ -307,7 +308,7 @@ static void Ship_build_interval_percent(uint32_t id) noexcept
 	v->SetServiceIntervalIsPercent(RustCompanyServiceIntervalPercent(RustCurrentCompanyID()));
 }
 
-static void Ship_build_capacity(uint32_t id, uint32_t capacity) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->cargo_cap = static_cast<uint16_t>(capacity); }
+static void Ship_build_capacity(uint32_t id, uint32_t capacity) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleSetCargoCap(RustVehicle(v), static_cast<uint16_t>(capacity)); }
 
 static void Ship_set_tile(uint32_t id, uint32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->tile = TileIndex(static_cast<uint32_t>(value)); }
 

@@ -47,6 +47,7 @@
 #include "rust/settings_services.h"
 
 static const OpenTTDRoadLeaves &GetRoadLeaves();
+const OpenTTDRoadLeaves &GetRustRoadLeaves() noexcept { return GetRoadLeaves(); }
 static OpenTTDRoadMaxSpeedRead RoadMaxSpeedRead(const RoadVehicle *u) noexcept;
 
 /** Settings and map size a road entry may consult, read once per entry. */

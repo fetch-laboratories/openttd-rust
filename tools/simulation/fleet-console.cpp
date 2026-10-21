@@ -73,7 +73,7 @@ static Vehicle *BuildFixture(VehicleType type)
 	} else {
 		for (Depot *depot : Depot::Iterate()) {
 			if (GetTileOwner(depot->xy) != _current_company) continue;
-			if ((type == VEH_TRAIN && IsRailDepotTile(depot->xy)) || (type == VEH_SHIP && IsShipDepotTile(depot->xy))) { tile = depot->xy; break; }
+			if ((type == VEH_TRAIN && IsRailDepotTile(depot->xy)) || (type == VEH_SHIP && IsShipDepotTile(depot->xy)) || (type == VEH_ROAD && IsRoadDepotTile(depot->xy))) { tile = depot->xy; break; }
 		}
 	}
 	if (tile == INVALID_TILE) FixtureAbort(__LINE__);
@@ -120,6 +120,35 @@ static bool FleetScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
 	Backup<CompanyID> company(_current_company);
+	if (args[1].starts_with("transaction-refit-")) {
+		VehicleType type = args[1].ends_with("train") ? VEH_TRAIN : args[1].ends_with("road") ? VEH_ROAD : args[1].ends_with("ship") ? VEH_SHIP : VEH_AIRCRAFT;
+		Vehicle *v = BuildFixture(type);
+		StationID station = StationID::Invalid();
+		for (const Order &o : v->Orders()) if (o.IsType(OT_GOTO_STATION)) { station = o.GetDestination().ToStationID(); break; }
+		if (station == StationID::Invalid()) FixtureAbort(__LINE__);
+		for (Vehicle *u = v; u != nullptr; u = u->Next()) {
+			if (u->cargo_cap == 0) continue;
+			uint16_t amount = std::min<uint>(u->cargo_cap + 7U, UINT16_MAX);
+			if (!CargoPacket::CanAllocateItem()) FixtureAbort(__LINE__);
+			u->cargo.Append(new CargoPacket(amount, 3, station, u->tile, Money(133)));
+			u->refit_cap = amount;
+		}
+		uint before_count = CargoCount(v);
+		SavedRandomSeeds before, after;
+		SaveRandomSeeds(&before);
+		for (DoCommandFlags flags : {DoCommandFlags{DoCommandFlag::QueryCost}, DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
+			auto [cost, capacity, mail, capacities] = Command<CMD_REFIT_VEHICLE>::Do(flags, v->index, v->cargo_type, 0xFF, false, false, 0);
+			Checked("refit-loaded", cost);
+			fmt::print(stderr, "FLEET refit {} {} {} {} {}\n", type, flags.base(), capacity, mail, CargoCount(v));
+			for (uint cap : capacities) fmt::print(stderr, "FLEET refit-capacity {}\n", cap);
+		}
+		SaveRandomSeeds(&after);
+		fmt::print(stderr, "FLEET refit-loaded {} {} {}\n", SameRandom(before, after), before_count > CargoCount(v), v->IsStoppedInDepot());
+		Cost("refit-invalid-cargo", std::get<0>(Command<CMD_REFIT_VEHICLE>::Do({}, v->index, NUM_CARGO, 0, false, false, 0)));
+		Checked("start-refit-fixture", Command<CMD_START_STOP_VEHICLE>::Do(DoCommandFlag::Execute, v->index, false));
+		Cost("refit-running", std::get<0>(Command<CMD_REFIT_VEHICLE>::Do({}, v->index, v->cargo_type, 0, false, false, 0)));
+		return true;
+	}
 	if (args[1] == "transaction-meta") {
 		for (VehicleType type : {VEH_TRAIN, VEH_ROAD, VEH_SHIP, VEH_AIRCRAFT}) {
 			Vehicle *v = nullptr;

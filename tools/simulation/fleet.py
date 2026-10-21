@@ -18,13 +18,13 @@ def scenarios(soak):
                 / "migration/saves"
                 / (
                     "padhattan-ridge-1996.sav"
-                    if mode.startswith("train")
+                    if mode.startswith("train") or mode == "transaction-refit-train"
                     else "padhattan-ridge-2000.sav"
-                    if mode.startswith(("drain", "transaction"))
+                    if mode.startswith("drain") or mode == "transaction-meta"
                     else "water-ferry.sav"
-                    if mode == "ship"
+                    if mode in ("ship", "transaction-refit-ship")
                     else "aircraft-route.sav"
-                    if mode == "aircraft"
+                    if mode in ("aircraft", "transaction-refit-aircraft")
                     else "opus-55-167-002.sav"
                 )
             ),
@@ -37,6 +37,10 @@ def scenarios(soak):
         for mode in (
             "groups",
             "transaction-meta",
+            "transaction-refit-train",
+            "transaction-refit-road",
+            "transaction-refit-ship",
+            "transaction-refit-aircraft",
             "list",
             "replace",
             "cash",
@@ -71,7 +75,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     import migration
 
     folder = out / scenario["name"] / "input"
-    if scenario["fleet"].startswith(("train", "drain", "transaction")):
+    if scenario["fleet"].startswith(("train", "drain")) or scenario["fleet"] in (
+        "transaction-meta",
+        "transaction-refit-train",
+    ):
         from .rails import normalize
 
         source, record = normalize(Path(scenario["save"]), folder / "normalized")
@@ -156,6 +163,10 @@ def check(scenario, run, mode, role, result):
     if "fleet" not in scenario or run["exit"] or not run["snapshots"]:
         return
     required = {
+        **{
+            "transaction-refit-" + kind: ["FLEET refit-loaded true true true"]
+            for kind in ("train", "road", "ship", "aircraft")
+        },
         "transaction-meta": [
             f"FLEET transaction-meta {kind} true 50 true true" for kind in range(4)
         ],

@@ -4,8 +4,10 @@
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
     clippy::too_many_arguments
 )]
+pub(crate) mod refit;
 use crate::fleet::GroupServices;
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, CommandServices, Services};
 
@@ -403,4 +405,209 @@ pub unsafe extern "C" fn openttd_rust_vehicle_generate_list(
             (s.list_push)(list, v);
         })
     }
+}
+
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct GrfStringId(pub u32);
+#[repr(C)]
+pub struct AircraftStartState {
+    pub state: u8,
+    pub flags: u8,
+}
+#[repr(C)]
+pub struct TransactionStrings {
+    pub destroyed: u32,
+    pub stopped_in_depot: u32,
+    pub no_power: u32,
+    pub in_flight: u32,
+    pub incompatible_rail: u32,
+    pub null_string: u32,
+    pub grf_text: GrfStringId,
+    pub takeoff: u8,
+    pub terminal7: u8,
+    pub direct_descent: u8,
+    pub new_vehicle_expense: u8,
+}
+#[repr(C)]
+pub struct CommonServices {
+    pub base: &'static TransactionServices,
+    pub transactions: &'static crate::fleet::transactions::Services,
+    pub vehicles: &'static crate::vehicle::VehicleServices,
+    pub orders: &'static crate::orders::Leaves,
+    pub strings: TransactionStrings,
+    pub train_power: extern "C" fn(*mut ()) -> u32,
+    pub aircraft_start: extern "C" fn(*mut ()) -> AircraftStartState,
+    pub startstop_callback: extern "C" fn(*mut (), *mut i32) -> u16,
+    pub grf_version: extern "C" fn(*mut ()) -> u8,
+    pub grf_string: extern "C" fn(*mut (), GrfStringId) -> u32,
+    pub waiting_news: extern "C" fn(u32),
+    pub flip_stopped: extern "C" fn(*mut ()),
+    pub startstop_ui: extern "C" fn(*mut ()),
+    pub sell_rail: extern "C" fn(*mut CommandCost, u16, *mut (), bool, bool, u32),
+    pub value: extern "C" fn(*mut ()) -> i64,
+}
+/// # Safety
+/// `v` denotes a live shell, established by the caller's source preconditions.
+unsafe fn vehicle_ref(v: *mut ()) -> crate::vehicle::VehicleRef {
+    crate::vehicle::VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast()) })
+}
+unsafe fn sell(
+    s: &CommonServices,
+    cost: *mut CommandCost,
+    flags: u16,
+    id: u32,
+    chain: bool,
+    backup: bool,
+    client: u32,
+) {
+    let b = s.base;
+    let v = unsafe { (b.groups.vehicle)(id) };
+    if v.is_null() {
+        return (b.cost.error)(cost, ERROR);
+    }
+    let front = unsafe { (s.transactions.first)(v) };
+    unsafe { (b.commands.ownership)(cost, (b.groups.vehicle_owner)(front)) };
+    if !(b.cost.success)(cost) {
+        return;
+    }
+    if unsafe { (s.transactions.crashed)(front) } {
+        return (b.cost.error)(cost, s.strings.destroyed);
+    }
+    if !unsafe { (s.transactions.stopped_in_depot)(front) } {
+        return (b.cost.error)(
+            cost,
+            s.strings.stopped_in_depot + u32::from(unsafe { (b.groups.vehicle_type)(front) }),
+        );
+    }
+    if unsafe { (b.groups.vehicle_type)(v) } == 0 {
+        return (s.sell_rail)(cost, flags, v, chain, backup, client);
+    }
+    (b.cost.expense_money)(
+        cost,
+        s.strings.new_vehicle_expense,
+        (s.value)(front).saturating_neg(),
+    );
+    if flags & EXECUTE != 0 {
+        if unsafe { (b.groups.primary)(front) } && backup {
+            unsafe { crate::orders::openttd_rust_backup_create(front.cast(), client, s.orders) };
+        }
+        // No owner access or retained reference crosses the deleting callback.
+        (s.vehicles.destroy)(unsafe { vehicle_ref(front) });
+    }
+}
+unsafe fn startstop(
+    s: &CommonServices,
+    cost: *mut CommandCost,
+    flags: u16,
+    id: u32,
+    mut evaluate: bool,
+) {
+    if flags & AUTOREPLACE == 0 {
+        evaluate = true;
+    }
+    let b = s.base;
+    let (v, _) = unsafe { owned_primary(b, cost, id) };
+    if v.is_null() {
+        return;
+    }
+    let handle = unsafe { vehicle_ref(v) };
+    let status = (s.vehicles.status)(handle);
+    if status & crate::vehicle::VS_CRASHED != 0 {
+        return (b.cost.error)(cost, s.strings.destroyed);
+    }
+    match unsafe { (b.groups.vehicle_type)(v) } {
+        0 => {
+            if status & crate::vehicle::VS_STOPPED != 0 && (s.train_power)(v) == 0 {
+                return (b.cost.error)(cost, s.strings.no_power);
+            }
+        }
+        1 | 2 => (),
+        3 => {
+            let state = (s.aircraft_start)(v);
+            if (state.state >= s.strings.takeoff && state.state < s.strings.terminal7)
+                || state.flags & s.strings.direct_descent != 0
+            {
+                return (b.cost.error)(cost, s.strings.in_flight);
+            }
+        }
+        _ => return (b.cost.error)(cost, ERROR),
+    }
+    if evaluate {
+        let mut register100 = std::mem::MaybeUninit::<i32>::uninit();
+        let callback = (s.startstop_callback)(v, register100.as_mut_ptr());
+        let mut error = s.strings.null_string;
+        if callback != crate::vehicle::CALLBACK_FAILED {
+            if (s.grf_version)(v) < 8 {
+                if callback < 0x400 && callback & 0xff != 0xff {
+                    error = (s.grf_string)(
+                        v,
+                        GrfStringId(s.strings.grf_text.0.wrapping_add(u32::from(callback))),
+                    );
+                }
+            } else if callback < 0x400 {
+                error = (s.grf_string)(
+                    v,
+                    GrfStringId(s.strings.grf_text.0.wrapping_add(u32::from(callback))),
+                );
+            } else {
+                match callback {
+                    0x400 => (),
+                    0x40f => {
+                        // The original reads register 100 only for this result.
+                        error = (s.grf_string)(
+                            v,
+                            GrfStringId(unsafe { register100.assume_init() } as u32),
+                        );
+                    }
+                    _ => error = s.strings.incompatible_rail,
+                }
+            }
+        }
+        if error != s.strings.null_string {
+            return (b.cost.error)(cost, error);
+        }
+    }
+    if flags & EXECUTE != 0 {
+        if unsafe { (s.transactions.stopped_in_depot)(v) } && flags & AUTOREPLACE == 0 {
+            (s.waiting_news)(id);
+        }
+        (s.flip_stopped)(v);
+        if unsafe { (b.groups.vehicle_type)(v) } != 0 {
+            (s.vehicles.write_speed)(handle, 0);
+        }
+        (s.vehicles.reset_depot_unbunching)(handle);
+        // Native presentation may reenter owners; no Rust owner borrow spans it.
+        (unsafe { &*s.vehicles.maintenance }.mark_dirty)(handle);
+        (s.startstop_ui)(v);
+    }
+    (b.cost.zero)(cost);
+}
+/// # Safety
+/// Immutable service tables and native stack cost remain live; shell ownership
+/// follows the original command preconditions. No borrow survives deletion/reentry.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_vehicle_sell(
+    s: &CommonServices,
+    cost: *mut CommandCost,
+    flags: u16,
+    id: u32,
+    chain: bool,
+    backup: bool,
+    client: u32,
+) {
+    unsafe { sell(s, cost, flags, id, chain, backup, client) };
+}
+/// # Safety
+/// Immutable service tables and stack cost remain live for this synchronous entry.
+/// Register 100 follows the original successful `NewGRF` callback preconditions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_vehicle_startstop(
+    s: &CommonServices,
+    cost: *mut CommandCost,
+    flags: u16,
+    id: u32,
+    evaluate: bool,
+) {
+    unsafe { startstop(s, cost, flags, id, evaluate) };
 }

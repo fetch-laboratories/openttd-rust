@@ -27,6 +27,7 @@ inline uint OpenTTDMoveGoodsToStation(CargoType cargo, uint amount, Source sourc
 /* Legacy tables specialize the shared meanings without another native copy. */
 inline uint OpenTTDScaleTownCargo(uint amount) noexcept { return OpenTTDScaleCargo(amount, true); }
 inline uint OpenTTDScaleIndustryCargo(uint amount) noexcept { return OpenTTDScaleCargo(amount, false); }
+inline CargoType OpenTTDMailCargo() noexcept { return OpenTTDCargoByLabel(CT_MAIL); }
 inline CargoType OpenTTDFoodCargo() noexcept { return OpenTTDCargoByLabel(CT_FOOD); }
 inline CargoType OpenTTDPassengerCargo() noexcept { return OpenTTDCargoByLabel(CT_PASSENGERS); }
 inline CargoType OpenTTDIndustryCargoTranslation(const OpenTTDIndustrySpecHandle *spec, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, reinterpret_cast<const IndustrySpec *>(spec)->grf_prop.grffile); }

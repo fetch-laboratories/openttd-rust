@@ -8,6 +8,8 @@
 /** @file company_services.h Shared current-company context for synchronous Rust callbacks. */
 #ifndef RUST_COMPANY_SERVICES_H
 #define RUST_COMPANY_SERVICES_H
+struct GRFFile;
+int32_t RustGRFPriceShift(const GRFFile *, uint32_t) noexcept;
 #include "../company_type.h"
 #include "../company_func.h"
 #include "../company_base.h"

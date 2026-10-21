@@ -6,6 +6,7 @@
  */
 
 #include "vehicle_services.h"
+#include "engine_services.h"
 #include "company_services.h"
 #include "presentation_services.h"
 
@@ -35,7 +36,6 @@ static void * FleetGroup_head(uint8_t company) noexcept { return Company::Get(Co
 static void * FleetGroup_renew_state(void *shell) noexcept { return static_cast<EngineRenew *>(shell)->state.state; }
 static void * FleetGroup_next_renew(uint32_t from) noexcept { for (EngineRenew *er : EngineRenew::Iterate(from)) { if (er->index.base() >= from) return er; } return nullptr; }
 static uint32_t FleetGroup_renew_id(void *shell) noexcept { return static_cast<EngineRenew *>(shell)->index.base(); }
-static uint8_t FleetGroup_engine_type(uint16_t engine) noexcept { return Engine::Get(EngineID(engine))->type; }
 static bool FleetGroup_buildable_type(uint8_t type) noexcept { return IsCompanyBuildableVehicleType(static_cast<VehicleType>(type)); }
 static bool FleetGroup_can_allocate() noexcept { return Group::CanAllocateItem(); }
 static uint16_t FleetGroup_allocate(uint8_t owner, uint8_t type) noexcept { return (new Group(CompanyID(owner), static_cast<VehicleType>(type)))->index.base(); }
@@ -94,7 +94,7 @@ static const OpenTTDFleetGroupServices _fleet_group_services{
 	.renew_state = FleetGroup_renew_state,
 	.next_renew = FleetGroup_next_renew,
 	.renew_id = FleetGroup_renew_id,
-	.engine_type = FleetGroup_engine_type,
+	.engine_type = RustIndexedEngineRead<uint8_t, RustEngineType>,
 	.current_company = RustCurrentCompanyID,
 	.buildable_type = FleetGroup_buildable_type,
 	.can_allocate = FleetGroup_can_allocate,

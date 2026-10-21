@@ -15,6 +15,14 @@
 #include "../articulated_vehicles.h"
 #include "../rail.h"
 #include "../road.h"
+inline const OpenTTDEngine *RustEngineByID(uint16_t id) noexcept { return RustEngine(Engine::Get(EngineID(id))); }
+inline VehicleType RustEngineType(const OpenTTDEngine *e) noexcept { return EngineOf(e)->type; }
+inline bool RustEngineHasGRF(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetGRF() != nullptr; }
+inline uint8_t RustEngineRefitCost(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.refit_cost; }
+inline int32_t RustEnginePriceShift(const OpenTTDEngine *e, uint32_t price) noexcept { return RustGRFPriceShift(EngineOf(e)->GetGRF(), price); }
+inline uint32_t RustEngineDetermineCapacity(const OpenTTDEngine *e, OpenTTDVehicle *v, uint16_t *mail) noexcept { return EngineOf(e)->DetermineCapacity(VehicleOf(v), mail); }
+template <typename Result, auto Read>
+static Result RustIndexedEngineRead(uint16_t id) noexcept { return Read(RustEngineByID(id)); }
 inline uint8_t RustEngineExtraFlags(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.extra_flags.base(); }
 inline uint16_t RustEngineID(const OpenTTDEngine *e) noexcept { return EngineOf(e)->index.base(); }
 inline int32_t RustEngineBaseIntro(const OpenTTDEngine *e) noexcept { return EngineOf(e)->info.base_intro.base(); }

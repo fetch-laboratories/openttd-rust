@@ -37,7 +37,6 @@ static void * FleetTransaction_next_unit(void *shell) noexcept { auto *v = stati
 static void * FleetTransaction_prev_unit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetPrevUnit(); }
 static uint16_t FleetTransaction_length(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->gcache.cached_total_length; }
 static bool FleetTransaction_flipped(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetTrainFlags().Test(VehicleRailFlag::Flipped); }
-static uint8_t FleetTransaction_cargo_type(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->cargo_type; }
 static bool FleetTransaction_stopped_in_depot(void *shell) noexcept { return static_cast<Vehicle *>(shell)->IsStoppedInDepot(); }
 static uint8_t FleetTransaction_max_length() noexcept { return _settings_game.vehicle.max_train_length; }
 /* Original assertion sites; Rust evaluates their conditions only when assertions is set. */
@@ -105,7 +104,7 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.prev_unit = FleetTransaction_prev_unit,
 	.length = FleetTransaction_length,
 	.flipped = FleetTransaction_flipped,
-	.cargo_type = FleetTransaction_cargo_type,
+	.cargo_type = RustOpaqueHandleRead<uint8_t, RustVehicleCargoType>,
 	.can_carry = FleetTransaction_can_carry,
 	.stopped_in_depot = FleetTransaction_stopped_in_depot,
 	.max_length = FleetTransaction_max_length,

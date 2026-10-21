@@ -44,9 +44,15 @@
 
 #ifdef WITH_RUST
 #include "rust/vehicle_transaction_ffi.h"
+#include "rust/vehicle_refit_ffi.h"
+#include "rust/engine_services.h"
+#include "rust/services_cargo.h"
+#include "rust/settings_services.h"
 #include "rust/command_cost_services.h"
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
+#include "rust/orders_ffi.h"
+#include "rust/vehicle_maintenance_ffi.h"
 
 /* Synchronous native storage/presentation leaves only. No Rust borrow crosses
  * these calls; allocation or formatting failures terminate in noexcept leaves. */
@@ -91,6 +97,58 @@ const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noe
 	};
 	return services;
 }
+static OpenTTDAircraftStartState VehicleTransactionAircraftStart(void *shell) noexcept
+{
+	const Aircraft *v = Aircraft::From(static_cast<Vehicle *>(shell));
+	return {.state = v->state, .flags = v->flags};
+}
+static void VehicleTransactionWaitingNews(uint32_t id) noexcept { DeleteVehicleNews(VehicleID(id), AdviceType::VehicleWaiting); }
+static void VehicleTransactionStartstopUI(void *shell) noexcept
+{
+	const Vehicle *v = static_cast<Vehicle *>(shell);
+	SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP);
+	SetWindowDirty(WC_VEHICLE_DEPOT, v->tile);
+	SetWindowClassesDirty(GetWindowClassForVehicleType(v->type));
+	InvalidateWindowData(WC_VEHICLE_VIEW, v->index);
+}
+static void VehicleTransactionSellRail(OpenTTDCommandCost *out, uint16_t flags, void *v, bool chain, bool backup, uint32_t client) noexcept
+{
+	*reinterpret_cast<CommandCost *>(out) = CmdSellRailWagon(DoCommandFlags(flags), static_cast<Vehicle *>(v), chain, backup, ClientID(client));
+}
+const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
+{
+	static const OpenTTDVehicleCommonServices services{
+		.base = &GetRustVehicleTransactionServices(),
+		.transactions = &FleetTransactionServices(),
+		.vehicles = &GetRustVehicleServices(),
+		.orders = &GetRustOrdersLeaves(),
+		.strings = {
+			.destroyed = STR_ERROR_VEHICLE_IS_DESTROYED,
+			.stopped_in_depot = STR_ERROR_TRAIN_MUST_BE_STOPPED_INSIDE_DEPOT,
+			.no_power = STR_ERROR_TRAIN_START_NO_POWER,
+			.in_flight = STR_ERROR_AIRCRAFT_IS_IN_FLIGHT,
+			.incompatible_rail = STR_ERROR_INCOMPATIBLE_RAIL_TYPES,
+			.null_string = STR_NULL,
+			.grf_text = GRFSTR_MISC_GRF_TEXT,
+			.takeoff = STARTTAKEOFF,
+			.terminal7 = TERM7,
+			.direct_descent = 1 << VAF_HELI_DIRECT_DESCENT,
+			.new_vehicle_expense = EXPENSES_NEW_VEHICLES,
+		},
+		.train_power = RustOpaqueVehicleRead<uint32_t, RustTrainCachedPower>,
+		.aircraft_start = VehicleTransactionAircraftStart,
+		.startstop_callback = RustOpaqueVehicleInvoke<RustVehicleStartstopCallback, int32_t *>,
+		.grf_version = RustOpaqueVehicleRead<uint8_t, RustVehicleGRFVersion>,
+		.grf_string = RustOpaqueVehicleInvoke<RustVehicleGRFString, GRFStringID>,
+		.waiting_news = VehicleTransactionWaitingNews,
+		.flip_stopped = RustOpaqueVehicleInvoke<RustVehicleFlipStopped>,
+		.startstop_ui = VehicleTransactionStartstopUI,
+		.sell_rail = VehicleTransactionSellRail,
+		.value = RustOpaqueVehicleRead<int64_t, RustVehicleValue>,
+	};
+	return services;
+}
+#include "rust/vehicle_refit_services.hpp"
 #endif /* WITH_RUST */
 
 #include "safeguards.h"
@@ -287,6 +345,11 @@ std::tuple<CommandCost, VehicleID, uint, uint16_t, CargoArray> CmdBuildVehicle(D
  */
 CommandCost CmdSellVehicle(DoCommandFlags flags, VehicleID v_id, bool sell_chain, bool backup_order, ClientID client_id)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_vehicle_sell(&GetRustVehicleCommonServices(), RustCommandCost(&cost), flags.base(), v_id.base(), sell_chain, backup_order, client_id);
+	return cost;
+#else
 	Vehicle *v = Vehicle::GetIfValid(v_id);
 	if (v == nullptr) return CMD_ERROR;
 
@@ -311,6 +374,7 @@ CommandCost CmdSellVehicle(DoCommandFlags flags, VehicleID v_id, bool sell_chain
 	}
 
 	return ret;
+#endif
 }
 
 /**
@@ -322,6 +386,7 @@ CommandCost CmdSellVehicle(DoCommandFlags flags, VehicleID v_id, bool sell_chain
  * @param[out] auto_refit_allowed The refit is allowed as an auto-refit.
  * @return Price for refitting
  */
+#ifndef WITH_RUST
 static int GetRefitCostFactor(const Vehicle *v, EngineID engine_type, CargoType new_cargo_type, uint8_t new_subtype, bool *auto_refit_allowed)
 {
 	/* Prepare callback param with info about the new cargo type. */
@@ -345,6 +410,8 @@ static int GetRefitCostFactor(const Vehicle *v, EngineID engine_type, CargoType 
 	return (v == nullptr || v->cargo_type != new_cargo_type) ? e->info.refit_cost : 0;
 }
 
+#endif
+
 /**
  * Learn the price of refitting a certain engine
  * @param v The vehicle we are refitting, can be nullptr.
@@ -356,6 +423,11 @@ static int GetRefitCostFactor(const Vehicle *v, EngineID engine_type, CargoType 
  */
 static CommandCost GetRefitCost(const Vehicle *v, EngineID engine_type, CargoType new_cargo_type, uint8_t new_subtype, bool *auto_refit_allowed)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_vehicle_refit_cost(&GetRustVehicleRefitServices(), reinterpret_cast<OpenTTDCommandCost *>(&cost), RustVehicle(v), engine_type.base(), new_cargo_type, new_subtype, auto_refit_allowed);
+	return cost;
+#else
 	ExpensesType expense_type;
 	const Engine *e = Engine::Get(engine_type);
 	Price base_price;
@@ -389,8 +461,10 @@ static CommandCost GetRefitCost(const Vehicle *v, EngineID engine_type, CargoTyp
 	} else {
 		return CommandCost(expense_type, GetPrice(base_price, cost_factor, e->GetGRF(), -10));
 	}
+#endif
 }
 
+#ifndef WITH_RUST
 /** Helper structure for RefitVehicle() */
 struct RefitResult {
 	Vehicle *v;         ///< Vehicle to refit
@@ -530,6 +604,8 @@ static std::tuple<CommandCost, uint, uint16_t, CargoArray> RefitVehicle(Vehicle 
 	return { cost, total_capacity, total_mail_capacity, cargo_capacities };
 }
 
+#endif
+
 /**
  * Refits a vehicle to the specified cargo type.
  * @param flags type of operation
@@ -544,6 +620,13 @@ static std::tuple<CommandCost, uint, uint16_t, CargoArray> RefitVehicle(Vehicle 
  */
 std::tuple<CommandCost, uint, uint16_t, CargoArray> CmdRefitVehicle(DoCommandFlags flags, VehicleID veh_id, CargoType new_cargo_type, uint8_t new_subtype, bool auto_refit, bool only_this, uint8_t num_vehicles)
 {
+#ifdef WITH_RUST
+	CommandCost cost, temporary;
+	auto result = openttd_rust_vehicle_refit(&GetRustVehicleRefitServices(), reinterpret_cast<OpenTTDCommandCost *>(&cost), reinterpret_cast<OpenTTDCommandCost *>(&temporary), flags.base(), veh_id.base(), new_cargo_type, new_subtype, auto_refit, only_this, num_vehicles);
+	CargoArray capacities{};
+	std::copy(std::begin(result.cargo), std::end(result.cargo), capacities.begin());
+	return {std::move(cost), result.total, result.mail, capacities};
+#else
 	Vehicle *v = Vehicle::GetIfValid(veh_id);
 	if (v == nullptr) return { CMD_ERROR, 0, 0, {} };
 
@@ -615,6 +698,7 @@ std::tuple<CommandCost, uint, uint16_t, CargoArray> CmdRefitVehicle(DoCommandFla
 	}
 
 	return { cost, refit_capacity, mail_capacity, cargo_capacities };
+#endif
 }
 
 /**
@@ -626,6 +710,11 @@ std::tuple<CommandCost, uint, uint16_t, CargoArray> CmdRefitVehicle(DoCommandFla
  */
 CommandCost CmdStartStopVehicle(DoCommandFlags flags, VehicleID veh_id, bool evaluate_startstop_cb)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_vehicle_startstop(&GetRustVehicleCommonServices(), RustCommandCost(&cost), flags.base(), veh_id.base(), evaluate_startstop_cb);
+	return cost;
+#else
 	/* Disable the effect of evaluate_startstop_cb, when DoCommandFlag::AutoReplace is not set */
 	if (!flags.Test(DoCommandFlag::AutoReplace)) evaluate_startstop_cb = true;
 
@@ -704,6 +793,7 @@ CommandCost CmdStartStopVehicle(DoCommandFlags flags, VehicleID veh_id, bool eva
 		InvalidateWindowData(WC_VEHICLE_VIEW, v->index);
 	}
 	return CommandCost();
+#endif
 }
 
 /**
@@ -1211,5 +1301,7 @@ CommandCost CmdChangeServiceInt(DoCommandFlags flags, VehicleID veh_id, uint16_t
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDVehicleTransactionServices.hpp"
-bool CheckAbi_vehicle_cmd() { return AbiServicesComplete(GetRustVehicleTransactionServices()); }
+#include "abi-visit-OpenTTDVehicleCommonServices.hpp"
+#include "abi-visit-OpenTTDVehicleRefitServices.hpp"
+bool CheckAbi_vehicle_cmd() { return AbiServicesComplete(GetRustVehicleTransactionServices()) && AbiServicesComplete(GetRustVehicleCommonServices()) && AbiServicesComplete(GetRustVehicleRefitServices()); }
 #endif

@@ -55,6 +55,7 @@
 #include "rust/utf8_ffi.h"
 #include "rust/vehicle_ffi.h"
 #include "rust/vehicle_transaction_ffi.h"
+#include "rust/vehicle_refit_ffi.h"
 #include "rust/vehicle_maintenance_ffi.h"
 #include "rust/vehicle_services.h"
 #include "rust/water_regions_ffi.h"

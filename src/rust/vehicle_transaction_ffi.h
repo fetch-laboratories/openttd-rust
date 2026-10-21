@@ -9,6 +9,7 @@
 #ifndef RUST_VEHICLE_TRANSACTION_FFI_H
 #define RUST_VEHICLE_TRANSACTION_FFI_H
 #include "byte_span_ffi.h"
+#include "../newgrf_text_type.h"
 #include "command_services_ffi.h"
 #include "fleet_ffi.h"
 #include "services_ffi.h"
@@ -47,9 +48,36 @@ struct OpenTTDVehicleSelectionServices {
 	void (*list_clear)(void *) noexcept OPENTTD_SERVICE_DEFAULT(list_clear);
 	void (*list_push)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(list_push);
 };
+struct OpenTTDOrdersLeaves;
+struct OpenTTDAircraftStartState { uint8_t state, flags; };
+struct OpenTTDVehicleTransactionStrings {
+	uint32_t destroyed, stopped_in_depot, no_power, in_flight, incompatible_rail, null_string;
+	GRFStringID grf_text;
+	uint8_t takeoff, terminal7, direct_descent, new_vehicle_expense;
+};
+struct OpenTTDVehicleCommonServices {
+	const OpenTTDVehicleTransactionServices *base;
+	const OpenTTDFleetTransactionServices *transactions;
+	const OpenTTDVehicleServices *vehicles;
+	const OpenTTDOrdersLeaves *orders;
+	OpenTTDVehicleTransactionStrings strings;
+	uint32_t (*train_power)(void *) noexcept OPENTTD_SERVICE_DEFAULT(train_power);
+	OpenTTDAircraftStartState (*aircraft_start)(void *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_start);
+	uint16_t (*startstop_callback)(void *, int32_t *) noexcept OPENTTD_SERVICE_DEFAULT(startstop_callback);
+	uint8_t (*grf_version)(void *) noexcept OPENTTD_SERVICE_DEFAULT(grf_version);
+	uint32_t (*grf_string)(void *, GRFStringID) noexcept OPENTTD_SERVICE_DEFAULT(grf_string);
+	void (*waiting_news)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waiting_news);
+	void (*flip_stopped)(void *) noexcept OPENTTD_SERVICE_DEFAULT(flip_stopped);
+	void (*startstop_ui)(void *) noexcept OPENTTD_SERVICE_DEFAULT(startstop_ui);
+	void (*sell_rail)(OpenTTDCommandCost *, uint16_t, void *, bool, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sell_rail);
+	int64_t (*value)(void *) noexcept OPENTTD_SERVICE_DEFAULT(value);
+};
+const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept;
 const OpenTTDVehicleSelectionServices &GetRustVehicleSelectionServices() noexcept;
 const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noexcept;
 extern "C" {
+void openttd_rust_vehicle_startstop(const OpenTTDVehicleCommonServices *, OpenTTDCommandCost *, uint16_t, uint32_t, bool);
+void openttd_rust_vehicle_sell(const OpenTTDVehicleCommonServices *, OpenTTDCommandCost *, uint16_t, uint32_t, bool, bool, uint32_t);
 void openttd_rust_vehicle_selection_set(const OpenTTDVehicleSelectionServices *, void *, uint8_t, void *, void (*)(void *, uint32_t));
 void openttd_rust_vehicle_depot_list(const OpenTTDVehicleSelectionServices *, uint8_t, uint32_t, void *, void *, bool);
 bool openttd_rust_vehicle_generate_list(const OpenTTDVehicleSelectionServices *, void *, uint8_t, uint8_t, uint8_t, uint32_t);
