@@ -25,7 +25,9 @@ def verify_debug(archive):
             info = subprocess.check_output(
                 ["readelf", "--debug-dump=info", str(obj)], text=True
             )
-            if "DW_AT_stmt_list" not in info or "DW_TAG_subprogram" in info:
+            if "DW_AT_stmt_list" not in info or re.search(
+                r"DW_AT_(type|decl_file)\b", info
+            ):
                 raise ValueError(
                     "compiled Rust requires effective line-tables-only debug"
                 )

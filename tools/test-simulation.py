@@ -620,9 +620,19 @@ class InstructionSpeedTests(unittest.TestCase):
                 '[lib]\npath="lib.rs"\ncrate-type=["staticlib"]\n'
             )
             (root / "lib.rs").write_text(
-                '#[unsafe(no_mangle)] pub extern "C" fn probe(x: i32)->i32 { x+1 }'
+                "use std::{cell::RefCell, collections::BTreeMap};\n"
+                '#[unsafe(no_mangle)] #[inline(never)] pub extern "C" fn probe(x: u32)->usize {\n'
+                "let map = RefCell::new(BTreeMap::new());\n"
+                "for i in 0..x { map.borrow_mut().insert(i, i as usize); }\n"
+                "*map.borrow().get(&x.wrapping_sub(1)).unwrap_or(&0) }"
             )
-            for flags in ("", "-Cdebuginfo=0", "-Cdebuginfo=2", "-Cstrip=debuginfo"):
+            for flags in (
+                "",
+                "-Cdebuginfo=0",
+                "-Cdebuginfo=1",
+                "-Cdebuginfo=2",
+                "-Cstrip=debuginfo",
+            ):
                 env = dict(
                     migration.environment(),
                     CARGO_PROFILE_RELEASE_DEBUG="line-tables-only",
