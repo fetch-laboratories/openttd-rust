@@ -656,7 +656,6 @@ void ResetCompanyLivery(Company *c)
 Company *DoStartupNewCompany(bool is_ai, CompanyID company = CompanyID::Invalid())
 {
 #ifdef WITH_RUST
-	RustTileOwnerContext ownership;
 	/* Rust returns before AI::StartNew, whose script memory policy can throw. */
 	OpenTTDCompanyStartup frame{.company = UINT32_MAX, .requested = company.base(), .is_ai = is_ai, .stage = 0};
 	while (openttd_rust_company_startup(&GetRustCompanyServices(), &frame)) AI::StartNew(CompanyID(frame.company));
