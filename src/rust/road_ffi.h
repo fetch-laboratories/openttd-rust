@@ -30,12 +30,10 @@ struct OpenTTDRoadEntry {
 struct OpenTTDRoadTickRead {
 	uint8_t tick;
 	bool front;
-};
-struct OpenTTDRoadFrontTickRead {
 	OpenTTDRoadEntry movement;
-	int32_t order_time;
-	uint8_t running;
-	uint8_t status;
+	const int32_t *order_time;
+	const uint8_t *running;
+	const uint8_t *status;
 };
 struct OpenTTDRoadMaxSpeedRead {
 	OpenTTDVehicle *next;
@@ -187,7 +185,6 @@ struct OpenTTDRoadLeaves {
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDGroundServices *ground;
 	const OpenTTDSharedServices *shared;
-	OpenTTDRoadFrontTickRead (OPENTTD_VEHICLE_CALL *tick_front)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tick_front);
 	uint32_t (OPENTTD_VEHICLE_CALL *max_depot_penalty)() noexcept OPENTTD_SERVICE_DEFAULT(max_depot_penalty);
 	uint8_t (OPENTTD_VEHICLE_CALL *process_orders_then_loading)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(process_orders_then_loading);
 	OpenTTDRoadVisualRead (OPENTTD_VEHICLE_CALL *visual_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(visual_read);

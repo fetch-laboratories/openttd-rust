@@ -108,8 +108,10 @@ inline uint16_t RustVehicleSpeed(const Vehicle *v) noexcept { return *RustVehicl
 inline uint8_t RustVehicleSubspeed(const Vehicle *v) noexcept { return v->subspeed; }
 inline uint8_t RustVehicleAcceleration(const Vehicle *v) noexcept { return v->acceleration; }
 inline uint16_t RustVehicleMaxSpeed(const Vehicle *v) noexcept { return v->vcache.cached_max_speed; }
-inline uint8_t RustVehicleRunning(const Vehicle *v) noexcept { return v->running_ticks; }
-inline int32_t RustVehicleOrderTime(const Vehicle *v) noexcept { return v->current_order_time; }
+inline const uint8_t *RustVehicleRunningAddress(const Vehicle *v) noexcept { return &v->running_ticks; }
+inline uint8_t RustVehicleRunning(const Vehicle *v) noexcept { return *RustVehicleRunningAddress(v); }
+inline const int32_t *RustVehicleOrderTimeAddress(const Vehicle *v) noexcept { return &v->current_order_time; }
+inline int32_t RustVehicleOrderTime(const Vehicle *v) noexcept { return *RustVehicleOrderTimeAddress(v); }
 inline int64_t RustVehicleProfit(const Vehicle *v) noexcept { return v->profit_this_year; }
 inline const VehicleType *RustVehicleVehicleTypeAddress(const Vehicle *v) noexcept { return &v->type; }
 inline VehicleType RustVehicleVehicleType(const Vehicle *v) noexcept { return *RustVehicleVehicleTypeAddress(v); }

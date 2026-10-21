@@ -1664,9 +1664,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.total_count = [](OpenTTDVehicle *handle) noexcept -> uint32_t {
 		Vehicle *v = VehicleOf(handle); return v->cargo.TotalCount();
 	},
-	.order_time = [](OpenTTDVehicle *handle) noexcept -> int32_t {
-		Vehicle *v = VehicleOf(handle); return v->current_order_time;
-	},
+	.order_time = GetRustVehicleServices().order_time,
 	.refit_mask = [](OpenTTDVehicle *handle) noexcept -> uint64_t {
 		Vehicle *v = VehicleOf(handle);
 		return static_cast<uint64_t>(EngInfo(v->engine_type)->refit_mask);

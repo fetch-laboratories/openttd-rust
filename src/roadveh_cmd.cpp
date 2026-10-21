@@ -56,6 +56,19 @@ static OpenTTDRoadEntry GetRoadEntry() noexcept
 	return {.acceleration_model = RustRoadAccelerationModel(),
 		.road_side = RustRoadSide(), .queue = RustRoadQueue(), .map_log_x = static_cast<uint8_t>(Map::LogX())};
 }
+
+/** The front gate never observes movement settings or front-only fields for parts. */
+OpenTTDRoadTickRead RustRoadTickRead(const RoadVehicle *v) noexcept
+{
+	OpenTTDRoadTickRead read{.tick = RustVehicleTick(v), .front = v->IsFrontEngine()};
+	if (read.front) {
+		read.movement = GetRoadEntry();
+		read.order_time = RustVehicleOrderTimeAddress(v);
+		read.running = RustVehicleRunningAddress(v);
+		read.status = RustVehicleStatusAddress(v);
+	}
+	return read;
+}
 #endif
 
 static const uint16_t _roadveh_images[] = {
@@ -1779,7 +1792,7 @@ bool RoadVehicle::Tick()
 {
 #ifdef WITH_RUST
 	PerformanceAccumulator framerate(PFE_GL_ROADVEHS);
-	OpenTTDRoadTickRead read{.tick = this->tick_counter, .front = this->IsFrontEngine()};
+	const auto read = RustRoadTickRead(this);
 	RustRoadCommandContext road;
 	return openttd_rust_road_tick(RustVehicle(this), this->GetRustState(), &read, &GetRoadLeaves(), &road.view);
 #else

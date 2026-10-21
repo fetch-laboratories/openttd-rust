@@ -1887,6 +1887,10 @@ layouts! {
     "OpenTTDRoadTickRead" ["probe"] => crate::road::TickRead {
         tick,
         front,
+        movement,
+        order_time,
+        running,
+        status,
     };
     "OpenTTDRoadMaxSpeedRead" ["probe"] => crate::road::MaxSpeedRead {
         next,
@@ -2017,12 +2021,6 @@ layouts! {
         link,
         tile,
     };
-    "OpenTTDRoadFrontTickRead" ["probe"] => crate::road::FrontTickRead {
-        movement,
-        order_time,
-        running,
-        status,
-    };
     "OpenTTDEngineForLength" ["probe"] => crate::vehicle::EngineForLength {
         engine,
         grf_version,
@@ -2053,7 +2051,6 @@ layouts! {
         vehicle,
         ground,
         shared,
-        tick_front,
         max_depot_penalty,
         process_orders_then_loading,
         visual_read,

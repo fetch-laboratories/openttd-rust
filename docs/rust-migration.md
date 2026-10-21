@@ -1217,6 +1217,11 @@ control supplies that limit between the shared native visual-effect gate and tai
 observes movement/speed inputs again after effects. Default native/ABI checks cover the
 front-state/curve/bridge domains and pre/post-effect ordering; train callers keep the shared policy.
 
+#330 folds tick-front capture into the native tick entry. Named read-only scalar places
+are loaded at the prologue branches, then discarded before controller callbacks; counter
+writes stay native and wrap explicitly in Rust. Default native fixtures cover real address
+identity, fresh loads, status resets, front/nonfront policy and counter boundaries.
+
 The default `roads-` simulation compares acceleration, servicing, path, RNG, crash expiry and
 reload. Legacy saves, custom NewGRFs, articulated/tram turns, sounds and viewport pixels remain
 limits tracked by #156.
