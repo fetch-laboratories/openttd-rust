@@ -24,6 +24,8 @@ mod integer;
 mod landscape;
 mod linkgraph;
 mod math;
+mod newgrf_callbacks;
+mod newgrf_sound;
 mod node_hash;
 mod packet;
 mod rail_cmd;

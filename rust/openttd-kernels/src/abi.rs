@@ -4703,6 +4703,10 @@ layouts! {
     };
     "OrderType" ["maintenance"] => crate::vehicle::OrderType {
     };
+    "CallbackID" ["maintenance"] => crate::newgrf_callbacks::CallbackID {
+    };
+    "VehicleSoundEvent" ["maintenance"] => crate::newgrf_sound::VehicleSoundEvent {
+    };
     "LandscapeType" ["maintenance"] => crate::services::LandscapeType {
     };
     "OpenTTDSignalContext" ["probe"] => crate::signal::Context {

@@ -33,14 +33,15 @@ pub struct State {
     pub turn_counter: u8,
     pub flags: u8,
 }
+use crate::newgrf_sound::VSE_START;
 use crate::services::{Map, Services, chance16_i};
 use crate::station::Station;
+use crate::vehicle::PROP_AIRCRAFT_SPEED;
 use crate::vehicle::maintenance;
 use crate::vehicle::{
     AltitudeInputs, Coordinates, DayCost, DirectionProgress, MovementObservations, OpenTTDVehicle,
     PositionObservations, SpeedInputs, TickStatus, VehicleRef, VehicleServices, XY, YEAR_TICKS,
 };
-use crate::vehicle::{PROP_AIRCRAFT_SPEED, VSE_START};
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::NonNull;

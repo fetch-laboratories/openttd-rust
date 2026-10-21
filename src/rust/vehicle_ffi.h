@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <cstddef>
 enum VehicleType : uint8_t;
+enum CallbackID : uint16_t;
+enum VehicleSoundEvent : uint8_t;
 enum Direction : uint8_t;
 #if defined(_MSC_VER)
 #define OPENTTD_VEHICLE_CALL __cdecl
@@ -95,10 +97,10 @@ struct OpenTTDVehicleServices {
 	uint8_t (OPENTTD_VEHICLE_CALL *move_then_status)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(move_then_status);
 	void (OPENTTD_VEHICLE_CALL *base_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
 	int32_t (OPENTTD_VEHICLE_CALL *property)(OpenTTDVehicle *, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(property);
-	uint16_t (OPENTTD_VEHICLE_CALL *callback)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(callback);
-	void (OPENTTD_VEHICLE_CALL *unknown_callback_result)(const OpenTTDEngine *, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_callback_result);
+	uint16_t (OPENTTD_VEHICLE_CALL *callback)(OpenTTDVehicle *, CallbackID) noexcept OPENTTD_SERVICE_DEFAULT(callback);
+	void (OPENTTD_VEHICLE_CALL *unknown_callback_result)(const OpenTTDEngine *, CallbackID, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_callback_result);
 	void (OPENTTD_VEHICLE_CALL *length_changed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(length_changed);
-	bool (OPENTTD_VEHICLE_CALL *play_vehicle_sound)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(play_vehicle_sound);
+	bool (OPENTTD_VEHICLE_CALL *play_vehicle_sound)(OpenTTDVehicle *, VehicleSoundEvent) noexcept OPENTTD_SERVICE_DEFAULT(play_vehicle_sound);
 	void (OPENTTD_VEHICLE_CALL *play_sound)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(play_sound);
 	void (OPENTTD_VEHICLE_CALL *large_explosion)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(large_explosion);
 	void (OPENTTD_VEHICLE_CALL *order_free)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_free);

@@ -8,10 +8,9 @@
 //! Live base-vehicle scheduling prototype. Owners stay opaque and call-local;
 //! no Rust world/owner reference survives a service that can mutate or reenter.
 #![allow(unsafe_code, clippy::too_many_lines, clippy::verbose_bit_mask)]
-use super::{
-    CALLBACK_FAILED, CBID_VEHICLE_32DAY_CALLBACK, VS_CRASHED, VS_HIDDEN, VS_STOPPED, VSE_RUNNING,
-    VSE_RUNNING_16, VSE_STOPPED_16, VehicleRef, VehicleServices,
-};
+use super::{CALLBACK_FAILED, VS_CRASHED, VS_HIDDEN, VS_STOPPED, VehicleRef, VehicleServices};
+use crate::newgrf_callbacks::CBID_VEHICLE_32DAY_CALLBACK;
+use crate::newgrf_sound::{VSE_RUNNING, VSE_RUNNING_16, VSE_STOPPED_16, VehicleSoundEvent};
 use crate::{cargo_storage, fleet, services, station_service};
 
 use super::VehicleType;
@@ -188,7 +187,7 @@ unsafe fn day<const COUNTED: bool>(
 }
 struct PostTickServices {
     cargo_owner: extern "C" fn(VehicleRef) -> *mut cargo_storage::List,
-    sound: extern "C" fn(VehicleRef, u8) -> bool,
+    sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
     cargo: *const cargo_storage::Services,
 }
 /// A field-sized raw access ends before the next service. These functions never
@@ -594,7 +593,7 @@ mod tests {
         c.events.push("age-owner");
         c.cargo
     }
-    extern "C" fn sound(v: VehicleRef, event: u8) -> bool {
+    extern "C" fn sound(v: VehicleRef, event: VehicleSoundEvent) -> bool {
         if event != VSE_RUNNING {
             let c = unsafe { &mut *cells(v) };
             c.events.push("periodic-sound");

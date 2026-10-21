@@ -98,17 +98,17 @@ static int32_t OPENTTD_VEHICLE_CALL VehicleSvcProperty(OpenTTDVehicle *v, uint8_
 {
 	return GetVehicleProperty(VehicleOf(v), static_cast<PropertyID>(property), fallback);
 }
-static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcCallback(OpenTTDVehicle *v, uint16_t callback) noexcept
+static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcCallback(OpenTTDVehicle *v, CallbackID callback) noexcept
 {
 	Vehicle *u = VehicleOf(v);
-	return GetVehicleCallback(static_cast<CallbackID>(callback), 0, 0, u->engine_type, u);
+	return GetVehicleCallback(callback, 0, 0, u->engine_type, u);
 }
-static void OPENTTD_VEHICLE_CALL VehicleSvcUnknownCallbackResult(const OpenTTDEngine *e, uint16_t callback, uint16_t result) noexcept
+static void OPENTTD_VEHICLE_CALL VehicleSvcUnknownCallbackResult(const OpenTTDEngine *e, CallbackID callback, uint16_t result) noexcept
 {
 	RustUnknownCallbackResult(EngineOf(e)->GetGRFID(), callback, result);
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcLengthChanged(OpenTTDVehicle *v) noexcept { VehicleLengthChanged(VehicleOf(v)); }
-static bool OPENTTD_VEHICLE_CALL VehicleSvcPlayVehicleSound(OpenTTDVehicle *v, uint8_t event) noexcept { return PlayVehicleSound(VehicleOf(v), static_cast<VehicleSoundEvent>(event)); }
+static bool OPENTTD_VEHICLE_CALL VehicleSvcPlayVehicleSound(OpenTTDVehicle *v, VehicleSoundEvent event) noexcept { return PlayVehicleSound(VehicleOf(v), event); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcPlaySound(OpenTTDVehicle *v, uint16_t sound) noexcept { SndPlayVehicleFx(static_cast<SoundID>(sound), VehicleOf(v)); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcLargeExplosion(OpenTTDVehicle *v) noexcept { CreateEffectVehicleRel(VehicleOf(v), 4, 4, 8, EV_EXPLOSION_LARGE); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcOrderFree(OpenTTDVehicle *v) noexcept { VehicleOf(v)->current_order.Free(); }

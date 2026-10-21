@@ -1031,7 +1031,7 @@ static void RoadBoundary()
 		return 8;
 	};
 	t.vehicle.length_changed = [](OpenTTDVehicle *) noexcept { ++road_abi_probe->length_changes; };
-	t.vehicle.unknown_callback_result = [](const OpenTTDEngine *e, uint16_t callback, uint16_t result) noexcept {
+	t.vehicle.unknown_callback_result = [](const OpenTTDEngine *e, CallbackID callback, uint16_t result) noexcept {
 		CHECK(e == reinterpret_cast<const OpenTTDEngine *>(&road_abi_new_engine) && callback == 0x11 && result == 9);
 	};
 	t.leaves.default_max_speed = [](OpenTTDVehicle *) noexcept -> uint16_t {
@@ -1104,7 +1104,7 @@ static void RoadBoundary()
 	t.vehicle.write_last_station = [](OpenTTDVehicle *, uint16_t station) noexcept { CHECK(station == 55); };
 	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.leaves.is_bay_stop = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
-	t.vehicle.play_vehicle_sound = [](OpenTTDVehicle *, uint8_t event) noexcept { CHECK(event == 1); return true; };
+	t.vehicle.play_vehicle_sound = [](OpenTTDVehicle *, VehicleSoundEvent event) noexcept { CHECK(event == 1); return true; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
 	t.leaves.enter_tile = [](OpenTTDVehicle *, uint32_t, int32_t, int32_t) noexcept -> OpenTTDRoadEntered { return {.tile = 100, .cur_speed = 0, .flags = 4, .direction = 1, .order_type = 0}; };
 	t.vehicle.write_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == 0); };

@@ -16,6 +16,8 @@
 pub(crate) mod maintenance;
 pub(crate) mod scheduler;
 
+use crate::newgrf_callbacks::CallbackID;
+use crate::newgrf_sound::VehicleSoundEvent;
 use std::ptr::NonNull;
 
 /// Opaque C++ `Vehicle`.
@@ -102,15 +104,6 @@ pub const INVALID_TRACKDIR: u8 = 0xFF;
 pub const INVALID_ENGINE: u16 = 0xFFFF;
 /// `INVALID_PRICE`.
 pub const INVALID_PRICE: u8 = 0xFF;
-/// `CBID_VEHICLE_LENGTH` and `CBID_VEHICLE_32DAY_CALLBACK`.
-pub const CBID_VEHICLE_LENGTH: u16 = 0x11;
-pub const CBID_VEHICLE_32DAY_CALLBACK: u16 = 0x32;
-/// `VehicleSoundEvent` values.
-pub const VSE_START: u8 = 1;
-pub const VSE_BREAKDOWN: u8 = 3;
-pub const VSE_RUNNING: u8 = 4;
-pub const VSE_RUNNING_16: u8 = 7;
-pub const VSE_STOPPED_16: u8 = 8;
 /// `PROP_AIRCRAFT_SPEED`.
 pub const PROP_AIRCRAFT_SPEED: u8 = 0x0C;
 /// `CALLBACK_FAILED`.
@@ -240,12 +233,12 @@ pub struct VehicleServices {
     /// `GetVehicleProperty(v, property, fallback)`.
     pub property: extern "C" fn(VehicleRef, u8, i32) -> i32,
     /// `GetVehicleCallback(callback, 0, 0, v->engine_type, v)`.
-    pub callback: extern "C" fn(VehicleRef, u16) -> u16,
+    pub callback: extern "C" fn(VehicleRef, CallbackID) -> u16,
     /// `ErrorUnknownCallbackResult(e->GetGRFID(), callback, result)`.
-    pub unknown_callback_result: extern "C" fn(EngineRef, u16, u16),
+    pub unknown_callback_result: extern "C" fn(EngineRef, CallbackID, u16),
     pub length_changed: extern "C" fn(VehicleRef),
     /// `PlayVehicleSound(v, event)`.
-    pub play_vehicle_sound: extern "C" fn(VehicleRef, u8) -> bool,
+    pub play_vehicle_sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
     pub play_sound: extern "C" fn(VehicleRef, u16),
     /// `CreateEffectVehicleRel(v, 4, 4, 8, EV_EXPLOSION_LARGE)`.
     pub large_explosion: extern "C" fn(VehicleRef),

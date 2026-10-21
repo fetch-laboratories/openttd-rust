@@ -410,7 +410,7 @@ TEST_CASE("Vehicle maintenance native scalar stores and cadence")
 	auto maintenance = _rust_vehicle_maintenance_services;
 	auto base = GetRustVehicleServices();
 	base.maintenance = &maintenance;
-	base.play_vehicle_sound = [](OpenTTDVehicle *handle, uint8_t event) noexcept {
+	base.play_vehicle_sound = [](OpenTTDVehicle *handle, VehicleSoundEvent event) noexcept {
 		CHECK(event == VSE_BREAKDOWN);
 		Vehicle *current = VehicleOf(handle);
 		CHECK(current->cur_speed == 0);

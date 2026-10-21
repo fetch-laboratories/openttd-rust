@@ -13,9 +13,10 @@
     clippy::struct_field_names
 )]
 use super::{
-    Breakdown, OT_GOTO_DEPOT, OT_LOADING, OrderType, VS_CRASHED, VS_HIDDEN, VS_STOPPED,
-    VSE_BREAKDOWN, VehicleRef, VehicleServices, VehicleType,
+    Breakdown, OT_GOTO_DEPOT, OT_LOADING, OrderType, VS_CRASHED, VS_HIDDEN, VS_STOPPED, VehicleRef,
+    VehicleServices, VehicleType,
 };
+use crate::newgrf_sound::VSE_BREAKDOWN;
 use crate::{company::OpenTTDCompany, fleet, services};
 
 use crate::services::{CalendarDate, EconomyDate};
