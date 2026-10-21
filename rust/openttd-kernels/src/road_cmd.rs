@@ -1534,7 +1534,7 @@ impl<'a> Ctx<'a> {
         w::hit(w::ROAD_COMMANDS_OWNER);
         if (self.shared.is_road_depot)(tile) {
             if (self.shared.tile_owner)(tile) == old {
-                if new == 255 {
+                if new == INVALID_OWNER {
                     self.clear(ret, DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT, tile);
                 } else {
                     let mut rt = self.rt(tile, 0);
@@ -1567,7 +1567,7 @@ impl<'a> Ctx<'a> {
                         self.bits(tile, rtt).count_ones()
                     };
                     (self.r.road_infrastructure)(old, rt, num.wrapping_neg());
-                    if new != 255 {
+                    if new != INVALID_OWNER {
                         (self.r.road_infrastructure)(new, rt, num);
                     }
                 }
@@ -1583,7 +1583,7 @@ impl<'a> Ctx<'a> {
             }
         }
         if (self.shared.is_level_crossing)(tile) && (self.shared.tile_owner)(tile) == old {
-            if new == 255 {
+            if new == INVALID_OWNER {
                 let track = crate::ground::crossing_rail_track(tile, self.rail).0;
                 self.command(
                     ret,
