@@ -36,7 +36,9 @@ def game_args(scenario):
 
 
 def game_environment(scenario):
-    witnessed = scenario.get("water") and scenario.get("witnesses")
+    witnessed = (
+        scenario.get("water") or scenario.get("water_commands")
+    ) and scenario.get("witnesses")
     return WITNESS_ENVIRONMENT if witnessed else {}
 
 
@@ -50,7 +52,17 @@ def install(scenario, run_dir):
 
 
 def scenarios(soak):
-    scenarios = []
+    scenarios = [
+        dict(
+            name="water-commands",
+            kind="save",
+            water_commands=True,
+            save=str(ROOT / "migration/saves/water-structures.sav"),
+            short_checkpoint=True,
+            ticks=1,
+            console=["water_scenario", "unpause"],
+        )
+    ]
     for distribution, commands in DISTRIBUTIONS.items():
         scenarios.append(
             {
@@ -190,7 +202,45 @@ def check_water(scenario, run, desync):
     }
 
 
+def adapter(build, folder, env):
+    from .console_adapter import console_adapter
+
+    return console_adapter(
+        build, folder, env, ROOT / "tools/simulation/water-console.cpp", "ships"
+    )
+
+
 def prepare(scenario, binaries, builds, out, timeout, env, result):
+    if scenario.get("water_commands"):
+        import migration
+
+        from .runtime import prepared_adapter
+
+        executables = {}
+        for role in ("reference", "candidate"):
+            folder = out / scenario["name"] / role
+            prepared = prepared_adapter("ships", role, builds, folder)
+            if prepared is None:
+                native = (
+                    migration.REFERENCE_BUILD
+                    if role == "reference" or binaries[role] == binaries["reference"]
+                    else ROOT / "build-rust"
+                )
+                lock = (
+                    migration.reference_lock(shared=True)
+                    if native == migration.REFERENCE_BUILD
+                    else migration.candidate_lock(native, shared=True)
+                )
+                with lock:
+                    prepared = adapter(native, folder, env)
+            executables[role] = prepared
+            for name in ("lang", "baseset", "ai", "game", "regression"):
+                if (builds[role] / name).is_dir():
+                    (folder / name).symlink_to(
+                        builds[role] / name, target_is_directory=True
+                    )
+        return dict(scenario, executables=executables)
+
     if scenario.get("water_operation") == "class":
         # MakeRiver differs from the existing flat clear canal only in m1:
         # WaterClass::River (2 << 5) and OWNER_WATER (17). Both roles load this
@@ -270,6 +320,47 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 
 def check(scenario, run, mode, role, result):
+    if scenario.get("water_commands"):
+        markers = [
+            line.split("WATER-CMD ", 1)[1]
+            for line in run["log"]
+            if "WATER-CMD " in line
+        ]
+        if not markers or markers[-1] != "complete":
+            raise RuntimeError("water command fixture did not finish")
+        for command, count in {
+            "depot": 2,
+            "ship": 2,
+            "lock": 12,
+            "remove-lock": 12,
+            "force": 2,
+            "bankrupt-occupied": 2,
+        }.items():
+            if sum(row.startswith(f"cost {command} true ") for row in markers) != count:
+                raise RuntimeError("water fixture did not exercise " + command)
+        if (
+            sum(row.startswith("cost above-lock-int-min false ") for row in markers)
+            != 12
+        ):
+            raise RuntimeError("water fixture did not exercise wrapping bridge errors")
+        if "docking true true" not in markers:
+            raise RuntimeError("water restoration did not preserve docking membership")
+        key = mode + "_water_commands"
+        if role == "reference":
+            result[key] = markers
+        elif result[key] != markers:
+            raise RuntimeError("water command/state/RNG results differ")
+        branches = branch_witnesses(
+            scenario,
+            run,
+            role,
+            "water_cmd",
+            "restore depot remove_depot force lock remove_lock canal skip clear owner desert".split(),
+        )
+        if branches is not None:
+            result[f"{mode}_{role}_water_command_profile"] = branches
+        return
+
     if "water" in scenario:
         required = ["economy_day", "path_cache", "reverse", "rotate", "buoy"]
         required += (

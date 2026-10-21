@@ -163,6 +163,7 @@ pub unsafe extern "C" fn openttd_rust_water_restore(
     unsafe {
         restore(tile, owner, &*s, &*water, &*r);
     }
+    crate::witness::hit(crate::witness::WATER_CMD_RESTORE);
 }
 const OFFSETS: [(i32, i32); 8] = [
     (-1, -1),
@@ -689,16 +690,15 @@ pub unsafe extern "C" fn openttd_rust_flooding_behaviour(
 }
 /// # Safety
 /// Live immutable service tables for the synchronous no-unwind invocation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_dirty_water_neighbours(
+pub(crate) unsafe fn dirty_water_neighbours(
     tile: u32,
     size_x: u32,
     size_y: u32,
-    w: *const WaterServices,
-    s: *const Services,
+    w: &WaterServices,
+    s: &Services,
 ) {
     // SAFETY: Serialized native entry; no map references are formed.
-    let types = TileTypeAccess::callback(unsafe { (*s).tile_type });
+    let types = TileTypeAccess::callback(s.tile_type);
     unsafe { World::new(w, s, &types, size_x, size_y) }.dirty_neighbours(tile);
 }
 /// # Safety

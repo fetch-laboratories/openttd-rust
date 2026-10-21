@@ -63,6 +63,11 @@ enum RoadType : uint8_t;
 enum RoadBits : uint8_t;
 enum Trackdir : uint8_t;
 struct OpenTTDWaterGroundServices;
+struct OpenTTDEnvironmentServices {
+	bool (*editor)() noexcept OPENTTD_SERVICE_DEFAULT(editor);
+	bool (*freeform_edges)() noexcept OPENTTD_SERVICE_DEFAULT(freeform_edges);
+};
+const OpenTTDEnvironmentServices &GetRustEnvironmentServices() noexcept;
 enum RoadTramType : bool;
 struct OpenTTDClearSquareServices {
 	bool (*may_animate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(may_animate);
@@ -71,6 +76,7 @@ struct OpenTTDClearSquareServices {
 	bool (*generating_world)() noexcept OPENTTD_SERVICE_DEFAULT(generating_world);
 };
 struct OpenTTDSharedServices {
+	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
 	bool (*autoslope)() noexcept OPENTTD_SERVICE_DEFAULT(autoslope);
 	uint8_t (*bay_stop_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bay_stop_direction);
 	bool (*bridge_above)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_above);
@@ -264,7 +270,6 @@ struct OpenTTDRailMapServices {
 	bool (*station_blocked)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_blocked);
 	Track (*station_track)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_track);
 	bool (*wormhole_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_reserved);
-	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
 };
 const OpenTTDRailMapServices &GetRustRailMapServices() noexcept;
 

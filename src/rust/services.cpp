@@ -108,6 +108,11 @@ static void CommandMoneyError(OpenTTDCommandCost *cost, int64_t amount) noexcept
 	if (RustIsLocalCompany()) NativeCost(cost)->SetEncodedMessage(GetEncodedString(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, Money(amount)));
 }
 static void CommandAllowRemoveRoad(OpenTTDCommandCost *out, uint32_t tile, uint8_t bits, uint8_t owner, uint8_t rtt, uint16_t flags, bool town_check) noexcept { *NativeCost(out) = CheckAllowRemoveRoad(TileIndex{tile}, static_cast<RoadBits>(bits), Owner(owner), static_cast<RoadTramType>(rtt), DoCommandFlags(flags), town_check); }
+const OpenTTDEnvironmentServices &GetRustEnvironmentServices() noexcept
+{
+	static const OpenTTDEnvironmentServices services{.editor = OpenTTDEditor, .freeform_edges = OpenTTDFreeformEdges};
+	return services;
+}
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
 	static const OpenTTDCommandServices services{
@@ -239,6 +244,7 @@ static int32_t SharedCalendarDate() noexcept { return TimerGameCalendar::date.ba
 static int32_t SharedSlope(int32_t x, int32_t y) noexcept { return SharedSlopePixelZ(x, y, false); }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
+	.set_tile_owner = RustSetTileOwner,
 	.autoslope = RustAutoslopeEnabled,
 	.bay_stop_direction = Shared_bay_stop_direction,
 	.bridge_above = SharedBridgeAbove,
@@ -480,7 +486,6 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.station_blocked = RustStationBlocked,
 		.station_track = RustRailStationTrack,
 		.wormhole_reserved = RustWormholeReserved,
-		.set_tile_owner = RustSetTileOwner,
 	};
 	return services;
 }
@@ -493,11 +498,13 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDCommandServices.hpp"
 #include "abi-visit-OpenTTDCommandCostServices.hpp"
 #include "abi-visit-OpenTTDSharedServices.hpp"
+#include "abi-visit-OpenTTDEnvironmentServices.hpp"
 #include "abi-visit-OpenTTDClearSquareServices.hpp"
 #include "abi-visit-OpenTTDWaterRestorationServices.hpp"
 bool CheckAbi_services()
 {
-	return AbiServicesComplete(GetRustRandomServices()) &&
+	return AbiServicesComplete(GetRustEnvironmentServices()) &&
+		AbiServicesComplete(GetRustRandomServices()) &&
 		AbiServicesComplete(GetRustRailMapServices()) &&
 		AbiServicesComplete(GetRustCommandServices()) &&
 		AbiServicesComplete(GetRustCommandCostServices()) &&

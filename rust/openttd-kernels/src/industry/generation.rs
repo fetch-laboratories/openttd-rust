@@ -30,7 +30,7 @@ pub struct GenerationServices {
     pub spec_behaviour: unsafe extern "C" fn(*const SpecHandle) -> u32,
     pub info: unsafe extern "C" fn(*const SpecHandle) -> GenerationInfo,
     pub coastal: unsafe extern "C" fn(*const SpecHandle) -> bool,
-    pub editor: unsafe extern "C" fn() -> bool,
+    pub environment: crate::services::EnvironmentServices,
     pub density: unsafe extern "C" fn() -> u8,
     pub custom_number: unsafe extern "C" fn() -> u32,
     pub scale_by_size_1d: unsafe extern "C" fn(u32) -> u32,
@@ -52,7 +52,9 @@ fn probability(
         return 0; // Source deliberately leaves the force output untouched here.
     }
     let info = unsafe { (g.info)(spec) };
-    if !info.enabled || !info.layouts || (!unsafe { (g.editor)() } && unsafe { (g.density)() } == 0)
+    if !info.enabled
+        || !info.layouts
+        || (!(g.environment.editor)() && unsafe { (g.density)() } == 0)
     {
         *forced = false;
         return 0;
@@ -70,7 +72,7 @@ fn probability(
     };
     *forced = chance > 0
         && behaviour.unwrap_or_else(|| unsafe { (g.spec_behaviour)(spec) }) & (1 << 16) == 0
-        && !unsafe { (g.editor)() };
+        && !(g.environment.editor)();
     chance
 }
 struct Probabilities {
@@ -97,7 +99,7 @@ fn probabilities(water: bool, s: &Services, g: &GenerationServices) -> Probabili
 }
 fn wanted(s: &Services, g: &GenerationServices) -> u32 {
     const AMOUNTS: [u16; 7] = [0, 0, 10, 25, 55, 80, 0];
-    let density = if unsafe { (g.editor)() } {
+    let density = if (g.environment.editor)() {
         2
     } else {
         unsafe { (g.density)() }
@@ -140,7 +142,7 @@ pub unsafe extern "C" fn openttd_rust_industry_generate(
 ) -> bool {
     let s = unsafe { &*s };
     let g = unsafe { &*g };
-    if !unsafe { (g.editor)() } && unsafe { (g.density)() } == 0 {
+    if !(g.environment.editor)() && unsafe { (g.density)() } == 0 {
         return true;
     }
     let land = probabilities(false, s, g);

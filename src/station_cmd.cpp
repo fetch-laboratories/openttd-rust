@@ -654,9 +654,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.tick_counter = []() noexcept -> uint64_t {
 		return openttd_orders_tick_counter();
 	},
-	.editor = []() noexcept -> bool {
-		return _game_mode == GM_EDITOR;
-	},
+	.environment = GetRustEnvironmentServices(),
 	.facilities = [](OpenTTDBaseStation *handle) noexcept -> uint8_t {
 		return static_cast<BaseStation *>(handle)->facilities.base();
 	},
@@ -6055,12 +6053,14 @@ extern const TileTypeProcs _tile_type_station_procs = {
 
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDEnvironmentServices.hpp"
 #include "abi-visit-OpenTTDStationServices.hpp"
 #include "abi-visit-OpenTTDStationLinks.hpp"
 #include "abi-visit-OpenTTDStationCommandServices.hpp"
 bool CheckAbi_station_cmd()
 {
-	return AbiServicesComplete(_rust_station_services) &&
+	return AbiServicesComplete(_rust_station_services.environment) &&
+		AbiServicesComplete(_rust_station_services) &&
 		AbiServicesComplete(_rust_station_links) &&
 		AbiServicesComplete(GetRustStationCommandServices());
 }

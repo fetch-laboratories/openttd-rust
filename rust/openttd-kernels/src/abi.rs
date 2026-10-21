@@ -31,6 +31,43 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "OpenTTDEnvironmentServices" ["common"] => crate::services::EnvironmentServices {
+        editor,
+        freeform_edges,
+    };
+    "OpenTTDWaterCommandStrings" ["common"] => crate::water_cmd::Strings {
+        built_on_water,
+        demolish_bridge,
+        unsuitable,
+        sloped_wrong,
+        edge,
+        low_bridge,
+        flat,
+        already_built,
+        build_on_water,
+        demolish_building,
+        demolish_canal,
+    };
+    "OpenTTDWaterCommandServices" ["common"] => crate::water_cmd::WaterCommandServices {
+        shared,
+        cost,
+        command,
+        water,
+        rail,
+        water_type,
+        lock_part,
+        lock_direction,
+        other_depot_tile,
+        restoration,
+        environment,
+        make_depot,
+        make_lock_tile,
+        area_begin,
+        area_tile,
+        area_next,
+        strings,
+    };
+
     "OpenTTDStationCommandServices" ["probe"] => crate::station_cmd::CommandServicesTable {
         shared,
         station,
@@ -881,7 +918,6 @@ layouts! {
         station_blocked,
         station_track,
         wormhole_reserved,
-        set_tile_owner,
     };
     "OpenTTDTownYearlyServices" ["probe"] => crate::town::YearlyServices {
         completed,
@@ -1389,6 +1425,7 @@ layouts! {
         leaves,
     };
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
+        set_tile_owner,
         autoslope,
         bay_stop_direction,
         bridge_above,
@@ -2136,7 +2173,7 @@ layouts! {
         map_log_x,
         growth_rate,
         snow_line,
-        editor,
+        environment,
         generating_world,
         allow_crossings,
         climate,
@@ -2636,7 +2673,7 @@ layouts! {
         owner,
         pool_size,
         tick_counter,
-        editor,
+        environment,
         facilities,
         in_use,
         is_station,
@@ -3017,7 +3054,7 @@ layouts! {
         spec_behaviour,
         info,
         coastal,
-        editor,
+        environment,
         density,
         custom_number,
         scale_by_size_1d,

@@ -262,6 +262,16 @@ pub struct Train {
     _private: [u8; 0],
 }
 
+/// Canonical immutable world settings shared by owner tables.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct EnvironmentServices {
+    /// Scenario editor mode.
+    pub editor: extern "C" fn() -> bool,
+    /// Construction freeform edges.
+    pub freeform_edges: extern "C" fn() -> bool,
+}
+
 /// Typed native leaves used by the complete shared clear-square policy.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -285,6 +295,8 @@ pub struct ClearSquareServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
+    /// Canonical native tile owner write.
+    pub set_tile_owner: extern "C" fn(u32, u8),
     /// `AutoslopeEnabled()`.
     pub autoslope: extern "C" fn() -> bool,
     /// Original native `bay_stop_direction` map observation.
@@ -586,6 +598,7 @@ pub fn fixture(
         }
     }
     Services {
+        set_tile_owner: zone,
         autoslope: flag0,
         bay_stop_direction: byte,
         bridge_above: flag,
@@ -1064,8 +1077,6 @@ pub struct RailMapServices {
     pub station_track: extern "C" fn(u32) -> Track,
     /// Native `HasTunnelBridgeReservation`.
     pub wormhole_reserved: extern "C" fn(u32) -> bool,
-    /// Native `SetTileOwner`.
-    pub set_tile_owner: extern "C" fn(u32, u8),
 }
 
 /// A live native `CommandCost` borrowed for the synchronous entry.

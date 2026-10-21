@@ -1542,3 +1542,28 @@ crossings/depots/slopes, signal cycling/conversion/copy/autofill through a bridg
 conversion/reroutes, clearing/terraforming, company transfer/deletion and reservations.
 Coast/half-tile water and PBS path-end removal remain #156 gaps. PR #270 records
 exact-head checks and outstanding full-simulation, speed and CI gates.
+
+### Water construction, clearing and restoration (#294)
+
+Rust (`water_cmd.rs`, shared `water.rs`/`ground.rs`) owns ship depot/lock/canal
+commands/removal, water clearing/restoration, river/desert traversal and owner/terraform/
+build-above policy. Original command bodies and `MakeLock` remain portable-only.
+Lock checks/build/removal order, depot partial clears and post-clear accounting,
+conditional RNG draws, narrowing and wrapping retain the original sequence.
+
+C++ keeps packed map primitives, depot identities, drawing, native stack
+`CommandCost` objects and a lazy stack area iterator. Generic landscape commands
+retain the complete native `Command::Do` lifecycle. Rust helpers call the
+integrated clear-square, flooding/neighbor, region-cache and economy owners directly.
+Shared restoration retains class/accounting/RNG order; docking calls its Rust owner.
+Shared command/depot/environment services replace touched rail/town/industry
+copies. Named generated layouts, aborting unused fixture slots and actual
+production table checks cover the boundary; no native world borrow spans reentry.
+
+`python3 tools/migration.py verify --jobs 2`, default `water-commands` and existing
+water traffic/mutation/reload scenarios compare semantic saves and require
+restoration/clear witnesses. The console fixture compares results/parameters,
+map/depot fields, infrastructure, docking membership and RNG across both axes,
+all lock directions/parts, occupied/bankrupt queries, force/partial clearing,
+editor/desert and restoration inputs. Pool exhaustion, construction under bridges,
+water objects, arbitrary NewGRF/legacy layouts and GUI remain #156 coverage gaps.

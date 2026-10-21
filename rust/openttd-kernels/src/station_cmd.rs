@@ -4060,7 +4060,7 @@ impl Ctx<'_> {
                 (self.s.station_infrastructure)(old, u32::MAX);
                 (self.s.station_infrastructure)(new, 1);
             }
-            (self.rail_map().set_tile_owner)(tile, new);
+            (self.shared.set_tile_owner)(tile, new);
             (self.s.station_list_classes_invalidate)();
         } else if (self.shared.is_drive_through_stop)(tile) {
             let kind = (self.shared.station_type)(tile).0;
@@ -4087,7 +4087,7 @@ impl Ctx<'_> {
             if (kind == 6 || (kind == 5 && (self.shared.station_type)(tile).0 == 6))
                 && (self.shared.tile_owner)(tile) == old
             {
-                (self.rail_map().set_tile_owner)(tile, 0x10);
+                (self.shared.set_tile_owner)(tile, 0x10);
             }
         }
     }
