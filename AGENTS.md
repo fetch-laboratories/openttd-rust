@@ -55,7 +55,10 @@ fork; the remaining upstream documentation explains behavior and architecture.
   accessor, or the Rust port of that helper), not a hand-written equivalent of
   it. A raw field store in place of a setter, a hand-written bound in place of
   `TileAddWrap`, or a literal in place of `INVALID_RAILTYPE` diverges as soon as
-  the helper does more than the copy.
+  the helper does more than the copy. An inline helper or constant from an
+  original header (`slope_func.h`, `map_func.h`, `tunnelbridge.h`, command
+  flags, price indices) is ported once, into the shared Rust module named after
+  that header, and every port imports it from there.
 - Keep the boundary cheap and typed. Entries are plain synchronous calls with
   no per-call heap allocation and no async, future, task or mailbox machinery.
   Each service is its own typed `noexcept` function, not an opcode switch or
@@ -78,15 +81,18 @@ fork; the remaining upstream documentation explains behavior and architecture.
   that changes compiled game code passes speed when no benchmark scenario is
   projected more than 15% slower than the ratio recorded for current
   `rust-migration` in `SPEED_BUDGETS`, and none exceeds its ceiling: 1.5x the
-  original for play saves, 1.3x for generation. The projection uses callgrind
-  instruction counts inside the game loop, which do not depend on host load:
-  the recorded ratio times (1 + 2 x the loop count's growth over the record).
-  These run alongside other agents. Wall-clock medians are taken only in
-  speed passes, with no builds, links or other timed games running; a wall
-  median taken under load is not a speed result. Until #321 integrates, a
-  per-PR guard uses quiet wall medians (`simulate <name> --benchmark 3 --jobs
-  2`). The integrating PR records its counts. There are no per-port CPU
-  budgets.
+  original for play saves, 1.3x for generation. The projection counts work:
+  callgrind instruction counts inside the game loop, which do not depend on
+  host load, give the anchor's measured ratio times (1 + 2 x the loop count's
+  growth over the anchor). They run alongside other agents, with no quiet
+  window. Wall ratios also move with code layout: quiet P2016 spanned
+  1.350-1.439 across heads whose loop counts moved under 0.5%. A PR does not
+  answer for that spread; speed passes measure it. Wall-clock medians are
+  taken only in speed passes, with no builds, links or other timed games
+  running; a wall median taken under load is not a speed result. Until #321
+  integrates, a per-PR guard uses quiet wall medians (`simulate <name>
+  --benchmark 3 --jobs 2`); its integrating PR records the first anchors.
+  There are no per-port CPU budgets.
 - A PR that fails the speed guard gets a profile-guided fix round before it is
   deferred. Attribute the cost per function (callgrind instruction counts work
   on this host, where hardware counters do not) and fix the attributed
@@ -98,13 +104,15 @@ fork; the remaining upstream documentation explains behavior and architecture.
   Rust-to-C++-to-Rust bounce into code Rust owns) block integration whatever
   the timing.
 - Root runs a speed pass after every fourth ownership integration (a PR that
-  moves a component's state and control loop to Rust), and sooner when a
-  scenario's projection comes within 5% of its ceiling. The pass profiles the
+  moves a component's state and control loop to Rust), and sooner when an
+  integration moves a scenario's projection to within 5% of its ceiling; a
+  pass's own wall measurement does not trigger another. The pass profiles the
   play saves and generation with callgrind, counting boundary cost as the
   overhead beyond what the original spends inline on the same work, and ranks
-  costs on the scenario nearest its ceiling. It turns the two or three largest
-  attributed costs into maintenance PRs, then re-measures all six wall ratios
-  on a quiet host, with their loop counts, as the new record.
+  those net costs, never gross callback counts, on the scenario nearest its
+  ceiling. It turns the two or three largest attributed costs into maintenance
+  PRs, then re-measures all six wall ratios on a quiet host, with their loop
+  counts, as the new record.
 - Evidence for game-logic ports is the semantic simulation harness (`python3
   tools/migration.py simulate`, #72) plus the existing tests; a new game-logic
   port integrates only after the harness exists and its scenarios exercise the
@@ -149,8 +157,10 @@ checks that run; do not restate them in paragraphs.
 - Infrastructure work (CI, caches, evidence plumbing) states a tooling budget in
   its issue and prefers platform defaults and settings (LRU cache eviction,
   concurrency groups) over custom controllers. Root may accept a draft up to
-  about 25% over its budget; beyond that it returns to root for re-selection,
-  not another review round.
+  about 25% over its budget and may raise a budget once; a second raise is a
+  `question` issue for the user. A review of infrastructure fixes only defects
+  that can change a game comparison or a speed decision on this host or in CI;
+  hypothetical ones go in the PR's limits.
 - Review report: reviewed commit, findings with their fixing commits (or why one
   went to root), plus one line naming the functions or files compared against
   the original body and one line naming any new callback that duplicates a
@@ -187,7 +197,10 @@ For example: `Agent: /root/implementation | Model: gpt-6.1-sol | Reasoning effor
 A user-directed session outside Codex (for example Claude Code) names its exact
 model and states its effort as reported by its host. When such a session runs
 root, it keeps the same structure with its host's models: subagents at lower
-effort than root, and a fresh reviewer per round.
+effort than root, and a fresh reviewer per round. A Claude Code root runs
+implementation and planning on its host's models and keeps independent review
+on `gpt-6.1-sol` (high) through T3 `delegate_task`, so a reviewer's model
+family differs from the implementer's.
 
 Sessions can end without warning (usage limits, host restarts). Implementation
 agents commit and push their branch at every passing milestone, not only at the
