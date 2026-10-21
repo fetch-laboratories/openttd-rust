@@ -44,6 +44,7 @@ mod station_service;
 mod string_validation;
 mod tgp;
 mod tile_loop;
+mod tile_owner;
 mod town;
 mod townname;
 mod townname_data;
@@ -1320,5 +1321,3 @@ mod cargo_storage;
 mod train_reservation;
 
 mod fleet;
-
-pub mod tile_owner;

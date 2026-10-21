@@ -335,6 +335,7 @@ def check(scenario, run, mode, role, result):
             "remove-lock": 12,
             "force": 2,
             "bankrupt-occupied": 2,
+            "native-object": 1,
         }.items():
             if sum(row.startswith(f"cost {command} true ") for row in markers) != count:
                 raise RuntimeError("water fixture did not exercise " + command)
@@ -343,6 +344,47 @@ def check(scenario, run, mode, role, result):
             != 12
         ):
             raise RuntimeError("water fixture did not exercise wrapping bridge errors")
+        required = {
+            f"restored-owner {kind} {mismatch} {bankrupt}"
+            for kind in (
+                "clear",
+                "sea",
+                "elevated-sea-canal",
+                "canal",
+                "river",
+                "sloped-canal-land",
+                "sloped-river-land",
+            )
+            for mismatch in ("false", "true")
+            for bankrupt in ("false", "true")
+        }
+        if {
+            " ".join(row.split()[:4])
+            for row in markers
+            if row.startswith("restored-owner ")
+        } != required:
+            raise RuntimeError("water fixture missed restored-owner cases")
+        captured = {
+            f"captured {viewer} {owner} {tile}"
+            for viewer in (0, 1)
+            for owner in (0, 1, 15)
+            for tile in (0, 10280)
+            if owner != 15 or tile != 0
+        }
+        if {row for row in markers if row.startswith("captured ")} != captured:
+            raise RuntimeError("water fixture missed captured-owner checks")
+        if sum(row.startswith("parameter captured-owner ") for row in markers) != 3:
+            raise RuntimeError("water fixture missed encoded ownership errors")
+        if not any(row.startswith("cost bankrupt-depot true ") for row in markers):
+            raise RuntimeError("water fixture missed live depot bankruptcy")
+        for name, kind in (
+            ("native-object-transfer", 10),
+            ("native-object-bankrupt", 0),
+        ):
+            if not any(
+                row.startswith(f"state {name} 10280 {kind} ") for row in markers
+            ):
+                raise RuntimeError("water fixture missed " + name)
         if "docking true true" not in markers:
             raise RuntimeError("water restoration did not preserve docking membership")
         key = mode + "_water_commands"

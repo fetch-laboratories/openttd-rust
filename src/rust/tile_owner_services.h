@@ -10,11 +10,12 @@
 #define RUST_TILE_OWNER_SERVICES_H
 #include "tile_owner_ffi.h"
 #include "road_command_services.h"
-/* Each slot is a distinct live CommandCost. Only immutable tables and scratch
- * addresses cross FFI; no map, pool or object reference is retained. */
+/* The road context supplies two costs; error is the third distinct live slot.
+ * Only immutable tables and scratch addresses cross FFI; no map, pool or
+ * object reference is retained. */
 struct RustTileOwnerContext {
 	RustRoadCommandContext road;
-	CommandCost cost, ret, error;
-	OpenTTDTileOwnerContext view{&GetRustTileOwnerServices(), RustCommandCost(&cost), RustCommandCost(&ret), RustCommandCost(&error), &road.view};
+	CommandCost error;
+	OpenTTDTileOwnerContext view{&GetRustTileOwnerServices(), RustCommandCost(&road.cost), RustCommandCost(&road.ret), RustCommandCost(&error), &road.view};
 };
 #endif /* RUST_TILE_OWNER_SERVICES_H */
