@@ -41,6 +41,58 @@
 
 #include "table/strings.h"
 
+
+#ifdef WITH_RUST
+#include "rust/vehicle_transaction_ffi.h"
+#include "rust/command_cost_services.h"
+#include "rust/vehicle_services.h"
+#include "rust/company_services.h"
+
+/* Synchronous native storage/presentation leaves only. No Rust borrow crosses
+ * these calls; allocation or formatting failures terminate in noexcept leaves. */
+static OpenTTDVehicleTransactionTarget VehicleTransactionTarget(void *shell) noexcept
+{
+	const Vehicle *v = static_cast<Vehicle *>(shell);
+	return {.owner = RustVehicleOwner(v), .primary = RustVehiclePrimary(v)};
+}
+static void VehicleTransactionNameDirty(void *shell) noexcept
+{
+	InvalidateWindowClassesData(GetWindowClassForVehicleType(RustVehicleVehicleType(static_cast<Vehicle *>(shell))), 1);
+	MarkWholeScreenDirty();
+}
+static uint16_t VehicleTransactionDefaultInterval(uint8_t owner, uint8_t type) noexcept { return CompanyServiceInterval(Company::Get(CompanyID(owner)), static_cast<VehicleType>(type)); }
+static uint16_t VehicleTransactionClampInterval(int32_t interval, bool percent) noexcept { return GetServiceIntervalClamped(interval, percent); }
+static void VehicleTransactionSetInterval(void *shell, uint16_t interval, bool custom, bool percent) noexcept
+{
+	Vehicle *v = static_cast<Vehicle *>(shell);
+	v->SetServiceInterval(interval);
+	v->SetServiceIntervalIsCustom(custom);
+	v->SetServiceIntervalIsPercent(percent);
+	SetWindowDirty(WC_VEHICLE_DETAILS, v->index);
+}
+const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noexcept
+{
+	static const OpenTTDVehicleTransactionServices services{
+		.shared = &GetRustSharedServices(),
+		.commands = &GetRustCommandServices(),
+		.cost = &GetRustCommandCostServices(),
+		.groups = &FleetGroupServices(),
+		.target = VehicleTransactionTarget,
+		.name = RustVehicleName,
+		.clear_name = RustVehicleClearName,
+		.set_name = RustVehicleSetName,
+		.name_dirty = VehicleTransactionNameDirty,
+		.interval_percent = RustCompanyServiceIntervalPercent,
+		.interval_default = VehicleTransactionDefaultInterval,
+		.interval_clamp = VehicleTransactionClampInterval,
+		.set_interval = VehicleTransactionSetInterval,
+		.unique_name = STR_ERROR_NAME_MUST_BE_UNIQUE,
+		.max_name = MAX_LENGTH_VEHICLE_NAME_CHARS,
+	};
+	return services;
+}
+#endif /* WITH_RUST */
+
 #include "safeguards.h"
 
 /* Tables used in vehicle_func.h to find the right error message for a certain vehicle type */
@@ -760,11 +812,15 @@ CommandCost CmdDepotMassAutoReplace(DoCommandFlags flags, TileIndex tile, Vehicl
  */
 bool IsUniqueVehicleName(const std::string &name)
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_unique_name(&GetRustVehicleTransactionServices(), {reinterpret_cast<const uint8_t *>(name.data()), name.size()});
+#else
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if (!v->name.empty() && v->name == name) return false;
 	}
 
 	return true;
+#endif
 }
 
 /**
@@ -1077,6 +1133,11 @@ CommandCost CmdSendVehicleToDepot(DoCommandFlags flags, VehicleID veh_id, DepotC
  */
 CommandCost CmdRenameVehicle(DoCommandFlags flags, VehicleID veh_id, const std::string &text)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_vehicle_rename(&GetRustVehicleTransactionServices(), RustCommandCost(&cost), flags.base(), veh_id.base(), {reinterpret_cast<const uint8_t *>(text.data()), text.size()});
+	return cost;
+#else
 	Vehicle *v = Vehicle::GetIfValid(veh_id);
 	if (v == nullptr || !v->IsPrimaryVehicle()) return CMD_ERROR;
 
@@ -1101,6 +1162,7 @@ CommandCost CmdRenameVehicle(DoCommandFlags flags, VehicleID veh_id, const std::
 	}
 
 	return CommandCost();
+#endif
 }
 
 
@@ -1115,6 +1177,11 @@ CommandCost CmdRenameVehicle(DoCommandFlags flags, VehicleID veh_id, const std::
  */
 CommandCost CmdChangeServiceInt(DoCommandFlags flags, VehicleID veh_id, uint16_t serv_int, bool is_custom, bool is_percent)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_vehicle_service_interval(&GetRustVehicleTransactionServices(), RustCommandCost(&cost), flags.base(), veh_id.base(), serv_int, is_custom, is_percent);
+	return cost;
+#else
 	Vehicle *v = Vehicle::GetIfValid(veh_id);
 	if (v == nullptr || !v->IsPrimaryVehicle()) return CMD_ERROR;
 
@@ -1138,4 +1205,11 @@ CommandCost CmdChangeServiceInt(DoCommandFlags flags, VehicleID veh_id, uint16_t
 	}
 
 	return CommandCost();
+#endif
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDVehicleTransactionServices.hpp"
+bool CheckAbi_vehicle_cmd() { return AbiServicesComplete(GetRustVehicleTransactionServices()); }
+#endif

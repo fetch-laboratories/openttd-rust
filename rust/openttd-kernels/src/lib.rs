@@ -48,6 +48,7 @@ mod townname;
 mod townname_data;
 mod trees;
 mod vehicle;
+mod vehicle_transactions;
 mod water;
 mod water_cmd;
 mod widget_parser;

@@ -6,6 +6,7 @@
  */
 
 #include "services_ffi.h"
+#include "company_services.h"
 #include "services_map.h"
 #include "services_water.h"
 
@@ -303,7 +304,7 @@ static void Ship_build_prototype(uint32_t id) noexcept { Ship *v = Ship::Get(Veh
 static void Ship_build_interval_percent(uint32_t id) noexcept
 {
 	Ship *v = Ship::Get(VehicleID(id));
-	v->SetServiceIntervalIsPercent(Company::Get(_current_company)->settings.vehicle.servint_ispercent);
+	v->SetServiceIntervalIsPercent(RustCompanyServiceIntervalPercent(RustCurrentCompanyID()));
 }
 
 static void Ship_build_capacity(uint32_t id, uint32_t capacity) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->cargo_cap = static_cast<uint16_t>(capacity); }

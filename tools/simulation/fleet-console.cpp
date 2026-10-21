@@ -120,6 +120,27 @@ static bool FleetScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
 	Backup<CompanyID> company(_current_company);
+	if (args[1] == "transaction-meta") {
+		for (VehicleType type : {VEH_TRAIN, VEH_ROAD, VEH_SHIP, VEH_AIRCRAFT}) {
+			Vehicle *v = nullptr;
+			for (Vehicle *u : Vehicle::Iterate()) if (u->type == type && u->IsPrimaryVehicle()) { v = u; break; }
+			if (v == nullptr) FixtureAbort(__LINE__);
+			company.Change(v->owner);
+			std::string name = fmt::format("Transaction snowman \xE2\x98\x83 {}", type);
+			Checked("name-test", Command<CMD_RENAME_VEHICLE>::Do({}, v->index, name));
+			Checked("name-exec", Command<CMD_RENAME_VEHICLE>::Do(DoCommandFlag::Execute, v->index, name));
+			Cost("name-same", Command<CMD_RENAME_VEHICLE>::Do({}, v->index, name));
+			Checked("name-autoreplace", Command<CMD_RENAME_VEHICLE>::Do(DoCommandFlag::AutoReplace, v->index, name));
+			Cost("name-long", Command<CMD_RENAME_VEHICLE>::Do({}, v->index, std::string(1000, 'x')));
+			Cost("interval-invalid", Command<CMD_CHANGE_SERVICE_INT>::Do({}, v->index, 0, true, true));
+			Checked("interval-test", Command<CMD_CHANGE_SERVICE_INT>::Do({}, v->index, 50, true, true));
+			Checked("interval-exec", Command<CMD_CHANGE_SERVICE_INT>::Do(DoCommandFlag::Execute, v->index, 50, true, true));
+			fmt::print(stderr, "FLEET transaction-meta {} {} {} {} {}\n", type, v->name == name, v->GetServiceInterval(), v->ServiceIntervalIsCustom(), v->ServiceIntervalIsPercent());
+			Checked("name-reset", Command<CMD_RENAME_VEHICLE>::Do(DoCommandFlag::Execute, v->index, std::string{}));
+			Checked("interval-default", Command<CMD_CHANGE_SERVICE_INT>::Do(DoCommandFlag::Execute, v->index, 0, false, false));
+		}
+		return true;
+	}
 	if (args[1] == "drain" || args[1] == "drain-cash") {
 		/* Typed inputs on an ordinary save: a running vehicle past renewal age, autorenew on, and for the cash case only the reserve. */
 		Vehicle *v = Vehicle::Get(VehicleID(12));

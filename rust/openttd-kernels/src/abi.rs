@@ -31,6 +31,17 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "OpenTTDVehicleSelectionServices" ["probe"] => crate::vehicle_transactions::SelectionServices {
+        groups, transactions, vehicles, in_depot, free_wagon, first_engine_part,
+        multiheaded, other_multihead, with_orders, list_clear, list_push,
+    };
+    "OpenTTDVehicleTransactionTarget" ["probe"] => crate::vehicle_transactions::Target {
+        owner, primary,
+    };
+    "OpenTTDVehicleTransactionServices" ["probe"] => crate::vehicle_transactions::TransactionServices {
+        shared, commands, cost, groups, target, name, clear_name, set_name, name_dirty,
+        interval_percent, interval_default, interval_clamp, set_interval, unique_name, max_name,
+    };
     "OpenTTDHouseLoopTile" ["probe"] => crate::town::house::HouseLoopTile {
         age,
         completed,

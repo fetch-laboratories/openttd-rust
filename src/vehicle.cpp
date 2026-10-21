@@ -67,6 +67,10 @@
 #include "rust/vehicle_maintenance_ffi.h"
 #include "rust/vehicle_services.h"
 #endif
+#ifdef WITH_RUST
+#include "rust/vehicle_transaction_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /* Number of bits in the hash to use from each vehicle coord */
@@ -3339,6 +3343,9 @@ const uint16_t &Vehicle::GetGroundVehicleFlags() const
  */
 void GetVehicleSet(VehicleSet &set, Vehicle *v, uint8_t num_vehicles)
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_selection_set(&GetRustVehicleSelectionServices(), v, num_vehicles, &set, [](void *set, uint32_t id) { include(*static_cast<VehicleSet *>(set), VehicleID(id)); });
+#else
 	if (v->type == VEH_TRAIN) {
 		Train *u = Train::From(v);
 		/* Only include whole vehicles, so start with the first articulated part */
@@ -3357,6 +3364,7 @@ void GetVehicleSet(VehicleSet &set, Vehicle *v, uint8_t num_vehicles)
 			} while (u != nullptr && u->IsArticulatedPart());
 		}
 	}
+#endif
 }
 
 /**

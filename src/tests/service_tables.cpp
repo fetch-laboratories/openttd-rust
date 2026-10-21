@@ -19,6 +19,8 @@ extern bool CheckAbi_train_cmd();
 extern bool CheckAbi_ship_cmd();
 extern bool CheckAbi_group_cmd();
 extern bool CheckAbi_vehicle();
+extern bool CheckAbi_vehicle_cmd();
+extern bool CheckAbi_vehiclelist();
 extern bool CheckAbi_engine();
 extern bool CheckAbi_aircraft_cmd();
 extern bool CheckAbi_cargopacket();
@@ -53,6 +55,8 @@ TEST_CASE("Rust ABI - actual production callback tables are complete")
 	CHECK(CheckAbi_ship_cmd());
 	CHECK(CheckAbi_group_cmd());
 	CHECK(CheckAbi_vehicle());
+	CHECK(CheckAbi_vehicle_cmd());
+	CHECK(CheckAbi_vehiclelist());
 	CHECK(CheckAbi_engine());
 	CHECK(CheckAbi_aircraft_cmd());
 	CHECK(CheckAbi_cargopacket());

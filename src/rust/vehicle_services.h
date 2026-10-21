@@ -9,6 +9,7 @@
 #ifndef RUST_VEHICLE_SERVICES_H
 #define RUST_VEHICLE_SERVICES_H
 #include "vehicle_ffi.h"
+#include "byte_span_ffi.h"
 #include "../ground_vehicle.hpp"
 #include "../engine_base.h"
 #include "../vehicle_func.h"
@@ -16,6 +17,10 @@
 #include "../newgrf_commons.h"
 
 inline void RustUnknownCallbackResult(uint32_t grfid, uint16_t callback, uint16_t result) noexcept { ErrorUnknownCallbackResult(grfid, callback, result); }
+
+OpenTTDByteSpan RustVehicleName(void *shell) noexcept;
+void RustVehicleClearName(void *shell) noexcept;
+void RustVehicleSetName(void *shell, OpenTTDByteSpan name) noexcept;
 
 /** The Rust handle of a live vehicle; null stays null. */
 inline OpenTTDVehicle *RustVehicle(const Vehicle *v) noexcept { return reinterpret_cast<OpenTTDVehicle *>(const_cast<Vehicle *>(v)); }
@@ -60,6 +65,12 @@ inline uint16_t RustVehicleOrderDestination(const Vehicle *v) noexcept { return 
 inline uint16_t RustVehicleOrderMaxSpeed(const Vehicle *v) noexcept { return v->current_order.GetMaxSpeed(); }
 template <class T> inline int RustVehicleDisplayMaxSpeed(const T *v) noexcept { return v->GetDisplayMaxSpeed(); }
 inline uint8_t RustVehicleOrderNonStop(const Vehicle *v) noexcept { return v->current_order.GetNonStopType().base(); }
+bool RustVehicleInDepot(const Vehicle *v) noexcept;
+bool RustTrainFreeWagon(const Vehicle *v) noexcept;
+Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept;
+bool RustTrainMultiheaded(const Vehicle *v) noexcept;
+Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept;
+inline bool RustVehiclePrimary(const Vehicle *v) noexcept { return v->IsPrimaryVehicle(); }
 inline uint8_t RustVehicleOwner(const Vehicle *v) noexcept { return v->owner.base(); }
 inline Direction RustVehicleDirection(const Vehicle *v) noexcept { return v->direction; }
 inline uint8_t RustVehicleProgress(const Vehicle *v) noexcept { return v->progress; }

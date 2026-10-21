@@ -4869,3 +4869,26 @@ impl Control {
         g.put_current(v, current);
     }
 }
+
+/// Short raw access to the canonical aliased Order; never retained across calls.
+pub(crate) struct OrderHandle(pub(crate) *const Order);
+impl OrderHandle {
+    /// # Safety
+    /// Handle denotes a live Order under the serial game-state mutex.
+    pub(crate) unsafe fn is_type(&self, kind: u8) -> bool {
+        // SAFETY: One scalar read from the live canonical record.
+        unsafe { ptr::addr_of!((*self.0).kind).read() & 15 == kind }
+    }
+    /// # Safety
+    /// Handle denotes a live Order under the serial game-state mutex.
+    pub(crate) unsafe fn destination(&self) -> u16 {
+        // SAFETY: One scalar read from the live canonical record.
+        unsafe { ptr::addr_of!((*self.0).destination).read() }
+    }
+    /// # Safety
+    /// Handle denotes a live depot Order under the serial game-state mutex.
+    pub(crate) unsafe fn nearest_depot(&self) -> bool {
+        // SAFETY: One scalar read; native OrderDepotActionFlag::NearestDepot = 1.
+        unsafe { ptr::addr_of!((*self.0).flags).read() & (1 << 4) != 0 }
+    }
+}

@@ -31,6 +31,7 @@
 #include "../sound_type.h"
 #include "../framerate_type.h"
 #include "../aircraft.h"
+#include "../train.h"
 #include "../station_base.h"
 #include "vehicle_maintenance_ffi.h"
 #include "fleet_ffi.h"
@@ -46,6 +47,20 @@
 #include "../strings_func.h"
 #include "../table/strings.h"
 #include "../safeguards.h"
+
+OpenTTDByteSpan RustVehicleName(void *shell) noexcept
+{
+	const std::string &name = static_cast<Vehicle *>(shell)->name;
+	return {reinterpret_cast<const uint8_t *>(name.data()), name.size()};
+}
+void RustVehicleClearName(void *shell) noexcept { static_cast<Vehicle *>(shell)->name.clear(); }
+void RustVehicleSetName(void *shell, OpenTTDByteSpan name) noexcept { static_cast<Vehicle *>(shell)->name.assign(reinterpret_cast<const char *>(name.data), name.size); }
+
+bool RustVehicleInDepot(const Vehicle *v) noexcept { return v->IsInDepot(); }
+bool RustTrainFreeWagon(const Vehicle *v) noexcept { return Train::From(v)->IsFreeWagon(); }
+Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept { return Train::From(v)->GetFirstEnginePart(); }
+bool RustTrainMultiheaded(const Vehicle *v) noexcept { return Train::From(v)->IsMultiheaded(); }
+Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept { return Train::From(v)->other_multiheaded_part; }
 
 /* Values the Rust side names in rust/openttd-kernels/src/vehicle.rs. */
 static_assert(MP_ROAD == 2 && MP_STATION == 5 && MP_TUNNELBRIDGE == 9);

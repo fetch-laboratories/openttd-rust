@@ -20,7 +20,7 @@ def scenarios(soak):
                     "padhattan-ridge-1996.sav"
                     if mode.startswith("train")
                     else "padhattan-ridge-2000.sav"
-                    if mode.startswith("drain")
+                    if mode.startswith(("drain", "transaction"))
                     else "water-ferry.sav"
                     if mode == "ship"
                     else "aircraft-route.sav"
@@ -36,6 +36,7 @@ def scenarios(soak):
         }
         for mode in (
             "groups",
+            "transaction-meta",
             "list",
             "replace",
             "cash",
@@ -70,7 +71,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     import migration
 
     folder = out / scenario["name"] / "input"
-    if scenario["fleet"].startswith(("train", "drain")):
+    if scenario["fleet"].startswith(("train", "drain", "transaction")):
         from .rails import normalize
 
         source, record = normalize(Path(scenario["save"]), folder / "normalized")
@@ -155,6 +156,9 @@ def check(scenario, run, mode, role, result):
     if "fleet" not in scenario or run["exit"] or not run["snapshots"]:
         return
     required = {
+        "transaction-meta": [
+            f"FLEET transaction-meta {kind} true 50 true true" for kind in range(4)
+        ],
         "reload": ["FLEET reloaded true 1 true"],
         "list": [
             "FLEET cost list-test true 0 65535",
