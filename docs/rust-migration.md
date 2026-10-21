@@ -548,7 +548,8 @@ The in-entry LFSR keeps native unsigned map-log widths and reads each live type
 byte from audited allocation metadata. All seven Rust tile owners dispatch directly,
 void tiles straight to the water owner, which reuses the dispatched type and reader
 and derives `IsValidTile` from the map size; only house/station/object have native
-scalar handlers with local strong-index construction; other proc slots are null.
+scalar handlers with local strong-index construction; the five unused facade slots
+are null.
 Flooding calls the Rust signal flush through the canonical signal context.
 Leaves shared by several
 owners (clear/tree ground, snow, shore, sound, foundation) live in shared tables.
