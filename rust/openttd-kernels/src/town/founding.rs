@@ -344,7 +344,7 @@ impl<'a> Founding<'a> {
         if size.0 == 3 {
             x = (self.random() & 15).wrapping_add(8) as i32;
         }
-        if city && (!manual || observed!((self.leaves.editor)())) {
+        if city && (!manual || observed!((self.leaves.environment.editor)())) {
             x = x.wrapping_mul(i32::from(observed!((self.s.initial_city_size)())));
         }
         let engine = self.engine(town);
@@ -501,7 +501,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
         w::hit(w::TOWN_INVALID);
         return;
     }
-    let editor = observed!((f.leaves.editor)());
+    let editor = observed!((f.leaves.environment.editor)());
     let company = CompanyId(observed!((f.shared.current_company)()));
     if editor {
         w::hit(w::TOWN_EDITOR);
@@ -586,7 +586,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
             }));
             observed!((f.s.update_virt)(town.shell));
         }
-        if !observed!((f.leaves.editor)()) {
+        if !observed!((f.leaves.environment.editor)()) {
             observed!((f.s.founded_news)(town.id, tile));
             observed!((f.s.founded_events)(town.id));
         }
@@ -680,7 +680,8 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
                 )
             }
             .is_some();
-    if !success && observed!((f.s.town_count)()) == 0 && !observed!((f.leaves.editor)()) {
+    if !success && observed!((f.s.town_count)()) == 0 && !observed!((f.leaves.environment.editor)())
+    {
         observed!((f.s.no_town_error)());
     }
     unsafe {

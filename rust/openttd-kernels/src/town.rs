@@ -698,7 +698,7 @@ pub struct Leaves {
     pub map_log_x: extern "C" fn() -> u32,
     pub growth_rate: extern "C" fn() -> u8,
     pub snow_line: extern "C" fn() -> u8,
-    pub editor: extern "C" fn() -> bool,
+    pub environment: crate::services::EnvironmentServices,
     pub generating_world: extern "C" fn() -> bool,
     pub allow_crossings: extern "C" fn() -> bool,
     pub climate: extern "C" fn() -> u8,
@@ -1573,7 +1573,7 @@ impl Engine<'_> {
                 if owner == 15 && u32::from((self.services.town_index)(tile)) != town {
                     return false;
                 }
-                if owner == 16 && (self.leaves.editor)() {
+                if owner == 16 && (self.leaves.environment.editor)() {
                     (self.leaves.set_road_town)(tile, town);
                 }
             }
@@ -1767,7 +1767,7 @@ impl Engine<'_> {
         let h = (self.leaves.house_construction)(house as u16);
         let mut counter = 0;
         let mut stage = 0;
-        if (self.leaves.generating_world)() || (self.leaves.editor)() || complete {
+        if (self.leaves.generating_world)() || (self.leaves.environment.editor)() || complete {
             let construction = self.services.random();
             stage = 3;
             if (self.leaves.generating_world)() && h.extra_flags & 1 == 0 && self.chance(1, 7) {
@@ -1888,7 +1888,7 @@ impl Engine<'_> {
             max -= weight;
             let h = (self.leaves.house_placement)(house as u16);
             if !(self.leaves.generating_world)()
-                && !(self.leaves.editor)()
+                && !(self.leaves.environment.editor)()
                 && h.extra_flags & 1 != 0
             {
                 continue;
@@ -1979,7 +1979,7 @@ impl Engine<'_> {
         (self.leaves.update_max_pass)(town);
     }
     fn tick_all(&self) {
-        if !(self.leaves.editor)() {
+        if !(self.leaves.environment.editor)() {
             let mut id = (self.leaves.next_town)(0);
             while id != u32::MAX {
                 self.clone().bind(id).tick(id);

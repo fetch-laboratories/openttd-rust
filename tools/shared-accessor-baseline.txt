@@ -154,7 +154,6 @@ src/rust/train_services.h | TrainWaitOneway(OpenTTDTrainHandle) noexcept | 99ac1
 src/rust/train_services.h | TrainWaitPbs(OpenTTDTrainHandle) noexcept | 47e292e790d4250a | 1
 src/rust/train_services.h | TrainWaitTwoway(OpenTTDTrainHandle) noexcept | 508c48d22dab543e | 1
 src/saveload/station_sl.cpp | [](void *object, size_t) -> void * | a82c84a1f03246e9 | 1
-src/station_cmd.cpp | []() noexcept -> bool | 1c0614908f1e3367 | 1
 src/station_cmd.cpp | []() noexcept -> bool | 29ea639015216c17 | 1
 src/station_cmd.cpp | []() noexcept -> int32_t | b7b2717268568730 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationService * | d36f25ba0331f630 | 1

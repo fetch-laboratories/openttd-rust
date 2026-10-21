@@ -233,7 +233,7 @@ typedef struct OpenTTDIndustryGenerationServices {
 	uint32_t (*spec_behaviour)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(spec_behaviour);
 	OpenTTDIndustryGenerationInfo (*info)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(info);
 	bool (*coastal)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(coastal);
-	bool (*editor)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(editor);
+	OpenTTDEnvironmentServices environment;
 	uint8_t (*density)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(density);
 	uint32_t (*custom_number)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(custom_number);
 	uint32_t (*scale_by_size_1d)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(scale_by_size_1d);

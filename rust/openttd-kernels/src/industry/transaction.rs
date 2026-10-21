@@ -184,7 +184,7 @@ impl Engine<'_> {
                 }
             }
             2 => {
-                if !unsafe { (self.g.editor)() }
+                if !(self.g.environment.editor)()
                     && !self.edge(
                         self.offset(tile, 1, 1),
                         u32::from(unsafe { (self.x.refinery_limit)() }),
@@ -206,7 +206,7 @@ impl Engine<'_> {
             6 if (self.s.shared().tropic_zone)(tile) != 2 => return self.fail(self.e.rainforest),
             7 if (self.s.shared().tile_z)(tile) > 4 => return self.fail(self.e.lowland),
             8 => {
-                if unsafe { (self.g.editor)() } && unsafe { (self.x.ignore_restrictions)() } {
+                if (self.g.environment.editor)() && unsafe { (self.x.ignore_restrictions)() } {
                     return self.success();
                 }
                 if unsafe { (self.x.tile_height)(tile) } != 0
@@ -789,7 +789,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         e.fail(0xffff);
         return;
     }
-    if !unsafe { (e.g.editor)() }
+    if !(e.g.environment.editor)()
         && e.company() != 18
         && unsafe { (e.x.raw_setting)() } == 0
         && unsafe { (e.x.raw)(spec) }
@@ -797,7 +797,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         e.fail(0xffff);
         return;
     }
-    if !unsafe { (e.g.editor)() }
+    if !(e.g.environment.editor)()
         && unsafe { (e.s.probability_callback)(kind, if e.company() == 18 { 1 } else { 2 }, 1) }
             == 0
     {
@@ -813,7 +813,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
     let deity_prospect = e.company() == 18 && !fund;
     let mut industry = ptr::null_mut();
     if deity_prospect
-        || (!unsafe { (e.g.editor)() }
+        || (!(e.g.environment.editor)()
             && e.company() != 18
             && unsafe { (e.x.raw_setting)() } == 2
             && unsafe { (e.x.raw)(spec) })
@@ -887,7 +887,7 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
             return;
         }
     }
-    if flags & 1 != 0 && !industry.is_null() && !unsafe { (e.g.editor)() } {
+    if flags & 1 != 0 && !industry.is_null() && !(e.g.environment.editor)() {
         unsafe { (e.s.advertise)(industry.cast()) };
     }
     let construction = unsafe { (e.x.construction_cost)(spec) };

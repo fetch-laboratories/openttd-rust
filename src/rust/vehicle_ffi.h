@@ -74,6 +74,7 @@ struct OpenTTDVehicleDayCost {
 struct OpenTTDVehicleAltitudeInputs { uint16_t max_speed; uint8_t direction; };
 struct OpenTTDVehicleMaintenanceServices;
 struct OpenTTDVehicleServices {
+	void (*vehicles_on_tile)(uint32_t, void *, void (*)(void *, OpenTTDVehicle *)) noexcept OPENTTD_SERVICE_DEFAULT(vehicles_on_tile);
 	void (OPENTTD_VEHICLE_CALL *write_counters)(OpenTTDVehicle *, uint8_t, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_counters);
 	OpenTTDVehicleBreakdown (OPENTTD_VEHICLE_CALL *handle_breakdown)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(handle_breakdown);
 	bool (OPENTTD_VEHICLE_CALL *waiting_for_unbunching)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_for_unbunching);
@@ -107,6 +108,7 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_VEHICLE_CALL *write_speed)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_speed);
 	uint16_t (OPENTTD_VEHICLE_CALL *last_station)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_station);
 	void (OPENTTD_VEHICLE_CALL *write_last_station)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_last_station);
+	void (OPENTTD_VEHICLE_CALL *set_dest_tile)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_dest_tile);
 	void (OPENTTD_VEHICLE_CALL *write_dest)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_dest);
 	void (OPENTTD_VEHICLE_CALL *write_progress)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_progress);
 	void (OPENTTD_VEHICLE_CALL *write_max_speed)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_max_speed);

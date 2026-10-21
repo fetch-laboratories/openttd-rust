@@ -426,6 +426,20 @@ witness_blocks! {
         WATER_AQUEDUCTS = 2 => "water.aqueducts",
         WATER_REBUILDS = 3 => "water.rebuilds",
     }
+    water_cmd {
+        WATER_CMD_RESTORE = 0 => "water_cmd.restore",
+        WATER_CMD_DEPOT = 1 => "water_cmd.depot",
+        WATER_CMD_REMOVE_DEPOT = 2 => "water_cmd.remove_depot",
+        WATER_CMD_FORCE = 3 => "water_cmd.force",
+        WATER_CMD_LOCK = 4 => "water_cmd.lock",
+        WATER_CMD_REMOVE_LOCK = 5 => "water_cmd.remove_lock",
+        WATER_CMD_CANAL = 6 => "water_cmd.canal",
+        WATER_CMD_SKIP = 7 => "water_cmd.skip",
+        WATER_CMD_CLEAR = 8 => "water_cmd.clear",
+        WATER_CMD_OWNER = 9 => "water_cmd.owner",
+        WATER_CMD_DESERT = 10 => "water_cmd.desert",
+    }
+
 }
 
 static ENABLED: AtomicBool = AtomicBool::new(false);

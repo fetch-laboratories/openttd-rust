@@ -345,7 +345,6 @@ pub struct ObjectServices {
     pub progress_set: unsafe extern "C" fn(*mut GenerationFrame, u32) -> bool,
     pub progress_increase: unsafe extern "C" fn(*mut GenerationFrame) -> bool,
     pub normal: unsafe extern "C" fn() -> bool,
-    pub freeform: unsafe extern "C" fn() -> bool,
     pub bulldozer: unsafe extern "C" fn() -> bool,
     pub water_class: unsafe extern "C" fn(u32) -> WaterClass,
     pub restoration: *const crate::water::RestorationServices,
@@ -883,7 +882,7 @@ impl<'a> World<'a> {
                     });
                     return;
                 }
-                if ((*self.s.town).editor)() {
+                if ((*self.s.town).environment.editor)() {
                 } else if self.owner(tile) == NONE {
                     if !(self.s.bulldozer)() && flags_spec & CANNOT_REMOVE != 0 {
                         out.error();
@@ -972,7 +971,7 @@ impl<'a> World<'a> {
                 out.error();
                 return;
             }
-            if (((*self.s.town).editor)() || ((*self.s.town).generating_world)())
+            if (((*self.s.town).environment.editor)() || ((*self.s.town).generating_world)())
                 && !(self.s.ever)(spec)
             {
                 out.error();
@@ -980,7 +979,8 @@ impl<'a> World<'a> {
             }
             let shape = (self.s.footprint)(spec);
             if shape.flags & SCENEDIT != 0
-                && ((!((*self.s.town).generating_world)() && !((*self.s.town).editor)())
+                && ((!((*self.s.town).generating_world)()
+                    && !((*self.s.town).environment.editor)())
                     || self.current() != NONE)
             {
                 out.error();
@@ -1038,7 +1038,7 @@ impl<'a> World<'a> {
                                 (self.commands().tile_ownership)(tmp.0, t);
                                 out.add(tmp);
                             }
-                            if !(self.s.freeform)()
+                            if !((*self.s.town).environment.freeform_edges)()
                                 && (self.map.tile_x(t) < 1
                                     || self.map.tile_x(t) >= (self.shared.map_max_x)() - 1
                                     || self.map.tile_y(t) < 1
@@ -1613,7 +1613,7 @@ impl World<'_> {
             let maxx = (self.shared.map_max_x)();
             let maxy = (self.shared.map_max_y)();
             let mut water_tiles = 0_u32;
-            if (self.s.freeform)() {
+            if ((*self.s.town).environment.freeform_edges)() {
                 for x in 0..maxx {
                     if (self.shared.tile_type)(x + self.map.size_x()) == 6 {
                         water_tiles += 1;
@@ -1637,7 +1637,9 @@ impl World<'_> {
                 if !generation.ever || generation.amount == 0 {
                     continue;
                 }
-                let mut amount = if generation.flags & SCALE_WATER != 0 && (self.s.freeform)() {
+                let mut amount = if generation.flags & SCALE_WATER != 0
+                    && ((*self.s.town).environment.freeform_edges)()
+                {
                     (self.s.scale_size_1d)(u32::from(generation.amount) * water_tiles)
                         / (2 * maxy + 2 * maxx - 6)
                 } else if generation.flags & SCALE_WATER != 0 {

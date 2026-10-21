@@ -374,7 +374,9 @@ impl World<'_> {
                 self.action(17, tile, 1, 0, 0, 0, 0).await;
             }
             0 | 4 => {
-                self.service(19, tile, 0, 0, 0, 0, 0);
+                crate::ground::clear_square(tile, self.services);
+                self.channel.vehicle.set(None);
+                self.channel.world.set(None);
             }
             _ => {}
         }

@@ -50,5 +50,4 @@ inline bool RustStationStopOnCompetitorRoad() noexcept { return _settings_game.c
 inline bool RustStationNoiseEnabled() noexcept { return _settings_game.economy.station_noise_level; }
 inline bool RustStationDistantJoin() noexcept { return _settings_game.station.distant_join_stations; }
 inline bool RustNormalGame() noexcept { return _game_mode == GM_NORMAL; }
-inline bool RustFreeformEdges() noexcept { return _settings_game.construction.freeform_edges; }
 #endif /* RUST_SETTINGS_SERVICES_H */

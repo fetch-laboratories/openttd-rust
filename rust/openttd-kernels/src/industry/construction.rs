@@ -336,7 +336,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
     unsafe {
         (*owner).metadata.construction_date = date;
     }
-    let construction_type = if unsafe { (g.editor)() } {
+    let construction_type = if (g.environment.editor)() {
         3
     } else if unsafe { (c.generating)() } {
         2

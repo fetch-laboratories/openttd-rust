@@ -134,7 +134,6 @@ struct OpenTTDObjectServices {
 	bool (*progress_set)(OpenTTDObjectGenerationFrame *frame, uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_set);
 	bool (*progress_increase)(OpenTTDObjectGenerationFrame *frame) noexcept OPENTTD_SERVICE_DEFAULT(progress_increase);
 	bool (*normal)() noexcept OPENTTD_SERVICE_DEFAULT(normal);
-	bool (*freeform)() noexcept OPENTTD_SERVICE_DEFAULT(freeform);
 	bool (*bulldozer)() noexcept OPENTTD_SERVICE_DEFAULT(bulldozer);
 	WaterClass (*water_class)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(water_class);
 	const OpenTTDWaterRestorationServices *restoration;

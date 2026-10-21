@@ -64,7 +64,7 @@ inline IndustryID RustFieldIndustry(Tile tile) noexcept { return GetIndustryInde
 inline bool RustFieldOfIndustry(Tile tile, IndustryID industry) noexcept { return RustClearFieldTile(tile) && RustFieldIndustry(tile) == industry; }
 /* Existing industry ABI uses the underlying IndustryID16 wire value. */
 inline bool RustFieldOfIndustryValue(uint32_t tile, uint16_t industry) noexcept { return RustFieldOfIndustry(Tile{TileIndex{tile}}, IndustryID{industry}); }
-inline bool RustIsCoast(uint32_t tile) noexcept { return IsCoast(TileIndex{tile}); }
+inline bool RustIsCoast(uint32_t tile) noexcept { return RustWaterTileType(tile) == WaterTileType::Coast; }
 inline void RustMakeClear(uint32_t tile, ClearGround ground, uint32_t density) noexcept { MakeClear(TileIndex{tile}, ground, density); }
 inline void RustMakeClearValue(uint32_t tile, uint8_t ground, uint32_t density) noexcept { RustMakeClear(tile, static_cast<ClearGround>(ground), density); }
 inline void RustMakeSnow(uint32_t tile, uint32_t density) noexcept { MakeSnow(TileIndex{tile}, density); }
