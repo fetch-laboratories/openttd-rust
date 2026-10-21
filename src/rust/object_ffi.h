@@ -47,6 +47,38 @@ struct OpenTTDObjectStrings {
 	uint32_t too_many, no_town, edge_sub, water, edge, on_water, bridge, flat;
 	uint32_t own, built, limit, hq, object;
 };
+enum class HouseZone : uint8_t;
+struct ResolverObject;
+struct OpenTTDObjectDefinition { uint32_t grfid; uint16_t local_id; uint8_t view; bool has_file; };
+struct OpenTTDObjectQueryServices {
+	uint8_t (*random_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
+	uint32_t (*index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(index);
+	Object *(*by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(by_tile);
+	OpenTTDObjectDefinition (*definition)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(definition);
+	uint32_t (*object_index)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(object_index);
+	uint16_t (*kind)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(kind);
+	uint32_t (*north)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(north);
+	const Town *(*town)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(town);
+	uint32_t (*town_tile)(const Town *) noexcept OPENTTD_SERVICE_DEFAULT(town_tile);
+	int32_t (*date)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(date);
+	uint8_t (*colour)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(colour);
+	uint8_t (*view)(Object *) noexcept OPENTTD_SERVICE_DEFAULT(view);
+	uint32_t (*nearby)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby);
+	uint32_t (*nearby_info)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_info);
+	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);
+	HouseZone (*town_zone)(const Town *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_zone);
+	uint32_t (*badges)(const ResolverObject *, const ObjectSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
+	int32_t (*register_100)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(register_100);
+	uint32_t (*grfid)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);
+	bool (*version8)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(version8);
+	uint16_t (*override_id)(uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(override_id);
+	uint32_t (*manhattan)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(manhattan);
+	uint32_t (*square)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(square);
+	uint16_t (*triggers)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(triggers);
+	void (*change_frame)(const ObjectSpec *, Object *, uint32_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(change_frame);
+	void (*unhandled)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
+};
+const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept;
 struct OpenTTDObjectServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDCommandCostServices *cost;
@@ -75,7 +107,7 @@ struct OpenTTDObjectServices {
 	OpenTTDObjectLoopPolicy (*loop_policy)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(loop_policy);
 	OpenTTDObjectReference (*reference)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reference);
 	OpenTTDObjectIdentity (*identity)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(identity);
-	OpenTTDObjectArea (*location)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(location);
+	OpenTTDObjectArea (*location)(Object *object) noexcept OPENTTD_SERVICE_DEFAULT(location);
 	OpenTTDObjectNext (*next)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	void (*set_colour)(Object *o, uint8_t colour) noexcept OPENTTD_SERVICE_DEFAULT(set_colour);
 	uint8_t (*recolour)(uint8_t owner, bool two) noexcept OPENTTD_SERVICE_DEFAULT(recolour);
@@ -83,8 +115,7 @@ struct OpenTTDObjectServices {
 	void (*colour_error)(const ObjectSpec *spec, uint16_t result) noexcept OPENTTD_SERVICE_DEFAULT(colour_error);
 	void (*make)(uint32_t tile, uint8_t owner, uint32_t id, WaterClass water, uint32_t random) noexcept OPENTTD_SERVICE_DEFAULT(make);
 	void (*delete_object)(Object *o) noexcept OPENTTD_SERVICE_DEFAULT(delete_object);
-	void (*trigger)(Object *o, ObjectAnimationTrigger trigger, const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(trigger);
-	void (*trigger_tile)(Object *o, uint32_t tile, const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(trigger_tile);
+	const OpenTTDObjectQueryServices *query;
 	OpenTTDObjectSlopeResult (*slope_callback)(const ObjectSpec *spec, uint32_t tile, Slope slope, uint32_t offset, uint8_t view) noexcept OPENTTD_SERVICE_DEFAULT(slope_callback);
 	void (*slope_error)(OpenTTDCommandCost *out, const OpenTTDObjectSlopeResult *result, const ObjectSpec *spec) noexcept OPENTTD_SERVICE_DEFAULT(slope_error);
 	void (*buildable)(OpenTTDCommandCost *out, uint32_t tile, int32_t *z) noexcept OPENTTD_SERVICE_DEFAULT(buildable);
@@ -118,6 +149,10 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept;
  * game threads. Indices survive append. No element pointer or allocation escapes;
  * callbacks may reenter only after every Rust state borrow has ended. */
 extern "C" {
+uint32_t openttd_rust_object_random_bits(const OpenTTDObjectServices *, uint32_t);
+uint32_t openttd_rust_object_variable(const OpenTTDObjectServices *, const ResolverObject *, Object *, const ObjectSpec *, uint32_t, uint8_t, uint8_t, uint32_t, bool *);
+bool openttd_rust_object_trigger_tile(const OpenTTDObjectServices *, Object *, uint32_t, ObjectAnimationTrigger, const ObjectSpec *);
+bool openttd_rust_object_trigger(const OpenTTDObjectServices *, Object *, ObjectAnimationTrigger, const ObjectSpec *);
 void openttd_rust_object_counts_reset();
 void openttd_rust_object_count_increment(uint16_t);
 void openttd_rust_object_count_decrement(uint16_t);

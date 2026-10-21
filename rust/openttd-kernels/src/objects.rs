@@ -316,7 +316,7 @@ pub struct ObjectServices {
     pub loop_policy: unsafe extern "C" fn(u32) -> LoopPolicy,
     pub reference: unsafe extern "C" fn(u32) -> Reference,
     pub identity: unsafe extern "C" fn(u32) -> Identity,
-    pub location: unsafe extern "C" fn(u32) -> Area,
+    pub location: unsafe extern "C" fn(*mut Object) -> Area,
     pub next: unsafe extern "C" fn(u32) -> Next,
     pub set_colour: unsafe extern "C" fn(*mut Object, u8) -> (),
     pub recolour: unsafe extern "C" fn(u8, bool) -> u8,
@@ -324,8 +324,7 @@ pub struct ObjectServices {
     pub colour_error: unsafe extern "C" fn(*const Spec, u16) -> (),
     pub make: unsafe extern "C" fn(u32, u8, u32, WaterClass, u32) -> (),
     pub delete_object: unsafe extern "C" fn(*mut Object) -> (),
-    pub trigger: unsafe extern "C" fn(*mut Object, AnimationTrigger, *const Spec) -> (),
-    pub trigger_tile: unsafe extern "C" fn(*mut Object, u32, *const Spec) -> (),
+    pub query: *const QueryServices,
     pub slope_callback:
         unsafe extern "C" fn(*const Spec, u32, crate::services::Slope, u32, u8) -> SlopeResult,
     pub slope_error: unsafe extern "C" fn(*mut CommandCost, *const SlopeResult, *const Spec) -> (),
@@ -384,6 +383,50 @@ const NOT_ON_LAND: u16 = 1 << 9;
 const UNDER_BRIDGE: u16 = 1 << 11;
 const SCALE_WATER: u16 = 1 << 13;
 
+#[repr(C)]
+pub struct Resolver {
+    _private: [u8; 0],
+}
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct HouseZone(u8);
+#[repr(C)]
+pub struct Definition {
+    pub grfid: u32,
+    pub local_id: u16,
+    pub view: u8,
+    pub has_file: bool,
+}
+#[repr(C)]
+pub struct QueryServices {
+    pub random_bits: unsafe extern "C" fn(u32) -> u8,
+    pub index: unsafe extern "C" fn(u32) -> u32,
+    pub by_tile: unsafe extern "C" fn(u32) -> *mut Object,
+    pub definition: unsafe extern "C" fn(*mut Object) -> Definition,
+    pub object_index: unsafe extern "C" fn(*mut Object) -> u32,
+    pub kind: unsafe extern "C" fn(*mut Object) -> u16,
+    pub north: unsafe extern "C" fn(*mut Object) -> u32,
+    pub town: unsafe extern "C" fn(*mut Object) -> *const TownHandle,
+    pub town_tile: unsafe extern "C" fn(*const TownHandle) -> u32,
+    pub date: unsafe extern "C" fn(*mut Object) -> i32,
+    pub colour: unsafe extern "C" fn(*mut Object) -> u8,
+    pub view: unsafe extern "C" fn(*mut Object) -> u8,
+    pub nearby: unsafe extern "C" fn(u8, u32) -> u32,
+    pub nearby_info: unsafe extern "C" fn(u32, bool) -> u32,
+    pub terrain: unsafe extern "C" fn(u32) -> u32,
+    pub town_zone: unsafe extern "C" fn(*const TownHandle, u32) -> HouseZone,
+    pub badges: unsafe extern "C" fn(*const Resolver, *const Spec, u32) -> u32,
+    pub register_100: unsafe extern "C" fn(*const Resolver) -> i32,
+    pub grfid: unsafe extern "C" fn(*const Resolver) -> u32,
+    pub version8: unsafe extern "C" fn(*const Resolver) -> bool,
+    pub override_id: unsafe extern "C" fn(u16, u32) -> u16,
+    pub manhattan: unsafe extern "C" fn(u32, u32) -> u32,
+    pub square: unsafe extern "C" fn(u32, u32) -> u32,
+    pub triggers: unsafe extern "C" fn(*const Spec) -> u16,
+    pub change_frame: unsafe extern "C" fn(*const Spec, *mut Object, u32, u32, u32),
+    pub unhandled: unsafe extern "C" fn(u8),
+}
+
 #[derive(Clone, Copy)]
 struct Cost<'a>(*mut CommandCost, &'a CommandCostServices);
 impl Cost<'_> {
@@ -434,6 +477,216 @@ impl<'a> World<'a> {
                     0
                 },
             },
+        }
+    }
+    fn query(&self) -> &QueryServices {
+        // SAFETY: immutable native services live for the synchronous entry.
+        unsafe { &*self.s.query }
+    }
+    fn random_bits(&self, tile: u32) -> u32 {
+        if (self.shared.tile_valid)(tile) && (self.shared.tile_type)(tile) == 10 {
+            unsafe { u32::from((self.query().random_bits)(tile)) }
+        } else {
+            0
+        }
+    }
+    fn id_at_offset(&self, tile: u32, grfid: u32) -> u32 {
+        if (self.shared.tile_type)(tile) != 10 {
+            return 0xffff;
+        }
+        // SAFETY: object tile owns a live native object and specification.
+        let d = unsafe { (self.query().definition)((self.query().by_tile)(tile)) };
+        if d.has_file && d.grfid == grfid {
+            u32::from(d.local_id) | u32::from(d.view) << 16
+        } else {
+            0xfffe
+        }
+    }
+    fn nearby_info(&self, parameter: u8, mut tile: u32, index: u32, version8: bool) -> u32 {
+        let q = self.query();
+        // SAFETY: native nearby helper wraps to the map, as in the original.
+        unsafe {
+            if parameter != 0 {
+                tile = (q.nearby)(parameter, tile);
+            }
+            let same = (self.shared.tile_type)(tile) == 10 && (q.index)(tile) == index;
+            (q.nearby_info)(tile, version8) | u32::from(same) << 8
+        }
+    }
+    fn closest(&self, tile: u32, kind: u16, current: *mut Object) -> u32 {
+        let mut best = u32::MAX;
+        let mut from = 0;
+        // SAFETY: pool iteration returns live pointers; no pointer is dereferenced in Rust.
+        unsafe {
+            loop {
+                let o = (self.s.next)(from);
+                if o.object.is_null() {
+                    break;
+                }
+                from = o.id.wrapping_add(1);
+                if (self.query().kind)(o.object) != kind || o.object == current {
+                    continue;
+                }
+                best = best.min((self.query().manhattan)(tile, o.tile));
+            }
+        }
+        best
+    }
+    fn count_distance(
+        &self,
+        ro: *const Resolver,
+        local_id: u8,
+        grfid: u32,
+        tile: u32,
+        current: *mut Object,
+    ) -> u32 {
+        let q = self.query();
+        // SAFETY: resolver and override manager are native and remain live.
+        let kind = unsafe {
+            match (q.register_100)(ro) as u32 {
+                0 => u16::from(local_id),
+                u32::MAX => (q.override_id)(u16::from(local_id), grfid),
+                other => (q.override_id)(u16::from(local_id), other),
+            }
+        };
+        if kind >= 64000 {
+            return 0xffff;
+        }
+        u32::from(openttd_rust_object_count(kind)) << 16
+            | self.closest(tile, kind, current).min(u32::from(u16::MAX))
+    }
+    fn variable(
+        &self,
+        ro: *const Resolver,
+        obj: *mut Object,
+        spec: *const Spec,
+        tile: u32,
+        view: u8,
+        variable: u8,
+        parameter: u32,
+        available: &mut bool,
+    ) -> u32 {
+        let q = self.query();
+        let mut town = std::ptr::null();
+        // SAFETY: native entry supplies its live resolver/spec/object. Null-object
+        // queries take the original availability path before any object access.
+        unsafe {
+            if obj.is_null() {
+                match variable {
+                    0x41 | 0x60 | 0x61 | 0x62 | 0x64 => {}
+                    0x45 | 0x46 if (self.shared.tile_valid)(tile) => {
+                        town = (self.shared.closest_town)(tile, u32::MAX);
+                    }
+                    0x42 => return (self.shared.calendar_date)() as u32,
+                    0x44 => return u32::from((self.shared.current_company)()),
+                    0x48 => return u32::from(view),
+                    0x7a => return (q.badges)(ro, spec, parameter),
+                    _ => return self.unhandled(variable, available),
+                }
+                if !(self.shared.tile_valid)(tile) {
+                    return self.unhandled(variable, available);
+                }
+            } else if matches!(variable, 0x45 | 0x46) {
+                town = (q.town)(obj);
+            }
+            match variable {
+                0x40 => {
+                    let offset = tile.wrapping_sub((q.north)(obj));
+                    let x = self.map.tile_x(offset);
+                    let y = self.map.tile_y(offset);
+                    y << 20 | x << 16 | y << 8 | x
+                }
+                0x41 => u32::from((self.shared.tile_slope)(tile)) << 8 | (q.terrain)(tile),
+                0x42 => (q.date)(obj) as u32,
+                0x43 => u32::from(((*self.s.industry_tiles).frame)(tile)),
+                0x44 => u32::from((self.shared.tile_owner)(tile)),
+                0x45 => {
+                    u32::from((q.town_zone)(town, tile).0) << 16
+                        | (q.manhattan)(tile, (q.town_tile)(town)).min(u32::from(u16::MAX))
+                }
+                0x46 => (q.square)(tile, (q.town_tile)(town)),
+                0x47 => u32::from((q.colour)(obj)),
+                0x48 => u32::from((q.view)(obj)),
+                0x60 => self.id_at_offset((q.nearby)(parameter as u8, tile), (q.grfid)(ro)),
+                0x61 | 0x63 => {
+                    let near = (q.nearby)(parameter as u8, tile);
+                    if (self.shared.tile_type)(near) == 10 && (q.by_tile)(near) == obj {
+                        if variable == 0x61 {
+                            u32::from((q.random_bits)(near))
+                        } else {
+                            u32::from(((*self.s.industry_tiles).frame)(near))
+                        }
+                    } else {
+                        0
+                    }
+                }
+                0x62 => self.nearby_info(
+                    parameter as u8,
+                    tile,
+                    if obj.is_null() {
+                        u32::MAX
+                    } else {
+                        (q.object_index)(obj)
+                    },
+                    (q.version8)(ro),
+                ),
+                0x64 => self.count_distance(ro, parameter as u8, (q.grfid)(ro), tile, obj),
+                0x7a => (q.badges)(ro, spec, parameter),
+                _ => self.unhandled(variable, available),
+            }
+        }
+    }
+    fn unhandled(&self, variable: u8, available: &mut bool) -> u32 {
+        unsafe { (self.query().unhandled)(variable) };
+        *available = false;
+        u32::MAX
+    }
+    fn do_trigger(
+        &self,
+        obj: *mut Object,
+        tile: u32,
+        trigger: AnimationTrigger,
+        spec: *const Spec,
+        random: u32,
+    ) -> bool {
+        // SAFETY: only immutable service tables are borrowed across the callback.
+        // Native object/spec pointers are opaque; no owner-state borrow survives it.
+        unsafe {
+            if (self.query().triggers)(spec) & (1_u16 << trigger.0) == 0 {
+                return false;
+            }
+            (self.query().change_frame)(spec, obj, tile, random, u32::from(trigger.0));
+        }
+        true
+    }
+    fn trigger_tile(
+        &self,
+        obj: *mut Object,
+        tile: u32,
+        trigger: AnimationTrigger,
+        spec: *const Spec,
+    ) -> bool {
+        let random = self.shared.random();
+        self.do_trigger(obj, tile, trigger, spec, random)
+    }
+    fn trigger(&self, obj: *mut Object, trigger: AnimationTrigger, spec: *const Spec) -> bool {
+        // SAFETY: native spec and object are live; original area is captured before
+        // callbacks and no borrow into either record crosses a callback.
+        unsafe {
+            if (self.query().triggers)(spec) & (1_u16 << trigger.0) == 0 {
+                return false;
+            }
+            let mut ret = true;
+            let mut random = self.shared.random();
+            let area = (self.s.location)(obj);
+            for tile in self.tiles(area) {
+                if self.do_trigger(obj, tile, trigger, spec, random) {
+                    random = (random & 0xffff_0000) | (self.shared.random() & 0xffff);
+                } else {
+                    ret = false;
+                }
+            }
+            ret
         }
     }
     fn commands(&self) -> &CommandServices {
@@ -551,7 +804,7 @@ impl<'a> World<'a> {
             }
             openttd_rust_object_count_increment(kind);
             if shape.flags & ANIMATION != 0 {
-                (self.s.trigger)(object.object, AnimationTrigger::BUILT, spec);
+                self.trigger(object.object, AnimationTrigger::BUILT, spec);
             }
         }
         crate::witness::hit(crate::witness::OBJECT_BUILD);
@@ -566,7 +819,7 @@ impl<'a> World<'a> {
             .count() as u8;
         unsafe {
             while ((*self.s.industry_tiles).frame)(tile) < target {
-                let area = (self.s.location)(tile);
+                let area = (self.s.location)((self.query().by_tile)(tile));
                 for t in self.tiles(area) {
                     ((*self.s.industry_tiles).set_frame)(
                         t,
@@ -1211,9 +1464,9 @@ impl World<'_> {
         unsafe {
             let policy = (self.s.loop_policy)(tile);
             if policy.flags & ANIMATION != 0 {
-                (self.s.trigger_tile)(policy.object, tile, policy.spec);
+                self.trigger_tile(policy.object, tile, AnimationTrigger(1), policy.spec);
                 if policy.north == tile {
-                    (self.s.trigger)(
+                    self.trigger(
                         policy.object,
                         AnimationTrigger::TILE_LOOP_NORTH,
                         policy.spec,
@@ -1526,6 +1779,70 @@ impl Drag {
             self.tile = INVALID_TILE;
         }
     }
+}
+
+/// Synchronous `NewGRF` query/animation entries. Native records stay opaque.
+///
+/// # Safety
+/// The caller holds the game-state mutex and supplies live tables, resolver,
+/// object/spec pointers (object may be null for variable queries), and availability
+/// storage. Calls are synchronous; native leaves are noexcept. Panics abort.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_variable(
+    s: *const ObjectServices,
+    ro: *const Resolver,
+    obj: *mut Object,
+    spec: *const Spec,
+    tile: u32,
+    view: u8,
+    variable: u8,
+    parameter: u32,
+    available: *mut bool,
+) -> u32 {
+    unsafe {
+        World::new::<true>(&*s).variable(
+            ro,
+            obj,
+            spec,
+            tile,
+            view,
+            variable,
+            parameter,
+            &mut *available,
+        )
+    }
+}
+/// # Safety
+/// Same serialized live-table contract as `openttd_rust_object_variable`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_random_bits(
+    s: *const ObjectServices,
+    tile: u32,
+) -> u32 {
+    unsafe { World::new::<false>(&*s).random_bits(tile) }
+}
+/// # Safety
+/// Same serialized live-table/object/spec contract as the variable entry.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_trigger_tile(
+    s: *const ObjectServices,
+    obj: *mut Object,
+    tile: u32,
+    trigger: AnimationTrigger,
+    spec: *const Spec,
+) -> bool {
+    unsafe { World::new::<false>(&*s).trigger_tile(obj, tile, trigger, spec) }
+}
+/// # Safety
+/// Same serialized live-table/object/spec contract as the variable entry.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_trigger(
+    s: *const ObjectServices,
+    obj: *mut Object,
+    trigger: AnimationTrigger,
+    spec: *const Spec,
+) -> bool {
+    unsafe { World::new::<true>(&*s).trigger(obj, trigger, spec) }
 }
 
 /// Synchronous object owner entry.

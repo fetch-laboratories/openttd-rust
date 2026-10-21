@@ -38,4 +38,6 @@ inline bool RoadSvcContinuation(uint32_t tile, uint32_t next) noexcept
 }
 inline int32_t SharedSlopePixelZ(int32_t x, int32_t y, bool ground_vehicle) noexcept { return GetSlopePixelZ(x, y, ground_vehicle); }
 
+inline uint32_t OpenTTDDistanceManhattan(uint32_t from, uint32_t to) noexcept { return DistanceManhattan(TileIndex(from), TileIndex(to)); }
+inline uint32_t OpenTTDDistanceSquare(uint32_t from, uint32_t to) noexcept { return DistanceSquare(TileIndex(from), TileIndex(to)); }
 #endif

@@ -1110,7 +1110,7 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.loop_policy = [](uint32_t tile) noexcept -> OpenTTDObjectLoopPolicy { Object *o = Object::GetByTile(TileIndex(tile)); const auto kind = o->type; const ObjectSpec *spec = ObjectSpec::GetByTile(TileIndex(tile)); const auto flags = RustObjectSpecFlags(spec); return {spec, o, ObjectFlags{flags}.Test(ObjectFlag::Animation) ? o->location.tile.base() : 0, flags, kind}; },
 		.reference = [](uint32_t tile) noexcept -> OpenTTDObjectReference { Object *o = Object::GetByTile(TileIndex(tile)); return {o, o->type}; },
 		.identity = [](uint32_t tile) noexcept -> OpenTTDObjectIdentity { Object *o = Object::GetByTile(TileIndex(tile)); return {o, {o->location.tile.base(), o->location.w, o->location.h}, o->type}; },
-		.location = [](uint32_t tile) noexcept -> OpenTTDObjectArea { const auto &a = Object::GetByTile(TileIndex(tile))->location; return {a.tile.base(), a.w, a.h}; },
+		.location = [](Object *o) noexcept -> OpenTTDObjectArea { const auto &a = o->location; return {a.tile.base(), a.w, a.h}; },
 		.next = [](uint32_t from) noexcept -> OpenTTDObjectNext { for (Object *o : Object::Iterate(from)) return {o, o->index.base(), o->location.tile.base()}; return {nullptr, UINT32_MAX, 0}; },
 		.set_colour = [](Object *o, uint8_t colour) noexcept -> void { o->colour = colour; },
 		.recolour = RustObjectRecolour,
@@ -1118,8 +1118,7 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.colour_error = RustFixedSpecCallbackError<CBID_OBJECT_COLOUR, ObjectSpec>,
 		.make = [](uint32_t tile, uint8_t owner, uint32_t id, WaterClass water, uint32_t random) noexcept -> void { MakeObject(TileIndex(tile), Owner(owner), ObjectID(id), water, random); },
 		.delete_object = [](Object *o) noexcept -> void { delete o; },
-		.trigger = [](Object *o, ObjectAnimationTrigger trigger, const ObjectSpec *spec) noexcept -> void { TriggerObjectAnimation(o, trigger, spec); },
-		.trigger_tile = [](Object *o, uint32_t tile, const ObjectSpec *spec) noexcept -> void { TriggerObjectTileAnimation(o, TileIndex(tile), ObjectAnimationTrigger::TileLoop, spec); },
+		.query = &GetRustObjectQueryServices(),
 		.slope_callback = [](const ObjectSpec *spec, uint32_t tile, Slope slope, uint32_t offset, uint8_t view) noexcept -> OpenTTDObjectSlopeResult { OpenTTDObjectSlopeResult r{}; r.callback = GetObjectCallback(CBID_OBJECT_LAND_SLOPE_CHECK, slope, offset, spec, nullptr, TileIndex(tile), r.registers, view); if (r.callback != CALLBACK_FAILED) r.version = spec->grf_prop.grffile->grf_version; return r; },
 		.slope_error = RustLocationCallbackError<ObjectSpec, ObjectSpec, OpenTTDObjectSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
 		.buildable = [](OpenTTDCommandCost *out, uint32_t tile, int32_t *z) noexcept -> void { *reinterpret_cast<CommandCost *>(out) = CheckBuildableTile(TileIndex(tile), {}, *z, false, false); },
@@ -1155,5 +1154,6 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDObjectServices.hpp"
-bool CheckAbi_object_cmd() { return AbiServicesComplete(GetRustObjectServices()); }
+#include "abi-visit-OpenTTDObjectQueryServices.hpp"
+bool CheckAbi_object_cmd() { return AbiServicesComplete(GetRustObjectServices()) && AbiServicesComplete(*GetRustObjectServices().query); }
 #endif
