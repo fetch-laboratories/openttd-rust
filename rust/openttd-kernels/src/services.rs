@@ -10,6 +10,10 @@
 #![allow(unsafe_code, clippy::cast_possible_truncation)]
 use std::ffi::c_void;
 
+/// Native `RoadTramType : bool`; true denotes the tram mask.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct RoadTramType(pub bool);
 /// Native `ClearGround` representation; every byte pattern is retained.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -65,6 +69,10 @@ pub const TILE_HEIGHT: u32 = 8;
 pub struct CommandCost {
     _private: [u8; 0],
 }
+/// Native `ExpensesType : uint8_t` carrier.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct ExpenseType(pub u8);
 /// Copied immutable command-result operations. Every input/output denotes a live
 /// native object for this call; C++ owns construction, storage and destruction.
 /// Moves and additions use the original native implementation without snapshots.
@@ -91,6 +99,8 @@ pub struct CommandCostServices {
     pub error_message: extern "C" fn(*const CommandCost) -> u32,
     /// Query native `GetCost()`.
     pub money: extern "C" fn(*const CommandCost) -> i64,
+    /// Original expense category; read only for a nonzero successful execution.
+    pub expense: extern "C" fn(*const CommandCost) -> ExpenseType,
     /// Native `MakeError`, keeping owner and encoded message.
     pub make_error: unsafe extern "C" fn(*mut CommandCost, u32),
 }
@@ -102,15 +112,19 @@ pub struct CommandCostServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandServices {
-    /// Native depot pool capacity.
-    pub depot_available: extern "C" fn() -> bool,
-    /// Allocate a native depot at a tile.
-    pub new_depot: extern "C" fn(u32) -> u16,
-    /// Assign the native default depot name.
-    pub depot_name: extern "C" fn(u16),
-    /// Delete the depot identified by its tile.
-    pub delete_depot: extern "C" fn(u32),
-    /// Refresh construction infrastructure windows.
+    /// Enter native command nesting and report whether this entry is top-level.
+    pub enter: extern "C" fn() -> bool,
+    /// Leave exactly one command nesting level.
+    pub leave: extern "C" fn(),
+    /// Canonical native finance owner resolution and presentation leaves.
+    pub finance: &'static crate::company::FinanceServices,
+    /// Clear native command-local object scratch at the original top level.
+    pub clear_object_areas: extern "C" fn(),
+    /// Current infinite-money difficulty setting.
+    pub infinite_money: extern "C" fn() -> bool,
+    /// Native error storage and local encoded currency formatting only.
+    pub money_error: unsafe extern "C" fn(*mut CommandCost, i64),
+    /// Canonical infrastructure window invalidation.
     pub infrastructure_dirty: extern "C" fn(u8),
     /// Original `CMD_LANDSCAPE_CLEAR`, with actual `DoCommandFlags` width.
     pub landscape_clear: extern "C" fn(*mut CommandCost, u32, u16),
@@ -124,6 +138,8 @@ pub struct CommandServices {
     pub no_train: unsafe extern "C" fn(*mut CommandCost, u32, u8),
     /// Original `TunnelBridgeIsFree`, with the source optional ignored train.
     pub wormhole_free: unsafe extern "C" fn(*mut CommandCost, u32, u32, *const Train),
+    /// `CheckAllowRemoveRoad`, shared by road/station command owners.
+    pub allow_remove_road: unsafe extern "C" fn(*mut CommandCost, u32, u8, u8, u8, u16, bool),
 }
 
 /// Opaque native town shell. Its address identifies the shell, not the Rust owner.
@@ -256,19 +272,17 @@ pub struct EnvironmentServices {
     pub freeform_edges: extern "C" fn() -> bool,
 }
 
-/// Native leaves used by the shared Rust clear-square orchestration.
+/// Typed native leaves used by the complete shared clear-square policy.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct ClearSquareServices {
-    /// Whether the tile type has an animation handler.
+    /// Original tile procedure animation capability.
     pub may_animate: extern "C" fn(u32) -> bool,
-    /// Remove animation, preserving the source immediate/deferred mode.
+    /// Original animated-tile erasure, including immediate erasure mode.
     pub delete_animated: extern "C" fn(u32, bool),
-    /// Current docking membership bit.
+    /// Original docking marker before map replacement.
     pub docking: extern "C" fn(u32) -> bool,
-    /// Recompute affected station docking membership after the map write.
-    pub remove_docking: extern "C" fn(u32),
-    /// Current generation mode, read at the map write.
+    /// Original generation setting at map replacement.
     pub generating_world: extern "C" fn() -> bool,
 }
 
@@ -301,8 +315,10 @@ pub struct Services {
     pub calendar_year: extern "C" fn() -> i32,
     /// `DoClearSquare`.
     pub clear_square: extern "C" fn(u32),
-    /// Shared clear-square native leaves; Rust callers use `ground::clear_square`.
+    /// Native leaves for direct shared Rust clear-square control.
     pub clear_square_services: ClearSquareServices,
+    /// Original native uncached nearest-town spatial lookup.
+    pub calc_closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
     /// Original native nearest-town spatial lookup; the result may be null.
     pub closest_town: extern "C" fn(u32, u32) -> *const TownHandle,
     /// Whether this company pool ID is live.
@@ -383,6 +399,12 @@ pub struct Services {
     pub random: extern "C" fn(*mut c_void) -> u32,
     /// Original `GetAnyRoadBits`, parameterized by `RoadTramType`.
     pub road_bits: extern "C" fn(u32, u8, bool) -> u8,
+    /// Native `GetRoadTramType`, preserving unclassified road mask behavior.
+    pub road_tram_type: extern "C" fn(u8) -> RoadTramType,
+    /// Native road type classification (the road mask, including unclassified types).
+    pub road_type_is_road: extern "C" fn(u8) -> bool,
+    /// Only the road type's construction price multiplier.
+    pub road_cost_multiplier: extern "C" fn(u8) -> u16,
     /// Original native `road_depot_direction` map observation.
     pub road_depot_direction: extern "C" fn(u32) -> u8,
     /// Original native `road_owner` map observation.
@@ -401,6 +423,35 @@ pub struct Services {
     pub snow_line: extern "C" fn() -> u8,
     /// `GetStationIndex`.
     pub station_index: extern "C" fn(u32) -> u16,
+    // Registry: station construction (#267).
+    /// Canonical shared `docking_tile` service.
+    pub station_commands: extern "C" fn() -> *const crate::station_cmd::CommandServicesTable,
+    /// Original docking flag.
+    pub docking_tile: extern "C" fn(u32) -> bool,
+    /// Canonical shared `station_gfx` service.
+    pub station_gfx: extern "C" fn(u32) -> u8,
+    /// Canonical shared `station_serve_neutral` service.
+    pub station_serve_neutral: extern "C" fn() -> bool,
+    /// Canonical shared `station_type` service.
+    pub station_type: extern "C" fn(u32) -> StationType,
+    /// Canonical shared `tile_animation_add` service.
+    pub tile_animation_add: extern "C" fn(u32, bool),
+    /// Canonical shared `tile_animation_delete` service.
+    pub tile_animation_delete: extern "C" fn(u32),
+    /// Canonical shared `tile_animation_set_frame` service.
+    pub tile_animation_set_frame: extern "C" fn(u32, u8),
+    /// Canonical shared `tile_change_owner` service.
+    pub tile_change_owner: extern "C" fn(u32, u8, u8),
+    /// Canonical shared `town_next_id` service.
+    pub town_next_id: extern "C" fn(u32) -> u32,
+    /// Canonical shared `town_owner_by_id` service.
+    pub town_owner_by_id: extern "C" fn(u32) -> *mut crate::town::State,
+    /// Canonical shared `utf8_length` service.
+    pub utf8_length: extern "C" fn(*const u8, usize) -> usize,
+    /// Canonical shared `vehicle_next` service.
+    pub vehicle_next: extern "C" fn(u32) -> Option<crate::vehicle::VehicleRef>,
+    /// Whether a water tile is the middle of a lock.
+    pub water_middle_lock: extern "C" fn(u32) -> bool,
     /// Original native `tile_height` map observation.
     pub tile_height: extern "C" fn(u32) -> u32,
     /// Original native `tile_max_z` map observation.
@@ -505,7 +556,6 @@ pub fn fixture(
         0
     }
     extern "C" fn tile(_: u32) {}
-    extern "C" fn animated(_: u32, _: bool) {}
     extern "C" fn train(_: *const Train) {}
     extern "C" fn train_path(_: *mut Train, _: bool, _: bool) -> bool {
         false
@@ -560,11 +610,11 @@ pub fn fixture(
         clear_square: tile,
         clear_square_services: ClearSquareServices {
             may_animate: flag,
-            delete_animated: animated,
+            delete_animated: unused_clear_animation,
             docking: flag,
-            remove_docking: tile,
             generating_world: flag0,
         },
+        calc_closest_town: unused_closest_town,
         closest_town: unused_closest_town,
         company_valid: unused_company_valid,
         context,
@@ -605,6 +655,9 @@ pub fn fixture(
         plane_speed: zero_byte,
         random,
         road_bits: bits,
+        road_tram_type: unused_road_tram_type,
+        road_type_is_road: unused_company_valid,
+        road_cost_multiplier: unused_road_cost_multiplier,
         road_depot_direction: byte,
         road_owner: byte,
         road_type: byte,
@@ -614,6 +667,20 @@ pub fn fixture(
         slope,
         snow_line: zero_byte,
         station_index: short,
+        station_commands: fixture_station_commands,
+        docking_tile: flag,
+        station_gfx: byte,
+        station_serve_neutral: flag0,
+        station_type: fixture_station_type,
+        tile_animation_add: unused_animation_add,
+        tile_animation_delete: tile,
+        tile_animation_set_frame: zone,
+        tile_change_owner: unused_tile_change_owner,
+        town_next_id: word,
+        town_owner_by_id: unused_town_owner_by_id,
+        utf8_length: unused_utf8_length,
+        vehicle_next: unused_vehicle_next,
+        water_middle_lock: flag,
         tile_height: word,
         tile_max_z: height,
         tile_owner: byte,
@@ -1010,7 +1077,97 @@ pub struct RailMapServices {
     pub wormhole_reserved: extern "C" fn(u32) -> bool,
 }
 
+/// A live native `CommandCost` borrowed for the synchronous entry.
+#[derive(Clone, Copy)]
+pub(crate) struct Cost<'a>(
+    pub(crate) *mut CommandCost,
+    pub(crate) &'a CommandCostServices,
+);
+impl Cost<'_> {
+    pub(crate) fn zero(self) {
+        (self.1.zero)(self.0);
+    }
+    pub(crate) fn error(self, message: u32) {
+        (self.1.error)(self.0, message);
+    }
+    pub(crate) fn set(self, money: i64) {
+        (self.1.expense_money)(self.0, 0, money);
+    }
+    pub(crate) fn add_money(self, money: i64) {
+        (self.1.amount)(self.0, money);
+    }
+    /// `AddCost(CommandCost &&)`.
+    pub(crate) fn add(self, other: Self) {
+        (self.1.add)(self.0, other.0);
+    }
+    pub(crate) fn take(self, other: Self) {
+        (self.1.move_cost)(self.0, other.0);
+    }
+    pub(crate) fn make_error(self, message: u32) {
+        unsafe { (self.1.make_error)(self.0, message) };
+    }
+    pub(crate) fn ok(self) -> bool {
+        (self.1.success)(self.0)
+    }
+    pub(crate) fn message(self) -> u32 {
+        (self.1.error_message)(self.0)
+    }
+    pub(crate) fn money(self) -> i64 {
+        (self.1.money)(self.0)
+    }
+}
+
+/// Native station tile kind (uint8).
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct StationType(pub u8);
+#[cfg(test)]
+extern "C" fn fixture_station_type(_: u32) -> StationType {
+    panic!("unused station type")
+}
+
+#[cfg(test)]
+extern "C" fn unused_animation_add(_: u32, _: bool) {
+    panic!("unused animation add");
+}
+#[cfg(test)]
+extern "C" fn unused_tile_change_owner(_: u32, _: u8, _: u8) {
+    panic!("unused tile ownership");
+}
+#[cfg(test)]
+extern "C" fn unused_town_owner_by_id(_: u32) -> *mut crate::town::State {
+    panic!("unused town lookup");
+}
+#[cfg(test)]
+extern "C" fn unused_utf8_length(_: *const u8, _: usize) -> usize {
+    panic!("unused text length");
+}
+#[cfg(test)]
+extern "C" fn unused_vehicle_next(_: u32) -> Option<crate::vehicle::VehicleRef> {
+    panic!("unused vehicle iteration");
+}
+
 #[cfg(test)]
 extern "C" fn fixture_water_services() -> *const crate::water::WaterServices {
     panic!("unexpected water service access");
+}
+
+#[cfg(test)]
+extern "C" fn fixture_station_commands() -> *const crate::station_cmd::CommandServicesTable {
+    panic!("unused station command table");
+}
+
+#[cfg(test)]
+extern "C" fn unused_road_cost_multiplier(_: u8) -> u16 {
+    panic!("unused road cost multiplier")
+}
+
+#[cfg(test)]
+extern "C" fn unused_road_tram_type(_: u8) -> RoadTramType {
+    panic!("unused road tram type")
+}
+
+#[cfg(test)]
+extern "C" fn unused_clear_animation(_: u32, _: bool) {
+    panic!("unused clear animation")
 }

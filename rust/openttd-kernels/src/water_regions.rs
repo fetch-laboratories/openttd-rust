@@ -37,14 +37,11 @@ pub struct Leaves {
     pub debug: unsafe extern "C" fn(u8, i32, i32),
 }
 
-/// Copied handles to the canonical native-owned cache and immutable leaves.
-/// The game-state mutex serializes map replacement and all cache operations.
+/// Current native-owned region allocation and its immutable leaves.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Context {
-    /// Live map-lifetime Rust cache; never borrowed across native callbacks.
     pub owner: *mut Regions,
-    /// Immutable map-query/debug table for this cache.
     pub leaves: *const Leaves,
 }
 

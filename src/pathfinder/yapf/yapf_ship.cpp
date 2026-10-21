@@ -49,7 +49,7 @@ static OpenTTDShipTile ShipTile(const void *context, uint32_t tile, uint8_t cost
 	uint count = 0;
 	if (docking) count = std::ranges::count_if(VehiclesOnTile(t), [](const Vehicle *other) { return other->type == VEH_SHIP && !other->vehstatus.Test(VehState::Hidden); });
 	return {count, static_cast<uint8_t>(docking), static_cast<uint8_t>(GetEffectiveWaterClass(t) == WaterClass::Sea),
-		static_cast<uint8_t>(IsTileType(t, MP_WATER) && RustWaterTileType(tile) == WaterTileType::Lock && RustLockPart(tile) == LockPart::Middle),
+		static_cast<uint8_t>(GetRustSharedServices().water_middle_lock(tile)),
 		0};
 }
 static OpenTTDWaterPatch ShipPatch(uint32_t tile) noexcept

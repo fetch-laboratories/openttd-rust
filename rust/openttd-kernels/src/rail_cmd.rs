@@ -21,7 +21,7 @@
     clippy::fn_params_excessive_bools
 )]
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Map, RailMapServices, Services,
+    CommandCost, CommandCostServices, CommandServices, Cost, Map, RailMapServices, Services,
 };
 pub use crate::services::{Foundation, Train};
 use crate::witness as w;
@@ -153,7 +153,6 @@ pub struct RailCommandServices {
     /// `RailConvertCost`.
     pub rail_convert_cost: extern "C" fn(u8, u8) -> i64,
     /// `RoadBuildCost`.
-    pub road_build_cost: extern "C" fn(u8) -> i64,
     /// `construction.crossing_with_competitor`.
     pub crossing_with_competitor: extern "C" fn() -> bool,
     /// `vehicle.disable_elrails`.
@@ -198,6 +197,7 @@ pub struct RailCommandServices {
     pub road_infrastructure: extern "C" fn(u8, u8, u32),
     /// `infrastructure.signal += delta` with uint32 wrap.
     pub signal_infrastructure: extern "C" fn(u8, u32),
+    /// `DirtyCompanyInfrastructureWindows`.
     /// `GetTrainForReservation`.
     pub reserving_train: extern "C" fn(u32, u8) -> *mut Train,
     /// Train fields read at the signal re-reservation branch.
@@ -214,6 +214,14 @@ pub struct RailCommandServices {
     pub make_crossing: extern "C" fn(u32, u8, u8, u8, u8, u8, u8, u8, u16),
     /// `MakeRoadNormal(tile, bits, road_rt, tram_rt, town, road_owner, tram_owner)`.
     pub make_road: extern "C" fn(u32, CrossingRoad),
+    /// `Depot::CanAllocateItem`.
+    pub depot_available: extern "C" fn() -> bool,
+    /// `new Depot(tile)`, returning its ID.
+    pub new_depot: extern "C" fn(u32) -> u16,
+    /// `MakeDefaultName(Depot::Get(id))`.
+    pub depot_name: extern "C" fn(u16),
+    /// `delete Depot::GetByTile(tile)`.
+    pub delete_depot: extern "C" fn(u32),
     /// `InvalidateWindowData` of the depot and build-vehicle windows.
     pub depot_windows: extern "C" fn(u32),
     /// `DeleteNewGRFInspectWindow(GSF_RAILTYPES, tile)`.
@@ -221,7 +229,6 @@ pub struct RailCommandServices {
     /// `MakeShore`, keeping the docking flag as the original does.
     pub make_shore: extern "C" fn(u32),
     /// `IsPossibleDockingTile` then `CheckForDockingTile`.
-    pub docking_check: extern "C" fn(u32),
     /// Begin `TileIterator::Create(start, end, diagonal)` in the frame.
     pub area_begin: unsafe extern "C" fn(*mut ConvertFrame, u32, u32, bool),
     /// Current iterator tile (`INVALID_TILE` at end).
@@ -237,7 +244,6 @@ pub struct RailCommandServices {
 }
 
 const INVALID_STRING: u32 = 0xFFFF;
-const CONSTRUCTION: u8 = 0;
 const EXECUTE: u16 = 1 << 0;
 const AUTO: u16 = 1 << 1;
 const BANKRUPT: u16 = 1 << 5;
@@ -402,43 +408,6 @@ fn negate(money: i64) -> i64 {
 }
 fn price(index: usize) -> i64 {
     crate::company::price(index)
-}
-
-/// A live native `CommandCost` borrowed for the synchronous entry.
-#[derive(Clone, Copy)]
-struct Cost<'a>(*mut CommandCost, &'a CommandCostServices);
-impl Cost<'_> {
-    fn zero(self) {
-        (self.1.zero)(self.0);
-    }
-    fn error(self, message: u32) {
-        (self.1.error)(self.0, message);
-    }
-    fn set(self, money: i64) {
-        (self.1.expense_money)(self.0, CONSTRUCTION, money);
-    }
-    fn add_money(self, money: i64) {
-        (self.1.amount)(self.0, money);
-    }
-    /// `AddCost(CommandCost &&)`.
-    fn add(self, other: Self) {
-        (self.1.add)(self.0, other.0);
-    }
-    fn take(self, other: Self) {
-        (self.1.move_cost)(self.0, other.0);
-    }
-    fn make_error(self, message: u32) {
-        unsafe { (self.1.make_error)(self.0, message) };
-    }
-    fn ok(self) -> bool {
-        (self.1.success)(self.0)
-    }
-    fn message(self) -> u32 {
-        (self.1.error_message)(self.0)
-    }
-    fn money(self) -> i64 {
-        (self.1.money)(self.0)
-    }
 }
 
 struct Ctx<'a> {
@@ -756,7 +725,9 @@ impl<'a> Ctx<'a> {
                         tile,
                         crate::services::RailGroundType(GROUND_HALF_WATER),
                     );
-                    (self.s.docking_check)(tile);
+                    let stations = (self.shared.station_commands)();
+                    // SAFETY: borrowed process-lifetime services; no owner borrow spans docking.
+                    unsafe { crate::station_cmd::check_possible_docking(stations, tile) };
                 }
                 self.rail_infra(self.current(), railtype, 1);
                 (self.command.infrastructure_dirty)(self.current());
@@ -798,7 +769,8 @@ impl<'a> Ctx<'a> {
         };
         if new_road > 0 {
             cost.add_money(
-                (self.s.road_build_cost)(road.road_type).saturating_mul(i64::from(new_road)),
+                crate::road_cost::build_cost(self.shared, road.road_type)
+                    .saturating_mul(i64::from(new_road)),
             );
         }
         let new_tram = if road.tram_bits == 0 {
@@ -808,7 +780,8 @@ impl<'a> Ctx<'a> {
         };
         if new_tram > 0 {
             cost.add_money(
-                (self.s.road_build_cost)(road.tram_type).saturating_mul(i64::from(new_tram)),
+                crate::road_cost::build_cost(self.shared, road.tram_type)
+                    .saturating_mul(i64::from(new_tram)),
             );
         }
         if flags & EXECUTE != 0 {
@@ -958,9 +931,7 @@ impl<'a> Ctx<'a> {
                             w::hit(w::RAIL_CMD_REMOVE_SHORE);
                             (self.s.make_shore)(tile);
                         } else {
-                            unsafe {
-                                crate::ground::clear_square(tile, self.shared);
-                            }
+                            crate::ground::clear_square(tile, self.shared);
                         }
                         (self.s.close_inspect)(tile);
                     } else {
@@ -1170,7 +1141,7 @@ impl<'a> Ctx<'a> {
             if (self.shared.bridge_above)(tile) {
                 return cost.error(self.s.strings.demolish_bridge);
             }
-            if !(self.command.depot_available)() {
+            if !(self.s.depot_available)() {
                 return cost.error(INVALID_STRING);
             }
         }
@@ -1180,9 +1151,9 @@ impl<'a> Ctx<'a> {
                 (self.rail.set_depot_exit)(tile, dir);
             } else {
                 w::hit(w::RAIL_CMD_DEPOT_BUILD);
-                let depot = (self.command.new_depot)(tile);
+                let depot = (self.s.new_depot)(tile);
                 (self.rail.make_rail_depot)(tile, self.current(), depot, dir, railtype);
-                (self.command.depot_name)(depot);
+                (self.s.depot_name)(depot);
                 self.rail_infra(self.current(), railtype, 1);
                 (self.command.infrastructure_dirty)(self.current());
             }
@@ -2002,10 +1973,8 @@ impl<'a> Ctx<'a> {
             }
             self.rail_infra(owner, (self.rail.rail_type)(tile).0, 1_u32.wrapping_neg());
             (self.command.infrastructure_dirty)(owner);
-            (self.command.delete_depot)(tile);
-            unsafe {
-                crate::ground::clear_square(tile, self.shared);
-            }
+            (self.s.delete_depot)(tile);
+            crate::ground::clear_square(tile, self.shared);
             self.add_side(tile, dir, owner);
             (self.s.layout_changed)(tile, dir & 1);
             if !v.is_null() {
@@ -2055,9 +2024,7 @@ impl<'a> Ctx<'a> {
                     }
                     if flags & EXECUTE != 0 {
                         w::hit(w::RAIL_CMD_CLEAR_WATER);
-                        unsafe {
-                            crate::ground::clear_square(tile, self.shared);
-                        }
+                        crate::ground::clear_square(tile, self.shared);
                     }
                     cost.add_money(price(PR_CLEAR_WATER));
                 }

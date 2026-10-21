@@ -3144,7 +3144,6 @@ static CommandCost CheckBuildAbove_Track(TileIndex tile, DoCommandFlags flags, A
  * counters and every CommandCost stay native; the original bodies remain
  * under #ifndef WITH_RUST above. */
 #include "rust/rail_command_ffi.h"
-#include "rust/services_depot.h"
 #include "rust/services_water.h"
 #include "rust/command_cost_services.h"
 #include "rust/company_services.h"
@@ -3217,14 +3216,9 @@ static void RailMakeCrossing(uint32_t tile, uint8_t road, uint8_t tram, uint8_t 
 }
 static void RailMakeShore(uint32_t tile) noexcept
 {
-	TileIndex t{tile};
 	bool docking = OpenTTDIsDockingTile(tile);
 	OpenTTDMakeShore(tile);
-	SetDockingTile(t, docking);
-}
-static void RailDockingCheck(uint32_t tile) noexcept
-{
-	if (RustPossibleDocking(tile)) RustCheckDocking(tile);
+	OpenTTDSetDockingTile(tile, docking);
 }
 static void RailDepotWindows(uint32_t tile) noexcept
 {
@@ -3282,7 +3276,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.rail_build_cost = [](uint8_t rt) noexcept { return RailBuildCost(static_cast<RailType>(rt)).base(); },
 		.rail_clear_cost = [](uint8_t rt) noexcept { return RailClearCost(static_cast<RailType>(rt)).base(); },
 		.rail_convert_cost = [](uint8_t from, uint8_t to) noexcept { return RailConvertCost(static_cast<RailType>(from), static_cast<RailType>(to)).base(); },
-		.road_build_cost = [](uint8_t rt) noexcept { return RoadBuildCost(static_cast<RoadType>(rt)).base(); },
 		.crossing_with_competitor = RustCrossingWithCompetitor,
 		.disable_elrails = RustDisableElrails,
 		.rail_foundation = OpenTTDEnumMapQuery<RustRailFoundation, Slope, TrackBits>,
@@ -3306,10 +3299,13 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.crossing_removed = [](uint32_t tile, uint8_t axis) noexcept { UpdateAdjacentLevelCrossingTilesOnLevelCrossingRemoval(TileIndex{tile}, static_cast<Axis>(axis)); },
 		.make_crossing = RailMakeCrossing,
 		.make_road = RailMakeRoad,
+		.depot_available = []() noexcept { return Depot::CanAllocateItem(); },
+		.new_depot = [](uint32_t tile) noexcept { return (new Depot(TileIndex{tile}))->index.base(); },
+		.depot_name = [](uint16_t id) noexcept { MakeDefaultName(Depot::Get(DepotID(id))); },
+		.delete_depot = [](uint32_t tile) noexcept { delete Depot::GetByTile(TileIndex{tile}); },
 		.depot_windows = RailDepotWindows,
 		.close_inspect = [](uint32_t tile) noexcept { DeleteNewGRFInspectWindow(GSF_RAILTYPES, tile); },
 		.make_shore = RailMakeShore,
-		.docking_check = RailDockingCheck,
 		.area_begin = [](OpenTTDRailConvertFrame *frame, uint32_t start, uint32_t end, bool diagonal) noexcept { frame->iter = TileIterator::Create(TileIndex{start}, TileIndex{end}, diagonal); },
 		.area_tile = [](OpenTTDRailConvertFrame *frame) noexcept { return (**frame->iter).base(); },
 		.area_next = [](OpenTTDRailConvertFrame *frame) noexcept { ++(*frame->iter); },

@@ -329,7 +329,7 @@ pub struct LoadingWait {
 #[repr(C)]
 pub struct OrderDestination {
     pub(crate) destination: u16,
-    pub(crate) is_station: bool,
+    pub(crate) kind: crate::vehicle::OrderType,
 }
 #[repr(C)]
 pub struct TruncatedSource {
@@ -348,7 +348,7 @@ pub struct World {
     pub(crate) owner: extern "C" fn(*mut BaseStation) -> *mut Service,
     pub(crate) pool_size: extern "C" fn() -> usize,
     pub(crate) tick_counter: extern "C" fn() -> u64,
-    pub(crate) editor: extern "C" fn() -> bool,
+    pub(crate) environment: crate::services::EnvironmentServices,
     pub(crate) facilities: extern "C" fn(*mut BaseStation) -> u8,
     pub(crate) in_use: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) is_station: extern "C" fn(*mut BaseStation) -> bool,
@@ -372,7 +372,7 @@ pub struct World {
     pub(crate) append_packet:
         extern "C" fn(*mut BaseStation, u8, u32, crate::cargo_storage::Source),
     pub(crate) update_supply: extern "C" fn(*mut BaseStation, u8, u32),
-    pub(crate) station_list_invalidation: extern "C" fn(*mut BaseStation),
+    pub(crate) station_list_invalidation: extern "C" fn(*mut BaseStation, i32),
     pub(crate) new_cargo_animation: extern "C" fn(*mut BaseStation, u8),
     pub(crate) waiting_redraw: extern "C" fn(*mut BaseStation),
     pub(crate) rating_callback: extern "C" fn(*mut BaseStation, u8, u32, u32) -> u16,
@@ -752,7 +752,7 @@ unsafe fn admit(
     (w.append_packet)(st, cargo, amount, source);
     (w.update_supply)(st, cargo, amount);
     if unsafe { (*ge).status } & 2 == 0 {
-        (w.station_list_invalidation)(st);
+        (w.station_list_invalidation)(st, 0);
         unsafe {
             status(state, cargo, 1, true);
         }
@@ -958,7 +958,7 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links) {
                         let mut found_to = false;
                         for order in 0..(l.order_count)(list) {
                             let observed = (l.order_destination)(list, order);
-                            if !observed.is_station {
+                            if !matches!(observed.kind.0, 1 | 8) {
                                 continue;
                             }
                             let dest = observed.destination;
@@ -1056,7 +1056,7 @@ pub unsafe extern "C" fn openttd_rust_station_stale(
 pub unsafe extern "C" fn openttd_rust_station_tick(world: *const World, links: *const Links) {
     let w = unsafe { &*world };
     let l = unsafe { &*links };
-    if u32::from((w.editor)()) != 0 {
+    if u32::from((w.environment.editor)()) != 0 {
         return;
     }
     let mut id = 0_usize;

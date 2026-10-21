@@ -11,11 +11,14 @@
 #include "service_defaults.hpp"
 #include "command_cost_ffi.h"
 struct Train;
+struct OpenTTDCompanyFinanceServices;
 struct OpenTTDCommandServices {
-	bool (*depot_available)() noexcept OPENTTD_SERVICE_DEFAULT(depot_available);
-	uint16_t (*new_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_depot);
-	void (*depot_name)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_name);
-	void (*delete_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_depot);
+	bool (*enter)() noexcept OPENTTD_SERVICE_DEFAULT(enter);
+	void (*leave)() noexcept OPENTTD_SERVICE_DEFAULT(leave);
+	const OpenTTDCompanyFinanceServices *finance;
+	void (*clear_object_areas)() noexcept OPENTTD_SERVICE_DEFAULT(clear_object_areas);
+	bool (*infinite_money)() noexcept OPENTTD_SERVICE_DEFAULT(infinite_money);
+	void (*money_error)(OpenTTDCommandCost *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(money_error);
 	void (*infrastructure_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure_dirty);
 	void (*landscape_clear)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(landscape_clear);
 	void (*tile_ownership)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_ownership);
@@ -23,6 +26,13 @@ struct OpenTTDCommandServices {
 	void (*no_vehicle)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(no_vehicle);
 	void (*no_train)(OpenTTDCommandCost *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(no_train);
 	void (*wormhole_free)(OpenTTDCommandCost *, uint32_t, uint32_t, const Train *) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_free);
+	void (*allow_remove_road)(OpenTTDCommandCost *, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(allow_remove_road);
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
+extern "C" {
+void openttd_rust_command_before(const OpenTTDCommandServices *, bool, bool);
+void openttd_rust_command_after(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint16_t, bool, bool);
+void openttd_rust_command_subtract_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, const OpenTTDCommandCost *);
+bool openttd_rust_command_check_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *);
+}
 #endif /* RUST_COMMAND_SERVICES_FFI_H */

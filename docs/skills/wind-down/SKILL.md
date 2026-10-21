@@ -1,6 +1,6 @@
 ---
 name: wind-down
-description: Inspect root's live session and the project, then write a tailored wind-down message for the user to paste into root's thread.
+description: Inspect root's live session and the project, then write a tailored wind-down message and send it directly to root's thread with T3 Code tools.
 disable-model-invocation: true
 ---
 
@@ -8,11 +8,13 @@ disable-model-invocation: true
 
 Root is developing OpenTTD-Rust in /home/fetch/projects/openttd-rust. Inspect
 the project and root's live session, then write a message tailored to what is
-in flight right now. The user pastes it into root's thread.
+in flight right now, then send it to root's thread yourself with the T3 Code
+`t3_thread_send` tool (step 5).
 
-Stay read-only. You only read: no commits, pushes, GitHub comments, CI
-requests, agent messages or process signals. Your output is the message plus
-a short note to the user.
+Stay read-only apart from that one send. Make no commits, pushes, GitHub
+comments, CI requests or process signals, and send no messages to other agents.
+Your output is the message, sent to root, plus a short note to the user that
+includes the text you sent.
 
 User input, if any: $ARGUMENTS
 This may be a trigger ("at 50% weekly usage") or scope ("only finish #218",
@@ -41,7 +43,15 @@ Removing worktrees and branches is for merged work only.
 
 ## 1. Read root's live session
 
-- Root's thread is the most recently modified
+- When root runs in T3 Code, load the T3 tools with ToolSearch
+  (`select:mcp__t3-code__t3_thread_list,mcp__t3-code__t3_thread_read,mcp__t3-code__t3_thread_send`).
+  `t3_thread_list` with `includeSubagents: true` shows root as the newest
+  top-level, unsettled codex `gpt-6.1-sol` thread started by the user. Its
+  subagents are the threads whose `parentThreadId` is root's id; `running`
+  status, or a recent `updatedAt`, marks the active ones. Read root's latest
+  messages with `t3_thread_read` (view `messages`, reading from near the end
+  of `itemCount`).
+- Otherwise, root's thread is the most recently modified
   `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` whose first real user message
   (after the AGENTS.md preamble) is `$start-development`. Subagent sessions sit
   beside it.
@@ -120,11 +130,22 @@ It needs to get across:
   each remaining draft and what blocks it; `rust-migration` CI state; and any
   decisions left for the user.
 
-After the code block, outside it, give the user at most 10 lines:
+## 5. Send it to root
 
-- the state you found, and the time you checked it, since root keeps working
-  until the message is pasted;
-- anything they should decide before sending it.
+Send the message text, without the code fence, with `t3_thread_send`: root's
+`threadId`, `mode: "auto"` (starts root if it is idle, steers it if it is
+mid-turn) and a stable `clientRequestId` such as `wind-down-YYYYMMDD-HHMM`, so
+a retry does not deliver it twice. Never use `create_threads` or
+`t3_thread_launch`; the message goes to root's existing thread. If the send
+fails, or root's thread is ambiguous, say so and print the message so the user
+can paste it. If the user's input asks for a review before sending, show the
+message and wait for their approval.
 
-When the user asks for changes, reprint the whole revised message so they can
-copy it in one piece.
+Then give the user at most 10 lines, followed by the sent message in a code
+block:
+
+- that it was sent (thread link `[title](t3-thread://v1/<threadId>)` and the
+  delivery status);
+- the state you found, and the time you checked it;
+- anything they may want to change. Send corrections to root as a short
+  follow-up with a new `clientRequestId`, not as a second full message.

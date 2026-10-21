@@ -113,9 +113,10 @@ struct OpenTTDLoadingStats {
 	uint8_t cargo;
 };
 using OpenTTDStationScope = void (*)(void *, void *) noexcept;
+enum OrderType : uint8_t;
 struct OpenTTDOrderDestination {
 	uint16_t destination;
-	bool is_station;
+	OrderType kind;
 };
 struct OpenTTDTruncatedSource {
 	uint32_t amount;
@@ -139,7 +140,7 @@ struct OpenTTDStationServices {
 	OpenTTDStationService * (*owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(owner);
 	size_t (*pool_size)() noexcept OPENTTD_SERVICE_DEFAULT(pool_size);
 	uint64_t (*tick_counter)() noexcept OPENTTD_SERVICE_DEFAULT(tick_counter);
-	bool (*editor)() noexcept OPENTTD_SERVICE_DEFAULT(editor);
+	OpenTTDEnvironmentServices environment;
 	uint8_t (*facilities)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(facilities);
 	bool (*in_use)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(in_use);
 	bool (*is_station)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
@@ -162,7 +163,7 @@ struct OpenTTDStationServices {
 	void (*watched_animation)(uint32_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(watched_animation);
 	void (*append_packet)(OpenTTDBaseStation *, uint8_t, uint32_t, OpenTTDCargoSource) noexcept OPENTTD_SERVICE_DEFAULT(append_packet);
 	void (*update_supply)(OpenTTDBaseStation *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(update_supply);
-	void (*station_list_invalidation)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_list_invalidation);
+	void (*station_list_invalidation)(OpenTTDBaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_list_invalidation);
 	void (*new_cargo_animation)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(new_cargo_animation);
 	void (*waiting_redraw)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_redraw);
 	uint16_t (*rating_callback)(OpenTTDBaseStation *, uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rating_callback);

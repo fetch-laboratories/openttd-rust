@@ -54,10 +54,7 @@ static const OpenTTDWaterLeaves _water_leaves{WaterTracks, WaterFollow, WaterAqu
 using WaterOwner = std::unique_ptr<OpenTTDWaterRegions, decltype(&openttd_rust_water_destroy)>;
 static WaterOwner _water_regions{nullptr, openttd_rust_water_destroy};
 
-OpenTTDWaterRegionContext GetRustWaterRegionContext() noexcept
-{
-	return {.owner = _water_regions.get(), .leaves = &_water_leaves};
-}
+OpenTTDWaterRegionContext GetRustWaterRegionContext() noexcept { return {_water_regions.get(), &_water_leaves}; }
 
 int CalculateWaterRegionPatchHash(const WaterRegionPatchDesc &patch)
 {

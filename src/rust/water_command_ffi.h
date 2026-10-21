@@ -9,6 +9,7 @@
 #ifndef RUST_WATER_COMMAND_FFI_H
 #define RUST_WATER_COMMAND_FFI_H
 #include "ground_ffi.h"
+struct OpenTTDRailCommandServices;
 enum class WaterTileType : uint8_t;
 enum class LockPart : uint8_t;
 enum class DepotPart : uint8_t;
@@ -27,6 +28,7 @@ struct OpenTTDWaterCommandServices {
 	const OpenTTDCommandCostServices *cost;
 	const OpenTTDCommandServices *command;
 	const OpenTTDWaterGroundServices *water;
+	const OpenTTDRailCommandServices *rail;
 	WaterTileType (*water_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_type);
 	LockPart (*lock_part)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(lock_part);
 	DiagDirection (*lock_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(lock_direction);
@@ -35,7 +37,6 @@ struct OpenTTDWaterCommandServices {
 	OpenTTDEnvironmentServices environment;
 	void (*make_depot)(uint32_t, uint8_t, uint16_t, DepotPart, Axis, WaterClass) noexcept OPENTTD_SERVICE_DEFAULT(make_depot);
 	void (*make_lock_tile)(uint32_t, uint8_t, LockPart, DiagDirection, WaterClass) noexcept OPENTTD_SERVICE_DEFAULT(make_lock_tile);
-	int32_t (*bridge_height_above)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_height_above);
 	void (*area_begin)(OpenTTDWaterArea *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(area_begin);
 	uint32_t (*area_tile)(OpenTTDWaterArea *) noexcept OPENTTD_SERVICE_DEFAULT(area_tile);
 	void (*area_next)(OpenTTDWaterArea *) noexcept OPENTTD_SERVICE_DEFAULT(area_next);

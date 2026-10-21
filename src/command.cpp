@@ -61,6 +61,10 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/command_services_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 
@@ -168,8 +172,12 @@ bool IsCommandAllowedWhilePaused(Commands cmd)
  */
 void CommandHelperBase::InternalDoBefore(bool top_level, bool test)
 {
+#ifdef WITH_RUST
+	openttd_rust_command_before(&GetRustCommandServices(), top_level, test);
+#else
 	if (top_level) _cleared_object_areas.clear();
 	if (test) SetTownRatingTestMode(true);
+#endif
 }
 
 /**
@@ -181,6 +189,9 @@ void CommandHelperBase::InternalDoBefore(bool top_level, bool test)
  */
 void CommandHelperBase::InternalDoAfter(CommandCost &res, DoCommandFlags flags, bool top_level, bool test)
 {
+#ifdef WITH_RUST
+	openttd_rust_command_after(&GetRustCommandServices(), &GetRustCommandCostServices(), reinterpret_cast<OpenTTDCommandCost *>(&res), flags.base(), top_level, test);
+#else
 	if (test) {
 		SetTownRatingTestMode(false);
 
@@ -193,6 +204,7 @@ void CommandHelperBase::InternalDoAfter(CommandCost &res, DoCommandFlags flags, 
 			SubtractMoneyFromCompany(res);
 		}
 	}
+#endif
 }
 
 /**

@@ -21,6 +21,8 @@ inline uint32_t RustCompanyRenewReserve(const Company *company) noexcept { retur
 inline uint16_t RustCompanyAircraftServiceInterval(CompanyID owner) noexcept { return Company::Get(owner)->settings.vehicle.servint_aircraft; }
 inline uint8_t RustCurrentCompanyID() noexcept { return OpenTTDCurrentCompany().base(); }
 inline void RustSetCurrentCompanyID(uint8_t company) noexcept { OpenTTDSetCurrentCompany(CompanyID(company)); }
+inline void RustInfrastructureDirty(uint8_t owner) noexcept { DirtyCompanyInfrastructureWindows(CompanyID(owner)); }
+inline bool RustIsLocalCompany() noexcept { return IsLocalCompany(); }
 inline uint8_t RustLocalCompanyID() noexcept { return _local_company.base(); }
 /** Shared pool traversal preserves the native ascending ID order. */
 inline Company *RustCompanyNext(uint32_t from) noexcept
@@ -46,5 +48,6 @@ inline void RustAddRailInfrastructure(uint8_t owner, uint8_t rt, uint32_t delta)
 inline void RustAddRoadInfrastructure(uint8_t owner, uint8_t rt, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.road[rt] += delta; }
 inline void RustAddSignalInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.signal += delta; }
 inline void RustAddWaterInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.water += delta; }
-inline void RustInfrastructureDirty(uint8_t owner) noexcept { DirtyCompanyInfrastructureWindows(CompanyID(owner)); }
+inline void RustStationStationInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.station += delta; }
+inline void RustStationAirportInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.airport += delta; }
 #endif /* RUST_COMPANY_SERVICES_H */

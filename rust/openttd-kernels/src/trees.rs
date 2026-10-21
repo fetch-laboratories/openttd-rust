@@ -1123,9 +1123,7 @@ pub unsafe extern "C" fn openttd_rust_trees_clear_tile(
         num = num.wrapping_mul(4);
     }
     if execute {
-        unsafe {
-            crate::ground::clear_square(tile, s);
-        }
+        crate::ground::clear_square(tile, s);
     }
     price.saturating_mul(i64::from(num))
 }
@@ -1217,7 +1215,12 @@ mod tests {
             tile_type: water_type,
             tree_ground: water,
             play_sound: sound,
-
+            clear_square_services: crate::services::ClearSquareServices {
+                may_animate: clear_flag,
+                delete_animated: clear_animation,
+                docking: clear_flag,
+                generating_world: clear_generation,
+            },
             ..crate::services::fixture(std::ptr::null_mut(), random, industry)
         }
     }
@@ -1296,16 +1299,11 @@ mod tests {
         MP_TREES
     }
     extern "C" fn water_services() -> *const crate::water::WaterServices {
-        thread_local! {
-            static CLEAR: crate::ground::ClearServices = crate::ground::ClearServices {
-                make_clear: clear_square,
-                ..crate::ground::clear_fixture()
-            };
-            static WATER: crate::water::WaterServices = crate::water::WaterServices {
-                clear: CLEAR.with(std::ptr::from_ref),
-                ..crate::water::fixture()
-            };
-        }
+        thread_local! { static WATER: crate::water::WaterServices = {
+            let mut water = crate::water::fixture();
+            water.clear = &raw const CLEAR;
+            water
+        }; }
         WATER.with(std::ptr::from_ref)
     }
     extern "C" fn ambient(_: u32) -> bool {
@@ -1334,6 +1332,41 @@ mod tests {
             w.abort_at == Some(w.progress)
         })
     }
+    extern "C" fn clear_flag(_: u32) -> bool {
+        false
+    }
+    extern "C" fn clear_generation() -> bool {
+        false
+    }
+    extern "C" fn clear_animation(_: u32, _: bool) {
+        panic!("unused animation");
+    }
+    extern "C" fn unused_clear1<A, R>(_: A) -> R {
+        panic!("unused clear leaf");
+    }
+    extern "C" fn unused_clear2<A, B, R>(_: A, _: B) -> R {
+        panic!("unused clear leaf");
+    }
+    extern "C" fn unused_clear3<A, B, C, R>(_: A, _: B, _: C) -> R {
+        panic!("unused clear leaf");
+    }
+    static CLEAR: crate::ground::ClearServices = crate::ground::ClearServices {
+        field_tile: unused_clear1,
+        density: unused_clear1,
+        counter: unused_clear1,
+        snow: unused_clear1,
+        surface: unused_clear1,
+        set_ground: unused_clear3,
+        set_density: unused_clear2,
+        set_counter: unused_clear2,
+        clear_snow: unused_clear1,
+        make_clear: clear_square,
+        fences: unused_clear1,
+        field: unused_clear1,
+        set_field: unused_clear2,
+        water_class: unused_clear1,
+        ambient: unused_clear1,
+    };
     extern "C" fn clear_square(_: u32, _: crate::services::ClearGroundType, _: u32) {
         log(Event::Write("clear_square"));
     }

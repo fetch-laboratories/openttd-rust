@@ -23,27 +23,34 @@ use crate::services::{
     RoadBits, RoadType, Roadside, Services, Slope, TrackBits, WaterClass,
 };
 
-/// Complete `DoClearSquare` control flow shared by every Rust caller.
-/// # Safety
-/// The game-state mutex protects the live map and cache. Only immutable service
-/// tables are borrowed; no map, animation or station borrow spans a native call.
-pub(crate) unsafe fn clear_square(tile: u32, s: &Services) {
-    let c = &s.clear_square_services;
-    if (c.may_animate)(tile) {
-        (c.delete_animated)(tile, true);
+/// Complete original `DoClearSquare` control. Native leaves cannot throw and no
+/// owner borrow survives their invocation; world access is serialized.
+pub(crate) fn clear_square(tile: u32, s: &Services) {
+    let leaves = &s.clear_square_services;
+    if (leaves.may_animate)(tile) {
+        (leaves.delete_animated)(tile, true);
     }
-    let remove = (c.docking)(tile);
-    let density = if (c.generating_world)() { 3 } else { 0 };
-    // SAFETY: Canonical immutable tables outlive the serialized call.
+    let remove = (leaves.docking)(tile);
+    // SAFETY: the native getter supplies immutable process-lifetime service tables.
     let water = unsafe { &*(s.water_services)() };
-    unsafe {
-        ((*water.clear).make_clear)(tile, ClearGroundType(0), density);
-    }
+    let clear = unsafe { &*water.clear };
+    (clear.make_clear)(
+        tile,
+        ClearGroundType(0),
+        if (leaves.generating_world)() { 3 } else { 0 },
+    );
     (s.mark_dirty)(tile);
     if remove {
-        (c.remove_docking)(tile);
+        // SAFETY: the native getter supplies the process-lifetime station table.
+        unsafe {
+            crate::station_cmd::openttd_rust_station_remove_docking_tile(
+                (s.station_commands)(),
+                tile,
+            );
+        }
     }
-    // SAFETY: No native map borrow survives any of the operations above.
+    // SAFETY: services reference the current serialized map; no borrow of region
+    // state crosses a callback. Source map dimensions are read at this operation.
     unsafe {
         crate::water::openttd_rust_clear_neighbour_flooding(
             tile,
@@ -55,12 +62,11 @@ pub(crate) unsafe fn clear_square(tile: u32, s: &Services) {
         water.invalidate_region(tile, s);
     }
 }
-/// Native facade for the complete clear-square owner.
+
 /// # Safety
-/// Live immutable shared table and original tile preconditions under the world mutex.
+/// The table and its native map services stay live under the game-state mutex.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_clear_square(tile: u32, s: *const Services) {
-    // SAFETY: Native callers uphold the shared synchronous map contract.
     unsafe {
         clear_square(tile, &*s);
     }
@@ -136,35 +142,6 @@ pub struct ClearServices {
     pub set_field: extern "C" fn(u32, u32),
     pub water_class: extern "C" fn(u32) -> WaterClass,
     pub ambient: extern "C" fn(u32),
-}
-#[cfg(test)]
-pub(crate) fn clear_fixture() -> ClearServices {
-    extern "C" fn unused1<A, R>(_: A) -> R {
-        panic!("unexpected clear fixture service");
-    }
-    extern "C" fn unused2<A, B, R>(_: A, _: B) -> R {
-        panic!("unexpected clear fixture service");
-    }
-    extern "C" fn unused3<A, B, C, R>(_: A, _: B, _: C) -> R {
-        panic!("unexpected clear fixture service");
-    }
-    ClearServices {
-        field_tile: unused1,
-        density: unused1,
-        counter: unused1,
-        snow: unused1,
-        surface: unused1,
-        set_ground: unused3,
-        set_density: unused2,
-        set_counter: unused2,
-        clear_snow: unused1,
-        make_clear: unused3,
-        fences: unused1,
-        field: unused1,
-        set_field: unused2,
-        water_class: unused1,
-        ambient: unused1,
-    }
 }
 #[repr(C)]
 pub struct RailSnowGround {

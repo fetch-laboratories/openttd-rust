@@ -100,6 +100,18 @@ with tempfile.TemporaryDirectory() as directory:
         assert ("orphan |" in result.stdout) == orphan == bool(result.returncode)
         target.write_text(before)
     caller.write_text("source = 'openttd_rust_dead();'")
+    shared_source = root / "src/rust/services.h"
+    shared_source.write_text(canonical + "\nvoid SharedCallback() noexcept {}\n")
+    shared_bindings = (
+        "\nOpenTTDFixtureServices shared_one{.a = SharedCallback,\n};\n"
+        "OpenTTDFixtureServices shared_two{.b = SharedCallback,\n};\n"
+    )
+    port.write_text(port.read_text() + shared_bindings)
+    assert check().returncode == 0, check().stdout
+    before = port.read_text()
+    port.write_text(before + "\nstatic void SharedCallback() noexcept {}\n")
+    assert "binding | SharedCallback | 2" in check().stdout
+    port.write_text(before)
     duplicate = "\nvoid Callback() noexcept {}\nOpenTTDFixtureServices one{.a = Callback,\n};\nOpenTTDFixtureServices two{.b = Callback,\n};\n"
     write = "\nvoid Write(uint8_t value) { _current_company = value; }\n"
     port.write_text(port.read_text() + duplicate + write)

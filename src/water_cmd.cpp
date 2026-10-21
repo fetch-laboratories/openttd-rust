@@ -44,6 +44,7 @@
 #include "table/strings.h"
 
 #ifdef WITH_RUST
+#include "rust/station_command_ffi.h"
 #include "rust/ground_services.h"
 #include "rust/services_landscape.h"
 #include "rust/environment_services.h"
@@ -52,9 +53,9 @@
 #include "rust/services_station.h"
 #include "rail_cmd.h"
 #include "rust/water_command_ffi.h"
+#include "rust/rail_command_ffi.h"
 #include "rust/command_services.h"
 #include "rust/company_services.h"
-#include "rust/services_depot.h"
 #include "rust/services_rail.h"
 #include <variant>
 #include <optional>
@@ -207,6 +208,9 @@ CommandCost CmdBuildShipDepot(DoCommandFlags flags, TileIndex tile, Axis axis)
 
 bool IsPossibleDockingTile(Tile t)
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_possible_docking(&GetRustStationCommandServices(), TileIndex(t).base());
+#else
 	assert(IsValidTile(t));
 	switch (GetTileType(t)) {
 		case MP_WATER:
@@ -220,6 +224,7 @@ bool IsPossibleDockingTile(Tile t)
 		default:
 			return false;
 	}
+#endif
 }
 
 /**
@@ -229,6 +234,9 @@ bool IsPossibleDockingTile(Tile t)
  */
 void CheckForDockingTile(TileIndex t)
 {
+#ifdef WITH_RUST
+	openttd_rust_station_check_docking(&GetRustStationCommandServices(), t.base());
+#else
 	for (DiagDirection d = DIAGDIR_BEGIN; d != DIAGDIR_END; d++) {
 		TileIndex tile = t + TileOffsByDiagDir(d);
 		if (!IsValidTile(tile)) continue;
@@ -249,6 +257,7 @@ void CheckForDockingTile(TileIndex t)
 			SetDockingTile(t, true);
 		}
 	}
+#endif
 }
 
 #ifdef WITH_RUST
@@ -278,6 +287,7 @@ const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
 {
 	static const OpenTTDWaterCommandServices services{
 		.shared = &GetRustSharedServices(), .cost = &GetRustCommandCostServices(), .command = &GetRustCommandServices(), .water = &GetRustWaterGroundServices(),
+		.rail = &GetRustRailCommandServices(),
 		.water_type = RustWaterTileType,
 		.lock_part = RustLockPart,
 		.lock_direction = [](uint32_t t) noexcept { return GetLockDirection(TileIndex{t}); },
@@ -286,7 +296,6 @@ const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
 		.environment = GetRustEnvironmentServices(),
 		.make_depot = [](uint32_t t, uint8_t o, uint16_t id, DepotPart part, Axis axis, WaterClass wc) noexcept { MakeShipDepot(TileIndex{t}, Owner{o}, DepotID{id}, part, axis, wc); },
 		.make_lock_tile = [](uint32_t t, uint8_t o, LockPart part, DiagDirection dir, WaterClass wc) noexcept { MakeLockTile(TileIndex{t}, Owner{o}, part, dir, wc); },
-		.bridge_height_above = [](uint32_t t) noexcept { return GetBridgeHeight(GetSouthernBridgeEnd(TileIndex{t})); },
 		.area_begin = [](OpenTTDWaterArea *a, uint32_t tile, uint32_t start, bool diagonal) noexcept {
 			if (diagonal) a->iter.emplace(std::in_place_type<DiagonalTileIterator>, TileIndex{tile}, TileIndex{start});
 			else a->iter.emplace(std::in_place_type<OrthogonalTileIterator>, TileIndex{tile}, TileIndex{start});
@@ -1158,8 +1167,6 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.make_sea = [](uint32_t t) noexcept { MakeSea(TileIndex{t}); },
 		.buoy_or_dock = [](uint32_t t) noexcept { return IsBuoy(TileIndex{t}) || IsDock(TileIndex{t}); },
 		.canal_or_river = [](uint32_t t) noexcept { return IsCanal(TileIndex{t}) || IsRiver(TileIndex{t}); },
-		.possible_docking = RustPossibleDocking,
-		.check_docking = RustCheckDocking,
 		.region_context = GetRustWaterRegionContext,
 		.remove_rail = [](OpenTTDCommandCost *out, uint32_t t, Track track) noexcept { *NativeGroundCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlag::Execute, TileIndex{t}, track); },
 		.apply_foundation = RustApplyFoundation,

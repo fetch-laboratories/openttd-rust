@@ -49,7 +49,6 @@ struct OpenTTDRailCommandServices {
 	int64_t (*rail_build_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_build_cost);
 	int64_t (*rail_clear_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_clear_cost);
 	int64_t (*rail_convert_cost)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_convert_cost);
-	int64_t (*road_build_cost)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_build_cost);
 	bool (*crossing_with_competitor)() noexcept OPENTTD_SERVICE_DEFAULT(crossing_with_competitor);
 	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
 	Foundation (*rail_foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_foundation);
@@ -73,10 +72,13 @@ struct OpenTTDRailCommandServices {
 	void (*crossing_removed)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_removed);
 	void (*make_crossing)(uint32_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(make_crossing);
 	void (*make_road)(uint32_t, OpenTTDCrossingRoad) noexcept OPENTTD_SERVICE_DEFAULT(make_road);
+	bool (*depot_available)() noexcept OPENTTD_SERVICE_DEFAULT(depot_available);
+	uint16_t (*new_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_depot);
+	void (*depot_name)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_name);
+	void (*delete_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_depot);
 	void (*depot_windows)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_windows);
 	void (*close_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_inspect);
 	void (*make_shore)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_shore);
-	void (*docking_check)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking_check);
 	void (*area_begin)(OpenTTDRailConvertFrame *, uint32_t, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(area_begin);
 	uint32_t (*area_tile)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(area_tile);
 	void (*area_next)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(area_next);

@@ -51,6 +51,7 @@ pub struct WaterCommandServices {
     pub cost: *const CommandCostServices,
     pub command: *const CommandServices,
     pub water: *const WaterServices,
+    pub rail: *const crate::rail_cmd::RailCommandServices,
     pub water_type: extern "C" fn(u32) -> WaterTileType,
     pub lock_part: extern "C" fn(u32) -> LockPart,
     pub lock_direction: extern "C" fn(u32) -> crate::services::DiagDirection,
@@ -60,7 +61,6 @@ pub struct WaterCommandServices {
     pub make_depot: extern "C" fn(u32, u8, u16, DepotPart, Axis, WaterClass),
     pub make_lock_tile:
         extern "C" fn(u32, u8, LockPart, crate::services::DiagDirection, WaterClass),
-    pub bridge_height_above: extern "C" fn(u32) -> i32,
     pub area_begin: unsafe extern "C" fn(*mut Area, u32, u32, bool),
     pub area_tile: unsafe extern "C" fn(*mut Area) -> u32,
     pub area_next: unsafe extern "C" fn(*mut Area),
@@ -143,6 +143,24 @@ impl World<'_> {
     }
     fn class(&self, t: u32) -> u8 {
         unsafe { ((*self.water.clear).water_class)(t).0 }
+    }
+    fn rail(&self) -> &crate::rail_cmd::RailCommandServices {
+        // SAFETY: native getter supplies an immutable process-lifetime table.
+        unsafe { &*self.a.rail }
+    }
+    fn bridge_height(&self, tile: u32) -> i32 {
+        // SAFETY: canonical immutable station services; no owner state is borrowed.
+        let stations = unsafe { &*(self.s.station_commands)() };
+        (stations.bridge_height)((stations.southern_bridge_end)(tile))
+    }
+    fn check_docking(&self, tile: u32) {
+        // SAFETY: the immutable station table is live; docking borrows no water owner.
+        unsafe {
+            crate::station_cmd::openttd_rust_station_check_docking(
+                (self.s.station_commands)(),
+                tile,
+            );
+        }
     }
     fn kind(&self, t: u32) -> u8 {
         (self.a.water_type)(t).0
@@ -241,7 +259,7 @@ impl World<'_> {
             self.error(out, self.a.strings.unsuitable);
             return;
         }
-        if !(self.cmd.depot_available)() {
+        if !(self.rail().depot_available)() {
             self.error(out, INVALID_STRING);
             return;
         }
@@ -259,7 +277,7 @@ impl World<'_> {
             }
         }
         if flags & EXEC != 0 {
-            let id = (self.cmd.new_depot)(tile);
+            let id = (self.rail().new_depot)(tile);
             let owner = (self.s.current_company)();
             let mut infra = 2 * FACTOR;
             for (t, wc) in [(tile, wc1), (tile2, wc2)] {
@@ -274,11 +292,11 @@ impl World<'_> {
             self.infra(owner, infra, true);
             (self.a.make_depot)(tile, owner, id, DepotPart(0), axis, WaterClass(wc1));
             (self.a.make_depot)(tile2, owner, id, DepotPart(1), axis, WaterClass(wc2));
-            (self.water.check_docking)(tile);
-            (self.water.check_docking)(tile2);
+            self.check_docking(tile);
+            self.check_docking(tile2);
             (self.s.mark_dirty)(tile);
             (self.s.mark_dirty)(tile2);
-            (self.cmd.depot_name)(id);
+            (self.rail().depot_name)(id);
             w::hit(w::WATER_CMD_DEPOT);
         }
     }
@@ -303,7 +321,7 @@ impl World<'_> {
         }
         let force = flags & FORCE != 0;
         if flags & EXEC != 0 {
-            (self.cmd.delete_depot)(tile);
+            (self.rail().delete_depot)(tile);
             let owner = (self.s.tile_owner)(tile);
             if (self.s.company_valid)(owner) {
                 let mut amount = 0u32.wrapping_sub(2 * FACTOR);
@@ -373,11 +391,11 @@ impl World<'_> {
         }
         for (part, t) in [tile, lower, upper].into_iter().enumerate() {
             if (self.s.bridge_above)(t)
-                && (self.a.bridge_height_above)(t) < (self.s.tile_max_z)(t) + [2, 3, 2][part]
+                && self.bridge_height(t) < (self.s.tile_max_z)(t) + [2, 3, 2][part]
             {
                 // The original error deliberately uses the MIDDLE tile height.
                 let diff = ((self.s.tile_max_z)(tile) + [2, 3, 2][part])
-                    .wrapping_sub((self.a.bridge_height_above)(t))
+                    .wrapping_sub(self.bridge_height(t))
                     .wrapping_mul(50);
                 (self.c.error_param)(out, self.a.strings.low_bridge, diff as u64);
                 return;
@@ -408,8 +426,8 @@ impl World<'_> {
                     WaterClass(classes[part]),
                 );
             }
-            (self.water.check_docking)(lower);
-            (self.water.check_docking)(upper);
+            self.check_docking(lower);
+            self.check_docking(upper);
             for t in [tile, lower, upper] {
                 (self.s.mark_dirty)(t);
             }
@@ -462,9 +480,7 @@ impl World<'_> {
             if self.class(tile) == 2 {
                 (self.a.restoration.make_river)(tile, self.random());
             } else {
-                unsafe {
-                    crate::ground::clear_square(tile, self.s);
-                }
+                crate::ground::clear_square(tile, self.s);
                 self.wake_neighbours(tile);
             }
             self.restore(upper, (self.s.tile_owner)(upper));
@@ -562,7 +578,7 @@ impl World<'_> {
                     }
                     (self.s.mark_dirty)(tile);
                     self.dirty_neighbours(tile);
-                    (self.water.check_docking)(tile);
+                    self.check_docking(tile);
                     w::hit(w::WATER_CMD_CANAL);
                 }
                 (self.c.amount)(out, crate::company::price(60));
@@ -610,9 +626,7 @@ impl World<'_> {
                     if self.canal(tile) && (self.s.company_valid)(owner) {
                         self.infra(owner, u32::MAX, true);
                     }
-                    unsafe {
-                        crate::ground::clear_square(tile, self.s);
-                    }
+                    crate::ground::clear_square(tile, self.s);
                     self.dirty_neighbours(tile);
                     self.wake_neighbours(tile);
                     w::hit(w::WATER_CMD_CLEAR);
@@ -626,9 +640,7 @@ impl World<'_> {
                     return;
                 }
                 if flags & EXEC != 0 {
-                    unsafe {
-                        crate::ground::clear_square(tile, self.s);
-                    }
+                    crate::ground::clear_square(tile, self.s);
                     self.dirty_neighbours(tile);
                     self.wake_neighbours(tile);
                 }
@@ -674,7 +686,7 @@ impl World<'_> {
         if (self.s.tile_owner)(tile) != old {
             return;
         }
-        let middle = self.kind(tile) == 2 && (self.a.lock_part)(tile).0 == 0;
+        let middle = (self.s.water_middle_lock)(tile);
         if middle {
             self.infra(old, 0u32.wrapping_sub(3 * FACTOR), false);
         }

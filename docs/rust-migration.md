@@ -261,9 +261,11 @@ subprocess timeout polling, which can add about 50 ms.
 Shared coordination does not reserve a quiet host. `SPEED_BUDGETS` in
 `tools/simulation/roads.py` records current ratios, updated up or down by integrating
 PRs. Reports show a 15% guard against that record, fixed ceilings of 1.5x for play
-saves and 1.3x for generation, and a flag within 5% of the ceiling. Take one median
-of three without holding other agents; rerun on a quiet host only within 3% of a
-limit. The roadmap schedules periodic speed passes.
+saves and 1.3x for generation, and a flag within 5% of the ceiling. Compile load
+moves P2016 medians 2-7% and concurrent timed games about 10% either way, so a
+wall median counts only when no builds, links or other timed games run. #321
+moves the per-PR guard to game-loop callgrind counts, which load does not move.
+The roadmap schedules periodic speed passes.
 
 ## Native macOS arm64 Rust linkage
 
@@ -1205,6 +1207,11 @@ retain field widths through C++ staging.
 `vehicle_services.{h,cpp}`). No owner, path or world borrow spans callbacks, reentry or
 deletion.
 
+#311 shares one lean max-speed calculation across road control and native queries. Road
+control supplies that limit between the shared native visual-effect gate and tail, then
+observes movement/speed inputs again after effects. Default native/ABI checks cover the
+front-state/curve/bridge domains and pre/post-effect ordering; train callers keep the shared policy.
+
 The default `roads-` simulation compares acceleration, servicing, path, RNG, crash expiry and
 reload. Legacy saves, custom NewGRFs, articulated/tram turns, sounds and viewport pixels remain
 limits tracked by #156.
@@ -1310,6 +1317,33 @@ remain unchanged.
 loading queues, fractional admission, acceptance loss, full/gradual loading, rating
 expiry/decay/capping, stale-link refresh/removal/restriction/release and active reload. Legacy, NewGRF and refit
 gaps remain in #156.
+
+### Station construction, joining and removal (#267)
+
+Rust owns the station command policy for rail platforms and waypoints, bay and
+through road stops, airports, docks and oil rigs, plus sign/name/owner, terrain,
+bridge clearance, joining, deletion/reuse and docking-neighbour decisions.
+`water_cmd.cpp` docking eligibility and registration belong to this owner.
+Original command bodies compile only in portable builds. The existing #125/#214
+station state remains canonical; there is no second station owner or save layout.
+
+C++ retains shell/spec/road-stop allocation, NewGRF resolvers, spatial indices,
+rendering/description and the hot tile-loop/animation/vehicle-entry/track/slope
+services. Entries use borrowed typed synchronous tables (ABI 1060-1072), shared
+Rust command pre/post checks, prices, clear-square/water restoration and native
+result slots. No ordinary-play script VM or save/load exception crosses the boundary.
+Rust ends owner access before reentry and calls owned aircraft/station/reservation
+policy directly. Reservation lookahead saves the existing layout-checked order
+value in each Rust stack guard; native pool/container allocation follows the original.
+
+`python3 tools/migration.py simulate stations-commands aircraft-controller-removal
+water-structures-mutate --jobs 2` compares command costs/errors, RNG, STNN/STNS,
+map, town and company state, including partial removal, joins, delete/reuse and
+modern reload. The station module includes unchanged-reference private callbacks
+in fixture executables and requires `station_command` witnesses in default CI.
+Builtin tram stops and a forced airport noise refusal share the controlled crossing
+fixture; terrain preparation preserves live ground-vehicle corner heights. NewGRF,
+legacy decoding and unusual occupied/reservation branches remain tracked by #156.
 
 ### Ship controller and private state (#146)
 
@@ -1517,7 +1551,7 @@ C++ keeps packed map primitives, depot identities, drawing, native stack
 `CommandCost` objects and a lazy stack area iterator. Generic landscape commands
 retain the complete native `Command::Do` lifecycle. Rust helpers call the
 integrated clear-square, flooding/neighbor, region-cache and economy owners directly.
-Shared restoration retains class/accounting/RNG order; docking stays native.
+Shared restoration retains class/accounting/RNG order; docking calls its Rust owner.
 Shared command/depot/environment services replace touched rail/town/industry
 copies. Named generated layouts, aborting unused fixture slots and actual
 production table checks cover the boundary; no native world borrow spans reentry.
