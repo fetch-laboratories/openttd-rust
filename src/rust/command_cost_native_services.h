@@ -9,6 +9,9 @@
 #ifndef RUST_COMMAND_COST_NATIVE_SERVICES_H
 #define RUST_COMMAND_COST_NATIVE_SERVICES_H
 #include "../command_type.h"
+#include "../company_func.h"
+#include "../strings_func.h"
+#include "../table/strings.h"
 
 /* Pointers borrow live C++ command results for the synchronous call. Native
  * assignment preserves every result field; environmental failures terminate. */
@@ -16,4 +19,10 @@ inline void OpenTTDCommandCostZero(CommandCost *out) noexcept { *out = CommandCo
 inline void OpenTTDCommandCostError(CommandCost *out, StringID message) noexcept { *out = CommandCost(message); }
 inline void OpenTTDCommandCostExpenseMoney(CommandCost *out, ExpensesType expense, Money money) noexcept { *out = CommandCost(expense, money); }
 inline bool OpenTTDCommandCostSuccess(const CommandCost *cost) noexcept { return cost->Succeeded(); }
+/** Encode the source owned-by parameters after the caller's local-company test. */
+inline void RustEncodeOwnedBy(CommandCost &cost, Owner owner, TileIndex tile) noexcept
+{
+	auto params = GetParamsForOwnedBy(owner, tile);
+	cost.SetEncodedMessage(GetEncodedStringWithArgs(STR_ERROR_OWNED_BY, params));
+}
 #endif /* RUST_COMMAND_COST_NATIVE_SERVICES_H */

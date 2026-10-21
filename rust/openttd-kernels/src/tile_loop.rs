@@ -82,6 +82,7 @@ pub struct GroundServices {
     pub clear: *const ground::ClearServices,
     pub rail: *const ground::RailServices,
     pub road: *const ground::RoadServices,
+    pub road_command: *const crate::road_cmd::CommandContext,
     pub tunnel: *const ground::TunnelServices,
     pub water: *const water::WaterServices,
     pub costs: *const ground::CostServices,
@@ -158,6 +159,7 @@ unsafe fn dispatch(
                 g.call,
                 g.costs,
                 g.road,
+                g.road_command,
                 s.shared,
             );
         },

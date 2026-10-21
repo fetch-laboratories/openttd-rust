@@ -678,7 +678,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
     }
     let owner = unsafe { (gw.vehicle_owner)(v) };
     // Native cost is live caller-owned CommandCost storage; no owner borrow spans the call.
-    unsafe { ((*w.commands).ownership)(cost.cast(), owner) };
+    unsafe { ((*w.commands).ownership)(cost.cast(), owner, 0) };
     if !unsafe { (w.success)(cost) } {
         return;
     }

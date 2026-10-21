@@ -1558,6 +1558,31 @@ conversion/reroutes, clearing/terraforming, company transfer/deletion and reserv
 Coast/half-tile water and PBS path-end removal remain #156 gaps. PR #270 records
 exact-head checks and outstanding full-simulation, speed and CI gates.
 
+### Road track, depot and conversion commands (#266)
+
+Rust (`road_cmd.rs`) owns road removal permissions and slopes, single and long
+build/removal, depots, clear/owner/nearest-town updates, terraform, conversion and
+build-above. Portable originals remain. Native road-type allocation, drawing,
+track-status/vehicle-enter and tile loops stay outside this command port.
+The boundary reuses shared command checks and native stack costs, road/rail map
+leaves, company counters, depots, crossings and the rail conversion cursor.
+Rust road/station helpers share the ordinary nesting, test/execute, rating and
+finance lifecycle. Outer native town, founding, controller and tile-loop frames
+provide one stack scratch and two result slots for direct Rust owner calls.
+Shared Rust also owns road prices and tile clearing; native facades retain portable
+originals and typed storage/error leaves. Town/tram builds enter the Rust road
+owner directly; ground removal, nearest-town and bankrupt rail calls are direct.
+Town authority and rating policy call the integrated Rust owner directly.
+Crossing reservation reads/writes now have one canonical definition shared with
+trains. The canonical `MayHaveRoad` predicate preserves rail-station/head guards.
+The nearest-town map scan bundles only its reached original predicates per tile.
+No world-state borrow spans nested commands or vehicle/town callbacks.
+The default `roads-commands` and `roads-commands-reload` scenarios compare test and
+execute outcomes, costs/extra cash, semantic maps, company/town state and RNG,
+including drags, one-way/tram coexistence, reserved crossings, stops, bridges,
+depots, slopes, town removal, owner changes and low-funds removal.
+The fixture declares builtin-like road-type inputs; external NewGRF programs and
+legacy save variants remain corpus gaps. PR #290 records validation and speed.
 ### House lifecycle and tile simulation (#256)
 
 `town/house.rs` owns `TileLoop_Town` (construction stages, rebuild/replacement, original and

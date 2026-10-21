@@ -44,6 +44,7 @@
 
 #ifdef WITH_RUST
 #include "rust/vehicle_services.h"
+#include "rust/road_command_services.h"
 #include "rust/settings_services.h"
 
 static const OpenTTDRoadLeaves &GetRoadLeaves();
@@ -1266,7 +1267,8 @@ bool IndividualRoadVehicleController(RoadVehicle *v, const RoadVehicle *prev)
 {
 #ifdef WITH_RUST
 	OpenTTDRoadEntry entry = GetRoadEntry();
-	return openttd_rust_road_individual(RustVehicle(v), v->GetRustState(), RustVehicle(prev), prev == nullptr ? nullptr : prev->GetRustState(), &entry, &GetRoadLeaves());
+	RustRoadCommandContext road;
+	return openttd_rust_road_individual(RustVehicle(v), v->GetRustState(), RustVehicle(prev), prev == nullptr ? nullptr : prev->GetRustState(), &entry, &GetRoadLeaves(), &road.view);
 #else
 	if (v->overtaking != 0)  {
 		if (IsTileType(v->tile, MP_STATION)) {
@@ -1791,7 +1793,8 @@ bool RoadVehicle::Tick()
 #ifdef WITH_RUST
 	PerformanceAccumulator framerate(PFE_GL_ROADVEHS);
 	const auto read = RustRoadTickRead(this);
-	return openttd_rust_road_tick(RustVehicle(this), this->GetRustState(), &read, &GetRoadLeaves());
+	RustRoadCommandContext road;
+	return openttd_rust_road_tick(RustVehicle(this), this->GetRustState(), &read, &GetRoadLeaves(), &road.view);
 #else
 	PerformanceAccumulator framerate(PFE_GL_ROADVEHS);
 

@@ -17,6 +17,7 @@
 #include "../command_type.h"
 #include <exception>
 #include <optional>
+struct OpenTTDRoadCommandContext;
 struct OpenTTDTownFoundingFrame {
 	OpenTTDTownNameFrame names;
 	std::optional<TownNameParams> parameters;
@@ -70,7 +71,6 @@ struct OpenTTDTownFoundingServices {
 	void (*money_deficit)(OpenTTDTownFoundingFrame *, const OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(money_deficit);
 	void (*set_result)(OpenTTDTownFoundingFrame *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_result);
 	bool (*exchange_generating)(bool) noexcept OPENTTD_SERVICE_DEFAULT(exchange_generating);
-	void (*nearest_town_roads)(bool) noexcept OPENTTD_SERVICE_DEFAULT(nearest_town_roads);
 	void (*founded_news)(uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(founded_news);
 	void (*founded_events)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(founded_events);
 	void (*clear_station_names)() noexcept OPENTTD_SERVICE_DEFAULT(clear_station_names);
@@ -85,9 +85,9 @@ struct OpenTTDTownFoundingServices {
 };
 const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept;
 extern "C" {
-void openttd_rust_town_found(const OpenTTDTownFoundingServices *, OpenTTDTownFoundingFrame *, OpenTTDTownNameFrame *, OpenTTDCommandCost *, uint32_t, TownSize, bool, TownLayout, bool, uint32_t, OpenTTDByteSpan, bool);
+void openttd_rust_town_found(const OpenTTDTownFoundingServices *, const OpenTTDRoadCommandContext *, OpenTTDTownFoundingFrame *, OpenTTDTownNameFrame *, OpenTTDCommandCost *, uint32_t, TownSize, bool, TownLayout, bool, uint32_t, OpenTTDByteSpan, bool);
 uint openttd_rust_town_default_number(const OpenTTDTownFoundingServices *);
-bool openttd_rust_town_generate(const OpenTTDTownFoundingServices *, OpenTTDTownFoundingFrame *, OpenTTDTownNameFrame *, TownLayout, bool, uint, bool *);
+bool openttd_rust_town_generate(const OpenTTDTownFoundingServices *, const OpenTTDRoadCommandContext *, OpenTTDTownFoundingFrame *, OpenTTDTownNameFrame *, TownLayout, bool, uint, bool *);
 void openttd_rust_town_rename(const OpenTTDTownFoundingServices *, OpenTTDCommandCost *, uint16_t, OpenTTDByteSpan, bool);
 }
 #endif /* RUST_TOWN_FOUNDING_FFI_H */

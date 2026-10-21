@@ -31,6 +31,17 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "OpenTTDRoadNearestTownTile" ["probe"] => crate::road_cmd::NearestTownTile { road, depot, town_owned, };
+
+    "OpenTTDRoadTramBuildRead" ["probe"] => crate::road::TramBuildRead { owner, road_type, };
+
+    "OpenTTDRoadCommandContext" ["probe"] => crate::road_cmd::CommandContext {
+        services,
+        scratch,
+        cost,
+        ret,
+    };
+
     "OpenTTDHouseLoopTile" ["probe"] => crate::town::house::HouseLoopTile {
         age,
         completed,
@@ -289,8 +300,6 @@ layouts! {
         reset_facilities,
         orders_dirty,
         vehicle,
-        road_type_valid,
-        powered_road,
         stop_on_town_road,
         stop_on_competitor_road,
         road_class_count,
@@ -395,7 +404,6 @@ layouts! {
         industry_area,
         remove_buoy,
         autoslope_axis,
-        set_road_owner,
         station_list_classes_invalidate,
     };
     "OpenTTDStationCommandStrings" ["probe"] => crate::station_cmd::Strings {
@@ -520,7 +528,6 @@ layouts! {
         all_bits,
         bulldozer,
         cleanup,
-        remove,
         town,
         set_road_type,
     };
@@ -651,6 +658,7 @@ layouts! {
         clear,
         rail,
         road,
+        road_command,
         tunnel,
         water,
         costs,
@@ -1070,6 +1078,52 @@ layouts! {
         town_index,
         refusal,
     };
+    "OpenTTDRoadCommandServices" ["probe"] => crate::road_cmd::RoadCommandServices {
+        do_build,
+        rail_commands,
+        town,
+        authority,
+        strings,
+        nearest_tile,
+        town_valid,
+        town_edge,
+        set_town,
+        foundation,
+        extra_dynamite,
+        depot_slope,
+        make_depot,
+        depot_exit,
+        next_effect,
+        delete_effect,
+        owned_by_town,
+        scratch_cost,
+        conversion_scratch,
+        collect_vehicles,
+        cargo_changed,
+    };
+    "OpenTTDRoadConversionScratch" ["probe"] => crate::road_cmd::ConversionScratch {
+        frame,
+        area,
+        error,
+        ret,
+    };
+    "OpenTTDRoadTownEdge" ["probe"] => crate::road_cmd::TownEdge {
+        tile,
+        radius,
+    };
+    "OpenTTDRoadWorksEffect" ["probe"] => crate::road_cmd::WorksEffect {
+        id,
+        tile,
+    };
+    "OpenTTDRoadCommandStrings" ["probe"] => crate::road_cmd::Strings {
+        no_road,
+        no_tram,
+        junction,
+        remove_road,
+        no_suitable_road,
+        no_suitable_tram,
+        authority,
+    };
     "OpenTTDCommandServices" ["probe"] => crate::services::CommandServices {
         enter,
         leave,
@@ -1084,7 +1138,6 @@ layouts! {
         no_vehicle,
         no_train,
         wormhole_free,
-        allow_remove_road,
     };
     "OpenTTDCommandCostServices" ["probe"] => crate::services::CommandCostServices {
         zero,
@@ -1617,12 +1670,23 @@ layouts! {
         road_depot_direction,
         road_owner,
         road_type,
+        crossing_reserved,
+        set_crossing_reserved,
+        may_have_road,
+        road_tile_kind,
+        set_road_bits,
+        set_road_type,
+        set_road_owner,
+        set_road_directions,
+        road_powered,
+        road_type_valid,
         safe_waiting_position,
         service_at_helipad,
         set_tropic_zone,
         slope,
         snow_line,
         station_index,
+        road_commands,
         station_commands,
         docking_tile,
         station_gfx,
@@ -2021,7 +2085,7 @@ layouts! {
         path_read,
         choose_track,
         find_depot,
-        can_build_tram,
+        tram_build_read,
         disconnect,
         stop_read,
         should_stop,
@@ -2211,7 +2275,6 @@ layouts! {
         money_deficit,
         set_result,
         exchange_generating,
-        nearest_town_roads,
         founded_news,
         founded_events,
         clear_station_names,
@@ -2339,7 +2402,6 @@ layouts! {
         update_max_pass,
         next_town,
         road_mask,
-        build_road,
         clear_land,
         terraform_land,
         build_bridge,
@@ -3817,7 +3879,6 @@ layouts! {
         crash_sound,
         crossing_barred,
         crossing_rail_axis,
-        crossing_reserved,
         crossing_road_axis,
         crossing_sound,
         curve_advantage,
@@ -3966,7 +4027,6 @@ layouts! {
         wait_twoway,
         wait_unbunch,
         write_crossing_bar,
-        write_crossing_res,
         write_visit_type,
         visit_tile,
         visit_near,

@@ -17,6 +17,7 @@ enum ExpensesType : uint8_t;
  * mutations/moves preserve all native fields, including encoded error params.
  * These ordinary services are noexcept; environmental failures terminate. */
 struct OpenTTDCommandCost;
+enum ExpensesType : uint8_t;
 struct OpenTTDCommandCostServices {
 	void (*zero)(OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(zero);
 	void (*error)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(error);

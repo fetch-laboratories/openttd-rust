@@ -9,6 +9,7 @@
 #ifndef RUST_SERVICES_ROAD_H
 #define RUST_SERVICES_ROAD_H
 #include "../road_map.h"
+#include "../town_map.h"
 #include "../road.h"
 #include "../roadveh.h"
 OpenTTDRoadTickRead RustRoadTickRead(const RoadVehicle *v) noexcept;
@@ -17,4 +18,8 @@ inline void RustSetRoadOwner(uint32_t tile, uint8_t kind, uint8_t owner) noexcep
 inline RoadTramType RustRoadTramType(RoadType type) noexcept { return GetRoadTramType(type); }
 inline bool RustRoadTypeIsRoad(uint8_t rt) noexcept { return RoadTypeIsRoad(static_cast<RoadType>(rt)); }
 inline uint16_t RustRoadCostMultiplier(uint8_t type) noexcept { return GetRoadTypeInfo(static_cast<RoadType>(type))->cost_multiplier; }
+inline void RustSetRoadType(TileIndex tile, RoadTramType kind, RoadType type) noexcept { SetRoadType(tile, kind, type); }
+inline bool RustCrossingReserved(uint32_t tile) noexcept { return HasCrossingReservation(TileIndex{tile}); }
+inline void RustSetCrossingReserved(uint32_t tile, bool reserved) noexcept { SetCrossingReservation(TileIndex{tile}, reserved); }
+inline void RustSetTownIndex(uint32_t tile, uint16_t town) noexcept { SetTownIndex(TileIndex{tile}, TownID(town)); }
 #endif /* RUST_SERVICES_ROAD_H */
