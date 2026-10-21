@@ -60,7 +60,6 @@ static void FleetGroup_vehicle_dirty(uint32_t id) noexcept { InvalidateWindowDat
 static void FleetGroup_depot_dirty(void *shell) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, static_cast<Vehicle *>(shell)->tile); }
 static void FleetGroup_close_replace(uint8_t type) noexcept { CloseWindowById(WC_REPLACE_VEHICLE, type); }
 static bool FleetGroup_list_generate(void *context) noexcept { auto *c = static_cast<FleetVehicleListContext *>(context); return GenerateVehicleSortList(&c->list, c->vli); }
-static void FleetGroup_list_push(void *context, void *shell) noexcept { static_cast<FleetVehicleListContext *>(context)->list.push_back(static_cast<Vehicle *>(shell)); }
 static size_t FleetGroup_list_size(void *context) noexcept { return static_cast<FleetVehicleListContext *>(context)->list.size(); }
 static void * FleetGroup_list_at(void *context, size_t index) noexcept { return const_cast<Vehicle *>(static_cast<FleetVehicleListContext *>(context)->list[index]); }
 static void * FleetGroup_renew_allocate() noexcept { return new EngineRenew(); }
@@ -122,7 +121,6 @@ static const OpenTTDFleetGroupServices _fleet_group_services{
 	.close_replace = FleetGroup_close_replace,
 	.screen_dirty = RustScreenDirty,
 	.list_generate = FleetGroup_list_generate,
-	.list_push = FleetGroup_list_push,
 	.list_size = FleetGroup_list_size,
 	.list_at = FleetGroup_list_at,
 	.renew_allocate = FleetGroup_renew_allocate,

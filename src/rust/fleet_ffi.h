@@ -81,7 +81,6 @@ struct OpenTTDFleetGroupServices {
 	void (*close_replace)(uint8_t type) noexcept OPENTTD_SERVICE_DEFAULT(close_replace);
 	void (*screen_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(screen_dirty);
 	bool (*list_generate)(void *context) noexcept OPENTTD_SERVICE_DEFAULT(list_generate);
-	void (*list_push)(void *context, void *shell) noexcept OPENTTD_SERVICE_DEFAULT(list_push);
 	size_t (*list_size)(void *context) noexcept OPENTTD_SERVICE_DEFAULT(list_size);
 	void * (*list_at)(void *context, size_t index) noexcept OPENTTD_SERVICE_DEFAULT(list_at);
 	void * (*renew_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(renew_allocate);

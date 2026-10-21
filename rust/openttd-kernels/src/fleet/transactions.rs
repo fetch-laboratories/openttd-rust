@@ -258,7 +258,7 @@ unsafe fn direct_copy_group(w: &Services, out: *mut (), old: *mut (), new: *mut 
                 id,
                 false,
                 std::ptr::null_mut(),
-                true,
+                false,
                 &raw mut group_out,
             );
             if error == u32::MAX {

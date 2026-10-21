@@ -45,7 +45,7 @@ unsafe fn copy_group(s: &Services, out: *mut CommandCost, flags: u16, old: *mut 
                 id,
                 false,
                 ptr::null_mut(),
-                true,
+                false,
                 &raw mut ignored,
             );
             if error == u32::MAX {

@@ -4338,7 +4338,6 @@ layouts! {
         close_replace,
         screen_dirty,
         list_generate,
-        list_push,
         list_size,
         list_at,
         renew_allocate,
