@@ -181,7 +181,7 @@ unsafe fn dispatch(
             );
         },
         8 => unsafe {
-            industry::openttd_rust_industry_tile_loop(
+            industry::tile_loop(
                 tile,
                 // Existing industry ABI stores legal map logarithms in a byte.
                 log_x as u8,

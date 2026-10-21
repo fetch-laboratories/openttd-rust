@@ -336,8 +336,8 @@ fn bubble(tile: u32, s: &Services, map: crate::services::Map, t: &TileServices) 
 /// Live map tile. Water can destroy its industry, so no owner is resolved until
 /// the source's post-water type recheck. Later callbacks retain no Rust borrow.
 /// Any reached water command uses the caller's live, independent stack result context.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_tile_loop(
+#[allow(clippy::too_many_arguments)]
+pub(crate) unsafe fn tile_loop(
     tile: u32,
     log_x: u8,
     call: *mut crate::ground::Call,
