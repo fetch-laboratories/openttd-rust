@@ -38,6 +38,7 @@
 #include "rust/water_command_ffi.h"
 #include "bridge_type.h"
 #include "rust/rail_yapf_ffi.h"
+#include "rust/road_command_ffi.h"
 #include "rust/road_ffi.h"
 #include "rust/road_yapf_ffi.h"
 #include "rust/script_list_ffi.h"
@@ -133,7 +134,7 @@ static void Calls()
 		founding.close_to_town = [](uint32_t tile, uint distance) noexcept { CHECK(tile == UINT32_MAX && distance == 20); return true; };
 		founding.resolve = [](uint16_t id) noexcept -> OpenTTDTownRef { CHECK(id == UINT16_MAX); return {nullptr, nullptr, id}; };
 		uint32_t error = 0; auto *cost = reinterpret_cast<OpenTTDCommandCost *>(&error); OpenTTDTownFoundingFrame frame; const uint8_t text = 'x';
-		openttd_rust_town_found(&founding, &frame, &frame.names, cost, UINT32_MAX, TSZ_SMALL, false, TL_ORIGINAL, false, 0, {&text, 1}, false);
+		openttd_rust_town_found(&founding, nullptr, &frame, &frame.names, cost, UINT32_MAX, TSZ_SMALL, false, TL_ORIGINAL, false, 0, {&text, 1}, false);
 		CHECK(error == 0x87654321); openttd_rust_town_rename(&founding, cost, UINT16_MAX, {nullptr, 0}, false);
 		CHECK(error == UINT16_MAX); openttd_rust_town_destroy(owner);
 	}
@@ -829,7 +830,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, order_destination);
 		VEHICLE_UNUSED(vehicle, order_nonstop);
 		VEHICLE_UNUSED(ground, has_articulated);
-		VEHICLE_UNUSED(leaves, tick_front);
 		VEHICLE_UNUSED(leaves, max_depot_penalty);
 		VEHICLE_UNUSED(vehicle, handle_breakdown);
 		VEHICLE_UNUSED(leaves, process_orders_then_loading);
@@ -914,7 +914,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, path_read);
 		VEHICLE_UNUSED(leaves, choose_track);
 		VEHICLE_UNUSED(leaves, find_depot);
-		VEHICLE_UNUSED(leaves, can_build_tram);
+		VEHICLE_UNUSED(leaves, tram_build_read);
 		VEHICLE_UNUSED(vehicle, previous_tile);
 		VEHICLE_UNUSED(leaves, disconnect);
 		VEHICLE_UNUSED(leaves, stop_read);
@@ -958,11 +958,11 @@ struct RoadAbiProbe {
 	const OpenTTDRoadLeaves *leaves = nullptr;
 	OpenTTDRoadEntry entry{.acceleration_model = 0, .road_side = 0, .queue = false, .map_log_x = 8};
 	uint32_t dest = 0, nested = 0, destroyed = 0, departures = 0, progress = 255;
-	uint8_t tick = 0, running = 0;
+	uint8_t tick = 0, running = 0, status = 0;
 	uint32_t cache_properties = 0, cargo_ages = 0, length_changes = 0, viewports = 0, turns = 0, next_reads = 0;
 	uint32_t progress_writes = 0, visual_stage = 0;
 	uint16_t post_effect_max = 80;
-	bool visual_eligible = true;
+	bool visual_eligible = true, reset_status = false;
 	bool fallback_cache = false, engine_replaced = false;
 	bool hidden_viewport_tail = false;
 	int32_t order_time = 0;
@@ -993,10 +993,11 @@ static void RoadBoundary()
 		p.tick = tick;
 		p.running = running;
 		p.order_time = order_time;
+		if (p.reset_status) p.status = 0;
 	};
 	t.vehicle.write_tick = [](OpenTTDVehicle *u, uint8_t tick) noexcept { CHECK(u == RoadAbiHandle()); road_abi_probe->tick = tick; };
 	const OpenTTDRoadTickRead part{.tick = 255, .front = false};
-	CHECK(openttd_rust_road_tick(v, probe.state, &part, &t.leaves));
+	CHECK(openttd_rust_road_tick(v, probe.state, &part, &t.leaves, nullptr));
 	CHECK(probe.tick == 0 && probe.running == 0 && probe.order_time == 0 && world.draws == 0);
 
 	/* A direct callback changes canonical state before Rust reobserves it. */
@@ -1114,7 +1115,7 @@ static void RoadBoundary()
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
 	t.leaves.enter_tile = [](OpenTTDVehicle *, uint32_t, int32_t, int32_t) noexcept -> OpenTTDRoadEntered { return {.tile = 100, .cur_speed = 0, .flags = 4, .direction = 1, .order_type = 0}; };
 	t.vehicle.write_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == 0); };
-	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &probe.entry, &t.leaves));
+	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &probe.entry, &t.leaves, nullptr));
 	CHECK(openttd_rust_road_get(probe.state, 0) == 36);
 	openttd_rust_road_set(probe.state, 0, 0);
 	openttd_rust_road_set(probe.state, 6, 0);
@@ -1159,21 +1160,47 @@ static void RoadBoundary()
 		++road_abi_probe->next_reads;
 		return {.next = nullptr, .final_progress = static_cast<uint8_t>(road_abi_probe->progress)};
 	};
-	t.leaves.tick_front = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadFrontTickRead { return {.movement = road_abi_probe->entry, .order_time = 5, .running = 0, .status = 0}; };
 	t.leaves.crash_part = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadCrashPart { return {.next = nullptr, .next_state = nullptr, .tile = 100, .z = 0, .crossing = false}; };
-	const OpenTTDRoadTickRead front{.tick = 0, .front = true};
-	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves));
-	CHECK(probe.nested == 3 && probe.dest == 100 && probe.order_time == 6 && probe.running == 1 && probe.progress == 7 && probe.next_reads == 1 && world.draws == 0);
+	OpenTTDRoadTickRead front{.tick = 255, .front = true, .movement = probe.entry, .order_time = &probe.order_time, .running = &probe.running, .status = &probe.status};
+	// Fresh scalar loads and the post-write crashed-bit reset precede controller entry.
+	probe.order_time = INT32_MAX;
+	probe.running = UINT8_MAX;
+	probe.status = 128;
+	probe.reset_status = true;
+	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
+	probe.reset_status = false;
+	CHECK(probe.tick == 0 && probe.status == 0);
+	CHECK(probe.nested == 3 && probe.dest == 100 && probe.order_time == INT32_MIN && probe.running == 0 && probe.progress == 7 && probe.next_reads == 1 && world.draws == 0);
+
+	/* Stopped parts preserve running ticks; later status resets must survive the entry. */
+	const auto breakdown_probe = _vehicle_maintenance_probe.breakdown_probe;
+	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept {
+		return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = road_abi_probe->status};
+	};
+	const auto last_speed = t.ground.set_last_speed;
+	t.ground.set_last_speed = [](OpenTTDVehicle *) noexcept {
+		road_abi_probe->status = 0;
+		return OpenTTDGroundLastSpeed{};
+	};
+	probe.status = 2;
+	probe.running = UINT8_MAX;
+	probe.order_time = INT32_MAX;
+	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
+	CHECK(probe.running == UINT8_MAX && probe.order_time == INT32_MIN && probe.status == 0);
+	_vehicle_maintenance_probe.breakdown_probe = breakdown_probe;
+	t.ground.set_last_speed = last_speed;
 
 	/* Skip effects with no lookup; realistic UpdateSpeed still observes post-effect inputs. */
 	probe.visual_eligible = false; probe.entry.acceleration_model = 1;
+	front.movement = probe.entry;
 	/* Hidden vehicles skip viewport callbacks, then use the direct canonical link. */
 	t.ground.set_last_speed = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundLastSpeed { return {.status = 1}; };
 	t.vehicle.next = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { CHECK(road_abi_probe->viewports == 1); ++road_abi_probe->next_reads; return nullptr; };
 	t.vehicle.progress = [](OpenTTDVehicle *) noexcept -> uint8_t { CHECK(road_abi_probe->viewports == 1 && road_abi_probe->next_reads == 2); return static_cast<uint8_t>(road_abi_probe->progress); };
-	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves));
+	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
 	CHECK(probe.viewports == 1 && probe.next_reads == 2 && probe.progress == 7);
 	probe.visual_eligible = true; probe.entry.acceleration_model = 0;
+	front.movement = probe.entry;
 
 	/* Viewport reentry can add a later visible part. Its progress mutation is
 	 * observed only after that viewport and any hidden final part's Next read. */
@@ -1212,18 +1239,18 @@ static void RoadBoundary()
 	for (bool hidden : {false, true}) {
 		probe.hidden_viewport_tail = hidden;
 		probe.viewports = probe.next_reads = probe.progress_writes = 0;
-		CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves));
+		CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves, nullptr));
 		CHECK(probe.viewports == 2 && probe.next_reads == (hidden ? 3U : 2U) && probe.progress_writes == 1 && probe.progress == 0 && probe.dest == 202);
 	}
 
 	/* Crash animation reads the next link after the turn/viewport callback. */
 	openttd_rust_road_set(probe.state, 5, 0);
-	t.leaves.tick_front = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadFrontTickRead { return {.movement = road_abi_probe->entry, .order_time = 0, .running = 0, .status = 128}; };
+	probe.status = 128;
 	t.vehicle.direction = [](OpenTTDVehicle *u) noexcept -> uint8_t { CHECK(u == RoadAbiHandle() && road_abi_probe->turns == 0); return 1; };
 	t.ground.turn = [](OpenTTDVehicle *u, uint8_t direction) noexcept { CHECK(u == RoadAbiHandle() && direction < 8); ++road_abi_probe->turns; };
 	t.vehicle.next = [](OpenTTDVehicle *u) noexcept -> OpenTTDVehicle * { CHECK(u == RoadAbiHandle() && road_abi_probe->turns == 1); return nullptr; };
-	const OpenTTDRoadTickRead animation{.tick = 7, .front = true};
-	CHECK(openttd_rust_road_tick(v, probe.state, &animation, &t.leaves));
+	const OpenTTDRoadTickRead animation{.tick = 7, .front = true, .movement = probe.entry, .order_time = &probe.order_time, .running = &probe.running, .status = &probe.status};
+	CHECK(openttd_rust_road_tick(v, probe.state, &animation, &t.leaves, nullptr));
 	CHECK(probe.turns == 1 && world.draws == 1);
 
 	/* The final-part deletion returns its copied alive result only. */
@@ -1239,9 +1266,9 @@ static void RoadBoundary()
 		road_abi_probe->state = nullptr;
 		++road_abi_probe->destroyed;
 	};
-	t.leaves.tick_front = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadFrontTickRead { return {.movement = road_abi_probe->entry, .order_time = 0, .running = 0, .status = 128}; };
-	const OpenTTDRoadTickRead crashed{.tick = 31, .front = true};
-	CHECK(!openttd_rust_road_tick(v, probe.state, &crashed, &t.leaves));
+	probe.status = 128;
+	const OpenTTDRoadTickRead crashed{.tick = 31, .front = true, .movement = probe.entry, .order_time = &probe.order_time, .running = &probe.running, .status = &probe.status};
+	CHECK(!openttd_rust_road_tick(v, probe.state, &crashed, &t.leaves, nullptr));
 	CHECK(probe.state == nullptr && probe.destroyed == 1 && world.draws == 1);
 	std::printf("road_native_typed_reentry_path_and_owner_destruction passed\n");
 }
@@ -1531,8 +1558,9 @@ static struct AircraftBoundaryProbe {
 	OpenTTDAircraftVehicle vehicle;
 	uint64_t blocks = UINT64_MAX;
 	unsigned orders = 0, deleted = 0, ticks = 0, rotor_reads = 0, moves = 0;
-	int32_t order_time = 0, x = 0, y = 0;
-	uint8_t order_kind = 0, direction = 0, progress = 0;
+	int32_t order_time = 0, x = 0, y = 0, z = 1;
+	uint8_t order_kind = 0, progress = 0, subtype = 2;
+	Direction direction = DIR_N;
 	uint16_t maximum_speed = 0, cargo_age = 0;
 	bool live = true;
 } aircraft_probe;
@@ -1639,7 +1667,13 @@ static void AircraftPhaseBoundary()
 
 	/* A speed change dirties the native widget before direction/progress are
 	 * read. Their mutation yields exactly one move; a stale snapshot yields none. */
-	v.subtype = [](OpenTTDVehicle *) noexcept { return uint8_t{2}; };
+	v.subtype = [](OpenTTDVehicle *) noexcept { return aircraft_probe.subtype; };
+	v.movement_observations = [](OpenTTDVehicle *shell) noexcept {
+		auto &p = aircraft_probe;
+		CHECK(shell == p.vehicle.handle);
+		return OpenTTDVehicleMovementObservations{.position = {.subtype = &p.subtype, .z = &p.z},
+			.x = &p.x, .y = &p.y, .speed = &p.maximum_speed, .direction = &p.direction};
+	};
 	v.status = [](OpenTTDVehicle *) noexcept { return uint8_t{0}; };
 	leaves.process_orders = [](OpenTTDAircraftVehicle) noexcept {};
 	v.loading = [](OpenTTDVehicle *, bool) noexcept {};
@@ -1656,26 +1690,36 @@ static void AircraftPhaseBoundary()
 	v.speed_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleSpeedInputs{0, 100, 8, 0, 0}; };
 	v.write_subspeed = [](OpenTTDVehicle *, uint8_t sub) noexcept { CHECK(sub == 104); };
 	v.write_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == 2); aircraft_probe.maximum_speed = speed; };
-	v.start_stop_dirty = [](OpenTTDVehicle *) noexcept { aircraft_probe.direction = 1; aircraft_probe.progress = 255; };
+	v.start_stop_dirty = [](OpenTTDVehicle *) noexcept { aircraft_probe.direction = DIR_NE; aircraft_probe.progress = 255; };
 	v.direction_progress = [](OpenTTDVehicle *) noexcept { CHECK(aircraft_probe.progress == 255); return OpenTTDVehicleDirectionProgress{aircraft_probe.direction, aircraft_probe.progress}; };
 	v.write_progress = [](OpenTTDVehicle *, uint8_t progress) noexcept { CHECK(progress == 1); aircraft_probe.progress = progress; };
 	leaves.direction_towards = [](OpenTTDAircraftVehicle, int32_t, int32_t) noexcept { return uint8_t{1}; };
-	v.direction = [](OpenTTDVehicle *) noexcept { return aircraft_probe.direction; };
+	v.direction = [](OpenTTDVehicle *) noexcept { return static_cast<uint8_t>(aircraft_probe.direction); };
 	v.new_position = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleNewPosition{aircraft_probe.x + 1, aircraft_probe.y, 0}; };
 	v.write_tile = [](OpenTTDVehicle *, uint32_t) noexcept {};
 	v.z = [](OpenTTDVehicle *) noexcept { return int32_t{1}; };
 	v.write_coordinates = [](OpenTTDVehicle *, int32_t x, int32_t y, int32_t z) noexcept { CHECK(z == 1); aircraft_probe.x = x; aircraft_probe.y = y; };
-	leaves.update_position = [](OpenTTDAircraftVehicle) noexcept { aircraft_probe.moves++; };
+	/* Both callbacks mutate canonical inputs. Subtype must be loaded after
+	 * UpdatePosition, then z after the rotor callback, rather than on acquisition. */
+	leaves.update_position = [](OpenTTDAircraftVehicle) noexcept { aircraft_probe.moves++; aircraft_probe.subtype = 0; aircraft_probe.z = 17; };
+	leaves.rotor_image = [](OpenTTDAircraftVehicle) noexcept { CHECK(aircraft_probe.z == 17); aircraft_probe.z = 25; };
 	leaves.next = [](OpenTTDAircraftVehicle u) noexcept { if (u.id != 17) return OpenTTDAircraftVehicle{nullptr, nullptr, 1048575}; u.id = 18; u.handle = reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}); return u; };
 	v.write_x = [](OpenTTDVehicle *, int32_t x) noexcept { CHECK(x == 1); };
-	v.write_y = [](OpenTTDVehicle *, int32_t y) noexcept { CHECK(y == 0); };
-	v.y = [](OpenTTDVehicle *) noexcept { return int32_t{0}; };
+	v.write_y = [](OpenTTDVehicle *, int32_t y) noexcept { CHECK(y == -3); };
+	v.y = [](OpenTTDVehicle *) noexcept { return int32_t{-3}; };
 	v.write_z = [](OpenTTDVehicle *, int32_t z) noexcept { CHECK(z == 0); };
 	s.slope = [](int32_t, int32_t) noexcept { return int32_t{0}; };
 	leaves.copy_sprite = [](OpenTTDAircraftVehicle, OpenTTDAircraftVehicle) noexcept {};
 	leaves.position_viewport = [](OpenTTDAircraftVehicle) noexcept {};
 	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.moves == 1 && p.x == 1 && p.y == 0 && p.progress == 1);
+	p.subtype = 2; p.z = 1;
+	v.position_observations = [](OpenTTDVehicle *shell) noexcept {
+		CHECK(shell == aircraft_probe.vehicle.handle);
+		return OpenTTDVehiclePositionObservations{.subtype = &aircraft_probe.subtype, .z = &aircraft_probe.z};
+	};
+	openttd_rust_aircraft_position(&leaves, p.vehicle, 1, 0, 1);
+	CHECK(p.moves == 2 && p.z == 25);
 	std::printf("aircraft rotor/order/loading phases and post-dirty motion mutation passed\n");
 }
 

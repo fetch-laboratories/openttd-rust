@@ -10,6 +10,7 @@
 #define TESTS_LANDSCAPE_PROTOCOL_HPP
 #include "../tile_cmd.h"
 #include "../rust/landscape_loop_ffi.h"
+#include "../rust/tile_owner_ffi.h"
 #include "../rust/abi_ffi.h"
 #include <array>
 #include <type_traits>

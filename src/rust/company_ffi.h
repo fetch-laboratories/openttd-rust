@@ -19,6 +19,7 @@
 #define OPENTTD_COMPANY_CALL
 #endif
 struct CompanyFinances;
+struct OpenTTDTileOwnerContext;
 extern "C" {
 /* Company IDs, owners, vehicle types, tracks and expenses cross as uint8_t;
  * pool indices and tiles as uint32_t (UINT32_MAX ends an iteration); Money as
@@ -85,7 +86,7 @@ struct OpenTTDCompanyFinanceServices {
 /**
  * Lifecycle, economy and ownership-transfer services. Every service is a typed
  * noexcept C++ call; environmental failures terminate inside it. Services that
- * reenter or delete (post_company_delete, change_tile_owner, delete_*,
+ * reenter or delete (post_company_delete, delete_*,
  * allocate_company, reset_service_interval, stop_ai) run after Rust has ended
  * every raw field access it may invalidate. *_next_owned scans a pool from an
  * index for the next item of that owner, in pool order.
@@ -182,7 +183,6 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_COMPANY_CALL *copy_service_interval_defaults)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(copy_service_interval_defaults);
 	void (OPENTTD_COMPANY_CALL *update_autoreplace)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(update_autoreplace);
 	uint32_t (OPENTTD_COMPANY_CALL *map_size)() noexcept OPENTTD_SERVICE_DEFAULT(map_size);
-	void (OPENTTD_COMPANY_CALL *change_tile_owner)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(change_tile_owner);
 	OpenTTDCompanySignalTile (OPENTTD_COMPANY_CALL *signal_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_tile);
 	bool (OPENTTD_COMPANY_CALL *has_signal_on_track)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signal_on_track);
 	void (OPENTTD_COMPANY_CALL *add_track_to_signal_buffer)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(add_track_to_signal_buffer);
@@ -236,9 +236,9 @@ bool OPENTTD_COMPANY_CALL openttd_rust_company_competitor_timeout(const OpenTTDC
 bool OPENTTD_COMPANY_CALL openttd_rust_company_on_tick(const OpenTTDCompanyServices *, OpenTTDCompanyTick *);
 void OPENTTD_COMPANY_CALL openttd_rust_company_yearly(const OpenTTDCompanyServices *, const OpenTTDCompanyYear *);
 bool OPENTTD_COMPANY_CALL openttd_rust_company_takeover_allowed(const OpenTTDCompanyServices *, uint8_t, uint8_t);
-bool OPENTTD_COMPANY_CALL openttd_rust_company_control(const OpenTTDCompanyServices *, OpenTTDCompanyControl *);
-void OPENTTD_COMPANY_CALL openttd_rust_company_change_ownership(const OpenTTDCompanyServices *, uint8_t, uint8_t);
-OpenTTDCompanyCost OPENTTD_COMPANY_CALL openttd_rust_company_buy(const OpenTTDCompanyServices *, uint8_t, bool, bool);
+bool OPENTTD_COMPANY_CALL openttd_rust_company_control(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, OpenTTDCompanyControl *);
+void OPENTTD_COMPANY_CALL openttd_rust_company_change_ownership(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, uint8_t, uint8_t);
+OpenTTDCompanyCost OPENTTD_COMPANY_CALL openttd_rust_company_buy(const OpenTTDCompanyServices *, const OpenTTDTileOwnerContext *, uint8_t, bool, bool);
 OpenTTDCompanyCost OPENTTD_COMPANY_CALL openttd_rust_company_give_money(const OpenTTDCompanyFinanceServices *, bool, int64_t, uint8_t, bool);
 OpenTTDCompanyCost OPENTTD_COMPANY_CALL openttd_rust_company_increase_loan(const OpenTTDCompanyFinanceServices *, uint8_t, int64_t, bool, bool);
 OpenTTDCompanyCost OPENTTD_COMPANY_CALL openttd_rust_company_decrease_loan(const OpenTTDCompanyFinanceServices *, uint8_t, int64_t, bool, bool);

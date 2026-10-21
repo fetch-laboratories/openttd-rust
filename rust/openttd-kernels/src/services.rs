@@ -147,15 +147,13 @@ pub struct CommandServices {
     /// Original `CheckTileOwnership`, preserving native encoded errors.
     pub tile_ownership: unsafe extern "C" fn(*mut CommandCost, u32),
     /// Original `CheckOwnership`.
-    pub ownership: unsafe extern "C" fn(*mut CommandCost, u8),
+    pub ownership: unsafe extern "C" fn(*mut CommandCost, u8, u32),
     /// Original `EnsureNoVehicleOnGround`.
     pub no_vehicle: unsafe extern "C" fn(*mut CommandCost, u32),
     /// Original `EnsureNoTrainOnTrackBits`.
     pub no_train: unsafe extern "C" fn(*mut CommandCost, u32, u8),
     /// Original `TunnelBridgeIsFree`, with the source optional ignored train.
     pub wormhole_free: unsafe extern "C" fn(*mut CommandCost, u32, u32, *const Train),
-    /// `CheckAllowRemoveRoad`, shared by road/station command owners.
-    pub allow_remove_road: unsafe extern "C" fn(*mut CommandCost, u32, u8, u8, u8, u16, bool),
 }
 
 /// Opaque native town shell. Its address identifies the shell, not the Rust owner.
@@ -425,6 +423,27 @@ pub struct Services {
     pub road_owner: extern "C" fn(u32) -> u8,
     /// Original native `road_type` map observation.
     pub road_type: extern "C" fn(u32) -> u8,
+    // Registry: road commands (#266).
+    /// Canonical native `HasCrossingReservation`.
+    pub crossing_reserved: extern "C" fn(u32) -> bool,
+    /// Canonical native `SetCrossingReservation`.
+    pub set_crossing_reserved: extern "C" fn(u32, bool),
+    /// Original `MayHaveRoad`, including road-stop and transport guards.
+    pub may_have_road: extern "C" fn(u32) -> bool,
+    /// Canonical native `road_tile_kind` service.
+    pub road_tile_kind: extern "C" fn(u32) -> RoadTileKind,
+    /// Canonical native `set_road_bits` service.
+    pub set_road_bits: extern "C" fn(u32, u8, u8),
+    /// Canonical native `set_road_type` service.
+    pub set_road_type: extern "C" fn(u32, u8, u8),
+    /// Canonical native `set_road_owner` service.
+    pub set_road_owner: extern "C" fn(u32, u8, u8),
+    /// Canonical native `set_road_directions` service.
+    pub set_road_directions: extern "C" fn(u32, u8),
+    /// Canonical native `road_powered` service.
+    pub road_powered: extern "C" fn(u8, u8) -> bool,
+    /// Canonical native `road_type_valid` service.
+    pub road_type_valid: extern "C" fn(u8) -> bool,
     /// `IsSafeWaitingPosition(v, tile, trackdir, true, forbid_90_deg)`.
     pub safe_waiting_position: unsafe extern "C" fn(*const Train, u32, u8, bool) -> bool,
     /// Shared live service at helipad observation.
@@ -439,6 +458,8 @@ pub struct Services {
     pub station_index: extern "C" fn(u32) -> u16,
     // Registry: station construction (#267).
     /// Canonical shared `docking_tile` service.
+    pub road_commands: extern "C" fn() -> *const crate::road_cmd::RoadCommandServices,
+    /// Canonical native station command table.
     pub station_commands: extern "C" fn() -> *const crate::station_cmd::CommandServicesTable,
     /// Original docking flag.
     pub docking_tile: extern "C" fn(u32) -> bool,
@@ -454,8 +475,6 @@ pub struct Services {
     pub tile_animation_delete: extern "C" fn(u32),
     /// Canonical shared `tile_animation_set_frame` service.
     pub tile_animation_set_frame: extern "C" fn(u32, u8),
-    /// Canonical shared `tile_change_owner` service.
-    pub tile_change_owner: extern "C" fn(u32, u8, u8),
     /// Canonical shared `town_next_id` service.
     pub town_next_id: extern "C" fn(u32) -> u32,
     /// Canonical shared `town_owner_by_id` service.
@@ -632,6 +651,17 @@ pub fn fixture(
             slope: Slope(0),
         }
     }
+    extern "C" fn set_reserved(_: u32, _: bool) {}
+    extern "C" fn set_three(_: u32, _: u8, _: u8) {}
+    extern "C" fn road_kind(_: u32) -> RoadTileKind {
+        RoadTileKind(0)
+    }
+    extern "C" fn two_types(_: u8, _: u8) -> bool {
+        false
+    }
+    extern "C" fn type_valid(_: u8) -> bool {
+        false
+    }
     Services {
         set_tile_owner: zone,
         autoslope: flag0,
@@ -695,12 +725,23 @@ pub fn fixture(
         road_depot_direction: byte,
         road_owner: byte,
         road_type: byte,
+        crossing_reserved: flag,
+        set_crossing_reserved: set_reserved,
+        may_have_road: flag,
+        road_tile_kind: road_kind,
+        set_road_bits: set_three,
+        set_road_type: set_three,
+        set_road_owner: set_three,
+        set_road_directions: zone,
+        road_powered: two_types,
+        road_type_valid: type_valid,
         safe_waiting_position: train_safe,
         service_at_helipad: flag0,
         set_tropic_zone: zone,
         slope,
         snow_line: zero_byte,
         station_index: short,
+        road_commands: fixture_road_commands,
         station_commands: fixture_station_commands,
         docking_tile: flag,
         station_gfx: byte,
@@ -709,7 +750,6 @@ pub fn fixture(
         tile_animation_add: unused_animation_add,
         tile_animation_delete: tile,
         tile_animation_set_frame: zone,
-        tile_change_owner: unused_tile_change_owner,
         town_next_id: word,
         town_owner_by_id: unused_town_owner_by_id,
         utf8_length: unused_utf8_length,
@@ -1172,10 +1212,6 @@ extern "C" fn unused_animation_add(_: u32, _: bool) {
     panic!("unused animation add");
 }
 #[cfg(test)]
-extern "C" fn unused_tile_change_owner(_: u32, _: u8, _: u8) {
-    panic!("unused tile ownership");
-}
-#[cfg(test)]
 extern "C" fn unused_town_owner_by_id(_: u32) -> *mut crate::town::State {
     panic!("unused town lookup");
 }
@@ -1211,6 +1247,16 @@ extern "C" fn unused_road_tram_type(_: u8) -> RoadTramType {
 #[cfg(test)]
 extern "C" fn unused_clear_animation(_: u32, _: bool) {
     panic!("unused clear animation")
+}
+
+/// Native road tile kind.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct RoadTileKind(pub u8);
+
+#[cfg(test)]
+extern "C" fn fixture_road_commands() -> *const crate::road_cmd::RoadCommandServices {
+    panic!("unused road commands")
 }
 
 #[cfg(test)]

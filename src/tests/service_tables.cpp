@@ -10,6 +10,7 @@ extern bool CheckAbi_industry_cmd();
 extern bool CheckAbi_town_cmd();
 extern bool CheckAbi_station_cmd();
 extern bool CheckAbi_rail_cmd();
+extern bool CheckAbi_road_cmd();
 extern bool CheckAbi_townname();
 extern bool CheckAbi_order_cmd();
 extern bool CheckAbi_signal();
@@ -45,6 +46,7 @@ TEST_CASE("Rust ABI - actual production callback tables are complete")
 	CHECK(CheckAbi_town_cmd());
 	CHECK(CheckAbi_station_cmd());
 	CHECK(CheckAbi_rail_cmd());
+	CHECK(CheckAbi_road_cmd());
 	CHECK(CheckAbi_townname());
 	CHECK(CheckAbi_order_cmd());
 	CHECK(CheckAbi_signal());

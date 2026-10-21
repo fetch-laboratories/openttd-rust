@@ -92,7 +92,6 @@ pub struct FoundingServices {
     pub money_deficit: extern "C" fn(*mut Frame, *const CommandCost),
     pub set_result: extern "C" fn(*mut Frame, TownId),
     pub exchange_generating: extern "C" fn(bool) -> bool,
-    pub nearest_town_roads: extern "C" fn(bool),
     pub founded_news: extern "C" fn(TownId, Tile),
     pub founded_events: extern "C" fn(TownId),
     pub clear_station_names: extern "C" fn(),
@@ -111,6 +110,7 @@ pub struct FoundingServices {
     pub no_space_error: u32,
 }
 struct Founding<'a> {
+    road: *const crate::road_cmd::CommandContext,
     s: &'a FoundingServices,
     shared: &'a Services,
     leaves: &'a Leaves,
@@ -125,6 +125,7 @@ impl<'a> Founding<'a> {
         let (shared, leaves, names, cost) =
             unsafe { (&*s.shared, &*s.growth, &*s.names, &*s.cost) };
         Self {
+            road: std::ptr::null(),
             s,
             shared,
             leaves,
@@ -148,6 +149,7 @@ impl<'a> Founding<'a> {
         let map = OnceCell::new();
         let _ = map.set(self.map());
         Engine {
+            road: self.road,
             leaves: self.leaves,
             services: self.shared,
             map,
@@ -479,6 +481,7 @@ pub unsafe extern "C" fn openttd_rust_town_default_number(s: *const FoundingServ
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_found(
     s: *const FoundingServices,
+    road: *const crate::road_cmd::CommandContext,
     frame: *mut Frame,
     name_frame: *mut names::NameFrame,
     result: *mut CommandCost,
@@ -492,7 +495,8 @@ pub unsafe extern "C" fn openttd_rust_town_found(
     execute: bool,
 ) {
     const MULT: [[i32; 4]; 2] = [[15, 25, 40, 25], [20, 35, 55, 35]];
-    let f = unsafe { Founding::new(&*s) };
+    let mut f = unsafe { Founding::new(&*s) };
+    f.road = road;
     w::hit(w::TOWN_ENTRIES);
     let parameters = observed!((f.s.parameters)(frame));
     observed!((f.cost.error)(result, 0xffff));
@@ -559,7 +563,9 @@ pub unsafe extern "C" fn openttd_rust_town_found(
             return;
         }
         let previous = observed!((f.s.exchange_generating)(true));
-        observed!((f.s.nearest_town_roads)(true));
+        unsafe {
+            crate::road_cmd::openttd_rust_road_nearest_towns((*road).services, true);
+        }
         let town = if random {
             unsafe { f.random_town(frame, 20, parts, size, city, layout) }
         } else {
@@ -569,7 +575,9 @@ pub unsafe extern "C" fn openttd_rust_town_found(
             }
             Some(town)
         };
-        observed!((f.s.nearest_town_roads)(false));
+        unsafe {
+            crate::road_cmd::openttd_rust_road_nearest_towns((*road).services, false);
+        }
         observed!((f.s.exchange_generating)(previous));
         let Some(town) = town else {
             observed!((f.cost.error)(result, f.s.no_space_error));
@@ -596,6 +604,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_generate(
     s: *const FoundingServices,
+    road: *const crate::road_cmd::CommandContext,
     frame: *mut Frame,
     name_frame: *mut names::NameFrame,
     layout: TownLayout,
@@ -603,7 +612,8 @@ pub unsafe extern "C" fn openttd_rust_town_generate(
     number: u32,
     result: *mut bool,
 ) -> bool {
-    let f = unsafe { Founding::new(&*s) };
+    let mut f = unsafe { Founding::new(&*s) };
+    f.road = road;
     let mut current = 0_u32;
     let mut total = if has_number {
         number

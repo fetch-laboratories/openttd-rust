@@ -43,6 +43,8 @@
 #include "town.h"
 #ifdef WITH_RUST
 #include "rust/command_services.h"
+#include "rust/road_command_services.h"
+#include "rust/services_road.h"
 #include "rust/company_services.h"
 #include "rust/environment_services.h"
 #include "rust/services_cargo.h"
@@ -1010,7 +1012,7 @@ static uint32_t RustTown_clean_road_bits(uint32_t tile, uint32_t bits) noexcept
 }
 static void RustTown_set_road_town(uint32_t tile, uint32_t town) noexcept
 {
-	SetRoadOwner(TileIndex{tile}, RTT_ROAD, OWNER_TOWN); SetTownIndex(TileIndex{tile}, TownID(town));
+	RustSetRoadOwner(tile, RTT_ROAD, OWNER_TOWN.base()); RustSetTownIndex(tile, static_cast<uint16_t>(town));
 }
 static uint32_t RustTown_exchange_company(uint32_t company) noexcept
 {
@@ -1054,13 +1056,6 @@ uint32_t OpenTTDNextTownID(uint32_t from) noexcept
 static uint64_t RustTown_road_mask() noexcept
 {
 	return GetMaskForRoadTramType(RTT_ROAD).base();
-}
-static bool RustTown_build_road(uint32_t town, uint32_t tile, uint32_t bits, uint32_t road_type, uint32_t mode) noexcept
-{
-	DoCommandFlags flags{DoCommandFlag::Auto};
-	if (mode != 2) flags.Set(DoCommandFlag::NoWater);
-	if (mode != 0) flags.Set(DoCommandFlag::Execute);
-	return Command<CMD_BUILD_ROAD>::Do(flags, TileIndex{tile}, static_cast<RoadBits>(bits), static_cast<RoadType>(road_type), DRD_NONE, TownID(town)).Succeeded();
 }
 static bool RustTown_clear_land(uint32_t tile, uint32_t execute) noexcept
 {
@@ -1304,7 +1299,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.update_max_pass = RustTown_update_max_pass,
 		.next_town = GetRustSharedServices().town_next_id,
 		.road_mask = RustTown_road_mask,
-		.build_road = RustTown_build_road,
 		.clear_land = RustTown_clear_land,
 		.terraform_land = RustTown_terraform_land,
 		.build_bridge = RustTown_build_bridge,
@@ -1345,7 +1339,7 @@ static void TownTickHandler(Town *t)
 
 /** Iterate through all towns and call their tick handler. */
 #ifdef WITH_RUST
-void OnTick_Town() { openttd_rust_town_tick_all(&GetRustTownServices(), &GetRustSharedServices()); }
+void OnTick_Town() { RustRoadCommandContext road; openttd_rust_town_tick_all(&GetRustTownServices(), &GetRustSharedServices(), &road.view); }
 #else
 void OnTick_Town()
 {
@@ -2503,7 +2497,6 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.money_deficit = [](OpenTTDTownFoundingFrame *frame, const OpenTTDCommandCost *cost) noexcept { frame->extra_money = reinterpret_cast<const CommandCost *>(cost)->GetCost(); },
 		.set_result = [](OpenTTDTownFoundingFrame *frame, uint16_t id) noexcept { frame->town_id = TownID(id); },
 		.exchange_generating = OpenTTDExchangeGeneratingWorld,
-		.nearest_town_roads = [](bool invalidate) noexcept { UpdateNearestTownForRoadTiles(invalidate); },
 		.founded_news = [](uint16_t value, uint32_t position) noexcept {
 			TownID id(value); TileIndex tile(position);
 			if (_current_company == OWNER_DEITY) {
@@ -2538,7 +2531,8 @@ std::tuple<CommandCost, Money, TownID> CmdFoundTown(DoCommandFlags flags, TileIn
 {
 	OpenTTDTownFoundingFrame frame;
 	CommandCost cost;
-	openttd_rust_town_found(&GetRustTownFoundingServices(), &frame, &frame.names, RustCommandCost(&cost), tile.base(), size, city, layout, random_location, townnameparts, {reinterpret_cast<const uint8_t *>(text.data()), text.size()}, flags.Test(DoCommandFlag::Execute));
+	RustRoadCommandContext road;
+	openttd_rust_town_found(&GetRustTownFoundingServices(), &road.view, &frame, &frame.names, RustCommandCost(&cost), tile.base(), size, city, layout, random_location, townnameparts, {reinterpret_cast<const uint8_t *>(text.data()), text.size()}, flags.Test(DoCommandFlag::Execute));
 	return {std::move(cost), frame.extra_money, frame.town_id};
 }
 uint GetDefaultTownsForMapSize()
@@ -2549,7 +2543,8 @@ bool GenerateTowns(TownLayout layout, std::optional<uint> number)
 {
 	OpenTTDTownFoundingFrame frame;
 	bool result;
-	if (!openttd_rust_town_generate(&GetRustTownFoundingServices(), &frame, &frame.names, layout, number.has_value(), number.value_or(0), &result)) std::rethrow_exception(frame.cancellation);
+	RustRoadCommandContext road;
+	if (!openttd_rust_town_generate(&GetRustTownFoundingServices(), &road.view, &frame, &frame.names, layout, number.has_value(), number.value_or(0), &result)) std::rethrow_exception(frame.cancellation);
 	return result;
 }
 #endif
@@ -3813,7 +3808,8 @@ CommandCost CmdExpandTown(DoCommandFlags flags, TownID town_id, uint32_t grow_am
 
 	if (flags.Test(DoCommandFlag::Execute)) {
 #ifdef WITH_RUST
-		openttd_rust_town_expand(&GetRustTownServices(), &GetRustSharedServices(), t->index.base(), grow_amount, modes.base());
+		RustRoadCommandContext road;
+		openttd_rust_town_expand(&GetRustTownServices(), &GetRustSharedServices(), &road.view, t->index.base(), grow_amount, modes.base());
 #else
 		/* The more houses, the faster we grow */
 		if (grow_amount == 0) {

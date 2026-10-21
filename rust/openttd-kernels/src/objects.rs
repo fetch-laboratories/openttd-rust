@@ -1439,7 +1439,7 @@ impl World<'_> {
             (self.commands().landscape_clear)(out.0, tile, flags);
         }
     }
-    fn change_owner(&self, tile: u32, old: u8, new: u8) {
+    fn change_owner(&self, ownership: &crate::tile_owner::Context, tile: u32, old: u8, new: u8) {
         if !self.is_owner(tile, old) {
             return;
         }
@@ -1468,7 +1468,8 @@ impl World<'_> {
             }
             if clear {
                 self.really_clear((self.s.identity)(tile));
-                (self.company().change_tile_owner)(tile, old, new);
+                // When clearing objects, they may turn into canal, which may require transferring ownership.
+                crate::tile_owner::openttd_rust_tile_change_owner(ownership, tile, old, new);
             }
         }
         crate::witness::hit(crate::witness::OBJECT_OWNER);
@@ -2128,13 +2129,14 @@ pub unsafe extern "C" fn openttd_rust_object_generate(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_change_owner(
     s: *const ObjectServices,
+    ownership: &crate::tile_owner::Context,
     tile: u32,
     old: u8,
     new_owner: u8,
 ) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
     let w = unsafe { World::new::<true>(&*s) };
-    w.change_owner(tile, old, new_owner);
+    w.change_owner(ownership, tile, old, new_owner);
 }
 
 /// Synchronous object owner entry.

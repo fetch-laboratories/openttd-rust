@@ -56,6 +56,7 @@
 #include "rust/services_cargo.h"
 #include "rust/services_newgrf.h"
 #include "rust/settings_services.h"
+#include "rust/tile_owner_services.h"
 #endif
 
 #include "safeguards.h"
@@ -963,7 +964,8 @@ void GenerateObjects()
 static void ChangeTileOwner_Object(TileIndex tile, Owner old_owner, Owner new_owner)
 {
 #ifdef WITH_RUST
-	openttd_rust_object_change_owner(&GetRustObjectServices(), tile.base(), old_owner.base(), new_owner.base());
+	RustTileOwnerContext ownership;
+	openttd_rust_object_change_owner(&GetRustObjectServices(), &ownership.view, tile.base(), old_owner.base(), new_owner.base());
 #else
 	if (!IsTileOwner(tile, old_owner)) return;
 
