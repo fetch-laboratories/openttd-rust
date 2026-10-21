@@ -117,7 +117,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings.
 2. **Speed guard and passes (#155, #282, #321, AGENTS.md).**
-   - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios; #321 adds fixed measured anchors and separately rolling integrated instruction projections. Root reselected its tooling/test budget to 250 added lines for compatibility identity, build reconfiguration and default regressions; no new controller.
+   - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios; #321 adds fixed measured anchors and separately rolling integrated instruction projections. After inspecting its 211-line draft, root reselected 330 added tooling/test lines to include the mandatory real scope probe, compatibility identity, build reconfiguration and default regressions; no new controller.
    - **Per PR:** no scenario's projected ratio more than 15% above its record and none over its ceiling (1.5x play saves, 1.3x generation). Until #321 lands, use quiet wall medians. Misses get a callgrind fix round.
    - **Speed pass:** after every fourth ownership integration (#255 and #303 count two since the #275 profile), or when a projection comes within 5% of its ceiling (1.425x play, 1.235x generation). The fifteenth steering profile on #275 is the current attribution.
    - **Redraw:** `-r 64x64` leaves the ratios unchanged, so redraw does not inflate them. It does make whole-process counts timing-dependent, which is why only the game loop is counted.
@@ -163,7 +163,7 @@ own the active tasks below; #290 waits for capacity behind their integration.
 | --- | --- | --- |
 | #306 / #308 | `9675566fb9` | Quiet medians recorded; exact-head Full requested. Root integrates when green. |
 | #320 | implementation active | Station fidelity fixes, cleanup and default failing-before witnesses; fresh review follows. |
-| #321 | implementation active | Instruction-count speed guard; 250-line budget. Root coordinates quiet anchors/calibration. |
+| #321 | implementation active | Instruction-count speed guard; 330-line budget. Root coordinates quiet anchors/calibration. |
 | #256 / #269 | `64f133b059` | Agent adopts actual base; scoped conflict review, quiet medians and Full follow. No new fix round. |
 | #294 / #317 | `5410774ff7` | Agent adopts #303's shared layer and deletes parallel copies; scoped review and gates follow. |
 | #295 / #313 | `b64cfe4cf0` | Agent adopts shared layer/ABI and reassesses retirement; fresh review and gates follow. |
