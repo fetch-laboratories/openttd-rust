@@ -165,7 +165,9 @@ static OpenTTDRoadDepotResult OPENTTD_VEHICLE_CALL RoadSvcFindDepot(OpenTTDVehic
 static OpenTTDRoadTramBuildRead OPENTTD_VEHICLE_CALL RoadSvcTramBuildRead(OpenTTDVehicle *v, OpenTTDRoadCommandSlot *slot) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	return {.owner = RustVehicleOwner(u), .road_type = u->roadtype, .road = &slot->road.emplace().view};
+	if (slot->built) slot->road.~RustRoadCommandContext();
+	slot->built = true;
+	return {.owner = RustVehicleOwner(u), .road_type = u->roadtype, .road = &std::construct_at(&slot->road)->view};
 }
 static void OPENTTD_VEHICLE_CALL RoadSvcDisconnect() noexcept { FatalError("Disconnecting road vehicle."); }
 static OpenTTDRoadStopRead OPENTTD_VEHICLE_CALL RoadSvcStopRead(OpenTTDVehicle *v) noexcept

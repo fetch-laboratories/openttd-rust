@@ -12,6 +12,7 @@
 #include "rail_command_services.h"
 #include "command_cost_services.h"
 #include "../roadveh.h"
+#include <memory>
 #include <optional>
 struct OpenTTDRoadConvertFrame { std::vector<RoadVehicle *> affected; };
 struct RoadConversionScratch {
@@ -32,5 +33,11 @@ struct RustRoadCommandContext {
 	CommandCost cost, ret;
 	OpenTTDRoadCommandContext view{&GetRustRoadCommandServices(), &scratch, RustCommandCost(&cost), RustCommandCost(&ret)};
 };
-struct OpenTTDRoadCommandSlot { std::optional<RustRoadCommandContext> road; };
+/* Not std::optional: its GCC 15 constructor zero-fills the payload on every road tick. */
+struct OpenTTDRoadCommandSlot {
+	union { RustRoadCommandContext road; };
+	bool built = false;
+	OpenTTDRoadCommandSlot() {}
+	~OpenTTDRoadCommandSlot() { if (this->built) this->road.~RustRoadCommandContext(); }
+};
 #endif /* RUST_ROAD_COMMAND_SERVICES_H */
