@@ -31,6 +31,7 @@ inline void RustLocationCallbackError(Cost *out, const Result *result, const Han
 	const Spec *spec = reinterpret_cast<const Spec *>(handle);
 	*reinterpret_cast<CommandCost *>(out) = GetErrorMessageFromLocationCallbackResult(result->callback, result->registers, spec->grf_prop.grffile, Error);
 }
+inline void RustCloseNewGRFInspect(GrfSpecFeature feature, uint32_t index) noexcept { DeleteNewGRFInspectWindow(feature, index); }
 template <GrfSpecFeature Feature, typename Id>
-inline void RustCloseInspect(Id id) noexcept { DeleteNewGRFInspectWindow(Feature, id); }
+inline void RustCloseInspect(Id id) noexcept { RustCloseNewGRFInspect(Feature, id); }
 #endif /* RUST_SERVICES_NEWGRF_H */

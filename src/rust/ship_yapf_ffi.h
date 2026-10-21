@@ -8,6 +8,7 @@
 /** @file ship_yapf_ffi.h Complete ship searches and canonical path owner. */
 #ifndef OPENTTD_RUST_SHIP_YAPF_FFI_H
 #define OPENTTD_RUST_SHIP_YAPF_FFI_H
+#include "service_defaults.hpp"
 #include "water_regions_ffi.h"
 #include "services_ffi.h"
 #include <stddef.h>
@@ -26,14 +27,14 @@ struct OpenTTDShipFollow { uint32_t tile; int32_t skipped; uint16_t dirs; uint8_
 struct OpenTTDShipTile { uint32_t ships; uint8_t docking, sea, lock_middle, destination; };
 struct OpenTTDShipYapfResult { uint8_t direction, found, origin; uint32_t stats[13]; };
 struct OpenTTDShipYapfLeaves {
-	void (*destination)(const void *, uint32_t *, uint16_t *) noexcept;
-	OpenTTDShipFollow (*follow)(const void *, uint32_t, uint8_t) noexcept;
-	OpenTTDShipTile (*tile)(const void *, uint32_t, uint8_t) noexcept;
-	OpenTTDWaterPatch (*patch)(uint32_t) noexcept;
-	void *(*visit_new)(OpenTTDWaterPatch) noexcept;
-	uint8_t (*visit_next)(void *, OpenTTDWaterPatch, OpenTTDWaterPatch *) noexcept;
-	void (*visit_destroy)(void *) noexcept;
-	void (*debug)(uint32_t, uint8_t, uint8_t, uint32_t, uint32_t, uint32_t, int32_t, int32_t) noexcept;
+	void (*destination)(const void *, uint32_t *, uint16_t *) noexcept OPENTTD_SERVICE_DEFAULT(destination);
+	OpenTTDShipFollow (*follow)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(follow);
+	OpenTTDShipTile (*tile)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
+	OpenTTDWaterPatch (*patch)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(patch);
+	void *(*visit_new)(OpenTTDWaterPatch) noexcept OPENTTD_SERVICE_DEFAULT(visit_new);
+	uint8_t (*visit_next)(void *, OpenTTDWaterPatch, OpenTTDWaterPatch *) noexcept OPENTTD_SERVICE_DEFAULT(visit_next);
+	void (*visit_destroy)(void *) noexcept OPENTTD_SERVICE_DEFAULT(visit_destroy);
+	void (*debug)(uint32_t, uint8_t, uint8_t, uint32_t, uint32_t, uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug);
 };
 /* Search owns its arena, hashes, heap and copied world observations. The ship
 	* context is opaque and live for the synchronous call. Leaves never reenter this

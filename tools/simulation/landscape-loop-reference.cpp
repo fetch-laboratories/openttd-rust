@@ -62,7 +62,21 @@ static TileIndex _cur_tileloop_tile;
 
 static uint32_t Random(void *) noexcept { std::abort(); }
 static uint32_t Industry(int32_t, int32_t, uint32_t *) noexcept { std::abort(); }
+static OpenTTDObjectLoopPolicy ReferenceObjectPolicy(uint32_t tile) noexcept
+{
+	Object(tile);
+	return {nullptr, nullptr, 0, 0, 0};
+}
+static bool ReferenceObjectOnWater(uint32_t) noexcept { return false; }
 static OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
+static const OpenTTDIndustryTileServices object_tiles{.on_water = ReferenceObjectOnWater};
+static const auto objects = [] {
+	auto result = OpenTTDObjectServices{};
+	result.shared = &shared;
+	result.industry_tiles = &object_tiles;
+	result.loop_policy = ReferenceObjectPolicy;
+	return result;
+}();
 static OpenTTDLandscapeLoopServices services{
 	.shared = &shared,
 	.tile_types = {nullptr, 0},
@@ -71,8 +85,7 @@ static OpenTTDLandscapeLoopServices services{
 	.ground = {},
 	.house_loop = House,
 	.station_loop = LandscapeStationLoop,
-	.object_loop = Object,
-		.objects = nullptr,
+		.objects = &objects,
 		.object_frame = nullptr,
 };
 static void RustRun()

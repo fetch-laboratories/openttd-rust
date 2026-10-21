@@ -46,7 +46,7 @@
 #include "rust/company_services.h"
 #include "rust/environment_services.h"
 #include "rust/tile_animation_services.h"
-#include "rust/station_services.h"
+#include "rust/services_station.h"
 #include "rust/services_landscape.h"
 #include "rust/settings_services.h"
 #include "rust/town_founding_ffi.h"
@@ -63,7 +63,6 @@
 #include "game/game.hpp"
 #include "town_cmd.h"
 #include "landscape_cmd.h"
-#include "road_cmd.h"
 #include "terraform_cmd.h"
 #include "tunnelbridge_cmd.h"
 #include "clear_map.h"
@@ -1029,7 +1028,7 @@ static void RustTown_update_max_pass(uint32_t town) noexcept
 {
 	UpdateTownMaxPass(Town::Get(TownID(town)));
 }
-static uint32_t RustTown_next_town(uint32_t from) noexcept
+uint32_t OpenTTDNextTownID(uint32_t from) noexcept
 {
 	{ auto range = Town::Iterate(from); auto it = range.begin(); return it == range.end() ? UINT32_MAX : (*it)->index.base(); }
 }
@@ -1086,10 +1085,13 @@ static bool RustTown_allow_construction(uint32_t town, uint32_t tile, uint32_t h
 static void RustTown_construction_animation(uint32_t tile) noexcept { TriggerHouseAnimation_ConstructionStageChanged(TileIndex{tile}, true); }
 static void RustTownStations(uint32_t tile, uint32_t radius, void *context, void (*visit)(void *, const OpenTTDStation *, uint32_t)) noexcept
 {
-	ForAllStationsRadius(TileIndex{tile}, radius, [context, visit](const Station *st) { visit(context, RustStation(st), RustStationLocation(st)); });
+	struct Context { void *context; void (*visit)(void *, const OpenTTDStation *, uint32_t); } state{context, visit};
+	RustStationRadius(tile, radius, &state, [](void *opaque, BaseStation *base) {
+		const auto &state = *static_cast<Context *>(opaque);
+		state.visit(state.context, RustStation(Station::From(base)), RustStationLocation(base));
+	});
 }
 /* Thin FFI conversion facades over the shared station observations. */
-static uint8_t RustTownStationOwner(const OpenTTDStation *station) noexcept { return OpenTTDStationOwner(StationOf(station)).base(); }
 static void RustTownDirtyAuthority(uint32_t town) noexcept { SetWindowDirty(WC_TOWN_AUTHORITY, TownID(town)); }
 
 const OpenTTDTownLeaves &GetRustTownServices() noexcept
@@ -1113,10 +1115,10 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.house_extra_flags = RustTownHouseExtraFlags,
 		.house_allows_callback = RustTownHouseAllowsCallback,
 		.road_info = RustTownRoadInfo,
-		.state = OpenTTDTownOwnerByID,
+		.state = GetRustSharedServices().town_owner_by_id,
 		.stations = RustTownStations,
 		.station_activity_owner = OpenTTDStationActivityOwner,
-		.station_owner = RustTownStationOwner,
+		.station_owner = RustStationOwnerByte<const Station>,
 		.dirty_authority = RustTownDirtyAuthority,
 		.dirty_town = RustTown_dirty_town,
 		.foundation_slope = RustFoundationSlopeValue,
@@ -1126,12 +1128,12 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.exchange_company = RustTown_exchange_company,
 		.house_class = RustTownHouseClass,
 		.make_house = RustTown_make_house,
-		.add_animation = OpenTTDAddAnimatedTile,
+		.add_animation = GetRustSharedServices().tile_animation_add,
 		.population_changed = RustTown_population_changed,
 		.nearby_stations = RustTown_nearby_stations,
 		.house_count = RustTown_house_count,
 		.update_max_pass = RustTown_update_max_pass,
-		.next_town = RustTown_next_town,
+		.next_town = GetRustSharedServices().town_next_id,
 		.road_mask = RustTown_road_mask,
 		.build_road = RustTown_build_road,
 		.clear_land = RustTown_clear_land,
@@ -4317,7 +4319,7 @@ static uint16_t RustTownAuthorityIndex(const OpenTTDTownHandle *town) noexcept {
 const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept
 {
 	static const OpenTTDTownAuthorityServices services{
-		.council_tolerance = RustTownCouncilTolerance, .bulldozer = RustMagicBulldozer,
+		.council_tolerance = RustTownCouncilTolerance, .bulldozer = []() noexcept { return _cheats.magic_bulldozer.value; },
 		.authority_distance = RustTownAuthorityDistance, .town_index = RustTownAuthorityIndex,
 		.refusal = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
 	};
@@ -4585,15 +4587,23 @@ static const IntervalTimer<TimerGameEconomy> _economy_towns_monthly({TimerGameEc
 #endif
 });
 
-static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::TOWN}, [](auto)
-{
 #ifdef WITH_RUST
+static const OpenTTDTownYearlyServices &TownYearlyServices()
+{
 	static const OpenTTDTownYearlyServices houses{
 		.completed = [](uint32_t tile) noexcept { return IsHouseCompleted(TileIndex{tile}); },
 		.age = [](uint32_t tile) noexcept { return Tile(TileIndex{tile}).m5(); },
 		.set_age = [](uint32_t tile, uint8_t age) noexcept { Tile(TileIndex{tile}).m5() = age; },
 	};
-	openttd_rust_town_yearly(&GetRustSharedServices(), &houses, Map::Size());
+	return houses;
+}
+#endif
+
+static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEconomy::YEAR, TimerGameEconomy::Priority::TOWN}, [](auto)
+{
+#ifdef WITH_RUST
+
+	openttd_rust_town_yearly(&GetRustSharedServices(), &TownYearlyServices(), Map::Size());
 #else
 	/* Increment house ages */
 	for (const auto t : Map::Iterate()) {
@@ -4654,3 +4664,18 @@ std::span<const DrawBuildingsTileStruct> GetTownDrawTileData()
 {
 	return _town_draw_tile_data;
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDTownLeaves.hpp"
+#include "abi-visit-OpenTTDTownFoundingServices.hpp"
+#include "abi-visit-OpenTTDTownAuthorityServices.hpp"
+#include "abi-visit-OpenTTDTownYearlyServices.hpp"
+bool CheckAbi_town_cmd()
+{
+	return AbiServicesComplete(GetRustTownServices()) &&
+		AbiServicesComplete(GetRustTownFoundingServices()) &&
+		AbiServicesComplete(GetRustTownAuthorityServices()) &&
+		AbiServicesComplete(TownYearlyServices());
+}
+#endif

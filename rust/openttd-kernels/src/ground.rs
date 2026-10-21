@@ -23,6 +23,55 @@ use crate::services::{
     RoadBits, RoadType, Roadside, Services, Slope, TrackBits, WaterClass,
 };
 
+/// Complete original `DoClearSquare` control. Native leaves cannot throw and no
+/// owner borrow survives their invocation; world access is serialized.
+pub(crate) fn clear_square(tile: u32, s: &Services) {
+    let leaves = &s.clear_square_services;
+    if (leaves.may_animate)(tile) {
+        (leaves.delete_animated)(tile, true);
+    }
+    let remove = (leaves.docking)(tile);
+    // SAFETY: the native getter supplies immutable process-lifetime service tables.
+    let water = unsafe { &*(s.water_services)() };
+    let clear = unsafe { &*water.clear };
+    (clear.make_clear)(
+        tile,
+        ClearGroundType(0),
+        if (leaves.generating_world)() { 3 } else { 0 },
+    );
+    (s.mark_dirty)(tile);
+    if remove {
+        // SAFETY: the native getter supplies the process-lifetime station table.
+        unsafe {
+            crate::station_cmd::openttd_rust_station_remove_docking_tile(
+                (s.station_commands)(),
+                tile,
+            );
+        }
+    }
+    // SAFETY: services reference the current serialized map; no borrow of region
+    // state crosses a callback. Source map dimensions are read at this operation.
+    unsafe {
+        crate::water::openttd_rust_clear_neighbour_flooding(
+            tile,
+            (s.map_max_x)() + 1,
+            (s.map_max_y)() + 1,
+            water,
+            s,
+        );
+        water.invalidate_region(tile, s);
+    }
+}
+
+/// # Safety
+/// The table and its native map services stay live under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_clear_square(tile: u32, s: *const Services) {
+    unsafe {
+        clear_square(tile, &*s);
+    }
+}
+
 #[repr(usize)]
 pub(crate) enum Witness {
     SnowStart,
@@ -716,72 +765,4 @@ pub unsafe extern "C" fn openttd_rust_ground_abi_calls(calls: *const ABICalls) -
             LandscapeType(236),
             victim.kind,
         )
-}
-
-/// Complete shared square clearing, with direct flooding/cache owner calls.
-/// # Safety
-/// Services are live immutable native tables; caller serializes map mutation.
-pub(crate) unsafe fn clear_square(tile: u32, s: &Services) {
-    let c = &s.clear_square_services;
-    if (c.may_animate)(tile) {
-        (c.delete_animated)(tile, true);
-    }
-    let remove = (c.docking)(tile);
-    let density = if (c.generating_world)() { 3 } else { 0 };
-    // SAFETY: lazy canonical water table; each observation ends before mutation.
-    let water = unsafe { &*(s.water_services)() };
-    unsafe { ((*water.clear).make_clear)(tile, ClearGroundType(0), density) };
-    (s.mark_dirty)(tile);
-    if remove {
-        (c.remove_docking)(tile);
-    }
-    // SAFETY: same live tables and serialized map mutation contract.
-    unsafe {
-        crate::water::openttd_rust_clear_neighbour_flooding(
-            tile,
-            (s.map_max_x)().wrapping_add(1),
-            (s.map_max_y)().wrapping_add(1),
-            water,
-            s,
-        );
-        water.invalidate_region(tile, s);
-    }
-}
-/// Native facade for complete shared square clearing.
-/// # Safety
-/// The native caller provides live services and serializes map mutation.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_clear_square(tile: u32, s: &Services) {
-    // SAFETY: forwarded native entry contract.
-    unsafe { clear_square(tile, s) };
-}
-
-#[cfg(test)]
-pub(crate) fn fixture_clear() -> ClearServices {
-    extern "C" fn unused1<A, R>(_: A) -> R {
-        panic!("unexpected clear fixture service")
-    }
-    extern "C" fn unused2<A, B, R>(_: A, _: B) -> R {
-        panic!("unexpected clear fixture service")
-    }
-    extern "C" fn unused3<A, B, C, R>(_: A, _: B, _: C) -> R {
-        panic!("unexpected clear fixture service")
-    }
-    ClearServices {
-        field_tile: unused1,
-        density: unused1,
-        counter: unused1,
-        snow: unused1,
-        surface: unused1,
-        set_ground: unused3,
-        set_density: unused2,
-        set_counter: unused2,
-        clear_snow: unused1,
-        make_clear: unused3,
-        fences: unused1,
-        field: unused1,
-        set_field: unused2,
-        water_class: unused1,
-        ambient: unused1,
-    }
 }

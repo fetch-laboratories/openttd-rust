@@ -8,6 +8,7 @@
 /** @file auth_ffi.h Opaque authentication owners and primitive-only host operations. */
 #ifndef OPENTTD_RUST_AUTH_FFI_H
 #define OPENTTD_RUST_AUTH_FFI_H
+#include "service_defaults.hpp"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -35,18 +36,18 @@ struct OpenTTDAuthPrimitives {
 	size_t aead_alignment;
 	size_t hash_size;
 	size_t hash_alignment;
-	void (OPENTTD_AUTH_CALL *wipe)(void *, size_t);
-	void (OPENTTD_AUTH_CALL *x25519)(uint8_t *, const uint8_t *, const uint8_t *);
-	void (OPENTTD_AUTH_CALL *public_key)(uint8_t *, const uint8_t *);
-	void (OPENTTD_AUTH_CALL *hash_init)(void *, size_t);
-	void (OPENTTD_AUTH_CALL *hash_update)(void *, const uint8_t *, size_t);
-	void (OPENTTD_AUTH_CALL *hash_final)(void *, uint8_t *);
-	void (OPENTTD_AUTH_CALL *aead_init)(void *, const uint8_t *, const uint8_t *);
-	void (OPENTTD_AUTH_CALL *aead_copy)(void *, const void *);
-	void (OPENTTD_AUTH_CALL *aead_write)(void *, uint8_t *, uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t);
-	int32_t (OPENTTD_AUTH_CALL *aead_read)(void *, uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t);
-	void (OPENTTD_AUTH_CALL *lock)(uint8_t *, uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t);
-	int32_t (OPENTTD_AUTH_CALL *unlock)(uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t);
+	void (OPENTTD_AUTH_CALL *wipe)(void *, size_t) OPENTTD_SERVICE_DEFAULT(wipe);
+	void (OPENTTD_AUTH_CALL *x25519)(uint8_t *, const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(x25519);
+	void (OPENTTD_AUTH_CALL *public_key)(uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(public_key);
+	void (OPENTTD_AUTH_CALL *hash_init)(void *, size_t) OPENTTD_SERVICE_DEFAULT(hash_init);
+	void (OPENTTD_AUTH_CALL *hash_update)(void *, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(hash_update);
+	void (OPENTTD_AUTH_CALL *hash_final)(void *, uint8_t *) OPENTTD_SERVICE_DEFAULT(hash_final);
+	void (OPENTTD_AUTH_CALL *aead_init)(void *, const uint8_t *, const uint8_t *) OPENTTD_SERVICE_DEFAULT(aead_init);
+	void (OPENTTD_AUTH_CALL *aead_copy)(void *, const void *) OPENTTD_SERVICE_DEFAULT(aead_copy);
+	void (OPENTTD_AUTH_CALL *aead_write)(void *, uint8_t *, uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(aead_write);
+	int32_t (OPENTTD_AUTH_CALL *aead_read)(void *, uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(aead_read);
+	void (OPENTTD_AUTH_CALL *lock)(uint8_t *, uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(lock);
+	int32_t (OPENTTD_AUTH_CALL *unlock)(uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, const uint8_t *, size_t, const uint8_t *, size_t) OPENTTD_SERVICE_DEFAULT(unlock);
 };
 
 struct OpenTTDAuthKeys;

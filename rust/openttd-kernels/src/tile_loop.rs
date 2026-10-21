@@ -103,7 +103,6 @@ pub struct Services {
     pub ground: GroundServices,
     pub house_loop: extern "C" fn(u32),
     pub station_loop: extern "C" fn(u32),
-    pub object_loop: Option<extern "C" fn(u32)>,
     pub objects: *const crate::objects::ObjectServices,
     pub object_frame: *mut crate::objects::LoopFrame,
 }
@@ -197,16 +196,7 @@ unsafe fn dispatch(
         },
         9 => unsafe { ground::openttd_rust_tunnel_tile_loop(tile, g.climate, g.tunnel, s.shared) },
         10 => unsafe {
-            if let Some(visit) = s.object_loop {
-                visit(tile);
-            } else {
-                crate::objects::openttd_rust_object_tile_loop(
-                    s.objects,
-                    s.object_frame,
-                    g.call,
-                    tile,
-                );
-            }
+            crate::objects::openttd_rust_object_tile_loop(s.objects, s.object_frame, g.call, tile);
         },
         // The source dispatch table has handlers only for original live tile types.
         _ => unsafe { std::hint::unreachable_unchecked() },

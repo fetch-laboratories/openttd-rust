@@ -101,6 +101,7 @@ protected:
 #endif
 };
 
+#ifndef WITH_RUST
 /**
  * Keeps track of removed objects during execution/testruns of commands.
  */
@@ -108,6 +109,7 @@ struct ClearedObjectArea {
 	TileIndex first_tile;  ///< The first tile being cleared, which then causes the whole object to be cleared.
 	TileArea area;         ///< The area of the object.
 };
+#endif
 
 /** Native scratch clients query or temporarily hide the first intersecting area. */
 #ifdef WITH_RUST

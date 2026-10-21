@@ -1049,7 +1049,7 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
                 / ("openttd" if role == "reference" else "openttd-rust")
             )
             binaries[role] = copy_runtime(source.parent, source, builds[role])
-            for name in ("fleet", "orders", "engines", "signals", "towns"):
+            for name in ("fleet", "orders", "engines", "signals", "stations", "towns"):
                 shutil.copytree(source.parent / name, builds[role] / name)
     else:
         # The game finds its data next to the executable, so copy the shared

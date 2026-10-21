@@ -45,9 +45,8 @@ struct OpenTTDLandscapeLoopServices {
 	const OpenTTDTreeServices *trees;
 	OpenTTDIndustryLoopServices industry;
 	OpenTTDGroundLoopServices ground;
-	void (*house_loop)(uint32_t) noexcept;
-	void (*station_loop)(uint32_t) noexcept;
-	void (*object_loop)(uint32_t) noexcept; ///< Only standalone oracle fixtures; null in the game.
+	void (*house_loop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(house_loop);
+	void (*station_loop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_loop);
 	const OpenTTDObjectServices *objects;
 	OpenTTDObjectLoopFrame *object_frame;
 };

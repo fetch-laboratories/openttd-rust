@@ -15,7 +15,9 @@ CARGODIST = ("cargodist", "stale-refresh", "stale-restrict", "stale-release")
 
 
 def game_environment(scenario):
-    witnessed = scenario.get("station_service") and scenario.get("witnesses")
+    witnessed = (
+        scenario.get("station_service") or scenario.get("station_commands")
+    ) and scenario.get("witnesses")
     return core.WITNESS_ENVIRONMENT if witnessed else {}
 
 
@@ -54,10 +56,22 @@ def scenarios(soak):
             "stale-restrict",
             "stale-release",
         )
+    ] + [
+        {
+            "name": "stations-commands-" + mode,
+            "kind": "save",
+            "save": str(ROOT / "migration/saves/road-crossing.sav"),
+            "station_commands": mode,
+            "ticks": 1,
+            "short_checkpoint": True,
+        }
+        for mode in ("commands", "reload")
     ]
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
+    if "station_commands" in scenario:
+        return prepare_commands(scenario, binaries, builds, out, timeout, env, result)
     if "station_service" not in scenario:
         return scenario
     original = read_save(Path(scenario["save"]))
@@ -205,6 +219,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 
 def check(scenario, run, mode, role, result):
+    if "station_commands" in scenario:
+        return check_commands(scenario, run, mode, role, result)
     if "station_service" not in scenario:
         return
     kind = scenario["station_service"]
@@ -304,3 +320,296 @@ def check(scenario, run, mode, role, result):
             result["problems"].append(
                 f"{mode}/{role}: acceptance loss did not retain staged delivery"
             )
+
+
+# #267: inputs for the unchanged reference bodies and Rust command owner. The
+# private tile callbacks need a fixture translation unit; the pinned source is
+# included verbatim and its ordinary object is replaced only in this executable.
+COMMAND_SOURCE = r"""
+#include "station_cmd.cpp"
+#include "console_internal.h"
+#include "clear_map.h"
+#include "waypoint_cmd.h"
+#include "saveload/saveload.h"
+static void StationNeed(bool value, int line) { if (!value) { fmt::print(stderr, "STCMD setup-failure {}\n", line); std::abort(); } }
+static void StationCost(const char *label, const CommandCost &cost)
+{
+	fmt::print(stderr, "STCMD cost {} {} {} {} rng {} {}\n", label, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), _random.state[0], _random.state[1]);
+}
+static TileIndex StationPatch()
+{
+	for (uint y = 8; y + 32 < Map::MaxY(); y += 8) for (uint x = 8; x + 32 < Map::MaxX(); x += 8) {
+		TileArea area(TileXY(x, y), 32, 32);
+		bool usable = true;
+		for (TileIndex t : area) if ((GetTileType(t) != MP_CLEAR && GetTileType(t) != MP_TREES && GetTileType(t) != MP_WATER) || IsBridgeAbove(t) || VehiclesOnTile(t).begin() != VehiclesOnTile(t).end()) usable = false;
+		auto height = [x, y](uint xx, uint yy) {
+			int d = std::max({int(x) - int(xx), int(xx) - int(x + 32), int(y) - int(yy), int(yy) - int(y + 32), 0});
+			return static_cast<uint>(std::clamp<int>(TileHeight(TileXY(xx, yy)), std::max(0, 1 - d), 1 + d));
+		};
+		/* Preserve live vehicle corner heights so their saved z remains valid. */
+		for (const Vehicle *v : Vehicle::Iterate()) {
+			if (!v->IsGroundVehicle()) continue;
+			uint xx = TileX(v->tile), yy = TileY(v->tile);
+			for (uint dy = 0; dy < 2; dy++) for (uint dx = 0; dx < 2; dx++) if (height(xx + dx, yy + dy) != TileHeight(TileXY(xx + dx, yy + dy))) usable = false;
+		}
+		if (!usable) continue;
+		/* Clamp a one-level plateau with a valid one-level transition for reload. */
+		for (uint yy = 0; yy < Map::SizeY(); yy++) for (uint xx = 0; xx < Map::SizeX(); xx++) SetTileHeight(TileXY(xx, yy), height(xx, yy));
+		for (TileIndex t : area) MakeClear(t, CLEAR_GRASS, 3);
+		return area.tile;
+	}
+	StationNeed(false, __LINE__); return INVALID_TILE;
+}
+static bool StationCommands(std::span<std::string_view> args)
+{
+	if (args.size() < 2) return false;
+	Company *company = *Company::Iterate().begin();
+	Backup<CompanyID> current(_current_company, company->index);
+	/* Declare the builtin tram type available without an external vehicle GRF. */
+	company->avail_roadtypes.Set(ROADTYPE_TRAM);
+	_settings_game.station.distant_join_stations = true;
+	_settings_game.station.never_expire_airports = true;
+	_settings_game.construction.road_stop_on_town_road = true;
+	_settings_game.construction.road_stop_on_competitor_road = true;
+	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
+	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
+	if (args[1] == "inspect") {
+		Station *found = nullptr;
+		for (Station *st : Station::Iterate()) if (st->name == "Migration station") found = st;
+		StationNeed(found != nullptr, __LINE__);
+		StationCost("reload-name", Command<CMD_RENAME_STATION>::Do(exec, found->index, "Reloaded station"));
+		UpdateStationDockingTiles(found);
+		fmt::print(stderr, "STCMD reloaded {} {}\n", found->index.base(), found->facilities.base());
+	} else {
+		TileIndex origin = StationPatch();
+		auto tile = [origin](int x, int y) { return origin + TileDiffXY(x, y); };
+		auto rail = [&](DoCommandFlags f, TileIndex t, StationID join, uint8_t n = 2, uint8_t len = 3) { return Command<CMD_BUILD_RAIL_STATION>::Do(f, t, RAILTYPE_RAIL, AXIS_X, n, len, STAT_CLASS_DFLT, 0, join, true); };
+		StationCost("rail-test", rail(test, tile(1, 1), NEW_STATION));
+		StationCost("rail-build", rail(exec, tile(1, 1), NEW_STATION));
+		StationNeed(IsRailStationTile(tile(1, 1)), __LINE__);
+		StationID station = GetStationIndex(tile(1, 1));
+		StationCost("rail-bridge-low", CheckBuildAbove_Station(tile(1, 1), test, AXIS_Y, 4));
+		StationCost("rail-bridge-high", CheckBuildAbove_Station(tile(1, 1), test, AXIS_Y, 12));
+		StationCost("rail-extension", rail(exec, tile(1, 3), station));
+		StationCost("rail-invalid", rail(test, tile(1, 8), NEW_STATION, 0));
+		StationCost("rail-overbuild", rail(test, tile(1, 1), NEW_STATION));
+		StationCost("rename-test", Command<CMD_RENAME_STATION>::Do(test, station, "Migration station"));
+		StationCost("rename", Command<CMD_RENAME_STATION>::Do(exec, station, "Migration station"));
+		StationCost("move-sign", std::get<0>(Command<CMD_MOVE_STATION_NAME>::Do(exec, station, tile(1, 2))));
+		StationCost("rename-missing", Command<CMD_RENAME_STATION>::Do(test, StationID::Invalid(), "Missing"));
+		StationCost("terraform-rail", TerraformTile_Station(tile(1, 1), test, GetTileZ(tile(1, 1)), SLOPE_FLAT));
+		StationCost("clear-auto", ClearTile_Station(tile(1, 1), DoCommandFlag::Auto));
+		StationCost("rail-other", rail(exec, tile(7, 1), NEW_STATION, 1, 1));
+		StationID other = GetStationIndex(tile(7, 1));
+		StationCost("rename-duplicate", Command<CMD_RENAME_STATION>::Do(test, other, "Migration station"));
+		/* Mixed ownership reaches the original accumulated-error/partial effects. */
+		Station::Get(other)->owner = OWNER_NONE;
+		StationCost("rail-partial-test", CmdRemoveFromRailStation(test, tile(1, 1), tile(7, 1), true));
+		StationCost("rail-partial", CmdRemoveFromRailStation(exec, tile(1, 1), tile(7, 1), true));
+		Station::Get(other)->owner = company->index;
+		StationCost("clear-rail", Command<CMD_LANDSCAPE_CLEAR>::Do(exec, tile(7, 1)));
+		StationCost("rail-delete", Command<CMD_REMOVE_FROM_RAIL_STATION>::Do(exec, tile(1, 2), tile(3, 4), true));
+		StationCost("rail-reuse", rail(exec, tile(1, 1), StationID::Invalid(), 1, 2));
+		fmt::print(stderr, "STCMD reuse {}\n", GetStationIndex(tile(1, 1)) == station);
+		StationCost("waypoint-build", Command<CMD_BUILD_RAIL_WAYPOINT>::Do(exec, tile(1, 2), AXIS_X, 1, 2, STAT_CLASS_WAYP, 0, NEW_STATION, true));
+		StationNeed(IsRailWaypointTile(tile(1, 2)), __LINE__);
+		StationCost("waypoint-remove", Command<CMD_REMOVE_FROM_RAIL_WAYPOINT>::Do(exec, tile(1, 2), tile(1, 3), true));
+		auto road = [&](DoCommandFlags f, TileIndex t, bool drive, StationID join) { return Command<CMD_BUILD_ROAD_STOP>::Do(f, t, 2, 1, RoadStopType::Bus, drive, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, join, true); };
+		StationCost("bay-test", road(test, tile(12, 1), false, NEW_STATION));
+		StationCost("bay-build", road(exec, tile(12, 1), false, NEW_STATION));
+		StationNeed(IsBayRoadStopTile(tile(12, 1)), __LINE__);
+		StationCost("bay-bridge-low", CheckBuildAbove_Station(tile(12, 1), test, AXIS_Y, 4));
+		StationCost("bay-bridge-high", CheckBuildAbove_Station(tile(12, 1), test, AXIS_Y, 12));
+		StationCost("bay-remove", Command<CMD_REMOVE_ROAD_STOP>::Do(exec, tile(12, 1), 2, 1, RoadStopType::Bus, false));
+		for (int x = 12; x < 14; x++) MakeRoadNormal(tile(x, 4), ROAD_X, ROADTYPE_ROAD, INVALID_ROADTYPE, TownID(0), OWNER_TOWN, OWNER_NONE);
+		StationCost("drive-test", road(test, tile(12, 4), true, NEW_STATION));
+		StationCost("drive-build", road(exec, tile(12, 4), true, NEW_STATION));
+		StationNeed(IsDriveThroughStopTile(tile(12, 4)), __LINE__);
+		StationCost("drive-remove", Command<CMD_REMOVE_ROAD_STOP>::Do(exec, tile(12, 4), 2, 1, RoadStopType::Bus, false));
+		fmt::print(stderr, "STCMD road-owner {}\n", GetRoadOwner(tile(12, 4), RTT_ROAD) == OWNER_TOWN);
+		StationCost("tram-test", Command<CMD_BUILD_ROAD_STOP>::Do(test, tile(12, 7), 1, 1, RoadStopType::Bus, true, DIAGDIR_NE, ROADTYPE_TRAM, ROADSTOP_CLASS_DFLT, 0, NEW_STATION, true));
+		StationCost("tram-build", Command<CMD_BUILD_ROAD_STOP>::Do(exec, tile(12, 7), 1, 1, RoadStopType::Bus, true, DIAGDIR_NE, ROADTYPE_TRAM, ROADSTOP_CLASS_DFLT, 0, NEW_STATION, true));
+		StationNeed(IsDriveThroughStopTile(tile(12, 7)), __LINE__);
+		StationCost("tram-remove", Command<CMD_REMOVE_ROAD_STOP>::Do(exec, tile(12, 7), 1, 1, RoadStopType::Bus, false));
+		StationCost("road-waypoint-test", Command<CMD_BUILD_ROAD_WAYPOINT>::Do(test, tile(12, 4), AXIS_X, 1, 1, ROADSTOP_CLASS_WAYP, 0, NEW_STATION, true));
+		StationCost("road-waypoint-build", Command<CMD_BUILD_ROAD_WAYPOINT>::Do(exec, tile(12, 4), AXIS_X, 1, 1, ROADSTOP_CLASS_WAYP, 0, NEW_STATION, true));
+		StationNeed(IsRoadWaypointTile(tile(12, 4)), __LINE__);
+		StationCost("road-waypoint-remove", Command<CMD_REMOVE_FROM_ROAD_WAYPOINT>::Do(exec, tile(12, 4), tile(12, 4)));
+		StationCost("airport-test", Command<CMD_BUILD_AIRPORT>::Do(test, tile(20, 1), AT_SMALL, 0, NEW_STATION, true));
+		StationCost("airport-build", Command<CMD_BUILD_AIRPORT>::Do(exec, tile(20, 1), AT_SMALL, 0, NEW_STATION, true));
+		StationNeed(IsAirportTile(tile(20, 1)), __LINE__);
+		StationID airport = GetStationIndex(tile(20, 1));
+		Backup<bool> noise_setting(_settings_game.economy.station_noise_level, true);
+		uint distance; Town *nearest = AirportGetNearestTown(AirportSpec::Get(AT_SMALL), Station::Get(airport)->airport.rotation, tile(20, 1), AirportTileIterator(Station::Get(airport)), distance);
+		Backup<uint16_t> noise(nearest->noise_reached, UINT16_MAX);
+		auto noisy = Command<CMD_BUILD_AIRPORT>::Do(test, tile(20, 1), AT_SMALL, 0, NEW_STATION, true);
+		StationCost("airport-noise-limit", noisy); StationNeed(noisy.GetErrorMessage() == STR_ERROR_LOCAL_AUTHORITY_REFUSES_NOISE, __LINE__);
+		noise.Restore(); noise_setting.Restore();
+		StationCost("airport-bridge-low", CheckBuildAbove_Station(tile(20, 1), test, AXIS_Y, 4));
+		StationCost("airport-bridge-high", CheckBuildAbove_Station(tile(20, 1), test, AXIS_Y, 12));
+		StationCost("airport-close-test", Command<CMD_OPEN_CLOSE_AIRPORT>::Do(test, airport));
+		StationCost("airport-close", Command<CMD_OPEN_CLOSE_AIRPORT>::Do(exec, airport));
+		StationCost("airport-open", Command<CMD_OPEN_CLOSE_AIRPORT>::Do(exec, airport));
+		UpdateAirportsNoise();
+		StationCost("airport-remove-test", Command<CMD_LANDSCAPE_CLEAR>::Do(test, tile(20, 1)));
+		StationCost("airport-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(exec, tile(20, 1)));
+		/* A deterministic synthetic shoreline input, followed by real dock commands. */
+		for (int y = 16; y < 23; y++) for (int x = 0; x < 8; x++) { SetTileHeight(tile(x, y), 0); MakeSea(tile(x, y)); }
+		SetTileHeight(tile(3, 16), 1); SetTileHeight(tile(4, 16), 1); MakeClear(tile(3, 16), CLEAR_GRASS, 3);
+		StationCost("dock-invalid", Command<CMD_BUILD_DOCK>::Do(test, tile(9, 16), NEW_STATION, true));
+		StationCost("dock-test", Command<CMD_BUILD_DOCK>::Do(test, tile(3, 16), NEW_STATION, true));
+		StationCost("dock-build", Command<CMD_BUILD_DOCK>::Do(exec, tile(3, 16), NEW_STATION, true));
+		StationNeed(IsDockTile(tile(3, 16)), __LINE__);
+		Station *dock = Station::GetByTile(tile(3, 16));
+		StationCost("dock-bridge-low", CheckBuildAbove_Station(tile(3, 16), test, AXIS_Y, 4));
+		StationCost("dock-bridge-high", CheckBuildAbove_Station(tile(3, 16), test, AXIS_Y, 12));
+		UpdateStationDockingTiles(dock); CheckForDockingTile(tile(3, 18));
+		fmt::print(stderr, "STCMD docking {}\n", IsPossibleDockingTile(tile(3, 18)));
+		StationCost("dock-remove-test", Command<CMD_LANDSCAPE_CLEAR>::Do(test, tile(3, 16)));
+		StationCost("dock-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(exec, tile(3, 16)));
+		StationNeed(Industry::CanAllocateItem(), __LINE__);
+		Industry *industry = new Industry(); industry->location = TileArea(tile(20, 20), 1, 1); industry->town = *Town::Iterate().begin(); industry->type = 5;
+		MakeIndustry(tile(20, 20), industry->index, 0, 0, WaterClass::Sea);
+		BuildOilRig(tile(20, 20)); StationNeed(IsOilRig(tile(20, 20)), __LINE__);
+		fmt::print(stderr, "STCMD oilrig {}\n", industry->neutral_station != nullptr);
+		DeleteOilRig(tile(20, 20)); StationNeed(industry->neutral_station == nullptr, __LINE__); delete industry;
+		ChangeTileOwner_Station(tile(1, 1), company->index, company->index);
+		fmt::print(stderr, "STCMD complete\n");
+		if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
+	}
+	current.Restore(); return true;
+}
+extern "C" void __real__Z22IConsoleStdLibRegisterv();
+extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLibRegisterv(); IConsole::CmdRegister("stations_scenario", StationCommands); }
+"""
+
+
+def adapter(build, folder, env):
+    from .console_adapter import console_adapter
+
+    folder.mkdir(parents=True, exist_ok=True)
+    source = folder / "station-commands.cpp"
+    source.write_text(COMMAND_SOURCE)
+    return console_adapter(
+        build,
+        folder,
+        env,
+        source,
+        "stations",
+        replace_objects=("/src/station_cmd.cpp.o",),
+    )
+
+
+def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
+    import migration
+
+    from .runtime import prepared_adapter
+
+    folder = out / scenario["name"] / "input"
+    source = Path(scenario["save"])
+    read_save(source)
+    executables = {}
+    for role in ("reference", "candidate"):
+        prepared = prepared_adapter("stations", role, builds, folder / role)
+        if prepared is None:
+            native = (
+                migration.REFERENCE_BUILD
+                if role == "reference" or binaries[role] == binaries["reference"]
+                else ROOT / "build-rust"
+            )
+            lock = (
+                migration.reference_lock(shared=True)
+                if native == migration.REFERENCE_BUILD
+                else migration.candidate_lock(native, shared=True)
+            )
+            with lock:
+                prepared = adapter(native, folder / role, env)
+        executables[role] = prepared
+        for name in core.RUNTIME_DIRECTORIES:
+            if (builds[role] / name).is_dir():
+                (folder / role / name).symlink_to(
+                    builds[role] / name, target_is_directory=True
+                )
+    if binaries["candidate"] == binaries["reference"]:
+        executables["candidate"] = executables["reference"]
+    scenario = dict(scenario, save=str(source), executables=executables)
+    if scenario["station_commands"] == "reload":
+        saves, logs = {}, {}
+        for role in ("reference", "candidate"):
+            save = folder / role / "stations.sav"
+            run = core.run_game(
+                dict(
+                    scenario,
+                    console=[f'stations_scenario commands "{save}"', "unpause"],
+                ),
+                executables[role],
+                builds[role],
+                folder / role / "capture",
+                timeout,
+                env,
+                False,
+            )
+            if run["exit"] or not save.is_file() or "STCMD complete" not in run["log"]:
+                raise RuntimeError("station reload capture failed")
+            saves[role], logs[role] = (
+                save,
+                [line for line in run["log"] if line.startswith("STCMD ")],
+            )
+        differences = core.compare_saves(
+            saves["reference"],
+            saves["candidate"],
+            scenario["name"],
+            10,
+            result["stats"],
+        )
+        if differences or logs["reference"] != logs["candidate"]:
+            raise RuntimeError("station reload input differs")
+        return dict(
+            scenario,
+            role_inputs={role: {"save": str(save)} for role, save in saves.items()},
+            console=["stations_scenario inspect", "unpause"],
+        )
+    return dict(scenario, console=["stations_scenario commands", "unpause"])
+
+
+def check_commands(scenario, run, mode, role, result):
+    required = (
+        ["rename"]
+        if scenario["station_commands"] == "reload"
+        else [
+            "build_rail",
+            "build_road",
+            "build_airport",
+            "remove_airport",
+            "build_dock",
+            "remove_dock",
+            "build_oilrig",
+            "delete_oilrig",
+            "check_docking",
+            "rename",
+            "move_name",
+            "change_owner",
+            "clear",
+            "terraform",
+            "remove_road_tile",
+            "remove_rail_area",
+            "join",
+            "reuse",
+            "partial_rail",
+            "build_above",
+        ]
+    )
+    core.branch_witnesses(scenario, run, role, "station_command", required)
+    lines = [line for line in run["log"] if line.startswith("STCMD ")]
+    expected = (
+        "STCMD reloaded"
+        if scenario["station_commands"] == "reload"
+        else "STCMD complete"
+    )
+    if not any(line.startswith(expected) for line in lines):
+        raise RuntimeError("station command scenario did not complete")
+    key = mode + "_station_commands"
+    if role == "reference":
+        result[key] = lines
+    elif result[key] != lines:
+        raise RuntimeError("station costs/errors/ids/RNG differ")

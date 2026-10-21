@@ -13,13 +13,6 @@
     clippy::cast_possible_wrap
 )]
 
-/// Call-local addresses of the canonical map-lifetime owner and native leaves.
-#[repr(C)]
-pub struct Context {
-    pub owner: *mut Regions,
-    pub leaves: *const Leaves,
-}
-
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Patch {
@@ -42,6 +35,14 @@ pub struct Leaves {
     pub follow: unsafe extern "C" fn(u32, u8, *mut u8) -> u32,
     pub aqueduct: unsafe extern "C" fn(u32) -> u32,
     pub debug: unsafe extern "C" fn(u8, i32, i32),
+}
+
+/// Current native-owned region allocation and its immutable leaves.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Context {
+    pub owner: *mut Regions,
+    pub leaves: *const Leaves,
 }
 
 #[derive(Default)]

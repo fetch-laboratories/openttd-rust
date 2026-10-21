@@ -1,39 +1,58 @@
 ---
 name: steer
-description: Steering review of root's autonomous migration work since the last steering commit; audits, corrects docs/issues, refreshes /start-development.
+description: Steering review of root's autonomous migration work since the last steering commit; audits, corrects docs/issues, refreshes /start-development, and can restart root.
 disable-model-invocation: true
 ---
 
 # Steer the OpenTTD-Rust migration
 
-The user runs root (`gpt-6.1-sol` xhigh in Codex; Astra before 2026-10-08) for
-long autonomous sessions, and runs this review in Claude Code between them. Your
+The user runs root for long autonomous sessions, usually `gpt-6.1-sol` xhigh in
+Codex (Astra before 2026-10-08) and sometimes Claude Opus in Claude Code, and
+runs this review between them in either host. Your
 job is to check that root is still on the path to a game whose simulation runs in Rust, find what it
 cannot see in its own work, and correct the *system*: rules, roadmap order,
 issues and PR comments. Root's team does the implementation. You edit docs,
 issues and PR comments, and you leave code changes to root's PR process.
 
-User focus for this run, if any: $ARGUMENTS
+Root carries out the latest steering section's actions within minutes and
+literally, and it parks work rather than question a gate. The rules you write
+are the strongest force on its next session, for better or worse.
+
+User focus for this run, if any: $ARGUMENTS (in Codex, any text sent with `$steer`)
+
+A focus that names a question (disk, CI, a crashed root, housekeeping) is
+answered first, down to its root cause. Read it broadly: housekeeping covers
+code, tests and refactoring as well as docs. Tell the user at the start which
+of steps 2 and 3 still run, and land the answer through step 4 with what root
+does next. A focus that asks you to restart root is handled in step 6.
 
 Attribution on every issue, comment and commit body you write:
-`Agent: /root (Claude Code steering review) | Model: <your exact model ID> | Reasoning effort: <as reported by host, else "not reported to the agent by host">`.
+`Agent: /root (<host> steering review) | Model: <your exact model ID> | Reasoning effort: <as reported by host, else "not reported to the agent by host">`.
 
 ## 1. Load the last steering
 
 1. Find the last steering commit: `git log --format='%h %ad %s' --date=short | grep -i 'Doc: .*Steer'`.
    Its message and the roadmap's "steering review" section state the standing
    corrections.
-2. Read the last steering session's transcript. `python3 docs/skills/steer/transcript.py`
-   lists sessions newest first. The steering ones open with `/steer` or a request
-   to review root (Astra or Sol). Skip unrelated sessions, but read the conclusion
+2. Read the last steering session's transcript, from whichever host ran it.
+   `python3 docs/skills/steer/transcript.py` lists Claude Code sessions and
+   `transcript.py --codex` lists Codex sessions, newest first. The steering ones
+   open with the steer skill or a request to review root, near the steering
+   commit's time. Skip unrelated sessions, but read the conclusion
    of any session in between that changed a rule. `transcript.py <id>` prints one session; read
    its final messages first.
-3. Read `docs/skills/start-development/SKILL.md`, the restart prompt root
-   last ran, and `AGENTS.md`. Root's own Codex sessions are under
-   `~/.codex/sessions/YYYY/MM/DD/`; its session opens with `$start-development`.
-   Read the user's messages to it, and how it ended.
+3. Read `docs/skills/start-development/SKILL.md` and `AGENTS.md`. Then read
+   root's sessions since the steering, in whichever host and model each ran.
+   They open with the start-development skill (`$start-development` in Codex,
+   `/start-development` in Claude Code). `transcript.py <id> --tools` prints one
+   with a line per tool call. Read the user's messages to root, and how it
+   ended.
+4. The user's messages to root, including the wind-down message, bind that
+   session only. They also restate premises (a gate, a speed figure, a PR's
+   state); check each against the code before carrying it forward.
 
-Done when you can list each standing correction and the issue that tracks it.
+Done when you can list each standing correction, the issue that tracks it, and
+the review or message that introduced it.
 
 ## 2. Survey root's work since then
 
@@ -47,12 +66,19 @@ Run these together:
   how many runs were cancelled.
 - Open PRs and issues, and the latest review reports on the integrated and pending PRs.
 - `python3 tools/port-metrics.py`, plus the PR-reported metrics and speed ratios.
+  Before quoting a progress figure, confirm it counts original C++ retired,
+  not glue removed.
 - `git worktree list` and disk use.
 
 Then post a short status line to the user and continue.
 
-Judge each standing correction: applied, slipped, or reinterpreted. Watch for the
-patterns root has repeated before:
+Judge each standing correction from the last two steering reviews, your own
+rules included: applied, slipped, reinterpreted, or harmful as written. For
+each, note what it cost root (agent hours, CI runs, PRs parked) against what it
+caught. Trace each problem you find to the rule, roadmap action or user message
+that produced it. Relax or remove a harmful rule before adding a new one.
+
+Watch for the patterns root has repeated before:
 
 - **Wheel-spinning**: evidence, tooling or process growing faster than retired game logic.
 - **Sediment**: roadmap and docs turning into logs (run IDs, hashes, probe values).
@@ -60,23 +86,45 @@ patterns root has repeated before:
 - **Template drift**: one port's boundary pattern copied into every later port.
 - **WIP creep**: stacked or conflicting branches, and dependency-merge churn.
 - **Finite prompts**: the last prompt ended because its listed items ran out.
+- **Artificial hurdles**: a gate, budget or ordering that parks work without
+  catching defects, including deferrals that wait on each other.
+
+Done when every standing correction has a verdict and a cost.
 
 ## 3. Audit independently
 
 Root's reviewers share its model family and usually report "Findings: none".
-The value of this session is an audit that does not depend on them. Launch these
-in one message as background read-only subagents (Claude Opus):
+The value of this session is an audit that does not depend on them, so run the
+audits on a model family other than root's: Claude Opus when root is Sol,
+`gpt-6.1-sol` when root is Claude. Use native subagents when they offer that
+model and T3 `delegate_task` otherwise; if neither can, say in the report that
+the audits share root's family. Launch these in one message as background
+subagents. They read and measure,
+and leave root's worktrees, branches, profiles and `.local/` output as they
+found them.
 
-- One per large port integrated since the last steering, or about to integrate.
-  Pick the largest by retired lines first, up to four.
-- One performance agent: run `python3 tools/migration.py simulate <scenario>
-  --benchmark 3 --jobs 2` on the play saves and generate-tgp-256-1, and profile
-  the candidate against the reference. Attribute the gap by port, then judge the
-  current speed plan against the profile.
+- **Fidelity**: one per large port integrated since the last steering, or
+  about to integrate. Pick the largest by retired lines first, up to four.
+- **Targeted**: one or two aimed where the survey shows the largest cost or
+  risk this round, for example:
+  - *Blockers*: each deferred or parked item, what would lift it, and any
+    re-selection condition that waits on other deferred work.
+  - *Process*: root's time on CI waits, base updates, reviews and gates against
+    its time on ports, attributed to the rules that require it.
+  - *Speed*: profile the candidate against the reference on the play saves and
+    generate-tgp-256-1, attribute the gap by port, and judge the current speed
+    plan against the profile. Re-measure each PR parked on speed at its exact
+    head.
 
-Give each audit agent the worktree, commit and merge base, `AGENTS.md`, and the
-pinned original at `.local/reference/openttd`. Ask it to compare against the
-original line by line:
+Speed results rest on callgrind instruction counts (valgrind is under
+`.local/valgrind`), which do not change with other processes on the machine.
+Steer cannot stop the user's own work, so a wall-clock median is quoted with
+what ran machine-wide during it: the compiler, linker and `openttd` processes
+in `ps -eo pid,pcpu,comm,args`, and the 1-minute load average.
+
+Give each agent `AGENTS.md` and the roadmap. A fidelity agent also gets the
+worktree, commit and merge base, and the pinned original at
+`.local/reference/openttd`, and compares against the original line by line:
 
 - **Ownership**: Rust owns the state and the control loop, and the original body
   sits under `#else` or `#ifndef WITH_RUST`.
@@ -90,8 +138,9 @@ original line by line:
 - **Coverage**: which Random, crash and contention branches the harness reaches.
 
 Each agent reports under about 70 lines. Tag findings REACHABLE-DIVERGENCE,
-UNREACHABLE, RULE-VIOLATION, COVERAGE-GAP or PERF, with `file:line` in both
-Rust and the original, and name what it compared. Relay a short summary to the
+UNREACHABLE, RULE-VIOLATION, COVERAGE-GAP, PERF or HURDLE (a rule or gate that
+costs more than it catches), with `file:line` in both Rust and the original
+where they apply, and name what it compared. Relay a short summary to the
 user as each audit returns. Before acting on a load-bearing claim, such as red CI,
 a reachable divergence or a perf attribution, check it yourself.
 
@@ -114,6 +163,20 @@ a one-off finding. Each correction lands in exactly one authoritative place:
   older steering sections into the compact "still in force" paragraph. Keep the
   file under the `AGENTS.md` budget, moving per-PR plans to their PRs or issues.
 
+Write each correction as the outcome you want, with its bounds attached:
+
+- A "do X next" names its constraint, such as a glue budget or the shared
+  layer to reuse.
+- A gate says what happens on a miss: a profile-guided fix round, not deferral.
+- A number you introduce (a threshold, a factor, a budget) rests on a
+  measurement of its noise under the conditions root will run it in. Record
+  that basis and mark the number provisional in the steering section; the next
+  review checks it.
+- Read each new rule beside the rules it interacts with.
+
+When a correction reverses a direction the user gave root, the steering section
+says so in one line: what it reverses, and why.
+
 Commit `AGENTS.md`, the roadmap and any restart-prompt edit (step 5) as one
 docs-only commit pushed straight to `rust-migration`, with a title like
 `Doc: Steer migration toward <corrections> [skip ci]`. Earlier steering commits
@@ -129,14 +192,30 @@ misread it, or needs a new standing step in its work loop. Keep it open-ended:
 finishing the listed items triggers planning the next work, and only the user
 ends the assignment. Include any edit in the step 4 commit.
 
-## 6. Report
+## 6. Report and hand off
 
-Tell the user:
+Tell the user, in about 25 lines at most:
 
 - the verdict on root's track;
 - what the audits found, with numbers;
-- what you changed, with issue and commit links;
+- what you changed, with issue and commit links, and any user direction it
+  reverses;
 - anything only the user can supply, such as a new play save or a policy decision.
 
-Finish by telling them to start root with `/start-development` in Codex, and
-whether this review changed it. The prompt lives in the skill, not in your reply.
+If the focus asked you to restart root, launch it once `origin/rust-migration`
+has your commit, using the T3 Code tools `t3_thread_list`,
+`t3_thread_configuration`, `t3_thread_launch` and `t3_thread_read` (in Claude
+Code, load them first with ToolSearch). Root's last thread is the newest
+top-level thread in `t3_thread_list` whose first message, read with
+`t3_thread_read`, invokes start-development. Read its `modelSelection`,
+`runtimeMode` and `interactionMode` with `t3_thread_configuration`. Call
+`t3_thread_launch` with those values, or with the model the focus names, plus
+its title, `workspaceStrategy: {type: "root"}` and the start-development
+message for that host (`$start-development` in Codex, `/start-development` in
+Claude Code). The launch has no retry key: after an error, check
+`t3_thread_list` before launching again. Confirm with `t3_thread_read` that it
+is running, and link it as `[title](t3-thread://v1/<threadId>)`.
+
+Otherwise finish by telling them to start root with the start-development
+skill. Either way, say whether this review changed the prompt; the prompt lives
+in the skill, not in your reply.

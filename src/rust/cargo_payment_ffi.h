@@ -8,6 +8,7 @@
 /** @file cargo_payment_ffi.h Rust payment lifetime and cargo delivery services. */
 #ifndef RUST_CARGO_PAYMENT_FFI_H
 #define RUST_CARGO_PAYMENT_FFI_H
+#include "service_defaults.hpp"
 
 /** Opaque live native entity, distinct from Rust-owned boundary state. */
 struct CargoPayment;
@@ -62,22 +63,22 @@ struct OpenTTDCargoPayment {
  * 9 default sound. Setting0 subsidy multiplier,1 feeder share. Monitor source is
  * SourceID low16/SourceType high16, industry=0xFFFF means town/house delivery. */
 struct OpenTTDCargoServices {
-	void (OPENTTD_CARGO_CALL *spec)(uint8_t, OpenTTDCargoSpec *) noexcept;
-	uint16_t (OPENTTD_CARGO_CALL *callback)(uint8_t, uint32_t) noexcept;
-	void *(OPENTTD_CARGO_CALL *nearby_industry)(uint16_t, uint32_t) noexcept;
-	uint32_t (OPENTTD_CARGO_CALL *station_read)(uint16_t, uint8_t, uint8_t) noexcept;
-	uint32_t (OPENTTD_CARGO_CALL *industry_read)(void *, uint8_t, uint32_t) noexcept;
-	void (OPENTTD_CARGO_CALL *industry_write)(void *, uint8_t, uint32_t, uint32_t) noexcept;
-	uint8_t (OPENTTD_CARGO_CALL *refuses)(void *, uint8_t) noexcept;
-	void (OPENTTD_CARGO_CALL *accept)(void *, uint32_t, uint32_t) noexcept;
-	void (OPENTTD_CARGO_CALL *statistics)(uint16_t, uint8_t, uint8_t, uint32_t, uint8_t) noexcept;
-	void (OPENTTD_CARGO_CALL *monitor)(uint16_t, uint8_t, uint8_t, uint32_t, uint32_t, uint16_t) noexcept;
-	uint8_t (OPENTTD_CARGO_CALL *subsidised)(uint16_t, uint8_t, uint8_t, uint32_t) noexcept;
-	void (OPENTTD_CARGO_CALL *industry_effect)(void *, uint8_t) noexcept;
-	uint32_t (OPENTTD_CARGO_CALL *vehicle_read)(void *, uint8_t) noexcept;
-	uint32_t (OPENTTD_CARGO_CALL *settle)(void *, uint8_t, int64_t, int64_t) noexcept;
-	int64_t (OPENTTD_CARGO_CALL *feeder)(const void *, uint32_t) noexcept;
-	uint32_t (OPENTTD_CARGO_CALL *setting)(uint8_t) noexcept;
+	void (OPENTTD_CARGO_CALL *spec)(uint8_t, OpenTTDCargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec);
+	uint16_t (OPENTTD_CARGO_CALL *callback)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(callback);
+	void *(OPENTTD_CARGO_CALL *nearby_industry)(uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby_industry);
+	uint32_t (OPENTTD_CARGO_CALL *station_read)(uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_read);
+	uint32_t (OPENTTD_CARGO_CALL *industry_read)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_read);
+	void (OPENTTD_CARGO_CALL *industry_write)(void *, uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_write);
+	uint8_t (OPENTTD_CARGO_CALL *refuses)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(refuses);
+	void (OPENTTD_CARGO_CALL *accept)(void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(accept);
+	void (OPENTTD_CARGO_CALL *statistics)(uint16_t, uint8_t, uint8_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(statistics);
+	void (OPENTTD_CARGO_CALL *monitor)(uint16_t, uint8_t, uint8_t, uint32_t, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(monitor);
+	uint8_t (OPENTTD_CARGO_CALL *subsidised)(uint16_t, uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(subsidised);
+	void (OPENTTD_CARGO_CALL *industry_effect)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_effect);
+	uint32_t (OPENTTD_CARGO_CALL *vehicle_read)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_read);
+	uint32_t (OPENTTD_CARGO_CALL *settle)(void *, uint8_t, int64_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(settle);
+	int64_t (OPENTTD_CARGO_CALL *feeder)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(feeder);
+	uint32_t (OPENTTD_CARGO_CALL *setting)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(setting);
 };
 extern "C" {
 OpenTTDCargoPayment *OPENTTD_CARGO_CALL openttd_rust_cargo_payment_new(void *, uint16_t);

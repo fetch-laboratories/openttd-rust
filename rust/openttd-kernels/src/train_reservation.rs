@@ -189,8 +189,8 @@ pub struct Leaves {
     pub reach_tracks: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub reserved: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub reserve_paths: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
-    pub restore_order: extern "C" fn(*mut std::ffi::c_void, Handle),
-    pub save_order: extern "C" fn(*mut std::ffi::c_void, Handle),
+    pub restore_order: unsafe extern "C" fn(Handle, *const crate::orders::Order),
+    pub save_order: extern "C" fn(Handle) -> crate::orders::Order,
     pub service: extern "C" fn(*mut std::ffi::c_void, Handle),
     pub set_depot: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8),
     pub set_depot_dest: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
@@ -411,17 +411,9 @@ impl Game<'_> {
     fn svc_reserve_paths(&self, id: Handle) -> u64 {
         (self.leaves.reserve_paths)(self.context, id)
     }
-    fn svc_restore_order(&self, id: Handle) -> u64 {
-        (self.leaves.restore_order)(self.context, id);
-        0
-    }
     fn shared(&self) -> &crate::services::Services {
         // SAFETY: Native installs the process-lifetime shared table; tests a live fixture.
         unsafe { &*self.leaves.shared }
-    }
-    fn svc_save_order(&self, id: Handle) -> u64 {
-        (self.leaves.save_order)(self.context, id);
-        0
     }
     fn svc_service(&self, id: Handle) -> u64 {
         (self.leaves.service)(self.context, id);
@@ -833,11 +825,12 @@ struct Orders<'a> {
     suppress: u8,
     index: u8,
     restored: bool,
+    saved_order: crate::orders::Order,
 }
 impl<'a> Orders<'a> {
     fn new(g: &Game<'a>, id: Handle) -> Self {
         let v = g.read_new(id);
-        g.svc_save_order(id);
+        let saved_order = (g.leaves.save_order)(id);
         Self {
             g: *g,
             id,
@@ -846,11 +839,13 @@ impl<'a> Orders<'a> {
             suppress: v.suppress,
             index: v.order_index,
             restored: false,
+            saved_order,
         }
     }
     fn restore(&mut self) {
         crate::witness::hit(crate::witness::TRAIN_ORDER_RESTORE);
-        self.g.svc_restore_order(self.id);
+        // SAFETY: this stack snapshot is live; the service copies it before returning.
+        unsafe { (self.g.leaves.restore_order)(self.id, &raw const self.saved_order) };
         self.g.svc_write_dest(self.id, u64::from(self.dest));
         self.g.svc_write_last(self.id, u64::from(self.last));
         self.g.svc_write_suppress(self.id, u64::from(self.suppress));
@@ -1212,7 +1207,7 @@ fn check_next(g: &Game, id: Handle) {
     }
 }
 
-/// Synchronous reservation policy; native order snapshots live on the calling stack.
+/// Synchronous reservation policy; order snapshots live on the Rust stack.
 /// # Safety
 /// Leaves, context and shell are live for this call. No state borrow spans a callback.
 #[unsafe(no_mangle)]
@@ -1231,7 +1226,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_check_next(
     check_next(&g, id);
 }
 
-/// Synchronous reservation policy; native order snapshots live on the calling stack.
+/// Synchronous reservation policy; order snapshots live on the Rust stack.
 /// # Safety
 /// Leaves, context and shell are live for this call. No state borrow spans a callback.
 #[unsafe(no_mangle)]
@@ -1252,7 +1247,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_clear(
     clear(&g, id, tile, td);
 }
 
-/// Synchronous reservation policy; native order snapshots live on the calling stack.
+/// Synchronous reservation policy; order snapshots live on the Rust stack.
 /// # Safety
 /// Leaves, context and shell are live for this call. No state borrow spans a callback.
 #[unsafe(no_mangle)]
@@ -1271,7 +1266,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_free(
     free(&g, id);
 }
 
-/// Synchronous reservation policy; native order snapshots live on the calling stack.
+/// Synchronous reservation policy; order snapshots live on the Rust stack.
 /// # Safety
 /// Leaves, context and shell are live for this call. No state borrow spans a callback.
 #[unsafe(no_mangle)]
@@ -1299,7 +1294,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_choose(
     }
 }
 
-/// Synchronous reservation policy; native order snapshots live on the calling stack.
+/// Synchronous reservation policy; order snapshots live on the Rust stack.
 /// # Safety
 /// Leaves, context and shell are live for this call. No state borrow spans a callback.
 #[unsafe(no_mangle)]
@@ -1320,7 +1315,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_try_path(
     u8::from(try_path(&g, id, mark != 0, first_okay != 0))
 }
 
-/// Synchronous reservation policy; native order snapshots live on the calling stack.
+/// Synchronous reservation policy; order snapshots live on the Rust stack.
 /// # Safety
 /// Leaves, context and shell are live for this call. No state borrow spans a callback.
 #[unsafe(no_mangle)]
@@ -1347,7 +1342,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_check_reverse(
     }
 }
 
-/// Synchronous reservation policy; native order snapshots live on the calling stack.
+/// Synchronous reservation policy; order snapshots live on the Rust stack.
 /// # Safety
 /// Leaves, context and shell are live for this call. No state borrow spans a callback.
 #[unsafe(no_mangle)]
@@ -1375,7 +1370,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_station_location(
     }
 }
 
-/// Synchronous reservation policy; native order snapshots live on the calling stack.
+/// Synchronous reservation policy; order snapshots live on the Rust stack.
 /// # Safety
 /// Leaves, context and shell are live for this call. No state borrow spans a callback.
 #[unsafe(no_mangle)]
@@ -1482,8 +1477,8 @@ mod tests {
             reach_tracks: unused!((*mut std::ffi::c_void, Handle, u8); u64),
             reserved: unused!((*mut std::ffi::c_void, Handle, u32); u64),
             reserve_paths: unused!((*mut std::ffi::c_void, Handle); u64),
-            restore_order: unused!((*mut std::ffi::c_void, Handle); ()),
-            save_order: unused!((*mut std::ffi::c_void, Handle); ()),
+            restore_order: unused!((Handle, *const crate::orders::Order); ()),
+            save_order: unused!((Handle); crate::orders::Order),
             service: unused!((*mut std::ffi::c_void, Handle); ()),
             set_depot: unused!((*mut std::ffi::c_void, Handle, u32, u8); ()),
             set_depot_dest: unused!((*mut std::ffi::c_void, Handle, u32); ()),
@@ -1716,23 +1711,36 @@ mod tests {
             }
         }
     }
-    struct OrderContext {
-        saved: u32,
-    }
-    extern "C" fn save_order(context: *mut std::ffi::c_void, h: Handle) {
-        // SAFETY: Each entry receives a live distinct stack context and this snapshot borrow ends here.
-        unsafe {
-            (*context.cast::<OrderContext>()).saved = mock(h).order_token;
+    extern "C" fn save_order(h: Handle) -> crate::orders::Order {
+        // SAFETY: The live fixture is accessed only during this synchronous call.
+        let token = unsafe { mock(h).order_token };
+        crate::orders::Order {
+            kind: 0x12,
+            flags: 0x34,
+            destination: token as u16,
+            refit: 0x56,
+            wait: (token >> 16) as u16,
+            travel: 0x789a,
+            speed: 0xbcde,
         }
     }
-    extern "C" fn restore_order(context: *mut std::ffi::c_void, h: Handle) {
-        // SAFETY: The corresponding native stack snapshot and mock are live; no borrow spans a callback.
-        unsafe {
-            let token = (*context.cast::<OrderContext>()).saved;
-            let m = mock(h);
-            m.order_token = token;
-            m.restores += 1;
-        }
+    unsafe extern "C" fn restore_order(h: Handle, order: *const crate::orders::Order) {
+        // SAFETY: The calling Orders guard owns this independent stack snapshot.
+        let order = unsafe { order.read() };
+        assert_eq!(
+            (
+                order.kind,
+                order.flags,
+                order.refit,
+                order.travel,
+                order.speed
+            ),
+            (0x12, 0x34, 0x56, 0x789a, 0xbcde)
+        );
+        // SAFETY: The live fixture is accessed only during this synchronous call.
+        let m = unsafe { mock(h) };
+        m.order_token = u32::from(order.destination) | (u32::from(order.wait) << 16);
+        m.restores += 1;
     }
     extern "C" fn write_dest(_: *mut std::ffi::c_void, h: Handle, dest: u32) {
         // SAFETY: Live exclusive mock.
@@ -1764,42 +1772,47 @@ mod tests {
         }
     }
     #[test]
-    fn explicit_or_drop_order_restoration_runs_once_with_nested_stack_contexts() {
+    fn explicit_or_drop_order_restoration_runs_once_with_nested_snapshots() {
         for explicit in [false, true] {
             let mut m = Mock::new(0);
+            m.order_token = 0x89ab_cdef;
             let h = m.handle();
             let ls = order_leaves();
-            let mut outer_context = OrderContext { saved: 0 };
             let g = Game {
                 vehicle: std::ptr::null_mut(),
                 leaves: &ls,
-                context: std::ptr::from_mut(&mut outer_context).cast(),
+                context: std::ptr::null_mut(),
             };
             {
                 let mut outer = Orders::new(&g, h);
-                m.order_token = 2;
+                m.order_token = 0x7654_3210;
                 m.dest = 42;
                 m.last = 8;
                 m.suppress = 0;
                 {
-                    let mut inner_context = OrderContext { saved: 0 };
                     let inner_game = Game {
                         vehicle: std::ptr::null_mut(),
                         leaves: &ls,
-                        context: std::ptr::from_mut(&mut inner_context).cast(),
+                        context: std::ptr::null_mut(),
                     };
                     let mut inner = Orders::new(&inner_game, h);
                     m.order_token = 3;
                     m.dest = 99;
                     inner.restore();
                 }
-                assert_eq!((m.dest, m.last, m.suppress, m.order_token), (42, 8, 0, 2));
+                assert_eq!(
+                    (m.dest, m.last, m.suppress, m.order_token),
+                    (42, 8, 0, 0x7654_3210)
+                );
                 assert_eq!(outer.index, 254);
                 if explicit {
                     outer.restore();
                 }
             }
-            assert_eq!((m.dest, m.last, m.suppress, m.order_token), (9, 7, 1, 1));
+            assert_eq!(
+                (m.dest, m.last, m.suppress, m.order_token),
+                (9, 7, 1, 0x89ab_cdef)
+            );
             assert_eq!(m.restores, 2);
         }
     }

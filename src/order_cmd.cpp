@@ -217,12 +217,6 @@ extern "C" uint64_t openttd_orders_distance(uint32_t first, uint32_t second, uin
 	return square ? DistanceSquare(TileIndex(first), TileIndex(second)) : DistanceManhattan(TileIndex(first), TileIndex(second));
 }
 
-extern "C" uint64_t openttd_orders_station_location(void *ctx, uint16_t destination) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return const_cast<Vehicle *>(v)->GetOrderStationLocation(StationID(destination)).base();
-}
-
 extern "C" uint64_t openttd_orders_destination_tile(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
@@ -674,7 +668,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	openttd_orders_station_tile,
 	openttd_orders_depot_tile,
 	openttd_orders_distance,
-	openttd_orders_station_location,
+	RustVehicleLegacyOrderStationLocation,
 	openttd_orders_destination_tile,
 	openttd_orders_aircraft_flying,
 	openttd_orders_target_airport,
@@ -3112,3 +3106,9 @@ bool Order::CanLeaveWithCargo(bool has_cargo) const
 			this->GetUnloadType() != OrderUnloadType::Transfer);
 #endif
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDOrdersLeaves.hpp"
+bool CheckAbi_order_cmd() { return AbiServicesComplete(_rust_orders_leaves); }
+#endif

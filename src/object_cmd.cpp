@@ -1078,6 +1078,7 @@ extern const TileTypeProcs _tile_type_object_procs = {
 #ifdef WITH_RUST
 const OpenTTDObjectServices &GetRustObjectServices() noexcept
 {
+	static_assert(to_underlying(ObjectAnimationTrigger::Built) == 0 && to_underlying(ObjectAnimationTrigger::TileLoopNorth) == 2);
 	static_assert(NUM_OBJECTS == 64000 && OBJECT_HQ == 4 && OBJECT_OWNED_LAND == 3 && OBJECT_STATUE == 2);
 	static_assert(EXPENSES_CONSTRUCTION == 0 && CBID_OBJECT_AUTOSLOPE == 0x15D && PR_BUILD_FOUNDATION == 57 && PR_BUILD_OBJECT == 50 && PR_CLEAR_OBJECT == 51);
 	static_assert(OWNER_NONE.base() == 16 && OWNER_WATER.base() == 17 && OWNER_DEITY.base() == 18 && MAX_COMPANIES == 15);
@@ -1105,7 +1106,6 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.generation = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectGeneration { return {RustObjectSpecFlags(spec), spec->generate_amount, spec->views, RustObjectEverAvailable(spec)}; },
 		.can_allocate = []() noexcept -> bool { return Object::CanAllocateItem(); },
 		.allocate = [](uint16_t type, const Town *town, OpenTTDObjectArea area, uint8_t view) noexcept -> OpenTTDObjectAllocation { Object *o = new Object(type, const_cast<Town *>(town), TileArea(TileIndex(area.tile), area.width, area.height), TimerGameCalendar::date, view); return {o, o->index.base()}; },
-		.nearest_town = [](uint32_t tile) noexcept -> const Town * { return CalcClosestTownFromTile(TileIndex(tile)); },
 		.object_type = [](uint32_t tile) noexcept { return GetObjectType(TileIndex(tile)); },
 		.loop_policy = [](uint32_t tile) noexcept -> OpenTTDObjectLoopPolicy { Object *o = Object::GetByTile(TileIndex(tile)); const auto kind = o->type; const ObjectSpec *spec = ObjectSpec::Get(kind); const auto flags = RustObjectSpecFlags(spec); return {spec, o, ObjectFlags{flags}.Test(ObjectFlag::Animation) ? o->location.tile.base() : 0, flags, kind}; },
 		.reference = [](uint32_t tile) noexcept -> OpenTTDObjectReference { Object *o = Object::GetByTile(TileIndex(tile)); return {o, o->type}; },
@@ -1150,4 +1150,10 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 	};
 	return services;
 }
+#endif
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDObjectServices.hpp"
+bool CheckAbi_object_cmd() { return AbiServicesComplete(GetRustObjectServices()); }
 #endif

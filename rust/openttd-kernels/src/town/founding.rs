@@ -552,7 +552,7 @@ pub unsafe extern "C" fn openttd_rust_town_found(
     ));
     if execute {
         if observed!((f.cost.money)(result))
-            > observed!(crate::command::available_money(unsafe { &*f.s.command }))
+            > crate::command::available_money(unsafe { &*f.s.command })
         {
             w::hit(w::TOWN_MONEY);
             observed!((f.s.money_deficit)(frame, result));

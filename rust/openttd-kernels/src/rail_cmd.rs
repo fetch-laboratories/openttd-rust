@@ -21,7 +21,7 @@
     clippy::fn_params_excessive_bools
 )]
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Map, RailMapServices, Services,
+    CommandCost, CommandCostServices, CommandServices, Cost, Map, RailMapServices, Services,
 };
 pub use crate::services::{Foundation, Train};
 use crate::witness as w;
@@ -153,7 +153,6 @@ pub struct RailCommandServices {
     /// `RailConvertCost`.
     pub rail_convert_cost: extern "C" fn(u8, u8) -> i64,
     /// `RoadBuildCost`.
-    pub road_build_cost: extern "C" fn(u8) -> i64,
     /// `construction.crossing_with_competitor`.
     pub crossing_with_competitor: extern "C" fn() -> bool,
     /// `vehicle.disable_elrails`.
@@ -199,7 +198,6 @@ pub struct RailCommandServices {
     /// `infrastructure.signal += delta` with uint32 wrap.
     pub signal_infrastructure: extern "C" fn(u8, u32),
     /// `DirtyCompanyInfrastructureWindows`.
-    pub infrastructure_dirty: extern "C" fn(u8),
     /// `GetTrainForReservation`.
     pub reserving_train: extern "C" fn(u32, u8) -> *mut Train,
     /// Train fields read at the signal re-reservation branch.
@@ -231,7 +229,6 @@ pub struct RailCommandServices {
     /// `MakeShore`, keeping the docking flag as the original does.
     pub make_shore: extern "C" fn(u32),
     /// `IsPossibleDockingTile` then `CheckForDockingTile`.
-    pub docking_check: extern "C" fn(u32),
     /// Begin `TileIterator::Create(start, end, diagonal)` in the frame.
     pub area_begin: unsafe extern "C" fn(*mut ConvertFrame, u32, u32, bool),
     /// Current iterator tile (`INVALID_TILE` at end).
@@ -247,7 +244,6 @@ pub struct RailCommandServices {
 }
 
 const INVALID_STRING: u32 = 0xFFFF;
-const CONSTRUCTION: u8 = 0;
 const EXECUTE: u16 = 1 << 0;
 const AUTO: u16 = 1 << 1;
 const BANKRUPT: u16 = 1 << 5;
@@ -412,43 +408,6 @@ fn negate(money: i64) -> i64 {
 }
 fn price(index: usize) -> i64 {
     crate::company::price(index)
-}
-
-/// A live native `CommandCost` borrowed for the synchronous entry.
-#[derive(Clone, Copy)]
-struct Cost<'a>(*mut CommandCost, &'a CommandCostServices);
-impl Cost<'_> {
-    fn zero(self) {
-        (self.1.zero)(self.0);
-    }
-    fn error(self, message: u32) {
-        (self.1.error)(self.0, message);
-    }
-    fn set(self, money: i64) {
-        (self.1.expense_money)(self.0, CONSTRUCTION, money);
-    }
-    fn add_money(self, money: i64) {
-        (self.1.amount)(self.0, money);
-    }
-    /// `AddCost(CommandCost &&)`.
-    fn add(self, other: Self) {
-        (self.1.add)(self.0, other.0);
-    }
-    fn take(self, other: Self) {
-        (self.1.move_cost)(self.0, other.0);
-    }
-    fn make_error(self, message: u32) {
-        unsafe { (self.1.make_error)(self.0, message) };
-    }
-    fn ok(self) -> bool {
-        (self.1.success)(self.0)
-    }
-    fn message(self) -> u32 {
-        (self.1.error_message)(self.0)
-    }
-    fn money(self) -> i64 {
-        (self.1.money)(self.0)
-    }
 }
 
 struct Ctx<'a> {
@@ -672,7 +631,7 @@ impl<'a> Ctx<'a> {
                         (self.rail.rail_type)(tile).0,
                         pieces(bits | trackbit),
                     );
-                    (self.s.infrastructure_dirty)((self.shared.tile_owner)(tile));
+                    (self.command.infrastructure_dirty)((self.shared.tile_owner)(tile));
                 }
             }
             MP_ROAD => {
@@ -766,10 +725,12 @@ impl<'a> Ctx<'a> {
                         tile,
                         crate::services::RailGroundType(GROUND_HALF_WATER),
                     );
-                    (self.s.docking_check)(tile);
+                    let stations = (self.shared.station_commands)();
+                    // SAFETY: borrowed process-lifetime services; no owner borrow spans docking.
+                    unsafe { crate::station_cmd::check_possible_docking(stations, tile) };
                 }
                 self.rail_infra(self.current(), railtype, 1);
-                (self.s.infrastructure_dirty)(self.current());
+                (self.command.infrastructure_dirty)(self.current());
             }
         }
         if flags & EXECUTE != 0 {
@@ -808,7 +769,8 @@ impl<'a> Ctx<'a> {
         };
         if new_road > 0 {
             cost.add_money(
-                (self.s.road_build_cost)(road.road_type).saturating_mul(i64::from(new_road)),
+                crate::road_cost::build_cost(self.shared, road.road_type)
+                    .saturating_mul(i64::from(new_road)),
             );
         }
         let new_tram = if road.tram_bits == 0 {
@@ -818,7 +780,8 @@ impl<'a> Ctx<'a> {
         };
         if new_tram > 0 {
             cost.add_money(
-                (self.s.road_build_cost)(road.tram_type).saturating_mul(i64::from(new_tram)),
+                crate::road_cost::build_cost(self.shared, road.tram_type)
+                    .saturating_mul(i64::from(new_tram)),
             );
         }
         if flags & EXECUTE != 0 {
@@ -840,14 +803,14 @@ impl<'a> Ctx<'a> {
             (self.shared.update_level_crossing)(tile, false);
             (self.s.mark_crossings)(tile, (self.rail.crossing_road_axis)(tile).0);
             self.rail_infra(self.current(), railtype, LEVELCROSSING_TRACKBIT_FACTOR);
-            (self.s.infrastructure_dirty)(self.current());
+            (self.command.infrastructure_dirty)(self.current());
             if new_road > 0 && (self.shared.company_valid)(road_owner) {
                 (self.s.road_infrastructure)(road_owner, road.road_type, new_road);
-                (self.s.infrastructure_dirty)(road_owner);
+                (self.command.infrastructure_dirty)(road_owner);
             }
             if new_tram > 0 && (self.shared.company_valid)(tram_owner) {
                 (self.s.road_infrastructure)(tram_owner, road.tram_type, new_tram);
-                (self.s.infrastructure_dirty)(tram_owner);
+                (self.command.infrastructure_dirty)(tram_owner);
             }
         }
         Some(())
@@ -901,7 +864,7 @@ impl<'a> Ctx<'a> {
                         (self.rail.rail_type)(tile).0,
                         LEVELCROSSING_TRACKBIT_FACTOR.wrapping_neg(),
                     );
-                    (self.s.infrastructure_dirty)(owner);
+                    (self.command.infrastructure_dirty)(owner);
                     let road = CrossingRoad {
                         bits: (self.shared.crossing_road_bits)(tile).0,
                         road_type: (self.shared.road_type)(tile),
@@ -959,7 +922,7 @@ impl<'a> Ctx<'a> {
                     );
                     present ^= trackbit;
                     self.rail_infra(owner, (self.rail.rail_type)(tile).0, pieces(present));
-                    (self.s.infrastructure_dirty)(owner);
+                    (self.command.infrastructure_dirty)(owner);
                     if present == 0 {
                         let tileh = (self.shared.tile_slope)(tile);
                         if (self.ground.ground)(tile).0 == GROUND_HALF_WATER
@@ -968,7 +931,7 @@ impl<'a> Ctx<'a> {
                             w::hit(w::RAIL_CMD_REMOVE_SHORE);
                             (self.s.make_shore)(tile);
                         } else {
-                            unsafe { crate::ground::clear_square(tile, self.shared) };
+                            crate::ground::clear_square(tile, self.shared);
                         }
                         (self.s.close_inspect)(tile);
                     } else {
@@ -1192,7 +1155,7 @@ impl<'a> Ctx<'a> {
                 (self.rail.make_rail_depot)(tile, self.current(), depot, dir, railtype);
                 (self.s.depot_name)(depot);
                 self.rail_infra(self.current(), railtype, 1);
-                (self.s.infrastructure_dirty)(self.current());
+                (self.command.infrastructure_dirty)(self.current());
             }
             (self.shared.mark_dirty)(tile);
             self.add_side(tile, INVALID_DIAGDIR, self.current());
@@ -1341,7 +1304,7 @@ impl<'a> Ctx<'a> {
         }
         let present = self.present_signals(tile);
         (self.s.signal_infrastructure)((self.shared.tile_owner)(tile), present.count_ones());
-        (self.s.infrastructure_dirty)((self.shared.tile_owner)(tile));
+        (self.command.infrastructure_dirty)((self.shared.tile_owner)(tile));
         if is_pbs(sigtype) {
             w::hit(w::RAIL_CMD_SIGNAL_PBS_STATE);
             let mask = u32::from(self.present_signals(tile) & on_track);
@@ -1711,7 +1674,7 @@ impl<'a> Ctx<'a> {
             (self.rail.set_present_signals)(tile, self.present_signals(tile) & !on_track);
             let present = self.present_signals(tile);
             (self.s.signal_infrastructure)((self.shared.tile_owner)(tile), present.count_ones());
-            (self.s.infrastructure_dirty)((self.shared.tile_owner)(tile));
+            (self.command.infrastructure_dirty)((self.shared.tile_owner)(tile));
             if self.present_signals(tile) == 0 {
                 (self.rail.set_signal_states)(tile, 0);
                 (self.rail.set_has_signals)(tile, false);
@@ -1870,7 +1833,7 @@ impl<'a> Ctx<'a> {
                     }
                     self.rail_infra(owner, kind, num.wrapping_neg());
                     self.rail_infra(owner, totype, num);
-                    (self.s.infrastructure_dirty)(owner);
+                    (self.command.infrastructure_dirty)(owner);
                 }
                 (self.rail.set_rail_type)(tile, totype);
                 (self.shared.mark_dirty)(tile);
@@ -1934,7 +1897,7 @@ impl<'a> Ctx<'a> {
                     let owner = (self.shared.tile_owner)(tile);
                     self.rail_infra(owner, (self.rail.rail_type)(tile).0, num.wrapping_neg());
                     self.rail_infra(owner, totype, num);
-                    (self.s.infrastructure_dirty)(owner);
+                    (self.command.infrastructure_dirty)(owner);
                     (self.rail.set_rail_type)(tile, totype);
                     (self.rail.set_rail_type)(endtile, totype);
                     unsafe { (self.s.collect_trains)(frame, tile) };
@@ -2009,9 +1972,9 @@ impl<'a> Ctx<'a> {
                 }
             }
             self.rail_infra(owner, (self.rail.rail_type)(tile).0, 1_u32.wrapping_neg());
-            (self.s.infrastructure_dirty)(owner);
+            (self.command.infrastructure_dirty)(owner);
             (self.s.delete_depot)(tile);
-            unsafe { crate::ground::clear_square(tile, self.shared) };
+            crate::ground::clear_square(tile, self.shared);
             self.add_side(tile, dir, owner);
             (self.s.layout_changed)(tile, dir & 1);
             if !v.is_null() {
@@ -2061,7 +2024,7 @@ impl<'a> Ctx<'a> {
                     }
                     if flags & EXECUTE != 0 {
                         w::hit(w::RAIL_CMD_CLEAR_WATER);
-                        unsafe { crate::ground::clear_square(tile, self.shared) };
+                        crate::ground::clear_square(tile, self.shared);
                     }
                     cost.add_money(price(PR_CLEAR_WATER));
                 }

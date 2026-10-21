@@ -79,6 +79,9 @@ static bool IndustryCommandDeity() noexcept { return OpenTTDCurrentCompany() == 
 #endif
 
 #ifdef WITH_RUST
+#include "rust/industry_shell_services.h"
+#include "rust/services_water.h"
+#include "rust/settings_services.h"
 #include "rust/services_landscape.h"
 #include "rust/command_services.h"
 #endif
@@ -3737,7 +3740,7 @@ const OpenTTDIndustryServices &GetIndustryRustServices() { return _industry_serv
 /** Native shells, packed map, resolver and shared station/cargo services only.
  * Destruction may reenter; Rust holds no owner or registry borrow across a slot. */
 static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
-	.neutral_station = [](void *shell) noexcept -> OpenTTDIndustryStationHandle * { return reinterpret_cast<OpenTTDIndustryStationHandle *>(RustIndustry(shell)->neutral_station); },
+	.neutral_station = [](void *shell) noexcept -> OpenTTDIndustryStationHandle * { return reinterpret_cast<OpenTTDIndustryStationHandle *>(RustIndustryNeutralStation(RustIndustry(shell))); },
 	.cleanup_tile = [](uint32_t index) noexcept -> OpenTTDIndustryCleanupTile {
 		TileIndex tile(index);
 		auto type = SharedTileType(index);
@@ -3847,9 +3850,9 @@ static const OpenTTDIndustryConstructionServices &GetIndustryConstructionService
 		.set_construction_stage = [](uint32_t tile, uint8_t stage) noexcept { SetIndustryConstructionStage(TileIndex(tile), stage); },
 		.translated_gfx = [](uint16_t gfx) noexcept -> uint16_t { return GetTranslatedIndustryTileID(gfx); },
 		.animation_enabled = [](uint16_t gfx) noexcept -> bool { return GetIndustryTileSpec(gfx)->animation.status != AnimationStatus::NoAnimation; },
-		.add_animated = OpenTTDAddAnimatedTile,
+		.add_animated = GetRustSharedServices().tile_animation_add,
 		.build_window_dirty = []() noexcept { SetWindowDirty(WC_BUILD_INDUSTRY, 0); },
-		.serve_neutral = []() noexcept -> bool { return _settings_game.station.serve_neutral_industries; },
+		.serve_neutral = GetRustSharedServices().station_serve_neutral,
 		.insert_near_station = [](void *shell, OpenTTDIndustryStationHandle *station) noexcept { RustIndustry(shell)->stations_near.insert(reinterpret_cast<Station *>(station)); },
 		.clear_near_industries = [](OpenTTDIndustryStationHandle *station) noexcept { reinterpret_cast<Station *>(station)->industries_near.clear(); },
 		.insert_neutral_industry = [](OpenTTDIndustryStationHandle *station, void *shell) noexcept { reinterpret_cast<Station *>(station)->industries_near.insert(IndustryListEntry{0, RustIndustry(shell)}); },
@@ -3867,10 +3870,10 @@ static const OpenTTDIndustryTileServices &GetIndustryTileServices()
 		.gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(TileIndex(tile)); },
 		.set_gfx = [](uint32_t tile, uint16_t gfx) noexcept { SetIndustryGfx(TileIndex(tile), gfx); },
 		.frame = OpenTTDAnimationFrame,
-		.set_frame = OpenTTDSetAnimationFrame,
+		.set_frame = GetRustSharedServices().tile_animation_set_frame,
 		.animation_loop = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryAnimationLoop(TileIndex(tile)); },
 		.set_animation_loop = [](uint32_t tile, uint8_t value) noexcept { SetIndustryAnimationLoop(TileIndex(tile), value); },
-		.delete_animated = OpenTTDDeleteAnimatedTile,
+		.delete_animated = GetRustSharedServices().tile_animation_delete,
 		.tick_counter = openttd_orders_tick_counter,
 		.ambient = OpenTTDAmbientSound,
 		.animate_new = [](uint32_t tile) noexcept { AnimateNewIndustryTile(TileIndex(tile)); },
@@ -4028,5 +4031,30 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 		.transaction = &GetIndustryTransactionServices(),
 		.errors = &errors,
 	};
+}
+#endif
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDIndustryServices.hpp"
+#include "abi-visit-OpenTTDIndustryLifecycleServices.hpp"
+#include "abi-visit-OpenTTDIndustryGenerationServices.hpp"
+#include "abi-visit-OpenTTDIndustryConstructionServices.hpp"
+#include "abi-visit-OpenTTDIndustryTileServices.hpp"
+#include "abi-visit-OpenTTDIndustryCommandServices.hpp"
+#include "abi-visit-OpenTTDIndustryCostServices.hpp"
+#include "abi-visit-OpenTTDIndustryTilePolicyServices.hpp"
+#include "abi-visit-OpenTTDIndustryTransactionServices.hpp"
+bool CheckAbi_industry_cmd()
+{
+	return AbiServicesComplete(GetIndustryRustServices()) &&
+		AbiServicesComplete(GetIndustryLifecycleRustServices()) &&
+		AbiServicesComplete(GetIndustryGenerationServices()) &&
+		AbiServicesComplete(GetIndustryConstructionServices()) &&
+		AbiServicesComplete(GetIndustryTileServices()) &&
+		AbiServicesComplete(GetIndustryCommandServices()) &&
+		AbiServicesComplete(GetIndustryCostServices()) &&
+		AbiServicesComplete(GetIndustryTilePolicyServices()) &&
+		AbiServicesComplete(GetIndustryTransactionServices());
 }
 #endif

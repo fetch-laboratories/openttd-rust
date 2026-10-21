@@ -2707,3 +2707,14 @@ CommandCost CmdBuyCompany(DoCommandFlags flags, CompanyID target_company, bool h
 	return cost;
 #endif /* WITH_RUST */
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDCargoServices.hpp"
+#include "abi-visit-OpenTTDStationLoading.hpp"
+bool CheckAbi_economy()
+{
+	return AbiServicesComplete(_cargo_services) &&
+		AbiServicesComplete(_rust_station_loading);
+}
+#endif

@@ -510,13 +510,7 @@ fn available(p: *const Finances, infinite: bool) -> i64 {
         get!(p, money)
     }
 }
-pub(crate) fn subtract_money(
-    f: &FinanceServices,
-    p: *mut Finances,
-    id: u8,
-    cost: i64,
-    expense: usize,
-) {
+fn subtract(f: &FinanceServices, p: *mut Finances, id: u8, cost: i64, expense: usize) {
     if cost == 0 {
         return;
     }
@@ -550,7 +544,7 @@ fn subtract_fraction(f: &FinanceServices, p: *mut Finances, id: u8, mut cost: i6
         cost = cost.saturating_add(1);
     }
     if cost != 0 {
-        subtract_money(f, p, id, cost, expense);
+        subtract(f, p, id, cost, expense);
     }
 }
 fn assets(s: &Services, id: u8) -> i64 {
@@ -675,7 +669,7 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
     }
     if update {
         put!(p, score as i32, old[0].performance);
-        // SAFETY: Native immutable object table, no finance borrow spans HQ updates.
+        // SAFETY: immutable object table; no finance borrow spans HQ mutation.
         unsafe {
             crate::objects::openttd_rust_object_update_hq(
                 (s.object_services)(),
@@ -775,7 +769,7 @@ fn maintenance(s: &Services, p: *mut Finances, id: u8) {
     cost = cost.saturating_add((s.canal_maintenance_cost)(infra.water));
     cost = cost.saturating_add((s.station_maintenance_cost)(infra.station));
     cost = cost.saturating_add((s.airport_maintenance_cost)(id));
-    subtract_money(s.finance, p, id, cost, EXPENSES_PROPERTY);
+    subtract(s.finance, p, id, cost, EXPENSES_PROPERTY);
 }
 fn statistics(s: &Services, m: &Month) {
     companies(s, |p, id| bankruptcy(s, m, p, id));
@@ -899,14 +893,14 @@ fn interest(s: &Services, m: &Month) {
         let month = i64::from(m.month);
         let previous = fee.saturating_mul(month) / 12;
         let now = fee.saturating_mul(month + 1) / 12;
-        subtract_money(
+        subtract(
             s.finance,
             p,
             id,
             now.saturating_sub(previous),
             EXPENSES_LOAN_INTEREST,
         );
-        subtract_money(
+        subtract(
             s.finance,
             p,
             id,
@@ -1493,6 +1487,18 @@ fn loan(
 // live for the call; finance pointers are live canonical owners resolved once by
 // the facade or through `company_finances`. Panics abort (`panic = "abort"`).
 
+/// `SubtractMoneyFromAnyCompany`.
+/// # Safety
+/// `p` is the live finance owner of company `id`.
+pub(crate) unsafe fn subtract_money(
+    f: &FinanceServices,
+    p: *mut Finances,
+    id: u8,
+    cost: i64,
+    expense: u8,
+) {
+    subtract(f, p, id, cost, usize::from(expense));
+}
 /// `SubtractMoneyFromCompanyFract`.
 /// # Safety
 /// `p` is the live finance owner of company `id`.
@@ -1652,7 +1658,7 @@ pub unsafe extern "C" fn openttd_rust_company_available_money(
 ) -> i64 {
     available(p, infinite)
 }
-/// Money test of `CheckCompanyHasMoney`; `p` is the current company or null.
+/// Original positive-cost finance predicate; null denotes an invalid company.
 /// # Safety
 /// `p` is null or a live finance owner.
 pub(crate) unsafe fn has_money(p: *const Finances, infinite: bool, cost: i64) -> bool {
@@ -1760,7 +1766,7 @@ pub extern "C" fn openttd_rust_company_give_money(
     }
     if execute {
         (f.set_current_company)(dest);
-        subtract_money(f, q, dest, neg(amount), usize::from(EXPENSES_OTHER));
+        subtract(f, q, dest, neg(amount), usize::from(EXPENSES_OTHER));
         (f.set_current_company)(current);
         if (f.networking)() {
             (f.give_money_message)(dest, amount);
@@ -1839,7 +1845,7 @@ pub extern "C" fn openttd_rust_company_change_bank_balance(
     }
     if execute {
         (f.set_current_company)(id);
-        subtract_money(f, p, id, neg(delta), usize::from(expense));
+        subtract(f, p, id, neg(delta), usize::from(expense));
         (f.set_current_company)(current);
         if tile != 0 {
             (f.money_animation)(tile, neg(delta));
@@ -1865,255 +1871,296 @@ pub unsafe extern "C" fn openttd_rust_company_initialize(
     put!(p, o.wrapping_shl(16), object);
 }
 
-pub fn abi_layout(type_id: u16, item: u8) -> usize {
-    use std::mem::{align_of, offset_of, size_of};
-    macro_rules! layout {($t:ty,$($field:ident),+)=>{match item{0=>size_of::<$t>(),1=>align_of::<$t>(),_=>[$(offset_of!($t,$field)),+].get(usize::from(item)-2).copied().unwrap_or(usize::MAX)}};}
-    match type_id {
-        210 => layout!(Entry, income, expenses, cargo, performance, value),
-        211 => {
-            layout!(
-                Finances,
-                money,
-                fraction,
-                loan,
-                max_loan,
-                preview,
-                empty,
-                bankruptcy,
-                asked,
-                timeout,
-                bankrupt_value,
-                terraform,
-                clear,
-                tree,
-                object,
-                expenses,
-                current,
-                old,
-                valid
-            )
-        }
-        212 => {
-            layout!(
-                Economy,
-                max_loan,
-                fluct,
-                interest,
-                infl_amount,
-                infl_payment,
-                prices,
-                payment,
-                old_loan,
-                old_fraction
-            )
-        }
-        213 => layout!(
-            FinanceServices,
-            current_company,
-            set_current_company,
-            networking,
-            company_finances,
-            invalidate_company_windows,
-            give_money_message,
-            money_animation
-        ),
-        214 => layout!(
-            Services,
-            finance,
-            shared,
-            company_next,
-            company_is_ai,
-            company_count,
-            can_allocate_company,
-            local_company,
-            network_server,
-            company_vehicle_counts,
-            vehicle_limits,
-            company_admin_update,
-            company_in_trouble,
-            post_company_delete,
-            hq_location,
-            object_services,
-            performance_detail_dirty,
-            company_graphs_dirty,
-            company_infrastructure,
-            rail_maintenance_cost,
-            signal_maintenance_cost,
-            road_maintenance_cost,
-            canal_maintenance_cost,
-            station_maintenance_cost,
-            airport_maintenance_cost,
-            recession_news,
-            price_base,
-            cargo_next,
-            set_cargo_payment,
-            price_windows_dirty,
-            industry_daily_changes,
-            clear_cargo_monitors,
-            clear_all_cargo_monitors,
-            generate_company_name,
-            ask_merger,
-            is_interactive_company,
-            show_buy_company,
-            script_random_next,
-            reset_competitor_timeout,
-            finances_dirty,
-            show_company_finances,
-            new_year_sound,
-            generate_company_colour,
-            allocate_company,
-            set_company_colour,
-            setup_new_company,
-            new_company_events,
-            company_league_dirty,
-            company_ctrl_windows,
-            close_network_status,
-            network_spectate,
-            network_company_new,
-            network_own_company,
-            assert_new_ai_slot,
-            company_bankrupt_news,
-            stop_ai,
-            delete_company,
-            company_removed,
-            merger_news,
-            acquisition_windows,
-            clients_to_spectators,
-            set_local_company,
-            subsidy_next_awarded,
-            delete_subsidy,
-            set_subsidy_awarded,
-            rebuild_subsidy_cache,
-            town_next,
-            town_rating,
-            set_town_rating,
-            set_town_exclusivity,
-            vehicle_next_owned,
-            aircraft_is_normal,
-            vehicle_value,
-            vehicle_is_primary,
-            vehicle_profit,
-            vehicle_previous,
-            vehicle_group_flags,
-            vehicle_service_interval_is_custom,
-            delete_vehicle,
-            count_group_engine,
-            count_group_vehicle,
-            reset_service_interval,
-            set_vehicle_owner,
-            assign_unit_number,
-            remove_engine_replacements,
-            group_next_owned,
-            delete_group,
-            transfer_group,
-            copy_service_interval_defaults,
-            update_autoreplace,
-            map_size,
-            change_tile_owner,
-            signal_tile,
-            has_signal_on_track,
-            add_track_to_signal_buffer,
-            update_signals_in_buffer,
-            add_airport_infrastructure,
-            station_next_owned,
-            station_facility_count,
-            station_times,
-            set_station_owner,
-            waypoint_next_owned,
-            set_waypoint_owner,
-            sign_next_owned,
-            set_sign_owner,
-            goal_next_owned,
-            delete_goal,
-            story_page_next_owned,
-            delete_story_page,
-            change_window_owner,
-            mark_whole_screen_dirty
-        ),
-        400 => layout!(CompanyRef, finances, id),
-        401 => layout!(VehicleCounts, trains, road, ships, aircraft),
-        402 => layout!(
-            Infrastructure,
-            rail,
-            road,
-            rail_total,
-            road_total,
-            tram_total,
-            signal,
-            water,
-            station,
-            road_is_road
-        ),
-        403 => layout!(VehicleGroupFlags, engine_countable, primary),
-        404 => layout!(VehicleProfit, profit_last_year, economy_age),
-        405 => layout!(StationTimes, since_load, since_unload),
-        406 => layout!(
-            TownRights,
-            rating,
-            have_ratings,
-            exclusive_counter,
-            exclusivity
-        ),
-        407 => layout!(SignalTile, railway, crossing, owner, has_signals, tracks),
-        408 => layout!(PriceBase, start_price, category),
-        409 => layout!(Cost, cost, param, error, expense),
-        410 => layout!(Startup, company, requested, is_ai, stage),
-        411 => layout!(
-            Control, result, startup, client, action, target, reason, execute, stage
-        ),
-        412 => layout!(
-            Tick,
-            finances,
-            num_companies,
-            index,
-            timeout,
-            interval,
-            editor,
-            named,
-            competitor_due,
-            networking,
-            max_companies,
-            max_competitors,
-            num_ais,
-            stage
-        ),
-        413 => layout!(
-            Competitors,
-            num_companies,
-            interval,
-            menu,
-            can_start,
-            networking,
-            max_companies,
-            max_competitors
-        ),
-        414 => layout!(Month, month, infinite_money, maintenance, fluctuating),
-        415 => layout!(Year, local_finances, local, show_finances, new_year_sound),
-        416 => layout!(
-            EconomySettings,
-            year,
-            max_loan,
-            initial_interest,
-            vehicle_costs,
-            construction_cost,
-            inflation
-        ),
-        417 => layout!(
-            Landscaping,
-            terraform_per_64k,
-            clear_per_64k,
-            tree_per_64k,
-            object_per_64k,
-            terraform_burst,
-            clear_burst,
-            tree_burst,
-            object_burst
-        ),
-        _ => usize::MAX,
-    }
+crate::abi::layouts! {
+    fn abi_layout;
+    "CompanyEconomyEntry" ["company_economy"] => Entry {
+        income,
+        expenses,
+        cargo => delivered_cargo,
+        performance => performance_history,
+        value => company_value,
+    };
+    "CompanyFinances" ["company_economy"] => Finances {
+        money,
+        fraction => money_fraction,
+        loan => current_loan,
+        max_loan,
+        preview => block_preview,
+        empty => months_empty,
+        bankruptcy => months_of_bankruptcy,
+        asked => bankrupt_asked,
+        timeout => bankrupt_timeout,
+        bankrupt_value,
+        terraform => terraform_limit,
+        clear => clear_limit,
+        tree => tree_limit,
+        object => build_object_limit,
+        expenses => yearly_expenses,
+        current => cur_economy,
+        old => old_economy,
+        valid => num_valid_stat_ent,
+    };
+    "Economy" ["company_economy"] => Economy {
+        max_loan,
+        fluct,
+        interest => interest_rate,
+        infl_amount,
+        infl_payment => infl_amount_pr,
+        prices => inflation_prices,
+        payment => inflation_payment,
+        old_loan => old_max_loan_unround,
+        old_fraction => old_max_loan_unround_fract,
+    };
+    "OpenTTDCompanyFinanceServices" ["company_economy"] => FinanceServices {
+        current_company,
+        set_current_company,
+        networking,
+        company_finances,
+        invalidate_company_windows,
+        give_money_message,
+        money_animation,
+    };
+    "OpenTTDCompanyServices" ["company_economy"] => Services {
+        finance,
+        shared,
+        company_next,
+        company_is_ai,
+        company_count,
+        can_allocate_company,
+        local_company,
+        network_server,
+        company_vehicle_counts,
+        vehicle_limits,
+        company_admin_update,
+        company_in_trouble,
+        post_company_delete,
+        hq_location,
+        object_services,
+        performance_detail_dirty,
+        company_graphs_dirty,
+        company_infrastructure,
+        rail_maintenance_cost,
+        signal_maintenance_cost,
+        road_maintenance_cost,
+        canal_maintenance_cost,
+        station_maintenance_cost,
+        airport_maintenance_cost,
+        recession_news,
+        price_base,
+        cargo_next,
+        set_cargo_payment,
+        price_windows_dirty,
+        industry_daily_changes,
+        clear_cargo_monitors,
+        clear_all_cargo_monitors,
+        generate_company_name,
+        ask_merger,
+        is_interactive_company,
+        show_buy_company,
+        script_random_next,
+        reset_competitor_timeout,
+        finances_dirty,
+        show_company_finances,
+        new_year_sound,
+        generate_company_colour,
+        allocate_company,
+        set_company_colour,
+        setup_new_company,
+        new_company_events,
+        company_league_dirty,
+        company_ctrl_windows,
+        close_network_status,
+        network_spectate,
+        network_company_new,
+        network_own_company,
+        assert_new_ai_slot,
+        company_bankrupt_news,
+        stop_ai,
+        delete_company,
+        company_removed,
+        merger_news,
+        acquisition_windows,
+        clients_to_spectators,
+        set_local_company,
+        subsidy_next_awarded,
+        delete_subsidy,
+        set_subsidy_awarded,
+        rebuild_subsidy_cache,
+        town_next,
+        town_rating,
+        set_town_rating,
+        set_town_exclusivity,
+        vehicle_next_owned,
+        aircraft_is_normal,
+        vehicle_value,
+        vehicle_is_primary,
+        vehicle_profit,
+        vehicle_previous,
+        vehicle_group_flags,
+        vehicle_service_interval_is_custom,
+        delete_vehicle,
+        count_group_engine,
+        count_group_vehicle,
+        reset_service_interval,
+        set_vehicle_owner,
+        assign_unit_number,
+        remove_engine_replacements,
+        group_next_owned,
+        delete_group,
+        transfer_group,
+        copy_service_interval_defaults,
+        update_autoreplace,
+        map_size,
+        change_tile_owner,
+        signal_tile,
+        has_signal_on_track,
+        add_track_to_signal_buffer,
+        update_signals_in_buffer,
+        add_airport_infrastructure,
+        station_next_owned,
+        station_facility_count,
+        station_times,
+        set_station_owner,
+        waypoint_next_owned,
+        set_waypoint_owner,
+        sign_next_owned,
+        set_sign_owner,
+        goal_next_owned,
+        delete_goal,
+        story_page_next_owned,
+        delete_story_page,
+        change_window_owner,
+        mark_whole_screen_dirty,
+    };
+    "OpenTTDCompanyRef" ["company_economy"] => CompanyRef {
+        finances,
+        id,
+    };
+    "OpenTTDCompanyVehicleCounts" ["company_economy"] => VehicleCounts {
+        trains,
+        road,
+        ships,
+        aircraft,
+    };
+    "OpenTTDCompanyInfrastructure" ["company_economy"] => Infrastructure {
+        rail,
+        road,
+        rail_total,
+        road_total,
+        tram_total,
+        signal,
+        water,
+        station,
+        road_is_road,
+    };
+    "OpenTTDCompanyVehicleGroupFlags" ["company_economy"] => VehicleGroupFlags {
+        engine_countable,
+        primary,
+    };
+    "OpenTTDCompanyVehicleProfit" ["company_economy"] => VehicleProfit {
+        profit_last_year,
+        economy_age,
+    };
+    "OpenTTDCompanyStationTimes" ["company_economy"] => StationTimes {
+        since_load,
+        since_unload,
+    };
+    "OpenTTDCompanyTownRights" ["company_economy"] => TownRights {
+        rating,
+        have_ratings,
+        exclusive_counter,
+        exclusivity,
+    };
+    "OpenTTDCompanySignalTile" ["company_economy"] => SignalTile {
+        railway,
+        crossing,
+        owner,
+        has_signals,
+        tracks,
+    };
+    "OpenTTDCompanyPriceBase" ["company_economy"] => PriceBase {
+        start_price,
+        category,
+    };
+    "OpenTTDCompanyCost" ["company_economy"] => Cost {
+        cost,
+        param,
+        error,
+        expense,
+    };
+    "OpenTTDCompanyStartup" ["company_economy"] => Startup {
+        company,
+        requested,
+        is_ai,
+        stage,
+    };
+    "OpenTTDCompanyControl" ["company_economy"] => Control {
+        result,
+        startup,
+        client,
+        action,
+        target,
+        reason,
+        execute,
+        stage,
+    };
+    "OpenTTDCompanyTick" ["company_economy"] => Tick {
+        finances,
+        num_companies,
+        index,
+        timeout,
+        interval,
+        editor,
+        named,
+        competitor_due,
+        networking,
+        max_companies,
+        max_competitors,
+        num_ais,
+        stage,
+    };
+    "OpenTTDCompanyCompetitors" ["company_economy"] => Competitors {
+        num_companies,
+        interval,
+        menu,
+        can_start,
+        networking,
+        max_companies,
+        max_competitors,
+    };
+    "OpenTTDEconomyMonth" ["company_economy"] => Month {
+        month,
+        infinite_money,
+        maintenance,
+        fluctuating,
+    };
+    "OpenTTDCompanyYear" ["company_economy"] => Year {
+        local_finances,
+        local,
+        show_finances,
+        new_year_sound,
+    };
+    "OpenTTDEconomySettings" ["company_economy"] => EconomySettings {
+        year,
+        max_loan,
+        initial_interest,
+        vehicle_costs,
+        construction_cost,
+        inflation,
+    };
+    "OpenTTDCompanyLandscaping" ["company_economy"] => Landscaping {
+        terraform_per_64k,
+        clear_per_64k,
+        tree_per_64k,
+        object_per_64k,
+        terraform_burst,
+        clear_burst,
+        tree_burst,
+        object_burst,
+    };
 }
 
-/// Source `EconomyIsInRecession`, reading the single canonical economy owner.
+/// Original `EconomyIsInRecession` over the canonical economy owner.
 pub(crate) fn in_recession() -> bool {
     get!(e(), fluct) <= 0
 }

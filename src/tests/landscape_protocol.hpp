@@ -35,16 +35,24 @@ template<uint8_t Kind> static void Visit(uint32_t tile_index) noexcept
 	calls++;
 	expected_tile = (expected_tile >> 1) ^ ((0U - (expected_tile & 1U)) & 0xD8FU);
 }
+static OpenTTDObjectLoopPolicy ProbeObjectPolicy(uint32_t tile) noexcept
+{
+	Visit<10>(tile);
+	return {nullptr, nullptr, 0, 0, 0};
+}
+static bool ProbeObjectOnWater(uint32_t) noexcept { return false; }
 template<typename Check> void Run(Check check)
 {
-	const std::array<size_t, 13> layout{sizeof(OpenTTDGroundLoopServices), alignof(OpenTTDGroundLoopServices), offsetof(OpenTTDGroundLoopServices, clear), offsetof(OpenTTDGroundLoopServices, rail), offsetof(OpenTTDGroundLoopServices, road), offsetof(OpenTTDGroundLoopServices, tunnel), offsetof(OpenTTDGroundLoopServices, water), offsetof(OpenTTDGroundLoopServices, costs), offsetof(OpenTTDGroundLoopServices, call), offsetof(OpenTTDGroundLoopServices, climate), offsetof(OpenTTDGroundLoopServices, editor), offsetof(OpenTTDGroundLoopServices, rebuild), offsetof(OpenTTDGroundLoopServices, ambient_callback)};
-	for (uint8_t item = 0; item < layout.size(); item++) check(openttd_rust_abi_layout(802, item) == layout[item]);
-	check(openttd_rust_abi_layout(802, static_cast<uint8_t>(layout.size())) == SIZE_MAX);
 	calls = reads = seen = 0;
 	expected_tile = 1;
 	passed = true;
 	auto shared = OpenTTDSharedServices{};
 	shared.tile_type = Type;
+	const OpenTTDIndustryTileServices object_tiles{.on_water = ProbeObjectOnWater};
+	auto objects = OpenTTDObjectServices{};
+	objects.shared = &shared;
+	objects.industry_tiles = &object_tiles;
+	objects.loop_policy = ProbeObjectPolicy;
 	const OpenTTDLandscapeLoopServices services{
 		.shared = &shared,
 		.tile_types = {nullptr, 0},
@@ -53,8 +61,7 @@ template<typename Check> void Run(Check check)
 		.ground = {},
 		.house_loop = Visit<3>,
 		.station_loop = Visit<5>,
-		.object_loop = Visit<10>,
-		.objects = nullptr,
+		.objects = &objects,
 		.object_frame = nullptr,
 	};
 	const OpenTTDTreeLoopSettings settings{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false};

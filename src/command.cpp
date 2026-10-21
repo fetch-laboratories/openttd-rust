@@ -20,9 +20,6 @@
 #include "town.h"
 #include "timer/timer_game_economy.h"
 #include "company_func.h"
-#ifdef WITH_RUST
-#include "rust/command_services.h"
-#endif
 #include "company_base.h"
 #include "signal_func.h"
 #include "core/backup_type.hpp"
@@ -65,7 +62,7 @@
 #include "table/strings.h"
 
 #ifdef WITH_RUST
-#include "rust/command_services.h"
+#include "rust/command_services_ffi.h"
 #endif
 
 #include "safeguards.h"
@@ -178,7 +175,7 @@ void CommandHelperBase::InternalDoBefore(bool top_level, bool test)
 #ifdef WITH_RUST
 	openttd_rust_command_before(&GetRustCommandServices(), top_level, test);
 #else
-	if (top_level) ClearObjectAreas();
+	if (top_level) _cleared_object_areas.clear();
 	if (test) SetTownRatingTestMode(true);
 #endif
 }

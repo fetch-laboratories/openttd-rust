@@ -49,7 +49,7 @@
 
 #ifdef WITH_RUST
 #include "rust/company_adapter.h"
-#include "rust/command_services.h"
+#include "rust/command_services_ffi.h"
 #endif
 
 #include "safeguards.h"
@@ -271,11 +271,7 @@ Money GetAvailableMoney(CompanyID company)
  */
 Money GetAvailableMoneyForCommand()
 {
-#ifdef WITH_RUST
-	return openttd_rust_command_available_money(&GetRustCommandServices());
-#else
 	return GetAvailableMoney(_current_company);
-#endif
 }
 
 /**
@@ -287,7 +283,7 @@ Money GetAvailableMoneyForCommand()
 bool CheckCompanyHasMoney(CommandCost &cost)
 {
 #ifdef WITH_RUST
-	return openttd_rust_command_check_money(&GetRustCommandServices(), &GetRustCommandCostServices(), RustCommandCost(&cost));
+	return openttd_rust_command_check_money(&GetRustCommandServices(), &GetRustCommandCostServices(), reinterpret_cast<OpenTTDCommandCost *>(&cost));
 #else
 	if (cost.GetCost() <= 0) return true;
 	if (_settings_game.difficulty.infinite_money) return true;
@@ -334,7 +330,7 @@ static void SubtractMoneyFromAnyCompany(Company *c, const CommandCost &cost)
 
 	InvalidateCompanyWindows(c);
 }
-#endif /* WITH_RUST */
+#endif /* !WITH_RUST */
 
 /**
  * Subtract money from the #_current_company, if the company is valid.
@@ -343,11 +339,11 @@ static void SubtractMoneyFromAnyCompany(Company *c, const CommandCost &cost)
 void SubtractMoneyFromCompany(const CommandCost &cost)
 {
 #ifdef WITH_RUST
-	openttd_rust_command_subtract_money(&GetRustCommandServices(), &GetRustCommandCostServices(), RustCommandCost(&cost));
+	openttd_rust_command_subtract_money(&GetRustCommandServices(), &GetRustCommandCostServices(), reinterpret_cast<const OpenTTDCommandCost *>(&cost));
 #else
 	Company *c = Company::GetIfValid(_current_company);
 	if (c != nullptr) SubtractMoneyFromAnyCompany(c, cost);
-#endif
+#endif /* WITH_RUST */
 }
 
 /**

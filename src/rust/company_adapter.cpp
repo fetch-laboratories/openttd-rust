@@ -60,6 +60,7 @@
 #include "presentation_services.h"
 #include "services_rail.h"
 #include "settings_services.h"
+#include "environment_services.h"
 #include "vehicle_services.h"
 // Registry: house (#256).
 
@@ -161,7 +162,7 @@ static void Co_company_infrastructure(uint8_t id, OpenTTDCompanyInfrastructure *
 	out->road_is_road = 0;
 	for (RoadType rt = ROADTYPE_BEGIN; rt < ROADTYPE_END; rt++) {
 		out->road[rt] = i.road[rt];
-		if (RoadTypeIsRoad(rt)) out->road_is_road |= uint64_t{1} << rt;
+		if (RustRoadTypeIsRoad(rt)) out->road_is_road |= uint64_t{1} << rt;
 	}
 	out->rail_total = i.GetRailTotal();
 	out->road_total = i.GetRoadTotal();
@@ -472,7 +473,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.remove_engine_replacements = Co_remove_engine_replacements, .group_next_owned = Co_group_next_owned,
 		.delete_group = Co_delete_group, .transfer_group = Co_transfer_group,
 		.copy_service_interval_defaults = Co_copy_service_interval_defaults, .update_autoreplace = Co_update_autoreplace,
-		.map_size = Co_map_size, .change_tile_owner = RustChangeTileOwner,
+		.map_size = Co_map_size, .change_tile_owner = GetRustSharedServices().tile_change_owner,
 		.signal_tile = Co_signal_tile, .has_signal_on_track = RustRailHasSignalTrack,
 		.add_track_to_signal_buffer = Co_add_track_to_signal_buffer,
 		.update_signals_in_buffer = RustUpdateSignals, .add_airport_infrastructure = Co_add_airport_infrastructure,
@@ -501,3 +502,14 @@ CommandCost RustCompanyCost(const OpenTTDCompanyCost &x)
 	}
 }
 #endif /* WITH_RUST */
+
+#ifdef WITH_RUST
+#include "service_table_check.hpp"
+#include "abi-visit-OpenTTDCompanyServices.hpp"
+#include "abi-visit-OpenTTDCompanyFinanceServices.hpp"
+bool CheckAbi_company_adapter()
+{
+	return AbiServicesComplete(GetRustCompanyServices()) &&
+		AbiServicesComplete(GetRustCompanyFinanceServices());
+}
+#endif

@@ -163,6 +163,15 @@ impl Price {
     }
 }
 
+/// Native `ObjectAnimationTrigger : uint8_t` carrier.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct AnimationTrigger(pub u8);
+impl AnimationTrigger {
+    const BUILT: Self = Self(0);
+    const TILE_LOOP_NORTH: Self = Self(2);
+}
+
 #[repr(C)]
 pub struct Spec {
     _private: [u8; 0],
@@ -303,7 +312,6 @@ pub struct ObjectServices {
     pub generation: unsafe extern "C" fn(*const Spec) -> Generation,
     pub can_allocate: unsafe extern "C" fn() -> bool,
     pub allocate: unsafe extern "C" fn(u16, *const TownHandle, Area, u8) -> Allocation,
-    pub nearest_town: unsafe extern "C" fn(u32) -> *const TownHandle,
     pub object_type: unsafe extern "C" fn(u32) -> u16,
     pub loop_policy: unsafe extern "C" fn(u32) -> LoopPolicy,
     pub reference: unsafe extern "C" fn(u32) -> Reference,
@@ -316,7 +324,7 @@ pub struct ObjectServices {
     pub colour_error: unsafe extern "C" fn(*const Spec, u16) -> (),
     pub make: unsafe extern "C" fn(u32, u8, u32, WaterClass, u32) -> (),
     pub delete_object: unsafe extern "C" fn(*mut Object) -> (),
-    pub trigger: unsafe extern "C" fn(*mut Object, u8, *const Spec) -> (),
+    pub trigger: unsafe extern "C" fn(*mut Object, AnimationTrigger, *const Spec) -> (),
     pub trigger_tile: unsafe extern "C" fn(*mut Object, u32, *const Spec) -> (),
     pub slope_callback:
         unsafe extern "C" fn(*const Spec, u32, crate::services::Slope, u32, u8) -> SlopeResult,
@@ -486,7 +494,7 @@ impl<'a> World<'a> {
             let shape = (self.s.footprint)(spec);
             let area = Self::footprint(tile, shape, view);
             let town = if town.is_null() {
-                (self.s.nearest_town)(tile)
+                (self.shared.calc_closest_town)(tile, u32::MAX)
             } else {
                 town
             };
@@ -534,13 +542,16 @@ impl<'a> World<'a> {
                 let remove = (self.shared.clear_square_services.docking)(t);
                 (self.s.make)(t, owner, object.id, wc, self.shared.random());
                 if remove {
-                    (self.shared.clear_square_services.remove_docking)(t);
+                    crate::station_cmd::openttd_rust_station_remove_docking_tile(
+                        (self.shared.station_commands)(),
+                        t,
+                    );
                 }
                 (self.shared.mark_dirty)(t);
             }
             openttd_rust_object_count_increment(kind);
             if shape.flags & ANIMATION != 0 {
-                (self.s.trigger)(object.object, 0, spec);
+                (self.s.trigger)(object.object, AnimationTrigger::BUILT, spec);
             }
         }
         crate::witness::hit(crate::witness::OBJECT_BUILD);
@@ -769,7 +780,7 @@ impl<'a> World<'a> {
                         } else {
                             let owner = self.owner(t);
                             if owner != NONE && owner != WATER {
-                                (self.commands().ownership_at)(tmp.0, owner, t);
+                                (self.commands().tile_ownership)(tmp.0, t);
                                 out.add(tmp);
                             }
                             if !(self.s.freeform)()
@@ -799,8 +810,9 @@ impl<'a> World<'a> {
                         }
                     }
                 }
-                let mut z = (self.shared.tile_z)(tile);
-                if (self.shared.tile_slope)(tile) != 0 {
+                let slope_z = ((*self.s.restoration).slope_z)(tile);
+                let mut z = slope_z.z;
+                if slope_z.slope.0 != 0 {
                     z += 1;
                 }
                 for t in self.tiles(area) {
@@ -863,7 +875,7 @@ impl<'a> World<'a> {
             let mut size = 1_u32;
             match kind {
                 TRANSMITTER | LIGHTHOUSE => {
-                    if (self.shared.tile_slope)(tile) != 0 {
+                    if !((*self.s.founding).flat)(crate::town::founding::Tile(tile)) {
                         out.fail(self.s.strings.flat);
                         return;
                     }
@@ -1066,16 +1078,10 @@ impl World<'_> {
                 && object.kind != LIGHTHOUSE
             {
                 let old_slope = (self.shared.tile_slope)(tile);
-                let new_max = if slope == 0 {
-                    0
-                } else if slope & 16 != 0 {
-                    2
-                } else {
-                    1
-                };
-                if old_slope & 16 == 0
-                    && slope & 16 == 0
-                    && (self.shared.tile_max_z)(tile) == z + new_max
+                let new_slope = crate::services::Slope(slope);
+                if !crate::services::Slope(old_slope).is_steep()
+                    && !new_slope.is_steep()
+                    && (self.shared.tile_max_z)(tile) == z + new_slope.max_z()
                 {
                     let spec = (self.s.spec)(object.kind);
                     let callbacks = (self.s.callbacks)(spec);
@@ -1207,7 +1213,11 @@ impl World<'_> {
             if policy.flags & ANIMATION != 0 {
                 (self.s.trigger_tile)(policy.object, tile, policy.spec);
                 if policy.north == tile {
-                    (self.s.trigger)(policy.object, 2, policy.spec);
+                    (self.s.trigger)(
+                        policy.object,
+                        AnimationTrigger::TILE_LOOP_NORTH,
+                        policy.spec,
+                    );
                 }
             }
             let water = ((*self.s.industry_tiles).on_water)(tile);
@@ -1291,7 +1301,7 @@ impl World<'_> {
             }
             for _ in 0..19 {
                 if (self.shared.tile_type)(tile) == 0
-                    && (self.shared.tile_slope)(tile) == 0
+                    && ((*self.s.founding).flat)(crate::town::founding::Tile(tile))
                     && (self.shared.tile_z)(tile) <= 2
                     && !(self.shared.bridge_above)(tile)
                 {
@@ -1310,10 +1320,13 @@ impl World<'_> {
         }
         false
     }
+    fn random_tile(&self) -> u32 {
+        self.shared.random() & (self.map.size_x() * ((self.shared.map_max_y)() + 1) - 1)
+    }
     fn transmitter(&self) -> bool {
-        let tile = self.shared.random() & (self.map.size_x() * ((self.shared.map_max_y)() + 1) - 1);
+        let tile = self.random_tile();
         if (self.shared.tile_type)(tile) == 0
-            && (self.shared.tile_slope)(tile) == 0
+            && unsafe { ((*self.s.founding).flat)(crate::town::founding::Tile(tile)) }
             && (self.shared.tile_z)(tile) >= 4
             && !(self.shared.bridge_above)(tile)
         {
@@ -1379,7 +1392,7 @@ impl World<'_> {
                         LIGHTHOUSE => self.lighthouse(),
                         _ => {
                             let view = self.shared.random_range(u32::from(generation.views)) as u8;
-                            let tile = self.shared.random() & (self.map.size_x() * (maxy + 1) - 1);
+                            let tile = self.random_tile();
                             self.build_command(
                                 out,
                                 tmp,
