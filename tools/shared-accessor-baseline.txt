@@ -8,7 +8,6 @@ src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> OpenTTDNativeCargoPayme
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c1ccb7a99eba675e | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c63db387bfa123f1 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | cb5a17d7b102cbc0 | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> int32_t | 06f31620cb63fe04 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | 02b8967881717dcf | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | 43fc64270dcd8062 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | cb1595c2e34ded93 | 1
