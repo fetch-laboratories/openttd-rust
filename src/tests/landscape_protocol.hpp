@@ -50,10 +50,7 @@ template<typename Check> void Run(Check check)
 	auto shared = OpenTTDSharedServices{};
 	shared.tile_type = Type;
 	const OpenTTDIndustryTileServices object_tiles{.on_water = ProbeObjectOnWater};
-	auto objects = OpenTTDObjectServices{};
-	objects.shared = &shared;
-	objects.industry_tiles = &object_tiles;
-	objects.loop_policy = ProbeObjectPolicy;
+	const OpenTTDObjectServices objects{.shared = &shared, .industry_tiles = &object_tiles, .loop_policy = ProbeObjectPolicy};
 	const OpenTTDLandscapeLoopServices services{
 		.shared = &shared,
 		.tile_types = {nullptr, 0},

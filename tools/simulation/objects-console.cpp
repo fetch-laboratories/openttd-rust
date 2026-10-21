@@ -231,6 +231,10 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		ChangeTileOwner_Object(owned, c->index, c->index);
 		Object::CanAllocateItem(); BuildObject(OBJECT_STATUE, tile + TileDiffXY(5, 5), c->index);
 		ChangeTileOwner_Object(tile + TileDiffXY(5, 5), c->index, INVALID_OWNER);
+		TileIndex sea = INVALID_TILE; for (TileIndex t : Map::Iterate()) if (sea == INVALID_TILE && IsSea(t) && GetTileSlopeZ(t) == std::tuple{SLOPE_FLAT, 0}) sea = t;
+		MakeCanal(tile + 7, OWNER_NONE, Random()); MakeRiver(tile + 8, Random()); fmt::print(stderr, "OBJECT water-clear"); /* Clearing restores each class, then ownership redispatches. */
+		for (TileIndex t : {tile + 7, tile + 8, sea}) { Object::CanAllocateItem(); BuildObject(OBJECT_OWNED_LAND, t, c->index); ChangeTileOwner(t, c->index, INVALID_OWNER); fmt::print(stderr, " {} {}", to_underlying(GetWaterClass(t)), GetTileOwner(t).base()); }
+		fmt::print(stderr, "\n");
 	}
 	uint index = 0; for (TileIndex t : TileArea(tile - TileDiffXY(3, 3), 14, 14)) SetTileHeight(t, heights[index++]);
 	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);

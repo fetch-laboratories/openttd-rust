@@ -101,7 +101,7 @@ def check(scenario, run, mode, role, result):
     if "objects" not in scenario:
         return
     required = {
-        "commands": ("hq-cargo 5 2 1", "id-reused true"),
+        "commands": ("hq-cargo 5 2 1", "id-reused true", "water-clear 1 16 2 17 0 17"),
         "gaps": (
             "count-wrap true|scratch-growth true true|callback-before-clear true|"
             "cleared-before-bridge true|callback-colour true|"
@@ -130,3 +130,5 @@ def check(scenario, run, mode, role, result):
         "reload": (),
     }[scenario["objects"]]
     branch_witnesses(scenario, run, role, "object", branches)
+    if scenario["objects"] == "commands":  # Object clearing redispatches to water.
+        branch_witnesses(scenario, run, role, "water_cmd", ("owner",))
