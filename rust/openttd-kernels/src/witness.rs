@@ -197,6 +197,8 @@ witness_blocks! {
         ROAD_SERVICES = 1 => "road.services",
         ROAD_VISITORS = 2 => "road.visitors",
         ROAD_ENTRIES = 3 => "road.entries",
+        ROAD_TRAM_BUILD = 4 => "road.tram_build",
+        ROAD_TRAM_REFUSED = 5 => "road.tram_refused",
     }
     road_commands {
         ROAD_COMMANDS_ENTRIES = 0 => "road_commands.entries",
