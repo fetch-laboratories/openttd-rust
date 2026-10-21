@@ -157,14 +157,14 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 ## Resume checkpoint
 
 Resumed on 2026-10-20 with the fifteenth steering actions. Root on this host:
-gpt-6.1-sol, ultra; implementation and reviews: gpt-6.1-sol, high. Two implementers
-and three reviewers own active tasks; #290 waits for capacity behind integration.
+gpt-6.1-sol, ultra; implementation and reviews: gpt-6.1-sol, high. The object
+implementer and four reviewers own active tasks; #290 waits for capacity behind integration.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
 | #320 / #323 | `46965793e0` | Verify and affected semantics pass; default failing-before witnesses pass after fixes. Fresh fixing review active. |
 | #321 / #322 | `339ce26af6` | R1 fixes stale build metadata, build/Valgrind identity and runner regression gaps within 450 lines. Root owns refreshed profiles/calibration/quiet anchors. |
-| #256 / #269 | `6acc16bb86` | Base adoption pushed; affected checks underway. Scoped conflict review, quiet medians and Full follow. |
+| #256 / #269 | `08e875fcba` | Adoption checks and 45 semantic cases pass; fresh scoped fixing review active. Quiet medians and Full follow. |
 | #294 / #317 | `1e18177388` | Shared-layer adoption checks pass; scoped fixing review active. Speed and Full follow. |
 | #295 / #313 | `b64cfe4cf0` | Agent adopts shared layer/ABI and reassesses retirement; fresh review and gates follow. |
 | #266 / #290 | `17bc99cd5a` | Remove five bounces, adopt the shared layer, remeasure (PR comment). |
