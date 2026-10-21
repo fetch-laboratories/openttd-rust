@@ -24,7 +24,10 @@ static void RoadPrint(std::string_view name, const CommandCost &cost, Money extr
 }
 #ifdef WITH_RUST
 #include "rust/road_command_services.h"
-static constexpr auto RoadBuild = RustRoadBuildCommand;
+static CommandCost RoadBuild(DoCommandFlags flags, TileIndex tile, RoadBits bits, RoadType rt, DisallowedRoadDirections drd, TownID town)
+{
+	RustRoadCommandContext c; openttd_rust_road_do_build(c.view.services, &c.scratch, c.view.cost, c.view.ret, flags.base(), tile.base(), bits, rt, drd, town.base()); return std::move(c.cost);
+}
 #else
 static constexpr auto RoadBuild = Command<CMD_BUILD_ROAD>::Do;
 #endif

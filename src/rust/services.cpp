@@ -171,7 +171,6 @@ static bool Shared_may_have_road(uint32_t tile) noexcept { return MayHaveRoad(Ti
 static RoadTileType Shared_road_tile_kind(uint32_t tile) noexcept { return GetRoadTileType(TileIndex{tile}); }
 static void Shared_set_road_bits(uint32_t tile, uint8_t bits, uint8_t rtt) noexcept { SetRoadBits(TileIndex{tile}, static_cast<RoadBits>(bits), static_cast<RoadTramType>(rtt)); }
 static void Shared_set_road_type(uint32_t tile, uint8_t rtt, uint8_t rt) noexcept { RustSetRoadType(TileIndex{tile}, static_cast<RoadTramType>(rtt), static_cast<RoadType>(rt)); }
-static void Shared_set_road_owner(uint32_t tile, uint8_t rtt, uint8_t owner) noexcept { RustSetRoadOwner(tile, rtt, owner); }
 static void Shared_set_road_directions(uint32_t tile, uint8_t drd) noexcept { SetDisallowedRoadDirections(TileIndex{tile}, static_cast<DisallowedRoadDirections>(drd)); }
 static bool Shared_road_powered(uint8_t from, uint8_t to) noexcept { return HasPowerOnRoad(static_cast<RoadType>(from), static_cast<RoadType>(to)); }
 static bool Shared_road_type_valid(uint8_t rt) noexcept { return ValParamRoadType(static_cast<RoadType>(rt)); }
@@ -312,7 +311,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.road_tile_kind = Shared_road_tile_kind,
 	.set_road_bits = Shared_set_road_bits,
 	.set_road_type = Shared_set_road_type,
-	.set_road_owner = Shared_set_road_owner,
+	.set_road_owner = RustSetRoadOwner,
 	.set_road_directions = Shared_set_road_directions,
 	.road_powered = Shared_road_powered,
 	.road_type_valid = Shared_road_type_valid,

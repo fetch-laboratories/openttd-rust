@@ -654,9 +654,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.tick_counter = []() noexcept -> uint64_t {
 		return openttd_orders_tick_counter();
 	},
-	.editor = []() noexcept -> bool {
-		return _game_mode == GM_EDITOR;
-	},
+	.editor = OpenTTDEditor,
 	.facilities = [](OpenTTDBaseStation *handle) noexcept -> uint8_t {
 		return static_cast<BaseStation *>(handle)->facilities.base();
 	},
