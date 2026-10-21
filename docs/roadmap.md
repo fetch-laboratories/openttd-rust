@@ -163,8 +163,8 @@ own the active tasks below; #290 waits for capacity behind their integration.
 | --- | --- | --- |
 | #306 / #308 | `9675566fb9` | Quiet medians recorded; exact-head Full requested. Root integrates when green. |
 | #320 | implementation active | Station fidelity fixes, cleanup and default failing-before witnesses; fresh review follows. |
-| #321 | implementation active | Instruction-count speed guard; 330-line budget. Root coordinates quiet anchors/calibration. |
-| #256 / #269 | `64f133b059` | Agent adopts actual base; scoped conflict review, quiet medians and Full follow. No new fix round. |
+| #321 / #322 | `bf9bb3c86f` | Default regressions pass at 330 added tooling/test/workflow lines; six profiles underway. Root owns review, quiet anchors/calibration. |
+| #256 / #269 | `5a6ad37c59` | Base adoption pushed; affected checks underway. Scoped conflict review, quiet medians and Full follow. |
 | #294 / #317 | `5410774ff7` | Agent adopts #303's shared layer and deletes parallel copies; scoped review and gates follow. |
 | #295 / #313 | `b64cfe4cf0` | Agent adopts shared layer/ABI and reassesses retirement; fresh review and gates follow. |
 | #266 / #290 | `17bc99cd5a` | Remove five bounces, adopt the shared layer, remeasure (PR comment). |
