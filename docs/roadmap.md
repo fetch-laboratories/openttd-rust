@@ -162,10 +162,10 @@ own the active tasks below; #290 waits for capacity behind their integration.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #320 | implementation active | Station fidelity fixes, cleanup and default failing-before witnesses; fresh review follows. |
+| #320 / #323 | `46965793e0` | Three repairs and cleanup pushed; all new cases fail on pre-fix game code. Native and affected semantic checks underway; fresh review follows. |
 | #321 / #322 | `bf9bb3c86f` | Default regressions pass at 330 added tooling/test/workflow lines; six profiles underway. Root owns review, quiet anchors/calibration. |
-| #256 / #269 | `5a6ad37c59` | Base adoption pushed; affected checks underway. Scoped conflict review, quiet medians and Full follow. |
-| #294 / #317 | `5410774ff7` | Agent adopts #303's shared layer and deletes parallel copies; scoped review and gates follow. |
+| #256 / #269 | `6acc16bb86` | Base adoption pushed; affected checks underway. Scoped conflict review, quiet medians and Full follow. |
+| #294 / #317 | `1e18177388` | Shared-layer adoption pushed; affected checks underway. Scoped review and gates follow. |
 | #295 / #313 | `b64cfe4cf0` | Agent adopts shared layer/ABI and reassesses retirement; fresh review and gates follow. |
 | #266 / #290 | `17bc99cd5a` | Remove five bounces, adopt the shared layer, remeasure (PR comment). |
 | #274 | `162843acbd` | Paused measurement branch; map view stays in the work order. |
