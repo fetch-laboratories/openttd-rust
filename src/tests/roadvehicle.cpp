@@ -232,7 +232,7 @@ TEST_CASE("Road tick prologue - actual scalar places and nonfront entry")
 		const auto read = RustRoadTickRead(v);
 		static_assert(std::is_same_v<decltype(read.status), const uint8_t *>);
 		static_assert(std::is_same_v<decltype(read.running), const decltype(v->running_ticks) *>);
-		static_assert(std::is_same_v<decltype(read.order_time), const decltype(v->current_order_time) *>);
+		static_assert(std::is_same_v<decltype(read.order_time), const std::remove_reference_t<decltype(v->current_order_time)> *>);
 		CHECK(read.status == v->vehstatus.base_address());
 		CHECK(read.running == &v->running_ticks);
 		CHECK(read.order_time == &v->current_order_time);
