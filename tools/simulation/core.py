@@ -1010,10 +1010,8 @@ def main():
     if args.benchmark and args.jobs != 1:
         parser.error("--benchmark requires --jobs 1")
 
-    if args.instructions and (args.benchmark or args.soak or args.frozen_runtimes):
-        parser.error(
-            "--instructions conflicts with --benchmark/--soak/--frozen-runtimes"
-        )
+    if args.instructions and (args.benchmark or args.soak):
+        parser.error("--instructions conflicts with --benchmark/--soak")
     every = scenario_list(args.soak)
     if args.instructions:
         from .roads import SPEED_BUDGETS

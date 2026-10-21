@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -14,6 +15,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from simulation import core as simulate
+from simulation import engines, fleet, orders, runtime, signals, stations, towns
 from simulation import instructions as ir
 from simulation.roads import SPEED_BUDGETS, speed_budget
 
@@ -534,17 +536,57 @@ class InstructionSpeedTests(unittest.TestCase):
             )
             ir.record_build(root, root, "reference", env)
             context = binary, root, run, env
+            candidate = root / "build-rust"
+            candidate.mkdir()
+            shutil.copy2(binary, candidate / "openttd-rust")
+            shutil.copy2(root / "instruction-build.json", candidate)
+
+            # Adapter copies exercise export stripping without another compiler fixture.
+            def adapter(build, folder, env):
+                folder.mkdir()
+                return Path(shutil.copy2(binary, folder / "adapter"))
+
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(patch.object(simulate, "ROOT", root))
+                stack.enter_context(patch.object(migration, "REFERENCE_BUILD", root))
+                for module in (engines, fleet, orders, signals, stations, towns):
+                    stack.enter_context(patch.object(module, "adapter", adapter))
+                runtime.export(root / "bundle", migration)
             counts = []
-            for kind in ("save", "generate"):
-                case = dict(scenario, kind=kind)
-                command, info = ir.prepare(case, [str(binary)], *context, False)
-                subprocess.run(command, env=env, check=True)
-                counts.append(ir.count(run / "callgrind.out"))
-                (run / "callgrind.out").unlink()
-                (run / "callgrind.log").unlink()
+            scenario["name"] = next(iter(SPEED_BUDGETS))
+
+            def collect(case, binaries, builds, out, *args):
+                self.assertTrue(args[-1])
+                frozen = binaries["candidate"]
+                context = frozen, builds["candidate"], run, env
+                for kind in ("save", "generate"):
+                    case = dict(scenario, kind=kind)
+                    command, info = ir.prepare(case, [str(frozen)], *context, False)
+                    subprocess.run(command, env=env, check=True)
+                    counts.append(ir.count(run / "callgrind.out"))
+                    (run / "callgrind.out").unlink()
+                    (run / "callgrind.log").unlink()
+                frozen.write_bytes(frozen.read_bytes() + b"changed")
+                with self.assertRaisesRegex(ValueError, "stale instruction build"):
+                    ir.prepare(case, [str(frozen)], *context, False)
+                (builds["candidate"] / "instruction-build.json").unlink()
+                with self.assertRaises(FileNotFoundError):
+                    ir.prepare(case, [str(frozen)], *context, False)
+                shutil.rmtree(out)
+                raise RuntimeError("collected frozen profiles")
+
+            cli = ["sim", "--instructions", f"--frozen-runtimes={root / 'bundle'}"]
+            with (
+                patch.object(simulate, "scenario_list", return_value=[scenario]),
+                patch.object(simulate, "run_scenario", side_effect=collect),
+                patch.object(sys, "argv", cli),
+                self.assertRaisesRegex(RuntimeError, "collected frozen profiles"),
+            ):
+                simulate.main()
             # Wildcard nested toggle loses this work.
             self.assertGreater(counts[0], 50000)
             self.assertGreater(counts[1], counts[0] * 2)
+            command, _ = ir.prepare(scenario, [str(binary)], *context, False)
             baseline = ir.identity(scenario, *context, Path(command[0]))
             (root / ".cargo").mkdir()
             for field, value in (("ticks", 2), ("console", ["unpause"])):
