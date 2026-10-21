@@ -122,6 +122,7 @@ struct OpenTTDVehicleServices {
 	void (OPENTTD_VEHICLE_CALL *detach_last)(OpenTTDVehicle *, OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(detach_last);
 	OpenTTDVehicle *(OPENTTD_VEHICLE_CALL *next)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	uint16_t (OPENTTD_VEHICLE_CALL *engine_id)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_id);
+	const OpenTTDEngine *(OPENTTD_VEHICLE_CALL *engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine);
 	OpenTTDEngineForLength (OPENTTD_VEHICLE_CALL *engine_for_length)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_for_length);
 	void (OPENTTD_VEHICLE_CALL *write_tick)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_tick);
 	uint8_t (OPENTTD_VEHICLE_CALL *direction)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(direction);

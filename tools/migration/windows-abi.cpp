@@ -926,6 +926,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(ground, cache_begin);
 		VEHICLE_UNUSED(vehicle, next);
 		VEHICLE_UNUSED(vehicle, engine_id);
+		VEHICLE_UNUSED(vehicle, engine);
 		VEHICLE_UNUSED(vehicle, engine_for_length);
 		VEHICLE_UNUSED(ground, cached_length);
 		VEHICLE_UNUSED(leaves, shorten_factor);

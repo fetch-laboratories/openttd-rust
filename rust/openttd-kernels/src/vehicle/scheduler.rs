@@ -165,7 +165,7 @@ unsafe fn day<const COUNTED: bool>(
                         svc!(COUNTED, s.first_dirty, vehicle);
                     }
                     if callback & !3 != 0 {
-                        let engine = svc!(COUNTED, vs.engine_for_length, vehicle).engine;
+                        let engine = svc!(COUNTED, vs.engine, vehicle);
                         svc!(
                             COUNTED,
                             vs.unknown_callback_result,

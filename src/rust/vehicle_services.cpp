@@ -164,9 +164,10 @@ static uint8_t OPENTTD_VEHICLE_CALL VehicleSvcStatus(OpenTTDVehicle *v) noexcept
 static uint32_t OPENTTD_VEHICLE_CALL VehicleSvcTile(OpenTTDVehicle *v) noexcept { return RustVehicleTile(VehicleOf(v)); }
 static OpenTTDVehicle *OPENTTD_VEHICLE_CALL VehicleSvcNext(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleNext(VehicleOf(v))); }
 static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcEngineID(OpenTTDVehicle *v) noexcept { return RustVehicleEngineID(VehicleOf(v)); }
+static const OpenTTDEngine *OPENTTD_VEHICLE_CALL VehicleSvcEngine(OpenTTDVehicle *v) noexcept { return RustEngine(VehicleOf(v)->GetEngine()); }
 static OpenTTDEngineForLength OPENTTD_VEHICLE_CALL VehicleSvcEngineForLength(OpenTTDVehicle *v) noexcept
 {
-	const Engine *e = VehicleOf(v)->GetEngine();
+	const Engine *e = EngineOf(VehicleSvcEngine(v));
 	return {.engine = RustEngine(e), .grf_version = RustEngineGRFVersion(e)};
 }
 
@@ -286,6 +287,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.detach_last = VehicleSvcDetachLast,
 	.next = VehicleSvcNext,
 	.engine_id = VehicleSvcEngineID,
+	.engine = VehicleSvcEngine,
 	.engine_for_length = VehicleSvcEngineForLength,
 	.write_tick = VehicleSvcWriteTick,
 	.direction = VehicleSvcDirection,

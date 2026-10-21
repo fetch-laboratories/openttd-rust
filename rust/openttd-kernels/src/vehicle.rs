@@ -266,6 +266,8 @@ pub struct VehicleServices {
     pub detach_last: extern "C" fn(VehicleRef, VehicleRef, VehicleRef),
     pub next: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
     pub engine_id: extern "C" fn(VehicleRef) -> u16,
+    /// Only the current engine, for callers that do not consume its GRF version.
+    pub engine: extern "C" fn(VehicleRef) -> EngineRef,
     pub engine_for_length: extern "C" fn(VehicleRef) -> EngineForLength,
     pub write_tick: extern "C" fn(VehicleRef, u8),
     pub direction: extern "C" fn(VehicleRef) -> u8,
