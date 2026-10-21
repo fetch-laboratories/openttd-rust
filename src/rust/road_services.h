@@ -162,10 +162,10 @@ static OpenTTDRoadDepotResult OPENTTD_VEHICLE_CALL RoadSvcFindDepot(OpenTTDVehic
 	FindDepotData result = YapfRoadVehicleFindNearestDepot(RoadOf(v), max_distance);
 	return {.tile = result.tile.base(), .length = result.best_length};
 }
-static OpenTTDRoadTramBuildRead OPENTTD_VEHICLE_CALL RoadSvcTramBuildRead(OpenTTDVehicle *v) noexcept
+static OpenTTDRoadTramBuildRead OPENTTD_VEHICLE_CALL RoadSvcTramBuildRead(OpenTTDVehicle *v, OpenTTDRoadCommandSlot *slot) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
-	return {.owner = RustVehicleOwner(u), .road_type = u->roadtype};
+	return {.owner = RustVehicleOwner(u), .road_type = u->roadtype, .road = &slot->road.emplace().view};
 }
 static void OPENTTD_VEHICLE_CALL RoadSvcDisconnect() noexcept { FatalError("Disconnecting road vehicle."); }
 static OpenTTDRoadStopRead OPENTTD_VEHICLE_CALL RoadSvcStopRead(OpenTTDVehicle *v) noexcept

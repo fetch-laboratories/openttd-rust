@@ -25,11 +25,12 @@ struct OpenTTDRoadCommandScratch {
 	std::optional<CommandCost> ret;
 	std::optional<RoadConversionScratch> conversion;
 };
-/* Each outer native entry owns one scratch and two results. No table copies,
- * heap allocation or state is introduced by this context. Conversion is lazy. */
+/* Each outer native entry owns one scratch and two results, with no table copies,
+ * heap allocation or state. Conversion is lazy, as is a road vehicle slot's context. */
 struct RustRoadCommandContext {
 	OpenTTDRoadCommandScratch scratch;
 	CommandCost cost, ret;
 	OpenTTDRoadCommandContext view{&GetRustRoadCommandServices(), &scratch, RustCommandCost(&cost), RustCommandCost(&ret)};
 };
+struct OpenTTDRoadCommandSlot { std::optional<RustRoadCommandContext> road; };
 #endif /* RUST_ROAD_COMMAND_SERVICES_H */
