@@ -118,7 +118,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings.
 2. **Speed guard and passes (#155, #282, #321, AGENTS.md).**
-   - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios; #321 adds fixed measured anchors and separately rolling integrated instruction projections. After inspecting its 211-line draft, root reselected 330 added tooling/test lines to include the mandatory real scope probe, compatibility identity, build reconfiguration and default regressions; no new controller.
+   - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios; #321 adds fixed measured anchors and separately rolling integrated instruction projections. Root reselected 450 added tooling/test/workflow lines for R1's concrete metadata, effective build settings, Valgrind isolation/identity and default runner regressions; no new controller.
    - **Per PR:** no scenario's projected ratio more than 15% above its record and none over its ceiling (1.5x play saves, 1.3x generation). Until #321 lands, use quiet wall medians. Misses get a callgrind fix round.
    - **Speed pass:** after every fourth ownership integration (#255 and #303 count two since the #275 profile), or when a projection comes within 5% of its ceiling (1.425x play, 1.235x generation). The fifteenth steering profile on #275 is the current attribution.
    - **Redraw:** `-r 64x64` leaves the ratios unchanged, so redraw does not inflate them. It does make whole-process counts timing-dependent, which is why only the game loop is counted.
@@ -157,15 +157,15 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 ## Resume checkpoint
 
 Resumed on 2026-10-20 with the fifteenth steering actions. Root on this host:
-gpt-6.1-sol, ultra; implementation and reviews: gpt-6.1-sol, high. Four implementers
-and the #322 reviewer own active tasks; #290 waits for capacity behind integration.
+gpt-6.1-sol, ultra; implementation and reviews: gpt-6.1-sol, high. Two implementers
+and three reviewers own active tasks; #290 waits for capacity behind integration.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #320 / #323 | `46965793e0` | Three repairs and cleanup pushed; all new cases fail on pre-fix game code. Native and affected semantic checks underway; fresh review follows. |
-| #321 / #322 | `339ce26af6` | Six pre-adoption profiles pass; P2016 stability within 0.1%. Conflict-free base adoption pushed; fresh review active. Root owns calibration/quiet anchors. |
+| #320 / #323 | `46965793e0` | Verify and affected semantics pass; default failing-before witnesses pass after fixes. Fresh fixing review active. |
+| #321 / #322 | `339ce26af6` | R1 fixes stale build metadata, build/Valgrind identity and runner regression gaps within 450 lines. Root owns refreshed profiles/calibration/quiet anchors. |
 | #256 / #269 | `6acc16bb86` | Base adoption pushed; affected checks underway. Scoped conflict review, quiet medians and Full follow. |
-| #294 / #317 | `1e18177388` | Shared-layer adoption pushed; affected checks underway. Scoped review and gates follow. |
+| #294 / #317 | `1e18177388` | Shared-layer adoption checks pass; scoped fixing review active. Speed and Full follow. |
 | #295 / #313 | `b64cfe4cf0` | Agent adopts shared layer/ABI and reassesses retirement; fresh review and gates follow. |
 | #266 / #290 | `17bc99cd5a` | Remove five bounces, adopt the shared layer, remeasure (PR comment). |
 | #274 | `162843acbd` | Paused measurement branch; map view stays in the work order. |
