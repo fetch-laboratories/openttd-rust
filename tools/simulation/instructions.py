@@ -39,8 +39,6 @@ def record_build(build, source, role, env):
 
         files = ("rust-build-configuration.txt", "rust-toolchain.txt")
         settings += "".join((build / f).read_text() for f in files)
-        if "CARGO_PROFILE_RELEASE_DEBUG=line-tables-only\n" not in settings:
-            raise ValueError("profile build lacks release line tables")
         verify_debug(migration.rust_archive(build))
     inputs = [source / "Cargo.toml", source / "rust/openttd-kernels/Cargo.toml"]
     configs = [p / ".cargo" for p in (source, *source.parents)]
@@ -60,6 +58,7 @@ def record_build(build, source, role, env):
 def flags(scenario):
     entries = ENTRIES if scenario["kind"] == "generate" else ENTRIES[:1]
     return [
+        "--command-line-only=yes",
         "--tool=callgrind",
         "--collect-atstart=no",
         *[f"--toggle-collect={e}" for e in entries],
@@ -114,9 +113,18 @@ def identity(scenario, binary, build, folder, env, valgrind):
         )
     settings = metadata["settings"]
     version = subprocess.check_output(
-        [str(valgrind), "--version"], env=env, text=True
+        [str(valgrind), "--command-line-only=yes", "--version"], env=env, text=True
     ).strip()
-    tool = str(valgrind), version, digest(valgrind.read_bytes())
+    libraries = Path(env["VALGRIND_LIB"])
+    tools = [sorted(libraries.glob(p)) for p in ("callgrind-*", "vgpreload_core-*")]
+    if not all(tools):
+        raise ValueError("incomplete selected Valgrind tool/core-preload identity")
+    tool = (
+        str(valgrind),
+        version,
+        digest(valgrind.read_bytes()),
+        [digest(p.read_bytes()) for group in tools for p in group],
+    )
     policy = "64x64/serial/witness-off/v1"
     settings = settings, platform.machine(), tool, flags(scenario), policy
     compatible = digest([resolved, inputs, settings])
@@ -132,6 +140,15 @@ def prepare(scenario, command, binary, build, folder, env, reference):
         env.update(VALGRIND_LIB=str(root / "libexec/valgrind"))
     else:
         valgrind = Path(shutil.which("valgrind") or "/missing-valgrind")
+    if not env.get("VALGRIND_LIB"):
+        prefix = valgrind.resolve().parent.parent
+        env["VALGRIND_LIB"] = str(
+            next(
+                p
+                for p in (prefix / "libexec/valgrind", prefix / "lib/valgrind")
+                if list(p.glob("callgrind-*"))
+            )
+        )
     env.pop("OPENTTD_WITNESS", None)
     measurement = identity(scenario, binary, build, folder, env, valgrind)
     key = digest(measurement)

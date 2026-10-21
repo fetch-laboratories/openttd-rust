@@ -529,7 +529,9 @@ class InstructionSpeedTests(unittest.TestCase):
                 ["g++", "-g", "-O0", str(source), "-o", str(binary)], check=True
             )
             scenario = dict(kind="save", ticks=1, save=str(source))
-            env = migration.environment()
+            env = dict(
+                migration.environment(), VALGRIND_OPTS="--toggle-collect=StateGameLoop*"
+            )
             ir.record_build(root, root, "reference", env)
             context = binary, root, run, env
             counts = []
@@ -571,6 +573,22 @@ class InstructionSpeedTests(unittest.TestCase):
             refreshed = ir.identity(scenario, *context, Path(command[0]))
             self.assertEqual(current["compatible"], refreshed["compatible"])
             self.assertNotEqual(current["executable"], refreshed["executable"])
+            tools = root / "valgrind-tools"
+            tools.mkdir()
+            for path in Path(env["VALGRIND_LIB"]).glob("memcheck-*"):
+                (tools / path.name).symlink_to(path)
+            context = binary, root, run, dict(env, VALGRIND_LIB=str(tools))
+            for name in ("callgrind-test", "vgpreload_core-test.so"):
+                (tools / name).write_bytes(b"original")
+            for name in ("callgrind-test", "vgpreload_core-test.so"):
+                previous = ir.identity(scenario, *context, Path(command[0]))
+                (tools / name).write_bytes(b"changed")
+                self.assertNotEqual(
+                    previous, ir.identity(scenario, *context, Path(command[0]))
+                )
+            (tools / "vgpreload_core-test.so").unlink()
+            with self.assertRaisesRegex(ValueError, "incomplete selected Valgrind"):
+                ir.identity(scenario, *context, Path(command[0]))
             profile = run / "callgrind.out"
             good = "desc: Trigger: Program termination\nevents: Dr Ir\nsummary: 999 999\ntotals: 2 42\n"
             profile.write_text(good)
