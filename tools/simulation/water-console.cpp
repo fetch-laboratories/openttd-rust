@@ -24,6 +24,16 @@
 #include "rust/command_services.h"
 #endif
 #include "station_base.h"
+#include "rail_cmd.h"
+#include "road_cmd.h"
+#include "station_cmd.h"
+#include "waypoint_cmd.h"
+#include "tunnelbridge_cmd.h"
+#include "industry.h"
+#include "newgrf_station.h"
+#include "newgrf_roadstop.h"
+#include "airport.h"
+#include "signal_func.h"
 #include "openttd.h"
 extern const TileTypeProcs _tile_type_water_procs;
 static void WaterCost(const char *name, CommandCost cost)
@@ -180,8 +190,85 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 	local.Restore(); company.Restore();
 	return true;
 }
+/* Company 1's station, crossing, water and tunnel/bridge tiles on flat height-1 land (#156). */
+static const struct { const char *name; int x, y; } _owner_tiles[] = {
+	{"drive-bus", 2, 1}, {"drive-truck", 3, 1}, {"road-waypoint", 4, 1}, {"crossing", 6, 1}, {"rail", 6, 2}, {"foreign-crossing", 6, 3},
+	{"bay", 1, 5}, {"rail-station", 2, 7}, {"rail-waypoint", 5, 7}, {"airport", 1, 9}, {"lock-upper", 10, 3}, {"lock", 10, 4},
+	{"lock-lower", 10, 5}, {"dock", 13, 4}, {"dock-water", 13, 5}, {"canal", 12, 6}, {"depot", 8, 7}, {"depot-other", 9, 7},
+	{"buoy", 11, 7}, {"rail-bridge", 6, 9}, {"road-bridge", 7, 9}, {"rail-tunnel", 9, 12}, {"road-tunnel", 9, 13},
+};
+static void OwnerState(const char *phase, TileIndex base, uint industry)
+{
+	for (const Company *c : Company::Iterate()) {
+		const auto &infra = c->infrastructure;
+		fmt::print(stderr, "WATER-CMD owner-infra {} {} {} {} {} {} {} {}\n", phase, c->index.base(), infra.rail[RAILTYPE_RAIL], infra.road[ROADTYPE_ROAD], infra.signal, infra.water, infra.station, infra.airport);
+	}
+	for (const auto &[name, x, y] : _owner_tiles) {
+		Tile t{base + TileDiffXY(x, y)};
+		fmt::print(stderr, "WATER-CMD owner {} {} {} {} {} {} {} {} {} {} {}\n", phase, name, GetTileType(t), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m7(), t.m8());
+	}
+	for (uint id = industry; id < industry + 2; ++id) {
+		const Industry *i = Industry::Get(id);
+		fmt::print(stderr, "WATER-CMD owner-industry {} {} {} {} {}\n", phase, id, i->founder.base(), i->exclusive_supplier.base(), i->exclusive_consumer.base());
+	}
+	fmt::print(stderr, "WATER-CMD rng {} {}\n", _random.state[0], _random.state[1]);
+}
+static void OwnerBuild(TileIndex base, uint industry)
+{
+	auto at = [base](int x, int y) { return base + TileDiffXY(x, y); };
+	const DoCommandFlags exec = DoCommandFlag::Execute;
+	for (int y = 0; y < 16; ++y) for (int x = 0; x < 16; ++x) MakeClear(at(x, y), CLEAR_GRASS, 3);
+	/* Inner corners one level up: a lock/dock plateau and a tunnel hill. */
+	for (int y = 1; y <= 4; ++y) for (int x = 9; x <= 15; ++x) SetTileHeight(at(x, y), 2);
+	for (int y = 12; y <= 14; ++y) for (int x = 10; x <= 13; ++x) SetTileHeight(at(x, y), 2);
+	for (int y = 1; y <= 3; ++y) WaterCost("owner-rail", Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, at(6, y), RAILTYPE_RAIL, TRACK_Y, false));
+	for (int x = 1; x <= 7; ++x) WaterCost("owner-road", Command<CMD_BUILD_ROAD>::Do(exec, at(x, 1), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
+	{
+		Backup<CompanyID> other(_current_company, CompanyID(0));
+		for (int x = 5; x <= 7; ++x) WaterCost("owner-road", Command<CMD_BUILD_ROAD>::Do(exec, at(x, 3), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
+	}
+	for (auto [x, type] : {std::pair{2, RoadStopType::Bus}, std::pair{3, RoadStopType::Truck}}) {
+		WaterCost("owner-stop", Command<CMD_BUILD_ROAD_STOP>::Do(exec, at(x, 1), 1, 1, type, true, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, StationID::Invalid(), false));
+	}
+	WaterCost("owner-stop", Command<CMD_BUILD_ROAD_WAYPOINT>::Do(exec, at(4, 1), AXIS_X, 1, 1, ROADSTOP_CLASS_WAYP, 0, StationID::Invalid(), false));
+	WaterCost("owner-stop", Command<CMD_BUILD_ROAD_STOP>::Do(exec, at(1, 5), 1, 1, RoadStopType::Bus, false, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, StationID::Invalid(), false));
+	WaterCost("owner-station", Command<CMD_BUILD_RAIL_STATION>::Do(exec, at(1, 7), RAILTYPE_RAIL, AXIS_X, 1, 3, STAT_CLASS_DFLT, 0, StationID::Invalid(), false));
+	WaterCost("owner-rail", Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, at(5, 7), RAILTYPE_RAIL, TRACK_X, false));
+	WaterCost("owner-station", Command<CMD_BUILD_RAIL_WAYPOINT>::Do(exec, at(5, 7), AXIS_X, 1, 1, STAT_CLASS_WAYP, 0, StationID::Invalid(), false));
+	WaterCost("owner-station", Command<CMD_BUILD_AIRPORT>::Do(exec, at(1, 9), AT_SMALL, 0, StationID::Invalid(), false));
+	WaterCost("owner-water", Command<CMD_BUILD_CANAL>::Do(exec, at(8, 5), at(14, 7), WaterClass::Canal, false));
+	WaterCost("owner-water", Command<CMD_BUILD_LOCK>::Do(exec, at(10, 4)));
+	WaterCost("owner-station", Command<CMD_BUILD_DOCK>::Do(exec, at(13, 4), StationID::Invalid(), false));
+	WaterCost("owner-water", Command<CMD_BUILD_SHIP_DEPOT>::Do(exec, at(8, 7), AXIS_X));
+	WaterCost("owner-station", Command<CMD_BUILD_BUOY>::Do(exec, at(11, 7)));
+	WaterCost("owner-bridge", Command<CMD_BUILD_BRIDGE>::Do(exec, at(6, 13), at(6, 9), TRANSPORT_RAIL, 0, RAILTYPE_RAIL));
+	WaterCost("owner-bridge", Command<CMD_BUILD_BRIDGE>::Do(exec, at(7, 13), at(7, 9), TRANSPORT_ROAD, 0, ROADTYPE_ROAD));
+	WaterCost("owner-tunnel", Command<CMD_BUILD_TUNNEL>::Do(exec, at(9, 12), TRANSPORT_RAIL, RAILTYPE_RAIL));
+	WaterCost("owner-tunnel", Command<CMD_BUILD_TUNNEL>::Do(exec, at(9, 13), TRANSPORT_ROAD, ROADTYPE_ROAD));
+	/* The first industry has every role; the second only supplies exclusively. */
+	Industry *i = Industry::Get(industry);
+	i->founder = i->exclusive_supplier = i->exclusive_consumer = _current_company;
+	Industry::Get(industry + 1)->exclusive_supplier = _current_company;
+	UpdateSignalsInBuffer(); // as after each top-level command; Do() leaves the buffer filled
+}
+static bool OwnerScenario([[maybe_unused]] std::span<std::string_view> args)
+{
+	Backup<CompanyID> company(_current_company, CompanyID(1));
+	Backup<CompanyID> local(_local_company, CompanyID(0));
+	/* A merger into a live company, then a bankruptcy, through the real company transfer. */
+	for (auto [phase, base, industry, next] : {std::tuple{"merge", TileXY(182, 114), 0u, Owner(0)}, std::tuple{"bankrupt", TileXY(188, 138), 2u, INVALID_OWNER}}) {
+		OwnerBuild(base, industry);
+		OwnerState("built", base, industry);
+		ChangeOwnershipOfCompanyItems(CompanyID(1), next);
+		OwnerState(phase, base, industry);
+	}
+	fmt::print(stderr, "WATER-CMD complete\n");
+	local.Restore(); company.Restore();
+	return true;
+}
 extern "C" void __real__Z22IConsoleStdLibRegisterv();
 extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 {
 	__real__Z22IConsoleStdLibRegisterv(); IConsole::CmdRegister("water_scenario", WaterScenario);
+	IConsole::CmdRegister("owner_scenario", OwnerScenario);
 }
