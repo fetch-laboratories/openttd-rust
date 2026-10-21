@@ -61,6 +61,76 @@ static void Result(const char *name, const CommandCost &cost)
 template<typename Tile> static void Loop(Tile tile) {
 	if constexpr (std::is_invocable_v<decltype(&TileLoop_Object), Tile>) TileLoop_Object(tile); else TileLoop_Object(tile.base());
 }
+/** Exercise native resolver entry points and callbacks identically in both games. */
+struct ObjectPolicyGroup : SpriteGroup {
+	ObjectPolicyGroup() {} // Preserve the pool-assigned index during construction.
+	mutable uint32_t calls = 0, word = 0, trigger = 0;
+	mutable Randomizer expected{};
+	mutable bool equal = true;
+	bool disable = false, refresh = true;
+	ResolverResult Resolve(ResolverObject &ro) const override {
+		auto &scope = static_cast<ObjectResolverObject &>(ro).object_scope;
+		equal &= ro.callback == CBID_OBJECT_ANIMATION_TRIGGER && ro.callback_param1 == word && ro.callback_param2 == trigger;
+		fmt::print(stderr, "OBJECT animation-callback {} {} {}\n", calls++, scope.tile.base(), ro.callback_param1);
+		equal &= scope.GetRandomBits() == (IsTileType(scope.tile, MP_OBJECT) ? GetObjectRandomBits(scope.tile) : 0);
+		if (refresh) SB(word, 0, 16, expected.Next());
+		if (disable) const_cast<ObjectSpec *>(scope.spec)->animation.triggers = {};
+		return CallbackResult(0xFD);
+	}
+};
+static void ObjectPolicyProbe(Object *o, ObjectSpec *spec)
+{
+	Backup<ObjectSpec> backup(*spec); Backup<TileArea> location(o->location);
+	GRFFile file; file.grf_version = 8; file.grfid = 0x12345678;
+	spec->grf_prop.grffile = &file; spec->grf_prop.grfid = file.grfid; spec->grf_prop.local_id = 17;
+	ObjectResolverObject live(spec, o, o->location.tile), empty(spec, nullptr, o->location.tile, 3), invalid(spec, nullptr, INVALID_TILE, 2);
+	for (auto *r : {&live, &empty, &invalid}) for (bool incoming : {false, true}) {
+		for (uint8_t var : {0x40,0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x60,0x61,0x62,0x63,0x64,0x7A,0xFF}) {
+			bool available = incoming; uint32_t value = r->object_scope.GetVariable(var, 0, available);
+			fmt::print(stderr, "OBJECT query {} {} {} {} {}\n", r == &live ? 0 : r == &empty ? 1 : 2, var, incoming, available, value);
+		}
+		fmt::print(stderr, "OBJECT random {}\n", r->object_scope.GetRandomBits());
+	}
+	for (TileIndex t : {o->location.tile + 1, INVALID_TILE}) {
+		ObjectResolverObject other(spec, o, t);
+		for (uint8_t var : {0x40,0x42,0x47,0x48,0x64}) { bool a = true; fmt::print(stderr, "OBJECT query-live-tile {} {} {}\n", t.base(), var, other.object_scope.GetVariable(var, 0, a)); }
+	}
+	Backup<std::vector<EntityIDMapping>> mappings(_object_mngr.mappings);
+	_object_mngr.mappings[o->type] = {file.grfid, 17, o->type};
+	_object_mngr.mappings[OBJECT_LIGHTHOUSE] = {file.grfid + 1, 17, OBJECT_LIGHTHOUSE};
+	for (uint32_t grfid : {0U, UINT32_MAX, file.grfid, file.grfid + 1, 0x87654321U}) {
+		live.SetRegister(0x100, grfid); bool available = false;
+		fmt::print(stderr, "OBJECT query-count {} {}\n", grfid, live.object_scope.GetVariable(0x64, grfid == 0 ? o->type : 17, available));
+	}
+	bool same = true;
+	for (uint32_t p : {0U, 1U, 0xFFU, 0x101U}) for (uint8_t var : {0x60,0x61,0x62,0x63}) {
+		bool available = true; fmt::print(stderr, "OBJECT query-near {} {} {}\n", var, p, live.object_scope.GetVariable(var, p, available));
+	}
+	for (bool has_file : {false, true}) for (uint32_t grfid : {file.grfid, file.grfid + 1}) {
+		spec->grf_prop.grffile = has_file ? &file : nullptr; spec->grf_prop.grfid = grfid;
+		bool available = true; fmt::print(stderr, "OBJECT query-id {} {} {}\n", has_file, grfid, live.object_scope.GetVariable(0x60, 0, available));
+	}
+	for (uint8_t version : {7, 8}) { file.grf_version = version; bool a = true; fmt::print(stderr, "OBJECT query-version {} {}\n", version, live.object_scope.GetVariable(0x62, 1, a)); }
+	spec->grf_prop.grffile = &file;
+	SpriteGroup::CanAllocateItem();
+	auto *group = new ObjectPolicyGroup(); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, group);
+	Randomizer expected = _random; expected.Next(); spec->animation.triggers = {};
+	same &= !TriggerObjectTileAnimation(o, o->location.tile, ObjectAnimationTrigger::Built, spec);
+	same &= std::ranges::equal(_random.state, expected.state);
+	same &= !TriggerObjectAnimation(o, ObjectAnimationTrigger::Built, spec) && std::ranges::equal(_random.state, expected.state);
+	group->refresh = false; group->trigger = 1; group->expected = _random; group->word = group->expected.Next(); spec->animation.triggers = {ObjectAnimationTrigger::TileLoop};
+	same &= TriggerObjectTileAnimation(o, o->location.tile, ObjectAnimationTrigger::TileLoop, spec) && group->calls == 1 && group->equal && std::ranges::equal(_random.state, group->expected.state);
+	group->refresh = true; group->trigger = 0;
+	o->location.w = o->location.h = 2;
+	for (bool disable : {false, true}) {
+		group->calls = 0; group->disable = disable; group->expected = _random; group->word = group->expected.Next();
+		spec->animation.triggers = {ObjectAnimationTrigger::Built};
+		bool result = TriggerObjectAnimation(o, ObjectAnimationTrigger::Built, spec);
+		same &= result == !disable && group->calls == (disable ? 1U : 4U) && group->equal && std::ranges::equal(_random.state, group->expected.state);
+	}
+	delete group;
+	fmt::print(stderr, "OBJECT query-animation-order {}\n", same);
+}
 static bool ObjectsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
@@ -119,6 +189,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		}
 		Result("colour", build(OBJECT_TRANSMITTER, tile));
 		fmt::print(stderr, "OBJECT callback-colour {}\n", Object::GetByTile(tile)->colour == 0xA5);
+		ObjectPolicyProbe(Object::GetByTile(tile), spec);
 		callbacks = false; backup.Restore();
 		Backup<bool> generating(_generating_world, true);
 		for (cancellation = 0; cancellation < 2; cancellation++) {

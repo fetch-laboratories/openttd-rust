@@ -1078,7 +1078,7 @@ extern const TileTypeProcs _tile_type_object_procs = {
 #ifdef WITH_RUST
 const OpenTTDObjectServices &GetRustObjectServices() noexcept
 {
-	static_assert(to_underlying(ObjectAnimationTrigger::Built) == 0 && to_underlying(ObjectAnimationTrigger::TileLoopNorth) == 2);
+	static_assert(to_underlying(ObjectAnimationTrigger::Built) == 0 && to_underlying(ObjectAnimationTrigger::TileLoop) == 1 && to_underlying(ObjectAnimationTrigger::TileLoopNorth) == 2);
 	static_assert(NUM_OBJECTS == 64000 && OBJECT_HQ == 4 && OBJECT_OWNED_LAND == 3 && OBJECT_STATUE == 2);
 	static_assert(EXPENSES_CONSTRUCTION == 0 && CBID_OBJECT_AUTOSLOPE == 0x15D && PR_BUILD_FOUNDATION == 57 && PR_BUILD_OBJECT == 50 && PR_CLEAR_OBJECT == 51);
 	static_assert(OWNER_NONE.base() == 16 && OWNER_WATER.base() == 17 && OWNER_DEITY.base() == 18 && MAX_COMPANIES == 15);

@@ -169,6 +169,7 @@ impl Price {
 pub struct AnimationTrigger(pub u8);
 impl AnimationTrigger {
     const BUILT: Self = Self(0);
+    const TILE_LOOP: Self = Self(1);
     const TILE_LOOP_NORTH: Self = Self(2);
 }
 
@@ -681,7 +682,8 @@ impl<'a> World<'a> {
             let area = (self.s.location)(obj);
             for tile in self.tiles(area) {
                 if self.do_trigger(obj, tile, trigger, spec, random) {
-                    random = (random & 0xffff_0000) | (self.shared.random() & 0xffff);
+                    // SB also ORs high bits from the unmasked draw.
+                    crate::math::sb(&mut random, 0, 16, self.shared.random());
                 } else {
                     ret = false;
                 }
@@ -1464,7 +1466,12 @@ impl World<'_> {
         unsafe {
             let policy = (self.s.loop_policy)(tile);
             if policy.flags & ANIMATION != 0 {
-                self.trigger_tile(policy.object, tile, AnimationTrigger(1), policy.spec);
+                self.trigger_tile(
+                    policy.object,
+                    tile,
+                    AnimationTrigger::TILE_LOOP,
+                    policy.spec,
+                );
                 if policy.north == tile {
                     self.trigger(
                         policy.object,

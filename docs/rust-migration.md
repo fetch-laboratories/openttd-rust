@@ -1544,6 +1544,8 @@ exact-head checks and outstanding full-simulation, speed and CI gates.
 Rust (`objects.rs`) owns build/area commands, clear and ownership policy,
 terraform/build-above, HQ growth/acceptance/production, colour updates,
 object tile loops and generation including lighthouse/transmitter searches.
+It also owns object NewGRF variables, nearby/sister queries and animation triggers;
+native interpreter, badge, override and generic animation-frame services remain.
 Process-wide wrapping type counts and ordered cleared-area command scratch
 have one Rust owner. Tunnel clients retain indices over nested append, and
 industry transactions snapshot/restore the same scratch at the original points.
@@ -1560,5 +1562,6 @@ metadata and typed abort defaults cover the object table and consumed records.
 Default `objects` semantic scenarios cover four climates/borders, HQ relocation,
 cargo, owned-land area construction, statues, ownership, ID reuse and afterload
 counts. Compact unchanged-body probes cover count wrapping/destruction, scratch
-growth, cancellation and NewGRF pre-clear/bridge/colour ordering. External NewGRF
-animation/autoslope and generation branches remain tracked in #156.
+growth, cancellation, query availability/register/nearby/count decisions and callback/RNG
+ordering, including unmasked `SB` refresh and reentry. External NewGRF/legacy,
+autoslope and generation branches remain tracked in #156.

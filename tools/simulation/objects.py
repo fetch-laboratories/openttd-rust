@@ -105,7 +105,7 @@ def check(scenario, run, mode, role, result):
         "gaps": (
             "count-wrap true|scratch-growth true true|callback-before-clear true|"
             "cleared-before-bridge true|callback-colour true|"
-            "cancellation 0 true|cancellation 1 true"
+            "cancellation 0 true|cancellation 1 true|query-animation-order true"
         ).split("|"),
         "reload": ("afterload-counts true",),
     }[scenario["objects"]]
