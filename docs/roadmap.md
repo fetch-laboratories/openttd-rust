@@ -140,7 +140,7 @@ Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #275, #321) and #156 run in parallel.
 
 1. **Speed pass and shared commands:** #308, #323, #317, #324 and #269 are integrated. Complete #321/#322 calibration, quiet anchors and bootstrap Full while profiling the current integrated base. Root lands #327's shared direct command lifecycle (tooling budget 0), extracting station's helper for both #290 and #314; neither draft builds a parallel copy.
-2. **Command drafts, in order of readiness:** #313 objects, #290 road. Both adopted `5ac2437aa5` and received split fixing reviews. Object's default query outputs lacked role comparison; root selects tooling cap 416 (from 406) for comparison/missing-result rejection, preserving the strict ratio. Road's named-helper fixes retain cap 375. Integrate after root spot-check, speed and Full.
+2. **Command drafts, in order of readiness:** #313 objects, #290 road. Both adopted `5ac2437aa5` and received split fixing reviews. Object's query outputs lacked role comparison and internal whole animation used an unset map stride. Root selects tooling cap 430 for comparison/missing-result rejection and an actual-loop probe; genuine boundary cleanup preserves the strict ratio. Road's named-helper fixes retain cap 375. Integrate after spot-check, speed and Full.
 3. **#275 corrected order:** #325/#326 aircraft movement observations (typed call-scoped addresses, net glue at most 120 and tooling 100) awaits speed/Full after a passing review, then road per-tick fold, station-tick per-slot reads, train reads; TGP clear-tile reads, then #312 trees and industry `next_tick`. Re-rank from the due profile before selecting the next maintenance scope.
 4. **#281** vehicle maintenance direct calls, then the callee-copy check.
 5. **#274 map view**, one shared PR.
@@ -170,7 +170,7 @@ of houses and aircraft are complete; road/object adoption and the due speed pass
 | #321 / #322 | `535761dc9d` | Reviewed R2 plus clean integrated-base merge; 17 default tests/Ruff pass at 560 additions. Current endpoint profiles first; two historical endpoints are frozen, two remain. Calibration/quiet anchors/Full remain. |
 | #256 / #269 | `5ac2437aa5` | Integrated after R5, quiet six and exact-head Full; worktree removed. |
 | #294 / #317 | `067e3c3b93` | Integrated after scoped review, four uncontaminated quiet sets and Full; worktree removed. |
-| #295 / #313 | `8f77218f11` | Adoption passes 58 semantics; split fixing reviews address named helpers, shared distance leaves and missing query-result comparison. Tooling cap 416, strict ratio retained. |
+| #295 / #313 | `b0af8ed00c` | Group A fixes construction callees/boundaries; B fixes stride, named HQ/cargo helpers, shared distances and missing query-result comparison. Cap 430; projected tooling 427/net488/retired924. |
 | #266 / #290 | `6195fa9a71` | Both fixing groups complete; named helpers/constants and affected checks pass at tooling 375. Root spot-check, quiet speed and Full remain. |
 | #261 R5 / #324 | `69d0365a9f` | Integrated after fixing review, quiet six and exact-head Full; worktree removed. |
 | #325 / #326 | `fd64dcb5f1` | Independent R1 has no findings; native/51 semantics pass. Root retains quiet six and requested exact-head Full. |
