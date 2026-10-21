@@ -47,6 +47,7 @@
 #include "rust/vehicle_refit_ffi.h"
 #include "rust/engine_services.h"
 #include "rust/services_cargo.h"
+#include "rust/services_map.h"
 #include "rust/settings_services.h"
 #include "rust/command_cost_services.h"
 #include "rust/vehicle_services.h"
@@ -149,6 +150,21 @@ const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
 	return services;
 }
 #include "rust/vehicle_refit_services.hpp"
+static OpenTTDVehicleListId VehicleTransactionListId(const VehicleListIdentifier &vli) noexcept
+{
+	return {.kind = static_cast<uint8_t>(vli.type), .vehicle_type = vli.vtype, .company = vli.company.base(), .index = vli.index, .valid = vli.Valid()};
+}
+static void VehicleTransactionSend(OpenTTDCommandCost *out, void *v, uint16_t flags, uint8_t command) noexcept { *reinterpret_cast<CommandCost *>(out) = static_cast<Vehicle *>(v)->SendToDepot(DoCommandFlags(flags), DepotCommandFlags(command)); }
+static const OpenTTDVehicleMassServices &GetVehicleMassServices() noexcept
+{
+	static const OpenTTDVehicleMassServices services{
+		.common = &GetRustVehicleCommonServices(), .selection = &GetRustVehicleSelectionServices(),
+		.is_depot = SharedIsDepotTile, .is_tile_owner = SharedIsTileOwner, .send = VehicleTransactionSend,
+		.service = DepotCommandFlags(DepotCommandFlag::Service).base(), .mass_send = DepotCommandFlags(DepotCommandFlag::MassSend).base(), .dont_cancel = DepotCommandFlags(DepotCommandFlag::DontCancel).base(), .invalid_client = INVALID_CLIENT_ID,
+	};
+	return services;
+}
+
 #endif /* WITH_RUST */
 
 #include "safeguards.h"
@@ -807,6 +823,12 @@ CommandCost CmdStartStopVehicle(DoCommandFlags flags, VehicleID veh_id, bool eva
  */
 CommandCost CmdMassStartStopVehicle(DoCommandFlags flags, TileIndex tile, bool do_start, bool vehicle_list_window, const VehicleListIdentifier &vli)
 {
+#ifdef WITH_RUST
+	CommandCost cost, item;
+	auto list = VehicleTransactionListId(vli);
+	openttd_rust_vehicle_mass_start(&GetVehicleMassServices(), RustCommandCost(&cost), RustCommandCost(&item), flags.base(), tile.base(), do_start, vehicle_list_window, &list);
+	return cost;
+#else
 	VehicleList list;
 
 	if (!vli.Valid()) return CMD_ERROR;
@@ -830,6 +852,7 @@ CommandCost CmdMassStartStopVehicle(DoCommandFlags flags, TileIndex tile, bool d
 	}
 
 	return CommandCost();
+#endif
 }
 
 /**
@@ -841,6 +864,11 @@ CommandCost CmdMassStartStopVehicle(DoCommandFlags flags, TileIndex tile, bool d
  */
 CommandCost CmdDepotSellAllVehicles(DoCommandFlags flags, TileIndex tile, VehicleType vehicle_type)
 {
+#ifdef WITH_RUST
+	CommandCost cost, item, last;
+	openttd_rust_vehicle_depot_sell(&GetVehicleMassServices(), RustCommandCost(&cost), RustCommandCost(&item), RustCommandCost(&last), flags.base(), tile.base(), vehicle_type);
+	return cost;
+#else
 	VehicleList list;
 
 	CommandCost cost(EXPENSES_NEW_VEHICLES);
@@ -864,6 +892,7 @@ CommandCost CmdDepotSellAllVehicles(DoCommandFlags flags, TileIndex tile, Vehicl
 	}
 
 	return had_success ? cost : last_error;
+#endif
 }
 
 /**
@@ -875,6 +904,13 @@ CommandCost CmdDepotSellAllVehicles(DoCommandFlags flags, TileIndex tile, Vehicl
  */
 CommandCost CmdDepotMassAutoReplace(DoCommandFlags flags, TileIndex tile, VehicleType vehicle_type)
 {
+#ifdef WITH_RUST
+	CommandCost cost, item, replace, build, copy, temporary;
+	SavedRandomSeeds seeds;
+	OpenTTDFleetCosts costs{&item, &replace, &build, &copy, &temporary, &seeds};
+	openttd_rust_vehicle_depot_replace(&GetVehicleMassServices(), RustCommandCost(&cost), &costs, flags.base(), tile.base(), vehicle_type);
+	return cost;
+#else
 	VehicleList list;
 	CommandCost cost = CommandCost(EXPENSES_NEW_VEHICLES);
 
@@ -893,6 +929,7 @@ CommandCost CmdDepotMassAutoReplace(DoCommandFlags flags, TileIndex tile, Vehicl
 		if (ret.Succeeded()) cost.AddCost(ret.GetCost());
 	}
 	return cost;
+#endif
 }
 
 /**
@@ -1165,6 +1202,7 @@ std::tuple<CommandCost, VehicleID> CmdCloneVehicle(DoCommandFlags flags, TileInd
  * @param vli     identifier of the vehicle list
  * @return 0 for success and CMD_ERROR if no vehicle is able to go to depot
  */
+#ifndef WITH_RUST
 static CommandCost SendAllVehiclesToDepot(DoCommandFlags flags, bool service, const VehicleListIdentifier &vli)
 {
 	VehicleList list;
@@ -1191,6 +1229,8 @@ static CommandCost SendAllVehiclesToDepot(DoCommandFlags flags, bool service, co
 	return had_success ? CommandCost() : CMD_ERROR;
 }
 
+#endif
+
 /**
  * Send a vehicle to the depot.
  * @param flags for command type
@@ -1201,6 +1241,12 @@ static CommandCost SendAllVehiclesToDepot(DoCommandFlags flags, bool service, co
  */
 CommandCost CmdSendVehicleToDepot(DoCommandFlags flags, VehicleID veh_id, DepotCommandFlags depot_cmd, const VehicleListIdentifier &vli)
 {
+#ifdef WITH_RUST
+	CommandCost cost, item;
+	auto list = VehicleTransactionListId(vli);
+	openttd_rust_vehicle_send(&GetVehicleMassServices(), RustCommandCost(&cost), RustCommandCost(&item), flags.base(), veh_id.base(), depot_cmd.base(), &list);
+	return cost;
+#else
 	if (depot_cmd.Test(DepotCommandFlag::MassSend)) {
 		/* Mass goto depot requested */
 		if (!vli.Valid()) return CMD_ERROR;
@@ -1212,6 +1258,7 @@ CommandCost CmdSendVehicleToDepot(DoCommandFlags flags, VehicleID veh_id, DepotC
 	if (!v->IsPrimaryVehicle()) return CMD_ERROR;
 
 	return v->SendToDepot(flags, depot_cmd);
+#endif
 }
 
 /**
@@ -1302,6 +1349,7 @@ CommandCost CmdChangeServiceInt(DoCommandFlags flags, VehicleID veh_id, uint16_t
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDVehicleTransactionServices.hpp"
 #include "abi-visit-OpenTTDVehicleCommonServices.hpp"
+#include "abi-visit-OpenTTDVehicleMassServices.hpp"
 #include "abi-visit-OpenTTDVehicleRefitServices.hpp"
-bool CheckAbi_vehicle_cmd() { return AbiServicesComplete(GetRustVehicleTransactionServices()) && AbiServicesComplete(GetRustVehicleCommonServices()) && AbiServicesComplete(GetRustVehicleRefitServices()); }
+bool CheckAbi_vehicle_cmd() { return AbiServicesComplete(GetRustVehicleTransactionServices()) && AbiServicesComplete(GetRustVehicleCommonServices()) && AbiServicesComplete(GetRustVehicleRefitServices()) && AbiServicesComplete(GetVehicleMassServices()); }
 #endif

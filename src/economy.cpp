@@ -64,6 +64,8 @@
 #include "rust/company_adapter.h"
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
+#include "rust/vehicle_refit_ffi.h"
+#include "rust/command_cost_services.h"
 #endif
 
 #include "safeguards.h"
@@ -1848,17 +1850,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		SetWindowDirty(WC_STATION_VIEW, st->index);
 		SetWindowDirty(WC_STATION_LIST, st->owner);
 	},
-	.test_refit = [](OpenTTDVehicle *handle, uint8_t cargo) noexcept -> uint32_t {
-		Vehicle *v = VehicleOf(handle);
-		auto [result, capacity, mail_capacity, cargo_capacities] = Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::QueryCost, v->index, cargo, 0xFF, true, false, 1);
-		return capacity;
-	},
-	.execute_refit = [](OpenTTDVehicle *handle, uint8_t cargo, int64_t *cost) noexcept -> bool {
-		Vehicle *v = VehicleOf(handle);
-		auto [result, capacity, mail_capacity, cargo_capacities] = Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, v->index, cargo, 0xFF, true, false, 1);
-		*cost = result.GetCost();
-		return result.Succeeded();
-	},
 };
 #endif
 
@@ -2554,7 +2545,8 @@ const OpenTTDStationLoading &GetRustStationLoading() noexcept { return _rust_sta
 void LoadUnloadStation(Station *st)
 {
 #ifdef WITH_RUST
-	openttd_rust_station_load(st->rust_service.get(), &GetRustStationServices(), &_rust_station_loading);
+	CommandCost cost, temporary;
+	openttd_rust_station_load(st->rust_service.get(), &GetRustStationServices(), &_rust_station_loading, &GetRustVehicleRefitServices(), RustCommandCost(&cost), RustCommandCost(&temporary));
 #else
 	/* No vehicle is here... */
 	if (st->loading_vehicles.empty()) return;

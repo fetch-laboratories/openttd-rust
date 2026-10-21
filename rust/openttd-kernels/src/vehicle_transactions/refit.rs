@@ -369,7 +369,7 @@ unsafe fn refit_chain(
     total.mail = mail_total as u16;
     total
 }
-pub(super) unsafe fn refit(
+pub(crate) unsafe fn refit(
     s: &Services,
     cost: *mut CommandCost,
     temp: *mut CommandCost,

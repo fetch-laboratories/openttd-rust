@@ -7,6 +7,7 @@
 
 #include "services_ffi.h"
 #include "services_rail.h"
+#include "services_map.h"
 #include "services_station.h"
 
 /** @file train_services.h Direct shared-world operations; no train policy. */
@@ -208,7 +209,7 @@ static void TrainClearReservation(OpenTTDTrainHandle id, uint32_t a, uint8_t b) 
 static uint64_t TrainCompatibleRailOwner(OpenTTDTrainHandle id, uint32_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return IsTileOwner(TileIndex(a), v->owner);
+	return SharedIsTileOwner(a, v->owner.base());
 }
 static void TrainConsistWindows(OpenTTDTrainHandle id) noexcept
 {

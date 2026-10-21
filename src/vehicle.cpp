@@ -942,9 +942,10 @@ static void VehicleEnteredDepotThisTick(Vehicle *v)
 #ifdef WITH_RUST
 #include "rust/vehicle_ffi.h"
 #include "rust/station_service_ffi.h"
-static OpenTTDVehicleSchedulerTables VehicleSchedulerTables() noexcept
+#include "rust/vehicle_refit_ffi.h"
+static OpenTTDVehicleSchedulerTables VehicleSchedulerTables(OpenTTDCommandCost *refit_cost = nullptr, OpenTTDCommandCost *temporary = nullptr) noexcept
 {
-	return {.scheduler = &GetRustVehicleSchedulerServices(), .cargo = CargoStorageServices(), .station = &GetRustStationServices(), .loading = &GetRustStationLoading(), .pending = &_fleet_pending_services, .transaction = &FleetTransactionServices(), .group = &FleetGroupServices()};
+	return {.scheduler = &GetRustVehicleSchedulerServices(), .cargo = CargoStorageServices(), .station = &GetRustStationServices(), .loading = &GetRustStationLoading(), .pending = &_fleet_pending_services, .transaction = &FleetTransactionServices(), .group = &FleetGroupServices(), .refit = &GetRustVehicleRefitServices(), .refit_cost = refit_cost, .refit_temporary = temporary};
 }
 void RunVehicleCalendarDayProc()
 {
@@ -953,8 +954,8 @@ void RunVehicleCalendarDayProc()
 }
 void CallVehicleTicks()
 {
-	const auto tables = VehicleSchedulerTables();
-	CommandCost replacement_cost;
+	CommandCost replacement_cost, refit_cost, temporary;
+	const auto tables = VehicleSchedulerTables(reinterpret_cast<OpenTTDCommandCost *>(&refit_cost), reinterpret_cast<OpenTTDCommandCost *>(&temporary));
 	openttd_rust_vehicle_ticks(&tables, _game_mode == GM_NORMAL, TimerGameEconomy::date_fract, &replacement_cost);
 }
 #else

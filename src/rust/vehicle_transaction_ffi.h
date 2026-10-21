@@ -72,10 +72,24 @@ struct OpenTTDVehicleCommonServices {
 	void (*sell_rail)(OpenTTDCommandCost *, uint16_t, void *, bool, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sell_rail);
 	int64_t (*value)(void *) noexcept OPENTTD_SERVICE_DEFAULT(value);
 };
+struct OpenTTDVehicleListId { uint8_t kind, vehicle_type, company; uint32_t index; bool valid; };
+struct OpenTTDVehicleMassServices {
+	const OpenTTDVehicleCommonServices *common;
+	const OpenTTDVehicleSelectionServices *selection;
+	bool (*is_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_depot);
+	bool (*is_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(is_tile_owner);
+	void (*send)(OpenTTDCommandCost *, void *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(send);
+	uint8_t service, mass_send, dont_cancel;
+	uint32_t invalid_client;
+};
 const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept;
 const OpenTTDVehicleSelectionServices &GetRustVehicleSelectionServices() noexcept;
 const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noexcept;
 extern "C" {
+void openttd_rust_vehicle_mass_start(const OpenTTDVehicleMassServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, bool, bool, const OpenTTDVehicleListId *);
+void openttd_rust_vehicle_depot_sell(const OpenTTDVehicleMassServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t);
+void openttd_rust_vehicle_depot_replace(const OpenTTDVehicleMassServices *, OpenTTDCommandCost *, const OpenTTDFleetCosts *, uint16_t, uint32_t, uint8_t);
+void openttd_rust_vehicle_send(const OpenTTDVehicleMassServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, const OpenTTDVehicleListId *);
 void openttd_rust_vehicle_startstop(const OpenTTDVehicleCommonServices *, OpenTTDCommandCost *, uint16_t, uint32_t, bool);
 void openttd_rust_vehicle_sell(const OpenTTDVehicleCommonServices *, OpenTTDCommandCost *, uint16_t, uint32_t, bool, bool, uint32_t);
 void openttd_rust_vehicle_selection_set(const OpenTTDVehicleSelectionServices *, void *, uint8_t, void *, void (*)(void *, uint32_t));

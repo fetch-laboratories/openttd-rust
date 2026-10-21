@@ -7,6 +7,7 @@
     clippy::cast_sign_loss,
     clippy::too_many_arguments
 )]
+pub(crate) mod mass;
 pub(crate) mod refit;
 use crate::fleet::GroupServices;
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, CommandServices, Services};

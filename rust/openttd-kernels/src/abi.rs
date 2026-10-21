@@ -31,6 +31,8 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "OpenTTDVehicleListId" ["probe"] => crate::vehicle_transactions::mass::ListId { kind, vehicle_type, company, index, valid, };
+    "OpenTTDVehicleMassServices" ["probe"] => crate::vehicle_transactions::mass::Services { common, selection, is_depot, is_tile_owner, send, service, mass_send, dont_cancel, invalid_client, };
     "GRFStringID" ["probe"] => crate::vehicle_transactions::GrfStringId { };
     "OpenTTDVehicleRefitCapacity" ["probe"] => crate::vehicle_transactions::refit::Capacity {
         total, mail, cargo,
@@ -3003,8 +3005,6 @@ layouts! {
         road_loads,
         vehicle_empty,
         station_dirty,
-        test_refit,
-        execute_refit,
     };
     "OpenTTDIndustryLocationResult" ["industry"] => crate::industry::LocationResult {
         callback,
@@ -4526,6 +4526,9 @@ layouts! {
         pending,
         transaction,
         group,
+        refit,
+        refit_cost,
+        refit_temporary,
     };
     "OpenTTDVehicleMaintenanceRenewal" ["maintenance"] => crate::vehicle::maintenance::Renewal {
         age,

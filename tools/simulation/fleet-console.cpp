@@ -120,6 +120,37 @@ static bool FleetScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
 	Backup<CompanyID> company(_current_company);
+	if (args[1].starts_with("transaction-mass-")) {
+		VehicleType type = args[1].ends_with("train") ? VEH_TRAIN : args[1].ends_with("road") ? VEH_ROAD : args[1].ends_with("ship") ? VEH_SHIP : VEH_AIRCRAFT;
+		Vehicle *v = BuildFixture(type);
+		VehicleID original = v->index;
+		TileIndex tile = v->tile;
+		VehicleListIdentifier list(VL_SHARED_ORDERS, type, v->owner, v->index);
+		Checked("mass-start-test", Command<CMD_MASS_START_STOP>::Do({}, tile, true, true, list));
+		bool test_stopped = v->vehstatus.Test(VehState::Stopped);
+		Checked("mass-start", Command<CMD_MASS_START_STOP>::Do(DoCommandFlag::Execute, tile, true, true, list));
+		bool started = !v->vehstatus.Test(VehState::Stopped);
+		Cost("mass-send-test", Command<CMD_SEND_VEHICLE_TO_DEPOT>::Do({}, VehicleID::Invalid(), {DepotCommandFlag::MassSend, DepotCommandFlag::Service}, list));
+		Cost("mass-send", Command<CMD_SEND_VEHICLE_TO_DEPOT>::Do(DoCommandFlag::Execute, VehicleID::Invalid(), {DepotCommandFlag::MassSend, DepotCommandFlag::Service}, list));
+		Checked("mass-stop", Command<CMD_MASS_START_STOP>::Do(DoCommandFlag::Execute, tile, false, false, list));
+		bool stopped = v->vehstatus.Test(VehState::Stopped);
+		v->age = TimerGameCalendar::Date(v->max_age.base() + 366);
+		Checked("mass-renew-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, v->engine_type, v->engine_type, true));
+		SavedRandomSeeds before, after;
+		SaveRandomSeeds(&before);
+		Cost("mass-replace-test", Command<CMD_DEPOT_MASS_AUTOREPLACE>::Do({}, tile, type));
+		SaveRandomSeeds(&after);
+		fmt::print(stderr, "FLEET mass-test {} {}\n", SameRandom(before, after), Vehicle::IsValidID(original));
+		Checked("mass-replace", Command<CMD_DEPOT_MASS_AUTOREPLACE>::Do(DoCommandFlag::Execute, tile, type));
+		fmt::print(stderr, "FLEET mass {} {} {} {}\n", test_stopped, started, stopped, !Vehicle::IsValidID(original));
+		Cost("mass-sell-test", Command<CMD_DEPOT_SELL_ALL_VEHICLES>::Do({}, tile, type));
+		Checked("mass-sell", Command<CMD_DEPOT_SELL_ALL_VEHICLES>::Do(DoCommandFlag::Execute, tile, type));
+		VehicleList remaining;
+		BuildDepotVehicleList(type, tile, &remaining, &remaining);
+		fmt::print(stderr, "FLEET mass-empty {}\n", remaining.empty());
+		Cost("mass-sell-empty", Command<CMD_DEPOT_SELL_ALL_VEHICLES>::Do({}, tile, type));
+		return true;
+	}
 	if (args[1].starts_with("transaction-refit-")) {
 		VehicleType type = args[1].ends_with("train") ? VEH_TRAIN : args[1].ends_with("road") ? VEH_ROAD : args[1].ends_with("ship") ? VEH_SHIP : VEH_AIRCRAFT;
 		Vehicle *v = BuildFixture(type);
