@@ -1115,7 +1115,6 @@ static void RustTownDirtyAuthority(uint32_t town) noexcept { SetWindowDirty(WC_T
 static_assert(NEW_HOUSE_OFFSET == 110 && HOUSE_NUM_ACCEPTS == 16 && MP_HOUSE == 3 && TOWN_PRODUCTION_DIVISOR == 256);
 static_assert(OWNER_WATER.base() == 0x11 && CALLBACK_HOUSEPRODCARGO_END == 0x20FF && TOWN_COUNCIL_PERMISSIVE == 3);
 static_assert(RATING_MAXIMUM == 1000 && RATING_HOUSE_MINIMUM == -1000 && PH_ALLOWED_CONSTRUCTED == 2 && EXPENSES_CONSTRUCTION == 0);
-static const OpenTTDTownAuthorityServices &RustTownAuthorityServices() noexcept;
 /* Canonical packed-map readers shared by the narrow phase observations below. */
 static uint16_t RustHouseType(uint32_t tile) noexcept { return GetHouseType(TileIndex{tile}); }
 static bool RustHouseCompleted(uint32_t tile) noexcept { return IsHouseCompleted(TileIndex{tile}); }
@@ -1192,7 +1191,7 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 	static const OpenTTDHouseServices services{
 		.cost = &GetRustCommandCostServices(),
 		.commands = &GetRustCommandServices(),
-		.authority = &RustTownAuthorityServices(),
+		.authority = &GetRustTownAuthorityServices(),
 		.entry = RustHouseEntry,
 		.loop_tile = RustHouseLoopTile,
 		.house_type = RustHouseType,
