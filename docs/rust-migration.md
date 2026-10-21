@@ -1552,7 +1552,8 @@ service. C++ keeps thin facades, the generic `HouseResolverObject`/reseed sum,
 variables; original bodies compile only portably. Narrow phase observations replace whole
 tile/spec copies; projections compose canonical spec-field readers. Each entry reuses its town
 and map context, including construction triggers and rebuilds. Town count, recession, autoslope,
-foundation price, tick counter, animated-tile removal and `DoClearSquare` are shared services.
+foundation price, tick counter and animated-tile removal are shared services; house clearing
+calls the canonical Rust ground owner directly.
 Cargo scaling, translation, label lookup and delivery, plus NewGRF boolean conversion and
 inspect-window deletion, share canonical typed native leaves with industry consumers.
 `python3 tools/migration.py simulate town-houses- --jobs 2` places every original house through

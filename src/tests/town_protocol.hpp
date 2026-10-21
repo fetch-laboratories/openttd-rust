@@ -11,6 +11,7 @@
 #include "../rust/town_ffi.h"
 #include "../rust/house_ffi.h"
 #include "../rust/command_services_ffi.h"
+#include "../rust/ground_ffi.h"
 #include <algorithm>
 #include <array>
 #include <memory>
@@ -18,8 +19,10 @@
 
 struct TownProtocolWorld {
 	OpenTTDTownState *owner;
+	OpenTTDWaterRegions *regions;
 	uint32_t population = 0, draws = 0, company = 7;
 	uint32_t owner_reads = 0, map_reads = 0;
+	uint32_t square_clears = 0;
 	bool house_callback = false, clear_ok = true;
 	uint16_t house_class = 0;
 	uint32_t clears = 0, animations = 0, roads = 0, landscape_clears = 0, house_count = 1;
@@ -140,6 +143,21 @@ static inline OpenTTDHouseServices TownProtocolHouses()
 	return houses;
 }
 static inline const OpenTTDHouseServices town_protocol_houses = TownProtocolHouses();
+/* The synthetic map has no animated or docking tiles and no water neighbours. */
+static inline const OpenTTDClearServices town_protocol_clear = [] {
+	auto clear = OpenTTDClearServices{};
+	clear.make_clear = [](uint32_t, ClearGround, uint32_t) noexcept { town_protocol_world->square_clears++; };
+	return clear;
+}();
+static inline const OpenTTDWaterLeaves town_protocol_water_leaves{
+	.debug = [](uint8_t, int32_t, int32_t) noexcept {},
+};
+static inline const OpenTTDWaterGroundServices town_protocol_water = [] {
+	auto water = OpenTTDWaterGroundServices{};
+	water.clear = &town_protocol_clear;
+	water.region_context = []() noexcept -> OpenTTDWaterRegionContext { return {town_protocol_world->regions, &town_protocol_water_leaves}; };
+	return water;
+}();
 static inline OpenTTDTownLeaves TownProtocolServices()
 {
 	return {
@@ -196,6 +214,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	/* Source quirks: first-road execute failure still returns success; a failed
 	 * expansion tries 25 times; reentry mutates the canonical owner's flags. */
 	auto owner = std::unique_ptr<OpenTTDTownState, decltype(&openttd_rust_town_destroy)>(openttd_rust_town_new(), openttd_rust_town_destroy);
+	auto regions = std::unique_ptr<OpenTTDWaterRegions, decltype(&openttd_rust_water_destroy)>(openttd_rust_water_new(64, 64), openttd_rust_water_destroy);
 	/* Preserve the process-wide game counters around the isolated fixture. */
 	const auto global_ids = openttd_rust_town_global_id_counts();
 	const auto global_classes = openttd_rust_town_global_class_counts();
@@ -206,7 +225,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	openttd_rust_town_class_counts_resize(owner.get(), 2);
 	openttd_rust_town_global_id_counts_resize(std::max<size_t>(5, saved_ids.size()));
 	openttd_rust_town_global_class_counts_resize(std::max<size_t>(2, saved_classes.size()));
-	TownProtocolWorld w{}; w.owner = owner.get(); town_protocol_world = &w;
+	TownProtocolWorld w{}; w.owner = owner.get(); w.regions = regions.get(); town_protocol_world = &w;
 	auto *fields = openttd_rust_town_simulation(owner.get()); fields->xy = 2080; std::fill_n(fields->radius, 5, 100);
 	const auto leaves = TownProtocolServices();
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, TownProtocolRandom, TownProtocolIndustry);
@@ -223,7 +242,12 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.bridge_above = [](uint32_t) noexcept { return false; };
 	services.has_water_ground = [](uint32_t) noexcept { return false; };
 	services.mark_dirty = [](uint32_t) noexcept {};
-	services.clear_square = [](uint32_t) noexcept {};
+	services.clear_square_services.may_animate = [](uint32_t) noexcept { return false; };
+	services.clear_square_services.docking = [](uint32_t) noexcept { return false; };
+	services.clear_square_services.generating_world = []() noexcept { return false; };
+	services.water_services = []() noexcept { return &town_protocol_water; };
+	services.map_max_x = []() noexcept -> uint32_t { return 63; };
+	services.map_max_y = []() noexcept -> uint32_t { return 63; };
 	services.closest_town = [](uint32_t, uint32_t) noexcept -> const OpenTTDTownHandle * { return nullptr; };
 	services.tile_valid = [](uint32_t) noexcept { return true; };
 	services.distance_from_edge = [](uint32_t) noexcept { return uint32_t(1); };
@@ -257,6 +281,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	w.house_class = 0; class_counts[1] = 0;
 	rebuild();
 	check(fields->num_houses == 1 && w.writes.size() == 1 && w.animations == 1 && openttd_rust_town_growth(owner.get())->flags == 0x88);
+	check(w.square_clears == 3);
 	/* CmdPlaceHouse executes a completed, protected 2x2 house through BuildTownHouse. */
 	w.writes.clear(); w.house_callback = false; w.clears = 0; w.animations = 0; w.house_count = 5;
 	TownProtocolCost cost{};

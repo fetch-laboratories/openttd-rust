@@ -406,7 +406,7 @@ impl House<'_> {
         let class = (self.l.house_class)(house);
         // SAFETY: Live owner; count access ends before the map services below.
         unsafe { super::decrease_building(town.state, house, class) };
-        (self.s.clear_square)(tile);
+        crate::ground::clear_square(tile, self.s);
         (self.h.delete_inspect)(tile);
     }
     /// `ClearTownHouse`: population, counts and flags precede the footprint.
@@ -1239,10 +1239,10 @@ impl House<'_> {
                     valid &= self.part_valid(tile.wrapping_add(map.diff(1, 1)), id + 3);
                 }
                 if !valid {
-                    (self.s.clear_square)(tile);
+                    crate::ground::clear_square(tile, self.s);
                 }
             } else if !self.part_valid(north, id) {
-                (self.s.clear_square)(tile);
+                crate::ground::clear_square(tile, self.s);
             }
         }
         self.rebuild_caches();
