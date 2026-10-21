@@ -52,6 +52,7 @@
 #include "rust/command_cost_services.h"
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
+#include "rust/presentation_services.h"
 #include "rust/orders_ffi.h"
 #include "rust/vehicle_maintenance_ffi.h"
 #include "rust/ship_control_ffi.h"
@@ -73,7 +74,7 @@ static OpenTTDVehicleTransactionTarget VehicleTransactionTarget(void *shell) noe
 static void VehicleTransactionNameDirty(void *shell) noexcept
 {
 	InvalidateWindowClassesData(GetWindowClassForVehicleType(RustVehicleVehicleType(static_cast<Vehicle *>(shell))), 1);
-	MarkWholeScreenDirty();
+	RustScreenDirty();
 }
 static uint16_t VehicleTransactionDefaultInterval(uint8_t owner, uint8_t type) noexcept { return CompanyServiceInterval(Company::Get(CompanyID(owner)), static_cast<VehicleType>(type)); }
 static uint16_t VehicleTransactionClampInterval(int32_t interval, bool percent) noexcept { return GetServiceIntervalClamped(interval, percent); }
@@ -83,7 +84,7 @@ static void VehicleTransactionSetInterval(void *shell, uint16_t interval, bool c
 	v->SetServiceInterval(interval);
 	v->SetServiceIntervalIsCustom(custom);
 	v->SetServiceIntervalIsPercent(percent);
-	SetWindowDirty(WC_VEHICLE_DETAILS, v->index);
+	GetRustVehicleServices().maintenance->details_dirty(RustVehicle(v));
 }
 const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noexcept
 {
@@ -115,9 +116,9 @@ static void VehicleTransactionWaitingNews(uint32_t id) noexcept { DeleteVehicleN
 static void VehicleTransactionStartstopUI(void *shell) noexcept
 {
 	const Vehicle *v = static_cast<Vehicle *>(shell);
-	SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP);
-	SetWindowDirty(WC_VEHICLE_DEPOT, v->tile);
-	SetWindowClassesDirty(GetWindowClassForVehicleType(v->type));
+	GetRustVehicleServices().start_stop_dirty(RustVehicle(v));
+	FleetGroupServices().depot_dirty(shell);
+	openttd_orders_dirty_vehicle_windows(shell);
 	InvalidateWindowData(WC_VEHICLE_VIEW, v->index);
 }
 static void VehicleTransactionSellRail(OpenTTDCommandCost *out, uint16_t flags, void *v, bool chain, bool backup, uint32_t client) noexcept

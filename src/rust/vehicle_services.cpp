@@ -10,6 +10,8 @@
 #include "vehicle_ffi.h"
 #ifdef WITH_RUST
 #include "vehicle_services.h"
+#include "orders_ffi.h"
+#include "station_service_ffi.h"
 #include "engine_services.h"
 #include "../vehicle_func.h"
 #include "../order_func.h"
@@ -78,16 +80,17 @@ OpenTTDByteSpan RustVehicleName(void *shell) noexcept
 void RustVehicleClearName(void *shell) noexcept { static_cast<Vehicle *>(shell)->name.clear(); }
 void RustVehicleSetName(void *shell, OpenTTDByteSpan name) noexcept { static_cast<Vehicle *>(shell)->name.assign(reinterpret_cast<const char *>(name.data), name.size); }
 
+bool RustVehiclePrimary(const Vehicle *v) noexcept { return openttd_orders_primary_vehicle(const_cast<Vehicle *>(v)) != 0; }
 bool RustVehicleInDepot(const Vehicle *v) noexcept { return v->IsInDepot(); }
 bool RustTrainFreeWagon(const Vehicle *v) noexcept { return Train::From(v)->IsFreeWagon(); }
-Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept { return Train::From(v)->GetFirstEnginePart(); }
-bool RustTrainMultiheaded(const Vehicle *v) noexcept { return Train::From(v)->IsMultiheaded(); }
-Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept { return Train::From(v)->other_multiheaded_part; }
+Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept { return VehicleOf(GetRustStationLoading().first_engine_part(RustVehicle(v))); }
+bool RustTrainMultiheaded(const Vehicle *v) noexcept { return GetRustStationLoading().is_multiheaded(RustVehicle(v)); }
+Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept { return VehicleOf(GetRustStationLoading().other_multiheaded(RustVehicle(v))); }
 
 bool RustTrainIsEngine(const Vehicle *v) noexcept { return Train::From(v)->IsEngine(); }
 uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept { return RustVehicleCallback(CBID_VEHICLE_START_STOP_CHECK, 0, 0, v->engine_type, v, std::span(reg, 1)); }
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_power; }
-uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept { return v->GetGRF()->grf_version; }
+uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept { return RustEngineGRFVersion(EngineOf(RustVehicleGetEngine(RustVehicle(v)))); }
 uint32_t RustVehicleGRFString(Vehicle *v, GRFStringID string) noexcept { return GetGRFStringID(v->GetGRFID(), string); }
 void RustVehicleFlipStopped(Vehicle *v) noexcept { v->vehstatus.Flip(VehState::Stopped); }
 
