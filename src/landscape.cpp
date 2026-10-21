@@ -592,12 +592,6 @@ TrackStatus GetTileTrackStatus(TileIndex tile, TransportType mode, uint sub_mode
 	return _tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc(tile, mode, sub_mode, side);
 }
 
-/**
- * Change the owner of a tile
- * @param tile      Tile to change
- * @param old_owner Current owner of the tile
- * @param new_owner New owner of the tile
- */
 #ifdef WITH_RUST
 const OpenTTDTileOwnerServices &GetRustTileOwnerServices() noexcept
 {
@@ -618,6 +612,12 @@ const OpenTTDTileOwnerServices &GetRustTileOwnerServices() noexcept
 }
 #endif
 
+/**
+ * Change the owner of a tile
+ * @param tile      Tile to change
+ * @param old_owner Current owner of the tile
+ * @param new_owner New owner of the tile
+ */
 void ChangeTileOwner(TileIndex tile, Owner old_owner, Owner new_owner)
 {
 #ifdef WITH_RUST

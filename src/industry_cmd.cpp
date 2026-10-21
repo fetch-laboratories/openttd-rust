@@ -70,7 +70,6 @@
 #include "rust/orders_ffi.h"
 static const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
 static const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices();
-
 static const OpenTTDIndustryCommandServices &GetIndustryCommandServices();
 static const OpenTTDIndustryCostServices &GetIndustryCostServices();
 static const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices();
