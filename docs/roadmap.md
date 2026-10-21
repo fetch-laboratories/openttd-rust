@@ -4,12 +4,12 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-21, code at `5e2f570eee`)
+## Where the fork stands (2026-10-21, code at `f6cddca557`)
 
-- Thirty-four ownership ports. Whole fork: Rust 79,796 / tooling 31,676 / glue 32,246 / original retired 46,102 of 470,612 C/C++ `src/` lines (9.80%). Simulation: 38,062 / 102,615 (37.09%).
+- Thirty-four ownership ports. Whole fork: Rust 79,796 / tooling 32,403 / glue 32,246 / original retired 46,102 of 470,612 C/C++ `src/` lines (9.80%). Simulation: 38,062 / 102,615 (37.09%).
 - Since the fifteenth review, water #317, houses #269 and roads #290 integrated, retiring 2,667 lines. Seven maintenance PRs (#308, #323, #324, #326, #328, #332, #333) retired 12 lines.
-- Speed: `SPEED_BUDGETS` still holds the #318 record. The last quiet six (#333 head) measured TGP 1.203, Opus 1.212, Grok 1.213, P1996 1.258, P2000 1.320 and P2016 1.371. The speed pass due since #269 closes when #322 records its anchors.
-- Drafts: #322 speed guard, #313 objects, and #329 vehicle transactions (non-passing). #274 is a paused measurement branch.
+- Speed: #322 integrated the count guard. Its quiet pass at `667e652ad8` (four medians each) is the first anchor and `SPEED_BUDGETS` record: TGP 1.215, Opus 1.204, Grok 1.191, P1996 1.250, P2000 1.305, P2016 1.356. None is within 5% of its ceiling. This closed the speed pass due since #269; the next falls due after four more ownership integrations.
+- Drafts: #313 objects, #329 vehicle transactions, #334 (#261 R6), plus new #156 and #275 maintenance branches. #274 is a paused measurement branch.
 
 ## Sixteenth steering review (2026-10-21, counts per PR and closing the speed pass)
 
@@ -42,7 +42,7 @@ AGENTS.md now says:
 Provisional, checked next review against #322's first anchors: the factor 2 (basis: the fifteenth review's 1.8x P2016 attribution; the calibration's residuals were layout) and the 6.6% layout spread (eight quiet P2016 sixes on 2026-10-21).
 
 Actions, in order:
-1. **#322 closes the speed pass.** Adopt the integrated base and refresh the six loop counts. One quiet wall pass at that head (four medians per scenario, line-tables-only builds) gives the first anchors and the new `SPEED_BUDGETS` record. No new tooling or calibration; HARD560 stands. Only an adoption that conflicts in `tools/` gets a scoped review. Then Full and integrate. After that, no PR takes a quiet window.
+1. **Done:** #322 integrated as `f6cddca557` with the first anchors (tooling 576, accepted 2.9% over HARD560 for the anchor records). No PR takes a quiet window now. Each game-code integration records its head's six loop Ir as `integrated` in `SPEED_ANCHORS`.
 2. **#313:** apply its PR comment:
    - adopt #333 (direct owner dispatch with the outer context) and #328 (`command::nested`);
    - use one shared accessor each for recession and ownership;
@@ -129,6 +129,8 @@ keep their evidence in their PRs. Rows below use original retirement and net glu
 | #325 aircraft movement observations | #326 | direct | `7b0a82cbd1` | 213 / 35 / 99 / 0; net glue +56 |
 | #330 road tick prologue | #332 | direct | `4476646d19` | 22 / 36 / 67 / 0; net glue +36 |
 | #331 shared ownership dispatch | #333 | direct | `5e2f570eee` | 143 / 90 / 122 / 1; net glue +101 |
+| #321 instruction-count speed guard and first anchors | #322 | direct | `f6cddca557` | 0 / 576 / 0 / 0; net glue 0 |
+| #156 ownership-dispatch coverage | #335 | direct | `caadbabc38` | 0 / 173 / 0 / 0; tests only |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -139,8 +141,8 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings. Rust-internal helper copies are invisible to it; reviewers check them against the shared header modules (#261 R6).
 2. **Speed guard and passes (#155, #282, #321, AGENTS.md).**
-   - **Per PR:** projected loop counts against the anchors #322 records; no scenario more than 15% above its record and none over its ceiling (1.5x play saves, 1.3x generation). Until #322 lands, quiet wall medians. Misses get a callgrind fix round.
-   - **Speed pass:** after every fourth ownership integration, or when an integration moves a projection within 5% of its ceiling (1.425x play, 1.235x generation). Its quiet six with loop counts replaces the anchors. #322's integration closes the pass due since #269. The next one falls due after four more ownership integrations.
+   - **Per PR:** `simulate --instructions` loop counts projected from `SPEED_ANCHORS`; no scenario more than 15% above the integrated projection and none over its ceiling (1.5x play saves, 1.3x generation). Misses get a callgrind fix round.
+   - **Speed pass:** after every fourth ownership integration, or when an integration moves a projection within 5% of its ceiling (1.425x play, 1.235x generation). Its quiet six with loop counts replaces the anchors. #322 closed the pass due since #269; the next falls due after four more ownership integrations (none yet).
    - **Redraw:** `-r 64x64` leaves the ratios unchanged. It makes whole-process counts timing-dependent, which is why only the game loop is counted.
 3. **#156 coverage, one standing slot** (sixteenth review, action 4). Random and crash branches come first. These remain:
    - signal tbd/global propagation overflow and arbitrary mod layouts;
@@ -156,7 +158,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #275) and #156 run in parallel.
 
-1. **#322**, then **#313**, then **#329/#314** (sixteenth review, actions 1-3).
+1. **#313**, then **#329/#314** (sixteenth review, actions 2-3).
 2. **#275 by net P2016 savings:** the per-tick road command context, the station per-slot reads, then the train reads. Retain the native movement and speed algorithms. TGP #312 trees stay ahead of clear observations on the 2026-10-21 net attribution (#275 comment); TGP is not the binding scenario.
 3. **#281** vehicle maintenance direct calls, then the callee-copy check.
 4. **#274 map view**, one shared PR.
@@ -181,14 +183,12 @@ and independent review on gpt-6.1-sol (high) through T3 `delegate_task`.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #321 / #322 | `535761dc9d` | Action 1 (`/root/speed_anchors_322`): adopt base, refresh counts, one quiet pass (four medians) as anchors; then root's workflow-bootstrap Full and integration. |
-| #295 / #313 | `d6297bdeef` | Action 2 (`/root/object_adopt_313`): steering PR comment items 1-6; then scoped review, count guard, Full. |
-| #314 / #329 | `de32f6f990` | Action 3 (`/root/vehicle_transactions_314_r2`): null fleet list context first; last passing head `da9f1c0464`. |
-| #156 / #335 | `2a14a97a08` | Action 4: ownership-dispatch rows closed; review `/root/review_ownership_coverage_335_r1`, then Full. |
+| #295 / #313 | `204a384c9d` | Action 2 (`/root/object_adopt_313`): steering PR comment items 1-6; then scoped review, count guard, Full. |
+| #314 / #329 | `fef56b0238` | Action 3 (`/root/vehicle_transactions_314_r2`): null fleet list context first; last passing head `da9f1c0464`. |
 | #261 R6 / #334 | `58fb82abd3` | Action 5 (`/root/shared_header_helpers_261_r6`): shared header modules, house bounce, orphaned facades. |
+| #156 road/water | new branch | Action 4 (`/root/coverage_156_road_water_commands`): #290 and #317 rows of the 2026-10-21 #156 comment. |
+| #275 road context | new branch | Action 6 (`/root/road_command_context_275`): build the road command context only on the tram-turn path; count guard. |
 | #274 | `162843acbd` | Paused measurement branch; map view stays in the work order. |
-
-Only `/root/speed_anchors_322` takes a quiet window; other agents wait while `.local/quiet-window` exists. A stale marker with no live #322 task is deleted.
 
 #64/#68/#69 are paused. Each open draft keeps one worktree and branch. Preserve the
 pinned reference. Do not reapply effect helper `73ccd511fb`. Build and test with `--jobs 2`.
