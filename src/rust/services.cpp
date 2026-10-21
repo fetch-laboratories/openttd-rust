@@ -61,6 +61,9 @@
 #include "../tree_map.h"
 #include "../cheat_type.h"
 #include "../timer/timer_game_economy.h"
+#include "../economy_func.h"
+#include "orders_ffi.h"
+#include "tile_animation_services.h"
 
 static CommandCost *NativeCost(OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<CommandCost *>(cost); }
 static const CommandCost *NativeCost(const OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<const CommandCost *>(cost); }
@@ -154,9 +157,9 @@ const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *s
 	return StationOf(station)->rust_service.get();
 }
 
-OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept
+Town *OpenTTDTownShellByID(uint32_t id) noexcept
 {
-	return Town::Get(TownID(id))->growth_owner.get();
+	return Town::Get(TownID(id));
 }
 
 void OpenTTDAssertTownGenerationContext() noexcept { assert(_game_mode == GM_EDITOR || _generating_world); }
@@ -208,6 +211,17 @@ static OpenTTDTownState *SharedTownOwner(const OpenTTDTownHandle *town) noexcept
 	return reinterpret_cast<const Town *>(town)->growth_owner.get();
 }
 
+OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept
+{
+	return SharedTownOwner(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDTownShellByID(id)));
+}
+
+OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept
+{
+	Town *t = OpenTTDTownShellByID(id);
+	return {.shell = t, .state = SharedTownOwner(reinterpret_cast<const OpenTTDTownHandle *>(t)), .id = static_cast<uint16_t>(id)};
+}
+
 static bool Shared_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileIndex{tile}); }
 static uint32_t Shared_distance_from_edge(uint32_t tile) noexcept { return DistanceFromEdge(TileIndex{tile}); }
 static int32_t Shared_tile_max_z(uint32_t tile) noexcept { return OpenTTDTileMaxZ(TileIndex{tile}); }
@@ -242,6 +256,10 @@ static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
 static int32_t SharedEconomyDate() noexcept { return TimerGameEconomy::date.base(); }
 static int32_t SharedCalendarDate() noexcept { return TimerGameCalendar::date.base(); }
 static int32_t SharedSlope(int32_t x, int32_t y) noexcept { return SharedSlopePixelZ(x, y, false); }
+static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
+static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
+static void SharedRebuildTownTree() noexcept { RebuildTownKdtree(); }
+static int64_t SharedFoundationPrice() noexcept { return _price[PR_BUILD_FOUNDATION]; }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
 	.set_tile_owner = RustSetTileOwner,
@@ -342,6 +360,11 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tunnel_transport = OpenTTDMapQuery<uint8_t, RustTunnelBridgeTransport, uint32_t>,
 	.update_level_crossing = SharedUpdateLevelCrossing,
 	// Registry: house (#256).
+	.foundation_price = SharedFoundationPrice,
+	.rebuild_town_tree = SharedRebuildTownTree,
+	.recession = SharedRecession,
+	.tick_counter = openttd_orders_tick_counter,
+	.town_count = SharedTownCount,
 
 	// Registry: landscape (#212).
 	.clear_ground = OpenTTDClearGround,

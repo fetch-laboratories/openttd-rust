@@ -69,6 +69,25 @@ witness_blocks! {
         ENGINE_ENTRIES = 13 => "engine.entries",
     }
     // Registry: house (#256).
+    house {
+        HOUSE = 0 => "house.stage",
+        HOUSE_COMPLETE = 1 => "house.complete",
+        HOUSE_LIFT_START = 2 => "house.lift_start",
+        HOUSE_LIFT_STOP = 3 => "house.lift_stop",
+        HOUSE_ORIGINAL = 4 => "house.original",
+        HOUSE_BINOMIAL = 5 => "house.binomial",
+        HOUSE_RECESSION = 6 => "house.recession",
+        HOUSE_REBUILD = 7 => "house.rebuild",
+        HOUSE_REPLACE = 8 => "house.replace",
+        HOUSE_CLEAR_AUTO = 9 => "house.clear_auto",
+        HOUSE_CLEAR_REFUSED = 10 => "house.clear_refused",
+        HOUSE_CLEAR_EXECUTE = 11 => "house.clear_execute",
+        HOUSE_AUTOSLOPE = 12 => "house.autoslope",
+        HOUSE_PLACE = 13 => "house.place",
+        HOUSE_PLACE_ERROR = 14 => "house.place_error",
+        HOUSE_STATION_REMOVED = 15 => "house.station_removed",
+        HOUSE_PROTECTED = 16 => "house.protected",
+    }
 
     // Registry: landscape (#212).
     landscape {

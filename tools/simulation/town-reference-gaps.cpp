@@ -159,7 +159,10 @@ static Town *ClosestTownFromTile(TileIndex tile, uint32_t threshold)
 #include "town-tunnel-original.hpp"
 
 static uint64_t Leaf(uint32_t op, uint32_t, uint32_t, uint32_t, uint32_t) noexcept { assert(op == 21); RoadMask(); return 1; }
-static OpenTTDTownState *State(uint32_t id) noexcept { assert(id == world->town.index); return world->owner; }
+/* Rust retains this fixture shell only as an opaque identity; the native FFI
+ * tag is global Town, while the reference body uses TownReference::Town. */
+static OpenTTDTownState *ResolveOwner(uint32_t id) noexcept { assert(id == world->town.index); return world->owner; }
+static ::Town *ResolveShell(uint32_t id) noexcept { assert(id == world->town.index); return reinterpret_cast<::Town *>(&world->town); }
 static void Stations(uint32_t, uint32_t, void *, void (*)(void *, const OpenTTDStation *, uint32_t)) noexcept {}
 static uint32_t Random(void *) noexcept { world->draws++; return 0; }
 static uint32_t Industry(int32_t, int32_t, uint32_t *) noexcept { return 0; }
@@ -178,7 +181,11 @@ static bool Candidate()
 	openttd_rust_town_simulation(world->owner)->population = world->town.cache.population;
 	auto leaves = TownProtocolServices();
 	leaves.map_log_x = Read_map_log_x; leaves.road_info = Read_road_info;
-	leaves.state = State; leaves.stations = Stations; leaves.road_mask = RoadTypes; leaves.build_road = BuildRoad; leaves.build_tunnel = BuildTunnel;
+	leaves.resolve_owner = ResolveOwner;
+	auto house_services = *leaves.houses;
+	house_services.town_shell = ResolveShell;
+	leaves.houses = &house_services;
+	leaves.stations = Stations; leaves.road_mask = RoadTypes; leaves.build_road = BuildRoad; leaves.build_tunnel = BuildTunnel;
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
 	services.calendar_date = []() noexcept { return 0; }; // The controlled road type is available from date zero.
 	services.tile_type = Read_tile_type; services.tile_valid = Read_tile_valid;

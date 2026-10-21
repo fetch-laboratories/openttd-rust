@@ -5,13 +5,14 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file towns-console.cpp Identical founding commands and otherwise unreachable name/cancellation inputs. */
+/** @file towns-console.cpp Identical founding/house commands and otherwise unreachable name/cancellation inputs. */
 #include "stdafx.h"
 #include "console_internal.h"
 #include "company_base.h"
 #include "company_func.h"
 #include "core/backup_type.hpp"
 #include "core/random_func.hpp"
+#include "town.h"
 #include "town_cmd.h"
 #include "townname_func.h"
 #include "house.h"
@@ -20,6 +21,14 @@
 #include "error.h"
 #include "table/strings.h"
 #include "saveload/saveload.h"
+#include "command_func.h"
+#include "landscape_cmd.h"
+#include "terraform_cmd.h"
+#include "economy_func.h"
+#include "town_map.h"
+#include "newgrf_spritegroup.h"
+#include "animated_tile_func.h"
+#include <map>
 #ifdef WITH_RUST
 #include "rust/town_founding_ffi.h"
 #include "rust/generation_services.hpp"
@@ -51,6 +60,137 @@ static TileIndex Site()
 	}
 	std::abort();
 }
+/* Real CmdPlaceHouse and animation bodies in both games, with controlled spec
+ * overrides. The save corpus has no external NewGRF providing callback 0x1C.
+ * Restore specs before returning so ordinary simulation and saves stay valid. */
+static void HouseOverridePlacement(TileIndex tile, HouseID house)
+{
+	using Place = Command<CMD_PLACE_HOUSE>;
+	const auto flags = HouseSpec::Get(house)->building_flags;
+	std::vector<TileIndex> parts{tile};
+	if (flags.Any(BUILDING_2_TILES_Y)) parts.push_back(TileAddXY(tile, 0, 1));
+	if (flags.Any(BUILDING_2_TILES_X)) parts.push_back(TileAddXY(tile, 1, 0));
+	if (flags.Any(BUILDING_HAS_4_TILES)) parts.push_back(TileAddXY(tile, 1, 1));
+	const HouseID override = static_cast<HouseID>(HouseSpec::Specs().size());
+	assert(override >= NEW_HOUSE_OFFSET);
+	HouseSpec::Specs().resize(override + parts.size());
+	CallbackResultSpriteGroup frame(7);
+	for (uint mask : {0U, 5U, 15U}) {
+		CommandCost clear = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile);
+		Cost("house-override-clear", clear);
+		if (clear.Failed()) std::abort();
+		for (size_t i = 0; i < parts.size(); ++i) {
+			auto *source = HouseSpec::Get(house + i);
+			auto *target = HouseSpec::Get(override + i);
+			*target = *source;
+			target->callback_mask.Reset();
+			if ((mask & (1U << i)) != 0) target->callback_mask.Set(HouseCallbackMask::AnimationTriggerConstructionStageChanged);
+			target->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, &frame);
+			source->grf_prop.override_id = override + i;
+		}
+		Randomizer trace = _random;
+		CommandCost placed = Place::Do(DoCommandFlag::Execute, tile, house, false, false);
+		Cost("house-override-place", placed);
+		if (placed.Failed()) std::abort();
+		/* Emit every actual draw by replaying the pre-command generator up to
+		 * its post-command state. Both missing and extra draws change the log. */
+		fmt::print(stderr, "TOWN house-override {} {} {}", house, parts.size(), mask);
+		uint draws = 0;
+		while (trace.state[0] != _random.state[0] || trace.state[1] != _random.state[1]) {
+			if (++draws > 16) std::abort();
+			fmt::print(stderr, " rng={}", trace.Next());
+		}
+		for (TileIndex part : parts) {
+			fmt::print(stderr, " part={}/{}/{}", GetCleanHouseType(part), GetHouseType(part), GetAnimationFrame(part));
+			DeleteAnimatedTile(part, true);
+		}
+		fmt::print(stderr, "\n");
+		for (size_t i = 0; i < parts.size(); ++i) {
+			HouseSpec::Get(house + i)->grf_prop.override_id = INVALID_HOUSE_ID;
+		}
+	}
+	HouseSpec::Specs().resize(override);
+}
+/* Every original house through CmdPlaceHouse, replacement, protection,
+ * autoslope and company clearance; aged houses then reach the rebuild path. */
+static bool HousesScenario(std::span<std::string_view> args)
+{
+	using Place = Command<CMD_PLACE_HOUSE>;
+	using Clear = Command<CMD_LANDSCAPE_CLEAR>;
+	Company *company = Company::GetNumItems() == 0 ? DoStartupNewCompany(false, CompanyID::Invalid()) : *Company::Iterate().begin();
+	Backup<CompanyID> owner(_current_company, OWNER_DEITY);
+	if (args.size() > 2 && args[2] == "recession") _economy.fluct = -1;
+	Backup<PlaceHouses> place(_settings_game.economy.place_houses, PH_FORBIDDEN);
+	Cost("house-forbidden", Place::Do(DoCommandFlag::Execute, TileIndex{}, 0, false, false));
+	place.Change(PH_ALLOWED);
+	Cost("house-invalid", Place::Do(DoCommandFlag::Execute, TileIndex{}, static_cast<HouseID>(HouseSpec::Specs().size()), false, false));
+	TileIndex centre{};
+	while (centre < Map::Size() && !IsTileType(centre, MP_HOUSE)) ++centre;
+	std::vector<TileIndex> window;
+	for (int dy = -12; dy <= 12; ++dy) for (int dx = -12; dx <= 12; ++dx) if (TileIndex tile = TileAddWrap(centre, dx, dy); tile != INVALID_TILE) window.push_back(tile);
+	std::vector<std::pair<TileIndex, HouseID>> sites;
+	for (const HouseSpec &spec : HouseSpec::Specs()) {
+		HouseID house = spec.Index();
+		if (house >= NEW_HOUSE_OFFSET) break;
+		if (!spec.enabled) { Cost("house-disabled", Place::Do(DoCommandFlag::Execute, centre, house, false, false)); continue; }
+		if (!spec.building_flags.Any(BUILDING_HAS_1_TILE)) continue;
+		place.Change(house % 2 == 0 ? PH_ALLOWED_CONSTRUCTED : PH_ALLOWED);
+		std::map<StringID, uint> errors;
+		for (TileIndex tile : window) {
+			CommandCost test = Place::Do({}, tile, house, house % 3 == 0, false);
+			if (test.Failed()) { errors[test.GetErrorMessage()]++; continue; }
+			Cost("house-place", Place::Do(DoCommandFlag::Execute, tile, house, house % 3 == 0, false));
+			sites.emplace_back(tile, house);
+			break;
+		}
+		for (const auto &[message, count] : errors) fmt::print(stderr, "TOWN house-errors {} {} {}\n", house, message, count);
+	}
+	fmt::print(stderr, "TOWN house-sites {}\n", sites.size());
+	BuildingFlags covered;
+	for (const auto &[tile, house] : sites) {
+		const auto size = HouseSpec::Get(house)->building_flags & BUILDING_HAS_1_TILE;
+		if (house < 96 && !IsHouseProtected(tile) && !covered.Any(size)) { HouseOverridePlacement(tile, house); covered |= size; }
+	}
+	auto single = std::ranges::find_if(sites, [](const auto &site) { return HouseSpec::Get(site.second)->building_flags.Test(BuildingFlag::Size1x1); });
+	if (single != sites.end()) {
+		HouseID other = single == sites.begin() ? sites.back().second : sites.front().second;
+		Cost("house-occupied", Place::Do(DoCommandFlag::Execute, single->first, other, false, false));
+		Cost("house-replace", Place::Do(DoCommandFlag::Execute, single->first, single->second, false, true));
+	}
+	for (const auto &[tile, house] : sites) Cost("house-protected", Clear::Do({}, tile));
+	/* Autoslope applies to companies only; funding sets the growth flag the rebuild path needs. */
+	owner.Change(company->index);
+#ifdef WITH_RUST
+	Backup<Money> money(company->Finances().money, 1000000000000LL);
+#else
+	Backup<Money> money(company->money, 1000000000000LL);
+#endif
+	Cost("house-fund", Command<CMD_DO_TOWN_ACTION>::Do(DoCommandFlag::Execute, ClosestTownFromTile(centre, UINT_MAX)->index, TownAction::FundBuildings));
+	bool terraformed = false;
+	for (const auto &[tile, house] : sites) {
+		CommandCost lower = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do({}, tile, SLOPE_N, false));
+		Cost("house-terraform", lower);
+		if (lower.Succeeded() && !terraformed) {
+			terraformed = true;
+			Cost("house-terraform-execute", std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(DoCommandFlag::Execute, tile, SLOPE_N, false)));
+		}
+	}
+	uint cleared = 0;
+	for (TileIndex tile : window) {
+		if (cleared == 24 || !IsTileType(tile, MP_HOUSE)) continue;
+		Cost("house-clear-test", Clear::Do({}, tile));
+		Cost("house-clear-auto", Clear::Do({DoCommandFlag::Execute, DoCommandFlag::Auto}, tile));
+		CommandCost clear = Clear::Do(DoCommandFlag::Execute, tile);
+		Cost("house-clear", clear);
+		cleared += clear.Succeeded();
+	}
+	for (TileIndex tile{}; tile < Map::Size(); ++tile) {
+		if (IsTileType(tile, MP_HOUSE)) for (int age = 0; age < 255; ++age) IncrementHouseAge(tile);
+	}
+	money.Restore(); place.Restore(); owner.Restore();
+	fmt::print(stderr, "TOWN house-done {}\n", cleared);
+	return true;
+}
 static bool TownsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
@@ -59,6 +199,7 @@ static bool TownsScenario(std::span<std::string_view> args)
 		for (const Town *town : Town::Iterate()) found |= town->GetCachedName() == "Migration renamed";
 		fmt::print(stderr, "TOWN reloaded {}\n", found); return true;
 	}
+	if (args[1] == "houses") return HousesScenario(args);
 	Company *company = Company::GetNumItems() == 0 ? DoStartupNewCompany(false, CompanyID::Invalid()) : *Company::Iterate().begin();
 	Backup<CompanyID> owner(_current_company, OWNER_DEITY);
 	Backup<TownFounding> setting(_settings_game.economy.found_town, TF_CUSTOM_LAYOUT);
