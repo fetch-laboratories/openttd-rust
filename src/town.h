@@ -469,7 +469,9 @@ using TownActions = EnumBitSet<TownAction, uint8_t>;
 
 DECLARE_INCREMENT_DECREMENT_OPERATORS(TownAction);
 
+#ifndef WITH_RUST
 void ClearTownHouse(Town *t, TileIndex tile);
+#endif
 void UpdateTownMaxPass(Town *t);
 void UpdateTownRadius(Town *t);
 CommandCost CheckIfAuthorityAllowsNewStation(TileIndex tile, DoCommandFlags flags);

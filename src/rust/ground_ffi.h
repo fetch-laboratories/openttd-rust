@@ -11,6 +11,7 @@
 #include "service_defaults.hpp"
 #include "services_ffi.h"
 #include "water_regions_ffi.h"
+#include "signal_ffi.h"
 /* Actual fixed-underlying native enums, not byte aliases. Rust transparent
  * carriers preserve every stored bit pattern without enum-discriminant guards. */
 enum ClearGround : uint8_t;
@@ -110,16 +111,9 @@ struct OpenTTDWaterRestorationServices {
 };
 const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept;
 struct OpenTTDWaterGroundServices;
-extern "C" {
-void openttd_rust_road_tile_loop(uint32_t, LandscapeType, bool, bool, uint32_t, OpenTTDGroundCall *, const OpenTTDGroundCostServices *, const OpenTTDRoadGroundServices *, const OpenTTDSharedServices *);
-void openttd_rust_tunnel_tile_loop(uint32_t, LandscapeType, const OpenTTDTunnelServices *, const OpenTTDSharedServices *);
-}
 struct OpenTTDVehicle;
 struct OpenTTDVehicleServices;
 struct OpenTTDAirportGround { const OpenTTDStation *station; uint32_t tile; uint16_t width; uint16_t height; };
-/* Native placement construction uses two pointer-aligned words, with native size
- * and alignment assertions. Rust never inspects the iterator representation. */
-struct OpenTTDTileVehicleCursor { uintptr_t storage[2]; };
 struct OpenTTDFloodVictim { uint8_t status; VehicleType type; };
 struct OpenTTDAircraftFloodPose { uint32_t tile; int32_t z; uint8_t subtype; };
 struct OpenTTDGroundFloodPose { int32_t z; OpenTTDVehicle *first; };
@@ -129,7 +123,8 @@ struct OpenTTDWaterGroundServices {
 	const OpenTTDClearServices *clear;
 	const OpenTTDVehicleServices *vehicles;
 	const OpenTTDGroundCostServices *costs;
-	const OpenTTDCompanyServices *company; ///< Current-company exchange and signal-buffer update.
+	const OpenTTDCompanyServices *company; ///< Current-company exchange.
+	OpenTTDSignalContext (*signal_context)() noexcept OPENTTD_SERVICE_DEFAULT(signal_context);
 	bool (*non_flooding)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(non_flooding);
 	void (*set_non_flooding)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_non_flooding);
 	bool (*coast)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(coast);
@@ -140,10 +135,6 @@ struct OpenTTDWaterGroundServices {
 	OpenTTDWaterRegionContext (*region_context)() noexcept OPENTTD_SERVICE_DEFAULT(region_context);
 	void (*remove_rail)(OpenTTDCommandCost *, uint32_t, Track) noexcept OPENTTD_SERVICE_DEFAULT(remove_rail);
 	OpenTTDFoundationSlope (*apply_foundation)(Foundation, Slope) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
-	void (*iterator_begin)(OpenTTDTileVehicleCursor *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(iterator_begin);
-	OpenTTDVehicle *(*iterator_current)(OpenTTDTileVehicleCursor *) noexcept OPENTTD_SERVICE_DEFAULT(iterator_current);
-	void (*iterator_next)(OpenTTDTileVehicleCursor *) noexcept OPENTTD_SERVICE_DEFAULT(iterator_next);
-	void (*iterator_end)(OpenTTDTileVehicleCursor *) noexcept OPENTTD_SERVICE_DEFAULT(iterator_end);
 	bool (*airport_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
 	OpenTTDAirportGround (*airport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport);
 	bool (*airport_member)(const OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_member);
@@ -163,7 +154,6 @@ void openttd_rust_water_tile_loop(uint32_t, uint32_t, uint32_t, bool, OpenTTDGro
 bool openttd_rust_flood_halftile(uint32_t, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 FloodingBehaviour openttd_rust_flooding_behaviour(uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 void openttd_rust_clear_neighbour_flooding(uint32_t, uint32_t, uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
-void openttd_rust_dirty_water_neighbours(uint32_t, uint32_t, uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 }
 /* Default native and Windows ABI call fixture: actual record returns and enum
  * parameters, including all-byte values, not just size/offset metadata. */

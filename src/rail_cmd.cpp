@@ -2621,7 +2621,7 @@ const OpenTTDRailServices &GetRustRailGroundServices() noexcept
 		.tracks = RustRailTracks,
 		.ground = RustRailGround,
 		.set_ground = RustSetRailGroundTyped,
-		.snow = [](uint32_t index) noexcept { TileIndex t{index}; auto [slope, z] = GetTileSlopeZ(t); bool plain = RustPlainRailTile(index); return OpenTTDRailSnowGround{.z = z, .slope = slope, .tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .plain = plain}; },
+		.snow = [](uint32_t index) noexcept { auto [z, slope] = RustTileSlopeZ(index); bool plain = RustPlainRailTile(index); return OpenTTDRailSnowGround{.z = z, .slope = slope, .tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .plain = plain}; },
 		.fences = [](uint32_t index) noexcept { bool plain = RustPlainRailTile(index); return OpenTTDRailFenceGround{.tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .owner = plain ? RustTileOwnerValue(index) : uint8_t{}, .plain = plain}; },
 		.foundation = RustRailFoundation,
 		.owned_land = [](uint32_t t) noexcept { return IsObjectType(TileIndex{t}, OBJECT_OWNED_LAND); },
@@ -3145,6 +3145,7 @@ static CommandCost CheckBuildAbove_Track(TileIndex tile, DoCommandFlags flags, A
  * under #ifndef WITH_RUST above. */
 #include "rust/rail_command_ffi.h"
 #include "rust/services_water.h"
+#include "rust/services_newgrf.h"
 #include "rust/command_cost_services.h"
 #include "rust/company_services.h"
 #include "rust/settings_services.h"
@@ -3304,7 +3305,7 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.depot_name = [](uint16_t id) noexcept { MakeDefaultName(Depot::Get(DepotID(id))); },
 		.delete_depot = [](uint32_t tile) noexcept { delete Depot::GetByTile(TileIndex{tile}); },
 		.depot_windows = RailDepotWindows,
-		.close_inspect = [](uint32_t tile) noexcept { DeleteNewGRFInspectWindow(GSF_RAILTYPES, tile); },
+		.close_inspect = OpenTTDDeleteRailInspect,
 		.make_shore = RailMakeShore,
 		.area_begin = [](OpenTTDRailConvertFrame *frame, uint32_t start, uint32_t end, bool diagonal) noexcept { frame->iter = TileIterator::Create(TileIndex{start}, TileIndex{end}, diagonal); },
 		.area_tile = [](OpenTTDRailConvertFrame *frame) noexcept { return (**frame->iter).base(); },

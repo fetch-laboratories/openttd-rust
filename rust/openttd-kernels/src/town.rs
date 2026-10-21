@@ -23,6 +23,7 @@
     clippy::decimal_bitwise_operands
 )]
 pub mod founding;
+pub mod house;
 pub mod names;
 
 use crate::services::{Map, Services, chance16_i};
@@ -279,25 +280,13 @@ unsafe fn change_population(leaves: &Leaves, state: *mut State, town: u32, amoun
     (leaves.population_changed)(town);
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_change_population(
-    leaves: *const Leaves,
-    state: *mut State,
-    town: u32,
-    amount: i32,
-) {
-    // SAFETY: Immutable table and live owner outlive the synchronous invocation.
-    unsafe {
-        change_population(&*leaves, state, town, amount);
-    }
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_world_population(leaves: *const Leaves) -> u32 {
     // SAFETY: Immutable table remains live; no owner access spans pool iteration.
     let leaves = unsafe { &*leaves };
     let mut total = 0_u32;
     let mut town = (leaves.next_town)(0);
     while town != u32::MAX {
-        let owner = (leaves.state)(town);
+        let owner = (leaves.resolve_owner)(town);
         // SAFETY: Iterator supplied a live shell; copy read ends before next callback.
         total = total.wrapping_add(unsafe { population(owner) });
         town = (leaves.next_town)(town.wrapping_add(1));
@@ -494,12 +483,8 @@ pub extern "C" fn openttd_rust_town_global_class_counts_resize(count: usize) {
         (*cell.get()).classes.resize(count, 0);
     });
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_increase_building(
-    state: *mut State,
-    house: u16,
-    class: u16,
-) {
+/// Count one built house part in its town and the process-wide totals.
+unsafe fn increase_building(state: *mut State, house: u16, class: u16) {
     // SAFETY: Original valid spec/count indices; no callback while borrowed.
     let state = unsafe { &mut *state };
     BUILDING_COUNTS.with(|cell| {
@@ -514,12 +499,8 @@ pub unsafe extern "C" fn openttd_rust_town_increase_building(
         }
     });
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_decrease_building(
-    state: *mut State,
-    house: u16,
-    class: u16,
-) {
+/// Saturating removal of one house part from town and process-wide totals.
+unsafe fn decrease_building(state: *mut State, house: u16, class: u16) {
     // SAFETY: Source valid indices and serialized original lifetime preconditions.
     let state = unsafe { &mut *state };
     BUILDING_COUNTS.with(|cell| {
@@ -601,14 +582,6 @@ pub struct HouseAvailability {
 pub struct HousePlacement {
     pub min_year: i32,
     pub max_year: i32,
-    pub flags: u8,
-    pub extra_flags: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct HouseConstruction {
-    pub extra_flags: u8,
-    pub population: u8,
 }
 /// Narrow authority settings are read only at their source short-circuit points.
 #[repr(C)]
@@ -698,7 +671,7 @@ pub struct Leaves {
     pub map_log_x: extern "C" fn() -> u32,
     pub growth_rate: extern "C" fn() -> u8,
     pub snow_line: extern "C" fn() -> u8,
-    pub editor: extern "C" fn() -> bool,
+    pub environment: crate::services::EnvironmentServices,
     pub generating_world: extern "C" fn() -> bool,
     pub allow_crossings: extern "C" fn() -> bool,
     pub climate: extern "C" fn() -> u8,
@@ -708,12 +681,12 @@ pub struct Leaves {
     pub road_flags: extern "C" fn(u8) -> u8,
     pub house_availability: extern "C" fn(u16) -> HouseAvailability,
     pub house_placement: extern "C" fn(u16) -> HousePlacement,
-    pub house_construction: extern "C" fn(u16) -> HouseConstruction,
+    pub house_population: extern "C" fn(u16) -> u8,
     pub house_flags: extern "C" fn(u16) -> u8,
     pub house_extra_flags: extern "C" fn(u16) -> u8,
-    pub house_allows_callback: extern "C" fn(u16) -> bool,
+    pub house_callbacks: extern "C" fn(u16) -> u16,
     pub road_info: extern "C" fn(u8) -> RoadChoice,
-    pub state: extern "C" fn(u32) -> *mut State,
+    pub resolve_owner: extern "C" fn(u32) -> *mut State,
     pub stations: extern "C" fn(
         u32,
         u32,
@@ -746,7 +719,7 @@ pub struct Leaves {
     pub build_tunnel: extern "C" fn(u32, u32, u32) -> bool,
     pub clear_house_land: extern "C" fn(u32),
     pub allow_construction: extern "C" fn(u32, u32, u32, u32) -> bool,
-    pub construction_animation: extern "C" fn(u32),
+    pub houses: *const house::HouseServices,
 }
 pub type StationActivity = crate::station_service::StationActivity;
 #[repr(C)]
@@ -761,6 +734,7 @@ struct Engine<'a> {
     services: &'a Services,
     map: OnceCell<Map>,
     owner: *mut State,
+    house_shell: OnceCell<*mut crate::services::TownHandle>,
 }
 impl Engine<'_> {
     fn map(&self) -> Map {
@@ -810,7 +784,7 @@ impl Engine<'_> {
         unsafe { u32::from((*self.owner).simulation.received[at].old_act) }
     }
     fn bind(mut self, town: u32) -> Self {
-        self.owner = (self.leaves.state)(town);
+        self.owner = (self.leaves.resolve_owner)(town);
         self
     }
     fn modify_flags(&self, clear: u16, set: u16) {
@@ -1033,6 +1007,7 @@ fn engine<'a>(leaves: *const Leaves, services: *const Services) -> Engine<'a> {
         services,
         map: OnceCell::new(),
         owner: std::ptr::null_mut(),
+        house_shell: OnceCell::new(),
     }
 }
 fn round_div(a: i32, b: u32) -> i32 {
@@ -1573,7 +1548,7 @@ impl Engine<'_> {
                 if owner == 15 && u32::from((self.services.town_index)(tile)) != town {
                     return false;
                 }
-                if owner == 16 && (self.leaves.editor)() {
+                if owner == 16 && (self.leaves.environment.editor)() {
                     (self.leaves.set_road_town)(tile, town);
                 }
             }
@@ -1739,7 +1714,7 @@ impl Engine<'_> {
         let class = (self.leaves.house_class)(house as u16);
         // SAFETY: Entry resolved the live town once. Count borrows end here,
         // before map writes or callbacks can reenter and mutate the owner.
-        unsafe { openttd_rust_town_increase_building(self.owner, house as u16, class) };
+        unsafe { increase_building(self.owner, house as u16, class) };
         (self.leaves.make_house)(
             tile,
             town,
@@ -1764,19 +1739,27 @@ impl Engine<'_> {
         unsafe {
             (*self.owner).simulation.num_houses = self.num_houses().wrapping_add(1);
         }
-        let h = (self.leaves.house_construction)(house as u16);
+
         let mut counter = 0;
         let mut stage = 0;
-        if (self.leaves.generating_world)() || (self.leaves.editor)() || complete {
+        if (self.leaves.generating_world)() || (self.leaves.environment.editor)() || complete {
             let construction = self.services.random();
             stage = 3;
-            if (self.leaves.generating_world)() && h.extra_flags & 1 == 0 && self.chance(1, 7) {
+            if (self.leaves.generating_world)()
+                && (self.leaves.house_extra_flags)(house as u16) & 1 == 0
+                && self.chance(1, 7)
+            {
                 stage = construction & 3;
             }
             if stage == 3 {
                 // SAFETY: Owner mutation ends before possible presentation reentry.
                 unsafe {
-                    change_population(self.leaves, self.owner, town, i32::from(h.population));
+                    change_population(
+                        self.leaves,
+                        self.owner,
+                        town,
+                        i32::from((self.leaves.house_population)(house as u16)),
+                    );
                 }
             } else {
                 counter = (construction >> 2) & 3;
@@ -1828,15 +1811,42 @@ impl Engine<'_> {
         }
         self.update_rate(town);
         let size = u32::from((self.leaves.house_flags)(house as u16));
-        (self.leaves.construction_animation)(tile);
+        // Resolve only the native shell at the first construction trigger; the
+        // entry already resolved its owner. House lifecycle callers also supplied
+        // their shell. No owner reference spans any construction callback.
+        let shell = *self.house_shell.get_or_init(|| {
+            // SAFETY: Static house table referenced by the town leaves.
+            (unsafe { &*self.leaves.houses }.town_shell)(town)
+        });
+        let town_ref = TownRef {
+            shell,
+            state: self.owner,
+            id: TownId(town as u16),
+        };
+        house::stage_changed(self.leaves, self.services, town_ref, tile);
         if size & 24 != 0 {
-            (self.leaves.construction_animation)(self.offset(tile, 0, 1));
+            house::stage_changed(
+                self.leaves,
+                self.services,
+                town_ref,
+                self.offset(tile, 0, 1),
+            );
         }
         if size & 20 != 0 {
-            (self.leaves.construction_animation)(self.offset(tile, 1, 0));
+            house::stage_changed(
+                self.leaves,
+                self.services,
+                town_ref,
+                self.offset(tile, 1, 0),
+            );
         }
         if size & 16 != 0 {
-            (self.leaves.construction_animation)(self.offset(tile, 1, 1));
+            house::stage_changed(
+                self.leaves,
+                self.services,
+                town_ref,
+                self.offset(tile, 1, 1),
+            );
         }
     }
     fn try_house(&self, town: u32, base: u32, modes: u32) -> bool {
@@ -1888,8 +1898,8 @@ impl Engine<'_> {
             max -= weight;
             let h = (self.leaves.house_placement)(house as u16);
             if !(self.leaves.generating_world)()
-                && !(self.leaves.editor)()
-                && h.extra_flags & 1 != 0
+                && !(self.leaves.environment.editor)()
+                && (self.leaves.house_extra_flags)(house as u16) & 1 != 0
             {
                 continue;
             }
@@ -1897,9 +1907,10 @@ impl Engine<'_> {
             if year < h.min_year || year > h.max_year {
                 continue;
             }
-            let oneof = if u32::from(h.flags) & 64 != 0 {
+            let flags = (self.leaves.house_flags)(house as u16);
+            let oneof = if u32::from(flags) & 64 != 0 {
                 2
-            } else if u32::from(h.flags) & 128 != 0 {
+            } else if u32::from(flags) & 128 != 0 {
                 4
             } else {
                 0
@@ -1907,15 +1918,15 @@ impl Engine<'_> {
             if self.flags() & oneof != 0 {
                 continue;
             }
-            let noslope = u32::from(h.flags) & 2 != 0;
+            let noslope = u32::from(flags) & 2 != 0;
             if noslope && slope != 0 {
                 continue;
             }
-            if !self.check_house(town, &mut tile, maxz, noslope, u32::from(h.flags), modes) {
+            if !self.check_house(town, &mut tile, maxz, noslope, u32::from(flags), modes) {
                 continue;
             }
             let random = u32::from(self.services.random() as u8);
-            if (self.leaves.house_allows_callback)(house as u16)
+            if (self.leaves.house_callbacks)(house as u16) & 1 != 0
                 && !(self.leaves.allow_construction)(town, tile, house, random)
             {
                 continue;
@@ -1978,11 +1989,16 @@ impl Engine<'_> {
         }
         (self.leaves.update_max_pass)(town);
     }
-    fn tick_all(&self) {
-        if !(self.leaves.editor)() {
+    fn tick_all(mut self) {
+        if !(self.leaves.environment.editor)() {
             let mut id = (self.leaves.next_town)(0);
             while id != u32::MAX {
-                self.clone().bind(id).tick(id);
+                // Each town starts with an empty map/shell cache, as the previous
+                // per-town engine did, without copying that engine each tick.
+                self.map.take();
+                self.house_shell.take();
+                self.owner = (self.leaves.resolve_owner)(id);
+                self.tick(id);
                 id = (self.leaves.next_town)(id + 1);
             }
         }
@@ -2011,33 +2027,6 @@ impl Engine<'_> {
         let ticks = 70;
         self.set_counter((counter.min(2 * ticks - (rate - counter) % ticks)) as u16);
     }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_try_house(
-    leaves: *const Leaves,
-    services: *const Services,
-    town: u32,
-    tile: u32,
-    modes: u32,
-) -> bool {
-    engine(leaves, services)
-        .bind(town)
-        .try_house(town, tile, modes)
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_build_house(
-    leaves: *const Leaves,
-    services: *const Services,
-    town: u32,
-    tile: u32,
-    house: u32,
-    random: u32,
-    complete: bool,
-    protected: bool,
-) {
-    engine(leaves, services)
-        .bind(town)
-        .build_house(town, tile, house, random, complete, protected);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_tick_all(
@@ -2381,36 +2370,6 @@ pub unsafe extern "C" fn openttd_rust_town_change_rating(
     }
 }
 
-/// House fields consumed only by the yearly traversal, with immediate map access.
-#[repr(C)]
-pub struct YearlyServices {
-    pub completed: extern "C" fn(u32) -> bool,
-    pub age: extern "C" fn(u32) -> u8,
-    pub set_age: extern "C" fn(u32, u8),
-}
-/// Original `Map::Iterate` order and completed-house age saturation.
-/// SAFETY: Immutable tables live through this serialized native timer entry.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_yearly(
-    services: *const Services,
-    houses: *const YearlyServices,
-    size: u32,
-) {
-    // SAFETY: Borrowed tables outlive traversal; map access ends before mutations.
-    let (services, houses) = unsafe { (&*services, &*houses) };
-    for tile in 0..size {
-        if (services.tile_type)(tile) != 3 {
-            continue;
-        }
-        if (houses.completed)(tile) {
-            let age = (houses.age)(tile);
-            if age < u8::MAX {
-                (houses.set_age)(tile, age + 1);
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2442,7 +2401,7 @@ mod tests {
             // SAFETY: Owner lives on the suspended parent stack; spawn/join prevents
             // concurrent reads and every index is valid in both sized owners.
             unsafe {
-                openttd_rust_town_increase_building(owner, 110, 15);
+                increase_building(owner, 110, 15);
             }
             RATING_TEST.with(|cell| {
                 // SAFETY: Serialized access; same process-wide test scratch.
@@ -2470,7 +2429,7 @@ mod tests {
             assert_eq!(*ids.data.cast::<u32>().add(110), 1);
             assert_eq!(*classes.data.cast::<u32>().add(15), 1);
             assert_eq!(openttd_rust_town_rating(&raw const owner, 42, 0), -99);
-            openttd_rust_town_decrease_building(&raw mut owner, 110, 15);
+            decrease_building(&raw mut owner, 110, 15);
             assert_eq!(*ids.data.cast::<u32>().add(110), 0);
             assert_eq!(*classes.data.cast::<u32>().add(15), 0);
         }

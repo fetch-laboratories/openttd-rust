@@ -42,7 +42,7 @@ OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
  * Map predicates take a TileIndex value and return the original accessor's
  * underlying type: TileType, TropicZone and Slope are uint8_t, GetTileZ is int.
  * mark_dirty is MarkTileDirtyByTile(tile), set_tropic_zone is SetTropicZone and
- * clear_square is DoClearSquare(tile). free_train_reservation is
+ * free_train_reservation is
  * FreeTrainTrackReservation(v), try_path_reserve is TryPathReserve(v, mark_as_stuck,
  * first_tile_okay) and safe_waiting_position is IsSafeWaitingPosition(v, tile,
  * trackdir, true, forbid_90_deg); the last two can reenter Rust train owners.
@@ -63,6 +63,11 @@ enum RoadType : uint8_t;
 enum RoadBits : uint8_t;
 enum Trackdir : uint8_t;
 struct OpenTTDWaterGroundServices;
+struct OpenTTDEnvironmentServices {
+	bool (*editor)() noexcept OPENTTD_SERVICE_DEFAULT(editor);
+	bool (*freeform_edges)() noexcept OPENTTD_SERVICE_DEFAULT(freeform_edges);
+};
+const OpenTTDEnvironmentServices &GetRustEnvironmentServices() noexcept;
 enum RoadTramType : bool;
 struct OpenTTDClearSquareServices {
 	bool (*may_animate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(may_animate);
@@ -71,6 +76,7 @@ struct OpenTTDClearSquareServices {
 	bool (*generating_world)() noexcept OPENTTD_SERVICE_DEFAULT(generating_world);
 };
 struct OpenTTDSharedServices {
+	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
 	bool (*autoslope)() noexcept OPENTTD_SERVICE_DEFAULT(autoslope);
 	uint8_t (*bay_stop_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bay_stop_direction);
 	bool (*bridge_above)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_above);
@@ -79,7 +85,6 @@ struct OpenTTDSharedServices {
 	bool (*build_on_slopes)() noexcept OPENTTD_SERVICE_DEFAULT(build_on_slopes);
 	int32_t (*calendar_date)() noexcept OPENTTD_SERVICE_DEFAULT(calendar_date);
 	int32_t (*calendar_year)() noexcept OPENTTD_SERVICE_DEFAULT(calendar_year);
-	void (*clear_square)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_square);
 	OpenTTDClearSquareServices clear_square_services;
 	const OpenTTDTownHandle *(*calc_closest_town)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(calc_closest_town);
 	const OpenTTDTownHandle *(*closest_town)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_town);
@@ -154,6 +159,7 @@ struct OpenTTDSharedServices {
 	uint8_t (*tile_owner)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_owner);
 	uint8_t (*tile_slope)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_slope);
 	uint8_t (*tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_type);
+	uint32_t (*tile_add_wrap)(uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_add_wrap);
 	bool (*tile_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_valid);
 	int32_t (*tile_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_z);
 	uint16_t (*town_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_index);
@@ -167,6 +173,11 @@ struct OpenTTDSharedServices {
 	uint8_t (*tunnel_transport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_transport);
 	void (*update_level_crossing)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(update_level_crossing);
 	// Registry: house (#256).
+	int64_t (*foundation_price)() noexcept OPENTTD_SERVICE_DEFAULT(foundation_price);
+	void (*rebuild_town_tree)() noexcept OPENTTD_SERVICE_DEFAULT(rebuild_town_tree);
+	bool (*recession)() noexcept OPENTTD_SERVICE_DEFAULT(recession);
+	uint64_t (*tick_counter)() noexcept OPENTTD_SERVICE_DEFAULT(tick_counter);
+	size_t (*town_count)() noexcept OPENTTD_SERVICE_DEFAULT(town_count);
 
 	// Registry: landscape (#212).
 	ClearGround (*clear_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_ground);
@@ -236,6 +247,7 @@ struct OpenTTDRailMapServices {
 	/* Rail command, depot and level-crossing leaves (#265). */
 	bool (*has_signals)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signals);
 	SignalType (*signal_type)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_type);
+	RailType (*invalid_rail_type)() noexcept OPENTTD_SERVICE_DEFAULT(invalid_rail_type);
 	RailType (*rail_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_type);
 	void (*set_rail_type)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_rail_type);
 	RailTileType (*rail_tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_tile_type);
@@ -263,7 +275,6 @@ struct OpenTTDRailMapServices {
 	bool (*station_blocked)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_blocked);
 	Track (*station_track)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_track);
 	bool (*wormhole_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_reserved);
-	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
 };
 const OpenTTDRailMapServices &GetRustRailMapServices() noexcept;
 
@@ -283,6 +294,11 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.next_company = [](uint8_t) noexcept -> uint8_t { return UINT8_MAX; },
 		.random = random,
 		// Registry: house (#256).
+		.foundation_price = OpenTTDFixtureMapService<int64_t>,
+		.rebuild_town_tree = OpenTTDFixtureMapService<void>,
+		.recession = OpenTTDFixtureMapService<bool>,
+		.tick_counter = OpenTTDFixtureMapService<uint64_t>,
+		.town_count = OpenTTDFixtureMapService<size_t>,
 
 		// Registry: landscape (#212).
 	};

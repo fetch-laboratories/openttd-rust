@@ -69,6 +69,25 @@ witness_blocks! {
         ENGINE_ENTRIES = 13 => "engine.entries",
     }
     // Registry: house (#256).
+    house {
+        HOUSE = 0 => "house.stage",
+        HOUSE_COMPLETE = 1 => "house.complete",
+        HOUSE_LIFT_START = 2 => "house.lift_start",
+        HOUSE_LIFT_STOP = 3 => "house.lift_stop",
+        HOUSE_ORIGINAL = 4 => "house.original",
+        HOUSE_BINOMIAL = 5 => "house.binomial",
+        HOUSE_RECESSION = 6 => "house.recession",
+        HOUSE_REBUILD = 7 => "house.rebuild",
+        HOUSE_REPLACE = 8 => "house.replace",
+        HOUSE_CLEAR_AUTO = 9 => "house.clear_auto",
+        HOUSE_CLEAR_REFUSED = 10 => "house.clear_refused",
+        HOUSE_CLEAR_EXECUTE = 11 => "house.clear_execute",
+        HOUSE_AUTOSLOPE = 12 => "house.autoslope",
+        HOUSE_PLACE = 13 => "house.place",
+        HOUSE_PLACE_ERROR = 14 => "house.place_error",
+        HOUSE_STATION_REMOVED = 15 => "house.station_removed",
+        HOUSE_PROTECTED = 16 => "house.protected",
+    }
 
     // Registry: landscape (#212).
     landscape {
@@ -405,6 +424,20 @@ witness_blocks! {
         WATER_AQUEDUCTS = 2 => "water.aqueducts",
         WATER_REBUILDS = 3 => "water.rebuilds",
     }
+    water_cmd {
+        WATER_CMD_RESTORE = 0 => "water_cmd.restore",
+        WATER_CMD_DEPOT = 1 => "water_cmd.depot",
+        WATER_CMD_REMOVE_DEPOT = 2 => "water_cmd.remove_depot",
+        WATER_CMD_FORCE = 3 => "water_cmd.force",
+        WATER_CMD_LOCK = 4 => "water_cmd.lock",
+        WATER_CMD_REMOVE_LOCK = 5 => "water_cmd.remove_lock",
+        WATER_CMD_CANAL = 6 => "water_cmd.canal",
+        WATER_CMD_SKIP = 7 => "water_cmd.skip",
+        WATER_CMD_CLEAR = 8 => "water_cmd.clear",
+        WATER_CMD_OWNER = 9 => "water_cmd.owner",
+        WATER_CMD_DESERT = 10 => "water_cmd.desert",
+    }
+
 }
 
 static ENABLED: AtomicBool = AtomicBool::new(false);

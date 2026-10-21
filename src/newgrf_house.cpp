@@ -22,6 +22,9 @@
 #include "newgrf_animation_base.h"
 #include "newgrf_cargo.h"
 #include "station_base.h"
+#ifdef WITH_RUST
+#include "rust/house_ffi.h"
+#endif
 
 #include "safeguards.h"
 
@@ -186,6 +189,7 @@ std::span<const uint> GetBuildingHouseIDCounts()
 	return _building_counts.id_count;
 }
 
+#ifndef WITH_RUST
 /**
  * IncreaseBuildingCount()
  * Increase the count of a building when it has been added by a town.
@@ -194,9 +198,6 @@ std::span<const uint> GetBuildingHouseIDCounts()
  */
 void IncreaseBuildingCount(Town *t, HouseID house_id)
 {
-#ifdef WITH_RUST
-	openttd_rust_town_increase_building(t->growth_owner.get(), house_id, HouseSpec::Get(house_id)->class_id);
-#else
 	HouseClassID class_id = HouseSpec::Get(house_id)->class_id;
 
 	t->cache.building_counts.id_count[house_id]++;
@@ -206,7 +207,6 @@ void IncreaseBuildingCount(Town *t, HouseID house_id)
 
 	t->cache.building_counts.class_count[class_id]++;
 	_building_counts.class_count[class_id]++;
-#endif
 }
 
 /**
@@ -217,9 +217,6 @@ void IncreaseBuildingCount(Town *t, HouseID house_id)
  */
 void DecreaseBuildingCount(Town *t, HouseID house_id)
 {
-#ifdef WITH_RUST
-	openttd_rust_town_decrease_building(t->growth_owner.get(), house_id, HouseSpec::Get(house_id)->class_id);
-#else
 	HouseClassID class_id = HouseSpec::Get(house_id)->class_id;
 
 	if (t->cache.building_counts.id_count[house_id] > 0) t->cache.building_counts.id_count[house_id]--;
@@ -229,8 +226,8 @@ void DecreaseBuildingCount(Town *t, HouseID house_id)
 
 	if (t->cache.building_counts.class_count[class_id] > 0) t->cache.building_counts.class_count[class_id]--;
 	if (_building_counts.class_count[class_id] > 0) _building_counts.class_count[class_id]--;
-#endif
 }
+#endif
 
 /* virtual */ uint32_t HouseScopeResolver::GetRandomBits() const
 {
@@ -588,6 +585,25 @@ void AnimateNewHouseTile(TileIndex tile)
 	HouseAnimationBase::AnimateTile(hs, Town::GetByTile(tile), tile, hs->extra_flags.Test(HouseExtraFlag::Callback1ARandomBits));
 }
 
+#ifdef WITH_RUST
+void OpenTTDAnimateNewHouse(uint32_t tile) noexcept { AnimateNewHouseTile(TileIndex{tile}); }
+OpenTTDHouseReseed OpenTTDHouseResolveReseed(uint16_t house, uint32_t tile, Town *town, uint8_t waiting) noexcept
+{
+	HouseResolverObject object(house, TileIndex{tile}, town, CBID_RANDOM_TRIGGER);
+	object.SetWaitingRandomTriggers(HouseRandomTriggers{waiting});
+	object.ResolveRerandomisation();
+	return {object.GetReseedSum(), object.GetUsedRandomTriggers().base()};
+}
+void OpenTTDHouseChangeFrame(uint16_t callback, uint16_t house, Town *town, uint32_t tile, uint32_t random, uint32_t trigger, uint64_t cargoes) noexcept
+{
+	TileIndex index{tile};
+	HouseAnimationBase::ChangeAnimationFrame(static_cast<CallbackID>(callback), HouseSpec::Get(house), town, index, random, trigger, cargoes);
+}
+void TriggerHouseAnimation_WatchedCargoAccepted(TileIndex tile, CargoTypes trigger_cargoes)
+{
+	openttd_rust_house_watched(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), trigger_cargoes);
+}
+#else
 void TriggerHouseAnimation_ConstructionStageChanged(TileIndex tile, bool first_call)
 {
 	const HouseSpec *hs = HouseSpec::Get(GetHouseType(tile));
@@ -767,4 +783,5 @@ void TriggerHouseAnimation_WatchedCargoAccepted(TileIndex tile, CargoTypes trigg
 	if (hs->building_flags.Any(BUILDING_2_TILES_X))   DoTriggerHouseAnimation_WatchedCargoAccepted(TileAddXY(north, 1, 0), tile, trigger_cargoes, r);
 	if (hs->building_flags.Any(BUILDING_HAS_4_TILES)) DoTriggerHouseAnimation_WatchedCargoAccepted(TileAddXY(north, 1, 1), tile, trigger_cargoes, r);
 }
+#endif
 

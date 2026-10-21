@@ -153,6 +153,12 @@ static void OPENTTD_VEHICLE_CALL VehicleSvcWriteDirection(OpenTTDVehicle *v, uin
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteSpeed(OpenTTDVehicle *v, uint16_t speed) noexcept { VehicleOf(v)->cur_speed = speed; }
 static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcLastStation(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_station_visited.base(); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteLastStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_station_visited = StationID(station); }
+/* Legacy orders context adapter; the virtual operation has one shared definition. */
+extern "C" void openttd_orders_set_destination(void *ctx, uint32_t tile) noexcept
+{
+	RustVehicleSetDestTile(RustVehicle(static_cast<Vehicle *>(ctx)), tile);
+}
+
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteDest(OpenTTDVehicle *v, uint32_t tile) noexcept { VehicleOf(v)->dest_tile = TileIndex(tile); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteProgress(OpenTTDVehicle *v, uint8_t progress) noexcept { RustWriteVehicleProgress(VehicleOf(v), progress); }
 
@@ -253,6 +259,7 @@ static OpenTTDVehicleAltitudeInputs OPENTTD_VEHICLE_CALL VehicleSvcAltitudeInput
 }
 
 constinit const OpenTTDVehicleServices _rust_vehicle_services{
+	.vehicles_on_tile = RustVisitVehiclesOnTile,
 	.write_counters = VehicleSvcWriteCounters,
 	.handle_breakdown = VehicleSvcHandleBreakdown,
 	.waiting_for_unbunching = VehicleSvcWaitingForUnbunching,
@@ -286,6 +293,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.write_speed = VehicleSvcWriteSpeed,
 	.last_station = VehicleSvcLastStation,
 	.write_last_station = VehicleSvcWriteLastStation,
+	.set_dest_tile = RustVehicleSetDestTile,
 	.write_dest = VehicleSvcWriteDest,
 	.write_progress = VehicleSvcWriteProgress,
 	.write_max_speed = VehicleSvcWriteMaxSpeed,

@@ -15,6 +15,7 @@
 #include "../roadstop_base.h"
 #include "../station_map.h"
 
+inline uint32_t SharedTileAddWrap(uint32_t tile, int32_t x, int32_t y) noexcept { return TileAddWrap(TileIndex(tile), x, y).base(); }
 inline uint8_t SharedTileType(uint32_t tile) noexcept { return GetTileType(TileIndex{tile}); }
 inline uint16_t MapSvcStationIndex(uint32_t tile) noexcept { return GetStationIndex(TileIndex(tile)).base(); }
 inline bool MapSvcRoadIsLevelCrossing(uint32_t tile) noexcept { return IsLevelCrossing(TileIndex(tile)); }

@@ -31,6 +31,182 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "OpenTTDHouseLoopTile" ["probe"] => crate::town::house::HouseLoopTile {
+        age,
+        completed,
+        lift_has_destination,
+    };
+    "OpenTTDHouseLift" ["probe"] => crate::town::house::HouseLift {
+        position,
+        destination,
+        has_destination,
+    };
+    "OpenTTDHouseRandom" ["probe"] => crate::town::house::HouseRandom {
+        bits,
+        triggers,
+    };
+    "OpenTTDHouseConstruction" ["probe"] => crate::town::house::HouseConstruction {
+        house,
+        tick,
+        completed,
+    };
+    "OpenTTDHouseCache" ["probe"] => crate::town::house::HouseCache {
+        house,
+        town,
+        completed,
+    };
+    "OpenTTDHouseAge" ["probe"] => crate::town::house::HouseAge {
+        age,
+        completed,
+    };
+    "OpenTTDHouseLoopSpec" ["probe"] => crate::town::house::HouseLoopSpec {
+        callbacks,
+        flags,
+        population,
+        mail,
+        minimum_life,
+    };
+    "OpenTTDHouseAnimationSpec" ["probe"] => crate::town::house::HouseAnimationSpec {
+        callbacks,
+        extra_flags,
+    };
+    "OpenTTDHouseNewSpec" ["probe"] => crate::town::house::HouseNewSpec {
+        callbacks,
+        flags,
+        processing_time,
+    };
+    "OpenTTDHouseProduction" ["probe"] => crate::town::house::HouseProduction {
+        callbacks,
+        population,
+        mail,
+    };
+    "OpenTTDHouseEntry" ["probe"] => crate::town::house::HouseEntry {
+        town,
+        house,
+    };
+    "OpenTTDHouseRemoval" ["probe"] => crate::town::house::HouseRemoval {
+        cost,
+        rating,
+    };
+    "OpenTTDHouseAcceptance" ["probe"] => crate::town::house::HouseAcceptance {
+        accepts,
+        amounts,
+    };
+    "OpenTTDHouseReseed" ["probe"] => crate::town::house::HouseReseed {
+        reseed,
+        used,
+    };
+    "OpenTTDHouseCargo" ["probe"] => crate::town::house::ProductionCargo {
+        cargo,
+        multiplier,
+    };
+    "OpenTTDHouseErrors" ["probe"] => crate::town::house::HouseErrors {
+        demolish,
+        protected => is_protected,
+        refuses,
+        sloped,
+        bridge,
+        flat,
+        no_town,
+    };
+    "OpenTTDHouseServices" ["probe"] => crate::town::house::HouseServices {
+        cost,
+        commands,
+        authority,
+        entry,
+        loop_tile,
+        house_type,
+        completed,
+        protected => is_protected,
+        lift,
+        random,
+        construction,
+        cache,
+        age,
+        processing,
+        clean_type,
+        town,
+        town_shell,
+        loop_spec,
+        animation_spec,
+        new_spec,
+        production,
+        sprite_groups,
+        removal,
+        acceptance,
+        watched,
+        substitute,
+        inc_construction,
+        reset_age,
+        set_age,
+        set_lift_destination,
+        set_lift_position,
+        halt_lift,
+        dec_processing,
+        set_processing,
+        set_random_bits,
+        set_random_triggers,
+        set_type,
+        animate_new,
+        delete_inspect,
+        callback,
+        cargo_translation,
+        convert_boolean,
+        convert_8bit,
+        resolve_reseed,
+        change_frame,
+        next_near_station,
+        erase_near_station,
+        station_catchment,
+        station_covers_town,
+        move_goods,
+        production_cargo,
+        add_cargo,
+        food_cargo,
+        scale_cargo,
+        cargogen_mode,
+        place_houses,
+        company_human,
+        init_counts,
+        errors,
+    };
+    "OpenTTDEnvironmentServices" ["common"] => crate::services::EnvironmentServices {
+        editor,
+        freeform_edges,
+    };
+    "OpenTTDWaterCommandStrings" ["common"] => crate::water_cmd::Strings {
+        built_on_water,
+        demolish_bridge,
+        unsuitable,
+        sloped_wrong,
+        edge,
+        low_bridge,
+        flat,
+        already_built,
+        build_on_water,
+        demolish_building,
+        demolish_canal,
+    };
+    "OpenTTDWaterCommandServices" ["common"] => crate::water_cmd::WaterCommandServices {
+        shared,
+        cost,
+        command,
+        water,
+        rail,
+        water_type,
+        lock_part,
+        lock_direction,
+        other_depot_tile,
+        restoration,
+        environment,
+        make_depot,
+        make_lock_tile,
+        area_begin,
+        area_tile,
+        area_next,
+        strings,
+    };
+
     "OpenTTDStationCommandServices" ["probe"] => crate::station_cmd::CommandServicesTable {
         shared,
         station,
@@ -154,7 +330,6 @@ layouts! {
         close_stop_inspect,
         road_waypoint_area,
         set_road_waypoint_area,
-        vehicles_on_tile,
         road_vehicle_owner,
         order_station_location,
         aircraft,
@@ -355,15 +530,13 @@ layouts! {
         width,
         height,
     };
-    "OpenTTDTileVehicleCursor" ["landscape"] => crate::water::TileVehicleCursor {
-        storage,
-    };
     "OpenTTDWaterGroundServices" ["landscape"] => crate::water::WaterServices {
         rail,
         clear,
         vehicles,
         costs,
         company,
+        signal_context,
         non_flooding,
         set_non_flooding,
         coast,
@@ -374,10 +547,6 @@ layouts! {
         region_context,
         remove_rail,
         apply_foundation,
-        iterator_begin,
-        iterator_current,
-        iterator_next,
-        iterator_end,
         airport_tile,
         airport,
         airport_member,
@@ -861,6 +1030,7 @@ layouts! {
         rail_track_status,
         has_signals,
         signal_type,
+        invalid_rail_type,
         rail_type,
         set_rail_type,
         rail_tile_type,
@@ -888,12 +1058,6 @@ layouts! {
         station_blocked,
         station_track,
         wormhole_reserved,
-        set_tile_owner,
-    };
-    "OpenTTDTownYearlyServices" ["probe"] => crate::town::YearlyServices {
-        completed,
-        age,
-        set_age,
     };
     "OpenTTDTownSuppliedEntry" ["probe"] => crate::town::SuppliedEntry {
         entry,
@@ -1396,6 +1560,7 @@ layouts! {
         leaves,
     };
     "OpenTTDSharedServices" ["probe"] => crate::services::Services {
+        set_tile_owner,
         autoslope,
         bay_stop_direction,
         bridge_above,
@@ -1404,7 +1569,6 @@ layouts! {
         build_on_slopes,
         calendar_date,
         calendar_year,
-        clear_square,
         clear_square_services,
         calc_closest_town,
         closest_town,
@@ -1478,6 +1642,7 @@ layouts! {
         tile_owner,
         tile_slope,
         tile_type,
+        tile_add_wrap,
         tile_valid,
         tile_z,
         town_index,
@@ -1491,7 +1656,11 @@ layouts! {
         tunnel_transport,
         update_level_crossing,
         // Registry: house (#256).
-
+        foundation_price,
+        rebuild_town_tree,
+        recession,
+        tick_counter,
+        town_count,
         // Registry: landscape (#212).
         clear_ground,
         foundation,
@@ -1513,6 +1682,7 @@ layouts! {
         status,
     };
     "OpenTTDVehicleServices" ["probe"] => crate::vehicle::VehicleServices {
+        vehicles_on_tile,
         write_counters,
         handle_breakdown,
         waiting_for_unbunching,
@@ -1546,6 +1716,7 @@ layouts! {
         write_speed,
         last_station,
         write_last_station,
+        set_dest_tile,
         write_dest,
         write_progress,
         write_max_speed,
@@ -2032,7 +2203,6 @@ layouts! {
         directory_rebuild,
         directory_resort,
         update_noise,
-        rebuild_tree,
         delete_town,
         assert_random_context,
         assert_allocation,
@@ -2051,7 +2221,6 @@ layouts! {
         set_progress,
         increase_progress,
         no_town_error,
-        town_count,
         random,
         edge_error,
         close_error,
@@ -2111,12 +2280,6 @@ layouts! {
     "OpenTTDTownHousePlacement" ["probe"] => crate::town::HousePlacement {
         min_year,
         max_year,
-        flags,
-        extra_flags,
-    };
-    "OpenTTDTownHouseConstruction" ["probe"] => crate::town::HouseConstruction {
-        extra_flags,
-        population,
     };
     "OpenTTDTownStationActivity" ["probe"] => crate::town::StationActivity {
         time_since_load,
@@ -2141,7 +2304,7 @@ layouts! {
         map_log_x,
         growth_rate,
         snow_line,
-        editor,
+        environment,
         generating_world,
         allow_crossings,
         climate,
@@ -2151,12 +2314,12 @@ layouts! {
         road_flags,
         house_availability,
         house_placement,
-        house_construction,
+        house_population,
         house_flags,
         house_extra_flags,
-        house_allows_callback,
+        house_callbacks,
         road_info,
-        state,
+        resolve_owner,
         stations,
         station_activity_owner,
         station_owner,
@@ -2183,7 +2346,7 @@ layouts! {
         build_tunnel,
         clear_house_land,
         allow_construction,
-        construction_animation,
+        houses,
     };
     "OpenTTDRailSettings" ["probe"] => crate::rail_yapf::Settings {
         max_nodes,
@@ -2640,8 +2803,7 @@ layouts! {
         get,
         owner,
         pool_size,
-        tick_counter,
-        editor,
+        environment,
         facilities,
         in_use,
         is_station,
@@ -2899,7 +3061,6 @@ layouts! {
         tile_max_z,
         autoslope_callback,
         callback_boolean,
-        foundation_cost,
         landscape_clear,
     };
     "OpenTTDIndustryCostServices" ["industry"] => crate::industry::IndustryCostServices {
@@ -2933,8 +3094,6 @@ layouts! {
         set_frame,
         animation_loop,
         set_animation_loop,
-        delete_animated,
-        tick_counter,
         ambient,
         animate_new,
         construction_counter,
@@ -3022,7 +3181,7 @@ layouts! {
         spec_behaviour,
         info,
         coastal,
-        editor,
+        environment,
         density,
         custom_number,
         scale_by_size_1d,
@@ -3185,7 +3344,6 @@ layouts! {
         company_none,
         restore_company,
         directory_dirty,
-        recession,
         economy_month,
         economy_year,
         days_since_last_month,

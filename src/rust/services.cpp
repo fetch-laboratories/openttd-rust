@@ -61,6 +61,9 @@
 #include "../tree_map.h"
 #include "../cheat_type.h"
 #include "../timer/timer_game_economy.h"
+#include "../economy_func.h"
+#include "orders_ffi.h"
+#include "tile_animation_services.h"
 
 static CommandCost *NativeCost(OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<CommandCost *>(cost); }
 static const CommandCost *NativeCost(const OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<const CommandCost *>(cost); }
@@ -108,6 +111,11 @@ static void CommandMoneyError(OpenTTDCommandCost *cost, int64_t amount) noexcept
 	if (RustIsLocalCompany()) NativeCost(cost)->SetEncodedMessage(GetEncodedString(STR_ERROR_NOT_ENOUGH_CASH_REQUIRES_CURRENCY, Money(amount)));
 }
 static void CommandAllowRemoveRoad(OpenTTDCommandCost *out, uint32_t tile, uint8_t bits, uint8_t owner, uint8_t rtt, uint16_t flags, bool town_check) noexcept { *NativeCost(out) = CheckAllowRemoveRoad(TileIndex{tile}, static_cast<RoadBits>(bits), Owner(owner), static_cast<RoadTramType>(rtt), DoCommandFlags(flags), town_check); }
+const OpenTTDEnvironmentServices &GetRustEnvironmentServices() noexcept
+{
+	static const OpenTTDEnvironmentServices services{.editor = OpenTTDEditor, .freeform_edges = OpenTTDFreeformEdges};
+	return services;
+}
 const OpenTTDCommandServices &GetRustCommandServices() noexcept
 {
 	static const OpenTTDCommandServices services{
@@ -149,9 +157,9 @@ const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *s
 	return StationOf(station)->rust_service.get();
 }
 
-OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept
+Town *OpenTTDTownShellByID(uint32_t id) noexcept
 {
-	return Town::Get(TownID(id))->growth_owner.get();
+	return Town::Get(TownID(id));
 }
 
 void OpenTTDAssertTownGenerationContext() noexcept { assert(_game_mode == GM_EDITOR || _generating_world); }
@@ -165,7 +173,6 @@ static uint8_t SharedTropicZone(uint32_t tile) noexcept { return GetTropicZone(T
 static int32_t SharedTileZ(uint32_t tile) noexcept { return RustTileZ(TileIndex{tile}); }
 static uint8_t SharedTileSlope(uint32_t tile) noexcept { return GetTileSlope(TileIndex{tile}); }
 static void SharedMarkDirty(uint32_t tile) noexcept { MarkTileDirtyByTile(TileIndex{tile}); }
-static void SharedClearSquare(uint32_t tile) noexcept { DoClearSquare(TileIndex{tile}); }
 static void SharedFreeTrainReservation(const Train *v) noexcept { FreeTrainTrackReservation(v); }
 static bool SharedTryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_okay) noexcept { return TryPathReserve(v, mark_as_stuck, first_tile_okay); }
 static bool SharedSafeWaitingPosition(const Train *v, uint32_t tile, uint8_t trackdir, bool forbid_90_deg) noexcept { return IsSafeWaitingPosition(v, TileIndex{tile}, static_cast<Trackdir>(trackdir), true, forbid_90_deg); }
@@ -204,6 +211,17 @@ static OpenTTDTownState *SharedTownOwner(const OpenTTDTownHandle *town) noexcept
 	return reinterpret_cast<const Town *>(town)->growth_owner.get();
 }
 
+OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept
+{
+	return SharedTownOwner(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDTownShellByID(id)));
+}
+
+OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept
+{
+	Town *t = OpenTTDTownShellByID(id);
+	return {.shell = t, .state = SharedTownOwner(reinterpret_cast<const OpenTTDTownHandle *>(t)), .id = static_cast<uint16_t>(id)};
+}
+
 static bool Shared_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileIndex{tile}); }
 static uint32_t Shared_distance_from_edge(uint32_t tile) noexcept { return DistanceFromEdge(TileIndex{tile}); }
 static int32_t Shared_tile_max_z(uint32_t tile) noexcept { return OpenTTDTileMaxZ(TileIndex{tile}); }
@@ -238,8 +256,13 @@ static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
 static int32_t SharedEconomyDate() noexcept { return TimerGameEconomy::date.base(); }
 static int32_t SharedCalendarDate() noexcept { return TimerGameCalendar::date.base(); }
 static int32_t SharedSlope(int32_t x, int32_t y) noexcept { return SharedSlopePixelZ(x, y, false); }
+static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
+static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
+static void SharedRebuildTownTree() noexcept { RebuildTownKdtree(); }
+static int64_t SharedFoundationPrice() noexcept { return _price[PR_BUILD_FOUNDATION]; }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
+	.set_tile_owner = RustSetTileOwner,
 	.autoslope = RustAutoslopeEnabled,
 	.bay_stop_direction = Shared_bay_stop_direction,
 	.bridge_above = SharedBridgeAbove,
@@ -248,7 +271,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.build_on_slopes = RustBuildOnSlopes,
 	.calendar_date = SharedCalendarDate,
 	.calendar_year = SharedCalendarYear,
-	.clear_square = SharedClearSquare,
 	.clear_square_services = {
 		.may_animate = OpenTTDMayAnimateTile, .delete_animated = OpenTTDDeleteAnimatedTileWithMode,
 		.docking = OpenTTDIsDockingTile,
@@ -324,6 +346,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tile_owner = RustTileOwnerValue,
 	.tile_slope = SharedTileSlope,
 	.tile_type = SharedTileType,
+	.tile_add_wrap = SharedTileAddWrap,
 	.tile_valid = Shared_tile_valid,
 	.tile_z = SharedTileZ,
 	.town_index = Shared_town_index,
@@ -337,6 +360,11 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tunnel_transport = OpenTTDMapQuery<uint8_t, RustTunnelBridgeTransport, uint32_t>,
 	.update_level_crossing = SharedUpdateLevelCrossing,
 	// Registry: house (#256).
+	.foundation_price = SharedFoundationPrice,
+	.rebuild_town_tree = SharedRebuildTownTree,
+	.recession = SharedRecession,
+	.tick_counter = openttd_orders_tick_counter,
+	.town_count = SharedTownCount,
 
 	// Registry: landscape (#212).
 	.clear_ground = OpenTTDClearGround,
@@ -453,6 +481,7 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.rail_track_status = RustRailTrackStatus,
 		.has_signals = RustRailHasSignals,
 		.signal_type = RustRailSignalType,
+		.invalid_rail_type = RustInvalidRailType,
 		.rail_type = RustRailType,
 		.set_rail_type = RustSetRailType,
 		.rail_tile_type = RustRailTileType,
@@ -480,7 +509,6 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.station_blocked = RustStationBlocked,
 		.station_track = RustRailStationTrack,
 		.wormhole_reserved = RustWormholeReserved,
-		.set_tile_owner = RustSetTileOwner,
 	};
 	return services;
 }
@@ -493,11 +521,13 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDCommandServices.hpp"
 #include "abi-visit-OpenTTDCommandCostServices.hpp"
 #include "abi-visit-OpenTTDSharedServices.hpp"
+#include "abi-visit-OpenTTDEnvironmentServices.hpp"
 #include "abi-visit-OpenTTDClearSquareServices.hpp"
 #include "abi-visit-OpenTTDWaterRestorationServices.hpp"
 bool CheckAbi_services()
 {
-	return AbiServicesComplete(GetRustRandomServices()) &&
+	return AbiServicesComplete(GetRustEnvironmentServices()) &&
+		AbiServicesComplete(GetRustRandomServices()) &&
 		AbiServicesComplete(GetRustRailMapServices()) &&
 		AbiServicesComplete(GetRustCommandServices()) &&
 		AbiServicesComplete(GetRustCommandCostServices()) &&

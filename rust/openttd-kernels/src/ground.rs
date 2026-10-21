@@ -472,8 +472,7 @@ pub(crate) unsafe fn rail_tile_loop(
 
 /// # Safety
 /// Tables are live for this serialized synchronous entry; callbacks do not unwind.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_tunnel_tile_loop(
+pub(crate) unsafe fn tunnel_tile_loop(
     tile: u32,
     climate: LandscapeType,
     tunnel: *const TunnelServices,
@@ -534,8 +533,7 @@ pub struct RoadServices {
 /// # Safety
 /// All tables and native lazy result context outlive this serialized entry. No
 /// Rust borrow denotes native command storage or a town across command callbacks.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_road_tile_loop(
+pub(crate) unsafe fn road_tile_loop(
     tile: u32,
     climate: LandscapeType,
     ambient: bool,

@@ -4,12 +4,12 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-20, code at `e996032875`)
+## Where the fork stands (2026-10-20, code at `067e3c3b93`)
 
-- Thirty-one ownership ports. Whole fork: Rust 74,783 / tooling 30,620 / glue 30,850 / original retired 43,423 of 470,612 `src/` lines (9.23%). Simulation: 35,473 / 102,615 (34.57%).
-- Since the fourteenth review: #255 landscape (846 retired) and #303 stations (2,427), plus #285/#286/#287/#298 and the #275 fixes #289/#300/#318/#319. Retirement +3,278; glue plus tooling +1,475.
+- Thirty-two ownership ports. Whole fork: Rust 75,597 / tooling 30,974 / glue 31,046 / original retired 43,935 of 470,612 `src/` lines (9.34%). Simulation: 35,985 / 102,615 (35.07%).
+- Since the fourteenth review: #255 landscape (846 retired) and #303 stations (2,427), plus #285/#286/#287/#298 and the #275 fixes #289/#300/#318/#319. Water #317 adds 512 retired; station fidelity #323 adds default witnesses. Retirement +3,790; glue plus tooling +2,038.
 - Speed record (#318): TGP 1.187, Opus 1.231, Grok 1.203, P1996 1.256, P2000 1.321, P2016 1.388. Four quiet steering medians per scenario confirm it within 1%. CI is green; CI_ON_DEMAND=true.
-- Ship scratch #308 is integrated after clean review, quiet speed and exact-head Full. Four component drafts remain: #269 houses adopts base; #317 water and #313 objects delete their parallel shared layers; #290 roads waits for capacity. Station fidelity #320 and the guard #322 are maintenance.
+- Ship scratch #308, station fidelity #323 and water #317 are integrated after review, quiet speed and exact-head Full. Three component drafts remain: #269 houses awaits validation; #313 completes object policy and #290 adopts shared services. Guard #322 and #261 R5 are maintenance. The latest quiet ratios pass; #156 gaps remain open. After #269, the fourth ownership integration since the profile makes a speed pass due.
 
 ## Fifteenth steering review (2026-10-20, honest speed and one shared layer)
 
@@ -93,6 +93,7 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #213 | Vehicle scheduling and base maintenance | #257 | `8bfcbd3abd` | 1833 / 375 / 1160 / 388 |
 | #212 | Landscape scheduling, ground evolution and flooding | #255 | `377b374579` | 2065 / 553 / 1095 / 846 |
 | #267 | Station construction and removal commands | #303 | `ca2b181d88` | 5233 / 333 / 1388 / 2427 |
+| #294 | Water construction, clearing and restoration | #317 | `067e3c3b93` | 871 / 249 / 228 / 512 |
 
 Harness and process: #72 harness (#85), #84 play saves (#87), #97 provenance
 freeze (#100), #88 Ruff (#92), #75 partial-pixel fidelity (#91), #90 world-state
@@ -108,6 +109,7 @@ keep their evidence in their PRs. Rows below use original retirement and net glu
 | #311 (#275 road speed/effect boundary) | #319 | direct | `08053fda50` | 88 / 35 / 101 / 5; net glue +90 |
 | #310 (#275 immutable road service tables) | #318 | direct | `4c4c5a0eab` | 0 / 27 / 312 / 0; net glue +7 |
 | #306 (#275 ship search scratch) | #308 | direct | `e996032875` | 108 / 0 / 0 / 0; net glue 0 |
+| #320 station command fidelity | #323 | direct | `bc25c51d44` | 60 / 118 / 34 / 0; net glue -5 |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -118,7 +120,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings.
 2. **Speed guard and passes (#155, #282, #321, AGENTS.md).**
-   - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios; #321 adds fixed measured anchors and separately rolling integrated instruction projections. After inspecting its 211-line draft, root reselected 330 added tooling/test lines to include the mandatory real scope probe, compatibility identity, build reconfiguration and default regressions; no new controller.
+   - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios; #321 adds fixed measured anchors and separately rolling integrated instruction projections. Root reselected 560 added tooling/test/workflow lines for R2 after the real profile build exposed valid minimal DWARF rejection and broken frozen profiling; 560 are implemented and the real profiled build/frozen run pass. No new controller.
    - **Per PR:** no scenario's projected ratio more than 15% above its record and none over its ceiling (1.5x play saves, 1.3x generation). Until #321 lands, use quiet wall medians. Misses get a callgrind fix round.
    - **Speed pass:** after every fourth ownership integration (#255 and #303 count two since the #275 profile), or when a projection comes within 5% of its ceiling (1.425x play, 1.235x generation). The fifteenth steering profile on #275 is the current attribution.
    - **Redraw:** `-r 64x64` leaves the ratios unchanged, so redraw does not inflate them. It does make whole-process counts timing-dependent, which is why only the game loop is counted.
@@ -135,9 +137,9 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #275, #321) and #156 run in parallel.
 
-1. **Unblock and fix:** #308 is integrated. Complete #320 and #321/#322 in parallel, then #269, as in the fifteenth actions.
-2. **Command drafts, in order of readiness:** #317 water, #313 objects, #290 road. Each adopts the integrated shared layer and builds no parallel copy. #313's retirement gap (79 lines) is reassessed after its duplicate glue is gone.
-3. **#275 corrected order:** aircraft per-field reads, road per-tick fold, station-tick per-slot reads, train reads; TGP clear-tile reads, then #312 trees and industry `next_tick`. Ship scratch is #308.
+1. **Unblock and fix:** #308, #320/#323 and #317 are integrated. Complete #321/#322 while #269 finishes validation and integrates, as in the fifteenth actions.
+2. **Command drafts, in order of readiness:** #313 objects, #290 road. Each adopts the integrated shared layer and builds no parallel copy. #313's remaining 57-line retirement gap gets a selected object NewGRF query/animation ownership extension (#295), about 250 retired for at most 100 net glue+75 tooling; tooling 331 is the starting budget. No waiver or deferred dependency.
+3. **#275 corrected order:** #325 aircraft movement observations (typed call-scoped addresses, net glue at most 120 and tooling 100), road per-tick fold, station-tick per-slot reads, train reads; TGP clear-tile reads, then #312 trees and industry `next_tick`. Ship scratch is #308.
 4. **#281** vehicle maintenance direct calls, then the callee-copy check.
 5. **#274 map view**, one shared PR.
 6. **Next whole owners**, as WIP frees, each without draft service dependencies:
@@ -157,17 +159,19 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 ## Resume checkpoint
 
 Resumed on 2026-10-20 with the fifteenth steering actions. Root on this host:
-gpt-6.1-sol, ultra; implementation and reviews: gpt-6.1-sol, high. Five agents
-own the active tasks below; #290 waits for capacity behind their integration.
+gpt-6.1-sol, ultra; implementation and reviews: gpt-6.1-sol, high. Source reviews
+are complete; root validates ready heads while road/object and calibration work proceed.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #320 / #323 | `46965793e0` | Three repairs and cleanup pushed; all new cases fail on pre-fix game code. Native and affected semantic checks underway; fresh review follows. |
-| #321 / #322 | `bf9bb3c86f` | Default regressions pass at 330 added tooling/test/workflow lines; six profiles underway. Root owns review, quiet anchors/calibration. |
-| #256 / #269 | `6acc16bb86` | Base adoption pushed; affected checks underway. Scoped conflict review, quiet medians and Full follow. |
-| #294 / #317 | `1e18177388` | Shared-layer adoption pushed; affected checks underway. Scoped review and gates follow. |
-| #295 / #313 | `b64cfe4cf0` | Agent adopts shared layer/ABI and reassesses retirement; fresh review and gates follow. |
-| #266 / #290 | `17bc99cd5a` | Remove five bounces, adopt the shared layer, remeasure (PR comment). |
+| #320 / #323 | `bc25c51d44` | Integrated after review, quiet six and exact-head Full; worktree removed. |
+| #321 / #322 | `c494160c0b` | R2/root spot-check and real profiled/frozen runs pass at 560 additions. Historical builds prepare while final base adoption waits for house integration. |
+| #256 / #269 | `8b55c5b557` | Prior Full/quiet six pass; necessary water/station conflict resolution passes Cargo4 and has fresh scoped R5 before new Full; R4 stopped at quiet readiness without a final report. |
+| #294 / #317 | `067e3c3b93` | Integrated after scoped review, four uncontaminated quiet sets and Full; worktree removed. |
+| #295 / #313 | `c7b8d11f4a` | Query/animation probes and 50 semantic cases pass; strict retirement margin 6. Necessary integrated-base adoption precedes fresh review. |
+| #266 / #290 | `0b1fa5692f` | Selected-base conflict adoption pushed; Python checks pass, native checks held for quiet timing before split reviews. |
+| #261 R5 / #324 | `27ae8ddbc2` | Fixing review/root spot-check, clean base merge and final build pass; Full requested, quiet speed pending. |
+| #325 | starting | Aircraft movement observation task uses selected typed address contract; preserve existing mutation witnesses. |
 | #274 | `162843acbd` | Paused measurement branch; map view stays in the work order. |
 | #64 / #66 | `aab5211801` | #66 closed unmerged; #64 and older paused work untouched. |
 

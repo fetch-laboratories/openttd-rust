@@ -193,6 +193,12 @@ pub struct AltitudeInputs {
 /// Base `Vehicle` operations and writes shared by every vehicle type.
 #[repr(C)]
 pub struct VehicleServices {
+    /// Shared live tile-hash traversal. Callback preserves the current shell.
+    pub vehicles_on_tile: unsafe extern "C" fn(
+        u32,
+        *mut std::ffi::c_void,
+        unsafe extern "C" fn(*mut std::ffi::c_void, VehicleRef),
+    ),
     /// Consecutive `tick_counter`, `running_ticks` and `current_order_time` stores.
     pub write_counters: extern "C" fn(VehicleRef, u8, u8, i32),
     /// `HandleBreakdown()`, then observe `vehstatus`.
@@ -240,6 +246,8 @@ pub struct VehicleServices {
     /// Shared last visited station read, before station discovery callbacks.
     pub last_station: extern "C" fn(VehicleRef) -> u16,
     pub write_last_station: extern "C" fn(VehicleRef, u16),
+    /// Original virtual `SetDestTile`; may reenter the vehicle owner.
+    pub set_dest_tile: extern "C" fn(VehicleRef, u32),
     pub write_dest: extern "C" fn(VehicleRef, u32),
     pub write_progress: extern "C" fn(VehicleRef, u8),
     pub write_max_speed: extern "C" fn(VehicleRef, u16),
@@ -370,6 +378,27 @@ pub struct GroundServices {
 #[must_use]
 pub fn advance_distance(direction: u8) -> i32 {
     if direction & 1 != 0 { 192 } else { 256 }
+}
+
+impl VehicleServices {
+    /// Visit the live hash chain in source order. The callback may reenter owners
+    /// but cannot delete the current shell. No owner reference spans a callback.
+    #[allow(unsafe_code)]
+    pub(crate) fn for_each_on_tile<F: FnMut(VehicleRef)>(&self, tile: u32, mut visit: F) {
+        unsafe extern "C" fn invoke<F: FnMut(VehicleRef)>(
+            context: *mut std::ffi::c_void,
+            vehicle: VehicleRef,
+        ) {
+            // SAFETY: The service borrows this unique closure only during the call.
+            unsafe {
+                (&mut *context.cast::<F>())(vehicle);
+            }
+        }
+        // SAFETY: Closure lives through synchronous traversal; caller preserves shells.
+        unsafe {
+            (self.vehicles_on_tile)(tile, std::ptr::from_mut(&mut visit).cast(), invoke::<F>);
+        }
+    }
 }
 
 #[cfg(test)]

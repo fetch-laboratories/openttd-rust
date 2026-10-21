@@ -570,7 +570,10 @@ The in-entry LFSR keeps native unsigned map-log widths and reads each live type
 byte from audited allocation metadata. All seven Rust tile owners dispatch directly,
 void tiles straight to the water owner, which reuses the dispatched type and reader
 and derives `IsValidTile` from the map size; only house/station/object have native
-scalar handlers with local strong-index construction. Leaves shared by several
+scalar handlers with local strong-index construction; the five unused facade slots
+are null.
+Flooding calls the Rust signal flush through the canonical signal context.
+Leaves shared by several
 owners (clear/tree ground, snow, shore, sound, foundation) live in shared tables.
 Tree/industry water loops, tree wakeups, rail flooding queries and road town-type
 selection call Rust directly; canonical rail leaves have one binding. Ground
@@ -1188,8 +1191,8 @@ exhaustive.
 
 Issue #120 moves town tick traversal, road/build choices, terrain retries, house
 selection/placement and expansion into Rust. The partial #148 extension owns town metadata,
-histories, ratings and building counts; C++ retains house tile loops and remaining
-authority/deletion commands. Native field aliases expose one Rust owner, with process-wide state
+histories, ratings and building counts; #256 moves house tile loops and deletion
+commands. Native field aliases expose one Rust owner, with process-wide state
 under the game-state mutex.
 
 Rust ends owner borrows before commands or NewGRF callbacks that can reenter. The default
@@ -1365,9 +1368,11 @@ water-structures-mutate --jobs 2` compares command costs/errors, RNG, STNN/STNS,
 map, town and company state, including partial removal, joins, delete/reuse and
 modern reload. The station module includes unchanged-reference private callbacks
 in fixture executables and requires `station_command` witnesses in default CI.
-Builtin tram stops and a forced airport noise refusal share the controlled crossing
-fixture; terrain preparation preserves live ground-vehicle corner heights. NewGRF,
-legacy decoding and unusual occupied/reservation branches remain tracked by #156.
+Default #320 cases require removed-destination path clearing, `TileAddWrap` border
+refusals and type-63 overbuilding through `AllocateRailType`. Retargeting uses virtual
+`SetDestTile`; shared native traversal serves stations and flooding. Builtin tram,
+airport noise and reload cases remain required. External NewGRF programs, legacy
+and unusual occupied/reservation branches remain tracked by #156.
 
 ### Ship controller and private state (#146)
 
@@ -1562,3 +1567,51 @@ crossings/depots/slopes, signal cycling/conversion/copy/autofill through a bridg
 conversion/reroutes, clearing/terraforming, company transfer/deletion and reservations.
 Coast/half-tile water and PBS path-end removal remain #156 gaps. PR #270 records
 exact-head checks and outstanding full-simulation, speed and CI gates.
+
+### House lifecycle and tile simulation (#256)
+
+`town/house.rs` owns `TileLoop_Town` (construction stages, rebuild/replacement, original and
+binomial cargo with recession halving), builtin lift animation, produced/accepted cargo,
+north-part normalisation, `ClearTile_Town`/`ClearTownHouse`/`RemoveNearbyStations`,
+`TerraformTile_Town`, `CmdPlaceHouse`, cache rebuild/repair traversals, yearly aging and the
+NewGRF house tile loop, `CanDeleteHouse`, animation triggers and rerandomisation. It writes the
+sole Rust town owner directly and ends each owner access before any callback, command or station
+service. C++ keeps thin facades, the generic `HouseResolverObject`/reseed sum,
+`HouseAnimationBase`, `StationFinder`/`MoveGoodsToStation` and `GetHouseNorthPart` for resolver
+variables; original bodies compile only portably. Narrow phase observations replace whole
+tile/spec copies; projections compose canonical spec-field readers. Each entry reuses its town
+and map context, including construction triggers and rebuilds. Town count, recession, autoslope,
+foundation price, tick counter and animated-tile removal are shared services; house clearing
+calls the canonical Rust ground owner directly.
+Cargo scaling, translation, label lookup and delivery, plus NewGRF boolean conversion and
+inspect-window deletion, share canonical typed native leaves with industry consumers.
+`python3 tools/migration.py simulate town-houses- --jobs 2` places every original house through
+`CmdPlaceHouse`, compares error histograms, occupied/replace, protected clears, autoslope
+terraform, company clearance until refusal and aged-house rebuild in both cargo modes, and
+requires candidate `house.*` witnesses. NewGRF house callbacks and station removal on house
+clearance remain #156 gaps.
+
+### Water construction, clearing and restoration (#294)
+
+Rust (`water_cmd.rs`, shared `water.rs`/`ground.rs`) owns ship depot/lock/canal
+commands/removal, water clearing/restoration, river/desert traversal and owner/terraform/
+build-above policy. Original command bodies and `MakeLock` remain portable-only.
+Lock checks/build/removal order, depot partial clears and post-clear accounting,
+conditional RNG draws, narrowing and wrapping retain the original sequence.
+
+C++ keeps packed map primitives, depot identities, drawing, native stack
+`CommandCost` objects and a lazy stack area iterator. Generic landscape commands
+retain the complete native `Command::Do` lifecycle. Rust helpers call the
+integrated clear-square, flooding/neighbor, region-cache and economy owners directly.
+Shared restoration retains class/accounting/RNG order; docking calls its Rust owner.
+Shared command/depot/environment services replace touched rail/town/industry
+copies. Named generated layouts, aborting unused fixture slots and actual
+production table checks cover the boundary; no native world borrow spans reentry.
+
+`python3 tools/migration.py verify --jobs 2`, default `water-commands` and existing
+water traffic/mutation/reload scenarios compare semantic saves and require
+restoration/clear witnesses. The console fixture compares results/parameters,
+map/depot fields, infrastructure, docking membership and RNG across both axes,
+all lock directions/parts, occupied/bankrupt queries, force/partial clearing,
+editor/desert and restoration inputs. Pool exhaustion, construction under bridges,
+water objects, arbitrary NewGRF/legacy layouts and GUI remain #156 coverage gaps.

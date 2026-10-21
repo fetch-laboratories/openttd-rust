@@ -35,6 +35,7 @@
 #include "rust/packet_ffi.h"
 #include "rust/rail_command_ffi.h"
 #include "rust/station_command_ffi.h"
+#include "rust/water_command_ffi.h"
 #include "bridge_type.h"
 #include "rust/rail_yapf_ffi.h"
 #include "rust/road_ffi.h"
@@ -63,6 +64,7 @@
 #include "tests/town_protocol.hpp"
 #include "tests/water_regions_protocol.hpp"
 // Registry: house (#256).
+#include "rust/house_ffi.h"
 
 // Registry: landscape (#212).
 #include "rust/ground_ffi.h"
@@ -119,7 +121,8 @@ static void Calls()
 		OpenTTDSharedServices shared{}; OpenTTDTownLeaves leaves{}; OpenTTDTownNameServices names{}; OpenTTDCommandCostServices costs{}; OpenTTDTownFoundingServices founding{};
 		founding.shared = &shared; founding.growth = &leaves; founding.names = &names; founding.cost = &costs; founding.close_error = 0x87654321;
 		costs.error = [](OpenTTDCommandCost *cost, uint32_t error) noexcept { *reinterpret_cast<uint32_t *>(cost) = error; };
-		leaves.editor = []() noexcept { return false; };
+		leaves.environment.editor = []() noexcept { return false; };
+		leaves.environment.freeform_edges = []() noexcept { return false; };
 		names.next = [](uint from) noexcept -> OpenTTDTownRef { CHECK(from == 0 || from == UINT16_MAX); return from == 0 ? OpenTTDTownRef{reinterpret_cast<Town *>(uintptr_t{1}), owner, UINT16_MAX - 1} : OpenTTDTownRef{nullptr, nullptr, UINT16_MAX}; };
 		names.utf8_length = [](const uint8_t *data, size_t size) noexcept -> size_t { CHECK(size == 1 && *data == 'x'); return size; };
 		founding.parameters = [](OpenTTDTownFoundingFrame *) noexcept -> const TownNameParams * { return nullptr; };
@@ -696,10 +699,6 @@ static void Trees()
 		.region_context = TreeUnused<OpenTTDWaterRegionContext>,
 		.remove_rail = TreeUnused<void, OpenTTDCommandCost *, uint32_t, Track>,
 		.apply_foundation = TreeUnused<OpenTTDFoundationSlope, Foundation, Slope>,
-		.iterator_begin = TreeUnused<void, OpenTTDTileVehicleCursor *, uint32_t>,
-		.iterator_current = TreeUnused<OpenTTDVehicle *, OpenTTDTileVehicleCursor *>,
-		.iterator_next = TreeUnused<void, OpenTTDTileVehicleCursor *>,
-		.iterator_end = TreeUnused<void, OpenTTDTileVehicleCursor *>,
 		.airport_tile = TreeUnused<bool, uint32_t>,
 		.airport = TreeUnused<OpenTTDAirportGround, uint32_t>,
 		.airport_member = TreeUnused<bool, const OpenTTDStation *, uint32_t>,
