@@ -572,33 +572,22 @@ static void ReallyClearObjectTile(Object *o)
 #ifndef WITH_RUST
 std::vector<ClearedObjectArea> _cleared_object_areas;
 
-static size_t FindClearedObjectIndex(TileIndex tile)
-{
-	TileArea ta(tile, 1, 1);
-	for (size_t i = 0; i < _cleared_object_areas.size(); i++) {
-		if (_cleared_object_areas[i].area.Intersects(ta)) return i;
-	}
-	return SIZE_MAX;
-}
 
-bool IsObjectIndirectlyCleared(TileIndex tile)
+/**
+ * Find the entry in _cleared_object_areas which occupies a certain tile.
+ * @param tile Tile of interest
+ * @return Occupying entry, or nullptr if none
+ */
+ClearedObjectArea *FindClearedObject(TileIndex tile)
 {
-	size_t index = FindClearedObjectIndex(tile);
-	return index != SIZE_MAX && _cleared_object_areas[index].first_tile != tile;
-}
-HiddenObjectArea HideObjectForTunnel(TileIndex tile)
-{
-	size_t index = FindClearedObjectIndex(tile);
-	if (index == SIZE_MAX) {
-		index = _cleared_object_areas.size();
-		_cleared_object_areas.emplace_back(tile, TileArea(tile, 1, 1));
+	TileArea ta = TileArea(tile, 1, 1);
+
+	for (ClearedObjectArea &coa : _cleared_object_areas) {
+		if (coa.area.Intersects(ta)) return &coa;
 	}
-	auto &entry = _cleared_object_areas[index];
-	HiddenObjectArea hidden{index, entry.first_tile.base()};
-	entry.first_tile = INVALID_TILE;
-	return hidden;
+
+	return nullptr;
 }
-void RestoreObjectFirstTile(HiddenObjectArea hidden) { _cleared_object_areas[hidden.index].first_tile = TileIndex(hidden.first_tile); }
 #endif
 
 static CommandCost ClearTile_Object(TileIndex tile, DoCommandFlags flags)

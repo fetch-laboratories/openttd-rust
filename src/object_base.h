@@ -109,20 +109,15 @@ struct ClearedObjectArea {
 	TileIndex first_tile;  ///< The first tile being cleared, which then causes the whole object to be cleared.
 	TileArea area;         ///< The area of the object.
 };
-#endif
 
+ClearedObjectArea *FindClearedObject(TileIndex tile);
+extern std::vector<ClearedObjectArea> _cleared_object_areas;
+#else
 /** Native scratch clients query or temporarily hide the first intersecting area. */
-#ifdef WITH_RUST
 using HiddenObjectArea = OpenTTDObjectHiddenArea;
 inline bool IsObjectIndirectlyCleared(TileIndex tile) { return openttd_rust_object_indirectly_cleared(tile.base(), GetRustSharedServices().map_log_x()); }
 inline HiddenObjectArea HideObjectForTunnel(TileIndex tile) { return openttd_rust_object_tunnel_hide(tile.base(), GetRustSharedServices().map_log_x()); }
 inline void RestoreObjectFirstTile(HiddenObjectArea hidden) { openttd_rust_object_restore_first(hidden); }
-#else
-struct HiddenObjectArea { size_t index; uint32_t first_tile; };
-bool IsObjectIndirectlyCleared(TileIndex tile);
-HiddenObjectArea HideObjectForTunnel(TileIndex tile);
-void RestoreObjectFirstTile(HiddenObjectArea hidden);
-extern std::vector<ClearedObjectArea> _cleared_object_areas;
 #endif
 
 #endif /* OBJECT_BASE_H */
