@@ -829,7 +829,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, order_destination);
 		VEHICLE_UNUSED(vehicle, order_nonstop);
 		VEHICLE_UNUSED(ground, has_articulated);
-		VEHICLE_UNUSED(leaves, tick_front);
 		VEHICLE_UNUSED(leaves, max_depot_penalty);
 		VEHICLE_UNUSED(vehicle, handle_breakdown);
 		VEHICLE_UNUSED(leaves, process_orders_then_loading);
@@ -958,11 +957,11 @@ struct RoadAbiProbe {
 	const OpenTTDRoadLeaves *leaves = nullptr;
 	OpenTTDRoadEntry entry{.acceleration_model = 0, .road_side = 0, .queue = false, .map_log_x = 8};
 	uint32_t dest = 0, nested = 0, destroyed = 0, departures = 0, progress = 255;
-	uint8_t tick = 0, running = 0;
+	uint8_t tick = 0, running = 0, status = 0;
 	uint32_t cache_properties = 0, cargo_ages = 0, length_changes = 0, viewports = 0, turns = 0, next_reads = 0;
 	uint32_t progress_writes = 0, visual_stage = 0;
 	uint16_t post_effect_max = 80;
-	bool visual_eligible = true;
+	bool visual_eligible = true, reset_status = false;
 	bool fallback_cache = false, engine_replaced = false;
 	bool hidden_viewport_tail = false;
 	int32_t order_time = 0;
@@ -993,6 +992,7 @@ static void RoadBoundary()
 		p.tick = tick;
 		p.running = running;
 		p.order_time = order_time;
+		if (p.reset_status) p.status = 0;
 	};
 	t.vehicle.write_tick = [](OpenTTDVehicle *u, uint8_t tick) noexcept { CHECK(u == RoadAbiHandle()); road_abi_probe->tick = tick; };
 	const OpenTTDRoadTickRead part{.tick = 255, .front = false};
@@ -1159,14 +1159,39 @@ static void RoadBoundary()
 		++road_abi_probe->next_reads;
 		return {.next = nullptr, .final_progress = static_cast<uint8_t>(road_abi_probe->progress)};
 	};
-	t.leaves.tick_front = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadFrontTickRead { return {.movement = road_abi_probe->entry, .order_time = 5, .running = 0, .status = 0}; };
 	t.leaves.crash_part = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadCrashPart { return {.next = nullptr, .next_state = nullptr, .tile = 100, .z = 0, .crossing = false}; };
-	const OpenTTDRoadTickRead front{.tick = 0, .front = true};
+	OpenTTDRoadTickRead front{.tick = 255, .front = true, .movement = probe.entry, .order_time = &probe.order_time, .running = &probe.running, .status = &probe.status};
+	// Fresh scalar loads and the post-write crashed-bit reset precede controller entry.
+	probe.order_time = INT32_MAX;
+	probe.running = UINT8_MAX;
+	probe.status = 128;
+	probe.reset_status = true;
 	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves));
-	CHECK(probe.nested == 3 && probe.dest == 100 && probe.order_time == 6 && probe.running == 1 && probe.progress == 7 && probe.next_reads == 1 && world.draws == 0);
+	probe.reset_status = false;
+	CHECK(probe.tick == 0 && probe.status == 0);
+	CHECK(probe.nested == 3 && probe.dest == 100 && probe.order_time == INT32_MIN && probe.running == 0 && probe.progress == 7 && probe.next_reads == 1 && world.draws == 0);
+
+	/* Stopped parts preserve running ticks; later status resets must survive the entry. */
+	const auto breakdown_probe = _vehicle_maintenance_probe.breakdown_probe;
+	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept {
+		return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = road_abi_probe->status};
+	};
+	const auto last_speed = t.ground.set_last_speed;
+	t.ground.set_last_speed = [](OpenTTDVehicle *) noexcept {
+		road_abi_probe->status = 0;
+		return OpenTTDGroundLastSpeed{};
+	};
+	probe.status = 2;
+	probe.running = UINT8_MAX;
+	probe.order_time = INT32_MAX;
+	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves));
+	CHECK(probe.running == UINT8_MAX && probe.order_time == INT32_MIN && probe.status == 0);
+	_vehicle_maintenance_probe.breakdown_probe = breakdown_probe;
+	t.ground.set_last_speed = last_speed;
 
 	/* Skip effects with no lookup; realistic UpdateSpeed still observes post-effect inputs. */
 	probe.visual_eligible = false; probe.entry.acceleration_model = 1;
+	front.movement = probe.entry;
 	/* Hidden vehicles skip viewport callbacks, then use the direct canonical link. */
 	t.ground.set_last_speed = [](OpenTTDVehicle *) noexcept -> OpenTTDGroundLastSpeed { return {.status = 1}; };
 	t.vehicle.next = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { CHECK(road_abi_probe->viewports == 1); ++road_abi_probe->next_reads; return nullptr; };
@@ -1174,6 +1199,7 @@ static void RoadBoundary()
 	CHECK(openttd_rust_road_tick(v, probe.state, &front, &t.leaves));
 	CHECK(probe.viewports == 1 && probe.next_reads == 2 && probe.progress == 7);
 	probe.visual_eligible = true; probe.entry.acceleration_model = 0;
+	front.movement = probe.entry;
 
 	/* Viewport reentry can add a later visible part. Its progress mutation is
 	 * observed only after that viewport and any hidden final part's Next read. */
@@ -1218,11 +1244,11 @@ static void RoadBoundary()
 
 	/* Crash animation reads the next link after the turn/viewport callback. */
 	openttd_rust_road_set(probe.state, 5, 0);
-	t.leaves.tick_front = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadFrontTickRead { return {.movement = road_abi_probe->entry, .order_time = 0, .running = 0, .status = 128}; };
+	probe.status = 128;
 	t.vehicle.direction = [](OpenTTDVehicle *u) noexcept -> uint8_t { CHECK(u == RoadAbiHandle() && road_abi_probe->turns == 0); return 1; };
 	t.ground.turn = [](OpenTTDVehicle *u, uint8_t direction) noexcept { CHECK(u == RoadAbiHandle() && direction < 8); ++road_abi_probe->turns; };
 	t.vehicle.next = [](OpenTTDVehicle *u) noexcept -> OpenTTDVehicle * { CHECK(u == RoadAbiHandle() && road_abi_probe->turns == 1); return nullptr; };
-	const OpenTTDRoadTickRead animation{.tick = 7, .front = true};
+	const OpenTTDRoadTickRead animation{.tick = 7, .front = true, .movement = probe.entry, .order_time = &probe.order_time, .running = &probe.running, .status = &probe.status};
 	CHECK(openttd_rust_road_tick(v, probe.state, &animation, &t.leaves));
 	CHECK(probe.turns == 1 && world.draws == 1);
 
@@ -1239,8 +1265,8 @@ static void RoadBoundary()
 		road_abi_probe->state = nullptr;
 		++road_abi_probe->destroyed;
 	};
-	t.leaves.tick_front = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadFrontTickRead { return {.movement = road_abi_probe->entry, .order_time = 0, .running = 0, .status = 128}; };
-	const OpenTTDRoadTickRead crashed{.tick = 31, .front = true};
+	probe.status = 128;
+	const OpenTTDRoadTickRead crashed{.tick = 31, .front = true, .movement = probe.entry, .order_time = &probe.order_time, .running = &probe.running, .status = &probe.status};
 	CHECK(!openttd_rust_road_tick(v, probe.state, &crashed, &t.leaves));
 	CHECK(probe.state == nullptr && probe.destroyed == 1 && world.draws == 1);
 	std::printf("road_native_typed_reentry_path_and_owner_destruction passed\n");

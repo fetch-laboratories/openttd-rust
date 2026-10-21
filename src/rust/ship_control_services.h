@@ -347,10 +347,10 @@ static uint32_t Ship_dest(uint32_t id) noexcept { const Ship *v = Ship::Get(Vehi
 
 static uint32_t Ship_tick(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(RustVehicleTick(v)); }
 
-static uint32_t Ship_running(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->running_ticks); }
+static uint32_t Ship_running(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(RustVehicleRunning(v)); }
 
 
-static uint32_t Ship_order_time(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->current_order_time); }
+static uint32_t Ship_order_time(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(RustVehicleOrderTime(v)); }
 
 static uint32_t Ship_progress(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(RustVehicleProgress(v)); }
 

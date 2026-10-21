@@ -16,12 +16,6 @@ static_assert(PROP_ROADVEH_SHORTEN_FACTOR == 0x23 && PROP_ROADVEH_CARGO_AGE_PERI
 
 static RoadVehicle *RoadOf(OpenTTDVehicle *v) noexcept { return RoadVehicle::From(VehicleOf(v)); }
 
-static OpenTTDRoadFrontTickRead OPENTTD_VEHICLE_CALL RoadSvcTickFront(OpenTTDVehicle *v) noexcept
-{
-	const RoadVehicle *u = RoadOf(v);
-	return {.movement = GetRoadEntry(), .order_time = u->current_order_time, .running = u->running_ticks, .status = RustVehicleStatus(u)};
-}
-
 static OpenTTDRoadMaxSpeedRead RoadMaxSpeedRead(const RoadVehicle *u) noexcept
 {
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(u));
@@ -328,7 +322,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.vehicle = &_rust_vehicle_services,
 	.ground = &_rust_ground_services<RoadVehicle>,
 	.shared = &_rust_shared_services,
-	.tick_front = RoadSvcTickFront,
 	.max_depot_penalty = RustMaximumDepotPenalty,
 	.process_orders_then_loading = RoadSvcProcessOrdersThenLoading,
 	.visual_read = RoadSvcVisualRead,

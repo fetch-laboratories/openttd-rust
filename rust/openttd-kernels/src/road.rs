@@ -159,20 +159,15 @@ pub struct Entry {
     pub map_log_x: u8,
 }
 
-/// The tick/front gate; non-front entries consume only these fields.
+/// Tick/front values and named read-only native places. Nonfront places are null.
 #[repr(C)]
 pub struct TickRead {
     pub tick: u8,
     pub front: bool,
-}
-/// Counters/status and movement settings consumed only after the Rust front gate.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct FrontTickRead {
     pub movement: Entry,
-    pub order_time: i32,
-    pub running: u8,
-    pub status: u8,
+    pub order_time: *const i32,
+    pub running: *const u8,
+    pub status: *const u8,
 }
 
 /// `GetCurrentMaxSpeed` inputs of the front part.
@@ -413,7 +408,6 @@ pub struct Leaves {
     pub vehicle: *const VehicleServices,
     pub ground: *const GroundServices,
     pub shared: *const Services,
-    pub tick_front: extern "C" fn(VehicleRef) -> FrontTickRead,
     pub max_depot_penalty: extern "C" fn() -> u32,
     pub process_orders_then_loading: extern "C" fn(VehicleRef) -> u8,
     pub visual_read: extern "C" fn(VehicleRef) -> VisualRead,
@@ -1682,18 +1676,22 @@ impl Game<'_> {
             service!(self.vs.write_tick)(v.v, tick);
             return true;
         }
-        let front = service!(self.l.tick_front)(v.v);
-        self.acceleration_model = front.movement.acceleration_model;
-        self.road_side = front.movement.road_side;
-        self.queue = front.movement.queue;
-        self.map.log_x = front.movement.map_log_x;
-        let running = if front.status & VS_STOPPED == 0 {
-            front.running.wrapping_add(1)
+        self.acceleration_model = t.movement.acceleration_model;
+        self.road_side = t.movement.road_side;
+        self.queue = t.movement.queue;
+        self.map.log_x = t.movement.map_log_x;
+        // SAFETY: The front entry supplies actual scalar addresses of the live shell.
+        // Load at the original branches; no native-field reference spans a service.
+        let running = if unsafe { t.status.read() } & VS_STOPPED == 0 {
+            unsafe { t.running.read() }.wrapping_add(1)
         } else {
-            front.running
+            unsafe { t.running.read() }
         };
-        service!(self.vs.write_counters)(v.v, tick, running, front.order_time.wrapping_add(1));
-        self.controller(v, front.status, tick)
+        let order_time = unsafe { t.order_time.read() }.wrapping_add(1);
+        service!(self.vs.write_counters)(v.v, tick, running, order_time);
+        // Reload after native writes; discard all places before controller callbacks.
+        let status = unsafe { t.status.read() };
+        self.controller(v, status, tick)
     }
     /// `RoadVehicle::SetDestTile`.
     fn set_dest(&self, v: Part, tile: u32, current: u32) {

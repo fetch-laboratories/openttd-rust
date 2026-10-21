@@ -881,7 +881,7 @@ static OpenTTDTrainHandle TrainReadLast(OpenTTDTrainHandle id) noexcept
 static int32_t TrainReadOrderTime(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return v->current_order_time;
+	return RustVehicleOrderTime(v);
 }
 static uint16_t TrainReadTotalLength(OpenTTDTrainHandle id) noexcept
 {
@@ -911,7 +911,7 @@ static uint16_t TrainReadLastStation(OpenTTDTrainHandle id) noexcept
 static uint8_t TrainReadRunning(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return v->running_ticks;
+	return RustVehicleRunning(v);
 }
 static uint8_t TrainReadFront(OpenTTDTrainHandle id) noexcept
 {
@@ -1066,7 +1066,7 @@ static OpenTTDTrainLoco26Read TrainReadLoco26(OpenTTDTrainHandle id) noexcept
 static OpenTTDTrainTickRead TrainReadTickState(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return {RustVehicleSpeed(v), RustVehicleStatus(v), v->running_ticks, v->IsFrontEngine(), v->IsFreeWagon()};
+	return {RustVehicleSpeed(v), RustVehicleStatus(v), RustVehicleRunning(v), v->IsFrontEngine(), v->IsFreeWagon()};
 }
 static OpenTTDTrainNeedsServiceRead TrainReadNeedsService(OpenTTDTrainHandle id) noexcept
 {
