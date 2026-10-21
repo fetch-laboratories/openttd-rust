@@ -19,6 +19,7 @@
 use crate::node_hash::NodeMap;
 use crate::services::Services;
 use crate::water_regions::Patch;
+use std::cell::UnsafeCell;
 use std::ffi::c_void;
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -101,21 +102,53 @@ struct Node {
 }
 // Maps are lookup-only (never iterated): bucket/iteration order never selects a
 // node, so the fixed NodeMap hasher cannot change results. Keys are the original tile/exit-dir or CalculateWaterRegionPatchHash bits.
+/// Only copied nodes and indices persist; no world pointer or input is cached.
+#[derive(Default)]
+struct Scratch {
+    arena: Vec<Node>,
+    open: NodeMap<u32, usize>,
+    closed: NodeMap<u32, usize>,
+    heap: Vec<usize>,
+}
+struct SerializedScratch(UnsafeCell<Option<Scratch>>);
+// SAFETY: Production entries hold the native game-state mutex. Slot borrows end
+// before callbacks; an active search owns its storage, including during reentry.
+// Native heap probes use local storage without accessing this process-wide slot.
+unsafe impl Sync for SerializedScratch {}
+static SCRATCH: SerializedScratch = SerializedScratch(UnsafeCell::new(None));
+
 struct Search {
     arena: Vec<Node>,
     open: NodeMap<u32, usize>,
     closed: NodeMap<u32, usize>,
     heap: Vec<usize>,
     limit: i32,
+    reuse_scratch: bool,
 }
 impl Search {
     fn new(limit: i32) -> Self {
+        Self::with_scratch(limit, Scratch::default(), false)
+    }
+    /// Caller serializes production entries with the native game-state mutex.
+    unsafe fn reused(limit: i32) -> Self {
+        // SAFETY: Move ownership out before any callback; nested calls get their
+        // own storage. First use allocates only when the search grows.
+        let scratch = unsafe { (*SCRATCH.0.get()).take().unwrap_or_default() };
+        Self::with_scratch(limit, scratch, true)
+    }
+    fn with_scratch(limit: i32, mut scratch: Scratch, reuse_scratch: bool) -> Self {
+        scratch.arena.clear();
+        scratch.open.clear();
+        scratch.closed.clear();
+        scratch.heap.clear();
+        scratch.heap.push(usize::MAX);
         Self {
-            arena: Vec::new(),
-            open: NodeMap::default(),
-            closed: NodeMap::default(),
-            heap: vec![usize::MAX],
+            arena: scratch.arena,
+            open: scratch.open,
+            closed: scratch.closed,
+            heap: scratch.heap,
             limit,
+            reuse_scratch,
         }
     }
     fn less(&self, a: usize, b: usize) -> bool {
@@ -220,6 +253,21 @@ impl Search {
         true
     }
 }
+impl Drop for Search {
+    fn drop(&mut self) {
+        if self.reuse_scratch {
+            let scratch = Scratch {
+                arena: std::mem::take(&mut self.arena),
+                open: std::mem::take(&mut self.open),
+                closed: std::mem::take(&mut self.closed),
+                heap: std::mem::take(&mut self.heap),
+            };
+            // SAFETY: Only serialized entries enable reuse. No slot borrow spans
+            // callbacks; an outer search may replace a nested call's cache.
+            unsafe { *SCRATCH.0.get() = Some(scratch) };
+        }
+    }
+}
 fn blank(key: u32, tile: u32, td: u8, patch: Patch, parent: Option<usize>) -> Node {
     Node {
         key,
@@ -267,7 +315,8 @@ fn region_path(
     // SAFETY: copied world leaves do not reenter this search. Water cache is a distinct owner.
     let start_patch = unsafe { (leaves.patch)(start) };
     let limit = ((input.map_x.wrapping_mul(input.map_y).wrapping_mul(4) as i32) / 256).min(65536);
-    let mut search = Search::new(limit);
+    // SAFETY: Production calls hold the native game-state mutex.
+    let mut search = unsafe { Search::reused(limit) };
     for &tile in origins {
         let patch = unsafe { (leaves.patch)(tile) };
         if patch.label != 0 {
@@ -404,7 +453,8 @@ fn low_search(
     } else {
         None
     };
-    let mut search = Search::new(5120);
+    // SAFETY: Production calls hold the native game-state mutex.
+    let mut search = unsafe { Search::reused(5120) };
     let mut dirs = dirs;
     while dirs != 0 {
         let td = dirs.trailing_zeros() as u8;
@@ -905,5 +955,57 @@ pub unsafe extern "C" fn openttd_rust_ship_heap_probe(
             out.add(step)
                 .write(search.best().map_or(u32::MAX, |i| i as u32));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scratch_retains_capacity_across_nested_searches_and_threads() {
+        // SAFETY: This is the only Rust test accessing SCRATCH. Nested calls
+        // are sequential and the spawned thread starts after the outer drops.
+        let mut outer = unsafe { Search::reused(7) };
+        let patch = Patch {
+            x: 1,
+            y: 2,
+            label: 3,
+        };
+        for key in 0..64 {
+            outer.add(blank(key, key, 0, patch, None));
+        }
+        assert!(outer.close(0));
+        let capacities = |s: &Search| {
+            (
+                s.arena.capacity(),
+                s.open.capacity(),
+                s.closed.capacity(),
+                s.heap.capacity(),
+            )
+        };
+        let retained = capacities(&outer);
+        let arena = outer.arena.as_ptr() as usize;
+        let nested = unsafe { Search::reused(1) };
+        assert!(nested.arena.is_empty());
+        assert_ne!(nested.arena.as_ptr() as usize, arena);
+        drop(nested);
+        assert_eq!(outer.arena.len(), 64);
+        drop(outer);
+        std::thread::spawn(move || {
+            let mut next = unsafe { Search::reused(2) };
+            assert_eq!(capacities(&next), retained);
+            assert_eq!(next.arena.as_ptr() as usize, arena);
+            assert!(next.arena.is_empty() && next.open.is_empty() && next.closed.is_empty());
+            assert_eq!(next.heap, [usize::MAX]);
+            assert_eq!(next.limit, 2);
+            for key in 0..64 {
+                next.add(blank(key, key, 0, patch, None));
+            }
+            assert!(next.close(0));
+            assert_eq!(capacities(&next), retained);
+        })
+        .join()
+        .unwrap();
     }
 }
