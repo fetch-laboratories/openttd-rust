@@ -80,7 +80,7 @@ unsafe fn owned_primary(s: &TransactionServices, cost: *mut CommandCost, id: u32
         (s.cost.error)(cost, ERROR);
         return (std::ptr::null_mut(), 0);
     }
-    unsafe { (s.commands.ownership)(cost, target.owner) };
+    unsafe { (s.commands.ownership)(cost, target.owner, 0) };
     if !(s.cost.success)(cost) {
         return (std::ptr::null_mut(), 0);
     }
@@ -479,7 +479,7 @@ pub(crate) unsafe fn sell(
         return (b.cost.error)(cost, ERROR);
     }
     let front = unsafe { (s.transactions.first)(v) };
-    unsafe { (b.commands.ownership)(cost, (b.groups.vehicle_owner)(front)) };
+    unsafe { (b.commands.ownership)(cost, (b.groups.vehicle_owner)(front), 0) };
     if !(b.cost.success)(cost) {
         return;
     }

@@ -395,7 +395,7 @@ pub(crate) unsafe fn refit(
     }
     let front = unsafe { (c.transactions.first)(v) };
     unsafe {
-        (b.commands.ownership)(cost, (b.groups.vehicle_owner)(front));
+        (b.commands.ownership)(cost, (b.groups.vehicle_owner)(front), 0);
     }
     if !(b.cost.success)(cost) {
         return Capacity::default();
