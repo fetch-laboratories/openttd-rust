@@ -117,8 +117,6 @@ void openttd_rust_tunnel_tile_loop(uint32_t, LandscapeType, const OpenTTDTunnelS
 struct OpenTTDVehicle;
 struct OpenTTDVehicleServices;
 struct OpenTTDAirportGround { const OpenTTDStation *station; uint32_t tile; uint16_t width; uint16_t height; };
-/* Native placement construction uses two pointer-aligned words, with native size
- * and alignment assertions. Rust never inspects the iterator representation. */
 struct OpenTTDFloodVictim { uint8_t status; VehicleType type; };
 struct OpenTTDAircraftFloodPose { uint32_t tile; int32_t z; uint8_t subtype; };
 struct OpenTTDGroundFloodPose { int32_t z; OpenTTDVehicle *first; };
