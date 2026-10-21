@@ -668,7 +668,11 @@ static const OpenTTDStationServices _rust_station_services = {
 		return {.pool_size = size, .station = st, .state = RustStationServiceOwner(st), .waypoint = waypoint, .in_use = !waypoint && st->IsInUse()};
 	},
 	.tick_phase = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationTickPhase {
-		return {.tick = openttd_orders_tick_counter(), .station = Station::IsExpected(static_cast<BaseStation *>(handle))};
+		/* Member stores, unlike an aggregate, avoid building zeroed padding for the register return. */
+		OpenTTDStationTickPhase read;
+		read.station = Station::IsExpected(static_cast<BaseStation *>(handle));
+		read.tick = openttd_orders_tick_counter();
+		return read;
 	},
 	.local_owner = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return static_cast<BaseStation *>(handle)->owner == _local_company;
