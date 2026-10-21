@@ -14,14 +14,14 @@ static bool VehicleConstructRoadTile(uint32_t tile, uint64_t powered) noexcept {
 static void *VehicleConstructNewRoad(uint32_t tile) noexcept
 {
 	RoadVehicle *v = new RoadVehicle();
-	v->direction = DiagDirToDir(GetRoadDepotDirection(TileIndex(tile)));
+	v->direction = DiagDirToDir(static_cast<DiagDirection>(Shared_road_depot_direction(tile)));
 	v->owner = _current_company;
 	v->tile = TileIndex(tile);
 	int x = TileX(v->tile) * TILE_SIZE + TILE_SIZE / 2;
 	int y = TileY(v->tile) * TILE_SIZE + TILE_SIZE / 2;
 	v->x_pos = x;
 	v->y_pos = y;
-	v->z_pos = GetSlopePixelZ(x, y, true);
+	v->z_pos = SharedSlopePixelZ(x, y, true);
 	v->vehstatus = {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette};
 	return v;
 }
@@ -32,7 +32,7 @@ static void VehicleConstructRoadFront(void *shell, const OpenTTDEngine *e) noexc
 	v->gcache.first_engine = EngineID::Invalid(); // needs to be set before first callback
 	v->SetFrontEngine();
 	v->roadtype = rt;
-	v->compatible_roadtypes = GetRoadTypeInfo(rt)->powered_roadtypes;
+	v->compatible_roadtypes = RoadTypes(RustEnginePoweredRoadTypes(EngineOf(e)));
 	v->gcache.cached_veh_length = VEHICLE_LENGTH;
 }
 static const OpenTTDStation *VehicleConstructStation(uint32_t tile) noexcept { return RustStation(Station::GetByTile(TileIndex(tile))); }
@@ -40,7 +40,8 @@ static bool VehicleConstructCanUse(const OpenTTDEngine *e, const OpenTTDStation 
 static uint32_t VehicleConstructHangar(const OpenTTDStation *station, uint32_t tile) noexcept
 {
 	const Station *st = StationOf(station);
-	return st->airport.GetHangarTile(st->airport.GetHangarNum(TileIndex(tile))).base();
+	uint hangar = st->airport.GetHangarNum(TileIndex(tile));
+	return RustStationHangarTile(st, hangar).base();
 }
 static uint8_t VehicleConstructPosOnBuild(uint32_t tile) noexcept { return GetVehiclePosOnBuild(TileIndex(tile)); }
 static void *VehicleConstructNewAircraft() noexcept { return new Aircraft(); }
@@ -55,7 +56,7 @@ static void VehicleConstructAircraftPlace(void *aircraft, void *shadow, uint32_t
 	uint y = TileY(v->tile) * TILE_SIZE + 3;
 	v->x_pos = u->x_pos = x;
 	v->y_pos = u->y_pos = y;
-	u->z_pos = GetSlopePixelZ(x, y);
+	u->z_pos = SharedSlopePixelZ(x, y, false);
 	v->z_pos = u->z_pos + 1;
 	v->vehstatus = {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette};
 	u->vehstatus = {VehState::Hidden, VehState::Unclickable, VehState::Shadow};
