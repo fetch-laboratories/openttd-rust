@@ -525,6 +525,7 @@ def main():
         common.extend(compiler_cache_options(cache_executable))
         for name, build in builds.items():
             with reference_lock() if name == "reference" else candidate_lock(build):
+                (build / "instruction-build.json").unlink(missing_ok=True)
                 select_role(name)
                 source = REFERENCE.resolve() if name == "reference" else ROOT
                 extra = (
@@ -560,26 +561,16 @@ def main():
                 )
                 if name == "candidate":
                     report["rust_configuration"] = rust_configuration(build)
-                if instruction_mode:
-                    if name == "candidate" and not configured_as(
-                        build, source, configure, env
-                    ):
-                        raise RuntimeError(
-                            "profile build lacks effective release line tables"
-                        )
-                    settings = (build / "CMakeCache.txt").read_text()
-                    if name == "candidate":
-                        files = ("rust-build-configuration.txt", "rust-toolchain.txt")
-                        settings += "".join((build / f).read_text() for f in files)
-                    for path, label in ((build, "<build>"), (source, "<source>")):
-                        settings = settings.replace(str(path), label)
-                    (build / "instruction-build.json").write_text(json.dumps(settings))
                 if args.action != "tools":
                     supply_graphics(build)
                 run(
                     f"{name}-build",
                     ["cmake", "--build", str(build), "--parallel", str(args.jobs)],
                 )
+                if instruction_mode:
+                    from simulation.instructions import record_build
+
+                    record_build(build, source, name, env)
 
         if args.action == "verify":
             inventories = {}

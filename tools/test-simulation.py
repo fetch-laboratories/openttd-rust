@@ -472,9 +472,9 @@ class InstructionSpeedTests(unittest.TestCase):
     def test_real_nested_scope_extraction_identity_and_semantic_rejection(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source, binary, run = root / "probe.cpp", root / "probe", root / "run"
+            source, binary, run = root / "probe.cpp", root / "openttd", root / "run"
             run.mkdir()
-            (root / "instruction-build.json").write_text("settings")
+            (root / "CMakeCache.txt").write_text("settings")
             source.write_text(
                 "volatile int n; void StateGameLoop_LinkGraphPauseControl(){for(int i=0;i<10000;i++)n=n+1;}\n"
                 "void StateGameLoop(){StateGameLoop_LinkGraphPauseControl();}\n"
@@ -486,6 +486,7 @@ class InstructionSpeedTests(unittest.TestCase):
             )
             scenario = dict(kind="save", ticks=1, save=str(source))
             env = migration.environment()
+            ir.record_build(root, root, "reference", env)
             context = binary, root, run, env
             counts = []
             for kind in ("save", "generate"):
@@ -504,12 +505,21 @@ class InstructionSpeedTests(unittest.TestCase):
                     dict(scenario, **{field: value}), *context, Path(command[0])
                 )
                 self.assertNotEqual(baseline, changed)
-            for name in ("probe.cpp", "probe", "instruction-build.json", "run/script"):
+            for name in ("probe.cpp", "CMakeCache.txt", "run/script"):
                 previous = ir.identity(scenario, *context, Path(command[0]))
                 with (root / name).open("ab") as asset:
                     asset.write(b"changed")
+                ir.record_build(root, root, "reference", env)
                 current = ir.identity(scenario, *context, Path(command[0]))
                 self.assertNotEqual(previous, current)
+            with binary.open("ab") as asset:
+                asset.write(b"changed")
+            with self.assertRaisesRegex(ValueError, "stale instruction build"):
+                ir.identity(scenario, *context, Path(command[0]))
+            ir.record_build(root, root, "reference", env)
+            refreshed = ir.identity(scenario, *context, Path(command[0]))
+            self.assertEqual(current["compatible"], refreshed["compatible"])
+            self.assertNotEqual(current["executable"], refreshed["executable"])
             profile = run / "callgrind.out"
             good = "desc: Trigger: Program termination\nevents: Dr Ir\nsummary: 999 999\ntotals: 2 42\n"
             profile.write_text(good)

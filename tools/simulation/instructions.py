@@ -11,6 +11,22 @@ from pathlib import Path
 ENTRIES = ("StateGameLoop()", "_GenerateWorld()")
 
 
+def record_build(build, source, role, env):
+    """Publish only successful builds, bound to the executable being measured."""
+    settings = (build / "CMakeCache.txt").read_text()
+    if role == "candidate":
+        files = ("rust-build-configuration.txt", "rust-toolchain.txt")
+        settings += "".join((build / f).read_text() for f in files)
+        if "CARGO_PROFILE_RELEASE_DEBUG=line-tables-only\n" not in settings:
+            raise ValueError("profile build lacks release line tables")
+    for path, label in ((build, "<build>"), (source, "<source>")):
+        settings = settings.replace(str(path), label)
+    binary = build / ("openttd" if role == "reference" else "openttd-rust")
+    (build / "instruction-build.json").write_text(
+        json.dumps(dict(settings=settings, executable=digest(binary.read_bytes())))
+    )
+
+
 def flags(scenario):
     entries = ENTRIES if scenario["kind"] == "generate" else ENTRIES[:1]
     return [
@@ -60,7 +76,13 @@ def identity(scenario, binary, build, folder, env, valgrind):
     inputs["libraries"] = [
         digest(Path(p).read_bytes()) for p in re.findall(r"(/\S+) \(", libraries)
     ]
-    settings = (build / "instruction-build.json").read_text()
+    metadata = json.loads((build / "instruction-build.json").read_text())
+    executable = digest(binary.read_bytes())
+    if metadata["executable"] != executable:
+        raise ValueError(
+            "stale instruction build; rebuild with simulate --instructions"
+        )
+    settings = metadata["settings"]
     version = subprocess.check_output(
         [str(valgrind), "--version"], env=env, text=True
     ).strip()
@@ -68,7 +90,7 @@ def identity(scenario, binary, build, folder, env, valgrind):
     policy = "64x64/serial/witness-off/v1"
     settings = settings, platform.machine(), tool, flags(scenario), policy
     compatible = digest([resolved, inputs, settings])
-    return {"compatible": compatible, "executable": digest(binary.read_bytes())}
+    return {"compatible": compatible, "executable": executable}
 
 
 def prepare(scenario, command, binary, build, folder, env, reference):
