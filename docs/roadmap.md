@@ -4,12 +4,12 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-20, code at `1794388c15`)
+## Where the fork stands (2026-10-20, code at `e996032875`)
 
-- Thirty-one ownership ports. Whole fork: Rust 74,681 / tooling 30,620 / glue 30,850 / original retired 43,423 of 470,612 `src/` lines (9.23%). Simulation: 35,473 / 102,615 (34.57%).
+- Thirty-one ownership ports. Whole fork: Rust 74,783 / tooling 30,620 / glue 30,850 / original retired 43,423 of 470,612 `src/` lines (9.23%). Simulation: 35,473 / 102,615 (34.57%).
 - Since the fourteenth review: #255 landscape (846 retired) and #303 stations (2,427), plus #285/#286/#287/#298 and the #275 fixes #289/#300/#318/#319. Retirement +3,278; glue plus tooling +1,475.
 - Speed record (#318): TGP 1.187, Opus 1.231, Grok 1.203, P1996 1.256, P2000 1.321, P2016 1.388. Four quiet steering medians per scenario confirm it within 1%. CI is green; CI_ON_DEMAND=true.
-- Drafts: #308 ship scratch and #269 houses, whose speed blockers were host load; #317 water, #313 objects and #290 road commands, which conflict with #303's shared layer in 24-38 files each.
+- Ship scratch #308 is integrated after clean review, quiet speed and exact-head Full. Four component drafts remain: #269 houses adopts base; #317 water and #313 objects delete their parallel shared layers; #290 roads waits for capacity. Station fidelity #320 and the guard #322 are maintenance.
 
 ## Fifteenth steering review (2026-10-20, honest speed and one shared layer)
 
@@ -107,6 +107,7 @@ keep their evidence in their PRs. Rows below use original retirement and net glu
 | #284 (generated ABI and typed defaults) | #298 | direct | `79dea34092` | 4541 / 287 / 2650 / 0; net glue +196 |
 | #311 (#275 road speed/effect boundary) | #319 | direct | `08053fda50` | 88 / 35 / 101 / 5; net glue +90 |
 | #310 (#275 immutable road service tables) | #318 | direct | `4c4c5a0eab` | 0 / 27 / 312 / 0; net glue +7 |
+| #306 (#275 ship search scratch) | #308 | direct | `e996032875` | 108 / 0 / 0 / 0; net glue 0 |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -134,7 +135,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #275, #321) and #156 run in parallel.
 
-1. **Unblock and fix:** #308, then #320 and #321 in parallel, then #269, as in the fifteenth actions.
+1. **Unblock and fix:** #308 is integrated. Complete #320 and #321/#322 in parallel, then #269, as in the fifteenth actions.
 2. **Command drafts, in order of readiness:** #317 water, #313 objects, #290 road. Each adopts the integrated shared layer and builds no parallel copy. #313's retirement gap (79 lines) is reassessed after its duplicate glue is gone.
 3. **#275 corrected order:** aircraft per-field reads, road per-tick fold, station-tick per-slot reads, train reads; TGP clear-tile reads, then #312 trees and industry `next_tick`. Ship scratch is #308.
 4. **#281** vehicle maintenance direct calls, then the callee-copy check.
@@ -161,7 +162,6 @@ own the active tasks below; #290 waits for capacity behind their integration.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #306 / #308 | `9675566fb9` | Quiet medians recorded; exact-head Full requested. Root integrates when green. |
 | #320 | implementation active | Station fidelity fixes, cleanup and default failing-before witnesses; fresh review follows. |
 | #321 / #322 | `bf9bb3c86f` | Default regressions pass at 330 added tooling/test/workflow lines; six profiles underway. Root owns review, quiet anchors/calibration. |
 | #256 / #269 | `5a6ad37c59` | Base adoption pushed; affected checks underway. Scoped conflict review, quiet medians and Full follow. |
