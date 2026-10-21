@@ -1653,8 +1653,8 @@ impl Engine<'_> {
         }
     }
     fn can_house(&self, tile: u32, noslope: bool) -> bool {
-        let slope = u32::from((self.services.tile_slope)(tile));
-        if (noslope && slope != 0) || slope & 16 != 0 {
+        let slope = (self.services.tile_slope)(tile);
+        if (noslope && slope != 0) || is_steep_slope(slope) {
             return false;
         }
         if !self.roads_allow_house(tile) || (self.services.bridge_above)(tile) {
