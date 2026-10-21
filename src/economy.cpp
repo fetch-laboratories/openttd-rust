@@ -62,6 +62,7 @@
 
 #ifdef WITH_RUST
 #include "rust/company_adapter.h"
+#include "rust/tile_owner_services.h"
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
 #endif
@@ -371,7 +372,8 @@ int UpdateCompanyRatingAndValue(Company *c, bool update)
 void ChangeOwnershipOfCompanyItems(Owner old_owner, Owner new_owner)
 {
 #ifdef WITH_RUST
-	openttd_rust_company_change_ownership(&GetRustCompanyServices(), old_owner.base(), new_owner.base());
+	RustTileOwnerContext ownership;
+	openttd_rust_company_change_ownership(&GetRustCompanyServices(), &ownership.view, old_owner.base(), new_owner.base());
 #else
 	/* We need to set _current_company to old_owner before we try to move
 	 * the client. This is needed as it needs to know whether "you" really
@@ -2670,7 +2672,8 @@ static void DoAcquireCompany(Company *c, bool hostile_takeover)
 CommandCost CmdBuyCompany(DoCommandFlags flags, CompanyID target_company, bool hostile_takeover)
 {
 #ifdef WITH_RUST
-	return RustCompanyCost(openttd_rust_company_buy(&GetRustCompanyServices(), target_company.base(), hostile_takeover, flags.Test(DoCommandFlag::Execute)));
+	RustTileOwnerContext ownership;
+	return RustCompanyCost(openttd_rust_company_buy(&GetRustCompanyServices(), &ownership.view, target_company.base(), hostile_takeover, flags.Test(DoCommandFlag::Execute)));
 #else
 	Company *c = Company::GetIfValid(target_company);
 	if (c == nullptr) return CMD_ERROR;

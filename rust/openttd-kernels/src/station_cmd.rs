@@ -3986,6 +3986,7 @@ impl Ctx<'_> {
     }
     fn change_owner(
         &self,
+        ownership: &crate::tile_owner::Context,
         cost: Cost<'_>,
         ret: Cost<'_>,
         error: Cost<'_>,
@@ -4055,7 +4056,8 @@ impl Ctx<'_> {
                 );
             });
             assert_eq!((self.shared.tile_type)(tile), 2);
-            (self.shared.tile_change_owner)(tile, old, new);
+            // SAFETY: Nested removal has returned; the native slots can be reused.
+            unsafe { crate::tile_owner::openttd_rust_tile_change_owner(ownership, tile, old, new) };
         } else {
             (self.command.landscape_clear)(cost.0, tile, 33);
             let kind = (self.shared.tile_type)(tile);
@@ -4100,15 +4102,21 @@ pub unsafe extern "C" fn openttd_rust_station_terraform(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_change_owner(
     s: *const CommandServicesTable,
-    cost: *mut CommandCost,
-    ret: *mut CommandCost,
-    error: *mut CommandCost,
+    ownership: &crate::tile_owner::Context,
     tile: u32,
     old: u8,
     new: u8,
 ) {
     let c = unsafe { Ctx::new(s) };
-    c.change_owner(c.c(cost), c.c(ret), c.c(error), tile, old, new);
+    c.change_owner(
+        ownership,
+        c.c(ownership.cost),
+        c.c(ownership.ret),
+        c.c(ownership.error),
+        tile,
+        old,
+        new,
+    );
 }
 
 /// # Safety

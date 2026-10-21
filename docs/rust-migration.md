@@ -1226,6 +1226,20 @@ The default `roads-` simulation compares acceleration, servicing, path, RNG, cra
 reload. Legacy saves, custom NewGRFs, articulated/tram turns, sounds and viewport pixels remain
 limits tracked by #156.
 
+### Shared tile ownership dispatch (#331)
+
+Rust owns the general `ChangeTileOwner` tile-kind dispatch and directly calls the
+integrated rail, road, station, water and industry owners. Native clear, house,
+tree, void, tunnel/bridge and object handlers remain separate typed leaves; the
+original general dispatcher remains portable. Company transfer/control/buy and
+native landscape/station entries own call-local constructed costs and the full
+canonical road context. Nested station removal returns before scratch reuse;
+AI startup still returns to its native outer frame before it can throw.
+The default `water-commands` scenario compares captured ownership errors,
+restored-tile transfer/bankruptcy, native objects, depot bankruptcy, map state,
+both water balances, docking and RNG. This is shared boundary maintenance, with
+no new subsystem ownership or retirement completion claim.
+
 ### Company finances and economy lifecycle
 
 Issue #137 moves cash/fraction accounting, loans, histories, rating/value,

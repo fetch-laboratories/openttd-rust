@@ -49,6 +49,7 @@
 #ifdef WITH_RUST
 #include "rust/ffi.h"
 #include "rust/landscape_loop_ffi.h"
+#include "rust/tile_owner_services.h"
 #include "rust/road_command_services.h"
 #include "rust/ground_services.h"
 #include "rust/environment_services.h"
@@ -591,6 +592,26 @@ TrackStatus GetTileTrackStatus(TileIndex tile, TransportType mode, uint sub_mode
 	return _tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc(tile, mode, sub_mode, side);
 }
 
+#ifdef WITH_RUST
+const OpenTTDTileOwnerServices &GetRustTileOwnerServices() noexcept
+{
+	static const OpenTTDTileOwnerServices services{
+		.clear = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_clear_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.house = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_town_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.industry = &GetIndustryTileServices(),
+		.object = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_object_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.rail = &GetRustRailCommandServices(),
+		.shared = &GetRustSharedServices(),
+		.station = &GetRustStationCommandServices(),
+		.trees = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_trees_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.tunnel_bridge = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_tunnelbridge_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.void_tile = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_void_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.water = &GetRustWaterCommandServices(),
+	};
+	return services;
+}
+#endif
+
 /**
  * Change the owner of a tile
  * @param tile      Tile to change
@@ -599,7 +620,12 @@ TrackStatus GetTileTrackStatus(TileIndex tile, TransportType mode, uint sub_mode
  */
 void ChangeTileOwner(TileIndex tile, Owner old_owner, Owner new_owner)
 {
+#ifdef WITH_RUST
+	RustTileOwnerContext ownership;
+	openttd_rust_tile_change_owner(&ownership.view, tile.base(), old_owner.base(), new_owner.base());
+#else
 	_tile_type_procs[GetTileType(tile)]->change_tile_owner_proc(tile, old_owner, new_owner);
+#endif
 }
 
 void GetTileDesc(TileIndex tile, TileDesc &td)
@@ -1790,6 +1816,7 @@ void CallLandscapeTick()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDLandscapeLoopServices.hpp"
+#include "abi-visit-OpenTTDTileOwnerServices.hpp"
 #include "abi-visit-OpenTTDClearServices.hpp"
 #include "abi-visit-OpenTTDRailServices.hpp"
 #include "abi-visit-OpenTTDRoadGroundServices.hpp"
@@ -1800,7 +1827,7 @@ bool CheckAbi_landscape()
 {
 	OpenTTDGroundCall call;
 	RustRoadCommandContext road;
-	return AbiServicesComplete(RustLandscapeLoopServices(&call, &road.view)) &&
+	return AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &road.view)) &&
 		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
 		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&
 		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices());

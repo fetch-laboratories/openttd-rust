@@ -49,6 +49,7 @@
 
 #ifdef WITH_RUST
 #include "rust/company_adapter.h"
+#include "rust/tile_owner_services.h"
 #include "rust/company_services.h"
 #include "rust/command_services_ffi.h"
 #include "rust/command_cost_native_services.h"
@@ -988,8 +989,9 @@ CommandCost CmdCompanyCtrl(DoCommandFlags flags, CompanyCtrlAction cca, CompanyI
 		.result = {}, .startup = {}, .client = static_cast<uint32_t>(client_id), .action = static_cast<uint8_t>(cca),
 		.target = company_id.base(), .reason = static_cast<uint8_t>(reason), .execute = flags.Test(DoCommandFlag::Execute), .stage = 0,
 	};
+	RustTileOwnerContext ownership;
 	/* Rust returns before AI::StartNew, whose script memory policy can throw. */
-	while (openttd_rust_company_control(&GetRustCompanyServices(), &frame)) AI::StartNew(CompanyID(frame.startup.company));
+	while (openttd_rust_company_control(&GetRustCompanyServices(), &ownership.view, &frame)) AI::StartNew(CompanyID(frame.startup.company));
 	return RustCompanyCost(frame.result);
 #else
 	InvalidateWindowData(WC_COMPANY_LEAGUE, 0, 0);

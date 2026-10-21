@@ -352,7 +352,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tile_animation_add = OpenTTDAddAnimatedTile,
 	.tile_animation_delete = OpenTTDDeleteAnimatedTile,
 	.tile_animation_set_frame = OpenTTDSetAnimationFrame,
-	.tile_change_owner = OpenTTDChangeTileOwner,
 	.town_next_id = OpenTTDNextTownID,
 	.town_owner_by_id = OpenTTDTownOwnerByID,
 	.utf8_length = RustUtf8Length,

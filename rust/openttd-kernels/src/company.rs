@@ -349,7 +349,6 @@ pub struct Services {
     pub copy_service_interval_defaults: extern "C" fn(u8, u8),
     pub update_autoreplace: extern "C" fn(u8),
     pub map_size: extern "C" fn() -> u32,
-    pub change_tile_owner: extern "C" fn(u32, u8, u8),
     pub signal_tile: extern "C" fn(u32) -> SignalTile,
     pub has_signal_on_track: extern "C" fn(u32, u8) -> bool,
     pub add_track_to_signal_buffer: extern "C" fn(u32, u8, u8),
@@ -990,7 +989,7 @@ fn startup(s: &Services, f: &mut Startup) -> bool {
     (s.new_company_events)(id);
     false
 }
-fn transfer(s: &Services, old: u8, new: u8) {
+fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: u8) {
     let f = s.finance;
     let current = (f.current_company)();
     (f.set_current_company)(old);
@@ -1126,7 +1125,8 @@ fn transfer(s: &Services, old: u8, new: u8) {
     }
     let map_size = (s.map_size)();
     for tile in 0..map_size {
-        (s.change_tile_owner)(tile, old, new);
+        // SAFETY: The outer C++ frame owns live scratch across this traversal.
+        unsafe { crate::tile_owner::openttd_rust_tile_change_owner(ownership, tile, old, new) };
     }
     if new != INVALID_OWNER {
         for tile in 0..map_size {
@@ -1190,7 +1190,7 @@ fn transfer(s: &Services, old: u8, new: u8) {
     (f.set_current_company)(current);
     (s.mark_whole_screen_dirty)();
 }
-fn control(s: &Services, c: &mut Control) -> bool {
+fn control(s: &Services, ownership: &crate::tile_owner::Context, c: &mut Control) -> bool {
     if c.stage == 0 {
         (s.company_league_dirty)();
         match c.action {
@@ -1266,7 +1266,7 @@ fn control(s: &Services, c: &mut Control) -> bool {
                     return false;
                 }
                 (s.company_bankrupt_news)(target);
-                transfer(s, target, INVALID_OWNER);
+                transfer(s, ownership, target, INVALID_OWNER);
                 if (s.company_is_ai)(target) {
                     (s.stop_ai)(target);
                 }
@@ -1359,7 +1359,13 @@ fn tick(s: &Services, t: &mut Tick) -> bool {
     }
     false
 }
-fn buy(s: &Services, id: u8, mut hostile: bool, execute: bool) -> Cost {
+fn buy(
+    s: &Services,
+    ownership: &crate::tile_owner::Context,
+    id: u8,
+    mut hostile: bool,
+    execute: bool,
+) -> Cost {
     let p = (s.finance.company_finances)(id);
     if p.is_null() {
         return error();
@@ -1396,7 +1402,7 @@ fn buy(s: &Services, id: u8, mut hostile: bool, execute: bool) -> Cost {
     };
     if execute {
         (s.merger_news)(id, hostile);
-        transfer(s, id, current);
+        transfer(s, ownership, id, current);
         if (s.company_is_ai)(id) {
             (s.stop_ai)(id);
         }
@@ -1716,23 +1722,33 @@ pub extern "C" fn openttd_rust_company_takeover_allowed(s: &Services, big: u8, s
 /// `CmdCompanyCtrl`; `true` asks the caller to run `AI::StartNew(startup.company)`
 /// and call again. The result is in `result` once it returns `false`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_control(s: &Services, c: &mut Control) -> bool {
-    control(s, c)
+pub extern "C" fn openttd_rust_company_control(
+    s: &Services,
+    ownership: &crate::tile_owner::Context,
+    c: &mut Control,
+) -> bool {
+    control(s, ownership, c)
 }
 /// `ChangeOwnershipOfCompanyItems`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_company_change_ownership(s: &Services, old: u8, new: u8) {
-    transfer(s, old, new);
+pub extern "C" fn openttd_rust_company_change_ownership(
+    s: &Services,
+    ownership: &crate::tile_owner::Context,
+    old: u8,
+    new: u8,
+) {
+    transfer(s, ownership, old, new);
 }
 /// `CmdBuyCompany`.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_company_buy(
     s: &Services,
+    ownership: &crate::tile_owner::Context,
     id: u8,
     hostile: bool,
     execute: bool,
 ) -> Cost {
-    buy(s, id, hostile, execute)
+    buy(s, ownership, id, hostile, execute)
 }
 /// `CmdGiveMoney`; `give_money` is the economy setting.
 #[unsafe(no_mangle)]
@@ -2002,7 +2018,6 @@ crate::abi::layouts! {
         copy_service_interval_defaults,
         update_autoreplace,
         map_size,
-        change_tile_owner,
         signal_tile,
         has_signal_on_track,
         add_track_to_signal_buffer,

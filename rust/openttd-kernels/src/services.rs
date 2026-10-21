@@ -459,8 +459,6 @@ pub struct Services {
     pub tile_animation_delete: extern "C" fn(u32),
     /// Canonical shared `tile_animation_set_frame` service.
     pub tile_animation_set_frame: extern "C" fn(u32, u8),
-    /// Canonical shared `tile_change_owner` service.
-    pub tile_change_owner: extern "C" fn(u32, u8, u8),
     /// Canonical shared `town_next_id` service.
     pub town_next_id: extern "C" fn(u32) -> u32,
     /// Canonical shared `town_owner_by_id` service.
@@ -736,7 +734,6 @@ pub fn fixture(
         tile_animation_add: unused_animation_add,
         tile_animation_delete: tile,
         tile_animation_set_frame: zone,
-        tile_change_owner: unused_tile_change_owner,
         town_next_id: word,
         town_owner_by_id: unused_town_owner_by_id,
         utf8_length: unused_utf8_length,
@@ -1197,10 +1194,6 @@ extern "C" fn fixture_station_type(_: u32) -> StationType {
 #[cfg(test)]
 extern "C" fn unused_animation_add(_: u32, _: bool) {
     panic!("unused animation add");
-}
-#[cfg(test)]
-extern "C" fn unused_tile_change_owner(_: u32, _: u8, _: u8) {
-    panic!("unused tile ownership");
 }
 #[cfg(test)]
 extern "C" fn unused_town_owner_by_id(_: u32) -> *mut crate::town::State {
