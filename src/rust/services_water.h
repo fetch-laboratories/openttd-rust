@@ -13,11 +13,13 @@
 #include "../track_func.h"
 #include "../landscape.h"
 
+inline WaterTileType RustWaterTileType(uint32_t tile) noexcept { return GetWaterTileType(TileIndex{tile}); }
+inline LockPart RustLockPart(uint32_t tile) noexcept { return GetLockPart(TileIndex{tile}); }
 inline bool RustHasWaterClass(uint32_t tile) noexcept { return HasTileWaterClass(TileIndex{tile}); }
 inline WaterClass RustWaterClass(uint32_t tile) noexcept { return GetWaterClass(TileIndex{tile}); }
 inline bool OpenTTDIsDockingTile(uint32_t tile) noexcept { return IsDockingTile(TileIndex(tile)); }
 inline void OpenTTDMakeShore(uint32_t tile) noexcept { MakeShore(TileIndex(tile)); }
-inline bool OpenTTDIsMiddleLock(uint32_t tile) noexcept { return IsTileType(TileIndex{tile}, MP_WATER) && IsLock(TileIndex{tile}) && GetLockPart(TileIndex{tile}) == LockPart::Middle; }
+inline bool OpenTTDIsMiddleLock(uint32_t tile) noexcept { return IsTileType(TileIndex{tile}, MP_WATER) && RustWaterTileType(tile) == WaterTileType::Lock && RustLockPart(tile) == LockPart::Middle; }
 inline TrackBits OpenTTDWaterTracks(uint32_t tile, uint8_t entry) noexcept { return TrackStatusToTrackBits(GetTileTrackStatus(TileIndex{tile}, TRANSPORT_WATER, 0, static_cast<DiagDirection>(entry))); }
 inline void OpenTTDSetDockingTile(uint32_t tile, bool docking) noexcept { SetDockingTile(TileIndex{tile}, docking); }
 inline uint32_t OpenTTDLegacyWaterTracks(uint32_t tile, uint32_t entry) noexcept { return OpenTTDWaterTracks(tile, static_cast<uint8_t>(entry)); }

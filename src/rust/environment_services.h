@@ -16,6 +16,7 @@
 #include "../landscape.h"
 
 inline uint32_t OpenTTDMapLogX() noexcept { return Map::LogX(); }
+inline bool OpenTTDFreeformEdges() noexcept { return _settings_game.construction.freeform_edges; }
 inline bool OpenTTDEditor() noexcept { return _game_mode == GM_EDITOR; }
 inline bool OpenTTDGeneratingWorld() noexcept { return _generating_world; }
 inline LandscapeType OpenTTDLandscape() noexcept { return _settings_game.game_creation.landscape; }

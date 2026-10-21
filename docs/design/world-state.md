@@ -80,6 +80,20 @@ drain. Tick is a typed native facade retaining controller timing; Rust owns the
 surrounding scheduler and post-tick policy. This contract authorizes no other raw
 field access. Measured total crossings, bytes and CPU/wall gates decide acceptance.
 
+#325 selects aircraft movement observations as a separate narrow contract.
+One call-scoped typed carrier holds addresses of canonical native x/y/z, speed,
+direction and subtype scalars used by the controller; standalone position needs
+only subtype and z. This exposes no Vehicle layout, offsets or persistent mirror.
+Rust uses short raw scalar loads at the original branches, including after native
+position, rotor and viewport mutations; no Rust reference or cached scalar crosses
+a callback. Writes and virtual operations retain their canonical services.
+Acquire access after loading/order processing establishes a live shell, excluding
+the deleting crash path. Discard it before any callback that may destroy or replace
+that shell; ID reuse is not a lifetime repair. The shared vehicle layer defines
+each typed address once. Default native tests prove address identity and fresh
+reads after mutation, while existing reentry witnesses and semantic checks remain.
+This selects no shared Vehicle storage migration, chain view or general raw API.
+
 Per-field callbacks inside tile or vehicle loops may dominate runtime. Prefer
 copied records for fields observed together and batches only where the original
 has no intervening observable operation. Do not batch RNG or defer writes across

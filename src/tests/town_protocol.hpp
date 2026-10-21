@@ -164,7 +164,7 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.map_log_x = TownProtocol_map_log_x,
 		.growth_rate = TownProtocol_growth_rate,
 		.snow_line = TownProtocol_snow_line,
-		.editor = TownProtocol_editor,
+		.environment = {.editor = TownProtocol_editor, .freeform_edges = TownProtocol_editor},
 		.generating_world = TownProtocol_generating_world,
 		.allow_crossings = TownProtocol_allow_crossings,
 		.climate = TownProtocol_climate,

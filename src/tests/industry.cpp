@@ -158,7 +158,7 @@ struct IndustryGenerationFixture {
 			.spec_behaviour = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint32_t { return uintptr_t(spec) == 2 ? 1U << 2 : 0; },
 			.info = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> OpenTTDIndustryGenerationInfo { return {1, uintptr_t(spec) <= 2, true}; },
 			.coastal = [](const OpenTTDIndustrySpecHandle *) noexcept -> bool { return false; },
-			.editor = []() noexcept -> bool { return false; },
+			.environment = {.editor = []() noexcept -> bool { return false; }, .freeform_edges = []() noexcept -> bool { return false; }},
 			.density = []() noexcept -> uint8_t { return 4; },
 			.custom_number = []() noexcept -> uint32_t { return 0; },
 			.scale_by_size_1d = [](uint32_t n) noexcept -> uint32_t { return n; },

@@ -347,7 +347,7 @@ pub struct World {
     pub(crate) get: extern "C" fn(u16) -> *mut BaseStation,
     pub(crate) owner: extern "C" fn(*mut BaseStation) -> *mut Service,
     pub(crate) pool_size: extern "C" fn() -> usize,
-    pub(crate) editor: extern "C" fn() -> bool,
+    pub(crate) environment: crate::services::EnvironmentServices,
     pub(crate) facilities: extern "C" fn(*mut BaseStation) -> u8,
     pub(crate) in_use: extern "C" fn(*mut BaseStation) -> bool,
     pub(crate) is_station: extern "C" fn(*mut BaseStation) -> bool,
@@ -1055,7 +1055,7 @@ pub unsafe extern "C" fn openttd_rust_station_stale(
 pub unsafe extern "C" fn openttd_rust_station_tick(world: *const World, links: *const Links) {
     let w = unsafe { &*world };
     let l = unsafe { &*links };
-    if u32::from((w.editor)()) != 0 {
+    if u32::from((w.environment.editor)()) != 0 {
         return;
     }
     let mut id = 0_usize;

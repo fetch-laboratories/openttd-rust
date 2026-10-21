@@ -368,7 +368,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_loop(
         bigger(tile, map, s, c, l, t);
         return;
     }
-    if unsafe { ((*g).editor)() } {
+    if unsafe { ((*g).environment.editor)() } {
         return;
     }
     if unsafe { (t.transport)(tile) } {
@@ -593,7 +593,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_clear(
     let kind = unsafe { (*industry.owner).metadata.kind };
     let spec = unsafe { (g.spec)(kind) };
     if (unsafe { (p.current_company)() } != 17
-        && !unsafe { (g.editor)() }
+        && !(g.environment.editor)()
         && !unsafe { (p.magic_bulldozer)() })
         || flags & 2 != 0
         || (unsafe { (p.current_company)() } == 17

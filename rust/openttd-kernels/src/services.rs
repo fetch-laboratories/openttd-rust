@@ -262,6 +262,16 @@ pub struct Train {
     _private: [u8; 0],
 }
 
+/// Canonical immutable world settings shared by owner tables.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct EnvironmentServices {
+    /// Scenario editor mode.
+    pub editor: extern "C" fn() -> bool,
+    /// Construction freeform edges.
+    pub freeform_edges: extern "C" fn() -> bool,
+}
+
 /// Typed native leaves used by the complete shared clear-square policy.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -285,6 +295,8 @@ pub struct ClearSquareServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
+    /// Canonical native tile owner write.
+    pub set_tile_owner: extern "C" fn(u32, u8),
     /// `AutoslopeEnabled()`.
     pub autoslope: extern "C" fn() -> bool,
     /// Original native `bay_stop_direction` map observation.
@@ -301,8 +313,6 @@ pub struct Services {
     pub calendar_date: extern "C" fn() -> i32,
     /// Current calendar year used by town and industry.
     pub calendar_year: extern "C" fn() -> i32,
-    /// `DoClearSquare`.
-    pub clear_square: extern "C" fn(u32),
     /// Native leaves for direct shared Rust clear-square control.
     pub clear_square_services: ClearSquareServices,
     /// Original native uncached nearest-town spatial lookup.
@@ -450,6 +460,8 @@ pub struct Services {
     pub tile_slope: extern "C" fn(u32) -> u8,
     /// `GetTileType`.
     pub tile_type: extern "C" fn(u32) -> u8,
+    /// Original `TileAddWrap`, including map and freeform-edge checks.
+    pub tile_add_wrap: extern "C" fn(u32, i32, i32) -> u32,
     /// Original native `tile_valid` map observation.
     pub tile_valid: extern "C" fn(u32) -> bool,
     /// `GetTileZ`.
@@ -605,6 +617,7 @@ pub fn fixture(
         }
     }
     Services {
+        set_tile_owner: zone,
         autoslope: flag0,
         bay_stop_direction: byte,
         bridge_above: flag,
@@ -613,7 +626,6 @@ pub fn fixture(
         build_on_slopes: flag0,
         calendar_date: zero_year,
         calendar_year: zero_year,
-        clear_square: tile,
         clear_square_services: ClearSquareServices {
             may_animate: flag,
             delete_animated: unused_clear_animation,
@@ -692,6 +704,7 @@ pub fn fixture(
         tile_owner: byte,
         tile_slope: byte,
         tile_type: byte,
+        tile_add_wrap: unused_tile_add_wrap,
         tile_valid: flag,
         tile_z: height,
         town_index: index,
@@ -1031,6 +1044,8 @@ pub struct RailMapServices {
     pub has_signals: extern "C" fn(u32) -> bool,
     /// Native `GetSignalType`.
     pub signal_type: extern "C" fn(u32, u8) -> SignalType,
+    /// Native `INVALID_RAILTYPE`.
+    pub invalid_rail_type: extern "C" fn() -> RailType,
     /// Native `GetRailType`.
     pub rail_type: extern "C" fn(u32) -> RailType,
     /// Native `SetRailType`.
@@ -1085,8 +1100,6 @@ pub struct RailMapServices {
     pub station_track: extern "C" fn(u32) -> Track,
     /// Native `HasTunnelBridgeReservation`.
     pub wormhole_reserved: extern "C" fn(u32) -> bool,
-    /// Native `SetTileOwner`.
-    pub set_tile_owner: extern "C" fn(u32, u8),
 }
 
 /// A live native `CommandCost` borrowed for the synchronous entry.
@@ -1182,4 +1195,9 @@ extern "C" fn unused_road_tram_type(_: u8) -> RoadTramType {
 #[cfg(test)]
 extern "C" fn unused_clear_animation(_: u32, _: bool) {
     panic!("unused clear animation")
+}
+
+#[cfg(test)]
+extern "C" fn unused_tile_add_wrap(_: u32, _: i32, _: i32) -> u32 {
+    panic!("unused tile addition")
 }

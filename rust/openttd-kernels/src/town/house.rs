@@ -360,7 +360,7 @@ impl House<'_> {
         if (self.h.company_human)(company)
             || company == OWNER_WATER
             || company == OWNER_NONE
-            || (self.l.editor)()
+            || (self.l.environment.editor)()
             || (self.l.generating_world)()
         {
             return true;
@@ -917,7 +917,7 @@ impl House<'_> {
         replace: bool,
     ) {
         let c = self.costs();
-        if !(self.l.editor)() && (self.h.place_houses)() == 0 {
+        if !(self.l.environment.editor)() && (self.h.place_houses)() == 0 {
             (c.error)(result, 0xFFFF);
             return;
         }
