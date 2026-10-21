@@ -149,7 +149,7 @@ unsafe fn dispatch(
             );
         },
         2 => unsafe {
-            ground::openttd_rust_road_tile_loop(
+            ground::road_tile_loop(
                 tile,
                 g.climate,
                 settings.ambient,
@@ -181,7 +181,7 @@ unsafe fn dispatch(
             );
         },
         8 => unsafe {
-            industry::openttd_rust_industry_tile_loop(
+            industry::tile_loop(
                 tile,
                 // Existing industry ABI stores legal map logarithms in a byte.
                 log_x as u8,
@@ -193,7 +193,7 @@ unsafe fn dispatch(
                 s.industry.generation,
             );
         },
-        9 => unsafe { ground::openttd_rust_tunnel_tile_loop(tile, g.climate, g.tunnel, s.shared) },
+        9 => unsafe { ground::tunnel_tile_loop(tile, g.climate, g.tunnel, s.shared) },
         10 => (s.object_loop)(tile),
         // The source dispatch table has handlers only for original live tile types.
         _ => unsafe { std::hint::unreachable_unchecked() },

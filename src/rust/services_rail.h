@@ -9,6 +9,8 @@
 #ifndef RUST_SERVICES_RAIL_H
 #define RUST_SERVICES_RAIL_H
 #include <type_traits>
+#include "signal_ffi.h"
+#include "environment_services.h"
 #include "../rail_map.h"
 #include "../rail.h"
 #include "../road_map.h"
@@ -19,6 +21,11 @@
 #include "../depot_map.h"
 #include "../tunnelbridge.h"
 #include "../pbs.h"
+
+inline OpenTTDSignalContext GetRustSignalContext() noexcept
+{
+	return {&GetRustSharedServices(), &GetRustRailMapServices(), &GetRustSignalServices(), OpenTTDMapLogX()};
+}
 
 /* Preserve native accessor types and assertion policy. The FFI tables adapt
  * only result widths; native consumers inline these same reads without another
