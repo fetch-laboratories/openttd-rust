@@ -97,7 +97,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitClose(OpenTTDVehicle *v, int32_t x,
 		if (u->type != VEH_ROAD || RustVehicleFirst(u) == front) return true;
 		const RoadVehicle *r = RoadVehicle::From(u);
 		const RoadVehicle *first = RustVehicleFirst(r);
-		OpenTTDRoadCandidate candidate{.vehicle = RustVehicle(r), .state = r->GetRustState(), .first = RustVehicle(first), .first_state = first->GetRustState(),
+		OpenTTDRoadCandidate candidate{.vehicle = RustVehicle(r), .state = RoadStateOf(r), .first = RustVehicle(first), .first_state = RoadStateOf(first),
 			.index = r->index.base(), .x = r->x_pos, .y = r->y_pos, .z = r->z_pos, .first_speed = RustVehicleSpeed(first), .direction = RustVehicleDirection(r)};
 		return visit(context, &candidate);
 	};
