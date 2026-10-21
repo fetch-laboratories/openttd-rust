@@ -34,6 +34,8 @@ jobs:
     - uses: astral-sh/setup-uv@v10.2.0
       with:
         version: "0.12.18"
+    - name: Install nested collection probe dependency
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends valgrind
     - name: Python formatting, lint and maintenance regression checks
       run: |
         uvx --from ruff==0.16.8 ruff check tools/
