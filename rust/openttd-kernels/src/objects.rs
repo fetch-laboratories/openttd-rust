@@ -918,7 +918,7 @@ impl<'a> World<'a> {
             out.set(if flags_spec & CLEAR_INCOME == 0 {
                 price
             } else {
-                negate(price)
+                crate::company::neg(price)
             });
             let company = self.current();
             if company == TOWN {
@@ -1091,7 +1091,7 @@ impl<'a> World<'a> {
                         } else {
                             let owner = self.owner(t);
                             if owner != NONE && owner != WATER {
-                                (self.commands().tile_ownership)(tmp.0, t);
+                                (self.commands().ownership)(tmp.0, owner, t);
                                 out.add(tmp);
                             }
                             if !((*self.s.town).environment.freeform_edges)()
@@ -1277,9 +1277,6 @@ impl<'a> World<'a> {
         crate::witness::hit(crate::witness::OBJECT_BUILD_COMMAND);
     }
 }
-fn negate(money: i64) -> i64 {
-    if money == i64::MIN { i64::MAX } else { -money }
-}
 
 impl World<'_> {
     fn do_build(
@@ -1287,37 +1284,15 @@ impl World<'_> {
         out: Cost<'_>,
         tmp: Cost<'_>,
         aux: Cost<'_>,
-        test: Cost<'_>,
         flags: u16,
         tile: u32,
         kind: u16,
         view: u8,
     ) {
-        if tile != 0
-            && (tile >= self.map.size_x() * ((self.shared.map_max_y)() + 1)
-                || (!(self.shared.tile_valid)(tile) && flags & ALL_TILES == 0))
-        {
-            out.error();
-            return;
-        }
-        unsafe {
-            let protocol = self.commands();
-            let top = (protocol.enter)();
-            if top || flags & EXECUTE == 0 {
-                crate::command::before(protocol, top, true);
-                self.build_command(test, tmp, aux, flags & !EXECUTE, tile, kind, view);
-                crate::command::after(protocol, &*self.s.cost, test.0, flags, top, true);
-                if !test.ok() || flags & EXECUTE == 0 {
-                    out.take(test);
-                    (protocol.leave)();
-                    return;
-                }
-            }
-            crate::command::before(protocol, top, false);
-            self.build_command(out, tmp, aux, flags, tile, kind, view);
-            crate::command::after(protocol, &*self.s.cost, out.0, flags, top, false);
-            (protocol.leave)();
-        }
+        let result = crate::services::Cost(out.0, out.1);
+        crate::command::nested(self.commands(), self.shared, result, tile, flags, |flags| {
+            self.build_command(out, tmp, aux, flags, tile, kind, view)
+        });
     }
     fn build_area(
         &self,
@@ -1325,7 +1300,6 @@ impl World<'_> {
         ret: Cost<'_>,
         tmp: Cost<'_>,
         aux: Cost<'_>,
-        test: Cost<'_>,
         last: Cost<'_>,
         flags: u16,
         tile: u32,
@@ -1355,7 +1329,7 @@ impl World<'_> {
             let mut iterator = Drag::new(self.map, map_y, tile, start, diagonal);
             while iterator.tile != INVALID_TILE {
                 let t = iterator.tile;
-                self.do_build(ret, tmp, aux, test, flags & !EXECUTE, t, kind, view);
+                self.do_build(ret, tmp, aux, flags & !EXECUTE, t, kind, view);
                 if !finance.is_null() {
                     let prior = limit;
                     limit -= 1;
@@ -1375,7 +1349,7 @@ impl World<'_> {
                     if cost > 0 && money < 0 {
                         break;
                     }
-                    self.do_build(ret, tmp, aux, test, flags, t, kind, view);
+                    self.do_build(ret, tmp, aux, flags, t, kind, view);
                 }
                 out.amount(cost);
                 iterator.advance();
@@ -1570,7 +1544,7 @@ impl World<'_> {
                 && random & 255 < 256 / 4 / (6_u32.wrapping_sub(level))
             {
                 let mut amount = (random & 255) / 8 / 4 + 1;
-                if crate::company::in_recession() {
+                if (self.shared.recession)() {
                     amount = (amount + 1) >> 1;
                 }
                 amount = (self.s.scale_cargo)(amount);
@@ -1582,7 +1556,7 @@ impl World<'_> {
                 && (random >> 8) & 255 < 196 / 4 / (6_u32.wrapping_sub(level))
             {
                 let mut amount = ((random >> 8) & 255) / 8 / 4 + 1;
-                if crate::company::in_recession() {
+                if (self.shared.recession)() {
                     amount = (amount + 1) >> 1;
                 }
                 amount = (self.s.scale_cargo)(amount);
@@ -2016,7 +1990,6 @@ pub unsafe extern "C" fn openttd_rust_object_build_area(
     ret: *mut CommandCost,
     tmp: *mut CommandCost,
     aux: *mut CommandCost,
-    test: *mut CommandCost,
     last: *mut CommandCost,
     flags: u16,
     tile: u32,
@@ -2032,10 +2005,9 @@ pub unsafe extern "C" fn openttd_rust_object_build_area(
     let ret = Cost(ret, costs);
     let tmp = Cost(tmp, costs);
     let aux = Cost(aux, costs);
-    let test = Cost(test, costs);
     let last = Cost(last, costs);
     w.build_area(
-        out, ret, tmp, aux, test, last, flags, tile, start, kind, view, diagonal,
+        out, ret, tmp, aux, last, flags, tile, start, kind, view, diagonal,
     );
 }
 

@@ -448,7 +448,8 @@ const SCORE_WEIGHT: [i64; 9] = [100, 100, 100, 50, 100, 400, 50, 50, 50];
 fn e() -> *mut Economy {
     &raw mut ECONOMY
 }
-fn neg(a: i64) -> i64 {
+/// Saturating `-Money` (`OverflowSafeInt64::operator-`).
+pub(crate) fn neg(a: i64) -> i64 {
     if a == i64::MIN { i64::MAX } else { -a }
 }
 fn done(cost: i64, expense: u8) -> Cost {
@@ -2173,9 +2174,4 @@ crate::abi::layouts! {
         tree_burst,
         object_burst,
     };
-}
-
-/// Original `EconomyIsInRecession` over the canonical economy owner.
-pub(crate) fn in_recession() -> bool {
-    get!(e(), fluct) <= 0
 }

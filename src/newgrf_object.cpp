@@ -31,6 +31,7 @@
 #include "rust/object_ffi.h"
 #include "rust/tile_animation_services.h"
 #include "rust/services_map.h"
+#include "rust/environment_services.h"
 #endif
 
 #include "safeguards.h"
@@ -641,7 +642,7 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 		.kind = [](Object *o) noexcept { return o->type; },
 		.north = [](Object *o) noexcept { return o->location.tile.base(); },
 		.town = [](Object *o) noexcept -> const Town * { return o->town; },
-		.town_tile = [](const Town *t) noexcept { return t->xy.base(); },
+		.town_tile = OpenTTDTownTile,
 		.date = [](Object *o) noexcept { return o->build_date.base(); },
 		.colour = [](Object *o) noexcept { return o->colour; },
 		.view = [](Object *o) noexcept { return o->view; },

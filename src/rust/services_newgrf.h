@@ -30,7 +30,6 @@ inline void OpenTTDDeleteRailInspect(uint32_t tile) noexcept { RustCloseNewGRFIn
 inline void OpenTTDDeleteHouseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_HOUSES, tile); }
 inline void OpenTTDDeleteIndustryTileInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_INDUSTRYTILES, tile); }
 inline void OpenTTDDeleteIndustryInspect(uint16_t industry) noexcept { RustCloseNewGRFInspect(GSF_INDUSTRIES, industry); }
-inline bool OpenTTDIndustryTileBooleanCallback(const IndustryTileSpec *spec, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvertBooleanCallback(spec->grf_prop.grffile, callback, result); }
 inline void RustUnknownCallbackResult(uint32_t grfid, uint16_t callback, uint16_t result) noexcept { ErrorUnknownCallbackResult(grfid, callback, result); }
 template <typename Spec, typename Handle>
 inline void RustSpecCallbackError(const Handle *handle, uint16_t callback, uint16_t result) noexcept

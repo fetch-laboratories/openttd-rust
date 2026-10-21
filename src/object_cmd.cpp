@@ -437,8 +437,8 @@ CommandCost CmdBuildObject(DoCommandFlags flags, TileIndex tile, ObjectType type
 CommandCost CmdBuildObjectArea(DoCommandFlags flags, TileIndex tile, TileIndex start_tile, ObjectType type, uint8_t view, bool diagonal)
 {
 #ifdef WITH_RUST
-	CommandCost out, ret, tmp, aux, test, last;
-	openttd_rust_object_build_area(&GetRustObjectServices(), RustCommandCost(&out), RustCommandCost(&ret), RustCommandCost(&tmp), RustCommandCost(&aux), RustCommandCost(&test), RustCommandCost(&last), flags.base(), tile.base(), start_tile.base(), type, view, diagonal);
+	CommandCost out, ret, tmp, aux, last;
+	openttd_rust_object_build_area(&GetRustObjectServices(), RustCommandCost(&out), RustCommandCost(&ret), RustCommandCost(&tmp), RustCommandCost(&aux), RustCommandCost(&last), flags.base(), tile.base(), start_tile.base(), type, view, diagonal);
 	return out;
 #else
 	if (start_tile >= Map::Size()) return CMD_ERROR;

@@ -3941,7 +3941,7 @@ static const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices()
 		.removal_cost = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> int64_t { return reinterpret_cast<const IndustrySpec *>(spec)->GetRemovalCost(); },
 		.tile_max_z = [](uint32_t tile) noexcept -> int32_t { return OpenTTDTileMaxZ(TileIndex(tile)); },
 		.autoslope_callback = [](const OpenTTDIndustryTileSpec *spec) noexcept -> bool { return spec->callback_mask.Test(IndustryTileCallbackMask::Autoslope); },
-		.callback_boolean = OpenTTDIndustryTileBooleanCallback,
+		.callback_boolean = RustSpecBooleanCallback<IndustryTileSpec>,
 		.landscape_clear = [](OpenTTDIndustryCost *out, uint32_t tile, uint16_t flags) noexcept { *out = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlags{flags}, TileIndex(tile)); },
 	};
 	return services;
@@ -3963,7 +3963,7 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.closest_town = [](uint32_t tile, uint32_t threshold) noexcept -> const OpenTTDTownHandle * { return reinterpret_cast<const OpenTTDTownHandle *>(ClosestTownFromTile(TileIndex(tile), threshold)); },
 		.town = [](Industry *industry) noexcept -> const OpenTTDTownHandle * { return reinterpret_cast<const OpenTTDTownHandle *>(industry->town); },
 		.population = [](const OpenTTDTownHandle *town) noexcept -> uint32_t { return reinterpret_cast<const Town *>(town)->cache.population; },
-		.town_position = [](const OpenTTDTownHandle *town) noexcept -> uint32_t { return reinterpret_cast<const Town *>(town)->xy.base(); },
+		.town_position = OpenTTDTownTile,
 		.industry = [](uint16_t id) noexcept -> Industry * { return Industry::Get(IndustryID(id)); },
 		.highest_snow_line = OpenTTDHighestSnowLine,
 		.edge_distance = [](uint32_t tile, uint8_t direction) noexcept -> uint32_t { return DistanceFromEdgeDir(TileIndex(tile), static_cast<DiagDirection>(direction)); },

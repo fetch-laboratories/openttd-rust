@@ -10,8 +10,6 @@
 #define RUST_ENVIRONMENT_SERVICES_H
 #include "../genworld.h"
 #include "../town.h"
-#include "../cargotype.h"
-#include "../economy_func.h"
 #include <utility>
 #include "../map_func.h"
 #include "../openttd.h"
@@ -28,7 +26,9 @@ inline uint8_t OpenTTDLandscapeValue() noexcept { return to_underlying(OpenTTDLa
 inline uint8_t OpenTTDHighestSnowLine() noexcept { return HighestSnowLine(); }
 struct OpenTTDTownState;
 struct OpenTTDTownRef;
+struct OpenTTDTownHandle;
 struct Town;
+inline uint32_t OpenTTDTownTile(const OpenTTDTownHandle *town) noexcept { return reinterpret_cast<const Town *>(town)->xy.base(); }
 Town *OpenTTDTownShellByID(uint32_t id) noexcept;
 OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept;
 OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept;
