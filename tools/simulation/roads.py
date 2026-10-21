@@ -309,9 +309,10 @@ def check(scenario, run, mode, role, result):
                 "protocol-query true",
                 "protocol-bankrupt true",
                 "automatic-convert-exec true",
+                *COVERAGE_OUTCOMES,
             ):
                 if not any(
-                    line.startswith("ROADCMD " + expected + " ") for line in lines
+                    (line + " ").startswith(f"ROADCMD {expected} ") for line in lines
                 ):
                     result["problems"].append(f"{mode}/{role}: missing {expected}")
             if not any(
@@ -825,6 +826,29 @@ if __name__ == "__main__":
     core.GAME_LOCK = migration.COMMON_LOCAL / "simulation-game.lock"
     prepare_crossing(migration, out, operation)
 
+
+# #156 outcomes: refusals, vehicles in the way (4162), wormholes, owner changes.
+COVERAGE_OUTCOMES = """\
+crossing-convert-exec false 0 4088
+crossing-disallowed-exec false 0 4088
+slope-remove-half-exec true 270
+depot-autoslope true 848
+stop-remove-last-exec true
+tunnel-convert-exec true
+rv-rotate-exec false 0 4162
+rv-depot-remove-exec false 0 4162
+rv-depot-convert-exec false 0 4162
+rv-depot-power-exec true
+rv-oneway-exec false 0 4162
+rv-remove-exec false 0 4162
+rv-bridge-exec false 0 4162
+rv-tunnel-exec false 0 4162
+town-rating-exec false 0 3945
+town-convert-rating-exec false 0 3945
+town-convert-exec false 0 3937
+town-convert-power-exec true
+town-refuse-exec false 0 3945
+transfer-depot true true""".splitlines()
 
 COMMAND_BRANCHES = (
     "build",
