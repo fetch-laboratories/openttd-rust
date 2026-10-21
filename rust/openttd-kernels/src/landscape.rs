@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-use crate::services::TILE_HEIGHT;
+use crate::tile_type::TILE_HEIGHT;
 
 const TILE_SIZE: u32 = 16;
 const HALF_TILE: u8 = 0x20;

@@ -283,6 +283,8 @@ struct OpenTTDWaterArea {
 // Direct Rust economy reads use these source Price indices.
 static_assert(PR_BUILD_DEPOT_SHIP == 7 && PR_CLEAR_DEPOT_SHIP == 32 && PR_BUILD_LOCK == 64 && PR_CLEAR_LOCK == 65);
 static_assert(PR_BUILD_CANAL == 60 && PR_CLEAR_CANAL == 61 && PR_CLEAR_WATER == 34 && PR_CLEAR_ROUGH == 23);
+/* Rust water.rs and water_cmd.rs keep these water.h values and the three-part lock table. */
+static_assert(RIVER_OFFSET_DESERT_DISTANCE == 5 && to_underlying(LockPart::End) == 3);
 const OpenTTDWaterCommandServices &GetRustWaterCommandServices() noexcept
 {
 	static const OpenTTDWaterCommandServices services{
@@ -1559,14 +1561,7 @@ static bool ClickTile_Water(TileIndex tile)
 	return false;
 }
 
-#ifdef WITH_RUST
-static void ChangeTileOwner_Water(TileIndex tile, Owner old_owner, Owner new_owner)
-{
-	CommandCost ret;
-	openttd_rust_water_change_owner(&GetRustWaterCommandServices(), RustCommandCost(&ret), tile.base(), old_owner.base(), new_owner.base());
-}
-
-#else
+#ifndef WITH_RUST
 static void ChangeTileOwner_Water(TileIndex tile, Owner old_owner, Owner new_owner)
 {
 	if (!IsTileOwner(tile, old_owner)) return;
@@ -1656,7 +1651,11 @@ extern const TileTypeProcs _tile_type_water_procs = {
 	ClickTile_Water,          // click_tile_proc
 	nullptr,                     // animate_tile_proc
 	TileLoop_Water,           // tile_loop_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust ownership dispatcher calls the owner directly.
+#else
 	ChangeTileOwner_Water,    // change_tile_owner_proc
+#endif
 	nullptr,                     // add_produced_cargo_proc
 	VehicleEnter_Water,       // vehicle_enter_tile_proc
 	GetFoundation_Water,      // get_foundation_proc

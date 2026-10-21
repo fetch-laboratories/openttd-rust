@@ -78,10 +78,8 @@ pub struct EngineForLength {
     pub grf_version: u8,
 }
 
-/// `MP_*` tile types.
-pub const MP_ROAD: u8 = 2;
-pub const MP_STATION: u8 = 5;
-pub const MP_TUNNELBRIDGE: u8 = 9;
+pub use crate::newgrf_callbacks::CALLBACK_FAILED;
+pub use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 /// `OrderType` values.
 pub const OT_GOTO_STATION: u8 = 1;
 pub const OT_GOTO_DEPOT: u8 = 2;
@@ -104,8 +102,6 @@ pub const INVALID_ENGINE: u16 = 0xFFFF;
 pub const INVALID_PRICE: u8 = 0xFF;
 /// `PROP_AIRCRAFT_SPEED`.
 pub const PROP_AIRCRAFT_SPEED: u8 = 0x0C;
-/// `CALLBACK_FAILED`.
-pub const CALLBACK_FAILED: u16 = 0xFFFF;
 /// `VEHICLE_LENGTH`.
 pub const VEHICLE_LENGTH: u8 = 8;
 /// `CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS`.

@@ -12,6 +12,7 @@ use super::{
     Accepted, Builder, GenerationServices, Industry, LifecycleServices, Map, Produced, Services,
     SpecHandle, accepted, fields, produced, produced_count, valid,
 };
+use crate::newgrf_callbacks::CALLBACK_FAILED;
 use std::{ffi::c_void, ptr};
 
 #[repr(C)]
@@ -84,7 +85,6 @@ pub struct ConstructionServices {
     ),
     pub add_delivery: unsafe extern "C" fn(*mut StationHandle, *mut c_void, u32),
 }
-const CALLBACK_FAILED: u16 = 0xffff;
 const PROD_CHANGE_BUILD: u16 = 0x15f;
 const DECIDE_COLOUR: u16 = 0x14a;
 const INPUT_CARGO_TYPES: u16 = 0x14b;
