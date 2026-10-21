@@ -4,12 +4,12 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-21, code at `4e7753122e`)
+## Where the fork stands (2026-10-21, code at `5e2f570eee`)
 
-- Thirty-four ownership ports. Whole fork: Rust 79,684 / tooling 31,564 / glue 32,109 / original retired 46,101 of 470,612 `src/` lines (9.80%). Simulation: 38,061 / 102,615 (37.09%).
-- The five ownership integrations since the previous speed record are #255 landscape, #303 stations, #317 water, #269 houses and #290 roads. The due speed pass has six fixed-endpoint profiles; historical calibration and quiet anchors remain.
-- Speed record (#318): TGP 1.187, Opus 1.231, Grok 1.203, P1996 1.256, P2000 1.321, P2016 1.388. Four quiet steering medians per scenario confirm it within 1%. CI_ON_DEMAND=true; the current base platform and semantic runs pass.
-- Ship scratch #308, station fidelity #323, water #317, tile cleanup #324, houses #269, shared commands #328 and aircraft observations #326 are integrated after review, quiet speed and exact-head Full. Road #290 is integrated; object #313 needs the selected shared ownership repair #331. Guard #322 awaits calibration and anchors; #156 gaps remain open.
+- Thirty-four ownership ports. Whole fork: Rust 79,796 / tooling 31,676 / glue 32,246 / original retired 46,102 of 470,612 C/C++ `src/` lines (9.80%). Simulation: 38,062 / 102,615 (37.09%).
+- The five ownership integrations since the previous speed record are #255 landscape, #303 stations, #317 water, #269 houses and #290 roads. The due speed pass has profiles and historical quiet calibration; guard policy and final integrated anchors remain. No further maintenance PR starts during the pause.
+- Speed record (#318): TGP 1.187, Opus 1.231, Grok 1.203, P1996 1.256, P2000 1.321, P2016 1.388. Four quiet steering medians per scenario confirm it within 1%. CI_ON_DEMAND=true; #332 and #333 passed exact-head Full and quiet six before integration.
+- Ship scratch #308, station fidelity #323, water #317, tile cleanup #324, houses #269, shared commands #328, aircraft observations #326, roads #290, road prologue #332 and shared ownership dispatch #333 are integrated. Object #313 awaits #333 adoption. Guard #322 returns its calibration policy decision to the user; vehicle #329 is a non-passing draft. #156 gaps remain open.
 
 ## Fifteenth steering review (2026-10-20, honest speed and one shared layer)
 
@@ -115,6 +115,8 @@ keep their evidence in their PRs. Rows below use original retirement and net glu
 | #261 R5 tile-loop cleanup and signal boundary | #324 | direct | `69d0365a9f` | 14 / 0 / 36 / 11; net glue -11 |
 | #327 shared direct command lifecycle | #328 | direct | `764e1fa92d` | 45 / 0 / 0 / 0; net glue 0 |
 | #325 aircraft movement observations | #326 | direct | `7b0a82cbd1` | 213 / 35 / 99 / 0; net glue +56 |
+| #330 road tick prologue | #332 | direct | `4476646d19` | 22 / 36 / 67 / 0; net glue +36 |
+| #331 shared ownership dispatch | #333 | direct | `5e2f570eee` | 143 / 90 / 122 / 1; net glue +101 |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -125,9 +127,9 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings.
 2. **Speed guard and passes (#155, #282, #321, AGENTS.md).**
-   - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios; #321 adds fixed measured anchors and separately rolling integrated instruction projections. Root reselected 560 added tooling/test/workflow lines for the reviewed implementation, now cleanly adopting `5ac2437aa5`. Calibration covers increases, decreases and underprediction before acceptance. Complete anchor data needs an explicit budget selection when measured; no new controller.
+   - **Record:** `SPEED_BUDGETS` holds current `rust-migration` ratios; #321 adds fixed anchors and separately rolling integrated projections. Draft #322 remains at 560 added tooling/test/workflow lines and `535761dc9d`. Historical calibration exposes factor-two underprediction; policy options and evidence are in the PR. The user decides the guard's scope and any budget for report changes or complete anchor data; no controller or source change is selected during wind-down.
    - **Per PR:** no scenario's projected ratio more than 15% above its record and none over its ceiling (1.5x play saves, 1.3x generation). Until #321 lands, use quiet wall medians. Misses get a callgrind fix round.
-   - **Speed pass:** after every fourth ownership integration, or when a projection comes within 5% of its ceiling (1.425x play, 1.235x generation). Five have integrated since the previous record; six profiles and net boundary attribution at the fixed calibration endpoint are complete. Historical comparisons, quiet anchors and the latest integrated count refresh remain.
+   - **Speed pass:** after every fourth ownership integration, or when a projection comes within 5% of its ceiling (1.425x play, 1.235x generation). Five have integrated since the previous record; fixed-endpoint profiles, net attribution and historical quiet calibration are complete. Policy, final integrated count refresh and matching quiet anchors remain; the due pass stays open without new maintenance PRs.
    - **Redraw:** `-r 64x64` leaves the ratios unchanged, so redraw does not inflate them. It does make whole-process counts timing-dependent, which is why only the game loop is counted.
 3. **#156 coverage, standing capacity.** Random and crash branches come first. These remain:
    - signal tbd/global propagation overflow and arbitrary mod layouts;
@@ -142,9 +144,9 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #275, #321) and #156 run in parallel.
 
-1. **Speed pass and shared services:** #308, #323, #317, #324, #269, #328 and #326 are integrated. Complete #321/#322 historical calibration, quiet anchors and bootstrap Full. Implement selected #331's dispatch-only shared ownership repair from integrated roads (hard added Rust 260 / net glue 160 / tooling 120); #313 adopts it with no new tooling. Reuse the integrated ownership signature and command lifecycle.
-2. **Object command draft #313:** both split fixing reviews and root spot-check are complete. Query comparison and actual-loop regression pass after genuine RED/GREEN; tooling 427 / net 486 / retired 924 preserves the strict ratio and cap 430. Captured-owner checking and post-clear ownership dispatch await #331 adoption, then scoped review, speed and Full. Road #290 is integrated with tooling 375 after quiet six and exact-head Full.
-3. **#275 profile-selected order:** #326 is integrated. Select #330's narrow road tick-prologue fold (hard net glue 40 / test-tooling 80 including ABI inventory), then station per-slot observation phases and train reads. Retain native movement/speed algorithms. Fresh net attribution reselects TGP #312 trees before clear observations and industry `next_tick`; parent attribution may revise that order. Gross callback counts are not recoverable savings.
+1. **Speed pass and shared services:** shared ownership repair #331/#333 is integrated within its hard added Rust 260 / net glue 160 / tooling 120 envelope. When resumed, complete the user's #321/#322 policy decision, final matching anchors and bootstrap Full; #313 adopts the integrated repair with no new tooling. Reuse the integrated ownership signature and command lifecycle.
+2. **Object command draft #313:** both split fixing reviews and root spot-check are complete. Query comparison and actual-loop regression pass after genuine RED/GREEN; tooling 427 / net 486 / retired 924 preserves the strict ratio and cap 430. Captured-owner checking and post-clear ownership dispatch await #333 adoption, then scoped review, quiet six and Full. No adoption starts during the pause.
+3. **#275 profile-selected order:** #326 and #330/#332 are integrated; station per-slot observation phases and train reads remain next. Retain native movement/speed algorithms. Fresh net attribution reselects TGP #312 trees before clear observations and industry `next_tick`; parent attribution may revise that order. Gross callback counts are not recoverable savings. No new maintenance PR starts during the pause.
 4. **#281** vehicle maintenance direct calls, then the callee-copy check.
 5. **#274 map view**, one shared PR.
 6. **Next whole owners**, as WIP frees, each without draft service dependencies:
@@ -163,17 +165,15 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Resumed on 2026-10-20 with the fifteenth steering actions. Root on this host:
-gpt-6.1-sol, ultra; implementation and reviews: gpt-6.1-sol, high. Source reviews
-of roads and objects are complete and spot-checked; shared ownership repair, road prologue review and the due speed pass proceed.
+Paused at the user's request. Root on this host: gpt-6.1-sol, ultra;
+implementation and reviews: gpt-6.1-sol, high. All delegated agents are closed.
+#332 and #333 integrated after their final gates; the work order above is unchanged.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #321 / #322 | `535761dc9d` | R2, 17 default tests and Ruff pass at 560 additions. Six endpoint profiles and all four historical builds are frozen; historical profile matrix, calibration/quiet anchors/Full remain. |
-| #295 / #313 | `d6297bdeef` | Both fixing groups and root spot-check complete; default RED/GREEN and 20 affected semantics pass. Tooling 427 / net 486 / retired 924; #331 adoption and final gates remain. |
-| #314 / #329 | `da9f1c0464` | Passing partial metadata/selection/sell/refit/mass/send and station caller cleanup; construction/clone/articulated/fleet calls remain. Tooling 123 / net 610 / retired 610; strict final ratio required. |
-| #330 / #332 | `d9070357d9` | Frozen source passes native 175 and 56 semantics; P2016 loop -26.299M Ir. Net 38 / test-tooling 72 incl ABI; fresh fixing review, six guards and Full remain. |
-| #331 | selected | Implement dispatcher from integrated `4e7753122e`; hard Rust 260 / net glue 160 / tooling 120. Object adoption remains root-owned. |
+| #321 / #322 | `535761dc9d` | Calibration and planner options posted; source unchanged. User decides policy/scope and any budget growth, then integrated-base adoption, matching counts/anchors, review and bootstrap Full. |
+| #295 / #313 | `d6297bdeef` | Adopt integrated #333, scoped review, quiet six and Full. Both prior fixing groups/spot-check pass; tooling 427 / net 486 / retired 924. |
+| #314 / #329 | `de32f6f990` | Non-passing: native 171/173; direct clone/group calls pass a null list context. Fix context/direct single-vehicle path and rerun regressions/semantics first, then road/air constructors and evidence. Common build/clone/articulated source is present; last fully passing head `da9f1c0464`. |
 | #274 | `162843acbd` | Paused measurement branch; map view stays in the work order. |
 | #64 / #66 | `aab5211801` | #66 closed unmerged; #64 and older paused work untouched. |
 
