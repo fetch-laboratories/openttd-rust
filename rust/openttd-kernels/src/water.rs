@@ -62,6 +62,7 @@ pub struct WaterServices {
     pub vehicles: *const VehicleServices,
     pub costs: *const CostServices,
     pub company: *const crate::company::Services,
+    pub signal_context: extern "C" fn() -> crate::signal::Context,
     pub non_flooding: extern "C" fn(u32) -> bool,
     pub set_non_flooding: extern "C" fn(u32, bool),
     pub coast: extern "C" fn(u32) -> bool,
@@ -523,7 +524,7 @@ impl<'a> World<'a> {
         };
         if flooded {
             self.dirty_neighbours(tile);
-            (self.co().update_signals_in_buffer)();
+            crate::signal::acquire_context(self.w.signal_context).flush();
             let stations = (self.s.station_commands)();
             // SAFETY: the getter supplies the borrowed process-lifetime table;
             // docking runs synchronously without a live owner borrow.
@@ -760,6 +761,9 @@ pub(crate) unsafe fn tree_industry_water_loop(tile: u32, call: *mut Call, s: &Se
 
 #[cfg(test)]
 pub(crate) fn fixture() -> WaterServices {
+    extern "C" fn unused0<R>() -> R {
+        panic!("unexpected water fixture service");
+    }
     extern "C" fn unused1<A, R>(_: A) -> R {
         panic!("unexpected water fixture service");
     }
@@ -775,6 +779,7 @@ pub(crate) fn fixture() -> WaterServices {
         vehicles: std::ptr::null(),
         costs: std::ptr::null(),
         company: std::ptr::null(),
+        signal_context: unused0,
         non_flooding: unused1,
         set_non_flooding: unused2,
         coast: unused1,

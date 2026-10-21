@@ -364,6 +364,7 @@ layouts! {
         vehicles,
         costs,
         company,
+        signal_context,
         non_flooding,
         set_non_flooding,
         coast,

@@ -920,19 +920,9 @@ OpenTTDIndustryLoopServices GetRustIndustryLoopServices() noexcept
 }
 #endif
 
-#ifdef WITH_RUST
-static void TileLoop_Industry(uint32_t tile_index) noexcept
-#else
+#ifndef WITH_RUST
 static void TileLoop_Industry(TileIndex tile)
-#endif
 {
-#ifdef WITH_RUST
-	const TileIndex tile{tile_index};
-#endif
-#ifdef WITH_RUST
-	OpenTTDGroundCall call;
-	openttd_rust_industry_tile_loop(tile.base(), Map::LogX(), &call, &GetIndustryRustServices(), &GetIndustryConstructionServices(), &GetIndustryLifecycleRustServices(), &GetIndustryTileServices(), &GetIndustryGenerationServices());
-#else
 	if (IsTileOnWater(tile)) TileLoop_Water(tile);
 
 	/* Normally this doesn't happen, but if an industry NewGRF is removed
@@ -1048,8 +1038,8 @@ static void TileLoop_Industry(TileIndex tile)
 		if (Chance16(1, 3)) AddAnimatedTile(tile);
 		break;
 	}
-#endif
 }
+#endif
 
 static bool ClickTile_Industry(TileIndex tile)
 {
@@ -3530,7 +3520,11 @@ extern const TileTypeProcs _tile_type_industry_procs = {
 	GetTileTrackStatus_Industry, // get_tile_track_status_proc
 	ClickTile_Industry,          // click_tile_proc
 	AnimateTile_Industry,        // animate_tile_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust scheduler calls the owner directly.
+#else
 	TileLoop_Industry,           // tile_loop_proc
+#endif
 	ChangeTileOwner_Industry,    // change_tile_owner_proc
 	nullptr,                        // add_produced_cargo_proc
 	nullptr,                        // vehicle_enter_tile_proc
