@@ -112,6 +112,18 @@ def check(scenario, run, mode, role, result):
     for text in required:
         if "OBJECT " + text not in run["log"]:
             raise RuntimeError(f"{mode}/{role}: missing object evidence: {text}")
+    lines = [line for line in run["log"] if line.startswith("OBJECT ")]
+    if (
+        scenario["objects"] == "gaps"
+        and sum(line.startswith("OBJECT query ") for line in lines) != 96
+    ):
+        raise RuntimeError(f"{mode}/{role}: missing object query results")
+    key = mode + "_object_results"
+    if role == "reference":
+        result[key] = lines
+    elif result[key] != lines:
+        raise RuntimeError(f"{mode}: object command/query results differ")
+
     branches = {
         "commands": "build clear hq_grow hq_relocate area cargo hq_pass hq_mail owner colours autoslope build_above".split(),
         "gaps": ("slope_callback",),

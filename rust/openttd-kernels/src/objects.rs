@@ -702,7 +702,12 @@ impl<'a> World<'a> {
             let mut ret = true;
             let mut random = self.shared.random();
             let area = (self.s.location)(obj);
-            for tile in self.tiles(area) {
+            // The tile-loop entry has no captured map. Acquire the actual stride
+            // only when the original whole-object iterator is constructed.
+            let map = crate::services::Map {
+                log_x: (self.shared.map_log_x)() as u8,
+            };
+            for tile in Self::tiles_with_map(area, map) {
                 if self.do_trigger(obj, tile, trigger, spec, random) {
                     // SB also ORs high bits from the unmasked draw.
                     crate::math::sb(&mut random, 0, 16, self.shared.random());
@@ -722,7 +727,10 @@ impl<'a> World<'a> {
         unsafe { &*self.s.company }
     }
     fn tiles(&self, a: Area) -> impl Iterator<Item = u32> {
-        let stride = self.map.size_x();
+        Self::tiles_with_map(a, self.map)
+    }
+    fn tiles_with_map(a: Area, map: crate::services::Map) -> impl Iterator<Item = u32> {
+        let stride = map.size_x();
         (0..u32::from(a.height)).flat_map(move |y| {
             (0..u32::from(a.width))
                 .map(move |x| a.tile.wrapping_add(y.wrapping_mul(stride)).wrapping_add(x))
@@ -850,6 +858,24 @@ impl<'a> World<'a> {
         }
         crate::witness::hit(crate::witness::OBJECT_BUILD);
     }
+    /// Original `GetCompanyHQSize`: the size is stored in the animation frame.
+    fn get_company_hq_size(&self, tile: u32) -> u8 {
+        unsafe { ((*self.s.industry_tiles).frame)(tile) }
+    }
+    /// Original `IncreaseCompanyHQSize`, including each frame write and redraw.
+    fn increase_company_hq_size(&self, tile: u32) {
+        unsafe {
+            let area = (self.s.location)((self.query().by_tile)(tile));
+            for t in self.tiles(area) {
+                ((*self.s.industry_tiles).set_frame)(
+                    t,
+                    ((*self.s.industry_tiles).frame)(t).wrapping_add(1),
+                );
+                (self.shared.mark_dirty)(t);
+            }
+        }
+        crate::witness::hit(crate::witness::OBJECT_HQ_GROW);
+    }
     fn update_hq(&self, tile: u32, score: u32) {
         if tile == INVALID_TILE {
             return;
@@ -858,18 +884,8 @@ impl<'a> World<'a> {
             .into_iter()
             .filter(|&n| score >= n)
             .count() as u8;
-        unsafe {
-            while ((*self.s.industry_tiles).frame)(tile) < target {
-                let area = (self.s.location)((self.query().by_tile)(tile));
-                for t in self.tiles(area) {
-                    ((*self.s.industry_tiles).set_frame)(
-                        t,
-                        ((*self.s.industry_tiles).frame)(t).wrapping_add(1),
-                    );
-                    (self.shared.mark_dirty)(t);
-                }
-                crate::witness::hit(crate::witness::OBJECT_HQ_GROW);
-            }
+        while self.get_company_hq_size(tile) < target {
+            self.increase_company_hq_size(tile);
         }
     }
     fn really_clear(&self, object: Identity) {
@@ -1489,10 +1505,10 @@ impl World<'_> {
             let level = if accepted.is_null() {
                 1
             } else {
-                u32::from(((*self.s.industry_tiles).frame)(tile)) + 1
+                u32::from(self.get_company_hq_size(tile)) + 1
             };
             let pass = (self.s.passengers)();
-            if pass < 64 {
+            if crate::cargo_storage::is_valid_cargo_type(pass) {
                 let entry = cargo.add(usize::from(pass));
                 *entry = (*entry).wrapping_add(if accepted.is_null() { 1 } else { level.max(1) });
                 if !accepted.is_null() {
@@ -1500,7 +1516,7 @@ impl World<'_> {
                 }
             }
             let mail = (self.s.mail)();
-            if mail < 64 {
+            if crate::cargo_storage::is_valid_cargo_type(mail) {
                 let entry = cargo.add(usize::from(mail));
                 *entry = (*entry).wrapping_add(if accepted.is_null() {
                     1
@@ -1545,11 +1561,13 @@ impl World<'_> {
             if kind != HQ {
                 return;
             }
-            let level = u32::from(((*self.s.industry_tiles).frame)(tile)) + 1;
+            let level = u32::from(self.get_company_hq_size(tile)) + 1;
             (self.s.hq_begin)(frame, tile, level);
             let random = self.shared.random();
             let pass = (self.s.passengers)();
-            if pass < 64 && random & 255 < 256 / 4 / (6_u32.wrapping_sub(level)) {
+            if crate::cargo_storage::is_valid_cargo_type(pass)
+                && random & 255 < 256 / 4 / (6_u32.wrapping_sub(level))
+            {
                 let mut amount = (random & 255) / 8 / 4 + 1;
                 if crate::company::in_recession() {
                     amount = (amount + 1) >> 1;
@@ -1559,7 +1577,9 @@ impl World<'_> {
                 crate::witness::hit(crate::witness::OBJECT_HQ_PASS);
             }
             let mail = (self.s.mail)();
-            if mail < 64 && (random >> 8) & 255 < 196 / 4 / (6_u32.wrapping_sub(level)) {
+            if crate::cargo_storage::is_valid_cargo_type(mail)
+                && (random >> 8) & 255 < 196 / 4 / (6_u32.wrapping_sub(level))
+            {
                 let mut amount = ((random >> 8) & 255) / 8 / 4 + 1;
                 if crate::company::in_recession() {
                     amount = (amount + 1) >> 1;
@@ -1903,7 +1923,7 @@ pub unsafe extern "C" fn openttd_rust_object_trigger(
     trigger: AnimationTrigger,
     spec: *const Spec,
 ) -> bool {
-    unsafe { World::new::<true>(&*s).trigger(obj, trigger, spec) }
+    unsafe { World::new::<false>(&*s).trigger(obj, trigger, spec) }
 }
 
 /// Synchronous object owner entry.

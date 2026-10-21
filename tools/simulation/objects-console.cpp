@@ -128,6 +128,17 @@ static void ObjectPolicyProbe(Object *o, ObjectSpec *spec)
 		bool result = TriggerObjectAnimation(o, ObjectAnimationTrigger::Built, spec);
 		same &= result == !disable && group->calls == (disable ? 1U : 4U) && group->equal && std::ranges::equal(_random.state, group->expected.state);
 	}
+	spec->flags.Set(ObjectFlag::Animation);
+	spec->animation.triggers = {ObjectAnimationTrigger::TileLoopNorth};
+	group->calls = 0;
+	group->disable = false;
+	group->trigger = to_underlying(ObjectAnimationTrigger::TileLoopNorth);
+	group->expected = _random;
+	group->expected.Next(); // The inactive single-tile TileLoop trigger still draws.
+	group->word = group->expected.Next();
+	Loop(o->location.tile);
+	same &= group->calls == 4 && group->equal && std::ranges::equal(_random.state, group->expected.state);
+
 	delete group;
 	fmt::print(stderr, "OBJECT query-animation-order {}\n", same);
 }
