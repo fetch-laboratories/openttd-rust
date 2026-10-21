@@ -1588,12 +1588,14 @@ results and typed shared services; original bodies remain portable-only.
 Generation progress cancellation returns before native rethrow. Other leaves
 are synchronous noexcept calls. Borrows end before callbacks; HQ passenger/mail
 production shares one random word and lazily discovers stations. Command calls
-reuse the native recursion counter and before/after protocol. Command, finance,
-clearing and water restoration reuse the integrated shared owners. Named ABI
+use the shared `command::nested` lifecycle. Command, finance, clearing and water
+restoration reuse the integrated shared owners; ownership enters from and
+redispatches through the shared Rust dispatcher (#333). Named ABI
 metadata and typed abort defaults cover the object table and consumed records.
 
 Default `objects` semantic scenarios cover four climates/borders, HQ relocation,
-cargo, owned-land area construction, statues, ownership, ID reuse and afterload
+cargo, owned-land area construction, statues, ownership, clearing back to
+canal/river/sea with water redispatch, ID reuse and afterload
 counts. Compact unchanged-body probes cover count wrapping/destruction, scratch
 growth, cancellation, query availability/register/nearby/count decisions and callback/RNG
 ordering, including unmasked `SB` refresh and reentry. External NewGRF/legacy,
