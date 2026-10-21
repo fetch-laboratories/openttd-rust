@@ -166,10 +166,10 @@ are complete; root validates ready heads while road/object and calibration work 
 | --- | --- | --- |
 | #320 / #323 | `bc25c51d44` | Integrated after review, quiet six and exact-head Full; worktree removed. |
 | #321 / #322 | `c494160c0b` | R2/root spot-check and real profiled/frozen runs pass at 560 additions. Historical builds prepare while final base adoption waits for house integration. |
-| #256 / #269 | `8b55c5b557` | Prior Full/quiet six pass; necessary water/station conflict resolution passes Cargo4 and has fresh scoped R4 before new Full. |
+| #256 / #269 | `8b55c5b557` | Prior Full/quiet six pass; necessary water/station conflict resolution passes Cargo4 and has fresh scoped R5 before new Full; R4 stopped at quiet readiness without a final report. |
 | #294 / #317 | `067e3c3b93` | Integrated after scoped review, four uncontaminated quiet sets and Full; worktree removed. |
 | #295 / #313 | `c7b8d11f4a` | Query/animation probes and 50 semantic cases pass; strict retirement margin 6. Necessary integrated-base adoption precedes fresh review. |
-| #266 / #290 | `2a047b2f23` | Canonical services/six bounces and 19 scenarios pass; actual base conflicts now get narrow adoption, then split reviews. |
+| #266 / #290 | `0b1fa5692f` | Selected-base conflict adoption pushed; Python checks pass, native checks held for quiet timing before split reviews. |
 | #261 R5 / #324 | `27ae8ddbc2` | Fixing review/root spot-check, clean base merge and final build pass; Full requested, quiet speed pending. |
 | #325 | starting | Aircraft movement observation task uses selected typed address contract; preserve existing mutation witnesses. |
 | #274 | `162843acbd` | Paused measurement branch; map view stays in the work order. |
