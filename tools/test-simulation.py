@@ -384,33 +384,63 @@ class SimulationSpeedTests(unittest.TestCase):
                 self.assertIsNone(speed_budget(name, None))
         self.assertIsNone(speed_budget("unrecorded", 1.0))
 
-    def exercise(self, *, difference=False, exit_code=0, instructions=False):
+    def exercise(self, *, instructions=False, **failure):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory)
             scenario = {"name": "speed", "ticks": 74}
             runs = [
                 {
-                    "exit": exit_code,
+                    "exit": failure.get("exit_code", 0),
                     "dir": out,
                     "instructions": dict(
-                        identity={"compatible": role}, cached=42, cache=out / "cache"
+                        identity={"compatible": role},
+                        cached=None if failure else 42,
+                        cache=out / "cache",
                     ),
                     "seconds": seconds,
                     "command": [role],
                     "snapshots": [out / role / "exit.sav"],
-                    "log": [],
+                    "log": [role] if failure.get("log") else [],
                     "stdout": b"",
                 }
                 for role, seconds in (("reference", 1.0), ("candidate", 2.0))
             ]
+            if instructions:
+                identity = {"compatible": "reference"}
+                cache = out / "instruction-cache" / f"{ir.digest(identity)}.json"
+                cache.parent.mkdir()
+                cache.write_text("42")
+                with (
+                    patch.object(migration, "COMMON_LOCAL", out),
+                    patch.object(ir, "identity", return_value=identity),
+                ):
+                    command, runs[0]["instructions"] = ir.prepare(
+                        scenario,
+                        ["reference"],
+                        Path("reference"),
+                        out,
+                        out,
+                        {"VALGRIND_LIB": "/unused"},
+                        True,
+                    )
+                self.assertEqual(command, ["reference"])  # Actual reference cache hit.
             with (
                 patch.object(simulate, "scenario_modules", return_value=()),
                 patch.object(simulate, "run_game", side_effect=runs * 3) as game,
-                patch.object(simulate, "save_moment", return_value=(1, 0, 74)),
+                patch.object(
+                    simulate,
+                    "save_moment",
+                    side_effect=[(1, 0, 74), (1, 0, 75)] * 3
+                    if failure.get("moment")
+                    else None,
+                    return_value=(1, 0, 74),
+                ),
                 patch.object(
                     simulate,
                     "compare_saves",
-                    return_value=[{"field": "world"}] if difference else [],
+                    return_value=[{"field": "world"}]
+                    if failure.get("difference")
+                    else [],
                 ),
             ):
                 result = simulate.run_scenario(
@@ -424,6 +454,10 @@ class SimulationSpeedTests(unittest.TestCase):
                     benchmark_repetitions=3,
                     instructions=instructions,
                 )
+            if instructions and failure:
+                self.assertNotIn("instruction_speed", result)
+                self.assertRegex(result["problems"][-1], "semantically unequal")
+                self.assertEqual(cache.read_text(), "42")
             return result, game.call_count, game.call_args_list
 
     def test_speed_ratio_needs_matching_semantic_pairs(self):
@@ -444,6 +478,16 @@ class SimulationSpeedTests(unittest.TestCase):
                 self.assertIsNone(
                     result["plain_speed"]["median_candidate_reference_ratio"]
                 )
+        for failure in (
+            {"difference": True},
+            {"exit_code": 1},
+            {"log": True},
+            {"moment": True},
+        ):
+            with self.subTest(instructions=True, **failure):
+                result, calls, _ = self.exercise(instructions=True, **failure)
+                self.assertFalse(result["passed"])
+                self.assertEqual(calls, 2)
 
 
 class InstructionSpeedTests(unittest.TestCase):
