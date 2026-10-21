@@ -318,7 +318,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.road_type = [](uint32_t tile) noexcept -> uint8_t { return tile == 2080 ? 0 : 63; };
 	w.writes.clear(); w.animations = 0; w.house_count = 1;
 	w.owner_reads = 0; w.map_reads = 0;
-	openttd_rust_town_expand(&leaves, &services, 0, 1, 1);
+	openttd_rust_town_expand(&leaves, &services, &road, 0, 1, 1);
 	check(w.writes.size() == 1 && w.animations == 1 && w.owner_reads == 1 && w.map_reads == 1);
 	openttd_rust_town_global_id_counts_resize(saved_ids.size());
 	openttd_rust_town_global_class_counts_resize(saved_classes.size());
