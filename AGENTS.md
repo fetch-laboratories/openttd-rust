@@ -89,10 +89,9 @@ fork; the remaining upstream documentation explains behavior and architecture.
   1.350-1.439 across heads whose loop counts moved under 0.5%. A PR does not
   answer for that spread; speed passes measure it. Wall-clock medians are
   taken only in speed passes, with no builds, links or other timed games
-  running; a wall median taken under load is not a speed result. Until #321
-  integrates, a per-PR guard uses quiet wall medians (`simulate <name>
-  --benchmark 3 --jobs 2`); its integrating PR records the first anchors.
-  There are no per-port CPU budgets.
+  running; a wall median taken under load is not a speed result. A PR runs
+  `python3 tools/migration.py simulate --instructions --jobs 2` and projects
+  from the anchors in `SPEED_ANCHORS`. There are no per-port CPU budgets.
 - A PR that fails the speed guard gets a profile-guided fix round before it is
   deferred. Attribute the cost per function (callgrind instruction counts work
   on this host, where hardware counters do not) and fix the attributed

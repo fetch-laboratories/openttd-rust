@@ -226,13 +226,17 @@ def cmake_cache(build):
     return cache
 
 
-def configured_as(build, source, command):
+def configured_as(build, source, command, env=None):
     """Whether an existing build tree already holds every requested -D value."""
     if not (build / "build.ninja").exists() or not (build / "CMakeCache.txt").exists():
         return False
     cache = cmake_cache(build)
     if Path(cache.get("CMAKE_HOME_DIRECTORY", "")).resolve() != Path(source).resolve():
         return False
+    if cache.get("OPTION_RUST") == "ON" and env is not None:
+        captured = f"CARGO_PROFILE_RELEASE_DEBUG={env.get('CARGO_PROFILE_RELEASE_DEBUG', '<unset>')}\n"
+        if captured not in (build / "rust-build-configuration.txt").read_text():
+            return False
     requested = dict(
         argument[2:].split("=", 1) for argument in command if argument.startswith("-D")
     )
@@ -385,6 +389,9 @@ def main():
         with reference_lock():
             ensure_reference()
     env = environment()
+    instruction_mode = args.action == "simulate" and "--instructions" in simulate_args
+    if instruction_mode:
+        env["CARGO_PROFILE_RELEASE_DEBUG"] = "line-tables-only"
     env["CARGO_BUILD_JOBS"] = str(args.jobs)
     cache_executable = (
         None
@@ -518,6 +525,7 @@ def main():
         common.extend(compiler_cache_options(cache_executable))
         for name, build in builds.items():
             with reference_lock() if name == "reference" else candidate_lock(build):
+                (build / "instruction-build.json").unlink(missing_ok=True)
                 select_role(name)
                 source = REFERENCE.resolve() if name == "reference" else ROOT
                 extra = (
@@ -541,7 +549,7 @@ def main():
                 ]
                 # Ninja reruns CMake itself when any CMake input changes, so an
                 # explicit configure is only needed when the cache lacks a requested value.
-                if configured_as(build, source, configure):
+                if configured_as(build, source, configure, env):
                     print(
                         f"{name}-configure: CMakeCache already matches; reusing {build}",
                         flush=True,
@@ -559,6 +567,10 @@ def main():
                     f"{name}-build",
                     ["cmake", "--build", str(build), "--parallel", str(args.jobs)],
                 )
+                if instruction_mode:
+                    from simulation.instructions import record_build
+
+                    record_build(build, source, name, env)
 
         if args.action == "verify":
             inventories = {}
