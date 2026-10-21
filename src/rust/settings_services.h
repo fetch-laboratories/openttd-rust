@@ -43,6 +43,8 @@ inline bool RustAutoslopeEnabled() noexcept { return AutoslopeEnabled(); }
 inline bool RustCrossingWithCompetitor() noexcept { return _settings_game.construction.crossing_with_competitor; }
 inline bool RustDisableElrails() noexcept { return _settings_game.vehicle.disable_elrails; }
 inline bool RustForbid90Deg() noexcept { return _settings_game.pf.forbid_90_deg; }
+inline uint8_t OpenTTDTownCargoGenMode() noexcept { return _settings_game.economy.town_cargogen_mode; }
+inline uint8_t OpenTTDPlaceHouses() noexcept { return _settings_game.economy.place_houses; }
 inline bool RustServeNeutralIndustries() noexcept { return _settings_game.station.serve_neutral_industries; }
 inline uint8_t RustStationSpread() noexcept { return _settings_game.station.station_spread; }
 inline bool RustStationStopOnTownRoad() noexcept { return _settings_game.construction.road_stop_on_town_road; }

@@ -260,13 +260,6 @@ OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept
 	};
 }
 
-static void TileLoop_Trees(uint32_t tile_index) noexcept
-{
-	const TileIndex tile{tile_index};
-	OpenTTDGroundCall call;
-	openttd_rust_trees_tile_loop(tile.base(), GetRustTreeLoopSettings(), &call, &_tree_services, &GetRustSharedServices());
-}
-
 void OnTick_Trees()
 {
 	const OpenTTDTreeTickSettings settings{
@@ -1289,7 +1282,11 @@ extern const TileTypeProcs _tile_type_trees_procs = {
 	GetTileTrackStatus_Trees, // get_tile_track_status_proc
 	nullptr,                     // click_tile_proc
 	nullptr,                     // animate_tile_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust scheduler calls the owner directly.
+#else
 	TileLoop_Trees,           // tile_loop_proc
+#endif
 	ChangeTileOwner_Trees,    // change_tile_owner_proc
 	nullptr,                     // add_produced_cargo_proc
 	nullptr,                     // vehicle_enter_tile_proc

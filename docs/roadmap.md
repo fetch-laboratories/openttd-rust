@@ -120,7 +120,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings.
 2. **Speed guard and passes (#155, #282, #321, AGENTS.md).**
-   - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios; #321 adds fixed measured anchors and separately rolling integrated instruction projections. Root reselected 560 added tooling/test/workflow lines for R2 after the real profile build exposed valid minimal DWARF rejection and broken frozen profiling; 505 preceded these fixes. No new controller.
+   - **Record:** `SPEED_BUDGETS` in `tools/simulation/roads.py` holds current `rust-migration` ratios; #321 adds fixed measured anchors and separately rolling integrated instruction projections. Root reselected 560 added tooling/test/workflow lines for R2 after the real profile build exposed valid minimal DWARF rejection and broken frozen profiling; 560 are implemented and the real profiled build/frozen run pass. No new controller.
    - **Per PR:** no scenario's projected ratio more than 15% above its record and none over its ceiling (1.5x play saves, 1.3x generation). Until #321 lands, use quiet wall medians. Misses get a callgrind fix round.
    - **Speed pass:** after every fourth ownership integration (#255 and #303 count two since the #275 profile), or when a projection comes within 5% of its ceiling (1.425x play, 1.235x generation). The fifteenth steering profile on #275 is the current attribution.
    - **Redraw:** `-r 64x64` leaves the ratios unchanged, so redraw does not inflate them. It does make whole-process counts timing-dependent, which is why only the game loop is counted.
@@ -165,13 +165,13 @@ are complete; root validates ready heads while road/object and calibration work 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
 | #320 / #323 | `bc25c51d44` | Integrated after review, quiet six and exact-head Full; worktree removed. |
-| #321 / #322 | `e0b80cd745` | R2 fixes real DWARF and frozen-run blockers within 560 additions; profiles/calibration/quiet anchors follow. |
-| #256 / #269 | `330d710e7b` | Scoped review fixed three clear-square bounces; root spot-check passes. Quiet six pass; exact-head Full requested. |
+| #321 / #322 | `c494160c0b` | R2/root spot-check and real profiled/frozen runs pass at 560 additions. Historical builds prepare while final base adoption waits for house integration. |
+| #256 / #269 | `8b55c5b557` | Prior Full/quiet six pass; necessary water/station conflict resolution passes Cargo4 and has fresh scoped R5 before new Full; R4 stopped at quiet readiness without a final report. |
 | #294 / #317 | `067e3c3b93` | Integrated after scoped review, four uncontaminated quiet sets and Full; worktree removed. |
-| #295 / #313 | `4bc35b6d4d` | Query/animation extension passes early metrics and Cargo/native checks; default probes and semantics precede fresh split review. |
-| #266 / #290 | `17bc99cd5a` | New agent adopts canonical services and removes five bounces, then gates. |
-| #261 R5 / #324 | `45124e12e1` | Implementation checks pass; fresh fixing review precedes quiet speed and Full. |
-| #325 | selected | Aircraft controller/position address contract selected; implement from integrated base, preserve mutation witnesses. |
+| #295 / #313 | `c7b8d11f4a` | Query/animation probes and 50 semantic cases pass; strict retirement margin 6. Necessary integrated-base adoption precedes fresh review. |
+| #266 / #290 | `0b1fa5692f` | Selected-base conflict adoption pushed; Python checks pass, native checks held for quiet timing before split reviews. |
+| #261 R5 / #324 | `27ae8ddbc2` | Fixing review/root spot-check, clean base merge and final build pass; Full requested, quiet speed pending. |
+| #325 | starting | Aircraft movement observation task uses selected typed address contract; preserve existing mutation witnesses. |
 | #274 | `162843acbd` | Paused measurement branch; map view stays in the work order. |
 | #64 / #66 | `aab5211801` | #66 closed unmerged; #64 and older paused work untouched. |
 

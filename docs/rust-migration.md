@@ -548,7 +548,10 @@ The in-entry LFSR keeps native unsigned map-log widths and reads each live type
 byte from audited allocation metadata. All seven Rust tile owners dispatch directly,
 void tiles straight to the water owner, which reuses the dispatched type and reader
 and derives `IsValidTile` from the map size; only house/station/object have native
-scalar handlers with local strong-index construction. Leaves shared by several
+scalar handlers with local strong-index construction; the five unused facade slots
+are null.
+Flooding calls the Rust signal flush through the canonical signal context.
+Leaves shared by several
 owners (clear/tree ground, snow, shore, sound, foundation) live in shared tables.
 Tree/industry water loops, tree wakeups, rail flooding queries and road town-type
 selection call Rust directly; canonical rail leaves have one binding. Ground
@@ -1166,8 +1169,8 @@ exhaustive.
 
 Issue #120 moves town tick traversal, road/build choices, terrain retries, house
 selection/placement and expansion into Rust. The partial #148 extension owns town metadata,
-histories, ratings and building counts; C++ retains house tile loops and remaining
-authority/deletion commands. Native field aliases expose one Rust owner, with process-wide state
+histories, ratings and building counts; #256 moves house tile loops and deletion
+commands. Native field aliases expose one Rust owner, with process-wide state
 under the game-state mutex.
 
 Rust ends owner borrows before commands or NewGRF callbacks that can reenter. The default
@@ -1569,6 +1572,29 @@ counts. Compact unchanged-body probes cover count wrapping/destruction, scratch
 growth, cancellation, query availability/register/nearby/count decisions and callback/RNG
 ordering, including unmasked `SB` refresh and reentry. External NewGRF/legacy,
 autoslope and generation branches remain tracked in #156.
+
+### House lifecycle and tile simulation (#256)
+
+`town/house.rs` owns `TileLoop_Town` (construction stages, rebuild/replacement, original and
+binomial cargo with recession halving), builtin lift animation, produced/accepted cargo,
+north-part normalisation, `ClearTile_Town`/`ClearTownHouse`/`RemoveNearbyStations`,
+`TerraformTile_Town`, `CmdPlaceHouse`, cache rebuild/repair traversals, yearly aging and the
+NewGRF house tile loop, `CanDeleteHouse`, animation triggers and rerandomisation. It writes the
+sole Rust town owner directly and ends each owner access before any callback, command or station
+service. C++ keeps thin facades, the generic `HouseResolverObject`/reseed sum,
+`HouseAnimationBase`, `StationFinder`/`MoveGoodsToStation` and `GetHouseNorthPart` for resolver
+variables; original bodies compile only portably. Narrow phase observations replace whole
+tile/spec copies; projections compose canonical spec-field readers. Each entry reuses its town
+and map context, including construction triggers and rebuilds. Town count, recession, autoslope,
+foundation price, tick counter and animated-tile removal are shared services; house clearing
+calls the canonical Rust ground owner directly.
+Cargo scaling, translation, label lookup and delivery, plus NewGRF boolean conversion and
+inspect-window deletion, share canonical typed native leaves with industry consumers.
+`python3 tools/migration.py simulate town-houses- --jobs 2` places every original house through
+`CmdPlaceHouse`, compares error histograms, occupied/replace, protected clears, autoslope
+terraform, company clearance until refusal and aged-house rebuild in both cargo modes, and
+requires candidate `house.*` witnesses. NewGRF house callbacks and station removal on house
+clearance remain #156 gaps.
 
 ### Water construction, clearing and restoration (#294)
 

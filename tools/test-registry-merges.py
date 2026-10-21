@@ -53,7 +53,9 @@ with tempfile.TemporaryDirectory() as directory:
         marker = f"// Registry: {component} (#{issue}).\n"
         probe = f"{component}_probe"
         field = f"{component}_registry_probe"
+        assert f"pub {field}:" not in (root / RUST).read_text(), field
         header = f"{component}_registry_probe_ffi"
+        assert f'#include "rust/{header}.h"' not in (root / ABI).read_text(), header
         additions = {
             WITNESS: [
                 f'    {probe} {{\n        {probe.upper()} = 0 => "{probe}.hit",\n    }}\n'

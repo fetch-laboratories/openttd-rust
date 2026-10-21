@@ -27,7 +27,11 @@ inline LandscapeType OpenTTDLandscape() noexcept { return _settings_game.game_cr
 inline uint8_t OpenTTDLandscapeValue() noexcept { return to_underlying(OpenTTDLandscape()); }
 inline uint8_t OpenTTDHighestSnowLine() noexcept { return HighestSnowLine(); }
 struct OpenTTDTownState;
+struct OpenTTDTownRef;
+struct Town;
+Town *OpenTTDTownShellByID(uint32_t id) noexcept;
 OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept;
+OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept;
 inline uint OpenTTDMapScaleSize(uint n) noexcept { return Map::ScaleBySize(n); }
 inline uint OpenTTDMapScaleLandProportion(uint n) noexcept { return Map::ScaleByLandProportion(n); }
 enum ClearGround : uint8_t;
@@ -39,8 +43,4 @@ inline bool OpenTTDExchangeGeneratingWorld(bool value) noexcept { return std::ex
 void OpenTTDAssertTownGenerationContext() noexcept;
 inline void OpenTTDChangeTileOwner(uint32_t tile, uint8_t old_owner, uint8_t new_owner) noexcept { ChangeTileOwner(TileIndex{tile}, Owner(old_owner), Owner(new_owner)); }
 inline uint32_t OpenTTDMapScaleSize1D(uint32_t n) noexcept { return Map::ScaleBySize1D(n); }
-inline uint8_t RustPassengerCargo() noexcept { return GetCargoTypeByLabel(CT_PASSENGERS); }
-inline uint8_t RustMailCargo() noexcept { return GetCargoTypeByLabel(CT_MAIL); }
-template <bool Town> inline uint32_t RustScaleCargo(uint32_t amount) noexcept { return ScaleByCargoScale(amount, Town); }
-inline size_t OpenTTDTownCount() noexcept { return Town::GetNumItems(); }
 #endif /* RUST_ENVIRONMENT_SERVICES_H */

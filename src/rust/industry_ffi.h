@@ -169,7 +169,6 @@ typedef struct OpenTTDIndustryServices {
 	uint8_t (*company_none)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(company_none);
 	void (*restore_company)(uint8_t company) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(restore_company);
 	void (*directory_dirty)(uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(directory_dirty);
-	bool (*recession)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(recession);
 	uint8_t (*economy_month)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(economy_month);
 	int32_t (*economy_year)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(economy_year);
 	uint32_t (*days_since_last_month)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(days_since_last_month);
@@ -317,7 +316,6 @@ typedef struct OpenTTDIndustryTilePolicyServices {
 	int32_t (*tile_max_z)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tile_max_z);
 	bool (*autoslope_callback)(const OpenTTDIndustryTileSpec *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(autoslope_callback);
 	bool (*callback_boolean)(const OpenTTDIndustryTileSpec *, uint16_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback_boolean);
-	int64_t (*foundation_cost)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(foundation_cost);
 	void (*landscape_clear)(OpenTTDIndustryCost *, uint32_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(landscape_clear);
 } OpenTTDIndustryTilePolicyServices;
 typedef struct OpenTTDIndustryCommandServices {
@@ -363,8 +361,6 @@ typedef struct OpenTTDIndustryTileServices {
 	void (*set_frame)(uint32_t, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_frame);
 	uint8_t (*animation_loop)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(animation_loop);
 	void (*set_animation_loop)(uint32_t, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(set_animation_loop);
-	void (*delete_animated)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(delete_animated);
-	uint64_t (*tick_counter)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tick_counter);
 	bool (*ambient)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(ambient);
 	void (*animate_new)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(animate_new);
 	uint8_t (*construction_counter)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(construction_counter);
@@ -393,7 +389,6 @@ void openttd_rust_industry_tile_clear(OpenTTDIndustryCost *, uint32_t tile, uint
 void openttd_rust_industry_tile_terraform(OpenTTDIndustryCost *, uint32_t tile, uint16_t flags, int32_t z_new, uint8_t slope_new, const OpenTTDSharedServices *shared, const OpenTTDIndustryTileServices *, const OpenTTDIndustryTilePolicyServices *, const OpenTTDIndustryCostServices *);
 void openttd_rust_industry_tile_acceptance(uint32_t tile, uint32_t *acceptance, uint64_t *always_accepted, const OpenTTDIndustryTileServices *);
 void openttd_rust_industry_tile_animate(uint32_t tile, const OpenTTDIndustryServices *, const OpenTTDIndustryConstructionServices *, const OpenTTDIndustryTileServices *);
-void openttd_rust_industry_tile_loop(uint32_t tile, uint8_t log_x, struct OpenTTDGroundCall *, const OpenTTDIndustryServices *, const OpenTTDIndustryConstructionServices *, const OpenTTDIndustryLifecycleServices *, const OpenTTDIndustryTileServices *, const OpenTTDIndustryGenerationServices *);
 /** Industry-owned scratch value, matching the actual shared cleared-object entry. */
 typedef struct OpenTTDIndustryAllocation { OpenTTDIndustryShell *shell; OpenTTDIndustry *owner; uint16_t id; } OpenTTDIndustryAllocation;
 typedef struct OpenTTDIndustryConflictKinds { uint8_t kinds[3]; } OpenTTDIndustryConflictKinds;

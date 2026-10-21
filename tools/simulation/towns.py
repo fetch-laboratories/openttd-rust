@@ -725,6 +725,16 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
                     builds[role] / name, target_is_directory=True
                 )
     scenario = dict(scenario, executables=executables)
+    if scenario["town_founding"] == "houses":
+        mode = scenario["house_mode"]
+        return dict(
+            scenario,
+            console=[
+                f"setting economy.town_cargogen_mode {int(mode == 'binomial')}",
+                f"towns_scenario houses {'recession' if mode == 'original' else ''}",
+                "unpause",
+            ],
+        )
     if scenario["town_founding"] != "reload":
         return dict(scenario, console=["towns_scenario commands", "unpause"])
     from .rails import normalize
@@ -776,6 +786,21 @@ def founding_scenarios(soak):
     return cases
 
 
+def house_scenarios(soak):
+    """Placement, clearance, autoslope, lift, rebuild and both cargo modes (#256)."""
+    cases = []
+    for mode in ("original", "binomial"):
+        scenario = founding_scenarios(soak)[0]
+        scenario.update(
+            name=f"town-houses-{mode}",
+            town_founding="houses",
+            house_mode=mode,
+            ticks=(90 if soak else 60) * TICKS_PER_DAY + SNAPSHOT_TICKS,
+        )
+        cases.append(scenario)
+    return cases
+
+
 def game_environment(scenario):
     return (
         core.WITNESS_ENVIRONMENT
@@ -808,7 +833,12 @@ def scenarios(soak):
                     },
                 }
             )
-    return scenarios + growth_scenarios(soak) + founding_scenarios(soak)
+    return (
+        scenarios
+        + growth_scenarios(soak)
+        + founding_scenarios(soak)
+        + house_scenarios(soak)
+    )
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
@@ -832,6 +862,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     return scenario
 
 
+HOUSE_BRANCHES = (
+    "stage complete lift_start lift_stop rebuild replace clear_auto clear_refused "
+    "clear_execute autoslope place place_error protected"
+).split()
+HOUSE_MODE_BRANCHES = {"original": ["original", "recession"], "binomial": ["binomial"]}
 FOUNDING_BRANCHES = (
     "placement growth generated coast manual deity editor invalid duplicate money "
     "zero_growth retry rename name_retry name_exhausted name_duplicate cancelled grid name_set"
@@ -839,7 +874,26 @@ FOUNDING_BRANCHES = (
 
 
 def check(scenario, run, mode, role, result):
-    if "town_founding" in scenario and not run["exit"] and run["snapshots"]:
+    if scenario.get("town_founding") == "houses" and not run["exit"]:
+        required = HOUSE_BRANCHES + HOUSE_MODE_BRANCHES[scenario["house_mode"]]
+        if counts := branch_witnesses(scenario, run, role, "house", required):
+            result[mode + "_house_branches"] = counts
+        if not any(line.startswith("TOWN house-done ") for line in run["log"]):
+            raise RuntimeError("house command witness missing")
+        overrides = [
+            line.split()
+            for line in run["log"]
+            if line.startswith("TOWN house-override ")
+        ]
+        if (
+            len(overrides) != 12
+            or {int(line[3]) for line in overrides} != {1, 2, 4}
+            or any(
+                not any(word.startswith("rng=") for word in line) for line in overrides
+            )
+        ):
+            raise RuntimeError("overridden-house placement/RNG trace missing")
+    elif "town_founding" in scenario and not run["exit"] and run["snapshots"]:
         required = () if scenario["town_founding"] == "reload" else FOUNDING_BRANCHES
         required = [*required, *scenario.get("town_branches", ())]
         counts = branch_witnesses(scenario, run, role, "town", required)

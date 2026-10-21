@@ -503,7 +503,16 @@ pub struct Services {
     /// Original `UpdateLevelCrossing`; callers retain their original sound argument.
     pub update_level_crossing: extern "C" fn(u32, bool),
     // Registry: house (#256).
-
+    /// Current foundation build price.
+    pub foundation_price: extern "C" fn() -> i64,
+    /// Rebuild the canonical town spatial index.
+    pub rebuild_town_tree: extern "C" fn(),
+    /// Whether the economy is in recession.
+    pub recession: extern "C" fn() -> bool,
+    /// Global game tick counter.
+    pub tick_counter: extern "C" fn() -> u64,
+    /// Number of towns in the pool.
+    pub town_count: extern "C" fn() -> usize,
     // Registry: landscape (#212).
     /// `GetClearGround`.
     pub clear_ground: extern "C" fn(u32) -> ClearGroundType,
@@ -547,7 +556,7 @@ impl Services {
 /// Standalone test table: map predicates return zero and writes do nothing.
 #[cfg(test)]
 #[must_use]
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)] // One field per shared service.
 pub fn fixture(
     context: *mut c_void,
     random: extern "C" fn(*mut c_void) -> u32,
@@ -571,6 +580,7 @@ pub fn fixture(
     extern "C" fn height(_: u32) -> i32 {
         0
     }
+    extern "C" fn noop() {}
     extern "C" fn tile(_: u32) {}
     extern "C" fn train(_: *const Train) {}
     extern "C" fn train_path(_: *mut Train, _: bool, _: bool) -> bool {
@@ -596,6 +606,15 @@ pub fn fixture(
         0
     }
     extern "C" fn slope(_: i32, _: i32) -> i32 {
+        0
+    }
+    extern "C" fn count0() -> usize {
+        0
+    }
+    extern "C" fn money0() -> i64 {
+        0
+    }
+    extern "C" fn tick0() -> u64 {
         0
     }
     extern "C" fn clear_ground(_: u32) -> ClearGroundType {
@@ -715,7 +734,11 @@ pub fn fixture(
         tunnel_transport: byte,
         update_level_crossing: fixture_crossing_update,
         // Registry: house (#256).
-
+        foundation_price: money0,
+        rebuild_town_tree: noop,
+        recession: flag0,
+        tick_counter: tick0,
+        town_count: count0,
         // Registry: landscape (#212).
         clear_ground,
         foundation,

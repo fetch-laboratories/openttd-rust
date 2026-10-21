@@ -1002,7 +1002,7 @@ impl<'a> World<'a> {
                 out.fail(self.s.strings.too_many);
                 return;
             }
-            if ((*self.s.founding).town_count)() == 0 {
+            if (self.shared.town_count)() == 0 {
                 out.fail(self.s.strings.no_town);
                 return;
             }

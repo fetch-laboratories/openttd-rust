@@ -53,6 +53,7 @@
 #include "rust/ground_services.h"
 #include "rust/services_landscape.h"
 #include "rust/services_object.h"
+#include "rust/services_cargo.h"
 #include "rust/services_newgrf.h"
 #include "rust/settings_services.h"
 #endif
@@ -1127,7 +1128,7 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.set_hq = [](uint8_t owner, uint32_t tile) noexcept -> void { Company::Get(CompanyID(owner))->location_of_HQ = TileIndex(tile); SetWindowDirty(WC_COMPANY, owner); },
 		.statue_town = [](Object *o) noexcept -> OpenTTDTownRef { Town *t = o->town; return {t, t->growth_owner.get(), t->index.base()}; },
 		.hq_begin = [](OpenTTDObjectLoopFrame *frame, uint32_t tile, [[maybe_unused]] uint32_t level) noexcept -> void { assert(level < 6); frame->stations.emplace(TileArea(TileIndex(tile), 2, 2)); },
-		.hq_deliver = [](OpenTTDObjectLoopFrame *frame, uint8_t cargo, uint32_t amount, uint8_t owner) noexcept -> void { MoveGoodsToStation(cargo, amount, {owner, SourceType::Headquarters}, frame->stations->GetStations()); },
+		.hq_deliver = [](OpenTTDObjectLoopFrame *frame, uint8_t cargo, uint32_t amount, uint8_t owner) noexcept -> void { OpenTTDMoveGoodsToStation(cargo, amount, {owner, SourceType::Headquarters}, frame->stations->GetStations()); },
 		.hq_end = [](OpenTTDObjectLoopFrame *frame) noexcept -> void { frame->stations.reset(); },
 		.autoslope_callback = [](const ObjectSpec *spec, Object *o, uint32_t tile) noexcept -> uint16_t { return GetObjectCallback(CBID_OBJECT_AUTOSLOPE, 0, 0, spec, o, TileIndex(tile)); },
 		.boolean_callback = RustSpecBooleanCallback<ObjectSpec>,
@@ -1143,8 +1144,8 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.set_owner = GetRustSharedServices().set_tile_owner,
 		.scale_size_1d = GetRustIndustryLoopServices().generation->scale_by_size_1d,
 		.passengers = GetRustIndustryLoopServices().production->passengers,
-		.mail = RustMailCargo,
-		.scale_cargo = RustScaleCargo<true>,
+		.mail = OpenTTDMailCargo,
+		.scale_cargo = OpenTTDScaleTownCargo,
 	};
 	return services;
 }

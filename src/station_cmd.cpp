@@ -651,9 +651,6 @@ static const OpenTTDStationServices _rust_station_services = {
 	.pool_size = []() noexcept -> size_t {
 		return BaseStation::GetPoolSize();
 	},
-	.tick_counter = []() noexcept -> uint64_t {
-		return openttd_orders_tick_counter();
-	},
 	.environment = GetRustEnvironmentServices(),
 	.facilities = [](OpenTTDBaseStation *handle) noexcept -> uint8_t {
 		return static_cast<BaseStation *>(handle)->facilities.base();
