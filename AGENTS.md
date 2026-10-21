@@ -75,18 +75,22 @@ fork; the remaining upstream documentation explains behavior and architecture.
   exceptions at integration: a port whose hot path allocates per call,
   dispatches by opcode or copies whole records is fixed before it integrates.
 - Speed is guarded per PR and optimized in periodic passes (#282, #321). A PR
-  that changes compiled game code passes speed when no benchmark scenario is
-  projected more than 15% slower than the ratio recorded for current
-  `rust-migration` in `SPEED_BUDGETS`, and none exceeds its ceiling: 1.5x the
-  original for play saves, 1.3x for generation. The projection uses callgrind
-  instruction counts inside the game loop, which do not depend on host load:
-  the recorded ratio times (1 + 2 x the loop count's growth over the record).
-  These run alongside other agents. Wall-clock medians are taken only in
-  speed passes, with no builds, links or other timed games running; a wall
-  median taken under load is not a speed result. Until #321 integrates, a
-  per-PR guard uses quiet wall medians (`simulate <name> --benchmark 3 --jobs
-  2`). The integrating PR records its counts. There are no per-port CPU
-  budgets.
+  that changes compiled game code runs `simulate --instructions` and compares
+  game-loop Ir against a fixed measured anchor in `SPEED_ANCHORS`. The complete
+  anchor (head, wall ratio R0, candidate Ir I0, compatible measurement identity)
+  changes only after a quiet speed pass. Project directly from it with
+  `R = R0 * (1 + 2 * max(0, I / I0 - 1))`; decreases earn no wall-speed credit.
+  The separate integrated record holds the latest integrated head and Ir. Its
+  projection from that same anchor is the rolling 15% guard; never reset anchor
+  Ir or compound projections per integration. No scenario may exceed 1.5x the
+  original for play saves or 1.3x for generation. Within 5% of either ceiling
+  triggers a speed pass. The factor 2 is provisional, pending calibration across
+  all six workloads; excluded work and memory behavior still need quiet checks.
+  Instruction profiles run alongside agents; wall medians count only with no
+  builds, links or other timed games running. Initial anchors require four quiet
+  medians per scenario at the same head as its instruction measurement. Until
+  #321 integrates, use quiet `simulate <name> --benchmark 3 --jobs 2` medians.
+  There are no per-port CPU budgets.
 - A PR that fails the speed guard gets a profile-guided fix round before it is
   deferred. Attribute the cost per function (callgrind instruction counts work
   on this host, where hardware counters do not) and fix the attributed

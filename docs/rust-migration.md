@@ -258,14 +258,36 @@ directories and runtime libraries; keep profiling separate from timing samples.
 Timings include startup, loading, serial link-graph work and save I/O. Benchmark
 games wait directly for child exit with a timeout watchdog; ordinary runs retain
 subprocess timeout polling, which can add about 50 ms.
-Shared coordination does not reserve a quiet host. `SPEED_BUDGETS` in
-`tools/simulation/roads.py` records current ratios, updated up or down by integrating
-PRs. Reports show a 15% guard against that record, fixed ceilings of 1.5x for play
-saves and 1.3x for generation, and a flag within 5% of the ceiling. Compile load
-moves P2016 medians 2-7% and concurrent timed games about 10% either way, so a
-wall median counts only when no builds, links or other timed games run. #321
-moves the per-PR guard to game-loop callgrind counts, which load does not move.
-The roadmap schedules periodic speed passes.
+Shared coordination does not reserve a quiet host. Wall medians count only when
+no builds, links or other timed games run. Compile load moves P2016 medians 2-7%
+and concurrent timed games about 10% either way. Quiet passes take four medians
+per scenario separately from instruction profiles and establish complete anchors.
+
+`python3 tools/migration.py simulate --instructions --jobs 2` profiles the six
+speed scenarios with witnesses off, `-r 64x64`, and exact Callgrind selectors
+`StateGameLoop()` and, for generation, `_GenerateWorld()`. Never use a wildcard:
+it also toggles off collection in the nested link-graph pause helper. These
+entries exclude loading/saving and early generation setup. The driver explicitly
+reconfigures and verifies effective release `line-tables-only` debug information.
+Completed profiles supply Ir by its `events:` position; canonical exit-state and
+full-log comparisons still run, including on reference-count cache hits. Profile
+elapsed times never enter `plain_speed` samples. Only reference Ir is cached;
+identity covers executable, runtime/libraries, resolved inputs, build/profile
+settings, architecture and Valgrind version. Candidate executable identity stays
+separate from the compatibility identity checked against anchors.
+
+`SPEED_ANCHORS` in `tools/simulation/roads.py` holds each measured anchor
+`{head, ratio, Ir, identity}` and a separate latest `integrated` record with its
+head and Ir. Empty anchors mean collection only, never a passing speed guard.
+Root fills them from the initial same-head quiet pass. Compute each projection
+as `R0 * (1 + 2 * max(0, I / I0 - 1))`, directly from the fixed anchor. The
+rolling guard is 15% above the integrated head's projection from that same
+anchor; ceilings remain 1.5x play and 1.3x generation, with a speed-pass trigger
+within 5%. Integration updates only `integrated`; quiet passes replace the whole
+anchor and refresh `integrated` together. Never reset anchor Ir alone. Factor 2
+is provisional, not a proven latency bound: historical changes across all six
+workloads must calibrate it. Memory stalls, excluded work and kernel/I/O costs
+remain outside the proxy. The roadmap schedules periodic quiet speed passes.
 
 ## Native macOS arm64 Rust linkage
 

@@ -13,7 +13,8 @@ ROAD = "roadveh[0]/"
 COMMON = ROAD + "common[0]/"
 AI_FOLDER = "road-scenario-ai"
 
-# Recorded candidate/reference medians; integrating PRs update these up or down.
+# Measured wall ratios; quiet speed passes replace these complete anchors.
+SPEED_ANCHORS = {}
 # PR #318 game head e7027a5944; quiet --benchmark 3 after base-resolution review.
 SPEED_BUDGETS = {
     "generate-tgp-256-1": 1.187150837988827,
@@ -25,9 +26,9 @@ SPEED_BUDGETS = {
 }
 
 
-def speed_budget(name, ratio):
+def speed_budget(name, ratio, integrated=None):
     """Report the speed guard without making timings a semantic CI failure."""
-    record = SPEED_BUDGETS.get(name)
+    record = SPEED_BUDGETS.get(name) if integrated is None else integrated
     if record is None or ratio is None:
         return None
     ceiling = 1.5 if name.startswith("play-") else 1.3
