@@ -250,7 +250,8 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	_tile_type_road_procs.change_tile_owner_proc(t(20, 20), other, INVALID_OWNER);
 	RoadRun<CMD_BUILD_ROAD_DEPOT>("transfer-depot", t(21, 20), ROADTYPE_ROAD, DIAGDIR_NE);
 	_tile_type_road_procs.change_tile_owner_proc(t(21, 20), owner, other);
-	bool merged = IsRoadDepotTile(t(21, 20)) && GetTileOwner(t(21, 20)) == other;
+	/* Bankruptcy clears the owner fields, so observe both road/tram owners first. */
+	bool merged = IsRoadDepotTile(t(21, 20)) && GetTileOwner(t(21, 20)) == other && GetRoadOwner(t(21, 20), RTT_ROAD) == other && GetRoadOwner(t(21, 20), RTT_TRAM) == other;
 	Backup<CompanyID> bankrupt(_current_company, other);
 	_tile_type_road_procs.change_tile_owner_proc(t(21, 20), other, INVALID_OWNER);
 	bankrupt.Restore();
