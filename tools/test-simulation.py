@@ -500,12 +500,19 @@ class InstructionSpeedTests(unittest.TestCase):
             self.assertGreater(counts[0], 50000)
             self.assertGreater(counts[1], counts[0] * 2)
             baseline = ir.identity(scenario, *context, Path(command[0]))
+            (root / ".cargo").mkdir()
             for field, value in (("ticks", 2), ("console", ["unpause"])):
                 changed = ir.identity(
                     dict(scenario, **{field: value}), *context, Path(command[0])
                 )
                 self.assertNotEqual(baseline, changed)
-            for name in ("probe.cpp", "CMakeCache.txt", "run/script"):
+            for name in (
+                "probe.cpp",
+                "CMakeCache.txt",
+                "Cargo.toml",
+                ".cargo/config.toml",
+                "run/script",
+            ):
                 previous = ir.identity(scenario, *context, Path(command[0]))
                 with (root / name).open("ab") as asset:
                     asset.write(b"changed")
@@ -542,6 +549,38 @@ class InstructionSpeedTests(unittest.TestCase):
                 failure[key] = ["failure"]
                 with self.assertRaises(ValueError):
                     ir.finish({}, failure)  # Reject before extraction/cache writes.
+
+    def test_effective_compiled_debug_rejects_overrides_and_stripping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Cargo.toml").write_text(
+                '[package]\nname="openttd-kernels"\nversion="0.0.0"\nedition="2024"\n'
+                '[lib]\npath="lib.rs"\ncrate-type=["staticlib"]\n'
+            )
+            (root / "lib.rs").write_text(
+                '#[unsafe(no_mangle)] pub extern "C" fn probe(x: i32)->i32 { x+1 }'
+            )
+            for flags in ("", "-Cdebuginfo=0", "-Cdebuginfo=2", "-Cstrip=debuginfo"):
+                env = dict(
+                    migration.environment(),
+                    CARGO_PROFILE_RELEASE_DEBUG="line-tables-only",
+                    RUSTFLAGS=flags,
+                )
+                subprocess.run(
+                    ["cargo", "build", "--release", "--offline"],
+                    cwd=root,
+                    env=env,
+                    check=True,
+                    capture_output=True,
+                )
+                archive = root / "target/release/libopenttd_kernels.a"
+                if flags.startswith("-Cdebuginfo="):
+                    with self.assertRaisesRegex(
+                        ValueError, "effective line-tables-only", msg=flags
+                    ):
+                        ir.verify_debug(archive)
+                else:
+                    ir.verify_debug(archive)
 
     def test_reused_build_restores_captured_release_debug(self):
         with tempfile.TemporaryDirectory() as directory:

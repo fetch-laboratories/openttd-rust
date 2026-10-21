@@ -6,19 +6,49 @@ import platform
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 ENTRIES = ("StateGameLoop()", "_GenerateWorld()")
+
+
+def verify_debug(archive):
+    """Inspect our compiled objects, excluding bundled standard-library DWARF."""
+    members = subprocess.check_output(["ar", "t", str(archive)], text=True).splitlines()
+    members = [m for m in members if ".openttd_kernels." in m and m.endswith(".o")]
+    if not members:
+        raise ValueError("missing compiled Rust objects")
+    with tempfile.TemporaryDirectory() as directory:
+        obj = Path(directory) / "kernel.o"
+        for member in members:
+            obj.write_bytes(subprocess.check_output(["ar", "p", str(archive), member]))
+            info = subprocess.check_output(
+                ["readelf", "--debug-dump=info", str(obj)], text=True
+            )
+            if "DW_AT_stmt_list" not in info or "DW_TAG_subprogram" in info:
+                raise ValueError(
+                    "compiled Rust requires effective line-tables-only debug"
+                )
 
 
 def record_build(build, source, role, env):
     """Publish only successful builds, bound to the executable being measured."""
     settings = (build / "CMakeCache.txt").read_text()
     if role == "candidate":
+        import migration
+
         files = ("rust-build-configuration.txt", "rust-toolchain.txt")
         settings += "".join((build / f).read_text() for f in files)
         if "CARGO_PROFILE_RELEASE_DEBUG=line-tables-only\n" not in settings:
             raise ValueError("profile build lacks release line tables")
+        verify_debug(migration.rust_archive(build))
+    inputs = [source / "Cargo.toml", source / "rust/openttd-kernels/Cargo.toml"]
+    configs = [p / ".cargo" for p in (source, *source.parents)]
+    configs.append(Path(env.get("CARGO_HOME", Path.home() / ".cargo")))
+    inputs += [p / name for p in configs for name in ("config", "config.toml")]
+    settings += json.dumps(
+        [(p.name, digest(p.read_bytes())) for p in inputs if p.is_file()]
+    )
     for path, label in ((build, "<build>"), (source, "<source>")):
         settings = settings.replace(str(path), label)
     binary = build / ("openttd" if role == "reference" else "openttd-rust")
