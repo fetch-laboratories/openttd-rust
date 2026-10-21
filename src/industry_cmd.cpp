@@ -70,7 +70,7 @@
 #include "rust/orders_ffi.h"
 static const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
 static const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices();
-static const OpenTTDIndustryTileServices &GetIndustryTileServices();
+
 static const OpenTTDIndustryCommandServices &GetIndustryCommandServices();
 static const OpenTTDIndustryCostServices &GetIndustryCostServices();
 static const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices();
@@ -3855,7 +3855,7 @@ static const OpenTTDIndustryConstructionServices &GetIndustryConstructionService
 	return services;
 }
 
-static const OpenTTDIndustryTileServices &GetIndustryTileServices()
+const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 {
 	static const OpenTTDIndustryTileServices services = {
 		.gfx = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryGfx(TileIndex(tile)); },

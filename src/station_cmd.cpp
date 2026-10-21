@@ -83,6 +83,7 @@
 #include "rust/vehicle_services.h"
 #include "rust/services_station.h"
 #include "rust/station_command_ffi.h"
+#include "rust/tile_owner_services.h"
 #include "rust/command_services.h"
 #include "rust/presentation_services.h"
 #include "rust/tile_animation_services.h"
@@ -5386,8 +5387,8 @@ void DeleteOilRig(TileIndex tile)
 static void ChangeTileOwner_Station(TileIndex tile, Owner old_owner, Owner new_owner)
 {
 #ifdef WITH_RUST
-	CommandCost cost, ret, error;
-	openttd_rust_station_change_owner(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), RustCommandCost(&error), tile.base(), old_owner.base(), new_owner.base());
+	RustTileOwnerContext ownership;
+	openttd_rust_station_change_owner(&GetRustStationCommandServices(), &ownership.view, tile.base(), old_owner.base(), new_owner.base());
 #else
 
 	if (IsAnyRoadStopTile(tile)) {

@@ -591,6 +591,14 @@ layouts! {
         sw,
         nw,
     };
+    "OpenTTDTileOwnerServices" ["landscape"] => crate::tile_owner::Services {
+        shared, industry, rail, station, water, clear, house, trees,
+        void => void_tile, tunnel_bridge, object,
+    };
+    "OpenTTDTileOwnerContext" ["landscape"] => crate::tile_owner::Context {
+        services, cost, ret, error, road,
+    };
+
     "OpenTTDFieldGround" ["landscape"] => crate::ground::FieldGround {
         industry,
         field_type => type,
@@ -1695,7 +1703,6 @@ layouts! {
         tile_animation_add,
         tile_animation_delete,
         tile_animation_set_frame,
-        tile_change_owner,
         town_next_id,
         town_owner_by_id,
         utf8_length,

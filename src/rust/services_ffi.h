@@ -161,7 +161,6 @@ struct OpenTTDSharedServices {
 	void (*tile_animation_add)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(tile_animation_add);
 	void (*tile_animation_delete)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_animation_delete);
 	void (*tile_animation_set_frame)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_animation_set_frame);
-	void (*tile_change_owner)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_change_owner);
 	uint32_t (*town_next_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_next_id);
 	OpenTTDTownState *(*town_owner_by_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_owner_by_id);
 	size_t (*utf8_length)(const uint8_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(utf8_length);

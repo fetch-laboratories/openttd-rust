@@ -14,6 +14,7 @@
 #include "../economy_type.h"
 #include "abi_layout.hpp"
 #include "../rust/company_adapter.h"
+#include "../rust/tile_owner_services.h"
 #include "../rust/command_services.h"
 #include "../core/backup_type.hpp"
 #include "../strings_func.h"
@@ -243,9 +244,10 @@ TEST_CASE("Company economy - competitor posts return to the caller before each P
  * effects (allocated company, no new-company events, no network announcement). */
 TEST_CASE("Company economy - AI startup continuation and abandoned frames")
 {
+	RustTileOwnerContext ownership;
 	FixtureReset(false, false);
 	OpenTTDCompanyControl abandoned{.result = {}, .startup = {}, .client = 0, .action = static_cast<uint8_t>(CCA_NEW_AI), .target = 255, .reason = 0, .execute = true, .stage = 0};
-	REQUIRE(openttd_rust_company_control(&fixture_services, &abandoned));
+	REQUIRE(openttd_rust_company_control(&fixture_services, &ownership.view, &abandoned));
 	CHECK(abandoned.startup.company == 2);
 	CHECK(fixture_trace == std::vector<std::string>{"allocate 2", "setup 2"});
 	CHECK(fixture_companies[2]->Finances().money == fixture_companies[2]->Finances().current_loan);
@@ -253,7 +255,7 @@ TEST_CASE("Company economy - AI startup continuation and abandoned frames")
 	FixtureReset(false, false);
 	OpenTTDCompanyControl resumed{.result = {}, .startup = {}, .client = 0, .action = static_cast<uint8_t>(CCA_NEW_AI), .target = 255, .reason = 0, .execute = true, .stage = 0};
 	int starts = 0;
-	while (openttd_rust_company_control(&fixture_services, &resumed)) starts++;
+	while (openttd_rust_company_control(&fixture_services, &ownership.view, &resumed)) starts++;
 	CHECK(starts == 1);
 	CHECK(fixture_trace == std::vector<std::string>{"allocate 2", "setup 2", "events 2", "network 2"});
 	CHECK(resumed.result.error == 0);
@@ -269,6 +271,7 @@ TEST_CASE("Company economy - AI startup continuation and abandoned frames")
  * also check the inactive/new/spectator sentinels without an oversized shift. */
 TEST_CASE("Company economy - special owners have no bankruptcy takeover offer")
 {
+	RustTileOwnerContext ownership;
 	FixtureReset(true, false);
 	fixture_companies[1] = std::make_unique<CompanyProperties>();
 	for (uint16_t mask : {uint16_t{0}, uint16_t{UINT16_MAX}}) {
@@ -278,7 +281,7 @@ TEST_CASE("Company economy - special owners have no bankruptcy takeover offer")
 			fixture_current = static_cast<uint8_t>(current);
 			if (current < 64) CHECK_FALSE(fixture_companies[1]->Finances().bankrupt_asked.Test(CompanyID(static_cast<uint8_t>(current))));
 			for (bool hostile : {false, true}) {
-				CHECK(openttd_rust_company_buy(&fixture_services, 1, hostile, false).error == 1);
+				CHECK(openttd_rust_company_buy(&fixture_services, &ownership.view, 1, hostile, false).error == 1);
 			}
 		}
 	}
