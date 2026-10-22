@@ -344,7 +344,7 @@ static void Co_reset_service_interval(uint32_t id, uint8_t company) noexcept
 	const Vehicle *v = Vehicle::Get(id);
 	const Company *c = Company::Get(company);
 	int interval = CompanyServiceInterval(c, v->type);
-	Command<CMD_CHANGE_SERVICE_INT>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, v->index, interval, false, c->settings.vehicle.servint_ispercent);
+	Command<CMD_CHANGE_SERVICE_INT>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, v->index, interval, false, RustCompanyServiceIntervalPercent(c->index.base()));
 }
 /** Owner write and its cache invalidation, consecutive in the original. */
 static void Co_set_vehicle_owner(uint32_t id, uint8_t owner) noexcept

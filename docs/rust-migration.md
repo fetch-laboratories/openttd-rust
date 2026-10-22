@@ -1561,6 +1561,26 @@ sites run in assertion builds.
 Checks: `python3 tools/migration.py verify --jobs 2` and the default `fleet-` simulation. NewGRF
 refit/attach callbacks and articulated parts remain #156.
 
+### Common vehicle transactions and nonrail construction (#314)
+
+Rust (`vehicle_transactions/`) owns the `vehicle_cmd.cpp` commands: build, sell, refit, clone,
+start/stop, mass start/stop, depot sell/replace, send-to-depot dispatch, naming and service
+intervals, with vehicle-set selection and depot/sort lists. It also owns the road vehicle and
+aircraft constructors (`construct.rs`, shadow and helicopter rotor included), articulated
+assembly and its consistency check. Speculative refit builds restore both RNG streams; clone
+cleanup sells partial consists. Commands nest through `command::nested` and call ship, orders,
+cargo, fleet, road and aircraft owners directly. Original bodies compile only portably.
+
+C++ keeps pools, shells and their field stores, specs/NewGRF callbacks, unit allocation,
+native stack `CommandCost`s and UI leaves. Rail construction, moves and rail sale stay native
+until #315.
+
+Checks: `python3 tools/migration.py verify --jobs 2` and the default `fleet-` scenarios. The
+`transaction-build-road`/`-aircraft` and `transaction-clone` scenarios require
+`vehicle_transactions` witnesses for road, aircraft, rotor, RNG restoration and clone join
+failure. Articulated road vehicles (NewGRF only), wrong-depot road types, airports refusing an
+engine and clone build failure after the front part are #156 gaps.
+
 ### Engine lifecycle and availability (#220)
 
 Rust owns each engine's lifecycle scalars and name, the process-wide aging-stop state,

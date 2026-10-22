@@ -8,6 +8,8 @@
 /** @file company_services.h Shared current-company context for synchronous Rust callbacks. */
 #ifndef RUST_COMPANY_SERVICES_H
 #define RUST_COMPANY_SERVICES_H
+struct GRFFile;
+int32_t RustGRFPriceShift(const GRFFile *, uint32_t) noexcept;
 #include "../company_type.h"
 #include "../company_func.h"
 #include "../company_base.h"
@@ -19,6 +21,7 @@ inline bool OpenTTDCompanyIsValidHuman(uint8_t company) noexcept { return Compan
 inline CompanyID OpenTTDCurrentCompany() noexcept { return _current_company; }
 inline void OpenTTDSetCurrentCompany(CompanyID company) noexcept { _current_company = company; }
 inline uint32_t RustCompanyRenewReserve(const Company *company) noexcept { return company->settings.engine_renew_money; }
+inline bool RustCompanyServiceIntervalPercent(uint8_t owner) noexcept { return Company::Get(CompanyID(owner))->settings.vehicle.servint_ispercent; }
 inline uint16_t RustCompanyAircraftServiceInterval(CompanyID owner) noexcept { return Company::Get(owner)->settings.vehicle.servint_aircraft; }
 inline uint8_t RustCurrentCompanyID() noexcept { return OpenTTDCurrentCompany().base(); }
 inline void RustSetCurrentCompanyID(uint8_t company) noexcept { OpenTTDSetCurrentCompany(CompanyID(company)); }

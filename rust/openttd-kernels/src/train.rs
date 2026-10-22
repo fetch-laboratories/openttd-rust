@@ -192,6 +192,8 @@ impl Handle {
         self.set_flags(if value { old | mask } else { old & !mask });
     }
 }
+/// Native `VehicleRailFlag::Flipped`.
+pub(crate) const FLIPPED: u8 = 4;
 const INVALID: u32 = u32::MAX;
 const DEPOT: u8 = 0x80;
 const WORMHOLE: u8 = 0x40;
