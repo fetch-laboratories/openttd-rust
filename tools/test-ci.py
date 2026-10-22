@@ -335,7 +335,7 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
 class PolicyTests(unittest.TestCase):
     def test_platform_cache_refresh_is_only_a_covered_protected_push(self):
         workflow = (ROOT / ".github/workflows/ci-build.yml").read_text()
-        for job in ("linux", "macos", "windows"):
+        for job in ("linux", "windows"):
             section = workflow.split(f"  {job}:\n", 1)[1]
             section = re.split(r"\n  [a-z_]+:\n", section, maxsplit=1)[0]
             expression = re.search(r"      cache-only: \${{ (.+) }}", section)[1]
@@ -360,15 +360,6 @@ class PolicyTests(unittest.TestCase):
                 )
         excluded = {
             "ci-linux.yml": ["Test"],
-            "ci-macos.yml": [
-                "Rust checks",
-                "Test",
-                "Compare accepted wide math templates with pinned C++",
-                "Reject unsupported Rust configurations",
-                "Fresh Rust native generators",
-                "Verify native archive configuration freshness",
-                "Retain native Rust evidence",
-            ],
             "ci-windows.yml": [
                 "Rust checks for actual selected target",
                 "Test",
@@ -402,13 +393,25 @@ class PolicyTests(unittest.TestCase):
                 self.assertNotIn("always()", predicate)
                 self.assertIn("!cancelled()", predicate)
                 expression = predicate.removeprefix("${{ ").removesuffix(" }}")
-                for cancelled, checkout, heavy, profile, expected in (
-                    (False, "head", "", "full", True),
-                    (False, "", "true", "full", True),
-                    (False, "", "false", "full", False),
-                    (True, "head", "true", "full", False),
-                    (True, "", "true", "full", False),
-                ):
+                cases = [
+                    (False, "head", "", "full", "push", True),
+                    (False, "", "true", "full", "push", True),
+                    (False, "", "false", "full", "push", False),
+                    (True, "head", "true", "full", "push", False),
+                    (True, "", "true", "full", "push", False),
+                ]
+                if job == "macos":
+                    # Full skips macOS; platform, heavy pushes and dispatch run it (#357).
+                    dispatch = "workflow_dispatch"
+                    cases = [
+                        (False, "head", "", "full", dispatch, False),
+                        (False, "head", "", "platform", dispatch, True),
+                        (False, "", "true", "", "push", True),
+                        (False, "", "false", "", "push", False),
+                        (False, "", "", "", dispatch, True),
+                        (True, "", "", "", dispatch, False),
+                    ]
+                for cancelled, checkout, heavy, profile, event, expected in cases:
                     inputs = {"checkout-ref": checkout, "profile": profile}
                     needs = {
                         "policy": {"outputs": {"heavy": heavy}},
@@ -421,6 +424,7 @@ class PolicyTests(unittest.TestCase):
                             ).replace("cancelled()", str(cancelled).lower()),
                             inputs=inputs,
                             needs=needs,
+                            github={"event_name": event},
                         )
                         self.assertEqual(result, expected)
 
@@ -456,6 +460,9 @@ class PolicyTests(unittest.TestCase):
             self.assertIn("paths-ignore: ['**.md']", push)
         _, (first, second) = groups("ci-quick.yml")
         self.assertNotEqual(first, second)
+        # A dispatched macOS run never displaces a queued push validation (#357).
+        workflow = (ROOT / ".github/workflows/ci-build.yml").read_text()
+        self.assertIn("-${{ github.event_name }}-build-", workflow)
 
     def test_bootstrap_on_demand_and_docs_classification(self):
         script = script_for("ci-policy.yml", "policy")

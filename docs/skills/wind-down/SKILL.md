@@ -29,6 +29,9 @@ Root is gpt-6.1-sol at xhigh effort, running in Codex from `$start-development`
 subagents. Each component has its own worktree and a draft PR that targets
 `rust-migration`. Read AGENTS.md and docs/roadmap.md first. Root already
 follows AGENTS.md, so the message says only what to finish and what to leave.
+It does not restate process steps (base updates, count runs, records, review
+rounds) or add any that AGENTS.md does not require: root reads a restated step
+as a new rule.
 
 The default wind-down is lenient. Root starts nothing new. Work already in
 flight is finished properly: agents reach their next passing, pushed
@@ -88,8 +91,10 @@ Verify rather than trust the roadmap or root's messages.
 ## 3. Classify everything in flight
 
 - Finish and merge: the implementation is complete. Name each remaining gate
-  (review, a timing or speed gate, `Full validation` at the final head) as a
-  pass/fail check. A miss stops the PR there.
+  (review, `Full validation` at the final head, any other gate AGENTS.md
+  defines) as a pass/fail check. A miss whose fix needs no new review under
+  AGENTS.md (formatting, CI warnings, platform errors) is fixed and rechecked;
+  any other miss stops the PR there.
 - Finish to a milestone: an agent mid-task. Name the milestone it reaches and
   pushes. Then it stops and its PR stays a draft.
 - Stop: work the user asked to stop. Leave it as it is, as defined above.
@@ -113,7 +118,9 @@ It needs to get across:
   user gave a trigger, root keeps working normally until then but prefers
   finishing to starting.
 - No new components, planners or issues, and the roadmap work order stays as
-  it is.
+  it is. Work that falls due during the wind-down (a speed pass, a planning
+  trigger) is recorded as due in the checkpoint; it does not become a gate on
+  other work at resume.
 - The finish condition for each item from step 3.
 - Reviews and CI finish under the usual process. Root merges what passes.
   Anything that needs another round stays a draft with its state recorded on
@@ -128,7 +135,9 @@ It needs to get across:
 - A final report: what was integrated; original C++ retired as a percent of
   all `src/` and of simulation sources (`port-metrics.py --whole-fork`, #226);
   each remaining draft and what blocks it; `rust-migration` CI state; and any
-  decisions left for the user.
+  decision only the user can make (spending, policy, scope). Engineering
+  dispositions, such as closing a draft that saved nothing, are root's to make
+  and record.
 
 ## 5. Send it to root
 

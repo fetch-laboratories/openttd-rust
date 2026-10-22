@@ -11,6 +11,8 @@
 #include "service_defaults.hpp"
 #include "services_ffi.h"
 #include "water_regions_ffi.h"
+struct OpenTTDVehicle;
+struct OpenTTDVehicleServices;
 #include <cstdint>
 #include <cstddef>
 struct OpenTTDShipState;
@@ -27,7 +29,6 @@ struct OpenTTDShipLeaves {
 	bool (*wait_unbunch)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(wait_unbunch);
 	bool (*chain_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(chain_depot);
 	uint32_t (*servint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(servint);
-	bool (*needs_service)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(needs_service);
 	uint32_t (*max_distance)() noexcept OPENTTD_SERVICE_DEFAULT(max_distance);
 	bool (*tile_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_valid);
 	uint32_t (*tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_type);
@@ -54,7 +55,6 @@ struct OpenTTDShipLeaves {
 	uint32_t (*station_visits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_visits);
 	void (*visit_set)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(visit_set);
 	void (*arrival)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival);
-	void (*service)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(service);
 	void (*leave_unbunch)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(leave_unbunch);
 	void (*path_result)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(path_result);
 	void (*order_free)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(order_free);
@@ -68,11 +68,6 @@ struct OpenTTDShipLeaves {
 	void (*depot_dirty)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_dirty);
 	void (*depot_invalidate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_invalidate);
 	void (*ships_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(ships_dirty);
-	void (*details_dirty)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(details_dirty);
-	void (*age)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(age);
-	void (*economy_age)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(economy_age);
-	void (*decrease_value)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(decrease_value);
-	void (*check_breakdown)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(check_breakdown);
 	void (*check_orders)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(check_orders);
 	int64_t (*running_cost)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(running_cost);
 	uint32_t (*cost_divisor)() noexcept OPENTTD_SERVICE_DEFAULT(cost_divisor);
@@ -104,7 +99,6 @@ struct OpenTTDShipLeaves {
 	bool (*process_orders)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);
 	void (*loading)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(loading);
 	void (*begin_loading)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(begin_loading);
-	bool (*breakdown)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(breakdown);
 	void (*viewport)(uint32_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (*base_viewport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
 	void (*visual)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(visual);
@@ -161,6 +155,7 @@ struct OpenTTDShipLeaves {
 	OpenTTDWaterPatch (*patch)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(patch);
 	size_t (*neighbours)(OpenTTDWaterPatch, OpenTTDWaterPatch *) noexcept OPENTTD_SERVICE_DEFAULT(neighbours);
 	bool (*next_depot)(uint32_t, OpenTTDShipDepot *) noexcept OPENTTD_SERVICE_DEFAULT(next_depot);
+	const OpenTTDVehicleServices *vehicle; ///< Base vehicle table, immutable for the process.
 };
 struct OpenTTDShipLeaves;
 const OpenTTDShipLeaves &GetRustShipServices() noexcept;
@@ -185,9 +180,9 @@ void openttd_rust_ship_set_rotation_y(OpenTTDShipState *, int16_t);
  * Every service is noexcept; unexpected environmental exceptions terminate.
  * The selected services do not unwind through script VMs or save/load during play.
  * Depot search owns its inherent BFS scratch; neighbour output spans 320 entries. */
-bool openttd_rust_ship_tick(uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
-void openttd_rust_ship_calendar_day(uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
-void openttd_rust_ship_economy_day(uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
+bool openttd_rust_ship_tick(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
+void openttd_rust_ship_calendar_day(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
+void openttd_rust_ship_economy_day(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_ship_cache(uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_ship_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 OpenTTDShipDepotResult openttd_rust_ship_find_depot(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);

@@ -13,6 +13,7 @@
 #include "../openttd.h"
 #include "../rust/vehicle_services.h"
 #include "../rust/vehicle_maintenance_ffi.h"
+#include "../newgrf_sound.h"
 #include "abi_layout.hpp"
 #include "../rust/fleet_ffi.h"
 #include "../safeguards.h"
@@ -308,7 +309,6 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 		CHECK(out->status == nullptr);
 		return true;
 	};
-	services.next_station = [](uint32_t) noexcept { return OpenTTDVehicleStationLookup{}; };
 	/* Rust borrows complete service values even when the pending map is empty.
 	 * Every function-pointer slot must be non-null, including unused callbacks. */
 	auto group = FleetGroupServices();
@@ -410,7 +410,8 @@ TEST_CASE("Vehicle maintenance native scalar stores and cadence")
 	auto maintenance = _rust_vehicle_maintenance_services;
 	auto base = GetRustVehicleServices();
 	base.maintenance = &maintenance;
-	maintenance.breakdown_sound = [](OpenTTDVehicle *handle) noexcept {
+	base.play_vehicle_sound = [](OpenTTDVehicle *handle, VehicleSoundEvent event) noexcept {
+		CHECK(event == VSE_BREAKDOWN);
 		Vehicle *current = VehicleOf(handle);
 		CHECK(current->cur_speed == 0);
 		CHECK(current->breakdown_ctr == 1);

@@ -786,7 +786,6 @@ struct RoadTestTables {
 
 		VEHICLE_UNUSED(vehicle, altitude_inputs);
 
-		VEHICLE_UNUSED(vehicle, breakdown);
 		VEHICLE_UNUSED(vehicle, check_orders_only);
 		VEHICLE_UNUSED(vehicle, write_coordinates);
 		VEHICLE_UNUSED(vehicle, subtype);
@@ -834,34 +833,28 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, order_nonstop);
 		VEHICLE_UNUSED(ground, has_articulated);
 		VEHICLE_UNUSED(leaves, max_depot_penalty);
-		VEHICLE_UNUSED(vehicle, handle_breakdown);
 		VEHICLE_UNUSED(leaves, process_orders_then_loading);
 		VEHICLE_UNUSED(vehicle, waiting_for_unbunching);
 		VEHICLE_UNUSED(vehicle, leave_unbunching_depot);
 		VEHICLE_UNUSED(vehicle, reset_depot_unbunching);
-		VEHICLE_UNUSED(vehicle, service_in_depot);
-		VEHICLE_UNUSED(vehicle, needs_automatic_servicing);
 		VEHICLE_UNUSED(vehicle, enter_depot);
 		VEHICLE_UNUSED(vehicle, pathfinding_result);
 		VEHICLE_UNUSED(vehicle, new_position);
 		VEHICLE_UNUSED(vehicle, move_then_status);
 		VEHICLE_UNUSED(vehicle, base_viewport);
 		VEHICLE_UNUSED(vehicle, property);
-		VEHICLE_UNUSED(vehicle, length_callback);
-		VEHICLE_UNUSED(vehicle, unknown_length_result);
+		VEHICLE_UNUSED(vehicle, callback);
+		VEHICLE_UNUSED(vehicle, unknown_callback_result);
 		VEHICLE_UNUSED(vehicle, length_changed);
-		VEHICLE_UNUSED(vehicle, play_start_sound);
+		VEHICLE_UNUSED(vehicle, play_vehicle_sound);
 		VEHICLE_UNUSED(vehicle, play_sound);
 		VEHICLE_UNUSED(vehicle, large_explosion);
 		VEHICLE_UNUSED(vehicle, order_free);
 		VEHICLE_UNUSED(vehicle, order_dummy);
 		VEHICLE_UNUSED(vehicle, start_stop_dirty);
 		VEHICLE_UNUSED(vehicle, destroy);
-		VEHICLE_UNUSED(vehicle, age);
-		VEHICLE_UNUSED(vehicle, economy_age);
-		VEHICLE_UNUSED(vehicle, decrease_value);
-		VEHICLE_UNUSED(vehicle, check_breakdown);
 		VEHICLE_UNUSED(vehicle, check_orders);
+		VEHICLE_UNUSED(vehicle, day);
 		VEHICLE_UNUSED(vehicle, write_day);
 		VEHICLE_UNUSED(vehicle, write_direction);
 		VEHICLE_UNUSED(vehicle, write_speed);
@@ -936,6 +929,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(ground, cache_begin);
 		VEHICLE_UNUSED(vehicle, next);
 		VEHICLE_UNUSED(vehicle, engine_id);
+		VEHICLE_UNUSED(vehicle, engine);
 		VEHICLE_UNUSED(vehicle, engine_for_length);
 		VEHICLE_UNUSED(ground, cached_length);
 		VEHICLE_UNUSED(leaves, shorten_factor);
@@ -1041,8 +1035,8 @@ static void RoadBoundary()
 		return 8;
 	};
 	t.vehicle.length_changed = [](OpenTTDVehicle *) noexcept { ++road_abi_probe->length_changes; };
-	t.vehicle.unknown_length_result = [](const OpenTTDEngine *e, uint16_t result) noexcept {
-		CHECK(e == reinterpret_cast<const OpenTTDEngine *>(&road_abi_new_engine) && result == 9);
+	t.vehicle.unknown_callback_result = [](const OpenTTDEngine *e, CallbackID callback, uint16_t result) noexcept {
+		CHECK(e == reinterpret_cast<const OpenTTDEngine *>(&road_abi_new_engine) && callback == 0x11 && result == 9);
 	};
 	t.leaves.default_max_speed = [](OpenTTDVehicle *) noexcept -> uint16_t {
 		CHECK(road_abi_probe->fallback_cache && road_abi_probe->cache_properties == 3);
@@ -1114,7 +1108,7 @@ static void RoadBoundary()
 	t.vehicle.write_last_station = [](OpenTTDVehicle *, uint16_t station) noexcept { CHECK(station == 55); };
 	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.leaves.is_bay_stop = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
-	t.vehicle.play_start_sound = [](OpenTTDVehicle *) noexcept { return true; };
+	t.vehicle.play_vehicle_sound = [](OpenTTDVehicle *, VehicleSoundEvent event) noexcept { CHECK(event == 1); return true; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
 	t.leaves.enter_tile = [](OpenTTDVehicle *, uint32_t, int32_t, int32_t) noexcept -> OpenTTDRoadEntered { return {.tile = 100, .cur_speed = 0, .flags = 4, .direction = 1, .order_type = 0}; };
 	t.vehicle.write_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == 0); };
@@ -1298,14 +1292,40 @@ static void RoadServiceBoundary()
 	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&world, EffectTestRandom, EffectTestIndustry);
 	RoadTestTables t(&services);
 	t.leaves.max_depot_penalty = []() noexcept -> uint32_t { return 300; };
-	t.vehicle.economy_age = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
+	/* Direct maintenance: aged out, no reliability decay, no breakdown, service due. */
+	auto &maintenance = _vehicle_maintenance_probe;
+	maintenance.max_economy_date = OpenTTDEconomyDate{0};
+	maintenance.economy_age = [](OpenTTDVehicle *) noexcept { return OpenTTDEconomyDate{0}; };
+	t.vehicle.day = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.vehicle.write_day = [](OpenTTDVehicle *, uint8_t day) noexcept { CHECK(day == 1); };
-	t.vehicle.check_breakdown = [](OpenTTDVehicle *) noexcept {};
+	maintenance.check_breakdown = [](OpenTTDVehicle *) noexcept {
+		OpenTTDVehicleMaintenanceCheckBreakdown r{};
+		r.no_service = true;
+		return r;
+	};
+	maintenance.breakdown_guard = [](OpenTTDVehicle *) noexcept {
+		OpenTTDVehicleMaintenanceBreakdownGuard r{};
+		r.counter = 1;
+		return r;
+	};
+	maintenance.automatic = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceAutomatic{}; };
+	t.vehicle.status = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
+	maintenance.interval = [](OpenTTDVehicle *) noexcept {
+		OpenTTDVehicleMaintenanceInterval r{};
+		r.now = OpenTTDEconomyDate{1};
+		return r;
+	};
+	maintenance.details_dirty = [](OpenTTDVehicle *) noexcept {};
+	maintenance.reset = [](OpenTTDVehicle *) noexcept { ++road_service_probe->services; return OpenTTDVehicleMaintenanceReset{}; };
+	t.vehicle.write_economy_service = t.vehicle.write_calendar_service = [](OpenTTDVehicle *, int32_t) noexcept {};
+	t.vehicle.write_breakdowns = [](OpenTTDVehicle *, uint8_t) noexcept {};
+	t.vehicle.write_reliability = [](OpenTTDVehicle *, uint16_t) noexcept {};
+	maintenance.chance_write = [](OpenTTDVehicle *, uint8_t) noexcept {};
+	t.vehicle.next = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { return nullptr; };
 	t.leaves.service_read = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadServiceRead {
 		auto &p = *road_service_probe;
 		return {.tile = p.tile, .servint = 1, .cur_speed = p.speed};
 	};
-	t.vehicle.needs_automatic_servicing = [](OpenTTDVehicle *) noexcept { return true; };
 	t.leaves.is_road_depot_tile = [](uint32_t tile) noexcept { CHECK(tile == road_service_probe->tile); return road_service_probe->depot_tile; };
 	t.leaves.link_tile = [](OpenTTDVehicle *u) noexcept -> OpenTTDRoadLinkTile {
 		auto &p = *road_service_probe;
@@ -1326,7 +1346,6 @@ static void RoadServiceBoundary()
 	t.ground.go_to_depot_service = [](OpenTTDVehicle *, uint16_t depot) noexcept { CHECK(depot == 55); ++road_service_probe->depot_orders; };
 	t.vehicle.dest_tile = [](OpenTTDVehicle *) noexcept -> uint32_t { return road_service_probe->dest; };
 	t.vehicle.write_dest = [](OpenTTDVehicle *, uint32_t tile) noexcept { CHECK(tile == road_service_probe->tile); road_service_probe->dest = tile; };
-	t.vehicle.service_in_depot = [](OpenTTDVehicle *) noexcept { ++road_service_probe->services; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
 	t.vehicle.check_orders = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	auto day = [&]() { openttd_rust_road_economy_day(RoadServiceHandle(0), probe.head, true, &t.leaves); };
@@ -1421,12 +1440,17 @@ static void ShipBoundary()
 		CHECK(openttd_rust_ship_get_rotation_x(state.get()) == static_cast<int16_t>(value));
 		CHECK(openttd_rust_ship_get_rotation_y(state.get()) == static_cast<int16_t>(value));
 	}
+	static OpenTTDVehicleMaintenanceServices ship_maintenance;
+	static OpenTTDVehicleServices ship_vehicle;
+	ship_vehicle.maintenance = &ship_maintenance;
+	static int ship_shell; ///< Its address is the opaque vehicle handle.
+	auto *shell = reinterpret_cast<OpenTTDVehicle *>(&ship_shell);
 	/* Initialize every function pointer, including paths unused in this concrete gap. */
 	OpenTTDShipLeaves leaves{
 		.depot_dir = ShipProbeUnused<uint32_t, uint32_t>, .depot_axis = ShipProbeUnused<uint32_t, uint32_t>,
 		.is_depot = ShipProbeUnused<bool, uint32_t>, .depot_index = ShipProbeUnused<uint32_t, uint32_t>,
 		.wait_unbunch = ShipProbeUnused<bool, uint32_t>, .chain_depot = ShipProbeUnused<bool, uint32_t>,
-		.servint = ShipProbeUnused<uint32_t, uint32_t>, .needs_service = ShipProbeUnused<bool, uint32_t>,
+		.servint = ShipProbeUnused<uint32_t, uint32_t>,
 		.max_distance = ShipProbeUnused<uint32_t>, .tile_valid = ShipProbeUnused<bool, uint32_t>,
 		.tile_type = ShipProbeUnused<uint32_t, uint32_t>, .water_class = ShipProbeUnused<uint32_t, uint32_t>,
 		.lock_middle = ShipProbeUnused<bool, uint32_t>, .lock_dir = ShipProbeUnused<uint32_t, uint32_t>,
@@ -1440,16 +1464,14 @@ static void ShipBoundary()
 		.station_xy = ShipProbeUnused<uint32_t, uint32_t>, .station_contains = ShipProbeUnused<bool, uint32_t, uint32_t>,
 		.station_dock = ShipProbeUnused<bool, uint32_t>, .station_visits = ShipProbeUnused<uint32_t, uint32_t>,
 		.visit_set = ShipProbeUnused<void, uint32_t, uint32_t>, .arrival = ShipProbeUnused<void, uint32_t, uint32_t>,
-		.service = ShipProbeUnused<void, uint32_t>, .leave_unbunch = ShipProbeUnused<void, uint32_t>,
+		.leave_unbunch = ShipProbeUnused<void, uint32_t>,
 		.path_result = ShipProbeUnused<void, uint32_t, bool>, .order_free = ShipProbeUnused<void, uint32_t>,
 		.order_dummy = ShipProbeUnused<void, uint32_t>, .order_depot = ShipProbeUnused<void, uint32_t, uint32_t>,
 		.order_leave = ShipProbeUnused<void, uint32_t>, .order_increment = ShipProbeUnused<void, uint32_t>,
 		.timetable = ShipProbeUnused<void, uint32_t>, .position = ShipProbeUnused<void, uint32_t>,
 		.start_dirty = ShipProbeUnused<void, uint32_t>, .depot_dirty = ShipProbeUnused<void, uint32_t>,
 		.depot_invalidate = ShipProbeUnused<void, uint32_t>, .ships_dirty = ShipProbeUnused<void>,
-		.details_dirty = ShipProbeUnused<void, uint32_t>, .age = ShipProbeUnused<void, uint32_t>,
-		.economy_age = ShipProbeUnused<void, uint32_t>, .decrease_value = ShipProbeUnused<void, uint32_t>,
-		.check_breakdown = ShipProbeUnused<void, uint32_t>, .check_orders = ShipProbeUnused<void, uint32_t>,
+		.check_orders = ShipProbeUnused<void, uint32_t>,
 		.running_cost = ShipProbeUnused<int64_t, uint32_t>, .cost_divisor = ShipProbeUnused<uint32_t>,
 		.pay_running = ShipProbeUnused<void, uint32_t, int64_t>, .speed_default = ShipProbeUnused<uint32_t, uint32_t>,
 		.age_default = ShipProbeUnused<uint32_t, uint32_t>, .speed_frac = ShipProbeUnused<uint32_t, uint32_t, bool>,
@@ -1465,7 +1487,7 @@ static void ShipBoundary()
 		.path_clear = ShipProbeUnused<void, uint32_t>, .enter_tile = ShipProbeUnused<uint32_t, uint32_t, uint32_t, uint32_t, uint32_t>,
 		.enter_depot = ShipProbeUnused<void, uint32_t>, .process_orders = ShipProbeUnused<bool, uint32_t>,
 		.loading = ShipProbeUnused<void, uint32_t>, .begin_loading = ShipProbeUnused<void, uint32_t>,
-		.breakdown = ShipProbeUnused<bool, uint32_t>, .viewport = ShipProbeUnused<void, uint32_t, bool, bool>,
+		.viewport = ShipProbeUnused<void, uint32_t, bool, bool>,
 		.base_viewport = ShipProbeUnused<void, uint32_t>, .visual = ShipProbeUnused<void, uint32_t>,
 		.cache = ShipProbeUnused<void, uint32_t>, .play_sound = ShipProbeUnused<void, uint32_t>,
 		.yapf_reverse = ShipProbeUnused<OpenTTDShipReverseResult, uint32_t, bool>, .yapf_choose = ShipProbeUnused<OpenTTDShipTrackResult, uint32_t, uint32_t>,
@@ -1493,7 +1515,8 @@ static void ShipBoundary()
 		.order_max_speed = ShipProbeUnused<uint32_t, uint32_t>, .acceleration = ShipProbeUnused<uint32_t, uint32_t>,
 		.max_speed = ShipProbeUnused<uint32_t, uint32_t>, .state_owner = ShipProbeUnused<OpenTTDShipState *, uint32_t>,
 		.patch = ShipProbeUnused<OpenTTDWaterPatch, uint32_t>, .neighbours = ShipProbeUnused<size_t, OpenTTDWaterPatch, OpenTTDWaterPatch *>,
-		.next_depot = ShipProbeUnused<bool, uint32_t, OpenTTDShipDepot *>
+		.next_depot = ShipProbeUnused<bool, uint32_t, OpenTTDShipDepot *>,
+		.vehicle = &ship_vehicle
 	};
 	ship_probe = {};
 	ship_probe.owner = state.get();
@@ -1516,10 +1539,10 @@ static void ShipBoundary()
 	leaves.set_dest = [](uint32_t, uint32_t value) noexcept { ship_probe.dest = value; };
 	leaves.path_clear = [](uint32_t) noexcept { ++ship_probe.paths; };
 	leaves.position = [](uint32_t) noexcept { ++ship_probe.positions; };
-	leaves.breakdown = [](uint32_t) noexcept {
+	ship_maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept {
 		CHECK(ship_probe.stage++ == 0);
 		CHECK(ship_probe.tick == 0 && ship_probe.running == 0 && ship_probe.order_time == 0);
-		return false;
+		return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0};
 	};
 	leaves.process_orders = [](uint32_t) noexcept { CHECK(ship_probe.stage++ == 1); return true; };
 	leaves.yapf_reverse = [](uint32_t, bool trackdir) noexcept {
@@ -1536,7 +1559,7 @@ static void ShipBoundary()
 		CHECK(ship_probe.dest == 17 && ship_probe.paths == 2);
 		openttd_rust_ship_set_rotation(ship_probe.owner, 3);
 	};
-	CHECK(openttd_rust_ship_tick(4, &leaves, &ship_probe.services));
+	CHECK(openttd_rust_ship_tick(4, shell, &leaves, &ship_probe.services));
 	CHECK(ship_probe.stage == 4 && openttd_rust_ship_get_rotation(state.get()) == 3);
 	CHECK(!openttd_rust_ship_find_depot(4, 80, &leaves, &ship_probe.services).valid);
 	leaves.owner = [](uint32_t) noexcept { return uint32_t{3}; };
@@ -1577,7 +1600,8 @@ static void AircraftDirectBoundary()
 	auto &leaves = p.leaves;
 	vehicle.status = [](OpenTTDVehicle *) noexcept { CHECK(aircraft_probe.live); return uint8_t{0}; };
 	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return uint8_t{3}; };
-	vehicle.breakdown = [](OpenTTDVehicle *) noexcept { return uint8_t{0}; };
+	vehicle.maintenance = &_vehicle_maintenance_probe;
+	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	vehicle.loading = [](OpenTTDVehicle *, bool) noexcept {};
 	leaves.process_orders = [](OpenTTDAircraftVehicle v) noexcept {
 		CHECK(aircraft_probe.live);
@@ -1661,7 +1685,8 @@ static void AircraftPhaseBoundary()
 	v.status = [](OpenTTDVehicle *u) noexcept { return static_cast<uint8_t>(u == aircraft_probe.vehicle.handle ? 0 : 1); };
 	v.order_time = [](OpenTTDVehicle *) noexcept { CHECK(aircraft_probe.rotor_reads == 1); return aircraft_probe.order_time; };
 	v.write_order_time = [](OpenTTDVehicle *, int32_t time) noexcept { CHECK(time == 41); aircraft_probe.order_time = time; };
-	v.breakdown = [](OpenTTDVehicle *) noexcept { return uint8_t{0}; };
+	v.maintenance = &_vehicle_maintenance_probe;
+	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	leaves.process_orders = [](OpenTTDAircraftVehicle) noexcept { aircraft_probe.orders++; aircraft_probe.order_kind = 3; };
 	v.loading = [](OpenTTDVehicle *, bool) noexcept { aircraft_probe.order_kind = 4; };
 	v.order_type = [](OpenTTDVehicle *) noexcept { return aircraft_probe.order_kind; };
@@ -1751,12 +1776,7 @@ static void VehicleMaintenanceBoundary()
 	maintenance.reset = [](OpenTTDVehicle *) noexcept {
 		return OpenTTDVehicleMaintenanceReset{.economy_date = OpenTTDEconomyDate{0x1020304}, .calendar_date = OpenTTDCalendarDate{-0x12345}, .reliability = 0x9876, .chance = 12, .breakdowns = 2};
 	};
-	maintenance.reset_write = [](OpenTTDVehicle *, OpenTTDVehicleMaintenanceResetWrite value) noexcept {
-		CHECK(value.economy_date.value == 0x1020304);
-		CHECK(value.calendar_date.value == -0x12345);
-		CHECK(value.reliability == 0x9876 && value.chance == 3 && value.since == 0);
-		resets++;
-	};
+	maintenance.chance_write = [](OpenTTDVehicle *, uint8_t chance) noexcept { CHECK(chance == 3); resets++; };
 	maintenance.value = [](OpenTTDVehicle *) noexcept { return int64_t{-257}; };
 	maintenance.value_write = [](OpenTTDVehicle *, int64_t value) noexcept { CHECK(value == -255); values++; };
 	maintenance.renewal = [](OpenTTDVehicle *, const Company *) noexcept {
@@ -1767,6 +1787,10 @@ static void VehicleMaintenanceBoundary()
 	auto &base = tables.vehicle;
 	base.maintenance = &maintenance;
 	base.next = [](OpenTTDVehicle *) noexcept -> OpenTTDVehicle * { return nullptr; };
+	base.write_economy_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == 0x1020304); };
+	base.write_calendar_service = [](OpenTTDVehicle *, int32_t date) noexcept { CHECK(date == -0x12345); };
+	base.write_breakdowns = [](OpenTTDVehicle *, uint8_t since) noexcept { CHECK(since == 0); };
+	base.write_reliability = [](OpenTTDVehicle *, uint16_t reliability) noexcept { CHECK(reliability == 0x9876); };
 	uint8_t opaque;
 	auto *shell = reinterpret_cast<OpenTTDVehicle *>(&opaque);
 	openttd_rust_vehicle_service_depot(shell, &base);

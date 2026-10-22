@@ -452,7 +452,18 @@ pub struct Services {
     pub tree_ground: extern "C" fn(u32) -> TreeGround,
     /// Immutable water table, resolved lazily to avoid native static-init cycles.
     pub water_services: extern "C" fn() -> *const crate::water::WaterServices,
+    /// `for (Station *st : Station::Iterate())`, visiting each station with its
+    /// canonical service owner and index. Visits may reenter but never add or
+    /// delete a station.
+    pub for_each_station: extern "C" fn(*mut c_void, StationVisitor),
 }
+/// Station visitor: context, station, its service owner and its index.
+pub type StationVisitor = unsafe extern "C" fn(
+    *mut c_void,
+    *const crate::station::Station,
+    *mut crate::station_service::Service,
+    u16,
+);
 /// `GetFoundationSlope` result: height and slope after the tile's foundation.
 #[repr(C)]
 pub struct FoundationSlope {
@@ -471,6 +482,27 @@ impl Services {
     #[must_use]
     pub fn random_range(&self, limit: u32) -> u32 {
         ((u64::from(self.random()) * u64::from(limit)) >> 32) as u32
+    }
+    /// Visit every station in pool order. No owner reference spans a visit.
+    #[allow(unsafe_code)]
+    pub(crate) fn for_each_station<
+        F: FnMut(*const crate::station::Station, *mut crate::station_service::Service, u16),
+    >(
+        &self,
+        mut visit: F,
+    ) {
+        unsafe extern "C" fn invoke<
+            F: FnMut(*const crate::station::Station, *mut crate::station_service::Service, u16),
+        >(
+            context: *mut c_void,
+            station: *const crate::station::Station,
+            service: *mut crate::station_service::Service,
+            id: u16,
+        ) {
+            // SAFETY: The service borrows this unique closure only during the call.
+            unsafe { (&mut *context.cast::<F>())(station, service, id) }
+        }
+        (self.for_each_station)(std::ptr::from_mut(&mut visit).cast(), invoke::<F>);
     }
 }
 /// Standalone test table: map predicates return zero and writes do nothing.
@@ -688,6 +720,7 @@ pub fn fixture(
         set_fence,
         tree_ground,
         water_services: fixture_water_services,
+        for_each_station: fixture_stations,
     }
 }
 #[cfg(test)]
@@ -1062,6 +1095,8 @@ extern "C" fn unused_vehicle_next(_: u32) -> Option<crate::vehicle::VehicleRef> 
     panic!("unused vehicle iteration");
 }
 
+#[cfg(test)]
+extern "C" fn fixture_stations(_: *mut c_void, _: StationVisitor) {}
 #[cfg(test)]
 extern "C" fn fixture_water_services() -> *const crate::water::WaterServices {
     panic!("unexpected water service access");

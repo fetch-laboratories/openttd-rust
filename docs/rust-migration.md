@@ -85,9 +85,9 @@ industry NewGRF-production, cargo income/destination and cargo queue-scaling pro
 CI runs all three steps.
 
 ```sh
-python3 tools/migration.py rust-checks --jobs 2
-python3 tools/migration.py build --jobs 2
-python3 tools/migration.py verify --jobs 2
+python3 tools/migration.py rust-checks
+python3 tools/migration.py build
+python3 tools/migration.py verify
 python3 tools/migration.py tools
 python3 tools/run-comparisons.py
 ```
@@ -97,7 +97,8 @@ Passing establishes only covered behavior. The driver does not itself compare
 every game state or prove full game equivalence.
 
 `rust-checks` runs the four Cargo checks without creating or building the
-reference. The default `--jobs 2` also limits Cargo invoked by CMake. Every logged
+reference. `--jobs` (default: the free cores, `max(2, cores - round(1-minute
+load))`, read once at start) also limits Cargo invoked by CMake. Every logged
 command reports its phase, elapsed time and output path, with periodic updates;
 lock waits identify live holders. POSIX commands run under a pipe supervisor;
 driver death (including SIGKILL) closes the pipe and kills the command session. Reference and candidate configure/build/test
@@ -278,19 +279,20 @@ resolved inputs, build/profile settings, architecture and Valgrind version. Cand
 separate from the compatibility identity checked against anchors.
 
 `SPEED_ANCHORS` in `tools/simulation/roads.py` holds each measured anchor
-`{head, ratio, Ir, identity}` and a separate latest `integrated` record with its
+`{head, ratio, Ir, identity}` and a separate `integrated` record with its
 head and Ir. Empty anchors mean collection only, never a passing speed guard.
 Each speed pass fills them from its same-head quiet medians. Compute each projection
 as `R0 * (1 + 2 * max(0, I / I0 - 1))`, directly from the fixed anchor. The
-rolling guard is 15% above the integrated head's projection from that same
-anchor; ceilings remain 1.5x play and 1.3x generation, with a speed-pass trigger
-within 5%. Before updating `integrated`, root checks the PR's six profiles against
-the latest `rust-migration` record. The PR's last commit before Full records the
-profiled commit's hash and loop Ir in `SPEED_INTEGRATED`, in `SPEED_PASS` order;
-this data-only update needs no new review. Quiet passes replace the whole anchor
-and refresh `integrated` together. Never reset anchor Ir alone. Profiles
-run alongside other agents; a PR does not answer for wall-ratio layout spread,
-which speed passes measure. Factor 2 is provisional. Memory stalls, excluded work
+ceilings are 1.5x play and 1.3x generation, with a speed-pass trigger within
+5%. PRs run no speed check and never edit `SPEED_ANCHORS` or `SPEED_INTEGRATED`
+(user decision, 2026-10-22). After every second integration root profiles the
+integrated tip in the background and records the six projections in the
+roadmap; a rise of more than 3% since the previous tip profile gets a
+fix-forward maintenance PR (AGENTS.md). Quiet passes replace the whole anchor
+and refresh `integrated` together. Never reset anchor Ir alone. Profiles run
+alongside other agents. Factor 2 is provisional: at
+`802ec7d6a4` the measured wall sensitivity to loop Ir was 0.75 TGP, 1.0-1.31
+for Opus/Grok/P1996/P2000 and 1.54 P2016 (#356). Memory stalls, excluded work
 and kernel/I/O costs remain outside the proxy. AGENTS.md schedules speed passes.
 
 ## Native macOS arm64 Rust linkage
@@ -318,7 +320,7 @@ configuration invalidates only that target's release crate; unchanged
 reconfiguration preserves the archive. Native CI checks minimum changes and
 restoration explicitly.
 
-The required macOS ARM jobs activate Rust through the reusable workflow's `rust`
+The macOS ARM jobs activate Rust through the reusable workflow's `rust`
 input. Debug enables `OPTION_USE_ASSERTS`: game/tests get `WITH_ASSERT`, while
 generators keep ordinary C++ assertions with neither `WITH_ASSERT` nor `NDEBUG`.
 Release defines `NDEBUG` for every consumer. Both run the four Cargo checks,
@@ -402,7 +404,7 @@ The driver and CI enforce native build/tests, nonempty test inventories, referen
 Server-side protection on `rust-migration` requires `Full validation`, the cheap
 commit/string/script-mode checks, and resolved conversations. Full validation is
 an explicit commit status, published only after the native comparisons, simulation,
-entire platform matrix, quick checks and annotation checks succeed for a captured
+platform matrix except macOS, quick checks and annotation checks succeed for a captured
 PR merge commit, with the status published on its head. Skipped or cancelled jobs cannot satisfy it. Workflow dispatch runs the
 controller from protected `rust-migration`; candidate test jobs have read-only
 permissions and the status publishers never execute candidate code.
@@ -418,7 +420,7 @@ python3 tools/ci.py wait .local/ci-requests/REQUEST.json
 ```
 
 `rust` runs four Cargo checks; `native` adds the Linux matrix and full migration
-comparison; `platform` runs the platform matrix. All include quick checks.
+comparison; `platform` runs the platform matrix including macOS. All include quick checks.
 Only `full` satisfies the merge gate. Unmergeable or pending-mergeability PRs
 are refused; a changed PR head needs a new full request. A later base advance
 does not invalidate an unchanged head; independent reviewed PRs can validate concurrently.
@@ -440,7 +442,7 @@ replaces a pending one, so a burst of merges validates the newest tip and the
 intermediate pushes show as cancelled. Markdown-only pushes do not start these
 workflows, so they cannot displace a pending code push. A merged push whose non-Markdown files match the tree marker from the same successful
 full request refreshes native compiler caches without repeating tests or scenarios.
-Covered protected pushes also rebuild the cached Linux GCC, macOS and Windows
+Covered protected pushes also rebuild the cached Linux GCC and Windows
 targets to refresh their compiler caches. This path skips Cargo checks, CTest,
 comparison/configuration probes, annotation checks and platform evidence; Clang
 and Emscripten have no compiler cache to refresh. The path is derived only from
@@ -491,6 +493,15 @@ Profile CI time with the Blacksmith CLI (`blacksmith jobs list|steps|stats`,
 sharding: `stats` gives each Blacksmith job's CPU and memory timeseries. Agents
 authenticate with an org token (`blacksmith org-token create`, admin only), never
 a copy of a person's `~/.blacksmith/credentials`.
+
+macOS runs on `rust-migration`, not per PR (#357). After every fifth integration
+root runs `gh workflow run ci-build.yml --ref rust-migration`, which builds and
+tests only the two macOS jobs at the tip and refreshes their caches, and waits with
+`gh run watch`; a red result is fixed before more integrations. An uncovered
+protected push also runs them. After two hosted-capacity cancellations of a macOS
+run, root runs `gh variable set CI_MACOS_HEAVY --body blacksmith-6vcpu-macos-26`,
+reruns, and runs `gh variable delete CI_MACOS_HEAVY` when that run finishes;
+setting the variable needs no Blacksmith credentials.
 
 `python3 tools/preflight.py --base origin/rust-migration` runs the pinned inherited
 commit checker. Its first run downloads the pinned hooks into ignored shared

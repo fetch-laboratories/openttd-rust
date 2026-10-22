@@ -7,10 +7,6 @@ on:
         required: false
         type: string
         default: ""
-      cache-only:
-        required: false
-        type: boolean
-        default: false
       arch:
         required: true
         type: string
@@ -62,7 +58,7 @@ jobs:
         rustup target list --installed | tee .local/macos-evidence/installed-targets.txt
 
     - name: Rust checks
-      if: inputs.rust && !inputs.cache-only
+      if: inputs.rust
       run: |
         python3 tools/test-rust-build-evidence.py
         cargo fmt --all -- --check
@@ -157,7 +153,7 @@ jobs:
         fi
 
     - name: Save vcpkg binary cache
-      if: github.event_name == 'push' && steps.vcpkg-binary-cache.outputs.cache-hit != 'true'
+      if: (github.event_name == 'push' || inputs.checkout-ref == '' && github.ref == 'refs/heads/rust-migration') && steps.vcpkg-binary-cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
         path: ${{ runner.temp }}/vcpkg-binary-cache
@@ -172,14 +168,13 @@ jobs:
       run: '"$CCACHE_EXE" --cleanup'
 
     - name: Save compiler cache
-      if: inputs.rust && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && steps.compiler-cache.outputs.cache-hit != 'true'
+      if: inputs.rust && inputs.checkout-ref == '' && github.ref == 'refs/heads/rust-migration' && steps.compiler-cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v4
       with:
         path: ${{ runner.temp }}/ccache
         key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
 
     - name: Test
-      if: ${{ !inputs.cache-only }}
       run: |
         cd build
         ctest --show-only=json-v1 > ctest-inventory.json
@@ -187,11 +182,11 @@ jobs:
         ctest -j $(sysctl -n hw.logicalcpu) --timeout 120 --output-junit ctest.xml
 
     - name: Compare accepted wide math templates with pinned C++
-      if: inputs.rust && !inputs.cache-only
+      if: inputs.rust
       run: python3 tools/math-extension-comparison.py --build build --output .local/macos-evidence/math-extensions
 
     - name: Reject unsupported Rust configurations
-      if: inputs.rust && !inputs.cache-only
+      if: inputs.rust
       run: |
         if cmake -S . -B .local/reject-universal -DOPTION_TOOLS_ONLY=ON -DOPTION_RUST=ON \
           '-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64' -DCMAKE_OSX_SYSROOT="$SDKROOT" \
@@ -209,7 +204,7 @@ jobs:
         grep -q 'deployment target of at least 11.0' .local/macos-evidence/reject-old-minimum.log
 
     - name: Fresh Rust native generators
-      if: inputs.rust && !inputs.cache-only
+      if: inputs.rust
       run: |
         cmake -S . -B .local/build-tools-macos \
           -DOPTION_TOOLS_ONLY=ON -DOPTION_RUST=ON \
@@ -222,7 +217,7 @@ jobs:
         cmake --build .local/build-tools-macos -j $(sysctl -n hw.logicalcpu)
 
     - name: Verify native archive configuration freshness
-      if: inputs.rust && !inputs.cache-only
+      if: inputs.rust
       run: |
         python3 - <<'PYCODE'
         import json
@@ -252,7 +247,7 @@ jobs:
         python3 tools/rust-build-evidence.py --build build --tools .local/build-tools-macos --output .local/macos-evidence
 
     - name: Retain native Rust evidence
-      if: always() && inputs.rust && !inputs.cache-only
+      if: always() && inputs.rust
       uses: actions/upload-artifact@v4
       with:
         include-hidden-files: true
