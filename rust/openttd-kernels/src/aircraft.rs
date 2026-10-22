@@ -33,7 +33,7 @@ pub struct State {
     pub turn_counter: u8,
     pub flags: u8,
 }
-use crate::airport::HANGAR;
+use crate::airport::{AT_OILRIG, HANGAR};
 use crate::services::{Map, Services, chance16_i};
 use crate::station::Station;
 use crate::tile_type::INVALID_TILE;
@@ -305,7 +305,6 @@ const HELICOPTER_SOUND: i64 = 22;
 const EXPLOSION_SOUND: i64 = 16;
 const SKID_SOUND: i64 = 21;
 const TICKS_PER_YEAR: i64 = YEAR_TICKS;
-const OILRIG: i64 = 9;
 const NUM_CARGO: i64 = 64;
 const INVALID_STATION: u32 = 65535;
 const OWNER_NONE: i64 = 16;
@@ -1116,7 +1115,7 @@ impl World<'_> {
                 self.next_airport(id);
                 return false;
             }
-            if self.airport_type(s) != OILRIG {
+            if self.airport_type(s) != i64::from(AT_OILRIG) {
                 x = observed.x();
                 y = observed.y();
                 tile = self.tile_virt(x, y);
@@ -1214,7 +1213,7 @@ impl World<'_> {
                 let vy = i64::from(point.y);
                 px = vx + (x + amd.x - vx).signum();
                 py = vy + (y + amd.y - vy).signum();
-                next_tile = if self.airport_type(s) == OILRIG {
+                next_tile = if self.airport_type(s) == i64::from(AT_OILRIG) {
                     self.airport_tile(s) as u32
                 } else {
                     self.tile_virt(px, py)
