@@ -96,8 +96,11 @@ def identity(scenario, binary, build, folder, env, valgrind):
     inputs = {}
     for base in (build, folder):
         for p in sorted(base.rglob("*")):
+            # CMake bookkeeping embeds each worktree's build path; games never read it.
             if p.is_file() and (
-                base == folder or p.parts[len(build.parts)] in RUNTIME_DIRECTORIES
+                base == folder
+                or p.parts[len(build.parts)] in RUNTIME_DIRECTORIES
+                and p.suffix != ".cmake"
             ):
                 inputs[str(p.relative_to(base))] = digest(p.read_bytes())
     resolved = dict(scenario)
