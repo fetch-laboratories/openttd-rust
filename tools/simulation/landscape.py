@@ -5,7 +5,7 @@ import struct
 import subprocess
 from pathlib import Path
 
-from . import core, objects
+from . import core, objects, rails
 from .console_adapter import prepared_console
 from .core import ROOT, WITNESS_ENVIRONMENT, branch_witnesses, read_save
 from .disasters import patch, rows
@@ -97,6 +97,9 @@ def game_environment(scenario):
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     if "landscape_commands" in scenario:
         folder = out / scenario["name"] / "input"
+        source, record = rails.normalize(Path(scenario["save"]), folder / "normalized")
+        result["landscape_input"] = record
+        scenario = dict(scenario, save=str(source))
         executables = prepared_console(
             "objects", objects.adapter, binaries, builds, folder, env
         )
