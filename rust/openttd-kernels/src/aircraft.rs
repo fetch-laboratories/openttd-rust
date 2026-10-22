@@ -34,10 +34,12 @@ pub struct State {
     pub flags: u8,
 }
 use crate::airport::HANGAR;
+use crate::newgrf_sound::VSE_START;
 use crate::services::{Map, Services, chance16_i};
 use crate::station::Station;
 use crate::tile_type::INVALID_TILE;
 use crate::vehicle::PROP_AIRCRAFT_SPEED;
+use crate::vehicle::maintenance;
 use crate::vehicle::{
     AltitudeInputs, Coordinates, DayCost, DirectionProgress, MovementObservations, OpenTTDVehicle,
     PositionObservations, SpeedInputs, TickStatus, VehicleRef, VehicleServices, XY, YEAR_TICKS,
@@ -201,7 +203,6 @@ pub struct Leaves {
     pub engine_speed: unsafe extern "C" fn(Vehicle) -> u16,
     pub engine_subtype: unsafe extern "C" fn(Vehicle) -> u8,
     pub engine_sound: unsafe extern "C" fn(Vehicle) -> u16,
-    pub engine_reliability: unsafe extern "C" fn(Vehicle) -> u16,
     pub airport_entry: unsafe extern "C" fn(*const c_void, u8) -> u8,
     pub direction_towards: unsafe extern "C" fn(Vehicle, i32, i32) -> u8,
     pub hangar_height: unsafe extern "C" fn(u16) -> i32,
@@ -212,7 +213,6 @@ pub struct Leaves {
     pub chain_in_depot: unsafe extern "C" fn(Vehicle) -> bool,
     pub nearest_depot_order: unsafe extern "C" fn(Vehicle) -> bool,
     pub part_of_orders: unsafe extern "C" fn(Vehicle) -> bool,
-    pub next_station: unsafe extern "C" fn(u16) -> u16,
     pub next_aircraft: unsafe extern "C" fn(u32) -> Vehicle,
     pub update_position: unsafe extern "C" fn(Vehicle),
     pub rotor_image: unsafe extern "C" fn(Vehicle),
@@ -226,7 +226,6 @@ pub struct Leaves {
     pub dirty_depot: unsafe extern "C" fn(Vehicle),
     pub first_arrival: unsafe extern "C" fn(Vehicle, u16),
     pub begin_loading: unsafe extern "C" fn(Vehicle),
-    pub dirty_details: unsafe extern "C" fn(Vehicle),
     pub update_delta: unsafe extern "C" fn(Vehicle),
     pub touchdown_animation: unsafe extern "C" fn(Vehicle, u16),
     pub destination_too_far: unsafe extern "C" fn(Vehicle),
@@ -438,6 +437,29 @@ impl World<'_> {
     fn map_max_y(&self) -> i64 {
         i64::from(self.map_bounds().1)
     }
+    fn maintenance(&self) -> &maintenance::Services {
+        // SAFETY: The base vehicle table names its immutable maintenance table.
+        unsafe { &*self.vs.maintenance }
+    }
+    // Direct Rust maintenance; no owner borrow spans these calls.
+    fn handle_breakdown(&self, v: Vehicle) -> i64 {
+        i64::from(unsafe { maintenance::handle_breakdown_status(v.base(), self.vs) }.status)
+    }
+    fn needs_service(&self, v: Vehicle) -> i64 {
+        i64::from(unsafe { maintenance::needs_automatic_servicing(v.base(), self.vs) })
+    }
+    fn service_in_depot(&self, v: Vehicle) {
+        unsafe { maintenance::service_in_depot(v.base(), self.vs) };
+    }
+    fn age_vehicle(&self, v: Vehicle) {
+        unsafe { maintenance::age_vehicle(v.base(), self.vs) };
+    }
+    fn decrease_value(&self, v: Vehicle) {
+        unsafe { maintenance::decrease_vehicle_value(v.base(), self.vs) };
+    }
+    fn check_breakdown(&self, v: Vehicle) {
+        unsafe { maintenance::check_vehicle_breakdown(v.base(), self.vs) };
+    }
     fn random(&self) -> u32 {
         let word = self.ss.random();
         service_witness("random", 4);
@@ -445,7 +467,6 @@ impl World<'_> {
     }
 
     scalar_services! {
-        handle_breakdown(self; vehicle: Vehicle) => (self.vs.breakdown)(vehicle.base());
         subtype(self; v: Vehicle) => (self.vs.subtype)(v.base());
         x(self; v: Vehicle) => (self.vs.x)(v.base());
         y(self; v: Vehicle) => (self.vs.y)(v.base());
@@ -483,7 +504,7 @@ impl World<'_> {
         engine_speed(self; v: Vehicle) => unsafe { (self.leaves.engine_speed)(v) };
         engine_subtype(self; v: Vehicle) => unsafe { (self.leaves.engine_subtype)(v) };
         engine_sound(self; v: Vehicle) => unsafe { (self.leaves.engine_sound)(v) };
-        engine_reliability(self; v: Vehicle) => unsafe { (self.leaves.engine_reliability)(v) };
+        engine_reliability(self; v: Vehicle) => (self.maintenance().engine_reliability)(v.base());
         vehicle_type(self; v: Vehicle) => (self.vs.vehicle_type)(v.base());
         slope(self; x: i64, y: i64) => (self.ss.slope)(x as i32, y as i32);
         // Original unsigned TileHeight * TILE_HEIGHT narrows to int before widening.
@@ -495,17 +516,15 @@ impl World<'_> {
         hangar_exit(self; v: Vehicle) => unsafe { (self.leaves.hangar_exit)(v) };
         can_use_station(self; v: Vehicle, station: *const Station) => unsafe { (self.leaves.can_use_station)(v, station) };
         service_interval(self; v: Vehicle) => unsafe { (self.leaves.service_interval)(v) };
-        needs_service(self; v: Vehicle) => (self.vs.needs_automatic_servicing)(v.base());
         chain_in_depot(self; v: Vehicle) => unsafe { (self.leaves.chain_in_depot)(v) };
         waiting_unbunching(self; v: Vehicle) => (self.vs.waiting_for_unbunching)(v.base());
         nearest_depot_order(self; v: Vehicle) => unsafe { (self.leaves.nearest_depot_order)(v) };
         part_of_orders(self; v: Vehicle) => unsafe { (self.leaves.part_of_orders)(v) };
-        next_station(self; last: i64) => unsafe { (self.leaves.next_station)(last as u16) };
         next_stopping_station(self; vehicle: Vehicle) => unsafe { (self.leaves.next_stopping_station)(vehicle) };
         speed_property(self; v: Vehicle) => (self.vs.property)(v.base(), PROP_AIRCRAFT_SPEED, 0) as u32;
         cargo_age_property(self; v: Vehicle) => unsafe { (self.leaves.cargo_age_property)(v) };
         range_property(self; v: Vehicle) => unsafe { (self.leaves.range_property)(v) };
-        start_sound(self; v: Vehicle) => (self.vs.play_start_sound)(v.base());
+        start_sound(self; v: Vehicle) => (self.vs.play_vehicle_sound)(v.base(), VSE_START);
         touchdown_sound(self; v: Vehicle) => unsafe { (self.leaves.touchdown_sound)(v) };
         rotor_image_if_changed(self; v: Vehicle) => unsafe { (self.leaves.rotor_image_if_changed)(v) };
         vehicle_crash(self; v: Vehicle, flooded: i64) => unsafe { (self.leaves.vehicle_crash)(v, flooded != 0) };
@@ -573,12 +592,11 @@ impl World<'_> {
         crash_news(self; vehicle: Vehicle, station: i64, victims: i64) -> () => unsafe { (self.leaves.crash_news)(vehicle, station as u16, victims as u32) };
         landing_rating(self; station_id: i64, cargo: i64) -> () => unsafe { (self.leaves.landing_rating)(station_id as u16, cargo as u8) };
         free_order(self; vehicle: Vehicle) -> () => (self.vs.order_free)(vehicle.base());
-        service_in_depot(self; vehicle: Vehicle) -> () => (self.vs.service_in_depot)(vehicle.base());
         leave_unbunching(self; vehicle: Vehicle) -> () => (self.vs.leave_unbunching_depot)(vehicle.base());
         dirty_depot(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.dirty_depot)(vehicle) };
         first_arrival(self; vehicle: Vehicle, station: i64) -> () => unsafe { (self.leaves.first_arrival)(vehicle, station as u16) };
         begin_loading(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.begin_loading)(vehicle) };
-        dirty_details(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.dirty_details)(vehicle) };
+        dirty_details(self; vehicle: Vehicle) -> () => (self.maintenance().details_dirty)(vehicle.base());
         update_delta(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.update_delta)(vehicle) };
         touchdown_animation(self; vehicle: Vehicle, station: i64) -> () => unsafe { (self.leaves.touchdown_animation)(vehicle, station as u16) };
         destination_too_far(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.destination_too_far)(vehicle) };
@@ -586,10 +604,7 @@ impl World<'_> {
         handle_loading(self; vehicle: Vehicle, second: i64) -> () => (self.vs.loading)(vehicle.base(), second != 0);
         service_order(self; vehicle: Vehicle, station: i64) -> () => unsafe { (self.leaves.service_order)(vehicle, station as u16) };
         dummy_order(self; vehicle: Vehicle) -> () => (self.vs.make_dummy)(vehicle.base());
-        age_vehicle(self; vehicle: Vehicle) -> () => (self.vs.age)(vehicle.base());
-        decrease_value(self; vehicle: Vehicle) -> () => (self.vs.decrease_value)(vehicle.base());
         check_orders(self; vehicle: Vehicle) -> () => (self.vs.check_orders_only)(vehicle.base());
-        check_breakdown(self; vehicle: Vehicle) -> () => (self.vs.check_breakdown)(vehicle.base());
         running_cost(self; vehicle: Vehicle) -> i64 => unsafe { (self.leaves.running_cost)(vehicle) };
         subtract_cost(self; vehicle: Vehicle, cost: i64) -> () => unsafe { (self.leaves.subtract_cost)(vehicle, cost) };
         dirty_lists(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.dirty_lists)(vehicle) };
@@ -1972,8 +1987,9 @@ impl World<'_> {
             self.age_vehicle(id);
             return;
         }
-        let day = (self.vs.economy_age)(id.base());
-        service_witness("economy_age", 1);
+        unsafe { maintenance::economy_age_vehicle(id.base(), self.vs) };
+        let day = (self.vs.day)(id.base());
+        service_witness("day", 1);
         let day = day.wrapping_add(1);
         self.set_day_counter(id, i64::from(day));
         if day & 7 == 0 {
@@ -2023,24 +2039,20 @@ impl World<'_> {
         let next = self.station(next);
         let engine_subtype = self.engine_subtype(id);
         let owner = self.owner(id) as u8;
-        let mut cursor = INVALID_STATION;
-        loop {
-            cursor = self.next_station(i64::from(cursor)) as u32;
-            if cursor == INVALID_STATION {
-                break;
-            }
-            let st = self.station(cursor);
+        service_witness("for_each_station", 0);
+        self.ss.for_each_station(|st, _, cursor| {
+            let cursor = u32::from(cursor);
             let candidate = self.hangar_candidate(st, owner);
             if candidate.owner != owner || !candidate.airport || !candidate.hangar {
-                continue;
+                return;
             }
             let ap = self.airport_fta(st);
             if self.airport_flags(ap) & 4 != 0 && engine_subtype & 2 != 0 && self.no_jetcrash() == 0
             {
-                continue;
+                return;
             }
             if self.airport_flags(ap) & 1 == 0 && engine_subtype & 1 != 0 {
-                continue;
+                return;
             }
             if range != 0 {
                 let ld = if !last.is_null() && self.airport_tile(last) as u32 != INVALID_TILE {
@@ -2054,7 +2066,7 @@ impl World<'_> {
                     0
                 };
                 if ld > range || nd > range {
-                    continue;
+                    return;
                 }
             }
             let distance = self.distance(vtile, self.airport_tile(st) as u32);
@@ -2062,7 +2074,7 @@ impl World<'_> {
                 best = distance;
                 result = cursor;
             }
-        }
+        });
         result
     }
     fn replacement(&self, station: u32) {

@@ -352,6 +352,11 @@ def supply_graphics(build):
         destination.symlink_to(source, target_is_directory=True)
 
 
+def free_cores():
+    """Cores the 1-minute load leaves idle, read once per run (#355)."""
+    return max(2, (os.cpu_count() or 2) - round(os.getloadavg()[0]))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -360,7 +365,9 @@ def main():
         nargs="?",
         default="verify",
     )
-    parser.add_argument("--jobs", type=int, default=2)
+    parser.add_argument(
+        "--jobs", type=int, default=free_cores(), help="default: free cores"
+    )
     parser.add_argument(
         "--ccache",
         action="store_true",

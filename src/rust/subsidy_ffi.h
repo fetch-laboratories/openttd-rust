@@ -39,7 +39,7 @@ struct OpenTTDSubsidyServices {
 	uint16_t (*allocate)(CargoType, Source, Source, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
 	void (*destroy)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
 	uint16_t (*duration)() noexcept OPENTTD_SERVICE_DEFAULT(duration);
-	CompanyID (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
+	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	bool (*cargo_valid)(CargoType) noexcept OPENTTD_SERVICE_DEFAULT(cargo_valid);
 	bool (*manual)(CargoType) noexcept OPENTTD_SERVICE_DEFAULT(manual);
 	bool (*manual_pax)() noexcept OPENTTD_SERVICE_DEFAULT(manual_pax);
@@ -68,6 +68,6 @@ void openttd_rust_subsidy_rebuild(const OpenTTDSubsidyServices *);
 void openttd_rust_subsidy_delete_with(const OpenTTDSubsidyServices *, Source);
 bool openttd_rust_subsidy_command(const OpenTTDSubsidyServices *, uint16_t, CargoType, Source, Source);
 void openttd_rust_subsidy_monthly(const OpenTTDSubsidyServices *, OpenTTDSubsidyCargo);
-bool openttd_rust_subsidy_check(const OpenTTDSubsidyServices *, CargoType, CompanyID, Source, uint16_t);
+bool openttd_rust_subsidy_check(const OpenTTDSubsidyServices *, CargoType, uint8_t, Source, uint16_t);
 }
 #endif /* RUST_SUBSIDY_FFI_H */

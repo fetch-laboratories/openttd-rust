@@ -20,6 +20,7 @@
     clippy::if_not_else
 )]
 use crate::services::Services;
+use crate::vehicle::{VS_STOPPED, VehicleRef, VehicleServices, maintenance};
 use crate::water_regions::Patch;
 use std::cell::UnsafeCell;
 use std::collections::{HashSet, VecDeque};
@@ -155,7 +156,6 @@ pub struct Leaves {
     pub wait_unbunch: extern "C" fn(u32) -> bool,
     pub chain_depot: extern "C" fn(u32) -> bool,
     pub servint: extern "C" fn(u32) -> u32,
-    pub needs_service: extern "C" fn(u32) -> bool,
     pub max_distance: extern "C" fn() -> u32,
     pub tile_valid: extern "C" fn(u32) -> bool,
     pub tile_type: extern "C" fn(u32) -> u32,
@@ -182,7 +182,6 @@ pub struct Leaves {
     pub station_visits: extern "C" fn(u32) -> u32,
     pub visit_set: extern "C" fn(u32, u32),
     pub arrival: extern "C" fn(u32, u32),
-    pub service: extern "C" fn(u32),
     pub leave_unbunch: extern "C" fn(u32),
     pub path_result: extern "C" fn(u32, bool),
     pub order_free: extern "C" fn(u32),
@@ -196,11 +195,6 @@ pub struct Leaves {
     pub depot_dirty: extern "C" fn(u32),
     pub depot_invalidate: extern "C" fn(u32),
     pub ships_dirty: extern "C" fn(),
-    pub details_dirty: extern "C" fn(u32),
-    pub age: extern "C" fn(u32),
-    pub economy_age: extern "C" fn(u32),
-    pub decrease_value: extern "C" fn(u32),
-    pub check_breakdown: extern "C" fn(u32),
     pub check_orders: extern "C" fn(u32),
     pub running_cost: extern "C" fn(u32) -> i64,
     pub cost_divisor: extern "C" fn() -> u32,
@@ -232,7 +226,6 @@ pub struct Leaves {
     pub process_orders: extern "C" fn(u32) -> bool,
     pub loading: extern "C" fn(u32),
     pub begin_loading: extern "C" fn(u32),
-    pub breakdown: extern "C" fn(u32) -> bool,
     pub viewport: extern "C" fn(u32, bool, bool),
     pub base_viewport: extern "C" fn(u32),
     pub visual: extern "C" fn(u32),
@@ -289,6 +282,8 @@ pub struct Leaves {
     pub patch: extern "C" fn(u32) -> Patch,
     pub neighbours: extern "C" fn(Patch, *mut Patch) -> usize,
     pub next_depot: extern "C" fn(u32, *mut Depot) -> bool,
+    /// Base vehicle table, immutable for the process.
+    pub vehicle: *const VehicleServices,
 }
 /// The original reuses one game-thread BFS set/deque across searches.
 /// `UnsafeCell` permits field-sized, short scratch access without holding a borrow
@@ -308,6 +303,10 @@ struct Game<'a> {
     owner: *mut State,
 }
 impl Game<'_> {
+    fn vs(&self) -> &VehicleServices {
+        // SAFETY: The native table names the immutable process-wide base table.
+        unsafe { &*self.leaves.vehicle }
+    }
     fn state(&self) -> u16 {
         // SAFETY: Raw shell pointer stays live; field access ends before any service.
         unsafe { u16::from((*self.owner).track) }
@@ -436,12 +435,15 @@ impl Game<'_> {
         }
         best
     }
-    fn service(&self, id: u32) {
-        if (self.leaves.servint)(id) == 0 || !(self.leaves.needs_service)(id) {
+    fn service(&self, id: u32, v: VehicleRef) {
+        // SAFETY: Live serialized shell; no owner borrow spans these calls.
+        if (self.leaves.servint)(id) == 0
+            || !unsafe { maintenance::needs_automatic_servicing(v, self.vs()) }
+        {
             return;
         }
         if (self.leaves.chain_depot)(id) {
-            (self.leaves.service)(id);
+            unsafe { maintenance::service_in_depot(v, self.vs()) };
             return;
         }
         let distance = (self.leaves.max_distance)();
@@ -467,7 +469,7 @@ impl Game<'_> {
         (self.leaves.set_cargo_age)(id, age as u16);
         (self.leaves.update_visual)(id);
     }
-    fn stay_depot(&self, id: u32) -> bool {
+    fn stay_depot(&self, id: u32, v: VehicleRef) -> bool {
         if !(self.leaves.chain_depot)(id) {
             return false;
         }
@@ -501,7 +503,8 @@ impl Game<'_> {
         (self.leaves.set_speed)(id, 0);
         self.viewport(id);
         (self.leaves.depot_dirty)(id);
-        (self.leaves.service)(id);
+        // SAFETY: Live serialized shell; no owner borrow spans the call.
+        unsafe { maintenance::service_in_depot(v, self.vs()) };
         (self.leaves.leave_unbunch)(id);
         (self.leaves.play_sound)(id);
         (self.leaves.depot_invalidate)(id);
@@ -632,15 +635,17 @@ impl Game<'_> {
             (self.leaves.arrival)(id, station);
         }
     }
-    fn controller(&self, id: u32) {
+    fn controller(&self, id: u32, v: VehicleRef) {
         let observed_tick = (self.leaves.tick)(id);
         let observed_order_time = (self.leaves.order_time)(id);
         (self.leaves.set_tick)(id, observed_tick.wrapping_add(1) as u8);
         (self.leaves.set_order_time)(id, observed_order_time.wrapping_add(1) as i32);
-        if (self.leaves.breakdown)(id) {
+        // SAFETY: Live serialized shell; no owner borrow spans the call.
+        let breakdown = unsafe { maintenance::handle_breakdown_status(v, self.vs()) };
+        if breakdown.broken {
             return;
         }
-        if (self.leaves.status)(id) & 2 != 0 {
+        if breakdown.status & VS_STOPPED != 0 {
             return;
         }
         if (self.leaves.process_orders)(id) && (self.leaves.yapf_reverse)(id, false).reverse {
@@ -651,7 +656,7 @@ impl Game<'_> {
         if (self.leaves.order_type)(id) == 3 {
             return;
         }
-        if self.stay_depot(id) {
+        if self.stay_depot(id, v) {
             return;
         }
         (self.leaves.visual)(id);
@@ -846,6 +851,7 @@ const SUBCOORD: [[(u8, u8, u8); 6]; 4] = [
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_tick(
     id: u32,
+    vehicle: VehicleRef,
     leaves: *const Leaves,
     services: *const Services,
 ) -> bool {
@@ -861,12 +867,13 @@ pub unsafe extern "C" fn openttd_rust_ship_tick(
     if observed_status & 2 == 0 {
         (game.leaves.set_running)(id, observed_running.wrapping_add(1) as u8);
     }
-    game.controller(id);
+    game.controller(id, vehicle);
     true
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_calendar_day(
     id: u32,
+    vehicle: VehicleRef,
     leaves: *const Leaves,
     services: *const Services,
 ) {
@@ -877,11 +884,13 @@ pub unsafe extern "C" fn openttd_rust_ship_calendar_day(
         services: unsafe { &*services },
         owner: (leaves.state_owner)(id),
     };
-    (game.leaves.age)(id);
+    // SAFETY: Live serialized shell; no owner borrow spans the call.
+    unsafe { maintenance::age_vehicle(vehicle, game.vs()) };
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_economy_day(
     id: u32,
+    vehicle: VehicleRef,
     leaves: *const Leaves,
     services: *const Services,
 ) {
@@ -893,21 +902,23 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
         owner: (leaves.state_owner)(id),
     };
     crate::witness::hit(crate::witness::SHIP_ECONOMY_DAY);
-    (game.leaves.economy_age)(id);
+    // SAFETY: Live serialized shell; no owner borrow spans these calls.
+    unsafe { maintenance::economy_age_vehicle(vehicle, game.vs()) };
     let day = (game.leaves.day)(id).wrapping_add(1);
     (game.leaves.set_day)(id, day as u8);
     if day & 7 == 0 {
-        (game.leaves.decrease_value)(id);
+        unsafe { maintenance::decrease_vehicle_value(vehicle, game.vs()) };
     }
-    (game.leaves.check_breakdown)(id);
-    game.service(id);
+    unsafe { maintenance::check_vehicle_breakdown(vehicle, game.vs()) };
+    game.service(id, vehicle);
     (game.leaves.check_orders)(id);
     let ticks = (game.leaves.running)(id);
     if ticks != 0 {
         let cost = (game.leaves.running_cost)(id);
         let cost = cost.saturating_mul(i64::from(ticks)) / i64::from((game.leaves.cost_divisor)());
         (game.leaves.pay_running)(id, cost);
-        (game.leaves.details_dirty)(id);
+        // SAFETY: The base table names its immutable maintenance table.
+        (unsafe { &*game.vs().maintenance }.details_dirty)(vehicle);
         (game.leaves.ships_dirty)();
     }
 }

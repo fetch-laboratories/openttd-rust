@@ -17,6 +17,8 @@ pub(crate) mod maintenance;
 pub(crate) mod scheduler;
 pub(crate) mod visits;
 
+use crate::newgrf_callbacks::CallbackID;
+use crate::newgrf_sound::VehicleSoundEvent;
 use std::ptr::NonNull;
 
 /// Opaque C++ `Vehicle`.
@@ -122,7 +124,6 @@ pub struct NewPosition {
 }
 
 /// `HandleBreakdown` result, then the vehicle status it leaves.
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Breakdown {
     pub broken: bool,
@@ -214,13 +215,9 @@ pub struct VehicleServices {
     ),
     /// Consecutive `tick_counter`, `running_ticks` and `current_order_time` stores.
     pub write_counters: extern "C" fn(VehicleRef, u8, u8, i32),
-    /// `HandleBreakdown()`, then observe `vehstatus`.
-    pub handle_breakdown: extern "C" fn(VehicleRef) -> Breakdown,
     pub waiting_for_unbunching: extern "C" fn(VehicleRef) -> bool,
     pub leave_unbunching_depot: extern "C" fn(VehicleRef),
     pub reset_depot_unbunching: extern "C" fn(VehicleRef),
-    pub service_in_depot: extern "C" fn(VehicleRef),
-    pub needs_automatic_servicing: extern "C" fn(VehicleRef) -> bool,
     pub enter_depot: extern "C" fn(VehicleRef),
     pub pathfinding_result: extern "C" fn(VehicleRef, bool),
     pub new_position: extern "C" fn(VehicleRef) -> NewPosition,
@@ -230,13 +227,13 @@ pub struct VehicleServices {
     pub base_viewport: extern "C" fn(VehicleRef),
     /// `GetVehicleProperty(v, property, fallback)`.
     pub property: extern "C" fn(VehicleRef, u8, i32) -> i32,
-    /// `GetVehicleCallback(CBID_VEHICLE_LENGTH, 0, 0, v->engine_type, v)`.
-    pub length_callback: extern "C" fn(VehicleRef) -> u16,
-    /// `ErrorUnknownCallbackResult(grfid, CBID_VEHICLE_LENGTH, result)`.
-    pub unknown_length_result: extern "C" fn(EngineRef, u16),
+    /// `GetVehicleCallback(callback, 0, 0, v->engine_type, v)`.
+    pub callback: extern "C" fn(VehicleRef, CallbackID) -> u16,
+    /// `ErrorUnknownCallbackResult(e->GetGRFID(), callback, result)`.
+    pub unknown_callback_result: extern "C" fn(EngineRef, CallbackID, u16),
     pub length_changed: extern "C" fn(VehicleRef),
-    /// `PlayVehicleSound(v, VSE_START)`.
-    pub play_start_sound: extern "C" fn(VehicleRef) -> bool,
+    /// `PlayVehicleSound(v, event)`.
+    pub play_vehicle_sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
     pub play_sound: extern "C" fn(VehicleRef, u16),
     /// `CreateEffectVehicleRel(v, 4, 4, 8, EV_EXPLOSION_LARGE)`.
     pub large_explosion: extern "C" fn(VehicleRef),
@@ -246,13 +243,9 @@ pub struct VehicleServices {
     pub start_stop_dirty: extern "C" fn(VehicleRef),
     /// `delete v`; the handle and its owner are dead afterwards.
     pub destroy: extern "C" fn(VehicleRef),
-    pub age: extern "C" fn(VehicleRef),
-    /// `EconomyAgeVehicle(v)`, then observe `day_counter`.
-    pub economy_age: extern "C" fn(VehicleRef) -> u8,
-    pub decrease_value: extern "C" fn(VehicleRef),
-    pub check_breakdown: extern "C" fn(VehicleRef),
     /// `CheckOrders(v)`, then observe `running_ticks`.
     pub check_orders: extern "C" fn(VehicleRef) -> u8,
+    pub day: extern "C" fn(VehicleRef) -> u8,
     pub write_day: extern "C" fn(VehicleRef, u8),
     pub write_direction: extern "C" fn(VehicleRef, u8),
     pub write_speed: extern "C" fn(VehicleRef, u16),
@@ -268,6 +261,8 @@ pub struct VehicleServices {
     pub detach_last: extern "C" fn(VehicleRef, VehicleRef, VehicleRef),
     pub next: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
     pub engine_id: extern "C" fn(VehicleRef) -> u16,
+    /// Only the current engine, for callers that do not consume its GRF version.
+    pub engine: extern "C" fn(VehicleRef) -> EngineRef,
     pub engine_for_length: extern "C" fn(VehicleRef) -> EngineForLength,
     pub write_tick: extern "C" fn(VehicleRef, u8),
     pub direction: extern "C" fn(VehicleRef) -> u8,
@@ -312,7 +307,6 @@ pub struct VehicleServices {
     pub day_cost: extern "C" fn(VehicleRef) -> DayCost,
     pub make_dummy: extern "C" fn(VehicleRef),
     pub loading: extern "C" fn(VehicleRef, bool),
-    pub breakdown: extern "C" fn(VehicleRef) -> u8,
     pub check_orders_only: extern "C" fn(VehicleRef),
     pub write_coordinates: extern "C" fn(VehicleRef, i32, i32, i32),
     pub altitude_inputs: extern "C" fn(VehicleRef) -> AltitudeInputs,

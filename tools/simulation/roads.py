@@ -13,20 +13,22 @@ ROAD = "roadveh[0]/"
 COMMON = ROAD + "common[0]/"
 AI_FOLDER = "road-scenario-ai"
 
-# Quiet speed pass at 667e652ad8 (#322): ratio is the median of four three-pair
-# medians; Ir and compatible identity come from profiles of the same build.
-SPEED_HEAD = "667e652ad8"
+# Quiet speed pass at 51ee7280f7, code 802ec7d6a4 (#356): ratio is the median of
+# four three-pair medians; Ir and compatible identity come from profiles of the
+# same build.
+SPEED_HEAD = "51ee7280f7"
 # fmt: off
 SPEED_PASS = (
-    ("generate-tgp-256-1", 1.2150013604135657, 2878998668, "f6f82b6bbc4769f652d1451890003fef0f2c7f12c76c6d8d5549614a7d35a1e1"),
-    ("play-opus-55-167-002-manual", 1.203689213933969, 25241154728, "b4ecf7337dcda62268175b3e99de2e43ffb3a3ffe4f608ee365751dbaabc23a2"),
-    ("play-grok-159-001-manual", 1.1907607348013287, 23912546163, "46dcbfc4ceba5d11801053ac2eb8d35ac640082a6393744d0825fe9dca7229c8"),
-    ("play-padhattan-ridge-1996-manual", 1.2502032553708693, 4286427692, "27801b82dceb31797d73fc2f2f9448be781d1551b2594408b562d7f96b79323d"),
-    ("play-padhattan-ridge-2000-manual", 1.3052238805970147, 7037662305, "17e34235425021ca2f96c739312d9f15ca167ac5f579617d6c9eb1047e8c2627"),
-    ("play-padhattan-ridge-2016-manual", 1.355471294661727, 12653579222, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
+    ("generate-tgp-256-1", 1.213575, 2887182629, "f6f82b6bbc4769f652d1451890003fef0f2c7f12c76c6d8d5549614a7d35a1e1"),
+    ("play-opus-55-167-002-manual", 1.198990, 24842200292, "b4ecf7337dcda62268175b3e99de2e43ffb3a3ffe4f608ee365751dbaabc23a2"),
+    ("play-grok-159-001-manual", 1.202356, 23560945644, "46dcbfc4ceba5d11801053ac2eb8d35ac640082a6393744d0825fe9dca7229c8"),
+    ("play-padhattan-ridge-1996-manual", 1.254140, 4235509810, "27801b82dceb31797d73fc2f2f9448be781d1551b2594408b562d7f96b79323d"),
+    ("play-padhattan-ridge-2000-manual", 1.323060, 6968637560, "17e34235425021ca2f96c739312d9f15ca167ac5f579617d6c9eb1047e8c2627"),
+    ("play-padhattan-ridge-2016-manual", 1.358763, 12567707644, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
 )
-# Each game-code PR records its head's loop Ir here, in SPEED_PASS order.
-SPEED_INTEGRATED = "e77cb83040", (2887190782, 24842146127, 23560931730, 4235385730, 6968477739, 12567856194)
+# Loop Ir at the anchor, in SPEED_PASS order. PRs record no counts: root profiles
+# the integrated tip against these anchors (user decision 2026-10-22, AGENTS.md).
+SPEED_INTEGRATED = SPEED_HEAD, tuple(ir for _, _, ir, _ in SPEED_PASS)
 # fmt: on
 SPEED_ANCHORS = {
     name: dict(

@@ -5,7 +5,11 @@
 #ifdef WITH_RUST
 #include "../rust/services_ffi.h"
 #include "../rust/service_table_check.hpp"
+#include "../company_type.h"
+#include "../newgrf_text_type.h"
 #include "abi-visit-OpenTTDRandomServices.hpp"
+static_assert(!OPENTTD_SERVICE_RETURN_TYPE<CompanyID>);
+static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
 extern bool CheckAbi_industry_cmd();
 extern bool CheckAbi_town_cmd();
 extern bool CheckAbi_station_cmd();

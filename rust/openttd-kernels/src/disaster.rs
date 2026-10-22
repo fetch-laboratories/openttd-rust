@@ -205,16 +205,29 @@ impl World<'_> {
         self.read(10, id, 0, 0)
     }
     fn tile_xy(&self, x: u32, y: u32) -> u32 {
-        y.wrapping_mul(self.world()[0] as u32).wrapping_add(x)
+        crate::map_func::Map {
+            log_x: (self.world()[0] as u32).trailing_zeros() as u8,
+        }
+        .tile_xy(x, y)
     }
     fn tile_virt(&self, x: i64, y: i64) -> u32 {
         self.tile_xy((x as i32 as u32) >> 4, (y as i32 as u32) >> 4)
     }
     fn tile_x(&self, tile: u32) -> i64 {
-        i64::from(tile & (self.world()[0] as u32 - 1))
+        i64::from(
+            crate::map_func::Map {
+                log_x: (self.world()[0] as u32).trailing_zeros() as u8,
+            }
+            .tile_x(tile),
+        )
     }
     fn tile_y(&self, tile: u32) -> i64 {
-        i64::from(tile >> (self.world()[0] as u32).trailing_zeros())
+        i64::from(
+            crate::map_func::Map {
+                log_x: (self.world()[0] as u32).trailing_zeros() as u8,
+            }
+            .tile_y(tile),
+        )
     }
     async fn action(&self, kind: u32, id: u32, other: u32, a: i64, b: i64, c: i64, d: i64) -> i64 {
         Request {

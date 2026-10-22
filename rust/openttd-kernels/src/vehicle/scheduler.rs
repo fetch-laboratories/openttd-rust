@@ -8,8 +8,10 @@
 //! Live base-vehicle scheduling prototype. Owners stay opaque and call-local;
 //! no Rust world/owner reference survives a service that can mutate or reenter.
 #![allow(unsafe_code, clippy::too_many_lines, clippy::verbose_bit_mask)]
-use super::{CALLBACK_FAILED, VS_CRASHED, VS_HIDDEN, VS_STOPPED, VehicleRef};
-use crate::{cargo_storage, fleet, station_service};
+use super::{CALLBACK_FAILED, VS_CRASHED, VS_HIDDEN, VS_STOPPED, VehicleRef, VehicleServices};
+use crate::newgrf_callbacks::CBID_VEHICLE_32DAY_CALLBACK;
+use crate::newgrf_sound::{VSE_RUNNING, VSE_RUNNING_16, VSE_STOPPED_16, VehicleSoundEvent};
+use crate::{cargo_storage, fleet, services, station_service};
 
 use super::VehicleType;
 const TRAIN: VehicleType = VehicleType::TRAIN;
@@ -47,11 +49,6 @@ pub struct DayCallback {
     pub has_engine: bool,
 }
 #[repr(C)]
-pub struct StationLookup {
-    pub station: *mut station_service::Service,
-    pub id: u32,
-}
-#[repr(C)]
 pub struct SchedulerServices {
     pub pool: extern "C" fn() -> PoolCursor,
     pub assertions: bool,
@@ -61,14 +58,12 @@ pub struct SchedulerServices {
     pub calendar_day: extern "C" fn(VehicleRef),
     pub economy_day: extern "C" fn(VehicleRef),
     pub day_callback_read: extern "C" fn(VehicleRef) -> DayCallback,
-    pub day_callback: extern "C" fn(VehicleRef) -> u16,
     pub randomise_callback: extern "C" fn(VehicleRef),
     pub first_dirty: extern "C" fn(VehicleRef),
-    pub unknown_day_callback: extern "C" fn(VehicleRef, u16),
     pub cargo_owner: extern "C" fn(VehicleRef) -> *mut cargo_storage::List,
-    pub running_sound: extern "C" fn(VehicleRef),
-    pub periodic_sound: extern "C" fn(VehicleRef, bool),
-    pub next_station: extern "C" fn(u32) -> StationLookup,
+    /// Base vehicle and shared tables, immutable for the process.
+    pub vehicle: *const VehicleServices,
+    pub shared: *const services::Services,
     /// Tables remain live through the synchronous loading callback.
     pub with_loading_timer:
         unsafe extern "C" fn(*const Tables, unsafe extern "C" fn(*const Tables)),
@@ -163,7 +158,8 @@ unsafe fn day<const COUNTED: bool>(
                 if COUNTED {
                     crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
                 }
-                let callback = svc!(COUNTED, s.day_callback, vehicle);
+                let vs = unsafe { &*s.vehicle };
+                let callback = svc!(COUNTED, vs.callback, vehicle, CBID_VEHICLE_32DAY_CALLBACK);
                 if callback != CALLBACK_FAILED {
                     if callback & 1 != 0 {
                         svc!(COUNTED, s.randomise_callback, vehicle);
@@ -172,7 +168,14 @@ unsafe fn day<const COUNTED: bool>(
                         svc!(COUNTED, s.first_dirty, vehicle);
                     }
                     if callback & !3 != 0 {
-                        svc!(COUNTED, s.unknown_day_callback, vehicle, callback);
+                        let engine = svc!(COUNTED, vs.engine, vehicle);
+                        svc!(
+                            COUNTED,
+                            vs.unknown_callback_result,
+                            engine,
+                            CBID_VEHICLE_32DAY_CALLBACK,
+                            callback
+                        );
                     }
                 }
             }
@@ -187,8 +190,7 @@ unsafe fn day<const COUNTED: bool>(
 }
 struct PostTickServices {
     cargo_owner: extern "C" fn(VehicleRef) -> *mut cargo_storage::List,
-    running_sound: extern "C" fn(VehicleRef),
-    periodic_sound: extern "C" fn(VehicleRef, bool),
+    sound: extern "C" fn(VehicleRef, VehicleSoundEvent) -> bool,
     cargo: *const cargo_storage::Services,
 }
 /// A field-sized raw access ends before the next service. These functions never
@@ -310,8 +312,9 @@ unsafe fn post_tick<const COUNTED: bool>(
         post_svc!(
             COUNTED,
             crate::witness::VEHICLE_RUNNING_SOUND,
-            schedule.running_sound,
-            vehicle
+            schedule.sound,
+            vehicle,
+            VSE_RUNNING
         );
     }
     // Running sound can change the following observations; load after it returns.
@@ -323,9 +326,13 @@ unsafe fn post_tick<const COUNTED: bool>(
         post_svc!(
             COUNTED,
             crate::witness::VEHICLE_PERIODIC_SOUND,
-            schedule.periodic_sound,
+            schedule.sound,
             vehicle,
-            running
+            if running {
+                VSE_RUNNING_16
+            } else {
+                VSE_STOPPED_16
+            }
         );
     }
 }
@@ -370,19 +377,17 @@ pub unsafe extern "C" fn openttd_rust_vehicle_ticks(
 unsafe extern "C" fn load_stations<const COUNTED: bool>(tables: *const Tables) {
     let tables = unsafe { &*tables };
     let s = unsafe { &*tables.scheduler };
-    let mut station_from = 0;
-    loop {
-        let station = svc!(COUNTED, s.next_station, station_from);
-        if station.station.is_null() {
-            break;
-        }
-        station_from = station.id + 1;
+    let shared = unsafe { &*s.shared };
+    if COUNTED {
+        crate::witness::hit(crate::witness::VEHICLE_CROSSINGS);
+    }
+    shared.for_each_station(|_, service, _| {
         if COUNTED {
             crate::witness::hit(crate::witness::VEHICLE_STATIONS);
         }
         unsafe {
             station_service::openttd_rust_station_load(
-                station.station,
+                service,
                 tables.station,
                 tables.loading,
                 tables.visits,
@@ -390,7 +395,7 @@ unsafe extern "C" fn load_stations<const COUNTED: bool>(tables: *const Tables) {
                 tables.refit_temporary,
             );
         };
-    }
+    });
 }
 unsafe fn run_ticks<const COUNTED: bool>(
     tables: &Tables,
@@ -415,8 +420,7 @@ unsafe fn run_ticks<const COUNTED: bool>(
     svc!(COUNTED, s.reset_accumulators);
     let post = PostTickServices {
         cargo_owner: s.cargo_owner,
-        running_sound: s.running_sound,
-        periodic_sound: s.periodic_sound,
+        sound: unsafe { &*s.vehicle }.play_vehicle_sound,
         cargo: tables.cargo,
     };
     {
@@ -543,8 +547,7 @@ mod tests {
             self.post_type = kind;
             let services = PostTickServices {
                 cargo_owner,
-                running_sound,
-                periodic_sound,
+                sound,
                 cargo: &raw const CARGO_SERVICES,
             };
             // Stands in for the native survival fill inside the Tick facade.
@@ -600,7 +603,14 @@ mod tests {
         c.events.push("age-owner");
         c.cargo
     }
-    extern "C" fn running_sound(v: VehicleRef) {
+    extern "C" fn sound(v: VehicleRef, event: VehicleSoundEvent) -> bool {
+        if event != VSE_RUNNING {
+            let c = unsafe { &mut *cells(v) };
+            c.events.push("periodic-sound");
+            c.running = Some(event == VSE_RUNNING_16);
+            assert!(event == VSE_RUNNING_16 || event == VSE_STOPPED_16);
+            return false;
+        }
         let c = unsafe { &mut *cells(v) };
         c.events.push("running-sound");
         match c.sound_changes {
@@ -619,11 +629,7 @@ mod tests {
             }
             _ => {}
         }
-    }
-    extern "C" fn periodic_sound(v: VehicleRef, running: bool) {
-        let c = unsafe { &mut *cells(v) };
-        c.events.push("periodic-sound");
-        c.running = Some(running);
+        false
     }
     extern "C" fn packet(shell: *mut c_void) -> *mut cargo_storage::Packet {
         let c = unsafe { &mut *shell.cast::<Cells>() };

@@ -25,7 +25,7 @@
     clippy::collapsible_match
 )]
 use crate::order_type::{OLFB_NO_LOAD, OUFB_TRANSFER, OUFB_UNLOAD};
-use crate::vehicle::VehicleRef;
+use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
 use std::ffi::c_void;
 
 /// Opaque live native `OrderList`; never dereferenced by Rust.
@@ -483,7 +483,6 @@ pub struct Leaves {
     pub vehicle_id: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub percent_filled: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub reliability: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub engine_reliability: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub display_speed: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub age_years: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub needs_service: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
@@ -534,7 +533,6 @@ pub struct Leaves {
     pub backup_hangar: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub review_setting: extern "C" fn() -> u64,
     pub local_owner: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub day_counter: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub fast_aircraft: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub short_strip: unsafe extern "C" fn(destination: u16) -> u64,
     pub no_jet_crash: extern "C" fn() -> u64,
@@ -543,7 +541,6 @@ pub struct Leaves {
     pub command_error: unsafe extern "C" fn(ctx: *mut c_void, error: u32, detail: u32),
     pub timetable_dirty: unsafe extern "C" fn(ctx: *mut c_void),
     pub invalidate_order: unsafe extern "C" fn(ctx: *mut c_void, data: i32),
-    pub vehicle_dirty: unsafe extern "C" fn(ctx: *mut c_void),
     pub delete_order_news: unsafe extern "C" fn(ctx: *mut c_void),
     pub suppress_implicit_write: unsafe extern "C" fn(ctx: *mut c_void, suppress: u8),
     pub invalidate_vehicle_list: unsafe extern "C" fn(ctx: *mut c_void),
@@ -571,13 +568,25 @@ pub struct Leaves {
     pub missing_aircraft_orders: unsafe extern "C" fn(ctx: *mut c_void),
     pub change_timetable_command:
         unsafe extern "C" fn(ctx: *mut c_void, index: u8, field: u8, value: u16),
+    pub base: &'static VehicleServices,
 }
 // Private helpers inherit the native entry's live-shell/output contracts and
 // the source branches' vehicle/destination types; they never expose safe calls
 // accepting arbitrary native pointers outside this module.
 #[derive(Clone, Copy)]
 struct Game(&'static Leaves);
+
+/// Convert the live, non-null native Vehicle shell supplied by each entry.
+fn native_vehicle(v: *mut c_void) -> VehicleRef {
+    // SAFETY: Callers inherit their entry's live, non-null Vehicle contract.
+    VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(v.cast()) })
+}
+
 impl Game {
+    fn maintenance(self) -> &'static maintenance::Services {
+        // SAFETY: The immutable base table supplies its process-wide maintenance table.
+        unsafe { &*self.0.base.maintenance }
+    }
     fn vehicle(self, v: *mut c_void) -> *mut VehicleOrders {
         // SAFETY: The entry supplies a live Vehicle shell whose orders owner remains allocated.
         unsafe { (self.0.vehicle)(v) }
@@ -1843,10 +1852,7 @@ impl Game {
                 unsafe {
                     (*self.consist(u)).next_departure = departure;
                 }
-                // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                unsafe {
-                    (self.0.vehicle_dirty)(u);
-                }
+                (self.maintenance().view_dirty)(native_vehicle(u));
             }
             u = self.next(u);
         }
@@ -3103,8 +3109,9 @@ impl Game {
             0 => (unsafe { (self.0.percent_filled)(v) }) as i32,
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
             1 => ((unsafe { (self.0.reliability)(v) } * 101) >> 16) as i32,
-            // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-            7 => ((unsafe { (self.0.engine_reliability)(v) } * 101) >> 16) as i32,
+            7 => {
+                (i32::from((self.maintenance().engine_reliability)(native_vehicle(v))) * 101) >> 16
+            }
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
             2 => ((unsafe { (self.0.display_speed)(v) }) as i32).wrapping_mul(10) / 16,
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
@@ -4614,10 +4621,7 @@ impl Control {
                 current.kind = 5;
                 current.flags = 0;
                 g.put_current(v, current);
-                // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                unsafe {
-                    (g.0.vehicle_dirty)(v);
-                }
+                (g.maintenance().view_dirty)(native_vehicle(v));
             }
             if !g.orders(v).is_null() {
                 let mut index = 0u8;
@@ -4693,8 +4697,7 @@ impl Control {
         }
         // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
         if unsafe { (g.0.local_owner)(v) } == 0
-            // SAFETY: The same live vehicle shell supplies its day counter.
-            || !unsafe { (g.0.day_counter)(v) }.is_multiple_of(20)
+            || !(g.0.base.day)(native_vehicle(v)).is_multiple_of(20)
         {
             return;
         }
