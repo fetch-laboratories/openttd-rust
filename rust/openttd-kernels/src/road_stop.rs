@@ -16,6 +16,10 @@
 use crate::direction_func::dir_to_diag_dir;
 use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW};
 use crate::road::State as RoadState;
+use crate::roadveh::{
+    RVS_USING_SECOND_BAY as USING_SECOND_BAY, RVSB_IN_DT_ROAD_STOP as IN_DT_ROAD_STOP,
+    RVSB_IN_ROAD_STOP as IN_ROAD_STOP,
+};
 use crate::services::{Map, RoadStopType, Services};
 use crate::station::BaseStation;
 use crate::tile_type::{MP_STATION, TILE_SIZE};
@@ -29,12 +33,6 @@ const BAY1_FREE: u8 = 1 << 1;
 const BASE_ENTRY: u8 = 1 << 6;
 /// `RoadStopStatusFlag::EntryBusy`.
 const ENTRY_BUSY: u8 = 1 << 7;
-/// `RVS_USING_SECOND_BAY`.
-const USING_SECOND_BAY: u8 = 1;
-/// `RVSB_IN_ROAD_STOP`, also `1 << RVS_IN_ROAD_STOP`.
-const IN_ROAD_STOP: u8 = 1 << 5;
-/// `1 << RVS_IN_DT_ROAD_STOP`.
-const IN_DT_ROAD_STOP: u8 = 1 << 6;
 /// `TILE_SIZE` in the `uint16_t` entry arithmetic.
 #[allow(clippy::cast_possible_truncation)] // TILE_SIZE is 16.
 const TILE_UNITS: u16 = TILE_SIZE as u16;

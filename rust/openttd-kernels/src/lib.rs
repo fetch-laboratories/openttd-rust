@@ -50,6 +50,7 @@ mod road_map;
 mod road_stop;
 mod road_type;
 mod road_yapf;
+mod roadveh;
 mod script_list;
 pub mod services;
 mod ship_control;

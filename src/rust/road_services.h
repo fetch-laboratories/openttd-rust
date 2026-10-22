@@ -13,6 +13,7 @@
 #include "services_road.h"
 #include "services_station.h"
 
+static_assert(RVS_USING_SECOND_BAY == 1 && RVS_IN_ROAD_STOP == 5 && RVS_IN_DT_ROAD_STOP == 6);
 static_assert(RVSB_IN_DEPOT == 254 && RVSB_WORMHOLE == 255 && RVSB_IN_ROAD_STOP == 32 && RVSB_IN_DT_ROAD_STOP == 64);
 static_assert(to_underlying(RoadStopType::Bus) == 0 && to_underlying(RoadStopType::Truck) == 1);
 static_assert(PROP_ROADVEH_SHORTEN_FACTOR == 0x23 && PROP_ROADVEH_CARGO_AGE_PERIOD == 0x22 && PROP_ROADVEH_SPEED == 0x15 && PROP_ROADVEH_RUNNING_COST_FACTOR == 0x09);

@@ -32,6 +32,7 @@
 use crate::direction_func::dir_to_diag_dir as diag;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
 use crate::newgrf_sound::VSE_START;
+use crate::roadveh::{RVSB_IN_DT_ROAD_STOP as DT_STOP, RVSB_IN_ROAD_STOP as STOP};
 use crate::services::{Map, RoadStopType, Services};
 use crate::vehicle::maintenance;
 use crate::vehicle::{
@@ -46,8 +47,6 @@ use std::ptr::NonNull;
 
 const DEPOT: u8 = 254;
 const WORMHOLE: u8 = 255;
-const STOP: u8 = 32;
-const DT_STOP: u8 = 64;
 const REVERSE: [u8; 4] = [6, 7, 14, 15];
 const DIAG_TRACK: [u8; 4] = [0, 1, 8, 9];
 /// Owner scalar selectors, shared with `openttd_rust_road_get/set`.
