@@ -92,6 +92,7 @@ struct OpenTTDCompanyFinanceServices {
  * every raw field access it may invalidate. *_next_owned scans a pool from an
  * index for the next item of that owner, in pool order.
  */
+struct OpenTTDObjectServices;
 struct OpenTTDCompanyServices {
 	const OpenTTDCompanyFinanceServices *finance;
 	const OpenTTDSharedServices *shared;
@@ -106,7 +107,8 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_COMPANY_CALL *company_admin_update)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_admin_update);
 	void (OPENTTD_COMPANY_CALL *company_in_trouble)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_in_trouble);
 	void (OPENTTD_COMPANY_CALL *post_company_delete)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(post_company_delete);
-	void (OPENTTD_COMPANY_CALL *update_company_hq)(uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(update_company_hq);
+	uint32_t (OPENTTD_COMPANY_CALL *hq_location)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(hq_location);
+	const OpenTTDObjectServices *(OPENTTD_COMPANY_CALL *object_services)() noexcept OPENTTD_SERVICE_DEFAULT(object_services);
 	void (OPENTTD_COMPANY_CALL *performance_detail_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(performance_detail_dirty);
 	void (OPENTTD_COMPANY_CALL *company_graphs_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(company_graphs_dirty);
 	void (OPENTTD_COMPANY_CALL *company_infrastructure)(uint8_t, OpenTTDCompanyInfrastructure *) noexcept OPENTTD_SERVICE_DEFAULT(company_infrastructure);

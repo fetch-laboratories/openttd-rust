@@ -470,6 +470,24 @@ def check(scenario, run, mode, role, result):
                 row.startswith(f"state {name} 10280 {kind} ") for row in markers
             ):
                 raise RuntimeError("water fixture missed " + name)
+        for row in (
+            "cost low-bridge-lock false 0 4138 ",  # bridge too low over the lower part
+            # The height comes from the middle tile: 150 m, not the lower part's 100 m.
+            "parameter low-bridge-lock \ue054\ue04eBridge is 150\xa0m too low for lock",
+            "cost sloped-end-lock false 0 3930 ",
+            "cost edge-lock false 0 3927 ",
+            "cost edge-clear false 0 3927 ",
+            "cost edge-lock-freeform true ",
+            "cost edge-clear-freeform true ",
+            "state editor-sea-zero 41120 6 17 ",
+        ):
+            if not any(marker.startswith(row) for marker in markers):
+                raise RuntimeError("water fixture missed " + row)
+        if (
+            sum(row.startswith("cost water-remove-lock false ") for row in markers)
+            != 12
+        ):
+            raise RuntimeError("water fixture missed OWNER_WATER lock clears")
         if "docking true true" not in markers:
             raise RuntimeError("water restoration did not preserve docking membership")
         key = mode + "_water_commands"

@@ -11,5 +11,6 @@
 #include "command_cost_services.h"
 #include "command_services_ffi.h"
 #include "../command_type.h"
+#include "../company_func.h"
 #include "../vehicle_func.h"
 #endif /* RUST_COMMAND_SERVICES_H */

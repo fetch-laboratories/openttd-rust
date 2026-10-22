@@ -25,10 +25,6 @@ static_assert(SND_2D_SUGAR_MINE_1 == 45 && SND_2E_BUBBLE_GENERATOR == 46 && SND_
 static_assert(OWNER_NONE.base() == 16 && INVALID_OWNER.base() == 255);
 static_assert(ICT_NORMAL_GAMEPLAY == 1 && ICT_MAP_GENERATION == 2 && ICT_SCENARIO_EDITOR == 3);
 static_assert(INDUSTRY_NUM_INPUTS == 16 && INDUSTRY_NUM_OUTPUTS == 16);
-static_assert(sizeof(ClearedObjectArea) == sizeof(OpenTTDIndustryClearArea));
-static_assert(alignof(ClearedObjectArea) == alignof(OpenTTDIndustryClearArea));
-static_assert(offsetof(ClearedObjectArea, first_tile) == offsetof(OpenTTDIndustryClearArea, first_tile));
-static_assert(offsetof(ClearedObjectArea, area) == offsetof(OpenTTDIndustryClearArea, area));
 static_assert(sizeof(CargoArray::value_type) == sizeof(uint32_t) && sizeof(CargoTypes) == sizeof(uint64_t));
 static_assert(std::is_trivially_destructible_v<TileArea>);
 static_assert(sizeof(TileArea) == sizeof(OpenTTDIndustryLocation));

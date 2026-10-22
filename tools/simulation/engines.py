@@ -3,9 +3,9 @@
 from pathlib import Path
 
 from . import economy, orders, rails
+from .console_adapter import prepared_console
 from .core import (
     ROOT,
-    RUNTIME_DIRECTORIES,
     WITNESS_ENVIRONMENT,
     branch_witnesses,
     compare_saves,
@@ -84,36 +84,11 @@ def adapter(build, folder, env):
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     if "engines" not in scenario:
         return scenario
-    import migration
-
-    from .runtime import prepared_adapter
-
     folder = out / scenario["name"] / "input"
     normalized, record = rails.normalize(Path(scenario["save"]), folder / "source")
     result["engines_input"] = record
     scenario = dict(scenario, save=str(normalized))
-    executables = {}
-    for role in ("reference", "candidate"):
-        prepared = prepared_adapter("engines", role, builds, folder / role)
-        if prepared is None:
-            native = (
-                migration.REFERENCE_BUILD
-                if role == "reference" or binaries[role] == binaries["reference"]
-                else ROOT / "build-rust"
-            )
-            lock = (
-                migration.reference_lock(shared=True)
-                if native == migration.REFERENCE_BUILD
-                else migration.candidate_lock(native, shared=True)
-            )
-            with lock:
-                prepared = adapter(native, folder / role, env)
-        executables[role] = prepared
-        for name in RUNTIME_DIRECTORIES:
-            if (builds[role] / name).is_dir():
-                (folder / role / name).symlink_to(
-                    builds[role] / name, target_is_directory=True
-                )
+    executables = prepared_console("engines", adapter, binaries, builds, folder, env)
     if scenario["engines"] not in ("reload", "subsidies-reload"):
         return dict(
             scenario,

@@ -4484,13 +4484,12 @@ static void UpdateTownGrowth(Town *t)
  */
 #ifdef WITH_RUST
 static uint8_t RustTownCouncilTolerance() noexcept { return _settings_game.difficulty.town_council_tolerance; }
-static bool RustTownBulldozer() noexcept { return _cheats.magic_bulldozer.value; }
 static uint8_t RustTownAuthorityDistance() noexcept { return _settings_game.economy.dist_local_authority; }
 static uint16_t RustTownAuthorityIndex(const OpenTTDTownHandle *town) noexcept { return reinterpret_cast<const Town *>(town)->index.base(); }
 const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept
 {
 	static const OpenTTDTownAuthorityServices services{
-		.council_tolerance = RustTownCouncilTolerance, .bulldozer = RustTownBulldozer,
+		.council_tolerance = RustTownCouncilTolerance, .bulldozer = []() noexcept { return _cheats.magic_bulldozer.value; },
 		.authority_distance = RustTownAuthorityDistance, .town_index = RustTownAuthorityIndex,
 		.refusal = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
 	};

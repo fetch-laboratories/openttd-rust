@@ -25,9 +25,9 @@ SPEED_PASS = (
     ("play-padhattan-ridge-2000-manual", 1.3052238805970147, 7037662305, "17e34235425021ca2f96c739312d9f15ca167ac5f579617d6c9eb1047e8c2627"),
     ("play-padhattan-ridge-2016-manual", 1.355471294661727, 12653579222, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
 )
-# fmt: on
 # Each game-code PR records its head's loop Ir here, in SPEED_PASS order.
-SPEED_INTEGRATED = SPEED_HEAD, tuple(ir for _, _, ir, _ in SPEED_PASS)
+SPEED_INTEGRATED = "95bf6fb0e4", (2883870178, 24906522543, 23615955738, 4244460938, 6992855200, 12600225776)
+# fmt: on
 SPEED_ANCHORS = {
     name: dict(
         anchor=dict(head=SPEED_HEAD, ratio=ratio, Ir=ir, identity={"compatible": c}),
@@ -324,9 +324,10 @@ def check(scenario, run, mode, role, result):
                 "protocol-query true",
                 "protocol-bankrupt true",
                 "automatic-convert-exec true",
+                *COVERAGE_OUTCOMES,
             ):
                 if not any(
-                    line.startswith("ROADCMD " + expected + " ") for line in lines
+                    (line + " ").startswith(f"ROADCMD {expected} ") for line in lines
                 ):
                     result["problems"].append(f"{mode}/{role}: missing {expected}")
             if not any(
@@ -840,6 +841,29 @@ if __name__ == "__main__":
     core.GAME_LOCK = migration.COMMON_LOCAL / "simulation-game.lock"
     prepare_crossing(migration, out, operation)
 
+
+# #156 outcomes: refusals, vehicles in the way (4162), wormholes, owner changes.
+COVERAGE_OUTCOMES = """\
+crossing-convert-exec false 0 4088
+crossing-disallowed-exec false 0 4088
+slope-remove-half-exec true 270
+depot-autoslope true 848
+stop-remove-last-exec true
+tunnel-convert-exec true
+rv-rotate-exec false 0 4162
+rv-depot-remove-exec false 0 4162
+rv-depot-convert-exec false 0 4162
+rv-depot-power-exec true
+rv-oneway-exec false 0 4162
+rv-remove-exec false 0 4162
+rv-bridge-exec false 0 4162
+rv-tunnel-exec false 0 4162
+town-rating-exec false 0 3945
+town-convert-rating-exec false 0 3945
+town-convert-exec false 0 3937
+town-convert-power-exec true
+town-refuse-exec false 0 3945
+transfer-depot true true""".splitlines()
 
 COMMAND_BRANCHES = (
     "build",

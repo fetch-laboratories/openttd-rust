@@ -31,6 +31,7 @@ mod map_func;
 mod math;
 mod newgrf_callbacks;
 mod node_hash;
+mod objects;
 mod packet;
 mod rail_cmd;
 pub mod rail_yapf;
