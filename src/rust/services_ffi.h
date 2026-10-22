@@ -18,7 +18,9 @@
 enum class LandscapeType : uint8_t;
 enum class StationType : uint8_t;
 struct OpenTTDStationService;
+enum class RoadStopType : uint8_t;
 struct OpenTTDStationCommandServices;
+struct OpenTTDRoadStopServices;
 struct OpenTTDRoadCommandServices;
 enum class RoadTileType : uint8_t;
 
@@ -207,6 +209,9 @@ struct OpenTTDSharedServices {
 	TreeGround (*tree_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_ground);
 	const OpenTTDWaterGroundServices *(*water_services)() noexcept OPENTTD_SERVICE_DEFAULT(water_services); ///< Immutable table; getter avoids recursive static initialization.
 	void (*for_each_station)(void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(for_each_station); ///< Station::Iterate(); visits never add or delete stations.
+	// Registry: road stops (#354).
+	RoadStopType (*road_stop_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_stop_type);
+	const OpenTTDRoadStopServices *(*road_stops)() noexcept OPENTTD_SERVICE_DEFAULT(road_stops);
 };
 extern const OpenTTDSharedServices _rust_shared_services;
 struct OpenTTDSubsidyServices;

@@ -6,9 +6,7 @@
  */
 
 use crate::slope_func::{get_slope_max_pixel_z, is_halftile_slope};
-use crate::tile_type::TILE_HEIGHT;
-
-const TILE_SIZE: u32 = 16;
+use crate::tile_type::{TILE_HEIGHT, TILE_SIZE};
 
 /// Preserve C++'s unsigned `TILE_SIZE`/`TILE_HEIGHT` promotions and logical shifts.
 /// Signed expressions use wrapping operations to avoid adding a panic path;

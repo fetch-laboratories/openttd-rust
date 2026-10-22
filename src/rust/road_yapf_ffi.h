@@ -18,14 +18,14 @@ struct OpenTTDRoadYapfInput {
 	uint8_t order_type, bus, articulated, trackdir;
 };
 struct OpenTTDRoadYapfTile {
-	uint32_t occupied, length;
 	uint16_t station;
-	uint8_t type, station_type, depot, depot_dir, crossing, waypoint, drive_through, continuation, busy_bays;
+	uint8_t type, station_type, depot, depot_dir, crossing, waypoint, drive_through;
 };
 struct OpenTTDRoadYapfFollow { uint32_t tile; int32_t skipped; uint16_t dirs; uint8_t followed; };
 struct OpenTTDRoadYapfTraversal { int32_t current_z, next_z, display_speed, max_speed, min_speed; uint16_t order_speed; };
 struct OpenTTDRoadYapfArea { uint32_t tile; uint16_t width, height; uint8_t valid, stop, drive_through, next; };
 struct OpenTTDRoadYapfLeaves {
+	const OpenTTDSharedServices *shared; ///< Road stop cost observations call the Rust road stop owner.
 	OpenTTDRoadYapfTile (OPENTTD_VEHICLE_CALL *tile)(const void *, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 	OpenTTDRoadYapfFollow (OPENTTD_VEHICLE_CALL *follow)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(follow);
 	uint16_t (OPENTTD_VEHICLE_CALL *tracks)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tracks);
@@ -40,8 +40,8 @@ struct OpenTTDRoadYapfResult { uint32_t tile; int32_t cost; uint8_t direction, f
  * Rust reference into world or canonical road state survives a leaf. The search
  * owns arena, lookup maps, exact-order heap and reconstruction. Only brief direct
  * writes modify #121's canonical path; no second cache or result bridge exists.
- * Tile cost facts are requested only in calc_cost; startup and unevaluated
- * segment endpoints request destination facts without road-stop cost lookups.
+ * Tile cost facts are requested only in calc_cost; road-stop occupancy is read
+ * there from the Rust road stop owner, never by startup or segment endpoints.
  * Traversal reads current/next ground-vehicle center Z, vehicle speed fields,
  * then CFollowTrackRoad limits for old_tile; it never follows again.
  * Panics/OOM abort; environment failures terminate inside noexcept leaves. */

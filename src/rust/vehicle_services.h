@@ -128,6 +128,8 @@ void RustVehicleInvalidateChain(OpenTTDVehicle *v) noexcept;
 ExpensesType RustVehicleExpense(OpenTTDVehicle *v, bool income) noexcept;
 template <class T>
 inline uint8_t RustGroundCachedLength(const T *v) noexcept { return v->gcache.cached_veh_length; }
+/** Canonical cached consist length, shared by narrow and compound observations. */
+inline uint16_t RustGroundCachedTotalLength(const GroundVehicleCache *cache) noexcept { return cache->cached_total_length; }
 template <class T>
 inline int32_t RustGroundAcceleration(const T *v) noexcept { return v->GetAcceleration(); }
 template <class T>

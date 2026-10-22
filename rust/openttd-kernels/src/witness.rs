@@ -260,6 +260,26 @@ witness_blocks! {
         ROAD_COMMANDS_FLOOD_WORKS = 28 => "road_commands.flood_works",
         ROAD_COMMANDS_NON_ROAD = 29 => "road_commands.non_road",
     }
+    road_stop {
+        ROAD_STOP_AFTER_LOAD = 0 => "road_stop.after_load",
+        ROAD_STOP_CLEAR_HEAD = 1 => "road_stop.clear_head",
+        ROAD_STOP_CLEAR_LAST = 2 => "road_stop.clear_last",
+        ROAD_STOP_CLEAR_SPLIT = 3 => "road_stop.clear_split",
+        ROAD_STOP_CLEAR_TAIL = 4 => "road_stop.clear_tail",
+        ROAD_STOP_ENTER_BAY0 = 5 => "road_stop.enter_bay0",
+        ROAD_STOP_ENTER_BAY1 = 6 => "road_stop.enter_bay1",
+        ROAD_STOP_ENTER_DRIVE = 7 => "road_stop.enter_drive",
+        ROAD_STOP_ENTER_REFUSED = 8 => "road_stop.enter_refused",
+        ROAD_STOP_INTEGRITY = 9 => "road_stop.integrity",
+        ROAD_STOP_LEAVE_BAY = 10 => "road_stop.leave_bay",
+        ROAD_STOP_LEAVE_DRIVE = 11 => "road_stop.leave_drive",
+        ROAD_STOP_MAKE_ALONE = 12 => "road_stop.make_alone",
+        ROAD_STOP_MAKE_JOIN = 13 => "road_stop.make_join",
+        ROAD_STOP_MAKE_MERGE = 14 => "road_stop.make_merge",
+        ROAD_STOP_MAKE_PARENT = 15 => "road_stop.make_parent",
+        ROAD_STOP_REBUILD = 16 => "road_stop.rebuild",
+        ROAD_STOP_REBUILD_VEHICLE = 17 => "road_stop.rebuild_vehicle",
+    }
     ship {
         SHIP_LOCK_UP = 0 => "ship.lock_up",
         SHIP_LOCK_DOWN = 1 => "ship.lock_down",

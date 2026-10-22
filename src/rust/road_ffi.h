@@ -213,9 +213,6 @@ struct OpenTTDRoadLeaves {
 	uint8_t (OPENTTD_VEHICLE_CALL *bay_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bay_direction);
 	bool (OPENTTD_VEHICLE_CALL *is_drive_through)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_drive_through);
 	bool (OPENTTD_VEHICLE_CALL *is_station_road_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_station_road_stop);
-	uint8_t (OPENTTD_VEHICLE_CALL *stop_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(stop_type);
-	bool (OPENTTD_VEHICLE_CALL *has_free_bay)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_free_bay);
-	bool (OPENTTD_VEHICLE_CALL *continuation)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(continuation);
 	OpenTTDRoadRoadTypes (OPENTTD_VEHICLE_CALL *move_tile)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(move_tile);
 	OpenTTDRoadPathRead (OPENTTD_VEHICLE_CALL *path_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(path_read);
 	OpenTTDRoadTrackChoice (OPENTTD_VEHICLE_CALL *choose_track)(OpenTTDVehicle *, uint32_t, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(choose_track);
@@ -224,9 +221,6 @@ struct OpenTTDRoadLeaves {
 	void (OPENTTD_VEHICLE_CALL *disconnect)() noexcept OPENTTD_SERVICE_DEFAULT(disconnect);
 	OpenTTDRoadStopRead (OPENTTD_VEHICLE_CALL *stop_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stop_read);
 	bool (OPENTTD_VEHICLE_CALL *should_stop)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(should_stop);
-	void (OPENTTD_VEHICLE_CALL *stop_leave)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stop_leave);
-	void (OPENTTD_VEHICLE_CALL *stop_entrance)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(stop_entrance);
-	bool (OPENTTD_VEHICLE_CALL *stop_entrance_busy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stop_entrance_busy);
 	OpenTTDRoadArrivalRead (OPENTTD_VEHICLE_CALL *arrival_read)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_read);
 	void (OPENTTD_VEHICLE_CALL *arrival_news)(OpenTTDVehicle *, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
 	void (OPENTTD_VEHICLE_CALL *begin_loading_at)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(begin_loading_at);

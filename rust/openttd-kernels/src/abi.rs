@@ -663,19 +663,13 @@ layouts! {
         road_boolean,
         road_triggers,
         new_stop,
-        get_stop,
-        stop_head,
         set_stop_head,
-        stop_next,
         set_stop_next,
-        stop_tile,
         add_stop_area,
         clear_stop_area,
         before_add_tile,
         make_drive_stop,
         make_bay_stop,
-        stop_make_drive,
-        stop_clear_drive,
         delete_stop,
         set_custom_road_index,
         custom_road_index,
@@ -2113,6 +2107,8 @@ layouts! {
         tree_ground,
         water_services,
         for_each_station,
+        road_stop_type,
+        road_stops,
     };
     "OpenTTDVehicleNewPosition" ["probe"] => crate::vehicle::NewPosition {
         x,
@@ -2446,9 +2442,6 @@ layouts! {
         bay_direction,
         is_drive_through,
         is_station_road_stop,
-        stop_type,
-        has_free_bay,
-        continuation,
         move_tile,
         path_read,
         choose_track,
@@ -2457,9 +2450,6 @@ layouts! {
         disconnect,
         stop_read,
         should_stop,
-        stop_leave,
-        stop_entrance,
-        stop_entrance_busy,
         arrival_read,
         arrival_news,
         begin_loading_at,
@@ -2905,8 +2895,6 @@ layouts! {
         trackdir,
     };
     "OpenTTDRoadYapfTile" ["probe"] => crate::road_yapf::Tile {
-        occupied,
-        length,
         station,
         r#type => type,
         station_type,
@@ -2915,8 +2903,6 @@ layouts! {
         crossing,
         waypoint,
         drive_through,
-        continuation,
-        busy_bays,
     };
     "OpenTTDRoadYapfFollow" ["probe"] => crate::road_yapf::Follow {
         tile,
@@ -2942,12 +2928,38 @@ layouts! {
         order_speed,
     };
     "OpenTTDRoadYapfLeaves" ["probe"] => crate::road_yapf::Leaves {
+        shared,
         tile,
         follow,
         tracks,
         traversal,
         closest,
         area,
+    };
+    "OpenTTDRoadStopEntry" ["probe"] => crate::road_stop::Entry { length, occupied, };
+    "OpenTTDRoadStopEntries" ["probe"] => crate::road_stop::Entries { east, west, };
+    "OpenTTDRoadStopState" ["probe"] => crate::road_stop::State { status, entries, };
+    "OpenTTDRoadStopPoolItem" ["probe"] => crate::road_stop::PoolStop { state, xy, index, };
+    "OpenTTDRoadStopDriveRead" ["probe"] => crate::road_stop::DriveRead { total_length, direction, };
+    "OpenTTDRoadStopRebuildRead" ["probe"] => crate::road_stop::RebuildRead {
+        road,
+        total_length,
+        vehicle_type,
+        direction,
+        status,
+        primary,
+    };
+    "OpenTTDRoadStopServices" ["probe"] => crate::road_stop::RoadStopServices {
+        vehicle,
+        ground,
+        primary,
+        head,
+        next,
+        tile,
+        state,
+        pool_next,
+        drive_read,
+        rebuild_read,
     };
     "OpenTTDRoadYapfResult" ["probe"] => crate::road_yapf::Result {
         tile,

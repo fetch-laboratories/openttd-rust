@@ -467,6 +467,11 @@ pub struct Services {
     /// canonical service owner and index. Visits may reenter but never add or
     /// delete a station.
     pub for_each_station: extern "C" fn(*mut c_void, StationVisitor),
+    // Registry: road stops (#354).
+    /// `GetRoadStopType`.
+    pub road_stop_type: extern "C" fn(u32) -> RoadStopType,
+    /// Native road stop shells and their vehicle reads.
+    pub road_stops: extern "C" fn() -> *const crate::road_stop::RoadStopServices,
 }
 /// Station visitor: context, station, its service owner and its index.
 pub type StationVisitor = unsafe extern "C" fn(
@@ -732,6 +737,9 @@ pub fn fixture(
         tree_ground,
         water_services: fixture_water_services,
         for_each_station: fixture_stations,
+        // Registry: road stops (#354).
+        road_stop_type: fixture_road_stop_type,
+        road_stops: fixture_road_stops,
     }
 }
 #[cfg(test)]
@@ -1084,6 +1092,18 @@ impl Cost<'_> {
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct StationType(pub u8);
+/// Native `RoadStopType : uint8_t` (bus 0, truck 1).
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct RoadStopType(pub u8);
+#[cfg(test)]
+extern "C" fn fixture_road_stop_type(_: u32) -> RoadStopType {
+    panic!("unused road stop type")
+}
+#[cfg(test)]
+extern "C" fn fixture_road_stops() -> *const crate::road_stop::RoadStopServices {
+    panic!("unused road stop table")
+}
 #[cfg(test)]
 extern "C" fn fixture_station_type(_: u32) -> StationType {
     panic!("unused station type")
