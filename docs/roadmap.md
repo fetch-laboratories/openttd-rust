@@ -4,13 +4,13 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-21, code at `883ce69671`)
+## Where the fork stands (2026-10-22, code at `802ec7d6a4`)
 
-- Thirty-five ownership ports. Whole fork: Rust 82,541 / tooling 32,944 / glue 32,766 / original retired 47,040 of 470,612 C/C++ `src/` lines (10.00%). Simulation: 38,997 / 102,615 (38.00%).
-- #313 integrated object ownership; the next speed pass is after three more ownership integrations. New ports import #334's shared header modules.
-- Speed: #322 wall anchors stand (TGP 1.215, Opus 1.204, Grok 1.191, P1996 1.250, P2000 1.305, P2016 1.356). #313's six guards pass; TGP projects 1.219, others stay at anchor floors. #336 removes per-tick command context; #345 saves 19.27M Ir in the train speed path after replacement calls. #341 closed without a saving.
-- CI: #339/#337/#336/#313 integrated after Full passed. #313's protected push passed; reviewed drafts refresh against object ownership before final counts/Full. macOS stays on GitHub-hosted runners.
-- Stock after #336/#313: original retirement grew 928 lines, net glue 510 and net tooling 396; wall anchors stand. Five ownership branches (#329/#346/#347/#352/#348), three maintenance (#340/#345/#351) and coverage #342 remain. #337 closes road/water gaps; #342 covers tram turns. Other #156 gaps stay open. #346 support 417 is below 430 retirement after fixing review; town support 542 is below 589 after object adoption.
+- Thirty-eight ownership ports. Whole fork: Rust 88,388 / tooling 33,537 / glue 34,397 / original retired 49,636 of 470,612 C/C++ `src/` lines (10.55%). Simulation: 41,518 / 102,615 (40.46%).
+- Wind-down integrated #329 vehicle transactions, #346 subsidies and #352 tunnel/bridge ownership, plus #345 train speed reads, #342 tram coverage. Each passed final-base counts and exact-head Full, including Windows linking.
+- Speed: #322 wall anchors stand (TGP 1.215, Opus 1.204, Grok 1.191, P1996 1.250, P2000 1.305, P2016 1.356). #352's final six pass: TGP projects 1.222, the other five stay at their anchor floors. Four ownership integrations since the pass (#313/#329/#346/#352) make the next pass due; the user deferred it to the first resume step.
+- CI: #352's protected push is green across native/platform/Quick; macOS remains on GitHub-hosted runners. #345's measured train speed-path saving is 19.27M net Ir; #341 closed without a saving. #351 passes final-base counts but stops as a draft on Full Rust formatting.
+- Three component branches remain against #157's limit of six: #347, #353 and uncommitted #349. Two maintenance drafts (#340/#351) also remain. #342 closes the tram-turn gap; other #156 gaps remain. New ports use #334's shared header modules.
 
 ## Sixteenth steering review (2026-10-21, counts per PR and closing the speed pass)
 
@@ -35,9 +35,9 @@ AGENTS.md now says:
 Provisional, checked next review against #322's first anchors: the factor 2 (basis: the fifteenth review's 1.8x P2016 attribution; the calibration's residuals were layout) and the 6.6% layout spread (eight quiet P2016 sixes on 2026-10-21).
 
 Remaining steering actions (completed #322/#313/#334 are table rows below):
-1. **#329:** integrate the reviewed null fleet context, constructors and articulated fixes. Tooling cap 500.
-2. **#156 standing slot:** whenever fewer than five agents are busy, work the recorded gaps; ownership dispatch is covered, tram turns next.
-3. **#275 by net P2016 savings:** road context integrated, station draft closed, train draft reviewed.
+1. **#329:** integrated; completion and metrics are below.
+2. **#156 standing slot:** whenever fewer than five agents are busy, work the recorded gaps; ownership dispatch and tram turns are covered; other recorded gaps remain.
+3. **#275 by net P2016 savings:** road context and train speed reads integrated; station draft closed.
 4. Then Phase 2 from #281 onward.
 
 ## Earlier steering, still in force
@@ -95,13 +95,12 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #256 | House lifecycle and tile simulation | #269 | `5ac2437aa5` | 1659 / 212 / 685 / 890 |
 | #266 | Whole road command policy | #290 | `4e7753122e` | 2547 / 375 / 545 / 1265 |
 | #295 | Object lifecycle, commands and NewGRF policy | #313 | `883ce69671` | 2474 / 429 / 585 / 928 |
+| #314 | Vehicle transactions and non-rail construction | #329 | `43257e3744` | 3231 / 206 / 1200 / 1312 |
+| #316 | Subsidy state and route lifecycle | #346 | `7e83fe925e` | 915 / 177 / 277 / 430 |
+| #293 | Tunnel/bridge commands and ownership | #352 | `802ec7d6a4` | 1862 / 178 / 325 / 854 |
 
-Harness and process: #72 harness (#85), #84 play saves (#87), #97 provenance
-freeze (#100), #88 Ruff (#92), #75 partial-pixel fidelity (#91), #90 world-state
-design (`docs/design/world-state.md`). Maintenance PRs #209-#302 (shared
-services, CI throughput and cost, disk hygiene, #249 enforcement, #280 registries,
-#282 speed guard, #283 receipt retirement, #275 road YAPF/scratch/table fixes)
-keep their evidence in their PRs. Rows below use original retirement and net glue (#223).
+Harness/process #72/#84/#97/#88/#75/#90 and maintenance #209-#302 retain evidence in their PRs.
+Rows below use original retirement and net glue (#223).
 
 | Issues | Maintenance PRs | Integration | Commit | Metrics |
 | --- | --- | --- | --- | --- |
@@ -122,6 +121,8 @@ keep their evidence in their PRs. Rows below use original retirement and net glu
 | #338 instruction identity and rolling record | #339 | direct | `c4efe7bc72` | 0 / 30 / 0 / 0; net glue 0 |
 | #156 road/water command coverage | #337 | direct | `9da106b61f` | 0 / 128 / 0 / 0; tests only |
 | #275 lazy tram command context | #336 | direct | `43f8d27304` | 17 / 2 / 23 / 0; net glue +11 |
+| #344 train speed observations | #345 | direct | `fc72e5cc1a` | 4 / 1 / 71 / 0; net glue +59 |
+| #156 tram-turn coverage | #342 | direct | `6017f98f3d` | 7 / 71 / 0 / 0; tests only |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -133,7 +134,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings. Rust-internal helper copies are invisible to it; reviewers check them against the shared header modules (#261 R6).
 2. **Speed guard and passes (#155, #282, #321, AGENTS.md).**
    - **Per PR:** `simulate --instructions` loop counts projected from `SPEED_ANCHORS`; no scenario more than 15% above the integrated projection and none over its ceiling (1.5x play saves, 1.3x generation). Misses get a callgrind fix round.
-   - **Speed pass:** after every fourth ownership integration, or when an integration moves a projection within 5% of its ceiling (1.425x play, 1.235x generation). Its quiet six with loop counts replaces the anchors. #322 closed the pass due since #269; #313 is the first ownership integration since, leaving three.
+   - **Speed pass:** after every fourth ownership integration, or when an integration moves a projection within 5% of its ceiling (1.425x play, 1.235x generation). Its quiet six with loop counts replaces the anchors. #322 closed the pass due since #269; four owners have since integrated. The next pass is due and deferred to resume by the user.
    - **Redraw:** `-r 64x64` leaves the ratios unchanged. It makes whole-process counts timing-dependent, which is why only the game loop is counted.
 3. **#156 coverage, one standing slot** (sixteenth review, action 4). Random and crash branches come first. These remain:
    - signal tbd/global propagation overflow and arbitrary mod layouts;
@@ -149,19 +150,19 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #275) and #156 run in parallel.
 
-1. **#329/#314** next; #313 integrated (sixteenth review, actions 2-3).
-2. **#275 by net P2016 savings:** #336 integrated; station #341 closed without a saving; train #345 replaces only the speed read6 bundle with existing services at original branches. Its measured speed-path saving passes; no raw train view or movement-reader change. TGP #312 trees remain ahead of clear observations in the net attribution; TGP is not binding.
-3. **#281** vehicle maintenance direct calls, then the callee-copy check.
-4. **#274 map view**, one shared maintenance PR: extend the canonical descriptor and adopt assertion-faithful shared helpers in the scheduler's clear/water/tree loops. C++ retains arrays and writes. Same-base TGP attribution and the six-count guard decide acceptance; historical results alone do not. Budget: 800 handwritten support/glue/test/tooling lines, including at most 150 validation/tooling; no new runner or vehicle view.
+1. **#329/#314** integrated after #313 (sixteenth review, actions 2-3).
+2. **#275 by net P2016 savings:** #336 integrated; station #341 closed without a saving; integrated train #345 replaces only the speed read6 bundle with existing services at original branches. Its measured speed-path saving passes; no raw train view or movement-reader change. TGP #312 trees remain ahead of clear observations in the net attribution; TGP is not binding.
+3. **#281** vehicle maintenance direct calls: #340 paused after conflict review found two boundary defects; then the callee-copy check.
+4. **#274 map view**, #351 paused on Full formatting, one shared maintenance PR: extend the canonical descriptor and adopt assertion-faithful shared helpers in the scheduler's clear/water/tree loops. C++ retains arrays and writes. Same-base TGP attribution and the six-count guard decide acceptance; historical results alone do not. Budget: 800 handwritten support/glue/test/tooling lines, including at most 150 validation/tooling; no new runner or vehicle view.
 5. **Next whole owners**, as WIP frees, each without draft service dependencies:
    - #315 rail construction and consist transactions, after #314;
-   - #316 subsidies (glue plus tooling at most 450 lines);
+   - #316 subsidies integrated in #346 (support418 <430 retired, cap450);
    - #247 town commands, authority and deletion (unblocked: #269 is integrated);
-   - #293 tunnel/bridge construction, removal and ownership (independent of #247: it reuses the town authority and rating owner #290 integrated).
-   - #348 landscape clearing, terraforming and leveling (support target400, tooling cap200);
+   - #293 tunnel/bridge construction, removal and ownership integrated in #352;
+   - #348 landscape clearing, terraforming and leveling: #353 milestone paused (support target400, tooling cap200);
    - #349 vehicle station/depot visits with LinkRefresher and IncreaseStats (support target560, tooling cap275).
 
-   A shared service two need lands first, as its own PR. The next-owner plan is on #3 (2026-10-21): #348/#349 use integrated services independently of #274. #350 generation/rivers remains proposed; root must accept its exact native sea-set iteration/lifetime boundary before selecting it. Plan again when fewer than two selected owners remain unstarted.
+   A shared service two need lands first, as its own PR. The next-owner plan is on #3 (2026-10-21): #348/#349 use integrated services independently of #274. #350 generation/rivers remains proposed; root must accept its exact native sea-set iteration/lifetime boundary before selecting it. Plan again when fewer than two selected owners remain unstarted. The finished #350/#354 plan on #3 is input only; neither proposal is selected. No new planning during the pause.
 6. **#168 tail, largest first.** `order_cmd.cpp` and `economy.cpp` hold 65 of the 198 baseline copies.
 
 New owners reuse integrated services, never draft copies. A Rust-allocated
@@ -170,29 +171,22 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Root is gpt-6.1-sol (xhigh); implementation/review agents are gpt-6.1-sol (high),
-planning gpt-6-astra (high). #339/#337/#336/#313 integrated. Root owns reviewed
-drafts' final counts/Full/integration. Every open draft
-keeps its worktree and branch. #274's plan is on its issue; implementation selected.
+Paused at the user's request. **First resume step: the due speed pass**, before further integrations or component starts. The work order above is unchanged; #350/#354 remain proposal inputs only. Root is gpt-6.1-sol (xhigh).
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #156 / #342 | `5374e59cef` | Reviewed; automatic object-base update and six counts pass. Root owns record/Full/integration. |
-| #281 / #340 | `da098ecfda` | Cleanup/conflict reviewed; verify/33 scenarios/counts pass before #313. Update when integrating, then record/Full. Part2 checker follows. |
-| #314 / #329 | `4abbf24b93` | Reviewed adoption; first Full passed native/non-Windows but MSVC missed an inline virtual symbol. Linkage fix pushed; fresh counts, record and Full next. |
-| #316 / #346 | `1849b5437b` | Fixing and object-merge reviews accepted; combined build/six counts pass. Root owns record/Full. Support417 <430 retired, cap450. |
-| #247 / #347 | `134a40b026` | Object adoption passes verify/focused scenarios/counts. Adopt subsidy owner after #346, then fresh full source review. |
-| #344 / #345 | `2bca3134eb` | Reviewed; automatic object-base update and six counts pass. Root owns record/Full. Speed-path saving19.27M Ir; production net glue -12, tests72. |
-| #274 / #351 | `e9e3a359ac` | Fixing lifetime/callee review accepted; verify/six counts pass. Default suite running; final base update follows. Support791/800, TGP -4.31% on same base. |
-| #293 / #352 | `76f736355a` | Complete source review/fixes and focused scenarios pass. Final six counts/default suite running; root spot-checked both fixes. |
-| #348 | `2a0793272a` | First ownership milestone committed; native verify running. Whole clear/terraform/level owner, shared opaque stack cost utility; actual retirement419. |
+| #281 / #340 | `0c8a5e15f3` | Draft: fix the orphan aircraft reliability wrapper and duplicate engine accessor found by conflict review; fresh review, six counts, record and Full. |
+| #247 / #347 | `134a40b026` | Untouched draft: adopt integrated subsidies, then fresh full source review and remaining integration gates. |
+| #274 / #351 | `edc8b95bdc` | Draft: Full fails merged lib.rs module ordering. Native build/default semantics/final-base six counts pass. Format, refresh evidence as needed, then exact-head Full; additions789/800. |
+| #348 / #353 | `6d10b6c900` | Draft milestone: native verify/Cargo4/preflight and Quick pass. Fresh independent review next session, then remaining semantic/count/Full gates. |
+| #349 (no PR) | `bc30c0fc25` + dirty WIP | Stopped before a passing milestone. Finish visit bindings/callers; Cargo4/preflight, first passing commit/push and draft PR. State is on #349. |
 
-#261 R7 inputs are on #261 and #281 part 2's inventory is on #281. The finished
-#329 review worktree was removed; its commits are already on the PR branch.
-#341 was closed by root: no speed saving (P2016 +0.18%); its measured head remains
-on origin and #275 records the disposition. Its worktrees/local branch are removed.
-#64/#68/#69 stay paused. Preserve the pinned reference. Do not reapply effect helper
-`73ccd511fb`. Build and test with `--jobs 2`.
+All retained drafts/WIP keep their worktrees and branches: three component branches against #157's limit of six; five unintegrated branches total.
+Merged worktrees/local branches, the verified stale measurement branch,
+retired preflight output and main-checkout verification runs before today were removed.
+#261 R7 and #281 part 2 inputs remain on their issues. #64/#68/#69 stay paused.
+Preserve the pinned reference; do not reapply effect helper `73ccd511fb`.
+Build and test with `--jobs 2`.
 
 ## Out of scope for the near term
 
@@ -201,7 +195,4 @@ Deferred behavior improvements stay in `deferred-improvement` issues.
 
 ## Progress metric
 
-Every port PR pastes `python3 tools/port-metrics.py`: Rust/tooling/glue added, original retired, fork glue removed and net glue.
-`--whole-fork` gives totals and simulation share. Retire more original C++ than net glue plus tooling or explain why.
-A port that misses this ratio gets a boundary fix (shared services) before deferral.
-Judge game logic owned; data tables inflate retirement. Avoid utility kernels.
+Every port PR records `python3 tools/port-metrics.py`; `--whole-fork` gives totals and simulation share. Retire more original C++ than net glue plus tooling or explain why. A port that misses this ratio gets a boundary fix before deferral. Judge game logic owned; data tables inflate retirement. Avoid utility kernels.
