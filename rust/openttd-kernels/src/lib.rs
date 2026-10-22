@@ -47,6 +47,7 @@ pub mod services;
 mod ship_control;
 mod signal;
 mod slope_func;
+mod source_type;
 mod station;
 mod station_cargo;
 mod station_cmd;

@@ -784,7 +784,11 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
     (s.delete_inspect)(t.id.0);
     // SAFETY: Cargo's canonical process owner and native pool remain live; town ID is copied before shell removal.
     unsafe {
-        crate::cargo_storage::openttd_rust_cargo_invalidate(s.cargo, t.id.0, 1);
+        crate::cargo_storage::openttd_rust_cargo_invalidate(
+            s.cargo,
+            t.id.0,
+            crate::source_type::TOWN,
+        );
     }
     (s.dirty_screen)();
     w::hit(w::TOWN_COMMAND_DESTRUCT);
