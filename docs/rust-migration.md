@@ -85,9 +85,9 @@ industry NewGRF-production, cargo income/destination and cargo queue-scaling pro
 CI runs all three steps.
 
 ```sh
-python3 tools/migration.py rust-checks --jobs 2
-python3 tools/migration.py build --jobs 2
-python3 tools/migration.py verify --jobs 2
+python3 tools/migration.py rust-checks
+python3 tools/migration.py build
+python3 tools/migration.py verify
 python3 tools/migration.py tools
 python3 tools/run-comparisons.py
 ```
@@ -97,7 +97,8 @@ Passing establishes only covered behavior. The driver does not itself compare
 every game state or prove full game equivalence.
 
 `rust-checks` runs the four Cargo checks without creating or building the
-reference. The default `--jobs 2` also limits Cargo invoked by CMake. Every logged
+reference. `--jobs` (default: the free cores, `max(2, cores - round(1-minute
+load))`, read once at start) also limits Cargo invoked by CMake. Every logged
 command reports its phase, elapsed time and output path, with periodic updates;
 lock waits identify live holders. POSIX commands run under a pipe supervisor;
 driver death (including SIGKILL) closes the pipe and kills the command session. Reference and candidate configure/build/test
