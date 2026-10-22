@@ -23,24 +23,6 @@ pub struct ClearGroundType(pub u8);
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Slope(pub u8);
-impl Slope {
-    /// Original `IsSteepSlope` predicate.
-    #[must_use]
-    pub const fn is_steep(self) -> bool {
-        self.0 & 16 != 0
-    }
-    /// Original `GetSlopeMaxZ`, in height levels.
-    #[must_use]
-    pub const fn max_z(self) -> i32 {
-        if self.0 == 0 {
-            0
-        } else if self.is_steep() {
-            2
-        } else {
-            1
-        }
-    }
-}
 /// Native `Foundation` representation; every byte pattern is retained.
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]

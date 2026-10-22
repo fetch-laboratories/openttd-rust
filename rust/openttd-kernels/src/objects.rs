@@ -22,6 +22,13 @@
     clippy::too_many_lines,
     clippy::fn_params_excessive_bools
 )]
+use crate::command_type::DoCommandFlag;
+use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
+use crate::economy_type::PR_BUILD_FOUNDATION;
+use crate::newgrf_callbacks::CALLBACK_FAILED;
+use crate::slope_func::{get_slope_max_z, is_steep_slope};
+use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_WATER};
 use std::cell::UnsafeCell;
 
 struct State {
@@ -367,12 +374,6 @@ pub struct ObjectServices {
     pub scale_cargo: unsafe extern "C" fn(u32) -> u32,
 }
 
-const NONE: u8 = 16;
-const TOWN: u8 = 15;
-const WATER: u8 = 17;
-const DEITY: u8 = 18;
-const INVALID_OWNER: u8 = 255;
-const INVALID_TILE: u32 = u32::MAX;
 const HQ: u16 = 4;
 const OWNED: u16 = 3;
 const STATUE: u16 = 2;
@@ -381,18 +382,12 @@ const TRANSMITTER: u16 = 0;
 const NEW_OBJECT_OFFSET: u16 = 5;
 const MAX_COMPANIES: u8 = 15;
 const OBJECT_SIZE_1X1: u8 = 0x11;
-const INVALID_STRING_ID: u32 = 0xffff;
 const INVALID_WATER_CLASS: WaterClass = WaterClass(3);
 const SOURCE_HEADQUARTERS: u8 = 2;
 const CBID_OBJECT_AUTOSLOPE: u16 = 0x15D;
 const PR_BUILD_OBJECT: u32 = 50;
 const PR_CLEAR_OBJECT: u32 = 51;
-const PR_BUILD_FOUNDATION: usize = 57;
-const EXECUTE: u16 = 1;
-const AUTO: u16 = 2;
-const NO_WATER: u16 = 8;
 const CONSTRUCTION: u8 = 0;
-const FAILED: u16 = 0xffff;
 const SCENEDIT: u16 = 1;
 const CANNOT_REMOVE: u16 = 1 << 1;
 const AUTOREMOVE: u16 = 1 << 2;
@@ -799,7 +794,7 @@ impl<'a> World<'a> {
                 town
             };
             let object = (self.s.allocate)(kind, town, area, view);
-            let mut colour = if owner == NONE {
+            let mut colour = if owner == OWNER_NONE {
                 self.shared.random() as u8
             } else {
                 (self.s.recolour)(owner, true)
@@ -810,7 +805,7 @@ impl<'a> World<'a> {
             (self.s.set_colour)(object.object, colour);
             if shape.callbacks & 8 != 0 {
                 let result = (self.s.colour_callback)(spec, object.object, colour, tile);
-                if result != FAILED {
+                if result != CALLBACK_FAILED {
                     if result >= 256 {
                         (self.s.colour_error)(spec, result);
                     }
@@ -835,7 +830,9 @@ impl<'a> World<'a> {
                 } else {
                     INVALID_WATER_CLASS
                 };
-                if wc.0 == 1 && owner != NONE && (self.is_owner(t, NONE) || self.is_owner(t, WATER))
+                if wc.0 == 1
+                    && owner != OWNER_NONE
+                    && (self.is_owner(t, OWNER_NONE) || self.is_owner(t, OWNER_WATER))
                 {
                     ((*self.s.restoration).infrastructure)(owner, 1);
                     ((*self.s.restoration).infrastructure_dirty)(owner);
@@ -920,16 +917,17 @@ impl<'a> World<'a> {
                 crate::company::neg(price)
             });
             let company = self.current();
-            if company == TOWN {
+            if company == OWNER_TOWN {
                 out.error();
                 return;
             }
-            if company != WATER {
-                if flags & NO_WATER != 0 && ((*self.s.industry_tiles).on_water)(tile) {
+            if company != OWNER_WATER {
+                if flags & DoCommandFlag::NO_WATER != 0 && ((*self.s.industry_tiles).on_water)(tile)
+                {
                     out.fail(self.s.strings.water);
                     return;
                 }
-                if flags_spec & AUTOREMOVE == 0 && flags & AUTO != 0 {
+                if flags_spec & AUTOREMOVE == 0 && flags & DoCommandFlag::AUTO != 0 {
                     out.fail(if object.kind == HQ {
                         self.s.strings.hq
                     } else {
@@ -938,7 +936,7 @@ impl<'a> World<'a> {
                     return;
                 }
                 if ((*self.s.town).environment.editor)() {
-                } else if self.owner(tile) == NONE {
+                } else if self.owner(tile) == OWNER_NONE {
                     if !(self.s.bulldozer)() && flags_spec & CANNOT_REMOVE != 0 {
                         out.error();
                         return;
@@ -967,7 +965,7 @@ impl<'a> World<'a> {
             }
             if object.kind == HQ {
                 let owner = self.owner(tile);
-                if flags & EXECUTE != 0 {
+                if flags & DoCommandFlag::EXECUTE != 0 {
                     (self.s.set_hq)(owner, INVALID_TILE);
                     crate::cargo_storage::openttd_rust_cargo_invalidate(
                         self.s.cargo,
@@ -983,7 +981,7 @@ impl<'a> World<'a> {
                         true,
                     ) / 100,
                 );
-            } else if object.kind == STATUE && flags & EXECUTE != 0 {
+            } else if object.kind == STATUE && flags & DoCommandFlag::EXECUTE != 0 {
                 let town = (self.s.statue_town)(object.object);
                 let fields = crate::town::openttd_rust_town_simulation(town.state);
                 (*fields).statues &= !((1_u64 << self.owner(tile)) as u16);
@@ -995,7 +993,7 @@ impl<'a> World<'a> {
                 width: object.area.width,
                 height: object.area.height,
             });
-            if flags & EXECUTE != 0 {
+            if flags & DoCommandFlag::EXECUTE != 0 {
                 self.really_clear(object);
             }
         }
@@ -1036,7 +1034,7 @@ impl<'a> World<'a> {
             if shape.flags & SCENEDIT != 0
                 && ((!((*self.s.town).generating_world)()
                     && !((*self.s.town).environment.editor)())
-                    || self.current() != NONE)
+                    || self.current() != OWNER_NONE)
             {
                 out.error();
                 return;
@@ -1084,12 +1082,12 @@ impl<'a> World<'a> {
                             (self.commands().landscape_clear)(
                                 tmp.0,
                                 t,
-                                flags & !(NO_WATER | EXECUTE),
+                                flags & !(DoCommandFlag::NO_WATER | DoCommandFlag::EXECUTE),
                             );
                             out.add(tmp);
                         } else {
                             let owner = self.owner(t);
-                            if owner != NONE && owner != WATER {
+                            if owner != OWNER_NONE && owner != OWNER_WATER {
                                 (self.commands().ownership)(tmp.0, owner, t);
                                 out.add(tmp);
                             }
@@ -1120,7 +1118,11 @@ impl<'a> World<'a> {
                             && self.is_owner(t, self.current())
                             && self.object_type_is(t, HQ))
                         {
-                            (self.commands().landscape_clear)(tmp.0, t, flags & !EXECUTE);
+                            (self.commands().landscape_clear)(
+                                tmp.0,
+                                t,
+                                flags & !DoCommandFlag::EXECUTE,
+                            );
                             out.add(tmp);
                         }
                     }
@@ -1132,7 +1134,7 @@ impl<'a> World<'a> {
                 }
                 for t in self.tiles(area) {
                     let mut result = SlopeResult {
-                        callback: FAILED,
+                        callback: CALLBACK_FAILED,
                         registers: [0; 16],
                         version: 0,
                     };
@@ -1147,7 +1149,7 @@ impl<'a> World<'a> {
                         );
                         crate::witness::hit(crate::witness::OBJECT_SLOPE_CALLBACK);
                     }
-                    if result.callback == FAILED {
+                    if result.callback == CALLBACK_FAILED {
                         crate::station_cmd::openttd_rust_station_check_buildable(
                             (self.shared.station_commands)(),
                             tmp.0,
@@ -1169,11 +1171,15 @@ impl<'a> World<'a> {
                         }
                     }
                 }
-                if flags & EXECUTE != 0 {
+                if flags & DoCommandFlag::EXECUTE != 0 {
                     for t in self.tiles(area) {
                         if (self.shared.has_water_ground)(t) {
                             if !(self.shared.is_water_tile)(t) {
-                                (self.commands().landscape_clear)(tmp.0, t, flags & !NO_WATER);
+                                (self.commands().landscape_clear)(
+                                    tmp.0,
+                                    t,
+                                    flags & !DoCommandFlag::NO_WATER,
+                                );
                             }
                         } else {
                             (self.commands().landscape_clear)(tmp.0, t, flags);
@@ -1222,13 +1228,13 @@ impl<'a> World<'a> {
                             out.fail(self.s.strings.built);
                             return;
                         }
-                        (self.company().finance.set_current_company)(WATER);
+                        (self.company().finance.set_current_company)(OWNER_WATER);
                         self.clear(tmp, aux, old, flags);
                         (self.company().finance.set_current_company)(company);
                         out.add(tmp);
                         crate::witness::hit(crate::witness::OBJECT_HQ_RELOCATE);
                     }
-                    if flags & EXECUTE != 0 {
+                    if flags & DoCommandFlag::EXECUTE != 0 {
                         score = crate::company::openttd_rust_company_update_rating(
                             self.company(),
                             self.finance(company),
@@ -1251,12 +1257,12 @@ impl<'a> World<'a> {
                 out.fail(self.s.strings.limit);
                 return;
             }
-            if flags & EXECUTE != 0 {
+            if flags & DoCommandFlag::EXECUTE != 0 {
                 self.build(
                     kind,
                     tile,
-                    if self.current() == DEITY {
-                        NONE
+                    if self.current() == OWNER_DEITY {
+                        OWNER_NONE
                     } else {
                         self.current()
                     },
@@ -1328,7 +1334,15 @@ impl World<'_> {
             let mut iterator = Drag::new(self.map, map_y, tile, start, diagonal);
             while iterator.tile != INVALID_TILE {
                 let t = iterator.tile;
-                self.do_build(ret, tmp, aux, flags & !EXECUTE, t, kind, view);
+                self.do_build(
+                    ret,
+                    tmp,
+                    aux,
+                    flags & !DoCommandFlag::EXECUTE,
+                    t,
+                    kind,
+                    view,
+                );
                 if !finance.is_null() {
                     let prior = limit;
                     limit -= 1;
@@ -1343,7 +1357,7 @@ impl World<'_> {
                 }
                 success = true;
                 let cost = ret.money();
-                if flags & EXECUTE != 0 {
+                if flags & DoCommandFlag::EXECUTE != 0 {
                     money = money.saturating_sub(cost);
                     if cost > 0 && money < 0 {
                         break;
@@ -1370,10 +1384,9 @@ impl World<'_> {
                 }
             } else if (self.shared.autoslope)() && kind != TRANSMITTER && kind != LIGHTHOUSE {
                 let old_slope = (self.shared.tile_slope)(tile);
-                let new_slope = crate::services::Slope(slope);
-                if !crate::services::Slope(old_slope).is_steep()
-                    && !new_slope.is_steep()
-                    && (self.shared.tile_max_z)(tile) == z + new_slope.max_z()
+                if !is_steep_slope(old_slope)
+                    && !is_steep_slope(slope)
+                    && (self.shared.tile_max_z)(tile) == z + get_slope_max_z(slope)
                 {
                     let spec = (self.s.spec)(kind);
                     let callbacks = (self.s.callbacks)(spec);
@@ -1384,7 +1397,7 @@ impl World<'_> {
                                 (self.query().by_tile)(tile),
                                 tile,
                             );
-                            result == FAILED
+                            result == CALLBACK_FAILED
                                 || !(self.s.boolean_callback)(spec, CBID_OBJECT_AUTOSLOPE, result)
                         }
                     } else {
@@ -1602,11 +1615,11 @@ impl World<'_> {
         };
         let mut tile = x + y * self.map.size_x();
         unsafe {
-            if (self.shared.tile_type)(tile) != 6 || (self.s.water_class)(tile).0 != 0 {
+            if (self.shared.tile_type)(tile) != MP_WATER || (self.s.water_class)(tile).0 != 0 {
                 return false;
             }
             for _ in 0..19 {
-                if (self.shared.tile_type)(tile) == 0
+                if (self.shared.tile_type)(tile) == MP_CLEAR
                     && ((*self.s.founding).flat)(crate::town::founding::Tile(tile))
                     && (self.shared.tile_z)(tile) <= 2
                     && !(self.shared.bridge_above)(tile)
@@ -1614,7 +1627,7 @@ impl World<'_> {
                     if self.near(tile, LIGHTHOUSE) {
                         return false;
                     }
-                    self.build(LIGHTHOUSE, tile, NONE, ptr::null(), 0);
+                    self.build(LIGHTHOUSE, tile, OWNER_NONE, ptr::null(), 0);
                     crate::witness::hit(crate::witness::OBJECT_LIGHTHOUSE);
                     return true;
                 }
@@ -1631,7 +1644,7 @@ impl World<'_> {
     }
     fn transmitter(&self) -> bool {
         let tile = self.random_tile();
-        if (self.shared.tile_type)(tile) == 0
+        if (self.shared.tile_type)(tile) == MP_CLEAR
             && unsafe { ((*self.s.founding).flat)(crate::town::founding::Tile(tile)) }
             && (self.shared.tile_z)(tile) >= 4
             && !(self.shared.bridge_above)(tile)
@@ -1639,7 +1652,7 @@ impl World<'_> {
             if self.near(tile, TRANSMITTER) {
                 return false;
             }
-            self.build(TRANSMITTER, tile, NONE, ptr::null(), 0);
+            self.build(TRANSMITTER, tile, OWNER_NONE, ptr::null(), 0);
             crate::witness::hit(crate::witness::OBJECT_TRANSMITTER);
             return true;
         }
@@ -1661,18 +1674,18 @@ impl World<'_> {
             let mut water_tiles = 0_u32;
             if ((*self.s.town).environment.freeform_edges)() {
                 for x in 0..maxx {
-                    if (self.shared.tile_type)(x + self.map.size_x()) == 6 {
+                    if (self.shared.tile_type)(x + self.map.size_x()) == MP_WATER {
                         water_tiles += 1;
                     }
-                    if (self.shared.tile_type)(x + (maxy - 1) * self.map.size_x()) == 6 {
+                    if (self.shared.tile_type)(x + (maxy - 1) * self.map.size_x()) == MP_WATER {
                         water_tiles += 1;
                     }
                 }
                 for y in 1..maxy - 1 {
-                    if (self.shared.tile_type)(1 + y * self.map.size_x()) == 6 {
+                    if (self.shared.tile_type)(1 + y * self.map.size_x()) == MP_WATER {
                         water_tiles += 1;
                     }
-                    if (self.shared.tile_type)(maxx - 1 + y * self.map.size_x()) == 6 {
+                    if (self.shared.tile_type)(maxx - 1 + y * self.map.size_x()) == MP_WATER {
                         water_tiles += 1;
                     }
                 }
@@ -1705,7 +1718,10 @@ impl World<'_> {
                                 out,
                                 tmp,
                                 aux,
-                                EXECUTE | AUTO | 16 | 512,
+                                DoCommandFlag::EXECUTE
+                                    | DoCommandFlag::AUTO
+                                    | DoCommandFlag::NO_TEST_TOWN_RATING
+                                    | DoCommandFlag::NO_MODIFY_TOWN_RATING,
                                 tile,
                                 kind as u16,
                                 view,
