@@ -134,12 +134,7 @@ pub(crate) unsafe fn build(
                 let v = (s.new_ship)(north);
                 let id = unsafe { (b.groups.vehicle_id)(v) };
                 unsafe {
-                    crate::ship_control::openttd_rust_ship_build(
-                        id,
-                        u32::from(engine),
-                        r.ship,
-                        b.shared,
-                    );
+                    crate::ship_control::ship_build(id, u32::from(engine), r.ship, b.shared);
                 };
                 v
             } else {

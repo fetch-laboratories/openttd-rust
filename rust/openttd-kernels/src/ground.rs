@@ -52,16 +52,6 @@ pub(crate) fn crossing_rail_track(tile: u32, rail: &RailMapServices) -> Track {
 pub(crate) fn check_build_above_clear(out: crate::services::Cost<'_>) {
     out.zero();
 }
-/// # Safety
-/// The native facade provides immutable costs and a live stack output slot.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_clear_build_above(
-    cost: *const crate::services::CommandCostServices,
-    out: *mut crate::services::CommandCost,
-) {
-    // SAFETY: the facade owns both values for this synchronous call.
-    check_build_above_clear(crate::services::Cost(out, unsafe { &*cost }));
-}
 
 /// Complete original `DoClearSquare` control. Native leaves cannot throw and no
 /// owner borrow survives their invocation; world access is serialized.

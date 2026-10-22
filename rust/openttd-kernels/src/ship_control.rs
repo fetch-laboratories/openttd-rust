@@ -1043,8 +1043,8 @@ pub unsafe extern "C" fn openttd_rust_ship_trackdir(
         )
     }) as u8
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_build(
+/// Only the Rust vehicle build transaction calls this; C++ no longer builds ships.
+pub(crate) unsafe fn ship_build(
     id: u32,
     engine: u32,
     leaves: *const Leaves,
