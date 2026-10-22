@@ -176,7 +176,6 @@ pub struct Leaves {
     pub is_waypoint: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub line_reverse: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
     pub mark_tile: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
-    pub needs_service: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
     pub oneway: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub order_service: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub order_stop: extern "C" fn(*mut std::ffi::c_void, Handle, u16) -> u64,
@@ -372,7 +371,11 @@ impl Game<'_> {
         0
     }
     fn svc_needs_service(&self, id: Handle) -> u64 {
-        (self.leaves.needs_service)(self.context, id)
+        // SAFETY: Live serialized train and immutable table; no owner borrow
+        // spans the direct `Vehicle::NeedsServicing` port.
+        u64::from(unsafe {
+            crate::vehicle::maintenance::needs_servicing(id.vehicle(), &*self.leaves.vehicle)
+        })
     }
     fn svc_oneway(&self, id: Handle, a: u64, b: u64) -> u64 {
         (self.leaves.oneway)(self.context, id, a as u32, b as u8)
@@ -1464,7 +1467,6 @@ mod tests {
             is_waypoint: unused!((*mut std::ffi::c_void, Handle, u32); u64),
             line_reverse: unused!((*mut std::ffi::c_void, Handle); u64),
             mark_tile: unused!((*mut std::ffi::c_void, Handle, u32); ()),
-            needs_service: unused!((*mut std::ffi::c_void, Handle); u64),
             oneway: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
             order_service: unused!((*mut std::ffi::c_void, Handle, u8); u64),
             order_stop: unused!((*mut std::ffi::c_void, Handle, u16); u64),

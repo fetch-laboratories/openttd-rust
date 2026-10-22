@@ -23,6 +23,7 @@
     clippy::many_single_char_names,
     clippy::too_many_lines
 )]
+use crate::clear_map::CLEAR_FIELDS;
 use crate::services::{Services, chance16_i};
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES, MP_WATER};
 
@@ -32,7 +33,6 @@ const TOYLAND: u8 = 3;
 const CLEAR_GRASS: u8 = 0;
 const CLEAR_ROUGH: u8 = 1;
 const CLEAR_ROCKS: u8 = 2;
-const CLEAR_FIELDS: u8 = 3;
 const CLEAR_DESERT: u8 = 5;
 const GROUND_GRASS: u8 = 0;
 const GROUND_ROUGH: u8 = 1;
@@ -333,13 +333,25 @@ fn in_grove(x: i32, y: i32, shape: &[Point; 16]) -> bool {
 struct Trees<'a> {
     t: &'a TreeServices,
     s: &'a Services,
+    map: Option<&'a crate::services::TileTypeAccess>,
 }
 impl Trees<'_> {
     fn plant_observation(&self, tile: u32) -> PlantObservation {
         (self.t.plant_observation)(tile)
     }
     fn tree_observation(&self, tile: u32) -> TreeObservation {
-        (self.t.tree_observation)(tile)
+        self.map
+            .and_then(|map| {
+                Some(TreeObservation {
+                    ground: crate::tree_map::get_tree_ground(map, tile)?,
+                    density: crate::tree_map::get_tree_density(map, tile)?,
+                    species: crate::tree_map::get_tree_type(map, tile)?,
+                    count: crate::tree_map::get_tree_count(map, tile)?,
+                    growth: crate::tree_map::get_tree_growth(map, tile)?,
+                    zone: crate::tile_map::get_tropic_zone(map, tile)?,
+                })
+            })
+            .unwrap_or_else(|| (self.t.tree_observation)(tile))
     }
     fn random(&self) -> u32 {
         self.s.random()
@@ -628,7 +640,12 @@ impl Trees<'_> {
 
     /// `TileLoopTreesAlps`.
     fn loop_alps(&self, tile: u32, t: &mut TreeObservation, s: &LoopSettings) {
-        let k = (self.s.tile_z)(tile)
+        let k = self
+            .map
+            .and_then(|map| {
+                crate::tile_map::get_tile_z(map, tile, s.size_x, map.count() / s.size_x)
+            })
+            .unwrap_or_else(|| (self.s.tile_z)(tile))
             .wrapping_sub(i32::from((self.t.snow_line)()))
             .wrapping_add(1);
         if k < 0 {
@@ -674,7 +691,23 @@ impl Trees<'_> {
         if shore {
             // SAFETY: The native caller owns an independent stack result context;
             // flooding may reenter trees but no owner state is borrowed here.
-            unsafe { crate::water::tree_industry_water_loop(tile, call, self.s) };
+            unsafe {
+                if let Some(map) = self.map {
+                    crate::water::water_tile_loop(
+                        tile,
+                        MP_TREES,
+                        s.size_x,
+                        map.count() / s.size_x,
+                        false,
+                        call,
+                        (self.s.water_services)(),
+                        self.s,
+                        map,
+                    );
+                } else {
+                    crate::water::tree_industry_water_loop(tile, call, self.s);
+                }
+            };
         } else {
             match s.climate {
                 TROPIC => self.loop_desert(tile, &mut t, s),
@@ -970,8 +1003,24 @@ unsafe fn trees<'a>(services: *const TreeServices, shared: *const Services) -> T
         Trees {
             t: &*services,
             s: &*shared,
+            map: None,
         }
     }
+}
+
+/// Scheduler-only entry: allocation metadata follows the scheduler's no-reset/no-yield proof.
+/// Each scalar load ends before ambient/flooding reentry; observations reload afterwards.
+pub(crate) unsafe fn tile_loop(
+    tile: u32,
+    settings: LoopSettings,
+    call: *mut crate::ground::Call,
+    services: *const TreeServices,
+    shared: *const Services,
+    map: &crate::services::TileTypeAccess,
+) {
+    let mut owner = unsafe { trees(services, shared) };
+    owner.map = Some(map);
+    owner.tile_loop(tile, &settings, call);
 }
 
 /// `TileLoop_Trees` for one `MP_TREES` tile.
@@ -1469,6 +1518,7 @@ mod tests {
         f(&Trees {
             t: &SERVICES,
             s: &shared,
+            map: None,
         })
     }
     const CLEAR_TILE: PlantObservation = PlantObservation {

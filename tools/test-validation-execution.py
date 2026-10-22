@@ -318,6 +318,9 @@ class NarrowChecksTests(unittest.TestCase):
                     "which",
                     side_effect=AssertionError("cache preparation"),
                 ),
+                # Without --jobs the driver takes the free cores, 8 - round(2.4).
+                patch.object(migration.os, "cpu_count", return_value=8),
+                patch.object(migration.os, "getloadavg", return_value=(2.4, 9, 9)),
                 patch.object(
                     sys,
                     "argv",
@@ -348,7 +351,14 @@ class NarrowChecksTests(unittest.TestCase):
             )
             for command in report["commands"]:
                 log = json.loads((root / command["log"]).read_text())
-                self.assertEqual(log["jobs"], "2")
+                self.assertEqual(log["jobs"], "6" if failing else "2")
+
+    def test_free_cores_keep_two_jobs_on_a_loaded_host(self):
+        with (
+            patch.object(migration.os, "cpu_count", return_value=8),
+            patch.object(migration.os, "getloadavg", return_value=(7.6, 0, 0)),
+        ):
+            self.assertEqual(migration.free_cores(), 2)
 
     def test_rust_checks_never_prepares_native_or_reference_build(self):
         self.exercise_checks()

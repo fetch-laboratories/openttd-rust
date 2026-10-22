@@ -16,17 +16,22 @@
  * descriptor lifetime; other entries retain the original callback reader. */
 struct OpenTTDNativeTileTypeAccess {
 	using BaseTile = Tile::TileBase;
-	static_assert(std::is_standard_layout_v<BaseTile>);
-	static_assert(sizeof(BaseTile) == 8 && alignof(BaseTile) == 2);
-	static_assert(offsetof(BaseTile, type) == 0 && offsetof(BaseTile, height) == 1 && offsetof(BaseTile, m2) == 2);
-	static_assert(offsetof(BaseTile, m1) == 4 && offsetof(BaseTile, m3) == 5 && offsetof(BaseTile, m4) == 6 && offsetof(BaseTile, m5) == 7);
+	using ExtendedTile = Tile::TileExtended;
+	static_assert(std::is_standard_layout_v<BaseTile> && std::is_standard_layout_v<ExtendedTile>);
 	/* Map::Allocate bounds both dimensions by MAX_MAP_SIZE. Even the largest
 	 * allocation is 128 MiB, below Rust isize::MAX on a 32-bit target. */
 	static_assert(uint64_t{MAX_MAP_SIZE} * MAX_MAP_SIZE * sizeof(BaseTile) <= INT32_MAX);
 
 	static OpenTTDTileTypeAllocation Acquire() noexcept
 	{
-		return {.base = reinterpret_cast<const uint8_t *>(Tile::base_tiles.get()), .count = Map::Size()};
+		return {
+			.base = Tile::base_tiles.get(), .extended = Tile::extended_tiles.get(), .count = Map::Size(),
+#if !defined(NDEBUG) || defined(WITH_ASSERT)
+			.assertions = true,
+#else
+			.assertions = false,
+#endif
+		};
 	}
 };
 #endif /* RUST_TILE_TYPE_ACCESS_HPP */

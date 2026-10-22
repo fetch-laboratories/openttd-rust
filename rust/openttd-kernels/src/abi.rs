@@ -1009,7 +1009,9 @@ layouts! {
     };
     "OpenTTDTileTypeAllocation" ["landscape"] => crate::services::TileTypeAllocation {
         base,
+        extended,
         count,
+        assertions,
     };
     "OpenTTDNativeTileTypeAccess::BaseTile" ["landscape"] => crate::services::BaseTileLayout {
         kind => type,
@@ -1019,6 +1021,11 @@ layouts! {
         m3,
         m4,
         m5,
+    };
+    "OpenTTDNativeTileTypeAccess::ExtendedTile" ["landscape"] => crate::services::ExtendedTileLayout {
+        m6,
+        m7,
+        m8,
     };
     "OpenTTDGroundLoopServices" ["landscape"] => crate::tile_loop::GroundServices {
         clear,
@@ -1550,7 +1557,6 @@ layouts! {
         wait_unbunch,
         chain_depot,
         servint,
-        needs_service,
         max_distance,
         tile_valid,
         tile_type,
@@ -1577,7 +1583,6 @@ layouts! {
         station_visits,
         visit_set,
         arrival,
-        service,
         leave_unbunch,
         path_result,
         order_free,
@@ -1591,11 +1596,6 @@ layouts! {
         depot_dirty,
         depot_invalidate,
         ships_dirty,
-        details_dirty,
-        age,
-        economy_age,
-        decrease_value,
-        check_breakdown,
         check_orders,
         running_cost,
         cost_divisor,
@@ -1627,7 +1627,6 @@ layouts! {
         process_orders,
         loading,
         begin_loading,
-        breakdown,
         viewport,
         base_viewport,
         visual,
@@ -1684,6 +1683,7 @@ layouts! {
         patch,
         neighbours,
         next_depot,
+        vehicle,
     };
     "OpenTTDShipReverseResult" ["probe"] => crate::ship_control::ReverseResult {
         reverse,
@@ -2112,46 +2112,37 @@ layouts! {
         set_fence,
         tree_ground,
         water_services,
+        for_each_station,
     };
     "OpenTTDVehicleNewPosition" ["probe"] => crate::vehicle::NewPosition {
         x,
         y,
         tile,
     };
-    "OpenTTDVehicleBreakdown" ["probe"] => crate::vehicle::Breakdown {
-        broken,
-        status,
-    };
     "OpenTTDVehicleServices" ["probe"] => crate::vehicle::VehicleServices {
         vehicles_on_tile,
         write_counters,
-        handle_breakdown,
         waiting_for_unbunching,
         leave_unbunching_depot,
         reset_depot_unbunching,
-        service_in_depot,
-        needs_automatic_servicing,
         enter_depot,
         pathfinding_result,
         new_position,
         move_then_status,
         base_viewport,
         property,
-        length_callback,
-        unknown_length_result,
+        callback,
+        unknown_callback_result,
         length_changed,
-        play_start_sound,
+        play_vehicle_sound,
         play_sound,
         large_explosion,
         order_free,
         order_dummy,
         start_stop_dirty,
         destroy,
-        age,
-        economy_age,
-        decrease_value,
-        check_breakdown,
         check_orders,
+        day,
         write_day,
         write_direction,
         write_speed,
@@ -2165,6 +2156,7 @@ layouts! {
         detach_last,
         next,
         engine_id,
+        engine,
         engine_for_length,
         write_tick,
         direction,
@@ -2209,7 +2201,6 @@ layouts! {
         day_cost,
         make_dummy,
         loading,
-        breakdown,
         check_orders_only,
         write_coordinates,
         altitude_inputs,
@@ -3037,7 +3028,6 @@ layouts! {
         vehicle_id,
         percent_filled,
         reliability,
-        engine_reliability,
         display_speed,
         age_years,
         needs_service,
@@ -3088,7 +3078,6 @@ layouts! {
         backup_hangar,
         review_setting,
         local_owner,
-        day_counter,
         fast_aircraft,
         short_strip,
         no_jet_crash,
@@ -3097,7 +3086,6 @@ layouts! {
         command_error,
         timetable_dirty,
         invalidate_order,
-        vehicle_dirty,
         delete_order_news,
         suppress_implicit_write,
         invalidate_vehicle_list,
@@ -3124,6 +3112,7 @@ layouts! {
         clear_backup_post,
         missing_aircraft_orders,
         change_timetable_command,
+        base,
     };
     "OpenTTDOrdersClosest" ["probe"] => crate::orders::Closest {
         tile,
@@ -3888,7 +3877,6 @@ layouts! {
         engine_speed,
         engine_subtype,
         engine_sound,
-        engine_reliability,
         airport_entry,
         direction_towards,
         hangar_height,
@@ -3899,7 +3887,6 @@ layouts! {
         chain_in_depot,
         nearest_depot_order,
         part_of_orders,
-        next_station,
         next_aircraft,
         update_position,
         rotor_image,
@@ -3913,7 +3900,6 @@ layouts! {
         dirty_depot,
         first_arrival,
         begin_loading,
-        dirty_details,
         update_delta,
         touchdown_animation,
         destination_too_far,
@@ -4195,7 +4181,6 @@ layouts! {
         acc_model,
         acc_type,
         advance_distance,
-        age,
         all_powered,
         ambient_sound,
         arrival_news,
@@ -4212,7 +4197,6 @@ layouts! {
         cargo_age_default,
         cargo_changed,
         chain_depot,
-        check_breakdown,
         check_next,
         check_orders,
         check_reverse,
@@ -4236,7 +4220,6 @@ layouts! {
         curve_advantage,
         curve_mod,
         day_ticks,
-        decrease_value,
         delete_vehicle,
         depot_dir,
         depot_dirty,
@@ -4251,14 +4234,12 @@ layouts! {
         dir_diag,
         disaster_sound,
         disconnect,
-        economy_age,
         engine_power,
         enter_depot,
         enter_tile,
         find_depot,
         first_track,
         grf_version,
-        handle_breakdown,
         has_depot_res,
         has_reserved,
         has_signal,
@@ -4290,7 +4271,6 @@ layouts! {
         lost_warn,
         map_size,
         max_depot_penalty,
-        needs_service,
         no_90,
         oneway_blocking,
         order_depot_service,
@@ -4319,7 +4299,6 @@ layouts! {
         reverse_single_blocked,
         reverse_windows,
         running_windows,
-        service,
         servint,
         set_depot_res,
         set_next,
@@ -4369,7 +4348,6 @@ layouts! {
         user_default,
         veh_exit_dir,
         viewport,
-        view_window,
         visit_type,
         vis_effect,
         wagon_override,
@@ -4382,6 +4360,7 @@ layouts! {
         write_visit_type,
         visit_tile,
         visit_near,
+        vehicle,
     };
     "OpenTTDTrainReservationFreeRead" ["probe"] => crate::train_reservation::TrainReservationFreeRead {
         tile,
@@ -4485,7 +4464,6 @@ layouts! {
         is_waypoint,
         line_reverse,
         mark_tile,
-        needs_service,
         oneway,
         order_service,
         order_stop,
@@ -4866,10 +4844,6 @@ layouts! {
         day,
         has_engine,
     };
-    "OpenTTDVehicleStationLookup" ["scheduler"] => crate::vehicle::scheduler::StationLookup {
-        station,
-        id,
-    };
     "OpenTTDVehicleSchedulerServices" ["scheduler"] => crate::vehicle::scheduler::SchedulerServices {
         pool,
         assertions,
@@ -4877,14 +4851,11 @@ layouts! {
         calendar_day,
         economy_day,
         day_callback_read,
-        day_callback,
         randomise_callback,
         first_dirty,
-        unknown_day_callback,
         cargo_owner,
-        running_sound,
-        periodic_sound,
-        next_station,
+        vehicle,
+        shared,
         with_loading_timer,
         reset_accumulators,
     };
@@ -4914,13 +4885,6 @@ layouts! {
         reliability,
         chance,
         breakdowns,
-    };
-    "OpenTTDVehicleMaintenanceResetWrite" ["maintenance"] => crate::vehicle::maintenance::ResetWrite {
-        economy_date,
-        calendar_date,
-        reliability,
-        chance,
-        since,
     };
     "OpenTTDVehicleMaintenanceInterval" ["maintenance"] => crate::vehicle::maintenance::Interval {
         company,
@@ -5014,7 +4978,6 @@ layouts! {
         group,
         renewal,
         reset,
-        reset_write,
         has_engine,
         interval,
         engine_reliability,
@@ -5037,7 +5000,6 @@ layouts! {
         breakdown_countdown,
         breakdown_sound_state,
         breakdown_delay_write,
-        breakdown_sound,
         smoke_disabled,
         smoke,
         smoke_animation,
@@ -5074,6 +5036,10 @@ layouts! {
         0 => value,
     };
     "OrderType" ["maintenance"] => crate::vehicle::OrderType {
+    };
+    "CallbackID" ["maintenance"] => crate::newgrf_callbacks::CallbackID {
+    };
+    "VehicleSoundEvent" ["maintenance"] => crate::newgrf_sound::VehicleSoundEvent {
     };
     "LandscapeType" ["maintenance"] => crate::services::LandscapeType {
     };

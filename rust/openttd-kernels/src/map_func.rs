@@ -6,6 +6,7 @@
  */
 
 //! Inline helpers of `map_func.h` over map dimensions read once per entry.
+#![allow(unsafe_code)]
 
 /// Map dimensions read once per entry.
 #[derive(Clone, Copy)]
@@ -18,6 +19,21 @@ impl Map {
     #[must_use]
     pub fn size_x(self) -> u32 {
         1_u32 << self.log_x
+    }
+    /// `TileXY`, over the captured map width.
+    #[must_use]
+    pub fn tile_xy(self, x: u32, y: u32) -> u32 {
+        y.wrapping_shl(u32::from(self.log_x)).wrapping_add(x)
+    }
+    /// `Map::MaxX`.
+    #[must_use]
+    pub fn max_x(self) -> u32 {
+        self.size_x() - 1
+    }
+    /// `Map::MaxY`, over the height captured at entry.
+    #[must_use]
+    pub fn max_y(size_y: u32) -> u32 {
+        size_y - 1
     }
     /// `TileX`.
     #[must_use]
@@ -102,4 +118,126 @@ impl Map {
 pub fn tile_index_diff_c_by_diag_dir(dir: u8) -> (i32, i32) {
     const OFFSETS: [(i32, i32); 4] = [(-1, 0), (0, 1), (1, 0), (0, -1)];
     OFFSETS[usize::from(dir)]
+}
+
+/// Allocation descriptor acquired once by an audited native entry. The base
+/// pointer comes from `Tile::base_tiles.get()`, with the full allocation's provenance.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct TileTypeAllocation {
+    /// Canonical base array; null only together with a zero count.
+    pub base: *const BaseTileLayout,
+    /// Canonical extended array from the same native allocation.
+    pub extended: *const ExtendedTileLayout,
+    /// Actual native `Map::Size()` at acquisition, not a copied tile snapshot;
+    /// zero selects the original callback backend for every read.
+    pub count: u32,
+    /// Native assert policy captured once at the audited entry.
+    pub assertions: bool,
+}
+
+/// Layout-only shell for the actual native base tile. Never create a reference,
+/// read or copy a value of this type; it supplies stride/ABI metadata only.
+#[repr(C)]
+#[allow(missing_docs)]
+pub struct BaseTileLayout {
+    pub kind: u8,
+    pub height: u8,
+    pub m2: u16,
+    pub m1: u8,
+    pub m3: u8,
+    pub m4: u8,
+    pub m5: u8,
+}
+
+/// Layout-only native extended tile. Never read a whole value or form a reference.
+#[repr(C)]
+#[allow(missing_docs)]
+pub struct ExtendedTileLayout {
+    pub m6: u8,
+    pub m7: u8,
+    pub m8: u16,
+}
+
+/// One shared reader with callback and audited entry-resolved raw backends.
+/// No clone/copy implementation: allocation validity covers this entry-local
+/// reader's entire lifetime. No map reference or slice is ever formed.
+pub(crate) struct TileTypeAccess {
+    allocation: TileTypeAllocation,
+    callback: extern "C" fn(u32) -> u8,
+}
+// The constructor's provenance/serialization contract covers each initialized
+// scalar; every load ends before any callback and native aliases remain legal.
+macro_rules! map_fields {
+    ($array:ident: $layout:ty => $($field:ident: $scalar:ty),*) => {$ (
+        #[inline]
+        pub(crate) fn $field(&self, tile: u32) -> Option<$scalar> {
+            self.available(tile)?;
+            // SAFETY: Live allocation under the entry contract, one scalar only.
+            unsafe { Some(std::ptr::addr_of!((*self.allocation.$array.add(tile as usize)).$field).read()) }
+        }
+    )*};
+}
+impl TileTypeAccess {
+    /// Resolve the audited allocation once, retaining only descriptor metadata.
+    /// # Safety
+    /// A nonzero count needs both canonical pointers with provenance for `count` live,
+    /// initialized base/extended tiles, within `isize::MAX`, until this reader is dropped. Map
+    /// reset and game-state-mutex yield are excluded throughout the entry. Each
+    /// read must be serialized with native writes; native aliases are permitted.
+    pub(crate) unsafe fn raw(
+        allocation: TileTypeAllocation,
+        callback: extern "C" fn(u32) -> u8,
+    ) -> Self {
+        Self {
+            allocation,
+            callback,
+        }
+    }
+
+    /// Reader for entries without an audited allocation: every read uses the
+    /// original noexcept accessor.
+    pub(crate) fn callback(callback: extern "C" fn(u32) -> u8) -> Self {
+        Self {
+            allocation: TileTypeAllocation {
+                base: std::ptr::null(),
+                extended: std::ptr::null(),
+                count: 0,
+                assertions: false,
+            },
+            callback,
+        }
+    }
+
+    /// Read the original high nibble at this observation point. Checked failures
+    /// go through the native accessor; asserts-off reads add no range rejection.
+    #[inline]
+    #[allow(clippy::cast_possible_truncation)]
+    pub(crate) fn read(&self, tile: u32) -> u8 {
+        crate::tile_map::get_tile_type(self, tile).unwrap_or_else(|| (self.callback)(tile))
+    }
+    /// Raw backend availability; assertion-disabled builds add no range rejection.
+    #[inline]
+    pub(crate) fn available(&self, tile: u32) -> Option<()> {
+        (self.allocation.count != 0 && (!self.assertions() || tile < self.allocation.count))
+            .then_some(())
+    }
+    #[inline]
+    pub(crate) fn assertions(&self) -> bool {
+        self.allocation.assertions
+    }
+    pub(crate) fn count(&self) -> u32 {
+        self.allocation.count
+    }
+    #[inline]
+    pub(crate) fn require_type(&self, tile: u32, kind: u8) -> Option<()> {
+        self.available(tile)?;
+        if self.assertions() && crate::tile_map::get_tile_type(self, tile)? != kind {
+            return None;
+        }
+        Some(())
+    }
+    // Named, field-sized loads. No Rust reference or record value is formed.
+    map_fields! { base: BaseTileLayout => kind: u8, height: u8, m1: u8, m2: u16, m3: u8, m4: u8, m5: u8 }
+    map_fields! { extended: ExtendedTileLayout => m6: u8 }
 }

@@ -65,11 +65,9 @@ src/order_cmd.cpp | openttd_orders_review_setting() noexcept | 1419e52784b2f36e 
 src/order_cmd.cpp | openttd_orders_ship_station_tile(uint16_t destination) noexcept | bb04aad8d8fd5aba | 1
 src/order_cmd.cpp | openttd_orders_station_owner(uint16_t destination) noexcept | c181e3b70687df7f | 1
 src/order_cmd.cpp | openttd_orders_station_tile(uint16_t destination) noexcept | 6bd6189b29cba5aa | 1
-src/order_cmd.cpp | openttd_orders_tick_counter() noexcept | c674568bf880d07c | 1
 src/order_cmd.cpp | openttd_orders_timetable_dirty(void *ctx) noexcept | 46e7dd5322c3c04a | 1
 src/order_cmd.cpp | openttd_orders_timetable_year_limit() noexcept | 65f1171d2d4fe3ef | 1
 src/order_cmd.cpp | openttd_orders_unit_number(void *ctx) noexcept | d3f367252bfba281 | 1
-src/order_cmd.cpp | openttd_orders_vehicle_dirty(void *ctx) noexcept | 31c7cbc74b4f9d02 | 1
 src/order_cmd.cpp | openttd_orders_vehicle_group(void *ctx) noexcept | d932fd412582f2de | 1
 src/order_cmd.cpp | openttd_orders_vehicle_id(void *ctx) noexcept | 8a72932b898fb672 | 1
 src/order_cmd.cpp | openttd_orders_vehicle_status(void *ctx) noexcept | 0666ba99af5a091d | 1

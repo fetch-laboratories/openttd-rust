@@ -271,19 +271,38 @@ impl<'a> World<'a> {
     fn behaviour(&self, tile: u32) -> u8 {
         match self.tile_type(tile) {
             6 => {
-                if (self.w.coast)(tile) {
-                    return if is_slope_with_one_corner_raised((self.s.tile_slope)(tile)) {
+                if crate::water_map::is_coast(self.types, tile)
+                    .unwrap_or_else(|| (self.w.coast)(tile))
+                {
+                    return if is_slope_with_one_corner_raised(
+                        crate::tile_map::get_tile_slope(self.types, tile, self.size_x, self.size_y)
+                            .unwrap_or_else(|| (self.s.tile_slope)(tile)),
+                    ) {
                         1
                     } else {
                         3
                     };
                 }
-                u8::from((self.c().water_class)(tile).0 == 0)
+                u8::from(
+                    crate::water_map::get_water_class(self.types, tile)
+                        .unwrap_or_else(|| (self.c().water_class)(tile).0)
+                        == 0,
+                )
             }
-            5 | 8 | 10 => u8::from((self.c().water_class)(tile).0 == 0),
+            5 | 8 | 10 => u8::from(
+                crate::water_map::get_water_class(self.types, tile)
+                    .unwrap_or_else(|| (self.c().water_class)(tile).0)
+                    == 0,
+            ),
             1 => {
-                if (self.r().ground)(tile).0 == 13 {
-                    if is_slope_with_one_corner_raised((self.s.tile_slope)(tile)) {
+                if crate::rail_map::get_rail_ground_type(self.types, tile)
+                    .unwrap_or_else(|| (self.r().ground)(tile).0)
+                    == 13
+                {
+                    if is_slope_with_one_corner_raised(
+                        crate::tile_map::get_tile_slope(self.types, tile, self.size_x, self.size_y)
+                            .unwrap_or_else(|| (self.s.tile_slope)(tile)),
+                    ) {
                         1
                     } else {
                         3
@@ -293,7 +312,10 @@ impl<'a> World<'a> {
                 }
             }
             4 => {
-                if (self.s.tree_ground)(tile).0 == 3 {
+                if crate::tree_map::get_tree_ground(self.types, tile)
+                    .unwrap_or_else(|| (self.s.tree_ground)(tile).0)
+                    == 3
+                {
                     3
                 } else {
                     0
@@ -321,10 +343,14 @@ impl<'a> World<'a> {
     }
     fn half_flood(&self, tile: u32, call: *mut Call) -> bool {
         let mut flooded = false;
-        if (self.r().ground)(tile).0 == 13 {
+        if crate::rail_map::get_rail_ground_type(self.types, tile)
+            .unwrap_or_else(|| (self.r().ground)(tile).0)
+            == 13
+        {
             return false;
         }
-        let slope = (self.s.tile_slope)(tile);
+        let slope = crate::tile_map::get_tile_slope(self.types, tile, self.size_x, self.size_y)
+            .unwrap_or_else(|| (self.s.tile_slope)(tile));
         let mut tracks = (self.r().tracks)(tile).0;
         if is_slope_with_one_corner_raised(slope) {
             let corner = (slope.trailing_zeros() ^ 2) as usize;
@@ -467,7 +493,8 @@ impl<'a> World<'a> {
     fn flood(&self, tile: u32, call: *mut Call) {
         let company = (self.s.current_company)();
         (self.co().finance.set_current_company)(17);
-        let slope = (self.s.tile_slope)(tile);
+        let slope = crate::tile_map::get_tile_slope(self.types, tile, self.size_x, self.size_y)
+            .unwrap_or_else(|| (self.s.tile_slope)(tile));
         let flooded = if slope != 0 {
             match self.tile_type(tile) {
                 1 => {
@@ -569,7 +596,11 @@ impl<'a> World<'a> {
                         continue;
                     }
                     continue_flooding = true;
-                    if kind == 4 && (self.s.tree_ground)(target).0 == 3 {
+                    if kind == 4
+                        && crate::tree_map::get_tree_ground(self.types, target)
+                            .unwrap_or_else(|| (self.s.tree_ground)(target).0)
+                            == 3
+                    {
                         continue;
                     }
                     let foundation = (self.s.foundation)(target);
@@ -657,7 +688,9 @@ pub(crate) unsafe fn water_tile_loop(
             // SAFETY: The water table's clear table is live for this entry.
             (unsafe { &*water.clear }.ambient)(tile);
         }
-        if (water.non_flooding)(tile) {
+        if crate::water_map::is_non_flooding_water_tile(types, tile)
+            .unwrap_or_else(|| (water.non_flooding)(tile))
+        {
             return;
         }
     }

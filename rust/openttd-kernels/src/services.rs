@@ -164,88 +164,9 @@ pub struct ByteSpan {
     pub size: usize,
 }
 
-/// Allocation descriptor acquired once by an audited native entry. The base
-/// pointer comes from `Tile::base_tiles.get()`, with the full allocation's provenance.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TileTypeAllocation {
-    /// Allocation-derived bytes; null only together with a zero count.
-    pub base: *const u8,
-    /// Actual native `Map::Size()` at acquisition, not a copied tile snapshot;
-    /// zero selects the original callback backend for every read.
-    pub count: u32,
-}
+pub use crate::map_func::TileTypeAllocation;
+pub(crate) use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAccess};
 
-/// Layout-only shell for the actual native base tile. Never create a reference,
-/// read or copy a value of this type; it supplies stride/ABI metadata only.
-#[repr(C)]
-pub(crate) struct BaseTileLayout {
-    pub kind: u8,
-    pub height: u8,
-    pub m2: u16,
-    pub m1: u8,
-    pub m3: u8,
-    pub m4: u8,
-    pub m5: u8,
-}
-
-/// One shared reader with callback and audited entry-resolved raw backends.
-/// No clone/copy implementation: allocation validity covers this entry-local
-/// reader's entire lifetime. No map reference or slice is ever formed.
-pub(crate) struct TileTypeAccess {
-    allocation: TileTypeAllocation,
-    callback: extern "C" fn(u32) -> u8,
-}
-impl TileTypeAccess {
-    /// Resolve the audited allocation once, retaining only descriptor metadata.
-    /// # Safety
-    /// A nonzero count needs a nonnull base that retains provenance for `count * sizeof(TileBase)` live,
-    /// initialized bytes, within `isize::MAX`, until this reader is dropped. Map
-    /// reset and game-state-mutex yield are excluded throughout the entry. Each
-    /// read must be serialized with native writes; native aliases are permitted.
-    pub(crate) unsafe fn raw(
-        allocation: TileTypeAllocation,
-        callback: extern "C" fn(u32) -> u8,
-    ) -> Self {
-        Self {
-            allocation,
-            callback,
-        }
-    }
-
-    /// Reader for entries without an audited allocation: every read uses the
-    /// original noexcept accessor.
-    pub(crate) fn callback(callback: extern "C" fn(u32) -> u8) -> Self {
-        Self {
-            allocation: TileTypeAllocation {
-                base: std::ptr::null(),
-                count: 0,
-            },
-            callback,
-        }
-    }
-
-    /// Read the original high nibble at this observation point. Out-of-range
-    /// reads go through the original native accessor/assertion policy; no new
-    /// rejection, panic or unchecked in-range-only timing shortcut is added.
-    #[inline]
-    #[allow(clippy::cast_possible_truncation)]
-    pub(crate) fn read(&self, tile: u32) -> u8 {
-        if tile < self.allocation.count {
-            // SAFETY: Constructor contract gives live allocation provenance and
-            // serialization. Original map bounds keep the byte offset in isize
-            // even on 32-bit targets. Exactly one initialized u8 is read; no
-            // Rust/C++ field reference is made or retained across a callback.
-            let offset = (tile as usize) * std::mem::size_of::<BaseTileLayout>()
-                + std::mem::offset_of!(BaseTileLayout, kind);
-            unsafe { self.allocation.base.add(offset).read() >> 4 }
-        } else {
-            (self.callback)(tile)
-        }
-    }
-}
-
-/// Default native ABI probe of the same shared reader used by every owner.
 /// # Safety
 /// For nonzero counts, uphold `TileTypeAccess::raw`'s validity/serialization
 /// contract for this call. The callback is the original noexcept accessor or an
@@ -542,7 +463,18 @@ pub struct Services {
     pub tree_ground: extern "C" fn(u32) -> TreeGround,
     /// Immutable water table, resolved lazily to avoid native static-init cycles.
     pub water_services: extern "C" fn() -> *const crate::water::WaterServices,
+    /// `for (Station *st : Station::Iterate())`, visiting each station with its
+    /// canonical service owner and index. Visits may reenter but never add or
+    /// delete a station.
+    pub for_each_station: extern "C" fn(*mut c_void, StationVisitor),
 }
+/// Station visitor: context, station, its service owner and its index.
+pub type StationVisitor = unsafe extern "C" fn(
+    *mut c_void,
+    *const crate::station::Station,
+    *mut crate::station_service::Service,
+    u16,
+);
 /// `GetFoundationSlope` result: height and slope after the tile's foundation.
 #[repr(C)]
 pub struct FoundationSlope {
@@ -561,6 +493,27 @@ impl Services {
     #[must_use]
     pub fn random_range(&self, limit: u32) -> u32 {
         ((u64::from(self.random()) * u64::from(limit)) >> 32) as u32
+    }
+    /// Visit every station in pool order. No owner reference spans a visit.
+    #[allow(unsafe_code)]
+    pub(crate) fn for_each_station<
+        F: FnMut(*const crate::station::Station, *mut crate::station_service::Service, u16),
+    >(
+        &self,
+        mut visit: F,
+    ) {
+        unsafe extern "C" fn invoke<
+            F: FnMut(*const crate::station::Station, *mut crate::station_service::Service, u16),
+        >(
+            context: *mut c_void,
+            station: *const crate::station::Station,
+            service: *mut crate::station_service::Service,
+            id: u16,
+        ) {
+            // SAFETY: The service borrows this unique closure only during the call.
+            unsafe { (&mut *context.cast::<F>())(station, service, id) }
+        }
+        (self.for_each_station)(std::ptr::from_mut(&mut visit).cast(), invoke::<F>);
     }
 }
 /// Standalone test table: map predicates return zero and writes do nothing.
@@ -778,6 +731,7 @@ pub fn fixture(
         set_fence,
         tree_ground,
         water_services: fixture_water_services,
+        for_each_station: fixture_stations,
     }
 }
 #[cfg(test)]
@@ -1152,6 +1106,8 @@ extern "C" fn unused_vehicle_next(_: u32) -> Option<crate::vehicle::VehicleRef> 
     panic!("unused vehicle iteration");
 }
 
+#[cfg(test)]
+extern "C" fn fixture_stations(_: *mut c_void, _: StationVisitor) {}
 #[cfg(test)]
 extern "C" fn fixture_water_services() -> *const crate::water::WaterServices {
     panic!("unexpected water service access");
