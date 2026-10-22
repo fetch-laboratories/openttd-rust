@@ -30,8 +30,8 @@ use crate::economy_type::{
     PR_CLEAR_BRIDGE, PR_CLEAR_TUNNEL,
 };
 use crate::services::{
-    Axis, CommandCost, Cost, DiagDirection, Map, RailType, RoadType, Services, TownHandle, Train,
-    TransportType,
+    Axis, CommandCost, Cost, DiagDirection, Foundation, Map, RailType, RoadType, Services, Slope,
+    TownHandle, Train, TransportType,
 };
 use crate::slope_func::{
     FOUNDATION_NONE, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_SE, SLOPE_SW, complement_slope,
@@ -195,7 +195,7 @@ impl<'a> World<'a> {
         (self.town.environment.editor)()
     }
     fn bridge_height(&self, tile: u32) -> i32 {
-        crate::bridge_map::get_bridge_height(tile, self.s, |f, h| (self.r.apply_foundation)(f, h).z)
+        crate::bridge_map::get_bridge_height(tile, self.s)
     }
     fn clear_command(&self, out: Cost<'_>, tile: u32, flags: u16) {
         (self.cmd.landscape_clear)(out.0, tile, flags);
@@ -301,9 +301,9 @@ impl<'a> World<'a> {
     }
     fn slope(&self, out: Cost<'_>, north: bool, axis: u8, slope: &mut u8, z: &mut i32) {
         let foundation = get_bridge_foundation(*slope, axis);
-        let applied = (self.r.apply_foundation)(foundation, *slope);
+        let applied = (self.s.apply_foundation)(Foundation(foundation), Slope(*slope));
         *z = z.wrapping_add(applied.z);
-        *slope = applied.slope;
+        *slope = applied.slope.0;
         let valid = match (north, axis) {
             (true, 0) => SLOPE_NE,
             (true, _) => SLOPE_NW,

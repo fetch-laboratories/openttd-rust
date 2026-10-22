@@ -194,6 +194,7 @@ struct OpenTTDSharedServices {
 	size_t (*town_count)() noexcept OPENTTD_SERVICE_DEFAULT(town_count);
 
 	// Registry: landscape (#212).
+	OpenTTDFoundationSlope (*apply_foundation)(Foundation, Slope) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
 	ClearGround (*clear_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_ground);
 	OpenTTDFoundationSlope (*foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(foundation);
 	bool (*has_water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_water_class);

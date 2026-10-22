@@ -412,6 +412,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.town_count = SharedTownCount,
 
 	// Registry: landscape (#212).
+	.apply_foundation = RustApplyFoundation,
 	.clear_ground = OpenTTDClearGround,
 	.foundation = RustFoundationSlope,
 	.has_water_class = RustHasWaterClass,

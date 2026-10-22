@@ -443,9 +443,7 @@ impl<'a> Ctx<'a> {
         }
     }
     fn bridge_height(&self, tile: u32) -> i32 {
-        crate::bridge_map::get_bridge_height(tile, self.shared, |f, h| {
-            (self.rail().apply_foundation)(f, h).z
-        })
+        crate::bridge_map::get_bridge_height(tile, self.shared)
     }
     fn bridge_ok(
         &self,
@@ -2345,9 +2343,9 @@ impl Ctx<'_> {
                 let factor = (self.s.road_spec_build_cost)(spec, category);
                 crate::economy_func::get_price(
                     u32::from(category),
-                    -4,
                     u32::from(factor.multiplier),
                     factor.shift,
+                    -4,
                 )
             }
         };
@@ -2660,9 +2658,9 @@ impl Ctx<'_> {
                 let factor = (self.s.road_spec_clear_cost)(spec, category);
                 crate::economy_func::get_price(
                     u32::from(category),
-                    -4,
                     u32::from(factor.multiplier),
                     factor.shift,
+                    -4,
                 )
             }
         });

@@ -3194,11 +3194,6 @@ static bool RailShipOnTile(uint32_t tile) noexcept
 	return false;
 }
 
-static OpenTTDSlopeZ RailApplyFoundation(uint8_t f, uint8_t tileh) noexcept
-{
-	auto result = RustApplyFoundation(static_cast<Foundation>(f), static_cast<Slope>(tileh));
-	return {.z = result.z, .slope = result.slope};
-}
 static OpenTTDRailTrainParking RailParking(Train *v) noexcept
 {
 	return {.track = v->GetTrack(), .status = RustVehicleStatus(v), .speed = RustVehicleSpeed(v), .order = RustVehicleOrderType(v)};
@@ -3276,7 +3271,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.crossing_with_competitor = RustCrossingWithCompetitor,
 		.disable_elrails = RustDisableElrails,
 		.rail_foundation = OpenTTDEnumMapQuery<RustRailFoundation, Slope, TrackBits>,
-		.apply_foundation = RailApplyFoundation,
 		.slope_z_in_corner = [](uint8_t tileh, uint8_t corner) noexcept -> int32_t { return GetSlopeZInCorner(static_cast<Slope>(tileh), static_cast<Corner>(corner)); },
 		.entrance_edge = [](uint32_t tile, int32_t z, uint8_t tileh, uint8_t dir) noexcept { return AutoslopeCheckForEntranceEdge(TileIndex{tile}, z, static_cast<Slope>(tileh), static_cast<DiagDirection>(dir)); },
 		.ship_on_tile = RailShipOnTile,

@@ -513,6 +513,8 @@ pub struct Services {
     /// Number of towns in the pool.
     pub town_count: extern "C" fn() -> usize,
     // Registry: landscape (#212).
+    /// `ApplyFoundationToSlope`, returning the height added and the modified slope.
+    pub apply_foundation: extern "C" fn(Foundation, Slope) -> FoundationSlope,
     /// `GetClearGround`.
     pub clear_ground: extern "C" fn(u32) -> ClearGroundType,
     /// `GetFoundationSlope`, returning both the foundation slope and its z.
@@ -839,6 +841,7 @@ crate::abi::layouts! {
         recession,
         tick_counter,
         town_count,
+        apply_foundation,
         clear_ground,
         foundation,
         has_water_class,
@@ -934,6 +937,9 @@ pub fn fixture(
     extern "C" fn make_snow(_: u32, _: u32) {}
     extern "C" fn play_sound(_: u32, _: u16) {}
     extern "C" fn set_fence(_: u32, _: DiagDirection, _: u32) {}
+    extern "C" fn apply_foundation(_: Foundation, slope: Slope) -> FoundationSlope {
+        FoundationSlope { z: 0, slope }
+    }
     extern "C" fn foundation(_: u32) -> FoundationSlope {
         FoundationSlope {
             z: 0,
@@ -1070,6 +1076,7 @@ pub fn fixture(
         tick_counter: tick0,
         town_count: count0,
         // Registry: landscape (#212).
+        apply_foundation,
         clear_ground,
         foundation,
         has_water_class: flag,

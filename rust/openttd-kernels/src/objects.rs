@@ -1197,7 +1197,6 @@ impl<'a> World<'a> {
                             crate::bridge_map::get_bridge_height(
                                 (station.southern_bridge_end)(t),
                                 self.shared,
-                                |f, h| ((*station.rail).apply_foundation)(f, h).z,
                             )
                         })
                 {

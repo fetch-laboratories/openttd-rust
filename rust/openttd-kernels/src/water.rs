@@ -28,8 +28,8 @@ pub const RIVER_OFFSET_DESERT_DISTANCE: u32 = 5;
 use crate::{
     ground::{Call, ClearServices, CostServices, RailServices},
     services::{
-        self, ClearGroundType, FloodingBehaviour, Foundation, FoundationSlope, RailGroundType,
-        Services, Slope, Track, TrackBits, TreeGround,
+        self, ClearGroundType, FloodingBehaviour, RailGroundType, Services, Slope, Track,
+        TrackBits, TreeGround,
     },
     vehicle::{VehicleRef, VehicleServices, VehicleType},
 };
@@ -74,7 +74,6 @@ pub struct WaterServices {
     pub canal_or_river: extern "C" fn(u32) -> bool,
     pub region_context: extern "C" fn() -> crate::water_regions::Context,
     pub remove_rail: unsafe extern "C" fn(*mut services::CommandCost, u32, Track),
-    pub apply_foundation: extern "C" fn(Foundation, Slope) -> FoundationSlope,
     pub airport_tile: extern "C" fn(u32) -> bool,
     pub airport: extern "C" fn(u32) -> AirportGround,
     pub airport_member: unsafe extern "C" fn(*const crate::station::Station, u32) -> bool,
@@ -357,7 +356,7 @@ impl<'a> World<'a> {
                 crate::ground::hit(crate::ground::Witness::HalfRail);
             }
         } else {
-            let foundation = (self.w.apply_foundation)(
+            let foundation = (self.s.apply_foundation)(
                 (self.r().foundation)(Slope(slope), TrackBits(tracks)),
                 Slope(slope),
             );
@@ -447,9 +446,7 @@ impl<'a> World<'a> {
             return;
         }
         let end = (self.s.other_tunnel_end)(tile);
-        let z = crate::bridge_map::get_bridge_pixel_height(tile, self.s, |f, h| {
-            (self.w.apply_foundation)(Foundation(f), Slope(h)).z
-        });
+        let z = crate::bridge_map::get_bridge_pixel_height(tile, self.s);
         crate::ground::hit(crate::ground::Witness::BridgeStart);
         self.vehicles_on_tile(tile, z);
         crate::ground::hit(crate::ground::Witness::BridgeEnd);
@@ -764,7 +761,6 @@ crate::abi::layouts! {
         canal_or_river,
         region_context,
         remove_rail,
-        apply_foundation,
         airport_tile,
         airport,
         airport_member,
@@ -828,7 +824,6 @@ pub(crate) fn fixture() -> WaterServices {
         canal_or_river: unused1,
         region_context: unused_region_context,
         remove_rail: unused3,
-        apply_foundation: unused2,
         airport_tile: unused1,
         airport: unused1,
         airport_member: unused2,
