@@ -461,7 +461,6 @@ pub struct CommonServices {
     pub waiting_news: extern "C" fn(u32),
     pub flip_stopped: extern "C" fn(*mut ()),
     pub startstop_ui: extern "C" fn(*mut ()),
-    pub rail: &'static rail::Services,
     pub value: extern "C" fn(*mut ()) -> i64,
     pub valid_cargo: extern "C" fn(u8) -> bool,
 }
@@ -499,7 +498,10 @@ pub(crate) unsafe fn sell(
         );
     }
     if unsafe { (b.groups.vehicle_type)(v) } == 0 {
-        return unsafe { rail::sell(s.rail, cost, flags, v, chain, backup, client) };
+        // The build root is late-bound through the fleet table, as autoreplace does.
+        let root = (s.transactions.build_services)();
+        unsafe { rail::sell(root, cost, flags, v, chain, backup, client) };
+        return;
     }
     (b.cost.expense_money)(
         cost,

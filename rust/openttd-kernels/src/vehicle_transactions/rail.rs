@@ -25,8 +25,6 @@ pub struct Strings {
 }
 #[repr(C)]
 pub struct Services {
-    /// Late-bound root table; breaks the static initialization cycle.
-    pub build: extern "C" fn() -> &'static build::Services,
     pub strings: Strings,
     pub compatible: extern "C" fn(*const OpenTTDEngine, u32) -> bool,
     pub powered: extern "C" fn(*const OpenTTDEngine, u32) -> bool,
@@ -72,8 +70,8 @@ struct Ctx {
     w: &'static crate::fleet::transactions::Services,
 }
 impl Ctx {
-    fn new(s: &'static Services) -> Self {
-        let b = (s.build)();
+    fn new(b: &'static build::Services) -> Self {
+        let s = b.rail;
         let r = b.refit;
         let c = r.common;
         Self {
@@ -206,25 +204,25 @@ fn free_wagons(x: Ctx, tile: u32) -> Vec<u32> {
 
 /// `Command<CMD_MOVE_RAIL_VEHICLE>::Do` from a Rust caller, by vehicle ID.
 pub(crate) unsafe fn nested_move(
-    s: &'static Services,
+    b: &'static build::Services,
     out: *mut CommandCost,
     flags: u16,
     src: u32,
     dest: u32,
     chain: bool,
 ) -> bool {
-    let b = (s.build)().refit.common.base;
+    let t = b.refit.common.base;
     crate::command::nested(
-        b.commands,
-        b.shared,
-        Cost(out, b.cost),
+        t.commands,
+        t.shared,
+        Cost(out, t.cost),
         0,
         flags,
         |f| unsafe {
-            move_vehicle(s, out, f, src, dest, chain);
+            move_vehicle(b, out, f, src, dest, chain);
         },
     );
-    (b.cost.success)(out)
+    (t.cost.success)(out)
 }
 
 /// Original `CmdBuildRailWagon`. `out` doubles as the scratch result of the
@@ -265,7 +263,7 @@ unsafe fn build_wagon(
                 continue;
             }
             let last = x.id((x.s.last)(w));
-            if unsafe { nested_move(x.s, out, DoCommandFlag::EXECUTE, x.id(v), last, true) } {
+            if unsafe { nested_move(x.b, out, DoCommandFlag::EXECUTE, x.id(v), last, true) } {
                 crate::witness::hit(crate::witness::VT_RAIL_WAGON_JOIN);
                 break;
             }
@@ -276,11 +274,11 @@ unsafe fn build_wagon(
 }
 
 /// Original `NormalizeTrainVehInDepot`; `out` is a free caller-owned result.
-pub(crate) unsafe fn normalize(s: &'static Services, out: *mut CommandCost, u: *mut ()) {
-    let x = Ctx::new(s);
+pub(crate) unsafe fn normalize(b: &'static build::Services, out: *mut CommandCost, u: *mut ()) {
+    let x = Ctx::new(b);
     x.assert(|| x.is_engine(u));
     for vehicle in free_wagons(x, x.tile(u)) {
-        if !unsafe { nested_move(s, out, DoCommandFlag::EXECUTE, vehicle, x.id(u), true) } {
+        if !unsafe { nested_move(b, out, DoCommandFlag::EXECUTE, vehicle, x.id(u), true) } {
             break;
         }
         crate::witness::hit(crate::witness::VT_RAIL_NORMALIZE);
@@ -305,13 +303,14 @@ fn add_rear_engine(x: Ctx, v: *mut ()) {
 /// Live native result and engine; new shells stay live and no shell access
 /// spans a callback.
 pub(crate) unsafe fn build(
-    s: &'static Services,
+    b: &'static build::Services,
     out: *mut CommandCost,
     flags: u16,
     tile: u32,
     e: *const OpenTTDEngine,
 ) -> *mut () {
-    let x = Ctx::new(s);
+    let x = Ctx::new(b);
+    let s = x.s;
     let kind = (x.r.rail_kind)(e);
     if kind == RailVehicleTypes::WAGON {
         return unsafe { build_wagon(x, out, flags, tile, e) };
@@ -520,9 +519,7 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
             (x.s.invalidate_grf)(head);
             if callback != CALLBACK_FAILED {
                 let mut error = strings.null_string;
-                let grf_text = |n: u32| {
-                    (x.c.grf_string)(head, super::GrfStringId(strings.grf_text.0.wrapping_add(n)))
-                };
+                let grf_text = |n: u32| (x.c.grf_string)(head, strings.grf_text.0.wrapping_add(n));
                 if (x.c.grf_version)(head) < 8 {
                     if callback == 0xFD {
                         error = strings.incompatible_rail;
@@ -540,10 +537,7 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
                         0x400 | 0x401 => (),
                         0x40F => {
                             // The original reads register 100 only for this result.
-                            error = (x.c.grf_string)(
-                                head,
-                                super::GrfStringId(unsafe { regs100.assume_init() } as u32),
-                            );
+                            error = (x.c.grf_string)(head, unsafe { regs100.assume_init() } as u32);
                         }
                         _ => error = strings.incompatible_rail,
                     }
@@ -658,14 +652,15 @@ fn mark_dirty(x: Ctx, v: *mut ()) {
 /// # Safety
 /// Live caller-owned native result; vehicles stay live through the command.
 pub(crate) unsafe fn move_vehicle(
-    s: &'static Services,
+    b: &'static build::Services,
     out: *mut CommandCost,
     flags: u16,
     src_veh: u32,
     dest_veh: u32,
     move_chain: bool,
 ) {
-    let x = Ctx::new(s);
+    let x = Ctx::new(b);
+    let s = x.s;
     let cost = x.t.cost;
     let mut src = x.train(src_veh);
     if src.is_null() {
@@ -827,7 +822,7 @@ pub(crate) unsafe fn move_vehicle(
 /// Live caller-owned native result and train shell; the sold chain is deleted
 /// last, after every shell access.
 pub(crate) unsafe fn sell(
-    s: &'static Services,
+    b: &'static build::Services,
     out: *mut CommandCost,
     flags: u16,
     t: *mut (),
@@ -835,7 +830,8 @@ pub(crate) unsafe fn sell(
     backup_order: bool,
     user: u32,
 ) {
-    let x = Ctx::new(s);
+    let x = Ctx::new(b);
+    let s = x.s;
     let cost = x.t.cost;
     let v = (x.r.selection.first_engine_part)(t);
     let first = x.first(v);
@@ -903,12 +899,12 @@ pub(crate) unsafe fn sell(
 /// As `move_vehicle`; the static table outlives the call. Panics abort.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_train_move(
-    s: &'static Services,
+    b: &'static build::Services,
     out: *mut CommandCost,
     flags: u16,
     src_veh: u32,
     dest_veh: u32,
     move_chain: bool,
 ) {
-    unsafe { move_vehicle(s, out, flags, src_veh, dest_veh, move_chain) };
+    unsafe { move_vehicle(b, out, flags, src_veh, dest_veh, move_chain) };
 }

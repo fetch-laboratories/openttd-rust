@@ -49,7 +49,7 @@ pub struct Services {
 /// callback; speculative destruction leaves only the original returned ID value.
 #[allow(clippy::too_many_lines, clippy::many_single_char_names)]
 pub(crate) unsafe fn build(
-    s: &Services,
+    s: &'static Services,
     out: *mut CommandCost,
     temporary: *mut CommandCost,
     refit_temporary: *mut CommandCost,
@@ -125,7 +125,7 @@ pub(crate) unsafe fn build(
     };
     let seeds = unsafe { (s.random.save)() };
     let v = match kind.0 {
-        0 => unsafe { rail::build(s.rail, temporary, subflags, tile, e) },
+        0 => unsafe { rail::build(s, temporary, subflags, tile, e) },
         1 => unsafe { construct::road(s, temporary, subflags, tile, e) },
         2 => {
             let north = (s.ship_tile)(tile);
@@ -193,7 +193,7 @@ pub(crate) unsafe fn build(
                 && (s.is_engine)(v)
             {
                 // The speculative-build result in `temporary` was consumed above.
-                unsafe { rail::normalize(s.rail, temporary, v) };
+                unsafe { rail::normalize(s, temporary, v) };
             }
             (s.presentation)(v, kind);
         }
@@ -248,7 +248,7 @@ pub(crate) unsafe fn build(
 /// Same synchronous stack-cost and native-shell contract as `build`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_build(
-    s: &Services,
+    s: &'static Services,
     out: *mut CommandCost,
     temporary: *mut CommandCost,
     refit_temporary: *mut CommandCost,

@@ -92,7 +92,7 @@ layouts! {
     };
     "OpenTTDRailConstructionStrings" ["probe"] => crate::vehicle_transactions::rail::Strings { rear_follow, depot_only, no_orders, };
     "OpenTTDRailConstructionServices" ["probe"] => crate::vehicle_transactions::rail::Services {
-        build, strings, compatible, powered, new_wagon, new_engine, new_rear, link_multihead, subtype,
+        strings, compatible, powered, new_wagon, new_engine, new_rear, link_multihead, subtype,
         set_subtype, previous, last, set_next, next_vehicle, last_engine_part, ground, first_engine,
         invalidate_grf, attach_callback, unknown_attach, train_limit, unit,
         use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
@@ -140,7 +140,7 @@ layouts! {
     "OpenTTDVehicleCommonServices" ["probe"] => crate::vehicle_transactions::CommonServices {
         base, transactions, vehicles, orders, strings, train_power, aircraft_start,
         startstop_callback, grf_version, grf_string, waiting_news, flip_stopped,
-        startstop_ui, rail, value, valid_cargo,
+        startstop_ui, value, valid_cargo,
     };
     "OpenTTDVehicleSelectionServices" ["probe"] => crate::vehicle_transactions::SelectionServices {
         groups, transactions, vehicles, in_depot, free_wagon, first_engine_part,

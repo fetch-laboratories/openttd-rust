@@ -1262,7 +1262,7 @@ CommandCost CmdMoveRailVehicle(DoCommandFlags flags, VehicleID src_veh, VehicleI
 {
 #ifdef WITH_RUST
 	CommandCost cost;
-	openttd_rust_train_move(&GetRustRailConstructionServices(), RustCommandCost(&cost), flags.base(), src_veh.base(), dest_veh.base(), move_chain);
+	openttd_rust_train_move(&GetRustVehicleBuildServices(), RustCommandCost(&cost), flags.base(), src_veh.base(), dest_veh.base(), move_chain);
 	return cost;
 #else
 	Train *src = Train::GetIfValid(src_veh);

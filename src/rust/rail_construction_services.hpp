@@ -134,11 +134,6 @@ static uint16_t RailAttachCallback(void *part, void *head, int32_t *regs100) noe
 	return GetVehicleCallbackParent(CBID_TRAIN_ALLOW_WAGON_ATTACH, 0, 0, h->engine_type, t, h, std::span(regs100, 1));
 }
 static void RailUnknownAttach(void *head, uint16_t callback) noexcept { ErrorUnknownCallbackResult(static_cast<Train *>(head)->GetGRFID(), CBID_TRAIN_ALLOW_WAGON_ATTACH, callback); }
-static void RailUseUnit(void *shell, uint16_t unit) noexcept
-{
-	Vehicle *head = static_cast<Vehicle *>(shell);
-	head->unitnumber = Company::Get(head->owner)->freeunits[head->type].UseID(unit);
-}
 static void RailHeadWindows(void *shell) noexcept
 {
 	const Vehicle *head = static_cast<Vehicle *>(shell);
@@ -165,7 +160,6 @@ static void RailDepotChanged(uint32_t tile) noexcept
 const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcept
 {
 	static const OpenTTDRailConstructionServices services{
-		.build = GetRustVehicleBuildServices,
 		.strings = {.rear_follow = STR_ERROR_REAR_ENGINE_FOLLOW_FRONT, .depot_only = STR_ERROR_TRAINS_CAN_ONLY_BE_ALTERED_INSIDE_A_DEPOT, .no_orders = STR_ERROR_NO_MORE_SPACE_FOR_ORDERS},
 		.compatible = RustEngineCompatibleRail,
 		.powered = RustEngineHasPowerOnRail,
@@ -187,7 +181,7 @@ const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcep
 		.unknown_attach = RailUnknownAttach,
 		.train_limit = RustTrainLimit,
 		.unit = RustOpaqueVehicleRead<uint16_t, RustVehicleUnitNumber>,
-		.use_unit = RailUseUnit,
+		.use_unit = RustOpaqueVehicleInvoke<RustVehicleUseUnitNumber, uint16_t>,
 		.release_unit = RustOpaqueVehicleInvoke<RustVehicleReleaseUnitNumber>,
 		.head_windows = RailHeadWindows,
 		.front_windows = RailFrontWindows,

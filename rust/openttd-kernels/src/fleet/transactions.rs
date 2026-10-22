@@ -115,7 +115,7 @@ unsafe fn move_vehicle(
     };
     unsafe {
         crate::vehicle_transactions::rail::nested_move(
-            b.rail,
+            b,
             out.cast(),
             (flags | u32::from(DoCommandFlag::NO_CARGO_CAPACITY_CHECK)) as u16,
             (g.vehicle_id)(v),

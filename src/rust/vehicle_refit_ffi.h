@@ -124,10 +124,8 @@ struct OpenTTDVehicleConstructServices {
 	void (*service_flags)(void *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(service_flags);
 	uint32_t wrong_depot;
 };
-struct OpenTTDVehicleBuildServices;
 struct OpenTTDRailConstructionStrings { uint32_t rear_follow, depot_only, no_orders; };
 struct OpenTTDRailConstructionServices {
-	const OpenTTDVehicleBuildServices &(*build)() noexcept OPENTTD_SERVICE_DEFAULT(build);
 	OpenTTDRailConstructionStrings strings;
 	bool (*compatible)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible);
 	bool (*powered)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(powered);
@@ -195,7 +193,7 @@ void openttd_rust_vehicle_add_articulated(const OpenTTDVehicleArticulatedService
 void openttd_rust_vehicle_articulated_consistency(const OpenTTDVehicleArticulatedServices *, void *);
 uint32_t openttd_rust_vehicle_clone(const OpenTTDVehicleCloneServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, bool);
 OpenTTDVehicleBuildResult openttd_rust_vehicle_build(const OpenTTDVehicleBuildServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint16_t, bool, uint8_t, uint32_t);
-void openttd_rust_train_move(const OpenTTDRailConstructionServices *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, bool);
+void openttd_rust_train_move(const OpenTTDVehicleBuildServices *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, bool);
 OpenTTDVehicleRefitCapacity openttd_rust_vehicle_refit(const OpenTTDVehicleRefitServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, bool, bool, uint8_t);
 }
 #endif

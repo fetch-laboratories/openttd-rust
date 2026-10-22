@@ -203,7 +203,7 @@ unsafe fn clone(
                 if unsafe { (b.groups.vehicle_type)(v) } == 0 && !unsafe { (b.groups.front)(v) } {
                     let moved = unsafe {
                         super::rail::nested_move(
-                            s.build.rail,
+                            s.build,
                             part,
                             flags,
                             (b.groups.vehicle_id)(w),
