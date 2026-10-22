@@ -28,6 +28,7 @@ Independent Claude Opus audits of integrated #329, #346 and #352 and draft #347,
 - Speed passes and speed fixes happen only when a scenario comes within 5% of its 1.5x/1.3x ceiling. #275 has no standing stream.
 - macOS is tested after every fifth integration, not per PR, with a Blacksmith fallback after two hosted-capacity cancellations (#357).
 - Small maintenance work is batched: one PR, one reviewer and one Full run carry every ready cleanup, coverage, speed or tooling item. Eight of the last twelve integrations were separate small maintenance PRs, each paying the full pipeline.
+- Agents run only the scenarios their change touches locally; the full default suite (38 minutes locally, repeated by Full in about 12) runs in CI.
 
 AGENTS.md also says: a PR whose exact-head Full passed and that merges cleanly integrates without a base update; a C++ class type crosses as its base type (#355); a local container the original builds stays a local `Vec`; review reports name orphaned WITH_RUST bodies, exports and declarations.
 

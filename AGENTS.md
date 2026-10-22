@@ -320,7 +320,10 @@ and per-role ccache stores. ccache is used whenever it is installed (PCH off);
 `--no-ccache` gives an ordinary PCH build. Cache build outputs freely when the
 key covers what determines them; never cache test results.
 
-Iterate locally and push reviewable batches. Ordinary PR pushes run only cheap
+Iterate locally and push reviewable batches. Locally, an agent runs the build,
+the Cargo checks and the simulation scenarios its change touches; it does not
+run the full default `simulate` suite (38 minutes locally), which the
+exact-head Full runs in about 12. Ordinary PR pushes run only cheap
 checks, so code pushes do not use `[skip ci]`. `python3 tools/ci.py request PR
 --profile rust|native|platform` runs diagnostic subsets. Before merging, request
 `--profile full` for the final PR head and wait for it. Only a successful full
