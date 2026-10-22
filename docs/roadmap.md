@@ -172,8 +172,10 @@ unintegrated component branches. Maintenance (#261, #275) and #156 run in parall
    - #316 subsidies (glue plus tooling at most 450 lines);
    - #247 town commands, authority and deletion (unblocked: #269 is integrated);
    - #293 tunnel/bridge construction, removal and ownership (independent of #247: it reuses the town authority and rating owner #290 integrated).
+   - #348 landscape clearing, terraforming and leveling (support target400, tooling cap200);
+   - #349 vehicle station/depot visits with LinkRefresher and IncreaseStats (support target560, tooling cap275).
 
-   A shared service two of them need lands first, as its own PR. When fewer than two remain unstarted, plan the next owners from the largest unported simulation files: `vehicle.cpp` (2,568 lines), `station_cmd.cpp` (2,124), `train_cmd.cpp` (1,778) and `landscape.cpp` (1,618).
+   A shared service two need lands first, as its own PR. The next-owner plan is on #3 (2026-10-21): #348/#349 use integrated services independently of #274. #350 generation/rivers remains proposed; root must accept its exact native sea-set iteration/lifetime boundary before selecting it. Plan again when fewer than two selected owners remain unstarted.
 6. **#168 tail, largest first.** `order_cmd.cpp` and `economy.cpp` hold 65 of the 198 baseline copies.
 
 New owners reuse integrated services, never draft copies. A Rust-allocated
