@@ -134,7 +134,7 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept
 {
 	static const OpenTTDWaterRestorationServices services{
-		.slope_z = RustTileSlopeZ, .infrastructure = RustAddWaterInfrastructure,
+		.infrastructure = RustAddWaterInfrastructure,
 		.infrastructure_dirty = GetRustCommandServices().infrastructure_dirty,
 		.make_canal = RustMakeCanal, .make_river = RustMakeRiver,
 	};
@@ -374,6 +374,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tile_type = SharedTileType,
 	.tile_add_wrap = SharedTileAddWrap,
 	.tile_valid = Shared_tile_valid,
+	.tile_slope_z = RustTileSlopeZ,
 	.tile_z = SharedTileZ,
 	.town_index = Shared_town_index,
 	.town_owner = SharedTownOwner,

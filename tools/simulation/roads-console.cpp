@@ -56,6 +56,105 @@ static void RoadRun(std::string_view name, Args... args)
 		UpdateSignalsInBuffer();
 	}
 }
+extern const TileTypeProcs _tile_type_tunnelbridge_procs;
+static void TunnelBridgeCommands(CompanyID owner, CompanyID other, RoadVehicle *rv)
+{
+	TileIndex origin = SignalFlatArea(24);
+	auto t = [origin](uint x, uint y) { return origin + TileDiffXY(x, y); };
+	auto ramp = [](TileIndex tile, Slope slope) {
+		SetTileHeight(tile, 1 + ((slope & SLOPE_N) != 0));
+		SetTileHeight(tile + TileDiffXY(1, 0), 1 + ((slope & SLOPE_W) != 0));
+		SetTileHeight(tile + TileDiffXY(0, 1), 1 + ((slope & SLOPE_E) != 0));
+		SetTileHeight(tile + TileDiffXY(1, 1), 1 + ((slope & SLOPE_S) != 0));
+	};
+	Backup<bool> slopes(_settings_game.construction.build_on_slopes, true);
+	for (Axis axis : {AXIS_X, AXIS_Y}) for (TransportType transport : {TRANSPORT_RAIL, TRANSPORT_ROAD, TRANSPORT_WATER}) {
+		uint lane = static_cast<uint>(transport);
+		TileIndex start = axis == AXIS_X ? t(2, 3 + lane * 4) : t(14 + lane * 3, 2);
+		TileIndex end = axis == AXIS_X ? t(8, 3 + lane * 4) : t(14 + lane * 3, 8);
+		if (transport == TRANSPORT_WATER) {
+			ramp(start, axis == AXIS_X ? SLOPE_NE : SLOPE_NW);
+			ramp(end, axis == AXIS_X ? SLOPE_SW : SLOPE_SE);
+		}
+		auto name = fmt::format("tb-bridge-{}-{}", static_cast<uint>(axis), static_cast<uint>(transport));
+		RoadPrint(name + "-query", Command<CMD_BUILD_BRIDGE>::Do(DoCommandFlag::QueryCost, end, start, transport, 0, 0));
+		RoadRun<CMD_BUILD_BRIDGE>(name, end, start, transport, 0, 0);
+		if (!IsBridgeTile(start)) SignalFixtureAbort(__LINE__);
+		RoadPrint(name + "-above", _tile_type_tunnelbridge_procs.check_build_above_proc(start, {}, OtherAxis(axis), GetBridgeHeight(start) + 1));
+		RoadPrint(name + "-auto", _tile_type_tunnelbridge_procs.clear_tile_proc(start, DoCommandFlag::Auto));
+		if (transport != TRANSPORT_WATER) {
+			RoadRun<CMD_BUILD_BRIDGE>(name + "-replace", start, end, transport, 1, 0);
+			RoadPrint(name + "-autoslope", _tile_type_tunnelbridge_procs.terraform_tile_proc(start, {}, GetTileZ(start), GetTileSlope(start)));
+		}
+		if (transport == TRANSPORT_ROAD) {
+			RoadRun<CMD_BUILD_ROAD>(name + "-tram", start, AxisToRoadBits(axis), ROADTYPE_TRAM, DRD_NONE, TownID::Invalid());
+			TileIndex old = rv->tile; rv->tile = start; rv->UpdatePosition();
+			RoadRun<CMD_LANDSCAPE_CLEAR>(name + "-occupied", start);
+			rv->tile = old; rv->UpdatePosition();
+		}
+		for (TileIndex tile : {start, end}) ChangeTileOwner(tile, owner, other);
+		RoadPrint(name + "-foreign", _tile_type_tunnelbridge_procs.clear_tile_proc(start, {}));
+		Backup<CompanyID> bankrupt(_current_company, other);
+		for (TileIndex tile : {start, end}) if (IsBridgeTile(tile)) ChangeTileOwner(tile, other, INVALID_OWNER);
+		bankrupt.Restore();
+		if (IsBridgeTile(start)) RoadRun<CMD_LANDSCAPE_CLEAR>(name + "-clear", end);
+		if (transport == TRANSPORT_WATER) { ramp(start, SLOPE_FLAT); ramp(end, SLOPE_FLAT); }
+	}
+	for (TransportType transport : {TRANSPORT_RAIL, TRANSPORT_ROAD}) {
+		uint row = 17 + static_cast<uint>(transport) * 3;
+		for (uint x = 3; x <= 7; ++x) for (uint y = row; y <= row + 1; ++y) SetTileHeight(t(x, y), 2);
+		TileIndex start = t(7, row), end = t(2, row);
+		if (transport == TRANSPORT_ROAD) SetTileHeight(end, 2); // Non-complementary exit needs recursive terraform.
+		auto name = fmt::format("tb-tunnel-{}", static_cast<uint>(transport));
+		Backup<uint16_t> limit(_settings_game.construction.max_tunnel_length, 1);
+		RoadPrint(name + "-length", Command<CMD_BUILD_TUNNEL>::Do({}, start, transport, 0));
+#ifdef WITH_RUST
+		RoadPrint(name + "-highlight", CommandCost(EXPENSES_CONSTRUCTION, GetBuildTunnelEndTile().base() - origin.base()));
+#else
+		RoadPrint(name + "-highlight", CommandCost(EXPENSES_CONSTRUCTION, _build_tunnel_endtile.base() - origin.base()));
+#endif
+		limit.Restore();
+		RoadRun<CMD_BUILD_TUNNEL>(name, start, transport, 0);
+		if (!IsTunnelTile(start)) SignalFixtureAbort(__LINE__);
+		RoadPrint(name + "-above", _tile_type_tunnelbridge_procs.check_build_above_proc(start, {}, AXIS_X, 0));
+		TileIndex old = rv->tile; rv->tile = end; rv->UpdatePosition();
+		RoadRun<CMD_LANDSCAPE_CLEAR>(name + "-occupied", start);
+		rv->tile = old; rv->UpdatePosition();
+		RoadRun<CMD_LANDSCAPE_CLEAR>(name + "-clear", start);
+	}
+	/* Positive Y-direction tunnel exercises the source's other Map::MaxX branch. */
+	for (uint y = 3; y <= 7; ++y) for (uint x = 17; x <= 18; ++x) SetTileHeight(t(x, y), 2);
+	RoadRun<CMD_BUILD_TUNNEL>("tb-tunnel-y", t(17, 2), TRANSPORT_ROAD, 0);
+	if (!IsTunnelTile(t(17, 2))) SignalFixtureAbort(__LINE__);
+	RoadRun<CMD_LANDSCAPE_CLEAR>("tb-tunnel-y-clear", t(17, 2));
+	/* Town/deity policy, town downgrade refusal, rating refusal, then allowed removal. */
+	Town *town = *Town::Iterate().begin();
+	Backup<bool> dynamite(_settings_game.construction.extra_dynamite, true);
+	{
+		Backup<CompanyID> company(_current_company, OWNER_TOWN);
+		RoadRun<CMD_BUILD_BRIDGE>("tb-town", t(8, 15), t(2, 15), TRANSPORT_ROAD, 1, ROADTYPE_ROAD);
+		company.Restore();
+	}
+	RoadRun<CMD_BUILD_BRIDGE>("tb-town-downgrade", t(8, 15), t(2, 15), TRANSPORT_ROAD, 0, ROADTYPE_ROAD);
+	Town *nearest = ClosestTownFromTile(t(2, 15), UINT_MAX);
+	if (nearest == nullptr) SignalFixtureAbort(__LINE__);
+	nearest->ratings[owner] = RATING_MINIMUM;
+	RoadRun<CMD_LANDSCAPE_CLEAR>("tb-town-refuse", t(2, 15));
+	nearest->ratings[owner] = RATING_MAXIMUM;
+	RoadRun<CMD_LANDSCAPE_CLEAR>("tb-town-clear", t(2, 15));
+	{
+		Backup<CompanyID> deity(_current_company, OWNER_DEITY);
+		RoadRun<CMD_BUILD_BRIDGE>("tb-deity", t(12, 14), t(12, 10), TRANSPORT_ROAD, 0, ROADTYPE_ROAD);
+		deity.Restore();
+	}
+	/* Shared pricing helper thresholds run by default against each unchanged executable. */
+	for (int length : {0, 1, 2, 3, 4, 5, 25, 26, 50, 51, 100, 200, 1000}) {
+		fmt::print(stderr, "ROADCMD tb-price {} {}\n", length, CalcBridgeLenCostFactor(length));
+	}
+	fmt::print(stderr, "ROADCMD tb-done {}\n", town != nullptr);
+	dynamite.Restore(); slopes.Restore();
+}
+
 static bool RoadCommandsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
@@ -256,6 +355,7 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	ChangeTileOwner(t(21, 20), other, INVALID_OWNER);
 	bankrupt.Restore();
 	fmt::print(stderr, "ROADCMD transfer-depot {} {}\n", merged, IsTileType(t(21, 20), MP_CLEAR));
+	TunnelBridgeCommands(owner, other, rv);
 	UpdateNearestTownForRoadTiles(false);
 	SaveRandomSeeds(&after);
 	bool same = before.random.state[0] == after.random.state[0] && before.random.state[1] == after.random.state[1] && before.interactive_random.state[0] == after.interactive_random.state[0] && before.interactive_random.state[1] == after.interactive_random.state[1];

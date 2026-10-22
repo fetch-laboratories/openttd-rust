@@ -324,6 +324,12 @@ def check(scenario, run, mode, role, result):
                 "protocol-query true",
                 "protocol-bankrupt true",
                 "automatic-convert-exec true",
+                "tb-done true",
+                "tb-tunnel-0-exec true",
+                "tb-tunnel-1-exec true",
+                "tb-tunnel-y-exec true",
+                "tb-town-downgrade-exec false",
+                "tb-town-refuse-exec false",
                 *COVERAGE_OUTCOMES,
             ):
                 if not any(
@@ -344,6 +350,36 @@ def check(scenario, run, mode, role, result):
             core.branch_witnesses(
                 scenario, run, role, "road_commands", COMMAND_BRANCHES
             )
+            core.branch_witnesses(
+                scenario,
+                run,
+                role,
+                "tunnelbridge_commands",
+                tuple(
+                    "tunnelbridge." + name
+                    for name in (
+                        "build_bridge",
+                        "build_tunnel",
+                        "replace_bridge",
+                        "new_bridge",
+                        "tunnel_terraform",
+                        "clear_tunnel",
+                        "clear_bridge",
+                        "occupied",
+                        "change_owner",
+                        "autoslope",
+                        "build_above",
+                        "deity",
+                        "town_rating",
+                    )
+                ),
+            )
+            for axis in (0, 1):
+                for transport in (0, 1, 2):
+                    prefix = f"ROADCMD tb-bridge-{axis}-{transport}-exec true "
+                    if not any(line.startswith(prefix) for line in lines):
+                        result["problems"].append(f"{mode}/{role}: missing {prefix}")
+
         return
 
     if "roads" not in scenario:

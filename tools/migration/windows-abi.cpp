@@ -36,6 +36,7 @@
 #include "rust/rail_command_ffi.h"
 #include "rust/station_command_ffi.h"
 #include "rust/water_command_ffi.h"
+#include "rust/tunnelbridge_command_ffi.h"
 #include "bridge_type.h"
 #include "rust/rail_yapf_ffi.h"
 #include "rust/road_command_ffi.h"
@@ -711,7 +712,6 @@ static void Trees()
 		.ai_event = TreeUnused<void, OpenTTDVehicle *, uint32_t>,
 		.game_event = TreeUnused<void, OpenTTDVehicle *, uint32_t>,
 		.news = TreeUnused<void, OpenTTDVehicle *, uint32_t>,
-		.bridge_height = TreeUnused<int32_t, uint32_t>,
 	};
 	shared.water_services = []() noexcept { return &water; };
 	shared.map_max_x = []() noexcept { return 63U; };

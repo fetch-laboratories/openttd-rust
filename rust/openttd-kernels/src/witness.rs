@@ -415,6 +415,22 @@ witness_blocks! {
         TRAIN_ORDER_LOOKAHEAD = 29 => "train.order_lookahead",
         TRAIN_ORDER_RESTORE = 30 => "train.order_restore",
     }
+    tunnelbridge {
+        TB_BUILD_BRIDGE = 0 => "tunnelbridge.build_bridge",
+        TB_BUILD_TUNNEL = 1 => "tunnelbridge.build_tunnel",
+        TB_REPLACE_BRIDGE = 2 => "tunnelbridge.replace_bridge",
+        TB_NEW_BRIDGE = 3 => "tunnelbridge.new_bridge",
+        TB_TUNNEL_TERRAFORM = 4 => "tunnelbridge.tunnel_terraform",
+        TB_CLEAR_TUNNEL = 5 => "tunnelbridge.clear_tunnel",
+        TB_CLEAR_BRIDGE = 6 => "tunnelbridge.clear_bridge",
+        TB_OCCUPIED = 7 => "tunnelbridge.occupied",
+        TB_OWNER = 8 => "tunnelbridge.change_owner",
+        TB_AUTOSLOPE = 9 => "tunnelbridge.autoslope",
+        TB_BUILD_ABOVE = 10 => "tunnelbridge.build_above",
+        TB_DEITY = 11 => "tunnelbridge.deity",
+        TB_TOWN_RATING = 12 => "tunnelbridge.town_rating",
+        TB_RESERVATION = 13 => "tunnelbridge.reservation",
+    }
     vehicle {
         VEHICLE_CALLBACK32 = 0 => "vehicle.callback32",
         VEHICLE_CARGO_AGES = 1 => "vehicle.cargo_ages",

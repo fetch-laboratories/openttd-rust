@@ -294,7 +294,7 @@ const SIG_SEMAPHORE: u8 = 1;
 
 const RAILTYPE_RAIL: u8 = 0;
 const RAILTYPE_ELECTRIC: u8 = 1;
-const INVALID_ROADTYPE: u8 = 63;
+use crate::road_type::INVALID_ROADTYPE;
 const ROAD_X: u8 = 10;
 const ROAD_Y: u8 = 5;
 const STOPPED: u8 = 1 << 1;
@@ -303,7 +303,7 @@ const OT_LOADING: u8 = 3;
 const TILE_AXIAL_DISTANCE: i32 = 192;
 const TILE_CORNER_DISTANCE: i32 = 128;
 pub(crate) const LEVELCROSSING_TRACKBIT_FACTOR: u32 = 2;
-pub(crate) const TUNNELBRIDGE_TRACKBIT_FACTOR: u32 = 4;
+pub(crate) use crate::tunnelbridge::TUNNELBRIDGE_TRACKBIT_FACTOR;
 
 /// `_trackdelta`, indexed by trackdir.
 const TRACK_DELTA: [(i32, i32); 16] = [
