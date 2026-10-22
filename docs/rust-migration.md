@@ -623,8 +623,9 @@ callbacks; no descriptor is carried into these unaudited entries.
 Generated named probes pin both layouts. Default native tests compare field/slope
 encodings, extended fences, live mutation, reallocation and assertion-policy
 fallbacks with unchanged native services. Assertions-off raw reads add no bounds,
-type or field rejection. The same-base TGP profile and six-scenario instruction
-guard are recorded in the PR; this maintenance moves no storage or whole owner.
+type or field rejection. The PR retains the historical same-base TGP profile;
+speed is checked on the integrated branch, without per-PR counts or a speed gate.
+This maintenance moves no storage or whole owner.
 
 ### Landscape partial-pixel height
 
