@@ -1708,6 +1708,27 @@ depots, slopes, town removal, owner changes and low-funds removal.
 The fixture declares builtin-like road-type inputs; external NewGRF programs and
 legacy save variants remain corpus gaps. PR #290 records validation and speed.
 
+### Road stop bays and drive-through entries (#354)
+
+Rust (`road_stop.rs`) owns each RoadStop's status byte and the shared
+drive-through entries: bay admission and freeing, entrance status, `GetByTile`,
+continuation, both `Enter`/`Leave` levels, joining (alone, parent, join, merge)
+and splitting (last, head, tail, split with rebuild), `Rebuild`,
+`CheckIntegrity`, destruction and both `AfterLoadRoadStops` passes. One Rust
+allocation per shell holds the status and entries pointer; the BaseEntry stop
+owns the entries, allocated and freed where the original does. `status` stays a
+native reference alias for the ROAD descriptor; `GetEntry` is a const reader.
+The road controller, station commands and road YAPF call the owner directly.
+C++ keeps the shell, pool, `xy`/`next` links and station stop lists
+(`OpenTTDRoadStopServices`), two compound vehicle reads, the tile hash and
+`GetNextRoadStop`, whose only caller is the native YAPF area leaf. Native
+vehicle entry, PreDestructor, cache check and load call typed entries.
+`stations-commands-road-stops` and `-road-stops-reload` compare every stop's
+status and entry length/occupancy through joins on both axes, occupied merges,
+interior/head/tail/last removal, bay admission and reload, and require every
+`road_stop` branch (`integrity` in desync runs). Articulated bay refusal and the
+unreachable `include` duplicate remain #156 gaps.
+
 ### House lifecycle and tile simulation (#256)
 
 `town/house.rs` owns `TileLoop_Town` (construction stages, rebuild/replacement, original and

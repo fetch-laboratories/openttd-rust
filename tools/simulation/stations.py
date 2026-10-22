@@ -365,14 +365,6 @@ static void StationPathPush(RoadVehicle *v, Trackdir trackdir, TileIndex tile)
 #endif
 }
 /* #354: road stop status and drive-through entries, read through the native API. */
-static uint8_t StationRoadState(const RoadVehicle *v)
-{
-#ifdef WITH_RUST
-	return v->GetState();
-#else
-	return v->state;
-#endif
-}
 static void StationRoadStops(const char *label)
 {
 	for (const RoadStop *rs : RoadStop::Iterate()) {
@@ -387,22 +379,18 @@ static void StationRoadStops(const char *label)
 /* Place a stopped fixture vehicle at the tile centre and enter the tile natively. */
 static void StationRoadEnter(RoadVehicle *v, TileIndex t, Direction dir, Trackdir td)
 {
-	v->tile = t;
-	v->x_pos = TileX(t) * TILE_SIZE + TILE_SIZE / 2;
-	v->y_pos = TileY(t) * TILE_SIZE + TILE_SIZE / 2;
-	v->direction = dir;
-	v->cur_speed = 0;
-	v->vehstatus.Set(VehState::Stopped);
+	v->tile = t; v->x_pos = TileX(t) * TILE_SIZE + 8; v->y_pos = TileY(t) * TILE_SIZE + 8; v->direction = dir;
+	v->cur_speed = 0; v->vehstatus.Set(VehState::Stopped);
 #ifdef WITH_RUST
-	v->SetState(td);
-	v->SetFrame(0);
+	v->SetState(td); v->SetFrame(0);
+	auto state = [v] { return v->GetState(); };
 #else
-	v->state = td;
-	v->frame = 0;
+	v->state = td; v->frame = 0;
+	auto state = [v] { return v->state; };
 #endif
 	v->UpdatePosition();
 	auto entered = VehicleEnterTile(v, t, v->x_pos, v->y_pos);
-	fmt::print(stderr, "STCMD road-enter {} {} {} {}\n", v->index.base(), t.base(), entered.base(), StationRoadState(v));
+	fmt::print(stderr, "STCMD road-enter {} {} {} {}\n", v->index.base(), t.base(), entered.base(), state());
 }
 static TileIndex StationPatch()
 {
@@ -448,8 +436,7 @@ static bool StationCommands(std::span<std::string_view> args)
 	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
 	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
 	if (args[1] == "road-stops-inspect") {
-		StationRoadStops("reloaded");
-		fmt::print(stderr, "STCMD complete\n");
+		StationRoadStops("reloaded"); fmt::print(stderr, "STCMD complete\n");
 		current.Restore(); return true;
 	}
 	if (args[1] == "inspect") {
@@ -520,11 +507,9 @@ static bool StationCommands(std::span<std::string_view> args)
 			std::vector<RoadVehicle *> buses;
 			for (int i = 0; i < 7; i++) {
 				auto [cost, id, refit, capacity, cargo] = Command<CMD_BUILD_VEHICLE>::Do(exec, tile(4, 4), engine, false, INVALID_CARGO, INVALID_CLIENT_ID);
-				StationNeed(cost.Succeeded(), __LINE__);
-				RoadVehicle *v = RoadVehicle::Get(id);
-				StationNeed(v->Next() == nullptr, __LINE__);
-				v->vehstatus.Reset(VehState::Hidden);
-				buses.push_back(v);
+				StationNeed(cost.Succeeded() && RoadVehicle::Get(id)->Next() == nullptr, __LINE__);
+				buses.push_back(RoadVehicle::Get(id));
+				buses.back()->vehstatus.Reset(VehState::Hidden);
 			}
 			for (int x = 8; x < 17; x++) MakeRoadNormal(tile(x, 10), ROAD_X, ROADTYPE_ROAD, INVALID_ROADTYPE, TownID(0), OWNER_TOWN, OWNER_NONE);
 			for (int y = 8; y < 15; y++) MakeRoadNormal(tile(20, y), ROAD_Y, ROADTYPE_ROAD, INVALID_ROADTYPE, TownID(0), OWNER_TOWN, OWNER_NONE);
@@ -715,22 +700,10 @@ RELOADS = {
 }
 # #354 road stop owner branches; cache checks run only with desync snapshots.
 ROAD_STOPS = (
-    "clear_head",
-    "clear_last",
-    "clear_split",
-    "clear_tail",
-    "enter_bay0",
-    "enter_bay1",
-    "enter_drive",
-    "enter_refused",
-    "leave_drive",
-    "make_alone",
-    "make_join",
-    "make_merge",
-    "make_parent",
-    "rebuild",
-    "rebuild_vehicle",
-)
+    "clear_head clear_last clear_split clear_tail enter_bay0 enter_bay1 enter_drive"
+    " enter_refused leave_drive make_alone make_join make_merge make_parent rebuild"
+    " rebuild_vehicle"
+).split()
 
 
 def adapter(build, folder, env):
@@ -869,18 +842,12 @@ def check_commands(scenario, run, mode, role, result):
         for line in evidence:
             if line not in run["log"]:
                 raise RuntimeError("station fidelity witness missing: " + line)
-    road_stops = {
-        "road-stops": list(ROAD_STOPS),
-        "road-stops-reload": ["after_load", "rebuild", "rebuild_vehicle"],
-    }.get(scenario["station_commands"])
-    if road_stops is not None:
-        required = (
-            []
-            if scenario["station_commands"] == "road-stops-reload"
-            else ["build_road", "remove_road_tile"]
-        )
+    if scenario["station_commands"].startswith("road-stops"):
+        reload = scenario["station_commands"] == "road-stops-reload"
+        required = [] if reload else ["build_road", "remove_road_tile"]
+        branches = ["after_load", "rebuild_vehicle"] if reload else ROAD_STOPS
         cached = ["integrity"] if mode == "snapshots" else []
-        core.branch_witnesses(scenario, run, role, "road_stop", road_stops + cached)
+        core.branch_witnesses(scenario, run, role, "road_stop", branches + cached)
     core.branch_witnesses(scenario, run, role, "station_command", required)
     lines = [line for line in run["log"] if line.startswith("STCMD ")]
     expected = (
