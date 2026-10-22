@@ -43,6 +43,11 @@ pub struct ConvertFrame {
 pub struct CommandScratch {
     _private: [u8; 0],
 }
+/// Caller-owned native slot that holds a context only once a road vehicle builds.
+#[repr(C)]
+pub struct CommandSlot {
+    _private: [u8; 0],
+}
 /// Borrowed native stack context supplied by the outer command/controller frame.
 #[repr(C)]
 pub struct CommandContext {

@@ -442,7 +442,8 @@ pub struct Leaves {
     pub path_read: extern "C" fn(VehicleRef) -> PathRead,
     pub choose_track: extern "C" fn(VehicleRef, u32, u8, u16) -> TrackChoice,
     pub find_depot: extern "C" fn(VehicleRef, i32) -> DepotResult,
-    pub tram_build_read: extern "C" fn(VehicleRef) -> TramBuildRead,
+    pub tram_build_read:
+        extern "C" fn(VehicleRef, *mut crate::road_cmd::CommandSlot) -> TramBuildRead,
     pub disconnect: extern "C" fn(),
     pub stop_read: extern "C" fn(VehicleRef) -> StopRead,
     pub should_stop: extern "C" fn(VehicleRef, u32) -> bool,
@@ -552,6 +553,8 @@ fn visit<T, F: FnMut(&T) -> bool>(
 pub struct TramBuildRead {
     pub owner: u8,
     pub road_type: u8,
+    /// Freshly constructed in the entry's slot for this one build.
+    pub road: *const crate::road_cmd::CommandContext,
 }
 /// Count one actual typed outgoing call; returns the unchanged function pointer.
 macro_rules! service {
@@ -562,7 +565,7 @@ macro_rules! service {
 }
 
 struct Game<'a> {
-    road: *const crate::road_cmd::CommandContext,
+    road: *mut crate::road_cmd::CommandSlot,
     l: &'a Leaves,
     vs: &'a VehicleServices,
     gs: &'a GroundServices,
@@ -632,7 +635,7 @@ impl Game<'_> {
         // SAFETY: As above; the shared tables are static.
         unsafe {
             Game {
-                road: std::ptr::null(),
+                road: std::ptr::null_mut(),
                 l,
                 vs: &*l.vehicle,
                 gs: &*l.ground,
@@ -645,10 +648,10 @@ impl Game<'_> {
         }
     }
     fn can_build_tram(&self, v: VehicleRef, tile: u32, bits: u8) -> bool {
-        let read = service!(self.l.tram_build_read)(v);
-        // SAFETY: movement entries supply live native stack scratch and results.
+        let read = service!(self.l.tram_build_read)(v, self.road);
+        // SAFETY: the read built live native stack scratch and results in the slot.
         unsafe {
-            let context = &*self.road;
+            let context = &*read.road;
             let town = &*(*context.services).town;
             let old = (town.exchange_company)(u32::from(read.owner));
             let success = context.build(8, tile, bits, read.road_type, u16::MAX);
@@ -1890,7 +1893,7 @@ pub unsafe extern "C" fn openttd_rust_road_tick(
     state: *mut State,
     read: *const TickRead,
     leaves: *const Leaves,
-    road: *const crate::road_cmd::CommandContext,
+    road: *mut crate::road_cmd::CommandSlot,
 ) -> bool {
     crate::witness::hit(crate::witness::ROAD_TICKS);
     // SAFETY: Records are borrowed for this call only.
@@ -1909,7 +1912,7 @@ pub unsafe extern "C" fn openttd_rust_road_individual(
     prev_state: *mut State,
     entry: *const Entry,
     leaves: *const Leaves,
-    road: *const crate::road_cmd::CommandContext,
+    road: *mut crate::road_cmd::CommandSlot,
 ) -> bool {
     // SAFETY: Entry record borrowed for this call only.
     let e = unsafe { &*entry };

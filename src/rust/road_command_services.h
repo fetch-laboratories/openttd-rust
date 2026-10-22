@@ -12,6 +12,7 @@
 #include "rail_command_services.h"
 #include "command_cost_services.h"
 #include "../roadveh.h"
+#include <memory>
 #include <optional>
 struct OpenTTDRoadConvertFrame { std::vector<RoadVehicle *> affected; };
 struct RoadConversionScratch {
@@ -25,11 +26,18 @@ struct OpenTTDRoadCommandScratch {
 	std::optional<CommandCost> ret;
 	std::optional<RoadConversionScratch> conversion;
 };
-/* Each outer native entry owns one scratch and two results. No table copies,
- * heap allocation or state is introduced by this context. Conversion is lazy. */
+/* Each outer native entry owns one scratch and two results, with no table copies,
+ * heap allocation or state. Conversion is lazy, as is a road vehicle slot's context. */
 struct RustRoadCommandContext {
 	OpenTTDRoadCommandScratch scratch;
 	CommandCost cost, ret;
 	OpenTTDRoadCommandContext view{&GetRustRoadCommandServices(), &scratch, RustCommandCost(&cost), RustCommandCost(&ret)};
+};
+/* Not std::optional: its GCC 15 constructor zero-fills the payload on every road tick. */
+struct OpenTTDRoadCommandSlot {
+	union { RustRoadCommandContext road; };
+	bool built = false;
+	OpenTTDRoadCommandSlot() {}
+	~OpenTTDRoadCommandSlot() { if (this->built) this->road.~RustRoadCommandContext(); }
 };
 #endif /* RUST_ROAD_COMMAND_SERVICES_H */
