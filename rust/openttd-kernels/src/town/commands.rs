@@ -395,10 +395,10 @@ impl<'a> Commands<'a> {
                     self.error(out);
                     return;
                 }
+                w::hit(w::TOWN_COMMAND_DELETE_OILRIG);
                 if !self.clear(out, (self.s.airport_tile)(st.shell), flags) {
                     return;
                 }
-                w::hit(w::TOWN_COMMAND_DELETE_OILRIG);
             }
         }
         for next in [self.s.next_waypoint, self.s.next_depot] {
