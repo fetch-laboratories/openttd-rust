@@ -234,11 +234,6 @@ CommandCost CmdPlantTree(DoCommandFlags flags, TileIndex tile, TileIndex start_t
 	return result.cost == 0 ? CommandCost(messages[result.message]) : CommandCost(EXPENSES_OTHER, Money(result.cost));
 }
 
-static CommandCost ClearTile_Trees(TileIndex tile, DoCommandFlags flags)
-{
-	return CommandCost(EXPENSES_CONSTRUCTION, Money(openttd_rust_trees_clear_tile(tile.base(), flags.base(), static_cast<int64_t>(_price[PR_CLEAR_TREES]), Company::IsValidID(_current_company), &_tree_services, &GetRustSharedServices())));
-}
-
 const OpenTTDTreeServices &GetRustTreeServices() noexcept { return _tree_services; }
 
 OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept
@@ -1259,16 +1254,22 @@ void InitializeTrees()
 
 #endif /* !WITH_RUST */
 
+#ifndef WITH_RUST
 static CommandCost TerraformTile_Trees(TileIndex tile, DoCommandFlags flags, int, Slope)
 {
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
 }
+#endif
 
 
 extern const TileTypeProcs _tile_type_trees_procs = {
 	DrawTile_Trees,           // draw_tile_proc
 	GetSlopePixelZ_Trees,     // get_slope_z_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	ClearTile_Trees,          // clear_tile_proc
+#endif
 	nullptr,                     // add_accepted_cargo_proc
 	GetTileDesc_Trees,        // get_tile_desc_proc
 	GetTileTrackStatus_Trees, // get_tile_track_status_proc
@@ -1283,7 +1284,11 @@ extern const TileTypeProcs _tile_type_trees_procs = {
 	nullptr,                     // add_produced_cargo_proc
 	nullptr,                     // vehicle_enter_tile_proc
 	GetFoundation_Trees,      // get_foundation_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	TerraformTile_Trees,      // terraform_tile_proc
+#endif
 	nullptr, // check_build_above_proc
 };
 

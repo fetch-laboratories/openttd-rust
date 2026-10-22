@@ -547,13 +547,9 @@ static void GetTileDesc_Industry(TileIndex tile, TileDesc &td)
 	}
 }
 
+#ifndef WITH_RUST
 static CommandCost ClearTile_Industry(TileIndex tile, DoCommandFlags flags)
 {
-#ifdef WITH_RUST
-	CommandCost result;
-	openttd_rust_industry_tile_clear(&result, tile.base(), flags.base(), &GetIndustryTileServices(), &GetIndustryTilePolicyServices(), &GetIndustryCostServices(), &GetIndustryGenerationServices());
-	return result;
-#else
 	Industry *i = Industry::GetByTile(tile);
 	const IndustrySpec *indspec = GetIndustrySpec(i->type);
 
@@ -581,8 +577,8 @@ static CommandCost ClearTile_Industry(TileIndex tile, DoCommandFlags flags)
 		delete i;
 	}
 	return CommandCost(EXPENSES_CONSTRUCTION, indspec->GetRemovalCost());
-#endif
 }
+#endif
 
 /**
  * Move produced cargo from industry to nearby stations.
@@ -3478,13 +3474,9 @@ bool IndustrySpec::UsesOriginalEconomy() const
 			IndustryCallbackMask::ProdChangeBuild}); // production change callbacks
 }
 
+#ifndef WITH_RUST
 static CommandCost TerraformTile_Industry(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
 {
-#ifdef WITH_RUST
-	CommandCost result;
-	openttd_rust_industry_tile_terraform(&result, tile.base(), flags.base(), z_new, tileh_new, &GetRustSharedServices(), &GetIndustryTileServices(), &GetIndustryTilePolicyServices(), &GetIndustryCostServices());
-	return result;
-#else
 	if (AutoslopeEnabled()) {
 		/* We imitate here TTDP's behaviour:
 		 *  - Both new and old slope must not be steep.
@@ -3510,13 +3502,17 @@ static CommandCost TerraformTile_Industry(TileIndex tile, DoCommandFlags flags, 
 		}
 	}
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
-#endif
 }
+#endif
 
 extern const TileTypeProcs _tile_type_industry_procs = {
 	DrawTile_Industry,           // draw_tile_proc
 	GetSlopePixelZ_Industry,     // get_slope_z_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	ClearTile_Industry,          // clear_tile_proc
+#endif
 	AddAcceptedCargo_Industry,   // add_accepted_cargo_proc
 	GetTileDesc_Industry,        // get_tile_desc_proc
 	GetTileTrackStatus_Industry, // get_tile_track_status_proc
@@ -3535,7 +3531,11 @@ extern const TileTypeProcs _tile_type_industry_procs = {
 	nullptr,                        // add_produced_cargo_proc
 	nullptr,                        // vehicle_enter_tile_proc
 	GetFoundation_Industry,      // get_foundation_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	TerraformTile_Industry,      // terraform_tile_proc
+#endif
 	nullptr, // check_build_above_proc
 };
 

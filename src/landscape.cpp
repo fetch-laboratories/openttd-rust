@@ -896,16 +896,16 @@ const OpenTTDLandscapeCommandServices &GetRustLandscapeCommandServices() noexcep
 		.on_water = RustOnWater,
 		.coast = [](uint32_t t) noexcept { return IsCoastTile(TileIndex{t}); },
 		.buoy = [](uint32_t t) noexcept { return IsBuoyTile(TileIndex{t}); },
-		.canal = [](uint32_t t) noexcept { return IsCanal(TileIndex{t}); },
+		.canal = RustIsCanal,
 		.height_limit = RustMapHeightLimit,
 		.max_bridge_height = RustMaximumBridgeHeight,
 		.freeform_edges = OpenTTDFreeformEdges, .editor = OpenTTDEditor,
 		.exchange_generating = GetRustTownFoundingServices().exchange_generating,
 		.tunnel_in_way = [](uint32_t t, int32_t z) noexcept { return IsTunnelInWay(TileIndex{t}, z); },
-		.mark_dirty_height = [](uint32_t t, int32_t z) noexcept { MarkTileDirtyByTile(TileIndex{t}, 0, z); },
+		.mark_dirty_height = RustMarkTileDirtyHeight,
 		.set_height = [](uint32_t t, uint32_t z) noexcept { SetTileHeight(TileIndex{t}, z); },
 		.paused = []() noexcept { return _pause_mode.Any(); },
-		.explosion = [](uint32_t t, bool small) noexcept { CreateEffectVehicleAbove(TileX(TileIndex{t}) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex{t}) * TILE_SIZE + TILE_SIZE / 2, 2, small ? EV_EXPLOSION_SMALL : EV_EXPLOSION_LARGE); },
+		.explosion = [](uint32_t t, bool small) noexcept { RustCreateEffectAbove(TileX(TileIndex{t}) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex{t}) * TILE_SIZE + TILE_SIZE / 2, 2, small ? EV_EXPLOSION_SMALL : EV_EXPLOSION_LARGE); },
 	};
 	return services;
 }

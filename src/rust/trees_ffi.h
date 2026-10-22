@@ -62,10 +62,6 @@ struct OpenTTDTreeCommandResult {
 	int64_t cost;
 	uint8_t status, message;
 };
-struct OpenTTDTreeLandscapeClear {
-	int64_t cost;
-	bool failed;
-};
 /* Command flags, company, tile iterator and nested result; opaque to Rust. */
 struct OpenTTDTreeCommand;
 

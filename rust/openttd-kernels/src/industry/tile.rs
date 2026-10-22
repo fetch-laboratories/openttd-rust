@@ -581,8 +581,7 @@ pub struct TilePolicyServices {
 /// # Safety
 /// Live tile and native stack result. Event and destruction callbacks may reenter;
 /// immutable specs remain live after owner destruction, with no owner borrow held.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_tile_clear(
+pub(crate) unsafe fn openttd_rust_industry_tile_clear(
     out: *mut IndustryCost,
     tile: u32,
     flags: u16,
@@ -623,9 +622,8 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_clear(
 /// # Safety
 /// Native complete cost sink and live tile. The resolver can reenter; no owner or
 /// map reference survives it. `LandscapeClear` returns its original full cost.
-#[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn openttd_rust_industry_tile_terraform(
+pub(crate) unsafe fn openttd_rust_industry_tile_terraform(
     out: *mut IndustryCost,
     tile: u32,
     flags: u16,

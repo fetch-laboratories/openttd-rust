@@ -2378,8 +2378,7 @@ pub unsafe extern "C" fn openttd_rust_rail_convert(
 /// `ClearTile_Track`.
 /// # Safety
 /// See the module entry contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_rail_clear_tile(
+pub(crate) unsafe fn openttd_rust_rail_clear_tile(
     s: *const RailCommandServices,
     out: *mut CommandCost,
     a: *mut CommandCost,
@@ -2405,8 +2404,7 @@ pub(crate) unsafe fn openttd_rust_rail_change_owner(
 /// `TerraformTile_Track`.
 /// # Safety
 /// See the module entry contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_rail_terraform(
+pub(crate) unsafe fn openttd_rust_rail_terraform(
     s: *const RailCommandServices,
     out: *mut CommandCost,
     flags: u16,

@@ -504,12 +504,6 @@ static void *RustHouseStationFinder(uint32_t tile) noexcept
 	stations.emplace(TileArea(TileIndex{tile}, 1, 1));
 	return &*stations;
 }
-static CommandCost ClearTile_Town(TileIndex tile, DoCommandFlags flags)
-{
-	CommandCost result;
-	openttd_rust_house_clear(&GetRustTownServices(), &GetRustSharedServices(), RustCommandCost(&result), tile.base(), flags.base());
-	return result;
-}
 static void AddProducedCargo_Town(TileIndex tile, CargoArray &produced)
 {
 	openttd_rust_house_produced(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), &produced);
@@ -4748,14 +4742,7 @@ static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEco
 #endif
 });
 
-#ifdef WITH_RUST
-static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
-{
-	CommandCost result;
-	openttd_rust_house_terraform(&GetRustTownServices(), &GetRustSharedServices(), RustCommandCost(&result), tile.base(), flags.base(), z_new, tileh_new);
-	return result;
-}
-#else
+#ifndef WITH_RUST
 static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
 {
 	if (AutoslopeEnabled()) {
@@ -4789,7 +4776,11 @@ static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int 
 extern const TileTypeProcs _tile_type_town_procs = {
 	DrawTile_Town,           // draw_tile_proc
 	GetSlopePixelZ_Town,     // get_slope_z_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	ClearTile_Town,          // clear_tile_proc
+#endif
 	AddAcceptedCargo_Town,   // add_accepted_cargo_proc
 	GetTileDesc_Town,        // get_tile_desc_proc
 	GetTileTrackStatus_Town, // get_tile_track_status_proc
@@ -4804,7 +4795,11 @@ extern const TileTypeProcs _tile_type_town_procs = {
 	AddProducedCargo_Town,   // add_produced_cargo_proc
 	nullptr,                    // vehicle_enter_tile_proc
 	GetFoundation_Town,      // get_foundation_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	TerraformTile_Town,      // terraform_tile_proc
+#endif
 	nullptr, // check_build_above_proc
 };
 

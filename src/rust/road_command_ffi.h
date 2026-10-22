@@ -64,9 +64,7 @@ void openttd_rust_road_build(const OpenTTDRoadCommandServices *, OpenTTDRoadComm
 void openttd_rust_road_build_long(const OpenTTDRoadCommandServices *, OpenTTDRoadCommandScratch *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, uint8_t, uint8_t, bool, bool, bool);
 int64_t openttd_rust_road_remove_long(const OpenTTDRoadCommandServices *, OpenTTDRoadCommandScratch *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, uint8_t, bool, bool);
 void openttd_rust_road_build_depot(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t);
-void openttd_rust_road_clear(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t);
 void openttd_rust_road_nearest_towns(const OpenTTDRoadCommandServices *, bool);
-void openttd_rust_road_terraform(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, int32_t, uint8_t);
 void openttd_rust_road_convert(const OpenTTDRoadCommandServices *, OpenTTDRoadConvertFrame *, OpenTTDRailConvertFrame *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, bool);
 void openttd_rust_road_build_above(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, uint16_t, uint32_t);
 }

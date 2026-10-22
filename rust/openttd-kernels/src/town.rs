@@ -720,7 +720,6 @@ pub struct Leaves {
     pub houses: *const house::HouseServices,
 }
 pub type StationActivity = crate::station_service::StationActivity;
-#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandResult {
     pub cost: i64,

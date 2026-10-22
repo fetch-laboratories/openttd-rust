@@ -384,8 +384,6 @@ typedef struct OpenTTDIndustryTileServices {
 	uint16_t (*callback)(uint32_t, uint16_t, uint16_t, uint32_t, uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback);
 	uint8_t (*cargo_translation)(const OpenTTDIndustryTileSpec *, uint8_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(cargo_translation);
 } OpenTTDIndustryTileServices;
-void openttd_rust_industry_tile_clear(OpenTTDIndustryCost *, uint32_t tile, uint16_t flags, const OpenTTDIndustryTileServices *, const OpenTTDIndustryTilePolicyServices *, const OpenTTDIndustryCostServices *, const OpenTTDIndustryGenerationServices *);
-void openttd_rust_industry_tile_terraform(OpenTTDIndustryCost *, uint32_t tile, uint16_t flags, int32_t z_new, uint8_t slope_new, const OpenTTDSharedServices *shared, const OpenTTDIndustryTileServices *, const OpenTTDIndustryTilePolicyServices *, const OpenTTDIndustryCostServices *);
 void openttd_rust_industry_tile_acceptance(uint32_t tile, uint32_t *acceptance, uint64_t *always_accepted, const OpenTTDIndustryTileServices *);
 void openttd_rust_industry_tile_animate(uint32_t tile, const OpenTTDIndustryServices *, const OpenTTDIndustryConstructionServices *, const OpenTTDIndustryTileServices *);
 /** Industry-owned scratch value, matching the actual shared cleared-object entry. */

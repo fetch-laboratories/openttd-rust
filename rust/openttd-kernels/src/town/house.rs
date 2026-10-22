@@ -1288,8 +1288,7 @@ pub unsafe extern "C" fn openttd_rust_house_animate(
 ) {
     house(leaves, services).animate(tile);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_clear(
+pub(crate) unsafe fn openttd_rust_house_clear(
     leaves: *const Leaves,
     services: *const Services,
     result: *mut CommandCost,
@@ -1298,8 +1297,7 @@ pub unsafe extern "C" fn openttd_rust_house_clear(
 ) {
     house(leaves, services).clear(result, tile, flags);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_terraform(
+pub(crate) unsafe fn openttd_rust_house_terraform(
     leaves: *const Leaves,
     services: *const Services,
     result: *mut CommandCost,

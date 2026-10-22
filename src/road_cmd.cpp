@@ -2823,22 +2823,10 @@ CommandCost CmdBuildRoadDepot(DoCommandFlags flags, TileIndex tile, RoadType rt,
 	openttd_rust_road_build_depot(RoadServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base(), rt, dir);
 	return cost;
 }
-static CommandCost ClearTile_Road(TileIndex tile, DoCommandFlags flags)
-{
-	CommandCost cost, ret, scratch;
-	openttd_rust_road_clear(RoadServices(), RustCommandCost(&cost), RustCommandCost(&ret), RustCommandCost(&scratch), flags.base(), tile.base());
-	return cost;
-}
 void UpdateNearestTownForRoadTiles(bool invalidate)
 {
 	assert(!invalidate || _generating_world);
 	openttd_rust_road_nearest_towns(RoadServices(), invalidate);
-}
-static CommandCost TerraformTile_Road(TileIndex tile, DoCommandFlags flags, int z_new, Slope slope)
-{
-	CommandCost cost, scratch;
-	openttd_rust_road_terraform(RoadServices(), RustCommandCost(&cost), RustCommandCost(&scratch), flags.base(), tile.base(), z_new, slope);
-	return cost;
 }
 CommandCost CmdConvertRoad(DoCommandFlags flags, TileIndex tile, TileIndex start, RoadType rt, bool diagonal)
 {
@@ -2860,7 +2848,11 @@ static CommandCost CheckBuildAbove_Road(TileIndex tile, DoCommandFlags flags, Ax
 extern const TileTypeProcs _tile_type_road_procs = {
 	DrawTile_Road,           // draw_tile_proc
 	GetSlopePixelZ_Road,     // get_slope_z_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	ClearTile_Road,          // clear_tile_proc
+#endif
 	nullptr,                    // add_accepted_cargo_proc
 	GetTileDesc_Road,        // get_tile_desc_proc
 	GetTileTrackStatus_Road, // get_tile_track_status_proc
@@ -2879,7 +2871,11 @@ extern const TileTypeProcs _tile_type_road_procs = {
 	nullptr,                    // add_produced_cargo_proc
 	VehicleEnter_Road,       // vehicle_enter_tile_proc
 	GetFoundation_Road,      // get_foundation_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	TerraformTile_Road,      // terraform_tile_proc
+#endif
 	CheckBuildAbove_Road, // check_build_above_proc
 };
 

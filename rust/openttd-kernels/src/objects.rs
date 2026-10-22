@@ -2035,8 +2035,7 @@ pub unsafe extern "C" fn openttd_rust_object_build_area(
 /// preconditions; serialized with reset/save/load. No native pointer is retained.
 /// Services may reenter after all state accesses end. Native cancellation is
 /// returned before C++ rethrows; other leaves are noexcept. Panics abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_clear(
+pub(crate) unsafe fn openttd_rust_object_clear(
     s: *const ObjectServices,
     out: *mut CommandCost,
     tmp: *mut CommandCost,

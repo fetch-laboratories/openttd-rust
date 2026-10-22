@@ -211,7 +211,6 @@ pub struct CommandResult {
 }
 
 /// Nested `CMD_LANDSCAPE_CLEAR` outcome; C++ keeps the failed `CommandCost`.
-#[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct LandscapeClear {
     pub cost: i64,
@@ -1432,7 +1431,7 @@ mod tests {
     extern "C" fn debit(_: *mut Command) {
         log(Event::Debit);
     }
-    extern "C" fn landscape_clear(_: *mut Command, _: u32) -> LandscapeClear {
+    fn landscape_clear(_: *mut Command, _: u32) -> LandscapeClear {
         log(Event::Clear);
         WORLD.with_borrow_mut(|w| {
             w.plant.ground = CLEAR_GRASS;

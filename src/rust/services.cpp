@@ -174,7 +174,6 @@ static bool SharedBridgeAbove(uint32_t tile) noexcept { return IsBridgeAbove(Til
 static uint8_t SharedTropicZone(uint32_t tile) noexcept { return GetTropicZone(TileIndex{tile}); }
 static int32_t SharedTileZ(uint32_t tile) noexcept { return RustTileZ(TileIndex{tile}); }
 static uint8_t SharedTileSlope(uint32_t tile) noexcept { return GetTileSlope(TileIndex{tile}); }
-static void SharedMarkDirty(uint32_t tile) noexcept { MarkTileDirtyByTile(TileIndex{tile}); }
 static void SharedFreeTrainReservation(const Train *v) noexcept { FreeTrainTrackReservation(v); }
 static bool SharedTryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_okay) noexcept { return TryPathReserve(v, mark_as_stuck, first_tile_okay); }
 static bool Shared_may_have_road(uint32_t tile) noexcept { return MayHaveRoad(TileIndex{tile}); }
@@ -327,7 +326,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.map_max_x = SharedMapMaxX,
 	.map_max_y = SharedMapMaxY,
 	.mark_bridge_dirty = SharedMarkBridgeDirty,
-	.mark_dirty = SharedMarkDirty,
+	.mark_dirty = RustMarkTileDirty,
 	.next_company = SharedNextCompany,
 	.no_jetcrash = SharedNoJetcrash,
 	.normal_road_bits = SharedNormalRoadBits,

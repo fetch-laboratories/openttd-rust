@@ -1788,10 +1788,6 @@ layouts! {
         status,
         message,
     };
-    "OpenTTDTreeLandscapeClear" ["probe"] => crate::trees::LandscapeClear {
-        cost,
-        failed,
-    };
     "OpenTTDEffectView" ["probe"] => crate::effect::View {
         x,
         y,
@@ -2570,10 +2566,6 @@ layouts! {
     "OpenTTDTownSlots" ["probe"] => crate::town::Slots {
         data,
         size,
-    };
-    "OpenTTDTownCommandResult" ["probe"] => crate::town::CommandResult {
-        cost,
-        success,
     };
     "OpenTTDTownLeaves" ["probe"] => crate::town::Leaves {
         map_log_x,

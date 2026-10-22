@@ -277,7 +277,6 @@ void openttd_rust_station_build_oilrig(const OpenTTDStationCommandServices *, Op
 void openttd_rust_station_delete_oilrig(const OpenTTDStationCommandServices *, uint32_t);
 bool openttd_rust_station_in_orders(const OpenTTDStationCommandServices *, uint16_t, bool, uint8_t);
 void openttd_rust_station_clear(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint32_t, uint16_t);
-void openttd_rust_station_terraform(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint32_t, uint16_t, int32_t, uint8_t);
 BaseStation *openttd_rust_station_join_waypoint(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint16_t, uint16_t, bool, OpenTTDStationArea, bool);
 }
 #endif /* RUST_STATION_COMMAND_FFI_H */
