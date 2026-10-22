@@ -180,8 +180,9 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 Resumed at the user's request (2026-10-21). Root is gpt-6.1-sol (xhigh), with
 gpt-6.1-sol (high) agents updating #313, #329, #337 and #340. The work order above
-is unchanged. Hosted macOS retries for the base and #339 have started; fix the
-base before integrating. Every open draft keeps its worktree and branch.
+is unchanged; #316 is the next unblocked whole owner while reviewed drafts await
+validation. Hosted macOS retries for the base and #339 have started; fix the base
+before integrating. Every open draft keeps its worktree and branch.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
@@ -192,6 +193,7 @@ base before integrating. Every open draft keeps its worktree and branch.
 | #156 / #342 | `9ed271d489` | Reviewed, no findings. After #336: update from base (`can_build_tram` conflict), counts, Full. |
 | #281 / #340 | `7a4707ff1e` | Agent deleting `Co_vehicle_value` and three legacy order copies; fresh review, counts and Full follow. |
 | #314 / #329 | `d3fbf2de39` | Agent adopting #334 modules and returning `interval_default` as int; scoped review, counts and Full follow. |
+| #316 | not yet started | Subsidy ownership selected for the free implementation slot; combined glue/tooling cap 450, no draft prerequisite. |
 | #274 | `162843acbd` | Paused measurement branch. |
 
 #261 R7 inputs are on #261 and #281 part 2's inventory is on #281. The finished
