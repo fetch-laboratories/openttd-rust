@@ -17,6 +17,8 @@ extern RoadTypes _roadtypes_road;
 #include "depot_func.h"
 #include "effectvehicle_func.h"
 #include "effectvehicle_base.h"
+#include "roadveh.h"
+#include "vehicle_cmd.h"
 extern const TileTypeProcs _tile_type_road_procs;
 static void RoadPrint(std::string_view name, const CommandCost &cost, Money extra = 0)
 {
@@ -130,6 +132,11 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	RoadRun<CMD_REMOVE_LONG_ROAD>("crossing-remove-tram", t(3, 9), t(3, 9), ROADTYPE_TRAM, AXIS_X, false, true);
 	RoadRun<CMD_REMOVE_LONG_ROAD>("crossing-remove", t(3, 9), t(3, 9), ROADTYPE_ROAD, AXIS_X, false, true);
 	RoadRun<CMD_BUILD_ROAD>("crossing-again", t(3, 9), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
+	Backup<RoadTypeFlags> no_crossing(_roadtypes[alternate].flags);
+	_roadtypes[alternate].flags.Set(RoadTypeFlag::NoLevelCrossing);
+	RoadRun<CMD_CONVERT_ROAD>("crossing-convert", t(3, 9), t(3, 9), alternate, false);
+	RoadRun<CMD_BUILD_ROAD>("crossing-disallowed", t(3, 9), ROAD_X, alternate, DRD_NONE, TownID::Invalid());
+	no_crossing.Restore();
 	RoadRun<CMD_LANDSCAPE_CLEAR>("clear-crossing", t(3, 9));
 	/* Source-order terraform and roadwork failures on declared normal tiles. */
 	RoadRun<CMD_BUILD_ROAD>("slope-road", t(6, 9), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
@@ -144,7 +151,11 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	water_company.Restore();
 	RoadRun<CMD_TERRAFORM_LAND>("raise", t(10, 9), SLOPE_N, true);
 	RoadRun<CMD_BUILD_ROAD>("slope", t(10, 9), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
+	Backup<bool> no_slopes(_settings_game.construction.build_on_slopes, false);
+	RoadRun<CMD_REMOVE_LONG_ROAD>("slope-remove-half", t(10, 9), t(10, 9), ROADTYPE_ROAD, AXIS_X, false, false);
+	no_slopes.Restore();
 	RoadPrint("build-above", _tile_type_road_procs.check_build_above_proc(t(8, 5), {}, AXIS_X, 64));
+	RoadPrint("depot-autoslope", _tile_type_road_procs.terraform_tile_proc(t(8, 5), {}, GetTileZ(t(8, 5)) - 1, SLOPE_SE));
 	RoadRun<CMD_LANDSCAPE_CLEAR>("depot-remove", t(8, 5));
 	/* Station coexistence and tunnel/bridge charging/removal. */
 	RoadRun<CMD_BUILD_ROAD_STOP>("stop", t(14, 12), 1, 1, RoadStopType::Bus, true, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, StationID::Invalid(), false);
@@ -155,6 +166,37 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	RoadRun<CMD_CONVERT_ROAD>("bridge-convert", t(9, 16), t(3, 16), alternate, false);
 	RoadRun<CMD_CONVERT_ROAD>("bridge-back", t(9, 16), t(3, 16), ROADTYPE_ROAD, false);
 	RoadRun<CMD_REMOVE_LONG_ROAD>("bridge-remove-tram", t(9, 16), t(3, 16), ROADTYPE_TRAM, AXIS_X, false, true);
+	RoadRun<CMD_REMOVE_LONG_ROAD>("stop-remove-last", t(14, 12), t(14, 12), ROADTYPE_ROAD, AXIS_X, false, true);
+	RoadRun<CMD_TERRAFORM_LAND>("tunnel-hill", t(18, 18), SLOPE_ELEVATED, true);
+	RoadRun<CMD_BUILD_TUNNEL>("tunnel", t(17, 18), TRANSPORT_ROAD, ROADTYPE_ROAD);
+	RoadRun<CMD_CONVERT_ROAD>("tunnel-convert", t(19, 18), t(17, 18), alternate, false);
+	RoadRun<CMD_CONVERT_ROAD>("tunnel-back", t(17, 18), t(19, 18), ROADTYPE_ROAD, false);
+	/* A stopped road vehicle in its depot, then moved in the tile hash onto road and wormhole heads. */
+	RoadRun<CMD_BUILD_ROAD_DEPOT>("rv-depot", t(2, 13), ROADTYPE_ROAD, DIAGDIR_SW);
+	RoadRun<CMD_BUILD_LONG_ROAD>("rv-road", t(6, 13), t(3, 13), ROADTYPE_ROAD, AXIS_X, DRD_NONE, false, false, false);
+	RoadVehicle *rv = nullptr;
+	for (const Engine *e : Engine::IterateType(VEH_ROAD)) {
+		auto [cost, id, capacity, mail, cargo] = Command<CMD_BUILD_VEHICLE>::Do(DoCommandFlag::Execute, t(2, 13), e->index, false, INVALID_CARGO, INVALID_CLIENT_ID);
+		if (cost.Succeeded()) { rv = RoadVehicle::Get(id); break; }
+	}
+	if (rv == nullptr) SignalFixtureAbort(__LINE__);
+	RoadRun<CMD_BUILD_ROAD_DEPOT>("rv-rotate", t(2, 13), ROADTYPE_ROAD, DIAGDIR_NE);
+	RoadRun<CMD_LANDSCAPE_CLEAR>("rv-depot-remove", t(2, 13));
+	RoadRun<CMD_CONVERT_ROAD>("rv-depot-convert", t(2, 13), t(2, 13), alternate, false);
+	Backup<RoadTypes> rv_power(_roadtypes[ROADTYPE_ROAD].powered_roadtypes);
+	_roadtypes[ROADTYPE_ROAD].powered_roadtypes.Set(alternate);
+	RoadRun<CMD_CONVERT_ROAD>("rv-depot-power", t(2, 13), t(2, 13), alternate, false);
+	rv_power.Restore();
+	RoadRun<CMD_CONVERT_ROAD>("rv-depot-back", t(2, 13), t(2, 13), ROADTYPE_ROAD, false);
+	auto move = [rv](TileIndex tile) { rv->tile = tile; rv->UpdatePosition(); };
+	move(t(4, 13));
+	RoadRun<CMD_BUILD_ROAD>("rv-oneway", t(4, 13), ROAD_X, ROADTYPE_ROAD, DRD_NORTHBOUND, TownID::Invalid());
+	RoadRun<CMD_REMOVE_LONG_ROAD>("rv-remove", t(4, 13), t(4, 13), ROADTYPE_ROAD, AXIS_X, false, true);
+	move(t(3, 16));
+	RoadRun<CMD_REMOVE_LONG_ROAD>("rv-bridge", t(3, 16), t(3, 16), ROADTYPE_ROAD, AXIS_X, false, true);
+	move(t(17, 18));
+	RoadRun<CMD_CONVERT_ROAD>("rv-tunnel", t(17, 18), t(17, 18), alternate, false);
+	move(t(2, 13));
 	/* Low-funds removal returns the full remaining estimate, retaining prior effects. */
 	RoadRun<CMD_BUILD_LONG_ROAD>("money-road", t(12, 20), t(2, 20), ROADTYPE_ROAD, AXIS_X, DRD_NONE, false, true, true);
 #ifdef WITH_RUST
@@ -186,6 +228,19 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 		RoadRun<CMD_BUILD_ROAD>("town-road", t(x, 20), ROAD_X, ROADTYPE_ROAD, DRD_NONE, town->index);
 		town_company.Restore();
 	}
+	town->ratings[owner] = RATING_MINIMUM;
+	RoadRun<CMD_REMOVE_LONG_ROAD>("town-rating", t(15, 20), t(15, 20), ROADTYPE_ROAD, AXIS_X, false, true);
+	RoadRun<CMD_CONVERT_ROAD>("town-convert-rating", t(17, 20), t(15, 20), alternate, false);
+	town->ratings[owner] = 800;
+	RoadRun<CMD_CONVERT_ROAD>("town-convert", t(17, 20), t(15, 20), alternate, false);
+	Backup<RoadTypes> town_power(_roadtypes[ROADTYPE_ROAD].powered_roadtypes);
+	_roadtypes[ROADTYPE_ROAD].powered_roadtypes.Set(alternate);
+	RoadRun<CMD_CONVERT_ROAD>("town-convert-power", t(17, 20), t(15, 20), alternate, false);
+	town_power.Restore();
+	RoadRun<CMD_CONVERT_ROAD>("town-convert-back", t(17, 20), t(15, 20), ROADTYPE_ROAD, false);
+	_settings_game.construction.extra_dynamite = false;
+	RoadRun<CMD_REMOVE_LONG_ROAD>("town-refuse", t(16, 20), t(16, 20), ROADTYPE_ROAD, AXIS_X, false, true);
+	_settings_game.construction.extra_dynamite = true;
 	RoadRun<CMD_REMOVE_LONG_ROAD>("town-inner", t(16, 20), t(16, 20), ROADTYPE_ROAD, AXIS_X, false, true);
 	RoadRun<CMD_REMOVE_LONG_ROAD>("town-edge", t(15, 20), t(15, 20), ROADTYPE_ROAD, AXIS_X, false, true);
 	dynamite.Restore();
@@ -193,6 +248,14 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	ChangeTileOwner(t(20, 20), owner, other);
 	RoadRun<CMD_BUILD_ROAD>("foreign-oneway", t(20, 20), ROAD_X, ROADTYPE_ROAD, DRD_SOUTHBOUND, TownID::Invalid());
 	ChangeTileOwner(t(20, 20), other, INVALID_OWNER);
+	RoadRun<CMD_BUILD_ROAD_DEPOT>("transfer-depot", t(21, 20), ROADTYPE_ROAD, DIAGDIR_NE);
+	ChangeTileOwner(t(21, 20), owner, other);
+	/* Bankruptcy clears the owner fields, so observe both road/tram owners first. */
+	bool merged = IsRoadDepotTile(t(21, 20)) && GetTileOwner(t(21, 20)) == other && GetRoadOwner(t(21, 20), RTT_ROAD) == other && GetRoadOwner(t(21, 20), RTT_TRAM) == other;
+	Backup<CompanyID> bankrupt(_current_company, other);
+	ChangeTileOwner(t(21, 20), other, INVALID_OWNER);
+	bankrupt.Restore();
+	fmt::print(stderr, "ROADCMD transfer-depot {} {}\n", merged, IsTileType(t(21, 20), MP_CLEAR));
 	UpdateNearestTownForRoadTiles(false);
 	SaveRandomSeeds(&after);
 	bool same = before.random.state[0] == after.random.state[0] && before.random.state[1] == after.random.state[1] && before.interactive_random.state[0] == after.interactive_random.state[0] && before.interactive_random.state[1] == after.interactive_random.state[1];
