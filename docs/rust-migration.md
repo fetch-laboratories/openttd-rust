@@ -1603,8 +1603,9 @@ body directly. Original bodies compile only portably.
 
 C++ keeps shell allocation and source-ordered field stores (including the rear head's `Money`
 halving), the attach callback, unit-ID pools and presentation leaves. Chain links stay native and
-change only through `SetNext`; shared leaves in `vehicle_services.h`/`engine_services.h` serve the
-train controller, cargo capacity and this owner. `vehicle_base.rs`/`ground_vehicle.rs` hold the
+change only through `SetNext`; rail moves call the Rust cargo capacity owner directly. Shared
+leaves in `vehicle_services.h`/`engine_services.h` serve the train controller, cargo capacity and
+this owner. `vehicle_base.rs`/`ground_vehicle.rs` hold the
 GVSF values and subtype helpers.
 
 Checks: `python3 tools/migration.py simulate fleet-transaction-rail --jobs 2` requires the

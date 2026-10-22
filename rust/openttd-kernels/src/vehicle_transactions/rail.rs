@@ -25,6 +25,7 @@ pub struct Strings {
 }
 #[repr(C)]
 pub struct Services {
+    pub cargo_capacity: &'static crate::cargo_storage::CapacityServices,
     pub strings: Strings,
     pub compatible: extern "C" fn(*const OpenTTDEngine, u32) -> bool,
     pub powered: extern "C" fn(*const OpenTTDEngine, u32) -> bool,
@@ -803,8 +804,20 @@ pub(crate) unsafe fn move_vehicle(
     }
     if flags & DoCommandFlag::NO_CARGO_CAPACITY_CHECK == 0 {
         unsafe {
-            (x.w.capacity)(src_head);
-            (x.w.capacity)(dst_head);
+            crate::cargo_storage::openttd_rust_cargo_capacity(
+                s.cargo_capacity,
+                src_head.cast(),
+                ptr::null_mut(),
+                0,
+                0,
+            );
+            crate::cargo_storage::openttd_rust_cargo_capacity(
+                s.cargo_capacity,
+                dst_head.cast(),
+                ptr::null_mut(),
+                0,
+                0,
+            );
         }
     }
     if !src_head.is_null() {
