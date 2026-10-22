@@ -630,9 +630,9 @@ static const OpenTTDStationServices _rust_station_services = {
 	},
 	.station_owner = RustStationOwnerByte<BaseStation>,
 	.station_exclusivity = [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationExclusivity {
-		BaseStation *st = static_cast<BaseStation *>(handle);
+		const Town *town = OpenTTDBaseStationTown(static_cast<BaseStation *>(handle));
 		return {
-			st->town->exclusive_counter, st->town->exclusivity.base()
+			town->exclusive_counter, town->exclusivity.base()
 		};
 	},
 	.station_next = [](void *handle) noexcept -> OpenTTDBaseStation * {
@@ -670,7 +670,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	},
 	.rectangle_empty = RustStationRectangleEmptyHandle<OpenTTDBaseStation *>,
 	.town_statue = [](OpenTTDBaseStation *handle) noexcept -> bool {
-		return Company::IsValidID(static_cast<BaseStation *>(handle)->owner) && static_cast<BaseStation *>(handle)->town->statues.Test(static_cast<BaseStation *>(handle)->owner);
+		return Company::IsValidID(static_cast<BaseStation *>(handle)->owner) && OpenTTDBaseStationTown(static_cast<BaseStation *>(handle))->statues.Test(static_cast<BaseStation *>(handle)->owner);
 	},
 	.select_goods = []() noexcept -> bool {
 		return _settings_game.order.selectgoods;

@@ -61,4 +61,8 @@ inline uint16_t OpenTTDSubsidyDuration() noexcept { return _settings_game.diffic
 inline bool OpenTTDManualCargoDistribution(CargoType cargo) noexcept { return _settings_game.linkgraph.GetDistributionType(cargo) == DT_MANUAL; }
 inline bool OpenTTDAutomaticCargoDistribution(CargoType cargo) noexcept { return !OpenTTDManualCargoDistribution(cargo); }
 inline bool OpenTTDManualPassengerDistribution() noexcept { return _settings_game.linkgraph.distribution_pax == DT_MANUAL; }
+inline bool OpenTTDFundRoads() noexcept { return _settings_game.economy.fund_roads; }
+inline bool OpenTTDFundBuildings() noexcept { return _settings_game.economy.fund_buildings; }
+inline bool OpenTTDExclusiveRights() noexcept { return _settings_game.economy.exclusive_rights; }
+inline bool OpenTTDBribe() noexcept { return _settings_game.economy.bribe; }
 #endif /* RUST_SETTINGS_SERVICES_H */

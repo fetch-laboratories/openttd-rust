@@ -19,7 +19,6 @@ pub struct Services {
     pub common: &'static CommonServices,
     pub selection: &'static SelectionServices,
     pub is_depot: extern "C" fn(u32) -> bool,
-    pub is_tile_owner: extern "C" fn(u32, u8) -> bool,
     pub send: extern "C" fn(*mut CommandCost, *mut (), u16, u8),
     pub service: u8,
     pub mass_send: u8,
@@ -60,7 +59,12 @@ unsafe fn generate(s: &Services, list: &mut List, id: &ListId) -> bool {
     }
 }
 fn depot(s: &Services, tile: u32) -> bool {
-    (s.is_depot)(tile) && (s.is_tile_owner)(tile, (s.common.base.shared.current_company)())
+    (s.is_depot)(tile)
+        && crate::tile_map::is_tile_owner(
+            s.common.base.shared,
+            tile,
+            (s.common.base.shared.current_company)(),
+        )
 }
 unsafe fn nested_start(s: &Services, cost: *mut CommandCost, flags: u16, id: u32) {
     let b = s.common.base;

@@ -15,7 +15,9 @@
 #include "company_type.h"
 #include "cargo_type.h"
 
+#ifndef WITH_RUST
 void DeleteSubsidyWith(Source src);
+#endif
 bool CheckSubsidised(CargoType cargo_type, CompanyID company, Source src, const Station *st);
 void RebuildSubsidisedSourceAndDestinationCache();
 

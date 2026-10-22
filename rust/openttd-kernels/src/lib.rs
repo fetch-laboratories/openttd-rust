@@ -38,6 +38,7 @@ mod math;
 mod newgrf_callbacks;
 mod newgrf_sound;
 mod node_hash;
+mod object_type;
 mod objects;
 mod order_type;
 mod packet;

@@ -9,3 +9,5 @@
 
 /// `HANGAR`.
 pub const HANGAR: u8 = 1;
+/// `AT_OILRIG`.
+pub const AT_OILRIG: u8 = 9;

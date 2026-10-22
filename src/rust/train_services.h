@@ -198,11 +198,6 @@ static void TrainClearReservation(OpenTTDTrainHandle id, uint32_t a, uint8_t b) 
 	Train *v = static_cast<Train *>(id.shell);
 	ClearPathReservation(v, TileIndex(a), static_cast<Trackdir>(b));
 }
-static uint64_t TrainCompatibleRailOwner(OpenTTDTrainHandle id, uint32_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return SharedIsTileOwner(a, v->owner.base());
-}
 static void TrainConsistWindows(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -245,7 +240,7 @@ static void TrainCrashNews(OpenTTDTrainHandle id, uint32_t a) noexcept
 static void TrainCrashRating(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	ModifyStationRatingAround(v->tile, v->owner, -160, 30);
+	OpenTTDModifyStationRatingAround(v->tile.base(), v->owner.base(), -160, 30);
 }
 static void TrainCrashSound(OpenTTDTrainHandle id) noexcept
 {

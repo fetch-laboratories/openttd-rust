@@ -42,3 +42,9 @@ pub const PR_CLEAR_TUNNEL: usize = 33;
 pub const PR_BUILD_AQUEDUCT: usize = 62;
 /// `PR_CLEAR_AQUEDUCT`.
 pub const PR_CLEAR_AQUEDUCT: usize = 63;
+
+/// `PR_TOWN_ACTION`.
+pub const PR_TOWN_ACTION: usize = 56;
+
+/// `EXPENSES_OTHER`.
+pub const EXPENSES_OTHER: u8 = 12;

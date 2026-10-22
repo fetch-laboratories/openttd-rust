@@ -56,6 +56,7 @@
 #include "table/build_industry.h"
 
 #ifdef WITH_RUST
+#include "rust/services_industry.h"
 #include "rust/industry_generation_adapter.hpp"
 #include "rust/subsidy_ffi.h"
 #include "rust/landscape_loop_ffi.h"
@@ -3591,9 +3592,9 @@ static void RustIndustryNews(Industry *i, StringID str, bool close) noexcept
 	/* Set parameters of news string */
 	EncodedString headline;
 	if (str > STR_LAST_STRINGID) {
-		headline = GetEncodedString(str, STR_TOWN_NAME, i->town->index, GetIndustrySpec(i->type)->name);
+		headline = GetEncodedString(str, STR_TOWN_NAME, OpenTTDIndustryTown(i)->index, GetIndustrySpec(i->type)->name);
 	} else if (close) {
-		headline = GetEncodedString(str, STR_FORMAT_INDUSTRY_NAME, i->town->index, GetIndustrySpec(i->type)->name);
+		headline = GetEncodedString(str, STR_FORMAT_INDUSTRY_NAME, OpenTTDIndustryTown(i)->index, GetIndustrySpec(i->type)->name);
 	} else {
 		headline = GetEncodedString(str, i->index);
 	}
@@ -3612,9 +3613,8 @@ static const IndustrySpec *RustIndustrySpec(void *handle) noexcept { return GetI
 static const OpenTTDIndustryServices _industry_services = {
 	.shared = &GetRustSharedServices(),
 	.next_tick = [](uint32_t from) noexcept -> OpenTTDIndustryEntry {
-		auto range = Industry::Iterate(from);
-		if (range.empty()) return {};
-		Industry *i = *range.begin();
+		Industry *i = OpenTTDNextIndustry(from);
+		if (i == nullptr) return {};
 		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i), GetIndustrySpec(i->type)->callback_mask.base()};
 	},
 	.sound_count = [](void *i) noexcept -> uint16_t { return static_cast<uint16_t>(RustIndustrySpec(i)->random_sounds.size()); },
@@ -3963,7 +3963,7 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.conflicting = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> OpenTTDIndustryConflictKinds { OpenTTDIndustryConflictKinds result; std::ranges::copy(reinterpret_cast<const IndustrySpec *>(spec)->conflicting, result.kinds); return result; },
 		.multiple_per_town = []() noexcept -> bool { return _settings_game.economy.multiple_industry_per_town; },
 		.closest_town = [](uint32_t tile, uint32_t threshold) noexcept -> const OpenTTDTownHandle * { return reinterpret_cast<const OpenTTDTownHandle *>(ClosestTownFromTile(TileIndex(tile), threshold)); },
-		.town = [](Industry *industry) noexcept -> const OpenTTDTownHandle * { return reinterpret_cast<const OpenTTDTownHandle *>(industry->town); },
+		.town = OpenTTDIndustryTownHandle,
 		.population = [](const OpenTTDTownHandle *town) noexcept -> uint32_t { return reinterpret_cast<const Town *>(town)->cache.population; },
 		.town_position = OpenTTDTownTile,
 		.industry = [](uint16_t id) noexcept -> Industry * { return Industry::Get(IndustryID(id)); },

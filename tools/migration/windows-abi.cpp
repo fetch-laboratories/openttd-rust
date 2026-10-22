@@ -51,6 +51,7 @@
 #include "rust/station_cargo_ffi.h"
 #include "rust/station_service_ffi.h"
 #include "rust/string_validation_ffi.h"
+#include "rust/town_command_ffi.h"
 #include "rust/town_founding_ffi.h"
 #include "rust/townname_ffi.h"
 #include "rust/train_ffi.h"

@@ -17,6 +17,7 @@
 #include "economy_func.h"
 #include "timer/timer_game_economy.h"
 #ifdef WITH_RUST
+#include "rust/subsidy_ffi.h"
 void SubsidyMonthlyLoop();
 #else
 bool FindSubsidyPassengerRoute();
@@ -93,7 +94,13 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	fmt::print(stderr, "SUBSIDY routes {} {} {}\n", found[0], found[1], found[2]); SubsidyClean();
 	if (!Company::CanAllocateItem()) { FixtureAbort(__LINE__); } Company *empty = new Company(); s = FixtureSubsidy(cargo, industry, other, 12); s->awarded = empty->index; RebuildSubsidisedSourceAndDestinationCache(); ChangeOwnershipOfCompanyItems(empty->index, front->owner); bool transfer = s->awarded == front->owner;
 	s->awarded = empty->index; ChangeOwnershipOfCompanyItems(empty->index, INVALID_OWNER); bool removed = Subsidy::GetNumItems() == 0; delete empty;
-	s = FixtureSubsidy(cargo, industry, other, 12); RebuildSubsidisedSourceAndDestinationCache(); DeleteSubsidyWith(industry); removed &= Subsidy::GetNumItems() == 0;
+	s = FixtureSubsidy(cargo, industry, other, 12); RebuildSubsidisedSourceAndDestinationCache();
+#ifdef WITH_RUST
+	openttd_rust_subsidy_delete_with(&GetRustSubsidyServices(), industry);
+#else
+	DeleteSubsidyWith(industry);
+#endif
+	removed &= Subsidy::GetNumItems() == 0;
 	fmt::print(stderr, "SUBSIDY transfer {} {}\n", transfer, removed);
 	s = FixtureSubsidy(cargo, town, other, 54321); s->awarded = front->owner; RebuildSubsidisedSourceAndDestinationCache();
 	catchment.Restore(); near.Restore(); accepts.Restore(); last.Restore(); current.Restore();

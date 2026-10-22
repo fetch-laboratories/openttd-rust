@@ -98,7 +98,7 @@ layouts! {
         build_stamp, exclusive_preview, service_flags, wrong_depot,
     };
     "OpenTTDVehicleListId" ["probe"] => crate::vehicle_transactions::mass::ListId { kind, vehicle_type, company, index, valid, };
-    "OpenTTDVehicleMassServices" ["probe"] => crate::vehicle_transactions::mass::Services { common, selection, is_depot, is_tile_owner, send, service, mass_send, dont_cancel, invalid_client, };
+    "OpenTTDVehicleMassServices" ["probe"] => crate::vehicle_transactions::mass::Services { common, selection, is_depot, send, service, mass_send, dont_cancel, invalid_client, };
     "GRFStringID" ["probe"] => crate::vehicle_transactions::GrfStringId { };
     "OpenTTDVehicleRefitCapacity" ["probe"] => crate::vehicle_transactions::refit::Capacity {
         total, mail, cargo,
@@ -2595,6 +2595,61 @@ layouts! {
         grfid,
         kind => type,
     };
+    "OpenTTDTownCommandServices" ["probe"] => crate::town::commands::CommandServices {
+        founding,
+        rail,
+        cargo,
+        objects,
+        subsidies,
+        fund_roads,
+        fund_buildings,
+        exclusive_rights,
+        bribe,
+        invalidate_view,
+        invalidate_authority,
+        modify_station_rating,
+        road_news,
+        road_events,
+        rights_news,
+        rights_events,
+        station_views_dirty,
+        next_station,
+        station_town,
+        station_owner,
+        station_airport,
+        airport_type,
+        airport_tile,
+        station_activity_owner,
+        local_company,
+        bribe_error,
+        next_waypoint,
+        next_depot,
+        next_industry,
+        set_object_town,
+        industry_town_by_tile,
+        town_owned_road,
+        remove_town_indices,
+        delete_town,
+        cleaning_pool,
+        close_view,
+        close_graph,
+        storage_count,
+        delete_storage,
+        clear_storage,
+        delete_inspect,
+        dirty_screen,
+        assertions,
+        too_many_objects,
+        no_statue_place,
+    };
+    "OpenTTDTownPoolRelation" ["probe"] => crate::town::commands::Relation {
+        next,
+        town,
+    };
+    "OpenTTDTownStationCursor" ["probe"] => crate::town::commands::StationCursor {
+        shell,
+        next,
+    };
     "OpenTTDTownFoundingServices" ["probe"] => crate::town::founding::FoundingServices {
         shared,
         growth,
@@ -4214,7 +4269,6 @@ layouts! {
         check_reverse,
         choose_track,
         clear_reservation,
-        compatible_rail_owner,
         consist_windows,
         cost_class,
         cost_default,
