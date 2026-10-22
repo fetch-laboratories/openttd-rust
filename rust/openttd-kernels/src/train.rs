@@ -237,13 +237,6 @@ pub struct TrainCurrentMaxSpeedRead {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct TrainCurrentMaxSpeed6Read {
-    pub next: Handle,
-    pub tile: u32,
-    pub status: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct TrainUpdateAccelerationRead {
     pub power: u32,
     pub weight: u32,
@@ -446,7 +439,6 @@ pub struct Leaves {
     pub read_curve_limit: extern "C" fn(Handle) -> TrainCurveLimitRead,
     pub read_stop_location: extern "C" fn(Handle) -> TrainStopLocationRead,
     pub read_current_max_speed: extern "C" fn(Handle) -> TrainCurrentMaxSpeedRead,
-    pub read_current_max_speed_6: extern "C" fn(Handle) -> TrainCurrentMaxSpeed6Read,
     pub read_update_acceleration: extern "C" fn(Handle) -> TrainUpdateAccelerationRead,
     pub read_update_speed: extern "C" fn(Handle) -> TrainUpdateSpeedRead,
     pub read_trackdir: extern "C" fn(Handle) -> TrainTrackdirRead,
@@ -976,15 +968,15 @@ impl Game<'_> {
         }
         let mut u = id;
         while u != Handle::NONE {
-            let part = (self.leaves.read_current_max_speed_6)(u);
             if model == 1 && u.get_track() == u64::from(DEPOT) {
                 max_speed = max_speed.min(61);
                 break;
             }
-            if u.get_track() == u64::from(WORMHOLE) && part.status & 1 == 0 {
-                max_speed = max_speed.min((self.leaves.bridge_speed)(u, part.tile) as i32);
+            if u.get_track() == u64::from(WORMHOLE) && (self.leaves.read_status)(u) & 1 == 0 {
+                let tile = (self.leaves.read_tile)(u);
+                max_speed = max_speed.min((self.leaves.bridge_speed)(u, tile) as i32);
             }
-            u = part.next;
+            u = (self.leaves.read_next)(u);
         }
         max_speed = max_speed.min((self.leaves.order_max_speed)(id) as i32);
         max_speed.min(i32::from((self.leaves.read_max_track_speed)(id)))
