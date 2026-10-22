@@ -196,6 +196,7 @@ worktree and branch.
 | #281 / #340 | `f7046d88b8` | Cleanup and conflict resolution reviewed; verify/33 scenarios passed before update, instruction driver running, then checked counts and Full. |
 | #314 / #329 | `a0dec91641` | Fixes reviewed, verify/52 scenarios passed; conflict-free docs/tools update, instruction run underway, then checked counts and Full. |
 | #316 | `d5c07a89b0` base | Agent implementing subsidies; Cargo4 passed, native compile/scenario work underway. Combined glue/tooling cap450. |
+| #247 | not yet started | Next free ownership slot: whole town commands/authority/deletion, integrated #246/#256 prerequisites met; current instruction-count policy replaces the issue's older speed process. |
 | #344 / #345 | `986ad0f756` | Train read6 deletion reviewed, verify/default trace passed; exact-base P2016 measured, relevant semantics and candidate counts pending. Production net glue -12, tests72. |
 | #274 | `162843acbd` | Paused measurement branch. |
 
