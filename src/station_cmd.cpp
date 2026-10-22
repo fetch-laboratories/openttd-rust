@@ -81,6 +81,7 @@
 
 #ifdef WITH_RUST
 #include "rust/vehicle_services.h"
+#include "rust/services_map.h"
 #include "rust/services_station.h"
 #include "rust/station_command_ffi.h"
 #include "rust/tile_owner_services.h"
@@ -819,7 +820,7 @@ static const OpenTTDStationLinks _rust_station_links = {
 		const Edge &edge = (*graph)[node].edges[index];
 		Station *from = static_cast<Station *>(from_handle);
 		Station *to = Station::Get((*graph)[edge.dest_node].station);
-		return {to, edge.LastUpdate().base(), DistanceManhattan(from->xy, to->xy)};
+		return {to, edge.LastUpdate().base(), OpenTTDDistanceManhattan(from->xy.base(), to->xy.base())};
 	},
 	.edge_unrestricted = [](OpenTTDLinkGraph *handle, uint16_t node, size_t index) noexcept -> int32_t {
 		return (*static_cast<LinkGraph *>(handle))[node].edges[index].last_unrestricted_update.base();

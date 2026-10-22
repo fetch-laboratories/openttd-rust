@@ -10,6 +10,7 @@
 #include "vehicle_ffi.h"
 #ifdef WITH_RUST
 #include "vehicle_services.h"
+#include "services_newgrf.h"
 #include "../vehicle_func.h"
 #include "../order_func.h"
 #include "../newgrf_engine.h"

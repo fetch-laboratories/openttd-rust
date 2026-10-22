@@ -1608,6 +1608,35 @@ conversion/reroutes, clearing/terraforming, company transfer/deletion and reserv
 Coast/half-tile water and PBS path-end removal remain #156 gaps. PR #270 records
 exact-head checks and outstanding full-simulation, speed and CI gates.
 
+### Object construction, generation and HQ lifecycle (#295)
+
+Rust (`objects.rs`) owns build/area commands, clear and ownership policy,
+terraform/build-above, HQ growth/acceptance/production, colour updates,
+object tile loops and generation including lighthouse/transmitter searches.
+It also owns object NewGRF variables, nearby/sister queries and animation triggers;
+native interpreter, badge, override and generic animation-frame services remain.
+Process-wide wrapping type counts and ordered cleared-area command scratch
+have one Rust owner. Tunnel clients retain indices over nested append, and
+industry transactions snapshot/restore the same scratch at the original points.
+C++ retains the native object pool/specs/map/save/render records, stack command
+results and typed shared services; original bodies remain portable-only.
+
+Generation progress cancellation returns before native rethrow. Other leaves
+are synchronous noexcept calls. Borrows end before callbacks; HQ passenger/mail
+production shares one random word and lazily discovers stations. Command calls
+use the shared `command::nested` lifecycle. Command, finance, clearing and water
+restoration reuse the integrated shared owners; ownership enters from and
+redispatches through the shared Rust dispatcher (#333). Named ABI
+metadata and typed abort defaults cover the object table and consumed records.
+
+Default `objects` semantic scenarios cover four climates/borders, HQ relocation,
+cargo, owned-land area construction, statues, ownership, clearing back to
+canal/river/sea with water redispatch, ID reuse and afterload
+counts. Compact unchanged-body probes cover count wrapping/destruction, scratch
+growth, cancellation, query availability/register/nearby/count decisions and callback/RNG
+ordering, including unmasked `SB` refresh and reentry. External NewGRF/legacy,
+autoslope and generation branches remain tracked in #156.
+
 ### Road track, depot and conversion commands (#266)
 
 Rust (`road_cmd.rs`) owns road removal permissions and slopes, single and long
@@ -1633,6 +1662,7 @@ including drags, one-way/tram coexistence, reserved crossings, stops, bridges,
 depots, slopes, town removal, owner changes and low-funds removal.
 The fixture declares builtin-like road-type inputs; external NewGRF programs and
 legacy save variants remain corpus gaps. PR #290 records validation and speed.
+
 ### House lifecycle and tile simulation (#256)
 
 `town/house.rs` owns `TileLoop_Town` (construction stages, rebuild/replacement, original and

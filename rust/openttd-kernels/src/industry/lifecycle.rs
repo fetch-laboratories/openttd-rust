@@ -40,7 +40,7 @@ pub struct LifecycleServices {
     pub neutral_station: unsafe extern "C" fn(*mut c_void) -> *mut super::StationHandle,
     pub cleanup_tile: unsafe extern "C" fn(u32) -> CleanupTile,
     pub delete_tile_inspect: unsafe extern "C" fn(u32),
-    pub make_water: unsafe extern "C" fn(u32),
+    pub restoration: *const crate::water::RestorationServices,
     pub delete_oilrig: unsafe extern "C" fn(u32),
     pub clear_docking: unsafe extern "C" fn(u32),
     pub industry_field: unsafe extern "C" fn(u32, u16) -> bool,
@@ -121,7 +121,14 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
         if observation.kind == 8 {
             if observation.industry == id {
                 (w.delete_tile_inspect)(tile);
-                (w.make_water)(tile);
+                let shared = s.shared();
+                crate::water::restore(
+                    tile,
+                    16,
+                    shared,
+                    &*(shared.water_services)(),
+                    &*w.restoration,
+                );
             }
         } else if observation.kind == 5 && observation.oilrig {
             (w.delete_oilrig)(tile);
