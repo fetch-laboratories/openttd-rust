@@ -229,9 +229,9 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	Backup<GameMode> mode(_game_mode, GM_EDITOR);
 	Backup<bool> roads(_settings_game.economy.fund_roads, true), buildings(_settings_game.economy.fund_buildings, true), rights(_settings_game.economy.exclusive_rights, true), bribes(_settings_game.economy.bribe, true);
 #ifdef WITH_RUST
-	Backup<Money> money(company->Finances().money, 1000000000000LL);
+	Backup<Money> money(company->Finances().money, 1000000000000LL), other_money(other->Finances().money, 1000000000000LL);
 #else
-	Backup<Money> money(company->money, 1000000000000LL);
+	Backup<Money> money(company->money, 1000000000000LL), other_money(other->money, 1000000000000LL);
 #endif
 	Cost("goal-wrong-owner", CmdTownCargoGoal({}, id, TAE_PASSENGERS, 100));
 	Cost("text-wrong-owner", CmdTownSetText({}, id, {}));
@@ -363,7 +363,7 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	/* Reuse the released ID through the actual founding command. */
 	auto [reused, extra, reused_id] = CmdFoundTown(DoCommandFlag::Execute, Site(), TSZ_SMALL, false, TL_ORIGINAL, false, 0, "Reused town");
 	Cost("delete-reuse", reused, extra, reused_id); fmt::print(stderr, "TOWN deletion-reuse {}\n", reused.Succeeded() && reused_id == removed);
-	mode.Restore(); money.Restore(); owner.Restore(); roads.Restore(); buildings.Restore(); rights.Restore(); bribes.Restore();
+	mode.Restore(); money.Restore(); other_money.Restore(); owner.Restore(); roads.Restore(); buildings.Restore(); rights.Restore(); bribes.Restore();
 	SetGeneratingWorldProgress(GWP_GAME_START, 1);
 	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 	else {

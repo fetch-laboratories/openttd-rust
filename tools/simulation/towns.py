@@ -932,6 +932,7 @@ def check(scenario, run, mode, role, result):
             ("authority-reload true",)
             if scenario["town_commands_reload"]
             else (
+                "foreign-mask 191",
                 "oilrig-refusal true true",
                 "deleted-dependencies true true true",
                 "deletion true true true",
