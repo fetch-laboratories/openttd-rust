@@ -22,7 +22,6 @@ struct OpenTTDAircraftVehicle;
 const OpenTTDAircraftLeaves &GetRustAircraftLeaves() noexcept;
 struct Vehicle;
 OpenTTDAircraftVehicle OPENTTD_AIRCRAFT_CALL RustAircraftNext(OpenTTDAircraftVehicle) noexcept;
-uint16_t OPENTTD_AIRCRAFT_CALL RustAircraftEngineReliability(OpenTTDAircraftVehicle) noexcept;
 OpenTTDAircraftVehicle RustAircraftVehicle(Vehicle *) noexcept;
 OpenTTDAircraftVehicle GetRustAircraftVehicle(OpenTTDVehicle *) noexcept;
 

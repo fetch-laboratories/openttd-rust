@@ -63,11 +63,6 @@ OpenTTDAircraftVehicle OPENTTD_AIRCRAFT_CALL RustAircraftNext(OpenTTDAircraftVeh
 {
 	return RustAircraftVehicle(RustVehicleNext(VehicleOf(vehicle.handle)));
 }
-uint16_t OPENTTD_AIRCRAFT_CALL RustAircraftEngineReliability(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	const Vehicle *v = VehicleOf(vehicle.handle);
-	return RustEngineReliability(EngineOf(RustVehicleGetEngine(RustVehicle(v))));
-}
 
 #include "../safeguards.h"
 
@@ -221,10 +216,9 @@ static uint8_t OPENTTD_VEHICLE_CALL VehicleSvcStatus(OpenTTDVehicle *v) noexcept
 static uint32_t OPENTTD_VEHICLE_CALL VehicleSvcTile(OpenTTDVehicle *v) noexcept { return RustVehicleTile(VehicleOf(v)); }
 static OpenTTDVehicle *OPENTTD_VEHICLE_CALL VehicleSvcNext(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleNext(VehicleOf(v))); }
 static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcEngineID(OpenTTDVehicle *v) noexcept { return RustVehicleEngineID(VehicleOf(v)); }
-static const OpenTTDEngine *OPENTTD_VEHICLE_CALL VehicleSvcEngine(OpenTTDVehicle *v) noexcept { return RustEngine(VehicleOf(v)->GetEngine()); }
 static OpenTTDEngineForLength OPENTTD_VEHICLE_CALL VehicleSvcEngineForLength(OpenTTDVehicle *v) noexcept
 {
-	const Engine *e = EngineOf(VehicleSvcEngine(v));
+	const Engine *e = EngineOf(RustVehicleGetEngine(v));
 	return {.engine = RustEngine(e), .grf_version = RustEngineGRFVersion(e)};
 }
 
@@ -344,7 +338,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.detach_last = VehicleSvcDetachLast,
 	.next = VehicleSvcNext,
 	.engine_id = VehicleSvcEngineID,
-	.engine = VehicleSvcEngine,
+	.engine = RustVehicleGetEngine,
 	.engine_for_length = VehicleSvcEngineForLength,
 	.write_tick = VehicleSvcWriteTick,
 	.direction = VehicleSvcDirection,
