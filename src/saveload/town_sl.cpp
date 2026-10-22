@@ -269,6 +269,14 @@ static std::array<Town::SuppliedHistory, 2> _old_pass_supplied{};
 static std::array<Town::SuppliedHistory, 2> _old_mail_supplied{};
 
 #ifdef WITH_RUST
+struct TownTextSaveScope {
+	static inline EncodedString current;
+	EncodedString previous;
+	Town *town;
+	bool loading;
+	TownTextSaveScope(Town *town, bool loading) : previous(std::move(current)), town(town), loading(loading) { current = town->GetText(); }
+	~TownTextSaveScope() { if (this->loading) this->town->SetText(current); current = std::move(this->previous); }
+};
 struct TownNameSaveScope {
 	static inline std::string current;
 	std::string previous;
@@ -328,7 +336,11 @@ static const SaveLoad _town_desc[] = {
 
 	SLE_CONDARR(Town, goal, SLE_UINT32, NUM_TAE, SLV_165, SL_MAX_VERSION),
 
+#ifdef WITH_RUST
+	SLEG_CONDSSTR("text", TownTextSaveScope::current, SLE_STR | SLF_ALLOW_CONTROL, SLV_168, SL_MAX_VERSION),
+#else
 	SLE_CONDSSTR(Town, text,                 SLE_STR | SLF_ALLOW_CONTROL, SLV_168, SL_MAX_VERSION),
+#endif
 
 	SLE_CONDVAR(Town, time_until_rebuild,    SLE_FILE_U8 | SLE_VAR_U16,  SL_MIN_VERSION, SLV_54),
 	SLE_CONDVAR(Town, time_until_rebuild,    SLE_UINT16,                SLV_54, SL_MAX_VERSION),
@@ -371,6 +383,7 @@ struct CITYChunkHandler : ChunkHandler {
 			SlSetArrayIndex(t->index);
 #ifdef WITH_RUST
 			TownNameSaveScope name_scope(t, false);
+			TownTextSaveScope text_scope(t, false);
 #endif
 			SlObject(t, _town_desc);
 		}
@@ -387,6 +400,7 @@ struct CITYChunkHandler : ChunkHandler {
 			{
 #ifdef WITH_RUST
 				TownNameSaveScope name_scope(t, true);
+				TownTextSaveScope text_scope(t, true);
 #endif
 				SlObject(t, slt);
 			}
@@ -418,6 +432,7 @@ struct CITYChunkHandler : ChunkHandler {
 		for (Town *t : Town::Iterate()) {
 #ifdef WITH_RUST
 			TownNameSaveScope name_scope(t, false);
+			TownTextSaveScope text_scope(t, false);
 #endif
 			SlObject(t, _town_desc);
 		}

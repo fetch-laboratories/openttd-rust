@@ -226,10 +226,6 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_crash_news(OpenTTDAircraftVehicle veh
 	AddTileNewsItem(std::move(headline), v->owner == _local_company ? NewsType::Accident : NewsType::AccidentOther, vt, station);
 }
 
-static void OPENTTD_AIRCRAFT_CALL Aircraft_station_rating(uint32_t tile, uint8_t owner, int32_t amount, uint32_t radius) noexcept
-{
-	ModifyStationRatingAround(TileIndex{tile}, CompanyID{static_cast<uint8_t>(owner)}, amount, radius);
-}
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_landing_rating(uint16_t station_id, uint8_t cargo) noexcept
 {
@@ -481,7 +477,7 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.create_effect = Aircraft_create_effect,
 	.truncate_cargo = Aircraft_truncate_cargo,
 	.crash_news = Aircraft_crash_news,
-	.station_rating = Aircraft_station_rating,
+	.station_rating = OpenTTDModifyStationRatingAround,
 	.landing_rating = Aircraft_landing_rating,
 	.dirty_depot = Aircraft_dirty_depot,
 	.first_arrival = Aircraft_first_arrival,

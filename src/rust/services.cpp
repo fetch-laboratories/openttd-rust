@@ -7,6 +7,7 @@
 
 /** @file services.cpp Direct shared-world leaves for Rust game owners. */
 #include "../stdafx.h"
+#include "../airport.h"
 #include "town_services.h"
 #include "services_ffi.h"
 #include "station_command_ffi.h"
@@ -243,7 +244,9 @@ static_assert(OWNER_TOWN.base() == 0x0F && OWNER_NONE.base() == 0x10 && OWNER_WA
 static_assert(to_underlying(DoCommandFlag::Execute) == 0 && to_underlying(DoCommandFlag::Auto) == 1 && to_underlying(DoCommandFlag::QueryCost) == 2 && to_underlying(DoCommandFlag::NoWater) == 3);
 static_assert(to_underlying(DoCommandFlag::NoTestTownRating) == 4 && to_underlying(DoCommandFlag::Bankrupt) == 5 && to_underlying(DoCommandFlag::NoModifyTownRating) == 9 && to_underlying(DoCommandFlag::ForceClearTile) == 10);
 static_assert(std::is_same_v<DoCommandFlags::BaseType, uint16_t>);
-static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28 && PR_CLEAR_DEPOT_TRAIN == 30 && PR_CLEAR_WATER == 34 && PR_BUILD_FOUNDATION == 57);
+static_assert(AT_OILRIG == 9 && OBJECT_STATUE == 2 && EXPENSES_OTHER == 12 && COMPANY_SPECTATOR.base() == 0xFF && MP_INDUSTRY == 8 && MP_OBJECT == 10);
+static_assert(RATING_MINIMUM == -1000 && RATING_MAXIMUM == 1000 && RATING_BRIBE_UP_STEP == 200 && RATING_BRIBE_MAXIMUM == 800 && RATING_BRIBE_DOWN_TO == -50);
+static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28 && PR_CLEAR_DEPOT_TRAIN == 30 && PR_CLEAR_WATER == 34 && PR_TOWN_ACTION == 56 && PR_BUILD_FOUNDATION == 57);
 static uint32_t Shared_tile_height(uint32_t tile) noexcept { return TileHeight(TileIndex{tile}); }
 static uint8_t Shared_bridge_axis(uint32_t tile) noexcept { return GetBridgeAxis(TileIndex{tile}); }
 static bool Shared_has_water_ground(uint32_t tile) noexcept { return HasTileWaterGround(TileIndex{tile}); }

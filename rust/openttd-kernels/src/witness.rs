@@ -361,6 +361,24 @@ witness_blocks! {
         TOWN_ENTRIES = 22 => "town.entries",
         TOWN_NO_CITIES = 23 => "town.no_cities",
     }
+    town_command {
+        TOWN_COMMAND_ACTION = 0 => "town_command.action",
+        TOWN_COMMAND_BRIBE_FAILED = 1 => "town_command.bribe_failed",
+        TOWN_COMMAND_BRIBE_SUCCESS = 2 => "town_command.bribe_success",
+        TOWN_COMMAND_DELETE = 3 => "town_command.delete",
+        TOWN_COMMAND_DELETE_BRIDGE = 4 => "town_command.delete_bridge",
+        TOWN_COMMAND_DELETE_OILRIG = 5 => "town_command.delete_oilrig",
+        TOWN_COMMAND_DESTRUCT = 6 => "town_command.destruct",
+        TOWN_COMMAND_EXPAND = 7 => "town_command.expand",
+        TOWN_COMMAND_GOAL = 8 => "town_command.goal",
+        TOWN_COMMAND_OBJECT_DETACH = 9 => "town_command.object_detach",
+        TOWN_COMMAND_OBJECT_REHOME = 10 => "town_command.object_rehome",
+        TOWN_COMMAND_RATE = 11 => "town_command.rate",
+        TOWN_COMMAND_RATING = 12 => "town_command.rating",
+        TOWN_COMMAND_RIGHTS_CANCEL = 13 => "town_command.rights_cancel",
+        TOWN_COMMAND_STATUE = 14 => "town_command.statue",
+        TOWN_COMMAND_TEXT = 15 => "town_command.text",
+    }
     train {
         TRAIN_TICK_FIRST = 0 => "train.tick_first",
         TRAIN_TICK_SECOND = 1 => "train.tick_second",

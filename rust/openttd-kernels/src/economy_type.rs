@@ -21,3 +21,9 @@ pub const PR_CLEAR_DEPOT_TRAIN: usize = 30;
 pub const PR_CLEAR_WATER: usize = 34;
 /// `PR_BUILD_FOUNDATION`.
 pub const PR_BUILD_FOUNDATION: usize = 57;
+
+/// `PR_TOWN_ACTION`.
+pub const PR_TOWN_ACTION: usize = 56;
+
+/// `EXPENSES_OTHER`.
+pub const EXPENSES_OTHER: u8 = 12;

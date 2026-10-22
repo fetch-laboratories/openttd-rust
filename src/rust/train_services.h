@@ -252,7 +252,7 @@ static void TrainCrashNews(OpenTTDTrainHandle id, uint32_t a) noexcept
 static void TrainCrashRating(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	ModifyStationRatingAround(v->tile, v->owner, -160, 30);
+	OpenTTDModifyStationRatingAround(v->tile.base(), v->owner.base(), -160, 30);
 }
 static void TrainCrashSound(OpenTTDTrainHandle id) noexcept
 {

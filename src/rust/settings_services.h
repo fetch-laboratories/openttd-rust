@@ -51,4 +51,8 @@ inline bool RustStationStopOnCompetitorRoad() noexcept { return _settings_game.c
 inline bool RustStationNoiseEnabled() noexcept { return _settings_game.economy.station_noise_level; }
 inline bool RustStationDistantJoin() noexcept { return _settings_game.station.distant_join_stations; }
 inline bool RustExtraDynamite() noexcept { return _settings_game.construction.extra_dynamite; }
+inline bool OpenTTDFundRoads() noexcept { return _settings_game.economy.fund_roads; }
+inline bool OpenTTDFundBuildings() noexcept { return _settings_game.economy.fund_buildings; }
+inline bool OpenTTDExclusiveRights() noexcept { return _settings_game.economy.exclusive_rights; }
+inline bool OpenTTDBribe() noexcept { return _settings_game.economy.bribe; }
 #endif /* RUST_SETTINGS_SERVICES_H */

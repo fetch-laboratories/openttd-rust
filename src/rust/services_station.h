@@ -126,4 +126,5 @@ inline uint8_t RustAirportDeltaZ(const AirportFTAClass *airport) noexcept { retu
 /* The existing aircraft table retains its opaque pointers and return widths. */
 inline const void *OpenTTDStationAirportFTA(const OpenTTDStation *station) noexcept { return RustStationAirportFTA(StationOf(station)); }
 inline uint8_t OpenTTDAirportDeltaZ(const void *airport) noexcept { return RustAirportDeltaZ(static_cast<const AirportFTAClass *>(airport)); }
+inline void OpenTTDModifyStationRatingAround(uint32_t tile, uint8_t owner, int amount, uint radius) noexcept { ModifyStationRatingAround(TileIndex(tile), CompanyID(owner), amount, radius); }
 #endif /* RUST_SERVICES_STATION_H */

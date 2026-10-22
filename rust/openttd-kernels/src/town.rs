@@ -22,6 +22,7 @@
     clippy::collapsible_match,
     clippy::decimal_bitwise_operands
 )]
+pub mod commands;
 pub mod founding;
 pub mod house;
 pub mod names;
@@ -154,6 +155,7 @@ pub struct GrowthFields {
 #[derive(Default)]
 pub struct State {
     name: Vec<u8>,
+    text: Vec<u8>,
     simulation: SimulationFields,
     supplied: Vec<Supplied>,
     id_counts: Vec<u16>,
@@ -2074,23 +2076,6 @@ pub unsafe extern "C" fn openttd_rust_town_expand(
     let mut engine = engine(leaves, services);
     engine.road = road;
     engine.bind(town).expand(town, amount, modes);
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_custom_rate(
-    leaves: *const Leaves,
-    services: *const Services,
-    town: u32,
-    rate: u32,
-) {
-    engine(leaves, services).bind(town).custom_rate(town, rate);
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_fund(
-    leaves: *const Leaves,
-    services: *const Services,
-    town: u32,
-) {
-    engine(leaves, services).bind(town).fund(town);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_road_type(
