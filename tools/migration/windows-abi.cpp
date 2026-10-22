@@ -70,6 +70,7 @@
 // Registry: landscape (#212).
 #include "rust/ground_ffi.h"
 #include "rust/landscape_loop_ffi.h"
+#include "rust/landscape_command_ffi.h"
 #include "rust/tile_type_access.hpp"
 #include "tests/ground_protocol.hpp"
 #include "tests/landscape_protocol.hpp"
@@ -670,12 +671,11 @@ static const OpenTTDTreeServices tree_probe_services{
 	.ambient = TreeUnused<bool, uint32_t>,
 	.progress = []() noexcept { return tree_probe.abort; },
 	.progress_total = TreeUnused<bool, uint32_t>,
-	.town_rating = TreeUnused<void, OpenTTDTreeCommand *, uint32_t, bool>,
+	.town_rating = TreeUnused<void, uint16_t, uint32_t, bool>,
 	.command_begin = [](OpenTTDTreeCommand *, uint32_t, uint32_t, bool) noexcept { return INT32_MAX; },
 	.command_tile = [](OpenTTDTreeCommand *) noexcept { return uint32_t{1}; },
 	.command_next = [](OpenTTDTreeCommand *) noexcept { return UINT32_MAX; },
 	.command_debit = TreeUnused<void, OpenTTDTreeCommand *>,
-	.landscape_clear = TreeUnused<OpenTTDTreeLandscapeClear, OpenTTDTreeCommand *, uint32_t>,
 };
 static void Trees()
 {
@@ -720,7 +720,7 @@ static void Trees()
 	shared.tree_ground = [](uint32_t tile) noexcept {
 		/* A water observation reenters trees; no owner borrow spans the call. */
 		++tree_probe.waters;
-		tree_probe.nested_cost = openttd_rust_trees_clear_tile(nullptr, tile + 1, 5, true, false, &tree_probe_services, tree_probe.shared);
+		tree_probe.nested_cost = openttd_rust_trees_clear_tile(tile + 1, 1, 5, false, &tree_probe_services, tree_probe.shared);
 		return static_cast<TreeGround>(0);
 	};
 	shared.clear_square_services = {
@@ -743,8 +743,9 @@ static void Trees()
 	openttd_rust_trees_plant(1, 12, 2, 6, &tree_probe_services, &shared);
 	CHECK(tree_probe.writes == 1 && openttd_rust_trees_can_plant(1, false, &tree_probe_services));
 	tree_probe.plant.tile_type = 4;
+	const OpenTTDCommandServices commands{};
 	const auto command = openttd_rust_trees_cmd_plant(nullptr, 1, 1, 255, false,
-		{.build_price = 15, .size = 4096, .climate = 0, .editor = false, .execute = false, .company_valid = false}, &tree_probe_services, &shared);
+		{.build_price = 15, .size = 4096, .climate = 0, .editor = false, .execute = false, .company_valid = false}, &tree_probe_services, &shared, nullptr, &commands, 0);
 	CHECK(command.cost == 30 && command.status == 0);
 	tree_probe.plant.tile_type = 0;
 	openttd_rust_trees_tile_loop(1, {.tick_counter = 0, .size_x = 64, .climate = 0, .extra = 2, .ambient = false}, nullptr, &tree_probe_services, &shared);

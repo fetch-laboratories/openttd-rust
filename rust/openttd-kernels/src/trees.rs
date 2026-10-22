@@ -1096,8 +1096,6 @@ pub unsafe extern "C" fn openttd_rust_trees_cmd_plant(
     commands: &crate::services::CommandServices,
     flags: u16,
 ) -> CommandResult {
-    let table = unsafe { &*(commands.landscape_commands)() };
-    let costs = unsafe { &*table.costs };
     // SAFETY: Guaranteed by the caller. The existing native nested result slot
     // keeps the complete error returned by a failed clear for status 2.
     unsafe { trees(services, shared) }.plant_command(
@@ -1109,6 +1107,8 @@ pub unsafe extern "C" fn openttd_rust_trees_cmd_plant(
         &settings,
         flags,
         |current| {
+            let table = unsafe { &*(commands.landscape_commands)() };
+            let costs = unsafe { &*table.costs };
             crate::landscape_cmd::clear_command(commands, nested, current, flags);
             LandscapeClear {
                 cost: (costs.money)(nested),

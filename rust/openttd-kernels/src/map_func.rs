@@ -53,8 +53,7 @@ impl Map {
     /// `TileOffsByDiagDir`, as the unsigned pattern of its `TileIndexDiff`.
     #[must_use]
     pub fn offs_by_diag_dir(self, dir: u8) -> u32 {
-        const OFFSETS: [(i32, i32); 4] = [(-1, 0), (0, 1), (1, 0), (0, -1)];
-        let (x, y) = OFFSETS[usize::from(dir)];
+        let (x, y) = tile_index_diff_c_by_diag_dir(dir);
         self.diff(x, y)
     }
     /// `tile + TileOffsByDiagDir(dir)`.
@@ -82,8 +81,7 @@ impl Map {
     /// Unlike `TileAddWrap`, this includes `MP_VOID` edge tiles.
     #[must_use]
     pub fn add_diff_c_wrap(self, tile: u32, dir: u8, size_y: u32) -> u32 {
-        const OFFSETS: [(i32, i32); 4] = [(-1, 0), (0, 1), (1, 0), (0, -1)];
-        let (dx, dy) = OFFSETS[usize::from(dir)];
+        let (dx, dy) = tile_index_diff_c_by_diag_dir(dir);
         let x = self.tile_x(tile).wrapping_add_signed(dx);
         let y = self.tile_y(tile).wrapping_add_signed(dy);
         if x >= self.size_x() || y >= size_y {
@@ -92,4 +90,11 @@ impl Map {
             y * self.size_x() + x
         }
     }
+}
+
+/// `TileIndexDiffCByDiagDir`, in the original NE/SE/SW/NW order.
+#[must_use]
+pub fn tile_index_diff_c_by_diag_dir(dir: u8) -> (i32, i32) {
+    const OFFSETS: [(i32, i32); 4] = [(-1, 0), (0, 1), (1, 0), (0, -1)];
+    OFFSETS[usize::from(dir)]
 }

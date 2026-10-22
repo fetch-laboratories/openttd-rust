@@ -888,20 +888,25 @@ impl Engine<'_> {
         let commands = unsafe { &*(*self.leaves.houses).commands };
         let table = unsafe { &*(commands.landscape_commands)() };
         let costs = unsafe { &*table.costs };
-        crate::command::with_cost(costs, |out| {
-            let flags = crate::command_type::DoCommandFlag::AUTO
-                | crate::command_type::DoCommandFlag::NO_WATER
-                | u16::from(execute);
-            if clear {
-                crate::landscape_cmd::clear_command(commands, out.0, tile, flags);
-            } else {
-                crate::landscape_cmd::terraform_command(commands, out.0, tile, slope, up, flags);
-            }
-            CommandResult {
-                cost: out.money(),
-                success: out.ok(),
-            }
-        })
+        unsafe {
+            /* SAFETY: synchronous costs never escape or outlive this call. */
+            crate::command::with_cost(costs, |out| {
+                let flags = crate::command_type::DoCommandFlag::AUTO
+                    | crate::command_type::DoCommandFlag::NO_WATER
+                    | u16::from(execute);
+                if clear {
+                    crate::landscape_cmd::clear_command(commands, out.0, tile, flags);
+                } else {
+                    crate::landscape_cmd::terraform_command(
+                        commands, out.0, tile, slope, up, flags,
+                    );
+                }
+                CommandResult {
+                    cost: out.money(),
+                    success: out.ok(),
+                }
+            })
+        }
     }
     fn clear(&self, tile: u32, execute: bool) -> bool {
         self.landscape(tile, 0, false, execute, true).success

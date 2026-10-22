@@ -5,6 +5,8 @@ import struct
 import subprocess
 from pathlib import Path
 
+from . import core, objects
+from .console_adapter import prepared_console
 from .core import ROOT, WITNESS_ENVIRONMENT, branch_witnesses, read_save
 from .disasters import patch, rows
 from .effects import effect_rows
@@ -70,15 +72,76 @@ def scenarios(soak):
             console=["unpause"],
         )
         for case in GROUND_CASES
+    ] + [
+        dict(
+            name="landscape-commands-" + mode,
+            kind="save",
+            landscape_commands=mode,
+            save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+            ticks=1,
+            short_checkpoint=True,
+        )
+        for mode in ("control", "reload")
     ]
 
 
 def game_environment(scenario):
-    selected = "ground" in scenario or scenario.get("roads") == "flooding"
+    selected = (
+        "ground" in scenario
+        or "landscape_commands" in scenario
+        or scenario.get("roads") == "flooding"
+    )
     return WITNESS_ENVIRONMENT if selected and scenario.get("witnesses") else {}
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
+    if "landscape_commands" in scenario:
+        folder = out / scenario["name"] / "input"
+        executables = prepared_console(
+            "objects", objects.adapter, binaries, builds, folder, env
+        )
+        if scenario["landscape_commands"] == "control":
+            return dict(
+                scenario,
+                executables=executables,
+                console=["landscape_scenario control", "unpause"],
+            )
+        saves = {
+            role: folder / role / "landscape.sav" for role in ("reference", "candidate")
+        }
+        for role, save in saves.items():
+            setup = dict(
+                scenario, console=[f'landscape_scenario control "{save}"', "unpause"]
+            )
+            run = core.run_game(
+                setup,
+                executables[role],
+                builds[role],
+                folder / role / "capture",
+                timeout,
+                env,
+                False,
+            )
+            if (
+                run["exit"]
+                or not save.is_file()
+                or not any(line.startswith("LANDSCAPE final ") for line in run["log"])
+            ):
+                raise RuntimeError("landscape reload setup failed")
+        if core.compare_saves(
+            saves["reference"],
+            saves["candidate"],
+            scenario["name"],
+            10,
+            {"chunks": 0, "elements": 0, "masked": {}},
+        ):
+            raise RuntimeError("landscape reload setup differs")
+        return dict(
+            scenario,
+            executables=executables,
+            role_inputs={r: {"save": str(s)} for r, s in saves.items()},
+            console=["landscape_scenario inspect", "unpause"],
+        )
     if "ground" not in scenario:
         return scenario
     case = scenario["ground"]
@@ -189,6 +252,34 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 
 def check(scenario, run, mode, role, result):
+    if "landscape_commands" in scenario:
+        lines = [line for line in run["log"] if line.startswith("LANDSCAPE ")]
+        if len(lines) < (35 if scenario["landscape_commands"] == "control" else 1):
+            raise RuntimeError("missing landscape command output")
+        if scenario["landscape_commands"] == "control":
+            costs = {
+                parts[1]: parts for line in lines if len(parts := line.split()) == 7
+            }
+            names = "raise lower recursive level-test level-exec terraform-limit level-limit clear-test clear-exec clear-limit clear-cash level-cash object-two-pass partial-clear object-remove editor edge void too-high bridge-build bridge-damage bridge-remove tunnel-build tunnel-damage tunnel-remove occupied-clear occupied-limit final".split()
+            if (
+                set(names) - {line.split()[1] for line in lines}
+                or "LANDSCAPE editor-restored true" not in lines
+            ):
+                raise RuntimeError("landscape command/restoration evidence missing")
+            if any(int(costs[name][5]) <= 0 for name in ("clear-cash", "level-cash")):
+                raise RuntimeError("landscape insufficient-cash branch missing")
+        key = mode + "_landscape_commands"
+        if role == "reference":
+            result[key] = lines
+        elif result[key] != lines:
+            raise RuntimeError("landscape command outputs differ")
+        required = (
+            ("recursive", "two_pass", "indirect", "partial")
+            if scenario["landscape_commands"] == "control"
+            else ()
+        )
+        branch_witnesses(scenario, run, role, "landscape_cmd", required)
+        return
     if scenario.get("roads") == "flooding":
         required = "flood_success flood_fail vehicle_crash wakeup".split()
         result[f"{mode}_{role}_flood"] = branch_witnesses(

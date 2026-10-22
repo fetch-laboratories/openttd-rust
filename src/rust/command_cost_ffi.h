@@ -12,13 +12,12 @@
 #include <cstdint>
 enum ExpensesType : uint8_t;
 
-/* Opaque live native CommandCost. Rust cannot construct, inspect or destroy it.
- * Every pointer denotes C++ stack storage that outlives the synchronous call;
+/* Opaque live native CommandCost. Only native operations construct, inspect or
+ * destroy it. Each pointer denotes caller stack storage live for the whole call;
  * mutations/moves preserve all native fields, including encoded error params.
  * These ordinary services are noexcept; environmental failures terminate. */
 struct OpenTTDCommandCost;
 struct alignas(16) OpenTTDCommandCostStorage { uint8_t storage[128]; };
-enum ExpensesType : uint8_t;
 struct OpenTTDCommandCostServices {
 	OpenTTDCommandCost *(*construct)(OpenTTDCommandCostStorage *) noexcept OPENTTD_SERVICE_DEFAULT(construct);
 	void (*destroy)(OpenTTDCommandCost *) noexcept OPENTTD_SERVICE_DEFAULT(destroy);

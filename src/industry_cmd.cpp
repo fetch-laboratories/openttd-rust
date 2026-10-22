@@ -3980,7 +3980,7 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.shape_callback = [](const OpenTTDIndustryTileSpec *spec) noexcept -> bool { return spec->callback_mask.Test(IndustryTileCallbackMask::ShapeCheck); },
 		.terragenesis = []() noexcept -> bool { return _settings_game.game_creation.land_generator == LG_TERRAGENESIS; },
 		.ignore_restrictions = []() noexcept -> bool { return _ignore_industry_restrictions; },
-		.platform = []() noexcept -> uint8_t { return _settings_game.construction.industry_platform; }, TileIndex(tile), SLOPE_N, raise)); },
+		.platform = []() noexcept -> uint8_t { return _settings_game.construction.industry_platform; },
 		.can_allocate = []() noexcept -> bool { return Industry::CanAllocateItem(); },
 		.allocate = [](uint32_t tile) noexcept -> OpenTTDIndustryAllocation { Industry *i = new Industry(TileIndex(tile)); return {i, i->production_owner.get(), i->index.base()}; },
 		.prospecting_chance = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint32_t { return reinterpret_cast<const IndustrySpec *>(spec)->prospecting_chance; },

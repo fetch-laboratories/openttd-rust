@@ -60,6 +60,7 @@
 
 #ifdef WITH_RUST
 #include "rust/landscape_command_ffi.h"
+#include "rust/settings_services.h"
 #include "tunnel_map.h"
 #include "rust/water_area_services.h"
 #include "rust/town_founding_ffi.h"
@@ -896,8 +897,8 @@ const OpenTTDLandscapeCommandServices &GetRustLandscapeCommandServices() noexcep
 		.coast = [](uint32_t t) noexcept { return IsCoastTile(TileIndex{t}); },
 		.buoy = [](uint32_t t) noexcept { return IsBuoyTile(TileIndex{t}); },
 		.canal = [](uint32_t t) noexcept { return IsCanal(TileIndex{t}); },
-		.height_limit = []() noexcept { return _settings_game.construction.map_height_limit; },
-		.max_bridge_height = []() noexcept { return _settings_game.construction.max_bridge_height; },
+		.height_limit = RustMapHeightLimit,
+		.max_bridge_height = RustMaximumBridgeHeight,
 		.freeform_edges = OpenTTDFreeformEdges, .editor = OpenTTDEditor,
 		.exchange_generating = GetRustTownFoundingServices().exchange_generating,
 		.tunnel_in_way = [](uint32_t t, int32_t z) noexcept { return IsTunnelInWay(TileIndex{t}, z); },

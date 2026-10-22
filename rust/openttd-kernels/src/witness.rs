@@ -119,6 +119,13 @@ witness_blocks! {
         LANDSCAPE_CRASHED_SKIP = 25 => "landscape.crashed_skip",
     }
 
+    landscape_cmd {
+        LANDSCAPE_CMD_RECURSIVE = 0 => "landscape_cmd.recursive",
+        LANDSCAPE_CMD_TWO_PASS = 1 => "landscape_cmd.two_pass",
+        LANDSCAPE_CMD_INDIRECT = 2 => "landscape_cmd.indirect",
+        LANDSCAPE_CMD_PARTIAL = 3 => "landscape_cmd.partial",
+    }
+
     object {
         OBJECT_BUILD = 0 => "object.build",
         OBJECT_REMOVE = 1 => "object.remove",

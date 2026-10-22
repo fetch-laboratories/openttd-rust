@@ -143,69 +143,103 @@ impl<'a> World<'a> {
         }
     }
     fn clear_tile(&self, out: Cost<'_>, tile: u32, flags: u16) {
+        let kind = (self.s.tile_type)(tile);
+        if matches!(kind, 1 | 2 | 5 | 6 | 10) {
+            unsafe {
+                /* SAFETY: synchronous costs never escape or outlive this call. */
+                crate::command::with_cost(self.c, |ret| {
+                    if matches!(kind, 2 | 5) {
+                        crate::command::with_cost(self.c, |error| {
+                            self.clear_tile_with(out, tile, flags, kind, ret.0, error.0)
+                        });
+                    } else {
+                        self.clear_tile_with(out, tile, flags, kind, ret.0, std::ptr::null_mut());
+                    }
+                })
+            };
+        } else {
+            self.clear_tile_with(
+                out,
+                tile,
+                flags,
+                kind,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            );
+        }
+    }
+    fn clear_tile_with(
+        &self,
+        out: Cost<'_>,
+        tile: u32,
+        flags: u16,
+        kind: u8,
+        ret: *mut CommandCost,
+        error: *mut CommandCost,
+    ) {
         let t = unsafe { &*self.a.tile_procs };
         let owners = unsafe { &*t.owners };
-        crate::command::with_cost(self.c, |ret| {
-            crate::command::with_cost(self.c, |error| unsafe {
-                match (self.s.tile_type)(tile) {
-                    1 => crate::rail_cmd::openttd_rust_rail_clear_tile(
-                        owners.rail,
-                        out.0,
-                        ret.0,
-                        flags,
-                        tile,
-                    ),
-                    2 => crate::road_cmd::openttd_rust_road_clear(
-                        (self.s.road_commands)(),
-                        out.0,
-                        ret.0,
-                        error.0,
-                        flags,
-                        tile,
-                    ),
-                    3 => crate::town::house::openttd_rust_house_clear(
-                        (*owners.objects).town,
-                        self.s,
-                        out.0,
-                        tile,
-                        flags,
-                    ),
-                    4 => out.set(crate::trees::clear_tile(&*t.trees, self.s, tile, flags)),
-                    5 => crate::station_cmd::openttd_rust_station_clear(
-                        owners.station,
-                        out.0,
-                        ret.0,
-                        error.0,
-                        tile,
-                        flags,
-                    ),
-                    6 => crate::water_cmd::openttd_rust_water_clear(
-                        owners.water,
-                        out.0,
-                        ret.0,
-                        flags,
-                        tile,
-                    ),
-                    8 => crate::industry::openttd_rust_industry_tile_clear(
-                        out.0.cast(),
-                        tile,
-                        flags,
-                        owners.industry,
-                        t.industry_policy,
-                        t.industry_costs,
-                        t.industry_generation,
-                    ),
-                    10 => crate::objects::openttd_rust_object_clear(
-                        owners.objects,
-                        out.0,
-                        ret.0,
-                        tile,
-                        flags,
-                    ),
-                    _ => (t.clear)(out.0, tile, flags),
-                }
-            })
-        });
+        // SAFETY: the matching caller supplies exactly the independent native
+        // result slots used by this tile kind. Other cases do not read the slots.
+        unsafe {
+            match kind {
+                1 => crate::rail_cmd::openttd_rust_rail_clear_tile(
+                    owners.rail,
+                    out.0,
+                    ret,
+                    flags,
+                    tile,
+                ),
+                2 => crate::road_cmd::openttd_rust_road_clear(
+                    (self.s.road_commands)(),
+                    out.0,
+                    ret,
+                    error,
+                    flags,
+                    tile,
+                ),
+                3 => crate::town::house::openttd_rust_house_clear(
+                    (*owners.objects).town,
+                    self.s,
+                    out.0,
+                    tile,
+                    flags,
+                ),
+                4 => out.set(crate::trees::clear_tile(&*t.trees, self.s, tile, flags)),
+                5 => crate::station_cmd::openttd_rust_station_clear(
+                    owners.station,
+                    out.0,
+                    ret,
+                    error,
+                    tile,
+                    flags,
+                ),
+                6 => crate::water_cmd::openttd_rust_water_clear(
+                    owners.water,
+                    out.0,
+                    ret,
+                    flags,
+                    tile,
+                ),
+                8 => crate::industry::openttd_rust_industry_tile_clear(
+                    out.0.cast(),
+                    tile,
+                    flags,
+                    owners.industry,
+                    t.industry_policy,
+                    t.industry_costs,
+                    t.industry_generation,
+                ),
+                10 => crate::objects::openttd_rust_object_clear(
+                    owners.objects,
+                    out.0,
+                    ret,
+                    tile,
+                    flags,
+                ),
+                _ => (t.clear)(out.0, tile, flags),
+            }
+        }
     }
     fn terraform_tile(&self, out: Cost<'_>, tile: u32, flags: u16, z: i32, slope: u8) {
         let t = unsafe { &*self.a.tile_procs };
@@ -220,17 +254,20 @@ impl<'a> World<'a> {
                     z,
                     slope,
                 ),
-                2 => crate::command::with_cost(self.c, |ret| {
-                    crate::road_cmd::openttd_rust_road_terraform(
-                        (self.s.road_commands)(),
-                        out.0,
-                        ret.0,
-                        flags,
-                        tile,
-                        z,
-                        slope,
-                    )
-                }),
+                2 => {
+                    /* SAFETY: synchronous costs never escape or outlive this call. */
+                    crate::command::with_cost(self.c, |ret| {
+                        crate::road_cmd::openttd_rust_road_terraform(
+                            (self.s.road_commands)(),
+                            out.0,
+                            ret.0,
+                            flags,
+                            tile,
+                            z,
+                            slope,
+                        )
+                    })
+                }
                 3 => crate::town::house::openttd_rust_house_terraform(
                     (*owners.objects).town,
                     self.s,
@@ -240,7 +277,7 @@ impl<'a> World<'a> {
                     z,
                     slope,
                 ),
-                4 => self.clear_do(out, tile, flags),
+                0 | 4 => self.clear_do(out, tile, flags),
                 5 => crate::station_cmd::openttd_rust_station_terraform(
                     owners.station,
                     out.0,
@@ -317,10 +354,13 @@ impl<'a> World<'a> {
                 return;
             }
         } else {
-            crate::command::with_cost(self.c, |ret| {
-                self.clear_tile(ret, tile, flags);
-                out.add(ret);
-            });
+            unsafe {
+                /* SAFETY: synchronous costs never escape or outlive this call. */
+                crate::command::with_cost(self.c, |ret| {
+                    self.clear_tile(ret, tile, flags);
+                    out.add(ret);
+                })
+            };
         }
         // The original performs these effects even when the tile handler failed.
         if flags & F::EXECUTE != 0 {
@@ -379,6 +419,9 @@ impl<'a> World<'a> {
         let extra = self.area(area, tile, start, diagonal, |t| {
             self.clear_do(ret, t, flags & !F::EXECUTE);
             if !ret.ok() {
+                if success {
+                    crate::witness::hit(crate::witness::LANDSCAPE_CMD_PARTIAL);
+                }
                 last.take(ret);
                 return if !company.is_null() && Self::clear_limit(company) < 1 {
                     Some(0)
@@ -393,7 +436,10 @@ impl<'a> World<'a> {
                 if amount > 0 && money < 0 {
                     return Some(amount);
                 }
-                crate::command::with_cost(self.c, |ignored| self.clear_do(ignored, t, flags));
+                unsafe {
+                    /* SAFETY: synchronous costs never escape or outlive this call. */
+                    crate::command::with_cost(self.c, |ignored| self.clear_do(ignored, t, flags))
+                };
                 if (t == tile || t == start) && !(self.a.paused)() {
                     (self.a.explosion)(t, tile == start);
                 }
@@ -435,22 +481,32 @@ impl<'a> World<'a> {
             if slope & corner == 0 || (corner != SLOPE_N && t >= self.size) {
                 continue;
             }
-            let result = crate::command::with_cost(self.c, |ret| {
-                let error =
-                    self.tile_height(&mut ts, ret, t, (self.s.tile_height)(t) as i32 + direction);
-                if ret.ok() {
-                    out.add_money(ret.money());
-                    None
-                } else {
-                    out.take(ret);
-                    Some(error)
-                }
-            });
+            let result = unsafe {
+                /* SAFETY: synchronous costs never escape or outlive this call. */
+                crate::command::with_cost(self.c, |ret| {
+                    let error = self.tile_height(
+                        &mut ts,
+                        ret,
+                        t,
+                        (self.s.tile_height)(t) as i32 + direction,
+                    );
+                    if ret.ok() {
+                        out.add_money(ret.money());
+                        None
+                    } else {
+                        out.take(ret);
+                        Some(error)
+                    }
+                })
+            };
             if let Some(error) = result {
                 return error;
             }
         }
         for pass in 0..2 {
+            if pass == 1 {
+                crate::witness::hit(crate::witness::LANDSCAPE_CMD_TWO_PASS);
+            }
             for &t in &ts.dirty {
                 if (self.s.tile_type)(t) == MP_VOID {
                     continue;
@@ -504,23 +560,27 @@ impl<'a> World<'a> {
                 if pass == 0 {
                     tile_flags = (tile_flags & !F::EXECUTE) | F::NO_MODIFY_TOWN_RATING;
                 }
-                let ok = crate::command::with_cost(self.c, |ret| {
-                    if indirect {
-                        self.clear_do(ret, t, tile_flags);
-                    } else {
-                        self.terraform_tile(ret, t, tile_flags, low, new_slope);
-                    }
-                    (self.a.exchange_generating)(old);
-                    if !ret.ok() {
-                        out.take(ret);
-                        false
-                    } else {
-                        if pass == 1 {
-                            out.add_money(ret.money());
+                let ok = unsafe {
+                    /* SAFETY: synchronous costs never escape or outlive this call. */
+                    crate::command::with_cost(self.c, |ret| {
+                        if indirect {
+                            crate::witness::hit(crate::witness::LANDSCAPE_CMD_INDIRECT);
+                            self.clear_do(ret, t, tile_flags);
+                        } else {
+                            self.terraform_tile(ret, t, tile_flags, low, new_slope);
                         }
-                        true
-                    }
-                });
+                        (self.a.exchange_generating)(old);
+                        if !ret.ok() {
+                            out.take(ret);
+                            false
+                        } else {
+                            if pass == 1 {
+                                out.add_money(ret.money());
+                            }
+                            true
+                        }
+                    })
+                };
                 if !ok {
                     return t;
                 }
@@ -602,17 +662,21 @@ impl<'a> World<'a> {
             let r = ts.height(self, neighbour);
             let mut difference = height - r;
             if difference.abs() > 1 {
+                crate::witness::hit(crate::witness::LANDSCAPE_CMD_RECURSIVE);
                 difference += if difference < 0 { 1 } else { -1 };
-                let failed = crate::command::with_cost(self.c, |ret| {
-                    let error = self.tile_height(ts, ret, neighbour, r + difference);
-                    if ret.ok() {
-                        out.add_money(ret.money());
-                        None
-                    } else {
-                        out.take(ret);
-                        Some(error)
-                    }
-                });
+                let failed = unsafe {
+                    /* SAFETY: synchronous costs never escape or outlive this call. */
+                    crate::command::with_cost(self.c, |ret| {
+                        let error = self.tile_height(ts, ret, neighbour, r + difference);
+                        if ret.ok() {
+                            out.add_money(ret.money());
+                            None
+                        } else {
+                            out.take(ret);
+                            Some(error)
+                        }
+                    })
+                };
                 if let Some(error) = failed {
                     return error;
                 }
@@ -686,9 +750,12 @@ impl<'a> World<'a> {
                     if money < 0 {
                         return Some((amount, true));
                     }
-                    crate::command::with_cost(self.c, |ignored| {
-                        self.terraform_do(ignored, t, SLOPE_N, current <= h, flags);
-                    });
+                    unsafe {
+                        /* SAFETY: synchronous costs never escape or outlive this call. */
+                        crate::command::with_cost(self.c, |ignored| {
+                            self.terraform_do(ignored, t, SLOPE_N, current <= h, flags);
+                        })
+                    };
                 } else {
                     limit -= 1;
                     if limit <= 0 {

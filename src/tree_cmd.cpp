@@ -47,6 +47,7 @@ enum ExtraTreePlacement : uint8_t {
 
 #ifdef WITH_RUST
 #include "rust/trees_ffi.h"
+#include "rust/settings_services.h"
 #include "rust/ground_services.h"
 #include "rust/landscape_loop_ffi.h"
 #include "rust/services_ffi.h"
@@ -183,7 +184,7 @@ static OpenTTDTreeGenerateSettings TreeGenerateSettings()
 		.size = Map::Size(), .size_x = Map::SizeX(), .size_y = Map::SizeY(),
 		.climate = to_underlying(_settings_game.game_creation.landscape),
 		.placer = _settings_game.game_creation.tree_placer,
-		.height_limit = _settings_game.construction.map_height_limit,
+		.height_limit = RustMapHeightLimit(),
 		.editor = _game_mode == GM_EDITOR,
 		.freeform_edges = _settings_game.construction.freeform_edges,
 	};
@@ -259,7 +260,7 @@ void OnTick_Trees()
 		.climate = to_underlying(_settings_game.game_creation.landscape),
 		.extra = _settings_game.construction.extra_tree_placement,
 	};
-	openttd_rust_trees_tick(settings, &_tree_services, &GetRustSharedServices(), RustCommandCost(&ctx.nested), &GetRustCommandServices(), flags.base());
+	openttd_rust_trees_tick(settings, &_tree_services, &GetRustSharedServices());
 }
 
 void InitializeTrees() { openttd_rust_trees_initialize(); }

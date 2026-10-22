@@ -10,6 +10,7 @@
 #include "../3rdparty/catch2/catch.hpp"
 #ifdef WITH_RUST
 #include "../rust/tile_type_access.hpp"
+#include "../rust/landscape_command_ffi.h"
 #include "abi_layout.hpp"
 #include "../tile_map.h"
 #include "landscape_protocol.hpp"

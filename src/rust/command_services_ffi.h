@@ -29,6 +29,7 @@ struct OpenTTDCommandServices {
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
 extern "C" {
+bool openttd_rust_command_stack_probe(const OpenTTDCommandCostServices *);
 void openttd_rust_command_before(const OpenTTDCommandServices *, bool, bool);
 void openttd_rust_command_after(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint16_t, bool, bool);
 void openttd_rust_command_subtract_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, const OpenTTDCommandCost *);

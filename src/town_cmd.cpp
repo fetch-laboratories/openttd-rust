@@ -1071,7 +1071,7 @@ static bool RustTown_build_tunnel(uint32_t tile, uint32_t road_type, uint32_t ex
 	if (execute != 0) flags.Set(DoCommandFlag::Execute);
 	return Command<CMD_BUILD_TUNNEL>::Do(flags, TileIndex{tile}, TRANSPORT_ROAD, static_cast<RoadType>(road_type)).Succeeded();
 }
-static void RustTown_assert_clear_house(bool success) noexcept { assert(success); }
+static void RustTown_assert_clear_house([[maybe_unused]] bool success) noexcept { assert(success); }
 static bool RustTown_allow_construction(uint32_t town, uint32_t tile, uint32_t house, uint32_t random) noexcept
 {
 	const auto *hs = HouseSpec::Get(house);
