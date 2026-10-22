@@ -14,6 +14,10 @@
 #include "roadstop_base.h"
 #include "station_base.h"
 #include "vehicle_func.h"
+#ifdef WITH_RUST
+#include "rust/services_road.h"
+#include "rust/vehicle_services.h"
+#endif
 
 #include "safeguards.h"
 
@@ -21,6 +25,7 @@
 RoadStopPool _roadstop_pool("RoadStop");
 INSTANTIATE_POOL_METHODS(RoadStop)
 
+#ifndef WITH_RUST
 /**
  * De-Initializes RoadStops.
  */
@@ -31,6 +36,7 @@ RoadStop::~RoadStop()
 		delete this->entries;
 	}
 }
+#endif /* WITH_RUST */
 
 /**
  * Get the next road stop accessible by this vehicle.
@@ -52,6 +58,48 @@ RoadStop *RoadStop::GetNextRoadStop(const RoadVehicle *v) const
 	return nullptr;
 }
 
+#ifdef WITH_RUST
+static OpenTTDRoadStopDriveRead OPENTTD_VEHICLE_CALL RoadStopDriveRead(OpenTTDVehicle *handle) noexcept
+{
+	const RoadVehicle *rv = RoadVehicle::From(VehicleOf(handle));
+	return {.total_length = rv->gcache.cached_total_length, .direction = RustVehicleDirection(rv)};
+}
+
+/** The Rebuild filter reads; only road vehicles have the road fields. */
+static OpenTTDRoadStopRebuildRead OPENTTD_VEHICLE_CALL RoadStopRebuildRead(OpenTTDVehicle *handle) noexcept
+{
+	const Vehicle *v = VehicleOf(handle);
+	if (RustVehicleVehicleType(v) != VEH_ROAD) return {.vehicle_type = RustVehicleVehicleType(v)};
+	const RoadVehicle *rv = RoadVehicle::From(v);
+	return {.road = RoadStateOf(rv), .total_length = rv->gcache.cached_total_length, .vehicle_type = VEH_ROAD,
+		.direction = RustVehicleDirection(v), .status = RustVehicleStatus(v), .primary = RustVehiclePrimary(v)};
+}
+
+static constinit const OpenTTDRoadStopServices _rust_road_stop_services{
+	.vehicle = &_rust_vehicle_services,
+	.ground = &_rust_ground_services<RoadVehicle>,
+	.primary = [](uint32_t tile, RoadStopType type) noexcept { return Station::GetByTile(TileIndex{tile})->GetPrimaryRoadStop(type); },
+	.head = [](BaseStation *st, bool truck) noexcept { return truck ? Station::From(st)->truck_stops : Station::From(st)->bus_stops; },
+	.next = [](const RoadStop *stop) noexcept { return stop->next; },
+	.tile = [](const RoadStop *stop) noexcept { return stop->xy.base(); },
+	.state = [](const RoadStop *stop) noexcept { return stop->GetRustState(); },
+	.pool_next = [](uint32_t from) noexcept -> OpenTTDRoadStopPoolItem {
+		for (const RoadStop *rs : RoadStop::Iterate(from)) return {rs->GetRustState(), rs->xy.base(), rs->index.base()};
+		return {};
+	},
+	.drive_read = RoadStopDriveRead,
+	.rebuild_read = RoadStopRebuildRead,
+};
+
+const OpenTTDRoadStopServices &GetRustRoadStopServices() noexcept
+{
+	return _rust_road_stop_services;
+}
+
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDRoadStopServices.hpp"
+bool CheckAbi_roadstop() { return AbiServicesComplete(GetRustRoadStopServices()); }
+#else
 /**
  * Join this road stop to another 'base' road stop if possible;
  * fill all necessary data to become an actual drive through road stop.
@@ -369,3 +417,4 @@ void RoadStop::Entry::CheckIntegrity(const RoadStop *rs) const
 	temp.Rebuild(rs, &rs->entries->east == this);
 	if (temp.length != this->length || temp.occupied != this->occupied) NOT_REACHED();
 }
+#endif /* WITH_RUST */

@@ -47,6 +47,7 @@ mod road_cmd;
 mod road_cost;
 mod road_data;
 mod road_map;
+mod road_stop;
 mod road_type;
 mod road_yapf;
 mod script_list;

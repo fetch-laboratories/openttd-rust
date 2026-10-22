@@ -133,10 +133,6 @@ static uint8_t OPENTTD_VEHICLE_CALL RoadSvcAnyRoadBits(OpenTTDVehicle *v, uint32
 	return GetAnyRoadBits(TileIndex(tile), RustRoadTramType(RoadOf(v)->roadtype), straight_only);
 }
 static bool OPENTTD_VEHICLE_CALL RoadSvcIsStationRoadStop(uint32_t tile) noexcept { return IsStationRoadStop(TileIndex(tile)); }
-static bool OPENTTD_VEHICLE_CALL RoadSvcHasFreeBay(uint32_t tile) noexcept
-{
-	return SharedRoadStopAt(tile)->HasFreeBay();
-}
 /** `old_tile = v->tile; v->tile = tile;` then both road types of the vehicle's road/tram kind. */
 static OpenTTDRoadRoadTypes OPENTTD_VEHICLE_CALL RoadSvcMoveTile(OpenTTDVehicle *v, uint32_t tile) noexcept
 {
@@ -179,21 +175,6 @@ static bool OPENTTD_VEHICLE_CALL RoadSvcShouldStop(OpenTTDVehicle *v, uint32_t t
 {
 	const RoadVehicle *u = RoadOf(v);
 	return u->current_order.ShouldStopAtStation(u, StationID(GetRustSharedServices().station_index(tile)));
-}
-static void OPENTTD_VEHICLE_CALL RoadSvcStopLeave(OpenTTDVehicle *v) noexcept
-{
-	RoadVehicle *u = RoadOf(v);
-	SharedRoadStopAt(u->tile.base())->Leave(u);
-}
-static void OPENTTD_VEHICLE_CALL RoadSvcStopEntrance(OpenTTDVehicle *v, bool busy) noexcept
-{
-	const RoadVehicle *u = RoadOf(v);
-	SharedRoadStopAt(u->tile.base())->SetEntranceBusy(busy);
-}
-static bool OPENTTD_VEHICLE_CALL RoadSvcStopEntranceBusy(OpenTTDVehicle *v) noexcept
-{
-	const RoadVehicle *u = RoadOf(v);
-	return SharedRoadStopAt(u->tile.base())->IsEntranceBusy();
 }
 static OpenTTDRoadArrivalRead OPENTTD_VEHICLE_CALL RoadSvcArrivalRead(OpenTTDVehicle *v, uint16_t station) noexcept
 {
@@ -350,9 +331,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.bay_direction = Shared_bay_stop_direction,
 	.is_drive_through = Shared_is_drive_through_stop,
 	.is_station_road_stop = RoadSvcIsStationRoadStop,
-	.stop_type = SharedRoadStopTypeByte,
-	.has_free_bay = RoadSvcHasFreeBay,
-	.continuation = RoadSvcContinuation,
 	.move_tile = RoadSvcMoveTile,
 	.path_read = RoadSvcPathRead,
 	.choose_track = RoadSvcChooseTrack,
@@ -361,9 +339,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.disconnect = RoadSvcDisconnect,
 	.stop_read = RoadSvcStopRead,
 	.should_stop = RoadSvcShouldStop,
-	.stop_leave = RoadSvcStopLeave,
-	.stop_entrance = RoadSvcStopEntrance,
-	.stop_entrance_busy = RoadSvcStopEntranceBusy,
 	.arrival_read = RoadSvcArrivalRead,
 	.arrival_news = RoadSvcArrivalNews,
 	.begin_loading_at = RoadSvcBeginLoadingAt,

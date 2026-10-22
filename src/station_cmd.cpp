@@ -4413,7 +4413,11 @@ static VehicleEnterTileStates VehicleEnter_Station(Vehicle *v, TileIndex tile, i
 		if (rv->GetState() < RVSB_IN_ROAD_STOP && !IsReversingRoadTrackdir((Trackdir)rv->GetState()) && rv->GetFrame() == 0) {
 			if (IsStationRoadStop(tile) && rv->IsFrontEngine()) {
 				/* Attempt to allocate a parking bay in a road stop */
+#ifdef WITH_RUST
+				if (openttd_rust_road_stop_enter(&GetRustSharedServices(), tile.base(), RustVehicle(rv), rv->GetRustState())) return {};
+#else
 				if (RoadStop::GetByTile(tile, GetRoadStopType(tile))->Enter(rv)) return {};
+#endif
 				return VehicleEnterTileState::CannotEnter;
 			}
 		}

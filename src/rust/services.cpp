@@ -13,6 +13,7 @@
 #include "services_viewport.h"
 #include "station_command_ffi.h"
 #include "road_command_ffi.h"
+#include "road_stop_ffi.h"
 #include "presentation_services.h"
 #include "tile_animation_services.h"
 #include "vehicle_services.h"
@@ -243,7 +244,7 @@ OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept
 static bool Shared_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileIndex{tile}); }
 static uint32_t Shared_distance_from_edge(uint32_t tile) noexcept { return DistanceFromEdge(TileIndex{tile}); }
 static int32_t Shared_tile_max_z(uint32_t tile) noexcept { return OpenTTDTileMaxZ(TileIndex{tile}); }
-static_assert(TILE_HEIGHT == 8);
+static_assert(TILE_HEIGHT == 8 && TILE_SIZE == 16);
 /* Values of the shared Rust header modules (tile_type.rs, slope_func.rs and the like). */
 static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_VOID == 7 && MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && MP_OBJECT == 10);
 static_assert(INVALID_TILE.base() == UINT32_MAX && TILE_HEIGHT_STEP == 50 && CALLBACK_FAILED == 0xFFFF && INVALID_STRING_ID == 0xFFFF);
@@ -422,6 +423,9 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tree_ground = OpenTTDTreeGround,
 	.water_services = []() noexcept { return &GetRustWaterGroundServices(); },
 	.for_each_station = SharedForEachStation,
+	// Registry: road stops (#354).
+	.road_stop_type = SharedRoadStopType,
+	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
 };
 
 const OpenTTDSharedServices &GetRustSharedServices() noexcept

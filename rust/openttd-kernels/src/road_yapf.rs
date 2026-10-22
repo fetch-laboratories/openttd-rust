@@ -16,8 +16,10 @@
     clippy::too_many_arguments,
     clippy::similar_names
 )]
+use crate::map_func::Map;
 use crate::node_hash::NodeMap;
 use crate::road::{PathElement, State};
+use crate::services::Services;
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 
@@ -44,8 +46,6 @@ pub struct Input {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Tile {
-    pub occupied: u32,
-    pub length: u32,
     pub station: u16,
     pub r#type: u8,
     pub station_type: u8,
@@ -54,8 +54,6 @@ pub struct Tile {
     pub crossing: u8,
     pub waypoint: u8,
     pub drive_through: u8,
-    pub continuation: u8,
-    pub busy_bays: u8,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -89,6 +87,8 @@ pub struct Area {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
+    /// Shared table for the road stop owner's cost observations.
+    pub shared: *const Services,
     pub tile: unsafe extern "C" fn(*const c_void, u32, u8, bool) -> Tile,
     pub follow: unsafe extern "C" fn(*const c_void, u32, u8) -> Follow,
     pub tracks: unsafe extern "C" fn(*const c_void, u32, u8) -> u16,
@@ -367,7 +367,7 @@ impl Search {
             }
         }
     }
-    fn one_tile(&self, t: Tile, td: u8) -> i32 {
+    fn one_tile(&self, tile: u32, t: Tile, td: u8) -> i32 {
         if td & 7 > 1 {
             return 71_i32.wrapping_add(self.input.curve);
         }
@@ -376,17 +376,32 @@ impl Search {
             cost = cost.wrapping_add(self.input.crossing);
         }
         if t.r#type == 5 && t.waypoint == 0 {
+            // SAFETY: Production leaves carry the static shared table.
+            let shared = unsafe { &*self.leaves.shared };
+            let rs = crate::road_stop::at(shared, tile);
             if t.drive_through != 0 {
                 cost = cost.wrapping_add(self.input.stop);
-                if t.continuation == 0 {
+                let dir = EXIT[usize::from(td)];
+                let map = Map {
+                    log_x: self.input.map_x.trailing_zeros() as u8,
+                };
+                if !crate::road_stop::continuation(
+                    shared,
+                    tile,
+                    tile.wrapping_sub(map.offs_by_diag_dir(dir)),
+                ) {
+                    let entry = crate::road_stop::entry_read(rs, dir);
                     cost = cost.wrapping_add(
-                        (t.occupied.wrapping_mul(self.input.occupied as u32) / t.length) as i32,
+                        (u32::from(entry.occupied).wrapping_mul(self.input.occupied as u32)
+                            / u32::from(entry.length)) as i32,
                     );
                 }
             } else {
+                let busy_bays = u32::from(!crate::road_stop::is_free_bay(rs, 0))
+                    + u32::from(!crate::road_stop::is_free_bay(rs, 1));
                 cost = cost.wrapping_add(
                     (self.input.bay as u32)
-                        .wrapping_mul(u32::from(t.busy_bays))
+                        .wrapping_mul(busy_bays)
                         .wrapping_div(2) as i32,
                 );
             }
@@ -398,7 +413,7 @@ impl Search {
         let (mut tile, mut td, mut cost, mut tiles) = (n.tile, n.td, 0_i32, 0_u32);
         loop {
             let t = self.tile(tile, td, true);
-            cost = cost.wrapping_add(self.one_tile(t, td));
+            cost = cost.wrapping_add(self.one_tile(tile, t, td));
             let destination = self.detected(tile, td, t);
             n.destination = Some(destination);
             if destination {
