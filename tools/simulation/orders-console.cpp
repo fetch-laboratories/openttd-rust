@@ -18,9 +18,11 @@
 #include "order_func.h"
 #include "saveload/saveload.h"
 #include "timetable_cmd.h"
+#include "cargo_type.h"
 #include "vehicle_cmd.h"
 #include "vehicle_func.h"
 #include "roadveh.h"
+#include "station_base.h"
 
 static size_t BackupCount()
 {
@@ -40,9 +42,65 @@ static void State(const char *name, const Vehicle *v)
 	fmt::print(stderr, "ORDERS state {} {} {} {} {} {} {} {} {} {} {}\n", name, v->index.base(), v->GetNumOrders(), v->orders == nullptr ? 0 : v->orders->GetNumVehicles(), v->cur_real_order_index, v->cur_implicit_order_index, v->round_trip_time, v->depot_unbunching_last_departure, v->depot_unbunching_next_departure, v->timetable_start, v->lateness_counter);
 }
 
+static bool VisitsScenario(std::span<std::string_view> args)
+{
+	if (args[1] != "visits") return false;
+	/* Declared inputs on padhattan-ridge-2000's running fleet (#349): each order
+	 * change is an ordinary command, checked against the vehicle it expects. */
+	auto vehicle = [](uint16_t index, VehicleType type) {
+		Vehicle *u = Vehicle::GetIfValid(VehicleID(index));
+		if (u == nullptr || u->type != type || !u->IsPrimaryVehicle()) std::abort();
+		return u;
+	};
+	Backup<CompanyID> company(_current_company, CompanyID::Begin());
+	auto station = [&](Vehicle *u, VehicleOrderID index, uint16_t destination) {
+		Order order;
+		order.MakeGoToStation(StationID(destination));
+		order.SetStopLocation(OrderStopLocation::FarEnd);
+		CheckCommand("visit-station", Command<CMD_INSERT_ORDER>::Do(DoCommandFlag::Execute, u->index, index, order));
+	};
+	/* Refit to goods at the first stop: a new goods graph, then joining 20, with
+	 * aircraft mail narrowing and the refit reset at the next station. */
+	Vehicle *refit = vehicle(44, VEH_AIRCRAFT);
+	CheckCommand("refit", Command<CMD_ORDER_REFIT>::Do(DoCommandFlag::Execute, refit->index, 0, 5));
+	/* Autorefit at the second stop predicts every refittable cargo. */
+	Vehicle *autorefit = vehicle(30, VEH_AIRCRAFT);
+	CheckCommand("autorefit", Command<CMD_ORDER_REFIT>::Do(DoCommandFlag::Execute, autorefit->index, 1, CARGO_AUTO_REFIT));
+	/* A conditional load-percentage branch back to the first stop. */
+	Vehicle *conditional = vehicle(18, VEH_ROAD);
+	Order branch;
+	branch.MakeConditional(0);
+	CheckCommand("conditional", Command<CMD_INSERT_ORDER>::Do(DoCommandFlag::Execute, conditional->index, 1, branch));
+	CheckCommand("condition", Command<CMD_MODIFY_ORDER>::Do(DoCommandFlag::Execute, conditional->index, 1, MOF_COND_VARIABLE, to_underlying(OrderConditionVariable::LoadPercentage)));
+	CheckCommand("comparator", Command<CMD_MODIFY_ORDER>::Do(DoCommandFlag::Execute, conditional->index, 1, MOF_COND_COMPARATOR, to_underlying(OrderConditionComparator::LessThan)));
+	CheckCommand("value", Command<CMD_MODIFY_ORDER>::Do(DoCommandFlag::Execute, conditional->index, 1, MOF_COND_VALUE, 50));
+	/* Full load against a short timetabled round trip. */
+	Vehicle *full = vehicle(2, VEH_SHIP);
+	if (full->GetOrder(0)->GetLoadType() != OrderLoadType::FullLoadAny) CheckCommand("full-load", Command<CMD_MODIFY_ORDER>::Do(DoCommandFlag::Execute, full->index, 0, MOF_LOAD, to_underlying(OrderLoadType::FullLoadAny)));
+	for (VehicleOrderID index = 0; index < 2; ++index) {
+		CheckCommand("full-wait", Command<CMD_CHANGE_TIMETABLE>::Do(DoCommandFlag::Execute, full->index, index, MTF_WAIT_TIME, 30));
+		CheckCommand("full-travel", Command<CMD_CHANGE_TIMETABLE>::Do(DoCommandFlag::Execute, full->index, index, MTF_TRAVEL_TIME, 30));
+	}
+	/* Merge goods {4,6,13} with the smaller {10,12}, then the smaller passenger
+	 * ship graph {24,25} into {0,1,16}. */
+	station(vehicle(7, VEH_ROAD), 2, 12);
+	station(vehicle(42, VEH_SHIP), 4, 1);
+	/* Stopped buses whose next hop leaves their graph: their link goes stale and
+	 * the station tick's refresh may not merge. */
+	for (uint16_t index : {3, 4}) {
+		Vehicle *bus = vehicle(index, VEH_ROAD);
+		station(bus, 2, 8);
+		CheckCommand("stop", Command<CMD_START_STOP_VEHICLE>::Do(DoCommandFlag::Execute, bus->index, false));
+	}
+	fmt::print(stderr, "VISITS setup {} {} {}\n", refit->GetNumOrders(), conditional->GetNumOrders(), full->orders->GetTotalDuration());
+	company.Restore();
+	return true;
+}
+
 static bool OrdersScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1].starts_with("visits")) return VisitsScenario(args);
 	Vehicle *v = Vehicle::Get(VehicleID(126));
 	Backup<CompanyID> company(_current_company, v->owner);
 	if (args[1] == "restore") {
