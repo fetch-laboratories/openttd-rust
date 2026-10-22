@@ -27,11 +27,13 @@ checkpoint and work order.
    branches are unintegrated. Keep about five subagents busy within that limit,
    with a fresh agent per task and review round. Close each agent when it
    finishes. At the slot limit, do root work until a slot frees.
-2. Follow the full process for every change: issue, isolated worktree, PR,
-   independent attributed review naming what was compared, in which the
-   reviewer fixes its findings and you spot-check its fix commits, green
-   required CI, integration, worktree removal, then a roadmap update in a single
-   docs-only commit. Update a draft from base only when a conflict blocks its
+2. Follow the full process for every change: issue (or a checklist item on a
+   batch's tracking issue), isolated worktree, PR, independent attributed
+   review naming what was compared, in which the reviewer fixes its findings
+   and you spot-check its fix commits, green required CI, integration and
+   worktree removal. Commit roadmap updates when you take stock (step 4) or
+   change the work order, not after every integration; PR and issue state
+   carry the rest. Update a draft from base only when a conflict blocks its
    integration or its own work. If a check on rust-migration itself is red,
    fix it first.
 3. When fewer than two unstarted components remain ahead of active work, spawn a
