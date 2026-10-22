@@ -20,6 +20,8 @@ extern bool CheckAbi_train_cmd();
 extern bool CheckAbi_ship_cmd();
 extern bool CheckAbi_group_cmd();
 extern bool CheckAbi_vehicle();
+extern bool CheckAbi_vehicle_cmd();
+extern bool CheckAbi_vehiclelist();
 extern bool CheckAbi_engine();
 extern bool CheckAbi_aircraft_cmd();
 extern bool CheckAbi_cargopacket();
@@ -37,7 +39,10 @@ extern bool CheckAbi_yapf_ship();
 extern bool CheckAbi_monocypher();
 extern bool CheckAbi_network_crypto();
 extern bool CheckAbi_landscape();
+extern bool CheckAbi_object_cmd();
 extern bool CheckAbi_water_cmd();
+extern bool CheckAbi_tunnelbridge_cmd();
+extern bool CheckAbi_subsidy();
 
 TEST_CASE("Rust ABI - actual production callback tables are complete")
 {
@@ -55,6 +60,8 @@ TEST_CASE("Rust ABI - actual production callback tables are complete")
 	CHECK(CheckAbi_ship_cmd());
 	CHECK(CheckAbi_group_cmd());
 	CHECK(CheckAbi_vehicle());
+	CHECK(CheckAbi_vehicle_cmd());
+	CHECK(CheckAbi_vehiclelist());
 	CHECK(CheckAbi_engine());
 	CHECK(CheckAbi_aircraft_cmd());
 	CHECK(CheckAbi_cargopacket());
@@ -72,7 +79,10 @@ TEST_CASE("Rust ABI - actual production callback tables are complete")
 	CHECK(CheckAbi_monocypher());
 	CHECK(CheckAbi_network_crypto());
 	CHECK(CheckAbi_landscape());
+	CHECK(CheckAbi_object_cmd());
 	CHECK(CheckAbi_water_cmd());
+	CHECK(CheckAbi_tunnelbridge_cmd());
+	CHECK(CheckAbi_subsidy());
 }
 TEST_CASE("Rust ABI - omitted and explicit null callbacks fail completeness")
 {

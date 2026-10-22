@@ -10,19 +10,19 @@
 //! the outer C++ frame. No world borrow survives a callback. Panics abort and
 //! native leaves are noexcept; AI startup remains outside Rust.
 #![allow(unsafe_code, missing_docs, clippy::too_many_arguments)]
-use crate::{industry, rail_cmd, road_cmd, services, station_cmd, water_cmd};
+use crate::{industry, objects, rail_cmd, road_cmd, services, station_cmd, water_cmd};
 
 #[repr(C)]
 pub struct Services {
     pub clear: extern "C" fn(u32, u8, u8),
     pub house: extern "C" fn(u32, u8, u8),
     pub industry: *const industry::TileServices,
-    pub object: extern "C" fn(u32, u8, u8),
+    pub objects: *const objects::ObjectServices,
     pub rail: *const rail_cmd::RailCommandServices,
     pub shared: *const services::Services,
     pub station: *const station_cmd::CommandServicesTable,
     pub trees: extern "C" fn(u32, u8, u8),
-    pub tunnel_bridge: extern "C" fn(u32, u8, u8),
+    pub tunnel_bridge: *const crate::tunnelbridge_cmd::TunnelBridgeServices,
     pub void: extern "C" fn(u32, u8, u8),
     pub water: *const water_cmd::WaterCommandServices,
 }
@@ -71,8 +71,16 @@ pub unsafe extern "C" fn openttd_rust_tile_change_owner(
                 let owner = ((*s.industry).industry)(tile).owner;
                 industry::openttd_rust_industry_change_owner(owner, old, new);
             }
-            9 => (s.tunnel_bridge)(tile, old, new),
-            10 => (s.object)(tile, old, new),
+            9 => {
+                crate::tunnelbridge_cmd::change_owner(
+                    s.tunnel_bridge,
+                    context.cost,
+                    tile,
+                    old,
+                    new,
+                );
+            }
+            10 => objects::openttd_rust_object_change_owner(s.objects, context, tile, old, new),
             // Like the native table, the map supplies only defined tile kinds.
             _ => std::hint::unreachable_unchecked(),
         }

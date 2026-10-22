@@ -17,7 +17,7 @@ static_assert(MAX_COMPANIES == 15 && OWNER_DEITY.base() == 18 && MAX_LENGTH_ENGI
 static OpenTTDEngineRef EngineRef(const Engine *e) noexcept
 {
 	if (e == nullptr) return {.shell = nullptr, .state = nullptr, .id = EngineID::Invalid().base(), .type = VEH_INVALID};
-	return {.shell = RustEngine(e), .state = e->rust_lifecycle.state, .id = e->index.base(), .type = e->type};
+	return {.shell = RustEngine(e), .state = e->rust_lifecycle.state, .id = e->index.base(), .type = RustEngineType(RustEngine(e))};
 }
 static OpenTTDEngineRef Engine_next(uint32_t from) noexcept
 {
@@ -29,7 +29,7 @@ static OpenTTDEngineRef EnginePrototype(const Engine *e) noexcept
 {
 	/* Unpooled prototypes may not initialize PoolItem::index. Read that field
 	 * only at the original startup-seed/retirement/new-month branches. */
-	return {.shell = RustEngine(e), .state = e->rust_lifecycle.state, .id = 0, .type = e->type};
+	return {.shell = RustEngine(e), .state = e->rust_lifecycle.state, .id = 0, .type = RustEngineType(RustEngine(e))};
 }
 static OpenTTDEngineSyncVariant Engine_sync_variant(const OpenTTDEngine *e) noexcept
 {

@@ -12,6 +12,7 @@
 #include "../settings_type.h"
 #include "../road.h"
 #include "../autoslope.h"
+#include "../openttd.h"
 
 inline uint8_t RustRoadAccelerationModel() noexcept { return _settings_game.vehicle.roadveh_acceleration_model; }
 inline uint8_t RustRoadSide() noexcept { return _settings_game.vehicle.road_side; }
@@ -50,5 +51,13 @@ inline bool RustStationStopOnTownRoad() noexcept { return _settings_game.constru
 inline bool RustStationStopOnCompetitorRoad() noexcept { return _settings_game.construction.road_stop_on_competitor_road; }
 inline bool RustStationNoiseEnabled() noexcept { return _settings_game.economy.station_noise_level; }
 inline bool RustStationDistantJoin() noexcept { return _settings_game.station.distant_join_stations; }
+inline bool RustNormalGame() noexcept { return _game_mode == GM_NORMAL; }
 inline bool RustExtraDynamite() noexcept { return _settings_game.construction.extra_dynamite; }
+inline uint16_t RustMaxBridgeLength() noexcept { return _settings_game.construction.max_bridge_length; }
+inline uint8_t RustMaxBridgeHeight() noexcept { return _settings_game.construction.max_bridge_height; }
+inline uint16_t RustMaxTunnelLength() noexcept { return _settings_game.construction.max_tunnel_length; }
+inline uint16_t OpenTTDSubsidyDuration() noexcept { return _settings_game.difficulty.subsidy_duration; }
+inline bool OpenTTDManualCargoDistribution(CargoType cargo) noexcept { return _settings_game.linkgraph.GetDistributionType(cargo) == DT_MANUAL; }
+inline bool OpenTTDAutomaticCargoDistribution(CargoType cargo) noexcept { return !OpenTTDManualCargoDistribution(cargo); }
+inline bool OpenTTDManualPassengerDistribution() noexcept { return _settings_game.linkgraph.distribution_pax == DT_MANUAL; }
 #endif /* RUST_SETTINGS_SERVICES_H */

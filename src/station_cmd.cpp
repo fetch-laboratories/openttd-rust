@@ -81,7 +81,10 @@
 
 #ifdef WITH_RUST
 #include "rust/vehicle_services.h"
+#include "rust/services_map.h"
 #include "rust/services_station.h"
+#include "rust/services_cargo.h"
+#include "rust/settings_services.h"
 #include "rust/station_command_ffi.h"
 #include "rust/tile_owner_services.h"
 #include "rust/command_services.h"
@@ -665,9 +668,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.local_owner = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return static_cast<BaseStation *>(handle)->owner == _local_company;
 	},
-	.rectangle_empty = [](OpenTTDBaseStation *handle) noexcept -> bool {
-		return static_cast<BaseStation *>(handle)->rect.IsEmpty();
-	},
+	.rectangle_empty = RustStationRectangleEmptyHandle<OpenTTDBaseStation *>,
 	.town_statue = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return Company::IsValidID(static_cast<BaseStation *>(handle)->owner) && static_cast<BaseStation *>(handle)->town->statues.Test(static_cast<BaseStation *>(handle)->owner);
 	},
@@ -680,9 +681,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.available = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> uint32_t {
 		return Station::From(static_cast<BaseStation *>(handle))->goods[cargo].AvailableCount();
 	},
-	.cargo_valid = [](uint8_t cargo) noexcept -> bool {
-		return CargoSpec::Get(cargo)->IsValid();
-	},
+	.cargo_valid = OpenTTDCargoSpecValid,
 	.rating_callback_enabled = [](uint8_t cargo) noexcept -> bool {
 		return CargoSpec::Get(cargo)->callback_mask.Test(CargoCallbackMask::StationRatingCalc);
 	},
@@ -793,9 +792,7 @@ static const OpenTTDStationLinks _rust_station_links = {
 	.graph = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> OpenTTDLinkGraph * {
 		return LinkGraph::GetIfValid(static_cast<Station *>(handle)->goods[cargo].link_graph);
 	},
-	.automatic_distribution = [](uint8_t cargo) noexcept -> bool {
-		return _settings_game.linkgraph.GetDistributionType(cargo) != DT_MANUAL;
-	},
+	.automatic_distribution = OpenTTDAutomaticCargoDistribution,
 	.node = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> uint16_t {
 		return static_cast<Station *>(handle)->goods[cargo].node;
 	},
@@ -819,7 +816,7 @@ static const OpenTTDStationLinks _rust_station_links = {
 		const Edge &edge = (*graph)[node].edges[index];
 		Station *from = static_cast<Station *>(from_handle);
 		Station *to = Station::Get((*graph)[edge.dest_node].station);
-		return {to, edge.LastUpdate().base(), DistanceManhattan(from->xy, to->xy)};
+		return {to, edge.LastUpdate().base(), OpenTTDDistanceManhattan(from->xy.base(), to->xy.base())};
 	},
 	.edge_unrestricted = [](OpenTTDLinkGraph *handle, uint16_t node, size_t index) noexcept -> int32_t {
 		return (*static_cast<LinkGraph *>(handle))[node].edges[index].last_unrestricted_update.base();

@@ -33,4 +33,5 @@ pub const MP_VOID: u8 = 7;
 /// `TileType::MP_INDUSTRY`.
 pub const MP_INDUSTRY: u8 = 8;
 /// `TileType::MP_OBJECT`.
+/// `MP_OBJECT`.
 pub const MP_OBJECT: u8 = 10;

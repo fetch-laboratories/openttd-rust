@@ -31,6 +31,352 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "Source" ["probe"] => crate::subsidy::Source { id, kind => type, };
+    "OpenTTDSubsidyState" ["probe"] => crate::subsidy::State { cargo_type, remaining, awarded, src, dst, };
+    "OpenTTDSubsidyCargo" ["probe"] => crate::subsidy::Cargo { object, data, };
+    "OpenTTDSubsidyServices" ["probe"] => crate::subsidy::Services {
+        shared,
+        town,
+        industry,
+        random_town,
+        industry_owner,
+        industry_id,
+        next_industry,
+        has_source_flag,
+        set_source_flag,
+        clear_source_flags,
+        valid_source,
+        can_allocate,
+        allocate,
+        destroy,
+        duration,
+        local_company,
+        cargo_valid,
+        manual,
+        manual_pax,
+        any_manual,
+        passenger_count,
+        passenger_at,
+        offered_news,
+        awarded_news,
+        offer_expired_news,
+        withdrawn_news,
+        offer_events,
+        award_events,
+        offer_expired_events,
+        expired_events,
+        dirty,
+        station,
+        station_empty,
+        catchment,
+        near_industries,
+        assert_destination,
+    };
+
+    "OpenTTDArticulatedPart" ["probe"] => crate::vehicle_transactions::articulated::Part { image, capacity, };
+    "OpenTTDArticulatedProbability" ["probe"] => crate::vehicle_transactions::articulated::Probability { present, value, };
+    "OpenTTDVehicleArticulatedServices" ["probe"] => crate::vehicle_transactions::articulated::Services {
+        refit, default_cargo, capacity, pool_available, has_callback, next_part, prepare_previous,
+        new_train, new_road, road_length, copy_roadtype, train_info, road_info, set_part, mark_train,
+        mark_road, copy_common, random_bits, flip_image, reverse, position, available_cargo, warning,
+        has_articulated, next_articulated, max_parts, all_cargo,
+    };
+    "OpenTTDVehicleCloneServices" ["probe"] => crate::vehicle_transactions::clone::Services {
+        build, next_vehicle, has_articulated, next_articulated, copy_service, parse_suffix,
+    };
+    "OpenTTDVehicleBuildResult" ["probe"] => crate::vehicle_transactions::build::Result { id, capacity, };
+    "OpenTTDVehicleBuildServices" ["probe"] => crate::vehicle_transactions::build::Services {
+        refit, mass, random, depot_kind, engine_cost, default_cargo, articulate_count, pool_available,
+        free_unit, construct, rail, ship_tile, new_ship, set_purchase, articulated_capacity,
+        display_capacity, is_engine, normalize, presentation, use_unit, too_many, unavailable,
+    };
+    "OpenTTDAircraftInfo" ["probe"] => crate::vehicle_transactions::construct::AircraftInfo { image, passengers, mail, subtype, };
+    "OpenTTDVehicleConstructServices" ["probe"] => crate::vehicle_transactions::construct::Services {
+        articulated, powered_roadtypes, any_roadtype, new_road, road_front, station, can_use_station,
+        hangar_tile, pos_on_build, new_aircraft, aircraft_place, aircraft_info, aircraft_properties,
+        rotor, aircraft_capacity, road_capacity, set_cargo_type, engine_common, service_dates,
+        build_stamp, exclusive_preview, service_flags, wrong_depot,
+    };
+    "OpenTTDVehicleListId" ["probe"] => crate::vehicle_transactions::mass::ListId { kind, vehicle_type, company, index, valid, };
+    "OpenTTDVehicleMassServices" ["probe"] => crate::vehicle_transactions::mass::Services { common, selection, is_depot, is_tile_owner, send, service, mass_send, dont_cancel, invalid_client, };
+    "GRFStringID" ["probe"] => crate::vehicle_transactions::GrfStringId { };
+    "OpenTTDVehicleRefitCapacity" ["probe"] => crate::vehicle_transactions::refit::Capacity {
+        total, mail, cargo,
+    };
+    "OpenTTDRefitCargoKind" ["probe"] => crate::vehicle_transactions::refit::CargoKind {
+        cargo, subtype,
+    };
+    "OpenTTDRefitCommit" ["probe"] => crate::vehicle_transactions::refit::Commit {
+        cargo, capacity,
+    };
+    "OpenTTDRefitEngine" ["probe"] => crate::vehicle_transactions::refit::Engine {
+        mask, automatic,
+    };
+    "OpenTTDRefitCargo" ["probe"] => crate::vehicle_transactions::refit::Cargo {
+        classes, local,
+    };
+    "OpenTTDRefitPrices" ["probe"] => crate::vehicle_transactions::refit::Prices {
+        train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
+    };
+    "OpenTTDVehicleRefitServices" ["probe"] => crate::vehicle_transactions::refit::Services {
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, has_grf, refit_cost, refit_cargo, cost_callback, engine_kind, rail_kind, price_shift, can_carry, refit_engine, capacity, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, set_refit_cap, refit_cap, cargo_cap, set_capacity, write_refit, mail_cargo, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
+    };
+
+    "OpenTTDAircraftStartState" ["probe"] => crate::vehicle_transactions::AircraftStartState {
+        state, flags,
+    };
+    "OpenTTDVehicleTransactionStrings" ["probe"] => crate::vehicle_transactions::TransactionStrings {
+        destroyed, stopped_in_depot, no_power, in_flight, incompatible_rail, null_string,
+        grf_text, takeoff, terminal7, direct_descent, new_vehicle_expense,
+        invalid_client, share_orders, copy_orders, cargo_count, invalid_cargo,
+    };
+    "OpenTTDVehicleCommonServices" ["probe"] => crate::vehicle_transactions::CommonServices {
+        base, transactions, vehicles, orders, strings, train_power, aircraft_start,
+        startstop_callback, grf_version, grf_string, waiting_news, flip_stopped,
+        startstop_ui, sell_rail, value, valid_cargo,
+    };
+    "OpenTTDVehicleSelectionServices" ["probe"] => crate::vehicle_transactions::SelectionServices {
+        groups, transactions, vehicles, in_depot, free_wagon, first_engine_part,
+        multiheaded, other_multihead, with_orders, list_clear, list_push,
+    };
+    "OpenTTDVehicleTransactionTarget" ["probe"] => crate::vehicle_transactions::Target {
+        owner, primary,
+    };
+    "OpenTTDVehicleTransactionServices" ["probe"] => crate::vehicle_transactions::TransactionServices {
+        shared, commands, cost, groups, target, name, clear_name, set_name, name_dirty,
+        interval_percent, interval_default, interval_clamp, set_interval, unique_name, max_name,
+    };
+    "OpenTTDObjectHiddenArea" ["landscape"] => crate::objects::HiddenArea {
+        index,
+        first_tile,
+    };
+    "OpenTTDObjectPrice" ["landscape"] => crate::objects::Price {
+        factor,
+        shift,
+    };
+    "OpenTTDObjectArea" ["landscape"] => crate::objects::Area {
+        tile,
+        width,
+        height,
+    };
+    "OpenTTDObjectIdentity" ["landscape"] => crate::objects::Identity {
+        object,
+        area,
+        kind,
+    };
+    "OpenTTDObjectAllocation" ["landscape"] => crate::objects::Allocation {
+        object,
+        id,
+    };
+    "OpenTTDObjectNext" ["landscape"] => crate::objects::Next {
+        object,
+        id,
+        tile,
+    };
+    "OpenTTDObjectLoopPolicy" ["landscape"] => crate::objects::LoopPolicy {
+        spec,
+        object,
+        north,
+        flags,
+        kind,
+    };
+    "OpenTTDObjectPolicy" ["landscape"] => crate::objects::Policy {
+        flags,
+        callbacks,
+    };
+    "OpenTTDObjectFootprint" ["landscape"] => crate::objects::Footprint {
+        flags,
+        callbacks,
+        size,
+    };
+    "OpenTTDObjectClearance" ["landscape"] => crate::objects::Clearance {
+        flags,
+        height,
+    };
+    "OpenTTDObjectAdmission" ["landscape"] => crate::objects::Admission {
+        views,
+        height,
+    };
+    "OpenTTDObjectAreaShape" ["landscape"] => crate::objects::AreaShape {
+        views,
+        size,
+    };
+    "OpenTTDObjectGeneration" ["landscape"] => crate::objects::Generation {
+        flags,
+        amount,
+        views,
+        ever,
+    };
+    "OpenTTDObjectSlopeResult" ["landscape"] => crate::objects::SlopeResult {
+        callback,
+        registers,
+        version,
+    };
+    "OpenTTDObjectStrings" ["landscape"] => crate::objects::Strings {
+        too_many,
+        no_town,
+        edge_sub,
+        water,
+        edge,
+        on_water,
+        bridge,
+        flat,
+        own,
+        built,
+        limit,
+        hq,
+        object,
+    };
+    "OpenTTDObjectDefinition" ["landscape"] => crate::objects::Definition {
+        grfid,
+        local_id,
+        view,
+        has_file,
+    };
+    "OpenTTDObjectQueryServices" ["landscape"] => crate::objects::QueryServices {
+        random_bits,
+        index,
+        by_tile,
+        definition,
+        object_index,
+        kind,
+        north,
+        town,
+        town_tile,
+        date,
+        colour,
+        view,
+        nearby,
+        nearby_info,
+        terrain,
+        town_zone,
+        badges,
+        register_100,
+        grfid,
+        version8,
+        override_id,
+        manhattan,
+        square,
+        triggers,
+        change_frame,
+        unhandled,
+    };
+    "OpenTTDObjectServices" ["landscape"] => crate::objects::ObjectServices {
+        shared,
+        cost,
+        command,
+        company,
+        cargo,
+        town,
+        founding,
+        industry_tiles,
+        strings,
+        spec_count,
+        spec,
+        callbacks,
+        colour_policy,
+        flags,
+        footprint,
+        clearance,
+        available,
+        ever,
+        area_shape,
+        admission,
+        generation,
+        can_allocate,
+        allocate,
+        object_type,
+        loop_policy,
+        identity,
+        location,
+        next,
+        set_colour,
+        recolour,
+        colour_callback,
+        colour_error,
+        make,
+        delete_object,
+        query,
+        slope_callback,
+        slope_error,
+        build_price,
+        clear_price,
+        set_hq,
+        statue_town,
+        hq_begin,
+        hq_deliver,
+        hq_end,
+        autoslope_callback,
+        boolean_callback,
+        enabled,
+        close_inspect,
+        progress_set,
+        progress_increase,
+        normal,
+        bulldozer,
+        water_class,
+        restoration,
+        set_owner,
+        scale_size_1d,
+        passengers,
+        mail,
+        scale_cargo,
+    };
+    "OpenTTDBridgeAvailability" ["probe"] => crate::tunnelbridge_cmd::Availability { year, min, max, };
+    "OpenTTDTunnelBridgeStrings" ["probe"] => crate::tunnelbridge_cmd::Strings {
+        bridge_border,
+        map_edge,
+        same_end,
+        straight,
+        too_long,
+        wrong_slope,
+        unequal_height,
+        demolish_bridge,
+        already_built,
+        authority,
+        other_owner,
+        too_low,
+        too_high,
+        tunnel_site,
+        water,
+        tunnel_border,
+        tunnel_way,
+        tunnel_long,
+        excavate,
+        demolish_tunnel,
+    };
+    "OpenTTDTunnelBridgeServices" ["probe"] => crate::tunnelbridge_cmd::TunnelBridgeServices {
+        rail,
+        road,
+        road_ground,
+        water,
+        company,
+        availability,
+        speed,
+        price,
+        max_bridge_length,
+        max_bridge_height,
+        max_tunnel_length,
+        crossing_tunnels,
+        other_bridge_end,
+        northern_bridge_end,
+        bridge_type,
+        is_tunnel,
+        tunnel_in_way,
+        set_middle,
+        clear_middle,
+        set_reservation,
+        make_rail_bridge,
+        make_road_bridge,
+        make_aqueduct,
+        make_rail_tunnel,
+        make_road_tunnel,
+        mark_bridge,
+        mark_dirty_height,
+        terraform,
+        objects,
+        strings,
+    };
     "OpenTTDRoadNearestTownTile" ["probe"] => crate::road_cmd::NearestTownTile { road, depot, town_owned, };
 
     "OpenTTDRoadTramBuildRead" ["probe"] => crate::road::TramBuildRead { owner, road_type, road, };
@@ -232,7 +578,6 @@ layouts! {
         rail_bridge_info,
         road_bridge_info,
         southern_bridge_end,
-        bridge_height,
         train_area,
         rail_spec,
         road_spec,
@@ -566,7 +911,6 @@ layouts! {
         ai_event,
         game_event,
         news,
-        bridge_height,
     };
     "OpenTTDFloodVictim" ["landscape"] => crate::water::FloodVictim {
         status,
@@ -596,7 +940,7 @@ layouts! {
         clear,
         house,
         industry,
-        object,
+        objects,
         rail,
         shared,
         station,
@@ -712,7 +1056,8 @@ layouts! {
         ground,
         town,
         station_loop,
-        object_loop,
+        objects,
+        object_frame,
     };
     "OpenTTDGroundABICalls" ["landscape"] => crate::ground::ABICalls {
         fences,
@@ -1157,7 +1502,6 @@ layouts! {
         enter,
         leave,
         finance,
-        clear_object_areas,
         infinite_money,
         money_error,
         infrastructure_dirty,
@@ -1631,7 +1975,6 @@ layouts! {
         generating_world,
     };
     "OpenTTDWaterRestorationServices" ["common"] => crate::water::RestorationServices {
-        slope_z,
         infrastructure,
         infrastructure_dirty,
         make_canal,
@@ -1694,6 +2037,7 @@ layouts! {
         random,
         road_bits,
         road_tram_type,
+        road_type_is_tram,
         road_type_is_road,
         road_cost_multiplier,
         road_depot_direction,
@@ -1736,6 +2080,7 @@ layouts! {
         tile_type,
         tile_add_wrap,
         tile_valid,
+        tile_slope_z,
         tile_z,
         town_index,
         town_owner,
@@ -2196,7 +2541,7 @@ layouts! {
         accept,
         statistics,
         monitor,
-        subsidised,
+        subsidies,
         industry_effect,
         vehicle_read,
         settle,
@@ -3046,20 +3391,10 @@ layouts! {
         road_loads,
         vehicle_empty,
         station_dirty,
-        test_refit,
-        execute_refit,
     };
     "OpenTTDIndustryLocationResult" ["industry"] => crate::industry::LocationResult {
         callback,
         registers,
-    };
-    "OpenTTDIndustryClearArea" ["industry"] => crate::industry::ClearArea {
-        first_tile,
-        area,
-    };
-    "OpenTTDIndustryClearAreas" ["industry"] => crate::industry::ClearAreas {
-        data,
-        size,
     };
     "OpenTTDIndustryAllocation" ["industry"] => crate::industry::Allocation {
         shell,
@@ -3135,8 +3470,6 @@ layouts! {
         costs,
         transaction,
         errors,
-        clear_areas,
-        restore_clear_areas,
     };
     "OpenTTDIndustryTilePolicyServices" ["industry"] => crate::industry::TilePolicyServices {
         current_company,
@@ -3316,7 +3649,7 @@ layouts! {
         neutral_station,
         cleanup_tile,
         delete_tile_inspect,
-        make_water,
+        restoration,
         delete_oilrig,
         clear_docking,
         industry_field,
@@ -3327,7 +3660,7 @@ layouts! {
         close_view,
         close_production,
         delete_inspect,
-        delete_subsidies,
+        subsidies,
         invalidate_cargo,
         next_near_station,
         remove_delivery,
@@ -3656,11 +3989,6 @@ layouts! {
         max_track_speed,
         speed,
     };
-    "OpenTTDTrainCurrentMaxSpeed6Read" ["probe"] => crate::train::TrainCurrentMaxSpeed6Read {
-        next,
-        tile,
-        status,
-    };
     "OpenTTDTrainUpdateAccelerationRead" ["probe"] => crate::train::TrainUpdateAccelerationRead {
         power,
         weight,
@@ -3817,7 +4145,6 @@ layouts! {
         read_curve_limit,
         read_stop_location,
         read_current_max_speed,
-        read_current_max_speed_6,
         read_update_acceleration,
         read_update_speed,
         read_trackdir,
@@ -4361,7 +4688,6 @@ layouts! {
         close_replace,
         screen_dirty,
         list_generate,
-        list_push,
         list_size,
         list_at,
         renew_allocate,
@@ -4370,6 +4696,7 @@ layouts! {
         recursion_error,
     };
     "OpenTTDFleetTransactionServices" ["fleet"] => crate::fleet::transactions::Services {
+        common, refit_services, build_services,
         cost_zero,
         cost_vehicles,
         cost_error,
@@ -4389,7 +4716,6 @@ layouts! {
         next_unit,
         prev_unit,
         length,
-        flipped,
         cargo_type,
         can_carry,
         stopped_in_depot,
@@ -4417,16 +4743,10 @@ layouts! {
         order_cargo,
         local,
         refit_news,
-        build,
-        refit,
         subtype,
         reverse_probability,
         reverse,
-        start_stop,
         move_vehicle => move,
-        sell,
-        clone_order,
-        copy_group,
         copy_configuration,
         viewports,
         view_window,
@@ -4578,6 +4898,9 @@ layouts! {
         pending,
         transaction,
         group,
+        refit,
+        refit_cost,
+        refit_temporary,
     };
     "OpenTTDVehicleMaintenanceRenewal" ["maintenance"] => crate::vehicle::maintenance::Renewal {
         age,

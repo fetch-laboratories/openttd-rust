@@ -8,6 +8,7 @@
 #ifndef RUST_COMPANY_FFI_H
 #define RUST_COMPANY_FFI_H
 #include "service_defaults.hpp"
+struct OpenTTDSubsidyServices;
 #include <cstddef>
 #include <cstdint>
 #include "services_ffi.h"
@@ -91,6 +92,7 @@ struct OpenTTDCompanyFinanceServices {
  * every raw field access it may invalidate. *_next_owned scans a pool from an
  * index for the next item of that owner, in pool order.
  */
+struct OpenTTDObjectServices;
 struct OpenTTDCompanyServices {
 	const OpenTTDCompanyFinanceServices *finance;
 	const OpenTTDSharedServices *shared;
@@ -105,7 +107,8 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_COMPANY_CALL *company_admin_update)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_admin_update);
 	void (OPENTTD_COMPANY_CALL *company_in_trouble)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_in_trouble);
 	void (OPENTTD_COMPANY_CALL *post_company_delete)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(post_company_delete);
-	void (OPENTTD_COMPANY_CALL *update_company_hq)(uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(update_company_hq);
+	uint32_t (OPENTTD_COMPANY_CALL *hq_location)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(hq_location);
+	const OpenTTDObjectServices *(OPENTTD_COMPANY_CALL *object_services)() noexcept OPENTTD_SERVICE_DEFAULT(object_services);
 	void (OPENTTD_COMPANY_CALL *performance_detail_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(performance_detail_dirty);
 	void (OPENTTD_COMPANY_CALL *company_graphs_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(company_graphs_dirty);
 	void (OPENTTD_COMPANY_CALL *company_infrastructure)(uint8_t, OpenTTDCompanyInfrastructure *) noexcept OPENTTD_SERVICE_DEFAULT(company_infrastructure);
@@ -152,10 +155,7 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_COMPANY_CALL *acquisition_windows)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(acquisition_windows);
 	void (OPENTTD_COMPANY_CALL *clients_to_spectators)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clients_to_spectators);
 	void (OPENTTD_COMPANY_CALL *set_local_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_local_company);
-	uint32_t (OPENTTD_COMPANY_CALL *subsidy_next_awarded)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(subsidy_next_awarded);
-	void (OPENTTD_COMPANY_CALL *delete_subsidy)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_subsidy);
-	void (OPENTTD_COMPANY_CALL *set_subsidy_awarded)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_subsidy_awarded);
-	void (OPENTTD_COMPANY_CALL *rebuild_subsidy_cache)() noexcept OPENTTD_SERVICE_DEFAULT(rebuild_subsidy_cache);
+	const OpenTTDSubsidyServices *(OPENTTD_COMPANY_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
 	uint32_t (OPENTTD_COMPANY_CALL *town_next)(uint32_t, uint8_t, OpenTTDCompanyTownRights *) noexcept OPENTTD_SERVICE_DEFAULT(town_next);
 	int16_t (OPENTTD_COMPANY_CALL *town_rating)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(town_rating);
 	void (OPENTTD_COMPANY_CALL *set_town_rating)(uint32_t, uint8_t, int16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_town_rating);

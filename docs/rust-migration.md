@@ -1574,6 +1574,26 @@ sites run in assertion builds.
 Checks: `python3 tools/migration.py verify --jobs 2` and the default `fleet-` simulation. NewGRF
 refit/attach callbacks and articulated parts remain #156.
 
+### Common vehicle transactions and nonrail construction (#314)
+
+Rust (`vehicle_transactions/`) owns the `vehicle_cmd.cpp` commands: build, sell, refit, clone,
+start/stop, mass start/stop, depot sell/replace, send-to-depot dispatch, naming and service
+intervals, with vehicle-set selection and depot/sort lists. It also owns the road vehicle and
+aircraft constructors (`construct.rs`, shadow and helicopter rotor included), articulated
+assembly and its consistency check. Speculative refit builds restore both RNG streams; clone
+cleanup sells partial consists. Commands nest through `command::nested` and call ship, orders,
+cargo, fleet, road and aircraft owners directly. Original bodies compile only portably.
+
+C++ keeps pools, shells and their field stores, specs/NewGRF callbacks, unit allocation,
+native stack `CommandCost`s and UI leaves. Rail construction, moves and rail sale stay native
+until #315.
+
+Checks: `python3 tools/migration.py verify --jobs 2` and the default `fleet-` scenarios. The
+`transaction-build-road`/`-aircraft` and `transaction-clone` scenarios require
+`vehicle_transactions` witnesses for road, aircraft, rotor, RNG restoration and clone join
+failure. Articulated road vehicles (NewGRF only), wrong-depot road types, airports refusing an
+engine and clone build failure after the front part are #156 gaps.
+
 ### Engine lifecycle and availability (#220)
 
 Rust owns each engine's lifecycle scalars and name, the process-wide aging-stop state,
@@ -1621,6 +1641,35 @@ conversion/reroutes, clearing/terraforming, company transfer/deletion and reserv
 Coast/half-tile water and PBS path-end removal remain #156 gaps. PR #270 records
 exact-head checks and outstanding full-simulation, speed and CI gates.
 
+### Object construction, generation and HQ lifecycle (#295)
+
+Rust (`objects.rs`) owns build/area commands, clear and ownership policy,
+terraform/build-above, HQ growth/acceptance/production, colour updates,
+object tile loops and generation including lighthouse/transmitter searches.
+It also owns object NewGRF variables, nearby/sister queries and animation triggers;
+native interpreter, badge, override and generic animation-frame services remain.
+Process-wide wrapping type counts and ordered cleared-area command scratch
+have one Rust owner. Tunnel clients retain indices over nested append, and
+industry transactions snapshot/restore the same scratch at the original points.
+C++ retains the native object pool/specs/map/save/render records, stack command
+results and typed shared services; original bodies remain portable-only.
+
+Generation progress cancellation returns before native rethrow. Other leaves
+are synchronous noexcept calls. Borrows end before callbacks; HQ passenger/mail
+production shares one random word and lazily discovers stations. Command calls
+use the shared `command::nested` lifecycle. Command, finance, clearing and water
+restoration reuse the integrated shared owners; ownership enters from and
+redispatches through the shared Rust dispatcher (#333). Named ABI
+metadata and typed abort defaults cover the object table and consumed records.
+
+Default `objects` semantic scenarios cover four climates/borders, HQ relocation,
+cargo, owned-land area construction, statues, ownership, clearing back to
+canal/river/sea with water redispatch, ID reuse and afterload
+counts. Compact unchanged-body probes cover count wrapping/destruction, scratch
+growth, cancellation, query availability/register/nearby/count decisions and callback/RNG
+ordering, including unmasked `SB` refresh and reentry. External NewGRF/legacy,
+autoslope and generation branches remain tracked in #156.
+
 ### Road track, depot and conversion commands (#266)
 
 Rust (`road_cmd.rs`) owns road removal permissions and slopes, single and long
@@ -1646,6 +1695,7 @@ including drags, one-way/tram coexistence, reserved crossings, stops, bridges,
 depots, slopes, town removal, owner changes and low-funds removal.
 The fixture declares builtin-like road-type inputs; external NewGRF programs and
 legacy save variants remain corpus gaps. PR #290 records validation and speed.
+
 ### House lifecycle and tile simulation (#256)
 
 `town/house.rs` owns `TileLoop_Town` (construction stages, rebuild/replacement, original and
@@ -1693,3 +1743,48 @@ map/depot fields, infrastructure, docking membership and RNG across both axes,
 all lock directions/parts, occupied/bankrupt queries, force/partial clearing,
 editor/desert and restoration inputs. Pool exhaustion, construction under bridges,
 water objects, arbitrary NewGRF/legacy layouts and GUI remain #156 coverage gaps.
+
+### Tunnel and bridge commands and ownership (#293)
+
+Rust (`tunnelbridge_cmd.rs`) owns complete bridge/tunnel construction, removal
+permission and clearing, ownership, terraform and build-above policy, including
+ordered replacement, partial effects, reservations and infrastructure updates.
+Header-named modules share bridge prices/foundations/heights, length and track
+helpers, and source constants. The hidden tunnel end tile is one process-wide
+Rust atomic, shared with GUI readers; no component world borrow crosses reentry.
+
+C++ keeps canonical map/spec/pool storage, rendering, vehicle entry and native
+stack command results. Direct typed noexcept services retain shared operations;
+ordinary play reaches no throwing script VM or save service. Bridge height calls
+Rust foundation directly, including existing station/water/object consumers.
+Slope/z has one canonical shared observation. Tunnel exit terraform uses the
+integrated object scratch owner's stable index across recursive clears.
+
+Default `roads-commands` and its reload compare all bridge transports/both axes,
+road/rail tunnels, test/execute/query (including AI), replacement, ownership,
+refusal, occupied clearing, bankruptcy, autoslope, recursive exit terraforming,
+hidden failure end tiles and price thresholds at 25/50/100 tunnel tiles.
+The existing default object probe checks scratch growth/restoration. Live train
+re-reservation, rectangular-map tunnel intersection choices, external NewGRFs
+and legacy layouts remain #156 coverage gaps. PR #352 records checks and limits.
+### Subsidy lifecycle, route search and awards (#316)
+
+Rust owns each subsidy’s canonical scalars, all route searches, creation/deity
+checks, source/destination cache rebuild and deletion, monthly generation/expiry,
+delivery awards and company transfer/deletion. Native SUBS descriptors and
+GUI/script readers alias the sole Rust allocation; original bodies stay portable.
+C++ retains pool identity/allocation order, map/catchment and cargo specifications,
+news formatting and event enqueueing through typed noexcept leaves. Payment,
+company and industry owners call Rust directly; no owner borrow spans a callback.
+The deity command retains duplicate/self/distant routes, and monthly policy keeps
+RNG short circuits, 1001 attempts, u16 wrapping/narrowing and expiry’s bypass of
+both disabled-generation early returns. Cache flags use the original Set/Test
+operations; house cargo scans call the integrated Rust house owner directly.
+`python3 tools/migration.py verify --jobs 2` checks Cargo and native ABI.
+Default `subsidies-control` and `subsidies-reload` compare commands, every endpoint
+class, multi-awards/rivals, actual final-delivery payments for all four multipliers,
+searches, deletion/transfer and modern SUBS reload, requiring Rust branch witnesses.
+The existing console adapter compiles the unchanged reference monthly lambda for
+zero-countdown, full-pool retry and disabled-expiry RNG gaps; scalar address checks
+cover the reference-alias boundary. External NewGRF programs, legacy conversion
+fixtures and threaded GUI/presentation remain coverage gaps tracked in #156.

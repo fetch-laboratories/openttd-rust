@@ -1178,7 +1178,6 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.ai_event = [](OpenTTDVehicle *v, uint32_t victims) noexcept { Vehicle *u = VehicleOf(v); AI::NewEvent(u->owner, new ScriptEventVehicleCrashed(u->index, u->tile, ScriptEventVehicleCrashed::CRASH_FLOODED, victims, u->owner)); },
 		.game_event = [](OpenTTDVehicle *v, uint32_t victims) noexcept { Vehicle *u = VehicleOf(v); Game::NewEvent(new ScriptEventVehicleCrashed(u->index, u->tile, ScriptEventVehicleCrashed::CRASH_FLOODED, victims, u->owner)); },
 		.news = [](OpenTTDVehicle *v, uint32_t victims) noexcept { AddTileNewsItem(GetEncodedString(STR_NEWS_DISASTER_FLOOD_VEHICLE, victims), NewsType::Accident, TileIndex{RustVehicleTile(VehicleOf(v))}); },
-		.bridge_height = [](uint32_t t) noexcept { return GetBridgePixelHeight(TileIndex{t}); },
 	};
 	return services;
 }

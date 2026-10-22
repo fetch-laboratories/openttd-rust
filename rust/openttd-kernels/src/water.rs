@@ -86,7 +86,6 @@ pub struct WaterServices {
     pub ai_event: extern "C" fn(VehicleRef, u32),
     pub game_event: extern "C" fn(VehicleRef, u32),
     pub news: extern "C" fn(VehicleRef, u32),
-    pub bridge_height: extern "C" fn(u32) -> i32,
 }
 impl WaterServices {
     /// # Safety
@@ -108,7 +107,6 @@ impl WaterServices {
 /// Native packed-map/storage leaves for water class restoration.
 #[repr(C)]
 pub struct RestorationServices {
-    pub slope_z: extern "C" fn(u32) -> FoundationSlope,
     pub infrastructure: extern "C" fn(u8, u32),
     pub infrastructure_dirty: extern "C" fn(u8),
     pub make_canal: extern "C" fn(u32, u8, u8),
@@ -124,7 +122,7 @@ pub(crate) unsafe fn restore(
     r: &RestorationServices,
 ) {
     let mut class = unsafe { (&*water.clear).water_class }(tile).0;
-    let slope_z = (r.slope_z)(tile);
+    let slope_z = (s.tile_slope_z)(tile);
     if slope_z.slope.0 != 0 {
         if class == 1 {
             if (s.company_valid)(owner) {
@@ -475,7 +473,9 @@ impl<'a> World<'a> {
             return;
         }
         let end = (self.s.other_tunnel_end)(tile);
-        let z = (self.w.bridge_height)(tile);
+        let z = crate::bridge_map::get_bridge_pixel_height(tile, self.s, |f, h| {
+            (self.w.apply_foundation)(Foundation(f), Slope(h)).z
+        });
         crate::ground::hit(crate::ground::Witness::BridgeStart);
         self.vehicles_on_tile(tile, z);
         crate::ground::hit(crate::ground::Witness::BridgeEnd);
@@ -815,7 +815,6 @@ pub(crate) fn fixture() -> WaterServices {
         ai_event: unused2,
         game_event: unused2,
         news: unused2,
-        bridge_height: unused1,
     }
 }
 

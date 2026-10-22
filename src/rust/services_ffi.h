@@ -133,6 +133,7 @@ struct OpenTTDSharedServices {
 	uint32_t (*random)(void *) noexcept OPENTTD_SERVICE_DEFAULT(random);
 	uint8_t (*road_bits)(uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(road_bits);
 	RoadTramType (*road_tram_type)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_tram_type);
+	bool (*road_type_is_tram)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(road_type_is_tram);
 	bool (*road_type_is_road)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_is_road);
 	uint16_t (*road_cost_multiplier)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_cost_multiplier);
 	uint8_t (*road_depot_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_depot_direction);
@@ -176,6 +177,7 @@ struct OpenTTDSharedServices {
 	uint8_t (*tile_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_type);
 	uint32_t (*tile_add_wrap)(uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_add_wrap);
 	bool (*tile_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_valid);
+	OpenTTDFoundationSlope (*tile_slope_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_slope_z);
 	int32_t (*tile_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_z);
 	uint16_t (*town_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_index);
 	OpenTTDTownState *(*town_owner)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_owner);
@@ -205,6 +207,9 @@ struct OpenTTDSharedServices {
 	const OpenTTDWaterGroundServices *(*water_services)() noexcept OPENTTD_SERVICE_DEFAULT(water_services); ///< Immutable table; getter avoids recursive static initialization.
 };
 extern const OpenTTDSharedServices _rust_shared_services;
+struct OpenTTDSubsidyServices;
+const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept;
+inline const OpenTTDSubsidyServices *RustSubsidyServices() noexcept { return &GetRustSubsidyServices(); }
 const OpenTTDSharedServices &GetRustSharedServices() noexcept;
 /* Shared reader ABI used by default allocation/layout/oracle tests, not game
  * dispatch. Zero count selects the existing callback backend. No pointer retained. */

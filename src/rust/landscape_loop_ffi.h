@@ -11,6 +11,7 @@
 #include "trees_ffi.h"
 #include "industry_ffi.h"
 #include "ground_ffi.h"
+#include "object_ffi.h"
 struct OpenTTDTownLeaves;
 
 /* Only existing tables consumed by the industry tile loop; borrowed for a batch. */
@@ -49,7 +50,8 @@ struct OpenTTDLandscapeLoopServices {
 	OpenTTDGroundLoopServices ground;
 	const OpenTTDTownLeaves *town;
 	void (*station_loop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_loop);
-	void (*object_loop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(object_loop);
+	const OpenTTDObjectServices *objects;
+	OpenTTDObjectLoopFrame *object_frame;
 };
 const OpenTTDTreeServices &GetRustTreeServices() noexcept;
 OpenTTDTreeLoopSettings GetRustTreeLoopSettings() noexcept;

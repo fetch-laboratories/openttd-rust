@@ -24,6 +24,7 @@
 #include "depot_base.h"
 #include "station_base.h"
 #include "engine_func.h"
+#include "cargotype.h"
 #include "rail_map.h"
 #include "road_map.h"
 #include "water_map.h"
@@ -31,6 +32,7 @@
 #include "vehiclelist.h"
 #include "console_func.h"
 #include "news_gui.h"
+#include "table/strings.h"
 
 [[noreturn]] static void FixtureAbort(int line) { fmt::print(stderr, "FLEET setup-failure {}\n", line); std::fflush(stderr); std::abort(); }
 
@@ -73,7 +75,7 @@ static Vehicle *BuildFixture(VehicleType type)
 	} else {
 		for (Depot *depot : Depot::Iterate()) {
 			if (GetTileOwner(depot->xy) != _current_company) continue;
-			if ((type == VEH_TRAIN && IsRailDepotTile(depot->xy)) || (type == VEH_SHIP && IsShipDepotTile(depot->xy))) { tile = depot->xy; break; }
+			if ((type == VEH_TRAIN && IsRailDepotTile(depot->xy)) || (type == VEH_SHIP && IsShipDepotTile(depot->xy)) || (type == VEH_ROAD && IsRoadDepotTile(depot->xy))) { tile = depot->xy; break; }
 		}
 	}
 	if (tile == INVALID_TILE) FixtureAbort(__LINE__);
@@ -120,6 +122,129 @@ static bool FleetScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
 	Backup<CompanyID> company(_current_company);
+	if (args[1].starts_with("transaction-mass-")) {
+		VehicleType type = args[1].ends_with("train") ? VEH_TRAIN : args[1].ends_with("road") ? VEH_ROAD : args[1].ends_with("ship") ? VEH_SHIP : VEH_AIRCRAFT;
+		Vehicle *v = BuildFixture(type);
+		VehicleID original = v->index;
+		TileIndex tile = v->tile;
+		VehicleListIdentifier list(VL_SHARED_ORDERS, type, v->owner, v->index);
+		Checked("mass-start-test", Command<CMD_MASS_START_STOP>::Do({}, tile, true, true, list));
+		bool test_stopped = v->vehstatus.Test(VehState::Stopped);
+		Checked("mass-start", Command<CMD_MASS_START_STOP>::Do(DoCommandFlag::Execute, tile, true, true, list));
+		bool started = !v->vehstatus.Test(VehState::Stopped);
+		Cost("mass-send-test", Command<CMD_SEND_VEHICLE_TO_DEPOT>::Do({}, VehicleID::Invalid(), {DepotCommandFlag::MassSend, DepotCommandFlag::Service}, list));
+		Cost("mass-send", Command<CMD_SEND_VEHICLE_TO_DEPOT>::Do(DoCommandFlag::Execute, VehicleID::Invalid(), {DepotCommandFlag::MassSend, DepotCommandFlag::Service}, list));
+		Checked("mass-stop", Command<CMD_MASS_START_STOP>::Do(DoCommandFlag::Execute, tile, false, false, list));
+		bool stopped = v->vehstatus.Test(VehState::Stopped);
+		v->age = TimerGameCalendar::Date(v->max_age.base() + 366);
+		Checked("mass-renew-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, v->engine_type, v->engine_type, true));
+		SavedRandomSeeds before, after;
+		SaveRandomSeeds(&before);
+		Cost("mass-replace-test", Command<CMD_DEPOT_MASS_AUTOREPLACE>::Do({}, tile, type));
+		SaveRandomSeeds(&after);
+		fmt::print(stderr, "FLEET mass-test {} {}\n", SameRandom(before, after), Vehicle::IsValidID(original));
+		Checked("mass-replace", Command<CMD_DEPOT_MASS_AUTOREPLACE>::Do(DoCommandFlag::Execute, tile, type));
+		fmt::print(stderr, "FLEET mass {} {} {} {}\n", test_stopped, started, stopped, !Vehicle::IsValidID(original));
+		Cost("mass-sell-test", Command<CMD_DEPOT_SELL_ALL_VEHICLES>::Do({}, tile, type));
+		Checked("mass-sell", Command<CMD_DEPOT_SELL_ALL_VEHICLES>::Do(DoCommandFlag::Execute, tile, type));
+		VehicleList remaining;
+		BuildDepotVehicleList(type, tile, &remaining, &remaining);
+		fmt::print(stderr, "FLEET mass-empty {}\n", remaining.empty());
+		Cost("mass-sell-empty", Command<CMD_DEPOT_SELL_ALL_VEHICLES>::Do({}, tile, type));
+		return true;
+	}
+	if (args[1].starts_with("transaction-refit-")) {
+		VehicleType type = args[1].ends_with("train") ? VEH_TRAIN : args[1].ends_with("road") ? VEH_ROAD : args[1].ends_with("ship") ? VEH_SHIP : VEH_AIRCRAFT;
+		Vehicle *v = BuildFixture(type);
+		StationID station = StationID::Invalid();
+		for (const Order &o : v->Orders()) if (o.IsType(OT_GOTO_STATION)) { station = o.GetDestination().ToStationID(); break; }
+		if (station == StationID::Invalid()) FixtureAbort(__LINE__);
+		for (Vehicle *u = v; u != nullptr; u = u->Next()) {
+			if (u->cargo_cap == 0) continue;
+			uint16_t amount = std::min<uint>(u->cargo_cap + 7U, UINT16_MAX);
+			if (!CargoPacket::CanAllocateItem()) FixtureAbort(__LINE__);
+			u->cargo.Append(new CargoPacket(amount, 3, station, u->tile, Money(133)));
+			u->refit_cap = amount;
+		}
+		uint before_count = CargoCount(v);
+		SavedRandomSeeds before, after;
+		SaveRandomSeeds(&before);
+		for (DoCommandFlags flags : {DoCommandFlags{DoCommandFlag::QueryCost}, DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
+			auto [cost, capacity, mail, capacities] = Command<CMD_REFIT_VEHICLE>::Do(flags, v->index, v->cargo_type, 0xFF, false, false, 0);
+			Checked("refit-loaded", cost);
+			fmt::print(stderr, "FLEET refit {} {} {} {} {}\n", type, flags.base(), capacity, mail, CargoCount(v));
+			for (uint cap : capacities) fmt::print(stderr, "FLEET refit-capacity {}\n", cap);
+		}
+		SaveRandomSeeds(&after);
+		fmt::print(stderr, "FLEET refit-loaded {} {} {}\n", SameRandom(before, after), before_count > CargoCount(v), v->IsStoppedInDepot());
+		Cost("refit-invalid-cargo", std::get<0>(Command<CMD_REFIT_VEHICLE>::Do({}, v->index, NUM_CARGO, 0, false, false, 0)));
+		Checked("start-refit-fixture", Command<CMD_START_STOP_VEHICLE>::Do(DoCommandFlag::Execute, v->index, false));
+		Cost("refit-running", std::get<0>(Command<CMD_REFIT_VEHICLE>::Do({}, v->index, v->cargo_type, 0, false, false, 0)));
+		return true;
+	}
+	if (args[1].starts_with("transaction-build-")) {
+		VehicleType type = args[1].ends_with("road") ? VEH_ROAD : VEH_AIRCRAFT;
+		Vehicle *v = BuildFixture(type);
+		SavedRandomSeeds before, after;
+		bool restored = true;
+		/* Every buildable engine through query, test and execute, then one speculative build for another cargo. */
+		for (const Engine *e : Engine::Iterate()) {
+			if (!IsEngineBuildable(e->index, type, _current_company)) continue;
+			for (DoCommandFlags flags : {DoCommandFlags{DoCommandFlag::QueryCost}, DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
+				auto [cost, id, cap, mail, cargo] = Command<CMD_BUILD_VEHICLE>::Do(flags, v->tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID);
+				fmt::print(stderr, "FLEET build {} {} {} {} {} {} {}\n", e->index, flags.base(), cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), cap, mail);
+				for (const Vehicle *u = Vehicle::GetIfValid(id); u != nullptr; u = u->Next()) fmt::print(stderr, "FLEET part {} {} {} {} {}\n", u->subtype, u->cargo_type, u->cargo_cap, u->z_pos, u->random_bits);
+			}
+			for (const CargoSpec *cs : CargoSpec::Iterate()) {
+				CargoType cargo = cs->Index();
+				if (cargo == e->GetDefaultCargoType()) continue;
+				SaveRandomSeeds(&before);
+				auto [cost, id, cap, mail, cargoes] = Command<CMD_BUILD_VEHICLE>::Do({}, v->tile, e->index, false, cargo, INVALID_CLIENT_ID);
+				SaveRandomSeeds(&after);
+				restored = restored && SameRandom(before, after);
+				fmt::print(stderr, "FLEET build-refit {} {} {} {} {} {}\n", e->index, cargo, cost.Succeeded(), cost.GetCost(), cap, mail);
+				break;
+			}
+		}
+		auto [clone_cost, clone] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, v->tile, v->index, true);
+		Checked("clone-shared", clone_cost);
+		fmt::print(stderr, "FLEET build-restored {} {}\n", restored, Vehicle::Get(clone)->IsOrderListShared());
+		return true;
+	}
+	if (args[1] == "transaction-clone") {
+		/* A train longer than one tile cannot rejoin: execute sells the front and the unjoined wagon. */
+		Vehicle *v = BuildFixture(VEH_TRAIN);
+		uint before = 0, after = 0;
+		for (const Vehicle *u : Vehicle::Iterate()) if (u->owner == _current_company) ++before;
+		Backup<uint8_t> max_length(_settings_game.vehicle.max_train_length);
+		max_length.Change(1);
+		auto [cost, id] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, v->tile, v->index, false);
+		max_length.Restore();
+		for (const Vehicle *u : Vehicle::Iterate()) if (u->owner == _current_company) ++after;
+		fmt::print(stderr, "FLEET clone-join {} {} {} {}\n", cost.Succeeded(), cost.GetErrorMessage() == STR_ERROR_TRAIN_TOO_LONG, id == VehicleID::Invalid(), before == after);
+		return true;
+	}
+	if (args[1] == "transaction-meta") {
+		for (VehicleType type : {VEH_TRAIN, VEH_ROAD, VEH_SHIP, VEH_AIRCRAFT}) {
+			Vehicle *v = nullptr;
+			for (Vehicle *u : Vehicle::Iterate()) if (u->type == type && u->IsPrimaryVehicle()) { v = u; break; }
+			if (v == nullptr) FixtureAbort(__LINE__);
+			company.Change(v->owner);
+			std::string name = fmt::format("Transaction snowman \xE2\x98\x83 {}", type);
+			Checked("name-test", Command<CMD_RENAME_VEHICLE>::Do({}, v->index, name));
+			Checked("name-exec", Command<CMD_RENAME_VEHICLE>::Do(DoCommandFlag::Execute, v->index, name));
+			Cost("name-same", Command<CMD_RENAME_VEHICLE>::Do({}, v->index, name));
+			Checked("name-autoreplace", Command<CMD_RENAME_VEHICLE>::Do(DoCommandFlag::AutoReplace, v->index, name));
+			Cost("name-long", Command<CMD_RENAME_VEHICLE>::Do({}, v->index, std::string(1000, 'x')));
+			Cost("interval-invalid", Command<CMD_CHANGE_SERVICE_INT>::Do({}, v->index, 0, true, true));
+			Checked("interval-test", Command<CMD_CHANGE_SERVICE_INT>::Do({}, v->index, 50, true, true));
+			Checked("interval-exec", Command<CMD_CHANGE_SERVICE_INT>::Do(DoCommandFlag::Execute, v->index, 50, true, true));
+			fmt::print(stderr, "FLEET transaction-meta {} {} {} {} {}\n", type, v->name == name, v->GetServiceInterval(), v->ServiceIntervalIsCustom(), v->ServiceIntervalIsPercent());
+			Checked("name-reset", Command<CMD_RENAME_VEHICLE>::Do(DoCommandFlag::Execute, v->index, std::string{}));
+			Checked("interval-default", Command<CMD_CHANGE_SERVICE_INT>::Do(DoCommandFlag::Execute, v->index, 0, false, false));
+		}
+		return true;
+	}
 	if (args[1] == "drain" || args[1] == "drain-cash") {
 		/* Typed inputs on an ordinary save: a running vehicle past renewal age, autorenew on, and for the cash case only the reserve. */
 		Vehicle *v = Vehicle::Get(VehicleID(12));

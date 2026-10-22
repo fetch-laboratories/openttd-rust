@@ -15,28 +15,48 @@
 #include "source_type.h"
 #include "subsidy_type.h"
 #include "core/pool_type.hpp"
+#ifdef WITH_RUST
+#include "rust/subsidy_ffi.h"
+#endif
 
 using SubsidyPool = Pool<Subsidy, SubsidyID, 1>;
 extern SubsidyPool _subsidy_pool;
 
 /** Struct about subsidies, offered and awarded */
 struct Subsidy : SubsidyPool::PoolItem<&_subsidy_pool> {
+#ifdef WITH_RUST
+	OpenTTDSubsidyState *rust_state = new (openttd_rust_subsidy_new(this->index.base())) OpenTTDSubsidyState{INVALID_CARGO, 0, CompanyID::Invalid(), {}, {}};
+	CargoType &cargo_type = this->rust_state->cargo_type;
+	uint16_t &remaining = this->rust_state->remaining;
+	CompanyID &awarded = this->rust_state->awarded;
+	Source &src = this->rust_state->src;
+	Source &dst = this->rust_state->dst;
+#else
 	CargoType cargo_type = INVALID_CARGO;  ///< Cargo type involved in this subsidy, INVALID_CARGO for invalid subsidy
 	uint16_t remaining = 0;    ///< Remaining months when this subsidy is valid
 	CompanyID awarded = CompanyID::Invalid();   ///< Subsidy is awarded to this company; CompanyID::Invalid() if it's not awarded to anyone
 	Source src{}; ///< Source of subsidised path
 	Source dst{}; ///< Destination of subsidised path
+#endif
 
 	/**
 	 * We need an (empty) constructor so struct isn't zeroed (as C++ standard states)
 	 */
 	Subsidy() { }
+#ifdef WITH_RUST
+	Subsidy(CargoType cargo_type, Source src, Source dst, uint16_t remaining) { this->cargo_type = cargo_type; this->remaining = remaining; this->src = src; this->dst = dst; }
+#else
 	Subsidy(CargoType cargo_type, Source src, Source dst, uint16_t remaining) : cargo_type(cargo_type), remaining(remaining), src(src), dst(dst) {}
+#endif
 
 	/**
 	 * (Empty) destructor has to be defined else operator delete might be called with nullptr parameter
 	 */
-	~Subsidy() { }
+	~Subsidy() {
+#ifdef WITH_RUST
+		openttd_rust_subsidy_destroy(this->index.base(), this->rust_state);
+#endif
+	}
 
 	/**
 	 * Tests whether this subsidy has been awarded to someone
@@ -47,7 +67,9 @@ struct Subsidy : SubsidyPool::PoolItem<&_subsidy_pool> {
 		return this->awarded != CompanyID::Invalid();
 	}
 
+#ifndef WITH_RUST
 	void AwardTo(CompanyID company);
+#endif
 };
 
 /** Constants related to subsidies */

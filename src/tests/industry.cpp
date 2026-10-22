@@ -14,6 +14,7 @@
 #include "../sound_type.h"
 #include "abi_layout.hpp"
 #include "../rust/industry_generation_adapter.hpp"
+#include "../rust/industry_shell_services.h"
 #include "../object_base.h"
 #include "../industrytype.h"
 #include "../water_map.h"
@@ -24,10 +25,6 @@ static_assert(SND_2D_SUGAR_MINE_1 == 45 && SND_2E_BUBBLE_GENERATOR == 46 && SND_
 static_assert(OWNER_NONE.base() == 16 && INVALID_OWNER.base() == 255);
 static_assert(ICT_NORMAL_GAMEPLAY == 1 && ICT_MAP_GENERATION == 2 && ICT_SCENARIO_EDITOR == 3);
 static_assert(INDUSTRY_NUM_INPUTS == 16 && INDUSTRY_NUM_OUTPUTS == 16);
-static_assert(sizeof(ClearedObjectArea) == sizeof(OpenTTDIndustryClearArea));
-static_assert(alignof(ClearedObjectArea) == alignof(OpenTTDIndustryClearArea));
-static_assert(offsetof(ClearedObjectArea, first_tile) == offsetof(OpenTTDIndustryClearArea, first_tile));
-static_assert(offsetof(ClearedObjectArea, area) == offsetof(OpenTTDIndustryClearArea, area));
 static_assert(sizeof(CargoArray::value_type) == sizeof(uint32_t) && sizeof(CargoTypes) == sizeof(uint64_t));
 static_assert(std::is_trivially_destructible_v<TileArea>);
 static_assert(sizeof(TileArea) == sizeof(OpenTTDIndustryLocation));
@@ -270,7 +267,7 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	OpenTTDIndustryConstructionErrors errors{};
 	errors.site = 1234;
 	generation.spec = [](uint8_t kind) noexcept -> const OpenTTDIndustrySpecHandle * { CHECK(kind == 7); trace.push_back(0); return reinterpret_cast<const OpenTTDIndustrySpecHandle *>(&industry_spec); };
-	commands.owner = [](Industry *shell) noexcept -> OpenTTDIndustry * { return shell->production_owner.get(); };
+	commands.owner = RustIndustryCanonicalOwner<Industry *>;
 	construction.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { CHECK(town == nullptr); static_cast<Industry *>(shell)->town = nullptr; };
 	transaction.closest_town = [](uint32_t tile, uint32_t threshold) noexcept -> const OpenTTDTownHandle * { CHECK(tile == 123); CHECK(threshold == UINT32_MAX); CHECK(openttd_rust_industry_metadata(active_owner)->random == 0); trace.push_back(2); return nullptr; };
 	transaction.temporary_shell = [](OpenTTDIndustry *owner, void *context, OpenTTDIndustryTemporaryVisit visit) noexcept {

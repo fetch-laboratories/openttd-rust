@@ -174,8 +174,8 @@ pub struct RoadCommandServices {
     /// Native `cargo_changed` service.
     pub cargo_changed: unsafe extern "C" fn(*mut ConvertFrame),
 }
+use crate::road_type::INVALID_ROADTYPE as INVALID;
 use crate::services::Cost;
-const INVALID: u8 = 63;
 const INVALID_TOWN: u16 = u16::MAX;
 const RATING_ROAD_DOWN_STEP_EDGE: i32 = -18;
 const RATING_ROAD_DOWN_STEP_INNER: i32 = -50;
@@ -377,12 +377,12 @@ impl<'a> Ctx<'a> {
         }
     }
     fn infrastructure(&self, rt: u8, owner: u8, count: i32) {
-        if rt == INVALID || !(self.shared.company_valid)(owner) {
-            return;
+        // SAFETY: canonical immutable table; this entry holds no world borrow.
+        unsafe {
+            update_company_road_infrastructure(self.s, rt, owner, count);
         }
-        (self.r.road_infrastructure)(owner, rt, count as u32);
-        (self.commands.infrastructure_dirty)(owner);
     }
+
     fn update_town(&self, tile: u32) {
         let town = (self.shared.calc_closest_town)(tile, u32::MAX);
         let id = if town.is_null() {
@@ -2193,4 +2193,37 @@ pub unsafe extern "C" fn openttd_rust_road_remove(
     // SAFETY: caller supplies valid tables and source-valid map inputs.
     let c = unsafe { Ctx::new(services) };
     c.remove(c.c(out), c.c(ret), tile, flags, pieces, rtt, town_check);
+}
+
+/// Shared `UpdateCompanyRoadInfrastructure`, also called directly by bridge policy.
+/// # Safety
+/// Native immutable services are live under the game-state mutex.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_update_road_infrastructure(
+    s: *const RoadCommandServices,
+    rt: u8,
+    owner: u8,
+    count: i32,
+) {
+    // SAFETY: native callers supply the process-lifetime canonical table.
+    unsafe {
+        update_company_road_infrastructure(s, rt, owner, count);
+    }
+}
+pub(crate) unsafe fn update_company_road_infrastructure(
+    s: *const RoadCommandServices,
+    rt: u8,
+    owner: u8,
+    count: i32,
+) {
+    // SAFETY: only immutable tables are borrowed; no map/pool borrow survives calls.
+    let s = unsafe { &*s };
+    let rail = unsafe { &*s.rail_commands };
+    let shared = unsafe { &*rail.shared };
+    if rt == INVALID || !(shared.company_valid)(owner) {
+        return;
+    }
+    (rail.road_infrastructure)(owner, rt, count as u32);
+    let commands = unsafe { &*rail.command };
+    (commands.infrastructure_dirty)(owner);
 }

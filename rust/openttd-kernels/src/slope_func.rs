@@ -108,6 +108,41 @@ pub fn get_inclined_slope_direction(s: u8) -> u8 {
     }
 }
 
+/// `FOUNDATION_NONE`.
+pub const FOUNDATION_NONE: u8 = 0;
+/// `FOUNDATION_LEVELED`.
+pub const FOUNDATION_LEVELED: u8 = 1;
+/// `FOUNDATION_INCLINED_X`.
+pub const FOUNDATION_INCLINED_X: u8 = 2;
+/// `FOUNDATION_INCLINED_Y`.
+pub const FOUNDATION_INCLINED_Y: u8 = 3;
+
+/// `RemoveHalftileSlope`.
+pub const fn remove_halftile_slope(s: u8) -> u8 {
+    s & !SLOPE_HALFTILE_MASK
+}
+/// `HasSlopeHighestCorner`.
+pub fn has_slope_highest_corner(s: u8) -> bool {
+    let s = remove_halftile_slope(s);
+    is_steep_slope(s) || is_slope_with_one_corner_raised(s)
+}
+/// `FlatteningFoundation`.
+pub const fn flattening_foundation(s: u8) -> u8 {
+    if s == SLOPE_FLAT {
+        FOUNDATION_NONE
+    } else {
+        FOUNDATION_LEVELED
+    }
+}
+/// `InclinedFoundation`.
+pub const fn inclined_foundation(axis: u8) -> u8 {
+    if axis == 0 {
+        FOUNDATION_INCLINED_X
+    } else {
+        FOUNDATION_INCLINED_Y
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

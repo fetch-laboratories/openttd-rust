@@ -36,6 +36,12 @@ template<uint8_t Kind> static void Visit(uint32_t tile_index) noexcept
 	calls++;
 	expected_tile = (expected_tile >> 1) ^ ((0U - (expected_tile & 1U)) & 0xD8FU);
 }
+static OpenTTDObjectLoopPolicy ProbeObjectPolicy(uint32_t tile) noexcept
+{
+	Visit<10>(tile);
+	return {nullptr, nullptr, 0, 0, 0};
+}
+static bool ProbeObjectOnWater(uint32_t) noexcept { return false; }
 template<typename Check> void Run(Check check)
 {
 	calls = reads = seen = 0;
@@ -43,6 +49,8 @@ template<typename Check> void Run(Check check)
 	passed = true;
 	auto shared = OpenTTDSharedServices{};
 	shared.tile_type = Type;
+	const OpenTTDIndustryTileServices object_tiles{.on_water = ProbeObjectOnWater};
+	const OpenTTDObjectServices objects{.shared = &shared, .industry_tiles = &object_tiles, .loop_policy = ProbeObjectPolicy};
 	const OpenTTDLandscapeLoopServices services{
 		.shared = &shared,
 		.tile_types = {},
@@ -51,7 +59,8 @@ template<typename Check> void Run(Check check)
 		.ground = {},
 		.town = nullptr,
 		.station_loop = Visit<5>,
-		.object_loop = Visit<10>,
+		.objects = &objects,
+		.object_frame = nullptr,
 	};
 	const OpenTTDTreeLoopSettings settings{.tick_counter = 1, .size_x = 64, .climate = 0, .extra = 0, .ambient = false};
 	const auto saved_cursor = *openttd_rust_tile_loop_cursor();

@@ -190,6 +190,9 @@ bool RoadVehiclesAreBuilt()
  */
 void UpdateCompanyRoadInfrastructure(RoadType rt, Owner o, int count)
 {
+#ifdef WITH_RUST
+	openttd_rust_update_road_infrastructure(&GetRustRoadCommandServices(), rt, o.base(), count);
+#else
 	if (rt == INVALID_ROADTYPE) return;
 
 	Company *c = Company::GetIfValid(o);
@@ -197,6 +200,7 @@ void UpdateCompanyRoadInfrastructure(RoadType rt, Owner o, int count)
 
 	c->infrastructure.road[rt] += count;
 	DirtyCompanyInfrastructureWindows(c->index);
+#endif
 }
 
 

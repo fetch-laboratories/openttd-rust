@@ -498,7 +498,7 @@ fn accepted_count(owner: *mut Industry) -> usize {
     unsafe { (*owner).accepted.len() }
 }
 fn valid(cargo: u8) -> bool {
-    cargo != 255
+    crate::cargo_type::is_valid_cargo_type(cargo)
 }
 fn transported(p: Pair) -> u32 {
     if p.first == 0 {
@@ -1653,4 +1653,34 @@ pub unsafe extern "C" fn openttd_rust_industry_registry_erase(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_registry_clear(owner: *mut Builder, kind: u8) {
     unsafe { (*owner).registry[usize::from(kind)].clear() };
+}
+
+/// Subsidy search reads only the original industry location.
+/// SAFETY: Live serialized industry owner, immediate read with no callbacks.
+pub(crate) unsafe fn subsidy_position(owner: *const Industry) -> u32 {
+    unsafe { (*owner).metadata.tile }
+}
+/// SAFETY: Live serialized owner; no callback occurs while reading its cargoes.
+pub(crate) unsafe fn subsidy_produced_count(owner: *const Industry) -> u32 {
+    unsafe { &(*owner).produced }
+        .iter()
+        .filter(|p| crate::cargo_type::is_valid_cargo_type(p.cargo))
+        .count() as u32
+}
+/// SAFETY: Original random cargo ordinal is less than the valid cargo count.
+pub(crate) unsafe fn subsidy_produced(owner: *const Industry, number: u32) -> (u8, u16, u8) {
+    let p = unsafe { &(*owner).produced }
+        .iter()
+        .filter(|p| crate::cargo_type::is_valid_cargo_type(p.cargo))
+        .nth(number as usize)
+        .unwrap();
+    let history = p.history[1];
+    let percent = transported(history) as u8;
+    (p.cargo, history.first, percent)
+}
+/// SAFETY: Live serialized owner; same accepted-slot predicate as `IsCargoAccepted`.
+pub(crate) unsafe fn subsidy_accepts(owner: *const Industry, cargo: u8) -> bool {
+    unsafe { &(*owner).accepted }
+        .iter()
+        .any(|a| a.cargo == cargo)
 }
