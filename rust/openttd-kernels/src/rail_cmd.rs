@@ -32,8 +32,8 @@ use crate::services::{
 };
 pub use crate::services::{Foundation, Train};
 use crate::slope_func::{
-    SLOPE_EW, SLOPE_FLAT, SLOPE_HALFTILE_MASK, SLOPE_NS, is_slope_with_one_corner_raised,
-    is_steep_slope,
+    FOUNDATION_NONE, SLOPE_EW, SLOPE_FLAT, SLOPE_HALFTILE_MASK, SLOPE_NS,
+    is_slope_with_one_corner_raised, is_steep_slope,
 };
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{INVALID_TILE, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
@@ -274,7 +274,6 @@ const INVALID_TRACKDIR: u8 = 0xFF;
 pub(crate) const CROSSING_SLOPES: u32 =
     (1 << 14) | (1 << 13) | (1 << 11) | (1 << 10) | (1 << 7) | (1 << 5) | 1;
 
-const FOUNDATION_NONE: u8 = 0;
 const FOUNDATION_RAIL_W: u8 = 10;
 const FOUNDATION_RAIL_N: u8 = 13;
 const FOUNDATION_INVALID: u8 = 0xFF;
