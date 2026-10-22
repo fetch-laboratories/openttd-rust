@@ -192,11 +192,12 @@ base before integrating. Every open draft keeps its worktree and branch.
 | #156 / #342 | `9ed271d489` | Reviewed, no findings. After #336: update from base (`can_build_tram` conflict), counts, Full. |
 | #281 / #340 | `7a4707ff1e` | Agent deleting `Co_vehicle_value` and three legacy order copies; fresh review, counts and Full follow. |
 | #314 / #329 | `d3fbf2de39` | Agent adopting #334 modules and returning `interval_default` as int; scoped review, counts and Full follow. |
-| #275 / #341 | `97bf95b1de` | #343 asks the user to close (recommended) or retain for the shared owner accessor; no saving (P2016 +0.18%). |
 | #274 | `162843acbd` | Paused measurement branch. |
 
 #261 R7 inputs are on #261 and #281 part 2's inventory is on #281. The finished
 #329 review worktree was removed; its commits are already on the PR branch.
+#341 was closed by root: no speed saving (P2016 +0.18%); its measured head remains
+on origin and #275 records the disposition. Its worktrees/local branch are removed.
 #64/#68/#69 stay paused. Preserve the pinned reference. Do not reapply effect helper
 `73ccd511fb`. Build and test with `--jobs 2`.
 
