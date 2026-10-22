@@ -26,6 +26,11 @@ TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
 		Map::Allocate(size, 64);
 		const auto allocation = GetRustTileTypeAllocation();
 		CHECK(allocation.extended != nullptr);
+#if !defined(NDEBUG) || defined(WITH_ASSERT)
+		CHECK(allocation.assertions);
+#else
+		CHECK(!allocation.assertions);
+#endif
 		for (const TileIndex tile : {TileXY(1, 1), TileIndex{Map::Size() - 1}}) {
 			for (const uint8_t kind : {0, 4, 6, 7}) {
 				for (uint value = 0; value < 256; value++) {
