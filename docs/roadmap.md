@@ -4,13 +4,13 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-22, code at `71d4f1d020`)
+## Where the fork stands (2026-10-22, code at `8c370210b4`)
 
-- Thirty-eight ownership ports. Whole fork: Rust 89,051 / tooling 33,615 / glue 34,290 / original retired 49,661 of 470,612 C/C++ `src/` lines (10.55%). Simulation: 41,543 / 102,615 (40.48%).
-- Since the seventeenth review: #358 (#355/#356/#357 batch and free-core `--jobs`), #340 (#281 part 1) and #351 (#274 map reads) integrated. No ownership port yet; five are in review or CI.
-- Speed: tip profile at `9a991a1c23` against the #356 anchors: TGP 1.2138 (+0.02%), every play save at or below its anchor's loop Ir (P2016 -0.5%). No rise, no scenario in its 5% band. #351's own counts showed TGP loop Ir about 4.6% lower; the next tip profile measures it.
-- CI on `rust-migration` is green. macOS now runs only on request (#357); none due yet (three integrations since #357).
-- Component branches: #347, #353, #360, #362, #359 and #350 (six of six). Maintenance: #261 batch (draft pending).
+- Forty-one ownership ports. Whole fork: Rust 91,994 / tooling 34,241 / glue 34,815 / original retired 51,203 of 470,612 C/C++ `src/` lines (10.88%). Simulation: 43,067 / 102,615 (41.97%), up from 40.46% at the seventeenth review.
+- Since the seventeenth review: maintenance #358 (#355/#356/#357 batch, free-core `--jobs`), #340 (#281 part 1) and #351 (#274); ownership ports #353 (landscape), #362 (road stops) and #347 (town commands).
+- Speed: last tip profile at `9a991a1c23` showed no rise and no scenario near its ceiling (TGP 1.2138; play saves at or below their anchors). Due: a tip profile at `8c370210b4` (#351, #353, #362, #347 landed since).
+- CI on `rust-migration` was green through `33fc37e973`; post-merge runs for `4075c50384` and `8c370210b4` were in progress at the pause. The macOS run on `rust-migration` is due (fifth integration since #357).
+- Component branches: #360, #359 and #350 (three of six). Maintenance: #361 (#261 batch).
 
 ## Seventeenth steering review (2026-10-22, speed on the merged branch, base-type returns, macOS every fifth merge)
 
@@ -99,31 +99,20 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #314 | Vehicle transactions and non-rail construction | #329 | `43257e3744` | 3231 / 206 / 1200 / 1312 |
 | #316 | Subsidy state and route lifecycle | #346 | `7e83fe925e` | 915 / 177 / 277 / 430 |
 | #293 | Tunnel/bridge commands and ownership | #352 | `802ec7d6a4` | 1862 / 178 / 325 / 854 |
+| #348 | Landscape clear, terraform and leveling | #353 | `33fc37e973` | 1289 / 189 / 301 / 447 |
+| #354 | Road-stop bays and drive-through occupancy | #362 | `4075c50384` | 875 / 164 / 181 / 501 |
+| #247 | Town commands, authority actions and deletion | #347 | `8c370210b4` | 977 / 270 / 298 / 589 |
 
 Harness/process #72/#84/#97/#88/#75/#90 and maintenance #209-#302 retain evidence in their PRs.
 Rows below use original retirement and net glue (#223).
 
 | Issues | Maintenance PRs | Integration | Commit | Metrics |
 | --- | --- | --- | --- | --- |
-| #307 (#156 scheduler deletion/pool growth) | #309 | direct | `ad58d65c10` | 0 / 7 / 74 / 0; tests only |
-| #284 (generated ABI and typed defaults) | #298 | direct | `79dea34092` | 4541 / 287 / 2650 / 0; net glue +196 |
-| #311 (#275 road speed/effect boundary) | #319 | direct | `08053fda50` | 88 / 35 / 101 / 5; net glue +90 |
-| #310 (#275 immutable road service tables) | #318 | direct | `4c4c5a0eab` | 0 / 27 / 312 / 0; net glue +7 |
-| #306 (#275 ship search scratch) | #308 | direct | `e996032875` | 108 / 0 / 0 / 0; net glue 0 |
-| #320 station command fidelity | #323 | direct | `bc25c51d44` | 60 / 118 / 34 / 0; net glue -5 |
-| #261 R5 tile-loop cleanup and signal boundary | #324 | direct | `69d0365a9f` | 14 / 0 / 36 / 11; net glue -11 |
-| #327 shared direct command lifecycle | #328 | direct | `764e1fa92d` | 45 / 0 / 0 / 0; net glue 0 |
-| #325 aircraft movement observations | #326 | direct | `7b0a82cbd1` | 213 / 35 / 99 / 0; net glue +56 |
-| #330 road tick prologue | #332 | direct | `4476646d19` | 22 / 36 / 67 / 0; net glue +36 |
-| #331 shared ownership dispatch | #333 | direct | `5e2f570eee` | 143 / 90 / 122 / 1; net glue +101 |
-| #321 instruction-count speed guard and first anchors | #322 | direct | `f6cddca557` | 0 / 576 / 0 / 0; net glue 0 |
-| #156 ownership-dispatch coverage | #335 | direct | `caadbabc38` | 0 / 173 / 0 / 0; tests only |
-| #261 R6 shared header modules | #334 | direct | `18dbc15675` | 858 / 7 / 64 / 10; net glue +10 |
-| #338 instruction identity and rolling record | #339 | direct | `c4efe7bc72` | 0 / 30 / 0 / 0; net glue 0 |
-| #156 road/water command coverage | #337 | direct | `9da106b61f` | 0 / 128 / 0 / 0; tests only |
-| #275 lazy tram command context | #336 | direct | `43f8d27304` | 17 / 2 / 23 / 0; net glue +11 |
-| #344 train speed observations | #345 | direct | `fc72e5cc1a` | 4 / 1 / 71 / 0; net glue +59 |
-| #156 tram-turn coverage | #342 | direct | `6017f98f3d` | 7 / 71 / 0 / 0; tests only |
+| #355, #356, #357 batch and free-core `--jobs` | #358 | direct | `f141b6e91a` | 0 / 84 / 9 / 0; net glue +5 |
+| #281 part 1 vehicle maintenance direct calls | #340 | direct | `9a991a1c23` | in PR |
+| #274 shared assertion-faithful map reads | #351 | direct | `71d4f1d020` | in PR |
+
+Earlier maintenance (#307-#345) retains its rows' evidence in those PRs.
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -156,13 +145,12 @@ unintegrated component branches. Maintenance (#261, #281) and #156 run in parall
 2. **#275** has no standing stream. When a pass or a tip rise opens speed work, rank it by net cost (#275 comment, 2026-10-22: aircraft, road-controller tick reads, scheduler carrier, orders).
 3. **#281** part 1 integrated (#340). Part 2: the callee-copy check and the four duplicate wrappers listed in the #340 r2 review.
 4. **#274 map view:** integrated as #351, limited to the scheduler's clear/water/tree loops; C++ keeps the arrays and writes.
-5. **Next whole owners**, as WIP frees, each without draft service dependencies (all six selected owners are started):
-   - #247 town commands (#347), #348 landscape (#353), #315 rail construction (#360): reviewed, Full then integration;
-   - #354 road-stop occupancy (#362): review; `GetNextRoadStop` stays native while only the native pathfinder calls it;
-   - #349 visits (#359): orders-adapter fixture and visit bodies, then one review;
-   - #350 generation and rivers: implementation (selected 2026-10-22 after #351 landed).
+5. **Next whole owners**, as WIP frees, each without draft service dependencies:
+   - #315 rail construction (#360): base merge and conflict review, then Full;
+   - #349 visits (#359): review, then Full;
+   - #350 generation and rivers: restart implementation.
 
-   A shared service that two owners need lands first, as its own PR. Selection is due again when fewer than two owners remain unstarted; plan with the latest tip profile.
+   A shared service that two owners need lands first, as its own PR. Selection is due: fewer than two selected owners remain unstarted. Plan with the next tip profile.
 6. **#168 tail, largest first.** `order_cmd.cpp` and `economy.cpp` hold 65 of the 198 baseline copies.
 
 New owners reuse integrated services, never draft copies. A Rust-allocated
@@ -171,21 +159,18 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Running at 2026-10-22 05:15 EDT. Root is Claude Code (claude-opus-5-5, xhigh); reviews run on gpt-6.1-sol. Seventeenth review actions 1-2 are done for #358, #340 and #351.
+Paused at the user's request (wind-down, 2026-10-22 ~10:00 EDT). Root was Claude Code (claude-opus-5-5, xhigh); reviews ran on gpt-6.1-sol. Seventeenth-review actions 1-2 are done.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #247 / #347 | `bcff433505` | Conflict review of base merge `b178708677`, then exact-head Full, integrate. |
-| #348 / #353 | `c46fdb4fd2` | Reviewed (incl. both base merges); exact-head Full, integrate. |
-| #315 / #360 | `247ed46e34` | Reviewed with fixes; exact-head Full, integrate. |
-| #354 / #362 | `8852a300c2` | Independent review, then Full. `GetNextRoadStop` stays native (root). |
-| #349 / #359 | `bb677a58dc` | Orders-adapter fixture and visit bodies on the same branch, then one review. |
-| #350 (no PR yet) | from `71d4f1d020` | Implementation to first passing milestone and draft PR. |
-| #261 batch | none yet | Seventeenth-review cleanup list plus per-component ABI registry split; then review. |
+| #315 / #360 | `247ed46e34` | Reviewed, Full passed, but conflicts after #362 (`fleet/transactions.rs`). Base merge, conflict review, exact-head Full, integrate. |
+| #349 / #359 | `189e58cfd9` | Implementation complete, not reviewed. Independent review, then exact-head Full. |
+| #350 (no PR) | `33fc37e973` | Agent stopped with nothing committed; worktree t3-bb7e4cd6 clean, no remote branch. Restart implementation. |
+| #261 / #361 | `4b4bb9dd21` | Build, rust-checks, preflight passed (scenarios not run). Base merge (conflicts), review, Full. |
 
-Retained drafts keep their worktrees. #281 part 2 and #261 R7 inputs remain on their issues. #64/#68/#69 stay paused.
+Due on resume, not gating: the tip speed profile at `8c370210b4` and the macOS run on `rust-migration`. Confirm post-merge CI on `8c370210b4` first; a red tip is fixed before more integrations.
+Retained drafts keep their worktrees and branches. #281 part 2 and #261 R7 inputs remain on their issues. #64/#68/#69 stay paused.
 Preserve the pinned reference; do not reapply effect helper `73ccd511fb`.
-Pass `--jobs` as the free cores (the driver default since #358).
 
 ## Out of scope for the near term
 
