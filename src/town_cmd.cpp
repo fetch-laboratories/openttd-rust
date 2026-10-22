@@ -1044,7 +1044,7 @@ static void RustTown_make_house(uint32_t tile, uint32_t town, uint32_t house, ui
 static void RustTown_population_changed(uint32_t town) noexcept
 {
 	Town *t = Town::Get(TownID(town));
-	InvalidateWindowData(WC_TOWN_VIEW, t->index);
+	OpenTTDInvalidateTownView(t->index.base());
 	if (_settings_client.gui.population_in_label) t->UpdateVirtCoord();
 	InvalidateWindowData(WC_TOWN_DIRECTORY, 0, TDIWD_POPULATION_CHANGE);
 }
@@ -3711,7 +3711,7 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.fund_buildings = OpenTTDFundBuildings,
 		.exclusive_rights = OpenTTDExclusiveRights,
 		.bribe = OpenTTDBribe,
-		.invalidate_view = [](uint16_t town) noexcept { InvalidateWindowData(WC_TOWN_VIEW, TownID(town)); },
+		.invalidate_view = OpenTTDInvalidateTownView,
 		.invalidate_authority = [](uint16_t town) noexcept { InvalidateWindowData(WC_TOWN_AUTHORITY, TownID(town)); },
 		.modify_station_rating = OpenTTDModifyStationRatingAround,
 		.road_news = [](uint16_t id) noexcept {
