@@ -162,6 +162,7 @@ unintegrated component branches. Maintenance (#261, #275) and #156 run in parall
 
 1. **#313**, then **#329/#314** (sixteenth review, actions 2-3).
 2. **#275 by net P2016 savings:** the per-tick road command context, the station per-slot reads, then the train reads. Retain the native movement and speed algorithms. TGP #312 trees stay ahead of clear observations on the 2026-10-21 net attribution (#275 comment); TGP is not the binding scenario.
+   Station #341 closed without a saving; #344 replaces only the train speed read6 bundle with existing services at original branches, requiring measured P2016 saving. No raw train view or movement-reader change.
 3. **#281** vehicle maintenance direct calls, then the callee-copy check.
 4. **#274 map view**, one shared PR.
 5. **Next whole owners**, as WIP frees, each without draft service dependencies:
@@ -194,6 +195,7 @@ profiling is unblocked. Every open draft keeps its worktree and branch.
 | #281 / #340 | `800e625502` | Cleanup reviewed, verify and 33 scenarios passed; resolve base conflicts, fresh scoped review, counts and Full. |
 | #314 / #329 | `19d155c993` | #334 adoption/type/accessor fixes reviewed, no findings; final verify passed, selected semantics running, then #339 update, counts and Full. |
 | #316 | `d8e3977039` base | Agent implementing subsidy ownership; combined glue/tooling cap 450, no draft prerequisite. |
+| #344 / #275 | not yet started | Delete only train speed read6; production net glue <=0, tests/tooling <=120; attributable P2016 saving required. |
 | #274 | `162843acbd` | Paused measurement branch. |
 
 #261 R7 inputs are on #261 and #281 part 2's inventory is on #281. The finished
