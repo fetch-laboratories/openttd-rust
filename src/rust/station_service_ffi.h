@@ -208,7 +208,6 @@ struct OpenTTDStationLinks {
 	bool (*stopped_in_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
 	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
 	uint8_t (*cargo_type)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
-	void (*refresh)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(refresh);
 	void (*reroute)(OpenTTDBaseStation *, OpenTTDVehicle *, uint8_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(reroute);
 };
 
@@ -260,7 +259,6 @@ struct OpenTTDStationLoading {
 	void (*set_speed)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_speed);
 	void (*subtract_profit)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(subtract_profit);
 	void (*unknown_load_result)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_load_result);
-	void (*refresh_capacity)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(refresh_capacity);
 	void (*vehicle_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_dirty);
 	void (*update_indicator)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_indicator);
 	void (*set_current_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_current_company);
@@ -299,6 +297,7 @@ struct OpenTTDStationLoading {
 
 const OpenTTDStationServices &GetRustStationServices() noexcept;
 const OpenTTDStationLoading &GetRustStationLoading() noexcept;
+const OpenTTDStationLinks &GetRustStationLinks() noexcept;
 extern "C" {
 OpenTTDStationService *openttd_rust_station_service_new();
 void openttd_rust_station_service_destroy(OpenTTDStationService *);
@@ -314,13 +313,13 @@ void *openttd_rust_station_queue_value(const OpenTTDStationQueueEntry *);
 OpenTTDStationQueueEntry *openttd_rust_station_queue_erase_node(OpenTTDStationService *, OpenTTDStationQueueEntry *);
 void openttd_rust_station_prepare(OpenTTDVehicle *, const OpenTTDStationServices *, const OpenTTDStationLoading *);
 /* An empty queue touches only its Rust owner; service tables may be null then. */
-struct OpenTTDVehicleRefitServices;
+struct OpenTTDVehicleVisits;
 struct OpenTTDCommandCost;
-void openttd_rust_station_load(OpenTTDStationService *, const OpenTTDStationServices *, const OpenTTDStationLoading *, const OpenTTDVehicleRefitServices *, OpenTTDCommandCost *, OpenTTDCommandCost *);
+void openttd_rust_station_load(OpenTTDStationService *, const OpenTTDStationServices *, const OpenTTDStationLoading *, const OpenTTDVehicleVisits *, OpenTTDCommandCost *, OpenTTDCommandCost *);
 void openttd_rust_station_acceptance(OpenTTDBaseStation *, const OpenTTDStationServices *, uint8_t);
 void openttd_rust_station_watched(OpenTTDBaseStation *, const OpenTTDStationServices *);
-void openttd_rust_station_tick(const OpenTTDStationServices *, const OpenTTDStationLinks *);
-void openttd_rust_station_stale(OpenTTDBaseStation *, const OpenTTDStationServices *, const OpenTTDStationLinks *);
+void openttd_rust_station_tick(const OpenTTDStationServices *, const OpenTTDStationLinks *, const OpenTTDVehicleVisits *);
+void openttd_rust_station_stale(OpenTTDBaseStation *, const OpenTTDStationServices *, const OpenTTDStationLinks *, const OpenTTDVehicleVisits *);
 void openttd_rust_station_reroute(OpenTTDBaseStation *, uint8_t, uint16_t, uint16_t, const OpenTTDStationServices *, const OpenTTDStationLinks *);
 void openttd_rust_station_monthly(const OpenTTDStationServices *);
 void openttd_rust_station_modify_rating(OpenTTDStationService *, int32_t);

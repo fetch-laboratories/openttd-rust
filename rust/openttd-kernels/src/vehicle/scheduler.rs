@@ -83,7 +83,7 @@ pub struct Tables {
     pub pending: *const fleet::pending::Services,
     pub transaction: *const fleet::transactions::Services,
     pub group: *const fleet::GroupServices,
-    pub refit: *const crate::vehicle_transactions::refit::Services,
+    pub visits: *const super::visits::Services,
     pub refit_cost: *mut crate::services::CommandCost,
     pub refit_temporary: *mut crate::services::CommandCost,
 }
@@ -385,7 +385,7 @@ unsafe extern "C" fn load_stations<const COUNTED: bool>(tables: *const Tables) {
                 station.station,
                 tables.station,
                 tables.loading,
-                tables.refit,
+                tables.visits,
                 tables.refit_cost,
                 tables.refit_temporary,
             );

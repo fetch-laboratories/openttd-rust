@@ -15,6 +15,7 @@
 //! callers end every owner borrow before calling one that can reenter Rust.
 pub(crate) mod maintenance;
 pub(crate) mod scheduler;
+pub(crate) mod visits;
 
 use std::ptr::NonNull;
 

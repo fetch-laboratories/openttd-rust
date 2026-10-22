@@ -66,12 +66,73 @@
 #ifdef WITH_RUST
 #include "rust/vehicle_maintenance_ffi.h"
 #include "rust/vehicle_services.h"
+#include "rust/vehicle_visits_ffi.h"
+#include "rust/services_station.h"
+#include "linkgraph/linkgraphschedule.h"
 #endif
 #ifdef WITH_RUST
 #include "rust/vehicle_transaction_ffi.h"
 #endif
 
 #include "safeguards.h"
+
+#ifdef WITH_RUST
+static OpenTTDVisitCapacity VehicleVisitCapacity(OpenTTDVehicle *handle) noexcept
+{
+	return {.capacity = RustVehicleCargoCap(handle), .remaining = RustVehicleRefitCap(handle), .cargo = RustVehicleCargoType(handle)};
+}
+static OpenTTDVisitPrediction VehicleVisitPrediction(OpenTTDVehicle *handle) noexcept
+{
+	const Vehicle *v = VehicleOf(handle);
+	return {.last_loading = v->last_loading_station.base(), .last_station = v->last_station_visited.base(), .ticks = v->load_unload_ticks};
+}
+static bool VehicleVisitGraphAvailable() noexcept { return LinkGraph::CanAllocateItem(); }
+static OpenTTDLinkGraph *VehicleVisitAllocateGraph(uint8_t cargo) noexcept
+{
+	LinkGraph *lg = new LinkGraph(cargo);
+	LinkGraphSchedule::instance.Queue(lg);
+	return lg;
+}
+static void VehicleVisitAllocationFailure() noexcept { Debug(misc, 0, "Can't allocate link graph"); }
+static void VehicleVisitJoinGraph(OpenTTDLinkGraph *lg, OpenTTDBaseStation *st, uint8_t cargo) noexcept
+{
+	GoodsEntry &ge = Station::From(st)->goods[cargo];
+	ge.link_graph = lg->index;
+	ge.node = lg->AddNode(Station::From(st));
+}
+static uint16_t VehicleVisitGraphSize(OpenTTDLinkGraph *lg) noexcept { return lg->Size(); }
+static void VehicleVisitMergeGraph(OpenTTDLinkGraph *lg, OpenTTDLinkGraph *other) noexcept
+{
+	LinkGraphSchedule::instance.Dequeue(other);
+	lg->Merge(other); // Updates GoodsEntries of other
+}
+static void VehicleVisitUpdateEdge(OpenTTDLinkGraph *lg, uint16_t from, uint16_t to, uint32_t capacity, uint32_t usage, uint32_t time, uint8_t modes) noexcept
+{
+	(*lg)[from].UpdateEdge(to, capacity, usage, time, EdgeUpdateModes{modes});
+}
+const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
+{
+	static const OpenTTDVehicleVisits services{
+		.shared = &GetRustSharedServices(),
+		.station = &GetRustStationServices(),
+		.links = &GetRustStationLinks(),
+		.loading = &GetRustStationLoading(),
+		.refit = &GetRustVehicleRefitServices(),
+		.capacity = VehicleVisitCapacity,
+		.prediction = VehicleVisitPrediction,
+		.display_speed = RustVehicleDisplaySpeed,
+		.location = RustStationLocation,
+		.graph_available = VehicleVisitGraphAvailable,
+		.allocate_graph = VehicleVisitAllocateGraph,
+		.allocation_failure = VehicleVisitAllocationFailure,
+		.join_graph = VehicleVisitJoinGraph,
+		.graph_size = VehicleVisitGraphSize,
+		.merge_graph = VehicleVisitMergeGraph,
+		.update_edge = VehicleVisitUpdateEdge,
+	};
+	return services;
+}
+#endif
 
 /* Number of bits in the hash to use from each vehicle coord */
 static const uint GEN_HASHX_BITS = 6;
@@ -945,7 +1006,7 @@ static void VehicleEnteredDepotThisTick(Vehicle *v)
 #include "rust/vehicle_refit_ffi.h"
 static OpenTTDVehicleSchedulerTables VehicleSchedulerTables(OpenTTDCommandCost *refit_cost = nullptr, OpenTTDCommandCost *temporary = nullptr) noexcept
 {
-	return {.scheduler = &GetRustVehicleSchedulerServices(), .cargo = CargoStorageServices(), .station = &GetRustStationServices(), .loading = &GetRustStationLoading(), .pending = &_fleet_pending_services, .transaction = &FleetTransactionServices(), .group = &FleetGroupServices(), .refit = &GetRustVehicleRefitServices(), .refit_cost = refit_cost, .refit_temporary = temporary};
+	return {.scheduler = &GetRustVehicleSchedulerServices(), .cargo = CargoStorageServices(), .station = &GetRustStationServices(), .loading = &GetRustStationLoading(), .pending = &_fleet_pending_services, .transaction = &FleetTransactionServices(), .group = &FleetGroupServices(), .visits = &GetRustVehicleVisits(), .refit_cost = refit_cost, .refit_temporary = temporary};
 }
 void RunVehicleCalendarDayProc()
 {
@@ -3426,10 +3487,12 @@ bool VehiclesHaveSameOrderList(const Vehicle *v1, const Vehicle *v2)
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDGroundServices.hpp"
 #include "abi-visit-OpenTTDFleetPendingServices.hpp"
+#include "abi-visit-OpenTTDVehicleVisits.hpp"
 bool CheckAbi_vehicle()
 {
 	return AbiServicesComplete(GetRustGroundServices<Train>()) &&
 		AbiServicesComplete(GetRustGroundServices<RoadVehicle>()) &&
-		AbiServicesComplete(_fleet_pending_services);
+		AbiServicesComplete(_fleet_pending_services) &&
+		AbiServicesComplete(GetRustVehicleVisits());
 }
 #endif

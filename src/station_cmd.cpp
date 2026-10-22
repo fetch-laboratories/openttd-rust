@@ -96,6 +96,7 @@
 #include "rust/company_services.h"
 #include "rust/industry_shell_services.h"
 #include "rust/services_road.h"
+#include "rust/vehicle_visits_ffi.h"
 #endif
 
 #include "safeguards.h"
@@ -869,9 +870,6 @@ static const OpenTTDStationLinks _rust_station_links = {
 	},
 	.last_service = RustVehicleLastServiceOf,
 	.cargo_type = RustVehicleCargoType,
-	.refresh = [](OpenTTDVehicle *handle) noexcept -> void {
-		LinkRefresher::Run(VehicleOf(handle), false);
-	},
 	.reroute = [](OpenTTDBaseStation *handle, OpenTTDVehicle *vehicle, uint8_t cargo, uint16_t avoid, uint16_t avoid2) noexcept -> void {
 		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
 		if (vehicle == nullptr) {
@@ -883,6 +881,7 @@ static const OpenTTDStationLinks _rust_station_links = {
 	},
 };
 const OpenTTDStationServices &GetRustStationServices() noexcept { return _rust_station_services; }
+const OpenTTDStationLinks &GetRustStationLinks() noexcept { return _rust_station_links; }
 #endif
 
 #ifndef WITH_RUST
@@ -4719,7 +4718,7 @@ void RerouteCargo(Station *st, CargoType cargo, StationID avoid, StationID avoid
 void DeleteStaleLinks(Station *from)
 {
 #ifdef WITH_RUST
-	openttd_rust_station_stale(from, &_rust_station_services, &_rust_station_links);
+	openttd_rust_station_stale(from, &_rust_station_services, &_rust_station_links, &GetRustVehicleVisits());
 #else
 	for (CargoType cargo = 0; cargo < NUM_CARGO; ++cargo) {
 		const bool auto_distributed = (_settings_game.linkgraph.GetDistributionType(cargo) != DT_MANUAL);
@@ -4805,6 +4804,7 @@ void DeleteStaleLinks(Station *from)
 #endif
 }
 
+#ifndef WITH_RUST
 /**
  * Increase capacity for a link stat given by station cargo and next hop.
  * @param st Station to get the link stats from.
@@ -4859,6 +4859,7 @@ void IncreaseStats(Station *st, CargoType cargo, StationID next_station_id, uint
 		(*lg)[ge1.node].UpdateEdge(ge2.node, capacity, usage, time, modes);
 	}
 }
+#endif /* WITH_RUST */
 
 /**
  * Increase capacity for all link stats associated with vehicles in the given consist.
@@ -4868,6 +4869,9 @@ void IncreaseStats(Station *st, CargoType cargo, StationID next_station_id, uint
  */
 void IncreaseStats(Station *st, const Vehicle *front, StationID next_station_id, uint32_t time)
 {
+#ifdef WITH_RUST
+	openttd_rust_increase_vehicle_stats(st, RustVehicle(front), next_station_id.base(), time, &GetRustVehicleVisits());
+#else
 	for (const Vehicle *v = front; v != nullptr; v = v->Next()) {
 		if (v->refit_cap > 0) {
 			/* The cargo count can indeed be higher than the refit_cap if
@@ -4880,6 +4884,7 @@ void IncreaseStats(Station *st, const Vehicle *front, StationID next_station_id,
 					std::min<uint>(v->refit_cap, v->cargo.StoredCount()), time, EdgeUpdateMode::Increase);
 		}
 	}
+#endif
 }
 
 #ifndef WITH_RUST
@@ -4900,7 +4905,7 @@ static void StationHandleSmallTick(BaseStation *st)
 void OnTick_Station()
 {
 #ifdef WITH_RUST
-	openttd_rust_station_tick(&_rust_station_services, &_rust_station_links);
+	openttd_rust_station_tick(&_rust_station_services, &_rust_station_links, &GetRustVehicleVisits());
 #else
 	if (_game_mode == GM_EDITOR) return;
 

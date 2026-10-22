@@ -15,6 +15,10 @@
 #include "refresh.h"
 #include "linkgraph.h"
 
+#ifdef WITH_RUST
+#include "../rust/vehicle_visits_ffi.h"
+#include "../rust/vehicle_services.h"
+#endif
 #include "../safeguards.h"
 
 /**
@@ -25,6 +29,9 @@
  */
 /* static */ void LinkRefresher::Run(Vehicle *v, bool allow_merge, bool is_full_loading)
 {
+#ifdef WITH_RUST
+	openttd_rust_refresh_links(RustVehicle(v), allow_merge, is_full_loading, &GetRustVehicleVisits());
+#else
 	/* If there are no orders we can't predict anything.*/
 	if (v->orders == nullptr) return;
 
@@ -36,8 +43,10 @@
 	LinkRefresher refresher(v, &seen_hops, allow_merge, is_full_loading);
 
 	refresher.RefreshLinks(first, first, v->last_loading_station != StationID::Invalid() ? RefreshFlags{RefreshFlag::HasCargo} : RefreshFlags{});
+#endif
 }
 
+#ifndef WITH_RUST
 /**
  * Constructor for link refreshing algorithm.
  * @param vehicle Vehicle to refresh links for.
@@ -316,3 +325,5 @@ void LinkRefresher::RefreshLinks(VehicleOrderID cur, VehicleOrderID next, Refres
 		cur = next;
 	}
 }
+
+#endif

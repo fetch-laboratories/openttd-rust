@@ -20,6 +20,7 @@ use crate::cargo_payment::NativePayment;
 use crate::linkgraph::NativeGraph;
 use crate::orders::NativeOrderList;
 use crate::station::{BaseStation, Station};
+use crate::vehicle::visits::{Services as Visits, refresh_links};
 use crate::vehicle::{EngineRef, VS_CRASHED, VS_STOPPED, VehicleRef};
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -890,7 +891,6 @@ pub struct Links {
     pub(crate) stopped_in_depot: extern "C" fn(VehicleRef) -> bool,
     pub(crate) last_service: extern "C" fn(VehicleRef) -> i32,
     pub(crate) cargo_type: extern "C" fn(VehicleRef) -> u8,
-    pub(crate) refresh: extern "C" fn(VehicleRef),
     pub(crate) reroute: extern "C" fn(*mut BaseStation, Option<VehicleRef>, u8, u16, u16),
 }
 unsafe fn reroute(st: *mut BaseStation, cargo: u8, avoid: u16, avoid2: u16, w: &World, l: &Links) {
@@ -926,7 +926,7 @@ pub unsafe extern "C" fn openttd_rust_station_reroute(
 }
 // Keep the source edge/vehicle iteration and its immediate mutation order together.
 #[allow(clippy::too_many_lines)]
-unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links) {
+unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
     for cargo in 0..64 {
         let auto = (l.automatic_distribution)(cargo);
         let graph = (l.graph)(from, cargo);
@@ -983,7 +983,7 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links) {
                         if !(l.stopped_in_depot)(vehicle)
                             || date.wrapping_sub((l.last_service)(vehicle)) <= 1024
                         {
-                            (l.refresh)(vehicle);
+                            refresh_links(vehicle, false, false, visits);
                         }
                         if (l.edge_last_update)(graph, node, index) == date {
                             crate::witness::hit(crate::witness::STATION_STALE_REFRESH);
@@ -1044,17 +1044,24 @@ pub unsafe extern "C" fn openttd_rust_station_stale(
     st: *mut BaseStation,
     world: *const World,
     links: *const Links,
+    visits: *const Visits,
 ) {
     let w = unsafe { &*world };
     let l = unsafe { &*links };
+    let visits = unsafe { &*visits };
     unsafe {
-        stale(st, w, l);
+        stale(st, w, l, visits);
     }
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_tick(world: *const World, links: *const Links) {
+pub unsafe extern "C" fn openttd_rust_station_tick(
+    world: *const World,
+    links: *const Links,
+    visits: *const Visits,
+) {
     let w = unsafe { &*world };
     let l = unsafe { &*links };
+    let visits = unsafe { &*visits };
     if u32::from((w.environment.editor)()) != 0 {
         return;
     }
@@ -1082,7 +1089,7 @@ pub unsafe extern "C" fn openttd_rust_station_tick(world: *const World, links: *
             let phase = tick.wrapping_add(id as u64);
             if u32::from((w.is_station)(st)) != 0 && phase % 504 == 0 {
                 unsafe {
-                    stale(st, w, l);
+                    stale(st, w, l, visits);
                 }
             }
             if phase % 250 == 0 {
@@ -1171,7 +1178,6 @@ pub struct Loading {
     pub(crate) set_speed: extern "C" fn(VehicleRef, u16),
     pub(crate) subtract_profit: extern "C" fn(VehicleRef, i64),
     pub(crate) unknown_load_result: extern "C" fn(VehicleRef, u16),
-    pub(crate) refresh_capacity: extern "C" fn(VehicleRef),
     pub(crate) vehicle_dirty: extern "C" fn(VehicleRef),
     pub(crate) update_indicator: extern "C" fn(VehicleRef),
     pub(crate) set_current_company: extern "C" fn(u8),
@@ -1490,7 +1496,13 @@ fn update_ticks(front: VehicleRef, st: LoadingStation, kind: u8, mut ticks: i32,
 }
 // Preserve complete loading control at the source observation points.
 #[allow(clippy::too_many_lines)]
-unsafe fn load_vehicle(front: VehicleRef, w: &World, l: &Loading, refit: &RefitContext) {
+unsafe fn load_vehicle(
+    front: VehicleRef,
+    w: &World,
+    l: &Loading,
+    refit: &RefitContext,
+    visits: &Visits,
+) {
     // SAFETY: the shared immutable vehicle table outlives this entry. Station
     // identities and owner are resolved before next-station discovery (#228).
     let vehicle = unsafe { &*l.vehicle };
@@ -1731,7 +1743,7 @@ unsafe fn load_vehicle(front: VehicleRef, w: &World, l: &Loading, refit: &RefitC
                     finished = false;
                 }
                 if !finished {
-                    (l.refresh_capacity)(front);
+                    refresh_links(front, true, true, visits);
                 }
             }
             (l.set_loading_finished)(front, finished);
@@ -1756,7 +1768,7 @@ pub unsafe extern "C" fn openttd_rust_station_load(
     state: *mut Service,
     world: *const World,
     loading: *const Loading,
-    refit_services: *const crate::vehicle_transactions::refit::Services,
+    visits: *const Visits,
     out: *mut crate::services::CommandCost,
     temporary: *mut crate::services::CommandCost,
 ) {
@@ -1768,8 +1780,9 @@ pub unsafe extern "C" fn openttd_rust_station_load(
     }
     let w = unsafe { &*world };
     let l = unsafe { &*loading };
+    let visits = unsafe { &*visits };
     let refit = RefitContext {
-        services: refit_services,
+        services: visits.refit,
         out,
         temporary,
     };
@@ -1797,7 +1810,7 @@ pub unsafe extern "C" fn openttd_rust_station_load(
         });
         if (l.status)(v) & (VS_STOPPED | VS_CRASHED) == 0 {
             unsafe {
-                load_vehicle(v, w, l, &refit);
+                load_vehicle(v, w, l, &refit, visits);
             }
         }
         if Some(v) == last {

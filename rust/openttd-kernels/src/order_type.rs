@@ -17,5 +17,15 @@ pub const OT_LOADING: u8 = 3;
 pub const OT_LEAVESTATION: u8 = 4;
 /// `OT_GOTO_WAYPOINT`.
 pub const OT_GOTO_WAYPOINT: u8 = 6;
+/// `OT_CONDITIONAL`.
+pub const OT_CONDITIONAL: u8 = 7;
 /// `OT_IMPLICIT`.
 pub const OT_IMPLICIT: u8 = 8;
+/// `INVALID_VEH_ORDER_ID`.
+pub const INVALID_VEH_ORDER_ID: u8 = 0xFF;
+/// `OrderLoadType::NoLoad`.
+pub const OLFB_NO_LOAD: u8 = 4;
+/// `OrderUnloadType::Unload`.
+pub const OUFB_UNLOAD: u8 = 1;
+/// `OrderUnloadType::Transfer`.
+pub const OUFB_TRANSFER: u8 = 2;

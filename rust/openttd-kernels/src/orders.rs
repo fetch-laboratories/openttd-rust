@@ -24,6 +24,8 @@
     clippy::if_not_else,
     clippy::collapsible_match
 )]
+use crate::order_type::{OLFB_NO_LOAD, OUFB_TRANSFER, OUFB_UNLOAD};
+use crate::vehicle::VehicleRef;
 use std::ffi::c_void;
 
 /// Opaque live native `OrderList`; never dereferenced by Rust.
@@ -770,16 +772,16 @@ impl Game {
     }
 }
 impl Order {
-    fn kind(&self) -> u8 {
+    pub(crate) fn kind(&self) -> u8 {
         self.kind & 15
     }
     fn non_stop(self) -> u8 {
         self.kind >> 6
     }
-    fn load(self) -> u8 {
+    pub(crate) fn load(self) -> u8 {
         (self.flags >> 4) & 7
     }
-    fn unload(self) -> u8 {
+    pub(crate) fn unload(self) -> u8 {
         self.flags & 7
     }
     fn action(&self) -> u8 {
@@ -797,8 +799,17 @@ impl Order {
     fn value(self) -> u16 {
         self.destination & 2047
     }
-    fn is_refit(self) -> bool {
+    pub(crate) fn is_refit(self) -> bool {
         self.refit < 64 || self.refit == 0xfd
+    }
+    /// `Order::GetConditionSkipToOrder`.
+    pub(crate) fn condition_skip_to(self) -> u8 {
+        self.flags
+    }
+    /// `Order::CanLeaveWithCargo`.
+    pub(crate) fn can_leave_with_cargo(self, has_cargo: bool) -> bool {
+        self.load() != OLFB_NO_LOAD
+            || (has_cargo && self.unload() != OUFB_UNLOAD && self.unload() != OUFB_TRANSFER)
     }
     fn wait_timetabled(self) -> bool {
         if self.kind() == 7 {
@@ -4890,5 +4901,53 @@ impl OrderHandle {
     pub(crate) unsafe fn nearest_depot(&self) -> bool {
         // SAFETY: One scalar read; native OrderDepotActionFlag::NearestDepot = 1.
         unsafe { (&*self.0).action() & 2 != 0 }
+    }
+}
+
+/// Direct access to the canonical orders owner for route prediction (#349).
+/// Handles are live for the synchronous entry; no owner borrow crosses a leaf.
+#[derive(Clone, Copy)]
+pub(crate) struct VisitOrders(Game);
+impl VisitOrders {
+    pub(crate) fn new(leaves: &'static Leaves) -> Self {
+        Self(Game(leaves))
+    }
+    fn shell(v: VehicleRef) -> *mut c_void {
+        v.0.as_ptr().cast()
+    }
+    /// `v->orders`, the native `OrderList` shell or null.
+    pub(crate) fn list(self, v: VehicleRef) -> *mut c_void {
+        self.0.orders(Self::shell(v))
+    }
+    /// `OrderList::GetNumOrders()`.
+    pub(crate) fn count(self, list: *mut c_void) -> u8 {
+        self.0.size(list)
+    }
+    /// `orders[index]` for an index below `count`.
+    pub(crate) fn order(self, list: *mut c_void, index: u8) -> Order {
+        self.0.stored_order(list, usize::from(index))
+    }
+    /// `OrderList::GetNext`.
+    pub(crate) fn next(self, list: *mut c_void, index: u8) -> u8 {
+        self.0.next_index(list, index)
+    }
+    /// `OrderList::GetNextDecisionNode`.
+    pub(crate) fn decision(self, list: *mut c_void, next: u8, hops: u32) -> u8 {
+        self.0.decision(list, next, hops)
+    }
+    /// `v->cur_implicit_order_index`.
+    pub(crate) fn implicit(self, v: VehicleRef) -> u8 {
+        // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
+        unsafe { (*self.0.consist(Self::shell(v))).implicit }
+    }
+    /// `v->current_order_time`.
+    pub(crate) fn time(self, v: VehicleRef) -> i32 {
+        // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
+        unsafe { (*self.0.consist(Self::shell(v))).time }
+    }
+    /// `OrderList::GetTotalDuration()`.
+    pub(crate) fn total(self, list: *mut c_void) -> i32 {
+        // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
+        unsafe { (*self.0.list(list)).total }
     }
 }

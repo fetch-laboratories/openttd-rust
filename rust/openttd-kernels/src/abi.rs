@@ -146,6 +146,26 @@ layouts! {
         shared, commands, cost, groups, target, name, clear_name, set_name, name_dirty,
         interval_percent, interval_default, interval_clamp, set_interval, unique_name, max_name,
     };
+    "OpenTTDVisitCapacity" ["probe"] => crate::vehicle::visits::Capacity { capacity, remaining, cargo, };
+    "OpenTTDVisitPrediction" ["probe"] => crate::vehicle::visits::Prediction { last_loading, last_station, ticks, };
+    "OpenTTDVehicleVisits" ["probe"] => crate::vehicle::visits::Services {
+        shared,
+        station,
+        links,
+        loading,
+        refit,
+        capacity,
+        prediction,
+        display_speed,
+        location,
+        graph_available,
+        allocate_graph,
+        allocation_failure,
+        join_graph,
+        graph_size,
+        merge_graph,
+        update_edge,
+    };
     "OpenTTDObjectHiddenArea" ["landscape"] => crate::objects::HiddenArea {
         index,
         first_tile,
@@ -3298,7 +3318,6 @@ layouts! {
         stopped_in_depot,
         last_service,
         cargo_type,
-        refresh,
         reroute,
     };
     "OpenTTDStationLoading" ["probe"] => crate::station_service::Loading {
@@ -3349,7 +3368,6 @@ layouts! {
         set_speed,
         subtract_profit,
         unknown_load_result,
-        refresh_capacity,
         vehicle_dirty,
         update_indicator,
         set_current_company,
@@ -4891,7 +4909,7 @@ layouts! {
         pending,
         transaction,
         group,
-        refit,
+        visits,
         refit_cost,
         refit_temporary,
     };

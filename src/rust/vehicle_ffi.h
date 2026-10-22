@@ -273,7 +273,7 @@ struct OpenTTDVehicleSchedulerServices {
 	void (OPENTTD_VEHICLE_CALL *with_loading_timer)(const OpenTTDVehicleSchedulerTables *, void (OPENTTD_VEHICLE_CALL *)(const OpenTTDVehicleSchedulerTables *)) noexcept OPENTTD_SERVICE_DEFAULT(with_loading_timer);
 	void (OPENTTD_VEHICLE_CALL *reset_accumulators)() noexcept OPENTTD_SERVICE_DEFAULT(reset_accumulators);
 };
-struct OpenTTDVehicleRefitServices;
+struct OpenTTDVehicleVisits;
 struct OpenTTDCommandCost;
 struct OpenTTDVehicleSchedulerTables {
 	const OpenTTDVehicleSchedulerServices *scheduler;
@@ -283,7 +283,7 @@ struct OpenTTDVehicleSchedulerTables {
 	const OpenTTDFleetPendingServices *pending;
 	const OpenTTDFleetTransactionServices *transaction;
 	const OpenTTDFleetGroupServices *group;
-	const OpenTTDVehicleRefitServices *refit;
+	const OpenTTDVehicleVisits *visits;
 	OpenTTDCommandCost *refit_cost;
 	OpenTTDCommandCost *refit_temporary;
 };

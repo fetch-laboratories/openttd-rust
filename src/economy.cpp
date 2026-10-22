@@ -66,7 +66,7 @@
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
 #include "rust/industry_shell_services.h"
-#include "rust/vehicle_refit_ffi.h"
+#include "rust/vehicle_visits_ffi.h"
 #include "rust/command_cost_services.h"
 #endif
 
@@ -1695,9 +1695,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Vehicle *front = VehicleOf(handle);
 		ErrorUnknownCallbackResult(front->GetEngine()->GetGRFID(), CBID_VEHICLE_LOAD_AMOUNT, value);
 	},
-	.refresh_capacity = [](OpenTTDVehicle *handle) noexcept -> void {
-		Vehicle *front = VehicleOf(handle); LinkRefresher::Run(front, true, true);
-	},
 	.vehicle_dirty = [](OpenTTDVehicle *handle) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
 		SetWindowDirty(GetWindowClassForVehicleType(front->type), front->owner);
@@ -2543,7 +2540,7 @@ void LoadUnloadStation(Station *st)
 {
 #ifdef WITH_RUST
 	CommandCost cost, temporary;
-	openttd_rust_station_load(st->rust_service.get(), &GetRustStationServices(), &_rust_station_loading, &GetRustVehicleRefitServices(), RustCommandCost(&cost), RustCommandCost(&temporary));
+	openttd_rust_station_load(st->rust_service.get(), &GetRustStationServices(), &_rust_station_loading, &GetRustVehicleVisits(), RustCommandCost(&cost), RustCommandCost(&temporary));
 #else
 	/* No vehicle is here... */
 	if (st->loading_vehicles.empty()) return;

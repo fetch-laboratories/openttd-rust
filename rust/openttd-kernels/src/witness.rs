@@ -504,6 +504,26 @@ witness_blocks! {
         VT_CLONE_BUILD_SELL = 5 => "vehicle_transactions.clone_build_sell",
         VT_CLONE_JOIN_SELL = 6 => "vehicle_transactions.clone_join_sell",
     }
+    vehicle_visits {
+        VISITS_AIRCRAFT_MAIL = 0 => "vehicle_visits.aircraft_mail",
+        VISITS_ARRIVAL_STATS = 1 => "vehicle_visits.arrival_stats",
+        VISITS_AUTOREFIT = 2 => "vehicle_visits.autorefit",
+        VISITS_CONDITIONAL_BRANCH = 3 => "vehicle_visits.conditional_branch",
+        VISITS_FULL_LOAD_INCREASE = 4 => "vehicle_visits.full_load_increase",
+        VISITS_FULL_LOAD_RANDOM = 5 => "vehicle_visits.full_load_random",
+        VISITS_FULL_LOAD_REFRESH = 6 => "vehicle_visits.full_load_refresh",
+        VISITS_GRAPH_FAILURE = 7 => "vehicle_visits.graph_failure",
+        VISITS_GRAPH_JOIN = 8 => "vehicle_visits.graph_join",
+        VISITS_GRAPH_MERGE_FIRST = 9 => "vehicle_visits.graph_merge_first",
+        VISITS_GRAPH_MERGE_SECOND = 10 => "vehicle_visits.graph_merge_second",
+        VISITS_GRAPH_NEW = 11 => "vehicle_visits.graph_new",
+        VISITS_MERGE_BLOCKED = 12 => "vehicle_visits.merge_blocked",
+        VISITS_REFIT = 13 => "vehicle_visits.refit",
+        VISITS_REFRESH = 14 => "vehicle_visits.refresh",
+        VISITS_RESET_REFIT = 15 => "vehicle_visits.reset_refit",
+        VISITS_SEEN_HOP = 16 => "vehicle_visits.seen_hop",
+        VISITS_STATS = 17 => "vehicle_visits.stats",
+    }
     water {
         WATER_TRACKS = 0 => "water.tracks",
         WATER_FOLLOWS = 1 => "water.follows",

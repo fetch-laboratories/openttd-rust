@@ -47,6 +47,7 @@
 #include "../road_internal.h"
 #include "../pbs.h"
 #include "../train.h"
+#include "../linkgraph/linkgraph_type.h"
 #include "../company_base.h"
 #include "../company_func.h"
 #include "../command_type.h"
@@ -250,7 +251,10 @@ static_assert(to_underlying(DoCommandFlag::NoTestTownRating) == 4 && to_underlyi
 static_assert(std::is_same_v<DoCommandFlags::BaseType, uint16_t>);
 static_assert(to_underlying(DoCommandFlag::AutoReplace) == 6 && to_underlying(DoCommandFlag::NoCargoCapacityCheck) == 7);
 static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);
-static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_GOTO_WAYPOINT == 6 && OT_IMPLICIT == 8);
+static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8);
+static_assert(INVALID_VEH_ORDER_ID == 0xFF && to_underlying(OrderLoadType::NoLoad) == 4 && to_underlying(OrderUnloadType::Unload) == 1 && to_underlying(OrderUnloadType::Transfer) == 2);
+static_assert(CARGO_AUTO_REFIT == 0xFD && StationID::Invalid().base() == 0xFFFF);
+static_assert(EdgeUpdateModes{EdgeUpdateMode::Increase}.base() == 1 && EdgeUpdateModes{EdgeUpdateMode::Refresh}.base() == 2 && EdgeUpdateModes{EdgeUpdateMode::Restricted}.base() == 4 && EdgeUpdateModes{EdgeUpdateMode::Unrestricted}.base() == 8);
 static_assert(VL_STANDARD == 0 && VL_SHARED_ORDERS == 1 && VL_STATION_LIST == 2 && VL_DEPOT_LIST == 3 && VL_GROUP_LIST == 4);
 static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28 && PR_CLEAR_DEPOT_TRAIN == 30 && PR_CLEAR_WATER == 34 && PR_BUILD_FOUNDATION == 57);
 static uint32_t Shared_tile_height(uint32_t tile) noexcept { return TileHeight(TileIndex{tile}); }

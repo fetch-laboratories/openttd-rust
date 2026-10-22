@@ -83,6 +83,7 @@ inline OrderType RustVehicleOrderType(const Vehicle *v) noexcept { return v->cur
 inline uint16_t RustVehicleOrderDestination(const Vehicle *v) noexcept { return v->current_order.GetDestination().base(); }
 inline uint16_t RustVehicleOrderMaxSpeed(const Vehicle *v) noexcept { return v->current_order.GetMaxSpeed(); }
 template <class T> inline int RustVehicleDisplayMaxSpeed(const T *v) noexcept { return v->GetDisplayMaxSpeed(); }
+inline int32_t RustVehicleDisplaySpeed(OpenTTDVehicle *v) noexcept { return RustVehicleDisplayMaxSpeed(VehicleOf(v)); }
 inline uint8_t RustVehicleOrderNonStop(const Vehicle *v) noexcept { return v->current_order.GetNonStopType().base(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept;
 bool RustTrainFreeWagon(const Vehicle *v) noexcept;
