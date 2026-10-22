@@ -16,6 +16,7 @@
 
 #include "vehicle_services.h"
 #include "engine_services.h"
+#include "services_newgrf.h"
 #include "services_landscape.h"
 #include "settings_services.h"
 

@@ -42,7 +42,6 @@ src/industry_cmd.cpp | []() noexcept -> uint8_t | bf71454f2d308e6c | 1
 src/industry_cmd.cpp | []() noexcept -> uint8_t | eb526c61b6569eeb | 1
 src/industry_cmd.cpp | [](OpenTTDIndustryStationHandle *station) noexcept | e578e1424e834e33 | 1
 src/industry_cmd.cpp | [](OpenTTDIndustryStationHandle *station, void *shell, uint32_t tile) noexcept | 7aca589e29338f6e | 1
-src/industry_cmd.cpp | [](uint32_t n) noexcept -> uint32_t | f470dc7eef94f90b | 1
 src/industry_cmd.cpp | [](void *station, void *industry) noexcept | 5cf80664985a1943 | 1
 src/order_cmd.cpp | [](void *v) noexcept | 3ad12ea0c58a2761 | 1
 src/order_cmd.cpp | [](void *v) noexcept | 5e35106910478995 | 1
@@ -93,7 +92,6 @@ src/rust/company_adapter.cpp | Co_aircraft_is_normal(uint32_t id) noexcept | 83a
 src/rust/company_adapter.cpp | Co_company_is_ai(uint8_t id) noexcept | 0931792824cde127 | 1
 src/rust/company_adapter.cpp | Co_map_size() noexcept | b49ebe1aff917479 | 1
 src/rust/company_adapter.cpp | Co_station_facility_count(uint32_t id) noexcept | 19b651266161c5ee | 1
-src/rust/company_adapter.cpp | Co_update_company_hq(uint8_t id, int32_t score) noexcept | 9cbbbc65f3f697ef | 1
 src/rust/company_adapter.cpp | Co_vehicle_is_primary(uint32_t id) noexcept | 3e99ead5f6df114c | 1
 src/rust/company_adapter.cpp | Co_vehicle_previous(uint32_t id) noexcept | 69c960a7c51e638b | 1
 src/rust/company_adapter.cpp | Co_vehicle_service_interval_is_custom(uint32_t id) noexcept | df7f6be000c1cef1 | 1

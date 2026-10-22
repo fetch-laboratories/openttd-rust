@@ -22,6 +22,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::c_void;
 
+/// Native `INVALID_CARGO` sentinel.
+pub(crate) const INVALID_CARGO: u8 = u8::MAX;
+
+/// Original `IsValidCargoType`; cargo validity here only excludes the sentinel.
+pub(crate) const fn is_valid_cargo_type(cargo: u8) -> bool {
+    cargo != INVALID_CARGO
+}
+
 /// Native cargo Source, passed by value without packing its ID and type.
 #[repr(C)]
 #[derive(Clone, Copy)]

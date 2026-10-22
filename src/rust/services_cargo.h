@@ -30,6 +30,7 @@ inline uint OpenTTDScaleIndustryCargo(uint amount) noexcept { return OpenTTDScal
 inline bool OpenTTDIsValidCargo(CargoType cargo) noexcept { return IsValidCargoType(cargo); }
 inline CargoType OpenTTDMailCargo() noexcept { return OpenTTDCargoByLabel(CT_MAIL); }
 inline CargoType OpenTTDFoodCargo() noexcept { return OpenTTDCargoByLabel(CT_FOOD); }
+inline CargoType OpenTTDMailCargo() noexcept { return OpenTTDCargoByLabel(CT_MAIL); }
 inline CargoType OpenTTDPassengerCargo() noexcept { return OpenTTDCargoByLabel(CT_PASSENGERS); }
 inline CargoType OpenTTDIndustryCargoTranslation(const OpenTTDIndustrySpecHandle *spec, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, reinterpret_cast<const IndustrySpec *>(spec)->grf_prop.grffile); }
 inline CargoType OpenTTDIndustryTileCargoTranslation(const IndustryTileSpec *spec, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, spec->grf_prop.grffile); }

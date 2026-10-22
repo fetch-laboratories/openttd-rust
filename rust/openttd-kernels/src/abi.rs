@@ -104,6 +104,182 @@ layouts! {
         shared, commands, cost, groups, target, name, clear_name, set_name, name_dirty,
         interval_percent, interval_default, interval_clamp, set_interval, unique_name, max_name,
     };
+    "OpenTTDObjectHiddenArea" ["landscape"] => crate::objects::HiddenArea {
+        index,
+        first_tile,
+    };
+    "OpenTTDObjectPrice" ["landscape"] => crate::objects::Price {
+        factor,
+        shift,
+    };
+    "OpenTTDObjectArea" ["landscape"] => crate::objects::Area {
+        tile,
+        width,
+        height,
+    };
+    "OpenTTDObjectIdentity" ["landscape"] => crate::objects::Identity {
+        object,
+        area,
+        kind,
+    };
+    "OpenTTDObjectAllocation" ["landscape"] => crate::objects::Allocation {
+        object,
+        id,
+    };
+    "OpenTTDObjectNext" ["landscape"] => crate::objects::Next {
+        object,
+        id,
+        tile,
+    };
+    "OpenTTDObjectLoopPolicy" ["landscape"] => crate::objects::LoopPolicy {
+        spec,
+        object,
+        north,
+        flags,
+        kind,
+    };
+    "OpenTTDObjectPolicy" ["landscape"] => crate::objects::Policy {
+        flags,
+        callbacks,
+    };
+    "OpenTTDObjectFootprint" ["landscape"] => crate::objects::Footprint {
+        flags,
+        callbacks,
+        size,
+    };
+    "OpenTTDObjectClearance" ["landscape"] => crate::objects::Clearance {
+        flags,
+        height,
+    };
+    "OpenTTDObjectAdmission" ["landscape"] => crate::objects::Admission {
+        views,
+        height,
+    };
+    "OpenTTDObjectAreaShape" ["landscape"] => crate::objects::AreaShape {
+        views,
+        size,
+    };
+    "OpenTTDObjectGeneration" ["landscape"] => crate::objects::Generation {
+        flags,
+        amount,
+        views,
+        ever,
+    };
+    "OpenTTDObjectSlopeResult" ["landscape"] => crate::objects::SlopeResult {
+        callback,
+        registers,
+        version,
+    };
+    "OpenTTDObjectStrings" ["landscape"] => crate::objects::Strings {
+        too_many,
+        no_town,
+        edge_sub,
+        water,
+        edge,
+        on_water,
+        bridge,
+        flat,
+        own,
+        built,
+        limit,
+        hq,
+        object,
+    };
+    "OpenTTDObjectDefinition" ["landscape"] => crate::objects::Definition {
+        grfid,
+        local_id,
+        view,
+        has_file,
+    };
+    "OpenTTDObjectQueryServices" ["landscape"] => crate::objects::QueryServices {
+        random_bits,
+        index,
+        by_tile,
+        definition,
+        object_index,
+        kind,
+        north,
+        town,
+        town_tile,
+        date,
+        colour,
+        view,
+        nearby,
+        nearby_info,
+        terrain,
+        town_zone,
+        badges,
+        register_100,
+        grfid,
+        version8,
+        override_id,
+        manhattan,
+        square,
+        triggers,
+        change_frame,
+        unhandled,
+    };
+    "OpenTTDObjectServices" ["landscape"] => crate::objects::ObjectServices {
+        shared,
+        cost,
+        command,
+        company,
+        cargo,
+        town,
+        founding,
+        industry_tiles,
+        strings,
+        spec_count,
+        spec,
+        callbacks,
+        colour_policy,
+        flags,
+        footprint,
+        clearance,
+        available,
+        ever,
+        area_shape,
+        admission,
+        generation,
+        can_allocate,
+        allocate,
+        object_type,
+        loop_policy,
+        identity,
+        location,
+        next,
+        set_colour,
+        recolour,
+        colour_callback,
+        colour_error,
+        make,
+        delete_object,
+        query,
+        slope_callback,
+        slope_error,
+        build_price,
+        clear_price,
+        set_hq,
+        statue_town,
+        hq_begin,
+        hq_deliver,
+        hq_end,
+        autoslope_callback,
+        boolean_callback,
+        enabled,
+        close_inspect,
+        progress_set,
+        progress_increase,
+        normal,
+        bulldozer,
+        water_class,
+        restoration,
+        set_owner,
+        scale_size_1d,
+        passengers,
+        mail,
+        scale_cargo,
+    };
     "OpenTTDRoadNearestTownTile" ["probe"] => crate::road_cmd::NearestTownTile { road, depot, town_owned, };
 
     "OpenTTDRoadTramBuildRead" ["probe"] => crate::road::TramBuildRead { owner, road_type, road, };
@@ -669,7 +845,7 @@ layouts! {
         clear,
         house,
         industry,
-        object,
+        objects,
         rail,
         shared,
         station,
@@ -778,7 +954,8 @@ layouts! {
         ground,
         town,
         station_loop,
-        object_loop,
+        objects,
+        object_frame,
     };
     "OpenTTDGroundABICalls" ["landscape"] => crate::ground::ABICalls {
         fences,
@@ -1223,7 +1400,6 @@ layouts! {
         enter,
         leave,
         finance,
-        clear_object_areas,
         infinite_money,
         money_error,
         infrastructure_dirty,
@@ -3117,14 +3293,6 @@ layouts! {
         callback,
         registers,
     };
-    "OpenTTDIndustryClearArea" ["industry"] => crate::industry::ClearArea {
-        first_tile,
-        area,
-    };
-    "OpenTTDIndustryClearAreas" ["industry"] => crate::industry::ClearAreas {
-        data,
-        size,
-    };
     "OpenTTDIndustryAllocation" ["industry"] => crate::industry::Allocation {
         shell,
         owner,
@@ -3199,8 +3367,6 @@ layouts! {
         costs,
         transaction,
         errors,
-        clear_areas,
-        restore_clear_areas,
     };
     "OpenTTDIndustryTilePolicyServices" ["industry"] => crate::industry::TilePolicyServices {
         current_company,
@@ -3380,7 +3546,7 @@ layouts! {
         neutral_station,
         cleanup_tile,
         delete_tile_inspect,
-        make_water,
+        restoration,
         delete_oilrig,
         clear_docking,
         industry_field,

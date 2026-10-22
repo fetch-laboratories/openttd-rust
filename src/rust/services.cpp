@@ -110,7 +110,6 @@ static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner, uint32_t ti
 static void CommandNoVehicle(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = EnsureNoVehicleOnGround(TileIndex{tile}); }
 static void CommandNoTrain(OpenTTDCommandCost *out, uint32_t tile, uint8_t bits) noexcept { *NativeCost(out) = EnsureNoTrainOnTrackBits(TileIndex{tile}, static_cast<TrackBits>(bits)); }
 static void CommandWormholeFree(OpenTTDCommandCost *out, uint32_t tile, uint32_t end, const Train *ignore) noexcept { *NativeCost(out) = TunnelBridgeIsFree(TileIndex{tile}, TileIndex{end}, ignore); }
-static void CommandClearObjectAreas() noexcept { _cleared_object_areas.clear(); }
 static bool CommandInfiniteMoney() noexcept { return _settings_game.difficulty.infinite_money; }
 static void CommandMoneyError(OpenTTDCommandCost *cost, int64_t amount) noexcept
 {
@@ -127,7 +126,7 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 	static const OpenTTDCommandServices services{
 		.enter = RecursiveCommandCounter::Enter, .leave = RecursiveCommandCounter::Leave,
 		.finance = &GetRustCompanyFinanceServices(),
-		.clear_object_areas = CommandClearObjectAreas, .infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
+		.infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
 		.infrastructure_dirty = RustInfrastructureDirty,
 		.landscape_clear = LandscapeClear,
 		.tile_ownership = CommandTileOwnership, .ownership = CommandOwnership,

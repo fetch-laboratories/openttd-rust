@@ -13,6 +13,7 @@
 #include "orders_ffi.h"
 #include "station_service_ffi.h"
 #include "engine_services.h"
+#include "services_newgrf.h"
 #include "../vehicle_func.h"
 #include "../order_func.h"
 #include "../newgrf_engine.h"

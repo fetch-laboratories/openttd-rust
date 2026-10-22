@@ -16,7 +16,6 @@ struct OpenTTDCommandServices {
 	bool (*enter)() noexcept OPENTTD_SERVICE_DEFAULT(enter);
 	void (*leave)() noexcept OPENTTD_SERVICE_DEFAULT(leave);
 	const OpenTTDCompanyFinanceServices *finance;
-	void (*clear_object_areas)() noexcept OPENTTD_SERVICE_DEFAULT(clear_object_areas);
 	bool (*infinite_money)() noexcept OPENTTD_SERVICE_DEFAULT(infinite_money);
 	void (*money_error)(OpenTTDCommandCost *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(money_error);
 	void (*infrastructure_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure_dirty);

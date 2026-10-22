@@ -16,6 +16,7 @@
 #include "../newgrf.h"
 #include "../newgrf_engine.h"
 #include "../newgrf_commons.h"
+#include "services_newgrf.h"
 
 inline uint16_t RustVehicleCallback(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, std::span<int32_t> registers = {}) noexcept { return GetVehicleCallback(callback, param1, param2, engine, v, registers); }
 uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept;
@@ -24,7 +25,7 @@ uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
 uint32_t RustVehicleGRFString(Vehicle *v, GRFStringID string) noexcept;
 void RustVehicleFlipStopped(Vehicle *v) noexcept;
-inline void RustUnknownCallbackResult(uint32_t grfid, uint16_t callback, uint16_t result) noexcept { ErrorUnknownCallbackResult(grfid, callback, result); }
+
 
 OpenTTDByteSpan RustVehicleName(void *shell) noexcept;
 void RustVehicleClearName(void *shell) noexcept;

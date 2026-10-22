@@ -33,6 +33,7 @@ mod map_func;
 mod math;
 mod newgrf_callbacks;
 mod node_hash;
+mod objects;
 mod order_type;
 mod packet;
 mod rail_cmd;

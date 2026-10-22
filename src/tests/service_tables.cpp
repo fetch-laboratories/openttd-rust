@@ -39,6 +39,7 @@ extern bool CheckAbi_yapf_ship();
 extern bool CheckAbi_monocypher();
 extern bool CheckAbi_network_crypto();
 extern bool CheckAbi_landscape();
+extern bool CheckAbi_object_cmd();
 extern bool CheckAbi_water_cmd();
 
 TEST_CASE("Rust ABI - actual production callback tables are complete")
@@ -76,6 +77,7 @@ TEST_CASE("Rust ABI - actual production callback tables are complete")
 	CHECK(CheckAbi_monocypher());
 	CHECK(CheckAbi_network_crypto());
 	CHECK(CheckAbi_landscape());
+	CHECK(CheckAbi_object_cmd());
 	CHECK(CheckAbi_water_cmd());
 }
 TEST_CASE("Rust ABI - omitted and explicit null callbacks fail completeness")

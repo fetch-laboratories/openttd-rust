@@ -17,7 +17,6 @@
 struct Randomizer;
 struct OpenTTDTownNames;
 struct OpenTTDTownNameFrame { std::string candidate, other; };
-/** Pool IDs cross as their uint16_t wire value; native PoolID classes stay native. */
 /** Rendering owns its ordinary string allocation in these call-local native
  * objects. Candidate bytes survive other-name rendering; no view survives its
  * own next render. Only resolver services run here; they cannot unwind. */

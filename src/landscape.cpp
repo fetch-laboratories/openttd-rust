@@ -49,6 +49,7 @@
 #ifdef WITH_RUST
 #include "rust/ffi.h"
 #include "rust/landscape_loop_ffi.h"
+#include "rust/services_object.h"
 #include "rust/tile_owner_services.h"
 #include "rust/road_command_services.h"
 #include "rust/ground_services.h"
@@ -600,7 +601,7 @@ const OpenTTDTileOwnerServices &GetRustTileOwnerServices() noexcept
 		.clear = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_clear_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
 		.house = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_town_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
 		.industry = &GetIndustryTileServices(),
-		.object = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_object_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.objects = &GetRustObjectServices(),
 		.rail = &GetRustRailCommandServices(),
 		.shared = &GetRustSharedServices(),
 		.station = &GetRustStationCommandServices(),
@@ -751,11 +752,17 @@ CommandCost CmdLandscapeClear(DoCommandFlags flags, TileIndex tile)
 		return CommandCost(STR_ERROR_CLEARING_LIMIT_REACHED);
 	}
 
+#ifdef WITH_RUST
+	/* If this tile was the first tile which caused object destruction, always
+	 * pass it on to the tile_type_proc. That way multiple test runs and the exec run stay consistent. */
+	if (IsObjectIndirectlyCleared(tile)) {
+#else
 	const ClearedObjectArea *coa = FindClearedObject(tile);
 
 	/* If this tile was the first tile which caused object destruction, always
 	 * pass it on to the tile_type_proc. That way multiple test runs and the exec run stay consistent. */
 	if (coa != nullptr && coa->first_tile != tile) {
+#endif
 		/* If this tile belongs to an object which was already cleared via another tile, pretend it has been
 		 * already removed.
 		 * However, we need to check stuff, which is not the same for all object tiles. (e.g. being on water or not) */
@@ -851,7 +858,7 @@ TileIndex _cur_tileloop_tile;
 #endif
 
 #ifdef WITH_RUST
-static OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, const OpenTTDRoadCommandContext *road)
+static OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall *call, OpenTTDObjectLoopFrame *frame, const OpenTTDRoadCommandContext *road)
 {
 	return {
 		.shared = &GetRustSharedServices(),
@@ -861,7 +868,8 @@ static OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall 
 		.ground = {.clear = &GetRustClearServices(), .rail = &GetRustRailGroundServices(), .road = &GetRustRoadGroundServices(), .road_command = road, .tunnel = &GetRustTunnelGroundServices(), .water = &GetRustWaterGroundServices(), .costs = &GetRustGroundCostServices(), .call = call, .climate = OpenTTDLandscape(), .editor = OpenTTDEditor(), .rebuild = _settings_game.economy.mod_road_rebuild, .ambient_callback = RustAmbientSoundEnabled()},
 		.town = &GetRustTownServices(),
 		.station_loop = _tile_type_station_procs.tile_loop_proc,
-		.object_loop = _tile_type_object_procs.tile_loop_proc,
+		.objects = &GetRustObjectServices(),
+		.object_frame = frame,
 	};
 }
 #endif
@@ -876,8 +884,9 @@ void RunTileLoop()
 	static_assert(MIN_MAP_SIZE_BITS == 6 && MAX_MAP_SIZE_BITS == 12 && TILE_UPDATE_FREQUENCY_LOG == 8);
 	static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_VOID == 7 && MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && MP_OBJECT == 10);
 	OpenTTDGroundCall call;
+	OpenTTDObjectLoopFrame frame;
 	RustRoadCommandContext road;
-	const auto services = RustLandscapeLoopServices(&call, &road.view);
+	const auto services = RustLandscapeLoopServices(&call, &frame, &road.view);
 	/* Preserve the original assertion under the native build assertion policy. */
 	assert(*openttd_rust_tile_loop_cursor() != 0);
 	openttd_rust_run_tile_loop(Map::LogX(), Map::LogY(), GetRustTreeLoopSettings(), &services);
@@ -1827,8 +1836,9 @@ void CallLandscapeTick()
 bool CheckAbi_landscape()
 {
 	OpenTTDGroundCall call;
+	OpenTTDObjectLoopFrame frame;
 	RustRoadCommandContext road;
-	return AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &road.view)) &&
+	return AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &frame, &road.view)) &&
 		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
 		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&
 		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices());
