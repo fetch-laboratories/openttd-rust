@@ -278,19 +278,22 @@ resolved inputs, build/profile settings, architecture and Valgrind version. Cand
 separate from the compatibility identity checked against anchors.
 
 `SPEED_ANCHORS` in `tools/simulation/roads.py` holds each measured anchor
-`{head, ratio, Ir, identity}` and a separate latest `integrated` record with its
+`{head, ratio, Ir, identity}` and a separate `integrated` record with its
 head and Ir. Empty anchors mean collection only, never a passing speed guard.
 Each speed pass fills them from its same-head quiet medians. Compute each projection
 as `R0 * (1 + 2 * max(0, I / I0 - 1))`, directly from the fixed anchor. The
-rolling guard is 15% above the integrated head's projection from that same
-anchor; ceilings remain 1.5x play and 1.3x generation, with a speed-pass trigger
-within 5%. Before updating `integrated`, root checks the PR's six profiles against
-the latest `rust-migration` record. The PR's last commit before Full records the
-profiled commit's hash and loop Ir in `SPEED_INTEGRATED`, in `SPEED_PASS` order;
-this data-only update needs no new review. Quiet passes replace the whole anchor
-and refresh `integrated` together. Never reset anchor Ir alone. Profiles
-run alongside other agents; a PR does not answer for wall-ratio layout spread,
-which speed passes measure. Factor 2 is provisional. Memory stalls, excluded work
+guard is 15% above the `integrated` record's projection from that same anchor;
+ceilings remain 1.5x play and 1.3x generation, with a speed-pass trigger
+within 5%. A PR profiles once at its final head and records its six loop counts
+and projections in its description; it never edits `SPEED_INTEGRATED`, so
+game-code PRs do not conflict with each other on it. Quiet passes replace the
+whole anchor and refresh `integrated` together. Never reset anchor Ir alone.
+When root takes stock after every second integration, it profiles the integrated
+tip in the background and records the six projections in the roadmap, to
+see the 5% band. Profiles run alongside other agents; a PR does not answer for
+wall-ratio spread, which speed passes measure. Factor 2 is provisional: at
+`802ec7d6a4` the measured wall sensitivity to loop Ir was 0.75 TGP, 1.0-1.31
+for Opus/Grok/P1996/P2000 and 1.54 P2016 (#356). Memory stalls, excluded work
 and kernel/I/O costs remain outside the proxy. AGENTS.md schedules speed passes.
 
 ## Native macOS arm64 Rust linkage

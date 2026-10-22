@@ -31,8 +31,8 @@ checkpoint and work order.
    independent attributed review naming what was compared, in which the
    reviewer fixes its findings and you spot-check its fix commits, green
    required CI, integration, worktree removal, then a roadmap update in a single
-   docs-only commit. Update a draft from base only to integrate it or to clear a
-   conflict blocking its own work. If a check on rust-migration itself is red,
+   docs-only commit. Update a draft from base only when a conflict blocks its
+   integration or its own work. If a check on rust-migration itself is red,
    fix it first.
 3. When fewer than two unstarted components remain ahead of active work, spawn a
    fresh high-effort planning agent (Astra in Codex) to select the next whole
