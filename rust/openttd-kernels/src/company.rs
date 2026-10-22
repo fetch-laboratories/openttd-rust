@@ -274,7 +274,8 @@ pub struct Services {
     pub company_admin_update: extern "C" fn(u8),
     pub company_in_trouble: extern "C" fn(u8),
     pub post_company_delete: extern "C" fn(u8),
-    pub update_company_hq: extern "C" fn(u8, i32),
+    pub hq_location: extern "C" fn(u8) -> u32,
+    pub object_services: extern "C" fn() -> *const crate::objects::ObjectServices,
     pub performance_detail_dirty: extern "C" fn(),
     pub company_graphs_dirty: extern "C" fn(),
     pub company_infrastructure: extern "C" fn(u8, *mut Infrastructure),
@@ -445,7 +446,8 @@ const SCORE_WEIGHT: [i64; 9] = [100, 100, 100, 50, 100, 400, 50, 50, 50];
 fn e() -> *mut Economy {
     &raw mut ECONOMY
 }
-fn neg(a: i64) -> i64 {
+/// Saturating `-Money` (`OverflowSafeInt64::operator-`).
+pub(crate) fn neg(a: i64) -> i64 {
     if a == i64::MIN { i64::MAX } else { -a }
 }
 fn done(cost: i64, expense: u8) -> Cost {
@@ -665,7 +667,14 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
     }
     if update {
         put!(p, score as i32, old[0].performance);
-        (s.update_company_hq)(id, score as i32);
+        // SAFETY: immutable object table; no finance borrow spans HQ mutation.
+        unsafe {
+            crate::objects::openttd_rust_object_update_hq(
+                (s.object_services)(),
+                (s.hq_location)(id),
+                score as u32,
+            );
+        }
         let v = value(s, p, id, true);
         put!(p, v, old[0].value);
     }
@@ -1940,7 +1949,8 @@ crate::abi::layouts! {
         company_admin_update,
         company_in_trouble,
         post_company_delete,
-        update_company_hq,
+        hq_location,
+        object_services,
         performance_detail_dirty,
         company_graphs_dirty,
         company_infrastructure,

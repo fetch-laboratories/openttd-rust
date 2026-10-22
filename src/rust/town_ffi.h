@@ -18,8 +18,9 @@
 struct OpenTTDTownState;
 struct OpenTTDRoadCommandContext;
 struct Town;
-/** One resolved town: native shell, Rust owner and pool index. */
+/** Pool IDs cross as their uint16_t wire value; native PoolID classes stay native. */
 struct OpenTTDTownRef { Town *shell; OpenTTDTownState *state; uint16_t id; };
+
 struct OpenTTDHouseServices;
 struct OpenTTDTownGrowthFields { uint16_t counter, rate; uint8_t funding, road, flags; };
 struct OpenTTDTownReceived { uint16_t old_max, new_max, old_act, new_act; };

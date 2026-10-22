@@ -7,6 +7,7 @@ use super::{Engine, State, TownId, TownRef, engine};
 use crate::command_type::DoCommandFlag;
 use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN};
 use crate::economy_type::PR_TOWN_ACTION;
+use crate::objects::{Object, ObjectServices, QueryServices};
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, Map, Services, TownHandle};
 use crate::slope_func::is_steep_slope;
 use crate::station::BaseStation;
@@ -21,10 +22,6 @@ use crate::town_type::{
 };
 use crate::witness as w;
 use std::cell::OnceCell;
-#[repr(C)]
-pub struct Object {
-    _private: [u8; 0],
-}
 #[repr(C)]
 pub struct Relation {
     pub next: u32,
@@ -45,6 +42,7 @@ pub struct CommandServices {
     pub founding: *const FoundingServices,
     pub rail: *const crate::services::RailMapServices,
     pub cargo: *const crate::cargo_storage::Services,
+    pub objects: *const ObjectServices,
     pub fund_roads: extern "C" fn() -> bool,
     pub fund_buildings: extern "C" fn() -> bool,
     pub exclusive_rights: extern "C" fn() -> bool,
@@ -56,8 +54,6 @@ pub struct CommandServices {
     pub rights_news: extern "C" fn(u16),
     pub rights_events: extern "C" fn(u16),
     pub station_views_dirty: extern "C" fn(),
-    pub object_available: extern "C" fn() -> bool,
-    pub build_statue: extern "C" fn(u32, u8, *mut TownHandle),
     pub next_station: extern "C" fn(u32) -> StationCursor,
     pub station_town: extern "C" fn(*mut BaseStation) -> *const TownHandle,
     pub station_owner: extern "C" fn(*const BaseStation) -> u8,
@@ -72,10 +68,6 @@ pub struct CommandServices {
     pub next_depot: extern "C" fn(u32) -> Relation,
     pub next_industry: extern "C" fn(u32) -> Relation,
     pub next_object: extern "C" fn(u32) -> ObjectCursor,
-    pub object_by_tile: extern "C" fn(u32) -> *mut Object,
-    pub object_town: extern "C" fn(*const Object) -> *mut TownHandle,
-    pub object_type: extern "C" fn(*const Object) -> u16,
-    pub object_tile: extern "C" fn(*const Object) -> u32,
     pub set_object_town: extern "C" fn(*mut Object, *mut TownHandle),
     pub industry_town_by_tile: extern "C" fn(u32) -> *mut TownHandle,
     pub town_owned_road: extern "C" fn(u32) -> bool,
@@ -114,6 +106,14 @@ impl<'a> Commands<'a> {
             map: OnceCell::new(),
             size_y: OnceCell::new(),
         }
+    }
+    fn objects(&self) -> &ObjectServices {
+        // SAFETY: Canonical immutable object services outlive the synchronous call.
+        unsafe { &*self.s.objects }
+    }
+    fn object_query(&self) -> &QueryServices {
+        // SAFETY: The canonical query table has the same lifetime.
+        unsafe { &*self.objects().query }
     }
     fn resolve(&self, id: u16) -> TownRef {
         (self.f.resolve)(TownId(id))
@@ -225,7 +225,7 @@ impl<'a> Commands<'a> {
         buttons
     }
     fn statue(&self, t: TownRef, out: *mut CommandCost, flags: u16) -> bool {
-        if !(self.s.object_available)() {
+        if !unsafe { (self.objects().can_allocate)() } {
             (self.cost.error)(out, self.s.too_many_objects);
             return false;
         }
@@ -281,7 +281,17 @@ impl<'a> Commands<'a> {
         if flags & DoCommandFlag::EXECUTE != 0 {
             self.clear_unowned(out, best, DoCommandFlag::EXECUTE);
             let company = (self.shared.current_company)();
-            (self.s.build_statue)(best, company, t.shell);
+            // SAFETY: Live canonical tables and shell; no town-state borrow spans object callbacks.
+            unsafe {
+                crate::objects::build(
+                    self.objects(),
+                    crate::object_type::OBJECT_STATUE,
+                    best,
+                    company,
+                    t.shell,
+                    0,
+                );
+            }
             let company = (self.shared.current_company)();
             unsafe {
                 (*t.state).simulation.statues |= 1 << company;
@@ -434,9 +444,11 @@ impl<'a> Commands<'a> {
                     if (self.shared.town_count)() == 1 {
                         true
                     } else {
-                        let object = (self.s.object_by_tile)(tile);
-                        if (self.s.object_town)(object) == t.shell {
-                            if (self.s.object_type)(object) == crate::object_type::OBJECT_STATUE {
+                        let object = unsafe { (self.object_query().by_tile)(tile) };
+                        if unsafe { (self.object_query().town)(object) } == t.shell {
+                            if unsafe { (self.object_query().kind)(object) }
+                                == crate::object_type::OBJECT_STATUE
+                            {
                                 true
                             } else {
                                 if flags & DoCommandFlag::EXECUTE != 0 {
@@ -763,7 +775,7 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
                 break;
             }
             from = o.next;
-            assert!((s.object_town)(o.shell) != t.shell);
+            assert!(unsafe { (c.object_query().town)(o.shell) } != t.shell);
         }
         for tile in 0..c.map_size() {
             match (c.shared.tile_type)(tile) {
@@ -808,8 +820,11 @@ pub unsafe extern "C" fn openttd_rust_town_post_destruct(s: &CommandServices) {
             break;
         }
         from = o.next;
-        if (s.object_town)(o.shell).is_null() {
-            let town = (c.shared.calc_closest_town)((s.object_tile)(o.shell), u32::MAX);
+        if unsafe { (c.object_query().town)(o.shell) }.is_null() {
+            let town = (c.shared.calc_closest_town)(
+                unsafe { (c.object_query().north)(o.shell) },
+                u32::MAX,
+            );
             (s.set_object_town)(o.shell, town.cast_mut());
             w::hit(w::TOWN_COMMAND_OBJECT_REHOME);
         }

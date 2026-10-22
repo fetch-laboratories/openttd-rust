@@ -56,6 +56,7 @@
 #include "../window_func.h"
 #include "company_adapter.h"
 #include "company_services.h"
+#include "object_ffi.h"
 #include "presentation_services.h"
 #include "services_rail.h"
 #include "services_road.h"
@@ -145,7 +146,6 @@ static void Co_company_in_trouble(uint8_t id) noexcept
 	Game::NewEvent(new ScriptEventCompanyInTrouble(cid));
 }
 static void Co_post_company_delete(uint8_t id) noexcept { Command<CMD_COMPANY_CTRL>::Post(CCA_DELETE, CompanyID(id), CRR_BANKRUPT, INVALID_CLIENT_ID); }
-static void Co_update_company_hq(uint8_t id, int32_t score) noexcept { UpdateCompanyHQ(Company::Get(id)->location_of_HQ, score); }
 static void Co_performance_detail_dirty() noexcept { SetWindowDirty(WC_PERFORMANCE_DETAIL, 0); }
 static void Co_company_graphs_dirty() noexcept
 {
@@ -435,7 +435,8 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.local_company = RustLocalCompanyID, .network_server = Co_network_server,
 		.company_vehicle_counts = Co_company_vehicle_counts, .vehicle_limits = Co_vehicle_limits,
 		.company_admin_update = Co_company_admin_update, .company_in_trouble = Co_company_in_trouble,
-		.post_company_delete = Co_post_company_delete, .update_company_hq = Co_update_company_hq,
+		.post_company_delete = Co_post_company_delete, .hq_location = RustCompanyHQ,
+		.object_services = []() noexcept { return &GetRustObjectServices(); },
 		.performance_detail_dirty = Co_performance_detail_dirty, .company_graphs_dirty = Co_company_graphs_dirty,
 		.company_infrastructure = Co_company_infrastructure,
 		.rail_maintenance_cost = Co_rail_maintenance_cost, .signal_maintenance_cost = Co_signal_maintenance_cost,

@@ -1267,8 +1267,8 @@ bool IndividualRoadVehicleController(RoadVehicle *v, const RoadVehicle *prev)
 {
 #ifdef WITH_RUST
 	OpenTTDRoadEntry entry = GetRoadEntry();
-	RustRoadCommandContext road;
-	return openttd_rust_road_individual(RustVehicle(v), v->GetRustState(), RustVehicle(prev), prev == nullptr ? nullptr : prev->GetRustState(), &entry, &GetRoadLeaves(), &road.view);
+	OpenTTDRoadCommandSlot road;
+	return openttd_rust_road_individual(RustVehicle(v), v->GetRustState(), RustVehicle(prev), prev == nullptr ? nullptr : prev->GetRustState(), &entry, &GetRoadLeaves(), &road);
 #else
 	if (v->overtaking != 0)  {
 		if (IsTileType(v->tile, MP_STATION)) {
@@ -1793,8 +1793,8 @@ bool RoadVehicle::Tick()
 #ifdef WITH_RUST
 	PerformanceAccumulator framerate(PFE_GL_ROADVEHS);
 	const auto read = RustRoadTickRead(this);
-	RustRoadCommandContext road;
-	return openttd_rust_road_tick(RustVehicle(this), this->GetRustState(), &read, &GetRoadLeaves(), &road.view);
+	OpenTTDRoadCommandSlot road;
+	return openttd_rust_road_tick(RustVehicle(this), this->GetRustState(), &read, &GetRoadLeaves(), &road);
 #else
 	PerformanceAccumulator framerate(PFE_GL_ROADVEHS);
 

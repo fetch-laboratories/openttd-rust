@@ -36,3 +36,30 @@ def console_adapter(build, folder, env, source, kind, wraps=(), replace_objects=
     ]
     subprocess.run(link_args, cwd=build, env=env, check=True)
     return binary
+
+
+def prepared_console(kind, build_adapter, binaries, builds, folder, env):
+    """Reuse a prepared console, or relink under its existing native build lock."""
+    import migration
+
+    from .core import ROOT, RUNTIME_DIRECTORIES
+    from .runtime import prepared_adapter
+
+    executables = {}
+    for role in ("reference", "candidate"):
+        target = folder / role
+        executable = prepared_adapter(kind, role, builds, target)
+        if executable is None:
+            reference = role == "reference" or binaries[role] == binaries["reference"]
+            native = migration.REFERENCE_BUILD if reference else ROOT / "build-rust"
+            lock = migration.candidate_lock(native, shared=True)
+            if reference:
+                lock = migration.reference_lock(shared=True)
+            with lock:
+                executable = build_adapter(native, target, env)
+        executables[role] = executable
+        for name in RUNTIME_DIRECTORIES:
+            data = builds[role] / name
+            if data.is_dir():
+                (target / name).symlink_to(data, target_is_directory=True)
+    return executables

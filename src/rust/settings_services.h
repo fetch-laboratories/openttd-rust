@@ -12,6 +12,7 @@
 #include "../settings_type.h"
 #include "../road.h"
 #include "../autoslope.h"
+#include "../openttd.h"
 
 inline uint8_t RustRoadAccelerationModel() noexcept { return _settings_game.vehicle.roadveh_acceleration_model; }
 inline uint8_t RustRoadSide() noexcept { return _settings_game.vehicle.road_side; }
@@ -50,6 +51,7 @@ inline bool RustStationStopOnTownRoad() noexcept { return _settings_game.constru
 inline bool RustStationStopOnCompetitorRoad() noexcept { return _settings_game.construction.road_stop_on_competitor_road; }
 inline bool RustStationNoiseEnabled() noexcept { return _settings_game.economy.station_noise_level; }
 inline bool RustStationDistantJoin() noexcept { return _settings_game.station.distant_join_stations; }
+inline bool RustNormalGame() noexcept { return _game_mode == GM_NORMAL; }
 inline bool RustExtraDynamite() noexcept { return _settings_game.construction.extra_dynamite; }
 inline bool OpenTTDFundRoads() noexcept { return _settings_game.economy.fund_roads; }
 inline bool OpenTTDFundBuildings() noexcept { return _settings_game.economy.fund_buildings; }

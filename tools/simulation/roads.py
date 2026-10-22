@@ -25,9 +25,9 @@ SPEED_PASS = (
     ("play-padhattan-ridge-2000-manual", 1.3052238805970147, 7037662305, "17e34235425021ca2f96c739312d9f15ca167ac5f579617d6c9eb1047e8c2627"),
     ("play-padhattan-ridge-2016-manual", 1.355471294661727, 12653579222, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
 )
-# fmt: on
 # Each game-code PR records its head's loop Ir here, in SPEED_PASS order.
-SPEED_INTEGRATED = SPEED_HEAD, tuple(ir for _, _, ir, _ in SPEED_PASS)
+SPEED_INTEGRATED = "95bf6fb0e4", (2883870178, 24906522543, 23615955738, 4244460938, 6992855200, 12600225776)
+# fmt: on
 SPEED_ANCHORS = {
     name: dict(
         anchor=dict(head=SPEED_HEAD, ratio=ratio, Ir=ir, identity={"compatible": c}),

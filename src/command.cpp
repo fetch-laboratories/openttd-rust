@@ -296,8 +296,12 @@ bool CommandHelperBase::InternalExecutePrepTest(CommandFlags cmd_flags, TileInde
 	if (exec_as_spectator) cur_company.Change(COMPANY_SPECTATOR);
 
 	/* Enter test mode. */
+#ifdef WITH_RUST
+	InternalDoBefore(true, true);
+#else
 	_cleared_object_areas.clear();
 	SetTownRatingTestMode(true);
+#endif
 	BasePersistentStorageArray::SwitchMode(PSM_ENTER_TESTMODE);
 	return true;
 }
@@ -333,7 +337,11 @@ std::tuple<bool, bool, bool> CommandHelperBase::InternalExecuteValidateTestAndPr
 
 	if (!send_net) {
 		/* Prepare for command execution. */
+#ifdef WITH_RUST
+		InternalDoBefore(true, false);
+#else
 		_cleared_object_areas.clear();
+#endif
 		BasePersistentStorageArray::SwitchMode(PSM_ENTER_COMMAND);
 	}
 

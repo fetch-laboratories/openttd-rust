@@ -3705,6 +3705,7 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.founding = &GetRustTownFoundingServices(),
 		.rail = &GetRustRailMapServices(),
 		.cargo = CargoStorageServices(),
+		.objects = &GetRustObjectServices(),
 		.fund_roads = OpenTTDFundRoads,
 		.fund_buildings = OpenTTDFundBuildings,
 		.exclusive_rights = OpenTTDExclusiveRights,
@@ -3723,8 +3724,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		},
 		.rights_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventExclusiveTransportRights(_current_company, TownID(id))); Game::NewEvent(new ScriptEventExclusiveTransportRights(_current_company, TownID(id))); },
 		.station_views_dirty = []() noexcept { SetWindowClassesDirty(WC_STATION_VIEW); },
-		.object_available = []() noexcept { return Object::CanAllocateItem(); },
-		.build_statue = [](uint32_t tile, uint8_t owner, Town *town) noexcept { BuildObject(OBJECT_STATUE, TileIndex(tile), CompanyID(owner), town); },
 		.next_station = [](uint32_t from) noexcept -> OpenTTDTownStationCursor { for (Station *st : Station::Iterate(from)) return {.shell = st, .next = st->index.base() + 1U}; return {.shell = nullptr, .next = UINT32_MAX}; },
 		.station_town = RustStationStationTown,
 		.station_owner = RustStationOwnerByte<const BaseStation>,
@@ -3738,10 +3737,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.next_depot = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Depot *d : Depot::Iterate(from)) return {.next = d->index.base() + 1U, .town = d->town}; return {.next = UINT32_MAX, .town = nullptr}; },
 		.next_industry = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Industry *i : Industry::Iterate(from)) return {.next = i->index.base() + 1U, .town = OpenTTDIndustryTown(i)}; return {.next = UINT32_MAX, .town = nullptr}; },
 		.next_object = [](uint32_t from) noexcept -> OpenTTDTownObjectCursor { for (Object *o : Object::Iterate(from)) return {.shell = o, .next = o->index.base() + 1U}; return {.shell = nullptr, .next = UINT32_MAX}; },
-		.object_by_tile = OpenTTDObjectByTile,
-		.object_town = OpenTTDObjectTown,
-		.object_type = OpenTTDObjectType,
-		.object_tile = OpenTTDObjectTile,
 		.set_object_town = OpenTTDSetObjectTown,
 		.industry_town_by_tile = OpenTTDIndustryTownByTile,
 		.town_owned_road = OpenTTDHasTownOwnedRoad,
@@ -4628,13 +4623,12 @@ static void UpdateTownGrowth(Town *t)
  */
 #ifdef WITH_RUST
 static uint8_t RustTownCouncilTolerance() noexcept { return _settings_game.difficulty.town_council_tolerance; }
-static bool RustTownBulldozer() noexcept { return _cheats.magic_bulldozer.value; }
 static uint8_t RustTownAuthorityDistance() noexcept { return _settings_game.economy.dist_local_authority; }
 static uint16_t RustTownAuthorityIndex(const OpenTTDTownHandle *town) noexcept { return reinterpret_cast<const Town *>(town)->index.base(); }
 const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept
 {
 	static const OpenTTDTownAuthorityServices services{
-		.council_tolerance = RustTownCouncilTolerance, .bulldozer = RustTownBulldozer,
+		.council_tolerance = RustTownCouncilTolerance, .bulldozer = []() noexcept { return _cheats.magic_bulldozer.value; },
 		.authority_distance = RustTownAuthorityDistance, .town_index = RustTownAuthorityIndex,
 		.refusal = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
 	};

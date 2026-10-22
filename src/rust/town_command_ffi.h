@@ -5,6 +5,7 @@
 #include "town_founding_ffi.h"
 #include "cargo_storage_ffi.h"
 #include "../object_type.h"
+struct OpenTTDObjectServices;
 struct OpenTTDRailMapServices;
 struct BaseStation;
 struct Object;
@@ -19,6 +20,7 @@ struct OpenTTDTownCommandServices {
 	const OpenTTDTownFoundingServices *founding;
 	const OpenTTDRailMapServices *rail;
 	const OpenTTDCargoStorageServices *cargo;
+	const OpenTTDObjectServices *objects;
 	bool (*fund_roads)() noexcept OPENTTD_SERVICE_DEFAULT(fund_roads);
 	bool (*fund_buildings)() noexcept OPENTTD_SERVICE_DEFAULT(fund_buildings);
 	bool (*exclusive_rights)() noexcept OPENTTD_SERVICE_DEFAULT(exclusive_rights);
@@ -30,8 +32,6 @@ struct OpenTTDTownCommandServices {
 	void (*rights_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rights_news);
 	void (*rights_events)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rights_events);
 	void (*station_views_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(station_views_dirty);
-	bool (*object_available)() noexcept OPENTTD_SERVICE_DEFAULT(object_available);
-	void (*build_statue)(uint32_t, uint8_t, Town *) noexcept OPENTTD_SERVICE_DEFAULT(build_statue);
 	OpenTTDTownStationCursor (*next_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_station);
 	const OpenTTDTownHandle *(*station_town)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
 	uint8_t (*station_owner)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
@@ -45,10 +45,6 @@ struct OpenTTDTownCommandServices {
 	OpenTTDTownPoolRelation (*next_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_depot);
 	OpenTTDTownPoolRelation (*next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);
 	OpenTTDTownObjectCursor (*next_object)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_object);
-	Object *(*object_by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(object_by_tile);
-	Town *(*object_town)(const Object *) noexcept OPENTTD_SERVICE_DEFAULT(object_town);
-	ObjectType (*object_type)(const Object *) noexcept OPENTTD_SERVICE_DEFAULT(object_type);
-	uint32_t (*object_tile)(const Object *) noexcept OPENTTD_SERVICE_DEFAULT(object_tile);
 	void (*set_object_town)(Object *, Town *) noexcept OPENTTD_SERVICE_DEFAULT(set_object_town);
 	Town *(*industry_town_by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_town_by_tile);
 	bool (*town_owned_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_owned_road);

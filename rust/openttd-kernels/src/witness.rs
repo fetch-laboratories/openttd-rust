@@ -119,6 +119,27 @@ witness_blocks! {
         LANDSCAPE_CRASHED_SKIP = 25 => "landscape.crashed_skip",
     }
 
+    object {
+        OBJECT_BUILD = 0 => "object.build",
+        OBJECT_REMOVE = 1 => "object.remove",
+        OBJECT_CLEAR = 2 => "object.clear",
+        OBJECT_HQ_GROW = 3 => "object.hq_grow",
+        OBJECT_HQ_RELOCATE = 4 => "object.hq_relocate",
+        OBJECT_BUILD_COMMAND = 5 => "object.build_command",
+        OBJECT_AREA = 6 => "object.area",
+        OBJECT_AUTOSLOPE = 7 => "object.autoslope",
+        OBJECT_OWNER = 8 => "object.owner",
+        OBJECT_COLOURS = 9 => "object.colours",
+        OBJECT_CARGO = 10 => "object.cargo",
+        OBJECT_HQ_PASS = 11 => "object.hq_pass",
+        OBJECT_HQ_MAIL = 12 => "object.hq_mail",
+        OBJECT_LOOP = 13 => "object.loop",
+        OBJECT_LIGHTHOUSE = 14 => "object.lighthouse",
+        OBJECT_TRANSMITTER = 15 => "object.transmitter",
+        OBJECT_GENERATE = 16 => "object.generate",
+        OBJECT_SLOPE_CALLBACK = 17 => "object.slope_callback",
+        OBJECT_BUILD_ABOVE = 18 => "object.build_above",
+    }
     rail {
         RAIL_CHOOSE = 0 => "rail.choose",
         RAIL_REVERSE = 1 => "rail.reverse",
