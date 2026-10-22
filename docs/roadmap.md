@@ -194,9 +194,10 @@ keeps its worktree and branch. #274's plan is on its issue; implementation selec
 | #281 / #340 | `da098ecfda` | Cleanup/conflict reviewed; verify/33 scenarios pass; combined counts checked, then record/Full. Part2 checker follows integration. |
 | #314 / #329 | `0bdb9c07a9` | Fixes reviewed; verify/52 scenarios pass; combined counts checked, then record/Full. |
 | #316 / #346 | `b5a90ae5f4` | Buildable milestone pushed; boundary fix removes private facades and uses real monthly generation. Default semantics pending; support405 below430 retired in working audit, cap450. |
-| #247 / #347 | `65f0b4e8f0` | Commands/authority/deletion milestone pushed; verify passes, default evidence underway. Preserve the original real-oilrig refusal; later vetoes tested after native industry cleanup. |
+| #247 / #347 | `426b56c65e` | Verify and two default scenarios pass (19 snapshots); broader semantics/counts running. Preserve real-oilrig refusal. Adopt direct object/statue and subsidy cleanup calls after those owners integrate. |
 | #344 / #345 | `fdcc5a3b5b` | Reviewed; verify/26 scenarios pass; exact-base speed attribution and combined counts checked, then record/Full. Production net glue -12, tests72. |
-| #274 | integrated base | Fresh shared-layer plan on issue; bounded implementation next, historical experiment retained as context only. |
+| #274 | `d6b539ec78` base | Implementing in `map274-shared-read`; same-base TGP attribution uses a detached baseline. Historical experiment is context only. |
+| #293 | `d6b539ec78` base | Implementing in `tunnelbridge-ownership-293`; bridge/tunnel work proceeds while #313's existing scratch API awaits integration. No parallel scratch API. |
 
 #261 R7 inputs are on #261 and #281 part 2's inventory is on #281. The finished
 #329 review worktree was removed; its commits are already on the PR branch.
