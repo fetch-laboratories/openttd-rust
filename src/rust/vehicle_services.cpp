@@ -625,21 +625,10 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 };
 
 /* Existing order ABI adapters share the canonical typed observations here. */
-extern "C" uint64_t openttd_orders_day_counter(void *ctx) noexcept
-{
-	return RustVehicleDay(static_cast<const Vehicle *>(ctx));
-}
-
 extern "C" uint64_t openttd_orders_reliability(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
 	return RustVehicleReliability(v);
-}
-
-extern "C" uint64_t openttd_orders_engine_reliability(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return RustEngineReliability(v->GetEngine());
 }
 
 extern "C" uint64_t openttd_orders_age_years(void *ctx) noexcept

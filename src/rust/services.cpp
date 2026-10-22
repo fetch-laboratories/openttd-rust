@@ -66,6 +66,11 @@
 #include "orders_ffi.h"
 #include "tile_animation_services.h"
 
+extern "C" uint64_t openttd_orders_tick_counter() noexcept
+{
+	return TimerGameTick::counter;
+}
+
 static CommandCost *NativeCost(OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<CommandCost *>(cost); }
 static const CommandCost *NativeCost(const OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<const CommandCost *>(cost); }
 static void CostZero(OpenTTDCommandCost *out) noexcept { OpenTTDCommandCostZero(NativeCost(out)); }

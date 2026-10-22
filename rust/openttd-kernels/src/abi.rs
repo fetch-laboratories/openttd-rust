@@ -2670,7 +2670,6 @@ layouts! {
         vehicle_id,
         percent_filled,
         reliability,
-        engine_reliability,
         display_speed,
         age_years,
         needs_service,
@@ -2721,7 +2720,6 @@ layouts! {
         backup_hangar,
         review_setting,
         local_owner,
-        day_counter,
         fast_aircraft,
         short_strip,
         no_jet_crash,
@@ -2730,7 +2728,6 @@ layouts! {
         command_error,
         timetable_dirty,
         invalidate_order,
-        vehicle_dirty,
         delete_order_news,
         suppress_implicit_write,
         invalidate_vehicle_list,
@@ -2757,6 +2754,7 @@ layouts! {
         clear_backup_post,
         missing_aircraft_orders,
         change_timetable_command,
+        base,
     };
     "OpenTTDOrdersClosest" ["probe"] => crate::orders::Closest {
         tile,
