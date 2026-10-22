@@ -235,8 +235,13 @@ fn field_fence(
     fence: u32,
     c: &ClearServices,
     s: &Services,
+    map: &crate::services::TileTypeAccess,
 ) -> bool {
-    if fence != 0 || (c.field_tile)(diagonal(tile, direction, size_x)) {
+    let neighbour = diagonal(tile, direction, size_x);
+    if fence != 0
+        || crate::clear_map::is_field_tile(map, neighbour)
+            .unwrap_or_else(|| (c.field_tile)(neighbour))
+    {
         return false;
     }
     (s.set_fence)(tile, DiagDirection(direction), 3);
@@ -253,6 +258,7 @@ pub(crate) unsafe fn clear_tile_loop(
     size_x: u32,
     clear: *const ClearServices,
     shared: *const Services,
+    map: &crate::services::TileTypeAccess,
 ) {
     let climate = climate.0;
     // SAFETY: Caller supplies immutable live tables. No state borrow crosses a call.
@@ -261,15 +267,19 @@ pub(crate) unsafe fn clear_tile_loop(
         (c.ambient)(tile);
     }
     if climate == 1 {
-        let k = (s.tile_z)(tile) - i32::from((s.snow_line)()) + 1;
-        if !(c.snow)(tile) {
+        let k = crate::tile_map::get_tile_z(map, tile, size_x, map.count() / size_x)
+            .unwrap_or_else(|| (s.tile_z)(tile))
+            - i32::from((s.snow_line)())
+            + 1;
+        if !crate::clear_map::is_snow_tile(map, tile).unwrap_or_else(|| (c.snow)(tile)) {
             if k >= 0 {
                 (s.make_snow)(tile, 0);
                 hit(Witness::SnowStart);
                 (s.mark_dirty)(tile);
             }
         } else {
-            let density = (c.density)(tile);
+            let density = crate::clear_map::get_clear_density(map, tile)
+                .map_or_else(|| (c.density)(tile), u32::from);
             let required = k.clamp(0, 3) as u32;
             if density == required {
                 if k < 0 {
@@ -291,18 +301,30 @@ pub(crate) unsafe fn clear_tile_loop(
             }
         }
     } else if climate == 2 {
-        let current = if (s.clear_ground)(tile).0 == 5 {
-            (c.density)(tile)
+        let current = if crate::clear_map::get_clear_ground(map, tile)
+            .unwrap_or_else(|| (s.clear_ground)(tile).0)
+            == 5
+        {
+            crate::clear_map::get_clear_density(map, tile)
+                .map_or_else(|| (c.density)(tile), u32::from)
         } else {
             0
         };
         let mut expected = 0;
-        if (s.tropic_zone)(tile) == 1 {
+        if crate::tile_map::get_tropic_zone(map, tile).unwrap_or_else(|| (s.tropic_zone)(tile)) == 1
+        {
             let normal = (0..4).any(|direction| {
                 let t = diagonal(tile, direction, size_x);
-                (s.tile_valid)(t)
-                    && ((s.tropic_zone)(t) != 1
-                        || ((s.has_water_class)(t) && (c.water_class)(t).0 == 0))
+                crate::tile_map::is_valid_tile(map, t, map.count())
+                    .unwrap_or_else(|| (s.tile_valid)(t))
+                    && (crate::tile_map::get_tropic_zone(map, t)
+                        .unwrap_or_else(|| (s.tropic_zone)(t))
+                        != 1
+                        || (crate::water_map::has_tile_water_class(map, t)
+                            .unwrap_or_else(|| (s.has_water_class)(t))
+                            && crate::water_map::get_water_class(map, t)
+                                .unwrap_or_else(|| (c.water_class)(t).0)
+                                == 0))
             });
             expected = if normal { 1 } else { 3 };
         }
@@ -316,7 +338,24 @@ pub(crate) unsafe fn clear_tile_loop(
             hit(Witness::Desert);
         }
     }
-    let surface = (c.surface)(tile);
+    let surface = (|| -> Option<ClearSurface> {
+        let snow = crate::clear_map::is_snow_tile(map, tile)?;
+        let ground = if snow {
+            0
+        } else {
+            crate::clear_map::get_clear_ground(map, tile)?
+        };
+        Some(ClearSurface {
+            snow,
+            ground: ClearGroundType(ground),
+            density: if !snow && ground == 0 {
+                crate::clear_map::get_clear_density(map, tile)?
+            } else {
+                0
+            },
+        })
+    })()
+    .unwrap_or_else(|| (c.surface)(tile));
     if surface.snow {
         return;
     }
@@ -333,7 +372,8 @@ pub(crate) unsafe fn clear_tile_loop(
                     3,
                 );
             } else {
-                let counter = (c.counter)(tile);
+                let counter = crate::clear_map::get_clear_counter(map, tile)
+                    .map_or_else(|| (c.counter)(tile), u32::from);
                 if counter < 7 {
                     (c.set_counter)(tile, counter + 1);
                     return;
@@ -345,11 +385,19 @@ pub(crate) unsafe fn clear_tile_loop(
         3 => {
             // Four ordered steps keep each guarded live neighbour read and write.
             // SetFence's fields are disjoint; dirtying remains after all four.
-            let fences = (c.fences)(tile);
-            let mut dirty = field_fence(tile, size_x, 0, fences.ne, c, s);
-            dirty |= field_fence(tile, size_x, 1, fences.se, c, s);
-            dirty |= field_fence(tile, size_x, 2, fences.sw, c, s);
-            dirty |= field_fence(tile, size_x, 3, fences.nw, c, s);
+            let fences = (|| -> Option<FieldFences> {
+                Some(FieldFences {
+                    ne: crate::clear_map::get_fence(map, tile, 0)?,
+                    se: crate::clear_map::get_fence(map, tile, 1)?,
+                    sw: crate::clear_map::get_fence(map, tile, 2)?,
+                    nw: crate::clear_map::get_fence(map, tile, 3)?,
+                })
+            })()
+            .unwrap_or_else(|| (c.fences)(tile));
+            let mut dirty = field_fence(tile, size_x, 0, fences.ne, c, s, map);
+            dirty |= field_fence(tile, size_x, 1, fences.se, c, s, map);
+            dirty |= field_fence(tile, size_x, 2, fences.sw, c, s, map);
+            dirty |= field_fence(tile, size_x, 3, fences.nw, c, s, map);
             if dirty {
                 (s.mark_dirty)(tile);
                 hit(Witness::FieldFence);
@@ -357,13 +405,20 @@ pub(crate) unsafe fn clear_tile_loop(
             if editor {
                 return;
             }
-            let counter = (c.counter)(tile);
+            let counter = crate::clear_map::get_clear_counter(map, tile)
+                .map_or_else(|| (c.counter)(tile), u32::from);
             if counter < 7 {
                 (c.set_counter)(tile, counter + 1);
                 return;
             }
             (c.set_counter)(tile, 0);
-            let field = (c.field)(tile);
+            let field = (|| -> Option<FieldGround> {
+                Some(FieldGround {
+                    industry: crate::clear_map::get_industry_index_of_field(map, tile)?,
+                    field_type: crate::clear_map::get_field_type(map, tile)?,
+                })
+            })()
+            .unwrap_or_else(|| (c.field)(tile));
             if field.industry == u16::MAX && field.field_type >= 7 {
                 (c.make_clear)(tile, ClearGroundType(0), 2);
                 hit(Witness::FieldOrphan);
