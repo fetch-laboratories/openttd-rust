@@ -20,6 +20,21 @@ impl Map {
     pub fn size_x(self) -> u32 {
         1_u32 << self.log_x
     }
+    /// `TileXY`, over the captured map width.
+    #[must_use]
+    pub fn tile_xy(self, x: u32, y: u32) -> u32 {
+        y.wrapping_shl(u32::from(self.log_x)).wrapping_add(x)
+    }
+    /// `Map::MaxX`.
+    #[must_use]
+    pub fn max_x(self) -> u32 {
+        self.size_x() - 1
+    }
+    /// `Map::MaxY`, over the height captured at entry.
+    #[must_use]
+    pub fn max_y(size_y: u32) -> u32 {
+        size_y - 1
+    }
     /// `TileX`.
     #[must_use]
     pub fn tile_x(self, tile: u32) -> u32 {

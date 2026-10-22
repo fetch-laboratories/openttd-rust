@@ -26,17 +26,21 @@ pub(crate) fn is_valid_tile(m: &TileTypeAccess, t: u32, count: u32) -> Option<bo
 fn tile_height(m: &TileTypeAccess, t: u32) -> Option<i32> {
     Some(i32::from(m.height(t)?))
 }
+#[allow(clippy::cast_possible_truncation)] // trailing_zeros is in 0..=32.
 fn corners(m: &TileTypeAccess, t: u32, x: u32, y: u32) -> Option<[i32; 4]> {
     m.available(t)?;
-    let x1 = t & (x - 1);
-    let y1 = t / x;
-    let x2 = (x1 + 1).min(x - 1);
-    let y2 = (y1 + 1).min(y - 1);
+    let map = crate::map_func::Map {
+        log_x: x.trailing_zeros() as u8,
+    };
+    let x1 = map.tile_x(t);
+    let y1 = map.tile_y(t);
+    let x2 = (x1 + 1).min(map.max_x());
+    let y2 = (y1 + 1).min(crate::map_func::Map::max_y(y));
     Some([
         tile_height(m, t)?,
-        tile_height(m, y1 * x + x2)?,
-        tile_height(m, y2 * x + x1)?,
-        tile_height(m, y2 * x + x2)?,
+        tile_height(m, map.tile_xy(x2, y1))?,
+        tile_height(m, map.tile_xy(x1, y2))?,
+        tile_height(m, map.tile_xy(x2, y2))?,
     ])
 }
 /// `GetTileSlopeGivenHeight`, also called by `GetTileSlopeZ` in the original.
