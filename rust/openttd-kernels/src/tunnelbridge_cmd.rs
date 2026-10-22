@@ -30,8 +30,8 @@ use crate::economy_type::{
     PR_CLEAR_BRIDGE, PR_CLEAR_TUNNEL,
 };
 use crate::services::{
-    Axis, CommandCost, Cost, DiagDirection, Map, RailType, RoadType, Roadside, Services,
-    TownHandle, Train, TransportType,
+    Axis, CommandCost, Cost, DiagDirection, Map, RailType, RoadType, Services, TownHandle, Train,
+    TransportType,
 };
 use crate::slope_func::{
     FOUNDATION_NONE, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_SE, SLOPE_SW, complement_slope,
@@ -46,14 +46,15 @@ use crate::tunnelbridge::{TUNNELBRIDGE_TRACKBIT_FACTOR, get_tunnel_bridge_length
 use crate::witness as w;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-const RAIL: u8 = 0;
-const ROAD: u8 = 1;
-const WATER: u8 = 2;
+use crate::road_map::{ROADSIDE_PAVED, ROADSIDE_TREES};
 use crate::road_type::INVALID_ROADTYPE;
-const RATING_TUNNEL_BRIDGE_UP_STEP: i32 = 50;
-const RATING_TUNNEL_BRIDGE_DOWN_STEP: i32 = -250;
-const RATING_TUNNEL_BRIDGE_MINIMUM: i32 = 0;
-const RATING_MAXIMUM: i32 = 1000;
+use crate::town_type::{
+    RATING_MAXIMUM, RATING_TUNNEL_BRIDGE_DOWN_STEP, RATING_TUNNEL_BRIDGE_MINIMUM,
+    RATING_TUNNEL_BRIDGE_UP_STEP,
+};
+use crate::transport_type::{
+    TRANSPORT_RAIL as RAIL, TRANSPORT_ROAD as ROAD, TRANSPORT_WATER as WATER,
+};
 // Process-wide hidden command output, also read from the GUI thread under the
 // game-state mutex. Atomic storage preserves that scope without Rust references.
 static END_TILE: AtomicU32 = AtomicU32::new(0);
@@ -94,29 +95,29 @@ pub struct TunnelBridgeServices {
     pub road_ground: *const crate::ground::RoadServices,
     pub water: *const crate::water_cmd::WaterCommandServices,
     pub company: *const crate::company::Services,
-    pub availability: extern "C" fn(u8) -> Availability,
-    pub speed: extern "C" fn(u8) -> u16,
-    pub price: extern "C" fn(u8) -> u16,
+    pub availability: extern "C" fn(u32) -> Availability,
+    pub speed: extern "C" fn(u32) -> u16,
+    pub price: extern "C" fn(u32) -> u16,
     pub max_bridge_length: extern "C" fn() -> u16,
     pub max_bridge_height: extern "C" fn() -> u8,
     pub max_tunnel_length: extern "C" fn() -> u16,
     pub crossing_tunnels: extern "C" fn() -> bool,
     pub other_bridge_end: extern "C" fn(u32) -> u32,
     pub northern_bridge_end: extern "C" fn(u32) -> u32,
-    pub bridge_type: extern "C" fn(u32) -> u8,
+    pub bridge_type: extern "C" fn(u32) -> u32,
     pub is_tunnel: extern "C" fn(u32) -> bool,
     pub tunnel_in_way: extern "C" fn(u32, i32, crate::services::DiagDirection) -> bool,
     pub set_middle: extern "C" fn(u32, crate::services::Axis),
     pub clear_middle: extern "C" fn(u32),
     pub set_reservation: extern "C" fn(u32, bool),
     pub make_rail_bridge:
-        extern "C" fn(u32, u8, u8, crate::services::DiagDirection, crate::services::RailType),
+        extern "C" fn(u32, u8, u32, crate::services::DiagDirection, crate::services::RailType),
     pub make_road_bridge: extern "C" fn(
         u32,
         u8,
         u8,
         u8,
-        u8,
+        u32,
         crate::services::DiagDirection,
         crate::services::RoadType,
         crate::services::RoadType,
@@ -228,8 +229,16 @@ impl<'a> World<'a> {
             crate::town::openttd_rust_town_change_rating(
                 self.road.town,
                 self.r.shared,
-                (self.s.town_owner)(town),
-                u32::from((self.authority.town_index)(town)),
+                if town.is_null() {
+                    std::ptr::null_mut()
+                } else {
+                    (self.s.town_owner)(town)
+                },
+                if town.is_null() {
+                    u32::from(u16::MAX)
+                } else {
+                    u32::from((self.authority.town_index)(town))
+                },
                 town as usize,
                 (self.s.current_company)(),
                 delta,
@@ -267,7 +276,7 @@ impl<'a> World<'a> {
             OWNER_TOWN
         }
     }
-    fn available(&self, out: Cost<'_>, bridge_type: u8, length: u32, flags: u16) {
+    fn available(&self, out: Cost<'_>, bridge_type: u32, length: u32, flags: u16) {
         out.zero();
         if flags & DoCommandFlag::QUERY_COST != 0 {
             if length > u32::from((self.a.max_bridge_length)()) {
@@ -383,7 +392,7 @@ impl<'a> World<'a> {
         mut end: u32,
         mut start: u32,
         transport: u8,
-        bridge_type: u8,
+        bridge_type: u32,
         kind: u8,
     ) {
         w::hit(w::TB_BUILD_BRIDGE);
@@ -715,6 +724,9 @@ impl<'a> World<'a> {
                 && (companies.company_is_ai)(company)
                 && company != (companies.local_company)())
         {
+            if flags & DoCommandFlag::QUERY_COST != 0 {
+                w::hit(w::TB_AI_QUERY);
+            }
             match transport {
                 ROAD => {
                     if road != INVALID_ROADTYPE {
@@ -1168,10 +1180,12 @@ impl<'a> World<'a> {
             // SAFETY: immutable table; only original scalar observations cross.
             let road_ground = unsafe { &*self.a.road_ground };
             while middle != end {
-                if (self.s.is_normal_road)(middle) && (road_ground.roadside)(middle).0 == 5 {
+                if (self.s.is_normal_road)(middle)
+                    && (road_ground.roadside)(middle).0 == ROADSIDE_TREES.0
+                {
                     let min_z = (self.s.tile_max_z)(middle).wrapping_add(3);
                     if height < min_z {
-                        (road_ground.set_roadside)(middle, Roadside(2));
+                        (road_ground.set_roadside)(middle, ROADSIDE_PAVED);
                     }
                 }
                 (self.a.clear_middle)(middle);
@@ -1340,10 +1354,10 @@ macro_rules! entry {
         }
     };
 }
-entry!(openttd_rust_bridge_available(out:*mut CommandCost,kind:u8,length:u32,flags:u16) |w:&World<'_>| {
+entry!(openttd_rust_bridge_available(out:*mut CommandCost,kind:u32,length:u32,flags:u16) |w:&World<'_>| {
     w.available(w.cost(out),kind,length,flags);
 });
-entry!(openttd_rust_build_bridge(out:*mut CommandCost,ret:*mut CommandCost,north:*mut CommandCost,south:*mut CommandCost,flags:u16,end:u32,start:u32,transport:TransportType,bridge:u8,kind:u8) |w:&World<'_>| {
+entry!(openttd_rust_build_bridge(out:*mut CommandCost,ret:*mut CommandCost,north:*mut CommandCost,south:*mut CommandCost,flags:u16,end:u32,start:u32,transport:TransportType,bridge:u32,kind:u8) |w:&World<'_>| {
     w.build_bridge(w.cost(out),w.cost(ret),w.cost(north),w.cost(south),flags,end,start,transport.0,bridge,kind);
 });
 entry!(openttd_rust_build_tunnel(out:*mut CommandCost,ret:*mut CommandCost,flags:u16,start:u32,transport:TransportType,kind:u8) |w:&World<'_>| {

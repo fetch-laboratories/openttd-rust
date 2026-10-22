@@ -430,6 +430,7 @@ witness_blocks! {
         TB_DEITY = 11 => "tunnelbridge.deity",
         TB_TOWN_RATING = 12 => "tunnelbridge.town_rating",
         TB_RESERVATION = 13 => "tunnelbridge.reservation",
+        TB_AI_QUERY = 14 => "tunnelbridge.ai_query",
     }
     vehicle {
         VEHICLE_CALLBACK32 = 0 => "vehicle.callback32",

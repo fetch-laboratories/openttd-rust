@@ -54,6 +54,8 @@
 #include "rust/road_command_services.h"
 #include "rust/services_rail.h"
 #include "rust/settings_services.h"
+#include "rust/services_bridge.h"
+#include "rust/services_viewport.h"
 #endif
 
 #include "safeguards.h"
@@ -81,16 +83,16 @@ const OpenTTDTunnelBridgeServices &GetRustTunnelBridgeServices() noexcept
 		.road_ground = &GetRustRoadGroundServices(),
 		.water = &GetRustWaterCommandServices(),
 		.company = &GetRustCompanyServices(),
-		.availability = [](uint8_t type) noexcept -> OpenTTDBridgeAvailability { const auto *b = GetBridgeSpec(type); return {.year = b->avail_year.base(), .min = b->min_length, .max = b->max_length}; },
-		.speed = [](uint8_t type) noexcept -> uint16_t { return GetBridgeSpec(type)->speed; },
-		.price = [](uint8_t type) noexcept -> uint16_t { return GetBridgeSpec(type)->price; },
+		.availability = [](BridgeType type) noexcept -> OpenTTDBridgeAvailability { const auto *b = GetBridgeSpec(type); return {.year = b->avail_year.base(), .min = b->min_length, .max = b->max_length}; },
+		.speed = RustBridgeSpecSpeed,
+		.price = [](BridgeType type) noexcept -> uint16_t { return GetBridgeSpec(type)->price; },
 		.max_bridge_length = RustMaxBridgeLength,
 		.max_bridge_height = RustMaxBridgeHeight,
 		.max_tunnel_length = RustMaxTunnelLength,
 		.crossing_tunnels = []() noexcept -> bool { return _cheats.crossing_tunnels.value; },
 		.other_bridge_end = [](uint32_t t) noexcept -> uint32_t { return GetOtherBridgeEnd(TileIndex{t}).base(); },
 		.northern_bridge_end = [](uint32_t t) noexcept -> uint32_t { return GetNorthernBridgeEnd(TileIndex{t}).base(); },
-		.bridge_type = [](uint32_t t) noexcept -> BridgeType { return GetBridgeType(TileIndex{t}); },
+		.bridge_type = RustBridgeType,
 		.is_tunnel = [](uint32_t t) noexcept -> bool { return IsTunnel(TileIndex{t}); },
 		.tunnel_in_way = [](uint32_t t, int32_t z, DiagDirection d) noexcept -> bool { return IsTunnelInWayDir(TileIndex{t}, z, d); },
 		.set_middle = [](uint32_t t, Axis a) noexcept -> void { SetBridgeMiddle(TileIndex{t}, a); },
@@ -102,7 +104,7 @@ const OpenTTDTunnelBridgeServices &GetRustTunnelBridgeServices() noexcept
 		.make_rail_tunnel = [](uint32_t t, uint8_t o, DiagDirection d, RailType rt) noexcept -> void { MakeRailTunnel(TileIndex{t}, Owner{o}, d, rt); },
 		.make_road_tunnel = [](uint32_t t, uint8_t o, DiagDirection d, RoadType rt, RoadType tt) noexcept -> void { MakeRoadTunnel(TileIndex{t}, Owner{o}, d, rt, tt); },
 		.mark_bridge = [](uint32_t start, uint32_t end, DiagDirection d, uint32_t z) noexcept -> void { MarkBridgeDirty(TileIndex{start}, TileIndex{end}, d, z); },
-		.mark_dirty_height = [](uint32_t t, int32_t h) noexcept -> void { MarkTileDirtyByTile(TileIndex{t}, h); },
+		.mark_dirty_height = RustMarkTileDirtyHeight,
 		.terraform = [](OpenTTDCommandCost *out, uint16_t flags, uint32_t t, Slope slope) noexcept -> void { *reinterpret_cast<CommandCost *>(out) = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(DoCommandFlags{flags}, TileIndex{t}, slope, false)); },
 		.objects = &GetRustObjectServices(),
 		.strings = {
@@ -2327,6 +2329,7 @@ bool CheckAbi_tunnelbridge_cmd()
 	return AbiServicesComplete(GetRustTunnelBridgeServices());
 }
 static_assert(PR_BUILD_BRIDGE == 4 && PR_BUILD_TUNNEL == 8 && PR_CLEAR_BRIDGE == 29 && PR_CLEAR_TUNNEL == 33 && PR_BUILD_AQUEDUCT == 62 && PR_CLEAR_AQUEDUCT == 63);
+static_assert(std::is_same_v<BridgeType, uint32_t>);
 static_assert(MAX_BRIDGES == 13 && TUNNELBRIDGE_TRACKBIT_FACTOR == 4);
 static_assert(RATING_TUNNEL_BRIDGE_UP_STEP == 50 && RATING_TUNNEL_BRIDGE_DOWN_STEP == -250 && RATING_TUNNEL_BRIDGE_MINIMUM == 0 && RATING_MAXIMUM == 1000);
 #endif

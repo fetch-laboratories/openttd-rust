@@ -12,7 +12,7 @@ use crate::slope_func::{
     FOUNDATION_NONE, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_SE, SLOPE_SW, flattening_foundation,
     has_slope_highest_corner, inclined_foundation,
 };
-pub(crate) const MAX_BRIDGES: u8 = 13;
+pub(crate) const MAX_BRIDGES: u32 = 13;
 /// Original long-bridge price factor, including precondition-free small inputs.
 pub(crate) fn calc_bridge_len_cost_factor(mut length: i32) -> i32 {
     if length < 2 {

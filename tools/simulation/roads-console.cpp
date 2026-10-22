@@ -7,6 +7,9 @@
 
 /** @file roads-console.cpp Road-command inputs, included by the shared signal fixture. */
 #include "town.h"
+#include "tunnelbridge.h"
+#include "water_map.h"
+#include "pathfinder/water_regions.h"
 #include "road.h"
 #include "newgrf_roadstop.h"
 extern RoadTypeInfo _roadtypes[ROADTYPE_END];
@@ -78,12 +81,18 @@ static void TunnelBridgeCommands(CompanyID owner, CompanyID other, RoadVehicle *
 		}
 		auto name = fmt::format("tb-bridge-{}-{}", static_cast<uint>(axis), static_cast<uint>(transport));
 		RoadPrint(name + "-query", Command<CMD_BUILD_BRIDGE>::Do(DoCommandFlag::QueryCost, end, start, transport, 0, 0));
+		{
+			Backup<bool> ai(Company::Get(owner)->is_ai, true);
+			Backup<CompanyID> local(_local_company, other);
+			RoadPrint(name + "-ai-query", Command<CMD_BUILD_BRIDGE>::Do(DoCommandFlag::QueryCost, end, start, transport, 0, 0));
+			local.Restore(); ai.Restore();
+		}
 		RoadRun<CMD_BUILD_BRIDGE>(name, end, start, transport, 0, 0);
 		if (!IsBridgeTile(start)) SignalFixtureAbort(__LINE__);
 		RoadPrint(name + "-above", _tile_type_tunnelbridge_procs.check_build_above_proc(start, {}, OtherAxis(axis), GetBridgeHeight(start) + 1));
 		RoadPrint(name + "-auto", _tile_type_tunnelbridge_procs.clear_tile_proc(start, DoCommandFlag::Auto));
 		if (transport != TRANSPORT_WATER) {
-			RoadRun<CMD_BUILD_BRIDGE>(name + "-replace", start, end, transport, 1, 0);
+			RoadRun<CMD_BUILD_BRIDGE>(name + "-replace", start, end, transport, 3, 0);
 			RoadPrint(name + "-autoslope", _tile_type_tunnelbridge_procs.terraform_tile_proc(start, {}, GetTileZ(start), GetTileSlope(start)));
 		}
 		if (transport == TRANSPORT_ROAD) {
@@ -109,9 +118,9 @@ static void TunnelBridgeCommands(CompanyID owner, CompanyID other, RoadVehicle *
 		Backup<uint16_t> limit(_settings_game.construction.max_tunnel_length, 1);
 		RoadPrint(name + "-length", Command<CMD_BUILD_TUNNEL>::Do({}, start, transport, 0));
 #ifdef WITH_RUST
-		RoadPrint(name + "-highlight", CommandCost(EXPENSES_CONSTRUCTION, GetBuildTunnelEndTile().base() - origin.base()));
+		RoadPrint(name + "-highlight", CommandCost(EXPENSES_CONSTRUCTION, Money(GetBuildTunnelEndTile().base() - origin.base())));
 #else
-		RoadPrint(name + "-highlight", CommandCost(EXPENSES_CONSTRUCTION, _build_tunnel_endtile.base() - origin.base()));
+		RoadPrint(name + "-highlight", CommandCost(EXPENSES_CONSTRUCTION, Money(_build_tunnel_endtile.base() - origin.base())));
 #endif
 		limit.Restore();
 		RoadRun<CMD_BUILD_TUNNEL>(name, start, transport, 0);
@@ -121,6 +130,9 @@ static void TunnelBridgeCommands(CompanyID owner, CompanyID other, RoadVehicle *
 		RoadRun<CMD_LANDSCAPE_CLEAR>(name + "-occupied", start);
 		rv->tile = old; rv->UpdatePosition();
 		RoadRun<CMD_LANDSCAPE_CLEAR>(name + "-clear", start);
+	}
+	for (BridgeType bridge : {BridgeType{255}, BridgeType{256}, std::numeric_limits<BridgeType>::max()}) {
+		RoadPrint(fmt::format("tb-invalid-type-{}", bridge), Command<CMD_BUILD_BRIDGE>::Do({}, t(8, 14), t(2, 14), TRANSPORT_RAIL, bridge, RAILTYPE_RAIL));
 	}
 	/* Positive Y-direction tunnel exercises the source's other Map::MaxX branch. */
 	for (uint y = 3; y <= 7; ++y) for (uint x = 17; x <= 18; ++x) SetTileHeight(t(x, y), 2);
@@ -132,7 +144,7 @@ static void TunnelBridgeCommands(CompanyID owner, CompanyID other, RoadVehicle *
 	Backup<bool> dynamite(_settings_game.construction.extra_dynamite, true);
 	{
 		Backup<CompanyID> company(_current_company, OWNER_TOWN);
-		RoadRun<CMD_BUILD_BRIDGE>("tb-town", t(8, 15), t(2, 15), TRANSPORT_ROAD, 1, ROADTYPE_ROAD);
+		RoadRun<CMD_BUILD_BRIDGE>("tb-town", t(8, 15), t(2, 15), TRANSPORT_ROAD, 3, ROADTYPE_ROAD);
 		company.Restore();
 	}
 	RoadRun<CMD_BUILD_BRIDGE>("tb-town-downgrade", t(8, 15), t(2, 15), TRANSPORT_ROAD, 0, ROADTYPE_ROAD);
@@ -151,6 +163,25 @@ static void TunnelBridgeCommands(CompanyID owner, CompanyID other, RoadVehicle *
 	for (int length : {0, 1, 2, 3, 4, 5, 25, 26, 50, 51, 100, 200, 1000}) {
 		fmt::print(stderr, "ROADCMD tb-price {} {}\n", length, CalcBridgeLenCostFactor(length));
 	}
+	/* Normal CmdBuildTunnel prices around each coefficient change, on a declared clear strip. */
+	TileIndex strip = INVALID_TILE;
+	for (uint y = 2; y + 5 < Map::SizeY() && strip == INVALID_TILE; ++y) for (uint x = 2; x + 108 < Map::SizeX(); ++x) {
+		bool clear = true;
+		for (uint dy = 0; dy < 4 && clear; ++dy) for (uint dx = 0; dx < 108; ++dx) {
+			TileType type = GetTileType(TileXY(x + dx, y + dy));
+			if (type != MP_CLEAR && type != MP_TREES && !(type == MP_WATER && IsWaterTile(TileXY(x + dx, y + dy)) && GetWaterClass(TileXY(x + dx, y + dy)) == WaterClass::Sea)) { clear = false; break; }
+		}
+		if (clear) { strip = TileXY(x, y); break; }
+	}
+	if (strip == INVALID_TILE) SignalFixtureAbort(__LINE__);
+	for (uint dy = 0; dy < 4; ++dy) for (uint dx = 0; dx < 108; ++dx) { TileIndex tile = strip + TileDiffXY(dx, dy); MakeClear(tile, CLEAR_GRASS, 3); InvalidateWaterRegion(tile); }
+	Backup<uint16_t> tunnel_limit(_settings_game.construction.max_tunnel_length, 65535);
+	for (uint length : {24, 25, 26, 49, 50, 51, 99, 100, 101}) {
+		for (uint dy = 0; dy < 4; ++dy) for (uint dx = 0; dx < 108; ++dx) SetTileHeight(strip + TileDiffXY(dx, dy), 1);
+		for (uint y = 1; y <= 2; ++y) for (uint x = 3; x <= length + 3; ++x) SetTileHeight(strip + TileDiffXY(x, y), 2);
+		RoadPrint(fmt::format("tb-tunnel-price-{}", length), Command<CMD_BUILD_TUNNEL>::Do({}, strip + TileDiffXY(2, 1), TRANSPORT_RAIL, RAILTYPE_RAIL));
+	}
+	tunnel_limit.Restore();
 	fmt::print(stderr, "ROADCMD tb-done {}\n", town != nullptr);
 	dynamite.Restore(); slopes.Restore();
 }

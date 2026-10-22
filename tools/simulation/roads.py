@@ -325,6 +325,7 @@ def check(scenario, run, mode, role, result):
                 "protocol-bankrupt true",
                 "automatic-convert-exec true",
                 "tb-done true",
+                "tb-invalid-type-256 false",
                 "tb-tunnel-0-exec true",
                 "tb-tunnel-1-exec true",
                 "tb-tunnel-y-exec true",
@@ -354,26 +355,28 @@ def check(scenario, run, mode, role, result):
                 scenario,
                 run,
                 role,
-                "tunnelbridge_commands",
-                tuple(
-                    "tunnelbridge." + name
-                    for name in (
-                        "build_bridge",
-                        "build_tunnel",
-                        "replace_bridge",
-                        "new_bridge",
-                        "tunnel_terraform",
-                        "clear_tunnel",
-                        "clear_bridge",
-                        "occupied",
-                        "change_owner",
-                        "autoslope",
-                        "build_above",
-                        "deity",
-                        "town_rating",
-                    )
+                "tunnelbridge",
+                (
+                    "build_bridge",
+                    "build_tunnel",
+                    "replace_bridge",
+                    "new_bridge",
+                    "tunnel_terraform",
+                    "clear_tunnel",
+                    "clear_bridge",
+                    "occupied",
+                    "change_owner",
+                    "autoslope",
+                    "build_above",
+                    "deity",
+                    "town_rating",
+                    "ai_query",
                 ),
             )
+            for length in (24, 25, 26, 49, 50, 51, 99, 100, 101):
+                prefix = f"ROADCMD tb-tunnel-price-{length} true "
+                if not any(line.startswith(prefix) for line in lines):
+                    result["problems"].append(f"{mode}/{role}: missing {prefix}")
             for axis in (0, 1):
                 for transport in (0, 1, 2):
                     prefix = f"ROADCMD tb-bridge-{axis}-{transport}-exec true "
