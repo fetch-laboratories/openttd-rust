@@ -11,7 +11,6 @@ struct BaseStation;
 struct Object;
 struct OpenTTDTownPoolRelation { uint32_t next; const Town *town; };
 struct OpenTTDTownStationCursor { BaseStation *shell; uint32_t next; };
-struct OpenTTDTownObjectCursor { Object *shell; uint32_t next; };
 /** All entries are synchronous/noexcept. Shells are borrowed only until deletion;
  * no owner borrow crosses commands, storage destruction, news or event enqueue.
  * post_destruct runs after pool removal and never reacquires the old town ID.
@@ -44,7 +43,6 @@ struct OpenTTDTownCommandServices {
 	OpenTTDTownPoolRelation (*next_waypoint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_waypoint);
 	OpenTTDTownPoolRelation (*next_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_depot);
 	OpenTTDTownPoolRelation (*next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);
-	OpenTTDTownObjectCursor (*next_object)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_object);
 	void (*set_object_town)(Object *, Town *) noexcept OPENTTD_SERVICE_DEFAULT(set_object_town);
 	Town *(*industry_town_by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_town_by_tile);
 	bool (*town_owned_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_owned_road);

@@ -3736,7 +3736,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.next_waypoint = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Waypoint *wp : Waypoint::Iterate(from)) return {.next = wp->index.base() + 1U, .town = OpenTTDBaseStationTown(wp)}; return {.next = UINT32_MAX, .town = nullptr}; },
 		.next_depot = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Depot *d : Depot::Iterate(from)) return {.next = d->index.base() + 1U, .town = d->town}; return {.next = UINT32_MAX, .town = nullptr}; },
 		.next_industry = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Industry *i : Industry::Iterate(from)) return {.next = i->index.base() + 1U, .town = OpenTTDIndustryTown(i)}; return {.next = UINT32_MAX, .town = nullptr}; },
-		.next_object = [](uint32_t from) noexcept -> OpenTTDTownObjectCursor { for (Object *o : Object::Iterate(from)) return {.shell = o, .next = o->index.base() + 1U}; return {.shell = nullptr, .next = UINT32_MAX}; },
 		.set_object_town = OpenTTDSetObjectTown,
 		.industry_town_by_tile = OpenTTDIndustryTownByTile,
 		.town_owned_road = OpenTTDHasTownOwnedRoad,

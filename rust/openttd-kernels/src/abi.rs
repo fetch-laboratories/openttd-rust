@@ -2630,7 +2630,6 @@ layouts! {
         next_waypoint,
         next_depot,
         next_industry,
-        next_object,
         set_object_town,
         industry_town_by_tile,
         town_owned_road,
@@ -2654,10 +2653,6 @@ layouts! {
         town,
     };
     "OpenTTDTownStationCursor" ["probe"] => crate::town::commands::StationCursor {
-        shell,
-        next,
-    };
-    "OpenTTDTownObjectCursor" ["probe"] => crate::town::commands::ObjectCursor {
         shell,
         next,
     };

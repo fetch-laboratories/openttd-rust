@@ -33,11 +33,6 @@ pub struct StationCursor {
     pub next: u32,
 }
 #[repr(C)]
-pub struct ObjectCursor {
-    pub shell: *mut Object,
-    pub next: u32,
-}
-#[repr(C)]
 pub struct CommandServices {
     pub founding: *const FoundingServices,
     pub rail: *const crate::services::RailMapServices,
@@ -67,7 +62,6 @@ pub struct CommandServices {
     pub next_waypoint: extern "C" fn(u32) -> Relation,
     pub next_depot: extern "C" fn(u32) -> Relation,
     pub next_industry: extern "C" fn(u32) -> Relation,
-    pub next_object: extern "C" fn(u32) -> ObjectCursor,
     pub set_object_town: extern "C" fn(*mut Object, *mut TownHandle),
     pub industry_town_by_tile: extern "C" fn(u32) -> *mut TownHandle,
     pub town_owned_road: extern "C" fn(u32) -> bool,
@@ -772,12 +766,13 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
         }
         from = 0;
         loop {
-            let o = (s.next_object)(from);
-            if o.shell.is_null() {
+            // SAFETY: Pool iteration returns a live object or null; no Rust borrow spans it.
+            let o = unsafe { (c.objects().next)(from) };
+            if o.object.is_null() {
                 break;
             }
-            from = o.next;
-            assert!(unsafe { (c.object_query().town)(o.shell) } != t.shell);
+            from = o.id.wrapping_add(1);
+            assert!(unsafe { (c.object_query().town)(o.object) } != t.shell);
         }
         for tile in 0..c.map_size() {
             match (c.shared.tile_type)(tile) {
@@ -817,17 +812,18 @@ pub unsafe extern "C" fn openttd_rust_town_post_destruct(s: &CommandServices) {
     }
     let mut from = 0;
     loop {
-        let o = (s.next_object)(from);
-        if o.shell.is_null() {
+        // SAFETY: Pool iteration returns a live object or null; no Rust borrow spans it.
+        let o = unsafe { (c.objects().next)(from) };
+        if o.object.is_null() {
             break;
         }
-        from = o.next;
-        if unsafe { (c.object_query().town)(o.shell) }.is_null() {
+        from = o.id.wrapping_add(1);
+        if unsafe { (c.object_query().town)(o.object) }.is_null() {
             let town = (c.shared.calc_closest_town)(
-                unsafe { (c.object_query().north)(o.shell) },
+                unsafe { (c.object_query().north)(o.object) },
                 u32::MAX,
             );
-            (s.set_object_town)(o.shell, town.cast_mut());
+            (s.set_object_town)(o.object, town.cast_mut());
             w::hit(w::TOWN_COMMAND_OBJECT_REHOME);
         }
     }
