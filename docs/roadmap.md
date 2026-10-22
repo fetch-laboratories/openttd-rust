@@ -178,24 +178,25 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Paused at the user's request (2026-10-21). Root ran as Claude Opus 5.5 (xhigh) in
-Claude Code, with independent review on gpt-6.1-sol (high). The work order above is
-unchanged. No agents are running. Every open draft keeps its worktree and branch.
+Resumed at the user's request (2026-10-21). Root is gpt-6.1-sol (xhigh), with
+gpt-6.1-sol (high) agents updating #313, #329, #337 and #340. The work order above
+is unchanged. Hosted macOS retries for the base and #339 have started; fix the
+base before integrating. Every open draft keeps its worktree and branch.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #338 / #339 | `9eaec44aae` | Reviewed. Full: macOS Debug job not yet run; integrate once it passes. The next game-code PR then records its loop Ir in `SPEED_INTEGRATED`. |
-| #295 / #313 | `b497480981` | Reviewed; counts and Full passed. Conflicts in `src/rust/landscape_loop_ffi.h` since #334: update from base (conflict review unless both sides kept), adopt #334's modules, Full. |
-| #156 / #337 | `113a6070bf` | Reviewed. Conflicts in `roads-console.cpp` since #334: update from base, Full (capacity re-runs exhausted). |
+| #338 / #339 | `9eaec44aae` | Reviewed; macOS Debug retry running. Integrate after base and Full pass; the next game-code PR records its loop Ir in `SPEED_INTEGRATED`. |
+| #295 / #313 | `b497480981` | Agent updating from base and adopting #334 modules; scoped review, counts and Full follow. |
+| #156 / #337 | `113a6070bf` | Agent updating from base; depot ownership calls need the shared dispatcher, then scoped conflict review and Full. |
 | #275 / #336 | `c472210a9f` | Reviewed, counts lower. Full: capacity re-runs exhausted; re-run Full, integrate. |
 | #156 / #342 | `9ed271d489` | Reviewed, no findings. After #336: update from base (`can_build_tram` conflict), counts, Full. |
-| #281 / #340 | `7a4707ff1e` | Reviewed. Blocker: delete `Co_vehicle_value` and three legacy order copies of its new typed services; fix, fresh review, counts, Full. |
-| #314 / #329 | `d3fbf2de39` | All three groups reviewed. Adopt #334's modules and return `interval_default` as int (conflict in `lib.rs`); fix, review, counts, Full. |
-| #275 / #341 | `97bf95b1de` | Station slot reads: checks pass, no saving (P2016 +0.18%). User decides: keep for its shared owner accessor (review, Full) or close. |
+| #281 / #340 | `7a4707ff1e` | Agent deleting `Co_vehicle_value` and three legacy order copies; fresh review, counts and Full follow. |
+| #314 / #329 | `d3fbf2de39` | Agent adopting #334 modules and returning `interval_default` as int; scoped review, counts and Full follow. |
+| #275 / #341 | `97bf95b1de` | #343 asks the user to close (recommended) or retain for the shared owner accessor; no saving (P2016 +0.18%). |
 | #274 | `162843acbd` | Paused measurement branch. |
 
-#261 R7 inputs are on #261 and #281 part 2's inventory is on #281. Worktree
-`.local/worktrees/review-329-a2` holds a finished review's pushed commits and can go.
+#261 R7 inputs are on #261 and #281 part 2's inventory is on #281. The finished
+#329 review worktree was removed; its commits are already on the PR branch.
 #64/#68/#69 stay paused. Preserve the pinned reference. Do not reapply effect helper
 `73ccd511fb`. Build and test with `--jobs 2`.
 
