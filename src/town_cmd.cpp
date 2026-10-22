@@ -2456,8 +2456,8 @@ void UpdateTownMaxPass(Town *t)
 
 #ifndef WITH_RUST
 static void UpdateTownGrowthRate(Town *t);
-#endif
 static void UpdateTownGrowth(Town *t);
+#endif
 
 /**
  * Actually create a town.
@@ -4500,9 +4500,7 @@ static void UpdateTownRating(Town *t)
  * @param t The town to calculate grow counter for
  * @param prev_growth_rate Town growth rate before it changed (one that was used with grow counter to be updated)
  */
-#ifdef WITH_RUST
-static void UpdateTownGrowth(Town *t) { openttd_rust_town_update_growth(&GetRustTownServices(), &GetRustSharedServices(), t->index.base()); }
-#else
+#ifndef WITH_RUST
 static void UpdateTownGrowCounter(Town *t, uint16_t prev_growth_rate)
 {
 	if (t->growth_rate == TOWN_GROWTH_RATE_NONE) return;

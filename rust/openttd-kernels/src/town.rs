@@ -2057,14 +2057,6 @@ pub unsafe extern "C" fn openttd_rust_town_tick_all(
     engine.tick_all();
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_town_update_growth(
-    leaves: *const Leaves,
-    services: *const Services,
-    town: u32,
-) {
-    engine(leaves, services).bind(town).update_growth(town);
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_expand(
     leaves: *const Leaves,
     services: *const Services,
