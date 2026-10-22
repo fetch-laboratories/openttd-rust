@@ -525,7 +525,10 @@ def main():
         common.extend(compiler_cache_options(cache_executable))
         for name, build in builds.items():
             with reference_lock() if name == "reference" else candidate_lock(build):
-                (build / "instruction-build.json").unlink(missing_ok=True)
+                # Other worktrees rebuild the shared pinned reference concurrently;
+                # its record stays bound to the executable digest instead.
+                if name != "reference":
+                    (build / "instruction-build.json").unlink(missing_ok=True)
                 select_role(name)
                 source = REFERENCE.resolve() if name == "reference" else ROOT
                 extra = (

@@ -595,12 +595,22 @@ class InstructionSpeedTests(unittest.TestCase):
                     dict(scenario, **{field: value}), *context, Path(command[0])
                 )
                 self.assertNotEqual(baseline, changed)
+            # Worktree paths in CMake bookkeeping must not change the identity.
+            (root / "regression").mkdir()
+            bookkeeping = root / "regression/CTestTestfile.cmake"
+            bookkeeping.write_text("/worktree-a")
+            previous = ir.identity(scenario, *context, Path(command[0]))
+            bookkeeping.write_text("/worktree-b")
+            self.assertEqual(
+                previous, ir.identity(scenario, *context, Path(command[0]))
+            )
             for name in (
                 "probe.cpp",
                 "CMakeCache.txt",
                 "Cargo.toml",
                 ".cargo/config.toml",
                 "run/script",
+                "regression/main.nut",
             ):
                 previous = ir.identity(scenario, *context, Path(command[0]))
                 with (root / name).open("ab") as asset:
