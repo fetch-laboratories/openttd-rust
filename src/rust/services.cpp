@@ -51,6 +51,8 @@
 #include "../tunnelbridge.h"
 #include "../town.h"
 #include "../timer/timer_game_calendar.h"
+#include "../newgrf_callbacks.h"
+#include "../slope_func.h"
 #include "tile_type_access.hpp"
 #include "../safeguards.h"
 #include "settings_services.h"
@@ -232,6 +234,16 @@ static bool Shared_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileI
 static uint32_t Shared_distance_from_edge(uint32_t tile) noexcept { return DistanceFromEdge(TileIndex{tile}); }
 static int32_t Shared_tile_max_z(uint32_t tile) noexcept { return OpenTTDTileMaxZ(TileIndex{tile}); }
 static_assert(TILE_HEIGHT == 8);
+/* Values of the shared Rust header modules (tile_type.rs, slope_func.rs and the like). */
+static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_TUNNELBRIDGE == 9);
+static_assert(INVALID_TILE.base() == UINT32_MAX && TILE_HEIGHT_STEP == 50 && CALLBACK_FAILED == 0xFFFF && INVALID_STRING_ID == 0xFFFF);
+static_assert(SLOPE_FLAT == 0 && SLOPE_W == 1 && SLOPE_S == 2 && SLOPE_E == 4 && SLOPE_N == 8 && SLOPE_STEEP == 0x10 && SLOPE_HALFTILE == 0x20 && SLOPE_HALFTILE_MASK == 0xE0);
+static_assert(DIAGDIR_NE == 0 && DIAGDIR_SE == 1 && DIAGDIR_SW == 2 && DIAGDIR_NW == 3 && INVALID_DIAGDIR == 0xFF);
+static_assert(OWNER_TOWN.base() == 0x0F && OWNER_NONE.base() == 0x10 && OWNER_WATER.base() == 0x11 && OWNER_DEITY.base() == 0x12 && INVALID_OWNER.base() == 0xFF);
+static_assert(to_underlying(DoCommandFlag::Execute) == 0 && to_underlying(DoCommandFlag::Auto) == 1 && to_underlying(DoCommandFlag::QueryCost) == 2 && to_underlying(DoCommandFlag::NoWater) == 3);
+static_assert(to_underlying(DoCommandFlag::NoTestTownRating) == 4 && to_underlying(DoCommandFlag::Bankrupt) == 5 && to_underlying(DoCommandFlag::NoModifyTownRating) == 9 && to_underlying(DoCommandFlag::ForceClearTile) == 10);
+static_assert(std::is_same_v<DoCommandFlags::BaseType, uint16_t>);
+static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28 && PR_CLEAR_DEPOT_TRAIN == 30 && PR_CLEAR_WATER == 34 && PR_BUILD_FOUNDATION == 57);
 static uint32_t Shared_tile_height(uint32_t tile) noexcept { return TileHeight(TileIndex{tile}); }
 static uint8_t Shared_bridge_axis(uint32_t tile) noexcept { return GetBridgeAxis(TileIndex{tile}); }
 static bool Shared_has_water_ground(uint32_t tile) noexcept { return HasTileWaterGround(TileIndex{tile}); }
@@ -265,7 +277,6 @@ static int32_t SharedSlope(int32_t x, int32_t y) noexcept { return SharedSlopePi
 static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
 static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
 static void SharedRebuildTownTree() noexcept { RebuildTownKdtree(); }
-static int64_t SharedFoundationPrice() noexcept { return _price[PR_BUILD_FOUNDATION]; }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
 	.set_tile_owner = RustSetTileOwner,
@@ -376,7 +387,6 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tunnel_transport = OpenTTDMapQuery<uint8_t, RustTunnelBridgeTransport, uint32_t>,
 	.update_level_crossing = SharedUpdateLevelCrossing,
 	// Registry: house (#256).
-	.foundation_price = SharedFoundationPrice,
 	.rebuild_town_tree = SharedRebuildTownTree,
 	.recession = SharedRecession,
 	.tick_counter = openttd_orders_tick_counter,

@@ -495,12 +495,14 @@ uint32_t GetWorldPopulation()
 #endif
 
 #ifdef WITH_RUST
-/* The lazy finder is stack-owned here, preserving the original station caching. */
-static void TileLoop_Town(uint32_t tile_index) noexcept
+/* TileLoop_Town's finder, requested by the Rust house tile loop only when it
+ * moves cargo and reused for the rest of that tile. One house tile loop runs at
+ * a time under the game-state mutex and none nests, so one slot serves them. */
+static void *RustHouseStationFinder(uint32_t tile) noexcept
 {
-	TileIndex tile{tile_index};
-	StationFinder stations(TileArea(tile, 1, 1));
-	openttd_rust_house_tile_loop(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), &stations);
+	static std::optional<StationFinder> stations;
+	stations.emplace(TileArea(TileIndex{tile}, 1, 1));
+	return &*stations;
 }
 static CommandCost ClearTile_Town(TileIndex tile, DoCommandFlags flags)
 {
@@ -1238,6 +1240,7 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.erase_near_station = [](Town *t, Station *st) noexcept { t->stations_near.erase(st); },
 		.station_catchment = [](const Station *st, uint32_t tile) noexcept { return st->TileIsInCatchment(TileIndex{tile}); },
 		.station_covers_town = [](const Station *st, uint16_t town) noexcept { return st->CatchmentCoversTown(TownID(town)); },
+		.station_finder = RustHouseStationFinder,
 		.move_goods = [](void *finder, uint8_t cargo, uint32_t amount, uint16_t town) noexcept -> uint32_t {
 			return OpenTTDMoveGoodsToStation(cargo, amount, {TownID(town), SourceType::Town}, static_cast<StationFinder *>(finder)->GetStations());
 		},
@@ -4815,7 +4818,11 @@ extern const TileTypeProcs _tile_type_town_procs = {
 	GetTileTrackStatus_Town, // get_tile_track_status_proc
 	nullptr,                    // click_tile_proc
 	AnimateTile_Town,        // animate_tile_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust scheduler calls the owner directly.
+#else
 	TileLoop_Town,           // tile_loop_proc
+#endif
 	ChangeTileOwner_Town,    // change_tile_owner_proc
 	AddProducedCargo_Town,   // add_produced_cargo_proc
 	nullptr,                    // vehicle_enter_tile_proc

@@ -12,23 +12,24 @@
 //! service is a synchronous typed call that may reenter; owner fields are
 //! accessed only immediately, never borrowed across a service.
 use super::{AuthorityServices, Leaves, State, TownRef, change_population, engine, update_radius};
+use crate::command_type::DoCommandFlag;
+use crate::company_type::{OWNER_NONE, OWNER_TOWN, OWNER_WATER};
+use crate::economy_type::PR_BUILD_FOUNDATION;
+use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Map, Services, TownHandle, chance16_i,
 };
+use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use crate::station::Station;
+use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::{INVALID_TILE, MP_HOUSE};
 use crate::witness;
-use std::cell::OnceCell;
+use std::cell::{Cell, OnceCell};
 use std::ffi::c_void;
 
 const NEW_HOUSE_OFFSET: u16 = 110;
-const MP_HOUSE: u8 = 3;
 const INVALID_CARGO: u8 = u8::MAX;
-const INVALID_TILE: u32 = u32::MAX;
-const CALLBACK_FAILED: u16 = 0xFFFF;
 const PRODUCE_END: u16 = 0x20FF;
-const OWNER_TOWN: u32 = 15;
-const OWNER_NONE: u8 = 16;
-const OWNER_WATER: u8 = 17;
 // Building flags.
 const NOT_SLOPED: u8 = 1 << 1;
 const SIZE_2X1: u8 = 1 << 2;
@@ -59,12 +60,6 @@ const CB_PRODUCE: u16 = 0x2E;
 const CB_DENY: u16 = 0x143;
 const CB_WATCHED: u16 = 0x148;
 const CB_AUTOSLOPE: u16 = 0x14F;
-// DoCommandFlags bits.
-const DC_EXEC: u16 = 1;
-const DC_AUTO: u16 = 1 << 1;
-const DC_NO_WATER: u16 = 1 << 3;
-const DC_NO_TEST_RATING: u16 = 1 << 4;
-const DC_NO_MODIFY_RATING: u16 = 1 << 9;
 
 // Branch witnesses, in `witness::NAMES` order from `witness::HOUSE`.
 const W_STAGE: usize = witness::HOUSE;
@@ -251,6 +246,8 @@ pub struct HouseServices {
     pub erase_near_station: unsafe extern "C" fn(*mut TownHandle, *mut Station),
     pub station_catchment: unsafe extern "C" fn(*const Station, u32) -> bool,
     pub station_covers_town: unsafe extern "C" fn(*const Station, u16) -> bool,
+    /// Native `StationFinder` for a 1x1 house tile area, valid until the next call.
+    pub station_finder: extern "C" fn(u32) -> *mut c_void,
     pub move_goods: unsafe extern "C" fn(*mut c_void, u8, u32, u16) -> u32,
     pub production_cargo: extern "C" fn(u8, u32) -> ProductionCargo,
     pub add_cargo: unsafe extern "C" fn(*mut c_void, u8, u32),
@@ -261,6 +258,14 @@ pub struct HouseServices {
     pub company_human: extern "C" fn(u8) -> bool,
     pub init_counts: extern "C" fn(),
     pub errors: HouseErrors,
+}
+
+/// `TileLoop_Town`'s `StationFinder`. The original computes its station list on
+/// the first `GetStations`; the native finder is likewise requested only when
+/// cargo moves, then reused for the rest of the tile.
+struct StationFinder {
+    tile: u32,
+    native: Cell<*mut c_void>,
 }
 
 /// Immutable native tables for one synchronous entry.
@@ -280,15 +285,6 @@ fn house<'a>(leaves: *const Leaves, services: *const Services) -> House<'a> {
         s,
         h,
         map: OnceCell::new(),
-    }
-}
-fn slope_max_z(slope: u8) -> i32 {
-    if slope == 0 {
-        0
-    } else if slope & 16 != 0 {
-        2
-    } else {
-        1
     }
 }
 impl House<'_> {
@@ -609,7 +605,7 @@ impl House<'_> {
         town: TownRef,
         cargo: u8,
         mut amount: u32,
-        finder: *mut c_void,
+        stations: &StationFinder,
         recession: bool,
     ) {
         if amount == 0 {
@@ -629,14 +625,19 @@ impl House<'_> {
         unsafe {
             (*row).history[0].production = (*row).history[0].production.wrapping_add(amount);
         }
-        // SAFETY: The native entry's stack-owned StationFinder remains live.
+        let mut finder = stations.native.get();
+        if finder.is_null() {
+            finder = (self.h.station_finder)(stations.tile);
+            stations.native.set(finder);
+        }
+        // SAFETY: The native finder stays live until the next tile requests one.
         let moved = unsafe { (self.h.move_goods)(finder, cargo, amount, town.id.0) };
         // SAFETY: As above; the row is still the live canonical entry.
         unsafe {
             (*row).history[0].transported = (*row).history[0].transported.wrapping_add(moved);
         }
     }
-    fn generate_original(&self, town: TownRef, effect: u8, rate: u8, finder: *mut c_void) {
+    fn generate_original(&self, town: TownRef, effect: u8, rate: u8, stations: &StationFinder) {
         let mut at = 0;
         loop {
             let cargo = (self.h.production_cargo)(effect, at);
@@ -648,11 +649,11 @@ impl House<'_> {
             if r & 0xFF < u32::from(rate) {
                 witness::hit(W_ORIGINAL);
                 let amount = (r & 0xFF) * u32::from(cargo.multiplier) / 256 / 8 + 1;
-                self.generate(town, cargo.cargo, amount, finder, true);
+                self.generate(town, cargo.cargo, amount, stations, true);
             }
         }
     }
-    fn generate_binomial(&self, town: TownRef, effect: u8, rate: u8, finder: *mut c_void) {
+    fn generate_binomial(&self, town: TownRef, effect: u8, rate: u8, stations: &StationFinder) {
         let mut at = 0;
         loop {
             let cargo = (self.h.production_cargo)(effect, at);
@@ -669,11 +670,11 @@ impl House<'_> {
             };
             witness::hit(W_BINOMIAL);
             let amount = (r & genmask).count_ones() * u32::from(cargo.multiplier) / 256;
-            self.generate(town, cargo.cargo, amount, finder, true);
+            self.generate(town, cargo.cargo, amount, stations, true);
         }
     }
     /// `TileLoop_Town`.
-    fn tile_loop(&self, tile: u32, finder: *mut c_void) {
+    fn tile_loop(&self, tile: u32) {
         let entry = (self.h.entry)(tile);
         let town = entry.town;
         let house = entry.house;
@@ -696,6 +697,10 @@ impl House<'_> {
             (self.l.add_animation)(tile, true);
         }
         let r = self.s.random();
+        let stations = StationFinder {
+            tile,
+            native: Cell::new(std::ptr::null_mut()),
+        };
         if spec.callbacks & CBM_PRODUCE != 0 {
             for i in 0..256 {
                 // SAFETY: Live town; no owner borrow spans the callback.
@@ -712,24 +717,24 @@ impl House<'_> {
                 if amount == 0 {
                     continue;
                 }
-                self.generate(town, cargo, amount, finder, false);
+                self.generate(town, cargo, amount, &stations, false);
             }
         } else {
             match (self.h.cargogen_mode)() {
                 0 => {
-                    self.generate_original(town, 1, spec.population, finder);
-                    self.generate_original(town, 2, spec.mail, finder);
+                    self.generate_original(town, 1, spec.population, &stations);
+                    self.generate_original(town, 2, spec.mail, &stations);
                 }
                 1 => {
                     if ((self.s.tick_counter)() >> 8) & 3 == u64::from(tile & 3) {
-                        self.generate_binomial(town, 1, spec.population, finder);
-                        self.generate_binomial(town, 2, spec.mail, finder);
+                        self.generate_binomial(town, 1, spec.population, &stations);
+                        self.generate_binomial(town, 2, spec.mail, &stations);
                     }
                 }
                 _ => unreachable!("NOT_REACHED"),
             }
         }
-        let company = (self.l.exchange_company)(OWNER_TOWN);
+        let company = (self.l.exchange_company)(u32::from(OWNER_TOWN));
         // SAFETY: Immediate owner reads/writes in source short-circuit order;
         // each access ends before the next service.
         let growing = unsafe { (*town.state).growth.flags } & 1 != 0;
@@ -819,7 +824,7 @@ impl House<'_> {
     /// `ClearTile_Town`.
     fn clear(&self, result: *mut CommandCost, tile: u32, flags: u16) {
         let c = self.costs();
-        if flags & DC_AUTO != 0 {
+        if flags & DoCommandFlag::AUTO != 0 {
             witness::hit(W_CLEAR_AUTO);
             (c.error)(result, self.h.errors.demolish);
             return;
@@ -839,7 +844,7 @@ impl House<'_> {
         let authority = self.authority();
         if (self.s.company_valid)(company)
             && !(authority.bulldozer)()
-            && flags & DC_NO_TEST_RATING == 0
+            && flags & DoCommandFlag::NO_TEST_TOWN_RATING == 0
         {
             if rating > 1000 {
                 (c.error)(result, self.h.errors.protected);
@@ -865,11 +870,11 @@ impl House<'_> {
                 company,
                 -rating,
                 -1000,
-                flags & DC_NO_MODIFY_RATING != 0,
+                flags & DoCommandFlag::NO_MODIFY_TOWN_RATING != 0,
                 (authority.bulldozer)(),
             );
         }
-        if flags & DC_EXEC != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             witness::hit(W_CLEAR_EXECUTE);
             self.clear_town_house(town, tile, house);
         }
@@ -881,8 +886,8 @@ impl House<'_> {
             let mut north = house;
             self.north_part(&mut north, self.map());
             if (self.l.house_flags)(north) & NOT_SLOPED == 0
-                && slope & 16 == 0
-                && (self.s.tile_max_z)(tile) == z_new + slope_max_z(slope)
+                && !is_steep_slope(slope)
+                && (self.s.tile_max_z)(tile) == z_new + get_slope_max_z(slope)
             {
                 let mut allow = true;
                 if (self.l.house_callbacks)(house) & CBM_AUTOSLOPE != 0 {
@@ -898,7 +903,11 @@ impl House<'_> {
                 }
                 if allow {
                     witness::hit(W_AUTOSLOPE);
-                    (self.costs().expense_money)(result, 0, (self.s.foundation_price)());
+                    (self.costs().expense_money)(
+                        result,
+                        0,
+                        crate::company::price(PR_BUILD_FOUNDATION),
+                    );
                     return;
                 }
             }
@@ -918,7 +927,7 @@ impl House<'_> {
     ) {
         let c = self.costs();
         if !(self.l.environment.editor)() && (self.h.place_houses)() == 0 {
-            (c.error)(result, 0xFFFF);
+            (c.error)(result, INVALID_STRING_ID);
             return;
         }
         if (self.s.town_count)() == 0 {
@@ -927,7 +936,7 @@ impl House<'_> {
         }
         if u32::from(house) >= (self.l.house_count)() || !(self.l.house_availability)(house).enabled
         {
-            (c.error)(result, 0xFFFF);
+            (c.error)(result, INVALID_STRING_ID);
             return;
         }
         let maxz = (self.s.tile_max_z)(tile);
@@ -953,7 +962,7 @@ impl House<'_> {
         for (x, y) in area.clone() {
             let subtile = base.wrapping_add(map.diff(x as i32, y as i32));
             let slope = (self.s.tile_slope)(subtile);
-            if slope & 16 != 0 {
+            if is_steep_slope(slope) {
                 (c.error)(result, self.h.errors.sloped);
                 return;
             }
@@ -970,7 +979,11 @@ impl House<'_> {
                 return;
             }
             if !(replace && (self.s.tile_type)(subtile) == MP_HOUSE) {
-                (commands.landscape_clear)(result, subtile, DC_AUTO | DC_NO_WATER);
+                (commands.landscape_clear)(
+                    result,
+                    subtile,
+                    DoCommandFlag::AUTO | DoCommandFlag::NO_WATER,
+                );
                 if !(c.success)(result) {
                     witness::hit(W_PLACE_ERROR);
                     return;
@@ -978,7 +991,7 @@ impl House<'_> {
             }
         }
         (c.zero)(result);
-        if flags & DC_EXEC != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             witness::hit(W_PLACE);
             if replace {
                 for (x, y) in area {
@@ -1197,10 +1210,7 @@ impl House<'_> {
             if (self.s.tile_type)(tile) != MP_HOUSE {
                 continue;
             }
-            let rec = (self.h.age)(tile);
-            if rec.completed && rec.age < u8::MAX {
-                (self.h.set_age)(tile, rec.age + 1);
-            }
+            crate::town_map::increment_house_age(self.h, tile);
         }
     }
     fn part_valid(&self, tile: u32, house: u32) -> bool {
@@ -1259,15 +1269,15 @@ pub(super) fn stage_changed(leaves: &Leaves, services: &Services, town: TownRef,
 }
 
 // Native entries: immutable static tables outlive each synchronous call; native
-// result, finder and cargo-array storage are stack-owned by the native frame.
+// result and cargo-array storage are stack-owned by the native frame. The tile
+// scheduler calls the tile loop directly, like every Rust-owned tile kind.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_tile_loop(
     leaves: *const Leaves,
     services: *const Services,
     tile: u32,
-    finder: *mut c_void,
 ) {
-    house(leaves, services).tile_loop(tile, finder);
+    house(leaves, services).tile_loop(tile);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_house_animate(

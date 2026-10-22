@@ -185,7 +185,6 @@ struct OpenTTDSharedServices {
 	uint8_t (*tunnel_transport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_transport);
 	void (*update_level_crossing)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(update_level_crossing);
 	// Registry: house (#256).
-	int64_t (*foundation_price)() noexcept OPENTTD_SERVICE_DEFAULT(foundation_price);
 	void (*rebuild_town_tree)() noexcept OPENTTD_SERVICE_DEFAULT(rebuild_town_tree);
 	bool (*recession)() noexcept OPENTTD_SERVICE_DEFAULT(recession);
 	uint64_t (*tick_counter)() noexcept OPENTTD_SERVICE_DEFAULT(tick_counter);
@@ -306,7 +305,6 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.next_company = [](uint8_t) noexcept -> uint8_t { return UINT8_MAX; },
 		.random = random,
 		// Registry: house (#256).
-		.foundation_price = OpenTTDFixtureMapService<int64_t>,
 		.rebuild_town_tree = OpenTTDFixtureMapService<void>,
 		.recession = OpenTTDFixtureMapService<bool>,
 		.tick_counter = OpenTTDFixtureMapService<uint64_t>,

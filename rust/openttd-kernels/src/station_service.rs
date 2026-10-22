@@ -536,7 +536,7 @@ pub unsafe extern "C" fn openttd_rust_station_watched(st: *mut BaseStation, worl
             if tile == u32::MAX {
                 break;
             }
-            if (shared.tile_type)(tile) == crate::services::MP_HOUSE {
+            if (shared.tile_type)(tile) == crate::tile_type::MP_HOUSE {
                 (w.watched_animation)(tile, cargoes);
             }
         }

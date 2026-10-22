@@ -19,6 +19,7 @@
     clippy::verbose_bit_mask
 )]
 use crate::services::{Services, chance16_i};
+use crate::tile_type::INVALID_TILE;
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::future::Future;
@@ -96,7 +97,6 @@ const BREAK_DELAY: usize = 17;
 const CRASHED: usize = 18;
 const BACKLINK: usize = 19;
 const INVALID: u32 = 1_048_575;
-const INVALID_TILE: u32 = u32::MAX;
 impl World<'_> {
     fn read(&self, kind: u32, id: u32, a: i64, b: i64) -> [i64; 24] {
         // Reuse observations between canonical scalar writes. Direct services

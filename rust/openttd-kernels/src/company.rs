@@ -26,6 +26,7 @@
     clippy::fn_params_excessive_bools,
     clippy::verbose_bit_mask
 )]
+use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE};
 use std::ptr::{addr_of, addr_of_mut};
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -419,9 +420,6 @@ pub extern "C" fn openttd_rust_company_tick() -> *mut u32 {
     &raw mut TICK
 }
 const INVALID: u32 = u32::MAX;
-const INVALID_OWNER: u8 = 255;
-const OWNER_NONE: u8 = 16;
-pub const OWNER_DEITY: u8 = 18;
 pub(crate) const COMPANIES: u32 = 15;
 const PRICE_COUNT: usize = 71;
 const INITIAL_LOAN: i64 = 100_000;
