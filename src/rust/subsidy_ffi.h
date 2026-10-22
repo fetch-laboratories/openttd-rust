@@ -31,8 +31,9 @@ struct OpenTTDSubsidyServices {
 	OpenTTDIndustry *(*industry_owner)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_owner);
 	uint16_t (*industry_id)(void *) noexcept OPENTTD_SERVICE_DEFAULT(industry_id);
 	uint32_t (*next_industry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next_industry);
-	PartsOfSubsidy (*source_flags)(Source) noexcept OPENTTD_SERVICE_DEFAULT(source_flags);
-	void (*set_source_flags)(Source, PartsOfSubsidy) noexcept OPENTTD_SERVICE_DEFAULT(set_source_flags);
+	bool (*has_source_flag)(Source, PartOfSubsidy) noexcept OPENTTD_SERVICE_DEFAULT(has_source_flag);
+	void (*set_source_flag)(Source, PartOfSubsidy) noexcept OPENTTD_SERVICE_DEFAULT(set_source_flag);
+	void (*clear_source_flags)(Source) noexcept OPENTTD_SERVICE_DEFAULT(clear_source_flags);
 	bool (*valid_source)(Source) noexcept OPENTTD_SERVICE_DEFAULT(valid_source);
 	bool (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	uint16_t (*allocate)(CargoType, Source, Source, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
@@ -56,24 +57,16 @@ struct OpenTTDSubsidyServices {
 	void (*dirty)() noexcept OPENTTD_SERVICE_DEFAULT(dirty);
 	const Station *(*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	bool (*station_empty)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_empty);
-	void (*catchment)(const Station *, void *, void (*catchment)(void *, uint32_t)) noexcept OPENTTD_SERVICE_DEFAULT(catchment);
+	void (*catchment)(const Station *, void *, void (*)(void *, uint32_t)) noexcept OPENTTD_SERVICE_DEFAULT(catchment);
 	void (*near_industries)(const Station *, void *, void (*)(void *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(near_industries);
 	void (*assert_destination)(Source) noexcept OPENTTD_SERVICE_DEFAULT(assert_destination);
 };
-const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept;
-inline const OpenTTDSubsidyServices *RustSubsidyServices() noexcept { return &GetRustSubsidyServices(); }
 extern "C" {
 OpenTTDSubsidyState *openttd_rust_subsidy_new(uint16_t);
 void openttd_rust_subsidy_destroy(uint16_t, OpenTTDSubsidyState *);
-void openttd_rust_subsidy_award(const OpenTTDSubsidyServices *, uint16_t, CompanyID);
 void openttd_rust_subsidy_rebuild(const OpenTTDSubsidyServices *);
 void openttd_rust_subsidy_delete_with(const OpenTTDSubsidyServices *, Source);
-void openttd_rust_subsidy_create(const OpenTTDSubsidyServices *, CargoType, Source, Source);
 bool openttd_rust_subsidy_command(const OpenTTDSubsidyServices *, uint16_t, CargoType, Source, Source);
-bool openttd_rust_subsidy_passenger(const OpenTTDSubsidyServices *);
-bool openttd_rust_subsidy_town(const OpenTTDSubsidyServices *, OpenTTDSubsidyCargo);
-bool openttd_rust_subsidy_industry(const OpenTTDSubsidyServices *, OpenTTDSubsidyCargo);
-bool openttd_rust_subsidy_destination(const OpenTTDSubsidyServices *, OpenTTDSubsidyCargo, CargoType, Source);
 void openttd_rust_subsidy_monthly(const OpenTTDSubsidyServices *, OpenTTDSubsidyCargo);
 bool openttd_rust_subsidy_check(const OpenTTDSubsidyServices *, CargoType, CompanyID, Source, uint16_t);
 }

@@ -67,7 +67,9 @@ struct Subsidy : SubsidyPool::PoolItem<&_subsidy_pool> {
 		return this->awarded != CompanyID::Invalid();
 	}
 
+#ifndef WITH_RUST
 	void AwardTo(CompanyID company);
+#endif
 };
 
 /** Constants related to subsidies */

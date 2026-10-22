@@ -5,6 +5,13 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared calendar constants consumed by simulation owners.
-/// `CalendarTime::MONTHS_IN_YEAR`.
-pub const MONTHS_IN_YEAR: u32 = 12;
+//! Named cache flags from `subsidy_type.h`.
+/// Native `PartOfSubsidy : uint8_t`.
+#[repr(u8)]
+#[derive(Clone, Copy)]
+pub enum PartOfSubsidy {
+    /// Source of a subsidised route.
+    Source = 0,
+    /// Destination of a subsidised route.
+    Destination = 1,
+}

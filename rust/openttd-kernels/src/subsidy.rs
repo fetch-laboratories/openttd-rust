@@ -16,16 +16,18 @@
     clippy::missing_safety_doc,
     clippy::cast_possible_truncation,
     clippy::comparison_chain,
+    clippy::if_not_else,
     clippy::too_many_lines
 )]
 pub use crate::source_type::Source;
+use crate::subsidy_type::PartOfSubsidy;
 use crate::{
     cargo_type::{INVALID_CARGO, NUM_CARGO, is_valid_cargo_type},
     subsidy_base::{
         SUBSIDY_CARGO_MIN_POPULATION, SUBSIDY_MAX_DISTANCE, SUBSIDY_MAX_PCT_TRANSPORTED,
         SUBSIDY_OFFER_MONTHS, SUBSIDY_PAX_MIN_POPULATION, SUBSIDY_TOWN_CARGO_RADIUS,
     },
-    timer_game_calendar::MONTHS_IN_YEAR,
+    timer_game_common::MONTHS_IN_YEAR,
 };
 use crate::{industry, services::Services as Shared, town};
 use std::{cell::UnsafeCell, ffi::c_void, ptr};
@@ -36,6 +38,11 @@ pub struct State {
     pub awarded: u8,
     pub src: Source,
     pub dst: Source,
+}
+impl State {
+    fn is_awarded(&self) -> bool {
+        self.awarded != u8::MAX
+    }
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -52,8 +59,9 @@ pub struct Services {
     pub industry_owner: extern "C" fn(*mut c_void) -> *mut crate::industry::Industry,
     pub industry_id: extern "C" fn(*mut c_void) -> u16,
     pub next_industry: extern "C" fn(u32) -> u32,
-    pub source_flags: extern "C" fn(Source) -> u8,
-    pub set_source_flags: extern "C" fn(Source, u8),
+    pub has_source_flag: extern "C" fn(Source, PartOfSubsidy) -> bool,
+    pub set_source_flag: extern "C" fn(Source, PartOfSubsidy),
+    pub clear_source_flags: extern "C" fn(Source),
     pub valid_source: extern "C" fn(Source) -> bool,
     pub can_allocate: extern "C" fn() -> bool,
     pub allocate: extern "C" fn(u8, Source, Source, u16) -> u16,
@@ -145,37 +153,40 @@ impl Services {
     }
     fn position(&self, source: Source) -> u32 {
         unsafe {
-            if source.kind == 1 {
+            if source.kind == Source::TOWN {
                 town::position((self.shared().town_owner_by_id)(u32::from(source.id)))
             } else {
                 industry::subsidy_position((self.industry_owner)((self.industry().get)(source.id)))
             }
         }
     }
-    fn flag(&self, source: Source, flag: u8) {
-        (self.set_source_flags)(source, (self.source_flags)(source) | flag);
+    fn flag(&self, source: Source, flag: PartOfSubsidy) {
+        (self.set_source_flag)(source, flag);
     }
-    fn distance(&self, a: Source, b: Source) -> bool {
+    fn distance_tiles(&self, a: u32, b: u32) -> bool {
         let map = crate::map_func::Map {
             log_x: (self.shared().map_log_x)() as u8,
         };
-        map.distance_manhattan(self.position(a), self.position(b)) <= SUBSIDY_MAX_DISTANCE
+        map.distance_manhattan(a, b) <= SUBSIDY_MAX_DISTANCE
+    }
+    fn distance(&self, a: Source, b: Source) -> bool {
+        self.distance_tiles(self.position(a), self.position(b))
     }
     fn rebuild(&self) {
         let mut id = (self.shared().town_next_id)(0);
         while id != u32::MAX {
-            (self.set_source_flags)(Source::town(id as u16), 0);
+            (self.clear_source_flags)(Source::town(id as u16));
             id = (self.shared().town_next_id)(id + 1);
         }
         let mut id = (self.next_industry)(0);
         while id != u32::MAX {
-            (self.set_source_flags)(Source::industry(id as u16), 0);
+            (self.clear_source_flags)(Source::industry(id as u16));
             id = (self.next_industry)(id + 1);
         }
         each(|_, state| {
             let (src, dst) = unsafe { ((*state).src, (*state).dst) };
-            self.flag(src, 1);
-            self.flag(dst, 2);
+            self.flag(src, PartOfSubsidy::Source);
+            self.flag(dst, PartOfSubsidy::Destination);
         });
     }
     fn duplicate(cargo: u8, src: Source, dst: Source) -> bool {
@@ -190,16 +201,15 @@ impl Services {
     fn create(&self, cargo: u8, src: Source, dst: Source) {
         let id = (self.allocate)(cargo, src, dst, SUBSIDY_OFFER_MONTHS);
         (self.offered_news)(id);
-        self.flag(src, 1);
-        self.flag(dst, 2);
+        self.flag(src, PartOfSubsidy::Source);
+        self.flag(dst, PartOfSubsidy::Destination);
         (self.offer_events)(id);
         (self.dirty)();
         crate::witness::hit(crate::witness::SUBSIDY_CREATE);
     }
     fn award(&self, id: u16, company: u8) {
         let state = owner(id);
-        // Original assertion remains at the native public facade; this internal
-        // call is reached only after the original IsAwarded test.
+        // This private callee is reached after the original IsAwarded test.
         unsafe {
             (*state).awarded = company;
         }
@@ -233,13 +243,15 @@ impl Services {
         }
         let a = Source::town(src.id.0);
         let b = Source::town(dst.id.0);
-        if !self.distance(a, b) || Self::duplicate(cargo, a, b) {
+        let from = unsafe { town::position(src.state) };
+        let to = unsafe { town::position(dst.state) };
+        if !self.distance_tiles(from, to) || Self::duplicate(cargo, a, b) {
             return false;
         }
         self.create(cargo, a, b);
         true
     }
-    fn scan(&self, scratch: Cargo, id: u16, accepted: bool) {
+    fn scan(&self, scratch: Cargo, owner: *const town::State, accepted: bool) {
         // SAFETY: Native outer frame owns one actual CargoArray and exposes its
         // own data() address. Only immediate scalar accesses cross that view.
         for c in 0..64 {
@@ -248,7 +260,7 @@ impl Services {
             }
         }
         let shared = self.shared();
-        let xy = unsafe { town::position((shared.town_owner_by_id)(u32::from(id))) };
+        let xy = unsafe { town::position(owner) };
         let map = crate::map_func::Map {
             log_x: (shared.map_log_x)() as u8,
         };
@@ -296,16 +308,14 @@ impl Services {
         if unsafe { town::population(src.state) < SUBSIDY_CARGO_MIN_POPULATION } {
             return false;
         }
-        self.scan(scratch, src.id.0, false);
+        self.scan(scratch, src.state, false);
         for index in 0..(self.passenger_count)() {
             let cargo = (self.passenger_at)(index);
             unsafe {
                 scratch.data.add(usize::from(cargo)).write(0);
             }
         }
-        let count = (0..64)
-            .filter(|c| unsafe { scratch.data.add(*c).read() > 0 })
-            .count() as u32;
+        let count = unsafe { crate::cargo_type::cargo_array_count(scratch.data) };
         if count == 0 {
             return false;
         }
@@ -357,7 +367,7 @@ impl Services {
     fn destination(&self, scratch: Cargo, cargo: u8, src: Source) -> bool {
         let dst = if crate::services::chance16_i(1, 2, self.shared().random()) {
             let town = (self.random_town)();
-            self.scan(scratch, town.id.0, true);
+            self.scan(scratch, town.state, true);
             if unsafe { scratch.data.add(usize::from(cargo)).read() < 8 } {
                 return false;
             }
@@ -391,12 +401,11 @@ impl Services {
             if remaining != 0 {
                 return;
             }
-            let awarded = unsafe { (*state).awarded };
-            if awarded == 255 {
+            if !unsafe { (*state).is_awarded() } {
                 (self.offer_expired_news)(id);
                 (self.offer_expired_events)(id);
             } else {
-                if awarded == (self.local_company)() {
+                if unsafe { (*state).awarded } == (self.local_company)() {
                     (self.withdrawn_news)(id);
                 }
                 (self.expired_events)(id);
@@ -461,7 +470,10 @@ impl Services {
         }
     }
     pub(crate) fn check(&self, cargo: u8, company: u8, src: Source, station: u16) -> bool {
-        if !src.is_valid() || src.kind > 1 || (self.source_flags)(src) & 1 == 0 {
+        if !src.is_valid()
+            || src.kind > Source::TOWN
+            || !(self.has_source_flag)(src, PartOfSubsidy::Source)
+        {
             return false;
         }
         // The original lazily creates a vector only after the first applicable
@@ -476,10 +488,10 @@ impl Services {
             let mut needed = false;
             each(|_, state| {
                 needed |= unsafe {
-                    (*state).dst.kind == 1
+                    (*state).dst.kind == Source::TOWN
                         && (*state).cargo_type == cargo
                         && (*state).src == src
-                        && ((*state).awarded == 255 || (*state).awarded == company)
+                        && (!(*state).is_awarded() || (*state).awarded == company)
                 };
             });
             if needed {
@@ -492,14 +504,14 @@ impl Services {
                 (
                     (*state).cargo_type == cargo
                         && (*state).src == src
-                        && ((*state).awarded == 255 || (*state).awarded == company),
+                        && (!(*state).is_awarded() || (*state).awarded == company),
                     (*state).dst,
                 )
             };
             if !applies {
                 return;
             }
-            if dst.kind == 0 {
+            if dst.kind == Source::INDUSTRY {
                 let mut visit = IndustryMatch {
                     services: self,
                     id,
@@ -513,7 +525,7 @@ impl Services {
             } else if towns.bits[usize::from(dst.id) / 64] & (1 << (dst.id % 64)) != 0 {
                 (self.assert_destination)(dst);
                 subsidised = true;
-                if unsafe { (*state).awarded == 255 } {
+                if unsafe { !(*state).is_awarded() } {
                     self.award(id, company);
                 }
             }
@@ -538,13 +550,9 @@ extern "C" fn catchment_tile(context: *mut c_void, tile: u32) {
         return;
     }
     let town = (shared.town_index)(tile);
-    if (cache.services.source_flags)(Source::town(town)) & 2 != 0 {
+    if (cache.services.has_source_flag)(Source::town(town), PartOfSubsidy::Destination) {
         cache.bits[usize::from(town) / 64] |= 1 << (town % 64);
     }
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_subsidy_award(s: *const Services, id: u16, company: u8) {
-    unsafe { &*s }.award(id, company);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_subsidy_rebuild(s: *const Services) {
@@ -553,15 +561,6 @@ pub unsafe extern "C" fn openttd_rust_subsidy_rebuild(s: *const Services) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_subsidy_delete_with(s: *const Services, source: Source) {
     unsafe { &*s }.delete_with(source);
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_subsidy_create(
-    s: *const Services,
-    cargo: u8,
-    src: Source,
-    dst: Source,
-) {
-    unsafe { &*s }.create(cargo, src, dst);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_subsidy_command(
@@ -585,27 +584,6 @@ pub unsafe extern "C" fn openttd_rust_subsidy_command(
         s.create(cargo, src, dst);
     }
     true
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_subsidy_passenger(s: *const Services) -> bool {
-    unsafe { &*s }.passenger()
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_subsidy_town(s: *const Services, scratch: Cargo) -> bool {
-    unsafe { &*s }.town_route(scratch)
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_subsidy_industry(s: *const Services, scratch: Cargo) -> bool {
-    unsafe { &*s }.industry_route(scratch)
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_subsidy_destination(
-    s: *const Services,
-    scratch: Cargo,
-    cargo: u8,
-    src: Source,
-) -> bool {
-    unsafe { &*s }.destination(scratch, cargo, src)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_subsidy_monthly(s: *const Services, scratch: Cargo) {
@@ -644,7 +622,7 @@ extern "C" fn matching_industry(context: *mut c_void, industry: u16) {
     unsafe {
         (*context.cast::<IndustryMatch<'_>>()).subsidised = true;
     }
-    if unsafe { (*state).awarded == 255 } {
+    if unsafe { !(*state).is_awarded() } {
         services.award(id, company);
     }
 }

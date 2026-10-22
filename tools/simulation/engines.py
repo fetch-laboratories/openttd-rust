@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from . import orders, rails
+from . import economy, orders, rails
 from .core import (
     ROOT,
     RUNTIME_DIRECTORIES,
@@ -19,6 +19,8 @@ REQUIRED = {
     "preview": ("offer", "accept", "join", "penalty"),
     "reliability": ("retire", "never_expire", "sync", "cutoff"),
     "reload": (),
+    "subsidies": ("create", "award", "expire"),
+    "subsidies-reload": (),
 }
 EXPECTED = {
     "commands": (
@@ -36,6 +38,17 @@ EXPECTED = {
         "cutoff true",
     ),
     "reload": ("reloaded true",),
+    "subsidies": (
+        "commands true true",
+        "classes true true",
+        "multipliers true",
+        "wrap true",
+        "disabled true true",
+        "retries true",
+        "routes true true true",
+        "transfer true true",
+    ),
+    "subsidies-reload": ("loaded true",),
 }
 
 
@@ -49,7 +62,7 @@ def scenarios(soak):
             "short_checkpoint": True,
             "ticks": 74 if soak else 1,
         }
-        for mode in REQUIRED
+        for mode in ("commands", "preview", "reliability", "reload")
     ]
 
 
@@ -62,6 +75,7 @@ def game_environment(scenario):
 
 
 def adapter(build, folder, env):
+    economy.subsidy_reference(folder)
     return orders.adapter(
         build, folder, env, source=ADAPTER, name="engines", afterload=False
     )
@@ -100,18 +114,20 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 (folder / role / name).symlink_to(
                     builds[role] / name, target_is_directory=True
                 )
-    if scenario["engines"] != "reload":
+    if scenario["engines"] not in ("reload", "subsidies-reload"):
         return dict(
             scenario,
             executables=executables,
             console=["engines_scenario " + scenario["engines"], "unpause"],
         )
+    subsidy = scenario["engines"] == "subsidies-reload"
+    variant, prefix = ("subsidies", "SUBSIDY ") if subsidy else ("commands", "ENGINE ")
     saves, captures = {}, {}
     for role in ("reference", "candidate"):
         save = folder / role / "engines.sav"
         setup = dict(
             scenario,
-            console=[f'engines_scenario commands "{save}"', "unpause"],
+            console=[f'engines_scenario {variant} "{save}"', "unpause"],
             ticks=1,
         )
         run = run_game(
@@ -123,10 +139,15 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             env,
             False,
         )
-        if run["exit"] or not save.is_file() or "ENGINE hidden true" not in run["log"]:
+        if (
+            run["exit"]
+            or not save.is_file()
+            or ("SUBSIDY transfer true true" if subsidy else "ENGINE hidden true")
+            not in run["log"]
+        ):
             raise RuntimeError("engine reload capture failed")
         saves[role] = save
-        captures[role] = [line for line in run["log"] if line.startswith("ENGINE ")]
+        captures[role] = [line for line in run["log"] if line.startswith(prefix)]
     differences = compare_saves(
         saves["reference"],
         saves["candidate"],
@@ -142,7 +163,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         scenario,
         executables=executables,
         role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-        console=["engines_scenario inspect", "unpause"],
+        console=[
+            "engines_scenario " + ("subsidies-inspect" if subsidy else "inspect"),
+            "unpause",
+        ],
     )
 
 
@@ -156,14 +180,16 @@ def check(scenario, run, mode, role, result):
     if "engines" not in scenario or run["exit"] or not run["snapshots"]:
         return
     variant = scenario["engines"]
+    component = "subsidy" if variant.startswith("subsidies") else "engine"
+    prefix = component.upper() + " "
     for expected in EXPECTED[variant]:
-        if "ENGINE " + expected not in run["log"]:
+        if prefix + expected not in run["log"]:
             raise RuntimeError("engine branch result missing: " + expected)
-    lines = [line for line in run["log"] if line.startswith("ENGINE ")]
-    key = mode + "_engine_results"
+    lines = [line for line in run["log"] if line.startswith(prefix)]
+    key = mode + "_" + component + "_results"
     if role == "reference":
         result[key] = lines
     elif result[key] != lines:
         raise RuntimeError("engine command/branch results differ")
-    if counts := branch_witnesses(scenario, run, role, "engine", REQUIRED[variant]):
-        result[mode + "_engine_branches"] = counts
+    if counts := branch_witnesses(scenario, run, role, component, REQUIRED[variant]):
+        result[mode + "_" + component + "_branches"] = counts

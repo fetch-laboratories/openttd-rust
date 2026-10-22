@@ -1339,4 +1339,6 @@ mod cargo_type;
 mod source_type;
 mod subsidy_base;
 mod tilearea;
-mod timer_game_calendar;
+mod timer_game_common;
+
+mod subsidy_type;

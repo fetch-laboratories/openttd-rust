@@ -6,6 +6,7 @@
  */
 
 //! Shared inline cargo identities from `cargo_type.h`.
+#![allow(unsafe_code)]
 /// Number of defined cargo slots.
 pub const NUM_CARGO: u8 = 64;
 /// `INVALID_CARGO` sentinel.
@@ -14,4 +15,14 @@ pub const INVALID_CARGO: u8 = 255;
 #[must_use]
 pub const fn is_valid_cargo_type(cargo: u8) -> bool {
     cargo != INVALID_CARGO
+}
+
+/// Original `CargoArray::GetCount` over the native stack array's actual `data()`.
+/// SAFETY: The caller supplies `NUM_CARGO` live scalar elements; no callback runs.
+pub(crate) unsafe fn cargo_array_count(data: *const u32) -> u32 {
+    (0..usize::from(NUM_CARGO))
+        .filter(|i| unsafe { data.add(*i).read() != 0 })
+        .count()
+        .try_into()
+        .unwrap()
 }

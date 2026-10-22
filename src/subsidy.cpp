@@ -76,12 +76,9 @@ StringID Source::GetFormat() const
  * Marks subsidy as awarded, creates news and AI event
  * @param company awarded company
  */
+#ifndef WITH_RUST
 void Subsidy::AwardTo(CompanyID company)
 {
-#ifdef WITH_RUST
-	assert(!this->IsAwarded());
-	openttd_rust_subsidy_award(&GetRustSubsidyServices(), this->index.base(), company);
-#else
 	assert(!this->IsAwarded());
 
 	this->awarded = company;
@@ -97,8 +94,8 @@ void Subsidy::AwardTo(CompanyID company)
 	Game::NewEvent(new ScriptEventSubsidyAwarded(this->index));
 
 	InvalidateWindowData(WC_SUBSIDIES_LIST, 0);
-#endif
 }
+#endif
 
 /**
  * Sets a flag indicating that given town/industry is part of subsidised route.
@@ -199,11 +196,9 @@ static bool CheckSubsidyDistance(Source src, Source dst)
  * @param src Source of cargo.
  * @param dst Destination of cargo.
  */
+#ifndef WITH_RUST
 void CreateSubsidy(CargoType cargo_type, Source src, Source dst)
 {
-#ifdef WITH_RUST
-	openttd_rust_subsidy_create(&GetRustSubsidyServices(), cargo_type, src, dst);
-#else
 	Subsidy *s = new Subsidy(cargo_type, src, dst, SUBSIDY_OFFER_MONTHS);
 
 	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
@@ -215,8 +210,8 @@ void CreateSubsidy(CargoType cargo_type, Source src, Source dst)
 	Game::NewEvent(new ScriptEventSubsidyOffer(s->index));
 
 	InvalidateWindowData(WC_SUBSIDIES_LIST, 0);
-#endif
 }
+#endif
 
 /**
  * Create a new subsidy.
@@ -270,11 +265,9 @@ CommandCost CmdCreateSubsidy(DoCommandFlags flags, CargoType cargo_type, Source 
  * Tries to create a passenger subsidy between two towns.
  * @return True iff the subsidy was created.
  */
+#ifndef WITH_RUST
 bool FindSubsidyPassengerRoute()
 {
-#ifdef WITH_RUST
-	return openttd_rust_subsidy_passenger(&GetRustSubsidyServices());
-#else
 	if (!Subsidy::CanAllocateItem()) return false;
 
 	/* Pick a random TPE_PASSENGER type */
@@ -298,22 +291,21 @@ bool FindSubsidyPassengerRoute()
 	CreateSubsidy(cargo_type, {src->index, SourceType::Town}, {dst->index, SourceType::Town});
 
 	return true;
-#endif
 }
+#endif
 
+#ifndef WITH_RUST
 bool FindSubsidyCargoDestination(CargoType cargo_type, Source src);
+#endif
 
 
 /**
  * Tries to create a cargo subsidy with a town as source.
  * @return True iff the subsidy was created.
  */
+#ifndef WITH_RUST
 bool FindSubsidyTownCargoRoute()
 {
-#ifdef WITH_RUST
-	CargoArray scratch{};
-	return openttd_rust_subsidy_town(&GetRustSubsidyServices(), {&scratch, scratch.data()});
-#else
 	if (!Subsidy::CanAllocateItem()) return false;
 
 	/* Select a random town. */
@@ -359,19 +351,16 @@ bool FindSubsidyTownCargoRoute()
 	if (src_town->GetPercentTransported(cargo_type) > SUBSIDY_MAX_PCT_TRANSPORTED) return false;
 
 	return FindSubsidyCargoDestination(cargo_type, {src_town->index, SourceType::Town});
-#endif
 }
+#endif
 
 /**
  * Tries to create a cargo subsidy with an industry as source.
  * @return True iff the subsidy was created.
  */
+#ifndef WITH_RUST
 bool FindSubsidyIndustryCargoRoute()
 {
-#ifdef WITH_RUST
-	CargoArray scratch{};
-	return openttd_rust_subsidy_industry(&GetRustSubsidyServices(), {&scratch, scratch.data()});
-#else
 	if (!Subsidy::CanAllocateItem()) return false;
 
 	/* Select a random industry. */
@@ -408,8 +397,8 @@ bool FindSubsidyIndustryCargoRoute()
 	}
 
 	return FindSubsidyCargoDestination(cargo_type, {src_ind->index, SourceType::Industry});
-#endif
 }
+#endif
 
 /**
  * Tries to find a suitable destination for the given source and cargo.
@@ -417,12 +406,9 @@ bool FindSubsidyIndustryCargoRoute()
  * @param src Source of cargo.
  * @return True iff the subsidy was created.
  */
+#ifndef WITH_RUST
 bool FindSubsidyCargoDestination(CargoType cargo_type, Source src)
 {
-#ifdef WITH_RUST
-	CargoArray scratch{};
-	return openttd_rust_subsidy_destination(&GetRustSubsidyServices(), {&scratch, scratch.data()}, cargo_type, src);
-#else
 	/* Choose a random destination. */
 	Source dst{Source::Invalid, Chance16(1, 2) ? SourceType::Town : SourceType::Industry};
 
@@ -474,8 +460,8 @@ bool FindSubsidyCargoDestination(CargoType cargo_type, Source src)
 	CreateSubsidy(cargo_type, src, dst);
 
 	return true;
-#endif
 }
+#endif
 
 /** Perform the economy monthly update of open subsidies, and try to create a new one. */
 void SubsidyMonthlyLoop()
@@ -676,8 +662,9 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 		.shared = &GetRustSharedServices(), .town = &GetRustTownServices(), .industry = &GetIndustryRustServices(),
 		.random_town = []() noexcept -> OpenTTDTownRef { Town *t = Town::GetRandom(); return {t, t->growth_owner.get(), t->index.base()}; },
 		.industry_owner = RustIndustryCanonicalOwner<void *>, .industry_id = RustIndustryID, .next_industry = RustIndustryNextID,
-		.source_flags = [](Source source) noexcept -> PartsOfSubsidy { return source.type == SourceType::Town ? Town::Get(source.ToTownID())->cache.part_of_subsidy : Industry::Get(source.ToIndustryID())->part_of_subsidy; },
-		.set_source_flags = [](Source source, PartsOfSubsidy flags) noexcept { if (source.type == SourceType::Town) Town::Get(source.ToTownID())->cache.part_of_subsidy = flags; else Industry::Get(source.ToIndustryID())->part_of_subsidy = flags; },
+		.has_source_flag = [](Source source, PartOfSubsidy part) noexcept { switch (source.type) { case SourceType::Town: return Town::Get(source.ToTownID())->cache.part_of_subsidy.Test(part); case SourceType::Industry: return Industry::Get(source.ToIndustryID())->part_of_subsidy.Test(part); default: NOT_REACHED(); } },
+		.set_source_flag = [](Source source, PartOfSubsidy part) noexcept { switch (source.type) { case SourceType::Town: Town::Get(source.ToTownID())->cache.part_of_subsidy.Set(part); return; case SourceType::Industry: Industry::Get(source.ToIndustryID())->part_of_subsidy.Set(part); return; default: NOT_REACHED(); } },
+		.clear_source_flags = [](Source source) noexcept { switch (source.type) { case SourceType::Town: Town::Get(source.ToTownID())->cache.part_of_subsidy = {}; return; case SourceType::Industry: Industry::Get(source.ToIndustryID())->part_of_subsidy = {}; return; default: NOT_REACHED(); } },
 		.valid_source = [](Source source) noexcept { return source.type == SourceType::Town ? Town::IsValidID(source.ToTownID()) : source.type == SourceType::Industry && Industry::IsValidID(source.ToIndustryID()); },
 		.can_allocate = []() noexcept { return Subsidy::CanAllocateItem(); },
 		.allocate = [](CargoType cargo, Source src, Source dst, uint16_t remaining) noexcept { return (new Subsidy(cargo, src, dst, remaining))->index.base(); },
