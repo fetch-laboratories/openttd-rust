@@ -3649,11 +3649,6 @@ layouts! {
         max_track_speed,
         speed,
     };
-    "OpenTTDTrainCurrentMaxSpeed6Read" ["probe"] => crate::train::TrainCurrentMaxSpeed6Read {
-        next,
-        tile,
-        status,
-    };
     "OpenTTDTrainUpdateAccelerationRead" ["probe"] => crate::train::TrainUpdateAccelerationRead {
         power,
         weight,
@@ -3810,7 +3805,6 @@ layouts! {
         read_curve_limit,
         read_stop_location,
         read_current_max_speed,
-        read_current_max_speed_6,
         read_update_acceleration,
         read_update_speed,
         read_trackdir,
