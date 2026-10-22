@@ -121,10 +121,6 @@ static void VehicleTransactionStartstopUI(void *shell) noexcept
 	openttd_orders_dirty_vehicle_windows(shell);
 	InvalidateWindowData(WC_VEHICLE_VIEW, v->index);
 }
-static void VehicleTransactionSellRail(OpenTTDCommandCost *out, uint16_t flags, void *v, bool chain, bool backup, uint32_t client) noexcept
-{
-	*reinterpret_cast<CommandCost *>(out) = CmdSellRailWagon(DoCommandFlags(flags), static_cast<Vehicle *>(v), chain, backup, ClientID(client));
-}
 const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
 {
 	static const OpenTTDVehicleCommonServices services{
@@ -155,7 +151,7 @@ const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
 		.waiting_news = VehicleTransactionWaitingNews,
 		.flip_stopped = RustOpaqueVehicleInvoke<RustVehicleFlipStopped>,
 		.startstop_ui = VehicleTransactionStartstopUI,
-		.sell_rail = VehicleTransactionSellRail,
+		.rail = &GetRustRailConstructionServices(),
 		.value = RustOpaqueVehicleRead<int64_t, RustVehicleValue>,
 		.valid_cargo = OpenTTDIsValidCargo,
 	};

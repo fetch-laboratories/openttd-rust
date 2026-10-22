@@ -7,6 +7,8 @@
 
 //! `tile_type.h` values. `services.cpp` and `landscape.cpp` assert every value.
 
+/// `TILE_SIZE`, the tile edge in world pixel units.
+pub const TILE_SIZE: u32 = 16;
 /// `TILE_HEIGHT`, shared by raw-to-pixel map consumers.
 pub const TILE_HEIGHT: u32 = 8;
 /// `TileType::MP_CLEAR`.

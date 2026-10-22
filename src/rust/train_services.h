@@ -27,6 +27,18 @@ static Result TrainVehicleRead(OpenTTDTrainHandle id) noexcept
 	return Read(static_cast<const Train *>(id.shell));
 }
 
+template <auto Operation>
+static void TrainVehicleInvoke(OpenTTDTrainHandle id) noexcept
+{
+	Operation(static_cast<Train *>(id.shell));
+}
+
+template <auto Operation>
+static void TrainVehiclePair(OpenTTDTrainHandle id, OpenTTDTrainHandle other) noexcept
+{
+	Operation(static_cast<Train *>(id.shell), static_cast<Train *>(other.shell));
+}
+
 template <typename Result, auto Member>
 static Result TrainSharedMap(OpenTTDTrainHandle, uint32_t tile) noexcept
 {
@@ -388,11 +400,6 @@ static uint64_t TrainInclination(OpenTTDTrainHandle id, uint8_t a, uint8_t b) no
 	Train *v = static_cast<Train *>(id.shell);
 	return static_cast<uint64_t>(v->UpdateInclination(a != 0, b != 0));
 }
-static void TrainInvalidateGrf(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	v->InvalidateNewGRFCache();
-}
 static uint64_t TrainInvalidPrice(OpenTTDTrainHandle) noexcept
 {
 	return static_cast<uint32_t>(INVALID_PRICE);
@@ -626,11 +633,6 @@ static void TrainSetDepotRes(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
 {
 	SetDepotReservation(TileIndex(a), b != 0);
 }
-static void TrainSetNext(OpenTTDTrainHandle id, OpenTTDTrainHandle a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	v->SetNext(static_cast<Train *>(a.shell));
-}
 
 static void TrainShowEffect(OpenTTDTrainHandle id) noexcept
 {
@@ -858,8 +860,7 @@ static OpenTTDTrainHandle TrainReadNext(OpenTTDTrainHandle id) noexcept
 }
 static OpenTTDTrainHandle TrainReadPrevious(OpenTTDTrainHandle id) noexcept
 {
-	const Train *v=static_cast<Train *>(id.shell);
-	return TrainHandle(v->Previous());
+	return TrainHandle(static_cast<const Train *>(RustVehiclePrevious(static_cast<Train *>(id.shell))));
 }
 static OpenTTDTrainHandle TrainReadNextUnit(OpenTTDTrainHandle id) noexcept
 {

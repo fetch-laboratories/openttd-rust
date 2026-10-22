@@ -49,6 +49,7 @@ struct OpenTTDVehicleSelectionServices {
 	void (*list_push)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(list_push);
 };
 struct OpenTTDOrdersLeaves;
+struct OpenTTDRailConstructionServices;
 struct OpenTTDAircraftStartState { uint8_t state, flags; };
 struct OpenTTDVehicleTransactionStrings {
 	uint32_t destroyed, stopped_in_depot, no_power, in_flight, incompatible_rail, null_string;
@@ -71,7 +72,7 @@ struct OpenTTDVehicleCommonServices {
 	void (*waiting_news)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waiting_news);
 	void (*flip_stopped)(void *) noexcept OPENTTD_SERVICE_DEFAULT(flip_stopped);
 	void (*startstop_ui)(void *) noexcept OPENTTD_SERVICE_DEFAULT(startstop_ui);
-	void (*sell_rail)(OpenTTDCommandCost *, uint16_t, void *, bool, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sell_rail);
+	const OpenTTDRailConstructionServices *rail;
 	int64_t (*value)(void *) noexcept OPENTTD_SERVICE_DEFAULT(value);
 	bool (*valid_cargo)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(valid_cargo);
 };

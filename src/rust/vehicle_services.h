@@ -72,6 +72,16 @@ inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station)
 template <class T> inline auto RustVehicleNextVehicle(const T *v) noexcept { return v->GetNextVehicle(); }
 inline OpenTTDVehicle *RustVehicleNextArticulated(OpenTTDVehicle *v) noexcept { return RustVehicle(VehicleOf(v)->GetNextArticulatedPart()); }
 inline Vehicle *RustVehicleNext(const Vehicle *v) noexcept { return v->Next(); }
+/** Chain, subtype and unit leaves shared by consist transactions and controllers. */
+inline Vehicle *RustVehiclePrevious(const Vehicle *v) noexcept { return v->Previous(); }
+inline void RustVehicleSetNext(Vehicle *v, Vehicle *next) noexcept { v->SetNext(next); }
+inline void RustOpaqueVehicleSetNext(void *v, void *next) noexcept { RustVehicleSetNext(static_cast<Vehicle *>(v), static_cast<Vehicle *>(next)); }
+inline Vehicle *RustVehicleLastEnginePart(Vehicle *v) noexcept { return v->GetLastEnginePart(); }
+inline void RustVehicleSetSubtype(Vehicle *v, uint8_t subtype) noexcept { v->subtype = subtype; }
+inline void RustVehicleInvalidateNewGRFCache(Vehicle *v) noexcept { v->InvalidateNewGRFCache(); }
+inline uint16_t RustVehicleUnitNumber(const Vehicle *v) noexcept { return v->unitnumber; }
+inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNumber(); }
+inline uint16_t RustGroundFirstEngine(const Vehicle *v) noexcept { return v->GetGroundVehicleCache()->first_engine.base(); }
 #ifdef WITH_RUST
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }
 #endif

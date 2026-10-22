@@ -80,7 +80,6 @@ pub struct Services {
     pub(crate) subtype: unsafe extern "C" fn(*mut (), *mut (), u8) -> u8,
     pub(crate) reverse_probability: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) reverse: unsafe extern "C" fn(*mut ()),
-    pub(crate) move_vehicle: unsafe extern "C" fn(*mut (), *mut (), *mut (), u32, bool),
     pub(crate) copy_configuration: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) viewports: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) view_window: unsafe extern "C" fn(*mut (), *mut ()),
@@ -107,15 +106,23 @@ unsafe fn move_vehicle(
     flags: u32,
     whole: bool,
 ) {
+    let b = (w.build_services)();
+    let g = b.refit.common.base.groups;
+    let after = if after.is_null() {
+        super::INVALID_VEHICLE
+    } else {
+        unsafe { (g.vehicle_id)(after) }
+    };
     unsafe {
-        (w.move_vehicle)(
-            out,
-            v,
+        crate::vehicle_transactions::rail::nested_move(
+            b.rail,
+            out.cast(),
+            (flags | u32::from(DoCommandFlag::NO_CARGO_CAPACITY_CHECK)) as u16,
+            (g.vehicle_id)(v),
             after,
-            flags | u32::from(DoCommandFlag::NO_CARGO_CAPACITY_CHECK),
             whole,
         );
-    };
+    }
 }
 
 unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) -> *mut () {
@@ -280,7 +287,7 @@ unsafe fn direct_copy_group(w: &Services, out: *mut (), old: *mut (), new: *mut 
 
 const INVALID_CARGO: u8 = 255;
 const NO_REFIT: u8 = 254;
-const TILE_SIZE: u16 = 16;
+use crate::tile_type::TILE_SIZE;
 
 /// Original `assert` site: the condition is evaluated only in builds whose C++
 /// `assert` is active, and the native wrapper terminates exactly like it.
@@ -621,8 +628,7 @@ unsafe fn replace_chain(
     unsafe { (w.cost_vehicles)(cost) };
     if unsafe { (gw.vehicle_type)(old_head) } == 0 {
         let length = unsafe { (w.length)(old_head) };
-        let old_total_length =
-            (u32::from(length).div_ceil(u32::from(TILE_SIZE)) * u32::from(TILE_SIZE)) as u16;
+        let old_total_length = (u32::from(length).div_ceil(TILE_SIZE) * TILE_SIZE) as u16;
         let mut replacements = Vec::<ChainItem>::new();
         let mut unit = old_head;
         while !unit.is_null() {
@@ -762,7 +768,7 @@ unsafe fn replace_chain(
                 check!(
                     w,
                     u32::from(unsafe { (w.length)(new_head) })
-                        <= u32::from(unsafe { (w.max_length)() }) * u32::from(TILE_SIZE)
+                        <= u32::from(unsafe { (w.max_length)() }) * TILE_SIZE
                 );
                 for item in replacements.iter_mut().skip(1) {
                     let wagon = item.new;

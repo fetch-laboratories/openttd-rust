@@ -1,4 +1,3 @@
-src/autoreplace_cmd.cpp | CargoCapacityLastEnginePart(void *shell) noexcept | d8363d458eed013e | 1
 src/autoreplace_cmd.cpp | CargoCapacityNextPart(void *shell) noexcept | b5ccfbeab5559bd6 | 1
 src/economy.cpp | []() noexcept -> bool | 05d6eb800dc27d98 | 1
 src/economy.cpp | [](OpenTTDStation *station) noexcept -> uint16_t | d08f8c5433be9ae1 | 1

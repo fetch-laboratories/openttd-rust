@@ -503,6 +503,16 @@ witness_blocks! {
         VT_RESTORE = 4 => "vehicle_transactions.restore",
         VT_CLONE_BUILD_SELL = 5 => "vehicle_transactions.clone_build_sell",
         VT_CLONE_JOIN_SELL = 6 => "vehicle_transactions.clone_join_sell",
+        VT_RAIL_DUAL_HEADS = 7 => "vehicle_transactions.rail_dual_heads",
+        VT_RAIL_FRONT_TRASHED = 8 => "vehicle_transactions.rail_front_trashed",
+        VT_RAIL_HEAD_TRANSFER = 9 => "vehicle_transactions.rail_head_transfer",
+        VT_RAIL_MOVE_RESTORE = 10 => "vehicle_transactions.rail_move_restore",
+        VT_RAIL_MULTIHEAD = 11 => "vehicle_transactions.rail_multihead",
+        VT_RAIL_NEW_FRONT = 12 => "vehicle_transactions.rail_new_front",
+        VT_RAIL_NORMALIZE = 13 => "vehicle_transactions.rail_normalize",
+        VT_RAIL_SELL_RESTORE = 14 => "vehicle_transactions.rail_sell_restore",
+        VT_RAIL_SELL_TRANSFER = 15 => "vehicle_transactions.rail_sell_transfer",
+        VT_RAIL_WAGON_JOIN = 16 => "vehicle_transactions.rail_wagon_join",
     }
     water {
         WATER_TRACKS = 0 => "water.tracks",

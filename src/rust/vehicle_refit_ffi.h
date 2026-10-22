@@ -124,6 +124,39 @@ struct OpenTTDVehicleConstructServices {
 	void (*service_flags)(void *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(service_flags);
 	uint32_t wrong_depot;
 };
+struct OpenTTDVehicleBuildServices;
+struct OpenTTDRailConstructionStrings { uint32_t rear_follow, depot_only, no_orders; };
+struct OpenTTDRailConstructionServices {
+	const OpenTTDVehicleBuildServices &(*build)() noexcept OPENTTD_SERVICE_DEFAULT(build);
+	OpenTTDRailConstructionStrings strings;
+	bool (*compatible)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible);
+	bool (*powered)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(powered);
+	void *(*new_wagon)(uint32_t, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(new_wagon);
+	void *(*new_engine)(uint32_t, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(new_engine);
+	void *(*new_rear)(void *) noexcept OPENTTD_SERVICE_DEFAULT(new_rear);
+	void (*link_multihead)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(link_multihead);
+	uint8_t (*subtype)(void *) noexcept OPENTTD_SERVICE_DEFAULT(subtype);
+	void (*set_subtype)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_subtype);
+	void *(*previous)(void *) noexcept OPENTTD_SERVICE_DEFAULT(previous);
+	void *(*last)(void *) noexcept OPENTTD_SERVICE_DEFAULT(last);
+	void (*set_next)(void *, void *) noexcept OPENTTD_SERVICE_DEFAULT(set_next);
+	void *(*next_vehicle)(void *) noexcept OPENTTD_SERVICE_DEFAULT(next_vehicle);
+	void *(*last_engine_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(last_engine_part);
+	const OpenTTDGroundServices *ground;
+	uint16_t (*first_engine)(void *) noexcept OPENTTD_SERVICE_DEFAULT(first_engine);
+	void (*invalidate_grf)(void *) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_grf);
+	uint16_t (*attach_callback)(void *, void *, int32_t *) noexcept OPENTTD_SERVICE_DEFAULT(attach_callback);
+	void (*unknown_attach)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_attach);
+	uint16_t (*train_limit)() noexcept OPENTTD_SERVICE_DEFAULT(train_limit);
+	uint16_t (*unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(unit);
+	void (*use_unit)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(use_unit);
+	void (*release_unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(release_unit);
+	void (*head_windows)(void *) noexcept OPENTTD_SERVICE_DEFAULT(head_windows);
+	void (*front_windows)(void *) noexcept OPENTTD_SERVICE_DEFAULT(front_windows);
+	void (*company_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(company_dirty);
+	void (*depot_changed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_changed);
+};
+const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcept;
 struct OpenTTDVehicleBuildServices {
 	const OpenTTDVehicleRefitServices *refit;
 	const OpenTTDVehicleMassServices *mass;
@@ -135,14 +168,13 @@ struct OpenTTDVehicleBuildServices {
 	bool (*pool_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(pool_available);
 	uint16_t (*free_unit)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(free_unit);
 	const OpenTTDVehicleConstructServices *construct;
-	void *(*rail)(OpenTTDCommandCost *, uint16_t, uint32_t, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(rail);
+	const OpenTTDRailConstructionServices *rail;
 	uint32_t (*ship_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_tile);
 	void *(*new_ship)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_ship);
 	void (*set_purchase)(void *, uint16_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_purchase);
 	void (*articulated_capacity)(uint16_t, uint32_t *) noexcept OPENTTD_SERVICE_DEFAULT(articulated_capacity);
 	uint32_t (*display_capacity)(const OpenTTDEngine *, uint16_t *) noexcept OPENTTD_SERVICE_DEFAULT(display_capacity);
 	bool (*is_engine)(void *) noexcept OPENTTD_SERVICE_DEFAULT(is_engine);
-	void (*normalize)(void *) noexcept OPENTTD_SERVICE_DEFAULT(normalize);
 	void (*presentation)(void *, VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(presentation);
 	void (*use_unit)(void *) noexcept OPENTTD_SERVICE_DEFAULT(use_unit);
 	uint32_t too_many, unavailable;
@@ -163,6 +195,7 @@ void openttd_rust_vehicle_add_articulated(const OpenTTDVehicleArticulatedService
 void openttd_rust_vehicle_articulated_consistency(const OpenTTDVehicleArticulatedServices *, void *);
 uint32_t openttd_rust_vehicle_clone(const OpenTTDVehicleCloneServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, bool);
 OpenTTDVehicleBuildResult openttd_rust_vehicle_build(const OpenTTDVehicleBuildServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint16_t, bool, uint8_t, uint32_t);
+void openttd_rust_train_move(const OpenTTDRailConstructionServices *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, bool);
 OpenTTDVehicleRefitCapacity openttd_rust_vehicle_refit(const OpenTTDVehicleRefitServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, bool, bool, uint8_t);
 }
 #endif

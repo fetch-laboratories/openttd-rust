@@ -201,10 +201,17 @@ unsafe fn clone(
                     }
                 }
                 if unsafe { (b.groups.vehicle_type)(v) } == 0 && !unsafe { (b.groups.front)(v) } {
-                    unsafe {
-                        (c.transactions.move_vehicle)(part.cast(), w, rear, u32::from(flags), true);
+                    let moved = unsafe {
+                        super::rail::nested_move(
+                            s.build.rail,
+                            part,
+                            flags,
+                            (b.groups.vehicle_id)(w),
+                            (b.groups.vehicle_id)(rear),
+                            true,
+                        )
                     };
-                    if !(b.cost.success)(part) {
+                    if !moved {
                         crate::witness::hit(crate::witness::VT_CLONE_JOIN_SELL);
                         unsafe {
                             sell(s, temporary, flags, front);

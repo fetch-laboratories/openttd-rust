@@ -3,12 +3,6 @@
 static VehicleType VehicleBuildDepotKind(uint32_t tile) noexcept { return GetDepotVehicleType(TileIndex(tile)); }
 static uint32_t VehicleBuildArticulatedCount(uint16_t engine, bool capacity) noexcept { return CountArticulatedParts(EngineID(engine), capacity); }
 static uint16_t VehicleBuildFreeUnit(VehicleType type) noexcept { return GetFreeUnitNumber(type); }
-static void *VehicleBuildRail(OpenTTDCommandCost *out, uint16_t flags, uint32_t tile, const OpenTTDEngine *e) noexcept
-{
-	Vehicle *v = nullptr;
-	*reinterpret_cast<CommandCost *>(out) = CmdBuildRailVehicle(DoCommandFlags(flags), TileIndex(tile), EngineOf(e), &v);
-	return v;
-}
 /* Road vehicle and aircraft construction leaves: shell allocation and field stores. */
 static bool VehicleConstructRoadTile(uint32_t tile, uint64_t powered) noexcept { return HasTileAnyRoadType(TileIndex(tile), RoadTypes(powered)); }
 static void *VehicleConstructNewRoad(uint32_t tile) noexcept
@@ -161,7 +155,6 @@ static uint32_t VehicleBuildShipTile(uint32_t tile) noexcept { return GetShipDep
 static void *VehicleBuildNewShip(uint32_t tile) noexcept { Ship *v = new Ship(); v->tile = TileIndex(tile); return v; }
 static void VehicleBuildSetPurchase(void *shell, uint16_t unit, int64_t value) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); v->unitnumber = unit; v->value = value; }
 static uint32_t VehicleBuildDisplayCapacity(const OpenTTDEngine *e, uint16_t *mail) noexcept { return EngineOf(e)->GetDisplayDefaultCapacity(mail); }
-static void VehicleBuildNormalize(void *v) noexcept { NormalizeTrainVehInDepot(Train::From(static_cast<Vehicle *>(v))); }
 static void VehicleBuildPresentation(void *shell, VehicleType type) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
@@ -177,10 +170,10 @@ const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept
 		.refit = &GetRustVehicleRefitServices(), .mass = &GetVehicleMassServices(), .random = &GetRustRandomServices(),
 		.depot_kind = VehicleBuildDepotKind, .engine_cost = RustEngineCost, .default_cargo = RustEngineDefaultCargo,
 		.articulate_count = VehicleBuildArticulatedCount, .pool_available = RustVehicleCanAllocate, .free_unit = VehicleBuildFreeUnit,
-		.construct = &GetVehicleConstructServices(), .rail = VehicleBuildRail,
+		.construct = &GetVehicleConstructServices(), .rail = &GetRustRailConstructionServices(),
 		.ship_tile = VehicleBuildShipTile, .new_ship = VehicleBuildNewShip, .set_purchase = VehicleBuildSetPurchase,
 		.articulated_capacity = RustArticulatedCapacity, .display_capacity = VehicleBuildDisplayCapacity,
-		.is_engine = RustOpaqueVehicleRead<bool, RustTrainIsEngine>, .normalize = VehicleBuildNormalize, .presentation = VehicleBuildPresentation, .use_unit = VehicleBuildUseUnit,
+		.is_engine = RustOpaqueVehicleRead<bool, RustTrainIsEngine>, .presentation = VehicleBuildPresentation, .use_unit = VehicleBuildUseUnit,
 		.too_many = STR_ERROR_TOO_MANY_VEHICLES_IN_GAME, .unavailable = STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE,
 	};
 	return services;

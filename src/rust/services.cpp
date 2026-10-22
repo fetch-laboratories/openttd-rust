@@ -238,7 +238,7 @@ OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept
 static bool Shared_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileIndex{tile}); }
 static uint32_t Shared_distance_from_edge(uint32_t tile) noexcept { return DistanceFromEdge(TileIndex{tile}); }
 static int32_t Shared_tile_max_z(uint32_t tile) noexcept { return OpenTTDTileMaxZ(TileIndex{tile}); }
-static_assert(TILE_HEIGHT == 8);
+static_assert(TILE_HEIGHT == 8 && TILE_SIZE == 16);
 /* Values of the shared Rust header modules (tile_type.rs, slope_func.rs and the like). */
 static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_TUNNELBRIDGE == 9);
 static_assert(INVALID_TILE.base() == UINT32_MAX && TILE_HEIGHT_STEP == 50 && CALLBACK_FAILED == 0xFFFF && INVALID_STRING_ID == 0xFFFF);
@@ -252,6 +252,8 @@ static_assert(to_underlying(DoCommandFlag::AutoReplace) == 6 && to_underlying(Do
 static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);
 static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_GOTO_WAYPOINT == 6 && OT_IMPLICIT == 8);
 static_assert(VL_STANDARD == 0 && VL_SHARED_ORDERS == 1 && VL_STATION_LIST == 2 && VL_DEPOT_LIST == 3 && VL_GROUP_LIST == 4);
+static_assert(GVSF_FRONT == 0 && GVSF_ARTICULATED_PART == 1 && GVSF_WAGON == 2 && GVSF_ENGINE == 3 && GVSF_FREE_WAGON == 4 && GVSF_MULTIHEADED == 5);
+static_assert(CCF_ARRANGE.base() == 3);
 static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28 && PR_CLEAR_DEPOT_TRAIN == 30 && PR_CLEAR_WATER == 34 && PR_BUILD_FOUNDATION == 57);
 static uint32_t Shared_tile_height(uint32_t tile) noexcept { return TileHeight(TileIndex{tile}); }
 static uint8_t Shared_bridge_axis(uint32_t tile) noexcept { return GetBridgeAxis(TileIndex{tile}); }

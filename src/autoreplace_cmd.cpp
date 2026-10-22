@@ -113,17 +113,13 @@ void *CargoCapacityNextPart(void *shell) noexcept
 {
 	return static_cast<Vehicle *>(shell)->Next();
 }
-static void *CargoCapacityLastEnginePart(void *shell) noexcept
-{
-	return static_cast<Vehicle *>(shell)->GetLastEnginePart();
-}
 static void *CargoCapacityOtherMultiheadedPart(void *shell) noexcept
 {
 	return Train::From(static_cast<Vehicle *>(shell))->other_multiheaded_part;
 }
 static OpenTTDCargoCapacityServices CargoCapacityServices()
 {
-	return {CargoCapacityRead, CargoCapacityNextPart, CargoCapacityLastEnginePart, CargoCapacityOtherMultiheadedPart, CargoStorageServices()};
+	return {CargoCapacityRead, CargoCapacityNextPart, RustOpaqueVehicleRead<void *, RustVehicleLastEnginePart>, CargoCapacityOtherMultiheadedPart, CargoStorageServices()};
 }
 #endif
 
