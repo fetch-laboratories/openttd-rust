@@ -29,6 +29,7 @@
     clippy::collapsible_if,
     clippy::if_not_else
 )]
+use crate::direction_func::dir_to_diag_dir as diag;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
 use crate::newgrf_sound::VSE_START;
 use crate::services::{Map, RoadStopType, Services};
@@ -606,10 +607,6 @@ fn reversing(dir: u8) -> bool {
 fn straight(dir: u8) -> bool {
     dir & 6 == 0
 }
-fn diag(dir: u8) -> u8 {
-    (dir >> 1) & 3
-}
-
 /// `RoadVehicle::GetCurrentMaxSpeed`.
 fn max_speed(front: Part, r: MaxSpeedRead, acceleration_model: u8, l: &Leaves) -> i32 {
     let mut speed = i32::from(r.max_track_speed);

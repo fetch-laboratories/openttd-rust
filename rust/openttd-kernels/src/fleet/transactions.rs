@@ -11,6 +11,7 @@ use super::{
     add_replacement, group, remove_replacement, replacement, update_autoreplace,
 };
 use crate::command_type::DoCommandFlag;
+use crate::tile_type::TILE_SIZE;
 /// `EngineID::Invalid()`; shares the 0xFFFF encoding with `GroupID::Invalid()`.
 const INVALID_ENGINE: u16 = INVALID_GROUP;
 use std::ptr;
@@ -280,7 +281,6 @@ unsafe fn direct_copy_group(w: &Services, out: *mut (), old: *mut (), new: *mut 
 
 const INVALID_CARGO: u8 = 255;
 const NO_REFIT: u8 = 254;
-const TILE_SIZE: u16 = 16;
 
 /// Original `assert` site: the condition is evaluated only in builds whose C++
 /// `assert` is active, and the native wrapper terminates exactly like it.
@@ -621,8 +621,7 @@ unsafe fn replace_chain(
     unsafe { (w.cost_vehicles)(cost) };
     if unsafe { (gw.vehicle_type)(old_head) } == 0 {
         let length = unsafe { (w.length)(old_head) };
-        let old_total_length =
-            (u32::from(length).div_ceil(u32::from(TILE_SIZE)) * u32::from(TILE_SIZE)) as u16;
+        let old_total_length = (u32::from(length).div_ceil(TILE_SIZE) * TILE_SIZE) as u16;
         let mut replacements = Vec::<ChainItem>::new();
         let mut unit = old_head;
         while !unit.is_null() {
@@ -762,7 +761,7 @@ unsafe fn replace_chain(
                 check!(
                     w,
                     u32::from(unsafe { (w.length)(new_head) })
-                        <= u32::from(unsafe { (w.max_length)() }) * u32::from(TILE_SIZE)
+                        <= u32::from(unsafe { (w.max_length)() }) * TILE_SIZE
                 );
                 for item in replacements.iter_mut().skip(1) {
                     let wagon = item.new;
