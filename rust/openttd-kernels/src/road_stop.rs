@@ -264,17 +264,20 @@ fn allocate_bay(state: *mut State) -> u8 {
     while !is_free_bay(state, bay_nr) {
         bay_nr += 1;
     }
-    // AllocateDriveThroughBay(bay_nr)
+    allocate_drive_through_bay(state, bay_nr);
+    bay_nr
+}
+/// `RoadStop::AllocateDriveThroughBay`.
+fn allocate_drive_through_bay(state: *mut State, nr: u8) {
     set_status(
         state,
         status(state)
-            & !match bay_nr {
+            & !match nr {
                 0 => BAY0_FREE,
                 1 => BAY1_FREE,
                 _ => unreachable!("original AllocateDriveThroughBay NOT_REACHED"),
             },
     );
-    bay_nr
 }
 /// `RoadStop::FreeBay`.
 fn free_bay(state: *mut State, nr: u8) {
@@ -287,6 +290,20 @@ fn free_bay(state: *mut State, nr: u8) {
                 _ => unreachable!("original FreeBay NOT_REACHED"),
             },
     );
+}
+
+/// `RoadStop::Entry::Enter`.
+fn enter_entry(entry: *mut Entry, total_length: u16) {
+    // SAFETY: Live shared entry; RVs may run through each other, so no bound.
+    unsafe { (*entry).occupied = (*entry).occupied.wrapping_add(total_length) };
+}
+/// `RoadStop::Entry::Leave`.
+fn leave_entry(entry: *mut Entry, total_length: u16) {
+    // SAFETY: Live shared entry; uint16_t arithmetic and the native assertion.
+    unsafe {
+        debug_assert!((*entry).occupied >= total_length);
+        (*entry).occupied = (*entry).occupied.wrapping_sub(total_length);
+    }
 }
 
 /// `RoadStop::Enter` for the stop at `xy`.
@@ -328,9 +345,9 @@ pub(crate) unsafe fn enter(
     crate::witness::hit(crate::witness::ROAD_STOP_ENTER_DRIVE);
     let r = (t.drive_read)(v);
     let e = entry(state, dir_to_diag_dir(r.direction));
-    // SAFETY: Live shared entry; RVs may run through each other, so no bound.
+    enter_entry(e, r.total_length);
+    // SAFETY: Caller's live road owner; no service runs during the store.
     unsafe {
-        (*e).occupied = (*e).occupied.wrapping_add(r.total_length);
         crate::road::set_state(road, crate::road::get_state(road) | IN_DT_ROAD_STOP);
     }
     true
@@ -356,11 +373,7 @@ pub(crate) unsafe fn leave(
         crate::witness::hit(crate::witness::ROAD_STOP_LEAVE_DRIVE);
         let r = (table(s).drive_read)(v);
         let e = entry(state, dir_to_diag_dir(r.direction));
-        // SAFETY: Live shared entry; uint16_t arithmetic.
-        unsafe {
-            debug_assert!((*e).occupied >= r.total_length);
-            (*e).occupied = (*e).occupied.wrapping_sub(r.total_length);
-        }
+        leave_entry(e, r.total_length);
     }
 }
 /// `RoadStop::GetByTile(v->tile, GetRoadStopType(v->tile))->Leave(v)`.
