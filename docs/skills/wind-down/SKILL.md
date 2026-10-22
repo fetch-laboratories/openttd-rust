@@ -40,6 +40,14 @@ gates. Root merges what passes. Anything needing another review round, another
 fix round or new scope stays a draft with its state recorded. Root then tidies
 up.
 
+The wind-down is time-boxed to about 15 minutes of root work and never waits
+on CI. Root merges only PRs whose Full already passed (after the AGENTS.md
+step 4 local check), records any run still in progress in the checkpoint, sends
+its report and stops; a failure that appears later belongs to the next session.
+If the tip goes red during the wind-down, root resets it as AGENTS.md step 4
+says, without asking, and names the reset in its report. Root does not open fix
+PRs or wait on new CI during a wind-down.
+
 Stopping work means leaving it exactly as it is: the worktree, its uncommitted
 changes and its branch all stay, and a state note goes on the PR or issue.
 Removing worktrees and branches is for merged work only.

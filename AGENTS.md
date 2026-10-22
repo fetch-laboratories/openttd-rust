@@ -265,8 +265,15 @@ For substantive changes:
    on the PR). Otherwise a fresh reviewer checks and fixes only the conflict
    resolution.
 4. Root integrates after review and required checks, records completion, and
-   removes the merged worktree. A red check on `rust-migration` itself is fixed
-   before more integrations.
+   removes the merged worktree. If `rust-migration` has moved since the PR's
+   Full ran, root first builds the merge result locally (`git merge` in the
+   PR's worktree without committing, then `python3 tools/migration.py
+   rust-checks`); if it fails, the PR does not merge and gets a base update. A
+   red check on `rust-migration` itself is fixed before more integrations: when
+   only docs commits sit on top of the breaking merge, root resets
+   `rust-migration` to the commit before it, force-pushes, reapplies the docs
+   commits and reopens the PR, without asking (user decision, 2026-10-22), and
+   reports it afterwards.
 
 Keep at most six unintegrated component branches, counting drafts and WIP
 (#157). Integrating reviewed work comes before starting a new component, and a
