@@ -269,13 +269,13 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	v->engine_type = e->index;
 	v->reliability = RustEngineReliability(e);
 	v->reliability_spd_dec = e->reliability_spd_dec;
-	v->max_age = e->GetLifeLengthInDays();
+	v->max_age = RustEngineLifeLength(e);
 }
 
 static void Ship_build_dates(uint32_t id) noexcept
 {
 	Ship *v = Ship::Get(VehicleID(id));
-	v->SetServiceInterval(Company::Get(_current_company)->settings.vehicle.servint_ships);
+	RustVehicleSetServiceInterval(v, Company::Get(_current_company)->settings.vehicle.servint_ships);
 	v->date_of_last_service = TimerGameEconomy::date;
 	v->date_of_last_service_newgrf = TimerGameCalendar::date;
 	v->build_year = TimerGameCalendar::year;

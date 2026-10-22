@@ -114,12 +114,6 @@ extern "C" uint64_t openttd_orders_ticks_per_second() noexcept
 	return Ticks::TICKS_PER_SECOND;
 }
 
-extern "C" uint64_t openttd_orders_unit_number(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return v->unitnumber;
-}
-
 extern "C" uint64_t openttd_orders_economy_date() noexcept
 {
 	return TimerGameEconomy::date.base();
@@ -625,7 +619,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.primary_vehicle = openttd_orders_primary_vehicle,
 	.vehicle_ownership = openttd_orders_vehicle_ownership,
 	.ticks_per_second = openttd_orders_ticks_per_second,
-	.unit_number = openttd_orders_unit_number,
+	.unit_number = RustVehicleLegacyUnitNumber,
 	.economy_date = openttd_orders_economy_date,
 	.economy_fraction = openttd_orders_economy_fraction,
 	.maximum_date = openttd_orders_maximum_date,

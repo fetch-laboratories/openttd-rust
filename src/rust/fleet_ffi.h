@@ -179,7 +179,6 @@ struct OpenTTDFleetPendingServices {
 const OpenTTDFleetGroupServices &FleetGroupServices();
 const OpenTTDFleetTransactionServices &FleetTransactionServices();
 /** #139 capacity traversal service, shared as the fleet next-part service. */
-void *CargoCapacityNextPart(void *shell) noexcept;
 extern "C" {
 void *openttd_rust_fleet_group_create();
 void openttd_rust_fleet_group_destroy(void *);

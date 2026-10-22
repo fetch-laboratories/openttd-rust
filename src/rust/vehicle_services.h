@@ -77,9 +77,11 @@ inline Vehicle *RustVehiclePrevious(const Vehicle *v) noexcept { return v->Previ
 inline void RustVehicleSetNext(Vehicle *v, Vehicle *next) noexcept { v->SetNext(next); }
 inline void RustOpaqueVehicleSetNext(void *v, void *next) noexcept { RustVehicleSetNext(static_cast<Vehicle *>(v), static_cast<Vehicle *>(next)); }
 inline Vehicle *RustVehicleLastEnginePart(Vehicle *v) noexcept { return v->GetLastEnginePart(); }
+inline void RustVehicleSetServiceInterval(Vehicle *v, uint16_t interval) noexcept { v->SetServiceInterval(interval); }
 inline void RustVehicleSetSubtype(Vehicle *v, uint8_t subtype) noexcept { v->subtype = subtype; }
 inline void RustVehicleInvalidateNewGRFCache(Vehicle *v) noexcept { v->InvalidateNewGRFCache(); }
 inline uint16_t RustVehicleUnitNumber(const Vehicle *v) noexcept { return v->unitnumber; }
+inline uint64_t RustVehicleLegacyUnitNumber(void *v) noexcept { return RustVehicleUnitNumber(static_cast<Vehicle *>(v)); }
 inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNumber(); }
 inline uint16_t RustGroundFirstEngine(const Vehicle *v) noexcept { return v->GetGroundVehicleCache()->first_engine.base(); }
 #ifdef WITH_RUST

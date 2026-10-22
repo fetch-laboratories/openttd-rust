@@ -23,7 +23,7 @@ static void VehicleConstructRoadFront(void *shell, const OpenTTDEngine *e) noexc
 {
 	RoadVehicle *v = static_cast<RoadVehicle *>(shell);
 	RoadType rt = EngineOf(e)->VehInfo<RoadVehicleInfo>().roadtype;
-	v->gcache.first_engine = EngineID::Invalid(); // needs to be set before first callback
+	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
 	v->SetFrontEngine();
 	v->roadtype = rt;
 	v->compatible_roadtypes = RoadTypes(RustEnginePoweredRoadTypes(EngineOf(e)));
@@ -66,10 +66,10 @@ static void VehicleConstructAircraftProperties(void *aircraft, void *shadow, con
 	Aircraft *u = static_cast<Aircraft *>(shadow);
 	v->acceleration = EngineOf(e)->VehInfo<AircraftVehicleInfo>().acceleration;
 	u->engine_type = EngineOf(e)->index;
-	v->subtype = subtype;
-	u->subtype = AIR_SHADOW;
+	RustVehicleSetSubtype(v, subtype);
+	RustVehicleSetSubtype(u, AIR_SHADOW);
 	v->vehicle_flags = {};
-	v->SetNext(u);
+	RustVehicleSetNext(v, u);
 }
 static void VehicleConstructRotor(void *rotor, void *aircraft, void *shadow) noexcept
 {
@@ -83,9 +83,9 @@ static void VehicleConstructRotor(void *rotor, void *aircraft, void *shadow) noe
 	w->z_pos = v->z_pos + ROTOR_Z_OFFSET;
 	w->vehstatus = {VehState::Hidden, VehState::Unclickable};
 	w->spritenum = 0xFF;
-	w->subtype = AIR_ROTOR;
+	RustVehicleSetSubtype(w, AIR_ROTOR);
 	w->sprite_cache.sprite_seq.Set(SPR_ROTOR_STOPPED);
-	static_cast<Vehicle *>(shadow)->SetNext(w);
+	RustVehicleSetNext(static_cast<Vehicle *>(shadow), w);
 }
 static void VehicleConstructAircraftCapacity(const OpenTTDEngine *e, void *aircraft, void *shadow) noexcept
 {
@@ -100,8 +100,8 @@ static void VehicleConstructRoadCapacity(void *front, void *part, uint16_t capac
 	Vehicle *u = static_cast<Vehicle *>(part);
 	u->cargo_cap = capacity;
 	u->refit_cap = 0;
-	v->InvalidateNewGRFCache();
-	u->InvalidateNewGRFCache();
+	RustVehicleInvalidateNewGRFCache(v);
+	RustVehicleInvalidateNewGRFCache(u);
 }
 static void VehicleConstructEngineCommon(void *shell, const OpenTTDEngine *engine) noexcept
 {
@@ -112,12 +112,12 @@ static void VehicleConstructEngineCommon(void *shell, const OpenTTDEngine *engin
 	v->engine_type = e->index;
 	v->reliability = RustEngineReliability(e);
 	v->reliability_spd_dec = e->reliability_spd_dec;
-	v->max_age = e->GetLifeLengthInDays();
+	v->max_age = RustEngineLifeLength(e);
 }
 static void VehicleConstructServiceDates(void *shell, uint16_t interval) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
-	v->SetServiceInterval(interval);
+	RustVehicleSetServiceInterval(v, interval);
 	v->date_of_last_service = TimerGameEconomy::date;
 	v->date_of_last_service_newgrf = TimerGameCalendar::date;
 }
@@ -163,7 +163,6 @@ static void VehicleBuildPresentation(void *shell, VehicleType type) noexcept
 	SetWindowDirty(WC_COMPANY, OpenTTDCurrentCompany());
 	if (RustIsLocalCompany()) InvalidateAutoreplaceWindow(v->engine_type, v->group_id);
 }
-static void VehicleBuildUseUnit(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); Company::Get(v->owner)->freeunits[v->type].UseID(v->unitnumber); }
 const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept
 {
 	static const OpenTTDVehicleBuildServices services{
@@ -173,7 +172,7 @@ const OpenTTDVehicleBuildServices &GetRustVehicleBuildServices() noexcept
 		.construct = &GetVehicleConstructServices(), .rail = &GetRustRailConstructionServices(),
 		.ship_tile = VehicleBuildShipTile, .new_ship = VehicleBuildNewShip, .set_purchase = VehicleBuildSetPurchase,
 		.articulated_capacity = RustArticulatedCapacity, .display_capacity = VehicleBuildDisplayCapacity,
-		.is_engine = RustOpaqueVehicleRead<bool, RustTrainIsEngine>, .presentation = VehicleBuildPresentation, .use_unit = VehicleBuildUseUnit,
+		.is_engine = RustOpaqueVehicleRead<bool, RustTrainIsEngine>, .presentation = VehicleBuildPresentation, .use_unit = RustVehicleUseCurrentUnit,
 		.too_many = STR_ERROR_TOO_MANY_VEHICLES_IN_GAME, .unavailable = STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE,
 	};
 	return services;

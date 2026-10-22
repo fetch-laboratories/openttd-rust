@@ -99,7 +99,7 @@ static void OPENTTD_DISASTER_CALL DisasterWrite(void *, uint32_t field, uint32_t
 {
 	Vehicle *v = Vehicle::Get(id);
 	switch (field) {
-		case 0: v->subtype = value; break;
+		case 0: RustVehicleSetSubtype(v, static_cast<uint8_t>(value)); break;
 		case 1: v->x_pos = value; break;
 		case 2: v->y_pos = value; break;
 		case 3: v->z_pos = value; break;
@@ -110,7 +110,7 @@ static void OPENTTD_DISASTER_CALL DisasterWrite(void *, uint32_t field, uint32_t
 		case 8: v->tick_counter = value; break;
 		case 9: v->owner = CompanyID{static_cast<uint8_t>(value)}; break;
 		case 10: v->vehstatus = VehStates{static_cast<uint8_t>(value)}; break;
-		case 11: v->SetNext(Vehicle::Get(static_cast<uint32_t>(value))); break;
+		case 11: RustVehicleSetNext(v, Vehicle::Get(static_cast<uint32_t>(value))); break;
 		case 12: v->sprite_cache.sprite_seq.Set(value); break;
 		case 16: v->breakdown_ctr = value; break;
 		case 17: v->breakdown_delay = value; break;

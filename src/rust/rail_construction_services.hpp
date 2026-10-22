@@ -12,9 +12,9 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	v->spritenum = rvi->image_index;
 
 	v->engine_type = e->index;
-	v->gcache.first_engine = EngineID::Invalid(); // needs to be set before first callback
+	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
 
-	DiagDirection dir = GetRailDepotDirection(tile);
+	DiagDirection dir = RustRailDepotDirection(tile.base());
 
 	v->direction = DiagDirToDir(dir);
 	v->tile = tile;
@@ -24,7 +24,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 
 	v->x_pos = x;
 	v->y_pos = y;
-	v->z_pos = GetSlopePixelZ(x, y, true);
+	v->z_pos = SharedSlopePixelZ(x, y, true);
 	v->owner = _current_company;
 	v->SetTrack(TRACK_BIT_DEPOT);
 	v->vehstatus = {VehState::Hidden, VehState::DefaultPalette};
@@ -34,7 +34,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	v->SetFreeWagon();
 	InvalidateWindowData(WC_VEHICLE_DEPOT, v->tile);
 
-	v->cargo_type = e->GetDefaultCargoType();
+	v->cargo_type = RustEngineDefaultCargo(engine);
 	assert(IsValidCargoType(v->cargo_type));
 	v->cargo_cap = rvi->capacity;
 	v->refit_cap = 0;
@@ -53,7 +53,7 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	const Engine *e = EngineOf(engine);
 	const RailVehicleInfo *rvi = &e->VehInfo<RailVehicleInfo>();
 	TileIndex tile(tile_index);
-	DiagDirection dir = GetRailDepotDirection(tile);
+	DiagDirection dir = RustRailDepotDirection(tile.base());
 	int x = TileX(tile) * TILE_SIZE + _vehicle_initial_x_fract[dir];
 	int y = TileY(tile) * TILE_SIZE + _vehicle_initial_y_fract[dir];
 
@@ -63,11 +63,11 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	v->owner = _current_company;
 	v->x_pos = x;
 	v->y_pos = y;
-	v->z_pos = GetSlopePixelZ(x, y, true);
+	v->z_pos = SharedSlopePixelZ(x, y, true);
 	v->SetTrack(TRACK_BIT_DEPOT);
 	v->vehstatus = {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette};
 	v->spritenum = rvi->image_index;
-	v->cargo_type = e->GetDefaultCargoType();
+	v->cargo_type = RustEngineDefaultCargo(engine);
 	assert(IsValidCargoType(v->cargo_type));
 	v->cargo_cap = rvi->capacity;
 	v->refit_cap = 0;
@@ -75,15 +75,15 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	v->last_loading_station = StationID::Invalid();
 
 	v->engine_type = e->index;
-	v->gcache.first_engine = EngineID::Invalid(); // needs to be set before first callback
+	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
 
 	v->reliability = e->reliability;
 	v->reliability_spd_dec = e->reliability_spd_dec;
-	v->max_age = e->GetLifeLengthInDays();
+	v->max_age = RustEngineLifeLength(e);
 
 	v->SetRailTypes(rvi->railtypes);
 
-	v->SetServiceInterval(Company::Get(_current_company)->settings.vehicle.servint_trains);
+	RustVehicleSetServiceInterval(v, Company::Get(_current_company)->settings.vehicle.servint_trains);
 	v->date_of_last_service = TimerGameEconomy::date;
 	v->date_of_last_service_newgrf = TimerGameCalendar::date;
 	v->build_year = TimerGameCalendar::year;
@@ -133,7 +133,7 @@ static uint16_t RailAttachCallback(void *part, void *head, int32_t *regs100) noe
 	const Train *h = static_cast<Train *>(head);
 	return GetVehicleCallbackParent(CBID_TRAIN_ALLOW_WAGON_ATTACH, 0, 0, h->engine_type, t, h, std::span(regs100, 1));
 }
-static void RailUnknownAttach(void *head, uint16_t callback) noexcept { ErrorUnknownCallbackResult(static_cast<Train *>(head)->GetGRFID(), CBID_TRAIN_ALLOW_WAGON_ATTACH, callback); }
+static void RailUnknownAttach(void *head, uint16_t callback) noexcept { RustUnknownCallbackResult(static_cast<Train *>(head)->GetGRFID(), CBID_TRAIN_ALLOW_WAGON_ATTACH, callback); }
 static void RailHeadWindows(void *shell) noexcept
 {
 	const Vehicle *head = static_cast<Vehicle *>(shell);

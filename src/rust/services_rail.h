@@ -30,6 +30,12 @@ inline OpenTTDSignalContext GetRustSignalContext() noexcept
 /* Preserve native accessor types and assertion policy. The FFI tables adapt
  * only result widths; native consumers inline these same reads without another
  * service-table call or a second definition of the map query. */
+template <typename EngineType>
+inline bool RustRailCompatible(EngineType engine, RailType tile) noexcept { return IsCompatibleRail(engine, tile); }
+template <typename EngineType>
+inline bool RustRailPowered(EngineType engine, RailType tile) noexcept { return HasPowerOnRail(engine, tile); }
+inline bool RustRailCompatibleLegacy(uint8_t engine, uint8_t tile) noexcept { return RustRailCompatible(static_cast<RailType>(engine), static_cast<RailType>(tile)); }
+inline bool RustRailPoweredLegacy(uint8_t engine, uint8_t tile) noexcept { return RustRailPowered(static_cast<RailType>(engine), static_cast<RailType>(tile)); }
 inline bool RustRailIsDepot(uint32_t tile) noexcept { return IsRailDepot(TileIndex(tile)); }
 inline DiagDirection RustRailDepotDirection(uint32_t tile) noexcept { return GetRailDepotDirection(TileIndex(tile)); }
 inline TrackBits RustRailTracks(uint32_t tile) noexcept { return GetTrackBits(TileIndex(tile)); }

@@ -347,13 +347,7 @@ static void Co_set_vehicle_owner(uint32_t id, uint8_t owner) noexcept
 	Vehicle *v = Vehicle::Get(id);
 	v->owner = CompanyID(owner);
 	v->colourmap = PAL_NONE;
-	v->InvalidateNewGRFCache();
-}
-static void Co_assign_unit_number(uint32_t id, uint8_t company) noexcept
-{
-	Vehicle *v = Vehicle::Get(id);
-	auto &unitidgen = Company::Get(company)->freeunits[v->type];
-	v->unitnumber = unitidgen.UseID(unitidgen.NextID());
+	RustVehicleInvalidateNewGRFCache(v);
 }
 static void Co_remove_engine_replacements(uint8_t id) noexcept { RemoveAllEngineReplacementForCompany(Company::Get(id)); }
 static uint32_t Co_group_next_owned(uint8_t owner, uint32_t from) noexcept { return NextOwned<Group>(owner, from, [](const Group *g) { return g->owner; }); }
@@ -464,7 +458,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.vehicle_group_flags = Co_vehicle_group_flags, .vehicle_service_interval_is_custom = Co_vehicle_service_interval_is_custom,
 		.delete_vehicle = Co_delete_vehicle, .count_group_engine = Co_count_group_engine,
 		.count_group_vehicle = Co_count_group_vehicle, .reset_service_interval = Co_reset_service_interval,
-		.set_vehicle_owner = Co_set_vehicle_owner, .assign_unit_number = Co_assign_unit_number,
+		.set_vehicle_owner = Co_set_vehicle_owner, .assign_unit_number = RustCompanyAssignVehicleUnit,
 		.remove_engine_replacements = Co_remove_engine_replacements, .group_next_owned = Co_group_next_owned,
 		.delete_group = Co_delete_group, .transfer_group = Co_transfer_group,
 		.copy_service_interval_defaults = Co_copy_service_interval_defaults, .update_autoreplace = Co_update_autoreplace,

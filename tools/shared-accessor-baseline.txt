@@ -1,4 +1,3 @@
-src/autoreplace_cmd.cpp | CargoCapacityNextPart(void *shell) noexcept | b5ccfbeab5559bd6 | 1
 src/economy.cpp | []() noexcept -> bool | 05d6eb800dc27d98 | 1
 src/economy.cpp | [](OpenTTDStation *station) noexcept -> uint16_t | d08f8c5433be9ae1 | 1
 src/economy.cpp | [](OpenTTDStation *station, OpenTTDVehicle *vehicle) noexcept -> uint32_t | 9863489038d87581 | 1
@@ -66,7 +65,6 @@ src/order_cmd.cpp | openttd_orders_station_owner(uint16_t destination) noexcept 
 src/order_cmd.cpp | openttd_orders_station_tile(uint16_t destination) noexcept | 6bd6189b29cba5aa | 1
 src/order_cmd.cpp | openttd_orders_timetable_dirty(void *ctx) noexcept | 46e7dd5322c3c04a | 1
 src/order_cmd.cpp | openttd_orders_timetable_year_limit() noexcept | 65f1171d2d4fe3ef | 1
-src/order_cmd.cpp | openttd_orders_unit_number(void *ctx) noexcept | d3f367252bfba281 | 1
 src/order_cmd.cpp | openttd_orders_vehicle_group(void *ctx) noexcept | d932fd412582f2de | 1
 src/order_cmd.cpp | openttd_orders_vehicle_id(void *ctx) noexcept | 8a72932b898fb672 | 1
 src/order_cmd.cpp | openttd_orders_vehicle_status(void *ctx) noexcept | 0666ba99af5a091d | 1
@@ -165,7 +163,6 @@ write | src/economy.cpp | [](OpenTTDVehicle *handle, int64_t value) noexcept -> 
 write | src/economy.cpp | [](OpenTTDVehicle *handle, uint16_t value) noexcept -> void | cebe9268db3802a2 | 1
 write | src/order_cmd.cpp | openttd_orders_last_station_write(void *ctx, uint16_t station) noexcept | 5b7a6c4866ddd3da | 1
 write | src/rust/company_adapter.cpp | Co_add_airport_infrastructure(uint8_t new_owner, uint8_t old_owner) noexcept | d8f0ad7c93f2f046 | 1
-write | src/rust/company_adapter.cpp | Co_assign_unit_number(uint32_t id, uint8_t company) noexcept | 828c84656df232ed | 1
 write | src/rust/company_adapter.cpp | Co_set_station_owner(uint32_t id, uint8_t owner) noexcept | b1bc0135df3a7a84 | 1
 write | src/rust/fleet_group_services.hpp | FleetGroup_set_membership(void *shell, uint16_t id) noexcept | 1b6edd36dbec0c7a | 1
 write | src/rust/ship_control_services.h | Ship_visit_set(uint32_t station, uint32_t vehicle_type) noexcept | 680b8e84edac38d1 | 1

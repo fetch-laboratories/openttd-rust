@@ -153,7 +153,7 @@ static void TrainBeginLoading(OpenTTDTrainHandle id) noexcept
 static void TrainCacheOverride(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	v->tcache.cached_override = GetWagonOverrideSpriteSet(v->engine_type, v->cargo_type, v->gcache.first_engine);
+	v->tcache.cached_override = GetWagonOverrideSpriteSet(v->engine_type, v->cargo_type, EngineID(RustGroundFirstEngine(v)));
 }
 static uint64_t TrainCallbackLength(OpenTTDTrainHandle id) noexcept
 {

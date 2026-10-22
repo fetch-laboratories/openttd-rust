@@ -109,10 +109,6 @@ static void CargoCapacityRead(void *shell, OpenTTDCargoCapacityVehicle *out) noe
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	*out = {RustVehicleCargoOwner(v), v->cargo_cap, v->cargo_type, static_cast<uint8_t>(v->type == VEH_TRAIN), static_cast<uint8_t>(v->IsArticulatedPart())};
 }
-void *CargoCapacityNextPart(void *shell) noexcept
-{
-	return static_cast<Vehicle *>(shell)->Next();
-}
 static void *CargoCapacityOtherMultiheadedPart(void *shell) noexcept
 {
 	return Train::From(static_cast<Vehicle *>(shell))->other_multiheaded_part;
@@ -121,7 +117,7 @@ const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept
 {
 	static const OpenTTDCargoCapacityServices services{
 		.read = CargoCapacityRead,
-		.next_part = CargoCapacityNextPart,
+		.next_part = RustOpaqueVehicleRead<void *, RustVehicleNext>,
 		.last_engine_part = RustOpaqueVehicleRead<void *, RustVehicleLastEnginePart>,
 		.other_multiheaded_part = CargoCapacityOtherMultiheadedPart,
 		.cargo = CargoStorageServices(),
