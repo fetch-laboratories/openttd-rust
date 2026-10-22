@@ -125,13 +125,21 @@ LD_LIBRARY_PATH="$PWD/.local/deps/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$L
 
 ### Generated ABI probes and fixture defaults (#284)
 
-`layouts!` declarations in `abi.rs`, `company.rs`, `crypto_primitives.rs`, `blake2b.rs`,
-`x25519.rs` and `auth.rs` name the C++ type, probe group and ordered Rust fields. Use
-`rust_field => cpp_field` for aliases and `width field: RustType` for an extra
-native-width check. Native-only groups remain in their owning unit tests.
-CMake runs `tools/generate-abi.py` into the build directory; probes compare the
-complete list and its `SIZE_MAX` terminator through the named metadata API.
-Add declarations there, never a second C++ field list or numeric type ID.
+Each component declares `layouts!` in the module that owns the type; they name the C++ type,
+probe group and ordered Rust fields. Use `rust_field => cpp_field` for aliases and
+`width field: RustType` for an extra native-width check. Native-only groups remain in their
+owning unit tests. `rust/openttd-kernels/build.rs` lists every module that invokes `layouts!`
+for `abi::layout`, and `tools/generate-abi.py` scans the same modules, so a port edits no shared
+registry file. CMake runs the generator into the build directory; probes compare the complete
+list and its `SIZE_MAX` terminator through the named metadata API. Generated `abi-includes.inc`
+includes each layout type's header. Add declarations to the owning module, never a second C++
+field list or numeric type ID.
+
+A component's native ABI probes live in `tools/migration/windows-abi/NAME.inc`: its own
+`#include`s, helpers, and a probe function registered with `ABI_PROBE(function)`. The generator
+lists every fragment in `abi-probes.inc`, in file-name order (`ABI_PROBE_FIRST` runs before the
+rest); a fragment that needs another includes it. `windows-abi.cpp` keeps only the kernel probes
+that predate the split.
 
 Callback declarations inherit signature-correct abort defaults. Fixtures specify
 only callbacks they actually use; data pointers and scalar carriers retain their
@@ -371,7 +379,7 @@ references, closing the [MSVC i686 alignment gap](https://doc.rust-lang.org/rust
 
 `windows-rust-evidence.py` checks PE machine headers, Ninja response files, exact
 archive linkage, MSVC maps and static CRT imports, and runs the native ABI
-executable: struct sizes, alignments and field offsets for every `abi.rs` layout
+executable: struct sizes, alignments and field offsets for every `layouts!` declaration
 ID, high-bit scalars, by-value returns, sentinels, null/empty inputs, Rust
 allocation/view/destroy paths, history-engine staging and a per-thread non-C
 locale lowercase check (signed negative compare arguments stay outside the defined
@@ -394,8 +402,9 @@ corrections in the roadmap and edit `/start-development` only to improve it;
 root follows these skills and leaves them unedited.
 
 Shared append lists group by component (reserve sections for concurrent ports),
-then sort entries by name: includes after stdafx/before safeguards, independent
-ABI probe calls, and shared table fields/mirrors/initializers/layouts (one field per line).
+then sort entries by name: includes after stdafx/before safeguards, and shared table
+fields/mirrors/initializers (one field per line). ABI layouts and probes are per-component
+files, not shared lists.
 Witness blocks are alphabetical; keep names and consecutive local indices
 together in `witness_blocks!`; global indices/array lengths are derived.
 

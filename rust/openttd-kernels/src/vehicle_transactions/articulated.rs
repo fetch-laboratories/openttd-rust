@@ -204,3 +204,15 @@ pub unsafe extern "C" fn openttd_rust_vehicle_articulated_consistency(
 ) {
     unsafe { consistency(s, first) };
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDArticulatedPart" ["probe"] => Part { image, capacity, };
+    "OpenTTDArticulatedProbability" ["probe"] => Probability { present, value, };
+    "OpenTTDVehicleArticulatedServices" ["probe"] => Services {
+        refit, default_cargo, capacity, pool_available, has_callback, next_part, prepare_previous,
+        new_train, new_road, road_length, copy_roadtype, train_info, road_info, set_part, mark_train,
+        mark_road, copy_common, random_bits, flip_image, reverse, position, available_cargo, warning,
+        has_articulated, next_articulated, max_parts, all_cargo,
+    };
+}

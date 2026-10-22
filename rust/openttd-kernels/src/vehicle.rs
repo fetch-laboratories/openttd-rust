@@ -410,6 +410,195 @@ impl VehicleServices {
     }
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDVehicleNewPosition" ["probe"] => NewPosition {
+        x,
+        y,
+        tile,
+    };
+    "OpenTTDVehicleServices" ["probe"] => VehicleServices {
+        vehicles_on_tile,
+        write_counters,
+        waiting_for_unbunching,
+        leave_unbunching_depot,
+        reset_depot_unbunching,
+        enter_depot,
+        pathfinding_result,
+        new_position,
+        move_then_status,
+        base_viewport,
+        property,
+        callback,
+        unknown_callback_result,
+        length_changed,
+        play_vehicle_sound,
+        play_sound,
+        large_explosion,
+        order_free,
+        order_dummy,
+        start_stop_dirty,
+        destroy,
+        check_orders,
+        day,
+        write_day,
+        write_direction,
+        write_speed,
+        last_station,
+        write_last_station,
+        set_dest_tile,
+        write_dest,
+        write_progress,
+        write_max_speed,
+        previous_tile,
+        detach_last,
+        next,
+        engine_id,
+        engine,
+        engine_for_length,
+        write_tick,
+        direction,
+        status,
+        tile,
+        progress,
+        dest_tile,
+        order_type,
+        order_destination,
+        order_nonstop,
+        subtype,
+        x,
+        y,
+        z,
+        tick,
+        owner,
+        speed,
+        subspeed,
+        running,
+        order_time,
+        vehicle_type,
+        write_x,
+        write_y,
+        write_z,
+        write_tile,
+        write_status,
+        write_subspeed,
+        write_breakdown_counter,
+        write_running,
+        write_order_time,
+        write_profit,
+        write_economy_service,
+        write_calendar_service,
+        write_breakdowns,
+        write_reliability,
+        write_cargo_age,
+        coordinates,
+        xy,
+        speed_inputs,
+        direction_progress,
+        tick_status,
+        day_cost,
+        make_dummy,
+        loading,
+        check_orders_only,
+        write_coordinates,
+        altitude_inputs,
+        position_observations,
+        movement_observations,
+        max_speed,
+        maintenance,
+    };
+    "OpenTTDGroundMoved" ["probe"] => Moved {
+        old_z,
+        z,
+        cur_speed,
+        max_track_speed,
+    };
+    "OpenTTDGroundSpeed" ["probe"] => Speed {
+        distance,
+        cur_speed,
+    };
+    "OpenTTDGroundLastSpeed" ["probe"] => LastSpeed {
+        status,
+    };
+    "OpenTTDGroundCrash" ["probe"] => Crash {
+        victims,
+        front,
+    };
+    "OpenTTDGroundServices" ["probe"] => GroundServices {
+        cache_begin,
+        move_incline,
+        update_viewport_then_next,
+        turn,
+        do_update_speed,
+        set_last_speed,
+        acceleration,
+        crash,
+        first_cargo_changed,
+        go_to_depot_service,
+        write_first_engine,
+        write_length,
+        cached_length,
+        has_articulated,
+    };
+    "OpenTTDVehiclePreviousTile" ["probe"] => PreviousTile {
+        tile,
+        exists,
+    };
+    "OpenTTDGroundViewportNext" ["probe"] => ViewportNext {
+        next,
+        final_progress,
+    };
+    "OpenTTDEngineForLength" ["probe"] => EngineForLength {
+        engine,
+        grf_version,
+    };
+    "OpenTTDVehicleCoordinates" ["probe"] => Coordinates {
+        x,
+        y,
+        z,
+    };
+    "OpenTTDVehicleXY" ["probe"] => XY {
+        x,
+        y,
+    };
+    "OpenTTDVehicleSpeedInputs" ["probe"] => SpeedInputs {
+        speed,
+        max_speed,
+        acceleration,
+        status,
+        subspeed,
+    };
+    "OpenTTDVehicleDirectionProgress" ["probe"] => DirectionProgress {
+        direction,
+        progress,
+    };
+    "OpenTTDVehicleTickStatus" ["probe"] => TickStatus {
+        tick,
+        status,
+    };
+    "OpenTTDVehicleDayCost" ["probe"] => DayCost {
+        profit,
+        running,
+    };
+    "OpenTTDVehiclePositionObservations" ["probe"] => PositionObservations {
+        subtype,
+        z,
+    } width z: *const i32;
+    "OpenTTDVehicleMovementObservations" ["probe"] => MovementObservations {
+        position,
+        x,
+        y,
+        speed,
+        direction,
+    } width direction: *const crate::vehicle::Direction;
+    "OpenTTDVehicleAltitudeInputs" ["probe"] => AltitudeInputs {
+        max_speed,
+        direction,
+    };
+    "OrderType" ["maintenance"] => OrderType {
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

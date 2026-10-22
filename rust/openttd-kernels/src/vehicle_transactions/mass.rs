@@ -295,3 +295,9 @@ pub unsafe extern "C" fn openttd_rust_vehicle_send(
         (b.cost.error)(cost, ERROR);
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDVehicleListId" ["probe"] => ListId { kind, vehicle_type, company, index, valid, };
+    "OpenTTDVehicleMassServices" ["probe"] => Services { common, selection, is_depot, is_tile_owner, send, service, mass_send, dont_cancel, invalid_client, };
+}

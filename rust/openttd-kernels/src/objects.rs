@@ -2171,6 +2171,186 @@ pub unsafe extern "C" fn openttd_rust_object_build_above(
     w.build_above(out, tile, flags, height);
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDObjectHiddenArea" ["landscape"] => HiddenArea {
+        index,
+        first_tile,
+    };
+    "OpenTTDObjectPrice" ["landscape"] => Price {
+        factor,
+        shift,
+    };
+    "OpenTTDObjectArea" ["landscape"] => Area {
+        tile,
+        width,
+        height,
+    };
+    "OpenTTDObjectIdentity" ["landscape"] => Identity {
+        object,
+        area,
+        kind,
+    };
+    "OpenTTDObjectAllocation" ["landscape"] => Allocation {
+        object,
+        id,
+    };
+    "OpenTTDObjectNext" ["landscape"] => Next {
+        object,
+        id,
+        tile,
+    };
+    "OpenTTDObjectLoopPolicy" ["landscape"] => LoopPolicy {
+        spec,
+        object,
+        north,
+        flags,
+        kind,
+    };
+    "OpenTTDObjectPolicy" ["landscape"] => Policy {
+        flags,
+        callbacks,
+    };
+    "OpenTTDObjectFootprint" ["landscape"] => Footprint {
+        flags,
+        callbacks,
+        size,
+    };
+    "OpenTTDObjectClearance" ["landscape"] => Clearance {
+        flags,
+        height,
+    };
+    "OpenTTDObjectAdmission" ["landscape"] => Admission {
+        views,
+        height,
+    };
+    "OpenTTDObjectAreaShape" ["landscape"] => AreaShape {
+        views,
+        size,
+    };
+    "OpenTTDObjectGeneration" ["landscape"] => Generation {
+        flags,
+        amount,
+        views,
+        ever,
+    };
+    "OpenTTDObjectSlopeResult" ["landscape"] => SlopeResult {
+        callback,
+        registers,
+        version,
+    };
+    "OpenTTDObjectStrings" ["landscape"] => Strings {
+        too_many,
+        no_town,
+        edge_sub,
+        water,
+        edge,
+        on_water,
+        bridge,
+        flat,
+        own,
+        built,
+        limit,
+        hq,
+        object,
+    };
+    "OpenTTDObjectDefinition" ["landscape"] => Definition {
+        grfid,
+        local_id,
+        view,
+        has_file,
+    };
+    "OpenTTDObjectQueryServices" ["landscape"] => QueryServices {
+        random_bits,
+        index,
+        by_tile,
+        definition,
+        object_index,
+        kind,
+        north,
+        town,
+        town_tile,
+        date,
+        colour,
+        view,
+        nearby,
+        nearby_info,
+        terrain,
+        town_zone,
+        badges,
+        register_100,
+        grfid,
+        version8,
+        override_id,
+        manhattan,
+        square,
+        triggers,
+        change_frame,
+        unhandled,
+    };
+    "OpenTTDObjectServices" ["landscape"] => ObjectServices {
+        shared,
+        cost,
+        command,
+        company,
+        cargo,
+        town,
+        founding,
+        industry_tiles,
+        strings,
+        spec_count,
+        spec,
+        callbacks,
+        colour_policy,
+        flags,
+        footprint,
+        clearance,
+        available,
+        ever,
+        area_shape,
+        admission,
+        generation,
+        can_allocate,
+        allocate,
+        object_type,
+        loop_policy,
+        identity,
+        location,
+        next,
+        set_colour,
+        recolour,
+        colour_callback,
+        colour_error,
+        make,
+        delete_object,
+        query,
+        slope_callback,
+        slope_error,
+        build_price,
+        clear_price,
+        set_hq,
+        statue_town,
+        hq_begin,
+        hq_deliver,
+        hq_end,
+        autoslope_callback,
+        boolean_callback,
+        enabled,
+        close_inspect,
+        progress_set,
+        progress_increase,
+        normal,
+        bulldozer,
+        water_class,
+        restoration,
+        set_owner,
+        scale_size_1d,
+        passengers,
+        mail,
+        scale_cargo,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

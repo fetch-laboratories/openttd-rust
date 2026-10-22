@@ -622,3 +622,32 @@ pub unsafe extern "C" fn openttd_rust_vehicle_startstop(
 ) {
     unsafe { startstop(s, cost, flags, id, evaluate) };
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "GRFStringID" ["probe"] => GrfStringId { };
+    "OpenTTDAircraftStartState" ["probe"] => AircraftStartState {
+        state, flags,
+    };
+    "OpenTTDVehicleTransactionStrings" ["probe"] => TransactionStrings {
+        destroyed, stopped_in_depot, no_power, in_flight, incompatible_rail, null_string,
+        grf_text, takeoff, terminal7, direct_descent, new_vehicle_expense,
+        invalid_client, share_orders, copy_orders, cargo_count, invalid_cargo,
+    };
+    "OpenTTDVehicleCommonServices" ["probe"] => CommonServices {
+        base, transactions, vehicles, orders, strings, train_power, aircraft_start,
+        startstop_callback, grf_version, grf_string, waiting_news, flip_stopped,
+        startstop_ui, sell_rail, value, valid_cargo,
+    };
+    "OpenTTDVehicleSelectionServices" ["probe"] => SelectionServices {
+        groups, transactions, vehicles, in_depot, free_wagon, first_engine_part,
+        multiheaded, other_multihead, with_orders, list_clear, list_push,
+    };
+    "OpenTTDVehicleTransactionTarget" ["probe"] => Target {
+        owner, primary,
+    };
+    "OpenTTDVehicleTransactionServices" ["probe"] => TransactionServices {
+        shared, commands, cost, groups, target, name, clear_name, set_name, name_dirty,
+        interval_percent, interval_default, interval_clamp, set_interval, unique_name, max_name,
+    };
+}

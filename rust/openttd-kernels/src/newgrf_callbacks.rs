@@ -17,3 +17,9 @@ pub const CBID_VEHICLE_32DAY_CALLBACK: CallbackID = CallbackID(0x32);
 
 /// `CALLBACK_FAILED`.
 pub const CALLBACK_FAILED: u16 = 0xFFFF;
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "CallbackID" ["maintenance"] => CallbackID {
+    };
+}

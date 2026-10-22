@@ -1373,3 +1373,147 @@ pub unsafe extern "C" fn openttd_rust_house_age_all(
 ) {
     house(leaves, services).age_all();
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDHouseLoopTile" ["probe"] => HouseLoopTile {
+        age,
+        completed,
+        lift_has_destination,
+    };
+    "OpenTTDHouseLift" ["probe"] => HouseLift {
+        position,
+        destination,
+        has_destination,
+    };
+    "OpenTTDHouseRandom" ["probe"] => HouseRandom {
+        bits,
+        triggers,
+    };
+    "OpenTTDHouseConstruction" ["probe"] => HouseConstruction {
+        house,
+        tick,
+        completed,
+    };
+    "OpenTTDHouseCache" ["probe"] => HouseCache {
+        house,
+        town,
+        completed,
+    };
+    "OpenTTDHouseAge" ["probe"] => HouseAge {
+        age,
+        completed,
+    };
+    "OpenTTDHouseLoopSpec" ["probe"] => HouseLoopSpec {
+        callbacks,
+        flags,
+        population,
+        mail,
+        minimum_life,
+    };
+    "OpenTTDHouseAnimationSpec" ["probe"] => HouseAnimationSpec {
+        callbacks,
+        extra_flags,
+    };
+    "OpenTTDHouseNewSpec" ["probe"] => HouseNewSpec {
+        callbacks,
+        flags,
+        processing_time,
+    };
+    "OpenTTDHouseProduction" ["probe"] => HouseProduction {
+        callbacks,
+        population,
+        mail,
+    };
+    "OpenTTDHouseEntry" ["probe"] => HouseEntry {
+        town,
+        house,
+    };
+    "OpenTTDHouseRemoval" ["probe"] => HouseRemoval {
+        cost,
+        rating,
+    };
+    "OpenTTDHouseAcceptance" ["probe"] => HouseAcceptance {
+        accepts,
+        amounts,
+    };
+    "OpenTTDHouseReseed" ["probe"] => HouseReseed {
+        reseed,
+        used,
+    };
+    "OpenTTDHouseCargo" ["probe"] => ProductionCargo {
+        cargo,
+        multiplier,
+    };
+    "OpenTTDHouseErrors" ["probe"] => HouseErrors {
+        demolish,
+        protected => is_protected,
+        refuses,
+        sloped,
+        bridge,
+        flat,
+        no_town,
+    };
+    "OpenTTDHouseServices" ["probe"] => HouseServices {
+        cost,
+        commands,
+        authority,
+        entry,
+        loop_tile,
+        house_type,
+        completed,
+        protected => is_protected,
+        lift,
+        random,
+        construction,
+        cache,
+        age,
+        processing,
+        clean_type,
+        town,
+        town_shell,
+        loop_spec,
+        animation_spec,
+        new_spec,
+        production,
+        sprite_groups,
+        removal,
+        acceptance,
+        watched,
+        substitute,
+        inc_construction,
+        reset_age,
+        set_age,
+        set_lift_destination,
+        set_lift_position,
+        halt_lift,
+        dec_processing,
+        set_processing,
+        set_random_bits,
+        set_random_triggers,
+        set_type,
+        animate_new,
+        delete_inspect,
+        callback,
+        cargo_translation,
+        convert_boolean,
+        convert_8bit,
+        resolve_reseed,
+        change_frame,
+        next_near_station,
+        erase_near_station,
+        station_catchment,
+        station_covers_town,
+        station_finder,
+        move_goods,
+        production_cargo,
+        add_cargo,
+        food_cargo,
+        scale_cargo,
+        cargogen_mode,
+        place_houses,
+        company_human,
+        init_counts,
+        errors,
+    };
+}

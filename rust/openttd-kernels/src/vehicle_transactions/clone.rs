@@ -359,3 +359,10 @@ pub unsafe extern "C" fn openttd_rust_vehicle_clone(
         )
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDVehicleCloneServices" ["probe"] => Services {
+        build, next_vehicle, has_articulated, next_articulated, copy_service, parse_suffix,
+    };
+}

@@ -244,3 +244,39 @@ pub unsafe extern "C" fn openttd_rust_run_tile_loop(
     }
     unsafe { CURSOR = tile };
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDGroundLoopServices" ["landscape"] => GroundServices {
+        clear,
+        rail,
+        road,
+        road_command,
+        tunnel,
+        water,
+        costs,
+        call,
+        climate,
+        editor,
+        rebuild,
+        ambient_callback,
+    };
+    "OpenTTDIndustryLoopServices" ["landscape"] => IndustryServices {
+        production,
+        construction,
+        lifecycle,
+        tiles,
+        generation,
+    };
+    "OpenTTDLandscapeLoopServices" ["landscape"] => Services {
+        shared,
+        tile_types,
+        trees,
+        industry,
+        ground,
+        town,
+        station_loop,
+        objects,
+        object_frame,
+    };
+}

@@ -106,10 +106,12 @@ class GeneratedAbiTests(unittest.TestCase):
             headers = root / "src/rust"
             rust.mkdir(parents=True)
             headers.mkdir(parents=True)
-            for module in GENERATOR["SOURCES"]:
-                (rust / f"{module}.rs").write_text("")
-            source = rust / "abi.rs"
-            source.write_text('"Probe" ["new"] => Local { call => callback };')
+            (rust / "unrelated.rs").write_text('"Other" ["new"] => Local {};')
+            source = rust / "nested" / "probe.rs"
+            source.parent.mkdir()
+            source.write_text(
+                'layouts! { "Probe" ["new"] => Local { call => callback }; }'
+            )
             (headers / "probe.h").write_text(
                 "struct Probe { void (*callback)() noexcept; };"
             )
@@ -120,14 +122,14 @@ class GeneratedAbiTests(unittest.TestCase):
             )
             output = root / "build"
             GENERATOR["write_fragments"](output, fragments)
-            source.write_text('"Replacement" ["new"] => Local {};')
+            source.write_text('layouts! { "Replacement" ["new"] => Local {}; }')
             with self.assertRaisesRegex(ValueError, "callback table absent"):
                 GENERATOR["generate"](root)
             (headers / "probe.h").rename(headers / "probe.retired")
             GENERATOR["write_fragments"](output, GENERATOR["generate"](root))
             self.assertFalse((output / "abi-visit-Probe.hpp").exists())
             (headers / "probe.retired").rename(headers / "probe.h")
-            source.write_text('"Probe" ["new"] => Local {};')
+            source.write_text('layouts! { "Probe" ["new"] => Local {}; }')
             with self.assertRaisesRegex(ValueError, "callbacks absent"):
                 GENERATOR["generate"](root)
 
@@ -136,9 +138,12 @@ class GeneratedAbiTests(unittest.TestCase):
         self.assertTrue(any(width for *_, width, _ in declarations))
         pairs = (pair for record in declarations for pair in record[3])
         self.assertTrue(any(rust != cpp for rust, cpp in pairs))
-        for module in GENERATOR["SOURCES"]:
-            source = (ROOT / f"rust/openttd-kernels/src/{module}.rs").read_text()
-            self.assertRegex(source, GENERATOR["DECLARATION"])
+        modules = [
+            path
+            for path in (ROOT / "rust/openttd-kernels/src").rglob("*.rs")
+            if "layouts! {" in path.read_text()
+        ]
+        self.assertGreater(len(modules), 10)
         visitors = "".join(
             value
             for key, value in GENERATOR["generate"]().items()

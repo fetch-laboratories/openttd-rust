@@ -740,6 +740,64 @@ pub(crate) unsafe fn tree_industry_water_loop(tile: u32, call: *mut Call, s: &Se
     }
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDAirportGround" ["landscape"] => AirportGround {
+        station,
+        tile,
+        width,
+        height,
+    };
+    "OpenTTDWaterGroundServices" ["landscape"] => WaterServices {
+        rail,
+        clear,
+        vehicles,
+        costs,
+        company,
+        signal_context,
+        non_flooding,
+        set_non_flooding,
+        coast,
+        set_tree_ground,
+        make_sea,
+        buoy_or_dock,
+        canal_or_river,
+        region_context,
+        remove_rail,
+        apply_foundation,
+        airport_tile,
+        airport,
+        airport_member,
+        airport_z,
+        victim,
+        aircraft_pose,
+        ground_pose,
+        crash,
+        ai_event,
+        game_event,
+        news,
+    };
+    "OpenTTDFloodVictim" ["landscape"] => FloodVictim {
+        status,
+        kind => type,
+    };
+    "OpenTTDAircraftFloodPose" ["landscape"] => AircraftFloodPose {
+        tile,
+        z,
+        subtype,
+    };
+    "OpenTTDGroundFloodPose" ["landscape"] => GroundFloodPose {
+        z,
+        first,
+    };
+    "OpenTTDWaterRestorationServices" ["common"] => RestorationServices {
+        infrastructure,
+        infrastructure_dirty,
+        make_canal,
+        make_river,
+    };
+}
+
 #[cfg(test)]
 pub(crate) fn fixture() -> WaterServices {
     extern "C" fn unused0<R>() -> R {

@@ -773,3 +773,165 @@ pub unsafe extern "C" fn openttd_rust_vehicle_handle_breakdown(
 ) -> bool {
     unsafe { vehicle_handle_breakdown(v, &*base) }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDVehicleMaintenanceRenewal" ["maintenance"] => Renewal {
+        age,
+        max_age,
+        months,
+        enabled,
+        kind,
+        subtype,
+    };
+    "OpenTTDVehicleMaintenanceReset" ["maintenance"] => Reset {
+        economy_date,
+        calendar_date,
+        reliability,
+        chance,
+        breakdowns,
+    };
+    "OpenTTDVehicleMaintenanceInterval" ["maintenance"] => Interval {
+        company,
+        last_service,
+        now,
+        interval,
+        reliability,
+        percent,
+        wallclock,
+        no_service,
+        breakdowns,
+    };
+    "OpenTTDVehicleMaintenanceReplacement" ["maintenance"] => Replacement {
+        engine,
+        when_old,
+    };
+    "OpenTTDVehicleMaintenanceBudget" ["maintenance"] => Budget {
+        needed,
+        available,
+    };
+    "OpenTTDVehicleMaintenanceReplacementCost" ["maintenance"] => ReplacementCost {
+        cost,
+        available,
+    };
+    "OpenTTDVehicleMaintenanceAutomatic" ["maintenance"] => Automatic {
+        has_depot_order,
+        order_type,
+    };
+    "OpenTTDVehicleMaintenanceCheckBreakdown" ["maintenance"] => CheckBreakdown {
+        reliability,
+        decay,
+        no_service,
+        breakdowns,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownGuard" ["maintenance"] => BreakdownGuard {
+        speed,
+        counter,
+        status,
+        breakdowns,
+        menu,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownTrigger" ["maintenance"] => BreakdownTrigger {
+        reliability,
+        chance,
+        kind,
+        breakdowns,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownProbe" ["maintenance"] => BreakdownProbe {
+        counter,
+        status,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownStart" ["maintenance"] => BreakdownStart {
+        since,
+        kind,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownActive" ["maintenance"] => BreakdownActive {
+        kind,
+        tick,
+        delay,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownCountdown" ["maintenance"] => BreakdownCountdown {
+        order_type,
+        counter,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownSoundState" ["maintenance"] => BreakdownSoundState {
+        kind,
+        landscape,
+    };
+    "OpenTTDVehicleMaintenanceBreakdownSmoke" ["maintenance"] => BreakdownSmoke {
+        shell,
+        delay,
+    };
+    "OpenTTDVehicleMaintenanceAge" ["maintenance"] => Age {
+        age,
+        max_age,
+        decay,
+    };
+    "OpenTTDVehicleMaintenanceWarning" ["maintenance"] => Warning {
+        enabled,
+        has_previous,
+        local,
+        status,
+    };
+    "OpenTTDVehicleMaintenanceWarningCompany" ["maintenance"] => WarningCompany {
+        company,
+        renewal,
+    };
+    "OpenTTDVehicleMaintenanceServices" ["maintenance"] => Services {
+        shared,
+        transaction,
+        group,
+        renewal,
+        reset,
+        has_engine,
+        interval,
+        engine_reliability,
+        budget,
+        replacement,
+        replacement_available,
+        replacement_cost,
+        automatic,
+        depot_service,
+        check_breakdown,
+        breakdown_guard,
+        breakdown_trigger,
+        chance_write,
+        trigger,
+        breakdown_counter,
+        breakdown_probe,
+        breakdown_start,
+        breakdown_start_write,
+        breakdown_active,
+        breakdown_countdown,
+        breakdown_sound_state,
+        breakdown_delay_write,
+        smoke_disabled,
+        smoke,
+        smoke_animation,
+        aircraft_broken,
+        mark_dirty,
+        view_dirty,
+        details_dirty,
+        age,
+        age_write,
+        decay_write,
+        warning,
+        warning_company,
+        engine_available_any,
+        replacement_active,
+        old_news,
+        economy_age,
+        economy_age_write,
+        reached_min_age,
+        value,
+        value_write,
+        max_calendar_date,
+        max_economy_date,
+        profit_min_age,
+        anniversaries,
+        before_zero,
+        news_getting_old,
+        news_very_old,
+        news_very_old_and,
+    };
+}

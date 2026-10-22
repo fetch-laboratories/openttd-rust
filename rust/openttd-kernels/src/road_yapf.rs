@@ -738,3 +738,81 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_heap_probe(
         }
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRoadYapfInput" ["probe"] => Input {
+        map_x,
+        map_y,
+        tile,
+        dest_tile,
+        max_nodes,
+        slope,
+        crossing,
+        stop,
+        occupied,
+        bay,
+        curve,
+        order_destination,
+        order_type,
+        bus,
+        articulated,
+        trackdir,
+    };
+    "OpenTTDRoadYapfTile" ["probe"] => Tile {
+        occupied,
+        length,
+        station,
+        r#type => type,
+        station_type,
+        depot,
+        depot_dir,
+        crossing,
+        waypoint,
+        drive_through,
+        continuation,
+        busy_bays,
+    };
+    "OpenTTDRoadYapfFollow" ["probe"] => Follow {
+        tile,
+        skipped,
+        dirs,
+        followed,
+    };
+    "OpenTTDRoadYapfArea" ["probe"] => Area {
+        tile,
+        width,
+        height,
+        valid,
+        stop,
+        drive_through,
+        next,
+    };
+    "OpenTTDRoadYapfTraversal" ["probe"] => Traversal {
+        current_z,
+        next_z,
+        display_speed,
+        max_speed,
+        min_speed,
+        order_speed,
+    };
+    "OpenTTDRoadYapfLeaves" ["probe"] => Leaves {
+        tile,
+        follow,
+        tracks,
+        traversal,
+        closest,
+        area,
+    };
+    "OpenTTDRoadYapfResult" ["probe"] => Result {
+        tile,
+        cost,
+        direction,
+        found,
+        rounds,
+        open,
+        closed,
+        calcs,
+        distance,
+    };
+}

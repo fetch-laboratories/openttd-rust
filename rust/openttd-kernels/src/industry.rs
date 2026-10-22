@@ -1681,3 +1681,437 @@ pub(crate) unsafe fn subsidy_accepts(owner: *const Industry, cargo: u8) -> bool 
         .iter()
         .any(|a| a.cargo == cargo)
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDIndustryLocationResult" ["industry"] => crate::industry::LocationResult {
+        callback,
+        registers,
+    };
+    "OpenTTDIndustryAllocation" ["industry"] => crate::industry::Allocation {
+        shell,
+        owner,
+        id,
+    };
+    "OpenTTDIndustryConflictKinds" ["industry"] => crate::industry::ConflictKinds {
+        kinds,
+    };
+    "OpenTTDIndustryConstructionErrors" ["industry"] => crate::industry::ConstructionErrors {
+        site,
+        forest,
+        positioned,
+        desert,
+        rainforest,
+        lowland,
+        one_per_town,
+        town,
+        population,
+        near_town,
+        conflict,
+        too_many,
+    };
+    "OpenTTDIndustryTransactionServices" ["industry"] => crate::industry::TransactionServices {
+        enabled,
+        layout_count,
+        layout,
+        raw,
+        raw_setting,
+        check_proc,
+        conflicting,
+        multiple_per_town,
+        closest_town,
+        town,
+        population,
+        town_position,
+        industry,
+        highest_snow_line,
+        edge_distance,
+        refinery_limit,
+        tile_height,
+        set_company,
+        temporary_shell,
+        resolve_location,
+        resolve_shape,
+        location_error,
+        shape_error,
+        tile_grf_version,
+        shape_callback,
+        terragenesis,
+        ignore_restrictions,
+        platform,
+        terraform,
+        can_allocate,
+        allocate,
+        prospecting_chance,
+        local_company,
+        prospect_no_place,
+        prospect_unlucky,
+        construction_cost,
+    };
+    "OpenTTDIndustryTransactionContext" ["industry"] => crate::industry::TransactionContext {
+        map,
+        builder,
+        production,
+        generation,
+        construction,
+        lifecycle,
+        tiles,
+        tile_policy,
+        commands,
+        command_checks,
+        costs,
+        transaction,
+        errors,
+    };
+    "OpenTTDIndustryTilePolicyServices" ["industry"] => crate::industry::TilePolicyServices {
+        current_company,
+        magic_bulldozer,
+        object_in_way,
+        slopes_refused,
+        close_ai,
+        close_game,
+        destroy,
+        removal_cost,
+        tile_max_z,
+        autoslope_callback,
+        callback_boolean,
+        landscape_clear,
+    };
+    "OpenTTDIndustryCostServices" ["industry"] => crate::industry::IndustryCostServices {
+        zero,
+        error,
+        expense_money,
+        success,
+    };
+    "OpenTTDIndustryCommandServices" ["industry"] => crate::industry::IndustryCommandServices {
+        deity,
+        get,
+        owner,
+        valid_company,
+        invalidate_view,
+    };
+    "OpenTTDIndustryTileAcceptance" ["industry"] => crate::industry::TileAcceptance {
+        cargo,
+        amount,
+        accepts_all,
+        accepts_callback,
+        amount_callback,
+    };
+    "OpenTTDIndustryTileOwner" ["industry"] => crate::industry::TileIndustry {
+        shell,
+        owner,
+    };
+    "OpenTTDIndustryTileServices" ["industry"] => crate::industry::TileServices {
+        gfx,
+        set_gfx,
+        frame,
+        set_frame,
+        animation_loop,
+        set_animation_loop,
+        ambient,
+        animate_new,
+        construction_counter,
+        construction_stage,
+        completed,
+        set_completed,
+        reset_construction,
+        industry,
+        industry_index,
+        toffee_offset,
+        on_water,
+        transport,
+        anim_production,
+        anim_next,
+        build_oilrig,
+        pixel_max_z,
+        create_effect,
+        create_effect_above,
+        set_effect_substate,
+        spec,
+        acceptance,
+        callback,
+        cargo_translation,
+    };
+    "OpenTTDIndustryCargoLists" ["industry"] => crate::industry::CargoLists {
+        produced,
+        accepted,
+    };
+    "OpenTTDIndustryLayoutTile" ["industry"] => crate::industry::LayoutTile {
+        x,
+        y,
+        gfx,
+    };
+    "OpenTTDIndustryConstructionRequest" ["industry"] => crate::industry::ConstructionRequest {
+        layout,
+        town,
+        layout_index,
+        tile,
+        size_x,
+        size_y,
+        id,
+        random_bits,
+        kind => type,
+        founder,
+    };
+    "OpenTTDIndustryConstructionServices" ["industry"] => crate::industry::ConstructionServices {
+        cargo_lists,
+        callback_mask,
+        set_town,
+        calendar_date,
+        generating,
+        callback,
+        callback_error,
+        grf_version,
+        cargo_translation,
+        layout_size,
+        layout_tile,
+        water_class,
+        clear_tile,
+        make_industry,
+        set_construction_counter,
+        set_construction_stage,
+        translated_gfx,
+        animation_enabled,
+        add_animated,
+        build_window_dirty,
+        serve_neutral,
+        insert_near_station,
+        clear_near_industries,
+        insert_neutral_industry,
+        stations_around,
+        add_delivery,
+    };
+    "OpenTTDIndustryGenerationInfo" ["industry"] => crate::industry::GenerationInfo {
+        appear,
+        enabled,
+        layouts,
+    };
+    "OpenTTDIndustryGenerationServices" ["industry"] => crate::industry::GenerationServices {
+        spec,
+        spec_behaviour,
+        info,
+        coastal,
+        environment,
+        density,
+        custom_number,
+        scale_by_size_1d,
+        scale_by_land_proportion,
+        set_progress,
+        increase_progress,
+        missing_warning,
+    };
+    "OpenTTDIndustryMetadata" ["industry"] => Metadata {
+        tile,
+        width,
+        height,
+        construction_date,
+        random,
+        kind => type,
+        owner,
+        random_colour,
+        founder,
+        construction_type,
+        selected_layout,
+        exclusive_supplier,
+        exclusive_consumer,
+    };
+    "OpenTTDIndustryCleanupTile" ["industry"] => crate::industry::CleanupTile {
+        industry,
+        kind => type,
+        oilrig,
+    };
+    "OpenTTDIndustryReseed" ["industry"] => crate::industry::Reseed {
+        own => self,
+        parent,
+        used,
+    };
+    "OpenTTDIndustryRandomisationSpec" ["industry"] => crate::industry::RandomisationSpec {
+        gfx,
+        enabled,
+    };
+    "OpenTTDIndustryAnimationSpec" ["industry"] => crate::industry::AnimationSpec {
+        spec,
+        triggers,
+    };
+    "OpenTTDIndustryLifecycleServices" ["industry"] => crate::industry::LifecycleServices {
+        neutral_station,
+        cleanup_tile,
+        delete_tile_inspect,
+        restoration,
+        delete_oilrig,
+        clear_docking,
+        industry_field,
+        disassociate_field,
+        release_disasters,
+        delete_storage,
+        delete_news,
+        close_view,
+        close_production,
+        delete_inspect,
+        subsidies,
+        invalidate_cargo,
+        next_near_station,
+        remove_delivery,
+        belongs,
+        randomisation_spec,
+        random_triggers,
+        set_random_triggers,
+        resolve_reseed,
+        random_bits,
+        set_random_bits,
+        animation_spec,
+        change_frame,
+    };
+    "OpenTTDIndustryFields" ["industry"] => Fields {
+        valid_history,
+        last_prod_year,
+        counter,
+        prod_level,
+        was_cargo_delivered,
+        ctlflags,
+    };
+    "OpenTTDIndustryBuildFields" ["industry"] => BuildFields {
+        probability,
+        min_number,
+        target_count,
+        max_wait,
+        wait_count,
+    };
+    "OpenTTDIndustryBuilderFields" ["industry"] => BuilderFields {
+        builddata,
+        wanted_inds,
+        daily_counter,
+        daily_increment,
+        sound_tile,
+        sound_ctr,
+    };
+    "OpenTTDIndustrySlots" ["industry"] => Slots {
+        data,
+        size,
+    };
+    "Industry::ProducedCargo" ["industry"] => Produced {
+        cargo,
+        waiting,
+        rate,
+        history,
+    };
+    "Industry::AcceptedCargo" ["industry"] => Accepted {
+        cargo,
+        waiting,
+        accumulated_waiting,
+        last_accepted,
+        history,
+    };
+    "OpenTTDIndustryObservation" ["industry"] => Observation {
+        owner,
+        behaviour,
+        callbacks,
+        life,
+        original,
+        kind => type,
+        up_text,
+        down_text,
+        closure_text,
+    };
+    "OpenTTDIndustryServices" ["industry"] => Services {
+        shared,
+        next_tick,
+        sound_count,
+        behaviour,
+        location,
+        industry_sound,
+        play_sound,
+        special_effect,
+        tick_trigger,
+        production_callback,
+        scale_cargo,
+        move_goods,
+        tile_add_wrap,
+        farm_tile,
+        snow_line,
+        make_field,
+        fence_wanted,
+        tile_completed,
+        harvest,
+        observe,
+        production_rate,
+        change_callback,
+        custom_text,
+        news,
+        rate_news,
+        callback_error,
+        set_dirty,
+        destroy,
+        advertise,
+        create,
+        random_industry,
+        get,
+        type_count,
+        total,
+        type_info,
+        probability_callback,
+        scale_by_map_size,
+        company_none,
+        restore_company,
+        directory_dirty,
+        economy_month,
+        economy_year,
+        days_since_last_month,
+        landscape,
+        economy_type,
+        passengers,
+        fund_only,
+        calendar_year,
+        deity,
+    };
+    "OpenTTDIndustryProductionResult" ["industry"] => ProductionResult {
+        subtract,
+        add,
+        again,
+        cargo_input,
+        cargo_output,
+        version,
+        num_input,
+        num_output,
+        present,
+    };
+    "OpenTTDIndustryMap" ["industry"] => Map {
+        size_x,
+        size_y,
+        landscape,
+    };
+    "OpenTTDIndustryTickRecord" ["industry"] => TickRecord {
+        counter,
+        map,
+        interval,
+        ambient,
+        editor,
+    };
+    "OpenTTDIndustryEntry" ["industry"] => Entry {
+        industry,
+        owner,
+        id,
+        callbacks,
+    };
+    "OpenTTDIndustryLocation" ["industry"] => Location {
+        tile,
+        width,
+        height,
+    };
+    "OpenTTDIndustryFarmTile" ["industry"] => FarmTile {
+        kind => type,
+        snow,
+        ground,
+        grown,
+    };
+    "OpenTTDIndustryChange" ["industry"] => Change {
+        result,
+        reg,
+    };
+    "OpenTTDIndustryTypeInfo" ["industry"] => TypeInfo {
+        behaviour,
+        enabled,
+        layouts,
+        appear,
+    };
+}

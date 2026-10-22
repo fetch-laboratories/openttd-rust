@@ -274,3 +274,13 @@ pub unsafe extern "C" fn openttd_rust_vehicle_build(
         )
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDVehicleBuildResult" ["probe"] => Result { id, capacity, };
+    "OpenTTDVehicleBuildServices" ["probe"] => Services {
+        refit, mass, random, depot_kind, engine_cost, default_cargo, articulate_count, pool_available,
+        free_unit, construct, rail, ship_tile, new_ship, set_purchase, articulated_capacity,
+        display_capacity, is_engine, normalize, presentation, use_unit, too_many, unavailable,
+    };
+}

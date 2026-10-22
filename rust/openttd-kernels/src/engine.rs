@@ -1082,3 +1082,159 @@ pub unsafe extern "C" fn openttd_rust_engine_check(s: *const Services) {
         call!(s, no_engines, min);
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDEngineLifecycle" ["engine"] => Lifecycle {
+        company_avail,
+        company_hidden,
+        preview_asked,
+        intro_date,
+        age,
+        reliability,
+        reliability_spd_dec,
+        reliability_start,
+        reliability_max,
+        reliability_final,
+        duration_phase_1,
+        duration_phase_2,
+        duration_phase_3,
+        flags,
+        preview_company,
+        preview_wait,
+    };
+    "OpenTTDEngineRef" ["engine"] => EngineRef {
+        shell,
+        state,
+        id,
+        kind => type,
+    };
+    "OpenTTDEngineSyncVariant" ["engine"] => SyncVariant {
+        parent,
+        sync,
+    };
+    "OpenTTDEngineDisplayVariant" ["engine"] => DisplayVariant {
+        parent,
+        display,
+    };
+    "OpenTTDEnginePreviewVariant" ["engine"] => PreviewVariant {
+        parent,
+        join,
+    };
+    "OpenTTDEngineReliability" ["engine"] => Reliability {
+        base_life,
+        retire_early,
+    };
+    "OpenTTDEngineStartup" ["engine"] => Startup {
+        base_intro,
+        grfid,
+        decay_speed,
+        base_life,
+        climate,
+    };
+    "OpenTTDEngineSeed" ["engine"] => SeedConfig {
+        base_intro,
+        lifelength,
+        decay_speed,
+        retire_early,
+    };
+    "OpenTTDEngineYear" ["engine"] => AgingYear {
+        base_intro,
+        lifelength,
+    };
+    "OpenTTDEngineYMD" ["engine"] => Ymd {
+        year,
+        month,
+        day,
+    };
+    "OpenTTDEngineStartSettings" ["engine"] => StartSettings {
+        generation_seed,
+        starting_year,
+        date,
+    };
+    "OpenTTDEngineCompany" ["engine"] => Company {
+        shell,
+        id,
+    };
+    "OpenTTDEngineCompanyPreview" ["engine"] => CompanyPreview {
+        blocked,
+        performance,
+    };
+    "OpenTTDEngineVehicle" ["engine"] => Vehicle {
+        shell,
+        id,
+        owner,
+        kind => type,
+    };
+    "OpenTTDEngineVehicleCargo" ["engine"] => VehicleCargo {
+        engine,
+        cargo,
+    };
+    "OpenTTDEngineServices" ["engine"] => Services {
+        shared,
+        rng,
+        next,
+        resolve,
+        sync_variant,
+        display_variant,
+        preview_variant,
+        extra_flags,
+        engine_id,
+        reliability,
+        startup,
+        seed_config,
+        base_intro,
+        aging_year,
+        calendar_year,
+        never_expire,
+        start_settings,
+        train_limit,
+        road_limit,
+        ship_limit,
+        aircraft_limit,
+        ai_train_disabled,
+        ai_road_disabled,
+        ai_ship_disabled,
+        ai_aircraft_disabled,
+        date_to_ymd,
+        ymd_to_date,
+        enabled,
+        climate,
+        rail_kind,
+        clear_last_variant,
+        refresh_type,
+        refresh_lists,
+        company_next,
+        company_preview,
+        vehicle_next,
+        vehicle_cargo,
+        can_carry,
+        refit_mask,
+        update_railtypes,
+        update_roadtypes,
+        date_company_types,
+        company_valid,
+        compatible_railtypes,
+        powered_roadtypes,
+        company_railtypes,
+        company_roadtypes,
+        company_engine_count,
+        block_preview,
+        introduces_railtypes,
+        introduces_roadtypes,
+        set_railtypes,
+        set_roadtypes,
+        current_company,
+        local_company,
+        toolbar_enable,
+        toolbar_release,
+        close_preview,
+        invalidate_preview,
+        offer_preview,
+        available_event,
+        available_news,
+        no_engines,
+        screen_dirty,
+        utf8_length,
+    };
+}

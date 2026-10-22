@@ -2227,3 +2227,60 @@ pub(crate) unsafe fn update_company_road_infrastructure(
     let commands = unsafe { &*rail.command };
     (commands.infrastructure_dirty)(owner);
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRoadNearestTownTile" ["probe"] => NearestTownTile { road, depot, town_owned, };
+    "OpenTTDRoadCommandContext" ["probe"] => CommandContext {
+        services,
+        scratch,
+        cost,
+        ret,
+    };
+    "OpenTTDRoadCommandServices" ["probe"] => RoadCommandServices {
+        do_build,
+        rail_commands,
+        town,
+        authority,
+        strings,
+        nearest_tile,
+        town_valid,
+        town_edge,
+        set_town,
+        foundation,
+        extra_dynamite,
+        depot_slope,
+        make_depot,
+        depot_exit,
+        next_effect,
+        delete_effect,
+        owned_by_town,
+        scratch_cost,
+        conversion_scratch,
+        collect_vehicles,
+        cargo_changed,
+    };
+    "OpenTTDRoadConversionScratch" ["probe"] => ConversionScratch {
+        frame,
+        area,
+        error,
+        ret,
+    };
+    "OpenTTDRoadTownEdge" ["probe"] => TownEdge {
+        tile,
+        radius,
+    };
+    "OpenTTDRoadWorksEffect" ["probe"] => WorksEffect {
+        id,
+        tile,
+    };
+    "OpenTTDRoadCommandStrings" ["probe"] => Strings {
+        no_road,
+        no_tram,
+        junction,
+        remove_road,
+        no_suitable_road,
+        no_suitable_tram,
+        authority,
+    };
+}

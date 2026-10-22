@@ -781,3 +781,39 @@ pub(crate) unsafe fn openttd_rust_water_change_owner(
     let world = unsafe { World::new(a) };
     world.owner(ret, tile, old, new);
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDWaterCommandStrings" ["common"] => Strings {
+        built_on_water,
+        demolish_bridge,
+        unsuitable,
+        sloped_wrong,
+        edge,
+        low_bridge,
+        flat,
+        already_built,
+        build_on_water,
+        demolish_building,
+        demolish_canal,
+    };
+    "OpenTTDWaterCommandServices" ["common"] => WaterCommandServices {
+        shared,
+        cost,
+        command,
+        water,
+        rail,
+        water_type,
+        lock_part,
+        lock_direction,
+        other_depot_tile,
+        restoration,
+        environment,
+        make_depot,
+        make_lock_tile,
+        area_begin,
+        area_tile,
+        area_next,
+        strings,
+    };
+}

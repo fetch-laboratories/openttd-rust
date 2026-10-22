@@ -1387,6 +1387,65 @@ pub(crate) unsafe fn change_owner(
     w.change_owner(w.cost(ret), tile, old, new);
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDBridgeAvailability" ["probe"] => Availability { year, min, max, };
+    "OpenTTDTunnelBridgeStrings" ["probe"] => Strings {
+        bridge_border,
+        map_edge,
+        same_end,
+        straight,
+        too_long,
+        wrong_slope,
+        unequal_height,
+        demolish_bridge,
+        already_built,
+        authority,
+        other_owner,
+        too_low,
+        too_high,
+        tunnel_site,
+        water,
+        tunnel_border,
+        tunnel_way,
+        tunnel_long,
+        excavate,
+        demolish_tunnel,
+    };
+    "OpenTTDTunnelBridgeServices" ["probe"] => TunnelBridgeServices {
+        rail,
+        road,
+        road_ground,
+        water,
+        company,
+        availability,
+        speed,
+        price,
+        max_bridge_length,
+        max_bridge_height,
+        max_tunnel_length,
+        crossing_tunnels,
+        other_bridge_end,
+        northern_bridge_end,
+        bridge_type,
+        is_tunnel,
+        tunnel_in_way,
+        set_middle,
+        clear_middle,
+        set_reservation,
+        make_rail_bridge,
+        make_road_bridge,
+        make_aqueduct,
+        make_rail_tunnel,
+        make_road_tunnel,
+        mark_bridge,
+        mark_dirty_height,
+        terraform,
+        objects,
+        strings,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

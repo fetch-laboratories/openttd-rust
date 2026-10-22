@@ -526,3 +526,28 @@ pub unsafe extern "C" fn openttd_rust_vehicle_refit(
         )
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDVehicleRefitCapacity" ["probe"] => Capacity {
+        total, mail, cargo,
+    };
+    "OpenTTDRefitCargoKind" ["probe"] => CargoKind {
+        cargo, subtype,
+    };
+    "OpenTTDRefitCommit" ["probe"] => Commit {
+        cargo, capacity,
+    };
+    "OpenTTDRefitEngine" ["probe"] => Engine {
+        mask, automatic,
+    };
+    "OpenTTDRefitCargo" ["probe"] => Cargo {
+        classes, local,
+    };
+    "OpenTTDRefitPrices" ["probe"] => Prices {
+        train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
+    };
+    "OpenTTDVehicleRefitServices" ["probe"] => Services {
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, has_grf, refit_cost, refit_cargo, cost_callback, engine_kind, rail_kind, price_shift, can_carry, refit_engine, capacity, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, set_refit_cap, refit_cap, cargo_cap, set_capacity, write_refit, mail_cargo, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
+    };
+}

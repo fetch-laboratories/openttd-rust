@@ -62,3 +62,14 @@ pub fn integer(bits: u64, negative: bool, base: i32) -> FormattedInteger {
     result.bytes[..result.length].reverse();
     result
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRustLittleEndian" ["probe"] => LittleEndian {
+        bytes,
+    };
+    "OpenTTDRustFormattedInteger" ["probe"] => FormattedInteger {
+        bytes,
+        length,
+    };
+}
