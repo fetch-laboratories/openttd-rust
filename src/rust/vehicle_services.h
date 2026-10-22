@@ -69,7 +69,7 @@ inline void RustVehicleLeaveStation(OpenTTDVehicle *v) noexcept { VehicleOf(v)->
 inline uint32_t RustVehicleOrderStationLocation(OpenTTDVehicle *v, uint16_t station) noexcept { return VehicleOf(v)->GetOrderStationLocation(StationID(station)).base(); }
 inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station) noexcept { return RustVehicleOrderStationLocation(RustVehicle(static_cast<Vehicle *>(v)), station); }
 template <class T> inline auto RustVehicleNextVehicle(const T *v) noexcept { return v->GetNextVehicle(); }
-template <class T> inline auto RustVehicleNextArticulated(const T *v) noexcept { return v->GetNextArticulatedPart(); }
+inline OpenTTDVehicle *RustVehicleNextArticulated(OpenTTDVehicle *v) noexcept { return RustVehicle(VehicleOf(v)->GetNextArticulatedPart()); }
 inline Vehicle *RustVehicleNext(const Vehicle *v) noexcept { return v->Next(); }
 #ifdef WITH_RUST
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }

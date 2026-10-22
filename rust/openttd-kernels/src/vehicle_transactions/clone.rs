@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Whole clone assembly, including partial construction and order/cash rollback.
-use super::{AUTOREPLACE, ERROR, EXECUTE, build, refit, vehicle_ref};
+use super::{ERROR, build, refit, vehicle_ref};
+use crate::command_type::DoCommandFlag;
 use crate::services::{ByteSpan, CommandCost, Cost};
 use std::ffi::c_long;
 use std::ptr;
@@ -81,7 +82,7 @@ unsafe fn orders(
                 } else {
                     c.strings.copy_orders
                 },
-                u8::from(flags & EXECUTE != 0),
+                u8::from(flags & DoCommandFlag::EXECUTE != 0),
                 out.cast(),
                 c.orders,
             );
@@ -128,7 +129,7 @@ unsafe fn clone(
         total.error(c.strings.destroyed);
         return invalid;
     }
-    if flags & EXECUTE == 0 {
+    if flags & DoCommandFlag::EXECUTE == 0 {
         let mut count = 0_i32;
         loop {
             count += 1;
@@ -150,11 +151,12 @@ unsafe fn clone(
     let mut new_id = invalid;
     loop {
         if unsafe { (b.groups.vehicle_type)(v) } != 0 || !unsafe { (c.transactions.rear)(v) } {
-            let build_flags = if flags & EXECUTE != 0 && !unsafe { (b.groups.primary)(v) } {
-                flags | AUTOREPLACE
-            } else {
-                flags
-            };
+            let build_flags =
+                if flags & DoCommandFlag::EXECUTE != 0 && !unsafe { (b.groups.primary)(v) } {
+                    flags | DoCommandFlag::AUTO_REPLACE
+                } else {
+                    flags
+                };
             let engine = unsafe { (b.groups.vehicle_engine)(v) };
             let built = crate::command::nested(
                 b.commands,
@@ -187,7 +189,7 @@ unsafe fn clone(
                 return invalid;
             }
             total.add_money((b.cost.money)(part));
-            if flags & EXECUTE != 0 {
+            if flags & DoCommandFlag::EXECUTE != 0 {
                 w = unsafe { (b.groups.vehicle)(new_id) };
                 if unsafe { (b.groups.vehicle_type)(v) } == 0 {
                     let old_train = (r.train_handle)(v.cast());
@@ -226,17 +228,17 @@ unsafe fn clone(
             break;
         }
     }
-    if flags & EXECUTE != 0 && unsafe { (b.groups.vehicle_type)(original) } == 0 {
+    if flags & DoCommandFlag::EXECUTE != 0 && unsafe { (b.groups.vehicle_type)(original) } == 0 {
         new_id = unsafe { (b.groups.vehicle_id)(front) };
     }
-    if flags & EXECUTE != 0 {
+    if flags & DoCommandFlag::EXECUTE != 0 {
         unsafe { copy_group(s, temporary, flags, original, front) };
     }
     w = front;
     v = original;
     loop {
         loop {
-            if flags & EXECUTE != 0 {
+            if flags & DoCommandFlag::EXECUTE != 0 {
                 if c.transactions.assertions {
                     unsafe { (c.transactions.check)(!w.is_null()) };
                 }
@@ -301,7 +303,7 @@ unsafe fn clone(
                 break;
             }
         }
-        if flags & EXECUTE != 0 && unsafe { (b.groups.vehicle_type)(v) } == 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 && unsafe { (b.groups.vehicle_type)(v) } == 0 {
             w = (s.next_vehicle)(w);
         }
         if unsafe { (b.groups.vehicle_type)(v) } != 0 {
@@ -312,7 +314,7 @@ unsafe fn clone(
             break;
         }
     }
-    if flags & EXECUTE != 0 {
+    if flags & DoCommandFlag::EXECUTE != 0 {
         unsafe { orders(s, part, flags, share, original, front) };
         if !(b.cost.success)(part) {
             unsafe { sell(s, temporary, flags, front) };

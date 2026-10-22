@@ -133,7 +133,6 @@ static void VehicleConstructStamp(void *shell) noexcept
 	v->build_year = TimerGameCalendar::year;
 	v->sprite_cache.sprite_seq.Set(SPR_IMG_QUERY);
 }
-static bool VehicleConstructPreview(const OpenTTDEngine *e) noexcept { return EngineOf(e)->flags.Test(EngineFlag::ExclusivePreview); }
 static void VehicleConstructServiceFlags(void *shell, bool prototype, bool percent) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
@@ -153,7 +152,7 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 		.aircraft_capacity = VehicleConstructAircraftCapacity, .road_capacity = VehicleConstructRoadCapacity,
 		.set_cargo_type = RustVehicleSetCargoType, .engine_common = VehicleConstructEngineCommon,
 		.service_dates = VehicleConstructServiceDates, .build_stamp = VehicleConstructStamp,
-		.exclusive_preview = VehicleConstructPreview, .service_flags = VehicleConstructServiceFlags,
+		.exclusive_preview = RustEngineExclusivePreview, .service_flags = VehicleConstructServiceFlags,
 		.wrong_depot = STR_ERROR_DEPOT_WRONG_DEPOT_TYPE,
 	};
 	return services;
@@ -209,7 +208,7 @@ const OpenTTDVehicleCloneServices &GetRustVehicleCloneServices() noexcept
 		.build = &GetRustVehicleBuildServices(),
 		.next_vehicle = RustOpaqueVehicleRead<void *, RustVehicleNextVehicle<Vehicle>>,
 		.has_articulated = RustOpaqueVehicleRead<bool, RustGroundHasArticulated<Vehicle>>,
-		.next_articulated = RustOpaqueVehicleRead<void *, RustVehicleNextArticulated<Vehicle>>,
+		.next_articulated = RustOpaqueHandleRead<void *, RustVehicleNextArticulated>,
 		.copy_service = VehicleCloneCopyService, .parse_suffix = VehicleCloneParseSuffix,
 	};
 	return services;

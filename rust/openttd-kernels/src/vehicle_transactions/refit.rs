@@ -2,7 +2,8 @@
 //! Deferred refit computation and commit. Active frames are owned by their stack
 //! transaction; only cleared inactive frames remain in process-wide scratch.
 #![allow(clippy::too_many_lines, clippy::many_single_char_names)]
-use super::{CommonServices, ERROR, EXECUTE, SelectionServices, vehicle_ref, vehicle_set};
+use super::{CommonServices, ERROR, SelectionServices, vehicle_ref, vehicle_set};
+use crate::command_type::DoCommandFlag;
 use crate::services::{CommandCost, ExpenseType};
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
 use std::cell::UnsafeCell;
@@ -334,7 +335,7 @@ unsafe fn refit_chain(
             unsafe { next(s, v) }
         };
     }
-    if flags & EXECUTE != 0 {
+    if flags & DoCommandFlag::EXECUTE != 0 {
         for index in 0..transaction.0.results.len() {
             // Copy only the private result; no Vec borrow crosses a callback.
             let result = transaction.0.results[index];
@@ -441,7 +442,7 @@ pub(crate) unsafe fn refit(
             s, cost, temp, v, only, count, cargo, subtype, flags, automatic,
         )
     };
-    if flags & EXECUTE != 0 {
+    if flags & DoCommandFlag::EXECUTE != 0 {
         match unsafe { (b.groups.vehicle_type)(v) } {
             0 => unsafe {
                 crate::train::openttd_rust_train_consist_changed(

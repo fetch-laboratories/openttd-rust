@@ -14,8 +14,14 @@ mod clone_name;
 pub(crate) mod construct;
 pub(crate) mod mass;
 pub(crate) mod refit;
+use crate::command_type::DoCommandFlag;
 use crate::fleet::GroupServices;
+use crate::order_type::{OT_GOTO_WAYPOINT, OT_IMPLICIT};
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, CommandServices, Services};
+use crate::strings_type::INVALID_STRING_ID as ERROR;
+use crate::vehiclelist::{
+    VL_DEPOT_LIST, VL_GROUP_LIST, VL_SHARED_ORDERS, VL_STANDARD, VL_STATION_LIST,
+};
 
 #[repr(C)]
 pub struct Target {
@@ -34,15 +40,12 @@ pub struct TransactionServices {
     pub set_name: extern "C" fn(*mut (), ByteSpan),
     pub name_dirty: extern "C" fn(*mut ()),
     pub interval_percent: extern "C" fn(u8) -> bool,
-    pub interval_default: extern "C" fn(u8, u8) -> u16,
+    pub interval_default: extern "C" fn(u8, u8) -> i32,
     pub interval_clamp: extern "C" fn(i32, bool) -> u16,
     pub set_interval: extern "C" fn(*mut (), u16, bool, bool),
     pub unique_name: u32,
     pub max_name: usize,
 }
-const EXECUTE: u16 = 1;
-const AUTOREPLACE: u16 = 1 << 6;
-const ERROR: u32 = 0xffff;
 
 /// # Safety
 /// The spans denote live readable bytes; no name mutation occurs during comparison.
@@ -114,11 +117,11 @@ pub unsafe extern "C" fn openttd_rust_vehicle_rename(
         if (s.shared.utf8_length)(text.data, text.size) >= s.max_name {
             return (s.cost.error)(cost, ERROR);
         }
-        if flags & AUTOREPLACE == 0 && !unsafe { unique_name(s, text) } {
+        if flags & DoCommandFlag::AUTO_REPLACE == 0 && !unsafe { unique_name(s, text) } {
             return (s.cost.error)(cost, s.unique_name);
         }
     }
-    if flags & EXECUTE != 0 {
+    if flags & DoCommandFlag::EXECUTE != 0 {
         if text.size == 0 {
             (s.clear_name)(v);
         } else {
@@ -154,9 +157,9 @@ pub unsafe extern "C" fn openttd_rust_vehicle_service_interval(
             return (s.cost.error)(cost, ERROR);
         }
     } else {
-        interval = (s.interval_default)(owner, unsafe { (s.groups.vehicle_type)(v) });
+        interval = (s.interval_default)(owner, unsafe { (s.groups.vehicle_type)(v) }) as u16;
     }
-    if flags & EXECUTE != 0 {
+    if flags & DoCommandFlag::EXECUTE != 0 {
         (s.set_interval)(v, interval, custom, percent);
     }
     (s.cost.zero)(cost);
@@ -303,7 +306,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
     index: u32,
     mut emit: F,
 ) -> bool {
-    if kind == 2 || kind == 3 {
+    if kind == VL_STATION_LIST || kind == VL_DEPOT_LIST {
         struct Find<'a, F> {
             s: &'a SelectionServices,
             vehicle_type: u8,
@@ -325,7 +328,9 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
                         && !o.nearest_depot()
                         && o.destination() == c.destination
                 } else {
-                    (o.is_type(crate::vehicle::OT_GOTO_STATION) || o.is_type(6) || o.is_type(8))
+                    (o.is_type(crate::vehicle::OT_GOTO_STATION)
+                        || o.is_type(OT_GOTO_WAYPOINT)
+                        || o.is_type(OT_IMPLICIT))
                         && o.destination() == c.destination
                 }
             }
@@ -337,7 +342,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         let mut ctx = Find {
             s,
             vehicle_type,
-            depot: kind == 3,
+            depot: kind == VL_DEPOT_LIST,
             destination: index as u16,
             emit: &mut emit,
         };
@@ -349,7 +354,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         );
         return true;
     }
-    if kind == 1 {
+    if kind == VL_SHARED_ORDERS {
         let mut v = unsafe { (s.groups.vehicle)(index) };
         if v.is_null()
             || unsafe { (s.groups.vehicle_type)(v) != vehicle_type || !(s.groups.primary)(v) }
@@ -362,7 +367,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         }
         return true;
     }
-    if kind != 0 && kind != 4 {
+    if kind != VL_STANDARD && kind != VL_GROUP_LIST {
         return false;
     }
     let mut from = 0;
@@ -373,7 +378,7 @@ unsafe fn generate_list<F: FnMut(*mut ())>(
         }
         // Preserve the distinct predicate order of group and standard lists.
         if unsafe { (s.groups.vehicle_type)(v) } == vehicle_type {
-            let selected = if kind == 4 && index as u16 != crate::fleet::ALL_GROUP {
+            let selected = if kind == VL_GROUP_LIST && index as u16 != crate::fleet::ALL_GROUP {
                 unsafe {
                     (s.groups.primary)(v)
                         && (s.groups.vehicle_owner)(v) == company
@@ -500,7 +505,7 @@ pub(crate) unsafe fn sell(
         s.strings.new_vehicle_expense,
         (s.value)(front).saturating_neg(),
     );
-    if flags & EXECUTE != 0 {
+    if flags & DoCommandFlag::EXECUTE != 0 {
         if unsafe { (b.groups.primary)(front) } && backup {
             unsafe { crate::orders::openttd_rust_backup_create(front.cast(), client, s.orders) };
         }
@@ -515,7 +520,7 @@ pub(crate) unsafe fn startstop(
     id: u32,
     mut evaluate: bool,
 ) {
-    if flags & AUTOREPLACE == 0 {
+    if flags & DoCommandFlag::AUTO_REPLACE == 0 {
         evaluate = true;
     }
     let b = s.base;
@@ -580,8 +585,10 @@ pub(crate) unsafe fn startstop(
             return (b.cost.error)(cost, error);
         }
     }
-    if flags & EXECUTE != 0 {
-        if unsafe { (s.transactions.stopped_in_depot)(v) } && flags & AUTOREPLACE == 0 {
+    if flags & DoCommandFlag::EXECUTE != 0 {
+        if unsafe { (s.transactions.stopped_in_depot)(v) }
+            && flags & DoCommandFlag::AUTO_REPLACE == 0
+        {
             (s.waiting_news)(id);
         }
         (s.flip_stopped)(v);

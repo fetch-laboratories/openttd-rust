@@ -47,7 +47,7 @@ const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noe
 		.flip_image = VehicleArticFlip, .reverse = VehicleArticReverse, .position = RustOpaqueVehicleInvoke<RustVehicleUpdatePosition<Vehicle>>,
 		.available_cargo = VehicleArticAvailableCargo, .warning = VehicleArticWarning,
 		.has_articulated = RustOpaqueVehicleRead<bool, RustGroundHasArticulated<Vehicle>>,
-		.next_articulated = RustOpaqueVehicleRead<void *, RustVehicleNextArticulated<Vehicle>>, .max_parts = MAX_ARTICULATED_PARTS, .all_cargo = ALL_CARGOTYPES,
+		.next_articulated = RustOpaqueHandleRead<void *, RustVehicleNextArticulated>, .max_parts = MAX_ARTICULATED_PARTS, .all_cargo = ALL_CARGOTYPES,
 	};
 	return services;
 }

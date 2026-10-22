@@ -3,18 +3,16 @@
 //! `CmdBuildAircraft`. Native leaves allocate shells and store fields; Rust owns
 //! the checks, RNG draws, articulated assembly, capacities, caches and chain.
 #![allow(clippy::many_single_char_names)]
-use super::{ERROR, EXECUTE, articulated, build};
+use super::{ERROR, articulated, build};
+use crate::aircraft::{AIR_AIRCRAFT, AIR_HELICOPTER};
+use crate::airport::HANGAR;
+use crate::command_type::DoCommandFlag;
+use crate::engine_type::AIR_CTOL;
 use crate::services::CommandCost;
 use crate::station::Station;
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, VehicleType};
 use std::ptr;
 
-const AIR_HELICOPTER: u8 = 0;
-const AIR_AIRCRAFT: u8 = 2;
-/// `AIR_CTOL` in `AircraftVehicleInfo::subtype`.
-const AIR_CTOL: u8 = 1;
-/// Aircraft `HANGAR` movement state.
-const HANGAR: u8 = 1;
 const HRS_ROTOR_STOPPED: u8 = 0;
 
 #[repr(C)]
@@ -74,7 +72,7 @@ pub(crate) unsafe fn road(
         return ptr::null_mut();
     }
     (b.cost.zero)(out);
-    if flags & EXECUTE == 0 {
+    if flags & DoCommandFlag::EXECUTE == 0 {
         return ptr::null_mut();
     }
     crate::witness::hit(crate::witness::VT_ROAD);
@@ -84,7 +82,7 @@ pub(crate) unsafe fn road(
     let info = (a.road_info)(e, true);
     (a.set_part)(v, info.image, (a.default_cargo)(e), info.capacity, true);
     (k.engine_common)(v, e);
-    (k.service_dates)(v, (b.interval_default)(company, VehicleType::ROAD.0));
+    (k.service_dates)(v, (b.interval_default)(company, VehicleType::ROAD.0) as u16);
     (k.build_stamp)(v);
     (a.random_bits)(v, b.shared.random() as u16);
     (k.road_front)(v, e);
@@ -135,7 +133,7 @@ pub(crate) unsafe fn aircraft(
     }
     let tile = (k.hangar_tile)(st, tile);
     (b.cost.zero)(out);
-    if flags & EXECUTE == 0 {
+    if flags & DoCommandFlag::EXECUTE == 0 {
         return ptr::null_mut();
     }
     crate::witness::hit(crate::witness::VT_AIRCRAFT);
@@ -174,7 +172,10 @@ pub(crate) unsafe fn aircraft(
         (*hv.state).previous_pos = pos;
         (*hv.state).targetairport = target;
     }
-    (k.service_dates)(v, (b.interval_default)(company, VehicleType::AIRCRAFT.0));
+    (k.service_dates)(
+        v,
+        (b.interval_default)(company, VehicleType::AIRCRAFT.0) as u16,
+    );
     (k.build_stamp)(v);
     (k.build_stamp)(u);
     (a.random_bits)(v, b.shared.random() as u16);

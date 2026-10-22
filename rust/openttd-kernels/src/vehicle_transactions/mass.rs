@@ -1,7 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Depot and list command dispatch with retained, transaction-local selection.
 #![allow(clippy::too_many_lines)]
-use super::{CommonServices, ERROR, EXECUTE, SelectionServices, depot_list, generate_list};
+use super::{CommonServices, ERROR, SelectionServices, depot_list, generate_list};
+use crate::command_type::DoCommandFlag;
 use crate::services::{CommandCost, Cost};
 use std::cell::UnsafeCell;
 
@@ -283,7 +284,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_send(
         );
         if (b.cost.success)(item) {
             success = true;
-            if flags & EXECUTE == 0 {
+            if flags & DoCommandFlag::EXECUTE == 0 {
                 break;
             }
         }

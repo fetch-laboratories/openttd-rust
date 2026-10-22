@@ -1,12 +1,10 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Common build transaction, including speculative construction and RNG rollback.
-use super::{AUTOREPLACE, ERROR, EXECUTE, construct, mass, refit};
+use super::{ERROR, construct, mass, refit};
+use crate::command_type::DoCommandFlag;
 use crate::services::{CommandCost, Cost, RandomServices};
 use crate::vehicle::{OpenTTDEngine, RailVehicleTypes, VehicleType};
 use std::ptr;
-/// Native `DoCommandFlag::QueryCost`.
-const QUERY_COST: u16 = 1 << 2;
-
 #[repr(C)]
 pub struct Result {
     pub id: u32,
@@ -110,7 +108,7 @@ pub(crate) unsafe fn build(
         value.error(s.too_many);
         return Result::default();
     }
-    let unit = if flags & (QUERY_COST | AUTOREPLACE) != 0
+    let unit = if flags & (DoCommandFlag::QUERY_COST | DoCommandFlag::AUTO_REPLACE) != 0
         || (kind == VehicleType::TRAIN && (r.rail_kind)(e) == RailVehicleTypes::WAGON)
     {
         0
@@ -121,8 +119,8 @@ pub(crate) unsafe fn build(
         value.error(s.too_many);
         return Result::default();
     }
-    let subflags = if refitting && flags & EXECUTE == 0 {
-        flags | EXECUTE | AUTOREPLACE
+    let subflags = if refitting && flags & DoCommandFlag::EXECUTE == 0 {
+        flags | DoCommandFlag::EXECUTE | DoCommandFlag::AUTO_REPLACE
     } else {
         flags
     };
@@ -132,7 +130,7 @@ pub(crate) unsafe fn build(
         1 => unsafe { construct::road(s, temporary, subflags, tile, e) },
         2 => {
             let north = (s.ship_tile)(tile);
-            let v = if subflags & EXECUTE != 0 {
+            let v = if subflags & DoCommandFlag::EXECUTE != 0 {
                 let v = (s.new_ship)(north);
                 let id = unsafe { (b.groups.vehicle_id)(v) };
                 unsafe {
@@ -158,7 +156,7 @@ pub(crate) unsafe fn build(
     // This is deliberately one success test, before refitting. A failed refit
     // still follows the original accounting, temporary sale and restoration.
     if value.ok() {
-        if subflags & EXECUTE != 0 {
+        if subflags & DoCommandFlag::EXECUTE != 0 {
             (s.set_purchase)(v, unit, value.money());
             result.id = unsafe { (b.groups.vehicle_id)(v) };
         }
@@ -189,17 +187,17 @@ pub(crate) unsafe fn build(
                 result.capacity.cargo[usize::from(mail)] = u32::from(result.capacity.mail);
             }
         }
-        if flags & EXECUTE != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             if kind == VehicleType::TRAIN
                 && use_free
-                && flags & AUTOREPLACE == 0
+                && flags & DoCommandFlag::AUTO_REPLACE == 0
                 && (s.is_engine)(v)
             {
                 (s.normalize)(v);
             }
             (s.presentation)(v, kind);
         }
-        if subflags & EXECUTE != 0 {
+        if subflags & DoCommandFlag::EXECUTE != 0 {
             unsafe {
                 crate::fleet::openttd_rust_fleet_count_engine(b.groups, v, 1);
                 crate::fleet::openttd_rust_fleet_update_autoreplace(
@@ -209,7 +207,7 @@ pub(crate) unsafe fn build(
             }
             if unsafe { (b.groups.primary)(v) } {
                 unsafe { crate::fleet::openttd_rust_fleet_count_vehicle(b.groups, v, 1) };
-                if subflags & AUTOREPLACE == 0 {
+                if subflags & DoCommandFlag::AUTO_REPLACE == 0 {
                     unsafe {
                         crate::orders::openttd_rust_backup_restore(v.cast(), client, c.orders)
                     };
@@ -224,7 +222,7 @@ pub(crate) unsafe fn build(
                 b.shared,
                 Cost(temporary, b.cost),
                 0,
-                EXECUTE,
+                DoCommandFlag::EXECUTE,
                 |nested_flags| unsafe {
                     super::sell(
                         c,

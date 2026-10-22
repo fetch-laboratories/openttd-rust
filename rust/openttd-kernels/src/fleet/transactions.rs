@@ -10,6 +10,7 @@ use super::{
     ALL_GROUP, DEFAULT_GROUP, ERROR, GroupFields, GroupServices, INVALID_GROUP, add_profit,
     add_replacement, group, remove_replacement, replacement, update_autoreplace,
 };
+use crate::command_type::DoCommandFlag;
 /// `EngineID::Invalid()`; shares the 0xFFFF encoding with `GroupID::Invalid()`.
 const INVALID_ENGINE: u16 = INVALID_GROUP;
 use std::ptr;
@@ -98,7 +99,6 @@ pub struct Services {
 }
 
 /// `DoCommandFlag::NoCargoCapacityCheck`, set by every original autoreplace move.
-const NO_CARGO_CAPACITY_CHECK: u32 = 1 << 7;
 unsafe fn move_vehicle(
     w: &Services,
     out: *mut (),
@@ -107,7 +107,15 @@ unsafe fn move_vehicle(
     flags: u32,
     whole: bool,
 ) {
-    unsafe { (w.move_vehicle)(out, v, after, flags | NO_CARGO_CAPACITY_CHECK, whole) };
+    unsafe {
+        (w.move_vehicle)(
+            out,
+            v,
+            after,
+            flags | u32::from(DoCommandFlag::NO_CARGO_CAPACITY_CHECK),
+            whole,
+        );
+    };
 }
 
 unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) -> *mut () {
@@ -120,7 +128,7 @@ unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) ->
         b.shared,
         crate::services::Cost(costs.build.cast(), b.cost),
         tile,
-        (EXECUTE | AUTOREPLACE) as u16,
+        DoCommandFlag::EXECUTE | DoCommandFlag::AUTO_REPLACE,
         |flags| unsafe {
             crate::vehicle_transactions::build::build(
                 s,
@@ -155,7 +163,7 @@ unsafe fn direct_start(w: &Services, out: *mut (), v: *mut (), evaluate: bool) {
         b.shared,
         crate::services::Cost(out.cast(), b.cost),
         0,
-        (EXECUTE | AUTOREPLACE) as u16,
+        DoCommandFlag::EXECUTE | DoCommandFlag::AUTO_REPLACE,
         |flags| unsafe {
             crate::vehicle_transactions::startstop(s, out.cast(), flags, id, evaluate);
         },
@@ -200,7 +208,7 @@ unsafe fn direct_refit(
         b.shared,
         crate::services::Cost(out.cast(), b.cost),
         0,
-        EXECUTE as u16,
+        DoCommandFlag::EXECUTE,
         |flags| unsafe {
             crate::vehicle_transactions::refit::refit(
                 s,
@@ -225,7 +233,7 @@ unsafe fn direct_clone_order(w: &Services, out: *mut (), old: *mut (), new: *mut
         b.shared,
         crate::services::Cost(out.cast(), b.cost),
         0,
-        EXECUTE as u16,
+        DoCommandFlag::EXECUTE,
         |flags| unsafe {
             crate::orders::openttd_rust_command_clone(
                 new.cast(),
@@ -248,7 +256,7 @@ unsafe fn direct_copy_group(w: &Services, out: *mut (), old: *mut (), new: *mut 
         b.shared,
         crate::services::Cost(out.cast(), b.cost),
         0,
-        EXECUTE as u16,
+        DoCommandFlag::EXECUTE,
         |flags| unsafe {
             let mut group_out = 0;
             let error = crate::fleet::openttd_rust_fleet_add_vehicle_group(
@@ -270,8 +278,6 @@ unsafe fn direct_copy_group(w: &Services, out: *mut (), old: *mut (), new: *mut 
     );
 }
 
-const EXECUTE: u32 = 1;
-const AUTOREPLACE: u32 = 1 << 6;
 const INVALID_CARGO: u8 = 255;
 const NO_REFIT: u8 = 254;
 const TILE_SIZE: u16 = 16;
@@ -468,7 +474,7 @@ unsafe fn build(
     }
     let cargo = unsafe { new_cargo(w, gw, old, engine, chain) };
     if cargo == INVALID_CARGO {
-        if unsafe { (w.local)() } && flags & EXECUTE != 0 {
+        if unsafe { (w.local)() } && flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
             let order = unsafe { incompatible_refit(w, gw, old, engine) };
             unsafe { (w.refit_news)(old, order) };
         }
@@ -532,7 +538,8 @@ unsafe fn copy_head(
             };
         }
     }
-    if unsafe { (w.success)(cost) } && old != new && flags & EXECUTE != 0 {
+    if unsafe { (w.success)(cost) } && old != new && flags & u32::from(DoCommandFlag::EXECUTE) != 0
+    {
         unsafe {
             (w.copy_configuration)(old, new);
             add_profit(gw, new);
@@ -561,9 +568,16 @@ unsafe fn replace_free(
     unsafe { (w.cost_add)(cost, costs.build) };
     if unsafe { (w.success)(cost) } && !new.is_null() {
         *nothing = false;
-        if flags & EXECUTE != 0 {
+        if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
             unsafe {
-                move_vehicle(w, costs.temporary, new, old, EXECUTE, false);
+                move_vehicle(
+                    w,
+                    costs.temporary,
+                    new,
+                    old,
+                    u32::from(DoCommandFlag::EXECUTE),
+                    false,
+                );
                 (w.transfer_cargo)(old, new, false);
             }
             *unit = new;
@@ -573,8 +587,8 @@ unsafe fn replace_free(
             direct_sell(w, costs.temporary, old, flags);
             (w.cost_add)(cost, costs.temporary);
         }
-        if flags & EXECUTE == 0 {
-            unsafe { direct_sell(w, costs.temporary, new, EXECUTE) };
+        if flags & u32::from(DoCommandFlag::EXECUTE) == 0 {
+            unsafe { direct_sell(w, costs.temporary, new, u32::from(DoCommandFlag::EXECUTE)) };
         }
     }
 }
@@ -642,7 +656,7 @@ unsafe fn replace_chain(
                         costs.temporary,
                         second,
                         ptr::null_mut(),
-                        EXECUTE | AUTOREPLACE,
+                        u32::from(DoCommandFlag::EXECUTE) | u32::from(DoCommandFlag::AUTO_REPLACE),
                         true,
                     );
                     (w.cost_add)(cost, costs.temporary);
@@ -664,7 +678,8 @@ unsafe fn replace_chain(
                                 costs.temporary,
                                 item.old,
                                 ptr::null_mut(),
-                                EXECUTE | AUTOREPLACE,
+                                u32::from(DoCommandFlag::EXECUTE)
+                                    | u32::from(DoCommandFlag::AUTO_REPLACE),
                                 false,
                             );
                         };
@@ -673,7 +688,14 @@ unsafe fn replace_chain(
                         last_engine = append;
                     }
                     unsafe {
-                        move_vehicle(w, costs.temporary, append, new_head, EXECUTE, false);
+                        move_vehicle(
+                            w,
+                            costs.temporary,
+                            append,
+                            new_head,
+                            u32::from(DoCommandFlag::EXECUTE),
+                            false,
+                        );
                         (w.cost_add)(cost, costs.temporary);
                     }
                     if !unsafe { (w.success)(cost) } {
@@ -697,7 +719,14 @@ unsafe fn replace_chain(
                     let engine = unsafe { (gw.vehicle_engine)(append) };
                     if unsafe { (w.wagon)(engine) } {
                         unsafe {
-                            move_vehicle(w, costs.temporary, append, last_engine, EXECUTE, false);
+                            move_vehicle(
+                                w,
+                                costs.temporary,
+                                append,
+                                last_engine,
+                                u32::from(DoCommandFlag::EXECUTE),
+                                false,
+                            );
                         };
                         if wagon_removal
                             && if unsafe { (w.success)(costs.temporary) } {
@@ -712,7 +741,8 @@ unsafe fn replace_chain(
                                     costs.temporary,
                                     append,
                                     ptr::null_mut(),
-                                    EXECUTE | AUTOREPLACE,
+                                    u32::from(DoCommandFlag::EXECUTE)
+                                        | u32::from(DoCommandFlag::AUTO_REPLACE),
                                     false,
                                 );
                             };
@@ -743,7 +773,9 @@ unsafe fn replace_chain(
                         break;
                     }
                     check!(w, unsafe { (w.wagon)((gw.vehicle_engine)(wagon)) });
-                    unsafe { direct_sell(w, costs.temporary, wagon, EXECUTE) };
+                    unsafe {
+                        direct_sell(w, costs.temporary, wagon, u32::from(DoCommandFlag::EXECUTE));
+                    };
                     check!(w, unsafe { (w.success)(costs.temporary) });
                     item.new = ptr::null_mut();
                     unsafe { (w.cost_amount)(cost, item.cost.saturating_neg()) };
@@ -756,7 +788,7 @@ unsafe fn replace_chain(
                 }
             }
             if unsafe { (w.success)(cost) } {
-                if flags & EXECUTE != 0 && new_head != old_head {
+                if flags & u32::from(DoCommandFlag::EXECUTE) != 0 && new_head != old_head {
                     *chain = new_head;
                     unsafe { (w.event)(old_head, new_head) };
                 }
@@ -765,25 +797,30 @@ unsafe fn replace_chain(
                     if unsafe { (w.first)(old) } == new_head {
                         continue;
                     }
-                    if flags & EXECUTE != 0 {
+                    if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
                         unsafe { (w.transfer_cargo)(old, new_head, true) };
                     }
                     unsafe {
-                        direct_sell(w, costs.temporary, old, flags | AUTOREPLACE);
+                        direct_sell(
+                            w,
+                            costs.temporary,
+                            old,
+                            flags | u32::from(DoCommandFlag::AUTO_REPLACE),
+                        );
                         (w.cost_add)(cost, costs.temporary);
                     }
-                    if flags & EXECUTE != 0 {
+                    if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
                         item.old = ptr::null_mut();
                         if i == 0 {
                             old_head = ptr::null_mut();
                         }
                     }
                 }
-                if flags & EXECUTE != 0 {
+                if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
                     unsafe { (w.capacity)(new_head) };
                 }
             }
-            if flags & EXECUTE == 0 {
+            if flags & u32::from(DoCommandFlag::EXECUTE) == 0 {
                 let second = unsafe { (w.next_unit)(old_head) };
                 if !second.is_null() {
                     unsafe {
@@ -792,7 +829,8 @@ unsafe fn replace_chain(
                             costs.temporary,
                             second,
                             ptr::null_mut(),
-                            EXECUTE | AUTOREPLACE,
+                            u32::from(DoCommandFlag::EXECUTE)
+                                | u32::from(DoCommandFlag::AUTO_REPLACE),
                             true,
                         );
                     };
@@ -805,7 +843,8 @@ unsafe fn replace_chain(
                             costs.temporary,
                             item.old,
                             old_head,
-                            EXECUTE | AUTOREPLACE,
+                            u32::from(DoCommandFlag::EXECUTE)
+                                | u32::from(DoCommandFlag::AUTO_REPLACE),
                             false,
                         );
                     };
@@ -813,10 +852,17 @@ unsafe fn replace_chain(
                 }
             }
         }
-        if flags & EXECUTE == 0 {
+        if flags & u32::from(DoCommandFlag::EXECUTE) == 0 {
             for item in replacements.iter_mut().rev() {
                 if !item.new.is_null() {
-                    unsafe { direct_sell(w, costs.temporary, item.new, EXECUTE) };
+                    unsafe {
+                        direct_sell(
+                            w,
+                            costs.temporary,
+                            item.new,
+                            u32::from(DoCommandFlag::EXECUTE),
+                        );
+                    };
                     item.new = ptr::null_mut();
                 }
             }
@@ -831,7 +877,7 @@ unsafe fn replace_chain(
                 (w.cost_add)(cost, costs.copy);
             }
             if unsafe { (w.success)(cost) } {
-                if flags & EXECUTE != 0 {
+                if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
                     unsafe { (w.transfer_cargo)(old_head, new_head, true) };
                     *chain = new_head;
                     unsafe { (w.event)(old_head, new_head) };
@@ -841,8 +887,15 @@ unsafe fn replace_chain(
                     (w.cost_add)(cost, costs.temporary);
                 }
             }
-            if flags & EXECUTE == 0 {
-                unsafe { direct_sell(w, costs.temporary, new_head, EXECUTE) };
+            if flags & u32::from(DoCommandFlag::EXECUTE) == 0 {
+                unsafe {
+                    direct_sell(
+                        w,
+                        costs.temporary,
+                        new_head,
+                        u32::from(DoCommandFlag::EXECUTE),
+                    );
+                };
             }
         }
     }
@@ -923,7 +976,16 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
         check!(w, free || unsafe { (w.stopped_in_depot)(v) });
         unsafe { (w.save_rng)(costs.seeds) };
         if free {
-            unsafe { replace_free(w, gw, costs, &mut v, flags & !EXECUTE, &mut nothing) };
+            unsafe {
+                replace_free(
+                    w,
+                    gw,
+                    costs,
+                    &mut v,
+                    flags & !u32::from(DoCommandFlag::EXECUTE),
+                    &mut nothing,
+                );
+            };
         } else {
             unsafe {
                 replace_chain(
@@ -931,7 +993,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
                     gw,
                     costs,
                     &mut v,
-                    flags & !EXECUTE,
+                    flags & !u32::from(DoCommandFlag::EXECUTE),
                     wagon_removal,
                     &mut nothing,
                 );
@@ -941,7 +1003,7 @@ unsafe fn autoreplace(w: &Services, gw: &GroupServices, costs: Costs, flags: u32
             (w.cost_add)(cost, costs.replace);
             (w.restore_rng)(costs.seeds);
         }
-        if unsafe { (w.success)(cost) } && flags & EXECUTE != 0 {
+        if unsafe { (w.success)(cost) } && flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
             if free {
                 unsafe { replace_free(w, gw, costs, &mut v, flags, &mut nothing) };
             } else {
@@ -1002,14 +1064,14 @@ unsafe fn set_rule(
         }
         unsafe { add_replacement(gw, head, from, to, id, old, flags) }
     };
-    if flags & EXECUTE != 0 {
+    if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
         unsafe { update_autoreplace(gw, company) };
         if unsafe { (w.local)() } {
             unsafe { (gw.replace_dirty)(kind) };
         }
         unsafe { (gw.list_set_dirty)(company, kind) };
     }
-    if flags & EXECUTE != 0 && unsafe { (w.local)() } {
+    if flags & u32::from(DoCommandFlag::EXECUTE) != 0 && unsafe { (w.local)() } {
         unsafe { (w.rule_window)(from, id) };
     }
     cost

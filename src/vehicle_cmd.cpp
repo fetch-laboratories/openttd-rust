@@ -76,7 +76,7 @@ static void VehicleTransactionNameDirty(void *shell) noexcept
 	InvalidateWindowClassesData(GetWindowClassForVehicleType(RustVehicleVehicleType(static_cast<Vehicle *>(shell))), 1);
 	RustScreenDirty();
 }
-static uint16_t VehicleTransactionDefaultInterval(uint8_t owner, uint8_t type) noexcept { return CompanyServiceInterval(Company::Get(CompanyID(owner)), static_cast<VehicleType>(type)); }
+static int32_t VehicleTransactionDefaultInterval(uint8_t owner, uint8_t type) noexcept { return CompanyServiceInterval(Company::Get(CompanyID(owner)), static_cast<VehicleType>(type)); }
 static uint16_t VehicleTransactionClampInterval(int32_t interval, bool percent) noexcept { return GetServiceIntervalClamped(interval, percent); }
 static void VehicleTransactionSetInterval(void *shell, uint16_t interval, bool custom, bool percent) noexcept
 {

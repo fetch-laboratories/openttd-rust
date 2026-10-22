@@ -188,8 +188,6 @@ static uint32_t Ship_tile_x(uint32_t tile) noexcept { return TileX(TileIndex(til
 
 static uint32_t Ship_tile_y(uint32_t tile) noexcept { return TileY(TileIndex(tile)); }
 
-static bool Ship_build_flag(uint32_t engine) noexcept { return Engine::Get(EngineID(engine))->flags.Test(EngineFlag::ExclusivePreview); }
-
 static void Ship_build_random(uint32_t id, uint16_t random) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleSetRandomBits(v, random); }
 
 static OpenTTDShipPosition Ship_new_position(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); auto gp = GetNewVehiclePos(v); return {gp.x, gp.y, gp.old_tile.base(), gp.new_tile.base()}; }
@@ -425,7 +423,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.update_visual = Ship_update_visual, .cache_invalidate = Ship_cache_invalidate,
 		.capacity = Ship_capacity, .sprite_direction = Ship_sprite_direction,
 		.tile_x = Ship_tile_x, .tile_y = Ship_tile_y,
-		.build_flag = Ship_build_flag, .build_random = Ship_build_random,
+		.build_flag = RustIndexedEngineRead<bool, RustEngineExclusivePreview, uint32_t>, .build_random = Ship_build_random,
 		.new_position = Ship_new_position, .exit_dir = Ship_exit_dir,
 		.track_direction = Ship_track_direction, .tracks_reach = Ship_tracks_reach,
 		.busy_tile = Ship_busy_tile, .path_size = Ship_path_size,
