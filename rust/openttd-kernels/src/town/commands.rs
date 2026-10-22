@@ -150,7 +150,7 @@ impl<'a> Commands<'a> {
     }
     fn clear(&self, out: *mut CommandCost, tile: u32, flags: u16) -> bool {
         // SAFETY: Native command table and caller-owned result remain live.
-        (unsafe { &*self.f.command }.landscape_clear)(out, tile, flags);
+        crate::landscape_cmd::clear_command(unsafe { &*self.f.command }, out, tile, flags);
         (self.cost.success)(out)
     }
     fn clear_unowned(&self, out: *mut CommandCost, tile: u32, flags: u16) -> bool {
