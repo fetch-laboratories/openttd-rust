@@ -4,13 +4,13 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-22, code at `802ec7d6a4`)
+## Where the fork stands (2026-10-22, code at `71d4f1d020`)
 
-- Thirty-eight ownership ports. Whole fork: Rust 88,388 / tooling 33,537 / glue 34,397 / original retired 49,636 of 470,612 C/C++ `src/` lines (10.55%). Simulation: 41,518 / 102,615 (40.46%), up from 37.09% at the sixteenth review.
-- Since then, twelve integrations, four of them ownership ports (#313 objects, #329 vehicle transactions, #346 subsidies, #352 tunnels/bridges). Retired 3,534 lines against 2,151 net glue plus 1,960 tooling.
-- Speed: a quiet six at this code (#356) matches every projection within -0.7% to +1.4% (TGP 1.214, Opus 1.199, Grok 1.202, P1996 1.254, P2000 1.323, P2016 1.359). No scenario is in its 5% band. TGP is nearest its ceiling in relative terms: before #351 it is 0.8% loop Ir from its band.
-- CI on `rust-migration` is green. On 2026-10-21, hosted macOS arm64 capacity cancelled 19 Full attempts; macOS moves to every fifth integration (#357).
-- Component branches: #347, #353 and uncommitted #349 (three of six). Maintenance drafts: #340, #351.
+- Thirty-eight ownership ports. Whole fork: Rust 89,051 / tooling 33,615 / glue 34,290 / original retired 49,661 of 470,612 C/C++ `src/` lines (10.55%). Simulation: 41,543 / 102,615 (40.48%).
+- Since the seventeenth review: #358 (#355/#356/#357 batch and free-core `--jobs`), #340 (#281 part 1) and #351 (#274 map reads) integrated. No ownership port yet; five are in review or CI.
+- Speed: tip profile at `9a991a1c23` against the #356 anchors: TGP 1.2138 (+0.02%), every play save at or below its anchor's loop Ir (P2016 -0.5%). No rise, no scenario in its 5% band. #351's own counts showed TGP loop Ir about 4.6% lower; the next tip profile measures it.
+- CI on `rust-migration` is green. macOS now runs only on request (#357); none due yet (three integrations since #357).
+- Component branches: #347, #353, #360, #362, #359 and #350 (six of six). Maintenance: #261 batch (draft pending).
 
 ## Seventeenth steering review (2026-10-22, speed on the merged branch, base-type returns, macOS every fifth merge)
 
@@ -152,17 +152,17 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #281) and #156 run in parallel.
 
-1. **#355, #356 and #357**, one batch PR (seventeenth review, action 1).
+1. **#355, #356 and #357**: integrated as #358.
 2. **#275** has no standing stream. When a pass or a tip rise opens speed work, rank it by net cost (#275 comment, 2026-10-22: aircraft, road-controller tick reads, scheduler carrier, orders).
-3. **#281** vehicle maintenance direct calls: #340 deletes the orphan aircraft reliability wrapper and the duplicate engine accessor, then gets a fresh review. The callee-copy check follows.
-4. **#274 map view (#351):** limited to the scheduler's clear/water/tree loops; C++ keeps the arrays and writes. Remaining: rustfmt and exact-head Full after #356. No extension for TGP speed.
-5. **Next whole owners**, as WIP frees, each without draft service dependencies:
-   - #247 town commands (#347): the PR comment items, then review;
-   - #348 landscape clearing, terraforming and leveling (#353): fresh review;
-   - #349 vehicle station/depot visits with LinkRefresher and IncreaseStats: first passing milestone;
-   - #315 rail construction and consist transactions (unblocked: #329 is integrated).
+3. **#281** part 1 integrated (#340). Part 2: the callee-copy check and the four duplicate wrappers listed in the #340 r2 review.
+4. **#274 map view:** integrated as #351, limited to the scheduler's clear/water/tree loops; C++ keeps the arrays and writes.
+5. **Next whole owners**, as WIP frees, each without draft service dependencies (all six selected owners are started):
+   - #247 town commands (#347), #348 landscape (#353), #315 rail construction (#360): reviewed, Full then integration;
+   - #354 road-stop occupancy (#362): review; `GetNextRoadStop` stays native while only the native pathfinder calls it;
+   - #349 visits (#359): orders-adapter fixture and visit bodies, then one review;
+   - #350 generation and rivers: implementation (selected 2026-10-22 after #351 landed).
 
-   A shared service that two owners need lands first, as its own PR. #315 is the only selected owner not yet started, so selection is due. Root decides on the amended #350 (generation and rivers; plan on #3, 2026-10-22) and #354 (road-stop occupancy) when a slot frees. Generation owners land after #351 so its TGP saving gives them headroom.
+   A shared service that two owners need lands first, as its own PR. Selection is due again when fewer than two owners remain unstarted; plan with the latest tip profile.
 6. **#168 tail, largest first.** `order_cmd.cpp` and `economy.cpp` hold 65 of the 198 baseline copies.
 
 New owners reuse integrated services, never draft copies. A Rust-allocated
@@ -171,21 +171,21 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Paused at the user's request; resume with the seventeenth review's actions. Root is gpt-6.1-sol (xhigh).
+Running at 2026-10-22 05:15 EDT. Root is Claude Code (claude-opus-5-5, xhigh); reviews run on gpt-6.1-sol. Seventeenth review actions 1-2 are done for #358, #340 and #351.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #355 + #356 + #357 | none | One batch PR from `rust-migration`, first: MSVC return fix, instruction identity fix and anchors, macOS every fifth integration. |
-| #281 / #340 | `0c8a5e15f3` | Two deletions from the conflict review, fresh review, counts, Full. |
-| #247 / #347 | `134a40b026` | PR comment items (subsidy direct call, shared object iterator, `InvalidateWindowData`, base merge), then review, counts, Full. |
-| #274 / #351 | `edc8b95bdc` | rustfmt the merged `lib.rs`, then exact-head Full after #356. |
-| #348 / #353 | `6d10b6c900` | Fresh independent review, then semantic, count and Full gates. |
-| #349 (no PR) | `bc30c0fc25` + dirty WIP | Finish visit bindings/callers to a first passing commit and draft PR. State is on #349. |
+| #247 / #347 | `bcff433505` | Conflict review of base merge `b178708677`, then exact-head Full, integrate. |
+| #348 / #353 | `c46fdb4fd2` | Reviewed (incl. both base merges); exact-head Full, integrate. |
+| #315 / #360 | `247ed46e34` | Reviewed with fixes; exact-head Full, integrate. |
+| #354 / #362 | `8852a300c2` | Independent review, then Full. `GetNextRoadStop` stays native (root). |
+| #349 / #359 | `bb677a58dc` | Orders-adapter fixture and visit bodies on the same branch, then one review. |
+| #350 (no PR yet) | from `71d4f1d020` | Implementation to first passing milestone and draft PR. |
+| #261 batch | none yet | Seventeenth-review cleanup list plus per-component ABI registry split; then review. |
 
-All retained drafts and WIP keep their worktrees and branches: three component branches of six.
-#261 R7 and #281 part 2 inputs remain on their issues. #64/#68/#69 stay paused.
+Retained drafts keep their worktrees. #281 part 2 and #261 R7 inputs remain on their issues. #64/#68/#69 stay paused.
 Preserve the pinned reference; do not reapply effect helper `73ccd511fb`.
-Pass `--jobs` as the free cores (AGENTS.md), not a fixed 2.
+Pass `--jobs` as the free cores (the driver default since #358).
 
 ## Out of scope for the near term
 
