@@ -27,18 +27,17 @@ Independent Claude Opus audits of integrated #329, #346 and #352 and draft #347,
 - PRs run no speed check. Root profiles the merged branch after every second integration and fixes forward any rise of more than 3%. This replaces the 2026-10-21 per-PR count decision and the 15% per-PR guard.
 - Speed passes and speed fixes happen only when a scenario comes within 5% of its 1.5x/1.3x ceiling. #275 has no standing stream.
 - macOS is tested after every fifth integration, not per PR, with a Blacksmith fallback after two hosted-capacity cancellations (#357).
+- Small maintenance work is batched: one PR, one reviewer and one Full run carry every ready cleanup, coverage, speed or tooling item. Eight of the last twelve integrations were separate small maintenance PRs, each paying the full pipeline.
 
 AGENTS.md also says: a PR whose exact-head Full passed and that merges cleanly integrates without a base update; a C++ class type crosses as its base type (#355); a local container the original builds stays a local `Vec`; review reports name orphaned WITH_RUST bodies, exports and declarations.
 
 Provisional, checked next review: the 3% tip-rise threshold (basis: counts repeat to 0.04%; the largest ordinary per-PR move was 1.3%) and factor 2 (measured wall sensitivity 0.75-1.54 at `802ec7d6a4`, so it is conservative). The 6.6% layout spread is retired: a pass's median of four three-pair medians came within 1.4% of every projection.
 
 Actions, in order (apply first; ports keep running alongside):
-1. **#355:** the MSVC return fix and the compile-time return-type check, before any other integration.
-2. **#356:** the identity fix and the quiet anchors; the tip profiles compare against them. No pass is due: nothing is near a ceiling.
-3. **#357:** macOS out of the pre-merge Full. Until it lands, use the Blacksmith fallback on capacity cancellations.
-4. **Integrate ready drafts,** without base updates unless a conflict blocks: #351 after #356 (rustfmt, then Full; no extension), #340 (two deletions, then review), #347 (PR comment items), #353 (fresh review).
-5. **Ports continue:** #349 to its first passing milestone, #315, then owner selection (Phase 2 item 5).
-6. **#261:** the 2026-10-22 cleanup list as one maintenance PR. The **#156** standing slot takes the new gaps.
+1. **#355, #356 and #357 as one batch PR,** before any other integration: the MSVC return fix and compile-time return-type check; the identity fix and the quiet anchors the tip profiles compare against (no pass is due); and macOS out of the pre-merge Full. Until that lands, use the Blacksmith fallback on capacity cancellations.
+2. **Integrate ready drafts,** without base updates unless a conflict blocks: #351 after #356 (rustfmt, then Full; no extension), #340 (two deletions, then review), #347 (PR comment items), #353 (fresh review).
+3. **Ports continue:** #349 to its first passing milestone, #315, then owner selection (Phase 2 item 5).
+4. **Batches:** the #261 cleanup list (2026-10-22 comment) as one batch PR; the **#156** slot batches the new gaps.
 
 ## Earlier steering, still in force
 
@@ -151,7 +150,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #281) and #156 run in parallel.
 
-1. **#355, #356, #357** (seventeenth review, actions 1-3).
+1. **#355, #356 and #357**, one batch PR (seventeenth review, action 1).
 2. **#275** has no standing stream. When a pass or a tip rise opens speed work, rank it by net cost (#275 comment, 2026-10-22: aircraft, road-controller tick reads, scheduler carrier, orders).
 3. **#281** vehicle maintenance direct calls: #340 deletes the orphan aircraft reliability wrapper and the duplicate engine accessor, then gets a fresh review. The callee-copy check follows.
 4. **#274 map view (#351):** limited to the scheduler's clear/water/tree loops; C++ keeps the arrays and writes. Remaining: rustfmt and exact-head Full after #356. No extension for TGP speed.
@@ -174,9 +173,7 @@ Paused at the user's request; resume with the seventeenth review's actions. Root
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #355 | none | Small fix PR from `rust-migration`, first. |
-| #356 | none | Identity fix plus the quiet anchors from the issue. |
-| #357 | none | macOS out of the pre-merge Full; every fifth integration; Blacksmith fallback. |
+| #355 + #356 + #357 | none | One batch PR from `rust-migration`, first: MSVC return fix, instruction identity fix and anchors, macOS every fifth integration. |
 | #281 / #340 | `0c8a5e15f3` | Two deletions from the conflict review, fresh review, counts, Full. |
 | #247 / #347 | `134a40b026` | PR comment items (subsidy direct call, shared object iterator, `InvalidateWindowData`, base merge), then review, counts, Full. |
 | #274 / #351 | `edc8b95bdc` | rustfmt the merged `lib.rs`, then exact-head Full after #356. |

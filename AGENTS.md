@@ -174,8 +174,14 @@ checks that run; do not restate them in paragraphs.
   the PR leaves without a caller (each one is a finding). Do not narrate
   further when there are no findings. Branches the harness does not reach go in the coverage
   tracker (#156), not only in the disposition.
-- One PR per component, targeting `rust-migration` directly. Use an integration
-  branch only when CI capacity forces batching. Update a PR branch from its base
+- One PR per ownership port, targeting `rust-migration` directly. Small
+  maintenance work (cleanups, coverage additions, speed fixes, tooling and
+  fidelity fixes) is batched instead: one PR carries every ready item, listed
+  as a checklist on its tracking issue (#261, #156, #275) rather than one issue
+  each, with one reviewer and one Full run. An item that fails review or CI
+  leaves the batch for the next one rather than holding it. A fix that a draft
+  or a live crash needs may go alone. Use an integration branch only when CI
+  capacity forces batching. Update a PR branch from its base
   (merge or rebase) only when a conflict blocks its integration or its own
   work. A PR whose exact-head Full passed and that still merges cleanly
   integrates without a base update, since Full validates its merge with base;
