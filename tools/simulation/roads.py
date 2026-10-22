@@ -18,20 +18,24 @@ AI_FOLDER = "road-scenario-ai"
 SPEED_HEAD = "667e652ad8"
 # fmt: off
 SPEED_PASS = (
-    ("generate-tgp-256-1", 1.2150013604135657, 2878998668, "59a8b117d7e088ff28eec161265ac96eb45430a885e2e22f708fb5bb5d7d945f"),
-    ("play-opus-55-167-002-manual", 1.203689213933969, 25241154728, "856eeabd0e9515a8da38e66ace671534f87d5b576cfe0b3d2277d8a4ac25b017"),
-    ("play-grok-159-001-manual", 1.1907607348013287, 23912546163, "b7bb63d73160aaa264d408e4882e1f2a3122adbbb5f809ea108b4a1060be057a"),
-    ("play-padhattan-ridge-1996-manual", 1.2502032553708693, 4286427692, "94af7f540305ff4d939d99a366b434975e0193e09c11649318bae6f92170f263"),
-    ("play-padhattan-ridge-2000-manual", 1.3052238805970147, 7037662305, "bb96a6a5ca9e404b42748018f4f544e4c8a1067e5950e4623a8f6e1ca6865e0e"),
-    ("play-padhattan-ridge-2016-manual", 1.355471294661727, 12653579222, "17f5d00c733b336251c05de5edb03302e546958d3ea3d28e9ebd5093574ce872"),
+    ("generate-tgp-256-1", 1.2150013604135657, 2878998668, "f6f82b6bbc4769f652d1451890003fef0f2c7f12c76c6d8d5549614a7d35a1e1"),
+    ("play-opus-55-167-002-manual", 1.203689213933969, 25241154728, "b4ecf7337dcda62268175b3e99de2e43ffb3a3ffe4f608ee365751dbaabc23a2"),
+    ("play-grok-159-001-manual", 1.1907607348013287, 23912546163, "46dcbfc4ceba5d11801053ac2eb8d35ac640082a6393744d0825fe9dca7229c8"),
+    ("play-padhattan-ridge-1996-manual", 1.2502032553708693, 4286427692, "27801b82dceb31797d73fc2f2f9448be781d1551b2594408b562d7f96b79323d"),
+    ("play-padhattan-ridge-2000-manual", 1.3052238805970147, 7037662305, "17e34235425021ca2f96c739312d9f15ca167ac5f579617d6c9eb1047e8c2627"),
+    ("play-padhattan-ridge-2016-manual", 1.355471294661727, 12653579222, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
 )
+# Each game-code PR records its head's loop Ir here, in SPEED_PASS order.
+SPEED_INTEGRATED = "b482432713", (2874226019, 24902631547, 23611904848, 4239298518, 6984668258, 12592834899)
 # fmt: on
 SPEED_ANCHORS = {
     name: dict(
         anchor=dict(head=SPEED_HEAD, ratio=ratio, Ir=ir, identity={"compatible": c}),
-        integrated=dict(head=SPEED_HEAD, Ir=ir),
+        integrated=dict(head=SPEED_INTEGRATED[0], Ir=integrated),
     )
-    for name, ratio, ir, c in SPEED_PASS
+    for (name, ratio, ir, c), integrated in zip(
+        SPEED_PASS, SPEED_INTEGRATED[1], strict=True
+    )
 }
 SPEED_BUDGETS = {name: ratio for name, ratio, _, _ in SPEED_PASS}
 
@@ -351,9 +355,10 @@ def check(scenario, run, mode, role, result):
                 "protocol-query true",
                 "protocol-bankrupt true",
                 "automatic-convert-exec true",
+                *COVERAGE_OUTCOMES,
             ):
                 if not any(
-                    line.startswith("ROADCMD " + expected + " ") for line in lines
+                    (line + " ").startswith(f"ROADCMD {expected} ") for line in lines
                 ):
                     result["problems"].append(f"{mode}/{role}: missing {expected}")
             if not any(
@@ -867,6 +872,29 @@ if __name__ == "__main__":
     core.GAME_LOCK = migration.COMMON_LOCAL / "simulation-game.lock"
     prepare_crossing(migration, out, operation)
 
+
+# #156 outcomes: refusals, vehicles in the way (4162), wormholes, owner changes.
+COVERAGE_OUTCOMES = """\
+crossing-convert-exec false 0 4088
+crossing-disallowed-exec false 0 4088
+slope-remove-half-exec true 270
+depot-autoslope true 848
+stop-remove-last-exec true
+tunnel-convert-exec true
+rv-rotate-exec false 0 4162
+rv-depot-remove-exec false 0 4162
+rv-depot-convert-exec false 0 4162
+rv-depot-power-exec true
+rv-oneway-exec false 0 4162
+rv-remove-exec false 0 4162
+rv-bridge-exec false 0 4162
+rv-tunnel-exec false 0 4162
+town-rating-exec false 0 3945
+town-convert-rating-exec false 0 3945
+town-convert-exec false 0 3937
+town-convert-power-exec true
+town-refuse-exec false 0 3945
+transfer-depot true true""".splitlines()
 
 COMMAND_BRANCHES = (
     "build",

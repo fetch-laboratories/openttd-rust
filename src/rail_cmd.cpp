@@ -3402,12 +3402,6 @@ static CommandCost ClearTile_Track(TileIndex tile, DoCommandFlags flags)
 	return cost;
 }
 
-static void ChangeTileOwner_Track(TileIndex tile, Owner old_owner, Owner new_owner)
-{
-	CommandCost ret;
-	openttd_rust_rail_change_owner(RailServices(), RustCommandCost(&ret), tile.base(), old_owner.base(), new_owner.base());
-}
-
 static CommandCost TerraformTile_Track(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
 {
 	CommandCost cost;
@@ -3437,7 +3431,11 @@ extern const TileTypeProcs _tile_type_rail_procs = {
 #else
 	TileLoop_Track,           // tile_loop_proc
 #endif
+#ifdef WITH_RUST
+	nullptr,                 // Rust ownership dispatcher calls the owner directly.
+#else
 	ChangeTileOwner_Track,    // change_tile_owner_proc
+#endif
 	nullptr,                     // add_produced_cargo_proc
 	VehicleEnter_Track,       // vehicle_enter_tile_proc
 	GetFoundation_Track,      // get_foundation_proc

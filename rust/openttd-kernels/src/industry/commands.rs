@@ -135,12 +135,7 @@ pub unsafe extern "C" fn openttd_rust_industry_set_text_command(
 }
 /// # Safety
 /// Live owner, with no callbacks or surviving reference to metadata.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_change_owner(
-    owner: *mut Industry,
-    old: u8,
-    new: u8,
-) {
+pub(crate) unsafe fn openttd_rust_industry_change_owner(owner: *mut Industry, old: u8, new: u8) {
     unsafe {
         if (*owner).metadata.founder == old {
             (*owner).metadata.founder = if new == 255 { 16 } else { new };

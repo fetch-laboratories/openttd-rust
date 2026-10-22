@@ -33,7 +33,7 @@ layouts! {
     fn local_layout;
     "OpenTTDRoadNearestTownTile" ["probe"] => crate::road_cmd::NearestTownTile { road, depot, town_owned, };
 
-    "OpenTTDRoadTramBuildRead" ["probe"] => crate::road::TramBuildRead { owner, road_type, };
+    "OpenTTDRoadTramBuildRead" ["probe"] => crate::road::TramBuildRead { owner, road_type, road, };
 
     "OpenTTDRoadCommandContext" ["probe"] => crate::road_cmd::CommandContext {
         services,
@@ -170,6 +170,7 @@ layouts! {
         erase_near_station,
         station_catchment,
         station_covers_town,
+        station_finder,
         move_goods,
         production_cargo,
         add_cargo,
@@ -702,7 +703,7 @@ layouts! {
         trees,
         industry,
         ground,
-        house_loop,
+        town,
         station_loop,
         object_loop,
     };
@@ -1740,7 +1741,6 @@ layouts! {
         tunnel_transport,
         update_level_crossing,
         // Registry: house (#256).
-        foundation_price,
         rebuild_town_tree,
         recession,
         tick_counter,

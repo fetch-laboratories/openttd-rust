@@ -277,7 +277,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 		fields->time_until_rebuild = 1; fields->num_houses++;
 		openttd_rust_town_growth(owner.get())->flags |= 1;
 		w.owner_reads = 0; w.map_reads = 0;
-		openttd_rust_house_tile_loop(&leaves, &services, 2080, nullptr);
+		openttd_rust_house_tile_loop(&leaves, &services, 2080);
 		check(w.owner_reads == 1 && w.map_reads == 1);
 	};
 	id_counts[0] = UINT16_MAX;

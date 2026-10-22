@@ -86,6 +86,7 @@ struct OpenTTDHouseServices {
 	void (*erase_near_station)(Town *, OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(erase_near_station);
 	bool (*station_catchment)(const OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_catchment);
 	bool (*station_covers_town)(const OpenTTDStation *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_covers_town);
+	void *(*station_finder)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_finder);
 	uint32_t (*move_goods)(void *, uint8_t, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(move_goods);
 	OpenTTDHouseCargo (*production_cargo)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(production_cargo);
 	void (*add_cargo)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(add_cargo);
@@ -103,7 +104,7 @@ void OpenTTDHouseChangeFrame(uint16_t callback, uint16_t house, Town *town, uint
 void OpenTTDAnimateNewHouse(uint32_t tile) noexcept;
 
 extern "C" {
-void openttd_rust_house_tile_loop(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile, void *finder);
+void openttd_rust_house_tile_loop(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
 void openttd_rust_house_animate(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
 void openttd_rust_house_clear(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDCommandCost *, uint32_t tile, uint16_t flags);
 void openttd_rust_house_terraform(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDCommandCost *, uint32_t tile, uint16_t flags, int32_t z_new, uint8_t slope);
