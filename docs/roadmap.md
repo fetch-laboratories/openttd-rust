@@ -4,13 +4,13 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-21, code at `43f8d27304`)
+## Where the fork stands (2026-10-21, code at `883ce69671`)
 
-- Thirty-four ownership ports. Whole fork: Rust 80,118 / tooling 32,548 / glue 32,267 / original retired 46,112 of 470,612 C/C++ `src/` lines (9.80%). Simulation: 38,072 / 102,615 (37.10%).
-- #334 (#261 R6) integrated the shared header modules (`slope_func`, `map_func`, `tile_type`, `command_type` and others); new ports import from them. No ownership port integrated this session, so the next speed pass is still four ownership integrations away.
-- Speed: the #322 wall anchors stand (TGP 1.215, Opus 1.204, Grok 1.191, P1996 1.250, P2000 1.305, P2016 1.356). #336 removes the per-tick command context; refreshed drafts pass all six guards/ceilings. #345 saves 19.27M Ir in the affected train speed path after replacement calls. #341 closed without a saving.
-- CI: #339, #337 and #336 integrated after Full passed; protected-branch checks are green. #313 is in refreshed final-head Full. Other reviewed branches have passing combined counts. macOS stays on GitHub-hosted runners.
-- Four ownership branches (#313, #329, #346, #347) and three maintenance/coverage branches (#340, #342, #345) remain; #274 is selected next. #337 closes road/water gaps; #342 covers tram turns. The remaining #156 gaps stay open. Ownership retirement resumes with #313/#329 integration and subsidy/town implementation.
+- Thirty-five ownership ports. Whole fork: Rust 82,541 / tooling 32,944 / glue 32,766 / original retired 47,040 of 470,612 C/C++ `src/` lines (10.00%). Simulation: 38,997 / 102,615 (38.00%).
+- #313 integrated object ownership; the next speed pass is after three more ownership integrations. New ports import #334's shared header modules.
+- Speed: #322 wall anchors stand (TGP 1.215, Opus 1.204, Grok 1.191, P1996 1.250, P2000 1.305, P2016 1.356). #313's six guards pass; TGP projects1.219, others stay at anchor floors. #336 removes per-tick command context; #345 saves19.27M Ir in the train speed path after replacement calls. #341 closed without a saving.
+- CI: #339/#337/#336/#313 integrated after Full passed. #313's protected push is running; reviewed drafts refresh against object ownership before final counts/Full. macOS stays on GitHub-hosted runners.
+- Stock after #336/#313: original retirement grew928 lines, net glue510 and net tooling396; wall anchors stand. Four ownership branches (#329/#346/#347/#293), three maintenance (#340/#345/#351) and coverage #342 remain. #337 closes road/water gaps; #342 covers tram turns. Other #156 gaps stay open. #346 support417 is below430 retirement after fixing review; town support542 is below589 after object adoption.
 
 ## Sixteenth steering review (2026-10-21, counts per PR and closing the speed pass)
 
@@ -109,6 +109,7 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #294 | Water construction, clearing and restoration | #317 | `067e3c3b93` | 871 / 249 / 228 / 512 |
 | #256 | House lifecycle and tile simulation | #269 | `5ac2437aa5` | 1659 / 212 / 685 / 890 |
 | #266 | Whole road command policy | #290 | `4e7753122e` | 2547 / 375 / 545 / 1265 |
+| #295 | Object lifecycle, commands and NewGRF policy | #313 | `883ce69671` | 2474 / 429 / 585 / 928 |
 
 Harness and process: #72 harness (#85), #84 play saves (#87), #97 provenance
 freeze (#100), #88 Ruff (#92), #75 partial-pixel fidelity (#91), #90 world-state
@@ -147,7 +148,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings. Rust-internal helper copies are invisible to it; reviewers check them against the shared header modules (#261 R6).
 2. **Speed guard and passes (#155, #282, #321, AGENTS.md).**
    - **Per PR:** `simulate --instructions` loop counts projected from `SPEED_ANCHORS`; no scenario more than 15% above the integrated projection and none over its ceiling (1.5x play saves, 1.3x generation). Misses get a callgrind fix round.
-   - **Speed pass:** after every fourth ownership integration, or when an integration moves a projection within 5% of its ceiling (1.425x play, 1.235x generation). Its quiet six with loop counts replaces the anchors. #322 closed the pass due since #269; the next falls due after four more ownership integrations (none yet).
+   - **Speed pass:** after every fourth ownership integration, or when an integration moves a projection within 5% of its ceiling (1.425x play, 1.235x generation). Its quiet six with loop counts replaces the anchors. #322 closed the pass due since #269; #313 is the first ownership integration since, leaving three.
    - **Redraw:** `-r 64x64` leaves the ratios unchanged. It makes whole-process counts timing-dependent, which is why only the game loop is counted.
 3. **#156 coverage, one standing slot** (sixteenth review, action 4). Random and crash branches come first. These remain:
    - signal tbd/global propagation overflow and arbitrary mod layouts;
@@ -163,7 +164,7 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #275) and #156 run in parallel.
 
-1. **#313**, then **#329/#314** (sixteenth review, actions 2-3).
+1. **#329/#314** next; #313 integrated (sixteenth review, actions 2-3).
 2. **#275 by net P2016 savings:** #336 integrated; station #341 closed without a saving; train #345 replaces only the speed read6 bundle with existing services at original branches. Its measured speed-path saving passes; no raw train view or movement-reader change. TGP #312 trees remain ahead of clear observations in the net attribution; TGP is not binding.
 3. **#281** vehicle maintenance direct calls, then the callee-copy check.
 4. **#274 map view**, one shared maintenance PR: extend the canonical descriptor and adopt assertion-faithful shared helpers in the scheduler's clear/water/tree loops. C++ retains arrays and writes. Same-base TGP attribution and the six-count guard decide acceptance; historical results alone do not. Budget: 800 handwritten support/glue/test/tooling lines, including at most 150 validation/tooling; no new runner or vehicle view.
@@ -185,21 +186,20 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 ## Resume checkpoint
 
 Root is gpt-6.1-sol (xhigh); implementation/review agents are gpt-6.1-sol (high),
-planning gpt-6-astra (high). #339/#337/#336 integrated; no ownership integration
-yet. Root owns reviewed drafts' final counts/Full/integration. Every open draft
+planning gpt-6-astra (high). #339/#337/#336/#313 integrated. Root owns reviewed
+drafts' final counts/Full/integration. Every open draft
 keeps its worktree and branch. #274's plan is on its issue; implementation selected.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #295 / #313 | `2516557f2e` | Reviewed; verify/objects pass; combined counts checked and recorded; final Full running. Tooling429 meets cap; mandatory record explains support928 equalling928 retired. |
-| #156 / #342 | `09efa66901` | Update/source review and three focused cases pass; combined counts checked, then record/Full. |
-| #281 / #340 | `da098ecfda` | Cleanup/conflict reviewed; verify/33 scenarios pass; combined counts checked, then record/Full. Part2 checker follows integration. |
-| #314 / #329 | `0bdb9c07a9` | Fixes reviewed; verify/52 scenarios pass; combined counts checked, then record/Full. |
-| #316 / #346 | `b5a90ae5f4` | Buildable milestone pushed; boundary fix removes private facades and uses real monthly generation. Default semantics pending; support405 below430 retired in working audit, cap450. |
-| #247 / #347 | `426b56c65e` | Verify and two default scenarios pass (19 snapshots); broader semantics/counts running. Preserve real-oilrig refusal. Adopt direct object/statue and subsidy cleanup calls after those owners integrate. |
-| #344 / #345 | `fdcc5a3b5b` | Reviewed; verify/26 scenarios pass; exact-base speed attribution and combined counts checked, then record/Full. Production net glue -12, tests72. |
-| #274 | `d6b539ec78` base | Implementing in `map274-shared-read`; same-base TGP attribution uses a detached baseline. Historical experiment is context only. |
-| #293 | `d6b539ec78` base | Implementing in `tunnelbridge-ownership-293`; bridge/tunnel work proceeds while #313's existing scratch API awaits integration. No parallel scratch API. |
+| #156 / #342 | `09efa66901` | Reviewed; focused cases and six counts pass before #313. Update when integrating, then counts/record/Full. |
+| #281 / #340 | `da098ecfda` | Cleanup/conflict reviewed; verify/33 scenarios/counts pass before #313. Update when integrating, then record/Full. Part2 checker follows. |
+| #314 / #329 | `903edc56d5` | Adopted #313; five conflicts preserve both groups plus one ABI terminator and canonical callback-error helper. Fresh scoped review, combined counts, record/Full next. |
+| #316 / #346 | `fba1615154` | Reviewer fixed canonical-callee/duplicate getters and retry-RNG evidence; verify/control/reload pass, final report pending, six counts running. Support417 <430 retired, cap450. |
+| #247 / #347 | `e90e4c2320` | Verify/11 scenarios/18 comparisons/counts pass before #313. Object adoption building; deletes six callbacks and four duplicate leaves. Subsidy adoption follows #346. |
+| #344 / #345 | `fdcc5a3b5b` | Reviewed; verify/26 scenarios/counts pass before #313; measured speed-path saving. Update when integrating, then record/Full. Production net glue -12, tests72. |
+| #274 / #351 | `0b645de38a` | Shared map reads pushed under681 gross additions; native verify/probes underway. Same-base TGP baseline recorded; candidate attribution/semantics/counts pending. |
+| #293 | `883ce69671` base | Complete bridge/tunnel policy translated; adopted integrated scratch directly. Canonical bridge-height helper removes a foundation bounce; build milestone next. |
 
 #261 R7 inputs are on #261 and #281 part 2's inventory is on #281. The finished
 #329 review worktree was removed; its commits are already on the PR branch.
