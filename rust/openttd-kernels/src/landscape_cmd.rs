@@ -544,7 +544,11 @@ impl<'a> World<'a> {
                 if pass == 0 {
                     if (self.s.bridge_above)(t) {
                         let station = unsafe { &*(self.s.station_commands)() };
-                        let height = (station.bridge_height)((station.southern_bridge_end)(t));
+                        let height = crate::bridge_map::get_bridge_height(
+                            (station.southern_bridge_end)(t),
+                            self.s,
+                            |f, h| unsafe { ((*station.rail).apply_foundation)(f, h).z },
+                        );
                         if direction == 1 && height <= high {
                             out.error(self.a.strings.bridge);
                             return t;
