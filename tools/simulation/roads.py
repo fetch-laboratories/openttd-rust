@@ -26,7 +26,7 @@ SPEED_PASS = (
     ("play-padhattan-ridge-2016-manual", 1.355471294661727, 12653579222, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
 )
 # Each game-code PR records its head's loop Ir here, in SPEED_PASS order.
-SPEED_INTEGRATED = "95bf6fb0e4", (2883870178, 24906522543, 23615955738, 4244460938, 6992855200, 12600225776)
+SPEED_INTEGRATED = "fb63276f2f", (2892752605, 24902215901, 23616140572, 4236282321, 6972059412, 12573738546)
 # fmt: on
 SPEED_ANCHORS = {
     name: dict(
@@ -125,14 +125,45 @@ def scenarios(soak):
             "name": f"roads-commands{suffix}",
             "kind": "save",
             "save": str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
-            "road_commands": "reload" if suffix else "commands",
+            "road_commands": variant,
             "short_checkpoint": True,
-            "ticks": 74,
-            "console": ["road_commands build", "unpause"],
+            "ticks": ticks,
+            "console": [f"road_commands {argument}", "unpause"],
         }
-        for suffix in ("", "-reload")
+        for suffix, variant, argument, ticks in (
+            ("", "commands", "build", 74),
+            ("-reload", "reload", "build", 74),
+            # Front trams reach dead ends whose turn-around build query
+            # succeeds (the tram waits) or is refused (it turns short).
+            ("-tram", "tram", "tram", 300),
+        )
     )
     return cases
+
+
+def check_tram(scenario, run, mode, role, result, lines):
+    """Both executables: the buildable dead end holds its tram, unturned, at the
+    last X_SW frame. Candidate: the controller's build query had both outcomes."""
+    from . import core
+
+    ends = {
+        int(y): (int(v), int(tile))
+        for y, v, tile in (
+            line.split()[2:] for line in lines if line.startswith("ROADCMD tram-end ")
+        )
+    }
+    vehicle, tile = ends.get(4, (None, None))
+    final = rows(run["snapshots"][-1]).get(vehicle) if run["snapshots"] else None
+    pose = final and (
+        final[COMMON + "tile"],
+        final[ROAD + "state"],
+        final[ROAD + "frame"],
+    )
+    if pose != (tile, 8, 15):
+        result["problems"].append(f"{mode}/{role}: tram does not wait at its dead end")
+    result[f"{mode}_{role}_tram"] = core.branch_witnesses(
+        scenario, run, role, "road", ("tram_build", "tram_refused")
+    )
 
 
 def rows(path):
@@ -303,10 +334,8 @@ def check(scenario, run, mode, role, result):
         from . import core
 
         lines = [line for line in run["log"] if line.startswith("ROADCMD ")]
-        required = (
-            "ROADCMD reload "
-            if scenario["road_commands"] == "reload"
-            else "ROADCMD rng "
+        required = {"reload": "ROADCMD reload ", "tram": "ROADCMD tram-end "}.get(
+            scenario["road_commands"], "ROADCMD rng "
         )
         if not any(line.startswith(required) for line in lines):
             result["problems"].append(f"{mode}/{role}: missing road command outcomes")
@@ -315,7 +344,9 @@ def check(scenario, run, mode, role, result):
             result[key] = lines
         elif result[key] != lines:
             result["problems"].append(f"{mode}: road command outcomes differ")
-        if scenario["road_commands"] != "reload":
+        if scenario["road_commands"] == "tram":
+            check_tram(scenario, run, mode, role, result, lines)
+        if scenario["road_commands"] == "commands":
             for expected in (
                 "protocol-outside false",
                 "protocol-void false",

@@ -9,8 +9,8 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 - Thirty-five ownership ports. Whole fork: Rust 82,541 / tooling 32,944 / glue 32,766 / original retired 47,040 of 470,612 C/C++ `src/` lines (10.00%). Simulation: 38,997 / 102,615 (38.00%).
 - #313 integrated object ownership; the next speed pass is after three more ownership integrations. New ports import #334's shared header modules.
 - Speed: #322 wall anchors stand (TGP 1.215, Opus 1.204, Grok 1.191, P1996 1.250, P2000 1.305, P2016 1.356). #313's six guards pass; TGP projects 1.219, others stay at anchor floors. #336 removes per-tick command context; #345 saves 19.27M Ir in the train speed path after replacement calls. #341 closed without a saving.
-- CI: #339/#337/#336/#313 integrated after Full passed. #313's protected push is running; reviewed drafts refresh against object ownership before final counts/Full. macOS stays on GitHub-hosted runners.
-- Stock after #336/#313: original retirement grew 928 lines, net glue 510 and net tooling 396; wall anchors stand. Four ownership branches (#329/#346/#347/#293), three maintenance (#340/#345/#351) and coverage #342 remain. #337 closes road/water gaps; #342 covers tram turns. Other #156 gaps stay open. #346 support 417 is below 430 retirement after fixing review; town support 542 is below 589 after object adoption.
+- CI: #339/#337/#336/#313 integrated after Full passed. #313's protected push passed; reviewed drafts refresh against object ownership before final counts/Full. macOS stays on GitHub-hosted runners.
+- Stock after #336/#313: original retirement grew 928 lines, net glue 510 and net tooling 396; wall anchors stand. Five ownership branches (#329/#346/#347/#352/#348), three maintenance (#340/#345/#351) and coverage #342 remain. #337 closes road/water gaps; #342 covers tram turns. Other #156 gaps stay open. #346 support 417 is below 430 retirement after fixing review; town support 542 is below 589 after object adoption.
 
 ## Sixteenth steering review (2026-10-21, counts per PR and closing the speed pass)
 
@@ -177,14 +177,15 @@ keeps its worktree and branch. #274's plan is on its issue; implementation selec
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #156 / #342 | `09efa66901` | Reviewed; focused cases and six counts pass before #313. Update when integrating, then counts/record/Full. |
+| #156 / #342 | `5374e59cef` | Reviewed; automatic object-base update and six counts pass. Root owns record/Full/integration. |
 | #281 / #340 | `da098ecfda` | Cleanup/conflict reviewed; verify/33 scenarios/counts pass before #313. Update when integrating, then record/Full. Part2 checker follows. |
-| #314 / #329 | `34885b9b2b` | #313 adoption reviewed; reviewer removed duplicate mail helper. Root checked fix; combined build/counts running, then record/Full. |
-| #316 / #346 | `fba1615154` | Fixing review accepted; root checked fixes. Verify/control/reload pass, six counts running. Support417 <430 retired, cap450. |
-| #247 / #347 | `e90e4c2320` | Verify/11 scenarios/18 comparisons/counts pass before #313. Object adoption building; deletes six callbacks and four duplicate leaves. Subsidy adoption follows #346. |
-| #344 / #345 | `fdcc5a3b5b` | Reviewed; verify/26 scenarios/counts pass before #313; measured speed-path saving. Update when integrating, then record/Full. Production net glue -12, tests72. |
-| #274 / #351 | `5279f98979` | Shared map reads/default probes pushed within800 additions; native/default/counts underway. Fresh callee/lifetime review includes exact integrated map-helper copies; baseline TGP recorded. |
-| #293 | `883ce69671` base | Complete bridge/tunnel policy translated; adopted integrated scratch directly. Canonical bridge-height helper removes a foundation bounce; build milestone next. |
+| #314 / #329 | `4abbf24b93` | Reviewed adoption; first Full passed native/non-Windows but MSVC missed an inline virtual symbol. Linkage fix pushed; fresh counts, record and Full next. |
+| #316 / #346 | `1849b5437b` | Fixing and object-merge reviews accepted; combined build/six counts pass. Root owns record/Full. Support417 <430 retired, cap450. |
+| #247 / #347 | `134a40b026` | Object adoption passes verify/focused scenarios/counts. Adopt subsidy owner after #346, then fresh full source review. |
+| #344 / #345 | `2bca3134eb` | Reviewed; automatic object-base update and six counts pass. Root owns record/Full. Speed-path saving19.27M Ir; production net glue -12, tests72. |
+| #274 / #351 | `e9e3a359ac` | Fixing lifetime/callee review accepted; verify/six counts pass. Default suite running; final base update follows. Support791/800, TGP -4.31% on same base. |
+| #293 / #352 | `76f736355a` | Complete source review/fixes and focused scenarios pass. Final six counts/default suite running; root spot-checked both fixes. |
+| #348 | `2a0793272a` | First ownership milestone committed; native verify running. Whole clear/terraform/level owner, shared opaque stack cost utility; actual retirement419. |
 
 #261 R7 inputs are on #261 and #281 part 2's inventory is on #281. The finished
 #329 review worktree was removed; its commits are already on the PR branch.

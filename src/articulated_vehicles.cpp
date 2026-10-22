@@ -19,6 +19,11 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/vehicle_refit_ffi.h"
+#include "rust/engine_services.h"
+#include "rust/services_cargo.h"
+#endif
 #include "safeguards.h"
 
 static const uint MAX_ARTICULATED_PARTS = 100; ///< Maximum of articulated parts per vehicle, i.e. when to abort calling the articulated vehicle callback.
@@ -55,6 +60,7 @@ static EngineID GetNextArticulatedPart(uint index, EngineID front_type, Vehicle 
 
 	return GetNewEngineID(front_engine->GetGRF(), front_engine->type, callback);
 }
+
 
 /**
  * Does a NewGRF report that this should be an articulated vehicle?
@@ -283,6 +289,10 @@ CargoTypes GetCargoTypesOfArticulatedVehicle(const Vehicle *v, CargoType *cargo_
 	return cargoes;
 }
 
+#ifdef WITH_RUST
+#include "rust/vehicle_articulated_services.hpp"
+#endif
+
 /**
  * Checks whether the specs of freshly build articulated vehicles are consistent with the information specified in the purchase list.
  * Only essential information is checked to leave room for magic tricks/workarounds to grfcoders.
@@ -293,6 +303,9 @@ CargoTypes GetCargoTypesOfArticulatedVehicle(const Vehicle *v, CargoType *cargo_
  */
 void CheckConsistencyOfArticulatedVehicle(const Vehicle *v)
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_articulated_consistency(&GetRustVehicleArticulatedServices(), const_cast<Vehicle *>(v));
+#else
 	const Engine *engine = v->GetEngine();
 
 	CargoTypes purchase_refit_union, purchase_refit_intersection;
@@ -327,6 +340,7 @@ void CheckConsistencyOfArticulatedVehicle(const Vehicle *v)
 	if (real_refit_union != purchase_refit_union || real_refit_intersection != purchase_refit_intersection || carries_more) {
 		ShowNewGrfVehicleError(engine->index, STR_NEWGRF_BUGGY, STR_NEWGRF_BUGGY_ARTICULATED_CARGO, GRFBug::VehRefit, false);
 	}
+#endif
 }
 
 /**
@@ -335,6 +349,9 @@ void CheckConsistencyOfArticulatedVehicle(const Vehicle *v)
  */
 void AddArticulatedParts(Vehicle *first)
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_add_articulated(&GetRustVehicleArticulatedServices(), first);
+#else
 	VehicleType type = first->type;
 	if (!EngInfo(first->engine_type)->callback_mask.Test(VehicleCallbackMask::ArticEngine)) return;
 
@@ -436,4 +453,5 @@ void AddArticulatedParts(Vehicle *first)
 		}
 		v->UpdatePosition();
 	}
+#endif
 }

@@ -66,6 +66,8 @@
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
 #include "rust/industry_shell_services.h"
+#include "rust/vehicle_refit_ffi.h"
+#include "rust/command_cost_services.h"
 #endif
 
 #include "safeguards.h"
@@ -1048,7 +1050,7 @@ Money GetPrice(Price index, uint cost_factor, const GRFFile *grf_file, int shift
 #ifdef WITH_RUST
 	/* GRF storage stays canonical C++; observe its scalar at the original point. */
 	if (index >= PR_END) return 0;
-	if (grf_file != nullptr) shift += grf_file->price_base_multipliers[index];
+	shift += RustGRFPriceShift(grf_file, index);
 	return openttd_rust_economy_price(index, cost_factor, shift);
 #else
 	if (index >= PR_END) return 0;
@@ -1512,7 +1514,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 	.part = [](OpenTTDVehicle *handle) noexcept -> OpenTTDLoadingPart {
 		Vehicle *v = VehicleOf(handle);
-		uint16_t capacity = v->cargo_cap;
+		uint16_t capacity = RustVehicleCargoCap(handle);
 		return {
 			.capacity = capacity,
 			.cargo = capacity != 0 ? v->cargo_type : uint8_t(0),
@@ -1526,9 +1528,9 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		uint8_t cargo = 0;
 		if (refitted) {
 			cargo = v->cargo_type;
-			capacity = v->cargo_cap;
+			capacity = RustVehicleCargoCap(handle);
 		}
-		v->refit_cap = capacity;
+		RustVehicleSetRefitCap(handle, capacity);
 		int speed;
 		switch (kind) {
 			case VEH_TRAIN:
@@ -1569,34 +1571,32 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.delivery_remaining = [](OpenTTDVehicle *handle) noexcept -> OpenTTDDeliveryRemaining {
 		Vehicle *v = VehicleOf(handle);
 		return {
-			v->cargo.RemainingCount(), v->cargo.ActionCount(VehicleCargoList::MTA_DELIVER), v->cargo_cap
+			v->cargo.RemainingCount(), v->cargo.ActionCount(VehicleCargoList::MTA_DELIVER), RustVehicleCargoCap(handle)
 		};
 	},
 	.cargo_stored = [](OpenTTDVehicle *handle) noexcept -> OpenTTDCargoStored {
 		Vehicle *v = VehicleOf(handle);
 		return {
-			v->cargo.StoredCount(), v->cargo_cap
+			v->cargo.StoredCount(), RustVehicleCargoCap(handle)
 		};
 	},
 	.cargo_reservation = [](OpenTTDVehicle *handle) noexcept -> OpenTTDCargoReservation {
 		Vehicle *v = VehicleOf(handle);
 		return {
-			static_cast<uint64_t>(EngInfo(v->engine_type)->refit_mask), v->cargo.ReservedCount(), v->cargo_cap, v->cargo_type
+			static_cast<uint64_t>(EngInfo(v->engine_type)->refit_mask), v->cargo.ReservedCount(), RustVehicleCargoCap(handle), v->cargo_type
 		};
 	},
 	.cargo_capacity = [](OpenTTDVehicle *handle) noexcept -> OpenTTDCargoCapacity {
 		Vehicle *v = VehicleOf(handle);
 		return {
-			RustVehicleCargoOwner(v), v->cargo_cap, v->cargo_type
+			RustVehicleCargoOwner(v), RustVehicleCargoCap(handle), v->cargo_type
 		};
 	},
 	.vehicle_type = [](OpenTTDVehicle *handle) noexcept -> uint8_t {
 		Vehicle *v = VehicleOf(handle); return v->type;
 	},
 	.cargo_type = RustVehicleCargoType,
-	.cargo_cap = [](OpenTTDVehicle *handle) noexcept -> uint16_t {
-		Vehicle *v = VehicleOf(handle); return v->cargo_cap;
-	},
+	.cargo_cap = RustVehicleCargoCap,
 	.stored_count = [](OpenTTDVehicle *handle) noexcept -> uint32_t {
 		Vehicle *v = VehicleOf(handle); return v->cargo.StoredCount();
 	},
@@ -1718,9 +1718,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 	.set_current_company = GetRustCompanyFinanceServices().set_current_company,
 	.next_vehicle = GetRustVehicleServices().next,
-	.next_articulated = [](OpenTTDVehicle *handle) noexcept -> OpenTTDVehicle * {
-		Vehicle *v = VehicleOf(handle); return RustVehicle(v->GetNextArticulatedPart());
-	},
+	.next_articulated = RustVehicleNextArticulated,
 	.other_multiheaded = [](OpenTTDVehicle *handle) noexcept -> OpenTTDVehicle * {
 		Vehicle *v = VehicleOf(handle);
 		return RustVehicle(Train::From(v)->other_multiheaded_part);
@@ -1848,17 +1846,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		st->MarkTilesDirty(true);
 		SetWindowDirty(WC_STATION_VIEW, st->index);
 		SetWindowDirty(WC_STATION_LIST, st->owner);
-	},
-	.test_refit = [](OpenTTDVehicle *handle, uint8_t cargo) noexcept -> uint32_t {
-		Vehicle *v = VehicleOf(handle);
-		auto [result, capacity, mail_capacity, cargo_capacities] = Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::QueryCost, v->index, cargo, 0xFF, true, false, 1);
-		return capacity;
-	},
-	.execute_refit = [](OpenTTDVehicle *handle, uint8_t cargo, int64_t *cost) noexcept -> bool {
-		Vehicle *v = VehicleOf(handle);
-		auto [result, capacity, mail_capacity, cargo_capacities] = Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, v->index, cargo, 0xFF, true, false, 1);
-		*cost = result.GetCost();
-		return result.Succeeded();
 	},
 };
 #endif
@@ -2555,7 +2542,8 @@ const OpenTTDStationLoading &GetRustStationLoading() noexcept { return _rust_sta
 void LoadUnloadStation(Station *st)
 {
 #ifdef WITH_RUST
-	openttd_rust_station_load(st->rust_service.get(), &GetRustStationServices(), &_rust_station_loading);
+	CommandCost cost, temporary;
+	openttd_rust_station_load(st->rust_service.get(), &GetRustStationServices(), &_rust_station_loading, &GetRustVehicleRefitServices(), RustCommandCost(&cost), RustCommandCost(&temporary));
 #else
 	/* No vehicle is here... */
 	if (st->loading_vehicles.empty()) return;

@@ -264,6 +264,7 @@ void GetAircraftSpriteSize(EngineID engine, uint &width, uint &height, int &xoff
 	yoffs  = UnScaleGUI(rect.top);
 }
 
+#ifndef WITH_RUST
 /**
  * Build an aircraft.
  * @param flags    type of operation.
@@ -398,6 +399,7 @@ CommandCost CmdBuildAircraft(DoCommandFlags flags, TileIndex tile, const Engine 
 
 	return CommandCost();
 }
+#endif /* !WITH_RUST */
 
 
 Money Aircraft::GetRunningCost() const
