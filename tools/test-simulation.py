@@ -665,6 +665,25 @@ class InstructionSpeedTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     ir.finish({}, failure)  # Reject before extraction/cache writes.
 
+    def test_main_checkout_and_worktree_record_one_settings_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            main, worktree = Path(directory) / "clone", Path(directory) / "wt"
+            shared = main / ".local"
+            recorded = []
+            for source in (main, worktree):
+                build = source / "build-rust"
+                build.mkdir(parents=True)
+                (build / "openttd").write_bytes(b"game")
+                (build / "CMakeCache.txt").write_text(
+                    f"{shared}/deps/lib;{source}/src;{build}/x;{shared}/cargo\n"
+                )
+                with patch.object(migration, "COMMON_LOCAL", shared):
+                    ir.record_build(build, source, "reference", {"CARGO_HOME": "-"})
+                recorded.append((build / "instruction-build.json").read_text())
+            self.assertEqual(recorded[0], recorded[1])
+            settings = json.loads(recorded[0])["settings"]
+            self.assertIn(f"{shared}/deps/lib;<source>/src;<build>/x;", settings)
+
     def test_effective_compiled_debug_rejects_overrides_and_stripping(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

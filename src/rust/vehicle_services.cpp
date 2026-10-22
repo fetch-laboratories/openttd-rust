@@ -92,7 +92,7 @@ bool RustTrainIsEngine(const Vehicle *v) noexcept { return Train::From(v)->IsEng
 uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept { return RustVehicleCallback(CBID_VEHICLE_START_STOP_CHECK, 0, 0, v->engine_type, v, std::span(reg, 1)); }
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_power; }
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept { return RustEngineGRFVersion(EngineOf(RustVehicleGetEngine(RustVehicle(v)))); }
-uint32_t RustVehicleGRFString(Vehicle *v, GRFStringID string) noexcept { return GetGRFStringID(v->GetGRFID(), string); }
+uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept { return GetGRFStringID(v->GetGRFID(), GRFStringID(string)); }
 void RustVehicleFlipStopped(Vehicle *v) noexcept { v->vehstatus.Flip(VehState::Stopped); }
 
 uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->refit_cap; }
