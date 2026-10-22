@@ -17,6 +17,7 @@
     clippy::too_many_arguments
 )]
 use crate::cargo_payment::NativePayment;
+use crate::command_type::DoCommandFlag;
 use crate::linkgraph::NativeGraph;
 use crate::orders::NativeOrderList;
 use crate::station::{BaseStation, Station};
@@ -1402,7 +1403,7 @@ fn refit_vehicle(
             if mask & (1_u64 << cargo) == 0 || !(l.has_cargo_for)(st.native, cargo, next) {
                 continue;
             }
-            let capacity = refit.run(start, cargo, 1 << 2).total;
+            let capacity = refit.run(start, cargo, DoCommandFlag::QUERY_COST).total;
             if capacity > 0
                 && (capleft[usize::from(cargo)] < capleft[usize::from(new_cargo)]
                     || (capleft[usize::from(cargo)] == capleft[usize::from(new_cargo)]
@@ -1417,7 +1418,7 @@ fn refit_vehicle(
             (l.return_cargo)(st.native, part, u32::MAX);
             true
         });
-        refit.run(start, new_cargo, 1);
+        refit.run(start, new_cargo, DoCommandFlag::EXECUTE);
         let cost = refit.cost().money();
         let succeeded = refit.cost().ok();
         if succeeded {

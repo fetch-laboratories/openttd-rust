@@ -4,6 +4,7 @@
 #![allow(clippy::too_many_lines, clippy::many_single_char_names)]
 use super::{CommonServices, ERROR, SelectionServices, vehicle_ref, vehicle_set};
 use crate::command_type::DoCommandFlag;
+use crate::economy_func::get_price;
 use crate::services::{CommandCost, ExpenseType};
 use crate::vehicle::{OpenTTDEngine, OpenTTDVehicle, RailVehicleTypes, VehicleType};
 use std::cell::UnsafeCell;
@@ -170,11 +171,11 @@ pub(super) unsafe fn get_cost(
 ) -> bool {
     let e = (s.engine)(engine);
     let (mut factor, automatic) = unsafe { cost_factor(s, v, engine, cargo, subtype) };
-    let (price, expense) = match (s.engine_kind)(e).0 {
-        2 => (s.prices.ship, s.prices.ship_run),
-        1 => (s.prices.road, s.prices.road_run),
-        3 => (s.prices.aircraft, s.prices.aircraft_run),
-        0 => {
+    let (price, expense) = match (s.engine_kind)(e) {
+        VehicleType::SHIP => (s.prices.ship, s.prices.ship_run),
+        VehicleType::ROAD => (s.prices.road, s.prices.road_run),
+        VehicleType::AIRCRAFT => (s.prices.aircraft, s.prices.aircraft_run),
+        VehicleType::TRAIN => {
             let price = if (s.rail_kind)(e) == RailVehicleTypes::WAGON {
                 s.prices.wagon
             } else {
@@ -185,10 +186,8 @@ pub(super) unsafe fn get_cost(
         }
         _ => unreachable!("original NOT_REACHED vehicle type"),
     };
-    // GetPrice's canonical Rust owner, with the original native GRF observation.
-    let shift = (s.price_shift)(e, price).wrapping_add(-10);
     let negative = factor < 0;
-    let amount = crate::company::openttd_rust_economy_price(price, factor.unsigned_abs(), shift);
+    let amount = get_price(price, factor.unsigned_abs(), (s.price_shift)(e, price), -10);
     (s.common.base.cost.expense_money)(
         out,
         expense,
@@ -253,7 +252,7 @@ unsafe fn refit_chain(
         if !unsafe { (c.transactions.articulated)(v) } {
             actual_subtype = subtype;
         }
-        if unsafe { (b.groups.vehicle_type)(v) } == 0
+        if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0
             && !only
             && !transaction
                 .0
@@ -309,12 +308,12 @@ unsafe fn refit_chain(
             (s.set_cargo_kind)(v.cast(), old.cargo, old.subtype);
             let engine = unsafe { (b.groups.vehicle_engine)(v) };
             let allowed = unsafe { get_cost(s, temp, v, engine, cargo, actual_subtype) };
-            if automatic && flags & (1 << 2) == 0 && !allowed {
+            if automatic && flags & DoCommandFlag::QUERY_COST == 0 && !allowed {
                 total.total = total.total.wrapping_sub(amount);
                 mail_total = mail_total.wrapping_sub(u32::from(mail));
                 if unsafe { (c.transactions.cargo_type)(v) } == cargo {
                     total.total = total.total.wrapping_add(u32::from((s.cargo_cap)(v.cast())));
-                    if unsafe { (b.groups.vehicle_type)(v) } == 3 {
+                    if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::AIRCRAFT.0 {
                         mail_total = mail_total
                             .wrapping_add(u32::from((s.cargo_cap)(unsafe { next(s, v) }.cast())));
                     }
@@ -351,7 +350,7 @@ unsafe fn refit_chain(
                 truncate(s, v, cap);
             }
             (s.write_refit)(v.cast(), cargo, result.capacity as u16, result.subtype);
-            if unsafe { (b.groups.vehicle_type)(v) } == 3 {
+            if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::AIRCRAFT.0 {
                 let shadow = unsafe { next(s, v) };
                 if c.transactions.assertions {
                     unsafe {
@@ -401,8 +400,8 @@ pub(crate) unsafe fn refit(
     if !(b.cost.success)(cost) {
         return Capacity::default();
     }
-    let free = kind == 0 && (s.selection.free_wagon)(front);
-    if v != front && matches!(kind, 2 | 3) {
+    let free = kind == VehicleType::TRAIN.0 && (s.selection.free_wagon)(front);
+    if v != front && matches!(VehicleType(kind), VehicleType::SHIP | VehicleType::AIRCRAFT) {
         (b.cost.error)(cost, ERROR);
         return Capacity::default();
     }
@@ -417,7 +416,7 @@ pub(crate) unsafe fn refit(
             false
         }
     };
-    if flags & (1 << 2) == 0
+    if flags & DoCommandFlag::QUERY_COST == 0
         && !free
         && (!automatic || !loading())
         && !unsafe { (c.transactions.stopped_in_depot)(front) }
@@ -436,15 +435,18 @@ pub(crate) unsafe fn refit(
         (b.cost.error)(cost, ERROR);
         return Capacity::default();
     }
-    only |= matches!(unsafe { (b.groups.vehicle_type)(front) }, 2 | 3);
+    only |= matches!(
+        VehicleType(unsafe { (b.groups.vehicle_type)(front) }),
+        VehicleType::SHIP | VehicleType::AIRCRAFT
+    );
     let result = unsafe {
         refit_chain(
             s, cost, temp, v, only, count, cargo, subtype, flags, automatic,
         )
     };
     if flags & DoCommandFlag::EXECUTE != 0 {
-        match unsafe { (b.groups.vehicle_type)(v) } {
-            0 => unsafe {
+        match VehicleType(unsafe { (b.groups.vehicle_type)(v) }) {
+            VehicleType::TRAIN => unsafe {
                 crate::train::openttd_rust_train_consist_changed(
                     (s.train_handle)(front.cast()),
                     if automatic {
@@ -456,7 +458,7 @@ pub(crate) unsafe fn refit(
                     b.shared,
                 );
             },
-            1 => {
+            VehicleType::ROAD => {
                 unsafe {
                     crate::road::openttd_rust_road_update_cache(
                         vehicle_ref(front),
@@ -469,7 +471,7 @@ pub(crate) unsafe fn refit(
                     (s.road_ground.first_cargo_changed)(unsafe { vehicle_ref(front) });
                 }
             }
-            2 => {
+            VehicleType::SHIP => {
                 (s.invalidate_chain)(v.cast());
                 unsafe {
                     crate::ship_control::openttd_rust_ship_cache(
@@ -479,7 +481,7 @@ pub(crate) unsafe fn refit(
                     );
                 }
             }
-            3 => {
+            VehicleType::AIRCRAFT => {
                 (s.invalidate_chain)(v.cast());
                 unsafe {
                     crate::aircraft::openttd_rust_aircraft_cache(

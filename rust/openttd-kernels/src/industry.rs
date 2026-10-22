@@ -24,6 +24,7 @@
     clippy::too_many_lines,
     clippy::if_not_else
 )]
+use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES};
 use std::ffi::c_void;
 use std::ptr;
@@ -533,8 +534,9 @@ fn produce(e: Entry, t: &TickRecord, s: &Services, builder: *mut Builder) {
             let sounds = unsafe { (s.sound_count)(i) };
             if sounds != 0
                 && t.ambient != 0
-                && (0..produced_count(owner))
-                    .any(|n| unsafe { (*produced(owner, n)).history[1].first > 0 })
+                && (0..produced_count(owner)).any(|n| unsafe {
+                    (*produced(owner, n)).history[usize::from(LAST_MONTH)].first > 0
+                })
             {
                 unsafe { (s.industry_sound)(i, ((r >> 16) * u32::from(sounds)) >> 16) };
             }
@@ -659,11 +661,15 @@ pub unsafe extern "C" fn openttd_rust_industry_transport(
             cw = cw.div_ceil(2);
         }
         unsafe {
-            (*p).history[0].first = (*p).history[0].first.wrapping_add(cw as u16);
+            (*p).history[usize::from(THIS_MONTH)].first = (*p).history[usize::from(THIS_MONTH)]
+                .first
+                .wrapping_add(cw as u16);
         }
         let am = unsafe { (s.move_goods)(i, n as u32, cw) };
         unsafe {
-            (*p).history[0].second = (*p).history[0].second.wrapping_add(am as u16);
+            (*p).history[usize::from(THIS_MONTH)].second = (*p).history[usize::from(THIS_MONTH)]
+                .second
+                .wrapping_add(am as u16);
         }
         moved |= am != 0;
     }
@@ -736,7 +742,7 @@ fn statistics(owner: *mut Industry, s: &Services) {
             if !valid((*p).cargo) {
                 continue;
             }
-            if (*p).history[0].first != 0 {
+            if (*p).history[usize::from(THIS_MONTH)].first != 0 {
                 (*f).last_prod_year = (s.economy_year)();
             }
             rotate(&mut (*p).history, (*f).valid_history, month);
@@ -815,7 +821,7 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
         if original {
             if only_decrease || chance(s, 1, 3) {
                 let pct = if produced_count(o.owner) > 0 {
-                    unsafe { transported((*produced(o.owner, 0)).history[1]) }
+                    unsafe { transported((*produced(o.owner, 0)).history[usize::from(LAST_MONTH)]) }
                 } else {
                     0
                 };
@@ -834,7 +840,7 @@ fn change(i: *mut c_void, s: &Services, monthly: bool) {
                 }
                 let random = rand(s);
                 let old = unsafe { i32::from((*p).rate) };
-                let pct = unsafe { transported((*p).history[1]) };
+                let pct = unsafe { transported((*p).history[usize::from(LAST_MONTH)]) };
                 let mut mult = if pct > 153 { 1 } else { -1 };
                 if only_decrease {
                     mult = -1;
@@ -1671,7 +1677,7 @@ pub(crate) unsafe fn subsidy_produced(owner: *const Industry, number: u32) -> (u
         .filter(|p| crate::cargo_type::is_valid_cargo_type(p.cargo))
         .nth(number as usize)
         .unwrap();
-    let history = p.history[1];
+    let history = p.history[usize::from(LAST_MONTH)];
     let percent = transported(history) as u8;
     (p.cargo, history.first, percent)
 }

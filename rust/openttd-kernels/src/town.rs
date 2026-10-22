@@ -26,6 +26,7 @@ pub mod founding;
 pub mod house;
 pub mod names;
 
+use crate::history_type::LAST_MONTH;
 use crate::services::{Map, Services, chance16_i};
 use crate::slope_func::{is_slope_with_one_corner_raised, is_steep_slope};
 
@@ -2404,7 +2405,9 @@ pub(crate) unsafe fn subsidy_percent_transported(state: *const State, cargo: u8)
     if at == rows.len() {
         return 0;
     }
-    unsafe { openttd_rust_town_percent_transported(&raw const rows[at].history[1]) }
+    unsafe {
+        openttd_rust_town_percent_transported(&raw const rows[at].history[usize::from(LAST_MONTH)])
+    }
 }
 
 crate::abi::layouts! {

@@ -19,6 +19,7 @@ use crate::fleet::GroupServices;
 use crate::order_type::{OT_GOTO_WAYPOINT, OT_IMPLICIT};
 use crate::services::{ByteSpan, CommandCost, CommandCostServices, CommandServices, Services};
 use crate::strings_type::INVALID_STRING_ID as ERROR;
+use crate::vehicle::VehicleType;
 use crate::vehiclelist::{
     VL_DEPOT_LIST, VL_GROUP_LIST, VL_SHARED_ORDERS, VL_STANDARD, VL_STATION_LIST,
 };
@@ -191,7 +192,7 @@ unsafe fn vehicle_set(
     mut count: u8,
     mut emit: impl FnMut(u32),
 ) {
-    if unsafe { (s.groups.vehicle_type)(v) } != 0 {
+    if unsafe { (s.groups.vehicle_type)(v) } != VehicleType::TRAIN.0 {
         return;
     }
     v = (s.first_engine_part)(v);
@@ -249,7 +250,7 @@ unsafe fn depot_list<F: FnMut(*mut (), bool)>(
         if unsafe { (c.s.groups.vehicle_type)(v) } != c.kind || !(c.s.in_depot)(v) {
             return;
         }
-        if c.kind == 0 {
+        if c.kind == VehicleType::TRAIN.0 {
             if unsafe { (c.s.transactions.articulated)(v) || (c.s.transactions.rear)(v) } {
                 return;
             }
@@ -497,7 +498,7 @@ pub(crate) unsafe fn sell(
             s.strings.stopped_in_depot + u32::from(unsafe { (b.groups.vehicle_type)(front) }),
         );
     }
-    if unsafe { (b.groups.vehicle_type)(v) } == 0 {
+    if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0 {
         return (s.sell_rail)(cost, flags, v, chain, backup, client);
     }
     (b.cost.expense_money)(
@@ -533,14 +534,14 @@ pub(crate) unsafe fn startstop(
     if status & crate::vehicle::VS_CRASHED != 0 {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
-    match unsafe { (b.groups.vehicle_type)(v) } {
-        0 => {
+    match VehicleType(unsafe { (b.groups.vehicle_type)(v) }) {
+        VehicleType::TRAIN => {
             if status & crate::vehicle::VS_STOPPED != 0 && (s.train_power)(v) == 0 {
                 return (b.cost.error)(cost, s.strings.no_power);
             }
         }
-        1 | 2 => (),
-        3 => {
+        VehicleType::ROAD | VehicleType::SHIP => (),
+        VehicleType::AIRCRAFT => {
             let state = (s.aircraft_start)(v);
             if (state.state >= s.strings.takeoff && state.state < s.strings.terminal7)
                 || state.flags & s.strings.direct_descent != 0
@@ -584,7 +585,7 @@ pub(crate) unsafe fn startstop(
             (s.waiting_news)(id);
         }
         (s.flip_stopped)(v);
-        if unsafe { (b.groups.vehicle_type)(v) } != 0 {
+        if unsafe { (b.groups.vehicle_type)(v) } != VehicleType::TRAIN.0 {
             (s.vehicles.write_speed)(handle, 0);
         }
         (s.vehicles.reset_depot_unbunching)(handle);

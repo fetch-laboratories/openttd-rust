@@ -305,7 +305,6 @@ const EXPLOSION_SOUND: i64 = 16;
 const SKID_SOUND: i64 = 21;
 const TICKS_PER_YEAR: i64 = YEAR_TICKS;
 const OILRIG: i64 = 9;
-const NUM_CARGO: i64 = 64;
 const INVALID_STATION: u32 = 65535;
 const OWNER_NONE: i64 = 16;
 const HIDDEN: i64 = 1;
@@ -1456,7 +1455,7 @@ impl World<'_> {
         if self.random() & ((1 << 22) - 1) > prob {
             return;
         }
-        for cargo in 0..NUM_CARGO {
+        for cargo in 0..i64::from(crate::cargo_type::NUM_CARGO) {
             self.landing_rating(i64::from(self.target(id)), cargo);
         }
         self.crash_airplane(id);

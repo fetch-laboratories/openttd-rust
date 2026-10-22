@@ -87,15 +87,15 @@ pub(crate) unsafe fn build(
         return Result::default();
     }
     let refitting = (c.valid_cargo)(cargo) && cargo != default_cargo;
-    let count = match kind.0 {
-        0 => {
+    let count = match kind {
+        VehicleType::TRAIN => {
             u32::from((r.rail_kind)(e) == RailVehicleTypes::MULTIHEAD)
                 + 1
                 + (s.articulate_count)(engine, false)
         }
-        1 => 1 + (s.articulate_count)(engine, false),
-        2 => 1,
-        3 => {
+        VehicleType::ROAD => 1 + (s.articulate_count)(engine, false),
+        VehicleType::SHIP => 1,
+        VehicleType::AIRCRAFT => {
             if unsafe { (c.transactions.plane)(engine) } != 0 {
                 2
             } else {
@@ -125,10 +125,10 @@ pub(crate) unsafe fn build(
         flags
     };
     let seeds = unsafe { (s.random.save)() };
-    let v = match kind.0 {
-        0 => (s.rail)(temporary, subflags, tile, e),
-        1 => unsafe { construct::road(s, temporary, subflags, tile, e) },
-        2 => {
+    let v = match kind {
+        VehicleType::TRAIN => (s.rail)(temporary, subflags, tile, e),
+        VehicleType::ROAD => unsafe { construct::road(s, temporary, subflags, tile, e) },
+        VehicleType::SHIP => {
             let north = (s.ship_tile)(tile);
             let v = if subflags & DoCommandFlag::EXECUTE != 0 {
                 let v = (s.new_ship)(north);
@@ -143,7 +143,7 @@ pub(crate) unsafe fn build(
             (b.cost.zero)(temporary);
             v
         }
-        3 => unsafe { construct::aircraft(s, temporary, subflags, tile, e) },
+        VehicleType::AIRCRAFT => unsafe { construct::aircraft(s, temporary, subflags, tile, e) },
         _ => unreachable!("depot kind is a buildable vehicle type"),
     };
     value.add(Cost(temporary, b.cost));

@@ -10,6 +10,7 @@ use super::{
     ALL_GROUP, DEFAULT_GROUP, ERROR, GroupFields, GroupServices, INVALID_GROUP, add_profit,
     add_replacement, group, remove_replacement, replacement, update_autoreplace,
 };
+use crate::cargo_type::INVALID_CARGO;
 use crate::command_type::DoCommandFlag;
 /// `EngineID::Invalid()`; shares the 0xFFFF encoding with `GroupID::Invalid()`.
 const INVALID_ENGINE: u16 = INVALID_GROUP;
@@ -239,7 +240,7 @@ unsafe fn direct_clone_order(w: &Services, out: *mut (), old: *mut (), new: *mut
                 new.cast(),
                 old.cast(),
                 s.strings.share_orders,
-                u8::from(flags & 1 != 0),
+                u8::from(flags & DoCommandFlag::EXECUTE != 0),
                 out.cast(),
                 s.orders,
             );
@@ -278,7 +279,6 @@ unsafe fn direct_copy_group(w: &Services, out: *mut (), old: *mut (), new: *mut 
     );
 }
 
-const INVALID_CARGO: u8 = 255;
 const NO_REFIT: u8 = 254;
 const TILE_SIZE: u16 = 16;
 

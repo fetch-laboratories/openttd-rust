@@ -121,7 +121,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
         if unsafe { flip.assume_init() } {
             (s.flip_image)(v);
         }
-        if unsafe { (g.vehicle_type)(v) } == 0 {
+        if unsafe { (g.vehicle_type)(v) } == VehicleType::TRAIN.0 {
             let probability = (s.reverse)(v, unsafe { (g.vehicle_engine)(v) });
             if probability.present {
                 (r.train_handle)(v.cast()).set_flag(crate::train::FLIPPED, probability.value);

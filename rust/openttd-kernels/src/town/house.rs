@@ -12,9 +12,11 @@
 //! service is a synchronous typed call that may reenter; owner fields are
 //! accessed only immediately, never borrowed across a service.
 use super::{AuthorityServices, Leaves, State, TownRef, change_population, engine, update_radius};
+use crate::cargo_type::INVALID_CARGO;
 use crate::command_type::DoCommandFlag;
 use crate::company_type::{OWNER_NONE, OWNER_TOWN, OWNER_WATER};
 use crate::economy_type::PR_BUILD_FOUNDATION;
+use crate::history_type::THIS_MONTH;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Map, Services, TownHandle, chance16_i,
@@ -28,7 +30,6 @@ use std::cell::{Cell, OnceCell};
 use std::ffi::c_void;
 
 const NEW_HOUSE_OFFSET: u16 = 110;
-const INVALID_CARGO: u8 = u8::MAX;
 const PRODUCE_END: u16 = 0x20FF;
 // Building flags.
 const NOT_SLOPED: u8 = 1 << 1;
@@ -623,7 +624,10 @@ impl House<'_> {
         // only the station delivery, which never touches town supplied rows.
         let row = unsafe { super::supplied_entry(town.state, cargo) }.entry;
         unsafe {
-            (*row).history[0].production = (*row).history[0].production.wrapping_add(amount);
+            (*row).history[usize::from(THIS_MONTH)].production = (*row).history
+                [usize::from(THIS_MONTH)]
+            .production
+            .wrapping_add(amount);
         }
         let mut finder = stations.native.get();
         if finder.is_null() {
@@ -634,7 +638,10 @@ impl House<'_> {
         let moved = unsafe { (self.h.move_goods)(finder, cargo, amount, town.id.0) };
         // SAFETY: As above; the row is still the live canonical entry.
         unsafe {
-            (*row).history[0].transported = (*row).history[0].transported.wrapping_add(moved);
+            (*row).history[usize::from(THIS_MONTH)].transported = (*row).history
+                [usize::from(THIS_MONTH)]
+            .transported
+            .wrapping_add(moved);
         }
     }
     fn generate_original(&self, town: TownRef, effect: u8, rate: u8, stations: &StationFinder) {

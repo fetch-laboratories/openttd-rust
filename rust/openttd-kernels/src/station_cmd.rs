@@ -79,6 +79,7 @@ pub struct RailSpecInfo {
 #[repr(C)]
 pub struct RoadSpecCost {
     pub multiplier: u8,
+    /// The spec GRF's `price_base_multipliers[price]`, zero without a GRF file.
     pub shift: i32,
 }
 #[repr(C)]
@@ -2342,8 +2343,9 @@ impl Ctx<'_> {
         } else {
             {
                 let factor = (self.s.road_spec_build_cost)(spec, category);
-                crate::company::openttd_rust_economy_price(
+                crate::economy_func::get_price(
                     u32::from(category),
+                    -4,
                     u32::from(factor.multiplier),
                     factor.shift,
                 )
@@ -2656,8 +2658,9 @@ impl Ctx<'_> {
         } else {
             {
                 let factor = (self.s.road_spec_clear_cost)(spec, category);
-                crate::company::openttd_rust_economy_price(
+                crate::economy_func::get_price(
                     u32::from(category),
+                    -4,
                     u32::from(factor.multiplier),
                     factor.shift,
                 )
