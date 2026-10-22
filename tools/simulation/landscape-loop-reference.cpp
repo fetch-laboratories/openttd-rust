@@ -151,7 +151,7 @@ int main()
 		for (bool rust : {false, true}) {
 			/* Reset BETWEEN entries and reacquire; no stale pointer is read. */
 			tiles = std::make_unique<BaseTile[]>(4096);
-	extended = std::make_unique<TileExtendedStorage[]>(4096);
+			extended = std::make_unique<TileExtendedStorage[]>(4096);
 			for (uint32_t tile = 0; tile < 4096; tile++) tiles[tile].type = static_cast<uint8_t>(native_types[tile % 4] << 4);
 			rust_run = rust;
 			reenter = true;

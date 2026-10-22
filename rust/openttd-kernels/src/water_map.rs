@@ -10,6 +10,8 @@
 use crate::map_func::TileTypeAccess;
 
 use crate::tile_type::{MP_INDUSTRY, MP_OBJECT, MP_STATION, MP_TREES, MP_WATER};
+/// `WaterTileType::Coast`.
+const COAST: u8 = 1;
 #[inline]
 pub(crate) fn get_water_tile_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
     m.require_type(t, MP_WATER)?;
@@ -32,7 +34,7 @@ pub(crate) fn get_water_class(m: &TileTypeAccess, t: u32) -> Option<u8> {
 }
 #[inline]
 pub(crate) fn is_coast(m: &TileTypeAccess, t: u32) -> Option<bool> {
-    Some(get_water_tile_type(m, t)? == 1)
+    Some(get_water_tile_type(m, t)? == COAST)
 }
 #[inline]
 pub(crate) fn is_non_flooding_water_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {

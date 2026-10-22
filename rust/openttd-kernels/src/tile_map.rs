@@ -108,7 +108,7 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
             {
                 return false;
             }
-            if get_clear_ground(&map, tile) == Some(3) {
+            if get_clear_ground(&map, tile) == Some(crate::clear_map::CLEAR_FIELDS) {
                 let fences = (c.fences)(tile);
                 let field = (c.field)(tile);
                 if [fences.ne, fences.se, fences.sw, fences.nw]

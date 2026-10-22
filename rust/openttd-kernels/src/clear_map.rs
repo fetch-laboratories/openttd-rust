@@ -9,6 +9,8 @@
 //! `None` routes to the original typed native accessor (including failed assertions).
 use crate::map_func::TileTypeAccess;
 use crate::tile_type::MP_CLEAR;
+/// `ClearGround::CLEAR_FIELDS`.
+pub(crate) const CLEAR_FIELDS: u8 = 3;
 #[inline]
 pub(crate) fn is_snow_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {
     m.require_type(t, MP_CLEAR)?;
@@ -32,7 +34,7 @@ pub(crate) fn get_clear_counter(m: &TileTypeAccess, t: u32) -> Option<u8> {
 #[inline]
 fn require_field(m: &TileTypeAccess, t: u32) -> Option<()> {
     m.available(t)?;
-    if m.assertions() && get_clear_ground(m, t)? != 3 {
+    if m.assertions() && get_clear_ground(m, t)? != CLEAR_FIELDS {
         return None;
     }
     Some(())
@@ -60,5 +62,8 @@ pub(crate) fn get_fence(m: &TileTypeAccess, t: u32, side: u8) -> Option<u32> {
 }
 #[inline]
 pub(crate) fn is_field_tile(m: &TileTypeAccess, t: u32) -> Option<bool> {
-    Some(crate::tile_map::get_tile_type(m, t)? == MP_CLEAR && get_clear_ground(m, t)? == 3)
+    Some(
+        crate::tile_map::get_tile_type(m, t)? == MP_CLEAR
+            && get_clear_ground(m, t)? == CLEAR_FIELDS,
+    )
 }
