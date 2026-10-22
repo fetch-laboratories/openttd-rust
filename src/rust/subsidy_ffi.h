@@ -39,7 +39,7 @@ struct OpenTTDSubsidyServices {
 	uint16_t (*allocate)(CargoType, Source, Source, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate);
 	void (*destroy)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(destroy);
 	uint16_t (*duration)() noexcept OPENTTD_SERVICE_DEFAULT(duration);
-	CompanyID (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
+	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	bool (*cargo_valid)(CargoType) noexcept OPENTTD_SERVICE_DEFAULT(cargo_valid);
 	bool (*manual)(CargoType) noexcept OPENTTD_SERVICE_DEFAULT(manual);
 	bool (*manual_pax)() noexcept OPENTTD_SERVICE_DEFAULT(manual_pax);

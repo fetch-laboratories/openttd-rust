@@ -670,7 +670,7 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 		.allocate = [](CargoType cargo, Source src, Source dst, uint16_t remaining) noexcept { return (new Subsidy(cargo, src, dst, remaining))->index.base(); },
 		.destroy = [](uint16_t id) noexcept { delete Subsidy::Get(id); },
 		.duration = OpenTTDSubsidyDuration,
-		.local_company = RustLocalCompany,
+		.local_company = RustLocalCompanyID,
 		.cargo_valid = OpenTTDCargoSpecValid,
 		.manual = OpenTTDManualCargoDistribution,
 		.manual_pax = OpenTTDManualPassengerDistribution,
