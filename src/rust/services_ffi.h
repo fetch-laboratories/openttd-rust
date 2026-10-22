@@ -8,7 +8,7 @@
 /** @file services_ffi.h Synchronous shared game services for Rust owners. */
 #ifndef RUST_SERVICES_FFI_H
 #define RUST_SERVICES_FFI_H
-#include "../map_func.h"
+#include "../tile_storage_type.h"
 #include "service_defaults.hpp"
 #include <cstdint>
 #include <cstddef>
@@ -33,8 +33,8 @@ static_assert(std::is_trivially_copyable_v<OpenTTDEconomyDate> && std::is_standa
  * mutex yield. Only field-sized raw reads in audited scheduler entries are allowed;
  * C++ owns allocation/construction/reset/destruction and every write. */
 struct OpenTTDTileTypeAllocation {
-	const Tile::TileBase *base;
-	const Tile::TileExtended *extended;
+	const TileBaseStorage *base;
+	const TileExtendedStorage *extended;
 	uint32_t count;
 	bool assertions;
 };

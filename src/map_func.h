@@ -12,6 +12,7 @@
 
 #include "core/math_func.hpp"
 #include "tile_type.h"
+#include "tile_storage_type.h"
 #include "map_type.h"
 #include "direction_func.h"
 
@@ -28,34 +29,9 @@ private:
 #ifdef WITH_RUST
 	friend struct OpenTTDNativeTileTypeAccess;
 #endif
-public:
-	/**
-	 * Data that is stored per tile. Also used TileExtended for this.
-	 * Look at docs/landscape.html for the exact meaning of the members.
-	 */
-	struct TileBase {
-		uint8_t type = 0; ///< The type (bits 4..7), bridges (2..3), rainforest/desert (0..1)
-		uint8_t height = 0; ///< The height of the northern corner.
-		uint16_t m2 = 0; ///< Primarily used for indices to towns, industries and stations
-		uint8_t m1 = 0; ///< Primarily used for ownership information
-		uint8_t m3 = 0; ///< General purpose
-		uint8_t m4 = 0; ///< General purpose
-		uint8_t m5 = 0; ///< General purpose
-	};
+	using TileBase = TileBaseStorage;
+	using TileExtended = TileExtendedStorage;
 
-	static_assert(sizeof(TileBase) == 8);
-
-	/**
-	 * Data that is stored per tile. Also used TileBase for this.
-	 * Look at docs/landscape.html for the exact meaning of the members.
-	 */
-	struct TileExtended {
-		uint8_t m6 = 0; ///< General purpose
-		uint8_t m7 = 0; ///< Primarily used for newgrf support
-		uint16_t m8 = 0; ///< General purpose
-	};
-
-private:
 	static std::unique_ptr<TileBase[]> base_tiles; ///< Pointer to the tile-array.
 	static std::unique_ptr<TileExtended[]> extended_tiles; ///< Pointer to the extended tile-array.
 

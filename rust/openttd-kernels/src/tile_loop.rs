@@ -21,7 +21,7 @@
 //! still rereads the feature bit after its call. Thus settings are entry-local;
 //! tree/map observations still occur inside each owner at original callback sites.
 //!
-//! Raw type descriptor lifetime: `Map::Allocate` is reached only from game reset
+//! Raw map descriptor lifetime: `Map::Allocate` is reached only from game reset
 //! (`InitializeGame`), MAPS/legacy loaders and tests. Mutex yield (`GameLoopPause`)
 //! occurs only in generation progress and GRF scanning; warmup callers place it
 //! outside this entry. `VideoDriver::GameLoop`/GUI input hold the game-state mutex;
@@ -30,7 +30,7 @@
 //! may mutate later tiles and reenter owners, but never run reset/load/progress or
 //! a script VM. AI/Game event insertion only queues via `InsertEvent`; script VMs
 //! run after this batch. Window invalidation cannot pump GUI commands here.
-//! Therefore only allocation metadata can span dispatch; each u8 read ends first.
+//! Therefore only allocation metadata can span dispatch; each field-sized read ends first.
 //! Nested entries acquire independently, and entries after reset reacquire. Link
 //! graph workers own copies; sound/compression do not mutate the arrays. Threaded
 //! and arbitrary `NewGRF` corpus limits remain source-review obligations in #156.
