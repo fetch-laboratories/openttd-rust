@@ -1217,8 +1217,6 @@ pub struct Loading {
     pub(crate) road_loads: extern "C" fn(*mut Station, VehicleRef),
     pub(crate) vehicle_empty: extern "C" fn(VehicleRef),
     pub(crate) station_dirty: extern "C" fn(*mut Station),
-    pub(crate) test_refit: extern "C" fn(VehicleRef, u8) -> u32,
-    pub(crate) execute_refit: extern "C" fn(VehicleRef, u8, *mut i64) -> bool,
 }
 
 fn parts(l: &Loading, v: VehicleRef, mut action: impl FnMut(VehicleRef) -> bool) -> bool {
@@ -1336,6 +1334,52 @@ fn load_amount(v: VehicleRef, gradual: bool, l: &Loading) -> u32 {
     }
     amount.max(1)
 }
+// Call-local native costs live in LoadUnloadStation's stack frame. They never
+// alias another loading/reentrant command frame; no owner reference spans calls.
+struct RefitContext {
+    services: *const crate::vehicle_transactions::refit::Services,
+    out: *mut crate::services::CommandCost,
+    temporary: *mut crate::services::CommandCost,
+}
+impl RefitContext {
+    fn cost(&self) -> crate::services::Cost<'_> {
+        // SAFETY: Native loading entry supplies immutable services and stack slots.
+        crate::services::Cost(self.out, unsafe { &*self.services }.common.base.cost)
+    }
+    fn run(
+        &self,
+        v: VehicleRef,
+        cargo: u8,
+        flags: u16,
+    ) -> crate::vehicle_transactions::refit::Capacity {
+        // SAFETY: Loading entry owns native stack costs for this synchronous call;
+        // immutable service-table borrows contain no world/vehicle owner borrow.
+        let services = unsafe { &*self.services };
+        let base = services.common.base;
+        let id = unsafe { (base.groups.vehicle_id)(v.0.as_ptr().cast()) };
+        crate::command::nested(
+            base.commands,
+            base.shared,
+            self.cost(),
+            0,
+            flags,
+            |flags| unsafe {
+                crate::vehicle_transactions::refit::refit(
+                    services,
+                    self.out,
+                    self.temporary,
+                    flags,
+                    id,
+                    cargo,
+                    0xff,
+                    true,
+                    false,
+                    1,
+                )
+            },
+        )
+    }
+}
 fn refit_vehicle(
     v: VehicleRef,
     capleft: &mut [u32; 64],
@@ -1344,6 +1388,7 @@ fn refit_vehicle(
     mut new_cargo: u8,
     w: &World,
     l: &Loading,
+    refit: &RefitContext,
 ) {
     let start = (l.first_engine_part)(v);
     if !parts(l, start, |part| (l.stored_count)(part) == 0) {
@@ -1367,7 +1412,7 @@ fn refit_vehicle(
             if mask & (1_u64 << cargo) == 0 || !(l.has_cargo_for)(st.native, cargo, next) {
                 continue;
             }
-            let capacity = (l.test_refit)(start, cargo);
+            let capacity = refit.run(start, cargo, 1 << 2).total;
             if capacity > 0
                 && (capleft[usize::from(cargo)] < capleft[usize::from(new_cargo)]
                     || (capleft[usize::from(cargo)] == capleft[usize::from(new_cargo)]
@@ -1382,8 +1427,9 @@ fn refit_vehicle(
             (l.return_cargo)(st.native, part, u32::MAX);
             true
         });
-        let mut cost = 0;
-        let succeeded = (l.execute_refit)(start, new_cargo, &raw mut cost);
+        refit.run(start, new_cargo, 1);
+        let cost = refit.cost().money();
+        let succeeded = refit.cost().ok();
         if succeeded {
             (l.subtract_profit)((l.first_vehicle)(v), cost.wrapping_shl(8));
         }
@@ -1454,7 +1500,7 @@ fn update_ticks(front: VehicleRef, st: LoadingStation, kind: u8, mut ticks: i32,
 }
 // Preserve complete loading control at the source observation points.
 #[allow(clippy::too_many_lines)]
-unsafe fn load_vehicle(front: VehicleRef, w: &World, l: &Loading) {
+unsafe fn load_vehicle(front: VehicleRef, w: &World, l: &Loading, refit: &RefitContext) {
     // SAFETY: the shared immutable vehicle table outlives this entry. Station
     // identities and owner are resolved before next-station discovery (#228).
     let vehicle = unsafe { &*l.vehicle };
@@ -1589,7 +1635,7 @@ unsafe fn load_vehicle(front: VehicleRef, w: &World, l: &Loading) {
             }
             let refitted = control.refit && artic_part == 1;
             if refitted {
-                refit_vehicle(v, &mut capleft, st, next, control.refit_cargo, w, l);
+                refit_vehicle(v, &mut capleft, st, next, control.refit_cargo, w, l, refit);
             }
             let observed = (l.set_refit_capacity_and_stats)(
                 v,
@@ -1720,6 +1766,9 @@ pub unsafe extern "C" fn openttd_rust_station_load(
     state: *mut Service,
     world: *const World,
     loading: *const Loading,
+    refit_services: *const crate::vehicle_transactions::refit::Services,
+    out: *mut crate::services::CommandCost,
+    temporary: *mut crate::services::CommandCost,
 ) {
     // C++ supplies the queue owner directly: no callback precedes the empty
     // queue check, and the queue station is not the vehicles' loading station.
@@ -1729,6 +1778,11 @@ pub unsafe extern "C" fn openttd_rust_station_load(
     }
     let w = unsafe { &*world };
     let l = unsafe { &*loading };
+    let refit = RefitContext {
+        services: refit_services,
+        out,
+        temporary,
+    };
     let mut last = None;
     while !node.is_null() {
         let v = VehicleRef(unsafe {
@@ -1753,7 +1807,7 @@ pub unsafe extern "C" fn openttd_rust_station_load(
         });
         if (l.status)(v) & (VS_STOPPED | VS_CRASHED) == 0 {
             unsafe {
-                load_vehicle(v, w, l);
+                load_vehicle(v, w, l, &refit);
             }
         }
         if Some(v) == last {

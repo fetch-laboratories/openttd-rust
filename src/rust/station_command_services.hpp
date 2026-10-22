@@ -9,6 +9,7 @@
 #ifndef RUST_STATION_COMMAND_SERVICES_HPP
 #define RUST_STATION_COMMAND_SERVICES_HPP
 #include "services_map.h"
+#include "company_services.h"
 
 const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 {
@@ -69,7 +70,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.rail_bridge_info = [](const StationSpec *spec) noexcept -> OpenTTDStationBridgeInfo { return {spec->bridgeable_info.data(), spec->bridgeable_info.size()}; },
 		.road_bridge_info = [](const RoadStopSpec *spec) noexcept -> OpenTTDStationBridgeInfo { return {spec->bridgeable_info.data(), spec->bridgeable_info.size()}; },
 		.southern_bridge_end = [](uint32_t tile) noexcept { return GetSouthernBridgeEnd(TileIndex{tile}).base(); },
-		.bridge_height = [](uint32_t tile) noexcept { return GetBridgeHeight(TileIndex{tile}); },
 		.train_area = [](const BaseStation *st) noexcept -> OpenTTDStationArea { return {st->train_station.tile.base(), st->train_station.w, st->train_station.h}; },
 		.rail_spec = [](uint32_t tile) noexcept { return GetStationSpec(TileIndex{tile}); },
 		.road_spec = [](uint32_t tile) noexcept { return GetRoadStopSpec(TileIndex{tile}); },
@@ -153,8 +153,8 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.road_spec_count = [](uint16_t cls) noexcept { return RoadStopClass::Get(static_cast<RoadStopClassID>(cls))->GetSpecCount(); },
 		.class_road_spec = [](uint16_t cls, uint16_t index) noexcept { return RoadStopClass::Get(static_cast<RoadStopClassID>(cls))->GetSpec(index); },
 		.road_spec_info = [](const RoadStopSpec *spec) noexcept -> OpenTTDRoadStationSpecInfo { return {spec->stop_type, spec->flags.Test(RoadStopSpecFlag::DriveThroughOnly), spec->callback_mask.Test(RoadStopCallbackMask::Avail)}; },
-		.road_spec_build_cost = [](const RoadStopSpec *spec, uint8_t price) noexcept -> OpenTTDRoadStationSpecCost { return {spec->build_cost_multiplier, -4 + (spec->grf_prop.grffile == nullptr ? 0 : spec->grf_prop.grffile->price_base_multipliers[price])}; },
-		.road_spec_clear_cost = [](const RoadStopSpec *spec, uint8_t price) noexcept -> OpenTTDRoadStationSpecCost { return {spec->clear_cost_multiplier, -4 + (spec->grf_prop.grffile == nullptr ? 0 : spec->grf_prop.grffile->price_base_multipliers[price])}; },
+		.road_spec_build_cost = [](const RoadStopSpec *spec, uint8_t price) noexcept -> OpenTTDRoadStationSpecCost { return {spec->build_cost_multiplier, -4 + RustGRFPriceShift(spec->grf_prop.grffile, price)}; },
+		.road_spec_clear_cost = [](const RoadStopSpec *spec, uint8_t price) noexcept -> OpenTTDRoadStationSpecCost { return {spec->clear_cost_multiplier, -4 + RustGRFPriceShift(spec->grf_prop.grffile, price)}; },
 		.stops_available = [](size_t count) noexcept { return RoadStop::CanAllocateItem(count); },
 		.allocate_road_spec = [](const RoadStopSpec *spec, BaseStation *st) noexcept -> OpenTTDStationSpecIndex { auto index = AllocateSpecToRoadStop(spec, st); return {index.value_or(0), index.has_value()}; },
 		.assign_road_spec = [](const RoadStopSpec *spec, BaseStation *st, uint8_t index) noexcept { AssignSpecToRoadStop(spec, st, index); },

@@ -23,18 +23,7 @@ static_assert(AirportBlocks{AirportBlock::AirportClosed}.base() == (uint64_t{1} 
 
 /* Resolve each live shell/private owner once. Disaster helpers retain null State.
  * The record contains opaque pointers only; Rust never views C++ object layout. */
-static OpenTTDAircraftVehicle AircraftVehicle(Vehicle *v) noexcept
-{
-	if (v == nullptr) return {nullptr, nullptr, VehicleID::Invalid().base()};
-	return {RustVehicle(v), v->type == VEH_AIRCRAFT ? Aircraft::From(v)->rust_state.get() : nullptr, v->index.base()};
-}
 
-OpenTTDAircraftVehicle GetRustAircraftVehicle(OpenTTDVehicle *v) noexcept { return AircraftVehicle(VehicleOf(v)); }
-
-static OpenTTDAircraftVehicle OPENTTD_AIRCRAFT_CALL Aircraft_next(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	return AircraftVehicle(RustVehicleNext(VehicleOf(vehicle.handle)));
-}
 
 static const OpenTTDStation *OPENTTD_AIRCRAFT_CALL Aircraft_station(uint16_t id) noexcept
 {
@@ -113,11 +102,7 @@ static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_engine_sound(OpenTTDAircraftVehic
 	return AircraftVehInfo(v->engine_type)->sfx;
 }
 
-static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_engine_reliability(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	const Vehicle *v = VehicleOf(vehicle.handle);
-	return RustEngineReliability(v->GetEngine());
-}
+
 
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_airport_entry(const void * ap, uint8_t direction) noexcept
 {
@@ -182,13 +167,13 @@ static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_next_station(uint16_t last) noexc
 
 static OpenTTDAircraftVehicle OPENTTD_AIRCRAFT_CALL Aircraft_next_aircraft(uint32_t last) noexcept
 {
-	for (Aircraft *v : Aircraft::Iterate(last == VehicleID::Invalid().base() ? 0 : last + 1)) return AircraftVehicle(v);
-	return AircraftVehicle(nullptr);
+	for (Aircraft *v : Aircraft::Iterate(last == VehicleID::Invalid().base() ? 0 : last + 1)) return RustAircraftVehicle(v);
+	return RustAircraftVehicle(nullptr);
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_update_position(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); v->UpdatePosition(); v->UpdateViewport(true, false);
+	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustVehicleUpdatePosition(v); v->UpdateViewport(true, false);
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_rotor_image(OpenTTDAircraftVehicle vehicle) noexcept
@@ -435,7 +420,7 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.layout_route = Aircraft_layout_route,
 	.vehicle = &GetRustVehicleServices(),
 	.shared = &GetRustSharedServices(),
-	.next = Aircraft_next,
+	.next = RustAircraftNext,
 	.station = Aircraft_station,
 	.airport_tile = Aircraft_airport_tile,
 	.station_tile = Aircraft_station_tile,
@@ -457,7 +442,7 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.engine_speed = Aircraft_engine_speed,
 	.engine_subtype = Aircraft_engine_subtype,
 	.engine_sound = Aircraft_engine_sound,
-	.engine_reliability = Aircraft_engine_reliability,
+	.engine_reliability = RustAircraftEngineReliability,
 	.airport_entry = Aircraft_airport_entry,
 	.direction_towards = Aircraft_direction_towards,
 	.hangar_height = Aircraft_hangar_height,
@@ -517,30 +502,30 @@ bool Aircraft::Tick()
 {
 	if (!this->IsNormalAircraft()) return true;
 	PerformanceAccumulator framerate(PFE_GL_AIRCRAFT);
-	return openttd_rust_aircraft_tick(&_aircraft_leaves, AircraftVehicle(this));
+	return openttd_rust_aircraft_tick(&_aircraft_leaves, RustAircraftVehicle(this));
 }
-void Aircraft::OnNewCalendarDay() { openttd_rust_aircraft_calendar_day(&_aircraft_leaves, AircraftVehicle(this)); }
-void Aircraft::OnNewEconomyDay() { openttd_rust_aircraft_economy_day(&_aircraft_leaves, AircraftVehicle(this)); }
-void SetAircraftPosition(Aircraft *v, int x, int y, int z) { openttd_rust_aircraft_position(&_aircraft_leaves, AircraftVehicle(v), x, y, z); }
-void HandleAircraftEnterHangar(Aircraft *v) { openttd_rust_aircraft_enter_hangar(&_aircraft_leaves, AircraftVehicle(v)); }
-void UpdateAircraftCache(Aircraft *v, bool update_range) { openttd_rust_aircraft_cache(&_aircraft_leaves, AircraftVehicle(v), update_range); }
-void GetAircraftFlightLevelBounds(const Vehicle *v, int *min, int *max) { openttd_rust_aircraft_flight_bounds(&_aircraft_leaves, AircraftVehicle(const_cast<Vehicle *>(v)), min, max); }
+void Aircraft::OnNewCalendarDay() { openttd_rust_aircraft_calendar_day(&_aircraft_leaves, RustAircraftVehicle(this)); }
+void Aircraft::OnNewEconomyDay() { openttd_rust_aircraft_economy_day(&_aircraft_leaves, RustAircraftVehicle(this)); }
+void SetAircraftPosition(Aircraft *v, int x, int y, int z) { openttd_rust_aircraft_position(&_aircraft_leaves, RustAircraftVehicle(v), x, y, z); }
+void HandleAircraftEnterHangar(Aircraft *v) { openttd_rust_aircraft_enter_hangar(&_aircraft_leaves, RustAircraftVehicle(v)); }
+void UpdateAircraftCache(Aircraft *v, bool update_range) { openttd_rust_aircraft_cache(&_aircraft_leaves, RustAircraftVehicle(v), update_range); }
+void GetAircraftFlightLevelBounds(const Vehicle *v, int *min, int *max) { openttd_rust_aircraft_flight_bounds(&_aircraft_leaves, RustAircraftVehicle(const_cast<Vehicle *>(v)), min, max); }
 static uint8_t &GetFlightFlags(Aircraft *v) { return v->flags; }
 static uint8_t &GetFlightFlags(DisasterVehicle *v) { return v->Flags(); }
-template <class T> int GetAircraftFlightLevel(T *v, bool takeoff) { return openttd_rust_aircraft_flight_level(&_aircraft_leaves, AircraftVehicle(v), &GetFlightFlags(v), takeoff); }
+template <class T> int GetAircraftFlightLevel(T *v, bool takeoff) { return openttd_rust_aircraft_flight_level(&_aircraft_leaves, RustAircraftVehicle(v), &GetFlightFlags(v), takeoff); }
 template int GetAircraftFlightLevel(DisasterVehicle *v, bool takeoff);
 template int GetAircraftFlightLevel(Aircraft *v, bool takeoff);
-int GetTileHeightBelowAircraft(const Vehicle *v) { return openttd_rust_aircraft_height(&_aircraft_leaves, AircraftVehicle(const_cast<Vehicle *>(v))); }
-int GetAircraftHoldMaxAltitude(const Aircraft *v) { return openttd_rust_aircraft_hold_altitude(&_aircraft_leaves, AircraftVehicle(const_cast<Aircraft *>(v))); }
-void HandleMissingAircraftOrders(Aircraft *v) { openttd_rust_aircraft_missing_orders(&_aircraft_leaves, AircraftVehicle(v)); }
-uint Aircraft::Crash(bool flooded) { return openttd_rust_aircraft_crash(&_aircraft_leaves, AircraftVehicle(this), flooded); }
-void AircraftNextAirportPos_and_Order(Aircraft *v) { openttd_rust_aircraft_next_airport(&_aircraft_leaves, AircraftVehicle(v)); }
-void AircraftLeaveHangar(Aircraft *v, Direction exit_dir) { openttd_rust_aircraft_leave_hangar(&_aircraft_leaves, AircraftVehicle(v), exit_dir); }
-TileIndex Aircraft::GetOrderStationLocation(StationID) { openttd_rust_aircraft_order_location(&_aircraft_leaves, AircraftVehicle(this)); return TileIndex{}; }
+int GetTileHeightBelowAircraft(const Vehicle *v) { return openttd_rust_aircraft_height(&_aircraft_leaves, RustAircraftVehicle(const_cast<Vehicle *>(v))); }
+int GetAircraftHoldMaxAltitude(const Aircraft *v) { return openttd_rust_aircraft_hold_altitude(&_aircraft_leaves, RustAircraftVehicle(const_cast<Aircraft *>(v))); }
+void HandleMissingAircraftOrders(Aircraft *v) { openttd_rust_aircraft_missing_orders(&_aircraft_leaves, RustAircraftVehicle(v)); }
+uint Aircraft::Crash(bool flooded) { return openttd_rust_aircraft_crash(&_aircraft_leaves, RustAircraftVehicle(this), flooded); }
+void AircraftNextAirportPos_and_Order(Aircraft *v) { openttd_rust_aircraft_next_airport(&_aircraft_leaves, RustAircraftVehicle(v)); }
+void AircraftLeaveHangar(Aircraft *v, Direction exit_dir) { openttd_rust_aircraft_leave_hangar(&_aircraft_leaves, RustAircraftVehicle(v), exit_dir); }
+TileIndex Aircraft::GetOrderStationLocation(StationID) { openttd_rust_aircraft_order_location(&_aircraft_leaves, RustAircraftVehicle(this)); return TileIndex{}; }
 void UpdateAirplanesOnNewStation(const Station *st) { openttd_rust_aircraft_replacement(&_aircraft_leaves, st->index.base()); }
 ClosestDepot Aircraft::FindClosestDepot()
 {
-	StationID station{openttd_rust_aircraft_closest_depot(&_aircraft_leaves, AircraftVehicle(this))};
+	StationID station{openttd_rust_aircraft_closest_depot(&_aircraft_leaves, RustAircraftVehicle(this))};
 	return station == StationID::Invalid() ? ClosestDepot() : ClosestDepot(Station::Get(station)->xy, station);
 }
 Station *GetTargetAirportIfValid(const Aircraft *v)
@@ -549,5 +534,5 @@ Station *GetTargetAirportIfValid(const Aircraft *v)
 	Station *st = Station::GetIfValid(v->targetairport);
 	return st == nullptr || RustStationAirportTile(st) == INVALID_TILE.base() ? nullptr : st;
 }
-void ReleaseAircraftAirportBlocks(const Aircraft *v) { openttd_rust_aircraft_release_blocks(&_aircraft_leaves, AircraftVehicle(const_cast<Aircraft *>(v))); }
+void ReleaseAircraftAirportBlocks(const Aircraft *v) { openttd_rust_aircraft_release_blocks(&_aircraft_leaves, RustAircraftVehicle(const_cast<Aircraft *>(v))); }
 void InvalidateAircraftTargetStation(StationID station) { openttd_rust_aircraft_invalidate_target(&_aircraft_leaves, station.base()); }

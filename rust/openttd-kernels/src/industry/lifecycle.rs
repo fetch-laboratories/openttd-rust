@@ -51,7 +51,7 @@ pub struct LifecycleServices {
     pub close_view: unsafe extern "C" fn(u16),
     pub close_production: unsafe extern "C" fn(u16),
     pub delete_inspect: unsafe extern "C" fn(u16),
-    pub delete_subsidies: unsafe extern "C" fn(u16),
+    pub subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub invalidate_cargo: unsafe extern "C" fn(u16),
     pub next_near_station: unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_void,
     pub remove_delivery: unsafe extern "C" fn(*mut c_void, *mut c_void),
@@ -167,7 +167,7 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
         (w.close_view)(id);
         (w.close_production)(id);
         (w.delete_inspect)(id);
-        (w.delete_subsidies)(id);
+        (&*(w.subsidies)()).delete_with(crate::subsidy::Source::industry(id));
         (w.invalidate_cargo)(id);
     }
     let mut previous = ptr::null_mut();

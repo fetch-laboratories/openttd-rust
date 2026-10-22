@@ -11,6 +11,7 @@
 #include "road_command_ffi.h"
 #include "station_command_ffi.h"
 #include "water_command_ffi.h"
+#include "tunnelbridge_command_ffi.h"
 #include "industry_ffi.h"
 struct OpenTTDObjectServices;
 struct OpenTTDTileOwnerServices {
@@ -22,7 +23,7 @@ struct OpenTTDTileOwnerServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStationCommandServices *station;
 	void (*trees)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(trees);
-	void (*tunnel_bridge)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_bridge);
+	const OpenTTDTunnelBridgeServices *tunnel_bridge;
 	void (*void_tile)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(void_tile);
 	const OpenTTDWaterCommandServices *water;
 };

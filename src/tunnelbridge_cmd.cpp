@@ -48,12 +48,91 @@
 #include "rust/ground_ffi.h"
 #include "rust/services_landscape.h"
 #include "rust/environment_services.h"
+#include "rust/tunnelbridge_command_ffi.h"
+#include "rust/command_services.h"
+#include "rust/company_adapter.h"
+#include "rust/road_command_services.h"
+#include "rust/services_rail.h"
+#include "rust/settings_services.h"
+#include "rust/services_bridge.h"
+#include "rust/services_viewport.h"
 #endif
 
 #include "safeguards.h"
 
 BridgeSpec _bridge[MAX_BRIDGES]; ///< The specification of all bridges.
-TileIndex _build_tunnel_endtile; ///< The end of a tunnel; as hidden return from the tunnel build command for GUI purposes.
+#ifndef WITH_RUST
+TileIndex _build_tunnel_endtile; ///< Hidden command output for the GUI.
+#endif
+
+TileIndex GetBuildTunnelEndTile()
+{
+#ifdef WITH_RUST
+	return TileIndex{openttd_rust_tunnel_endtile()};
+#else
+	return _build_tunnel_endtile;
+#endif
+}
+
+#ifdef WITH_RUST
+const OpenTTDTunnelBridgeServices &GetRustTunnelBridgeServices() noexcept
+{
+	static const OpenTTDTunnelBridgeServices services{
+		.rail = &GetRustRailCommandServices(),
+		.road = &GetRustRoadCommandServices(),
+		.road_ground = &GetRustRoadGroundServices(),
+		.water = &GetRustWaterCommandServices(),
+		.company = &GetRustCompanyServices(),
+		.availability = [](BridgeType type) noexcept -> OpenTTDBridgeAvailability { const auto *b = GetBridgeSpec(type); return {.year = b->avail_year.base(), .min = b->min_length, .max = b->max_length}; },
+		.speed = RustBridgeSpecSpeed,
+		.price = [](BridgeType type) noexcept -> uint16_t { return GetBridgeSpec(type)->price; },
+		.max_bridge_length = RustMaxBridgeLength,
+		.max_bridge_height = RustMaxBridgeHeight,
+		.max_tunnel_length = RustMaxTunnelLength,
+		.crossing_tunnels = []() noexcept -> bool { return _cheats.crossing_tunnels.value; },
+		.other_bridge_end = [](uint32_t t) noexcept -> uint32_t { return GetOtherBridgeEnd(TileIndex{t}).base(); },
+		.northern_bridge_end = [](uint32_t t) noexcept -> uint32_t { return GetNorthernBridgeEnd(TileIndex{t}).base(); },
+		.bridge_type = RustBridgeType,
+		.is_tunnel = [](uint32_t t) noexcept -> bool { return IsTunnel(TileIndex{t}); },
+		.tunnel_in_way = [](uint32_t t, int32_t z, DiagDirection d) noexcept -> bool { return IsTunnelInWayDir(TileIndex{t}, z, d); },
+		.set_middle = [](uint32_t t, Axis a) noexcept -> void { SetBridgeMiddle(TileIndex{t}, a); },
+		.clear_middle = [](uint32_t t) noexcept -> void { ClearBridgeMiddle(TileIndex{t}); },
+		.set_reservation = RustSetTunnelBridgeReservation,
+		.make_rail_bridge = [](uint32_t t, uint8_t o, BridgeType b, DiagDirection d, RailType rt) noexcept -> void { MakeRailBridgeRamp(TileIndex{t}, Owner{o}, b, d, rt); },
+		.make_road_bridge = [](uint32_t t, uint8_t o, uint8_t road, uint8_t tram, BridgeType b, DiagDirection d, RoadType rt, RoadType tt) noexcept -> void { MakeRoadBridgeRamp(TileIndex{t}, Owner{o}, Owner{road}, Owner{tram}, b, d, rt, tt); },
+		.make_aqueduct = [](uint32_t t, uint8_t o, DiagDirection d) noexcept -> void { MakeAqueductBridgeRamp(TileIndex{t}, Owner{o}, d); },
+		.make_rail_tunnel = [](uint32_t t, uint8_t o, DiagDirection d, RailType rt) noexcept -> void { MakeRailTunnel(TileIndex{t}, Owner{o}, d, rt); },
+		.make_road_tunnel = [](uint32_t t, uint8_t o, DiagDirection d, RoadType rt, RoadType tt) noexcept -> void { MakeRoadTunnel(TileIndex{t}, Owner{o}, d, rt, tt); },
+		.mark_bridge = [](uint32_t start, uint32_t end, DiagDirection d, uint32_t z) noexcept -> void { MarkBridgeDirty(TileIndex{start}, TileIndex{end}, d, z); },
+		.mark_dirty_height = RustMarkTileDirtyHeight,
+		.terraform = [](OpenTTDCommandCost *out, uint16_t flags, uint32_t t, Slope slope) noexcept -> void { *reinterpret_cast<CommandCost *>(out) = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(DoCommandFlags{flags}, TileIndex{t}, slope, false)); },
+		.objects = &GetRustObjectServices(),
+		.strings = {
+			.bridge_border = STR_ERROR_BRIDGE_THROUGH_MAP_BORDER,
+			.map_edge = STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP,
+			.same_end = STR_ERROR_CAN_T_START_AND_END_ON,
+			.straight = STR_ERROR_START_AND_END_MUST_BE_IN,
+			.too_long = STR_ERROR_BRIDGE_TOO_LONG,
+			.wrong_slope = STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION,
+			.unequal_height = STR_ERROR_BRIDGEHEADS_NOT_SAME_HEIGHT,
+			.demolish_bridge = STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST,
+			.already_built = STR_ERROR_ALREADY_BUILT,
+			.authority = STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
+			.other_owner = STR_ERROR_AREA_IS_OWNED_BY_ANOTHER,
+			.too_low = STR_ERROR_BRIDGE_TOO_LOW_FOR_TERRAIN,
+			.too_high = STR_ERROR_BRIDGE_TOO_HIGH_FOR_TERRAIN,
+			.tunnel_site = STR_ERROR_SITE_UNSUITABLE_FOR_TUNNEL,
+			.water = STR_ERROR_CAN_T_BUILD_ON_WATER,
+			.tunnel_border = STR_ERROR_TUNNEL_THROUGH_MAP_BORDER,
+			.tunnel_way = STR_ERROR_ANOTHER_TUNNEL_IN_THE_WAY,
+			.tunnel_long = STR_ERROR_TUNNEL_TOO_LONG,
+			.excavate = STR_ERROR_UNABLE_TO_EXCAVATE_LAND,
+			.demolish_tunnel = STR_ERROR_MUST_DEMOLISH_TUNNEL_FIRST,
+		},
+	};
+	return services;
+}
+#endif
 
 /** Z position of the bridge sprites relative to bridge height (downwards) */
 static const int BRIDGE_Z_START = 3;
@@ -99,6 +178,9 @@ void ResetBridges()
  */
 int CalcBridgeLenCostFactor(int length)
 {
+#ifdef WITH_RUST
+	return openttd_rust_bridge_length_cost(length);
+#else
 	if (length < 2) return length;
 
 	length -= 2;
@@ -110,6 +192,7 @@ int CalcBridgeLenCostFactor(int length)
 			length--;
 		}
 	}
+#endif
 }
 
 /**
@@ -120,11 +203,15 @@ int CalcBridgeLenCostFactor(int length)
  */
 Foundation GetBridgeFoundation(Slope tileh, Axis axis)
 {
+#ifdef WITH_RUST
+	return openttd_rust_bridge_foundation(tileh, axis);
+#else
 	if (tileh == SLOPE_FLAT ||
 			((tileh == SLOPE_NE || tileh == SLOPE_SW) && axis == AXIS_X) ||
 			((tileh == SLOPE_NW || tileh == SLOPE_SE) && axis == AXIS_Y)) return FOUNDATION_NONE;
 
 	return (HasSlopeHighestCorner(tileh) ? InclinedFoundation(axis) : FlatteningFoundation(tileh));
+#endif
 }
 
 /**
@@ -136,9 +223,13 @@ Foundation GetBridgeFoundation(Slope tileh, Axis axis)
  */
 bool HasBridgeFlatRamp(Slope tileh, Axis axis)
 {
+#ifdef WITH_RUST
+	return openttd_rust_bridge_flat_ramp(&GetRustRailCommandServices(), tileh, axis);
+#else
 	ApplyFoundationToSlope(GetBridgeFoundation(tileh, axis), tileh);
 	/* If the foundation slope is flat the bridge has a non-flat ramp and vice versa. */
 	return (tileh != SLOPE_FLAT);
+#endif
 }
 
 /**
@@ -216,6 +307,7 @@ static uint8_t GetBridgeMiddleAxisBaseOffset(Axis axis)
  * @param z TileZ corresponding to tileh, gets modified as well
  * @return Error or cost for bridge foundation
  */
+#ifndef WITH_RUST
 static CommandCost CheckBridgeSlope(BridgePieces bridge_piece, Axis axis, Slope &tileh, int &z)
 {
 	assert(bridge_piece == BRIDGE_PIECE_NORTH || bridge_piece == BRIDGE_PIECE_SOUTH);
@@ -235,6 +327,7 @@ static CommandCost CheckBridgeSlope(BridgePieces bridge_piece, Axis axis, Slope 
 
 	return CommandCost(EXPENSES_CONSTRUCTION, _price[PR_BUILD_FOUNDATION]);
 }
+#endif /* !WITH_RUST */
 
 /**
  * Is a bridge of the specified type and length available?
@@ -245,6 +338,11 @@ static CommandCost CheckBridgeSlope(BridgePieces bridge_piece, Axis axis, Slope 
  */
 CommandCost CheckBridgeAvailability(BridgeType bridge_type, uint bridge_len, DoCommandFlags flags)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_bridge_available(&GetRustTunnelBridgeServices(), RustCommandCost(&cost), bridge_type, bridge_len, flags.base());
+	return cost;
+#else
 	if (flags.Test(DoCommandFlag::QueryCost)) {
 		if (bridge_len <= _settings_game.construction.max_bridge_length) return CommandCost();
 		return CommandCost(STR_ERROR_BRIDGE_TOO_LONG);
@@ -260,6 +358,7 @@ CommandCost CheckBridgeAvailability(BridgeType bridge_type, uint bridge_len, DoC
 	if (b->min_length > bridge_len) return CMD_ERROR;
 	if (bridge_len <= max) return CommandCost();
 	return CommandCost(STR_ERROR_BRIDGE_TOO_LONG);
+#endif
 }
 
 /**
@@ -267,6 +366,7 @@ CommandCost CheckBridgeAvailability(BridgeType bridge_type, uint bridge_len, DoC
  * @param tile Start tile of the tunnel/bridge.
  * @return How much clearing this tunnel/bridge costs per tile.
  */
+#ifndef WITH_RUST
 static Money TunnelBridgeClearCost(TileIndex tile, Price base_price)
 {
 	Money base_cost = _price[base_price];
@@ -293,7 +393,9 @@ static Money TunnelBridgeClearCost(TileIndex tile, Price base_price)
 
 	return base_cost;
 }
+#endif /* !WITH_RUST */
 
+#ifndef WITH_RUST
 static CommandCost CheckBuildAbove(TileIndex tile, DoCommandFlags flags, Axis axis, int height)
 {
 	if (_tile_type_procs[GetTileType(tile)]->check_build_above_proc != nullptr) {
@@ -302,6 +404,7 @@ static CommandCost CheckBuildAbove(TileIndex tile, DoCommandFlags flags, Axis ax
 	/* A tile without a handler must be cleared. */
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
 }
+#endif /* !WITH_RUST */
 
 /**
  * Build a Bridge
@@ -315,6 +418,11 @@ static CommandCost CheckBuildAbove(TileIndex tile, DoCommandFlags flags, Axis ax
  */
 CommandCost CmdBuildBridge(DoCommandFlags flags, TileIndex tile_end, TileIndex tile_start, TransportType transport_type, BridgeType bridge_type, uint8_t road_rail_type)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret, north, south;
+	openttd_rust_build_bridge(&GetRustTunnelBridgeServices(), RustCommandCost(&cost), RustCommandCost(&ret), RustCommandCost(&north), RustCommandCost(&south), flags.base(), tile_end.base(), tile_start.base(), transport_type, bridge_type, road_rail_type);
+	return cost;
+#else
 	CompanyID company = _current_company;
 
 	RailType railtype = INVALID_RAILTYPE;
@@ -639,6 +747,7 @@ CommandCost CmdBuildBridge(DoCommandFlags flags, TileIndex tile_end, TileIndex t
 	}
 
 	return cost;
+#endif
 }
 
 
@@ -652,6 +761,11 @@ CommandCost CmdBuildBridge(DoCommandFlags flags, TileIndex tile_end, TileIndex t
  */
 CommandCost CmdBuildTunnel(DoCommandFlags flags, TileIndex start_tile, TransportType transport_type, uint8_t road_rail_type)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret;
+	openttd_rust_build_tunnel(&GetRustTunnelBridgeServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), start_tile.base(), transport_type, road_rail_type);
+	return cost;
+#else
 	CompanyID company = _current_company;
 
 	RailType railtype = INVALID_RAILTYPE;
@@ -758,12 +872,6 @@ CommandCost CmdBuildTunnel(DoCommandFlags flags, TileIndex start_tile, Transport
 	if (end_tileh != ComplementSlope(start_tileh)) {
 		/* Mark the tile as already cleared for the terraform command.
 		 * Do this for all tiles (like trees), not only objects. */
-#ifdef WITH_RUST
-		const auto hidden = HideObjectForTunnel(end_tile);
-		/* Nested terraform may append; only the index survives that call. */
-		ret = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(flags, end_tile, end_tileh & start_tileh, false));
-		RestoreObjectFirstTile(hidden);
-#else
 		ClearedObjectArea *coa = FindClearedObject(end_tile);
 		if (coa == nullptr) {
 			coa = &_cleared_object_areas.emplace_back(end_tile, TileArea(end_tile, 1, 1));
@@ -790,7 +898,6 @@ CommandCost CmdBuildTunnel(DoCommandFlags flags, TileIndex start_tile, Transport
 
 		ret = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(flags, end_tile, end_tileh & start_tileh, false));
 		_cleared_object_areas[(uint)coa_index].first_tile = old_first_tile;
-#endif
 		if (ret.Failed()) return CommandCost(STR_ERROR_UNABLE_TO_EXCAVATE_LAND);
 		cost.AddCost(ret.GetCost());
 	}
@@ -823,6 +930,7 @@ CommandCost CmdBuildTunnel(DoCommandFlags flags, TileIndex start_tile, Transport
 	}
 
 	return cost;
+#endif
 }
 
 
@@ -831,6 +939,7 @@ CommandCost CmdBuildTunnel(DoCommandFlags flags, TileIndex start_tile, Transport
  * @param tile End point of the tunnel or bridge.
  * @return A succeeded command if the tunnel or bridge may be removed, a failed command otherwise.
  */
+#ifndef WITH_RUST
 static inline CommandCost CheckAllowRemoveTunnelBridge(TileIndex tile)
 {
 	/* Floods can remove anything as well as the scenario editor */
@@ -872,6 +981,7 @@ static inline CommandCost CheckAllowRemoveTunnelBridge(TileIndex tile)
 		default: NOT_REACHED();
 	}
 }
+#endif /* !WITH_RUST */
 
 /**
  * Remove a tunnel from the game, update town rating, etc.
@@ -879,6 +989,7 @@ static inline CommandCost CheckAllowRemoveTunnelBridge(TileIndex tile)
  * @param flags Command flags.
  * @return Succeeded or failed command.
  */
+#ifndef WITH_RUST
 static CommandCost DoClearTunnel(TileIndex tile, DoCommandFlags flags)
 {
 	CommandCost ret = CheckAllowRemoveTunnelBridge(tile);
@@ -951,6 +1062,7 @@ static CommandCost DoClearTunnel(TileIndex tile, DoCommandFlags flags)
 
 	return CommandCost(EXPENSES_CONSTRUCTION, len * base_cost);
 }
+#endif /* !WITH_RUST */
 
 
 /**
@@ -959,6 +1071,7 @@ static CommandCost DoClearTunnel(TileIndex tile, DoCommandFlags flags)
  * @param flags Command flags.
  * @return Succeeded or failed command.
  */
+#ifndef WITH_RUST
 static CommandCost DoClearBridge(TileIndex tile, DoCommandFlags flags)
 {
 	CommandCost ret = CheckAllowRemoveTunnelBridge(tile);
@@ -1043,6 +1156,7 @@ static CommandCost DoClearBridge(TileIndex tile, DoCommandFlags flags)
 
 	return CommandCost(EXPENSES_CONSTRUCTION, len * base_cost);
 }
+#endif /* !WITH_RUST */
 
 /**
  * Remove a tunnel or a bridge from the game.
@@ -1052,6 +1166,11 @@ static CommandCost DoClearBridge(TileIndex tile, DoCommandFlags flags)
  */
 static CommandCost ClearTile_TunnelBridge(TileIndex tile, DoCommandFlags flags)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret;
+	openttd_rust_tunnelbridge_clear(&GetRustTunnelBridgeServices(), RustCommandCost(&cost), RustCommandCost(&ret), tile.base(), flags.base());
+	return cost;
+#else
 	if (IsTunnel(tile)) {
 		if (flags.Test(DoCommandFlag::Auto)) return CommandCost(STR_ERROR_MUST_DEMOLISH_TUNNEL_FIRST);
 		return DoClearTunnel(tile, flags);
@@ -1059,6 +1178,7 @@ static CommandCost ClearTile_TunnelBridge(TileIndex tile, DoCommandFlags flags)
 		if (flags.Test(DoCommandFlag::Auto)) return CommandCost(STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST);
 		return DoClearBridge(tile, flags);
 	}
+#endif
 }
 
 /**
@@ -1892,6 +2012,7 @@ static TrackStatus GetTileTrackStatus_TunnelBridge(TileIndex tile, TransportType
 	return CombineTrackStatus(TrackBitsToTrackdirBits(DiagDirToDiagTrackBits(dir)), TRACKDIR_BIT_NONE);
 }
 
+#ifndef WITH_RUST
 static void ChangeTileOwner_TunnelBridge(TileIndex tile, Owner old_owner, Owner new_owner)
 {
 	TileIndex other_end = GetOtherTunnelBridgeEnd(tile);
@@ -1945,6 +2066,7 @@ static void ChangeTileOwner_TunnelBridge(TileIndex tile, Owner old_owner, Owner 
 		}
 	}
 }
+#endif /* !WITH_RUST */
 
 /**
  * Helper to prepare the ground vehicle when entering a bridge. This get called
@@ -2128,6 +2250,11 @@ static VehicleEnterTileStates VehicleEnter_TunnelBridge(Vehicle *v, TileIndex ti
 
 static CommandCost TerraformTile_TunnelBridge(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret;
+	openttd_rust_tunnelbridge_terraform(&GetRustTunnelBridgeServices(), RustCommandCost(&cost), RustCommandCost(&ret), tile.base(), flags.base(), z_new, tileh_new);
+	return cost;
+#else
 	if (_settings_game.construction.build_on_slopes && AutoslopeEnabled() && IsBridge(tile) && GetTunnelBridgeTransportType(tile) != TRANSPORT_WATER) {
 		DiagDirection direction = GetTunnelBridgeDirection(tile);
 		Axis axis = DiagDirToAxis(direction);
@@ -2148,10 +2275,16 @@ static CommandCost TerraformTile_TunnelBridge(TileIndex tile, DoCommandFlags fla
 	}
 
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
+#endif
 }
 
 static CommandCost CheckBuildAbove_TunnelBridge(TileIndex tile, DoCommandFlags flags, Axis axis, int height)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_tunnelbridge_build_above(&GetRustTunnelBridgeServices(), RustCommandCost(&cost), tile.base(), flags.base(), axis, height);
+	return cost;
+#else
 	if (IsTunnel(tile)) return CommandCost();
 
 	if (axis != DiagDirToAxis(GetTunnelBridgeDirection(tile)) && height > GetBridgeHeight(tile)) {
@@ -2159,6 +2292,7 @@ static CommandCost CheckBuildAbove_TunnelBridge(TileIndex tile, DoCommandFlags f
 	}
 
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
+#endif
 }
 
 extern const TileTypeProcs _tile_type_tunnelbridge_procs = {
@@ -2175,10 +2309,27 @@ extern const TileTypeProcs _tile_type_tunnelbridge_procs = {
 #else
 	TileLoop_TunnelBridge,           // tile_loop_proc
 #endif
+#ifdef WITH_RUST
+	nullptr,                         // Rust dispatcher calls the owner directly.
+#else
 	ChangeTileOwner_TunnelBridge,    // change_tile_owner_proc
+#endif
 	nullptr,                            // add_produced_cargo_proc
 	VehicleEnter_TunnelBridge,       // vehicle_enter_tile_proc
 	GetFoundation_TunnelBridge,      // get_foundation_proc
 	TerraformTile_TunnelBridge,      // terraform_tile_proc
 	CheckBuildAbove_TunnelBridge, // check_build_above_proc
 };
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDTunnelBridgeServices.hpp"
+bool CheckAbi_tunnelbridge_cmd()
+{
+	return AbiServicesComplete(GetRustTunnelBridgeServices());
+}
+static_assert(PR_BUILD_BRIDGE == 4 && PR_BUILD_TUNNEL == 8 && PR_CLEAR_BRIDGE == 29 && PR_CLEAR_TUNNEL == 33 && PR_BUILD_AQUEDUCT == 62 && PR_CLEAR_AQUEDUCT == 63);
+static_assert(std::is_same_v<BridgeType, uint32_t>);
+static_assert(MAX_BRIDGES == 13 && TUNNELBRIDGE_TRACKBIT_FACTOR == 4);
+static_assert(RATING_TUNNEL_BRIDGE_UP_STEP == 50 && RATING_TUNNEL_BRIDGE_DOWN_STEP == -250 && RATING_TUNNEL_BRIDGE_MINIMUM == 0 && RATING_MAXIMUM == 1000);
+#endif

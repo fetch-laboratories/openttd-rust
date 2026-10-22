@@ -186,7 +186,7 @@ impl<'a> Commands<'a> {
                     if !(self.s.bribe)() {
                         continue;
                     }
-                    if unsafe { (*t.state).simulation.ratings[usize::from(cid)] }
+                    if i32::from(unsafe { (*t.state).simulation.ratings[usize::from(cid)] })
                         >= RATING_BRIBE_MAXIMUM
                     {
                         if unsafe { (*t.state).simulation.exclusivity }
@@ -327,10 +327,12 @@ impl<'a> Commands<'a> {
             if (self.s.local_company)() {
                 (self.s.bribe_error)();
             }
-            if unsafe { (*t.state).simulation.ratings[usize::from(company)] } > RATING_BRIBE_DOWN_TO
+            if i32::from(unsafe { (*t.state).simulation.ratings[usize::from(company)] })
+                > RATING_BRIBE_DOWN_TO
             {
                 unsafe {
-                    (*t.state).simulation.ratings[usize::from(company)] = RATING_BRIBE_DOWN_TO;
+                    (*t.state).simulation.ratings[usize::from(company)] =
+                        RATING_BRIBE_DOWN_TO as i16;
                 }
                 (unsafe { &*self.f.growth }.dirty_authority)(u32::from(t.id.0));
             }
@@ -346,7 +348,7 @@ impl<'a> Commands<'a> {
                     t.shell as usize,
                     company,
                     RATING_BRIBE_UP_STEP,
-                    i32::from(RATING_BRIBE_MAXIMUM),
+                    RATING_BRIBE_MAXIMUM,
                     false,
                     ((*(*self.f.growth).houses)
                         .authority
@@ -594,7 +596,7 @@ pub unsafe extern "C" fn openttd_rust_town_rating_command(
         c.error(out);
         return;
     }
-    let rating = rating.clamp(RATING_MINIMUM, RATING_MAXIMUM);
+    let rating = i32::from(rating).clamp(RATING_MINIMUM, RATING_MAXIMUM) as i16;
     if flags & DoCommandFlag::EXECUTE != 0 {
         unsafe {
             (*t.state).simulation.ratings[usize::from(company)] = rating;
@@ -799,7 +801,7 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
         crate::cargo_storage::openttd_rust_cargo_invalidate(
             s.cargo,
             t.id.0,
-            crate::source_type::TOWN,
+            crate::source_type::Source::TOWN,
         );
     }
     (s.dirty_screen)();

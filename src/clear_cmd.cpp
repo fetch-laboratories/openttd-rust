@@ -25,6 +25,7 @@
 #include "rust/ground_ffi.h"
 #include "rust/services_landscape.h"
 #include "rust/environment_services.h"
+#include "rust/command_services.h"
 #endif
 
 #include "safeguards.h"
@@ -419,8 +420,14 @@ static CommandCost TerraformTile_Clear(TileIndex tile, DoCommandFlags flags, int
 
 static CommandCost CheckBuildAbove_Clear(TileIndex, DoCommandFlags, Axis, int)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_clear_build_above(&GetRustCommandCostServices(), RustCommandCost(&cost));
+	return cost;
+#else
 	/* Can always build above clear tiles. */
 	return CommandCost();
+#endif
 }
 
 extern const TileTypeProcs _tile_type_clear_procs = {

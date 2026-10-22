@@ -58,6 +58,7 @@
 #ifdef WITH_RUST
 #include "rust/services_industry.h"
 #include "rust/industry_generation_adapter.hpp"
+#include "rust/subsidy_ffi.h"
 #include "rust/landscape_loop_ffi.h"
 #include "rust/ground_services.h"
 #include "rust/company_services.h"
@@ -76,7 +77,7 @@ static const OpenTTDIndustryCostServices &GetIndustryCostServices();
 static const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices();
 static OpenTTDIndustryTransactionContext GetIndustryTransactionContext();
 static Industry *IndustryIfValid(uint16_t id) noexcept { return Industry::GetIfValid(IndustryID(id)); }
-static OpenTTDIndustry *IndustryOwner(Industry *shell) noexcept { return shell->production_owner.get(); }
+
 static bool IndustryCommandDeity() noexcept { return OpenTTDCurrentCompany() == OWNER_DEITY; }
 #endif
 
@@ -3615,7 +3616,7 @@ static const OpenTTDIndustryServices _industry_services = {
 		auto range = Industry::Iterate(from);
 		if (range.empty()) return {};
 		Industry *i = *range.begin();
-		return {i, i->production_owner.get(), i->index.base(), GetIndustrySpec(i->type)->callback_mask.base()};
+		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i), GetIndustrySpec(i->type)->callback_mask.base()};
 	},
 	.sound_count = [](void *i) noexcept -> uint16_t { return static_cast<uint16_t>(RustIndustrySpec(i)->random_sounds.size()); },
 	.behaviour = [](void *i) noexcept -> uint32_t { return RustIndustrySpec(i)->behaviour.base(); },
@@ -3678,7 +3679,7 @@ static const OpenTTDIndustryServices _industry_services = {
 	.observe = [](void *handle, OpenTTDIndustryObservation *out) noexcept {
 		Industry *i = RustIndustry(handle);
 		const IndustrySpec *spec = GetIndustrySpec(i->type);
-		*out = {i->production_owner.get(), spec->behaviour.base(), spec->callback_mask.base(), spec->life_type.base(), uint8_t(spec->UsesOriginalEconomy()), i->type,
+		*out = {RustIndustryCanonicalOwner(i), spec->behaviour.base(), spec->callback_mask.base(), spec->life_type.base(), uint8_t(spec->UsesOriginalEconomy()), i->type,
 			spec->production_up_text, spec->production_down_text, spec->closure_text};
 	},
 	.production_rate = [](void *i, uint32_t slot) noexcept -> uint8_t { return RustIndustrySpec(i)->production_rate[slot]; },
@@ -3754,7 +3755,7 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.close_view = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_VIEW, industry); },
 	.close_production = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_PRODUCTION, industry); },
 	.delete_inspect = OpenTTDDeleteIndustryInspect,
-	.delete_subsidies = [](uint16_t industry) noexcept { DeleteSubsidyWith({IndustryID(industry), SourceType::Industry}); },
+	.subsidies = RustSubsidyServices,
 	.invalidate_cargo = [](uint16_t industry) noexcept { CargoPacket::InvalidateAllFrom({IndustryID(industry), SourceType::Industry}); },
 	.next_near_station = [](void *shell, void *previous) noexcept -> void * {
 		const StationList &stations = static_cast<Industry *>(shell)->stations_near;
@@ -3876,7 +3877,7 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 		.completed = [](uint32_t tile) noexcept -> bool { return IsIndustryCompleted(TileIndex(tile)); },
 		.set_completed = [](uint32_t tile) noexcept { SetIndustryCompleted(TileIndex(tile)); },
 		.reset_construction = [](uint32_t tile) noexcept { ResetIndustryConstructionStage(TileIndex(tile)); },
-		.industry = [](uint32_t tile) noexcept -> OpenTTDIndustryTileOwner { Industry *i = Industry::GetByTile(TileIndex(tile)); return {i, i->production_owner.get()}; },
+		.industry = [](uint32_t tile) noexcept -> OpenTTDIndustryTileOwner { Industry *i = Industry::GetByTile(TileIndex(tile)); return {i, RustIndustryCanonicalOwner(i)}; },
 		.industry_index = [](uint32_t tile) noexcept -> uint16_t { return GetIndustryIndex(TileIndex(tile)).base(); },
 		.toffee_offset = [](uint8_t frame) noexcept -> uint8_t { return _industry_anim_offs_toffee[frame]; },
 		.on_water = RustOnWater,
@@ -3911,7 +3912,7 @@ static const OpenTTDIndustryCommandServices &GetIndustryCommandServices()
 	static const OpenTTDIndustryCommandServices services = {
 		.deity = IndustryCommandDeity,
 		.get = IndustryIfValid,
-		.owner = IndustryOwner,
+		.owner = RustIndustryCanonicalOwner<Industry *>,
 		.valid_company = [](uint8_t company) noexcept -> bool { return Company::IsValidID(CompanyID(company)); },
 		.invalidate_view = [](uint16_t id) noexcept { InvalidateWindowData(WC_INDUSTRY_VIEW, IndustryID(id)); },
 	};
@@ -3984,7 +3985,7 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.platform = []() noexcept -> uint8_t { return _settings_game.construction.industry_platform; },
 		.terraform = [](OpenTTDIndustryCost *out, uint32_t tile, uint16_t flags, bool raise) noexcept { *out = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(DoCommandFlags{flags}, TileIndex(tile), SLOPE_N, raise)); },
 		.can_allocate = []() noexcept -> bool { return Industry::CanAllocateItem(); },
-		.allocate = [](uint32_t tile) noexcept -> OpenTTDIndustryAllocation { Industry *i = new Industry(TileIndex(tile)); return {i, i->production_owner.get(), i->index.base()}; },
+		.allocate = [](uint32_t tile) noexcept -> OpenTTDIndustryAllocation { Industry *i = new Industry(TileIndex(tile)); return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i)}; },
 		.prospecting_chance = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint32_t { return reinterpret_cast<const IndustrySpec *>(spec)->prospecting_chance; },
 		.local_company = []() noexcept -> bool { return IsLocalCompany(); },
 		.prospect_no_place = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_CAN_T_PROSPECT_INDUSTRY), GetEncodedString(STR_ERROR_NO_SUITABLE_PLACES_FOR_PROSPECTING), WL_INFO); },

@@ -151,7 +151,7 @@ void CcBuildRoadTunnel(Commands, const CommandCost &result, TileIndex start_tile
 		DiagDirection end_direction = ReverseDiagDir(GetTunnelBridgeDirection(end_tile));
 		ConnectRoadToStructure(end_tile, end_direction);
 	} else {
-		SetRedErrorSquare(_build_tunnel_endtile);
+		SetRedErrorSquare(GetBuildTunnelEndTile());
 	}
 }
 
@@ -819,7 +819,7 @@ struct BuildRoadToolbarWindow : Window {
 	void OnPlacePresize([[maybe_unused]] Point pt, TileIndex tile) override
 	{
 		Command<CMD_BUILD_TUNNEL>::Do(DoCommandFlag::Auto, tile, TRANSPORT_ROAD, _cur_roadtype);
-		VpSetPresizeRange(tile, _build_tunnel_endtile == 0 ? tile : _build_tunnel_endtile);
+		VpSetPresizeRange(tile, GetBuildTunnelEndTile() == 0 ? tile : GetBuildTunnelEndTile());
 	}
 
 	EventState OnCTRLStateChange() override

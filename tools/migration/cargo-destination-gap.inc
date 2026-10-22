@@ -18,6 +18,9 @@ constexpr size_t THIS_MONTH = 0;
 constexpr int WC_INDUSTRY_VIEW = 0;
 enum class SourceType : uint8_t { Industry };
 struct Source { IndustryID id; SourceType type; };
+enum class PartOfSubsidy : uint8_t { Source, Destination };
+#define OPENTTD_SUBSIDY_FIXTURE_TYPES
+#include "rust/subsidy_ffi.h"
 struct TimerGameEconomy { static constexpr int date = 123; };
 enum class IndustryCallbackMask { ProductionCargoArrival, Production256Ticks };
 struct IndustryCallbackMasks {
@@ -114,7 +117,7 @@ static int CheckCargoDestinationGap(OpenTTDCargoServices s)
 	s.monitor = [](uint16_t, uint8_t cargo, uint8_t, uint32_t amount, uint32_t, uint16_t industry) noexcept {
 		if (industry != 65535) destination_events.emplace_back(industry, 5, amount, cargo);
 	};
-	s.subsidised = [](uint16_t, uint8_t, uint8_t, uint32_t) noexcept -> uint8_t { return 0; };
+	s.subsidies = []() noexcept -> const OpenTTDSubsidyServices * { static const OpenTTDSubsidyServices empty{.has_source_flag = [](Source, PartOfSubsidy) noexcept { return false; }}; return &empty; };
 	s.industry_effect = [](void *p, uint8_t op) noexcept {
 		auto *i = static_cast<Industry *>(p);
 		if (op == 0) i->was_cargo_delivered = true; else destination_events.emplace_back(i->index, op, 0, 0);

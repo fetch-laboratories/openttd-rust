@@ -1,0 +1,21 @@
+/*
+ * This file is part of OpenTTD.
+ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
+ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
+ */
+
+//! `order_type.h` values. `services.cpp` asserts every value.
+
+/// `OT_GOTO_STATION`.
+pub const OT_GOTO_STATION: u8 = 1;
+/// `OT_GOTO_DEPOT`.
+pub const OT_GOTO_DEPOT: u8 = 2;
+/// `OT_LOADING`.
+pub const OT_LOADING: u8 = 3;
+/// `OT_LEAVESTATION`.
+pub const OT_LEAVESTATION: u8 = 4;
+/// `OT_GOTO_WAYPOINT`.
+pub const OT_GOTO_WAYPOINT: u8 = 6;
+/// `OT_IMPLICIT`.
+pub const OT_IMPLICIT: u8 = 8;

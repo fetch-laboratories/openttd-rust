@@ -22,6 +22,19 @@ pub const PR_CLEAR_WATER: usize = 34;
 /// `PR_BUILD_FOUNDATION`.
 pub const PR_BUILD_FOUNDATION: usize = 57;
 
+/// `PR_BUILD_BRIDGE`.
+pub const PR_BUILD_BRIDGE: usize = 4;
+/// `PR_BUILD_TUNNEL`.
+pub const PR_BUILD_TUNNEL: usize = 8;
+/// `PR_CLEAR_BRIDGE`.
+pub const PR_CLEAR_BRIDGE: usize = 29;
+/// `PR_CLEAR_TUNNEL`.
+pub const PR_CLEAR_TUNNEL: usize = 33;
+/// `PR_BUILD_AQUEDUCT`.
+pub const PR_BUILD_AQUEDUCT: usize = 62;
+/// `PR_CLEAR_AQUEDUCT`.
+pub const PR_CLEAR_AQUEDUCT: usize = 63;
+
 /// `PR_TOWN_ACTION`.
 pub const PR_TOWN_ACTION: usize = 56;
 

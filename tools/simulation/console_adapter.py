@@ -14,7 +14,7 @@ def console_adapter(build, folder, env, source, kind, wraps=(), replace_objects=
     compile_args = shlex.split(entry["command"])
     compile_args[compile_args.index("-o") + 1] = str(folder / f"{kind}.o")
     compile_args[compile_args.index("-c") + 1] = str(source)
-    compile_args += ["-I" + str(Path(entry["file"]).parent)]
+    compile_args += ["-I" + str(Path(entry["file"]).parent), "-I" + str(folder)]
     subprocess.run(compile_args, cwd=entry["directory"], env=env, check=True)
     target = "openttd-rust" if (build / "openttd-rust").exists() else "openttd"
     command = subprocess.check_output(

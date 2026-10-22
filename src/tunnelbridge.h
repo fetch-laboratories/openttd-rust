@@ -44,6 +44,9 @@ inline void SetTunnelBridgeOwner(TileIndex begin, TileIndex end, Owner owner)
 	SetTileOwner(end, owner);
 }
 
+#ifndef WITH_RUST
 extern TileIndex _build_tunnel_endtile;
+#endif
+TileIndex GetBuildTunnelEndTile();
 
 #endif /* TUNNELBRIDGE_H */

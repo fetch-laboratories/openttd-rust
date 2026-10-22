@@ -10,7 +10,6 @@ src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | c63db387bfa123f1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> bool | cb5a17d7b102cbc0 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | 02b8967881717dcf | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | 43fc64270dcd8062 | 1
-src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | cb1595c2e34ded93 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint16_t | e1d76fdb813b3717 | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 0adea4dfb4e628dd | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> uint32_t | 2476726e8336e3a3 | 1
@@ -109,14 +108,12 @@ src/rust/fleet_group_services.hpp | FleetGroup_vehicle_owner(void *shell) noexce
 src/rust/fleet_group_services.hpp | FleetGroup_vehicle_type(void *shell) noexcept | 725e4daef5bcf650 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_viewport(void *shell) noexcept | 5fe83f6e19b74226 | 1
 src/rust/fleet_pending_services.hpp | FleetPending_restart(void *shell) noexcept | 88efe79b36574162 | 1
-src/rust/fleet_transaction_services.hpp | FleetTransaction_cargo_type(void *shell) noexcept | 55e848b736abd9d3 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_copy_configuration(void *old, void *replacement) noexcept | 727c7c448c7843d3 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_crashed(void *shell) noexcept | 4e8240e91be2f979 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_max_length() noexcept | 27d4365792c77eba | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_needs_renew(void *shell, bool settings) noexcept | 0c9267b6cb5b5b22 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_orders(void *shell) noexcept | fad29c81879d9cca | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_reverse(void *shell) noexcept | fc5bd727a0ec52f9 | 1
-src/rust/fleet_transaction_services.hpp | FleetTransaction_reverse_probability(void *shell) noexcept | 7787d751d28b6c79 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_stopped(void *shell) noexcept | 3b5f024ebad01d63 | 1
 src/rust/fleet_transaction_services.hpp | FleetTransaction_stopped_in_depot(void *shell) noexcept | 7eb686328ee6a83e | 1
 src/rust/road_services.h | RoadSvcShortenFactor(const OpenTTDEngine *e) noexcept | 0e64e34569c25c86 | 1
@@ -155,12 +152,10 @@ src/station_cmd.cpp | []() noexcept -> int32_t | b7b2717268568730 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationService * | d36f25ba0331f630 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 204197618397b80a | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 525f6f2cbe8d180f | 1
-src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | b2d9366ff90c20df | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> uint8_t | 06dab3257089f706 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> void | 13c7c5aa49806d75 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> OpenTTDLinkGraph * | a0c4a048bc6596fd | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> uint16_t | 8c14257fe50590c2 | 1
-src/station_cmd.cpp | [](uint8_t cargo) noexcept -> bool | 5e6e087028374bc5 | 1
 src/town_cmd.cpp | RustTownAuthorityDistance() noexcept | e43037648def52db | 1
 src/town_cmd.cpp | RustTownCouncilTolerance() noexcept | cddd8d4718f9a2cd | 1
 src/town_cmd.cpp | RustTown_allow_crossings() noexcept | 1f8c8aa2e0af5a02 | 1

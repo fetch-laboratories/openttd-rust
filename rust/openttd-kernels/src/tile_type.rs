@@ -30,5 +30,5 @@ pub const INVALID_TILE: u32 = u32::MAX;
 
 /// `TileType::MP_INDUSTRY`.
 pub const MP_INDUSTRY: u8 = 8;
-/// `TileType::MP_OBJECT`.
+/// `MP_OBJECT`.
 pub const MP_OBJECT: u8 = 10;
