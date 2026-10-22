@@ -1130,9 +1130,7 @@ static const OpenTTDCargoServices _cargo_services = {
 	[](uint16_t station, uint8_t cargo, uint8_t company, uint32_t amount, uint32_t source, uint16_t industry) noexcept {
 		AddCargoDelivery(cargo, CompanyID(company), amount, Source(uint16_t(source), SourceType(source >> 16)), Station::Get(StationID(station)), IndustryID(industry));
 	},
-	[](uint16_t station, uint8_t cargo, uint8_t company, uint32_t source) noexcept -> uint8_t {
-		return CheckSubsidised(cargo, CompanyID(company), Source(uint16_t(source), SourceType(source >> 16)), Station::Get(StationID(station)));
-	},
+	RustSubsidyServices,
 	[](void *handle, uint8_t op) noexcept {
 		Industry *i = static_cast<Industry *>(handle);
 		switch (op) {

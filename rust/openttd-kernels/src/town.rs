@@ -2393,6 +2393,20 @@ pub unsafe extern "C" fn openttd_rust_town_change_rating(
     }
 }
 
+/// Read the original last-month transported percentage from the sole town owner.
+/// SAFETY: Serialized live owner; no callback or owner borrow survives this call.
+pub(crate) unsafe fn subsidy_percent_transported(state: *const State, cargo: u8) -> u8 {
+    if !crate::cargo_type::is_valid_cargo_type(cargo) {
+        return 0;
+    }
+    let rows = unsafe { &(*state).supplied };
+    let at = rows.partition_point(|row| row.cargo < cargo);
+    if at == rows.len() || rows[at].cargo != cargo {
+        return 0;
+    }
+    unsafe { openttd_rust_town_percent_transported(&raw const rows[at].history[1]) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

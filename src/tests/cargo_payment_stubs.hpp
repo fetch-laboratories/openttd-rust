@@ -23,7 +23,7 @@ inline OpenTTDCargoServices CargoTestServices()
 		[](void *, uint32_t, uint32_t) noexcept { std::abort(); },
 		[](uint16_t, uint8_t, uint8_t, uint32_t, uint8_t) noexcept { std::abort(); },
 		[](uint16_t, uint8_t, uint8_t, uint32_t, uint32_t, uint16_t) noexcept { std::abort(); },
-		[](uint16_t, uint8_t, uint8_t, uint32_t) noexcept -> uint8_t { std::abort(); },
+		[]() noexcept -> const OpenTTDSubsidyServices * { std::abort(); },
 		[](void *, uint8_t) noexcept { std::abort(); },
 		[](void *, uint8_t) noexcept -> uint32_t { std::abort(); },
 		[](void *, uint8_t, int64_t, int64_t) noexcept -> uint32_t { std::abort(); },

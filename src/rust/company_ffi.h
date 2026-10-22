@@ -8,6 +8,7 @@
 #ifndef RUST_COMPANY_FFI_H
 #define RUST_COMPANY_FFI_H
 #include "service_defaults.hpp"
+struct OpenTTDSubsidyServices;
 #include <cstddef>
 #include <cstdint>
 #include "services_ffi.h"
@@ -152,10 +153,7 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_COMPANY_CALL *acquisition_windows)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(acquisition_windows);
 	void (OPENTTD_COMPANY_CALL *clients_to_spectators)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clients_to_spectators);
 	void (OPENTTD_COMPANY_CALL *set_local_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_local_company);
-	uint32_t (OPENTTD_COMPANY_CALL *subsidy_next_awarded)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(subsidy_next_awarded);
-	void (OPENTTD_COMPANY_CALL *delete_subsidy)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_subsidy);
-	void (OPENTTD_COMPANY_CALL *set_subsidy_awarded)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_subsidy_awarded);
-	void (OPENTTD_COMPANY_CALL *rebuild_subsidy_cache)() noexcept OPENTTD_SERVICE_DEFAULT(rebuild_subsidy_cache);
+	const OpenTTDSubsidyServices *(OPENTTD_COMPANY_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
 	uint32_t (OPENTTD_COMPANY_CALL *town_next)(uint32_t, uint8_t, OpenTTDCompanyTownRights *) noexcept OPENTTD_SERVICE_DEFAULT(town_next);
 	int16_t (OPENTTD_COMPANY_CALL *town_rating)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(town_rating);
 	void (OPENTTD_COMPANY_CALL *set_town_rating)(uint32_t, uint8_t, int16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_town_rating);

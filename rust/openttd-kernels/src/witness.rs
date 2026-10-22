@@ -335,6 +335,11 @@ witness_blocks! {
         STATION_CMD_PARTIAL_RAIL = 18 => "station_command.partial_rail",
         STATION_CMD_BUILD_ABOVE = 19 => "station_command.build_above",
     }
+    subsidy {
+        SUBSIDY_CREATE = 0 => "subsidy.create",
+        SUBSIDY_AWARD = 1 => "subsidy.award",
+        SUBSIDY_EXPIRE = 2 => "subsidy.expire",
+    }
     town {
         TOWN_SERVICES = 0 => "town.services",
         TOWN_BYTES = 1 => "town.bytes",

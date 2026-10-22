@@ -31,6 +31,16 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/subsidy_ffi.h"
+#include "rust/industry_ffi.h"
+#include "rust/industry_shell_services.h"
+#include "rust/company_services.h"
+#include "rust/house_ffi.h"
+#include "rust/settings_services.h"
+#include "rust/services_cargo.h"
+#include "rust/services_station.h"
+#endif
 #include "safeguards.h"
 
 SubsidyPool _subsidy_pool("Subsidy"); ///< Pool for the subsidies.
@@ -68,6 +78,10 @@ StringID Source::GetFormat() const
  */
 void Subsidy::AwardTo(CompanyID company)
 {
+#ifdef WITH_RUST
+	assert(!this->IsAwarded());
+	openttd_rust_subsidy_award(&GetRustSubsidyServices(), this->index.base(), company);
+#else
 	assert(!this->IsAwarded());
 
 	this->awarded = company;
@@ -83,6 +97,7 @@ void Subsidy::AwardTo(CompanyID company)
 	Game::NewEvent(new ScriptEventSubsidyAwarded(this->index));
 
 	InvalidateWindowData(WC_SUBSIDIES_LIST, 0);
+#endif
 }
 
 /**
@@ -90,6 +105,7 @@ void Subsidy::AwardTo(CompanyID company)
  * @param source actual source
  * @param flag flag to set
  */
+#ifndef WITH_RUST
 static inline void SetPartOfSubsidyFlag(Source source, PartOfSubsidy flag)
 {
 	switch (source.type) {
@@ -99,9 +115,14 @@ static inline void SetPartOfSubsidyFlag(Source source, PartOfSubsidy flag)
 	}
 }
 
+#endif
+
 /** Perform a full rebuild of the subsidies cache. */
 void RebuildSubsidisedSourceAndDestinationCache()
 {
+#ifdef WITH_RUST
+	openttd_rust_subsidy_rebuild(&GetRustSubsidyServices());
+#else
 	for (Town *t : Town::Iterate()) t->cache.part_of_subsidy = {};
 
 	for (Industry *i : Industry::Iterate()) i->part_of_subsidy = {};
@@ -110,6 +131,7 @@ void RebuildSubsidisedSourceAndDestinationCache()
 		SetPartOfSubsidyFlag(s->src, PartOfSubsidy::Source);
 		SetPartOfSubsidyFlag(s->dst, PartOfSubsidy::Destination);
 	}
+#endif
 }
 
 /**
@@ -118,6 +140,9 @@ void RebuildSubsidisedSourceAndDestinationCache()
  */
 void DeleteSubsidyWith(Source source)
 {
+#ifdef WITH_RUST
+	openttd_rust_subsidy_delete_with(&GetRustSubsidyServices(), source);
+#else
 	bool dirty = false;
 
 	for (Subsidy *s : Subsidy::Iterate()) {
@@ -131,6 +156,7 @@ void DeleteSubsidyWith(Source source)
 		InvalidateWindowData(WC_SUBSIDIES_LIST, 0);
 		RebuildSubsidisedSourceAndDestinationCache();
 	}
+#endif
 }
 
 /**
@@ -140,6 +166,7 @@ void DeleteSubsidyWith(Source source)
  * @param dst The destination.
  * @return \c true if the subsidy already exists, \c false if not.
  */
+#ifndef WITH_RUST
 static bool CheckSubsidyDuplicate(CargoType cargo, Source src, Source dst)
 {
 	for (const Subsidy *s : Subsidy::Iterate()) {
@@ -164,6 +191,8 @@ static bool CheckSubsidyDistance(Source src, Source dst)
 	return (DistanceManhattan(tile_src, tile_dst) <= SUBSIDY_MAX_DISTANCE);
 }
 
+#endif
+
 /**
  * Creates a subsidy with the given parameters.
  * @param cargo_type Subsidised cargo.
@@ -172,6 +201,9 @@ static bool CheckSubsidyDistance(Source src, Source dst)
  */
 void CreateSubsidy(CargoType cargo_type, Source src, Source dst)
 {
+#ifdef WITH_RUST
+	openttd_rust_subsidy_create(&GetRustSubsidyServices(), cargo_type, src, dst);
+#else
 	Subsidy *s = new Subsidy(cargo_type, src, dst, SUBSIDY_OFFER_MONTHS);
 
 	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
@@ -183,6 +215,7 @@ void CreateSubsidy(CargoType cargo_type, Source src, Source dst)
 	Game::NewEvent(new ScriptEventSubsidyOffer(s->index));
 
 	InvalidateWindowData(WC_SUBSIDIES_LIST, 0);
+#endif
 }
 
 /**
@@ -195,6 +228,9 @@ void CreateSubsidy(CargoType cargo_type, Source src, Source dst)
  */
 CommandCost CmdCreateSubsidy(DoCommandFlags flags, CargoType cargo_type, Source src, Source dst)
 {
+#ifdef WITH_RUST
+	return openttd_rust_subsidy_command(&GetRustSubsidyServices(), flags.base(), cargo_type, src, dst) ? CommandCost() : CMD_ERROR;
+#else
 	if (!Subsidy::CanAllocateItem()) return CMD_ERROR;
 
 	if (_current_company != OWNER_DEITY) return CMD_ERROR;
@@ -227,6 +263,7 @@ CommandCost CmdCreateSubsidy(DoCommandFlags flags, CargoType cargo_type, Source 
 	}
 
 	return CommandCost();
+#endif
 }
 
 /**
@@ -235,6 +272,9 @@ CommandCost CmdCreateSubsidy(DoCommandFlags flags, CargoType cargo_type, Source 
  */
 bool FindSubsidyPassengerRoute()
 {
+#ifdef WITH_RUST
+	return openttd_rust_subsidy_passenger(&GetRustSubsidyServices());
+#else
 	if (!Subsidy::CanAllocateItem()) return false;
 
 	/* Pick a random TPE_PASSENGER type */
@@ -258,6 +298,7 @@ bool FindSubsidyPassengerRoute()
 	CreateSubsidy(cargo_type, {src->index, SourceType::Town}, {dst->index, SourceType::Town});
 
 	return true;
+#endif
 }
 
 bool FindSubsidyCargoDestination(CargoType cargo_type, Source src);
@@ -269,6 +310,10 @@ bool FindSubsidyCargoDestination(CargoType cargo_type, Source src);
  */
 bool FindSubsidyTownCargoRoute()
 {
+#ifdef WITH_RUST
+	CargoArray scratch{};
+	return openttd_rust_subsidy_town(&GetRustSubsidyServices(), {&scratch, scratch.data()});
+#else
 	if (!Subsidy::CanAllocateItem()) return false;
 
 	/* Select a random town. */
@@ -314,6 +359,7 @@ bool FindSubsidyTownCargoRoute()
 	if (src_town->GetPercentTransported(cargo_type) > SUBSIDY_MAX_PCT_TRANSPORTED) return false;
 
 	return FindSubsidyCargoDestination(cargo_type, {src_town->index, SourceType::Town});
+#endif
 }
 
 /**
@@ -322,6 +368,10 @@ bool FindSubsidyTownCargoRoute()
  */
 bool FindSubsidyIndustryCargoRoute()
 {
+#ifdef WITH_RUST
+	CargoArray scratch{};
+	return openttd_rust_subsidy_industry(&GetRustSubsidyServices(), {&scratch, scratch.data()});
+#else
 	if (!Subsidy::CanAllocateItem()) return false;
 
 	/* Select a random industry. */
@@ -358,6 +408,7 @@ bool FindSubsidyIndustryCargoRoute()
 	}
 
 	return FindSubsidyCargoDestination(cargo_type, {src_ind->index, SourceType::Industry});
+#endif
 }
 
 /**
@@ -368,6 +419,10 @@ bool FindSubsidyIndustryCargoRoute()
  */
 bool FindSubsidyCargoDestination(CargoType cargo_type, Source src)
 {
+#ifdef WITH_RUST
+	CargoArray scratch{};
+	return openttd_rust_subsidy_destination(&GetRustSubsidyServices(), {&scratch, scratch.data()}, cargo_type, src);
+#else
 	/* Choose a random destination. */
 	Source dst{Source::Invalid, Chance16(1, 2) ? SourceType::Town : SourceType::Industry};
 
@@ -419,11 +474,16 @@ bool FindSubsidyCargoDestination(CargoType cargo_type, Source src)
 	CreateSubsidy(cargo_type, src, dst);
 
 	return true;
+#endif
 }
 
 /** Perform the economy monthly update of open subsidies, and try to create a new one. */
-static const IntervalTimer<TimerGameEconomy> _economy_subsidies_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::SUBSIDY}, [](auto)
+void SubsidyMonthlyLoop()
 {
+#ifdef WITH_RUST
+	CargoArray scratch{};
+	openttd_rust_subsidy_monthly(&GetRustSubsidyServices(), {&scratch, scratch.data()});
+#else
 	bool modified = false;
 
 	for (Subsidy *s : Subsidy::Iterate()) {
@@ -494,7 +554,9 @@ static const IntervalTimer<TimerGameEconomy> _economy_subsidies_monthly({TimerGa
 	modified |= passenger_subsidy || town_subsidy || industry_subsidy;
 
 	if (modified) InvalidateWindowData(WC_SUBSIDIES_LIST, 0);
-});
+#endif
+}
+static const IntervalTimer<TimerGameEconomy> _economy_subsidies_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::SUBSIDY}, [](auto) { SubsidyMonthlyLoop(); });
 
 /**
  * Tests whether given delivery is subsidised and possibly awards the subsidy to delivering company
@@ -506,6 +568,9 @@ static const IntervalTimer<TimerGameEconomy> _economy_subsidies_monthly({TimerGa
  */
 bool CheckSubsidised(CargoType cargo_type, CompanyID company, Source src, const Station *st)
 {
+#ifdef WITH_RUST
+	return openttd_rust_subsidy_check(&GetRustSubsidyServices(), cargo_type, company, src, st->index.base());
+#else
 	/* If the source isn't subsidised, don't continue */
 	if (!src.IsValid()) return false;
 	switch (src.type) {
@@ -570,4 +635,77 @@ bool CheckSubsidised(CargoType cargo_type, CompanyID company, Source src, const 
 	}
 
 	return subsidised;
+#endif
 }
+
+#ifdef WITH_RUST
+static void SubsidyOfferedNews(uint16_t id) noexcept
+{
+	const Subsidy *s = Subsidy::Get(id);
+	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
+	EncodedString headline = GetEncodedString(STR_NEWS_SERVICE_SUBSIDY_OFFERED, cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id, _settings_game.difficulty.subsidy_duration);
+	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->src.GetNewsReference(), s->dst.GetNewsReference());
+}
+static void SubsidyAwardedNews(uint16_t id) noexcept
+{
+	const Subsidy *s = Subsidy::Get(id);
+	std::string company_name = GetString(STR_COMPANY_NAME, s->awarded);
+
+	/* Add a news item */
+	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
+	EncodedString headline = GetEncodedString(STR_NEWS_SERVICE_SUBSIDY_AWARDED_HALF + _settings_game.difficulty.subsidy_multiplier, std::move(company_name), cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id, _settings_game.difficulty.subsidy_duration);
+	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->src.GetNewsReference(), s->dst.GetNewsReference());
+}
+static void SubsidyOfferExpiredNews(uint16_t id) noexcept
+{
+	const Subsidy *s = Subsidy::Get(id);
+	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
+	EncodedString headline = GetEncodedString(STR_NEWS_OFFER_OF_SUBSIDY_EXPIRED, cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id);
+	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->src.GetNewsReference(), s->dst.GetNewsReference());
+}
+static void SubsidyWithdrawnNews(uint16_t id) noexcept
+{
+	const Subsidy *s = Subsidy::Get(id);
+	const CargoSpec *cs = CargoSpec::Get(s->cargo_type);
+	EncodedString headline = GetEncodedString(STR_NEWS_SUBSIDY_WITHDRAWN_SERVICE, cs->name, s->src.GetFormat(), s->src.id, s->dst.GetFormat(), s->dst.id);
+	AddNewsItem(std::move(headline), NewsType::Subsidies, NewsStyle::Normal, {}, s->src.GetNewsReference(), s->dst.GetNewsReference());
+}
+const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
+{
+	static const OpenTTDSubsidyServices services = {
+		.shared = &GetRustSharedServices(), .town = &GetRustTownServices(), .industry = &GetIndustryRustServices(),
+		.random_town = []() noexcept -> OpenTTDTownRef { Town *t = Town::GetRandom(); return {t, t->growth_owner.get(), t->index.base()}; },
+		.industry_owner = RustIndustryCanonicalOwner<void *>, .industry_id = RustIndustryID, .next_industry = RustIndustryNextID,
+		.source_flags = [](Source source) noexcept -> PartsOfSubsidy { return source.type == SourceType::Town ? Town::Get(source.ToTownID())->cache.part_of_subsidy : Industry::Get(source.ToIndustryID())->part_of_subsidy; },
+		.set_source_flags = [](Source source, PartsOfSubsidy flags) noexcept { if (source.type == SourceType::Town) Town::Get(source.ToTownID())->cache.part_of_subsidy = flags; else Industry::Get(source.ToIndustryID())->part_of_subsidy = flags; },
+		.valid_source = [](Source source) noexcept { return source.type == SourceType::Town ? Town::IsValidID(source.ToTownID()) : source.type == SourceType::Industry && Industry::IsValidID(source.ToIndustryID()); },
+		.can_allocate = []() noexcept { return Subsidy::CanAllocateItem(); },
+		.allocate = [](CargoType cargo, Source src, Source dst, uint16_t remaining) noexcept { return (new Subsidy(cargo, src, dst, remaining))->index.base(); },
+		.destroy = [](uint16_t id) noexcept { delete Subsidy::Get(id); },
+		.duration = OpenTTDSubsidyDuration,
+		.local_company = RustLocalCompany,
+		.cargo_valid = OpenTTDCargoSpecValid,
+		.manual = OpenTTDManualCargoDistribution,
+		.manual_pax = OpenTTDManualPassengerDistribution,
+		.any_manual = []() noexcept { return _settings_game.linkgraph.distribution_pax == DT_MANUAL || _settings_game.linkgraph.distribution_mail == DT_MANUAL || _settings_game.linkgraph.distribution_armoured == DT_MANUAL || _settings_game.linkgraph.distribution_default == DT_MANUAL; },
+		.passenger_count = []() noexcept { return static_cast<uint32_t>(CargoSpec::town_production_cargoes[TPE_PASSENGERS].size()); },
+		.passenger_at = [](uint32_t index) noexcept { return CargoSpec::town_production_cargoes[TPE_PASSENGERS][index]->Index(); },
+		.offered_news = SubsidyOfferedNews, .awarded_news = SubsidyAwardedNews,
+		.offer_expired_news = SubsidyOfferExpiredNews, .withdrawn_news = SubsidyWithdrawnNews,
+		.offer_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyOffer(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyOffer(SubsidyID(id))); },
+		.award_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyAwarded(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyAwarded(SubsidyID(id))); },
+		.offer_expired_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyOfferExpired(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyOfferExpired(SubsidyID(id))); },
+		.expired_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyExpired(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyExpired(SubsidyID(id))); },
+		.dirty = []() noexcept { InvalidateWindowData(WC_SUBSIDIES_LIST, 0); },
+		.station = [](uint16_t id) noexcept -> const Station * { return Station::Get(StationID(id)); },
+		.station_empty = RustStationRectangleEmptyHandle<const Station *>,
+		.catchment = RustStationCatchment,
+		.near_industries = RustStationIndustriesNear,
+		.assert_destination = [](Source source) noexcept { if (source.type == SourceType::Town) { assert(Town::Get(source.ToTownID())->cache.part_of_subsidy.Test(PartOfSubsidy::Destination)); } else { assert(Industry::Get(source.ToIndustryID())->part_of_subsidy.Test(PartOfSubsidy::Destination)); } },
+	};
+	return services;
+}
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDSubsidyServices.hpp"
+bool CheckAbi_subsidy() { return AbiServicesComplete(GetRustSubsidyServices()); }
+#endif

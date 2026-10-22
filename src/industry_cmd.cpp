@@ -57,6 +57,7 @@
 
 #ifdef WITH_RUST
 #include "rust/industry_generation_adapter.hpp"
+#include "rust/subsidy_ffi.h"
 #include "rust/landscape_loop_ffi.h"
 #include "rust/ground_services.h"
 #include "rust/company_services.h"
@@ -75,7 +76,7 @@ static const OpenTTDIndustryCostServices &GetIndustryCostServices();
 static const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices();
 static OpenTTDIndustryTransactionContext GetIndustryTransactionContext();
 static Industry *IndustryIfValid(uint16_t id) noexcept { return Industry::GetIfValid(IndustryID(id)); }
-static OpenTTDIndustry *IndustryOwner(Industry *shell) noexcept { return shell->production_owner.get(); }
+
 static bool IndustryCommandDeity() noexcept { return OpenTTDCurrentCompany() == OWNER_DEITY; }
 #endif
 
@@ -3749,7 +3750,7 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.close_view = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_VIEW, industry); },
 	.close_production = [](uint16_t industry) noexcept { CloseWindowById(WC_INDUSTRY_PRODUCTION, industry); },
 	.delete_inspect = OpenTTDDeleteIndustryInspect,
-	.delete_subsidies = [](uint16_t industry) noexcept { DeleteSubsidyWith({IndustryID(industry), SourceType::Industry}); },
+	.subsidies = RustSubsidyServices,
 	.invalidate_cargo = [](uint16_t industry) noexcept { CargoPacket::InvalidateAllFrom({IndustryID(industry), SourceType::Industry}); },
 	.next_near_station = [](void *shell, void *previous) noexcept -> void * {
 		const StationList &stations = static_cast<Industry *>(shell)->stations_near;
@@ -3906,7 +3907,7 @@ static const OpenTTDIndustryCommandServices &GetIndustryCommandServices()
 	static const OpenTTDIndustryCommandServices services = {
 		.deity = IndustryCommandDeity,
 		.get = IndustryIfValid,
-		.owner = IndustryOwner,
+		.owner = RustIndustryCanonicalOwner<Industry *>,
 		.valid_company = [](uint8_t company) noexcept -> bool { return Company::IsValidID(CompanyID(company)); },
 		.invalidate_view = [](uint16_t id) noexcept { InvalidateWindowData(WC_INDUSTRY_VIEW, IndustryID(id)); },
 	};
