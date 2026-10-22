@@ -325,7 +325,9 @@ def check(scenario, run, mode, role, result):
                 "protocol-bankrupt true",
                 "automatic-convert-exec true",
                 "tb-done true",
+                "tb-invalid-type-255 false",
                 "tb-invalid-type-256 false",
+                "tb-invalid-type-4294967295 false",
                 "tb-tunnel-0-exec true",
                 "tb-tunnel-1-exec true",
                 "tb-tunnel-y-exec true",
@@ -375,6 +377,10 @@ def check(scenario, run, mode, role, result):
             )
             for length in (24, 25, 26, 49, 50, 51, 99, 100, 101):
                 prefix = f"ROADCMD tb-tunnel-price-{length} true "
+                if not any(line.startswith(prefix) for line in lines):
+                    result["problems"].append(f"{mode}/{role}: missing {prefix}")
+            for length in (0, 1, 2, 3, 4, 5, 25, 26, 50, 51, 100, 200, 1000):
+                prefix = f"ROADCMD tb-price {length} "
                 if not any(line.startswith(prefix) for line in lines):
                     result["problems"].append(f"{mode}/{role}: missing {prefix}")
             for axis in (0, 1):
