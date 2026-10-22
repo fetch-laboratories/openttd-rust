@@ -35,10 +35,10 @@ def verify_debug(archive):
 
 def record_build(build, source, role, env):
     """Publish only successful builds, bound to the executable being measured."""
+    import migration
+
     settings = (build / "CMakeCache.txt").read_text()
     if role == "candidate":
-        import migration
-
         files = ("rust-build-configuration.txt", "rust-toolchain.txt")
         settings += "".join((build / f).read_text() for f in files)
         verify_debug(migration.rust_archive(build))
@@ -49,8 +49,13 @@ def record_build(build, source, role, env):
     settings += json.dumps(
         [(p.name, digest(p.read_bytes())) for p in inputs if p.is_file()]
     )
-    for path, label in ((build, "<build>"), (source, "<source>")):
-        settings = settings.replace(str(path), label)
+    # Longest first: the clone's shared .local stays absolute even under the main
+    # checkout's source path, so every worktree records one identity (#356).
+    shared = str(migration.COMMON_LOCAL)
+    labels = {str(source): "<source>", str(build): "<build>", shared: "\0"}
+    for path in sorted(labels, key=len, reverse=True):
+        settings = settings.replace(path, labels[path])
+    settings = settings.replace("\0", shared)
     binary = build / ("openttd" if role == "reference" else "openttd-rust")
     (build / "instruction-build.json").write_text(
         json.dumps(dict(settings=settings, executable=digest(binary.read_bytes())))

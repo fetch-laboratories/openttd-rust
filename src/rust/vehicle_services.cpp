@@ -12,7 +12,6 @@
 #include "vehicle_services.h"
 #include "orders_ffi.h"
 #include "station_service_ffi.h"
-#include "services_station.h"
 #include "engine_services.h"
 #include "services_newgrf.h"
 #include "../vehicle_func.h"
@@ -64,11 +63,6 @@ OpenTTDAircraftVehicle OPENTTD_AIRCRAFT_CALL RustAircraftNext(OpenTTDAircraftVeh
 {
 	return RustAircraftVehicle(RustVehicleNext(VehicleOf(vehicle.handle)));
 }
-uint16_t OPENTTD_AIRCRAFT_CALL RustAircraftEngineReliability(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	const Vehicle *v = VehicleOf(vehicle.handle);
-	return RustEngineReliability(EngineOf(RustVehicleGetEngine(RustVehicle(v))));
-}
 
 #include "../safeguards.h"
 
@@ -93,7 +87,7 @@ bool RustTrainIsEngine(const Vehicle *v) noexcept { return Train::From(v)->IsEng
 uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept { return RustVehicleCallback(CBID_VEHICLE_START_STOP_CHECK, 0, 0, v->engine_type, v, std::span(reg, 1)); }
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_power; }
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept { return RustEngineGRFVersion(EngineOf(RustVehicleGetEngine(RustVehicle(v)))); }
-uint32_t RustVehicleGRFString(Vehicle *v, GRFStringID string) noexcept { return GetGRFStringID(v->GetGRFID(), string); }
+uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept { return GetGRFStringID(v->GetGRFID(), GRFStringID(string)); }
 void RustVehicleFlipStopped(Vehicle *v) noexcept { v->vehstatus.Flip(VehState::Stopped); }
 
 uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->refit_cap; }
@@ -114,7 +108,8 @@ static_assert(AM_REALISTIC == 1 && INVALID_TRACKDIR == 0xFF && INVALID_PRICE == 
 static_assert(EngineID::Invalid().base() == 0xFFFF);
 static_assert(CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS == 365 * 74);
 static_assert(SND_19_DEPARTURE_OLD_RV_1 == 23 && SND_1A_DEPARTURE_OLD_RV_2 == 24);
-static_assert(PROP_AIRCRAFT_SPEED == 0x0C);
+static_assert(PROP_AIRCRAFT_SPEED == 0x0C && CBID_VEHICLE_LENGTH == 0x11 && CBID_VEHICLE_32DAY_CALLBACK == 0x32);
+static_assert(VSE_START == 1 && VSE_BREAKDOWN == 3 && VSE_RUNNING == 4 && VSE_RUNNING_16 == 7 && VSE_STOPPED_16 == 8);
 static_assert(HVOT_BUS == 4 && HVOT_TRUCK == 8);
 
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteCounters(OpenTTDVehicle *v, uint8_t tick, uint8_t running, int32_t order_time) noexcept
@@ -124,12 +119,6 @@ static void OPENTTD_VEHICLE_CALL VehicleSvcWriteCounters(OpenTTDVehicle *v, uint
 	u->running_ticks = running;
 	u->current_order_time = order_time;
 }
-static uint8_t OPENTTD_VEHICLE_CALL VehicleSvcBreakdown(OpenTTDVehicle *v) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	u->HandleBreakdown();
-	return RustVehicleStatus(u);
-}
 static void OPENTTD_VEHICLE_CALL VehicleSvcCheckOrdersOnly(OpenTTDVehicle *v) noexcept { CheckOrders(VehicleOf(v)); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteCoordinates(OpenTTDVehicle *v, int32_t x, int32_t y, int32_t z) noexcept
 {
@@ -138,17 +127,9 @@ static void OPENTTD_VEHICLE_CALL VehicleSvcWriteCoordinates(OpenTTDVehicle *v, i
 	u->y_pos = y;
 	u->z_pos = z;
 }
-static OpenTTDVehicleBreakdown OPENTTD_VEHICLE_CALL VehicleSvcHandleBreakdown(OpenTTDVehicle *v) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	bool broken = u->HandleBreakdown();
-	return {.broken = broken, .status = RustVehicleStatus(u)};
-}
 static bool OPENTTD_VEHICLE_CALL VehicleSvcWaitingForUnbunching(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->IsWaitingForUnbunching(); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcLeaveUnbunchingDepot(OpenTTDVehicle *v) noexcept { VehicleOf(v)->LeaveUnbunchingDepot(); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcResetDepotUnbunching(OpenTTDVehicle *v) noexcept { VehicleOf(v)->ResetDepotUnbunching(); }
-static void OPENTTD_VEHICLE_CALL VehicleSvcServiceInDepot(OpenTTDVehicle *v) noexcept { VehicleServiceInDepot(VehicleOf(v)); }
-static bool OPENTTD_VEHICLE_CALL VehicleSvcNeedsAutomaticServicing(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->NeedsAutomaticServicing(); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcEnterDepot(OpenTTDVehicle *v) noexcept { VehicleEnterDepot(VehicleOf(v)); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcPathfindingResult(OpenTTDVehicle *v, bool found) noexcept { VehicleOf(v)->HandlePathfindingResult(found); }
 static OpenTTDVehicleNewPosition OPENTTD_VEHICLE_CALL VehicleSvcNewPosition(OpenTTDVehicle *v) noexcept
@@ -169,17 +150,17 @@ static int32_t OPENTTD_VEHICLE_CALL VehicleSvcProperty(OpenTTDVehicle *v, uint8_
 {
 	return GetVehicleProperty(VehicleOf(v), static_cast<PropertyID>(property), fallback);
 }
-static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcLengthCallback(OpenTTDVehicle *v) noexcept
+static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcCallback(OpenTTDVehicle *v, CallbackID callback) noexcept
 {
 	Vehicle *u = VehicleOf(v);
-	return RustVehicleCallback(CBID_VEHICLE_LENGTH, 0, 0, u->engine_type, u);
+	return RustVehicleCallback(callback, 0, 0, u->engine_type, u);
 }
-static void OPENTTD_VEHICLE_CALL VehicleSvcUnknownLengthResult(const OpenTTDEngine *e, uint16_t result) noexcept
+static void OPENTTD_VEHICLE_CALL VehicleSvcUnknownCallbackResult(const OpenTTDEngine *e, CallbackID callback, uint16_t result) noexcept
 {
-	RustUnknownCallbackResult(EngineOf(e)->GetGRFID(), CBID_VEHICLE_LENGTH, result);
+	RustUnknownCallbackResult(EngineOf(e)->GetGRFID(), callback, result);
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcLengthChanged(OpenTTDVehicle *v) noexcept { VehicleLengthChanged(VehicleOf(v)); }
-static bool OPENTTD_VEHICLE_CALL VehicleSvcPlayStartSound(OpenTTDVehicle *v) noexcept { return PlayVehicleSound(VehicleOf(v), VSE_START); }
+static bool OPENTTD_VEHICLE_CALL VehicleSvcPlayVehicleSound(OpenTTDVehicle *v, VehicleSoundEvent event) noexcept { return PlayVehicleSound(VehicleOf(v), event); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcPlaySound(OpenTTDVehicle *v, uint16_t sound) noexcept { SndPlayVehicleFx(static_cast<SoundID>(sound), VehicleOf(v)); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcLargeExplosion(OpenTTDVehicle *v) noexcept { CreateEffectVehicleRel(VehicleOf(v), 4, 4, 8, EV_EXPLOSION_LARGE); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcOrderFree(OpenTTDVehicle *v) noexcept { VehicleOf(v)->current_order.Free(); }
@@ -191,21 +172,13 @@ static void OPENTTD_VEHICLE_CALL VehicleSvcOrderDummy(OpenTTDVehicle *v) noexcep
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcStartStopDirty(OpenTTDVehicle *v) noexcept { SetWindowWidgetDirty(WC_VEHICLE_VIEW, VehicleOf(v)->index, WID_VV_START_STOP); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcDestroy(OpenTTDVehicle *v) noexcept { delete VehicleOf(v); }
-static void OPENTTD_VEHICLE_CALL VehicleSvcAge(OpenTTDVehicle *v) noexcept { AgeVehicle(VehicleOf(v)); }
-static uint8_t OPENTTD_VEHICLE_CALL VehicleSvcEconomyAge(OpenTTDVehicle *v) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	EconomyAgeVehicle(u);
-	return RustVehicleDay(u);
-}
-static void OPENTTD_VEHICLE_CALL VehicleSvcDecreaseValue(OpenTTDVehicle *v) noexcept { DecreaseVehicleValue(VehicleOf(v)); }
-static void OPENTTD_VEHICLE_CALL VehicleSvcCheckBreakdown(OpenTTDVehicle *v) noexcept { CheckVehicleBreakdown(VehicleOf(v)); }
 static uint8_t OPENTTD_VEHICLE_CALL VehicleSvcCheckOrders(OpenTTDVehicle *v) noexcept
 {
 	Vehicle *u = VehicleOf(v);
 	CheckOrders(u);
 	return RustVehicleRunning(u);
 }
+static uint8_t OPENTTD_VEHICLE_CALL VehicleSvcDay(OpenTTDVehicle *v) noexcept { return RustVehicleDay(VehicleOf(v)); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteDay(OpenTTDVehicle *v, uint8_t day) noexcept { VehicleOf(v)->day_counter = day; }
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteDirection(OpenTTDVehicle *v, uint8_t direction) noexcept { VehicleOf(v)->direction = static_cast<Direction>(direction); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteSpeed(OpenTTDVehicle *v, uint16_t speed) noexcept { VehicleOf(v)->cur_speed = speed; }
@@ -245,7 +218,7 @@ static OpenTTDVehicle *OPENTTD_VEHICLE_CALL VehicleSvcNext(OpenTTDVehicle *v) no
 static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcEngineID(OpenTTDVehicle *v) noexcept { return RustVehicleEngineID(VehicleOf(v)); }
 static OpenTTDEngineForLength OPENTTD_VEHICLE_CALL VehicleSvcEngineForLength(OpenTTDVehicle *v) noexcept
 {
-	const Engine *e = VehicleOf(v)->GetEngine();
+	const Engine *e = EngineOf(RustVehicleGetEngine(v));
 	return {.engine = RustEngine(e), .grf_version = RustEngineGRFVersion(e)};
 }
 
@@ -331,33 +304,27 @@ static OpenTTDVehicleAltitudeInputs OPENTTD_VEHICLE_CALL VehicleSvcAltitudeInput
 constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.vehicles_on_tile = RustVisitVehiclesOnTile,
 	.write_counters = VehicleSvcWriteCounters,
-	.handle_breakdown = VehicleSvcHandleBreakdown,
 	.waiting_for_unbunching = VehicleSvcWaitingForUnbunching,
 	.leave_unbunching_depot = VehicleSvcLeaveUnbunchingDepot,
 	.reset_depot_unbunching = VehicleSvcResetDepotUnbunching,
-	.service_in_depot = VehicleSvcServiceInDepot,
-	.needs_automatic_servicing = VehicleSvcNeedsAutomaticServicing,
 	.enter_depot = VehicleSvcEnterDepot,
 	.pathfinding_result = VehicleSvcPathfindingResult,
 	.new_position = VehicleSvcNewPosition,
 	.move_then_status = VehicleSvcMoveThenStatus,
 	.base_viewport = VehicleSvcBaseViewport,
 	.property = VehicleSvcProperty,
-	.length_callback = VehicleSvcLengthCallback,
-	.unknown_length_result = VehicleSvcUnknownLengthResult,
+	.callback = VehicleSvcCallback,
+	.unknown_callback_result = VehicleSvcUnknownCallbackResult,
 	.length_changed = VehicleSvcLengthChanged,
-	.play_start_sound = VehicleSvcPlayStartSound,
+	.play_vehicle_sound = VehicleSvcPlayVehicleSound,
 	.play_sound = VehicleSvcPlaySound,
 	.large_explosion = VehicleSvcLargeExplosion,
 	.order_free = VehicleSvcOrderFree,
 	.order_dummy = VehicleSvcOrderDummy,
 	.start_stop_dirty = VehicleSvcStartStopDirty,
 	.destroy = VehicleSvcDestroy,
-	.age = VehicleSvcAge,
-	.economy_age = VehicleSvcEconomyAge,
-	.decrease_value = VehicleSvcDecreaseValue,
-	.check_breakdown = VehicleSvcCheckBreakdown,
 	.check_orders = VehicleSvcCheckOrders,
+	.day = VehicleSvcDay,
 	.write_day = VehicleSvcWriteDay,
 	.write_direction = VehicleSvcWriteDirection,
 	.write_speed = VehicleSvcWriteSpeed,
@@ -371,6 +338,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.detach_last = VehicleSvcDetachLast,
 	.next = VehicleSvcNext,
 	.engine_id = VehicleSvcEngineID,
+	.engine = RustVehicleGetEngine,
 	.engine_for_length = VehicleSvcEngineForLength,
 	.write_tick = VehicleSvcWriteTick,
 	.direction = VehicleSvcDirection,
@@ -415,7 +383,6 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.day_cost = VehicleSvcDayCost,
 	.make_dummy = VehicleSvcMakeDummy,
 	.loading = VehicleSvcLoading,
-	.breakdown = VehicleSvcBreakdown,
 	.check_orders_only = VehicleSvcCheckOrdersOnly,
 	.write_coordinates = VehicleSvcWriteCoordinates,
 	.altitude_inputs = VehicleSvcAltitudeInputs,
@@ -465,28 +432,11 @@ static OpenTTDVehicleDayCallback OPENTTD_VEHICLE_CALL VehicleSchedulerDayCallbac
 	const Vehicle *v = VehicleOf(shell);
 	return {.day = RustVehicleDay(v), .has_engine = RustVehicleHasEngine(v)};
 }
-static uint16_t OPENTTD_VEHICLE_CALL VehicleSchedulerDayCallback(OpenTTDVehicle *shell) noexcept
-{
-	Vehicle *v = VehicleOf(shell);
-	return RustVehicleCallback(CBID_VEHICLE_32DAY_CALLBACK, 0, 0, v->engine_type, v);
-}
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerRandomiseCallback(OpenTTDVehicle *shell) noexcept
 {
 	TriggerVehicleRandomisation(VehicleOf(shell), VehicleRandomTrigger::Callback32);
 }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerFirstDirty(OpenTTDVehicle *shell) noexcept { RustVehicleFirst(VehicleOf(shell))->MarkDirty(); }
-static void OPENTTD_VEHICLE_CALL VehicleSchedulerUnknownDayCallback(OpenTTDVehicle *shell, uint16_t result) noexcept
-{
-	RustUnknownCallbackResult(VehicleOf(shell)->GetGRFID(), CBID_VEHICLE_32DAY_CALLBACK, result);
-}
-static void OPENTTD_VEHICLE_CALL VehicleSchedulerRunningSound(OpenTTDVehicle *shell) noexcept { PlayVehicleSound(VehicleOf(shell), VSE_RUNNING); }
-static void OPENTTD_VEHICLE_CALL VehicleSchedulerPeriodicSound(OpenTTDVehicle *shell, bool running) noexcept { PlayVehicleSound(VehicleOf(shell), running ? VSE_RUNNING_16 : VSE_STOPPED_16); }
-static OpenTTDVehicleStationLookup OPENTTD_VEHICLE_CALL VehicleSchedulerNextStation(uint32_t from) noexcept
-{
-	Station *st = OpenTTDNextStation(from);
-	if (st == nullptr) return {};
-	return {.station = st->rust_service.get(), .id = st->index.base()};
-}
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerWithLoadingTimer(const OpenTTDVehicleSchedulerTables *tables, void (OPENTTD_VEHICLE_CALL *load)(const OpenTTDVehicleSchedulerTables *)) noexcept
 {
 	PerformanceMeasurer framerate(PFE_GL_ECONOMY);
@@ -513,14 +463,11 @@ const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcep
 		.calendar_day = VehicleSchedulerCalendarDay,
 		.economy_day = VehicleSchedulerEconomyDay,
 		.day_callback_read = VehicleSchedulerDayCallbackRead,
-		.day_callback = VehicleSchedulerDayCallback,
 		.randomise_callback = VehicleSchedulerRandomiseCallback,
 		.first_dirty = VehicleSchedulerFirstDirty,
-		.unknown_day_callback = VehicleSchedulerUnknownDayCallback,
 		.cargo_owner = VehicleSchedulerCargoOwner,
-		.running_sound = VehicleSchedulerRunningSound,
-		.periodic_sound = VehicleSchedulerPeriodicSound,
-		.next_station = VehicleSchedulerNextStation,
+		.vehicle = &_rust_vehicle_services,
+		.shared = &GetRustSharedServices(),
 		.with_loading_timer = VehicleSchedulerWithLoadingTimer,
 		.reset_accumulators = VehicleSchedulerResetAccumulators,
 	};
@@ -541,15 +488,6 @@ static OpenTTDVehicleMaintenanceReset OPENTTD_VEHICLE_CALL MaintenanceReset(Open
 {
 	const Vehicle *v = VehicleOf(handle);
 	return {.economy_date = MaintenanceDate(TimerGameEconomy::date), .calendar_date = MaintenanceDate(TimerGameCalendar::date), .reliability = RustEngineReliability(v->GetEngine()), .chance = RustVehicleBreakdownChance(v), .breakdowns = _settings_game.difficulty.vehicle_breakdowns};
-}
-static void OPENTTD_VEHICLE_CALL MaintenanceResetWrite(OpenTTDVehicle *handle, OpenTTDVehicleMaintenanceResetWrite value) noexcept
-{
-	Vehicle *v = VehicleOf(handle);
-	v->date_of_last_service = TimerGameEconomy::Date{value.economy_date.value};
-	v->date_of_last_service_newgrf = TimerGameCalendar::Date{value.calendar_date.value};
-	v->breakdowns_since_last_service = value.since;
-	v->reliability = value.reliability;
-	v->breakdown_chance = value.chance;
 }
 static bool OPENTTD_VEHICLE_CALL MaintenanceHasEngine(OpenTTDVehicle *handle) noexcept { return RustVehicleHasEngine(VehicleOf(handle)); }
 static OpenTTDVehicleMaintenanceInterval OPENTTD_VEHICLE_CALL MaintenanceInterval(OpenTTDVehicle *handle) noexcept
@@ -631,7 +569,6 @@ static OpenTTDVehicleMaintenanceBreakdownSoundState OPENTTD_VEHICLE_CALL Mainten
 	return {.kind = RustVehicleVehicleType(v), .landscape = OpenTTDLandscape()};
 }
 static void OPENTTD_VEHICLE_CALL MaintenanceBreakdownDelayWrite(OpenTTDVehicle *handle, uint8_t delay) noexcept { VehicleOf(handle)->breakdown_delay = delay; }
-static bool OPENTTD_VEHICLE_CALL MaintenanceBreakdownSound(OpenTTDVehicle *handle) noexcept { return PlayVehicleSound(VehicleOf(handle), VSE_BREAKDOWN); }
 static bool OPENTTD_VEHICLE_CALL MaintenanceSmokeDisabled(OpenTTDVehicle *handle) noexcept { return EngInfo(VehicleOf(handle)->engine_type)->misc_flags.Test(EngineMiscFlag::NoBreakdownSmoke); }
 static OpenTTDVehicleMaintenanceBreakdownSmoke OPENTTD_VEHICLE_CALL MaintenanceSmoke(OpenTTDVehicle *handle) noexcept
 {
@@ -686,7 +623,6 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.group = &FleetGroupServices(),
 	.renewal = MaintenanceRenewal,
 	.reset = MaintenanceReset,
-	.reset_write = MaintenanceResetWrite,
 	.has_engine = MaintenanceHasEngine,
 	.interval = MaintenanceInterval,
 	.engine_reliability = MaintenanceEngineReliability,
@@ -709,7 +645,6 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.breakdown_countdown = MaintenanceBreakdownCountdown,
 	.breakdown_sound_state = MaintenanceBreakdownSoundState,
 	.breakdown_delay_write = MaintenanceBreakdownDelayWrite,
-	.breakdown_sound = MaintenanceBreakdownSound,
 	.smoke_disabled = MaintenanceSmokeDisabled,
 	.smoke = MaintenanceSmoke,
 	.smoke_animation = MaintenanceSmokeAnimation,
@@ -741,21 +676,10 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 };
 
 /* Existing order ABI adapters share the canonical typed observations here. */
-extern "C" uint64_t openttd_orders_day_counter(void *ctx) noexcept
-{
-	return RustVehicleDay(static_cast<const Vehicle *>(ctx));
-}
-
 extern "C" uint64_t openttd_orders_reliability(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
 	return RustVehicleReliability(v);
-}
-
-extern "C" uint64_t openttd_orders_engine_reliability(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return RustEngineReliability(v->GetEngine());
 }
 
 extern "C" uint64_t openttd_orders_age_years(void *ctx) noexcept

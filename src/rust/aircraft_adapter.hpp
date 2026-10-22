@@ -102,8 +102,6 @@ static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_engine_sound(OpenTTDAircraftVehic
 	return AircraftVehInfo(v->engine_type)->sfx;
 }
 
-
-
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_airport_entry(const void * ap, uint8_t direction) noexcept
 {
 	return static_cast<const AirportFTAClass *>(ap)->entry_points[direction];
@@ -157,12 +155,6 @@ static bool OPENTTD_AIRCRAFT_CALL Aircraft_part_of_orders(OpenTTDAircraftVehicle
 {
 	const Vehicle *v = VehicleOf(vehicle.handle);
 	return v->current_order.GetDepotOrderType().Test(OrderDepotTypeFlag::PartOfOrders);
-}
-
-static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_next_station(uint16_t last) noexcept
-{
-	for (const Station *s : Station::Iterate(last == StationID::Invalid().base() ? 0 : last + 1)) return s->index.base();
-	return StationID::Invalid().base();
 }
 
 static OpenTTDAircraftVehicle OPENTTD_AIRCRAFT_CALL Aircraft_next_aircraft(uint32_t last) noexcept
@@ -232,11 +224,6 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_first_arrival(OpenTTDAircraftVehicle 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_begin_loading(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	VehicleOf(vehicle.handle)->BeginLoading();
-}
-
-static void OPENTTD_AIRCRAFT_CALL Aircraft_dirty_details(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	SetWindowDirty(WC_VEHICLE_DETAILS, vehicle.id);
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_update_delta(OpenTTDAircraftVehicle vehicle) noexcept
@@ -442,7 +429,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.engine_speed = Aircraft_engine_speed,
 	.engine_subtype = Aircraft_engine_subtype,
 	.engine_sound = Aircraft_engine_sound,
-	.engine_reliability = RustAircraftEngineReliability,
 	.airport_entry = Aircraft_airport_entry,
 	.direction_towards = Aircraft_direction_towards,
 	.hangar_height = Aircraft_hangar_height,
@@ -453,7 +439,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.chain_in_depot = Aircraft_chain_in_depot,
 	.nearest_depot_order = Aircraft_nearest_depot_order,
 	.part_of_orders = Aircraft_part_of_orders,
-	.next_station = Aircraft_next_station,
 	.next_aircraft = Aircraft_next_aircraft,
 	.update_position = Aircraft_update_position,
 	.rotor_image = Aircraft_rotor_image,
@@ -467,7 +452,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.dirty_depot = Aircraft_dirty_depot,
 	.first_arrival = Aircraft_first_arrival,
 	.begin_loading = Aircraft_begin_loading,
-	.dirty_details = Aircraft_dirty_details,
 	.update_delta = Aircraft_update_delta,
 	.touchdown_animation = Aircraft_touchdown_animation,
 	.destination_too_far = Aircraft_destination_too_far,

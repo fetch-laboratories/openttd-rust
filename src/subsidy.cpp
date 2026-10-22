@@ -553,7 +553,7 @@ static const IntervalTimer<TimerGameEconomy> _economy_subsidies_monthly({TimerGa
 bool CheckSubsidised(CargoType cargo_type, CompanyID company, Source src, const Station *st)
 {
 #ifdef WITH_RUST
-	return openttd_rust_subsidy_check(&GetRustSubsidyServices(), cargo_type, company, src, st->index.base());
+	return openttd_rust_subsidy_check(&GetRustSubsidyServices(), cargo_type, company.base(), src, st->index.base());
 #else
 	/* If the source isn't subsidised, don't continue */
 	if (!src.IsValid()) return false;
@@ -668,7 +668,7 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 		.allocate = [](CargoType cargo, Source src, Source dst, uint16_t remaining) noexcept { return (new Subsidy(cargo, src, dst, remaining))->index.base(); },
 		.destroy = [](uint16_t id) noexcept { delete Subsidy::Get(id); },
 		.duration = OpenTTDSubsidyDuration,
-		.local_company = RustLocalCompany,
+		.local_company = RustLocalCompanyID,
 		.cargo_valid = OpenTTDCargoSpecValid,
 		.manual = OpenTTDManualCargoDistribution,
 		.manual_pax = OpenTTDManualPassengerDistribution,

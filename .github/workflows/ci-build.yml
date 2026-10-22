@@ -20,6 +20,8 @@ on:
     - rust-migration
     # Markdown-only pushes never queue, so they cannot displace a pending code push below.
     paths-ignore: ['**.md']
+  # Root runs macOS alone on rust-migration after every fifth integration (#357).
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -34,12 +36,12 @@ env:
 # Protected pushes queue without cancelling the running validation; a newer
 # push replaces a pending one, so a burst of merges validates the newest tip.
 concurrency:
-  group: ${{ github.workflow }}-build-${{ inputs.checkout-ref && github.run_id || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-build-${{ inputs.checkout-ref && github.run_id || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.ref != 'refs/heads/rust-migration' }}
 
 jobs:
   policy:
-    if: inputs.checkout-ref == ''
+    if: inputs.checkout-ref == '' && github.event_name != 'workflow_dispatch'
     uses: ./.github/workflows/ci-policy.yml
 
   emscripten:
@@ -87,7 +89,8 @@ jobs:
 
   macos:
     needs: policy
-    if: ${{ !cancelled() && (inputs.checkout-ref != '' || needs.policy.outputs.heavy == 'true' || needs.policy.outputs.covered == 'true') && inputs.profile != 'native' }}
+    # Full validation and covered pushes skip macOS (#357).
+    if: ${{ !cancelled() && (inputs.checkout-ref != '' || needs.policy.outputs.heavy == 'true' || github.event_name == 'workflow_dispatch') && inputs.profile != 'native' && inputs.profile != 'full' }}
     strategy:
       fail-fast: false
       matrix:
@@ -111,7 +114,6 @@ jobs:
       arch: ${{ matrix.arch }}
       full_arch: ${{ matrix.full_arch }}
       extra-cmake-parameters: ${{ matrix.extra-cmake-parameters }}
-      cache-only: ${{ inputs.checkout-ref == '' && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && needs.policy.outputs.covered == 'true' }}
 
   windows:
     needs: policy
@@ -166,8 +168,10 @@ jobs:
         import os
         results = json.loads(os.environ['RESULTS'])
         required = ['linux', 'check_annotations']
-        if os.environ['PROFILE'] in ('platform', 'full'):
+        if os.environ['PROFILE'] == 'platform':
             required += ['emscripten', 'macos', 'windows']
+        elif os.environ['PROFILE'] == 'full':
+            required += ['emscripten', 'windows']
         elif os.environ['PROFILE'] != 'native':
             raise SystemExit('Unsupported platform profile')
         failed = [job for job in required if results.get(job, {}).get('result') != 'success']

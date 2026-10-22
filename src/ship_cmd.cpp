@@ -43,6 +43,7 @@
 #ifdef WITH_RUST
 #include "rust/services_ffi.h"
 #include "rust/industry_shell_services.h"
+#include "rust/vehicle_services.h"
 #endif
 #include "safeguards.h"
 
@@ -267,7 +268,7 @@ Money Ship::GetRunningCost() const
 void Ship::OnNewCalendarDay()
 {
 #ifdef WITH_RUST
-	openttd_rust_ship_calendar_day(this->index.base(), &GetRustShipServices(), &GetRustSharedServices());
+	openttd_rust_ship_calendar_day(this->index.base(), RustVehicle(this), &GetRustShipServices(), &GetRustSharedServices());
 #else
 	AgeVehicle(this);
 #endif
@@ -277,7 +278,7 @@ void Ship::OnNewCalendarDay()
 void Ship::OnNewEconomyDay()
 {
 #ifdef WITH_RUST
-	openttd_rust_ship_economy_day(this->index.base(), &GetRustShipServices(), &GetRustSharedServices());
+	openttd_rust_ship_economy_day(this->index.base(), RustVehicle(this), &GetRustShipServices(), &GetRustSharedServices());
 #else
 	EconomyAgeVehicle(this);
 
@@ -876,7 +877,7 @@ bool Ship::Tick()
 {
 #ifdef WITH_RUST
 	PerformanceAccumulator framerate(PFE_GL_SHIPS);
-	return openttd_rust_ship_tick(this->index.base(), &GetRustShipServices(), &GetRustSharedServices());
+	return openttd_rust_ship_tick(this->index.base(), RustVehicle(this), &GetRustShipServices(), &GetRustSharedServices());
 #else
 	PerformanceAccumulator framerate(PFE_GL_SHIPS);
 

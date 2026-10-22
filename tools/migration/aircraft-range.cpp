@@ -1,6 +1,7 @@
 /* OpenTTD-Rust migration evidence, licensed under GPLv2. */
 /** @file aircraft-range.cpp Finite NewGRF range gap against unchanged event bodies. */
 #include "rust/aircraft_ffi.h"
+#include "rust/vehicle_maintenance_ffi.h"
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -58,6 +59,7 @@ struct Fixture {
 #include "aircraft-boundary.hpp"
 static Fixture *fixture;
 static OpenTTDVehicleServices vehicle;
+static OpenTTDVehicleMaintenanceServices maintenance;
 static OpenTTDSharedServices shared;
 static OpenTTDAircraftLeaves RangeLeaves()
 {
@@ -68,7 +70,8 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.status = [](OpenTTDVehicle *) noexcept { return static_cast<uint8_t>(fixture->aircraft.vehstatus.value); };
 	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return static_cast<uint8_t>(fixture->aircraft.current_order.type); };
 	vehicle.order_destination = [](OpenTTDVehicle *) noexcept { return fixture->aircraft.current_order.destination; };
-	vehicle.breakdown = [](OpenTTDVehicle *) noexcept { return uint8_t{0}; };
+	vehicle.maintenance = &maintenance;
+	maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	leaves.process_orders = [](OpenTTDAircraftVehicle) noexcept {};
 	vehicle.loading = [](OpenTTDVehicle *, bool) noexcept {};
 	vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept { fixture->messages[0]++; };
