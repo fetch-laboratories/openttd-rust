@@ -62,16 +62,17 @@ RoadStop *RoadStop::GetNextRoadStop(const RoadVehicle *v) const
 static OpenTTDRoadStopDriveRead OPENTTD_VEHICLE_CALL RoadStopDriveRead(OpenTTDVehicle *handle) noexcept
 {
 	const RoadVehicle *rv = RoadVehicle::From(VehicleOf(handle));
-	return {.total_length = rv->gcache.cached_total_length, .direction = RustVehicleDirection(rv)};
+	return {.total_length = RustGroundCachedTotalLength(&rv->gcache), .direction = RustVehicleDirection(rv)};
 }
 
 /** The Rebuild filter reads; only road vehicles have the road fields. */
 static OpenTTDRoadStopRebuildRead OPENTTD_VEHICLE_CALL RoadStopRebuildRead(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	if (RustVehicleVehicleType(v) != VEH_ROAD) return {.vehicle_type = RustVehicleVehicleType(v)};
+	VehicleType type = RustVehicleVehicleType(v);
+	if (type != VEH_ROAD) return {.vehicle_type = type};
 	const RoadVehicle *rv = RoadVehicle::From(v);
-	return {.road = RoadStateOf(rv), .total_length = rv->gcache.cached_total_length, .vehicle_type = VEH_ROAD,
+	return {.road = RoadStateOf(rv), .total_length = RustGroundCachedTotalLength(&rv->gcache), .vehicle_type = type,
 		.direction = RustVehicleDirection(v), .status = RustVehicleStatus(v), .primary = RustVehiclePrimary(v)};
 }
 

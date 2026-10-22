@@ -839,7 +839,7 @@ static int32_t TrainReadOrderTime(OpenTTDTrainHandle id) noexcept
 static uint16_t TrainReadTotalLength(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return v->gcache.cached_total_length;
+	return RustGroundCachedTotalLength(&v->gcache);
 }
 static uint16_t TrainReadMaxTrackSpeed(OpenTTDTrainHandle id) noexcept
 {
@@ -909,7 +909,7 @@ static OpenTTDTrainCurveLimitRead TrainReadCurveLimit(OpenTTDTrainHandle id) noe
 static OpenTTDTrainStopLocationRead TrainReadStopLocation(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return {RustGroundCachedLength(v), v->gcache.cached_total_length, RustVehicleOrderDestination(v), RustVehicleOrderType(v)};
+	return {RustGroundCachedLength(v), RustGroundCachedTotalLength(&v->gcache), RustVehicleOrderDestination(v), RustVehicleOrderType(v)};
 }
 static OpenTTDTrainCurrentMaxSpeedRead TrainReadCurrentMaxSpeed(OpenTTDTrainHandle id) noexcept
 {
