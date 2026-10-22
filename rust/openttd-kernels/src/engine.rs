@@ -248,7 +248,7 @@ pub struct Services {
 
 const AVAILABLE: u8 = 1;
 const EXCLUSIVE: u8 = 2;
-use crate::company::OWNER_DEITY;
+use crate::company_type::OWNER_DEITY;
 use crate::vehicle::INVALID_ENGINE as INVALID;
 // Original static year is process-wide; all engine entries run serialized by
 // the game-state mutex, including main-thread GUI commands and game timers.

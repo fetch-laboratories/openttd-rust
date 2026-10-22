@@ -35,6 +35,7 @@ pub struct State {
 }
 use crate::services::{Map, Services, chance16_i};
 use crate::station::Station;
+use crate::tile_type::INVALID_TILE;
 use crate::vehicle::PROP_AIRCRAFT_SPEED;
 use crate::vehicle::{
     AltitudeInputs, Coordinates, DayCost, DirectionProgress, MovementObservations, OpenTTDVehicle,
@@ -307,7 +308,6 @@ const OILRIG: i64 = 9;
 const NUM_CARGO: i64 = 64;
 const INVALID_STATION: u32 = 65535;
 const OWNER_NONE: i64 = 16;
-const INVALID_TILE: u32 = u32::MAX;
 const HIDDEN: i64 = 1;
 const STOPPED: i64 = 2;
 const BROKEN: i64 = 64;
@@ -483,7 +483,7 @@ impl World<'_> {
         vehicle_type(self; v: Vehicle) => (self.vs.vehicle_type)(v.base());
         slope(self; x: i64, y: i64) => (self.ss.slope)(x as i32, y as i32);
         // Original unsigned TileHeight * TILE_HEIGHT narrows to int before widening.
-        tile_height(self; tile: i64) => (self.ss.tile_height)(tile as u32).wrapping_mul(crate::services::TILE_HEIGHT) as i32;
+        tile_height(self; tile: i64) => (self.ss.tile_height)(tile as u32).wrapping_mul(crate::tile_type::TILE_HEIGHT) as i32;
         airport_entry(self; ap: *const c_void, direction: i64) => unsafe { (self.leaves.airport_entry)(ap, direction as u8) };
         direction_towards(self; v: Vehicle, x: i64, y: i64) => unsafe { (self.leaves.direction_towards)(v, x as i32, y as i32) };
         hangar_height(self; station: i64) => unsafe { (self.leaves.hangar_height)(station as u16) };

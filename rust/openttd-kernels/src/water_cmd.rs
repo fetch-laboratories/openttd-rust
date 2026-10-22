@@ -20,8 +20,20 @@
     clippy::cast_sign_loss,
     clippy::if_not_else
 )]
-use crate::services::{CommandCost, CommandCostServices, CommandServices, Services, WaterClass};
-use crate::{water::WaterServices, witness as w};
+use crate::command_type::DoCommandFlag;
+use crate::company_type::{INVALID_OWNER, OWNER_NONE, OWNER_WATER};
+use crate::direction_type::INVALID_DIAGDIR;
+use crate::services::{
+    CommandCost, CommandCostServices, CommandServices, Map, Services, WaterClass,
+};
+use crate::slope_func::{
+    get_inclined_slope_direction, is_inclined_slope, is_slope_with_one_corner_raised,
+};
+use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::INVALID_TILE;
+use crate::viewport_func::TILE_HEIGHT_STEP;
+use crate::water::{RIVER_OFFSET_DESERT_DISTANCE, WaterServices};
+use crate::witness as w;
 
 macro_rules! carrier {
     ($($name:ident),+) => {$(#[repr(transparent)] #[derive(Clone, Copy)] pub struct $name(pub u8);)+};
@@ -66,16 +78,17 @@ pub struct WaterCommandServices {
     pub area_next: unsafe extern "C" fn(*mut Area),
     pub strings: Strings,
 }
-const EXEC: u16 = 1;
-const AUTO: u16 = 2;
-const NO_WATER: u16 = 8;
-const BANKRUPT: u16 = 32;
-const FORCE: u16 = 1024;
-const NONE: u8 = 16;
-const WATER: u8 = 17;
-const INVALID_OWNER: u8 = 255;
 const FACTOR: u32 = 2;
-const INVALID_STRING: u32 = 0xffff;
+
+/// `GetLockPartMinimalBridgeHeight`.
+fn get_lock_part_minimal_bridge_height(lock_part: usize) -> i32 {
+    const MINIMAL_BRIDGE_HEIGHT: [u8; 3] = [
+        2, // LockPart::Middle
+        3, // LockPart::Lower
+        2, // LockPart::Upper
+    ];
+    i32::from(MINIMAL_BRIDGE_HEIGHT[lock_part])
+}
 
 struct World<'a> {
     a: &'a WaterCommandServices,
@@ -85,6 +98,7 @@ struct World<'a> {
     water: &'a WaterServices,
     size_x: u32,
     size_y: u32,
+    map: Map,
 }
 impl World<'_> {
     unsafe fn new(a: *const WaterCommandServices) -> Self {
@@ -99,14 +113,18 @@ impl World<'_> {
                 &*(*a).water,
             )
         };
+        let size_x = (s.map_max_x)() + 1;
         Self {
             a,
             s,
             c,
             cmd,
             water,
-            size_x: (s.map_max_x)() + 1,
+            size_x,
             size_y: (s.map_max_y)() + 1,
+            map: Map {
+                log_x: size_x.trailing_zeros() as u8,
+            },
         }
     }
     fn error(&self, out: *mut CommandCost, string: u32) {
@@ -171,24 +189,6 @@ impl World<'_> {
     fn canal(&self, t: u32) -> bool {
         self.kind(t) == 0 && self.class(t) == 1
     }
-    fn delta(&self, dir: u8) -> u32 {
-        match dir {
-            0 => u32::MAX,
-            1 => self.size_x,
-            2 => 1,
-            3 => 0u32.wrapping_sub(self.size_x),
-            _ => unreachable!(),
-        }
-    }
-    fn inclined(slope: u8) -> u8 {
-        match slope {
-            12 => 0,
-            6 => 1,
-            3 => 2,
-            9 => 3,
-            _ => 255,
-        }
-    }
     fn edge(&self, t: u32) -> bool {
         let x = t % self.size_x;
         let y = t / self.size_x;
@@ -243,10 +243,10 @@ impl World<'_> {
         axis: Axis,
     ) {
         if axis.0 >= 2 {
-            self.error(out, INVALID_STRING);
+            self.error(out, INVALID_STRING_ID);
             return;
         }
-        let tile2 = tile.wrapping_add(if axis.0 == 0 { 1 } else { self.size_x });
+        let tile2 = tile.wrapping_add(self.map.offs_by_axis(axis.0));
         if !(self.s.has_water_ground)(tile) || !(self.s.has_water_ground)(tile2) {
             self.error(out, self.a.strings.built_on_water);
             return;
@@ -260,7 +260,7 @@ impl World<'_> {
             return;
         }
         if !(self.rail().depot_available)() {
-            self.error(out, INVALID_STRING);
+            self.error(out, INVALID_STRING_ID);
             return;
         }
         let wc1 = self.class(tile);
@@ -268,7 +268,7 @@ impl World<'_> {
         self.expense(out, crate::company::price(7));
         for t in [tile, tile2] {
             let add = !(self.s.is_water_tile)(t);
-            self.clear_command(ret, t, flags | AUTO);
+            self.clear_command(ret, t, flags | DoCommandFlag::AUTO);
             if self.take_failure(out, ret) {
                 return;
             }
@@ -276,7 +276,7 @@ impl World<'_> {
                 (self.c.amount)(out, (self.c.money)(ret));
             }
         }
-        if flags & EXEC != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             let id = (self.rail().new_depot)(tile);
             let owner = (self.s.current_company)();
             let mut infra = 2 * FACTOR;
@@ -302,7 +302,7 @@ impl World<'_> {
     }
     fn remove_depot(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
         if self.kind(tile) != 3 {
-            self.error(out, INVALID_STRING);
+            self.error(out, INVALID_STRING_ID);
             return;
         }
         self.ownership(ret, tile);
@@ -310,7 +310,7 @@ impl World<'_> {
             return;
         }
         let tile2 = (self.a.other_depot_tile)(tile);
-        if flags & BANKRUPT == 0 {
+        if flags & DoCommandFlag::BANKRUPT == 0 {
             self.no_vehicle(ret, tile);
             if !self.failed(ret) {
                 self.no_vehicle(ret, tile2);
@@ -319,8 +319,8 @@ impl World<'_> {
                 return;
             }
         }
-        let force = flags & FORCE != 0;
-        if flags & EXEC != 0 {
+        let force = flags & DoCommandFlag::FORCE_CLEAR_TILE != 0;
+        if flags & DoCommandFlag::EXECUTE != 0 {
             (self.rail().delete_depot)(tile);
             let owner = (self.s.tile_owner)(tile);
             if (self.s.company_valid)(owner) {
@@ -350,7 +350,7 @@ impl World<'_> {
         dir: u8,
     ) {
         self.expense(out, 0);
-        let delta = self.delta(dir);
+        let delta = self.map.offs_by_diag_dir(dir);
         let lower = tile.wrapping_sub(delta);
         let upper = tile.wrapping_add(delta);
         for t in [tile, upper, lower] {
@@ -391,17 +391,18 @@ impl World<'_> {
         }
         for (part, t) in [tile, lower, upper].into_iter().enumerate() {
             if (self.s.bridge_above)(t)
-                && self.bridge_height(t) < (self.s.tile_max_z)(t) + [2, 3, 2][part]
+                && self.bridge_height(t)
+                    < (self.s.tile_max_z)(t) + get_lock_part_minimal_bridge_height(part)
             {
                 // The original error deliberately uses the MIDDLE tile height.
-                let diff = ((self.s.tile_max_z)(tile) + [2, 3, 2][part])
+                let diff = ((self.s.tile_max_z)(tile) + get_lock_part_minimal_bridge_height(part))
                     .wrapping_sub(self.bridge_height(t))
-                    .wrapping_mul(50);
+                    .wrapping_mul(TILE_HEIGHT_STEP);
                 (self.c.error_param)(out, self.a.strings.low_bridge, diff as u64);
                 return;
             }
         }
-        if flags & EXEC != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             let owner = (self.s.current_company)();
             if (self.s.company_valid)(owner) {
                 if !(self.s.is_water_tile)(lower) {
@@ -444,12 +445,12 @@ impl World<'_> {
         (self.c.amount)(out, crate::company::price(64));
     }
     fn build_lock(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
-        let dir = Self::inclined((self.s.tile_slope)(tile));
-        if dir == 255 {
+        let dir = get_inclined_slope_direction((self.s.tile_slope)(tile));
+        if dir == INVALID_DIAGDIR {
             self.error(out, self.a.strings.sloped_wrong);
             return;
         }
-        let lower = tile.wrapping_sub(self.delta(dir));
+        let lower = tile.wrapping_sub(self.map.offs_by_diag_dir(dir));
         if !(self.a.environment.freeform_edges)() && self.edge(lower) {
             self.error(out, self.a.strings.edge);
             return;
@@ -457,13 +458,13 @@ impl World<'_> {
         self.do_build_lock(out, ret, flags, tile, dir);
     }
     fn remove_lock(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
-        if (self.s.tile_owner)(tile) != NONE {
+        if (self.s.tile_owner)(tile) != OWNER_NONE {
             self.ownership(ret, tile);
             if self.take_failure(out, ret) {
                 return;
             }
         }
-        let delta = self.delta((self.a.lock_direction)(tile).0);
+        let delta = self.map.offs_by_diag_dir((self.a.lock_direction)(tile).0);
         let upper = tile.wrapping_add(delta);
         let lower = tile.wrapping_sub(delta);
         for t in [tile, upper, lower] {
@@ -472,7 +473,7 @@ impl World<'_> {
                 return;
             }
         }
-        if flags & EXEC != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             let owner = (self.s.tile_owner)(tile);
             if (self.s.company_valid)(owner) {
                 self.infra(owner, 0u32.wrapping_sub(3 * FACTOR), true);
@@ -496,7 +497,7 @@ impl World<'_> {
         let mut iter = crate::spiral::square(
             tile % self.size_x,
             tile / self.size_x,
-            5,
+            RIVER_OFFSET_DESERT_DISTANCE,
             self.size_x,
             self.size_y,
         );
@@ -524,7 +525,7 @@ impl World<'_> {
             || wc.0 >= 3
             || (wc.0 != 1 && !(self.a.environment.editor)())
         {
-            self.error(out, INVALID_STRING);
+            self.error(out, INVALID_STRING_ID);
             return;
         }
         self.expense(out, 0);
@@ -533,9 +534,9 @@ impl World<'_> {
             (self.a.area_begin)(area, end, start, diagonal);
             (self.a.area_tile)(area)
         };
-        while tile != u32::MAX {
+        while tile != INVALID_TILE {
             let slope = (self.s.tile_slope)(tile);
-            if slope != 0 && (wc.0 != 2 || Self::inclined(slope) == 255) {
+            if slope != 0 && (wc.0 != 2 || !is_inclined_slope(slope)) {
                 self.error(out, self.a.strings.flat);
                 return;
             }
@@ -544,7 +545,7 @@ impl World<'_> {
                 && self.canal(tile)
                 && !(self.a.environment.editor)()
                 && ((self.s.tile_owner)(tile) == (self.s.current_company)()
-                    || (self.s.tile_owner)(tile) == NONE))
+                    || (self.s.tile_owner)(tile) == OWNER_NONE))
             {
                 self.clear_command(ret, tile, flags);
                 if self.take_failure(out, ret) {
@@ -553,7 +554,7 @@ impl World<'_> {
                 if !water {
                     (self.c.amount)(out, (self.c.money)(ret));
                 }
-                if flags & EXEC != 0 {
+                if flags & DoCommandFlag::EXECUTE != 0 {
                     if (self.s.tile_type)(tile) == 6 && self.canal(tile) {
                         let owner = (self.s.tile_owner)(tile);
                         if (self.s.company_valid)(owner) {
@@ -598,7 +599,7 @@ impl World<'_> {
     fn clear(&self, out: *mut CommandCost, ret: *mut CommandCost, flags: u16, tile: u32) {
         match self.kind(tile) {
             0 => {
-                if flags & NO_WATER != 0 {
+                if flags & DoCommandFlag::NO_WATER != 0 {
                     self.error(out, self.a.strings.build_on_water);
                     return;
                 }
@@ -616,13 +617,13 @@ impl World<'_> {
                     return;
                 }
                 let owner = (self.s.tile_owner)(tile);
-                if owner != WATER && owner != NONE {
+                if owner != OWNER_WATER && owner != OWNER_NONE {
                     self.ownership(ret, tile);
                     if self.take_failure(out, ret) {
                         return;
                     }
                 }
-                if flags & EXEC != 0 {
+                if flags & DoCommandFlag::EXECUTE != 0 {
                     if self.canal(tile) && (self.s.company_valid)(owner) {
                         self.infra(owner, u32::MAX, true);
                     }
@@ -639,14 +640,14 @@ impl World<'_> {
                 if self.take_failure(out, ret) {
                     return;
                 }
-                if flags & EXEC != 0 {
+                if flags & DoCommandFlag::EXECUTE != 0 {
                     crate::ground::clear_square(tile, self.s);
                     self.dirty_neighbours(tile);
                     self.wake_neighbours(tile);
                 }
                 self.expense(
                     out,
-                    if matches!(slope, 1 | 2 | 4 | 8) {
+                    if is_slope_with_one_corner_raised(slope) {
                         crate::company::price(34)
                     } else {
                         crate::company::price(23)
@@ -654,16 +655,16 @@ impl World<'_> {
                 );
             }
             2 => {
-                if flags & AUTO != 0 {
+                if flags & DoCommandFlag::AUTO != 0 {
                     self.error(out, self.a.strings.demolish_building);
                     return;
                 }
-                if (self.s.current_company)() == WATER {
-                    self.error(out, INVALID_STRING);
+                if (self.s.current_company)() == OWNER_WATER {
+                    self.error(out, INVALID_STRING_ID);
                     return;
                 }
                 let part = (self.a.lock_part)(tile).0;
-                let delta = self.delta((self.a.lock_direction)(tile).0);
+                let delta = self.map.offs_by_diag_dir((self.a.lock_direction)(tile).0);
                 let middle = match part {
                     0 => tile,
                     1 => tile.wrapping_add(delta),
@@ -673,7 +674,7 @@ impl World<'_> {
                 self.remove_lock(out, ret, flags, middle);
             }
             3 => {
-                if flags & AUTO != 0 {
+                if flags & DoCommandFlag::AUTO != 0 {
                     self.error(out, self.a.strings.demolish_building);
                     return;
                 }
@@ -706,13 +707,13 @@ impl World<'_> {
             return;
         }
         if self.kind(tile) == 3 {
-            self.clear_command(ret, tile, EXEC | BANKRUPT);
+            self.clear_command(ret, tile, DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT);
         }
         if (self.s.tile_owner)(tile) == old {
             if self.class(tile) == 1 && !middle {
                 self.infra(old, u32::MAX, false);
             }
-            (self.s.set_tile_owner)(tile, NONE);
+            (self.s.set_tile_owner)(tile, OWNER_NONE);
         }
         w::hit(w::WATER_CMD_OWNER);
     }
@@ -747,8 +748,6 @@ entry!(openttd_rust_water_make_river(tile:u32) |world:&World<'_>| {
 });
 entry!(openttd_rust_water_clear(out:*mut CommandCost,ret:*mut CommandCost,flags:u16,tile:u32)
     |world:&World<'_>| world.clear(out,ret,flags,tile));
-entry!(openttd_rust_water_change_owner(ret:*mut CommandCost,tile:u32,old:u8,new:u8)
-    |world:&World<'_>| world.owner(ret,tile,old,new));
 entry!(openttd_rust_water_terraform(out:*mut CommandCost,flags:u16,tile:u32) |world:&World<'_>| {
     if (world.s.is_water_tile)(tile) && world.canal(tile) { world.error(out,world.a.strings.demolish_canal); }
     else { world.clear_command(out,tile,flags); }
@@ -757,10 +756,24 @@ entry!(openttd_rust_water_build_above(out:*mut CommandCost,flags:u16,tile:u32,he
     match world.kind(tile) {
         0|1=>(world.c.zero)(out),
         2=>{
-            let required=(world.s.tile_max_z)(tile)+[2,3,2][usize::from((world.a.lock_part)(tile).0)];
+            let required=(world.s.tile_max_z)(tile)+get_lock_part_minimal_bridge_height(usize::from((world.a.lock_part)(tile).0));
             if required<=height { (world.c.zero)(out); }
-            else { (world.c.error_param)(out,world.a.strings.low_bridge,required.wrapping_sub(height).wrapping_mul(50) as u64); }
+            else { (world.c.error_param)(out,world.a.strings.low_bridge,required.wrapping_sub(height).wrapping_mul(TILE_HEIGHT_STEP) as u64); }
         },
         _=>world.clear_command(out,tile,flags),
     }
 });
+/// Original `ChangeTileOwner_Water`, called by the ownership dispatcher.
+/// # Safety
+/// As for the native entries: live immutable tables and an independent result.
+pub(crate) unsafe fn openttd_rust_water_change_owner(
+    a: *const WaterCommandServices,
+    ret: *mut CommandCost,
+    tile: u32,
+    old: u8,
+    new: u8,
+) {
+    // SAFETY: The ownership dispatcher upholds the common synchronous contract.
+    let world = unsafe { World::new(a) };
+    world.owner(ret, tile, old, new);
+}

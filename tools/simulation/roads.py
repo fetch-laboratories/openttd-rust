@@ -13,21 +13,32 @@ ROAD = "roadveh[0]/"
 COMMON = ROAD + "common[0]/"
 AI_FOLDER = "road-scenario-ai"
 
-# Recorded candidate/reference medians; integrating PRs update these up or down.
-# PR #318 game head e7027a5944; quiet --benchmark 3 after base-resolution review.
-SPEED_BUDGETS = {
-    "generate-tgp-256-1": 1.187150837988827,
-    "play-opus-55-167-002-manual": 1.231404958677686,
-    "play-grok-159-001-manual": 1.2032235459004905,
-    "play-padhattan-ridge-1996-manual": 1.2555780933062881,
-    "play-padhattan-ridge-2000-manual": 1.320839580209895,
-    "play-padhattan-ridge-2016-manual": 1.387829246139873,
+# Quiet speed pass at 667e652ad8 (#322): ratio is the median of four three-pair
+# medians; Ir and compatible identity come from profiles of the same build.
+SPEED_HEAD = "667e652ad8"
+# fmt: off
+SPEED_PASS = (
+    ("generate-tgp-256-1", 1.2150013604135657, 2878998668, "59a8b117d7e088ff28eec161265ac96eb45430a885e2e22f708fb5bb5d7d945f"),
+    ("play-opus-55-167-002-manual", 1.203689213933969, 25241154728, "856eeabd0e9515a8da38e66ace671534f87d5b576cfe0b3d2277d8a4ac25b017"),
+    ("play-grok-159-001-manual", 1.1907607348013287, 23912546163, "b7bb63d73160aaa264d408e4882e1f2a3122adbbb5f809ea108b4a1060be057a"),
+    ("play-padhattan-ridge-1996-manual", 1.2502032553708693, 4286427692, "94af7f540305ff4d939d99a366b434975e0193e09c11649318bae6f92170f263"),
+    ("play-padhattan-ridge-2000-manual", 1.3052238805970147, 7037662305, "bb96a6a5ca9e404b42748018f4f544e4c8a1067e5950e4623a8f6e1ca6865e0e"),
+    ("play-padhattan-ridge-2016-manual", 1.355471294661727, 12653579222, "17f5d00c733b336251c05de5edb03302e546958d3ea3d28e9ebd5093574ce872"),
+)
+# fmt: on
+SPEED_ANCHORS = {
+    name: dict(
+        anchor=dict(head=SPEED_HEAD, ratio=ratio, Ir=ir, identity={"compatible": c}),
+        integrated=dict(head=SPEED_HEAD, Ir=ir),
+    )
+    for name, ratio, ir, c in SPEED_PASS
 }
+SPEED_BUDGETS = {name: ratio for name, ratio, _, _ in SPEED_PASS}
 
 
-def speed_budget(name, ratio):
+def speed_budget(name, ratio, integrated=None):
     """Report the speed guard without making timings a semantic CI failure."""
-    record = SPEED_BUDGETS.get(name)
+    record = SPEED_BUDGETS.get(name) if integrated is None else integrated
     if record is None or ratio is None:
         return None
     ceiling = 1.5 if name.startswith("play-") else 1.3
