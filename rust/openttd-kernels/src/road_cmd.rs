@@ -2062,7 +2062,8 @@ pub unsafe extern "C" fn openttd_rust_road_build_depot(
 /// # Safety
 /// Immutable tables and live native cost/frame slots outlive this synchronous
 /// invocation. Slots are distinct; no native borrow survives reentrant calls.
-pub(crate) unsafe fn openttd_rust_road_clear(
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_clear(
     services: *const RoadCommandServices,
     out: *mut CommandCost,
     ret: *mut CommandCost,
@@ -2110,7 +2111,8 @@ pub(crate) unsafe fn openttd_rust_road_change_owner(
 /// # Safety
 /// Immutable tables and live native cost/frame slots outlive this synchronous
 /// invocation. Slots are distinct; no native borrow survives reentrant calls.
-pub(crate) unsafe fn openttd_rust_road_terraform(
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_road_terraform(
     services: *const RoadCommandServices,
     out: *mut CommandCost,
     scratch: *mut CommandCost,

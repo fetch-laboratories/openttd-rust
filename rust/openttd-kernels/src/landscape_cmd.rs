@@ -14,9 +14,15 @@
     clippy::if_not_else
 )]
 use crate::command_type::DoCommandFlag as F;
+use crate::map_type::{LM_LEVEL, LM_LOWER, LM_RAISE};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
 use crate::slope_func::{SLOPE_E, SLOPE_FLAT, SLOPE_N, SLOPE_S, SLOPE_STEEP, SLOPE_W};
-use crate::tile_type::{INVALID_TILE, MP_VOID};
+use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::{
+    INVALID_TILE, MP_CLEAR, MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION,
+    MP_TREES, MP_VOID, MP_WATER,
+};
+use crate::water_type::WATER_CLASS_CANAL;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ptr::{addr_of, addr_of_mut};
 
@@ -144,11 +150,14 @@ impl<'a> World<'a> {
     }
     fn clear_tile(&self, out: Cost<'_>, tile: u32, flags: u16) {
         let kind = (self.s.tile_type)(tile);
-        if matches!(kind, 1 | 2 | 5 | 6 | 10) {
+        if matches!(
+            kind,
+            MP_RAILWAY | MP_ROAD | MP_STATION | MP_WATER | MP_OBJECT
+        ) {
             unsafe {
                 /* SAFETY: synchronous costs never escape or outlive this call. */
                 crate::command::with_cost(self.c, |ret| {
-                    if matches!(kind, 2 | 5) {
+                    if matches!(kind, MP_ROAD | MP_STATION) {
                         crate::command::with_cost(self.c, |error| {
                             self.clear_tile_with(out, tile, flags, kind, ret.0, error.0)
                         });
@@ -183,14 +192,14 @@ impl<'a> World<'a> {
         // result slots used by this tile kind. Other cases do not read the slots.
         unsafe {
             match kind {
-                1 => crate::rail_cmd::openttd_rust_rail_clear_tile(
+                MP_RAILWAY => crate::rail_cmd::openttd_rust_rail_clear_tile(
                     owners.rail,
                     out.0,
                     ret,
                     flags,
                     tile,
                 ),
-                2 => crate::road_cmd::openttd_rust_road_clear(
+                MP_ROAD => crate::road_cmd::openttd_rust_road_clear(
                     (self.s.road_commands)(),
                     out.0,
                     ret,
@@ -198,15 +207,15 @@ impl<'a> World<'a> {
                     flags,
                     tile,
                 ),
-                3 => crate::town::house::openttd_rust_house_clear(
+                MP_HOUSE => crate::town::house::openttd_rust_house_clear(
                     (*owners.objects).town,
                     self.s,
                     out.0,
                     tile,
                     flags,
                 ),
-                4 => out.set(crate::trees::clear_tile(&*t.trees, self.s, tile, flags)),
-                5 => crate::station_cmd::openttd_rust_station_clear(
+                MP_TREES => out.set(crate::trees::clear_tile(&*t.trees, self.s, tile, flags)),
+                MP_STATION => crate::station_cmd::openttd_rust_station_clear(
                     owners.station,
                     out.0,
                     ret,
@@ -214,14 +223,14 @@ impl<'a> World<'a> {
                     tile,
                     flags,
                 ),
-                6 => crate::water_cmd::openttd_rust_water_clear(
+                MP_WATER => crate::water_cmd::openttd_rust_water_clear(
                     owners.water,
                     out.0,
                     ret,
                     flags,
                     tile,
                 ),
-                8 => crate::industry::openttd_rust_industry_tile_clear(
+                MP_INDUSTRY => crate::industry::openttd_rust_industry_tile_clear(
                     out.0.cast(),
                     tile,
                     flags,
@@ -230,7 +239,7 @@ impl<'a> World<'a> {
                     t.industry_costs,
                     t.industry_generation,
                 ),
-                10 => crate::objects::openttd_rust_object_clear(
+                MP_OBJECT => crate::objects::openttd_rust_object_clear(
                     owners.objects,
                     out.0,
                     ret,
@@ -246,7 +255,7 @@ impl<'a> World<'a> {
         let owners = unsafe { &*t.owners };
         unsafe {
             match (self.s.tile_type)(tile) {
-                1 => crate::rail_cmd::openttd_rust_rail_terraform(
+                MP_RAILWAY => crate::rail_cmd::openttd_rust_rail_terraform(
                     owners.rail,
                     out.0,
                     flags,
@@ -254,7 +263,7 @@ impl<'a> World<'a> {
                     z,
                     slope,
                 ),
-                2 => {
+                MP_ROAD => {
                     /* SAFETY: synchronous costs never escape or outlive this call. */
                     crate::command::with_cost(self.c, |ret| {
                         crate::road_cmd::openttd_rust_road_terraform(
@@ -268,7 +277,7 @@ impl<'a> World<'a> {
                         )
                     })
                 }
-                3 => crate::town::house::openttd_rust_house_terraform(
+                MP_HOUSE => crate::town::house::openttd_rust_house_terraform(
                     (*owners.objects).town,
                     self.s,
                     out.0,
@@ -277,8 +286,8 @@ impl<'a> World<'a> {
                     z,
                     slope,
                 ),
-                0 | 4 => self.clear_do(out, tile, flags),
-                5 => crate::station_cmd::openttd_rust_station_terraform(
+                MP_CLEAR | MP_TREES => self.clear_do(out, tile, flags),
+                MP_STATION => crate::station_cmd::openttd_rust_station_terraform(
                     owners.station,
                     out.0,
                     tile,
@@ -286,10 +295,10 @@ impl<'a> World<'a> {
                     z,
                     slope,
                 ),
-                6 => {
+                MP_WATER => {
                     crate::water_cmd::openttd_rust_water_terraform(owners.water, out.0, flags, tile)
                 }
-                8 => crate::industry::openttd_rust_industry_tile_terraform(
+                MP_INDUSTRY => crate::industry::openttd_rust_industry_tile_terraform(
                     out.0.cast(),
                     tile,
                     flags,
@@ -300,7 +309,7 @@ impl<'a> World<'a> {
                     t.industry_policy,
                     t.industry_costs,
                 ),
-                10 => crate::objects::openttd_rust_object_terraform(
+                MP_OBJECT => crate::objects::openttd_rust_object_terraform(
                     owners.objects,
                     out.0,
                     tile,
@@ -328,14 +337,14 @@ impl<'a> World<'a> {
             && !(self.s.is_water_tile)(tile)
             && !(self.a.coast)(tile)
         {
-            let class = (native.water_class)(tile).0;
-            if flags & F::AUTO != 0 && class == 1 {
+            let class = (native.water_class)(tile);
+            if flags & F::AUTO != 0 && class == WATER_CLASS_CANAL {
                 out.error(self.a.strings.canal);
                 return;
             }
             if !(self.a.buoy)(tile) || (self.s.tile_owner)(tile) == (self.s.current_company)() {
                 do_clear = true;
-                out.add_money(crate::company::price(if class == 1 {
+                out.add_money(crate::company::price(if class == WATER_CLASS_CANAL {
                     crate::economy_type::PR_CLEAR_CANAL
                 } else {
                     crate::economy_type::PR_CLEAR_WATER
@@ -404,12 +413,12 @@ impl<'a> World<'a> {
         area: *mut crate::water_cmd::Area,
     ) -> i64 {
         if start >= self.size {
-            out.error(0xffff);
+            out.error(INVALID_STRING_ID);
             return 0;
         }
         let mut money = crate::command::available_money(self.cmd);
         out.set(0);
-        last.error(0xffff);
+        last.error(INVALID_STRING_ID);
         let mut success = false;
         let company = self.finance(flags, true);
         let mut limit = Self::clear_limit(company);
@@ -623,7 +632,7 @@ impl<'a> World<'a> {
             return INVALID_TILE;
         }
         if height == ts.height(self, tile) {
-            out.error(0xffff);
+            out.error(INVALID_STRING_ID);
             return INVALID_TILE;
         }
         let mut x = self.map.tile_x(tile);
@@ -697,16 +706,16 @@ impl<'a> World<'a> {
         area: *mut crate::water_cmd::Area,
     ) -> (i64, u32) {
         if start >= self.size {
-            out.error(0xffff);
+            out.error(INVALID_STRING_ID);
             return (0, INVALID_TILE);
         }
         let old = (self.s.tile_height)(start);
         let h = match mode {
-            0 => old,
-            2 => old.wrapping_add(1),
-            1 => old.wrapping_sub(1),
+            LM_LEVEL => old,
+            LM_RAISE => old.wrapping_add(1),
+            LM_LOWER => old.wrapping_sub(1),
             _ => {
-                out.error(0xffff);
+                out.error(INVALID_STRING_ID);
                 return (0, INVALID_TILE);
             }
         };
@@ -720,10 +729,10 @@ impl<'a> World<'a> {
         }
         let mut money = crate::command::available_money(self.cmd);
         out.set(0);
-        last.error(if mode == 0 {
+        last.error(if mode == LM_LEVEL {
             self.a.strings.levelled
         } else {
-            0xffff
+            INVALID_STRING_ID
         });
         let mut success = false;
         let company = self.finance(flags, false);

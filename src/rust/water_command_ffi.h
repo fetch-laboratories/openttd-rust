@@ -48,6 +48,8 @@ void openttd_rust_water_build_depot(const OpenTTDWaterCommandServices *, OpenTTD
 void openttd_rust_water_build_lock(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t);
 void openttd_rust_water_build_canal(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDWaterArea *, uint16_t, uint32_t, uint32_t, WaterClass, bool);
 void openttd_rust_water_make_river(const OpenTTDWaterCommandServices *, uint32_t);
+void openttd_rust_water_clear(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t);
+void openttd_rust_water_terraform(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, uint16_t, uint32_t);
 void openttd_rust_water_build_above(const OpenTTDWaterCommandServices *, OpenTTDCommandCost *, uint16_t, uint32_t, int32_t);
 }
 #endif /* RUST_WATER_COMMAND_FFI_H */

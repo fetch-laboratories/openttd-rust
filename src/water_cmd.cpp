@@ -325,6 +325,12 @@ CommandCost CmdBuildCanal(DoCommandFlags flags, TileIndex tile, TileIndex start_
 	openttd_rust_water_build_canal(&GetRustWaterCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), &area, flags.base(), tile.base(), start_tile.base(), wc, diagonal);
 	return cost;
 }
+static CommandCost ClearTile_Water(TileIndex tile, DoCommandFlags flags)
+{
+	CommandCost cost, ret;
+	openttd_rust_water_clear(&GetRustWaterCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base());
+	return cost;
+}
 
 #else
 void MakeWaterKeepingClass(TileIndex tile, Owner o)
@@ -1598,6 +1604,12 @@ static VehicleEnterTileStates VehicleEnter_Water(Vehicle *, TileIndex, int, int)
 }
 
 #ifdef WITH_RUST
+static CommandCost TerraformTile_Water(TileIndex tile, DoCommandFlags flags, int, Slope)
+{
+	CommandCost cost;
+	openttd_rust_water_terraform(&GetRustWaterCommandServices(), RustCommandCost(&cost), flags.base(), tile.base());
+	return cost;
+}
 static CommandCost CheckBuildAbove_Water(TileIndex tile, DoCommandFlags flags, Axis, int height)
 {
 	CommandCost cost;
@@ -1630,11 +1642,7 @@ static CommandCost CheckBuildAbove_Water(TileIndex tile, DoCommandFlags flags, A
 extern const TileTypeProcs _tile_type_water_procs = {
 	DrawTile_Water,           // draw_tile_proc
 	GetSlopePixelZ_Water,     // get_slope_z_proc
-#ifdef WITH_RUST
-	nullptr,                 // Rust landscape commands call the owner directly.
-#else
 	ClearTile_Water,          // clear_tile_proc
-#endif
 	nullptr,                     // add_accepted_cargo_proc
 	GetTileDesc_Water,        // get_tile_desc_proc
 	GetTileTrackStatus_Water, // get_tile_track_status_proc
@@ -1649,11 +1657,7 @@ extern const TileTypeProcs _tile_type_water_procs = {
 	nullptr,                     // add_produced_cargo_proc
 	VehicleEnter_Water,       // vehicle_enter_tile_proc
 	GetFoundation_Water,      // get_foundation_proc
-#ifdef WITH_RUST
-	nullptr,                 // Rust landscape commands call the owner directly.
-#else
 	TerraformTile_Water,      // terraform_tile_proc
-#endif
 	CheckBuildAbove_Water, // check_build_above_proc
 };
 

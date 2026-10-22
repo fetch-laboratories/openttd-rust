@@ -5567,9 +5567,13 @@ CommandCost ClearTile_Station(TileIndex tile, DoCommandFlags flags)
 #endif
 }
 
-#ifndef WITH_RUST
 static CommandCost TerraformTile_Station(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_station_terraform(&GetRustStationCommandServices(), RustCommandCost(&cost), tile.base(), flags.base(), z_new, tileh_new);
+	return cost;
+#else
 	if (_settings_game.construction.build_on_slopes && AutoslopeEnabled()) {
 		/* TODO: If you implement newgrf callback 149 'land slope check', you have to decide what to do with it here.
 		 *       TTDP does not call it.
@@ -5601,8 +5605,8 @@ static CommandCost TerraformTile_Station(TileIndex tile, DoCommandFlags flags, i
 		}
 	}
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
-}
 #endif
+}
 
 #ifndef WITH_RUST
 /**
@@ -6043,11 +6047,7 @@ extern const TileTypeProcs _tile_type_station_procs = {
 	nullptr,                       // add_produced_cargo_proc
 	VehicleEnter_Station,       // vehicle_enter_tile_proc
 	GetFoundation_Station,      // get_foundation_proc
-#ifdef WITH_RUST
-	nullptr,                 // Rust landscape commands call the owner directly.
-#else
 	TerraformTile_Station,      // terraform_tile_proc
-#endif
 	CheckBuildAbove_Station, // check_build_above_proc
 };
 

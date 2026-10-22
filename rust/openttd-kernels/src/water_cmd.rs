@@ -746,33 +746,12 @@ entry!(openttd_rust_water_build_canal(out:*mut CommandCost,ret:*mut CommandCost,
 entry!(openttd_rust_water_make_river(tile:u32) |world:&World<'_>| {
     (world.a.restoration.make_river)(tile,world.random()); (world.s.mark_dirty)(tile); world.desert(tile);
 });
-/// # Safety
-/// Immutable tables and distinct live native result slots outlive the call.
-pub(crate) unsafe fn openttd_rust_water_clear(
-    a: *const WaterCommandServices,
-    out: *mut CommandCost,
-    ret: *mut CommandCost,
-    flags: u16,
-    tile: u32,
-) {
-    let world = unsafe { World::new(a) };
-    world.clear(out, ret, flags, tile);
-}
-/// # Safety
-/// Immutable tables and the live native result slot outlive the call.
-pub(crate) unsafe fn openttd_rust_water_terraform(
-    a: *const WaterCommandServices,
-    out: *mut CommandCost,
-    flags: u16,
-    tile: u32,
-) {
-    let world = unsafe { World::new(a) };
-    if (world.s.is_water_tile)(tile) && world.canal(tile) {
-        world.error(out, world.a.strings.demolish_canal);
-    } else {
-        world.clear_command(out, tile, flags);
-    }
-}
+entry!(openttd_rust_water_clear(out:*mut CommandCost,ret:*mut CommandCost,flags:u16,tile:u32)
+    |world:&World<'_>| world.clear(out,ret,flags,tile));
+entry!(openttd_rust_water_terraform(out:*mut CommandCost,flags:u16,tile:u32) |world:&World<'_>| {
+    if (world.s.is_water_tile)(tile) && world.canal(tile) { world.error(out,world.a.strings.demolish_canal); }
+    else { world.clear_command(out,tile,flags); }
+});
 entry!(openttd_rust_water_build_above(out:*mut CommandCost,flags:u16,tile:u32,height:i32) |world:&World<'_>| {
     match world.kind(tile) {
         0|1=>(world.c.zero)(out),

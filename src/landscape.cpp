@@ -879,6 +879,7 @@ std::tuple<CommandCost, Money> CmdClearArea(DoCommandFlags flags, TileIndex tile
 #ifdef WITH_RUST
 const OpenTTDLandscapeCommandServices &GetRustLandscapeCommandServices() noexcept
 {
+	static_assert(to_underlying(WaterClass::Canal) == 1);
 	static const OpenTTDLandscapeTileServices tiles{
 		.clear = [](OpenTTDCommandCost *out, uint32_t tile, uint16_t flags) noexcept {
 			*reinterpret_cast<CommandCost *>(out) = _tile_type_procs[GetTileType(TileIndex{tile})]->clear_tile_proc(TileIndex{tile}, DoCommandFlags{flags});

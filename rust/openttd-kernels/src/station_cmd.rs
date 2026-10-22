@@ -4081,7 +4081,8 @@ pub unsafe extern "C" fn openttd_rust_station_clear(
 }
 /// # Safety
 /// Tables and native output slot remain live for the serialized tile proc.
-pub(crate) unsafe fn openttd_rust_station_terraform(
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_terraform(
     s: *const CommandServicesTable,
     cost: *mut CommandCost,
     tile: u32,

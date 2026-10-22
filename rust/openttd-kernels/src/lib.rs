@@ -28,6 +28,7 @@ mod integer;
 mod landscape;
 mod linkgraph;
 mod map_func;
+mod map_type;
 mod math;
 mod newgrf_callbacks;
 mod node_hash;
@@ -64,6 +65,7 @@ mod vehicle;
 mod viewport_func;
 mod water;
 mod water_cmd;
+mod water_type;
 mod widget_parser;
 mod witness;
 

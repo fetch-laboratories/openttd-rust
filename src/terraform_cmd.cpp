@@ -26,6 +26,7 @@
 #include "rust/landscape_command_ffi.h"
 #include "rust/water_area_services.h"
 #include "rust/command_cost_services.h"
+static_assert(LM_LEVEL == 0 && LM_LOWER == 1 && LM_RAISE == 2);
 #endif
 
 #include "safeguards.h"
