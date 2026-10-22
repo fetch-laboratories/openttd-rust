@@ -322,10 +322,7 @@ pub struct Services {
     pub acquisition_windows: extern "C" fn(u8),
     pub clients_to_spectators: extern "C" fn(u8),
     pub set_local_company: extern "C" fn(u8),
-    pub subsidy_next_awarded: extern "C" fn(u8, u32) -> u32,
-    pub delete_subsidy: extern "C" fn(u32),
-    pub set_subsidy_awarded: extern "C" fn(u32, u8),
-    pub rebuild_subsidy_cache: extern "C" fn(),
+    pub subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub town_next: extern "C" fn(u32, u8, *mut TownRights) -> u32,
     pub town_rating: extern "C" fn(u32, u8) -> i16,
     pub set_town_rating: extern "C" fn(u32, u8, i16, bool),
@@ -1022,19 +1019,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     if new == INVALID_OWNER {
         put!((f.company_finances)(old), (u64::MAX >> 2) as i64, money);
     }
-    each(
-        |from| (s.subsidy_next_awarded)(old, from),
-        |id| {
-            if new == INVALID_OWNER {
-                (s.delete_subsidy)(id);
-            } else {
-                (s.set_subsidy_awarded)(id, new);
-            }
-        },
-    );
-    if new == INVALID_OWNER {
-        (s.rebuild_subsidy_cache)();
-    }
+    unsafe { &*(s.subsidies)() }.transfer(old, new);
     let mut t = TownRights {
         rating: 0,
         have_ratings: 0,
@@ -1997,10 +1982,7 @@ crate::abi::layouts! {
         acquisition_windows,
         clients_to_spectators,
         set_local_company,
-        subsidy_next_awarded,
-        delete_subsidy,
-        set_subsidy_awarded,
-        rebuild_subsidy_cache,
+        subsidies,
         town_next,
         town_rating,
         set_town_rating,

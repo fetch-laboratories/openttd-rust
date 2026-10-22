@@ -10,4 +10,7 @@
 #define RUST_INDUSTRY_SHELL_SERVICES_H
 #include "../industry.h"
 inline Station *RustIndustryNeutralStation(const Industry *industry) noexcept { return industry->neutral_station; }
+template <class Handle> inline OpenTTDIndustry *RustIndustryCanonicalOwner(Handle industry) noexcept { return static_cast<Industry *>(industry)->production_owner.get(); }
+inline uint16_t RustIndustryID(void *industry) noexcept { return static_cast<Industry *>(industry)->index.base(); }
+inline uint32_t RustIndustryNextID(uint32_t from) noexcept { auto range = Industry::Iterate(from); return range.empty() ? UINT32_MAX : (*range.begin())->index.base(); }
 #endif /* RUST_INDUSTRY_SHELL_SERVICES_H */

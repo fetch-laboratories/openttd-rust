@@ -33,4 +33,5 @@ inline CargoType OpenTTDMailCargo() noexcept { return OpenTTDCargoByLabel(CT_MAI
 inline CargoType OpenTTDPassengerCargo() noexcept { return OpenTTDCargoByLabel(CT_PASSENGERS); }
 inline CargoType OpenTTDIndustryCargoTranslation(const OpenTTDIndustrySpecHandle *spec, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, reinterpret_cast<const IndustrySpec *>(spec)->grf_prop.grffile); }
 inline CargoType OpenTTDIndustryTileCargoTranslation(const IndustryTileSpec *spec, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, spec->grf_prop.grffile); }
+inline bool OpenTTDCargoSpecValid(CargoType cargo) noexcept { return CargoSpec::Get(cargo)->IsValid(); }
 #endif /* RUST_SERVICES_CARGO_H */

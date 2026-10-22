@@ -1338,3 +1338,13 @@ mod cargo_storage;
 mod train_reservation;
 
 mod fleet;
+
+mod subsidy;
+
+mod cargo_type;
+mod source_type;
+mod subsidy_base;
+mod tilearea;
+mod timer_game_common;
+
+mod subsidy_type;

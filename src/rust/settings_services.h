@@ -53,4 +53,8 @@ inline bool RustStationNoiseEnabled() noexcept { return _settings_game.economy.s
 inline bool RustStationDistantJoin() noexcept { return _settings_game.station.distant_join_stations; }
 inline bool RustNormalGame() noexcept { return _game_mode == GM_NORMAL; }
 inline bool RustExtraDynamite() noexcept { return _settings_game.construction.extra_dynamite; }
+inline uint16_t OpenTTDSubsidyDuration() noexcept { return _settings_game.difficulty.subsidy_duration; }
+inline bool OpenTTDManualCargoDistribution(CargoType cargo) noexcept { return _settings_game.linkgraph.GetDistributionType(cargo) == DT_MANUAL; }
+inline bool OpenTTDAutomaticCargoDistribution(CargoType cargo) noexcept { return !OpenTTDManualCargoDistribution(cargo); }
+inline bool OpenTTDManualPassengerDistribution() noexcept { return _settings_game.linkgraph.distribution_pax == DT_MANUAL; }
 #endif /* RUST_SETTINGS_SERVICES_H */

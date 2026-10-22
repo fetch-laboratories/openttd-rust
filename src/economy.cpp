@@ -65,6 +65,7 @@
 #include "rust/tile_owner_services.h"
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
+#include "rust/industry_shell_services.h"
 #include "rust/vehicle_refit_ffi.h"
 #include "rust/command_cost_services.h"
 #endif
@@ -1088,7 +1089,7 @@ static const OpenTTDCargoServices _cargo_services = {
 	[](void *handle, uint8_t field, uint32_t slot) noexcept -> uint32_t {
 		const Industry *i = static_cast<Industry *>(handle);
 		switch (field) {
-			case 0: return i->index.base();
+			case 0: return RustIndustryID(handle);
 			case 1: {
 				auto it = i->GetCargoAccepted(slot);
 				return it == std::end(i->accepted) ? UINT32_MAX : it - std::begin(i->accepted);
@@ -1132,9 +1133,7 @@ static const OpenTTDCargoServices _cargo_services = {
 	[](uint16_t station, uint8_t cargo, uint8_t company, uint32_t amount, uint32_t source, uint16_t industry) noexcept {
 		AddCargoDelivery(cargo, CompanyID(company), amount, Source(uint16_t(source), SourceType(source >> 16)), Station::Get(StationID(station)), IndustryID(industry));
 	},
-	[](uint16_t station, uint8_t cargo, uint8_t company, uint32_t source) noexcept -> uint8_t {
-		return CheckSubsidised(cargo, CompanyID(company), Source(uint16_t(source), SourceType(source >> 16)), Station::Get(StationID(station)));
-	},
+	RustSubsidyServices,
 	[](void *handle, uint8_t op) noexcept {
 		Industry *i = static_cast<Industry *>(handle);
 		switch (op) {

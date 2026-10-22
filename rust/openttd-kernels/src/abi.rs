@@ -31,6 +31,48 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "Source" ["probe"] => crate::subsidy::Source { id, kind => type, };
+    "OpenTTDSubsidyState" ["probe"] => crate::subsidy::State { cargo_type, remaining, awarded, src, dst, };
+    "OpenTTDSubsidyCargo" ["probe"] => crate::subsidy::Cargo { object, data, };
+    "OpenTTDSubsidyServices" ["probe"] => crate::subsidy::Services {
+        shared,
+        town,
+        industry,
+        random_town,
+        industry_owner,
+        industry_id,
+        next_industry,
+        has_source_flag,
+        set_source_flag,
+        clear_source_flags,
+        valid_source,
+        can_allocate,
+        allocate,
+        destroy,
+        duration,
+        local_company,
+        cargo_valid,
+        manual,
+        manual_pax,
+        any_manual,
+        passenger_count,
+        passenger_at,
+        offered_news,
+        awarded_news,
+        offer_expired_news,
+        withdrawn_news,
+        offer_events,
+        award_events,
+        offer_expired_events,
+        expired_events,
+        dirty,
+        station,
+        station_empty,
+        catchment,
+        near_industries,
+        assert_destination,
+    };
+
     "OpenTTDArticulatedPart" ["probe"] => crate::vehicle_transactions::articulated::Part { image, capacity, };
     "OpenTTDArticulatedProbability" ["probe"] => crate::vehicle_transactions::articulated::Probability { present, value, };
     "OpenTTDVehicleArticulatedServices" ["probe"] => crate::vehicle_transactions::articulated::Services {
@@ -2438,7 +2480,7 @@ layouts! {
         accept,
         statistics,
         monitor,
-        subsidised,
+        subsidies,
         industry_effect,
         vehicle_read,
         settle,
@@ -3557,7 +3599,7 @@ layouts! {
         close_view,
         close_production,
         delete_inspect,
-        delete_subsidies,
+        subsidies,
         invalidate_cargo,
         next_near_station,
         remove_delivery,

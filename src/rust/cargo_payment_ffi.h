@@ -9,6 +9,7 @@
 #ifndef RUST_CARGO_PAYMENT_FFI_H
 #define RUST_CARGO_PAYMENT_FFI_H
 #include "service_defaults.hpp"
+struct OpenTTDSubsidyServices;
 
 /** Opaque live native entity, distinct from Rust-owned boundary state. */
 struct CargoPayment;
@@ -73,7 +74,7 @@ struct OpenTTDCargoServices {
 	void (OPENTTD_CARGO_CALL *accept)(void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(accept);
 	void (OPENTTD_CARGO_CALL *statistics)(uint16_t, uint8_t, uint8_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(statistics);
 	void (OPENTTD_CARGO_CALL *monitor)(uint16_t, uint8_t, uint8_t, uint32_t, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(monitor);
-	uint8_t (OPENTTD_CARGO_CALL *subsidised)(uint16_t, uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(subsidised);
+	const OpenTTDSubsidyServices *(OPENTTD_CARGO_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
 	void (OPENTTD_CARGO_CALL *industry_effect)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_effect);
 	uint32_t (OPENTTD_CARGO_CALL *vehicle_read)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_read);
 	uint32_t (OPENTTD_CARGO_CALL *settle)(void *, uint8_t, int64_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(settle);

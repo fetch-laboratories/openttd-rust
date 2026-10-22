@@ -9,6 +9,7 @@
 #ifndef RUST_INDUSTRY_FFI_H
 #define RUST_INDUSTRY_FFI_H
 #include "service_defaults.hpp"
+struct OpenTTDSubsidyServices;
 #include "command_services_ffi.h"
 #include <stddef.h>
 #include <stdbool.h>
@@ -202,7 +203,7 @@ typedef struct OpenTTDIndustryLifecycleServices {
 	void (*close_view)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(close_view);
 	void (*close_production)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(close_production);
 	void (*delete_inspect)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(delete_inspect);
-	void (*delete_subsidies)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(delete_subsidies);
+	const OpenTTDSubsidyServices *(*subsidies)() OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(subsidies);
 	void (*invalidate_cargo)(uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(invalidate_cargo);
 	void *(*next_near_station)(void *, void *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(next_near_station);
 	void (*remove_delivery)(void *, void *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(remove_delivery);

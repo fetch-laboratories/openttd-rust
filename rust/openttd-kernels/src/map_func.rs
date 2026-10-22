@@ -29,6 +29,11 @@ impl Map {
     pub fn tile_y(self, tile: u32) -> u32 {
         tile >> self.log_x
     }
+    /// Original `DistanceManhattan`.
+    #[must_use]
+    pub fn distance_manhattan(self, a: u32, b: u32) -> u32 {
+        self.tile_x(a).abs_diff(self.tile_x(b)) + self.tile_y(a).abs_diff(self.tile_y(b))
+    }
     /// Original `DistanceSquare` over captured map dimensions.
     #[must_use]
     pub fn distance_square(self, a: u32, b: u32) -> u32 {

@@ -59,7 +59,7 @@ pub struct Services {
     pub(crate) accept: extern "C" fn(*mut c_void, u32, u32),
     pub(crate) statistics: extern "C" fn(u16, u8, u8, u32, u8),
     pub(crate) monitor: extern "C" fn(u16, u8, u8, u32, u32, u16),
-    pub(crate) subsidised: extern "C" fn(u16, u8, u8, u32) -> u8,
+    pub(crate) subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub(crate) industry_effect: extern "C" fn(*mut c_void, u8),
     pub(crate) vehicle_read: extern "C" fn(*mut c_void, u8) -> u32,
     pub(crate) settle: extern "C" fn(*mut c_void, u8, i64, i64) -> u32,
@@ -195,7 +195,15 @@ fn deliver(
         source,
         0xffff,
     );
-    if (s.subsidised)(station, cargo, company, source) != 0 {
+    if unsafe { &*(s.subsidies)() }.check(
+        cargo,
+        company,
+        crate::subsidy::Source {
+            id: source as u16,
+            kind: (source >> 16) as u8,
+        },
+        station,
+    ) {
         profit = match (s.setting)(0) {
             0 => profit.saturating_add(profit >> 1),
             1 => profit.saturating_mul(2),

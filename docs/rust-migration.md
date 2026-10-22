@@ -1730,3 +1730,25 @@ map/depot fields, infrastructure, docking membership and RNG across both axes,
 all lock directions/parts, occupied/bankrupt queries, force/partial clearing,
 editor/desert and restoration inputs. Pool exhaustion, construction under bridges,
 water objects, arbitrary NewGRF/legacy layouts and GUI remain #156 coverage gaps.
+
+### Subsidy lifecycle, route search and awards (#316)
+
+Rust owns each subsidy’s canonical scalars, all route searches, creation/deity
+checks, source/destination cache rebuild and deletion, monthly generation/expiry,
+delivery awards and company transfer/deletion. Native SUBS descriptors and
+GUI/script readers alias the sole Rust allocation; original bodies stay portable.
+C++ retains pool identity/allocation order, map/catchment and cargo specifications,
+news formatting and event enqueueing through typed noexcept leaves. Payment,
+company and industry owners call Rust directly; no owner borrow spans a callback.
+The deity command retains duplicate/self/distant routes, and monthly policy keeps
+RNG short circuits, 1001 attempts, u16 wrapping/narrowing and expiry’s bypass of
+both disabled-generation early returns. Cache flags use the original Set/Test
+operations; house cargo scans call the integrated Rust house owner directly.
+`python3 tools/migration.py verify --jobs 2` checks Cargo and native ABI.
+Default `subsidies-control` and `subsidies-reload` compare commands, every endpoint
+class, multi-awards/rivals, actual final-delivery payments for all four multipliers,
+searches, deletion/transfer and modern SUBS reload, requiring Rust branch witnesses.
+The existing console adapter compiles the unchanged reference monthly lambda for
+zero-countdown, full-pool retry and disabled-expiry RNG gaps; scalar address checks
+cover the reference-alias boundary. External NewGRF programs, legacy conversion
+fixtures and threaded GUI/presentation remain coverage gaps tracked in #156.
