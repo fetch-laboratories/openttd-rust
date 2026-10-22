@@ -665,7 +665,9 @@ layouts! {
     };
     "OpenTTDTileTypeAllocation" ["landscape"] => crate::services::TileTypeAllocation {
         base,
+        extended,
         count,
+        assertions,
     };
     "OpenTTDNativeTileTypeAccess::BaseTile" ["landscape"] => crate::services::BaseTileLayout {
         kind => type,
@@ -675,6 +677,11 @@ layouts! {
         m3,
         m4,
         m5,
+    };
+    "OpenTTDNativeTileTypeAccess::ExtendedTile" ["landscape"] => crate::services::ExtendedTileLayout {
+        m6,
+        m7,
+        m8,
     };
     "OpenTTDGroundLoopServices" ["landscape"] => crate::tile_loop::GroundServices {
         clear,

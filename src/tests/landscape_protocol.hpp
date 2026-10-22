@@ -45,7 +45,7 @@ template<typename Check> void Run(Check check)
 	shared.tile_type = Type;
 	const OpenTTDLandscapeLoopServices services{
 		.shared = &shared,
-		.tile_types = {nullptr, 0},
+		.tile_types = {},
 		.trees = nullptr,
 		.industry = {},
 		.ground = {},

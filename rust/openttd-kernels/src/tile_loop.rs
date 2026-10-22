@@ -133,6 +133,7 @@ unsafe fn dispatch(
                 settings.size_x,
                 g.clear,
                 s.shared,
+                types,
             );
         },
         1 => unsafe {
@@ -165,7 +166,7 @@ unsafe fn dispatch(
         },
         3 => unsafe { town::house::openttd_rust_house_tile_loop(s.town, s.shared, tile) },
         4 => unsafe {
-            trees::openttd_rust_trees_tile_loop(tile, settings, g.call, s.trees, s.shared);
+            trees::tile_loop(tile, settings, g.call, s.trees, s.shared, types);
         },
         5 => (s.station_loop)(tile),
         // `TileLoop_Void` is exactly `TileLoop_Water(tile)`.

@@ -28,6 +28,7 @@ private:
 #ifdef WITH_RUST
 	friend struct OpenTTDNativeTileTypeAccess;
 #endif
+public:
 	/**
 	 * Data that is stored per tile. Also used TileExtended for this.
 	 * Look at docs/landscape.html for the exact meaning of the members.
@@ -54,6 +55,7 @@ private:
 		uint16_t m8 = 0; ///< General purpose
 	};
 
+private:
 	static std::unique_ptr<TileBase[]> base_tiles; ///< Pointer to the tile-array.
 	static std::unique_ptr<TileExtended[]> extended_tiles; ///< Pointer to the extended tile-array.
 

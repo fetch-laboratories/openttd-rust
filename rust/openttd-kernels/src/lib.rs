@@ -1332,3 +1332,9 @@ mod cargo_storage;
 mod train_reservation;
 
 mod fleet;
+
+pub(crate) mod clear_map;
+pub(crate) mod rail_map;
+pub(crate) mod tile_map;
+pub(crate) mod tree_map;
+pub(crate) mod water_map;
