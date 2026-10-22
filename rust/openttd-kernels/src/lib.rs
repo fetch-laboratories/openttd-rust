@@ -63,7 +63,6 @@ mod string_validation;
 mod strings_type;
 mod tgp;
 mod tile_loop;
-mod tile_map;
 mod tile_owner;
 mod tile_type;
 mod town;
@@ -1352,7 +1351,12 @@ mod train_reservation;
 
 mod fleet;
 
+pub(crate) mod clear_map;
+pub(crate) mod rail_map;
 mod subsidy;
+pub(crate) mod tile_map;
+pub(crate) mod tree_map;
+pub(crate) mod water_map;
 
 mod cargo_type;
 mod source_type;

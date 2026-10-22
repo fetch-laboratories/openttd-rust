@@ -18,9 +18,10 @@ static constexpr uint8_t native_types[]{5, 10, 10, 5}; // Other kinds dispatch t
 static uint64_t observed_hash, observed_count;
 static bool rust_run, reenter, nested;
 static uint32_t starting_cursor;
-struct BaseTile { uint8_t type = 0, height = 0; uint16_t m2 = 0; uint8_t m1 = 0, m3 = 0, m4 = 0, m5 = 0; };
+using BaseTile = TileBaseStorage;
 static_assert(sizeof(BaseTile) == 8 && alignof(BaseTile) == 2 && offsetof(BaseTile, type) == 0);
 static std::unique_ptr<BaseTile[]> tiles;
+static std::unique_ptr<TileExtendedStorage[]> extended;
 static bool raw_backend, mutate;
 static uint32_t feedback;
 
@@ -71,7 +72,7 @@ static const OpenTTDIndustryTileServices object_tiles{.on_water = ReferenceObjec
 static const OpenTTDObjectServices objects{.shared = &shared, .industry_tiles = &object_tiles, .loop_policy = ReferenceObjectPolicy};
 static OpenTTDLandscapeLoopServices services{
 	.shared = &shared,
-	.tile_types = {nullptr, 0},
+	.tile_types = {},
 	.trees = nullptr,
 	.industry = {},
 	.ground = {},
@@ -91,7 +92,7 @@ static void RustRun()
 	};
 	/* Each nested entry has its own immutable table, like the native facade. */
 	auto batch_services = services;
-	batch_services.tile_types = raw_backend ? OpenTTDTileTypeAllocation{reinterpret_cast<const uint8_t *>(tiles.get()), 1U << (log_x + log_y)} : OpenTTDTileTypeAllocation{nullptr, 0};
+	batch_services.tile_types = raw_backend ? OpenTTDTileTypeAllocation{.base = tiles.get(), .extended = extended.get(), .count = 1U << (log_x + log_y), .assertions = true} : OpenTTDTileTypeAllocation{};
 	openttd_rust_run_tile_loop(log_x, log_y, settings, &batch_services);
 }
 static void NativeVisit(uint32_t tile, uint8_t kind) noexcept
@@ -117,6 +118,7 @@ int main()
 	for (log_x = 6; log_x <= 12; log_x++) {
 		for (log_y = 6; log_y <= 12; log_y++) {
 			tiles = std::make_unique<BaseTile[]>(1U << (log_x + log_y));
+			extended = std::make_unique<TileExtendedStorage[]>(1U << (log_x + log_y));
 			for (uint32_t tile = 0; tile < (1U << (log_x + log_y)); tile++) tiles[tile].type = static_cast<uint8_t>((native_types[tile % 4] << 4) | (tile & 15));
 			for (uint64_t tick : {UINT64_C(0), UINT64_C(1), UINT64_C(255), UINT64_C(256), UINT64_MAX}) {
 				for (uint32_t start : {1U, (1U << (log_x + log_y)) - 1, 0x5A5U}) {
@@ -158,6 +160,7 @@ int main()
 		for (bool rust : {false, true}) {
 			/* Reset BETWEEN entries and reacquire; no stale pointer is read. */
 			tiles = std::make_unique<BaseTile[]>(4096);
+			extended = std::make_unique<TileExtendedStorage[]>(4096);
 			for (uint32_t tile = 0; tile < 4096; tile++) tiles[tile].type = static_cast<uint8_t>(native_types[tile % 4] << 4);
 			rust_run = rust;
 			reenter = true;

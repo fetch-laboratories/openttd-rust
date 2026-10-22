@@ -8,6 +8,7 @@
 /** @file services_ffi.h Synchronous shared game services for Rust owners. */
 #ifndef RUST_SERVICES_FFI_H
 #define RUST_SERVICES_FFI_H
+#include "../tile_storage_type.h"
 #include "service_defaults.hpp"
 #include <cstdint>
 #include <cstddef>
@@ -28,13 +29,15 @@ struct OpenTTDEconomyDate { int32_t value; };
 static_assert(std::is_trivially_copyable_v<OpenTTDCalendarDate> && std::is_standard_layout_v<OpenTTDCalendarDate>);
 static_assert(std::is_trivially_copyable_v<OpenTTDEconomyDate> && std::is_standard_layout_v<OpenTTDEconomyDate>);
 
-/* Allocation-derived base array address, never a reference to tile zero's byte.
+/* Canonical typed allocation addresses, never references to tile zero's fields.
  * Only an audited serialized entry may retain it. It expires before map reset or
- * mutex yield. Raw reads consume only type@0 of each actual eight-byte base tile;
+ * mutex yield. Only field-sized raw reads in audited scheduler entries are allowed;
  * C++ owns allocation/construction/reset/destruction and every write. */
 struct OpenTTDTileTypeAllocation {
-	const uint8_t *base;
+	const TileBaseStorage *base;
+	const TileExtendedStorage *extended;
 	uint32_t count;
+	bool assertions;
 };
 OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
 

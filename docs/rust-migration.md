@@ -610,8 +610,22 @@ callback unwinds; generation-progress cancellation stays outside tick.
 exercise real ABI calls, declared endpoints and required named branch witnesses;
 `--self`/`--soak` extend evidence. Missing witnesses fail. The unchanged scheduler
 probe covers dimensions/cursor/reentry phases unreachable through ordinary saves.
-Remaining matrix/editor/NewGRF/threaded gaps are in #156. `TreeObservation` remains;
-the scheduler gate does not remove its full facade cost.
+Remaining matrix/editor/NewGRF/threaded gaps are in #156.
+
+#274 extends the canonical allocation descriptor with typed base/extended pointers,
+count and native assertion policy. The scheduler's clear/water/tree reads use
+header-named Rust helpers; shore-tree flooding shares that reader. Field-sized raw
+loads finish before callbacks, and observations reload after mutation. The audited
+scheduler no-reset/no-yield interval alone permits descriptor metadata to survive
+callbacks. C++ retains arrays, allocation and all writes. Standalone water/tree,
+generation, planting/command and unrelated owner reads retain canonical typed
+callbacks; no descriptor is carried into these unaudited entries.
+Generated named probes pin both layouts. Default native tests compare field/slope
+encodings, extended fences, live mutation, reallocation and assertion-policy
+fallbacks with unchanged native services. Assertions-off raw reads add no bounds,
+type or field rejection. The PR retains the historical same-base TGP profile;
+speed is checked on the integrated branch, without per-PR counts or a speed gate.
+This maintenance moves no storage or whole owner.
 
 ### Landscape partial-pixel height
 
