@@ -20,7 +20,7 @@ use crate::vehicle::OpenTTDVehicle;
 use std::collections::{BTreeMap, BTreeSet};
 const NONE: u32 = u32::MAX;
 /// `VehicleID::Invalid()` (`vehicle_type.h`), the list-selection sentinel.
-const INVALID_VEHICLE: u32 = 0xF_FFFF;
+pub(crate) const INVALID_VEHICLE: u32 = 0xF_FFFF;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct GroupFields {
@@ -307,7 +307,6 @@ pub struct GroupServices {
     pub(crate) close_replace: unsafe extern "C" fn(u8),
     pub(crate) screen_dirty: unsafe extern "C" fn(),
     pub(crate) list_generate: unsafe extern "C" fn(*mut ()) -> bool,
-    pub(crate) list_push: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) list_size: unsafe extern "C" fn(*mut ()) -> usize,
     pub(crate) list_at: unsafe extern "C" fn(*mut (), usize) -> *mut (),
     pub(crate) renew_allocate: unsafe extern "C" fn() -> *mut (),
@@ -318,7 +317,7 @@ pub struct GroupServices {
 
 const INVALID_GROUP: u16 = 65535;
 const DEFAULT_GROUP: u16 = 65534;
-const ALL_GROUP: u16 = 65533;
+pub(crate) const ALL_GROUP: u16 = 65533;
 const NEW_GROUP: u16 = 65532;
 const OK: u32 = u32::MAX;
 const ERROR: u32 = 65535;
@@ -971,6 +970,24 @@ unsafe fn company_liveries(w: &GroupServices, company: u8) {
         }
     }
 }
+enum VehicleList {
+    Generated(*mut ()),
+    Single(*mut ()),
+}
+impl VehicleList {
+    unsafe fn size(&self, w: &GroupServices) -> usize {
+        match *self {
+            Self::Generated(context) => unsafe { (w.list_size)(context) },
+            Self::Single(_) => 1,
+        }
+    }
+    unsafe fn at(&self, w: &GroupServices, index: usize) -> *mut () {
+        match *self {
+            Self::Generated(context) => unsafe { (w.list_at)(context, index) },
+            Self::Single(v) => v,
+        }
+    }
+}
 unsafe fn add_vehicle_group(
     w: &GroupServices,
     flags: u32,
@@ -986,23 +1003,26 @@ unsafe fn add_vehicle_group(
     if unsafe { group(w, new) }.is_null() && new != DEFAULT_GROUP && new != NEW_GROUP {
         return ERROR;
     }
-    if veh_id == INVALID_VEHICLE && vli_valid {
+    // The original's command-local `VehicleList`: generated from the
+    // identifier, or holding the single named vehicle.
+    let list = if veh_id == INVALID_VEHICLE && vli_valid {
         if !unsafe { (w.list_generate)(context) } || unsafe { (w.list_size)(context) } == 0 {
             return ERROR;
         }
+        VehicleList::Generated(context)
     } else {
         let v = unsafe { (w.vehicle)(veh_id) };
         if v.is_null() {
             return ERROR;
         }
-        unsafe { (w.list_push)(context, v) };
-    }
-    let first = unsafe { (w.list_at)(context, 0) };
+        VehicleList::Single(v)
+    };
+    let first = unsafe { list.at(w, 0) };
     let kind = unsafe { (w.vehicle_type)(first) };
     let owner = unsafe { (w.current_company)() };
-    let size = unsafe { (w.list_size)(context) };
+    let size = unsafe { list.size(w) };
     for i in 0..size {
-        let v = unsafe { (w.list_at)(context, i) };
+        let v = unsafe { list.at(w, i) };
         if unsafe { (w.vehicle_owner)(v) } != owner || !unsafe { (w.primary)(v) } {
             return ERROR;
         }
@@ -1022,7 +1042,7 @@ unsafe fn add_vehicle_group(
     }
     if flags & 1 != 0 {
         for i in 0..size {
-            let vc = unsafe { (w.list_at)(context, i) };
+            let vc = unsafe { list.at(w, i) };
             let vehicle_id = unsafe { (w.vehicle_id)(vc) };
             let v = unsafe { (w.vehicle)(vehicle_id) };
             unsafe { add_vehicle(w, v, new) };

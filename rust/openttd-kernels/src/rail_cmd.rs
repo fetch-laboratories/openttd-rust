@@ -27,6 +27,7 @@ use crate::economy_type::{
     PR_BUILD_DEPOT_TRAIN, PR_BUILD_FOUNDATION, PR_BUILD_SIGNALS, PR_CLEAR_DEPOT_TRAIN,
     PR_CLEAR_ROUGH, PR_CLEAR_SIGNALS, PR_CLEAR_WATER,
 };
+use crate::order_type::OT_LOADING;
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Cost, Map, RailMapServices, Services,
 };
@@ -298,7 +299,6 @@ const INVALID_ROADTYPE: u8 = 63;
 const ROAD_X: u8 = 10;
 const ROAD_Y: u8 = 5;
 const STOPPED: u8 = 1 << 1;
-const OT_LOADING: u8 = 3;
 
 const TILE_AXIAL_DISTANCE: i32 = 192;
 const TILE_CORNER_DISTANCE: i32 = 128;
