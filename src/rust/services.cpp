@@ -256,8 +256,9 @@ static_assert(to_underlying(DoCommandFlag::NoTestTownRating) == 4 && to_underlyi
 static_assert(std::is_same_v<DoCommandFlags::BaseType, uint16_t>);
 static_assert(to_underlying(DoCommandFlag::AutoReplace) == 6 && to_underlying(DoCommandFlag::NoCargoCapacityCheck) == 7);
 static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);
-static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8);
-static_assert(INVALID_VEH_ORDER_ID == 0xFF && to_underlying(OrderLoadType::NoLoad) == 4 && to_underlying(OrderUnloadType::Unload) == 1 && to_underlying(OrderUnloadType::Transfer) == 2);
+static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_DUMMY == 5 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8);
+static_assert(INVALID_VEH_ORDER_ID == 0xFF && to_underlying(OrderLoadType::NoLoad) == 4 && to_underlying(OrderUnloadType::Unload) == 1 && to_underlying(OrderUnloadType::Transfer) == 2 && to_underlying(OrderUnloadType::NoUnload) == 4);
+static_assert(to_underlying(StationType::Truck) == 2 && to_underlying(StationType::Bus) == 3);
 static_assert(CARGO_AUTO_REFIT == 0xFD && StationID::Invalid().base() == 0xFFFF);
 static_assert(EdgeUpdateModes{EdgeUpdateMode::Increase}.base() == 1 && EdgeUpdateModes{EdgeUpdateMode::Refresh}.base() == 2 && EdgeUpdateModes{EdgeUpdateMode::Restricted}.base() == 4 && EdgeUpdateModes{EdgeUpdateMode::Unrestricted}.base() == 8);
 static_assert(VL_STANDARD == 0 && VL_SHARED_ORDERS == 1 && VL_STATION_LIST == 2 && VL_DEPOT_LIST == 3 && VL_GROUP_LIST == 4);

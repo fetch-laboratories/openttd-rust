@@ -17,12 +17,16 @@ from .play_saves import DISTRIBUTIONS
 
 ADAPTER = ROOT / "tools/simulation/orders-console.cpp"
 COMMON = "roadveh[0]/common[0]/"
-# Route prediction and link statistics (#349) reached by the visits fixture's
-# refit, autorefit, conditional, full-load and cross-graph orders. Allocation
-# failure needs an exhausted link-graph pool (#156).
-VISITS = ["aircraft_mail", "autorefit", "conditional_branch", "full_load_increase"]
+# Station/depot visits and route prediction (#349) reached by the visits
+# fixture's refit, autorefit, conditional, full-load, cross-graph, depot and
+# unload-only orders. Unreached (#156): graph_failure (exhausted link-graph
+# pool), depot_refit_failed (refit cost beyond cash), depot_elsewhere,
+# dummy and reservation (departure with reserved cargo).
+VISITS = ["aircraft_mail", "autorefit", "begin_loading", "conditional_branch"]
+VISITS += ["depot", "depot_halt", "depot_refit", "full_load_increase"]
 VISITS += ["graph_join", "graph_merge_first", "graph_merge_second", "graph_new"]
-VISITS += ["merge_blocked", "refit", "reset_refit"]
+VISITS += ["leave_empty", "leave_loaded", "loading_depart", "merge_blocked"]
+VISITS += ["refit", "reset_refit"]
 
 
 def scenarios(soak):
@@ -230,7 +234,7 @@ def check(scenario, run, mode, role, result):
         return
     operation = scenario["orders"]
     if operation == "visits":
-        if "VISITS setup 3 3 120" not in run["log"]:
+        if "VISITS setup 3 3 120 0" not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing visits setup")
         if counts := branch_witnesses(scenario, run, role, "vehicle_visits", VISITS):
             result[f"{mode}_{role}_visit_branches"] = counts

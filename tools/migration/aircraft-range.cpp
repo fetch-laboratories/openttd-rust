@@ -73,7 +73,8 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.maintenance = &maintenance;
 	maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	leaves.process_orders = [](OpenTTDAircraftVehicle) noexcept {};
-	vehicle.loading = [](OpenTTDVehicle *, bool) noexcept {};
+	vehicle.loading = [](OpenTTDVehicle *, bool, const OpenTTDVehicleVisits *) noexcept {};
+	vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept { fixture->messages[0]++; };
 	leaves.destination_too_far = [](OpenTTDAircraftVehicle) noexcept { fixture->messages[1]++; fixture->messages[2]++; };
 	leaves.delete_range_news = [](OpenTTDAircraftVehicle) noexcept { fixture->messages[3]++; };

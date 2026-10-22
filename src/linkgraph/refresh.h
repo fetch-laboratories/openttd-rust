@@ -13,6 +13,7 @@
 #include "../cargo_type.h"
 #include "../vehicle_base.h"
 
+#ifndef WITH_RUST
 /**
  * Utility to refresh links a consist will visit.
  */
@@ -20,7 +21,6 @@ class LinkRefresher {
 public:
 	static void Run(Vehicle *v, bool allow_merge = true, bool is_full_loading = false);
 
-#ifndef WITH_RUST
 protected:
 	/**
 	 * Various flags about properties of the last examined link that might have
@@ -97,7 +97,7 @@ protected:
 	VehicleOrderID PredictNextOrder(VehicleOrderID cur, VehicleOrderID next, RefreshFlags flags, uint num_hops = 0);
 
 	void RefreshLinks(VehicleOrderID cur, VehicleOrderID next, RefreshFlags flags, uint num_hops = 0);
-#endif
 };
+#endif /* WITH_RUST */
 
 #endif /* REFRESH_H */

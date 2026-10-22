@@ -212,13 +212,10 @@ static uint32_t Ship_enter_tile(uint32_t id, uint32_t tile, uint32_t x, uint32_t
 	return VehicleEnterTile(v, TileIndex(tile), static_cast<int32_t>(x), static_cast<int32_t>(y)).base();
 }
 
-static void Ship_enter_depot(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); VehicleEnterDepot(v); }
 
 static bool Ship_process_orders(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return ProcessOrders(v); }
 
-static void Ship_loading(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->HandleLoading(); }
 
-static void Ship_begin_loading(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->BeginLoading(); }
 
 
 static void Ship_viewport(uint32_t id, bool update_delta, bool force) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateViewport(update_delta, force); }
@@ -417,8 +414,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.busy_tile = Ship_busy_tile, .path_size = Ship_path_size,
 		.path_back = Ship_path_back, .path_pop = Ship_path_pop,
 		.path_clear = Ship_path_clear, .enter_tile = Ship_enter_tile,
-		.enter_depot = Ship_enter_depot, .process_orders = Ship_process_orders,
-		.loading = Ship_loading, .begin_loading = Ship_begin_loading,
+		.process_orders = Ship_process_orders,
 		.viewport = Ship_viewport,
 		.base_viewport = Ship_base_viewport, .visual = Ship_visual,
 		.cache = Ship_cache, .play_sound = Ship_play_sound,

@@ -737,7 +737,9 @@ public:
 		this->orders->GetNextStoppingStation(next_station, this);
 	}
 
+#ifndef WITH_RUST
 	void ResetRefitCaps();
+#endif
 
 	void ReleaseUnitNumber();
 

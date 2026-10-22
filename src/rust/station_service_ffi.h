@@ -260,7 +260,8 @@ struct OpenTTDStationLoading {
 	void (*subtract_profit)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(subtract_profit);
 	void (*unknown_load_result)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_load_result);
 	void (*vehicle_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_dirty);
-	void (*update_indicator)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_indicator);
+	bool (*indicator)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(indicator);
+	void (*show_indicator)(OpenTTDVehicle *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(show_indicator);
 	void (*set_current_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_current_company);
 	OpenTTDVehicle * (*next_vehicle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next_vehicle);
 	OpenTTDVehicle * (*next_articulated)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(next_articulated);

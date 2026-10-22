@@ -1701,16 +1701,16 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		SetWindowDirty(WC_VEHICLE_DETAILS, front->index);
 		front->MarkDirty();
 	},
-	.update_indicator = [](OpenTTDVehicle *handle) noexcept -> void {
+	.indicator = [](OpenTTDVehicle *handle) noexcept -> bool {
+		const Vehicle *front = VehicleOf(handle);
+		return _game_mode != GM_MENU && (_settings_client.gui.loading_indicators > (uint)(front->owner != _local_company && _local_company != COMPANY_SPECTATOR));
+	},
+	.show_indicator = [](OpenTTDVehicle *handle, uint8_t percent, uint32_t percent_up_down) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
-		if (_game_mode != GM_MENU && (_settings_client.gui.loading_indicators > (uint)(front->owner != _local_company && _local_company != COMPANY_SPECTATOR))) {
-			StringID percent_up_down = STR_NULL;
-			int percent = CalcPercentVehicleFilled(front, &percent_up_down);
-			if (front->fill_percent_te_id == INVALID_TE_ID) {
-				front->fill_percent_te_id = ShowFillingPercent(front->x_pos, front->y_pos, front->z_pos + 20, percent, percent_up_down);
-			} else {
-				UpdateFillingPercent(front->fill_percent_te_id, percent, percent_up_down);
-			}
+		if (front->fill_percent_te_id == INVALID_TE_ID) {
+			front->fill_percent_te_id = ShowFillingPercent(front->x_pos, front->y_pos, front->z_pos + 20, percent, percent_up_down);
+		} else {
+			UpdateFillingPercent(front->fill_percent_te_id, percent, percent_up_down);
 		}
 	},
 	.set_current_company = GetRustCompanyFinanceServices().set_current_company,
@@ -1851,11 +1851,9 @@ static const OpenTTDStationLoading _rust_station_loading = {
  * Prepare the vehicle to be unloaded.
  * @param front_v the vehicle to be unloaded
  */
+#ifndef WITH_RUST
 void PrepareUnload(Vehicle *front_v)
 {
-#ifdef WITH_RUST
-	openttd_rust_station_prepare(RustVehicle(front_v), &GetRustStationServices(), &_rust_station_loading);
-#else
 	Station *curr_station = Station::Get(front_v->last_station_visited);
 	curr_station->loading_vehicles.push_back(front_v);
 
@@ -1889,10 +1887,8 @@ void PrepareUnload(Vehicle *front_v)
 			}
 		}
 	}
-#endif
 }
 
-#ifndef WITH_RUST
 /**
  * Gets the amount of cargo the given vehicle can load in the current tick.
  * This is only about loading speed. The free capacity is ignored.

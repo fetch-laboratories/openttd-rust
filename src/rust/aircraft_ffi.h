@@ -99,7 +99,6 @@ struct OpenTTDAircraftLeaves {
 	void (OPENTTD_AIRCRAFT_CALL *landing_rating)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(landing_rating);
 	void (OPENTTD_AIRCRAFT_CALL *dirty_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_depot);
 	void (OPENTTD_AIRCRAFT_CALL *first_arrival)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(first_arrival);
-	void (OPENTTD_AIRCRAFT_CALL *begin_loading)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(begin_loading);
 	void (OPENTTD_AIRCRAFT_CALL *update_delta)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(update_delta);
 	void (OPENTTD_AIRCRAFT_CALL *touchdown_animation)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(touchdown_animation);
 	void (OPENTTD_AIRCRAFT_CALL *destination_too_far)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(destination_too_far);

@@ -12,6 +12,7 @@
 #include "vehicle_services.h"
 #include "orders_ffi.h"
 #include "station_service_ffi.h"
+#include "vehicle_visits_ffi.h"
 #include "engine_services.h"
 #include "services_newgrf.h"
 #include "../vehicle_func.h"
@@ -130,7 +131,6 @@ static void OPENTTD_VEHICLE_CALL VehicleSvcWriteCoordinates(OpenTTDVehicle *v, i
 static bool OPENTTD_VEHICLE_CALL VehicleSvcWaitingForUnbunching(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->IsWaitingForUnbunching(); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcLeaveUnbunchingDepot(OpenTTDVehicle *v) noexcept { VehicleOf(v)->LeaveUnbunchingDepot(); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcResetDepotUnbunching(OpenTTDVehicle *v) noexcept { VehicleOf(v)->ResetDepotUnbunching(); }
-static void OPENTTD_VEHICLE_CALL VehicleSvcEnterDepot(OpenTTDVehicle *v) noexcept { VehicleEnterDepot(VehicleOf(v)); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcPathfindingResult(OpenTTDVehicle *v, bool found) noexcept { VehicleOf(v)->HandlePathfindingResult(found); }
 static OpenTTDVehicleNewPosition OPENTTD_VEHICLE_CALL VehicleSvcNewPosition(OpenTTDVehicle *v) noexcept
 {
@@ -281,7 +281,6 @@ static OpenTTDVehicleDayCost OPENTTD_VEHICLE_CALL VehicleSvcDayCost(OpenTTDVehic
 	return {.profit = RustVehicleProfit(u), .running = RustVehicleRunning(u)};
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcMakeDummy(OpenTTDVehicle *v) noexcept { VehicleOf(v)->current_order.MakeDummy(); }
-static void OPENTTD_VEHICLE_CALL VehicleSvcLoading(OpenTTDVehicle *v, bool second) noexcept { VehicleOf(v)->HandleLoading(second); }
 
 static OpenTTDVehiclePositionObservations OPENTTD_VEHICLE_CALL VehicleSvcPositionObservations(OpenTTDVehicle *shell) noexcept
 {
@@ -307,7 +306,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.waiting_for_unbunching = VehicleSvcWaitingForUnbunching,
 	.leave_unbunching_depot = VehicleSvcLeaveUnbunchingDepot,
 	.reset_depot_unbunching = VehicleSvcResetDepotUnbunching,
-	.enter_depot = VehicleSvcEnterDepot,
+	.enter_depot = openttd_rust_visit_enter_depot,
 	.pathfinding_result = VehicleSvcPathfindingResult,
 	.new_position = VehicleSvcNewPosition,
 	.move_then_status = VehicleSvcMoveThenStatus,
@@ -382,7 +381,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.tick_status = VehicleSvcTickStatus,
 	.day_cost = VehicleSvcDayCost,
 	.make_dummy = VehicleSvcMakeDummy,
-	.loading = VehicleSvcLoading,
+	.loading = openttd_rust_visit_handle_loading,
 	.check_orders_only = VehicleSvcCheckOrdersOnly,
 	.write_coordinates = VehicleSvcWriteCoordinates,
 	.altitude_inputs = VehicleSvcAltitudeInputs,
@@ -390,6 +389,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.movement_observations = VehicleSvcMovementObservations,
 	.max_speed = VehicleSvcMaxSpeed,
 	.maintenance = &_rust_vehicle_maintenance_services,
+	.visits = RustVehicleVisits,
 };
 
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept

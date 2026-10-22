@@ -225,7 +225,6 @@ pub struct Leaves {
     pub landing_rating: unsafe extern "C" fn(u16, u8),
     pub dirty_depot: unsafe extern "C" fn(Vehicle),
     pub first_arrival: unsafe extern "C" fn(Vehicle, u16),
-    pub begin_loading: unsafe extern "C" fn(Vehicle),
     pub update_delta: unsafe extern "C" fn(Vehicle),
     pub touchdown_animation: unsafe extern "C" fn(Vehicle, u16),
     pub destination_too_far: unsafe extern "C" fn(Vehicle),
@@ -595,13 +594,13 @@ impl World<'_> {
         leave_unbunching(self; vehicle: Vehicle) -> () => (self.vs.leave_unbunching_depot)(vehicle.base());
         dirty_depot(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.dirty_depot)(vehicle) };
         first_arrival(self; vehicle: Vehicle, station: i64) -> () => unsafe { (self.leaves.first_arrival)(vehicle, station as u16) };
-        begin_loading(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.begin_loading)(vehicle) };
+        begin_loading(self; vehicle: Vehicle) -> () => crate::vehicle::visits::begin_loading(vehicle.base(), self.vs.visits());
         dirty_details(self; vehicle: Vehicle) -> () => (self.maintenance().details_dirty)(vehicle.base());
         update_delta(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.update_delta)(vehicle) };
         touchdown_animation(self; vehicle: Vehicle, station: i64) -> () => unsafe { (self.leaves.touchdown_animation)(vehicle, station as u16) };
         destination_too_far(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.destination_too_far)(vehicle) };
         delete_range_news(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.delete_range_news)(vehicle) };
-        handle_loading(self; vehicle: Vehicle, second: i64) -> () => (self.vs.loading)(vehicle.base(), second != 0);
+        handle_loading(self; vehicle: Vehicle, second: i64) -> () => self.vs.handle_loading(vehicle.base(), second != 0);
         service_order(self; vehicle: Vehicle, station: i64) -> () => unsafe { (self.leaves.service_order)(vehicle, station as u16) };
         dummy_order(self; vehicle: Vehicle) -> () => (self.vs.make_dummy)(vehicle.base());
         check_orders(self; vehicle: Vehicle) -> () => (self.vs.check_orders_only)(vehicle.base());
@@ -616,7 +615,7 @@ impl World<'_> {
         unreachable(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.unreachable)(vehicle) };
         update_rotor_image(self; v: Vehicle) -> () => unsafe { (self.leaves.update_rotor_image)(v) };
         process_orders(self; v: Vehicle) -> () => unsafe { (self.leaves.process_orders)(v) };
-        enter_depot(self; v: Vehicle) -> () => (self.vs.enter_depot)(v.base());
+        enter_depot(self; v: Vehicle) -> () => self.vs.enter_depot(v.base());
         delete_aircraft(self; v: Vehicle) -> () => (self.vs.destroy)(v.base());
     }
 

@@ -222,10 +222,7 @@ pub struct Leaves {
     pub path_pop: extern "C" fn(u32),
     pub path_clear: extern "C" fn(u32),
     pub enter_tile: extern "C" fn(u32, u32, u32, u32) -> u32,
-    pub enter_depot: extern "C" fn(u32),
     pub process_orders: extern "C" fn(u32) -> bool,
-    pub loading: extern "C" fn(u32),
-    pub begin_loading: extern "C" fn(u32),
     pub viewport: extern "C" fn(u32, bool, bool),
     pub base_viewport: extern "C" fn(u32),
     pub visual: extern "C" fn(u32),
@@ -484,7 +481,7 @@ impl Game<'_> {
             && (self.leaves.is_depot)(observed_tile)
             && (self.leaves.depot_index)(observed_tile) == observed_order_destination
         {
-            (self.leaves.enter_depot)(id);
+            self.vs().enter_depot(v);
             return true;
         }
         if observed_dest == 0 || (self.leaves.busy_tile)(id) {
@@ -652,7 +649,7 @@ impl Game<'_> {
             self.reverse(id, INVALID);
             return;
         }
-        (self.leaves.loading)(id);
+        self.vs().handle_loading(v, false);
         if (self.leaves.order_type)(id) == 3 {
             return;
         }
@@ -722,7 +719,7 @@ impl Game<'_> {
                             } else if observed_order_type == 2 && observed_dest == new_tile {
                                 if x & 15 == 8 && y & 15 == 8 {
                                     crate::witness::hit(crate::witness::SHIP_DEPOT_ENTER);
-                                    (self.leaves.enter_depot)(id);
+                                    self.vs().enter_depot(v);
                                     return;
                                 }
                             } else if observed_order_type == 1 && (self.leaves.docking)(new_tile) {
@@ -734,7 +731,10 @@ impl Game<'_> {
                                     if (self.leaves.station_dock)(station) {
                                         crate::witness::hit(crate::witness::SHIP_LOADING);
                                         self.arrives(id, station);
-                                        (self.leaves.begin_loading)(id);
+                                        crate::vehicle::visits::begin_loading(
+                                            v,
+                                            self.vs().visits(),
+                                        );
                                     } else {
                                         (self.leaves.order_leave)(id);
                                         (self.leaves.order_increment)(id);

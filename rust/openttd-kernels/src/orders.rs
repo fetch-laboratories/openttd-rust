@@ -481,7 +481,6 @@ pub struct Leaves {
     pub suppress_implicit: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub shared_window: unsafe extern "C" fn(ctx: *mut c_void, first: *mut c_void) -> u64,
     pub vehicle_id: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
-    pub percent_filled: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub reliability: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub display_speed: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
     pub age_years: unsafe extern "C" fn(ctx: *mut c_void) -> u64,
@@ -555,7 +554,6 @@ pub struct Leaves {
     pub debug_list: unsafe extern "C" fn(ctx: *mut c_void),
     pub assert_departure_range: extern "C" fn(lower: i32, upper: i32),
     pub delete_list: unsafe extern "C" fn(ctx: *mut c_void),
-    pub leave_station: unsafe extern "C" fn(ctx: *mut c_void),
     pub reverse_train: unsafe extern "C" fn(ctx: *mut c_void),
     pub next_airport: unsafe extern "C" fn(ctx: *mut c_void),
     pub set_destination: unsafe extern "C" fn(ctx: *mut c_void, tile: u32),
@@ -784,7 +782,7 @@ impl Order {
     pub(crate) fn kind(&self) -> u8 {
         self.kind & 15
     }
-    fn non_stop(self) -> u8 {
+    pub(crate) fn non_stop(self) -> u8 {
         self.kind >> 6
     }
     pub(crate) fn load(self) -> u8 {
@@ -793,10 +791,10 @@ impl Order {
     pub(crate) fn unload(self) -> u8 {
         self.flags & 7
     }
-    fn action(&self) -> u8 {
+    pub(crate) fn action(&self) -> u8 {
         (self.flags >> 3) & 15
     }
-    fn depot_type(self) -> u8 {
+    pub(crate) fn depot_type(self) -> u8 {
         self.flags & 7
     }
     fn variable(self) -> u8 {
@@ -834,7 +832,7 @@ impl Order {
             self.flags & 128 != 0
         }
     }
-    fn timetabled_wait(self) -> u16 {
+    pub(crate) fn timetabled_wait(self) -> u16 {
         if self.wait_timetabled() { self.wait } else { 0 }
     }
     fn timetabled_travel(self) -> u16 {
@@ -1988,16 +1986,6 @@ pub unsafe extern "C" fn openttd_rust_wait_unbunching(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_measure_unbunching(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u32 {
-    let g = Game(leaves);
-    g.measure_unbunching(v);
-    0
-}
-
 /// All fields belong to a live, properly constructed C++ Order, accessed raw.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_free(p: *mut Order) -> u32 {
@@ -3081,16 +3069,6 @@ pub unsafe extern "C" fn openttd_rust_check_orders(v: *mut c_void, leaves: &'sta
     0
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_begin_loading(
-    v: *mut c_void,
-    leaves: &'static Leaves,
-) -> u64 {
-    let control = Control { g: Game(leaves) };
-    control.begin_loading_orders(v);
-    0
-}
-
 #[repr(C)]
 #[derive(Default)]
 pub struct Closest {
@@ -3106,7 +3084,12 @@ impl Game {
         }
         let variable = match order.variable() {
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-            0 => (unsafe { (self.0.percent_filled)(v) }) as i32,
+            0 => i32::from(crate::vehicle::visits::percent_filled(
+                // SAFETY: the entry's live Vehicle shell.
+                VehicleRef(unsafe { ptr::NonNull::new_unchecked(v.cast()) }),
+                None,
+                self.0.base.visits(),
+            )),
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
             1 => ((unsafe { (self.0.reliability)(v) } * 101) >> 16) as i32,
             7 => {
@@ -3784,9 +3767,8 @@ impl Control {
         if execute {
             if g.current(v).kind() == 3 {
                 // SAFETY: The vehicle is live; no owner borrow spans station departure.
-                unsafe {
-                    (g.0.leave_station)(v);
-                }
+                let vehicle = VehicleRef(unsafe { ptr::NonNull::new_unchecked(v.cast()) });
+                crate::vehicle::visits::leave_station(vehicle, g.0.base.visits());
             }
             // SAFETY: Exclusive serialized scalar write to a live owner; no borrow survives the statement.
             unsafe {
@@ -4952,5 +4934,63 @@ impl VisitOrders {
     pub(crate) fn total(self, list: *mut c_void) -> i32 {
         // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
         unsafe { (*self.0.list(list)).total }
+    }
+    /// `v->current_order`.
+    pub(crate) fn current(self, v: VehicleRef) -> Order {
+        self.0.current(Self::shell(v))
+    }
+    /// `v->GetOrder(index)`: null without a list or beyond its orders.
+    pub(crate) fn get(self, v: VehicleRef, index: u8) -> Option<Order> {
+        self.0.vehicle_order(Self::shell(v), index)
+    }
+    /// `v->cur_real_order_index`.
+    pub(crate) fn real(self, v: VehicleRef) -> u8 {
+        // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
+        unsafe { (*self.0.consist(Self::shell(v))).real }
+    }
+    /// `v->lateness_counter`.
+    pub(crate) fn lateness(self, v: VehicleRef) -> i32 {
+        // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
+        unsafe { (*self.0.consist(Self::shell(v))).lateness }
+    }
+    /// `v->vehicle_flags`.
+    pub(crate) fn flags(self, v: VehicleRef) -> u16 {
+        // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
+        unsafe { (*self.0.consist(Self::shell(v))).flags }
+    }
+    /// The implicit-order part of `Vehicle::BeginLoading`.
+    pub(crate) fn begin_loading(self, v: VehicleRef) {
+        Control { g: self.0 }.begin_loading_orders(Self::shell(v));
+    }
+    /// `Vehicle::DeleteUnreachedImplicitOrders`.
+    pub(crate) fn delete_implicit(self, v: VehicleRef) {
+        Control { g: self.0 }.delete_implicit(Self::shell(v));
+    }
+    /// `Vehicle::IncrementImplicitOrderIndex`.
+    pub(crate) fn increment_implicit(self, v: VehicleRef) {
+        self.0.increment_implicit(Self::shell(v));
+    }
+    /// `UpdateVehicleTimetable`.
+    pub(crate) fn update_timetable(self, v: VehicleRef, travelling: bool) {
+        self.0.update_timetable(Self::shell(v), travelling);
+    }
+    /// The unbunching round-trip measurement of `VehicleEnterDepot`.
+    pub(crate) fn measure_unbunching(self, v: VehicleRef) {
+        self.0.measure_unbunching(Self::shell(v));
+    }
+    /// `BaseConsist::ResetDepotUnbunching`.
+    pub(crate) fn reset_unbunching(self, v: VehicleRef) {
+        // SAFETY: The live consist owner is written by scalar stores only.
+        unsafe { openttd_rust_consist_reset(self.0.consist(Self::shell(v))) };
+    }
+    /// `v->current_order.MakeLeaveStation()`.
+    pub(crate) fn make_leave_station(self, v: VehicleRef) {
+        // SAFETY: One Order store into the live current order; no alias survives.
+        unsafe { openttd_rust_order_leave((*self.0.vehicle(Self::shell(v))).current.as_mut_ptr()) };
+    }
+    /// `v->current_order.MakeDummy()`.
+    pub(crate) fn make_dummy(self, v: VehicleRef) {
+        // SAFETY: One Order store into the live current order; no alias survives.
+        unsafe { openttd_rust_order_dummy((*self.0.vehicle(Self::shell(v))).current.as_mut_ptr()) };
     }
 }

@@ -235,7 +235,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.water_infrastructure = GetRustWaterRestorationServices().infrastructure,
 		.make_dock = [](uint32_t tile, uint8_t owner, uint16_t id, uint8_t dir, uint8_t water) noexcept { MakeDock(TileIndex{tile}, Owner(owner), StationID(id), static_cast<DiagDirection>(dir), static_cast<WaterClass>(water)); },
 		.neutral_for_tile = [](uint32_t tile) noexcept -> BaseStation * { return RustIndustryNeutralStation(Industry::GetByTile(TileIndex{tile})); },
-		.leave_station = RustVehicleLeaveStation,
 		.oilrig_unavailable = [](uint32_t tile) noexcept { Debug(misc, 0, "Can't allocate station for oilrig at 0x{:X}, reverting to oilrig only", tile); },
 		.associate_industry = [](BaseStation *st, uint32_t tile) noexcept { auto *s = Station::From(st); s->industry = Industry::GetByTile(TileIndex{tile}); s->industry->neutral_station = s; },
 		.make_oilrig = [](uint32_t tile, uint16_t id, uint8_t water) noexcept { MakeOilrig(TileIndex{tile}, StationID(id), static_cast<WaterClass>(water)); },

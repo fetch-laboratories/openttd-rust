@@ -393,7 +393,7 @@ impl World {
 }
 // Native iterator/container frames live on the C++ caller's stack. This private
 // callback context is synchronous and does not retain aliases into a game owner.
-type Scope = extern "C" fn(*mut c_void, *mut c_void);
+pub(crate) type Scope = extern "C" fn(*mut c_void, *mut c_void);
 extern "C" fn scoped<F: FnMut(*mut c_void)>(context: *mut c_void, frame: *mut c_void) {
     // SAFETY: with_* invokes this callback exactly once, before the stack context
     // ends; only the callback accesses its private closure during the invocation.
@@ -401,7 +401,7 @@ extern "C" fn scoped<F: FnMut(*mut c_void)>(context: *mut c_void, frame: *mut c_
         (&mut *context.cast::<F>())(frame);
     }
 }
-fn scope_context<F: FnMut(*mut c_void)>(body: &mut F) -> (*mut c_void, Scope) {
+pub(crate) fn scope_context<F: FnMut(*mut c_void)>(body: &mut F) -> (*mut c_void, Scope) {
     (std::ptr::from_mut(body).cast(), scoped::<F>)
 }
 // Field-sized operations avoid owner borrows while C++ aliases are live. A copied
@@ -412,6 +412,11 @@ unsafe fn cp(state: *mut Service, cargo: u8) -> *mut CargoFields {
             .cast::<CargoFields>()
             .add(usize::from(cargo))
     }
+}
+/// `GoodsEntry::HasRating()` of a live station owner.
+pub(crate) fn has_rating(state: *mut Service, cargo: u8) -> bool {
+    // SAFETY: scalar read of the live serialized owner; no borrow survives.
+    unsafe { (*cp(state, cargo)).status & 2 != 0 }
 }
 unsafe fn status(state: *mut Service, cargo: u8, bit: u8, value: bool) {
     let p = unsafe { &raw mut (*cp(state, cargo)).status };
@@ -1179,7 +1184,8 @@ pub struct Loading {
     pub(crate) subtract_profit: extern "C" fn(VehicleRef, i64),
     pub(crate) unknown_load_result: extern "C" fn(VehicleRef, u16),
     pub(crate) vehicle_dirty: extern "C" fn(VehicleRef),
-    pub(crate) update_indicator: extern "C" fn(VehicleRef),
+    pub(crate) indicator: extern "C" fn(VehicleRef) -> bool,
+    pub(crate) show_indicator: extern "C" fn(VehicleRef, u8, u32),
     pub(crate) set_current_company: extern "C" fn(u8),
     pub(crate) next_vehicle: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
     pub(crate) next_articulated: extern "C" fn(VehicleRef) -> Option<VehicleRef>,
@@ -1452,8 +1458,10 @@ pub unsafe extern "C" fn openttd_rust_station_prepare(
     world: *const World,
     loading: *const Loading,
 ) {
-    let w = unsafe { &*world };
-    let l = unsafe { &*loading };
+    prepare_unload(front, unsafe { &*world }, unsafe { &*loading });
+}
+/// `PrepareUnload`.
+pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
     // SAFETY: the shared immutable vehicle table outlives this entry. Station
     // identities and owner are resolved before next-station discovery (#228).
     let vehicle = unsafe { &*l.vehicle };
@@ -1748,7 +1756,11 @@ unsafe fn load_vehicle(
             }
             (l.set_loading_finished)(front, finished);
         }
-        (l.update_indicator)(front);
+        if (l.indicator)(front) {
+            let mut colour = 0;
+            let percent = crate::vehicle::visits::percent_filled(front, Some(&mut colour), visits);
+            (l.show_indicator)(front, percent, colour);
+        }
         if emptied {
             dirty_vehicle = true;
             (l.vehicle_empty)(front);

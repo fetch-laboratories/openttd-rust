@@ -277,7 +277,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*axis_diag)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(axis_diag);
 	uint64_t (*backoff)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(backoff);
 	void (*base_viewport)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
-	void (*begin_loading)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(begin_loading);
 	uint64_t (*bridge_speed)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_speed);
 	void (*cache_override)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(cache_override);
 	uint64_t (*callback_length)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(callback_length);
@@ -324,7 +323,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*disaster_sound)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(disaster_sound);
 	void (*disconnect)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(disconnect);
 	uint64_t (*engine_power)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(engine_power);
-	void (*enter_depot)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(enter_depot);
 	uint64_t (*enter_tile)(OpenTTDTrainHandle, uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(enter_tile);
 	OpenTTDTrainDepot (*find_depot)(OpenTTDTrainHandle, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_depot);
 	uint64_t (*first_track)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(first_track);
@@ -349,13 +347,11 @@ struct OpenTTDTrainServices {
 	void (*large_explosion)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(large_explosion);
 	void (*last_speed)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(last_speed);
 	void (*leave_sound)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(leave_sound);
-	void (*leave_station)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(leave_station);
 	void (*leave_unbunch)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(leave_unbunch);
 	uint64_t (*length_callback)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(length_callback);
 	void (*length_changed)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(length_changed);
 	uint64_t (*length_default)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(length_default);
 	void (*length_error)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(length_error);
-	void (*loading)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(loading);
 	uint64_t (*local_company)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	uint64_t (*lost_warn)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(lost_warn);
 	uint64_t (*map_size)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(map_size);

@@ -225,11 +225,6 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_first_arrival(OpenTTDAircraftVehicle 
 	AI::NewEvent(v->owner, new ScriptEventStationFirstVehicle(st->index, v->index)); Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, v->index));
 }
 
-static void OPENTTD_AIRCRAFT_CALL Aircraft_begin_loading(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	VehicleOf(vehicle.handle)->BeginLoading();
-}
-
 static void OPENTTD_AIRCRAFT_CALL Aircraft_update_delta(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	VehicleOf(vehicle.handle)->UpdateDeltaXY();
@@ -455,7 +450,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.landing_rating = Aircraft_landing_rating,
 	.dirty_depot = Aircraft_dirty_depot,
 	.first_arrival = Aircraft_first_arrival,
-	.begin_loading = Aircraft_begin_loading,
 	.update_delta = Aircraft_update_delta,
 	.touchdown_animation = Aircraft_touchdown_animation,
 	.destination_too_far = Aircraft_destination_too_far,

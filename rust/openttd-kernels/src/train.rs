@@ -507,7 +507,6 @@ pub struct Leaves {
     pub axis_diag: extern "C" fn(Handle, u8) -> u64,
     pub backoff: extern "C" fn(Handle) -> u64,
     pub base_viewport: extern "C" fn(Handle, u8),
-    pub begin_loading: extern "C" fn(Handle),
     pub bridge_speed: extern "C" fn(Handle, u32) -> u64,
     pub cache_override: extern "C" fn(Handle),
     pub callback_length: extern "C" fn(Handle) -> u64,
@@ -554,7 +553,6 @@ pub struct Leaves {
     pub disaster_sound: extern "C" fn(Handle) -> u64,
     pub disconnect: extern "C" fn(Handle),
     pub engine_power: extern "C" fn(Handle) -> u64,
-    pub enter_depot: extern "C" fn(Handle),
     pub enter_tile: extern "C" fn(Handle, u32, i32, i32) -> u64,
     pub find_depot: extern "C" fn(Handle, i32) -> Depot,
     pub first_track: extern "C" fn(Handle, u8) -> u64,
@@ -579,13 +577,11 @@ pub struct Leaves {
     pub large_explosion: extern "C" fn(Handle),
     pub last_speed: extern "C" fn(Handle),
     pub leave_sound: extern "C" fn(Handle),
-    pub leave_station: extern "C" fn(Handle),
     pub leave_unbunch: extern "C" fn(Handle),
     pub length_callback: extern "C" fn(Handle) -> u64,
     pub length_changed: extern "C" fn(Handle),
     pub length_default: extern "C" fn(Handle) -> u64,
     pub length_error: extern "C" fn(Handle, u16),
-    pub loading: extern "C" fn(Handle, u8),
     pub local_company: extern "C" fn(Handle) -> u64,
     pub lost_warn: extern "C" fn(Handle) -> u64,
     pub map_size: extern "C" fn(Handle) -> u64,
@@ -1634,7 +1630,7 @@ impl Game<'_> {
         }
         id.set_force_proceed(0);
         self.view_dirty(id);
-        (self.leaves.begin_loading)(id);
+        crate::vehicle::visits::begin_loading(id.vehicle(), self.vs().visits());
         (self.leaves.arrival_triggers)(id, station);
     }
     fn speed_z(&self, id: Handle, old: i32) {
@@ -2289,7 +2285,7 @@ impl Game<'_> {
         {
             if (self.leaves.has_depot_res)(Handle::NONE, (self.leaves.read_tile)(id)) == 0 {
                 crate::witness::hit(crate::witness::TRAIN_DEPOT_REENTRY);
-                (self.leaves.enter_depot)(id);
+                self.vs().enter_depot(id.vehicle());
             }
             return true;
         }
@@ -2372,7 +2368,7 @@ impl Game<'_> {
             }
             id.set_flag(9, false);
         }
-        (self.leaves.loading)(id, u8::from(mode));
+        self.vs().handle_loading(id.vehicle(), mode);
         if (self.leaves.read_order)(id) == 3 || self.stay_depot(id) {
             return true;
         }
@@ -2615,7 +2611,7 @@ impl Game<'_> {
                         || (self.leaves.station)(Handle::NONE, last)
                             != (self.leaves.station)(Handle::NONE, (self.leaves.read_tile)(id))
                     {
-                        (self.leaves.leave_station)(id);
+                        crate::vehicle::visits::leave_station(id.vehicle(), self.vs().visits());
                     }
                 }
                 id.set_force_proceed(0);
@@ -2646,6 +2642,23 @@ impl Game<'_> {
     }
 }
 
+/// The train part of `VehicleEnterDepot` (#349): clear the depot reservation,
+/// update the segment's signals and arrange the consist.
+pub(crate) fn enter_depot(id: Handle, leaves: &Leaves, services: &Services) {
+    let g = Game { leaves, services };
+    let tile = (leaves.read_tile)(id);
+    (leaves.set_depot_res)(id, tile, 0);
+    if (leaves.show_reservation)(id) != 0 {
+        (leaves.dirty_tile)(Handle::NONE, tile);
+    }
+    g.signal_segment(id, tile, crate::direction_type::INVALID_DIAGDIR);
+    id.set_wait_counter(0);
+    id.set_force_proceed(0);
+    // `VehicleRailFlag::Reversed`.
+    id.set_flags(id.get_flags() & !(1 << 7));
+    // `CCF_ARRANGE`: length and capacity.
+    g.consist_changed(id, 3);
+}
 /// Invoke synchronous train policy with live serialized services.
 /// # Safety
 /// The descriptors and shell must remain live until the call returns; callbacks may reenter.

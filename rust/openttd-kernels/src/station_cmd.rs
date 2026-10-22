@@ -340,7 +340,6 @@ pub struct CommandServicesTable {
     pub water_infrastructure: extern "C" fn(u8, u32),
     pub make_dock: extern "C" fn(u32, u8, u16, u8, u8),
     pub neutral_for_tile: extern "C" fn(u32) -> *mut BaseStation,
-    pub leave_station: extern "C" fn(crate::vehicle::VehicleRef),
     pub oilrig_unavailable: extern "C" fn(u32),
     pub associate_industry: extern "C" fn(*mut BaseStation, u32),
     pub make_oilrig: extern "C" fn(u32, u16, u8),
@@ -3627,7 +3626,7 @@ impl Ctx<'_> {
                             )
                         })
                     {
-                        (self.s.leave_station)(v);
+                        crate::vehicle::visits::leave_station(v, self.vehicle().visits());
                     }
                 }
                 if (self.vehicle().order_type)(v) == 1 && (self.world().facilities)(st) & 16 == 0 {

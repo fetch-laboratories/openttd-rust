@@ -4859,7 +4859,6 @@ void IncreaseStats(Station *st, CargoType cargo, StationID next_station_id, uint
 		(*lg)[ge1.node].UpdateEdge(ge2.node, capacity, usage, time, modes);
 	}
 }
-#endif /* WITH_RUST */
 
 /**
  * Increase capacity for all link stats associated with vehicles in the given consist.
@@ -4869,9 +4868,6 @@ void IncreaseStats(Station *st, CargoType cargo, StationID next_station_id, uint
  */
 void IncreaseStats(Station *st, const Vehicle *front, StationID next_station_id, uint32_t time)
 {
-#ifdef WITH_RUST
-	openttd_rust_increase_vehicle_stats(st, RustVehicle(front), next_station_id.base(), time, &GetRustVehicleVisits());
-#else
 	for (const Vehicle *v = front; v != nullptr; v = v->Next()) {
 		if (v->refit_cap > 0) {
 			/* The cargo count can indeed be higher than the refit_cap if
@@ -4884,8 +4880,8 @@ void IncreaseStats(Station *st, const Vehicle *front, StationID next_station_id,
 					std::min<uint>(v->refit_cap, v->cargo.StoredCount()), time, EdgeUpdateMode::Increase);
 		}
 	}
-#endif
 }
+#endif /* WITH_RUST */
 
 #ifndef WITH_RUST
 /* called for every station each tick */

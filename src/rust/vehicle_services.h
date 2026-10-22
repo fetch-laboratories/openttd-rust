@@ -41,6 +41,9 @@ inline bool RustVehicleHasReverseProbability(void *shell) noexcept { Vehicle *v 
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine; }
 template <class T> inline void RustVehicleUpdatePosition(T *v) noexcept { v->UpdatePosition(); }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
+inline void RustVehicleSetLastLoadingStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_loading_station = StationID(station); }
+inline void RustVehicleSetLastLoadingTick(OpenTTDVehicle *v, uint64_t tick) noexcept { VehicleOf(v)->last_loading_tick = tick; }
+inline void RustVehicleSetTripOccupancy(OpenTTDVehicle *v, uint8_t occupancy) noexcept { VehicleOf(v)->trip_occupancy = occupancy; }
 inline bool RustVehicleCanAllocate(size_t count) noexcept { return Vehicle::CanAllocateItem(count); }
 inline VehiclesOnTile RustVehiclesOnTile(TileIndex tile) noexcept { return VehiclesOnTile(tile); }
 
@@ -66,7 +69,6 @@ template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last()
 /** Signature adapter for existing opaque fleet and orders callbacks. */
 inline void *RustVehicleFirstOpaque(void *v) noexcept { return RustVehicleFirst(static_cast<const Vehicle *>(v)); }
 inline void OPENTTD_VEHICLE_CALL RustVehicleSetDestTile(OpenTTDVehicle *v, uint32_t tile) noexcept { VehicleOf(v)->SetDestTile(TileIndex(tile)); }
-inline void RustVehicleLeaveStation(OpenTTDVehicle *v) noexcept { VehicleOf(v)->LeaveStation(); }
 inline uint32_t RustVehicleOrderStationLocation(OpenTTDVehicle *v, uint16_t station) noexcept { return VehicleOf(v)->GetOrderStationLocation(StationID(station)).base(); }
 inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station) noexcept { return RustVehicleOrderStationLocation(RustVehicle(static_cast<Vehicle *>(v)), station); }
 template <class T> inline auto RustVehicleNextVehicle(const T *v) noexcept { return v->GetNextVehicle(); }

@@ -133,11 +133,6 @@ static void TrainBaseViewport(OpenTTDTrainHandle id, uint8_t a) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	v->Vehicle::UpdateViewport(a != 0);
 }
-static void TrainBeginLoading(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	v->BeginLoading();
-}
 static void TrainCacheOverride(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -325,11 +320,6 @@ static uint64_t TrainEnginePower(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return RailVehInfo(v->engine_type)->power;
 }
-static void TrainEnterDepot(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	VehicleEnterDepot(v);
-}
 static uint64_t TrainEnterTile(OpenTTDTrainHandle id, uint32_t a, int32_t b, int32_t c) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -407,11 +397,6 @@ static void TrainLeaveSound(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	v->PlayLeaveStationSound();
 }
-static void TrainLeaveStation(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	RustVehicleLeaveStation(RustVehicle(v));
-}
 static void TrainLeaveUnbunch(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -436,11 +421,6 @@ static void TrainLengthError(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	RustUnknownCallbackResult(EngineOf(RustVehicleGetEngine(RustVehicle(v)))->GetGRFID(), CBID_VEHICLE_LENGTH, static_cast<uint16_t>(a));
-}
-static void TrainLoading(OpenTTDTrainHandle id, uint8_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	v->HandleLoading(a != 0);
 }
 static uint64_t TrainLocalCompany(OpenTTDTrainHandle) noexcept
 {

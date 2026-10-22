@@ -187,7 +187,7 @@ struct OpenTTDRoadLeaves {
 	const OpenTTDGroundServices *ground;
 	const OpenTTDSharedServices *shared;
 	uint32_t (OPENTTD_VEHICLE_CALL *max_depot_penalty)() noexcept OPENTTD_SERVICE_DEFAULT(max_depot_penalty);
-	uint8_t (OPENTTD_VEHICLE_CALL *process_orders_then_loading)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(process_orders_then_loading);
+	void (OPENTTD_VEHICLE_CALL *process_orders)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);
 	OpenTTDRoadVisualRead (OPENTTD_VEHICLE_CALL *visual_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(visual_read);
 	OpenTTDRoadSpeedRead (OPENTTD_VEHICLE_CALL *visual_effect_then_speed)(OpenTTDVehicle *, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(visual_effect_then_speed);
 	OpenTTDRoadSpeedRead (OPENTTD_VEHICLE_CALL *speed_read)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(speed_read);
@@ -229,7 +229,7 @@ struct OpenTTDRoadLeaves {
 	bool (OPENTTD_VEHICLE_CALL *stop_entrance_busy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(stop_entrance_busy);
 	OpenTTDRoadArrivalRead (OPENTTD_VEHICLE_CALL *arrival_read)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_read);
 	void (OPENTTD_VEHICLE_CALL *arrival_news)(OpenTTDVehicle *, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
-	void (OPENTTD_VEHICLE_CALL *begin_loading_at)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(begin_loading_at);
+	void (OPENTTD_VEHICLE_CALL *arrival_triggers)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_triggers);
 	OpenTTDRoadOvertakeRead (OPENTTD_VEHICLE_CALL *overtake_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(overtake_read);
 	OpenTTDRoadSoundRead (OPENTTD_VEHICLE_CALL *sound_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(sound_read);
 	void (OPENTTD_VEHICLE_CALL *depot_exit)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_exit);

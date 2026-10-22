@@ -9,3 +9,7 @@
 
 /// `StationID::Invalid()`.
 pub const INVALID_STATION: u16 = 0xFFFF;
+/// `StationType::Truck`.
+pub const STATION_TRUCK: u8 = 2;
+/// `StationType::Bus`.
+pub const STATION_BUS: u8 = 3;

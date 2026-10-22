@@ -19,6 +19,8 @@
 #include "saveload/saveload.h"
 #include "timetable_cmd.h"
 #include "cargo_type.h"
+#include "depot_map.h"
+#include "rail_map.h"
 #include "vehicle_cmd.h"
 #include "vehicle_func.h"
 #include "roadveh.h"
@@ -92,7 +94,39 @@ static bool VisitsScenario(std::span<std::string_view> args)
 		station(bus, 2, 8);
 		CheckCommand("stop", Command<CMD_START_STOP_VEHICLE>::Do(DoCommandFlag::Execute, bus->index, false));
 	}
-	fmt::print(stderr, "VISITS setup {} {} {}\n", refit->GetNumOrders(), conditional->GetNumOrders(), full->orders->GetTotalDuration());
+	/* Depot orders at the depot nearest each first stop: a paid refit, a free one
+	 * (a bus cannot carry mail, so no part changes) and a halt. */
+	auto depot = [&](Vehicle *u, VehicleOrderID index, OrderDepotActionFlags action, CargoType cargo) {
+		TileIndex from = Station::Get(u->GetOrder(0)->GetDestination().ToStationID())->xy;
+		const Depot *best = nullptr;
+		for (const Depot *d : Depot::Iterate()) {
+			if (GetTileOwner(d->xy) != u->owner || !(u->type == VEH_TRAIN ? IsRailDepotTile(d->xy) : IsRoadDepotTile(d->xy))) continue;
+			if (best == nullptr || DistanceManhattan(from, d->xy) < DistanceManhattan(from, best->xy)) best = d;
+		}
+		if (best == nullptr) std::abort();
+		Order order;
+		order.MakeGoToDepot(best->index, OrderDepotTypeFlag::PartOfOrders, {}, action, CARGO_NO_REFIT);
+		CheckCommand("visit-depot", Command<CMD_INSERT_ORDER>::Do(DoCommandFlag::Execute, u->index, index, order));
+		if (cargo != CARGO_NO_REFIT) CheckCommand("depot-refit", Command<CMD_ORDER_REFIT>::Do(DoCommandFlag::Execute, u->index, index, cargo));
+	};
+	depot(vehicle(37, VEH_TRAIN), 1, {}, 0);
+	depot(vehicle(13, VEH_ROAD), 1, {}, 2);
+	depot(vehicle(26, VEH_ROAD), 1, OrderDepotActionFlag::Halt, CARGO_NO_REFIT);
+	/* Unload without loading: the bus leaves empty. */
+	Vehicle *empty = vehicle(11, VEH_ROAD);
+	CheckCommand("unload", Command<CMD_MODIFY_ORDER>::Do(DoCommandFlag::Execute, empty->index, 0, MOF_UNLOAD, to_underlying(OrderUnloadType::Unload)));
+	CheckCommand("no-load", Command<CMD_MODIFY_ORDER>::Do(DoCommandFlag::Execute, empty->index, 0, MOF_LOAD, to_underlying(OrderLoadType::NoLoad)));
+	/* Skipping a loading order returns its reserved cargo. */
+	size_t reserved = 0;
+	for (Vehicle *u : Vehicle::Iterate()) {
+		if (!u->IsPrimaryVehicle() || !u->current_order.IsType(OT_LOADING)) continue;
+		bool any = false;
+		for (const Vehicle *part = u; part != nullptr; part = part->Next()) any |= part->cargo.ActionCount(VehicleCargoList::MTA_LOAD) > 0;
+		if (!any) continue;
+		CheckCommand("skip", Command<CMD_SKIP_TO_ORDER>::Do(DoCommandFlag::Execute, u->index, u->orders->GetNext(u->cur_implicit_order_index)));
+		++reserved;
+	}
+	fmt::print(stderr, "VISITS setup {} {} {} {}\n", refit->GetNumOrders(), conditional->GetNumOrders(), full->orders->GetTotalDuration(), reserved);
 	company.Restore();
 	return true;
 }
