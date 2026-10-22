@@ -135,11 +135,9 @@ void RebuildSubsidisedSourceAndDestinationCache()
  * Delete the subsidies associated with a given cargo source type and id.
  * @param source The source to look for.
  */
+#ifndef WITH_RUST
 void DeleteSubsidyWith(Source source)
 {
-#ifdef WITH_RUST
-	openttd_rust_subsidy_delete_with(&GetRustSubsidyServices(), source);
-#else
 	bool dirty = false;
 
 	for (Subsidy *s : Subsidy::Iterate()) {
@@ -153,8 +151,8 @@ void DeleteSubsidyWith(Source source)
 		InvalidateWindowData(WC_SUBSIDIES_LIST, 0);
 		RebuildSubsidisedSourceAndDestinationCache();
 	}
-#endif
 }
+#endif
 
 /**
  * Check whether a specific subsidy already exists.
