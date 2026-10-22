@@ -33,6 +33,7 @@ pub struct State {
     pub turn_counter: u8,
     pub flags: u8,
 }
+use crate::airport::HANGAR;
 use crate::services::{Map, Services, chance16_i};
 use crate::station::Station;
 use crate::tile_type::INVALID_TILE;
@@ -312,7 +313,10 @@ const HIDDEN: i64 = 1;
 const STOPPED: i64 = 2;
 const BROKEN: i64 = 64;
 const CRASHED: i64 = 128;
-const HANGAR: u8 = 1;
+/// `AircraftSubType::AIR_HELICOPTER` from `aircraft.h`.
+pub const AIR_HELICOPTER: u8 = 0;
+/// `AircraftSubType::AIR_AIRCRAFT` from `aircraft.h`.
+pub const AIR_AIRCRAFT: u8 = 2;
 const TAKEOFF: u8 = 10;
 const STARTTAKEOFF: u8 = 11;
 const ENDTAKEOFF: u8 = 12;

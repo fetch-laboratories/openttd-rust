@@ -244,6 +244,7 @@ struct OpenTTDRoadLeaves {
 	OpenTTDRoadTurnRead (OPENTTD_VEHICLE_CALL *turn_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(turn_read);
 	OpenTTDRoadTrackdirRead (OPENTTD_VEHICLE_CALL *trackdir_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(trackdir_read);
 };
+const OpenTTDRoadLeaves &GetRustRoadLeaves() noexcept;
 extern "C" {
 bool OPENTTD_VEHICLE_CALL openttd_rust_road_tick(OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadTickRead *, const OpenTTDRoadLeaves *, OpenTTDRoadCommandSlot *);
 bool OPENTTD_VEHICLE_CALL openttd_rust_road_individual(OpenTTDVehicle *, OpenTTDRoadState *, OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadEntry *, const OpenTTDRoadLeaves *, OpenTTDRoadCommandSlot *);

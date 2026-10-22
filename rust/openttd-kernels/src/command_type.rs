@@ -23,6 +23,10 @@ impl DoCommandFlag {
     pub const NO_TEST_TOWN_RATING: u16 = 1 << 4;
     /// `DoCommandFlag::Bankrupt`.
     pub const BANKRUPT: u16 = 1 << 5;
+    /// `DoCommandFlag::AutoReplace`.
+    pub const AUTO_REPLACE: u16 = 1 << 6;
+    /// `DoCommandFlag::NoCargoCapacityCheck`.
+    pub const NO_CARGO_CAPACITY_CHECK: u16 = 1 << 7;
     /// `DoCommandFlag::NoModifyTownRating`.
     pub const NO_MODIFY_TOWN_RATING: u16 = 1 << 9;
     /// `DoCommandFlag::ForceClearTile`.

@@ -4541,7 +4541,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.read_curve_limit = TrainReadCurveLimit,
 		.read_stop_location = TrainReadStopLocation,
 		.read_current_max_speed = TrainReadCurrentMaxSpeed,
-		.read_current_max_speed_6 = TrainReadCurrentMaxSpeed6,
 		.read_update_acceleration = TrainReadUpdateAcceleration,
 		.read_update_speed = TrainReadUpdateSpeed,
 		.read_trackdir = TrainReadTrackdir,

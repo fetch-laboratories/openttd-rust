@@ -14,6 +14,7 @@
 #include "../sound_type.h"
 #include "abi_layout.hpp"
 #include "../rust/industry_generation_adapter.hpp"
+#include "../rust/industry_shell_services.h"
 #include "../object_base.h"
 #include "../industrytype.h"
 #include "../water_map.h"
@@ -266,7 +267,7 @@ TEST_CASE("Industry - borrowed stack resolver shell and callback policy")
 	OpenTTDIndustryConstructionErrors errors{};
 	errors.site = 1234;
 	generation.spec = [](uint8_t kind) noexcept -> const OpenTTDIndustrySpecHandle * { CHECK(kind == 7); trace.push_back(0); return reinterpret_cast<const OpenTTDIndustrySpecHandle *>(&industry_spec); };
-	commands.owner = [](Industry *shell) noexcept -> OpenTTDIndustry * { return shell->production_owner.get(); };
+	commands.owner = RustIndustryCanonicalOwner<Industry *>;
 	construction.set_town = [](void *shell, const OpenTTDTownHandle *town) noexcept { CHECK(town == nullptr); static_cast<Industry *>(shell)->town = nullptr; };
 	transaction.closest_town = [](uint32_t tile, uint32_t threshold) noexcept -> const OpenTTDTownHandle * { CHECK(tile == 123); CHECK(threshold == UINT32_MAX); CHECK(openttd_rust_industry_metadata(active_owner)->random == 0); trace.push_back(2); return nullptr; };
 	transaction.temporary_shell = [](OpenTTDIndustry *owner, void *context, OpenTTDIndustryTemporaryVisit visit) noexcept {

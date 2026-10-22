@@ -1209,6 +1209,31 @@ unsafe fn truncate_station(l: *mut List, s: Services, max_move: u32, origins: *m
     }
     moved
 }
+/// Original `VehicleCargoList::Truncate`, callable by Rust transaction owners.
+/// # Safety
+/// Live serialized vehicle cargo owner and immutable native services. No borrow
+/// of this or another cargo owner survives the packet/deletion callbacks.
+pub(crate) unsafe fn truncate_vehicle(src: *mut List, s: Services, amount: u32) -> u32 {
+    let amount = amount.min(unsafe { openttd_rust_cargo_list_count(src) });
+    let mut remaining = amount;
+    unsafe {
+        walk(
+            src,
+            std::ptr::null_mut(),
+            s,
+            4,
+            &mut remaining,
+            None,
+            INVALID,
+            INVALID,
+            std::ptr::null(),
+            0,
+            std::ptr::null_mut(),
+            u32::MAX,
+        );
+    }
+    amount
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_cargo_list_move(
     src: *mut List,
@@ -1226,6 +1251,9 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_move(
     at: u32,
 ) -> u32 {
     let s = unsafe { *s };
+    if mode == 4 {
+        return unsafe { truncate_vehicle(src, s, amount) };
+    }
     if mode == 9 {
         return unsafe { truncate_station(src, s, amount, payment) };
     }

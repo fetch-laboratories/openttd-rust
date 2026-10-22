@@ -1561,6 +1561,26 @@ sites run in assertion builds.
 Checks: `python3 tools/migration.py verify --jobs 2` and the default `fleet-` simulation. NewGRF
 refit/attach callbacks and articulated parts remain #156.
 
+### Common vehicle transactions and nonrail construction (#314)
+
+Rust (`vehicle_transactions/`) owns the `vehicle_cmd.cpp` commands: build, sell, refit, clone,
+start/stop, mass start/stop, depot sell/replace, send-to-depot dispatch, naming and service
+intervals, with vehicle-set selection and depot/sort lists. It also owns the road vehicle and
+aircraft constructors (`construct.rs`, shadow and helicopter rotor included), articulated
+assembly and its consistency check. Speculative refit builds restore both RNG streams; clone
+cleanup sells partial consists. Commands nest through `command::nested` and call ship, orders,
+cargo, fleet, road and aircraft owners directly. Original bodies compile only portably.
+
+C++ keeps pools, shells and their field stores, specs/NewGRF callbacks, unit allocation,
+native stack `CommandCost`s and UI leaves. Rail construction, moves and rail sale stay native
+until #315.
+
+Checks: `python3 tools/migration.py verify --jobs 2` and the default `fleet-` scenarios. The
+`transaction-build-road`/`-aircraft` and `transaction-clone` scenarios require
+`vehicle_transactions` witnesses for road, aircraft, rotor, RNG restoration and clone join
+failure. Articulated road vehicles (NewGRF only), wrong-depot road types, airports refusing an
+engine and clone build failure after the front part are #156 gaps.
+
 ### Engine lifecycle and availability (#220)
 
 Rust owns each engine's lifecycle scalars and name, the process-wide aging-stop state,
@@ -1734,3 +1754,24 @@ hidden failure end tiles and price thresholds at 25/50/100 tunnel tiles.
 The existing default object probe checks scratch growth/restoration. Live train
 re-reservation, rectangular-map tunnel intersection choices, external NewGRFs
 and legacy layouts remain #156 coverage gaps. PR #352 records checks and limits.
+### Subsidy lifecycle, route search and awards (#316)
+
+Rust owns each subsidy’s canonical scalars, all route searches, creation/deity
+checks, source/destination cache rebuild and deletion, monthly generation/expiry,
+delivery awards and company transfer/deletion. Native SUBS descriptors and
+GUI/script readers alias the sole Rust allocation; original bodies stay portable.
+C++ retains pool identity/allocation order, map/catchment and cargo specifications,
+news formatting and event enqueueing through typed noexcept leaves. Payment,
+company and industry owners call Rust directly; no owner borrow spans a callback.
+The deity command retains duplicate/self/distant routes, and monthly policy keeps
+RNG short circuits, 1001 attempts, u16 wrapping/narrowing and expiry’s bypass of
+both disabled-generation early returns. Cache flags use the original Set/Test
+operations; house cargo scans call the integrated Rust house owner directly.
+`python3 tools/migration.py verify --jobs 2` checks Cargo and native ABI.
+Default `subsidies-control` and `subsidies-reload` compare commands, every endpoint
+class, multi-awards/rivals, actual final-delivery payments for all four multipliers,
+searches, deletion/transfer and modern SUBS reload, requiring Rust branch witnesses.
+The existing console adapter compiles the unchanged reference monthly lambda for
+zero-countdown, full-pool retry and disabled-expiry RNG gaps; scalar address checks
+cover the reference-alias boundary. External NewGRF programs, legacy conversion
+fixtures and threaded GUI/presentation remain coverage gaps tracked in #156.
