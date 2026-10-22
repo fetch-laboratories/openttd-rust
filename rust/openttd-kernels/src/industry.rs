@@ -24,6 +24,7 @@
     clippy::too_many_lines,
     clippy::if_not_else
 )]
+use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES};
 use std::ffi::c_void;
 use std::ptr;
 mod transaction;
@@ -462,9 +463,6 @@ const SND_36_LUMBER_MILL_3: u16 = 0x36;
 const SND_37_LUMBER_MILL_2: u16 = 0x37;
 const LANDSCAPE_ARCTIC: u8 = 1;
 const LANDSCAPE_TROPIC: u8 = 2;
-const MP_CLEAR: u8 = 0;
-const MP_TREES: u8 = 4;
-const INVALID_TILE: u32 = u32::MAX;
 fn observe(s: &Services, i: *mut c_void) -> Observation {
     let mut o = Observation::default();
     unsafe {

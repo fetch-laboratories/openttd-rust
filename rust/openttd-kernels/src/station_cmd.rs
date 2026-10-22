@@ -17,8 +17,10 @@
     clippy::too_many_lines,
     clippy::too_many_arguments
 )]
+use crate::direction_type::INVALID_DIAGDIR;
 use crate::rail_cmd::RailCommandServices;
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
+use crate::slope_func::{get_inclined_slope_direction, get_slope_max_z, is_steep_slope};
 use crate::station::BaseStation;
 use crate::station_service::World;
 use crate::town::AuthorityServices;
@@ -412,17 +414,18 @@ impl<'a> Ctx<'a> {
         }
         let slope = (self.shared.tile_slope)(tile);
         let z = (self.shared.tile_z)(tile);
-        let steep = slope & 16 != 0;
-        if (!allow_steep && steep) || (!(self.shared.build_on_slopes)() && slope != 0) {
+        if (!allow_steep && is_steep_slope(slope))
+            || (!(self.shared.build_on_slopes)() && slope != 0)
+        {
             return out.error(self.s.strings.flat_land);
         }
         out.set(0);
-        let flat_z = z + if steep { 2 } else { i32::from(slope != 0) };
+        let flat_z = z + get_slope_max_z(slope);
         if slope != 0 {
             const INCLINED: [u8; 4] = [12, 6, 3, 9];
             for (dir, corners) in INCLINED.into_iter().enumerate() {
                 if invalid & (1 << dir) != 0
-                    && (if steep {
+                    && (if is_steep_slope(slope) {
                         slope & corners != corners
                     } else {
                         slope & corners == 0
@@ -3426,13 +3429,12 @@ impl Ctx<'_> {
             return cost.error(0xffff);
         }
         let slope = (self.shared.tile_slope)(tile);
-        let dir = match slope {
-            12 => 0,
-            6 => 1,
-            3 => 2,
-            9 => 3,
-            _ => return cost.error(self.s.strings.unsuitable),
-        } ^ 2;
+        let dir = get_inclined_slope_direction(slope);
+        if dir == INVALID_DIAGDIR {
+            return cost.error(self.s.strings.unsuitable);
+        }
+        // ReverseDiagDir.
+        let dir = dir ^ 2;
         if (self.shared.has_water_ground)(tile) {
             return cost.error(self.s.strings.unsuitable);
         }
@@ -3946,40 +3948,34 @@ impl Ctx<'_> {
     }
     fn terraform(&self, cost: Cost<'_>, tile: u32, flags: u16, z: i32, slope: u8) {
         crate::witness::hit(crate::witness::STATION_CMD_TERRAFORM);
-        if (self.shared.build_on_slopes)() && (self.shared.autoslope)() {
-            let max_z = if slope == 0 {
-                0
-            } else if slope & 16 != 0 {
-                2
-            } else {
-                1
-            };
-            if (self.shared.tile_max_z)(tile) == z.wrapping_add(max_z) {
-                let allowed = match (self.shared.station_type)(tile).0 {
-                    0 | 7 => (self.s.autoslope_axis)(tile, z, slope, self.station_axis(tile)),
-                    1 => true,
-                    2 | 3 | 8 => {
-                        if (self.shared.is_drive_through_stop)(tile) {
-                            (self.s.autoslope_axis)(
-                                tile,
-                                z,
-                                slope,
-                                (self.shared.drive_through_axis)(tile),
-                            )
-                        } else {
-                            (self.rail().entrance_edge)(
-                                tile,
-                                z,
-                                slope,
-                                (self.shared.bay_stop_direction)(tile),
-                            )
-                        }
+        if (self.shared.build_on_slopes)()
+            && (self.shared.autoslope)()
+            && (self.shared.tile_max_z)(tile) == z.wrapping_add(get_slope_max_z(slope))
+        {
+            let allowed = match (self.shared.station_type)(tile).0 {
+                0 | 7 => (self.s.autoslope_axis)(tile, z, slope, self.station_axis(tile)),
+                1 => true,
+                2 | 3 | 8 => {
+                    if (self.shared.is_drive_through_stop)(tile) {
+                        (self.s.autoslope_axis)(
+                            tile,
+                            z,
+                            slope,
+                            (self.shared.drive_through_axis)(tile),
+                        )
+                    } else {
+                        (self.rail().entrance_edge)(
+                            tile,
+                            z,
+                            slope,
+                            (self.shared.bay_stop_direction)(tile),
+                        )
                     }
-                    _ => false,
-                };
-                if allowed {
-                    return cost.set(crate::company::price(57));
                 }
+                _ => false,
+            };
+            if allowed {
+                return cost.set(crate::company::price(57));
             }
         }
         (self.command.landscape_clear)(cost.0, tile, flags);
@@ -4099,8 +4095,7 @@ pub unsafe extern "C" fn openttd_rust_station_terraform(
 }
 /// # Safety
 /// Tables, native result slots and serialized map/pools remain live.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_change_owner(
+pub(crate) unsafe fn openttd_rust_station_change_owner(
     s: *const CommandServicesTable,
     ownership: &crate::tile_owner::Context,
     tile: u32,

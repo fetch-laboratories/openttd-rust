@@ -570,7 +570,7 @@ static bool StationCommands(std::span<std::string_view> args)
 		BuildOilRig(tile(20, 20)); StationNeed(IsOilRig(tile(20, 20)), __LINE__);
 		fmt::print(stderr, "STCMD oilrig {}\n", industry->neutral_station != nullptr);
 		DeleteOilRig(tile(20, 20)); StationNeed(industry->neutral_station == nullptr, __LINE__); delete industry;
-		ChangeTileOwner_Station(tile(1, 1), company->index, company->index);
+		ChangeTileOwner(tile(1, 1), company->index, company->index);
 		fmt::print(stderr, "STCMD complete\n");
 		if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 	}

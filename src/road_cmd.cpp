@@ -2834,11 +2834,6 @@ void UpdateNearestTownForRoadTiles(bool invalidate)
 	assert(!invalidate || _generating_world);
 	openttd_rust_road_nearest_towns(RoadServices(), invalidate);
 }
-static void ChangeTileOwner_Road(TileIndex tile, Owner old_owner, Owner new_owner)
-{
-	CommandCost ret, scratch;
-	openttd_rust_road_change_owner(RoadServices(), RustCommandCost(&ret), RustCommandCost(&scratch), tile.base(), old_owner.base(), new_owner.base());
-}
 static CommandCost TerraformTile_Road(TileIndex tile, DoCommandFlags flags, int z_new, Slope slope)
 {
 	CommandCost cost, scratch;
@@ -2876,7 +2871,11 @@ extern const TileTypeProcs _tile_type_road_procs = {
 #else
 	TileLoop_Road,           // tile_loop_proc
 #endif
+#ifdef WITH_RUST
+	nullptr,                 // Rust ownership dispatcher calls the owner directly.
+#else
 	ChangeTileOwner_Road,    // change_tile_owner_proc
+#endif
 	nullptr,                    // add_produced_cargo_proc
 	VehicleEnter_Road,       // vehicle_enter_tile_proc
 	GetFoundation_Road,      // get_foundation_proc
