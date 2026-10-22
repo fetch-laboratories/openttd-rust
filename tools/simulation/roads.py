@@ -27,7 +27,17 @@ SPEED_PASS = (
 )
 # fmt: on
 # Each game-code PR records its head's loop Ir here, in SPEED_PASS order.
-SPEED_INTEGRATED = SPEED_HEAD, tuple(ir for _, _, ir, _ in SPEED_PASS)
+SPEED_INTEGRATED = (
+    "a740b94b03aea62f62e9dfbc0467eefa4cb0c73b",
+    (
+        2_883_870_285,
+        25_241_054_190,
+        23_912_581_794,
+        4_290_129_038,
+        7_042_438_228,
+        12_659_713_602,
+    ),
+)
 SPEED_ANCHORS = {
     name: dict(
         anchor=dict(head=SPEED_HEAD, ratio=ratio, Ir=ir, identity={"compatible": c}),
