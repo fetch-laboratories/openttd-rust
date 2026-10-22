@@ -577,10 +577,7 @@ extern "C" OpenTTDIndustryLocationResult openttd_industry_resolve_location(Indus
 	result.callback = object.ResolveCallback(result.registers);
 	return result;
 }
-extern "C" void openttd_industry_location_error(OpenTTDIndustryCost *out, const OpenTTDIndustryLocationResult *result, const OpenTTDIndustrySpecHandle *spec) noexcept
-{
-	*out = GetErrorMessageFromLocationCallbackResult(result->callback, result->registers, reinterpret_cast<const IndustrySpec *>(spec)->grf_prop.grffile, STR_ERROR_SITE_UNSUITABLE);
-}
+
 #endif
 
 /**

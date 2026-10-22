@@ -207,11 +207,6 @@ extern "C" uint64_t openttd_orders_depot_tile(uint16_t destination) noexcept
 	return Depot::Get(DepotID(destination))->xy.base();
 }
 
-extern "C" uint64_t openttd_orders_distance(uint32_t first, uint32_t second, uint8_t square) noexcept
-{
-	return square ? DistanceSquare(TileIndex(first), TileIndex(second)) : DistanceManhattan(TileIndex(first), TileIndex(second));
-}
-
 extern "C" uint64_t openttd_orders_destination_tile(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
@@ -650,7 +645,7 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.base_station_tile = openttd_orders_base_station_tile,
 	.station_tile = openttd_orders_station_tile,
 	.depot_tile = openttd_orders_depot_tile,
-	.distance = openttd_orders_distance,
+	.distance = OpenTTDLegacyOrderDistance,
 	.station_location = RustVehicleLegacyOrderStationLocation,
 	.destination_tile = openttd_orders_destination_tile,
 	.aircraft_flying = openttd_orders_aircraft_flying,

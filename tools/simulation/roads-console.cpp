@@ -17,8 +17,11 @@ extern RoadTypes _roadtypes_road;
 #include "depot_func.h"
 #include "effectvehicle_func.h"
 #include "effectvehicle_base.h"
+#include "engine_base.h"
+#include "engine_func.h"
 #include "roadveh.h"
 #include "vehicle_cmd.h"
+#include "water_cmd.h"
 extern const TileTypeProcs _tile_type_road_procs;
 static void RoadPrint(std::string_view name, const CommandCost &cost, Money extra = 0)
 {
@@ -77,6 +80,33 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	_roadtypes_road.Set(alternate);
 	Company::Get(owner)->avail_roadtypes.Set(alternate);
 	Company::Get(owner)->avail_roadtypes.Set(ROADTYPE_TRAM);
+	if (args[1] == "tram") {
+		/* Declared engine input (#156): the first buildable stock road engine no vehicle
+		 * uses becomes a tram for this run. No reload follows, so it stays configured. */
+		Engine *tram = nullptr;
+		for (Engine *e : Engine::IterateType(VEH_ROAD)) {
+			if (!IsEngineBuildable(e->index, VEH_ROAD, owner)) continue;
+			bool used = false;
+			for (const RoadVehicle *v : RoadVehicle::Iterate()) used |= v->engine_type == e->index;
+			if (!used) { tram = e; break; }
+		}
+		if (tram == nullptr) SignalFixtureAbort(__LINE__);
+		tram->VehInfo<RoadVehicleInfo>().roadtype = ROADTYPE_TRAM;
+		fmt::print(stderr, "ROADCMD tram-engine {}\n", tram->index.base());
+		/* Dead ends at x=6: clear land accepts the turn's build query, so that tram waits;
+		 * an own canal refuses it under NoWater, so that tram turns on its own tile. */
+		RoadRun<CMD_BUILD_CANAL>("tram-canal", t(7, 8), t(7, 8), WaterClass::Canal, false);
+		for (uint y : {4, 8}) {
+			RoadRun<CMD_BUILD_ROAD_DEPOT>("tram-depot", t(2, y), ROADTYPE_TRAM, DIAGDIR_SW);
+			RoadRun<CMD_BUILD_LONG_ROAD>("tram-line", t(6, y), t(3, y), ROADTYPE_TRAM, AXIS_X, DRD_NONE, false, true, true);
+			auto [cost, id, refit, part, cargo] = Command<CMD_BUILD_VEHICLE>::Do(DoCommandFlag::Execute, t(2, y), tram->index, false, INVALID_CARGO, INVALID_CLIENT_ID);
+			RoadPrint("tram-vehicle", cost, id.base());
+			RoadPrint("tram-start", Command<CMD_START_STOP_VEHICLE>::Do(DoCommandFlag::Execute, id, false));
+			fmt::print(stderr, "ROADCMD tram-end {} {} {}\n", y, id.base(), t(6, y).base());
+		}
+		company.Restore();
+		return true;
+	}
 	RoadRun<CMD_BUILD_BRIDGE>("non-road-bridge", t(14, 22), t(20, 22), TRANSPORT_RAIL, 0, RAILTYPE_RAIL);
 	/* MayHaveRoad excludes rail stations and non-road tunnel/bridge heads. */
 	std::array<bool, 2> non_road_seen{};

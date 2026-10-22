@@ -28,6 +28,16 @@ def scenarios(soak):
             else (12 if soak else 4) * SNAPSHOT_TICKS,
         }
         for mode in ("manual", "cargodist", "stockpile")
+    ] + [
+        dict(
+            name="subsidies-" + mode,
+            kind="save",
+            save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+            engines="subsidies" + ("-reload" if mode == "reload" else ""),
+            short_checkpoint=True,
+            ticks=1,
+        )
+        for mode in ("control", "reload")
     ]
 
 
@@ -321,3 +331,16 @@ def income_gap():
 
 if __name__ == "__main__":
     income_gap()
+
+
+def subsidy_reference(folder):
+    """Unchanged monthly lambda isolates wrap, disabled expiry and retry RNG gaps."""
+    import migration
+
+    source = migration.git("show", migration.BASELINE["commit"] + ":src/subsidy.cpp")
+    start = source.index("\n{", source.index("_economy_subsidies_monthly")) + 1
+    end = source.index("\n});", start)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "subsidy-monthly-reference.inc").write_text(
+        "static void SubsidyMonthlyLoop()\n" + source[start:end] + "\n}\n"
+    )

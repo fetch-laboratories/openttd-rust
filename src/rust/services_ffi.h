@@ -204,6 +204,9 @@ struct OpenTTDSharedServices {
 	void (*for_each_station)(void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(for_each_station); ///< Station::Iterate(); visits never add or delete stations.
 };
 extern const OpenTTDSharedServices _rust_shared_services;
+struct OpenTTDSubsidyServices;
+const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept;
+inline const OpenTTDSubsidyServices *RustSubsidyServices() noexcept { return &GetRustSubsidyServices(); }
 const OpenTTDSharedServices &GetRustSharedServices() noexcept;
 /* Shared reader ABI used by default allocation/layout/oracle tests, not game
  * dispatch. Zero count selects the existing callback backend. No pointer retained. */

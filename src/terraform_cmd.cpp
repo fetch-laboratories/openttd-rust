@@ -250,8 +250,12 @@ std::tuple<CommandCost, Money, TileIndex> CmdTerraformLand(DoCommandFlags flags,
 			}
 
 			/* Is the tile already cleared? */
+#ifdef WITH_RUST
+			bool indirectly_cleared = IsObjectIndirectlyCleared(t);
+#else
 			const ClearedObjectArea *coa = FindClearedObject(t);
 			bool indirectly_cleared = coa != nullptr && coa->first_tile != t;
+#endif
 
 			/* Check tiletype-specific things, and add extra-cost */
 			Backup<bool> old_generating_world(_generating_world);

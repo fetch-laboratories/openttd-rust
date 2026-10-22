@@ -78,6 +78,9 @@ pub struct Tables {
     pub pending: *const fleet::pending::Services,
     pub transaction: *const fleet::transactions::Services,
     pub group: *const fleet::GroupServices,
+    pub refit: *const crate::vehicle_transactions::refit::Services,
+    pub refit_cost: *mut crate::services::CommandCost,
+    pub refit_temporary: *mut crate::services::CommandCost,
 }
 // Select counted/plain implementations once at entry. In the plain monomorph,
 // COUNTED=false erases every new per-visit witness branch/load/update.
@@ -383,7 +386,14 @@ unsafe extern "C" fn load_stations<const COUNTED: bool>(tables: *const Tables) {
             crate::witness::hit(crate::witness::VEHICLE_STATIONS);
         }
         unsafe {
-            station_service::openttd_rust_station_load(service, tables.station, tables.loading);
+            station_service::openttd_rust_station_load(
+                service,
+                tables.station,
+                tables.loading,
+                tables.refit,
+                tables.refit_cost,
+                tables.refit_temporary,
+            );
         };
     });
 }

@@ -77,6 +77,11 @@ fork; the remaining upstream documentation explains behavior and architecture.
   initializers. Existing ports convert under #168 and #199. Root grants no
   exceptions at integration: a port whose hot path allocates per call,
   dispatches by opcode or copies whole records is fixed before it integrates.
+- The selected #274 shared map descriptor is limited to audited scheduler clear,
+  water and tree loops (`docs/design/world-state.md`). C++ retains canonical
+  arrays and writes. Shared header helpers preserve native assertions; raw
+  field loads end before callbacks and descriptor lifetime requires a proved
+  no-reset/no-yield interval. Other entries keep typed services until audited.
 - Speed is guarded per PR and optimized in periodic passes (#282, #321). A PR
   that changes compiled game code passes speed when no benchmark scenario is
   projected more than 15% slower than the ratio recorded for current

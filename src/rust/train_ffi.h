@@ -60,11 +60,6 @@ struct OpenTTDTrainCurrentMaxSpeedRead {
 	uint16_t max_track_speed;
 	uint16_t speed;
 };
-struct OpenTTDTrainCurrentMaxSpeed6Read {
-	OpenTTDTrainHandle next;
-	uint32_t tile;
-	uint8_t status;
-};
 struct OpenTTDTrainUpdateAccelerationRead {
 	uint32_t power;
 	uint32_t weight;
@@ -221,7 +216,6 @@ struct OpenTTDTrainServices {
 	OpenTTDTrainCurveLimitRead (*read_curve_limit)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_curve_limit);
 	OpenTTDTrainStopLocationRead (*read_stop_location)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_stop_location);
 	OpenTTDTrainCurrentMaxSpeedRead (*read_current_max_speed)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_current_max_speed);
-	OpenTTDTrainCurrentMaxSpeed6Read (*read_current_max_speed_6)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_current_max_speed_6);
 	OpenTTDTrainUpdateAccelerationRead (*read_update_acceleration)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_update_acceleration);
 	OpenTTDTrainUpdateSpeedRead (*read_update_speed)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_update_speed);
 	OpenTTDTrainTrackdirRead (*read_trackdir)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(read_trackdir);

@@ -274,7 +274,8 @@ pub struct Services {
     pub company_admin_update: extern "C" fn(u8),
     pub company_in_trouble: extern "C" fn(u8),
     pub post_company_delete: extern "C" fn(u8),
-    pub update_company_hq: extern "C" fn(u8, i32),
+    pub hq_location: extern "C" fn(u8) -> u32,
+    pub object_services: extern "C" fn() -> *const crate::objects::ObjectServices,
     pub performance_detail_dirty: extern "C" fn(),
     pub company_graphs_dirty: extern "C" fn(),
     pub company_infrastructure: extern "C" fn(u8, *mut Infrastructure),
@@ -321,10 +322,7 @@ pub struct Services {
     pub acquisition_windows: extern "C" fn(u8),
     pub clients_to_spectators: extern "C" fn(u8),
     pub set_local_company: extern "C" fn(u8),
-    pub subsidy_next_awarded: extern "C" fn(u8, u32) -> u32,
-    pub delete_subsidy: extern "C" fn(u32),
-    pub set_subsidy_awarded: extern "C" fn(u32, u8),
-    pub rebuild_subsidy_cache: extern "C" fn(),
+    pub subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub town_next: extern "C" fn(u32, u8, *mut TownRights) -> u32,
     pub town_rating: extern "C" fn(u32, u8) -> i16,
     pub set_town_rating: extern "C" fn(u32, u8, i16, bool),
@@ -445,7 +443,8 @@ const SCORE_WEIGHT: [i64; 9] = [100, 100, 100, 50, 100, 400, 50, 50, 50];
 fn e() -> *mut Economy {
     &raw mut ECONOMY
 }
-fn neg(a: i64) -> i64 {
+/// Saturating `-Money` (`OverflowSafeInt64::operator-`).
+pub(crate) fn neg(a: i64) -> i64 {
     if a == i64::MIN { i64::MAX } else { -a }
 }
 fn done(cost: i64, expense: u8) -> Cost {
@@ -665,7 +664,14 @@ fn rating(s: &Services, p: *mut Finances, id: u8, update: bool) -> i32 {
     }
     if update {
         put!(p, score as i32, old[0].performance);
-        (s.update_company_hq)(id, score as i32);
+        // SAFETY: immutable object table; no finance borrow spans HQ mutation.
+        unsafe {
+            crate::objects::openttd_rust_object_update_hq(
+                (s.object_services)(),
+                (s.hq_location)(id),
+                score as u32,
+            );
+        }
         let v = value(s, p, id, true);
         put!(p, v, old[0].value);
     }
@@ -1013,19 +1019,7 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
     if new == INVALID_OWNER {
         put!((f.company_finances)(old), (u64::MAX >> 2) as i64, money);
     }
-    each(
-        |from| (s.subsidy_next_awarded)(old, from),
-        |id| {
-            if new == INVALID_OWNER {
-                (s.delete_subsidy)(id);
-            } else {
-                (s.set_subsidy_awarded)(id, new);
-            }
-        },
-    );
-    if new == INVALID_OWNER {
-        (s.rebuild_subsidy_cache)();
-    }
+    unsafe { &*(s.subsidies)() }.transfer(old, new);
     let mut t = TownRights {
         rating: 0,
         have_ratings: 0,
@@ -1940,7 +1934,8 @@ crate::abi::layouts! {
         company_admin_update,
         company_in_trouble,
         post_company_delete,
-        update_company_hq,
+        hq_location,
+        object_services,
         performance_detail_dirty,
         company_graphs_dirty,
         company_infrastructure,
@@ -1987,10 +1982,7 @@ crate::abi::layouts! {
         acquisition_windows,
         clients_to_spectators,
         set_local_company,
-        subsidy_next_awarded,
-        delete_subsidy,
-        set_subsidy_awarded,
-        rebuild_subsidy_cache,
+        subsidies,
         town_next,
         town_rating,
         set_town_rating,

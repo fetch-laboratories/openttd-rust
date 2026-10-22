@@ -260,10 +260,7 @@ extern "C" OpenTTDIndustryLocationResult openttd_industry_resolve_shape(Industry
 	result.callback = GetIndustryTileCallback(CBID_INDTILE_SHAPE_CHECK, 0, parameter, gfx, industry, TileIndex(tile), result.registers);
 	return result;
 }
-extern "C" void openttd_industry_shape_error(OpenTTDIndustryCost *out, const OpenTTDIndustryLocationResult *result, const OpenTTDIndustryTileSpec *spec) noexcept
-{
-	*out = GetErrorMessageFromLocationCallbackResult(result->callback, result->registers, spec->grf_prop.grffile, STR_ERROR_SITE_UNSUITABLE);
-}
+
 #endif
 
 /* Simple wrapper for GetHouseCallback to keep the animation unified. */

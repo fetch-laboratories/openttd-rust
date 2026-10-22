@@ -40,7 +40,7 @@ pub struct LifecycleServices {
     pub neutral_station: unsafe extern "C" fn(*mut c_void) -> *mut super::StationHandle,
     pub cleanup_tile: unsafe extern "C" fn(u32) -> CleanupTile,
     pub delete_tile_inspect: unsafe extern "C" fn(u32),
-    pub make_water: unsafe extern "C" fn(u32),
+    pub restoration: *const crate::water::RestorationServices,
     pub delete_oilrig: unsafe extern "C" fn(u32),
     pub clear_docking: unsafe extern "C" fn(u32),
     pub industry_field: unsafe extern "C" fn(u32, u16) -> bool,
@@ -51,7 +51,7 @@ pub struct LifecycleServices {
     pub close_view: unsafe extern "C" fn(u16),
     pub close_production: unsafe extern "C" fn(u16),
     pub delete_inspect: unsafe extern "C" fn(u16),
-    pub delete_subsidies: unsafe extern "C" fn(u16),
+    pub subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub invalidate_cargo: unsafe extern "C" fn(u16),
     pub next_near_station: unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_void,
     pub remove_delivery: unsafe extern "C" fn(*mut c_void, *mut c_void),
@@ -121,7 +121,14 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
         if observation.kind == 8 {
             if observation.industry == id {
                 (w.delete_tile_inspect)(tile);
-                (w.make_water)(tile);
+                let shared = s.shared();
+                crate::water::restore(
+                    tile,
+                    16,
+                    shared,
+                    &*(shared.water_services)(),
+                    &*w.restoration,
+                );
             }
         } else if observation.kind == 5 && observation.oilrig {
             (w.delete_oilrig)(tile);
@@ -160,7 +167,7 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
         (w.close_view)(id);
         (w.close_production)(id);
         (w.delete_inspect)(id);
-        (w.delete_subsidies)(id);
+        (&*(w.subsidies)()).delete_with(crate::subsidy::Source::industry(id));
         (w.invalidate_cargo)(id);
     }
     let mut previous = ptr::null_mut();

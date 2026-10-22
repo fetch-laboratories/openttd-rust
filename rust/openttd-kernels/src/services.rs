@@ -116,8 +116,6 @@ pub struct CommandServices {
     pub leave: extern "C" fn(),
     /// Canonical native finance owner resolution and presentation leaves.
     pub finance: &'static crate::company::FinanceServices,
-    /// Clear native command-local object scratch at the original top level.
-    pub clear_object_areas: extern "C" fn(),
     /// Current infinite-money difficulty setting.
     pub infinite_money: extern "C" fn() -> bool,
     /// Native error storage and local encoded currency formatting only.

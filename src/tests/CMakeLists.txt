@@ -43,6 +43,7 @@ add_test_files(
     town_growth.cpp
     town_protocol.hpp
     townname.cpp
+    train.cpp
     ship_yapf.cpp
     ship_yapf_protocol.hpp
     water_regions.cpp

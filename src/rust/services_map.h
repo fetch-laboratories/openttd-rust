@@ -10,11 +10,14 @@
 #define RUST_SERVICES_MAP_H
 
 #include "../landscape.h"
+#include "../depot_map.h"
 #include "../road.h"
 #include "../road_map.h"
 #include "../roadstop_base.h"
 #include "../station_map.h"
 
+inline bool SharedIsDepotTile(uint32_t tile) noexcept { return IsDepotTile(TileIndex(tile)); }
+inline bool SharedIsTileOwner(uint32_t tile, uint8_t owner) noexcept { return IsTileOwner(TileIndex(tile), Owner(owner)); }
 inline uint32_t SharedTileAddWrap(uint32_t tile, int32_t x, int32_t y) noexcept { return TileAddWrap(TileIndex(tile), x, y).base(); }
 inline uint8_t SharedTileType(uint32_t tile) noexcept { return GetTileType(TileIndex{tile}); }
 inline uint16_t MapSvcStationIndex(uint32_t tile) noexcept { return GetStationIndex(TileIndex(tile)).base(); }
@@ -39,4 +42,8 @@ inline bool RoadSvcContinuation(uint32_t tile, uint32_t next) noexcept
 }
 inline int32_t SharedSlopePixelZ(int32_t x, int32_t y, bool ground_vehicle) noexcept { return GetSlopePixelZ(x, y, ground_vehicle); }
 
+inline uint32_t OpenTTDDistanceManhattan(uint32_t from, uint32_t to) noexcept { return DistanceManhattan(TileIndex(from), TileIndex(to)); }
+inline uint32_t OpenTTDDistanceSquare(uint32_t from, uint32_t to) noexcept { return DistanceSquare(TileIndex(from), TileIndex(to)); }
+/* Retain the existing orders-table carrier while sharing the typed leaves. */
+inline uint64_t OpenTTDLegacyOrderDistance(uint32_t from, uint32_t to, uint8_t square) noexcept { return square ? OpenTTDDistanceSquare(from, to) : OpenTTDDistanceManhattan(from, to); }
 #endif

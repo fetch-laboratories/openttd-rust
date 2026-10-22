@@ -6,13 +6,16 @@
  */
 
 #include "services_ffi.h"
+#include "company_services.h"
 #include "services_map.h"
 #include "services_water.h"
+#include "services_cargo.h"
 
 /** @file ship_control_services.h Typed synchronous shared-world services. */
 #include "settings_services.h"
 #include "tile_animation_services.h"
 #include "vehicle_services.h"
+#include "engine_services.h"
 static_assert(MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && TILE_HEIGHT == 8 && TILE_SIZE == 16);
 static_assert(TRACK_BIT_DEPOT == 128 && TRACK_BIT_WORMHOLE == 64 && HVOT_SHIP == 32);
 static_assert(to_underlying(WaterClass::Sea) == 0 && DIRDIFF_REVERSE == 4);
@@ -51,9 +54,7 @@ static uint32_t Ship_offset(uint32_t direction) noexcept { return static_cast<ui
 
 static uint32_t Ship_diag_between(uint32_t from, uint32_t to) noexcept { return DiagdirBetweenTiles(TileIndex(from), TileIndex(to)); }
 
-static uint32_t Ship_dist_square(uint32_t from, uint32_t to) noexcept { return DistanceSquare(TileIndex(from), TileIndex(to)); }
 
-static uint32_t Ship_dist_manhattan(uint32_t from, uint32_t to) noexcept { return DistanceManhattan(TileIndex(from), TileIndex(to)); }
 
 
 static bool Ship_dock(uint32_t tile) noexcept { return IsDockTile(TileIndex(tile)); }
@@ -115,7 +116,7 @@ static void Ship_order_increment(uint32_t id) noexcept { Ship *v = Ship::Get(Veh
 
 static void Ship_timetable(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); UpdateVehicleTimetable(v, true); }
 
-static void Ship_position(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdatePosition(); }
+static void Ship_position(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleUpdatePosition(v); }
 
 static void Ship_start_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP); }
 
@@ -168,9 +169,9 @@ static uint32_t Ship_age_property(uint32_t id, uint32_t default_period) noexcept
 
 static void Ship_update_visual(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateVisualEffect(); }
 
-static void Ship_cache_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->InvalidateNewGRFCacheOfChain(); }
+static void Ship_cache_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleInvalidateChain(RustVehicle(v)); }
 
-static uint32_t Ship_capacity(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return v->GetEngine()->DetermineCapacity(v); }
+static uint32_t Ship_capacity(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return RustEngineDetermineCapacity(RustVehicleGetEngine(RustVehicle(v)), RustVehicle(v), nullptr); }
 
 static void Ship_sprite_direction(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->sprite_cache.last_direction = INVALID_DIR; }
 
@@ -178,9 +179,7 @@ static uint32_t Ship_tile_x(uint32_t tile) noexcept { return TileX(TileIndex(til
 
 static uint32_t Ship_tile_y(uint32_t tile) noexcept { return TileY(TileIndex(tile)); }
 
-static bool Ship_build_flag(uint32_t engine) noexcept { return Engine::Get(EngineID(engine))->flags.Test(EngineFlag::ExclusivePreview); }
-
-static void Ship_build_random(uint32_t id, uint16_t random) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->random_bits = random; }
+static void Ship_build_random(uint32_t id, uint16_t random) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleSetRandomBits(v, random); }
 
 static OpenTTDShipPosition Ship_new_position(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); auto gp = GetNewVehiclePos(v); return {gp.x, gp.y, gp.old_tile.base(), gp.new_tile.base()}; }
 
@@ -261,10 +260,10 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	const auto &svi = e->VehInfo<ShipVehicleInfo>();
 	v->vehstatus = {VehState::Hidden, VehState::Stopped, VehState::DefaultPalette};
 	v->spritenum = svi.image_index;
-	v->cargo_type = e->GetDefaultCargoType();
-	assert(IsValidCargoType(v->cargo_type));
-	v->cargo_cap = svi.capacity;
-	v->refit_cap = 0;
+	RustVehicleSetCargoType(RustVehicle(v), RustEngineDefaultCargo(RustEngine(e)));
+	assert(OpenTTDIsValidCargo(RustVehicleCargoType(RustVehicle(v))));
+	RustVehicleSetCargoCap(RustVehicle(v), svi.capacity);
+	RustVehicleSetRefitCap(RustVehicle(v), 0);
 	v->last_station_visited = StationID::Invalid();
 	v->last_loading_station = StationID::Invalid();
 	v->engine_type = e->index;
@@ -295,10 +294,10 @@ static void Ship_build_prototype(uint32_t id) noexcept { Ship *v = Ship::Get(Veh
 static void Ship_build_interval_percent(uint32_t id) noexcept
 {
 	Ship *v = Ship::Get(VehicleID(id));
-	v->SetServiceIntervalIsPercent(Company::Get(_current_company)->settings.vehicle.servint_ispercent);
+	v->SetServiceIntervalIsPercent(RustCompanyServiceIntervalPercent(RustCurrentCompanyID()));
 }
 
-static void Ship_build_capacity(uint32_t id, uint32_t capacity) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->cargo_cap = static_cast<uint16_t>(capacity); }
+static void Ship_build_capacity(uint32_t id, uint32_t capacity) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleSetCargoCap(RustVehicle(v), static_cast<uint16_t>(capacity)); }
 
 static void Ship_set_tile(uint32_t id, uint32_t value) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->tile = TileIndex(static_cast<uint32_t>(value)); }
 
@@ -389,8 +388,8 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.lock_middle = GetRustSharedServices().water_middle_lock, .lock_dir = Ship_lock_dir,
 		.tile_min_z = Ship_tile_min_z, .tile_max_z = Ship_tile_max_z,
 		.track_status = OpenTTDLegacyWaterTracks, .offset = Ship_offset,
-		.diag_between = Ship_diag_between, .dist_square = Ship_dist_square,
-		.dist_manhattan = Ship_dist_manhattan, .docking = GetRustSharedServices().docking_tile,
+		.diag_between = Ship_diag_between, .dist_square = OpenTTDDistanceSquare,
+		.dist_manhattan = OpenTTDDistanceManhattan, .docking = GetRustSharedServices().docking_tile,
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
 		.station = Ship_station, .industry_station = Ship_industry_station,
 		.oilrig = Ship_oilrig, .station_use = Ship_station_use,
@@ -412,7 +411,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.update_visual = Ship_update_visual, .cache_invalidate = Ship_cache_invalidate,
 		.capacity = Ship_capacity, .sprite_direction = Ship_sprite_direction,
 		.tile_x = Ship_tile_x, .tile_y = Ship_tile_y,
-		.build_flag = Ship_build_flag, .build_random = Ship_build_random,
+		.build_flag = RustIndexedEngineRead<bool, RustEngineExclusivePreview, uint32_t>, .build_random = Ship_build_random,
 		.new_position = Ship_new_position, .exit_dir = Ship_exit_dir,
 		.track_direction = Ship_track_direction, .tracks_reach = Ship_tracks_reach,
 		.busy_tile = Ship_busy_tile, .path_size = Ship_path_size,
