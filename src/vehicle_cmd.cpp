@@ -41,6 +41,146 @@
 
 #include "table/strings.h"
 
+
+#ifdef WITH_RUST
+#include "rust/vehicle_transaction_ffi.h"
+#include "rust/vehicle_refit_ffi.h"
+#include "rust/engine_services.h"
+#include "rust/services_cargo.h"
+#include "rust/services_map.h"
+#include "rust/settings_services.h"
+#include "rust/command_cost_services.h"
+#include "rust/vehicle_services.h"
+#include "rust/company_services.h"
+#include "rust/presentation_services.h"
+#include "rust/orders_ffi.h"
+#include "rust/vehicle_maintenance_ffi.h"
+#include "rust/ship_control_ffi.h"
+#include "rust/services_station.h"
+#include "road_map.h"
+#include "landscape.h"
+#include "station_base.h"
+#include "timer/timer_game_calendar.h"
+#include "timer/timer_game_economy.h"
+#include "table/sprites.h"
+
+/* Synchronous native storage/presentation leaves only. No Rust borrow crosses
+ * these calls; allocation or formatting failures terminate in noexcept leaves. */
+static OpenTTDVehicleTransactionTarget VehicleTransactionTarget(void *shell) noexcept
+{
+	const Vehicle *v = static_cast<Vehicle *>(shell);
+	return {.owner = RustVehicleOwner(v), .primary = RustVehiclePrimary(v)};
+}
+static void VehicleTransactionNameDirty(void *shell) noexcept
+{
+	InvalidateWindowClassesData(GetWindowClassForVehicleType(RustVehicleVehicleType(static_cast<Vehicle *>(shell))), 1);
+	RustScreenDirty();
+}
+static int32_t VehicleTransactionDefaultInterval(uint8_t owner, uint8_t type) noexcept { return CompanyServiceInterval(Company::Get(CompanyID(owner)), static_cast<VehicleType>(type)); }
+static uint16_t VehicleTransactionClampInterval(int32_t interval, bool percent) noexcept { return GetServiceIntervalClamped(interval, percent); }
+static void VehicleTransactionSetInterval(void *shell, uint16_t interval, bool custom, bool percent) noexcept
+{
+	Vehicle *v = static_cast<Vehicle *>(shell);
+	v->SetServiceInterval(interval);
+	v->SetServiceIntervalIsCustom(custom);
+	v->SetServiceIntervalIsPercent(percent);
+	GetRustVehicleServices().maintenance->details_dirty(RustVehicle(v));
+}
+const OpenTTDVehicleTransactionServices &GetRustVehicleTransactionServices() noexcept
+{
+	static const OpenTTDVehicleTransactionServices services{
+		.shared = &GetRustSharedServices(),
+		.commands = &GetRustCommandServices(),
+		.cost = &GetRustCommandCostServices(),
+		.groups = &FleetGroupServices(),
+		.target = VehicleTransactionTarget,
+		.name = RustVehicleName,
+		.clear_name = RustVehicleClearName,
+		.set_name = RustVehicleSetName,
+		.name_dirty = VehicleTransactionNameDirty,
+		.interval_percent = RustCompanyServiceIntervalPercent,
+		.interval_default = VehicleTransactionDefaultInterval,
+		.interval_clamp = VehicleTransactionClampInterval,
+		.set_interval = VehicleTransactionSetInterval,
+		.unique_name = STR_ERROR_NAME_MUST_BE_UNIQUE,
+		.max_name = MAX_LENGTH_VEHICLE_NAME_CHARS,
+	};
+	return services;
+}
+static OpenTTDAircraftStartState VehicleTransactionAircraftStart(void *shell) noexcept
+{
+	const Aircraft *v = Aircraft::From(static_cast<Vehicle *>(shell));
+	return {.state = v->state, .flags = v->flags};
+}
+static void VehicleTransactionWaitingNews(uint32_t id) noexcept { DeleteVehicleNews(VehicleID(id), AdviceType::VehicleWaiting); }
+static void VehicleTransactionStartstopUI(void *shell) noexcept
+{
+	const Vehicle *v = static_cast<Vehicle *>(shell);
+	GetRustVehicleServices().start_stop_dirty(RustVehicle(v));
+	FleetGroupServices().depot_dirty(shell);
+	openttd_orders_dirty_vehicle_windows(shell);
+	InvalidateWindowData(WC_VEHICLE_VIEW, v->index);
+}
+static void VehicleTransactionSellRail(OpenTTDCommandCost *out, uint16_t flags, void *v, bool chain, bool backup, uint32_t client) noexcept
+{
+	*reinterpret_cast<CommandCost *>(out) = CmdSellRailWagon(DoCommandFlags(flags), static_cast<Vehicle *>(v), chain, backup, ClientID(client));
+}
+const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
+{
+	static const OpenTTDVehicleCommonServices services{
+		.base = &GetRustVehicleTransactionServices(),
+		.transactions = &FleetTransactionServices(),
+		.vehicles = &GetRustVehicleServices(),
+		.orders = &GetRustOrdersLeaves(),
+		.strings = {
+			.destroyed = STR_ERROR_VEHICLE_IS_DESTROYED,
+			.stopped_in_depot = STR_ERROR_TRAIN_MUST_BE_STOPPED_INSIDE_DEPOT,
+			.no_power = STR_ERROR_TRAIN_START_NO_POWER,
+			.in_flight = STR_ERROR_AIRCRAFT_IS_IN_FLIGHT,
+			.incompatible_rail = STR_ERROR_INCOMPATIBLE_RAIL_TYPES,
+			.null_string = STR_NULL,
+			.grf_text = GRFSTR_MISC_GRF_TEXT,
+			.takeoff = STARTTAKEOFF,
+			.terminal7 = TERM7,
+			.direct_descent = 1 << VAF_HELI_DIRECT_DESCENT,
+			.new_vehicle_expense = EXPENSES_NEW_VEHICLES,
+			.invalid_client = INVALID_CLIENT_ID, .share_orders = CO_SHARE, .copy_orders = CO_COPY,
+			.cargo_count = NUM_CARGO, .invalid_cargo = INVALID_CARGO,
+		},
+		.train_power = RustOpaqueVehicleRead<uint32_t, RustTrainCachedPower>,
+		.aircraft_start = VehicleTransactionAircraftStart,
+		.startstop_callback = RustOpaqueVehicleInvoke<RustVehicleStartstopCallback, int32_t *>,
+		.grf_version = RustOpaqueVehicleRead<uint8_t, RustVehicleGRFVersion>,
+		.grf_string = RustOpaqueVehicleInvoke<RustVehicleGRFString, GRFStringID>,
+		.waiting_news = VehicleTransactionWaitingNews,
+		.flip_stopped = RustOpaqueVehicleInvoke<RustVehicleFlipStopped>,
+		.startstop_ui = VehicleTransactionStartstopUI,
+		.sell_rail = VehicleTransactionSellRail,
+		.value = RustOpaqueVehicleRead<int64_t, RustVehicleValue>,
+		.valid_cargo = OpenTTDIsValidCargo,
+	};
+	return services;
+}
+#include "rust/vehicle_refit_services.hpp"
+static OpenTTDVehicleListId VehicleTransactionListId(const VehicleListIdentifier &vli) noexcept
+{
+	return {.kind = static_cast<uint8_t>(vli.type), .vehicle_type = vli.vtype, .company = vli.company.base(), .index = vli.index, .valid = vli.Valid()};
+}
+static void VehicleTransactionSend(OpenTTDCommandCost *out, void *v, uint16_t flags, uint8_t command) noexcept { *reinterpret_cast<CommandCost *>(out) = static_cast<Vehicle *>(v)->SendToDepot(DoCommandFlags(flags), DepotCommandFlags(command)); }
+static const OpenTTDVehicleMassServices &GetVehicleMassServices() noexcept
+{
+	static const OpenTTDVehicleMassServices services{
+		.common = &GetRustVehicleCommonServices(), .selection = &GetRustVehicleSelectionServices(),
+		.is_depot = SharedIsDepotTile, .is_tile_owner = SharedIsTileOwner, .send = VehicleTransactionSend,
+		.service = DepotCommandFlags(DepotCommandFlag::Service).base(), .mass_send = DepotCommandFlags(DepotCommandFlag::MassSend).base(), .dont_cancel = DepotCommandFlags(DepotCommandFlag::DontCancel).base(), .invalid_client = INVALID_CLIENT_ID,
+	};
+	return services;
+}
+
+#include "rust/vehicle_build_services.hpp"
+
+#endif /* WITH_RUST */
+
 #include "safeguards.h"
 
 /* Tables used in vehicle_func.h to find the right error message for a certain vehicle type */
@@ -99,6 +239,13 @@ const StringID _send_to_depot_msg_table[] = {
  */
 std::tuple<CommandCost, VehicleID, uint, uint16_t, CargoArray> CmdBuildVehicle(DoCommandFlags flags, TileIndex tile, EngineID eid, bool use_free_vehicles, CargoType cargo, ClientID client_id)
 {
+#ifdef WITH_RUST
+	CommandCost cost, temporary, refit_temporary;
+	auto result = openttd_rust_vehicle_build(&GetRustVehicleBuildServices(), RustCommandCost(&cost), RustCommandCost(&temporary), RustCommandCost(&refit_temporary), flags.base(), tile.base(), eid.base(), use_free_vehicles, cargo, client_id);
+	CargoArray capacity;
+	std::copy(std::begin(result.capacity.cargo), std::end(result.capacity.cargo), capacity.begin());
+	return {std::move(cost), VehicleID(result.id), result.capacity.total, result.capacity.mail, capacity};
+#else
 	/* Elementary check for valid location. */
 	if (!IsDepotTile(tile) || !IsTileOwner(tile, _current_company)) return { CMD_ERROR, VehicleID::Invalid(), 0, 0, {} };
 
@@ -222,6 +369,7 @@ std::tuple<CommandCost, VehicleID, uint, uint16_t, CargoArray> CmdBuildVehicle(D
 	if (flags != subflags) RestoreRandomSeeds(saved_seeds);
 
 	return { value, veh_id, refitted_capacity, refitted_mail_capacity, cargo_capacities };
+#endif
 }
 
 /**
@@ -235,6 +383,11 @@ std::tuple<CommandCost, VehicleID, uint, uint16_t, CargoArray> CmdBuildVehicle(D
  */
 CommandCost CmdSellVehicle(DoCommandFlags flags, VehicleID v_id, bool sell_chain, bool backup_order, ClientID client_id)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_vehicle_sell(&GetRustVehicleCommonServices(), RustCommandCost(&cost), flags.base(), v_id.base(), sell_chain, backup_order, client_id);
+	return cost;
+#else
 	Vehicle *v = Vehicle::GetIfValid(v_id);
 	if (v == nullptr) return CMD_ERROR;
 
@@ -259,6 +412,7 @@ CommandCost CmdSellVehicle(DoCommandFlags flags, VehicleID v_id, bool sell_chain
 	}
 
 	return ret;
+#endif
 }
 
 /**
@@ -270,6 +424,7 @@ CommandCost CmdSellVehicle(DoCommandFlags flags, VehicleID v_id, bool sell_chain
  * @param[out] auto_refit_allowed The refit is allowed as an auto-refit.
  * @return Price for refitting
  */
+#ifndef WITH_RUST
 static int GetRefitCostFactor(const Vehicle *v, EngineID engine_type, CargoType new_cargo_type, uint8_t new_subtype, bool *auto_refit_allowed)
 {
 	/* Prepare callback param with info about the new cargo type. */
@@ -293,6 +448,8 @@ static int GetRefitCostFactor(const Vehicle *v, EngineID engine_type, CargoType 
 	return (v == nullptr || v->cargo_type != new_cargo_type) ? e->info.refit_cost : 0;
 }
 
+#endif
+
 /**
  * Learn the price of refitting a certain engine
  * @param v The vehicle we are refitting, can be nullptr.
@@ -302,6 +459,7 @@ static int GetRefitCostFactor(const Vehicle *v, EngineID engine_type, CargoType 
  * @param[out] auto_refit_allowed The refit is allowed as an auto-refit.
  * @return Price for refitting
  */
+#ifndef WITH_RUST
 static CommandCost GetRefitCost(const Vehicle *v, EngineID engine_type, CargoType new_cargo_type, uint8_t new_subtype, bool *auto_refit_allowed)
 {
 	ExpensesType expense_type;
@@ -338,6 +496,10 @@ static CommandCost GetRefitCost(const Vehicle *v, EngineID engine_type, CargoTyp
 		return CommandCost(expense_type, GetPrice(base_price, cost_factor, e->GetGRF(), -10));
 	}
 }
+
+#endif
+
+#ifndef WITH_RUST
 
 /** Helper structure for RefitVehicle() */
 struct RefitResult {
@@ -478,6 +640,8 @@ static std::tuple<CommandCost, uint, uint16_t, CargoArray> RefitVehicle(Vehicle 
 	return { cost, total_capacity, total_mail_capacity, cargo_capacities };
 }
 
+#endif
+
 /**
  * Refits a vehicle to the specified cargo type.
  * @param flags type of operation
@@ -492,6 +656,13 @@ static std::tuple<CommandCost, uint, uint16_t, CargoArray> RefitVehicle(Vehicle 
  */
 std::tuple<CommandCost, uint, uint16_t, CargoArray> CmdRefitVehicle(DoCommandFlags flags, VehicleID veh_id, CargoType new_cargo_type, uint8_t new_subtype, bool auto_refit, bool only_this, uint8_t num_vehicles)
 {
+#ifdef WITH_RUST
+	CommandCost cost, temporary;
+	auto result = openttd_rust_vehicle_refit(&GetRustVehicleRefitServices(), reinterpret_cast<OpenTTDCommandCost *>(&cost), reinterpret_cast<OpenTTDCommandCost *>(&temporary), flags.base(), veh_id.base(), new_cargo_type, new_subtype, auto_refit, only_this, num_vehicles);
+	CargoArray capacities{};
+	std::copy(std::begin(result.cargo), std::end(result.cargo), capacities.begin());
+	return {std::move(cost), result.total, result.mail, capacities};
+#else
 	Vehicle *v = Vehicle::GetIfValid(veh_id);
 	if (v == nullptr) return { CMD_ERROR, 0, 0, {} };
 
@@ -563,6 +734,7 @@ std::tuple<CommandCost, uint, uint16_t, CargoArray> CmdRefitVehicle(DoCommandFla
 	}
 
 	return { cost, refit_capacity, mail_capacity, cargo_capacities };
+#endif
 }
 
 /**
@@ -574,6 +746,11 @@ std::tuple<CommandCost, uint, uint16_t, CargoArray> CmdRefitVehicle(DoCommandFla
  */
 CommandCost CmdStartStopVehicle(DoCommandFlags flags, VehicleID veh_id, bool evaluate_startstop_cb)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_vehicle_startstop(&GetRustVehicleCommonServices(), RustCommandCost(&cost), flags.base(), veh_id.base(), evaluate_startstop_cb);
+	return cost;
+#else
 	/* Disable the effect of evaluate_startstop_cb, when DoCommandFlag::AutoReplace is not set */
 	if (!flags.Test(DoCommandFlag::AutoReplace)) evaluate_startstop_cb = true;
 
@@ -652,6 +829,7 @@ CommandCost CmdStartStopVehicle(DoCommandFlags flags, VehicleID veh_id, bool eva
 		InvalidateWindowData(WC_VEHICLE_VIEW, v->index);
 	}
 	return CommandCost();
+#endif
 }
 
 /**
@@ -665,6 +843,12 @@ CommandCost CmdStartStopVehicle(DoCommandFlags flags, VehicleID veh_id, bool eva
  */
 CommandCost CmdMassStartStopVehicle(DoCommandFlags flags, TileIndex tile, bool do_start, bool vehicle_list_window, const VehicleListIdentifier &vli)
 {
+#ifdef WITH_RUST
+	CommandCost cost, item;
+	auto list = VehicleTransactionListId(vli);
+	openttd_rust_vehicle_mass_start(&GetVehicleMassServices(), RustCommandCost(&cost), RustCommandCost(&item), flags.base(), tile.base(), do_start, vehicle_list_window, &list);
+	return cost;
+#else
 	VehicleList list;
 
 	if (!vli.Valid()) return CMD_ERROR;
@@ -688,6 +872,7 @@ CommandCost CmdMassStartStopVehicle(DoCommandFlags flags, TileIndex tile, bool d
 	}
 
 	return CommandCost();
+#endif
 }
 
 /**
@@ -699,6 +884,11 @@ CommandCost CmdMassStartStopVehicle(DoCommandFlags flags, TileIndex tile, bool d
  */
 CommandCost CmdDepotSellAllVehicles(DoCommandFlags flags, TileIndex tile, VehicleType vehicle_type)
 {
+#ifdef WITH_RUST
+	CommandCost cost, item, last;
+	openttd_rust_vehicle_depot_sell(&GetVehicleMassServices(), RustCommandCost(&cost), RustCommandCost(&item), RustCommandCost(&last), flags.base(), tile.base(), vehicle_type);
+	return cost;
+#else
 	VehicleList list;
 
 	CommandCost cost(EXPENSES_NEW_VEHICLES);
@@ -722,6 +912,7 @@ CommandCost CmdDepotSellAllVehicles(DoCommandFlags flags, TileIndex tile, Vehicl
 	}
 
 	return had_success ? cost : last_error;
+#endif
 }
 
 /**
@@ -733,6 +924,13 @@ CommandCost CmdDepotSellAllVehicles(DoCommandFlags flags, TileIndex tile, Vehicl
  */
 CommandCost CmdDepotMassAutoReplace(DoCommandFlags flags, TileIndex tile, VehicleType vehicle_type)
 {
+#ifdef WITH_RUST
+	CommandCost cost, item, replace, build, copy, temporary;
+	SavedRandomSeeds seeds;
+	OpenTTDFleetCosts costs{&item, &replace, &build, &copy, &temporary, &seeds};
+	openttd_rust_vehicle_depot_replace(&GetVehicleMassServices(), RustCommandCost(&cost), &costs, flags.base(), tile.base(), vehicle_type);
+	return cost;
+#else
 	VehicleList list;
 	CommandCost cost = CommandCost(EXPENSES_NEW_VEHICLES);
 
@@ -751,6 +949,7 @@ CommandCost CmdDepotMassAutoReplace(DoCommandFlags flags, TileIndex tile, Vehicl
 		if (ret.Succeeded()) cost.AddCost(ret.GetCost());
 	}
 	return cost;
+#endif
 }
 
 /**
@@ -760,11 +959,15 @@ CommandCost CmdDepotMassAutoReplace(DoCommandFlags flags, TileIndex tile, Vehicl
  */
 bool IsUniqueVehicleName(const std::string &name)
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_unique_name(&GetRustVehicleTransactionServices(), {reinterpret_cast<const uint8_t *>(name.data()), name.size()});
+#else
 	for (const Vehicle *v : Vehicle::Iterate()) {
 		if (!v->name.empty() && v->name == name) return false;
 	}
 
 	return true;
+#endif
 }
 
 /**
@@ -772,6 +975,7 @@ bool IsUniqueVehicleName(const std::string &name)
  * @param src Source vehicle, with a custom name.
  * @param dst Destination vehicle.
  */
+#ifndef WITH_RUST
 static void CloneVehicleName(const Vehicle *src, Vehicle *dst)
 {
 	std::string buf;
@@ -818,6 +1022,7 @@ static void CloneVehicleName(const Vehicle *src, Vehicle *dst)
 
 	/* All done. If we didn't find a name, it'll just use its default. */
 }
+#endif
 
 /**
  * Clone a vehicle. If it is a train, it will clone all the cars too
@@ -829,6 +1034,11 @@ static void CloneVehicleName(const Vehicle *src, Vehicle *dst)
  */
 std::tuple<CommandCost, VehicleID> CmdCloneVehicle(DoCommandFlags flags, TileIndex tile, VehicleID veh_id, bool share_orders)
 {
+#ifdef WITH_RUST
+	CommandCost total, part, temporary, refit_temporary;
+	uint32_t id = openttd_rust_vehicle_clone(&GetRustVehicleCloneServices(), RustCommandCost(&total), RustCommandCost(&part), RustCommandCost(&temporary), RustCommandCost(&refit_temporary), flags.base(), tile.base(), veh_id.base(), share_orders);
+	return {std::move(total), VehicleID(id)};
+#else
 	CommandCost total_cost(EXPENSES_NEW_VEHICLES);
 
 	Vehicle *v = Vehicle::GetIfValid(veh_id);
@@ -1010,6 +1220,7 @@ std::tuple<CommandCost, VehicleID> CmdCloneVehicle(DoCommandFlags flags, TileInd
 	}
 
 	return { total_cost, new_veh_id };
+#endif
 }
 
 /**
@@ -1019,6 +1230,7 @@ std::tuple<CommandCost, VehicleID> CmdCloneVehicle(DoCommandFlags flags, TileInd
  * @param vli     identifier of the vehicle list
  * @return 0 for success and CMD_ERROR if no vehicle is able to go to depot
  */
+#ifndef WITH_RUST
 static CommandCost SendAllVehiclesToDepot(DoCommandFlags flags, bool service, const VehicleListIdentifier &vli)
 {
 	VehicleList list;
@@ -1045,6 +1257,8 @@ static CommandCost SendAllVehiclesToDepot(DoCommandFlags flags, bool service, co
 	return had_success ? CommandCost() : CMD_ERROR;
 }
 
+#endif
+
 /**
  * Send a vehicle to the depot.
  * @param flags for command type
@@ -1055,6 +1269,12 @@ static CommandCost SendAllVehiclesToDepot(DoCommandFlags flags, bool service, co
  */
 CommandCost CmdSendVehicleToDepot(DoCommandFlags flags, VehicleID veh_id, DepotCommandFlags depot_cmd, const VehicleListIdentifier &vli)
 {
+#ifdef WITH_RUST
+	CommandCost cost, item;
+	auto list = VehicleTransactionListId(vli);
+	openttd_rust_vehicle_send(&GetVehicleMassServices(), RustCommandCost(&cost), RustCommandCost(&item), flags.base(), veh_id.base(), depot_cmd.base(), &list);
+	return cost;
+#else
 	if (depot_cmd.Test(DepotCommandFlag::MassSend)) {
 		/* Mass goto depot requested */
 		if (!vli.Valid()) return CMD_ERROR;
@@ -1066,6 +1286,7 @@ CommandCost CmdSendVehicleToDepot(DoCommandFlags flags, VehicleID veh_id, DepotC
 	if (!v->IsPrimaryVehicle()) return CMD_ERROR;
 
 	return v->SendToDepot(flags, depot_cmd);
+#endif
 }
 
 /**
@@ -1077,6 +1298,11 @@ CommandCost CmdSendVehicleToDepot(DoCommandFlags flags, VehicleID veh_id, DepotC
  */
 CommandCost CmdRenameVehicle(DoCommandFlags flags, VehicleID veh_id, const std::string &text)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_vehicle_rename(&GetRustVehicleTransactionServices(), RustCommandCost(&cost), flags.base(), veh_id.base(), {reinterpret_cast<const uint8_t *>(text.data()), text.size()});
+	return cost;
+#else
 	Vehicle *v = Vehicle::GetIfValid(veh_id);
 	if (v == nullptr || !v->IsPrimaryVehicle()) return CMD_ERROR;
 
@@ -1101,6 +1327,7 @@ CommandCost CmdRenameVehicle(DoCommandFlags flags, VehicleID veh_id, const std::
 	}
 
 	return CommandCost();
+#endif
 }
 
 
@@ -1115,6 +1342,11 @@ CommandCost CmdRenameVehicle(DoCommandFlags flags, VehicleID veh_id, const std::
  */
 CommandCost CmdChangeServiceInt(DoCommandFlags flags, VehicleID veh_id, uint16_t serv_int, bool is_custom, bool is_percent)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_vehicle_service_interval(&GetRustVehicleTransactionServices(), RustCommandCost(&cost), flags.base(), veh_id.base(), serv_int, is_custom, is_percent);
+	return cost;
+#else
 	Vehicle *v = Vehicle::GetIfValid(veh_id);
 	if (v == nullptr || !v->IsPrimaryVehicle()) return CMD_ERROR;
 
@@ -1138,4 +1370,18 @@ CommandCost CmdChangeServiceInt(DoCommandFlags flags, VehicleID veh_id, uint16_t
 	}
 
 	return CommandCost();
+#endif
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDVehicleTransactionServices.hpp"
+#include "abi-visit-OpenTTDVehicleCommonServices.hpp"
+#include "abi-visit-OpenTTDVehicleMassServices.hpp"
+#include "abi-visit-OpenTTDVehicleRefitServices.hpp"
+#include "abi-visit-OpenTTDVehicleBuildServices.hpp"
+#include "abi-visit-OpenTTDVehicleCloneServices.hpp"
+#include "abi-visit-OpenTTDVehicleArticulatedServices.hpp"
+#include "abi-visit-OpenTTDVehicleConstructServices.hpp"
+bool CheckAbi_vehicle_cmd() { return AbiServicesComplete(GetRustVehicleTransactionServices()) && AbiServicesComplete(GetRustVehicleCommonServices()) && AbiServicesComplete(GetRustVehicleRefitServices()) && AbiServicesComplete(GetVehicleMassServices()) && AbiServicesComplete(GetRustVehicleBuildServices()) && AbiServicesComplete(GetRustVehicleCloneServices()) && AbiServicesComplete(GetRustVehicleArticulatedServices()) && AbiServicesComplete(GetVehicleConstructServices()); }
+#endif

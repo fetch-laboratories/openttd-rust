@@ -473,6 +473,15 @@ witness_blocks! {
         VEHICLE_MAINT_VALUE = 24 => "vehicle_maintenance.value",
         VEHICLE_MAINT_ENTRIES = 25 => "vehicle_maintenance.entries",
     }
+    vehicle_transactions {
+        VT_ROAD = 0 => "vehicle_transactions.road",
+        VT_AIRCRAFT = 1 => "vehicle_transactions.aircraft",
+        VT_ROTOR = 2 => "vehicle_transactions.rotor",
+        VT_ARTICULATED = 3 => "vehicle_transactions.articulated",
+        VT_RESTORE = 4 => "vehicle_transactions.restore",
+        VT_CLONE_BUILD_SELL = 5 => "vehicle_transactions.clone_build_sell",
+        VT_CLONE_JOIN_SELL = 6 => "vehicle_transactions.clone_join_sell",
+    }
     water {
         WATER_TRACKS = 0 => "water.tracks",
         WATER_FOLLOWS = 1 => "water.follows",

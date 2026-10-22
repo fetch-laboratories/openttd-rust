@@ -67,6 +67,10 @@
 #include "rust/vehicle_maintenance_ffi.h"
 #include "rust/vehicle_services.h"
 #endif
+#ifdef WITH_RUST
+#include "rust/vehicle_transaction_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /* Number of bits in the hash to use from each vehicle coord */
@@ -938,9 +942,10 @@ static void VehicleEnteredDepotThisTick(Vehicle *v)
 #ifdef WITH_RUST
 #include "rust/vehicle_ffi.h"
 #include "rust/station_service_ffi.h"
-static OpenTTDVehicleSchedulerTables VehicleSchedulerTables() noexcept
+#include "rust/vehicle_refit_ffi.h"
+static OpenTTDVehicleSchedulerTables VehicleSchedulerTables(OpenTTDCommandCost *refit_cost = nullptr, OpenTTDCommandCost *temporary = nullptr) noexcept
 {
-	return {.scheduler = &GetRustVehicleSchedulerServices(), .cargo = CargoStorageServices(), .station = &GetRustStationServices(), .loading = &GetRustStationLoading(), .pending = &_fleet_pending_services, .transaction = &FleetTransactionServices(), .group = &FleetGroupServices()};
+	return {.scheduler = &GetRustVehicleSchedulerServices(), .cargo = CargoStorageServices(), .station = &GetRustStationServices(), .loading = &GetRustStationLoading(), .pending = &_fleet_pending_services, .transaction = &FleetTransactionServices(), .group = &FleetGroupServices(), .refit = &GetRustVehicleRefitServices(), .refit_cost = refit_cost, .refit_temporary = temporary};
 }
 void RunVehicleCalendarDayProc()
 {
@@ -949,8 +954,8 @@ void RunVehicleCalendarDayProc()
 }
 void CallVehicleTicks()
 {
-	const auto tables = VehicleSchedulerTables();
-	CommandCost replacement_cost;
+	CommandCost replacement_cost, refit_cost, temporary;
+	const auto tables = VehicleSchedulerTables(reinterpret_cast<OpenTTDCommandCost *>(&refit_cost), reinterpret_cast<OpenTTDCommandCost *>(&temporary));
 	openttd_rust_vehicle_ticks(&tables, _game_mode == GM_NORMAL, TimerGameEconomy::date_fract, &replacement_cost);
 }
 #else
@@ -3339,6 +3344,9 @@ const uint16_t &Vehicle::GetGroundVehicleFlags() const
  */
 void GetVehicleSet(VehicleSet &set, Vehicle *v, uint8_t num_vehicles)
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_selection_set(&GetRustVehicleSelectionServices(), v, num_vehicles, &set, [](void *set, uint32_t id) { include(*static_cast<VehicleSet *>(set), VehicleID(id)); });
+#else
 	if (v->type == VEH_TRAIN) {
 		Train *u = Train::From(v);
 		/* Only include whole vehicles, so start with the first articulated part */
@@ -3357,6 +3365,7 @@ void GetVehicleSet(VehicleSet &set, Vehicle *v, uint8_t num_vehicles)
 			} while (u != nullptr && u->IsArticulatedPart());
 		}
 	}
+#endif
 }
 
 /**

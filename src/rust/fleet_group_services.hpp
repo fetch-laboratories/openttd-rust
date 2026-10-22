@@ -6,6 +6,7 @@
  */
 
 #include "vehicle_services.h"
+#include "engine_services.h"
 #include "company_services.h"
 #include "presentation_services.h"
 
@@ -22,7 +23,6 @@ static uint8_t FleetGroup_vehicle_owner(void *shell) noexcept { auto *v = static
 static uint16_t FleetGroup_vehicle_group(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->group_id.base(); }
 static uint16_t FleetGroup_vehicle_engine(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return RustVehicleEngineID(v); }
 static int64_t FleetGroup_profit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->GetDisplayProfitLastYear(); }
-static bool FleetGroup_primary(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsPrimaryVehicle(); }
 static bool FleetGroup_countable(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsEngineCountable(); }
 static bool FleetGroup_ground(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsGroundVehicle(); }
 static bool FleetGroup_front(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsFrontEngine(); }
@@ -36,7 +36,6 @@ static void * FleetGroup_head(uint8_t company) noexcept { return Company::Get(Co
 static void * FleetGroup_renew_state(void *shell) noexcept { return static_cast<EngineRenew *>(shell)->state.state; }
 static void * FleetGroup_next_renew(uint32_t from) noexcept { for (EngineRenew *er : EngineRenew::Iterate(from)) { if (er->index.base() >= from) return er; } return nullptr; }
 static uint32_t FleetGroup_renew_id(void *shell) noexcept { return static_cast<EngineRenew *>(shell)->index.base(); }
-static uint8_t FleetGroup_engine_type(uint16_t engine) noexcept { return Engine::Get(EngineID(engine))->type; }
 static bool FleetGroup_buildable_type(uint8_t type) noexcept { return IsCompanyBuildableVehicleType(static_cast<VehicleType>(type)); }
 static bool FleetGroup_can_allocate() noexcept { return Group::CanAllocateItem(); }
 static uint16_t FleetGroup_allocate(uint8_t owner, uint8_t type) noexcept { return (new Group(CompanyID(owner), static_cast<VehicleType>(type)))->index.base(); }
@@ -61,7 +60,6 @@ static void FleetGroup_vehicle_dirty(uint32_t id) noexcept { InvalidateWindowDat
 static void FleetGroup_depot_dirty(void *shell) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, static_cast<Vehicle *>(shell)->tile); }
 static void FleetGroup_close_replace(uint8_t type) noexcept { CloseWindowById(WC_REPLACE_VEHICLE, type); }
 static bool FleetGroup_list_generate(void *context) noexcept { auto *c = static_cast<FleetVehicleListContext *>(context); return GenerateVehicleSortList(&c->list, c->vli); }
-static void FleetGroup_list_push(void *context, void *shell) noexcept { static_cast<FleetVehicleListContext *>(context)->list.push_back(static_cast<Vehicle *>(shell)); }
 static size_t FleetGroup_list_size(void *context) noexcept { return static_cast<FleetVehicleListContext *>(context)->list.size(); }
 static void * FleetGroup_list_at(void *context, size_t index) noexcept { return const_cast<Vehicle *>(static_cast<FleetVehicleListContext *>(context)->list[index]); }
 static void * FleetGroup_renew_allocate() noexcept { return new EngineRenew(); }
@@ -80,7 +78,7 @@ static const OpenTTDFleetGroupServices _fleet_group_services{
 	.vehicle_engine = FleetGroup_vehicle_engine,
 	.profit = FleetGroup_profit,
 	.old_enough = RustOpaqueVehicleRead<bool, RustVehicleOldEnough>,
-	.primary = FleetGroup_primary,
+	.primary = RustOpaqueVehicleRead<bool, RustVehiclePrimary>,
 	.countable = FleetGroup_countable,
 	.ground = FleetGroup_ground,
 	.front = FleetGroup_front,
@@ -95,7 +93,7 @@ static const OpenTTDFleetGroupServices _fleet_group_services{
 	.renew_state = FleetGroup_renew_state,
 	.next_renew = FleetGroup_next_renew,
 	.renew_id = FleetGroup_renew_id,
-	.engine_type = FleetGroup_engine_type,
+	.engine_type = RustIndexedEngineRead<uint8_t, RustEngineType>,
 	.current_company = RustCurrentCompanyID,
 	.buildable_type = FleetGroup_buildable_type,
 	.can_allocate = FleetGroup_can_allocate,
@@ -123,7 +121,6 @@ static const OpenTTDFleetGroupServices _fleet_group_services{
 	.close_replace = FleetGroup_close_replace,
 	.screen_dirty = RustScreenDirty,
 	.list_generate = FleetGroup_list_generate,
-	.list_push = FleetGroup_list_push,
 	.list_size = FleetGroup_list_size,
 	.list_at = FleetGroup_list_at,
 	.renew_allocate = FleetGroup_renew_allocate,
