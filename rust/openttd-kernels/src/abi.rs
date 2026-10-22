@@ -2613,6 +2613,7 @@ layouts! {
         exclusive_rights,
         bribe,
         invalidate_view,
+        invalidate_authority,
         modify_station_rating,
         road_news,
         road_events,

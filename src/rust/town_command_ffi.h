@@ -27,6 +27,7 @@ struct OpenTTDTownCommandServices {
 	bool (*exclusive_rights)() noexcept OPENTTD_SERVICE_DEFAULT(exclusive_rights);
 	bool (*bribe)() noexcept OPENTTD_SERVICE_DEFAULT(bribe);
 	void (*invalidate_view)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_view);
+	void (*invalidate_authority)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(invalidate_authority);
 	void (*modify_station_rating)(uint32_t, uint8_t, int, uint) noexcept OPENTTD_SERVICE_DEFAULT(modify_station_rating);
 	void (*road_news)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_news);
 	void (*road_events)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_events);

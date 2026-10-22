@@ -44,6 +44,7 @@ pub struct CommandServices {
     pub exclusive_rights: extern "C" fn() -> bool,
     pub bribe: extern "C" fn() -> bool,
     pub invalidate_view: extern "C" fn(u16),
+    pub invalidate_authority: extern "C" fn(u16),
     pub modify_station_rating: extern "C" fn(u32, u8, i32, u32),
     pub road_news: extern "C" fn(u16),
     pub road_events: extern "C" fn(u16),
@@ -595,7 +596,7 @@ pub unsafe extern "C" fn openttd_rust_town_rating_command(
         unsafe {
             (*t.state).simulation.ratings[usize::from(company)] = rating;
         }
-        (unsafe { &*c.f.growth }.dirty_authority)(u32::from(id));
+        (s.invalidate_authority)(id);
         w::hit(w::TOWN_COMMAND_RATING);
     }
     (c.cost.zero)(out);

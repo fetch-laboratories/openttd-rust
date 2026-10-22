@@ -3712,6 +3712,7 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.exclusive_rights = OpenTTDExclusiveRights,
 		.bribe = OpenTTDBribe,
 		.invalidate_view = [](uint16_t town) noexcept { InvalidateWindowData(WC_TOWN_VIEW, TownID(town)); },
+		.invalidate_authority = [](uint16_t town) noexcept { InvalidateWindowData(WC_TOWN_AUTHORITY, TownID(town)); },
 		.modify_station_rating = OpenTTDModifyStationRatingAround,
 		.road_news = [](uint16_t id) noexcept {
 			std::string company_name = GetString(STR_COMPANY_NAME, _current_company);
