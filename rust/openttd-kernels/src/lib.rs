@@ -1351,10 +1351,10 @@ mod fleet;
 
 pub(crate) mod clear_map;
 pub(crate) mod rail_map;
+mod subsidy;
 pub(crate) mod tile_map;
 pub(crate) mod tree_map;
 pub(crate) mod water_map;
-mod subsidy;
 
 mod cargo_type;
 mod source_type;
