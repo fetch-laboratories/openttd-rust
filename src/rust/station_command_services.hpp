@@ -119,7 +119,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.assign_rail_spec = [](const StationSpec *spec, BaseStation *st, uint8_t index) noexcept { AssignSpecToStation(spec, st, index); },
 		.deallocate_rail_spec = [](BaseStation *st, uint32_t index) noexcept { DeallocateSpecFromStation(st, index); },
 		.rail_boolean = RustStationConvert8bitBoolean,
-		.rail_callback_error = RustStationRailCallbackError,
+		.rail_callback_error = RustSpecCallbackError<StationSpec, StationSpec>,
 		.set_train_area = [](BaseStation *st, OpenTTDStationArea area) noexcept { st->train_station = TileArea(TileIndex{area.tile}, area.w, area.h); },
 		.add_facility = [](BaseStation *st, uint8_t facility, uint32_t tile) noexcept { Station::From(st)->AddFacility(static_cast<StationFacility>(facility), TileIndex{tile}); },
 		.rail_triggers = RustStationRailTriggers,

@@ -4,9 +4,9 @@
 use crate::command_type::DoCommandFlag;
 use crate::services::{CommandCost, CommandCostServices, CommandServices};
 
-pub(crate) fn before(s: &CommandServices, top_level: bool, test: bool) {
+pub(crate) fn before(_s: &CommandServices, top_level: bool, test: bool) {
     if top_level {
-        (s.clear_object_areas)();
+        crate::objects::clear_areas();
     }
     if test {
         crate::town::openttd_rust_town_rating_test(true);

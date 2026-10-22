@@ -12,11 +12,12 @@
 #include "station_command_ffi.h"
 #include "water_command_ffi.h"
 #include "industry_ffi.h"
+struct OpenTTDObjectServices;
 struct OpenTTDTileOwnerServices {
 	void (*clear)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	void (*house)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(house);
 	const OpenTTDIndustryTileServices *industry;
-	void (*object)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(object);
+	const OpenTTDObjectServices *objects;
 	const OpenTTDRailCommandServices *rail;
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStationCommandServices *station;
