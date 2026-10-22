@@ -38,6 +38,7 @@ pub struct CommandServices {
     pub rail: *const crate::services::RailMapServices,
     pub cargo: *const crate::cargo_storage::Services,
     pub objects: *const ObjectServices,
+    pub subsidies: *const crate::subsidy::Services,
     pub fund_roads: extern "C" fn() -> bool,
     pub fund_buildings: extern "C" fn() -> bool,
     pub exclusive_rights: extern "C" fn() -> bool,
@@ -73,7 +74,6 @@ pub struct CommandServices {
     pub storage_count: extern "C" fn(*mut TownHandle) -> usize,
     pub delete_storage: extern "C" fn(*mut TownHandle, usize),
     pub clear_storage: extern "C" fn(*mut TownHandle),
-    pub delete_subsidies: extern "C" fn(u16),
     pub delete_inspect: extern "C" fn(u16),
     pub dirty_screen: extern "C" fn(),
     pub assertions: bool,
@@ -789,7 +789,8 @@ pub unsafe extern "C" fn openttd_rust_town_destruct(s: &CommandServices, t: Town
         (s.delete_storage)(t.shell, index);
     }
     (s.clear_storage)(t.shell);
-    (s.delete_subsidies)(t.id.0);
+    // SAFETY: The canonical subsidy owner table outlives the synchronous call.
+    unsafe { &*s.subsidies }.delete_with(crate::source_type::Source::town(t.id.0));
     (s.delete_inspect)(t.id.0);
     // SAFETY: Cargo's canonical process owner and native pool remain live; town ID is copied before shell removal.
     unsafe {

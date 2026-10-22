@@ -6,6 +6,7 @@
 #include "cargo_storage_ffi.h"
 #include "../object_type.h"
 struct OpenTTDObjectServices;
+struct OpenTTDSubsidyServices;
 struct OpenTTDRailMapServices;
 struct BaseStation;
 struct Object;
@@ -20,6 +21,7 @@ struct OpenTTDTownCommandServices {
 	const OpenTTDRailMapServices *rail;
 	const OpenTTDCargoStorageServices *cargo;
 	const OpenTTDObjectServices *objects;
+	const OpenTTDSubsidyServices *subsidies;
 	bool (*fund_roads)() noexcept OPENTTD_SERVICE_DEFAULT(fund_roads);
 	bool (*fund_buildings)() noexcept OPENTTD_SERVICE_DEFAULT(fund_buildings);
 	bool (*exclusive_rights)() noexcept OPENTTD_SERVICE_DEFAULT(exclusive_rights);
@@ -54,7 +56,6 @@ struct OpenTTDTownCommandServices {
 	size_t (*storage_count)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(storage_count);
 	void (*delete_storage)(Town *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_storage);
 	void (*clear_storage)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(clear_storage);
-	void (*delete_subsidies)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_subsidies);
 	void (*delete_inspect)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_inspect);
 	void (*dirty_screen)() noexcept OPENTTD_SERVICE_DEFAULT(dirty_screen);
 	bool assertions;

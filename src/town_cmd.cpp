@@ -3706,6 +3706,7 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.rail = &GetRustRailMapServices(),
 		.cargo = CargoStorageServices(),
 		.objects = &GetRustObjectServices(),
+		.subsidies = &GetRustSubsidyServices(),
 		.fund_roads = OpenTTDFundRoads,
 		.fund_buildings = OpenTTDFundBuildings,
 		.exclusive_rights = OpenTTDExclusiveRights,
@@ -3747,7 +3748,6 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.storage_count = [](Town *town) noexcept { return town->psa_list.size(); },
 		.delete_storage = [](Town *town, size_t index) noexcept { delete town->psa_list[index]; },
 		.clear_storage = [](Town *town) noexcept { town->psa_list.clear(); },
-		.delete_subsidies = [](uint16_t town) noexcept { DeleteSubsidyWith({TownID(town), SourceType::Town}); },
 		.delete_inspect = OpenTTDDeleteTownInspect,
 		.dirty_screen = RustScreenDirty,
 #ifdef WITH_ASSERT
