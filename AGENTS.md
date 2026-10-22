@@ -93,7 +93,7 @@ fork; the remaining upstream documentation explains behavior and architecture.
   inside the game loop, which do not depend on host load, give the anchor's
   measured ratio times (1 + 2 x the loop count's growth over the anchor),
   from `SPEED_ANCHORS`. After every second integration root runs `python3
-  tools/migration.py simulate --instructions --jobs 2` on the integrated tip in
+  tools/migration.py simulate --instructions` on the integrated tip in
   the background, alongside other work, and records the six projections in
   the roadmap's "Where the fork stands". If a projection rose more than 3%
   since the previous tip profile (provisional: counts repeat to 0.04% and no
@@ -305,7 +305,10 @@ checks that the candidate retains reference test names, and keeps its logs under
 `.local/`. `python3 tools/migration.py build` builds both without running tests.
 `python3 tools/migration.py tools` builds the native Rust generators.
 `python3 tools/migration.py rust-checks` runs only the four Cargo checks.
-`--jobs` defaults to two and bounds both CMake and Cargo.
+`--jobs` bounds CMake, Cargo and simulation (`simulate` runs `jobs // 2` scenarios
+at once). Pass the cores that are free: 8 minus the 1-minute load average, at
+least 2 (`--jobs $(( $(nproc) - $(cut -d. -f1 /proc/loadavg) ))`, floored at 2);
+the #355 batch makes that the driver's default.
 `python3 tools/migration.py simulate [name...] [--soak] [--self]` builds both
 games and compares their simulation state (`tools/simulate.py`).
 `python3 tools/run-comparisons.py [name...]` runs the reference comparison tools
