@@ -23,6 +23,7 @@ use crate::services::{
     RailGroundType, RailMapServices, RoadBits, RoadType, Roadside, Services, Slope, Track,
     TrackBits, WaterClass,
 };
+use crate::slope_func::{is_slope_with_three_corners_raised, is_steep_slope};
 
 /// Original `SetTunnelBridgeOwner`, preserving begin/end store order.
 pub(crate) fn set_tunnel_bridge_owner(begin: u32, end: u32, owner: u8, s: &Services) {
@@ -211,12 +212,6 @@ fn diagonal(tile: u32, direction: u8, size_x: u32) -> u32 {
         2 => tile.wrapping_add(1),
         _ => tile.wrapping_sub(size_x),
     }
-}
-fn three_corners(slope: u8) -> bool {
-    matches!(slope, 7 | 11 | 13 | 14)
-}
-fn steep(slope: u8) -> bool {
-    slope & 16 != 0
 }
 
 #[allow(clippy::inline_always)]
@@ -421,18 +416,18 @@ pub(crate) unsafe fn rail_tile_loop(
             let foundation = (r.foundation)(ground.slope, ground.tracks).0;
             match foundation {
                 0 => {
-                    if three_corners(ground.slope.0) {
+                    if is_slope_with_three_corners_raised(ground.slope.0) {
                         ground.z += 1;
                     }
                 }
                 2 | 3 => {
-                    if steep(ground.slope.0) {
+                    if is_steep_slope(ground.slope.0) {
                         ground.z += 1;
                     }
                 }
                 4 => ground.z += 1,
                 _ => {
-                    if steep(ground.slope.0) {
+                    if is_steep_slope(ground.slope.0) {
                         ground.z += 1;
                     }
                     ground.z += 1;

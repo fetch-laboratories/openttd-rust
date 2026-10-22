@@ -507,6 +507,12 @@ ratchet regressions by default. This small syntactic check covers typed paramete
 cast/lookup/typed owner aliases, settings, timers, map reads and named helper calls;
 it does not replace review of macros, derived-type fields or compound callbacks.
 
+Original header helpers and constants live once in crate modules named after the
+header (`slope_func`, `map_func`, `tile_type`, `company_type`, `command_type`,
+`direction_type`, `economy_type`, `newgrf_callbacks`, `strings_type`,
+`viewport_func`, `town_map`; #261). Ports import them instead of keeping copies,
+and `src/rust/services.cpp` asserts every value. The checker cannot see Rust copies.
+
 `python3 tools/port-metrics.py` reports the change in retired pinned-original
 C++ lines separately from fork glue added/removed and signed net glue. Original
 retirement can be negative when original lines are restored; removing fork glue

@@ -5385,12 +5385,9 @@ void DeleteOilRig(TileIndex tile)
 #endif
 }
 
+#ifndef WITH_RUST
 static void ChangeTileOwner_Station(TileIndex tile, Owner old_owner, Owner new_owner)
 {
-#ifdef WITH_RUST
-	RustTileOwnerContext ownership;
-	openttd_rust_station_change_owner(&GetRustStationCommandServices(), &ownership.view, tile.base(), old_owner.base(), new_owner.base());
-#else
 
 	if (IsAnyRoadStopTile(tile)) {
 		for (RoadTramType rtt : _roadtramtypes) {
@@ -5473,8 +5470,8 @@ static void ChangeTileOwner_Station(TileIndex tile, Owner old_owner, Owner new_o
 			if ((IsTileType(tile, MP_WATER) || IsBuoyTile(tile)) && IsTileOwner(tile, old_owner)) SetTileOwner(tile, OWNER_NONE);
 		}
 	}
-#endif
 }
+#endif
 
 /**
  * Check if a drive-through road stop tile can be cleared.
@@ -6042,7 +6039,11 @@ extern const TileTypeProcs _tile_type_station_procs = {
 	ClickTile_Station,          // click_tile_proc
 	AnimateTile_Station,        // animate_tile_proc
 	TileLoop_Station,           // tile_loop_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust ownership dispatcher calls the owner directly.
+#else
 	ChangeTileOwner_Station,    // change_tile_owner_proc
+#endif
 	nullptr,                       // add_produced_cargo_proc
 	VehicleEnter_Station,       // vehicle_enter_tile_proc
 	GetFoundation_Station,      // get_foundation_proc

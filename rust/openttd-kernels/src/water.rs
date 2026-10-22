@@ -18,6 +18,13 @@
     clippy::collapsible_match
 )]
 use crate::services::TileTypeAccess;
+use crate::slope_func::{
+    is_inclined_slope, is_slope_with_one_corner_raised, is_slope_with_three_corners_raised,
+    is_steep_slope,
+};
+
+/// `RIVER_OFFSET_DESERT_DISTANCE`: diameter of the non-desert search around a river tile.
+pub const RIVER_OFFSET_DESERT_DISTANCE: u32 = 5;
 use crate::{
     ground::{Call, ClearServices, CostServices, RailServices},
     services::{
@@ -126,7 +133,7 @@ pub(crate) unsafe fn restore(
             }
             class = 3;
         }
-        if class != 2 || !matches!(slope_z.slope.0, 3 | 6 | 9 | 12) {
+        if class != 2 || !is_inclined_slope(slope_z.slope.0) {
             class = 3;
         }
     }
@@ -193,12 +200,6 @@ const FLOOD_FROM: [u8; 15] = [
     0b0011_1000,
     0b1110_0000,
 ];
-fn one_corner(slope: u8) -> bool {
-    matches!(slope, 1 | 2 | 4 | 8)
-}
-fn three_corners(slope: u8) -> bool {
-    matches!(slope, 7 | 11 | 13 | 14)
-}
 fn offset(tile: u32, direction: usize, size_x: u32) -> u32 {
     let (dx, dy) = OFFSETS[direction];
     tile.wrapping_add_signed(dx)
@@ -273,7 +274,7 @@ impl<'a> World<'a> {
         match self.tile_type(tile) {
             6 => {
                 if (self.w.coast)(tile) {
-                    return if one_corner((self.s.tile_slope)(tile)) {
+                    return if is_slope_with_one_corner_raised((self.s.tile_slope)(tile)) {
                         1
                     } else {
                         3
@@ -284,7 +285,7 @@ impl<'a> World<'a> {
             5 | 8 | 10 => u8::from((self.c().water_class)(tile).0 == 0),
             1 => {
                 if (self.r().ground)(tile).0 == 13 {
-                    if one_corner((self.s.tile_slope)(tile)) {
+                    if is_slope_with_one_corner_raised((self.s.tile_slope)(tile)) {
                         1
                     } else {
                         3
@@ -327,7 +328,7 @@ impl<'a> World<'a> {
         }
         let slope = (self.s.tile_slope)(tile);
         let mut tracks = (self.r().tracks)(tile).0;
-        if one_corner(slope) {
+        if is_slope_with_one_corner_raised(slope) {
             let corner = (slope.trailing_zeros() ^ 2) as usize;
             let lower = [16, 8, 32, 4][corner];
             let remove = lower & tracks;
@@ -363,7 +364,8 @@ impl<'a> World<'a> {
                 Slope(slope),
             );
             if foundation.z == 0
-                && (foundation.slope.0 & 16 != 0 || three_corners(foundation.slope.0))
+                && (is_steep_slope(foundation.slope.0)
+                    || is_slope_with_three_corners_raised(foundation.slope.0))
             {
                 flooded = true;
                 (self.r().set_ground)(tile, RailGroundType(13));
@@ -476,7 +478,7 @@ impl<'a> World<'a> {
                         false
                     }
                 }
-                4 if !one_corner(slope) => {
+                4 if !is_slope_with_one_corner_raised(slope) => {
                     (self.w.set_tree_ground)(tile, TreeGround(3), 3);
                     (self.s.mark_dirty)(tile);
                     true

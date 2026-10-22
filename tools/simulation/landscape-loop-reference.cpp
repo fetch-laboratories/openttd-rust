@@ -14,7 +14,7 @@
 #include "rust/landscape_loop_ffi.h"
 
 static unsigned int log_x, log_y;
-static constexpr uint8_t native_types[]{3, 5, 10, 3}; // Void dispatches to Rust water.
+static constexpr uint8_t native_types[]{5, 10, 10, 5}; // Other kinds dispatch to Rust owners.
 static uint64_t observed_hash, observed_count;
 static bool rust_run, reenter, nested;
 static uint32_t starting_cursor;
@@ -45,17 +45,15 @@ using uint = unsigned int;
 
 static void NativeVisit(uint32_t tile, uint8_t kind) noexcept;
 static uint8_t Type(uint32_t tile) noexcept { return tiles[tile].type >> 4; }
-static void House(uint32_t tile) noexcept { NativeVisit(tile, 3); }
 static void LandscapeStationLoop(uint32_t tile) noexcept { NativeVisit(tile, 5); }
 static void Object(uint32_t tile) noexcept { NativeVisit(tile, 10); }
-static void ReferenceHouse(TileIndex tile) { House(tile.base()); }
 static void ReferenceStation(TileIndex tile) { LandscapeStationLoop(tile.base()); }
 static void ReferenceObject(TileIndex tile) { Object(tile.base()); }
 static uint8_t GetTileType(uint32_t tile) { return Type(tile); }
 static uint8_t GetTileType(TileIndex tile) { return Type(tile.base()); }
 struct TileTypeProcs { void (*tile_loop_proc)(TileIndex); };
-static const TileTypeProcs procs[3] = {{ReferenceHouse}, {ReferenceStation}, {ReferenceObject}};
-static const TileTypeProcs * const _tile_type_procs[16] = {nullptr, nullptr, nullptr, &procs[0], nullptr, &procs[1], nullptr, nullptr, nullptr, nullptr, &procs[2]};
+static const TileTypeProcs procs[2] = {{ReferenceStation}, {ReferenceObject}};
+static const TileTypeProcs * const _tile_type_procs[16] = {nullptr, nullptr, nullptr, nullptr, nullptr, &procs[0], nullptr, nullptr, nullptr, nullptr, &procs[1]};
 static TileIndex _cur_tileloop_tile;
 #include <cassert>
 #include "landscape-loop-reference.inc"
@@ -77,7 +75,7 @@ static OpenTTDLandscapeLoopServices services{
 	.trees = nullptr,
 	.industry = {},
 	.ground = {},
-	.house_loop = House,
+	.town = nullptr,
 	.station_loop = LandscapeStationLoop,
 	.objects = &objects,
 	.object_frame = nullptr,

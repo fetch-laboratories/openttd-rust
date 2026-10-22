@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Ordinary command pre/post control, shared by native and Rust command owners.
 #![allow(unsafe_code)]
+use crate::command_type::DoCommandFlag;
 use crate::services::{CommandCost, CommandCostServices, CommandServices};
 
 pub(crate) fn before(_s: &CommandServices, top_level: bool, test: bool) {
@@ -55,17 +56,18 @@ pub(crate) unsafe fn after(
     top_level: bool,
     test: bool,
 ) {
-    const QUERY_COST: u16 = 1 << 2;
-    const BANKRUPT: u16 = 1 << 5;
     if test {
         crate::town::openttd_rust_town_rating_test(false);
-        if (c.success)(result) && top_level && flags & (QUERY_COST | BANKRUPT) == 0 {
+        if (c.success)(result)
+            && top_level
+            && flags & (DoCommandFlag::QUERY_COST | DoCommandFlag::BANKRUPT) == 0
+        {
             // SAFETY: caller guarantees live exclusive storage.
             unsafe {
                 check_money(s, c, result);
             }
         }
-    } else if (c.success)(result) && top_level && flags & BANKRUPT == 0 {
+    } else if (c.success)(result) && top_level && flags & DoCommandFlag::BANKRUPT == 0 {
         // SAFETY: caller guarantees live native result storage.
         unsafe {
             subtract_money(s, c, result);

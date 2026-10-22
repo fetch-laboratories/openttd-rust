@@ -190,9 +190,9 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	RoadRun<CMD_REMOVE_LONG_ROAD>("town-edge", t(15, 20), t(15, 20), ROADTYPE_ROAD, AXIS_X, false, true);
 	dynamite.Restore();
 	RoadRun<CMD_BUILD_ROAD>("transfer-road", t(20, 20), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
-	_tile_type_road_procs.change_tile_owner_proc(t(20, 20), owner, other);
+	ChangeTileOwner(t(20, 20), owner, other);
 	RoadRun<CMD_BUILD_ROAD>("foreign-oneway", t(20, 20), ROAD_X, ROADTYPE_ROAD, DRD_SOUTHBOUND, TownID::Invalid());
-	_tile_type_road_procs.change_tile_owner_proc(t(20, 20), other, INVALID_OWNER);
+	ChangeTileOwner(t(20, 20), other, INVALID_OWNER);
 	UpdateNearestTownForRoadTiles(false);
 	SaveRandomSeeds(&after);
 	bool same = before.random.state[0] == after.random.state[0] && before.random.state[1] == after.random.state[1] && before.interactive_random.state[0] == after.interactive_random.state[0] && before.interactive_random.state[1] == after.interactive_random.state[1];

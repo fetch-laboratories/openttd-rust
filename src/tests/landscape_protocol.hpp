@@ -18,10 +18,10 @@
 namespace LandscapeProbe {
 static_assert(std::is_same_v<TileLoopProc, void(uint32_t) noexcept>);
 static_assert(std::is_same_v<decltype(&openttd_rust_run_tile_loop), void (*)(unsigned int, unsigned int, OpenTTDTreeLoopSettings, const OpenTTDLandscapeLoopServices *)>);
-static_assert(std::is_same_v<decltype(OpenTTDLandscapeLoopServices::house_loop), TileLoopProc *>);
+static_assert(std::is_same_v<decltype(OpenTTDLandscapeLoopServices::station_loop), TileLoopProc *>);
 static inline uint32_t calls, reads, seen, expected_tile;
 static inline bool passed;
-static constexpr std::array<uint8_t, 4> NATIVE_TYPES{3, 5, 10, 3}; // Void dispatches to Rust water.
+static constexpr std::array<uint8_t, 4> NATIVE_TYPES{5, 10, 10, 5}; // Other kinds dispatch to Rust owners.
 static uint8_t Type(uint32_t tile) noexcept
 {
 	passed &= tile == expected_tile;
@@ -57,7 +57,7 @@ template<typename Check> void Run(Check check)
 		.trees = nullptr,
 		.industry = {},
 		.ground = {},
-		.house_loop = Visit<3>,
+		.town = nullptr,
 		.station_loop = Visit<5>,
 		.objects = &objects,
 		.object_frame = nullptr,
@@ -66,7 +66,7 @@ template<typename Check> void Run(Check check)
 	const auto saved_cursor = *openttd_rust_tile_loop_cursor();
 	*openttd_rust_tile_loop_cursor() = 1;
 	openttd_rust_run_tile_loop(6, 6, settings, &services);
-	check(passed && calls == 16 && reads == calls && seen == 0x428 && *openttd_rust_tile_loop_cursor() == expected_tile);
+	check(passed && calls == 16 && reads == calls && seen == 0x420 && *openttd_rust_tile_loop_cursor() == expected_tile);
 	*openttd_rust_tile_loop_cursor() = saved_cursor;
 }
 } // namespace LandscapeProbe

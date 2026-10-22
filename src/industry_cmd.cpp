@@ -1057,20 +1057,17 @@ static TrackStatus GetTileTrackStatus_Industry(TileIndex, TransportType, uint, D
 	return 0;
 }
 
+#ifndef WITH_RUST
 static void ChangeTileOwner_Industry(TileIndex tile, Owner old_owner, Owner new_owner)
 {
-#ifdef WITH_RUST
-	Industry *i = Industry::GetByTile(tile);
-	openttd_rust_industry_change_owner(i->production_owner.get(), old_owner.base(), new_owner.base());
-#else
 	/* If the founder merges, the industry was created by the merged company */
 	Industry *i = Industry::GetByTile(tile);
 	if (i->founder == old_owner) i->founder = (new_owner == INVALID_OWNER) ? OWNER_NONE : new_owner;
 
 	if (i->exclusive_supplier == old_owner) i->exclusive_supplier = new_owner;
 	if (i->exclusive_consumer == old_owner) i->exclusive_consumer = new_owner;
-#endif
 }
+#endif
 
 /**
  * Check whether the tile is a forest.
@@ -3530,7 +3527,11 @@ extern const TileTypeProcs _tile_type_industry_procs = {
 #else
 	TileLoop_Industry,           // tile_loop_proc
 #endif
+#ifdef WITH_RUST
+	nullptr,                 // Rust ownership dispatcher calls the owner directly.
+#else
 	ChangeTileOwner_Industry,    // change_tile_owner_proc
+#endif
 	nullptr,                        // add_produced_cargo_proc
 	nullptr,                        // vehicle_enter_tile_proc
 	GetFoundation_Industry,      // get_foundation_proc

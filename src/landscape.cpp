@@ -55,6 +55,7 @@
 #include "rust/ground_services.h"
 #include "rust/environment_services.h"
 #include "rust/services_landscape.h"
+#include "rust/town_ffi.h"
 #endif
 
 #include "safeguards.h"
@@ -865,7 +866,7 @@ static OpenTTDLandscapeLoopServices RustLandscapeLoopServices(OpenTTDGroundCall 
 		.trees = &GetRustTreeServices(),
 		.industry = GetRustIndustryLoopServices(),
 		.ground = {.clear = &GetRustClearServices(), .rail = &GetRustRailGroundServices(), .road = &GetRustRoadGroundServices(), .road_command = road, .tunnel = &GetRustTunnelGroundServices(), .water = &GetRustWaterGroundServices(), .costs = &GetRustGroundCostServices(), .call = call, .climate = OpenTTDLandscape(), .editor = OpenTTDEditor(), .rebuild = _settings_game.economy.mod_road_rebuild, .ambient_callback = RustAmbientSoundEnabled()},
-		.house_loop = _tile_type_town_procs.tile_loop_proc,
+		.town = &GetRustTownServices(),
 		.station_loop = _tile_type_station_procs.tile_loop_proc,
 		.objects = &GetRustObjectServices(),
 		.object_frame = frame,

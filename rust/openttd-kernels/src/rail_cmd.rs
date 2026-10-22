@@ -20,10 +20,23 @@
     clippy::too_many_lines,
     clippy::fn_params_excessive_bools
 )]
+use crate::command_type::DoCommandFlag;
+use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_WATER};
+use crate::direction_type::INVALID_DIAGDIR;
+use crate::economy_type::{
+    PR_BUILD_DEPOT_TRAIN, PR_BUILD_FOUNDATION, PR_BUILD_SIGNALS, PR_CLEAR_DEPOT_TRAIN,
+    PR_CLEAR_ROUGH, PR_CLEAR_SIGNALS, PR_CLEAR_WATER,
+};
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Cost, Map, RailMapServices, Services,
 };
 pub use crate::services::{Foundation, Train};
+use crate::slope_func::{
+    SLOPE_EW, SLOPE_FLAT, SLOPE_HALFTILE_MASK, SLOPE_NS, is_slope_with_one_corner_raised,
+    is_steep_slope,
+};
+use crate::strings_type::INVALID_STRING_ID;
+use crate::tile_type::{INVALID_TILE, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
 use crate::witness as w;
 
 /// Opaque caller-owned native frame holding the conversion area iterator and
@@ -243,22 +256,6 @@ pub struct RailCommandServices {
     pub consist_changed: unsafe extern "C" fn(*mut ConvertFrame),
 }
 
-const INVALID_STRING: u32 = 0xFFFF;
-const EXECUTE: u16 = 1 << 0;
-const AUTO: u16 = 1 << 1;
-const BANKRUPT: u16 = 1 << 5;
-const INVALID_TILE: u32 = u32::MAX;
-
-const MP_RAILWAY: u8 = 1;
-const MP_ROAD: u8 = 2;
-const MP_STATION: u8 = 5;
-const MP_WATER: u8 = 6;
-const MP_TUNNELBRIDGE: u8 = 9;
-
-const OWNER_WATER: u8 = 0x11;
-const OWNER_DEITY: u8 = 0x12;
-const INVALID_OWNER: u8 = 0xFF;
-
 const TRACK_X: u8 = 0;
 const TRACK_Y: u8 = 1;
 const INVALID_TRACK: u8 = 0xFF;
@@ -272,17 +269,7 @@ const BIT_HORZ: u8 = 12;
 const BIT_VERT: u8 = 48;
 const BIT_DEPOT: u8 = 0x80;
 const INVALID_TRACKDIR: u8 = 0xFF;
-const INVALID_DIAGDIR: u8 = 0xFF;
 
-const SLOPE_FLAT: u8 = 0;
-const SLOPE_W: u8 = 1;
-const SLOPE_S: u8 = 2;
-const SLOPE_E: u8 = 4;
-const SLOPE_N: u8 = 8;
-const SLOPE_STEEP: u8 = 0x10;
-const SLOPE_EW: u8 = 5;
-const SLOPE_NS: u8 = 10;
-const SLOPE_HALFTILE_MASK: u8 = 0xE0;
 /// `VALID_LEVEL_CROSSING_SLOPES`.
 pub(crate) const CROSSING_SLOPES: u32 =
     (1 << 14) | (1 << 13) | (1 << 11) | (1 << 10) | (1 << 7) | (1 << 5) | 1;
@@ -317,14 +304,6 @@ const TILE_AXIAL_DISTANCE: i32 = 192;
 const TILE_CORNER_DISTANCE: i32 = 128;
 pub(crate) const LEVELCROSSING_TRACKBIT_FACTOR: u32 = 2;
 pub(crate) const TUNNELBRIDGE_TRACKBIT_FACTOR: u32 = 4;
-
-const PR_BUILD_SIGNALS: usize = 3;
-const PR_BUILD_DEPOT_TRAIN: usize = 5;
-const PR_CLEAR_ROUGH: usize = 23;
-const PR_CLEAR_SIGNALS: usize = 28;
-const PR_CLEAR_DEPOT_TRAIN: usize = 30;
-const PR_CLEAR_WATER: usize = 34;
-const PR_BUILD_FOUNDATION: usize = 57;
 
 /// `_trackdelta`, indexed by trackdir.
 const TRACK_DELTA: [(i32, i32); 16] = [
@@ -395,12 +374,6 @@ fn is_pbs(sigtype: u8) -> bool {
 }
 fn kill_first_bit(value: u8) -> u8 {
     value & value.wrapping_sub(1)
-}
-fn steep(slope: u8) -> bool {
-    slope & SLOPE_STEEP != 0
-}
-fn one_corner_raised(slope: u8) -> bool {
-    matches!(slope, SLOPE_W | SLOPE_S | SLOPE_E | SLOPE_N)
 }
 /// Saturating unary minus of `OverflowSafeInt64`.
 fn negate(money: i64) -> i64 {
@@ -512,7 +485,7 @@ impl<'a> Ctx<'a> {
             )
         }
         .0 != 0
-            && !steep(tileh)
+            && !is_steep_slope(tileh)
             && !LEVELED_TRACKS[usize::from(tileh)] & (bits | existing) != 0
         {
             out.error(self.s.strings.build_on_water);
@@ -547,7 +520,7 @@ impl<'a> Ctx<'a> {
     ) {
         cost.set(0);
         if !(self.s.rail_type_valid)(railtype) || track >= 6 {
-            cost.error(INVALID_STRING);
+            cost.error(INVALID_STRING_ID);
             return;
         }
         let tileh = (self.shared.tile_slope)(tile);
@@ -611,10 +584,10 @@ impl<'a> Ctx<'a> {
                         }
                         cost.add_money(ret.money());
                     } else {
-                        return cost.error(INVALID_STRING);
+                        return cost.error(INVALID_STRING_ID);
                     }
                 }
-                if flags & EXECUTE != 0 {
+                if flags & DoCommandFlag::EXECUTE != 0 {
                     w::hit(w::RAIL_CMD_BUILD_RAIL);
                     (self.ground.set_ground)(tile, crate::services::RailGroundType(GROUND_BARREN));
                     let bits = self.tracks(tile);
@@ -700,7 +673,8 @@ impl<'a> Ctx<'a> {
             _ => fall_through = true,
         }
         if fall_through {
-            let water_ground = self.tile_type(tile) == MP_WATER && one_corner_raised(tileh);
+            let water_ground =
+                self.tile_type(tile) == MP_WATER && is_slope_with_one_corner_raised(tileh);
             self.check_rail_slope(ret, tileh, trackbit, 0, tile);
             if !ret.ok() {
                 return cost.take(ret);
@@ -715,7 +689,7 @@ impl<'a> Ctx<'a> {
                 cost.add_money(negate(price(PR_CLEAR_WATER)));
                 cost.add_money(price(PR_CLEAR_ROUGH));
             }
-            if flags & EXECUTE != 0 {
+            if flags & DoCommandFlag::EXECUTE != 0 {
                 w::hit(w::RAIL_CMD_BUILD_CLEAR);
                 let current = self.current();
                 (self.rail.make_rail_normal)(tile, current, trackbit, railtype);
@@ -733,7 +707,7 @@ impl<'a> Ctx<'a> {
                 (self.command.infrastructure_dirty)(self.current());
             }
         }
-        if flags & EXECUTE != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             (self.shared.mark_dirty)(tile);
             self.add_track(tile, track, self.current());
             (self.s.layout_changed)(tile, track);
@@ -784,7 +758,7 @@ impl<'a> Ctx<'a> {
                     .saturating_mul(i64::from(new_tram)),
             );
         }
-        if flags & EXECUTE != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             w::hit(w::RAIL_CMD_BUILD_CROSSING);
             let current = self.current();
             let axis = u8::from(track == TRACK_X); // AXIS_Y for TRACK_X.
@@ -821,7 +795,7 @@ impl<'a> Ctx<'a> {
         cost.set(0);
         let mut crossing = false;
         if track >= 6 {
-            return cost.error(INVALID_STRING);
+            return cost.error(INVALID_STRING_ID);
         }
         let trackbit = 1_u8 << track;
         let mut owner = INVALID_OWNER;
@@ -841,7 +815,7 @@ impl<'a> Ctx<'a> {
                         return cost.take(ret);
                     }
                 }
-                if flags & BANKRUPT == 0 {
+                if flags & DoCommandFlag::BANKRUPT == 0 {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
                     unsafe { (self.command.no_vehicle)(ret.0, tile) };
                     if !ret.ok() {
@@ -849,7 +823,7 @@ impl<'a> Ctx<'a> {
                     }
                 }
                 cost.add_money((self.s.rail_clear_cost)((self.rail.rail_type)(tile).0));
-                if flags & EXECUTE != 0 {
+                if flags & DoCommandFlag::EXECUTE != 0 {
                     w::hit(w::RAIL_CMD_REMOVE_CROSSING);
                     (self.s.crossing_removed)(tile, (self.rail.crossing_road_axis)(tile).0);
                     if self.reserved(tile) & trackbit != 0 {
@@ -906,7 +880,7 @@ impl<'a> Ctx<'a> {
                     unsafe { (self.s.remove_signal)(ret.0, flags, tile, track) };
                     cost.add(ret);
                 }
-                if flags & EXECUTE != 0 {
+                if flags & DoCommandFlag::EXECUTE != 0 {
                     w::hit(w::RAIL_CMD_REMOVE_RAIL);
                     if self.reserved(tile) & trackbit != 0 {
                         v = (self.s.reserving_train)(tile, track);
@@ -926,7 +900,7 @@ impl<'a> Ctx<'a> {
                     if present == 0 {
                         let tileh = (self.shared.tile_slope)(tile);
                         if (self.ground.ground)(tile).0 == GROUND_HALF_WATER
-                            && one_corner_raised(tileh)
+                            && is_slope_with_one_corner_raised(tileh)
                         {
                             w::hit(w::RAIL_CMD_REMOVE_SHORE);
                             (self.s.make_shore)(tile);
@@ -943,7 +917,7 @@ impl<'a> Ctx<'a> {
             }
             _ => return cost.error(no_track),
         }
-        if flags & EXECUTE != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             (self.shared.mark_dirty)(tile);
             if crossing {
                 w::hit(w::RAIL_CMD_REMOVE_DIAGONAL_CROSSING);
@@ -1017,15 +991,15 @@ impl<'a> Ctx<'a> {
     ) {
         total.set(0);
         if (!remove && !(self.s.rail_type_valid)(railtype)) || track >= 6 {
-            return total.error(INVALID_STRING);
+            return total.error(INVALID_STRING_ID);
         }
         let size = self.map_size();
         if end_tile >= size || tile >= size {
-            return total.error(INVALID_STRING);
+            return total.error(INVALID_STRING_ID);
         }
         let mut trackdir = track;
         if !self.validate_auto_drag(&mut trackdir, tile, end_tile) {
-            return total.error(INVALID_STRING);
+            return total.error(INVALID_STRING_ID);
         }
         w::hit(if remove {
             w::RAIL_CMD_DRAG_REMOVE
@@ -1034,7 +1008,7 @@ impl<'a> Ctx<'a> {
         });
         let already = self.s.strings.already_built;
         let mut had_success = false;
-        last_error.error(INVALID_STRING);
+        last_error.error(INVALID_STRING_ID);
         loop {
             if remove {
                 unsafe { (self.s.remove_rail)(ret.0, flags, tile, trackdir & 7) };
@@ -1095,14 +1069,14 @@ impl<'a> Ctx<'a> {
         dir: u8,
     ) {
         if !(self.s.rail_type_valid)(railtype) || dir >= 4 {
-            return cost.error(INVALID_STRING);
+            return cost.error(INVALID_STRING_ID);
         }
         let tileh = (self.shared.tile_slope)(tile);
         cost.set(0);
         if tileh != SLOPE_FLAT {
             const INCLINED: [u8; 4] = [12, 6, 3, 9];
             let entrance = INCLINED[usize::from(dir)];
-            let fits = if steep(tileh) {
+            let fits = if is_steep_slope(tileh) {
                 tileh & entrance == entrance
             } else {
                 tileh & entrance != 0
@@ -1142,10 +1116,10 @@ impl<'a> Ctx<'a> {
                 return cost.error(self.s.strings.demolish_bridge);
             }
             if !(self.s.depot_available)() {
-                return cost.error(INVALID_STRING);
+                return cost.error(INVALID_STRING_ID);
             }
         }
-        if flags & EXECUTE != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             if rotate {
                 w::hit(w::RAIL_CMD_DEPOT_ROTATE);
                 (self.rail.set_depot_exit)(tile, dir);
@@ -1184,10 +1158,10 @@ impl<'a> Ctx<'a> {
         signals_copy: u8,
     ) {
         if sigtype > SIGTYPE_LAST || sigvar > SIG_SEMAPHORE {
-            return cost.error(INVALID_STRING);
+            return cost.error(INVALID_STRING_ID);
         }
         if cycle_start > cycle_stop || cycle_stop > SIGTYPE_LAST {
-            return cost.error(INVALID_STRING);
+            return cost.error(INVALID_STRING_ID);
         }
         if ctrl_pressed {
             sigvar ^= SIG_SEMAPHORE;
@@ -1197,7 +1171,7 @@ impl<'a> Ctx<'a> {
         }
         let on_track = SIGNAL_ON_TRACK[usize::from(track)];
         if signals_copy != 0 && signals_copy & on_track == 0 {
-            return cost.error(INVALID_STRING);
+            return cost.error(INVALID_STRING_ID);
         }
         // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
         unsafe { (self.command.tile_ownership)(cost.0, tile) };
@@ -1226,7 +1200,7 @@ impl<'a> Ctx<'a> {
         } else {
             cost.zero();
         }
-        if flags & EXECUTE == 0 {
+        if flags & DoCommandFlag::EXECUTE == 0 {
             return;
         }
         let mut v: *mut Train = std::ptr::null_mut();
@@ -1426,13 +1400,13 @@ impl<'a> Ctx<'a> {
     ) {
         total.set(0);
         if end_tile >= self.map_size() || track >= 6 {
-            return total.error(INVALID_STRING);
+            return total.error(INVALID_STRING_ID);
         }
         if signal_density == 0 || signal_density > 20 {
-            return total.error(INVALID_STRING);
+            return total.error(INVALID_STRING_ID);
         }
         if !remove && (sigtype > SIGTYPE_LAST || sigvar > SIG_SEMAPHORE) {
-            return total.error(INVALID_STRING);
+            return total.error(INVALID_STRING_ID);
         }
         if !(self.shared.is_plain_rail)(tile) {
             return total.error(self.s.strings.no_track);
@@ -1441,12 +1415,12 @@ impl<'a> Ctx<'a> {
         signal_density = signal_density.wrapping_mul(TILE_AXIAL_DISTANCE);
         let mut trackdir = track;
         if !self.validate_auto_drag(&mut trackdir, tile, end_tile) {
-            return total.error(INVALID_STRING);
+            return total.error(INVALID_STRING_ID);
         }
         track = trackdir & 7;
         let start_trackdir = trackdir;
         if !self.has_track(tile, track) {
-            return total.error(INVALID_STRING);
+            return total.error(INVALID_STRING_ID);
         }
         let signals = if self.has_signal(tile, track) {
             let signals = self.present_signals(tile) & SIGNAL_ON_TRACK[usize::from(track)];
@@ -1478,7 +1452,7 @@ impl<'a> Ctx<'a> {
         let mut last_suitable_ctr = 0_i32;
         let mut last_suitable_tile = INVALID_TILE;
         let mut last_suitable_trackdir = INVALID_TRACKDIR;
-        last_error.error(INVALID_STRING);
+        last_error.error(INVALID_STRING_ID);
         let mut had_success = false;
         let no_track = self.s.strings.no_track;
         let mut build_signal = |tile: u32, trackdir: u8, test_only: bool, signal_ctr: i32| {
@@ -1489,7 +1463,11 @@ impl<'a> Ctx<'a> {
             if signal_dir & 2 != 0 {
                 signals |= SIGNAL_AGAINST[usize::from(trackdir)];
             }
-            let do_flags = if test_only { flags & !EXECUTE } else { flags };
+            let do_flags = if test_only {
+                flags & !DoCommandFlag::EXECUTE
+            } else {
+                flags
+            };
             if remove {
                 unsafe { (self.s.remove_signal)(ret.0, do_flags, tile, trackdir & 7) };
             } else {
@@ -1518,7 +1496,7 @@ impl<'a> Ctx<'a> {
             if succeeded {
                 had_success = true;
                 total.add_money(ret.money());
-            } else if ret.message() != no_track || last_error.message() == INVALID_STRING {
+            } else if ret.message() != no_track || last_error.message() == INVALID_STRING_ID {
                 last_error.take(ret);
             }
             succeeded
@@ -1641,7 +1619,7 @@ impl<'a> Ctx<'a> {
                 return;
             }
         }
-        if flags & EXECUTE != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             w::hit(w::RAIL_CMD_SIGNAL_REMOVE);
             let mut v: *mut Train = std::ptr::null_mut();
             if self.reserved(tile) & (1 << track) != 0 {
@@ -1704,12 +1682,12 @@ impl<'a> Ctx<'a> {
         diagonal_area: bool,
     ) {
         if !(self.s.rail_type_valid)(totype) {
-            return cost.error(INVALID_STRING);
+            return cost.error(INVALID_STRING_ID);
         }
         if area_start >= self.map_size() {
-            return cost.error(INVALID_STRING);
+            return cost.error(INVALID_STRING_ID);
         }
-        let execute = flags & EXECUTE != 0;
+        let execute = flags & DoCommandFlag::EXECUTE != 0;
         cost.set(0);
         error.error(self.s.strings.no_suitable_track);
         let mut found = false;
@@ -1960,7 +1938,7 @@ impl<'a> Ctx<'a> {
         if !cost.ok() {
             return;
         }
-        if flags & EXECUTE != 0 {
+        if flags & DoCommandFlag::EXECUTE != 0 {
             w::hit(w::RAIL_CMD_CLEAR_DEPOT);
             let dir = (self.rail.rail_depot_direction)(tile).0;
             let owner = (self.shared.tile_owner)(tile);
@@ -1987,7 +1965,7 @@ impl<'a> Ctx<'a> {
     /// `ClearTile_Track`.
     fn clear_tile(&self, cost: Cost<'_>, ret: Cost<'_>, flags: u16, tile: u32) {
         cost.set(0);
-        if flags & AUTO != 0 {
+        if flags & DoCommandFlag::AUTO != 0 {
             if (self.shared.tile_owner)(tile) != self.current() {
                 return cost.error(self.s.strings.owned_by_another);
             }
@@ -2001,8 +1979,8 @@ impl<'a> Ctx<'a> {
             RAIL_TILE_SIGNALS | RAIL_TILE_NORMAL => {
                 w::hit(w::RAIL_CMD_CLEAR_RAIL);
                 let tileh = (self.shared.tile_slope)(tile);
-                let water_ground =
-                    (self.ground.ground)(tile).0 == GROUND_HALF_WATER && one_corner_raised(tileh);
+                let water_ground = (self.ground.ground)(tile).0 == GROUND_HALF_WATER
+                    && is_slope_with_one_corner_raised(tileh);
                 let mut tracks = self.tracks(tile);
                 while tracks != 0 {
                     let track = tracks.trailing_zeros() as u8;
@@ -2014,7 +1992,7 @@ impl<'a> Ctx<'a> {
                     cost.add_money(ret.money());
                 }
                 if water_ground
-                    && flags & BANKRUPT == 0
+                    && flags & DoCommandFlag::BANKRUPT == 0
                     && (self.shared.company_valid)(self.current())
                 {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
@@ -2022,7 +2000,7 @@ impl<'a> Ctx<'a> {
                     if !ret.ok() {
                         return cost.take(ret);
                     }
-                    if flags & EXECUTE != 0 {
+                    if flags & DoCommandFlag::EXECUTE != 0 {
                         w::hit(w::RAIL_CMD_CLEAR_WATER);
                         crate::ground::clear_square(tile, self.shared);
                     }
@@ -2030,7 +2008,7 @@ impl<'a> Ctx<'a> {
                 }
             }
             RAIL_TILE_DEPOT => self.remove_depot(cost, flags, tile),
-            _ => cost.error(INVALID_STRING),
+            _ => cost.error(INVALID_STRING_ID),
         }
     }
 
@@ -2041,7 +2019,11 @@ impl<'a> Ctx<'a> {
         }
         if new_owner == INVALID_OWNER {
             w::hit(w::RAIL_CMD_OWNER_CLEAR);
-            return (self.command.landscape_clear)(ret.0, tile, EXECUTE | BANKRUPT);
+            return (self.command.landscape_clear)(
+                ret.0,
+                tile,
+                DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT,
+            );
         }
         w::hit(w::RAIL_CMD_OWNER_TRANSFER);
         let num = if (self.shared.is_plain_rail)(tile) {
@@ -2106,10 +2088,12 @@ impl<'a> Ctx<'a> {
         }
         cost.set(price(PR_BUILD_FOUNDATION));
         if tileh_old != tileh_new {
-            if (self.ground.ground)(tile).0 == GROUND_HALF_WATER && one_corner_raised(tileh_old) {
+            if (self.ground.ground)(tile).0 == GROUND_HALF_WATER
+                && is_slope_with_one_corner_raised(tileh_old)
+            {
                 cost.add_money(price(PR_CLEAR_WATER));
             }
-            if flags & EXECUTE != 0 {
+            if flags & DoCommandFlag::EXECUTE != 0 {
                 (self.ground.set_ground)(tile, crate::services::RailGroundType(GROUND_BARREN));
             }
         }
@@ -2121,8 +2105,8 @@ impl<'a> Ctx<'a> {
         let z_old = (self.shared.tile_z)(tile);
         if (self.shared.is_plain_rail)(tile) {
             let bits = self.tracks(tile);
-            let was_water =
-                (self.ground.ground)(tile).0 == GROUND_HALF_WATER && one_corner_raised(tileh_old);
+            let was_water = (self.ground.ground)(tile).0 == GROUND_HALF_WATER
+                && is_slope_with_one_corner_raised(tileh_old);
             if was_water && (self.s.ship_on_tile)(tile) {
                 return cost.error(self.s.strings.ship_in_way);
             }
@@ -2152,7 +2136,7 @@ impl<'a> Ctx<'a> {
                 }
             }
             w::hit(w::RAIL_CMD_TERRAFORM_CORNER);
-            if flags & EXECUTE != 0 {
+            if flags & DoCommandFlag::EXECUTE != 0 {
                 (self.ground.set_ground)(tile, crate::services::RailGroundType(GROUND_BARREN));
             }
             return cost.set(if was_water { price(PR_CLEAR_WATER) } else { 0 });
@@ -2407,8 +2391,7 @@ pub unsafe extern "C" fn openttd_rust_rail_clear_tile(
 /// `ChangeTileOwner_Track`; `a` receives the discarded clear result.
 /// # Safety
 /// See the module entry contract.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_rail_change_owner(
+pub(crate) unsafe fn openttd_rust_rail_change_owner(
     s: *const RailCommandServices,
     a: *mut CommandCost,
     tile: u32,

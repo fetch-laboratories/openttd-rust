@@ -24,11 +24,8 @@
     clippy::too_many_lines
 )]
 use crate::services::{Services, chance16_i};
+use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES, MP_WATER};
 
-const INVALID_TILE: u32 = u32::MAX;
-const MP_CLEAR: u8 = 0;
-const MP_TREES: u8 = 4;
-const MP_WATER: u8 = 6;
 const ARCTIC: u8 = 1;
 const TROPIC: u8 = 2;
 const TOYLAND: u8 = 3;
