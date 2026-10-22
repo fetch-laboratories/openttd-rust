@@ -8,6 +8,7 @@
 /** @file services_newgrf.h Shared NewGRF leaves for synchronous Rust services. */
 #ifndef RUST_SERVICES_NEWGRF_H
 #define RUST_SERVICES_NEWGRF_H
+#include "../command_type.h"
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
 #include "../newgrf_house.h"
@@ -29,5 +30,26 @@ inline void OpenTTDDeleteRailInspect(uint32_t tile) noexcept { RustCloseNewGRFIn
 inline void OpenTTDDeleteHouseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_HOUSES, tile); }
 inline void OpenTTDDeleteIndustryTileInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_INDUSTRYTILES, tile); }
 inline void OpenTTDDeleteIndustryInspect(uint16_t industry) noexcept { RustCloseNewGRFInspect(GSF_INDUSTRIES, industry); }
-inline bool OpenTTDIndustryTileBooleanCallback(const IndustryTileSpec *spec, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvertBooleanCallback(spec->grf_prop.grffile, callback, result); }
+inline void RustUnknownCallbackResult(uint32_t grfid, uint16_t callback, uint16_t result) noexcept { ErrorUnknownCallbackResult(grfid, callback, result); }
+template <typename Spec, typename Handle>
+inline void RustSpecCallbackError(const Handle *handle, uint16_t callback, uint16_t result) noexcept
+{
+	const Spec *spec = reinterpret_cast<const Spec *>(handle);
+	RustUnknownCallbackResult(spec->grf_prop.grfid, callback, result);
+}
+template <uint16_t Callback, typename Spec>
+inline void RustFixedSpecCallbackError(const Spec *spec, uint16_t result) noexcept { RustSpecCallbackError<Spec, Spec>(spec, Callback, result); }
+template <typename Spec>
+inline bool RustSpecBooleanCallback(const Spec *spec, uint16_t callback, uint16_t result) noexcept
+{
+	return OpenTTDConvertBooleanCallback(spec->grf_prop.grffile, callback, result);
+}
+template <typename Spec, typename Handle, typename Result, typename Cost, StringID Error>
+inline void RustLocationCallbackError(Cost *out, const Result *result, const Handle *handle) noexcept
+{
+	const Spec *spec = reinterpret_cast<const Spec *>(handle);
+	*reinterpret_cast<CommandCost *>(out) = GetErrorMessageFromLocationCallbackResult(result->callback, result->registers, spec->grf_prop.grffile, Error);
+}
+template <GrfSpecFeature Feature, typename Id>
+inline void RustCloseInspect(Id id) noexcept { RustCloseNewGRFInspect(Feature, id); }
 #endif /* RUST_SERVICES_NEWGRF_H */

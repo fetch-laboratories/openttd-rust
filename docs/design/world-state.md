@@ -137,6 +137,32 @@ serialization reads live fields before the asynchronous compression thread start
 Link-graph workers use private graph copies and map dimensions, not tile arrays;
 retain the existing job join/reset ordering. Portable builds keep the C++ owner.
 
+### Selected shared map view (#274, 2026-10-21)
+
+The selected maintenance PR extends the existing tile-type allocation/access
+descriptor with canonical base/extended pointers and count. Its first consumers
+are scheduler-dispatched clear, water and tree tile loops, including shore-water
+reentry. Other entries retain typed native services until separately audited.
+Storage, allocation, setters, save adapters and worker ordering stay in C++.
+
+Acquire once at an audited entry under the game-state mutex. Use field-sized raw
+loads, no Rust references/slices, and reload after mutations at the original
+observation points. Descriptor metadata may survive only callbacks proved unable
+to reset/replace the map or yield; end its lifetime before any unproved callback.
+Same-thread reentry needs this proof even while the mutex remains held.
+
+Define each source helper once in its header-named Rust module. Generated named
+ABI probes pin both layouts; preserve native helper assertions under the native
+assertion policy captured once per entry. Assertion-disabled builds gain no new
+panics or rejected inputs. Delete displaced reads and orphan bindings; remaining
+unaudited callers share the canonical native fallback.
+
+The historical experiment compares different owner implementations and skipped
+some native assertions, so it establishes no isolated current saving. Acceptance
+requires assertion-faithful same-base TGP attribution, default mutation/reallocation
+checks, semantic comparisons and the current six-scenario instruction guard.
+This selects a bounded candidate, not a storage transfer or a general raw API.
+
 ## Transferring shared storage later
 Root selects a storage port when measured coupling warrants it. Move its canonical
 owner, accessors, allocation/reset and destruction together;
