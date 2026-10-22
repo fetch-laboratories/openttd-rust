@@ -183,3 +183,30 @@ pub(crate) fn nested<T: Default>(
     }
     extra
 }
+
+/// Own one independently constructed native result for a synchronous nested call.
+/// The storage never moves while its native object is alive. No native layout is
+/// inspected, and construction/destruction are the only lifetime operations.
+pub(crate) fn with_cost<T>(
+    s: &CommandCostServices,
+    body: impl for<'a> FnOnce(crate::services::Cost<'a>) -> T,
+) -> T {
+    struct Guard<'a>(*mut CommandCost, &'a CommandCostServices);
+    impl Drop for Guard<'_> {
+        fn drop(&mut self) {
+            // SAFETY: the guard is dropped before its storage, exactly once,
+            // and uses the actual pointer returned by native construction.
+            unsafe {
+                (self.1.destroy)(self.0);
+            }
+        }
+    }
+    let mut storage = std::mem::MaybeUninit::<crate::services::CommandCostStorage>::uninit();
+    // SAFETY: aligned stack capacity stays at this fixed address until the guard
+    // ends its native lifetime. Native static assertions prove the capacity.
+    let p = unsafe { (s.construct)(storage.as_mut_ptr()) };
+    let guard = Guard(p, s);
+    let result = body(crate::services::Cost(p, s));
+    drop(guard);
+    result
+}

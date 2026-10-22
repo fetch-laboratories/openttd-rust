@@ -77,6 +77,8 @@ struct OpenTTDTreeCommand;
  * wrapper keeps the exception, Rust returns without another draw or write, and the
  * entry's caller rethrows it. No other C++ exception reaches these services. */
 struct OpenTTDGroundCall;
+struct OpenTTDCommandCost;
+struct OpenTTDCommandServices;
 struct OpenTTDTreeServices {
 	OpenTTDTreePlantObservation (*plant_observation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(plant_observation);
 	OpenTTDTreeObservation (*tree_observation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_observation);
@@ -94,12 +96,11 @@ struct OpenTTDTreeServices {
 	bool (*ambient)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(ambient);
 	bool (*progress)() noexcept OPENTTD_SERVICE_DEFAULT(progress);
 	bool (*progress_total)(uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_total);
-	void (*town_rating)(OpenTTDTreeCommand *, uint32_t tile, bool up) noexcept OPENTTD_SERVICE_DEFAULT(town_rating);
+	void (*town_rating)(uint16_t, uint32_t tile, bool up) noexcept OPENTTD_SERVICE_DEFAULT(town_rating);
 	int32_t (*command_begin)(OpenTTDTreeCommand *, uint32_t end, uint32_t start, bool diagonal) noexcept OPENTTD_SERVICE_DEFAULT(command_begin);
 	uint32_t (*command_tile)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_tile);
 	uint32_t (*command_next)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_next);
 	void (*command_debit)(OpenTTDTreeCommand *) noexcept OPENTTD_SERVICE_DEFAULT(command_debit);
-	OpenTTDTreeLandscapeClear (*landscape_clear)(OpenTTDTreeCommand *, uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(landscape_clear);
 };
 
 extern "C" {
@@ -112,8 +113,8 @@ bool openttd_rust_trees_place_randomly(OpenTTDTreeGenerateSettings, const OpenTT
 void openttd_rust_trees_place(uint32_t tile, uint32_t r, bool keep_density, uint8_t climate, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 void openttd_rust_trees_plant(uint32_t tile, uint8_t type, uint32_t count, uint8_t growth, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 bool openttd_rust_trees_can_plant(uint32_t tile, bool allow_desert, const OpenTTDTreeServices *);
-OpenTTDTreeCommandResult openttd_rust_trees_cmd_plant(OpenTTDTreeCommand *, uint32_t tile, uint32_t start, uint8_t tree, bool diagonal, OpenTTDTreeCommandSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
-int64_t openttd_rust_trees_clear_tile(OpenTTDTreeCommand *, uint32_t tile, int64_t price, bool execute, bool company_valid, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
+OpenTTDTreeCommandResult openttd_rust_trees_cmd_plant(OpenTTDTreeCommand *, uint32_t tile, uint32_t start, uint8_t tree, bool diagonal, OpenTTDTreeCommandSettings, const OpenTTDTreeServices *, const OpenTTDSharedServices *, OpenTTDCommandCost *, const OpenTTDCommandServices *, uint16_t);
+int64_t openttd_rust_trees_clear_tile(uint32_t tile, uint16_t flags, int64_t price, bool company_valid, const OpenTTDTreeServices *, const OpenTTDSharedServices *);
 /* Stable Rust-owned byte; game-thread initialization/ticks and serial save/load access only.
  * C++ never retains a C++ reference across a Rust call. DATE LoadCheck omits this field.
  * The unchanged modern and TTD/TTO descriptors access it only at serialization boundaries. */

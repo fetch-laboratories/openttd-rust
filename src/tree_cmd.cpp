@@ -123,14 +123,14 @@ static bool TreeProgress(Update update) noexcept
 	return false;
 }
 
-static void TreeTownRating(OpenTTDTreeCommand *ctx, uint32_t tile, bool up) noexcept
+static void TreeTownRating(uint16_t flags, uint32_t tile, bool up) noexcept
 {
 	Town *t = ClosestTownFromTile(TileIndex{tile}, _settings_game.economy.dist_local_authority);
 	if (t == nullptr) return;
 	if (up) {
-		ChangeTownRating(t, RATING_TREE_UP_STEP, RATING_TREE_MAXIMUM, ctx->flags);
+		ChangeTownRating(t, RATING_TREE_UP_STEP, RATING_TREE_MAXIMUM, DoCommandFlags{flags});
 	} else {
-		ChangeTownRating(t, RATING_TREE_DOWN_STEP, RATING_TREE_MINIMUM, ctx->flags);
+		ChangeTownRating(t, RATING_TREE_DOWN_STEP, RATING_TREE_MINIMUM, DoCommandFlags{flags});
 	}
 }
 
@@ -140,12 +140,6 @@ static int32_t TreeCommandBegin(OpenTTDTreeCommand *ctx, uint32_t tile, uint32_t
 	int limit = (ctx->company == nullptr ? INT32_MAX : GB(ctx->company->Finances().tree_limit, 16, 16));
 	ctx->iter = TileIterator::Create(TileIndex{tile}, TileIndex{start_tile}, diagonal);
 	return limit;
-}
-
-static OpenTTDTreeLandscapeClear TreeLandscapeClear(OpenTTDTreeCommand *ctx, uint32_t tile) noexcept
-{
-	ctx->nested = Command<CMD_LANDSCAPE_CLEAR>::Do(ctx->flags, TileIndex{tile});
-	return {.cost = ctx->nested.GetCost(), .failed = ctx->nested.Failed()};
 }
 
 static const OpenTTDTreeServices _tree_services{
@@ -175,7 +169,6 @@ static const OpenTTDTreeServices _tree_services{
 	.command_tile = [](OpenTTDTreeCommand *ctx) noexcept { return static_cast<TileIndex>(*ctx->iter).base(); },
 	.command_next = [](OpenTTDTreeCommand *ctx) noexcept { return static_cast<TileIndex>(++(*ctx->iter)).base(); },
 	.command_debit = [](OpenTTDTreeCommand *ctx) noexcept { if (ctx->company != nullptr) ctx->company->Finances().tree_limit -= 1 << 16; },
-	.landscape_clear = TreeLandscapeClear,
 };
 
 /** Rethrow a world-generation abort after the Rust entry returned. */
@@ -232,7 +225,7 @@ CommandCost CmdPlantTree(DoCommandFlags flags, TileIndex tile, TileIndex start_t
 		.execute = flags.Test(DoCommandFlag::Execute),
 		.company_valid = Company::IsValidID(_current_company),
 	};
-	auto result = openttd_rust_trees_cmd_plant(&ctx, tile.base(), start_tile.base(), tree_to_plant, diagonal, settings, &_tree_services, &GetRustSharedServices());
+	auto result = openttd_rust_trees_cmd_plant(&ctx, tile.base(), start_tile.base(), tree_to_plant, diagonal, settings, &_tree_services, &GetRustSharedServices(), RustCommandCost(&ctx.nested), &GetRustCommandServices(), flags.base());
 	if (result.status == 1) return CMD_ERROR;
 	if (result.status == 2) return ctx.nested;
 	static const StringID messages[] = {INVALID_STRING_ID, STR_ERROR_TREE_ALREADY_HERE, STR_ERROR_TREE_PLANT_LIMIT_REACHED,
@@ -242,9 +235,7 @@ CommandCost CmdPlantTree(DoCommandFlags flags, TileIndex tile, TileIndex start_t
 
 static CommandCost ClearTile_Trees(TileIndex tile, DoCommandFlags flags)
 {
-	OpenTTDTreeCommand ctx(flags);
-	return CommandCost(EXPENSES_CONSTRUCTION, Money(openttd_rust_trees_clear_tile(&ctx, tile.base(), static_cast<int64_t>(_price[PR_CLEAR_TREES]),
-		flags.Test(DoCommandFlag::Execute), Company::IsValidID(_current_company), &_tree_services, &GetRustSharedServices())));
+	return CommandCost(EXPENSES_CONSTRUCTION, Money(openttd_rust_trees_clear_tile(tile.base(), flags.base(), static_cast<int64_t>(_price[PR_CLEAR_TREES]), Company::IsValidID(_current_company), &_tree_services, &GetRustSharedServices())));
 }
 
 const OpenTTDTreeServices &GetRustTreeServices() noexcept { return _tree_services; }
@@ -268,7 +259,7 @@ void OnTick_Trees()
 		.climate = to_underlying(_settings_game.game_creation.landscape),
 		.extra = _settings_game.construction.extra_tree_placement,
 	};
-	openttd_rust_trees_tick(settings, &_tree_services, &GetRustSharedServices());
+	openttd_rust_trees_tick(settings, &_tree_services, &GetRustSharedServices(), RustCommandCost(&ctx.nested), &GetRustCommandServices(), flags.base());
 }
 
 void InitializeTrees() { openttd_rust_trees_initialize(); }

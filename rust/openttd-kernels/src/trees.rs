@@ -247,12 +247,11 @@ pub struct TreeServices {
     pub ambient: extern "C" fn(u32) -> bool,
     pub progress: extern "C" fn() -> bool,
     pub progress_total: extern "C" fn(u32) -> bool,
-    pub town_rating: extern "C" fn(*mut Command, u32, bool),
+    pub town_rating: extern "C" fn(u16, u32, bool),
     pub command_begin: extern "C" fn(*mut Command, u32, u32, bool) -> i32,
     pub command_tile: extern "C" fn(*mut Command) -> u32,
     pub command_next: extern "C" fn(*mut Command) -> u32,
     pub command_debit: extern "C" fn(*mut Command),
-    pub landscape_clear: extern "C" fn(*mut Command, u32) -> LandscapeClear,
 }
 
 /// `Map::ScaleBySize`: `CeilDiv(n << (LogX + LogY - 12), 16)` in uint arithmetic.
@@ -830,6 +829,8 @@ impl Trees<'_> {
         tree: u8,
         diagonal: bool,
         s: &CommandSettings,
+        flags: u16,
+        mut clear: impl FnMut(u32) -> LandscapeClear,
     ) -> CommandResult {
         const ERROR: CommandResult = CommandResult {
             cost: 0,
@@ -902,7 +903,7 @@ impl Trees<'_> {
                             if p.tile_type == MP_CLEAR
                                 && (p.ground == CLEAR_FIELDS || p.ground == CLEAR_ROCKS)
                             {
-                                let nested = (self.t.landscape_clear)(ctx, current);
+                                let nested = clear(current);
                                 if nested.failed {
                                     return CommandResult {
                                         cost: 0,
@@ -913,7 +914,7 @@ impl Trees<'_> {
                                 cost = cost.saturating_add(nested.cost);
                             }
                             if !s.editor && s.company_valid {
-                                (self.t.town_rating)(ctx, current, true);
+                                (self.t.town_rating)(flags, current, true);
                             }
                             if s.execute {
                                 let mut tree = tree;
@@ -1091,9 +1092,30 @@ pub unsafe extern "C" fn openttd_rust_trees_cmd_plant(
     settings: CommandSettings,
     services: *const TreeServices,
     shared: *const Services,
+    nested: *mut crate::services::CommandCost,
+    commands: &crate::services::CommandServices,
+    flags: u16,
 ) -> CommandResult {
-    // SAFETY: Guaranteed by the caller.
-    unsafe { trees(services, shared) }.plant_command(ctx, tile, start, tree, diagonal, &settings)
+    let table = unsafe { &*(commands.landscape_commands)() };
+    let costs = unsafe { &*table.costs };
+    // SAFETY: Guaranteed by the caller. The existing native nested result slot
+    // keeps the complete error returned by a failed clear for status 2.
+    unsafe { trees(services, shared) }.plant_command(
+        ctx,
+        tile,
+        start,
+        tree,
+        diagonal,
+        &settings,
+        flags,
+        |current| {
+            crate::landscape_cmd::clear_command(commands, nested, current, flags);
+            LandscapeClear {
+                cost: (costs.money)(nested),
+                failed: !(costs.success)(nested),
+            }
+        },
+    )
 }
 
 /// `ClearTile_Trees`; returns the saturated cost.
@@ -1101,28 +1123,47 @@ pub unsafe extern "C" fn openttd_rust_trees_cmd_plant(
 /// As for `openttd_rust_trees_cmd_plant`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_trees_clear_tile(
-    ctx: *mut Command,
     tile: u32,
+    flags: u16,
     price: i64,
-    execute: bool,
     company_valid: bool,
     services: *const TreeServices,
     shared: *const Services,
 ) -> i64 {
-    // SAFETY: Guaranteed by the caller.
-    let (t, s) = unsafe { (&*services, &*shared) };
+    // SAFETY: the native caller supplies immutable canonical tables.
+    unsafe { clear_tile_price(&*services, &*shared, tile, flags, company_valid, price) }
+}
+/// The existing tree clear callee, also used by direct landscape dispatch.
+pub(crate) fn clear_tile(t: &TreeServices, s: &Services, tile: u32, flags: u16) -> i64 {
+    clear_tile_price(
+        t,
+        s,
+        tile,
+        flags,
+        (s.company_valid)((s.current_company)()),
+        crate::company::price(crate::economy_type::PR_CLEAR_TREES),
+    )
+}
+fn clear_tile_price(
+    t: &TreeServices,
+    s: &Services,
+    tile: u32,
+    flags: u16,
+    company_valid: bool,
+    price: i64,
+) -> i64 {
     if company_valid {
-        (t.town_rating)(ctx, tile, false);
+        (t.town_rating)(flags, tile, false);
     }
     let tree = (t.clear_observation)(tile);
-    let mut num = tree.count;
+    let mut count = tree.count;
     if is_rainforest_tree(tree.species) {
-        num = num.wrapping_mul(4);
+        count = count.wrapping_mul(4);
     }
-    if execute {
+    if flags & crate::command_type::DoCommandFlag::EXECUTE != 0 {
         crate::ground::clear_square(tile, s);
     }
-    price.saturating_mul(i64::from(num))
+    price.saturating_mul(i64::from(count))
 }
 
 #[cfg(test)]
@@ -1367,7 +1408,7 @@ mod tests {
     extern "C" fn clear_square(_: u32, _: crate::services::ClearGroundType, _: u32) {
         log(Event::Write("clear_square"));
     }
-    extern "C" fn rating(_: *mut Command, _: u32, up: bool) {
+    extern "C" fn rating(_: u16, _: u32, up: bool) {
         log(Event::Rating(up));
     }
     extern "C" fn begin(_: *mut Command, end: u32, start: u32, diagonal: bool) -> i32 {
@@ -1423,7 +1464,6 @@ mod tests {
         command_tile,
         command_next,
         command_debit: debit,
-        landscape_clear,
     };
     fn with<R>(f: impl FnOnce(&Trees) -> R) -> R {
         let shared = shared();
@@ -1696,7 +1736,11 @@ mod tests {
             editor: true,
             ..COMMAND
         };
-        let result = with(|t| t.plant_command(std::ptr::null_mut(), 2, 1, 20, true, &s));
+        let result = with(|t| {
+            t.plant_command(std::ptr::null_mut(), 2, 1, 20, true, &s, 0, |tile| {
+                landscape_clear(std::ptr::null_mut(), tile)
+            })
+        });
         assert_eq!((result.status, result.message, result.cost), (0, 0, 15));
         assert_eq!(
             events(),
@@ -1722,16 +1766,35 @@ mod tests {
             length: 1,
             ..World::default()
         });
-        let result = with(|t| t.plant_command(std::ptr::null_mut(), 2, 1, 20, false, &COMMAND));
+        let result = with(|t| {
+            t.plant_command(std::ptr::null_mut(), 2, 1, 20, false, &COMMAND, 0, |tile| {
+                landscape_clear(std::ptr::null_mut(), tile)
+            })
+        });
         assert_eq!(result.status, 1); // Rainforest is outside the temperate range.
-        let result = with(|t| t.plant_command(std::ptr::null_mut(), 2, 4096, 255, false, &COMMAND));
+        let result = with(|t| {
+            t.plant_command(
+                std::ptr::null_mut(),
+                2,
+                4096,
+                255,
+                false,
+                &COMMAND,
+                0,
+                |tile| landscape_clear(std::ptr::null_mut(), tile),
+            )
+        });
         assert_eq!(result.status, 1); // Start tile outside the map.
         assert_eq!(events(), []);
         let s = CommandSettings {
             climate: TROPIC,
             ..COMMAND
         };
-        let result = with(|t| t.plant_command(std::ptr::null_mut(), 2, 1, 20, false, &s));
+        let result = with(|t| {
+            t.plant_command(std::ptr::null_mut(), 2, 1, 20, false, &s, 0, |tile| {
+                landscape_clear(std::ptr::null_mut(), tile)
+            })
+        });
         assert_eq!((result.status, result.cost, result.message), (0, 0, 5));
     }
 
@@ -1743,7 +1806,18 @@ mod tests {
             length: 5,
             ..World::default()
         });
-        let result = with(|t| t.plant_command(std::ptr::null_mut(), 2, 1, 255, false, &COMMAND));
+        let result = with(|t| {
+            t.plant_command(
+                std::ptr::null_mut(),
+                2,
+                1,
+                255,
+                false,
+                &COMMAND,
+                0,
+                |tile| landscape_clear(std::ptr::null_mut(), tile),
+            )
+        });
         assert_eq!((result.status, result.cost, result.message), (0, 0, 2));
         assert_eq!(
             events(),
@@ -1768,7 +1842,11 @@ mod tests {
             clear_failed: true,
             ..World::default()
         });
-        let result = with(|t| t.plant_command(std::ptr::null_mut(), 2, 1, 3, false, &COMMAND));
+        let result = with(|t| {
+            t.plant_command(std::ptr::null_mut(), 2, 1, 3, false, &COMMAND, 0, |tile| {
+                landscape_clear(std::ptr::null_mut(), tile)
+            })
+        });
         assert_eq!(result.status, 2);
         reset(World {
             plant: PlantObservation {
@@ -1779,7 +1857,18 @@ mod tests {
             length: 1,
             ..World::default()
         });
-        let result = with(|t| t.plant_command(std::ptr::null_mut(), 2, 1, 255, false, &COMMAND));
+        let result = with(|t| {
+            t.plant_command(
+                std::ptr::null_mut(),
+                2,
+                1,
+                255,
+                false,
+                &COMMAND,
+                0,
+                |tile| landscape_clear(std::ptr::null_mut(), tile),
+            )
+        });
         assert_eq!((result.status, result.cost), (0, 22));
         assert_eq!(
             events(),
@@ -1822,7 +1911,11 @@ mod tests {
                 execute: false,
                 ..COMMAND
             };
-            let result = with(|t| t.plant_command(std::ptr::null_mut(), 2, 1, 255, false, &s));
+            let result = with(|t| {
+                t.plant_command(std::ptr::null_mut(), 2, 1, 255, false, &s, 0, |tile| {
+                    landscape_clear(std::ptr::null_mut(), tile)
+                })
+            });
             assert_eq!(result.cost, price);
             assert_eq!(events().iter().filter(|e| **e == Event::Count).count(), 3);
             assert!(!events().contains(&Event::Tree));
@@ -1830,15 +1923,7 @@ mod tests {
             // SAFETY: The test table is a live constant.
             let shared = shared();
             let cost = unsafe {
-                openttd_rust_trees_clear_tile(
-                    std::ptr::null_mut(),
-                    1,
-                    price,
-                    true,
-                    true,
-                    &SERVICES,
-                    &raw const shared,
-                )
+                openttd_rust_trees_clear_tile(1, 1, price, true, &SERVICES, &raw const shared)
             };
             assert_eq!(cost, price);
         }

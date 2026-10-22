@@ -22,8 +22,15 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/landscape_command_ffi.h"
+#include "rust/water_area_services.h"
+#include "rust/command_cost_services.h"
+#endif
+
 #include "safeguards.h"
 
+#ifndef WITH_RUST
 /** Set of tiles. */
 typedef std::set<TileIndex> TileIndexSet;
 /** Mapping of tiles to their height. */
@@ -158,6 +165,8 @@ static std::tuple<CommandCost, TileIndex> TerraformTileHeight(TerraformerState *
 	return { total_cost, INVALID_TILE };
 }
 
+#endif
+
 /**
  * Terraform land
  * @param flags for this command type
@@ -168,6 +177,11 @@ static std::tuple<CommandCost, TileIndex> TerraformTileHeight(TerraformerState *
  */
 std::tuple<CommandCost, Money, TileIndex> CmdTerraformLand(DoCommandFlags flags, TileIndex tile, Slope slope, bool dir_up)
 {
+#ifdef WITH_RUST
+	CommandCost result;
+	TileIndex error{openttd_rust_landscape_terraform(&GetRustLandscapeCommandServices(), RustCommandCost(&result), tile.base(), slope, dir_up, flags.base())};
+	return {std::move(result), 0, error};
+#else
 	CommandCost total_cost(EXPENSES_CONSTRUCTION);
 	int direction = (dir_up ? 1 : -1);
 	TerraformerState ts;
@@ -304,6 +318,7 @@ std::tuple<CommandCost, Money, TileIndex> CmdTerraformLand(DoCommandFlags flags,
 		if (c != nullptr) c->Finances().terraform_limit -= (uint32_t)ts.tile_to_new_height.size() << 16;
 	}
 	return { total_cost, 0, total_cost.Succeeded() ? tile : INVALID_TILE };
+#endif
 }
 
 
@@ -318,6 +333,13 @@ std::tuple<CommandCost, Money, TileIndex> CmdTerraformLand(DoCommandFlags flags,
  */
 std::tuple<CommandCost, Money, TileIndex> CmdLevelLand(DoCommandFlags flags, TileIndex tile, TileIndex start_tile, bool diagonal, LevelMode lm)
 {
+#ifdef WITH_RUST
+	CommandCost result, last, ret;
+	OpenTTDWaterArea area;
+	int64_t extra = 0;
+	TileIndex error{openttd_rust_landscape_level(&GetRustLandscapeCommandServices(), RustCommandCost(&result), RustCommandCost(&last), RustCommandCost(&ret), tile.base(), start_tile.base(), diagonal, lm, flags.base(), &area, &extra)};
+	return {std::move(result), Money(extra), error};
+#else
 	if (start_tile >= Map::Size()) return { CMD_ERROR, 0, INVALID_TILE };
 
 	/* remember level height */
@@ -388,4 +410,5 @@ std::tuple<CommandCost, Money, TileIndex> CmdLevelLand(DoCommandFlags flags, Til
 
 	CommandCost cc_ret = had_success ? cost : last_error;
 	return { cc_ret, 0, cc_ret.Succeeded() ? tile : error_tile };
+#endif
 }

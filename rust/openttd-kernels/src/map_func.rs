@@ -78,4 +78,18 @@ impl Map {
         let (x, y) = OFFSETS[usize::from(dir)];
         tile.wrapping_add(self.diff(x, y))
     }
+    /// `AddTileIndexDiffCWrap(tile, TileIndexDiffCByDiagDir(dir))`.
+    /// Unlike `TileAddWrap`, this includes `MP_VOID` edge tiles.
+    #[must_use]
+    pub fn add_diff_c_wrap(self, tile: u32, dir: u8, size_y: u32) -> u32 {
+        const OFFSETS: [(i32, i32); 4] = [(-1, 0), (0, 1), (1, 0), (0, -1)];
+        let (dx, dy) = OFFSETS[usize::from(dir)];
+        let x = self.tile_x(tile).wrapping_add_signed(dx);
+        let y = self.tile_y(tile).wrapping_add_signed(dy);
+        if x >= self.size_x() || y >= size_y {
+            crate::tile_type::INVALID_TILE
+        } else {
+            y * self.size_x() + x
+        }
+    }
 }

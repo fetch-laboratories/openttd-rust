@@ -316,7 +316,7 @@ typedef struct OpenTTDIndustryTilePolicyServices {
 	int32_t (*tile_max_z)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(tile_max_z);
 	bool (*autoslope_callback)(const OpenTTDIndustryTileSpec *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(autoslope_callback);
 	bool (*callback_boolean)(const OpenTTDIndustryTileSpec *, uint16_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(callback_boolean);
-	void (*landscape_clear)(OpenTTDIndustryCost *, uint32_t, uint16_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(landscape_clear);
+	const OpenTTDCommandServices *command_checks;
 } OpenTTDIndustryTilePolicyServices;
 typedef struct OpenTTDIndustryCommandServices {
 	bool (*deity)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(deity);
@@ -430,7 +430,6 @@ typedef struct OpenTTDIndustryTransactionServices {
 	bool (*terragenesis)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(terragenesis);
 	bool (*ignore_restrictions)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(ignore_restrictions);
 	uint8_t (*platform)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(platform);
-	void (*terraform)(OpenTTDIndustryCost *, uint32_t, uint16_t, bool) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(terraform);
 	bool (*can_allocate)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(can_allocate);
 	OpenTTDIndustryAllocation (*allocate)(uint32_t) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(allocate);
 	uint32_t (*prospecting_chance)(const OpenTTDIndustrySpecHandle *) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(prospecting_chance);
@@ -465,5 +464,8 @@ bool openttd_rust_industry_slope_refused(uint8_t current, uint8_t refused);
 #endif
 #ifdef __cplusplus
 const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept;
+const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcept;
+const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept;
+const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices();
 #endif
 #endif

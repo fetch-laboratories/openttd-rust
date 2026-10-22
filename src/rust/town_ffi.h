@@ -92,11 +92,9 @@ struct OpenTTDTownLeaves {
 	void (*update_max_pass)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(update_max_pass);
 	uint32_t (*next_town)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_town);
 	uint64_t (*road_mask)() noexcept OPENTTD_SERVICE_DEFAULT(road_mask);
-	bool (*clear_land)(uint32_t tile, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(clear_land);
-	OpenTTDTownCommandResult (*terraform_land)(uint32_t tile, uint32_t slope, uint32_t up, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(terraform_land);
 	bool (*build_bridge)(uint32_t tile, uint32_t end, uint32_t bridge, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_bridge);
 	bool (*build_tunnel)(uint32_t tile, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_tunnel);
-	void (*clear_house_land)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(clear_house_land);
+	void (*assert_clear_house)(bool) noexcept OPENTTD_SERVICE_DEFAULT(assert_clear_house);
 	bool (*allow_construction)(uint32_t town, uint32_t tile, uint32_t house, uint32_t random) noexcept OPENTTD_SERVICE_DEFAULT(allow_construction);
 	const OpenTTDHouseServices *houses;
 };

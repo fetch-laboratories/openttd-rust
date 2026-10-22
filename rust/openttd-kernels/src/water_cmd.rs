@@ -145,7 +145,7 @@ impl World<'_> {
         }
     }
     fn clear_command(&self, ret: *mut CommandCost, tile: u32, flags: u16) {
-        (self.cmd.landscape_clear)(ret, tile, flags);
+        crate::landscape_cmd::clear_command(self.cmd, ret, tile, flags);
     }
     fn ownership(&self, ret: *mut CommandCost, tile: u32) {
         // SAFETY: The facade owns this live native stack slot across reentry.

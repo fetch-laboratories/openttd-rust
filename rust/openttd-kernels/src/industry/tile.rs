@@ -576,7 +576,7 @@ pub struct TilePolicyServices {
     pub tile_max_z: unsafe extern "C" fn(u32) -> i32,
     pub autoslope_callback: unsafe extern "C" fn(*const TileSpec) -> bool,
     pub callback_boolean: unsafe extern "C" fn(*const TileSpec, u16, u16) -> bool,
-    pub landscape_clear: unsafe extern "C" fn(*mut IndustryCost, u32, u16),
+    pub command_checks: *const crate::services::CommandServices,
 }
 /// # Safety
 /// Live tile and native stack result. Event and destruction callbacks may reenter;
@@ -658,5 +658,5 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_terraform(
             }
         }
     }
-    unsafe { (p.landscape_clear)(out, tile, flags) };
+    crate::landscape_cmd::clear_command(unsafe { &*p.command_checks }, out.cast(), tile, flags);
 }

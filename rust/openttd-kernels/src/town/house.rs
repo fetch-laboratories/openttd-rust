@@ -913,7 +913,7 @@ impl House<'_> {
             }
         }
         // SAFETY: Static command table referenced by the house table.
-        (unsafe { &*self.h.commands }.landscape_clear)(result, tile, flags);
+        crate::landscape_cmd::clear_command(unsafe { &*self.h.commands }, result, tile, flags);
     }
     /// `CmdPlaceHouse`; test clears write into the result, replaced on success.
     fn place(
@@ -979,7 +979,8 @@ impl House<'_> {
                 return;
             }
             if !(replace && (self.s.tile_type)(subtile) == MP_HOUSE) {
-                (commands.landscape_clear)(
+                crate::landscape_cmd::clear_command(
+                    commands,
                     result,
                     subtile,
                     DoCommandFlag::AUTO | DoCommandFlag::NO_WATER,

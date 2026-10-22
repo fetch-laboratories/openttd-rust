@@ -69,10 +69,10 @@
 #include "rust/tile_animation_services.h"
 #include "rust/orders_ffi.h"
 static const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
-static const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices();
+const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices();
 static const OpenTTDIndustryCommandServices &GetIndustryCommandServices();
-static const OpenTTDIndustryCostServices &GetIndustryCostServices();
-static const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices();
+const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept;
+const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcept;
 static OpenTTDIndustryTransactionContext GetIndustryTransactionContext();
 static Industry *IndustryIfValid(uint16_t id) noexcept { return Industry::GetIfValid(IndustryID(id)); }
 static OpenTTDIndustry *IndustryOwner(Industry *shell) noexcept { return shell->production_owner.get(); }
@@ -3775,7 +3775,7 @@ const OpenTTDIndustryLifecycleServices &GetIndustryLifecycleRustServices() { ret
 #endif
 
 #ifdef WITH_RUST
-static const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
+const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 {
 	static const OpenTTDIndustryGenerationServices services = {
 		.spec = [](uint8_t type) noexcept -> const OpenTTDIndustrySpecHandle * { return reinterpret_cast<const OpenTTDIndustrySpecHandle *>(GetIndustrySpec(type)); },
@@ -3919,7 +3919,7 @@ static const OpenTTDIndustryCommandServices &GetIndustryCommandServices()
 #endif
 
 #ifdef WITH_RUST
-static const OpenTTDIndustryCostServices &GetIndustryCostServices()
+const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept
 {
 	static const OpenTTDIndustryCostServices services = {
 		.zero = OpenTTDCommandCostZero,
@@ -3929,7 +3929,7 @@ static const OpenTTDIndustryCostServices &GetIndustryCostServices()
 	};
 	return services;
 }
-static const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices()
+const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcept
 {
 	static const OpenTTDIndustryTilePolicyServices services = {
 		.current_company = []() noexcept -> uint8_t { return OpenTTDCurrentCompany().base(); },
@@ -3943,7 +3943,7 @@ static const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices()
 		.tile_max_z = [](uint32_t tile) noexcept -> int32_t { return OpenTTDTileMaxZ(TileIndex(tile)); },
 		.autoslope_callback = [](const OpenTTDIndustryTileSpec *spec) noexcept -> bool { return spec->callback_mask.Test(IndustryTileCallbackMask::Autoslope); },
 		.callback_boolean = RustSpecBooleanCallback<IndustryTileSpec>,
-		.landscape_clear = [](OpenTTDIndustryCost *out, uint32_t tile, uint16_t flags) noexcept { *out = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlags{flags}, TileIndex(tile)); },
+		.command_checks = &GetRustCommandServices(),
 	};
 	return services;
 }
@@ -3980,8 +3980,7 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.shape_callback = [](const OpenTTDIndustryTileSpec *spec) noexcept -> bool { return spec->callback_mask.Test(IndustryTileCallbackMask::ShapeCheck); },
 		.terragenesis = []() noexcept -> bool { return _settings_game.game_creation.land_generator == LG_TERRAGENESIS; },
 		.ignore_restrictions = []() noexcept -> bool { return _ignore_industry_restrictions; },
-		.platform = []() noexcept -> uint8_t { return _settings_game.construction.industry_platform; },
-		.terraform = [](OpenTTDIndustryCost *out, uint32_t tile, uint16_t flags, bool raise) noexcept { *out = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(DoCommandFlags{flags}, TileIndex(tile), SLOPE_N, raise)); },
+		.platform = []() noexcept -> uint8_t { return _settings_game.construction.industry_platform; }, TileIndex(tile), SLOPE_N, raise)); },
 		.can_allocate = []() noexcept -> bool { return Industry::CanAllocateItem(); },
 		.allocate = [](uint32_t tile) noexcept -> OpenTTDIndustryAllocation { Industry *i = new Industry(TileIndex(tile)); return {i, i->production_owner.get(), i->index.base()}; },
 		.prospecting_chance = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint32_t { return reinterpret_cast<const IndustrySpec *>(spec)->prospecting_chance; },

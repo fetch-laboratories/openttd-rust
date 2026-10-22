@@ -317,7 +317,7 @@ impl<'a> World<'a> {
         let out = unsafe { (self.costs().prepare)(call) };
         // SAFETY: Immutable shared table; native storage outlives command/reentry.
         unsafe {
-            ((*self.costs().commands).landscape_clear)(out, tile, 1);
+            crate::landscape_cmd::clear_command(&*self.costs().commands, out, tile, 1);
         }
         self.result(call, out)
     }

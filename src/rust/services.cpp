@@ -18,6 +18,7 @@
 #include "town_ffi.h"
 #include "services_map.h"
 #include "command_services.h"
+#include "landscape_command_ffi.h"
 #include "command_cost_native_services.h"
 #include "company_services.h"
 #include "company_adapter.h"
@@ -70,6 +71,10 @@
 
 static CommandCost *NativeCost(OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<CommandCost *>(cost); }
 static const CommandCost *NativeCost(const OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<const CommandCost *>(cost); }
+static_assert(sizeof(CommandCost) <= sizeof(OpenTTDCommandCostStorage));
+static_assert(alignof(CommandCost) <= alignof(OpenTTDCommandCostStorage));
+static OpenTTDCommandCost *CostConstruct(OpenTTDCommandCostStorage *p) noexcept { return reinterpret_cast<OpenTTDCommandCost *>(std::construct_at(reinterpret_cast<CommandCost *>(p))); }
+static void CostDestroy(OpenTTDCommandCost *p) noexcept { std::destroy_at(reinterpret_cast<CommandCost *>(p)); }
 static void CostZero(OpenTTDCommandCost *out) noexcept { OpenTTDCommandCostZero(NativeCost(out)); }
 static void CostError(OpenTTDCommandCost *out, uint32_t message) noexcept { OpenTTDCommandCostError(NativeCost(out), message); }
 static void CostExpenseMoney(OpenTTDCommandCost *out, uint8_t expense, int64_t amount) noexcept { OpenTTDCommandCostExpenseMoney(NativeCost(out), static_cast<ExpensesType>(expense), Money(amount)); }
@@ -85,6 +90,7 @@ static void CostMakeError(OpenTTDCommandCost *cost, uint32_t message) noexcept {
 const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 {
 	static const OpenTTDCommandCostServices services{
+		.construct = CostConstruct, .destroy = CostDestroy,
 		.zero = CostZero, .error = CostError, .expense_money = CostExpenseMoney,
 		.error_param = CostErrorParam, .add = CostAdd, .move = CostMove,
 		.amount = CostAmount, .success = CostSuccess, .error_message = CostErrorMessage, .money = CostMoney,
@@ -97,10 +103,6 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
  * save/load code. They may reenter Rust owners, but ordinary play cannot unwind
  * these leaves; allocation/error-formatting failures terminate under noexcept.
  * The native returned object is moved whole into its caller's stack sink. */
-static void LandscapeClear(OpenTTDCommandCost *out, uint32_t tile, uint16_t flags) noexcept
-{
-	*NativeCost(out) = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlags(flags), TileIndex{tile});
-}
 static void CommandTileOwnership(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = CheckTileOwnership(TileIndex{tile}); }
 static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner, uint32_t tile) noexcept { *NativeCost(out) = CheckOwnership(Owner(owner), TileIndex{tile}); }
 static void CommandNoVehicle(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = EnsureNoVehicleOnGround(TileIndex{tile}); }
@@ -124,7 +126,7 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 		.finance = &GetRustCompanyFinanceServices(),
 		.infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
 		.infrastructure_dirty = RustInfrastructureDirty,
-		.landscape_clear = LandscapeClear,
+		.landscape_commands = []() noexcept { return &GetRustLandscapeCommandServices(); },
 		.tile_ownership = CommandTileOwnership, .ownership = CommandOwnership,
 		.no_vehicle = CommandNoVehicle, .no_train = CommandNoTrain, .wormhole_free = CommandWormholeFree,
 	};

@@ -277,9 +277,7 @@ void MakeRiverAndModifyDesertZoneAround(TileIndex tile)
 }
 /* The selected command owns traversal; the established map iterator stays a
  * call-local native value. Variant construction has no per-command allocation. */
-struct OpenTTDWaterArea {
-	std::optional<std::variant<OrthogonalTileIterator, DiagonalTileIterator>> iter;
-};
+#include "rust/water_area_services.h"
 // Direct Rust economy reads use these source Price indices.
 static_assert(PR_BUILD_DEPOT_SHIP == 7 && PR_CLEAR_DEPOT_SHIP == 32 && PR_BUILD_LOCK == 64 && PR_CLEAR_LOCK == 65);
 static_assert(PR_BUILD_CANAL == 60 && PR_CLEAR_CANAL == 61 && PR_CLEAR_WATER == 34 && PR_CLEAR_ROUGH == 23);

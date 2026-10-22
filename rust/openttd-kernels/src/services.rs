@@ -67,6 +67,13 @@ pub struct EconomyDate(pub i32);
 pub struct CommandCost {
     _private: [u8; 0],
 }
+/// Opaque native stack capacity; no native field is read, copied or represented.
+/// Native compilation pins sufficient size/alignment on every supported platform.
+#[repr(C, align(16))]
+pub struct CommandCostStorage {
+    /// Uninterpreted, uninitialized capacity lent to native lifetime operations.
+    pub storage: [std::mem::MaybeUninit<u8>; 128],
+}
 /// Native `ExpensesType : uint8_t` carrier.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -77,6 +84,10 @@ pub struct ExpenseType(pub u8);
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandCostServices {
+    /// Start a native `CommandCost` lifetime in pinned opaque stack storage.
+    pub construct: unsafe extern "C" fn(*mut CommandCostStorage) -> *mut CommandCost,
+    /// End exactly the native lifetime begun by construct.
+    pub destroy: unsafe extern "C" fn(*mut CommandCost),
     /// Assign native successful zero cost.
     pub zero: extern "C" fn(*mut CommandCost),
     /// Assign the native `StringID` error constructor, including `INVALID_STRING_ID`.
@@ -123,7 +134,7 @@ pub struct CommandServices {
     /// Canonical infrastructure window invalidation.
     pub infrastructure_dirty: extern "C" fn(u8),
     /// Original `CMD_LANDSCAPE_CLEAR`, with actual `DoCommandFlags` width.
-    pub landscape_clear: extern "C" fn(*mut CommandCost, u32, u16),
+    pub landscape_commands: extern "C" fn() -> *const crate::landscape_cmd::LandscapeServices,
     /// Original `CheckTileOwnership`, preserving native encoded errors.
     pub tile_ownership: unsafe extern "C" fn(*mut CommandCost, u32),
     /// Original `CheckOwnership`.

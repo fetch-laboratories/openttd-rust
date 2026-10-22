@@ -354,7 +354,7 @@ impl<'a> Ctx<'a> {
         });
     }
     fn clear(&self, c: Cost<'_>, flags: u16, tile: u32) {
-        (self.commands.landscape_clear)(c.0, tile, flags);
+        crate::landscape_cmd::clear_command(self.commands, c.0, tile, flags);
     }
     fn no_vehicle(&self, c: Cost<'_>, tile: u32) {
         unsafe {

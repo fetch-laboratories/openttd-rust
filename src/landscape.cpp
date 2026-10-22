@@ -58,6 +58,15 @@
 #include "rust/town_ffi.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/landscape_command_ffi.h"
+#include "tunnel_map.h"
+#include "rust/water_area_services.h"
+#include "rust/town_founding_ffi.h"
+#include "rust/command_services.h"
+#include "rust/environment_services.h"
+#endif
+
 #include "safeguards.h"
 
 extern const TileTypeProcs
@@ -735,6 +744,11 @@ bool IsMapSurroundedByWater()
  */
 CommandCost CmdLandscapeClear(DoCommandFlags flags, TileIndex tile)
 {
+#ifdef WITH_RUST
+	CommandCost result;
+	openttd_rust_landscape_clear(&GetRustLandscapeCommandServices(), RustCommandCost(&result), tile.base(), flags.base());
+	return result;
+#else
 	CommandCost cost(EXPENSES_CONSTRUCTION);
 	bool do_clear = false;
 	/* Test for stuff which results in water when cleared. Then add the cost to also clear the water. */
@@ -790,6 +804,7 @@ CommandCost CmdLandscapeClear(DoCommandFlags flags, TileIndex tile)
 		}
 	}
 	return cost;
+#endif
 }
 
 /**
@@ -802,6 +817,12 @@ CommandCost CmdLandscapeClear(DoCommandFlags flags, TileIndex tile)
  */
 std::tuple<CommandCost, Money> CmdClearArea(DoCommandFlags flags, TileIndex tile, TileIndex start_tile, bool diagonal)
 {
+#ifdef WITH_RUST
+	CommandCost result, last, ret;
+	OpenTTDWaterArea area;
+	Money extra(openttd_rust_landscape_clear_area(&GetRustLandscapeCommandServices(), RustCommandCost(&result), RustCommandCost(&last), RustCommandCost(&ret), tile.base(), start_tile.base(), diagonal, flags.base(), &area));
+	return {std::move(result), extra};
+#else
 	if (start_tile >= Map::Size()) return { CMD_ERROR, 0 };
 
 	Money money = GetAvailableMoneyForCommand();
@@ -850,8 +871,44 @@ std::tuple<CommandCost, Money> CmdClearArea(DoCommandFlags flags, TileIndex tile
 	}
 
 	return { had_success ? cost : last_error, 0 };
+#endif
 }
 
+
+#ifdef WITH_RUST
+const OpenTTDLandscapeCommandServices &GetRustLandscapeCommandServices() noexcept
+{
+	static const OpenTTDLandscapeTileServices tiles{
+		.clear = [](OpenTTDCommandCost *out, uint32_t tile, uint16_t flags) noexcept {
+			*reinterpret_cast<CommandCost *>(out) = _tile_type_procs[GetTileType(TileIndex{tile})]->clear_tile_proc(TileIndex{tile}, DoCommandFlags{flags});
+		},
+		.terraform = [](OpenTTDCommandCost *out, uint32_t tile, uint16_t flags, int32_t z, uint8_t slope) noexcept {
+			*reinterpret_cast<CommandCost *>(out) = _tile_type_procs[GetTileType(TileIndex{tile})]->terraform_tile_proc(TileIndex{tile}, DoCommandFlags{flags}, z, static_cast<Slope>(slope));
+		},
+		.owners = &GetRustTileOwnerServices(), .trees = &GetRustTreeServices(),
+		.industry_policy = &GetIndustryTilePolicyServices(), .industry_costs = &GetIndustryCostServices(), .industry_generation = &GetIndustryGenerationServices(),
+	};
+	static const OpenTTDLandscapeCommandServices services{
+		.shared = &GetRustSharedServices(), .costs = &GetRustCommandCostServices(), .commands = &GetRustCommandServices(),
+		.strings = {STR_ERROR_MUST_DEMOLISH_CANAL_FIRST, STR_ERROR_CLEARING_LIMIT_REACHED, STR_ERROR_CAN_T_BUILD_ON_WATER, STR_ERROR_ALREADY_AT_SEA_LEVEL, STR_ERROR_TOO_HIGH, STR_ERROR_TOO_CLOSE_TO_EDGE_OF_MAP, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_BRIDGE_TOO_HIGH_AFTER_LOWER_LAND, STR_ERROR_EXCAVATION_WOULD_DAMAGE, STR_ERROR_TERRAFORM_LIMIT_REACHED, STR_ERROR_ALREADY_LEVELLED},
+		.tile_procs = &tiles, .water = &GetRustWaterCommandServices(),
+		.on_water = RustOnWater,
+		.coast = [](uint32_t t) noexcept { return IsCoastTile(TileIndex{t}); },
+		.buoy = [](uint32_t t) noexcept { return IsBuoyTile(TileIndex{t}); },
+		.canal = [](uint32_t t) noexcept { return IsCanal(TileIndex{t}); },
+		.height_limit = []() noexcept { return _settings_game.construction.map_height_limit; },
+		.max_bridge_height = []() noexcept { return _settings_game.construction.max_bridge_height; },
+		.freeform_edges = OpenTTDFreeformEdges, .editor = OpenTTDEditor,
+		.exchange_generating = GetRustTownFoundingServices().exchange_generating,
+		.tunnel_in_way = [](uint32_t t, int32_t z) noexcept { return IsTunnelInWay(TileIndex{t}, z); },
+		.mark_dirty_height = [](uint32_t t, int32_t z) noexcept { MarkTileDirtyByTile(TileIndex{t}, 0, z); },
+		.set_height = [](uint32_t t, uint32_t z) noexcept { SetTileHeight(TileIndex{t}, z); },
+		.paused = []() noexcept { return _pause_mode.Any(); },
+		.explosion = [](uint32_t t, bool small) noexcept { CreateEffectVehicleAbove(TileX(TileIndex{t}) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex{t}) * TILE_SIZE + TILE_SIZE / 2, 2, small ? EV_EXPLOSION_SMALL : EV_EXPLOSION_LARGE); },
+	};
+	return services;
+}
+#endif
 
 #ifndef WITH_RUST
 TileIndex _cur_tileloop_tile;

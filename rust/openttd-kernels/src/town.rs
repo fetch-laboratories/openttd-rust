@@ -713,11 +713,9 @@ pub struct Leaves {
     pub update_max_pass: extern "C" fn(u32),
     pub next_town: extern "C" fn(u32) -> u32,
     pub road_mask: extern "C" fn() -> u64,
-    pub clear_land: extern "C" fn(u32, u32) -> bool,
-    pub terraform_land: extern "C" fn(u32, u32, u32, u32) -> CommandResult,
     pub build_bridge: extern "C" fn(u32, u32, u32, u32, u32) -> bool,
     pub build_tunnel: extern "C" fn(u32, u32, u32) -> bool,
-    pub clear_house_land: extern "C" fn(u32),
+    pub assert_clear_house: extern "C" fn(bool),
     pub allow_construction: extern "C" fn(u32, u32, u32, u32) -> bool,
     pub houses: *const house::HouseServices,
 }
@@ -879,8 +877,34 @@ impl Engine<'_> {
         let rt = self.road_type();
         self.build_road(town, tile, bits, rt, flags)
     }
+    fn landscape(
+        &self,
+        tile: u32,
+        slope: u8,
+        up: bool,
+        execute: bool,
+        clear: bool,
+    ) -> CommandResult {
+        let commands = unsafe { &*(*self.leaves.houses).commands };
+        let table = unsafe { &*(commands.landscape_commands)() };
+        let costs = unsafe { &*table.costs };
+        crate::command::with_cost(costs, |out| {
+            let flags = crate::command_type::DoCommandFlag::AUTO
+                | crate::command_type::DoCommandFlag::NO_WATER
+                | u16::from(execute);
+            if clear {
+                crate::landscape_cmd::clear_command(commands, out.0, tile, flags);
+            } else {
+                crate::landscape_cmd::terraform_command(commands, out.0, tile, slope, up, flags);
+            }
+            CommandResult {
+                cost: out.money(),
+                success: out.ok(),
+            }
+        })
+    }
     fn clear(&self, tile: u32, execute: bool) -> bool {
-        (self.leaves.clear_land)(tile, u32::from(execute))
+        self.landscape(tile, 0, false, execute, true).success
     }
     fn count_stations(&self, _town: u32) -> u32 {
         struct StationCount<'a> {
@@ -1113,7 +1137,9 @@ impl Engine<'_> {
                     } else {
                         slope ^ 15
                     };
-                    success = (self.leaves.terraform_land)(tile, edges, 0, 1).success;
+                    success = self
+                        .landscape(tile, edges as u8, false, true, false)
+                        .success;
                 }
                 if !success && self.chance(1, 3) {
                     return ret;
@@ -1124,12 +1150,11 @@ impl Engine<'_> {
         ret
     }
     fn terraform(&self, tile: u32, edges: u32, up: bool) -> bool {
-        let CommandResult { success, cost } =
-            (self.leaves.terraform_land)(tile, edges, u32::from(up), 0);
+        let CommandResult { success, cost } = self.landscape(tile, edges as u8, up, false, false);
         if !success || cost >= ((self.leaves.terraform_price)() + 2) * 8 {
             return false;
         }
-        (self.leaves.terraform_land)(tile, edges, u32::from(up), 1);
+        self.landscape(tile, edges as u8, up, true, false);
         true
     }
     fn level(&self, tile: u32) {
@@ -1726,7 +1751,7 @@ impl Engine<'_> {
         random: u32,
         protected: bool,
     ) {
-        (self.leaves.clear_house_land)(tile);
+        (self.leaves.assert_clear_house)(self.landscape(tile, 0, false, true, true).success);
         let class = (self.leaves.house_class)(house as u16);
         // SAFETY: Entry resolved the live town once. Count borrows end here,
         // before map writes or callbacks can reenter and mutate the owner.

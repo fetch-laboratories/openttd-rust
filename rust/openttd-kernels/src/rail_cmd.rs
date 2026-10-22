@@ -536,7 +536,7 @@ impl<'a> Ctx<'a> {
                 }
                 if !(self.shared.is_plain_rail)(tile) {
                     w::hit(w::RAIL_CMD_BUILD_NOT_PLAIN);
-                    return (self.command.landscape_clear)(cost.0, tile, flags);
+                    return crate::landscape_cmd::clear_command(self.command, cost.0, tile, flags);
                 }
                 if !(self.s.compatible_rail)((self.rail.rail_type)(tile).0, railtype) {
                     return cost.error(strings.impossible_combination);
@@ -680,7 +680,7 @@ impl<'a> Ctx<'a> {
                 return cost.take(ret);
             }
             cost.add_money(ret.money());
-            (self.command.landscape_clear)(ret.0, tile, flags);
+            crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -1107,7 +1107,7 @@ impl<'a> Ctx<'a> {
             rotate = true;
         }
         if !rotate {
-            (self.command.landscape_clear)(ret.0, tile, flags);
+            crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
             cost.add(ret);
             if !cost.ok() {
                 return;
@@ -2019,7 +2019,8 @@ impl<'a> Ctx<'a> {
         }
         if new_owner == INVALID_OWNER {
             w::hit(w::RAIL_CMD_OWNER_CLEAR);
-            return (self.command.landscape_clear)(
+            return crate::landscape_cmd::clear_command(
+                self.command,
                 ret.0,
                 tile,
                 DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT,
@@ -2153,7 +2154,7 @@ impl<'a> Ctx<'a> {
             w::hit(w::RAIL_CMD_TERRAFORM_DEPOT);
             return cost.set(price(PR_BUILD_FOUNDATION));
         }
-        (self.command.landscape_clear)(cost.0, tile, flags);
+        crate::landscape_cmd::clear_command(self.command, cost.0, tile, flags);
     }
 }
 
@@ -2431,7 +2432,7 @@ pub unsafe extern "C" fn openttd_rust_rail_build_above(
         return x.c(out).zero();
     }
     w::hit(w::RAIL_CMD_BUILD_ABOVE_CLEAR);
-    (x.command.landscape_clear)(out, tile, flags);
+    crate::landscape_cmd::clear_command(x.command, out, tile, flags);
 }
 
 #[cfg(test)]

@@ -1330,14 +1330,31 @@ layouts! {
         infinite_money,
         money_error,
         infrastructure_dirty,
-        landscape_clear,
+        landscape_commands,
         tile_ownership,
         ownership,
         no_vehicle,
         no_train,
         wormhole_free,
     };
+    "OpenTTDLandscapeCommandStrings" ["landscape"] => crate::landscape_cmd::Strings {
+        canal, clear_limit, water, sea_level, high, edge, bridge, bridge_high,
+        tunnel, terraform_limit, levelled,
+    };
+    "OpenTTDLandscapeTileServices" ["landscape"] => crate::landscape_cmd::TileServices {
+        clear, terraform, owners, trees, industry_policy, industry_costs, industry_generation,
+    };
+    "OpenTTDLandscapeCommandServices" ["landscape"] => crate::landscape_cmd::LandscapeServices {
+        shared, costs, commands, strings, tile_procs, water, on_water, coast, buoy, canal,
+        height_limit, max_bridge_height, freeform_edges, editor, exchange_generating,
+        tunnel_in_way, mark_dirty_height, set_height, paused, explosion,
+    };
+    "OpenTTDCommandCostStorage" ["probe"] => crate::services::CommandCostStorage {
+        storage,
+    };
     "OpenTTDCommandCostServices" ["probe"] => crate::services::CommandCostServices {
+        construct,
+        destroy,
         zero,
         error,
         expense_money,
@@ -1713,7 +1730,6 @@ layouts! {
         command_tile,
         command_next,
         command_debit,
-        landscape_clear,
     };
     "OpenTTDTreePlantObservation" ["probe"] => crate::trees::PlantObservation {
         tile_type,
@@ -2598,11 +2614,9 @@ layouts! {
         update_max_pass,
         next_town,
         road_mask,
-        clear_land,
-        terraform_land,
         build_bridge,
         build_tunnel,
-        clear_house_land,
+        assert_clear_house,
         allow_construction,
         houses,
     };
@@ -3273,7 +3287,6 @@ layouts! {
         terragenesis,
         ignore_restrictions,
         platform,
-        terraform,
         can_allocate,
         allocate,
         prospecting_chance,
@@ -3309,7 +3322,7 @@ layouts! {
         tile_max_z,
         autoslope_callback,
         callback_boolean,
-        landscape_clear,
+        command_checks,
     };
     "OpenTTDIndustryCostServices" ["industry"] => crate::industry::IndustryCostServices {
         zero,
