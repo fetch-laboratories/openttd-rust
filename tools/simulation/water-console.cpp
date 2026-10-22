@@ -139,10 +139,29 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 			WaterCost("above-lock", _tile_type_water_procs.check_build_above_proc(lower, {}, AXIS_X, GetTileMaxZ(lower)));
 			WaterCost("above-lock-int-min", _tile_type_water_procs.check_build_above_proc(lower, {}, AXIS_X, INT32_MIN));
 			TileIndex selected = part == LockPart::Middle ? tile : part == LockPart::Lower ? lower : upper;
+			{ Backup<CompanyID> water(_current_company, OWNER_WATER); WaterCost("water-remove-lock", _tile_type_water_procs.clear_tile_proc(selected, {})); }
 			WaterCost("remove-lock-test", Command<CMD_LANDSCAPE_CLEAR>::Do({}, selected));
 			WaterCost("remove-lock", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, selected));
 			for (TileIndex t : {tile, upper, lower}) WaterState("restored-lock", t);
 		}
+	}
+	/* NE locks: a bridge too low over the lower part (the error uses the middle height), then a sloped upper end. */
+	for (uint x : {96u, 108u}) {
+		tile = TileXY(x, 132); WaterLand(tile);
+		for (int y = -3; y <= 4; ++y) for (int dx = -3; dx <= 4; ++dx) SetTileHeight(tile + TileDiffXY(dx, y), 3 + (dx <= 0));
+	}
+	WaterCost("low-bridge", Command<CMD_BUILD_BRIDGE>::Do(DoCommandFlag::Execute, TileXY(97, 134), TileXY(97, 130), TRANSPORT_ROAD, 0, ROADTYPE_ROAD));
+	WaterCost("low-bridge-lock", Command<CMD_BUILD_LOCK>::Do({}, TileXY(96, 132)));
+	SetTileHeight(TileXY(107, 132), 5);
+	WaterCost("sloped-end-lock", CmdBuildLock(DoCommandFlag::Execute, TileXY(108, 132)));
+	for (uint x : {107u, 108u, 109u}) WaterState("sloped-end", TileXY(x, 132));
+	/* An NE lock site whose lower end is the last sea column, and that sea tile, without freeform edges. */
+	for (uint y = 99; y <= 101; ++y) for (uint x = 251; x <= 253; ++x) MakeClear(TileXY(x, y), CLEAR_GRASS, 3);
+	for (uint y = 100; y <= 101; ++y) for (uint x = 252; x <= 253; ++x) SetTileHeight(TileXY(x, y), 1);
+	for (bool freeform : {false, true}) {
+		Backup<bool> edges(_settings_game.construction.freeform_edges, freeform);
+		WaterCost(freeform ? "edge-lock-freeform" : "edge-lock", Command<CMD_BUILD_LOCK>::Do({}, TileXY(253, 100)));
+		WaterCost(freeform ? "edge-clear-freeform" : "edge-clear", _tile_type_water_procs.clear_tile_proc(TileXY(254, 104), {}));
 	}
 	for (WaterClass wc : {WaterClass::Sea, WaterClass::Canal, WaterClass::River}) {
 		tile = TileXY(120 + to_underlying(wc) * 12, 120); WaterLand(tile);
@@ -162,6 +181,9 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 		WaterState("editor-river", tile);
 		fmt::print(stderr, "WATER-CMD desert {}\n", GetTropicZone(tile) == TROPICZONE_NORMAL);
 		MakeRiverAndModifyDesertZoneAround(tile);
+		WaterLand(tile, 0);
+		WaterCost("editor-sea-zero", Command<CMD_BUILD_CANAL>::Do(DoCommandFlag::Execute, tile, tile, WaterClass::Sea, false));
+		WaterState("editor-sea-zero", tile);
 		mode.Restore();
 	}
 	WaterLand(tile, 0); MakeSea(tile); MakeWaterKeepingClass(tile, _current_company); WaterState("sea-zero", tile);
