@@ -273,8 +273,8 @@ reconfigures and verifies effective release `line-tables-only` debug information
 Completed profiles supply Ir by its `events:` position; canonical exit-state and
 full-log comparisons still run, including on reference-count cache hits. Profile
 elapsed times never enter `plain_speed` samples. Only reference Ir is cached;
-identity covers executable, runtime/libraries, resolved inputs, build/profile
-settings, architecture and Valgrind version. Candidate executable identity stays
+identity covers executable, runtime files (not their CMake bookkeeping)/libraries,
+resolved inputs, build/profile settings, architecture and Valgrind version. Candidate executable identity stays
 separate from the compatibility identity checked against anchors.
 
 `SPEED_ANCHORS` in `tools/simulation/roads.py` holds each measured anchor
@@ -284,8 +284,11 @@ Each speed pass fills them from its same-head quiet medians. Compute each projec
 as `R0 * (1 + 2 * max(0, I / I0 - 1))`, directly from the fixed anchor. The
 rolling guard is 15% above the integrated head's projection from that same
 anchor; ceilings remain 1.5x play and 1.3x generation, with a speed-pass trigger
-within 5%. Integration updates only `integrated`; quiet passes replace the whole
-anchor and refresh `integrated` together. Never reset anchor Ir alone. Profiles
+within 5%. Before updating `integrated`, root checks the PR's six profiles against
+the latest `rust-migration` record. The PR's last commit before Full records the
+profiled commit's hash and loop Ir in `SPEED_INTEGRATED`, in `SPEED_PASS` order;
+this data-only update needs no new review. Quiet passes replace the whole anchor
+and refresh `integrated` together. Never reset anchor Ir alone. Profiles
 run alongside other agents; a PR does not answer for wall-ratio layout spread,
 which speed passes measure. Factor 2 is provisional. Memory stalls, excluded work
 and kernel/I/O costs remain outside the proxy. AGENTS.md schedules speed passes.

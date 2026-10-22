@@ -8,8 +8,8 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 
 - Thirty-four ownership ports. Whole fork: Rust 80,110 / tooling 32,401 / glue 32,256 / original retired 46,112 of 470,612 C/C++ `src/` lines (9.80%). Simulation: 38,072 / 102,615 (37.10%).
 - #334 (#261 R6) integrated the shared header modules (`slope_func`, `map_func`, `tile_type`, `command_type` and others); new ports import from them. No ownership port integrated this session, so the next speed pass is still four ownership integrations away.
-- Speed: the #322 anchors stand (TGP 1.215, Opus 1.204, Grok 1.191, P1996 1.250, P2000 1.305, P2016 1.356). The count guard rejects every PR on a worktree-path identity defect (#338) until draft #339 integrates; until then compare loop Ir with `SPEED_PASS` by hand. Measured drafts: #313 at most +0.33% (TGP), #336 and #340 lower on every play save, #341 +0.18% on P2016.
-- CI: GitHub-hosted macOS arm64 runners repeatedly failed to pick up jobs (cancelled after about 15 minutes). This blocked Full for #313, #336, #337 and #339 after three bounded re-runs each. `CI_MACOS_HEAVY` can move macOS to Blacksmith, which bills macOS at 20x.
+- Speed: the #322 anchors stand (TGP 1.215, Opus 1.204, Grok 1.191, P1996 1.250, P2000 1.305, P2016 1.356). #339 fixes worktree identity; the normal count guard works again. Previous drafts: #313 at most +0.33% (TGP), #336 and #340 lower on every play save. #341 closed without a saving (P2016 +0.18%).
+- CI: hosted macOS capacity recovered on retry; the base and #339 passed. Full for #337 is running. macOS stays on GitHub-hosted runners.
 
 ## Sixteenth steering review (2026-10-21, counts per PR and closing the speed pass)
 
@@ -132,6 +132,7 @@ keep their evidence in their PRs. Rows below use original retirement and net glu
 | #321 instruction-count speed guard and first anchors | #322 | direct | `f6cddca557` | 0 / 576 / 0 / 0; net glue 0 |
 | #156 ownership-dispatch coverage | #335 | direct | `caadbabc38` | 0 / 173 / 0 / 0; tests only |
 | #261 R6 shared header modules | #334 | direct | `18dbc15675` | 858 / 7 / 64 / 10; net glue +10 |
+| #338 instruction identity and rolling record | #339 | direct | `c4efe7bc72` | 0 / 30 / 0 / 0; net glue 0 |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -178,24 +179,27 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Paused at the user's request (2026-10-21). Root ran as Claude Opus 5.5 (xhigh) in
-Claude Code, with independent review on gpt-6.1-sol (high). The work order above is
-unchanged. No agents are running. Every open draft keeps its worktree and branch.
+Resumed at the user's request (2026-10-21). Root is gpt-6.1-sol (xhigh), with
+gpt-6.1-sol (high) agents updating #313, #329, #337 and #340. The work order above
+is unchanged; #316 has started as the next unblocked whole owner while reviewed
+drafts await validation. The base is green and #339 integrated; instruction
+profiling is unblocked. Every open draft keeps its worktree and branch.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #338 / #339 | `9eaec44aae` | Reviewed. Full: macOS Debug job not yet run; integrate once it passes. The next game-code PR then records its loop Ir in `SPEED_INTEGRATED`. |
-| #295 / #313 | `b497480981` | Reviewed; counts and Full passed. Conflicts in `src/rust/landscape_loop_ffi.h` since #334: update from base (conflict review unless both sides kept), adopt #334's modules, Full. |
-| #156 / #337 | `113a6070bf` | Reviewed. Conflicts in `roads-console.cpp` since #334: update from base, Full (capacity re-runs exhausted). |
-| #275 / #336 | `c472210a9f` | Reviewed, counts lower. Full: capacity re-runs exhausted; re-run Full, integrate. |
+| #295 / #313 | `ba777fc6e6` | #334 adoption reviewed, no findings; local verify/objects running, then counts and Full. |
+| #156 / #337 | `cd9858d1ff` | Dispatcher conflict resolution reviewed, no findings; local roads checks and Full running. |
+| #275 / #336 | `5205108077` | Conflict-free base update, local build running; adopt #339, counts, record checked Ir and Full. |
 | #156 / #342 | `9ed271d489` | Reviewed, no findings. After #336: update from base (`can_build_tram` conflict), counts, Full. |
-| #281 / #340 | `7a4707ff1e` | Reviewed. Blocker: delete `Co_vehicle_value` and three legacy order copies of its new typed services; fix, fresh review, counts, Full. |
-| #314 / #329 | `d3fbf2de39` | All three groups reviewed. Adopt #334's modules and return `interval_default` as int (conflict in `lib.rs`); fix, review, counts, Full. |
-| #275 / #341 | `97bf95b1de` | Station slot reads: checks pass, no saving (P2016 +0.18%). User decides: keep for its shared owner accessor (review, Full) or close. |
+| #281 / #340 | `800e625502` | Cleanup reviewed, no findings; author investigating native test segfaults before counts and Full. |
+| #314 / #329 | `d3fbf2de39` | Agent adopting #334 modules and returning `interval_default` as int; scoped review, counts and Full follow. |
+| #316 | `d8e3977039` base | Agent implementing subsidy ownership; combined glue/tooling cap 450, no draft prerequisite. |
 | #274 | `162843acbd` | Paused measurement branch. |
 
-#261 R7 inputs are on #261 and #281 part 2's inventory is on #281. Worktree
-`.local/worktrees/review-329-a2` holds a finished review's pushed commits and can go.
+#261 R7 inputs are on #261 and #281 part 2's inventory is on #281. The finished
+#329 review worktree was removed; its commits are already on the PR branch.
+#341 was closed by root: no speed saving (P2016 +0.18%); its measured head remains
+on origin and #275 records the disposition. Its worktrees/local branch are removed.
 #64/#68/#69 stay paused. Preserve the pinned reference. Do not reapply effect helper
 `73ccd511fb`. Build and test with `--jobs 2`.
 
