@@ -187,12 +187,12 @@ profiling is unblocked. Every open draft keeps its worktree and branch.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #295 / #313 | `ba777fc6e6` | #334 adoption reviewed, no findings; local verify/objects running, then counts and Full. |
+| #295 / #313 | `a740b94b03` | #334 adoption reviewed, verify and objects passed; conflict-free #339 update, instruction run underway, then checked counts and Full. |
 | #156 / #337 | `cd9858d1ff` | Dispatcher conflict resolution reviewed, no findings; local roads checks and Full running. |
-| #275 / #336 | `5205108077` | Conflict-free base update, local build running; adopt #339, counts, record checked Ir and Full. |
+| #275 / #336 | `b482432713` | Conflict-free base/#339 updates, build passed; instruction run underway, then checked Ir record and Full. |
 | #156 / #342 | `9ed271d489` | Reviewed, no findings. After #336: update from base (`can_build_tram` conflict), counts, Full. |
-| #281 / #340 | `800e625502` | Cleanup reviewed, no findings; author investigating native test segfaults before counts and Full. |
-| #314 / #329 | `d3fbf2de39` | Agent adopting #334 modules and returning `interval_default` as int; scoped review, counts and Full follow. |
+| #281 / #340 | `800e625502` | Cleanup reviewed, verify and 33 scenarios passed; resolve base conflicts, fresh scoped review, counts and Full. |
+| #314 / #329 | `19d155c993` | #334 adoption/type/accessor fixes reviewed, no findings; final verify passed, selected semantics running, then #339 update, counts and Full. |
 | #316 | `d8e3977039` base | Agent implementing subsidy ownership; combined glue/tooling cap 450, no draft prerequisite. |
 | #274 | `162843acbd` | Paused measurement branch. |
 
