@@ -9,6 +9,8 @@
 #include "../stdafx.h"
 #include "town_services.h"
 #include "services_ffi.h"
+#include "services_bridge.h"
+#include "services_viewport.h"
 #include "station_command_ffi.h"
 #include "road_command_ffi.h"
 #include "presentation_services.h"
@@ -26,6 +28,9 @@
 #include "../strings_func.h"
 #include "../table/strings.h"
 #ifdef WITH_RUST
+#include "../aircraft.h"
+#include "../airport.h"
+#include "../engine_type.h"
 #include "../industry_map.h"
 #include "../bridge_map.h"
 #include "services_rail.h"
@@ -49,6 +54,7 @@
 #include "../command_func.h"
 #include "../landscape_cmd.h"
 #include "../vehicle_func.h"
+#include "../vehiclelist.h"
 #include "../tunnelbridge.h"
 #include "../town.h"
 #include "../timer/timer_game_calendar.h"
@@ -136,7 +142,7 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept
 {
 	static const OpenTTDWaterRestorationServices services{
-		.slope_z = RustTileSlopeZ, .infrastructure = RustAddWaterInfrastructure,
+		.infrastructure = RustAddWaterInfrastructure,
 		.infrastructure_dirty = GetRustCommandServices().infrastructure_dirty,
 		.make_canal = RustMakeCanal, .make_river = RustMakeRiver,
 	};
@@ -197,7 +203,7 @@ static uint32_t SharedIndustry(int32_t x, int32_t y, uint32_t *index) noexcept
 
 static uint16_t MapSvcDepotIndex(uint32_t tile) noexcept { return GetDepotIndex(TileIndex(tile)).base(); }
 static uint8_t MapSvcTunnelBridgeDirection(uint32_t tile) noexcept { return GetTunnelBridgeDirection(TileIndex(tile)); }
-static uint16_t MapSvcBridgeSpeed(uint32_t tile) noexcept { return GetBridgeSpec(GetBridgeType(TileIndex(tile)))->speed; }
+static uint16_t MapSvcBridgeSpeed(uint32_t tile) noexcept { return RustBridgeSpecSpeed(RustBridgeType(tile)); }
 static bool MapSvcIsWaterTile(uint32_t tile) noexcept { return IsWaterTile(TileIndex(tile)); }
 
 static uint8_t SharedNextCompany(uint8_t from) noexcept
@@ -244,6 +250,10 @@ static_assert(to_underlying(DoCommandFlag::Execute) == 0 && to_underlying(DoComm
 static_assert(to_underlying(DoCommandFlag::NoTestTownRating) == 4 && to_underlying(DoCommandFlag::Bankrupt) == 5 && to_underlying(DoCommandFlag::NoModifyTownRating) == 9 && to_underlying(DoCommandFlag::ForceClearTile) == 10);
 static_assert(std::is_same_v<DoCommandFlags::BaseType, uint16_t>);
 static_assert(PR_TERRAFORM == 21 && PR_CLEAR_CANAL == 61 && PR_CLEAR_TREES == 26);
+static_assert(to_underlying(DoCommandFlag::AutoReplace) == 6 && to_underlying(DoCommandFlag::NoCargoCapacityCheck) == 7);
+static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);
+static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_GOTO_WAYPOINT == 6 && OT_IMPLICIT == 8);
+static_assert(VL_STANDARD == 0 && VL_SHARED_ORDERS == 1 && VL_STATION_LIST == 2 && VL_DEPOT_LIST == 3 && VL_GROUP_LIST == 4);
 static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28 && PR_CLEAR_DEPOT_TRAIN == 30 && PR_CLEAR_WATER == 34 && PR_BUILD_FOUNDATION == 57);
 static uint32_t Shared_tile_height(uint32_t tile) noexcept { return TileHeight(TileIndex{tile}); }
 static uint8_t Shared_bridge_axis(uint32_t tile) noexcept { return GetBridgeAxis(TileIndex{tile}); }
@@ -335,7 +345,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.plane_speed = SharedPlaneSpeed,
 	.random = SharedRandom,
 	.road_bits = Shared_road_bits,
-	.road_tram_type = Shared_road_tram_type, .road_type_is_road = RustRoadTypeIsRoad, .road_cost_multiplier = RustRoadCostMultiplier,
+	.road_tram_type = Shared_road_tram_type, .road_type_is_tram = SharedRoadTypeIsTram, .road_type_is_road = RustRoadTypeIsRoad, .road_cost_multiplier = RustRoadCostMultiplier,
 	.road_depot_direction = Shared_road_depot_direction,
 	.road_owner = Shared_road_owner,
 	.road_type = Shared_road_type,
@@ -376,6 +386,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tile_type = SharedTileType,
 	.tile_add_wrap = SharedTileAddWrap,
 	.tile_valid = Shared_tile_valid,
+	.tile_slope_z = RustTileSlopeZ,
 	.tile_z = SharedTileZ,
 	.town_index = Shared_town_index,
 	.town_owner = SharedTownOwner,

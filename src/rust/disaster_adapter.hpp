@@ -42,7 +42,7 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 		case 0:
 			out[0] = Map::SizeX(); out[1] = Map::SizeY(); out[2] = Map::MaxX(); out[3] = Map::MaxY(); out[4] = Map::Size() - 1;
 			out[5] = TimerGameCalendar::year.base(); out[6] = _settings_game.difficulty.disasters; out[7] = _settings_client.sound.disaster;
-			out[8] = _settings_game.construction.freeform_edges; out[9] = a == 0 ? 0 : Vehicle::CanAllocateItem(a);
+			out[8] = _settings_game.construction.freeform_edges; out[9] = a == 0 ? 0 : RustVehicleCanAllocate(a);
 			break;
 		case 1: {
 			const Vehicle *v = Vehicle::Get(id);

@@ -309,7 +309,7 @@ void CcBuildRailTunnel(Commands, const CommandCost &result, TileIndex tile)
 		if (_settings_client.sound.confirm) SndPlayTileFx(SND_20_CONSTRUCTION_RAIL, tile);
 		if (!_settings_client.gui.persistent_buildingtools) ResetObjectToPlace();
 	} else {
-		SetRedErrorSquare(_build_tunnel_endtile);
+		SetRedErrorSquare(GetBuildTunnelEndTile());
 	}
 }
 
@@ -815,7 +815,7 @@ struct BuildRailToolbarWindow : Window {
 	void OnPlacePresize([[maybe_unused]] Point pt, TileIndex tile) override
 	{
 		Command<CMD_BUILD_TUNNEL>::Do(DoCommandFlag::Auto, tile, TRANSPORT_RAIL, _cur_railtype);
-		VpSetPresizeRange(tile, _build_tunnel_endtile == 0 ? tile : _build_tunnel_endtile);
+		VpSetPresizeRange(tile, GetBuildTunnelEndTile() == 0 ? tile : GetBuildTunnelEndTile());
 	}
 
 	EventState OnCTRLStateChange() override

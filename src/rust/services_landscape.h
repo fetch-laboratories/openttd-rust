@@ -11,6 +11,7 @@
 #include "ground_ffi.h"
 #include "../clear_map.h"
 #include "services_rail.h"
+#include "services_viewport.h"
 #include "services_water.h"
 #include "../road_internal.h"
 #include "../tree_map.h"
@@ -59,8 +60,6 @@ inline bool RustTunnelSnowOrDesert(Tile tile) noexcept { return HasTunnelBridgeS
 inline bool RustTunnelSnowOrDesert(uint32_t tile) noexcept { return RustTunnelSnowOrDesert(Tile{TileIndex{tile}}); }
 inline bool RustTunnelBridgeIsBridge(Tile tile) noexcept { return IsBridge(tile); }
 inline bool RustAirportTile(uint32_t tile) noexcept { return IsAirportTile(TileIndex{tile}); }
-inline void RustMarkTileDirty(uint32_t tile) noexcept { MarkTileDirtyByTile(TileIndex{tile}); }
-inline void RustMarkTileDirtyHeight(uint32_t tile, int32_t height) noexcept { MarkTileDirtyByTile(TileIndex{tile}, 0, height); }
 inline EffectVehicle *RustCreateEffectAbove(int32_t x, int32_t y, int32_t z, EffectVehicleType type) noexcept { return CreateEffectVehicleAbove(x, y, z, type); }
 inline EffectVehicle *RustCreateEffectAboveValue(int32_t x, int32_t y, int32_t z, uint8_t type) noexcept { return RustCreateEffectAbove(x, y, z, static_cast<EffectVehicleType>(type)); }
 inline IndustryID RustFieldIndustry(Tile tile) noexcept { return GetIndustryIndexOfField(tile); }

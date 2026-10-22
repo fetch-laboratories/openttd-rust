@@ -225,6 +225,8 @@ witness_blocks! {
         ROAD_SERVICES = 1 => "road.services",
         ROAD_VISITORS = 2 => "road.visitors",
         ROAD_ENTRIES = 3 => "road.entries",
+        ROAD_TRAM_BUILD = 4 => "road.tram_build",
+        ROAD_TRAM_REFUSED = 5 => "road.tram_refused",
     }
     road_commands {
         ROAD_COMMANDS_ENTRIES = 0 => "road_commands.entries",
@@ -363,6 +365,11 @@ witness_blocks! {
         STATION_CMD_PARTIAL_RAIL = 18 => "station_command.partial_rail",
         STATION_CMD_BUILD_ABOVE = 19 => "station_command.build_above",
     }
+    subsidy {
+        SUBSIDY_CREATE = 0 => "subsidy.create",
+        SUBSIDY_AWARD = 1 => "subsidy.award",
+        SUBSIDY_EXPIRE = 2 => "subsidy.expire",
+    }
     town {
         TOWN_SERVICES = 0 => "town.services",
         TOWN_BYTES = 1 => "town.bytes",
@@ -422,6 +429,23 @@ witness_blocks! {
         TRAIN_ORDER_LOOKAHEAD = 29 => "train.order_lookahead",
         TRAIN_ORDER_RESTORE = 30 => "train.order_restore",
     }
+    tunnelbridge {
+        TB_BUILD_BRIDGE = 0 => "tunnelbridge.build_bridge",
+        TB_BUILD_TUNNEL = 1 => "tunnelbridge.build_tunnel",
+        TB_REPLACE_BRIDGE = 2 => "tunnelbridge.replace_bridge",
+        TB_NEW_BRIDGE = 3 => "tunnelbridge.new_bridge",
+        TB_TUNNEL_TERRAFORM = 4 => "tunnelbridge.tunnel_terraform",
+        TB_CLEAR_TUNNEL = 5 => "tunnelbridge.clear_tunnel",
+        TB_CLEAR_BRIDGE = 6 => "tunnelbridge.clear_bridge",
+        TB_OCCUPIED = 7 => "tunnelbridge.occupied",
+        TB_OWNER = 8 => "tunnelbridge.change_owner",
+        TB_AUTOSLOPE = 9 => "tunnelbridge.autoslope",
+        TB_BUILD_ABOVE = 10 => "tunnelbridge.build_above",
+        TB_DEITY = 11 => "tunnelbridge.deity",
+        TB_TOWN_RATING = 12 => "tunnelbridge.town_rating",
+        TB_RESERVATION = 13 => "tunnelbridge.reservation",
+        TB_AI_QUERY = 14 => "tunnelbridge.ai_query",
+    }
     vehicle {
         VEHICLE_CALLBACK32 = 0 => "vehicle.callback32",
         VEHICLE_CARGO_AGES = 1 => "vehicle.cargo_ages",
@@ -477,6 +501,15 @@ witness_blocks! {
         VEHICLE_MAINT_TRIGGER = 23 => "vehicle_maintenance.trigger",
         VEHICLE_MAINT_VALUE = 24 => "vehicle_maintenance.value",
         VEHICLE_MAINT_ENTRIES = 25 => "vehicle_maintenance.entries",
+    }
+    vehicle_transactions {
+        VT_ROAD = 0 => "vehicle_transactions.road",
+        VT_AIRCRAFT = 1 => "vehicle_transactions.aircraft",
+        VT_ROTOR = 2 => "vehicle_transactions.rotor",
+        VT_ARTICULATED = 3 => "vehicle_transactions.articulated",
+        VT_RESTORE = 4 => "vehicle_transactions.restore",
+        VT_CLONE_BUILD_SELL = 5 => "vehicle_transactions.clone_build_sell",
+        VT_CLONE_JOIN_SELL = 6 => "vehicle_transactions.clone_join_sell",
     }
     water {
         WATER_TRACKS = 0 => "water.tracks",

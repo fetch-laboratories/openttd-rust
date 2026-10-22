@@ -48,6 +48,7 @@
 #include "rust/settings_services.h"
 
 static const OpenTTDRoadLeaves &GetRoadLeaves();
+const OpenTTDRoadLeaves &GetRustRoadLeaves() noexcept { return GetRoadLeaves(); }
 static OpenTTDRoadMaxSpeedRead RoadMaxSpeedRead(const RoadVehicle *u) noexcept;
 
 /** Settings and map size a road entry may consult, read once per entry. */
@@ -289,6 +290,7 @@ void RoadVehUpdateCache(RoadVehicle *v, bool same_length)
 #endif
 }
 
+#ifndef WITH_RUST
 /**
  * Build a road vehicle.
  * @param flags    type of operation.
@@ -375,6 +377,7 @@ CommandCost CmdBuildRoadVehicle(DoCommandFlags flags, TileIndex tile, const Engi
 
 	return CommandCost();
 }
+#endif /* !WITH_RUST */
 
 static FindDepotData FindClosestRoadDepot(const RoadVehicle *v, int max_distance)
 {
@@ -503,7 +506,7 @@ void RoadVehicle::UpdateDeltaXY()
  * Calculates the maximum speed of the vehicle under its current conditions.
  * @return Maximum speed of the vehicle.
  */
-inline int RoadVehicle::GetCurrentMaxSpeed() const
+int RoadVehicle::GetCurrentMaxSpeed() const
 {
 #ifdef WITH_RUST
 	OpenTTDRoadMaxSpeedRead read = RoadMaxSpeedRead(this);

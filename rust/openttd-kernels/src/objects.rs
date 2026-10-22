@@ -1129,7 +1129,7 @@ impl<'a> World<'a> {
                         }
                     }
                 }
-                let slope_z = ((*self.s.restoration).slope_z)(tile);
+                let slope_z = (self.shared.tile_slope_z)(tile);
                 let mut z = slope_z.z;
                 if slope_z.slope.0 != 0 {
                     z += 1;
@@ -1198,7 +1198,11 @@ impl<'a> World<'a> {
                     && (shape.flags & UNDER_BRIDGE == 0
                         || (self.shared.tile_max_z)(t) + i32::from(admission.height) >= {
                             let station = &*(self.shared.station_commands)();
-                            (station.bridge_height)((station.southern_bridge_end)(t))
+                            crate::bridge_map::get_bridge_height(
+                                (station.southern_bridge_end)(t),
+                                self.shared,
+                                |f, h| ((*station.rail).apply_foundation)(f, h).z,
+                            )
                         })
                 {
                     out.fail(self.s.strings.bridge);

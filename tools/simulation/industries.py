@@ -57,6 +57,7 @@ def scenarios(soak):
             else (16 if soak else 6) * SNAPSHOT_TICKS,
         )
         for scenario in economy.scenarios(soak)
+        if "economy" in scenario
     ]
     for climate in ("temperate", "arctic", "tropic", "toyland", "lumber"):
         result.append(

@@ -41,7 +41,7 @@
 #include "../station_func.h"
 #include "../story_base.h"
 #include "../strings_func.h"
-#include "../subsidy_base.h"
+#include "subsidy_ffi.h"
 #include "../subsidy_func.h"
 #include "../table/strings.h"
 #include "../texteff.hpp"
@@ -281,10 +281,6 @@ static void Co_acquisition_windows(uint8_t id) noexcept
 /* Ownership transfer services. */
 static void Co_clients_to_spectators(uint8_t id) noexcept { NetworkClientsToSpectators(CompanyID(id)); }
 static void Co_set_local_company(uint8_t id) noexcept { SetLocalCompany(CompanyID(id)); }
-static uint32_t Co_subsidy_next_awarded(uint8_t owner, uint32_t from) noexcept { return NextOwned<Subsidy>(owner, from, [](const Subsidy *s) { return s->awarded; }); }
-static void Co_delete_subsidy(uint32_t id) noexcept { delete Subsidy::Get(id); }
-static void Co_set_subsidy_awarded(uint32_t id, uint8_t owner) noexcept { Subsidy::Get(id)->awarded = CompanyID(owner); }
-static void Co_rebuild_subsidy_cache() noexcept { RebuildSubsidisedSourceAndDestinationCache(); }
 static uint32_t Co_town_next(uint32_t from, uint8_t old, OpenTTDCompanyTownRights *out) noexcept
 {
 	for (const Town *t : Town::Iterate(from)) {
@@ -344,7 +340,7 @@ static void Co_reset_service_interval(uint32_t id, uint8_t company) noexcept
 	const Vehicle *v = Vehicle::Get(id);
 	const Company *c = Company::Get(company);
 	int interval = CompanyServiceInterval(c, v->type);
-	Command<CMD_CHANGE_SERVICE_INT>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, v->index, interval, false, c->settings.vehicle.servint_ispercent);
+	Command<CMD_CHANGE_SERVICE_INT>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, v->index, interval, false, RustCompanyServiceIntervalPercent(c->index.base()));
 }
 /** Owner write and its cache invalidation, consecutive in the original. */
 static void Co_set_vehicle_owner(uint32_t id, uint8_t owner) noexcept
@@ -460,8 +456,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.stop_ai = Co_stop_ai, .delete_company = Co_delete_company, .company_removed = Co_company_removed,
 		.merger_news = Co_merger_news, .acquisition_windows = Co_acquisition_windows,
 		.clients_to_spectators = Co_clients_to_spectators, .set_local_company = Co_set_local_company,
-		.subsidy_next_awarded = Co_subsidy_next_awarded, .delete_subsidy = Co_delete_subsidy,
-		.set_subsidy_awarded = Co_set_subsidy_awarded, .rebuild_subsidy_cache = Co_rebuild_subsidy_cache,
+		.subsidies = RustSubsidyServices,
 		.town_next = Co_town_next, .town_rating = Co_town_rating,
 		.set_town_rating = Co_set_town_rating, .set_town_exclusivity = Co_set_town_exclusivity,
 		.vehicle_next_owned = Co_vehicle_next_owned, .aircraft_is_normal = Co_aircraft_is_normal,

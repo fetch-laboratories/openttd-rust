@@ -6,6 +6,7 @@
  */
 
 #include "command_cost_services.h"
+#include "vehicle_refit_ffi.h"
 #include "services_ffi.h"
 #include "company_services.h"
 #include "engine_services.h"
@@ -36,8 +37,6 @@ static bool FleetTransaction_chain_depot(void *shell) noexcept { auto *v = stati
 static void * FleetTransaction_next_unit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetNextUnit(); }
 static void * FleetTransaction_prev_unit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetPrevUnit(); }
 static uint16_t FleetTransaction_length(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->gcache.cached_total_length; }
-static bool FleetTransaction_flipped(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetTrainFlags().Test(VehicleRailFlag::Flipped); }
-static uint8_t FleetTransaction_cargo_type(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->cargo_type; }
 static bool FleetTransaction_stopped_in_depot(void *shell) noexcept { return static_cast<Vehicle *>(shell)->IsStoppedInDepot(); }
 static uint8_t FleetTransaction_max_length() noexcept { return _settings_game.vehicle.max_train_length; }
 /* Original assertion sites; Rust evaluates their conditions only when assertions is set. */
@@ -64,16 +63,9 @@ static bool FleetTransaction_order_refit(void *order) noexcept { return static_c
 static bool FleetTransaction_order_auto(void *order) noexcept { return static_cast<Order *>(order)->IsAutoRefit(); }
 static uint8_t FleetTransaction_order_cargo(void *order) noexcept { return static_cast<Order *>(order)->GetRefitCargo(); }
 static void FleetTransaction_refit_news(void *shell, int32_t order) noexcept { auto *v = static_cast<Vehicle *>(shell); VehicleID id = (v->type == VEH_TRAIN) ? RustVehicleFirst(v)->index : v->index; EncodedString headline = order != -1 ? GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_REFIT, order + 1) : GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_CARGO, CargoSpec::Get(v->cargo_type)->name); AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, std::move(headline), id); }
-static void * FleetTransaction_build(void *out, void *shell, uint16_t engine) noexcept { auto *v = static_cast<Vehicle *>(shell); VehicleID id; std::tie(*static_cast<CommandCost *>(out), id, std::ignore, std::ignore, std::ignore) = Command<CMD_BUILD_VEHICLE>::Do({DoCommandFlag::Execute, DoCommandFlag::AutoReplace}, v->tile, EngineID(engine), true, INVALID_CARGO, INVALID_CLIENT_ID); return static_cast<CommandCost *>(out)->Failed() ? nullptr : Vehicle::Get(id); }
-static void FleetTransaction_refit(void *out, void *shell, uint8_t cargo, uint8_t subtype) noexcept { *static_cast<CommandCost *>(out) = std::get<0>(Command<CMD_REFIT_VEHICLE>::Do(DoCommandFlag::Execute, static_cast<Vehicle *>(shell)->index, cargo, subtype, false, false, 0)); }
 static uint8_t FleetTransaction_subtype(void *old, void *replacement, uint8_t cargo) noexcept { return GetBestFittingSubType(static_cast<Vehicle *>(old), static_cast<Vehicle *>(replacement), cargo); }
-static bool FleetTransaction_reverse_probability(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return TestVehicleBuildProbability(v, v->engine_type, BuildProbabilityType::Reversed).has_value(); }
 static void FleetTransaction_reverse(void *shell) noexcept { Command<CMD_REVERSE_TRAIN_DIRECTION>::Do(DoCommandFlag::Execute, static_cast<Vehicle *>(shell)->index, true); }
-static void FleetTransaction_start_stop(void *out, void *shell, bool evaluate) noexcept { *static_cast<CommandCost *>(out) = Command<CMD_START_STOP_VEHICLE>::Do({DoCommandFlag::Execute, DoCommandFlag::AutoReplace}, static_cast<Vehicle *>(shell)->index, evaluate); }
-static void FleetTransaction_move(void *out, void *shell, void *after, uint32_t flags, bool whole) noexcept { *static_cast<CommandCost *>(out) = Command<CMD_MOVE_RAIL_VEHICLE>::Do(DoCommandFlags(static_cast<uint16_t>(flags)).Set(DoCommandFlag::NoCargoCapacityCheck), static_cast<Vehicle *>(shell)->index, after == nullptr ? VehicleID::Invalid() : static_cast<Vehicle *>(after)->index, whole); }
-static void FleetTransaction_sell(void *out, void *shell, uint32_t flags) noexcept { *static_cast<CommandCost *>(out) = Command<CMD_SELL_VEHICLE>::Do(DoCommandFlags(static_cast<uint16_t>(flags)), static_cast<Vehicle *>(shell)->index, false, false, INVALID_CLIENT_ID); }
-static void FleetTransaction_clone_order(void *out, void *old, void *replacement) noexcept { *static_cast<CommandCost *>(out) = Command<CMD_CLONE_ORDER>::Do(DoCommandFlag::Execute, CO_SHARE, static_cast<Vehicle *>(replacement)->index, static_cast<Vehicle *>(old)->index); }
-static void FleetTransaction_copy_group(void *out, void *old, void *replacement) noexcept { *static_cast<CommandCost *>(out) = std::get<0>(Command<CMD_ADD_VEHICLE_GROUP>::Do(DoCommandFlag::Execute, static_cast<Vehicle *>(old)->group_id, static_cast<Vehicle *>(replacement)->index, false, VehicleListIdentifier{})); }
+static void FleetTransaction_move(void *out, void *shell, void *after, uint32_t flags, bool whole) noexcept { *static_cast<CommandCost *>(out) = Command<CMD_MOVE_RAIL_VEHICLE>::Do(DoCommandFlags(static_cast<uint16_t>(flags)), static_cast<Vehicle *>(shell)->index, after == nullptr ? VehicleID::Invalid() : static_cast<Vehicle *>(after)->index, whole); }
 static void FleetTransaction_copy_configuration(void *old, void *replacement) noexcept { static_cast<Vehicle *>(replacement)->CopyVehicleConfigAndStatistics(static_cast<Vehicle *>(old)); }
 static void FleetTransaction_viewports(void *old, void *replacement) noexcept { ChangeVehicleViewports(static_cast<Vehicle *>(old)->index, static_cast<Vehicle *>(replacement)->index); }
 static void FleetTransaction_view_window(void *old, void *replacement) noexcept { ChangeVehicleViewWindow(static_cast<Vehicle *>(old)->index, static_cast<Vehicle *>(replacement)->index); }
@@ -85,6 +77,9 @@ static void FleetTransaction_save_rng(void *seeds) noexcept { *static_cast<Saved
 static void FleetTransaction_restore_rng(void *seeds) noexcept { GetRustRandomServices().restore(std::bit_cast<OpenTTDRandomSeeds>(*static_cast<SavedRandomSeeds *>(seeds))); }
 static void FleetTransaction_rule_window(uint16_t engine, uint16_t group) noexcept { InvalidateAutoreplaceWindow(EngineID(engine), GroupID(group)); }
 static const OpenTTDFleetTransactionServices _fleet_transaction_services{
+	.common = GetRustVehicleCommonServices,
+	.refit_services = GetRustVehicleRefitServices,
+	.build_services = GetRustVehicleBuildServices,
 	.cost_zero = FleetTransaction_cost_zero,
 	.cost_vehicles = FleetTransaction_cost_vehicles,
 	.cost_error = FleetTransaction_cost_error,
@@ -104,8 +99,7 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.next_unit = FleetTransaction_next_unit,
 	.prev_unit = FleetTransaction_prev_unit,
 	.length = FleetTransaction_length,
-	.flipped = FleetTransaction_flipped,
-	.cargo_type = FleetTransaction_cargo_type,
+	.cargo_type = RustOpaqueHandleRead<uint8_t, RustVehicleCargoType>,
 	.can_carry = FleetTransaction_can_carry,
 	.stopped_in_depot = FleetTransaction_stopped_in_depot,
 	.max_length = FleetTransaction_max_length,
@@ -132,16 +126,10 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.order_cargo = FleetTransaction_order_cargo,
 	.local = RustIsLocalCompany,
 	.refit_news = FleetTransaction_refit_news,
-	.build = FleetTransaction_build,
-	.refit = FleetTransaction_refit,
 	.subtype = FleetTransaction_subtype,
-	.reverse_probability = FleetTransaction_reverse_probability,
+	.reverse_probability = RustVehicleHasReverseProbability,
 	.reverse = FleetTransaction_reverse,
-	.start_stop = FleetTransaction_start_stop,
 	.move = FleetTransaction_move,
-	.sell = FleetTransaction_sell,
-	.clone_order = FleetTransaction_clone_order,
-	.copy_group = FleetTransaction_copy_group,
 	.copy_configuration = FleetTransaction_copy_configuration,
 	.viewports = FleetTransaction_viewports,
 	.view_window = FleetTransaction_view_window,

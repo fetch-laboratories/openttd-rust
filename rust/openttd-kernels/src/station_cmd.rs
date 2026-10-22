@@ -177,7 +177,6 @@ pub struct CommandServicesTable {
     pub rail_bridge_info: unsafe extern "C" fn(*const RailSpec) -> BridgeSpan,
     pub road_bridge_info: unsafe extern "C" fn(*const RoadSpec) -> BridgeSpan,
     pub southern_bridge_end: extern "C" fn(u32) -> u32,
-    pub bridge_height: extern "C" fn(u32) -> i32,
     pub train_area: unsafe extern "C" fn(*const BaseStation) -> Area,
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
     pub road_spec: extern "C" fn(u32) -> *const RoadSpec,
@@ -442,6 +441,11 @@ impl<'a> Ctx<'a> {
             out.error(self.s.strings.flat_land);
         }
     }
+    fn bridge_height(&self, tile: u32) -> i32 {
+        crate::bridge_map::get_bridge_height(tile, self.shared, |f, h| {
+            (self.rail().apply_foundation)(f, h).z
+        })
+    }
     fn bridge_ok(
         &self,
         out: Cost<'_>,
@@ -489,7 +493,7 @@ impl<'a> Ctx<'a> {
             (self.s.default_bridge_info)(kind),
             kind,
             layout,
-            (self.s.bridge_height)(south),
+            self.bridge_height(south),
             self.s.strings.demolish_bridge,
         );
     }
@@ -546,7 +550,7 @@ pub unsafe extern "C" fn openttd_rust_station_rail_bridge_ok(
         info,
         kind,
         layout,
-        (c.s.bridge_height)(south),
+        c.bridge_height(south),
         c.s.strings.demolish_bridge,
     );
 }
@@ -578,7 +582,7 @@ pub unsafe extern "C" fn openttd_rust_station_road_bridge_ok(
         info,
         kind,
         layout,
-        (c.s.bridge_height)(south),
+        c.bridge_height(south),
         c.s.strings.demolish_bridge,
     );
 }
@@ -1366,7 +1370,7 @@ impl Ctx<'_> {
             info,
             kind,
             gfx,
-            (self.s.bridge_height)(south),
+            self.bridge_height(south),
             self.s.strings.demolish_bridge,
         );
     }
@@ -2057,7 +2061,7 @@ impl Ctx<'_> {
             info,
             kind,
             gfx,
-            (self.s.bridge_height)(south),
+            self.bridge_height(south),
             self.s.strings.demolish_bridge,
         );
     }

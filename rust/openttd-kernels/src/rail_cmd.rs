@@ -27,13 +27,14 @@ use crate::economy_type::{
     PR_BUILD_DEPOT_TRAIN, PR_BUILD_FOUNDATION, PR_BUILD_SIGNALS, PR_CLEAR_DEPOT_TRAIN,
     PR_CLEAR_ROUGH, PR_CLEAR_SIGNALS, PR_CLEAR_WATER,
 };
+use crate::order_type::OT_LOADING;
 use crate::services::{
     CommandCost, CommandCostServices, CommandServices, Cost, Map, RailMapServices, Services,
 };
 pub use crate::services::{Foundation, Train};
 use crate::slope_func::{
-    SLOPE_EW, SLOPE_FLAT, SLOPE_HALFTILE_MASK, SLOPE_NS, is_slope_with_one_corner_raised,
-    is_steep_slope,
+    FOUNDATION_NONE, SLOPE_EW, SLOPE_FLAT, SLOPE_HALFTILE_MASK, SLOPE_NS,
+    is_slope_with_one_corner_raised, is_steep_slope,
 };
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{INVALID_TILE, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
@@ -274,7 +275,6 @@ const INVALID_TRACKDIR: u8 = 0xFF;
 pub(crate) const CROSSING_SLOPES: u32 =
     (1 << 14) | (1 << 13) | (1 << 11) | (1 << 10) | (1 << 7) | (1 << 5) | 1;
 
-const FOUNDATION_NONE: u8 = 0;
 const FOUNDATION_RAIL_W: u8 = 10;
 const FOUNDATION_RAIL_N: u8 = 13;
 const FOUNDATION_INVALID: u8 = 0xFF;
@@ -294,16 +294,15 @@ const SIG_SEMAPHORE: u8 = 1;
 
 const RAILTYPE_RAIL: u8 = 0;
 const RAILTYPE_ELECTRIC: u8 = 1;
-const INVALID_ROADTYPE: u8 = 63;
+use crate::road_type::INVALID_ROADTYPE;
 const ROAD_X: u8 = 10;
 const ROAD_Y: u8 = 5;
 const STOPPED: u8 = 1 << 1;
-const OT_LOADING: u8 = 3;
 
 const TILE_AXIAL_DISTANCE: i32 = 192;
 const TILE_CORNER_DISTANCE: i32 = 128;
 pub(crate) const LEVELCROSSING_TRACKBIT_FACTOR: u32 = 2;
-pub(crate) const TUNNELBRIDGE_TRACKBIT_FACTOR: u32 = 4;
+pub(crate) use crate::tunnelbridge::TUNNELBRIDGE_TRACKBIT_FACTOR;
 
 /// `_trackdelta`, indexed by trackdir.
 const TRACK_DELTA: [(i32, i32); 16] = [

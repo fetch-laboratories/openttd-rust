@@ -103,7 +103,6 @@ const OpenTTDClearServices &GetRustClearServices() noexcept;
 const OpenTTDRailServices &GetRustRailGroundServices() noexcept;
 const OpenTTDTunnelServices &GetRustTunnelGroundServices() noexcept;
 struct OpenTTDWaterRestorationServices {
-	OpenTTDFoundationSlope (*slope_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(slope_z);
 	void (*infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure);
 	void (*infrastructure_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure_dirty);
 	void (*make_canal)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_canal);
@@ -146,7 +145,6 @@ struct OpenTTDWaterGroundServices {
 	void (*ai_event)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ai_event);
 	void (*game_event)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(game_event);
 	void (*news)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(news);
-	int32_t (*bridge_height)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_height);
 };
 const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept;
 extern "C" {
@@ -174,5 +172,6 @@ struct OpenTTDGroundABICalls {
 };
 extern "C" bool openttd_rust_ground_abi_calls(const OpenTTDGroundABICalls *);
 extern "C" void openttd_rust_water_restore(uint32_t, uint8_t, const OpenTTDSharedServices *, const OpenTTDWaterGroundServices *, const OpenTTDWaterRestorationServices *);
+extern "C" void openttd_rust_clear_build_above(const OpenTTDCommandCostServices *, OpenTTDCommandCost *);
 extern "C" void openttd_rust_clear_square(uint32_t, const OpenTTDSharedServices *);
 #endif /* RUST_GROUND_FFI_H */

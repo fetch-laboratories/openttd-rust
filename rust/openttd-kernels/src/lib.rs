@@ -9,8 +9,11 @@
 
 mod admin_conversion;
 mod aircraft;
+mod airport;
 mod alternating;
 mod auth;
+mod bridge;
+mod bridge_map;
 mod byte_strings;
 mod cargo_flow;
 mod cargo_payment;
@@ -19,9 +22,11 @@ mod command_type;
 mod company;
 mod company_type;
 mod consumer;
+mod direction_func;
 mod direction_type;
 mod disaster;
 mod economy_type;
+mod engine_type;
 mod ground;
 mod history;
 mod integer;
@@ -33,6 +38,7 @@ mod math;
 mod newgrf_callbacks;
 mod node_hash;
 mod objects;
+mod order_type;
 mod packet;
 mod rail_cmd;
 pub mod rail_yapf;
@@ -40,6 +46,8 @@ mod road;
 mod road_cmd;
 mod road_cost;
 mod road_data;
+mod road_map;
+mod road_type;
 mod road_yapf;
 mod script_list;
 pub mod services;
@@ -58,10 +66,17 @@ mod tile_owner;
 mod tile_type;
 mod town;
 mod town_map;
+mod town_type;
 mod townname;
 mod townname_data;
+mod track_func;
+mod transport_type;
 mod trees;
+mod tunnelbridge;
+mod tunnelbridge_cmd;
 mod vehicle;
+mod vehicle_transactions;
+mod vehiclelist;
 mod viewport_func;
 mod water;
 mod water_cmd;
@@ -1335,5 +1350,15 @@ mod cargo_storage;
 mod train_reservation;
 
 mod fleet;
+
+mod subsidy;
+
+mod cargo_type;
+mod source_type;
+mod subsidy_base;
+mod tilearea;
+mod timer_game_common;
+
+mod subsidy_type;
 
 pub mod landscape_cmd;

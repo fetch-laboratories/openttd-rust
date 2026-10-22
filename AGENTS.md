@@ -60,7 +60,9 @@ fork; the remaining upstream documentation explains behavior and architecture.
   flags, price indices) is ported once, into the shared Rust module named after
   that header, and every port imports it from there.
 - Keep the boundary cheap and typed. Entries are plain synchronous calls with
-  no per-call heap allocation and no async, future, task or mailbox machinery.
+  no async, future, task or mailbox machinery, and crossing the boundary
+  allocates nothing per call. Where the original body builds a local container,
+  the port uses a local `Vec`, not process-wide unsafe scratch.
   Each service is its own typed `noexcept` function, not an opcode switch or
   positional array. Each entry resolves its owner once and reads, once, only
   the fields it uses: neither a whole-record view nor a call per field. A
@@ -74,49 +76,49 @@ fork; the remaining upstream documentation explains behavior and architecture.
   adds a shared accessor deletes the integrated copies, and a PR that removes a
   caller deletes the export, declaration or callback field it orphans. Services
   return their real types on both sides and tables use designated
-  initializers. Existing ports convert under #168 and #199. Root grants no
-  exceptions at integration: a port whose hot path allocates per call,
-  dispatches by opcode or copies whole records is fixed before it integrates.
+  initializers. A C++ class type (`PoolID`, `StrongType`) crosses as its base
+  type, because MSVC returns class types through a hidden pointer (#355).
+  Existing ports convert under #168 and #199. Root grants no
+  exceptions at integration: a port whose hot path allocates where the original
+  does not, dispatches by opcode or copies whole records is fixed before it
+  integrates.
 - The selected #274 shared map descriptor is limited to audited scheduler clear,
   water and tree loops (`docs/design/world-state.md`). C++ retains canonical
   arrays and writes. Shared header helpers preserve native assertions; raw
   field loads end before callbacks and descriptor lifetime requires a proved
   no-reset/no-yield interval. Other entries keep typed services until audited.
-- Speed is guarded per PR and optimized in periodic passes (#282, #321). A PR
-  that changes compiled game code passes speed when no benchmark scenario is
-  projected more than 15% slower than the ratio recorded for current
-  `rust-migration` in `SPEED_BUDGETS`, and none exceeds its ceiling: 1.5x the
-  original for play saves, 1.3x for generation. The projection counts work:
-  callgrind instruction counts inside the game loop, which do not depend on
-  host load, give the anchor's measured ratio times (1 + 2 x the loop count's
-  growth over the anchor). They run alongside other agents, with no quiet
-  window. Wall ratios also move with code layout: quiet P2016 spanned
-  1.350-1.439 across heads whose loop counts moved under 0.5%. A PR does not
-  answer for that spread; speed passes measure it. Wall-clock medians are
-  taken only in speed passes, with no builds, links or other timed games
-  running; a wall median taken under load is not a speed result. A PR runs
-  `python3 tools/migration.py simulate --instructions --jobs 2` and projects
-  from the anchors in `SPEED_ANCHORS`. There are no per-port CPU budgets.
-- A PR that fails the speed guard gets a profile-guided fix round before it is
-  deferred. Attribute the cost per function (callgrind instruction counts work
-  on this host, where hardware counters do not) and fix the attributed
-  overhead. Deferral names an owned issue whose result can lift it; a
-  re-selection condition that waits on another deferred or unscheduled item is
-  circular. A core loop (tile loop, vehicle tick) that misses the guard or the
-  retirement ratio gets a boundary fix, not abandonment. Design faults
-  (per-call allocation, opcode dispatch, whole-record copies, a
-  Rust-to-C++-to-Rust bounce into code Rust owns) block integration whatever
-  the timing.
-- Root runs a speed pass after every fourth ownership integration (a PR that
-  moves a component's state and control loop to Rust), and sooner when an
-  integration moves a scenario's projection to within 5% of its ceiling; a
-  pass's own wall measurement does not trigger another. The pass profiles the
-  play saves and generation with callgrind, counting boundary cost as the
-  overhead beyond what the original spends inline on the same work, and ranks
-  those net costs, never gross callback counts, on the scenario nearest its
-  ceiling. It turns the two or three largest attributed costs into maintenance
-  PRs, then re-measures all six wall ratios on a quiet host, with their loop
-  counts, as the new record.
+- Speed is checked on the merged branch, not per PR (user decision,
+  2026-10-22). The ceilings are 1.5x the original for play saves and 1.3x for
+  generation (#282). The projection counts work: callgrind instruction counts
+  inside the game loop, which do not depend on host load, give the anchor's
+  measured ratio times (1 + 2 x the loop count's growth over the anchor),
+  from `SPEED_ANCHORS`. After every second integration root runs `python3
+  tools/migration.py simulate --instructions` on the integrated tip in
+  the background, alongside other work, and records the six projections in
+  the roadmap's "Where the fork stands". If a projection rose more than 3%
+  since the previous tip profile (provisional: counts repeat to 0.04% and no
+  ordinary PR has moved one more than 1.3%), root attributes the rise per
+  function to the PRs since and fixes it forward; that fix is the next
+  maintenance PR to integrate, and ports keep going. PRs run no speed check of
+  their own. Design faults (per-call allocation the original lacks, opcode
+  dispatch, whole-record copies, a Rust-to-C++-to-Rust bounce into code Rust
+  owns) block integration at review whatever the timing.
+- Deferral names an owned issue whose result can lift it; a re-selection
+  condition that waits on another deferred or unscheduled item is circular. A
+  core loop (tile loop, vehicle tick) that misses the retirement ratio gets a
+  boundary fix, not abandonment.
+- A speed pass runs only when a tip projection comes within 5% of its ceiling
+  (1.425x play, 1.235x generation). It first re-measures the six wall ratios on
+  a quiet host, with no builds, links or other timed games running, as the
+  median of four interleaved three-pair medians (#356 came within 1.4% of every
+  projection), and records them with their loop counts as the new anchors. If
+  no measured ratio is in its band, the pass ends there. Otherwise it profiles
+  that scenario with callgrind, counts boundary cost as the overhead beyond
+  what the original spends inline on the same work, ranks those net costs
+  (never gross callback counts), and turns the two or three largest into
+  maintenance PRs, then re-measures. A pass runs alongside other work: only its
+  quiet window pauses builds and timed games. Wall medians are taken only in
+  passes; one taken under load is not a speed result.
 - Evidence for game-logic ports is the semantic simulation harness (`python3
   tools/migration.py simulate`, #72) plus the existing tests; a new game-logic
   port integrates only after the harness exists and its scenarios exercise the
@@ -167,15 +169,24 @@ checks that run; do not restate them in paragraphs.
   hypothetical ones go in the PR's limits.
 - Review report: reviewed commit, findings with their fixing commits (or why one
   went to root), plus one line naming the functions or files compared against
-  the original body and one line naming any new callback that duplicates a
-  shared accessor (each one is a finding). Do not narrate further when there
-  are no findings. Branches the harness does not reach go in the coverage
+  the original body, one line naming any new callback that duplicates a
+  shared accessor, and one naming any WITH_RUST body, export or declaration
+  the PR leaves without a caller (each one is a finding). Do not narrate
+  further when there are no findings. Branches the harness does not reach go in the coverage
   tracker (#156), not only in the disposition.
-- One PR per component, targeting `rust-migration` directly. Use an integration
-  branch only when CI capacity forces batching. Update a PR branch from its base
-  (merge or rebase) only when it is about to integrate or a conflict blocks its
-  own work; do not add merges whose only purpose is to keep reviewed commit
-  ancestry or to track base.
+- One PR per ownership port, targeting `rust-migration` directly. Small
+  maintenance work (cleanups, coverage additions, speed fixes, tooling and
+  fidelity fixes) is batched instead: one PR carries every ready item, listed
+  as a checklist on its tracking issue (#261, #156, #275) rather than one issue
+  each, with one reviewer and one Full run. An item that fails review or CI
+  leaves the batch for the next one rather than holding it. A fix that a draft
+  or a live crash needs may go alone. Use an integration branch only when CI
+  capacity forces batching. Update a PR branch from its base
+  (merge or rebase) only when a conflict blocks its integration or its own
+  work. A PR whose exact-head Full passed and that still merges cleanly
+  integrates without a base update, since Full validates its merge with base;
+  do not add merges whose only purpose is to keep reviewed commit ancestry or
+  to track base.
 
 ## Agent team and review
 
@@ -231,8 +242,11 @@ For substantive changes:
 2. Use an isolated branch/worktree based on `rust-migration`. The implementation
    agent opens a draft PR targeting `rust-migration`, linking the issue and
    recording exact validation commands and limitations. The pre-merge full
-   run covers the platform matrix; request `--profile platform` only to
-   diagnose a suspected platform failure.
+   run covers the platform matrix except macOS, which runs on `rust-migration`
+   after every fifth integration (user decision, 2026-10-22; #357). After two
+   hosted-capacity cancellations of a macOS run, root sets `CI_MACOS_HEAVY` to
+   `blacksmith-6vcpu-macos-26` for the rerun and deletes it afterwards.
+   Request `--profile platform` only to diagnose a suspected platform failure.
 3. Assign a separate reviewer agent to examine the final commit and check evidence.
    Fidelity comes first: the reviewer compares each replaced original body
    callee by callee before checking boundary rules. A port that retires more
@@ -291,7 +305,10 @@ checks that the candidate retains reference test names, and keeps its logs under
 `.local/`. `python3 tools/migration.py build` builds both without running tests.
 `python3 tools/migration.py tools` builds the native Rust generators.
 `python3 tools/migration.py rust-checks` runs only the four Cargo checks.
-`--jobs` defaults to two and bounds both CMake and Cargo.
+`--jobs` bounds CMake, Cargo and simulation (`simulate` runs `jobs // 2` scenarios
+at once). Pass the cores that are free: 8 minus the 1-minute load average, at
+least 2 (`--jobs $(( $(nproc) - $(cut -d. -f1 /proc/loadavg) ))`, floored at 2);
+the #355 batch makes that the driver's default.
 `python3 tools/migration.py simulate [name...] [--soak] [--self]` builds both
 games and compares their simulation state (`tools/simulate.py`).
 `python3 tools/run-comparisons.py [name...]` runs the reference comparison tools
@@ -306,7 +323,10 @@ and per-role ccache stores. ccache is used whenever it is installed (PCH off);
 `--no-ccache` gives an ordinary PCH build. Cache build outputs freely when the
 key covers what determines them; never cache test results.
 
-Iterate locally and push reviewable batches. Ordinary PR pushes run only cheap
+Iterate locally and push reviewable batches. Locally, an agent runs the build,
+the Cargo checks and the simulation scenarios its change touches; it does not
+run the full default `simulate` suite (38 minutes locally), which the
+exact-head Full runs in about 12. Ordinary PR pushes run only cheap
 checks, so code pushes do not use `[skip ci]`. `python3 tools/ci.py request PR
 --profile rust|native|platform` runs diagnostic subsets. Before merging, request
 `--profile full` for the final PR head and wait for it. Only a successful full

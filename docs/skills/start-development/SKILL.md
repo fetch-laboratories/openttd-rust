@@ -27,12 +27,14 @@ checkpoint and work order.
    branches are unintegrated. Keep about five subagents busy within that limit,
    with a fresh agent per task and review round. Close each agent when it
    finishes. At the slot limit, do root work until a slot frees.
-2. Follow the full process for every change: issue, isolated worktree, PR,
-   independent attributed review naming what was compared, in which the
-   reviewer fixes its findings and you spot-check its fix commits, green
-   required CI, integration, worktree removal, then a roadmap update in a single
-   docs-only commit. Update a draft from base only to integrate it or to clear a
-   conflict blocking its own work. If a check on rust-migration itself is red,
+2. Follow the full process for every change: issue (or a checklist item on a
+   batch's tracking issue), isolated worktree, PR, independent attributed
+   review naming what was compared, in which the reviewer fixes its findings
+   and you spot-check its fix commits, green required CI, integration and
+   worktree removal. Commit roadmap updates when you take stock (step 4) or
+   change the work order, not after every integration; PR and issue state
+   carry the rest. Update a draft from base only when a conflict blocks its
+   integration or its own work. If a check on rust-migration itself is red,
    fix it first.
 3. When fewer than two unstarted components remain ahead of active work, spawn a
    fresh high-effort planning agent (Astra in Codex) to select the next whole
@@ -42,10 +44,10 @@ checkpoint and work order.
    failed gate stays yours to re-select once a profile shows the fix.
 4. After every second integration, take stock in "Where the fork stands": C++
    game logic retired, glue and tooling cost, play-save speed ratio, open
-   coverage gaps, and the unintegrated branch count. Run the AGENTS.md speed
-   pass when it falls due. If retirement stalls, a scenario nears its speed
-   ceiling, or an item stalls across review rounds, change course rather than
-   polishing evidence.
+   coverage gaps, and the unintegrated branch count. Profile the merged branch
+   for speed in the background and run a speed pass only when AGENTS.md says.
+   If retirement stalls, a scenario nears its speed ceiling, or an item stalls
+   across review rounds, change course rather than polishing evidence.
 5. Sessions can end without warning. Have agents push their branches at every
    passing milestone and keep one status comment per task, edited in place.
    Keep the roadmap's resume checkpoint table current with each roadmap commit,

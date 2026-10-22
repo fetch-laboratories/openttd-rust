@@ -402,6 +402,8 @@ pub struct Services {
     pub road_bits: extern "C" fn(u32, u8, bool) -> u8,
     /// Native `GetRoadTramType`, preserving unclassified road mask behavior.
     pub road_tram_type: extern "C" fn(u8) -> RoadTramType,
+    /// Original `RoadTypeIsTram` predicate.
+    pub road_type_is_tram: extern "C" fn(RoadType) -> bool,
     /// Native road type classification (the road mask, including unclassified types).
     pub road_type_is_road: extern "C" fn(u8) -> bool,
     /// Only the road type's construction price multiplier.
@@ -488,6 +490,8 @@ pub struct Services {
     pub tile_add_wrap: extern "C" fn(u32, i32, i32) -> u32,
     /// Original native `tile_valid` map observation.
     pub tile_valid: extern "C" fn(u32) -> bool,
+    /// Original `GetTileSlopeZ`, observed together at the source call.
+    pub tile_slope_z: extern "C" fn(u32) -> FoundationSlope,
     /// `GetTileZ`.
     pub tile_z: extern "C" fn(u32) -> i32,
     /// Original native `town_index` map observation.
@@ -704,6 +708,7 @@ pub fn fixture(
         random,
         road_bits: bits,
         road_tram_type: unused_road_tram_type,
+        road_type_is_tram: unused_road_is_tram,
         road_type_is_road: unused_company_valid,
         road_cost_multiplier: unused_road_cost_multiplier,
         road_depot_direction: byte,
@@ -746,6 +751,7 @@ pub fn fixture(
         tile_type: byte,
         tile_add_wrap: unused_tile_add_wrap,
         tile_valid: flag,
+        tile_slope_z: foundation,
         tile_z: height,
         town_index: index,
         town_owner: unused_town_owner,
@@ -1184,4 +1190,9 @@ extern "C" fn fixture_road_commands() -> *const crate::road_cmd::RoadCommandServ
 #[cfg(test)]
 extern "C" fn unused_tile_add_wrap(_: u32, _: i32, _: i32) -> u32 {
     panic!("unused tile addition")
+}
+
+#[cfg(test)]
+extern "C" fn unused_road_is_tram(_: RoadType) -> bool {
+    panic!("unused tram classification");
 }

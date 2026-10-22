@@ -9,6 +9,7 @@
 #ifndef RUST_SERVICES_STATION_H
 #define RUST_SERVICES_STATION_H
 #include "../station_base.h"
+#include "../industry.h"
 #include "../waypoint_base.h"
 #include "../station_kdtree.h"
 #include "../town.h"
@@ -27,6 +28,17 @@
 #include "../station_map.h"
 #include "../pbs.h"
 
+inline bool RustStationRectangleEmpty(const BaseStation *station) noexcept { return station->rect.IsEmpty(); }
+template <class Handle> inline bool RustStationRectangleEmptyHandle(Handle handle) noexcept { return RustStationRectangleEmpty(static_cast<const BaseStation *>(handle)); }
+inline void RustStationCatchment(const Station *station, void *context, void (*visit)(void *, uint32_t)) noexcept
+{
+	BitmapTileIterator it(station->catchment_tiles);
+	for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) visit(context, tile.base());
+}
+inline void RustStationIndustriesNear(const Station *station, void *context, void (*visit)(void *, uint16_t)) noexcept
+{
+	for (const auto &entry : station->industries_near) visit(context, entry.industry->index.base());
+}
 inline const AirportFTAClass *RustAirportFTA(uint8_t type) noexcept { return GetAirport(type); }
 inline const void *RustDummyAirportFTA() noexcept { return RustAirportFTA(AT_DUMMY); }
 inline TileIndex RustStationHangarTile(const BaseStation *st, uint32_t index) noexcept { return Station::From(st)->airport.GetHangarTile(index); }

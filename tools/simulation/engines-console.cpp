@@ -55,9 +55,11 @@ static Engine *UnusedEngine(EngineID except = EngineID::Invalid())
 	}
 	FixtureAbort(__LINE__);
 }
+#include "subsidies-console.inc"
 static bool EnginesScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1].starts_with("subsidies")) return SubsidyScenario(args);
 	Company *c = nullptr;
 	for (Vehicle *v : Vehicle::Iterate()) if (v->type == VEH_TRAIN && v->GetEngine()->CanCarryCargo()) { c = Company::Get(v->owner); break; }
 	if (c == nullptr) FixtureAbort(__LINE__);

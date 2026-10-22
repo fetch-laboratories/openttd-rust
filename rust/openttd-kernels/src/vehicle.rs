@@ -52,6 +52,8 @@ pub struct OrderType(pub u8);
 pub struct RailVehicleTypes(pub u8);
 
 impl RailVehicleTypes {
+    /// Native `RAILVEH_MULTIHEAD`.
+    pub const MULTIHEAD: Self = Self(1);
     /// Native `RAILVEH_WAGON`.
     pub const WAGON: Self = Self(2);
 }
@@ -79,12 +81,8 @@ pub struct EngineForLength {
 }
 
 pub use crate::newgrf_callbacks::CALLBACK_FAILED;
+pub use crate::order_type::{OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING};
 pub use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
-/// `OrderType` values.
-pub const OT_GOTO_STATION: u8 = 1;
-pub const OT_GOTO_DEPOT: u8 = 2;
-pub const OT_LOADING: u8 = 3;
-pub const OT_LEAVESTATION: u8 = 4;
 /// `VehState` bits.
 pub const VS_HIDDEN: u8 = 1 << 0;
 pub const VS_STOPPED: u8 = 1 << 1;

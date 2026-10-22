@@ -14,6 +14,34 @@
 #include "vehiclelist_func.h"
 #include "group.h"
 
+#ifdef WITH_RUST
+#include "rust/vehicle_transaction_ffi.h"
+#include "rust/vehicle_services.h"
+static void SelectionWithOrders(void *ctx, bool (*vehicle)(void *, const Vehicle *), bool (*order)(void *, const Order *), void (*visit)(void *, const Vehicle *)) noexcept
+{
+	FindVehiclesWithOrder([&](const Vehicle *v) { return vehicle(ctx, v); }, [&](const Order *o) { return order(ctx, o); }, [&](const Vehicle *v) { visit(ctx, v); });
+}
+static void SelectionListClear(void *list) noexcept { static_cast<VehicleList *>(list)->clear(); }
+static void SelectionListPush(void *list, void *v) noexcept { static_cast<VehicleList *>(list)->push_back(static_cast<Vehicle *>(v)); }
+const OpenTTDVehicleSelectionServices &GetRustVehicleSelectionServices() noexcept
+{
+	static const OpenTTDVehicleSelectionServices services{
+		.groups = &FleetGroupServices(),
+		.transactions = &FleetTransactionServices(),
+		.vehicles = &GetRustVehicleServices(),
+		.in_depot = RustOpaqueVehicleRead<bool, RustVehicleInDepot>,
+		.free_wagon = RustOpaqueVehicleRead<bool, RustTrainFreeWagon>,
+		.first_engine_part = RustOpaqueVehicleRead<void *, RustTrainFirstEnginePart>,
+		.multiheaded = RustOpaqueVehicleRead<bool, RustTrainMultiheaded>,
+		.other_multihead = RustOpaqueVehicleRead<void *, RustTrainOtherMultihead>,
+		.with_orders = SelectionWithOrders,
+		.list_clear = SelectionListClear,
+		.list_push = SelectionListPush,
+	};
+	return services;
+}
+#endif
+
 #include "safeguards.h"
 
 /**
@@ -42,6 +70,9 @@ WindowNumber VehicleListIdentifier::ToWindowNumber() const
  */
 void BuildDepotVehicleList(VehicleType type, TileIndex tile, VehicleList *engines, VehicleList *wagons, bool individual_wagons)
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_depot_list(&GetRustVehicleSelectionServices(), type, tile.base(), engines, wagons, individual_wagons);
+#else
 	engines->clear();
 	if (wagons != nullptr && wagons != engines) wagons->clear();
 
@@ -59,6 +90,7 @@ void BuildDepotVehicleList(VehicleType type, TileIndex tile, VehicleList *engine
 
 		if (v->IsPrimaryVehicle()) engines->push_back(v);
 	}
+#endif
 }
 
 /**
@@ -69,6 +101,9 @@ void BuildDepotVehicleList(VehicleType type, TileIndex tile, VehicleList *engine
  */
 bool GenerateVehicleSortList(VehicleList *list, const VehicleListIdentifier &vli)
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_generate_list(&GetRustVehicleSelectionServices(), list, vli.type, vli.vtype, vli.company.base(), vli.index);
+#else
 	list->clear();
 
 	switch (vli.type) {
@@ -123,4 +158,11 @@ bool GenerateVehicleSortList(VehicleList *list, const VehicleListIdentifier &vli
 	}
 
 	return true;
+#endif
 }
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDVehicleSelectionServices.hpp"
+bool CheckAbi_vehiclelist() { return AbiServicesComplete(GetRustVehicleSelectionServices()); }
+#endif
