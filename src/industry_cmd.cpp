@@ -3592,9 +3592,9 @@ static void RustIndustryNews(Industry *i, StringID str, bool close) noexcept
 	/* Set parameters of news string */
 	EncodedString headline;
 	if (str > STR_LAST_STRINGID) {
-		headline = GetEncodedString(str, STR_TOWN_NAME, i->town->index, GetIndustrySpec(i->type)->name);
+		headline = GetEncodedString(str, STR_TOWN_NAME, OpenTTDIndustryTown(i)->index, GetIndustrySpec(i->type)->name);
 	} else if (close) {
-		headline = GetEncodedString(str, STR_FORMAT_INDUSTRY_NAME, i->town->index, GetIndustrySpec(i->type)->name);
+		headline = GetEncodedString(str, STR_FORMAT_INDUSTRY_NAME, OpenTTDIndustryTown(i)->index, GetIndustrySpec(i->type)->name);
 	} else {
 		headline = GetEncodedString(str, i->index);
 	}
@@ -3613,9 +3613,8 @@ static const IndustrySpec *RustIndustrySpec(void *handle) noexcept { return GetI
 static const OpenTTDIndustryServices _industry_services = {
 	.shared = &GetRustSharedServices(),
 	.next_tick = [](uint32_t from) noexcept -> OpenTTDIndustryEntry {
-		auto range = Industry::Iterate(from);
-		if (range.empty()) return {};
-		Industry *i = *range.begin();
+		Industry *i = OpenTTDNextIndustry(from);
+		if (i == nullptr) return {};
 		return {i, RustIndustryCanonicalOwner(i), RustIndustryID(i), GetIndustrySpec(i->type)->callback_mask.base()};
 	},
 	.sound_count = [](void *i) noexcept -> uint16_t { return static_cast<uint16_t>(RustIndustrySpec(i)->random_sounds.size()); },

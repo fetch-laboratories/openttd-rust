@@ -8,6 +8,7 @@
 #include "services_water.h"
 #include "services_landscape.h"
 #include "services_station.h"
+#include "services_industry.h"
 #include "command_services.h"
 #include "services_map.h"
 #include "services_rail.h"
@@ -56,7 +57,7 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 		case 2: {
 			const Industry *i = Industry::Get(id); const auto &behaviour = GetIndustrySpec(i->type)->behaviour;
 			out[0] = i->location.tile.base(); out[1] = i->type; out[2] = behaviour.Test(IndustryBehaviour::AirplaneAttacks);
-			out[3] = behaviour.Test(IndustryBehaviour::ChopperAttacks); out[4] = behaviour.Test(IndustryBehaviour::CanSubsidence); out[5] = i->town->index.base();
+			out[3] = behaviour.Test(IndustryBehaviour::ChopperAttacks); out[4] = behaviour.Test(IndustryBehaviour::CanSubsidence); out[5] = OpenTTDIndustryTown(i)->index.base();
 			break;
 		}
 		case 3: { const Station *s = Station::Get(id); out[0] = RustStationAirportTile(s); out[1] = s->airport.type; break; }
@@ -77,8 +78,8 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 				case 1: out[0] = DisasterNext<RoadVehicle>(from); break;
 				case 2: out[0] = DisasterNext<Vehicle>(from); break;
 				case 3: out[0] = DisasterNext<Train>(from); break;
-				case 4: out[0] = DisasterNext<Station>(from); break;
-				case 5: out[0] = DisasterNext<Industry>(from); break;
+				case 4: { const Station *st = OpenTTDNextStation(from); out[0] = st == nullptr ? VehicleID::Invalid().base() : st->index.base(); break; }
+				case 5: { const Industry *i = OpenTTDNextIndustry(from); out[0] = i == nullptr ? VehicleID::Invalid().base() : i->index.base(); break; }
 				case 6: out[0] = DisasterNext<DisasterVehicle>(from); break;
 			}
 			break;

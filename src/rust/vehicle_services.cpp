@@ -12,6 +12,7 @@
 #include "vehicle_services.h"
 #include "orders_ffi.h"
 #include "station_service_ffi.h"
+#include "services_station.h"
 #include "engine_services.h"
 #include "services_newgrf.h"
 #include "../vehicle_func.h"
@@ -482,10 +483,8 @@ static void OPENTTD_VEHICLE_CALL VehicleSchedulerRunningSound(OpenTTDVehicle *sh
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerPeriodicSound(OpenTTDVehicle *shell, bool running) noexcept { PlayVehicleSound(VehicleOf(shell), running ? VSE_RUNNING_16 : VSE_STOPPED_16); }
 static OpenTTDVehicleStationLookup OPENTTD_VEHICLE_CALL VehicleSchedulerNextStation(uint32_t from) noexcept
 {
-	auto range = Station::Iterate(from);
-	auto it = range.begin();
-	if (it == range.end()) return {};
-	Station *st = *it;
+	Station *st = OpenTTDNextStation(from);
+	if (st == nullptr) return {};
 	return {.station = st->rust_service.get(), .id = st->index.base()};
 }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerWithLoadingTimer(const OpenTTDVehicleSchedulerTables *tables, void (OPENTTD_VEHICLE_CALL *load)(const OpenTTDVehicleSchedulerTables *)) noexcept
