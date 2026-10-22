@@ -23,6 +23,13 @@ failed together. Keep automatic rollback; replace the time deadline with action 
 - A confirmed breaking merge with only docs after it is reset automatically without asking, with work preserved remotely and docs corrected. The tracking issue reopens; a replacement PR follows on resume. AGENTS.md and the migration guide define recovery and exceptions.
 - Implementation uses platform settings and five existing documentation files; tooling budget: zero new code, workflows or controllers. Earlier unchanged-head merge permission below is superseded.
 
+## Process audit follow-up (2026-10-22)
+
+- **Selected next CI maintenance batch, #261:** fix Linux dependency/cache setup, report failed child jobs and platform annotations promptly, and make transient coverage-lookup failures retry then select full validation. Root owns selection and assigns one implementer on resume. Budget: at most 400 changed non-documentation lines including tests, reusing existing CI suites; one independent review and one final Full through the workflow bootstrap procedure. This is a separate scope from the zero-code integration correction above; keep #361's existing scope.
+- **Process changes now:** use small ready integration batches; save unfinished checkpoints before long checks or handoff; require independent execution for any unattended provider takeover. AGENTS.md and the migration guide define these rules. No new schedule or verified fallback is established by this documentation.
+- **Existing conflict reduction:** finish #261 / #361's shared ABI split through its pending review and validation; no new issue or repeated unchanged-component review.
+- **Deferred optimization:** root revisits Emscripten image setup and merge-queue tooling after the selected CI fixes land and ten integrations record stale Full reruns and ready-work waits in existing integration notes. No new service, runner upgrade or extra local full suite is selected.
+
 ## Seventeenth steering review (2026-10-22, speed on the merged branch, base-type returns, macOS every fifth merge)
 
 Independent Claude Opus audits of integrated #329, #346 and #352 and draft #347, a speed audit (fresh profiles plus a quiet six) and a process audit of both root sessions since the sixteenth review (Claude: 193 active minutes, 3 integrations; Codex: 261 minutes, 9 integrations) found:

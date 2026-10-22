@@ -217,7 +217,11 @@ family differs from the implementer's.
 
 Sessions can end without warning (usage limits, host restarts). Implementation
 agents commit and push their branch at every passing milestone, not only at the
-end. Each task keeps one status comment on its PR (or on its issue before the
+end. Before a long check, handoff or anticipated usage limit, also commit and
+push a coherent unfinished checkpoint; do not wait for validation to preserve
+work. Keep its PR draft and state what is incomplete, which checks are pending
+or failed, and the next action. A checkpoint is not integration evidence.
+Each task keeps one status comment on its PR (or on its issue before the
 PR), edited in place when it starts, reaches a milestone or stops. A PR's other
 comments are review reports and root's integration note.
 A review that stops before recording findings and a disposition counts as no

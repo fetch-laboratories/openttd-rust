@@ -393,6 +393,13 @@ which writes the user's message pausing root. Steering reviews put their
 corrections in the roadmap and edit `/start-development` only to improve it;
 root follows these skills and leaves them unedited.
 
+For unattended provider handoff, establish an independently executable takeover
+before the source provider exhausts its allowance. A scheduled prompt that needs
+the exhausted provider to launch its replacement is not a fallback. Verify the
+host's actual execution provider; naming another model in the prompt is not
+enough. If the host cannot provide independent takeover, record that limitation
+and preserve a checkpoint before stopping. This rule creates no schedule itself.
+
 Shared append lists group by component (reserve sections for concurrent ports),
 then sort entries by name: includes after stdafx/before safeguards, independent
 ABI probe calls, and shared table fields/mirrors/initializers/layouts (one field per line).
@@ -437,8 +444,19 @@ bootstrap. For a workflow-changing PR, root reviews its workflow definitions,
 temporarily unsets `CI_ON_DEMAND`, and requests `--profile full --bootstrap`
 (the `ci:full` label path tests the PR definitions). Root restores the variable
 to `true` after merge and records both changes in the PR; never use `--admin`.
-For batching ready work, test a concrete integration PR and merge it once. A stack
-organizes dependent PRs but does not itself combine validation runs.
+At an integration opportunity, batch two or three ready, reviewed component
+heads if available; integrate a lone ready PR without waiting to fill a batch.
+Assemble an integration PR from current base, preserving component commits and
+linking their reviews. Review only substantive conflict resolutions under
+AGENTS.md; unchanged components do not need another review. Request Full on the
+combined PR, without requiring separate component Full runs first.
+Finish routine base-doc updates before requesting Full. Freeze batch membership
+and coordinate root sessions to avoid base pushes during the run; implementation
+and review continue. Any head, membership or base change needs fresh Full,
+including removing a failing component. Merge only the passing, current head
+with `--match-head-commit`, then record and close the included component PRs.
+Keep batches small: the integration merge is the automatic rollback unit.
+A stack organizes dependent PRs but does not itself combine validation runs.
 
 Required checks must pass on the PR head and the branch must be up to date with
 base (`required_status_checks.strict=true`). The publisher still records the
