@@ -568,6 +568,16 @@ static bool StationCommands(std::span<std::string_view> args)
 			bay->status.Reset(RoadStop::RoadStopStatusFlag::EntryBusy);
 			StationRoadEnter(buses[6], tile(24, 4), DIR_SW, TRACKDIR_X_SW);
 			StationRoadStops("bays-full");
+			/* Free bay 1, then admit the previously refused vehicle into it. */
+#ifdef WITH_RUST
+			openttd_rust_road_stop_leave(&GetRustSharedServices(), RustVehicle(buses[5]), buses[5]->GetRustState());
+#else
+			bay->Leave(buses[5]);
+#endif
+			delete buses[5];
+			StationRoadStops("bays-freed");
+			StationRoadEnter(buses[6], tile(24, 4), DIR_SW, TRACKDIR_X_SW);
+			StationRoadStops("bays-reused");
 			fmt::print(stderr, "STCMD complete\n");
 			if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 			current.Restore(); return true;
@@ -701,7 +711,7 @@ RELOADS = {
 # #354 road stop owner branches; cache checks run only with desync snapshots.
 ROAD_STOPS = (
     "clear_head clear_last clear_split clear_tail enter_bay0 enter_bay1 enter_drive"
-    " enter_refused leave_drive make_alone make_join make_merge make_parent rebuild"
+    " enter_refused leave_bay leave_drive make_alone make_join make_merge make_parent rebuild"
     " rebuild_vehicle"
 ).split()
 
