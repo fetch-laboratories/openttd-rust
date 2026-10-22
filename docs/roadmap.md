@@ -37,7 +37,7 @@ Actions, in order (apply first; ports keep running alongside):
 1. **#355, #356 and #357 as one batch PR,** before any other integration: the MSVC return fix and compile-time return-type check; the identity fix and the quiet anchors the tip profiles compare against (no pass is due); and macOS out of the pre-merge Full. Until that lands, use the Blacksmith fallback on capacity cancellations.
 2. **Integrate ready drafts,** without base updates unless a conflict blocks: #351 after #356 (rustfmt, then Full; no extension), #340 (two deletions, then review), #347 (PR comment items), #353 (fresh review).
 3. **Ports continue:** #349 to its first passing milestone, #315, then owner selection (Phase 2 item 5).
-4. **Batches:** the #261 cleanup list (2026-10-22 comment) as one batch PR; the **#156** slot batches the new gaps.
+4. **Batches:** the #261 cleanup list (2026-10-22 comments) as one batch PR, including the per-component split of `abi.rs`/`windows-abi.cpp`, the most frequent base-update conflict; the **#156** slot batches the new gaps.
 
 ## Earlier steering, still in force
 
