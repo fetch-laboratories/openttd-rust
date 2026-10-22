@@ -183,3 +183,51 @@ pub(crate) fn nested<T: Default>(
     }
     extra
 }
+
+/// Own one independently constructed native result for a synchronous nested call.
+/// The storage never moves while its native object is alive. No native layout is
+/// inspected, and construction/destruction are the only lifetime operations.
+/// # Safety
+/// The callback must not retain or return either the cost or its pointer, rebuild
+/// a Cost from that pointer outside the callback, destroy it, or send it elsewhere.
+/// Native callbacks may use the pointer only until they return synchronously.
+pub(crate) unsafe fn with_cost<T>(
+    s: &CommandCostServices,
+    body: impl for<'a> FnOnce(crate::services::Cost<'a>) -> T,
+) -> T {
+    struct Guard<'a>(*mut CommandCost, &'a CommandCostServices);
+    impl Drop for Guard<'_> {
+        fn drop(&mut self) {
+            // SAFETY: the guard is dropped before its storage, exactly once,
+            // and uses the actual pointer returned by native construction.
+            unsafe {
+                (self.1.destroy)(self.0);
+            }
+        }
+    }
+    let mut storage = std::mem::MaybeUninit::<crate::services::CommandCostStorage>::uninit();
+    // SAFETY: aligned stack capacity stays at this fixed address until the guard
+    // ends its native lifetime. Native static assertions prove the capacity.
+    let p = unsafe { (s.construct)(storage.as_mut_ptr()) };
+    let guard = Guard(p, s);
+    let result = body(crate::services::Cost(p, s));
+    drop(guard);
+    result
+}
+
+/// Native default test of distinct nested stack results and early return cleanup.
+/// # Safety
+/// The supplied table constructs/destroys native objects in the advertised storage.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_command_stack_probe(s: &CommandCostServices) -> bool {
+    unsafe {
+        /* SAFETY: synchronous costs never escape or outlive this call. */
+        with_cost(s, |outer| {
+            with_cost(s, |inner| {
+                outer.zero();
+                inner.zero();
+                outer.0 != inner.0 && outer.ok() && inner.ok()
+            })
+        })
+    }
+}

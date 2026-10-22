@@ -464,7 +464,7 @@ impl<'a> Ctx<'a> {
         };
         if height == 0 {
             if disallowed == 0xffff {
-                (self.command.landscape_clear)(out.0, tile, 2);
+                crate::landscape_cmd::clear_command(self.command, out.0, tile, 2);
             } else {
                 out.error(disallowed);
             }
@@ -1317,7 +1317,7 @@ impl Ctx<'_> {
                     }
                 }
             }
-            (self.command.landscape_clear)(ret.0, tile, flags);
+            crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -2208,7 +2208,7 @@ impl Ctx<'_> {
             } else if rt == 63 {
                 cost.error(self.s.strings.no_road);
             } else {
-                (self.command.landscape_clear)(ret.0, tile, flags);
+                crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
                 if !ret.ok() {
                     return cost.take(ret);
                 }
@@ -3037,7 +3037,7 @@ impl Ctx<'_> {
                 return cost.take(ret);
             }
             cost.add_money(ret.money());
-            (self.command.landscape_clear)(ret.0, t.tile, flags);
+            crate::landscape_cmd::clear_command(self.command, ret.0, t.tile, flags);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -3451,7 +3451,7 @@ impl Ctx<'_> {
             return;
         }
         cost.set(crate::company::price(14));
-        (self.command.landscape_clear)(ret.0, tile, flags);
+        crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -3466,7 +3466,7 @@ impl Ctx<'_> {
         }
         let water = (unsafe { &*self.s.clear }.water_class)(flat).0;
         let add_cost = !(self.shared.is_water_tile)(flat);
-        (self.command.landscape_clear)(ret.0, flat, flags);
+        crate::landscape_cmd::clear_command(self.command, ret.0, flat, flags);
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -3982,7 +3982,7 @@ impl Ctx<'_> {
                 return cost.set(crate::company::price(57));
             }
         }
-        (self.command.landscape_clear)(cost.0, tile, flags);
+        crate::landscape_cmd::clear_command(self.command, cost.0, tile, flags);
     }
     fn change_owner(
         &self,
@@ -4059,7 +4059,7 @@ impl Ctx<'_> {
             // SAFETY: Nested removal has returned; the native slots can be reused.
             unsafe { crate::tile_owner::openttd_rust_tile_change_owner(ownership, tile, old, new) };
         } else {
-            (self.command.landscape_clear)(cost.0, tile, 33);
+            crate::landscape_cmd::clear_command(self.command, cost.0, tile, 33);
             let kind = (self.shared.tile_type)(tile);
             if (kind == 6 || (kind == 5 && (self.shared.station_type)(tile).0 == 6))
                 && (self.shared.tile_owner)(tile) == old

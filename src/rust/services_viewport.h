@@ -9,5 +9,8 @@
 #ifndef RUST_SERVICES_VIEWPORT_H
 #define RUST_SERVICES_VIEWPORT_H
 #include "../viewport_func.h"
+inline void RustMarkTileDirty(uint32_t tile) noexcept { MarkTileDirtyByTile(TileIndex{tile}); }
 inline void RustMarkTileDirtyHeight(uint32_t tile, int32_t offset) noexcept { MarkTileDirtyByTile(TileIndex{tile}, offset); }
+/* MarkTileDirtyByTile(tile, 0, tile_height_override) */
+inline void RustMarkTileDirtyAtHeight(uint32_t tile, int32_t height) noexcept { MarkTileDirtyByTile(TileIndex{tile}, 0, height); }
 #endif /* RUST_SERVICES_VIEWPORT_H */

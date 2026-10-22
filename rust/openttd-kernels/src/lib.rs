@@ -33,6 +33,7 @@ mod integer;
 mod landscape;
 mod linkgraph;
 mod map_func;
+mod map_type;
 mod math;
 mod newgrf_callbacks;
 mod newgrf_sound;
@@ -80,6 +81,7 @@ mod vehiclelist;
 mod viewport_func;
 mod water;
 mod water_cmd;
+mod water_type;
 mod widget_parser;
 mod witness;
 
@@ -1364,3 +1366,5 @@ mod tilearea;
 mod timer_game_common;
 
 mod subsidy_type;
+
+pub mod landscape_cmd;

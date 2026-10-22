@@ -576,13 +576,12 @@ pub struct TilePolicyServices {
     pub tile_max_z: unsafe extern "C" fn(u32) -> i32,
     pub autoslope_callback: unsafe extern "C" fn(*const TileSpec) -> bool,
     pub callback_boolean: unsafe extern "C" fn(*const TileSpec, u16, u16) -> bool,
-    pub landscape_clear: unsafe extern "C" fn(*mut IndustryCost, u32, u16),
+    pub command_checks: *const crate::services::CommandServices,
 }
 /// # Safety
 /// Live tile and native stack result. Event and destruction callbacks may reenter;
 /// immutable specs remain live after owner destruction, with no owner borrow held.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_tile_clear(
+pub(crate) unsafe fn openttd_rust_industry_tile_clear(
     out: *mut IndustryCost,
     tile: u32,
     flags: u16,
@@ -623,9 +622,8 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_clear(
 /// # Safety
 /// Native complete cost sink and live tile. The resolver can reenter; no owner or
 /// map reference survives it. `LandscapeClear` returns its original full cost.
-#[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn openttd_rust_industry_tile_terraform(
+pub(crate) unsafe fn openttd_rust_industry_tile_terraform(
     out: *mut IndustryCost,
     tile: u32,
     flags: u16,
@@ -658,5 +656,5 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_terraform(
             }
         }
     }
-    unsafe { (p.landscape_clear)(out, tile, flags) };
+    crate::landscape_cmd::clear_command(unsafe { &*p.command_checks }, out.cast(), tile, flags);
 }

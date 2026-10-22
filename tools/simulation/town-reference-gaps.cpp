@@ -6,6 +6,7 @@
  */
 
 /** @file town-tunnel-reference.cpp Controlled services for unchanged town tunnel bodies, absent from the save corpus. */
+#include "../../src/stdafx.h"
 #include "../../src/tests/town_protocol.hpp"
 #include "../../src/rust/town_ffi.h"
 #include <algorithm>

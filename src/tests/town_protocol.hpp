@@ -13,6 +13,7 @@
 #include "../rust/house_ffi.h"
 #include "../rust/command_services_ffi.h"
 #include "../rust/ground_ffi.h"
+#include "../rust/landscape_command_ffi.h"
 #include <algorithm>
 #include <array>
 #include <memory>
@@ -24,7 +25,7 @@ struct TownProtocolWorld {
 	uint32_t population = 0, draws = 0, company = 7;
 	uint32_t owner_reads = 0, map_reads = 0;
 	uint32_t square_clears = 0;
-	bool house_callback = false, clear_ok = true;
+	bool house_callback = false, clear_ok = true, placing = false;
 	uint16_t house_class = 0;
 	uint32_t clears = 0, animations = 0, roads = 0, landscape_clears = 0, house_count = 1;
 	std::vector<std::array<uint32_t, 4>> writes;
@@ -84,11 +85,9 @@ static inline bool TownProtocol_build_road(uint32_t, uint32_t, uint32_t, uint32_
 {
 	auto &w = *town_protocol_world; w.roads++; return mode == 0;
 }
-static inline bool TownProtocol_clear_land(uint32_t, uint32_t) noexcept { auto &w = *town_protocol_world; w.clears++; return w.clear_ok; }
-static inline OpenTTDTownCommandResult TownProtocol_terraform_land(uint32_t, uint32_t, uint32_t, uint32_t) noexcept { return {}; }
 static inline bool TownProtocol_build_bridge(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) noexcept { return false; }
 static inline bool TownProtocol_build_tunnel(uint32_t, uint32_t, uint32_t) noexcept { return false; }
-static inline void TownProtocol_clear_house_land(uint32_t) noexcept { town_protocol_world->clears++; }
+static inline void TownProtocol_assert_clear_house(bool) noexcept {}
 static inline bool TownProtocol_allow_construction(uint32_t, uint32_t, uint32_t, uint32_t) noexcept
 {
 	openttd_rust_town_growth(town_protocol_world->owner)->flags = 0x88; return true;
@@ -102,15 +101,22 @@ static inline TownProtocolCost *TownProtocolCostOf(const OpenTTDCommandCost *cos
 static inline OpenTTDCommandCostServices TownProtocolCosts()
 {
 	auto costs = OpenTTDCommandCostServices{};
+	costs.construct = [](OpenTTDCommandCostStorage *p) noexcept { return reinterpret_cast<OpenTTDCommandCost *>(std::construct_at(reinterpret_cast<TownProtocolCost *>(p))); };
+	costs.destroy = [](OpenTTDCommandCost *p) noexcept { std::destroy_at(TownProtocolCostOf(p)); };
+	costs.expense_money = [](OpenTTDCommandCost *p, uint8_t, int64_t) noexcept { TownProtocolCostOf(p)->ok = true; };
+	costs.add = [](OpenTTDCommandCost *p, OpenTTDCommandCost *other) noexcept { TownProtocolCostOf(p)->ok &= TownProtocolCostOf(other)->ok; };
+	costs.money = [](const OpenTTDCommandCost *) noexcept -> int64_t { return 0; };
 	costs.zero = [](OpenTTDCommandCost *cost) noexcept { TownProtocolCostOf(cost)->ok = true; };
 	costs.error = [](OpenTTDCommandCost *cost, uint32_t) noexcept { TownProtocolCostOf(cost)->ok = false; };
 	costs.success = [](const OpenTTDCommandCost *cost) noexcept { return TownProtocolCostOf(cost)->ok; };
 	return costs;
 }
 static inline const OpenTTDCommandCostServices town_protocol_costs = TownProtocolCosts();
+static inline OpenTTDLandscapeCommandServices town_protocol_landscape;
 static inline const OpenTTDCommandServices town_protocol_commands = [] {
 	auto commands = OpenTTDCommandServices{};
-	commands.landscape_clear = [](OpenTTDCommandCost *cost, uint32_t, uint16_t) noexcept { town_protocol_world->landscape_clears++; TownProtocolCostOf(cost)->ok = true; };
+	commands.landscape_commands = []() noexcept -> const OpenTTDLandscapeCommandServices * { return &town_protocol_landscape; };
+	commands.enter = []() noexcept { return false; }; commands.leave = []() noexcept {};
 	return commands;
 }();
 static inline const OpenTTDTownAuthorityServices town_protocol_authority{
@@ -200,11 +206,9 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.update_max_pass = TownProtocol_update_max_pass,
 		.next_town = TownProtocol_next_town,
 		.road_mask = TownProtocol_road_mask,
-		.clear_land = TownProtocol_clear_land,
-		.terraform_land = TownProtocol_terraform_land,
 		.build_bridge = TownProtocol_build_bridge,
 		.build_tunnel = TownProtocol_build_tunnel,
-		.clear_house_land = TownProtocol_clear_house_land,
+		.assert_clear_house = TownProtocol_assert_clear_house,
 		.allow_construction = TownProtocol_allow_construction,
 		.houses = &town_protocol_houses,
 	};
@@ -246,12 +250,20 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.clear_square_services.docking = [](uint32_t) noexcept { return false; };
 	services.clear_square_services.generating_world = []() noexcept { return false; };
 	services.water_services = []() noexcept { return &town_protocol_water; };
+	services.map_log_x = []() noexcept -> uint32_t { return 6; };
 	services.map_max_x = []() noexcept -> uint32_t { return 63; };
 	services.map_max_y = []() noexcept -> uint32_t { return 63; };
 	services.closest_town = [](uint32_t, uint32_t) noexcept -> const OpenTTDTownHandle * { return nullptr; };
 	services.tile_valid = [](uint32_t) noexcept { return true; };
 	services.distance_from_edge = [](uint32_t) noexcept { return uint32_t(1); };
 	services.road_type = [](uint32_t) noexcept { return uint8_t(63); };
+	static const OpenTTDTileOwnerServices owners{};
+	static const OpenTTDLandscapeTileServices tiles{
+		.clear = [](OpenTTDCommandCost *p, uint32_t, uint16_t flags) noexcept { auto &w = *town_protocol_world; if (w.placing && !(flags & 1)) w.landscape_clears++; else w.clears++; TownProtocolCostOf(p)->ok = w.clear_ok; },
+		.owners = &owners,
+	};
+	town_protocol_landscape.shared = &services; town_protocol_landscape.costs = &town_protocol_costs;
+	town_protocol_landscape.commands = &town_protocol_commands; town_protocol_landscape.tile_procs = &tiles;
 	bool road_ok = false;
 	OpenTTDCommandCostServices costs{};
 	costs.success = [](const OpenTTDCommandCost *out) noexcept { return *reinterpret_cast<const bool *>(out); };
@@ -291,7 +303,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	check(fields->num_houses == 1 && w.writes.size() == 1 && w.animations == 1 && openttd_rust_town_growth(owner.get())->flags == 0x88);
 	check(w.square_clears == 3);
 	/* CmdPlaceHouse executes a completed, protected 2x2 house through BuildTownHouse. */
-	w.writes.clear(); w.house_callback = false; w.clears = 0; w.animations = 0; w.house_count = 5;
+	w.placing = true; w.writes.clear(); w.house_callback = false; w.clears = 0; w.animations = 0; w.house_count = 5;
 	TownProtocolCost cost{};
 	services.town_count = []() noexcept -> size_t { return 1; };
 	services.town_owner = [](const OpenTTDTownHandle *) noexcept { town_protocol_world->owner_reads++; return town_protocol_world->owner; };

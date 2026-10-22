@@ -53,6 +53,7 @@ inline bool RustStationNoiseEnabled() noexcept { return _settings_game.economy.s
 inline bool RustStationDistantJoin() noexcept { return _settings_game.station.distant_join_stations; }
 inline bool RustNormalGame() noexcept { return _game_mode == GM_NORMAL; }
 inline bool RustExtraDynamite() noexcept { return _settings_game.construction.extra_dynamite; }
+inline uint8_t RustMapHeightLimit() noexcept { return _settings_game.construction.map_height_limit; }
 inline uint16_t RustMaxBridgeLength() noexcept { return _settings_game.construction.max_bridge_length; }
 inline uint8_t RustMaxBridgeHeight() noexcept { return _settings_game.construction.max_bridge_height; }
 inline uint16_t RustMaxTunnelLength() noexcept { return _settings_game.construction.max_tunnel_length; }

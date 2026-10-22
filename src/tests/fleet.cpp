@@ -127,6 +127,35 @@ TEST_CASE("Commands - shared native stack result layouts and encoded parameters"
 	CHECK(SameCost(moved, CommandCost(EXPENSES_CONSTRUCTION, Money(INT64_MIN))));
 }
 
+static std::vector<OpenTTDCommandCost *> command_cost_stack;
+static bool command_cost_lifo;
+TEST_CASE("Command - opaque stack lifetime and moved encoded errors")
+{
+	const auto &native = GetRustCommandCostServices();
+	auto traced = native;
+	traced.construct = [](OpenTTDCommandCostStorage *storage) noexcept {
+		auto *p = GetRustCommandCostServices().construct(storage); command_cost_stack.push_back(p); return p;
+	};
+	traced.destroy = [](OpenTTDCommandCost *p) noexcept {
+		command_cost_lifo &= !command_cost_stack.empty() && command_cost_stack.back() == p;
+		command_cost_stack.pop_back(); GetRustCommandCostServices().destroy(p);
+	};
+	command_cost_lifo = true;
+	CHECK(openttd_rust_command_stack_probe(&traced));
+	CHECK(command_cost_lifo);
+	CHECK(command_cost_stack.empty());
+	AutoRestoreBackup<CompanyID> company(_current_company, CompanyID(0)), local(_local_company, CompanyID(0));
+	OpenTTDCommandCostStorage first, second;
+	auto *a = native.construct(&first), *b = native.construct(&second);
+	native.error_param(a, STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS, UINT16_MAX);
+	const auto expected = reinterpret_cast<CommandCost *>(a)->GetEncodedMessage();
+	REQUIRE_FALSE(expected.empty());
+	native.move(b, a);
+	native.destroy(a);
+	CHECK(reinterpret_cast<CommandCost *>(b)->GetEncodedMessage() == expected);
+	native.destroy(b);
+}
+
 TEST_CASE("Fleet - CommandCost services keep native first-error and saturation")
 {
 	const auto &w = FleetTransactionServices();

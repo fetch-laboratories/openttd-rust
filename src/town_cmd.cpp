@@ -504,12 +504,6 @@ static void *RustHouseStationFinder(uint32_t tile) noexcept
 	stations.emplace(TileArea(TileIndex{tile}, 1, 1));
 	return &*stations;
 }
-static CommandCost ClearTile_Town(TileIndex tile, DoCommandFlags flags)
-{
-	CommandCost result;
-	openttd_rust_house_clear(&GetRustTownServices(), &GetRustSharedServices(), RustCommandCost(&result), tile.base(), flags.base());
-	return result;
-}
 static void AddProducedCargo_Town(TileIndex tile, CargoArray &produced)
 {
 	openttd_rust_house_produced(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), &produced);
@@ -1059,21 +1053,6 @@ static uint64_t RustTown_road_mask() noexcept
 {
 	return GetMaskForRoadTramType(RTT_ROAD).base();
 }
-static bool RustTown_clear_land(uint32_t tile, uint32_t execute) noexcept
-{
-	DoCommandFlags flags{DoCommandFlag::Auto, DoCommandFlag::NoWater};
-	if (execute != 0) flags.Set(DoCommandFlag::Execute);
-	CommandCost result;
-	GetRustCommandServices().landscape_clear(RustCommandCost(&result), tile, flags.base());
-	return result.Succeeded();
-}
-static OpenTTDTownCommandResult RustTown_terraform_land(uint32_t tile, uint32_t slope, uint32_t up, uint32_t execute) noexcept
-{
-	DoCommandFlags flags{DoCommandFlag::Auto, DoCommandFlag::NoWater};
-	if (execute != 0) flags.Set(DoCommandFlag::Execute);
-	const auto result = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(flags, TileIndex{tile}, static_cast<Slope>(slope), up != 0));
-	return {.cost = result.GetCost(), .success = result.Succeeded()};
-}
 static bool RustTown_build_bridge(uint32_t tile, uint32_t end, uint32_t bridge, uint32_t road_type, uint32_t execute) noexcept
 {
 	auto flags = CommandFlagsToDCFlags(GetCommandFlags<CMD_BUILD_BRIDGE>());
@@ -1086,12 +1065,7 @@ static bool RustTown_build_tunnel(uint32_t tile, uint32_t road_type, uint32_t ex
 	if (execute != 0) flags.Set(DoCommandFlag::Execute);
 	return Command<CMD_BUILD_TUNNEL>::Do(flags, TileIndex{tile}, TRANSPORT_ROAD, static_cast<RoadType>(road_type)).Succeeded();
 }
-static void RustTown_clear_house_land(uint32_t tile) noexcept
-{
-	CommandCost result;
-	GetRustCommandServices().landscape_clear(RustCommandCost(&result), tile, DoCommandFlags{DoCommandFlag::Auto, DoCommandFlag::NoWater, DoCommandFlag::Execute}.base());
-	assert(result.Succeeded());
-}
+static void RustTown_assert_clear_house([[maybe_unused]] bool success) noexcept { assert(success); }
 static bool RustTown_allow_construction(uint32_t town, uint32_t tile, uint32_t house, uint32_t random) noexcept
 {
 	const auto *hs = HouseSpec::Get(house);
@@ -1302,11 +1276,9 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.update_max_pass = RustTown_update_max_pass,
 		.next_town = GetRustSharedServices().town_next_id,
 		.road_mask = RustTown_road_mask,
-		.clear_land = RustTown_clear_land,
-		.terraform_land = RustTown_terraform_land,
 		.build_bridge = RustTown_build_bridge,
 		.build_tunnel = RustTown_build_tunnel,
-		.clear_house_land = RustTown_clear_house_land,
+		.assert_clear_house = RustTown_assert_clear_house,
 		.allow_construction = RustTown_allow_construction,
 		.houses = &GetRustHouseServices(),
 	};
@@ -4770,14 +4742,7 @@ static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEco
 #endif
 });
 
-#ifdef WITH_RUST
-static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
-{
-	CommandCost result;
-	openttd_rust_house_terraform(&GetRustTownServices(), &GetRustSharedServices(), RustCommandCost(&result), tile.base(), flags.base(), z_new, tileh_new);
-	return result;
-}
-#else
+#ifndef WITH_RUST
 static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
 {
 	if (AutoslopeEnabled()) {
@@ -4811,7 +4776,11 @@ static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int 
 extern const TileTypeProcs _tile_type_town_procs = {
 	DrawTile_Town,           // draw_tile_proc
 	GetSlopePixelZ_Town,     // get_slope_z_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	ClearTile_Town,          // clear_tile_proc
+#endif
 	AddAcceptedCargo_Town,   // add_accepted_cargo_proc
 	GetTileDesc_Town,        // get_tile_desc_proc
 	GetTileTrackStatus_Town, // get_tile_track_status_proc
@@ -4826,7 +4795,11 @@ extern const TileTypeProcs _tile_type_town_procs = {
 	AddProducedCargo_Town,   // add_produced_cargo_proc
 	nullptr,                    // vehicle_enter_tile_proc
 	GetFoundation_Town,      // get_foundation_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	TerraformTile_Town,      // terraform_tile_proc
+#endif
 	nullptr, // check_build_above_proc
 };
 

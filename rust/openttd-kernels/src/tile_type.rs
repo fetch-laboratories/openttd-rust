@@ -23,15 +23,13 @@ pub const MP_TREES: u8 = 4;
 pub const MP_STATION: u8 = 5;
 /// `TileType::MP_WATER`.
 pub const MP_WATER: u8 = 6;
-/// `TileType::MP_TUNNELBRIDGE`.
-pub const MP_TUNNELBRIDGE: u8 = 9;
-/// `INVALID_TILE`.
-pub const INVALID_TILE: u32 = u32::MAX;
-
 /// `TileType::MP_VOID`.
 pub const MP_VOID: u8 = 7;
 /// `TileType::MP_INDUSTRY`.
 pub const MP_INDUSTRY: u8 = 8;
 /// `TileType::MP_OBJECT`.
-/// `MP_OBJECT`.
 pub const MP_OBJECT: u8 = 10;
+/// `TileType::MP_TUNNELBRIDGE`.
+pub const MP_TUNNELBRIDGE: u8 = 9;
+/// `INVALID_TILE`.
+pub const INVALID_TILE: u32 = u32::MAX;

@@ -22,6 +22,14 @@ pub const PR_CLEAR_WATER: usize = 34;
 /// `PR_BUILD_FOUNDATION`.
 pub const PR_BUILD_FOUNDATION: usize = 57;
 
+/// `PR_TERRAFORM`.
+pub const PR_TERRAFORM: usize = 21;
+/// `PR_CLEAR_CANAL`.
+pub const PR_CLEAR_CANAL: usize = 61;
+
+/// `PR_CLEAR_TREES`.
+pub const PR_CLEAR_TREES: usize = 26;
+
 /// `PR_BUILD_BRIDGE`.
 pub const PR_BUILD_BRIDGE: usize = 4;
 /// `PR_BUILD_TUNNEL`.
