@@ -559,6 +559,10 @@ pub unsafe extern "C" fn openttd_rust_subsidy_rebuild(s: *const Services) {
     unsafe { &*s }.rebuild();
 }
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_subsidy_delete_with(s: *const Services, source: Source) {
+    unsafe { &*s }.delete_with(source);
+}
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_subsidy_command(
     s: *const Services,
     flags: u16,

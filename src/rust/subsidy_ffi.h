@@ -65,6 +65,7 @@ extern "C" {
 OpenTTDSubsidyState *openttd_rust_subsidy_new(uint16_t);
 void openttd_rust_subsidy_destroy(uint16_t, OpenTTDSubsidyState *);
 void openttd_rust_subsidy_rebuild(const OpenTTDSubsidyServices *);
+void openttd_rust_subsidy_delete_with(const OpenTTDSubsidyServices *, Source);
 bool openttd_rust_subsidy_command(const OpenTTDSubsidyServices *, uint16_t, CargoType, Source, Source);
 void openttd_rust_subsidy_monthly(const OpenTTDSubsidyServices *, OpenTTDSubsidyCargo);
 bool openttd_rust_subsidy_check(const OpenTTDSubsidyServices *, CargoType, CompanyID, Source, uint16_t);
