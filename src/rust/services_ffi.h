@@ -55,6 +55,7 @@ OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
  * An environmental exception terminates rather than unwinding through Rust. */
 enum ClearGround : uint8_t;
 enum TreeGround : uint8_t;
+enum Foundation : uint8_t;
 enum Slope : uint8_t;
 enum DiagDirection : uint8_t;
 struct OpenTTDFoundationSlope { int32_t z; Slope slope; };
