@@ -674,6 +674,11 @@ impl Game<'_> {
             let old = (town.exchange_company)(u32::from(read.owner));
             let success = context.build(8, tile, bits, read.road_type, u16::MAX);
             (town.exchange_company)(old);
+            crate::witness::hit(if success {
+                crate::witness::ROAD_TRAM_BUILD
+            } else {
+                crate::witness::ROAD_TRAM_REFUSED
+            });
             success
         }
     }
