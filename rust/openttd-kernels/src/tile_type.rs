@@ -27,3 +27,6 @@ pub const MP_WATER: u8 = 6;
 pub const MP_TUNNELBRIDGE: u8 = 9;
 /// `INVALID_TILE`.
 pub const INVALID_TILE: u32 = u32::MAX;
+
+/// `MP_OBJECT`.
+pub const MP_OBJECT: u8 = 10;

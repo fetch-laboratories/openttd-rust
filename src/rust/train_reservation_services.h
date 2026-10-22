@@ -217,11 +217,7 @@ static void TrainReservationSetPlatform(void *, OpenTTDTrainHandle, uint32_t a, 
 	TileIndex t(static_cast<uint32_t>(a));
 	RustStationPlatformReservation(t.base(), b, c != 0);
 }
-static void TrainReservationSetTunnel(void *, OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	TileIndex t(static_cast<uint32_t>(a));
-	SetTunnelBridgeReservation(t, b != 0);
-}
+
 static uint64_t TrainReservationShowRes(void *, OpenTTDTrainHandle) noexcept
 {
 	return _settings_client.gui.show_track_reservation;

@@ -169,7 +169,11 @@ impl World<'_> {
     fn bridge_height(&self, tile: u32) -> i32 {
         // SAFETY: canonical immutable station services; no owner state is borrowed.
         let stations = unsafe { &*(self.s.station_commands)() };
-        (stations.bridge_height)((stations.southern_bridge_end)(tile))
+        crate::bridge_map::get_bridge_height(
+            (stations.southern_bridge_end)(tile),
+            self.s,
+            |f, h| (self.rail().apply_foundation)(f, h).z,
+        )
     }
     fn check_docking(&self, tile: u32) {
         // SAFETY: the immutable station table is live; docking borrows no water owner.

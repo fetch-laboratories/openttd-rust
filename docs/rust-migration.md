@@ -1731,6 +1731,29 @@ all lock directions/parts, occupied/bankrupt queries, force/partial clearing,
 editor/desert and restoration inputs. Pool exhaustion, construction under bridges,
 water objects, arbitrary NewGRF/legacy layouts and GUI remain #156 coverage gaps.
 
+### Tunnel and bridge commands and ownership (#293)
+
+Rust (`tunnelbridge_cmd.rs`) owns complete bridge/tunnel construction, removal
+permission and clearing, ownership, terraform and build-above policy, including
+ordered replacement, partial effects, reservations and infrastructure updates.
+Header-named modules share bridge prices/foundations/heights, length and track
+helpers, and source constants. The hidden tunnel end tile is one process-wide
+Rust atomic, shared with GUI readers; no component world borrow crosses reentry.
+
+C++ keeps canonical map/spec/pool storage, rendering, vehicle entry and native
+stack command results. Direct typed noexcept services retain shared operations;
+ordinary play reaches no throwing script VM or save service. Bridge height calls
+Rust foundation directly, including existing station/water/object consumers.
+Slope/z has one canonical shared observation. Tunnel exit terraform uses the
+integrated object scratch owner's stable index across recursive clears.
+
+Default `roads-commands` and its reload compare all bridge transports/both axes,
+road/rail tunnels, test/execute/query (including AI), replacement, ownership,
+refusal, occupied clearing, bankruptcy, autoslope, recursive exit terraforming,
+hidden failure end tiles and price thresholds at 25/50/100 tunnel tiles.
+The existing default object probe checks scratch growth/restoration. Live train
+re-reservation, rectangular-map tunnel intersection choices, external NewGRFs
+and legacy layouts remain #156 coverage gaps. PR #352 records checks and limits.
 ### Subsidy lifecycle, route search and awards (#316)
 
 Rust owns each subsidy’s canonical scalars, all route searches, creation/deity

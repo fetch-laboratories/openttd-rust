@@ -26,7 +26,7 @@ SPEED_PASS = (
     ("play-padhattan-ridge-2016-manual", 1.355471294661727, 12653579222, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
 )
 # Each game-code PR records its head's loop Ir here, in SPEED_PASS order.
-SPEED_INTEGRATED = "daf63dfc1f", (2887024138, 24902225178, 23624022040, 4238401793, 6973130306, 12565264010)
+SPEED_INTEGRATED = "e77cb83040", (2887190782, 24842146127, 23560931730, 4235385730, 6968477739, 12567856194)
 # fmt: on
 SPEED_ANCHORS = {
     name: dict(
@@ -355,6 +355,15 @@ def check(scenario, run, mode, role, result):
                 "protocol-query true",
                 "protocol-bankrupt true",
                 "automatic-convert-exec true",
+                "tb-done true",
+                "tb-invalid-type-255 false",
+                "tb-invalid-type-256 false",
+                "tb-invalid-type-4294967295 false",
+                "tb-tunnel-0-exec true",
+                "tb-tunnel-1-exec true",
+                "tb-tunnel-y-exec true",
+                "tb-town-downgrade-exec false",
+                "tb-town-refuse-exec false",
                 *COVERAGE_OUTCOMES,
             ):
                 if not any(
@@ -375,6 +384,42 @@ def check(scenario, run, mode, role, result):
             core.branch_witnesses(
                 scenario, run, role, "road_commands", COMMAND_BRANCHES
             )
+            core.branch_witnesses(
+                scenario,
+                run,
+                role,
+                "tunnelbridge",
+                (
+                    "build_bridge",
+                    "build_tunnel",
+                    "replace_bridge",
+                    "new_bridge",
+                    "tunnel_terraform",
+                    "clear_tunnel",
+                    "clear_bridge",
+                    "occupied",
+                    "change_owner",
+                    "autoslope",
+                    "build_above",
+                    "deity",
+                    "town_rating",
+                    "ai_query",
+                ),
+            )
+            for length in (24, 25, 26, 49, 50, 51, 99, 100, 101):
+                prefix = f"ROADCMD tb-tunnel-price-{length} true "
+                if not any(line.startswith(prefix) for line in lines):
+                    result["problems"].append(f"{mode}/{role}: missing {prefix}")
+            for length in (0, 1, 2, 3, 4, 5, 25, 26, 50, 51, 100, 200, 1000):
+                prefix = f"ROADCMD tb-price {length} "
+                if not any(line.startswith(prefix) for line in lines):
+                    result["problems"].append(f"{mode}/{role}: missing {prefix}")
+            for axis in (0, 1):
+                for transport in (0, 1, 2):
+                    prefix = f"ROADCMD tb-bridge-{axis}-{transport}-exec true "
+                    if not any(line.startswith(prefix) for line in lines):
+                        result["problems"].append(f"{mode}/{role}: missing {prefix}")
+
         return
 
     if "roads" not in scenario:

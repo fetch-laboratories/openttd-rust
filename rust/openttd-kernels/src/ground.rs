@@ -36,10 +36,7 @@ fn other_axis(axis: Axis) -> Axis {
     Axis(axis.0 ^ 1)
 }
 
-/// Original `AxisToTrack`; valid axes and axial tracks share their encoding.
-fn axis_to_track(axis: Axis) -> Track {
-    Track(axis.0)
-}
+use crate::track_func::axis_to_track;
 
 /// Original `GetCrossingRailAxis`, over the canonical road-axis accessor.
 fn crossing_rail_axis(tile: u32, rail: &RailMapServices) -> Axis {
@@ -49,6 +46,21 @@ fn crossing_rail_axis(tile: u32, rail: &RailMapServices) -> Axis {
 /// Original `GetCrossingRailTrack`, retaining its named helper composition.
 pub(crate) fn crossing_rail_track(tile: u32, rail: &RailMapServices) -> Track {
     axis_to_track(crossing_rail_axis(tile, rail))
+}
+
+/// Original `CheckBuildAbove_Clear`: construction above clear tiles always succeeds.
+pub(crate) fn check_build_above_clear(out: crate::services::Cost<'_>) {
+    out.zero();
+}
+/// # Safety
+/// The native facade provides immutable costs and a live stack output slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_clear_build_above(
+    cost: *const crate::services::CommandCostServices,
+    out: *mut crate::services::CommandCost,
+) {
+    // SAFETY: the facade owns both values for this synchronous call.
+    check_build_above_clear(crate::services::Cost(out, unsafe { &*cost }));
 }
 
 /// Complete original `DoClearSquare` control. Native leaves cannot throw and no

@@ -606,7 +606,7 @@ const OpenTTDTileOwnerServices &GetRustTileOwnerServices() noexcept
 		.shared = &GetRustSharedServices(),
 		.station = &GetRustStationCommandServices(),
 		.trees = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_trees_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
-		.tunnel_bridge = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_tunnelbridge_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
+		.tunnel_bridge = &GetRustTunnelBridgeServices(),
 		.void_tile = [](uint32_t tile, uint8_t old, uint8_t next) noexcept { _tile_type_void_procs.change_tile_owner_proc(TileIndex(tile), Owner(old), Owner(next)); },
 		.water = &GetRustWaterCommandServices(),
 	};

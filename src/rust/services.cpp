@@ -9,6 +9,8 @@
 #include "../stdafx.h"
 #include "town_services.h"
 #include "services_ffi.h"
+#include "services_bridge.h"
+#include "services_viewport.h"
 #include "station_command_ffi.h"
 #include "road_command_ffi.h"
 #include "presentation_services.h"
@@ -138,7 +140,7 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 const OpenTTDWaterRestorationServices &GetRustWaterRestorationServices() noexcept
 {
 	static const OpenTTDWaterRestorationServices services{
-		.slope_z = RustTileSlopeZ, .infrastructure = RustAddWaterInfrastructure,
+		.infrastructure = RustAddWaterInfrastructure,
 		.infrastructure_dirty = GetRustCommandServices().infrastructure_dirty,
 		.make_canal = RustMakeCanal, .make_river = RustMakeRiver,
 	};
@@ -176,7 +178,7 @@ static bool SharedBridgeAbove(uint32_t tile) noexcept { return IsBridgeAbove(Til
 static uint8_t SharedTropicZone(uint32_t tile) noexcept { return GetTropicZone(TileIndex{tile}); }
 static int32_t SharedTileZ(uint32_t tile) noexcept { return RustTileZ(TileIndex{tile}); }
 static uint8_t SharedTileSlope(uint32_t tile) noexcept { return GetTileSlope(TileIndex{tile}); }
-static void SharedMarkDirty(uint32_t tile) noexcept { MarkTileDirtyByTile(TileIndex{tile}); }
+static void SharedMarkDirty(uint32_t tile) noexcept { RustMarkTileDirtyHeight(tile, 0); }
 static void SharedFreeTrainReservation(const Train *v) noexcept { FreeTrainTrackReservation(v); }
 static bool SharedTryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_okay) noexcept { return TryPathReserve(v, mark_as_stuck, first_tile_okay); }
 static bool Shared_may_have_road(uint32_t tile) noexcept { return MayHaveRoad(TileIndex{tile}); }
@@ -200,7 +202,7 @@ static uint32_t SharedIndustry(int32_t x, int32_t y, uint32_t *index) noexcept
 
 static uint16_t MapSvcDepotIndex(uint32_t tile) noexcept { return GetDepotIndex(TileIndex(tile)).base(); }
 static uint8_t MapSvcTunnelBridgeDirection(uint32_t tile) noexcept { return GetTunnelBridgeDirection(TileIndex(tile)); }
-static uint16_t MapSvcBridgeSpeed(uint32_t tile) noexcept { return GetBridgeSpec(GetBridgeType(TileIndex(tile)))->speed; }
+static uint16_t MapSvcBridgeSpeed(uint32_t tile) noexcept { return RustBridgeSpecSpeed(RustBridgeType(tile)); }
 static bool MapSvcIsWaterTile(uint32_t tile) noexcept { return IsWaterTile(TileIndex(tile)); }
 
 static uint8_t SharedNextCompany(uint8_t from) noexcept
@@ -341,7 +343,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.plane_speed = SharedPlaneSpeed,
 	.random = SharedRandom,
 	.road_bits = Shared_road_bits,
-	.road_tram_type = Shared_road_tram_type, .road_type_is_road = RustRoadTypeIsRoad, .road_cost_multiplier = RustRoadCostMultiplier,
+	.road_tram_type = Shared_road_tram_type, .road_type_is_tram = SharedRoadTypeIsTram, .road_type_is_road = RustRoadTypeIsRoad, .road_cost_multiplier = RustRoadCostMultiplier,
 	.road_depot_direction = Shared_road_depot_direction,
 	.road_owner = Shared_road_owner,
 	.road_type = Shared_road_type,
@@ -382,6 +384,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tile_type = SharedTileType,
 	.tile_add_wrap = SharedTileAddWrap,
 	.tile_valid = Shared_tile_valid,
+	.tile_slope_z = RustTileSlopeZ,
 	.tile_z = SharedTileZ,
 	.town_index = Shared_town_index,
 	.town_owner = SharedTownOwner,

@@ -631,10 +631,7 @@ static void TrainSetNext(OpenTTDTrainHandle id, OpenTTDTrainHandle a) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	v->SetNext(static_cast<Train *>(a.shell));
 }
-static void TrainSetTunnelRes(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	SetTunnelBridgeReservation(TileIndex(a), b != 0);
-}
+
 static void TrainShowEffect(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
