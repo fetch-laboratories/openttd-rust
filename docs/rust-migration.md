@@ -282,16 +282,14 @@ separate from the compatibility identity checked against anchors.
 head and Ir. Empty anchors mean collection only, never a passing speed guard.
 Each speed pass fills them from its same-head quiet medians. Compute each projection
 as `R0 * (1 + 2 * max(0, I / I0 - 1))`, directly from the fixed anchor. The
-guard is 15% above the `integrated` record's projection from that same anchor;
-ceilings remain 1.5x play and 1.3x generation, with a speed-pass trigger
-within 5%. A PR profiles once at its final head and records its six loop counts
-and projections in its description; it never edits `SPEED_INTEGRATED`, so
-game-code PRs do not conflict with each other on it. Quiet passes replace the
-whole anchor and refresh `integrated` together. Never reset anchor Ir alone.
-When root takes stock after every second integration, it profiles the integrated
-tip in the background and records the six projections in the roadmap, to
-see the 5% band. Profiles run alongside other agents; a PR does not answer for
-wall-ratio spread, which speed passes measure. Factor 2 is provisional: at
+ceilings are 1.5x play and 1.3x generation, with a speed-pass trigger within
+5%. PRs run no speed check and never edit `SPEED_ANCHORS` or `SPEED_INTEGRATED`
+(user decision, 2026-10-22). After every second integration root profiles the
+integrated tip in the background and records the six projections in the
+roadmap; a rise of more than 3% since the previous tip profile gets a
+fix-forward maintenance PR (AGENTS.md). Quiet passes replace the whole anchor
+and refresh `integrated` together. Never reset anchor Ir alone. Profiles run
+alongside other agents. Factor 2 is provisional: at
 `802ec7d6a4` the measured wall sensitivity to loop Ir was 0.75 TGP, 1.0-1.31
 for Opus/Grok/P1996/P2000 and 1.54 P2016 (#356). Memory stalls, excluded work
 and kernel/I/O costs remain outside the proxy. AGENTS.md schedules speed passes.
@@ -486,7 +484,9 @@ other Linux variables are `blacksmith-4vcpu-ubuntu-2404`. Windows uses
 `blacksmith-4vcpu-windows-2025` (#252 accepted the image; #304 matched the
 size to its `--parallel 4` build); macOS and light jobs stay
 on GitHub-hosted runners (free for this public repository; Blacksmith
-bills macOS at 20x). Blacksmith serves `actions/cache` from its own co-located
+bills macOS at 20x). macOS falls back to `blacksmith-6vcpu-macos-26` after two
+hosted-capacity cancellations of the same run (#357); setting that repository
+variable needs no Blacksmith credentials. Blacksmith serves `actions/cache` from its own co-located
 store on its runners, so the GitHub cache budget above covers only GitHub-hosted
 jobs. Unsetting a variable returns that job to GitHub with no workflow change.
 Profile CI time with the Blacksmith CLI (`blacksmith jobs list|steps|stats`,

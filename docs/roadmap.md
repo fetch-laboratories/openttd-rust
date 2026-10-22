@@ -9,43 +9,42 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 - Thirty-eight ownership ports. Whole fork: Rust 88,388 / tooling 33,537 / glue 34,397 / original retired 49,636 of 470,612 C/C++ `src/` lines (10.55%). Simulation: 41,518 / 102,615 (40.46%), up from 37.09% at the sixteenth review.
 - Since then, twelve integrations, four of them ownership ports (#313 objects, #329 vehicle transactions, #346 subsidies, #352 tunnels/bridges). Retired 3,534 lines against 2,151 net glue plus 1,960 tooling.
 - Speed: a quiet six at this code (#356) matches every projection within -0.7% to +1.4% (TGP 1.214, Opus 1.199, Grok 1.202, P1996 1.254, P2000 1.323, P2016 1.359). No scenario is in its 5% band. TGP is nearest its ceiling in relative terms: before #351 it is 0.8% loop Ir from its band.
-- CI on `rust-migration` is green. On 2026-10-21, hosted macOS arm64 capacity cancelled 19 Full attempts; it caught no defect.
+- CI on `rust-migration` is green. On 2026-10-21, hosted macOS arm64 capacity cancelled 19 Full attempts; macOS moves to every fifth integration (#357).
 - Component branches: #347, #353 and uncommitted #349 (three of six). Maintenance drafts: #340, #351.
 
-## Seventeenth steering review (2026-10-22, return types, count records and non-blocking passes)
+## Seventeenth steering review (2026-10-22, speed on the merged branch, base-type returns, macOS every fifth merge)
 
 Independent Claude Opus audits of integrated #329, #346 and #352 and draft #347, a speed audit (fresh profiles plus a quiet six) and a process audit of both root sessions since the sixteenth review (Claude: 193 active minutes, 3 integrations; Codex: 261 minutes, 9 integrations) found:
 
 - No game-state divergence on Linux or macOS in any audited port. One Windows defect: the subsidy `local_company` service returns `CompanyID` by value. MSVC returns it through a hidden pointer, while Rust reads a byte in AL (#355). Windows CI runs no scenario, and the ABI checks cover layouts, not return types.
-- `SPEED_INTEGRATED` is one line that every game-code PR rewrote, so each integration forced every queued PR to remerge, recount and rerun Full. That cost about 20 serial minutes per PR. 16 of 24 base merges were superseded, a passing Full was voided, and a Windows link failure stayed hidden for 70 minutes. It caught nothing: no PR missed the guard, and the largest per-PR move was -4.31%.
-- The checkpoint's "speed pass before further integrations or component starts" was root's addition; the user asked only to record the pass. The audit's quiet six close the pass (#356). `simulate --instructions` fails identity in the main checkout (#356).
-- Hosted macOS capacity cost the Claude root about 105 minutes and paused four PRs.
-- Of 24 review rounds, 12 had findings: duplicate copies and evidence holes, never a divergence. Reviews missed orphaned glue in all three audited integrations (#261 comment).
-- #329 added three process-wide unsafe scratch pools on cold command paths to avoid allocating, where the original uses a local vector.
-- #275's remaining list covers under 5% of the P2016 gap. Aircraft (36%) and the road controller (26%) lead (#275 comment).
+- Per-PR speed checks caught nothing. No ordinary PR moved a projection more than 1.3%, against a 15% guard. Recording the result on one shared line forced every queued PR to remerge, recount and rerun Full after each integration: about 20 serial minutes per PR, and 16 of 24 base merges superseded.
+- Four of the twelve integrations were speed work (#322, #339, #336, #345), saving about 0.4% of P2016. Quiet medians at this code match every projection within 1.4%, and all scenarios sit 6-10% below their ceilings. `simulate --instructions` fails identity in the main checkout (#356).
+- Hosted macOS capacity cost the Claude root about 105 minutes and paused four PRs; macOS caught no defect.
+- Of 24 review rounds, 12 had findings: duplicate copies and evidence holes, never a divergence. Reviews missed orphaned glue in all three audited integrations (#261 comment). #329 added three process-wide unsafe scratch pools where the original uses a local vector.
+- The wind-down skill restated process steps and stopped PRs on fixes that need no review. Root then made the due speed pass a gate on all resume work. The skill is fixed.
 
-AGENTS.md now says:
-- A PR profiles once at its final head and records its counts in its description. PRs never edit `SPEED_INTEGRATED`. A base update that keeps both sides needs no recount. A PR whose exact-head Full passed and that merges cleanly integrates without a base update. This keeps the user's per-PR count decision (2026-10-21) and drops the per-PR record step the last two wind-down messages listed.
-- A due pass runs alongside other work. When root takes stock, it profiles the tip in the background to see the 5% band.
-- A C++ class type crosses the boundary as its base type (#355).
-- The boundary allocates nothing per call; a local container the original builds becomes a local `Vec`.
-- Review reports name orphaned WITH_RUST bodies, exports and declarations.
+**User decisions (2026-10-22):**
+- PRs run no speed check. Root profiles the merged branch after every second integration and fixes forward any rise of more than 3%. This replaces the 2026-10-21 per-PR count decision and the 15% per-PR guard.
+- Speed passes and speed fixes happen only when a scenario comes within 5% of its 1.5x/1.3x ceiling. #275 has no standing stream.
+- macOS is tested after every fifth integration, not per PR, with a Blacksmith fallback after two hosted-capacity cancellations (#357).
 
-Provisional, checked next review: factor 2. The measured wall sensitivity to loop Ir at `802ec7d6a4` was 0.75-1.54, so factor 2 is conservative and is kept. The 6.6% layout spread is retired: a pass's median of four three-pair medians came within 1.4% of every projection.
+AGENTS.md also says: a PR whose exact-head Full passed and that merges cleanly integrates without a base update; a C++ class type crosses as its base type (#355); a local container the original builds stays a local `Vec`; review reports name orphaned WITH_RUST bodies, exports and declarations.
+
+Provisional, checked next review: the 3% tip-rise threshold (basis: counts repeat to 0.04%; the largest ordinary per-PR move was 1.3%) and factor 2 (measured wall sensitivity 0.75-1.54 at `802ec7d6a4`, so it is conservative). The 6.6% layout spread is retired: a pass's median of four three-pair medians came within 1.4% of every projection.
 
 Actions, in order (apply first; ports keep running alongside):
 1. **#355:** the MSVC return fix and the compile-time return-type check, before any other integration.
-2. **#356:** the identity fix and the quiet anchors. This closes the due pass. Its maintenance PRs come from the #275 attribution (aircraft, road controller, scheduler carrier, orders) and take maintenance slots.
-3. **Integrate ready drafts,** without base updates unless a conflict blocks: #351 after #356 (rustfmt, then Full; on #274 merits, with no extension for TGP), #340 (two deletions, then review), #347 (PR comment items), #353 (fresh review).
-4. **Ports continue:** #349 to its first passing milestone, #315, then owner selection (Phase 2 item 5).
-5. **#261:** the 2026-10-22 cleanup list as one maintenance PR. The **#156** standing slot takes the new gaps.
-6. **macOS capacity:** until the user decides on a Blacksmith fallback, keep the bounded reruns and work other items while a Full waits.
+2. **#356:** the identity fix and the quiet anchors; the tip profiles compare against them. No pass is due: nothing is near a ceiling.
+3. **#357:** macOS out of the pre-merge Full. Until it lands, use the Blacksmith fallback on capacity cancellations.
+4. **Integrate ready drafts,** without base updates unless a conflict blocks: #351 after #356 (rustfmt, then Full; no extension), #340 (two deletions, then review), #347 (PR comment items), #353 (fresh review).
+5. **Ports continue:** #349 to its first passing milestone, #315, then owner selection (Phase 2 item 5).
+6. **#261:** the 2026-10-22 cleanup list as one maintenance PR. The **#156** standing slot takes the new gaps.
 
 ## Earlier steering, still in force
 
-- **Counts per PR and the shared helper layer (sixteenth):** per-PR instruction counts (user decision, 2026-10-21), with wall time only in passes, ranked by net cost. Infrastructure budgets are raised once. Header helpers are ported once (#334). A Claude Code root keeps review on gpt-6.1-sol.
+- **Shared helper layer (sixteenth):** wall time only in passes, ranked by net cost (per-PR counts are superseded, 2026-10-22). Infrastructure budgets are raised once. Header helpers are ported once (#334). A Claude Code root keeps review on gpt-6.1-sol.
 - **Speed and the shared layer (fifteenth):** port callees as callees. Reviews compare callee by callee first, split by function group above about 1,000 retired lines. A shared service more than one draft needs lands once, as its own PR (#328, #333).
-- **Merge churn and process (fourteenth):** #282 15% guard with 1.5x/1.3x ceilings (user decision). Evidence is exact-head CI plus the PR's commands. Reviewers rerun only what their fixes touch. Root spot-checks fix commits. Commits that only fix warnings or record medians need no review. Each task keeps one status comment.
+- **Merge churn and process (fourteenth):** #282 1.5x/1.3x ceilings (user decision). Evidence is exact-head CI plus the PR's commands. Reviewers rerun only what their fixes touch. Root spot-checks fix commits. Commits that only fix warnings or record medians need no review. Each task keeps one status comment.
 - **Core loops (thirteenth):** the vehicle raw-offset view is closed (#274). Command ports share one set of command checks. Duplicate wrappers found at review are deleted before integration.
 - **Housekeeping (twelfth):** #261 R2 is unblocked; H5 comes last. At most three maintenance PRs are in flight. They never count against the component cap or block an ownership port.
 - **Direct shared services and boundaries:** direct shared services (#107/#168/#199) and one definition per shared accessor, enforced in quick CI by #249, whose baseline only shrinks. #284 generates named ABI layouts and fixture defaults.
@@ -134,8 +133,8 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 
 1. **Shared-accessor check (#249).** A new per-port copy fails quick CI. The baseline of existing copies only shrinks; #259 H4 extends the check to orphaned exports and duplicate table bindings. Rust-internal helper copies are invisible to it; reviewers check them against the shared header modules (#261 R6).
 2. **Speed guard and passes (#155, #282, #321, AGENTS.md).**
-   - **Per PR:** `simulate --instructions` loop counts at the final head, projected from `SPEED_ANCHORS`. No scenario may be more than 15% above the `integrated` projection, and none may exceed its ceiling (1.5x play saves, 1.3x generation). The counts go in the PR description. A miss gets a callgrind fix round.
-   - **Speed pass:** after every fourth ownership integration, or when a projection comes within 5% of its ceiling (1.425x play, 1.235x generation). Its quiet six with loop counts replaces the anchors and `integrated`. #356 closes the pass that came due after #352. Passes never block ports.
+   - **Merged branch:** after every second integration, `simulate --instructions` on the tip, projected from `SPEED_ANCHORS` and recorded in "Where the fork stands". A rise of more than 3% since the previous tip profile gets a fix-forward maintenance PR. PRs run no speed check.
+   - **Speed pass:** only when a projection comes within 5% of its ceiling (1.425x play, 1.235x generation). It re-anchors from a quiet six first and opens fix PRs only if a measured ratio is in its band. Passes never block ports.
    - **Redraw:** `-r 64x64` leaves the ratios unchanged. It makes whole-process counts timing-dependent, which is why only the game loop is counted.
 3. **#156 coverage, one standing slot.** Random and crash branches come first. These remain:
    - signal tbd/global propagation overflow and arbitrary mod layouts;
@@ -150,10 +149,10 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 ## Phase 2: current work, in order
 
 Integrate reviewed work first, in order of readiness, with at most six
-unintegrated component branches. Maintenance (#261, #275) and #156 run in parallel.
+unintegrated component branches. Maintenance (#261, #281) and #156 run in parallel.
 
-1. **#355, then #356** (seventeenth review, actions 1-2).
-2. **#275 by net savings,** ranked by the seventeenth review's attribution (#275 comment, 2026-10-22): aircraft position and per-field reads, road-controller tick reads, the vehicle scheduler's post-tick carrier, then orders. Each PR reports its measured net saving.
+1. **#355, #356, #357** (seventeenth review, actions 1-3).
+2. **#275** has no standing stream. When a pass or a tip rise opens speed work, rank it by net cost (#275 comment, 2026-10-22: aircraft, road-controller tick reads, scheduler carrier, orders).
 3. **#281** vehicle maintenance direct calls: #340 deletes the orphan aircraft reliability wrapper and the duplicate engine accessor, then gets a fresh review. The callee-copy check follows.
 4. **#274 map view (#351):** limited to the scheduler's clear/water/tree loops; C++ keeps the arrays and writes. Remaining: rustfmt and exact-head Full after #356. No extension for TGP speed.
 5. **Next whole owners**, as WIP frees, each without draft service dependencies:
@@ -176,7 +175,8 @@ Paused at the user's request; resume with the seventeenth review's actions. Root
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
 | #355 | none | Small fix PR from `rust-migration`, first. |
-| #356 | none | Identity fix plus the quiet anchors from the issue; closes the due pass. |
+| #356 | none | Identity fix plus the quiet anchors from the issue. |
+| #357 | none | macOS out of the pre-merge Full; every fifth integration; Blacksmith fallback. |
 | #281 / #340 | `0c8a5e15f3` | Two deletions from the conflict review, fresh review, counts, Full. |
 | #247 / #347 | `134a40b026` | PR comment items (subsidy direct call, shared object iterator, `InvalidateWindowData`, base merge), then review, counts, Full. |
 | #274 / #351 | `edc8b95bdc` | rustfmt the merged `lib.rs`, then exact-head Full after #356. |

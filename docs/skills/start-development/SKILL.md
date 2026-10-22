@@ -42,10 +42,10 @@ checkpoint and work order.
    failed gate stays yours to re-select once a profile shows the fix.
 4. After every second integration, take stock in "Where the fork stands": C++
    game logic retired, glue and tooling cost, play-save speed ratio, open
-   coverage gaps, and the unintegrated branch count. Run the AGENTS.md speed
-   pass when it falls due. If retirement stalls, a scenario nears its speed
-   ceiling, or an item stalls across review rounds, change course rather than
-   polishing evidence.
+   coverage gaps, and the unintegrated branch count. Profile the merged branch
+   for speed in the background and run a speed pass only when AGENTS.md says.
+   If retirement stalls, a scenario nears its speed ceiling, or an item stalls
+   across review rounds, change course rather than polishing evidence.
 5. Sessions can end without warning. Have agents push their branches at every
    passing milestone and keep one status comment per task, edited in place.
    Keep the roadmap's resume checkpoint table current with each roadmap commit,
