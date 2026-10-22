@@ -182,6 +182,10 @@ def check(scenario, run, mode, role, result):
     variant = scenario["engines"]
     component = "subsidy" if variant.startswith("subsidies") else "engine"
     prefix = component.upper() + " "
+    if variant == "subsidies" and not any(
+        line.startswith(prefix + "retry-rng ") for line in run["log"]
+    ):
+        raise RuntimeError("subsidy retry RNG result missing")
     for expected in EXPECTED[variant]:
         if prefix + expected not in run["log"]:
             raise RuntimeError("engine branch result missing: " + expected)

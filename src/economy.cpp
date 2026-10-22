@@ -65,6 +65,7 @@
 #include "rust/tile_owner_services.h"
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
+#include "rust/industry_shell_services.h"
 #endif
 
 #include "safeguards.h"
@@ -1086,7 +1087,7 @@ static const OpenTTDCargoServices _cargo_services = {
 	[](void *handle, uint8_t field, uint32_t slot) noexcept -> uint32_t {
 		const Industry *i = static_cast<Industry *>(handle);
 		switch (field) {
-			case 0: return i->index.base();
+			case 0: return RustIndustryID(handle);
 			case 1: {
 				auto it = i->GetCargoAccepted(slot);
 				return it == std::end(i->accepted) ? UINT32_MAX : it - std::begin(i->accepted);

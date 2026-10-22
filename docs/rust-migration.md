@@ -1694,7 +1694,7 @@ The deity command retains duplicate/self/distant routes, and monthly policy keep
 RNG short circuits, 1001 attempts, u16 wrapping/narrowing and expiry’s bypass of
 both disabled-generation early returns. Cache flags use the original Set/Test
 operations; house cargo scans call the integrated Rust house owner directly.
-`python3 tools/migration.py verify --jobs 2` checks Cargo and native ABI/aliases.
+`python3 tools/migration.py verify --jobs 2` checks Cargo and native ABI.
 Default `subsidies-control` and `subsidies-reload` compare commands, every endpoint
 class, multi-awards/rivals, actual final-delivery payments for all four multipliers,
 searches, deletion/transfer and modern SUBS reload, requiring Rust branch witnesses.

@@ -16,12 +16,12 @@
 #include "economy_base.h"
 #include "economy_func.h"
 #include "timer/timer_game_economy.h"
-bool FindSubsidyPassengerRoute();
-bool FindSubsidyTownCargoRoute();
-bool FindSubsidyIndustryCargoRoute();
 #ifdef WITH_RUST
 void SubsidyMonthlyLoop();
 #else
+bool FindSubsidyPassengerRoute();
+bool FindSubsidyTownCargoRoute();
+bool FindSubsidyIndustryCargoRoute();
 #include "subsidy-monthly-reference.inc"
 #endif
 static void SubsidyClean() { for (Subsidy *s : Subsidy::Iterate()) delete s; RebuildSubsidisedSourceAndDestinationCache(); }
@@ -85,7 +85,9 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	fmt::print(stderr, "SUBSIDY retries {}\n", retries); SubsidyClean();
 	_settings_game.linkgraph.distribution_pax = _settings_game.linkgraph.distribution_mail = _settings_game.linkgraph.distribution_armoured = _settings_game.linkgraph.distribution_default = DT_MANUAL;
 	std::vector<std::pair<Town *, uint32_t>> populations; std::vector<std::pair<uint32_t *, uint32_t>> histories;
-	for (Town *t : Town::Iterate()) { populations.emplace_back(t, t->cache.population); t->cache.population = 2000; for (auto &entry : t->supplied) { auto &count = entry.history[LAST_MONTH].transported; histories.emplace_back(&count, count); count = 0; } }
+	for (Town *t : Town::Iterate()) { populations.emplace_back(t, t->cache.population); t->cache.population = 0; for (auto &entry : t->supplied) { auto &count = entry.history[LAST_MONTH].transported; histories.emplace_back(&count, count); count = 0; } }
+	SubsidyChance(0); SubsidyMonthlyLoop(); fmt::print(stderr, "SUBSIDY retry-rng {} {}\n", _random.state[0], _random.state[1]);
+	for (auto [t, value] : populations) { t->cache.population = 2000; }
 	bool found[3]{}; uint index = 0; for (uint chance : {0U, 2U, 3U}) { SubsidyChance(chance); auto before = Subsidy::GetNumItems(); SubsidyMonthlyLoop(); found[index++] = Subsidy::GetNumItems() > before; }
 	for (auto [field, value] : histories) { *field = value; } for (auto [t, value] : populations) { t->cache.population = value; }
 	fmt::print(stderr, "SUBSIDY routes {} {} {}\n", found[0], found[1], found[2]); SubsidyClean();

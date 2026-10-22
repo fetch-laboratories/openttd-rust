@@ -2400,8 +2400,8 @@ pub(crate) unsafe fn subsidy_percent_transported(state: *const State, cargo: u8)
         return 0;
     }
     let rows = unsafe { &(*state).supplied };
-    let at = rows.partition_point(|row| row.cargo < cargo);
-    if at == rows.len() || rows[at].cargo != cargo {
+    let at = unsafe { openttd_rust_town_supplied_find(state, cargo) };
+    if at == rows.len() {
         return 0;
     }
     unsafe { openttd_rust_town_percent_transported(&raw const rows[at].history[1]) }
