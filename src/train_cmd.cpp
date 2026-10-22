@@ -4616,7 +4616,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.check_reverse = TrainCheckReverse,
 		.choose_track = TrainChooseTrack,
 		.clear_reservation = TrainClearReservation,
-		.compatible_rail_owner = TrainCompatibleRailOwner,
 		.consist_windows = TrainConsistWindows,
 		.cost_class = TrainCostClass,
 		.cost_default = TrainCostDefault,

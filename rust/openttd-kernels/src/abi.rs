@@ -4268,7 +4268,6 @@ layouts! {
         check_reverse,
         choose_track,
         clear_reservation,
-        compatible_rail_owner,
         consist_windows,
         cost_class,
         cost_default,

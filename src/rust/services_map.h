@@ -17,7 +17,6 @@
 #include "../station_map.h"
 
 inline bool SharedIsDepotTile(uint32_t tile) noexcept { return IsDepotTile(TileIndex(tile)); }
-inline bool SharedIsTileOwner(uint32_t tile, uint8_t owner) noexcept { return IsTileOwner(TileIndex(tile), Owner(owner)); }
 inline uint32_t SharedTileAddWrap(uint32_t tile, int32_t x, int32_t y) noexcept { return TileAddWrap(TileIndex(tile), x, y).base(); }
 inline uint8_t SharedTileType(uint32_t tile) noexcept { return GetTileType(TileIndex{tile}); }
 inline uint16_t MapSvcStationIndex(uint32_t tile) noexcept { return GetStationIndex(TileIndex(tile)).base(); }
