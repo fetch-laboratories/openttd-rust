@@ -27,6 +27,7 @@ pub mod house;
 pub mod names;
 
 use crate::services::{Map, Services, chance16_i};
+use crate::slope_func::{is_slope_with_one_corner_raised, is_steep_slope};
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1290,8 +1291,11 @@ impl Engine<'_> {
                 if !self.valid(test) {
                     return false;
                 }
-                let slope = u32::from((self.services.tile_slope)(test));
-                if slope != incline(dir) && slope & 16 == 0 && !matches!(slope, 1 | 2 | 4 | 8) {
+                let slope = (self.services.tile_slope)(test);
+                if u32::from(slope) != incline(dir)
+                    && !is_steep_slope(slope)
+                    && !is_slope_with_one_corner_raised(slope)
+                {
                     return false;
                 }
                 test = self.step(test, dir);
@@ -1649,8 +1653,8 @@ impl Engine<'_> {
         }
     }
     fn can_house(&self, tile: u32, noslope: bool) -> bool {
-        let slope = u32::from((self.services.tile_slope)(tile));
-        if (noslope && slope != 0) || slope & 16 != 0 {
+        let slope = (self.services.tile_slope)(tile);
+        if (noslope && slope != 0) || is_steep_slope(slope) {
             return false;
         }
         if !self.roads_allow_house(tile) || (self.services.bridge_above)(tile) {

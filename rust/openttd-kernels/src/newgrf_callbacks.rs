@@ -14,3 +14,6 @@ pub struct CallbackID(pub u16);
 
 pub const CBID_VEHICLE_LENGTH: CallbackID = CallbackID(0x11);
 pub const CBID_VEHICLE_32DAY_CALLBACK: CallbackID = CallbackID(0x32);
+
+/// `CALLBACK_FAILED`.
+pub const CALLBACK_FAILED: u16 = 0xFFFF;

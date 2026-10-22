@@ -5,11 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-use crate::services::TILE_HEIGHT;
+use crate::slope_func::{get_slope_max_pixel_z, is_halftile_slope};
+use crate::tile_type::TILE_HEIGHT;
 
 const TILE_SIZE: u32 = 16;
-const HALF_TILE: u8 = 0x20;
-const STEEP: u8 = 0x10;
 
 /// Preserve C++'s unsigned `TILE_SIZE`/`TILE_HEIGHT` promotions and logical shifts.
 /// Signed expressions use wrapping operations to avoid adding a panic path;
@@ -23,7 +22,7 @@ const STEEP: u8 = 0x10;
 )]
 pub(super) fn partial_pixel_z(x: i32, y: i32, corners: u8) -> Option<u32> {
     let sum = x.wrapping_add(y);
-    if corners & HALF_TILE != 0 {
+    if is_halftile_slope(corners) {
         let leveled = match (corners >> 6) & 3 {
             0 => x > y,
             1 => sum >= TILE_SIZE as i32,
@@ -32,11 +31,11 @@ pub(super) fn partial_pixel_z(x: i32, y: i32, corners: u8) -> Option<u32> {
             _ => unreachable!(), // A two-bit value is always 0..=3.
         };
         if leveled {
-            return Some(if corners & STEEP != 0 { 16 } else { 8 });
+            return Some(get_slope_max_pixel_z(corners).cast_unsigned());
         }
     }
 
-    // Clear all half-tile bits even when HALF_TILE was unset, after its return.
+    // Clear all half-tile bits even when SLOPE_HALFTILE was unset, after its return.
     let north = || TILE_SIZE.wrapping_sub(x as u32).wrapping_sub(y as u32) >> 1;
     let south = || (1_i32.wrapping_add(x).wrapping_add(y) as u32).wrapping_sub(TILE_SIZE) >> 1;
     let east = || (1_i32.wrapping_add(y).wrapping_sub(x) >> 1) as u32;

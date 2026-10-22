@@ -4,12 +4,12 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-21, code at `f6cddca557`)
+## Where the fork stands (2026-10-21, code at `18dbc15675`)
 
-- Thirty-four ownership ports. Whole fork: Rust 79,796 / tooling 32,403 / glue 32,246 / original retired 46,102 of 470,612 C/C++ `src/` lines (9.80%). Simulation: 38,062 / 102,615 (37.09%).
-- Since the fifteenth review, water #317, houses #269 and roads #290 integrated, retiring 2,667 lines. Seven maintenance PRs (#308, #323, #324, #326, #328, #332, #333) retired 12 lines.
-- Speed: #322 integrated the count guard. Its quiet pass at `667e652ad8` (four medians each) is the first anchor and `SPEED_BUDGETS` record: TGP 1.215, Opus 1.204, Grok 1.191, P1996 1.250, P2000 1.305, P2016 1.356. None is within 5% of its ceiling. This closed the speed pass due since #269; the next falls due after four more ownership integrations.
-- Drafts: #313 objects, #329 vehicle transactions, #334 (#261 R6), plus new #156 and #275 maintenance branches. #274 is a paused measurement branch.
+- Thirty-four ownership ports. Whole fork: Rust 80,110 / tooling 32,401 / glue 32,256 / original retired 46,112 of 470,612 C/C++ `src/` lines (9.80%). Simulation: 38,072 / 102,615 (37.10%).
+- #334 (#261 R6) integrated the shared header modules (`slope_func`, `map_func`, `tile_type`, `command_type` and others); new ports import from them. No ownership port integrated this session, so the next speed pass is still four ownership integrations away.
+- Speed: the #322 anchors stand (TGP 1.215, Opus 1.204, Grok 1.191, P1996 1.250, P2000 1.305, P2016 1.356). #339 fixes worktree identity; the normal count guard works again. Previous drafts: #313 at most +0.33% (TGP), #336 and #340 lower on every play save. #341 closed without a saving (P2016 +0.18%).
+- CI: hosted macOS capacity recovered on retry; the base and #339 passed. Full for #337 is running. macOS stays on GitHub-hosted runners.
 
 ## Sixteenth steering review (2026-10-21, counts per PR and closing the speed pass)
 
@@ -131,6 +131,8 @@ keep their evidence in their PRs. Rows below use original retirement and net glu
 | #331 shared ownership dispatch | #333 | direct | `5e2f570eee` | 143 / 90 / 122 / 1; net glue +101 |
 | #321 instruction-count speed guard and first anchors | #322 | direct | `f6cddca557` | 0 / 576 / 0 / 0; net glue 0 |
 | #156 ownership-dispatch coverage | #335 | direct | `caadbabc38` | 0 / 173 / 0 / 0; tests only |
+| #261 R6 shared header modules | #334 | direct | `18dbc15675` | 858 / 7 / 64 / 10; net glue +10 |
+| #338 instruction identity and rolling record | #339 | direct | `c4efe7bc72` | 0 / 30 / 0 / 0; net glue 0 |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -177,21 +179,29 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Resumed 2026-10-21 by the sixteenth steering review. Root runs as Claude Opus 5.5
-(xhigh) in Claude Code: implementation and planning on Claude models below xhigh,
-and independent review on gpt-6.1-sol (high) through T3 `delegate_task`.
+Resumed at the user's request (2026-10-21). Root is gpt-6.1-sol (xhigh), with
+gpt-6.1-sol (high) agents updating #313, #329, #337 and #340. The work order above
+is unchanged; #316 has started as the next unblocked whole owner while reviewed
+drafts await validation. The base is green and #339 integrated; instruction
+profiling is unblocked. Every open draft keeps its worktree and branch.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #295 / #313 | `204a384c9d` | Action 2 (`/root/object_adopt_313`): steering PR comment items 1-6; then scoped review, count guard, Full. |
-| #314 / #329 | `fef56b0238` | Action 3 (`/root/vehicle_transactions_314_r2`): null fleet list context first; last passing head `da9f1c0464`. |
-| #261 R6 / #334 | `58fb82abd3` | Action 5 (`/root/shared_header_helpers_261_r6`): shared header modules, house bounce, orphaned facades. |
-| #156 road/water | new branch | Action 4 (`/root/coverage_156_road_water_commands`): #290 and #317 rows of the 2026-10-21 #156 comment. |
-| #275 road context | new branch | Action 6 (`/root/road_command_context_275`): build the road command context only on the tram-turn path; count guard. |
-| #274 | `162843acbd` | Paused measurement branch; map view stays in the work order. |
+| #295 / #313 | `ba777fc6e6` | #334 adoption reviewed, no findings; local verify/objects running, then counts and Full. |
+| #156 / #337 | `cd9858d1ff` | Dispatcher conflict resolution reviewed, no findings; local roads checks and Full running. |
+| #275 / #336 | `5205108077` | Conflict-free base update, local build running; adopt #339, counts, record checked Ir and Full. |
+| #156 / #342 | `9ed271d489` | Reviewed, no findings. After #336: update from base (`can_build_tram` conflict), counts, Full. |
+| #281 / #340 | `800e625502` | Cleanup reviewed, no findings; author investigating native test segfaults before counts and Full. |
+| #314 / #329 | `d3fbf2de39` | Agent adopting #334 modules and returning `interval_default` as int; scoped review, counts and Full follow. |
+| #316 | `d8e3977039` base | Agent implementing subsidy ownership; combined glue/tooling cap 450, no draft prerequisite. |
+| #274 | `162843acbd` | Paused measurement branch. |
 
-#64/#68/#69 are paused. Each open draft keeps one worktree and branch. Preserve the
-pinned reference. Do not reapply effect helper `73ccd511fb`. Build and test with `--jobs 2`.
+#261 R7 inputs are on #261 and #281 part 2's inventory is on #281. The finished
+#329 review worktree was removed; its commits are already on the PR branch.
+#341 was closed by root: no speed saving (P2016 +0.18%); its measured head remains
+on origin and #275 records the disposition. Its worktrees/local branch are removed.
+#64/#68/#69 stay paused. Preserve the pinned reference. Do not reapply effect helper
+`73ccd511fb`. Build and test with `--jobs 2`.
 
 ## Out of scope for the near term
 

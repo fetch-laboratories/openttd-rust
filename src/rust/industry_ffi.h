@@ -328,7 +328,6 @@ bool openttd_rust_industry_set_flags_command(uint16_t id, bool execute, uint8_t 
 bool openttd_rust_industry_set_production_command(uint16_t id, bool execute, uint8_t level, const OpenTTDIndustryCommandServices *, const OpenTTDIndustryServices *);
 bool openttd_rust_industry_set_exclusivity_command(uint16_t id, bool execute, uint8_t company, bool consumer, const OpenTTDIndustryCommandServices *);
 bool openttd_rust_industry_set_text_command(uint16_t id, bool execute, OpenTTDByteSpan text, const OpenTTDIndustryCommandServices *);
-void openttd_rust_industry_change_owner(OpenTTDIndustry *, uint8_t old_owner, uint8_t new_owner);
 void openttd_rust_industry_build_reset(OpenTTDIndustryBuilder *builder, const OpenTTDIndustryServices *services);
 void openttd_rust_industry_build_monthly(OpenTTDIndustryBuilder *builder, const OpenTTDIndustryServices *services);
 void openttd_rust_industry_build_targets(OpenTTDIndustryBuilder *builder, const OpenTTDIndustryServices *services);
