@@ -725,6 +725,37 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
                     builds[role] / name, target_is_directory=True
                 )
     scenario = dict(scenario, executables=executables)
+    if scenario["town_founding"] == "authority":
+        if not scenario.get("town_commands_reload"):
+            return dict(scenario, console=["towns_scenario authority", "unpause"])
+        save = folder / "reference" / "town-commands.sav"
+        setup = dict(
+            scenario, console=[f'towns_scenario authority "{save}"', "unpause"], ticks=1
+        )
+        run = run_game(
+            setup,
+            executables["reference"],
+            builds["reference"],
+            folder / "capture",
+            timeout,
+            env,
+            False,
+        )
+        if (
+            run["exit"]
+            or not save.is_file()
+            or "TOWN deletion-reuse true" not in run["log"]
+        ):
+            raise RuntimeError("town authority reload capture failed")
+        from .rails import normalize
+
+        save, result["town_reload_input"] = normalize(save, folder / "normalized")
+        return dict(
+            scenario,
+            kind="save",
+            save=str(save),
+            console=["towns_scenario authority-inspect", "unpause"],
+        )
     if scenario["town_founding"] == "houses":
         mode = scenario["house_mode"]
         return dict(
@@ -801,6 +832,20 @@ def house_scenarios(soak):
     return cases
 
 
+def command_scenarios(soak):
+    cases = []
+    for reload in (False, True):
+        scenario = founding_scenarios(soak)[0]
+        scenario.update(
+            name="town-commands" + ("-reload" if reload else ""),
+            town_founding="authority",
+            town_commands_reload=reload,
+            ticks=(390 if reload else 14) * TICKS_PER_DAY + SNAPSHOT_TICKS,
+        )
+        cases.append(scenario)
+    return cases
+
+
 def game_environment(scenario):
     return (
         core.WITNESS_ENVIRONMENT
@@ -838,6 +883,7 @@ def scenarios(soak):
         + growth_scenarios(soak)
         + founding_scenarios(soak)
         + house_scenarios(soak)
+        + command_scenarios(soak)
     )
 
 
@@ -874,7 +920,39 @@ FOUNDING_BRANCHES = (
 
 
 def check(scenario, run, mode, role, result):
-    if scenario.get("town_founding") == "houses" and not run["exit"]:
+    if scenario.get("town_founding") == "authority" and not run["exit"]:
+        required = (
+            ()
+            if scenario["town_commands_reload"]
+            else "action bribe_failed bribe_success delete delete_bridge delete_oilrig destruct expand goal object_detach object_rehome rate rating rights_cancel statue text".split()
+        )
+        if counts := branch_witnesses(scenario, run, role, "town_command", required):
+            result[mode + "_town_command_branches"] = counts
+        markers = (
+            ("authority-reload true",)
+            if scenario["town_commands_reload"]
+            else (
+                "oilrig-refusal true true",
+                "deleted-dependencies true true true",
+                "deletion true true true",
+                "deletion-reuse true",
+                "final-town 0 0",
+            )
+        )
+        if any("TOWN " + marker not in run["log"] for marker in markers):
+            raise RuntimeError("town authority/deletion witness missing")
+        if scenario["town_commands_reload"] and run["snapshots"]:
+            city = read_save(run["snapshots"][-1])["CITY"]
+            town = decode_element(city, dict(city["elements"])[0])
+            if town["exclusive_counter"] or any(town["unwanted"]):
+                raise RuntimeError("town rights/unwanted expiration witness missing")
+        lines = [line for line in run["log"] if line.startswith("TOWN ")]
+        key = mode + "_town_authority"
+        if role == "reference":
+            result[key] = lines
+        elif result[key] != lines:
+            raise RuntimeError("town authority outcomes differ")
+    elif scenario.get("town_founding") == "houses" and not run["exit"]:
         required = HOUSE_BRANCHES + HOUSE_MODE_BRANCHES[scenario["house_mode"]]
         if counts := branch_witnesses(scenario, run, role, "house", required):
             result[mode + "_house_branches"] = counts

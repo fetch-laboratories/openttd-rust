@@ -56,6 +56,7 @@
 #include "table/build_industry.h"
 
 #ifdef WITH_RUST
+#include "rust/services_industry.h"
 #include "rust/industry_generation_adapter.hpp"
 #include "rust/landscape_loop_ffi.h"
 #include "rust/ground_services.h"
@@ -3958,7 +3959,7 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.conflicting = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> OpenTTDIndustryConflictKinds { OpenTTDIndustryConflictKinds result; std::ranges::copy(reinterpret_cast<const IndustrySpec *>(spec)->conflicting, result.kinds); return result; },
 		.multiple_per_town = []() noexcept -> bool { return _settings_game.economy.multiple_industry_per_town; },
 		.closest_town = [](uint32_t tile, uint32_t threshold) noexcept -> const OpenTTDTownHandle * { return reinterpret_cast<const OpenTTDTownHandle *>(ClosestTownFromTile(TileIndex(tile), threshold)); },
-		.town = [](Industry *industry) noexcept -> const OpenTTDTownHandle * { return reinterpret_cast<const OpenTTDTownHandle *>(industry->town); },
+		.town = OpenTTDIndustryTownHandle,
 		.population = [](const OpenTTDTownHandle *town) noexcept -> uint32_t { return reinterpret_cast<const Town *>(town)->cache.population; },
 		.town_position = [](const OpenTTDTownHandle *town) noexcept -> uint32_t { return reinterpret_cast<const Town *>(town)->xy.base(); },
 		.industry = [](uint16_t id) noexcept -> Industry * { return Industry::Get(IndustryID(id)); },
