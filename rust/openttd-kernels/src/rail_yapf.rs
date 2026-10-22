@@ -68,7 +68,6 @@ pub struct Tile {
     pub station_track: u8,
     pub tunnel_dir: u8,
     pub uphill: u8,
-    pub flat_ramp: u8,
     pub signal_along: u8,
     pub signal_against: u8,
     pub signal_green: u8,
@@ -540,6 +539,16 @@ impl Search {
     fn tile(&self, tile: u32, td: u8) -> Tile {
         unsafe { (self.leaves.tile)(tile, td) }
     }
+    /// Original `HasBridgeFlatRamp(GetTileSlope(tile), DiagDirToAxis(GetTunnelBridgeDirection(tile)))`.
+    fn bridge_flat_ramp(&self, tile: u32, direction: u8) -> bool {
+        // SAFETY: The immutable shared table outlives this synchronous search.
+        let shared = unsafe { &*self.input.shared };
+        crate::bridge::has_bridge_flat_ramp(
+            shared,
+            (shared.tile_slope)(tile),
+            crate::direction_func::diag_dir_to_axis(direction),
+        )
+    }
     fn follow(&self, tile: u32, td: u8, no90: u8, compatible: u64, mask: bool) -> Follow {
         unsafe {
             (self.leaves.follow)(
@@ -836,7 +845,8 @@ impl Search {
             segment_cost = add(segment_cost, mul(100, follower.skipped));
             if diagonal(td) {
                 let slope = if cur_info.flags & BRIDGE != 0 {
-                    cur_info.tunnel_dir == exit(td) && cur_info.flat_ramp == 0
+                    cur_info.tunnel_dir == exit(td)
+                        && !self.bridge_flat_ramp(cur, cur_info.tunnel_dir)
                 } else {
                     cur_info.flags & TUNNEL == 0 && cur_info.uphill != 0
                 };
@@ -1749,7 +1759,6 @@ crate::abi::layouts! {
         station_track,
         tunnel_dir,
         uphill,
-        flat_ramp,
         signal_along,
         signal_against,
         signal_green,
