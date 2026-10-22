@@ -4,12 +4,13 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-21, code at `18dbc15675`)
+## Where the fork stands (2026-10-21, code at `9da106b61f`)
 
-- Thirty-four ownership ports. Whole fork: Rust 80,110 / tooling 32,401 / glue 32,256 / original retired 46,112 of 470,612 C/C++ `src/` lines (9.80%). Simulation: 38,072 / 102,615 (37.10%).
+- Thirty-four ownership ports. Whole fork: Rust 80,110 / tooling 32,548 / glue 32,256 / original retired 46,112 of 470,612 C/C++ `src/` lines (9.80%). Simulation: 38,072 / 102,615 (37.10%).
 - #334 (#261 R6) integrated the shared header modules (`slope_func`, `map_func`, `tile_type`, `command_type` and others); new ports import from them. No ownership port integrated this session, so the next speed pass is still four ownership integrations away.
 - Speed: the #322 anchors stand (TGP 1.215, Opus 1.204, Grok 1.191, P1996 1.250, P2000 1.305, P2016 1.356). #339 fixes worktree identity; the normal count guard works again. Previous drafts: #313 at most +0.33% (TGP), #336 and #340 lower on every play save. #341 closed without a saving (P2016 +0.18%).
-- CI: hosted macOS capacity recovered on retry; the base and #339 passed. Full for #337 is running. macOS stays on GitHub-hosted runners.
+- CI: hosted macOS capacity recovered; #339 and coverage #337 integrated after Full passed. #313 and #336 are in final-head Full. macOS stays on GitHub-hosted runners.
+- After two integrations: retirement/glue and wall anchors are unchanged; tooling grew147 net lines. Three ownership branches (#313, #329, #316) and four maintenance/coverage branches (#336, #340, #342, #345) remain. #337 closes road/water gaps; tram-turn #342 and the remaining #156 gaps stay open. Ownership work resumes with #313's final gate and #316 implementation.
 
 ## Sixteenth steering review (2026-10-21, counts per PR and closing the speed pass)
 
@@ -133,6 +134,7 @@ keep their evidence in their PRs. Rows below use original retirement and net glu
 | #156 ownership-dispatch coverage | #335 | direct | `caadbabc38` | 0 / 173 / 0 / 0; tests only |
 | #261 R6 shared header modules | #334 | direct | `18dbc15675` | 858 / 7 / 64 / 10; net glue +10 |
 | #338 instruction identity and rolling record | #339 | direct | `c4efe7bc72` | 0 / 30 / 0 / 0; net glue 0 |
+| #156 road/water command coverage | #337 | direct | `9da106b61f` | 0 / 128 / 0 / 0; tests only |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -181,21 +183,21 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 ## Resume checkpoint
 
 Resumed at the user's request (2026-10-21). Root is gpt-6.1-sol (xhigh), with
-gpt-6.1-sol (high) agents updating #313, #329, #337 and #340. The work order above
-is unchanged; #316 has started as the next unblocked whole owner while reviewed
-drafts await validation. The base is green and #339 integrated; instruction
-profiling is unblocked. Every open draft keeps its worktree and branch.
+gpt-6.1-sol (high) agents on #329, #316, #342 and #345; root owns validation and
+integration of reviewed #313, #336 and #340. The work order is unchanged.
+#339/#337 integrated; no ownership integration yet. Every open draft keeps its
+worktree and branch.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #295 / #313 | `a740b94b03` | #334 adoption reviewed, verify and objects passed; conflict-free #339 update, instruction run underway, then checked counts and Full. |
-| #156 / #337 | `cd9858d1ff` | Dispatcher conflict resolution reviewed, no findings; local roads checks and Full running. |
-| #275 / #336 | `b482432713` | Conflict-free base/#339 updates, build passed; instruction run underway, then checked Ir record and Full. |
+| #295 / #313 | `5a956929c4` | Source/adoption reviewed, verify/objects/counts passed; root checked and recorded six Ir, final Full running. Tooling430 meets cap; mandatory speed record explains support929 vs928 retired. |
+| #275 / #336 | `189a91eee7` | Reviewed, conflict-free updates, counts lower; root checked/recorded six Ir, final Full running. |
 | #156 / #342 | `9ed271d489` | Reviewed, no findings. After #336: update from base (`can_build_tram` conflict), counts, Full. |
-| #281 / #340 | `800e625502` | Cleanup reviewed, verify and 33 scenarios passed; resolve base conflicts, fresh scoped review, counts and Full. |
-| #314 / #329 | `19d155c993` | #334 adoption/type/accessor fixes reviewed, no findings; final verify passed, selected semantics running, then #339 update, counts and Full. |
-| #316 | `d8e3977039` base | Agent implementing subsidy ownership; combined glue/tooling cap 450, no draft prerequisite. |
-| #344 / #275 | not yet started | Delete only train speed read6; production net glue <=0, tests/tooling <=120; attributable P2016 saving required. |
+| #281 / #340 | `f7046d88b8` | Cleanup and conflict resolution reviewed; verify/33 scenarios passed before update, instruction driver running, then checked counts and Full. |
+| #314 / #329 | `a0dec91641` | Fixes reviewed, verify/52 scenarios passed; conflict-free docs/tools update, instruction run underway, then checked counts and Full. |
+| #316 | `d5c07a89b0` base | Agent implementing subsidies; Cargo4 passed, native compile/scenario work underway. Combined glue/tooling cap450. |
+| #247 | not yet started | Next free ownership slot: whole town commands/authority/deletion, integrated #246/#256 prerequisites met; current instruction-count policy replaces the issue's older speed process. |
+| #344 / #345 | `986ad0f756` | Train read6 deletion reviewed, verify/default trace passed; exact-base P2016 measured, relevant semantics and candidate counts pending. Production net glue -12, tests72. |
 | #274 | `162843acbd` | Paused measurement branch. |
 
 #261 R7 inputs are on #261 and #281 part 2's inventory is on #281. The finished

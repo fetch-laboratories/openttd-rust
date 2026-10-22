@@ -106,7 +106,7 @@ layouts! {
     };
     "OpenTTDRoadNearestTownTile" ["probe"] => crate::road_cmd::NearestTownTile { road, depot, town_owned, };
 
-    "OpenTTDRoadTramBuildRead" ["probe"] => crate::road::TramBuildRead { owner, road_type, };
+    "OpenTTDRoadTramBuildRead" ["probe"] => crate::road::TramBuildRead { owner, road_type, road, };
 
     "OpenTTDRoadCommandContext" ["probe"] => crate::road_cmd::CommandContext {
         services,
