@@ -24,6 +24,7 @@
 )]
 use crate::services::Services;
 use crate::train_state::State;
+use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
 /// Native identity and canonical scalar owner, resolved together once per entry or link.
 /// Neither pointer permits a Rust borrow to survive a callback. Deletion invalidates both.
 #[repr(C)]
@@ -45,6 +46,12 @@ pub struct Depot {
     pub length: u32,
 }
 impl Handle {
+    /// The base `Vehicle` of this live `Train` shell: `Vehicle` is the primary,
+    /// non-virtual base of `Train`, so the native upcast does not adjust it.
+    pub(crate) fn vehicle(self) -> VehicleRef {
+        // SAFETY: Callers pass the live serialized train of this entry.
+        VehicleRef(unsafe { std::ptr::NonNull::new_unchecked(self.shell.cast()) })
+    }
     pub(crate) const NONE: Self = Self {
         shell: std::ptr::null_mut(),
         owner: std::ptr::null_mut(),
@@ -495,7 +502,6 @@ pub struct Leaves {
     pub acc_model: extern "C" fn(Handle) -> u64,
     pub acc_type: extern "C" fn(Handle) -> u64,
     pub advance_distance: extern "C" fn(Handle) -> u64,
-    pub age: extern "C" fn(Handle),
     pub all_powered: extern "C" fn(Handle, u64) -> u64,
     pub ambient_sound: extern "C" fn(Handle) -> u64,
     pub arrival_news: extern "C" fn(Handle, u16),
@@ -512,7 +518,6 @@ pub struct Leaves {
     pub cargo_age_default: extern "C" fn(Handle) -> u64,
     pub cargo_changed: extern "C" fn(Handle),
     pub chain_depot: extern "C" fn(Handle) -> u64,
-    pub check_breakdown: extern "C" fn(Handle),
     pub check_next: extern "C" fn(Handle),
     pub check_orders: extern "C" fn(Handle),
     pub check_reverse: extern "C" fn(Handle) -> u64,
@@ -536,7 +541,6 @@ pub struct Leaves {
     pub curve_advantage: extern "C" fn(Handle) -> u64,
     pub curve_mod: extern "C" fn(Handle) -> u64,
     pub day_ticks: extern "C" fn(Handle) -> u64,
-    pub decrease_value: extern "C" fn(Handle),
     pub delete_vehicle: extern "C" fn(Handle),
     pub depot_dir: extern "C" fn(Handle, u32) -> u64,
     pub depot_dirty: extern "C" fn(Handle),
@@ -551,14 +555,12 @@ pub struct Leaves {
     pub dir_diag: extern "C" fn(Handle, u8) -> u64,
     pub disaster_sound: extern "C" fn(Handle) -> u64,
     pub disconnect: extern "C" fn(Handle),
-    pub economy_age: extern "C" fn(Handle),
     pub engine_power: extern "C" fn(Handle) -> u64,
     pub enter_depot: extern "C" fn(Handle),
     pub enter_tile: extern "C" fn(Handle, u32, i32, i32) -> u64,
     pub find_depot: extern "C" fn(Handle, i32) -> Depot,
     pub first_track: extern "C" fn(Handle, u8) -> u64,
     pub grf_version: extern "C" fn(Handle) -> u64,
-    pub handle_breakdown: extern "C" fn(Handle) -> u64,
     pub has_depot_res: extern "C" fn(Handle, u32) -> u64,
     pub has_reserved: extern "C" fn(Handle, u32, u8) -> u64,
     pub has_signal: extern "C" fn(Handle, u32, u8) -> u64,
@@ -590,7 +592,6 @@ pub struct Leaves {
     pub lost_warn: extern "C" fn(Handle) -> u64,
     pub map_size: extern "C" fn(Handle) -> u64,
     pub max_depot_penalty: extern "C" fn(Handle) -> u64,
-    pub needs_service: extern "C" fn(Handle) -> u64,
     pub no_90: extern "C" fn(Handle, u8, u8) -> u64,
     pub oneway_blocking: extern "C" fn(Handle, u32, u8) -> u64,
     pub order_depot_service: extern "C" fn(Handle, u16),
@@ -619,7 +620,6 @@ pub struct Leaves {
     pub reverse_single_blocked: extern "C" fn(Handle) -> u64,
     pub reverse_windows: extern "C" fn(Handle),
     pub running_windows: extern "C" fn(Handle),
-    pub service: extern "C" fn(Handle),
     pub servint: extern "C" fn(Handle) -> u64,
     pub set_depot_res: extern "C" fn(Handle, u32, u8),
     pub set_next: extern "C" fn(Handle, Handle),
@@ -669,7 +669,6 @@ pub struct Leaves {
     pub user_default: extern "C" fn(Handle) -> u64,
     pub veh_exit_dir: extern "C" fn(Handle, u8, u8) -> u64,
     pub viewport: extern "C" fn(Handle, u8, u8),
-    pub view_window: extern "C" fn(Handle),
     pub visit_type: extern "C" fn(Handle, u16) -> u64,
     pub vis_effect: extern "C" fn(Handle, u8),
     pub wagon_override: extern "C" fn(Handle) -> u64,
@@ -692,6 +691,8 @@ pub struct Leaves {
         *mut std::ffi::c_void,
         extern "C" fn(*mut std::ffi::c_void, Handle) -> u8,
     ) -> u8,
+    /// Base vehicle table, immutable for the process.
+    pub vehicle: *const VehicleServices,
 }
 #[derive(Clone)]
 struct Game<'a> {
@@ -703,6 +704,27 @@ extern "C" fn visit<F: FnMut(Handle) -> bool>(context: *mut std::ffi::c_void, pa
     u8::from(unsafe { (&mut *context.cast::<F>())(part) })
 }
 impl Game<'_> {
+    fn vs(&self) -> &VehicleServices {
+        // SAFETY: The native table names the immutable process-wide base table.
+        unsafe { &*self.leaves.vehicle }
+    }
+    fn handle_breakdown(&self, id: Handle) -> bool {
+        // SAFETY: Live serialized shell; no owner borrow spans the call.
+        unsafe { maintenance::vehicle_handle_breakdown(id.vehicle(), self.vs()) }
+    }
+    fn needs_automatic_servicing(&self, id: Handle) -> bool {
+        // SAFETY: Live serialized shell; no owner borrow spans the call.
+        unsafe { maintenance::needs_automatic_servicing(id.vehicle(), self.vs()) }
+    }
+    fn service_in_depot(&self, id: Handle) {
+        // SAFETY: Live serialized shell; no owner borrow spans the call.
+        unsafe { maintenance::service_in_depot(id.vehicle(), self.vs()) };
+    }
+    /// `SetWindowDirty(WC_VEHICLE_VIEW, v->index)`.
+    fn view_dirty(&self, id: Handle) {
+        // SAFETY: The base table names its immutable maintenance table.
+        (unsafe { &*self.vs().maintenance }.view_dirty)(id.vehicle());
+    }
     fn visit_tile<F: FnMut(Handle) -> bool>(&self, tile: u32, mut visitor: F) -> bool {
         (self.leaves.visit_tile)(tile, std::ptr::from_mut(&mut visitor).cast(), visit::<F>) != 0
     }
@@ -1613,7 +1635,7 @@ impl Game<'_> {
             (self.leaves.arrival_news)(id, station);
         }
         id.set_force_proceed(0);
-        (self.leaves.view_window)(id);
+        self.view_dirty(id);
         (self.leaves.begin_loading)(id);
         (self.leaves.arrival_triggers)(id, station);
     }
@@ -1738,7 +1760,7 @@ impl Game<'_> {
                         {
                             crate::witness::hit(crate::witness::TRAIN_FORCE_SIGNAL);
                             id.set_force_proceed(u64::from(id.get_force_proceed() == 2));
-                            (self.leaves.view_window)(id);
+                            self.view_dirty(id);
                         }
                     }
                     if reds & chosen != 0 && id.get_force_proceed() == 0 {
@@ -2287,7 +2309,7 @@ impl Game<'_> {
             (self.leaves.dirty_tile)(Handle::NONE, (self.leaves.read_tile)(id));
         }
         crate::witness::hit(crate::witness::TRAIN_DEPOT_START);
-        (self.leaves.service)(id);
+        self.service_in_depot(id);
         (self.leaves.leave_unbunch)(id);
         (self.leaves.leave_sound)(id);
         (self.leaves.train_list)(id);
@@ -2318,7 +2340,7 @@ impl Game<'_> {
             id.set_flag(8, false);
             (self.leaves.start_stop_dirty)(id);
         }
-        if (self.leaves.handle_breakdown)(id) != 0 {
+        if self.handle_breakdown(id) {
             return true;
         }
         if id.flag(0) && (self.leaves.read_speed)(id) == 0 {
@@ -2404,7 +2426,7 @@ impl Game<'_> {
         let mut distance = self.update_speed(id);
         if (self.leaves.read_speed)(id) == 0 && (self.leaves.read_status)(id) & 2 != 0 {
             id.set_force_proceed(0);
-            (self.leaves.view_window)(id);
+            self.view_dirty(id);
         }
         let mut advance = (self.leaves.advance_distance)(id) as i32;
         if distance < advance {
@@ -2476,12 +2498,12 @@ impl Game<'_> {
         true
     }
     fn needs_service(&self, id: Handle) {
-        if (self.leaves.servint)(id) == 0 || (self.leaves.needs_service)(id) == 0 {
+        if (self.leaves.servint)(id) == 0 || !self.needs_automatic_servicing(id) {
             return;
         }
         if (self.leaves.chain_depot)(id) != 0 {
             crate::witness::hit(crate::witness::TRAIN_DEPOT_SERVICE);
-            (self.leaves.service)(id);
+            self.service_in_depot(id);
             return;
         }
         let max = (self.leaves.max_depot_penalty)(id) as u32;
@@ -2509,14 +2531,17 @@ impl Game<'_> {
         (self.leaves.start_stop_dirty)(id);
     }
     fn economy_day(&self, id: Handle) {
-        (self.leaves.economy_age)(id);
+        // SAFETY: Live serialized shell; no owner borrow spans the call.
+        unsafe { maintenance::economy_age_vehicle(id.vehicle(), self.vs()) };
         let day = (self.leaves.read_day)(id).wrapping_add(1);
         (self.leaves.write_day)(id, (u64::from(day)) as u8);
         if day & 7 == 0 {
-            (self.leaves.decrease_value)(id);
+            // SAFETY: Live serialized shell; no owner borrow spans the call.
+            unsafe { maintenance::decrease_vehicle_value(id.vehicle(), self.vs()) };
         }
         if (self.leaves.read_front)(id) != 0 {
-            (self.leaves.check_breakdown)(id);
+            // SAFETY: Live serialized shell; no owner borrow spans the call.
+            unsafe { maintenance::check_vehicle_breakdown(id.vehicle(), self.vs()) };
             self.needs_service(id);
             (self.leaves.check_orders)(id);
             if (self.leaves.read_order)(id) == 1 {
@@ -2596,7 +2621,7 @@ impl Game<'_> {
                     }
                 }
                 id.set_force_proceed(0);
-                (self.leaves.view_window)(id);
+                self.view_dirty(id);
                 if (self.leaves.acc_model)(id) != 0 && (self.leaves.read_speed)(id) != 0 {
                     id.set_flag(0, !id.flag(0));
                 } else {
@@ -2616,7 +2641,7 @@ impl Game<'_> {
         }
         if execute {
             id.set_force_proceed(u64::from(self.next_force(id)));
-            (self.leaves.view_window)(id);
+            self.view_dirty(id);
             (self.leaves.reset_unbunch)(id);
         }
         true
@@ -2758,7 +2783,8 @@ pub unsafe extern "C" fn openttd_rust_train_calendar_day(
         // SAFETY: The immutable services table is live for this call.
         services: unsafe { &*services },
     };
-    (g.leaves.age)(id);
+    // SAFETY: Live serialized shell; no owner borrow spans the call.
+    unsafe { maintenance::age_vehicle(id.vehicle(), g.vs()) };
 }
 /// Invoke synchronous train policy with live serialized services.
 /// # Safety

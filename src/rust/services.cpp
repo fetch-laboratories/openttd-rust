@@ -74,6 +74,11 @@
 #include "orders_ffi.h"
 #include "tile_animation_services.h"
 
+extern "C" uint64_t openttd_orders_tick_counter() noexcept
+{
+	return TimerGameTick::counter;
+}
+
 static CommandCost *NativeCost(OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<CommandCost *>(cost); }
 static const CommandCost *NativeCost(const OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<const CommandCost *>(cost); }
 static void CostZero(OpenTTDCommandCost *out) noexcept { OpenTTDCommandCostZero(NativeCost(out)); }
@@ -288,6 +293,10 @@ static int32_t SharedSlope(int32_t x, int32_t y) noexcept { return SharedSlopePi
 static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
 static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
 static void SharedRebuildTownTree() noexcept { RebuildTownKdtree(); }
+static void SharedForEachStation(void *context, void (*visit)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept
+{
+	for (Station *st : Station::Iterate()) visit(context, RustStation(st), st->rust_service.get(), st->index.base());
+}
 
 constinit const OpenTTDSharedServices _rust_shared_services{
 	.set_tile_owner = RustSetTileOwner,
@@ -414,6 +423,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.set_fence = RustSetFieldFence,
 	.tree_ground = OpenTTDTreeGround,
 	.water_services = []() noexcept { return &GetRustWaterGroundServices(); },
+	.for_each_station = SharedForEachStation,
 };
 
 const OpenTTDSharedServices &GetRustSharedServices() noexcept

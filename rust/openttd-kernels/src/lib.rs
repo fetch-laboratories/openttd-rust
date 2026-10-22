@@ -36,6 +36,7 @@ mod linkgraph;
 mod map_func;
 mod math;
 mod newgrf_callbacks;
+mod newgrf_sound;
 mod node_hash;
 mod objects;
 mod order_type;

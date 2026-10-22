@@ -457,7 +457,7 @@ pub struct CommonServices {
     pub aircraft_start: extern "C" fn(*mut ()) -> AircraftStartState,
     pub startstop_callback: extern "C" fn(*mut (), *mut i32) -> u16,
     pub grf_version: extern "C" fn(*mut ()) -> u8,
-    pub grf_string: extern "C" fn(*mut (), GrfStringId) -> u32,
+    pub grf_string: extern "C" fn(*mut (), u32) -> u32,
     pub waiting_news: extern "C" fn(u32),
     pub flip_stopped: extern "C" fn(*mut ()),
     pub startstop_ui: extern "C" fn(*mut ()),
@@ -558,25 +558,17 @@ pub(crate) unsafe fn startstop(
         if callback != crate::vehicle::CALLBACK_FAILED {
             if (s.grf_version)(v) < 8 {
                 if callback < 0x400 && callback & 0xff != 0xff {
-                    error = (s.grf_string)(
-                        v,
-                        GrfStringId(s.strings.grf_text.0.wrapping_add(u32::from(callback))),
-                    );
+                    error =
+                        (s.grf_string)(v, s.strings.grf_text.0.wrapping_add(u32::from(callback)));
                 }
             } else if callback < 0x400 {
-                error = (s.grf_string)(
-                    v,
-                    GrfStringId(s.strings.grf_text.0.wrapping_add(u32::from(callback))),
-                );
+                error = (s.grf_string)(v, s.strings.grf_text.0.wrapping_add(u32::from(callback)));
             } else {
                 match callback {
                     0x400 => (),
                     0x40f => {
                         // The original reads register 100 only for this result.
-                        error = (s.grf_string)(
-                            v,
-                            GrfStringId(unsafe { register100.assume_init() } as u32),
-                        );
+                        error = (s.grf_string)(v, unsafe { register100.assume_init() } as u32);
                     }
                     _ => error = s.strings.incompatible_rail,
                 }

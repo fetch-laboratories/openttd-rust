@@ -23,7 +23,7 @@ uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept;
 bool RustTrainIsEngine(const Vehicle *v) noexcept;
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
-uint32_t RustVehicleGRFString(Vehicle *v, GRFStringID string) noexcept;
+uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept;
 void RustVehicleFlipStopped(Vehicle *v) noexcept;
 
 

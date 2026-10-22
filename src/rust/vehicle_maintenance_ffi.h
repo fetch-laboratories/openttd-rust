@@ -31,13 +31,6 @@ struct OpenTTDVehicleMaintenanceReset {
 	uint8_t chance;
 	uint8_t breakdowns;
 };
-struct OpenTTDVehicleMaintenanceResetWrite {
-	OpenTTDEconomyDate economy_date;
-	OpenTTDCalendarDate calendar_date;
-	uint16_t reliability;
-	uint8_t chance;
-	uint8_t since;
-};
 struct OpenTTDVehicleMaintenanceInterval {
 	const Company *company;
 	OpenTTDEconomyDate last_service;
@@ -130,7 +123,6 @@ struct OpenTTDVehicleMaintenanceServices {
 	const OpenTTDFleetGroupServices *group;
 	OpenTTDVehicleMaintenanceRenewal (OPENTTD_VEHICLE_CALL *renewal)(OpenTTDVehicle *, const Company *) noexcept OPENTTD_SERVICE_DEFAULT(renewal);
 	OpenTTDVehicleMaintenanceReset (OPENTTD_VEHICLE_CALL *reset)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reset);
-	void (OPENTTD_VEHICLE_CALL *reset_write)(OpenTTDVehicle *, OpenTTDVehicleMaintenanceResetWrite) noexcept OPENTTD_SERVICE_DEFAULT(reset_write);
 	bool (OPENTTD_VEHICLE_CALL *has_engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(has_engine);
 	OpenTTDVehicleMaintenanceInterval (OPENTTD_VEHICLE_CALL *interval)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(interval);
 	uint16_t (OPENTTD_VEHICLE_CALL *engine_reliability)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(engine_reliability);
@@ -153,7 +145,6 @@ struct OpenTTDVehicleMaintenanceServices {
 	OpenTTDVehicleMaintenanceBreakdownCountdown (OPENTTD_VEHICLE_CALL *breakdown_countdown)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_countdown);
 	OpenTTDVehicleMaintenanceBreakdownSoundState (OPENTTD_VEHICLE_CALL *breakdown_sound_state)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_sound_state);
 	void (OPENTTD_VEHICLE_CALL *breakdown_delay_write)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_delay_write);
-	bool (OPENTTD_VEHICLE_CALL *breakdown_sound)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(breakdown_sound);
 	bool (OPENTTD_VEHICLE_CALL *smoke_disabled)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(smoke_disabled);
 	OpenTTDVehicleMaintenanceBreakdownSmoke (OPENTTD_VEHICLE_CALL *smoke)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(smoke);
 	void (OPENTTD_VEHICLE_CALL *smoke_animation)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(smoke_animation);
