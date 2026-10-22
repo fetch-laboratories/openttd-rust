@@ -12,6 +12,17 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 - CI: `8c370210b4` failed to compile (#347 used a command field #353 removed; both were validated before the other landed). #363 fixed it (`9f2c92b51e`, Full passed); its post-merge run was in progress at the pause. The macOS run is due (fifth integration since #357).
 - Component branches: #360, #359 and #350 (three of six). Maintenance: #361 (#261 batch).
 
+## Integration and wind-down correction (2026-10-22, takes precedence)
+
+User authorized replacing the rules after #347 and #353 passed separately but
+failed together. Keep automatic rollback; replace the time deadline with action limits.
+
+- Final Full tests the combination to integrate; GitHub strict/up-to-date protection blocks old passing results after base moves. Update when preparing final validation; batch ready, reviewed work to avoid serial runs. Implementation and review stay parallel.
+- Keep focused local checks and the full suite in CI; no extra local integration build gate. Avoid routine docs pushes during final validation, since they advance base too.
+- Wind-down finishes the current edit/review and records its state, merges only eligible already-tested combinations, and starts no new CI, retries or repairs. Pending checks are handed off; no deadline or time estimate.
+- A confirmed breaking merge with only docs after it is reset automatically without asking, with work preserved remotely and docs corrected. The tracking issue reopens; a replacement PR follows on resume. AGENTS.md and the migration guide define recovery and exceptions.
+- Implementation uses platform settings and five existing documentation files; tooling budget: zero new code, workflows or controllers. Earlier unchanged-head merge permission below is superseded.
+
 ## Seventeenth steering review (2026-10-22, speed on the merged branch, base-type returns, macOS every fifth merge)
 
 Independent Claude Opus audits of integrated #329, #346 and #352 and draft #347, a speed audit (fresh profiles plus a quiet six) and a process audit of both root sessions since the sixteenth review (Claude: 193 active minutes, 3 integrations; Codex: 261 minutes, 9 integrations) found:
@@ -31,13 +42,13 @@ Independent Claude Opus audits of integrated #329, #346 and #352 and draft #347,
 - Agents run only the scenarios their change touches locally; the full default suite (38 minutes locally, repeated by Full in about 12) runs in CI.
 - Local commands pass the free cores as `--jobs`, not a fixed 2. Last session they took 503 agent-minutes at 2 while half the cores sat idle for 171 of 261 minutes; 31 scenarios ran in 164 s at 2 and 44 s at 8, and the full suite in 10 minutes at 8.
 
-AGENTS.md also says: a PR whose exact-head Full passed and that merges cleanly integrates without a base update; a C++ class type crosses as its base type (#355); a local container the original builds stays a local `Vec`; review reports name orphaned WITH_RUST bodies, exports and declarations.
+The earlier unchanged-head merge permission is superseded above. AGENTS.md also says: a C++ class type crosses as its base type (#355); a local container the original builds stays a local `Vec`; review reports name orphaned WITH_RUST bodies, exports and declarations.
 
 Provisional, checked next review: the 3% tip-rise threshold (basis: counts repeat to 0.04%; the largest ordinary per-PR move was 1.3%) and factor 2 (measured wall sensitivity 0.75-1.54 at `802ec7d6a4`, so it is conservative). The 6.6% layout spread is retired: a pass's median of four three-pair medians came within 1.4% of every projection.
 
 Actions, in order (apply first; ports keep running alongside):
 1. **#355, #356 and #357 as one batch PR,** before any other integration: the MSVC return fix and compile-time return-type check; the identity fix and the quiet anchors the tip profiles compare against (no pass is due); and macOS out of the pre-merge Full; and the driver's `--jobs` default set to the free cores (AGENTS.md). Until that lands, use the Blacksmith fallback on capacity cancellations.
-2. **Integrate ready drafts,** without base updates unless a conflict blocks: #351 after #356 (rustfmt, then Full; no extension), #340 (two deletions, then review), #347 (PR comment items), #353 (fresh review).
+2. **Integrate ready drafts** under the corrected integration rule above: #351 after #356 (rustfmt, then Full; no extension), #340 (two deletions, then review), #347 (PR comment items), #353 (fresh review).
 3. **Ports continue:** #349 to its first passing milestone, #315, then owner selection (Phase 2 item 5).
 4. **Batches:** the #261 cleanup list (2026-10-22 comments) as one batch PR, including the per-component split of `abi.rs`/`windows-abi.cpp`, the most frequent base-update conflict; the **#156** slot batches the new gaps.
 
@@ -52,7 +63,7 @@ Actions, in order (apply first; ports keep running alongside):
 - **Ownership:** prioritize simulation ownership. Keep state at the original's process scope.
 - **Map storage:** #108 retains C++ map arrays; #351's descriptor is limited to the audited scheduler loops (AGENTS.md).
 - **Harness evidence:** end moments (#154), default branch witnesses and reference probes (#198/#204/#210/#211), the speed guard (#155/#282/#321) and documented coverage gaps (#156).
-- **Tooling, WIP and CI:** proportionate tooling (#109) with a stated budget for infrastructure work; platform defaults over controllers (#233); six component branches at most; exact-head Full on demand (#171), validated concurrently, with no admin bypass.
+- **Tooling, WIP and CI:** proportionate tooling (#109) with a stated budget for infrastructure work; platform defaults over controllers (#233); six component branches at most; Full on demand (#171), strict final integration as corrected above, with no admin bypass for new code.
 - **Metrics:** original retirement excludes removed fork glue (#223).
 
 ## Completed ownership ports

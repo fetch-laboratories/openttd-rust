@@ -180,13 +180,11 @@ checks that run; do not restate them in paragraphs.
   as a checklist on its tracking issue (#261, #156, #275) rather than one issue
   each, with one reviewer and one Full run. An item that fails review or CI
   leaves the batch for the next one rather than holding it. A fix that a draft
-  or a live crash needs may go alone. Use an integration branch only when CI
-  capacity forces batching. Update a PR branch from its base
-  (merge or rebase) only when a conflict blocks its integration or its own
-  work. A PR whose exact-head Full passed and that still merges cleanly
-  integrates without a base update, since Full validates its merge with base;
-  do not add merges whose only purpose is to keep reviewed commit ancestry or
-  to track base.
+  or a live crash needs may go alone. Batch ready, reviewed components in one
+  integration PR when that avoids serial Full runs; validate and merge the
+  combined result once. Update a PR from base when preparing its final Full
+  run or resolving a blocking conflict, not continuously while implementing.
+  An old passing result does not authorize a new combination of changes.
 
 ## Agent team and review
 
@@ -264,16 +262,37 @@ For substantive changes:
    --remerge-diff` of the merge removes only conflict markers; root records this
    on the PR). Otherwise a fresh reviewer checks and fixes only the conflict
    resolution.
-4. Root integrates after review and required checks, records completion, and
-   removes the merged worktree. If `rust-migration` has moved since the PR's
-   Full ran, root first builds the merge result locally (`git merge` in the
-   PR's worktree without committing, then `python3 tools/migration.py
-   rust-checks`); if it fails, the PR does not merge and gets a base update. A
-   red check on `rust-migration` itself is fixed before more integrations: when
-   only docs commits sit on top of the breaking merge, root resets
-   `rust-migration` to the commit before it, force-pushes, reapplies the docs
-   commits and reopens the PR, without asking (user decision, 2026-10-22), and
-   reports it afterwards.
+4. Root integrates only the combination Full tested. Before the final Full,
+   update the PR (or integration PR) from current `origin/rust-migration`.
+   Required checks use GitHub's strict/up-to-date protection. If base moves,
+   the PR stays unmerged until updated and validated again; a clean textual
+   merge or local build is no substitute. Root serializes final integration,
+   uses `gh pr merge --match-head-commit` with the reviewed SHA, and never
+   bypasses this gate. A failure leaves the shared branch unchanged. After
+   successful integration, record completion and remove the merged worktree.
+
+### Automatic rollback and wind-down
+
+A confirmed code regression on `rust-migration` stops further integrations.
+When the breaking merge has only docs commits after it (or none), root removes
+it automatically, without asking, using the rollback procedure in
+`docs/rust-migration.md`. Preserve its work remotely, restore the merge's first
+parent plus corrected docs, and report afterwards. This recovery is explicitly
+authorized even during wind-down; it needs no fix PR or new CI wait. A runner
+or API failure alone is not a code regression. If later code prevents this
+bounded rollback, preserve the state and handle recovery before further
+integrations; during wind-down, hand it off instead of starting repairs.
+
+Wind-down is bounded by actions, not time estimates. Finish an edit already
+underway and save its state, even if incomplete; finish an active review by
+recording findings. Start no new implementation, review, repair round, build,
+simulation, CI request or retry. Do not wait on CI. Merge only already-reviewed,
+already-validated combinations that still meet step 4; a required base update
+leaves the PR for resume. Perform an eligible automatic rollback, record each
+unfinished item's next action and running jobs, report, and stop. Pending or
+later CI results do not restart wind-down. Preserve unfinished worktrees and
+branches for resume; cleanup applies only to verified merged work. The user's
+explicit action scope overrides these defaults.
 
 Keep at most six unintegrated component branches, counting drafts and WIP
 (#157). Integrating reviewed work comes before starting a new component, and a
@@ -338,18 +357,20 @@ checks, so code pushes do not use `[skip ci]`. `python3 tools/ci.py request PR
 --profile rust|native|platform` runs diagnostic subsets. Before merging, request
 `--profile full` for the final PR head and wait for it. Only a successful full
 run at that exact head publishes the required `Full validation` status, and any
-later push needs a new one. When capacity forces batching, validate one concrete
+later push needs a new one. When batching ready work, validate one concrete
 integration PR. `docs/rust-migration.md` (team process section) has the flags
 and limits.
 
 CI wall time is development time (#233). Keep warm-cache full validation within
 about 15 minutes by adding parallel jobs or shards, never by adding steps to one
-job's critical path, and keep caches under the repository limit. Validate
-reviewed PRs concurrently: a merge or docs push to `rust-migration` does not
-invalidate another PR's run at an unchanged head. Post-merge CI fully
-re-validates only a merged tree no full run covered, and queued pushes coalesce
-to the newest tip; a red `rust-migration` is still fixed before more
-integrations.
+job's critical path, and keep caches under the repository limit. Implementation
+and review remain parallel; final Full runs target the next integration or a
+batch of ready changes. Strict protection blocks stale combinations even if
+their head status remains green. Avoid docs pushes during final validation:
+they also advance base. Post-merge CI is a backstop, never permission to merge
+an untested combination. It skips repeated tests for an already-validated tree;
+queued pushes coalesce to the newest tip. Keep the existing focused local
+checks; do not add a second full local suite or a pre-merge local build gate.
 
 Before pushing, run `python3 tools/preflight.py --base origin/rust-migration` for
 the inherited commit checker.

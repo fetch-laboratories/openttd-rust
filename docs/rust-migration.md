@@ -422,8 +422,14 @@ python3 tools/ci.py wait .local/ci-requests/REQUEST.json
 `rust` runs four Cargo checks; `native` adds the Linux matrix and full migration
 comparison; `platform` runs the platform matrix including macOS. All include quick checks.
 Only `full` satisfies the merge gate. Unmergeable or pending-mergeability PRs
-are refused; a changed PR head needs a new full request. A later base advance
-does not invalidate an unchanged head; independent reviewed PRs can validate concurrently.
+are refused; a changed PR head needs a new full request. Before final Full,
+update the PR from current `origin/rust-migration`; GitHub strict status checks
+require it to stay up to date before merging. A passing status for an old base
+does not validate the new combination. If base advances, update and request
+Full again. Keep implementation/review parallel and batch ready changes in one
+integration PR to avoid serial runs. Do not push routine docs while that final
+run is in progress; docs advance base too. This replaces the #233 policy that
+accepted unchanged PR heads and checked new combinations after merging.
 The CLI records the SHA and request/run identity and refuses a changed PR head.
 `CI_ON_DEMAND=true` enables this scheduling after root installs and verifies the
 required status. With the variable absent, automatic full CI remains as a safe
@@ -431,12 +437,15 @@ bootstrap. For a workflow-changing PR, root reviews its workflow definitions,
 temporarily unsets `CI_ON_DEMAND`, and requests `--profile full --bootstrap`
 (the `ci:full` label path tests the PR definitions). Root restores the variable
 to `true` after merge and records both changes in the PR; never use `--admin`.
-For capacity batching, test a concrete integration PR and merge it once. A stack
+For batching ready work, test a concrete integration PR and merge it once. A stack
 organizes dependent PRs but does not itself combine validation runs.
 
-Required checks must pass on the PR head; branches need not be up to date with the
-base. The publisher records the immutable tested merge tree separately from the
-head status.
+Required checks must pass on the PR head and the branch must be up to date with
+base (`required_status_checks.strict=true`). The publisher still records the
+immutable tested merge tree separately from the head status; its green status
+alone is insufficient when the branch is behind. Root uses ordinary protected
+merging with the reviewed head pinned by `--match-head-commit`, never `--admin`.
+No extra local integration build or full local simulation run is required.
 Protected pushes queue without cancelling a running validation; a newer push
 replaces a pending one, so a burst of merges validates the newest tip and the
 intermediate pushes show as cancelled. Markdown-only pushes do not start these
@@ -451,11 +460,48 @@ complete selected suite. A combined tree no full request
 covered receives all native and platform checks. Tree comparisons must be complete;
 missing or truncated GitHub inventories retain heavy validation. A Markdown-only push that still
 starts (GitHub runs path-filtered workflows when it cannot compute the diff) skips heavy
-builds only after complete classification of fewer than 300 changed files. A post-merge failure is fixed forward first. Force pushes and branch deletion are disallowed,
-including for administrators. The approving-review count is zero because agents
+builds only after complete classification of fewer than 300 changed files.
+Post-merge checks remain a backstop for missed defects; they do not authorize
+untested combinations. Ordinary force pushes and branch deletion are disabled.
+The approving-review count is zero because agents
 share credentials; the attributed independent review report is the process gate
 before root integrates. Repository controls are enforced separately from these
 documents.
+
+### Automatic rollback (user-authorized, 2026-10-22)
+
+A confirmed breaking merge with no later code is removed without asking, during
+development or wind-down. This is an explicit exception to ordinary PR-only
+code changes, not a repair PR or a new validation cycle. Runner/API errors alone
+do not identify a breaking merge. Read the failing result and identify its code
+cause; do not roll back an arbitrary latest commit because a check is red.
+
+1. Fetch the current remote tip and identify the breaking merge and its first
+   parent. Check that all later changes are docs-only. Preserve the old tip on
+   an origin recovery branch and record the component PR's head on its issue
+   before changing the shared branch. Do not discard dirty work in any checkout.
+2. Prepare the replacement from that first parent in a clean checkout. Reapply
+   later docs with their completion claims corrected for the removed work.
+   Keep the new integration/rollback rules if they were among those docs.
+3. Push the replacement with an explicit lease:
+   `git push --force-with-lease=refs/heads/rust-migration:OLD_REMOTE_SHA origin REPLACEMENT_SHA:refs/heads/rust-migration`.
+   If the lease fails, fetch and reassess the new tip; never use bare `--force`.
+   Root is authorized to temporarily enable force pushes for this operation
+   if protection requires it. Preserve all other settings, restore the prior
+   force-push setting even on failure, and read it back. Administrative access
+   also permits the documented direct docs pushes; it never permits bypassing
+   validation for a new code integration.
+4. Reopen the tracking issue if it was closed, record the recovery branch/head
+   and next repair step, and report the reset afterwards. GitHub keeps the old
+   PR marked merged; it cannot be reopened. Resume through a replacement PR
+   linked to it. Wind-down records that next step without opening the repair PR
+   or waiting for post-reset CI. Keep the recovery ref until the replacement
+   work is safely retained; do not restore the rejected merge by pulling it
+   back from a stale local branch.
+
+If later code makes this bounded reset inapplicable, stop integrations and
+record the recovery needed. During wind-down, hand it off without starting a
+fix cycle. A failed recovery operation is reported as failed, never as a reset.
 
 Native validation exports both frozen runtimes and once-built fleet/orders adapters,
 then runs component comparisons and three simulation shards concurrently
