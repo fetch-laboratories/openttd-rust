@@ -506,7 +506,7 @@ void RoadVehicle::UpdateDeltaXY()
  * Calculates the maximum speed of the vehicle under its current conditions.
  * @return Maximum speed of the vehicle.
  */
-inline int RoadVehicle::GetCurrentMaxSpeed() const
+int RoadVehicle::GetCurrentMaxSpeed() const
 {
 #ifdef WITH_RUST
 	OpenTTDRoadMaxSpeedRead read = RoadMaxSpeedRead(this);
