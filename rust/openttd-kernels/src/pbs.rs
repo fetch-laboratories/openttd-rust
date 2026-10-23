@@ -20,10 +20,10 @@ pub struct PbsServices {
     pub shared: *const Services,
     pub rail: *const RailMapServices,
     pub train: *const crate::train::Leaves,
-    pub depot_bits: extern "C" fn(u32) -> u8,
-    pub crossing_bits: extern "C" fn(u32) -> u8,
-    pub station_bits: extern "C" fn(u32) -> u8,
-    pub wormhole_bits: extern "C" fn(u32) -> u8,
+    pub depot_bits: extern "C" fn(u32) -> crate::services::TrackBits,
+    pub crossing_bits: extern "C" fn(u32) -> crate::services::TrackBits,
+    pub station_bits: extern "C" fn(u32) -> crate::services::TrackBits,
+    pub wormhole_bits: extern "C" fn(u32) -> crate::services::TrackBits,
     pub set_depot: extern "C" fn(u32, bool) -> (),
     pub set_station: extern "C" fn(u32, bool) -> (),
     pub set_wormhole: extern "C" fn(u32, bool) -> (),
@@ -31,7 +31,6 @@ pub struct PbsServices {
     pub unreserve_track: extern "C" fn(u32, u8) -> (),
     pub station_reserved: extern "C" fn(u32) -> bool,
     pub compatible_station: extern "C" fn(u32, u32) -> bool,
-    pub station_axis: extern "C" fn(u32) -> u8,
     pub show_reservation: extern "C" fn() -> bool,
     pub assert_track: extern "C" fn(u32, u8) -> (),
     pub assert_platform: extern "C" fn(u32, u8) -> (),
@@ -79,7 +78,7 @@ impl<'a> Pbs<'a> {
         match (s.tile_type)(tile) {
             MP_RAILWAY => {
                 if (r.is_rail_depot)(tile) {
-                    return (self.0.depot_bits)(tile);
+                    return (self.0.depot_bits)(tile).0;
                 }
                 if (s.is_plain_rail)(tile) {
                     return (r.rail_reservation)(tile).0;
@@ -87,17 +86,17 @@ impl<'a> Pbs<'a> {
             }
             MP_ROAD => {
                 if (s.is_level_crossing)(tile) {
-                    return (self.0.crossing_bits)(tile);
+                    return (self.0.crossing_bits)(tile).0;
                 }
             }
             MP_STATION => {
                 if (r.has_station_rail)(tile) {
-                    return (self.0.station_bits)(tile);
+                    return (self.0.station_bits)(tile).0;
                 }
             }
             MP_TUNNELBRIDGE => {
                 if (s.tunnel_transport)(tile) == TRANSPORT_RAIL {
-                    return (self.0.wormhole_bits)(tile);
+                    return (self.0.wormhole_bits)(tile).0;
                 }
             }
             _ => {}
@@ -177,7 +176,8 @@ impl<'a> Pbs<'a> {
                 }
             }
             MP_TUNNELBRIDGE => {
-                if (s.tunnel_transport)(tile) == TRANSPORT_RAIL && (self.0.wormhole_bits)(tile) == 0
+                if (s.tunnel_transport)(tile) == TRANSPORT_RAIL
+                    && (self.0.wormhole_bits)(tile).0 == 0
                 {
                     (self.0.set_wormhole)(tile, true);
                     return true;
@@ -401,8 +401,9 @@ impl<'a> Pbs<'a> {
     }
     pub(crate) fn follow_train(self, v: Handle, check_other: bool, mut other: Handle) -> TileInfo {
         let tile = (self.train().read_tile)(v);
-        let td = unsafe { (self.shared().train_trackdir)(v.shell.cast()) }.0;
-        if self.is_depot(tile) && (self.0.depot_bits)(tile) == 0 {
+        let td =
+            unsafe { crate::train::openttd_rust_train_trackdir(v, self.0.train, self.0.shared) };
+        if self.is_depot(tile) && (self.0.depot_bits)(tile).0 == 0 {
             return TileInfo {
                 tile,
                 td,

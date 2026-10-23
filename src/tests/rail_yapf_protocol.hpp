@@ -70,7 +70,14 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	rail.has_signal_trackdir = [](uint32_t, uint8_t) noexcept { return false; };
 	rail.rail_reservation = [](uint32_t) noexcept { return TRACK_BIT_NONE; };
 	rail.set_signal_state = [](uint32_t tile, uint8_t td, uint8_t value) noexcept { Write(tile, td, value ? 6 : 5); };
-	OpenTTDPbsServices pbs{.shared = &shared, .rail = &rail};
+	OpenTTDTrainServices train{};
+	train.read_tile = [](OpenTTDTrainHandle) noexcept -> uint32_t { return 0; };
+	openttd_rust_train_state_set_track(state.get(), TRACK_BIT_X);
+	train.read_trackdir = [](OpenTTDTrainHandle) noexcept -> OpenTTDTrainTrackdirRead { return {0, 0, 1}; };
+	train.first_track = [](OpenTTDTrainHandle, uint8_t) noexcept -> uint64_t { return 0; };
+	train.track_direction = [](OpenTTDTrainHandle, uint8_t, uint8_t) noexcept -> uint64_t { return 0; };
+	train.read_owner = [](OpenTTDTrainHandle) noexcept -> uint8_t { return 0; };
+	OpenTTDPbsServices pbs{.shared = &shared, .rail = &rail, .train = &train};
 	pbs.handle = [](const ::Train *v) noexcept { return OpenTTDTrainHandle{const_cast<::Train *>(v), reinterpret_cast<OpenTTDTrainState *>(const_cast<::Train *>(v))}; };
 	pbs.show_reservation = []() noexcept { return false; };
 	pbs.assert_track = [](uint32_t, uint8_t) noexcept {};
@@ -82,6 +89,8 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	pbs.rail90 = [](uint8_t, uint8_t, bool) noexcept { return false; };
 	shared.context = &pbs;
 	shared.pbs_services = [](const OpenTTDSharedServices *s) noexcept { return static_cast<const OpenTTDPbsServices *>(s->context); };
+	shared.train_trackdir = [](const ::Train *) noexcept { return TRACKDIR_X_NE; };
+	shared.forbid_90_deg = []() noexcept { return false; };
 	shared.tile_type = [](uint32_t) noexcept -> uint8_t { return 1; };
 	shared.is_plain_rail = [](uint32_t) noexcept { return true; };
 	shared.mark_dirty = [](uint32_t) noexcept {};

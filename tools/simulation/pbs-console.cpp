@@ -7,7 +7,6 @@
 #include "pathfinder/follow_track.hpp"
 #include "console_internal.h"
 #include "console_func.h"
-#include "pbs-original.hpp"
 #ifdef WITH_RUST
 #include "rust/pbs_ffi.h"
 #endif
@@ -22,6 +21,28 @@ extern "C" void __wrap_##Symbol(BaseStation *st, TileIndex t, Trigger trigger, C
 PBS_TRIGGER_WRAPPER(_Z27TriggerStationRandomisationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE20StationRandomTriggerh, StationRandomTrigger, 0)
 PBS_TRIGGER_WRAPPER(_Z23TriggerStationAnimationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE23StationAnimationTriggerh, StationAnimationTrigger, 1)
 #undef PBS_TRIGGER_WRAPPER
+static TrackBits PbsTrainTrack(Train *v) {
+#ifdef WITH_RUST
+	return v->GetTrack();
+#else
+	return v->track;
+#endif
+}
+static void PbsTrainTrack(Train *v, TrackBits track) {
+#ifdef WITH_RUST
+	v->SetTrack(track);
+#else
+	v->track = track;
+#endif
+}
+static RailTypes PbsTrainRailTypes(const Train *v) {
+#ifdef WITH_RUST
+	return v->GetRailTypes();
+#else
+	return v->railtypes;
+#endif
+}
+#include "pbs-original.hpp"
 using PbsMap = std::vector<std::array<uint16_t, 10>>;
 static PbsMap PbsMapRead()
 {
@@ -42,7 +63,7 @@ static PBSTileInfo PbsFollow(Owner owner, RailTypes types, TileIndex tile, Track
 	return PbsOriginalFollowReservation(owner, types, tile, td);
 #endif
 }
-static bool PbsProbe([[maybe_unused]] uint8_t argc, [[maybe_unused]] char *argv[])
+static bool PbsProbe([[maybe_unused]] std::span<std::string_view> args)
 {
 	const auto original = PbsMapRead(); const Randomizer random = _random; uint32_t checked = 0;
 	for (Train *v : Train::Iterate()) if (v->IsFrontEngine()) {
@@ -64,10 +85,22 @@ static bool PbsProbe([[maybe_unused]] uint8_t argc, [[maybe_unused]] char *argv[
 	for (uint i = 0; i < 4; ++i) { MakeRailNormal(tiles[i], Owner(0), TrackToTrackBits(tracks[i]), RAILTYPE_RAIL); SetTrackReservation(tiles[i], TrackToTrackBits(tracks[i])); }
 	PbsRequire(PbsSame(PbsOriginalFollowReservation(Owner(0), RailTypes(1), a, TRACKDIR_LOWER_W), PbsFollow(Owner(0), RailTypes(1), a, TRACKDIR_LOWER_W))); PbsRequire(GetTrainForReservation(a, TRACK_LOWER) == PbsOriginalGetTrainForReservation(a, TRACK_LOWER));
 	std::vector<std::tuple<Train *, TileIndex, TrackBits>> moved;
-	for (Train *v : Train::Iterate()) if (v->IsFrontEngine() && !v->vehstatus.Test(VehState::Crashed) && moved.size() < 2) { moved.emplace_back(v, v->tile, v->GetTrack()); v->tile = tiles[1]; v->SetTrack(TRACK_BIT_WORMHOLE); v->UpdatePosition(); }
+	for (Train *v : Train::Iterate()) if (v->IsFrontEngine() && !v->vehstatus.Test(VehState::Crashed) && moved.size() < 2) { moved.emplace_back(v, v->tile, PbsTrainTrack(v)); v->tile = tiles[1]; PbsTrainTrack(v, TRACK_BIT_WORMHOLE); v->UpdatePosition(); }
 	PbsRequire(!IsWaitingPositionFree(std::get<0>(moved[0]), a, TRACKDIR_LOWER_W, false));
 	PbsRequire(moved.size() == 2 && GetTrainForReservation(a, TRACK_LOWER) == std::get<0>(moved[0]) && GetTrainForReservation(a, TRACK_LOWER) == PbsOriginalGetTrainForReservation(a, TRACK_LOWER));
-	for (auto [v, tile, track] : moved) { v->tile = tile; v->SetTrack(track); v->UpdatePosition(); }
+	/* One-way blocking, its PBS search exception, and opposing PBS waiting policy. */
+	SetHasSignals(tiles[1], true); SetSignalType(tiles[1], TRACK_RIGHT, SIGTYPE_BLOCK); SetPresentSignals(tiles[1], SignalAlongTrackdir(TRACKDIR_RIGHT_S));
+	PbsRequire(GetTrainForReservation(tiles[1], TRACK_RIGHT) == PbsOriginalGetTrainForReservation(tiles[1], TRACK_RIGHT));
+	SetPresentSignals(tiles[1], SignalAlongTrackdir(TRACKDIR_RIGHT_N)); PbsRequire(PbsSame(PbsOriginalFollowReservation(Owner(0), RailTypes(1), a, TRACKDIR_LOWER_W), PbsFollow(Owner(0), RailTypes(1), a, TRACKDIR_LOWER_W)));
+	SetSignalType(tiles[1], TRACK_RIGHT, SIGTYPE_PBS_ONEWAY); for (bool end : {false, true}) PbsRequire(PbsOriginalIsSafeWaitingPosition(std::get<0>(moved[0]), a, TRACKDIR_LOWER_W, end, false) == IsSafeWaitingPosition(std::get<0>(moved[0]), a, TRACKDIR_LOWER_W, end, false));
+	SetPresentSignals(tiles[1], SignalAlongTrackdir(TRACKDIR_RIGHT_S)); PbsRequire(GetTrainForReservation(tiles[1], TRACK_RIGHT) == PbsOriginalGetTrainForReservation(tiles[1], TRACK_RIGHT));
+	for (auto [v, tile, track] : moved) { v->tile = tile; PbsTrainTrack(v, track); v->UpdatePosition(); }
+	PbsMapRestore(original);
+	/* The other end can hold the train even when the queried end has no vehicle. */
+	for (bool bridge : {false, true}) for (TileIndex t(0); t < Map::Size(); ++t) if (IsTileType(t, MP_TUNNELBRIDGE) && GetTunnelBridgeTransportType(t) == TRANSPORT_RAIL && IsBridgeTile(t) == bridge) {
+		Train *v = std::get<0>(moved[0]); const TileIndex old = v->tile; const TrackBits track = PbsTrainTrack(v); const TileIndex other = GetOtherTunnelBridgeEnd(t); SetTunnelBridgeReservation(t, true); SetTunnelBridgeReservation(other, false); v->tile = other; PbsTrainTrack(v, TRACK_BIT_WORMHOLE); v->UpdatePosition();
+		PbsRequire(GetTrainForReservation(t, DiagDirToDiagTrack(GetTunnelBridgeDirection(t))) == PbsOriginalGetTrainForReservation(t, DiagDirToDiagTrack(GetTunnelBridgeDirection(t)))); v->tile = old; PbsTrainTrack(v, track); v->UpdatePosition(); PbsMapRestore(original); break;
+	}
 	PbsMapRestore(original); _random = random; fmt::print(stderr, "PBS checked {}\n", checked); PbsRequire(checked != 0); return true;
 }
 // PBS registration

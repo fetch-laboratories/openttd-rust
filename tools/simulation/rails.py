@@ -46,7 +46,11 @@ def pbs_reference(folder):
     body = "".join(f"#define {name} PbsOriginal{name}\n" for name in names)
     body += "TrackBits PbsOriginalGetReservedTrackbits(TileIndex);\nbool PbsOriginalIsSafeWaitingPosition(const Train *, TileIndex, Trackdir, bool, bool);\n"
     body += "inline bool PbsOriginalHasReservedTracks(TileIndex t, TrackBits b) { return (PbsOriginalGetReservedTrackbits(t) & b) != TRACK_BIT_NONE; }\n"
-    body += original[original.index("TrackBits GetReservedTrackbits") :]
+    body += (
+        original[original.index("TrackBits GetReservedTrackbits") :]
+        .replace("t->track", "PbsTrainTrack(t)")
+        .replace("v->railtypes", "PbsTrainRailTypes(v)")
+    )
     body += "".join(f"#undef {name}\n" for name in names)
     (folder / "pbs-original.hpp").write_text(body)
 
@@ -761,6 +765,9 @@ def check(scenario, run, mode, role, result):
                 "lower_id",
                 "platform_interior",
                 "overlap",
+                "oneway_stop",
+                "search_oneway_skip",
+                "safe_opposing_pbs",
             ),
         )
     counts = core.branch_witnesses(

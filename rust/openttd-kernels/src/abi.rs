@@ -4436,7 +4436,6 @@ layouts! {
         unreserve_track,
         station_reserved,
         compatible_station,
-        station_axis,
         show_reservation,
         assert_track,
         assert_platform,

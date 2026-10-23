@@ -39,7 +39,6 @@ const OpenTTDPbsServices &GetPbsServices() noexcept
 		.unreserve_track = [](uint32_t t, uint8_t track) noexcept { UnreserveTrack(TileIndex{t}, static_cast<Track>(track)); },
 		.station_reserved = RustStationReserved,
 		.compatible_station = RustCompatibleStationTiles,
-		.station_axis = RustRailStationAxis,
 		.show_reservation = RustShowTrackReservation,
 		.assert_track = [](uint32_t tile, uint8_t t) noexcept { assert(HasTrack(TrackStatusToTrackBits(GetTileTrackStatus(TileIndex{tile}, TRANSPORT_RAIL, 0)), static_cast<Track>(t))); },
 		.assert_platform = [](uint32_t tile, uint8_t dir) noexcept { assert(IsRailStationTile(TileIndex{tile})); assert(GetRailStationAxis(TileIndex{tile}) == DiagDirToAxis(static_cast<DiagDirection>(dir))); },

@@ -27,7 +27,6 @@ struct OpenTTDPbsServices {
 	void (*unreserve_track)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unreserve_track);
 	bool (*station_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_reserved);
 	bool (*compatible_station)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_station);
-	Axis (*station_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_axis);
 	bool (*show_reservation)() noexcept OPENTTD_SERVICE_DEFAULT(show_reservation);
 	void (*assert_track)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_track);
 	void (*assert_platform)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_platform);

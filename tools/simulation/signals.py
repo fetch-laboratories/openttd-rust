@@ -325,6 +325,20 @@ def boundary_profile(counts):
 def check(scenario, run, mode, role, result):
     if "signals" not in scenario or run["exit"] or not run["snapshots"]:
         return
+    if not any("PBS checked" in line for line in run["log"]):
+        raise RuntimeError("missing default PBS transient comparison")
+    core.branch_witnesses(
+        scenario,
+        run,
+        role,
+        "pbs",
+        ("follow", "loop", "lower_id", "platform_interior")
+        + (
+            ("other_end_train",)
+            if scenario["signals"] in ("2006", "rail-commands")
+            else ()
+        ),
+    )
     lines = [line for line in run["log"] if line.startswith("SIGNALS ")]
     if scenario["signals"] == "rail-commands":
         lines = [line for line in run["log"] if line.startswith("RAILCMD ")]
