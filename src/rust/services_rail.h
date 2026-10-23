@@ -111,6 +111,8 @@ inline bool RustFollowTrackRail(OpenTTDTrainHandle v, uint8_t owner, uint64_t ty
 	return followed;
 }
 
+template <auto Follow> inline uint8_t OpenTTDTrainFollower(OpenTTDTrainHandle v, uint64_t types, OpenTTDTrainReservationFollow *out) noexcept { return Follow(v, 0, types, out); }
+
 /* Shared signature adapters preserve existing legacy callback ABIs. Query is
  * compile-time and inline: each entry makes the same native query. */
 template <auto Query, typename First, typename Second>

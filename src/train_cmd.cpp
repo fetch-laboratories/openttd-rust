@@ -4878,7 +4878,7 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.write_dest = TrainReservationWriteDest,
 		.write_last = TrainReservationWriteLast,
 		.write_suppress = TrainReservationWriteSuppress,
-		.follow = TrainReservationFollow,
+		.follow = OpenTTDTrainFollower<RustFollowTrackRail>,
 
 		.pathfind = TrainReservationPathfind,
 		.safe_track = TrainReservationSafeTrack,

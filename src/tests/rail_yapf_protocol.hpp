@@ -9,6 +9,9 @@
 #ifndef RAIL_YAPF_PROTOCOL_HPP
 #define RAIL_YAPF_PROTOCOL_HPP
 #include "../rust/rail_yapf_ffi.h"
+#include "../rust/pbs_ffi.h"
+#include "../track_type.h"
+#include "../rail_type.h"
 #include <array>
 #include <memory>
 #include <vector>
@@ -37,12 +40,10 @@ inline OpenTTDRailFollow Follow(void *, uint32_t tile, uint8_t td, uint64_t, uin
 	follows.push_back((tile << 4) | td);
 	return {tile + 1, 0, 0, INT32_MAX, (1 << 0) | (1 << 2), 1, 0, 0};
 }
-inline uint8_t Free(void *, uint32_t, uint8_t, uint8_t) noexcept { return 1; }
 inline uint8_t Station(uint32_t, uint32_t) noexcept { return 0; }
 inline uint32_t Platform(uint32_t, uint8_t) noexcept { return 0; }
 inline uint32_t Closest(void *, uint8_t) noexcept { return goal; }
 inline uint16_t Directions(uint32_t) noexcept { return (1 << 0) | (1 << 2); }
-inline void Origin(void *, uint32_t *tile, uint8_t *td) noexcept { *tile = 0; *td = 0; }
 inline uint8_t Write(uint32_t tile, uint8_t td, uint8_t op) noexcept
 {
 	writes.push_back((tile << 12) | (td << 4) | op);
@@ -61,12 +62,34 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 {
 	follows.clear(); writes.clear(); stats = {}; flushes = limits = red = restored = 0;
 	auto shared = OpenTTDFixtureSharedServices(nullptr, OpenTTDFixtureMapService<uint32_t, void *>, OpenTTDFixtureMapService<uint32_t, int32_t, int32_t, uint32_t *>);
-	shared.safe_waiting_position = [](const ::Train *, uint32_t, uint8_t, bool) noexcept { return false; };
-	OpenTTDRailInput input{}; input.shared = &shared;
+	/* PBS is now a Rust callee: provide its typed map/follower leaves instead of
+	 * stubbing whole waiting/reservation policies. The synthetic graph is unchanged. */
+	std::unique_ptr<OpenTTDTrainState, decltype(&openttd_rust_train_state_destroy)> state{openttd_rust_train_state_new(), openttd_rust_train_state_destroy};
+	OpenTTDRailMapServices rail{};
+	rail.is_rail_depot = [](uint32_t) noexcept { return false; };
+	rail.has_signal_trackdir = [](uint32_t, uint8_t) noexcept { return false; };
+	rail.rail_reservation = [](uint32_t) noexcept { return TRACK_BIT_NONE; };
+	rail.set_signal_state = [](uint32_t tile, uint8_t td, uint8_t value) noexcept { Write(tile, td, value ? 6 : 5); };
+	OpenTTDPbsServices pbs{.shared = &shared, .rail = &rail};
+	pbs.handle = [](const ::Train *v) noexcept { return OpenTTDTrainHandle{const_cast<::Train *>(v), reinterpret_cast<OpenTTDTrainState *>(const_cast<::Train *>(v))}; };
+	pbs.show_reservation = []() noexcept { return false; };
+	pbs.assert_track = [](uint32_t, uint8_t) noexcept {};
+	pbs.try_track = [](uint32_t tile, uint8_t track) noexcept { return Write(tile, track, 1) != 0; };
+	pbs.unreserve_track = [](uint32_t tile, uint8_t track) noexcept { Write(tile, track, 2); };
+	pbs.all_compatible = [](uint64_t) noexcept -> uint64_t { return 1; };
+	pbs.follow = [](OpenTTDTrainHandle, uint8_t, uint64_t, OpenTTDTrainReservationFollow *ft) noexcept { ft->new_tile = ft->old_tile + 1; ft->dirs = 0x1001; ft->exitdir = 0; return true; };
+	pbs.tile_rail_type = [](uint32_t) noexcept { return RAILTYPE_RAIL; };
+	pbs.rail90 = [](uint8_t, uint8_t, bool) noexcept { return false; };
+	shared.context = &pbs;
+	shared.pbs_services = [](const OpenTTDSharedServices *s) noexcept { return static_cast<const OpenTTDPbsServices *>(s->context); };
+	shared.tile_type = [](uint32_t) noexcept -> uint8_t { return 1; };
+	shared.is_plain_rail = [](uint32_t) noexcept { return true; };
+	shared.mark_dirty = [](uint32_t) noexcept {};
+	OpenTTDRailInput input{}; input.shared = &shared; input.vehicle = reinterpret_cast<const ::Train *>(state.get());
 	input.settings.max_nodes = limit; input.settings.curve45 = curve;
 	input.settings.slope = 50; input.settings.lookahead = !cache;
 	input.map_x = 128; input.reserve = reserve;
-	const OpenTTDRailLeaves leaves{.train = Train, .tile = Tile, .follow = Follow, .free = Free, .compatible_station = Station, .platform_length = Platform, .closest_station = Closest, .destination_dirs = Directions, .origin = Origin, .write = Write, .output = Output, .debug = Debug};
+	const OpenTTDRailLeaves leaves{.train = Train, .tile = Tile, .follow = Follow, .compatible_station = Station, .platform_length = Platform, .closest_station = Closest, .destination_dirs = Directions, .output = Output, .debug = Debug};
 	std::unique_ptr<OpenTTDRailYapf, decltype(&openttd_rust_rail_destroy)> owner{openttd_rust_rail_new(&input, &leaves), openttd_rust_rail_destroy};
 	return openttd_rust_rail_step(owner.get());
 }

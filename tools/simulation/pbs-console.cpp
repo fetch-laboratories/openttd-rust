@@ -1,0 +1,75 @@
+/* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
+/** @file pbs-console.cpp Transient endpoint/output and trigger-order gap against unchanged bodies. */
+#include "stdafx.h"
+#include "viewport_func.h"
+#include "vehicle_func.h"
+#include "newgrf_station.h"
+#include "pathfinder/follow_track.hpp"
+#include "console_internal.h"
+#include "console_func.h"
+#include "pbs-original.hpp"
+#ifdef WITH_RUST
+#include "rust/pbs_ffi.h"
+#endif
+using PbsTrace = std::vector<std::tuple<uint8_t, uint32_t, uint16_t>>;
+static PbsTrace *_pbs_trace = nullptr;
+#define PBS_TRIGGER_WRAPPER(Symbol, Trigger, Kind) \
+extern "C" void __real_##Symbol(BaseStation *, TileIndex, Trigger, CargoType); \
+extern "C" void __wrap_##Symbol(BaseStation *st, TileIndex t, Trigger trigger, CargoType cargo) { \
+	if (_pbs_trace != nullptr) _pbs_trace->emplace_back(Kind, t.base(), st->index.base()); \
+	__real_##Symbol(st, t, trigger, cargo); \
+}
+PBS_TRIGGER_WRAPPER(_Z27TriggerStationRandomisationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE20StationRandomTriggerh, StationRandomTrigger, 0)
+PBS_TRIGGER_WRAPPER(_Z23TriggerStationAnimationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE23StationAnimationTriggerh, StationAnimationTrigger, 1)
+#undef PBS_TRIGGER_WRAPPER
+using PbsMap = std::vector<std::array<uint16_t, 10>>;
+static PbsMap PbsMapRead()
+{
+	PbsMap rows; for (TileIndex i(0); i < Map::Size(); ++i) { Tile t(i); rows.push_back({t.type(), t.height(), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m7(), t.m8()}); } return rows;
+}
+static void PbsMapRestore(const PbsMap &rows)
+{
+	for (uint32_t i = 0; i < rows.size(); ++i) { Tile t(TileIndex{i}); const auto &r = rows[i]; t.type() = uint8_t(r[0]); t.height() = uint8_t(r[1]); t.m1() = uint8_t(r[2]); t.m2() = r[3]; t.m3() = uint8_t(r[4]); t.m4() = uint8_t(r[5]); t.m5() = uint8_t(r[6]); t.m6() = uint8_t(r[7]); t.m7() = uint8_t(r[8]); t.m8() = r[9]; }
+}
+static void PbsRequire(bool okay) { if (!okay) { fmt::print(stderr, "PBS mismatch\n"); std::abort(); } }
+static bool PbsSame(PBSTileInfo a, PBSTileInfo b) { return a.tile == b.tile && a.trackdir == b.trackdir && a.okay == b.okay; }
+static PBSTileInfo PbsFollow(Owner owner, RailTypes types, TileIndex tile, Trackdir td)
+{
+#ifdef WITH_RUST
+	auto r = openttd_rust_pbs_follow(&GetPbsServices(), owner.base(), types.base(), tile.base(), td);
+	return {TileIndex{r.tile}, static_cast<Trackdir>(r.td), r.okay != 0};
+#else
+	return PbsOriginalFollowReservation(owner, types, tile, td);
+#endif
+}
+static bool PbsProbe([[maybe_unused]] uint8_t argc, [[maybe_unused]] char *argv[])
+{
+	const auto original = PbsMapRead(); const Randomizer random = _random; uint32_t checked = 0;
+	for (Train *v : Train::Iterate()) if (v->IsFrontEngine()) {
+		for (Vehicle *initial : {static_cast<Vehicle *>(nullptr), static_cast<Vehicle *>(v)}) { Vehicle *a = initial, *b = initial; PbsRequire(PbsSame(PbsOriginalFollowTrainReservation(v, &a), FollowTrainReservation(v, &b)) && a == b); ++checked; }
+		for (bool end : {false, true}) for (bool no90 : {false, true}) { PbsRequire(PbsOriginalIsSafeWaitingPosition(v, v->tile, v->GetVehicleTrackdir(), end, no90) == IsSafeWaitingPosition(v, v->tile, v->GetVehicleTrackdir(), end, no90)); PbsRequire(PbsOriginalIsWaitingPositionFree(v, v->tile, v->GetVehicleTrackdir(), no90) == IsWaitingPositionFree(v, v->tile, v->GetVehicleTrackdir(), no90)); }
+	}
+	for (TileIndex t(0); t < Map::Size(); ++t) {
+		PbsRequire(PbsOriginalGetReservedTrackbits(t) == GetReservedTrackbits(t));
+		for (Track track : SetTrackBitIterator(GetReservedTrackbits(t))) { PbsRequire(PbsOriginalGetTrainForReservation(t, track) == GetTrainForReservation(t, track)); ++checked; }
+		if (IsRailStationTile(t)) { auto dir = AxisToDiagDir(GetRailStationAxis(t)); PbsOriginalSetRailStationPlatformReservation(t, dir, false); const auto before = PbsMapRead(); PbsOriginalSetRailStationPlatformReservation(t, dir, true); const auto expected = PbsMapRead(); PbsMapRestore(before); SetRailStationPlatformReservation(t, dir, true); PbsRequire(expected == PbsMapRead()); PbsMapRestore(original);
+			PbsTrace a, b; SetRailStationReservation(t, false); _pbs_trace = &a; PbsRequire(PbsOriginalTryReserveRailTrack(t, GetRailStationTrack(t), true)); const auto state = PbsMapRead(); const Randomizer expected_random = _random; PbsMapRestore(original); SetRailStationReservation(t, false); _random = random; _pbs_trace = &b; PbsRequire(TryReserveRailTrack(t, GetRailStationTrack(t), true)); _pbs_trace = nullptr; PbsRequire(state == PbsMapRead() && a == b && _random.state[0] == expected_random.state[0] && _random.state[1] == expected_random.state[1]); PbsMapRestore(original); _random = random;
+			const TileIndex next = TileAddByDiagDir(t, dir), last = TileAddByDiagDir(next, dir); if (IsCompatibleTrainStationTile(next, t) && IsCompatibleTrainStationTile(last, t)) { SetRailStationPlatformReservation(t, dir, false); SetRailStationReservation(t, true); SetRailStationReservation(next, true); const auto td = DiagDirToDiagTrackdir(dir); PbsRequire(PbsSame(PbsOriginalFollowReservation(GetTileOwner(t), GetRailTypeInfo(GetTileRailType(t))->compatible_railtypes, t, td), PbsFollow(GetTileOwner(t), GetRailTypeInfo(GetTileRailType(t))->compatible_railtypes, t, td))); PbsMapRestore(original); }
+		}
+	}
+	/* A valid four-corner reservation loop, then collocated live trains in hash
+	 * order opposite pool ID order. Restore every canonical scalar before play. */
+	const TileIndex a = TileXY(20, 20); const std::array<TileIndex, 4> tiles{a, a + 1, a + Map::SizeX() + 1, a + Map::SizeX()}; const std::array<Track, 4> tracks{TRACK_LOWER, TRACK_RIGHT, TRACK_UPPER, TRACK_LEFT};
+	for (uint y = 19; y <= 23; ++y) for (uint x = 19; x <= 23; ++x) Tile(TileXY(x, y)).height() = 0;
+	for (uint i = 0; i < 4; ++i) { MakeRailNormal(tiles[i], Owner(0), TrackToTrackBits(tracks[i]), RAILTYPE_RAIL); SetTrackReservation(tiles[i], TrackToTrackBits(tracks[i])); }
+	PbsRequire(PbsSame(PbsOriginalFollowReservation(Owner(0), RailTypes(1), a, TRACKDIR_LOWER_W), PbsFollow(Owner(0), RailTypes(1), a, TRACKDIR_LOWER_W))); PbsRequire(GetTrainForReservation(a, TRACK_LOWER) == PbsOriginalGetTrainForReservation(a, TRACK_LOWER));
+	std::vector<std::tuple<Train *, TileIndex, TrackBits>> moved;
+	for (Train *v : Train::Iterate()) if (v->IsFrontEngine() && !v->vehstatus.Test(VehState::Crashed) && moved.size() < 2) { moved.emplace_back(v, v->tile, v->GetTrack()); v->tile = tiles[1]; v->SetTrack(TRACK_BIT_WORMHOLE); v->UpdatePosition(); }
+	PbsRequire(!IsWaitingPositionFree(std::get<0>(moved[0]), a, TRACKDIR_LOWER_W, false));
+	PbsRequire(moved.size() == 2 && GetTrainForReservation(a, TRACK_LOWER) == std::get<0>(moved[0]) && GetTrainForReservation(a, TRACK_LOWER) == PbsOriginalGetTrainForReservation(a, TRACK_LOWER));
+	for (auto [v, tile, track] : moved) { v->tile = tile; v->SetTrack(track); v->UpdatePosition(); }
+	PbsMapRestore(original); _random = random; fmt::print(stderr, "PBS checked {}\n", checked); PbsRequire(checked != 0); return true;
+}
+// PBS registration
+extern "C" void __real__Z22IConsoleStdLibRegisterv();
+extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLibRegisterv(); IConsole::CmdRegister("pbs_probe", PbsProbe); }

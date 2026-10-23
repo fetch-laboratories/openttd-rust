@@ -63,6 +63,8 @@ def scenarios(soak):
             console=["signals_scenario rail-commands", "unpause"],
         )
     )
+    for case in cases:
+        case["console"] = ["pbs_probe", *case["console"]]
     return cases
 
 
@@ -134,6 +136,9 @@ def adapter(build, folder, env):
     inspection calls the Rust diagnostic entry without resetting its owner.
     """
     folder.mkdir(parents=True, exist_ok=True)
+    from .rails import PBS_WRAPS, pbs_reference
+
+    pbs_reference(folder)
     commands = json.loads((build / "compile_commands.json").read_text())
     signal = Path(
         next(row["file"] for row in commands if row["file"].endswith("/signal.cpp"))
@@ -160,6 +165,9 @@ def adapter(build, folder, env):
     )
     source.write_text(
         native
+        + (core.ROOT / "tools/simulation/pbs-console.cpp")
+        .read_text()
+        .split("// PBS registration")[0]
         + ADAPTER.read_text()
         .replace(
             "../../../src/rust/signal_ffi.h", str(core.ROOT / "src/rust/signal_ffi.h")
@@ -175,7 +183,7 @@ def adapter(build, folder, env):
         env,
         source,
         "signals",
-        wraps=("openttd_rust_train_state_get_track",),
+        wraps=("openttd_rust_train_state_get_track", *PBS_WRAPS),
         replace_objects=("/src/signal.cpp.o",),
     )
 

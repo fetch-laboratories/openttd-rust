@@ -609,3 +609,17 @@ pub unsafe extern "C" fn openttd_rust_pbs_free(
 ) -> bool {
     Pbs(unsafe { &*s }).free(v, tile, td, no90)
 }
+
+/// Transient endpoint observation for the default unchanged-body gap check.
+/// # Safety
+/// Live serialized world/tables and original track follower preconditions.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_pbs_follow(
+    s: *const PbsServices,
+    owner: u8,
+    types: u64,
+    tile: u32,
+    td: u8,
+) -> TileInfo {
+    Pbs(unsafe { &*s }).follow_reservation(owner, types, tile, td, false)
+}

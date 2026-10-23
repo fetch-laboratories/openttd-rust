@@ -1,13 +1,16 @@
 """Owner-built multimodal fixtures and rail controller evidence (#86/#179/#183/#221)."""
 
 import hashlib
+import json
 import lzma
 import re
 import shutil
 import struct
+import subprocess
 from pathlib import Path
 
 from . import core
+from .console_adapter import console_adapter, prepared_console
 from .core import (
     ROOT,
     SNAPSHOT_TICKS,
@@ -19,6 +22,47 @@ from .core import (
 from .play_saves import DISTRIBUTIONS
 
 AI_FOLDER = "rail-scenario-ai"
+
+
+# Exact unchanged pinned bodies: transient PBSTileInfo/train_on_res and trigger order
+# are not serialized. Both adapter roles compile the same source without editing it.
+def pbs_reference(folder):
+    baseline = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
+    original = subprocess.check_output(
+        ["git", "show", f"{baseline}:src/pbs.cpp"], cwd=ROOT, text=True
+    )
+    names = (
+        "GetReservedTrackbits",
+        "SetRailStationPlatformReservation",
+        "TryReserveRailTrack",
+        "UnreserveRailTrack",
+        "FollowReservation",
+        "FollowTrainReservation",
+        "GetTrainForReservation",
+        "IsSafeWaitingPosition",
+        "IsWaitingPositionFree",
+        "HasReservedTracks",
+    )
+    body = "".join(f"#define {name} PbsOriginal{name}\n" for name in names)
+    body += "TrackBits PbsOriginalGetReservedTrackbits(TileIndex);\nbool PbsOriginalIsSafeWaitingPosition(const Train *, TileIndex, Trackdir, bool, bool);\n"
+    body += "inline bool PbsOriginalHasReservedTracks(TileIndex t, TrackBits b) { return (PbsOriginalGetReservedTrackbits(t) & b) != TRACK_BIT_NONE; }\n"
+    body += original[original.index("TrackBits GetReservedTrackbits") :]
+    body += "".join(f"#undef {name}\n" for name in names)
+    (folder / "pbs-original.hpp").write_text(body)
+
+
+def adapter(build, folder, env):
+    folder.mkdir(parents=True, exist_ok=True)
+    pbs_reference(folder)
+    source = folder / "pbs-source.cpp"
+    source.write_text((ROOT / "tools/simulation/pbs-console.cpp").read_text())
+    return console_adapter(build, folder, env, source, "rails", wraps=PBS_WRAPS)
+
+
+PBS_WRAPS = (
+    "_Z27TriggerStationRandomisationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE20StationRandomTriggerh",
+    "_Z23TriggerStationAnimationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE23StationAnimationTriggerh",
+)
 
 
 def uses_ai(scenario):
@@ -174,6 +218,10 @@ def scenarios(soak):
                 "ticks": (6 if soak else 2) * 365 * TICKS_PER_DAY + SNAPSHOT_TICKS,
             }
         )
+    for case in cases:
+        if case["name"].startswith(("rail-reservation-", "rail-controller-")):
+            case["pbs_probe"] = True
+            case["console"] = ["pbs_probe", *case["console"]]
     return cases
 
 
@@ -334,6 +382,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         normalized, record = normalize(fixture, directory / "reload")
         result["rail_reload_input"] = record
         scenario = dict(scenario, save=str(normalized))
+    if scenario.get("pbs_probe"):
+        executables = prepared_console(
+            "rails", adapter, binaries, builds, directory / "pbs", env
+        )
+        scenario = dict(scenario, executables=executables)
     return scenario
 
 
@@ -692,6 +745,24 @@ def controller_witnesses(scenario, run, mode):
 def check(scenario, run, mode, role, result):
     if not scenario.get("rail_fixture"):
         return
+    if scenario.get("pbs_probe"):
+        if not any("PBS checked" in line for line in run["log"]):
+            raise RuntimeError("missing default PBS transient comparison")
+        result[f"{mode}_{role}_pbs"] = core.branch_witnesses(
+            scenario,
+            run,
+            role,
+            "pbs",
+            (
+                "follow",
+                "loop",
+                "second_direction",
+                "stray",
+                "lower_id",
+                "platform_interior",
+                "overlap",
+            ),
+        )
     counts = core.branch_witnesses(
         scenario, run, role, "train", train_required(scenario)
     )

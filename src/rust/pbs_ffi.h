@@ -51,6 +51,7 @@ uint8_t openttd_rust_pbs_reserved(const OpenTTDPbsServices *, uint32_t);
 void openttd_rust_pbs_platform(const OpenTTDPbsServices *, uint32_t, uint8_t, bool);
 bool openttd_rust_pbs_try_reserve(const OpenTTDPbsServices *, uint32_t, uint8_t, bool);
 void openttd_rust_pbs_unreserve(const OpenTTDPbsServices *, uint32_t, uint8_t);
+OpenTTDTrainReservationPbs openttd_rust_pbs_follow(const OpenTTDPbsServices *, uint8_t, uint64_t, uint32_t, uint8_t);
 OpenTTDTrainReservationPbs openttd_rust_pbs_follow_train(const OpenTTDPbsServices *, OpenTTDTrainHandle, bool, OpenTTDTrainHandle);
 OpenTTDTrainHandle openttd_rust_pbs_train_for(const OpenTTDPbsServices *, uint32_t, uint8_t);
 bool openttd_rust_pbs_safe(const OpenTTDPbsServices *, OpenTTDTrainHandle, uint32_t, uint8_t, bool, bool);

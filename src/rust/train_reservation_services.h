@@ -249,10 +249,7 @@ static void TrainReservationWriteSuppress(void *, OpenTTDTrainHandle id, uint8_t
 	Train *v = static_cast<Train *>(id.shell);
 	AssignBit(v->gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS, a != 0);
 }
-static uint8_t TrainReservationFollow(OpenTTDTrainHandle id, uint64_t railtypes, OpenTTDTrainReservationFollow *out) noexcept
-{
-	return RustFollowTrackRail(id, 0, railtypes, out);
-}
+
 
 
 static OpenTTDTrainReservationSearch TrainReservationPathfind(OpenTTDTrainHandle id, uint32_t tile, uint8_t dir, uint8_t tracks, uint8_t reserve, uint8_t want_final) noexcept

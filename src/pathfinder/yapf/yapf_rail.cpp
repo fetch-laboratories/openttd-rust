@@ -176,10 +176,10 @@ static void RailDebug(void *context, uint8_t kind, const uint32_t *stats, uint32
 	}
 }
 static const OpenTTDRailLeaves _rail_leaves{
-	.train = RailTrain, .tile = RailTile, .follow = RailFollow, .free = RailFree,
+	.train = RailTrain, .tile = RailTile, .follow = RailFollow,
 	.compatible_station = RailCompatibleStation, .platform_length = RailPlatformLength,
 	.closest_station = RailClosestStation, .destination_dirs = RailDestinationDirs,
-	.origin = RailOrigin, .write = RailWrite, .output = RailOutput, .debug = RailDebug,
+	.output = RailOutput, .debug = RailDebug,
 };
 static OpenTTDRailStep RailRun(RailYapfContext &context, uint8_t kind, TileIndex tile = INVALID_TILE, Trackdir td = INVALID_TRACKDIR, bool override_railtype = false, bool reserve = false, int max_cost = 0)
 {
