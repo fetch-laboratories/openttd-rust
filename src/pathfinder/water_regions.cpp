@@ -24,11 +24,7 @@
 
 #ifdef WITH_RUST
 #include "../rust/water_regions_ffi.h"
-
-static uint16_t WaterTracks(uint32_t tile) noexcept
-{
-	return TrackBitsToTrackdirBits(TrackStatusToTrackBits(GetTileTrackStatus(TileIndex{tile}, TRANSPORT_WATER, 0)));
-}
+#include "../rust/services_ffi.h"
 
 static uint32_t WaterFollow(uint32_t tile, uint8_t dir, uint8_t *bridge) noexcept
 {
@@ -50,7 +46,7 @@ static void WaterDebug(uint8_t operation, int32_t x, int32_t y) noexcept
 	else Debug(map, 3, "Invalidated water region ({},{})", x, y);
 }
 
-static const OpenTTDWaterLeaves _water_leaves{WaterTracks, WaterFollow, WaterAqueduct, WaterDebug};
+static const OpenTTDWaterLeaves _water_leaves{.shared = &GetRustSharedServices(), .follow = WaterFollow, .aqueduct = WaterAqueduct, .debug = WaterDebug};
 using WaterOwner = std::unique_ptr<OpenTTDWaterRegions, decltype(&openttd_rust_water_destroy)>;
 static WaterOwner _water_regions{nullptr, openttd_rust_water_destroy};
 

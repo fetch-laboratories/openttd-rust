@@ -1964,6 +1964,28 @@ before play. Native runtime export/import carries both once-built PBS adapters
 into CI shards. Native ABI/table checks and existing YAPF/controller tests remain.
 External NewGRF trigger reentry, custom railtype turn flags, legacy conversion
 and threaded GUI coverage remain #156 gaps. PR #370 records commands and metrics.
+### Tile movement dispatch (#371)
+
+Rust owns tile track status, admission, pixel height (including outside-map),
+foundation dispatch and every tile policy, rail/road foundations, depot distances,
+portal frames and bridge entry preparation. Commands, drawing and existing tile
+loops retain their owners. Native map arrays, pools and vehicle shells remain
+canonical; typed noexcept leaves carry consumed scalars or stable identities.
+Owner loads/stores end before depot, road-stop, sound, viewport and NewGRF calls.
+Train stopping, crossing occupancy, order stopping, slope/pixel and bridge helpers
+call their integrated Rust owners directly. Road pathfinder track bits and
+road/ship YAPF plus water-region movement queries also call Rust directly; header
+preconditions follow native assertion policy, without valid-input FFI. Native
+facades serve remaining native callers; portable original bodies remain excluded from WITH_RUST.
+`python3 tools/migration.py rust-checks` runs Cargo4; `build` and native ABI/tests
+check the boundary. Existing rail/road/station scenarios require movement counters,
+including all depot directions, all train tunnel portal directions, station stopping,
+road-stop admission/refusal/reload, road bridges and Padhattan lock/coast queries.
+The road fixture queries adjacent barred crossings, edge-water masks and four half-tram directions.
+`python3 tools/landscape-comparison.py` adds 19,608 unchanged-body foundation and
+signed-coordinate cases to the existing default scheduler comparison.
+Remaining NewGRF foundations, train/ship bridges, road tunnels, partial-depot
+reversal timing, half-water and extreme bridge-speed branches are tracked in #156.
 
 ### Vehicle station/depot visits and route-link prediction (#349)
 

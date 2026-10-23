@@ -170,7 +170,6 @@ pub struct Leaves {
     pub compatible_station: unsafe extern "C" fn(u32, u32) -> u8,
     pub platform_length: unsafe extern "C" fn(u32, u8) -> u32,
     pub closest_station: unsafe extern "C" fn(*mut c_void, u8) -> u32,
-    pub destination_dirs: unsafe extern "C" fn(u32) -> u16,
     pub output: unsafe extern "C" fn(*mut c_void, u8, *const Step),
     pub debug: unsafe extern "C" fn(*mut c_void, u8, *const u32, u32),
 }
@@ -542,7 +541,9 @@ impl Search {
         crate::bridge::has_bridge_flat_ramp(
             shared,
             (shared.tile_slope)(tile),
-            crate::direction_func::diag_dir_to_axis(direction),
+            crate::direction_func::diag_dir_to_axis(direction, |ok| {
+                crate::movement::native_assert(shared, ok);
+            }),
         )
     }
     fn follow(&self, tile: u32, td: u8, no90: u8, compatible: u64, mask: bool) -> Follow {
@@ -615,7 +616,15 @@ impl Search {
             _ => {
                 self.any_depot = self.train.order == 2 && self.train.nearest_depot != 0;
                 self.dest_tile = self.train.dest_tile;
-                self.dest_dirs = unsafe { (self.leaves.destination_dirs)(self.dest_tile) };
+                self.dest_dirs = unsafe {
+                    crate::track_func::track_status_to_trackdir_bits(crate::movement::track_status(
+                        &*self.input.shared,
+                        self.dest_tile,
+                        0,
+                        0,
+                        255,
+                    ))
+                };
             }
         }
     }
@@ -748,6 +757,7 @@ impl Search {
         if crate::track_func::track_overlaps_tracks(
             self.pbs().reserved(tile),
             crate::track_func::trackdir_to_track(td),
+            |ok| crate::movement::native_assert(self.pbs().shared(), ok),
         ) {
             let mut cost = self.input.settings.pbs_cross as i32;
             if !diagonal(td) {
@@ -1824,7 +1834,6 @@ crate::abi::layouts! {
         compatible_station,
         platform_length,
         closest_station,
-        destination_dirs,
         output,
         debug,
     };

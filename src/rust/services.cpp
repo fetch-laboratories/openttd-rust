@@ -12,6 +12,7 @@
 #include "town_services.h"
 #include "services_ffi.h"
 #include "pbs_ffi.h"
+#include "movement_ffi.h"
 #include "services_bridge.h"
 #include "services_viewport.h"
 #include "station_command_ffi.h"
@@ -290,7 +291,7 @@ static bool Shared_is_bridge(uint32_t tile) noexcept { return IsBridgeTile(TileI
 static uint8_t Shared_drive_through_axis(uint32_t tile) noexcept { return GetDriveThroughStopAxis(TileIndex{tile}); }
 static bool Shared_is_any_road_stop(uint32_t tile) noexcept { return IsAnyRoadStopTile(TileIndex{tile}); }
 static uint8_t Shared_road_type(uint32_t tile) noexcept { return GetRoadTypeRoad(TileIndex{tile}); }
-static bool Shared_has_road_type(uint32_t tile) noexcept { return HasTileRoadType(TileIndex{tile}, RTT_ROAD); }
+static bool Shared_has_road_type(uint32_t tile) noexcept { return RustHasTileRoadType(tile, RTT_ROAD); }
 static uint8_t Shared_road_owner(uint32_t tile) noexcept { return GetRoadOwner(TileIndex{tile}, RTT_ROAD).base(); }
 static uint16_t Shared_town_index(uint32_t tile) noexcept { return GetTownIndex(TileIndex{tile}).base(); }
 static uint8_t Shared_road_bits(uint32_t tile, uint8_t type, bool straight) noexcept { return GetAnyRoadBits(TileIndex{tile}, static_cast<RoadTramType>(type), straight); }
@@ -311,7 +312,7 @@ static bool SharedServiceAtHelipad() noexcept { return RustServiceAtHelipad(); }
 static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
 static int32_t SharedEconomyDate() noexcept { return TimerGameEconomy::date.base(); }
 static int32_t SharedCalendarDate() noexcept { return TimerGameCalendar::date.base(); }
-static int32_t SharedSlope(int32_t x, int32_t y) noexcept { return SharedSlopePixelZ(x, y, false); }
+
 static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
 static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
 static void SharedRebuildTownTree() noexcept { RebuildTownKdtree(); }
@@ -325,6 +326,7 @@ static void SharedForEachStation(void *context, void (*visit)(void *, const Open
 }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
+	.movement_services = []() noexcept { return &GetRustMovementServices(); },
 	.set_tile_owner = RustSetTileOwner,
 	.autoslope = RustAutoslopeEnabled,
 	.bay_stop_direction = Shared_bay_stop_direction,
@@ -397,7 +399,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.pbs_services = [](const OpenTTDSharedServices *) noexcept { return &GetPbsServices(); },
 	.service_at_helipad = SharedServiceAtHelipad,
 	.set_tropic_zone = SharedSetTropicZone,
-	.slope = SharedSlope,
+
 	.snow_line = SharedSnowLine,
 	.station_index = MapSvcStationIndex,
 	.road_commands = []() noexcept { return &GetRustRoadCommandServices(); },
@@ -442,7 +444,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	// Registry: landscape (#212).
 	.apply_foundation = RustApplyFoundation,
 	.clear_ground = OpenTTDClearGround,
-	.foundation = RustFoundationSlope,
+
 	.has_water_class = RustHasWaterClass,
 	.make_shore = OpenTTDMakeShore,
 	.make_snow = RustMakeSnow,
@@ -556,7 +558,7 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.signal_state = RustRailSignalState,
 		.set_signal_state = RustRailSetSignalState,
 		.other_tunnel_bridge_end = RustOtherTunnelBridgeEnd,
-		.rail_track_status = RustRailTrackStatus,
+
 		.has_signals = RustRailHasSignals,
 		.signal_type = RustRailSignalType,
 		.invalid_rail_type = RustInvalidRailType,

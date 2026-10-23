@@ -211,7 +211,6 @@ struct OpenTTDStationCommandServices {
 	const OpenTTDShipLeaves *ship;
 	const OpenTTDClearServices *clear;
 	const OpenTTDWaterRestorationServices *restoration;
-	TrackBits (*water_tracks)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(water_tracks);
 	void (*set_docking)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_docking);
 	OpenTTDStationArea (*ship_area)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(ship_area);
 	void (*set_ship_area)(BaseStation *, OpenTTDStationArea) noexcept OPENTTD_SERVICE_DEFAULT(set_ship_area);

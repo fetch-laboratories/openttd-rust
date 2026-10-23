@@ -20,9 +20,7 @@ inline WaterClass RustWaterClass(uint32_t tile) noexcept { return GetWaterClass(
 inline bool OpenTTDIsDockingTile(uint32_t tile) noexcept { return IsDockingTile(TileIndex(tile)); }
 inline void OpenTTDMakeShore(uint32_t tile) noexcept { MakeShore(TileIndex(tile)); }
 inline bool OpenTTDIsMiddleLock(uint32_t tile) noexcept { return IsTileType(TileIndex{tile}, MP_WATER) && RustWaterTileType(tile) == WaterTileType::Lock && RustLockPart(tile) == LockPart::Middle; }
-inline TrackBits OpenTTDWaterTracks(uint32_t tile, uint8_t entry) noexcept { return TrackStatusToTrackBits(GetTileTrackStatus(TileIndex{tile}, TRANSPORT_WATER, 0, static_cast<DiagDirection>(entry))); }
 inline void OpenTTDSetDockingTile(uint32_t tile, bool docking) noexcept { SetDockingTile(TileIndex{tile}, docking); }
-inline uint32_t OpenTTDLegacyWaterTracks(uint32_t tile, uint32_t entry) noexcept { return OpenTTDWaterTracks(tile, static_cast<uint8_t>(entry)); }
 inline void RustMakeCanal(uint32_t tile, uint8_t owner, uint8_t random) noexcept { MakeCanal(TileIndex{tile}, Owner(owner), random); }
 inline void RustMakeRiver(uint32_t tile, uint8_t random) noexcept { MakeRiver(TileIndex{tile}, random); }
 inline bool RustOnWater(uint32_t tile) noexcept { return IsTileOnWater(TileIndex(tile)); }
@@ -30,4 +28,5 @@ inline bool RustIsRiver(uint32_t tile) noexcept { return IsRiver(TileIndex{tile}
 inline bool RustIsCanal(uint32_t tile) noexcept { return IsCanal(TileIndex{tile}); }
 
 inline bool RustCanalOrRiver(uint32_t tile) noexcept { return RustIsCanal(tile) || RustIsRiver(tile); }
+inline Axis RustShipDepotAxis(uint32_t tile) noexcept { return GetShipDepotAxis(TileIndex{tile}); }
 #endif /* RUST_SERVICES_WATER_H */

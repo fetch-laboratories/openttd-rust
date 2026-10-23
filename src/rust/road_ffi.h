@@ -198,12 +198,11 @@ struct OpenTTDRoadLeaves {
 	OpenTTDRoadPartRead (OPENTTD_VEHICLE_CALL *part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(part);
 	OpenTTDRoadLink (OPENTTD_VEHICLE_CALL *link)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(link);
 	OpenTTDRoadLinkTile (OPENTTD_VEHICLE_CALL *link_tile)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(link_tile);
-	OpenTTDRoadEntered (OPENTTD_VEHICLE_CALL *enter_tile)(OpenTTDVehicle *, uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(enter_tile);
+	OpenTTDRoadEntered (OPENTTD_VEHICLE_CALL *after_enter_tile)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(after_enter_tile);
 	void (OPENTTD_VEHICLE_CALL *visit_close)(OpenTTDVehicle *, int32_t, int32_t, bool, OpenTTDRoadCloseVisitor, void *) noexcept OPENTTD_SERVICE_DEFAULT(visit_close);
 	void (OPENTTD_VEHICLE_CALL *visit_trains)(OpenTTDVehicle *, OpenTTDRoadTrainVisitor, void *) noexcept OPENTTD_SERVICE_DEFAULT(visit_trains);
 	void (OPENTTD_VEHICLE_CALL *visit_tile)(uint32_t, OpenTTDRoadTileVisitor, void *) noexcept OPENTTD_SERVICE_DEFAULT(visit_tile);
 	bool (OPENTTD_VEHICLE_CALL *has_road)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_road);
-	uint32_t (OPENTTD_VEHICLE_CALL *track_status)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(track_status);
 	uint8_t (OPENTTD_VEHICLE_CALL *any_road_bits)(OpenTTDVehicle *, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(any_road_bits);
 	bool (OPENTTD_VEHICLE_CALL *is_road_depot_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_road_depot_tile);
 	uint8_t (OPENTTD_VEHICLE_CALL *depot_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_direction);

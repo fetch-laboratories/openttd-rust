@@ -41,7 +41,6 @@ const OpenTTDPbsServices &GetPbsServices() noexcept
 		.station_reserved = RustStationReserved,
 		.compatible_station = RustCompatibleStationTiles,
 		.show_reservation = RustShowTrackReservation,
-		.assert_track = []([[maybe_unused]] uint32_t tile, [[maybe_unused]] uint8_t t) noexcept { assert(HasTrack(TrackStatusToTrackBits(GetTileTrackStatus(TileIndex{tile}, TRANSPORT_RAIL, 0)), static_cast<Track>(t))); },
 		.assert_platform = []([[maybe_unused]] uint32_t tile, [[maybe_unused]] uint8_t dir) noexcept { assert(IsRailStationTile(TileIndex{tile})); assert(GetRailStationAxis(TileIndex{tile}) == DiagDirToAxis(static_cast<DiagDirection>(dir))); },
 		.station = [](uint32_t t) noexcept { return BaseStation::GetByTile(TileIndex{t}); },
 		.randomisation = [](BaseStation *st, uint32_t t) noexcept { RustStationRandomisation(st, TileIndex{t}, StationRandomTrigger::PathReservation); },

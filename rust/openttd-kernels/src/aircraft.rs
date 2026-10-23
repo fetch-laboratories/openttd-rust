@@ -503,7 +503,7 @@ impl World<'_> {
         engine_sound(self; v: Vehicle) => unsafe { (self.leaves.engine_sound)(v) };
         engine_reliability(self; v: Vehicle) => (self.maintenance().engine_reliability)(v.base());
         vehicle_type(self; v: Vehicle) => (self.vs.vehicle_type)(v.base());
-        slope(self; x: i64, y: i64) => (self.ss.slope)(x as i32, y as i32);
+        slope(self; x: i64, y: i64) => crate::movement::pixel_z(self.ss,x as i32,y as i32,false);
         // Original unsigned TileHeight * TILE_HEIGHT narrows to int before widening.
         tile_height(self; tile: i64) => (self.ss.tile_height)(tile as u32).wrapping_mul(crate::tile_type::TILE_HEIGHT) as i32;
         airport_entry(self; ap: *const c_void, direction: i64) => unsafe { (self.leaves.airport_entry)(ap, direction as u8) };

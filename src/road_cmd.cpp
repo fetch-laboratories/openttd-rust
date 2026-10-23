@@ -55,6 +55,10 @@
 #include "rust/environment_services.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/movement_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 
@@ -203,6 +207,7 @@ void UpdateCompanyRoadInfrastructure(RoadType rt, Owner o, int count)
 
 
 /** Invalid RoadBits on slopes.  */
+#ifndef WITH_RUST
 static const RoadBits _invalid_tileh_slopes_road[2][15] = {
 	/* The inverse of the mixable RoadBits on a leveled slope */
 	{
@@ -250,6 +255,7 @@ static const RoadBits _invalid_tileh_slopes_road[2][15] = {
 		ROAD_ALL   // SLOPE_NW
 	}
 };
+#endif
 
 static Foundation GetRoadFoundation(Slope tileh, RoadBits bits);
 
@@ -1321,6 +1327,9 @@ struct DrawRoadTileStruct {
  */
 static Foundation GetRoadFoundation(Slope tileh, RoadBits bits)
 {
+#ifdef WITH_RUST
+	return openttd_rust_road_foundation(tileh, bits, RustMovementAssert);
+#else
 	/* Flat land and land without a road doesn't require a foundation */
 	if (tileh == SLOPE_FLAT || bits == ROAD_NONE) return FOUNDATION_NONE;
 
@@ -1339,6 +1348,7 @@ static Foundation GetRoadFoundation(Slope tileh, RoadBits bits)
 
 	/* Roads on steep Slopes or on Slopes with one corner raised */
 	return (bits == ROAD_X ? FOUNDATION_INCLINED_X : FOUNDATION_INCLINED_Y);
+#endif
 }
 
 const uint8_t _road_sloped_sprites[14] = {
@@ -1993,6 +2003,7 @@ void UpdateNearestTownForRoadTiles(bool invalidate)
 }
 #endif /* WITH_RUST */
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Road(TileIndex tile, uint x, uint y, bool)
 {
 
@@ -2007,7 +2018,9 @@ static int GetSlopePixelZ_Road(TileIndex tile, uint x, uint y, bool)
 		return GetTileMaxPixelZ(tile);
 	}
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_Road(TileIndex tile, Slope tileh)
 {
 	if (IsNormalRoad(tile)) {
@@ -2016,13 +2029,14 @@ static Foundation GetFoundation_Road(TileIndex tile, Slope tileh)
 		return FlatteningFoundation(tileh);
 	}
 }
+#endif
 
 #ifdef WITH_RUST
 const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept
 {
 	static_assert(SND_21_ROAD_WORKS == 31 && OWNER_TOWN.base() == 15);
 	static const OpenTTDRoadGroundServices services{
-		.snow = [](uint32_t index) noexcept { TileIndex t{index}; int z = RustFoundationSlope(index).slope == SLOPE_FLAT ? OpenTTDTileMaxZ(t) : RustTileZ(t); return OpenTTDRoadSnowGround{.z = z, .snow = RustRoadSnowOrDesert(Tile{t})}; },
+		.snow = [](uint32_t index, bool flat) noexcept { TileIndex t{index}; int z = flat ? OpenTTDTileMaxZ(t) : RustTileZ(t); return OpenTTDRoadSnowGround{.z = z, .snow = RustRoadSnowOrDesert(Tile{t})}; },
 		.snow_or_desert = RustRoadSnowOrDesert,
 		.toggle_snow_or_desert = [](uint32_t t) noexcept { ToggleSnowOrDesert(TileIndex{t}); },
 		.roadside = [](uint32_t t) noexcept { return GetRoadside(TileIndex{t}); },
@@ -2174,6 +2188,7 @@ static bool ClickTile_Road(TileIndex tile)
 }
 
 /* Converts RoadBits to TrackBits */
+#ifndef WITH_RUST
 static const TrackBits _road_trackbits[16] = {
 	TRACK_BIT_NONE,                                  // ROAD_NONE
 	TRACK_BIT_NONE,                                  // ROAD_NW
@@ -2192,7 +2207,9 @@ static const TrackBits _road_trackbits[16] = {
 	TRACK_BIT_RIGHT | TRACK_BIT_LOWER | TRACK_BIT_X, // ROAD_X | ROAD_SE
 	TRACK_BIT_ALL,                                   // ROAD_ALL
 };
+#endif
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Road(TileIndex tile, TransportType mode, uint sub_mode, DiagDirection side)
 {
 	TrackdirBits trackdirbits = TRACKDIR_BIT_NONE;
@@ -2256,6 +2273,7 @@ static TrackStatus GetTileTrackStatus_Road(TileIndex tile, TransportType mode, u
 	}
 	return CombineTrackStatus(trackdirbits, red_signals);
 }
+#endif
 
 static const StringID _road_tile_strings[] = {
 	STR_LAI_ROAD_DESCRIPTION_ROAD,
@@ -2338,10 +2356,13 @@ static void GetTileDesc_Road(TileIndex tile, TileDesc &td)
  * Given the direction the road depot is pointing, this is the direction the
  * vehicle should be travelling in in order to enter the depot.
  */
+#ifndef WITH_RUST
 static const uint8_t _roadveh_enter_depot_dir[4] = {
 	TRACKDIR_X_SW, TRACKDIR_Y_NW, TRACKDIR_X_NE, TRACKDIR_Y_SE
 };
+#endif
 
+#ifndef WITH_RUST
 static VehicleEnterTileStates VehicleEnter_Road(Vehicle *v, TileIndex tile, int, int)
 {
 	switch (GetRoadTileType(tile)) {
@@ -2367,6 +2388,7 @@ static VehicleEnterTileStates VehicleEnter_Road(Vehicle *v, TileIndex tile, int,
 	}
 	return {};
 }
+#endif
 
 
 #ifndef WITH_RUST
@@ -2780,7 +2802,7 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 			return {.tile = town->xy.base(), .radius = town->cache.squared_town_zone_radius[to_underlying(HouseZone::TownEdge)]};
 		},
 		.set_town = RustSetTownIndex,
-		.foundation = [](uint8_t slope, uint8_t bits) noexcept { return GetRoadFoundation(static_cast<Slope>(slope), static_cast<RoadBits>(bits)); },
+
 		.extra_dynamite = RustExtraDynamite,
 		.depot_slope = [](uint8_t dir, uint8_t slope) noexcept { return CanBuildDepotByTileh(static_cast<DiagDirection>(dir), static_cast<Slope>(slope)); },
 		.make_depot = [](uint32_t tile, uint8_t owner, uint16_t depot, uint8_t dir, uint8_t rt) noexcept { MakeRoadDepot(TileIndex{tile}, Owner(owner), DepotID(depot), static_cast<DiagDirection>(dir), static_cast<RoadType>(rt)); },
@@ -2863,11 +2885,19 @@ static CommandCost CheckBuildAbove_Road(TileIndex tile, DoCommandFlags flags, Ax
 /** Tile callback functions for road tiles */
 extern const TileTypeProcs _tile_type_road_procs = {
 	DrawTile_Road,           // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Road,     // get_slope_z_proc
+#endif
 	ClearTile_Road,          // clear_tile_proc
 	nullptr,                    // add_accepted_cargo_proc
 	GetTileDesc_Road,        // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Road, // get_tile_track_status_proc
+#endif
 	ClickTile_Road,          // click_tile_proc
 	nullptr,                    // animate_tile_proc
 #ifdef WITH_RUST
@@ -2881,8 +2911,16 @@ extern const TileTypeProcs _tile_type_road_procs = {
 	ChangeTileOwner_Road,    // change_tile_owner_proc
 #endif
 	nullptr,                    // add_produced_cargo_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	VehicleEnter_Road,       // vehicle_enter_tile_proc
+#endif
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Road,      // get_foundation_proc
+#endif
 	TerraformTile_Road,      // terraform_tile_proc
 	CheckBuildAbove_Road, // check_build_above_proc
 };

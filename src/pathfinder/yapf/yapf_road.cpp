@@ -22,6 +22,7 @@
 #include "../../rust/road_yapf_ffi.h"
 #include "../../rust/services_yapf.h"
 #include "../../rust/services_map.h"
+#include "../../rust/services_movement.h"
 #include "../../rust/vehicle_services.h"
 
 static OpenTTDRoadYapfInput RoadInput(const RoadVehicle *v)
@@ -60,19 +61,11 @@ static OpenTTDRoadYapfFollow RoadFollow(const void *ctx, uint32_t tile, uint8_t 
 	return out;
 }
 
-static uint16_t RoadTracks(const void *ctx, uint32_t tile, uint8_t status) noexcept
-{
-	const auto *v = static_cast<const RoadVehicle *>(ctx);
-	return status ? TrackStatusToTrackdirBits(GetTileTrackStatus(TileIndex(tile), TRANSPORT_ROAD, RustRoadTramType(v->roadtype))) : GetTrackdirBitsForRoad(TileIndex(tile), RustRoadTramType(v->roadtype));
-}
-
 /** No Follow here: GetSpeedLimit reads only old_tile and the live vehicle. */
-static OpenTTDRoadYapfTraversal RoadTraversal(const void *ctx, uint32_t tile, uint32_t next) noexcept
+static OpenTTDRoadYapfTraversal RoadTraversal(const void *ctx, uint32_t tile) noexcept
 {
 	const auto *v = static_cast<const RoadVehicle *>(ctx);
 	OpenTTDRoadYapfTraversal out{};
-	out.current_z = SharedSlopePixelZ(TileX(TileIndex(tile)) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex(tile)) * TILE_SIZE + TILE_SIZE / 2, true);
-	out.next_z = SharedSlopePixelZ(TileX(TileIndex(next)) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex(next)) * TILE_SIZE + TILE_SIZE / 2, true);
 	out.display_speed = RustVehicleDisplayMaxSpeed(v);
 	out.order_speed = RustVehicleOrderMaxSpeed(v);
 	CFollowTrackRoad follower(v);
@@ -105,7 +98,7 @@ static OpenTTDRoadYapfArea RoadArea(const void *ctx, uint16_t station) noexcept
 	return out;
 }
 
-static const OpenTTDRoadYapfLeaves _road_yapf_leaves{.shared = &_rust_shared_services, .tile = RoadTile, .follow = RoadFollow, .tracks = RoadTracks, .traversal = RoadTraversal, .closest = RoadClosest, .area = RoadArea};
+static const OpenTTDRoadYapfLeaves _road_yapf_leaves{.shared = &_rust_shared_services, .road_kind = RustVehicleContextQuery<RoadTramType, RoadVehicle, RustMovementRoadKind>, .tile = RoadTile, .follow = RoadFollow, .traversal = RoadTraversal, .closest = RoadClosest, .area = RoadArea};
 
 static void RoadDebug(const RoadVehicle *v, const OpenTTDRoadYapfResult &result)
 {

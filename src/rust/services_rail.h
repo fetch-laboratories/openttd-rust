@@ -16,6 +16,7 @@
 #include "../road_map.h"
 #include "../station_map.h"
 #include "../tunnelbridge_map.h"
+#include "../tunnel_map.h"
 #include "../landscape.h"
 #include "../water_map.h"
 #include "../depot_map.h"
@@ -50,7 +51,6 @@ inline SignalState RustRailSignalState(uint32_t tile, uint8_t td) noexcept { ret
 inline void RustRailSetSignalState(uint32_t tile, uint8_t td, uint8_t state) noexcept { SetSignalStateByTrackdir(TileIndex(tile), static_cast<Trackdir>(td), static_cast<SignalState>(state)); }
 inline bool RustRailSignalIsGreen(uint32_t tile, uint8_t td) noexcept { return RustRailSignalState(tile, td) == SIGNAL_STATE_GREEN; }
 inline void RustRailSetSignalGreen(uint32_t tile, uint8_t td, uint8_t green) noexcept { RustRailSetSignalState(tile, td, green != 0 ? SIGNAL_STATE_GREEN : SIGNAL_STATE_RED); }
-inline TrackStatus RustRailTrackStatus(uint32_t tile, uint8_t dir) noexcept { return GetTileTrackStatus(TileIndex(tile), TRANSPORT_RAIL, 0, static_cast<DiagDirection>(dir)); }
 inline Axis RustRailStationAxis(uint32_t tile) noexcept { return GetRailStationAxis(TileIndex(tile)); }
 inline Axis RustCrossingRoadAxis(uint32_t tile) noexcept { return GetCrossingRoadAxis(TileIndex(tile)); }
 inline TransportType RustTunnelBridgeTransport(uint32_t tile) noexcept { return GetTunnelBridgeTransportType(TileIndex(tile)); }
@@ -63,7 +63,6 @@ inline uint16_t RustRailMaxSpeed(RailType type) noexcept { return GetRailTypeInf
 inline RailType RustRailType(uint32_t tile) noexcept { return GetRailType(TileIndex(tile)); }
 inline void RustSetRailType(uint32_t tile, uint8_t rt) noexcept { SetRailType(TileIndex(tile), static_cast<RailType>(rt)); }
 inline RailTileType RustRailTileType(uint32_t tile) noexcept { return GetRailTileType(TileIndex(tile)); }
-inline Foundation RustRailFoundation(Slope slope, TrackBits tracks) noexcept { return GetRailFoundation(slope, tracks); }
 inline RailGroundType RustRailGround(uint32_t tile) noexcept { return GetRailGroundType(TileIndex(tile)); }
 inline void RustSetRailGroundTyped(uint32_t tile, RailGroundType ground) noexcept { SetRailGroundType(TileIndex(tile), ground); }
 inline void RustSetTrackBits(uint32_t tile, uint8_t bits) noexcept { SetTrackBits(TileIndex(tile), static_cast<TrackBits>(bits)); }
@@ -138,4 +137,9 @@ Result OpenTTDLegacyContextMapQuery(void *, Handle, Args... args) noexcept
 {
 	return static_cast<Result>(Query(args...));
 }
+inline bool RustMovementTunnel(uint32_t tile) noexcept { return IsTunnel(TileIndex{tile}); }
+inline bool RustMovementPlainRail(uint32_t tile) noexcept { return IsPlainRail(TileIndex{tile}); }
+inline bool RustRailDepotTile(uint32_t tile) noexcept { return IsRailDepotTile(TileIndex{tile}); }
+inline bool RustRailOnewaySignal(uint32_t tile, uint8_t track) noexcept { return IsOnewaySignal(TileIndex{tile}, static_cast<Track>(track)); }
+inline bool RustCrossingBarred(uint32_t tile) noexcept { return IsCrossingBarred(TileIndex{tile}); }
 #endif /* RUST_SERVICES_RAIL_H */

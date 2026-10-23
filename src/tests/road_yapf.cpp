@@ -13,20 +13,43 @@
 #include "../roadveh.h"
 #ifdef WITH_RUST
 #include "../rust/road_yapf_ffi.h"
+#include "../rust/movement_ffi.h"
 #include "../safeguards.h"
 
 namespace {
 struct HeapNode { int32_t estimate; bool operator<(const HeapNode &other) const { return this->estimate < other.estimate; } };
 OpenTTDRoadYapfTile ProbeTile(const void *, uint32_t, uint8_t, bool) noexcept { OpenTTDRoadYapfTile tile{}; tile.type = 5; tile.station_type = 2; return tile; }
 OpenTTDRoadYapfFollow RoadProbeFollow(const void *, uint32_t, uint8_t) noexcept { return {}; }
-uint16_t Tracks(const void *ctx, uint32_t, uint8_t) noexcept { return *static_cast<const uint16_t *>(ctx); }
-OpenTTDRoadYapfTraversal Traversal(const void *, uint32_t, uint32_t) noexcept { OpenTTDRoadYapfTraversal out{}; out.max_speed = INT32_MAX; return out; }
+uint16_t fixture_dirs = 1;
+OpenTTDFoundationSlope (*height_query)(uint32_t) noexcept = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
+const OpenTTDSharedServices *MovementWorld()
+{
+	static OpenTTDSharedServices world{};
+	static OpenTTDMovementServices movement{};
+	world.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 2; };
+	world.map_log_x = []() noexcept -> uint32_t { return 6; };
+	world.road_tile_kind = [](uint32_t) noexcept { return static_cast<RoadTileType>(0); };
+	world.normal_road_bits = [](uint32_t, uint8_t) noexcept -> RoadBits {
+		constexpr RoadBits bits[]{static_cast<RoadBits>(10), static_cast<RoadBits>(5), static_cast<RoadBits>(9), static_cast<RoadBits>(6), static_cast<RoadBits>(3), static_cast<RoadBits>(12)};
+		return bits[std::countr_zero(static_cast<unsigned>(fixture_dirs)) & 7];
+	};
+	world.disallowed_road_directions = [](uint32_t) noexcept -> uint8_t { return fixture_dirs > 255 ? 1 : 2; };
+	world.has_road_works = [](uint32_t) noexcept { return false; };
+	movement.shared = &world;
+	movement.has_tile_road_type = [](uint32_t, RoadTramType) noexcept { return true; };
+	movement.normal_road = [](uint32_t) noexcept { return true; };
+	movement.pixel_slope = [](uint32_t tile) noexcept { return height_query(tile); };
+	return &world;
+}
+OpenTTDRoadYapfTraversal Traversal(const void *, uint32_t) noexcept { OpenTTDRoadYapfTraversal out{}; out.max_speed = INT32_MAX; return out; }
 uint32_t RoadProbeClosest(const void *, uint16_t, uint8_t) noexcept { return 0; }
 OpenTTDRoadYapfArea Area(const void *, uint16_t) noexcept { return {}; }
 const OpenTTDRoadYapfLeaves probe_leaves{
+	.shared = MovementWorld(),
+	.road_kind = [](const void *) noexcept { return RTT_ROAD; },
 	.tile = ProbeTile,
 	.follow = RoadProbeFollow,
-	.tracks = Tracks,
 	.traversal = Traversal,
 	.closest = RoadProbeClosest,
 	.area = Area,
@@ -68,6 +91,7 @@ TEST_CASE("Road YAPF origin masks match shared track constants", "[road][rust]")
 		for (uint8_t td = 0; td < 14; ++td) {
 			if (td == 6 || td == 7) continue;
 			uint16_t tracks = 1U << td;
+			fixture_dirs = tracks;
 			auto result = openttd_rust_road_yapf_choose(state, &input, &leaves, &tracks, 0, entry, TRACKDIR_BIT_Y_NW, true);
 			bool reachable = (tracks & DiagdirReachesTrackdirs(static_cast<DiagDirection>(entry))) != 0;
 			REQUIRE(result.direction == (reachable ? td : static_cast<uint8_t>(TRACKDIR_Y_NW)));
@@ -96,7 +120,6 @@ OpenTTDRoadYapfFollow Follow(const void *, uint32_t tile, uint8_t td) noexcept
 	trace.emplace_back(tile, td);
 	return {tile + 1, 0, TRACKDIR_BIT_X_NE | TRACKDIR_BIT_LOWER_E, true};
 }
-uint16_t Tracks(const void *, uint32_t, uint8_t) noexcept { return TRACKDIR_BIT_X_NE; }
 struct Follower {};
 class Search;
 struct Types {
@@ -136,8 +159,9 @@ public:
 }
 TEST_CASE("Road YAPF low-limit timing and exit-key replacement match reference", "[road][rust]")
 {
+	fixture_dirs = 1;
 	auto leaves = probe_leaves;
-	leaves.tile = RoadLimit::ProbeTile; leaves.follow = RoadLimit::Follow; leaves.tracks = RoadLimit::Tracks;
+	leaves.tile = RoadLimit::ProbeTile; leaves.follow = RoadLimit::Follow;
 	for (int limit : {0, 1, 2, 7}) {
 		for (uint32_t destination : {2U, 10U}) for (int max_cost : {0, 70, 71, 100}) {
 			RoadLimit::goal = destination; RoadLimit::trace.clear();
@@ -185,21 +209,27 @@ OpenTTDRoadYapfFollow Follow(const void *ctx, uint32_t tile, uint8_t) noexcept
 	if (c.mode == Loop) return {1, 0, TRACKDIR_BIT_X_NE, true};
 	return {2, c.mode == LongSegment ? 4096 : 2, static_cast<uint16_t>(c.mode == Junction ? TRACKDIR_BIT_X_NE | TRACKDIR_BIT_LOWER_E : TRACKDIR_BIT_X_NE), true};
 }
-OpenTTDRoadYapfTraversal Traversal(const void *ctx, uint32_t tile, uint32_t next) noexcept
+Context *height_context;
+OpenTTDFoundationSlope Height(uint32_t tile) noexcept
 {
-	auto &c = *const_cast<Context *>(static_cast<const Context *>(ctx));
-	c.trace.emplace_back('V', tile); c.trace.emplace_back('N', next);
-	return {.current_z = 0, .next_z = 8, .display_speed = 100, .max_speed = 40, .min_speed = 90, .order_speed = 40};
+	height_context->trace.emplace_back(tile == 1 ? 'V' : 'N', tile);
+	return {.z = tile == 1 ? 0 : 8, .slope = SLOPE_FLAT};
+}
+OpenTTDRoadYapfTraversal Traversal(const void *, uint32_t) noexcept
+{
+	return {.display_speed = 100, .max_speed = 40, .min_speed = 90, .order_speed = 40};
 }
 }
 TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[road][rust]")
 {
 	using namespace RoadOrder;
+	fixture_dirs = 1;
 	auto leaves = probe_leaves;
-	leaves.tile = RoadOrder::Tile; leaves.follow = RoadOrder::Follow; leaves.tracks = RoadLimit::Tracks; leaves.traversal = RoadOrder::Traversal;
+	leaves.tile = RoadOrder::Tile; leaves.follow = RoadOrder::Follow; leaves.traversal = RoadOrder::Traversal;
 	for (Mode mode : {Rejected, Junction, Loop, Destination, MaxCost, DepotEntry, Accepted, LongSegment, Startup}) {
 		CAPTURE(mode);
 		Context context{mode, {}};
+		height_context = &context; height_query = Height;
 		OpenTTDRoadYapfInput input{}; input.map_x = input.map_y = 64; input.slope = 17; input.dest_tile = 10;
 		OpenTTDRoadYapfResult result;
 		if (mode == DepotEntry) {
@@ -228,6 +258,8 @@ TEST_CASE("Road YAPF observes accepted traversal once after transient exits", "[
 			if (mode == Loop || mode == MaxCost) REQUIRE(result.found == 0);
 		}
 	}
+	height_query = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
+	height_context = nullptr;
 }
 
 #endif

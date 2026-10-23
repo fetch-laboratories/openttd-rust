@@ -25,7 +25,7 @@ typedef struct OpenTTDWaterVisit OpenTTDWaterVisit;
 typedef struct { int32_t x, y; uint8_t label; } OpenTTDWaterPatch;
 typedef struct { uint16_t edges[4]; uint8_t labels[256], patches, aqueducts; } OpenTTDWaterSnapshot;
 typedef struct OpenTTDWaterLeaves {
-	uint16_t (OPENTTD_WATER_CALL *tracks)(uint32_t) OPENTTD_SERVICE_DEFAULT(tracks);
+	const struct OpenTTDSharedServices *shared;
 	uint32_t (OPENTTD_WATER_CALL *follow)(uint32_t, uint8_t, uint8_t *) OPENTTD_SERVICE_DEFAULT(follow);
 	uint32_t (OPENTTD_WATER_CALL *aqueduct)(uint32_t) OPENTTD_SERVICE_DEFAULT(aqueduct);
 	void (OPENTTD_WATER_CALL *debug)(uint8_t, int32_t, int32_t) OPENTTD_SERVICE_DEFAULT(debug);

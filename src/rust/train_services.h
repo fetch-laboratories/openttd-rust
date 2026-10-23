@@ -229,10 +229,7 @@ static void TrainCrashSound(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	SndPlayVehicleFx(SND_13_TRAIN_COLLISION, v);
 }
-static uint64_t TrainCrossingBarred(OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	return IsCrossingBarred(TileIndex(a));
-}
+
 static uint64_t TrainCrossingRailAxis(OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	return GetCrossingRailAxis(TileIndex(a));
@@ -302,11 +299,6 @@ static uint64_t TrainEnginePower(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return RustGroundEnginePower(RustVehicle(v));
 }
-static uint64_t TrainEnterTile(OpenTTDTrainHandle id, uint32_t a, int32_t b, int32_t c) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return VehicleEnterTile(v, TileIndex(a), static_cast<int>(b), static_cast<int>(c)).base();
-}
 static OpenTTDTrainDepot TrainFindDepot(OpenTTDTrainHandle id, int32_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -335,10 +327,7 @@ static uint64_t TrainIsBridge(OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	return IsBridgeTile(TileIndex(a));
 }
-static uint64_t TrainIsDepot(OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	return IsRailDepotTile(TileIndex(a));
-}
+
 static uint64_t TrainIsRailway(OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	return IsTileType(TileIndex(a), MP_RAILWAY);
@@ -423,11 +412,7 @@ static uint64_t TrainOrderMaxSpeed(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return RustVehicleOrderMaxSpeed(v);
 }
-static uint64_t TrainOrderStop(OpenTTDTrainHandle id, uint16_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return v->current_order.ShouldStopAtStation(v, StationID(a));
-}
+
 static void TrainPayRunning(OpenTTDTrainHandle id, int64_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -583,15 +568,8 @@ static void TrainSuppressImplicit(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	SetBit(v->gv_flags, GVF_SUPPRESS_IMPLICIT_ORDERS);
 }
-static uint64_t TrainTicksLeaveDepot(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return TicksToLeaveDepot(v);
-}
-static uint64_t TrainTileAddDiag(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	return TileAddByDiagDir(TileIndex(a), static_cast<DiagDirection>(b)).base();
-}
+
+
 static uint64_t TrainTileOffsetAxis(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return static_cast<uint32_t>(TileOffsByAxis(static_cast<Axis>(a)));

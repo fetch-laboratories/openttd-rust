@@ -13,6 +13,7 @@
 #include "../rust/house_ffi.h"
 #include "../rust/command_services_ffi.h"
 #include "../rust/ground_ffi.h"
+#include "../rust/movement_ffi.h"
 #include "../rust/landscape_command_ffi.h"
 #include <algorithm>
 #include <array>
@@ -67,7 +68,6 @@ static inline uint8_t TownProtocol_house_population(uint16_t house) noexcept { r
 static inline uint8_t TownProtocol_house_extra_flags(uint16_t) noexcept { return 0; }
 static inline OpenTTDTownRoadChoice TownProtocol_road_info(uint8_t) noexcept { return {}; }
 static inline void TownProtocol_dirty_town(uint32_t town) noexcept { TownProtocolLeaf(1, town, 0, 0, 0); }
-static inline uint32_t TownProtocol_foundation_slope(uint32_t tile) noexcept { return static_cast<uint32_t>(TownProtocolLeaf(4, tile, 0, 0, 0)); }
 static inline int64_t TownProtocol_terraform_price() noexcept { return TownProtocolLeaf(5, 0, 0, 0, 0); }
 static inline uint32_t TownProtocol_clean_road_bits(uint32_t tile, uint32_t bits) noexcept { return static_cast<uint32_t>(TownProtocolLeaf(6, tile, bits, 0, 0)); }
 static inline void TownProtocol_set_road_town(uint32_t tile, uint32_t town) noexcept { TownProtocolLeaf(7, tile, town, 0, 0); }
@@ -192,7 +192,7 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.station_owner = TownProtocolStationOwner,
 		.dirty_authority = TownProtocol_dirty_town,
 		.dirty_town = TownProtocol_dirty_town,
-		.foundation_slope = TownProtocol_foundation_slope,
+
 		.terraform_price = TownProtocol_terraform_price,
 		.clean_road_bits = TownProtocol_clean_road_bits,
 		.set_road_town = TownProtocol_set_road_town,
@@ -240,6 +240,13 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.road_bits = [](uint32_t, uint8_t, bool) noexcept -> uint8_t { return 0; };
 	services.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
 	services.tile_slope = [](uint32_t) noexcept -> uint8_t { return 0; };
+	static OpenTTDSharedServices movement_world{};
+	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
+	movement_world.tile_slope_z = [](uint32_t tile) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = static_cast<Slope>(TownProtocolLeaf(4, tile, 0, 0, 0))}; };
+	static OpenTTDMovementServices movement{};
+	movement.shared = &movement_world;
+	movement_world.apply_foundation = [](Foundation, Slope slope) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = slope}; };
+	services.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	services.tile_max_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	services.tile_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	services.calendar_date = []() noexcept { return 0; };

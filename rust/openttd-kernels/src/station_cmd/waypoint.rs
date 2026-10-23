@@ -317,7 +317,9 @@ impl Ctx<'_> {
         (self.s.waypoint_layout_init)(layout, spec, count);
         let offset = self
             .map()
-            .offs_by_axis(crate::direction_func::other_axis(axis));
+            .offs_by_axis(crate::direction_func::other_axis(axis, |ok| {
+                crate::movement::native_assert(self.shared, ok)
+            }));
         let mut tile = start;
         for i in 0..count {
             let gfx = (self.s.waypoint_layout_gfx)(layout, i == 0);
@@ -426,7 +428,10 @@ impl Ctx<'_> {
             if !crate::station_map::has_station_tile_rail(tile, self.shared, self.rail_map()) {
                 (self.s.station_infrastructure)(owner, 1);
             }
-            let track = crate::track_func::axis_to_track(crate::services::Axis(axis)).0;
+            let track = crate::track_func::axis_to_track(crate::services::Axis(axis), |ok| {
+                crate::movement::native_assert(self.shared, ok)
+            })
+            .0;
             let reserved = if (self.shared.tile_type)(tile) == MP_RAILWAY {
                 crate::bitmath_func::has_bit((self.rail_map().rail_reservation)(tile).0, track)
             } else {
@@ -520,7 +525,9 @@ impl Ctx<'_> {
             ROAD_WAYPOINT,
             spec,
             axis,
-            crate::direction_func::axis_to_diag_dir(axis),
+            crate::direction_func::axis_to_diag_dir(axis, |ok| {
+                crate::movement::native_assert(self.shared, ok)
+            }),
             &mut existing,
             INVALID_ROADTYPE,
             unit,
@@ -541,12 +548,12 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        let center = start.wrapping_add(
-            u32::from(count / 2).wrapping_mul(
-                self.map()
-                    .offs_by_axis(crate::direction_func::other_axis(axis)),
-            ),
-        );
+        let center =
+            start.wrapping_add(u32::from(count / 2).wrapping_mul(self.map().offs_by_axis(
+                crate::direction_func::other_axis(axis, |ok| {
+                    crate::movement::native_assert(self.shared, ok)
+                }),
+            )));
         if wp.is_null() && reuse {
             wp = self.deleted_waypoint(
                 center,

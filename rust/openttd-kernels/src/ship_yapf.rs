@@ -65,9 +65,14 @@ pub struct Result {
     pub stats: [u32; 13],
 }
 #[repr(C)]
+pub struct Destination {
+    pub tile: u32,
+    pub station: bool,
+}
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
-    pub destination: unsafe extern "C" fn(*const c_void, *mut u32, *mut u16),
+    pub destination: unsafe extern "C" fn(*const c_void) -> Destination,
     pub follow: unsafe extern "C" fn(*const c_void, u32, u8) -> Follow,
     pub tile: unsafe extern "C" fn(*const c_void, u32, u8) -> Tile,
     pub patch: unsafe extern "C" fn(u32) -> Patch,
@@ -421,6 +426,7 @@ fn preferred(input: &Input, tile: u32, td: u8) -> bool {
     }
 }
 fn low_search(
+    services: &Services,
     input: &Input,
     leaves: &Leaves,
     context: *const c_void,
@@ -431,13 +437,19 @@ fn low_search(
 ) -> Option<(Search, usize, u32)> {
     let mut observations = *input;
     // Destination observations occur only when the region search succeeds.
-    unsafe {
-        (leaves.destination)(
-            context,
-            &raw mut observations.dest_tile,
-            &raw mut observations.dest_dirs,
-        );
-    }
+    let dest = unsafe { (leaves.destination)(context) };
+    observations.dest_tile = dest.tile;
+    observations.dest_dirs = if dest.station {
+        u16::MAX
+    } else {
+        crate::track_func::track_status_to_trackdir_bits(crate::movement::track_status(
+            services,
+            dest.tile,
+            crate::transport_type::TRANSPORT_WATER,
+            0,
+            crate::direction_type::INVALID_DIAGDIR,
+        ))
+    };
     let input = &observations;
     let intermediate = if path.len() >= 5 {
         path.last().copied()
@@ -640,6 +652,7 @@ fn choose(
             result.stats[2] += 1;
         }
         let Some((search, mut index, closest)) = low_search(
+            services,
             input,
             leaves,
             context,
@@ -953,6 +966,7 @@ pub unsafe extern "C" fn openttd_rust_ship_heap_probe(
 
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDShipYapfDestination" ["probe"] => Destination { tile, station, };
     "OpenTTDShipYapfInput" ["probe"] => Input {
         map_x,
         map_y,

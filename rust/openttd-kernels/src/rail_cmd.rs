@@ -34,17 +34,17 @@ use crate::economy_type::{
     PR_CLEAR_ROUGH, PR_CLEAR_SIGNALS, PR_CLEAR_WATER,
 };
 use crate::order_type::OT_LOADING;
+pub use crate::services::Train;
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Cost, Map, RailMapServices, Services,
+    CommandCost, CommandCostServices, CommandServices, Cost, Foundation, Map, RailMapServices,
+    Services, Slope,
 };
-pub use crate::services::{Foundation, Slope, Train};
 use crate::slope_func::{
     FOUNDATION_NONE, SLOPE_EW, SLOPE_FLAT, SLOPE_HALFTILE_MASK, SLOPE_NS,
     is_slope_with_one_corner_raised, is_steep_slope,
 };
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{INVALID_TILE, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
-use crate::track_type::{TRACK_BIT_DEPOT as BIT_DEPOT, TRACK_BIT_X as BIT_X, TRACK_BIT_Y as BIT_Y};
 use crate::witness as w;
 
 /// Opaque caller-owned native frame holding the conversion area iterator and
@@ -169,8 +169,6 @@ pub struct RailCommandServices {
     pub crossing_with_competitor: extern "C" fn() -> bool,
     /// `vehicle.disable_elrails`.
     pub disable_elrails: extern "C" fn() -> bool,
-    /// `GetRailFoundation`.
-    pub rail_foundation: extern "C" fn(u8, u8) -> Foundation,
     /// `GetSlopeZInCorner`.
     pub slope_z_in_corner: extern "C" fn(u8, u8) -> i32,
     /// `AutoslopeCheckForEntranceEdge`.
@@ -255,29 +253,27 @@ pub struct RailCommandServices {
 const TRACK_X: u8 = 0;
 const TRACK_Y: u8 = 1;
 const INVALID_TRACK: u8 = 0xFF;
-const BIT_UPPER: u8 = 4;
-const BIT_LOWER: u8 = 8;
-const BIT_LEFT: u8 = 16;
-const BIT_RIGHT: u8 = 32;
-#[cfg(test)]
-const BIT_HORZ: u8 = 12;
-#[cfg(test)]
-const BIT_VERT: u8 = 48;
+use crate::track_type::TRACK_BIT_DEPOT as BIT_DEPOT;
+use crate::track_type::TRACK_BIT_LEFT as BIT_LEFT;
+use crate::track_type::TRACK_BIT_LOWER as BIT_LOWER;
+use crate::track_type::TRACK_BIT_RIGHT as BIT_RIGHT;
+use crate::track_type::TRACK_BIT_UPPER as BIT_UPPER;
+use crate::track_type::TRACK_BIT_X as BIT_X;
+use crate::track_type::TRACK_BIT_Y as BIT_Y;
 const INVALID_TRACKDIR: u8 = 0xFF;
 
 /// `VALID_LEVEL_CROSSING_SLOPES`.
 pub(crate) const CROSSING_SLOPES: u32 =
     (1 << 14) | (1 << 13) | (1 << 11) | (1 << 10) | (1 << 7) | (1 << 5) | 1;
 
-const FOUNDATION_RAIL_W: u8 = 10;
-const FOUNDATION_RAIL_N: u8 = 13;
-const FOUNDATION_INVALID: u8 = 0xFF;
+use crate::slope_func::FOUNDATION_INVALID;
+use crate::slope_func::{FOUNDATION_RAIL_N, FOUNDATION_RAIL_W};
 
 const GROUND_BARREN: u8 = 0;
-const GROUND_HALF_WATER: u8 = 13;
+use crate::rail_map::RAIL_GROUND_HALF_TILE_WATER as GROUND_HALF_WATER;
+use crate::rail_map::RAIL_TILE_DEPOT;
 use crate::rail_map::RAIL_TILE_NORMAL;
-const RAIL_TILE_SIGNALS: u8 = 1;
-const RAIL_TILE_DEPOT: u8 = 3;
+use crate::rail_map::RAIL_TILE_SIGNALS;
 
 const SIGTYPE_BLOCK: u8 = 0;
 const SIGTYPE_ENTRY: u8 = 1;
@@ -317,7 +313,7 @@ const TRACK_DELTA: [(i32, i32); 16] = [
     (0, 0),
 ];
 /// `_valid_tracks_on_leveled_foundation`.
-const LEVELED_TRACKS: [u8; 15] = [
+pub(crate) const LEVELED_TRACKS: [u8; 15] = [
     0,
     BIT_LEFT,
     BIT_LOWER,
@@ -336,8 +332,6 @@ const LEVELED_TRACKS: [u8; 15] = [
 ];
 const SIGNAL_ALONG: [u8; 14] = [8, 8, 8, 2, 4, 1, 0, 0, 4, 4, 4, 1, 8, 2];
 const SIGNAL_AGAINST: [u8; 14] = [4, 4, 4, 1, 8, 2, 0, 0, 8, 8, 8, 2, 4, 1];
-const SIGNAL_ON_TRACK: [u8; 6] = [0xC, 0xC, 0xC, 3, 0xC, 3];
-
 /// Infrastructure pieces of a plain rail tile: squared when tracks overlap.
 fn pieces(bits: u8) -> u32 {
     let n = bits.count_ones();
@@ -411,7 +405,7 @@ impl<'a> Ctx<'a> {
     /// `HasSignalOnTrack`: signal tile type and a present signal on the track.
     fn has_signal(&self, tile: u32, track: u8) -> bool {
         (self.rail.has_signals)(tile)
-            && self.present_signals(tile) & SIGNAL_ON_TRACK[usize::from(track)] != 0
+            && self.present_signals(tile) & crate::signal_func::signal_on_track(track) != 0
     }
     fn reserved(&self, tile: u32) -> u8 {
         crate::pbs::Pbs::acquire(self.shared).reserved(tile)
@@ -465,14 +459,18 @@ impl<'a> Ctx<'a> {
             out.error(self.s.strings.build_on_water);
             return;
         }
-        let f_new = (self.s.rail_foundation)(tileh, bits | existing).0;
+        let f_new = crate::movement::rail_foundation(tileh, bits | existing, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         if f_new == FOUNDATION_INVALID
             || (f_new != FOUNDATION_NONE && !(self.shared.build_on_slopes)())
         {
             out.error(self.s.strings.sloped_wrong);
             return;
         }
-        let f_old = (self.s.rail_foundation)(tileh, existing).0;
+        let f_old = crate::movement::rail_foundation(tileh, existing, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         out.set(if f_new == f_old {
             0
         } else {
@@ -1149,7 +1147,7 @@ impl<'a> Ctx<'a> {
         if track >= 6 || !(self.shared.is_plain_rail)(tile) || !self.has_track(tile, track) {
             return cost.error(self.s.strings.no_track);
         }
-        let on_track = SIGNAL_ON_TRACK[usize::from(track)];
+        let on_track = crate::signal_func::signal_on_track(track);
         if signals_copy != 0 && signals_copy & on_track == 0 {
             return cost.error(INVALID_STRING_ID);
         }
@@ -1323,7 +1321,8 @@ impl<'a> Ctx<'a> {
             return false;
         }
         *tile = ((y as u32) << self.map.log_x) | x as u32;
-        let mut bits = ((self.rail.rail_track_status)(*tile, INVALID_DIAGDIR) & 0x3F3F) as u16;
+        let mut bits = (crate::movement::track_status(self.shared, *tile, 0, 0, INVALID_DIAGDIR)
+            & 0x3F3F) as u16;
         if tracks_overlap(trackdir_tracks(bits)) {
             return false;
         }
@@ -1408,7 +1407,7 @@ impl<'a> Ctx<'a> {
             return total.error(INVALID_STRING_ID);
         }
         let signals = if self.has_signal(tile, track) {
-            let signals = self.present_signals(tile) & SIGNAL_ON_TRACK[usize::from(track)];
+            let signals = self.present_signals(tile) & crate::signal_func::signal_on_track(track);
             sigvar = (self.rail.signal_variant)(tile, track).0;
             sigtype = self.signal_type(tile, track);
             if sigtype == SIGTYPE_ENTRY || sigtype == SIGTYPE_EXIT {
@@ -1418,7 +1417,7 @@ impl<'a> Ctx<'a> {
         } else if is_pbs(sigtype) {
             SIGNAL_ALONG[usize::from(trackdir)]
         } else {
-            SIGNAL_ON_TRACK[usize::from(track)]
+            crate::signal_func::signal_on_track(track)
         };
         let mut signal_dir = 0_u8;
         if signals & SIGNAL_ALONG[usize::from(trackdir)] != 0 {
@@ -1641,7 +1640,7 @@ impl<'a> Ctx<'a> {
                 (self.shared.tile_owner)(tile),
                 present.count_ones().wrapping_neg(),
             );
-            let on_track = SIGNAL_ON_TRACK[usize::from(track)];
+            let on_track = crate::signal_func::signal_on_track(track);
             (self.rail.set_present_signals)(tile, self.present_signals(tile) & !on_track);
             let present = self.present_signals(tile);
             (self.s.signal_infrastructure)((self.shared.tile_owner)(tile), present.count_ones());
@@ -1893,7 +1892,10 @@ impl<'a> Ctx<'a> {
                     let track = if tt == MP_STATION {
                         (self.rail.station_track)(tile).0
                     } else {
-                        crate::ground::crossing_rail_track(tile, self.rail).0
+                        crate::ground::crossing_rail_track(tile, self.rail, |ok| {
+                            crate::movement::native_assert(self.shared, ok);
+                        })
+                        .0
                     };
                     (self.s.layout_changed)(tile, track);
                 }
@@ -2064,13 +2066,17 @@ impl<'a> Ctx<'a> {
         }
         // ApplyFoundationToSlope also rewrites the slope in place.
         let top = (self.shared.apply_foundation)(
-            (self.s.rail_foundation)(tileh_old, bits),
+            Foundation(crate::movement::rail_foundation(tileh_old, bits, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            })),
             Slope(tileh_old),
         );
         z_old += top.z;
         tileh_old = top.slope.0;
         let top = (self.shared.apply_foundation)(
-            (self.s.rail_foundation)(tileh_new, bits),
+            Foundation(crate::movement::rail_foundation(tileh_new, bits, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            })),
             Slope(tileh_new),
         );
         z_new += top.z;
@@ -2124,7 +2130,9 @@ impl<'a> Ctx<'a> {
                 BIT_LOWER => 3,
                 _ => return,
             };
-            let f_old = (self.s.rail_foundation)(tileh_old, bits).0;
+            let f_old = crate::movement::rail_foundation(tileh_old, bits, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            });
             if tileh_old != SLOPE_NS
                 && tileh_old != SLOPE_EW
                 && (FOUNDATION_RAIL_W..=FOUNDATION_RAIL_N).contains(&f_old)
@@ -2458,7 +2466,6 @@ crate::abi::layouts! {
         rail_convert_cost,
         crossing_with_competitor,
         disable_elrails,
-        rail_foundation,
         slope_z_in_corner,
         entrance_edge,
         ship_on_tile,
@@ -2533,11 +2540,11 @@ mod tests {
     use super::*;
     #[test]
     fn track_helpers_follow_source_tables() {
-        assert!(!tracks_overlap(BIT_HORZ));
-        assert!(!tracks_overlap(BIT_VERT));
+        assert!(!tracks_overlap(crate::track_type::TRACK_BIT_HORZ));
+        assert!(!tracks_overlap(crate::track_type::TRACK_BIT_VERT));
         assert!(tracks_overlap(BIT_X | BIT_Y));
         assert_eq!(pieces(BIT_X | BIT_Y), 4);
-        assert_eq!(pieces(BIT_HORZ), 2);
+        assert_eq!(pieces(crate::track_type::TRACK_BIT_HORZ), 2);
         assert_eq!(trackdir_tracks(reaches(0)), BIT_X | BIT_LOWER | BIT_LEFT);
         assert_eq!(negate(i64::MIN), i64::MAX);
         assert_eq!(kill_first_bit(0xC), 0x8);

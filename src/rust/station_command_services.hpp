@@ -225,7 +225,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.ship = &GetRustShipServices(),
 		.clear = &GetRustClearServices(),
 		.restoration = &GetRustWaterRestorationServices(),
-		.water_tracks = OpenTTDWaterTracks,
+
 		.set_docking = OpenTTDSetDockingTile,
 		.ship_area = [](BaseStation *st) noexcept -> OpenTTDStationArea { const auto &a = Station::From(st)->ship_station; return {a.tile.base(), a.w, a.h}; },
 		.set_ship_area = [](BaseStation *st, OpenTTDStationArea area) noexcept { Station::From(st)->ship_station = TileArea(TileIndex{area.tile}, area.w, area.h); },

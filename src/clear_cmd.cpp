@@ -162,17 +162,21 @@ static void DrawTile_Clear(TileInfo *ti)
 	DrawBridgeMiddle(ti, {});
 }
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Clear(TileIndex tile, uint x, uint y, bool)
 {
 	auto [tileh, z] = GetTilePixelSlope(tile);
 
 	return z + GetPartialPixelZ(x & 0xF, y & 0xF, tileh);
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_Clear(TileIndex, Slope)
 {
 	return FOUNDATION_NONE;
 }
+#endif
 
 #ifdef WITH_RUST
 const OpenTTDClearServices &GetRustClearServices() noexcept
@@ -382,10 +386,12 @@ get_out:;
 	} while (--i);
 }
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Clear(TileIndex, TransportType, uint, DiagDirection)
 {
 	return 0;
 }
+#endif
 
 static void GetTileDesc_Clear(TileIndex tile, TileDesc &td)
 {
@@ -430,11 +436,19 @@ static CommandCost CheckBuildAbove_Clear(TileIndex, DoCommandFlags, Axis, int)
 
 extern const TileTypeProcs _tile_type_clear_procs = {
 	DrawTile_Clear,           ///< draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Clear,     ///< get_slope_z_proc
+#endif
 	ClearTile_Clear,          ///< clear_tile_proc
 	nullptr,                     ///< add_accepted_cargo_proc
 	GetTileDesc_Clear,        ///< get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Clear, ///< get_tile_track_status_proc
+#endif
 	nullptr,                     ///< click_tile_proc
 	nullptr,                     ///< animate_tile_proc
 #ifdef WITH_RUST
@@ -445,7 +459,11 @@ extern const TileTypeProcs _tile_type_clear_procs = {
 	ChangeTileOwner_Clear,    ///< change_tile_owner_proc
 	nullptr,                     ///< add_produced_cargo_proc
 	nullptr,                     ///< vehicle_enter_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Clear,      ///< get_foundation_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else

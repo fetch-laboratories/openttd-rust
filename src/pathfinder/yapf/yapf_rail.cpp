@@ -73,7 +73,7 @@ static OpenTTDRailTile RailTile(uint32_t tile, uint8_t direction) noexcept
 		result.signal_against = RustRailHasSignalTrackdir(tile, ReverseTrackdir(td));
 		if (result.signal_along || result.signal_against) {
 			result.signal_type = RustRailSignalType(tile, TrackdirToTrack(td));
-			result.oneway = IsOnewaySignal(t, TrackdirToTrack(td));
+			result.oneway = RustRailOnewaySignal(tile, TrackdirToTrack(td));
 		}
 		if (result.signal_along) result.signal_green = RustRailSignalState(tile, td) == SIGNAL_STATE_GREEN;
 	}
@@ -111,10 +111,6 @@ static uint32_t RailClosestStation(void *context, uint8_t station) noexcept
 {
 	const Train *v = static_cast<RailYapfContext *>(context)->train;
 	return CalcClosestStationTile(v->current_order.GetDestination().ToStationID(), v->tile, station ? StationType::Rail : StationType::RailWaypoint).base();
-}
-static uint16_t RailDestinationDirs(uint32_t tile) noexcept
-{
-	return TrackStatusToTrackdirBits(RustRailTrackStatus(tile, INVALID_DIAGDIR));
 }
 static void RailOutput(void *context, uint8_t mask, const OpenTTDRailStep *result) noexcept
 {
@@ -181,7 +177,7 @@ static void RailDebug(void *context, uint8_t kind, const uint32_t *stats, uint32
 static const OpenTTDRailLeaves _rail_leaves{
 	.train = RailTrain, .tile = RailTile, .follow = RailFollow, .speed = RailSpeed,
 	.compatible_station = OpenTTDMapQuery<uint8_t, RustCompatibleStationTiles, uint32_t, uint32_t>, .platform_length = RailPlatformLength,
-	.closest_station = RailClosestStation, .destination_dirs = RailDestinationDirs,
+	.closest_station = RailClosestStation,
 	.output = RailOutput, .debug = RailDebug,
 };
 static OpenTTDRailStep RailRun(RailYapfContext &context, uint8_t kind, TileIndex tile = INVALID_TILE, Trackdir td = INVALID_TRACKDIR, bool override_railtype = false, bool reserve = false, int max_cost = 0)

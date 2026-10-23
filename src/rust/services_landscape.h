@@ -9,9 +9,19 @@
 #ifndef RUST_SERVICES_LANDSCAPE_H
 #define RUST_SERVICES_LANDSCAPE_H
 #include "ground_ffi.h"
+#include "movement_ffi.h"
+#include "../newgrf_house.h"
+#include "../newgrf_industrytiles.h"
+#include "../newgrf_object.h"
+#include "../house.h"
+#include "../town.h"
+#include "../industry.h"
+#include "../object_map.h"
 #include "../clear_map.h"
 #include "services_rail.h"
 #include "services_viewport.h"
+#include "services_newgrf.h"
+#include "services_industry.h"
 #include "services_water.h"
 #include "../road_internal.h"
 #include "../tree_map.h"
@@ -30,7 +40,6 @@ inline void RustSetTileHeight(uint32_t tile, uint32_t height) noexcept { SetTile
 inline bool RustInnerTile(uint32_t tile) noexcept { return IsInnerTile(TileIndex{tile}); }
 inline OpenTTDFoundationSlope RustTileSlopeZ(uint32_t tile) noexcept { auto [slope, z] = GetTileSlopeZ(TileIndex{tile}); return {.z = z, .slope = slope}; }
 inline OpenTTDFoundationSlope RustApplyFoundation(Foundation foundation, Slope slope) noexcept { int z = ApplyFoundationToSlope(foundation, slope); return {.z = z, .slope = slope}; }
-inline OpenTTDFoundationSlope RustFoundationSlope(uint32_t tile) noexcept { auto [slope, z] = GetFoundationSlope(TileIndex{tile}); return {.z = z, .slope = slope}; }
 inline RoadBits RustCleanRoadBits(TileIndex tile, RoadBits bits) noexcept { return CleanUpRoadBits(tile, bits); }
 inline uint8_t RustTileOwnerValue(uint32_t tile) noexcept { return GetTileOwner(TileIndex{tile}).base(); }
 inline bool RustPlainRailTile(uint32_t tile) noexcept { return IsPlainRailTile(TileIndex{tile}); }
@@ -84,7 +93,31 @@ inline void RustPlayTileSoundBySound(uint16_t sound, uint32_t tile) noexcept { R
 inline void RustUpdateSignals() noexcept { UpdateSignalsInBuffer(); }
 /* Necessary legacy signatures: context handles are unused and scalar return
  * widths are retained. All native work remains in the canonical typed leaves. */
-inline uint32_t RustFoundationSlopeValue(uint32_t tile) noexcept { return RustFoundationSlope(tile).slope; }
 template <typename Context>
 inline void RustCrossingSound(Context, uint32_t tile) noexcept { RustPlayTileSound(tile, SND_0E_LEVEL_CROSSING); }
+
+inline OpenTTDFoundationSlope RustTilePixelSlope(uint32_t tile) noexcept { auto [slope, z] = GetTilePixelSlope(TileIndex{tile}); return {.z = z, .slope = slope}; }
+inline OpenTTDFoundationSlope RustOutsidePixelSlope(uint32_t x, uint32_t y) noexcept { auto [slope, z] = GetTilePixelSlopeOutsideMap(x, y); return {.z = z, .slope = slope}; }
+inline OpenTTDMovementObjectFoundation RustObjectFoundation(uint32_t tile) noexcept
+{
+	const auto *spec = ObjectSpec::Get(GetObjectType(TileIndex{tile}));
+	const bool enabled = spec->IsEnabled();
+	return {.enabled = enabled, .no_foundation = enabled && spec->flags.Test(ObjectFlag::HasNoFoundation)};
+}
+inline OpenTTDMovementFoundation RustHouseFoundation(uint32_t tile) noexcept
+{
+	HouseID kind = GetHouseType(TileIndex{tile});
+	const auto *spec = kind >= NEW_HOUSE_OFFSET ? HouseSpec::Get(kind) : nullptr;
+	return {.spec = spec, .kind = kind, .callback = spec != nullptr && spec->callback_mask.Test(HouseCallbackMask::DrawFoundations)};
+}
+inline uint16_t RustHouseFoundationCallback(uint32_t tile, uint16_t kind) noexcept { return OpenTTDHouseCallback(CBID_HOUSE_DRAW_FOUNDATIONS, 0, 0, kind, Town::GetByTile(TileIndex{tile}), TileIndex{tile}, false); }
+inline bool RustHouseFoundationBoolean(const void *spec, uint16_t result) noexcept { return RustSpecBooleanCallback(static_cast<const HouseSpec *>(spec), CBID_HOUSE_DRAW_FOUNDATIONS, result); }
+inline OpenTTDMovementFoundation RustIndustryFoundation(uint32_t tile) noexcept
+{
+	IndustryGfx kind = GetIndustryGfx(TileIndex{tile});
+	const auto *spec = kind >= NEW_INDUSTRYTILEOFFSET ? GetIndustryTileSpec(kind) : nullptr;
+	return {.spec = spec, .kind = kind, .callback = spec != nullptr && spec->callback_mask.Test(IndustryTileCallbackMask::DrawFoundations)};
+}
+inline uint16_t RustIndustryFoundationCallback(uint32_t tile, uint16_t kind) noexcept { return OpenTTDIndustryTileCallback(tile, kind, CBID_INDTILE_DRAW_FOUNDATIONS, 0, 0); }
+inline bool RustIndustryFoundationBoolean(const void *spec, uint16_t result) noexcept { return RustSpecBooleanCallback(static_cast<const IndustryTileSpec *>(spec), CBID_INDTILE_DRAW_FOUNDATIONS, result); }
 #endif /* RUST_SERVICES_LANDSCAPE_H */

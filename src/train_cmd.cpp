@@ -43,6 +43,7 @@
 
 #ifdef WITH_RUST
 #include "rust/train_ffi.h"
+#include "rust/services_map.h"
 #include "rust/train_reservation_ffi.h"
 #include "rust/vehicle_services.h"
 #include "rust/vehicle_refit_ffi.h"
@@ -285,6 +286,7 @@ void Train::ConsistChanged(ConsistChangeFlags allowed_changes)
  * @param station_length 'return' the station length in 1/16th tiles
  * @return the location, calculated from the begin of the station to stop at.
  */
+#ifndef WITH_RUST
 int GetTrainStopLocation(StationID station_id, TileIndex tile, const Train *v, int *station_ahead, int *station_length)
 {
 	const Station *st = Station::Get(station_id);
@@ -323,6 +325,7 @@ int GetTrainStopLocation(StationID station_id, TileIndex tile, const Train *v, i
 	 * stop location of the train. */
 	return stop - (v->gcache.cached_veh_length + 1) / 2;
 }
+#endif
 
 
 /**
@@ -4638,7 +4641,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.crash_news = TrainCrashNews,
 		.crash_rating = TrainCrashRating,
 		.crash_sound = TrainCrashSound,
-		.crossing_barred = TrainCrossingBarred,
+		.crossing_barred = OpenTTDLegacyMapQuery<uint64_t, RustCrossingBarred, OpenTTDTrainHandle, uint32_t>,
 		.crossing_rail_axis = TrainCrossingRailAxis,
 		.crossing_road_axis = OpenTTDLegacyMapQuery<uint64_t, RustCrossingRoadAxis, OpenTTDTrainHandle, uint32_t>,
 		.crossing_sound = RustCrossingSound<OpenTTDTrainHandle>,
@@ -4660,7 +4663,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.disaster_sound = TrainDisasterSound,
 		.disconnect = TrainDisconnect,
 		.engine_power = TrainEnginePower,
-		.enter_tile = TrainEnterTile,
 		.find_depot = TrainFindDepot,
 		.first_track = TrainFirstTrack,
 		.grf_version = TrainGrfVersion,
@@ -4674,7 +4676,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.invalid_price = TrainInvalidPrice,
 		.is_bridge = TrainIsBridge,
 		.is_crossing = TrainSharedMap<uint64_t, &OpenTTDSharedServices::is_level_crossing>,
-		.is_depot = TrainIsDepot,
+		.is_depot = OpenTTDLegacyMapQuery<uint64_t, RustRailDepotTile, OpenTTDTrainHandle, uint32_t>,
 		.is_plain_rail = OpenTTDLegacyMapQuery<uint64_t, RustPlainRailTile, OpenTTDTrainHandle, uint32_t>,
 		.is_railway = TrainIsRailway,
 		.is_station = OpenTTDLegacyMapQuery<uint64_t, RustIsRailStation, OpenTTDTrainHandle, uint32_t>,
@@ -4697,7 +4699,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.order_dummy = TrainOrderDummy,
 		.order_free = TrainOrderFree,
 		.order_max_speed = TrainOrderMaxSpeed,
-		.order_stop = TrainOrderStop,
 		.other_end = OpenTTDLegacyMapQuery<uint64_t, RustOtherTunnelBridgeEnd, OpenTTDTrainHandle, uint32_t>,
 		.pay_running = TrainPayRunning,
 		.pbs_signal_type = TrainPbsSignalType,
@@ -4744,8 +4745,8 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.stop_location = TrainStopLocation,
 		.stuck_news = TrainStuckNews,
 		.suppress_implicit = TrainSuppressImplicit,
-		.ticks_leave_depot = TrainTicksLeaveDepot,
-		.tile_add_diag = TrainTileAddDiag,
+
+		.tile_add_diag = OpenTTDLegacyMapQuery<uint64_t, RustTileAddByDiagDir, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.tile_offset_axis = TrainTileOffsetAxis,
 		.tile_offset_diag = TrainTileOffsetDiag,
 		.tile_owner = TrainSharedMap<uint64_t, &OpenTTDSharedServices::tile_owner>,
@@ -4756,7 +4757,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.track_bits = OpenTTDLegacyMapQuery<uint64_t, RustRailTracks, OpenTTDTrainHandle, uint32_t>,
 		.track_crosses = TrainTrackCrosses,
 		.track_direction = TrainTrackDirection,
-		.track_status = OpenTTDLegacyMapQuery<uint64_t, RustRailTrackStatus, OpenTTDTrainHandle, uint32_t, uint8_t>,
+
 		.train_list = TrainTrainList,
 		.train_visit = TrainTrainVisit,
 		.truncate_cargo = TrainTruncateCargo,
@@ -4822,18 +4823,17 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.has_signal = OpenTTDLegacyContextMapQuery<uint64_t, RustRailHasSignalTrackdir, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.increment_order = TrainReservationIncrementOrder,
 		.is_bridge = OpenTTDLegacyContextMapQuery<uint64_t, RustTunnelBridgeIsBridge, OpenTTDTrainHandle, uint32_t>,
-		.is_depot = TrainReservationIsDepot,
+		.is_depot = OpenTTDLegacyContextMapQuery<uint64_t, RustRailDepotTile, OpenTTDTrainHandle, uint32_t>,
 		.is_pbs = TrainReservationIsPbs,
-		.is_plain = TrainReservationIsPlain,
+		.is_plain = OpenTTDLegacyContextMapQuery<uint64_t, RustMovementPlainRail, OpenTTDTrainHandle, uint32_t>,
 		.is_railway = TrainReservationIsRailway,
 		.is_station = OpenTTDLegacyContextMapQuery<uint64_t, RustIsRailStation, OpenTTDTrainHandle, uint32_t>,
 		.is_tunnel = TrainReservationIsTunnel,
 		.is_waypoint = TrainReservationIsWaypoint,
 		.line_reverse = TrainReservationLineReverse,
 		.mark_tile = TrainReservationSharedMap<void, &OpenTTDSharedServices::mark_dirty>,
-		.oneway = TrainReservationOneway,
+		.oneway = OpenTTDLegacyContextMapQuery<uint64_t, RustRailOnewaySignal, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.order_service = TrainReservationOrderService,
-		.order_stop = TrainReservationOrderStop,
 		.order_type = TrainReservationOrderType,
 		.other_end = OpenTTDLegacyContextMapQuery<uint64_t, RustOtherTunnelBridgeEnd, OpenTTDTrainHandle, uint32_t>,
 		.overlap = TrainReservationOverlap,
@@ -4860,11 +4860,9 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.station_train = TrainReservationStationTrain,
 		.station_xy = TrainReservationStationXy,
 		.stuck = TrainReservationStuck,
-		.tile_add = TrainReservationTileAdd,
+		.tile_add = OpenTTDLegacyContextMapQuery<uint64_t, RustTileAddByDiagDir, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.tile_offset = TrainReservationTileOffset,
 		.trackdir = TrainReservationTrackdir,
-		.track_status = TrainReservationTrackStatus,
-
 		.tunnel_dir = TrainReservationSharedMap<uint64_t, &OpenTTDSharedServices::tunnel_bridge_direction>,
 		.tunnel_free = TrainReservationTunnelFree,
 

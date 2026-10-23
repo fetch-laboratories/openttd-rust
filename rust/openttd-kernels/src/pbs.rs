@@ -32,7 +32,6 @@ pub struct PbsServices {
     pub station_reserved: extern "C" fn(u32) -> bool,
     pub compatible_station: extern "C" fn(u32, u32) -> bool,
     pub show_reservation: extern "C" fn() -> bool,
-    pub assert_track: extern "C" fn(u32, u8) -> (),
     pub assert_platform: extern "C" fn(u32, u8) -> (),
     pub station: extern "C" fn(u32) -> *mut std::ffi::c_void,
     pub randomisation: extern "C" fn(*mut std::ffi::c_void, u32) -> (),
@@ -67,7 +66,7 @@ impl<'a> Pbs<'a> {
         (self.0.handle)(v)
     }
 
-    fn shared(self) -> &'a Services {
+    pub(crate) fn shared(self) -> &'a Services {
         // SAFETY: tables have process lifetime; they contain operations, no world borrows.
         unsafe { &*self.0.shared }
     }
@@ -143,8 +142,19 @@ impl<'a> Pbs<'a> {
             );
         }
     }
+    fn assert_track(self, tile: u32, track: u8) {
+        if self.0.assertions {
+            let bits = crate::track_func::track_status_to_track_bits(
+                crate::movement::track_status(self.shared(), tile, TRANSPORT_RAIL, 0, 255),
+            );
+            let mask = track_to_track_bits(track, |ok| {
+                crate::movement::native_assert(self.shared(), ok)
+            });
+            crate::movement::native_assert(self.shared(), bits & mask != 0);
+        }
+    }
     pub(crate) fn try_reserve(self, tile: u32, track: u8, trigger: bool) -> bool {
-        (self.0.assert_track)(tile, track);
+        self.assert_track(tile, track);
         self.dirty(tile);
         let s = self.shared();
         let r = self.rail();
@@ -191,7 +201,7 @@ impl<'a> Pbs<'a> {
         false
     }
     pub(crate) fn unreserve(self, tile: u32, track: u8) {
-        (self.0.assert_track)(tile, track);
+        self.assert_track(tile, track);
         self.dirty(tile);
         let s = self.shared();
         let r = self.rail();
@@ -303,7 +313,12 @@ impl<'a> Pbs<'a> {
     ) -> TileInfo {
         let (mut start_tile, mut start_td) = (tile, td);
         let mut first_loop = true;
-        if !self.has_reserved_tracks(tile, track_to_track_bits(trackdir_to_track(td))) {
+        if !self.has_reserved_tracks(
+            tile,
+            track_to_track_bits(trackdir_to_track(td), |ok| {
+                crate::movement::native_assert(self.shared(), ok)
+            }),
+        ) {
             crate::witness::hit(crate::witness::PBS_START_UNRESERVED);
             return TileInfo {
                 tile,
@@ -326,7 +341,9 @@ impl<'a> Pbs<'a> {
                         ft.new_tile = ft.new_tile.wrapping_sub(diff);
                         if (self.0.station_reserved)(ft.new_tile) {
                             tile = ft.new_tile;
-                            td = diag_dir_to_diag_trackdir(ft.exitdir);
+                            td = diag_dir_to_diag_trackdir(ft.exitdir, |ok| {
+                                crate::movement::native_assert(self.shared(), ok)
+                            });
                             crate::witness::hit(crate::witness::PBS_PLATFORM_INTERIOR);
                             break;
                         }
@@ -381,7 +398,11 @@ impl<'a> Pbs<'a> {
             }
             let track = t.track();
             if track == crate::track_type::TRACK_BIT_WORMHOLE
-                || track & track_to_track_bits(trackdir_to_track(c.td)) != 0
+                || track
+                    & track_to_track_bits(trackdir_to_track(c.td), |ok| {
+                        crate::movement::native_assert(c.pbs.shared(), ok)
+                    })
+                    != 0
             {
                 let t = (c.pbs.train().read_first)(t);
                 if c.best.shell.is_null()
@@ -471,7 +492,13 @@ impl<'a> Pbs<'a> {
     }
     pub(crate) fn train_for(self, tile: u32, track: u8) -> Handle {
         if self.0.assertions {
-            assert!(self.has_reserved_tracks(tile, track_to_track_bits(track)));
+            assert!(self.has_reserved_tracks(
+                tile,
+                track_to_track_bits(track, |ok| crate::movement::native_assert(
+                    self.shared(),
+                    ok
+                ))
+            ));
         }
         let mut td = track_to_trackdir(track);
         let types = (self.0.compatible)((self.0.tile_rail_type)(tile).0);
@@ -565,7 +592,9 @@ impl<'a> Pbs<'a> {
         false
     }
     pub(crate) fn free(self, v: Handle, tile: u32, td: u8, no90: bool) -> bool {
-        if track_overlaps_tracks(self.reserved(tile), trackdir_to_track(td)) {
+        if track_overlaps_tracks(self.reserved(tile), trackdir_to_track(td), |ok| {
+            crate::movement::native_assert(self.shared(), ok)
+        }) {
             crate::witness::hit(crate::witness::PBS_OVERLAP);
             return false;
         }
@@ -689,7 +718,6 @@ crate::abi::layouts! {
         station_reserved,
         compatible_station,
         show_reservation,
-        assert_track,
         assert_platform,
         station,
         randomisation,

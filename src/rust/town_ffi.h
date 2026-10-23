@@ -77,7 +77,6 @@ struct OpenTTDTownLeaves {
 	uint8_t (*station_owner)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
 	void (*dirty_authority)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(dirty_authority);
 	void (*dirty_town)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(dirty_town);
-	uint32_t (*foundation_slope)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(foundation_slope);
 	int64_t (*terraform_price)() noexcept OPENTTD_SERVICE_DEFAULT(terraform_price);
 	uint32_t (*clean_road_bits)(uint32_t tile, uint32_t bits) noexcept OPENTTD_SERVICE_DEFAULT(clean_road_bits);
 	void (*set_road_town)(uint32_t tile, uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(set_road_town);

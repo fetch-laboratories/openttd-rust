@@ -23,16 +23,13 @@
 #include "../../rust/services_yapf.h"
 #include "../../rust/services_water.h"
 
-static void ShipDestination(const void *context, uint32_t *tile, uint16_t *dirs) noexcept
+static OpenTTDShipYapfDestination ShipDestination(const void *context) noexcept
 {
 	const Ship *v = static_cast<const Ship *>(context);
 	if (v->current_order.IsType(OT_GOTO_STATION)) {
-		*tile = CalcClosestStationTile(v->current_order.GetDestination().ToStationID(), v->tile, StationType::Dock).base();
-		*dirs = INVALID_TRACKDIR_BIT;
-	} else {
-		*tile = v->dest_tile.base();
-		*dirs = TrackStatusToTrackdirBits(GetTileTrackStatus(v->dest_tile, TRANSPORT_WATER, 0));
+		return {.tile = CalcClosestStationTile(v->current_order.GetDestination().ToStationID(), v->tile, StationType::Dock).base(), .station = true};
 	}
+	return {.tile = v->dest_tile.base(), .station = false};
 }
 static OpenTTDShipFollow ShipFollow(const void *context, uint32_t tile, uint8_t td) noexcept
 {

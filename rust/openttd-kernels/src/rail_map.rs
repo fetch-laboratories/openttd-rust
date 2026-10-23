@@ -30,3 +30,9 @@ pub(crate) fn is_rail_depot_tile(
 ) -> bool {
     (shared.tile_type)(tile) == crate::tile_type::MP_RAILWAY && (rail.is_rail_depot)(tile)
 }
+/// `RailGroundType::HalfTileWater`.
+pub const RAIL_GROUND_HALF_TILE_WATER: u8 = 13;
+/// `RailTileType::Signals`.
+pub const RAIL_TILE_SIGNALS: u8 = 1;
+/// `RailTileType::Depot`.
+pub const RAIL_TILE_DEPOT: u8 = 3;

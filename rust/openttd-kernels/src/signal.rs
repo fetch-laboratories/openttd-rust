@@ -245,7 +245,9 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                     }
                     let td = ((u32::from(tracks) * 0x101)
                         & u32::from(crate::track_func::diagdir_reaches_trackdirs(
-                            crate::direction_func::reverse_diag_dir(dir),
+                            crate::direction_func::reverse_diag_dir(dir, |ok| {
+                                crate::movement::native_assert(w.shared, ok)
+                            }),
                         )))
                     .trailing_zeros() as u8;
                     let signal = read!(w, rail, signal_presence, tile, masked, td);
@@ -444,7 +446,7 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
             }
             add_tbd(w, Item { tile, dir: INVALID });
         } else if (kind == 1 || kind == 5 || kind == 2)
-            && (track_bits(read!(w, rail, rail_track_status, tile, INVALID))
+            && (track_bits(crate::movement::track_status(w.shared, tile, 0, 0, INVALID))
                 & ENTER_TRACKS[usize::from(dir)])
                 != 0
         {
@@ -459,7 +461,7 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
         } else {
             tile = w.map.add_diag(tile, dir);
             dir = reverse(dir);
-            if (track_bits(read!(w, rail, rail_track_status, tile, INVALID))
+            if (track_bits(crate::movement::track_status(w.shared, tile, 0, 0, INVALID))
                 & ENTER_TRACKS[usize::from(dir)])
                 == 0
             {

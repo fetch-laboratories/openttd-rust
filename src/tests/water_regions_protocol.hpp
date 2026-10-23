@@ -9,6 +9,7 @@
 #ifndef WATER_REGIONS_PROTOCOL_HPP
 #define WATER_REGIONS_PROTOCOL_HPP
 #include "../rust/water_regions_ffi.h"
+#include "../rust/movement_ffi.h"
 #include <algorithm>
 #include <array>
 #include <memory>
@@ -17,11 +18,14 @@
 namespace WaterProbe {
 inline std::array<bool, 32 * 32> water;
 inline uint32_t tracks_calls, follow_calls;
-inline uint16_t OPENTTD_WATER_CALL Tracks(uint32_t tile) noexcept { ++tracks_calls; return water[tile] ? 15 : 0; }
-inline uint32_t OPENTTD_WATER_CALL Follow(uint32_t tile, uint8_t dir, uint8_t *bridge) noexcept
+inline uint8_t WaterType(uint32_t tile) noexcept { ++tracks_calls; return water[tile] ? 6 : 0; }
+inline uint32_t OPENTTD_WATER_CALL WaterProbeFollow(uint32_t tile, uint8_t dir, uint8_t *bridge) noexcept
 {
 	++follow_calls;
 	*bridge = 0;
+	/* Synthetic four-neighbour graph, accepting the real movement trackdirs. */
+	constexpr uint8_t exit[]{0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0};
+	dir = exit[dir];
 	const int x = tile % 32, y = tile / 32;
 	constexpr int dx[] = {-1, 0, 1, 0}, dy[] = {0, 1, 0, -1};
 	const int nx = x + dx[dir], ny = y + dy[dir];
@@ -29,13 +33,21 @@ inline uint32_t OPENTTD_WATER_CALL Follow(uint32_t tile, uint8_t dir, uint8_t *b
 	return nx + ny * 32;
 }
 inline uint32_t OPENTTD_WATER_CALL Aqueduct(uint32_t) noexcept { return UINT32_MAX; }
-inline void OPENTTD_WATER_CALL Debug(uint8_t, int32_t, int32_t) noexcept {}
+inline void OPENTTD_WATER_CALL WaterProbeDebug(uint8_t, int32_t, int32_t) noexcept {}
 
 /* These callbacks deliberately mutate a warmed cache between next calls, a gap
  * the ship AI corpus cannot reach: YAPF visitors do not execute world commands. */
 template <typename Check> void Run(Check check)
 {
-	const OpenTTDWaterLeaves leaves{Tracks, Follow, Aqueduct, Debug};
+	static OpenTTDSharedServices world{};
+	world.tile_type = WaterType;
+	world.map_log_x = []() noexcept -> uint32_t { return 5; };
+	static OpenTTDMovementServices movement{};
+	movement.shared = &world;
+	movement.water_type = [](uint32_t) noexcept { return static_cast<WaterTileType>(0); };
+	movement.tile_flat = [](uint32_t) noexcept { return true; };
+	world.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	const OpenTTDWaterLeaves leaves{.shared = &world, .follow = WaterProbeFollow, .aqueduct = Aqueduct, .debug = WaterProbeDebug};
 	using Owner = std::unique_ptr<OpenTTDWaterRegions, decltype(&openttd_rust_water_destroy)>;
 	using Cursor = std::unique_ptr<OpenTTDWaterVisit, decltype(&openttd_rust_water_visit_destroy)>;
 	Owner owner{openttd_rust_water_new(32, 32), openttd_rust_water_destroy};

@@ -327,7 +327,6 @@ pub struct CommandServicesTable {
     pub ship: *const crate::ship_control::Leaves,
     pub clear: *const crate::ground::ClearServices,
     pub restoration: *const crate::water::RestorationServices,
-    pub water_tracks: extern "C" fn(u32, u8) -> crate::services::TrackBits,
     pub set_docking: extern "C" fn(u32, bool),
     pub ship_area: extern "C" fn(*mut BaseStation) -> Area,
     pub set_ship_area: extern "C" fn(*mut BaseStation, Area),
@@ -3234,7 +3233,7 @@ impl Ctx<'_> {
             1 | 5 | 9 => (),
             _ => return false,
         }
-        (self.s.water_tracks)(tile, 255).0 != 0
+        crate::movement::water_tracks(self.shared, tile, 255) != 0
     }
     fn check_docking(&self, tile: u32) {
         crate::witness::hit(crate::witness::STATION_CMD_CHECK_DOCKING);
@@ -4223,7 +4222,6 @@ crate::abi::layouts! {
         ship,
         clear,
         restoration,
-        water_tracks,
         set_docking,
         ship_area,
         set_ship_area,

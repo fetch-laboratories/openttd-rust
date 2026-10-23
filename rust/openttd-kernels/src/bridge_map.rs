@@ -14,7 +14,9 @@ pub(crate) fn get_bridge_height(tile: u32, s: &Services) -> i32 {
     let slope_z = (s.tile_slope_z)(tile);
     let foundation = crate::bridge::get_bridge_foundation(
         slope_z.slope.0,
-        diag_dir_to_axis((s.tunnel_bridge_direction)(tile)),
+        diag_dir_to_axis((s.tunnel_bridge_direction)(tile), |ok| {
+            crate::movement::native_assert(s, ok);
+        }),
     );
     slope_z
         .z

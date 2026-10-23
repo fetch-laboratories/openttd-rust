@@ -17,11 +17,11 @@
     clippy::many_single_char_names,
     clippy::items_after_statements
 )]
-use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE};
 use crate::track_func::{
     find_first_trackdir as first, track_bits_to_trackdir_bits as dirs,
     trackdir_bits_to_track_bits as tracks,
 };
+use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE};
 
 use crate::train::Handle;
 const INVALID: u32 = u32::MAX;
@@ -184,7 +184,6 @@ pub struct Leaves {
     pub mark_tile: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
     pub oneway: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub order_service: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub order_stop: extern "C" fn(*mut std::ffi::c_void, Handle, u16) -> u64,
     pub order_type: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub other_end: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub overlap: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
@@ -216,7 +215,6 @@ pub struct Leaves {
     pub tile_add: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub tile_offset: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub trackdir: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
-    pub track_status: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     #[cfg(test)]
     pub try_track: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub tunnel_dir: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
@@ -417,7 +415,11 @@ impl Game<'_> {
         (self.leaves.order_service)(self.context, id, a as u8)
     }
     fn svc_order_stop(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.order_stop)(self.context, id, a as u16)
+        u64::from(crate::movement::should_stop(
+            self.shared(),
+            id.vehicle(),
+            a as u16,
+        ))
     }
     fn svc_order_type(&self, id: Handle, a: u64) -> u64 {
         (self.leaves.order_type)(self.context, id, a as u8)
@@ -558,8 +560,10 @@ impl Game<'_> {
     fn svc_trackdir(&self, id: Handle) -> u64 {
         (self.leaves.trackdir)(self.context, id)
     }
-    fn svc_track_status(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.track_status)(self.context, id, a as u32)
+    fn svc_track_status(&self, _id: Handle, a: u64) -> u64 {
+        u64::from(crate::track_func::track_status_to_trackdir_bits(
+            crate::movement::track_status(self.shared(), a as u32, 0, 0, 255),
+        ))
     }
     fn svc_try_track(&self, id: Handle, a: u64, b: u64) -> u64 {
         #[cfg(not(test))]
@@ -1592,7 +1596,6 @@ crate::abi::layouts! {
         mark_tile,
         oneway,
         order_service,
-        order_stop,
         order_type,
         other_end,
         overlap,
@@ -1620,7 +1623,6 @@ crate::abi::layouts! {
         tile_add,
         tile_offset,
         trackdir,
-        track_status,
         tunnel_dir,
         tunnel_free,
         write_dest,
@@ -1697,7 +1699,6 @@ mod tests {
             mark_tile: unused!((*mut std::ffi::c_void, Handle, u32); ()),
             oneway: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
             order_service: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            order_stop: unused!((*mut std::ffi::c_void, Handle, u16); u64),
             order_type: unused!((*mut std::ffi::c_void, Handle, u8); u64),
             other_end: unused!((*mut std::ffi::c_void, Handle, u32); u64),
             overlap: unused!((*mut std::ffi::c_void, Handle, u8); u64),
@@ -1727,7 +1728,7 @@ mod tests {
             tile_add: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
             tile_offset: unused!((*mut std::ffi::c_void, Handle, u8); u64),
             trackdir: unused!((*mut std::ffi::c_void, Handle); u64),
-            track_status: unused!((*mut std::ffi::c_void, Handle, u32); u64),
+
             try_track: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
             tunnel_dir: unused!((*mut std::ffi::c_void, Handle, u32); u64),
             tunnel_free: unused!((*mut std::ffi::c_void, Handle, u32, u32); u64),

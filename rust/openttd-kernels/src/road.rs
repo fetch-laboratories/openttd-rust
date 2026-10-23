@@ -49,7 +49,6 @@ use std::ptr::NonNull;
 
 const WORMHOLE: u8 = 255;
 const REVERSE: [u8; 4] = [6, 7, 14, 15];
-const DIAG_TRACK: [u8; 4] = [0, 1, 8, 9];
 /// Owner scalar selectors, shared with `openttd_rust_road_get/set`.
 const STATE: usize = 0;
 const FRAME: usize = 1;
@@ -448,12 +447,11 @@ pub struct Leaves {
     pub part: extern "C" fn(VehicleRef) -> PartRead,
     pub link: extern "C" fn(VehicleRef) -> Link,
     pub link_tile: extern "C" fn(VehicleRef) -> LinkTile,
-    pub enter_tile: extern "C" fn(VehicleRef, u32, i32, i32) -> Entered,
+    pub after_enter_tile: extern "C" fn(VehicleRef, u8) -> Entered,
     pub visit_close: extern "C" fn(VehicleRef, i32, i32, bool, CloseVisitor, *mut c_void),
     pub visit_trains: extern "C" fn(VehicleRef, TrainVisitor, *mut c_void),
     pub visit_tile: extern "C" fn(u32, TileVisitor, *mut c_void),
     pub has_road: extern "C" fn(VehicleRef, u32) -> bool,
-    pub track_status: extern "C" fn(VehicleRef, u32) -> u32,
     pub any_road_bits: extern "C" fn(VehicleRef, u32, bool) -> u8,
     pub is_road_depot_tile: extern "C" fn(u32) -> bool,
     pub depot_direction: extern "C" fn(u32) -> u8,
@@ -809,7 +807,7 @@ impl Game<'_> {
         if !service!(self.l.has_road)(v.v, tile) {
             return true;
         }
-        let ts = service!(self.l.track_status)(v.v, tile);
+        let ts = crate::movement::road_tracks(self.ss, v.v, tile);
         let trackdirs = ts & 0x3f3f;
         let red = (ts >> 16) & 0x3f3f;
         let trackbits = (trackdirs | (trackdirs >> 8)) & 0x3f;
@@ -870,11 +868,21 @@ impl Game<'_> {
         {
             return;
         }
-        let trackdir = DIAG_TRACK[usize::from(diag(s.direction))];
+        let trackdir = crate::track_func::diag_dir_to_diag_trackdir(
+            diag(s.direction, |ok| {
+                crate::movement::native_assert(self.ss, ok);
+            }),
+            |ok| crate::movement::native_assert(self.ss, ok),
+        );
         if self.overtake_blocked(v, u.v, s.tile, trackdir) {
             return;
         }
-        let tile = self.map.add_diag(s.tile, diag(s.direction));
+        let tile = self.map.add_diag(
+            s.tile,
+            diag(s.direction, |ok| {
+                crate::movement::native_assert(self.ss, ok);
+            }),
+        );
         if self.overtake_blocked(v, u.v, tile, trackdir) {
             return;
         }
@@ -1084,7 +1092,7 @@ impl Game<'_> {
     }
     /// `RoadFindPathToDest`.
     fn path(&self, v: Part, s: &Step, tile: u32, entry: u8) -> u8 {
-        let ts = service!(self.l.track_status)(v.v, tile);
+        let ts = crate::movement::road_tracks(self.ss, v.v, tile);
         let red = (ts >> 16) & 0x3f3f;
         let mut trackdirs = ts & 0x3f3f;
         let p = service!(self.l.path_read)(v.v);
@@ -1209,7 +1217,9 @@ impl Game<'_> {
         let dir = service!(self.l.depot_direction)(d.tile);
         let direction = dir * 2 + 1;
         service!(self.vs.write_direction)(v.v, direction);
-        let tdir = DIAG_TRACK[usize::from(dir)];
+        let tdir = crate::track_func::diag_dir_to_diag_trackdir(dir, |ok| {
+            crate::movement::native_assert(self.ss, ok);
+        });
         let rd = crate::road_data::entry(d.tram, self.side() + usize::from(tdir), 6);
         let (x, y) = self.tile_xy(d.tile, (rd.0 & 15, rd.1 & 15));
         if first {
@@ -1251,7 +1261,9 @@ impl Game<'_> {
             } else {
                 return INVALID_TRACKDIR;
             };
-            dir = DIAG_TRACK[usize::from(diagonal)];
+            dir = crate::track_func::diag_dir_to_diag_trackdir(diagonal, |ok| {
+                crate::movement::native_assert(self.ss, ok);
+            });
         } else if reversed && (prev_tile != tile || (state < 16 && reversing(state))) {
             let north = if prev_tile != tile {
                 prev_tile < tile
@@ -1317,7 +1329,7 @@ impl Game<'_> {
                 }
             }
             if service!(self.ss.tile_type)(gp.tile) == MP_TUNNELBRIDGE {
-                let e = service!(self.l.enter_tile)(v.v, gp.tile, gp.x, gp.y);
+                let e = self.movement_enter(v.v, gp.tile, gp.x, gp.y);
                 Self::observe(s, e);
                 if e.flags & VETS_ENTERED_WORMHOLE != 0 {
                     self.move_without_speed(v, s, gp.x, gp.y);
@@ -1410,7 +1422,7 @@ impl Game<'_> {
                         return false;
                     }
                 }
-                let e = service!(self.l.enter_tile)(v.v, tile, x, y);
+                let e = self.movement_enter(v.v, tile, x, y);
                 Self::observe(s, e);
                 if e.flags & VETS_CANNOT_ENTER != 0 {
                     if service!(self.ss.tile_type)(tile) != MP_TUNNELBRIDGE {
@@ -1491,7 +1503,7 @@ impl Game<'_> {
                     return false;
                 }
             }
-            let e = service!(self.l.enter_tile)(v.v, s.tile, x, y);
+            let e = self.movement_enter(v.v, s.tile, x, y);
             Self::observe(s, e);
             if e.flags & VETS_CANNOT_ENTER != 0 {
                 self.set_speed(v, s, 0);
@@ -1600,7 +1612,7 @@ impl Game<'_> {
             self.start_sound(v);
             service!(self.vs.start_stop_dirty)(v.v);
         }
-        let e = service!(self.l.enter_tile)(v.v, s.tile, x, y);
+        let e = self.movement_enter(v.v, s.tile, x, y);
         Self::observe(s, e);
         if e.flags & VETS_CANNOT_ENTER != 0 {
             self.set_speed(v, s, 0);
@@ -1887,7 +1899,9 @@ impl Game<'_> {
             return false;
         }
         if service!(self.ss.tile_type)(r.tile) == MP_TUNNELBRIDGE
-            && diag(r.direction) == service!(self.ss.tunnel_bridge_direction)(r.tile)
+            && diag(r.direction, |ok| {
+                crate::movement::native_assert(self.ss, ok);
+            }) == service!(self.ss.tunnel_bridge_direction)(r.tile)
         {
             return false;
         }
@@ -1904,14 +1918,25 @@ impl Game<'_> {
             return INVALID_TRACKDIR;
         }
         if v.state() == DEPOT {
-            return DIAG_TRACK[usize::from(service!(self.l.depot_direction)(r.tile))];
+            return crate::track_func::diag_dir_to_diag_trackdir(
+                service!(self.l.depot_direction)(r.tile),
+                |ok| crate::movement::native_assert(self.ss, ok),
+            );
         }
         if service!(self.l.is_bay_stop)(r.tile) {
-            return DIAG_TRACK[usize::from(service!(self.l.bay_direction)(r.tile))];
+            return crate::track_func::diag_dir_to_diag_trackdir(
+                service!(self.l.bay_direction)(r.tile),
+                |ok| crate::movement::native_assert(self.ss, ok),
+            );
         }
         let state = v.state();
         if state > 15 {
-            return DIAG_TRACK[usize::from(diag(r.direction))];
+            return crate::track_func::diag_dir_to_diag_trackdir(
+                diag(r.direction, |ok| {
+                    crate::movement::native_assert(self.ss, ok);
+                }),
+                |ok| crate::movement::native_assert(self.ss, ok),
+            );
         }
         if reversing(state) { state - 6 } else { state }
     }
@@ -2325,12 +2350,11 @@ crate::abi::layouts! {
         part,
         link,
         link_tile,
-        enter_tile,
+        after_enter_tile,
         visit_close,
         visit_trains,
         visit_tile,
         has_road,
-        track_status,
         any_road_bits,
         is_road_depot_tile,
         depot_direction,
@@ -2372,4 +2396,27 @@ crate::abi::layouts! {
 pub(crate) fn is_in_depot(state: *mut State) -> bool {
     // SAFETY: caller holds this live shell under the game-state mutex.
     unsafe { get_state(state) == DEPOT }
+}
+
+/// `RoadVehicle::GetFrame` on the canonical owner.
+/// # Safety
+/// The serialized live shell owns this state for this scalar access.
+pub(crate) unsafe fn get_frame(s: *const State) -> u8 {
+    unsafe { (*s).scalars[FRAME] as u8 }
+}
+/// `RoadVehicle::SetFrame` on the canonical owner.
+/// # Safety
+/// The serialized live shell owns this state for this scalar access.
+pub(crate) unsafe fn set_frame(s: *mut State, frame: u8) {
+    unsafe {
+        (*s).scalars[FRAME] = u16::from(frame);
+    }
+}
+
+impl Game<'_> {
+    fn movement_enter(&self, v: VehicleRef, tile: u32, x: i32, y: i32) -> Entered {
+        // SAFETY: Same live serialized shell as the original callback; no owner borrow spans it.
+        let flags = unsafe { crate::movement::enter(self.ss, v, tile, x, y) };
+        service!(self.l.after_enter_tile)(v, flags)
+    }
 }

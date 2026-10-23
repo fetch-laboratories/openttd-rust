@@ -9,6 +9,7 @@
 #ifndef RUST_VEHICLE_SERVICES_H
 #define RUST_VEHICLE_SERVICES_H
 #include "vehicle_ffi.h"
+#include "services_viewport.h"
 #include "byte_span_ffi.h"
 #include "../ground_vehicle.hpp"
 #include "../engine_base.h"
@@ -79,6 +80,9 @@ inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
 }
 
 /** Shared native field definitions, also used by bundled observations. */
+/* Typed signature adapter for synchronous pathfinder vehicle contexts. */
+template <typename Result, typename Shell, auto Query>
+inline Result RustVehicleContextQuery(const void *context) noexcept { return Query(RustVehicle(static_cast<const Shell *>(context))); }
 template <class T> inline auto RustVehicleFirst(T *v) noexcept { return v->First(); }
 template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last(); }
 /** Signature adapter for existing opaque fleet and orders callbacks. */

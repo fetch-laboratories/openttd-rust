@@ -22,14 +22,14 @@ struct OpenTTDRoadYapfTile {
 	uint8_t type, station_type, depot, depot_dir, crossing, waypoint, drive_through;
 };
 struct OpenTTDRoadYapfFollow { uint32_t tile; int32_t skipped; uint16_t dirs; uint8_t followed; };
-struct OpenTTDRoadYapfTraversal { int32_t current_z, next_z, display_speed, max_speed, min_speed; uint16_t order_speed; };
+struct OpenTTDRoadYapfTraversal { int32_t display_speed, max_speed, min_speed; uint16_t order_speed; };
 struct OpenTTDRoadYapfArea { uint32_t tile; uint16_t width, height; uint8_t valid, stop, drive_through, next; };
 struct OpenTTDRoadYapfLeaves {
-	const OpenTTDSharedServices *shared; ///< Road stop cost observations call the Rust road stop owner.
+	const OpenTTDSharedServices *shared; ///< Shared world and movement owner.
+	RoadTramType (OPENTTD_VEHICLE_CALL *road_kind)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(road_kind);
 	OpenTTDRoadYapfTile (OPENTTD_VEHICLE_CALL *tile)(const void *, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 	OpenTTDRoadYapfFollow (OPENTTD_VEHICLE_CALL *follow)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(follow);
-	uint16_t (OPENTTD_VEHICLE_CALL *tracks)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tracks);
-	OpenTTDRoadYapfTraversal (OPENTTD_VEHICLE_CALL *traversal)(const void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(traversal);
+	OpenTTDRoadYapfTraversal (OPENTTD_VEHICLE_CALL *traversal)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(traversal);
 	uint32_t (OPENTTD_VEHICLE_CALL *closest)(const void *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest);
 	OpenTTDRoadYapfArea (OPENTTD_VEHICLE_CALL *area)(const void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(area);
 };

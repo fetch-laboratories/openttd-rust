@@ -445,11 +445,14 @@ static void DrawTile_Industry(TileInfo *ti)
 	}
 }
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Industry(TileIndex tile, uint, uint, bool)
 {
 	return GetTileMaxPixelZ(tile);
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_Industry(TileIndex tile, Slope tileh)
 {
 	IndustryGfx gfx = GetIndustryGfx(tile);
@@ -467,6 +470,7 @@ static Foundation GetFoundation_Industry(TileIndex tile, Slope tileh)
 	}
 	return FlatteningFoundation(tileh);
 }
+#endif
 
 static void AddAcceptedCargo_Industry(TileIndex tile, CargoArray &acceptance, CargoTypes &always_accepted)
 {
@@ -1050,10 +1054,12 @@ static bool ClickTile_Industry(TileIndex tile)
 	return true;
 }
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Industry(TileIndex, TransportType, uint, DiagDirection)
 {
 	return 0;
 }
+#endif
 
 #ifndef WITH_RUST
 static void ChangeTileOwner_Industry(TileIndex tile, Owner old_owner, Owner new_owner)
@@ -3509,7 +3515,11 @@ static CommandCost TerraformTile_Industry(TileIndex tile, DoCommandFlags flags, 
 
 extern const TileTypeProcs _tile_type_industry_procs = {
 	DrawTile_Industry,           // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Industry,     // get_slope_z_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else
@@ -3517,7 +3527,11 @@ extern const TileTypeProcs _tile_type_industry_procs = {
 #endif
 	AddAcceptedCargo_Industry,   // add_accepted_cargo_proc
 	GetTileDesc_Industry,        // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Industry, // get_tile_track_status_proc
+#endif
 	ClickTile_Industry,          // click_tile_proc
 	AnimateTile_Industry,        // animate_tile_proc
 #ifdef WITH_RUST
@@ -3532,7 +3546,11 @@ extern const TileTypeProcs _tile_type_industry_procs = {
 #endif
 	nullptr,                        // add_produced_cargo_proc
 	nullptr,                        // vehicle_enter_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Industry,      // get_foundation_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else
@@ -3898,7 +3916,7 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 			result.amount_callback = spec->callback_mask.Test(IndustryTileCallbackMask::CargoAcceptance);
 			return result;
 		},
-		.callback = [](uint32_t tile, uint16_t gfx, uint16_t callback, uint32_t parameter1, uint32_t parameter2) noexcept -> uint16_t { return GetIndustryTileCallback(static_cast<CallbackID>(callback), parameter1, parameter2, gfx, Industry::GetByTile(TileIndex(tile)), TileIndex(tile)); },
+		.callback = OpenTTDIndustryTileCallback,
 		.cargo_translation = OpenTTDIndustryTileCargoTranslation,
 	};
 	return services;

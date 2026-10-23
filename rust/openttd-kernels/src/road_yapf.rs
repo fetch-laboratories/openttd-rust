@@ -65,9 +65,8 @@ pub struct Follow {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+#[allow(clippy::struct_field_names)] // Existing native ABI names distinguish the four speed observations.
 pub struct Traversal {
-    pub current_z: i32,
-    pub next_z: i32,
     pub display_speed: i32,
     pub max_speed: i32,
     pub min_speed: i32,
@@ -89,10 +88,10 @@ pub struct Area {
 pub struct Leaves {
     /// Shared table for the road stop owner's cost observations.
     pub shared: *const Services,
+    pub road_kind: unsafe extern "C" fn(*const c_void) -> crate::services::RoadTramType,
     pub tile: unsafe extern "C" fn(*const c_void, u32, u8, bool) -> Tile,
     pub follow: unsafe extern "C" fn(*const c_void, u32, u8) -> Follow,
-    pub tracks: unsafe extern "C" fn(*const c_void, u32, u8) -> u16,
-    pub traversal: unsafe extern "C" fn(*const c_void, u32, u32) -> Traversal,
+    pub traversal: unsafe extern "C" fn(*const c_void, u32) -> Traversal,
     pub closest: unsafe extern "C" fn(*const c_void, u16, u8) -> u32,
     pub area: unsafe extern "C" fn(*const c_void, u16) -> Area,
 }
@@ -246,8 +245,20 @@ impl Search {
         }
     }
     fn tracks(&self, tile: u32, status: u8) -> u16 {
-        // SAFETY: Copied queries; the opaque game-thread vehicle stays live.
-        unsafe { (self.leaves.tracks)(self.context, tile, status) }
+        // SAFETY: The native search keeps the same live road vehicle context.
+        let shared = unsafe { &*self.leaves.shared };
+        let tram = unsafe { (self.leaves.road_kind)(self.context) }.0;
+        if status != 0 {
+            crate::track_func::track_status_to_trackdir_bits(crate::movement::track_status(
+                shared,
+                tile,
+                crate::transport_type::TRANSPORT_ROAD,
+                u32::from(tram),
+                crate::direction_type::INVALID_DIAGDIR,
+            ))
+        } else {
+            crate::pathfinder_func::road_trackdirs(shared, tile, tram)
+        }
     }
     fn tile(&self, tile: u32, td: u8, cost: bool) -> Tile {
         // SAFETY: Shared map/pool query has no owner access or reentry.
@@ -415,7 +426,10 @@ impl Search {
                 return false;
             }
             if t.depot != 0
-                && td == crate::track_func::diag_dir_to_diag_trackdir((t.depot_dir + 2) & 3)
+                && td
+                    == crate::track_func::diag_dir_to_diag_trackdir((t.depot_dir + 2) & 3, |ok| {
+                        crate::movement::native_assert(unsafe { &*self.leaves.shared }, ok);
+                    })
             {
                 break;
             }
@@ -431,8 +445,26 @@ impl Search {
             tiles = tiles.wrapping_add(f.skipped.wrapping_add(1) as u32);
             // SAFETY: After accepted continuation, observe current/next height,
             // then vehicle and old-tile follower limits, without world mutation.
-            let facts = unsafe { (self.leaves.traversal)(self.context, tile, f.tile) };
-            if facts.next_z.wrapping_sub(facts.current_z) > 1 {
+            let shared = unsafe { &*self.leaves.shared };
+            let map = crate::services::Map {
+                log_x: self.input.map_x.trailing_zeros() as u8,
+            };
+            let center_z = |tile| {
+                crate::movement::pixel_z(
+                    shared,
+                    (map.tile_x(tile) * crate::tile_type::TILE_SIZE
+                        + crate::tile_type::TILE_SIZE / 2)
+                        .cast_signed(),
+                    (map.tile_y(tile) * crate::tile_type::TILE_SIZE
+                        + crate::tile_type::TILE_SIZE / 2)
+                        .cast_signed(),
+                    true,
+                )
+            };
+            let current_z = center_z(tile);
+            let next_z = center_z(f.tile);
+            let facts = unsafe { (self.leaves.traversal)(self.context, tile) };
+            if next_z.wrapping_sub(current_z) > 1 {
                 cost = cost.wrapping_add(self.input.slope);
             }
             let speed = facts.display_speed.min(i32::from(facts.order_speed) * 2);
@@ -647,7 +679,9 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_choose(
         return Result {
             tile,
             cost: 0,
-            direction: crate::track_func::diag_dir_to_diag_trackdir(entry),
+            direction: crate::track_func::diag_dir_to_diag_trackdir(entry, |ok| {
+                crate::movement::native_assert(unsafe { &*leaves.shared }, ok);
+            }),
             found,
             rounds: 0,
             open: 0,
@@ -797,8 +831,6 @@ crate::abi::layouts! {
         next,
     };
     "OpenTTDRoadYapfTraversal" ["probe"] => Traversal {
-        current_z,
-        next_z,
         display_speed,
         max_speed,
         min_speed,
@@ -806,9 +838,9 @@ crate::abi::layouts! {
     };
     "OpenTTDRoadYapfLeaves" ["probe"] => crate::road_yapf::Leaves {
         shared,
+        road_kind,
         tile,
         follow,
-        tracks,
         traversal,
         closest,
         area,

@@ -41,7 +41,10 @@ pub(crate) fn mask_reserved_tracks(pbs: Pbs<'_>, ft: &mut Follow) -> bool {
     while tracks != 0 {
         let track = tracks.trailing_zeros() as u8;
         tracks &= tracks.wrapping_sub(1);
-        if tracks_overlap(reserved | track_to_track_bits(track)) {
+        if tracks_overlap(
+            reserved
+                | track_to_track_bits(track, |ok| crate::movement::native_assert(pbs.shared(), ok)),
+        ) {
             ft.dirs &= !track_to_trackdir_bits(track);
         }
     }
