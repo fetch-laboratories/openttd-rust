@@ -2012,4 +2012,6 @@ The existing fleet console compares unchanged public iterator bodies at the
 full-scan threshold, coordinate extremes and current-shell mutation; native
 checks cover canonical link identity, stale removal, copied cursors and pixel-Z
 command refusal. The existing ABI/range fixtures exercise their direct routes.
-Threaded GUI/input and external articulated-NewGRF reload remain #156 gaps.
+Shared geometry/bit/track modules supply the original header callees.
+Native disaster callbacks still bounce through occupancy facades; root owns the
+bounded repair before integration. GUI/external articulated-GRF gaps remain #156.
