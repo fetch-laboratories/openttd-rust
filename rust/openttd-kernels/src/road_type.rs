@@ -11,3 +11,6 @@ pub const INVALID_ROADTYPE: u8 = 63;
 
 /// `ROAD_X`.
 pub const ROAD_X: u8 = 10;
+
+/// `ROAD_NW`.
+pub const ROAD_NW: u8 = 1;

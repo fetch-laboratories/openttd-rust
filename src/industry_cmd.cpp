@@ -3916,7 +3916,7 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 			result.amount_callback = spec->callback_mask.Test(IndustryTileCallbackMask::CargoAcceptance);
 			return result;
 		},
-		.callback = [](uint32_t tile, uint16_t gfx, uint16_t callback, uint32_t parameter1, uint32_t parameter2) noexcept -> uint16_t { return GetIndustryTileCallback(static_cast<CallbackID>(callback), parameter1, parameter2, gfx, Industry::GetByTile(TileIndex(tile)), TileIndex(tile)); },
+		.callback = OpenTTDIndustryTileCallback,
 		.cargo_translation = OpenTTDIndustryTileCargoTranslation,
 	};
 	return services;

@@ -142,8 +142,8 @@ static void MovementGap()
 	const Slope slopes[]{SLOPE_FLAT, SLOPE_W, SLOPE_S, SLOPE_SW, SLOPE_E, SLOPE_EW, SLOPE_SE, SLOPE_WSE, SLOPE_N, SLOPE_NW, SLOPE_NS, SLOPE_ENW, SLOPE_NE, SLOPE_SEN, SLOPE_NWS, SLOPE_STEEP_W, SLOPE_STEEP_S, SLOPE_STEEP_E, SLOPE_STEEP_N};
 	unsigned cases = 0;
 	for (Slope slope : slopes) for (uint bits = 0; bits < 256; bits++) {
-		if (openttd_rust_rail_foundation(slope, static_cast<TrackBits>(bits)) != GetRailFoundation(slope, static_cast<TrackBits>(bits))) std::abort();
-		if (openttd_rust_road_foundation(slope, static_cast<RoadBits>(bits)) != GetRoadFoundation(slope, static_cast<RoadBits>(bits))) std::abort();
+		if (openttd_rust_rail_foundation(slope, static_cast<TrackBits>(bits), [](bool ok) noexcept { assert(ok); }) != GetRailFoundation(slope, static_cast<TrackBits>(bits))) std::abort();
+		if (openttd_rust_road_foundation(slope, static_cast<RoadBits>(bits), [](bool ok) noexcept { assert(ok); }) != GetRoadFoundation(slope, static_cast<RoadBits>(bits))) std::abort();
 		cases += 2;
 	}
 	OpenTTDSharedServices world{};

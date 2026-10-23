@@ -7,6 +7,9 @@
 
 //! Shared `road_func.h` helpers.
 /// `DiagDirToRoadBits`, with the native valid direction precondition.
-pub const fn diag_dir_to_road_bits(dir: u8) -> u8 {
-    1 << (3 ^ dir)
+pub fn diag_dir_to_road_bits(dir: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if dir >= 4 {
+        check(false);
+    }
+    (u32::from(crate::road_type::ROAD_NW).wrapping_shl(u32::from(3 ^ dir)) & 0xff) as u8
 }

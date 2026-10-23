@@ -164,24 +164,45 @@ pub const fn opposite_corner(c: u8) -> u8 {
     c ^ 2
 }
 /// `SlopeWithOneCornerRaised`.
-pub const fn slope_with_one_corner_raised(c: u8) -> u8 {
-    assert!(c < 4); // Native IsValidCorner assertion.
-    1 << c
+pub fn slope_with_one_corner_raised(c: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if c >= 4 {
+        check(false);
+    }
+    (1_u32.wrapping_shl(u32::from(c)) & 0xff) as u8
 }
 /// `SlopeWithThreeCornersRaised`.
-pub const fn slope_with_three_corners_raised(c: u8) -> u8 {
-    slope_with_one_corner_raised(c) ^ SLOPE_ELEVATED
+pub fn slope_with_three_corners_raised(c: u8, check: impl Fn(bool) + Copy) -> u8 {
+    complement_slope(slope_with_one_corner_raised(c, check))
 }
 /// `HalftileFoundation`, with a valid native corner.
-pub const fn halftile_foundation(c: u8) -> u8 {
-    assert!(c < 4); // Native IsValidCorner assertion.
-    6 + c
+pub fn halftile_foundation(c: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if c >= 4 {
+        check(false);
+    }
+    FOUNDATION_HALFTILE_W.wrapping_add(c)
 }
 /// `SpecialRailFoundation`, with a valid native corner.
-pub const fn special_rail_foundation(c: u8) -> u8 {
-    assert!(c < 4); // Native IsValidCorner assertion.
-    10 + c
+pub fn special_rail_foundation(c: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if c >= 4 {
+        check(false);
+    }
+    FOUNDATION_RAIL_W.wrapping_add(c)
 }
+
+/// `CORNER_W`.
+pub const CORNER_W: u8 = 0;
+/// `CORNER_S`.
+pub const CORNER_S: u8 = 1;
+/// `CORNER_E`.
+pub const CORNER_E: u8 = 2;
+/// `CORNER_N`.
+pub const CORNER_N: u8 = 3;
+/// `FOUNDATION_HALFTILE_W`.
+pub const FOUNDATION_HALFTILE_W: u8 = 6;
+/// `FOUNDATION_RAIL_W`.
+pub const FOUNDATION_RAIL_W: u8 = 10;
+/// `FOUNDATION_RAIL_N`.
+pub const FOUNDATION_RAIL_N: u8 = 13;
 
 #[cfg(test)]
 mod tests {

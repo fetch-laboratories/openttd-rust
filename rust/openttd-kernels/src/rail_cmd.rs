@@ -272,9 +272,8 @@ const INVALID_TRACKDIR: u8 = 0xFF;
 pub(crate) const CROSSING_SLOPES: u32 =
     (1 << 14) | (1 << 13) | (1 << 11) | (1 << 10) | (1 << 7) | (1 << 5) | 1;
 
-const FOUNDATION_RAIL_W: u8 = 10;
-const FOUNDATION_RAIL_N: u8 = 13;
 use crate::slope_func::FOUNDATION_INVALID;
+use crate::slope_func::{FOUNDATION_RAIL_N, FOUNDATION_RAIL_W};
 
 const GROUND_BARREN: u8 = 0;
 use crate::rail_map::RAIL_GROUND_HALF_TILE_WATER as GROUND_HALF_WATER;
@@ -321,7 +320,7 @@ const TRACK_DELTA: [(i32, i32); 16] = [
     (0, 0),
 ];
 /// `_valid_tracks_on_leveled_foundation`.
-const LEVELED_TRACKS: [u8; 15] = [
+pub(crate) const LEVELED_TRACKS: [u8; 15] = [
     0,
     BIT_LEFT,
     BIT_LOWER,
@@ -481,14 +480,18 @@ impl<'a> Ctx<'a> {
             out.error(self.s.strings.build_on_water);
             return;
         }
-        let f_new = crate::movement::rail_foundation(tileh, bits | existing);
+        let f_new = crate::movement::rail_foundation(tileh, bits | existing, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         if f_new == FOUNDATION_INVALID
             || (f_new != FOUNDATION_NONE && !(self.shared.build_on_slopes)())
         {
             out.error(self.s.strings.sloped_wrong);
             return;
         }
-        let f_old = crate::movement::rail_foundation(tileh, existing);
+        let f_old = crate::movement::rail_foundation(tileh, existing, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        });
         out.set(if f_new == f_old {
             0
         } else {
@@ -1891,7 +1894,10 @@ impl<'a> Ctx<'a> {
                     let track = if tt == MP_STATION {
                         (self.rail.station_track)(tile).0
                     } else {
-                        crate::ground::crossing_rail_track(tile, self.rail).0
+                        crate::ground::crossing_rail_track(tile, self.rail, |ok| {
+                            crate::movement::native_assert(self.shared, ok);
+                        })
+                        .0
                     };
                     (self.s.layout_changed)(tile, track);
                 }
@@ -2055,12 +2061,20 @@ impl<'a> Ctx<'a> {
             return cost.error(remove_track);
         }
         // ApplyFoundationToSlope also rewrites the slope in place.
-        let top =
-            (self.s.apply_foundation)(crate::movement::rail_foundation(tileh_old, bits), tileh_old);
+        let top = (self.s.apply_foundation)(
+            crate::movement::rail_foundation(tileh_old, bits, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            }),
+            tileh_old,
+        );
         z_old += top.z;
         tileh_old = top.slope;
-        let top =
-            (self.s.apply_foundation)(crate::movement::rail_foundation(tileh_new, bits), tileh_new);
+        let top = (self.s.apply_foundation)(
+            crate::movement::rail_foundation(tileh_new, bits, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            }),
+            tileh_new,
+        );
         z_new += top.z;
         tileh_new = top.slope;
         let corner = match bits {
@@ -2112,7 +2126,9 @@ impl<'a> Ctx<'a> {
                 BIT_LOWER => 3,
                 _ => return,
             };
-            let f_old = crate::movement::rail_foundation(tileh_old, bits);
+            let f_old = crate::movement::rail_foundation(tileh_old, bits, |ok| {
+                crate::movement::native_assert(self.shared, ok);
+            });
             if tileh_old != SLOPE_NS
                 && tileh_old != SLOPE_EW
                 && (FOUNDATION_RAIL_W..=FOUNDATION_RAIL_N).contains(&f_old)

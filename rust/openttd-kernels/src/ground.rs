@@ -44,8 +44,12 @@ fn crossing_rail_axis(tile: u32, rail: &RailMapServices) -> Axis {
 }
 
 /// Original `GetCrossingRailTrack`, retaining its named helper composition.
-pub(crate) fn crossing_rail_track(tile: u32, rail: &RailMapServices) -> Track {
-    axis_to_track(crossing_rail_axis(tile, rail))
+pub(crate) fn crossing_rail_track(
+    tile: u32,
+    rail: &RailMapServices,
+    check: impl Fn(bool) + Copy,
+) -> Track {
+    axis_to_track(crossing_rail_axis(tile, rail), check)
 }
 
 /// Original `CheckBuildAbove_Clear`: construction above clear tiles always succeeds.
@@ -479,7 +483,10 @@ pub(crate) unsafe fn rail_tile_loop(
         let mut ground = (r.snow)(tile);
         let mut half = false;
         if ground.plain {
-            let foundation = crate::movement::rail_foundation(ground.slope.0, ground.tracks.0);
+            let foundation =
+                crate::movement::rail_foundation(ground.slope.0, ground.tracks.0, |ok| {
+                    crate::movement::native_assert(s, ok);
+                });
             match foundation {
                 0 => {
                     if is_slope_with_three_corners_raised(ground.slope.0) {

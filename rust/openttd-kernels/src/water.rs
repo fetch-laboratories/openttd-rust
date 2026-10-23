@@ -354,7 +354,9 @@ impl<'a> World<'a> {
         let mut tracks = (self.r().tracks)(tile).0;
         if is_slope_with_one_corner_raised(slope) {
             let corner = (slope.trailing_zeros() ^ 2) as usize;
-            let lower = crate::track_func::corner_to_track_bits(corner as u8);
+            let lower = crate::track_func::corner_to_track_bits(corner as u8, |ok| {
+                crate::movement::native_assert(self.s, ok);
+            });
             let remove = lower & tracks;
             if remove != 0 {
                 let company = (self.s.current_company)();
@@ -376,7 +378,9 @@ impl<'a> World<'a> {
                     return true;
                 }
             }
-            if (5..10).contains(&crate::movement::rail_foundation(slope, tracks)) {
+            if (5..10).contains(&crate::movement::rail_foundation(slope, tracks, |ok| {
+                crate::movement::native_assert(self.s, ok);
+            })) {
                 flooded = true;
                 (self.r().set_ground)(tile, RailGroundType(13));
                 (self.s.mark_dirty)(tile);
@@ -384,7 +388,9 @@ impl<'a> World<'a> {
             }
         } else {
             let foundation = (self.w.apply_foundation)(
-                Foundation(crate::movement::rail_foundation(slope, tracks)),
+                Foundation(crate::movement::rail_foundation(slope, tracks, |ok| {
+                    crate::movement::native_assert(self.s, ok);
+                })),
                 Slope(slope),
             );
             if foundation.z == 0

@@ -1330,7 +1330,7 @@ struct DrawRoadTileStruct {
 static Foundation GetRoadFoundation(Slope tileh, RoadBits bits)
 {
 #ifdef WITH_RUST
-	return openttd_rust_road_foundation(tileh, bits);
+	return openttd_rust_road_foundation(tileh, bits, RustMovementAssert);
 #else
 	/* Flat land and land without a road doesn't require a foundation */
 	if (tileh == SLOPE_FLAT || bits == ROAD_NONE) return FOUNDATION_NONE;

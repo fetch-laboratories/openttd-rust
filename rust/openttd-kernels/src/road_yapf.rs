@@ -422,7 +422,10 @@ impl Search {
                 return false;
             }
             if t.depot != 0
-                && td == crate::track_func::diag_dir_to_diag_trackdir((t.depot_dir + 2) & 3)
+                && td
+                    == crate::track_func::diag_dir_to_diag_trackdir((t.depot_dir + 2) & 3, |ok| {
+                        crate::movement::native_assert(unsafe { &*self.leaves.shared }, ok);
+                    })
             {
                 break;
             }
@@ -654,7 +657,9 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_choose(
         return Result {
             tile,
             cost: 0,
-            direction: crate::track_func::diag_dir_to_diag_trackdir(entry),
+            direction: crate::track_func::diag_dir_to_diag_trackdir(entry, |ok| {
+                crate::movement::native_assert(unsafe { &*leaves.shared }, ok);
+            }),
             found,
             rounds: 0,
             open: 0,

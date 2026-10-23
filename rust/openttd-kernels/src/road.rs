@@ -862,11 +862,21 @@ impl Game<'_> {
         {
             return;
         }
-        let trackdir = crate::track_func::diag_dir_to_diag_trackdir(diag(s.direction));
+        let trackdir = crate::track_func::diag_dir_to_diag_trackdir(
+            diag(s.direction, |ok| {
+                crate::movement::native_assert(self.ss, ok);
+            }),
+            |ok| crate::movement::native_assert(self.ss, ok),
+        );
         if self.overtake_blocked(v, u.v, s.tile, trackdir) {
             return;
         }
-        let tile = self.map.add_diag(s.tile, diag(s.direction));
+        let tile = self.map.add_diag(
+            s.tile,
+            diag(s.direction, |ok| {
+                crate::movement::native_assert(self.ss, ok);
+            }),
+        );
         if self.overtake_blocked(v, u.v, tile, trackdir) {
             return;
         }
@@ -1202,7 +1212,9 @@ impl Game<'_> {
         let dir = service!(self.l.depot_direction)(d.tile);
         let direction = dir * 2 + 1;
         service!(self.vs.write_direction)(v.v, direction);
-        let tdir = crate::track_func::diag_dir_to_diag_trackdir(dir);
+        let tdir = crate::track_func::diag_dir_to_diag_trackdir(dir, |ok| {
+            crate::movement::native_assert(self.ss, ok);
+        });
         let rd = crate::road_data::entry(d.tram, self.side() + usize::from(tdir), 6);
         let (x, y) = self.tile_xy(d.tile, (rd.0 & 15, rd.1 & 15));
         if first {
@@ -1242,7 +1254,9 @@ impl Game<'_> {
             } else {
                 return INVALID_TRACKDIR;
             };
-            dir = crate::track_func::diag_dir_to_diag_trackdir(diagonal);
+            dir = crate::track_func::diag_dir_to_diag_trackdir(diagonal, |ok| {
+                crate::movement::native_assert(self.ss, ok);
+            });
         } else if reversed && (prev_tile != tile || (state < 16 && reversing(state))) {
             let north = if prev_tile != tile {
                 prev_tile < tile
@@ -1871,7 +1885,9 @@ impl Game<'_> {
             return false;
         }
         if service!(self.ss.tile_type)(r.tile) == MP_TUNNELBRIDGE
-            && diag(r.direction) == service!(self.ss.tunnel_bridge_direction)(r.tile)
+            && diag(r.direction, |ok| {
+                crate::movement::native_assert(self.ss, ok);
+            }) == service!(self.ss.tunnel_bridge_direction)(r.tile)
         {
             return false;
         }
@@ -1888,18 +1904,25 @@ impl Game<'_> {
             return INVALID_TRACKDIR;
         }
         if v.state() == DEPOT {
-            return crate::track_func::diag_dir_to_diag_trackdir(service!(self.l.depot_direction)(
-                r.tile,
-            ));
+            return crate::track_func::diag_dir_to_diag_trackdir(
+                service!(self.l.depot_direction)(r.tile),
+                |ok| crate::movement::native_assert(self.ss, ok),
+            );
         }
         if service!(self.l.is_bay_stop)(r.tile) {
-            return crate::track_func::diag_dir_to_diag_trackdir(service!(self.l.bay_direction)(
-                r.tile,
-            ));
+            return crate::track_func::diag_dir_to_diag_trackdir(
+                service!(self.l.bay_direction)(r.tile),
+                |ok| crate::movement::native_assert(self.ss, ok),
+            );
         }
         let state = v.state();
         if state > 15 {
-            return crate::track_func::diag_dir_to_diag_trackdir(diag(r.direction));
+            return crate::track_func::diag_dir_to_diag_trackdir(
+                diag(r.direction, |ok| {
+                    crate::movement::native_assert(self.ss, ok);
+                }),
+                |ok| crate::movement::native_assert(self.ss, ok),
+            );
         }
         if reversing(state) { state - 6 } else { state }
     }

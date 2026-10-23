@@ -6,35 +6,64 @@
  */
 
 //! Shared inline track helpers declared in `track_func.h`.
+use crate::track_type::{TRACK_BIT_LEFT, TRACK_BIT_LOWER, TRACK_BIT_RIGHT, TRACK_BIT_UPPER};
+use crate::track_type::{TRACKDIR_X_NE, TRACKDIR_X_SW, TRACKDIR_Y_NW, TRACKDIR_Y_SE};
+
 /// `AxisToTrack`.
-pub const fn axis_to_track(axis: crate::services::Axis) -> crate::services::Track {
-    assert!(axis.0 < 2); // Same precondition assertion as the native header.
+pub fn axis_to_track(
+    axis: crate::services::Axis,
+    check: impl Fn(bool) + Copy,
+) -> crate::services::Track {
+    if axis.0 >= 2 {
+        check(false);
+    }
     crate::services::Track(axis.0)
 }
 /// `DiagDirToDiagTrack`.
-pub const fn diag_dir_to_diag_track(direction: u8) -> u8 {
-    assert!(direction < 4); // Same precondition assertion as the native header.
+pub fn diag_dir_to_diag_track(direction: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if direction >= 4 {
+        check(false);
+    }
     direction & 1
 }
 
 /// `CornerToTrackBits`, with a valid native corner.
-pub const fn corner_to_track_bits(c: u8) -> u8 {
-    assert!(c < 4); // Same precondition assertion as the native header.
-    [16, 8, 32, 4][c as usize]
+pub fn corner_to_track_bits(c: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if c >= 4 {
+        check(false);
+    }
+    [
+        TRACK_BIT_LEFT,
+        TRACK_BIT_LOWER,
+        TRACK_BIT_RIGHT,
+        TRACK_BIT_UPPER,
+    ][c as usize]
 }
 /// `TracksOverlap`.
 pub const fn tracks_overlap(b: u8) -> bool {
-    b != 0 && b & b.wrapping_sub(1) != 0 && b != 12 && b != 48
+    b != crate::track_type::TRACK_BIT_NONE
+        && b & b.wrapping_sub(1) != 0
+        && b != crate::track_type::TRACK_BIT_HORZ
+        && b != crate::track_type::TRACK_BIT_VERT
 }
 
+/// `TrackToTrackBits`.
+pub fn track_to_track_bits(track: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if track >= 6 {
+        check(false);
+    }
+    (1_u32.wrapping_shl(u32::from(track)) & 0xff) as u8
+}
 /// `AxisToTrackBits`.
-pub const fn axis_to_track_bits(axis: u8) -> u8 {
-    assert!(axis < 2); // Same precondition assertion as the native header.
-    1 << axis
+pub fn axis_to_track_bits(axis: u8, check: impl Fn(bool) + Copy) -> u8 {
+    track_to_track_bits(axis_to_track(crate::services::Axis(axis), check).0, check)
 }
 /// `DiagDirToDiagTrackBits`.
-pub const fn diag_dir_to_diag_track_bits(dir: u8) -> u8 {
-    axis_to_track_bits(crate::direction_func::diag_dir_to_axis(dir))
+pub fn diag_dir_to_diag_track_bits(dir: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if dir >= 4 {
+        check(false);
+    }
+    track_to_track_bits(diag_dir_to_diag_track(dir, check), check)
 }
 /// `TrackBitsToTrackdirBits`.
 pub const fn track_bits_to_trackdir_bits(bits: u8) -> u16 {
@@ -45,14 +74,18 @@ pub const fn combine_track_status(bits: u16, red: u16) -> u32 {
     (bits as u32) | ((red as u32) << 16)
 }
 /// `DiagDirToDiagTrackdir`.
-pub const fn diag_dir_to_diag_trackdir(dir: u8) -> u8 {
-    assert!(dir < 4); // Same precondition assertion as the native header.
-    [0, 1, 8, 9][dir as usize]
+pub fn diag_dir_to_diag_trackdir(dir: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if dir >= 4 {
+        check(false);
+    }
+    [TRACKDIR_X_NE, TRACKDIR_Y_SE, TRACKDIR_X_SW, TRACKDIR_Y_NW][dir as usize]
 }
 
 /// `IsReversingRoadTrackdir`, under its native valid-road-trackdir precondition.
-pub const fn is_reversing_road_trackdir(dir: u8) -> bool {
-    assert!(dir < 16); // Same precondition assertion as the native header.
+pub fn is_reversing_road_trackdir(dir: u8, check: impl Fn(bool) + Copy) -> bool {
+    if dir >= 16 {
+        check(false);
+    }
     (dir & 7) >= 6
 }
 
@@ -65,4 +98,18 @@ pub const fn track_status_to_track_bits(status: u32) -> u8 {
 #[allow(clippy::cast_possible_truncation)] // Native mask and narrowing to TrackdirBits.
 pub const fn track_status_to_trackdir_bits(status: u32) -> u16 {
     status as u16 & 0x3f3f
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn native_asserts_off_retains_header_conversions() {
+        let disabled = |ok: bool| assert!(!ok);
+        assert_eq!(axis_to_track(crate::services::Axis(2), disabled).0, 2);
+        assert_eq!(axis_to_track_bits(2, disabled), 4);
+        assert_eq!(track_to_track_bits(8, disabled), 0);
+        assert_eq!(diag_dir_to_diag_track(4, disabled), 0);
+        assert!(is_reversing_road_trackdir(22, disabled));
+    }
 }

@@ -9,6 +9,8 @@
 
 /// `TILE_SIZE`: tile edge length in world units.
 pub const TILE_SIZE: u32 = 16;
+/// `TILE_UNIT_MASK`.
+pub const TILE_UNIT_MASK: u32 = TILE_SIZE - 1;
 /// `TILE_HEIGHT`, shared by raw-to-pixel map consumers.
 pub const TILE_HEIGHT: u32 = 8;
 /// `TileType::MP_CLEAR`.

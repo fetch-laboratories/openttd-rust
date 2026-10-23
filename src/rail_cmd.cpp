@@ -323,7 +323,7 @@ static const TrackBits _valid_tracks_on_leveled_foundation[15] = {
 Foundation GetRailFoundation(Slope tileh, TrackBits bits)
 {
 #ifdef WITH_RUST
-	return openttd_rust_rail_foundation(tileh, bits);
+	return openttd_rust_rail_foundation(tileh, bits, RustMovementAssert);
 #else
 	if (bits == TRACK_BIT_NONE) return FOUNDATION_NONE;
 

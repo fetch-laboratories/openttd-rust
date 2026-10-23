@@ -1932,6 +1932,8 @@ bool CheckAbi_landscape()
 #endif
 
 #ifdef WITH_RUST
+void RustMovementAssert(bool condition) noexcept { assert(condition); }
+
 const OpenTTDMovementServices &GetRustMovementServices() noexcept
 {
 	static const OpenTTDMovementServices services{

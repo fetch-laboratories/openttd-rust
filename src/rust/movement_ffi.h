@@ -75,6 +75,7 @@ struct OpenTTDMovementServices {
 	uint16_t (*industry_callback)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_callback);
 	bool (*industry_boolean)(const void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_boolean);
 };
+void RustMovementAssert(bool condition) noexcept;
 const OpenTTDMovementServices &GetRustMovementServices() noexcept;
 extern "C" {
 uint8_t openttd_rust_movement_tunnel_visibility(uint8_t);
@@ -85,7 +86,7 @@ int32_t openttd_rust_movement_pixel_z(const OpenTTDMovementServices *, int32_t, 
 int32_t openttd_rust_movement_outside_z(const OpenTTDMovementServices *, int32_t, int32_t);
 OpenTTDFoundationSlope openttd_rust_movement_foundation_slope(const OpenTTDMovementServices *, uint32_t);
 Foundation openttd_rust_movement_foundation(const OpenTTDMovementServices *, uint32_t, Slope);
-Foundation openttd_rust_rail_foundation(Slope, TrackBits);
-Foundation openttd_rust_road_foundation(Slope, RoadBits);
+Foundation openttd_rust_rail_foundation(Slope, TrackBits, void (*)(bool) noexcept);
+Foundation openttd_rust_road_foundation(Slope, RoadBits, void (*)(bool) noexcept);
 }
 #endif

@@ -342,7 +342,12 @@ pub(crate) unsafe fn enter(
     }
     crate::witness::hit(crate::witness::ROAD_STOP_ENTER_DRIVE);
     let r = (t.drive_read)(v);
-    let e = entry(state, dir_to_diag_dir(r.direction));
+    let e = entry(
+        state,
+        dir_to_diag_dir(r.direction, |ok| {
+            crate::movement::native_assert(s, ok);
+        }),
+    );
     enter_entry(e, r.total_length);
     // SAFETY: Caller's live road owner; no service runs during the store.
     unsafe {
@@ -370,7 +375,12 @@ pub(crate) unsafe fn leave(
     } else {
         crate::witness::hit(crate::witness::ROAD_STOP_LEAVE_DRIVE);
         let r = (table(s).drive_read)(v);
-        let e = entry(state, dir_to_diag_dir(r.direction));
+        let e = entry(
+            state,
+            dir_to_diag_dir(r.direction, |ok| {
+                crate::movement::native_assert(s, ok);
+            }),
+        );
         leave_entry(e, r.total_length);
     }
 }
@@ -427,7 +437,9 @@ fn rebuild_entry(s: &Services, xy: u32, state: *mut State, east: bool) -> Entry 
             let r = (t.rebuild_read)(v);
             // Not a RV or not in the right direction or crashed :(
             if r.vehicle_type != VehicleType::ROAD
-                || dir_to_diag_dir(r.direction) != entry_dir
+                || dir_to_diag_dir(r.direction, |ok| {
+                    crate::movement::native_assert(s, ok);
+                }) != entry_dir
                 || !r.primary
                 || r.status & VS_CRASHED != 0
             {

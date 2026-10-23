@@ -587,7 +587,9 @@ impl<'a> Ctx<'a> {
                 let slope = simple_slope((self.shared.tile_slope)(tile));
                 let mut present = self.bits(tile, rtt);
                 let other = self.bits(tile, rtt ^ 1);
-                let foundation = crate::movement::road_foundation(slope, present);
+                let foundation = crate::movement::road_foundation(slope, present, |ok| {
+                    crate::movement::native_assert(self.shared, ok);
+                });
                 if (self.shared.has_road_works)(tile)
                     && (self.shared.current_company)() != OWNER_WATER
                 {
@@ -655,7 +657,11 @@ impl<'a> Ctx<'a> {
                     crate::road_cost::clear_cost(self.shared, rt)
                         .saturating_mul(i64::from(pieces.count_ones())),
                 );
-                if foundation == 0 && crate::movement::road_foundation(slope, present) != 0 {
+                if foundation == 0
+                    && crate::movement::road_foundation(slope, present, |ok| {
+                        crate::movement::native_assert(self.shared, ok);
+                    }) != 0
+                {
                     cost.add_money(price(57));
                 }
             }
@@ -668,7 +674,10 @@ impl<'a> Ctx<'a> {
                 if flags & DoCommandFlag::EXECUTE != 0 {
                     (self.r.crossing_removed)(tile, (self.rail.crossing_road_axis)(tile).0);
                     self.infrastructure(rt, self.owner(tile, rtt), -2);
-                    let track = crate::ground::crossing_rail_track(tile, self.rail).0;
+                    let track = crate::ground::crossing_rail_track(tile, self.rail, |ok| {
+                        crate::movement::native_assert(self.shared, ok);
+                    })
+                    .0;
                     if self.rt(tile, rtt ^ 1) == INVALID {
                         let tracks = (self.rail.crossing_rail_bits)(tile).0;
                         let reserved = (self.shared.crossing_reserved)(tile);
@@ -739,7 +748,9 @@ impl<'a> Ctx<'a> {
                 }
             } else {
                 if existing.is_power_of_two()
-                    && crate::movement::road_foundation(slope, existing) == 0
+                    && crate::movement::road_foundation(slope, existing, |ok| {
+                        crate::movement::native_assert(self.shared, ok);
+                    }) == 0
                 {
                     cost.set(price(57));
                 }
@@ -1033,9 +1044,15 @@ impl<'a> Ctx<'a> {
                 pieces &= existing ^ 15;
                 if (self.shared.is_normal_road)(tile) {
                     let slope = (self.shared.tile_slope)(tile);
-                    let new = crate::movement::road_foundation(slope, pieces | existing);
+                    let new = crate::movement::road_foundation(slope, pieces | existing, |ok| {
+                        crate::movement::native_assert(self.shared, ok);
+                    });
                     let bits = self.bits(tile, rtt ^ 1);
-                    if bits != 0 && crate::movement::road_foundation(slope, bits) != new {
+                    if bits != 0
+                        && crate::movement::road_foundation(slope, bits, |ok| {
+                            crate::movement::native_assert(self.shared, ok);
+                        }) != new
+                    {
                         cost.error(self.r.strings.sloped_wrong);
                         return;
                     }
@@ -1590,7 +1607,10 @@ impl<'a> Ctx<'a> {
         }
         if (self.shared.is_level_crossing)(tile) && (self.shared.tile_owner)(tile) == old {
             if new == INVALID_OWNER {
-                let track = crate::ground::crossing_rail_track(tile, self.rail).0;
+                let track = crate::ground::crossing_rail_track(tile, self.rail, |ok| {
+                    crate::movement::native_assert(self.shared, ok);
+                })
+                .0;
                 self.command(
                     ret,
                     DoCommandFlag::EXECUTE | DoCommandFlag::BANKRUPT,
@@ -1646,13 +1666,17 @@ impl<'a> Ctx<'a> {
                         let mut old_slope = (self.shared.tile_slope)(tile);
                         let mut old_z = (self.shared.tile_z)(tile);
                         let old = (self.r.apply_foundation)(
-                            crate::movement::road_foundation(old_slope, bits),
+                            crate::movement::road_foundation(old_slope, bits, |ok| {
+                                crate::movement::native_assert(self.shared, ok);
+                            }),
                             old_slope,
                         );
                         old_z += old.z;
                         old_slope = old.slope;
                         let new = (self.r.apply_foundation)(
-                            crate::movement::road_foundation(slope, bits),
+                            crate::movement::road_foundation(slope, bits, |ok| {
+                                crate::movement::native_assert(self.shared, ok);
+                            }),
                             slope,
                         );
                         z += new.z;

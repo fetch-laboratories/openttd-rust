@@ -488,7 +488,9 @@ impl Game<'_> {
         (self.leaves.trackdir)(self.context, id)
     }
     fn svc_track_status(&self, _id: Handle, a: u64) -> u64 {
-        u64::from(crate::movement::track_status(self.shared(), a as u32, 0, 0, 255) as u16)
+        u64::from(crate::track_func::track_status_to_trackdir_bits(
+            crate::movement::track_status(self.shared(), a as u32, 0, 0, 255),
+        ))
     }
     fn svc_try_track(&self, id: Handle, a: u64, b: u64) -> u64 {
         (self.leaves.try_track)(self.context, id, a as u32, b as u8)

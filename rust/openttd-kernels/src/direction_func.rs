@@ -6,36 +6,78 @@
  */
 
 //! Inline direction helpers from `direction_func.h`.
+//! A failed header precondition calls the native assertion handler. The caller
+//! supplies it lazily; valid inputs cross no boundary and asserts-off keeps the
+//! original computation. No Rust debug/release assertion setting is consulted.
 use crate::direction_type::DIR_END;
 
 /// `DiagDirToAxis`.
-pub const fn diag_dir_to_axis(direction: u8) -> u8 {
-    assert!(direction < 4); // Native valid-direction/axis assertion.
+pub fn diag_dir_to_axis(direction: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if direction >= 4 {
+        check(false);
+    }
     direction & 1
 }
 /// `AxisToDiagDir`.
-pub const fn axis_to_diag_dir(axis: u8) -> u8 {
-    assert!(axis < 2); // Native valid-direction/axis assertion.
-    2 - axis
+pub fn axis_to_diag_dir(axis: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if axis >= 2 {
+        check(false);
+    }
+    crate::direction_type::DIAGDIR_SW.wrapping_sub(axis)
 }
 /// `DirToDiagDir`.
-pub const fn dir_to_diag_dir(direction: u8) -> u8 {
-    debug_assert!(direction < DIR_END);
+pub fn dir_to_diag_dir(direction: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if direction >= DIR_END {
+        check(false);
+    }
     direction >> 1
 }
 /// `ReverseDiagDir`.
-pub const fn reverse_diag_dir(direction: u8) -> u8 {
-    assert!(direction < 4); // Native valid-direction/axis assertion.
+pub fn reverse_diag_dir(direction: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if direction >= 4 {
+        check(false);
+    }
     direction ^ 2
 }
 
 /// `DiagDirToDir`, with a valid native diagonal direction.
-pub const fn diag_dir_to_dir(d: u8) -> u8 {
-    assert!(d < 4); // Native valid-direction/axis assertion.
-    2 * d + 1
+pub fn diag_dir_to_dir(d: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if d >= 4 {
+        check(false);
+    }
+    d.wrapping_mul(2).wrapping_add(1)
 }
 /// `ReverseDir`.
-pub const fn reverse_dir(d: u8) -> u8 {
-    assert!(d < DIR_END); // Native valid-direction/axis assertion.
+pub fn reverse_dir(d: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if d >= DIR_END {
+        check(false);
+    }
     d ^ 4
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    #[test]
+    fn native_assertion_policy_keeps_asserts_off_arithmetic() {
+        let failures = Cell::new(0);
+        let disabled = |ok: bool| {
+            assert!(!ok);
+            failures.set(failures.get() + 1);
+        };
+        assert_eq!(diag_dir_to_axis(4, disabled), 0);
+        assert_eq!(axis_to_diag_dir(3, disabled), 255);
+        assert_eq!(reverse_diag_dir(4, disabled), 6);
+        assert_eq!(dir_to_diag_dir(8, disabled), 4);
+        assert_eq!(diag_dir_to_dir(255, disabled), 255);
+        assert_eq!(reverse_dir(8, disabled), 12);
+        assert_eq!(failures.get(), 6);
+        let enabled = |ok: bool| assert!(ok);
+        for direction in 0..4 {
+            assert_eq!(diag_dir_to_axis(direction, enabled), direction & 1);
+            assert_eq!(diag_dir_to_dir(direction, enabled), direction * 2 + 1);
+        }
+    }
 }
