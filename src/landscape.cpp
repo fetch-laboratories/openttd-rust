@@ -1040,7 +1040,7 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.set_snow_line = RustSetSnowLineHeight,
 		.not_reached = RustNotReached,
 		.river_debug = RustRiverYapfDebug,
-		.assert_condition = []([[maybe_unused]] bool condition) noexcept { assert(condition); },
+		.assert_condition = RustAssertCondition,
 		.sea_construct = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Construct(); },
 		.sea_destroy = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Destroy(); },
 		.sea_insert = [](OpenTTDGenerationFrame *f, uint32_t tile) noexcept { f->sea.Insert(tile); },
