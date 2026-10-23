@@ -38,6 +38,7 @@ use crate::slope_func::{
 };
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{INVALID_TILE, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
+use crate::track_type::{TRACK_BIT_DEPOT as BIT_DEPOT, TRACK_BIT_X as BIT_X, TRACK_BIT_Y as BIT_Y};
 use crate::witness as w;
 
 /// Opaque caller-owned native frame holding the conversion area iterator and
@@ -260,15 +261,12 @@ pub struct RailCommandServices {
 const TRACK_X: u8 = 0;
 const TRACK_Y: u8 = 1;
 const INVALID_TRACK: u8 = 0xFF;
-const BIT_X: u8 = 1;
-const BIT_Y: u8 = 2;
 const BIT_UPPER: u8 = 4;
 const BIT_LOWER: u8 = 8;
 const BIT_LEFT: u8 = 16;
 const BIT_RIGHT: u8 = 32;
 const BIT_HORZ: u8 = 12;
 const BIT_VERT: u8 = 48;
-const BIT_DEPOT: u8 = 0x80;
 const INVALID_TRACKDIR: u8 = 0xFF;
 
 /// `VALID_LEVEL_CROSSING_SLOPES`.

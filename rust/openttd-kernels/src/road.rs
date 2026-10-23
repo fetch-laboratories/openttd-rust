@@ -32,7 +32,9 @@
 use crate::direction_func::dir_to_diag_dir as diag;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
 use crate::newgrf_sound::VSE_START;
-use crate::roadveh::{RVSB_IN_DT_ROAD_STOP as DT_STOP, RVSB_IN_ROAD_STOP as STOP};
+use crate::roadveh::{
+    RVSB_IN_DEPOT as DEPOT, RVSB_IN_DT_ROAD_STOP as DT_STOP, RVSB_IN_ROAD_STOP as STOP,
+};
 use crate::services::{Map, RoadStopType, Services};
 use crate::vehicle::maintenance;
 use crate::vehicle::{
@@ -45,7 +47,6 @@ use crate::vehicle::{
 use std::ffi::c_void;
 use std::ptr::NonNull;
 
-const DEPOT: u8 = 254;
 const WORMHOLE: u8 = 255;
 const REVERSE: [u8; 4] = [6, 7, 14, 15];
 const DIAG_TRACK: [u8; 4] = [0, 1, 8, 9];
@@ -2143,5 +2144,5 @@ pub(crate) unsafe fn clear_removed_drive_stop(state: *mut State) {
 /// Shared `RoadVehicle::IsInDepot` over the canonical private owner.
 pub(crate) fn is_in_depot(state: *mut State) -> bool {
     // SAFETY: caller holds this live shell under the game-state mutex.
-    unsafe { (*state).scalars[STATE] == u16::from(crate::roadveh::RVSB_IN_DEPOT) }
+    unsafe { get_state(state) == DEPOT }
 }

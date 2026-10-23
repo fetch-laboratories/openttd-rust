@@ -204,8 +204,7 @@ pub(crate) const FLIPPED: u8 = 4;
 /// `CCF_ARRANGE`: `ConsistChangeFlag::Length` and `ConsistChangeFlag::Capacity`.
 pub(crate) const CCF_ARRANGE: u8 = 3;
 const INVALID: u32 = u32::MAX;
-const DEPOT: u8 = 0x80;
-const WORMHOLE: u8 = 0x40;
+use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE};
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct TrainConsistChangedRead {
