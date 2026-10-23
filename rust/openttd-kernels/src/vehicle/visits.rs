@@ -181,8 +181,8 @@ pub(crate) fn increase_stats(
     let l = s.links;
     // `Station::Get(next_station_id)`.
     let st2 = (s.station.station)(next).base;
-    let mut graph = (l.graph)(st, cargo);
-    let second = (l.graph)(st2, cargo);
+    let mut graph = live::station_graph(st, cargo, l.graphs);
+    let second = live::station_graph(st2, cargo, l.graphs);
     if graph.is_null() {
         if second.is_null() {
             if (l.graphs.available)() {
@@ -238,8 +238,8 @@ pub(crate) fn increase_stats(
     }
     if !graph.is_null() {
         // Merging rewrites both goods entries, so the nodes are read afterwards.
-        let from = (l.node)(st, cargo);
-        let to = (l.node)(st2, cargo);
+        let from = (l.graphs.node)(st, cargo);
+        let to = (l.graphs.node)(st2, cargo);
         unsafe {
             (&mut *live::resolve(graph, l.graphs)).nodes[usize::from(from)].update_edge(
                 to,
@@ -468,7 +468,10 @@ impl Refresher {
             }
 
             // If not allowed to merge link graphs, the stations must already share one.
-            if !self.allow_merge && (s.links.graph)(st, cargo) != (s.links.graph)(st_to, cargo) {
+            if !self.allow_merge
+                && live::station_graph(st, cargo, s.links.graphs)
+                    != live::station_graph(st_to, cargo, s.links.graphs)
+            {
                 witness::hit(witness::VISITS_MERGE_BLOCKED);
                 continue;
             }

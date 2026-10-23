@@ -18,7 +18,7 @@
 )]
 use crate::cargo_payment::NativePayment;
 use crate::command_type::DoCommandFlag;
-use crate::linkgraph::{NativeGraph, live};
+use crate::linkgraph::live;
 use crate::orders::NativeOrderList;
 use crate::station::{BaseStation, Station};
 use crate::vehicle::visits::{Services as Visits, refresh_links};
@@ -883,9 +883,7 @@ pub struct Edge {
 #[repr(C)]
 pub struct Links {
     pub(crate) graphs: &'static live::Services,
-    pub(crate) graph: extern "C" fn(*mut BaseStation, u8) -> *mut NativeGraph,
     pub(crate) automatic_distribution: extern "C" fn(u8) -> bool,
-    pub(crate) node: extern "C" fn(*mut BaseStation, u8) -> u16,
     pub(crate) date: extern "C" fn() -> i32,
     pub(crate) edge: extern "C" fn(*mut BaseStation, u16) -> Edge,
     pub(crate) delete_flows: extern "C" fn(*mut BaseStation, u8, u16),
@@ -938,11 +936,11 @@ pub unsafe extern "C" fn openttd_rust_station_reroute(
 unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
     for cargo in 0..64 {
         let auto = (l.automatic_distribution)(cargo);
-        let graph = (l.graph)(from, cargo);
+        let graph = live::station_graph(from, cargo, l.graphs);
         if graph.is_null() {
             continue;
         }
-        let node = u32::from((l.node)(from, cargo)) as u16;
+        let node = u32::from((l.graphs.node)(from, cargo)) as u16;
         let mut remove = Vec::new();
         let owner = unsafe { live::resolve(graph, l.graphs) };
         let count = unsafe { &*owner }.nodes[usize::from(node)].edges.len();
@@ -1022,7 +1020,7 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
                 }
                 if !updated {
                     crate::witness::hit(crate::witness::STATION_STALE_REMOVE);
-                    remove.push((l.node)(edge.destination, cargo));
+                    remove.push((l.graphs.node)(edge.destination, cargo));
                     let to_id = (l.graphs.station_id)(edge.destination);
                     (l.delete_flows)(from, cargo, to_id);
                     unsafe {
@@ -1220,7 +1218,6 @@ pub struct Loading {
     pub(crate) has_cargo_for: extern "C" fn(*mut Station, u8, *mut c_void) -> bool,
     pub(crate) platform_length: extern "C" fn(*mut Station, VehicleRef) -> u32,
     pub(crate) vehicle_tile: extern "C" fn(VehicleRef) -> u32,
-    pub(crate) station_index: extern "C" fn(*mut Station) -> u16,
     pub(crate) station_cargo_total: extern "C" fn(*mut Station, u8) -> u32,
     pub(crate) load_property: extern "C" fn(VehicleRef) -> u16,
     pub(crate) load_callback: extern "C" fn(VehicleRef) -> u16,
@@ -1564,7 +1561,7 @@ unsafe fn load_vehicle(
             let tile = (l.vehicle_tile)(front);
             let shared = unsafe { &*w.shared };
             (shared.tile_type)(tile) != crate::vehicle::MP_STATION
-                || (shared.station_index)(tile) != (l.station_index)(st.native)
+                || (shared.station_index)(tile) != (w.graphs.station_id)(st.base)
         } {
             (l.set_loading_finished)(front, true);
             (l.set_load_ticks)(front, 1);
@@ -2004,9 +2001,7 @@ crate::abi::layouts! {
     };
     "OpenTTDStationLinks" ["probe"] => Links {
         graphs,
-        graph,
         automatic_distribution,
-        node,
         date,
         edge,
         delete_flows,
@@ -2092,7 +2087,6 @@ crate::abi::layouts! {
         has_cargo_for,
         platform_length,
         vehicle_tile,
-        station_index,
         station_cargo_total,
         load_property,
         load_callback,

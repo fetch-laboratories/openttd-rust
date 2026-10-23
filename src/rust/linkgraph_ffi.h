@@ -93,7 +93,6 @@ void openttd_rust_live_edge_update(OpenTTDLiveEdge *, uint32_t, uint32_t, uint32
 void openttd_rust_live_edge_restrict(OpenTTDLiveEdge *);
 void openttd_rust_live_edge_release(OpenTTDLiveEdge *);
 struct OpenTTDLiveGraphAccess { OpenTTDLiveGraph *owner; uint16_t index; };
-struct OpenTTDLiveMembership { uint16_t graph, node; };
 struct OpenTTDLiveStationInput { uint32_t xy, demand; };
 struct OpenTTDLiveGraphServices {
 	bool assertions;
@@ -106,7 +105,8 @@ struct OpenTTDLiveGraphServices {
 	void (*attach)(uint16_t, uint8_t, uint16_t, uint16_t) noexcept;
 	void (*set_node)(uint16_t, uint8_t, uint16_t) noexcept;
 	void (*delete_graph)(OpenTTDLinkGraph *) noexcept;
-	OpenTTDLiveMembership (*membership)(OpenTTDBaseStation *, uint8_t) noexcept;
+	uint16_t (*graph_id)(OpenTTDBaseStation *, uint8_t) noexcept;
+	uint16_t (*node)(OpenTTDBaseStation *, uint8_t) noexcept;
 	bool (*available)() noexcept;
 	OpenTTDLinkGraph *(*allocate)(uint8_t) noexcept;
 	void (*allocation_failure)() noexcept;

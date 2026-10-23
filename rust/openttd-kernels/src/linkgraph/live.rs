@@ -497,7 +497,8 @@ pub struct Services {
     pub attach: extern "C" fn(u16, u8, u16, u16),
     pub set_node: extern "C" fn(u16, u8, u16),
     pub delete_graph: extern "C" fn(*mut super::NativeGraph),
-    pub membership: extern "C" fn(*mut crate::station::BaseStation, u8) -> Membership,
+    pub graph_id: extern "C" fn(*mut crate::station::BaseStation, u8) -> u16,
+    pub node: extern "C" fn(*mut crate::station::BaseStation, u8) -> u16,
     pub available: extern "C" fn() -> bool,
     pub allocate: extern "C" fn(u8) -> *mut super::NativeGraph,
     pub allocation_failure: extern "C" fn(),
@@ -638,10 +639,13 @@ pub unsafe extern "C" fn openttd_rust_live_graph_run(
     }
 }
 
-#[repr(C)]
-pub struct Membership {
-    pub graph: u16,
-    pub node: u16,
+/// Station membership remains native; all callers share these typed leaves.
+pub(crate) fn station_graph(
+    station: *mut crate::station::BaseStation,
+    cargo: u8,
+    services: &Services,
+) -> *mut super::NativeGraph {
+    (services.get_if_valid)((services.graph_id)(station, cargo))
 }
 pub(crate) unsafe fn join(graph: *mut super::NativeGraph, station: u16, services: &Services) {
     let native = (services.access)(graph);
@@ -660,11 +664,11 @@ pub(crate) unsafe fn station_demand(
     demand: u32,
     services: &Services,
 ) {
-    let m = (services.membership)(station, cargo);
-    let graph = (services.get_if_valid)(m.graph);
+    let graph = station_graph(station, cargo, services);
     if !graph.is_null() {
         let owner = unsafe { resolve(graph, services) };
-        unsafe { &mut *owner }.nodes[usize::from(m.node)].set_demand(demand);
+        let node = (services.node)(station, cargo);
+        unsafe { &mut *owner }.nodes[usize::from(node)].set_demand(demand);
     }
 }
 pub(crate) unsafe fn station_supply(
@@ -674,26 +678,26 @@ pub(crate) unsafe fn station_supply(
     date: extern "C" fn() -> i32,
     services: &Services,
 ) {
-    let mut m = (services.membership)(station, cargo);
-    let graph = if m.graph == INVALID_LINK_GRAPH {
+    let id = (services.graph_id)(station, cargo);
+    let graph = if id == INVALID_LINK_GRAPH {
         if (services.available)() {
             let graph = (services.allocate)(cargo);
             unsafe {
                 join(graph, (services.station_id)(station), services);
             }
-            m = (services.membership)(station, cargo);
             graph
         } else {
             (services.allocation_failure)();
             std::ptr::null_mut()
         }
     } else {
-        (services.get)(m.graph)
+        (services.get)(id)
     };
     if !graph.is_null() {
         let owner = unsafe { resolve(graph, services) };
         let date = date();
-        let n = &mut unsafe { &mut *owner }.nodes[usize::from(m.node)];
+        let node = (services.node)(station, cargo);
+        let n = &mut unsafe { &mut *owner }.nodes[usize::from(node)];
         n.update_supply(supply, date);
     }
 }
@@ -707,10 +711,9 @@ crate::abi::layouts! {
         supply, demand, station, xy, last_update,
     };
     "OpenTTDLiveGraphAccess" ["station_service"] => Access { owner, index, };
-    "OpenTTDLiveMembership" ["station_service"] => Membership { graph, node, };
     "OpenTTDLiveStationInput" ["station_service"] => StationInput { xy, demand, };
     "OpenTTDLiveGraphServices" ["station_service"] => Services {
-        assertions, get, get_if_valid, station_id, owner, access, station, attach, set_node, delete_graph, membership, available, allocate, allocation_failure, dequeue,
+        assertions, get, get_if_valid, station_id, owner, access, station, attach, set_node, delete_graph, graph_id, node, available, allocate, allocation_failure, dequeue,
     };
 }
 

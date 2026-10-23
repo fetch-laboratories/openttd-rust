@@ -617,7 +617,7 @@ static OpenTTDLiveGraphAccess LiveGraphAccess(OpenTTDLinkGraph *graph) noexcept 
 static OpenTTDLiveStationInput LiveGraphStation(uint16_t station, uint8_t cargo) noexcept
 {
 	Station *st = Station::Get(StationID(station));
-	return {st->xy.base(), st->goods[cargo].status.Test(GoodsEntry::State::Acceptance)};
+	return {RustStationLocation(st), st->goods[cargo].status.Test(GoodsEntry::State::Acceptance)};
 }
 static void LiveGraphAttach(uint16_t station, uint8_t cargo, uint16_t graph, uint16_t node) noexcept
 {
@@ -628,11 +628,8 @@ static void LiveGraphAttach(uint16_t station, uint8_t cargo, uint16_t graph, uin
 static void LiveGraphSetNode(uint16_t station, uint8_t cargo, uint16_t node) noexcept { Station::Get(StationID(station))->goods[cargo].node = node; }
 static void LiveGraphDelete(OpenTTDLinkGraph *graph) noexcept { delete graph; }
 
-static OpenTTDLiveMembership LiveGraphMembership(OpenTTDBaseStation *station, uint8_t cargo) noexcept
-{
-	GoodsEntry &ge = static_cast<Station *>(station)->goods[cargo];
-	return {ge.link_graph.base(), ge.node};
-}
+static uint16_t LiveGraphStationGraphID(OpenTTDBaseStation *station, uint8_t cargo) noexcept { return static_cast<Station *>(station)->goods[cargo].link_graph.base(); }
+static uint16_t LiveGraphStationNode(OpenTTDBaseStation *station, uint8_t cargo) noexcept { return static_cast<Station *>(station)->goods[cargo].node; }
 static OpenTTDLinkGraph *LiveGraphGet(uint16_t id) noexcept { return LinkGraph::Get(LinkGraphID(id)); }
 static OpenTTDLinkGraph *LiveGraphGetIfValid(uint16_t id) noexcept { return LinkGraph::GetIfValid(LinkGraphID(id)); }
 static uint16_t LiveGraphStationID(const OpenTTDBaseStation *station) noexcept { return station->index.base(); }
@@ -654,7 +651,8 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 		.attach = LiveGraphAttach,
 		.set_node = LiveGraphSetNode,
 		.delete_graph = LiveGraphDelete,
-		.membership = LiveGraphMembership,
+		.graph_id = LiveGraphStationGraphID,
+		.node = LiveGraphStationNode,
 		.available = RustLinkGraphAvailable,
 		.allocate = RustLinkGraphAllocate,
 		.allocation_failure = RustLinkGraphAllocationFailure,

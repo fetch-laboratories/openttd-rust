@@ -15,10 +15,6 @@
 #include "linkgraph_ffi.h"
 #include "station_service_ffi.h"
 
-inline OpenTTDLinkGraph *RustStationGraph(OpenTTDBaseStation *station, uint8_t cargo) noexcept
-{
-	return GetRustLiveGraphServices().get_if_valid(static_cast<Station *>(station)->goods[cargo].link_graph.base());
-}
 inline bool RustLinkGraphAvailable() noexcept { return LinkGraph::CanAllocateItem(); }
 inline OpenTTDLinkGraph *RustLinkGraphAllocate(uint8_t cargo) noexcept
 {

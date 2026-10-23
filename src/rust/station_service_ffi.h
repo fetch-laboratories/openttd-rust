@@ -180,9 +180,7 @@ struct OpenTTDStationEdge {
 };
 struct OpenTTDStationLinks {
 	const OpenTTDLiveGraphServices *graphs;
-	OpenTTDLinkGraph * (*graph)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(graph);
 	bool (*automatic_distribution)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(automatic_distribution);
-	uint16_t (*node)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(node);
 	int32_t (*date)() noexcept OPENTTD_SERVICE_DEFAULT(date);
 	OpenTTDStationEdge (*edge)(OpenTTDBaseStation *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(edge);
 	void (*delete_flows)(OpenTTDBaseStation *, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_flows);
@@ -269,7 +267,6 @@ struct OpenTTDStationLoading {
 	bool (*has_cargo_for)(OpenTTDStation *, uint8_t, void *) noexcept OPENTTD_SERVICE_DEFAULT(has_cargo_for);
 	uint32_t (*platform_length)(OpenTTDStation *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(platform_length);
 	uint32_t (*vehicle_tile)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_tile);
-	uint16_t (*station_index)(OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
 	uint32_t (*station_cargo_total)(OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_cargo_total);
 	uint16_t (*load_property)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_property);
 	uint16_t (*load_callback)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_callback);
