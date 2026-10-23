@@ -2155,5 +2155,6 @@ duplicate rows. Production monitor-table completeness runs in native ABI tests.
 Focused evidence: `python3 tools/migration.py simulate economy-manual economy-cargodist economy-stockpile companies-delete companies-acquire engines-monitors`;
 `python3 tools/cargo-income-comparison.py`, Cargo4 and native company/payment/ABI tests.
 Historical monitor-key conversion and external GameScript callers remain #156
-coverage gaps. Independent fixing review is recorded on #388; root cost
-disposition, current-base combination and Full remain pending.
+coverage gaps. Independent fixing review and the separate root cost disposition
+are recorded on #388; #391 combines the frozen owners on the routing base.
+Scoped reconciliation review and exact-combination Full remain pending.
