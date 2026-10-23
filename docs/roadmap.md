@@ -4,13 +4,13 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-22, code at `8c370210b4`)
+## Where the fork stands (2026-10-23, code at `9f2c92b51e`)
 
 - Forty-one ownership ports. Whole fork: Rust 91,994 / tooling 34,241 / glue 34,815 / original retired 51,203 of 470,612 C/C++ `src/` lines (10.88%). Simulation: 43,067 / 102,615 (41.97%), up from 40.46% at the seventeenth review.
 - Since the seventeenth review: maintenance #358 (#355/#356/#357 batch, free-core `--jobs`), #340 (#281 part 1) and #351 (#274); ownership ports #353 (landscape), #362 (road stops) and #347 (town commands).
-- Speed: last tip profile at `9a991a1c23` showed no rise and no scenario near its ceiling (TGP 1.2138; play saves at or below their anchors). Due: a tip profile at `8c370210b4` (#351, #353, #362, #347 landed since).
-- CI: `8c370210b4` failed to compile (#347 used a command field #353 removed; both were validated before the other landed). #363 fixed it (`9f2c92b51e`, Full passed); its post-merge run was in progress at the pause. The macOS run is due (fifth integration since #357).
-- Component branches: #360, #359 and #350 (three of six). Maintenance: #361 (#261 batch).
+- Speed: last tip profile at `9a991a1c23` showed no rise and no scenario near its ceiling (TGP 1.2138; play saves at or below their anchors). The due six-scenario tip profile is running alongside work.
+- CI: #363 fixed the #347/#353 compilation regression (`9f2c92b51e`, Full and post-merge semantic baseline passed). The platform policy stopped on a GitHub HTTP 500 before builds; this is in the selected CI batch. The due macOS run is running on the integrated tip.
+- Component branches: #360, #359 and #350 (three of six). Maintenance: #361 and the selected #261 CI batch.
 
 ## Integration and wind-down correction (2026-10-22, takes precedence)
 
@@ -177,17 +177,18 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Paused at the user's request (wind-down, 2026-10-22 ~10:00 EDT). Root was Claude Code (claude-opus-5-5, xhigh); reviews ran on gpt-6.1-sol. Seventeenth-review actions 1-2 are done.
+Resumed 2026-10-23. Root is Codex (gpt-6.1-sol, ultra); implementation and independent reviews use gpt-6.1-sol high, owner planning uses gpt-6-astra high. Seventeenth-review actions 1-2 are done. Strict/up-to-date protection is confirmed enabled.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #315 / #360 | `247ed46e34` | Reviewed, Full passed, but conflicts after #362 (`fleet/transactions.rs`). Base merge, conflict review, exact-head Full, integrate. |
-| #349 / #359 | `189e58cfd9` | Implementation complete, not reviewed. Independent review, then exact-head Full. |
-| #350 (no PR) | `33fc37e973` | Agent stopped with nothing committed; worktree t3-bb7e4cd6 clean, no remote branch. Restart implementation. |
-| #261 / #361 | `4b4bb9dd21` | Build, rust-checks, preflight passed (scenarios not run). Base merge (conflicts), review, Full. |
+| #315 / #360 | `53d230d5e2` | Base merged and conflict review complete; root spot-check done. Update for final Full, then integrate the tested combination. |
+| #349 / #359 | `189e58cfd9` | Fresh fixing reviewer owns base update and complete independent review; final Full remains. |
+| #350 (no PR yet) | integrated base | Implementation restarted in an isolated worktree; push an early boundary/metrics checkpoint and draft. |
+| #261 / #361 | `4b4bb9dd21` | Fresh fixing reviewer owns base merge, complete cleanup/ABI review and stale PR description. Final Full remains. |
+| #261 CI batch (no PR yet) | integrated base | Implementer assigned to the selected 400-line checklist; independent review and workflow-bootstrap Full follow. |
 
-First on resume: confirm post-merge CI on `9f2c92b51e` is green. Due, not gating: the tip speed profile and the macOS run on `rust-migration`.
-Retained drafts keep their worktrees and branches. #281 part 2 and #261 R7 inputs remain on their issues. #64/#68/#69 stay paused.
+The tip speed profile and macOS run are active; a fresh owner-selection planner is examining the next complete simulation boundaries. Finish checkpoint/docs updates before final Full, then keep base stable for that validation.
+Each draft has one current worktree. #281 part 2 and #261 R7 inputs remain on their issues. #64/#68/#69 stay paused.
 Preserve the pinned reference; do not reapply effect helper `73ccd511fb`.
 
 ## Out of scope for the near term
