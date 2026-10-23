@@ -95,12 +95,15 @@ fork; the remaining upstream documentation explains behavior and architecture.
   from `SPEED_ANCHORS`. After every second integration root runs `python3
   tools/migration.py simulate --instructions` on the integrated tip in
   the background, alongside other work, and records the six projections in
-  the roadmap's "Where the fork stands". If a projection rose more than 3%
-  since the previous tip profile (provisional: counts repeat to 0.04% and no
+  the roadmap's "Where the fork stands". Compare both tips under the same
+  anchor; after re-anchoring, recompute the previous tip from its retained count.
+  If a projection rose more than 3% since the previous tip profile
+  (provisional: counts repeat to 0.04% and no
   ordinary PR has moved one more than 1.3%), root attributes the rise per
   function to the PRs since and fixes it forward; that fix is the next
-  maintenance PR to integrate, and ports keep going. PRs run no speed check of
-  their own. Design faults (per-call allocation the original lacks, opcode
+  maintenance PR to integrate. A ready ownership PR proceeds while that fix is
+  being prepared; it does not wait for a future maintenance base. PRs run no
+  speed check of their own. Design faults (per-call allocation the original lacks, opcode
   dispatch, whole-record copies, a Rust-to-C++-to-Rust bounce into code Rust
   owns) block integration at review whatever the timing.
 - Deferral names an owned issue whose result can lift it; a re-selection
@@ -117,8 +120,13 @@ fork; the remaining upstream documentation explains behavior and architecture.
   what the original spends inline on the same work, ranks those net costs
   (never gross callback counts), and turns the two or three largest into
   maintenance PRs, then re-measures. A pass runs alongside other work: only its
-  quiet window pauses builds and timed games. Wall medians are taken only in
-  passes; one taken under load is not a speed result.
+  actual timed collection pauses builds, links, profiles and other games.
+  Prepare runtimes before the hold and release it when the last timed game
+  exits; parsing, attribution and reports run after release. Record process/load
+  observations. An unrelated process crossing an uncalibrated CPU threshold is
+  not, by itself, grounds to abort or reject a collection. Keep genuinely
+  contaminated samples out of anchors and record why. Wall medians are taken
+  only in passes; one taken under load is not a speed result.
 - Evidence for game-logic ports is the semantic simulation harness (`python3
   tools/migration.py simulate`, #72) plus the existing tests; a new game-logic
   port integrates only after the harness exists and its scenarios exercise the
@@ -160,6 +168,14 @@ checks that run; do not restate them in paragraphs.
   paths, which nobody else can check; #283 retires the receipt tooling.
 - Harness tooling for a port goes in that component's scenario module. Tooling
   is code to maintain; keep it proportionate to the C++ the port retires.
+- Decide an ownership port's cost at its first concrete boundary/evidence
+  checkpoint: select a bounded repair or accept the necessary cost with a
+  specific explanation. Use the ordinary retirement/net-glue/tooling metric;
+  do not turn estimates into separate implementation, native-test and tooling
+  approval gates or keep replanning solely to force a line ratio. Source and
+  boundary defects still require fixes. A new evidence requirement names the
+  observable behavior the existing checks cannot distinguish; pure-helper
+  tracing is not mandatory merely to reproduce the source call sequence.
 - Infrastructure work (CI, caches, evidence plumbing) states a tooling budget in
   its issue and prefers platform defaults and settings (LRU cache eviction,
   concurrency groups) over custom controllers. Root may accept a draft up to
@@ -167,6 +183,8 @@ checks that run; do not restate them in paragraphs.
   `question` issue for the user. A review of infrastructure fixes only defects
   that can change a game comparison or a speed decision on this host or in CI;
   hypothetical ones go in the PR's limits.
+  This budget-escalation rule applies to infrastructure tasks, not ordinary
+  scenario/test support within an ownership port.
 - Review report: reviewed commit, findings with their fixing commits (or why one
   went to root), plus one line naming the functions or files compared against
   the original body, one line naming any new callback that duplicates a

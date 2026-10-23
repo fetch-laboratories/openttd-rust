@@ -93,15 +93,14 @@ Done when every standing correction has a verdict and a cost.
 
 ## 3. Audit independently
 
-Root's reviewers share its model family and usually report "Findings: none".
-The value of this session is an audit that does not depend on them, so run the
-audits on a model family other than root's: Claude Opus when root is Sol,
-`gpt-6.1-sol` when root is Claude. Use native subagents when they offer that
-model and T3 `delegate_task` otherwise; if neither can, say in the report that
-the audits share root's family. Launch these in one message as background
-subagents. They read and measure,
-and leave root's worktrees, branches, profiles and `.local/` output as they
-found them.
+The value of this session is an audit that does not depend on root's reviews.
+Use Codex `gpt-6.1-sol` at high effort for the audit agents (user preference,
+2026-10-23), unless the user explicitly selects another provider/model. Use
+native subagents when they support that selection and its options, and T3
+`delegate_task` otherwise. Report when the audits share root's model family;
+fresh context and independent source comparison remain required. Launch these
+in one message as background subagents. They read and measure, and leave root's
+worktrees, branches, profiles and `.local/` output as they found them.
 
 - **Fidelity**: one per large port integrated since the last steering, or
   about to integrate. Pick the largest by retired lines first, up to four.
