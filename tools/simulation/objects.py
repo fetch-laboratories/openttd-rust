@@ -126,6 +126,17 @@ def check(scenario, run, mode, role, result):
         and sum(line.startswith("OBJECT query ") for line in lines) != 96
     ):
         raise RuntimeError(f"{mode}/{role}: missing object query results")
+    if scenario["objects"] == "gaps":
+        for marker, expected in (
+            ("animation-step", 240),
+            ("animation-speed", 144),
+            ("animation-property-speed", 90),
+        ):
+            if (
+                sum(line.startswith("OBJECT " + marker + " ") for line in lines)
+                != expected
+            ):
+                raise RuntimeError(f"{mode}/{role}: missing {marker} boundary cases")
     key = mode + "_object_results"
     if role == "reference":
         result[key] = lines
