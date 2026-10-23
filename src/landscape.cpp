@@ -1022,7 +1022,7 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.water_commands = &GetRustWaterCommandServices(),
 		.set_progress = [](OpenTTDGenerationFrame *f, GenWorldProgress stage, uint32_t total) noexcept { return RunGenerationProgress(f, [=] { SetGeneratingWorldProgress(stage, total); }); },
 		.increase_progress = [](OpenTTDGenerationFrame *f, GenWorldProgress stage) noexcept { return RunGenerationProgress(f, [=] { IncreaseGeneratingWorldProgress(stage); }); },
-		.begin_loop = [](OpenTTDGenerationFrame *f) noexcept { return &f->loop.emplace().view; },
+		.begin_loop = [](OpenTTDGenerationFrame *f) noexcept -> const OpenTTDGenerationLoop * { return &f->loop.emplace().view; },
 		.end_loop = [](OpenTTDGenerationFrame *f) noexcept { f->loop.reset(); },
 		.set_abort_callback = [](void (*callback)()) noexcept { GenerateWorldSetAbortCallback(callback); },
 		.tgp_settings = RustTGPSettings,
