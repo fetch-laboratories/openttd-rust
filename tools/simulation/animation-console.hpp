@@ -226,7 +226,6 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 			else TriggerRoadStopAnimation(st, tile, StationAnimationTrigger::Built, INVALID_CARGO);
 			AnimationTrace("end"); fmt::print(stderr, "OBJECT animation-matrix {}\n", animation_case); animation_case.clear();
 		}
-		group->observation = {};
 		if constexpr (std::is_same_v<Spec, StationSpec>) {
 			for (auto rejection : {"cached", "nonmember", "nullspec", "disabled", "accepted"}) {
 				cached = std::string_view(rejection) == "cached" ? StationAnimationTriggers{} : StationAnimationTriggers{StationAnimationTrigger::Built};
