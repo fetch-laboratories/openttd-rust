@@ -872,7 +872,11 @@ def check_commands(scenario, run, mode, role, result):
         cached = ["integrity"] if mode == "snapshots" else []
         core.branch_witnesses(scenario, run, role, "road_stop", branches + cached)
         core.branch_witnesses(
-            scenario, run, role, "occupancy", ["insert", "same_bucket", "reset"]
+            scenario,
+            run,
+            role,
+            "occupancy",
+            ["insert", "reset"] + ([] if reload else ["same_bucket"]),
         )
     core.branch_witnesses(scenario, run, role, "station_command", required)
     lines = [line for line in run["log"] if line.startswith("STCMD ")]

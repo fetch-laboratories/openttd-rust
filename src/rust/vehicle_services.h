@@ -63,10 +63,6 @@ inline void RustVehicleVisitInvalidateView(OpenTTDVehicle *v) noexcept { RustVeh
 inline void RustVehicleSetTripOccupancy(OpenTTDVehicle *v, uint8_t occupancy) noexcept { VehicleOf(v)->trip_occupancy = occupancy; }
 inline bool RustVehicleCanAllocate(size_t count) noexcept { return Vehicle::CanAllocateItem(count); }
 
-/** Callback may reenter Rust but must preserve the current native shell. Advance
- * after it returns, matching the original live hash traversal. No allocation. */
-
-
 /** Shared ascending vehicle pool traversal for lifecycle and fleet ports. */
 inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
 {
