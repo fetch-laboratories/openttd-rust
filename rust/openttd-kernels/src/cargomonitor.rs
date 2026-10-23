@@ -70,20 +70,13 @@ impl Owner {
             add_u32(value, amount);
         }
     }
-    fn next(&self, first: bool, key: &mut u32, amount: &mut u32) -> bool {
+    fn next(&self, after: Option<u32>) -> Option<(u32, u32)> {
         let map = unsafe { &*self.0.get() };
-        let pair = if first {
-            map.first_key_value()
-        } else {
-            map.range((Excluded(*key), Unbounded)).next()
-        };
-        if let Some((&number, &value)) = pair {
-            *key = number;
-            *amount = value as u32;
-            true
-        } else {
-            false
-        }
+        let pair = after.map_or_else(
+            || map.first_key_value(),
+            |key| map.range((Excluded(key), Unbounded)).next(),
+        );
+        pair.map(|(&key, &amount)| (key, amount as u32))
     }
     fn insert(&self, key: u32, amount: u32) {
         unsafe { &mut *self.0.get() }
@@ -177,13 +170,31 @@ pub extern "C" fn openttd_rust_monitor_pickup(key: u32, keep: bool) -> i32 {
 pub extern "C" fn openttd_rust_monitor_delivery(key: u32, keep: bool) -> i32 {
     DELIVERIES.amount(key, keep)
 }
+// Native TempStorage is uninitialized on the first save call. Read only a
+// previously returned key, and initialize output scalars through raw writes.
+unsafe fn next(owner: &Owner, first: bool, key: *mut u32, amount: *mut u32) -> bool {
+    let after = if first {
+        None
+    } else {
+        Some(unsafe { key.read() })
+    };
+    if let Some((number, value)) = owner.next(after) {
+        unsafe {
+            key.write(number);
+            amount.write(value);
+        }
+        true
+    } else {
+        false
+    }
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_monitor_next_pickup(
     first: bool,
     key: *mut u32,
     amount: *mut u32,
 ) -> bool {
-    PICKUPS.next(first, unsafe { &mut *key }, unsafe { &mut *amount })
+    unsafe { next(&PICKUPS, first, key, amount) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_monitor_next_delivery(
@@ -191,7 +202,7 @@ pub unsafe extern "C" fn openttd_rust_monitor_next_delivery(
     key: *mut u32,
     amount: *mut u32,
 ) -> bool {
-    DELIVERIES.next(first, unsafe { &mut *key }, unsafe { &mut *amount })
+    unsafe { next(&DELIVERIES, first, key, amount) }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_monitor_insert_pickup(key: u32, amount: u32) {

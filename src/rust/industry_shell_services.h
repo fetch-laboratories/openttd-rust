@@ -11,6 +11,5 @@
 #include "services_industry.h"
 inline Station *RustIndustryNeutralStation(const Industry *industry) noexcept { return industry->neutral_station; }
 template <class Handle> inline OpenTTDIndustry *RustIndustryCanonicalOwner(Handle industry) noexcept { return static_cast<Industry *>(industry)->production_owner.get(); }
-inline uint16_t RustIndustryID(void *industry) noexcept { return static_cast<Industry *>(industry)->index.base(); }
 inline uint32_t RustIndustryNextID(uint32_t from) noexcept { const Industry *industry = OpenTTDNextIndustry(from); return industry == nullptr ? UINT32_MAX : industry->index.base(); }
 #endif /* RUST_INDUSTRY_SHELL_SERVICES_H */

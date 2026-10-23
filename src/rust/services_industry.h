@@ -13,4 +13,5 @@ inline uint16_t OpenTTDIndustryTileCallback(uint32_t tile, uint16_t gfx, uint16_
 {
 	return GetIndustryTileCallback(static_cast<CallbackID>(callback), parameter1, parameter2, gfx, Industry::GetByTile(TileIndex(tile)), TileIndex(tile));
 }
+inline uint16_t RustIndustryID(void *industry) noexcept { return static_cast<Industry *>(industry)->index.base(); }
 #endif /* RUST_SERVICES_INDUSTRY_H */
