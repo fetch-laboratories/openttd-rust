@@ -219,7 +219,7 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 	SetAnimationFrame(tile, old_frame); SetAnimatedTileState(tile, state); RestoreAnimationQueue(queue);
 	fmt::print(stderr, "OBJECT animation-binding {} true\n", name);
 }
-static void AnimationBindingsProbe()
+static std::array<TileIndex, 6> AnimationFixtureTiles()
 {
 	std::array<TileIndex, 6> tiles; tiles.fill(INVALID_TILE);
 	std::map<StationID, std::vector<TileIndex>> stops;
@@ -233,6 +233,19 @@ static void AnimationBindingsProbe()
 	}
 	size_t largest = 0; for (const auto &[id, members] : stops) if (members.size() > largest) { largest = members.size(); tiles[4] = members.front(); }
 	if (std::ranges::find(tiles, INVALID_TILE) != tiles.end()) std::abort();
+	return tiles;
+}
+static void AnimationReloadObservation()
+{
+	const auto queue = AnimationQueue(); if (queue.empty()) std::abort();
+	fmt::print(stderr, "OBJECT animation-reload {} {} {}", queue.size(), _random.state[0], _random.state[1]);
+	for (auto t : queue) fmt::print(stderr, " {}:{}:{}", t.base(), GetAnimationFrame(t), to_underlying(GetAnimatedTileState(t)));
+	for (const auto *st : BaseStation::Iterate()) for (const auto &data : st->custom_roadstop_tile_data) fmt::print(stderr, " r{}:{}:{}:{}", st->index.base(), data.tile.base(), data.random_bits, data.animation_frame);
+	fmt::print(stderr, "\n");
+}
+static void AnimationBindingsProbe()
+{
+	const auto tiles = AnimationFixtureTiles();
 	auto frame = [](TileIndex t) { return [t](int value) { if (value >= 0) SetAnimationFrame(t, value); return GetAnimationFrame(t); }; };
 	auto *h = HouseSpec::Get(GetHouseType(tiles[0]));
 	AnimationBindingProbe("house", tiles[0], h, HouseCallbackMask::AnimationSpeed, HouseCallbackMask::AnimationNextFrame, AnimateNewHouseTile, frame(tiles[0]), [h](bool bits) { h->extra_flags.Set(HouseExtraFlag::Callback1ARandomBits, bits); });

@@ -154,6 +154,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 	Company *c = *Company::Iterate().begin();
 	Backup<CompanyID> company(_current_company, c->index);
 	if (args[1] == "inspect") {
+		AnimationReloadObservation();
 		std::array<uint16_t, NUM_OBJECTS> counts{};
 		for (const Object *o : Object::Iterate()) counts[o->type]++;
 		bool equal = true;
@@ -244,7 +245,13 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		fmt::print(stderr, "\n");
 	}
 	uint index = 0; for (TileIndex t : TileArea(tile - TileDiffXY(3, 3), 14, 14)) SetTileHeight(t, heights[index++]);
-	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
+	if (args.size() == 3) {
+		for (auto t : AnimationQueue()) SetAnimatedTileState(t, AnimatedTileState::None);
+		InitializeAnimatedTiles();
+		for (auto t : AnimationFixtureTiles()) AddAnimatedTile(t, false);
+		AnimationReloadObservation();
+		SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
+	}
 	std::fflush(stderr); return true;
 }
 #include "landscape-console.hpp"

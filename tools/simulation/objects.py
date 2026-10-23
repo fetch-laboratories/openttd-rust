@@ -103,6 +103,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             or "OBJECT id-reused true" not in capture["log"]
         ):
             raise RuntimeError("object reload capture failed")
+        state = [x for x in capture["log"] if x.startswith("OBJECT animation-reload ")]
+        if len(state) != 1 or (
+            role == "candidate" and state != result["saved_animation"]
+        ):
+            raise RuntimeError("nonempty animation reload capture differs/missing")
+        result["saved_animation"] = state
     differences = core.compare_saves(
         saves["reference"],
         saves["candidate"],
@@ -163,6 +169,12 @@ def check(scenario, run, mode, role, result):
                 != expected
             ):
                 raise RuntimeError(f"{mode}/{role}: missing {marker} boundary cases")
+    if scenario["objects"] == "reload":
+        state = [x for x in lines if x.startswith("OBJECT animation-reload ")]
+        if state != result["saved_animation"]:
+            raise RuntimeError(
+                "animation queue/frame/bits/records/RNG changed on reload"
+            )
     key = mode + "_object_results"
     if role == "reference":
         result[key] = lines
