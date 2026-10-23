@@ -220,7 +220,7 @@ pub struct ClearSquareServices {
 #[derive(Clone, Copy)]
 pub struct Services {
     /// Complete synchronous movement owner; immutable process-lifetime table.
-    pub movement_services: extern "C" fn() -> *const crate::movement::MovementServices<'static>,
+    pub movement_services: extern "C" fn() -> *const crate::movement::MovementServices,
     /// Canonical native tile owner write.
     pub set_tile_owner: extern "C" fn(u32, u8),
     /// `AutoslopeEnabled()`.
@@ -1169,6 +1169,6 @@ extern "C" fn unused_road_is_tram(_: RoadType) -> bool {
 }
 
 #[cfg(test)]
-extern "C" fn fixture_movement() -> *const crate::movement::MovementServices<'static> {
+extern "C" fn fixture_movement() -> *const crate::movement::MovementServices {
     std::ptr::null()
 }

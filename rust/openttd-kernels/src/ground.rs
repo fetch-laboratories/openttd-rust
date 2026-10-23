@@ -603,7 +603,7 @@ pub struct RoadSnowGround {
 }
 #[repr(C)]
 pub struct RoadServices {
-    pub snow: extern "C" fn(u32) -> RoadSnowGround,
+    pub snow: extern "C" fn(u32, bool) -> RoadSnowGround,
     pub snow_or_desert: extern "C" fn(u32) -> bool,
     pub toggle_snow_or_desert: extern "C" fn(u32),
     pub roadside: extern "C" fn(u32) -> Roadside,
@@ -636,7 +636,8 @@ pub(crate) unsafe fn road_tile_loop(
     // SAFETY: Live immutable tables; native storage is accessed only by its leaves.
     let (c, r, s) = unsafe { (&*costs, &*roads, &*shared) };
     if climate == 1 {
-        let ground = (r.snow)(tile);
+        let flat = crate::movement::foundation_slope(s, tile).slope.0 == 0;
+        let ground = (r.snow)(tile, flat);
         if ground.snow != (ground.z > i32::from((s.snow_line)())) {
             (r.toggle_snow_or_desert)(tile);
             (s.mark_dirty)(tile);

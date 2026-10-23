@@ -70,6 +70,7 @@
 
 #ifdef WITH_RUST
 #include "rust/movement_ffi.h"
+#include "rust/services_map.h"
 #include "rust/services_movement.h"
 #include "rust/train_ffi.h"
 #include "rust/services_station.h"
@@ -1947,7 +1948,6 @@ const OpenTTDMovementServices &GetRustMovementServices() noexcept
 		.first = RustMovementFirst,
 		.first_speed = RustMovementFirstSpeed,
 		.write_ground_flags = RustMovementWriteGroundFlags,
-		.front_engine = RustMovementFrontEngine,
 		.train_engine_class = RustMovementTrainEngineClass,
 		.depot_invalidate = RustMovementDepotInvalidate,
 		.native_assert = RustMovementAssert,

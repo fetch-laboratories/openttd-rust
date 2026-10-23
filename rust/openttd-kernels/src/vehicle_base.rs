@@ -33,3 +33,11 @@ pub(crate) const fn is_front_engine(ground: bool, subtype: u8) -> bool {
 pub(crate) const fn is_articulated_part(ground: bool, subtype: u8) -> bool {
     ground && has(subtype, GVSF_ARTICULATED_PART)
 }
+
+/// `Vehicle::IsGroundVehicle`.
+pub(crate) const fn is_ground_vehicle(kind: u8) -> bool {
+    kind == crate::vehicle_type::VEH_TRAIN || kind == crate::vehicle_type::VEH_ROAD
+}
+
+/// `VehStatus::TrainSlowing`.
+pub const VS_TRAIN_SLOWING: u8 = 1 << 4;

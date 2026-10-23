@@ -892,12 +892,11 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, part);
 		VEHICLE_UNUSED(leaves, link);
 		VEHICLE_UNUSED(leaves, link_tile);
-		VEHICLE_UNUSED(leaves, enter_tile);
+		VEHICLE_UNUSED(leaves, after_enter_tile);
 		VEHICLE_UNUSED(leaves, visit_close);
 		VEHICLE_UNUSED(leaves, visit_trains);
 		VEHICLE_UNUSED(leaves, visit_tile);
 		VEHICLE_UNUSED(leaves, has_road);
-		VEHICLE_UNUSED(leaves, track_status);
 		VEHICLE_UNUSED(leaves, any_road_bits);
 		VEHICLE_UNUSED(leaves, is_road_depot_tile);
 		VEHICLE_UNUSED(leaves, depot_direction);
@@ -1139,8 +1138,8 @@ static void RoadBoundary()
 	movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
 	movement.is_tunnel = [](uint32_t) noexcept { return true; };
 	movement.pose = [](OpenTTDVehicle *) noexcept -> OpenTTDMovementPose { return {.z = 10, .direction = 1}; };
-	t.shared.movement_services = []() noexcept { return &movement; };
-	t.leaves.enter_tile = [](OpenTTDVehicle *, uint8_t flags) noexcept -> OpenTTDRoadEntered { CHECK(flags == 4); return {.tile = 100, .cur_speed = 0, .flags = flags, .direction = 1, .order_type = 0}; };
+	t.shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	t.leaves.after_enter_tile = [](OpenTTDVehicle *, uint8_t flags) noexcept -> OpenTTDRoadEntered { CHECK(flags == 4); return {.tile = 100, .cur_speed = 0, .flags = flags, .direction = 1, .order_type = 0}; };
 	t.vehicle.write_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == 0); };
 	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &probe.entry, &t.leaves, nullptr));
 	CHECK(openttd_rust_road_get(probe.state, 0) == 36 && probe.stop->status == 0x7F);
@@ -1773,7 +1772,7 @@ static void AircraftPhaseBoundary()
 	static OpenTTDMovementServices movement{};
 	movement.shared = &movement_world;
 	movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
-	s.movement_services = []() noexcept { return &movement; };
+	s.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	leaves.copy_sprite = [](OpenTTDAircraftVehicle, OpenTTDAircraftVehicle) noexcept {};
 	leaves.position_viewport = [](OpenTTDAircraftVehicle) noexcept {};
 	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));

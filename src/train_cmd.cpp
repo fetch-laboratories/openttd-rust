@@ -43,6 +43,7 @@
 
 #ifdef WITH_RUST
 #include "rust/train_ffi.h"
+#include "rust/services_map.h"
 #include "rust/train_reservation_ffi.h"
 #include "rust/vehicle_services.h"
 #include "rust/vehicle_refit_ffi.h"

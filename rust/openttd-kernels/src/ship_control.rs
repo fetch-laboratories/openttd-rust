@@ -751,7 +751,7 @@ impl Game<'_> {
                         return;
                     }
                     let diag = (self.leaves.diag_between)(old_tile, new_tile);
-                    let tracks = crate::movement::water_tracks(self.services, new_tile, 255 as u8)
+                    let tracks = crate::movement::water_tracks(self.services, new_tile, 255)
                         & (self.leaves.tracks_reach)(diag);
                     if tracks == 0 {
                         let result = (self.leaves.yapf_reverse)(id, true);

@@ -103,7 +103,6 @@ Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept;
 bool RustTrainMultiheaded(const Vehicle *v) noexcept;
 Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept;
 bool RustVehiclePrimary(const Vehicle *v) noexcept;
-inline bool RustVehicleFrontEngine(const Vehicle *v) noexcept { return v->IsFrontEngine(); }
 inline uint8_t RustVehicleOwner(const Vehicle *v) noexcept { return v->owner.base(); }
 inline const Direction *RustVehicleDirectionAddress(const Vehicle *v) noexcept { return &v->direction; }
 inline Direction RustVehicleDirection(const Vehicle *v) noexcept { return *RustVehicleDirectionAddress(v); }
@@ -254,7 +253,7 @@ inline OpenTTDGroundCrash OPENTTD_VEHICLE_CALL GroundSvcCrash(OpenTTDVehicle *v,
 {
 	T *u = T::From(VehicleOf(v));
 	uint victims = u->T::GroundVehicleBase::Crash(flooded);
-	return {.victims = victims, .front = RustVehicleFrontEngine(u)};
+	return {.victims = victims, .front = u->IsFrontEngine()};
 }
 template <class T>
 inline void OPENTTD_VEHICLE_CALL GroundSvcFirstCargoChanged(OpenTTDVehicle *v) noexcept

@@ -447,7 +447,7 @@ pub struct Leaves {
     pub part: extern "C" fn(VehicleRef) -> PartRead,
     pub link: extern "C" fn(VehicleRef) -> Link,
     pub link_tile: extern "C" fn(VehicleRef) -> LinkTile,
-    pub enter_tile: extern "C" fn(VehicleRef, u8) -> Entered,
+    pub after_enter_tile: extern "C" fn(VehicleRef, u8) -> Entered,
     pub visit_close: extern "C" fn(VehicleRef, i32, i32, bool, CloseVisitor, *mut c_void),
     pub visit_trains: extern "C" fn(VehicleRef, TrainVisitor, *mut c_void),
     pub visit_tile: extern "C" fn(u32, TileVisitor, *mut c_void),
@@ -2150,6 +2150,6 @@ impl Game<'_> {
     fn movement_enter(&self, v: VehicleRef, tile: u32, x: i32, y: i32) -> Entered {
         // SAFETY: Same live serialized shell as the original callback; no owner borrow spans it.
         let flags = unsafe { crate::movement::enter(self.ss, v, tile, x, y) };
-        service!(self.l.enter_tile)(v, flags)
+        service!(self.l.after_enter_tile)(v, flags)
     }
 }

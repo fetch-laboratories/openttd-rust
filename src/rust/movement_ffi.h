@@ -42,7 +42,6 @@ struct OpenTTDMovementServices {
 	OpenTTDVehicle *(*first)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first);
 	OpenTTDMovementFirstSpeed (*first_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first_speed);
 	void (*write_ground_flags)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_ground_flags);
-	bool (*front_engine)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(front_engine);
 	uint8_t (*train_engine_class)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_engine_class);
 	void (*depot_invalidate)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_invalidate);
 	void (*native_assert)(bool) noexcept OPENTTD_SERVICE_DEFAULT(native_assert);

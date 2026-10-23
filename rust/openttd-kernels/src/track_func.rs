@@ -54,3 +54,9 @@ pub const fn is_reversing_road_trackdir(dir: u8) -> bool {
 pub const fn track_status_to_track_bits(status: u32) -> u8 {
     ((status | (status >> 8)) & 0x3f) as u8
 }
+
+/// Native `TrackStatusToTrackdirBits`.
+#[allow(clippy::cast_possible_truncation)] // Native mask and narrowing to TrackdirBits.
+pub const fn track_status_to_trackdir_bits(status: u32) -> u16 {
+    status as u16 & 0x3f3f
+}

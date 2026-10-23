@@ -31,3 +31,16 @@ pub const TRACKDIR_BIT_UPPER_W: u16 = 1024;
 pub const TRACKDIR_BIT_LOWER_W: u16 = 2048;
 pub const TRACKDIR_BIT_LEFT_N: u16 = 4096;
 pub const TRACKDIR_BIT_RIGHT_N: u16 = 8192;
+
+/// `TRACK_BIT_HORZ`.
+pub const TRACK_BIT_HORZ: u8 = TRACK_BIT_UPPER | TRACK_BIT_LOWER;
+/// `TRACK_BIT_VERT`.
+pub const TRACK_BIT_VERT: u8 = TRACK_BIT_LEFT | TRACK_BIT_RIGHT;
+/// `TRACKDIR_X_NE`.
+pub const TRACKDIR_X_NE: u8 = 0;
+/// `TRACKDIR_Y_SE`.
+pub const TRACKDIR_Y_SE: u8 = 1;
+/// `TRACKDIR_X_SW`.
+pub const TRACKDIR_X_SW: u8 = 8;
+/// `TRACKDIR_Y_NW`.
+pub const TRACKDIR_Y_NW: u8 = 9;

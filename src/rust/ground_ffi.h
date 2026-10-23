@@ -83,7 +83,7 @@ struct OpenTTDRoadSnowGround { int32_t z; bool snow; };
 struct OpenTTDTownLeaves;
 struct OpenTTDRoadCommandContext;
 struct OpenTTDRoadGroundServices {
-	OpenTTDRoadSnowGround (*snow)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(snow);
+	OpenTTDRoadSnowGround (*snow)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(snow);
 	bool (*snow_or_desert)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(snow_or_desert);
 	void (*toggle_snow_or_desert)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(toggle_snow_or_desert);
 	Roadside (*roadside)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(roadside);

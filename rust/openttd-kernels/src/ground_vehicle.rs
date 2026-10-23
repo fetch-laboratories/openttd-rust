@@ -56,3 +56,7 @@ pub(crate) const fn is_multiheaded(subtype: u8) -> bool {
 pub(crate) const fn is_rear_dualheaded(subtype: u8) -> bool {
     is_multiheaded(subtype) && !is_engine(subtype)
 }
+
+/// Native cached incline flag bits.
+pub const GVF_GOINGUP_BIT: u8 = 0;
+pub const GVF_GOINGDOWN_BIT: u8 = 1;

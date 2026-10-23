@@ -209,6 +209,7 @@ void UpdateCompanyRoadInfrastructure(RoadType rt, Owner o, int count)
 
 
 /** Invalid RoadBits on slopes.  */
+#ifndef WITH_RUST
 static const RoadBits _invalid_tileh_slopes_road[2][15] = {
 	/* The inverse of the mixable RoadBits on a leveled slope */
 	{
@@ -256,6 +257,7 @@ static const RoadBits _invalid_tileh_slopes_road[2][15] = {
 		ROAD_ALL   // SLOPE_NW
 	}
 };
+#endif
 
 static Foundation GetRoadFoundation(Slope tileh, RoadBits bits);
 
@@ -2036,7 +2038,7 @@ const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept
 {
 	static_assert(SND_21_ROAD_WORKS == 31 && OWNER_TOWN.base() == 15);
 	static const OpenTTDRoadGroundServices services{
-		.snow = [](uint32_t index) noexcept { TileIndex t{index}; int z = RustFoundationSlope(index).slope == SLOPE_FLAT ? OpenTTDTileMaxZ(t) : RustTileZ(t); return OpenTTDRoadSnowGround{.z = z, .snow = RustRoadSnowOrDesert(Tile{t})}; },
+		.snow = [](uint32_t index, bool flat) noexcept { TileIndex t{index}; int z = flat ? OpenTTDTileMaxZ(t) : RustTileZ(t); return OpenTTDRoadSnowGround{.z = z, .snow = RustRoadSnowOrDesert(Tile{t})}; },
 		.snow_or_desert = RustRoadSnowOrDesert,
 		.toggle_snow_or_desert = [](uint32_t t) noexcept { ToggleSnowOrDesert(TileIndex{t}); },
 		.roadside = [](uint32_t t) noexcept { return GetRoadside(TileIndex{t}); },

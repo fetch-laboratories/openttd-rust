@@ -60,7 +60,6 @@ struct OpenTTDRailLeaves {
 	uint8_t (*compatible_station)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_station);
 	uint32_t (*platform_length)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(platform_length);
 	uint32_t (*closest_station)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_station);
-	uint16_t (*destination_dirs)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(destination_dirs);
 	void (*origin)(void *, uint32_t *, uint8_t *) noexcept OPENTTD_SERVICE_DEFAULT(origin);
 	uint8_t (*write)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write);
 	void (*output)(void *, uint8_t, const OpenTTDRailStep *) noexcept OPENTTD_SERVICE_DEFAULT(output);

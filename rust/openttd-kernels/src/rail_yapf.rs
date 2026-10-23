@@ -150,7 +150,6 @@ pub struct Leaves {
     pub compatible_station: unsafe extern "C" fn(u32, u32) -> u8,
     pub platform_length: unsafe extern "C" fn(u32, u8) -> u32,
     pub closest_station: unsafe extern "C" fn(*mut c_void, u8) -> u32,
-    pub destination_dirs: unsafe extern "C" fn(u32) -> u16,
     pub origin: unsafe extern "C" fn(*mut c_void, *mut u32, *mut u8),
     pub write: unsafe extern "C" fn(u32, u8, u8) -> u8,
     pub output: unsafe extern "C" fn(*mut c_void, u8, *const Step),
@@ -590,7 +589,15 @@ impl Search {
             _ => {
                 self.any_depot = self.train.order == 2 && self.train.nearest_depot != 0;
                 self.dest_tile = self.train.dest_tile;
-                self.dest_dirs = unsafe { (self.leaves.destination_dirs)(self.dest_tile) };
+                self.dest_dirs = unsafe {
+                    crate::track_func::track_status_to_trackdir_bits(crate::movement::track_status(
+                        &*self.input.shared,
+                        self.dest_tile,
+                        0,
+                        0,
+                        255,
+                    ))
+                };
             }
         }
     }

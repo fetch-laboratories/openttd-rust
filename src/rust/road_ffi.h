@@ -198,7 +198,7 @@ struct OpenTTDRoadLeaves {
 	OpenTTDRoadPartRead (OPENTTD_VEHICLE_CALL *part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(part);
 	OpenTTDRoadLink (OPENTTD_VEHICLE_CALL *link)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(link);
 	OpenTTDRoadLinkTile (OPENTTD_VEHICLE_CALL *link_tile)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(link_tile);
-	OpenTTDRoadEntered (OPENTTD_VEHICLE_CALL *enter_tile)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(enter_tile);
+	OpenTTDRoadEntered (OPENTTD_VEHICLE_CALL *after_enter_tile)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(enter_tile);
 	void (OPENTTD_VEHICLE_CALL *visit_close)(OpenTTDVehicle *, int32_t, int32_t, bool, OpenTTDRoadCloseVisitor, void *) noexcept OPENTTD_SERVICE_DEFAULT(visit_close);
 	void (OPENTTD_VEHICLE_CALL *visit_trains)(OpenTTDVehicle *, OpenTTDRoadTrainVisitor, void *) noexcept OPENTTD_SERVICE_DEFAULT(visit_trains);
 	void (OPENTTD_VEHICLE_CALL *visit_tile)(uint32_t, OpenTTDRoadTileVisitor, void *) noexcept OPENTTD_SERVICE_DEFAULT(visit_tile);

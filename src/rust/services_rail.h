@@ -49,7 +49,6 @@ inline SignalState RustRailSignalState(uint32_t tile, uint8_t td) noexcept { ret
 inline void RustRailSetSignalState(uint32_t tile, uint8_t td, uint8_t state) noexcept { SetSignalStateByTrackdir(TileIndex(tile), static_cast<Trackdir>(td), static_cast<SignalState>(state)); }
 inline bool RustRailSignalIsGreen(uint32_t tile, uint8_t td) noexcept { return RustRailSignalState(tile, td) == SIGNAL_STATE_GREEN; }
 inline void RustRailSetSignalGreen(uint32_t tile, uint8_t td, uint8_t green) noexcept { RustRailSetSignalState(tile, td, green != 0 ? SIGNAL_STATE_GREEN : SIGNAL_STATE_RED); }
-inline TrackStatus RustRailTrackStatus(uint32_t tile, uint8_t dir) noexcept { return GetTileTrackStatus(TileIndex(tile), TRANSPORT_RAIL, 0, static_cast<DiagDirection>(dir)); }
 inline Axis RustRailStationAxis(uint32_t tile) noexcept { return GetRailStationAxis(TileIndex(tile)); }
 inline Axis RustCrossingRoadAxis(uint32_t tile) noexcept { return GetCrossingRoadAxis(TileIndex(tile)); }
 inline TransportType RustTunnelBridgeTransport(uint32_t tile) noexcept { return GetTunnelBridgeTransportType(TileIndex(tile)); }

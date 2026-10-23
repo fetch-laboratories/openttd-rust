@@ -55,7 +55,7 @@ static OpenTTDRoadStep OPENTTD_VEHICLE_CALL RoadSvcStep(OpenTTDVehicle *v) noexc
 {
 	const RoadVehicle *u = RoadOf(v);
 	return {.tile = RustVehicleTile(u), .x = RustVehicleX(u), .y = RustVehicleY(u), .z = RustVehicleZ(u),
-		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = RustVehicleFrontEngine(u), .tram = SharedRoadTypeIsTram(u->roadtype)};
+		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = SharedRoadTypeIsTram(u->roadtype)};
 }
 static OpenTTDRoadCrashPart OPENTTD_VEHICLE_CALL RoadSvcCrashPart(OpenTTDVehicle *v) noexcept
 {
@@ -80,7 +80,7 @@ static OpenTTDRoadLinkTile OPENTTD_VEHICLE_CALL RoadSvcLinkTile(OpenTTDVehicle *
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(u));
 	return {.link = {.next = RustVehicle(next), .next_state = RoadStateOf(next)}, .tile = RustVehicleTile(u)};
 }
-static OpenTTDRoadEntered OPENTTD_VEHICLE_CALL RoadSvcEnterTile(OpenTTDVehicle *v, uint8_t flags) noexcept
+static OpenTTDRoadEntered OPENTTD_VEHICLE_CALL RoadSvcAfterEnterTile(OpenTTDVehicle *v, uint8_t flags) noexcept
 {
 	RoadVehicle *u = RoadOf(v);
 	return {.tile = RustVehicleTile(u), .cur_speed = RustVehicleSpeed(u), .flags = flags, .direction = RustVehicleDirection(u), .order_type = RustVehicleOrderType(u)};
@@ -313,7 +313,7 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.part = RoadSvcPart,
 	.link = RoadSvcLink,
 	.link_tile = RoadSvcLinkTile,
-	.enter_tile = RoadSvcEnterTile,
+	.after_enter_tile = RoadSvcAfterEnterTile,
 	.visit_close = RoadSvcVisitClose,
 	.visit_trains = RoadSvcVisitTrains,
 	.visit_tile = RoadSvcVisitTile,

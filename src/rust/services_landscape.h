@@ -35,7 +35,6 @@
 
 inline OpenTTDFoundationSlope RustTileSlopeZ(uint32_t tile) noexcept { auto [slope, z] = GetTileSlopeZ(TileIndex{tile}); return {.z = z, .slope = slope}; }
 inline OpenTTDFoundationSlope RustApplyFoundation(Foundation foundation, Slope slope) noexcept { int z = ApplyFoundationToSlope(foundation, slope); return {.z = z, .slope = slope}; }
-inline OpenTTDFoundationSlope RustFoundationSlope(uint32_t tile) noexcept { auto [slope, z] = GetFoundationSlope(TileIndex{tile}); return {.z = z, .slope = slope}; }
 inline RoadBits RustCleanRoadBits(TileIndex tile, RoadBits bits) noexcept { return CleanUpRoadBits(tile, bits); }
 inline uint8_t RustTileOwnerValue(uint32_t tile) noexcept { return GetTileOwner(TileIndex{tile}).base(); }
 inline bool RustPlainRailTile(uint32_t tile) noexcept { return IsPlainRailTile(TileIndex{tile}); }
@@ -97,7 +96,8 @@ inline OpenTTDFoundationSlope RustOutsidePixelSlope(uint32_t x, uint32_t y) noex
 inline OpenTTDMovementObjectFoundation RustObjectFoundation(uint32_t tile) noexcept
 {
 	const auto *spec = ObjectSpec::Get(GetObjectType(TileIndex{tile}));
-	return {.enabled = spec->IsEnabled(), .no_foundation = spec->flags.Test(ObjectFlag::HasNoFoundation)};
+	const bool enabled = spec->IsEnabled();
+	return {.enabled = enabled, .no_foundation = enabled && spec->flags.Test(ObjectFlag::HasNoFoundation)};
 }
 inline OpenTTDMovementFoundation RustHouseFoundation(uint32_t tile) noexcept
 {

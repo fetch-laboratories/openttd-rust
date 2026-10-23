@@ -85,7 +85,6 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 			break;
 		}
 		case 7: out[0] = reinterpret_cast<intptr_t>(DisasterVehicle::Get(id)->rust_state.get()); break;
-		case 8: out[0] = SharedSlopePixelZ(a, b, false); break;
 		case 9: out[0] = GetDirectionTowards(Vehicle::Get(id), a, b); break;
 		case 10: { auto gp = GetNewVehiclePos(Vehicle::Get(id)); out[0] = gp.x; out[1] = gp.y; break; }
 		case 11: out[0] = Industry::Get(id)->TileBelongsToIndustry(TileIndex{static_cast<uint32_t>(a)}); break;
@@ -166,7 +165,6 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 		case 18: RustUpdateSignals(); break;
 		case 20: ResetIndustryConstructionStage(TileIndex{step.id}); MarkTileDirtyByTile(TileIndex{step.id}); break;
 		case 21: response = ClosestTownFromTile(TileIndex{step.id}, UINT_MAX)->index.base(); break;
-		case 23: response = OpenTTDWaterTracks(step.id, INVALID_DIAGDIR); break;
 		case 24: DisasterVehicle::Get(step.id)->UpdateDeltaXY(); break;
 	}
 	return response;

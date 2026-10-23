@@ -9,6 +9,7 @@
 #ifndef RAIL_YAPF_PROTOCOL_HPP
 #define RAIL_YAPF_PROTOCOL_HPP
 #include "../rust/rail_yapf_ffi.h"
+#include "../rust/movement_ffi.h"
 #include <array>
 #include <memory>
 #include <vector>
@@ -41,7 +42,6 @@ inline uint8_t Free(void *, uint32_t, uint8_t, uint8_t) noexcept { return 1; }
 inline uint8_t Station(uint32_t, uint32_t) noexcept { return 0; }
 inline uint32_t Platform(uint32_t, uint8_t) noexcept { return 0; }
 inline uint32_t Closest(void *, uint8_t) noexcept { return goal; }
-inline uint16_t Directions(uint32_t) noexcept { return (1 << 0) | (1 << 2); }
 inline void Origin(void *, uint32_t *tile, uint8_t *td) noexcept { *tile = 0; *td = 0; }
 inline uint8_t Write(uint32_t tile, uint8_t td, uint8_t op) noexcept
 {
@@ -61,12 +61,22 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 {
 	follows.clear(); writes.clear(); stats = {}; flushes = limits = red = restored = 0;
 	auto shared = OpenTTDFixtureSharedServices(nullptr, OpenTTDFixtureMapService<uint32_t, void *>, OpenTTDFixtureMapService<uint32_t, int32_t, int32_t, uint32_t *>);
+	static OpenTTDSharedServices world{};
+	static OpenTTDRailMapServices rail{};
+	static OpenTTDRailServices ground{};
+	static OpenTTDMovementServices movement{};
+	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 1; };
+	rail.rail_tile_type = [](uint32_t) noexcept -> RailTileType { return RAIL_TILE_NORMAL; };
+	ground.tracks = [](uint32_t) noexcept -> TrackBits { return static_cast<TrackBits>(5); };
+	movement.rail = &ground;
+	movement.shared = &world; movement.rail_map = &rail;
+	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	shared.safe_waiting_position = [](const ::Train *, uint32_t, uint8_t, bool) noexcept { return false; };
 	OpenTTDRailInput input{}; input.shared = &shared;
 	input.settings.max_nodes = limit; input.settings.curve45 = curve;
 	input.settings.slope = 50; input.settings.lookahead = !cache;
 	input.map_x = 128; input.reserve = reserve;
-	const OpenTTDRailLeaves leaves{.train = Train, .tile = Tile, .follow = Follow, .free = Free, .compatible_station = Station, .platform_length = Platform, .closest_station = Closest, .destination_dirs = Directions, .origin = Origin, .write = Write, .output = Output, .debug = Debug};
+	const OpenTTDRailLeaves leaves{.train = Train, .tile = Tile, .follow = Follow, .free = Free, .compatible_station = Station, .platform_length = Platform, .closest_station = Closest, .origin = Origin, .write = Write, .output = Output, .debug = Debug};
 	std::unique_ptr<OpenTTDRailYapf, decltype(&openttd_rust_rail_destroy)> owner{openttd_rust_rail_new(&input, &leaves), openttd_rust_rail_destroy};
 	return openttd_rust_rail_step(owner.get());
 }

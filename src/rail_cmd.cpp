@@ -268,6 +268,7 @@ static CommandCost CheckTrackCombination(TileIndex tile, TrackBits to_build)
 
 
 /** Valid TrackBits on a specific (non-steep)-slope without foundation */
+#ifndef WITH_RUST
 static const TrackBits _valid_tracks_without_foundation[15] = {
 	TRACK_BIT_ALL,
 	TRACK_BIT_RIGHT,
@@ -310,6 +311,7 @@ static const TrackBits _valid_tracks_on_leveled_foundation[15] = {
 	TRACK_BIT_ALL,
 	TRACK_BIT_ALL
 };
+#endif
 
 /**
  * Checks if a track combination is valid on a specific slope and returns the needed foundation.

@@ -12,6 +12,7 @@
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct VehicleSoundEvent(pub u8);
 
+pub const VSE_TUNNEL: VehicleSoundEvent = VehicleSoundEvent(2);
 pub const VSE_START: VehicleSoundEvent = VehicleSoundEvent(1);
 pub const VSE_BREAKDOWN: VehicleSoundEvent = VehicleSoundEvent(3);
 pub const VSE_RUNNING: VehicleSoundEvent = VehicleSoundEvent(4);

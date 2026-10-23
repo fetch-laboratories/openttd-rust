@@ -11,3 +11,10 @@ use crate::services::Roadside;
 pub const ROADSIDE_TREES: Roadside = Roadside(5);
 /// `Roadside::Paved`.
 pub const ROADSIDE_PAVED: Roadside = Roadside(2);
+
+/// `RoadTileType::Normal`.
+pub const ROAD_TILE_NORMAL: u8 = 0;
+/// `RoadTileType::Crossing`.
+pub const ROAD_TILE_CROSSING: u8 = 1;
+/// `RoadTileType::Depot`.
+pub const ROAD_TILE_DEPOT: u8 = 2;

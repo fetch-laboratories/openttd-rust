@@ -196,7 +196,12 @@ impl World<'_> {
         self.read(6, kind, i64::from(id), 0)[0] as u32
     }
     fn slope(&self, x: i64, y: i64) -> i64 {
-        self.read(8, 0, x, y)[0]
+        i64::from(crate::movement::pixel_z(
+            self.services,
+            x as i32,
+            y as i32,
+            false,
+        ))
     }
     fn toward(&self, id: u32, x: i64, y: i64) -> i64 {
         self.read(9, id, x, y)[0]
@@ -788,7 +793,7 @@ async fn submarine(w: World<'_>, id: u32) -> i64 {
     let step = w.read(13, 0, w.v(id, DIR) >> 1, 0)[0] as u32;
     let tile = (w.v(id, TILE) as u32).wrapping_add(step);
     if w.tile(tile)[0] != 0 {
-        let bits = w.service(23, tile, 0, 0, 0, 0, 0);
+        let bits = crate::movement::water_tracks(w.services, tile, 255);
         if bits == 63 && !w.chance(90) {
             let gp = w.position(id);
             w.update_position(id, gp[0], gp[1], w.v(id, Z));
