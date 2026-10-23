@@ -4,13 +4,13 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-23, code at `9f2c92b51e`)
+## Where the fork stands (2026-10-23, code at `eccfe3f240`)
 
-- Forty-one ownership ports. Whole fork: Rust 91,994 / tooling 34,241 / glue 34,815 / original retired 51,203 of 470,612 C/C++ `src/` lines (10.88%). Simulation: 43,067 / 102,615 (41.97%), up from 40.46% at the seventeenth review.
+- Forty-two ownership ports. Whole fork: Rust 93,047 / tooling 34,366 / glue 35,061 / original retired 52,067 of 470,612 C/C++ `src/` lines (11.06%). Simulation: 43,931 / 102,615 (42.81%).
 - Since the seventeenth review: maintenance #358 (#355/#356/#357 batch, free-core `--jobs`), #340 (#281 part 1) and #351 (#274); ownership ports #353 (landscape), #362 (road stops) and #347 (town commands).
-- Speed: last tip profile at `9a991a1c23` showed no rise and no scenario near its ceiling (TGP 1.2138; play saves at or below their anchors). The due six-scenario tip profile is running alongside work.
-- CI: #363 fixed the #347/#353 compilation regression (`9f2c92b51e`, Full and post-merge semantic baseline passed). The platform policy stopped on a GitHub HTTP 500 before builds; this is in the selected CI batch. The due macOS run is running on the integrated tip.
-- Component branches: #360, #359 and #350 (three of six). Maintenance: #361 and the selected #261 CI batch.
+- Speed: last accepted profile at `9a991a1c23` showed no rise or scenario near its ceiling (TGP 1.2138; play saves at or below their anchors). The due pre-rail tip profile hit a real liblzma upgrade; #356 records the diagnosis. Reprofiling with the verified original runtime is running; anchors remain unchanged.
+- CI: #363 fixed the #347/#353 regression. The due macOS Debug/Release run passed; one integration since, next due after four more. #360 passed current-base Full before merging. #365 addresses the platform policy's GitHub HTTP 500 and the selected setup/failure-reporting fixes.
+- Component branches: #359 and #350 (two of six), with #366 selected next. Maintenance: reviewed #361 and #365, preparing one tested integration batch.
 
 ## Integration and wind-down correction (2026-10-22, takes precedence)
 
@@ -120,6 +120,7 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #348 | Landscape clear, terraform and leveling | #353 | `33fc37e973` | 1289 / 189 / 301 / 447 |
 | #354 | Road-stop bays and drive-through occupancy | #362 | `4075c50384` | 875 / 164 / 181 / 501 |
 | #247 | Town commands, authority actions and deletion | #347 | `8c370210b4` | 977 / 270 / 298 / 589 |
+| #315 | Rail construction and depot consist transactions | #360 | `eccfe3f240` | 1082 / 129 / 347 / 864; net glue 246 |
 
 Harness/process #72/#84/#97/#88/#75/#90 and maintenance #209-#302 retain evidence in their PRs.
 Rows below use original retirement and net glue (#223).
@@ -164,11 +165,12 @@ unintegrated component branches. Maintenance (#261, #281) and #156 run in parall
 3. **#281** part 1 integrated (#340). Part 2: the callee-copy check and the four duplicate wrappers listed in the #340 r2 review.
 4. **#274 map view:** integrated as #351, limited to the scheduler's clear/water/tree loops; C++ keeps the arrays and writes.
 5. **Next whole owners**, as WIP frees, each without draft service dependencies:
-   - #315 rail construction (#360): base merge and conflict review, then Full;
-   - #349 visits (#359): review, then Full;
-   - #350 generation and rivers: restart implementation.
+   - #349 visits (#359): fixing review active, then Full;
+   - #350 generation and rivers: implementation active;
+   - #366 complete waypoint construction and command policy: selected next;
+   - #367 complete PBS reservation service: selected after waypoints.
 
-   A shared service that two owners need lands first, as its own PR. Selection is due: fewer than two selected owners remain unstarted. Plan with the next tip profile.
+   A shared service that two owners need lands first, as its own PR. The fresh Astra plan selected #366/#367 without draft dependencies; common ground-vehicle dynamics is the next planning candidate, not yet selected. Keep native map/pool storage and typed services; #274 does not authorize raw access for these owners.
 6. **#168 tail, largest first.** `order_cmd.cpp` and `economy.cpp` hold 65 of the 198 baseline copies.
 
 New owners reuse integrated services, never draft copies. A Rust-allocated
@@ -181,13 +183,13 @@ Resumed 2026-10-23. Root is Codex (gpt-6.1-sol, ultra); implementation and indep
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #315 / #360 | `53d230d5e2` | Base merged and conflict review complete; root spot-check done. Update for final Full, then integrate the tested combination. |
 | #349 / #359 | `189e58cfd9` | Fresh fixing reviewer owns base update and complete independent review; final Full remains. |
 | #350 (no PR yet) | integrated base | Implementation restarted in an isolated worktree; push an early boundary/metrics checkpoint and draft. |
-| #261 / #361 | `4b4bb9dd21` | Fresh fixing reviewer owns base merge, complete cleanup/ABI review and stale PR description. Final Full remains. |
-| #261 CI batch (no PR yet) | integrated base | Implementer assigned to the selected 400-line checklist; independent review and workflow-bootstrap Full follow. |
+| #261 / #361 | `909b445de2` | Fixing review complete; root spot-check and rail-base conflict review, then batch Full with #365. |
+| #261 / #365 | `95830c3d33` | Independent review passed, 376/400 lines. Root reviewed workflow definitions; update to current base, combine with #361 and use bootstrap Full. |
+| #366 / #367 | selected | Start waypoint owner as capacity frees; PBS follows. Both scopes and evidence plans are on their issues. |
 
-The tip speed profile and macOS run are active; a fresh owner-selection planner is examining the next complete simulation boundaries. Finish checkpoint/docs updates before final Full, then keep base stable for that validation.
+The anchored-runtime pre-rail profile is active; macOS passed. Next integration is the reviewed #261 batch after scoped conflict review. Finish checkpoint/docs updates before final Full, then keep base stable for that validation. #360 integrated without a stale Full rerun or ready-work wait; PR notes carry the ten-integration observation.
 Each draft has one current worktree. #281 part 2 and #261 R7 inputs remain on their issues. #64/#68/#69 stay paused.
 Preserve the pinned reference; do not reapply effect helper `73ccd511fb`.
 
