@@ -40,6 +40,12 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/command_services.h"
+#include "rust/waypoint_command_ffi.h"
+#include "rust/waypoint_layout.h"
+#endif
+
 #include "safeguards.h"
 
 /**
@@ -77,6 +83,7 @@ void Waypoint::MoveSign(TileIndex new_xy)
  * @param is_road whether to find a road waypoint
  * @return the deleted nearby waypoint
  */
+#ifndef WITH_RUST
 static Waypoint *FindDeletedWaypointCloseTo(TileIndex tile, StringID str, CompanyID cid, bool is_road)
 {
 	Waypoint *best = nullptr;
@@ -95,6 +102,7 @@ static Waypoint *FindDeletedWaypointCloseTo(TileIndex tile, StringID str, Compan
 
 	return best;
 }
+#endif
 
 /**
  * Get the axis for a new rail waypoint. This means that if it is a valid
@@ -105,6 +113,9 @@ static Waypoint *FindDeletedWaypointCloseTo(TileIndex tile, StringID str, Compan
  */
 Axis GetAxisForNewRailWaypoint(TileIndex tile)
 {
+#ifdef WITH_RUST
+	return static_cast<Axis>(openttd_rust_waypoint_rail_axis(&GetRustStationCommandServices(), tile.base()));
+#else
 	/* The axis for rail waypoints is easy. */
 	if (IsRailWaypointTile(tile)) return GetRailStationAxis(tile);
 
@@ -116,6 +127,7 @@ Axis GetAxisForNewRailWaypoint(TileIndex tile)
 		case TRACK_BIT_Y: return AXIS_Y;
 		default:          return INVALID_AXIS;
 	}
+#endif
 }
 
 /**
@@ -127,6 +139,9 @@ Axis GetAxisForNewRailWaypoint(TileIndex tile)
  */
 Axis GetAxisForNewRoadWaypoint(TileIndex tile)
 {
+#ifdef WITH_RUST
+	return static_cast<Axis>(openttd_rust_waypoint_road_axis(&GetRustStationCommandServices(), tile.base()));
+#else
 	/* The axis for existing road waypoints is easy. */
 	if (IsRoadWaypointTile(tile)) return GetDriveThroughStopAxis(tile);
 
@@ -139,9 +154,12 @@ Axis GetAxisForNewRoadWaypoint(TileIndex tile)
 	if ((bits & ROAD_X) == 0) return AXIS_Y;
 
 	return INVALID_AXIS;
+#endif
 }
 
+#ifndef WITH_RUST
 extern CommandCost ClearTile_Station(TileIndex tile, DoCommandFlags flags);
+#endif
 
 /**
  * Check whether the given tile is suitable for a waypoint.
@@ -149,6 +167,7 @@ extern CommandCost ClearTile_Station(TileIndex tile, DoCommandFlags flags);
  * @param axis the axis of the waypoint
  * @param waypoint Waypoint the waypoint to check for is already joined to. If we find another waypoint it can join to it will throw an error.
  */
+#ifndef WITH_RUST
 static CommandCost IsValidTileForWaypoint(TileIndex tile, Axis axis, StationID *waypoint)
 {
 	/* if waypoint is set, then we have special handling to allow building on top of already existing waypoints.
@@ -182,7 +201,9 @@ static CommandCost IsValidTileForWaypoint(TileIndex tile, Axis axis, StationID *
 
 	return CommandCost();
 }
+#endif
 
+#ifndef WITH_RUST
 extern CommandCost FindJoiningWaypoint(StationID existing_station, StationID station_to_join, bool adjacent, TileArea ta, Waypoint **wp, bool is_road);
 extern CommandCost CanExpandRailStation(const BaseStation *st, TileArea &new_ta);
 extern CommandCost CalculateRoadStopCost(TileArea tile_area, DoCommandFlags flags, bool is_drive_through, StationType station_type, const RoadStopSpec *roadstopspec, Axis axis, DiagDirection ddir, StationID *est, RoadType rt, Money unit_cost);
@@ -190,6 +211,7 @@ extern CommandCost IsRailStationBridgeAboveOk(TileIndex tile, const StationSpec 
 extern CommandCost IsBuoyBridgeAboveOk(TileIndex tile);
 
 extern CommandCost RemoveRoadWaypointStop(TileIndex tile, DoCommandFlags flags, int replacement_spec_index);
+#endif
 
 /**
  * Convert existing rail to waypoint. Eg build a waypoint station over
@@ -207,6 +229,12 @@ extern CommandCost RemoveRoadWaypointStop(TileIndex tile, DoCommandFlags flags, 
  */
 CommandCost CmdBuildRailWaypoint(DoCommandFlags flags, TileIndex start_tile, Axis axis, uint8_t width, uint8_t height, StationClassID spec_class, uint16_t spec_index, StationID station_to_join, bool adjacent)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret;
+	OpenTTDWaypointLayout layout;
+	openttd_rust_waypoint_build_rail(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), &layout, flags.base(), start_tile.base(), axis, width, height, spec_class, spec_index, station_to_join.base(), adjacent);
+	return cost;
+#else
 	if (!IsValidAxis(axis)) return CMD_ERROR;
 	/* Check if the given station class is valid */
 	if (static_cast<uint>(spec_class) >= StationClass::GetClassCount()) return CMD_ERROR;
@@ -324,6 +352,7 @@ CommandCost CmdBuildRailWaypoint(DoCommandFlags flags, TileIndex start_tile, Axi
 	}
 
 	return cost;
+#endif
 }
 
 /**
@@ -341,6 +370,11 @@ CommandCost CmdBuildRailWaypoint(DoCommandFlags flags, TileIndex start_tile, Axi
  */
 CommandCost CmdBuildRoadWaypoint(DoCommandFlags flags, TileIndex start_tile, Axis axis, uint8_t width, uint8_t height, RoadStopClassID spec_class, uint16_t spec_index, StationID station_to_join, bool adjacent)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret;
+	openttd_rust_waypoint_build_road(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), start_tile.base(), axis, width, height, spec_class, spec_index, station_to_join.base(), adjacent);
+	return cost;
+#else
 	if (!IsValidAxis(axis)) return CMD_ERROR;
 	/* Check if the given station class is valid */
 	if (static_cast<uint>(spec_class) >= RoadStopClass::GetClassCount()) return CMD_ERROR;
@@ -464,6 +498,7 @@ CommandCost CmdBuildRoadWaypoint(DoCommandFlags flags, TileIndex start_tile, Axi
 		DirtyCompanyInfrastructureWindows(wp->owner);
 	}
 	return cost;
+#endif
 }
 
 /**
@@ -474,6 +509,11 @@ CommandCost CmdBuildRoadWaypoint(DoCommandFlags flags, TileIndex start_tile, Axi
  */
 CommandCost CmdBuildBuoy(DoCommandFlags flags, TileIndex tile)
 {
+#ifdef WITH_RUST
+	CommandCost cost, ret;
+	openttd_rust_waypoint_build_buoy(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base());
+	return cost;
+#else
 	if (tile == 0 || !HasTileWaterGround(tile)) return CommandCost(STR_ERROR_SITE_UNSUITABLE);
 	if (CommandCost ret = IsBuoyBridgeAboveOk(tile); ret.Failed()) return ret;
 
@@ -519,6 +559,7 @@ CommandCost CmdBuildBuoy(DoCommandFlags flags, TileIndex tile)
 	}
 
 	return cost;
+#endif
 }
 
 /**
@@ -528,6 +569,7 @@ CommandCost CmdBuildBuoy(DoCommandFlags flags, TileIndex tile)
  * @pre IsBuoyTile(tile)
  * @return cost or failure of operation
  */
+#ifndef WITH_RUST
 CommandCost RemoveBuoy(TileIndex tile, DoCommandFlags flags)
 {
 	/* XXX: strange stuff, allow clearing as invalid company when clearing landscape */
@@ -560,12 +602,14 @@ CommandCost RemoveBuoy(TileIndex tile, DoCommandFlags flags)
 
 	return CommandCost(EXPENSES_CONSTRUCTION, _price[PR_CLEAR_WAYPOINT_BUOY]);
 }
+#endif
 
 /**
  * Check whether the name is unique amongst the waypoints.
  * @param name The name to check.
  * @return True iff the name is unique.
  */
+#ifndef WITH_RUST
 static bool IsUniqueWaypointName(const std::string &name)
 {
 	for (const Waypoint *wp : Waypoint::Iterate()) {
@@ -574,6 +618,7 @@ static bool IsUniqueWaypointName(const std::string &name)
 
 	return true;
 }
+#endif
 
 /**
  * Rename a waypoint.
@@ -584,6 +629,11 @@ static bool IsUniqueWaypointName(const std::string &name)
  */
 CommandCost CmdRenameWaypoint(DoCommandFlags flags, StationID waypoint_id, const std::string &text)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_waypoint_rename(&GetRustStationCommandServices(), RustCommandCost(&cost), flags.base(), waypoint_id.base(), reinterpret_cast<const uint8_t *>(text.data()), text.size());
+	return cost;
+#else
 	Waypoint *wp = Waypoint::GetIfValid(waypoint_id);
 	if (wp == nullptr) return CMD_ERROR;
 
@@ -609,6 +659,7 @@ CommandCost CmdRenameWaypoint(DoCommandFlags flags, StationID waypoint_id, const
 		wp->UpdateVirtCoord();
 	}
 	return CommandCost();
+#endif
 }
 
 /**
@@ -620,6 +671,11 @@ CommandCost CmdRenameWaypoint(DoCommandFlags flags, StationID waypoint_id, const
  */
 std::tuple<CommandCost, StationID> CmdMoveWaypointName(DoCommandFlags flags, StationID waypoint_id, TileIndex tile)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	auto id = openttd_rust_waypoint_move_name(&GetRustStationCommandServices(), RustCommandCost(&cost), flags.base(), waypoint_id.base(), tile.base());
+	return {std::move(cost), StationID(id)};
+#else
 	Waypoint *wp = Waypoint::GetIfValid(waypoint_id);
 	if (wp == nullptr) return { CMD_ERROR, StationID::Invalid() };
 
@@ -648,6 +704,7 @@ std::tuple<CommandCost, StationID> CmdMoveWaypointName(DoCommandFlags flags, Sta
 		wp->UpdateVirtCoord();
 	}
 	return { CommandCost(), waypoint_id };
+#endif
 }
 
 /**

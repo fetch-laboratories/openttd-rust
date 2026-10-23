@@ -259,6 +259,14 @@ static_assert(OWNER_TOWN.base() == 0x0F && OWNER_NONE.base() == 0x10 && OWNER_WA
 static_assert(to_underlying(DoCommandFlag::Execute) == 0 && to_underlying(DoCommandFlag::Auto) == 1 && to_underlying(DoCommandFlag::QueryCost) == 2 && to_underlying(DoCommandFlag::NoWater) == 3);
 static_assert(to_underlying(DoCommandFlag::NoTestTownRating) == 4 && to_underlying(DoCommandFlag::Bankrupt) == 5 && to_underlying(DoCommandFlag::NoModifyTownRating) == 9 && to_underlying(DoCommandFlag::ForceClearTile) == 10);
 static_assert(std::is_same_v<DoCommandFlags::BaseType, uint16_t>);
+static_assert(NEW_STATION.base() == 0xFFFD && StationID::Invalid().base() == 0xFFFF);
+static_assert(to_underlying(StationType::RailWaypoint) == 7 && to_underlying(StationType::RoadWaypoint) == 8 && to_underlying(StationType::Buoy) == 6);
+static_assert(StationFacilities(StationFacility::Train).base() == 1 && StationFacilities(StationFacility::TruckStop).base() == 2 && StationFacilities(StationFacility::BusStop).base() == 4 && StationFacilities(StationFacility::Dock).base() == 16);
+static_assert(MAX_LENGTH_STATION_NAME_CHARS == 32 && StationRect::ADD_TEST == 0 && StationRect::ADD_TRY == 1);
+static_assert(PR_BUILD_STATION_TRUCK == 13 && PR_BUILD_WAYPOINT_RAIL == 52 && PR_BUILD_WAYPOINT_BUOY == 54 && PR_CLEAR_WAYPOINT_BUOY == 55 && ROAD_STOP_TRACKBIT_FACTOR == 2);
+static_assert(to_underlying(RailTileType::Normal) == 0 && TRACK_BIT_X == 1 && TRACK_BIT_Y == 2 && AXIS_END == 2);
+static_assert(ROAD_X == 10 && ROAD_Y == 5);
+static_assert(AXIS_X == 0 && AXIS_Y == 1 && INVALID_AXIS == 0xFF);
 static_assert(PR_TERRAFORM == 21 && PR_CLEAR_CANAL == 61 && PR_CLEAR_TREES == 26);
 static_assert(to_underlying(DoCommandFlag::AutoReplace) == 6 && to_underlying(DoCommandFlag::NoCargoCapacityCheck) == 7);
 static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);

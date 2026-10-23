@@ -82,6 +82,8 @@ def scenarios(soak):
             "railtype-63",
             "road-stops",
             "road-stops-reload",
+            "waypoints",
+            "waypoints-reload",
         )
     ]
 
@@ -429,6 +431,81 @@ static TileIndex StationPatch()
 	}
 	StationNeed(false, __LINE__); return INVALID_TILE;
 }
+
+/* #366: complete transactions through the unchanged reference command bodies. */
+static void StationWaypoints(TileIndex origin, Company *company, DoCommandFlags test, DoCommandFlags exec)
+{
+	auto at = [origin](int x, int y) { return origin + TileDiffXY(x, y); };
+	auto check = [](const char *label, CommandCost cost, bool success = true) { StationCost(label, cost); StationNeed(cost.Succeeded() == success, __LINE__); };
+	for (Axis axis : {AXIS_X, AXIS_Y}) {
+		TileIndex rail = at(axis == AXIS_X ? 2 : 10, 2), road = at(axis == AXIS_X ? 2 : 10, 10);
+		TileIndexDiff step = TileOffsByAxis(OtherAxis(axis));
+		uint8_t width = axis == AXIS_X ? 1 : 2, height = axis == AXIS_X ? 2 : 1;
+		auto build = [&](DoCommandFlags f, TileIndex t, uint8_t w, uint8_t h, StationID id, bool adjacent) { return Command<CMD_BUILD_RAIL_WAYPOINT>::Do(f, t, axis, w, h, STAT_CLASS_WAYP, 0, id, adjacent); };
+		for (uint i = 0; i < 3; ++i) check("wp-track", Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, rail + i * step, RAILTYPE_RAIL, AxisToTrack(axis), false));
+		check("wp-invalid-axis", Command<CMD_BUILD_RAIL_WAYPOINT>::Do(test, rail, INVALID_AXIS, width, height, STAT_CLASS_WAYP, 0, NEW_STATION, true), false);
+		check("wp-invalid-size", build(test, rail, 0, 0, NEW_STATION, true), false);
+		check("wp-test", build(test, rail, width, height, NEW_STATION, true));
+		check("wp-build", build(exec, rail, width, height, NEW_STATION, true));
+		Waypoint *wp = Waypoint::GetByTile(rail); StationID id = wp->index;
+		StationNeed(GetAxisForNewRailWaypoint(rail) == axis, __LINE__);
+		check("wp-replace", build(exec, rail, width, height, id, true));
+		check("wp-adjacent", build(exec, rail + 2 * step, 1, 1, StationID::Invalid(), false));
+		StationNeed(GetStationIndex(rail + 2 * step) == id, __LINE__);
+		TileIndex distant = rail + 4 * TileOffsByAxis(axis);
+		check("wp-track", Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, distant, RAILTYPE_RAIL, AxisToTrack(axis), false));
+		check("wp-distant", build(exec, distant, 1, 1, id, true));
+		std::string name = fmt::format("Migration waypoint {}", axis);
+		check("wp-rename", Command<CMD_RENAME_WAYPOINT>::Do(exec, id, name));
+		check("wp-duplicate", Command<CMD_RENAME_WAYPOINT>::Do(test, id, name), false);
+		check("wp-long-name", Command<CMD_RENAME_WAYPOINT>::Do(test, id, std::string(32, 'x')), false);
+		check("wp-move", std::get<0>(Command<CMD_MOVE_WAYPOINT_NAME>::Do(exec, id, rail + step)));
+		check("wp-move-outside", std::get<0>(Command<CMD_MOVE_WAYPOINT_NAME>::Do(test, id, at(30, 30))), false);
+		Owner owner = wp->owner; wp->owner = OWNER_NONE;
+		check("wp-neutral-rename", Command<CMD_RENAME_WAYPOINT>::Do(test, id, "Neutral")); wp->owner = owner;
+		check("wp-reset", Command<CMD_RENAME_WAYPOINT>::Do(exec, id, ""));
+		check("wp-rename", Command<CMD_RENAME_WAYPOINT>::Do(exec, id, name));
+		for (uint i = 0; i < 3; ++i) check("wp-remove", Command<CMD_REMOVE_FROM_RAIL_WAYPOINT>::Do(exec, rail + i * step, rail + i * step, true));
+		check("wp-remove-distant", Command<CMD_REMOVE_FROM_RAIL_WAYPOINT>::Do(exec, distant, distant, true));
+		check("wp-reuse", build(exec, rail, width, height, StationID::Invalid(), false));
+		StationNeed(GetStationIndex(rail) == id && Waypoint::Get(id)->name == name, __LINE__);
+		for (uint i = 0; i < 3; ++i) check("wp-road", Command<CMD_BUILD_ROAD>::Do(exec, road + i * step, axis == AXIS_X ? ROAD_X : ROAD_Y, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
+		auto build_road = [&](DoCommandFlags f, TileIndex t, uint8_t w, uint8_t h, StationID join, bool adjacent) { return Command<CMD_BUILD_ROAD_WAYPOINT>::Do(f, t, axis, w, h, ROADSTOP_CLASS_WAYP, 0, join, adjacent); };
+		check("wp-road-test", build_road(test, road, width, height, NEW_STATION, true));
+		check("wp-road-build", build_road(exec, road, width, height, NEW_STATION, true));
+		StationID rid = GetStationIndex(road); StationNeed(GetAxisForNewRoadWaypoint(road) == axis, __LINE__);
+		TileIndex road_distant = road + 4 * TileOffsByAxis(axis);
+		check("wp-road", Command<CMD_BUILD_ROAD>::Do(exec, road_distant, axis == AXIS_X ? ROAD_X : ROAD_Y, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
+		check("wp-road-distant", build_road(exec, road_distant, 1, 1, rid, true));
+		check("wp-road-replace", build_road(exec, road, width, height, rid, true));
+		check("wp-road-join", build_road(exec, road + 2 * step, 1, 1, StationID::Invalid(), false));
+		StationNeed(GetStationIndex(road + 2 * step) == rid, __LINE__);
+		/* A real vehicle occupies the replacement tile. Restore its spatial hash before saving. */
+		RoadVehicle *v = nullptr; for (RoadVehicle *candidate : RoadVehicle::Iterate()) if (!candidate->vehstatus.Test(VehState::Hidden)) { v = candidate; break; }
+		StationNeed(v != nullptr, __LINE__); TileIndex old_tile = v->tile; int old_x = v->x_pos, old_y = v->y_pos, old_z = v->z_pos;
+		v->tile = road; v->x_pos = TileX(road) * TILE_SIZE + 8; v->y_pos = TileY(road) * TILE_SIZE + 8; v->z_pos = GetTileZ(road); v->UpdatePosition();
+		check("wp-occupied", build_road(test, road, width, height, rid, true), false);
+		v->tile = old_tile; v->x_pos = old_x; v->y_pos = old_y; v->z_pos = old_z; v->UpdatePosition();
+		check("wp-road-remove", Command<CMD_REMOVE_FROM_ROAD_WAYPOINT>::Do(exec, road, road + 2 * step));
+		check("wp-road-remove-distant", Command<CMD_REMOVE_FROM_ROAD_WAYPOINT>::Do(exec, road_distant, road_distant));
+		check("wp-road-reuse", build_road(exec, road, width, height, StationID::Invalid(), false));
+		StationNeed(GetStationIndex(road) == rid, __LINE__);
+		check("wp-road-rename", Command<CMD_RENAME_WAYPOINT>::Do(exec, rid, fmt::format("Migration road waypoint {}", axis)));
+	}
+	/* Deleted candidates at the same distance: retain pool order, not spatial order. */
+	StationID ids[2];
+	for (uint i = 0; i < 2; ++i) {
+		TileIndex tile = at(2 + 4 * i, 22);
+		check("wp-tie-track", Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, tile, RAILTYPE_RAIL, TRACK_X, false));
+		check("wp-tie-build", Command<CMD_BUILD_RAIL_WAYPOINT>::Do(exec, tile, AXIS_X, 1, 1, STAT_CLASS_WAYP, 0, NEW_STATION, true)); ids[i] = GetStationIndex(tile);
+		check("wp-tie-remove", Command<CMD_REMOVE_FROM_RAIL_WAYPOINT>::Do(exec, tile, tile, true));
+	}
+	check("wp-tie-track", Command<CMD_BUILD_SINGLE_RAIL>::Do(exec, at(4, 22), RAILTYPE_RAIL, TRACK_X, false));
+	check("wp-tie-reuse", Command<CMD_BUILD_RAIL_WAYPOINT>::Do(exec, at(4, 22), AXIS_X, 1, 1, STAT_CLASS_WAYP, 0, StationID::Invalid(), false));
+	StationNeed(GetStationIndex(at(4, 22)) == std::min(ids[0], ids[1]), __LINE__);
+	fmt::print(stderr, "STCMD waypoints axes reuse tie occupied {} {} {}\n", company->infrastructure.station, company->infrastructure.rail[RAILTYPE_RAIL], company->infrastructure.road[ROADTYPE_ROAD]);
+}
+
 static bool StationCommands(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
@@ -448,6 +525,11 @@ static bool StationCommands(std::span<std::string_view> args)
 	_settings_game.construction.road_stop_on_competitor_road = true;
 	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
 	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
+	if (args[1] == "waypoints-inspect") {
+		uint found = 0;
+		for (Waypoint *wp : Waypoint::Iterate()) if (wp->name.starts_with("Migration ")) { ++found; StationCost("wp-reload-name", Command<CMD_RENAME_WAYPOINT>::Do(test, wp->index, wp->name)); }
+		StationNeed(found == 4, __LINE__); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true;
+	}
 	if (args[1] == "road-stops-inspect") {
 		StationRoadStops("reloaded"); fmt::print(stderr, "STCMD complete\n");
 		current.Restore(); return true;
@@ -462,6 +544,11 @@ static bool StationCommands(std::span<std::string_view> args)
 	} else {
 		TileIndex origin = StationPatch();
 		auto tile = [origin](int x, int y) { return origin + TileDiffXY(x, y); };
+		if (args[1] == "waypoints") {
+			StationWaypoints(origin, company, test, exec); fmt::print(stderr, "STCMD complete\n");
+			if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
+			current.Restore(); return true;
+		}
 		if (args[1] == "removed-destination") {
 			TileIndex stop = tile(12, 1);
 			StationNeed(Command<CMD_BUILD_ROAD_STOP>::Do(exec, stop, 1, 1, RoadStopType::Bus, false, DIAGDIR_NE, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, NEW_STATION, true).Succeeded(), __LINE__);
@@ -720,6 +807,7 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLib
 RELOADS = {
     "reload": ("commands", "inspect"),
     "road-stops-reload": ("road-stops", "road-stops-inspect"),
+    "waypoints-reload": ("waypoints", "waypoints-inspect"),
 }
 # #354 road stop owner branches; cache checks run only with desync snapshots.
 ROAD_STOPS = (
@@ -871,6 +959,24 @@ def check_commands(scenario, run, mode, role, result):
         branches = ["after_load", "rebuild_vehicle"] if reload else ROAD_STOPS
         cached = ["integrity"] if mode == "snapshots" else []
         core.branch_witnesses(scenario, run, role, "road_stop", branches + cached)
+    if scenario["station_commands"].startswith("waypoints"):
+        required = []
+        branches = (
+            ["rename"]
+            if scenario["station_commands"].endswith("reload")
+            else [
+                "build_rail",
+                "build_road",
+                "axis_rail",
+                "axis_road",
+                "reuse",
+                "tie",
+                "rename",
+                "move_name",
+                "validate",
+            ]
+        )
+        core.branch_witnesses(scenario, run, role, "waypoint_command", branches)
     core.branch_witnesses(scenario, run, role, "station_command", required)
     lines = [line for line in run["log"] if line.startswith("STCMD ")]
     expected = (

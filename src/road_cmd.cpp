@@ -188,11 +188,9 @@ bool RoadVehiclesAreBuilt()
  * @param o Owner of road piece.
  * @param count Number of road pieces to adjust.
  */
+#ifndef WITH_RUST
 void UpdateCompanyRoadInfrastructure(RoadType rt, Owner o, int count)
 {
-#ifdef WITH_RUST
-	openttd_rust_update_road_infrastructure(&GetRustRoadCommandServices(), rt, o.base(), count);
-#else
 	if (rt == INVALID_ROADTYPE) return;
 
 	Company *c = Company::GetIfValid(o);
@@ -200,8 +198,8 @@ void UpdateCompanyRoadInfrastructure(RoadType rt, Owner o, int count)
 
 	c->infrastructure.road[rt] += count;
 	DirtyCompanyInfrastructureWindows(c->index);
-#endif
 }
+#endif
 
 
 /** Invalid RoadBits on slopes.  */

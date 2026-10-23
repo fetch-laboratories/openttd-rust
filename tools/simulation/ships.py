@@ -421,6 +421,10 @@ def check(scenario, run, mode, role, result):
             "force": 2,
             "bankrupt-occupied": 2,
             "native-object": 1,
+            "buoy-build": 3,
+            "buoy-bankrupt": 3,
+            "buoy-reuse": 3,
+            "buoy-remove": 3,
         }.items():
             if sum(row.startswith(f"cost {command} true ") for row in markers) != count:
                 raise RuntimeError("water fixture did not exercise " + command)
@@ -490,6 +494,15 @@ def check(scenario, run, mode, role, result):
             raise RuntimeError("water fixture missed OWNER_WATER lock clears")
         if "docking true true" not in markers:
             raise RuntimeError("water restoration did not preserve docking membership")
+        if sum(row.startswith("cost buoy-occupied false ") for row in markers) != 3:
+            raise RuntimeError("water fixture missed occupied buoy refusals")
+        branch_witnesses(
+            scenario,
+            run,
+            role,
+            "waypoint_command",
+            ["build_buoy", "remove_buoy", "bankrupt", "reuse"],
+        )
         key = mode + "_water_commands"
         if role == "reference":
             result[key] = markers

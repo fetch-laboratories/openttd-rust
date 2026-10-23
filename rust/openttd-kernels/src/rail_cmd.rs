@@ -268,7 +268,7 @@ const FOUNDATION_INVALID: u8 = 0xFF;
 
 const GROUND_BARREN: u8 = 0;
 const GROUND_HALF_WATER: u8 = 13;
-const RAIL_TILE_NORMAL: u8 = 0;
+use crate::rail_map::RAIL_TILE_NORMAL;
 const RAIL_TILE_SIGNALS: u8 = 1;
 const RAIL_TILE_DEPOT: u8 = 3;
 
@@ -282,8 +282,7 @@ const SIG_SEMAPHORE: u8 = 1;
 const RAILTYPE_RAIL: u8 = 0;
 const RAILTYPE_ELECTRIC: u8 = 1;
 use crate::road_type::INVALID_ROADTYPE;
-const ROAD_X: u8 = 10;
-const ROAD_Y: u8 = 5;
+use crate::road_type::{ROAD_X, ROAD_Y};
 const STOPPED: u8 = 1 << 1;
 
 const TILE_AXIAL_DISTANCE: i32 = 192;

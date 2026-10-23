@@ -184,7 +184,7 @@ const RATING_ROAD_DOWN_STEP_EDGE: i32 = -18;
 const RATING_ROAD_DOWN_STEP_INNER: i32 = -50;
 const RATING_ROAD_MINIMUM: i32 = -100;
 const ROAD_DEPOT_TRACKBIT_FACTOR: u32 = 2;
-const ROAD_STOP_TRACKBIT_FACTOR: u32 = 2;
+use crate::economy_type::ROAD_STOP_TRACKBIT_FACTOR;
 const INVALID_SLOPES: [[u8; 15]; 2] = [
     [0, 12, 9, 8, 3, 0, 1, 0, 6, 4, 0, 0, 2, 0, 0],
     [0, 0, 0, 5, 0, 15, 10, 15, 0, 10, 15, 15, 5, 15, 15],
@@ -2204,21 +2204,6 @@ pub unsafe extern "C" fn openttd_rust_road_remove(
     c.remove(c.c(out), c.c(ret), tile, flags, pieces, rtt, town_check);
 }
 
-/// Shared `UpdateCompanyRoadInfrastructure`, also called directly by bridge policy.
-/// # Safety
-/// Native immutable services are live under the game-state mutex.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_update_road_infrastructure(
-    s: *const RoadCommandServices,
-    rt: u8,
-    owner: u8,
-    count: i32,
-) {
-    // SAFETY: native callers supply the process-lifetime canonical table.
-    unsafe {
-        update_company_road_infrastructure(s, rt, owner, count);
-    }
-}
 pub(crate) unsafe fn update_company_road_infrastructure(
     s: *const RoadCommandServices,
     rt: u8,

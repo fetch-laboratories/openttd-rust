@@ -14,3 +14,6 @@ use crate::map_func::TileTypeAccess;
 pub(crate) fn get_rail_ground_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
     Some(m.m4(t)? & 15)
 }
+
+/// `RailTileType::Normal`, asserted by native compilation.
+pub const RAIL_TILE_NORMAL: u8 = 0;
