@@ -258,14 +258,6 @@ static uint64_t TrainReservationTryTrack(void *, OpenTTDTrainHandle, uint32_t a,
 	TileIndex t(static_cast<uint32_t>(a));
 	return TryReserveRailTrack(t, static_cast<Track>(b));
 }
-static uint64_t TrainReservationTunnelFree(void *, OpenTTDTrainHandle id, uint32_t a, uint32_t b) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	TileIndex t(static_cast<uint32_t>(a));
-	CommandCost result;
-	GetRustCommandServices().wormhole_free(RustCommandCost(&result), t.base(), b, v);
-	return result.Succeeded();
-}
 static void TrainReservationUnreserve(void *, OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
 {
 	TileIndex t(static_cast<uint32_t>(a));

@@ -150,6 +150,51 @@ static bool SameRandom(const SavedRandomSeeds &a, const SavedRandomSeeds &b)
 {
 	return std::equal(std::begin(a.random.state), std::end(a.random.state), std::begin(b.random.state)) && std::equal(std::begin(a.interactive_random.state), std::end(a.interactive_random.state), std::begin(b.interactive_random.state));
 }
+/* Unchanged public iterator bodies are the reference oracle for inputs absent
+ * from traffic: full-bucket threshold, extreme unsigned arithmetic and live next
+ * after a callback moves/removes the current shell. No pinned source is edited. */
+static void OccupancyProbe()
+{
+	SavedRandomSeeds before, after;
+	SaveRandomSeeds(&before);
+	if (!Vehicle::CanAllocateItem(3)) FixtureAbort(__LINE__);
+	std::array<Vehicle *, 3> shells{new Vehicle(VEH_ROAD), new Vehicle(VEH_ROAD), new Vehicle(VEH_ROAD)};
+	TileIndex tile(Map::Size() + 1), alias(tile.base() + (128U << Map::LogX()));
+	for (auto *v : shells) { v->tile = tile; v->x_pos = 16; v->y_pos = 16; v->z_pos = 0; v->UpdatePosition(); }
+	/* Same hash, distinct tile: update must not move a shell to the head. */
+	shells[1]->tile = alias; shells[1]->UpdatePosition();
+	auto Trace = [&](auto range) {
+		uint64_t trace = 0; uint count = 0;
+		for (const Vehicle *v : range) { trace = trace * 131 + v->index.base(); ++count; }
+		fmt::print(stderr, "FLEET occupancy-trace {} {}\n", count, trace);
+	};
+	Trace(VehiclesOnTile(tile)); Trace(VehiclesOnTile(alias));
+	for (auto [x, y] : {std::pair{16, 16}, {INT32_MIN, INT32_MAX}, {INT32_MAX, INT32_MIN}}) {
+		for (uint distance : {1015U, 1016U, 1017U, UINT32_MAX, 0x80000000U}) Trace(VehiclesNearTileXY(x, y, distance));
+	}
+	auto it = VehiclesOnTile(tile).begin();
+	if (*it != shells[2]) FixtureAbort(__LINE__);
+	shells[2]->tile = alias; shells[2]->UpdatePosition(); // Same bucket retains LIVE next.
+	++it;
+	if (*it != shells[0]) FixtureAbort(__LINE__); // Alias filtering skips shell 1.
+	/* Move the current head to a distinct bucket; advance now follows its NEW chain. */
+	shells[2]->tile = TileIndex(tile.base() + 1); shells[2]->UpdatePosition();
+	shells[1]->tile = tile; shells[1]->UpdatePosition();
+	it = VehiclesOnTile(tile).begin();
+	if (*it != shells[1]) FixtureAbort(__LINE__);
+	shells[1]->tile = shells[2]->tile; shells[1]->UpdatePosition();
+	++it;
+	if (it != std::default_sentinel) FixtureAbort(__LINE__);
+	Cost("occupancy-ground", EnsureNoVehicleOnGround(TileIndex(1)));
+	Cost("occupancy-wormhole", TunnelBridgeIsFree(tile, shells[2]->tile));
+	ResetVehicleHash();
+	for (Vehicle *v : Vehicle::Iterate()) v->UpdatePosition();
+	Trace(VehiclesOnTile(shells[2]->tile));
+	for (Vehicle *v : shells) delete v;
+	SaveRandomSeeds(&after);
+	fmt::print(stderr, "FLEET occupancy-probe 18 live-next {}\n", SameRandom(before, after));
+}
+
 /** Running road vehicle 12 of padhattan-ridge-2000 heads to a service depot; the witness runs on 2001-01-01. */
 static VehicleID _drain_vehicle = VehicleID::Invalid();
 static UnitID _drain_unit = 0;
@@ -218,6 +263,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		return true;
 	}
 	if (args[1].starts_with("transaction-build-")) {
+		if (args[1] == "transaction-build-road") OccupancyProbe();
 		VehicleType type = args[1].ends_with("road") ? VEH_ROAD : VEH_AIRCRAFT;
 		Vehicle *v = BuildFixture(type);
 		if (type == VEH_ROAD) GroundPhysicsProbe(RoadVehicle::From(v), Engine::Get(v->engine_type)->VehInfo<RoadVehicleInfo>());

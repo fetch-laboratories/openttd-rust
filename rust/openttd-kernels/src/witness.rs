@@ -200,6 +200,14 @@ witness_blocks! {
         OBJECT_SLOPE_CALLBACK = 17 => "object.slope_callback",
         OBJECT_BUILD_ABOVE = 18 => "object.build_above",
     }
+    occupancy {
+        OCCUPANCY_INSERT = 0 => "occupancy.insert",
+        OCCUPANCY_SAME = 1 => "occupancy.same_bucket",
+        OCCUPANCY_REMOVE = 2 => "occupancy.remove",
+        OCCUPANCY_ALIAS = 3 => "occupancy.alias_filter",
+        OCCUPANCY_RESET = 4 => "occupancy.reset",
+        OCCUPANCY_NEAR = 5 => "occupancy.near",
+    }
     rail {
         RAIL_CHOOSE = 0 => "rail.choose",
         RAIL_REVERSE = 1 => "rail.reverse",

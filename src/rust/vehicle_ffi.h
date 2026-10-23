@@ -277,7 +277,7 @@ struct OpenTTDCommandCostServices;
 struct OpenTTDCommandCost;
 struct OpenTTDOccupancyCommands {
 	const OpenTTDVehicleServices *vehicles;
-	const OpenTTDSharedServices *shared;
+	int32_t (*max_pixel_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(max_pixel_z);
 	const OpenTTDCommandCostServices *costs;
 	uint32_t vehicle_error;
 };

@@ -14,6 +14,7 @@
 #include "station_service_ffi.h"
 #include "vehicle_visits_ffi.h"
 #include "command_cost_ffi.h"
+#include "tile_animation_services.h"
 #include "engine_services.h"
 #include "services_newgrf.h"
 #include "../vehicle_func.h"
@@ -302,7 +303,7 @@ static OpenTTDVehicleAltitudeInputs OPENTTD_VEHICLE_CALL VehicleSvcAltitudeInput
 
 const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept
 {
-	static const OpenTTDOccupancyCommands services{.vehicles = &GetRustVehicleServices(), .shared = &GetRustSharedServices(), .costs = &GetRustCommandCostServices(), .vehicle_error = STR_ERROR_TRAIN_IN_THE_WAY};
+	static const OpenTTDOccupancyCommands services{.vehicles = &GetRustVehicleServices(), .max_pixel_z = OpenTTDTileMaxPixelZ, .costs = &GetRustCommandCostServices(), .vehicle_error = STR_ERROR_TRAIN_IN_THE_WAY};
 	return &services;
 }
 static_assert(AIR_SHADOW == 4);

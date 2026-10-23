@@ -4863,7 +4863,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.track_status = TrainReservationTrackStatus,
 		.try_track = TrainReservationTryTrack,
 		.tunnel_dir = TrainReservationSharedMap<uint64_t, &OpenTTDSharedServices::tunnel_bridge_direction>,
-		.tunnel_free = TrainReservationTunnelFree,
 		.unreserve = TrainReservationUnreserve,
 		.write_dest = TrainReservationWriteDest,
 		.write_last = TrainReservationWriteLast,

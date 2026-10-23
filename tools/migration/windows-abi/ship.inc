@@ -9,6 +9,7 @@ struct ShipProbe {
 	uint8_t tick = 255, running = 255, direction = 1;
 	uint16_t speed = 33;
 	uint32_t stage = 0, paths = 0, positions = 0;
+	OpenTTDVehicleTileLinks links;
 	OpenTTDShipState *owner = nullptr;
 	const OpenTTDShipLeaves *leaves = nullptr;
 	OpenTTDSharedServices services{};
@@ -62,7 +63,7 @@ static void ShipBoundary()
 		.path_result = ShipProbeUnused<void, uint32_t, bool>, .order_free = ShipProbeUnused<void, uint32_t>,
 		.order_dummy = ShipProbeUnused<void, uint32_t>, .order_depot = ShipProbeUnused<void, uint32_t, uint32_t>,
 		.order_leave = ShipProbeUnused<void, uint32_t>, .order_increment = ShipProbeUnused<void, uint32_t>,
-		.timetable = ShipProbeUnused<void, uint32_t>, .position = ShipProbeUnused<void, uint32_t>,
+		.timetable = ShipProbeUnused<void, uint32_t>,
 		.start_dirty = ShipProbeUnused<void, uint32_t>, .depot_dirty = ShipProbeUnused<void, uint32_t>,
 		.depot_invalidate = ShipProbeUnused<void, uint32_t>, .ships_dirty = ShipProbeUnused<void>,
 		.check_orders = ShipProbeUnused<void, uint32_t>,
@@ -76,7 +77,7 @@ static void ShipBoundary()
 		.build_flag = ShipProbeUnused<bool, uint32_t>, .build_random = ShipProbeUnused<void, uint32_t, uint16_t>,
 		.new_position = ShipProbeUnused<OpenTTDShipPosition, uint32_t>, .exit_dir = ShipProbeUnused<uint32_t, uint32_t, uint32_t>,
 		.track_direction = ShipProbeUnused<uint32_t, uint32_t, uint32_t>, .tracks_reach = ShipProbeUnused<uint32_t, uint32_t>,
-		.busy_tile = ShipProbeUnused<bool, uint32_t>, .path_size = ShipProbeUnused<size_t, uint32_t>,
+		.path_size = ShipProbeUnused<size_t, uint32_t>,
 		.path_back = ShipProbeUnused<uint32_t, uint32_t>, .path_pop = ShipProbeUnused<void, uint32_t>,
 		.path_clear = ShipProbeUnused<void, uint32_t>, .enter_tile = ShipProbeUnused<uint32_t, uint32_t, uint32_t, uint32_t, uint32_t>,
 		.process_orders = ShipProbeUnused<bool, uint32_t>,
@@ -131,7 +132,9 @@ static void ShipBoundary()
 	leaves.set_speed = [](uint32_t, uint16_t value) noexcept { ship_probe.speed = value; };
 	leaves.set_dest = [](uint32_t, uint32_t value) noexcept { ship_probe.dest = value; };
 	leaves.path_clear = [](uint32_t) noexcept { ++ship_probe.paths; };
-	leaves.position = [](uint32_t) noexcept { ++ship_probe.positions; };
+	ship_vehicle.tile_links = [](OpenTTDVehicle *) noexcept { ++ship_probe.positions; return &ship_probe.links; };
+	ship_vehicle.tile = [](OpenTTDVehicle *) noexcept { return uint32_t{0}; };
+	ship_vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	ship_maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept {
 		CHECK(ship_probe.stage++ == 0);
 		CHECK(ship_probe.tick == 0 && ship_probe.running == 0 && ship_probe.order_time == 0);
@@ -154,6 +157,7 @@ static void ShipBoundary()
 	};
 	CHECK(openttd_rust_ship_tick(4, shell, &leaves, &ship_probe.services));
 	CHECK(ship_probe.stage == 4 && openttd_rust_ship_get_rotation(state.get()) == 3);
+	openttd_rust_occupancy_update(&ship_vehicle, shell, true);
 	CHECK(!openttd_rust_ship_find_depot(4, 80, &leaves, &ship_probe.services).valid);
 	leaves.owner = [](uint32_t) noexcept { return uint32_t{3}; };
 	leaves.next_depot = [](uint32_t first, OpenTTDShipDepot *out) noexcept {

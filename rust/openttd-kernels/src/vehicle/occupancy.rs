@@ -75,10 +75,12 @@ pub(crate) unsafe fn update(s: &VehicleServices, v: VehicleRef, remove: bool) {
         tile_bucket(s, (s.tile)(v))
     };
     if old == new {
+        crate::witness::hit(crate::witness::OCCUPANCY_SAME);
         return;
     }
     unsafe {
         if !old.is_null() {
+            crate::witness::hit(crate::witness::OCCUPANCY_REMOVE);
             let n = (*links).next;
             if !n.is_null() {
                 (*((s.tile_links)(handle(n)))).prev = (*links).prev;
@@ -86,6 +88,7 @@ pub(crate) unsafe fn update(s: &VehicleServices, v: VehicleRef, remove: bool) {
             *(*links).prev = (*links).next;
         }
         if !new.is_null() {
+            crate::witness::hit(crate::witness::OCCUPANCY_INSERT);
             (*links).next = *new;
             if !(*links).next.is_null() {
                 (*((s.tile_links)(handle((*links).next)))).prev = ptr::addr_of_mut!((*links).next);
@@ -99,6 +102,7 @@ pub(crate) unsafe fn update(s: &VehicleServices, v: VehicleRef, remove: bool) {
 /// No pool allocation/deletion/yield occurs during reset. Retain stale links.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::SchedulerServices) {
+    crate::witness::hit(crate::witness::OCCUPANCY_RESET);
     let pool = (s.pool)();
     let vs = unsafe { &*s.vehicle };
     for i in 0..unsafe { *pool.first_unused } {
@@ -142,6 +146,7 @@ impl OnTile {
     }
     unsafe fn filter(&mut self, s: &VehicleServices) {
         while !self.current.is_null() && (s.tile)(unsafe { handle(self.current) }) != self.tile {
+            crate::witness::hit(crate::witness::OCCUPANCY_ALIAS);
             self.current = unsafe { next(s, self.current) };
         }
     }
@@ -184,6 +189,7 @@ pub struct Near {
 }
 impl Near {
     pub(crate) unsafe fn new(s: &VehicleServices, x: i32, y: i32, distance: u32) -> Self {
+        crate::witness::hit(crate::witness::OCCUPANCY_NEAR);
         let left = (x as u32).wrapping_sub(distance) as i32;
         let right = (x as u32).wrapping_add(distance) as i32;
         let top = (y as u32).wrapping_sub(distance) as i32;
@@ -278,7 +284,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_near_advance(s: &VehicleServices
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDOccupancyCommands" ["probe"] => Commands { vehicles, shared, costs, vehicle_error, };
+    "OpenTTDOccupancyCommands" ["probe"] => Commands { vehicles, max_pixel_z, costs, vehicle_error, };
     "OpenTTDVehicleTileLinks" ["probe"] => Links { next, prev, current, };
     "OpenTTDVehicleOnTile" ["probe"] => OnTile { tile, current, };
     "OpenTTDVehicleNear" ["probe"] => Near { left, top, right, bottom, hxmin, hxmax, hymin, hymax, hx, hy, current, };
@@ -289,7 +295,7 @@ crate::abi::layouts! {
 #[repr(C)]
 pub struct Commands {
     pub vehicles: &'static VehicleServices,
-    pub shared: &'static crate::services::Services,
+    pub max_pixel_z: extern "C" fn(u32) -> i32,
     pub costs: &'static crate::services::CommandCostServices,
     pub vehicle_error: u32,
 }
@@ -309,7 +315,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_ground(
     tile: u32,
 ) {
     let s = c.vehicles;
-    let z = (c.shared.tile_max_z)(tile);
+    let z = (c.max_pixel_z)(tile);
     let mut it = unsafe { OnTile::new(s, tile) };
     while let Some(v) = it.get() {
         let kind = (s.vehicle_type)(v);
@@ -335,7 +341,16 @@ pub unsafe extern "C" fn openttd_rust_occupancy_wormhole(
     end: u32,
     ignore: *const OpenTTDVehicle,
 ) {
-    let s = c.vehicles;
+    c.result(out, unsafe {
+        wormhole_blocker(c.vehicles, tile, end, ignore)
+    });
+}
+pub(crate) unsafe fn wormhole_blocker(
+    s: &VehicleServices,
+    tile: u32,
+    end: u32,
+    ignore: *const OpenTTDVehicle,
+) -> Option<u8> {
     for tile in [tile, end] {
         let mut it = unsafe { OnTile::new(s, tile) };
         while let Some(v) = it.get() {
@@ -348,15 +363,14 @@ pub unsafe extern "C" fn openttd_rust_occupancy_wormhole(
             .contains(&kind)
                 && !ptr::eq(v.0.as_ptr(), ignore)
             {
-                c.result(out, Some(kind));
-                return;
+                return Some(kind);
             }
             unsafe {
                 it.advance(s);
             }
         }
     }
-    c.result(out, None);
+    None
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_occupancy_train(

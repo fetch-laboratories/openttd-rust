@@ -158,8 +158,7 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 		}
 		case 15: response = (new DisasterVehicle(step.a, step.b, static_cast<Direction>(step.c), static_cast<DisasterSubType>(step.id), VehicleID{step.other}))->index.base(); break;
 		case 16: {
-			CommandCost result;
-			GetRustCommandServices().no_vehicle(RustCommandCost(&result), step.id);
+			CommandCost result = EnsureNoVehicleOnGround(TileIndex(step.id));
 			response = result.Failed();
 			break;
 		}

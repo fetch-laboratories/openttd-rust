@@ -697,6 +697,13 @@ def check(scenario, run, mode, role, result):
         ground += ["speed", "accelerate", "brake", "depot"]
     if scenario.get("rail_control") == "collision":
         ground += ["crash"]
+        core.branch_witnesses(
+            scenario,
+            run,
+            role,
+            "occupancy",
+            ["insert", "same_bucket", "remove", "reset", "near"],
+        )
     result[f"{mode}_{role}_ground"] = core.branch_witnesses(
         scenario, run, role, "ground", ground
     )

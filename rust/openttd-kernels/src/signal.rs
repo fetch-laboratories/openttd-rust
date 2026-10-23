@@ -40,10 +40,8 @@ pub struct SignalServices {
     pub assert_condition: extern "C" fn(bool),
     /// Original tunnel transport and entering-direction assertion sites.
     pub assert_wormhole_start: extern "C" fn(u32, u8),
-    /// Original `HasVehicleOnTile(IsTrainAndNotInDepot)` spatial query.
-    pub train_on_tile: extern "C" fn(u32) -> bool,
-    /// Original `EnsureNoTrainOnTrackBits(...).Failed()` spatial query.
-    pub train_on_tracks: extern "C" fn(u32, u8) -> bool,
+    /// Direct Rust occupancy traversal, shared with the train controller.
+    pub vehicles: *const crate::vehicle::VehicleServices,
     /// Original to-be-updated set overflow log.
     pub overflow_tbu: extern "C" fn(),
     /// Original to-be-done set overflow log.
@@ -189,8 +187,22 @@ fn maybe_add(w: &World<'_>, next: Item, previous: Item) -> bool {
     let add = access(|s| !s.tbd.remove(previous));
     !add || add_tbd(w, next)
 }
+fn occupied(w: &World<'_>, tile: u32, bits: Option<u8>) -> bool {
+    // SAFETY: Static services and live shells; signal scans do not delete vehicles.
+    let vs = unsafe { &*w.native.vehicles };
+    vs.any_on_tile(tile, |v| {
+        if (vs.vehicle_type)(v) != crate::vehicle::VehicleType::TRAIN.0 {
+            return false;
+        }
+        crate::witness::hit(crate::witness::SIGNAL_OCCUPANCY_ACCESSORS);
+        let track = (vs.train_handle)(v.0.as_ptr()).track();
+        bits.map_or(track != crate::track_type::TRACK_BIT_DEPOT, |bits| {
+            track == bits || crate::track_func::tracks_overlap(track | bits)
+        })
+    })
+}
 fn train_on_tile(w: &World<'_>, tile: u32, flags: &mut u16) {
-    if *flags & TRAIN == 0 && read!(w, native, train_on_tile, tile) {
+    if *flags & TRAIN == 0 && occupied(w, tile, None) {
         *flags |= TRAIN;
         crate::witness::hit(crate::witness::SIGNAL_TRAIN);
     }
@@ -232,7 +244,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                     let masked = tracks & ENTER_TRACKS[usize::from(dir)];
                     if tracks == 0x0c || tracks == 0x30 {
                         tracks = masked;
-                        if flags & TRAIN == 0 && read!(w, native, train_on_tracks, tile, tracks) {
+                        if flags & TRAIN == 0 && occupied(w, tile, Some(tracks)) {
                             flags |= TRAIN;
                             crate::witness::hit(crate::witness::SIGNAL_TRAIN);
                         }
@@ -737,8 +749,7 @@ crate::abi::layouts! {
         assertions,
         assert_condition,
         assert_wormhole_start,
-        train_on_tile,
-        train_on_tracks,
+        vehicles,
         overflow_tbu,
         overflow_tbd,
         overflow_global,
@@ -825,13 +836,6 @@ pub(crate) fn acquire_context(get: extern "C" fn() -> Context) -> Context {
 pub(crate) fn count_context_owner_read() {
     crate::witness::hit(crate::witness::SIGNAL_CONTEXT_OWNER_READS);
 }
-/// Bounded report from the scenario adapter's occupancy accessor link wrapper.
-/// The ordinary game never calls this diagnostic entry.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_signal_count_occupancy(reads: u64) {
-    crate::witness::add(crate::witness::SIGNAL_OCCUPANCY_ACCESSORS, reads);
-}
-
 /// Narrow unchanged-body probe trace for `SmallSet` operations not reachable from
 /// the stock rail layouts (not a production signal entry or second authority).
 #[repr(C)]

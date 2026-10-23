@@ -306,6 +306,16 @@ def check(scenario, run, mode, role, result):
             "ground",
             [kind + "_power", kind + "_weight", "full_weight"],
         )
+    if scenario["fleet"] == "transaction-build-road":
+        if "FLEET occupancy-probe 18 live-next true" not in run["log"]:
+            raise RuntimeError("missing native occupancy arithmetic/live-advance probe")
+        branch_witnesses(
+            scenario,
+            run,
+            role,
+            "occupancy",
+            ["same_bucket", "remove", "alias_filter", "reset", "near"],
+        )
     if scenario["fleet"] in BRANCHES:
         result[mode + "_" + role + "_branches"] = branch_witnesses(
             scenario, run, role, "vehicle_transactions", BRANCHES[scenario["fleet"]]
