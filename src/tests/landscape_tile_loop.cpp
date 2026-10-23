@@ -11,6 +11,8 @@
 #ifdef WITH_RUST
 #include "../rust/tile_type_access.hpp"
 #include "../rust/landscape_command_ffi.h"
+#include "../rust/landscape_generation_ffi.h"
+#include "../rust/generation_sea_set.hpp"
 #include "abi_layout.hpp"
 #include "../tile_map.h"
 #include "../rust/landscape_loop_ffi.h"
@@ -117,5 +119,27 @@ TEST_CASE("Rust shared tile-type out-of-range preserves callback policy")
 	CHECK(openttd_rust_shared_tile_type({.base = nullptr, .extended = nullptr, .count = 0, .assertions = false}, callback, 0) == 231);
 	CHECK(calls == 3);
 	CHECK(observed == 0);
+}
+#endif
+
+#ifdef WITH_RUST
+TEST_CASE("Rust generation sea identity preserves native flattening iteration")
+{
+	RustGenerationSeaSet boundary;
+	for (uint count : {1U, 1025U, 7U, 64U}) {
+		std::unordered_set<TileIndex> source;
+		boundary.Construct();
+		for (uint i = 0; i < count; i++) {
+			uint tile = (i * 197 + 64) & 8191;
+			source.insert(TileIndex{tile}); boundary.Insert(tile);
+			CHECK(boundary.Contains(tile)); CHECK(boundary.Size() == source.size());
+		}
+		uint32_t tile = boundary.First();
+		/* FlowRiver consumes this stream directly as its two terraform calls per
+		 * tile. Reconstructing after a large search must restore source buckets. */
+		for (TileIndex expected : source) { CHECK(tile == expected.base()); tile = boundary.Next(); }
+		CHECK(tile == INVALID_TILE.base());
+		boundary.Destroy();
+	}
 }
 #endif

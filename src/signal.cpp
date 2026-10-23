@@ -26,6 +26,7 @@
 #include "rust/signal_ffi.h"
 #include "rust/command_services_ffi.h"
 #include "rust/command_cost_services.h"
+#include "rust/services_assert.h"
 #include "rust/services_rail.h"
 #include "rust/company_services.h"
 #include "rust/environment_services.h"
@@ -48,7 +49,6 @@ static void SignalOverflowTbu() noexcept { Debug(misc, 0, "SignalSegment too com
 static void SignalOverflowTbd() noexcept { Debug(misc, 0, "SignalSegment too complex. Set _tbdset is full (maximum 256)"); }
 static void SignalOverflowGlobal() noexcept { Debug(misc, 0, "SignalSegment too complex. Set _globset is full (maximum 128)"); }
 static void SignalAssertCompany([[maybe_unused]] uint8_t owner) noexcept { assert(OpenTTDCompanyIsValid(owner)); }
-static void SignalAssertCondition([[maybe_unused]] bool condition) noexcept { assert(condition); }
 static void SignalAssertWormholeStart([[maybe_unused]] uint32_t tile, [[maybe_unused]] uint8_t dir) noexcept
 {
 	assert(RustTunnelBridgeTransport(tile) == TRANSPORT_RAIL);
@@ -60,7 +60,7 @@ static const OpenTTDSignalServices _signal_services{
 #else
 	.assertions = false,
 #endif
-	.assert_condition = SignalAssertCondition,
+	.assert_condition = RustAssertCondition,
 	.assert_wormhole_start = SignalAssertWormholeStart,
 	.train_on_tile = SignalTrainOnTile,
 	.train_on_tracks = SignalTrainOnTracks,

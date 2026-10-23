@@ -10,6 +10,7 @@
 #include "services_ffi.h"
 #include "company_services.h"
 #include "engine_services.h"
+#include "services_assert.h"
 #include "vehicle_services.h"
 
 /* Named shared services and full native CommandCost storage. All callbacks are
@@ -40,7 +41,6 @@ static uint16_t FleetTransaction_length(void *shell) noexcept { auto *v = static
 static bool FleetTransaction_stopped_in_depot(void *shell) noexcept { return static_cast<Vehicle *>(shell)->IsStoppedInDepot(); }
 static uint8_t FleetTransaction_max_length() noexcept { return _settings_game.vehicle.max_train_length; }
 /* Original assertion sites; Rust evaluates their conditions only when assertions is set. */
-static void FleetTransaction_check([[maybe_unused]] bool condition) noexcept { assert(condition); }
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 static constexpr bool FLEET_ASSERTIONS = true;
 #else
@@ -102,7 +102,7 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.can_carry = FleetTransaction_can_carry,
 	.stopped_in_depot = FleetTransaction_stopped_in_depot,
 	.max_length = FleetTransaction_max_length,
-	.check = FleetTransaction_check,
+	.check = RustAssertCondition,
 	.needs_renew = FleetTransaction_needs_renew,
 	.engine_valid = FleetTransaction_engine_valid,
 	.company_valid = FleetTransaction_company_valid,

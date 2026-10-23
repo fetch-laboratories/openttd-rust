@@ -19,55 +19,31 @@
 #ifdef WITH_RUST
 #include "rust/tgp_ffi.h"
 
-static std::array<uint32_t, 15> TGPSettings()
+OpenTTDTGPSettings RustTGPSettings() noexcept
 {
-	return {Map::LogX(), Map::LogY(), _settings_game.difficulty.terrain_type,
-		_settings_game.game_creation.custom_terrain_type, _settings_game.construction.map_height_limit,
-		_settings_game.game_creation.tgen_smoothness, static_cast<uint32_t>(_settings_game.game_creation.landscape),
-		_settings_game.game_creation.variety, _settings_game.difficulty.quantity_sea_lakes,
-		_settings_game.game_creation.custom_sea_level, _settings_game.construction.freeform_edges,
-		_settings_game.game_creation.water_borders.base(), _settings_game.game_creation.generation_seed,
-		_settings_game.game_creation.map_x, _settings_game.game_creation.map_y};
-}
-
-static uint32_t TGPRandom() noexcept { return Random(); }
-static uint32_t TGPRandomRange(uint32_t limit) noexcept { return RandomRange(limit); }
-static void *_tgp_owner = nullptr;
-
-static void TGPFree()
-{
-	openttd_rust_tgp_destroy(_tgp_owner);
-	_tgp_owner = nullptr;
+	return {
+		.log_x = Map::LogX(),
+		.log_y = Map::LogY(),
+		.terrain = _settings_game.difficulty.terrain_type,
+		.custom_height = _settings_game.game_creation.custom_terrain_type,
+		.height_limit = _settings_game.construction.map_height_limit,
+		.smoothness = _settings_game.game_creation.tgen_smoothness,
+		.landscape = static_cast<uint32_t>(_settings_game.game_creation.landscape),
+		.variety = _settings_game.game_creation.variety,
+		.sea = _settings_game.difficulty.quantity_sea_lakes,
+		.custom_sea = _settings_game.game_creation.custom_sea_level,
+		.freeform = _settings_game.construction.freeform_edges,
+		.borders = _settings_game.game_creation.water_borders.base(),
+		.seed = _settings_game.game_creation.generation_seed,
+		.creation_log_x = _settings_game.game_creation.map_x,
+		.creation_log_y = _settings_game.game_creation.map_y,
+	};
 }
 
 uint GetEstimationTGPMapHeight()
 {
-	auto settings = TGPSettings();
-	return openttd_rust_tgp_estimate(settings.data());
-}
-
-void GenerateTerrainPerlin()
-{
-	auto settings = TGPSettings();
-	_tgp_owner = openttd_rust_tgp_create(settings.data(), TGPRandom, TGPRandomRange);
-	GenerateWorldSetAbortCallback(TGPFree);
-	while (openttd_rust_tgp_advance(_tgp_owner) != 0) IncreaseGeneratingWorldProgress(GWP_LANDSCAPE);
-
-	if (_settings_game.construction.freeform_edges) {
-		for (uint x = 0; x < Map::SizeX(); x++) MakeVoid(TileXY(x, 0));
-		for (uint y = 0; y < Map::SizeY(); y++) MakeVoid(TileXY(0, y));
-	}
-	std::vector<uint8_t> heights(Map::Size());
-	openttd_rust_tgp_heights(_tgp_owner, heights.data());
-	for (uint y = 0; y < Map::SizeY(); y++) {
-		for (uint x = 0; x < Map::SizeX(); x++) {
-			TileIndex tile = TileXY(x, y);
-			SetTileHeight(tile, heights[x + y * Map::SizeX()]);
-			if (IsInnerTile(tile)) MakeClear(tile, CLEAR_GRASS, 3);
-		}
-	}
-	TGPFree();
-	GenerateWorldSetAbortCallback(nullptr);
+	auto settings = RustTGPSettings();
+	return openttd_rust_tgp_estimate(&settings);
 }
 #else /* WITH_RUST */
 /*

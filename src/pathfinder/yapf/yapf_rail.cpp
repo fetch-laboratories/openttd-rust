@@ -21,6 +21,7 @@
 
 #ifdef WITH_RUST
 #include "../../rust/rail_yapf_ffi.h"
+#include "../../rust/services_yapf.h"
 #include "../../rust/services_map.h"
 #include "../../rust/services_rail.h"
 #include "../../rust/vehicle_services.h"
@@ -155,8 +156,7 @@ static void RailDebug(void *context, uint8_t kind, const uint32_t *stats, uint32
 	if (kind == 0) {
 		const Train *v = static_cast<RailYapfContext *>(context)->train;
 		const float ratio = stats[3] == 0 ? 0.0f : static_cast<float>(stats[3]) / static_cast<float>(stats[3] + stats[4]) * 100.0f;
-		Debug(yapf, 3, "[YAPFt]{}{:4d} - {} rounds - {} open - {} closed - CHR {:4.1f}% - C {} D {}",
-			stats[5] ? '-' : '!', v->unitnumber, stats[0], stats[1], stats[2], ratio, static_cast<int32_t>(stats[6]), static_cast<int32_t>(stats[7]));
+		RustYapfDebug('t', stats[5] != 0, v->unitnumber, stats[0], stats[1], stats[2], ratio, static_cast<int32_t>(stats[6]), static_cast<int32_t>(stats[7]));
 	} else if (kind == 3) {
 		if (stats[0] == 0) Debug(desync, 2, "warning: ChooseRailTrack cache mismatch: {} vs {}", stats[1], stats[2]);
 		else Debug(desync, 2, "warning: {} cache mismatch: {} vs {}", stats[0] == 1 ? "CheckReverseTrain" : stats[0] == 2 ? "FindNearestDepotTwoWay" : "FindSafeTile", stats[1] ? "T" : "F", stats[2] ? "T" : "F");

@@ -20,6 +20,7 @@
 
 #ifdef WITH_RUST
 #include "../../rust/ship_yapf_ffi.h"
+#include "../../rust/services_yapf.h"
 #include "../../rust/services_water.h"
 
 static void ShipDestination(const void *context, uint32_t *tile, uint16_t *dirs) noexcept
@@ -61,13 +62,17 @@ static OpenTTDWaterPatch ShipPatch(uint32_t tile) noexcept
 void *ShipWaterVisitNew(OpenTTDWaterPatch) noexcept;
 uint8_t ShipWaterVisitNext(void *, OpenTTDWaterPatch, OpenTTDWaterPatch *) noexcept;
 void ShipWaterVisitDestroy(void *) noexcept;
-static void ShipDebug(uint32_t unit_number, uint8_t kind, uint8_t found, uint32_t rounds, uint32_t open, uint32_t closed, int32_t cost, int32_t distance) noexcept
-{
-	/* Both original ship searches use CYapfSegmentCostCacheNoneT. */
-	Debug(yapf, 3, "[YAPF{}]{}{:4d} - {} rounds - {} open - {} closed - CHR {:4.1f}% - C {} D {}",
-		kind == 0 ? '^' : 'w', found != 0 ? '-' : '!', unit_number, rounds, open, closed, 0.0f, cost, distance);
-}
-static const OpenTTDShipYapfLeaves _ship_yapf_leaves{ShipDestination, ShipFollow, ShipTile, ShipPatch, ShipWaterVisitNew, ShipWaterVisitNext, ShipWaterVisitDestroy, ShipDebug};
+
+static const OpenTTDShipYapfLeaves _ship_yapf_leaves{
+	.destination = ShipDestination,
+	.follow = ShipFollow,
+	.tile = ShipTile,
+	.patch = ShipPatch,
+	.visit_new = ShipWaterVisitNew,
+	.visit_next = ShipWaterVisitNext,
+	.visit_destroy = ShipWaterVisitDestroy,
+	.debug = RustShipYapfDebug,
+};
 
 static OpenTTDShipYapfInput ShipInput(const Ship *v, bool blocked = false)
 {

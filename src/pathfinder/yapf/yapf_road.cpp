@@ -20,6 +20,7 @@
 
 #ifdef WITH_RUST
 #include "../../rust/road_yapf_ffi.h"
+#include "../../rust/services_yapf.h"
 #include "../../rust/services_map.h"
 #include "../../rust/vehicle_services.h"
 
@@ -109,8 +110,7 @@ static const OpenTTDRoadYapfLeaves _road_yapf_leaves{.shared = &_rust_shared_ser
 static void RoadDebug(const RoadVehicle *v, const OpenTTDRoadYapfResult &result)
 {
 	if (result.rounds == 0 || _debug_yapf_level < 3) return;
-	Debug(yapf, 3, "[YAPFr]{}{:4d} - {} rounds - {} open - {} closed - CHR {:4.1f}% - C {} D {}",
-		result.found ? '-' : '!', v->unitnumber, result.rounds, result.open, result.closed, 0.0f,
+	RustYapfDebug('r', result.found, v->unitnumber, result.rounds, result.open, result.closed, 0.0f,
 		result.found ? result.cost : -1, result.found ? result.distance : -1);
 }
 

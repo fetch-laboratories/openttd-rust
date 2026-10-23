@@ -180,7 +180,7 @@ const OFFSETS: [(i32, i32); 8] = [
     (1, -1),
     (0, -1),
 ];
-const FLOOD_FROM: [u8; 15] = [
+pub(crate) const FLOOD_FROM: [u8; 15] = [
     0b1010_1010,
     0b0000_1010,
     0b1000_0010,

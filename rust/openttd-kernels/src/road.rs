@@ -1139,7 +1139,7 @@ impl Game<'_> {
                 dir
             } else if p.dest == 0 {
                 let count = trackdirs.count_ones();
-                let mut n = ((u64::from(self.random()) * u64::from(count)) >> 32) as u32;
+                let mut n = crate::random_func::scale_to_limit(self.random(), count);
                 let mut bits = trackdirs;
                 let mut bit = 0;
                 loop {
