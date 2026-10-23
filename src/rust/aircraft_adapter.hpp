@@ -298,10 +298,7 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_invalid_scheme(OpenTTDAircraftVehicle
 	FatalError("OK, you shouldn't be here, check your Airport Scheme!");
 }
 
-static void OPENTTD_AIRCRAFT_CALL Aircraft_unreachable(OpenTTDAircraftVehicle) noexcept
-{
-	RustNotReached();
-}
+
 
 static uint32_t OPENTTD_AIRCRAFT_CALL Aircraft_cargo_age_property(OpenTTDAircraftVehicle vehicle) noexcept
 {
@@ -467,7 +464,7 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.invalid_movement = Aircraft_invalid_movement,
 	.invalid_position = Aircraft_invalid_position,
 	.invalid_scheme = Aircraft_invalid_scheme,
-	.unreachable = Aircraft_unreachable,
+	.unreachable = RustNotReachedWithUnusedOwner<OpenTTDAircraftVehicle>,
 	.cargo_age_property = Aircraft_cargo_age_property,
 	.range_property = Aircraft_range_property,
 	.touchdown_sound = Aircraft_touchdown_sound,

@@ -1134,121 +1134,192 @@ impl World<'_> {
         }
     }
     fn build_river(&self, start: u32, end: u32, spring: u32, main: bool, g: &Settings) {
-        #[derive(Clone, Copy)]
-        struct Node {
-            tile: u32,
-            parent: Option<usize>,
-            cost: i32,
-            estimate: i32,
-        }
-        let mut nodes = vec![Node {
-            tile: start,
-            parent: None,
-            cost: 0,
-            estimate: 0,
-        }];
-        let mut open = NodeMap::default();
-        let mut closed: NodeMap<u32, usize> = NodeMap::default();
-        let mut heap = crate::binaryheap::BinaryHeap::new(2048);
-        open.insert(start, 0_usize);
-        heap.include(0, |a, b| nodes[a].estimate < nodes[b].estimate);
-        let mut destination = None;
-        let mut rounds = 0_u32;
-        #[allow(clippy::while_let_loop)] // Native counts the final empty-open round.
-        loop {
-            rounds = rounds.wrapping_add(1);
-            let Some(best) = heap.first() else {
-                break;
-            };
-            if nodes[best].tile == end {
-                destination = Some(best);
-                break;
-            }
-            for dir in 0..4 {
-                let tile = self.map.add_diag(nodes[best].tile, dir);
-                if !self.valid(tile) || !self.flows_down(nodes[best].tile, tile) {
-                    continue;
-                }
-                // Both cost and estimate run before admission checks, including
-                // rejected open/closed duplicates: every such RNG draw matters.
-                let cost = nodes[best]
-                    .cost
-                    .wrapping_add(1)
-                    .wrapping_add(self.s.random_range(u32::from(g.route_random)) as i32);
-                let estimate = cost.wrapping_add(self.map.distance_manhattan(end, tile) as i32);
-                (self.a.assert_condition)(estimate >= nodes[best].estimate);
-                let node = Node {
-                    tile,
-                    parent: Some(best),
-                    cost,
-                    estimate,
-                };
-                if let Some(&old) = open.get(&tile) {
-                    if estimate < nodes[old].estimate {
-                        w::hit(w::GENERATION_YAPF_OPEN_UPDATE);
-                        heap.remove(old, |a, b| nodes[a].estimate < nodes[b].estimate);
-                        nodes[old] = node;
-                        heap.include(old, |a, b| nodes[a].estimate < nodes[b].estimate);
-                    }
-                    continue;
-                }
-                if let Some(&old) = closed.get(&tile) {
-                    if estimate < nodes[old].estimate {
-                        (self.a.not_reached)();
-                    }
-                    continue;
-                }
-                let id = nodes.len();
-                nodes.push(node);
-                open.insert(tile, id);
-                heap.include(id, |a, b| nodes[a].estimate < nodes[b].estimate);
-            }
-            if g.max_search_nodes != 0 && closed.len() as i32 >= g.max_search_nodes {
-                w::hit(w::GENERATION_YAPF_LIMIT);
-                break;
-            }
-            open.remove(&nodes[best].tile);
-            heap.remove(best, |a, b| nodes[a].estimate < nodes[b].estimate);
-            closed.insert(nodes[best].tile, best);
-        }
-        let (cost, distance) = destination.map_or((-1, -1), |id| {
-            (
-                nodes[id].cost,
-                nodes[id].estimate.wrapping_sub(nodes[id].cost),
-            )
-        });
-        (self.a.river_debug)(
-            destination.is_some(),
-            rounds,
-            open.len() as u32,
-            closed.len() as u32,
-            cost,
-            distance,
-        );
-        let Some(destination) = destination else {
+        let mut pf = RiverBuilder::new(self, g, start, end);
+        if !pf.find_path() {
             return;
-        };
+        }
+        let destination = pf.get_best_node().unwrap();
         w::hit(w::GENERATION_YAPF_FOUND);
         let mut current = Some(destination);
         while let Some(id) = current {
-            let tile = nodes[id].tile;
+            let tile = pf.nodes[id].get_tile();
             if !self.water(tile) {
                 self.river_tile(tile);
             }
-            current = nodes[id].parent;
+            current = pf.nodes[id].parent;
         }
         if g.generator != LG_ORIGINAL && main {
             let long = u32::from(g.min_river_length) * 4;
             let mut current = Some(destination);
             while let Some(id) = current {
-                let center = nodes[id].tile;
+                let center = pf.nodes[id].get_tile();
                 let length = self.map.distance_manhattan(spring, center);
                 let diameter = (length / (long / 3) + 1).min(3);
                 if diameter > 1 {
                     self.for_spiral(center, diameter, |tile| self.make_wider(tile, center));
                 }
-                current = nodes[id].parent;
+                current = pf.nodes[id].parent;
             }
         }
+    }
+}
+
+type RiverNode = crate::yapf_node::Node<u32>;
+/// Complete local CYapfBaseT/NodeList state. The no-cache component retains no
+/// segments; keys are tiles because every source trackdir is `INVALID_TRACKDIR`.
+struct RiverBuilder<'a, 'w> {
+    world: &'a World<'w>,
+    settings: &'a Settings,
+    end: u32,
+    nodes: Vec<RiverNode>,
+    open: NodeMap<u32, usize>,
+    closed: NodeMap<u32, usize>,
+    heap: crate::binaryheap::BinaryHeap,
+    best_dest: Option<usize>,
+    best_intermediate: Option<usize>,
+    rounds: u32,
+}
+impl<'a, 'w> RiverBuilder<'a, 'w> {
+    fn new(world: &'a World<'w>, settings: &'a Settings, start: u32, end: u32) -> Self {
+        let mut pf = Self {
+            world,
+            settings,
+            end,
+            nodes: Vec::new(),
+            open: NodeMap::default(),
+            closed: NodeMap::default(),
+            heap: crate::binaryheap::BinaryHeap::new(2048),
+            best_dest: None,
+            best_intermediate: None,
+            rounds: 0,
+        };
+        pf.add_startup_node(RiverNode::set(None, start));
+        pf
+    }
+    fn node_cache_fetch(_node: &mut RiverNode) -> bool {
+        false
+    }
+    fn include(&mut self, id: usize) {
+        self.heap
+            .include(id, |a, b| self.nodes[a].less(self.nodes[b]));
+    }
+    fn pop_open_node(&mut self, id: usize) {
+        self.open.remove(&self.nodes[id].get_tile());
+        self.heap
+            .remove(id, |a, b| self.nodes[a].less(self.nodes[b]));
+    }
+    fn add_startup_node(&mut self, mut node: RiverNode) {
+        Self::node_cache_fetch(&mut node);
+        if !self.open.contains_key(&node.get_tile()) {
+            let id = self.nodes.len();
+            self.open.insert(node.get_tile(), id);
+            self.nodes.push(node);
+            self.include(id);
+        }
+    }
+    fn detect_destination(&self, node: RiverNode) -> bool {
+        node.get_tile() == self.end
+    }
+    fn calc_cost(&self, node: &mut RiverNode) {
+        node.cost = self.nodes[node.parent.unwrap()]
+            .cost
+            .wrapping_add(1)
+            .wrapping_add(
+                self.world
+                    .s
+                    .random_range(u32::from(self.settings.route_random)) as i32,
+            );
+    }
+    fn calc_estimate(&self, node: &mut RiverNode) {
+        node.estimate = node
+            .cost
+            .wrapping_add(self.world.map.distance_manhattan(self.end, node.get_tile()) as i32);
+        (self.world.a.assert_condition)(node.estimate >= self.nodes[node.parent.unwrap()].estimate);
+    }
+    fn add_new_node(&mut self, mut node: RiverNode) {
+        Self::node_cache_fetch(&mut node);
+        // Source calculates cost/estimate before either duplicate admission
+        // check. Rejected candidates consume the same shared random word.
+        self.calc_cost(&mut node);
+        self.calc_estimate(&mut node);
+        let set_intermediate = self.settings.max_search_nodes > 0
+            && self.best_intermediate.is_none_or(|id| {
+                self.nodes[id].estimate.wrapping_sub(self.nodes[id].cost)
+                    > node.estimate.wrapping_sub(node.cost)
+            });
+        if let Some(&old) = self.open.get(&node.get_tile()) {
+            if node.estimate < self.nodes[old].estimate {
+                w::hit(w::GENERATION_YAPF_OPEN_UPDATE);
+                self.pop_open_node(old);
+                self.nodes[old] = node;
+                self.open.insert(node.get_tile(), old);
+                self.include(old);
+                if set_intermediate {
+                    self.best_intermediate = Some(old);
+                }
+            }
+            return;
+        }
+        if let Some(&old) = self.closed.get(&node.get_tile()) {
+            if node.estimate < self.nodes[old].estimate {
+                (self.world.a.not_reached)();
+            }
+            return;
+        }
+        let id = self.nodes.len();
+        self.nodes.push(node);
+        self.open.insert(node.get_tile(), id);
+        self.include(id);
+        if set_intermediate {
+            self.best_intermediate = Some(id);
+        }
+    }
+    fn follow_node(&mut self, old: usize) {
+        for dir in 0..4 {
+            let tile = self.world.map.add_diag(self.nodes[old].get_tile(), dir);
+            if self.world.valid(tile) && self.world.flows_down(self.nodes[old].get_tile(), tile) {
+                self.add_new_node(RiverNode::set(Some(old), tile));
+            }
+        }
+    }
+    fn get_best_node(&self) -> Option<usize> {
+        self.best_dest.or(self.best_intermediate)
+    }
+    fn find_path(&mut self) -> bool {
+        #[allow(clippy::while_let_loop)] // Source counts the empty-open final round.
+        loop {
+            self.rounds = self.rounds.wrapping_add(1);
+            let Some(best) = self.heap.first() else {
+                break;
+            };
+            if self.detect_destination(self.nodes[best]) {
+                self.best_dest = Some(best);
+                break;
+            }
+            self.follow_node(best);
+            if self.settings.max_search_nodes != 0
+                && self.closed.len() as i32 >= self.settings.max_search_nodes
+            {
+                w::hit(w::GENERATION_YAPF_LIMIT);
+                break;
+            }
+            self.pop_open_node(best);
+            self.closed.insert(self.nodes[best].get_tile(), best);
+        }
+        let (cost, distance) = self.best_dest.map_or((-1, -1), |id| {
+            (
+                self.nodes[id].cost,
+                self.nodes[id].estimate.wrapping_sub(self.nodes[id].cost),
+            )
+        });
+        (self.world.a.river_debug)(
+            self.best_dest.is_some(),
+            self.rounds,
+            self.open.len() as u32,
+            self.closed.len() as u32,
+            cost,
+            distance,
+        );
+        self.best_dest.is_some()
     }
 }

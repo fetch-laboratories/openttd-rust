@@ -64,8 +64,13 @@ uint8_t ShipWaterVisitNext(void *, OpenTTDWaterPatch, OpenTTDWaterPatch *) noexc
 void ShipWaterVisitDestroy(void *) noexcept;
 
 static const OpenTTDShipYapfLeaves _ship_yapf_leaves{
-	.destination = ShipDestination, .follow = ShipFollow, .tile = ShipTile, .patch = ShipPatch,
-	.visit_new = ShipWaterVisitNew, .visit_next = ShipWaterVisitNext, .visit_destroy = ShipWaterVisitDestroy,
+	.destination = ShipDestination,
+	.follow = ShipFollow,
+	.tile = ShipTile,
+	.patch = ShipPatch,
+	.visit_new = ShipWaterVisitNew,
+	.visit_next = ShipWaterVisitNext,
+	.visit_destroy = ShipWaterVisitDestroy,
 	.debug = RustShipYapfDebug,
 };
 

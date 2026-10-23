@@ -3,4 +3,6 @@
 #ifndef RUST_SERVICES_ASSERT_H
 #define RUST_SERVICES_ASSERT_H
 inline void RustNotReached() noexcept { NOT_REACHED(); }
+template <typename Owner>
+inline void RustNotReachedWithUnusedOwner(Owner) noexcept { RustNotReached(); }
 #endif /* RUST_SERVICES_ASSERT_H */

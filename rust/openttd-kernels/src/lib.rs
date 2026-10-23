@@ -95,6 +95,7 @@ mod water_cmd;
 mod water_type;
 mod widget_parser;
 mod witness;
+mod yapf_node;
 
 pub use admin_conversion::Action as AdminAction;
 pub use alternating::{AlternatingState, AlternatingStep};
