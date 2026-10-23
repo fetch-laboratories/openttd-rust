@@ -468,14 +468,6 @@ impl World<'_> {
             return;
         }
         let direction = ((r >> 22) & 3) as u8;
-        w::hit(
-            [
-                w::GENERATION_TEMPLATE_NE,
-                w::GENERATION_TEMPLATE_SE,
-                w::GENERATION_TEMPLATE_SW,
-                w::GENERATION_TEMPLATE_NW,
-            ][usize::from(direction)],
-        );
         let (mut width, mut height) = (template.width, template.height);
         if diag_dir_to_axis(direction) == 1 {
             std::mem::swap(&mut width, &mut height);
@@ -497,6 +489,14 @@ impl World<'_> {
         if x + width >= self.map.max_x() || y + height >= self.size_y - 1 {
             return;
         }
+        w::hit(
+            [
+                w::GENERATION_TEMPLATE_NE,
+                w::GENERATION_TEMPLATE_SE,
+                w::GENERATION_TEMPLATE_SW,
+                w::GENERATION_TEMPLATE_NW,
+            ][usize::from(direction)],
+        );
         let mut tile = self.map.tile_xy(x, y);
         let (outer, inner, step, advance) = match direction {
             0 => (height, width, self.map.diff(1, 0), self.map.diff(0, 1)),
@@ -677,9 +677,6 @@ impl World<'_> {
         self.river_tile(center);
         let diameter = length.max(16);
         let trees = self.chance(1, 2);
-        if trees {
-            w::hit(w::GENERATION_WETLAND_TREES);
-        }
         self.for_spiral(center, diameter, |tile| {
             if !self.valid_terminus_tile(tile, height, g) {
                 return;
@@ -693,6 +690,7 @@ impl World<'_> {
             } else if (self.s.tile_type)(tile) == MP_CLEAR {
                 (self.clear.set_ground)(tile, ClearGroundType(CLEAR_ROUGH), 3);
                 if trees && g.tree_placer != TP_NONE {
+                    w::hit(w::GENERATION_WETLAND_TREES);
                     unsafe {
                         crate::trees::openttd_rust_trees_place(
                             tile,
