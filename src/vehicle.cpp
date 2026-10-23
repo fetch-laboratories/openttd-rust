@@ -93,7 +93,6 @@ static OpenTTDVisitPrediction VehicleVisitPrediction(OpenTTDVehicle *handle) noe
 }
 static void VehicleVisitMergeGraph(OpenTTDLinkGraph *lg, OpenTTDLinkGraph *other) noexcept
 {
-	LinkGraphSchedule::instance.Dequeue(other);
 	lg->Merge(other); // Updates GoodsEntries of other
 }
 static void VehicleVisitUpdateEdge(OpenTTDLinkGraph *lg, uint16_t from, uint16_t to, uint32_t capacity, uint32_t usage, uint32_t time, uint8_t modes) noexcept
@@ -171,6 +170,7 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.links = &GetRustStationLinks(),
 		.loading = &GetRustStationLoading(),
 		.refit = &GetRustVehicleRefitServices(),
+		.schedule = &LinkGraphSchedule::services,
 		.capacity = VehicleVisitCapacity,
 		.prediction = VehicleVisitPrediction,
 		.display_speed = RustVehicleDisplaySpeed,

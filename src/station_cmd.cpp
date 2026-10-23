@@ -700,7 +700,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	},
 	.set_demand = [](OpenTTDBaseStation *handle, uint8_t cargo, uint32_t amount) noexcept -> void {
 		GoodsEntry &ge = Station::From(static_cast<BaseStation *>(handle))->goods[cargo];
-		if (LinkGraph::IsValidID(ge.link_graph)) (*LinkGraph::Get(ge.link_graph))[ge.node].SetDemand(amount);
+		if (RustLinkGraphValid(ge.link_graph.base())) (*RustLinkGraphGet(ge.link_graph.base()))[ge.node].SetDemand(amount);
 	},
 	.acceptance_news = [](OpenTTDBaseStation *handle, uint64_t cargoes, bool reject) noexcept -> void {
 		ShowRejectOrAcceptNews(Station::From(static_cast<BaseStation *>(handle)), cargoes, reject);
@@ -733,12 +733,13 @@ static const OpenTTDStationServices _rust_station_services = {
 		if (ge.link_graph == LinkGraphID::Invalid()) {
 			if (RustLinkGraphAvailable()) {
 				lg = RustLinkGraphAllocate(cargo);
+				LinkGraphSchedule::instance.Queue(lg);
 				RustLinkGraphJoin(lg, st, cargo);
 			} else {
 				RustLinkGraphAllocationFailure();
 			}
 		} else {
-			lg = LinkGraph::Get(ge.link_graph);
+			lg = RustLinkGraphGet(ge.link_graph.base());
 		} if (lg != nullptr) (*lg)[ge.node].UpdateSupply(amount);
 	},
 	.station_list_invalidation = RustStationListInvalidation,

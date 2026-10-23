@@ -38,12 +38,14 @@ struct OpenTTDVisitCosts {
 	OpenTTDCommandCost *out;
 	OpenTTDCommandCost *temporary;
 };
+struct OpenTTDScheduleServices;
 struct OpenTTDVehicleVisits {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStationServices *station;
 	const OpenTTDStationLinks *links;
 	const OpenTTDStationLoading *loading;
 	const OpenTTDVehicleRefitServices *refit;
+	const OpenTTDScheduleServices *schedule;
 	OpenTTDVisitCapacity (*capacity)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
 	OpenTTDVisitPrediction (*prediction)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(prediction);
 	int32_t (*display_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(display_speed);

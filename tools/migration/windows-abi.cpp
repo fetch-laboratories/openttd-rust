@@ -86,6 +86,7 @@ static void Layout(const char *name, std::initializer_list<size_t> values)
 static void Layouts()
 {
 #include "abi-layout-probe.inc"
+#include "abi-layout-linkgraph_schedule.inc"
 #include "abi-layout-scheduler.inc"
 #include "abi-layout-maintenance.inc"
 #include "abi-layout-landscape.inc"

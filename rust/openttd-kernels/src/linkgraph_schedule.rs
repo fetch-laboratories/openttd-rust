@@ -1,13 +1,9 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Whole `LinkGraphSchedule` owner. Workers only touch native job snapshots.
 #![allow(unsafe_code)]
-use crate::{timer_game_common::SECONDS_PER_DAY, witness};
+use crate::{linkgraph::NativeGraph as Graph, timer_game_common::SECONDS_PER_DAY, witness};
 use std::{cell::UnsafeCell, collections::VecDeque, ffi::c_void};
 
-#[repr(C)]
-struct Graph {
-    _opaque: [u8; 0],
-}
 #[repr(C)]
 struct Job {
     _opaque: [u8; 0],
@@ -26,7 +22,7 @@ struct Queues {
     running_len: usize,
 }
 #[repr(C)]
-struct Services {
+pub(crate) struct Services {
     graph_size: extern "C" fn(*const Graph) -> u16,
     assert_graph: extern "C" fn(*const Graph),
     can_allocate: extern "C" fn() -> bool,
@@ -50,9 +46,9 @@ struct Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScheduleServices" ["probe"] => Services { graph_size, assert_graph, can_allocate, allocation_failure, new_job, spawn, due, completed, graph_index, destroy_job, graph_valid, graph_get, abort_job, next_graph, next_job, shift_graph, shift_job, post_pause, set_pause, begin_measurement };
-    "OpenTTDScheduleTime" ["probe"] => Time { date, fract, interval };
-    "OpenTTDScheduleQueues" ["probe"] => Queues { schedule, schedule_len, running, running_len };
+    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { graph_size, assert_graph, can_allocate, allocation_failure, new_job, spawn, due, completed, graph_index, destroy_job, graph_valid, graph_get, abort_job, next_graph, next_job, shift_graph, shift_job, post_pause, set_pause, begin_measurement };
+    "OpenTTDScheduleTime" ["linkgraph_schedule"] => Time { date, fract, interval };
+    "OpenTTDScheduleQueues" ["linkgraph_schedule"] => Queues { schedule, schedule_len, running, running_len };
 
 }
 struct State {
@@ -75,13 +71,13 @@ fn access<T>(f: impl FnOnce(&mut State) -> T) -> T {
 const SPAWN_JOIN_TICK: u16 = 21;
 
 #[unsafe(no_mangle)]
-extern "C" fn openttd_rust_schedule_queue(s: &Services, graph: *mut Graph) {
+pub(crate) extern "C" fn openttd_rust_schedule_queue(s: &Services, graph: *mut Graph) {
     (s.assert_graph)(graph);
     access(|q| q.schedule.push_back(graph));
     witness::hit(witness::SCHEDULE_QUEUE);
 }
 #[unsafe(no_mangle)]
-extern "C" fn openttd_rust_schedule_dequeue(graph: *mut Graph) {
+pub(crate) extern "C" fn openttd_rust_schedule_dequeue(graph: *mut Graph) {
     access(|q| q.schedule.retain(|&g| g != graph));
 }
 fn spawn_next(s: &Services) {

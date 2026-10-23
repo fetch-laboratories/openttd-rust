@@ -22,9 +22,7 @@ inline LinkGraph *RustLinkGraphGet(uint16_t id) noexcept { return LinkGraph::Get
 inline bool RustLinkGraphAvailable() noexcept { return LinkGraph::CanAllocateItem(); }
 inline OpenTTDLinkGraph *RustLinkGraphAllocate(uint8_t cargo) noexcept
 {
-	LinkGraph *lg = new LinkGraph(cargo);
-	LinkGraphSchedule::instance.Queue(lg);
-	return lg;
+	return new LinkGraph(cargo);
 }
 inline void RustLinkGraphAllocationFailure() noexcept { Debug(misc, 0, "Can't allocate link graph"); }
 inline void RustLinkGraphJoin(OpenTTDLinkGraph *lg, OpenTTDBaseStation *st, uint8_t cargo) noexcept

@@ -4,7 +4,9 @@
 #define RUST_LINKGRAPH_SCHEDULE_STAGING_HPP
 #include "linkgraph_schedule_ffi.h"
 
-/* Save/load runs serialized with the game loop. Workers never touch these queues;
+/* VideoDriver::game_state_mutex serializes save/load with the game loop (the
+ * headless harness is single-threaded). DoSave calls SlSaveChunks before it
+ * starts the asynchronous compression writer. Workers never touch these queues;
  * export and both copies below invoke no callback, yield or pool reset. Discard
  * exported spans before SlObject, which may recurse through SlError/SlNullPointers.
  * Nested fixup uses active itself and publishes nulls before returning; the outer
