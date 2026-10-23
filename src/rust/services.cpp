@@ -277,7 +277,8 @@ static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && O
 static_assert(INVALID_VEH_ORDER_ID == 0xFF && to_underlying(OrderLoadType::NoLoad) == 4 && to_underlying(OrderUnloadType::Unload) == 1 && to_underlying(OrderUnloadType::Transfer) == 2 && to_underlying(OrderUnloadType::NoUnload) == 4);
 static_assert(to_underlying(StationType::Truck) == 2 && to_underlying(StationType::Bus) == 3);
 static_assert(CARGO_AUTO_REFIT == 0xFD && StationID::Invalid().base() == 0xFFFF);
-static_assert(LinkGraphID::Invalid().base() == UINT16_MAX);
+static_assert(LinkGraph::MIN_TIMEOUT_DISTANCE == 32 && LinkGraph::STALE_LINK_DEPOT_TIMEOUT.base() == 1024 && LinkGraph::COMPRESSION_INTERVAL.base() == 256);
+static_assert(EconomyTime::INVALID_DATE.base() == -1 && INVALID_NODE == UINT16_MAX && LinkGraphID::Invalid().base() == UINT16_MAX);
 static_assert(EdgeUpdateModes{EdgeUpdateMode::Increase}.base() == 1 && EdgeUpdateModes{EdgeUpdateMode::Refresh}.base() == 2 && EdgeUpdateModes{EdgeUpdateMode::Restricted}.base() == 4 && EdgeUpdateModes{EdgeUpdateMode::Unrestricted}.base() == 8);
 static_assert(VL_STANDARD == 0 && VL_SHARED_ORDERS == 1 && VL_STATION_LIST == 2 && VL_DEPOT_LIST == 3 && VL_GROUP_LIST == 4);
 static_assert(GVSF_FRONT == 0 && GVSF_ARTICULATED_PART == 1 && GVSF_WAGON == 2 && GVSF_ENGINE == 3 && GVSF_FREE_WAGON == 4 && GVSF_MULTIHEADED == 5);
@@ -605,12 +606,14 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDCommandCostServices.hpp"
 #include "abi-visit-OpenTTDSharedServices.hpp"
 #include "abi-visit-OpenTTDPbsServices.hpp"
+#include "abi-visit-OpenTTDLiveGraphServices.hpp"
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
 #include "abi-visit-OpenTTDClearSquareServices.hpp"
 #include "abi-visit-OpenTTDWaterRestorationServices.hpp"
 bool CheckAbi_services()
 {
-	return AbiServicesComplete(GetPbsServices()) && AbiServicesComplete(GetRustEnvironmentServices()) &&
+	return AbiServicesComplete(GetPbsServices()) && AbiServicesComplete(GetRustLiveGraphServices()) &&
+		AbiServicesComplete(GetRustEnvironmentServices()) &&
 		AbiServicesComplete(GetRustRandomServices()) &&
 		AbiServicesComplete(GetRustRailMapServices()) &&
 		AbiServicesComplete(GetRustCommandServices()) &&
@@ -620,3 +623,47 @@ bool CheckAbi_services()
 		AbiServicesComplete(GetRustWaterRestorationServices());
 }
 #endif
+
+static OpenTTDLiveGraphAccess LiveGraphAccess(OpenTTDLinkGraph *graph) noexcept { return {LiveGraphOwner(graph), graph->index.base()}; }
+static OpenTTDLiveStationInput LiveGraphStation(uint16_t station, uint8_t cargo) noexcept
+{
+	Station *st = Station::Get(StationID(station));
+	return {RustStationLocation(st), st->goods[cargo].status.Test(GoodsEntry::State::Acceptance)};
+}
+static void LiveGraphAttach(uint16_t station, uint8_t cargo, uint16_t graph, uint16_t node) noexcept
+{
+	GoodsEntry &ge = Station::Get(StationID(station))->goods[cargo];
+	ge.link_graph = LinkGraphID(graph);
+	ge.node = node;
+}
+static void LiveGraphSetNode(uint16_t station, uint8_t cargo, uint16_t node) noexcept { Station::Get(StationID(station))->goods[cargo].node = node; }
+static void LiveGraphDelete(OpenTTDLinkGraph *graph) noexcept { delete graph; }
+
+static uint16_t LiveGraphStationNode(OpenTTDBaseStation *station, uint8_t cargo) noexcept { return static_cast<Station *>(station)->goods[cargo].node; }
+static OpenTTDLinkGraph *LiveGraphGetIfValid(uint16_t id) noexcept { return LinkGraph::GetIfValid(LinkGraphID(id)); }
+static uint16_t LiveGraphStationID(const OpenTTDBaseStation *station) noexcept { return station->index.base(); }
+const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
+{
+	static const OpenTTDLiveGraphServices services{
+#if !defined(NDEBUG) || defined(WITH_ASSERT)
+		.assertions = true,
+#else
+		.assertions = false,
+#endif
+		.get = RustLinkGraphGet,
+		.get_if_valid = LiveGraphGetIfValid,
+		.station_id = LiveGraphStationID,
+		.owner = LiveGraphOwner,
+		.access = LiveGraphAccess,
+		.station = LiveGraphStation,
+		.attach = LiveGraphAttach,
+		.set_node = LiveGraphSetNode,
+		.delete_graph = LiveGraphDelete,
+		.graph_id = RustStationLinkGraphIndex,
+		.node = LiveGraphStationNode,
+		.available = RustLinkGraphAvailable,
+		.allocate = RustLinkGraphAllocate,
+		.allocation_failure = RustLinkGraphAllocationFailure,
+	};
+	return services;
+}

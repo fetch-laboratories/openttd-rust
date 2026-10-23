@@ -76,6 +76,7 @@ def scenarios(soak):
         }
         for mode in (
             "commands",
+            "linkgraph",
             "reload",
             "removed-destination",
             "map-edges",
@@ -262,6 +263,10 @@ def check(scenario, run, mode, role, result):
     }.get(kind, [])
     if counts := core.branch_witnesses(scenario, run, role, "station", required):
         result[f"{mode}_{role}_station_branches"] = counts
+    graph_required = {"stale-restrict": ["restrict"], "stale-release": ["release"]}.get(
+        kind, []
+    )
+    core.branch_witnesses(scenario, run, role, "linkgraph", graph_required)
     # Route prediction and link statistics (#349) on real station visits.
     visits = VISIT_WITNESSES.get(kind, [])
     if counts := core.branch_witnesses(scenario, run, role, "vehicle_visits", visits):
@@ -513,9 +518,69 @@ static void StationWaypoints(TileIndex origin, Company *company, DoCommandFlags 
 	fmt::print(stderr, "STCMD waypoints axes reuse tie occupied {} {} {}\n", company->infrastructure.station, company->infrastructure.rail[RAILTYPE_RAIL], company->infrastructure.road[ROADTYPE_ROAD]);
 }
 
+/* #378: real graph mutations plus arithmetic outside ordinary play's range. */
+static void StationGraphs()
+{
+	constexpr CargoType cargo = 0;
+	std::array<Station *, 4> stations; std::array<LinkGraphID, 4> graphs; std::array<NodeID, 4> nodes;
+	auto it = Station::Iterate().begin();
+	for (size_t i = 0; i < stations.size(); i++, ++it) { StationNeed(it != Station::Iterate().end(), __LINE__); stations[i] = *it; graphs[i] = stations[i]->goods[cargo].link_graph; nodes[i] = stations[i]->goods[cargo].node; }
+	auto join = [cargo](LinkGraph *g, Station *st) { st->goods[cargo].link_graph = g->index; st->goods[cargo].node = g->AddNode(st); };
+	StationNeed(LinkGraph::CanAllocateItem(2), __LINE__);
+	LinkGraph *first = new LinkGraph(cargo), *second = new LinkGraph(cargo);
+	Backup<GoodsEntry::States> acceptance(stations[2]->goods[cargo].status);
+	stations[2]->goods[cargo].status.Set(GoodsEntry::State::Acceptance);
+	join(first, stations[0]); join(first, stations[1]); join(second, stations[2]); join(second, stations[3]);
+	(*first)[0].AddEdge(1, 65535, 5, 120, {EdgeUpdateMode::Increase, EdgeUpdateMode::Restricted});
+	(*second)[0].UpdateEdge(1, 65536, 4, 17, {EdgeUpdateMode::Unrestricted});
+	(*second)[0].UpdateSupply(11);
+	LinkGraph copy(*second);
+	stations[2]->goods[cargo].status.Reset(GoodsEntry::State::Acceptance);
+	first->Merge(second);
+#ifdef WITH_RUST
+	StationNeed(*openttd_rust_live_node_fields(first->RustState(), 2).demand == 0, __LINE__);
+#else
+	StationNeed((*first)[2].demand == 0, __LINE__);
+#endif
+	fmt::print(stderr, "STCMD graph merge {} {} {} {} {}\n", first->Size(), copy.Size(), stations[2]->goods[cargo].node, (*first)[2][3].LastUpdate().base(), (*first)[2][3].travel_time_sum);
+	first->RemoveNode(1);
+	fmt::print(stderr, "STCMD graph nonlast {} {} {}\n", first->Size(), stations[3]->goods[cargo].node, (*first)[2][1].dest_node);
+	first->RemoveNode(first->Size() - 1);
+	fmt::print(stderr, "STCMD graph last {}\n", first->Size());
+	acceptance.Restore();
+	for (size_t i = 0; i < stations.size(); i++) { stations[i]->goods[cargo].link_graph = graphs[i]; stations[i]->goods[cargo].node = nodes[i]; }
+	delete first;
+	for (uint cap : {1U, 65535U, 65536U, UINT32_MAX}) {
+		LinkGraph graph(cargo); graph.Init(1);
+		graph[0].UpdateSupply(UINT32_MAX); graph[0].UpdateSupply(2);
+		{
+#ifdef WITH_RUST
+			auto &edge = graph[0].AppendEdge();
+#else
+			auto &edge = graph[0].edges.emplace_back();
+#endif
+			edge.dest_node = 0; edge.capacity = cap; edge.usage = cap - 1; edge.travel_time_sum = UINT64_MAX - 1;
+			edge.last_restricted_update = TimerGameEconomy::date;
+		}
+		graph.Compress(); graph.ShiftDates(TimerGameEconomy::Date{9});
+		const auto &edge = graph[0][0];
+		fmt::print(stderr, "STCMD graph compress {} {} {} {} {} {} {}\n", cap, edge.capacity, edge.usage, edge.travel_time_sum, edge.last_unrestricted_update.base(), edge.LastUpdate().base(), edge.TravelTime());
+		fmt::print(stderr, "STCMD graph scale {} {} {}\n", graph.Monthly(UINT32_MAX), LinkGraph::Scale(edge.travel_time_sum, TimerGameEconomy::Date{257}, TimerGameEconomy::Date{3}), LinkGraph::Scale(0, TimerGameEconomy::Date{1}, TimerGameEconomy::Date{-1}));
+	}
+	for (uint64_t sum : {uint64_t{0}, UINT64_MAX - 1}) {
+		LinkGraph::BaseEdge edge(0); edge.capacity = UINT32_MAX - 2; edge.usage = UINT32_MAX - 3; edge.travel_time_sum = sum;
+		edge.Update(7, 6, 100, {EdgeUpdateMode::Increase, EdgeUpdateMode::Refresh, EdgeUpdateMode::Restricted});
+		edge.Update(11, 3, 0, {EdgeUpdateMode::Refresh, EdgeUpdateMode::Unrestricted});
+		edge.Update(5, 1, 0, {EdgeUpdateMode::Increase});
+		edge.Restrict(); edge.Release();
+		fmt::print(stderr, "STCMD graph update {} {} {} {} {}\n", edge.capacity, edge.usage, edge.travel_time_sum, edge.TravelTime(), edge.LastUpdate().base());
+	}
+	fmt::print(stderr, "STCMD complete\n");
+}
 static bool StationCommands(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1] == "linkgraph") { StationGraphs(); return true; }
 	Company *company = *Company::Iterate().begin();
 	RoadVehicle *bus = nullptr;
 	if (args[1] == "removed-destination") {
@@ -918,6 +983,21 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
 
 
 def check_commands(scenario, run, mode, role, result):
+    if scenario["station_commands"] == "linkgraph":
+        core.branch_witnesses(
+            scenario,
+            run,
+            role,
+            "linkgraph",
+            [
+                "merge",
+                "remove_last",
+                "remove_nonlast",
+                "restrict",
+                "release",
+                "compress",
+            ],
+        )
     required = (
         ["rename"]
         if scenario["station_commands"] == "reload"
@@ -991,7 +1071,8 @@ def check_commands(scenario, run, mode, role, result):
             ]
         )
         core.branch_witnesses(scenario, run, role, "waypoint_command", branches)
-    core.branch_witnesses(scenario, run, role, "station_command", required)
+    if scenario["station_commands"] != "linkgraph":
+        core.branch_witnesses(scenario, run, role, "station_command", required)
     lines = [line for line in run["log"] if line.startswith("STCMD ")]
     expected = (
         "STCMD reloaded"

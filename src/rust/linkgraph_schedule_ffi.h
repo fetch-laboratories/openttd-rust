@@ -3,6 +3,7 @@
 #ifndef RUST_LINKGRAPH_SCHEDULE_FFI_H
 #define RUST_LINKGRAPH_SCHEDULE_FFI_H
 #include "linkgraph_ffi.h"
+struct OpenTTDLiveGraph;
 class LinkGraphJob;
 struct OpenTTDScheduleTime { int32_t date; uint16_t fract, interval; };
 struct OpenTTDScheduleQueues {
@@ -16,7 +17,7 @@ struct OpenTTDScheduleQueues {
  * Exported spans live only until the next owner mutation; copy in native code
  * before SlObject. Native staging publishes partial state on return and unwind, including recursive null cleanup. */
 struct OpenTTDScheduleServices {
-	uint16_t (OPENTTD_LINKGRAPH_CALL *graph_size)(const LinkGraph *) noexcept;
+	OpenTTDLiveGraph *(OPENTTD_LINKGRAPH_CALL *graph_owner)(LinkGraph *) noexcept;
 	void (OPENTTD_LINKGRAPH_CALL *assert_graph)(const LinkGraph *) noexcept;
 	bool (OPENTTD_LINKGRAPH_CALL *can_allocate)() noexcept;
 	void (OPENTTD_LINKGRAPH_CALL *allocation_failure)() noexcept;
@@ -31,7 +32,6 @@ struct OpenTTDScheduleServices {
 	void (OPENTTD_LINKGRAPH_CALL *abort_job)(LinkGraphJob *) noexcept;
 	LinkGraph *(OPENTTD_LINKGRAPH_CALL *next_graph)(uint32_t *) noexcept;
 	LinkGraphJob *(OPENTTD_LINKGRAPH_CALL *next_job)(uint32_t *) noexcept;
-	void (OPENTTD_LINKGRAPH_CALL *shift_graph)(LinkGraph *, int32_t) noexcept;
 	void (OPENTTD_LINKGRAPH_CALL *shift_job)(LinkGraphJob *, int32_t) noexcept;
 	void (OPENTTD_LINKGRAPH_CALL *post_pause)(bool) noexcept;
 	void (OPENTTD_LINKGRAPH_CALL *set_pause)() noexcept;

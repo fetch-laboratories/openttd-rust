@@ -587,6 +587,8 @@ pub unsafe extern "C" fn openttd_rust_flow_map_delete(
 }
 #[repr(C)]
 pub struct Services {
+    pub snapshot: *const crate::linkgraph::live::Graph,
+    pub live_graph: *const crate::linkgraph::live::Graph,
     pub context: *mut c_void,
     pub read: extern "C" fn(*mut c_void, u8, u16, u16) -> u32,
     pub job_flows: extern "C" fn(*mut c_void, u16) -> *mut FlowMap,
@@ -601,13 +603,13 @@ pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
     if read(0, 0, 0) == 0 {
         return;
     }
-    let size = read(1, 0, 0) as u16;
+    let size = unsafe { &*s.snapshot }.size();
     let graph = read(12, 0, 0);
     let valid_node = |node| {
         read(3, node, 0) != 0 && read(10, node, 0) == graph && read(11, node, 0) == u32::from(node)
     };
     for node in 0..size {
-        let station = read(2, node, 0) as u16;
+        let station = unsafe { &*s.snapshot }.nodes[usize::from(node)].station;
         if !valid_node(node) {
             for index in 0..size {
                 let map = (s.job_flows)(s.context, index);
@@ -626,15 +628,23 @@ pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
                 continue;
             }
             let dest = read(6, node, edge) as u16;
-            let to = read(2, dest, 0) as u16;
-            if !valid_node(dest) || read(7, node, dest) == 0 || read(13, node, dest) == 0 {
+            let to = unsafe { &*s.snapshot }.nodes[usize::from(dest)].station;
+            let observed = if valid_node(dest) {
+                // No owner borrow crosses a native world leaf, including reroute.
+                unsafe { &*s.live_graph }.nodes[usize::from(node)]
+                    .edge(dest)
+                    .map(|edge| (edge.last_update(), edge.last_unrestricted_update))
+            } else {
+                None
+            };
+            if observed.is_none_or(|(last, _)| last == crate::timer_game_common::INVALID_DATE) {
                 let erased = unsafe { (&mut *flows).deleted(to) };
                 for origin in erased {
                     unsafe {
                         (&mut *live).erase(origin);
                     }
                 }
-            } else if read(14, node, dest) == 0 {
+            } else if observed.unwrap().1 == crate::timer_game_common::INVALID_DATE {
                 unsafe {
                     openttd_rust_flow_map_change(flows, 2, 0, to, 0);
                 }
@@ -689,6 +699,8 @@ crate::abi::layouts! {
         found,
     };
     "OpenTTDCargoFlowServices" ["probe"] => Services {
+        snapshot,
+        live_graph,
         context,
         read,
         job_flows,
@@ -839,7 +851,19 @@ mod tests {
                 (*world.live[0]).add(7, 106, 4, false);
                 (*world.live[0]).add(7, 107, 6, false);
             }
+            let snapshot = crate::linkgraph::live::openttd_rust_live_graph_new(0, 0);
+            unsafe {
+                crate::linkgraph::live::openttd_rust_live_graph_init(snapshot, 3);
+                for node in 0..3 {
+                    *crate::linkgraph::live::openttd_rust_live_node_fields(snapshot, node)
+                        .station = 100 + node;
+                }
+            }
             let services = Services {
+                snapshot,
+                // The sole annotated edge targets invalid station 102; source
+                // short-circuiting must never read the live graph in this test.
+                live_graph: std::ptr::null(),
                 context: (&raw mut world).cast(),
                 read: job_read,
                 job_flows: job_map,
@@ -849,6 +873,7 @@ mod tests {
             };
             unsafe {
                 openttd_rust_flow_apply(&raw const services);
+                crate::linkgraph::live::openttd_rust_live_graph_delete(snapshot);
             }
             assert!(!unsafe { &*world.live[0] }.entries.contains_key(&1));
             assert!(unsafe { &*world.live[0] }.entries.contains_key(&3));

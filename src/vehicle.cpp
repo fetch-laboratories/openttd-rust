@@ -95,14 +95,6 @@ static OpenTTDVisitPrediction VehicleVisitPrediction(OpenTTDVehicle *handle) noe
 	const Vehicle *v = VehicleOf(handle);
 	return {.loading_tick = v->last_loading_tick, .last_loading = v->last_loading_station.base(), .last_station = RustVehicleLastStationVisited(handle), .ticks = RustVehicleLoadUnloadTicks(handle)};
 }
-static void VehicleVisitMergeGraph(OpenTTDLinkGraph *lg, OpenTTDLinkGraph *other) noexcept
-{
-	lg->Merge(other); // Updates GoodsEntries of other
-}
-static void VehicleVisitUpdateEdge(OpenTTDLinkGraph *lg, uint16_t from, uint16_t to, uint32_t capacity, uint32_t usage, uint32_t time, uint8_t modes) noexcept
-{
-	(*lg)[from].UpdateEdge(to, capacity, usage, time, EdgeUpdateModes{modes});
-}
 static void VehicleVisitArrivalDirty(OpenTTDVehicle *handle) noexcept
 {
 	Vehicle *v = VehicleOf(handle);
@@ -179,13 +171,6 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.prediction = VehicleVisitPrediction,
 		.display_speed = RustVehicleDisplaySpeed,
 		.location = RustStationLocation,
-		.graph_available = RustLinkGraphAvailable,
-		.allocate_graph = RustLinkGraphAllocate,
-		.allocation_failure = RustLinkGraphAllocationFailure,
-		.join_graph = RustLinkGraphJoin,
-		.graph_size = RustLinkGraphSize,
-		.merge_graph = VehicleVisitMergeGraph,
-		.update_edge = VehicleVisitUpdateEdge,
 		.percent = {.up = STR_PERCENT_UP, .down = STR_PERCENT_DOWN, .up_down = STR_PERCENT_UP_DOWN, .none = STR_PERCENT_NONE},
 		.set_last_loading = RustVehicleSetLastLoadingStation,
 		.set_loading_tick = RustVehicleSetLastLoadingTick,

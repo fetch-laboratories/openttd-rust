@@ -1,7 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Whole `LinkGraphSchedule` owner. Workers only touch native job snapshots.
 #![allow(unsafe_code)]
-use crate::{linkgraph::NativeGraph as Graph, timer_game_common::SECONDS_PER_DAY, witness};
+use crate::{linkgraph::{NativeGraph as Graph, live}, timer_game_common::SECONDS_PER_DAY, witness};
 use std::{cell::UnsafeCell, collections::VecDeque, ffi::c_void};
 
 #[repr(C)]
@@ -23,7 +23,7 @@ struct Queues {
 }
 #[repr(C)]
 pub(crate) struct Services {
-    graph_size: extern "C" fn(*const Graph) -> u16,
+    graph_owner: extern "C" fn(*mut Graph) -> *mut live::Graph,
     assert_graph: extern "C" fn(*const Graph),
     can_allocate: extern "C" fn() -> bool,
     allocation_failure: extern "C" fn(),
@@ -38,7 +38,6 @@ pub(crate) struct Services {
     abort_job: extern "C" fn(*mut Job),
     next_graph: extern "C" fn(*mut u32) -> *mut Graph,
     next_job: extern "C" fn(*mut u32) -> *mut Job,
-    shift_graph: extern "C" fn(*mut Graph, i32),
     shift_job: extern "C" fn(*mut Job, i32),
     post_pause: extern "C" fn(bool),
     set_pause: extern "C" fn(),
@@ -46,7 +45,7 @@ pub(crate) struct Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { graph_size, assert_graph, can_allocate, allocation_failure, new_job, spawn, due, completed, graph_index, destroy_job, graph_valid, graph_get, abort_job, next_graph, next_job, shift_graph, shift_job, post_pause, set_pause, begin_measurement };
+    "OpenTTDScheduleServices" ["linkgraph_schedule"] => Services { graph_owner, assert_graph, can_allocate, allocation_failure, new_job, spawn, due, completed, graph_index, destroy_job, graph_valid, graph_get, abort_job, next_graph, next_job, shift_job, post_pause, set_pause, begin_measurement };
     "OpenTTDScheduleTime" ["linkgraph_schedule"] => Time { date, fract, interval };
     "OpenTTDScheduleQueues" ["linkgraph_schedule"] => Queues { schedule, schedule_len, running, running_len };
 
@@ -85,7 +84,7 @@ fn spawn_next(s: &Services) {
         return;
     };
     let first = next;
-    while (s.graph_size)(next) < 2 {
+    while unsafe { (&*(s.graph_owner)(next)).size() } < 2 {
         next = access(|q| {
             q.schedule.rotate_left(1);
             q.schedule[0]
@@ -156,7 +155,8 @@ extern "C" fn openttd_rust_schedule_shift(s: &Services, interval: i32) {
         if graph.is_null() {
             break;
         }
-        (s.shift_graph)(graph, interval);
+        // SAFETY: pool iteration yields a live shell; no borrow crosses a callback.
+        unsafe { live::openttd_rust_live_graph_shift((s.graph_owner)(graph), interval) };
     }
     from = 0;
     loop {

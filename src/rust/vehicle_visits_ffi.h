@@ -50,13 +50,6 @@ struct OpenTTDVehicleVisits {
 	OpenTTDVisitPrediction (*prediction)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(prediction);
 	int32_t (*display_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(display_speed);
 	uint32_t (*location)(const OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
-	bool (*graph_available)() noexcept OPENTTD_SERVICE_DEFAULT(graph_available);
-	OpenTTDLinkGraph *(*allocate_graph)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate_graph);
-	void (*allocation_failure)() noexcept OPENTTD_SERVICE_DEFAULT(allocation_failure);
-	void (*join_graph)(OpenTTDLinkGraph *, OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(join_graph);
-	uint16_t (*graph_size)(const OpenTTDLinkGraph *) noexcept OPENTTD_SERVICE_DEFAULT(graph_size);
-	void (*merge_graph)(OpenTTDLinkGraph *, OpenTTDLinkGraph *) noexcept OPENTTD_SERVICE_DEFAULT(merge_graph);
-	void (*update_edge)(OpenTTDLinkGraph *, uint16_t, uint16_t, uint32_t, uint32_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(update_edge);
 	OpenTTDVisitPercentStrings percent;
 	void (*set_last_loading)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_last_loading);
 	void (*set_loading_tick)(OpenTTDVehicle *, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_loading_tick);

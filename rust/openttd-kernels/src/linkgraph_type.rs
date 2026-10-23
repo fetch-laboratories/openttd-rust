@@ -7,8 +7,10 @@
 
 //! `linkgraph_type.h` values. `services.cpp` asserts every value.
 
-/// `LinkGraphID::Invalid().base()`.
-pub(crate) const INVALID_LINK_GRAPH: u16 = u16::MAX;
+/// `INVALID_NODE`.
+pub const INVALID_NODE: u16 = u16::MAX;
+/// `LinkGraphID::Invalid()`.
+pub const INVALID_LINK_GRAPH: u16 = u16::MAX;
 
 /// `EdgeUpdateModes`, the `EnumBitSet<EdgeUpdateMode, uint8_t>` base value.
 #[repr(transparent)]
@@ -23,6 +25,10 @@ impl EdgeUpdateModes {
     pub const RESTRICTED: Self = Self(1 << 2);
     /// `EdgeUpdateMode::Unrestricted`.
     pub const UNRESTRICTED: Self = Self(1 << 3);
+    /// `EnumBitSet::Test`, for one named update mode.
+    pub const fn test(self, mode: Self) -> bool {
+        self.0 & mode.0 != 0
+    }
     /// Set union, `{a, b}`.
     #[must_use]
     pub const fn with(self, other: Self) -> Self {

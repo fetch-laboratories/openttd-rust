@@ -12,6 +12,8 @@
     clippy::cast_sign_loss
 )]
 
+pub(crate) mod live;
+
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// Opaque live native `LinkGraph`; never dereferenced by Rust.

@@ -11,3 +11,5 @@ pub const MONTHS_IN_YEAR: u32 = 12;
 
 /// `EconomyTime::SECONDS_PER_DAY`.
 pub const SECONDS_PER_DAY: i32 = 2;
+/// `TimerGameConst::INVALID_DATE`, inherited by `EconomyTime`/`CalendarTime`.
+pub const INVALID_DATE: i32 = -1;

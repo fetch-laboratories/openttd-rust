@@ -15,7 +15,7 @@
 #include "../linkgraph/linkgraphjob.h"
 #include "station_service_ffi.h"
 
-inline uint16_t RustLinkGraphSize(const LinkGraph *g) noexcept { return g->Size(); }
+inline OpenTTDLiveGraph *LiveGraphOwner(OpenTTDLinkGraph *graph) noexcept { return graph->RustState(); }
 inline uint16_t RustLinkGraphJobGraphIndex(const LinkGraphJob *j) noexcept { return j->LinkGraphIndex().base(); }
 inline bool RustLinkGraphValid(uint16_t id) noexcept { return LinkGraph::IsValidID(LinkGraphID(id)); }
 inline LinkGraph *RustLinkGraphGet(uint16_t id) noexcept { return LinkGraph::Get(LinkGraphID(id)); }
@@ -26,10 +26,4 @@ inline OpenTTDLinkGraph *RustLinkGraphAllocate(uint8_t cargo) noexcept
 	return new LinkGraph(cargo);
 }
 inline void RustLinkGraphAllocationFailure() noexcept { Debug(misc, 0, "Can't allocate link graph"); }
-inline void RustLinkGraphJoin(OpenTTDLinkGraph *lg, OpenTTDBaseStation *st, uint8_t cargo) noexcept
-{
-	GoodsEntry &ge = static_cast<Station *>(st)->goods[cargo];
-	ge.link_graph = lg->index;
-	ge.node = lg->AddNode(static_cast<Station *>(st));
-}
 #endif /* RUST_SERVICES_LINKGRAPH_H */

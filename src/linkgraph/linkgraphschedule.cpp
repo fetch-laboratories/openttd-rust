@@ -39,7 +39,7 @@
 static_assert(LinkGraphSchedule::SPAWN_JOIN_TICK == 21 && EconomyTime::SECONDS_PER_DAY == 2);
 using ScheduleDate = TimerGameEconomy::Date;
 constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
-	.graph_size = RustLinkGraphSize,
+	.graph_owner = LiveGraphOwner,
 	.assert_graph = +[](const LinkGraph *g) noexcept { assert(g == LinkGraph::Get(g->index)); },
 	.can_allocate = +[]() noexcept { return LinkGraphJob::CanAllocateItem(); },
 	.allocation_failure = +[]() noexcept { NOT_REACHED(); },
@@ -60,7 +60,6 @@ constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
 		for (LinkGraphJob *j : LinkGraphJob::Iterate(*from)) { *from = j->index.base() + 1U; return j; }
 		return nullptr;
 	},
-	.shift_graph = +[](LinkGraph *g, int32_t interval) noexcept { g->ShiftDates(ScheduleDate(interval)); },
 	.shift_job = +[](LinkGraphJob *j, int32_t interval) noexcept { j->ShiftJoinDate(ScheduleDate(interval)); },
 	.post_pause = +[](bool pause) noexcept { Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, pause); },
 	.set_pause = +[]() noexcept { _pause_mode.Set(PauseMode::LinkGraph); },

@@ -1823,6 +1823,30 @@ pool-shift gaps, failing absent completion markers. Native tests exercise ABI,
 partial-state unwind and real SlError recursive cleanup. Actual concurrent worker,
 multiplayer/GUI timing and historical LGRS versions remain #156 gaps. Independent
 source review and focused checks pass; root must decide actual cost/retirement disposition.
+### Live link graph contents and mutation (#378)
+
+Rust owns cargo, compression date, nodes and sorted edge vectors in one owner per
+native shell. Lifecycle/copy/init, node and edge mutation, supply/demand/location,
+restriction/release, merge/scaling, compression, dates and queries run in Rust.
+C++ keeps pool IDs/reuse, station membership leaves and the independent scheduler.
+Each job deep-copies the same representation; native annotations borrow canonical
+station scalars and immutable edge references until the existing worker join.
+The computation and flow-application ports are unchanged ownership, not new retirement.
+
+LGRP/LGRJ retain field names, widths/order and legacy matrix/list conversions.
+Native SlObject writes canonical scalar addresses and appends edges before decoding;
+partial effects remain visible. Legacy matrix staging retains its original scope.
+SlErrorCorrupt/SlNullPointers and all exception unwinding remain C++ frames. LGRP/J
+have no pointer-fixup handler; graph borrows end before station writes or deletion.
+Read-only job access never creates an exclusive Rust borrow during worker execution.
+
+Default evidence extends the station fixture with merge, last/nonlast replacement,
+current acceptance, fresh timestamps, compression thresholds, unsigned travel sums,
+Scale narrowing and date sentinels against unchanged reference bodies. Required owner
+witnesses cover those mutations and real stale restriction/release. Native tests pin
+scalar layouts/addresses and distinct job snapshot storage/lifetime. Focused station
+stale/removal/reload and symmetric/asymmetric LGRJ reload compare graphs, station flows
+and full semantic state. Legacy/corrupt-load matrices and real-thread timing remain #156.
 
 <!-- Subsystem: Towns, industries and subsidies. Add a new entry at the end of its group, not of the file. -->
 
