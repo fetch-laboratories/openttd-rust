@@ -105,7 +105,7 @@ static uint32_t ReadCargoFlowJob(void *context, uint8_t op, uint16_t node, uint1
 		case 7: return (*RustLinkGraphGet(RustLinkGraphJobGraphIndex(&job)))[node].HasEdgeTo(edge_index);
 		case 8: return _settings_game.linkgraph.GetDistributionType(job.Cargo()) == DT_MANUAL;
 		case 9: return Station::Get(job[node].base.station)->goods[job.Cargo()].GetData().IsEmpty();
-		case 10: return Station::Get(job[node].base.station)->goods[job.Cargo()].link_graph.base();
+		case 10: return RustStationLinkGraphIndex(Station::Get(job[node].base.station), job.Cargo());
 		case 11: return Station::Get(job[node].base.station)->goods[job.Cargo()].node;
 		case 12: return RustLinkGraphJobGraphIndex(&job);
 		case 13: return (*RustLinkGraphGet(RustLinkGraphJobGraphIndex(&job)))[node][edge_index].LastUpdate() != EconomyTime::INVALID_DATE;

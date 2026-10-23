@@ -726,21 +726,11 @@ static const OpenTTDStationServices _rust_station_services = {
 		StationID next = ge.GetVia(st->index);
 		ge.GetOrCreateData().cargo.Append(new CargoPacket(st->index, amount, Source(source.id, source.type)), next);
 	},
-	.update_supply = [](OpenTTDBaseStation *handle, uint8_t cargo, uint32_t amount) noexcept -> void {
-		Station *st = Station::From(static_cast<BaseStation *>(handle));
-		GoodsEntry &ge = st->goods[cargo];
-		LinkGraph *lg = nullptr;
-		if (ge.link_graph == LinkGraphID::Invalid()) {
-			if (RustLinkGraphAvailable()) {
-				lg = RustLinkGraphAllocate(cargo);
-				LinkGraphSchedule::instance.Queue(lg);
-				RustLinkGraphJoin(lg, st, cargo);
-			} else {
-				RustLinkGraphAllocationFailure();
-			}
-		} else {
-			lg = RustLinkGraphGet(ge.link_graph.base());
-		} if (lg != nullptr) (*lg)[ge.node].UpdateSupply(amount);
+	.supply_graph = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> uint16_t {
+		return RustStationLinkGraphIndex(handle, cargo);
+	},
+	.update_supply = [](OpenTTDLinkGraph *graph, uint16_t node, uint32_t amount) noexcept {
+		(*graph)[node].UpdateSupply(amount);
 	},
 	.station_list_invalidation = RustStationListInvalidation,
 	.new_cargo_animation = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> void {
@@ -791,7 +781,7 @@ static const OpenTTDStationServices _rust_station_services = {
 };
 static const OpenTTDStationLinks _rust_station_links = {
 	.graph = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> OpenTTDLinkGraph * {
-		return LinkGraph::GetIfValid(static_cast<Station *>(handle)->goods[cargo].link_graph);
+		return LinkGraph::GetIfValid(LinkGraphID(RustStationLinkGraphIndex(handle, cargo)));
 	},
 	.automatic_distribution = OpenTTDAutomaticCargoDistribution,
 	.node = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> uint16_t {
@@ -5196,7 +5186,7 @@ uint MoveGoodsToStation(CargoType cargo, uint amount, Source source, const Stati
 {
 #ifdef WITH_RUST
 	std::pair cursor(all_stations.begin(), all_stations.end());
-	return openttd_rust_station_distribute(cargo, amount, {source.id, source.type}, &cursor, exclusivity.base(), &_rust_station_services);
+	return openttd_rust_station_distribute(cargo, amount, {source.id, source.type}, &cursor, exclusivity.base(), &_rust_station_services, &GetRustVehicleVisits());
 #else
 	/* Return if nothing to do. Also the rounding below fails for 0. */
 	if (all_stations.empty()) return 0;

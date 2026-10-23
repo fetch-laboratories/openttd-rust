@@ -34,7 +34,7 @@ pub(crate) struct Services {
     graph_index: extern "C" fn(*const Job) -> u16,
     destroy_job: extern "C" fn(*mut Job),
     graph_valid: extern "C" fn(u16) -> bool,
-    graph_get: extern "C" fn(u16) -> *mut Graph,
+    pub(crate) graph_get: extern "C" fn(u16) -> *mut Graph,
     abort_job: extern "C" fn(*mut Job),
     next_graph: extern "C" fn(*mut u32) -> *mut Graph,
     next_job: extern "C" fn(*mut u32) -> *mut Job,

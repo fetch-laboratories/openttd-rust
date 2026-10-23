@@ -7,6 +7,9 @@
 
 //! `linkgraph_type.h` values. `services.cpp` asserts every value.
 
+/// `LinkGraphID::Invalid().base()`.
+pub(crate) const INVALID_LINK_GRAPH: u16 = u16::MAX;
+
 /// `EdgeUpdateModes`, the `EnumBitSet<EdgeUpdateMode, uint8_t>` base value.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
