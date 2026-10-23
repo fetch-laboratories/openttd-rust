@@ -26,6 +26,7 @@ use crate::slope_func::{get_inclined_slope_direction, get_slope_max_z, is_steep_
 use crate::station::BaseStation;
 use crate::station_service::World;
 use crate::town::AuthorityServices;
+use waypoint::WaypointLayout;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -160,6 +161,11 @@ pub struct Strings {
     pub demolish_dock: u32,
     pub object_in_way: u32,
     pub oilrig_name: u32,
+    pub waypoint_name: u32,
+    pub buoy_name: u32,
+    pub waypoint_adjoins_multiple: u32,
+    pub waypoint_close: u32,
+    pub buoy_in_use: u32,
 }
 #[repr(C)]
 pub struct CommandServicesTable {
@@ -349,13 +355,27 @@ pub struct CommandServicesTable {
     pub industry_neutral: extern "C" fn(*mut Industry) -> *mut BaseStation,
     pub clear_industry_neutral: extern "C" fn(*mut Industry),
     pub industry_area: extern "C" fn(*mut Industry) -> Area,
-    pub remove_buoy: extern "C" fn(*mut CommandCost, u32, u16),
     pub autoslope_axis: extern "C" fn(u32, i32, u8, u8) -> bool,
     pub station_list_classes_invalidate: extern "C" fn(),
     // Waypoint command leaves; canonical shells and shared map services.
     pub rail_axis: extern "C" fn(u32) -> crate::services::Axis,
     pub road_ground: *const crate::ground::RoadServices,
     pub clear_cached_name: extern "C" fn(*mut BaseStation),
+    pub waypoint_available: extern "C" fn() -> bool,
+    pub new_waypoint: extern "C" fn(u32) -> *mut BaseStation,
+    pub string_id: extern "C" fn(*mut BaseStation) -> u32,
+    pub set_string_id: extern "C" fn(*mut BaseStation, u32),
+    pub set_location: extern "C" fn(*mut BaseStation, u32),
+    pub set_road_waypoint: extern "C" fn(*mut BaseStation),
+    pub waypoint_default_name: extern "C" fn(*mut BaseStation),
+    pub waypoint_view_invalidate: extern "C" fn(*mut BaseStation),
+    pub road_waypoint_area_add: extern "C" fn(*mut BaseStation, u32),
+    pub tile_flat: extern "C" fn(u32) -> bool,
+    pub make_buoy: extern "C" fn(u32, u16, crate::services::WaterClass),
+    pub make_rail_waypoint: extern "C" fn(u32, u8, u16, u8, u8, crate::services::RailType),
+    pub set_rail_station_reservation: extern "C" fn(u32, bool),
+    pub waypoint_layout_init: extern "C" fn(*mut WaypointLayout, *const RailSpec, u8),
+    pub waypoint_layout_gfx: extern "C" fn(*mut WaypointLayout, bool) -> u8,
 }
 struct Ctx<'a> {
     s: &'a CommandServicesTable,
@@ -518,38 +538,7 @@ pub unsafe extern "C" fn openttd_rust_station_check_buildable(
         check_bridge,
     );
 }
-/// Check building a rail station below a bridge.
-/// # Safety
-/// Native tables, optional spec and output are live for this synchronous call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_rail_bridge_ok(
-    s: *const CommandServicesTable,
-    out: *mut CommandCost,
-    tile: u32,
-    spec: *const RailSpec,
-    kind: u8,
-    layout: u8,
-) {
-    let c = unsafe { Ctx::new(s) };
-    if !(c.shared.bridge_above)(tile) {
-        return c.c(out).zero();
-    }
-    let south = (c.s.southern_bridge_end)(tile);
-    let info = if spec.is_null() {
-        (c.s.default_bridge_info)(kind)
-    } else {
-        unsafe { (c.s.rail_bridge_info)(spec) }
-    };
-    c.bridge_ok(
-        c.c(out),
-        tile,
-        info,
-        kind,
-        layout,
-        c.bridge_height(south),
-        c.s.strings.demolish_bridge,
-    );
-}
+
 /// Check building a road stop below a bridge.
 /// # Safety
 /// Native tables, optional spec and output are live for this synchronous call.
@@ -582,65 +571,7 @@ pub unsafe extern "C" fn openttd_rust_station_road_bridge_ok(
         c.s.strings.demolish_bridge,
     );
 }
-/// Check a dock/buoy's default clearance.
-/// # Safety
-/// Tables and output are live for this call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_default_bridge_ok(
-    s: *const CommandServicesTable,
-    out: *mut CommandCost,
-    tile: u32,
-    kind: u8,
-    layout: u8,
-) {
-    let c = unsafe { Ctx::new(s) };
-    c.default_bridge_ok(c.c(out), tile, kind, layout);
-}
-/// Compute the expanded train area before testing the spread limit.
-/// # Safety
-/// The station, tables and native cost output stay live for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_expand_rail(
-    s: *const CommandServicesTable,
-    out: *mut CommandCost,
-    st: *const BaseStation,
-    new_area: Area,
-) -> Area {
-    let c = unsafe { Ctx::new(s) };
-    let old = unsafe { (c.s.train_area)(st) };
-    let x = c.map().tile_x(old.tile).min(c.map().tile_x(new_area.tile));
-    let y = c.map().tile_y(old.tile).min(c.map().tile_y(new_area.tile));
-    let area = Area {
-        tile: (y << c.map().log_x) + x,
-        w: (c
-            .map()
-            .tile_x(old.tile)
-            .wrapping_add(u32::from(old.w))
-            .max(
-                c.map()
-                    .tile_x(new_area.tile)
-                    .wrapping_add(u32::from(new_area.w)),
-            )
-            .wrapping_sub(x)) as u16,
-        h: (c
-            .map()
-            .tile_y(old.tile)
-            .wrapping_add(u32::from(old.h))
-            .max(
-                c.map()
-                    .tile_y(new_area.tile)
-                    .wrapping_add(u32::from(new_area.h)),
-            )
-            .wrapping_sub(y)) as u16,
-    };
-    let spread = (c.s.spread)();
-    if area.w > u16::from(spread) || area.h > u16::from(spread) {
-        c.c(out).error(c.s.strings.spread);
-    } else {
-        c.c(out).zero();
-    }
-    area
-}
+
 /// Source uint8 tolerance-distance truncation and noise reduction.
 /// # Safety
 /// The immutable native table and authority table are live.
@@ -1492,7 +1423,7 @@ impl Ctx<'_> {
             return cost.take(ret);
         }
         if !st.is_null() && unsafe { (self.s.train_area)(st) }.tile != u32::MAX {
-            area = unsafe { openttd_rust_station_expand_rail(self.s, ret.0, st, area) };
+            area = self.expand_rail(ret, st, area);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -2783,41 +2714,7 @@ impl Ctx<'_> {
         self.remove_generic_road(cost, ret, error, flags, area, waypoint, remove_road);
     }
 }
-/// # Safety
-/// Tables, distinct native cost slots, optional immutable spec and station output
-/// are live for this call. No owner borrow crosses a callback.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_road_cost(
-    s: *const CommandServicesTable,
-    cost: *mut CommandCost,
-    ret: *mut CommandCost,
-    area: Area,
-    flags: u16,
-    drive: bool,
-    kind: u8,
-    spec: *const RoadSpec,
-    axis: u8,
-    dir: u8,
-    est: *mut u16,
-    rt: u8,
-    unit: i64,
-) {
-    let c = unsafe { Ctx::new(s) };
-    c.road_cost(
-        c.c(cost),
-        c.c(ret),
-        area,
-        flags,
-        drive,
-        kind,
-        spec,
-        axis,
-        dir,
-        unsafe { &mut *est },
-        rt,
-        unit,
-    );
-}
+
 /// # Safety
 /// Tables, native cost slots and serialized map/pools remain live for this call.
 #[unsafe(no_mangle)]
@@ -2856,21 +2753,7 @@ pub unsafe extern "C" fn openttd_rust_station_build_road(
         adjacent,
     );
 }
-/// # Safety
-/// Tables and native cost slots remain live; destructive calls hold no Rust owner borrow.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_remove_road_tile(
-    s: *const CommandServicesTable,
-    cost: *mut CommandCost,
-    ret: *mut CommandCost,
-    tile: u32,
-    flags: u16,
-    replacement: i32,
-    waypoint: bool,
-) {
-    let c = unsafe { Ctx::new(s) };
-    c.remove_road_tile(c.c(cost), c.c(ret), tile, flags, replacement, waypoint);
-}
+
 /// # Safety
 /// Tables and three native cost slots are live for the serialized synchronous call.
 #[unsafe(no_mangle)]
@@ -3950,7 +3833,7 @@ impl Ctx<'_> {
                     self.remove_road_tile(cost, ret, tile, flags, -1, true);
                 }
             }
-            6 => (self.s.remove_buoy)(cost.0, tile, flags),
+            6 => self.remove_buoy(cost, tile, flags),
             5 => self.remove_dock(cost, ret, tile, flags),
             _ => cost.error(0xffff),
         }
@@ -4123,31 +4006,46 @@ pub(crate) unsafe fn openttd_rust_station_change_owner(
     );
 }
 
-/// # Safety
-/// Tables and native cost output are live for the serialized waypoint lookup.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_join_waypoint(
-    s: *const CommandServicesTable,
-    out: *mut CommandCost,
-    existing: u16,
-    target: u16,
-    adjacent: bool,
-    area: Area,
-    road: bool,
-) -> *mut BaseStation {
-    let c = unsafe { Ctx::new(s) };
-    c.join(
-        c.c(out),
-        existing,
-        target,
-        adjacent,
-        area,
-        true,
-        road,
-        if road {
-            c.s.strings.remove_road_waypoint
+impl Ctx<'_> {
+    fn expand_rail(&self, out: Cost<'_>, st: *const BaseStation, new_area: Area) -> Area {
+        let old = unsafe { (self.s.train_area)(st) };
+        let x = self
+            .map()
+            .tile_x(old.tile)
+            .min(self.map().tile_x(new_area.tile));
+        let y = self
+            .map()
+            .tile_y(old.tile)
+            .min(self.map().tile_y(new_area.tile));
+        let area = Area {
+            tile: (y << self.map().log_x) + x,
+            w: (self
+                .map()
+                .tile_x(old.tile)
+                .wrapping_add(u32::from(old.w))
+                .max(
+                    self.map()
+                        .tile_x(new_area.tile)
+                        .wrapping_add(u32::from(new_area.w)),
+                )
+                .wrapping_sub(x)) as u16,
+            h: (self
+                .map()
+                .tile_y(old.tile)
+                .wrapping_add(u32::from(old.h))
+                .max(
+                    self.map()
+                        .tile_y(new_area.tile)
+                        .wrapping_add(u32::from(new_area.h)),
+                )
+                .wrapping_sub(y)) as u16,
+        };
+        let spread = (self.s.spread)();
+        if area.w > u16::from(spread) || area.h > u16::from(spread) {
+            out.error(self.s.strings.spread);
         } else {
-            c.s.strings.remove_rail_waypoint
-        },
-    )
+            out.zero();
+        }
+        area
+    }
 }

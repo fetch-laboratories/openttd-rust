@@ -25,3 +25,12 @@ pub const fn dir_to_diag_dir(direction: u8) -> u8 {
 pub const fn reverse_diag_dir(direction: u8) -> u8 {
     direction ^ 2
 }
+
+/// `IsValidAxis`.
+pub const fn is_valid_axis(axis: u8) -> bool {
+    axis < 2
+}
+/// `OtherAxis`.
+pub const fn other_axis(axis: u8) -> u8 {
+    axis ^ 1
+}

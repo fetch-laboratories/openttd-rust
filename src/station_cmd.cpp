@@ -1248,20 +1248,16 @@ static std::span<const BridgeableTileInfo> GetStationBridgeableTileInfo(StationT
  * @param layout Layout piece of station to test.
  * @return Command result.
  */
+#ifndef WITH_RUST
 CommandCost IsRailStationBridgeAboveOk(TileIndex tile, const StationSpec *spec, StationType type, StationGfx layout)
 {
-#ifdef WITH_RUST
-	CommandCost cost;
-	openttd_rust_station_rail_bridge_ok(&GetRustStationCommandServices(), RustCommandCost(&cost), tile.base(), spec, to_underlying(type), layout);
-	return cost;
-#else
 	if (!IsBridgeAbove(tile)) return CommandCost();
 
 	TileIndex rampsouth = GetSouthernBridgeEnd(tile);
 	auto bridgeable_info = spec == nullptr ? GetStationBridgeableTileInfo(type) : spec->bridgeable_info;
 	return IsStationBridgeAboveOk(tile, bridgeable_info, type, layout, GetBridgeHeight(rampsouth), STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST);
-#endif
 }
+#endif
 
 /**
  * Test if a road station can be built below a bridge.
@@ -1308,20 +1304,16 @@ static CommandCost IsDockBridgeAboveOk(TileIndex tile, StationGfx layout)
  * @param tile Tile to test.
  * @return Command result.
  */
+#ifndef WITH_RUST
 CommandCost IsBuoyBridgeAboveOk(TileIndex tile)
 {
-#ifdef WITH_RUST
-	CommandCost cost;
-	openttd_rust_station_default_bridge_ok(&GetRustStationCommandServices(), RustCommandCost(&cost), tile.base(), to_underlying(StationType::Buoy), 0);
-	return cost;
-#else
 	if (!IsBridgeAbove(tile)) return CommandCost();
 
 	TileIndex rampsouth = GetSouthernBridgeEnd(tile);
 	auto bridgeable_info = GetStationBridgeableTileInfo(StationType::Buoy);
 	return IsStationBridgeAboveOk(tile, bridgeable_info, StationType::Buoy, 0, GetBridgeHeight(rampsouth), STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST);
-#endif
 }
+#endif
 
 /**
  * Checks if a rail station can be built at the given tile.
@@ -1544,14 +1536,9 @@ static CommandCost CheckFlatLandRoadStop(TileIndex cur_tile, int &allowed_z, con
  * @param new_ta the current (and if all is fine new) tile area of the rail part of the station
  * @return Succeeded or failed command.
  */
+#ifndef WITH_RUST
 CommandCost CanExpandRailStation(const BaseStation *st, TileArea &new_ta)
 {
-#ifdef WITH_RUST
-	CommandCost cost;
-	auto area = openttd_rust_station_expand_rail(&GetRustStationCommandServices(), RustCommandCost(&cost), st, {new_ta.tile.base(), new_ta.w, new_ta.h});
-	new_ta = TileArea(TileIndex{area.tile}, area.w, area.h);
-	return cost;
-#else
 	TileArea cur_ta = st->train_station;
 
 	/* determine new size of train station region.. */
@@ -1567,8 +1554,8 @@ CommandCost CanExpandRailStation(const BaseStation *st, TileArea &new_ta)
 	}
 
 	return CommandCost();
-#endif
 }
+#endif
 
 RailStationTileLayout::RailStationTileLayout(const StationSpec *spec, uint8_t platforms, uint8_t length) : platforms(platforms), length(length)
 {
@@ -1681,20 +1668,16 @@ static CommandCost FindJoiningStation(StationID existing_station, StationID stat
  * @param is_road whether to find a road waypoint
  * @return command cost with the error or 'okay'
  */
+#ifndef WITH_RUST
 CommandCost FindJoiningWaypoint(StationID existing_waypoint, StationID waypoint_to_join, bool adjacent, TileArea ta, Waypoint **wp, bool is_road)
 {
-#ifdef WITH_RUST
-	CommandCost cost;
-	*wp = static_cast<Waypoint *>(openttd_rust_station_join_waypoint(&GetRustStationCommandServices(), RustCommandCost(&cost), existing_waypoint.base(), waypoint_to_join.base(), adjacent, {ta.tile.base(), ta.w, ta.h}, is_road));
-	return cost;
-#else
 	if (is_road) {
 		return FindJoiningBaseStation<Waypoint, STR_ERROR_MUST_REMOVE_ROADWAYPOINT_FIRST>(existing_waypoint, waypoint_to_join, adjacent, ta, wp, [](const Waypoint *wp) -> bool { return HasBit(wp->waypoint_flags, WPF_ROAD); });
 	} else {
 		return FindJoiningBaseStation<Waypoint, STR_ERROR_MUST_REMOVE_RAILWAYPOINT_FIRST>(existing_waypoint, waypoint_to_join, adjacent, ta, wp, [](const Waypoint *wp) -> bool { return !HasBit(wp->waypoint_flags, WPF_ROAD); });
 	}
-#endif
 }
+#endif
 
 /**
  * Clear platform reservation during station building/removing.
@@ -2427,7 +2410,9 @@ static RoadStop **FindRoadStopSpot(bool truck_station, Station *st)
 #ifndef WITH_RUST
 static CommandCost RemoveRoadStop(TileIndex tile, DoCommandFlags flags, int replacement_spec_index = -1);
 #endif
+#ifndef WITH_RUST
 CommandCost RemoveRoadWaypointStop(TileIndex tile, DoCommandFlags flags, int replacement_spec_index = -1);
+#endif
 
 /**
  * Find a nearby station that joins this road stop.
@@ -2460,15 +2445,9 @@ static CommandCost FindJoiningRoadStop(StationID existing_stop, StationID statio
  * @param unit_cost The cost to build one road stop of the current type.
  * @return The cost in case of success, or an error code if it failed.
  */
+#ifndef WITH_RUST
 CommandCost CalculateRoadStopCost(TileArea tile_area, DoCommandFlags flags, bool is_drive_through, StationType station_type, const RoadStopSpec *roadstopspec, Axis axis, DiagDirection ddir, StationID *est, RoadType rt, Money unit_cost)
 {
-#ifdef WITH_RUST
-	CommandCost cost, ret;
-	uint16_t station = est->base();
-	openttd_rust_station_road_cost(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), {tile_area.tile.base(), tile_area.w, tile_area.h}, flags.base(), is_drive_through, to_underlying(station_type), roadstopspec, axis, ddir, &station, rt, unit_cost.base());
-	*est = StationID(station);
-	return cost;
-#else
 	DiagDirections invalid_dirs{};
 	if (is_drive_through) {
 		invalid_dirs.Set(AxisToDiagDir(axis));
@@ -2494,8 +2473,8 @@ CommandCost CalculateRoadStopCost(TileArea tile_area, DoCommandFlags flags, bool
 	}
 
 	return cost;
-#endif
 }
+#endif
 
 /**
  * Build a bus or truck stop.
@@ -2806,13 +2785,9 @@ static CommandCost RemoveRoadStop(TileIndex tile, DoCommandFlags flags, int repl
  * @param replacement_spec_index replacement spec index to avoid deallocating, if < 0, tile is not being replaced
  * @return cost or failure of operation
  */
+#ifndef WITH_RUST
 CommandCost RemoveRoadWaypointStop(TileIndex tile, DoCommandFlags flags, int replacement_spec_index)
 {
-#ifdef WITH_RUST
-	CommandCost cost, ret;
-	openttd_rust_station_remove_road_tile(&GetRustStationCommandServices(), RustCommandCost(&cost), RustCommandCost(&ret), tile.base(), flags.base(), replacement_spec_index, true);
-	return cost;
-#else
 	Waypoint *wp = Waypoint::GetByTile(tile);
 
 	if (_current_company != OWNER_WATER) {
@@ -2865,8 +2840,8 @@ CommandCost RemoveRoadWaypointStop(TileIndex tile, DoCommandFlags flags, int rep
 	}
 
 	return CommandCost(EXPENSES_CONSTRUCTION, spec != nullptr ? spec->GetClearCost(PR_CLEAR_STATION_TRUCK) : _price[PR_CLEAR_STATION_TRUCK]);
-#endif
 }
+#endif
 
 /**
  * Remove a tile area of road stop or road waypoints

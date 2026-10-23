@@ -14,5 +14,8 @@ uint8_t openttd_rust_waypoint_rail_axis(const OpenTTDStationCommandServices *, u
 uint8_t openttd_rust_waypoint_road_axis(const OpenTTDStationCommandServices *, uint32_t);
 void openttd_rust_waypoint_rename(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint16_t, uint16_t, const uint8_t *, size_t);
 uint16_t openttd_rust_waypoint_move_name(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, uint16_t, uint16_t, uint32_t);
+void openttd_rust_waypoint_build_rail(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDWaypointLayout *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t, uint16_t, uint16_t, bool);
+void openttd_rust_waypoint_build_road(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t, uint16_t, uint16_t, bool);
+void openttd_rust_waypoint_build_buoy(const OpenTTDStationCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t);
 }
 #endif /* RUST_WAYPOINT_COMMAND_FFI_H */

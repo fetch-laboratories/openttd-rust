@@ -10,6 +10,7 @@
 #define RUST_STATION_COMMAND_SERVICES_HPP
 #include "services_map.h"
 #include "company_services.h"
+#include "waypoint_layout.h"
 
 const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 {
@@ -64,6 +65,12 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 			.demolish_dock = STR_ERROR_MUST_DEMOLISH_DOCK_FIRST,
 			.object_in_way = STR_ERROR_GENERIC_OBJECT_IN_THE_WAY,
 			.oilrig_name = STR_INDUSTRY_NAME_OIL_RIG,
+			.waypoint_name = STR_SV_STNAME_WAYPOINT,
+			.buoy_name = STR_SV_STNAME_BUOY,
+			.waypoint_adjoins_multiple = STR_ERROR_WAYPOINT_ADJOINS_MORE_THAN_ONE_EXISTING,
+			.waypoint_close = STR_ERROR_TOO_CLOSE_TO_ANOTHER_WAYPOINT,
+			.buoy_in_use = STR_ERROR_BUOY_IS_IN_USE,
+
 		},
 		.spread = RustStationSpread,
 		.default_bridge_info = [](uint8_t type) noexcept -> OpenTTDStationBridgeInfo { auto info = GetStationBridgeableTileInfo(static_cast<StationType>(type)); return {info.data(), info.size()}; },
@@ -101,7 +108,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.before_add_rect = [](OpenTTDCommandCost *out, BaseStation *st, OpenTTDStationArea area, uint8_t mode) noexcept { *reinterpret_cast<CommandCost *>(out) = st->rect.BeforeAddRect(TileIndex{area.tile}, area.w, area.h, static_cast<StationRect::StationRectMode>(mode)); },
 		.road_waypoint = RustStationRoadWaypoint,
 		.name_equals = [](BaseStation *st, const uint8_t *text, size_t length) noexcept { return !st->name.empty() && st->name == std::string_view(reinterpret_cast<const char *>(text), length); },
-		.set_name = [](BaseStation *st, const uint8_t *text, size_t length) noexcept { st->name.assign(reinterpret_cast<const char *>(text), length); },
+		.set_name = RustStationSetName,
 		.rect_contains = [](BaseStation *st, uint32_t tile) noexcept { return st->rect.PtInExtendedRect(TileX(TileIndex{tile}), TileY(TileIndex{tile})); },
 		.flip_airport_closed = [](BaseStation *st) noexcept { Station::From(st)->airport.blocks.Flip(AirportBlock::AirportClosed); },
 		.closed_widget = RustStationClosedWidget,
@@ -242,12 +249,27 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.industry_neutral = [](Industry *industry) noexcept -> BaseStation * { return RustIndustryNeutralStation(industry); },
 		.clear_industry_neutral = [](Industry *industry) noexcept { industry->neutral_station = nullptr; },
 		.industry_area = [](Industry *industry) noexcept -> OpenTTDStationArea { const auto &a = industry->location; return {a.tile.base(), a.w, a.h}; },
-		.remove_buoy = [](OpenTTDCommandCost *out, uint32_t tile, uint16_t flags) noexcept { *reinterpret_cast<CommandCost *>(out) = RemoveBuoy(TileIndex{tile}, DoCommandFlags(flags)); },
 		.autoslope_axis = [](uint32_t tile, int32_t z, uint8_t slope, uint8_t axis) noexcept { return AutoslopeCheckForAxis(TileIndex{tile}, z, static_cast<Slope>(slope), static_cast<Axis>(axis)); },
 			.station_list_classes_invalidate = []() noexcept { InvalidateWindowClassesData(WC_STATION_LIST, 0); },
 		.rail_axis = RustRailStationAxis,
 		.road_ground = &GetRustRoadGroundServices(),
-		.clear_cached_name = [](BaseStation *st) noexcept { st->cached_name.clear(); },
+		.clear_cached_name = RustStationClearCachedName,
+		.waypoint_available = RustWaypointAvailable,
+		.new_waypoint = [](uint32_t tile) noexcept -> BaseStation * { return new Waypoint(TileIndex{tile}); },
+		.string_id = RustStationStringID,
+		.set_string_id = RustStationSetStringID,
+		.set_location = RustStationSetLocation,
+		.set_road_waypoint = RustWaypointSetRoad,
+		.waypoint_default_name = RustWaypointDefaultName,
+		.waypoint_view_invalidate = RustWaypointViewInvalidate,
+		.road_waypoint_area_add = RustWaypointRoadAreaAdd,
+		.tile_flat = OpenTTDIsTileFlat,
+		.make_buoy = RustMakeBuoy,
+		.make_rail_waypoint = RustMakeRailWaypoint,
+		.set_rail_station_reservation = RustSetRailStationReservation,
+		.waypoint_layout_init = [](OpenTTDWaypointLayout *frame, const StationSpec *spec, uint8_t count) noexcept { frame->layout.emplace(spec, count, 1); },
+		.waypoint_layout_gfx = [](OpenTTDWaypointLayout *frame, bool first) noexcept { if (first) frame->iterator.emplace(frame->layout->begin()); return *(*frame->iterator)++; },
+
 	};
 	return services;
 }

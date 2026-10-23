@@ -86,6 +86,19 @@ inline void RustStationSetStationOwner(BaseStation *st, uint8_t owner) noexcept 
 inline void RustStationSetFacilities(BaseStation *st, uint8_t facilities) noexcept { st->facilities = StationFacilities(facilities); }
 inline void RustStationSetBuildDate(BaseStation *st, int32_t date) noexcept { st->build_date = TimerGameCalendar::Date(date); }
 inline void RustStationListInvalidation(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_LIST, st->owner, data); }
+inline void RustStationClearCachedName(BaseStation *st) noexcept { st->cached_name.clear(); }
+inline void RustStationSetName(BaseStation *st, const uint8_t *text, size_t length) noexcept { st->name.assign(reinterpret_cast<const char *>(text), length); }
+inline bool RustWaypointAvailable() noexcept { return Waypoint::CanAllocateItem(); }
+inline uint32_t RustStationStringID(BaseStation *st) noexcept { return st->string_id; }
+inline void RustStationSetStringID(BaseStation *st, uint32_t string) noexcept { st->string_id = string; }
+inline void RustStationSetLocation(BaseStation *st, uint32_t tile) noexcept { st->xy = TileIndex{tile}; }
+inline void RustWaypointSetRoad(BaseStation *st) noexcept { SetBit(Waypoint::From(st)->waypoint_flags, WPF_ROAD); }
+inline void RustWaypointDefaultName(BaseStation *st) noexcept { MakeDefaultName(Waypoint::From(st)); }
+inline void RustWaypointViewInvalidate(BaseStation *st) noexcept { InvalidateWindowData(WC_WAYPOINT_VIEW, st->index); }
+inline void RustWaypointRoadAreaAdd(BaseStation *st, uint32_t tile) noexcept { Waypoint::From(st)->road_waypoint_area.Add(TileIndex{tile}); }
+inline void RustMakeBuoy(uint32_t tile, uint16_t id, WaterClass water) noexcept { MakeBuoy(TileIndex{tile}, StationID(id), water); }
+inline void RustMakeRailWaypoint(uint32_t tile, uint8_t owner, uint16_t id, uint8_t axis, uint8_t gfx, RailType rt) noexcept { MakeRailWaypoint(TileIndex{tile}, Owner(owner), StationID(id), static_cast<Axis>(axis), gfx, rt); }
+inline void RustSetRailStationReservation(uint32_t tile, bool reserved) noexcept { SetRailStationReservation(TileIndex{tile}, reserved); }
 /** Width/handle adapters for older typed service tables. */
 template <class T> inline uint8_t RustStationOwnerByte(T *st) noexcept { return OpenTTDStationOwner(st).base(); }
 template <class Handle> inline void RustStationLegacyPlatformReservation(Handle, uint32_t tile, uint8_t dir, uint8_t reserved) noexcept { RustStationPlatformReservation(tile, dir, reserved != 0); }
