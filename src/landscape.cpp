@@ -1002,6 +1002,7 @@ void RunTileLoop()
 #include "rust/tgp_ffi.h"
 
 struct RustGenerationLoop {
+	PerformanceAccumulator framerate{PFE_GL_LANDSCAPE};
 	OpenTTDGroundCall ground;
 	OpenTTDObjectLoopFrame objects;
 	RustRoadCommandContext road;
