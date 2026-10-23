@@ -40,11 +40,11 @@ impl Edge {
             dest_node,
         }
     }
-    pub(crate) fn last_update(self) -> i32 {
+    pub(crate) fn last_update(&self) -> i32 {
         self.last_unrestricted_update
             .max(self.last_restricted_update)
     }
-    pub(crate) fn travel_time(self) -> u32 {
+    pub(crate) fn travel_time(&self) -> u32 {
         (self.travel_time_sum / u64::from(self.capacity)) as u32
     }
     fn update(&mut self, capacity: u32, usage: u32, time: u32, modes: EdgeUpdateModes, date: i32) {
@@ -453,7 +453,7 @@ pub struct StationInput {
 }
 #[repr(C)]
 pub struct Access {
-    pub owner: *mut std::ffi::c_void,
+    pub owner: *mut Graph,
     pub index: u16,
 }
 /// Typed native shell/station leaves; no opcode dispatch or registered globals.
@@ -480,7 +480,7 @@ struct GraphAccess {
 }
 /// Resolve once per Rust caller entry; the shell remains live under the game mutex.
 pub(crate) unsafe fn resolve(graph: *mut super::NativeGraph, services: &Services) -> *mut Graph {
-    (services.access)(graph).owner.cast()
+    (services.access)(graph).owner
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_add_station(
@@ -491,7 +491,7 @@ pub unsafe extern "C" fn openttd_rust_live_graph_add_station(
     let services = unsafe { &*services };
     let native = (services.access)(graph);
     let access = GraphAccess {
-        owner: native.owner.cast(),
+        owner: native.owner,
         index: native.index,
     };
     let cargo = unsafe { (*access.owner).cargo };
@@ -526,7 +526,7 @@ pub unsafe extern "C" fn openttd_rust_live_graph_merge(
     let services = unsafe { &*services };
     let native = (services.access)(graph);
     let access = GraphAccess {
-        owner: native.owner.cast(),
+        owner: native.owner,
         index: native.index,
     };
     let source = unsafe { resolve(other, services) };
@@ -620,7 +620,7 @@ pub struct Membership {
 pub(crate) unsafe fn join(graph: *mut super::NativeGraph, station: u16, services: &Services) {
     let native = (services.access)(graph);
     let access = GraphAccess {
-        owner: native.owner.cast(),
+        owner: native.owner,
         index: native.index,
     };
     let cargo = unsafe { (*access.owner).cargo };
