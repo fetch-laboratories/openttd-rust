@@ -26,7 +26,10 @@ typedef struct {
 	uint16_t origin;
 	uint8_t found;
 } OpenTTDCargoOrigin;
+struct OpenTTDLiveGraph;
 typedef struct OpenTTDCargoFlowServices {
+	const OpenTTDLiveGraph *snapshot;
+	const OpenTTDLiveGraph *live_graph;
 	void *context;
 	uint32_t (*read)(void *, uint8_t, uint16_t, uint16_t) OPENTTD_SERVICE_DEFAULT(read);
 	OpenTTDCargoFlowMap *(*job_flows)(void *, uint16_t) OPENTTD_SERVICE_DEFAULT(job_flows);
@@ -44,10 +47,11 @@ typedef struct OpenTTDCargoFlowServices {
  * a service. Services are noexcept, never run script VMs, and may read/mutate
  * canonical cargo through rerouting; raw owner accesses end before each call.
  * Save/load errors remain entirely in C++ adapters. Panics/alloc failures abort.
- * read: 0 graph valid,1 size,2 station,3 live station valid,4 edge count,
- * 5 edge flow,6 destination node,7 live edge exists (node,dest),
- * 8 manual distribution,9 live data empty,10 live graph ID,11 live node ID,
- * 12 job graph ID,13 edge last-update valid,14 edge unrestricted-update valid. finish clears data when requested
+ * Snapshot and live graph pointers are canonical Rust owners, stable for this
+ * application under the game-state mutex; rerouting cannot delete graph shells.
+ * read: 0 graph valid,3 live station valid,4 edge count,5 edge flow,6 destination
+ * node,8 manual distribution,9 live data empty,10 live graph ID,11 live node ID,
+ * 12 job graph ID. Graph queries execute directly in Rust. finish clears data when requested
  * then invalidates the station window. Native thread join precedes application.
  */
 OpenTTDCargoFlow *openttd_rust_flow_new(uint16_t, uint32_t, uint8_t);

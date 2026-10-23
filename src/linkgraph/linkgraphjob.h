@@ -78,11 +78,12 @@ public:
 	 */
 	struct NodeAnnotation {
 #ifdef WITH_RUST
-		const LinkGraph::BaseNode base;
+		const uint16_t *station; ///< Canonical immutable snapshot scalar, not a mirror.
+		StationID Station() const { return StationID(*this->station); }
 #else
 		const LinkGraph::BaseNode &base;
 #endif
-		// ///< Reference to the node that is annotated.
+
 
 		uint undelivered_supply = 0; ///< Amount of supply that hasn't been distributed yet.
 		PathList paths{}; ///< Paths through this node, sorted so that those with flow == 0 are in the back.
@@ -91,7 +92,13 @@ public:
 		std::vector<EdgeAnnotation> edges{}; ///< Annotations for all edges originating at this node.
 		std::vector<DemandAnnotation> demands{}; ///< Annotations for the demand to all other nodes.
 
-		NodeAnnotation(const LinkGraph::BaseNode &node, size_t size) : base(node), undelivered_supply(node.Supply())
+		NodeAnnotation(const LinkGraph::BaseNode &node, size_t size) :
+#ifdef WITH_RUST
+			station(node.StationAddress()),
+#else
+			base(node),
+#endif
+			undelivered_supply(node.Supply())
 		{
 			const auto edges = node.Edges();
 			this->edges.reserve(edges.size());

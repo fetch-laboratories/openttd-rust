@@ -117,6 +117,7 @@ public:
 		NodeID id;
 		uint Supply() const { return openttd_rust_live_node_supply(this->owner, this->id); }
 		StationID Station() const { return StationID(openttd_rust_live_node_station(this->owner, this->id)); }
+		const uint16_t *StationAddress() const { return openttd_rust_live_node_station_address(this->owner, this->id); }
 		void UpdateSupply(uint supply) { openttd_rust_live_node_update_supply(this->owner, this->id, supply, GetRustSharedServices().economy_date()); }
 		void UpdateLocation(TileIndex xy) { openttd_rust_live_node_location(this->owner, this->id, xy.base()); }
 		void SetDemand(uint demand) { openttd_rust_live_node_demand(this->owner, this->id, demand); }

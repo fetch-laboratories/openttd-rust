@@ -1785,8 +1785,8 @@ Rust owns cargo, compression date, nodes and sorted edge vectors in one owner pe
 native shell. Lifecycle/copy/init, node and edge mutation, supply/demand/location,
 restriction/release, merge/scaling, compression, dates and queries run in Rust.
 C++ keeps pool IDs/reuse, station membership leaves and the independent scheduler.
-Each job deep-copies the same representation; native annotations retain allocation-free
-node handles and immutable canonical edge references until the existing worker join.
+Each job deep-copies the same representation; native annotations borrow canonical
+station scalars and immutable edge references until the existing worker join.
 The computation and flow-application ports are unchanged ownership, not new retirement.
 
 LGRP/LGRJ retain field names, widths/order and legacy matrix/list conversions.

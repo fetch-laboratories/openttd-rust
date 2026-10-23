@@ -257,7 +257,8 @@ TEST_CASE("Link graph - canonical scalars and independent job snapshot lifetime"
 		auto &edge = graph[0].AppendEdge(); edge.dest_node = 0; edge.capacity = 65536; edge.travel_time_sum = UINT64_C(0xFEDCBA9876543210);
 	}
 	{
-		LinkGraphJob job(graph);
+		LinkGraphJob job(graph); job.Init();
+		CHECK(job[0].Station() == StationID(42));
 		CHECK(job.Graph().RustState() != graph.RustState());
 		CHECK(job.Graph()[0].Supply() == 0xFEDCBA98);
 		CHECK(job.Graph()[0][0].travel_time_sum == UINT64_C(0xFEDCBA9876543210));

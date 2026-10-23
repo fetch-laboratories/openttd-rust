@@ -78,6 +78,7 @@ uint32_t openttd_rust_live_graph_monthly(const OpenTTDLiveGraph *, uint32_t, int
 OpenTTDLiveNodeFields openttd_rust_live_node_fields(OpenTTDLiveGraph *, uint16_t);
 uint32_t openttd_rust_live_node_supply(const OpenTTDLiveGraph *, uint16_t);
 uint16_t openttd_rust_live_node_station(const OpenTTDLiveGraph *, uint16_t);
+const uint16_t *openttd_rust_live_node_station_address(const OpenTTDLiveGraph *, uint16_t);
 void openttd_rust_live_node_location(OpenTTDLiveGraph *, uint16_t, uint32_t);
 void openttd_rust_live_node_demand(OpenTTDLiveGraph *, uint16_t, uint32_t);
 void openttd_rust_live_node_update_supply(OpenTTDLiveGraph *, uint16_t, uint32_t, int32_t);

@@ -373,6 +373,14 @@ pub unsafe extern "C" fn openttd_rust_live_node_supply(graph: *const Graph, id: 
 pub unsafe extern "C" fn openttd_rust_live_node_station(graph: *const Graph, id: u16) -> u16 {
     unsafe { &*graph }.nodes[usize::from(id)].station
 }
+/// Immutable job annotations borrow only this canonical scalar until join/drop.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_live_node_station_address(
+    graph: *const Graph,
+    id: u16,
+) -> *const u16 {
+    std::ptr::addr_of!(unsafe { &*graph }.nodes[usize::from(id)].station)
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_node_location(graph: *mut Graph, id: u16, xy: u32) {
     unsafe { &mut *graph }.nodes[usize::from(id)].xy = xy;
