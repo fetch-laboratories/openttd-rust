@@ -58,10 +58,10 @@ pub trait Frame<O> {
 pub struct TileFrame;
 impl<O> Frame<O> for TileFrame {
     fn get(a: &Services, _: *mut O, t: u32) -> u8 {
-        (a.frame)(t)
+        unsafe { ((*a.industry_tiles).frame)(t) }
     }
     fn set(a: &Services, _: *mut O, t: u32, f: u8) -> bool {
-        if (a.frame)(t) == f {
+        if unsafe { ((*a.industry_tiles).frame)(t) } == f {
             return false;
         }
         (a.shared().tile_animation_set_frame)(t, f);
@@ -79,7 +79,7 @@ impl Frame<BaseStation> for RoadFrame {
 }
 fn sound<S, O, E>(a: &Services, b: &Binding<S, O, E>, spec: *const S, tile: u32, cb: u16) {
     let id = ((cb >> 8) & 0x7F) as u8;
-    if id != 0 && (a.ambient)() {
+    if id != 0 && unsafe { ((*a.industry_tiles).ambient)() } {
         (b.sound)(spec, id, tile);
     }
 }

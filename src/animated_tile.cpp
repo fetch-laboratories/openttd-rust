@@ -41,14 +41,13 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.airport = &GetAirportAnimationBinding(), .object = &GetObjectAnimationBinding(), .roadstop = &GetRoadStopAnimationBinding(),
 		.state = [](uint32_t t) noexcept { return GetAnimatedTileState(TileIndex{t}); },
 		.set_state = [](uint32_t t, AnimatedTileState s) noexcept { SetAnimatedTileState(TileIndex{t}, s); },
-		.frame = OpenTTDAnimationFrame, .ambient = OpenTTDAmbientSound,
 		.house_spec = [](uint16_t h) noexcept -> const HouseSpec * { return HouseSpec::Get(h); },
 		.road_frame = [](BaseStation *s, uint32_t t) noexcept { return s->GetRoadStopAnimationFrame(TileIndex{t}); },
 		.set_road_frame = [](BaseStation *s, uint32_t t, uint8_t f) noexcept { return s->SetRoadStopAnimationFrame(TileIndex{t}, f); },
 		.rail_area = OpenTTDAnimationRailArea,
 		.rail_belongs = [](BaseStation *s, uint32_t t) noexcept { return s->TileBelongsToRailStation(TileIndex{t}); },
-		.station_triggers = [](BaseStation *s, uint8_t t) noexcept { return s->cached_anim_triggers.Test(static_cast<StationAnimationTrigger>(t)); },
-		.road_triggers = [](BaseStation *s, uint8_t t) noexcept { return s->cached_roadstop_anim_triggers.Test(static_cast<StationAnimationTrigger>(t)); },
+		.station_triggers = RustStationHasAnimationTrigger,
+		.road_triggers = RustRoadStopHasAnimationTrigger,
 		.rail_spec = RustAnimationRailSpec, .road_spec = RustAnimationRoadSpec, .airport_spec = RustAnimationAirportSpec,
 		.industry_object = [](uint32_t t) noexcept { return Industry::GetByTile(TileIndex{t}); },
 		.rail_spec_triggers = [](const StationSpec *s) noexcept { return s->animation.triggers.base(); },
@@ -60,8 +59,8 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.airport_grf = [](const AirportTileSpec *s) noexcept { return s->grf_prop.grffile != nullptr; },
 		.airport_area = [](Station *s) noexcept -> OpenTTDAnimationArea { return {s->airport.tile.base(), s->airport.w, s->airport.h}; },
 		.airport_belongs = [](Station *s, uint32_t t) noexcept { return s->TileBelongsToAirport(TileIndex{t}); },
-		.road_count = [](BaseStation *s) noexcept { return s->custom_roadstop_tile_data.size(); },
-		.road_tile = [](BaseStation *s, size_t i) noexcept { return s->custom_roadstop_tile_data[i].tile.base(); },
+		.road_count = RustRoadStopTileDataCount,
+		.road_tile = RustRoadStopDataTile,
 	};
 	return services;
 }

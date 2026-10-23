@@ -45,8 +45,6 @@ struct OpenTTDAnimationServices {
 	const OpenTTDRoadStopAnimation *roadstop;
 	AnimatedTileState (*state)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(state);
 	void (*set_state)(uint32_t, AnimatedTileState) noexcept OPENTTD_SERVICE_DEFAULT(set_state);
-	uint8_t (*frame)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(frame);
-	bool (*ambient)() noexcept OPENTTD_SERVICE_DEFAULT(ambient);
 	const HouseSpec *(*house_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_spec);
 	uint8_t (*road_frame)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_frame);
 	bool (*set_road_frame)(BaseStation *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_frame);

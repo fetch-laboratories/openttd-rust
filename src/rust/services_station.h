@@ -31,6 +31,10 @@
 
 inline BaseStation *RustAnimationStationBase(uint16_t id) noexcept { return Station::Get(StationID{id}); }
 inline Station *RustAnimationStation(BaseStation *st) noexcept { return Station::From(st); }
+inline bool RustStationHasAnimationTrigger(BaseStation *s, uint8_t trigger) noexcept { return s->cached_anim_triggers.Test(static_cast<StationAnimationTrigger>(trigger)); }
+inline bool RustRoadStopHasAnimationTrigger(BaseStation *s, uint8_t trigger) noexcept { return s->cached_roadstop_anim_triggers.Test(static_cast<StationAnimationTrigger>(trigger)); }
+inline size_t RustRoadStopTileDataCount(BaseStation *s) noexcept { return s->custom_roadstop_tile_data.size(); }
+inline uint32_t RustRoadStopDataTile(BaseStation *s, size_t i) noexcept { return s->custom_roadstop_tile_data[i].tile.base(); }
 inline const StationSpec *RustAnimationRailSpec(uint32_t tile) noexcept { return GetStationSpec(TileIndex{tile}); }
 inline const RoadStopSpec *RustAnimationRoadSpec(uint32_t tile) noexcept { return GetRoadStopSpec(TileIndex{tile}); }
 inline const AirportTileSpec *RustAnimationAirportSpec(uint32_t tile) noexcept { return AirportTileSpec::GetByTile(TileIndex{tile}); }

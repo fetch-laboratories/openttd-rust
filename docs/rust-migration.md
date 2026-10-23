@@ -1370,6 +1370,26 @@ External station/road-stop GRFs, exhausted pools/spec lists and legacy saves rem
 coverage gaps under #156. Independent review and exact-head Full are root's gates.
 
 
+### Animated-tile scheduling and shared animation control (#385, draft)
+
+The draft moves the process-wide queue, Add/Delete/Animate/Initialize, shared
+AnimationBase control, six feature bindings, station/airport/road-stop trigger
+traversals and tile dispatch to Rust. Existing owners call it directly; native
+map frames/bits, road-stop data, pools, specs and resolver evaluation remain.
+Initialization installs immutable typed services under the game-state mutex.
+Queue and spec/state accesses end before callbacks; actual scheduled callbacks
+can request deferred deletion but cannot resize or immediately erase the queue.
+ANIT uses one scoped native vector and descriptor pointer: decoding and errors
+stay on native frames, publishing partial contents on unwind. Legacy append and
+first-occurrence cleanup retain source order. No persistent queue mirror exists.
+`python3 tools/migration.py simulate objects-gaps` requires six live resolver
+binding markers and compares loop/stop, speed gates, next-frame sentinels and
+RNG; existing effects-bubble scenarios compare ordered ANIT and bubble catchers.
+Native checks cover queue reactivation/swap removal, cleanup, staging unwind and
+ABI layouts. Trigger traversal/sound evidence, affected owner scenarios, final
+cost disposition and independent review remain pending in PR #389. Historical
+saves, external GRF programs and GUI threading remain #156 coverage limits.
+
 <!-- Subsystem: Vehicles, pathfinding and orders. Add a new entry at the end of its group, not of the file. -->
 
 ### Effect vehicles
@@ -1379,8 +1399,8 @@ C++ EffectVehicle shell owns one zero-created opaque state, also on indexed load
 it on ordinary deletion and pool cleanup.
 
 Copied call-scoped observations and immediate scalar writes keep original mutation order. Rust
-calls common Random/map and effect-specific sound, viewport and animated-tile noexcept wrappers
-directly; none can reenter Rust. The immutable shared service table is borrowed only
+calls common Random/map and effect-specific sound/viewport noexcept leaves
+directly, plus the Rust animated-tile owner; the native leaves cannot reenter Rust. The immutable shared service table is borrowed only
 until the controller returns (#299); no full table is copied.
 
 `python3 tools/migration.py simulate effects` compares save chunks across subtypes, expiry,
