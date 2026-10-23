@@ -369,7 +369,10 @@ impl<'a> Commands<'a> {
             return false;
         }
         let adjacent = tile.wrapping_add(self.map().offs_by_diag_dir(
-            crate::direction_func::reverse_diag_dir((self.shared.tunnel_bridge_direction)(tile)),
+            crate::direction_func::reverse_diag_dir(
+                (self.shared.tunnel_bridge_direction)(tile),
+                |ok| crate::movement::native_assert(self.shared, ok),
+            ),
         ));
         let owns = |at| {
             (self.shared.tile_type)(at) == MP_ROAD
@@ -383,7 +386,10 @@ impl<'a> Commands<'a> {
         // Historical source adds the other end's direction to the ORIGINAL tile.
         owns(
             tile.wrapping_add(self.map().offs_by_diag_dir(
-                crate::direction_func::reverse_diag_dir((self.shared.tunnel_bridge_direction)(end)),
+                crate::direction_func::reverse_diag_dir(
+                    (self.shared.tunnel_bridge_direction)(end),
+                    |ok| crate::movement::native_assert(self.shared, ok),
+                ),
             )),
         )
     }

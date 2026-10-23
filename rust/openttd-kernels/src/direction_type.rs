@@ -10,8 +10,6 @@
 
 /// `DIR_END`.
 pub const DIR_END: u8 = 8;
-/// `AXIS_Y`.
-pub const AXIS_Y: u8 = 1;
 /// `DIAGDIR_NE`.
 pub const DIAGDIR_NE: u8 = 0;
 /// `DIAGDIR_SE`.
@@ -33,3 +31,12 @@ pub const DIAGDIRDIFF_REVERSE: u8 = 2;
 pub const DIAGDIRDIFF_90LEFT: u8 = 3;
 /// `DIAGDIRDIFF_END`.
 pub const DIAGDIRDIFF_END: u8 = 4;
+/// `AXIS_X`.
+pub const AXIS_X: u8 = 0;
+/// `AXIS_Y`.
+pub const AXIS_Y: u8 = 1;
+/// `INVALID_AXIS`.
+pub const INVALID_AXIS: u8 = 0xFF;
+
+/// `AXIS_END`.
+pub const AXIS_END: u8 = 2;

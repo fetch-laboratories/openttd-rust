@@ -21,3 +21,7 @@ pub const RVSB_IN_DT_ROAD_STOP: u8 = 1 << RVS_IN_DT_ROAD_STOP;
 
 /// `RVSB_IN_DEPOT`.
 pub const RVSB_IN_DEPOT: u8 = 254;
+/// `RVSB_WORMHOLE`.
+pub const RVSB_WORMHOLE: u8 = 255;
+/// `RVC_DEPOT_STOP_FRAME`.
+pub const RVC_DEPOT_STOP_FRAME: u8 = 11;

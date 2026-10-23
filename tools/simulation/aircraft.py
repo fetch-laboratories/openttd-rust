@@ -401,10 +401,9 @@ def finite_range_probe(folder, candidate_build, env):
         "-o",
         str(probe),
     ]
-    compiled = subprocess.run(
-        command, env=env, text=True, capture_output=True, check=True
-    )
+    compiled = subprocess.run(command, env=env, text=True, capture_output=True)
     (folder / "range-build.log").write_text(compiled.stdout + compiled.stderr)
+    compiled.check_returncode()
     checked = subprocess.run(
         [str(probe)], env=env, text=True, capture_output=True, check=True
     )

@@ -90,9 +90,9 @@ pub use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 pub const VS_HIDDEN: u8 = 1 << 0;
 pub const VS_STOPPED: u8 = 1 << 1;
 pub const VS_CRASHED: u8 = 1 << 7;
+pub use crate::tile_cmd::CANNOT_ENTER as VETS_CANNOT_ENTER;
 /// `VehicleEnterTileState` bits.
-pub const VETS_ENTERED_WORMHOLE: u8 = 1 << 1;
-pub const VETS_CANNOT_ENTER: u8 = 1 << 2;
+pub use crate::tile_cmd::ENTERED_WORMHOLE as VETS_ENTERED_WORMHOLE;
 /// `AM_REALISTIC`.
 pub const AM_REALISTIC: u8 = 1;
 /// `INVALID_TRACKDIR`.

@@ -48,7 +48,6 @@ struct OpenTTDGroundPhysicsServices {
 	bool (*tram)(RoadType) noexcept OPENTTD_SERVICE_DEFAULT(tram);
 	uint32_t (*steepness)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(steepness);
 	int32_t (*display_max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(display_max_speed);
-	int32_t (*slope_z)(int32_t, int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(slope_z);
 	void (*viewport)(OpenTTDVehicle *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (*details_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(details_dirty);
 	uint32_t (*base_crash)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(base_crash);

@@ -479,7 +479,7 @@ impl World<'_> {
         }
         let direction = ((r >> 22) & 3) as u8;
         let (mut width, mut height) = (template.width, template.height);
-        if diag_dir_to_axis(direction) == AXIS_Y {
+        if diag_dir_to_axis(direction, |ok| (self.a.assert_condition)(ok)) == AXIS_Y {
             std::mem::swap(&mut width, &mut height);
         }
         if flag & 4 != 0 {
@@ -1109,7 +1109,9 @@ impl World<'_> {
                 w::hit(w::GENERATION_WIDEN_TERRAFORM);
                 self.terraform(tile, complement_slope(current), true, F::EXECUTE | F::AUTO);
             } else if is_inclined_slope(desired) {
-                let direction = reverse_diag_dir(get_inclined_slope_direction(desired));
+                let direction = reverse_diag_dir(get_inclined_slope_direction(desired), |ok| {
+                    (self.a.assert_condition)(ok);
+                });
                 for diff in DIAGDIRDIFF_SAME..DIAGDIRDIFF_END {
                     if diff == DIAGDIRDIFF_SAME || diff == DIAGDIRDIFF_REVERSE {
                         continue;
@@ -1136,7 +1138,10 @@ impl World<'_> {
             w::hit(w::GENERATION_WIDEN_SLOPE);
             let direction = get_inclined_slope_direction(current);
             let upstream = self.map.add_diag(tile, direction);
-            let downstream = self.map.add_diag(tile, reverse_diag_dir(direction));
+            let downstream = self.map.add_diag(
+                tile,
+                reverse_diag_dir(direction, |ok| (self.a.assert_condition)(ok)),
+            );
             if !self.valid(upstream) || !self.valid(downstream) {
                 return;
             }

@@ -10,6 +10,7 @@
 #include "../3rdparty/catch2/catch.hpp"
 #ifdef WITH_RUST
 #include "../rust/tile_type_access.hpp"
+#include "../rust/movement_ffi.h"
 #include "../rust/landscape_command_ffi.h"
 #include "../rust/landscape_generation_ffi.h"
 #include "../rust/generation_sea_set.hpp"

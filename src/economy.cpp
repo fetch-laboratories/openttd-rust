@@ -1080,10 +1080,6 @@ static const OpenTTDCargoServices _cargo_services = {
 		*out = {cs->current_payment.base(), uint8_t(cs->IsValid()), uint8_t(cs->callback_mask.Test(CargoCallbackMask::ProfitCalc)), cs->transit_periods[0], cs->transit_periods[1]};
 	},
 	[](uint8_t cargo, uint32_t var18) noexcept { return GetCargoCallback(CBID_CARGO_PROFIT_CALC, 0, var18, CargoSpec::Get(cargo)); },
-	[](uint16_t station, uint32_t index) noexcept -> void * {
-		const auto &near = Station::Get(StationID(station))->industries_near;
-		return index < near.size() ? std::next(near.begin(), index)->industry : nullptr;
-	},
 	[](uint16_t station, uint8_t field, uint8_t cargo) noexcept -> uint32_t {
 		const Station *st = Station::Get(StationID(station));
 		return field == 0 ? st->owner.base() : HasBit(st->always_accepted, cargo);
@@ -1091,7 +1087,6 @@ static const OpenTTDCargoServices _cargo_services = {
 	[](void *handle, uint8_t field, uint32_t slot) noexcept -> uint32_t {
 		const Industry *i = static_cast<Industry *>(handle);
 		switch (field) {
-			case 0: return RustIndustryID(handle);
 			case 1: {
 				auto it = i->GetCargoAccepted(slot);
 				return it == std::end(i->accepted) ? UINT32_MAX : it - std::begin(i->accepted);
@@ -1196,7 +1191,8 @@ void CargoPayment::PayFinalDelivery(CargoType cargo, const CargoPacket *cp, uint
 {
 	assert(int(count) > 0);
 	Source source = cp->GetSource();
-	openttd_rust_cargo_payment_final(this->rust_state, GetCargoDeliveryState(), &_cargo_services, cargo, cp, count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit(), source.id | (uint32_t(source.type) << 16));
+	RustNearbyIndustryCursor cursor;
+	openttd_rust_cargo_payment_final(this->rust_state, GetCargoDeliveryState(), &_cargo_services, cargo, cp, count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit(), source.id | (uint32_t(source.type) << 16), &cursor);
 }
 Money CargoPayment::PayTransfer(CargoType cargo, const CargoPacket *cp, uint count, TileIndex current_tile)
 {

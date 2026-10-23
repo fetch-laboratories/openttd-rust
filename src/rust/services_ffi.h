@@ -52,8 +52,8 @@ OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
  * mark_dirty is MarkTileDirtyByTile(tile), set_tropic_zone is SetTropicZone and
  * free_train_reservation is
  * FreeTrainTrackReservation(v), try_path_reserve is TryPathReserve(v, mark_as_stuck,
- * first_tile_okay) and safe_waiting_position is IsSafeWaitingPosition(v, tile,
- * trackdir, true, forbid_90_deg); the last two can reenter Rust train owners.
+ * first_tile_okay). pbs_services acquires leaves for direct Rust PBS calls.
+ * Train reservation services can reenter the Rust train owners.
  * Random logging still runs, but its debug source location names this wrapper.
  * Industry query returns 0 not industry,1 industry,2 bubble catcher and writes
  * TileVirtXY(x,y). It observes only type and industry graphics.
@@ -84,7 +84,10 @@ struct OpenTTDClearSquareServices {
 	bool (*docking)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking);
 	bool (*generating_world)() noexcept OPENTTD_SERVICE_DEFAULT(generating_world);
 };
+struct OpenTTDPbsServices;
+struct OpenTTDMovementServices;
 struct OpenTTDSharedServices {
+	const OpenTTDMovementServices *(*movement_services)() noexcept OPENTTD_SERVICE_DEFAULT(movement_services);
 	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
 	bool (*autoslope)() noexcept OPENTTD_SERVICE_DEFAULT(autoslope);
 	uint8_t (*bay_stop_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bay_stop_direction);
@@ -153,10 +156,9 @@ struct OpenTTDSharedServices {
 	void (*set_road_directions)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_directions);
 	bool (*road_powered)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_powered);
 	bool (*road_type_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_valid);
-	bool (*safe_waiting_position)(const Train *, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(safe_waiting_position);
+	const OpenTTDPbsServices *(*pbs_services)(const OpenTTDSharedServices *) noexcept OPENTTD_SERVICE_DEFAULT(pbs_services);
 	bool (*service_at_helipad)() noexcept OPENTTD_SERVICE_DEFAULT(service_at_helipad);
 	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tropic_zone);
-	int32_t (*slope)(int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(slope);
 	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
 	// Registry: station construction (#267).
@@ -202,7 +204,6 @@ struct OpenTTDSharedServices {
 	// Registry: landscape (#212).
 	OpenTTDFoundationSlope (*apply_foundation)(Foundation, Slope) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
 	ClearGround (*clear_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_ground);
-	OpenTTDFoundationSlope (*foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(foundation);
 	bool (*has_water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_water_class);
 	void (*make_shore)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_shore);
 	void (*make_snow)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(make_snow);
@@ -271,7 +272,6 @@ struct OpenTTDRailMapServices {
 	SignalState (*signal_state)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_state);
 	void (*set_signal_state)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_state);
 	uint32_t (*other_tunnel_bridge_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_tunnel_bridge_end);
-	uint32_t (*rail_track_status)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_track_status);
 	/* Rail command, depot and level-crossing leaves (#265). */
 	bool (*has_signals)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signals);
 	SignalType (*signal_type)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_type);
@@ -289,7 +289,6 @@ struct OpenTTDRailMapServices {
 	SignalVariant (*signal_variant)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_variant);
 	void (*set_signal_variant)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_variant);
 	void (*cycle_signal_side)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cycle_signal_side);
-	TrackBits (*reserved_tracks)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reserved_tracks);
 	TrackBits (*rail_reservation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_reservation);
 	void (*set_track_reservation)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_track_reservation);
 	bool (*depot_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_reserved);

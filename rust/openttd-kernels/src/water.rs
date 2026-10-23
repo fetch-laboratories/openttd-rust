@@ -28,8 +28,8 @@ pub const RIVER_OFFSET_DESERT_DISTANCE: u32 = 5;
 use crate::{
     ground::{Call, ClearServices, CostServices, RailServices},
     services::{
-        self, ClearGroundType, FloodingBehaviour, RailGroundType, Services, Slope, Track,
-        TrackBits, TreeGround,
+        self, ClearGroundType, FloodingBehaviour, Foundation, RailGroundType, Services, Slope,
+        Track, TreeGround,
     },
     vehicle::{VehicleRef, VehicleServices, VehicleType},
 };
@@ -353,7 +353,9 @@ impl<'a> World<'a> {
         let mut tracks = (self.r().tracks)(tile).0;
         if is_slope_with_one_corner_raised(slope) {
             let corner = (slope.trailing_zeros() ^ 2) as usize;
-            let lower = [16, 8, 32, 4][corner];
+            let lower = crate::track_func::corner_to_track_bits(corner as u8, |ok| {
+                crate::movement::native_assert(self.s, ok);
+            });
             let remove = lower & tracks;
             if remove != 0 {
                 let company = (self.s.current_company)();
@@ -375,7 +377,9 @@ impl<'a> World<'a> {
                     return true;
                 }
             }
-            if (5..10).contains(&(self.r().foundation)(Slope(slope), TrackBits(tracks)).0) {
+            if (5..10).contains(&crate::movement::rail_foundation(slope, tracks, |ok| {
+                crate::movement::native_assert(self.s, ok);
+            })) {
                 flooded = true;
                 (self.r().set_ground)(tile, RailGroundType(13));
                 (self.s.mark_dirty)(tile);
@@ -383,7 +387,9 @@ impl<'a> World<'a> {
             }
         } else {
             let foundation = (self.s.apply_foundation)(
-                (self.r().foundation)(Slope(slope), TrackBits(tracks)),
+                Foundation(crate::movement::rail_foundation(slope, tracks, |ok| {
+                    crate::movement::native_assert(self.s, ok);
+                })),
                 Slope(slope),
             );
             if foundation.z == 0
@@ -600,7 +606,7 @@ impl<'a> World<'a> {
                     {
                         continue;
                     }
-                    let foundation = (self.s.foundation)(target);
+                    let foundation = crate::movement::foundation_slope(self.s, target);
                     if foundation.z > 0 {
                         continue;
                     }
@@ -615,7 +621,8 @@ impl<'a> World<'a> {
                 }
             }
             3 => {
-                let mask = FLOOD_FROM[usize::from((self.s.foundation)(tile).slope.0 & 15)];
+                let mask = FLOOD_FROM
+                    [usize::from(crate::movement::foundation_slope(self.s, tile).slope.0 & 15)];
                 for direction in 0..8 {
                     if mask & (1 << direction) == 0 {
                         continue;

@@ -31,21 +31,23 @@ pub(crate) fn set_tunnel_bridge_owner(begin: u32, end: u32, owner: u8, s: &Servi
     (s.set_tile_owner)(end, owner);
 }
 
-/// Original `OtherAxis` for a source-valid axis.
-fn other_axis(axis: Axis) -> Axis {
-    Axis(axis.0 ^ 1)
-}
-
 use crate::track_func::axis_to_track;
 
 /// Original `GetCrossingRailAxis`, over the canonical road-axis accessor.
-fn crossing_rail_axis(tile: u32, rail: &RailMapServices) -> Axis {
-    other_axis((rail.crossing_road_axis)(tile))
+fn crossing_rail_axis(tile: u32, rail: &RailMapServices, check: impl Fn(bool) + Copy) -> Axis {
+    Axis(crate::direction_func::other_axis(
+        (rail.crossing_road_axis)(tile).0,
+        check,
+    ))
 }
 
 /// Original `GetCrossingRailTrack`, retaining its named helper composition.
-pub(crate) fn crossing_rail_track(tile: u32, rail: &RailMapServices) -> Track {
-    axis_to_track(crossing_rail_axis(tile, rail))
+pub(crate) fn crossing_rail_track(
+    tile: u32,
+    rail: &RailMapServices,
+    check: impl Fn(bool) + Copy,
+) -> Track {
+    axis_to_track(crossing_rail_axis(tile, rail, check), check)
 }
 
 /// Original `CheckBuildAbove_Clear`: construction above clear tiles always succeeds.
@@ -193,7 +195,6 @@ pub struct RailServices {
     pub set_ground: extern "C" fn(u32, RailGroundType),
     pub snow: extern "C" fn(u32) -> RailSnowGround,
     pub fences: extern "C" fn(u32) -> RailFenceGround,
-    pub foundation: extern "C" fn(Slope, TrackBits) -> Foundation,
     pub owned_land: extern "C" fn(u32) -> bool,
 }
 #[repr(C)]
@@ -470,7 +471,10 @@ pub(crate) unsafe fn rail_tile_loop(
         let mut ground = (r.snow)(tile);
         let mut half = false;
         if ground.plain {
-            let foundation = (r.foundation)(ground.slope, ground.tracks).0;
+            let foundation =
+                crate::movement::rail_foundation(ground.slope.0, ground.tracks.0, |ok| {
+                    crate::movement::native_assert(s, ok);
+                });
             match foundation {
                 0 => {
                     if is_slope_with_three_corners_raised(ground.slope.0) {
@@ -594,7 +598,7 @@ pub struct RoadSnowGround {
 }
 #[repr(C)]
 pub struct RoadServices {
-    pub snow: extern "C" fn(u32) -> RoadSnowGround,
+    pub snow: extern "C" fn(u32, bool) -> RoadSnowGround,
     pub snow_or_desert: extern "C" fn(u32) -> bool,
     pub toggle_snow_or_desert: extern "C" fn(u32),
     pub roadside: extern "C" fn(u32) -> Roadside,
@@ -627,7 +631,8 @@ pub(crate) unsafe fn road_tile_loop(
     // SAFETY: Live immutable tables; native storage is accessed only by its leaves.
     let (c, r, s) = unsafe { (&*costs, &*roads, &*shared) };
     if climate == 1 {
-        let ground = (r.snow)(tile);
+        let flat = crate::movement::foundation_slope(s, tile).slope.0 == 0;
+        let ground = (r.snow)(tile, flat);
         if ground.snow != (ground.z > i32::from((s.snow_line)())) {
             (r.toggle_snow_or_desert)(tile);
             (s.mark_dirty)(tile);
@@ -652,7 +657,9 @@ pub(crate) unsafe fn road_tile_loop(
             zone = group;
             if months != 0 && (distance < 8 || zone != 0) && (s.is_normal_road)(tile) {
                 let bits = (r.all_bits)(tile);
-                if bits.0.count_ones() > 1 && (s.foundation)(tile).slope.0 == 0 {
+                if bits.0.count_ones() > 1
+                    && crate::movement::foundation_slope(s, tile).slope.0 == 0
+                {
                     // SAFETY: The facade owns this live native stack context.
                     let out = unsafe { (c.prepare)(call) };
                     // SAFETY: prepare provides live native result storage.
@@ -932,7 +939,6 @@ crate::abi::layouts! {
         set_ground,
         snow,
         fences,
-        foundation,
         owned_land,
     };
     "OpenTTDTunnelGround" ["landscape"] => TunnelGround {

@@ -127,12 +127,11 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, part);
 		VEHICLE_UNUSED(leaves, link);
 		VEHICLE_UNUSED(leaves, link_tile);
-		VEHICLE_UNUSED(leaves, enter_tile);
+		VEHICLE_UNUSED(leaves, after_enter_tile);
 		VEHICLE_UNUSED(leaves, visit_close);
 		VEHICLE_UNUSED(leaves, visit_trains);
 		VEHICLE_UNUSED(leaves, visit_tile);
 		VEHICLE_UNUSED(leaves, has_road);
-		VEHICLE_UNUSED(leaves, track_status);
 		VEHICLE_UNUSED(leaves, any_road_bits);
 		VEHICLE_UNUSED(leaves, is_road_depot_tile);
 		VEHICLE_UNUSED(leaves, depot_direction);

@@ -14,11 +14,62 @@
 #include "pathfinder/follow_track.hpp"
 
 #ifdef WITH_RUST
+#include "rust/pbs_ffi.h"
+#include "rust/services_map.h"
+#include "rust/services_rail.h"
 #include "rust/services_station.h"
 #endif
 
 #include "safeguards.h"
 
+#ifdef WITH_RUST
+const OpenTTDPbsServices &GetPbsServices() noexcept
+{
+	static const OpenTTDPbsServices s{
+		.shared = &GetRustSharedServices(),
+		.rail = &GetRustRailMapServices(),
+		.train = &GetTrainServices(),
+		.depot_bits = [](uint32_t t) noexcept { return GetDepotReservationTrackBits(TileIndex{t}); },
+		.crossing_bits = [](uint32_t t) noexcept { return GetCrossingReservationTrackBits(TileIndex{t}); },
+		.station_bits = [](uint32_t t) noexcept { return GetStationReservationTrackBits(TileIndex{t}); },
+		.wormhole_bits = [](uint32_t t) noexcept { return GetTunnelBridgeReservationTrackBits(TileIndex{t}); },
+		.set_depot = RustSetDepotReservation,
+		.set_station = RustSetRailStationReservation,
+		.set_wormhole = RustSetTunnelBridgeReservation,
+		.try_track = [](uint32_t t, uint8_t track) noexcept { return TryReserveTrack(TileIndex{t}, static_cast<Track>(track)); },
+		.unreserve_track = [](uint32_t t, uint8_t track) noexcept { UnreserveTrack(TileIndex{t}, static_cast<Track>(track)); },
+		.station_reserved = RustStationReserved,
+		.compatible_station = RustCompatibleStationTiles,
+		.show_reservation = RustShowTrackReservation,
+		.assert_platform = []([[maybe_unused]] uint32_t tile, [[maybe_unused]] uint8_t dir) noexcept { assert(IsRailStationTile(TileIndex{tile})); assert(GetRailStationAxis(TileIndex{tile}) == DiagDirToAxis(static_cast<DiagDirection>(dir))); },
+		.station = [](uint32_t t) noexcept { return BaseStation::GetByTile(TileIndex{t}); },
+		.randomisation = [](BaseStation *st, uint32_t t) noexcept { RustStationRandomisation(st, TileIndex{t}, StationRandomTrigger::PathReservation); },
+		.animation = [](BaseStation *st, uint32_t t) noexcept { RustStationAnimation(st, TileIndex{t}, StationAnimationTrigger::PathReservation); },
+		.is_crossing = MapSvcRoadIsLevelCrossing,
+		.read_train_on_res = [](const OpenTTDPbsTrainOutput *slot) noexcept -> OpenTTDTrainHandle { return {*reinterpret_cast<Vehicle *const *>(slot), nullptr}; },
+		.write_train_on_res = [](OpenTTDPbsTrainOutput *slot, OpenTTDTrainHandle v) noexcept { *reinterpret_cast<Vehicle **>(slot) = static_cast<Train *>(v.shell); },
+#if !defined(NDEBUG) || defined(WITH_ASSERT)
+		.assertions = true,
+#else
+		.assertions = false,
+#endif
+		.handle = TrainHandle,
+		.all_compatible = RustAllCompatibleRailTypes,
+		.compatible = [](uint8_t rt) noexcept { return GetRailTypeInfo(static_cast<RailType>(rt))->compatible_railtypes.base(); },
+		.tile_rail_type = RustTileRailType,
+		.rail90 = RustRail90Disallowed,
+		.blocking = RustOnewaySignalBlocking,
+		.has_pbs = RustHasPbsSignal,
+		.index = RustVehicleIndexOpaque,
+		.follow = RustFollowTrackRail,
+	};
+	return s;
+}
+TrackBits GetReservedTrackbits(TileIndex t) { return static_cast<TrackBits>(openttd_rust_pbs_reserved(&GetPbsServices(), t.base())); }
+void SetRailStationPlatformReservation(TileIndex t, DiagDirection dir, bool b) { openttd_rust_pbs_platform(&GetPbsServices(), t.base(), dir, b); }
+bool TryReserveRailTrack(TileIndex tile, Track t, bool trigger) { return openttd_rust_pbs_try_reserve(&GetPbsServices(), tile.base(), t, trigger); }
+void UnreserveRailTrack(TileIndex tile, Track t) { openttd_rust_pbs_unreserve(&GetPbsServices(), tile.base(), t); }
+#else
 /**
  * Get the reserved trackbits for any tile, regardless of type.
  * @param t the tile
@@ -67,11 +118,7 @@ void SetRailStationPlatformReservation(TileIndex start, DiagDirection dir, bool 
 	assert(GetRailStationAxis(start) == DiagDirToAxis(dir));
 
 	do {
-#ifdef WITH_RUST
-		RustSetRailStationReservation(tile.base(), b);
-#else
 		SetRailStationReservation(tile, b);
-#endif
 		MarkTileDirtyByTile(tile);
 		tile = TileAdd(tile, diff);
 	} while (IsCompatibleTrainStationTile(tile, start));
@@ -120,11 +167,7 @@ bool TryReserveRailTrack(TileIndex tile, Track t, bool trigger_stations)
 
 		case MP_STATION:
 			if (HasStationRail(tile) && !HasStationReservation(tile)) {
-#ifdef WITH_RUST
-				RustSetRailStationReservation(tile.base(), true);
-#else
 				SetRailStationReservation(tile, true);
-#endif
 				if (trigger_stations) {
 					auto *st = BaseStation::GetByTile(tile);
 					TriggerStationRandomisation(st, tile, StationRandomTrigger::PathReservation);
@@ -184,11 +227,7 @@ void UnreserveRailTrack(TileIndex tile, Track t)
 
 		case MP_STATION:
 			if (HasStationRail(tile)) {
-#ifdef WITH_RUST
-				RustSetRailStationReservation(tile.base(), false);
-#else
 				SetRailStationReservation(tile, false);
-#endif
 				MarkTileDirtyByTile(tile);
 			}
 			break;
@@ -203,6 +242,19 @@ void UnreserveRailTrack(TileIndex tile, Track t)
 }
 
 
+#endif
+
+#ifdef WITH_RUST
+PBSTileInfo FollowTrainReservation(const Train *v, Vehicle **other)
+{
+	assert(v->type == VEH_TRAIN);
+	auto result = openttd_rust_pbs_follow_train(&GetPbsServices(), TrainHandle(v), reinterpret_cast<OpenTTDPbsTrainOutput *>(other));
+	return {TileIndex{result.tile}, static_cast<Trackdir>(result.td), result.okay != 0};
+}
+Train *GetTrainForReservation(TileIndex tile, Track track) { return static_cast<Train *>(openttd_rust_pbs_train_for(&GetPbsServices(), tile.base(), track).shell); }
+bool IsSafeWaitingPosition(const Train *v, TileIndex tile, Trackdir td, bool end, bool no90) { return openttd_rust_pbs_safe(&GetPbsServices(), TrainHandle(v), tile.base(), td, end, no90); }
+bool IsWaitingPositionFree(const Train *v, TileIndex tile, Trackdir td, bool no90) { return openttd_rust_pbs_free(&GetPbsServices(), TrainHandle(v), tile.base(), td, no90); }
+#else
 /** Follow a reservation starting from a specific tile to the end. */
 static PBSTileInfo FollowReservation(Owner o, RailTypes rts, TileIndex tile, Trackdir trackdir, bool ignore_oneway = false)
 {
@@ -464,3 +516,5 @@ bool IsWaitingPositionFree(const Train *v, TileIndex tile, Trackdir trackdir, bo
 
 	return !HasReservedTracks(ft.new_tile, TrackdirBitsToTrackBits(ft.new_td_bits));
 }
+
+#endif

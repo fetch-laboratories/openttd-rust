@@ -196,7 +196,17 @@ static void RoadBoundary()
 	t.leaves.is_bay_stop = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
 	t.vehicle.play_vehicle_sound = [](OpenTTDVehicle *, VehicleSoundEvent event) noexcept { CHECK(event == 1); return true; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
-	t.leaves.enter_tile = [](OpenTTDVehicle *, uint32_t, int32_t, int32_t) noexcept -> OpenTTDRoadEntered { return {.tile = 100, .cur_speed = 0, .flags = 4, .direction = 1, .order_type = 0}; };
+	static OpenTTDSharedServices movement_world{};
+	movement_world.map_log_x = []() noexcept -> uint32_t { return 6; };
+	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 9; };
+	static OpenTTDMovementServices movement{};
+	movement.shared = &movement_world;
+	movement.resolve = [](OpenTTDVehicle *) noexcept -> OpenTTDMovementVehicle { return {.train = {}, .road = road_abi_probe->state, .ship = nullptr, .kind = static_cast<VehicleType>(1)}; };
+	movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
+	movement.is_tunnel = [](uint32_t) noexcept { return true; };
+	movement.pose = [](OpenTTDVehicle *) noexcept -> OpenTTDMovementPose { return {.z = 10, .direction = 1}; };
+	t.shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	t.leaves.after_enter_tile = [](OpenTTDVehicle *, uint8_t flags) noexcept -> OpenTTDRoadEntered { CHECK(flags == 4); return {.tile = 100, .cur_speed = 0, .flags = flags, .direction = 1, .order_type = 0}; };
 	t.vehicle.write_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == 0); };
 	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &probe.entry, &t.leaves, nullptr));
 	CHECK(openttd_rust_road_get(probe.state, 0) == 36 && probe.stop->status == 0x7F);

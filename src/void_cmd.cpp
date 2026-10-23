@@ -30,6 +30,7 @@ static void DrawTile_Void(TileInfo *ti)
 }
 
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Void(TileIndex, uint x, uint y, bool)
 {
 	/* This function may be called on tiles outside the map, don't assume
@@ -38,11 +39,14 @@ static int GetSlopePixelZ_Void(TileIndex, uint x, uint y, bool)
 
 	return z + GetPartialPixelZ(x & 0xF, y & 0xF, tileh);
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_Void(TileIndex, Slope)
 {
 	return FOUNDATION_NONE;
 }
+#endif
 
 static CommandCost ClearTile_Void(TileIndex, DoCommandFlags)
 {
@@ -69,10 +73,12 @@ static void ChangeTileOwner_Void(TileIndex, Owner, Owner)
 	/* not used */
 }
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Void(TileIndex, TransportType, uint, DiagDirection)
 {
 	return 0;
 }
+#endif
 
 static CommandCost TerraformTile_Void(TileIndex, DoCommandFlags, int, Slope)
 {
@@ -81,11 +87,19 @@ static CommandCost TerraformTile_Void(TileIndex, DoCommandFlags, int, Slope)
 
 extern const TileTypeProcs _tile_type_void_procs = {
 	DrawTile_Void,            // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Void,      // get_slope_z_proc
+#endif
 	ClearTile_Void,           // clear_tile_proc
 	nullptr,                     // add_accepted_cargo_proc
 	GetTileDesc_Void,         // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Void,  // get_tile_track_status_proc
+#endif
 	nullptr,                     // click_tile_proc
 	nullptr,                     // animate_tile_proc
 #ifdef WITH_RUST
@@ -96,7 +110,11 @@ extern const TileTypeProcs _tile_type_void_procs = {
 	ChangeTileOwner_Void,     // change_tile_owner_proc
 	nullptr,                     // add_produced_cargo_proc
 	nullptr,                     // vehicle_enter_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Void,       // get_foundation_proc
+#endif
 	TerraformTile_Void,       // terraform_tile_proc
 	nullptr, // check_build_above_proc
 };

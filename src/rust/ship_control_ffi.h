@@ -37,7 +37,6 @@ struct OpenTTDShipLeaves {
 	uint32_t (*lock_dir)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(lock_dir);
 	uint32_t (*tile_min_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_min_z);
 	uint32_t (*tile_max_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_max_z);
-	uint32_t (*track_status)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(track_status);
 	uint32_t (*offset)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(offset);
 	uint32_t (*diag_between)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(diag_between);
 	uint32_t (*dist_square)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(dist_square);
@@ -94,7 +93,6 @@ struct OpenTTDShipLeaves {
 	uint32_t (*path_back)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_back);
 	void (*path_pop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_pop);
 	void (*path_clear)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_clear);
-	uint32_t (*enter_tile)(uint32_t, uint32_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(enter_tile);
 	bool (*process_orders)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);
 	void (*viewport)(uint32_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (*base_viewport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);

@@ -5,5 +5,11 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! `vehicle_type.h` physics constants.
+//! Shared `vehicle_type.h` transport identities.
+/// `VEH_TRAIN`.
+pub const VEH_TRAIN: u8 = 0;
+/// `VEH_ROAD`.
+pub const VEH_ROAD: u8 = 1;
+/// `VEH_SHIP`.
+pub const VEH_SHIP: u8 = 2;
 pub const GROUND_ACCELERATION: u32 = 9800;

@@ -371,6 +371,10 @@ def check(scenario, run, mode, role, result):
                 "protocol-query true",
                 "protocol-bankrupt true",
                 "automatic-convert-exec true",
+                "movement-half-tram-1 514",
+                "movement-half-tram-2 257",
+                "movement-half-tram-4 514",
+                "movement-half-tram-8 257",
                 "tb-done true",
                 "tb-invalid-type-255 false",
                 "tb-invalid-type-256 false",
@@ -392,6 +396,9 @@ def check(scenario, run, mode, role, result):
                 result["problems"].append(
                     f"{mode}/{role}: missing non-flat crossing autoslope outcome"
                 )
+            core.branch_witnesses(
+                scenario, run, role, "movement", ["crossing_escape", "water_edge"]
+            )
             for kind in (0, 1):
                 for action in ("remove", "convert"):
                     prefix = f"ROADCMD non-road-{action}-{kind}-exec false "
@@ -446,6 +453,20 @@ def check(scenario, run, mode, role, result):
     before, after = rows(source), rows(final)
     chunks = read_save(source)
     operation = scenario["roads"]
+    from . import core
+
+    required = (
+        ["pixel_z", "track_road"]
+        if operation in ("original", "depot-service", "reload")
+        else []
+    )
+    if operation in ("depot-service", "reload"):
+        required += ["road_depot_enter_0"]
+    if operation == "reload":
+        required += ["road_stop_admit"]
+    result[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
+        scenario, run, role, "movement", required
+    )
     witnesses = {}
 
     def require(condition, message):

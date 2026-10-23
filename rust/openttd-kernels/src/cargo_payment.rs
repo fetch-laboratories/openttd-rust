@@ -21,6 +21,7 @@
     clippy::missing_safety_doc,
     clippy::too_many_arguments
 )]
+use crate::station::NearbyIndustryCursor;
 use std::ffi::c_void;
 
 /// Opaque live native `CargoPayment`; never dereferenced by Rust.
@@ -51,7 +52,6 @@ pub struct Fields {
 pub struct Services {
     pub(crate) spec: extern "C" fn(u8, *mut Spec),
     pub(crate) callback: extern "C" fn(u8, u32) -> u16,
-    pub(crate) nearby_industry: extern "C" fn(u16, u32) -> *mut c_void,
     pub(crate) station_read: extern "C" fn(u16, u8, u8) -> u32,
     pub(crate) industry_read: extern "C" fn(*mut c_void, u8, u32) -> u32,
     pub(crate) industry_write: extern "C" fn(*mut c_void, u8, u32, u32),
@@ -129,6 +129,7 @@ fn deliver(
     periods: u16,
     company: u8,
     source: u32,
+    cursor: *mut NearbyIndustryCursor,
 ) -> i64 {
     let industry_source = if source >> 16 == 0 {
         source as u16
@@ -137,14 +138,14 @@ fn deliver(
     };
     let mut remaining = pieces;
     let mut accepted_ind = 0_u32;
-    let mut index = 0;
+    let subsidies = unsafe { &*(s.subsidies)() };
+    (subsidies.begin_nearby)(cursor, (subsidies.station)(station));
     loop {
-        let ind = (s.nearby_industry)(station, index);
+        let ind = (subsidies.next_nearby)(cursor).cast::<c_void>();
         if ind.is_null() || remaining == 0 {
             break;
         }
-        index += 1;
-        if (s.industry_read)(ind, 0, 0) == u32::from(industry_source) {
+        if (subsidies.industry_id)(ind) == industry_source {
             continue;
         }
         let slot = (s.industry_read)(ind, 1, u32::from(cargo));
@@ -173,7 +174,7 @@ fn deliver(
             company,
             amount,
             u32::from(industry_source),
-            (s.industry_read)(ind, 0, 0) as u16,
+            (subsidies.industry_id)(ind),
         );
     }
     let accepted = if (s.station_read)(station, 1, cargo) != 0 {
@@ -195,7 +196,7 @@ fn deliver(
         source,
         0xffff,
     );
-    if unsafe { &*(s.subsidies)() }.check(
+    if subsidies.check(
         cargo,
         company,
         crate::subsidy::Source {
@@ -203,6 +204,7 @@ fn deliver(
             kind: (source >> 16) as u8,
         },
         station,
+        cursor,
     ) {
         profit = match (s.setting)(0) {
             0 => profit.saturating_add(profit >> 1),
@@ -340,13 +342,14 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
     distance: u32,
     periods: u16,
     source: u32,
+    cursor: *mut NearbyIndustryCursor,
 ) {
     let s = unsafe { *s };
     let front = unsafe { (*p).fields.front };
     let station = unsafe { (*p).station };
     let company = (s.vehicle_read)(front, 1) as u8;
     let profit = deliver(
-        d, s, count, cargo, station, distance, periods, company, source,
+        d, s, count, cargo, station, distance, periods, company, source, cursor,
     );
     unsafe {
         (*p).fields.route_profit = (*p).fields.route_profit.saturating_add(profit);
@@ -412,7 +415,6 @@ crate::abi::layouts! {
     "OpenTTDCargoServices" ["probe"] => Services {
         spec,
         callback,
-        nearby_industry,
         station_read,
         industry_read,
         industry_write,

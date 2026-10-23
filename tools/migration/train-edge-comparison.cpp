@@ -10,6 +10,7 @@
 #include "core/math_func.hpp"
 #include "direction_func.h"
 #include "rust/train_ffi.h"
+#include "rust/movement_ffi.h"
 #include <cstdio>
 #include <vector>
 
@@ -66,6 +67,8 @@ static OpenTTDTrainHandle Handle(Train *v) noexcept { return {v, v == nullptr ? 
 static Train &Part(OpenTTDTrainHandle part) noexcept { return *static_cast<Train *>(part.shell); }
 static uint32_t UnexpectedRandom(void *) noexcept { std::abort(); }
 static uint32_t UnexpectedIndustry(int32_t, int32_t, uint32_t *) noexcept { std::abort(); }
+static OpenTTDMovementServices movement;
+static uint32_t entered_tile;
 static OpenTTDTrainServices Leaves()
 {
 	OpenTTDTrainServices leaves{};
@@ -91,7 +94,6 @@ static OpenTTDTrainServices Leaves()
 	leaves.viewport = [](OpenTTDTrainHandle h, uint8_t a, uint8_t b) noexcept { Part(h).UpdateViewport(a != 0, b != 0); };
 	leaves.tile_virt = [](OpenTTDTrainHandle, int32_t x, int32_t y) noexcept { return uint64_t(TileVirtXY(x, y)); };
 	leaves.is_tunnelbridge = [](OpenTTDTrainHandle, uint32_t) noexcept { return uint64_t(0); };
-	leaves.enter_tile = [](OpenTTDTrainHandle h, uint32_t tile, int32_t x, int32_t y) noexcept { VehicleEnterTile(&Part(h), tile, x, y); return uint64_t(0); };
 	return leaves;
 }
 static uint16_t RustCurve()
@@ -103,7 +105,19 @@ static uint16_t RustCurve()
 static void RustReverse(int left, int right)
 {
 	const auto leaves = Leaves();
-	const OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, UnexpectedRandom, UnexpectedIndustry);
+	OpenTTDSharedServices shared = OpenTTDFixtureSharedServices(nullptr, UnexpectedRandom, UnexpectedIndustry);
+	movement.shared = &shared;
+	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	// The copied world has no depot/tunnel tiles. Observe the real owner's
+	// admission call through typed map/vehicle services, retaining event order.
+	shared.tile_type = [](uint32_t tile) noexcept { entered_tile = tile; return uint8_t{1}; };
+	movement.resolve = [](OpenTTDVehicle *shell) noexcept {
+		auto *v = reinterpret_cast<Train *>(shell);
+		assert(entered_tile == v->tile);
+		events.push_back(0x300 + v->id);
+		return OpenTTDMovementVehicle{Handle(v), nullptr, nullptr, VehicleType{0}};
+	};
+	movement.rail_depot_tile = [](uint32_t) noexcept { return false; };
 	openttd_rust_train_reverse_swap(Handle(trains), left, right, &leaves, &shared);
 }
 static uint32_t random_state = 130;

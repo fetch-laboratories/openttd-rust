@@ -68,6 +68,14 @@
 #include "rust/environment_services.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/movement_ffi.h"
+#include "rust/services_map.h"
+#include "rust/services_movement.h"
+#include "rust/train_ffi.h"
+#include "rust/services_station.h"
+#endif
+
 #include "safeguards.h"
 
 extern const TileTypeProcs
@@ -344,9 +352,13 @@ uint GetPartialPixelZ(int x, int y, Slope corners)
  */
 int GetSlopePixelZ(int x, int y, bool ground_vehicle)
 {
+#ifdef WITH_RUST
+	return openttd_rust_movement_pixel_z(&GetRustMovementServices(), x, y, ground_vehicle);
+#else
 	TileIndex tile = TileVirtXY(x, y);
 
 	return _tile_type_procs[GetTileType(tile)]->get_slope_z_proc(tile, x, y, ground_vehicle);
+#endif
 }
 
 /**
@@ -359,11 +371,15 @@ int GetSlopePixelZ(int x, int y, bool ground_vehicle)
  */
 int GetSlopePixelZOutsideMap(int x, int y)
 {
+#ifdef WITH_RUST
+	return openttd_rust_movement_outside_z(&GetRustMovementServices(), x, y);
+#else
 	if (IsInsideBS(x, 0, Map::SizeX() * TILE_SIZE) && IsInsideBS(y, 0, Map::SizeY() * TILE_SIZE)) {
 		return GetSlopePixelZ(x, y, false);
 	} else {
 		return _tile_type_procs[MP_VOID]->get_slope_z_proc(INVALID_TILE, x, y, false);
 	}
+#endif
 }
 
 /**
@@ -423,10 +439,15 @@ void GetSlopePixelZOnEdge(Slope tileh, DiagDirection edge, int &z1, int &z2)
  */
 std::tuple<Slope, int> GetFoundationSlope(TileIndex tile)
 {
+#ifdef WITH_RUST
+	auto result = openttd_rust_movement_foundation_slope(&GetRustMovementServices(), tile.base());
+	return {result.slope, result.z};
+#else
 	auto [tileh, z] = GetTileSlopeZ(tile);
 	Foundation f = _tile_type_procs[GetTileType(tile)]->get_foundation_proc(tile, tileh);
 	z += ApplyFoundationToSlope(f, tileh);
 	return {tileh, z};
+#endif
 }
 
 
@@ -601,7 +622,11 @@ void DoClearSquare(TileIndex tile)
  */
 TrackStatus GetTileTrackStatus(TileIndex tile, TransportType mode, uint sub_mode, DiagDirection side)
 {
+#ifdef WITH_RUST
+	return openttd_rust_movement_track_status(&GetRustMovementServices(), tile.base(), mode, sub_mode, side);
+#else
 	return _tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc(tile, mode, sub_mode, side);
+#endif
 }
 
 #ifdef WITH_RUST
@@ -1994,6 +2019,7 @@ void CallLandscapeTick()
 #include "abi-visit-OpenTTDLandscapeGenerationServices.hpp"
 #include "abi-visit-OpenTTDHeightmapDecoder.hpp"
 #include "abi-visit-OpenTTDLandscapeLoopServices.hpp"
+#include "abi-visit-OpenTTDMovementServices.hpp"
 #include "abi-visit-OpenTTDTileOwnerServices.hpp"
 #include "abi-visit-OpenTTDClearServices.hpp"
 #include "abi-visit-OpenTTDRailServices.hpp"
@@ -2011,6 +2037,63 @@ bool CheckAbi_landscape()
 		AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &frame, &road.view)) &&
 		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
 		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&
-		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices());
+		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices()) &&
+		AbiServicesComplete(GetRustMovementServices());
+}
+#endif
+
+#ifdef WITH_RUST
+void RustMovementAssert(bool condition) noexcept { assert(condition); }
+
+const OpenTTDMovementServices &GetRustMovementServices() noexcept
+{
+	static const OpenTTDMovementServices services{
+		.shared = &GetRustSharedServices(),
+		.orders = &GetRustOrdersLeaves(),
+		.rail = &GetRustRailGroundServices(),
+		.road = &GetRustRoadGroundServices(),
+		.rail_map = &GetRustRailMapServices(),
+		.train = &GetTrainServices(),
+		.vehicle = &GetRustVehicleServices(),
+		.road_kind = RustMovementRoadKind,
+		.road_vehicle = &GetRustRoadLeaves(),
+		.resolve = RustMovementResolve,
+		.pose = RustMovementPose,
+		.depot_position = RustMovementDepotPosition,
+		.incline = RustMovementIncline,
+		.first = RustMovementFirst,
+		.first_speed = RustMovementFirstSpeed,
+		.write_ground_flags = RustMovementWriteGroundFlags,
+		.train_engine_class = RustMovementTrainEngineClass,
+		.depot_invalidate = RustMovementDepotInvalidate,
+		.native_assert = RustMovementAssert,
+		.plain_rail = RustMovementPlainRail,
+		.normal_road = RustMovementNormalRoad,
+		.is_tunnel = RustMovementTunnel,
+		.rail_station = RustMovementRailStation,
+		.road_crossing = MapSvcRoadIsLevelCrossing,
+		.tile_flat = GetRustTownFoundingServices().flat,
+		.add_by_diag_dir = RustTileAddByDiagDir,
+		.rail_depot_tile = RustRailDepotTile,
+		.has_tile_road_type = RustHasTileRoadType,
+		.oneway_signal = RustRailOnewaySignal,
+		.crossing_barred = RustCrossingBarred,
+		.buoy = RustStationBuoy,
+		.water_type = GetRustWaterCommandServices().water_type,
+		.lock_direction = GetRustWaterCommandServices().lock_direction,
+		.ship_depot_axis = RustShipDepotAxis,
+		.pixel_slope = RustTilePixelSlope,
+		.outside_pixel_slope = RustOutsidePixelSlope,
+		.max_pixel_z = GetIndustryTileServices().pixel_max_z,
+		.owned_land = GetRustRailGroundServices().owned_land,
+		.object_foundation = RustObjectFoundation,
+		.house_foundation = RustHouseFoundation,
+		.house_callback = RustHouseFoundationCallback,
+		.house_boolean = RustHouseFoundationBoolean,
+		.industry_foundation = RustIndustryFoundation,
+		.industry_callback = RustIndustryFoundationCallback,
+		.industry_boolean = RustIndustryFoundationBoolean,
+	};
+	return services;
 }
 #endif

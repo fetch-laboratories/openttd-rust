@@ -1,13 +1,16 @@
 """Owner-built multimodal fixtures and rail controller evidence (#86/#179/#183/#221)."""
 
 import hashlib
+import json
 import lzma
 import re
 import shutil
 import struct
+import subprocess
 from pathlib import Path
 
 from . import core
+from .console_adapter import console_adapter, prepared_console
 from .core import (
     ROOT,
     SNAPSHOT_TICKS,
@@ -19,6 +22,63 @@ from .core import (
 from .play_saves import DISTRIBUTIONS
 
 AI_FOLDER = "rail-scenario-ai"
+
+
+# Exact unchanged pinned bodies: transient PBSTileInfo/train_on_res and trigger order
+# are not serialized. Both adapter roles compile the same source without editing it.
+def pbs_reference(folder):
+    baseline = json.loads((ROOT / "migration/baseline.json").read_text())["commit"]
+    original = subprocess.check_output(
+        ["git", "show", f"{baseline}:src/pbs.cpp"], cwd=ROOT, text=True
+    )
+    names = (
+        "GetReservedTrackbits",
+        "SetRailStationPlatformReservation",
+        "TryReserveRailTrack",
+        "UnreserveRailTrack",
+        "FollowReservation",
+        "FollowTrainReservation",
+        "GetTrainForReservation",
+        "IsSafeWaitingPosition",
+        "IsWaitingPositionFree",
+        "HasReservedTracks",
+    )
+    body = "".join(f"#define {name} PbsOriginal{name}\n" for name in names)
+    body += "TrackBits PbsOriginalGetReservedTrackbits(TileIndex);\nbool PbsOriginalIsSafeWaitingPosition(const Train *, TileIndex, Trackdir, bool, bool);\n"
+    body += "inline bool PbsOriginalHasReservedTracks(TileIndex t, TrackBits b) { return (PbsOriginalGetReservedTrackbits(t) & b) != TRACK_BIT_NONE; }\n"
+    body += (
+        original[original.index("TrackBits GetReservedTrackbits") :]
+        .replace("t->track", "PbsTrainTrack(t)")
+        .replace("v->railtypes", "PbsTrainRailTypes(v)")
+    )
+    header = subprocess.check_output(
+        ["git", "show", f"{baseline}:src/pathfinder/follow_track.hpp"],
+        cwd=ROOT,
+        text=True,
+    )
+    mask = header[header.index("\tinline bool MaskReservedTracks()") :]
+    body += (
+        "struct PbsOriginalMask : CFollowTrackRail { using CFollowTrackRail::CFollowTrackRail; "
+        "static bool DoTrackMasking() { return true; }\n"
+        + mask[: mask.index("\nprotected:")]
+        + "};\n"
+    )
+    body += "".join(f"#undef {name}\n" for name in names)
+    (folder / "pbs-original.hpp").write_text(body)
+
+
+def adapter(build, folder, env):
+    folder.mkdir(parents=True, exist_ok=True)
+    pbs_reference(folder)
+    source = folder / "pbs-source.cpp"
+    source.write_text((ROOT / "tools/simulation/pbs-console.cpp").read_text())
+    return console_adapter(build, folder, env, source, "rails", wraps=PBS_WRAPS)
+
+
+PBS_WRAPS = (
+    "_Z27TriggerStationRandomisationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE20StationRandomTriggerh",
+    "_Z23TriggerStationAnimationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE23StationAnimationTriggerh",
+)
 
 
 def uses_ai(scenario):
@@ -59,6 +119,15 @@ def scenarios(soak):
         }
         for distribution, commands in DISTRIBUTIONS.items()
     ]
+    cases.append(
+        dict(
+            cases[0],
+            name="rail-movement-depot-3",
+            movement_depot=True,
+            ticks=1200,
+            short_checkpoint=True,
+        )
+    )
     cases.append(
         dict(
             cases[0],
@@ -174,6 +243,10 @@ def scenarios(soak):
                 "ticks": (6 if soak else 2) * 365 * TICKS_PER_DAY + SNAPSHOT_TICKS,
             }
         )
+    for case in cases:
+        if case["name"].startswith(("rail-reservation-", "rail-controller-")):
+            case["pbs_probe"] = True
+            case["console"] = ["pbs_probe", *case["console"]]
     return cases
 
 
@@ -220,6 +293,8 @@ TRAIN_BRANCHES = {
 
 def train_required(scenario):
     name = scenario["name"]
+    if scenario.get("movement_depot"):
+        return []
     return TRAIN_BRANCHES[
         max((k for k in TRAIN_BRANCHES if name.startswith(k)), key=len)
     ]
@@ -277,6 +352,23 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             )
             for kind in range(4)
         }
+    if scenario.get("movement_depot"):
+        warm = run_game(
+            dict(scenario, save=str(normalized), ticks=1000),
+            binaries["reference"],
+            builds["reference"],
+            directory / "depot-warm",
+            timeout,
+            env,
+        )
+        normalized, _ = normalize(
+            warm["snapshots"][-1], directory / "depot-warm-normalized"
+        )
+        from .disasters import rows
+
+        if rows(normalized)[14]["train[0]/common[0]/current_order.type"] & 15 == 3:
+            raise RuntimeError("depot staging still has a station loading owner")
+        normalized = depot_input(normalized, directory)
     scenario = dict(scenario, save=str(normalized))
     if "rail_control" in scenario:
         normalized, record = controller_input(normalized, directory, scenario)
@@ -334,7 +426,58 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         normalized, record = normalize(fixture, directory / "reload")
         result["rail_reload_input"] = record
         scenario = dict(scenario, save=str(normalized))
+    if scenario.get("pbs_probe"):
+        executables = prepared_console(
+            "rails", adapter, binaries, builds, directory / "pbs", env
+        )
+        scenario = dict(scenario, executables=executables)
     return scenario
+
+
+def depot_input(source, directory):
+    """Stage the existing consist north of real depot 5; ordinary ticks enter/leave."""
+    from .disasters import patch
+
+    common, depot = "train[0]/common[0]/", 8280
+    changes = {"VEHS": {}}
+    for index in (14, 15, 16):
+        y = 1016 - (index - 14) * 8
+        changes["VEHS"][index] = {
+            common + "tile": (y // 16) * 128 + 88,
+            common + "x_pos": 1416,
+            common + "y_pos": y,
+            common + "z_pos": 48,
+            common + "direction": 3,
+            common + "vehstatus": 8,
+            "train[0]/track": 2,
+        }
+    changes["VEHS"][14].update(
+        {
+            common + "current_order.type": 66,
+            common + "current_order.flags": 0,
+            common + "current_order.dest": 5,
+            common + "dest_tile": depot,
+            common + "cur_speed": 32,
+        }
+    )
+    target = directory / "depot-input.sav"
+    patch(source, target, changes)
+    data, chunks = bytearray(target.read_bytes()), read_save(target)
+    # rail_map.h: retain the canonical depot pool entry, rotate its door to NW,
+    # and declare a flat, unreserved straight approach; no output is patched.
+    for tile in (depot, depot - 128, depot - 256, depot - 384):
+        for cid, value in {
+            "MAPT": 16,
+            "MAPO": 0,
+            "M3LO": 0,
+            "M3HI": 1,
+            "MAP5": 0xC3 if tile == depot else 2,
+            "MAPE": 0,
+        }.items():
+            data[chunks[cid]["span"][0] + 8 + tile] = value
+        struct.pack_into(">H", data, chunks["MAP2"]["span"][0] + 8 + tile * 2, 0)
+    target.write_bytes(data)
+    return target
 
 
 def controller_input(source, directory, scenario):
@@ -700,11 +843,59 @@ def check(scenario, run, mode, role, result):
     result[f"{mode}_{role}_ground"] = core.branch_witnesses(
         scenario, run, role, "ground", ground
     )
+    if scenario.get("pbs_probe"):
+        if not any("PBS checked" in line for line in run["log"]):
+            raise RuntimeError("missing default PBS transient comparison")
+        result[f"{mode}_{role}_pbs"] = core.branch_witnesses(
+            scenario,
+            run,
+            role,
+            "pbs",
+            (
+                "follow",
+                "loop",
+                "second_direction",
+                "stray",
+                "lower_id",
+                "platform_interior",
+                "overlap",
+                "oneway_stop",
+                "search_oneway_skip",
+                "safe_opposing_pbs",
+            ),
+        )
+    required = ["pixel_z", "track_rail"]
+    if scenario.get("movement_depot"):
+        required += ["train_depot_enter_3", "train_depot_leave_3"]
+    if scenario["name"] == "play-padhattan-ridge-2016-manual":
+        required += (
+            "coast lock ship_depot train_tunnel_enter train_tunnel_exit "
+            "train_tunnel_sound road_bridge_enter road_bridge_exit station_stop "
+            "station_slow bridge_up bridge_down"
+        ).split()
+        required += [
+            f"train_depot_{phase}_{direction}"
+            for phase in ("enter", "leave")
+            for direction in range(3)
+        ]
+        required += [
+            f"train_tunnel_{phase}_{direction}"
+            for phase in ("enter", "exit")
+            for direction in range(4)
+        ]
+        required += [f"road_depot_enter_{direction}" for direction in range(4)]
+    if scenario.get("rail_control") in ("crossing", "service"):
+        required += ["signal_directions", "station_stop"]
+    result[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
+        scenario, run, role, "movement", required
+    )
     counts = core.branch_witnesses(
         scenario, run, role, "train", train_required(scenario)
     )
     if counts is not None:
         result[f"{mode}_{role}_train_profile"] = counts
+    if scenario.get("movement_depot"):
+        return
     if scenario.get("owner_structure_reload"):
         if run["exit"] != 0 or not run["snapshots"]:
             raise RuntimeError("owner structure window lacks exit checkpoint")

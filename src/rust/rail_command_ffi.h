@@ -50,7 +50,6 @@ struct OpenTTDRailCommandServices {
 	int64_t (*rail_convert_cost)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_convert_cost);
 	bool (*crossing_with_competitor)() noexcept OPENTTD_SERVICE_DEFAULT(crossing_with_competitor);
 	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
-	Foundation (*rail_foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_foundation);
 	int32_t (*slope_z_in_corner)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(slope_z_in_corner);
 	bool (*entrance_edge)(uint32_t, int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(entrance_edge);
 	bool (*ship_on_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_on_tile);
@@ -62,7 +61,6 @@ struct OpenTTDRailCommandServices {
 	void (*rail_infrastructure)(uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_infrastructure);
 	void (*road_infrastructure)(uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_infrastructure);
 	void (*signal_infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_infrastructure);
-	Train *(*reserving_train)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reserving_train);
 	OpenTTDRailTrainParking (*parking)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(parking);
 	OpenTTDRailTrainPosition (*train_position)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(train_position);
 	void (*layout_changed)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_changed);

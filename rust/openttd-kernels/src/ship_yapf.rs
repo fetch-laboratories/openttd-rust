@@ -65,9 +65,14 @@ pub struct Result {
     pub stats: [u32; 13],
 }
 #[repr(C)]
+pub struct Destination {
+    pub tile: u32,
+    pub station: bool,
+}
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
-    pub destination: unsafe extern "C" fn(*const c_void, *mut u32, *mut u16),
+    pub destination: unsafe extern "C" fn(*const c_void) -> Destination,
     pub follow: unsafe extern "C" fn(*const c_void, u32, u8) -> Follow,
     pub tile: unsafe extern "C" fn(*const c_void, u32, u8) -> Tile,
     pub patch: unsafe extern "C" fn(u32) -> Patch,
@@ -80,16 +85,7 @@ pub struct Leaves {
 pub struct Path(Vec<u8>);
 pub struct RegionPath(Vec<Patch>);
 const INVALID: u8 = 255;
-const EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
 const NEXT: [u8; 14] = [0, 1, 3, 2, 5, 4, 255, 255, 8, 9, 11, 10, 13, 12];
-const CROSS: [u16; 6] = [
-    (1 << 1) | (1 << 9),
-    (1 << 0) | (1 << 8),
-    (1 << 4) | (1 << 5) | (1 << 12) | (1 << 13),
-    (1 << 4) | (1 << 5) | (1 << 12) | (1 << 13),
-    (1 << 2) | (1 << 3) | (1 << 10) | (1 << 11),
-    (1 << 2) | (1 << 3) | (1 << 10) | (1 << 11),
-];
 #[derive(Clone, Copy)]
 struct Node {
     key: u32,
@@ -412,7 +408,7 @@ fn matches(
 fn octile(input: &Input, tile: u32, td: u8, destination: u32) -> i32 {
     let (x, y) = coords(input, tile);
     let (dx, dy) = coords(input, destination);
-    let exit = usize::from(EXIT[usize::from(td)]);
+    let exit = usize::from(crate::track_func::trackdir_to_exitdir(td));
     let x = (2 * x + [-1, 0, 1, 0][exit] - 2 * dx).abs();
     let y = (2 * y + [0, 1, 0, -1][exit] - 2 * dy).abs();
     x.min(y) * 71 + ((x - y).abs() - 1) * 50
@@ -430,6 +426,7 @@ fn preferred(input: &Input, tile: u32, td: u8) -> bool {
     }
 }
 fn low_search(
+    services: &Services,
     input: &Input,
     leaves: &Leaves,
     context: *const c_void,
@@ -440,13 +437,19 @@ fn low_search(
 ) -> Option<(Search, usize, u32)> {
     let mut observations = *input;
     // Destination observations occur only when the region search succeeds.
-    unsafe {
-        (leaves.destination)(
-            context,
-            &raw mut observations.dest_tile,
-            &raw mut observations.dest_dirs,
-        );
-    }
+    let dest = unsafe { (leaves.destination)(context) };
+    observations.dest_tile = dest.tile;
+    observations.dest_dirs = if dest.station {
+        u16::MAX
+    } else {
+        crate::track_func::track_status_to_trackdir_bits(crate::movement::track_status(
+            services,
+            dest.tile,
+            crate::transport_type::TRANSPORT_WATER,
+            0,
+            crate::direction_type::INVALID_DIAGDIR,
+        ))
+    };
     let input = &observations;
     let intermediate = if path.len() >= 5 {
         path.last().copied()
@@ -459,7 +462,7 @@ fn low_search(
     while dirs != 0 {
         let td = dirs.trailing_zeros() as u8;
         dirs &= dirs - 1;
-        let key = (input.tile << 2) | u32::from(EXIT[usize::from(td)]);
+        let key = (input.tile << 2) | u32::from(crate::track_func::trackdir_to_exitdir(td));
         search.startup(blank(
             key,
             input.tile,
@@ -494,7 +497,7 @@ fn low_search(
                 let td = dirs.trailing_zeros() as u8;
                 dirs &= dirs - 1;
                 let mut n = blank(
-                    (f.tile << 2) | u32::from(EXIT[usize::from(td)]),
+                    (f.tile << 2) | u32::from(crate::track_func::trackdir_to_exitdir(td)),
                     f.tile,
                     td,
                     Patch {
@@ -505,13 +508,15 @@ fn low_search(
                     Some(index),
                 );
                 let mut c: i32 = if td & 7 < 2 { 100 } else { 71 };
-                c = c.wrapping_add(if CROSS[usize::from(parent.td & 7)] & (1 << td) != 0 {
-                    input.curve90
-                } else if td != NEXT[usize::from(parent.td)] {
-                    input.curve45
-                } else {
-                    0
-                });
+                c = c.wrapping_add(
+                    if crate::track_func::trackdir_crosses_trackdirs(parent.td) & (1 << td) != 0 {
+                        input.curve90
+                    } else if td != NEXT[usize::from(parent.td)] {
+                        input.curve45
+                    } else {
+                        0
+                    },
+                );
                 let tile = unsafe { (leaves.tile)(context, n.tile, 1) };
                 if tile.docking != 0 {
                     c = c.wrapping_add(tile.ships.wrapping_mul(300) as i32);
@@ -594,7 +599,7 @@ fn random_path(
             break;
         }
         let mut dirs = f.dirs;
-        let straight = dirs & !CROSS[usize::from(td & 7)];
+        let straight = dirs & !crate::track_func::trackdir_crosses_trackdirs(td);
         if straight != 0 {
             dirs = straight;
         }
@@ -647,6 +652,7 @@ fn choose(
             result.stats[2] += 1;
         }
         let Some((search, mut index, closest)) = low_search(
+            services,
             input,
             leaves,
             context,
@@ -960,6 +966,7 @@ pub unsafe extern "C" fn openttd_rust_ship_heap_probe(
 
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDShipYapfDestination" ["probe"] => Destination { tile, station, };
     "OpenTTDShipYapfInput" ["probe"] => Input {
         map_x,
         map_y,

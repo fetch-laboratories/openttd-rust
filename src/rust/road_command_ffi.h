@@ -44,7 +44,6 @@ struct OpenTTDRoadCommandServices {
 	bool (*town_valid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(town_valid);
 	OpenTTDRoadTownEdge (*town_edge)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_edge);
 	void (*set_town)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_town);
-	Foundation (*foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(foundation);
 	bool (*extra_dynamite)() noexcept OPENTTD_SERVICE_DEFAULT(extra_dynamite);
 	bool (*depot_slope)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_slope);
 	void (*make_depot)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_depot);
@@ -60,7 +59,6 @@ struct OpenTTDRoadCommandServices {
 };
 const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept;
 extern "C" {
-void openttd_rust_update_road_infrastructure(const OpenTTDRoadCommandServices *, uint8_t, uint8_t, int32_t);
 void openttd_rust_road_do_build(const OpenTTDRoadCommandServices *, OpenTTDRoadCommandScratch *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t) noexcept;
 void openttd_rust_road_allow_remove(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t, bool);
 void openttd_rust_road_remove(const OpenTTDRoadCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, bool);

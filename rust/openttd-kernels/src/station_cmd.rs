@@ -18,6 +18,7 @@
     clippy::too_many_arguments
 )]
 use crate::direction_type::INVALID_DIAGDIR;
+mod waypoint;
 use crate::rail_cmd::RailCommandServices;
 use crate::road_stop::{RoadStopServices, Stop};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
@@ -25,6 +26,7 @@ use crate::slope_func::{get_inclined_slope_direction, get_slope_max_z, is_steep_
 use crate::station::BaseStation;
 use crate::station_service::World;
 use crate::town::AuthorityServices;
+use waypoint::WaypointLayout;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -160,6 +162,11 @@ pub struct Strings {
     pub demolish_dock: u32,
     pub object_in_way: u32,
     pub oilrig_name: u32,
+    pub buoy_in_use: u32,
+    pub buoy_name: u32,
+    pub waypoint_adjoins_multiple: u32,
+    pub waypoint_close: u32,
+    pub waypoint_name: u32,
 }
 #[repr(C)]
 pub struct CommandServicesTable {
@@ -228,10 +235,8 @@ pub struct CommandServicesTable {
     pub reserved: extern "C" fn(u32) -> bool,
     pub last_train:
         unsafe extern "C" fn(*mut crate::services::Train) -> *mut crate::services::Train,
-    pub train_handle: extern "C" fn(*const crate::services::Train) -> crate::train::Handle,
     pub train: *const crate::train::Leaves,
     pub reservation: *const crate::train_reservation::Leaves,
-    pub platform_reservation: extern "C" fn(u32, u8, bool),
     pub compatible_tiles: extern "C" fn(u32, u32) -> bool,
     pub custom_rail_index: extern "C" fn(u32) -> u32,
     pub make_rail_station: extern "C" fn(u32, u8, u16, u8, u8, u8),
@@ -322,7 +327,6 @@ pub struct CommandServicesTable {
     pub ship: *const crate::ship_control::Leaves,
     pub clear: *const crate::ground::ClearServices,
     pub restoration: *const crate::water::RestorationServices,
-    pub water_tracks: extern "C" fn(u32, u8) -> crate::services::TrackBits,
     pub set_docking: extern "C" fn(u32, bool),
     pub ship_area: extern "C" fn(*mut BaseStation) -> Area,
     pub set_ship_area: extern "C" fn(*mut BaseStation, Area),
@@ -348,9 +352,29 @@ pub struct CommandServicesTable {
     pub industry_neutral: extern "C" fn(*mut Industry) -> *mut BaseStation,
     pub clear_industry_neutral: extern "C" fn(*mut Industry),
     pub industry_area: extern "C" fn(*mut Industry) -> Area,
-    pub remove_buoy: extern "C" fn(*mut CommandCost, u32, u16),
     pub autoslope_axis: extern "C" fn(u32, i32, u8, u8) -> bool,
     pub station_list_classes_invalidate: extern "C" fn(),
+    // Waypoint command leaves; canonical shells and shared map services.
+    pub clear_cached_name: extern "C" fn(*mut BaseStation),
+    pub clear_name: extern "C" fn(*mut BaseStation),
+    pub make_buoy: extern "C" fn(u32, u16, crate::services::WaterClass),
+    pub make_rail_waypoint: extern "C" fn(u32, u8, u16, u8, u8, crate::services::RailType),
+    pub new_waypoint: extern "C" fn(u32) -> *mut BaseStation,
+    pub rail_axis: extern "C" fn(u32) -> crate::services::Axis,
+    pub road_ground: *const crate::ground::RoadServices,
+    pub road_waypoint_area_add: extern "C" fn(*mut BaseStation, u32),
+    pub set_facility_bits: extern "C" fn(*mut BaseStation, u8),
+    pub set_location: extern "C" fn(*mut BaseStation, u32),
+    pub set_rail_station_reservation: extern "C" fn(u32, bool),
+    pub set_road_waypoint: extern "C" fn(*mut BaseStation),
+    pub set_string_id: extern "C" fn(*mut BaseStation, u32),
+    pub string_id: extern "C" fn(*mut BaseStation) -> u32,
+    pub tile_flat: extern "C" fn(u32) -> bool,
+    pub waypoint_available: extern "C" fn() -> bool,
+    pub waypoint_default_name: extern "C" fn(*mut BaseStation),
+    pub waypoint_layout_gfx: extern "C" fn(*mut WaypointLayout, bool) -> u8,
+    pub waypoint_layout_init: extern "C" fn(*mut WaypointLayout, *const RailSpec, u8),
+    pub waypoint_view_invalidate: extern "C" fn(*mut BaseStation),
 }
 struct Ctx<'a> {
     s: &'a CommandServicesTable,
@@ -511,38 +535,7 @@ pub unsafe extern "C" fn openttd_rust_station_check_buildable(
         check_bridge,
     );
 }
-/// Check building a rail station below a bridge.
-/// # Safety
-/// Native tables, optional spec and output are live for this synchronous call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_rail_bridge_ok(
-    s: *const CommandServicesTable,
-    out: *mut CommandCost,
-    tile: u32,
-    spec: *const RailSpec,
-    kind: u8,
-    layout: u8,
-) {
-    let c = unsafe { Ctx::new(s) };
-    if !(c.shared.bridge_above)(tile) {
-        return c.c(out).zero();
-    }
-    let south = (c.s.southern_bridge_end)(tile);
-    let info = if spec.is_null() {
-        (c.s.default_bridge_info)(kind)
-    } else {
-        unsafe { (c.s.rail_bridge_info)(spec) }
-    };
-    c.bridge_ok(
-        c.c(out),
-        tile,
-        info,
-        kind,
-        layout,
-        c.bridge_height(south),
-        c.s.strings.demolish_bridge,
-    );
-}
+
 /// Check building a road stop below a bridge.
 /// # Safety
 /// Native tables, optional spec and output are live for this synchronous call.
@@ -575,65 +568,7 @@ pub unsafe extern "C" fn openttd_rust_station_road_bridge_ok(
         c.s.strings.demolish_bridge,
     );
 }
-/// Check a dock/buoy's default clearance.
-/// # Safety
-/// Tables and output are live for this call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_default_bridge_ok(
-    s: *const CommandServicesTable,
-    out: *mut CommandCost,
-    tile: u32,
-    kind: u8,
-    layout: u8,
-) {
-    let c = unsafe { Ctx::new(s) };
-    c.default_bridge_ok(c.c(out), tile, kind, layout);
-}
-/// Compute the expanded train area before testing the spread limit.
-/// # Safety
-/// The station, tables and native cost output stay live for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_expand_rail(
-    s: *const CommandServicesTable,
-    out: *mut CommandCost,
-    st: *const BaseStation,
-    new_area: Area,
-) -> Area {
-    let c = unsafe { Ctx::new(s) };
-    let old = unsafe { (c.s.train_area)(st) };
-    let x = c.map().tile_x(old.tile).min(c.map().tile_x(new_area.tile));
-    let y = c.map().tile_y(old.tile).min(c.map().tile_y(new_area.tile));
-    let area = Area {
-        tile: (y << c.map().log_x) + x,
-        w: (c
-            .map()
-            .tile_x(old.tile)
-            .wrapping_add(u32::from(old.w))
-            .max(
-                c.map()
-                    .tile_x(new_area.tile)
-                    .wrapping_add(u32::from(new_area.w)),
-            )
-            .wrapping_sub(x)) as u16,
-        h: (c
-            .map()
-            .tile_y(old.tile)
-            .wrapping_add(u32::from(old.h))
-            .max(
-                c.map()
-                    .tile_y(new_area.tile)
-                    .wrapping_add(u32::from(new_area.h)),
-            )
-            .wrapping_sub(y)) as u16,
-    };
-    let spread = (c.s.spread)();
-    if area.w > u16::from(spread) || area.h > u16::from(spread) {
-        c.c(out).error(c.s.strings.spread);
-    } else {
-        c.c(out).zero();
-    }
-    area
-}
+
 /// Source uint8 tolerance-distance truncation and noise reduction.
 /// # Safety
 /// The immutable native table and authority table are live.
@@ -960,7 +895,9 @@ impl Ctx<'_> {
             return;
         }
         if length != 0 {
-            if (self.shared.utf8_length)(text, length) >= 32 {
+            if (self.shared.utf8_length)(text, length)
+                >= crate::station_type::MAX_LENGTH_STATION_NAME_CHARS
+            {
                 return out.error(0xffff);
             }
             for index in 0..(self.world().pool_size)() {
@@ -971,7 +908,12 @@ impl Ctx<'_> {
             }
         }
         if flags & 1 != 0 {
-            (self.s.set_name)(st, text, length);
+            (self.s.clear_cached_name)(st);
+            if length == 0 {
+                (self.s.clear_name)(st);
+            } else {
+                (self.s.set_name)(st, text, length);
+            }
             (self.s.virtual_coord)(st);
             (self.world().station_list_invalidation)(st, 1);
         }
@@ -1184,7 +1126,7 @@ impl Ctx<'_> {
     }
     fn free_reservation(&self, train: *mut crate::services::Train) {
         unsafe {
-            let handle = (self.s.train_handle)(train);
+            let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
             crate::train_reservation::openttd_rust_train_reservation_free(
                 handle,
                 crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast())),
@@ -1199,7 +1141,7 @@ impl Ctx<'_> {
     fn restore_reservation(&self, train: *mut crate::services::Train) {
         self.platform_end(train, false, true);
         unsafe {
-            let handle = (self.s.train_handle)(train);
+            let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
             crate::train_reservation::openttd_rust_train_reservation_try_path(
                 handle,
                 crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast())),
@@ -1213,8 +1155,7 @@ impl Ctx<'_> {
         self.platform_end(last, true, true);
     }
     fn platform_end(&self, train: *mut crate::services::Train, reverse: bool, reserved: bool) {
-        const EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
-        let handle = (self.s.train_handle)(train);
+        let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
         // SAFETY: The reached platform update always supplies a live train shell.
         let vehicle = unsafe {
             crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast()))
@@ -1226,7 +1167,11 @@ impl Ctx<'_> {
                 crate::train::openttd_rust_train_trackdir(handle, self.s.train, self.s.shared)
             };
             let td = trackdir ^ if reverse { 8 } else { 0 };
-            (self.s.platform_reservation)(tile, EXIT[usize::from(td)], reserved);
+            crate::pbs::Pbs::acquire(self.shared).platform(
+                tile,
+                crate::track_func::trackdir_to_exitdir(td),
+                reserved,
+            );
         }
     }
     fn flat_rail(
@@ -1278,8 +1223,12 @@ impl Ctx<'_> {
                     let bits = (self.rail_map().traversal)(tile).tracks.0;
                     let track = bits.trailing_zeros() as u8;
                     if bits & bits.wrapping_sub(1) == 0 && track == axis {
-                        if (self.rail_map().reserved_tracks)(tile).0 & (1 << track) != 0 {
-                            let train = (self.rail().reserving_train)(tile, track);
+                        if crate::pbs::Pbs::acquire(self.shared).reserved(tile) & (1 << track) != 0
+                        {
+                            let train = crate::pbs::Pbs::acquire(self.shared)
+                                .train_for(tile, track)
+                                .shell
+                                .cast::<crate::services::Train>();
                             if !train.is_null() {
                                 affected.push(train);
                             }
@@ -1484,7 +1433,7 @@ impl Ctx<'_> {
             return cost.take(ret);
         }
         if !st.is_null() && unsafe { (self.s.train_area)(st) }.tile != u32::MAX {
-            area = unsafe { openttd_rust_station_expand_rail(self.s, ret.0, st, area) };
+            area = self.expand_rail(ret, st, area);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -1567,7 +1516,10 @@ impl Ctx<'_> {
             for j in 0..length {
                 let t = track_tile.wrapping_add(u32::from(j).wrapping_mul(delta));
                 if self.rail_station(t) && (self.s.reserved)(t) {
-                    let train = (self.rail().reserving_train)(t, self.station_axis(t));
+                    let train = crate::pbs::Pbs::acquire(self.shared)
+                        .train_for(t, self.station_axis(t))
+                        .shell
+                        .cast::<crate::services::Train>();
                     if !train.is_null() {
                         affected.push(train);
                         self.free_reservation(train);
@@ -1673,7 +1625,7 @@ impl Ctx<'_> {
                 cur = cur.wrapping_add(offset);
             }
             if reservation {
-                (self.s.platform_reservation)(begin, dir, true);
+                crate::pbs::Pbs::acquire(self.shared).platform(begin, dir, true);
             }
         }
         (self.s.mark_tiles)(st, false);
@@ -1807,7 +1759,10 @@ impl Ctx<'_> {
             let rt = (self.rail_map().rail_type)(tile).0;
             let mut train = std::ptr::null_mut();
             if (self.s.reserved)(tile) {
-                train = (self.rail().reserving_train)(tile, track);
+                train = crate::pbs::Pbs::acquire(self.shared)
+                    .train_for(tile, track)
+                    .shell
+                    .cast::<crate::services::Train>();
                 if !train.is_null() {
                     self.free_reservation(train);
                 }
@@ -2777,41 +2732,7 @@ impl Ctx<'_> {
         self.remove_generic_road(cost, ret, error, flags, area, waypoint, remove_road);
     }
 }
-/// # Safety
-/// Tables, distinct native cost slots, optional immutable spec and station output
-/// are live for this call. No owner borrow crosses a callback.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_road_cost(
-    s: *const CommandServicesTable,
-    cost: *mut CommandCost,
-    ret: *mut CommandCost,
-    area: Area,
-    flags: u16,
-    drive: bool,
-    kind: u8,
-    spec: *const RoadSpec,
-    axis: u8,
-    dir: u8,
-    est: *mut u16,
-    rt: u8,
-    unit: i64,
-) {
-    let c = unsafe { Ctx::new(s) };
-    c.road_cost(
-        c.c(cost),
-        c.c(ret),
-        area,
-        flags,
-        drive,
-        kind,
-        spec,
-        axis,
-        dir,
-        unsafe { &mut *est },
-        rt,
-        unit,
-    );
-}
+
 /// # Safety
 /// Tables, native cost slots and serialized map/pools remain live for this call.
 #[unsafe(no_mangle)]
@@ -2850,21 +2771,7 @@ pub unsafe extern "C" fn openttd_rust_station_build_road(
         adjacent,
     );
 }
-/// # Safety
-/// Tables and native cost slots remain live; destructive calls hold no Rust owner borrow.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_remove_road_tile(
-    s: *const CommandServicesTable,
-    cost: *mut CommandCost,
-    ret: *mut CommandCost,
-    tile: u32,
-    flags: u16,
-    replacement: i32,
-    waypoint: bool,
-) {
-    let c = unsafe { Ctx::new(s) };
-    c.remove_road_tile(c.c(cost), c.c(ret), tile, flags, replacement, waypoint);
-}
+
 /// # Safety
 /// Tables and three native cost slots are live for the serialized synchronous call.
 #[unsafe(no_mangle)]
@@ -3326,7 +3233,7 @@ impl Ctx<'_> {
             1 | 5 | 9 => (),
             _ => return false,
         }
-        (self.s.water_tracks)(tile, 255).0 != 0
+        crate::movement::water_tracks(self.shared, tile, 255) != 0
     }
     fn check_docking(&self, tile: u32) {
         crate::witness::hit(crate::witness::STATION_CMD_CHECK_DOCKING);
@@ -3944,7 +3851,7 @@ impl Ctx<'_> {
                     self.remove_road_tile(cost, ret, tile, flags, -1, true);
                 }
             }
-            6 => (self.s.remove_buoy)(cost.0, tile, flags),
+            6 => self.remove_buoy(cost, tile, flags),
             5 => self.remove_dock(cost, ret, tile, flags),
             _ => cost.error(0xffff),
         }
@@ -4117,33 +4024,48 @@ pub(crate) unsafe fn openttd_rust_station_change_owner(
     );
 }
 
-/// # Safety
-/// Tables and native cost output are live for the serialized waypoint lookup.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_join_waypoint(
-    s: *const CommandServicesTable,
-    out: *mut CommandCost,
-    existing: u16,
-    target: u16,
-    adjacent: bool,
-    area: Area,
-    road: bool,
-) -> *mut BaseStation {
-    let c = unsafe { Ctx::new(s) };
-    c.join(
-        c.c(out),
-        existing,
-        target,
-        adjacent,
-        area,
-        true,
-        road,
-        if road {
-            c.s.strings.remove_road_waypoint
+impl Ctx<'_> {
+    fn expand_rail(&self, out: Cost<'_>, st: *const BaseStation, new_area: Area) -> Area {
+        let old = unsafe { (self.s.train_area)(st) };
+        let x = self
+            .map()
+            .tile_x(old.tile)
+            .min(self.map().tile_x(new_area.tile));
+        let y = self
+            .map()
+            .tile_y(old.tile)
+            .min(self.map().tile_y(new_area.tile));
+        let area = Area {
+            tile: (y << self.map().log_x) + x,
+            w: (self
+                .map()
+                .tile_x(old.tile)
+                .wrapping_add(u32::from(old.w))
+                .max(
+                    self.map()
+                        .tile_x(new_area.tile)
+                        .wrapping_add(u32::from(new_area.w)),
+                )
+                .wrapping_sub(x)) as u16,
+            h: (self
+                .map()
+                .tile_y(old.tile)
+                .wrapping_add(u32::from(old.h))
+                .max(
+                    self.map()
+                        .tile_y(new_area.tile)
+                        .wrapping_add(u32::from(new_area.h)),
+                )
+                .wrapping_sub(y)) as u16,
+        };
+        let spread = (self.s.spread)();
+        if area.w > u16::from(spread) || area.h > u16::from(spread) {
+            out.error(self.s.strings.spread);
         } else {
-            c.s.strings.remove_rail_waypoint
-        },
-    )
+            out.zero();
+        }
+        area
+    }
 }
 
 crate::abi::layouts! {
@@ -4208,10 +4130,8 @@ crate::abi::layouts! {
         rail_triggers,
         reserved,
         last_train,
-        train_handle,
         train,
         reservation,
-        platform_reservation,
         compatible_tiles,
         custom_rail_index,
         make_rail_station,
@@ -4302,7 +4222,6 @@ crate::abi::layouts! {
         ship,
         clear,
         restoration,
-        water_tracks,
         set_docking,
         ship_area,
         set_ship_area,
@@ -4324,9 +4243,28 @@ crate::abi::layouts! {
         industry_neutral,
         clear_industry_neutral,
         industry_area,
-        remove_buoy,
         autoslope_axis,
         station_list_classes_invalidate,
+        clear_cached_name,
+        clear_name,
+        make_buoy,
+        make_rail_waypoint,
+        new_waypoint,
+        rail_axis,
+        road_ground,
+        road_waypoint_area_add,
+        set_facility_bits,
+        set_location,
+        set_rail_station_reservation,
+        set_road_waypoint,
+        set_string_id,
+        string_id,
+        tile_flat,
+        waypoint_available,
+        waypoint_default_name,
+        waypoint_layout_gfx,
+        waypoint_layout_init,
+        waypoint_view_invalidate,
     };
     "OpenTTDStationCommandStrings" ["probe"] => Strings {
         demolish_bridge,
@@ -4369,6 +4307,11 @@ crate::abi::layouts! {
         demolish_dock,
         object_in_way,
         oilrig_name,
+        buoy_in_use,
+        buoy_name,
+        waypoint_adjoins_multiple,
+        waypoint_close,
+        waypoint_name,
     };
     "OpenTTDStationArea" ["probe"] => Area {
         tile,

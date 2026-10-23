@@ -15,9 +15,19 @@ def strip_debug(source, destination=None):
 
 def export(destination, migration):
     """Capture under build locks; adapters must come from these exact game objects."""
-    from . import engines, fleet, objects, orders, ships, signals, stations, towns
+    from . import (
+        engines,
+        fleet,
+        objects,
+        orders,
+        rails,
+        ships,
+        signals,
+        stations,
+        towns,
+    )
 
-    adapters = (engines, fleet, objects, orders, ships, signals, stations, towns)
+    adapters = (engines, fleet, objects, orders, rails, ships, signals, stations, towns)
 
     destination.mkdir(parents=True)
     builds = {

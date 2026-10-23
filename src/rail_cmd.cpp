@@ -44,6 +44,10 @@
 #include "rust/environment_services.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/movement_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /** Helper type for lists/vectors of trains */
@@ -264,6 +268,7 @@ static CommandCost CheckTrackCombination(TileIndex tile, TrackBits to_build)
 
 
 /** Valid TrackBits on a specific (non-steep)-slope without foundation */
+#ifndef WITH_RUST
 static const TrackBits _valid_tracks_without_foundation[15] = {
 	TRACK_BIT_ALL,
 	TRACK_BIT_RIGHT,
@@ -306,6 +311,7 @@ static const TrackBits _valid_tracks_on_leveled_foundation[15] = {
 	TRACK_BIT_ALL,
 	TRACK_BIT_ALL
 };
+#endif
 
 /**
  * Checks if a track combination is valid on a specific slope and returns the needed foundation.
@@ -316,6 +322,9 @@ static const TrackBits _valid_tracks_on_leveled_foundation[15] = {
  */
 Foundation GetRailFoundation(Slope tileh, TrackBits bits)
 {
+#ifdef WITH_RUST
+	return openttd_rust_rail_foundation(tileh, bits, RustMovementAssert);
+#else
 	if (bits == TRACK_BIT_NONE) return FOUNDATION_NONE;
 
 	if (IsSteepSlope(tileh)) {
@@ -382,6 +391,7 @@ Foundation GetRailFoundation(Slope tileh, TrackBits bits)
 		/* else special anti-zig-zag foundation */
 		return SpecialRailFoundation(track_corner);
 	}
+#endif
 }
 
 
@@ -2596,6 +2606,7 @@ void DrawTrainDepotSprite(int x, int y, int dir, RailType railtype)
 	DrawRailTileSeqInGUI(x, y, dts, offset, 0, palette);
 }
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Track(TileIndex tile, uint x, uint y, bool)
 {
 	if (IsPlainRail(tile)) {
@@ -2608,11 +2619,14 @@ static int GetSlopePixelZ_Track(TileIndex tile, uint x, uint y, bool)
 		return GetTileMaxPixelZ(tile);
 	}
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_Track(TileIndex tile, Slope tileh)
 {
 	return IsPlainRail(tile) ? GetRailFoundation(tileh, GetTrackBits(tile)) : FlatteningFoundation(tileh);
 }
+#endif
 
 #ifdef WITH_RUST
 const OpenTTDRailServices &GetRustRailGroundServices() noexcept
@@ -2623,7 +2637,7 @@ const OpenTTDRailServices &GetRustRailGroundServices() noexcept
 		.set_ground = RustSetRailGroundTyped,
 		.snow = [](uint32_t index) noexcept { auto [z, slope] = RustTileSlopeZ(index); bool plain = RustPlainRailTile(index); return OpenTTDRailSnowGround{.z = z, .slope = slope, .tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .plain = plain}; },
 		.fences = [](uint32_t index) noexcept { bool plain = RustPlainRailTile(index); return OpenTTDRailFenceGround{.tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .owner = plain ? RustTileOwnerValue(index) : uint8_t{}, .plain = plain}; },
-		.foundation = RustRailFoundation,
+
 		.owned_land = [](uint32_t t) noexcept { return IsObjectType(TileIndex{t}, OBJECT_OWNED_LAND); },
 	};
 	return services;
@@ -2757,6 +2771,7 @@ set_ground:
 #endif
 
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Track(TileIndex tile, TransportType mode, uint, DiagDirection side)
 {
 	/* Case of half tile slope with water. */
@@ -2818,6 +2833,7 @@ static TrackStatus GetTileTrackStatus_Track(TileIndex tile, TransportType mode, 
 
 	return CombineTrackStatus(TrackBitsToTrackdirBits(trackbits), red_signals);
 }
+#endif
 
 static bool ClickTile_Track(TileIndex tile)
 {
@@ -2950,12 +2966,14 @@ static void ChangeTileOwner_Track(TileIndex tile, Owner old_owner, Owner new_own
 }
 #endif /* WITH_RUST */
 
+#ifndef WITH_RUST
 static const uint8_t _fractcoords_behind[4] = { 0x8F, 0x8, 0x80, 0xF8 };
 static const uint8_t _fractcoords_enter[4] = { 0x8A, 0x48, 0x84, 0xA8 };
 static const int8_t _deltacoord_leaveoffset[8] = {
 	-1,  0,  1,  0, /* x */
 	 0,  1,  0, -1  /* y */
 };
+#endif
 
 
 /**
@@ -2966,6 +2984,9 @@ static const int8_t _deltacoord_leaveoffset[8] = {
  */
 int TicksToLeaveDepot(const Train *v)
 {
+#ifdef WITH_RUST
+	return openttd_rust_movement_depot_ticks(&GetRustMovementServices(), TrainHandle(v));
+#else
 	DiagDirection dir = GetRailDepotDirection(v->tile);
 	int length = v->CalcNextVehicleOffset();
 
@@ -2976,12 +2997,14 @@ int TicksToLeaveDepot(const Train *v)
 		case DIAGDIR_NW: return  ((int)(v->y_pos & 0x0F) - ((_fractcoords_enter[dir] >> 4)   - (length + 1)));
 		default: NOT_REACHED();
 	}
+#endif
 }
 
 /**
  * Tile callback routine when vehicle enters tile
  * @see vehicle_enter_tile_proc
  */
+#ifndef WITH_RUST
 static VehicleEnterTileStates VehicleEnter_Track(Vehicle *u, TileIndex tile, int x, int y)
 {
 	/* This routine applies only to trains in depot tiles. */
@@ -3030,6 +3053,7 @@ static VehicleEnterTileStates VehicleEnter_Track(Vehicle *u, TileIndex tile, int
 
 	return {};
 }
+#endif
 
 #ifndef WITH_RUST
 /**
@@ -3270,7 +3294,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.rail_convert_cost = [](uint8_t from, uint8_t to) noexcept { return RailConvertCost(static_cast<RailType>(from), static_cast<RailType>(to)).base(); },
 		.crossing_with_competitor = RustCrossingWithCompetitor,
 		.disable_elrails = RustDisableElrails,
-		.rail_foundation = OpenTTDEnumMapQuery<RustRailFoundation, Slope, TrackBits>,
 		.slope_z_in_corner = [](uint8_t tileh, uint8_t corner) noexcept -> int32_t { return GetSlopeZInCorner(static_cast<Slope>(tileh), static_cast<Corner>(corner)); },
 		.entrance_edge = [](uint32_t tile, int32_t z, uint8_t tileh, uint8_t dir) noexcept { return AutoslopeCheckForEntranceEdge(TileIndex{tile}, z, static_cast<Slope>(tileh), static_cast<DiagDirection>(dir)); },
 		.ship_on_tile = RailShipOnTile,
@@ -3282,7 +3305,7 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.rail_infrastructure = RustAddRailInfrastructure,
 		.road_infrastructure = RustAddRoadInfrastructure,
 		.signal_infrastructure = RustAddSignalInfrastructure,
-		.reserving_train = [](uint32_t tile, uint8_t track) noexcept { return GetTrainForReservation(TileIndex{tile}, static_cast<Track>(track)); },
+
 		.parking = RailParking,
 		.train_position = [](Train *v) noexcept -> OpenTTDRailTrainPosition { return {.tile = RustVehicleTile(v), .trackdir = GetRustSharedServices().train_trackdir(v)}; },
 		.layout_changed = [](uint32_t tile, uint8_t track) noexcept { YapfNotifyTrackLayoutChange(TileIndex{tile}, static_cast<Track>(track)); },
@@ -3401,7 +3424,11 @@ static CommandCost CheckBuildAbove_Track(TileIndex tile, DoCommandFlags flags, A
 
 extern const TileTypeProcs _tile_type_rail_procs = {
 	DrawTile_Track,           // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Track,     // get_slope_z_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else
@@ -3409,7 +3436,11 @@ extern const TileTypeProcs _tile_type_rail_procs = {
 #endif
 	nullptr,                     // add_accepted_cargo_proc
 	GetTileDesc_Track,        // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Track, // get_tile_track_status_proc
+#endif
 	ClickTile_Track,          // click_tile_proc
 	nullptr,                     // animate_tile_proc
 #ifdef WITH_RUST
@@ -3423,8 +3454,16 @@ extern const TileTypeProcs _tile_type_rail_procs = {
 	ChangeTileOwner_Track,    // change_tile_owner_proc
 #endif
 	nullptr,                     // add_produced_cargo_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	VehicleEnter_Track,       // vehicle_enter_tile_proc
+#endif
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Track,      // get_foundation_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else

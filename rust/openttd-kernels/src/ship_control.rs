@@ -164,7 +164,6 @@ pub struct Leaves {
     pub lock_dir: extern "C" fn(u32) -> u32,
     pub tile_min_z: extern "C" fn(u32) -> u32,
     pub tile_max_z: extern "C" fn(u32) -> u32,
-    pub track_status: extern "C" fn(u32, u32) -> u32,
     pub offset: extern "C" fn(u32) -> u32,
     pub diag_between: extern "C" fn(u32, u32) -> u32,
     pub dist_square: extern "C" fn(u32, u32) -> u32,
@@ -221,7 +220,6 @@ pub struct Leaves {
     pub path_back: extern "C" fn(u32) -> u32,
     pub path_pop: extern "C" fn(u32),
     pub path_clear: extern "C" fn(u32),
-    pub enter_tile: extern "C" fn(u32, u32, u32, u32) -> u32,
     pub process_orders: extern "C" fn(u32) -> bool,
     pub viewport: extern "C" fn(u32, bool, bool),
     pub base_viewport: extern "C" fn(u32),
@@ -689,7 +687,11 @@ impl Game<'_> {
                         x = (self.leaves.x)(id);
                         y = (self.leaves.y)(id);
                     } else {
-                        if (self.leaves.enter_tile)(id, new_tile, x, y) & 4 != 0 {
+                        if u32::from(unsafe {
+                            crate::movement::enter(self.services, v, new_tile, x as i32, y as i32)
+                        }) & 4
+                            != 0
+                        {
                             self.reverse(id, INVALID);
                             return;
                         }
@@ -704,7 +706,7 @@ impl Game<'_> {
                             let exit =
                                 (self.leaves.exit_dir)(observed_direction, u32::from(self.state()));
                             let tile = observed_tile.wrapping_add((self.leaves.offset)(exit));
-                            if (self.leaves.track_status)(tile, exit) == 0 {
+                            if crate::movement::water_tracks(self.services, tile, exit as u8) == 0 {
                                 self.reverse(id, INVALID);
                                 return;
                             }
@@ -749,7 +751,7 @@ impl Game<'_> {
                         return;
                     }
                     let diag = (self.leaves.diag_between)(old_tile, new_tile);
-                    let tracks = (self.leaves.track_status)(new_tile, 255)
+                    let tracks = crate::movement::water_tracks(self.services, new_tile, 255)
                         & (self.leaves.tracks_reach)(diag);
                     if tracks == 0 {
                         let result = (self.leaves.yapf_reverse)(id, true);
@@ -765,7 +767,9 @@ impl Game<'_> {
                     let (sx, sy, direction) = SUBCOORD[diag as usize][track as usize];
                     x = (x & !15) | u32::from(sx);
                     y = (y & !15) | u32::from(sy);
-                    let entered = (self.leaves.enter_tile)(id, new_tile, x, y);
+                    let entered = u32::from(unsafe {
+                        crate::movement::enter(self.services, v, new_tile, x as i32, y as i32)
+                    });
                     if entered & 4 != 0 {
                         self.reverse(id, INVALID);
                         return;
@@ -793,7 +797,10 @@ impl Game<'_> {
             } else {
                 crate::witness::hit(crate::witness::SHIP_AQUEDUCT);
                 if (self.leaves.tile_type)(new_tile) != 9
-                    || (self.leaves.enter_tile)(id, new_tile, x, y) & 2 == 0
+                    || u32::from(unsafe {
+                        crate::movement::enter(self.services, v, new_tile, x as i32, y as i32)
+                    }) & 2
+                        == 0
                 {
                     (self.leaves.set_x)(id, x as i32);
                     (self.leaves.set_y)(id, y as i32);
@@ -1110,7 +1117,6 @@ crate::abi::layouts! {
         lock_dir,
         tile_min_z,
         tile_max_z,
-        track_status,
         offset,
         diag_between,
         dist_square,
@@ -1167,7 +1173,6 @@ crate::abi::layouts! {
         path_back,
         path_pop,
         path_clear,
-        enter_tile,
         process_orders,
         viewport,
         base_viewport,

@@ -8,6 +8,9 @@
 /** @file afterload.cpp Code updating data after game load */
 
 #include "../stdafx.h"
+#ifdef WITH_RUST
+#include "../rust/movement_ffi.h"
+#endif
 #include "../void_map.h"
 #include "../signs_base.h"
 #include "../depot_base.h"
@@ -2642,15 +2645,20 @@ bool AfterLoadGame()
 			/* Have we passed the visibility "switch" state already? */
 			uint8_t pos = (DiagDirToAxis(vdir) == AXIS_X ? v->x_pos : v->y_pos) & TILE_UNIT_MASK;
 			uint8_t frame = (vdir == DIAGDIR_NE || vdir == DIAGDIR_NW) ? TILE_SIZE - 1 - pos : pos;
+#ifdef WITH_RUST
+			const uint8_t visibility_frame = openttd_rust_movement_tunnel_visibility(dir);
+#else
 			extern const uint8_t _tunnel_visibility_frame[DIAGDIR_END];
+			const uint8_t visibility_frame = _tunnel_visibility_frame[dir];
+#endif
 
 			/* Should the vehicle be hidden or not? */
 			bool hidden;
 			if (dir == vdir) { // Entering tunnel
-				hidden = frame >= _tunnel_visibility_frame[dir];
+				hidden = frame >= visibility_frame;
 				v->tile = vtile;
 			} else if (dir == ReverseDiagDir(vdir)) { // Leaving tunnel
-				hidden = frame < TILE_SIZE - _tunnel_visibility_frame[dir];
+				hidden = frame < TILE_SIZE - visibility_frame;
 				/* v->tile changes at the moment when the vehicle leaves the tunnel. */
 				v->tile = hidden ? GetOtherTunnelBridgeEnd(vtile) : vtile;
 			} else {

@@ -11,6 +11,8 @@
 #include "../airport.h"
 #include "town_services.h"
 #include "services_ffi.h"
+#include "pbs_ffi.h"
+#include "movement_ffi.h"
 #include "services_bridge.h"
 #include "services_viewport.h"
 #include "station_command_ffi.h"
@@ -198,7 +200,6 @@ static void Shared_set_road_type(uint32_t tile, uint8_t rtt, uint8_t rt) noexcep
 static void Shared_set_road_directions(uint32_t tile, uint8_t drd) noexcept { SetDisallowedRoadDirections(TileIndex{tile}, static_cast<DisallowedRoadDirections>(drd)); }
 static bool Shared_road_powered(uint8_t from, uint8_t to) noexcept { return HasPowerOnRoad(static_cast<RoadType>(from), static_cast<RoadType>(to)); }
 static bool Shared_road_type_valid(uint8_t rt) noexcept { return ValParamRoadType(static_cast<RoadType>(rt)); }
-static bool SharedSafeWaitingPosition(const Train *v, uint32_t tile, uint8_t trackdir, bool forbid_90_deg) noexcept { return IsSafeWaitingPosition(v, TileIndex{tile}, static_cast<Trackdir>(trackdir), true, forbid_90_deg); }
 static void SharedSetTropicZone(uint32_t tile, uint8_t zone) noexcept { SetTropicZone(TileIndex{tile}, static_cast<TropicZone>(zone)); }
 
 /** Pure map query; no allocation, reentry or C++ exception crosses into Rust. */
@@ -259,6 +260,14 @@ static_assert(OWNER_TOWN.base() == 0x0F && OWNER_NONE.base() == 0x10 && OWNER_WA
 static_assert(to_underlying(DoCommandFlag::Execute) == 0 && to_underlying(DoCommandFlag::Auto) == 1 && to_underlying(DoCommandFlag::QueryCost) == 2 && to_underlying(DoCommandFlag::NoWater) == 3);
 static_assert(to_underlying(DoCommandFlag::NoTestTownRating) == 4 && to_underlying(DoCommandFlag::Bankrupt) == 5 && to_underlying(DoCommandFlag::NoModifyTownRating) == 9 && to_underlying(DoCommandFlag::ForceClearTile) == 10);
 static_assert(std::is_same_v<DoCommandFlags::BaseType, uint16_t>);
+static_assert(NEW_STATION.base() == 0xFFFD && StationID::Invalid().base() == 0xFFFF);
+static_assert(to_underlying(StationType::RailWaypoint) == 7 && to_underlying(StationType::RoadWaypoint) == 8 && to_underlying(StationType::Buoy) == 6);
+static_assert(StationFacilities(StationFacility::Train).base() == 1 && StationFacilities(StationFacility::TruckStop).base() == 2 && StationFacilities(StationFacility::BusStop).base() == 4 && StationFacilities(StationFacility::Dock).base() == 16);
+static_assert(MAX_LENGTH_STATION_NAME_CHARS == 32 && StationRect::ADD_TEST == 0 && StationRect::ADD_TRY == 1);
+static_assert(PR_BUILD_STATION_TRUCK == 13 && PR_BUILD_WAYPOINT_RAIL == 52 && PR_BUILD_WAYPOINT_BUOY == 54 && PR_CLEAR_WAYPOINT_BUOY == 55 && ROAD_STOP_TRACKBIT_FACTOR == 2);
+static_assert(to_underlying(RailTileType::Normal) == 0 && TRACK_BIT_X == 1 && TRACK_BIT_Y == 2 && AXIS_END == 2);
+static_assert(ROAD_X == 10 && ROAD_Y == 5);
+static_assert(AXIS_X == 0 && AXIS_Y == 1 && INVALID_AXIS == 0xFF);
 static_assert(PR_TERRAFORM == 21 && PR_CLEAR_CANAL == 61 && PR_CLEAR_TREES == 26);
 static_assert(to_underlying(DoCommandFlag::AutoReplace) == 6 && to_underlying(DoCommandFlag::NoCargoCapacityCheck) == 7);
 static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);
@@ -282,7 +291,7 @@ static bool Shared_is_bridge(uint32_t tile) noexcept { return IsBridgeTile(TileI
 static uint8_t Shared_drive_through_axis(uint32_t tile) noexcept { return GetDriveThroughStopAxis(TileIndex{tile}); }
 static bool Shared_is_any_road_stop(uint32_t tile) noexcept { return IsAnyRoadStopTile(TileIndex{tile}); }
 static uint8_t Shared_road_type(uint32_t tile) noexcept { return GetRoadTypeRoad(TileIndex{tile}); }
-static bool Shared_has_road_type(uint32_t tile) noexcept { return HasTileRoadType(TileIndex{tile}, RTT_ROAD); }
+static bool Shared_has_road_type(uint32_t tile) noexcept { return RustHasTileRoadType(tile, RTT_ROAD); }
 static uint8_t Shared_road_owner(uint32_t tile) noexcept { return GetRoadOwner(TileIndex{tile}, RTT_ROAD).base(); }
 static uint16_t Shared_town_index(uint32_t tile) noexcept { return GetTownIndex(TileIndex{tile}).base(); }
 static uint8_t Shared_road_bits(uint32_t tile, uint8_t type, bool straight) noexcept { return GetAnyRoadBits(TileIndex{tile}, static_cast<RoadTramType>(type), straight); }
@@ -303,7 +312,7 @@ static bool SharedServiceAtHelipad() noexcept { return RustServiceAtHelipad(); }
 static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
 static int32_t SharedEconomyDate() noexcept { return TimerGameEconomy::date.base(); }
 static int32_t SharedCalendarDate() noexcept { return TimerGameCalendar::date.base(); }
-static int32_t SharedSlope(int32_t x, int32_t y) noexcept { return SharedSlopePixelZ(x, y, false); }
+
 static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
 static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
 static void SharedRebuildTownTree() noexcept { RebuildTownKdtree(); }
@@ -317,6 +326,7 @@ static void SharedForEachStation(void *context, void (*visit)(void *, const Open
 }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
+	.movement_services = []() noexcept { return &GetRustMovementServices(); },
 	.set_tile_owner = RustSetTileOwner,
 	.autoslope = RustAutoslopeEnabled,
 	.bay_stop_direction = Shared_bay_stop_direction,
@@ -386,10 +396,10 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.set_road_directions = Shared_set_road_directions,
 	.road_powered = Shared_road_powered,
 	.road_type_valid = Shared_road_type_valid,
-	.safe_waiting_position = SharedSafeWaitingPosition,
+	.pbs_services = [](const OpenTTDSharedServices *) noexcept { return &GetPbsServices(); },
 	.service_at_helipad = SharedServiceAtHelipad,
 	.set_tropic_zone = SharedSetTropicZone,
-	.slope = SharedSlope,
+
 	.snow_line = SharedSnowLine,
 	.station_index = MapSvcStationIndex,
 	.road_commands = []() noexcept { return &GetRustRoadCommandServices(); },
@@ -434,7 +444,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	// Registry: landscape (#212).
 	.apply_foundation = RustApplyFoundation,
 	.clear_ground = OpenTTDClearGround,
-	.foundation = RustFoundationSlope,
+
 	.has_water_class = RustHasWaterClass,
 	.make_shore = OpenTTDMakeShore,
 	.make_snow = RustMakeSnow,
@@ -548,7 +558,7 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.signal_state = RustRailSignalState,
 		.set_signal_state = RustRailSetSignalState,
 		.other_tunnel_bridge_end = RustOtherTunnelBridgeEnd,
-		.rail_track_status = RustRailTrackStatus,
+
 		.has_signals = RustRailHasSignals,
 		.signal_type = RustRailSignalType,
 		.invalid_rail_type = RustInvalidRailType,
@@ -565,7 +575,7 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.signal_variant = RustSignalVariant,
 		.set_signal_variant = RustSetSignalVariant,
 		.cycle_signal_side = RustCycleSignalSide,
-		.reserved_tracks = RustReservedTracks,
+
 		.rail_reservation = RustRailReservation,
 		.set_track_reservation = RustSetTrackReservation,
 		.depot_reserved = RustDepotReserved,
@@ -591,12 +601,13 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDCommandServices.hpp"
 #include "abi-visit-OpenTTDCommandCostServices.hpp"
 #include "abi-visit-OpenTTDSharedServices.hpp"
+#include "abi-visit-OpenTTDPbsServices.hpp"
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
 #include "abi-visit-OpenTTDClearSquareServices.hpp"
 #include "abi-visit-OpenTTDWaterRestorationServices.hpp"
 bool CheckAbi_services()
 {
-	return AbiServicesComplete(GetRustEnvironmentServices()) &&
+	return AbiServicesComplete(GetPbsServices()) && AbiServicesComplete(GetRustEnvironmentServices()) &&
 		AbiServicesComplete(GetRustRandomServices()) &&
 		AbiServicesComplete(GetRustRailMapServices()) &&
 		AbiServicesComplete(GetRustCommandServices()) &&

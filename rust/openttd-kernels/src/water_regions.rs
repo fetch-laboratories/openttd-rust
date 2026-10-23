@@ -31,7 +31,7 @@ pub struct Snapshot {
 
 #[repr(C)]
 pub struct Leaves {
-    pub tracks: unsafe extern "C" fn(u32) -> u16,
+    pub shared: *const crate::services::Services,
     pub follow: unsafe extern "C" fn(u32, u8, *mut u8) -> u32,
     pub aqueduct: unsafe extern "C" fn(u32) -> u32,
     pub debug: unsafe extern "C" fn(u8, i32, i32),
@@ -126,7 +126,12 @@ impl Regions {
             while let Some(tile) = self.scratch.pop() {
                 // SAFETY: See leaf contract above; no live world reference is retained.
                 crate::witness::hit(crate::witness::WATER_TRACKS);
-                let mut dirs = unsafe { (leaves.tracks)(tile) };
+                let mut dirs =
+                    crate::track_func::track_bits_to_trackdir_bits(crate::movement::water_tracks(
+                        unsafe { &*leaves.shared },
+                        tile,
+                        crate::direction_type::INVALID_DIAGDIR,
+                    ) as u8);
                 if dirs == 0 {
                     continue;
                 }
@@ -483,7 +488,7 @@ crate::abi::layouts! {
         aqueducts,
     };
     "OpenTTDWaterLeaves" ["probe"] => Leaves {
-        tracks,
+        shared,
         follow,
         aqueduct,
         debug,

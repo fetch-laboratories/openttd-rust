@@ -23,7 +23,6 @@ static_assert(static_cast<uint8_t>(VehicleEnterTileState::EnteredWormhole) == 1 
 
 static uint32_t Ship_depot_dir(uint32_t tile) noexcept { return GetShipDepotDirection(TileIndex(tile)); }
 
-static uint32_t Ship_depot_axis(uint32_t tile) noexcept { return GetShipDepotAxis(TileIndex(tile)); }
 
 static bool Ship_is_depot(uint32_t tile) noexcept { return IsShipDepotTile(TileIndex(tile)); }
 
@@ -206,11 +205,7 @@ static void Ship_path_pop(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(
 
 static void Ship_path_clear(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->path.clear(); }
 
-static uint32_t Ship_enter_tile(uint32_t id, uint32_t tile, uint32_t x, uint32_t y) noexcept
-{
-	Ship *v = Ship::Get(VehicleID(id));
-	return VehicleEnterTile(v, TileIndex(tile), static_cast<int32_t>(x), static_cast<int32_t>(y)).base();
-}
+
 
 
 static bool Ship_process_orders(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return ProcessOrders(v); }
@@ -376,7 +371,7 @@ static bool Ship_next_depot(uint32_t first, OpenTTDShipDepot *out) noexcept
 const OpenTTDShipLeaves &GetRustShipServices() noexcept
 {
 	static const OpenTTDShipLeaves leaves{
-		.depot_dir = Ship_depot_dir, .depot_axis = Ship_depot_axis,
+		.depot_dir = Ship_depot_dir, .depot_axis = OpenTTDMapQuery<uint32_t, RustShipDepotAxis, uint32_t>,
 		.is_depot = Ship_is_depot, .depot_index = Ship_depot_index,
 		.wait_unbunch = Ship_wait_unbunch, .chain_depot = Ship_chain_depot,
 		.servint = Ship_servint,
@@ -384,7 +379,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.tile_type = Ship_tile_type, .water_class = Ship_water_class,
 		.lock_middle = GetRustSharedServices().water_middle_lock, .lock_dir = Ship_lock_dir,
 		.tile_min_z = Ship_tile_min_z, .tile_max_z = Ship_tile_max_z,
-		.track_status = OpenTTDLegacyWaterTracks, .offset = Ship_offset,
+		.offset = Ship_offset,
 		.diag_between = Ship_diag_between, .dist_square = OpenTTDDistanceSquare,
 		.dist_manhattan = OpenTTDDistanceManhattan, .docking = GetRustSharedServices().docking_tile,
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
@@ -413,8 +408,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.track_direction = Ship_track_direction, .tracks_reach = Ship_tracks_reach,
 		.busy_tile = Ship_busy_tile, .path_size = Ship_path_size,
 		.path_back = Ship_path_back, .path_pop = Ship_path_pop,
-		.path_clear = Ship_path_clear, .enter_tile = Ship_enter_tile,
-		.process_orders = Ship_process_orders,
+		.path_clear = Ship_path_clear, .process_orders = Ship_process_orders,
 		.viewport = Ship_viewport,
 		.base_viewport = Ship_base_viewport, .visual = Ship_visual,
 		.cache = Ship_cache, .play_sound = Ship_play_sound,

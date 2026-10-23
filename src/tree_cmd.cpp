@@ -930,17 +930,21 @@ static void DrawTile_Trees(TileInfo *ti)
 }
 
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Trees(TileIndex tile, uint x, uint y, bool)
 {
 	auto [tileh, z] = GetTilePixelSlope(tile);
 
 	return z + GetPartialPixelZ(x & 0xF, y & 0xF, tileh);
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_Trees(TileIndex, Slope)
 {
 	return FOUNDATION_NONE;
 }
+#endif
 
 #ifndef WITH_RUST
 static CommandCost ClearTile_Trees(TileIndex tile, DoCommandFlags flags)
@@ -1237,10 +1241,12 @@ void OnTick_Trees()
 
 #endif /* !WITH_RUST */
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Trees(TileIndex, TransportType, uint, DiagDirection)
 {
 	return 0;
 }
+#endif
 
 static void ChangeTileOwner_Trees(TileIndex, Owner, Owner)
 {
@@ -1265,7 +1271,11 @@ static CommandCost TerraformTile_Trees(TileIndex tile, DoCommandFlags flags, int
 
 extern const TileTypeProcs _tile_type_trees_procs = {
 	DrawTile_Trees,           // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Trees,     // get_slope_z_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else
@@ -1273,7 +1283,11 @@ extern const TileTypeProcs _tile_type_trees_procs = {
 #endif
 	nullptr,                     // add_accepted_cargo_proc
 	GetTileDesc_Trees,        // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Trees, // get_tile_track_status_proc
+#endif
 	nullptr,                     // click_tile_proc
 	nullptr,                     // animate_tile_proc
 #ifdef WITH_RUST
@@ -1284,7 +1298,11 @@ extern const TileTypeProcs _tile_type_trees_procs = {
 	ChangeTileOwner_Trees,    // change_tile_owner_proc
 	nullptr,                     // add_produced_cargo_proc
 	nullptr,                     // vehicle_enter_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Trees,      // get_foundation_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else

@@ -553,7 +553,8 @@ static const IntervalTimer<TimerGameEconomy> _economy_subsidies_monthly({TimerGa
 bool CheckSubsidised(CargoType cargo_type, CompanyID company, Source src, const Station *st)
 {
 #ifdef WITH_RUST
-	return openttd_rust_subsidy_check(&GetRustSubsidyServices(), cargo_type, company.base(), src, st->index.base());
+	RustNearbyIndustryCursor cursor;
+	return openttd_rust_subsidy_check(&GetRustSubsidyServices(), cargo_type, company.base(), src, st->index.base(), &cursor);
 #else
 	/* If the source isn't subsidised, don't continue */
 	if (!src.IsValid()) return false;
@@ -685,7 +686,8 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 		.station = [](uint16_t id) noexcept -> const Station * { return Station::Get(StationID(id)); },
 		.station_empty = RustStationRectangleEmptyHandle<const Station *>,
 		.catchment = RustStationCatchment,
-		.near_industries = RustStationIndustriesNear,
+		.begin_nearby = BeginNearbyIndustries,
+		.next_nearby = NextNearbyIndustry,
 		.assert_destination = [](Source source) noexcept { if (source.type == SourceType::Town) { assert(Town::Get(source.ToTownID())->cache.part_of_subsidy.Test(PartOfSubsidy::Destination)); } else { assert(Industry::Get(source.ToIndustryID())->part_of_subsidy.Test(PartOfSubsidy::Destination)); } },
 	};
 	return services;

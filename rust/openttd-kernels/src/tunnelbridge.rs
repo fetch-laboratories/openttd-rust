@@ -16,3 +16,7 @@ pub fn get_tunnel_bridge_length(map: Map, begin: u32, end: u32) -> u32 {
     let last = map.tile_x(end).wrapping_add(map.tile_y(end));
     last.abs_diff(first).wrapping_sub(1)
 }
+
+/// Native tunnel portal sound and visibility frames from `tunnelbridge_cmd.cpp`.
+pub(crate) const TUNNEL_SOUND_FRAME: u8 = 1;
+pub(crate) const TUNNEL_VISIBILITY: [u8; 4] = [12, 8, 8, 12];

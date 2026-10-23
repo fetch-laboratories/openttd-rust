@@ -1,6 +1,7 @@
 /* OpenTTD-Rust migration evidence, licensed under GPLv2. */
 /** @file aircraft-range.cpp Finite NewGRF range gap against unchanged event bodies. */
 #include "rust/aircraft_ffi.h"
+#include "rust/movement_ffi.h"
 #include "rust/vehicle_maintenance_ffi.h"
 #include <algorithm>
 #include <array>
@@ -61,6 +62,7 @@ static Fixture *fixture;
 static OpenTTDVehicleServices vehicle;
 static OpenTTDVehicleMaintenanceServices maintenance;
 static OpenTTDSharedServices shared;
+static OpenTTDMovementServices movement;
 static OpenTTDAircraftLeaves RangeLeaves()
 {
 	auto leaves = AircraftTestLeaves(vehicle, shared);
@@ -110,7 +112,10 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.subtype = [](OpenTTDVehicle * v) noexcept { return uint8_t(v == reinterpret_cast<OpenTTDVehicle *>(fixture) ? 2 : 4); };
 	vehicle.vehicle_type = [](OpenTTDVehicle *) noexcept { return uint8_t{3}; };
 	vehicle.altitude_inputs = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleAltitudeInputs{100, 0}; };
-	shared.slope = [](int32_t, int32_t) noexcept { return int32_t{0}; };
+	movement.shared = &shared;
+	shared.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
+	shared.tile_type = [](uint32_t) noexcept { return uint8_t{0}; }; // Flat clear ground.
+	movement.pixel_slope = [](uint32_t) noexcept { return OpenTTDFoundationSlope{0, Slope{0}}; };
 	shared.tile_height = [](uint32_t) noexcept { return uint32_t{0}; };
 	leaves.airport_entry = [](const void *, uint8_t) noexcept { return uint8_t{0}; };
 	vehicle.write_x = vehicle.write_y = vehicle.write_z = [](OpenTTDVehicle *, int32_t) noexcept {};

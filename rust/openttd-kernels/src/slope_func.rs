@@ -143,6 +143,67 @@ pub const fn inclined_foundation(axis: u8) -> u8 {
     }
 }
 
+/// `FOUNDATION_STEEP_LOWER`.
+pub const FOUNDATION_STEEP_LOWER: u8 = 4;
+/// `FOUNDATION_STEEP_BOTH`.
+pub const FOUNDATION_STEEP_BOTH: u8 = 5;
+/// `FOUNDATION_INVALID`.
+pub const FOUNDATION_INVALID: u8 = 255;
+/// `GetHighestSlopeCorner`, on the native helper's reachable domain.
+pub fn get_highest_slope_corner(s: u8) -> u8 {
+    match remove_halftile_slope(s) {
+        1 | 27 => 0,
+        2 | 23 => 1,
+        4 | 30 => 2,
+        8 | 29 => 3,
+        _ => unreachable!("native highest slope corner"),
+    }
+}
+/// `OppositeCorner`.
+pub const fn opposite_corner(c: u8) -> u8 {
+    c ^ 2
+}
+/// `SlopeWithOneCornerRaised`.
+pub fn slope_with_one_corner_raised(c: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if c >= 4 {
+        check(false);
+    }
+    (1_u32.wrapping_shl(u32::from(c)) & 0xff) as u8
+}
+/// `SlopeWithThreeCornersRaised`.
+pub fn slope_with_three_corners_raised(c: u8, check: impl Fn(bool) + Copy) -> u8 {
+    complement_slope(slope_with_one_corner_raised(c, check))
+}
+/// `HalftileFoundation`, with a valid native corner.
+pub fn halftile_foundation(c: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if c >= 4 {
+        check(false);
+    }
+    FOUNDATION_HALFTILE_W.wrapping_add(c)
+}
+/// `SpecialRailFoundation`, with a valid native corner.
+pub fn special_rail_foundation(c: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if c >= 4 {
+        check(false);
+    }
+    FOUNDATION_RAIL_W.wrapping_add(c)
+}
+
+/// `CORNER_W`.
+pub const CORNER_W: u8 = 0;
+/// `CORNER_S`.
+pub const CORNER_S: u8 = 1;
+/// `CORNER_E`.
+pub const CORNER_E: u8 = 2;
+/// `CORNER_N`.
+pub const CORNER_N: u8 = 3;
+/// `FOUNDATION_HALFTILE_W`.
+pub const FOUNDATION_HALFTILE_W: u8 = 6;
+/// `FOUNDATION_RAIL_W`.
+pub const FOUNDATION_RAIL_W: u8 = 10;
+/// `FOUNDATION_RAIL_N`.
+pub const FOUNDATION_RAIL_N: u8 = 13;
+
 #[cfg(test)]
 mod tests {
     use super::*;

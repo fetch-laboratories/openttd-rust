@@ -167,7 +167,13 @@ static void AircraftPhaseBoundary()
 	v.write_y = [](OpenTTDVehicle *, int32_t y) noexcept { CHECK(y == -3); };
 	v.y = [](OpenTTDVehicle *) noexcept { return int32_t{-3}; };
 	v.write_z = [](OpenTTDVehicle *, int32_t z) noexcept { CHECK(z == 0); };
-	s.slope = [](int32_t, int32_t) noexcept { return int32_t{0}; };
+	static OpenTTDSharedServices movement_world{};
+	movement_world.map_log_x = []() noexcept -> uint32_t { return 6; };
+	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
+	static OpenTTDMovementServices movement{};
+	movement.shared = &movement_world;
+	movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
+	s.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	leaves.copy_sprite = [](OpenTTDAircraftVehicle, OpenTTDAircraftVehicle) noexcept {};
 	leaves.position_viewport = [](OpenTTDAircraftVehicle) noexcept {};
 	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));

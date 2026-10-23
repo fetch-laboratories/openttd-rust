@@ -1348,6 +1348,28 @@ interior/head/tail/last removal, bay admission and reload, and require every
 `road_stop` branch (`integrity` in desync runs). Articulated bay refusal and the
 unreachable `include` duplicate remain #156 gaps.
 
+### Waypoint construction and command policy (#366)
+
+Rust owns deleted-waypoint reuse in pool order, rail/road axis selection and tile
+validation, complete rail/road/buoy construction, buoy removal and waypoint name
+uniqueness, rename and sign-move policy. It calls integrated station joining,
+expansion, road-cost and removal policy directly, and water restoration directly.
+C++ retains canonical Waypoint/BaseStation shells, spec allocation, map setters,
+presentation and caller-stack `RailStationTileLayout`/iterator and command costs.
+No native world borrow spans callbacks; serialized synchronous leaves are noexcept.
+The last native road-infrastructure caller is replaced and its facade/export removed.
+
+`python3 tools/migration.py rust-checks` covers Cargo4. Focused semantic evidence:
+`python3 tools/migration.py simulate stations-commands-waypoints
+stations-commands-waypoints-reload stations-commands-commands
+stations-commands-reload water-commands` compares commands/errors, infrastructure,
+map/STNN, names/reload and RNG, with required default waypoint branch witnesses.
+Both axes, adjacent/distant joining, replacement, deleted reuse/equal-distance ties,
+occupied refusals and buoy water-class restoration/bankruptcy are exercised.
+External station/road-stop GRFs, exhausted pools/spec lists and legacy saves remain
+coverage gaps under #156. Independent review and exact-head Full are root's gates.
+
+
 <!-- Subsystem: Vehicles, pathfinding and orders. Add a new entry at the end of its group, not of the file. -->
 
 ### Effect vehicles
@@ -1919,6 +1941,51 @@ The existing console adapter compiles the unchanged reference monthly lambda for
 zero-countdown, full-pool retry and disabled-expiry RNG gaps; scalar address checks
 cover the reference-alias boundary. External NewGRF programs, legacy conversion
 fixtures and threaded GUI/presentation remain coverage gaps tracked in #156.
+
+### Complete PBS reservation service (#367)
+
+Rust (`pbs.rs`) owns reservation reads/writes, complete platform scans, traversal,
+loop termination, train selection and waiting policy. `follow_track.rs` owns
+reserved-track masking between native Follow and GetSpeedLimit calls, removing
+the YAPF/PBS bounce. Native map bits remain
+canonical. The named `CFollowTrackRail::Follow` leaf carries all partial failure
+observations in a call-local typed result; spatial enumeration retains native
+hash order, while Rust selects the lowest front-train ID. Crossing updates and
+train state/trackdir call their Rust owners directly. Header-matched track/PBS
+helpers replace integrated copies; displaced native reservation bindings retire.
+Station randomisation, animation and redraw retain source order and the same
+native station identity. No world borrow spans a trigger or shared service.
+Default rail-reservation, reload, controller and signal scenarios compare map
+bits, movement/orders and RNG and require PBS branch witnesses. Their adapter
+compiles the pinned algorithm bodies, adapting only migrated field reads, for
+transient endpoints, train_on_res and trigger order; controlled platforms, loops,
+stray/one-way paths, lowest-ID ties and occupied structure ends are restored
+before play. Native runtime export/import carries both once-built PBS adapters
+into CI shards. Native ABI/table checks and existing YAPF/controller tests remain.
+External NewGRF trigger reentry, custom railtype turn flags, legacy conversion
+and threaded GUI coverage remain #156 gaps. PR #370 records commands and metrics.
+### Tile movement dispatch (#371)
+
+Rust owns tile track status, admission, pixel height (including outside-map),
+foundation dispatch and every tile policy, rail/road foundations, depot distances,
+portal frames and bridge entry preparation. Commands, drawing and existing tile
+loops retain their owners. Native map arrays, pools and vehicle shells remain
+canonical; typed noexcept leaves carry consumed scalars or stable identities.
+Owner loads/stores end before depot, road-stop, sound, viewport and NewGRF calls.
+Train stopping, crossing occupancy, order stopping, slope/pixel and bridge helpers
+call their integrated Rust owners directly. Road pathfinder track bits and
+road/ship YAPF plus water-region movement queries also call Rust directly; header
+preconditions follow native assertion policy, without valid-input FFI. Native
+facades serve remaining native callers; portable original bodies remain excluded from WITH_RUST.
+`python3 tools/migration.py rust-checks` runs Cargo4; `build` and native ABI/tests
+check the boundary. Existing rail/road/station scenarios require movement counters,
+including all depot directions, all train tunnel portal directions, station stopping,
+road-stop admission/refusal/reload, road bridges and Padhattan lock/coast queries.
+The road fixture queries adjacent barred crossings, edge-water masks and four half-tram directions.
+`python3 tools/landscape-comparison.py` adds 19,608 unchanged-body foundation and
+signed-coordinate cases to the existing default scheduler comparison.
+Remaining NewGRF foundations, train/ship bridges, road tunnels, partial-depot
+reversal timing, half-water and extreme bridge-speed branches are tracked in #156.
 
 ### Vehicle station/depot visits and route-link prediction (#349)
 
