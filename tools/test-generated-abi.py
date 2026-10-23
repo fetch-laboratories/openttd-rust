@@ -17,6 +17,32 @@ CONVERSION = "df9a6c22da0462ef68a918debdc5e715a757291d"
 GENERATOR = runpy.run_path(str(ROOT / "tools/generate-abi.py"))
 
 
+def snapshot(revision):
+    with tempfile.TemporaryDirectory() as directory:
+        archive = subprocess.check_output(
+            [
+                "git",
+                "archive",
+                revision,
+                "tools/generate-abi.py",
+                "rust/openttd-kernels/src",
+                "src/rust",
+                "tools/migration",
+            ],
+            cwd=ROOT,
+        )
+        with tarfile.open(fileobj=io.BytesIO(archive)) as files:
+            files.extractall(directory, filter="data")
+        root = Path(directory)
+        converter = runpy.run_path(str(root / "tools/generate-abi.py"))
+        probes = (root / "tools/migration/windows-abi.cpp").read_text()
+        probes += "\n".join(
+            path.read_text()
+            for path in (root / "tools/migration/windows-abi").glob("*.inc")
+        )
+        return converter["generate"](), probes
+
+
 def original(path):
     return subprocess.check_output(
         ["git", "show", f"{BEFORE}:{path}"], cwd=ROOT, text=True
@@ -61,22 +87,7 @@ class GeneratedAbiTests(unittest.TestCase):
     def test_every_deleted_probe_and_native_only_list_is_preserved(self):
         # Freeze the conversion inputs, never today's evolving ABI. Current generation
         # is tested independently below, so later additions/retirements remain valid.
-        with tempfile.TemporaryDirectory() as directory:
-            archive = subprocess.check_output(
-                [
-                    "git",
-                    "archive",
-                    CONVERSION,
-                    "tools/generate-abi.py",
-                    "rust/openttd-kernels/src",
-                    "src/rust",
-                ],
-                cwd=ROOT,
-            )
-            with tarfile.open(fileobj=io.BytesIO(archive)) as files:
-                files.extractall(directory, filter="data")
-            converter = runpy.run_path(str(Path(directory) / "tools/generate-abi.py"))
-            generated = converter["generate"]()
+        generated, _ = snapshot(CONVERSION)
         actual = {}
         for path, contents in generated.items():
             if not path.endswith(".inc"):
@@ -87,6 +98,29 @@ class GeneratedAbiTests(unittest.TestCase):
                 self.assertNotIn(name, actual)
                 actual[name] = re.sub(r"\s+", "", values)
         self.assertEqual(legacy_lists(), actual)
+
+    def test_component_split_preserves_layouts_visitors_and_probe_bodies(self):
+        split = "a42498e47f574c78cd1f0a96cfc61c901f397ef2"
+        results = []
+        for revision in (split + "^", split):
+            fragments, probes = snapshot(revision)
+            fragments = {
+                name: sorted(text.splitlines())
+                if name.startswith("abi-layout-")
+                else text
+                for name, text in fragments.items()
+                if name.startswith(("abi-layout-", "abi-visit-"))
+            }
+            functions = dict(
+                re.findall(
+                    r"^(static [^\n]+\([^\n]*\))\n(\{.*?^\})", probes, re.M | re.S
+                )
+            )
+            self.assertGreater(len(functions), 20)
+            results.append((fragments, functions))
+        self.assertEqual(results[0][0], results[1][0])
+        for name, body in results[0][1].items():
+            self.assertEqual(body, results[1][1][name], name)
 
     def test_generation_is_deterministic_and_build_directory_only(self):
         with tempfile.TemporaryDirectory() as directory:
