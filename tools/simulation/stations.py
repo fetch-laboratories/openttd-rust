@@ -461,15 +461,20 @@ static void StationWaypoints(TileIndex origin, Company *company, DoCommandFlags 
 		check("wp-road-test", build_road(test, road, width, height, NEW_STATION, true));
 		check("wp-road-build", build_road(exec, road, width, height, NEW_STATION, true));
 		StationID rid = GetStationIndex(road); StationNeed(GetAxisForNewRoadWaypoint(road) == axis, __LINE__);
+		TileIndex road_distant = road + 4 * TileOffsByAxis(axis);
+		check("wp-road", Command<CMD_BUILD_ROAD>::Do(exec, road_distant, axis == AXIS_X ? ROAD_X : ROAD_Y, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
+		check("wp-road-distant", build_road(exec, road_distant, 1, 1, rid, true));
 		check("wp-road-replace", build_road(exec, road, width, height, rid, true));
 		check("wp-road-join", build_road(exec, road + 2 * step, 1, 1, StationID::Invalid(), false));
 		StationNeed(GetStationIndex(road + 2 * step) == rid, __LINE__);
 		/* A real vehicle occupies the replacement tile. Restore its spatial hash before saving. */
-		RoadVehicle *v = *RoadVehicle::Iterate().begin(); TileIndex old_tile = v->tile; int old_x = v->x_pos, old_y = v->y_pos;
-		v->tile = road; v->x_pos = TileX(road) * TILE_SIZE + 8; v->y_pos = TileY(road) * TILE_SIZE + 8; v->UpdatePosition();
+		RoadVehicle *v = nullptr; for (RoadVehicle *candidate : RoadVehicle::Iterate()) if (!candidate->vehstatus.Test(VehState::Hidden)) { v = candidate; break; }
+		StationNeed(v != nullptr, __LINE__); TileIndex old_tile = v->tile; int old_x = v->x_pos, old_y = v->y_pos, old_z = v->z_pos;
+		v->tile = road; v->x_pos = TileX(road) * TILE_SIZE + 8; v->y_pos = TileY(road) * TILE_SIZE + 8; v->z_pos = GetTileZ(road); v->UpdatePosition();
 		check("wp-occupied", build_road(test, road, width, height, rid, true), false);
-		v->tile = old_tile; v->x_pos = old_x; v->y_pos = old_y; v->UpdatePosition();
+		v->tile = old_tile; v->x_pos = old_x; v->y_pos = old_y; v->z_pos = old_z; v->UpdatePosition();
 		check("wp-road-remove", Command<CMD_REMOVE_FROM_ROAD_WAYPOINT>::Do(exec, road, road + 2 * step));
+		check("wp-road-remove-distant", Command<CMD_REMOVE_FROM_ROAD_WAYPOINT>::Do(exec, road_distant, road_distant));
 		check("wp-road-reuse", build_road(exec, road, width, height, StationID::Invalid(), false));
 		StationNeed(GetStationIndex(road) == rid, __LINE__);
 		check("wp-road-rename", Command<CMD_RENAME_WAYPOINT>::Do(exec, rid, fmt::format("Migration road waypoint {}", axis)));

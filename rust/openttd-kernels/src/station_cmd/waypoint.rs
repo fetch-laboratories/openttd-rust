@@ -182,7 +182,7 @@ pub struct WaypointLayout {
 }
 impl Ctx<'_> {
     fn deleted_waypoint(&self, tile: u32, string: u32, owner: u8, road: bool) -> *mut BaseStation {
-        let mut best = std::ptr::null_mut();
+        let mut best: *mut BaseStation = std::ptr::null_mut();
         let mut threshold = 8;
         // Pool ID order is Waypoint::Iterate order. Equal distances never replace
         // the earlier candidate, including deleted waypoints outside the kdtree.
