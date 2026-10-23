@@ -18,6 +18,7 @@
 #include "timer/timer_game_economy.h"
 #ifdef WITH_RUST
 #include "rust/subsidy_ffi.h"
+#include "rust/services_station.h"
 void SubsidyMonthlyLoop();
 #else
 bool FindSubsidyPassengerRoute();
@@ -43,7 +44,17 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	Backup<BitmapTileArea> catchment(st->catchment_tiles); Backup<IndustryList> near(st->industries_near); Backup<CargoTypes> accepts(st->always_accepted);
 	st->catchment_tiles.Initialize(TileArea(TileXY(0, 0), Map::SizeX(), Map::SizeY()));
 	for (TileIndex tile : Map::Iterate()) if (IsTileType(tile, MP_HOUSE) && (GetTownIndex(tile) == a->index || GetTownIndex(tile) == b->index)) st->catchment_tiles.SetTile(tile);
-	st->industries_near = {{0, i}, {1, j}};
+	st->industries_near = {{1, j}, {1, i}};
+#ifdef WITH_RUST
+	const auto &services = GetRustSubsidyServices(); RustNearbyIndustryCursor x, y;
+	st->industries_near.clear(); services.begin_nearby(&x, st);
+	if (services.next_nearby(&x) != nullptr) FixtureAbort(__LINE__);
+	st->industries_near = {{1, i}, {0, j}}; services.begin_nearby(&x, st);
+	if (services.next_nearby(&x) != j || services.next_nearby(&x) != i || services.next_nearby(&x) != nullptr) FixtureAbort(__LINE__);
+	st->industries_near = {{1, j}, {1, i}}; services.begin_nearby(&x, st); services.begin_nearby(&y, st);
+	if (services.next_nearby(&x) != i || services.next_nearby(&x) != j || services.next_nearby(&y) != i || services.next_nearby(&x) != nullptr || services.next_nearby(&y) != j || services.next_nearby(&y) != nullptr) FixtureAbort(__LINE__);
+#endif
+	fmt::print(stderr, "SUBSIDY nearby true\n");
 	CargoType cargo = CargoSpec::town_production_cargoes[TPE_PASSENGERS][0]->Index(); SetBit(st->always_accepted, cargo);
 	Source town{a->index, SourceType::Town}, other{b->index, SourceType::Town}, industry{i->index, SourceType::Industry}, destination{j->index, SourceType::Industry};
 	bool commands = true; for (Source src : {town, industry}) for (Source dst : {town, destination}) { commands &= CmdCreateSubsidy({}, cargo, src, dst).Succeeded(); commands &= CmdCreateSubsidy(DoCommandFlag::Execute, cargo, src, dst).Succeeded(); }
@@ -57,7 +68,7 @@ static bool SubsidyScenario(std::span<std::string_view> args)
 	bool multipliers = true;
 	for (uint8_t multiplier = 0; multiplier < 4; ++multiplier) {
 		SubsidyClean(); _settings_game.difficulty.subsidy_multiplier = multiplier;
-		for (Source dst : {town, other, destination}) CmdCreateSubsidy(DoCommandFlag::Execute, cargo, town, dst);
+		for (Source dst : {town, other, industry, destination}) CmdCreateSubsidy(DoCommandFlag::Execute, cargo, town, dst);
 		if (!CargoPacket::CanAllocateItem() || !CargoPayment::CanAllocateItem()) FixtureAbort(__LINE__);
 		CargoPacket *cp = new CargoPacket(st->index, 10, town); cp->UpdateLoadingTile(st->xy); TileIndex tile = TileXY((TileX(st->xy) + 10) % Map::SizeX(), TileY(st->xy));
 		CargoPayment *payment = new CargoPayment(front); Money base = GetTransportedGoodsIncome(10, cp->GetDistance(tile), cp->GetPeriodsInTransit(), cargo);

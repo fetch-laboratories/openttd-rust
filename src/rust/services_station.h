@@ -38,9 +38,18 @@ inline void RustStationCatchment(const Station *station, void *context, void (*v
 	BitmapTileIterator it(station->catchment_tiles);
 	for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) visit(context, tile.base());
 }
-inline void RustStationIndustriesNear(const Station *station, void *context, void (*visit)(void *, uint16_t)) noexcept
+/** Native entry-frame storage; bind at each original scan. Serialized callbacks
+ * cannot rebuild catchments/remove industries/reset the world; no Rust layout view. */
+struct RustNearbyIndustryCursor { IndustryList::const_iterator current, end; bool started; };
+inline void BeginNearbyIndustries(RustNearbyIndustryCursor *cursor, const Station *station) noexcept
 {
-	for (const auto &entry : station->industries_near) visit(context, entry.industry->index.base());
+	*cursor = {station->industries_near.begin(), station->industries_near.end(), false};
+}
+inline Industry *NextNearbyIndustry(RustNearbyIndustryCursor *cursor) noexcept
+{
+	if (cursor->started) ++cursor->current;
+	cursor->started = true;
+	return cursor->current == cursor->end ? nullptr : cursor->current->industry;
 }
 inline const AirportFTAClass *RustAirportFTA(uint8_t type) noexcept { return GetAirport(type); }
 inline const void *RustDummyAirportFTA() noexcept { return RustAirportFTA(AT_DUMMY); }
