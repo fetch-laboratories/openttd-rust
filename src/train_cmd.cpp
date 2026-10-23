@@ -4751,7 +4751,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.tile_offset_diag = TrainTileOffsetDiag,
 		.tile_owner = TrainSharedMap<uint64_t, &OpenTTDSharedServices::tile_owner>,
 		.tile_rail_type = OpenTTDLegacyMapQuery<uint64_t, RustTileRailType, OpenTTDTrainHandle, uint32_t>,
-		.tile_virt = TrainTileVirt,
+		.tile_virt = RustTileVirtXY,
 		.trackdir_exit = TrainTrackdirExit,
 		.trackdir_reaches = TrainTrackdirReaches,
 		.track_bits = OpenTTDLegacyMapQuery<uint64_t, RustRailTracks, OpenTTDTrainHandle, uint32_t>,

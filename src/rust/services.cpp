@@ -183,7 +183,7 @@ Town *OpenTTDTownShellByID(uint32_t id) noexcept
 
 void OpenTTDAssertTownGenerationContext() noexcept { assert(_game_mode == GM_EDITOR || _generating_world); }
 
-bool OpenTTDIsTileFlat(uint32_t tile) noexcept { return RustFlatTileHeight(tile).flat; }
+bool OpenTTDIsTileFlat(uint32_t tile) noexcept { return IsTileFlat(TileIndex{tile}); }
 ClearGround OpenTTDClearGround(uint32_t tile) noexcept { return RustClearGround(Tile{TileIndex{tile}}); }
 TreeGround OpenTTDTreeGround(uint32_t tile) noexcept { return RustTreeGround(Tile{TileIndex{tile}}); }
 
@@ -205,7 +205,7 @@ static void SharedSetTropicZone(uint32_t tile, uint8_t zone) noexcept { SetTropi
 /** Pure map query; no allocation, reentry or C++ exception crosses into Rust. */
 static uint32_t SharedIndustry(int32_t x, int32_t y, uint32_t *index) noexcept
 {
-	TileIndex tile = TileVirtXY(x, y);
+	TileIndex tile{RustTileVirtXY(x, y)};
 	*index = tile.base();
 	if (!IsTileType(tile, MP_INDUSTRY)) return 0;
 	return GetIndustryGfx(tile) == GFX_BUBBLE_CATCHER ? 2 : 1;
@@ -298,7 +298,6 @@ static uint8_t Shared_road_bits(uint32_t tile, uint8_t type, bool straight) noex
 static void SharedUpdateLevelCrossing(uint32_t tile, bool sound) noexcept { UpdateLevelCrossing(TileIndex{tile}, sound); }
 static void SharedMarkBridgeDirty(uint32_t tile) noexcept { MarkBridgeDirty(TileIndex{tile}); }
 static Trackdir SharedTrainTrackdir(const Train *v) noexcept { return v->GetVehicleTrackdir(); }
-static bool SharedHasRoadWorks(uint32_t tile) noexcept { return HasRoadWorks(TileIndex{tile}); }
 static RoadType SharedTramType(uint32_t tile) noexcept { return GetRoadTypeTram(TileIndex{tile}); }
 static uint8_t SharedTramOwner(uint32_t tile) noexcept { return GetRoadOwner(TileIndex{tile}, RTT_TRAM).base(); }
 static RoadBits SharedNormalRoadBits(uint32_t tile, uint8_t type) noexcept { return GetRoadBits(TileIndex{tile}, static_cast<RoadTramType>(type)); }

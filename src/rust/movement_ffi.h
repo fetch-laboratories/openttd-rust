@@ -27,6 +27,7 @@ struct OpenTTDMovementPose { int32_t z; uint8_t direction; };
 struct OpenTTDMovementDepotPosition { uint32_t tile; int32_t x, y; };
 struct OpenTTDMovementIncline { int32_t z; uint16_t flags; };
 struct OpenTTDMovementFirstSpeed { OpenTTDVehicle *first; uint16_t speed; };
+struct OpenTTDNormalRoadStatusTail { uint8_t disallowed; bool road_works; };
 struct OpenTTDMovementServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDOrdersLeaves *orders;
@@ -47,6 +48,8 @@ struct OpenTTDMovementServices {
 	uint8_t (*train_engine_class)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_engine_class);
 	void (*depot_invalidate)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_invalidate);
 	void (*native_assert)(bool) noexcept OPENTTD_SERVICE_DEFAULT(native_assert);
+	OpenTTDNormalRoadStatusTail (*normal_road_status_tail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(normal_road_status_tail);
+	OpenTTDPixelLocation (*pixel_location)(int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(pixel_location);
 	bool (*plain_rail)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(plain_rail);
 	bool (*normal_road)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(normal_road);
 	bool (*is_tunnel)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_tunnel);
@@ -77,7 +80,7 @@ struct OpenTTDMovementServices {
 void RustMovementAssert(bool condition) noexcept;
 const OpenTTDMovementServices &GetRustMovementServices() noexcept;
 extern "C" {
-uint16_t openttd_rust_road_trackdirs(const OpenTTDSharedServices *, uint32_t, RoadTramType);
+uint16_t openttd_rust_road_trackdirs(const OpenTTDMovementServices *, uint32_t, RoadTramType);
 uint8_t openttd_rust_movement_tunnel_visibility(uint8_t);
 uint8_t openttd_rust_movement_enter(const OpenTTDMovementServices *, OpenTTDVehicle *, uint32_t, int32_t, int32_t);
 int32_t openttd_rust_movement_depot_ticks(const OpenTTDMovementServices *, OpenTTDTrainHandle);

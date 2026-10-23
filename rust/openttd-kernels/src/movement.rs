@@ -44,7 +44,38 @@ use crate::tile_type::{
 };
 use crate::vehicle_type::{VEH_ROAD, VEH_SHIP, VEH_TRAIN};
 use crate::witness as w;
+use std::cell::Cell;
 use std::ffi::c_void;
+
+/// Entry-local lazy reuse of the immutable registry, never map or owner state.
+#[derive(Clone)]
+pub(crate) struct CachedTable<'a> {
+    shared: &'a Services,
+    resolved: Cell<Option<&'a MovementServices>>,
+}
+impl<'a> CachedTable<'a> {
+    pub(crate) fn new(shared: &'a Services) -> Self {
+        Self {
+            shared,
+            resolved: Cell::new(None),
+        }
+    }
+    pub(crate) fn get(&self) -> &'a MovementServices {
+        // Copy before the getter: no Cell borrow spans a callback/reentry.
+        if let Some(table) = self.resolved.get() {
+            return table;
+        }
+        let table = table(self.shared);
+        self.resolved.set(Some(table));
+        table
+    }
+}
+
+#[repr(C)]
+pub struct NormalRoadStatusTail {
+    pub disallowed: u8,
+    pub road_works: bool,
+}
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CallbackFoundation {
@@ -106,6 +137,8 @@ pub struct MovementServices {
     pub train_engine_class: extern "C" fn(crate::vehicle::VehicleRef) -> u8,
     pub depot_invalidate: extern "C" fn(crate::vehicle::VehicleRef),
     pub native_assert: extern "C" fn(bool),
+    pub normal_road_status_tail: extern "C" fn(u32) -> NormalRoadStatusTail,
+    pub pixel_location: extern "C" fn(i32, i32) -> crate::services::PixelLocation,
     pub plain_rail: extern "C" fn(u32) -> bool,
     pub normal_road: extern "C" fn(u32) -> bool,
     pub is_tunnel: extern "C" fn(u32) -> bool,
@@ -134,7 +167,7 @@ pub struct MovementServices {
     pub industry_boolean: extern "C" fn(*const c_void, u16) -> bool,
 }
 impl MovementServices {
-    fn shared(&self) -> &Services {
+    pub(crate) fn shared(&self) -> &Services {
         // SAFETY: Only resolved at branches whose native/fixture table supplies this immutable callee.
         unsafe { &*self.shared }
     }
@@ -233,6 +266,10 @@ impl MovementServices {
             _ => FOUNDATION_NONE,
         }
     }
+    pub(crate) fn pixel_z_at(&self, x: i32, y: i32, ground: bool) -> i32 {
+        let p = (self.pixel_location)(x, y);
+        self.pixel_z(p.tile, x as u32, y as u32, ground, p.kind)
+    }
     fn pixel_z(&self, tile: u32, x: u32, y: u32, ground_vehicle: bool, kind: u8) -> i32 {
         w::hit(w::MOVE_PIXEL_Z);
         if matches!(kind, MP_HOUSE | MP_INDUSTRY | MP_STATION)
@@ -305,18 +342,7 @@ pub unsafe extern "C" fn openttd_rust_movement_pixel_z(
     y: i32,
     ground_vehicle: bool,
 ) -> i32 {
-    let s = unsafe { &*s };
-    let map = crate::services::Map {
-        log_x: (s.shared().map_log_x)() as u8,
-    };
-    let tile = map.tile_xy((x as u32) >> 4, (y as u32) >> 4);
-    s.pixel_z(
-        tile,
-        x as u32,
-        y as u32,
-        ground_vehicle,
-        (s.shared().tile_type)(tile),
-    )
+    unsafe { &*s }.pixel_z_at(x, y, ground_vehicle)
 }
 /// # Safety
 /// Same as the in-map entry; outside coordinates never access an invalid tile.
@@ -331,7 +357,7 @@ pub unsafe extern "C" fn openttd_rust_movement_outside_z(
     if (x as u32) < ((s.shared().map_max_x)() + 1) * TILE_SIZE
         && (y as u32) < ((s.shared().map_max_y)() + 1) * TILE_SIZE
     {
-        unsafe { openttd_rust_movement_pixel_z(s, x, y, false) }
+        s.pixel_z_at(x, y, false)
     } else {
         s.pixel_z(INVALID_TILE, x as u32, y as u32, false, MP_VOID)
     }
@@ -538,7 +564,7 @@ impl MovementServices {
         }
         bits
     }
-    fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
+    pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
         let mut bits = TRACK_BIT_NONE;
         let mut red = 0;
         match (self.shared().tile_type)(tile) {
@@ -631,11 +657,13 @@ impl MovementServices {
                                 {
                                     return 0;
                                 }
-                                let multiplier = [0x101, 0x100, 1, 0][if tram {
-                                    0
+                                let (disallowed, road_works) = if tram {
+                                    (0, (self.shared().has_road_works)(tile))
                                 } else {
-                                    usize::from((self.shared().disallowed_road_directions)(tile))
-                                }];
+                                    let tail = (self.normal_road_status_tail)(tile);
+                                    (tail.disallowed, tail.road_works)
+                                };
+                                let multiplier = [0x101, 0x100, 1, 0][usize::from(disallowed)];
                                 const ROAD_TRACKS: [u8; 16] = [
                                     TRACK_BIT_NONE,
                                     TRACK_BIT_NONE,
@@ -654,7 +682,7 @@ impl MovementServices {
                                     TRACK_BIT_RIGHT | TRACK_BIT_LOWER | TRACK_BIT_X,
                                     TRACK_BIT_ALL,
                                 ];
-                                let dirs = if (self.shared().has_road_works)(tile) {
+                                let dirs = if road_works {
                                     w::hit(w::MOVE_ROAD_WORKS);
                                     0
                                 } else {
@@ -1349,8 +1377,7 @@ pub(crate) fn track_status(shared: &Services, tile: u32, mode: u8, sub: u32, sid
     table(shared).track_status(tile, mode, sub, side)
 }
 pub(crate) fn pixel_z(shared: &Services, x: i32, y: i32, ground: bool) -> i32 {
-    // SAFETY: Callers supply the serialized live native map and registry.
-    unsafe { openttd_rust_movement_pixel_z(table(shared), x, y, ground) }
+    table(shared).pixel_z_at(x, y, ground)
 }
 pub(crate) fn foundation_slope(shared: &Services, tile: u32) -> FoundationSlope {
     // SAFETY: Callers supply the serialized live native map and registry.
@@ -1363,19 +1390,18 @@ pub(crate) unsafe fn enter(shared: &Services, v: VehicleRef, tile: u32, x: i32, 
 }
 
 pub(crate) fn water_tracks(shared: &Services, tile: u32, side: u8) -> u32 {
-    u32::from(crate::track_func::track_status_to_track_bits(track_status(
-        shared,
-        tile,
-        TRANSPORT_WATER,
-        0,
-        side,
-    )))
+    table(shared).water_tracks(tile, side)
 }
-
-pub(crate) fn road_tracks(shared: &Services, v: VehicleRef, tile: u32) -> u32 {
-    let s = table(shared);
-    let kind = (s.road_kind)(v);
-    s.track_status(tile, TRANSPORT_ROAD, u32::from(kind.0), INVALID_DIAGDIR)
+impl MovementServices {
+    pub(crate) fn water_tracks(&self, tile: u32, side: u8) -> u32 {
+        u32::from(crate::track_func::track_status_to_track_bits(
+            self.track_status(tile, TRANSPORT_WATER, 0, side),
+        ))
+    }
+    pub(crate) fn road_tracks(&self, v: VehicleRef, tile: u32) -> u32 {
+        let kind = (self.road_kind)(v);
+        self.track_status(tile, TRANSPORT_ROAD, u32::from(kind.0), INVALID_DIAGDIR)
+    }
 }
 
 pub(crate) fn depot_ticks(shared: &Services, v: crate::train::Handle) -> i32 {
@@ -1446,6 +1472,10 @@ crate::abi::layouts! {
         kind,
         callback,
     };
+    "OpenTTDNormalRoadStatusTail" ["landscape"] => NormalRoadStatusTail {
+        disallowed,
+        road_works,
+    };
     "OpenTTDMovementServices" ["landscape"] => MovementServices {
         shared,
         orders,
@@ -1466,6 +1496,8 @@ crate::abi::layouts! {
         train_engine_class,
         depot_invalidate,
         native_assert,
+        normal_road_status_tail,
+        pixel_location,
         plain_rail,
         normal_road,
         is_tunnel,

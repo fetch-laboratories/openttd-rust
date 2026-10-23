@@ -7,23 +7,22 @@
 
 //! Shared `pathfinder/pathfinder_func.h` road track helper.
 use crate::direction_type::INVALID_DIAGDIR;
-use crate::services::Services;
+use crate::movement::MovementServices;
 use crate::track_func::track_status_to_trackdir_bits;
 use crate::track_type::{
     TRACKDIR_BIT_X_NE, TRACKDIR_BIT_X_SW, TRACKDIR_BIT_Y_NW, TRACKDIR_BIT_Y_SE,
 };
 use crate::transport_type::TRANSPORT_ROAD;
 
-pub(crate) fn road_trackdirs(shared: &Services, tile: u32, tram: bool) -> u16 {
-    let mut bits = track_status_to_trackdir_bits(crate::movement::track_status(
-        shared,
+pub(crate) fn road_trackdirs(movement: &MovementServices, tile: u32, tram: bool) -> u16 {
+    let mut bits = track_status_to_trackdir_bits(movement.track_status(
         tile,
         TRANSPORT_ROAD,
         u32::from(tram),
         INVALID_DIAGDIR,
     ));
-    if tram && bits == 0 && (shared.is_normal_road)(tile) {
-        bits = match (shared.normal_road_bits)(tile, 1).0 {
+    if tram && bits == 0 && (movement.shared().is_normal_road)(tile) {
+        bits = match (movement.shared().normal_road_bits)(tile, 1).0 {
             crate::road_type::ROAD_NE | crate::road_type::ROAD_SW => {
                 TRACKDIR_BIT_X_NE | TRACKDIR_BIT_X_SW
             }
@@ -40,9 +39,9 @@ pub(crate) fn road_trackdirs(shared: &Services, tile: u32, tram: bool) -> u16 {
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_trackdirs(
-    shared: *const Services,
+    movement: *const MovementServices,
     tile: u32,
     tram: crate::services::RoadTramType,
 ) -> u16 {
-    road_trackdirs(unsafe { &*shared }, tile, tram.0)
+    road_trackdirs(unsafe { &*movement }, tile, tram.0)
 }

@@ -579,10 +579,6 @@ static uint64_t TrainTileOffsetDiag(OpenTTDTrainHandle, uint8_t a) noexcept
 	return static_cast<uint32_t>(TileOffsByDiagDir(static_cast<DiagDirection>(a)));
 }
 
-static uint64_t TrainTileVirt(OpenTTDTrainHandle, int32_t a, int32_t b) noexcept
-{
-	return TileVirtXY(static_cast<int>(a), static_cast<int>(b)).base();
-}
 static uint64_t TrainTrackdirExit(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return TrackdirToExitdir(static_cast<Trackdir>(a));

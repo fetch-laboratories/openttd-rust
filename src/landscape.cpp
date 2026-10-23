@@ -353,7 +353,8 @@ uint GetPartialPixelZ(int x, int y, Slope corners)
 int GetSlopePixelZ(int x, int y, bool ground_vehicle)
 {
 #ifdef WITH_RUST
-	return openttd_rust_movement_pixel_z(&GetRustMovementServices(), x, y, ground_vehicle);
+	static const OpenTTDMovementServices * const movement = &GetRustMovementServices();
+	return openttd_rust_movement_pixel_z(movement, x, y, ground_vehicle);
 #else
 	TileIndex tile = TileVirtXY(x, y);
 
@@ -623,7 +624,8 @@ void DoClearSquare(TileIndex tile)
 TrackStatus GetTileTrackStatus(TileIndex tile, TransportType mode, uint sub_mode, DiagDirection side)
 {
 #ifdef WITH_RUST
-	return openttd_rust_movement_track_status(&GetRustMovementServices(), tile.base(), mode, sub_mode, side);
+	static const OpenTTDMovementServices * const movement = &GetRustMovementServices();
+	return openttd_rust_movement_track_status(movement, tile.base(), mode, sub_mode, side);
 #else
 	return _tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc(tile, mode, sub_mode, side);
 #endif
@@ -2067,6 +2069,8 @@ const OpenTTDMovementServices &GetRustMovementServices() noexcept
 		.train_engine_class = RustMovementTrainEngineClass,
 		.depot_invalidate = RustMovementDepotInvalidate,
 		.native_assert = RustMovementAssert,
+		.normal_road_status_tail = RustNormalRoadStatusTail,
+		.pixel_location = RustPixelLocation,
 		.plain_rail = RustMovementPlainRail,
 		.normal_road = RustMovementNormalRoad,
 		.is_tunnel = RustMovementTunnel,

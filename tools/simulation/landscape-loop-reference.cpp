@@ -153,6 +153,7 @@ static void MovementGap()
 	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
 	OpenTTDMovementServices movement{};
 	movement.shared = &world;
+	movement.pixel_location = [](int32_t x, int32_t y) noexcept -> OpenTTDPixelLocation { return {.tile = ((uint32_t(y) >> 4) << log_x) + (uint32_t(x) >> 4), .kind = 0}; };
 	movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 24, .slope = movement_slope}; };
 	movement.outside_pixel_slope = [](uint32_t x, uint32_t y) noexcept -> OpenTTDFoundationSlope { outside_x = x; outside_y = y; return {.z = 24, .slope = movement_slope}; };
 	for (uint x_bits : {6U, 12U}) for (uint y_bits : {6U, 12U}) for (Slope slope : slopes) {

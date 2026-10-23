@@ -202,6 +202,7 @@ static void RoadBoundary()
 	static OpenTTDMovementServices movement{};
 	movement.shared = &movement_world;
 	movement.resolve = [](OpenTTDVehicle *) noexcept -> OpenTTDMovementVehicle { return {.train = {}, .road = road_abi_probe->state, .ship = nullptr, .kind = static_cast<VehicleType>(1)}; };
+	movement.pixel_location = [](int32_t x, int32_t y) noexcept -> OpenTTDPixelLocation { return {.tile = ((uint32_t(y) >> 4) << 6) + (uint32_t(x) >> 4), .kind = 9}; };
 	movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
 	movement.is_tunnel = [](uint32_t) noexcept { return true; };
 	movement.pose = [](OpenTTDVehicle *) noexcept -> OpenTTDMovementPose { return {.z = 10, .direction = 1}; };
