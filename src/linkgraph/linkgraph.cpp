@@ -17,6 +17,7 @@
 LinkGraphPool _link_graph_pool("LinkGraph");
 INSTANTIATE_POOL_METHODS(LinkGraph)
 
+#ifndef WITH_RUST
 /**
  * Create a node or clear it.
  * @param xy Location of the associated station.
@@ -253,3 +254,5 @@ void LinkGraph::Init(uint size)
 	assert(this->Size() == 0);
 	this->nodes.resize(size);
 }
+
+#endif /* !WITH_RUST */

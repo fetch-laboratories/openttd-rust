@@ -337,6 +337,12 @@ def check(scenario, run, mode, role, result):
 
         required = ["road_power", "road_weight"]
         operation = scenario["roads"]
+        occupancy = ["insert", "same_bucket", "reset"]
+        if operation.startswith("overtake") or operation == "level-crossing":
+            occupancy += ["near"]
+        if operation == "flooding" or scenario.get("crash_expiry") == "expiry":
+            occupancy += ["remove"]
+        core.branch_witnesses(scenario, run, role, "occupancy", occupancy)
         if operation in ("original", "realistic", "reload", "depot-service"):
             required += ["speed"]
         if operation == "realistic":

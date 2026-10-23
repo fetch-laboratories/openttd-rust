@@ -1102,7 +1102,7 @@ impl<'a> World<'a> {
                                 out.fail(self.s.strings.edge);
                                 return;
                             }
-                            (self.commands().no_vehicle)(tmp.0, t);
+                            self.commands().no_vehicle(tmp.0, t);
                             out.add(tmp);
                         }
                     } else {

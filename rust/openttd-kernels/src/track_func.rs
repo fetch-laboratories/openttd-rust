@@ -42,7 +42,7 @@ pub fn corner_to_track_bits(c: u8, check: impl Fn(bool) + Copy) -> u8 {
 /// `TracksOverlap`.
 pub const fn tracks_overlap(b: u8) -> bool {
     b != crate::track_type::TRACK_BIT_NONE
-        && b & b.wrapping_sub(1) != 0
+        && crate::bitmath_func::kill_first_bit(b) != crate::track_type::TRACK_BIT_NONE
         && b != crate::track_type::TRACK_BIT_HORZ
         && b != crate::track_type::TRACK_BIT_VERT
 }

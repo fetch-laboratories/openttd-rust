@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstddef>
 #include "train_state_ffi.h"
+#include "vehicle_ffi.h"
 #include "services_ffi.h"
 #include "signal_ffi.h"
 struct OpenTTDVehicleServices;
@@ -26,10 +27,6 @@ struct OpenTTDGroundPhysicsServices;
  * Escaping environmental exceptions and Rust panics abort. Destruction invalidates
  * both handle pointers; policy never reads them after the original deletion point. */
 struct OpenTTDTrainDepot { uint32_t tile, length; };
-struct OpenTTDTrainHandle {
-	void *shell;
-	OpenTTDTrainState *owner;
-};
 struct Train;
 struct OpenTTDTrainServices;
 const OpenTTDTrainServices &GetTrainServices() noexcept;
@@ -359,7 +356,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*pbs_signal_type)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(pbs_signal_type);
 	uint64_t (*platform_ahead)(OpenTTDTrainHandle, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(platform_ahead);
 	uint64_t (*platform_length)(OpenTTDTrainHandle, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(platform_length);
-	void (*position)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(position);
 	uint64_t (*pow_wag_power)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(pow_wag_power);
 	uint64_t (*price)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price);
 	uint64_t (*process_orders)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);
@@ -429,8 +425,6 @@ struct OpenTTDTrainServices {
 	void (*write_crossing_bar)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_crossing_bar);
 	void (*write_visit_type)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_visit_type);
 
-	uint8_t (*visit_tile)(uint32_t, void *, uint8_t (*)(void *, OpenTTDTrainHandle)) noexcept OPENTTD_SERVICE_DEFAULT(visit_tile);
-	uint8_t (*visit_near)(int32_t, int32_t, void *, uint8_t (*)(void *, OpenTTDTrainHandle)) noexcept OPENTTD_SERVICE_DEFAULT(visit_near);
 	const OpenTTDVehicleServices *vehicle; ///< Base vehicle table, immutable for the process.
 };
 

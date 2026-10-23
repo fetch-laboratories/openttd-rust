@@ -589,7 +589,6 @@ pub struct Leaves {
     pub pbs_signal_type: extern "C" fn(Handle) -> u64,
     pub platform_ahead: extern "C" fn(Handle, u16, u32) -> u64,
     pub platform_length: extern "C" fn(Handle, u16, u32) -> u64,
-    pub position: extern "C" fn(Handle),
     pub pow_wag_power: extern "C" fn(Handle) -> u64,
     pub price: extern "C" fn(Handle, u32) -> u64,
     pub process_orders: extern "C" fn(Handle) -> u64,
@@ -659,17 +658,6 @@ pub struct Leaves {
     pub write_crossing_bar: extern "C" fn(Handle, u32, u8),
     pub write_visit_type: extern "C" fn(Handle, u16),
 
-    pub visit_tile: extern "C" fn(
-        u32,
-        *mut std::ffi::c_void,
-        extern "C" fn(*mut std::ffi::c_void, Handle) -> u8,
-    ) -> u8,
-    pub visit_near: extern "C" fn(
-        i32,
-        i32,
-        *mut std::ffi::c_void,
-        extern "C" fn(*mut std::ffi::c_void, Handle) -> u8,
-    ) -> u8,
     /// Base vehicle table, immutable for the process.
     pub vehicle: *const VehicleServices,
 }
@@ -713,10 +701,18 @@ impl<'a> Game<'a> {
         (unsafe { &*self.vs().maintenance }.view_dirty)(id.vehicle());
     }
     fn visit_tile<F: FnMut(Handle) -> bool>(&self, tile: u32, mut visitor: F) -> bool {
-        (self.leaves.visit_tile)(tile, std::ptr::from_mut(&mut visitor).cast(), visit::<F>) != 0
+        let vs = self.vs();
+        vs.any_on_tile(tile, |v| {
+            (vs.vehicle_type)(v) == crate::vehicle::VehicleType::TRAIN.0
+                && visitor((vs.train_handle)(v.0.as_ptr()))
+        })
     }
     fn visit_near<F: FnMut(Handle) -> bool>(&self, x: i32, y: i32, mut visitor: F) -> bool {
-        (self.leaves.visit_near)(x, y, std::ptr::from_mut(&mut visitor).cast(), visit::<F>) != 0
+        let vs = self.vs();
+        vs.any_near(x, y, 7, |v| {
+            (vs.vehicle_type)(v) == crate::vehicle::VehicleType::TRAIN.0
+                && visitor((vs.train_handle)(v.0.as_ptr()))
+        })
     }
 
     fn signal_context(&self) -> crate::signal::Context {
@@ -1317,7 +1313,10 @@ impl Game<'_> {
                 if id.track() != WORMHOLE
                     && (self.leaves.is_bridge)(Handle::NONE, (self.leaves.read_tile)(id)) != 0
                 {
-                    (self.leaves.position)(id);
+                    // SAFETY: The controller retains this live shell through the index update.
+                    unsafe {
+                        crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
+                    }
                     crate::ground_vehicle::inclination(
                         self.leaves.physics,
                         id.vehicle(),
@@ -1328,7 +1327,10 @@ impl Game<'_> {
                 }
             }
         }
-        (self.leaves.position)(id);
+        // SAFETY: The controller retains this live shell through the index update.
+        unsafe {
+            crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
+        }
         (self.leaves.viewport)(id, 1, 1);
     }
     fn swap_ground_flags(&self, a: Handle, b: Handle) {
@@ -1927,7 +1929,10 @@ impl Game<'_> {
             } else {
                 (self.leaves.write_x)(id, (x as u64) as i32);
                 (self.leaves.write_y)(id, (y as u64) as i32);
-                (self.leaves.position)(id);
+                // SAFETY: The controller retains this live shell through the index update.
+                unsafe {
+                    crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
+                }
                 if (self.leaves.read_status)(id) & 1 == 0 {
                     (self.leaves.base_viewport)(id, 1);
                 }
@@ -1937,7 +1942,10 @@ impl Game<'_> {
         (self.leaves.update_delta)(id);
         (self.leaves.write_x)(id, (x as u64) as i32);
         (self.leaves.write_y)(id, (y as u64) as i32);
-        (self.leaves.position)(id);
+        // SAFETY: The controller retains this live shell through the index update.
+        unsafe {
+            crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
+        }
         let old_z = crate::ground_vehicle::inclination(
             self.leaves.physics,
             id.vehicle(),
@@ -2211,7 +2219,10 @@ impl Game<'_> {
                     (u64::from((self.leaves.read_direction)(id).wrapping_add(delta) & 7)) as u8,
                 );
                 if id.track() != WORMHOLE {
-                    (self.leaves.position)(id);
+                    // SAFETY: The controller retains this live shell through the index update.
+                    unsafe {
+                        crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
+                    }
                     crate::ground_vehicle::inclination(
                         self.leaves.physics,
                         id.vehicle(),
@@ -2336,7 +2347,10 @@ impl Game<'_> {
         self.write_status(id, 1, false);
         (self.leaves.write_speed)(id, 0_u16);
         (self.leaves.viewport)(id, 1, 1);
-        (self.leaves.position)(id);
+        // SAFETY: The controller retains this live shell through the index update.
+        unsafe {
+            crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
+        }
         self.signal_segment(id, (self.leaves.read_tile)(id), u8::MAX);
         self.update_acceleration(id);
         (self.leaves.depot_dirty)(id);
@@ -3332,7 +3346,6 @@ crate::abi::layouts! {
         pbs_signal_type,
         platform_ahead,
         platform_length,
-        position,
         pow_wag_power,
         price,
         process_orders,
@@ -3401,8 +3414,6 @@ crate::abi::layouts! {
         wait_unbunch,
         write_crossing_bar,
         write_visit_type,
-        visit_tile,
-        visit_near,
         vehicle,
         physics,
     };

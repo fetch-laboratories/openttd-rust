@@ -144,27 +144,8 @@ def adapter(build, folder, env):
         next(row["file"] for row in commands if row["file"].endswith("/signal.cpp"))
     )
     source = folder / "signals-source.cpp"
-    # Only the fixture binary replaces the two occupancy slots. Its link wrapper
-    # counts actual canonical GetTrack calls inside the original native queries.
-    native = (
-        signal.read_text()
-        .replace(
-            ".train_on_tile = SignalTrainOnTile,",
-            ".train_on_tile = SignalCountTrainOnTile,",
-        )
-        .replace(
-            ".train_on_tracks = SignalTrainOnTracks,",
-            ".train_on_tracks = SignalCountTrainOnTracks,",
-        )
-    )
-    native = native.replace(
-        '#include "rust/signal_ffi.h"',
-        '#include "rust/signal_ffi.h"\n'
-        "static bool SignalCountTrainOnTile(uint32_t) noexcept;\n"
-        "static bool SignalCountTrainOnTracks(uint32_t, uint8_t) noexcept;",
-    )
     source.write_text(
-        native
+        signal.read_text()
         + (core.ROOT / "tools/simulation/pbs-console.cpp")
         .read_text()
         .split("// PBS registration")[0]
@@ -183,7 +164,7 @@ def adapter(build, folder, env):
         env,
         source,
         "signals",
-        wraps=("openttd_rust_train_state_get_track", *PBS_WRAPS),
+        wraps=PBS_WRAPS,
         replace_objects=("/src/signal.cpp.o",),
     )
 
@@ -318,7 +299,7 @@ def boundary_profile(counts):
         "returned_bytes_per_update": copied / counts["updates"]
         if counts["updates"]
         else None,
-        "scope": "ordinary facade entries, signal world services, direct train/reservation context and owner reads, actual nested occupancy GetTrack accessors; returned typed records/context/scalars include padding; excludes call arguments, diagnostic snapshots/probe and witness reporting; counters disabled during timing",
+        "scope": "ordinary facade entries, signal world services, direct train/reservation context and owner reads, direct occupancy GetTrack reads; returned typed records/context/scalars include padding; excludes call arguments, diagnostic snapshots/probe and witness reporting; counters disabled during timing",
     }
 
 
