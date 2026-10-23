@@ -12,6 +12,7 @@
 #ifdef WITH_RUST
 #include "../rust/station_service_ffi.h"
 #include "../station_base.h"
+#include "../linkgraph/linkgraph.h"
 #include "../station_func.h"
 #include "../station_kdtree.h"
 #include "../waypoint_base.h"

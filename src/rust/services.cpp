@@ -592,12 +592,14 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDCommandServices.hpp"
 #include "abi-visit-OpenTTDCommandCostServices.hpp"
 #include "abi-visit-OpenTTDSharedServices.hpp"
+#include "abi-visit-OpenTTDLiveGraphServices.hpp"
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
 #include "abi-visit-OpenTTDClearSquareServices.hpp"
 #include "abi-visit-OpenTTDWaterRestorationServices.hpp"
 bool CheckAbi_services()
 {
-	return AbiServicesComplete(GetRustEnvironmentServices()) &&
+	return AbiServicesComplete(GetRustLiveGraphServices()) &&
+		AbiServicesComplete(GetRustEnvironmentServices()) &&
 		AbiServicesComplete(GetRustRandomServices()) &&
 		AbiServicesComplete(GetRustRailMapServices()) &&
 		AbiServicesComplete(GetRustCommandServices()) &&

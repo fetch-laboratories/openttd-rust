@@ -626,6 +626,7 @@ struct RustStationTruncation {
 	StationCargoAmountMap::iterator iterator;
 };
 static const OpenTTDStationServices _rust_station_services = {
+	.graphs = &GetRustLiveGraphServices(),
 	.station = [](uint16_t id) noexcept -> OpenTTDLoadingStation {
 		Station *st = Station::Get(StationID(id));
 		return {.native = st, .base = st, .state = st->rust_service.get()};

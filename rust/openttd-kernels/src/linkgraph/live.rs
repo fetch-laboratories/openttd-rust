@@ -459,7 +459,7 @@ struct GraphAccess {
 }
 /// Resolve once per Rust caller entry; the shell remains live under the game mutex.
 pub(crate) unsafe fn resolve(graph: *mut super::NativeGraph, services: &Services) -> *mut Graph {
-    unsafe { (services.access)(graph) }.owner.cast()
+    (services.access)(graph).owner.cast()
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_add_station(
@@ -468,13 +468,13 @@ pub unsafe extern "C" fn openttd_rust_live_graph_add_station(
     services: *const Services,
 ) -> u16 {
     let services = unsafe { &*services };
-    let native = unsafe { (services.access)(graph) };
+    let native = (services.access)(graph);
     let access = GraphAccess {
         owner: native.owner.cast(),
         index: native.index,
     };
     let cargo = unsafe { (*access.owner).cargo };
-    let input = unsafe { (services.station)(station, cargo) };
+    let input = (services.station)(station, cargo);
     unsafe { &mut *access.owner }.add_node(input.xy, station, input.demand)
 }
 #[unsafe(no_mangle)]
@@ -492,9 +492,7 @@ pub unsafe extern "C" fn openttd_rust_live_graph_remove(
             g.cargo,
         )
     };
-    unsafe {
-        (services.set_node)(station, cargo, id);
-    }
+    (services.set_node)(station, cargo, id);
     unsafe { &mut *owner }.remove_node(id);
 }
 #[unsafe(no_mangle)]
@@ -524,15 +522,13 @@ pub unsafe extern "C" fn openttd_rust_live_graph_merge(
     };
     for id in 0..size {
         let station = unsafe { &*source }.nodes[usize::from(id)].station;
-        let input = unsafe { (services.station)(station, cargo) };
+        let input = (services.station)(station, cargo);
         let new = unsafe { &mut *access.owner }.add_node(input.xy, station, input.demand);
         let supply = unsafe { &*source }.nodes[usize::from(id)].supply;
         unsafe { &mut *access.owner }.nodes[usize::from(new)].supply =
             scale(supply, age, other_age);
         // No graph borrow crosses station mutation or deletion/reentry.
-        unsafe {
-            (services.attach)(station, cargo, access.index, new);
-        }
+        (services.attach)(station, cargo, access.index, new);
         let from = &unsafe { &*source }.nodes[usize::from(id)];
         let to = &mut unsafe { &mut *access.owner }.nodes[usize::from(new)];
         for edge in &from.edges {
@@ -544,9 +540,7 @@ pub unsafe extern "C" fn openttd_rust_live_graph_merge(
             to.edges.push(added);
         }
     }
-    unsafe {
-        (services.delete_graph)(other);
-    }
+    (services.delete_graph)(other);
 }
 
 /// Run the existing computation from its distinct immutable snapshot. This
@@ -604,17 +598,15 @@ pub struct Membership {
     pub station: u16,
 }
 pub(crate) unsafe fn join(graph: *mut super::NativeGraph, station: u16, services: &Services) {
-    let native = unsafe { (services.access)(graph) };
+    let native = (services.access)(graph);
     let access = GraphAccess {
         owner: native.owner.cast(),
         index: native.index,
     };
     let cargo = unsafe { (*access.owner).cargo };
-    let input = unsafe { (services.station)(station, cargo) };
+    let input = (services.station)(station, cargo);
     let node = unsafe { &mut *access.owner }.add_node(input.xy, station, input.demand);
-    unsafe {
-        (services.attach)(station, cargo, access.index, node);
-    }
+    (services.attach)(station, cargo, access.index, node);
 }
 pub(crate) unsafe fn station_demand(
     station: *mut crate::station::BaseStation,
@@ -622,7 +614,7 @@ pub(crate) unsafe fn station_demand(
     demand: u32,
     services: &Services,
 ) {
-    let m = unsafe { (services.membership)(station, cargo) };
+    let m = (services.membership)(station, cargo);
     if !m.graph.is_null() {
         let owner = unsafe { resolve(m.graph, services) };
         unsafe { &mut *owner }.nodes[usize::from(m.node)].demand = demand;
@@ -635,18 +627,16 @@ pub(crate) unsafe fn station_supply(
     date: i32,
     services: &Services,
 ) {
-    let mut m = unsafe { (services.membership)(station, cargo) };
+    let mut m = (services.membership)(station, cargo);
     if m.graph.is_null() {
-        if unsafe { (services.available)() } {
-            m.graph = unsafe { (services.allocate)(cargo) };
+        if (services.available)() {
+            m.graph = (services.allocate)(cargo);
             unsafe {
                 join(m.graph, m.station, services);
             }
-            m = unsafe { (services.membership)(station, cargo) };
+            m = (services.membership)(station, cargo);
         } else {
-            unsafe {
-                (services.allocation_failure)();
-            }
+            (services.allocation_failure)();
         }
     }
     if !m.graph.is_null() {
@@ -655,4 +645,20 @@ pub(crate) unsafe fn station_supply(
         n.supply = n.supply.wrapping_add(supply);
         n.last_update = date;
     }
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "LinkGraph::BaseEdge" ["station_service"] => Edge {
+        capacity, usage, travel_time_sum, last_unrestricted_update, last_restricted_update, dest_node,
+    };
+    "OpenTTDLiveNodeFields" ["station_service"] => NodeFields {
+        supply, demand, station, xy, last_update,
+    };
+    "OpenTTDLiveGraphAccess" ["station_service"] => Access { owner, index, };
+    "OpenTTDLiveMembership" ["station_service"] => Membership { graph, node, station, };
+    "OpenTTDLiveStationInput" ["station_service"] => StationInput { xy, demand, };
+    "OpenTTDLiveGraphServices" ["station_service"] => Services {
+        access, station, attach, set_node, delete_graph, membership, available, allocate, allocation_failure, dequeue,
+    };
 }

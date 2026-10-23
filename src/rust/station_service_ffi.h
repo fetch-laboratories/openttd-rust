@@ -131,6 +131,7 @@ struct OpenTTDLoadingStation {
 	OpenTTDStationService *state;
 };
 struct OpenTTDStationServices {
+	const OpenTTDLiveGraphServices *graphs;
 	OpenTTDLoadingStation (*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	uint8_t (*station_owner)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_owner);
 	OpenTTDStationExclusivity (*station_exclusivity)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_exclusivity);
