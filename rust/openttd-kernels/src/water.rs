@@ -354,7 +354,7 @@ impl<'a> World<'a> {
         let mut tracks = (self.r().tracks)(tile).0;
         if is_slope_with_one_corner_raised(slope) {
             let corner = (slope.trailing_zeros() ^ 2) as usize;
-            let lower = [16, 8, 32, 4][corner];
+            let lower = crate::track_func::corner_to_track_bits(corner as u8);
             let remove = lower & tracks;
             if remove != 0 {
                 let company = (self.s.current_company)();

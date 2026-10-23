@@ -75,6 +75,7 @@ struct OpenTTDMovementServices {
 };
 const OpenTTDMovementServices &GetRustMovementServices() noexcept;
 extern "C" {
+uint8_t openttd_rust_movement_tunnel_visibility(uint8_t);
 uint8_t openttd_rust_movement_enter(const OpenTTDMovementServices *, OpenTTDVehicle *, uint32_t, int32_t, int32_t);
 int32_t openttd_rust_movement_depot_ticks(const OpenTTDMovementServices *, OpenTTDTrainHandle);
 uint32_t openttd_rust_movement_track_status(const OpenTTDMovementServices *, uint32_t, TransportType, uint32_t, DiagDirection);

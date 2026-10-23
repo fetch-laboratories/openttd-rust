@@ -9,6 +9,7 @@
 #include "town.h"
 #include "tunnelbridge.h"
 #include "water_map.h"
+#include "void_map.h"
 #include "pathfinder/water_regions.h"
 #include "road.h"
 #include "newgrf_roadstop.h"
@@ -287,6 +288,24 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	SetTrackReservation(t(3, 9), TRACK_BIT_Y);
 	RoadRun<CMD_BUILD_ROAD>("crossing", t(3, 9), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
 	RoadRun<CMD_BUILD_ROAD>("crossing-tram", t(3, 9), ROAD_X, ROADTYPE_TRAM, DRD_NONE, TownID::Invalid());
+	/* Actual owner queries on adjacent barred crossings: both escape directions. */
+	RoadRun<CMD_BUILD_SINGLE_RAIL>("adjacent-rail", t(4, 9), RAILTYPE_RAIL, TRACK_Y, false);
+	RoadRun<CMD_BUILD_ROAD>("adjacent-crossing", t(4, 9), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
+	BarCrossing(t(3, 9)); BarCrossing(t(4, 9));
+	for (TileIndex crossing : {t(3, 9), t(4, 9)}) {
+		fmt::print(stderr, "ROADCMD movement-crossing {} {}\n", crossing.base(), GetTileTrackStatus(crossing, TRANSPORT_ROAD, RTT_ROAD));
+	}
+	UnbarCrossing(t(3, 9)); UnbarCrossing(t(4, 9));
+	RoadRun<CMD_LANDSCAPE_CLEAR>("adjacent-clear", t(4, 9));
+	/* The map-edge mask remains observable with freeform edges enabled. */
+	for (TileIndex edge : {TileXY(0, 10), TileXY(10, 0), TileXY(0, 0)}) {
+		if (!IsTileType(edge, MP_VOID)) SignalFixtureAbort(__LINE__);
+		Backup<bool> freeform(_settings_game.construction.freeform_edges, false);
+		MakeSea(edge);
+		fmt::print(stderr, "ROADCMD movement-water {} {}\n", edge.base(), GetTileTrackStatus(edge, TRANSPORT_WATER, 0));
+		freeform.Restore();
+		MakeVoid(edge);
+	}
 	/* Terraform heights are tile levels, including non-flat crossing surfaces. */
 	RoadPrint("crossing-autoslope", _tile_type_road_procs.terraform_tile_proc(t(3, 9), {}, GetTileMaxZ(t(3, 9)) - 1, SLOPE_WSE));
 	RoadRun<CMD_REMOVE_LONG_ROAD>("crossing-remove-tram", t(3, 9), t(3, 9), ROADTYPE_TRAM, AXIS_X, false, true);

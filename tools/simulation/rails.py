@@ -62,6 +62,15 @@ def scenarios(soak):
     cases.append(
         dict(
             cases[0],
+            name="rail-movement-depot-3",
+            movement_depot=True,
+            ticks=1200,
+            short_checkpoint=True,
+        )
+    )
+    cases.append(
+        dict(
+            cases[0],
             name="rail-padhattan-ridge-1996-realistic",
             console=["setting vehicle.train_acceleration_model 1", "unpause"],
         )
@@ -220,6 +229,8 @@ TRAIN_BRANCHES = {
 
 def train_required(scenario):
     name = scenario["name"]
+    if scenario.get("movement_depot"):
+        return []
     return TRAIN_BRANCHES[
         max((k for k in TRAIN_BRANCHES if name.startswith(k)), key=len)
     ]
@@ -277,6 +288,27 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             )
             for kind in range(4)
         }
+    if scenario.get("movement_depot"):
+        warm = run_game(
+            dict(scenario, save=str(normalized), ticks=1000),
+            binaries["reference"],
+            builds["reference"],
+            directory / "depot-warm",
+            timeout,
+            env,
+        )
+        normalized, _ = normalize(
+            warm["snapshots"][-1], directory / "depot-warm-normalized"
+        )
+        if any(
+            15
+            in decode_element(read_save(normalized)["STNN"], body).get(
+                "normal[0]/loading_vehicles", ()
+            )
+            for _, body in read_save(normalized)["STNN"]["elements"]
+        ):
+            raise RuntimeError("depot staging still has a station loading owner")
+        normalized = depot_input(normalized, directory)
     scenario = dict(scenario, save=str(normalized))
     if "rail_control" in scenario:
         normalized, record = controller_input(normalized, directory, scenario)
@@ -335,6 +367,52 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         result["rail_reload_input"] = record
         scenario = dict(scenario, save=str(normalized))
     return scenario
+
+
+def depot_input(source, directory):
+    """Stage the existing consist north of real depot 5; ordinary ticks enter/leave."""
+    from .disasters import patch
+
+    common, depot = "train[0]/common[0]/", 8280
+    changes = {"VEHS": {}}
+    for index in (14, 15, 16):
+        y = 1016 - (index - 14) * 8
+        changes["VEHS"][index] = {
+            common + "tile": (y // 16) * 128 + 88,
+            common + "x_pos": 1416,
+            common + "y_pos": y,
+            common + "z_pos": 48,
+            common + "direction": 3,
+            common + "vehstatus": 8,
+            "train[0]/track": 2,
+        }
+    changes["VEHS"][14].update(
+        {
+            common + "current_order.type": 66,
+            common + "current_order.flags": 0,
+            common + "current_order.dest": 5,
+            common + "dest_tile": depot,
+            common + "cur_speed": 32,
+        }
+    )
+    target = directory / "depot-input.sav"
+    patch(source, target, changes)
+    data, chunks = bytearray(target.read_bytes()), read_save(target)
+    # rail_map.h: retain the canonical depot pool entry, rotate its door to NW,
+    # and declare a flat, unreserved straight approach; no output is patched.
+    for tile in (depot, depot - 128, depot - 256, depot - 384):
+        for cid, value in {
+            "MAPT": 16,
+            "MAPO": 0,
+            "M3LO": 0,
+            "M3HI": 1,
+            "MAP5": 0xC3 if tile == depot else 2,
+            "MAPE": 0,
+        }.items():
+            data[chunks[cid]["span"][0] + 8 + tile] = value
+        struct.pack_into(">H", data, chunks["MAP2"]["span"][0] + 8 + tile * 2, 0)
+    target.write_bytes(data)
+    return target
 
 
 def controller_input(source, directory, scenario):
@@ -692,14 +770,42 @@ def controller_witnesses(scenario, run, mode):
 def check(scenario, run, mode, role, result):
     if not scenario.get("rail_fixture"):
         return
+    required = ["pixel_z", "track_rail"]
+    if scenario.get("movement_depot"):
+        required += ["train_depot_enter_3", "train_depot_leave_3"]
+    if scenario["name"] == "play-padhattan-ridge-2016-manual":
+        required += [
+            "coast",
+            "lock",
+            "ship_depot",
+            "train_tunnel_enter",
+            "train_tunnel_exit",
+            "train_tunnel_sound",
+            "road_bridge_enter",
+            "road_bridge_exit",
+            "station_stop",
+            "station_slow",
+            "bridge_up",
+            "bridge_down",
+        ]
+        required += [
+            f"train_depot_{phase}_{direction}"
+            for phase in ("enter", "leave")
+            for direction in range(3)
+        ]
+        required += [f"road_depot_enter_{direction}" for direction in range(4)]
+    if scenario.get("rail_control") in ("crossing", "service"):
+        required += ["signal_directions", "station_stop"]
     result[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
-        scenario, run, role, "movement", ["pixel_z", "track_rail"]
+        scenario, run, role, "movement", required
     )
     counts = core.branch_witnesses(
         scenario, run, role, "train", train_required(scenario)
     )
     if counts is not None:
         result[f"{mode}_{role}_train_profile"] = counts
+    if scenario.get("movement_depot"):
+        return
     if scenario.get("owner_structure_reload"):
         if run["exit"] != 0 or not run["snapshots"]:
             raise RuntimeError("owner structure window lacks exit checkpoint")

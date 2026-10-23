@@ -259,15 +259,13 @@ pub struct RailCommandServices {
 const TRACK_X: u8 = 0;
 const TRACK_Y: u8 = 1;
 const INVALID_TRACK: u8 = 0xFF;
-const BIT_X: u8 = 1;
-const BIT_Y: u8 = 2;
-const BIT_UPPER: u8 = 4;
-const BIT_LOWER: u8 = 8;
-const BIT_LEFT: u8 = 16;
-const BIT_RIGHT: u8 = 32;
-const BIT_HORZ: u8 = 12;
-const BIT_VERT: u8 = 48;
-const BIT_DEPOT: u8 = 0x80;
+use crate::track_type::TRACK_BIT_DEPOT as BIT_DEPOT;
+use crate::track_type::TRACK_BIT_LEFT as BIT_LEFT;
+use crate::track_type::TRACK_BIT_LOWER as BIT_LOWER;
+use crate::track_type::TRACK_BIT_RIGHT as BIT_RIGHT;
+use crate::track_type::TRACK_BIT_UPPER as BIT_UPPER;
+use crate::track_type::TRACK_BIT_X as BIT_X;
+use crate::track_type::TRACK_BIT_Y as BIT_Y;
 const INVALID_TRACKDIR: u8 = 0xFF;
 
 /// `VALID_LEVEL_CROSSING_SLOPES`.
@@ -276,13 +274,13 @@ pub(crate) const CROSSING_SLOPES: u32 =
 
 const FOUNDATION_RAIL_W: u8 = 10;
 const FOUNDATION_RAIL_N: u8 = 13;
-const FOUNDATION_INVALID: u8 = 0xFF;
+use crate::slope_func::FOUNDATION_INVALID;
 
 const GROUND_BARREN: u8 = 0;
-const GROUND_HALF_WATER: u8 = 13;
-const RAIL_TILE_NORMAL: u8 = 0;
-const RAIL_TILE_SIGNALS: u8 = 1;
-const RAIL_TILE_DEPOT: u8 = 3;
+use crate::rail_map::RAIL_GROUND_HALF_TILE_WATER as GROUND_HALF_WATER;
+use crate::rail_map::RAIL_TILE_DEPOT;
+use crate::rail_map::RAIL_TILE_NORMAL;
+use crate::rail_map::RAIL_TILE_SIGNALS;
 
 const SIGTYPE_BLOCK: u8 = 0;
 const SIGTYPE_ENTRY: u8 = 1;
@@ -346,12 +344,7 @@ const TRACKDIR_EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
 /// `_exitdir_reaches_trackdirs`.
 const EXIT_REACHES: [u16; 4] = [0x1009, 0x0016, 0x0520, 0x2a00];
 
-fn tracks_overlap(bits: u8) -> bool {
-    if bits == 0 || bits & bits.wrapping_sub(1) == 0 {
-        return false;
-    }
-    bits != BIT_HORZ && bits != BIT_VERT
-}
+use crate::track_func::tracks_overlap;
 /// Infrastructure pieces of a plain rail tile: squared when tracks overlap.
 fn pieces(bits: u8) -> u32 {
     let n = bits.count_ones();

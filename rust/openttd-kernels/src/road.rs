@@ -48,7 +48,6 @@ use std::ptr::NonNull;
 const DEPOT: u8 = 254;
 const WORMHOLE: u8 = 255;
 const REVERSE: [u8; 4] = [6, 7, 14, 15];
-const DIAG_TRACK: [u8; 4] = [0, 1, 8, 9];
 /// Owner scalar selectors, shared with `openttd_rust_road_get/set`.
 const STATE: usize = 0;
 const FRAME: usize = 1;
@@ -863,7 +862,7 @@ impl Game<'_> {
         {
             return;
         }
-        let trackdir = DIAG_TRACK[usize::from(diag(s.direction))];
+        let trackdir = crate::track_func::diag_dir_to_diag_trackdir(diag(s.direction));
         if self.overtake_blocked(v, u.v, s.tile, trackdir) {
             return;
         }
@@ -1203,7 +1202,7 @@ impl Game<'_> {
         let dir = service!(self.l.depot_direction)(d.tile);
         let direction = dir * 2 + 1;
         service!(self.vs.write_direction)(v.v, direction);
-        let tdir = DIAG_TRACK[usize::from(dir)];
+        let tdir = crate::track_func::diag_dir_to_diag_trackdir(dir);
         let rd = crate::road_data::entry(d.tram, self.side() + usize::from(tdir), 6);
         let (x, y) = self.tile_xy(d.tile, (rd.0 & 15, rd.1 & 15));
         if first {
@@ -1243,7 +1242,7 @@ impl Game<'_> {
             } else {
                 return INVALID_TRACKDIR;
             };
-            dir = DIAG_TRACK[usize::from(diagonal)];
+            dir = crate::track_func::diag_dir_to_diag_trackdir(diagonal);
         } else if reversed && (prev_tile != tile || (state < 16 && reversing(state))) {
             let north = if prev_tile != tile {
                 prev_tile < tile
@@ -1889,14 +1888,18 @@ impl Game<'_> {
             return INVALID_TRACKDIR;
         }
         if v.state() == DEPOT {
-            return DIAG_TRACK[usize::from(service!(self.l.depot_direction)(r.tile))];
+            return crate::track_func::diag_dir_to_diag_trackdir(service!(self.l.depot_direction)(
+                r.tile,
+            ));
         }
         if service!(self.l.is_bay_stop)(r.tile) {
-            return DIAG_TRACK[usize::from(service!(self.l.bay_direction)(r.tile))];
+            return crate::track_func::diag_dir_to_diag_trackdir(service!(self.l.bay_direction)(
+                r.tile,
+            ));
         }
         let state = v.state();
         if state > 15 {
-            return DIAG_TRACK[usize::from(diag(r.direction))];
+            return crate::track_func::diag_dir_to_diag_trackdir(diag(r.direction));
         }
         if reversing(state) { state - 6 } else { state }
     }

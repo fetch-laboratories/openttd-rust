@@ -378,6 +378,9 @@ def check(scenario, run, mode, role, result):
                 result["problems"].append(
                     f"{mode}/{role}: missing non-flat crossing autoslope outcome"
                 )
+            core.branch_witnesses(
+                scenario, run, role, "movement", ["crossing_escape", "water_edge"]
+            )
             for kind in (0, 1):
                 for action in ("remove", "convert"):
                     prefix = f"ROADCMD non-road-{action}-{kind}-exec false "
@@ -434,8 +437,13 @@ def check(scenario, run, mode, role, result):
     operation = scenario["roads"]
     from . import core
 
+    required = ["pixel_z", "track_road"]
+    if operation in ("depot-service", "reload"):
+        required += ["road_depot_enter_0"]
+    if operation == "reload":
+        required += ["road_stop_admit"]
     result[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
-        scenario, run, role, "movement", ["pixel_z", "track_road"]
+        scenario, run, role, "movement", required
     )
     witnesses = {}
 

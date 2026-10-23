@@ -233,7 +233,11 @@ def check(scenario, run, mode, role, result):
         return
     kind = scenario["station_service"]
     result[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
-        scenario, run, role, "movement", []
+        scenario,
+        run,
+        role,
+        "movement",
+        ["pixel_z", "road_stop_admit"] if kind == "manual" else [],
     )
     required = {
         "acceptance-loss": ["rejected_delivery"],
@@ -861,6 +865,13 @@ def check_commands(scenario, run, mode, role, result):
         branches = ["after_load", "rebuild_vehicle"] if reload else ROAD_STOPS
         cached = ["integrity"] if mode == "snapshots" else []
         core.branch_witnesses(scenario, run, role, "road_stop", branches + cached)
+        core.branch_witnesses(
+            scenario,
+            run,
+            role,
+            "movement",
+            [] if reload else ["road_stop_admit", "road_stop_refuse"],
+        )
     core.branch_witnesses(scenario, run, role, "station_command", required)
     lines = [line for line in run["log"] if line.startswith("STCMD ")]
     expected = (

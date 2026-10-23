@@ -819,8 +819,7 @@ const ROAD_ENTER_DEPOT: [u8; 4] = [
     crate::track_type::TRACKDIR_X_NE,
     crate::track_type::TRACKDIR_Y_SE,
 ];
-const TUNNEL_SOUND_FRAME: u8 = 1;
-const TUNNEL_VISIBILITY: [u8; 4] = [12, 8, 8, 12];
+use crate::tunnelbridge::{TUNNEL_SOUND_FRAME, TUNNEL_VISIBILITY};
 impl MovementServices {
     fn hidden(&self, v: VehicleRef, hidden: bool) {
         let status = (self.vehicle().status)(v);
