@@ -1425,7 +1425,7 @@ mod tests {
         write_tick: unused!(vehicle::VehicleRef, u8),
         direction: unused!(vehicle::VehicleRef ; u8),
         status: unused!(vehicle::VehicleRef ; u8),
-        tile: tile,
+        tile,
         progress: unused!(vehicle::VehicleRef ; u8),
         dest_tile: unused!(vehicle::VehicleRef ; u32),
         order_type: unused!(vehicle::VehicleRef ; u8),

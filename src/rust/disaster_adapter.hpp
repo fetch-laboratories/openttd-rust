@@ -9,15 +9,12 @@
 #include "services_landscape.h"
 #include "services_station.h"
 #include "services_industry.h"
-#include "command_services.h"
 #include "services_map.h"
 #include "services_rail.h"
 #include "disaster_ffi.h"
 #include "vehicle_services.h"
 #include "disaster_counter.h"
 #include "services_ffi.h"
-#include "command_services_ffi.h"
-#include "command_cost_services.h"
 
 static_assert(VEH_EFFECT == 4);
 static_assert(VehicleID::Invalid().base() == 1048575);

@@ -32,8 +32,8 @@ typedef struct {
 } OpenTTDDisasterOccupancy;
 /* Rust state follows its shell's lifetime; scalar serialization addresses are
  * stable until destruction. The shared service table is borrowed: keep it live
- * and immutable, along with the occupancy table and its pointees, through run destruction, including suspended actions and nested
- * owners. Its context may mutate independently. No world/state reference spans
+ * and immutable, along with the occupancy table and its pointees, through run
+ * destruction, including suspended actions and nested owners. Its context may mutate independently. No world/state reference spans
  * a shared-service call.
  * Read/write leaves are noexcept and cannot reenter. Direct services are noexcept;
  * shell allocation may construct a separate Rust owner, and the shared flight
