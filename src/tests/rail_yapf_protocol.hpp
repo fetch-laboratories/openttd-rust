@@ -18,7 +18,9 @@
 namespace RailYapfProbe {
 inline uint32_t goal = 9;
 inline bool hill = false, rollback = false;
+inline bool follow_fail = false;
 inline std::vector<uint32_t> follows, writes;
+inline std::vector<char> follow_reads;
 inline std::array<uint32_t, 8> stats;
 inline uint32_t flushes, limits, red, restored;
 inline OpenTTDRailTrain Train(void *) noexcept
@@ -35,11 +37,13 @@ inline OpenTTDRailTile Tile(uint32_t tile, uint8_t td) noexcept
 	info.signal_type = 4; info.signal_green = 1;
 	return info;
 }
-inline OpenTTDRailFollow Follow(void *, uint32_t tile, uint8_t td, uint64_t, uint8_t, uint8_t) noexcept
+inline OpenTTDRailFollow Follow(void *, uint32_t tile, uint8_t td, uint64_t, uint8_t) noexcept
 {
 	follows.push_back((tile << 4) | td);
-	return {tile + 1, 0, 0, INT32_MAX, (1 << 0) | (1 << 2), 1, 0, 0};
+	follow_reads.push_back('f');
+	return {tile + 1, 0, (1 << 0) | (1 << 2), static_cast<uint8_t>(!follow_fail), 0, 0};
 }
+inline OpenTTDRailSpeed Speed(uint32_t) noexcept { follow_reads.push_back('s'); return {0, INT32_MAX}; }
 inline uint8_t Station(uint32_t, uint32_t) noexcept { return 0; }
 inline uint32_t Platform(uint32_t, uint8_t) noexcept { return 0; }
 inline uint32_t Closest(void *, uint8_t) noexcept { return goal; }
@@ -58,9 +62,10 @@ inline void Debug(void *, uint8_t kind, const uint32_t *data, uint32_t count) no
 	if (kind == 5 && data[0] == 1) ++red;
 	if (kind == 5 && data[0] == 2) ++restored;
 }
-inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = false, bool reserve = false)
+inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = false, bool reserve = false, uint8_t kind = 0)
 {
 	follows.clear(); writes.clear(); stats = {}; flushes = limits = red = restored = 0;
+	follow_reads.clear();
 	auto shared = OpenTTDFixtureSharedServices(nullptr, OpenTTDFixtureMapService<uint32_t, void *>, OpenTTDFixtureMapService<uint32_t, int32_t, int32_t, uint32_t *>);
 	/* PBS is now a Rust callee: provide its typed map/follower leaves instead of
 	 * stubbing whole waiting/reservation policies. The synthetic graph is unchanged. */
@@ -68,7 +73,7 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	OpenTTDRailMapServices rail{};
 	rail.is_rail_depot = [](uint32_t) noexcept { return false; };
 	rail.has_signal_trackdir = [](uint32_t, uint8_t) noexcept { return false; };
-	rail.rail_reservation = [](uint32_t) noexcept { return TRACK_BIT_NONE; };
+	rail.rail_reservation = [](uint32_t) noexcept { follow_reads.push_back('r'); return TRACK_BIT_NONE; };
 	rail.set_signal_state = [](uint32_t tile, uint8_t td, uint8_t value) noexcept { Write(tile, td, value ? 6 : 5); };
 	OpenTTDTrainServices train{};
 	train.read_tile = [](OpenTTDTrainHandle) noexcept -> uint32_t { return 0; };
@@ -98,7 +103,8 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	input.settings.max_nodes = limit; input.settings.curve45 = curve;
 	input.settings.slope = 50; input.settings.lookahead = !cache;
 	input.map_x = 128; input.reserve = reserve;
-	const OpenTTDRailLeaves leaves{.train = Train, .tile = Tile, .follow = Follow, .compatible_station = Station, .platform_length = Platform, .closest_station = Closest, .destination_dirs = Directions, .output = Output, .debug = Debug};
+	input.kind = kind;
+	const OpenTTDRailLeaves leaves{.train = Train, .tile = Tile, .follow = Follow, .speed = Speed, .compatible_station = Station, .platform_length = Platform, .closest_station = Closest, .destination_dirs = Directions, .output = Output, .debug = Debug};
 	std::unique_ptr<OpenTTDRailYapf, decltype(&openttd_rust_rail_destroy)> owner{openttd_rust_rail_new(&input, &leaves), openttd_rust_rail_destroy};
 	return openttd_rust_rail_step(owner.get());
 }

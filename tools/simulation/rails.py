@@ -51,6 +51,18 @@ def pbs_reference(folder):
         .replace("t->track", "PbsTrainTrack(t)")
         .replace("v->railtypes", "PbsTrainRailTypes(v)")
     )
+    header = subprocess.check_output(
+        ["git", "show", f"{baseline}:src/pathfinder/follow_track.hpp"],
+        cwd=ROOT,
+        text=True,
+    )
+    mask = header[header.index("\tinline bool MaskReservedTracks()") :]
+    body += (
+        "struct PbsOriginalMask : CFollowTrackRail { using CFollowTrackRail::CFollowTrackRail; "
+        "static bool DoTrackMasking() { return true; }\n"
+        + mask[: mask.index("\nprotected:")]
+        + "};\n"
+    )
     body += "".join(f"#undef {name}\n" for name in names)
     (folder / "pbs-original.hpp").write_text(body)
 

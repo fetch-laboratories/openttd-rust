@@ -49,6 +49,11 @@ pub const fn reverse_trackdir(td: u8) -> u8 {
 pub const fn track_to_trackdir(track: u8) -> u8 {
     track
 }
+/// `TrackToTrackdirBits`.
+pub const fn track_to_trackdir_bits(track: u8) -> u16 {
+    let td = track_to_trackdir(track);
+    (1 << td) | (1 << reverse_trackdir(td))
+}
 /// `TrackdirToExitdir`, table from `table/track_data.h`.
 pub fn trackdir_to_exitdir(td: u8) -> u8 {
     [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0, 0, 0][usize::from(td)]

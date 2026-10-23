@@ -81,15 +81,31 @@ pub struct Tile {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Follow {
+pub struct FollowStep {
     pub tile: u32,
     pub skipped: i32,
-    pub min_speed: i32,
-    pub max_speed: i32,
     pub dirs: u16,
     pub followed: u8,
     pub error: u8,
     pub station: u8,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Speed {
+    pub min_speed: i32,
+    pub max_speed: i32,
+}
+#[derive(Clone, Copy)]
+struct Follow {
+    step: FollowStep,
+    min_speed: i32,
+    max_speed: i32,
+}
+impl std::ops::Deref for Follow {
+    type Target = FollowStep;
+    fn deref(&self) -> &Self::Target {
+        &self.step
+    }
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -149,7 +165,8 @@ pub struct Step {
 pub struct Leaves {
     pub train: unsafe extern "C" fn(*mut c_void) -> Train,
     pub tile: unsafe extern "C" fn(u32, u8) -> Tile,
-    pub follow: unsafe extern "C" fn(*mut c_void, u32, u8, u64, u8, u8) -> Follow,
+    pub follow: unsafe extern "C" fn(*mut c_void, u32, u8, u64, u8) -> FollowStep,
+    pub speed: unsafe extern "C" fn(u32) -> Speed,
     pub compatible_station: unsafe extern "C" fn(u32, u32) -> u8,
     pub platform_length: unsafe extern "C" fn(u32, u8) -> u32,
     pub closest_station: unsafe extern "C" fn(*mut c_void, u8) -> u32,
@@ -519,15 +536,33 @@ impl Search {
         unsafe { (self.leaves.tile)(tile, td) }
     }
     fn follow(&self, tile: u32, td: u8, no90: u8, compatible: u64, mask: bool) -> Follow {
-        unsafe {
-            (self.leaves.follow)(
-                self.input.context,
-                tile,
-                td,
-                compatible,
-                no90,
-                u8::from(mask),
-            )
+        let mut step =
+            unsafe { (self.leaves.follow)(self.input.context, tile, td, compatible, no90) };
+        if step.followed != 0 && mask {
+            let mut ft = crate::train_reservation::Follow {
+                old_tile: tile,
+                old_td: td,
+                new_tile: step.tile,
+                skipped: step.skipped,
+                dirs: step.dirs,
+                exitdir: exit(td),
+                station: step.station,
+                error: step.error,
+                ..Default::default()
+            };
+            step.followed = u8::from(crate::follow_track::mask_reserved_tracks(
+                self.pbs(),
+                &mut ft,
+            ));
+            step.dirs = ft.dirs;
+            step.error = ft.error;
+        }
+        // Native GetSpeedLimit remains after masking, even if either step failed.
+        let speed = unsafe { (self.leaves.speed)(tile) };
+        Follow {
+            step,
+            min_speed: speed.min_speed,
+            max_speed: speed.max_speed,
         }
     }
     fn pbs(&self) -> crate::pbs::Pbs<'_> {

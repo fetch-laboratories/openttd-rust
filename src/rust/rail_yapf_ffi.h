@@ -29,10 +29,11 @@ struct OpenTTDRailTile {
 };
 struct OpenTTDRailFollow {
 	uint32_t tile;
-	int32_t skipped, min_speed, max_speed;
+	int32_t skipped;
 	uint16_t dirs;
 	uint8_t followed, error, station;
 };
+struct OpenTTDRailSpeed { int32_t min_speed, max_speed; };
 struct OpenTTDRailTrain {
 	uint64_t compatible, all_compatible;
 	uint32_t tile, rear_tile, virtual_tile, rear_virtual_tile, dest_tile, length, speed;
@@ -55,7 +56,8 @@ struct OpenTTDRailStep {
 struct OpenTTDRailLeaves {
 	OpenTTDRailTrain (*train)(void *) noexcept OPENTTD_SERVICE_DEFAULT(train);
 	OpenTTDRailTile (*tile)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
-	OpenTTDRailFollow (*follow)(void *, uint32_t, uint8_t, uint64_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(follow);
+	OpenTTDRailFollow (*follow)(void *, uint32_t, uint8_t, uint64_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(follow);
+	OpenTTDRailSpeed (*speed)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(speed);
 	uint8_t (*compatible_station)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_station);
 	uint32_t (*platform_length)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(platform_length);
 	uint32_t (*closest_station)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(closest_station);

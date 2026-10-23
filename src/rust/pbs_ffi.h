@@ -50,6 +50,7 @@ struct OpenTTDPbsServices {
 };
 const OpenTTDPbsServices &GetPbsServices() noexcept;
 extern "C" {
+bool openttd_rust_follow_mask(const OpenTTDPbsServices *, OpenTTDTrainReservationFollow *);
 uint8_t openttd_rust_pbs_reserved(const OpenTTDPbsServices *, uint32_t);
 void openttd_rust_pbs_platform(const OpenTTDPbsServices *, uint32_t, uint8_t, bool);
 bool openttd_rust_pbs_try_reserve(const OpenTTDPbsServices *, uint32_t, uint8_t, bool);

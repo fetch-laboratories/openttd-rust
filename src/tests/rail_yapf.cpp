@@ -47,7 +47,7 @@ public:
 	bool PfNodeCacheFetch(Node &) { return false; }
 	void PfFollowNode(Node &parent)
 	{
-		RailYapfProbe::Follow(nullptr, parent.key.tile, parent.key.td, 1, 0, 0);
+		RailYapfProbe::Follow(nullptr, parent.key.tile, parent.key.td, 1, 0);
 		for (uint8_t td : {0, 2}) {
 			Node &node = this->CreateNewNode(); node.Set(parent.key.tile + 1, td, &parent);
 			this->AddNewNode(node, Follower{});
@@ -59,7 +59,7 @@ public:
 		node.cost = node.parent->cost + (td == 0 ? 100 : 71);
 		if (td != 0 || node.parent->key.td != 0) node.cost += this->curve;
 		if (td == 0 && RailYapfProbe::hill && node.key.tile == 2) node.cost += 50;
-		RailYapfProbe::Follow(nullptr, node.key.tile, td, 1, 0, 0);
+		RailYapfProbe::Follow(nullptr, node.key.tile, td, 1, 0);
 		return true;
 	}
 	bool PfCalcEstimate(Node &node) { node.estimate = node.cost + 100 * (this->goal - node.key.tile); return true; }
@@ -132,6 +132,22 @@ TEST_CASE("Rail YAPF opposing PBS signals restored in insertion order on rollbac
 	CHECK(RailYapfProbe::red == 2);
 	CHECK(RailYapfProbe::restored == 2);
 	RailYapfProbe::rollback = false;
+	openttd_rust_rail_invalidate();
+}
+TEST_CASE("Rail YAPF observes Follow then optional masking then speed limits")
+{
+	for (bool fail : {false, true}) for (uint8_t kind : {0, 3}) {
+		RailYapfProbe::follow_fail = fail;
+		openttd_rust_rail_invalidate();
+		RailYapfProbe::Run(1, 29, false, false, kind);
+		const auto &reads = RailYapfProbe::follow_reads;
+		REQUIRE(std::count(reads.begin(), reads.end(), 'f') > 0);
+		for (size_t i = 0; i < reads.size(); ++i) if (reads[i] == 'f') {
+			if (kind == 3 && !fail) { REQUIRE(i + 2 < reads.size()); CHECK(reads[i + 1] == 'r'); CHECK(reads[i + 2] == 's'); }
+			else { REQUIRE(i + 1 < reads.size()); CHECK(reads[i + 1] == 's'); }
+		}
+	}
+	RailYapfProbe::follow_fail = false;
 	openttd_rust_rail_invalidate();
 }
 #endif

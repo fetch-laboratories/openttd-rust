@@ -81,20 +81,27 @@ static OpenTTDRailTile RailTile(uint32_t tile, uint8_t direction) noexcept
 	return result;
 }
 template <typename Follower>
-static OpenTTDRailFollow RailFollowT(void *context, uint32_t tile, uint8_t direction, uint64_t types, bool mask) noexcept
+static OpenTTDRailFollow RailFollowT(void *context, uint32_t tile, uint8_t direction, uint64_t types) noexcept
 {
 	Follower follower{static_cast<RailYapfContext *>(context)->train, RailTypes{types}};
 	bool followed = follower.Follow(TileIndex{tile}, static_cast<Trackdir>(direction));
-	if (followed && mask) followed = follower.MaskReservedTracks();
-	int min_speed = 0;
-	int max_speed = follower.GetSpeedLimit(&min_speed);
-	return {follower.new_tile.base(), follower.tiles_skipped, min_speed, max_speed,
+	return {follower.new_tile.base(), follower.tiles_skipped,
 		static_cast<uint16_t>(follower.new_td_bits), static_cast<uint8_t>(followed), static_cast<uint8_t>(follower.err), static_cast<uint8_t>(follower.is_station)};
 }
-static OpenTTDRailFollow RailFollow(void *context, uint32_t tile, uint8_t td, uint64_t types, uint8_t no90, uint8_t mask) noexcept
+static OpenTTDRailFollow RailFollow(void *context, uint32_t tile, uint8_t td, uint64_t types, uint8_t no90) noexcept
 {
-	if (no90) return RailFollowT<CFollowTrackFreeRailNo90>(context, tile, td, types, mask);
-	return RailFollowT<CFollowTrackFreeRail>(context, tile, td, types, mask);
+	if (no90) return RailFollowT<CFollowTrackRailNo90>(context, tile, td, types);
+	return RailFollowT<CFollowTrackRail>(context, tile, td, types);
+}
+static OpenTTDRailSpeed RailSpeed(uint32_t tile) noexcept
+{
+	/* The rail specialization of GetSpeedLimit reads only old_tile. Keep the
+	 * named native method after Rust masking, including when Follow failed. */
+	CFollowTrackRail follower{INVALID_OWNER, RailTypes{}};
+	follower.old_tile = TileIndex{tile};
+	int min_speed = 0;
+	int max_speed = follower.GetSpeedLimit(&min_speed);
+	return {min_speed, max_speed};
 }
 static uint32_t RailPlatformLength(uint32_t tile, uint8_t dir) noexcept
 {
@@ -173,7 +180,7 @@ static void RailDebug(void *context, uint8_t kind, const uint32_t *stats, uint32
 	}
 }
 static const OpenTTDRailLeaves _rail_leaves{
-	.train = RailTrain, .tile = RailTile, .follow = RailFollow,
+	.train = RailTrain, .tile = RailTile, .follow = RailFollow, .speed = RailSpeed,
 	.compatible_station = OpenTTDMapQuery<uint8_t, RustCompatibleStationTiles, uint32_t, uint32_t>, .platform_length = RailPlatformLength,
 	.closest_station = RailClosestStation, .destination_dirs = RailDestinationDirs,
 	.output = RailOutput, .debug = RailDebug,

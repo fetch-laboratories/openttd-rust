@@ -27,6 +27,7 @@ mod direction_type;
 mod disaster;
 mod economy_type;
 mod engine_type;
+mod follow_track;
 mod ground;
 mod ground_vehicle;
 mod history;

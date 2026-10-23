@@ -288,7 +288,7 @@ impl<'a> Pbs<'a> {
                 (self.rail().signal_type)(tile, trackdir_to_track(td)).0,
             )
     }
-    fn map(self) -> crate::map_func::Map {
+    pub(crate) fn map(self) -> crate::map_func::Map {
         crate::map_func::Map {
             log_x: (self.shared().map_log_x)() as u8,
         }

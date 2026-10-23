@@ -2862,20 +2862,23 @@ layouts! {
         signal_type,
         oneway,
     };
-    "OpenTTDRailFollow" ["probe"] => crate::rail_yapf::Follow {
+    "OpenTTDRailFollow" ["probe"] => crate::rail_yapf::FollowStep {
         tile,
         skipped,
-        min_speed,
-        max_speed,
         dirs,
         followed,
         error,
         station,
     };
+    "OpenTTDRailSpeed" ["probe"] => crate::rail_yapf::Speed {
+        min_speed,
+        max_speed,
+    };
     "OpenTTDRailLeaves" ["probe"] => crate::rail_yapf::Leaves {
         train,
         tile,
         follow,
+        speed,
         compatible_station,
         platform_length,
         closest_station,

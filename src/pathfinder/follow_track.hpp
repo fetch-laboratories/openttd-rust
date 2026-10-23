@@ -167,6 +167,7 @@ struct CFollowTrackT {
 		return true;
 	}
 
+#ifndef WITH_RUST
 	inline bool MaskReservedTracks()
 	{
 		if (!DoTrackMasking()) return true;
@@ -196,6 +197,7 @@ struct CFollowTrackT {
 		}
 		return true;
 	}
+#endif
 
 protected:
 	/** Follow the exitdir from old_tile and fill new_tile and tiles_skipped */
