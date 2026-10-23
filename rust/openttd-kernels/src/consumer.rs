@@ -137,3 +137,24 @@ pub fn separator(bytes: &[u8], pattern: &[u8], policy: i32) -> SeparatorResult {
         consumed_length: end,
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRustConsumerBound" ["probe"] => BoundResult {
+        length,
+        position,
+        shortfall,
+    };
+    "OpenTTDRustConsumerByte" ["probe"] => ByteResult {
+        value_bits,
+        length,
+    };
+    "OpenTTDRustConsumerMatch" ["probe"] => MatchResult {
+        length,
+        matched,
+    };
+    "OpenTTDRustConsumerSeparator" ["probe"] => SeparatorResult {
+        result_length,
+        consumed_length,
+    };
+}

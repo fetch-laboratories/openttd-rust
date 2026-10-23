@@ -135,6 +135,38 @@ jobs:
       arch: ${{ matrix.arch }}
       cache-only: ${{ inputs.checkout-ref == '' && github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && needs.policy.outputs.covered == 'true' }}
 
+  annotations_emscripten:
+    name: Check emscripten annotations
+    needs: emscripten
+    if: always() && needs.emscripten.result != 'skipped' && (inputs.checkout-ref != '' || github.event_name == 'pull_request')
+    runs-on: ubuntu-latest
+    steps:
+    - uses: OpenTTD/actions/annotation-check@v6
+
+  annotations_linux:
+    name: Check linux annotations
+    needs: linux
+    if: always() && needs.linux.result != 'skipped' && (inputs.checkout-ref != '' || github.event_name == 'pull_request')
+    runs-on: ubuntu-latest
+    steps:
+    - uses: OpenTTD/actions/annotation-check@v6
+
+  annotations_macos:
+    name: Check macos annotations
+    needs: macos
+    if: always() && needs.macos.result != 'skipped' && (inputs.checkout-ref != '' || github.event_name == 'pull_request')
+    runs-on: ubuntu-latest
+    steps:
+    - uses: OpenTTD/actions/annotation-check@v6
+
+  annotations_windows:
+    name: Check windows annotations
+    needs: windows
+    if: always() && needs.windows.result != 'skipped' && (inputs.checkout-ref != '' || github.event_name == 'pull_request')
+    runs-on: ubuntu-latest
+    steps:
+    - uses: OpenTTD/actions/annotation-check@v6
+
   check_annotations:
     name: Check Annotations
     needs:
@@ -142,6 +174,10 @@ jobs:
     - linux
     - macos
     - windows
+    - annotations_emscripten
+    - annotations_linux
+    - annotations_macos
+    - annotations_windows
 
     if: always() && (inputs.checkout-ref != '' || (github.event_name == 'pull_request' && needs.linux.result != 'skipped'))
 
@@ -153,7 +189,7 @@ jobs:
 
   complete:
     if: always() && inputs.checkout-ref != ''
-    needs: [emscripten, linux, macos, windows, check_annotations]
+    needs: [emscripten, linux, macos, windows, check_annotations, annotations_emscripten, annotations_linux, annotations_macos, annotations_windows]
     runs-on: ubuntu-latest
     outputs:
       validated: ${{ steps.complete.outputs.validated }}
@@ -174,6 +210,7 @@ jobs:
             required += ['emscripten', 'windows']
         elif os.environ['PROFILE'] != 'native':
             raise SystemExit('Unsupported platform profile')
+        required += [f'annotations_{job}' for job in required if job != 'check_annotations']
         failed = [job for job in required if results.get(job, {}).get('result') != 'success']
         if failed:
             raise SystemExit(f'Required builds/checks did not succeed: {failed}')

@@ -10,3 +10,6 @@
 pub const TRACK_BIT_X: u8 = 1;
 /// `TRACK_BIT_Y`.
 pub const TRACK_BIT_Y: u8 = 2;
+
+/// `TRACK_BIT_DEPOT`.
+pub const TRACK_BIT_DEPOT: u8 = 0x80;

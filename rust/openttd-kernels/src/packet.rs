@@ -96,3 +96,15 @@ pub(crate) fn header(bytes: &mut [u8]) {
     let encoded = crate::builder::little_endian(bytes.len() as u64);
     bytes[..2].copy_from_slice(&encoded.bytes[..2]);
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDPacketState" ["probe"] => State {
+        limit,
+        position,
+    };
+    "OpenTTDPacketFrame" ["probe"] => Frame {
+        message,
+        payload,
+    };
+}

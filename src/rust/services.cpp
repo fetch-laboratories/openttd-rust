@@ -51,6 +51,7 @@
 #include "../road_internal.h"
 #include "../pbs.h"
 #include "../train.h"
+#include "../linkgraph/linkgraph_type.h"
 #include "../company_base.h"
 #include "../company_func.h"
 #include "../command_type.h"
@@ -268,7 +269,11 @@ static_assert(AXIS_X == 0 && AXIS_Y == 1 && INVALID_AXIS == 0xFF);
 static_assert(PR_TERRAFORM == 21 && PR_CLEAR_CANAL == 61 && PR_CLEAR_TREES == 26);
 static_assert(to_underlying(DoCommandFlag::AutoReplace) == 6 && to_underlying(DoCommandFlag::NoCargoCapacityCheck) == 7);
 static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);
-static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_GOTO_WAYPOINT == 6 && OT_IMPLICIT == 8);
+static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_DUMMY == 5 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8);
+static_assert(INVALID_VEH_ORDER_ID == 0xFF && to_underlying(OrderLoadType::NoLoad) == 4 && to_underlying(OrderUnloadType::Unload) == 1 && to_underlying(OrderUnloadType::Transfer) == 2 && to_underlying(OrderUnloadType::NoUnload) == 4);
+static_assert(to_underlying(StationType::Truck) == 2 && to_underlying(StationType::Bus) == 3);
+static_assert(CARGO_AUTO_REFIT == 0xFD && StationID::Invalid().base() == 0xFFFF);
+static_assert(EdgeUpdateModes{EdgeUpdateMode::Increase}.base() == 1 && EdgeUpdateModes{EdgeUpdateMode::Refresh}.base() == 2 && EdgeUpdateModes{EdgeUpdateMode::Restricted}.base() == 4 && EdgeUpdateModes{EdgeUpdateMode::Unrestricted}.base() == 8);
 static_assert(VL_STANDARD == 0 && VL_SHARED_ORDERS == 1 && VL_STATION_LIST == 2 && VL_DEPOT_LIST == 3 && VL_GROUP_LIST == 4);
 static_assert(GVSF_FRONT == 0 && GVSF_ARTICULATED_PART == 1 && GVSF_WAGON == 2 && GVSF_ENGINE == 3 && GVSF_FREE_WAGON == 4 && GVSF_MULTIHEADED == 5);
 static_assert(CCF_ARRANGE.base() == 3);
@@ -434,6 +439,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.town_count = SharedTownCount,
 
 	// Registry: landscape (#212).
+	.apply_foundation = RustApplyFoundation,
 	.clear_ground = OpenTTDClearGround,
 	.foundation = RustFoundationSlope,
 	.has_water_class = RustHasWaterClass,

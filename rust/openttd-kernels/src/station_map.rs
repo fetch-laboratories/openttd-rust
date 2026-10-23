@@ -5,9 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared waypoint predicates from `station_map.h`, through typed map services.
+//! Shared station predicates from `station_map.h`, through typed map services.
 use crate::services::Services;
-use crate::station_type::{RAIL_WAYPOINT, ROAD_WAYPOINT};
+use crate::station_type::{RAIL_WAYPOINT, ROAD_WAYPOINT, STATION_BUS, STATION_TRUCK};
 use crate::tile_type::MP_STATION;
 
 /// `IsRailWaypoint`; the station type leaf keeps its native assertion.
@@ -30,4 +30,10 @@ pub(crate) fn has_station_tile_rail(
     rail: &crate::services::RailMapServices,
 ) -> bool {
     (s.tile_type)(tile) == MP_STATION && (rail.has_station_rail)(tile)
+}
+
+/// `IsStationRoadStopTile`: a bus or truck stop, not a road waypoint.
+pub(crate) fn is_station_road_stop_tile(s: &Services, tile: u32) -> bool {
+    (s.tile_type)(tile) == MP_STATION
+        && matches!((s.station_type)(tile).0, STATION_TRUCK | STATION_BUS)
 }

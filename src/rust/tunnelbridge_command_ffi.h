@@ -76,7 +76,7 @@ const OpenTTDTunnelBridgeServices &GetRustTunnelBridgeServices() noexcept;
 extern "C" {
 int32_t openttd_rust_bridge_length_cost(int32_t);
 Foundation openttd_rust_bridge_foundation(uint8_t, Axis);
-bool openttd_rust_bridge_flat_ramp(const OpenTTDRailCommandServices *, uint8_t, Axis);
+bool openttd_rust_bridge_flat_ramp(const OpenTTDSharedServices *, uint8_t, Axis);
 void openttd_rust_bridge_available(const OpenTTDTunnelBridgeServices *, OpenTTDCommandCost *, BridgeType, uint32_t, uint16_t);
 void openttd_rust_build_bridge(const OpenTTDTunnelBridgeServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, TransportType, BridgeType, uint8_t);
 void openttd_rust_build_tunnel(const OpenTTDTunnelBridgeServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, TransportType, uint8_t);
@@ -84,6 +84,6 @@ void openttd_rust_tunnelbridge_clear(const OpenTTDTunnelBridgeServices *, OpenTT
 void openttd_rust_tunnelbridge_terraform(const OpenTTDTunnelBridgeServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint32_t, uint16_t, int32_t, uint8_t);
 void openttd_rust_tunnelbridge_build_above(const OpenTTDTunnelBridgeServices *, OpenTTDCommandCost *, uint32_t, uint16_t, Axis, int32_t);
 uint32_t openttd_rust_tunnel_endtile();
-int32_t openttd_rust_bridge_height(const OpenTTDSharedServices *, const OpenTTDRailCommandServices *, uint32_t);
+int32_t openttd_rust_bridge_height(const OpenTTDSharedServices *, uint32_t);
 }
 #endif /* RUST_TUNNELBRIDGE_COMMAND_FFI_H */

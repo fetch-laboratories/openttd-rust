@@ -49,16 +49,6 @@ pub(crate) fn crossing_rail_track(tile: u32, rail: &RailMapServices) -> Track {
 pub(crate) fn check_build_above_clear(out: crate::services::Cost<'_>) {
     out.zero();
 }
-/// # Safety
-/// The native facade provides immutable costs and a live stack output slot.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_clear_build_above(
-    cost: *const crate::services::CommandCostServices,
-    out: *mut crate::services::CommandCost,
-) {
-    // SAFETY: the facade owns both values for this synchronous call.
-    check_build_above_clear(crate::services::Cost(out, unsafe { &*cost }));
-}
 
 /// Complete original `DoClearSquare` control. Native leaves cannot throw and no
 /// owner borrow survives their invocation; world access is serialized.
@@ -862,4 +852,108 @@ pub unsafe extern "C" fn openttd_rust_ground_abi_calls(calls: *const ABICalls) -
             LandscapeType(236),
             victim.kind,
         )
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDGroundCostServices" ["landscape"] => CostServices {
+        commands,
+        costs,
+        prepare,
+        release,
+    };
+    "OpenTTDRoadSnowGround" ["landscape"] => RoadSnowGround {
+        z,
+        snow,
+    };
+    "OpenTTDRoadGroundServices" ["landscape"] => RoadServices {
+        snow,
+        snow_or_desert,
+        toggle_snow_or_desert,
+        roadside,
+        set_roadside,
+        work_counter,
+        set_work_counter,
+        all_bits,
+        bulldozer,
+        cleanup,
+        town,
+        set_road_type,
+    };
+    "OpenTTDClearSurface" ["landscape"] => ClearSurface {
+        ground,
+        density,
+        snow,
+    };
+    "OpenTTDFieldFences" ["landscape"] => FieldFences {
+        ne,
+        se,
+        sw,
+        nw,
+    };
+    "OpenTTDFieldGround" ["landscape"] => FieldGround {
+        industry,
+        field_type => type,
+    };
+    "OpenTTDClearServices" ["landscape"] => ClearServices {
+        field_tile,
+        density,
+        counter,
+        snow,
+        surface,
+        set_ground,
+        set_density,
+        set_counter,
+        clear_snow,
+        make_clear,
+        fences,
+        field,
+        set_field,
+        water_class,
+        ambient,
+    };
+    "OpenTTDRailSnowGround" ["landscape"] => RailSnowGround {
+        z,
+        slope,
+        tracks,
+        plain,
+    };
+    "OpenTTDRailFenceGround" ["landscape"] => RailFenceGround {
+        tracks,
+        owner,
+        plain,
+    };
+    "OpenTTDRailServices" ["landscape"] => RailServices {
+        tracks,
+        ground,
+        set_ground,
+        snow,
+        fences,
+        foundation,
+        owned_land,
+    };
+    "OpenTTDTunnelGround" ["landscape"] => TunnelGround {
+        z,
+        snow,
+    };
+    "OpenTTDTunnelServices" ["landscape"] => TunnelServices {
+        snow,
+        snow_or_desert,
+        set_snow_or_desert,
+    };
+    "OpenTTDGroundABICalls" ["landscape"] => ABICalls {
+        fences,
+        surface,
+        field,
+        rail_snow,
+        rail_fence,
+        foundation,
+        road_snow,
+        tunnel,
+        airport,
+        victim,
+        aircraft,
+        ground,
+        enums,
+    };
 }

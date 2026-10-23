@@ -30,6 +30,8 @@
 #include "../pbs.h"
 
 inline bool RustStationRectangleEmpty(const BaseStation *station) noexcept { return station->rect.IsEmpty(); }
+/** `&st->goods[cargo].GetOrCreateData().cargo`'s Rust owner. */
+inline OpenTTDCargoList *RustStationCargoOwner(OpenTTDStation *st, uint8_t cargo) noexcept { return static_cast<Station *>(st)->goods[cargo].GetOrCreateData().cargo.RustOwner(); }
 template <class Handle> inline bool RustStationRectangleEmptyHandle(Handle handle) noexcept { return RustStationRectangleEmpty(static_cast<const BaseStation *>(handle)); }
 inline void RustStationCatchment(const Station *station, void *context, void (*visit)(void *, uint32_t)) noexcept
 {
@@ -50,6 +52,8 @@ inline void RustRoadStopCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFIn
 inline void RustAirportTileCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_AIRPORTTILES, tile); }
 inline uint32_t RustStationHangarTileValue(BaseStation *st, uint32_t index) noexcept { return RustStationHangarTile(st, index).base(); }
 inline void RustStationMarkTilesDirty(BaseStation *st, bool cargo) noexcept { Station::From(st)->MarkTilesDirty(cargo); }
+inline void RustStationRandomisation(Station *st, TileIndex tile, StationRandomTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerStationRandomisation(st, tile, trigger, cargo); }
+inline void RustRoadStopRandomisation(Station *st, TileIndex tile, StationRandomTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerRoadStopRandomisation(st, tile, trigger, cargo); }
 inline void RustStationAnimation(BaseStation *st, TileIndex tile, StationAnimationTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerStationAnimation(st, tile, trigger, cargo); }
 inline void RustRoadStopAnimation(BaseStation *st, TileIndex tile, StationAnimationTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerRoadStopAnimation(st, tile, trigger, cargo); }
 inline bool RustAirportTileAnimation(Station *st, TileIndex tile, AirportAnimationTrigger trigger) noexcept { return TriggerAirportTileAnimation(st, tile, trigger); }

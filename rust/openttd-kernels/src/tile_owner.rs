@@ -86,3 +86,27 @@ pub unsafe extern "C" fn openttd_rust_tile_change_owner(
         }
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDTileOwnerServices" ["landscape"] => Services {
+        clear,
+        house,
+        industry,
+        objects,
+        rail,
+        shared,
+        station,
+        trees,
+        tunnel_bridge,
+        void => void_tile,
+        water,
+    };
+    "OpenTTDTileOwnerContext" ["landscape"] => Context {
+        services,
+        cost,
+        ret,
+        error,
+        road,
+    };
+}

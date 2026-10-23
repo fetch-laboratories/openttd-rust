@@ -224,7 +224,7 @@ Foundation GetBridgeFoundation(Slope tileh, Axis axis)
 bool HasBridgeFlatRamp(Slope tileh, Axis axis)
 {
 #ifdef WITH_RUST
-	return openttd_rust_bridge_flat_ramp(&GetRustRailCommandServices(), tileh, axis);
+	return openttd_rust_bridge_flat_ramp(&GetRustSharedServices(), tileh, axis);
 #else
 	ApplyFoundationToSlope(GetBridgeFoundation(tileh, axis), tileh);
 	/* If the foundation slope is flat the bridge has a non-flat ramp and vice versa. */

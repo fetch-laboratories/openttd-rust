@@ -16,3 +16,8 @@ pub const FACILITY_TRUCK: u8 = 2;
 pub const FACILITY_BUS: u8 = 4;
 pub const FACILITY_DOCK: u8 = 16;
 pub const MAX_LENGTH_STATION_NAME_CHARS: usize = 32;
+
+/// `StationType::Truck`.
+pub const STATION_TRUCK: u8 = 2;
+/// `StationType::Bus`.
+pub const STATION_BUS: u8 = 3;

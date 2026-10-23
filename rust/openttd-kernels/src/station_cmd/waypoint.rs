@@ -503,10 +503,11 @@ impl Ctx<'_> {
             crate::company::price(PR_BUILD_STATION_TRUCK)
         } else {
             let factor = (self.s.road_spec_build_cost)(spec, PR_BUILD_STATION_TRUCK as u8);
-            crate::company::openttd_rust_economy_price(
+            crate::economy_func::get_price(
                 PR_BUILD_STATION_TRUCK as u32,
                 u32::from(factor.multiplier),
                 factor.shift,
+                -4,
             )
         };
         let mut existing = INVALID_STATION;

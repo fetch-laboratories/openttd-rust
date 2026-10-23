@@ -96,6 +96,8 @@
 #include "rust/company_services.h"
 #include "rust/industry_shell_services.h"
 #include "rust/services_road.h"
+#include "rust/vehicle_visits_ffi.h"
+#include "rust/services_linkgraph.h"
 #endif
 
 #include "safeguards.h"
@@ -729,13 +731,11 @@ static const OpenTTDStationServices _rust_station_services = {
 		GoodsEntry &ge = st->goods[cargo];
 		LinkGraph *lg = nullptr;
 		if (ge.link_graph == LinkGraphID::Invalid()) {
-			if (LinkGraph::CanAllocateItem()) {
-				lg = new LinkGraph(cargo);
-				LinkGraphSchedule::instance.Queue(lg);
-				ge.link_graph = lg->index;
-				ge.node = lg->AddNode(st);
+			if (RustLinkGraphAvailable()) {
+				lg = RustLinkGraphAllocate(cargo);
+				RustLinkGraphJoin(lg, st, cargo);
 			} else {
-				Debug(misc, 0, "Can't allocate link graph");
+				RustLinkGraphAllocationFailure();
 			}
 		} else {
 			lg = LinkGraph::Get(ge.link_graph);
@@ -744,10 +744,10 @@ static const OpenTTDStationServices _rust_station_services = {
 	.station_list_invalidation = RustStationListInvalidation,
 	.new_cargo_animation = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> void {
 		Station *st = Station::From(static_cast<BaseStation *>(handle));
-		TriggerStationRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
+		RustStationRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
 		RustStationAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
 		TriggerAirportAnimation(st, AirportAnimationTrigger::NewCargo, cargo);
-		TriggerRoadStopRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
+		RustRoadStopRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
 		RustRoadStopAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
 	},
 	.waiting_redraw = [](OpenTTDBaseStation *handle) noexcept -> void {
@@ -869,9 +869,6 @@ static const OpenTTDStationLinks _rust_station_links = {
 	},
 	.last_service = RustVehicleLastServiceOf,
 	.cargo_type = RustVehicleCargoType,
-	.refresh = [](OpenTTDVehicle *handle) noexcept -> void {
-		LinkRefresher::Run(VehicleOf(handle), false);
-	},
 	.reroute = [](OpenTTDBaseStation *handle, OpenTTDVehicle *vehicle, uint8_t cargo, uint16_t avoid, uint16_t avoid2) noexcept -> void {
 		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
 		if (vehicle == nullptr) {
@@ -883,6 +880,7 @@ static const OpenTTDStationLinks _rust_station_links = {
 	},
 };
 const OpenTTDStationServices &GetRustStationServices() noexcept { return _rust_station_services; }
+const OpenTTDStationLinks &GetRustStationLinks() noexcept { return _rust_station_links; }
 #endif
 
 #ifndef WITH_RUST
@@ -4698,7 +4696,7 @@ void RerouteCargo(Station *st, CargoType cargo, StationID avoid, StationID avoid
 void DeleteStaleLinks(Station *from)
 {
 #ifdef WITH_RUST
-	openttd_rust_station_stale(from, &_rust_station_services, &_rust_station_links);
+	openttd_rust_station_stale(from, &_rust_station_services, &_rust_station_links, &GetRustVehicleVisits());
 #else
 	for (CargoType cargo = 0; cargo < NUM_CARGO; ++cargo) {
 		const bool auto_distributed = (_settings_game.linkgraph.GetDistributionType(cargo) != DT_MANUAL);
@@ -4784,6 +4782,7 @@ void DeleteStaleLinks(Station *from)
 #endif
 }
 
+#ifndef WITH_RUST
 /**
  * Increase capacity for a link stat given by station cargo and next hop.
  * @param st Station to get the link stats from.
@@ -4860,6 +4859,7 @@ void IncreaseStats(Station *st, const Vehicle *front, StationID next_station_id,
 		}
 	}
 }
+#endif /* WITH_RUST */
 
 #ifndef WITH_RUST
 /* called for every station each tick */
@@ -4879,7 +4879,7 @@ static void StationHandleSmallTick(BaseStation *st)
 void OnTick_Station()
 {
 #ifdef WITH_RUST
-	openttd_rust_station_tick(&_rust_station_services, &_rust_station_links);
+	openttd_rust_station_tick(&_rust_station_services, &_rust_station_links, &GetRustVehicleVisits());
 #else
 	if (_game_mode == GM_EDITOR) return;
 

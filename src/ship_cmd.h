@@ -14,6 +14,8 @@
 #include "engine_type.h"
 #include "vehicle_type.h"
 
+#ifndef WITH_RUST
 CommandCost CmdBuildShip(DoCommandFlags flags, TileIndex tile, const Engine *e, Vehicle **v);
+#endif
 
 #endif /* SHIP_CMD_H */
