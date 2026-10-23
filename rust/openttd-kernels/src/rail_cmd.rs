@@ -20,6 +20,7 @@
     clippy::too_many_lines,
     clippy::fn_params_excessive_bools
 )]
+use crate::bitmath_func::kill_first_bit;
 use crate::command_type::DoCommandFlag;
 use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_WATER};
 use crate::direction_type::INVALID_DIAGDIR;
@@ -350,9 +351,6 @@ fn trackdir_tracks(bits: u16) -> u8 {
 }
 fn is_pbs(sigtype: u8) -> bool {
     sigtype == 4 || sigtype == 5
-}
-fn kill_first_bit(value: u8) -> u8 {
-    value & value.wrapping_sub(1)
 }
 /// Saturating unary minus of `OverflowSafeInt64`.
 fn negate(money: i64) -> i64 {

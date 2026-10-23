@@ -7,6 +7,7 @@
 
 //! `track_type.h` constants shared by simulation owners.
 
+pub const TRACK_BIT_NONE: u8 = 0;
 pub const TRACK_BIT_X: u8 = 1;
 pub const TRACK_BIT_Y: u8 = 2;
 /// `TRACK_BIT_HORZ`.

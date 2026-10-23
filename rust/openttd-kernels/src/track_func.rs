@@ -30,8 +30,8 @@ pub const fn track_status_to_track_bits(status: u32) -> u8 {
 
 /// `TracksOverlap`.
 pub fn tracks_overlap(bits: u8) -> bool {
-    use crate::track_type::{TRACK_BIT_HORZ, TRACK_BIT_VERT};
-    if bits == 0 || bits & bits.wrapping_sub(1) == 0 {
+    use crate::track_type::{TRACK_BIT_HORZ, TRACK_BIT_NONE, TRACK_BIT_VERT};
+    if bits == TRACK_BIT_NONE || crate::bitmath_func::kill_first_bit(bits) == TRACK_BIT_NONE {
         return false;
     }
     bits != TRACK_BIT_HORZ && bits != TRACK_BIT_VERT

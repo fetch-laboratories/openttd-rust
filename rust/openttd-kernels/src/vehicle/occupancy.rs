@@ -17,7 +17,8 @@ use super::{OpenTTDVehicle, VehicleRef, VehicleServices};
 use crate::{map_func::Map, tile_type::TILE_SIZE};
 use std::{cell::UnsafeCell, ptr};
 
-const HASH_BITS: u32 = 7;
+const HASH_BITS: u8 = 7;
+const HASH_RES: u8 = 0;
 const HASH_SIZE: u32 = 1 << HASH_BITS;
 const HASH_MASK: u32 = HASH_SIZE - 1;
 const TOTAL: usize = (HASH_SIZE * HASH_SIZE) as usize;
@@ -36,7 +37,7 @@ struct Buckets(UnsafeCell<[Shell; TOTAL]>);
 unsafe impl Sync for Buckets {}
 static BUCKETS: Buckets = Buckets(UnsafeCell::new([ptr::null_mut(); TOTAL]));
 fn hash_1d(p: u32) -> u32 {
-    p & HASH_MASK
+    crate::bitmath_func::gb(p, HASH_RES, HASH_BITS)
 }
 fn increment(h: u32) -> u32 {
     h.wrapping_add(1) & HASH_MASK

@@ -14,6 +14,7 @@ mod alternating;
 mod auth;
 mod base_consist;
 mod binaryheap;
+mod bitmath_func;
 mod bridge;
 mod bridge_map;
 mod byte_strings;
