@@ -62,13 +62,21 @@ public:
 		 * Get edge's average travel time.
 		 * @return Travel time, in ticks.
 		 */
+#ifdef WITH_RUST
+		uint32_t TravelTime() const { return openttd_rust_live_edge_travel_time(reinterpret_cast<const OpenTTDLiveEdge *>(this)); }
+#else
 		uint32_t TravelTime() const { return this->travel_time_sum / this->capacity; }
+#endif
 
 		/**
 		 * Get the date of the last update to any part of the edge's capacity.
 		 * @return Last update.
 		 */
+#ifdef WITH_RUST
+		TimerGameEconomy::Date LastUpdate() const { return TimerGameEconomy::Date{openttd_rust_live_edge_last_update(reinterpret_cast<const OpenTTDLiveEdge *>(this))}; }
+#else
 		TimerGameEconomy::Date LastUpdate() const { return std::max(this->last_unrestricted_update, this->last_restricted_update); }
+#endif
 
 #ifdef WITH_RUST
 		void Update(uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(this->capacity > 0); assert(capacity >= usage); openttd_rust_live_edge_update(reinterpret_cast<OpenTTDLiveEdge *>(this), capacity, usage, time, modes.base(), GetRustSharedServices().economy_date()); }
@@ -112,8 +120,8 @@ public:
 		void UpdateSupply(uint supply) { openttd_rust_live_node_update_supply(this->owner, this->id, supply, GetRustSharedServices().economy_date()); }
 		void UpdateLocation(TileIndex xy) { openttd_rust_live_node_location(this->owner, this->id, xy.base()); }
 		void SetDemand(uint demand) { openttd_rust_live_node_demand(this->owner, this->id, demand); }
-		void UpdateEdge(NodeID to, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(capacity > 0); assert(usage <= capacity); openttd_rust_live_node_update_edge(this->owner, this->id, to, capacity, usage, time, modes.base(), GetRustSharedServices().economy_date()); }
-		void AddEdge(NodeID to, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(!this->HasEdgeTo(to)); this->UpdateEdge(to, capacity, usage, time, modes); }
+		void UpdateEdge(NodeID to, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(capacity > 0); assert(usage <= capacity); openttd_rust_live_node_update_edge(this->owner, this->id, to, capacity, usage, time, modes.base(), GetRustSharedServices().economy_date(), GetRustLiveGraphServices().assertions); }
+		void AddEdge(NodeID to, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(!this->HasEdgeTo(to)); openttd_rust_live_node_add_edge(this->owner, this->id, to, capacity, usage, time, modes.base(), GetRustSharedServices().economy_date()); }
 		void RemoveEdge(NodeID to) { openttd_rust_live_node_remove_edge(this->owner, this->id, to); }
 		bool HasEdgeTo(NodeID to) const { return openttd_rust_live_node_edge(this->owner, this->id, to) != nullptr; }
 		const BaseEdge &operator[](NodeID to) const { auto *edge = openttd_rust_live_node_edge(this->owner, this->id, to); assert(edge != nullptr); return *reinterpret_cast<const BaseEdge *>(edge); }
@@ -333,7 +341,7 @@ public:
 	}
 
 #ifdef WITH_RUST
-	NodeID AddNode(const ::Station *st) { const auto station = st->index; return openttd_rust_live_graph_add_station(this, station.base(), &GetRustLiveGraphServices()); }
+	NodeID AddNode(const ::Station *st) { return openttd_rust_live_graph_add_station(this, GetRustLiveGraphServices().station_id(st), &GetRustLiveGraphServices()); }
 	void RemoveNode(NodeID id) { assert(id < this->Size()); openttd_rust_live_graph_remove(this, id, &GetRustLiveGraphServices()); }
 #else
 	NodeID AddNode(const Station *st);

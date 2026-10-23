@@ -184,7 +184,6 @@ struct OpenTTDStationLinks {
 	bool (*automatic_distribution)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(automatic_distribution);
 	uint16_t (*node)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(node);
 	int32_t (*date)() noexcept OPENTTD_SERVICE_DEFAULT(date);
-	uint16_t (*station_id)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_id);
 	OpenTTDStationEdge (*edge)(OpenTTDBaseStation *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(edge);
 	void (*delete_flows)(OpenTTDBaseStation *, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_flows);
 	void (*restrict_flows)(OpenTTDBaseStation *, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(restrict_flows);

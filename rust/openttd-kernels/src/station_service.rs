@@ -768,7 +768,7 @@ unsafe fn admit(
     }
     (w.append_packet)(st, cargo, amount, source);
     unsafe {
-        live::station_supply(st, cargo, amount, ((*w.shared).economy_date)(), w.graphs);
+        live::station_supply(st, cargo, amount, (*w.shared).economy_date, w.graphs);
     }
     if unsafe { (*ge).status } & 2 == 0 {
         (w.station_list_invalidation)(st, 0);
@@ -887,7 +887,6 @@ pub struct Links {
     pub(crate) automatic_distribution: extern "C" fn(u8) -> bool,
     pub(crate) node: extern "C" fn(*mut BaseStation, u8) -> u16,
     pub(crate) date: extern "C" fn() -> i32,
-    pub(crate) station_id: extern "C" fn(*mut BaseStation) -> u16,
     pub(crate) edge: extern "C" fn(*mut BaseStation, u16) -> Edge,
     pub(crate) delete_flows: extern "C" fn(*mut BaseStation, u8, u16),
     pub(crate) restrict_flows: extern "C" fn(*mut BaseStation, u8, u16),
@@ -960,8 +959,8 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
                 let mut updated = false;
                 if auto {
                     let mut vehicles = Vec::new();
-                    let from_id = (l.station_id)(from);
-                    let to_id = (l.station_id)(edge.destination);
+                    let from_id = (l.graphs.station_id)(from);
+                    let to_id = (l.graphs.station_id)(edge.destination);
                     let order_count = (l.order_pool_size)();
                     for id in 0..order_count {
                         // OrderList pool IDs are bounded by their u16 representation.
@@ -1024,10 +1023,10 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
                 if !updated {
                     crate::witness::hit(crate::witness::STATION_STALE_REMOVE);
                     remove.push((l.node)(edge.destination, cargo));
-                    let to_id = (l.station_id)(edge.destination);
+                    let to_id = (l.graphs.station_id)(edge.destination);
                     (l.delete_flows)(from, cargo, to_id);
                     unsafe {
-                        reroute(from, cargo, to_id, (l.station_id)(from), w, l);
+                        reroute(from, cargo, to_id, (l.graphs.station_id)(from), w, l);
                     }
                 }
             } else {
@@ -1037,10 +1036,10 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
                     crate::witness::hit(crate::witness::STATION_STALE_RESTRICT);
                     unsafe { &mut *owner }.nodes[usize::from(node)].edges[index]
                         .last_unrestricted_update = -1;
-                    let to_id = (l.station_id)(edge.destination);
+                    let to_id = (l.graphs.station_id)(edge.destination);
                     (l.restrict_flows)(from, cargo, to_id);
                     unsafe {
-                        reroute(from, cargo, to_id, (l.station_id)(from), w, l);
+                        reroute(from, cargo, to_id, (l.graphs.station_id)(from), w, l);
                     }
                 } else {
                     let restricted = unsafe { &*owner }.nodes[usize::from(node)].edges[index]
@@ -2011,7 +2010,6 @@ crate::abi::layouts! {
         automatic_distribution,
         node,
         date,
-        station_id,
         edge,
         delete_flows,
         restrict_flows,

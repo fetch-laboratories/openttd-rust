@@ -124,12 +124,11 @@ impl Node {
         }
     }
     pub(crate) fn edge(&self, dest: u16) -> Option<&Edge> {
-        self.edges
-            .binary_search_by_key(&dest, |e| e.dest_node)
-            .ok()
-            .map(|i| &self.edges[i])
+        let index = self.edges.partition_point(|e| e.dest_node < dest);
+        self.edges.get(index).filter(|e| e.dest_node == dest)
     }
-    pub(crate) fn update_edge(
+    #[allow(clippy::too_many_arguments)]
+    fn add_edge(
         &mut self,
         to: u16,
         capacity: u32,
@@ -138,21 +137,38 @@ impl Node {
         modes: EdgeUpdateModes,
         date: i32,
     ) {
-        match self.edges.binary_search_by_key(&to, |e| e.dest_node) {
-            Ok(index) => self.edges[index].update(capacity, usage, time, modes, date),
-            Err(index) => {
-                let mut edge = Edge::new(to);
-                edge.capacity = capacity;
-                edge.usage = usage;
-                edge.travel_time_sum = u64::from(time) * u64::from(capacity);
-                if modes.0 & EdgeUpdateModes::UNRESTRICTED.0 != 0 {
-                    edge.last_unrestricted_update = date;
-                }
-                if modes.0 & EdgeUpdateModes::RESTRICTED.0 != 0 {
-                    edge.last_restricted_update = date;
-                }
-                self.edges.insert(index, edge);
-            }
+        let index = self.edges.partition_point(|e| e.dest_node <= to);
+        let mut edge = Edge::new(to);
+        edge.capacity = capacity;
+        edge.usage = usage;
+        edge.travel_time_sum = u64::from(time) * u64::from(capacity);
+        if modes.0 & EdgeUpdateModes::UNRESTRICTED.0 != 0 {
+            edge.last_unrestricted_update = date;
+        }
+        if modes.0 & EdgeUpdateModes::RESTRICTED.0 != 0 {
+            edge.last_restricted_update = date;
+        }
+        self.edges.insert(index, edge);
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn update_edge(
+        &mut self,
+        to: u16,
+        capacity: u32,
+        usage: u32,
+        time: u32,
+        modes: EdgeUpdateModes,
+        date: i32,
+        assertions: bool,
+    ) {
+        assert!(!assertions || capacity > 0);
+        assert!(!assertions || usage <= capacity);
+        let index = self.edges.partition_point(|e| e.dest_node < to);
+        if self.edges.get(index).is_some_and(|e| e.dest_node == to) {
+            assert!(!assertions || self.edges[index].capacity > 0);
+            self.edges[index].update(capacity, usage, time, modes, date);
+        } else {
+            self.add_edge(to, capacity, usage, time, modes, date);
         }
     }
     pub(crate) fn remove_edge(&mut self, to: u16) {
@@ -382,9 +398,10 @@ pub unsafe extern "C" fn openttd_rust_live_node_update_edge(
     time: u32,
     modes: EdgeUpdateModes,
     date: i32,
+    assertions: bool,
 ) {
     unsafe { &mut *graph }.nodes[usize::from(id)]
-        .update_edge(to, capacity, usage, time, modes, date);
+        .update_edge(to, capacity, usage, time, modes, date, assertions);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_node_remove_edge(graph: *mut Graph, id: u16, to: u16) {
@@ -442,6 +459,10 @@ pub struct Access {
 /// Typed native shell/station leaves; no opcode dispatch or registered globals.
 #[repr(C)]
 pub struct Services {
+    pub assertions: bool,
+    pub get: extern "C" fn(u16) -> *mut super::NativeGraph,
+    pub get_if_valid: extern "C" fn(u16) -> *mut super::NativeGraph,
+    pub station_id: extern "C" fn(*const crate::station::BaseStation) -> u16,
     pub access: extern "C" fn(*mut super::NativeGraph) -> Access,
     pub station: extern "C" fn(u16, u8) -> StationInput,
     pub attach: extern "C" fn(u16, u8, u16, u16),
@@ -593,9 +614,8 @@ pub unsafe extern "C" fn openttd_rust_live_graph_run(
 
 #[repr(C)]
 pub struct Membership {
-    pub graph: *mut super::NativeGraph,
+    pub graph: u16,
     pub node: u16,
-    pub station: u16,
 }
 pub(crate) unsafe fn join(graph: *mut super::NativeGraph, station: u16, services: &Services) {
     let native = (services.access)(graph);
@@ -615,8 +635,9 @@ pub(crate) unsafe fn station_demand(
     services: &Services,
 ) {
     let m = (services.membership)(station, cargo);
-    if !m.graph.is_null() {
-        let owner = unsafe { resolve(m.graph, services) };
+    let graph = (services.get_if_valid)(m.graph);
+    if !graph.is_null() {
+        let owner = unsafe { resolve(graph, services) };
         unsafe { &mut *owner }.nodes[usize::from(m.node)].demand = demand;
     }
 }
@@ -624,23 +645,28 @@ pub(crate) unsafe fn station_supply(
     station: *mut crate::station::BaseStation,
     cargo: u8,
     supply: u32,
-    date: i32,
+    date: extern "C" fn() -> i32,
     services: &Services,
 ) {
     let mut m = (services.membership)(station, cargo);
-    if m.graph.is_null() {
+    let graph = if m.graph == u16::MAX {
         if (services.available)() {
-            m.graph = (services.allocate)(cargo);
+            let graph = (services.allocate)(cargo);
             unsafe {
-                join(m.graph, m.station, services);
+                join(graph, (services.station_id)(station), services);
             }
             m = (services.membership)(station, cargo);
+            graph
         } else {
             (services.allocation_failure)();
+            std::ptr::null_mut()
         }
-    }
-    if !m.graph.is_null() {
-        let owner = unsafe { resolve(m.graph, services) };
+    } else {
+        (services.get)(m.graph)
+    };
+    if !graph.is_null() {
+        let owner = unsafe { resolve(graph, services) };
+        let date = date();
         let n = &mut unsafe { &mut *owner }.nodes[usize::from(m.node)];
         n.supply = n.supply.wrapping_add(supply);
         n.last_update = date;
@@ -656,9 +682,31 @@ crate::abi::layouts! {
         supply, demand, station, xy, last_update,
     };
     "OpenTTDLiveGraphAccess" ["station_service"] => Access { owner, index, };
-    "OpenTTDLiveMembership" ["station_service"] => Membership { graph, node, station, };
+    "OpenTTDLiveMembership" ["station_service"] => Membership { graph, node, };
     "OpenTTDLiveStationInput" ["station_service"] => StationInput { xy, demand, };
     "OpenTTDLiveGraphServices" ["station_service"] => Services {
-        access, station, attach, set_node, delete_graph, membership, available, allocate, allocation_failure, dequeue,
+        assertions, get, get_if_valid, station_id, access, station, attach, set_node, delete_graph, membership, available, allocate, allocation_failure, dequeue,
     };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_live_node_add_edge(
+    graph: *mut Graph,
+    id: u16,
+    to: u16,
+    capacity: u32,
+    usage: u32,
+    time: u32,
+    modes: EdgeUpdateModes,
+    date: i32,
+) {
+    unsafe { &mut *graph }.nodes[usize::from(id)].add_edge(to, capacity, usage, time, modes, date);
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_live_edge_travel_time(edge: *const Edge) -> u32 {
+    unsafe { &*edge }.travel_time()
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_live_edge_last_update(edge: *const Edge) -> i32 {
+    unsafe { &*edge }.last_update()
 }

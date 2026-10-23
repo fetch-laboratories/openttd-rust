@@ -97,8 +97,8 @@ public:
 				edge.dest_node = to;
 			}
 			/* Sort by destination. */
-			auto edges = bn->Edges();
-			std::sort(const_cast<Edge *>(edges.data()), const_cast<Edge *>(edges.data()) + edges.size());
+			auto loaded_edges = bn->Edges();
+			std::sort(const_cast<Edge *>(loaded_edges.data()), const_cast<Edge *>(loaded_edges.data()) + loaded_edges.size());
 		} else {
 			/* Edge data is now a simple vector and not any kind of matrix. */
 			size_t size = SlGetStructListLength(UINT16_MAX);

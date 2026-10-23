@@ -782,9 +782,6 @@ static const OpenTTDStationLinks _rust_station_links = {
 	.date = []() noexcept -> int32_t {
 		return TimerGameEconomy::date.base();
 	},
-	.station_id = [](OpenTTDBaseStation *handle) noexcept -> uint16_t {
-		return handle->index.base();
-	},
 	.edge = [](OpenTTDBaseStation *from, uint16_t destination) noexcept -> OpenTTDStationEdge {
 		Station *to = Station::Get(StationID(destination));
 		return {to, OpenTTDDistanceManhattan(RustStationLocation(from), RustStationLocation(to))};

@@ -628,12 +628,23 @@ static void LiveGraphDelete(OpenTTDLinkGraph *graph) noexcept { delete graph; }
 static OpenTTDLiveMembership LiveGraphMembership(OpenTTDBaseStation *station, uint8_t cargo) noexcept
 {
 	GoodsEntry &ge = static_cast<Station *>(station)->goods[cargo];
-	return {LinkGraph::GetIfValid(ge.link_graph), ge.node, station->index.base()};
+	return {ge.link_graph.base(), ge.node};
 }
+static OpenTTDLinkGraph *LiveGraphGet(uint16_t id) noexcept { return LinkGraph::Get(LinkGraphID(id)); }
+static OpenTTDLinkGraph *LiveGraphGetIfValid(uint16_t id) noexcept { return LinkGraph::GetIfValid(LinkGraphID(id)); }
+static uint16_t LiveGraphStationID(const OpenTTDBaseStation *station) noexcept { return station->index.base(); }
 static void LiveGraphDequeue(OpenTTDLinkGraph *graph) noexcept { LinkGraphSchedule::instance.Dequeue(graph); }
 const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 {
 	static const OpenTTDLiveGraphServices services{
+#if !defined(NDEBUG) || defined(WITH_ASSERT)
+		.assertions = true,
+#else
+		.assertions = false,
+#endif
+		.get = LiveGraphGet,
+		.get_if_valid = LiveGraphGetIfValid,
+		.station_id = LiveGraphStationID,
 		.access = LiveGraphAccess,
 		.station = LiveGraphStation,
 		.attach = LiveGraphAttach,

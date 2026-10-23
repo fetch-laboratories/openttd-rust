@@ -195,7 +195,7 @@ pub(crate) fn increase_stats(
                 witness::hit(witness::VISITS_GRAPH_NEW);
                 graph = (s.allocate_graph)(cargo);
                 unsafe {
-                    live::join(graph, (l.station_id)(st2), l.graphs);
+                    live::join(graph, (l.graphs.station_id)(st2), l.graphs);
                 }
             } else {
                 witness::hit(witness::VISITS_GRAPH_FAILURE);
@@ -206,13 +206,13 @@ pub(crate) fn increase_stats(
         }
         if !graph.is_null() {
             unsafe {
-                live::join(graph, (l.station_id)(st), l.graphs);
+                live::join(graph, (l.graphs.station_id)(st), l.graphs);
             }
         }
     } else if second.is_null() {
         witness::hit(witness::VISITS_GRAPH_JOIN);
         unsafe {
-            live::join(graph, (l.station_id)(st2), l.graphs);
+            live::join(graph, (l.graphs.station_id)(st2), l.graphs);
         }
     } else if graph != second {
         if unsafe {
@@ -254,6 +254,7 @@ pub(crate) fn increase_stats(
                 time,
                 modes,
                 (s.shared.economy_date)(),
+                l.graphs.assertions,
             );
         }
     }
@@ -452,7 +453,7 @@ impl Refresher {
         let st = s.station_if_valid(cur_order.destination);
         if st.is_null()
             || next_station == INVALID_STATION
-            || next_station == (s.links.station_id)(st)
+            || next_station == (s.links.graphs.station_id)(st)
         {
             return;
         }
@@ -492,7 +493,7 @@ impl Refresher {
             // transported, unless the wait already exceeds the whole order list.
             if self.full_loading
                 && !list.is_null()
-                && (s.links.station_id)(st) == self.prediction.last_station
+                && (s.links.graphs.station_id)(st) == self.prediction.last_station
                 && o.total(list) > o.time(v)
             {
                 let total = o.total(list);
