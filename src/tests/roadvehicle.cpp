@@ -233,8 +233,7 @@ TEST_CASE("Ground cache - canonical aliases on normal and indexed construction")
 		CHECK(v->gcache.first_engine == EngineID::Invalid());
 		v->gv_flags = 0x8003;
 		CHECK(v->rust_ground.state->flags == 0x8003);
-		v->cur_speed = 65535;
-		v->SetLastSpeed();
+		v->gcache.last_speed = 65535;
 		CHECK(v->rust_ground.state->cache.last_speed == 65535);
 	};
 	REQUIRE(Vehicle::CanAllocateItem());

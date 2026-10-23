@@ -61,8 +61,6 @@ void openttd_rust_ground_cargo_changed(const OpenTTDGroundPhysicsServices *, con
 int32_t openttd_rust_ground_acceleration(const OpenTTDGroundPhysicsServices *, const Vehicle *);
 bool openttd_rust_ground_chain_in_depot(const OpenTTDGroundPhysicsServices *, const Vehicle *);
 uint32_t openttd_rust_ground_crash(const OpenTTDGroundPhysicsServices *, const Vehicle *, bool);
-int32_t openttd_rust_ground_inclination(const OpenTTDGroundPhysicsServices *, const Vehicle *, bool, bool);
-void openttd_rust_ground_last_speed(const OpenTTDGroundPhysicsServices *, const Vehicle *);
 uint16_t openttd_rust_ground_weight(const OpenTTDGroundPhysicsServices *, const Vehicle *, bool);
 VehicleAccelerationModel openttd_rust_ground_acceleration_type(const OpenTTDGroundPhysicsServices *, const Vehicle *);
 }

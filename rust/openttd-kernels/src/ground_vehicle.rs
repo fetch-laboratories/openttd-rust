@@ -711,8 +711,6 @@ entry!(openttd_rust_ground_cargo_changed, cargo_changed => ());
 entry!(openttd_rust_ground_acceleration, acceleration => i32);
 entry!(openttd_rust_ground_chain_in_depot, chain_in_depot => bool);
 entry!(openttd_rust_ground_crash, crash, flooded: bool => u32);
-entry!(openttd_rust_ground_inclination, inclination, new_tile: bool, delta: bool => i32);
-entry!(openttd_rust_ground_last_speed, last_speed => ());
 entry!(openttd_rust_ground_weight, weight, full: bool => u16);
 entry!(openttd_rust_ground_acceleration_type, acceleration_type => u8);
 

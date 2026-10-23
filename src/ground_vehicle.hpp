@@ -266,11 +266,9 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * @param update_delta Indicates to also update the delta.
 	 * @return Old height of the vehicle.
 	 */
+#ifndef WITH_RUST
 	inline int UpdateInclination(bool new_tile, bool update_delta)
 	{
-#ifdef WITH_RUST
-		return openttd_rust_ground_inclination(&GetRustGroundPhysicsServices(), this, new_tile, update_delta);
-#else
 		int old_z = this->z_pos;
 
 		if (new_tile) {
@@ -281,8 +279,8 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 
 		this->UpdateViewport(true, update_delta);
 		return old_z;
-#endif
 	}
+#endif
 
 	/**
 	 * Set front engine state.
@@ -379,17 +377,15 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * Also mark the widget dirty when that is needed, i.e. when
 	 * the speed of this vehicle has changed.
 	 */
+#ifndef WITH_RUST
 	inline void SetLastSpeed()
 	{
-#ifdef WITH_RUST
-		return openttd_rust_ground_last_speed(&GetRustGroundPhysicsServices(), this);
-#else
 		if (this->cur_speed != this->gcache.last_speed) {
 			SetWindowWidgetDirty(WC_VEHICLE_VIEW, this->index, WID_VV_START_STOP);
 			this->gcache.last_speed = this->cur_speed;
 		}
-#endif
 	}
+#endif
 
 protected:
 	/**
