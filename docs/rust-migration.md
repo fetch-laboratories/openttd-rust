@@ -1803,7 +1803,7 @@ LGRJ records (GLOG history is reset only in prepared road inputs so both loaders
 revision). Graphs, allocator failures and abort timing are not exhaustive; resource exhaustion
 timing differs with the allocation strategy.
 
-### Link graph scheduler ownership (#373, draft #380)
+### Link graph scheduler ownership (#373, #380 via #391)
 
 One process-wide Rust owner holds ordered queued/running pointers and controls
 rotation, spawn/join/requeue, pool-wide date shifts and pause policy. Native pools,
@@ -1824,7 +1824,7 @@ pinned scheduler bodies for worker/pause, duplicate rotation, recycled-ID, clear
 pool-shift gaps, failing absent completion markers. Native tests exercise ABI,
 partial-state unwind and real SlError recursive cleanup. Actual concurrent worker,
 multiplayer/GUI timing and historical LGRS versions remain #156 gaps. Independent
-source reviews and root cost disposition stand; combined conflict review and Full remain.
+source/conflict reviews, root cost disposition and exact-combination Full passed in #391.
 
 ### Live link graph contents and mutation (#378)
 
@@ -2134,7 +2134,7 @@ Disaster movement and ground-clear enter occupancy directly through borrowed
 typed context; the exact base viewport and native cost lifetime stay shared.
 GUI/external articulated-GRF gaps remain #156.
 
-### Cargo-monitor accounting and ordered maps (#386, draft #388)
+### Cargo-monitor accounting and ordered maps (#386, #388 via #391)
 
 Rust owns both process-wide ordered pickup/delivery maps, shared bit helpers,
 activation/query/reset/stop, selective/global cleanup and delivery accounting.
@@ -2156,5 +2156,5 @@ Focused evidence: `python3 tools/migration.py simulate economy-manual economy-ca
 `python3 tools/cargo-income-comparison.py`, Cargo4 and native company/payment/ABI tests.
 Historical monitor-key conversion and external GameScript callers remain #156
 coverage gaps. Independent fixing review and the separate root cost disposition
-are recorded on #388; #391 combines the frozen owners on the routing base.
-Scoped reconciliation review and exact-combination Full remain pending.
+are recorded on #388; #391 integrated the frozen owners on the routing base after
+scoped reconciliation review and exact-combination Full passed.
