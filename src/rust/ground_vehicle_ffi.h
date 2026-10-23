@@ -15,6 +15,7 @@ struct Vehicle;
 struct CargoSpec;
 struct OpenTTDGroundState;
 struct OpenTTDRoadLeaves;
+struct OpenTTDRoadState;
 struct OpenTTDGroundOwner { OpenTTDGroundState *state; OpenTTDTrainHandle train; OpenTTDRoadState *road; VehicleType kind; };
 struct OpenTTDGroundPowerInput { uint32_t tile; uint8_t subtype; };
 struct OpenTTDGroundWeightInput { const CargoSpec *cargo; OpenTTDCargoList *owner; };

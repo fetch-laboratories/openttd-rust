@@ -1638,8 +1638,6 @@ static void AircraftDirectBoundary()
 	vehicle.status = [](OpenTTDVehicle *) noexcept { CHECK(aircraft_probe.live); return uint8_t{0}; };
 	vehicle.order_type = [](OpenTTDVehicle *) noexcept { return uint8_t{3}; };
 	vehicle.maintenance = &_vehicle_maintenance_probe;
-		ground.physics = &physics;
-		physics.vehicle = &physics_vehicle;
 	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	vehicle.loading = [](OpenTTDVehicle *, bool) noexcept {};
 	leaves.process_orders = [](OpenTTDAircraftVehicle v) noexcept {

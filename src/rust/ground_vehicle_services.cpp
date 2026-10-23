@@ -26,7 +26,7 @@ static OpenTTDGroundOwner GroundResolve(OpenTTDVehicle *shell) noexcept
 	if (v->type == VEH_TRAIN) { Train *t = Train::From(v); return {t->rust_ground.state, {t, t->GetRustState()}, nullptr, v->type}; }
 	return {RoadVehicle::From(v)->rust_ground.state, {nullptr, nullptr}, RoadVehicle::From(v)->GetRustState(), v->type};
 }
-static OpenTTDGroundPowerInput GroundPowerInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleTile(v), RustVehicleSubtype(v)}; }
+static OpenTTDGroundPowerInput GroundPowerInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {v->type == VEH_TRAIN ? RustVehicleTile(v) : 0, RustVehicleSubtype(v)}; }
 static OpenTTDGroundWeightInput GroundWeightInput(OpenTTDVehicle *shell) noexcept { Vehicle *v = VehicleOf(shell); return {CargoSpec::Get(v->cargo_type), RustVehicleCargoOwner(v)}; }
 static OpenTTDGroundAccelerationInput GroundAccelerationInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {v->type == VEH_TRAIN ? RustVehicleTile(v) : 0, RustVehicleSpeed(v), RustVehicleStatus(v), v->type == VEH_ROAD ? RoadVehicle::From(v)->roadtype : RoadType{0}}; }
 static OpenTTDGroundSpeedInput GroundSpeedInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleSpeed(v), RustVehicleSubspeed(v)}; }

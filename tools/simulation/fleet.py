@@ -296,8 +296,15 @@ def check(scenario, run, mode, role, result):
             result["problems"].append(f"{mode}/{role}: missing {line}")
     if scenario["fleet"] in ("transaction-build-road", "transaction-rail"):
         kind = "road" if scenario["fleet"] == "transaction-build-road" else "rail"
+        probes = [line for line in run["log"] if line.startswith("FLEET ground-probe ")]
+        if len(probes) != 1 or probes[0].split()[3] != "30":
+            result["problems"].append(f"{mode}/{role}: missing ground arithmetic probe")
         result[f"{mode}_{role}_ground"] = branch_witnesses(
-            scenario, run, role, "ground", [kind + "_power", kind + "_weight"]
+            scenario,
+            run,
+            role,
+            "ground",
+            [kind + "_power", kind + "_weight", "full_weight"],
         )
     if scenario["fleet"] in BRANCHES:
         result[mode + "_" + role + "_branches"] = branch_witnesses(

@@ -1952,13 +1952,7 @@ uint16_t RoadVehicle::GetMaxWeight() const
 #include "rust/road_services.h"
 #endif /* WITH_RUST */
 
-#ifdef WITH_RUST
-bool RoadVehicle::HasToUseGetSlopePixelZ()
-{
-	const RoadVehicle *first = this->First();
-	return openttd_rust_road_slope_pixel(RustVehicle(this), RustVehicle(first), first->GetRustState(), this->direction, &GetRoadLeaves());
-}
-#endif
+
 
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"

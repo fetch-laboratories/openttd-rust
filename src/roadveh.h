@@ -521,9 +521,7 @@ protected: // These functions should not be called outside acceleration code.
 	 * even if it is not reversing.
 	 * @return are we (possibly) reversing?
 	 */
-#ifdef WITH_RUST
-	bool HasToUseGetSlopePixelZ();
-#else
+#ifndef WITH_RUST
 	inline bool HasToUseGetSlopePixelZ()
 	{
 		const RoadVehicle *rv = this->First();

@@ -571,10 +571,12 @@ protected: // These functions should not be called outside acceleration code.
 	 * have always the same direction as the track under them.
 	 * @return false
 	 */
+#ifndef WITH_RUST
 	inline bool HasToUseGetSlopePixelZ()
 	{
 		return false;
 	}
+#endif
 };
 
 #ifdef WITH_RUST
