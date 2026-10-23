@@ -244,3 +244,29 @@ TEST_CASE("Station service - indexed shells, retirement and pool reuse")
 	_game_mode = old_mode;
 }
 #endif
+
+#ifdef WITH_RUST
+#include "../linkgraph/linkgraphjob.h"
+TEST_CASE("Link graph - canonical scalars and independent job snapshot lifetime")
+{
+	LinkGraph graph(0); graph.index = LinkGraphID::Invalid(); graph.Init(1);
+	{
+		auto fields = openttd_rust_live_node_fields(graph.RustState(), 0);
+		*fields.supply = 0xFEDCBA98; *fields.demand = 17; *fields.station = 42; *fields.xy = 1234; *fields.last_update = -1;
+		CHECK(fields.supply == openttd_rust_live_node_fields(graph.RustState(), 0).supply);
+		auto &edge = graph[0].AppendEdge(); edge.dest_node = 0; edge.capacity = 65536; edge.travel_time_sum = UINT64_C(0xFEDCBA9876543210);
+	}
+	{
+		LinkGraphJob job(graph);
+		CHECK(job.Graph().RustState() != graph.RustState());
+		CHECK(job.Graph()[0].Supply() == 0xFEDCBA98);
+		CHECK(job.Graph()[0][0].travel_time_sum == UINT64_C(0xFEDCBA9876543210));
+		CHECK(job.Graph()[0].Edges().data() != graph[0].Edges().data());
+		graph[0].UpdateSupply(1);
+		CHECK(job.Graph()[0].Supply() == 0xFEDCBA98);
+	}
+	CHECK(graph[0].Supply() == 0xFEDCBA99);
+	CHECK(graph[0].Station() == StationID(42));
+	CHECK(GetRustLiveGraphServices().access(&graph).owner == graph.RustState());
+}
+#endif

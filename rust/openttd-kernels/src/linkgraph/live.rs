@@ -11,13 +11,18 @@
 //! Rust frame or borrow survives `SlObject`, its pointer cleanup or exceptions.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
-use crate::linkgraph_type::EdgeUpdateModes;
+use crate::{
+    linkgraph_type::{EdgeUpdateModes, INVALID_LINK_GRAPH, INVALID_NODE},
+    station_type::INVALID_STATION,
+    tile_type::INVALID_TILE,
+    timer_game_common::INVALID_DATE,
+    witness,
+};
 use std::ptr::addr_of_mut;
 
 pub(crate) const MIN_TIMEOUT_DISTANCE: u32 = 32;
 pub(crate) const STALE_LINK_DEPOT_TIMEOUT: i32 = 1024;
 pub(crate) const COMPRESSION_INTERVAL: i32 = 256;
-const INVALID_DATE: i32 = -1;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -46,6 +51,14 @@ impl Edge {
     }
     pub(crate) fn travel_time(&self) -> u32 {
         (self.travel_time_sum / u64::from(self.capacity)) as u32
+    }
+    pub(crate) fn restrict(&mut self) {
+        witness::hit(witness::LINKGRAPH_RESTRICT);
+        self.last_unrestricted_update = INVALID_DATE;
+    }
+    pub(crate) fn release(&mut self) {
+        witness::hit(witness::LINKGRAPH_RELEASE);
+        self.last_restricted_update = INVALID_DATE;
     }
     fn update(&mut self, capacity: u32, usage: u32, time: u32, modes: EdgeUpdateModes, date: i32) {
         if modes.0 & EdgeUpdateModes::INCREASE.0 != 0 {
@@ -123,6 +136,13 @@ impl Node {
             edges: Vec::new(),
         }
     }
+    fn update_supply(&mut self, supply: u32, date: i32) {
+        self.supply = self.supply.wrapping_add(supply);
+        self.last_update = date;
+    }
+    fn set_demand(&mut self, demand: u32) {
+        self.demand = demand;
+    }
     pub(crate) fn edge(&self, dest: u16) -> Option<&Edge> {
         let index = self.edges.partition_point(|e| e.dest_node < dest);
         self.edges.get(index).filter(|e| e.dest_node == dest)
@@ -194,6 +214,7 @@ impl Graph {
         id
     }
     pub(crate) fn compress(&mut self, date: i32) {
+        witness::hit(witness::LINKGRAPH_COMPRESS);
         self.last_compression = date.wrapping_add(self.last_compression) / 2;
         let size = usize::from(self.size());
         for n in self.nodes.iter_mut().take(size) {
@@ -215,6 +236,11 @@ impl Graph {
     }
     fn remove_node(&mut self, id: u16) {
         let last = self.size().wrapping_sub(1);
+        witness::hit(if id == last {
+            witness::LINKGRAPH_REMOVE_LAST
+        } else {
+            witness::LINKGRAPH_REMOVE_NONLAST
+        });
         // Copy assignment, including for the last node, matches the source's
         // replacement semantics; existing node/edge storage can be reused.
         if id != last {
@@ -276,9 +302,9 @@ pub unsafe extern "C" fn openttd_rust_live_graph_date(graph: *mut Graph) -> *mut
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_init(graph: *mut Graph, size: u32) {
-    unsafe { &mut *graph }
-        .nodes
-        .resize_with(size as usize, || Node::new(u32::MAX, u16::MAX, 0));
+    unsafe { &mut *graph }.nodes.resize_with(size as usize, || {
+        Node::new(INVALID_TILE, INVALID_STATION, 0)
+    });
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_shift(graph: *mut Graph, interval: i32) {
@@ -353,7 +379,7 @@ pub unsafe extern "C" fn openttd_rust_live_node_location(graph: *mut Graph, id: 
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_node_demand(graph: *mut Graph, id: u16, demand: u32) {
-    unsafe { &mut *graph }.nodes[usize::from(id)].demand = demand;
+    unsafe { &mut *graph }.nodes[usize::from(id)].set_demand(demand);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_node_update_supply(
@@ -363,8 +389,7 @@ pub unsafe extern "C" fn openttd_rust_live_node_update_supply(
     date: i32,
 ) {
     let n = &mut unsafe { &mut *graph }.nodes[usize::from(id)];
-    n.supply = n.supply.wrapping_add(supply);
-    n.last_update = date;
+    n.update_supply(supply, date);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_node_edges(
@@ -413,7 +438,7 @@ pub unsafe extern "C" fn openttd_rust_live_node_append_edge(
     id: u16,
 ) -> *mut Edge {
     let edges = &mut unsafe { &mut *graph }.nodes[usize::from(id)].edges;
-    edges.push(Edge::new(u16::MAX));
+    edges.push(Edge::new(INVALID_NODE));
     edges.last_mut().unwrap()
 }
 #[unsafe(no_mangle)]
@@ -435,15 +460,11 @@ pub unsafe extern "C" fn openttd_rust_live_edge_update(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_edge_restrict(edge: *mut Edge) {
-    unsafe {
-        (*edge).last_unrestricted_update = INVALID_DATE;
-    }
+    unsafe { &mut *edge }.restrict();
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_edge_release(edge: *mut Edge) {
-    unsafe {
-        (*edge).last_restricted_update = INVALID_DATE;
-    }
+    unsafe { &mut *edge }.release();
 }
 
 #[repr(C)]
@@ -524,6 +545,7 @@ pub unsafe extern "C" fn openttd_rust_live_graph_merge(
     services: *const Services,
 ) {
     let services = unsafe { &*services };
+    witness::hit(witness::LINKGRAPH_MERGE);
     let native = (services.access)(graph);
     let access = GraphAccess {
         owner: native.owner,
@@ -638,7 +660,7 @@ pub(crate) unsafe fn station_demand(
     let graph = (services.get_if_valid)(m.graph);
     if !graph.is_null() {
         let owner = unsafe { resolve(graph, services) };
-        unsafe { &mut *owner }.nodes[usize::from(m.node)].demand = demand;
+        unsafe { &mut *owner }.nodes[usize::from(m.node)].set_demand(demand);
     }
 }
 pub(crate) unsafe fn station_supply(
@@ -649,7 +671,7 @@ pub(crate) unsafe fn station_supply(
     services: &Services,
 ) {
     let mut m = (services.membership)(station, cargo);
-    let graph = if m.graph == u16::MAX {
+    let graph = if m.graph == INVALID_LINK_GRAPH {
         if (services.available)() {
             let graph = (services.allocate)(cargo);
             unsafe {
@@ -668,8 +690,7 @@ pub(crate) unsafe fn station_supply(
         let owner = unsafe { resolve(graph, services) };
         let date = date();
         let n = &mut unsafe { &mut *owner }.nodes[usize::from(m.node)];
-        n.supply = n.supply.wrapping_add(supply);
-        n.last_update = date;
+        n.update_supply(supply, date);
     }
 }
 

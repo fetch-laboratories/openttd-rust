@@ -22,7 +22,7 @@ use crate::{
     cargo_storage::List,
     cargo_type::{CARGO_AUTO_REFIT, INVALID_CARGO, NUM_CARGO},
     cargopacket::MTA_LOAD,
-    linkgraph::{NativeGraph, live},
+    linkgraph::live,
     linkgraph_type::EdgeUpdateModes,
     map_func::Map,
     order_type::{
@@ -93,12 +93,6 @@ pub struct Services {
     pub display_speed: extern "C" fn(VehicleRef) -> i32,
     /// `BaseStation::xy`.
     pub location: extern "C" fn(*const BaseStation) -> u32,
-    /// `LinkGraph::CanAllocateItem()`.
-    pub graph_available: extern "C" fn() -> bool,
-    /// `new LinkGraph(cargo)`, then `LinkGraphSchedule::instance.Queue`.
-    pub allocate_graph: extern "C" fn(u8) -> *mut NativeGraph,
-    /// `Debug(misc, 0, "Can't allocate link graph")`.
-    pub allocation_failure: extern "C" fn(),
     pub percent: PercentStrings,
     /// `v->last_loading_station = station`.
     pub set_last_loading: extern "C" fn(VehicleRef, u16),
@@ -191,15 +185,15 @@ pub(crate) fn increase_stats(
     let second = (l.graph)(st2, cargo);
     if graph.is_null() {
         if second.is_null() {
-            if (s.graph_available)() {
+            if (l.graphs.available)() {
                 witness::hit(witness::VISITS_GRAPH_NEW);
-                graph = (s.allocate_graph)(cargo);
+                graph = (l.graphs.allocate)(cargo);
                 unsafe {
                     live::join(graph, (l.graphs.station_id)(st2), l.graphs);
                 }
             } else {
                 witness::hit(witness::VISITS_GRAPH_FAILURE);
-                (s.allocation_failure)();
+                (l.graphs.allocation_failure)();
             }
         } else {
             graph = second;
@@ -1156,9 +1150,6 @@ crate::abi::layouts! {
         prediction,
         display_speed,
         location,
-        graph_available,
-        allocate_graph,
-        allocation_failure,
         percent,
         set_last_loading,
         set_loading_tick,

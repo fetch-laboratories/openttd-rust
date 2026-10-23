@@ -8,3 +8,6 @@
 //! Shared time constants from `timer_game_common.h`.
 /// `CalendarTime::MONTHS_IN_YEAR`.
 pub const MONTHS_IN_YEAR: u32 = 12;
+
+/// `TimerGameConst::INVALID_DATE`, inherited by `EconomyTime`/`CalendarTime`.
+pub const INVALID_DATE: i32 = -1;

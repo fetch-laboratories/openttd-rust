@@ -179,6 +179,14 @@ witness_blocks! {
         LANDSCAPE_CMD_PARTIAL = 3 => "landscape_cmd.partial",
     }
 
+    linkgraph {
+        LINKGRAPH_MERGE = 0 => "linkgraph.merge",
+        LINKGRAPH_REMOVE_LAST = 1 => "linkgraph.remove_last",
+        LINKGRAPH_REMOVE_NONLAST = 2 => "linkgraph.remove_nonlast",
+        LINKGRAPH_RESTRICT = 3 => "linkgraph.restrict",
+        LINKGRAPH_RELEASE = 4 => "linkgraph.release",
+        LINKGRAPH_COMPRESS = 5 => "linkgraph.compress",
+    }
     object {
         OBJECT_BUILD = 0 => "object.build",
         OBJECT_REMOVE = 1 => "object.remove",

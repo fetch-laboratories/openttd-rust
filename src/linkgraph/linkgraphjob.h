@@ -93,8 +93,9 @@ public:
 
 		NodeAnnotation(const LinkGraph::BaseNode &node, size_t size) : base(node), undelivered_supply(node.Supply())
 		{
-			this->edges.reserve(node.Edges().size());
-			for (auto &e : node.Edges()) this->edges.emplace_back(e);
+			const auto edges = node.Edges();
+			this->edges.reserve(edges.size());
+			for (auto &e : edges) this->edges.emplace_back(e);
 #ifndef WITH_RUST
 			this->demands.resize(size);
 #else
