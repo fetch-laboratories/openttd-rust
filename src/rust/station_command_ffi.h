@@ -33,6 +33,7 @@ struct OpenTTDStationBounds { int32_t left, top, right, bottom; };
 struct OpenTTDStationSpecIndex { uint8_t value; bool valid; };
 struct OpenTTDRailStationSpecInfo { uint8_t platforms, lengths; bool slope_callback, availability_callback; };
 struct RoadStop;
+struct OpenTTDRoadGroundServices;
 struct OpenTTDRoadStationSpecCost { uint8_t multiplier; int32_t shift; };
 struct OpenTTDRoadStationSpecInfo { uint8_t stop_type; bool drive_only, availability_callback; };
 struct AirportSpec;
@@ -236,6 +237,9 @@ struct OpenTTDStationCommandServices {
 	void (*remove_buoy)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_buoy);
 	bool (*autoslope_axis)(uint32_t, int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(autoslope_axis);
 	void (*station_list_classes_invalidate)() noexcept OPENTTD_SERVICE_DEFAULT(station_list_classes_invalidate);
+	Axis (*rail_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_axis);
+	const OpenTTDRoadGroundServices *road_ground;
+	void (*clear_cached_name)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(clear_cached_name);
 };
 const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept;
 extern "C" {

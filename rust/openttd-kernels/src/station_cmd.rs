@@ -18,6 +18,7 @@
     clippy::too_many_arguments
 )]
 use crate::direction_type::INVALID_DIAGDIR;
+mod waypoint;
 use crate::rail_cmd::RailCommandServices;
 use crate::road_stop::{RoadStopServices, Stop};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
@@ -351,6 +352,10 @@ pub struct CommandServicesTable {
     pub remove_buoy: extern "C" fn(*mut CommandCost, u32, u16),
     pub autoslope_axis: extern "C" fn(u32, i32, u8, u8) -> bool,
     pub station_list_classes_invalidate: extern "C" fn(),
+    // Waypoint command leaves; canonical shells and shared map services.
+    pub rail_axis: extern "C" fn(u32) -> crate::services::Axis,
+    pub road_ground: *const crate::ground::RoadServices,
+    pub clear_cached_name: extern "C" fn(*mut BaseStation),
 }
 struct Ctx<'a> {
     s: &'a CommandServicesTable,
@@ -973,6 +978,7 @@ impl Ctx<'_> {
             }
         }
         if flags & 1 != 0 {
+            (self.s.clear_cached_name)(st);
             (self.s.set_name)(st, text, length);
             (self.s.virtual_coord)(st);
             (self.world().station_list_invalidation)(st, 1);

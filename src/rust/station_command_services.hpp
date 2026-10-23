@@ -101,7 +101,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.before_add_rect = [](OpenTTDCommandCost *out, BaseStation *st, OpenTTDStationArea area, uint8_t mode) noexcept { *reinterpret_cast<CommandCost *>(out) = st->rect.BeforeAddRect(TileIndex{area.tile}, area.w, area.h, static_cast<StationRect::StationRectMode>(mode)); },
 		.road_waypoint = RustStationRoadWaypoint,
 		.name_equals = [](BaseStation *st, const uint8_t *text, size_t length) noexcept { return !st->name.empty() && st->name == std::string_view(reinterpret_cast<const char *>(text), length); },
-		.set_name = [](BaseStation *st, const uint8_t *text, size_t length) noexcept { st->cached_name.clear(); st->name.assign(reinterpret_cast<const char *>(text), length); },
+		.set_name = [](BaseStation *st, const uint8_t *text, size_t length) noexcept { st->name.assign(reinterpret_cast<const char *>(text), length); },
 		.rect_contains = [](BaseStation *st, uint32_t tile) noexcept { return st->rect.PtInExtendedRect(TileX(TileIndex{tile}), TileY(TileIndex{tile})); },
 		.flip_airport_closed = [](BaseStation *st) noexcept { Station::From(st)->airport.blocks.Flip(AirportBlock::AirportClosed); },
 		.closed_widget = RustStationClosedWidget,
@@ -245,6 +245,9 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.remove_buoy = [](OpenTTDCommandCost *out, uint32_t tile, uint16_t flags) noexcept { *reinterpret_cast<CommandCost *>(out) = RemoveBuoy(TileIndex{tile}, DoCommandFlags(flags)); },
 		.autoslope_axis = [](uint32_t tile, int32_t z, uint8_t slope, uint8_t axis) noexcept { return AutoslopeCheckForAxis(TileIndex{tile}, z, static_cast<Slope>(slope), static_cast<Axis>(axis)); },
 			.station_list_classes_invalidate = []() noexcept { InvalidateWindowClassesData(WC_STATION_LIST, 0); },
+		.rail_axis = RustRailStationAxis,
+		.road_ground = &GetRustRoadGroundServices(),
+		.clear_cached_name = [](BaseStation *st) noexcept { st->cached_name.clear(); },
 	};
 	return services;
 }

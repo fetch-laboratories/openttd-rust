@@ -20,3 +20,10 @@ pub const DIAGDIR_SW: u8 = 2;
 pub const DIAGDIR_NW: u8 = 3;
 /// `INVALID_DIAGDIR`.
 pub const INVALID_DIAGDIR: u8 = 0xFF;
+
+/// `AXIS_X`.
+pub const AXIS_X: u8 = 0;
+/// `AXIS_Y`.
+pub const AXIS_Y: u8 = 1;
+/// `INVALID_AXIS`.
+pub const INVALID_AXIS: u8 = 0xFF;

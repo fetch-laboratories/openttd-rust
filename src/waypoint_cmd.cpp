@@ -40,6 +40,10 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/waypoint_command_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /**
@@ -105,6 +109,9 @@ static Waypoint *FindDeletedWaypointCloseTo(TileIndex tile, StringID str, Compan
  */
 Axis GetAxisForNewRailWaypoint(TileIndex tile)
 {
+#ifdef WITH_RUST
+	return static_cast<Axis>(openttd_rust_waypoint_rail_axis(&GetRustStationCommandServices(), tile.base()));
+#else
 	/* The axis for rail waypoints is easy. */
 	if (IsRailWaypointTile(tile)) return GetRailStationAxis(tile);
 
@@ -116,6 +123,7 @@ Axis GetAxisForNewRailWaypoint(TileIndex tile)
 		case TRACK_BIT_Y: return AXIS_Y;
 		default:          return INVALID_AXIS;
 	}
+#endif
 }
 
 /**
@@ -127,6 +135,9 @@ Axis GetAxisForNewRailWaypoint(TileIndex tile)
  */
 Axis GetAxisForNewRoadWaypoint(TileIndex tile)
 {
+#ifdef WITH_RUST
+	return static_cast<Axis>(openttd_rust_waypoint_road_axis(&GetRustStationCommandServices(), tile.base()));
+#else
 	/* The axis for existing road waypoints is easy. */
 	if (IsRoadWaypointTile(tile)) return GetDriveThroughStopAxis(tile);
 
@@ -139,6 +150,7 @@ Axis GetAxisForNewRoadWaypoint(TileIndex tile)
 	if ((bits & ROAD_X) == 0) return AXIS_Y;
 
 	return INVALID_AXIS;
+#endif
 }
 
 extern CommandCost ClearTile_Station(TileIndex tile, DoCommandFlags flags);
@@ -566,6 +578,7 @@ CommandCost RemoveBuoy(TileIndex tile, DoCommandFlags flags)
  * @param name The name to check.
  * @return True iff the name is unique.
  */
+#ifndef WITH_RUST
 static bool IsUniqueWaypointName(const std::string &name)
 {
 	for (const Waypoint *wp : Waypoint::Iterate()) {
@@ -574,6 +587,7 @@ static bool IsUniqueWaypointName(const std::string &name)
 
 	return true;
 }
+#endif
 
 /**
  * Rename a waypoint.
@@ -584,6 +598,11 @@ static bool IsUniqueWaypointName(const std::string &name)
  */
 CommandCost CmdRenameWaypoint(DoCommandFlags flags, StationID waypoint_id, const std::string &text)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_waypoint_rename(&GetRustStationCommandServices(), RustCommandCost(&cost), flags.base(), waypoint_id.base(), reinterpret_cast<const uint8_t *>(text.data()), text.size());
+	return cost;
+#else
 	Waypoint *wp = Waypoint::GetIfValid(waypoint_id);
 	if (wp == nullptr) return CMD_ERROR;
 
@@ -609,6 +628,7 @@ CommandCost CmdRenameWaypoint(DoCommandFlags flags, StationID waypoint_id, const
 		wp->UpdateVirtCoord();
 	}
 	return CommandCost();
+#endif
 }
 
 /**
@@ -620,6 +640,11 @@ CommandCost CmdRenameWaypoint(DoCommandFlags flags, StationID waypoint_id, const
  */
 std::tuple<CommandCost, StationID> CmdMoveWaypointName(DoCommandFlags flags, StationID waypoint_id, TileIndex tile)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	auto id = openttd_rust_waypoint_move_name(&GetRustStationCommandServices(), RustCommandCost(&cost), flags.base(), waypoint_id.base(), tile.base());
+	return {std::move(cost), StationID(id)};
+#else
 	Waypoint *wp = Waypoint::GetIfValid(waypoint_id);
 	if (wp == nullptr) return { CMD_ERROR, StationID::Invalid() };
 
@@ -648,6 +673,7 @@ std::tuple<CommandCost, StationID> CmdMoveWaypointName(DoCommandFlags flags, Sta
 		wp->UpdateVirtCoord();
 	}
 	return { CommandCost(), waypoint_id };
+#endif
 }
 
 /**

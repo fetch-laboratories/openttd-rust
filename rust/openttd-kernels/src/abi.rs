@@ -752,6 +752,9 @@ layouts! {
         remove_buoy,
         autoslope_axis,
         station_list_classes_invalidate,
+        rail_axis,
+        road_ground,
+        clear_cached_name,
     };
     "OpenTTDStationCommandStrings" ["probe"] => crate::station_cmd::Strings {
         demolish_bridge,
