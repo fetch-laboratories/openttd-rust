@@ -30,6 +30,7 @@ fn collect(dir: &Path, module: &str, found: &mut Vec<String>) -> io::Result<()> 
 }
 
 fn main() -> io::Result<()> {
+    println!("cargo:rerun-if-changed=src");
     let mut found = Vec::new();
     collect(Path::new("src"), "", &mut found)?;
     found.sort();

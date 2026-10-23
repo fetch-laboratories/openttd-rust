@@ -15,6 +15,7 @@
 #endif
 #include "service_defaults.hpp"
 #include "town_ffi.h"
+struct Industry;
 struct OpenTTDIndustry;
 struct OpenTTDIndustryServices;
 /** Native aliases address this sole Rust allocation. Calls are serialized by the
@@ -58,7 +59,7 @@ struct OpenTTDSubsidyServices {
 	const Station *(*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	bool (*station_empty)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_empty);
 	void (*catchment)(const Station *, void *, void (*)(void *, uint32_t)) noexcept OPENTTD_SERVICE_DEFAULT(catchment);
-	void (*near_industries)(const Station *, void *, void (*)(void *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(near_industries);
+	Industry *(*nearby_industry)(const Station *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby_industry);
 	void (*assert_destination)(Source) noexcept OPENTTD_SERVICE_DEFAULT(assert_destination);
 };
 extern "C" {
