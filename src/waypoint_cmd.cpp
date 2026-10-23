@@ -41,6 +41,7 @@
 #include "table/strings.h"
 
 #ifdef WITH_RUST
+#include "rust/command_services.h"
 #include "rust/waypoint_command_ffi.h"
 #include "rust/waypoint_layout.h"
 #endif

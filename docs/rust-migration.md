@@ -1496,6 +1496,27 @@ refusals and type-63 overbuilding through `AllocateRailType`. Retargeting uses v
 airport noise and reload cases remain required. External NewGRF programs, legacy
 and unusual occupied/reservation branches remain tracked by #156.
 
+### Waypoint construction and command policy (#366)
+
+Rust owns deleted-waypoint reuse in pool order, rail/road axis selection and tile
+validation, complete rail/road/buoy construction, buoy removal and waypoint name
+uniqueness, rename and sign-move policy. It calls integrated station joining,
+expansion, road-cost and removal policy directly, and water restoration directly.
+C++ retains canonical Waypoint/BaseStation shells, spec allocation, map setters,
+presentation and caller-stack `RailStationTileLayout`/iterator and command costs.
+No native world borrow spans callbacks; serialized synchronous leaves are noexcept.
+The last native road-infrastructure caller is replaced and its facade/export removed.
+
+`python3 tools/migration.py rust-checks` covers Cargo4. Focused semantic evidence:
+`python3 tools/migration.py simulate stations-commands-waypoints
+stations-commands-waypoints-reload stations-commands-commands
+stations-commands-reload water-commands` compares commands/errors, infrastructure,
+map/STNN, names/reload and RNG, with required default waypoint branch witnesses.
+Both axes, adjacent/distant joining, replacement, deleted reuse/equal-distance ties,
+occupied refusals and buoy water-class restoration/bankruptcy are exercised.
+External station/road-stop GRFs, exhausted pools/spec lists and legacy saves remain
+coverage gaps under #156. Independent review and exact-head Full are root's gates.
+
 ### Ship controller and private state (#146)
 
 Rust owns the complete ship tick/movement, locks, acceleration, rotation/reversal,

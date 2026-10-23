@@ -53,7 +53,7 @@ struct OpenTTDStationCommandStrings {
 	uint32_t drive_direction, drive_corner, drive_junction, drive_town, no_road, unsuitable_road, too_many_truck, too_many_bus;
 	uint32_t refuse_noise, refuse_airport, close_airport, aircraft_in_way;
 	uint32_t demolish_railroad, demolish_building, demolish_airport, demolish_cargo_tram, demolish_truck, demolish_passenger_tram, demolish_bus, buoy_in_way, demolish_dock, object_in_way, oilrig_name;
-	uint32_t waypoint_name, buoy_name, waypoint_adjoins_multiple, waypoint_close, buoy_in_use;
+	uint32_t buoy_in_use, buoy_name, waypoint_adjoins_multiple, waypoint_close, waypoint_name;
 };
 /* Each pointer is borrowed synchronously under the game-state mutex. Specs and
  * bridge tables remain native and immutable during the entry. No reference to
@@ -238,24 +238,24 @@ struct OpenTTDStationCommandServices {
 	OpenTTDStationArea (*industry_area)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(industry_area);
 	bool (*autoslope_axis)(uint32_t, int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(autoslope_axis);
 	void (*station_list_classes_invalidate)() noexcept OPENTTD_SERVICE_DEFAULT(station_list_classes_invalidate);
-	Axis (*rail_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_axis);
-	const OpenTTDRoadGroundServices *road_ground;
 	void (*clear_cached_name)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(clear_cached_name);
-	bool (*waypoint_available)() noexcept OPENTTD_SERVICE_DEFAULT(waypoint_available);
-	BaseStation *(*new_waypoint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_waypoint);
-	uint32_t (*string_id)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(string_id);
-	void (*set_string_id)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_string_id);
-	void (*set_location)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_location);
-	void (*set_road_waypoint)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(set_road_waypoint);
-	void (*waypoint_default_name)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_default_name);
-	void (*waypoint_view_invalidate)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_view_invalidate);
-	void (*road_waypoint_area_add)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_waypoint_area_add);
-	bool (*tile_flat)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_flat);
 	void (*make_buoy)(uint32_t, uint16_t, WaterClass) noexcept OPENTTD_SERVICE_DEFAULT(make_buoy);
 	void (*make_rail_waypoint)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t, RailType) noexcept OPENTTD_SERVICE_DEFAULT(make_rail_waypoint);
+	BaseStation *(*new_waypoint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_waypoint);
+	Axis (*rail_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_axis);
+	const OpenTTDRoadGroundServices *road_ground;
+	void (*road_waypoint_area_add)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_waypoint_area_add);
+	void (*set_location)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_location);
 	void (*set_rail_station_reservation)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_rail_station_reservation);
-	void (*waypoint_layout_init)(OpenTTDWaypointLayout *, const StationSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_layout_init);
+	void (*set_road_waypoint)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(set_road_waypoint);
+	void (*set_string_id)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_string_id);
+	uint32_t (*string_id)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(string_id);
+	bool (*tile_flat)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_flat);
+	bool (*waypoint_available)() noexcept OPENTTD_SERVICE_DEFAULT(waypoint_available);
+	void (*waypoint_default_name)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_default_name);
 	uint8_t (*waypoint_layout_gfx)(OpenTTDWaypointLayout *, bool) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_layout_gfx);
+	void (*waypoint_layout_init)(OpenTTDWaypointLayout *, const StationSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_layout_init);
+	void (*waypoint_view_invalidate)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waypoint_view_invalidate);
 
 };
 const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept;
