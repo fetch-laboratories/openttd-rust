@@ -28,8 +28,8 @@ pub const RIVER_OFFSET_DESERT_DISTANCE: u32 = 5;
 use crate::{
     ground::{Call, ClearServices, CostServices, RailServices},
     services::{
-        self, ClearGroundType, FloodingBehaviour, Foundation, FoundationSlope, RailGroundType,
-        Services, Slope, Track, TreeGround,
+        self, ClearGroundType, FloodingBehaviour, Foundation, RailGroundType, Services, Slope,
+        Track, TreeGround,
     },
     vehicle::{VehicleRef, VehicleServices, VehicleType},
 };

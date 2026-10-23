@@ -545,7 +545,9 @@ impl Search {
         crate::bridge::has_bridge_flat_ramp(
             shared,
             (shared.tile_slope)(tile),
-            crate::direction_func::diag_dir_to_axis(direction),
+            crate::direction_func::diag_dir_to_axis(direction, |ok| {
+                crate::movement::native_assert(shared, ok);
+            }),
         )
     }
     fn follow(&self, tile: u32, td: u8, no90: u8, compatible: u64, mask: bool) -> Follow {
