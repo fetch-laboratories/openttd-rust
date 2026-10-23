@@ -241,10 +241,12 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 	std::fflush(stderr); return true;
 }
 #include "landscape-console.hpp"
+#include "generation-console.hpp"
 extern "C" void __real__Z22IConsoleStdLibRegisterv();
 extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 {
 	__real__Z22IConsoleStdLibRegisterv();
 	IConsole::CmdRegister("objects_scenario", ObjectsScenario);
 	IConsole::CmdRegister("landscape_scenario", LandscapeScenario);
+	IConsole::CmdRegister("generation_scenario", GenerationScenario);
 }

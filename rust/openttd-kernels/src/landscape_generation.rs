@@ -38,6 +38,7 @@ use crate::tile_type::{MP_CLEAR, MP_VOID};
 use crate::tree_cmd::TP_NONE;
 use crate::water::WaterServices;
 use crate::water_type::WATER_CLASS_SEA;
+use crate::witness as w;
 use std::ffi::c_void;
 #[repr(C)]
 pub struct Frame {
@@ -145,6 +146,7 @@ impl<'a> World<'a> {
         }
     }
     fn initialize(&self, freeform: bool) {
+        w::hit(w::GENERATION_INITIALIZE);
         for y in u32::from(freeform)..self.size_y - 1 {
             for x in u32::from(freeform)..self.map.max_x() {
                 let tile = self.map.tile_xy(x, y);
@@ -162,6 +164,7 @@ impl<'a> World<'a> {
         }
     }
     fn fix_slopes(&self, max_height: u8) {
+        w::hit(w::GENERATION_FIX_SLOPES);
         // Two source-ordered passes. Heights are re-read at each source observation.
         for reverse in [false, true] {
             for row in 0..self.size_y {
@@ -216,6 +219,7 @@ pub unsafe extern "C" fn openttd_rust_fix_slopes(a: *const GenerationServices, m
 
 impl World<'_> {
     fn convert_ground_water(&self) {
+        w::hit(w::GENERATION_WATERING);
         let water = unsafe { &*self.a.water };
         for tile in 0..self.map.size_x() * self.size_y {
             let slope_z = (self.s.tile_slope_z)(tile);
@@ -247,6 +251,7 @@ impl World<'_> {
         }
     }
     fn flat_empty_world(&self, height: u8, freeform: bool, max_height: u8) {
+        w::hit(w::GENERATION_FLAT);
         let edge = if freeform { 0 } else { 2 };
         for y in edge..self.size_y - edge {
             for x in edge..self.map.size_x() - edge {
@@ -333,8 +338,15 @@ impl World<'_> {
             data: std::ptr::null(),
         };
         if !(decoder.read)(decoder.context, &raw mut image) {
+            w::hit(w::GENERATION_LOAD_FAILURE);
             return false;
         }
+        w::hit(w::GENERATION_HEIGHTMAP);
+        w::hit(if rotation == 0 {
+            w::GENERATION_HEIGHTMAP_CCW
+        } else {
+            w::GENERATION_HEIGHTMAP_CW
+        });
         self.greyscale(&image, rotation, freeform, heightmap_height);
         self.fix_slopes(max_height);
         (self.a.set_freeform)(!(self.a.surrounded_by_water)());
@@ -451,6 +463,14 @@ impl World<'_> {
             return;
         }
         let direction = ((r >> 22) & 3) as u8;
+        w::hit(
+            [
+                w::GENERATION_TEMPLATE_NE,
+                w::GENERATION_TEMPLATE_SE,
+                w::GENERATION_TEMPLATE_SW,
+                w::GENERATION_TEMPLATE_NW,
+            ][usize::from(direction)],
+        );
         let (mut width, mut height) = (template.width, template.height);
         if diag_dir_to_axis(direction) == 1 {
             std::mem::swap(&mut width, &mut height);
@@ -500,6 +520,9 @@ impl World<'_> {
         }
     }
     fn coverage_line(&self, coverage: u32, edge_multiplier: u32) -> u32 {
+        if edge_multiplier != 0 {
+            w::hit(w::GENERATION_COVERAGE_EDGE);
+        }
         let mut histogram = [0_i32; MAX_TILE_HEIGHT as usize + 1];
         let mut edges = [0_i32; MAX_TILE_HEIGHT as usize + 1];
         for tile in 0..self.size() {
@@ -549,6 +572,7 @@ impl World<'_> {
                     || ((self.s.tile_height)(other) < line && (self.s.tile_type)(other) != MP_WATER)
             }) {
                 (self.s.set_tropic_zone)(tile, TROPICZONE_DESERT);
+                w::hit(w::GENERATION_DESERT);
             }
         }
         for i in 0..crate::landscape::TILE_UPDATE_FREQUENCY {
@@ -571,6 +595,7 @@ impl World<'_> {
                     || (self.s.clear_ground)(other).0 != CLEAR_DESERT
             }) {
                 (self.s.set_tropic_zone)(tile, TROPICZONE_RAINFOREST);
+                w::hit(w::GENERATION_RAINFOREST);
             }
         }
         true
@@ -625,6 +650,7 @@ impl World<'_> {
         }
     }
     fn lake(&self, center: u32, height: u32, g: &Settings) {
+        w::hit(w::GENERATION_LAKE);
         self.river_tile(center);
         let diameter = self.s.random_range(8) + 3;
         for _ in 0..2 {
@@ -642,9 +668,13 @@ impl World<'_> {
         }
     }
     fn wetlands(&self, center: u32, height: u32, length: u32, g: &Settings) {
+        w::hit(w::GENERATION_WETLAND);
         self.river_tile(center);
         let diameter = length.max(16);
         let trees = self.chance(1, 2);
+        if trees {
+            w::hit(w::GENERATION_WETLAND_TREES);
+        }
         self.for_spiral(center, diameter, |tile| {
             if !self.valid_terminus_tile(tile, height, g) {
                 return;
@@ -719,10 +749,12 @@ impl World<'_> {
             return false;
         }
         if (self.s.distance_from_edge)(tile) <= 1 {
+            w::hit(w::GENERATION_SEA_EDGE);
             return true;
         }
         (self.a.sea_insert)(frame, tile);
         if (self.a.sea_size)(frame) > limit {
+            w::hit(w::GENERATION_SEA_CUTOFF);
             return false;
         }
         for dir in 0..4 {
@@ -771,6 +803,7 @@ impl World<'_> {
                     if edge || (self.a.sea_size)(frame) > threshold {
                         found = true;
                     } else {
+                        w::hit(w::GENERATION_SEA_FLATTEN);
                         let mut tile = (self.a.sea_first)(frame);
                         while tile != INVALID_TILE {
                             self.terraform(tile, SLOPE_ELEVATED, false, F::EXECUTE);
@@ -799,6 +832,7 @@ impl World<'_> {
         }
         let mut main_river = false;
         if found {
+            w::hit(w::GENERATION_FLOW_RECURSE);
             (found, main_river) = self.flow_river(frame, spring, end, min_length, g);
         } else if queue.len() > 32 {
             let center = queue[self.s.random_range(queue.len() as u32) as usize];
@@ -831,6 +865,11 @@ impl World<'_> {
         }
         while wells != 0 {
             let long = wells > short;
+            w::hit(if long {
+                w::GENERATION_LONG_ATTEMPT
+            } else {
+                w::GENERATION_SHORT_ATTEMPT
+            });
             if !(self.a.increase_progress)(frame, GWP_RIVER) {
                 return false;
             }
@@ -847,6 +886,7 @@ impl World<'_> {
                 while !spiral.is_end() {
                     let tile = self.map.tile_xy(spiral.x, spiral.y);
                     if self.find_spring(tile, g) {
+                        w::hit(w::GENERATION_SPRING);
                         done = self
                             .flow_river(
                                 frame,
@@ -894,6 +934,7 @@ impl World<'_> {
                 return false;
             }
         } else if g.generator == LG_TERRAGENESIS {
+            w::hit(w::GENERATION_TGP);
             if !(self.a.set_progress)(frame, GWP_LANDSCAPE, steps + 4) {
                 return false;
             }
@@ -901,6 +942,7 @@ impl World<'_> {
                 return false;
             }
         } else {
+            w::hit(w::GENERATION_ORIGINAL);
             if !(self.a.set_progress)(frame, GWP_LANDSCAPE, steps + 2) {
                 return false;
             }
@@ -953,9 +995,12 @@ impl World<'_> {
             return false;
         }
         match g.climate {
-            ARCTIC => (self.a.set_snow_line)(
-                self.coverage_line(u32::from(g.snow_coverage), 0).max(2) as u8,
-            ),
+            ARCTIC => {
+                w::hit(w::GENERATION_SNOW);
+                (self.a.set_snow_line)(
+                    self.coverage_line(u32::from(g.snow_coverage), 0).max(2) as u8
+                )
+            }
             TROPIC => {
                 let line =
                     u32::from(self.coverage_line(100 - u32::from(g.desert_coverage), 4) as u8);
@@ -1030,6 +1075,7 @@ impl World<'_> {
                         return;
                     }
                 }
+                w::hit(w::GENERATION_WIDEN_TERRAFORM);
                 self.terraform(tile, complement_slope(current), true, F::EXECUTE | F::AUTO);
             } else if is_inclined_slope(desired) {
                 let direction = reverse_diag_dir(get_inclined_slope_direction(desired));
@@ -1056,6 +1102,7 @@ impl World<'_> {
             current = (self.s.tile_slope)(tile);
         }
         if is_inclined_slope(current) {
+            w::hit(w::GENERATION_WIDEN_SLOPE);
             let direction = get_inclined_slope_direction(current);
             let upstream = self.map.add_diag(tile, direction);
             let downstream = self.map.add_diag(tile, reverse_diag_dir(direction));
@@ -1079,6 +1126,7 @@ impl World<'_> {
             }
         }
         if current == desired {
+            w::hit(w::GENERATION_WIDEN);
             self.river_tile(tile);
         }
     }
@@ -1128,6 +1176,7 @@ impl World<'_> {
                 };
                 if let Some(&old) = open.get(&tile) {
                     if estimate < nodes[old].estimate {
+                        w::hit(w::GENERATION_YAPF_OPEN_UPDATE);
                         heap.remove(old, |a, b| nodes[a].estimate < nodes[b].estimate);
                         nodes[old] = node;
                         heap.include(old, |a, b| nodes[a].estimate < nodes[b].estimate);
@@ -1144,6 +1193,7 @@ impl World<'_> {
                 heap.include(id, |a, b| nodes[a].estimate < nodes[b].estimate);
             }
             if g.max_search_nodes != 0 && closed.len() as i32 >= g.max_search_nodes {
+                w::hit(w::GENERATION_YAPF_LIMIT);
                 break;
             }
             open.remove(&nodes[best].tile);
@@ -1153,6 +1203,7 @@ impl World<'_> {
         let Some(destination) = destination else {
             return;
         };
+        w::hit(w::GENERATION_YAPF_FOUND);
         let mut current = Some(destination);
         while let Some(id) = current {
             let tile = nodes[id].tile;

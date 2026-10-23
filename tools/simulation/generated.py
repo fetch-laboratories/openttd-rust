@@ -1,5 +1,7 @@
 """generated scenario evidence."""
 
+from . import core, objects
+from .console_adapter import prepared_console
 from .core import SNAPSHOT_TICKS, TICKS_PER_DAY
 
 
@@ -93,6 +95,7 @@ def scenarios(soak):
                 "map_log2": mx,
                 "map_log2_y": my,
                 "land_generator": 1,
+                "generation_owner": "snapshot",
                 "ticks": 2 * SNAPSHOT_TICKS + TICKS_PER_DAY,
                 "settings": {
                     "difficulty": {"terrain_type": terrain, "quantity_sea_lakes": sea},
@@ -100,6 +103,9 @@ def scenarios(soak):
                         "landscape": ("temperate", "arctic", "tropic", "toyland")[
                             climate
                         ],
+                        "snow_coverage": 0,
+                        "desert_coverage": 100,
+                        "min_river_length": 6,
                         "variety": variety,
                         "tgen_smoothness": smooth,
                         "water_borders": border,
@@ -115,4 +121,81 @@ def scenarios(soak):
                 },
             }
         )
+    for climate, seed in enumerate((1, 12345, 777, 31337)):
+        scenarios.append(
+            dict(
+                name=f"generate-original-settings-{climate}",
+                kind="generate",
+                seed=seed,
+                map_log2=7,
+                map_log2_y=8 if climate == 2 else 6,
+                land_generator=0,
+                generation_owner="snapshot",
+                ticks=2 * SNAPSHOT_TICKS + TICKS_PER_DAY,
+                settings={
+                    "game_creation": {
+                        "landscape": ("temperate", "arctic", "tropic", "toyland")[
+                            climate
+                        ],
+                        "snow_coverage": 100,
+                        "desert_coverage": 0,
+                        "amount_of_rivers": 0 if climate == 0 else 3,
+                        "min_river_length": 6,
+                    },
+                    "construction": {
+                        "freeform_edges": "false" if climate % 2 else "true"
+                    },
+                    "difficulty": {
+                        "terrain_type": climate,
+                        "quantity_sea_lakes": climate,
+                    },
+                },
+            )
+        )
     return scenarios
+
+
+def game_environment(scenario):
+    return (
+        core.WITNESS_ENVIRONMENT
+        if scenario.get("generation_owner") and scenario.get("witnesses")
+        else {}
+    )
+
+
+def prepare(scenario, binaries, builds, out, timeout, env, result):
+    if not scenario.get("generation_owner"):
+        return scenario
+    executables = prepared_console(
+        "objects",
+        objects.adapter,
+        binaries,
+        builds,
+        out / scenario["name"] / "input",
+        env,
+    )
+    return dict(
+        scenario,
+        executables=executables,
+        console=["generation_scenario " + scenario["generation_owner"]],
+    )
+
+
+def check(scenario, run, mode, role, result):
+    if not scenario.get("generation_owner"):
+        return
+    lines = [line for line in run["log"] if line.startswith("GENERATION ")]
+    if not any(line.startswith("GENERATION map early ") for line in lines):
+        raise RuntimeError("missing early map/RNG snapshot")
+    required = ["initialize", "fix_slopes", "watering"]
+    required += ["tgp" if scenario["land_generator"] else "original"]
+    climate = scenario["settings"]["game_creation"]["landscape"]
+    if climate == "arctic":
+        required += ["snow"]
+    if climate == "tropic":
+        required += ["coverage_edge", "rainforest"]
+    if not scenario["land_generator"]:
+        required += ["template_ne", "template_se", "template_sw", "template_nw"]
+    counts = core.branch_witnesses(scenario, run, role, "generation", required)
+    if counts is not None:
+        result.setdefault("generation_witnesses", {})[mode] = counts

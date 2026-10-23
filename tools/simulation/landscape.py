@@ -57,37 +57,54 @@ REQUIRED = {
 
 def scenarios(soak):
     saves = {"airport": "aircraft-route", "victims": "road-crossing"}
-    return [
-        dict(
-            name="landscape-" + case[0],
-            kind="save",
-            ground=case,
-            save=str(
-                ROOT
-                / "migration/saves"
-                / (saves.get(case[0], "road-flooding") + ".sav")
-            ),
-            short_checkpoint=True,
-            ticks=1,
-            console=["unpause"],
-        )
-        for case in GROUND_CASES
-    ] + [
-        dict(
-            name="landscape-commands-" + mode,
-            kind="save",
-            landscape_commands=mode,
-            save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
-            ticks=1,
-            short_checkpoint=True,
-        )
-        for mode in ("control", "reload")
-    ]
+    return (
+        [
+            dict(
+                name="landscape-" + case[0],
+                kind="save",
+                ground=case,
+                save=str(
+                    ROOT
+                    / "migration/saves"
+                    / (saves.get(case[0], "road-flooding") + ".sav")
+                ),
+                short_checkpoint=True,
+                ticks=1,
+                console=["unpause"],
+            )
+            for case in GROUND_CASES
+        ]
+        + [
+            dict(
+                name="landscape-commands-" + mode,
+                kind="save",
+                landscape_commands=mode,
+                save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+                ticks=1,
+                short_checkpoint=True,
+            )
+            for mode in ("control", "reload")
+        ]
+        + [
+            dict(
+                name="generate-heightmap-and-cancellation",
+                kind="generate",
+                seed=1,
+                map_log2=6,
+                map_log2_y=7,
+                land_generator=1,
+                generation_probe=True,
+                ticks=1,
+                short_checkpoint=True,
+            )
+        ]
+    )
 
 
 def game_environment(scenario):
     selected = (
-        "ground" in scenario
+        scenario.get("generation_probe")
+        or "ground" in scenario
         or "landscape_commands" in scenario
         or scenario.get("roads") == "flooding"
     )
@@ -95,6 +112,19 @@ def game_environment(scenario):
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
+    if scenario.get("generation_probe"):
+        executables = prepared_console(
+            "objects",
+            objects.adapter,
+            binaries,
+            builds,
+            out / scenario["name"] / "input",
+            env,
+        )
+        return dict(
+            scenario, executables=executables, console=["generation_scenario probe"]
+        )
+
     if "landscape_commands" in scenario:
         folder = out / scenario["name"] / "input"
         source, record = rails.normalize(Path(scenario["save"]), folder / "normalized")
@@ -255,6 +285,37 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 
 def check(scenario, run, mode, role, result):
+    if scenario.get("generation_probe"):
+        lines = [line for line in run["log"] if line.startswith("GENERATION ")]
+        expected = [
+            f"GENERATION cancel {i} true {i + 1} {int(i != 0)}" for i in range(3)
+        ]
+        if (
+            any(line not in lines for line in expected)
+            or "GENERATION missing false false" not in lines
+        ):
+            raise RuntimeError("missing cancellation/heightmap failure evidence")
+        if (
+            sum(
+                line.startswith("GENERATION heightmap ") and line.endswith("true")
+                for line in lines
+            )
+            != 8
+        ):
+            raise RuntimeError("missing heightmap rotation/aspect/edge cases")
+        if sum(line.startswith("GENERATION map ") for line in lines) != 10:
+            raise RuntimeError("missing early/heightmap/flat map and RNG snapshots")
+        counts = branch_witnesses(
+            scenario,
+            run,
+            role,
+            "generation",
+            ["heightmap_ccw", "heightmap_cw", "flat", "load_failure", "tgp_abort"],
+        )
+        if counts is not None:
+            result.setdefault("generation_witnesses", {})[mode] = counts
+        return
+
     if "landscape_commands" in scenario:
         lines = [line for line in run["log"] if line.startswith("LANDSCAPE ")]
         if len(lines) < (35 if scenario["landscape_commands"] == "control" else 1):
@@ -351,3 +412,21 @@ def scheduler_gap():
         check=True,
     )
     subprocess.run([str(binary)], cwd=root, check=True)
+
+
+def install(scenario, run_dir):
+    if not scenario.get("generation_probe"):
+        return
+    for name, width, height in (("wide", 17, 9), ("tall", 9, 17)):
+        pixels = b"".join(
+            b"".join(
+                bytes([(0, 1, 254, 255)[(x + 2 * y) % 4]]) * 3 for x in range(width)
+            )
+            + bytes((-width * 3) % 4)
+            for y in range(height)
+        )
+        header = struct.pack("<2sIHHI", b"BM", 54 + len(pixels), 0, 0, 54)
+        header += struct.pack(
+            "<IiiHHIIiiII", 40, width, height, 1, 24, 0, len(pixels), 0, 0, 0, 0
+        )
+        (run_dir / f"{name}.bmp").write_bytes(header + pixels)

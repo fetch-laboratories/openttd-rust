@@ -650,12 +650,14 @@ pub(crate) fn run(world: &World<'_>, frame: *mut Frame, input: Input) -> bool {
         (*owner).generate();
     }
     if !(world.a.increase_progress)(frame, GWP_LANDSCAPE) {
+        crate::witness::hit(crate::witness::GENERATION_TGP_ABORT);
         return false;
     }
     unsafe {
         (*owner).normalize();
     }
     if !(world.a.increase_progress)(frame, GWP_LANDSCAPE) {
+        crate::witness::hit(crate::witness::GENERATION_TGP_ABORT);
         return false;
     }
     if input.freeform != 0 {

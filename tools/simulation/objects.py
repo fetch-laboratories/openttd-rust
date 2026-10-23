@@ -37,6 +37,11 @@ def adapter(build, folder, env):
         env,
         ROOT / "tools/simulation/objects-console.cpp",
         "objects",
+        wraps=(
+            "_Z26SetGeneratingWorldProgress16GenWorldProgressj",
+            "_Z31IncreaseGeneratingWorldProgress16GenWorldProgress",
+            "_Z29GenerateWorldSetAbortCallbackPFvvE",
+        ),
         replace_objects=("/src/object_cmd.cpp.o",),
     )
 
