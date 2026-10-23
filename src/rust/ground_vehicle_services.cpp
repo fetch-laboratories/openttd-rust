@@ -35,26 +35,47 @@ static uint64_t GroundTrainCargoWeight(const CargoSpec *cargo, uint32_t count) n
 static bool GroundPowered(uint64_t types, RailType type) noexcept { return RustRailPowered(RailTypes(types), type); }
 static uint16_t GroundRoadSpeed(OpenTTDVehicle *shell) noexcept { const RoadVehicle *v = RoadVehicle::From(VehicleOf(shell)); return GetRoadTypeInfo(GetRoadType(v->tile, RustRoadTramType(v->roadtype)))->max_speed; }
 static uint32_t GroundSteepness(VehicleType type) noexcept { return type == VEH_TRAIN ? _settings_game.vehicle.train_slope_steepness : _settings_game.vehicle.roadveh_slope_steepness; }
-static void GroundViewport(OpenTTDVehicle *shell, bool force, bool delta) noexcept { Vehicle *v = VehicleOf(shell); if (v->type == VEH_TRAIN) Train::From(v)->UpdateViewport(force, delta); else RoadVehicle::From(v)->UpdateViewport(force, delta); }
+static void GroundViewport(OpenTTDVehicle *shell, bool force, bool delta) noexcept { Vehicle *v = VehicleOf(shell); if (v->type == VEH_TRAIN) RustVehicleViewport(Train::From(v), force, delta); else RustVehicleViewport(RoadVehicle::From(v), force, delta); }
 static bool GroundDepotTile(uint32_t tile, TransportType type) noexcept { return IsDepotTypeTile(TileIndex(tile), type); }
 
 const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 {
 	static const OpenTTDGroundPhysicsServices services{
-		.vehicle = &GetRustVehicleServices(), .road = &GetRustRoadLeaves(),
+		.vehicle = &GetRustVehicleServices(),
+		.road = &GetRustRoadLeaves(),
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 		.assertions = true,
 #else
 		.assertions = false,
 #endif
-		.resolve = GroundResolve, .first = RustGroundFirst, .power_input = GroundPowerInput, .weight_input = GroundWeightInput, .acceleration_input = GroundAccelerationInput, .speed_input = GroundSpeedInput,
-		.capacity = RustEngineDetermineCapacity, .cargo_weight = GroundCargoWeight, .train_cargo_weight = GroundTrainCargoWeight,
-		.engine_power = RustGroundEnginePower, .engine_weight = RustGroundEngineWeight, .engine_te = RustGroundEngineTE, .engine_drag = RustGroundEngineDrag,
-		.wagon_power = RustEngineWagonPower, .wagon_weight = RustEngineWagonWeight, .powered = GroundPowered, .rail_type = RustRailType,
-		.rail_acceleration = RustRailAccelerationType, .rail_speed = RustRailMaxSpeed, .road_speed = GroundRoadSpeed,
-		.tram = SharedRoadTypeIsTram, .steepness = GroundSteepness, .display_max_speed = RustGroundDisplayMaxSpeed,
-		.slope_z = SharedSlopePixelZ, .viewport = GroundViewport, .details_dirty = RustVehicleDetailsDirty,
-		.base_crash = RustVehicleBaseCrash, .depot_tile = GroundDepotTile,
+		.resolve = GroundResolve,
+		.first = RustGroundFirst,
+		.power_input = GroundPowerInput,
+		.weight_input = GroundWeightInput,
+		.acceleration_input = GroundAccelerationInput,
+		.speed_input = GroundSpeedInput,
+		.capacity = RustEngineDetermineCapacity,
+		.cargo_weight = GroundCargoWeight,
+		.train_cargo_weight = GroundTrainCargoWeight,
+		.engine_power = RustGroundEnginePower,
+		.engine_weight = RustGroundEngineWeight,
+		.engine_te = RustGroundEngineTE,
+		.engine_drag = RustGroundEngineDrag,
+		.wagon_power = RustEngineWagonPower,
+		.wagon_weight = RustEngineWagonWeight,
+		.powered = GroundPowered,
+		.rail_type = RustRailType,
+		.rail_acceleration = RustRailAccelerationType,
+		.rail_speed = RustRailMaxSpeed,
+		.road_speed = GroundRoadSpeed,
+		.tram = SharedRoadTypeIsTram,
+		.steepness = GroundSteepness,
+		.display_max_speed = RustGroundDisplayMaxSpeed,
+		.slope_z = SharedSlopePixelZ,
+		.viewport = GroundViewport,
+		.details_dirty = RustVehicleDetailsDirty,
+		.base_crash = RustVehicleBaseCrash,
+		.depot_tile = GroundDepotTile,
 	};
 	return services;
 }

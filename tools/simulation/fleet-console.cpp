@@ -62,7 +62,8 @@ static void GroundPhysicsProbe(T *v, Info &info)
 		v->gcache.cached_air_drag = 4096;
 		v->gcache.cached_slope_resistance = 800000000;
 		int acceleration = v->GetAcceleration();
-		int distance = v->UpdateSpeed();
+		int distance = 0;
+		if constexpr (std::is_same_v<T, Train>) distance = v->UpdateSpeed();
 		fmt::print(stderr, "FLEET ground-arithmetic {} {} {} {} {} {} {} {} {}\n", v->type, spd, brake, slope, acceleration, distance, v->cur_speed, v->subspeed, v->progress);
 		++cases;
 	}

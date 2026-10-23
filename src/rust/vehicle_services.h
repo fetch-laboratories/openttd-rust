@@ -39,6 +39,7 @@ inline Vehicle *VehicleOf(OpenTTDVehicle *v) noexcept { return reinterpret_cast<
 inline std::optional<bool> RustVehicleBuildProbability(Vehicle *v, EngineID engine, BuildProbabilityType type) noexcept { return TestVehicleBuildProbability(v, engine, type); }
 inline bool RustVehicleHasReverseProbability(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); return RustVehicleBuildProbability(v, v->engine_type, BuildProbabilityType::Reversed).has_value(); }
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine; }
+template <class T> inline void RustVehicleViewport(T *v, bool force, bool delta) noexcept { v->UpdateViewport(force, delta); }
 template <class T> inline void RustVehicleUpdatePosition(T *v) noexcept { v->UpdatePosition(); }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
 inline bool RustVehicleCanAllocate(size_t count) noexcept { return Vehicle::CanAllocateItem(count); }
@@ -210,7 +211,7 @@ inline OpenTTDGroundViewportNext OPENTTD_VEHICLE_CALL GroundSvcUpdateViewportThe
 {
 	T *u = T::From(VehicleOf(part));
 	/* UpdateViewport may reenter Rust; no Rust borrow survives this call. */
-	u->UpdateViewport(false, false);
+	RustVehicleViewport(u, false, false);
 	Vehicle *next = RustVehicleNext(u);
 	/* Only the final iteration consumes front progress, after every viewport. */
 	return {.next = RustVehicle(next), .final_progress = next == nullptr ? RustVehicleProgress(VehicleOf(front)) : uint8_t(0)};
@@ -220,7 +221,7 @@ inline void OPENTTD_VEHICLE_CALL GroundSvcTurn(OpenTTDVehicle *v, uint8_t direct
 {
 	T *u = T::From(VehicleOf(v));
 	u->direction = static_cast<Direction>(direction);
-	u->UpdateViewport(true, true);
+	RustVehicleViewport(u, true, true);
 }
 template <class T>
 inline void OPENTTD_VEHICLE_CALL GroundSvcGoToDepotService(OpenTTDVehicle *v, uint16_t depot) noexcept

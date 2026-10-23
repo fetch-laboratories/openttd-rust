@@ -221,7 +221,7 @@ static void Ship_loading(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(i
 static void Ship_begin_loading(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->BeginLoading(); }
 
 
-static void Ship_viewport(uint32_t id, bool update_delta, bool force) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateViewport(update_delta, force); }
+static void Ship_viewport(uint32_t id, bool update_delta, bool force) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleViewport(v, update_delta, force); }
 
 static void Ship_base_viewport(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->Vehicle::UpdateViewport(true); }
 

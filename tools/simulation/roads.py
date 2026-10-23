@@ -340,7 +340,7 @@ def check(scenario, run, mode, role, result):
         if operation in ("original", "realistic", "reload", "depot-service"):
             required += ["speed"]
         if operation == "realistic":
-            required += ["accelerate"]
+            required += ["accelerate", "uphill", "downhill"]
         if operation in ("level-crossing", "flooding"):
             required += ["flood" if operation == "flooding" else "crash"]
         result[f"{mode}_{role}_ground"] = core.branch_witnesses(

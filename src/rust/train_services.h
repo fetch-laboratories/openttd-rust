@@ -703,7 +703,7 @@ static uint64_t TrainVehExitDir(OpenTTDTrainHandle, uint8_t a, uint8_t b) noexce
 static void TrainViewport(OpenTTDTrainHandle id, uint8_t a, uint8_t b) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	v->UpdateViewport(a != 0, b != 0);
+	RustVehicleViewport(v, a != 0, b != 0);
 }
 static uint64_t TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
 {

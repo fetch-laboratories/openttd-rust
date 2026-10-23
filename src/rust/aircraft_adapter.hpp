@@ -165,7 +165,7 @@ static OpenTTDAircraftVehicle OPENTTD_AIRCRAFT_CALL Aircraft_next_aircraft(uint3
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_update_position(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustVehicleUpdatePosition(v); v->UpdateViewport(true, false);
+	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustVehicleUpdatePosition(v); RustVehicleViewport(v, true, false);
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_rotor_image(OpenTTDAircraftVehicle vehicle) noexcept
@@ -264,7 +264,7 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_subtract_cost(OpenTTDAircraftVehicle 
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_dirty_lists(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	SetWindowDirty(WC_VEHICLE_DETAILS, vehicle.id); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
+	RustVehicleDetailsDirty(vehicle.handle); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
 }
 
 static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_next_stopping_station(OpenTTDAircraftVehicle vehicle) noexcept
