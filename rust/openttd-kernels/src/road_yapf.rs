@@ -108,13 +108,6 @@ pub struct Result {
     pub calcs: i32,
     pub distance: i32,
 }
-const DIAGONAL: [u8; 4] = [0, 1, 8, 9];
-const REACHES: [u16; 4] = [
-    (1 << 0) | (1 << 3) | (1 << 12),
-    (1 << 1) | (1 << 4) | (1 << 2),
-    (1 << 8) | (1 << 10) | (1 << 5),
-    (1 << 9) | (1 << 13) | (1 << 11),
-];
 const INVALID: u8 = 255;
 #[derive(Clone, Copy)]
 struct Node {
@@ -421,7 +414,9 @@ impl Search {
             if self.max_cost > 0 && parent_cost.wrapping_add(cost) > self.max_cost {
                 return false;
             }
-            if t.depot != 0 && td == DIAGONAL[usize::from((t.depot_dir + 2) & 3)] {
+            if t.depot != 0
+                && td == crate::track_func::diag_dir_to_diag_trackdir((t.depot_dir + 2) & 3)
+            {
                 break;
             }
             let f = self.follow(tile, td);
@@ -652,7 +647,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_choose(
         return Result {
             tile,
             cost: 0,
-            direction: DIAGONAL[usize::from(entry)],
+            direction: crate::track_func::diag_dir_to_diag_trackdir(entry),
             found,
             rounds: 0,
             open: 0,
@@ -663,7 +658,10 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_choose(
     }
     // SAFETY: The production caller serializes searches with the game-state mutex.
     let mut search = unsafe { Search::reused(input, leaves, context, false, 0) };
-    search.startup(tile, search.tracks(tile, 0) & REACHES[usize::from(entry)]);
+    search.startup(
+        tile,
+        search.tracks(tile, 0) & crate::track_func::diagdir_reaches_trackdirs(entry),
+    );
     search.destination();
     let found = u8::from(search.find());
     // SAFETY: Canonical road owner live and no borrow overlaps world services.

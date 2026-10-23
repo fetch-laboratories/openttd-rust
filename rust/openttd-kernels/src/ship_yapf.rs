@@ -81,14 +81,6 @@ pub struct Path(Vec<u8>);
 pub struct RegionPath(Vec<Patch>);
 const INVALID: u8 = 255;
 const NEXT: [u8; 14] = [0, 1, 3, 2, 5, 4, 255, 255, 8, 9, 11, 10, 13, 12];
-const CROSS: [u16; 6] = [
-    (1 << 1) | (1 << 9),
-    (1 << 0) | (1 << 8),
-    (1 << 4) | (1 << 5) | (1 << 12) | (1 << 13),
-    (1 << 4) | (1 << 5) | (1 << 12) | (1 << 13),
-    (1 << 2) | (1 << 3) | (1 << 10) | (1 << 11),
-    (1 << 2) | (1 << 3) | (1 << 10) | (1 << 11),
-];
 #[derive(Clone, Copy)]
 struct Node {
     key: u32,
@@ -504,13 +496,15 @@ fn low_search(
                     Some(index),
                 );
                 let mut c: i32 = if td & 7 < 2 { 100 } else { 71 };
-                c = c.wrapping_add(if CROSS[usize::from(parent.td & 7)] & (1 << td) != 0 {
-                    input.curve90
-                } else if td != NEXT[usize::from(parent.td)] {
-                    input.curve45
-                } else {
-                    0
-                });
+                c = c.wrapping_add(
+                    if crate::track_func::trackdir_crosses_trackdirs(parent.td) & (1 << td) != 0 {
+                        input.curve90
+                    } else if td != NEXT[usize::from(parent.td)] {
+                        input.curve45
+                    } else {
+                        0
+                    },
+                );
                 let tile = unsafe { (leaves.tile)(context, n.tile, 1) };
                 if tile.docking != 0 {
                     c = c.wrapping_add(tile.ships.wrapping_mul(300) as i32);
@@ -593,7 +587,7 @@ fn random_path(
             break;
         }
         let mut dirs = f.dirs;
-        let straight = dirs & !CROSS[usize::from(td & 7)];
+        let straight = dirs & !crate::track_func::trackdir_crosses_trackdirs(td);
         if straight != 0 {
             dirs = straight;
         }
