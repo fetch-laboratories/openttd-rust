@@ -1991,3 +1991,25 @@ aliases on normal/indexed shells and flags cleared before the base crash callbac
 `python3 tools/migration.py verify` checks Cargo4, both native suites and ABI layouts;
 PR #375 records the focused simulation commands and metrics. External powered/
 articulated NewGRFs, maglev traffic, legacy saves and threaded GUI remain #156 gaps.
+
+### Vehicle tile occupancy and live spatial queries (#377)
+
+`vehicle/occupancy.rs` owns the process-wide tile buckets, complete on-tile/near
+cursors, hash update/reset, and ground/track/tunnel occupancy command checks.
+Each stable native shell carries the sole intrusive link record; Rust owns its
+mutations. Native pools, IDs, coordinates and viewport indexing stay in C++.
+Original bodies compile only portably. Rust road/train collision, signal,
+flooding, road-stop rebuild, ship and fleet/command scans enter the owner directly;
+position operations update the index before calling native viewport leaves.
+No query/update/advance allocation or mirrored occupancy state is introduced.
+Reset retains stale links and rebuild order; iterators read live next after
+callbacks. No owner borrow spans crash/flood reentry, and no generation guard
+changes source admission or revisitation. Shared native command costs preserve
+local error messages; occupancy consumes no random draws.
+Default road/crash/flood/reload, train collision, road-stop and fleet scenarios
+require occupancy witnesses alongside their semantic vehicle/cargo/RNG checks.
+The existing fleet console compares unchanged public iterator bodies at the
+full-scan threshold, coordinate extremes and current-shell mutation; native
+checks cover canonical link identity, stale removal, copied cursors and pixel-Z
+command refusal. The existing ABI/range fixtures exercise their direct routes.
+Threaded GUI/input and external articulated-NewGRF reload remain #156 gaps.

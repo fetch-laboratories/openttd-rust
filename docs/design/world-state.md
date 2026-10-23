@@ -94,6 +94,17 @@ each typed address once. Default native tests prove address identity and fresh
 reads after mutation, while existing reentry witnesses and semantic checks remain.
 This selects no shared Vehicle storage migration, chain view or general raw API.
 
+#377 transfers only the canonical tile bucket array and intrusive tile links.
+The stable native shell embeds one named FFI link carrier; its typed accessor
+exposes that carrier, never a Vehicle layout or copied vehicle record. Rust uses
+raw field-sized reads/writes under the game-state mutex. Bucket/link addresses
+remain stable until shell destruction or index reset. An iterator retains only
+its shell cursor and local bounds, and reads the live next link after callbacks.
+The current shell survives advancement as required by the original iterators;
+crash/flood callbacks may mutate links but do not delete that current shell.
+No link borrow spans reentry. Reset ends all cursors before load/pool reset and
+clears only current-bucket pointers and buckets, retaining source stale links.
+
 Per-field callbacks inside tile or vehicle loops may dominate runtime. Prefer
 copied records for fields observed together and batches only where the original
 has no intervening observable operation. Do not batch RNG or defer writes across

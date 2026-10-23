@@ -160,7 +160,7 @@ static void OccupancyProbe()
 	if (!Vehicle::CanAllocateItem(3)) FixtureAbort(__LINE__);
 	std::array<Vehicle *, 3> shells{new Vehicle(VEH_ROAD), new Vehicle(VEH_ROAD), new Vehicle(VEH_ROAD)};
 	TileIndex tile(Map::Size() + 1), alias(tile.base() + (128U << Map::LogX()));
-	for (auto *v : shells) { v->tile = tile; v->x_pos = 16; v->y_pos = 16; v->z_pos = 0; v->UpdatePosition(); }
+	for (auto *v : shells) { v->tile = tile; v->x_pos = 16; v->y_pos = 0; v->z_pos = 0; v->UpdatePosition(); }
 	/* Same hash, distinct tile: update must not move a shell to the head. */
 	shells[1]->tile = alias; shells[1]->UpdatePosition();
 	auto Trace = [&](auto range) {
@@ -185,6 +185,13 @@ static void OccupancyProbe()
 	shells[1]->tile = shells[2]->tile; shells[1]->UpdatePosition();
 	++it;
 	if (it != std::default_sentinel) FixtureAbort(__LINE__);
+	auto near = VehiclesNearTileXY(16, 0, 16).begin();
+	if (*near != shells[0]) FixtureAbort(__LINE__);
+	shells[0]->tile = shells[2]->tile; shells[0]->UpdatePosition();
+	uint live = 0;
+	for (++near; near != std::default_sentinel; ++near) ++live;
+	if (live != 5) FixtureAbort(__LINE__); // LIVE next plus the later bucket revisits the moved shell.
+	fmt::print(stderr, "FLEET occupancy-live-near {}\n", live);
 	Cost("occupancy-ground", EnsureNoVehicleOnGround(TileIndex(1)));
 	Cost("occupancy-wormhole", TunnelBridgeIsFree(tile, shells[2]->tile));
 	ResetVehicleHash();

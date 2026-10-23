@@ -307,7 +307,10 @@ def check(scenario, run, mode, role, result):
             [kind + "_power", kind + "_weight", "full_weight"],
         )
     if scenario["fleet"] == "transaction-build-road":
-        if "FLEET occupancy-probe 18 live-next true" not in run["log"]:
+        if not {
+            "FLEET occupancy-probe 18 live-next true",
+            "FLEET occupancy-live-near 5",
+        }.issubset(run["log"]):
             raise RuntimeError("missing native occupancy arithmetic/live-advance probe")
         branch_witnesses(
             scenario,
