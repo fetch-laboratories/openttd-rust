@@ -611,7 +611,7 @@ struct TimetableWindow : Window {
 
 		if (order_number >= v->GetNumOrders()) order_number = 0;
 
-		return { order_number, mtf };
+		return { static_cast<VehicleOrderID>(order_number), mtf };
 	}
 
 	void OnClick([[maybe_unused]] Point pt, WidgetID widget, [[maybe_unused]] int click_count) override
