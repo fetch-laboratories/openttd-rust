@@ -14,40 +14,38 @@ struct OpenTTDScheduleQueues {
  * Queue pointers preserve native identity (including encoded load references).
  * No queue borrow spans a callback. Leaves are noexcept; panics abort.
  * Exported spans live only until the next owner mutation; copy in native code
- * before SlObject. Import only after native save/load/fixup returns normally. */
+ * before SlObject. Native staging publishes partial state on return and unwind, including recursive null cleanup. */
+struct OpenTTDScheduleServices {
+	uint16_t (OPENTTD_LINKGRAPH_CALL *graph_size)(const LinkGraph *) noexcept;
+	void (OPENTTD_LINKGRAPH_CALL *assert_graph)(const LinkGraph *) noexcept;
+	bool (OPENTTD_LINKGRAPH_CALL *can_allocate)() noexcept;
+	void (OPENTTD_LINKGRAPH_CALL *allocation_failure)() noexcept;
+	LinkGraphJob *(OPENTTD_LINKGRAPH_CALL *new_job)(const LinkGraph *) noexcept;
+	void (OPENTTD_LINKGRAPH_CALL *spawn)(LinkGraphJob *) noexcept;
+	bool (OPENTTD_LINKGRAPH_CALL *due)(const LinkGraphJob *) noexcept;
+	bool (OPENTTD_LINKGRAPH_CALL *completed)(const LinkGraphJob *) noexcept;
+	uint16_t (OPENTTD_LINKGRAPH_CALL *graph_index)(const LinkGraphJob *) noexcept;
+	void (OPENTTD_LINKGRAPH_CALL *destroy_job)(LinkGraphJob *) noexcept;
+	bool (OPENTTD_LINKGRAPH_CALL *graph_valid)(uint16_t) noexcept;
+	LinkGraph *(OPENTTD_LINKGRAPH_CALL *graph_get)(uint16_t) noexcept;
+	void (OPENTTD_LINKGRAPH_CALL *abort_job)(LinkGraphJob *) noexcept;
+	LinkGraph *(OPENTTD_LINKGRAPH_CALL *next_graph)(uint32_t *) noexcept;
+	LinkGraphJob *(OPENTTD_LINKGRAPH_CALL *next_job)(uint32_t *) noexcept;
+	void (OPENTTD_LINKGRAPH_CALL *shift_graph)(LinkGraph *, int32_t) noexcept;
+	void (OPENTTD_LINKGRAPH_CALL *shift_job)(LinkGraphJob *, int32_t) noexcept;
+	void (OPENTTD_LINKGRAPH_CALL *post_pause)(bool) noexcept;
+	void (OPENTTD_LINKGRAPH_CALL *set_pause)() noexcept;
+	void (OPENTTD_LINKGRAPH_CALL *begin_measurement)(void *, bool) noexcept;
+};
 extern "C" {
-uint16_t RustLinkGraphSize(const LinkGraph *) noexcept;
-void OpenTTDScheduleAssertGraph(const LinkGraph *) noexcept;
-bool OpenTTDScheduleCanAllocate() noexcept;
-void OpenTTDScheduleAllocationFailure() noexcept;
-LinkGraphJob *OpenTTDScheduleNewJob(const LinkGraph *) noexcept;
-void OpenTTDScheduleSpawn(LinkGraphJob *) noexcept;
-bool OpenTTDScheduleDue(const LinkGraphJob *) noexcept;
-bool OpenTTDScheduleCompleted(const LinkGraphJob *) noexcept;
-uint16_t OpenTTDScheduleGraphIndex(const LinkGraphJob *) noexcept;
-void OpenTTDScheduleDestroyJob(LinkGraphJob *) noexcept;
-bool OpenTTDScheduleGraphValid(uint16_t) noexcept;
-LinkGraph *OpenTTDScheduleGraphGet(uint16_t) noexcept;
-void OpenTTDScheduleAbortJob(LinkGraphJob *) noexcept;
-LinkGraph *OpenTTDScheduleNextGraph(uint32_t *) noexcept;
-LinkGraphJob *OpenTTDScheduleNextJob(uint32_t *) noexcept;
-void OpenTTDScheduleShiftGraph(LinkGraph *, int32_t) noexcept;
-void OpenTTDScheduleShiftJob(LinkGraphJob *, int32_t) noexcept;
-OpenTTDScheduleTime OpenTTDScheduleTimeNow() noexcept;
-void OpenTTDSchedulePostPause(bool) noexcept;
-void OpenTTDScheduleSetPause() noexcept;
-void OpenTTDScheduleBeginMeasurement(void *, bool) noexcept;
-void openttd_rust_schedule_queue(LinkGraph *);
+void openttd_rust_schedule_queue(const OpenTTDScheduleServices *, LinkGraph *);
 void openttd_rust_schedule_dequeue(LinkGraph *);
-void openttd_rust_schedule_spawn_next();
-bool openttd_rust_schedule_unfinished();
-void openttd_rust_schedule_join_next();
-void openttd_rust_schedule_spawn_all();
-void openttd_rust_schedule_clear();
-void openttd_rust_schedule_shift(int32_t);
-void openttd_rust_schedule_tick(bool, void *);
-void openttd_rust_schedule_pause(bool, bool);
-void openttd_rust_schedule_after_load();
+void openttd_rust_schedule_spawn_all(const OpenTTDScheduleServices *);
+void openttd_rust_schedule_clear(const OpenTTDScheduleServices *);
+void openttd_rust_schedule_shift(const OpenTTDScheduleServices *, int32_t);
+void openttd_rust_schedule_tick(const OpenTTDScheduleServices *, OpenTTDScheduleTime, bool, void *);
+void openttd_rust_schedule_pause(const OpenTTDScheduleServices *, OpenTTDScheduleTime, bool, bool);
+void openttd_rust_schedule_after_load(const OpenTTDScheduleServices *);
 void openttd_rust_schedule_export(OpenTTDScheduleQueues *);
 void openttd_rust_schedule_import(const OpenTTDScheduleQueues *);
 }

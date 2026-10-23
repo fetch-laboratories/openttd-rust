@@ -10,9 +10,6 @@
 #ifndef LINKGRAPHJOB_H
 #define LINKGRAPHJOB_H
 
-#ifdef WITH_RUST
-#include "../rust/linkgraph_schedule_ffi.h"
-#endif
 #include "../thread.h"
 #include "linkgraph.h"
 #include <atomic>
@@ -164,9 +161,6 @@ private:
 
 	friend SaveLoadTable GetLinkGraphJobDesc();
 	friend class LinkGraphSchedule;
-#ifdef WITH_RUST
-	friend void OpenTTDScheduleSpawn(LinkGraphJob *) noexcept;
-#endif
 
 protected:
 	const LinkGraph link_graph; ///< Link graph to by analyzed. Is copied when job is started and mustn't be modified later.

@@ -13,6 +13,9 @@
 #include "linkgraph.h"
 
 class LinkGraphJob;
+#ifdef WITH_RUST
+struct OpenTTDScheduleServices;
+#endif
 
 /**
  * A handler doing "something" on a link graph component. It must not keep any
@@ -37,9 +40,12 @@ class LinkGraphSchedule {
 private:
 	LinkGraphSchedule();
 	~LinkGraphSchedule();
+
+#ifndef WITH_RUST
 	typedef std::list<LinkGraph *> GraphList;
 	typedef std::list<LinkGraphJob *> JobList;
 	friend SaveLoadTable GetLinkGraphScheduleDesc();
+#endif
 
 protected:
 #ifndef WITH_RUST
@@ -58,9 +64,14 @@ public:
 	static void Run(LinkGraphJob *job);
 	static void Clear();
 
+
+#ifdef WITH_RUST
+	static const OpenTTDScheduleServices services;
+#else
 	void SpawnNext();
 	bool IsJoinWithUnfinishedJobDue() const;
 	void JoinNext();
+#endif
 	void SpawnAll();
 	void ShiftDates(TimerGameEconomy::Date interval);
 

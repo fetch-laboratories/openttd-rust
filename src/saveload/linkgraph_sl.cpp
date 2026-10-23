@@ -220,24 +220,7 @@ SaveLoadTable GetLinkGraphJobDesc()
  * @return SaveLoad array for the link graph schedule.
  */
 #ifdef WITH_RUST
-/* Only native frames own staging. SlObject may throw or recursively null pointers;
- * import follows normal completion only. No Rust frame or borrowed span survives it. */
-struct ScheduleStaging {
-	std::vector<LinkGraph *> schedule;
-	std::vector<LinkGraphJob *> running;
-	ScheduleStaging()
-	{
-		OpenTTDScheduleQueues q;
-		openttd_rust_schedule_export(&q);
-		if (q.schedule_len != 0) this->schedule.assign(q.schedule, q.schedule + q.schedule_len);
-		if (q.running_len != 0) this->running.assign(q.running, q.running + q.running_len);
-	}
-	void Import() const
-	{
-		OpenTTDScheduleQueues q{this->schedule.data(), this->schedule.size(), this->running.data(), this->running.size()};
-		openttd_rust_schedule_import(&q);
-	}
-};
+#include "../rust/linkgraph_schedule_staging.hpp"
 SaveLoadTable GetLinkGraphScheduleDesc()
 {
 	static const SaveLoad schedule_desc[] = {
@@ -248,9 +231,13 @@ SaveLoadTable GetLinkGraphScheduleDesc()
 }
 static void ScheduleObject(SaveLoadTable desc, bool import)
 {
-	ScheduleStaging staging;
-	SlObject(&staging, desc);
-	if (import) staging.Import();
+	if (ScheduleStaging::active != nullptr) {
+		SlObject(ScheduleStaging::active, desc);
+		if (import) ScheduleStaging::active->Import();
+	} else {
+		ScheduleStaging staging(import);
+		SlObject(&staging, desc);
+	}
 }
 #else
 SaveLoadTable GetLinkGraphScheduleDesc()
@@ -378,7 +365,7 @@ struct LGRSChunkHandler : ChunkHandler {
 
 	void FixPointers() const override
 	{
-ScheduleObject(GetLinkGraphScheduleDesc(), true);
+		ScheduleObject(GetLinkGraphScheduleDesc(), true);
 	}
 };
 

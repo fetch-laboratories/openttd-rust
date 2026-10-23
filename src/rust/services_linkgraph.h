@@ -12,9 +12,13 @@
 #include "../linkgraph/linkgraphschedule.h"
 #include "../station_base.h"
 #include "../debug.h"
-#include "linkgraph_schedule_ffi.h"
+#include "../linkgraph/linkgraphjob.h"
 #include "station_service_ffi.h"
 
+inline uint16_t RustLinkGraphSize(const LinkGraph *g) noexcept { return g->Size(); }
+inline uint16_t RustLinkGraphJobGraphIndex(const LinkGraphJob *j) noexcept { return j->LinkGraphIndex().base(); }
+inline bool RustLinkGraphValid(uint16_t id) noexcept { return LinkGraph::IsValidID(LinkGraphID(id)); }
+inline LinkGraph *RustLinkGraphGet(uint16_t id) noexcept { return LinkGraph::Get(LinkGraphID(id)); }
 inline bool RustLinkGraphAvailable() noexcept { return LinkGraph::CanAllocateItem(); }
 inline OpenTTDLinkGraph *RustLinkGraphAllocate(uint8_t cargo) noexcept
 {

@@ -302,9 +302,6 @@ static bool SharedNoJetcrash() noexcept { return _cheats.no_jetcrash.value; }
 static uint8_t SharedPlaneCrashes() noexcept { return RustPlaneCrashes(); }
 static bool SharedServiceAtHelipad() noexcept { return RustServiceAtHelipad(); }
 static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
-extern "C" uint16_t RustLinkGraphSize(const OpenTTDLinkGraph *lg) noexcept { return lg->Size(); }
-void OpenTTDScheduleShiftGraph(LinkGraph *g, int32_t interval) noexcept { g->ShiftDates(TimerGameEconomy::Date(interval)); }
-void OpenTTDScheduleShiftJob(LinkGraphJob *j, int32_t interval) noexcept { j->ShiftJoinDate(TimerGameEconomy::Date(interval)); }
 static int32_t SharedEconomyDate() noexcept { return TimerGameEconomy::date.base(); }
 static int32_t SharedCalendarDate() noexcept { return TimerGameCalendar::date.base(); }
 static int32_t SharedSlope(int32_t x, int32_t y) noexcept { return SharedSlopePixelZ(x, y, false); }
