@@ -40,31 +40,31 @@ static_assert(LinkGraphSchedule::SPAWN_JOIN_TICK == 21 && EconomyTime::SECONDS_P
 using ScheduleDate = TimerGameEconomy::Date;
 constinit const OpenTTDScheduleServices LinkGraphSchedule::services = {
 	.graph_size = RustLinkGraphSize,
-	.assert_graph = [](const LinkGraph *g) noexcept { assert(g == LinkGraph::Get(g->index)); },
-	.can_allocate = []() noexcept { return LinkGraphJob::CanAllocateItem(); },
-	.allocation_failure = []() noexcept { NOT_REACHED(); },
-	.new_job = [](const LinkGraph *g) noexcept { return new LinkGraphJob(*g); },
-	.spawn = [](LinkGraphJob *j) noexcept { j->SpawnThread(); },
-	.due = [](const LinkGraphJob *j) noexcept { return j->IsScheduledToBeJoined(); },
-	.completed = [](const LinkGraphJob *j) noexcept { return j->IsJobCompleted(); },
+	.assert_graph = +[](const LinkGraph *g) noexcept { assert(g == LinkGraph::Get(g->index)); },
+	.can_allocate = +[]() noexcept { return LinkGraphJob::CanAllocateItem(); },
+	.allocation_failure = +[]() noexcept { NOT_REACHED(); },
+	.new_job = +[](const LinkGraph *g) noexcept { return new LinkGraphJob(*g); },
+	.spawn = +[](LinkGraphJob *j) noexcept { j->SpawnThread(); },
+	.due = +[](const LinkGraphJob *j) noexcept { return j->IsScheduledToBeJoined(); },
+	.completed = +[](const LinkGraphJob *j) noexcept { return j->IsJobCompleted(); },
 	.graph_index = RustLinkGraphJobGraphIndex,
-	.destroy_job = [](LinkGraphJob *j) noexcept { delete j; },
+	.destroy_job = +[](LinkGraphJob *j) noexcept { delete j; },
 	.graph_valid = RustLinkGraphValid,
 	.graph_get = RustLinkGraphGet,
-	.abort_job = [](LinkGraphJob *j) noexcept { j->AbortJob(); },
-	.next_graph = [](uint32_t *from) noexcept -> LinkGraph * {
+	.abort_job = +[](LinkGraphJob *j) noexcept { j->AbortJob(); },
+	.next_graph = +[](uint32_t *from) noexcept -> LinkGraph * {
 		for (LinkGraph *g : LinkGraph::Iterate(*from)) { *from = g->index.base() + 1U; return g; }
 		return nullptr;
 	},
-	.next_job = [](uint32_t *from) noexcept -> LinkGraphJob * {
+	.next_job = +[](uint32_t *from) noexcept -> LinkGraphJob * {
 		for (LinkGraphJob *j : LinkGraphJob::Iterate(*from)) { *from = j->index.base() + 1U; return j; }
 		return nullptr;
 	},
-	.shift_graph = [](LinkGraph *g, int32_t interval) noexcept { g->ShiftDates(ScheduleDate(interval)); },
-	.shift_job = [](LinkGraphJob *j, int32_t interval) noexcept { j->ShiftJoinDate(ScheduleDate(interval)); },
-	.post_pause = [](bool pause) noexcept { Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, pause); },
-	.set_pause = []() noexcept { _pause_mode.Set(PauseMode::LinkGraph); },
-	.begin_measurement = [](void *storage, bool client) noexcept {
+	.shift_graph = +[](LinkGraph *g, int32_t interval) noexcept { g->ShiftDates(ScheduleDate(interval)); },
+	.shift_job = +[](LinkGraphJob *j, int32_t interval) noexcept { j->ShiftJoinDate(ScheduleDate(interval)); },
+	.post_pause = +[](bool pause) noexcept { Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, pause); },
+	.set_pause = +[]() noexcept { _pause_mode.Set(PauseMode::LinkGraph); },
+	.begin_measurement = +[](void *storage, bool client) noexcept {
 		if (client) static_cast<std::optional<PerformanceMeasurer> *>(storage)->emplace(PFE_GL_LINKGRAPH);
 		else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH);
 	},
