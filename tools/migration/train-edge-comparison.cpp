@@ -92,7 +92,7 @@ static OpenTTDTrainServices Leaves()
 	leaves.curve_advantage = [](OpenTTDTrainHandle) noexcept { return uint64_t(rail.curve_speed); };
 	leaves.position = [](OpenTTDTrainHandle h) noexcept { Part(h).UpdatePosition(); };
 	leaves.viewport = [](OpenTTDTrainHandle h, uint8_t a, uint8_t b) noexcept { Part(h).UpdateViewport(a != 0, b != 0); };
-	leaves.tile_virt = [](OpenTTDTrainHandle, int32_t x, int32_t y) noexcept { return uint64_t(TileVirtXY(x, y)); };
+	leaves.tile_virt = [](int32_t x, int32_t y) noexcept { return uint32_t(TileVirtXY(x, y)); };
 	leaves.is_tunnelbridge = [](OpenTTDTrainHandle, uint32_t) noexcept { return uint64_t(0); };
 	return leaves;
 }

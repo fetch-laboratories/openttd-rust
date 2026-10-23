@@ -39,6 +39,8 @@ const OpenTTDSharedServices *MovementWorld()
 	movement.shared = &world;
 	movement.has_tile_road_type = [](uint32_t, RoadTramType) noexcept { return true; };
 	movement.normal_road = [](uint32_t) noexcept { return true; };
+	movement.pixel_location = [](int32_t x, int32_t y) noexcept -> OpenTTDPixelLocation { return {.tile = ((uint32_t(y) >> 4) << 6) + (uint32_t(x) >> 4), .kind = 2}; };
+	movement.normal_road_status_tail = [](uint32_t) noexcept -> OpenTTDNormalRoadStatusTail { return {.disallowed = uint8_t(fixture_dirs > 255 ? 1 : 2), .road_works = false}; };
 	movement.pixel_slope = [](uint32_t tile) noexcept { return height_query(tile); };
 	return &world;
 }

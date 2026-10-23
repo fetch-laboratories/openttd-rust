@@ -8,6 +8,7 @@
 #include "aircraft_ffi.h"
 #include "services_assert.h"
 #include "vehicle_services.h"
+#include "services_map.h"
 #include "services_station.h"
 #include "company_services.h"
 static_assert(ORIGINAL_SAMPLE_COUNT == 73 && SND_18_TAKEOFF_HELICOPTER == 22 && SND_12_EXPLOSION == 16 && SND_17_SKID_PLANE == 21);
@@ -229,7 +230,7 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_update_delta(OpenTTDAircraftVehicle v
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_touchdown_animation(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept
 {
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustAirportTileAnimation(Station::Get(station), TileVirtXY(RustVehicleX(v), RustVehicleY(v)), AirportAnimationTrigger::AirplaneTouchdown);
+	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustAirportTileAnimation(Station::Get(station), TileIndex{RustTileVirtXY(RustVehicleX(v), RustVehicleY(v))}, AirportAnimationTrigger::AirplaneTouchdown);
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_destination_too_far(OpenTTDAircraftVehicle vehicle) noexcept

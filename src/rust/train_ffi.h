@@ -404,7 +404,7 @@ struct OpenTTDTrainServices {
 	uint64_t (*tile_offset_diag)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_offset_diag);
 	uint64_t (*tile_owner)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_owner);
 	uint64_t (*tile_rail_type)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_rail_type);
-	uint64_t (*tile_virt)(OpenTTDTrainHandle, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_virt);
+	uint32_t (*tile_virt)(int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_virt);
 	uint64_t (*trackdir_exit)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(trackdir_exit);
 	uint64_t (*trackdir_reaches)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(trackdir_reaches);
 	uint64_t (*track_bits)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(track_bits);

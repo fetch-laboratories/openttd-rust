@@ -9,6 +9,7 @@
 #ifndef RUST_SERVICES_MOVEMENT_H
 #define RUST_SERVICES_MOVEMENT_H
 #include "movement_ffi.h"
+#include "services_map.h"
 #include "vehicle_services.h"
 #include "services_road.h"
 #include "services_rail.h"
@@ -24,6 +25,10 @@ static_assert(static_cast<uint8_t>(VehicleEnterTileState::EnteredStation) == 0 &
 	static_cast<uint8_t>(VehicleEnterTileState::EnteredWormhole) == 1 &&
 	static_cast<uint8_t>(VehicleEnterTileState::CannotEnter) == 2);
 static_assert(sizeof(decltype(TileIndex{}.base())) == sizeof(uint32_t) && sizeof(Track) == sizeof(uint8_t));
+inline OpenTTDNormalRoadStatusTail RustNormalRoadStatusTail(uint32_t tile) noexcept
+{
+	return {.disallowed = Shared_disallowed_road_directions(tile), .road_works = SharedHasRoadWorks(tile)};
+}
 inline OpenTTDMovementVehicle RustMovementResolve(OpenTTDVehicle *handle) noexcept
 {
 	Vehicle *v = VehicleOf(handle);

@@ -485,6 +485,14 @@ pub type StationVisitor = unsafe extern "C" fn(
     *mut crate::station_service::Service,
     u16,
 );
+/// Canonical `TileVirtXY` and tile type observation, in native call order.
+#[repr(C)]
+pub struct PixelLocation {
+    /// Tile index from unsigned pixel coordinates.
+    pub tile: u32,
+    /// Native tile type.
+    pub kind: u8,
+}
 /// `GetFoundationSlope` result: height and slope after the tile's foundation.
 #[repr(C)]
 pub struct FoundationSlope {
@@ -539,6 +547,10 @@ crate::abi::layouts! {
     "OpenTTDEnvironmentServices" ["common"] => EnvironmentServices {
         editor,
         freeform_edges,
+    };
+    "OpenTTDPixelLocation" ["landscape"] => PixelLocation {
+        tile,
+        kind,
     };
     "OpenTTDFoundationSlope" ["landscape"] => FoundationSlope {
         z,

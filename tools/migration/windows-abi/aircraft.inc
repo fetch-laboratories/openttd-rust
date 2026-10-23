@@ -172,6 +172,7 @@ static void AircraftPhaseBoundary()
 	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
 	static OpenTTDMovementServices movement{};
 	movement.shared = &movement_world;
+	movement.pixel_location = [](int32_t x, int32_t y) noexcept -> OpenTTDPixelLocation { return {.tile = ((uint32_t(y) >> 4) << 6) + (uint32_t(x) >> 4), .kind = 0}; };
 	movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
 	s.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	leaves.copy_sprite = [](OpenTTDAircraftVehicle, OpenTTDAircraftVehicle) noexcept {};

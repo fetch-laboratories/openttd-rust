@@ -592,6 +592,7 @@ struct Game<'a> {
     vs: &'a VehicleServices,
     gs: &'a GroundServices,
     ss: &'a Services,
+    movement: crate::movement::CachedTable<'a>,
     acceleration_model: u8,
     road_side: u8,
     queue: bool,
@@ -658,6 +659,7 @@ impl Game<'_> {
                 vs: &*l.vehicle,
                 gs: &*l.ground,
                 ss: &*l.shared,
+                movement: crate::movement::CachedTable::new(&*l.shared),
                 acceleration_model,
                 road_side,
                 queue,
@@ -742,7 +744,7 @@ impl Game<'_> {
             min,
             max_speed(front, r.max, self.acceleration_model, self.l),
         );
-        (distance as i32, service!(self.vs.speed)(front.v))
+        (distance.distance as i32, distance.stored_speed)
     }
     /// `RoadVehFindCloseTo`; `v` is always the front part.
     fn close(&self, v: Part, z: i32, x: i32, y: i32, dir: u8, update: bool) -> Option<Candidate> {
@@ -807,7 +809,7 @@ impl Game<'_> {
         if !service!(self.l.has_road)(v.v, tile) {
             return true;
         }
-        let ts = crate::movement::road_tracks(self.ss, v.v, tile);
+        let ts = self.movement.get().road_tracks(v.v, tile);
         let trackdirs = ts & 0x3f3f;
         let red = (ts >> 16) & 0x3f3f;
         let trackbits = (trackdirs | (trackdirs >> 8)) & 0x3f;
@@ -1092,7 +1094,7 @@ impl Game<'_> {
     }
     /// `RoadFindPathToDest`.
     fn path(&self, v: Part, s: &Step, tile: u32, entry: u8) -> u8 {
-        let ts = crate::movement::road_tracks(self.ss, v.v, tile);
+        let ts = self.movement.get().road_tracks(v.v, tile);
         let red = (ts >> 16) & 0x3f3f;
         let mut trackdirs = ts & 0x3f3f;
         let p = service!(self.l.path_read)(v.v);
@@ -2416,7 +2418,9 @@ pub(crate) unsafe fn set_frame(s: *mut State, frame: u8) {
 impl Game<'_> {
     fn movement_enter(&self, v: VehicleRef, tile: u32, x: i32, y: i32) -> Entered {
         // SAFETY: Same live serialized shell as the original callback; no owner borrow spans it.
-        let flags = unsafe { crate::movement::enter(self.ss, v, tile, x, y) };
+        let flags = unsafe {
+            crate::movement::openttd_rust_movement_enter(self.movement.get(), v, tile, x, y)
+        };
         service!(self.l.after_enter_tile)(v, flags)
     }
 }
