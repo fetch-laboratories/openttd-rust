@@ -9,26 +9,17 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 - Fifty-two ownership ports. Whole fork: Rust 103,834 / tooling 36,694 / glue 37,169 / original retired 57,462 of 470,612 C/C++ `src/` lines (12.21%). Simulation: 49,264 / 102,615 (48.01%). The warning-only GUI cast in #382 is not ownership progress.
 - Latest integration: #391 combines reviewed scheduler #380, live graph #383, occupancy #384 and monitors #388 on #390's routing base. Root spot-checked all source/CI fixes; corrected-head Full, strict protection and validated-tree equality passed before match-head merge. The first Full was cancelled after registry/portable-guard defects and a dependency timeout. No stale-base rerun, bootstrap or CI setting change.
 - Speed: #390's post-fix instruction profile at `824ebd56c5` passed all six semantic/identity comparisons; play loop work fell 0.93–2.52%, TGP rose 0.144%. Matching quiet ratios are TGP 1.108913x, Opus 1.397978x, Grok 1.398183x, P1996 1.305639x, P2000 1.377750x, P2016 1.453124x. All 72 pairs/144 exits passed. Only P2016 remains in band; no ceiling exceeded. Opus/Grok/P1996 ranges separate from baseline; other small changes overlap spread.
-- Genuine post-fix anchors/counts/identities integrated in #391. The due profile at frozen `ac7d2b60f2` passed all six semantic/identity checks: TGP 1.112461300x, Opus 1.473042194x, Grok 1.464168425x, P1996 1.368048397x, P2000 1.442737780x, P2016 1.516109672x. Opus/P2000/P2016 rose more than 3%; quiet remeasurement is active. These projections do not measure wall time. Residual pixel/track net budgets include necessary work and are not promised savings; assess the new occupancy routes before another selection. Ports have no individual speed gate.
+- Genuine post-fix anchors/counts/identities integrated in #391. The due profile at frozen `ac7d2b60f2` passed all six semantic/identity checks: TGP 1.112461300x, Opus 1.473042194x, Grok 1.464168425x, P1996 1.368048397x, P2000 1.442737780x, P2016 1.516109672x. Opus/P2000/P2016 rose more than 3%. These projections stand and do not measure wall time. The quiet six was contaminated and incomplete: 66 zero exits, 33 raw pairs, 32 canonical comparisons; no new ratios or anchors and no retry. The external process was the user's wind-down session, not peers. On resume rerun the whole quiet six and attribute retained ac7-versus-824 profiles; interrupted preliminary attribution is not an accepted ranking. The >3% rise remains the next maintenance item, not a gate on other work. Ports have no individual speed gate.
 - CI: due macOS arm64 Debug/Release passed at `824ebd56c5`; one integration since that run. CI maintenance observation is 4/10, recorded in integration notes. `CI_ON_DEMAND=true` is retained.
-- Animation #389 passed independent fixing review at `cdc34942dd`; root spot-check and specific cost explanation are accepted. Current-base reconciliation is saved; scoped review/Full follow the next required maintenance integration. Next selected owners are #392 vehicle NewGRF resolver/cache and #393 transactional storage, independently from integrated main.
+- Animation #389 passed independent fixing review at `cdc34942dd`; root spot-check and specific cost explanation are accepted. Reconciliation is saved at `2290e57998`; scoped review, affected checks, base update and Full remain. #392 and #393 have clean pushed unfinished checkpoints. All agents are stopped; no rollback is needed.
 
 ## Integration and wind-down correction (2026-10-22, takes precedence)
 
-User authorized replacing the rules after #347 and #353 passed separately but
-failed together. Keep automatic rollback; replace the time deadline with action limits.
+After #347/#353 passed separately but failed together, the user replaced the old unchanged-head merge rule. Final Full covers the exact current-base combination; strict protection blocks stale results. Keep implementation/review parallel and hold routine docs pushes during final validation.
+Wind-down is bounded by actions: save the edit in hand, record review findings, start no new validation/repair and wait on no CI. Merge only already-reviewed/validated current combinations. A confirmed breaking merge with only docs after it is automatically removed with remote work preserved; AGENTS.md and the migration guide define recovery.
+Implementation uses platform settings and existing documentation; no new controller or tooling is selected. The current explicit user wind-down limits override the normal loop.
 
-- Final Full tests the combination to integrate; GitHub strict/up-to-date protection blocks old passing results after base moves. Update when preparing final validation; batch ready, reviewed work to avoid serial runs. Implementation and review stay parallel.
-- Keep focused local checks and the full suite in CI; no extra local integration build gate. Avoid routine docs pushes during final validation, since they advance base too.
-- Wind-down finishes the current edit/review and records its state, merges only eligible already-tested combinations, and starts no new CI, retries or repairs. Pending checks are handed off; no deadline or time estimate.
-- A confirmed breaking merge with only docs after it is reset automatically without asking, with work preserved remotely and docs corrected. The tracking issue reopens; a replacement PR follows on resume. AGENTS.md and the migration guide define recovery and exceptions.
-- Implementation uses platform settings and five existing documentation files; tooling budget: zero new code, workflows or controllers. Earlier unchanged-head merge permission below is superseded.
-
-## Process audit follow-up (2026-10-22)
-
-- **Completed:** #261/#365's bounded setup/retries, early failed-child reporting and conservative coverage fallback integrated via #368 at 376/400 changed lines, with #361's shared ABI split. Independent review/bootstrap Full passed; on-demand CI is restored.
-- **Process:** small ready batches, pushed unfinished checkpoints and independent execution for unattended provider takeover remain required by AGENTS.md. No new schedule or verified fallback is established.
-- **Deferred optimization:** root revisits Emscripten image setup and merge-queue tooling after the selected CI fixes land and ten integrations record stale Full reruns and ready-work waits in existing integration notes. No new service, runner upgrade or extra local full suite is selected.
+Process audit follow-up (2026-10-22): #261/#365 setup/retry/failure reporting integrated via #368 at 376/400 lines with #361's ABI split; independent review/bootstrap Full passed and on-demand CI is restored. Small ready batches, pushed unfinished checkpoints and independent takeover remain required. Revisit Emscripten setup/merge-queue tooling after ten integration notes record stale Full reruns and waits; no new service, runner or local full suite is selected.
 
 ## Seventeenth steering review (2026-10-22, speed on the merged branch, base-type returns, macOS every fifth merge)
 
@@ -141,8 +132,6 @@ Rows below use original retirement and net glue (#223).
 | #261 shared linear nearby-industry cursor | #381 | #382 | `032d0d150c` | 47 / 25 / 28 / 0; net glue 11; 100/100 added lines |
 | #275, #356 typed routing and quiet anchors | #390, #391 anchors | direct | `824ebd56c5`, `ac7d2b60f2` | #390: 226 / 13 / 34 / 0; net glue 20; fixture 24/80 |
 
-Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
-
 ## Phase 1: harness and speed maintenance
 
 The default semantic harness runs in CI; regressions come first. Port differences
@@ -169,11 +158,11 @@ Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #281) and #156 run in parallel.
 
 1. **#355, #356 and #357**: integrated as #358.
-2. **#275 / #390 integrated:** post-fix counts and prescribed quiet remeasurement passed; genuine anchors integrated with #391. Only P2016 remains in band. The due #391 count passed; three projections rose more than 3%. Quiet six and retained-profile attribution select the next maintenance integration; no source fix is selected yet. Residual pixel/track costs include required original work and ABI overhead. No broader raw-map/Vehicle permission or per-PR speed gate.
+2. **#275 / #390 integrated:** post-fix counts and prescribed quiet remeasurement passed; genuine anchors integrated with #391. Only P2016 remains in band. The due #391 count passed; three projections rose more than 3%. The quiet attempt was contaminated; rerun it wholly on resume, then complete retained-profile attribution. No source fix is selected; other work has no speed gate. Residual pixel/track costs include required original work and ABI overhead. No broader raw-map/Vehicle permission or per-PR speed gate.
 3. **#281** part 1 integrated (#340). Part 2: the callee-copy check and the four duplicate wrappers listed in the #340 r2 review.
 4. **#274 map view:** integrated as #351, limited to the scheduler's clear/water/tree loops; C++ keeps the arrays and writes.
 5. **Whole owners**, in readiness order; six component branches maximum:
-   - #385 animation (#389): reviewed `cdc34942dd`; root accepts 349 implementation +81 native evidence +550 tooling versus unchanged 415 basis after boundary repairs. All caps remain 350/105/550; the one tooling raise is used, so further required growth is a user question issue. The 57 scaffold declarations earn no behavior credit. Actual sounds/setters/RNG, nonempty lifecycle/reload and native ANIT errors are default checks. Exact source helper order remains mandatory; dynamic same-TU station helper tracing is explicitly a #156 coverage limit under root's evidence re-selection. Preserve the saved base reconciliation, review substantive conflicts after the quiet lease, then adopt the next maintenance base for final Full.
+   - #385 animation (#389): reviewed `cdc34942dd`; root accepts 349 implementation +81 native evidence +550 tooling versus unchanged 415 basis after boundary repairs. All caps remain 350/105/550; the one tooling raise is used, so further required growth is a user question issue. The 57 scaffold declarations earn no behavior credit. Actual sounds/setters/RNG, nonempty lifecycle/reload and native ANIT errors are default checks. Exact source helper order remains mandatory; dynamic same-TU station helper tracing is explicitly a #156 coverage limit under root's evidence re-selection. Preserve the saved base reconciliation; resume with fresh scoped conflict review, then affected checks, base update and Full.
    - #392 vehicle NewGRF resolver and canonical query cache: complete vehicle-specific scope/root/variable/callback/property/randomisation runtime and cache lifecycle. Native common Action2/specs/pools/rendering remain shared. First checkpoint proves canonical cache aliases/reuse, stack invocation state, direct owners and real 0x42/0x61, parent-override and trigger evidence. Planning budgets and full scope are on the issue; measure before broader evidence. Split review above about 1000 retired lines.
    - #393 NewGRF transactional storage: complete process registry/modes/registers, modern/legacy persistent payloads/backups and industry/airport/town creation policies. Native pool associations and save/error frames remain. First checkpoint proves canonical save aliases, all transitions/creation policies and nonempty reload. Planning costs can miss the ratio; no inherited waiver.
    - Integrated #373's separate explanation remains 185 retired versus 199 implementation and 309 evidence; #391 tooling 266 remains within 210/270/50 caps. Integrated #386 remains 113 implementation +4 native evidence +240 tooling versus unchanged 193 basis, within 120/8/240. No cross-owner offset or design waiver.
@@ -188,16 +177,18 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Root is Codex (gpt-6.1-sol, ultra); implementation/reviews use gpt-6.1-sol high and planning uses gpt-6-astra high. Strict/up-to-date protection is enabled. Seventeenth-review steering is complete.
+Paused at the user's request. All agents are closed and no local jobs remain. Preserve unfinished branches/worktrees and the retained speed evidence. Nothing is eligible to merge; no rollback is needed.
 
-| Issue / PR | Head | Next step |
-| --- | --- | --- |
-| #275 / #356 | merged `ac7d2b60f2` | New projections recorded; quiet six active after the >3% rise. Attribute retained profiles after the lease and select next maintenance. |
-| #373 / #378 / #377 / #386 via #391 | merged `ac7d2b60f2` | Components/issues closed; remove verified merged checkouts. |
-| #385 / #389 | `cdc34942dd` | Reviewed/cost accepted; base reconciliation saved. Complete scoped review after quiet release; final Full follows next required maintenance. |
-| #392 / #393 | selected | Start independent owners from integrated main; first boundary/evidence checkpoints precede expansion. |
+| Item | Saved head | Resume action | Jobs / CI at stop |
+| --- | --- | --- | --- |
+| #389 animation | `2290e57998` | Fresh scoped conflict review; then affected checks, base update and exact-head Full. | None. Quick green; no Full. Cargo4/maintenance passed; native build interrupted, ABI/scenarios pending. |
+| #392 vehicle resolver | `48727d8fd1` | Finish unbuildable declaration/facade sketch and canonical cache/resolver checkpoint, then evidence/checks. | None. No checks or PR; automatic CI unchecked. |
+| #393 transactional storage | `8b5e305555` | Finish payload/interfaces, creation policies and save aliases; then nonempty reload and checks. | None. No checks or PR; automatic CI unchecked. |
+| #275 / #356 speed pass | frozen `ac7d2b60f2` | Rerun the whole quiet six; attribute retained ac7/824 profiles and select next maintenance. | None. Attempt contaminated/incomplete; no new ratios, anchors or retry. |
 
-#391 is merged and unwatched. Complete routine docs before #389's final base preparation, then hold base fixed through Full. Main CI remains on demand; next macOS is due after four more integrations. Integration notes carry CI observations. Each open PR keeps one worktree after its task; preserve the pinned reference and active speed evidence. #281/#261 cleanup remains on its issues; #64/#68/#69 stay paused. Do not reapply effect helper `73ccd511fb`.
+Session integrations: #360, #368, #379, #382, #390 and #391; rollbacks: none. Last game `ac7d2b60f2` passed Quick/Build/baseline and its combination Full; docs-only `851bbdd787`/`9ed430ce6c` Quick passed. CI for this final docs commit is pending/unknown; do not wait. #391 is merged and unwatched. CI_ON_DEMAND stays true; macOS is due after four more integrations. No new CI request or validation release is authorized during wind-down.
+
+Preserve speed evidence checkouts `af1fea6a`, `bf961767`, `72a1223d`, `7ece2878`, `2a35b1c0` and the exact runtime. The failed attempt retains its partial reports/proofs. Keep unfinished worktrees/branches; cleanup is limited to verified merged work. Root uses gpt-6.1-sol ultra; implementation/reviews high, planning gpt-6-astra high. #281/#261 remain owned; #64/#68/#69 stay paused. Preserve the pinned reference; do not reapply `73ccd511fb`.
 
 ## Out of scope for the near term
 
