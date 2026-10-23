@@ -1111,7 +1111,7 @@ impl Game<'_> {
                 trackdirs = 0;
             }
         }
-        trackdirs &= crate::track_func::diagdir_reaches_trackdirs(entry);
+        trackdirs &= u32::from(crate::track_func::diagdir_reaches_trackdirs(entry));
         let best = if trackdirs == 0 {
             if v.path_len() != 0 {
                 v.path_clear();

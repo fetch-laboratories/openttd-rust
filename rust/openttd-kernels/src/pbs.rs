@@ -37,6 +37,7 @@ pub struct PbsServices {
     pub station: extern "C" fn(u32) -> *mut std::ffi::c_void,
     pub randomisation: extern "C" fn(*mut std::ffi::c_void, u32) -> (),
     pub animation: extern "C" fn(*mut std::ffi::c_void, u32) -> (),
+    pub is_crossing: extern "C" fn(u32) -> bool,
     pub assertions: bool,
     pub handle: extern "C" fn(*const crate::services::Train) -> crate::train::Handle,
     pub all_compatible: extern "C" fn(u64) -> u64,
@@ -85,7 +86,7 @@ impl<'a> Pbs<'a> {
                 }
             }
             MP_ROAD => {
-                if (s.is_level_crossing)(tile) {
+                if (self.0.is_crossing)(tile) {
                     return (self.0.crossing_bits)(tile).0;
                 }
             }
@@ -157,7 +158,7 @@ impl<'a> Pbs<'a> {
                 }
             }
             MP_ROAD => {
-                if (s.is_level_crossing)(tile) && !(s.crossing_reserved)(tile) {
+                if (self.0.is_crossing)(tile) && !(s.crossing_reserved)(tile) {
                     (s.set_crossing_reserved)(tile, true);
                     self.crossing(tile, false);
                     return true;
@@ -202,7 +203,7 @@ impl<'a> Pbs<'a> {
                 }
             }
             MP_ROAD => {
-                if (s.is_level_crossing)(tile) {
+                if (self.0.is_crossing)(tile) {
                     (s.set_crossing_reserved)(tile, false);
                     self.crossing(tile, true);
                 }
@@ -276,7 +277,7 @@ impl<'a> Pbs<'a> {
         unsafe { (self.0.follow)(v, owner, types, ft) }
     }
     fn is_depot(self, tile: u32) -> bool {
-        (self.shared().tile_type)(tile) == MP_RAILWAY && (self.rail().is_rail_depot)(tile)
+        crate::rail_map::is_rail_depot_tile(self.shared(), self.rail(), tile)
     }
     fn block_signal(self, tile: u32, td: u8) -> bool {
         (self.shared().tile_type)(tile) == MP_RAILWAY

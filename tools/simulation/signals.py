@@ -327,6 +327,10 @@ def check(scenario, run, mode, role, result):
         return
     if not any("PBS checked" in line for line in run["log"]):
         raise RuntimeError("missing default PBS transient comparison")
+    if scenario["signals"] in ("2006", "rail-commands") and not any(
+        "PBS ends 1 1" in line for line in run["log"]
+    ):
+        raise RuntimeError("missing occupied tunnel/bridge end comparisons")
     core.branch_witnesses(
         scenario,
         run,

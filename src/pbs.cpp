@@ -15,6 +15,7 @@
 
 #ifdef WITH_RUST
 #include "rust/pbs_ffi.h"
+#include "rust/services_map.h"
 #include "rust/services_rail.h"
 #include "rust/services_station.h"
 #endif
@@ -40,11 +41,12 @@ const OpenTTDPbsServices &GetPbsServices() noexcept
 		.station_reserved = RustStationReserved,
 		.compatible_station = RustCompatibleStationTiles,
 		.show_reservation = RustShowTrackReservation,
-		.assert_track = [](uint32_t tile, uint8_t t) noexcept { assert(HasTrack(TrackStatusToTrackBits(GetTileTrackStatus(TileIndex{tile}, TRANSPORT_RAIL, 0)), static_cast<Track>(t))); },
-		.assert_platform = [](uint32_t tile, uint8_t dir) noexcept { assert(IsRailStationTile(TileIndex{tile})); assert(GetRailStationAxis(TileIndex{tile}) == DiagDirToAxis(static_cast<DiagDirection>(dir))); },
+		.assert_track = []([[maybe_unused]] uint32_t tile, [[maybe_unused]] uint8_t t) noexcept { assert(HasTrack(TrackStatusToTrackBits(GetTileTrackStatus(TileIndex{tile}, TRANSPORT_RAIL, 0)), static_cast<Track>(t))); },
+		.assert_platform = []([[maybe_unused]] uint32_t tile, [[maybe_unused]] uint8_t dir) noexcept { assert(IsRailStationTile(TileIndex{tile})); assert(GetRailStationAxis(TileIndex{tile}) == DiagDirToAxis(static_cast<DiagDirection>(dir))); },
 		.station = [](uint32_t t) noexcept { return BaseStation::GetByTile(TileIndex{t}); },
 		.randomisation = [](BaseStation *st, uint32_t t) noexcept { TriggerStationRandomisation(st, TileIndex{t}, StationRandomTrigger::PathReservation); },
 		.animation = [](BaseStation *st, uint32_t t) noexcept { RustStationAnimation(st, TileIndex{t}, StationAnimationTrigger::PathReservation); },
+		.is_crossing = MapSvcRoadIsLevelCrossing,
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 		.assertions = true,
 #else

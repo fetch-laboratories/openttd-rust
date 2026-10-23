@@ -74,7 +74,7 @@ static bool PbsProbe([[maybe_unused]] std::span<std::string_view> args)
 		PbsRequire(PbsOriginalGetReservedTrackbits(t) == GetReservedTrackbits(t));
 		for (Track track : SetTrackBitIterator(GetReservedTrackbits(t))) { PbsRequire(PbsOriginalGetTrainForReservation(t, track) == GetTrainForReservation(t, track)); ++checked; }
 		if (IsRailStationTile(t)) { auto dir = AxisToDiagDir(GetRailStationAxis(t)); PbsOriginalSetRailStationPlatformReservation(t, dir, false); const auto before = PbsMapRead(); PbsOriginalSetRailStationPlatformReservation(t, dir, true); const auto expected = PbsMapRead(); PbsMapRestore(before); SetRailStationPlatformReservation(t, dir, true); PbsRequire(expected == PbsMapRead()); PbsMapRestore(original);
-			PbsTrace a, b; SetRailStationReservation(t, false); _pbs_trace = &a; PbsRequire(PbsOriginalTryReserveRailTrack(t, GetRailStationTrack(t), true)); const auto state = PbsMapRead(); const Randomizer expected_random = _random; PbsMapRestore(original); SetRailStationReservation(t, false); _random = random; _pbs_trace = &b; PbsRequire(TryReserveRailTrack(t, GetRailStationTrack(t), true)); _pbs_trace = nullptr; PbsRequire(state == PbsMapRead() && a == b && _random.state[0] == expected_random.state[0] && _random.state[1] == expected_random.state[1]); PbsMapRestore(original); _random = random;
+			PbsTrace a, b; SetRailStationReservation(t, false); _pbs_trace = &a; PbsRequire(PbsOriginalTryReserveRailTrack(t, GetRailStationTrack(t), true)); const auto state = PbsMapRead(); const Randomizer expected_random = _random; PbsMapRestore(original); SetRailStationReservation(t, false); _random = random; _pbs_trace = &b; PbsRequire(TryReserveRailTrack(t, GetRailStationTrack(t), true)); _pbs_trace = nullptr; PbsRequire(state == PbsMapRead() && a.size() == 2 && a == b && _random.state[0] == expected_random.state[0] && _random.state[1] == expected_random.state[1]); PbsMapRestore(original); _random = random;
 			const TileIndex next = TileAddByDiagDir(t, dir), last = TileAddByDiagDir(next, dir); if (IsCompatibleTrainStationTile(next, t) && IsCompatibleTrainStationTile(last, t)) { SetRailStationPlatformReservation(t, dir, false); SetRailStationReservation(t, true); SetRailStationReservation(next, true); const auto td = DiagDirToDiagTrackdir(dir); PbsRequire(PbsSame(PbsOriginalFollowReservation(GetTileOwner(t), GetRailTypeInfo(GetTileRailType(t))->compatible_railtypes, t, td), PbsFollow(GetTileOwner(t), GetRailTypeInfo(GetTileRailType(t))->compatible_railtypes, t, td))); PbsMapRestore(original); }
 		}
 	}
@@ -97,12 +97,16 @@ static bool PbsProbe([[maybe_unused]] std::span<std::string_view> args)
 	SetPresentSignals(tiles[1], SignalAlongTrackdir(TRACKDIR_RIGHT_S)); PbsRequire(GetTrainForReservation(tiles[1], TRACK_RIGHT) == PbsOriginalGetTrainForReservation(tiles[1], TRACK_RIGHT));
 	for (auto [v, tile, track] : moved) { v->tile = tile; PbsTrainTrack(v, track); v->UpdatePosition(); }
 	PbsMapRestore(original);
+	/* Isolate end lookup from unrelated live paths; both roles restore the same map. */
+	for (TileIndex t(0); t < Map::Size(); ++t) for (Track track : SetTrackBitIterator(GetReservedTrackbits(t))) UnreserveRailTrack(t, track);
+	const auto cleared = PbsMapRead(); std::array<uint32_t, 2> ends{};
 	/* The other end can hold the train even when the queried end has no vehicle. */
 	for (bool bridge : {false, true}) for (TileIndex t(0); t < Map::Size(); ++t) if (IsTileType(t, MP_TUNNELBRIDGE) && GetTunnelBridgeTransportType(t) == TRANSPORT_RAIL && IsBridgeTile(t) == bridge) {
+		bool occupied = false; for ([[maybe_unused]] Vehicle *v : VehiclesOnTile(t)) occupied = true; if (occupied) continue;
 		Train *v = std::get<0>(moved[0]); const TileIndex old = v->tile; const TrackBits track = PbsTrainTrack(v); const TileIndex other = GetOtherTunnelBridgeEnd(t); SetTunnelBridgeReservation(t, true); SetTunnelBridgeReservation(other, false); v->tile = other; PbsTrainTrack(v, TRACK_BIT_WORMHOLE); v->UpdatePosition();
-		PbsRequire(GetTrainForReservation(t, DiagDirToDiagTrack(GetTunnelBridgeDirection(t))) == PbsOriginalGetTrainForReservation(t, DiagDirToDiagTrack(GetTunnelBridgeDirection(t)))); v->tile = old; PbsTrainTrack(v, track); v->UpdatePosition(); PbsMapRestore(original); break;
+		PbsRequire(GetTrainForReservation(t, DiagDirToDiagTrack(GetTunnelBridgeDirection(t))) == v && PbsOriginalGetTrainForReservation(t, DiagDirToDiagTrack(GetTunnelBridgeDirection(t))) == v); ++ends[bridge]; v->tile = old; PbsTrainTrack(v, track); v->UpdatePosition(); PbsMapRestore(cleared); break;
 	}
-	PbsMapRestore(original); _random = random; fmt::print(stderr, "PBS checked {}\n", checked); PbsRequire(checked != 0); return true;
+	PbsMapRestore(original); _random = random; fmt::print(stderr, "PBS checked {}\nPBS ends {} {}\n", checked, ends[0], ends[1]); PbsRequire(checked != 0); return true;
 }
 // PBS registration
 extern "C" void __real__Z22IConsoleStdLibRegisterv();

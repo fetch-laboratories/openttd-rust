@@ -1907,3 +1907,23 @@ The existing console adapter compiles the unchanged reference monthly lambda for
 zero-countdown, full-pool retry and disabled-expiry RNG gaps; scalar address checks
 cover the reference-alias boundary. External NewGRF programs, legacy conversion
 fixtures and threaded GUI/presentation remain coverage gaps tracked in #156.
+
+### Complete PBS reservation service (#367)
+
+Rust (`pbs.rs`) owns reservation reads/writes, complete platform scans, traversal,
+loop termination, train selection and waiting policy. Native map bits remain
+canonical. The named `CFollowTrackRail::Follow` leaf carries all partial failure
+observations in a call-local typed result; spatial enumeration retains native
+hash order, while Rust selects the lowest front-train ID. Crossing updates and
+train state/trackdir call their Rust owners directly. Header-matched track/PBS
+helpers replace integrated copies; displaced native reservation bindings retire.
+Station randomisation, animation and redraw retain source order and the same
+native station identity. No world borrow spans a trigger or shared service.
+Default rail-reservation, reload, controller and signal scenarios compare map
+bits, movement/orders and RNG and require PBS branch witnesses. Their adapter
+compiles the pinned algorithm bodies, adapting only migrated field reads, for
+transient endpoints, train_on_res and trigger order; controlled platforms, loops,
+stray/one-way paths, lowest-ID ties and occupied structure ends are restored
+before play. Native ABI/table checks and existing YAPF/controller tests remain.
+External NewGRF trigger reentry, custom railtype turn flags, legacy conversion
+and threaded GUI coverage remain #156 gaps. PR #370 records commands and metrics.

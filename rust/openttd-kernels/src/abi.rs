@@ -4442,6 +4442,7 @@ layouts! {
         station,
         randomisation,
         animation,
+        is_crossing,
         assertions, handle, all_compatible, compatible, tile_rail_type, rail90, blocking, has_pbs, index, follow,
     };
     "OpenTTDTrainReservationFreeRead" ["probe"] => crate::train_reservation::TrainReservationFreeRead {
