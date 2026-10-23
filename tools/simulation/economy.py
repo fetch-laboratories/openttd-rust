@@ -60,7 +60,7 @@ def pending(chunks):
     return None
 
 
-def active_monitors(path):
+def active_monitors(path, cargoes=(0, 1), amount=0):
     """Register cargo 0/1 town/industry monitors through the real modern loader."""
     from .disasters import gamma
 
@@ -68,7 +68,7 @@ def active_monitors(path):
     keys = sorted(
         (company << 25) | (cargo << 19) | (industry << 16) | index
         for company in rows(chunks, "PLYR")
-        for cargo in (0, 1)
+        for cargo in cargoes
         for industry, cid in ((0, "CITY"), (1, "INDY"))
         for index in rows(chunks, cid)
     )
@@ -78,7 +78,7 @@ def active_monitors(path):
         reader = core.Reader(data, chunk["span"][0] + 5)
         reader.take(reader.gamma() - 1)
         payload = (
-            b"".join(gamma(9) + struct.pack(">II", key, 0) for key in keys) + b"\0"
+            b"".join(gamma(9) + struct.pack(">II", key, amount) for key in keys) + b"\0"
         )
         data = data[: reader.pos] + payload + data[chunk["span"][1] :]
         path.write_bytes(data)
@@ -216,10 +216,30 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         "payments": rows(original, "CAPY"),
         "patches": patches,
     }
+    if scenario["economy"] == "stockpile":
+        from .console_adapter import prepared_console
+        from .engines import adapter
+
+        scenario = dict(
+            scenario,
+            executables=prepared_console(
+                "engines",
+                adapter,
+                binaries,
+                builds,
+                normalized.parent / "monitors",
+                env,
+            ),
+        )
     return dict(scenario, save=str(normalized))
 
 
 def check(scenario, run, mode, role, result):
+    if scenario.get("engines") == "monitors":
+        if not run["snapshots"] or any(
+            read_save(run["snapshots"][-1])[cid]["elements"] for cid in ("CMDL", "CMPU")
+        ):
+            raise RuntimeError("InitializeEconomy did not clear both monitor maps")
     if "economy" not in scenario or not run["snapshots"]:
         return
     saved = [read_save(p) for p in run["snapshots"]]
@@ -237,6 +257,35 @@ def check(scenario, run, mode, role, result):
         }
     result[f"{mode}_{role}_monitors"] = counts
     if scenario["economy"] == "stockpile":
+        import migration
+
+        capture = run["dir"] / "immediate.sav"
+        executable = scenario["executables"][role]
+        reload = dict(
+            scenario,
+            save=str(run["snapshots"][-1]),
+            ticks=1,
+            console=[f'engines_scenario monitors-capture "{capture}"'],
+        )
+        loaded = run_game(
+            reload,
+            executable,
+            executable.parent,
+            run["dir"] / "reload",
+            120,
+            migration.environment(),
+            False,
+        )
+        if loaded["exit"] or "MONITOR captured true" not in loaded["log"]:
+            raise RuntimeError("positive monitor reload failed")
+        for cid in ("CMDL", "CMPU"):
+            before = {v["number"]: v["amount"] for v in rows(saved[-1], cid).values()}
+            after = {
+                v["number"]: v["amount"] for v in rows(read_save(capture), cid).values()
+            }
+            if before != after or not any(after.values()):
+                raise RuntimeError("immediate monitor reload changed " + cid)
+        result[f"{mode}_{role}_monitor_reload"] = True
         delivered = [
             i for i in rows(saved[-1], "INDY").values() if i["was_cargo_delivered"]
         ]
@@ -382,3 +431,47 @@ def subsidy_reference(folder):
     (folder / "subsidy-monthly-reference.inc").write_text(
         "static void SubsidyMonthlyLoop()\n" + source[start:end] + "\n}\n"
     )
+
+
+def monitor_load_probes(scenario, executables, builds, folder, timeout, env):
+    """Dispatch real modern chunk bytes, including native decode/error unwinding."""
+    from .disasters import gamma
+
+    data = Path(scenario["save"]).read_bytes()
+    for cid in ("CMDL", "CMPU"):
+        chunk = read_save(Path(scenario["save"]))[cid]
+        reader = core.Reader(data, chunk["span"][0] + 5)
+        reader.take(reader.gamma() - 1)
+        header = data[chunk["span"][0] + 4 : reader.pos]
+        for case in ("header", "partial", "duplicate"):
+            payload = gamma(9) + struct.pack(">II", 1, 11)
+            payload += (
+                gamma(9) + struct.pack(">I", 2)
+                if case == "partial"
+                else gamma(9) + struct.pack(">II", 1, 99) + b"\0"
+            )
+            raw = bytearray(header + payload)
+            if case == "header":
+                raw[len(gamma(len(header) - 1)) + 1] = (
+                    5  # wrong type for number, before clear
+                )
+            path = folder / f"{cid}-{case}.bin"
+            path.write_bytes(raw)
+            for role, executable in executables.items():
+                probe = dict(
+                    scenario,
+                    console=[f'engines_scenario monitors-load "{path}" {cid} {case}'],
+                )
+                run = run_game(
+                    probe,
+                    executable,
+                    builds[role],
+                    folder / f"{role}-{cid}-{case}",
+                    timeout,
+                    env,
+                    False,
+                )
+                if run["exit"] or f"MONITOR load {cid} {case} true" not in run["log"]:
+                    raise RuntimeError(
+                        f"{role} native {cid}/{case} publication probe failed"
+                    )

@@ -21,6 +21,8 @@
 #include "timer/timer_manager.h"
 #include "saveload/saveload.h"
 #include "console_func.h"
+/* Compile the unchanged native loader here to reach its private chunk reader. */
+#include "saveload/saveload.cpp"
 
 void CalendarEnginesMonthlyLoop();
 void ClearEnginesHiddenFlagOfCompany(CompanyID);
@@ -56,9 +58,11 @@ static Engine *UnusedEngine(EngineID except = EngineID::Invalid())
 	FixtureAbort(__LINE__);
 }
 #include "subsidies-console.inc"
+#include "cargomonitor-console.inc"
 static bool EnginesScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1].starts_with("monitors")) return MonitorScenario(args);
 	if (args[1].starts_with("subsidies")) return SubsidyScenario(args);
 	Company *c = nullptr;
 	for (Vehicle *v : Vehicle::Iterate()) if (v->type == VEH_TRAIN && v->GetEngine()->CanCarryCargo()) { c = Company::Get(v->owner); break; }
