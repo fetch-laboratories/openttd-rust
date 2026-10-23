@@ -523,7 +523,6 @@ impl Services {
                         if unsafe { !(*state).is_awarded() } {
                             self.award(id, company);
                         }
-                        break;
                     }
                     index += 1;
                 }
