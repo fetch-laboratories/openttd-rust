@@ -425,6 +425,13 @@ def check_effects(scenario, path):
     added_animation = sorted(
         set(animated_tiles(path)) - set(animated_tiles(Path(scenario["save"])))
     )
+    lifecycle = None
+    if scenario["effects"] == "controllers" and elapsed == 1:
+        prior = animated_tiles(Path(scenario["save"]))
+        current = animated_tiles(path)
+        if len(set(prior) & set(current)) < 2:
+            raise RuntimeError("catcher insertion lacks two live ANIT survivors")
+        lifecycle = ["effects-catcher", prior, current]
     labels = {label: index for index, label, _ in scenario["effect_assignments"]}
     if scenario["effects"] == "controllers" and elapsed == 1:
         if {before[labels[f"subtype-{i}"]]["subtype"] for i in range(12)} != set(
@@ -489,6 +496,7 @@ def check_effects(scenario, path):
         "elapsed_ticks": elapsed,
         "added_animated_tiles": added_animation,
         "animated_tile_order": animated_tiles(path),
+        "animation_lifecycle": lifecycle,
         "rng": [fields[f"random_state[{i}]"] for i in range(2)],
         "before": before,
         "after": after,

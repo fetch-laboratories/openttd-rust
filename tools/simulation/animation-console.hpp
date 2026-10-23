@@ -354,3 +354,50 @@ static void AnimationBindingsProbe()
 	Backup<ObjectFlags> flags(o->flags); o->flags.Set(ObjectFlag::Animation);
 	AnimationBindingProbe("object", tiles[5], o, ObjectCallbackMask::AnimationSpeed, ObjectCallbackMask::AnimationNextFrame, AnimateNewObjectTile, frame(tiles[5]), [o](bool bits) { o->flags.Set(ObjectFlag::AnimRandomBits, bits); });
 }
+
+#include "town_cmd.h"
+#include "station_cmd.h"
+#include "terraform_cmd.h"
+void BuildOilRig(TileIndex tile);
+static void AnimationLifecycleProbe(TileIndex scratch)
+{
+	const auto tiles = AnimationFixtureTiles();
+	const auto queue = AnimationQueue();
+	const std::array survivors{scratch + TileDiffXY(5, 9), scratch + TileDiffXY(6, 9)};
+	for (auto t : survivors) { Object::CanAllocateItem(); BuildObject(OBJECT_OWNED_LAND, t, _current_company); }
+	Backup<GameMode> editor(_game_mode, GM_EDITOR);
+	auto exercise = [&](const char *key, TileIndex tile, auto operation) {
+		for (auto t : AnimationQueue()) SetAnimatedTileState(t, AnimatedTileState::None);
+		RestoreAnimationQueue({survivors[0], tile, survivors[1]});
+		for (auto t : AnimationQueue()) SetAnimatedTileState(t, AnimatedTileState::Animated);
+		auto observe = [&](const char *phase) {
+			fmt::print(stderr, "OBJECT animation-lifecycle {} {} {}:{}", key, phase, tile.base(), to_underlying(GetAnimatedTileState(tile)));
+			for (auto t : AnimationQueue()) fmt::print(stderr, " {}:{}", t.base(), to_underlying(GetAnimatedTileState(t)));
+			fmt::print(stderr, "\n");
+		};
+		observe("before"); if (!operation()) std::abort(); observe("after");
+		for (auto t : survivors) if (!IsTileType(t, MP_OBJECT) || GetAnimatedTileState(t) != AnimatedTileState::Animated || std::ranges::count(AnimationQueue(), t) != 1) std::abort();
+	};
+	exercise("house-replace", tiles[0], [&] { return CmdPlaceHouse(DoCommandFlag::Execute, tiles[0], 0, false, true).Succeeded() && IsTileType(tiles[0], MP_HOUSE); });
+	exercise("house-clear", tiles[0], [&] { ClearTownHouse(Town::GetByTile(tiles[0]), tiles[0]); return IsTileType(tiles[0], MP_CLEAR); });
+	exercise("oilrig-convert", tiles[1], [&] { BuildOilRig(tiles[1]); return IsOilRig(tiles[1]); });
+	TileIndex industry = INVALID_TILE; for (auto t : Map::Iterate()) if (IsTileType(t, MP_INDUSTRY)) { industry = t; break; }
+	exercise("industry-terraform", industry, [&] { return std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(DoCommandFlag::Execute, industry, SLOPE_N, true)).Succeeded(); });
+	industry = INVALID_TILE; for (auto t : Map::Iterate()) if (IsTileType(t, MP_INDUSTRY)) { industry = t; break; }
+	exercise("industry-clear", industry, [&] { return Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, industry).Succeeded() && !IsTileType(industry, MP_INDUSTRY); });
+	for (auto [key, tile] : {std::pair{"rail-remove", tiles[2]}, {"roadstop-remove", tiles[4]}, {"airport-remove", tiles[3]}}) {
+		Backup<CompanyID> owner(_current_company, GetTileOwner(tile));
+		exercise(key, tile, [&] { return Command<CMD_LANDSCAPE_CLEAR>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, tile).Succeeded() && !IsTileType(tile, MP_STATION); });
+	}
+	TileIndex rail = INVALID_TILE; for (auto t : Map::Iterate()) if (HasStationTileRail(t)) { rail = t; break; }
+	const auto rail_owner = GetTileOwner(rail);
+	exercise("station-preserve", rail, [&] { ChangeTileOwner(rail, rail_owner, rail_owner); return HasStationTileRail(rail) && GetTileOwner(rail) == rail_owner; });
+	exercise("station-remove", rail, [&] { ChangeTileOwner(rail, rail_owner, INVALID_OWNER); return !IsTileType(rail, MP_STATION); });
+	TileIndex object = scratch + TileDiffXY(4, 9); Object::CanAllocateItem(); BuildObject(OBJECT_OWNED_LAND, object, _current_company);
+	exercise("object-preserve", object, [&] { ChangeTileOwner(object, _current_company, _current_company); return IsTileType(object, MP_OBJECT); });
+	exercise("object-remove", object, [&] { ChangeTileOwner(object, _current_company, INVALID_OWNER); return !IsTileType(object, MP_OBJECT); });
+	Object::CanAllocateItem(); BuildObject(OBJECT_OWNED_LAND, object, _current_company);
+	exercise("object-clear", object, [&] { return Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, object).Succeeded() && !IsTileType(object, MP_OBJECT); });
+	for (auto t : AnimationQueue()) SetAnimatedTileState(t, AnimatedTileState::None);
+	InitializeAnimatedTiles(); for (auto t : queue) if (MayAnimateTile(t)) AddAnimatedTile(t, false);
+}

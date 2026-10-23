@@ -217,6 +217,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 			fmt::print(stderr, "OBJECT cancellation {} {}\n", cancellation, caught);
 		}
 		cancellation = -1;
+		AnimationLifecycleProbe(tile);
 	} else {
 		Result("hq-test", Command<CMD_BUILD_OBJECT>::Do({}, tile, OBJECT_HQ, 0));
 		Result("hq", build(OBJECT_HQ, tile));

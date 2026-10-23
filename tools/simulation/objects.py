@@ -1,5 +1,6 @@
 """Object ownership scenarios and named unchanged-original-body gap inputs."""
 
+from itertools import product
 from pathlib import Path
 
 from . import core, generated, rails
@@ -167,6 +168,7 @@ def check(scenario, run, mode, role, result):
             ("animation-property-speed", 90),
             ("animation-traversal", 72),
             ("animation-airport", 5),
+            ("animation-diagnostic", 6),
             ("animation-visit station", 46),
             ("animation-visit roadstop", 21),
             ("animation-visit airport", 9),
@@ -176,62 +178,42 @@ def check(scenario, run, mode, role, result):
                 != expected
             ):
                 raise RuntimeError(f"{mode}/{role}: missing {marker} boundary cases")
-    if scenario["objects"] == "gaps":
-        matrix = {
-            f"{f}-{t}-{a}-{r}"
-            for f in ("station", "roadstop")
-            for t in ("false", "true")
-            for a in ("false", "true")
-            for r in (65535, 509, 510, 511, 259, 263, 32771)
-        }
-        versions = {
-            f"{f} {v} {r}"
-            for f in ("house", "industry", "station", "airport", "roadstop", "object")
-            for v in (7, 8)
-            for r in (255, 256, 65535)
-        }
-        for marker, keys, width in (
-            ("animation-matrix", matrix, 1),
-            ("animation-version", versions, 3),
-            (
-                "animation-rejection",
-                {
-                    f"{r} {p}"
-                    for r in ("cached", "nonmember", "nullspec", "disabled", "accepted")
-                    for p in ("before", "after")
-                },
-                2,
-            ),
-        ):
+        features = "house industry station airport roadstop object".split()
+        results = "65535 509 510 511 259 263 32771".split()
+        rejections = "cached nonmember nullspec disabled accepted".split()
+        lifecycle = "house-replace house-clear industry-clear industry-terraform rail-remove roadstop-remove airport-remove oilrig-convert object-clear object-preserve object-remove station-preserve station-remove".split()
+        booleans = ["false", "true"]
+        matrix_axes = (["station", "roadstop"], booleans, booleans, results)
+        inventories = (
+            ("matrix", "-", matrix_axes),
+            ("version", " ", (features, ["7", "8"], ["255", "256", "65535"])),
+            ("rejection", " ", (rejections, ["before", "after"])),
+            ("lifecycle", " ", (lifecycle, ["before", "after"])),
+        )
+        for marker, separator, axes in inventories:
+            keys = {separator.join(x) for x in product(*axes)}
+            width = 1 if separator == "-" else len(axes)
             rows = [
-                x.split()[2:] for x in lines if x.startswith("OBJECT " + marker + " ")
+                x.split()[2:]
+                for x in lines
+                if x.startswith("OBJECT animation-" + marker + " ")
             ]
             if len(rows) != len(keys) or {" ".join(x[:width]) for x in rows} != keys:
-                raise RuntimeError(f"missing/duplicate keyed {marker}")
+                raise RuntimeError(f"missing/duplicate keyed animation {marker}")
         traces = [
             x.split()[2:] for x in lines if x.startswith("OBJECT animation-trace ")
         ]
-        for event, count in (
-            ("sound-enter", 20),
-            ("sound-exit", 20),
-            ("setter-enter", 20),
-            ("callback", 56),
-            ("end", 56),
-        ):
+        for event, count in {
+            "sound-enter": 20,
+            "sound-exit": 20,
+            "setter-enter": 20,
+            "callback": 56,
+            "end": 56,
+        }.items():
             if sum(x[2] == event for x in traces) != count:
                 raise RuntimeError(
                     f"original animation event inventory differs: {event}"
                 )
-        for key in matrix:
-            events = [x for x in traces if x[0] == key]
-            if (
-                [int(x[1]) for x in events] != list(range(len(events)))
-                or events[0][2] != "callback"
-                or events[-1][2] != "end"
-            ):
-                raise RuntimeError(f"animation trace missing/unordered: {key}")
-        if sum(x.startswith("OBJECT animation-diagnostic ") for x in lines) != 6:
-            raise RuntimeError("missing native version8 speed diagnostics")
     if scenario["objects"] == "reload":
         state = [x for x in lines if x.startswith("OBJECT animation-reload ")]
         if state != result["saved_animation"]:
