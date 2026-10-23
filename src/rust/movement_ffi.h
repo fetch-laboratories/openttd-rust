@@ -65,7 +65,6 @@ struct OpenTTDMovementServices {
 	OpenTTDFoundationSlope (*pixel_slope)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(pixel_slope);
 	OpenTTDFoundationSlope (*outside_pixel_slope)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(outside_pixel_slope);
 	int32_t (*max_pixel_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(max_pixel_z);
-	OpenTTDFoundationSlope (*apply_foundation)(Foundation, Slope) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
 	bool (*owned_land)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(owned_land);
 	OpenTTDMovementObjectFoundation (*object_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(object_foundation);
 	OpenTTDMovementFoundation (*house_foundation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(house_foundation);

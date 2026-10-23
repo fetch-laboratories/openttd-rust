@@ -124,7 +124,6 @@ pub struct MovementServices {
     pub pixel_slope: extern "C" fn(u32) -> FoundationSlope,
     pub outside_pixel_slope: extern "C" fn(u32, u32) -> FoundationSlope,
     pub max_pixel_z: extern "C" fn(u32) -> i32,
-    pub apply_foundation: extern "C" fn(Foundation, Slope) -> FoundationSlope,
     pub owned_land: extern "C" fn(u32) -> bool,
     pub object_foundation: extern "C" fn(u32) -> ObjectFoundation,
     pub house_foundation: extern "C" fn(u32) -> CallbackFoundation,
@@ -261,7 +260,7 @@ impl MovementServices {
                     (self.native_assert)(ok);
                 })
             };
-            let a = (self.apply_foundation)(Foundation(f), Slope(p.slope.0));
+            let a = (self.shared().apply_foundation)(Foundation(f), Slope(p.slope.0));
             p.z =
                 p.z.wrapping_add(a.z.wrapping_mul(TILE_HEIGHT.cast_signed()));
             p.slope = a.slope;
@@ -272,7 +271,7 @@ impl MovementServices {
                 }
             } else {
                 let dir = (self.shared().tunnel_bridge_direction)(tile);
-                let a = (self.apply_foundation)(
+                let a = (self.shared().apply_foundation)(
                     Foundation(crate::bridge::get_bridge_foundation(
                         p.slope.0,
                         diag_dir_to_axis(dir, |ok| (self.native_assert)(ok)),
@@ -346,7 +345,8 @@ pub unsafe extern "C" fn openttd_rust_movement_foundation_slope(
 ) -> FoundationSlope {
     let s = unsafe { &*s };
     let p = (s.shared().tile_slope_z)(tile);
-    let a = (s.apply_foundation)(Foundation(s.foundation(tile, p.slope.0)), Slope(p.slope.0));
+    let a =
+        (s.shared().apply_foundation)(Foundation(s.foundation(tile, p.slope.0)), Slope(p.slope.0));
     FoundationSlope {
         z: p.z.wrapping_add(a.z),
         slope: a.slope,
@@ -1484,7 +1484,6 @@ crate::abi::layouts! {
         pixel_slope,
         outside_pixel_slope,
         max_pixel_z,
-        apply_foundation,
         owned_land,
         object_foundation,
         house_foundation,

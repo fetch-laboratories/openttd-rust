@@ -1974,7 +1974,6 @@ const OpenTTDMovementServices &GetRustMovementServices() noexcept
 		.pixel_slope = RustTilePixelSlope,
 		.outside_pixel_slope = RustOutsidePixelSlope,
 		.max_pixel_z = GetIndustryTileServices().pixel_max_z,
-		.apply_foundation = RustApplyFoundation,
 		.owned_land = GetRustRailGroundServices().owned_land,
 		.object_foundation = RustObjectFoundation,
 		.house_foundation = RustHouseFoundation,

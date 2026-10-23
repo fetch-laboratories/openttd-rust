@@ -245,7 +245,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	movement_world.tile_slope_z = [](uint32_t tile) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = static_cast<Slope>(TownProtocolLeaf(4, tile, 0, 0, 0))}; };
 	static OpenTTDMovementServices movement{};
 	movement.shared = &movement_world;
-	movement.apply_foundation = [](Foundation, Slope slope) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = slope}; };
+	movement_world.apply_foundation = [](Foundation, Slope slope) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = slope}; };
 	services.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	services.tile_max_z = [](uint32_t) noexcept -> int32_t { return 0; };
 	services.tile_z = [](uint32_t) noexcept -> int32_t { return 0; };
