@@ -667,10 +667,6 @@ struct Game<'a> {
     services: &'a Services,
     movement: crate::movement::CachedTable<'a>,
 }
-extern "C" fn visit<F: FnMut(Handle) -> bool>(context: *mut std::ffi::c_void, part: Handle) -> u8 {
-    // SAFETY: Native visitors call synchronously with this live stack closure; no borrow of world state is held.
-    u8::from(unsafe { (&mut *context.cast::<F>())(part) })
-}
 impl<'a> Game<'a> {
     fn new(leaves: &'a Leaves, services: &'a Services) -> Self {
         Self {
