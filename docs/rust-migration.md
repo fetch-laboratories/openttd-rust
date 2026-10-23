@@ -1767,7 +1767,7 @@ pages, hostile purchase, multiplayer runtime and NewGRFs remain evidence limits.
 
 Issue #74 moves demands, both MCF passes, cycle elimination, path lifetime and flow mapping into
 Rust. Rust owns copied graph/settings, private demand/edge annotations, a reusable path arena
-and ordered cumulative-share maps. C++ keeps job scheduling/thread/abort flags, LGRP/LGRJ
+and ordered cumulative-share maps. C++ keeps worker launch/join and abort flags, LGRP/LGRJ
 save/load and the existing station flow join.
 
 ABI IDs 34-37 cover scalar node/edge/settings/share records. Its sole callback reads the job's
