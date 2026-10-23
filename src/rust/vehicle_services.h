@@ -284,6 +284,7 @@ inline bool OPENTTD_VEHICLE_CALL GroundSvcHasArticulated(OpenTTDVehicle *v) noex
 	return RustGroundHasArticulated(T::From(VehicleOf(v)));
 }
 
+#ifdef WITH_RUST
 /** One immutable process-wide GroundVehicle table per vehicle type. */
 template <class T>
 inline const OpenTTDGroundServices _rust_ground_services{
@@ -304,7 +305,7 @@ const OpenTTDGroundServices &GetRustGroundServices() noexcept
 {
 	return _rust_ground_services<T>;
 }
-
+#endif /* WITH_RUST */
 
 inline OpenTTDVehicle *RustGroundFirst(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleFirst(VehicleOf(v))); }
 
