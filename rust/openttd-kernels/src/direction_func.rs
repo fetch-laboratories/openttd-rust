@@ -25,3 +25,8 @@ pub const fn dir_to_diag_dir(direction: u8) -> u8 {
 pub const fn reverse_diag_dir(direction: u8) -> u8 {
     direction ^ 2
 }
+
+/// `ChangeDiagDir` modulo the four diagonal directions.
+pub const fn change_diag_dir(direction: u8, difference: u8) -> u8 {
+    direction.wrapping_add(difference) & 3
+}

@@ -9,6 +9,14 @@
 //! `None` routes to the original typed native accessor (including failed assertions).
 use crate::map_func::TileTypeAccess;
 use crate::tile_type::MP_CLEAR;
+/// `ClearGround::CLEAR_GRASS`.
+pub(crate) const CLEAR_GRASS: u8 = 0;
+/// `ClearGround::CLEAR_ROUGH`.
+pub(crate) const CLEAR_ROUGH: u8 = 1;
+/// `ClearGround::CLEAR_ROCKS`.
+pub(crate) const CLEAR_ROCKS: u8 = 2;
+/// `ClearGround::CLEAR_DESERT`.
+pub(crate) const CLEAR_DESERT: u8 = 5;
 /// `ClearGround::CLEAR_FIELDS`.
 pub(crate) const CLEAR_FIELDS: u8 = 3;
 #[inline]

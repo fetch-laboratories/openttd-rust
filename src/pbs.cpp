@@ -13,6 +13,10 @@
 #include "newgrf_station.h"
 #include "pathfinder/follow_track.hpp"
 
+#ifdef WITH_RUST
+#include "rust/services_station.h"
+#endif
+
 #include "safeguards.h"
 
 /**
@@ -63,7 +67,11 @@ void SetRailStationPlatformReservation(TileIndex start, DiagDirection dir, bool 
 	assert(GetRailStationAxis(start) == DiagDirToAxis(dir));
 
 	do {
+#ifdef WITH_RUST
+		RustSetRailStationReservation(tile.base(), b);
+#else
 		SetRailStationReservation(tile, b);
+#endif
 		MarkTileDirtyByTile(tile);
 		tile = TileAdd(tile, diff);
 	} while (IsCompatibleTrainStationTile(tile, start));
@@ -112,7 +120,11 @@ bool TryReserveRailTrack(TileIndex tile, Track t, bool trigger_stations)
 
 		case MP_STATION:
 			if (HasStationRail(tile) && !HasStationReservation(tile)) {
+#ifdef WITH_RUST
+				RustSetRailStationReservation(tile.base(), true);
+#else
 				SetRailStationReservation(tile, true);
+#endif
 				if (trigger_stations) {
 					auto *st = BaseStation::GetByTile(tile);
 					TriggerStationRandomisation(st, tile, StationRandomTrigger::PathReservation);
@@ -172,7 +184,11 @@ void UnreserveRailTrack(TileIndex tile, Track t)
 
 		case MP_STATION:
 			if (HasStationRail(tile)) {
+#ifdef WITH_RUST
+				RustSetRailStationReservation(tile.base(), false);
+#else
 				SetRailStationReservation(tile, false);
+#endif
 				MarkTileDirtyByTile(tile);
 			}
 			break;

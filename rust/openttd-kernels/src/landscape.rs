@@ -135,6 +135,9 @@ pub(super) fn partial_pixel_z(x: i32, y: i32, corners: u8) -> Option<u32> {
     })
 }
 
+/// Original `TILE_UPDATE_FREQUENCY` in landscape.cpp.
+pub(crate) const TILE_UPDATE_FREQUENCY: u32 = 256;
+
 #[cfg(test)]
 mod tests {
     use crate::openttd_rust_get_partial_pixel_z as height;

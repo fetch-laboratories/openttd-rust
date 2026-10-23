@@ -7,6 +7,7 @@
 
 /** @file windows-abi.cpp Bounded first-32-bit layout and real C ABI call checks. */
 #include "stdafx.h"
+#include "ground_vehicle.hpp"
 #include "3rdparty/monocypher/monocypher.h"
 #include "misc/history_type.hpp"
 #include "rust/abi_ffi.h"

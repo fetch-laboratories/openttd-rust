@@ -36,6 +36,41 @@
 
 [[noreturn]] static void FixtureAbort(int line) { fmt::print(stderr, "FLEET setup-failure {}\n", line); std::fflush(stderr); std::abort(); }
 
+/* Arithmetic and default-drag inputs absent from stock traffic. The reference
+ * calls its unchanged bodies; the candidate calls the production Rust owner. */
+template <class T, class Info>
+static void GroundPhysicsProbe(T *v, Info &info)
+{
+	Backup<GroundVehicleCache> cache(v->gcache);
+	Backup<uint16_t> flags(v->gv_flags), speed(v->cur_speed), maximum(v->vcache.cached_max_speed);
+	Backup<uint8_t> subspeed(v->subspeed), progress(v->progress), drag(info.air_drag);
+	Backup<VehStates> status(v->vehstatus);
+	uint cases = 0;
+	for (uint8_t air : {0, 1, 255}) for (uint16_t max : {0, 10, 11, 2048}) {
+		drag.Change(air); maximum.Change(max); v->PowerChanged();
+		fmt::print(stderr, "FLEET ground-drag {} {} {} {}\n", v->type, air, max, v->gcache.cached_air_drag);
+		++cases;
+	}
+	maximum.Restore(); drag.Restore();
+	for (uint16_t spd : {0, 1, 65535}) for (bool brake : {false, true}) for (uint16_t slope : {0, 1, 2}) {
+		speed.Change(spd); subspeed.Change(255); progress.Change(19);
+		status.Change(brake ? VehStates{VehState::Stopped} : VehStates{}); flags.Change(slope);
+		v->gcache.cached_weight = 8000000;
+		v->gcache.cached_power = 8000000; // Kickoff narrows watts through std::min<int>.
+		v->gcache.cached_max_te = UINT32_MAX;
+		v->gcache.cached_axle_resistance = uint16_t(10U * v->gcache.cached_weight);
+		v->gcache.cached_air_drag = 4096;
+		v->gcache.cached_slope_resistance = 800000000;
+		int acceleration = v->GetAcceleration();
+		int distance = 0;
+		if constexpr (std::is_same_v<T, Train>) distance = v->UpdateSpeed();
+		fmt::print(stderr, "FLEET ground-arithmetic {} {} {} {} {} {} {} {} {}\n", v->type, spd, brake, slope, acceleration, distance, v->cur_speed, v->subspeed, v->progress);
+		++cases;
+	}
+	fmt::print(stderr, "FLEET ground-probe {} {} {}\n", v->type, cases, static_cast<Vehicle *>(v)->GetMaxWeight());
+	cache.Restore(); flags.Restore(); speed.Restore(); subspeed.Restore(); progress.Restore(); status.Restore();
+}
+
 static void Cost(const char *name, const CommandCost &cost)
 {
 	fmt::print(stderr, "FLEET cost {} {} {} {}\n", name, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage());
@@ -185,6 +220,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 	if (args[1].starts_with("transaction-build-")) {
 		VehicleType type = args[1].ends_with("road") ? VEH_ROAD : VEH_AIRCRAFT;
 		Vehicle *v = BuildFixture(type);
+		if (type == VEH_ROAD) GroundPhysicsProbe(RoadVehicle::From(v), Engine::Get(v->engine_type)->VehInfo<RoadVehicleInfo>());
 		SavedRandomSeeds before, after;
 		bool restored = true;
 		/* Every buildable engine through query, test and execute, then one speculative build for another cargo. */
@@ -228,6 +264,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		/* Depot consist transactions: free chains, normalisation, same-chain and cross-train moves,
 		 * front promotion/demotion, refusals with restoration, dual heads, sales and ID reuse. */
 		Train *v = Train::From(BuildFixture(VEH_TRAIN));
+		GroundPhysicsProbe(v, Engine::Get(v->engine_type)->VehInfo<RailVehicleInfo>());
 		TileIndex tile = v->tile;
 		EngineID wagon = v->GetNextVehicle()->engine_type;
 		EngineID single = EngineID::Invalid(), multi = EngineID::Invalid();

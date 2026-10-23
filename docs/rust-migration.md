@@ -1010,19 +1010,18 @@ fatal state.
 
 ### TGP terrain generation
 
-Rust owns the temporary height map and every TerraGenesis generation stage, including
-height estimation, noise, water histogram, smoothing and regional curves. `src/tgp.cpp` keeps
-settings extraction, shared RNG callbacks, progress and final tile writes; the original
-implementation compiles only without `WITH_RUST`.
+Rust owns the temporary height map and every TerraGenesis stage, including
+height estimation, noise, histogram, smoothing and regional curves. #350 also
+moves advance/apply loops into this owner, writing through typed map services
+without a native height-output copy. C++ extracts named settings and retains
+shared RNG, canonical map storage and native progress/abort-hook operations.
 
-An opaque owner advances through generation and normalization, returning progress actions to
-C++. Settings are copied; RNG draw order and fixed-point conversions follow the source. Abortion
-frees the owner after Rust returns, so the progress exception never crosses a Rust frame.
-
-Default CI verifies the build and runs `python3 tools/migration.py simulate` with four curated
-settings cases spanning all four climates and selected terrain, smoothness, variety, sea/border,
-height and map-shape values. Maximum-map performance and Windows/macOS runtime parity remain
-untested.
+The process-wide abort owner is borrowed only between progress calls. Both
+progress operations catch AbortGenerateWorldSignal in the native handoff; cleanup
+runs with no live generator borrow, then the landscape facade rethrows after
+Rust returns. Default generation cases and the native cancellation probe compare
+both TGP progress events and single cleanup. Original bodies remain portable-only.
+Maximum-map performance and Windows/macOS runtime parity remain untested.
 
 ### Landscape scheduler, ground and flooding
 
@@ -1969,3 +1968,49 @@ assertions through the shared native assertion policy.
 autorefit, conditional, full-load and cross-graph orders and requires the
 `vehicle_visits.*` prediction witnesses; the station scenarios require the
 arrival/refresh/full-load ones. Link-graph pool exhaustion is a #156 gap.
+
+### Landscape generation and rivers (#350)
+
+Rust owns initialization, complete GenerateLandscape orchestration, original
+terrain templates, coverage lines, desert/rainforest, springs, lakes/wetlands,
+recursive river flow/widening, and the complete river YAPF state/search. It also
+owns heightmap greyscale conversion/loading, flat worlds, slope repair and ground
+watering. C++ keeps decoding, map storage/writes, sprite lookup and presentation.
+Native helpers remain callees; existing tree, water, commands and scheduler
+owners are called directly. The scheduler alone acquires its audited descriptor
+for each loop call; generation reads use typed map services throughout.
+
+Sea BFS/recursion remains Rust-owned. One stack optional unordered_set preserves
+native flattening order; each search reconstructs it and ends before recursive
+flow. Both generation progress operations use generation_services.hpp, returning
+before native exception rethrow; no generator borrow survives a progress call.
+Local queues, lookup-only marks and YAPF nodes/heaps retain source traversal,
+admission, tie, RNG and narrowing order, including native search diagnostics.
+
+Default generated.py/landscape.py cases compare both generators/all climates,
+rectangular/freeform maps, coverage extrema, short/main rivers, sea cutoff and
+flattening, lake/wetland/tree terminals, widening and bounded YAPF. Early map/RNG
+snapshots, BMP rotation/aspect/padding/extreme-grey probes and TGP cancellation
+are required, as is the native sea-order unit test. External heightmap formats,
+maximum dimensions, alternate graphics and late/GUI aborts remain #156 gaps.
+
+### Common ground-vehicle dynamics and canonical cache (#372)
+
+`ground_vehicle.rs` owns train/road power and cargo cache rebuilds, acceleration,
+whole-chain depot checks, crash slope-flag clearing, inclination/Z updates and
+speed accumulation, including the selected train/road physics callees. Each
+native shell holds one Rust cache/flags allocation with stable native aliases;
+normal/indexed construction and destruction share that owner. `gv_flags` keeps
+its uint16 save field and old-loader access; the cache remains rebuilt on load.
+C++ keeps shell/pool identity, engine/cargo specifications, NewGRF properties,
+viewport updates, typed map operations and the shared base crash leaf. Controllers
+call the Rust owner directly; original dynamics/helpers compile only portably.
+No owner borrow spans callbacks, and links are read at the original loop points.
+Default road original/realistic/reload/service/collision/flooding, rail acceleration/
+collision/service/reload and fleet build/consist scenarios require ground witnesses
+in plain and desync runs. The existing fleet console compares unchanged reference
+bodies over 30 arithmetic/default-drag inputs per type; native tests check canonical
+aliases on normal/indexed shells and flags cleared before the base crash callback.
+`python3 tools/migration.py verify` checks Cargo4, both native suites and ABI layouts;
+PR #375 records the focused simulation commands and metrics. External powered/
+articulated NewGRFs, maglev traffic, legacy saves and threaded GUI remain #156 gaps.

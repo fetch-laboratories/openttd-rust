@@ -32,17 +32,17 @@ static OpenTTDRoadVisualRead OPENTTD_VEHICLE_CALL RoadSvcVisualRead(OpenTTDVehic
 	if (!u->VisualEffectEligible()) return {};
 	return {.max = RoadMaxSpeedRead(u), .eligible = true};
 }
-static OpenTTDRoadSpeedRead RoadSpeedRead(const RoadVehicle *u, bool realistic) noexcept
+static OpenTTDRoadSpeedRead RoadSpeedRead(const RoadVehicle *u) noexcept
 {
-	return {.max = RoadMaxSpeedRead(u), .x = RustVehicleX(u), .y = RustVehicleY(u), .z = RustVehicleZ(u), .acceleration = realistic ? RustGroundAcceleration(u) : 0,
+	return {.max = RoadMaxSpeedRead(u), .x = RustVehicleX(u), .y = RustVehicleY(u), .z = RustVehicleZ(u),
 		.length = RustGroundCachedLength(u), .tram = SharedRoadTypeIsTram(u->roadtype)};
 }
-static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcSpeedRead(OpenTTDVehicle *v, bool realistic) noexcept { return RoadSpeedRead(RoadOf(v), realistic); }
-static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcVisualEffectThenSpeed(OpenTTDVehicle *v, uint32_t speed, bool realistic) noexcept
+static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcSpeedRead(OpenTTDVehicle *v) noexcept { return RoadSpeedRead(RoadOf(v)); }
+static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcVisualEffectThenSpeed(OpenTTDVehicle *v, uint32_t speed) noexcept
 {
 	const RoadVehicle *u = RoadOf(v);
 	u->ShowVisualEffectAtSpeed(speed);
-	return RoadSpeedRead(u, realistic);
+	return RoadSpeedRead(u);
 }
 static OpenTTDRoadMaxSpeedRead OPENTTD_VEHICLE_CALL RoadSvcMaxSpeedRead(OpenTTDVehicle *v) noexcept { return RoadMaxSpeedRead(RoadOf(v)); }
 static OpenTTDRoadSpeedPart OPENTTD_VEHICLE_CALL RoadSvcSpeedPart(OpenTTDVehicle *v) noexcept
@@ -218,8 +218,10 @@ static void OPENTTD_VEHICLE_CALL RoadSvcDepotExit(OpenTTDVehicle *v, int32_t x, 
 	u->x_pos = x;
 	u->y_pos = y;
 	RustVehicleUpdatePosition(u);
-	u->UpdateInclination(true, true);
-	RustVehicleInvalidateDepot(u);
+}
+static void OPENTTD_VEHICLE_CALL RoadSvcDepotExitDirty(OpenTTDVehicle *v) noexcept
+{
+	RustVehicleInvalidateDepot(RoadOf(v));
 }
 /** `RoadVehCrash` after `v->Crash()`. */
 static void OPENTTD_VEHICLE_CALL RoadSvcCrashNews(OpenTTDVehicle *v, uint32_t victims) noexcept
@@ -273,7 +275,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t am
 
 	SubtractMoneyFromCompanyFract(u->owner, cost);
 
-	SetWindowDirty(WC_VEHICLE_DETAILS, u->index);
+	RustVehicleDetailsDirty(RustVehicle(u));
 	SetWindowClassesDirty(WC_ROADVEH_LIST);
 }
 static OpenTTDRoadServiceRead OPENTTD_VEHICLE_CALL RoadSvcServiceRead(OpenTTDVehicle *v) noexcept
@@ -338,6 +340,7 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.arrival_triggers = RoadSvcArrivalTriggers,
 	.overtake_read = RoadSvcOvertakeRead,
 	.sound_read = RoadSvcSoundRead,
+	.depot_exit_dirty = RoadSvcDepotExitDirty,
 	.depot_exit = RoadSvcDepotExit,
 	.crash_news = RoadSvcCrashNews,
 	.shorten_factor = RoadSvcShortenFactor,

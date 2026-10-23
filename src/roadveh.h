@@ -126,7 +126,6 @@ struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
 
 #ifdef WITH_RUST
 	OpenTTDRoadState *GetRustState() const { return this->rust_state.get(); }
-	uint RustDoUpdateSpeed(uint accel, int min_speed, int max_speed) { return this->DoUpdateSpeed(accel, min_speed, max_speed); }
 #endif
 
 	uint8_t GetState() const
@@ -348,6 +347,7 @@ protected: // These functions should not be called outside acceleration code.
 	 * Allows to know the power value that this vehicle will use.
 	 * @return Power value from the engine in HP, or zero if the vehicle is not powered.
 	 */
+#ifndef WITH_RUST
 	inline uint16_t GetPower() const
 	{
 		/* Power is not added for articulated parts */
@@ -357,20 +357,24 @@ protected: // These functions should not be called outside acceleration code.
 		}
 		return 0;
 	}
+#endif
 
 	/**
 	 * Returns a value if this articulated part is powered.
 	 * @return Zero, because road vehicles don't have powered parts.
 	 */
+#ifndef WITH_RUST
 	inline uint16_t GetPoweredPartPower(const RoadVehicle *) const
 	{
 		return 0;
 	}
+#endif
 
 	/**
 	 * Allows to know the weight value that this vehicle will use.
 	 * @return Weight value from the engine in tonnes.
 	 */
+#ifndef WITH_RUST
 	inline uint16_t GetWeight() const
 	{
 		uint16_t weight = CargoSpec::Get(this->cargo_type)->WeightOfNUnits(this->cargo.StoredCount());
@@ -383,6 +387,7 @@ protected: // These functions should not be called outside acceleration code.
 
 		return weight;
 	}
+#endif
 
 	/**
 	 * Calculates the weight value that this vehicle will have when fully loaded with its current cargo.
@@ -394,52 +399,63 @@ protected: // These functions should not be called outside acceleration code.
 	 * Allows to know the tractive effort value that this vehicle will use.
 	 * @return Tractive effort value from the engine.
 	 */
+#ifndef WITH_RUST
 	inline uint8_t GetTractiveEffort() const
 	{
 		/* The tractive effort coefficient is in units of 1/256.  */
 		return GetVehicleProperty(this, PROP_ROADVEH_TRACTIVE_EFFORT, RoadVehInfo(this->engine_type)->tractive_effort);
 	}
+#endif
 
 	/**
 	 * Gets the area used for calculating air drag.
 	 * @return Area of the engine in m^2.
 	 */
+#ifndef WITH_RUST
 	inline uint8_t GetAirDragArea() const
 	{
 		return 6;
 	}
+#endif
 
 	/**
 	 * Gets the air drag coefficient of this vehicle.
 	 * @return Air drag value from the engine.
 	 */
+#ifndef WITH_RUST
 	inline uint8_t GetAirDrag() const
 	{
 		return RoadVehInfo(this->engine_type)->air_drag;
 	}
+#endif
 
 	/**
 	 * Checks the current acceleration status of this vehicle.
 	 * @return Acceleration status.
 	 */
+#ifndef WITH_RUST
 	inline AccelStatus GetAccelerationStatus() const
 	{
 		return this->vehstatus.Test(VehState::Stopped) ? AS_BRAKE : AS_ACCEL;
 	}
+#endif
 
 	/**
 	 * Calculates the current speed of this vehicle.
 	 * @return Current speed in km/h-ish.
 	 */
+#ifndef WITH_RUST
 	inline uint16_t GetCurrentSpeed() const
 	{
 		return this->cur_speed / 2;
 	}
+#endif
 
 	/**
 	 * Returns the rolling friction coefficient of this vehicle.
 	 * @return Rolling friction coefficient in [1e-4].
 	 */
+#ifndef WITH_RUST
 	inline uint32_t GetRollingFriction() const
 	{
 		/* Trams have a slightly greater friction coefficient than trains.
@@ -449,38 +465,46 @@ protected: // These functions should not be called outside acceleration code.
 		 * it doubles at 128 km/h, triples at 256 km/h and so on. */
 		return coeff * (128 + this->GetCurrentSpeed()) / 128;
 	}
+#endif
 
 	/**
 	 * Allows to know the acceleration type of a vehicle.
 	 * @return \c VehicleAccelerationModel::Normal, road vehicles always use a normal acceleration method.
 	 */
+#ifndef WITH_RUST
 	inline VehicleAccelerationModel GetAccelerationType() const
 	{
 		return VehicleAccelerationModel::Normal;
 	}
+#endif
 
 	/**
 	 * Returns the slope steepness used by this vehicle.
 	 * @return Slope steepness used by the vehicle.
 	 */
+#ifndef WITH_RUST
 	inline uint32_t GetSlopeSteepness() const
 	{
 		return _settings_game.vehicle.roadveh_slope_steepness;
 	}
+#endif
 
 	/**
 	 * Gets the maximum speed allowed by the track for this vehicle.
 	 * @return Since roads don't limit road vehicle speed, it returns always zero.
 	 */
+#ifndef WITH_RUST
 	inline uint16_t GetMaxTrackSpeed() const
 	{
 		return GetRoadTypeInfo(GetRoadType(this->tile, GetRoadTramType(this->roadtype)))->max_speed;
 	}
+#endif
 
 	/**
 	 * Checks if the vehicle is at a tile that can be sloped.
 	 * @return True if the tile can be sloped.
 	 */
+#ifndef WITH_RUST
 	inline bool TileMayHaveSlopedTrack() const
 	{
 		TrackStatus ts = GetTileTrackStatus(this->tile, TRANSPORT_ROAD, GetRoadTramType(this->roadtype));
@@ -488,6 +512,7 @@ protected: // These functions should not be called outside acceleration code.
 
 		return trackbits == TRACK_BIT_X || trackbits == TRACK_BIT_Y;
 	}
+#endif
 
 	/**
 	 * Road vehicles have to use GetSlopePixelZ() to compute their height
@@ -496,9 +521,7 @@ protected: // These functions should not be called outside acceleration code.
 	 * even if it is not reversing.
 	 * @return are we (possibly) reversing?
 	 */
-#ifdef WITH_RUST
-	bool HasToUseGetSlopePixelZ();
-#else
+#ifndef WITH_RUST
 	inline bool HasToUseGetSlopePixelZ()
 	{
 		const RoadVehicle *rv = this->First();

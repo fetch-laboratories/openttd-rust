@@ -206,7 +206,7 @@ impl Flow {
         restricted: &mut u8,
         random: extern "C" fn() -> u32,
     ) -> u16 {
-        let range = |max: u32| ((u64::from(random()) * u64::from(max)) >> 32) as u32;
+        let range = |max: u32| crate::random_func::scale_to_limit(random(), max);
         if mode == 1 {
             assert!(!self.shares.is_empty());
             let draw = range(*self.shares.last_key_value().unwrap().0);

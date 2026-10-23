@@ -16,6 +16,9 @@
 #include "window_func.h"
 
 #include "widgets/vehicle_widget.h"
+#ifdef WITH_RUST
+#include "rust/ground_vehicle_ffi.h"
+#endif
 
 /** What is the status of our acceleration? */
 enum AccelStatus : uint8_t {
@@ -50,6 +53,22 @@ struct GroundVehicleCache {
 	auto operator<=>(const GroundVehicleCache &) const = default;
 };
 
+#ifdef WITH_RUST
+/** One canonical Rust allocation, shared by stable native reference aliases.
+ * Construction (including indexed loading) and destruction follow the shell.
+ * SaveLoad and legacy loaders address gv_flags through the alias, unchanged. */
+struct OpenTTDGroundState { GroundVehicleCache cache; uint16_t flags = 0; };
+extern "C" OpenTTDGroundState *openttd_rust_ground_new();
+extern "C" void openttd_rust_ground_destroy(OpenTTDGroundState *);
+struct GroundStateOwner {
+	OpenTTDGroundState *state;
+	GroundStateOwner() : state(openttd_rust_ground_new()) { new (this->state) OpenTTDGroundState(); }
+	GroundStateOwner(const GroundStateOwner &) = delete;
+	GroundStateOwner &operator=(const GroundStateOwner &) = delete;
+	~GroundStateOwner() { openttd_rust_ground_destroy(this->state); }
+};
+#endif
+
 /** Ground vehicle flags. */
 enum GroundVehicleFlags : uint8_t {
 	GVF_GOINGUP_BIT              = 0,  ///< Vehicle is currently going uphill. (Cached track information for acceleration)
@@ -80,8 +99,14 @@ enum GroundVehicleFlags : uint8_t {
  */
 template <class T, VehicleType Type>
 struct GroundVehicle : public SpecializedVehicle<T, Type> {
+#ifdef WITH_RUST
+	GroundStateOwner rust_ground;
+	GroundVehicleCache &gcache = this->rust_ground.state->cache;
+	uint16_t &gv_flags = this->rust_ground.state->flags;
+#else
 	GroundVehicleCache gcache{}; ///< Cache of often calculated values.
 	uint16_t gv_flags = 0; ///< @see GroundVehicleFlags.
+#endif
 
 	typedef GroundVehicle<T, Type> GroundVehicleBase; ///< Our type
 
@@ -102,18 +127,23 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 */
 	uint Crash(bool flooded) override
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_crash(&GetRustGroundPhysicsServices(), this, flooded);
+#else
 		/* Crashed vehicles aren't going up or down */
 		for (T *v = T::From(this); v != nullptr; v = v->Next()) {
 			ClrBit(v->gv_flags, GVF_GOINGUP_BIT);
 			ClrBit(v->gv_flags, GVF_GOINGDOWN_BIT);
 		}
 		return this->Vehicle::Crash(flooded);
+#endif
 	}
 
 	/**
 	 * Calculates the total slope resistance for this vehicle.
 	 * @return Slope resistance.
 	 */
+#ifndef WITH_RUST
 	inline int64_t GetSlopeResistance() const
 	{
 		int64_t incl = 0;
@@ -128,6 +158,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 
 		return incl;
 	}
+#endif
 
 	/**
 	 * Updates vehicle's Z position and inclination.
@@ -135,6 +166,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * @pre The vehicle has to be at (or near to) a border of the tile,
 	 *      directed towards tile centre
 	 */
+#ifndef WITH_RUST
 	inline void UpdateZPositionAndInclination()
 	{
 		this->z_pos = GetSlopePixelZ(this->x_pos, this->y_pos, true);
@@ -153,6 +185,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 			}
 		}
 	}
+#endif
 
 	/**
 	 * Updates vehicle's Z position.
@@ -160,6 +193,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * The faster code is used for trains and road vehicles unless they are
 	 * reversing on a sloped tile.
 	 */
+#ifndef WITH_RUST
 	inline void UpdateZPosition()
 	{
 #if 0
@@ -224,6 +258,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 
 		assert(this->z_pos == GetSlopePixelZ(this->x_pos, this->y_pos, true));
 	}
+#endif
 
 	/**
 	 * Checks if the vehicle is in a slope and sets the required flags in that case.
@@ -231,6 +266,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * @param update_delta Indicates to also update the delta.
 	 * @return Old height of the vehicle.
 	 */
+#ifndef WITH_RUST
 	inline int UpdateInclination(bool new_tile, bool update_delta)
 	{
 		int old_z = this->z_pos;
@@ -244,6 +280,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 		this->UpdateViewport(true, update_delta);
 		return old_z;
 	}
+#endif
 
 	/**
 	 * Set front engine state.
@@ -340,6 +377,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * Also mark the widget dirty when that is needed, i.e. when
 	 * the speed of this vehicle has changed.
 	 */
+#ifndef WITH_RUST
 	inline void SetLastSpeed()
 	{
 		if (this->cur_speed != this->gcache.last_speed) {
@@ -347,6 +385,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 			this->gcache.last_speed = this->cur_speed;
 		}
 	}
+#endif
 
 protected:
 	/**
@@ -362,6 +401,7 @@ protected:
 	 * @param max_speed The maximum speed here, in vehicle specific units.
 	 * @return Distance to drive.
 	 */
+#ifndef WITH_RUST
 	inline uint DoUpdateSpeed(uint accel, int min_speed, int max_speed)
 	{
 		uint spd = this->subspeed + accel;
@@ -387,6 +427,7 @@ protected:
 		this->progress = 0; // set later in *Handler or *Controller
 		return scaled_spd;
 	}
+#endif
 };
 
 #endif /* GROUND_VEHICLE_HPP */

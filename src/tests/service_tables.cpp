@@ -34,6 +34,7 @@ extern bool CheckAbi_roadstop();
 extern bool CheckAbi_effectvehicle();
 extern bool CheckAbi_services();
 extern bool CheckAbi_vehicle_services();
+extern bool CheckAbi_ground_physics();
 extern bool CheckAbi_company_adapter();
 extern bool CheckAbi_autoreplace_cmd();
 extern bool CheckAbi_linkgraphjob();
@@ -75,6 +76,7 @@ TEST_CASE("Rust ABI - actual production callback tables are complete")
 	CHECK(CheckAbi_effectvehicle());
 	CHECK(CheckAbi_services());
 	CHECK(CheckAbi_vehicle_services());
+	CHECK(CheckAbi_ground_physics());
 	CHECK(CheckAbi_company_adapter());
 	CHECK(CheckAbi_autoreplace_cmd());
 	CHECK(CheckAbi_linkgraphjob());

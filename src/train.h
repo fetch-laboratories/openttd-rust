@@ -302,9 +302,6 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 		return {this->tcache.cached_override, this->GetCachedTilt(), this->GetUserDefData(), this->GetCachedCurveSpeedMod(), this->GetCachedMaxCurveSpeed()};
 	}
 
-#ifdef WITH_RUST
-	uint RustDoUpdateSpeed(uint accel, int min_speed, int max_speed) { return this->DoUpdateSpeed(accel, min_speed, max_speed); }
-#endif
 
 	friend struct GroundVehicle<Train, VEH_TRAIN>; // GroundVehicle needs to use the acceleration functions defined at Train.
 
@@ -383,7 +380,11 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	 */
 	inline VehicleAccelerationModel GetAccelerationType() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_acceleration_type(&GetRustGroundPhysicsServices(), this);
+#else
 		return GetRailTypeInfo(GetRailType(this->tile))->acceleration_type;
+#endif
 	}
 
 protected: // These functions should not be called outside acceleration code.
@@ -392,6 +393,7 @@ protected: // These functions should not be called outside acceleration code.
 	 * Allows to know the power value that this vehicle will use.
 	 * @return Power value from the engine in HP, or zero if the vehicle is not powered.
 	 */
+#ifndef WITH_RUST
 	inline uint16_t GetPower() const
 	{
 		/* Power is not added for articulated parts */
@@ -404,11 +406,13 @@ protected: // These functions should not be called outside acceleration code.
 
 		return 0;
 	}
+#endif
 
 	/**
 	 * Returns a value if this articulated part is powered.
 	 * @return Power value from the articulated part in HP, or zero if it is not powered.
 	 */
+#ifndef WITH_RUST
 	inline uint16_t GetPoweredPartPower(const Train *head) const
 	{
 		/* For powered wagons the engine defines the type of engine (i.e. railtype) */
@@ -418,11 +422,13 @@ protected: // These functions should not be called outside acceleration code.
 
 		return 0;
 	}
+#endif
 
 	/**
 	 * Allows to know the weight value that this vehicle will use.
 	 * @return Weight value from the engine in tonnes.
 	 */
+#ifndef WITH_RUST
 	inline uint16_t GetWeight() const
 	{
 		uint16_t weight = CargoSpec::Get(this->cargo_type)->WeightOfNUnitsInTrain(this->cargo.StoredCount());
@@ -439,6 +445,7 @@ protected: // These functions should not be called outside acceleration code.
 
 		return weight;
 	}
+#endif
 
 	/**
 	 * Calculates the weight value that this vehicle will have when fully loaded with its current cargo.
@@ -450,52 +457,63 @@ protected: // These functions should not be called outside acceleration code.
 	 * Allows to know the tractive effort value that this vehicle will use.
 	 * @return Tractive effort value from the engine.
 	 */
+#ifndef WITH_RUST
 	inline uint8_t GetTractiveEffort() const
 	{
 		return GetVehicleProperty(this, PROP_TRAIN_TRACTIVE_EFFORT, RailVehInfo(this->engine_type)->tractive_effort);
 	}
+#endif
 
 	/**
 	 * Gets the area used for calculating air drag.
 	 * @return Area of the engine in m^2.
 	 */
+#ifndef WITH_RUST
 	inline uint8_t GetAirDragArea() const
 	{
 		/* Air drag is higher in tunnels due to the limited cross-section. */
 		return (this->GetTrack() == TRACK_BIT_WORMHOLE && this->vehstatus.Test(VehState::Hidden)) ? 28 : 14;
 	}
+#endif
 
 	/**
 	 * Gets the air drag coefficient of this vehicle.
 	 * @return Air drag value from the engine.
 	 */
+#ifndef WITH_RUST
 	inline uint8_t GetAirDrag() const
 	{
 		return RailVehInfo(this->engine_type)->air_drag;
 	}
+#endif
 
 	/**
 	 * Checks the current acceleration status of this vehicle.
 	 * @return Acceleration status.
 	 */
+#ifndef WITH_RUST
 	inline AccelStatus GetAccelerationStatus() const
 	{
 		return this->vehstatus.Test(VehState::Stopped) || this->GetTrainFlags().Any({VehicleRailFlag::Reversing, VehicleRailFlag::Stuck}) ? AS_BRAKE : AS_ACCEL;
 	}
+#endif
 
 	/**
 	 * Calculates the current speed of this vehicle.
 	 * @return Current speed in km/h-ish.
 	 */
+#ifndef WITH_RUST
 	inline uint16_t GetCurrentSpeed() const
 	{
 		return this->cur_speed;
 	}
+#endif
 
 	/**
 	 * Returns the rolling friction coefficient of this vehicle.
 	 * @return Rolling friction coefficient in [1e-4].
 	 */
+#ifndef WITH_RUST
 	inline uint32_t GetRollingFriction() const
 	{
 		/* Rolling friction for steel on steel is between 0.1% and 0.2%.
@@ -503,24 +521,29 @@ protected: // These functions should not be called outside acceleration code.
 		 * it doubles at 512 km/h, triples at 1024 km/h and so on. */
 		return 15 * (512 + this->GetCurrentSpeed()) / 512;
 	}
+#endif
 
 	/**
 	 * Returns the slope steepness used by this vehicle.
 	 * @return Slope steepness used by the vehicle.
 	 */
+#ifndef WITH_RUST
 	inline uint32_t GetSlopeSteepness() const
 	{
 		return _settings_game.vehicle.train_slope_steepness;
 	}
+#endif
 
 	/**
 	 * Gets the maximum speed allowed by the track for this vehicle.
 	 * @return Maximum speed allowed.
 	 */
+#ifndef WITH_RUST
 	inline uint16_t GetMaxTrackSpeed() const
 	{
 		return GetRailTypeInfo(GetRailType(this->tile))->max_speed;
 	}
+#endif
 
 	/**
 	 * Returns the curve speed modifier of this vehicle.
@@ -535,21 +558,25 @@ protected: // These functions should not be called outside acceleration code.
 	 * Checks if the vehicle is at a tile that can be sloped.
 	 * @return True if the tile can be sloped.
 	 */
+#ifndef WITH_RUST
 	inline bool TileMayHaveSlopedTrack() const
 	{
 		/* Any track that isn't TRACK_BIT_X or TRACK_BIT_Y cannot be sloped. */
 		return this->GetTrack() == TRACK_BIT_X || this->GetTrack() == TRACK_BIT_Y;
 	}
+#endif
 
 	/**
 	 * Trains can always use the faster algorithm because they
 	 * have always the same direction as the track under them.
 	 * @return false
 	 */
+#ifndef WITH_RUST
 	inline bool HasToUseGetSlopePixelZ()
 	{
 		return false;
 	}
+#endif
 };
 
 #ifdef WITH_RUST

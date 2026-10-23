@@ -904,7 +904,7 @@ const OpenTTDLandscapeCommandServices &GetRustLandscapeCommandServices() noexcep
 		.exchange_generating = GetRustTownFoundingServices().exchange_generating,
 		.tunnel_in_way = [](uint32_t t, int32_t z) noexcept { return IsTunnelInWay(TileIndex{t}, z); },
 		.mark_dirty_height = RustMarkTileDirtyAtHeight,
-		.set_height = [](uint32_t t, uint32_t z) noexcept { SetTileHeight(TileIndex{t}, z); },
+		.set_height = RustSetTileHeight,
 		.paused = []() noexcept { return _pause_mode.Any(); },
 		.explosion = [](uint32_t t, bool small) noexcept { RustCreateEffectAbove(TileX(TileIndex{t}) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex{t}) * TILE_SIZE + TILE_SIZE / 2, 2, small ? EV_EXPLOSION_SMALL : EV_EXPLOSION_LARGE); },
 	};
@@ -988,8 +988,83 @@ void RunTileLoop()
 #endif
 }
 
+#ifdef WITH_RUST
+#include "rust/landscape_generation_ffi.h"
+#include "void_map.h"
+#include "rust/presentation_services.h"
+
+#include "rust/generation_services.hpp"
+#include "rust/generation_sea_set.hpp"
+#include "rust/services_bridge.h"
+#include "rust/services_yapf.h"
+#include "rust/services_assert.h"
+#include "rust/heightmap_services.hpp"
+#include "rust/tgp_ffi.h"
+
+struct RustGenerationLoop {
+	PerformanceAccumulator framerate{PFE_GL_LANDSCAPE};
+	OpenTTDGroundCall ground;
+	OpenTTDObjectLoopFrame objects;
+	RustRoadCommandContext road;
+	OpenTTDLandscapeLoopServices services{RustLandscapeLoopServices(&ground, &objects, &road.view)};
+	OpenTTDGenerationLoop view{GetRustTreeLoopSettings(), &services};
+};
+struct OpenTTDGenerationFrame {
+	std::exception_ptr cancellation;
+	RustGenerationSeaSet sea;
+	std::optional<RustGenerationLoop> loop;
+};
+
+const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() noexcept
+{
+	static const OpenTTDLandscapeGenerationServices services{
+		.shared = &GetRustSharedServices(),
+		.clear = &GetRustClearServices(),
+		.water = &GetRustWaterGroundServices(),
+		.trees = &GetRustTreeServices(),
+		.landscape_commands = &GetRustLandscapeCommandServices(),
+		.water_commands = &GetRustWaterCommandServices(),
+		.set_progress = [](OpenTTDGenerationFrame *f, GenWorldProgress stage, uint32_t total) noexcept { return RunGenerationProgress(f, [=] { RustSetGeneratingWorldProgress(stage, total); }); },
+		.increase_progress = [](OpenTTDGenerationFrame *f, GenWorldProgress stage) noexcept { return RunGenerationProgress(f, [=] { RustIncreaseGeneratingWorldProgress(stage); }); },
+		.begin_loop = [](OpenTTDGenerationFrame *f) noexcept -> const OpenTTDGenerationLoop * { return &f->loop.emplace().view; },
+		.end_loop = [](OpenTTDGenerationFrame *f) noexcept { f->loop.reset(); },
+		.set_abort_callback = [](void (*callback)()) noexcept { GenerateWorldSetAbortCallback(callback); },
+		.tgp_settings = RustTGPSettings,
+		.terrain_template = [](uint32_t index) noexcept {
+			const Sprite *templ = GetSprite(index, SpriteType::MapGen);
+			if (templ == nullptr) UserError("Map generator sprites could not be loaded");
+			return OpenTTDTerrainTemplate{.width = templ->width, .height = templ->height, .data = reinterpret_cast<const uint8_t *>(templ->data)};
+		},
+		.flat_height = RustFlatTileHeight,
+		.river = RustIsRiver,
+		.set_snow_line = RustSetSnowLineHeight,
+		.not_reached = RustNotReached,
+		.river_debug = RustRiverYapfDebug,
+		.assert_condition = RustAssertCondition,
+		.sea_construct = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Construct(); },
+		.sea_destroy = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Destroy(); },
+		.sea_insert = [](OpenTTDGenerationFrame *f, uint32_t tile) noexcept { f->sea.Insert(tile); },
+		.sea_contains = [](OpenTTDGenerationFrame *f, uint32_t tile) noexcept { return f->sea.Contains(tile); },
+		.sea_size = [](OpenTTDGenerationFrame *f) noexcept { return f->sea.Size(); },
+		.sea_first = [](OpenTTDGenerationFrame *f) noexcept { return f->sea.First(); },
+		.sea_next = [](OpenTTDGenerationFrame *f) noexcept { return f->sea.Next(); },
+		.set_height = RustSetTileHeight,
+		.inner_tile = RustInnerTile,
+		.make_void = [](uint32_t t) noexcept { MakeVoid(TileIndex{t}); },
+		.screen_dirty = RustScreenDirty,
+		.surrounded_by_water = []() noexcept { return IsMapSurroundedByWater(); },
+		.set_freeform = RustSetFreeformEdges,
+		.clear_bridge_middle = RustClearBridgeMiddle,
+	};
+	return services;
+}
+#endif
+
 void InitializeLandscape()
 {
+#ifdef WITH_RUST
+	openttd_rust_initialize_landscape(&GetRustLandscapeGenerationServices(), _settings_game.construction.freeform_edges);
+#else
 	for (uint y = _settings_game.construction.freeform_edges ? 1 : 0; y < Map::MaxY(); y++) {
 		for (uint x = _settings_game.construction.freeform_edges ? 1 : 0; x < Map::MaxX(); x++) {
 			MakeClear(TileXY(x, y), CLEAR_GRASS, 3);
@@ -1001,8 +1076,38 @@ void InitializeLandscape()
 
 	for (uint x = 0; x < Map::SizeX(); x++) MakeVoid(TileXY(x, Map::MaxY()));
 	for (uint y = 0; y < Map::SizeY(); y++) MakeVoid(TileXY(Map::MaxX(), y));
+#endif
 }
 
+#ifdef WITH_RUST
+bool GenerateLandscape(uint8_t mode)
+{
+	static_assert(GWP_LANDSCAPE == 1 && GWP_RIVER == 2 && GWM_HEIGHTMAP == 3 && LG_ORIGINAL == 0 && LG_TERRAGENESIS == 1 && MAX_TILE_HEIGHT == 255);
+	static_assert(SPR_MAPGEN_BEGIN == 4845 && TILE_UPDATE_FREQUENCY == 256);
+	OpenTTDGenerationFrame frame;
+	/* Resolve file selection only after the first progress call, as the source
+	 * does. No filename view is retained across a progress/yield boundary. */
+	RustHeightmapDecoder decoder(DFT_HEIGHTMAP_BMP, "");
+	const OpenTTDHeightmapDecoder heightmap{
+		.context = &decoder,
+		.read = [](void *ctx, OpenTTDHeightmapImage *out) noexcept { return static_cast<RustHeightmapDecoder *>(ctx)->Read(_file_to_saveload.ftype.detailed, _file_to_saveload.name, out); },
+		.finish = decoder.view.finish,
+	};
+	const auto &g = _settings_game.game_creation;
+	const OpenTTDLandscapeGenerationSettings settings{
+		.max_search_nodes = static_cast<int32_t>(_settings_game.pf.yapf.max_search_nodes),
+		.climate = to_underlying(g.landscape), .generator = g.land_generator,
+		.rivers = g.amount_of_rivers, .min_river_length = g.min_river_length, .route_random = g.river_route_random,
+		.terrain = _settings_game.difficulty.terrain_type, .sea = _settings_game.difficulty.quantity_sea_lakes,
+		.snow_coverage = g.snow_coverage, .desert_coverage = g.desert_coverage, .tree_placer = g.tree_placer,
+		.height_limit = _settings_game.construction.map_height_limit, .rotation = g.heightmap_rotation, .heightmap_height = g.heightmap_height,
+		.freeform = _settings_game.construction.freeform_edges,
+	};
+	bool generated = openttd_rust_generate_landscape(&GetRustLandscapeGenerationServices(), &frame, &heightmap, settings, mode);
+	if (frame.cancellation) std::rethrow_exception(frame.cancellation);
+	return generated;
+}
+#else
 static const uint8_t _genterrain_tbl_1[5] = { 10, 22, 33, 37, 4  };
 static const uint8_t _genterrain_tbl_2[5] = {  0,  0,  0,  0, 33 };
 
@@ -1859,6 +1964,8 @@ bool GenerateLandscape(uint8_t mode)
 	return true;
 }
 
+#endif /* WITH_RUST */
+
 void OnTick_Town();
 void OnTick_Trees();
 void OnTick_Station();
@@ -1884,6 +1991,8 @@ void CallLandscapeTick()
 
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDLandscapeGenerationServices.hpp"
+#include "abi-visit-OpenTTDHeightmapDecoder.hpp"
 #include "abi-visit-OpenTTDLandscapeLoopServices.hpp"
 #include "abi-visit-OpenTTDTileOwnerServices.hpp"
 #include "abi-visit-OpenTTDClearServices.hpp"
@@ -1897,7 +2006,9 @@ bool CheckAbi_landscape()
 	OpenTTDGroundCall call;
 	OpenTTDObjectLoopFrame frame;
 	RustRoadCommandContext road;
-	return AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &frame, &road.view)) &&
+	RustHeightmapDecoder decoder(DFT_HEIGHTMAP_BMP, "");
+	return AbiServicesComplete(GetRustLandscapeGenerationServices()) && AbiServicesComplete(decoder.view) &&
+		AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &frame, &road.view)) &&
 		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
 		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&
 		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices());
