@@ -48,7 +48,7 @@ def generate(root=ROOT):
     output = defaultdict(list)
     headers = {}
     aliases = {}
-    for header in sorted((root / "src/rust").glob("*.h")):
+    for header in sorted((root / "src/rust").glob("*.h*")):
         source = header.read_text(encoding="utf-8")
         text = re.sub(r"//[^\n]*|/\*.*?\*/", "", source, flags=re.S)
         aliases.update(re.findall(r"using\s+(\w+)\s*=\s*([^;]+);", text))
@@ -60,7 +60,7 @@ def generate(root=ROOT):
     records = sorted(declarations(root))
     for name, (_, body) in headers.items():
         if re.search(r"\(\s*(?:\w+\s+)?\*\w+\)\s*\(", body):
-            if name not in {record[0] for record in records}:
+            if name not in {aliases.get(r[0], r[0]).split("<")[0] for r in records}:
                 raise ValueError(f"callback table absent from Rust layouts: {name}")
     for name, group, _, fields, width, _ in records:
         values = [f"sizeof({name})", f"alignof({name})"]
@@ -71,10 +71,8 @@ def generate(root=ROOT):
             f'Layout("{name}", {{{", ".join(values)}}});'
         )
         # Data pointers and scalar carriers never acquire callback defaults or checks.
-        header, body = headers.get(name, ("", ""))
+        header, body = headers.get(aliases.get(name, name).split("<")[0], ("", ""))
         callbacks = re.findall(r"\(\s*(?:\w+\s+)?\*(\w+)\)\s*\(", body)
-        if "<" in aliases.get(name, ""):
-            callbacks = [cpp for _, cpp in fields]
         if not callbacks:
             continue
         missing = set(callbacks) - {cpp for _, cpp in fields}
