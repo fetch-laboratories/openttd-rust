@@ -39,6 +39,7 @@ EXPECTED = {
     ),
     "reload": ("reloaded true",),
     "subsidies": (
+        "nearby true",
         "commands true true",
         "classes true true",
         "multipliers true",

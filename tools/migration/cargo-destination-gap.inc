@@ -63,6 +63,7 @@ struct Industry {
 using SmallIndustryList = std::vector<Industry *>;
 struct IndustryListEntry { Industry *industry; };
 struct Station { CompanyID owner{}; std::vector<IndustryListEntry> industries_near; };
+struct RustNearbyIndustryCursor { size_t next; };
 using DestinationEvent = std::tuple<IndustryID, uint8_t, uint32_t, uint32_t>;
 static std::vector<DestinationEvent> destination_events;
 static std::array<IndustrySpec, 8> destination_specs;
@@ -83,12 +84,10 @@ static void TriggerIndustryAnimation(Industry *i, IndustryAnimationTrigger) { de
 
 static int CheckCargoDestinationGap(OpenTTDCargoServices s)
 {
-	s.nearby_industry = [](uint16_t, uint32_t n) noexcept -> void * { return n < destination_station.industries_near.size() ? destination_station.industries_near[n].industry : nullptr; };
 	s.station_read = [](uint16_t, uint8_t field, uint8_t) noexcept -> uint32_t { return field == 0 ? destination_station.owner : 0; };
 	s.industry_read = [](void *p, uint8_t field, uint32_t slot) noexcept -> uint32_t {
 		auto *i = static_cast<Industry *>(p);
 		switch (field) {
-			case 0: return i->index;
 			case 1: { auto it = i->GetCargoAccepted(slot); return it == i->accepted.end() ? UINT32_MAX : it - i->accepted.begin(); }
 			case 2: return i->exclusive_supplier;
 			case 3: return i->accepted[slot].waiting;
@@ -117,7 +116,13 @@ static int CheckCargoDestinationGap(OpenTTDCargoServices s)
 	s.monitor = [](uint16_t, uint8_t cargo, uint8_t, uint32_t amount, uint32_t, uint16_t industry) noexcept {
 		if (industry != 65535) destination_events.emplace_back(industry, 5, amount, cargo);
 	};
-	s.subsidies = []() noexcept -> const OpenTTDSubsidyServices * { static const OpenTTDSubsidyServices empty{.has_source_flag = [](Source, PartOfSubsidy) noexcept { return false; }}; return &empty; };
+	s.subsidies = []() noexcept -> const OpenTTDSubsidyServices * { static const OpenTTDSubsidyServices empty{
+		.industry_id = [](void *p) noexcept -> uint16_t { return static_cast<Industry *>(p)->index; },
+		.has_source_flag = [](Source, PartOfSubsidy) noexcept { return false; },
+		.station = [](uint16_t) noexcept -> const Station * { return &destination_station; },
+		.begin_nearby = [](RustNearbyIndustryCursor *c, const Station *) noexcept { c->next = 0; },
+		.next_nearby = [](RustNearbyIndustryCursor *c) noexcept -> Industry * { return c->next < destination_station.industries_near.size() ? destination_station.industries_near[c->next++].industry : nullptr; },
+	}; return &empty; };
 	s.industry_effect = [](void *p, uint8_t op) noexcept {
 		auto *i = static_cast<Industry *>(p);
 		if (op == 0) i->was_cargo_delivered = true; else destination_events.emplace_back(i->index, op, 0, 0);
@@ -151,8 +156,9 @@ static int CheckCargoDestinationGap(OpenTTDCargoServices s)
 			auto *delivery = openttd_rust_cargo_delivery_new();
 			auto *payment = openttd_rust_cargo_payment_new(nullptr, 0);
 			spec = {Money(6000), {20, 20}, true, false, {false}};
-			openttd_rust_cargo_payment_final(payment, delivery, &s, 1, nullptr, 12, 250, 45, 7);
-			openttd_rust_cargo_payment_final(payment, delivery, &s, 1, nullptr, 3, 250, 45, 7);
+			RustNearbyIndustryCursor cursor;
+			openttd_rust_cargo_payment_final(payment, delivery, &s, 1, nullptr, 12, 250, 45, 7, &cursor);
+			openttd_rust_cargo_payment_final(payment, delivery, &s, 1, nullptr, 3, 250, 45, 7, &cursor);
 			if (payment->fields.route_profit != (GetTransportedGoodsIncome(12, 250, 45, 1) + GetTransportedGoodsIncome(3, 250, 45, 1)).base() || accepted != 15) return 2;
 			openttd_rust_cargo_delivery_flush(delivery, &s);
 			if (destination_industries != expected || destination_events != events) return 3;

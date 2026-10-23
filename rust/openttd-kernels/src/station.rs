@@ -15,6 +15,12 @@ pub struct Station {
     _private: [u8; 0],
 }
 
+/// Opaque native entry-frame iterator storage; never read or retained by Rust.
+#[repr(C)]
+pub struct NearbyIndustryCursor {
+    _private: [u8; 0],
+}
+
 /// A native `BaseStation`, which may also be a waypoint.
 #[repr(C)]
 pub struct BaseStation {

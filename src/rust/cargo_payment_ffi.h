@@ -10,6 +10,7 @@
 #define RUST_CARGO_PAYMENT_FFI_H
 #include "service_defaults.hpp"
 struct OpenTTDSubsidyServices;
+struct RustNearbyIndustryCursor;
 
 /** Opaque live native entity, distinct from Rust-owned boundary state. */
 struct CargoPayment;
@@ -41,7 +42,9 @@ struct OpenTTDCargoPayment {
  * resolvers execute sprite-group programs rather than script VMs; cargo profit,
  * refusal, production, randomisation, animation and vehicle sound resolution do
  * not invoke arbitrary game commands or mutate payment/destination storage.
- * Pool/world pointers are opaque handles, never Rust references. Returned fields
+ * Entry frames own unbound nearby-industry cursors; begin binds each scan.
+ * Delivery finishes its scan before subsidy checks reuse the cursor; production
+ * flush is later. Pool/world pointers are opaque handles, never Rust references. Returned fields
  * are copied scalars. Environmental exceptions terminate inside the wrappers.
  * Save/load and pointer fixups write the fields in place between Rust calls and
  * do not run simulation. Panics abort.
@@ -54,7 +57,7 @@ struct OpenTTDCargoPayment {
  * Integer argument widths, slot bounds and pool lifetimes are caller preconditions.
  */
 /* Leaf selectors: station read0 owner,1 always-accepted(cargo); industry read
- * 0 id,1 accepted-slot(cargo)/UINT32_MAX,2 supplier,3 accepted-waiting,4 production
+ * 1 accepted-slot(cargo)/UINT32_MAX,2 supplier,3 accepted-waiting,4 production
  * callback bits(arrival=1,periodic=2),5/6 input/output counts,7/8 input/output
  * cargo,9 output-waiting,10 multiplier(input<<16|output). Industry write0 output,
  * 1 input waiting. Statistics0 station,1 company,2 town. Industry effect0 mark,
@@ -66,7 +69,6 @@ struct OpenTTDCargoPayment {
 struct OpenTTDCargoServices {
 	void (OPENTTD_CARGO_CALL *spec)(uint8_t, OpenTTDCargoSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec);
 	uint16_t (OPENTTD_CARGO_CALL *callback)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(callback);
-	void *(OPENTTD_CARGO_CALL *nearby_industry)(uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby_industry);
 	uint32_t (OPENTTD_CARGO_CALL *station_read)(uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_read);
 	uint32_t (OPENTTD_CARGO_CALL *industry_read)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_read);
 	void (OPENTTD_CARGO_CALL *industry_write)(void *, uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_write);
@@ -87,7 +89,7 @@ void OPENTTD_CARGO_CALL openttd_rust_cargo_payment_destroy(OpenTTDCargoPayment *
 void *OPENTTD_CARGO_CALL openttd_rust_cargo_payment_front(const OpenTTDCargoPayment *);
 void OPENTTD_CARGO_CALL openttd_rust_cargo_payment_afterload(OpenTTDCargoPayment *, const OpenTTDCargoServices *);
 int64_t OPENTTD_CARGO_CALL openttd_rust_cargo_payment_transfer(OpenTTDCargoPayment *, const OpenTTDCargoServices *, uint8_t, const void *, uint32_t, uint32_t, uint16_t);
-void OPENTTD_CARGO_CALL openttd_rust_cargo_payment_final(OpenTTDCargoPayment *, OpenTTDCargoDelivery *, const OpenTTDCargoServices *, uint8_t, const void *, uint32_t, uint32_t, uint16_t, uint32_t);
+void OPENTTD_CARGO_CALL openttd_rust_cargo_payment_final(OpenTTDCargoPayment *, OpenTTDCargoDelivery *, const OpenTTDCargoServices *, uint8_t, const void *, uint32_t, uint32_t, uint16_t, uint32_t, RustNearbyIndustryCursor *);
 int64_t OPENTTD_CARGO_CALL openttd_rust_cargo_income(const OpenTTDCargoServices *, uint32_t, uint32_t, uint16_t, uint8_t);
 OpenTTDCargoDelivery *OPENTTD_CARGO_CALL openttd_rust_cargo_delivery_new();
 void OPENTTD_CARGO_CALL openttd_rust_cargo_delivery_destroy(OpenTTDCargoDelivery *);

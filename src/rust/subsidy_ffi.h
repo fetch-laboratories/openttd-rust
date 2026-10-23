@@ -16,6 +16,8 @@
 #include "service_defaults.hpp"
 #include "town_ffi.h"
 struct OpenTTDIndustry;
+struct Industry;
+struct RustNearbyIndustryCursor;
 struct OpenTTDIndustryServices;
 /** Native aliases address this sole Rust allocation. Calls are serialized by the
  * game-state mutex. No owner borrow survives allocation, news, events or deletion;
@@ -58,7 +60,8 @@ struct OpenTTDSubsidyServices {
 	const Station *(*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	bool (*station_empty)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_empty);
 	void (*catchment)(const Station *, void *, void (*)(void *, uint32_t)) noexcept OPENTTD_SERVICE_DEFAULT(catchment);
-	void (*near_industries)(const Station *, void *, void (*)(void *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(near_industries);
+	void (*begin_nearby)(RustNearbyIndustryCursor *, const Station *) noexcept OPENTTD_SERVICE_DEFAULT(begin_nearby);
+	Industry *(*next_nearby)(RustNearbyIndustryCursor *) noexcept OPENTTD_SERVICE_DEFAULT(next_nearby);
 	void (*assert_destination)(Source) noexcept OPENTTD_SERVICE_DEFAULT(assert_destination);
 };
 extern "C" {
@@ -68,6 +71,6 @@ void openttd_rust_subsidy_rebuild(const OpenTTDSubsidyServices *);
 void openttd_rust_subsidy_delete_with(const OpenTTDSubsidyServices *, Source);
 bool openttd_rust_subsidy_command(const OpenTTDSubsidyServices *, uint16_t, CargoType, Source, Source);
 void openttd_rust_subsidy_monthly(const OpenTTDSubsidyServices *, OpenTTDSubsidyCargo);
-bool openttd_rust_subsidy_check(const OpenTTDSubsidyServices *, CargoType, uint8_t, Source, uint16_t);
+bool openttd_rust_subsidy_check(const OpenTTDSubsidyServices *, CargoType, uint8_t, Source, uint16_t, RustNearbyIndustryCursor *);
 }
 #endif /* RUST_SUBSIDY_FFI_H */

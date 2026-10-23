@@ -20,6 +20,7 @@
     clippy::too_many_lines
 )]
 pub use crate::source_type::Source;
+use crate::station::{NearbyIndustryCursor, Station};
 use crate::subsidy_type::PartOfSubsidy;
 use crate::{
     cargo_type::{INVALID_CARGO, NUM_CARGO, is_valid_cargo_type},
@@ -86,8 +87,8 @@ pub struct Services {
     pub station: extern "C" fn(u16) -> *const Station,
     pub station_empty: extern "C" fn(*const Station) -> bool,
     pub catchment: extern "C" fn(*const Station, *mut c_void, extern "C" fn(*mut c_void, u32)),
-    pub near_industries:
-        extern "C" fn(*const Station, *mut c_void, extern "C" fn(*mut c_void, u16)),
+    pub begin_nearby: extern "C" fn(*mut NearbyIndustryCursor, *const Station),
+    pub next_nearby: extern "C" fn(*mut NearbyIndustryCursor) -> *mut industry::ShellHandle,
     pub assert_destination: extern "C" fn(Source),
 }
 struct RegistryState {
@@ -469,7 +470,14 @@ impl Services {
             self.rebuild();
         }
     }
-    pub(crate) fn check(&self, cargo: u8, company: u8, src: Source, station: u16) -> bool {
+    pub(crate) fn check(
+        &self,
+        cargo: u8,
+        company: u8,
+        src: Source,
+        station: u16,
+        cursor: *mut NearbyIndustryCursor,
+    ) -> bool {
         if !src.is_valid()
             || src.kind > Source::TOWN
             || !(self.has_source_flag)(src, PartOfSubsidy::Source)
@@ -512,16 +520,21 @@ impl Services {
                 return;
             }
             if dst.kind == Source::INDUSTRY {
-                let mut visit = IndustryMatch {
-                    services: self,
-                    id,
-                    state,
-                    company,
-                    destination: dst.id,
-                    subsidised: false,
-                };
-                (self.near_industries)(station, (&raw mut visit).cast(), matching_industry);
-                subsidised |= visit.subsidised;
+                (self.begin_nearby)(cursor, station);
+                loop {
+                    let industry = (self.next_nearby)(cursor);
+                    if industry.is_null() {
+                        break;
+                    }
+                    if (self.industry_id)(industry.cast()) != dst.id {
+                        continue;
+                    }
+                    (self.assert_destination)(dst);
+                    subsidised = true;
+                    if unsafe { !(*state).is_awarded() } {
+                        self.award(id, company);
+                    }
+                }
             } else if towns.bits[usize::from(dst.id) / 64] & (1 << (dst.id % 64)) != 0 {
                 (self.assert_destination)(dst);
                 subsidised = true;
@@ -532,10 +545,6 @@ impl Services {
         });
         subsidised
     }
-}
-#[repr(C)]
-pub struct Station {
-    _private: [u8; 0],
 }
 struct TownsNear<'a> {
     services: &'a Services,
@@ -596,35 +605,9 @@ pub unsafe extern "C" fn openttd_rust_subsidy_check(
     company: u8,
     src: Source,
     station: u16,
+    cursor: *mut NearbyIndustryCursor,
 ) -> bool {
-    unsafe { &*s }.check(cargo, company, src, station)
-}
-
-struct IndustryMatch<'a> {
-    services: &'a Services,
-    id: u16,
-    state: *mut State,
-    company: u8,
-    destination: u16,
-    subsidised: bool,
-}
-extern "C" fn matching_industry(context: *mut c_void, industry: u16) {
-    // SAFETY: Native visitor retains this synchronous stack context only until
-    // it returns. Copy all inputs before an award can reenter shared services.
-    let (services, id, state, company, destination) = unsafe {
-        let v = &*context.cast::<IndustryMatch<'_>>();
-        (v.services, v.id, v.state, v.company, v.destination)
-    };
-    if industry != destination {
-        return;
-    }
-    (services.assert_destination)(Source::industry(industry));
-    unsafe {
-        (*context.cast::<IndustryMatch<'_>>()).subsidised = true;
-    }
-    if unsafe { !(*state).is_awarded() } {
-        services.award(id, company);
-    }
+    unsafe { &*s }.check(cargo, company, src, station, cursor)
 }
 
 crate::abi::layouts! {
@@ -667,7 +650,8 @@ crate::abi::layouts! {
         station,
         station_empty,
         catchment,
-        near_industries,
+        begin_nearby,
+        next_nearby,
         assert_destination,
     };
 }

@@ -15,7 +15,6 @@ inline OpenTTDCargoServices CargoTestServices()
 	return {
 		[](uint8_t, OpenTTDCargoSpec *) noexcept { std::abort(); },
 		[](uint8_t, uint32_t) noexcept -> uint16_t { std::abort(); },
-		[](uint16_t, uint32_t) noexcept -> void * { std::abort(); },
 		[](uint16_t, uint8_t, uint8_t) noexcept -> uint32_t { std::abort(); },
 		[](void *, uint8_t, uint32_t) noexcept -> uint32_t { std::abort(); },
 		[](void *, uint8_t, uint32_t, uint32_t) noexcept { std::abort(); },
