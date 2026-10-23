@@ -12,5 +12,6 @@ struct RustHeightmapDecoder {
 	std::vector<uint8_t> image;
 	OpenTTDHeightmapDecoder view;
 	RustHeightmapDecoder(DetailedFileType type, std::string_view filename);
+	bool Read(DetailedFileType type, std::string_view filename, OpenTTDHeightmapImage *out) noexcept;
 };
 #endif /* RUST_HEIGHTMAP_SERVICES_HPP */

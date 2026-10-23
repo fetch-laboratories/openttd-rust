@@ -1084,7 +1084,13 @@ bool GenerateLandscape(uint8_t mode)
 	static_assert(GWP_LANDSCAPE == 1 && GWP_RIVER == 2 && GWM_HEIGHTMAP == 3 && LG_ORIGINAL == 0 && LG_TERRAGENESIS == 1 && MAX_TILE_HEIGHT == 255);
 	static_assert(SPR_MAPGEN_BEGIN == 4845 && TILE_UPDATE_FREQUENCY == 256);
 	OpenTTDGenerationFrame frame;
-	RustHeightmapDecoder decoder(_file_to_saveload.ftype.detailed, _file_to_saveload.name);
+	/* Resolve file selection only after the first progress call, as the source
+	 * does. No filename view is retained across a progress/yield boundary. */
+	RustHeightmapDecoder decoder(DFT_HEIGHTMAP_BMP, "");
+	const OpenTTDHeightmapDecoder heightmap{
+		.context = &decoder,
+		.read = [](void *ctx, OpenTTDHeightmapImage *out) noexcept { return static_cast<RustHeightmapDecoder *>(ctx)->Read(_file_to_saveload.ftype.detailed, _file_to_saveload.name, out); },
+	};
 	const auto &g = _settings_game.game_creation;
 	const OpenTTDLandscapeGenerationSettings settings{
 		.max_search_nodes = static_cast<int32_t>(_settings_game.pf.yapf.max_search_nodes),
@@ -1095,7 +1101,7 @@ bool GenerateLandscape(uint8_t mode)
 		.height_limit = _settings_game.construction.map_height_limit, .rotation = g.heightmap_rotation, .heightmap_height = g.heightmap_height,
 		.freeform = _settings_game.construction.freeform_edges,
 	};
-	bool generated = openttd_rust_generate_landscape(&GetRustLandscapeGenerationServices(), &frame, &decoder.view, settings, mode);
+	bool generated = openttd_rust_generate_landscape(&GetRustLandscapeGenerationServices(), &frame, &heightmap, settings, mode);
 	if (frame.cancellation) std::rethrow_exception(frame.cancellation);
 	return generated;
 }

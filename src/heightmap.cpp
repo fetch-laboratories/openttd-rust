@@ -529,12 +529,16 @@ RustHeightmapDecoder::RustHeightmapDecoder(DetailedFileType type, std::string_vi
 	.context = this,
 	.read = [](void *ctx, OpenTTDHeightmapImage *out) noexcept {
 		auto &decoder = *static_cast<RustHeightmapDecoder *>(ctx);
-		uint width, height;
-		if (!ReadHeightMap(decoder.type, decoder.filename, &width, &height, &decoder.image)) return false;
-		*out = {.width = width, .height = height, .data = decoder.image.data()};
-		return true;
+		return decoder.Read(decoder.type, decoder.filename, out);
 	},
 } {}
+bool RustHeightmapDecoder::Read(DetailedFileType type, std::string_view filename, OpenTTDHeightmapImage *out) noexcept
+{
+	uint width, height;
+	if (!ReadHeightMap(type, filename, &width, &height, &this->image)) return false;
+	*out = {.width = width, .height = height, .data = this->image.data()};
+	return true;
+}
 #endif
 
 bool LoadHeightmap(DetailedFileType dft, std::string_view filename)

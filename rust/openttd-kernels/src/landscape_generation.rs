@@ -1201,12 +1201,12 @@ impl<'a, 'w> RiverBuilder<'a, 'w> {
     }
     fn include(&mut self, id: usize) {
         self.heap
-            .include(id, |a, b| self.nodes[a].less(self.nodes[b]));
+            .include(id, |a, b| self.nodes[a].less(&self.nodes[b]));
     }
     fn pop_open_node(&mut self, id: usize) {
         self.open.remove(&self.nodes[id].get_tile());
         self.heap
-            .remove(id, |a, b| self.nodes[a].less(self.nodes[b]));
+            .remove(id, |a, b| self.nodes[a].less(&self.nodes[b]));
     }
     fn add_startup_node(&mut self, mut node: RiverNode) {
         Self::node_cache_fetch(&mut node);

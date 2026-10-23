@@ -18,7 +18,7 @@ impl<K> Node<K> {
             estimate: 0,
         }
     }
-    pub(crate) fn less(self, other: Self) -> bool {
+    pub(crate) fn less(&self, other: &Self) -> bool {
         self.estimate < other.estimate
     }
 }
