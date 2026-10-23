@@ -10,7 +10,7 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 - Since the seventeenth review: maintenance #358 (#355/#356/#357 batch, free-core `--jobs`), #340 (#281 part 1) and #351 (#274); ownership ports #353 (landscape), #362 (road stops) and #347 (town commands).
 - Speed: the due pre-rail profile at code `9f2c92b51e` passed under the verified original liblzma runtime (#356): TGP 1.213575x, Opus 1.218885x, Grok 1.225347x, P1996 1.254140x, P2000 1.323060x, P2016 1.358763x. Largest rise since `9a991a1c23`: 1.92%; none is in its speed-pass band. Anchors remain unchanged; profile again after the next integration.
 - CI: #363 fixed the #347/#353 regression. The due macOS Debug/Release run passed; one integration since, next due after four more. #360 passed current-base Full before merging. #365 addresses the platform policy's GitHub HTTP 500 and the selected setup/failure-reporting fixes.
-- Component branches: #359 and #364 (two of six), with #366/#367 selected next. Reviewed #359, #361 and #365 will form one tested integration batch.
+- Component branches: #359, #364, #366 and #367 (four of six), with #371 selected next. Reviewed #359, #361 and #365 are in combined conflict review; the nearby-industry consolidation leaves this batch for a linear design on #261.
 
 ## Integration and wind-down correction (2026-10-22, takes precedence)
 
@@ -167,10 +167,13 @@ unintegrated component branches. Maintenance (#261, #281) and #156 run in parall
 5. **Next whole owners**, as WIP frees, each without draft service dependencies:
    - #349 visits (#359): fixing review active, then Full;
    - #350 generation and rivers: implementation active;
-   - #366 complete waypoint construction and command policy: selected next;
-   - #367 complete PBS reservation service: selected after waypoints.
+   - #366 complete waypoint construction and command policy: implementation active;
+   - #367 complete PBS reservation service: implementation active;
+   - #371 complete tile movement dispatch/policy: selected next;
+   - #372 common ground-vehicle dynamics and canonical cache: selected after movement;
+   - #373 live link-graph scheduling/queues: selected after ground dynamics.
 
-   A shared service that two owners need lands first, as its own PR. The fresh Astra plan selected #366/#367 without draft dependencies; common ground-vehicle dynamics is the next planning candidate, not yet selected. Keep native map/pool storage and typed services; #274 does not authorize raw access for these owners.
+   A shared service that two owners need lands first, as its own PR. Fresh Astra plans selected these whole owners without draft dependencies; #372 may use integrated slope services before #371 lands. Keep canonical map/pool storage and typed services; #274 does not authorize raw access for these owners. Each tight retirement boundary gets an early metrics checkpoint and a fix on its owned issue if needed.
 6. **#168 tail, largest first.** `order_cmd.cpp` and `economy.cpp` hold 65 of the 198 baseline copies.
 
 New owners reuse integrated services, never draft copies. A Rust-allocated
@@ -187,7 +190,8 @@ Resumed 2026-10-23. Root is Codex (gpt-6.1-sol, ultra); implementation and indep
 | #350 / #364 | `ad026854e1` | Implementation checkpoint pushed; finish the complete owner and focused evidence before split reviews. |
 | #261 / #361 | `909b445de2` | Fixing review complete; root spot-check and combined conflict review. Tooling growth 160 lines; root raises its 120-line budget once to 180 (#261). |
 | #261 / #365 | `95830c3d33` | Independent review passed, 376/400 lines. Root reviewed workflow definitions; combine with #359/#361 and use bootstrap Full. |
-| #366 / #367 | selected | Start waypoint owner as capacity frees; PBS follows. Both scopes and evidence plans are on their issues. |
+| #366 / #367 | integrated base | Separate implementers are active; keep early drafts/checkpoints and focused evidence. |
+| #371 / #372 / #373 | selected | Start movement in the free slot; ground dynamics and link-graph scheduling follow. Scopes/evidence are on their issues. |
 
 The anchored-runtime pre-rail profile and macOS passed. Next integration combines reviewed #359/#361/#365 after scoped conflict review. Finish checkpoint/docs updates before bootstrap Full, then keep base stable for validation. #360 integrated without a stale Full rerun or ready-work wait; PR notes carry the ten-integration observation.
 Each draft has one current worktree. #281 part 2 and #261 R7 inputs remain on their issues. #64/#68/#69 stay paused.
