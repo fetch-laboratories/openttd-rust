@@ -79,7 +79,6 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept;
 inline const OpenTTDVehicleVisits *RustVehicleVisits() noexcept { return &GetRustVehicleVisits(); }
 extern "C" {
 uint8_t openttd_rust_percent_filled(OpenTTDVehicle *, uint32_t *, const OpenTTDVehicleVisits *);
-void openttd_rust_visit_begin_loading(OpenTTDVehicle *, const OpenTTDVehicleVisits *);
 void openttd_rust_visit_leave_station(OpenTTDVehicle *, const OpenTTDVehicleVisits *);
 void openttd_rust_visit_handle_loading(OpenTTDVehicle *, bool, const OpenTTDVehicleVisits *) noexcept;
 void openttd_rust_visit_enter_depot(OpenTTDVehicle *, const OpenTTDVehicleVisits *) noexcept;

@@ -77,6 +77,11 @@
 #include "safeguards.h"
 
 #ifdef WITH_RUST
+static_assert(VehicleFlags{VehicleFlag::LoadingFinished}.base() == 1 && VehicleFlags{VehicleFlag::StopLoading}.base() == 64);
+static_assert(VehicleRailFlags{VehicleRailFlag::Reversed}.base() == 128 && VehicleRailFlags{VehicleRailFlag::LeavingStation}.base() == 512);
+static_assert(CCF_ARRANGE.base() == 3 && TRACK_BIT_DEPOT == 0x80 && VehicleCargoList::MTA_LOAD == 3);
+static_assert(OrderDepotTypeFlags{OrderDepotTypeFlag::PartOfOrders}.base() == 2 && OrderDepotActionFlags{OrderDepotActionFlag::Halt}.base() == 1 && OrderDepotActionFlags{OrderDepotActionFlag::NearestDepot}.base() == 2);
+static_assert(to_underlying(OrderLoadType::FullLoad) == 2 && to_underlying(OrderLoadType::FullLoadAny) == 3);
 static OpenTTDVisitCapacity VehicleVisitCapacity(OpenTTDVehicle *handle) noexcept
 {
 	return {.capacity = RustVehicleCargoCap(handle), .remaining = RustVehicleRefitCap(handle), .cargo = RustVehicleCargoType(handle)};
@@ -2416,13 +2421,11 @@ void Vehicle::DeleteUnreachedImplicitOrders()
  * Prepare everything to begin the loading when arriving at a station.
  * @pre IsTileType(this->tile, MP_STATION) || this->type == VEH_SHIP.
  */
+#ifndef WITH_RUST
 void Vehicle::BeginLoading()
 {
 	assert(IsTileType(this->tile, MP_STATION) || this->type == VEH_SHIP);
 
-#ifdef WITH_RUST
-	openttd_rust_visit_begin_loading(RustVehicle(this), &GetRustVehicleVisits());
-#else
 	TimerGameTick::Ticks travel_time = TimerGameTick::counter - this->last_loading_tick;
 	if (this->current_order.IsType(OT_GOTO_STATION) &&
 			this->current_order.GetDestination() == this->last_station_visited) {
@@ -2540,8 +2543,8 @@ void Vehicle::BeginLoading()
 	Station::Get(this->last_station_visited)->MarkTilesDirty(true);
 	this->cur_speed = 0;
 	this->MarkDirty();
-#endif
 }
+#endif
 
 /**
  * Return all reserved cargo packets to the station and reset all packets
@@ -2654,11 +2657,9 @@ void Vehicle::ReleaseUnitNumber()
  * orders and does nothing in all other cases.
  * @param mode is the non-first call for this vehicle in this tick?
  */
+#ifndef WITH_RUST
 void Vehicle::HandleLoading(bool mode)
 {
-#ifdef WITH_RUST
-	openttd_rust_visit_handle_loading(RustVehicle(this), mode, &GetRustVehicleVisits());
-#else
 	switch (this->current_order.GetType()) {
 		case OT_LOADING: {
 			TimerGameTick::Ticks wait_time = std::max(this->current_order.GetTimetabledWait() - this->lateness_counter, 0);
@@ -2686,8 +2687,8 @@ void Vehicle::HandleLoading(bool mode)
 	}
 
 	this->IncrementImplicitOrderIndex();
-#endif
 }
+#endif
 
 /**
  * Check if the current vehicle has a full load order.

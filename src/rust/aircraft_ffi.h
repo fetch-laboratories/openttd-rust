@@ -131,7 +131,6 @@ bool OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_tick(const OpenTTDAircraftLeave
 void OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_calendar_day(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 void OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_economy_day(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 void OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_position(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, int32_t, int32_t, int32_t);
-void OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_enter_hangar(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 void OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_cache(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, bool);
 void OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_flight_bounds(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, int32_t *, int32_t *);
 int32_t OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_flight_level(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, uint8_t *, bool);

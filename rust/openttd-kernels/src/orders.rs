@@ -24,7 +24,9 @@
     clippy::if_not_else,
     clippy::collapsible_match
 )]
-use crate::order_type::{OLFB_NO_LOAD, OUFB_TRANSFER, OUFB_UNLOAD};
+use crate::order_type::{
+    OLFB_FULL_LOAD, OLFB_FULL_LOAD_ANY, OLFB_NO_LOAD, OUFB_TRANSFER, OUFB_UNLOAD,
+};
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
 use std::ffi::c_void;
 
@@ -817,6 +819,10 @@ impl Order {
     pub(crate) fn can_leave_with_cargo(self, has_cargo: bool) -> bool {
         self.load() != OLFB_NO_LOAD
             || (has_cargo && self.unload() != OUFB_UNLOAD && self.unload() != OUFB_TRANSFER)
+    }
+    /// `Order::IsFullLoadOrder`.
+    pub(crate) fn is_full_load(self) -> bool {
+        matches!(self.load(), OLFB_FULL_LOAD | OLFB_FULL_LOAD_ANY)
     }
     fn wait_timetabled(self) -> bool {
         if self.kind() == 7 {

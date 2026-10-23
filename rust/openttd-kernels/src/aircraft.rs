@@ -2207,8 +2207,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_position(
 /// # Safety
 /// Handles/state and immutable services satisfy the source lifetime preconditions.
 /// Raw scalar accesses end before noexcept callbacks; no borrow survives reentry.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_aircraft_enter_hangar(leaves: *const Leaves, id: Vehicle) {
+pub(crate) unsafe fn enter_hangar(leaves: &Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     let w = unsafe { World::new(leaves) };
     w.enter_hangar(id);

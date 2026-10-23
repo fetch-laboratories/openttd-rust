@@ -2641,6 +2641,13 @@ impl Game<'_> {
     }
 }
 
+/// `VehicleRailFlag::LeavingStation`.
+pub(crate) const VRF_LEAVING_STATION: u64 = 1 << 9;
+/// `VehicleRailFlag::Reversed`.
+const VRF_REVERSED: u64 = 1 << 7;
+/// `CCF_ARRANGE`: length and capacity.
+const CCF_ARRANGE: u8 = 3;
+
 /// The train part of `VehicleEnterDepot` (#349): clear the depot reservation,
 /// update the segment's signals and arrange the consist.
 pub(crate) fn enter_depot(id: Handle, leaves: &Leaves, services: &Services) {
@@ -2653,10 +2660,8 @@ pub(crate) fn enter_depot(id: Handle, leaves: &Leaves, services: &Services) {
     g.signal_segment(id, tile, crate::direction_type::INVALID_DIAGDIR);
     id.set_wait_counter(0);
     id.set_force_proceed(0);
-    // `VehicleRailFlag::Reversed`.
-    id.set_flags(id.get_flags() & !(1 << 7));
-    // `CCF_ARRANGE`: length and capacity.
-    g.consist_changed(id, 3);
+    id.set_flags(id.get_flags() & !VRF_REVERSED);
+    g.consist_changed(id, CCF_ARRANGE);
 }
 /// Invoke synchronous train policy with live serialized services.
 /// # Safety

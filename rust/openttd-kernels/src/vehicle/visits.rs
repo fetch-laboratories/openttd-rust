@@ -18,14 +18,17 @@
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::if_not_else)]
 use super::{VS_CRASHED, VS_HIDDEN, VS_STOPPED, VehicleRef, VehicleServices, VehicleType};
 use crate::{
+    base_consist::{VF_LOADING_FINISHED, VF_STOP_LOADING},
     cargo_storage::List,
     cargo_type::{CARGO_AUTO_REFIT, INVALID_CARGO, NUM_CARGO},
+    cargopacket::MTA_LOAD,
     linkgraph::NativeGraph,
     linkgraph_type::EdgeUpdateModes,
     map_func::Map,
     order_type::{
-        INVALID_VEH_ORDER_ID, OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT,
-        OT_GOTO_STATION, OT_IMPLICIT, OT_LOADING, OUFB_NO_UNLOAD,
+        INVALID_VEH_ORDER_ID, ODATF_HALT, ODATF_NEAREST_DEPOT, ODTF_PART_OF_ORDERS, OLFB_NO_LOAD,
+        OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_IMPLICIT, OT_LOADING,
+        OUFB_NO_UNLOAD,
     },
     orders::VisitOrders,
     services::{CommandCost, Services as SharedServices},
@@ -34,6 +37,8 @@ use crate::{
     station_service::{Links, Loading, Scope, World, has_rating, prepare_unload, scope_context},
     station_type::INVALID_STATION,
     tile_type::MP_STATION,
+    track_type::TRACK_BIT_DEPOT,
+    train::VRF_LEAVING_STATION,
     vehicle_transactions::refit,
     witness,
 };
@@ -705,14 +710,6 @@ pub(crate) fn cancel_reservation(front: VehicleRef, next: u16, st: *mut Station,
     }
 }
 
-/// `VehicleCargoList::MTA_LOAD`.
-const MTA_LOAD: u8 = 3;
-/// `VehicleFlag::LoadingFinished` and `VehicleFlag::StopLoading`.
-const VF_LOADING_FINISHED: u16 = 1 << 0;
-const VF_STOP_LOADING: u16 = 1 << 6;
-/// `VehicleRailFlag::LeavingStation` and `VehicleRailFlag::Reversed`.
-const VRF_LEAVING_STATION: u64 = 1 << 9;
-
 /// `CalcPercentVehicleFilled`; the colour string is computed only when wanted.
 pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut u32>, s: &Services) -> u8 {
     let mut count = 0_i32;
@@ -730,7 +727,7 @@ pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut u32>, s: &Se
     s.check(|| colour.is_none() || (!st.is_null() && is_loading));
 
     let order_no_load = is_loading && order.load() == OLFB_NO_LOAD;
-    let order_full_load = is_loading && matches!(order.load(), 2 | 3);
+    let order_full_load = is_loading && order.is_full_load();
     let wants_colour = colour.is_some();
 
     let mut part = Some(front);
@@ -974,7 +971,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
             let aircraft = (s.refit.aircraft_handle)(v.0.as_ptr());
             // SAFETY: the live aircraft handle and its static controller table.
             unsafe {
-                crate::aircraft::openttd_rust_aircraft_enter_hangar(s.refit.aircraft, aircraft)
+                crate::aircraft::enter_hangar(s.refit.aircraft, aircraft);
             };
         }
         _ => unreachable!(),
@@ -1051,13 +1048,6 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     o.make_dummy(v);
 }
 
-/// `OrderDepotTypeFlag::PartOfOrders`, `OrderDepotActionFlag::Halt` and `NearestDepot`.
-const ODTF_PART_OF_ORDERS: u8 = 1 << 1;
-const ODATF_HALT: u8 = 1 << 0;
-const ODATF_NEAREST_DEPOT: u8 = 1 << 1;
-/// `TRACK_BIT_DEPOT`.
-const TRACK_BIT_DEPOT: u8 = 0x80;
-
 /// The current order's depot refit, under the owner's company.
 fn depot_refit(v: VehicleRef, cargo: u8, s: &Services) {
     let l = s.loading;
@@ -1123,7 +1113,6 @@ macro_rules! visit_entry {
         }
     };
 }
-visit_entry!(openttd_rust_visit_begin_loading() => begin_loading);
 visit_entry!(openttd_rust_visit_leave_station() => leave_station);
 visit_entry!(openttd_rust_visit_handle_loading(mode: bool) => handle_loading);
 visit_entry!(openttd_rust_visit_enter_depot() => enter_depot);

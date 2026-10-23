@@ -123,7 +123,7 @@ impl NextHops {
 const TRANSFER: usize = 0;
 const DELIVER: usize = 1;
 const KEEP: usize = 2;
-const LOAD: usize = 3;
+const LOAD: usize = crate::cargopacket::MTA_LOAD as usize;
 const INVALID: u16 = u16::MAX;
 
 fn share(p: Packet, amount: u32) -> i64 {
