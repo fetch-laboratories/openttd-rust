@@ -145,6 +145,7 @@ static void ObjectPolicyProbe(Object *o, ObjectSpec *spec)
 	delete group;
 	fmt::print(stderr, "OBJECT query-animation-order {}\n", same);
 }
+#include "animation-console.hpp"
 static bool ObjectsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
@@ -204,6 +205,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		Result("colour", build(OBJECT_TRANSMITTER, tile));
 		fmt::print(stderr, "OBJECT callback-colour {}\n", Object::GetByTile(tile)->colour == 0xA5);
 		ObjectPolicyProbe(Object::GetByTile(tile), spec);
+		AnimationBindingsProbe();
 		callbacks = false; backup.Restore();
 		Backup<bool> generating(_generating_world, true);
 		for (cancellation = 0; cancellation < 2; cancellation++) {

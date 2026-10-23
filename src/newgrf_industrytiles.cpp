@@ -451,6 +451,7 @@ void TriggerIndustryRandomisation(Industry *ind, IndustryRandomTrigger trigger)
 #endif
 }
 
+
 #ifdef WITH_RUST
 OpenTTDIndustryRandomisationSpec IndustryRandomisationSpec(uint32_t index) noexcept
 {

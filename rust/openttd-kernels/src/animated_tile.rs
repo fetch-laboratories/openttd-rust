@@ -12,13 +12,15 @@
 //! Specs/pool shells stay live across resolver calls: GRF evaluation neither
 //! resets specs/map nor yields or destroys the animated shell.
 #![allow(unsafe_code, missing_docs, clippy::cast_possible_truncation)]
+use crate::newgrf_callbacks::{CBID_INDTILE_ANIMATION_TRIGGER, CBID_STATION_ANIMATION_TRIGGER,
+    CBID_AIRPTILE_ANIMATION_TRIGGER, CBID_OBJECT_ANIMATION_TRIGGER};
 use crate::newgrf_animation_base::{Binding, Entry};
 use crate::{
     industry::{ConstructionServices, Services as Industries, TileServices},
     objects::{Object, Spec as ObjectSpec},
     services::{Services as Shared, TownHandle},
     station::BaseStation,
-    tile_type::*,
+    tile_type::{INVALID_TILE, MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_STATION},
     town::Leaves,
 };
 use std::cell::UnsafeCell;
@@ -51,6 +53,7 @@ pub struct RoadSpec {
     _private: [u8; 0],
 }
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Area {
     pub tile: u32,
     pub width: u16,
@@ -92,12 +95,29 @@ pub struct Services {
     pub road_count: extern "C" fn(*mut BaseStation) -> usize,
     pub road_tile: extern "C" fn(*mut BaseStation, usize) -> u32,
 }
-unsafe extern "C" {
-    fn openttd_animation_services() -> *const Services;
+struct Registry(UnsafeCell<*const Services>);
+// SAFETY: installation and all calls are serialized by the game-state mutex.
+unsafe impl Sync for Registry {}
+static REGISTRY: Registry = Registry(UnsafeCell::new(std::ptr::null()));
+/// Install the immutable native table at `InitializeAnimatedTiles`, before play.
+/// Native fixtures temporarily install a stack table and restore its predecessor.
+/// No owner borrow spans installation; the previous table is never dereferenced.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_animation_exchange(
+    table: *const Services,
+) -> *const Services {
+    unsafe {
+        let previous = *REGISTRY.0.get();
+        *REGISTRY.0.get() = table;
+        previous
+    }
 }
-pub(crate) fn services() -> &'static Services {
-    unsafe { &*openttd_animation_services() }
+pub(crate) fn services<'a>() -> &'a Services {
+    // SAFETY: InitializeAnimatedTiles installs the process-lifetime native table
+    // before any map use. A native test scope pins its replacement until restore.
+    unsafe { &**REGISTRY.0.get() }
 }
+
 impl Services {
     pub fn shared(&self) -> &Shared {
         unsafe { &*self.shared }
@@ -177,12 +197,15 @@ pub extern "C" fn openttd_rust_animation_run() {
         i += 1;
     }
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_may_animate(tile: u32) -> bool {
+pub(crate) fn may_animate(tile: u32, shared: &Shared) -> bool {
     matches!(
-        (services().shared().tile_type)(tile),
+        (shared.tile_type)(tile),
         MP_HOUSE | MP_STATION | MP_INDUSTRY | MP_OBJECT
     )
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_may_animate(tile: u32) -> bool {
+    may_animate(tile, services().shared())
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_animate_tile(tile: u32) {
@@ -190,7 +213,7 @@ pub extern "C" fn openttd_rust_animate_tile(tile: u32) {
     let s = a.shared();
     match (s.tile_type)(tile) {
         MP_HOUSE => unsafe {
-            crate::town::house::openttd_rust_house_animate(a.town, a.shared, tile)
+            crate::town::house::openttd_rust_house_animate(a.town, a.shared, tile);
         },
         MP_INDUSTRY => unsafe {
             crate::industry::openttd_rust_industry_tile_animate(
@@ -198,7 +221,7 @@ pub extern "C" fn openttd_rust_animate_tile(tile: u32) {
                 a.industries,
                 a.construction,
                 a.industry_tiles,
-            )
+            );
         },
         MP_OBJECT => openttd_rust_animate_object(tile),
         MP_STATION => {
@@ -328,7 +351,7 @@ pub(crate) unsafe fn industry_change(
             object: e.object,
         },
         tile,
-        0x25,
+        CBID_INDTILE_ANIMATION_TRIGGER.0,
         random,
         trigger,
         0,
@@ -347,7 +370,7 @@ pub(crate) unsafe fn object_change(
         unsafe { &*a.object },
         Entry { spec, object: obj },
         tile,
-        0x159,
+        CBID_OBJECT_ANIMATION_TRIGGER.0,
         random,
         trigger,
         0,
@@ -397,7 +420,7 @@ pub extern "C" fn openttd_rust_trigger_station(
                     object: st,
                 },
                 t,
-                0x140,
+                CBID_STATION_ANIMATION_TRIGGER.0,
                 (u32::from(random) << 16) | (a.shared().random() & 0xFFFF),
                 u32::from(trigger) | u32::from(extra),
                 0,
@@ -434,7 +457,7 @@ pub extern "C" fn openttd_rust_trigger_roadstop(
                     object: st,
                 },
                 t,
-                0x140,
+                CBID_STATION_ANIMATION_TRIGGER.0,
                 (u32::from(random) << 16) | (a.shared().random() & 0xFFFF),
                 u32::from(trigger) | u32::from(extra),
                 0,
@@ -470,7 +493,7 @@ fn airport_trigger(
             object: st,
         },
         tile,
-        0x152,
+        CBID_AIRPTILE_ANIMATION_TRIGGER.0,
         random,
         u32::from(trigger) | u32::from(extra),
         0,
@@ -510,7 +533,7 @@ pub extern "C" fn openttd_rust_trigger_airport(st: *mut Station, trigger: u8, ca
             0
         };
         if airport_trigger(a, st, t, trigger, random, extra) {
-            random = (random & 0xFFFF0000) | (a.shared().random() & 0xFFFF);
+            random = (random & 0xFFFF_0000) | (a.shared().random() & 0xFFFF);
         } else {
             ret = false;
         }
@@ -562,4 +585,10 @@ crate::abi::layouts! {
     "OpenTTDAirportAnimation" ["probe"] => Binding<AirportSpec, Station, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
     "OpenTTDObjectAnimation" ["probe"] => Binding<ObjectSpec, Object, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
     "OpenTTDRoadStopAnimation" ["probe"] => Binding<RoadSpec, BaseStation, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
+    "OpenTTDHouseAnimationEntry" ["probe"] => Entry<HouseSpec, TownHandle> { spec, object };
+    "OpenTTDIndustryAnimationEntry" ["probe"] => Entry<IndustrySpec, IndustryShell> { spec, object };
+    "OpenTTDStationAnimationEntry" ["probe"] => Entry<RailSpec, BaseStation> { spec, object };
+    "OpenTTDAirportAnimationEntry" ["probe"] => Entry<AirportSpec, Station> { spec, object };
+    "OpenTTDObjectAnimationEntry" ["probe"] => Entry<ObjectSpec, Object> { spec, object };
+    "OpenTTDRoadStopAnimationEntry" ["probe"] => Entry<RoadSpec, BaseStation> { spec, object };
 }

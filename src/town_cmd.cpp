@@ -92,6 +92,7 @@
 TownPool _town_pool("Town");
 INSTANTIATE_POOL_METHODS(Town)
 
+
 TownKdtree _town_kdtree{};
 
 void RebuildTownKdtree()
@@ -193,6 +194,7 @@ Town::~Town()
 	CargoPacket::InvalidateAllFrom(src);
 	MarkWholeScreenDirty();
 }
+
 
 /**
  * Invalidating of the "nearest town cache" has to be done
@@ -2355,6 +2357,7 @@ static bool GrowTown(Town *t, TownExpandModes modes)
 }
 #endif
 
+
 /**
  * Update the cached town zone radii of a town, based on the number of houses.
  * @param t The town to update.
@@ -3020,6 +3023,7 @@ bool GenerateTowns(TownLayout layout, std::optional<uint> number)
 
 #endif /* !WITH_RUST */
 
+
 /**
  * Returns the bit corresponding to the town zone of the specified tile.
  * @param t Town on which town zone is to be found.
@@ -3064,6 +3068,7 @@ static inline void ClearMakeHouseTile(TileIndex tile, Town *t, uint8_t counter, 
 	MarkTileDirtyByTile(tile);
 }
 
+
 /**
  * Write house information into the map. For multi-tile houses, all tiles are marked.
  * @param town The town related to this house
@@ -3090,6 +3095,7 @@ static void MakeTownHouse(TileIndex tile, Town *t, uint8_t counter, uint8_t stag
 	});
 }
 
+
 /**
  * Check if a house can be built here, based on slope, whether there's a bridge above, and if we can clear the land.
  * @param tile The tile to check.
@@ -3112,6 +3118,7 @@ static inline bool CanBuildHouseHere(TileIndex tile, bool noslope)
 	return Command<CMD_LANDSCAPE_CLEAR>::Do({DoCommandFlag::Auto, DoCommandFlag::NoWater}, tile).Succeeded();
 }
 
+
 /**
  * Check if a tile where we want to build a multi-tile house has an appropriate max Z.
  * @param tile The tile to check.
@@ -3129,6 +3136,7 @@ static inline bool CheckBuildHouseSameZ(TileIndex tile, int z, bool noslope)
 
 	return true;
 }
+
 
 /**
  * Checks if a house of size 2x2 can be built at this tile.
@@ -3150,6 +3158,7 @@ static bool CheckFree2x2Area(TileIndex tile, int z, bool noslope)
 
 	return true;
 }
+
 
 /**
  * Checks if the current town layout allows building here.
@@ -3182,6 +3191,7 @@ static inline bool TownLayoutAllowsHouseHere(Town *t, TileIndex tile, TownExpand
 
 	return true;
 }
+
 
 /**
  * Checks if the current town layout allows a 2x2 building here.
@@ -3219,6 +3229,7 @@ static inline bool TownLayoutAllows2x2HouseHere(Town *t, TileIndex tile, TownExp
 	return true;
 }
 
+
 /**
  * Checks if a 1x2 or 2x1 building is allowed here, accounting for road layout and tile heights.
  * Also, tests both building positions that occupy this tile.
@@ -3243,6 +3254,7 @@ static bool CheckTownBuild2House(TileIndex *tile, Town *t, int maxz, bool noslop
 
 	return false;
 }
+
 
 /**
  * Checks if a 1x2 or 2x1 building is allowed here, accounting for road layout and tile heights.
@@ -3441,6 +3453,7 @@ static bool TryBuildTownHouse(Town *t, TileIndex tile, TownExpandModes modes)
 	return false;
 }
 #endif
+
 
 /**
  * Determines if a given HouseID is part of a multitile house.
@@ -4458,6 +4471,7 @@ static void UpdateTownRating(Town *t)
 
 #endif
 
+
 /**
  * Updates town grow counter after growth rate change.
  * Preserves relative house builting progress whenever it can.
@@ -4575,6 +4589,7 @@ static void UpdateTownGrowth(Town *t)
 	SetWindowDirty(WC_TOWN_VIEW, t->index);
 }
 #endif
+
 
 /**
  * Checks whether the local authority allows construction of a new station (rail, road, airport, dock) on the given tile

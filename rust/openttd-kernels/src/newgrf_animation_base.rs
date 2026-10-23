@@ -100,7 +100,7 @@ pub fn animate<S, O, E: Default, F: Frame<O>>(
             speed = (cb as u8).min(16);
         }
     }
-    if (a.shared().tick_counter)() % (1_u64 << speed) != 0 {
+    if !(a.shared().tick_counter)().is_multiple_of(1_u64 << speed) {
         return;
     }
     let mut frame = F::get(a, e.object, tile);
@@ -165,4 +165,9 @@ pub fn change<S, O, E, F: Frame<O>>(
     sound(a, b, e.spec, tile, cb);
 }
 
-crate::abi::layouts! { fn abi_layout; "OpenTTDAnimationInfo" ["probe"] => Info { speed, frames, looping, speed_callback, next_callback, random, enabled }; }
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDAnimationInfo" ["probe"] => Info {
+        speed, frames, looping, speed_callback, next_callback, random, enabled
+    };
+}

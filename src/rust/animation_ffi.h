@@ -17,6 +17,12 @@ using OpenTTDStationAnimation = OpenTTDAnimationBinding<StationSpec, BaseStation
 using OpenTTDAirportAnimation = OpenTTDAnimationBinding<AirportTileSpec, Station, int32_t>;
 using OpenTTDObjectAnimation = OpenTTDAnimationBinding<ObjectSpec, Object, int32_t>;
 using OpenTTDRoadStopAnimation = OpenTTDAnimationBinding<RoadStopSpec, BaseStation, int32_t>;
+using OpenTTDHouseAnimationEntry = OpenTTDAnimationEntry<HouseSpec, Town>;
+using OpenTTDIndustryAnimationEntry = OpenTTDAnimationEntry<IndustryTileSpec, Industry>;
+using OpenTTDStationAnimationEntry = OpenTTDAnimationEntry<StationSpec, BaseStation>;
+using OpenTTDAirportAnimationEntry = OpenTTDAnimationEntry<AirportTileSpec, Station>;
+using OpenTTDObjectAnimationEntry = OpenTTDAnimationEntry<ObjectSpec, Object>;
+using OpenTTDRoadStopAnimationEntry = OpenTTDAnimationEntry<RoadStopSpec, BaseStation>;
 struct OpenTTDAnimationArea { uint32_t tile; uint16_t width, height; };
 struct OpenTTDAnimationServices {
 	const OpenTTDSharedServices *shared;
@@ -62,7 +68,7 @@ const OpenTTDAirportAnimation &GetAirportAnimationBinding() noexcept;
 const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept;
 const OpenTTDRoadStopAnimation &GetRoadStopAnimationBinding() noexcept;
 extern "C" {
-const OpenTTDAnimationServices *openttd_animation_services() noexcept;
+const OpenTTDAnimationServices *openttd_rust_animation_exchange(const OpenTTDAnimationServices *);
 void openttd_rust_animation_add(uint32_t, bool);
 void openttd_rust_animation_delete(uint32_t, bool);
 void openttd_rust_animation_run();

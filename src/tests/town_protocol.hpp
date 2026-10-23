@@ -20,6 +20,7 @@
 #include <memory>
 #include <vector>
 
+#include "../rust/animation_save.hpp"
 struct TownProtocolWorld {
 	OpenTTDTownState *owner;
 	OpenTTDWaterRegions *regions;
@@ -74,7 +75,6 @@ static inline void TownProtocol_set_road_town(uint32_t tile, uint32_t town) noex
 static inline uint32_t TownProtocol_exchange_company(uint32_t company) noexcept { return static_cast<uint32_t>(TownProtocolLeaf(8, 0, company, 0, 0)); }
 static inline uint16_t TownProtocol_house_class(uint16_t id) noexcept { return id == 2 ? 0 : town_protocol_world->house_class; }
 static inline void TownProtocol_make_house(uint32_t tile, uint32_t town, uint32_t house, uint32_t construction) noexcept { TownProtocolLeaf(10, tile, town, house, construction); }
-static inline void TownProtocol_add_animation(uint32_t tile, bool) noexcept { TownProtocolLeaf(11, tile, 0, 0, 0); }
 static inline void TownProtocol_population_changed(uint32_t) noexcept { town_protocol_world->population = openttd_rust_town_simulation(town_protocol_world->owner)->population; }
 static inline void TownProtocol_nearby_stations(uint32_t town, uint32_t tile, uint32_t size) noexcept { TownProtocolLeaf(15, town, tile, size, 0); }
 static inline uint32_t TownProtocol_house_count() noexcept { return static_cast<uint32_t>(TownProtocolLeaf(17, 0, 0, 0, 0)); }
@@ -95,7 +95,6 @@ static inline bool TownProtocol_allow_construction(uint32_t, uint32_t, uint32_t,
 /* House 2 is an unpopulated, completed old 1x1 house; its rebuild reaches TryBuildTownHouse. */
 static inline OpenTTDHouseLoopTile TownProtocol_house_tile(uint32_t) noexcept { return {.age = 255, .completed = true, .lift_has_destination = false}; }
 static inline uint16_t TownProtocol_house_callbacks(uint16_t) noexcept { return (1U << 3) | (town_protocol_world->house_callback ? 1U : 0U); }
-static inline void TownProtocol_change_frame(uint16_t, uint16_t, Town *, uint32_t, uint32_t, uint32_t, uint64_t) noexcept { town_protocol_world->animations++; }
 struct TownProtocolCost { bool ok; };
 static inline TownProtocolCost *TownProtocolCostOf(const OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<TownProtocolCost *>(const_cast<OpenTTDCommandCost *>(cost)); }
 static inline OpenTTDCommandCostServices TownProtocolCosts()
@@ -141,7 +140,6 @@ static inline OpenTTDHouseServices TownProtocolHouses()
 	houses.town = [](uint32_t) noexcept -> OpenTTDTownRef { town_protocol_world->owner_reads++; return {nullptr, town_protocol_world->owner, 0}; };
 	houses.loop_spec = [](uint16_t id) noexcept -> OpenTTDHouseLoopSpec { return {.callbacks = TownProtocol_house_callbacks(id), .flags = TownProtocol_house_flags(id), .population = TownProtocol_house_population(id), .mail = 0, .minimum_life = 0}; };
 	houses.delete_inspect = [](uint32_t) noexcept {};
-	houses.change_frame = TownProtocol_change_frame;
 	houses.next_near_station = [](Town *, OpenTTDStation *) noexcept -> OpenTTDStation * { return nullptr; };
 	houses.production_cargo = [](uint8_t, uint32_t) noexcept -> OpenTTDHouseCargo { return {UINT8_MAX, 0}; };
 	houses.cargogen_mode = []() noexcept -> uint8_t { return 0; };
@@ -253,7 +251,6 @@ template <typename Check> void CheckTownProtocol(Check check)
 	services.bridge_above = [](uint32_t) noexcept { return false; };
 	services.has_water_ground = [](uint32_t) noexcept { return false; };
 	services.mark_dirty = [](uint32_t) noexcept {};
-	services.clear_square_services.may_animate = [](uint32_t) noexcept { return false; };
 	services.clear_square_services.docking = [](uint32_t) noexcept { return false; };
 	services.clear_square_services.generating_world = []() noexcept { return false; };
 	services.water_services = []() noexcept { return &town_protocol_water; };
@@ -271,6 +268,17 @@ template <typename Check> void CheckTownProtocol(Check check)
 	};
 	town_protocol_landscape.shared = &services; town_protocol_landscape.costs = &town_protocol_costs;
 	town_protocol_landscape.commands = &town_protocol_commands; town_protocol_landscape.tile_procs = &tiles;
+	const OpenTTDHouseAnimation animation_house{
+		.callback = [](uint16_t, uint32_t, uint32_t, const HouseSpec *, Town *, uint32_t, uint64_t) noexcept -> uint16_t { town_protocol_world->animations++; return UINT16_MAX; },
+	};
+	const OpenTTDAnimationServices animation{
+		.shared = &services, .house = &animation_house,
+		.state = [](uint32_t) noexcept -> uint8_t { return 1; },
+		.set_state = [](uint32_t tile, uint8_t) noexcept { TownProtocolLeaf(11, tile, 0, 0, 0); },
+		.house_spec = [](uint16_t) noexcept -> const HouseSpec * { return nullptr; },
+	};
+	RustAnimationScope animation_scope(animation);
+
 	bool road_ok = false;
 	OpenTTDCommandCostServices costs{};
 	costs.success = [](const OpenTTDCommandCost *out) noexcept { return *reinterpret_cast<const bool *>(out); };

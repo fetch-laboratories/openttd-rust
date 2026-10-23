@@ -110,7 +110,10 @@ def check(scenario, run, mode, role, result):
         "gaps": (
             "count-wrap true|scratch-growth true true|callback-before-clear true|"
             "cleared-before-bridge true|callback-colour true|"
-            "cancellation 0 true|cancellation 1 true|query-animation-order true"
+            "cancellation 0 true|cancellation 1 true|query-animation-order true|"
+            "animation-binding house true|animation-binding industry true|"
+            "animation-binding station true|animation-binding airport true|"
+            "animation-binding roadstop true|animation-binding object true"
         ).split("|"),
         "reload": ("afterload-counts true",),
     }[scenario["objects"]]

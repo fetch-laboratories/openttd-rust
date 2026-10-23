@@ -59,7 +59,7 @@ pub(crate) fn check_build_above_clear(out: crate::services::Cost<'_>) {
 /// owner borrow survives their invocation; world access is serialized.
 pub(crate) fn clear_square(tile: u32, s: &Services) {
     let leaves = &s.clear_square_services;
-    if crate::animated_tile::openttd_rust_may_animate(tile) {
+    if crate::animated_tile::may_animate(tile, s) {
         crate::animated_tile::openttd_rust_animation_delete(tile, true);
     }
     let remove = (leaves.docking)(tile);

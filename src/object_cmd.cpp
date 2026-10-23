@@ -591,6 +591,7 @@ static void ReallyClearObjectTile(Object *o)
 #ifndef WITH_RUST
 std::vector<ClearedObjectArea> _cleared_object_areas;
 
+
 /**
  * Find the entry in _cleared_object_areas which occupies a certain tile.
  * @param tile Tile of interest
@@ -736,6 +737,7 @@ static void AddProducedCargo_Object(TileIndex tile, CargoArray &produced)
 #endif
 }
 
+
 static void GetTileDesc_Object(TileIndex tile, TileDesc &td)
 {
 	const ObjectSpec *spec = ObjectSpec::GetByTile(tile);
@@ -811,6 +813,7 @@ static void TileLoop_Object(TileIndex tile)
 	}
 #endif
 }
+
 
 #ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Object(TileIndex, TransportType, uint, DiagDirection)

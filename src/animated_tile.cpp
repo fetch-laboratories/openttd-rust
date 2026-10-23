@@ -27,7 +27,7 @@
 #include "house.h"
 #include "industry.h"
 
-extern "C" const OpenTTDAnimationServices *openttd_animation_services() noexcept
+static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 {
 	static const OpenTTDAnimationServices services{
 		.shared = &GetRustSharedServices(), .town = &GetRustTownServices(), .industries = &GetIndustryRustServices(),
@@ -37,7 +37,7 @@ extern "C" const OpenTTDAnimationServices *openttd_animation_services() noexcept
 		.state = [](uint32_t t) noexcept { return to_underlying(GetAnimatedTileState(TileIndex{t})); },
 		.set_state = [](uint32_t t, uint8_t s) noexcept { SetAnimatedTileState(TileIndex{t}, static_cast<AnimatedTileState>(s)); },
 		.frame = OpenTTDAnimationFrame, .ambient = OpenTTDAmbientSound,
-		.house_spec = [](uint16_t h) noexcept { return HouseSpec::Get(h); },
+		.house_spec = [](uint16_t h) noexcept -> const HouseSpec * { return HouseSpec::Get(h); },
 		.road_frame = [](BaseStation *s, uint32_t t) noexcept { return s->GetRoadStopAnimationFrame(TileIndex{t}); },
 		.set_road_frame = [](BaseStation *s, uint32_t t, uint8_t f) noexcept { return s->SetRoadStopAnimationFrame(TileIndex{t}, f); },
 		.rail_area = OpenTTDAnimationRailArea,
@@ -56,12 +56,21 @@ extern "C" const OpenTTDAnimationServices *openttd_animation_services() noexcept
 		.road_count = [](BaseStation *s) noexcept { return s->custom_roadstop_tile_data.size(); },
 		.road_tile = [](BaseStation *s, size_t i) noexcept { return s->custom_roadstop_tile_data[i].tile.base(); },
 	};
-	return &services;
+	return services;
 }
 void AddAnimatedTile(TileIndex tile, bool dirty) { openttd_rust_animation_add(tile.base(), dirty); }
 void DeleteAnimatedTile(TileIndex tile, bool immediate) { openttd_rust_animation_delete(tile.base(), immediate); }
 void AnimateAnimatedTiles() { PerformanceAccumulator landscape_framerate(PFE_GL_LANDSCAPE); openttd_rust_animation_run(); }
-void InitializeAnimatedTiles() { openttd_rust_animation_initialize(); }
+void InitializeAnimatedTiles() { openttd_rust_animation_exchange(&GetRustAnimationServices()); openttd_rust_animation_initialize(); }
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDAnimationServices.hpp"
+bool CheckAbi_animated_tile()
+{
+	const auto &s = GetRustAnimationServices();
+	return AbiServicesComplete(s) && AbiServicesComplete(*s.house) && AbiServicesComplete(*s.industry) &&
+		AbiServicesComplete(*s.station) && AbiServicesComplete(*s.airport) && AbiServicesComplete(*s.object) && AbiServicesComplete(*s.roadstop);
+}
+
 #else
 /** The table/list with animated tiles. */
 std::vector<TileIndex> _animated_tiles;

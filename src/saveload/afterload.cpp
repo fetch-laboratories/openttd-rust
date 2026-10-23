@@ -851,6 +851,7 @@ bool AfterLoadGame()
 		cp->AfterLoad();
 	}
 
+
 	if (IsSavegameVersionBefore(SLV_WATER_TILE_TYPE)) {
 		/* Prior to SLV_WATER_TILE_TYPE, the water tile type was stored differently from the enumeration. This has to be
 		 * converted before SLV_72 and SLV_82 conversions which use GetWaterTileType. */
@@ -1814,6 +1815,7 @@ bool AfterLoadGame()
 		}
 	}
 
+
 	if (IsSavegameVersionBefore(SLV_93)) {
 		/* Rework of orders. */
 		for (OrderList *orderlist : OrderList::Iterate()) {
@@ -2736,6 +2738,7 @@ bool AfterLoadGame()
 			c->Finances().clear_limit     = _settings_game.construction.clear_frame_burst << 16;
 		}
 	}
+
 
 	if (IsSavegameVersionBefore(SLV_CONSISTENT_PARTIAL_Z)) {
 		/*

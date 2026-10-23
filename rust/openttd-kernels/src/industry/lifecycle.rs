@@ -266,7 +266,7 @@ unsafe fn trigger_animation(
         return false;
     }
     unsafe {
-        crate::animated_tile::industry_change(spec.spec, tile, random, u32::from(trigger) | extra)
+        crate::animated_tile::industry_change(spec.spec, tile, random, u32::from(trigger) | extra);
     };
     true
 }

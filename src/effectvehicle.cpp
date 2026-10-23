@@ -19,6 +19,7 @@
 
 #include "safeguards.h"
 
+
 #ifndef WITH_RUST
 /**
  * Increment the sprite unless it has reached the end of the animation.
@@ -333,6 +334,7 @@ static const BubbleMovement _bubble_float_sw[] = {
 	MK(1, 0, 1, 2),
 	ME(1)
 };
+
 
 static const BubbleMovement _bubble_float_ne[] = {
 	MK( 0, 0, 1, 0),

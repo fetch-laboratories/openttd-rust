@@ -1612,6 +1612,7 @@ static bool LoadOldGameDifficulty(LoadgameState &ls, int)
 	return ret;
 }
 
+
 static bool LoadOldMapPart1(LoadgameState &ls, int)
 {
 	if (_savegame_type == SGT_TTO) {

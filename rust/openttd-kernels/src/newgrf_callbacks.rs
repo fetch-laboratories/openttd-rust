@@ -15,6 +15,11 @@ pub struct CallbackID(pub u16);
 pub const CBID_VEHICLE_LENGTH: CallbackID = CallbackID(0x11);
 pub const CBID_VEHICLE_32DAY_CALLBACK: CallbackID = CallbackID(0x32);
 
+pub const CBID_INDTILE_ANIMATION_TRIGGER: CallbackID = CallbackID(0x25);
+pub const CBID_STATION_ANIMATION_TRIGGER: CallbackID = CallbackID(0x140);
+pub const CBID_AIRPTILE_ANIMATION_TRIGGER: CallbackID = CallbackID(0x152);
+pub const CBID_OBJECT_ANIMATION_TRIGGER: CallbackID = CallbackID(0x159);
+
 /// `CALLBACK_FAILED`.
 pub const CALLBACK_FAILED: u16 = 0xFFFF;
 

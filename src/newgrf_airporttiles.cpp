@@ -120,6 +120,7 @@ static uint32_t GetNearbyAirportTileInformation(uint8_t parameter, TileIndex til
 	return GetNearbyTileInformation(tile, grf_version8) | (is_same_airport ? 1 : 0) << 8;
 }
 
+
 /**
  * Make an analysis of a tile and check whether it belongs to the same
  * airport, and/or the same grf file

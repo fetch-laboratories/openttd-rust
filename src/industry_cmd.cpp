@@ -278,6 +278,7 @@ void Industry::PostDestructor(size_t)
 	SetWindowDirty(WC_BUILD_INDUSTRY, 0);
 }
 
+
 /**
  * Return a random valid industry.
  * @return random industry, nullptr if there are no industries
@@ -301,6 +302,7 @@ void Industry::PostDestructor(size_t)
 
 	return Industry::Get(index);
 }
+
 
 static void IndustryDrawSugarMine(const TileInfo *ti)
 {
@@ -1020,6 +1022,7 @@ static void TileLoop_Industry(TileIndex tile)
 		CreateEffectVehicleAbove(TileX(tile) * TILE_SIZE + 6, TileY(tile) * TILE_SIZE + 6, 43, EV_COPPER_MINE_SMOKE);
 		break;
 
+
 	case GFX_TOY_FACTORY: {
 			Industry *i = Industry::GetByTile(tile);
 			if (i->was_cargo_delivered) {
@@ -1433,6 +1436,7 @@ static CommandCost CheckNewIndustry_OilRefinery(TileIndex tile)
 	return CommandCost(STR_ERROR_CAN_ONLY_BE_POSITIONED);
 }
 
+
 /**
  * Check the conditions of #CHECK_OIL_RIG (Industries at sea should be positioned near edge of the map).
  * @param tile %Tile to perform the checking.
@@ -1805,6 +1809,7 @@ static bool CheckIfCanLevelIndustryPlatform(TileIndex tile, DoCommandFlags flags
 	cur_company.Restore();
 	return true;
 }
+
 
 /**
  * Check that the new industry is far enough from conflicting industries.
@@ -2400,6 +2405,7 @@ CommandCost CmdIndustrySetExclusivity(DoCommandFlags flags, IndustryID ind_id, O
 		}
 	}
 
+
 	return CommandCost();
 #endif
 }
@@ -2598,6 +2604,7 @@ static uint GetCurrentTotalNumberOfIndustries()
 	}
 	return total;
 }
+
 
 /** Reset the entry. */
 void IndustryTypeBuildData::Reset()
@@ -3313,13 +3320,16 @@ static const IntervalTimer<TimerGameEconomy> _economy_industries_daily({TimerGam
 #else
 	_economy.industry_daily_change_counter += _economy.industry_daily_increment;
 
+
 	/* Bits 16-31 of industry_construction_counter contain the number of industries to change/create today,
 	 * the lower 16 bit are a fractional part that might accumulate over several days until it
 	 * is sufficient for an industry. */
 	uint16_t change_loop = _economy.industry_daily_change_counter >> 16;
 
+
 	/* Reset the active part of the counter, just keeping the "fractional part" */
 	_economy.industry_daily_change_counter &= 0xFFFF;
+
 
 	if (change_loop == 0) {
 		return;  // Nothing to do? get out
@@ -3377,6 +3387,7 @@ static const IntervalTimer<TimerGameEconomy> _economy_industries_monthly({TimerG
 	InvalidateWindowData(WC_INDUSTRY_DIRECTORY, 0, IDIWD_PRODUCTION_CHANGE);
 #endif
 });
+
 
 void InitializeIndustries()
 {

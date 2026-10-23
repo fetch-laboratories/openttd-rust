@@ -420,10 +420,10 @@ def check_effects(scenario, path):
 
     def animated_tiles(save):
         chunk = read_save(save)["ANIT"]
-        return set(decode_element(chunk, chunk["elements"][0][1])["tiles"])
+        return decode_element(chunk, chunk["elements"][0][1])["tiles"]
 
     added_animation = sorted(
-        animated_tiles(path) - animated_tiles(Path(scenario["save"]))
+        set(animated_tiles(path)) - set(animated_tiles(Path(scenario["save"])))
     )
     labels = {label: index for index, label, _ in scenario["effect_assignments"]}
     if scenario["effects"] == "controllers" and elapsed == 1:
@@ -488,6 +488,7 @@ def check_effects(scenario, path):
     return {
         "elapsed_ticks": elapsed,
         "added_animated_tiles": added_animation,
+        "animated_tile_order": animated_tiles(path),
         "rng": [fields[f"random_state[{i}]"] for i in range(2)],
         "before": before,
         "after": after,
