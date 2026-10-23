@@ -135,7 +135,8 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 		WaterCost("buoy-occupied", Command<CMD_LANDSCAPE_CLEAR>::Do({}, tile));
 		WaterCost("buoy-bankrupt", Command<CMD_LANDSCAPE_CLEAR>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, tile));
 		v->tile = old_tile; v->x_pos = old_x; v->y_pos = old_y; v->z_pos = old_z; v->UpdatePosition();
-		if (!IsWaterTile(tile) || GetWaterClass(tile) != wc) std::abort(); WaterState("buoy-restored", tile);
+		if (!IsWaterTile(tile) || GetWaterClass(tile) != wc) std::abort();
+		WaterState("buoy-restored", tile);
 		WaterCost("buoy-reuse", Command<CMD_BUILD_BUOY>::Do(DoCommandFlag::Execute, tile));
 		if (GetStationIndex(tile) != id) std::abort();
 		WaterCost("buoy-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile));
