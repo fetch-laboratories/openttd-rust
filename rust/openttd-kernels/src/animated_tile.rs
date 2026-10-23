@@ -82,7 +82,7 @@ pub struct Services {
     pub industry_object: extern "C" fn(u32) -> *mut IndustryShell,
     pub rail_spec_triggers: extern "C" fn(*const RailSpec) -> u16,
     pub road_spec_triggers: extern "C" fn(*const RoadSpec) -> u16,
-    pub airport_spec_triggers: extern "C" fn(*const AirportSpec) -> u16,
+    pub airport_spec_triggers: extern "C" fn(*const AirportSpec) -> u8,
     pub rail_cargo: extern "C" fn(*const RailSpec, u8) -> u8,
     pub road_cargo: extern "C" fn(*const RoadSpec, u8) -> u8,
     pub airport_cargo: extern "C" fn(*const AirportSpec, u8) -> u8,

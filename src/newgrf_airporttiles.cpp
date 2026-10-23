@@ -21,6 +21,7 @@
 #include "newgrf_animation_base.h"
 #ifdef WITH_RUST
 #include "rust/animation_binding.hpp"
+#include "rust/services_station.h"
 #endif
 
 #include "table/strings.h"
@@ -296,7 +297,7 @@ static uint16_t GetSimpleAirportTileCallback(CallbackID callback, uint32_t param
 const OpenTTDAirportAnimation &GetAirportAnimationBinding() noexcept
 {
 	static const auto binding = MakeRustAnimationBinding<AirportTileSpec, Station, int, GetSimpleAirportTileCallback>(
-		[](uint32_t t) noexcept -> OpenTTDAirportAnimationEntry { const auto *s = AirportTileSpec::GetByTile(TileIndex{t}); if (s == nullptr) return {nullptr, nullptr}; return {s, Station::GetByTile(TileIndex{t})}; },
+		[](uint32_t t) noexcept -> OpenTTDAirportAnimationEntry { const auto *s = RustAnimationAirportSpec(t); if (s == nullptr) return {nullptr, nullptr}; return {s, Station::GetByTile(TileIndex{t})}; },
 		[](const AirportTileSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(AirportTileCallbackMask::AnimationSpeed), s->callback_mask.Test(AirportTileCallbackMask::AnimationNextFrame), HasBit(s->animation_special_flags, 0), true}; });
 	return binding;
 }

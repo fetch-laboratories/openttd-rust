@@ -58,7 +58,7 @@ struct OpenTTDAnimationServices {
 	Industry *(*industry_object)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_object);
 	uint16_t (*rail_spec_triggers)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec_triggers);
 	uint16_t (*road_spec_triggers)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_triggers);
-	uint16_t (*airport_spec_triggers)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_spec_triggers);
+	uint8_t (*airport_spec_triggers)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_spec_triggers);
 	uint8_t (*rail_cargo)(const StationSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_cargo);
 	uint8_t (*road_cargo)(const RoadStopSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_cargo);
 	uint8_t (*airport_cargo)(const AirportTileSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_cargo);

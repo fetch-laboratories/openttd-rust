@@ -13,6 +13,7 @@
 #include "../newgrf_debug.h"
 #include "../newgrf_house.h"
 #include "../industrytype.h"
+inline const HouseSpec *RustHouseSpec(uint16_t house) noexcept { return HouseSpec::Get(house); }
 
 /* Borrowed GRF files remain native and live for the synchronous conversion.
  * A town shell is live for resolution (or null for a prototype); no Rust

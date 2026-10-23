@@ -21,6 +21,7 @@
 #include "rust/tile_animation_services.h"
 #include "rust/sound_services.h"
 #include "rust/services_station.h"
+#include "rust/services_industry.h"
 #include "rust/station_service_ffi.h"
 #include "station_base.h"
 #include "newgrf_station.h"
@@ -41,7 +42,7 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.airport = &GetAirportAnimationBinding(), .object = &GetObjectAnimationBinding(), .roadstop = &GetRoadStopAnimationBinding(),
 		.state = [](uint32_t t) noexcept { return GetAnimatedTileState(TileIndex{t}); },
 		.set_state = [](uint32_t t, AnimatedTileState s) noexcept { SetAnimatedTileState(TileIndex{t}, s); },
-		.house_spec = [](uint16_t h) noexcept -> const HouseSpec * { return HouseSpec::Get(h); },
+		.house_spec = RustHouseSpec,
 		.road_frame = [](BaseStation *s, uint32_t t) noexcept { return s->GetRoadStopAnimationFrame(TileIndex{t}); },
 		.set_road_frame = [](BaseStation *s, uint32_t t, uint8_t f) noexcept { return s->SetRoadStopAnimationFrame(TileIndex{t}, f); },
 		.rail_area = OpenTTDAnimationRailArea,
@@ -49,10 +50,10 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.station_triggers = RustStationHasAnimationTrigger,
 		.road_triggers = RustRoadStopHasAnimationTrigger,
 		.rail_spec = RustAnimationRailSpec, .road_spec = RustAnimationRoadSpec, .airport_spec = RustAnimationAirportSpec,
-		.industry_object = [](uint32_t t) noexcept { return Industry::GetByTile(TileIndex{t}); },
+		.industry_object = RustIndustryByTile,
 		.rail_spec_triggers = [](const StationSpec *s) noexcept { return s->animation.triggers.base(); },
 		.road_spec_triggers = [](const RoadStopSpec *s) noexcept { return s->animation.triggers.base(); },
-		.airport_spec_triggers = [](const AirportTileSpec *s) noexcept -> uint16_t { return s->animation.triggers.base(); },
+		.airport_spec_triggers = [](const AirportTileSpec *s) noexcept { return s->animation.triggers.base(); },
 		.rail_cargo = [](const StationSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },
 		.road_cargo = [](const RoadStopSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },
 		.airport_cargo = [](const AirportTileSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },

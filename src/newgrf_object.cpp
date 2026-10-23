@@ -24,6 +24,7 @@
 #include "newgrf_animation_base.h"
 #ifdef WITH_RUST
 #include "rust/animation_binding.hpp"
+#include "rust/services_object.h"
 #endif
 
 #include "table/strings.h"
@@ -563,7 +564,7 @@ uint16_t StubGetObjectCallback(CallbackID callback, uint32_t param1, uint32_t pa
 const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept
 {
 	static const auto binding = MakeRustAnimationBinding<ObjectSpec, Object, int, StubGetObjectCallback>(
-		[](uint32_t t) noexcept -> OpenTTDObjectAnimationEntry { const auto *s = ObjectSpec::GetByTile(TileIndex{t}); if (s == nullptr || !s->flags.Test(ObjectFlag::Animation)) return {nullptr, nullptr}; return {s, Object::GetByTile(TileIndex{t})}; },
+		[](uint32_t t) noexcept -> OpenTTDObjectAnimationEntry { const auto *s = RustObjectSpecByTile(t); if (s == nullptr || !s->flags.Test(ObjectFlag::Animation)) return {nullptr, nullptr}; return {s, RustObjectByTile(t)}; },
 		[](const ObjectSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(ObjectCallbackMask::AnimationSpeed), s->callback_mask.Test(ObjectCallbackMask::AnimationNextFrame), s->flags.Test(ObjectFlag::AnimRandomBits), true}; });
 	return binding;
 }

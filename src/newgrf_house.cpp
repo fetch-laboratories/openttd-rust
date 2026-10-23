@@ -576,7 +576,7 @@ static uint16_t GetSimpleHouseCallback(CallbackID callback, uint32_t param1, uin
 const OpenTTDHouseAnimation &GetHouseAnimationBinding() noexcept
 {
 	static const auto binding = MakeRustAnimationBinding<HouseSpec, Town, CargoTypes, GetSimpleHouseCallback>(
-		[](uint32_t t) noexcept -> OpenTTDHouseAnimationEntry { const auto *s = HouseSpec::Get(GetHouseType(TileIndex{t})); if (s == nullptr) return {nullptr, nullptr}; return {s, Town::GetByTile(TileIndex{t})}; },
+		[](uint32_t t) noexcept -> OpenTTDHouseAnimationEntry { const auto *s = RustHouseSpec(GetHouseType(TileIndex{t})); if (s == nullptr) return {nullptr, nullptr}; return {s, Town::GetByTile(TileIndex{t})}; },
 		[](const HouseSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(HouseCallbackMask::AnimationSpeed), s->callback_mask.Test(HouseCallbackMask::AnimationNextFrame), s->extra_flags.Test(HouseExtraFlag::Callback1ARandomBits), true}; });
 	return binding;
 }

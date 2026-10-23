@@ -20,6 +20,7 @@
 #include "newgrf_animation_base.h"
 #ifdef WITH_RUST
 #include "rust/animation_binding.hpp"
+#include "rust/services_industry.h"
 #endif
 
 #include "table/strings.h"
@@ -277,7 +278,7 @@ uint16_t GetSimpleIndustryCallback(CallbackID callback, uint32_t param1, uint32_
 const OpenTTDIndustryAnimation &GetIndustryAnimationBinding() noexcept
 {
 	static const auto binding = MakeRustAnimationBinding<IndustryTileSpec, Industry, int, GetSimpleIndustryCallback>(
-		[](uint32_t t) noexcept -> OpenTTDIndustryAnimationEntry { const auto *s = GetIndustryTileSpec(GetIndustryGfx(TileIndex{t})); if (s == nullptr) return {nullptr, nullptr}; return {s, Industry::GetByTile(TileIndex{t})}; },
+		[](uint32_t t) noexcept -> OpenTTDIndustryAnimationEntry { const auto *s = GetIndustryTileSpec(GetIndustryGfx(TileIndex{t})); if (s == nullptr) return {nullptr, nullptr}; return {s, RustIndustryByTile(t)}; },
 		[](const IndustryTileSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(IndustryTileCallbackMask::AnimationSpeed), s->callback_mask.Test(IndustryTileCallbackMask::AnimationNextFrame), s->special_flags.Test(IndustryTileSpecialFlag::NextFrameRandomBits), true}; });
 	return binding;
 }
