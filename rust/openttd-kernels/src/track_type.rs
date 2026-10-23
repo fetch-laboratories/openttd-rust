@@ -49,3 +49,6 @@ pub const TRACKDIR_Y_NW: u8 = 9;
 pub const TRACKDIR_BIT_MASK: u32 = 0x3f3f;
 /// `TRACK_BIT_MASK`.
 pub const TRACK_BIT_MASK: u8 = 0x3f;
+
+/// `TRACK_END`.
+pub const TRACK_END: u8 = 6;

@@ -47,9 +47,21 @@ pub const fn tracks_overlap(b: u8) -> bool {
         && b != crate::track_type::TRACK_BIT_VERT
 }
 
+/// `IsValidTrack`.
+pub const fn is_valid_track(track: u8) -> bool {
+    track < crate::track_type::TRACK_END
+}
+/// `HasTrack`, retaining its native assertion and `HasBit` callee.
+pub fn has_track(bits: u8, track: u8, check: impl Fn(bool) + Copy) -> bool {
+    if !is_valid_track(track) {
+        check(false);
+    }
+    crate::bitmath_func::has_bit(bits, track)
+}
+
 /// `TrackToTrackBits`.
 pub fn track_to_track_bits(track: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if track >= 6 {
+    if !is_valid_track(track) {
         check(false);
     }
     (1_u32.wrapping_shl(u32::from(track)) & 0xff) as u8

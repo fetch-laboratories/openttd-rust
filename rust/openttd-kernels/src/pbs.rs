@@ -144,13 +144,17 @@ impl<'a> Pbs<'a> {
     }
     fn assert_track(self, tile: u32, track: u8) {
         if self.0.assertions {
-            let bits = crate::track_func::track_status_to_track_bits(
-                crate::movement::track_status(self.shared(), tile, TRANSPORT_RAIL, 0, 255),
-            );
-            let mask = track_to_track_bits(track, |ok| {
+            let bits =
+                crate::track_func::track_status_to_track_bits(crate::movement::track_status(
+                    self.shared(),
+                    tile,
+                    TRANSPORT_RAIL,
+                    0,
+                    crate::direction_type::INVALID_DIAGDIR,
+                ));
+            if !crate::track_func::has_track(bits, track, |ok| {
                 crate::movement::native_assert(self.shared(), ok);
-            });
-            if bits & mask == 0 {
+            }) {
                 crate::movement::native_assert(self.shared(), false);
             }
         }

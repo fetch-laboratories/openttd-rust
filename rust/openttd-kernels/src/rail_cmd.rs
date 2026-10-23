@@ -400,7 +400,9 @@ impl<'a> Ctx<'a> {
         (self.rail.present_signals)(tile) as u8
     }
     fn has_track(&self, tile: u32, track: u8) -> bool {
-        self.tracks(tile) >> track & 1 != 0
+        crate::track_func::has_track(self.tracks(tile), track, |ok| {
+            crate::movement::native_assert(self.shared, ok);
+        })
     }
     /// `HasSignalOnTrack`: signal tile type and a present signal on the track.
     fn has_signal(&self, tile: u32, track: u8) -> bool {
