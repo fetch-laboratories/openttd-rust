@@ -35,6 +35,47 @@ static void RestoreAnimationQueue(const std::vector<TileIndex> &tiles)
 	_animated_tiles = tiles;
 #endif
 }
+/** Leaf observations are gated to keyed cases; every wrapper calls the actual operation. */
+static std::string animation_case;
+static TileIndex animation_tile;
+static bool animation_road = false;
+static uint animation_sequence = 0;
+static void AnimationTrace(std::string_view event)
+{
+	if (animation_case.empty()) return;
+	auto *st = BaseStation::GetByTile(animation_tile);
+	fmt::print(stderr, "OBJECT animation-trace {} {} {} {} {}", animation_case, animation_sequence++, event, animation_road ? st->GetRoadStopAnimationFrame(animation_tile) : GetAnimationFrame(animation_tile), to_underlying(GetAnimatedTileState(animation_tile)));
+	for (auto t : AnimationQueue()) fmt::print(stderr, " q{}", t.base());
+	for (const auto &r : st->custom_roadstop_tile_data) fmt::print(stderr, " r{}:{}:{}", r.tile.base(), r.random_bits, r.animation_frame);
+	fmt::print(stderr, "\n");
+}
+extern "C" void __real__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE(const GRFFile *, SoundID, TileIndex);
+extern "C" void __wrap__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE(const GRFFile *f, SoundID s, TileIndex t)
+{
+	AnimationTrace("sound-enter");
+	__real__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE(f, s, t);
+	AnimationTrace("sound-exit");
+}
+extern "C" bool __real__ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb(BaseStation *, TileIndex, uint8_t, bool);
+extern "C" bool __wrap__ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb(BaseStation *s, TileIndex t, uint8_t f, bool a)
+{
+	AnimationTrace(a ? "setter-enter" : "random-enter");
+	bool changed = __real__ZN11BaseStation19SetRoadStopTileDataEN10StrongType7TypedefIj12TileIndexTagJNS0_7CompareENS0_7IntegerENS0_10CompatibleIiEENS5_IlEEEEEhb(s, t, f, a);
+	AnimationTrace(changed ? "setter-changed" : "setter-unchanged");
+	return changed;
+}
+extern "C" void __real__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(TileIndex, int, int);
+extern "C" void __wrap__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(TileIndex t, int b, int h)
+{
+	AnimationTrace("dirty");
+	__real__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndexTagJNS_7CompareENS_7IntegerENS_10CompatibleIiEENS4_IlEEEEEii(t, b, h);
+}
+extern "C" void __real__Z26ErrorUnknownCallbackResultjtt(uint32_t, uint16_t, uint16_t);
+extern "C" void __wrap__Z26ErrorUnknownCallbackResultjtt(uint32_t g, uint16_t c, uint16_t r)
+{
+	fmt::print(stderr, "OBJECT animation-diagnostic {} {} {}\n", g, c, r);
+	__real__Z26ErrorUnknownCallbackResultjtt(g, c, r);
+}
 /** ANIT-only input stream; malformed cases terminate before the game can resume. */
 struct AnimationInput : LoadFilter {
 	std::vector<uint8_t> bytes;
@@ -136,6 +177,15 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 		fmt::print(stderr, "OBJECT animation-property-speed {} {} {} {}\n", name, raw, tick, frame(-1));
 	}
 
+	// A valid config is required by the native diagnostic's GRF lookup; restore the list afterwards.
+	_grfconfig.push_back(std::make_unique<GRFConfig>("animation-probe")); _grfconfig.back()->ident.grfid = file.grfid;
+	spec->callback_mask = {speed}; spec->animation.speed = 0; TimerGameTick::counter = 0;
+	for (uint8_t version : {7, 8}) for (uint16_t result : {0xFF, 0x100, 0xFFFF}) {
+		file.grf_version = version; group->speed = result; frame(7); animate(tile);
+		fmt::print(stderr, "OBJECT animation-version {} {} {} {}\n", name, version, result, frame(-1));
+	}
+	_grfconfig.pop_back(); file.grf_version = 7;
+
 	if constexpr (std::is_same_v<Spec, StationSpec> || std::is_same_v<Spec, RoadStopSpec>) {
 		auto *st = BaseStation::GetByTile(tile);
 		std::vector<TileIndex> members;
@@ -162,6 +212,34 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 			st->custom_roadstop_tile_data.clear();
 			for (auto it = members.rbegin(); it != members.rend(); ++it) st->custom_roadstop_tile_data.push_back({*it, 19, 0});
 		}
+		for (bool trigger : {false, true}) for (bool ambient : {false, true}) for (uint16_t result : {0xFFFF, 0x1FD, 0x1FE, 0x1FF, 0x103, 0x107, 0x8003}) {
+			Backup<bool> sound(_settings_client.sound.ambient, ambient);
+			spec->callback_mask = {next}; spec->animation.speed = 0; spec->animation.status = AnimationStatus::NonLooping;
+			spec->animation.triggers = {StationAnimationTrigger::Built}; cached = spec->animation.triggers;
+			group->next = result; random(false); frame(7);
+			RestoreAnimationQueue({tile}); SetAnimatedTileState(tile, trigger && (result & 0xFF) != 0xFF ? AnimatedTileState::Deleted : AnimatedTileState::Animated);
+			animation_case = fmt::format("{}-{}-{}-{}", name, trigger, ambient, result); animation_tile = tile;
+			animation_road = std::is_same_v<Spec, RoadStopSpec>; animation_sequence = 0;
+			group->observation = [](ResolverObject &) { AnimationTrace("callback"); };
+			if (!trigger) animate(tile);
+			else if constexpr (std::is_same_v<Spec, StationSpec>) TriggerStationAnimation(st, tile, StationAnimationTrigger::Built, INVALID_CARGO);
+			else TriggerRoadStopAnimation(st, tile, StationAnimationTrigger::Built, INVALID_CARGO);
+			AnimationTrace("end"); fmt::print(stderr, "OBJECT animation-matrix {}\n", animation_case); animation_case.clear();
+		}
+		group->observation = {};
+		if constexpr (std::is_same_v<Spec, StationSpec>) {
+			for (auto rejection : {"cached", "nonmember", "nullspec", "disabled", "accepted"}) {
+				cached = std::string_view(rejection) == "cached" ? StationAnimationTriggers{} : StationAnimationTriggers{StationAnimationTrigger::Built};
+				spec->animation.triggers = std::string_view(rejection) == "disabled" ? StationAnimationTriggers{} : StationAnimationTriggers{StationAnimationTrigger::Built};
+				SetCustomStationSpecIndex(tile, std::string_view(rejection) == "nullspec" ? 0 : 1);
+				uint calls = 0; group->observation = [&](ResolverObject &) { ++calls; }; group->next = 0xFD;
+				fmt::print(stderr, "OBJECT animation-rejection {} before {} {}\n", rejection, _random.state[0], _random.state[1]);
+				TriggerStationAnimation(st, std::string_view(rejection) == "nonmember" ? TileXY(0, 0) : tile, StationAnimationTrigger::Built, INVALID_CARGO);
+				fmt::print(stderr, "OBJECT animation-rejection {} after {} {} {}\n", rejection, _random.state[0], _random.state[1], calls);
+			}
+			SetCustomStationSpecIndex(tile, 1); group->observation = {};
+		}
+
 		group->next = 0xFD; file.cargo_map[0] = 37;
 		for (uint8_t phase = 0; phase < 4; phase++) for (uint8_t value = 0; value < 9; value++) {
 			auto event = static_cast<StationAnimationTrigger>(value);
