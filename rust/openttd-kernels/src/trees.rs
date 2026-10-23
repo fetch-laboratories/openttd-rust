@@ -1214,6 +1214,91 @@ fn clear_tile_price(
     price.saturating_mul(i64::from(count))
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDTreeServices" ["probe"] => crate::trees::TreeServices {
+        plant_observation,
+        tree_observation,
+        tree_count,
+        clear_observation,
+        snow_line,
+        sin,
+        cos,
+        make_tree,
+        set_ground_density,
+        add_count,
+        add_growth,
+        set_growth,
+        make_clear,
+        ambient,
+        progress,
+        progress_total,
+        town_rating,
+        command_begin,
+        command_tile,
+        command_next,
+        command_debit,
+    };
+    "OpenTTDTreePlantObservation" ["probe"] => PlantObservation {
+        tile_type,
+        bridge,
+        ground,
+        density,
+        snow,
+        coast,
+        zone,
+    };
+    "OpenTTDTreeObservation" ["probe"] => TreeObservation {
+        ground,
+        density,
+        species,
+        count,
+        growth,
+        zone,
+    };
+    "OpenTTDTreeClearObservation" ["probe"] => ClearObservation {
+        count,
+        species,
+    };
+    "OpenTTDTreeLoopSettings" ["probe"] => LoopSettings {
+        tick_counter,
+        size_x,
+        climate,
+        extra,
+        ambient,
+    };
+    "OpenTTDTreeTickSettings" ["probe"] => TickSettings {
+        tick_counter,
+        size,
+        climate,
+        extra,
+    };
+    "OpenTTDTreeGenerateSettings" ["probe"] => GenerateSettings {
+        size,
+        size_x,
+        size_y,
+        climate,
+        placer,
+        height_limit,
+        editor,
+        freeform_edges,
+    };
+    "OpenTTDTreeCommandSettings" ["probe"] => CommandSettings {
+        build_price,
+        size,
+        climate,
+        editor,
+        execute,
+        company_valid,
+    };
+    "OpenTTDTreeCommandResult" ["probe"] => CommandResult {
+        cost,
+        status,
+        message,
+    };
+
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -3,6 +3,7 @@
 use super::{ERROR, build, refit, vehicle_ref};
 use crate::command_type::DoCommandFlag;
 use crate::services::{ByteSpan, CommandCost, Cost};
+use crate::vehicle::VehicleType;
 use std::ffi::c_long;
 use std::ptr;
 #[repr(C)]
@@ -122,7 +123,7 @@ unsafe fn clone(
         total.take(Cost(temporary, b.cost));
         return invalid;
     }
-    if unsafe { (b.groups.vehicle_type)(v) } == 0
+    if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0
         && (!unsafe { (b.groups.front)(v) }
             || (r.train_handle)(v.cast()).get_crash_anim_pos() >= 4400)
     {
@@ -150,7 +151,9 @@ unsafe fn clone(
     let mut rear: *mut () = ptr::null_mut();
     let mut new_id = invalid;
     loop {
-        if unsafe { (b.groups.vehicle_type)(v) } != 0 || !unsafe { (c.transactions.rear)(v) } {
+        if unsafe { (b.groups.vehicle_type)(v) } != VehicleType::TRAIN.0
+            || !unsafe { (c.transactions.rear)(v) }
+        {
             let build_flags =
                 if flags & DoCommandFlag::EXECUTE != 0 && !unsafe { (b.groups.primary)(v) } {
                     flags | DoCommandFlag::AUTO_REPLACE
@@ -191,7 +194,7 @@ unsafe fn clone(
             total.add_money((b.cost.money)(part));
             if flags & DoCommandFlag::EXECUTE != 0 {
                 w = unsafe { (b.groups.vehicle)(new_id) };
-                if unsafe { (b.groups.vehicle_type)(v) } == 0 {
+                if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0 {
                     let old_train = (r.train_handle)(v.cast());
                     if old_train.get_flags() & (1 << crate::train::FLIPPED) != 0
                         && !unsafe { (c.transactions.reverse_probability)(v) }
@@ -200,7 +203,9 @@ unsafe fn clone(
                         (r.train_handle)(w.cast()).set_flag(crate::train::FLIPPED, true);
                     }
                 }
-                if unsafe { (b.groups.vehicle_type)(v) } == 0 && !unsafe { (b.groups.front)(v) } {
+                if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0
+                    && !unsafe { (b.groups.front)(v) }
+                {
                     let moved = unsafe {
                         super::rail::nested_move(
                             s.build,
@@ -227,7 +232,7 @@ unsafe fn clone(
                 rear = w;
             }
         }
-        if unsafe { (b.groups.vehicle_type)(v) } != 0 {
+        if unsafe { (b.groups.vehicle_type)(v) } != VehicleType::TRAIN.0 {
             break;
         }
         v = (s.next_vehicle)(v);
@@ -235,7 +240,9 @@ unsafe fn clone(
             break;
         }
     }
-    if flags & DoCommandFlag::EXECUTE != 0 && unsafe { (b.groups.vehicle_type)(original) } == 0 {
+    if flags & DoCommandFlag::EXECUTE != 0
+        && unsafe { (b.groups.vehicle_type)(original) } == VehicleType::TRAIN.0
+    {
         new_id = unsafe { (b.groups.vehicle_id)(front) };
     }
     if flags & DoCommandFlag::EXECUTE != 0 {
@@ -310,10 +317,12 @@ unsafe fn clone(
                 break;
             }
         }
-        if flags & DoCommandFlag::EXECUTE != 0 && unsafe { (b.groups.vehicle_type)(v) } == 0 {
+        if flags & DoCommandFlag::EXECUTE != 0
+            && unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0
+        {
             w = (s.next_vehicle)(w);
         }
-        if unsafe { (b.groups.vehicle_type)(v) } != 0 {
+        if unsafe { (b.groups.vehicle_type)(v) } != VehicleType::TRAIN.0 {
             break;
         }
         v = (s.next_vehicle)(v);
@@ -365,4 +374,11 @@ pub unsafe extern "C" fn openttd_rust_vehicle_clone(
             share,
         )
     }
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDVehicleCloneServices" ["probe"] => Services {
+        build, next_vehicle, has_articulated, next_articulated, copy_service, parse_suffix,
+    };
 }

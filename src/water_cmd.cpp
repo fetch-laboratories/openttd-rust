@@ -1164,7 +1164,6 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.canal_or_river = [](uint32_t t) noexcept { return RustIsCanal(t) || IsRiver(TileIndex{t}); },
 		.region_context = GetRustWaterRegionContext,
 		.remove_rail = [](OpenTTDCommandCost *out, uint32_t t, Track track) noexcept { *NativeGroundCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlag::Execute, TileIndex{t}, track); },
-		.apply_foundation = RustApplyFoundation,
 		.airport_tile = RustAirportTile,
 		.airport = [](uint32_t t) noexcept { const Station *st = Station::GetByTile(TileIndex{t}); return OpenTTDAirportGround{.station = st, .tile = RustStationAirportTile(st), .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st)}; },
 		.airport_member = [](const OpenTTDStation *st, uint32_t t) noexcept { return st->TileBelongsToAirport(TileIndex{t}); },

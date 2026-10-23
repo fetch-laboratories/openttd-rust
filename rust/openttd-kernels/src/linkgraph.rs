@@ -1007,6 +1007,43 @@ pub unsafe extern "C" fn openttd_rust_linkgraph_destroy(owner: *mut Result) {
     }
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDLinkGraphNode" ["probe"] => InputNode {
+        supply,
+        demand,
+        station,
+        x,
+        y,
+        edge_begin,
+        edge_count,
+    };
+    "OpenTTDLinkGraphEdge" ["probe"] => InputEdge {
+        capacity,
+        travel_time,
+        dest,
+    };
+    "OpenTTDLinkGraphSettings" ["probe"] => Settings {
+        accuracy,
+        demand_distance,
+        demand_size,
+        saturation,
+        distribution,
+        express,
+        map_max_x,
+        map_max_y,
+        runtime,
+    };
+    "OpenTTDLinkGraphShare" ["probe"] => OutputShare {
+        node,
+        origin,
+        via,
+        cumulative,
+        unrestricted,
+        has_share,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::{FlowStat, capacity_ratio};

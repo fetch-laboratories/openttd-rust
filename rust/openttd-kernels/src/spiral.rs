@@ -144,3 +144,16 @@ pub fn hole(
 pub fn equal(left: SpiralState, right: SpiralState) -> bool {
     left.x == right.x && left.y == right.y
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRustSpiralState" ["probe"] => SpiralState {
+        max_radius,
+        extent,
+        cur_radius,
+        position,
+        x,
+        y,
+        direction,
+    };
+}

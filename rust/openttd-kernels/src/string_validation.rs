@@ -99,3 +99,16 @@ pub fn write_plan(position: usize, consumed: usize, length: usize) -> Write {
         }
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDValidationStep" ["probe"] => Step {
+        consumed,
+        output,
+        stopped,
+    };
+    "OpenTTDInplaceWrite" ["probe"] => Write {
+        position,
+        accepted,
+    };
+}

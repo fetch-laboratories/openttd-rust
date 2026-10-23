@@ -12,6 +12,7 @@ use super::{
     Accepted, Builder, GenerationServices, Industry, LifecycleServices, Map, Produced, Services,
     SpecHandle, accepted, fields, produced, produced_count, valid,
 };
+use crate::history_type::LAST_MONTH;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
 use std::{ffi::c_void, ptr};
 
@@ -375,7 +376,8 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
                     let waiting = unsafe { u32::from((*p).waiting) };
                     let production = unsafe { (s.scale_cargo)(waiting.wrapping_mul(8)) };
                     unsafe {
-                        (*produced(owner, n)).history[1].first = production as u16;
+                        (*produced(owner, n)).history[usize::from(LAST_MONTH)].first =
+                            production as u16;
                     }
                 }
                 unsafe {
@@ -390,7 +392,10 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
                 let production = unsafe { (s.scale_cargo)(rate.wrapping_mul(8)) };
                 let p = produced(owner, n);
                 unsafe {
-                    (*p).history[1].first = (*p).history[1].first.wrapping_add(production as u16);
+                    (*p).history[usize::from(LAST_MONTH)].first = (*p).history
+                        [usize::from(LAST_MONTH)]
+                    .first
+                    .wrapping_add(production as u16);
                 }
             }
         }

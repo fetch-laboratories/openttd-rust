@@ -121,7 +121,7 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
         if unsafe { flip.assume_init() } {
             (s.flip_image)(v);
         }
-        if unsafe { (g.vehicle_type)(v) } == 0 {
+        if unsafe { (g.vehicle_type)(v) } == VehicleType::TRAIN.0 {
             let probability = (s.reverse)(v, unsafe { (g.vehicle_engine)(v) });
             if probability.present {
                 (r.train_handle)(v.cast()).set_flag(crate::train::FLIPPED, probability.value);
@@ -203,4 +203,16 @@ pub unsafe extern "C" fn openttd_rust_vehicle_articulated_consistency(
     first: *mut (),
 ) {
     unsafe { consistency(s, first) };
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDArticulatedPart" ["probe"] => Part { image, capacity, };
+    "OpenTTDArticulatedProbability" ["probe"] => Probability { present, value, };
+    "OpenTTDVehicleArticulatedServices" ["probe"] => Services {
+        refit, default_cargo, capacity, pool_available, has_callback, next_part, prepare_previous,
+        new_train, new_road, road_length, copy_roadtype, train_info, road_info, set_part, mark_train,
+        mark_road, copy_common, random_bits, flip_image, reverse, position, available_cargo, warning,
+        has_articulated, next_articulated, max_parts, all_cargo,
+    };
 }

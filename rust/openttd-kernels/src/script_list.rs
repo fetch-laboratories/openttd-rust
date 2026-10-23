@@ -280,6 +280,20 @@ impl List {
     }
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDListControlInput" ["probe"] => control::Input {
+        a,
+        b,
+        flag,
+        kind,
+    };
+    "OpenTTDListControlAction" ["probe"] => control::Action {
+        a,
+        kind,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::List;

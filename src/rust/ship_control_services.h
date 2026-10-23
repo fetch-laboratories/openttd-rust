@@ -120,9 +120,9 @@ static void Ship_position(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(
 
 static void Ship_start_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP); }
 
-static void Ship_depot_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); }
+static void Ship_depot_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleDirtyDepot(v); }
 
-static void Ship_depot_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); InvalidateWindowData(WC_VEHICLE_DEPOT, v->tile); }
+static void Ship_depot_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleInvalidateDepot(v); }
 
 static void Ship_ships_dirty() noexcept { SetWindowClassesDirty(WC_SHIPS_LIST); }
 
@@ -212,16 +212,13 @@ static uint32_t Ship_enter_tile(uint32_t id, uint32_t tile, uint32_t x, uint32_t
 	return VehicleEnterTile(v, TileIndex(tile), static_cast<int32_t>(x), static_cast<int32_t>(y)).base();
 }
 
-static void Ship_enter_depot(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); VehicleEnterDepot(v); }
 
 static bool Ship_process_orders(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return ProcessOrders(v); }
 
-static void Ship_loading(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->HandleLoading(); }
-
-static void Ship_begin_loading(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->BeginLoading(); }
 
 
-static void Ship_viewport(uint32_t id, bool update_delta, bool force) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateViewport(update_delta, force); }
+
+static void Ship_viewport(uint32_t id, bool update_delta, bool force) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleUpdateViewport(v, update_delta, force); }
 
 static void Ship_base_viewport(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->Vehicle::UpdateViewport(true); }
 
@@ -229,7 +226,7 @@ static void Ship_visual(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id
 
 static void Ship_cache(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateCache(); }
 
-static void Ship_play_sound(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->PlayLeaveStationSound(); }
+static void Ship_play_sound(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehiclePlayLeaveSound(RustVehicle(v)); }
 
 static OpenTTDShipReverseResult Ship_yapf_reverse(uint32_t id, bool return_trackdir) noexcept
 {
@@ -265,7 +262,7 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	RustVehicleSetCargoCap(RustVehicle(v), svi.capacity);
 	RustVehicleSetRefitCap(RustVehicle(v), 0);
 	v->last_station_visited = StationID::Invalid();
-	v->last_loading_station = StationID::Invalid();
+	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 	v->engine_type = e->index;
 	v->reliability = RustEngineReliability(e);
 	v->reliability_spd_dec = e->reliability_spd_dec;
@@ -417,8 +414,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.busy_tile = Ship_busy_tile, .path_size = Ship_path_size,
 		.path_back = Ship_path_back, .path_pop = Ship_path_pop,
 		.path_clear = Ship_path_clear, .enter_tile = Ship_enter_tile,
-		.enter_depot = Ship_enter_depot, .process_orders = Ship_process_orders,
-		.loading = Ship_loading, .begin_loading = Ship_begin_loading,
+		.process_orders = Ship_process_orders,
 		.viewport = Ship_viewport,
 		.base_viewport = Ship_base_viewport, .visual = Ship_visual,
 		.cache = Ship_cache, .play_sound = Ship_play_sound,

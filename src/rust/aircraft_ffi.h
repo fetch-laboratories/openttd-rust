@@ -99,7 +99,6 @@ struct OpenTTDAircraftLeaves {
 	void (OPENTTD_AIRCRAFT_CALL *landing_rating)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(landing_rating);
 	void (OPENTTD_AIRCRAFT_CALL *dirty_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(dirty_depot);
 	void (OPENTTD_AIRCRAFT_CALL *first_arrival)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(first_arrival);
-	void (OPENTTD_AIRCRAFT_CALL *begin_loading)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(begin_loading);
 	void (OPENTTD_AIRCRAFT_CALL *update_delta)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(update_delta);
 	void (OPENTTD_AIRCRAFT_CALL *touchdown_animation)(OpenTTDAircraftVehicle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(touchdown_animation);
 	void (OPENTTD_AIRCRAFT_CALL *destination_too_far)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(destination_too_far);
@@ -132,7 +131,6 @@ bool OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_tick(const OpenTTDAircraftLeave
 void OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_calendar_day(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 void OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_economy_day(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 void OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_position(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, int32_t, int32_t, int32_t);
-void OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_enter_hangar(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle);
 void OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_cache(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, bool);
 void OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_flight_bounds(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, int32_t *, int32_t *);
 int32_t OPENTTD_AIRCRAFT_CALL openttd_rust_aircraft_flight_level(const OpenTTDAircraftLeaves *, OpenTTDAircraftVehicle, uint8_t *, bool);

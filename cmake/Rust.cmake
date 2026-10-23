@@ -232,7 +232,7 @@ endif()
 
 # Derive native ABI checks from the same declarations compiled by Rust.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
-file(GLOB RUST_ABI_INPUTS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/rust/openttd-kernels/src/*.rs" "${CMAKE_SOURCE_DIR}/src/rust/*.h")
+file(GLOB_RECURSE RUST_ABI_INPUTS CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/rust/openttd-kernels/src/*.rs" "${CMAKE_SOURCE_DIR}/src/rust/*.h" "${CMAKE_SOURCE_DIR}/tools/migration/windows-abi/*.inc")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${RUST_ABI_INPUTS} "${CMAKE_SOURCE_DIR}/tools/generate-abi.py")
 execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/generate-abi.py" "${CMAKE_BINARY_DIR}/generated-abi"
     RESULT_VARIABLE RUST_ABI_RESULT)
