@@ -4,14 +4,14 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-23, code at `032d0d150c`)
+## Where the fork stands (2026-10-23, code at `824ebd56c5`)
 
-- Forty-eight ownership ports. Whole fork: Rust 101,632 / tooling 36,016 / glue 36,555 / original retired 56,470 of 470,612 C/C++ `src/` lines (12.00%). Simulation: 48,330 / 102,615 (47.10%). One reported original line in #382 is a warning-only GUI cast, not ownership progress.
-- Latest integrations: #379 generation/ground/setter, then #382 waypoint/PBS/movement and the #261 nearby-industry cursor (100/100 added lines). Both passed exact current-base Full and strict match-head merge. Probe/portable/MSVC defects were fixed first; no stale-base rerun or CI settings/bootstrap change. `CI_ON_DEMAND=true` is retained.
-- Speed: the compatible `032d0d150c` profile passed semantic6/6 under exact preserved zlib/lzma. Projections versus `4ddd8cfab4`: TGP 1.213575x (+0.000%), Opus 1.699282x (+38.021%), Grok 1.720302x (+39.163%), P1996 1.500083x (+19.306%), P2000 1.555213x (+16.344%), P2016 1.608537x (+17.306%). The first run's identity failure was solely an unattended zlib upgrade; no normalization or hash-only anchor change.
-- Prescribed quiet six: TGP 1.105480x, Opus 1.427799x, Grok 1.441280x, P1996 1.342173x, P2000 1.393337x, P2016 1.468324x, each median of four interleaved three-pair medians. All72 paired comparisons pass; no measured ceiling exceeded. Opus/Grok/P2016 enter the play band. Attribute net costs on worst P2016; #275 maintenance integrates next. Measured anchors enter through that PR; ports resume after the completed quiet window.
-- CI: four integrations since the last due macOS Debug/Release run; next integration triggers the next due run. #382's first Full exposed stale aircraft/train probe bindings and a timetable narrowing warning; corrected fixture bindings and explicit narrowing passed its second Full on the same base.
-- Component branches: scheduler #380, live graph #383 and occupancy #384 are combined in independently reviewed #387. Cargo monitors #388 are reviewed and their cost is explained below; prepare ready owners after speed maintenance. Animation #389 has an early checkpoint for concrete boundary planning (six components maximum).
+- Forty-eight ownership ports. Whole fork: Rust 101,618 / tooling 36,020 / glue 36,575 / original retired 56,470 of 470,612 C/C++ `src/` lines (12.00%). Simulation: 48,330 / 102,615 (47.10%). One reported original line in #382 is a warning-only GUI cast, not ownership progress.
+- Latest integration: #390 typed movement routing and genuine quiet anchors, after #379/#382. Independent review and first exact current-base Full passed; root verified the validated tree and strict match-head merge. No stale-base rerun or CI settings/bootstrap change. `CI_ON_DEMAND=true` is retained.
+- Speed: #390 followed the compatible `032d0d150c` rise attributed across #379/#382. Call-local table reuse, consumed pixel/road observations, actual flatness helper and the redundant speed-read deletion are integrated. Post-fix instruction counting is active on frozen `824ebd56c5`; quiet wall remeasurement follows. No code benefit is claimed before measurement; identity uses exact preserved zlib/lzma.
+- Accepted pre-fix quiet anchors at `032d0d150c`: TGP 1.105480x, Opus 1.427799x, Grok 1.441280x, P1996 1.342173x, P2000 1.393337x, P2016 1.468324x, each median of four interleaved three-pair medians. All72 paired comparisons passed; no ceiling exceeded. Opus/Grok/P2016 entered the play band. #356/#390 retain the older projections, method and limits.
+- CI: the fifth-integration macOS Debug/Release run is active at this merged code. It must pass before another integration; apply the prescribed capacity fallback only after two hosted-capacity cancellations. Source preparation/review and counting continue meanwhile.
+- Component branches: independently reviewed #387 preserves scheduler #380, live graph #383 and occupancy #384. Reviewed, cost-accepted cargo monitors #388 join the next concrete current-base combination. Animation #389's trait/ABI repair is saved; remaining bounded default evidence is active (six components maximum).
 
 ## Integration and wind-down correction (2026-10-22, takes precedence)
 
@@ -135,6 +135,7 @@ Rows below use original retirement and net glue (#223).
 | #261 cleanup and selected CI maintenance | #361, #365 | #368 | `4ddd8cfab4` | in PRs; ABI tooling 172/180, CI changes 376/400 |
 | #261 canonical station reservation setter | #376 | #379 | `dd31616e7a` | in PR; other drafts adopt this definition |
 | #261 shared linear nearby-industry cursor | #381 | #382 | `032d0d150c` | 47 / 25 / 28 / 0; net glue 11; 100/100 added lines |
+| #275, #356 typed routing and quiet anchors | #390 | direct | `824ebd56c5` | 226 / 13 / 34 / 0; net glue 20; fixture budget 24/80 |
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -164,13 +165,13 @@ Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #281) and #156 run in parallel.
 
 1. **#355, #356 and #357**: integrated as #358.
-2. **#275 / #390 speed batch:** genuine measured anchors are staged. P2016 track-status and pixel-height excess costs are at least307M/275M Ir; overlapping inclination is counted once. One intermediate profile attributes23.39% of P2016's rise to#379 and76.61% to#382. Implement call-local table reuse, narrow pixel/road-tail observations, direct flatness helper and the redundant speed-read deletion; fresh review and one Full follow. Tooling ceiling80 gross changed lines includes16 for anchors. This maintenance integrates next; no broader raw-map or Vehicle access. Ready owners follow on its base.
+2. **#275 / #390 speed batch integrated:** source review and exact-head Full passed at24/80 fixture lines. Prior net target budgets307M/275M Ir are not promised savings. Count the merged code, then use matching binaries/counts for the prescribed quiet remeasurement; pause only local builds/games during that window. Ready owners proceed on this base after due macOS validation. No broader raw-map or Vehicle access or per-PR speed gate.
 3. **#281** part 1 integrated (#340). Part 2: the callee-copy check and the four duplicate wrappers listed in the #340 r2 review.
 4. **#274 map view:** integrated as #351, limited to the scheduler's clear/water/tree loops; C++ keeps the arrays and writes.
 5. **Next whole owners**, as WIP frees, each without draft service dependencies:
-   - #373 scheduler (#380), #378 live graph (#383), #377 occupancy (#384): combined at #387 `4a0a977857`, independently reviewed without findings. Direct owner routing, save/worker lifetimes, typed disaster routes and frozen ancestors are preserved. Prepare its current base and exact-combination Full after speed maintenance;
+   - #373 scheduler (#380), #378 live graph (#383), #377 occupancy (#384): combined at reviewed #387 `4a0a977857`. Prepare a new combination from this integrated base with reviewed #388; preserve every frozen parent and #390's typed routing. Fresh scoped conflict review and one exact-combination Full follow; #387 remains frozen until superseded;
    - #373 cost is separately accepted with explanation: 185 retired versus 199 implementation net glue and 309 evidence (263 tooling/46 native), after two boundary repairs. Required worker/save support remains; no design rule waived. Ceilings 210 implementation, 270 tooling, 50 native evidence; further raise needs a question issue. Other owners do not offset it;
-   - #385 tile-animation scheduling/shared control (#389): six live bindings/default checks pass at `d67f678396`. Corrected inventory415 retired /350 implementation +81 native evidence +143 tooling =574. Concrete same-owner trait/binding/save-copy repairs are being planned before broader trigger/removal/reload evidence. No cost acceptance;
+   - #385 tile animation (#389): trait/entry-order/complete ABI visitor repair passes at `b5675960d2`. Cost345 implementation +81 native evidence +163 tooling =589 versus unchanged415 basis;36 obsolete declarations add no game behavior. Complete selected trigger/sound/order/zero-record, lifecycle/reload and actual native-error evidence. Work caps350/105/375; final cost disposition and fresh review remain;
    - #386 cargo monitors (#388): reviewed at `b7d85fa34d`; helper/orphan fixes spot-checked. Root accepts the specific explanation:113 implementation +4 native evidence +240 tooling =357 versus unchanged193 retirement basis. Runtime glue is thin; existing empty maps needed real delivery, positive reload, cleanup, arithmetic and actual load-error checks. Caps120/8/240 remain; further growth needs a question issue. No design waiver or other-owner offset.
 
    A shared service needed by two drafts lands once as its own PR (#376), then drafts adopt the integrated definition. Fresh Astra plans selected these whole owners without draft dependencies. Canonical map/pool storage and typed services remain; #274 grants no new raw access. Tight retirement boundaries get early measured checkpoints and an owned boundary fix if needed. #377 excludes viewport indexing; #378 excludes visits, scheduling and existing graph computation.
@@ -187,12 +188,12 @@ Resumed 2026-10-23. Root is Codex (gpt-6.1-sol, ultra); implementation and indep
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #275 / #390 | anchors `f3f34bbfb5` | Net-cost and intermediate-tip attribution complete; selected typed routing/read repairs active. Fresh review and exact-head Full, then integrate next. |
-| #373 / #378 / #377 via #387 | `4a0a977857` | Scoped review passes without findings. Source parents spot-checked; scheduler caps remain separate. Prepare final base and Full after maintenance. |
-| #385 / #389 | `d67f678396` | Six-feature checkpoint saved; concrete boundary/cost plan before remaining evidence. |
-| #386 / #388 | `b7d85fa34d` | Source review, fix spot-check and explained cost accepted; current-base combination and Full follow speed maintenance. |
+| #275 / #356 | merged `824ebd56c5` | Post-fix merged-tip counts active; matching quiet remeasurement next. Keep the frozen evidence/runtime and make no benefit claim yet. |
+| #373 / #378 / #377 via #387 | `4a0a977857` | Combine with reviewed #388 on current base; preserve scheduler caps, obtain fresh conflict review and exact-combination Full. |
+| #385 / #389 | `b5675960d2` | Bounded remaining default evidence active; final cost/review follow. |
+| #386 / #388 | `b7d85fa34d` | Source review, fix spot-check and explained cost accepted; include in the next ready combination. |
 
-#382 and all four members are merged; their worktrees are removed. CI_ON_DEMAND remains true. #356 records compatible counts, quiet medians and method limits; tracked anchors await the maintenance PR. Finish routine docs before final base preparation, then hold base stable. Integration notes carry the ten-integration CI observation.
+#390 is merged and unwatched; remove its verified merged worktree. CI_ON_DEMAND remains true. #356 records compatible counts, quiet medians and method limits; tracked anchors are genuine and post-fix measurement continues. Finish routine docs before the next final base preparation, then hold base stable. Integration notes carry the ten-integration CI observation.
 Each open draft keeps one worktree; no unmerged component is adopted as another draft's service dependency. #281 part 2 and remaining #261 cleanup stay on their issues; linear traversal is complete. #64/#68/#69 stay paused. Preserve the pinned reference; do not reapply effect helper `73ccd511fb`.
 
 ## Out of scope for the near term
