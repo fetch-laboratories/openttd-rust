@@ -36,7 +36,7 @@ static void RestoreAnimationQueue(const std::vector<TileIndex> &tiles)
 #endif
 }
 /** Leaf observations are gated to keyed cases; every wrapper calls the actual operation. */
-static std::string animation_case;
+static std::string animation_case, animation_version;
 static TileIndex animation_tile;
 static bool animation_road = false;
 static uint animation_sequence = 0;
@@ -73,7 +73,7 @@ extern "C" void __wrap__Z19MarkTileDirtyByTileN10StrongType7TypedefIj12TileIndex
 extern "C" void __real__Z26ErrorUnknownCallbackResultjtt(uint32_t, uint16_t, uint16_t);
 extern "C" void __wrap__Z26ErrorUnknownCallbackResultjtt(uint32_t g, uint16_t c, uint16_t r)
 {
-	fmt::print(stderr, "OBJECT animation-diagnostic {} {} {}\n", g, c, r);
+	fmt::print(stderr, "OBJECT animation-diagnostic {} {} {} {}\n", animation_version, g, c, r);
 	__real__Z26ErrorUnknownCallbackResultjtt(g, c, r);
 }
 /** ANIT-only input stream; malformed cases terminate before the game can resume. */
@@ -181,7 +181,7 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 	_grfconfig.push_back(std::make_unique<GRFConfig>("animation-probe")); _grfconfig.back()->ident.grfid = file.grfid;
 	spec->callback_mask = {speed}; spec->animation.speed = 0; TimerGameTick::counter = 0;
 	for (uint8_t version : {7, 8}) for (uint16_t result : {0xFF, 0x100, 0xFFFF}) {
-		file.grf_version = version; group->speed = result; frame(7); animate(tile);
+		file.grf_version = version; animation_version = fmt::format("{}-{}-{}", name, version, result); group->speed = result; frame(7); animate(tile);
 		fmt::print(stderr, "OBJECT animation-version {} {} {} {}\n", name, version, result, frame(-1));
 	}
 	_grfconfig.pop_back(); file.grf_version = 7;
@@ -213,7 +213,7 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 			for (auto it = members.rbegin(); it != members.rend(); ++it) st->custom_roadstop_tile_data.push_back({*it, 19, 0});
 		}
 		for (bool trigger : {false, true}) for (bool ambient : {false, true}) for (uint16_t result : {0xFFFF, 0x1FD, 0x1FE, 0x1FF, 0x103, 0x107, 0x8003}) {
-			Backup<bool> sound(_settings_client.sound.ambient, ambient);
+			AutoRestoreBackup<bool> sound(_settings_client.sound.ambient, ambient);
 			spec->callback_mask = {next}; spec->animation.speed = 0; spec->animation.status = AnimationStatus::NonLooping;
 			spec->animation.triggers = {StationAnimationTrigger::Built}; cached = spec->animation.triggers;
 			group->next = result; random(false); frame(7);
@@ -365,10 +365,10 @@ static void AnimationLifecycleProbe(TileIndex scratch)
 	const auto queue = AnimationQueue();
 	const std::array survivors{scratch + TileDiffXY(5, 9), scratch + TileDiffXY(6, 9)};
 	for (auto t : survivors) { Object::CanAllocateItem(); BuildObject(OBJECT_OWNED_LAND, t, _current_company); }
-	Backup<GameMode> editor(_game_mode, GM_EDITOR);
+	AutoRestoreBackup<GameMode> editor(_game_mode, GM_EDITOR);
 	auto exercise = [&](const char *key, TileIndex tile, auto operation) {
 		for (auto t : AnimationQueue()) SetAnimatedTileState(t, AnimatedTileState::None);
-		RestoreAnimationQueue({survivors[0], tile, survivors[1]});
+		RestoreAnimationQueue({tile, survivors[0], survivors[1]});
 		for (auto t : AnimationQueue()) SetAnimatedTileState(t, AnimatedTileState::Animated);
 		auto observe = [&](const char *phase) {
 			fmt::print(stderr, "OBJECT animation-lifecycle {} {} {}:{}", key, phase, tile.base(), to_underlying(GetAnimatedTileState(tile)));
@@ -379,14 +379,15 @@ static void AnimationLifecycleProbe(TileIndex scratch)
 		for (auto t : survivors) if (!IsTileType(t, MP_OBJECT) || GetAnimatedTileState(t) != AnimatedTileState::Animated || std::ranges::count(AnimationQueue(), t) != 1) std::abort();
 	};
 	exercise("house-replace", tiles[0], [&] { return CmdPlaceHouse(DoCommandFlag::Execute, tiles[0], 0, false, true).Succeeded() && IsTileType(tiles[0], MP_HOUSE); });
-	exercise("house-clear", tiles[0], [&] { ClearTownHouse(Town::GetByTile(tiles[0]), tiles[0]); return IsTileType(tiles[0], MP_CLEAR); });
+	exercise("house-clear", tiles[0], [&] { return Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tiles[0]).Succeeded() && IsTileType(tiles[0], MP_CLEAR); });
 	exercise("oilrig-convert", tiles[1], [&] { BuildOilRig(tiles[1]); return IsOilRig(tiles[1]); });
-	TileIndex industry = INVALID_TILE; for (auto t : Map::Iterate()) if (IsTileType(t, MP_INDUSTRY)) { industry = t; break; }
-	exercise("industry-terraform", industry, [&] { return std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(DoCommandFlag::Execute, industry, SLOPE_N, true)).Succeeded(); });
+	TileIndex industry = INVALID_TILE; for (auto t : Map::Iterate()) if (IsTileType(t, MP_INDUSTRY) && GetTileZ(t) > 0 && GetTileSlope(t) == SLOPE_FLAT) { industry = t; break; }
+	exercise("industry-terraform", industry, [&] { return std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(DoCommandFlag::Execute, industry, SLOPE_N, false)).Succeeded(); });
 	industry = INVALID_TILE; for (auto t : Map::Iterate()) if (IsTileType(t, MP_INDUSTRY)) { industry = t; break; }
 	exercise("industry-clear", industry, [&] { return Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, industry).Succeeded() && !IsTileType(industry, MP_INDUSTRY); });
 	for (auto [key, tile] : {std::pair{"rail-remove", tiles[2]}, {"roadstop-remove", tiles[4]}, {"airport-remove", tiles[3]}}) {
-		Backup<CompanyID> owner(_current_company, GetTileOwner(tile));
+		if (std::string_view(key) == "airport-remove") { tile = scratch + TileDiffXY(0, 3); auto built = Command<CMD_BUILD_AIRPORT>::Do(DoCommandFlag::Execute, tile, AT_HELIPORT, 0, NEW_STATION, false); Result("lifecycle-airport-build", built); if (built.Failed()) std::abort(); }
+		AutoRestoreBackup<CompanyID> owner(_current_company, GetTileOwner(tile));
 		exercise(key, tile, [&] { return Command<CMD_LANDSCAPE_CLEAR>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, tile).Succeeded() && !IsTileType(tile, MP_STATION); });
 	}
 	TileIndex rail = INVALID_TILE; for (auto t : Map::Iterate()) if (HasStationTileRail(t)) { rail = t; break; }

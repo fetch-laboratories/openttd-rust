@@ -188,6 +188,7 @@ def check(scenario, run, mode, role, result):
             ("matrix", "-", matrix_axes),
             ("version", " ", (features, ["7", "8"], ["255", "256", "65535"])),
             ("rejection", " ", (rejections, ["before", "after"])),
+            ("diagnostic", " ", ([f"{f}-8-256" for f in features],)),
             ("lifecycle", " ", (lifecycle, ["before", "after"])),
         )
         for marker, separator, axes in inventories:
@@ -207,6 +208,7 @@ def check(scenario, run, mode, role, result):
             "sound-enter": 20,
             "sound-exit": 20,
             "setter-enter": 20,
+            "dirty": 20,
             "callback": 56,
             "end": 56,
         }.items():
