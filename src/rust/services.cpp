@@ -618,7 +618,6 @@ bool CheckAbi_services()
 		AbiServicesComplete(GetRustSharedServices().clear_square_services) &&
 		AbiServicesComplete(GetRustWaterRestorationServices());
 }
-#endif
 
 static OpenTTDLiveGraphAccess LiveGraphAccess(OpenTTDLinkGraph *graph) noexcept { return {LiveGraphOwner(graph), graph->index.base()}; }
 static OpenTTDLiveStationInput LiveGraphStation(uint16_t station, uint8_t cargo) noexcept
@@ -663,3 +662,4 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 	};
 	return services;
 }
+#endif /* WITH_RUST */
