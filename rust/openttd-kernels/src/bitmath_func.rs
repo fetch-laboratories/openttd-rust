@@ -12,3 +12,10 @@
 pub fn has_bit(value: u8, bit: u8) -> bool {
     u32::from(value) & 1_u32.wrapping_shl(u32::from(bit)) != 0
 }
+
+/// `SB` for uint32 fields: clear the destination window, then OR the entire
+/// shifted operand. The original deliberately does not mask the operand.
+pub fn sb(value: &mut u32, start: u8, length: u8, data: u32) {
+    *value &= !((1_u32.wrapping_shl(u32::from(length)) - 1).wrapping_shl(u32::from(start)));
+    *value |= data.wrapping_shl(u32::from(start));
+}

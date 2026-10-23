@@ -58,7 +58,6 @@ pub struct Services {
     pub(crate) refuses: extern "C" fn(*mut c_void, u8) -> u8,
     pub(crate) accept: extern "C" fn(*mut c_void, u32, u32),
     pub(crate) statistics: extern "C" fn(u16, u8, u8, u32, u8),
-    pub(crate) monitor: extern "C" fn(u16, u8, u8, u32, u32, u16),
     pub(crate) subsidies: extern "C" fn() -> *const crate::subsidy::Services,
     pub(crate) industry_effect: extern "C" fn(*mut c_void, u8),
     pub(crate) vehicle_read: extern "C" fn(*mut c_void, u8) -> u32,
@@ -130,6 +129,8 @@ fn deliver(
     company: u8,
     source: u32,
     cursor: *mut NearbyIndustryCursor,
+    monitors: &crate::cargomonitor::Services,
+    monitor_cursor: *mut NearbyIndustryCursor,
 ) -> i64 {
     let industry_source = if source >> 16 == 0 {
         source as u16
@@ -168,13 +169,15 @@ fn deliver(
         (s.accept)(ind, slot, amount);
         remaining -= amount;
         accepted_ind += amount;
-        (s.monitor)(
-            station,
+        crate::cargomonitor::add_delivery(
+            monitors,
             cargo,
             company,
             amount,
-            u32::from(industry_source),
+            crate::source_type::Source::industry(industry_source),
+            (monitors.station)(station),
             (subsidies.industry_id)(ind),
+            monitor_cursor,
         );
     }
     let accepted = if (s.station_read)(station, 1, cargo) != 0 {
@@ -188,13 +191,18 @@ fn deliver(
     (s.statistics)(station, cargo, company, accepted, 1);
     (s.statistics)(station, cargo, company, accepted, 2);
     let mut profit = income(s, accepted, distance, periods, cargo);
-    (s.monitor)(
-        station,
+    crate::cargomonitor::add_delivery(
+        monitors,
         cargo,
         company,
         accepted - accepted_ind,
-        source,
+        crate::source_type::Source {
+            id: source as u16,
+            kind: (source >> 16) as u8,
+        },
+        (monitors.station)(station),
         0xffff,
+        monitor_cursor,
     );
     if subsidies.check(
         cargo,
@@ -343,13 +351,26 @@ pub unsafe extern "C" fn openttd_rust_cargo_payment_final(
     periods: u16,
     source: u32,
     cursor: *mut NearbyIndustryCursor,
+    monitors: *const crate::cargomonitor::Services,
+    monitor_cursor: *mut NearbyIndustryCursor,
 ) {
     let s = unsafe { *s };
     let front = unsafe { (*p).fields.front };
     let station = unsafe { (*p).station };
     let company = (s.vehicle_read)(front, 1) as u8;
     let profit = deliver(
-        d, s, count, cargo, station, distance, periods, company, source, cursor,
+        d,
+        s,
+        count,
+        cargo,
+        station,
+        distance,
+        periods,
+        company,
+        source,
+        cursor,
+        unsafe { &*monitors },
+        monitor_cursor,
     );
     unsafe {
         (*p).fields.route_profit = (*p).fields.route_profit.saturating_add(profit);
@@ -421,7 +442,6 @@ crate::abi::layouts! {
         refuses,
         accept,
         statistics,
-        monitor,
         subsidies,
         industry_effect,
         vehicle_read,

@@ -60,6 +60,30 @@ def pending(chunks):
     return None
 
 
+def active_monitors(path):
+    """Register cargo 0/1 town/industry monitors through the real modern loader."""
+    from .disasters import gamma
+
+    chunks = read_save(path)
+    keys = sorted(
+        (company << 25) | (cargo << 19) | (industry << 16) | index
+        for company in rows(chunks, "PLYR")
+        for cargo in (0, 1)
+        for industry, cid in ((0, "CITY"), (1, "INDY"))
+        for index in rows(chunks, cid)
+    )
+    data = path.read_bytes()
+    for cid in ("CMDL", "CMPU"):
+        chunk = read_save(path)[cid]
+        reader = core.Reader(data, chunk["span"][0] + 5)
+        reader.take(reader.gamma() - 1)
+        payload = (
+            b"".join(gamma(9) + struct.pack(">II", key, 0) for key in keys) + b"\0"
+        )
+        data = data[: reader.pos] + payload + data[chunk["span"][1] :]
+        path.write_bytes(data)
+
+
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     if "economy" not in scenario:
         return scenario
@@ -185,6 +209,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     checked = read_save(normalized)
     if set(checked) != set(original) - {"GLOG"}:
         raise RuntimeError("economy input changed the chunk set")
+    active_monitors(normalized)
     result["economy_input"] = {
         "reference_sha256": hashlib.sha256(source).hexdigest(),
         "normalized_sha256": hashlib.sha256(normalized.read_bytes()).hexdigest(),
@@ -198,6 +223,19 @@ def check(scenario, run, mode, role, result):
     if "economy" not in scenario or not run["snapshots"]:
         return
     saved = [read_save(p) for p in run["snapshots"]]
+    initial = read_save(Path(scenario["save"]))
+    counts = {}
+    for cid in ("CMDL", "CMPU"):
+        before, after = rows(initial, cid), rows(saved[-1], cid)
+        changed = sum(row["amount"] != before[i]["amount"] for i, row in after.items())
+        if not before or not after or not changed:
+            raise RuntimeError(f"{mode}/{role}: {cid} lacks active changed monitors")
+        counts[cid] = {
+            "registered": len(after),
+            "changed": changed,
+            "amount": sum(row["amount"] for row in after.values()),
+        }
+    result[f"{mode}_{role}_monitors"] = counts
     if scenario["economy"] == "stockpile":
         delivered = [
             i for i in rows(saved[-1], "INDY").values() if i["was_cargo_delivered"]

@@ -29,6 +29,7 @@
 #include "../station_map.h"
 #include "../pbs.h"
 
+inline const Station *RustStationByID(uint16_t id) noexcept { return Station::Get(StationID(id)); }
 inline bool RustStationRectangleEmpty(const BaseStation *station) noexcept { return station->rect.IsEmpty(); }
 /** `&st->goods[cargo].GetOrCreateData().cargo`'s Rust owner. */
 inline OpenTTDCargoList *RustStationCargoOwner(OpenTTDStation *st, uint8_t cargo) noexcept { return static_cast<Station *>(st)->goods[cargo].GetOrCreateData().cargo.RustOwner(); }

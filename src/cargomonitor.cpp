@@ -13,6 +13,33 @@
 
 #include "safeguards.h"
 
+#ifdef WITH_RUST
+#include "rust/cargomonitor_ffi.h"
+#include "rust/services_station.h"
+#include "rust/industry_shell_services.h"
+#include "rust/services_assert.h"
+#include "rust/town_services.h"
+const OpenTTDCargoMonitorServices &GetRustCargoMonitorServices() noexcept
+{
+	static const OpenTTDCargoMonitorServices services = {
+		.station = RustStationByID,
+		.station_town = [](const Station *st) noexcept { return RustTownAuthorityIndex(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(st))); },
+		.begin_nearby = BeginNearbyIndustries, .next_nearby = NextNearbyIndustry,
+		.industry_id = RustIndustryID, .check = RustAssertCondition,
+	};
+	return services;
+}
+void ClearCargoPickupMonitoring(CompanyID company) { openttd_rust_monitor_clear_pickups(company.base()); }
+void ClearCargoDeliveryMonitoring(CompanyID company) { openttd_rust_monitor_clear_deliveries(company.base()); }
+int32_t GetPickupAmount(CargoMonitorID monitor, bool keep) { return openttd_rust_monitor_pickup(monitor, keep); }
+int32_t GetDeliveryAmount(CargoMonitorID monitor, bool keep) { return openttd_rust_monitor_delivery(monitor, keep); }
+void AddCargoDelivery(CargoType cargo, CompanyID company, uint32_t amount, Source src, const Station *st, IndustryID dest)
+{
+	RustNearbyIndustryCursor cursor;
+	openttd_rust_monitor_add(&GetRustCargoMonitorServices(), cargo, company.base(), amount, src.id, uint8_t(src.type), st, dest.base(), &cursor);
+}
+#include "abi-visit-OpenTTDCargoMonitorServices.hpp"
+#else
 CargoMonitorMap _cargo_pickups;    ///< Map of monitored pick-ups   to the amount since last query/activation.
 CargoMonitorMap _cargo_deliveries; ///< Map of monitored deliveries to the amount since last query/activation.
 
@@ -154,3 +181,5 @@ void AddCargoDelivery(CargoType cargo_type, CompanyID company, uint32_t amount, 
 	}
 }
 
+
+#endif /* WITH_RUST */

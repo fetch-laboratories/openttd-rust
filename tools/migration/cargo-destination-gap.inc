@@ -21,6 +21,7 @@ struct Source { IndustryID id; SourceType type; };
 enum class PartOfSubsidy : uint8_t { Source, Destination };
 #define OPENTTD_SUBSIDY_FIXTURE_TYPES
 #include "rust/subsidy_ffi.h"
+#include "rust/cargomonitor_ffi.h"
 struct TimerGameEconomy { static constexpr int date = 123; };
 enum class IndustryCallbackMask { ProductionCargoArrival, Production256Ticks };
 struct IndustryCallbackMasks {
@@ -111,11 +112,10 @@ static int CheckCargoDestinationGap(OpenTTDCargoServices s)
 		a.waiting += amount;
 		a.history[THIS_MONTH].accepted += amount;
 		a.last_accepted = TimerGameEconomy::date;
+		// The removed monitor callback recorded these acceptance arguments.
+		destination_events.emplace_back(static_cast<Industry *>(p)->index, 5, amount, a.cargo);
 	};
 	s.statistics = [](uint16_t, uint8_t, uint8_t, uint32_t, uint8_t) noexcept {};
-	s.monitor = [](uint16_t, uint8_t cargo, uint8_t, uint32_t amount, uint32_t, uint16_t industry) noexcept {
-		if (industry != 65535) destination_events.emplace_back(industry, 5, amount, cargo);
-	};
 	s.subsidies = []() noexcept -> const OpenTTDSubsidyServices * { static const OpenTTDSubsidyServices empty{
 		.industry_id = [](void *p) noexcept -> uint16_t { return static_cast<Industry *>(p)->index; },
 		.has_source_flag = [](Source, PartOfSubsidy) noexcept { return false; },
@@ -129,6 +129,14 @@ static int CheckCargoDestinationGap(OpenTTDCargoServices s)
 	};
 	s.vehicle_read = [](void *, uint8_t) noexcept -> uint32_t { return 0; };
 	s.feeder = [](const void *, uint32_t) noexcept -> int64_t { return 0; };
+	OpenTTDCargoMonitorServices monitors{
+		.station = [](uint16_t) noexcept -> const Station * { return &destination_station; },
+		.station_town = [](const Station *) noexcept -> uint16_t { return 0; },
+		.begin_nearby = [](RustNearbyIndustryCursor *c, const Station *) noexcept { c->next = 0; },
+		.next_nearby = [](RustNearbyIndustryCursor *c) noexcept -> Industry * { return c->next < destination_station.industries_near.size() ? destination_station.industries_near[c->next++].industry : nullptr; },
+		.industry_id = [](void *p) noexcept -> uint16_t { return static_cast<Industry *>(p)->index; },
+		.check = [](bool ok) noexcept { if (!ok) std::abort(); },
+	};
 	for (uint8_t first_mask = 0; first_mask < 4; ++first_mask) {
 		for (uint8_t second_mask = 0; second_mask < 4; ++second_mask) {
 			destination_industries = {{{7, 0}, {8, 1}, {9, 2}, {11, 3}, {30, 4}, {20, 5}, {10, 6}, {40, 7}}};
@@ -156,9 +164,16 @@ static int CheckCargoDestinationGap(OpenTTDCargoServices s)
 			auto *delivery = openttd_rust_cargo_delivery_new();
 			auto *payment = openttd_rust_cargo_payment_new(nullptr, 0);
 			spec = {Money(6000), {20, 20}, true, false, {false}};
-			RustNearbyIndustryCursor cursor;
-			openttd_rust_cargo_payment_final(payment, delivery, &s, 1, nullptr, 12, 250, 45, 7, &cursor);
-			openttd_rust_cargo_payment_final(payment, delivery, &s, 1, nullptr, 3, 250, 45, 7, &cursor);
+			RustNearbyIndustryCursor cursor, monitor_cursor;
+			openttd_rust_monitor_clear_deliveries(255);
+			for (auto &i : destination_industries) openttd_rust_monitor_delivery(openttd_rust_monitor_encode_industry(0, 1, i.index, monitors.check), true);
+			openttd_rust_cargo_payment_final(payment, delivery, &s, 1, nullptr, 12, 250, 45, 7, &cursor, &monitors, &monitor_cursor);
+			openttd_rust_cargo_payment_final(payment, delivery, &s, 1, nullptr, 3, 250, 45, 7, &cursor, &monitors, &monitor_cursor);
+			for (size_t n = 0; n < destination_industries.size(); ++n) {
+				auto key = openttd_rust_monitor_encode_industry(0, 1, destination_industries[n].index, monitors.check);
+				uint32_t expected_amount = expected[n].accepted[0].history[0].accepted - initial[n].accepted[0].history[0].accepted;
+				if (uint32_t(openttd_rust_monitor_delivery(key, false)) != expected_amount) return 5;
+			}
 			if (payment->fields.route_profit != (GetTransportedGoodsIncome(12, 250, 45, 1) + GetTransportedGoodsIncome(3, 250, 45, 1)).base() || accepted != 15) return 2;
 			openttd_rust_cargo_delivery_flush(delivery, &s);
 			if (destination_industries != expected || destination_events != events) return 3;

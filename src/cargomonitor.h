@@ -29,10 +29,15 @@ struct Station;
 typedef uint32_t CargoMonitorID; ///< Type of the cargo monitor number.
 
 /** Map type for storing and updating active cargo monitor numbers and their amounts. */
+#ifndef WITH_RUST
 typedef std::map<CargoMonitorID, OverflowSafeInt32> CargoMonitorMap;
 
 extern CargoMonitorMap _cargo_pickups;
 extern CargoMonitorMap _cargo_deliveries;
+#else
+#include "rust/cargomonitor_ffi.h"
+#include "rust/services_assert.h"
+#endif
 
 
 /* Constants for encoding and extracting cargo monitors. */
@@ -57,6 +62,9 @@ static_assert(MAX_COMPANIES <= (1 << CCB_COMPANY_LENGTH));
  */
 inline CargoMonitorID EncodeCargoIndustryMonitor(CompanyID company, CargoType ctype, IndustryID ind)
 {
+#ifdef WITH_RUST
+	return openttd_rust_monitor_encode_industry(company.base(), ctype, ind.base(), RustAssertCondition);
+#else
 	assert(ctype < (1 << CCB_CARGO_TYPE_LENGTH));
 	assert(company < (1 << CCB_COMPANY_LENGTH));
 
@@ -66,6 +74,7 @@ inline CargoMonitorID EncodeCargoIndustryMonitor(CompanyID company, CargoType ct
 	SB(ret, CCB_CARGO_TYPE_START, CCB_CARGO_TYPE_LENGTH, ctype);
 	SB(ret, CCB_COMPANY_START, CCB_COMPANY_LENGTH, company.base());
 	return ret;
+#endif /* WITH_RUST */
 }
 
 /**
@@ -77,6 +86,9 @@ inline CargoMonitorID EncodeCargoIndustryMonitor(CompanyID company, CargoType ct
  */
 inline CargoMonitorID EncodeCargoTownMonitor(CompanyID company, CargoType ctype, TownID town)
 {
+#ifdef WITH_RUST
+	return openttd_rust_monitor_encode_town(company.base(), ctype, town.base(), RustAssertCondition);
+#else
 	assert(ctype < (1 << CCB_CARGO_TYPE_LENGTH));
 	assert(company < (1 << CCB_COMPANY_LENGTH));
 
@@ -85,6 +97,7 @@ inline CargoMonitorID EncodeCargoTownMonitor(CompanyID company, CargoType ctype,
 	SB(ret, CCB_CARGO_TYPE_START, CCB_CARGO_TYPE_LENGTH, ctype);
 	SB(ret, CCB_COMPANY_START, CCB_COMPANY_LENGTH, company.base());
 	return ret;
+#endif /* WITH_RUST */
 }
 
 /**
@@ -94,7 +107,11 @@ inline CargoMonitorID EncodeCargoTownMonitor(CompanyID company, CargoType ctype,
  */
 inline CompanyID DecodeMonitorCompany(CargoMonitorID num)
 {
+#ifdef WITH_RUST
+	return CompanyID(openttd_rust_monitor_company(num));
+#else
 	return static_cast<CompanyID>(GB(num, CCB_COMPANY_START, CCB_COMPANY_LENGTH));
+#endif /* WITH_RUST */
 }
 
 /**
@@ -104,7 +121,11 @@ inline CompanyID DecodeMonitorCompany(CargoMonitorID num)
  */
 inline CargoType DecodeMonitorCargoType(CargoMonitorID num)
 {
+#ifdef WITH_RUST
+	return openttd_rust_monitor_cargo(num);
+#else
 	return GB(num, CCB_CARGO_TYPE_START, CCB_CARGO_TYPE_LENGTH);
+#endif /* WITH_RUST */
 }
 
 /**
@@ -114,7 +135,11 @@ inline CargoType DecodeMonitorCargoType(CargoMonitorID num)
  */
 inline bool MonitorMonitorsIndustry(CargoMonitorID num)
 {
+#ifdef WITH_RUST
+	return openttd_rust_monitor_is_industry(num);
+#else
 	return HasBit(num, CCB_IS_INDUSTRY_BIT);
+#endif /* WITH_RUST */
 }
 
 /**
@@ -124,8 +149,12 @@ inline bool MonitorMonitorsIndustry(CargoMonitorID num)
  */
 inline IndustryID DecodeMonitorIndustry(CargoMonitorID num)
 {
+#ifdef WITH_RUST
+	return IndustryID(openttd_rust_monitor_industry(num));
+#else
 	if (!MonitorMonitorsIndustry(num)) return IndustryID::Invalid();
 	return static_cast<IndustryID>(GB(num, CCB_TOWN_IND_NUMBER_START, CCB_TOWN_IND_NUMBER_LENGTH));
+#endif /* WITH_RUST */
 }
 
 /**
@@ -135,8 +164,12 @@ inline IndustryID DecodeMonitorIndustry(CargoMonitorID num)
  */
 inline TownID DecodeMonitorTown(CargoMonitorID num)
 {
+#ifdef WITH_RUST
+	return TownID(openttd_rust_monitor_town(num));
+#else
 	if (MonitorMonitorsIndustry(num)) return TownID::Invalid();
 	return static_cast<TownID>(GB(num, CCB_TOWN_IND_NUMBER_START, CCB_TOWN_IND_NUMBER_LENGTH));
+#endif /* WITH_RUST */
 }
 
 void ClearCargoPickupMonitoring(CompanyID company = INVALID_OWNER);
