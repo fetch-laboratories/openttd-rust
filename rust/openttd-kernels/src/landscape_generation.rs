@@ -1110,7 +1110,7 @@ impl World<'_> {
                 self.terraform(tile, complement_slope(current), true, F::EXECUTE | F::AUTO);
             } else if is_inclined_slope(desired) {
                 let direction = reverse_diag_dir(get_inclined_slope_direction(desired), |ok| {
-                    (self.a.assert_condition)(ok)
+                    (self.a.assert_condition)(ok);
                 });
                 for diff in DIAGDIRDIFF_SAME..DIAGDIRDIFF_END {
                     if diff == DIAGDIRDIFF_SAME || diff == DIAGDIRDIFF_REVERSE {

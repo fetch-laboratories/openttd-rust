@@ -100,20 +100,6 @@ pub const fn track_status_to_trackdir_bits(status: u32) -> u16 {
     (status & crate::track_type::TRACKDIR_BIT_MASK) as u16
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn native_asserts_off_retains_header_conversions() {
-        let disabled = |ok: bool| assert!(!ok);
-        assert_eq!(axis_to_track(crate::services::Axis(2), disabled).0, 2);
-        assert_eq!(axis_to_track_bits(2, disabled), 4);
-        assert_eq!(track_to_track_bits(8, disabled), 0);
-        assert_eq!(diag_dir_to_diag_track(4, disabled), 0);
-        assert!(is_reversing_road_trackdir(22, disabled));
-    }
-}
-
 /// `TrackdirToTrack`.
 pub const fn trackdir_to_track(td: u8) -> u8 {
     td & 7
@@ -179,5 +165,19 @@ pub const fn find_first_trackdir(bits: u16) -> u8 {
         0xff
     } else {
         bits.trailing_zeros() as u8
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn native_asserts_off_retains_header_conversions() {
+        let disabled = |ok: bool| assert!(!ok);
+        assert_eq!(axis_to_track(crate::services::Axis(2), disabled).0, 2);
+        assert_eq!(axis_to_track_bits(2, disabled), 4);
+        assert_eq!(track_to_track_bits(8, disabled), 0);
+        assert_eq!(diag_dir_to_diag_track(4, disabled), 0);
+        assert!(is_reversing_road_trackdir(22, disabled));
     }
 }

@@ -318,7 +318,7 @@ impl Ctx<'_> {
         let offset = self
             .map()
             .offs_by_axis(crate::direction_func::other_axis(axis, |ok| {
-                crate::movement::native_assert(self.shared, ok)
+                crate::movement::native_assert(self.shared, ok);
             }));
         let mut tile = start;
         for i in 0..count {
@@ -429,7 +429,7 @@ impl Ctx<'_> {
                 (self.s.station_infrastructure)(owner, 1);
             }
             let track = crate::track_func::axis_to_track(crate::services::Axis(axis), |ok| {
-                crate::movement::native_assert(self.shared, ok)
+                crate::movement::native_assert(self.shared, ok);
             })
             .0;
             let reserved = if (self.shared.tile_type)(tile) == MP_RAILWAY {
@@ -526,7 +526,7 @@ impl Ctx<'_> {
             spec,
             axis,
             crate::direction_func::axis_to_diag_dir(axis, |ok| {
-                crate::movement::native_assert(self.shared, ok)
+                crate::movement::native_assert(self.shared, ok);
             }),
             &mut existing,
             INVALID_ROADTYPE,
@@ -551,7 +551,7 @@ impl Ctx<'_> {
         let center =
             start.wrapping_add(u32::from(count / 2).wrapping_mul(self.map().offs_by_axis(
                 crate::direction_func::other_axis(axis, |ok| {
-                    crate::movement::native_assert(self.shared, ok)
+                    crate::movement::native_assert(self.shared, ok);
                 }),
             )));
         if wp.is_null() && reuse {

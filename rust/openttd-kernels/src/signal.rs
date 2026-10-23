@@ -246,7 +246,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                     let td = ((u32::from(tracks) * 0x101)
                         & u32::from(crate::track_func::diagdir_reaches_trackdirs(
                             crate::direction_func::reverse_diag_dir(dir, |ok| {
-                                crate::movement::native_assert(w.shared, ok)
+                                crate::movement::native_assert(w.shared, ok);
                             }),
                         )))
                     .trailing_zeros() as u8;

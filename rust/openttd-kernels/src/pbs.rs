@@ -148,9 +148,11 @@ impl<'a> Pbs<'a> {
                 crate::movement::track_status(self.shared(), tile, TRANSPORT_RAIL, 0, 255),
             );
             let mask = track_to_track_bits(track, |ok| {
-                crate::movement::native_assert(self.shared(), ok)
+                crate::movement::native_assert(self.shared(), ok);
             });
-            crate::movement::native_assert(self.shared(), bits & mask != 0);
+            if bits & mask == 0 {
+                crate::movement::native_assert(self.shared(), false);
+            }
         }
     }
     pub(crate) fn try_reserve(self, tile: u32, track: u8, trigger: bool) -> bool {
@@ -316,7 +318,7 @@ impl<'a> Pbs<'a> {
         if !self.has_reserved_tracks(
             tile,
             track_to_track_bits(trackdir_to_track(td), |ok| {
-                crate::movement::native_assert(self.shared(), ok)
+                crate::movement::native_assert(self.shared(), ok);
             }),
         ) {
             crate::witness::hit(crate::witness::PBS_START_UNRESERVED);
@@ -342,7 +344,7 @@ impl<'a> Pbs<'a> {
                         if (self.0.station_reserved)(ft.new_tile) {
                             tile = ft.new_tile;
                             td = diag_dir_to_diag_trackdir(ft.exitdir, |ok| {
-                                crate::movement::native_assert(self.shared(), ok)
+                                crate::movement::native_assert(self.shared(), ok);
                             });
                             crate::witness::hit(crate::witness::PBS_PLATFORM_INTERIOR);
                             break;
@@ -400,7 +402,7 @@ impl<'a> Pbs<'a> {
             if track == crate::track_type::TRACK_BIT_WORMHOLE
                 || track
                     & track_to_track_bits(trackdir_to_track(c.td), |ok| {
-                        crate::movement::native_assert(c.pbs.shared(), ok)
+                        crate::movement::native_assert(c.pbs.shared(), ok);
                     })
                     != 0
             {
@@ -593,7 +595,7 @@ impl<'a> Pbs<'a> {
     }
     pub(crate) fn free(self, v: Handle, tile: u32, td: u8, no90: bool) -> bool {
         if track_overlaps_tracks(self.reserved(tile), trackdir_to_track(td), |ok| {
-            crate::movement::native_assert(self.shared(), ok)
+            crate::movement::native_assert(self.shared(), ok);
         }) {
             crate::witness::hit(crate::witness::PBS_OVERLAP);
             return false;

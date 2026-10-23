@@ -55,6 +55,23 @@ pub fn reverse_dir(d: u8, check: impl Fn(bool) + Copy) -> u8 {
     d ^ 4
 }
 
+/// `ChangeDiagDir` modulo the four diagonal directions.
+pub const fn change_diag_dir(direction: u8, difference: u8) -> u8 {
+    direction.wrapping_add(difference) & 3
+}
+
+/// `IsValidAxis`.
+pub const fn is_valid_axis(axis: u8) -> bool {
+    axis < AXIS_END
+}
+/// `OtherAxis`.
+pub fn other_axis(axis: u8, check: impl Fn(bool) + Copy) -> u8 {
+    if !is_valid_axis(axis) {
+        check(false);
+    }
+    axis ^ 1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,21 +97,4 @@ mod tests {
             assert_eq!(diag_dir_to_dir(direction, enabled), direction * 2 + 1);
         }
     }
-}
-
-/// `ChangeDiagDir` modulo the four diagonal directions.
-pub const fn change_diag_dir(direction: u8, difference: u8) -> u8 {
-    direction.wrapping_add(difference) & 3
-}
-
-/// `IsValidAxis`.
-pub const fn is_valid_axis(axis: u8) -> bool {
-    axis < AXIS_END
-}
-/// `OtherAxis`.
-pub fn other_axis(axis: u8, check: impl Fn(bool) + Copy) -> u8 {
-    if !is_valid_axis(axis) {
-        check(false);
-    }
-    axis ^ 1
 }
