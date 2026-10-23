@@ -80,6 +80,8 @@ def scenarios(soak):
             "removed-destination",
             "map-edges",
             "railtype-63",
+            "road-stops",
+            "road-stops-reload",
         )
     ]
 
@@ -350,6 +352,9 @@ COMMAND_SOURCE = r"""
 #include "clear_map.h"
 #include "order_cmd.h"
 #include "waypoint_cmd.h"
+#include "road_cmd.h"
+#include "vehicle_cmd.h"
+#include "engine_func.h"
 #include "saveload/saveload.h"
 static void StationNeed(bool value, int line) { if (!value) { fmt::print(stderr, "STCMD setup-failure {}\n", line); std::abort(); } }
 static void StationCost(const char *label, const CommandCost &cost)
@@ -371,6 +376,34 @@ static void StationPathPush(RoadVehicle *v, Trackdir trackdir, TileIndex tile)
 #else
 	v->path.emplace_back(trackdir, tile);
 #endif
+}
+/* #354: road stop status and drive-through entries, read through the native API. */
+static void StationRoadStops(const char *label)
+{
+	for (const RoadStop *rs : RoadStop::Iterate()) {
+		fmt::print(stderr, "STCMD road-stop {} {} {} {}", label, rs->index.base(), rs->xy.base(), rs->status.base());
+		if (IsDriveThroughStopTile(rs->xy)) {
+			const auto &east = rs->GetEntry(DIAGDIR_NE), &west = rs->GetEntry(DIAGDIR_NW);
+			fmt::print(stderr, " east {} {} west {} {}", east.GetLength(), east.GetOccupied(), west.GetLength(), west.GetOccupied());
+		}
+		fmt::print(stderr, "\n");
+	}
+}
+/* Place a stopped fixture vehicle at the tile centre and enter the tile natively. */
+static void StationRoadEnter(RoadVehicle *v, TileIndex t, Direction dir, Trackdir td)
+{
+	v->tile = t; v->x_pos = TileX(t) * TILE_SIZE + 8; v->y_pos = TileY(t) * TILE_SIZE + 8; v->direction = dir;
+	v->cur_speed = 0; v->vehstatus.Set(VehState::Stopped);
+#ifdef WITH_RUST
+	v->SetState(td); v->SetFrame(0);
+	auto state = [v] { return v->GetState(); };
+#else
+	v->state = td; v->frame = 0;
+	auto state = [v] { return v->state; };
+#endif
+	v->UpdatePosition();
+	auto entered = VehicleEnterTile(v, t, v->x_pos, v->y_pos);
+	fmt::print(stderr, "STCMD road-enter {} {} {} {}\n", v->index.base(), t.base(), entered.base(), state());
 }
 static TileIndex StationPatch()
 {
@@ -415,6 +448,10 @@ static bool StationCommands(std::span<std::string_view> args)
 	_settings_game.construction.road_stop_on_competitor_road = true;
 	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
 	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
+	if (args[1] == "road-stops-inspect") {
+		StationRoadStops("reloaded"); fmt::print(stderr, "STCMD complete\n");
+		current.Restore(); return true;
+	}
 	if (args[1] == "inspect") {
 		Station *found = nullptr;
 		for (Station *st : Station::Iterate()) if (st->name == "Migration station") found = st;
@@ -470,6 +507,92 @@ static bool StationCommands(std::span<std::string_view> args)
 			}
 			StationNeed(all_edges, __LINE__);
 			fmt::print(stderr, "STCMD complete\n");
+			current.Restore(); return true;
+		}
+		if (args[1] == "road-stops") {
+			/* Seven new single-part buses, built in a depot and placed by the fixture. */
+			StationNeed(Command<CMD_BUILD_ROAD_DEPOT>::Do(exec, tile(4, 4), ROADTYPE_ROAD, DIAGDIR_NE).Succeeded(), __LINE__);
+			EngineID engine = EngineID::Invalid();
+			for (const Engine *e : Engine::IterateType(VEH_ROAD)) {
+				if (engine == EngineID::Invalid() && IsEngineBuildable(e->index, VEH_ROAD, company->index) && e->VehInfo<RoadVehicleInfo>().roadtype == ROADTYPE_ROAD && !e->info.callback_mask.Test(VehicleCallbackMask::ArticEngine)) engine = e->index;
+			}
+			StationNeed(engine != EngineID::Invalid(), __LINE__);
+			std::vector<RoadVehicle *> buses;
+			for (int i = 0; i < 7; i++) {
+				auto [cost, id, refit, capacity, cargo] = Command<CMD_BUILD_VEHICLE>::Do(exec, tile(4, 4), engine, false, INVALID_CARGO, INVALID_CLIENT_ID);
+				StationNeed(cost.Succeeded() && RoadVehicle::Get(id)->Next() == nullptr, __LINE__);
+				buses.push_back(RoadVehicle::Get(id));
+				buses.back()->vehstatus.Reset(VehState::Hidden);
+			}
+			for (int x = 8; x < 17; x++) MakeRoadNormal(tile(x, 10), ROAD_X, ROADTYPE_ROAD, INVALID_ROADTYPE, TownID(0), OWNER_TOWN, OWNER_NONE);
+			for (int y = 8; y < 15; y++) MakeRoadNormal(tile(20, y), ROAD_Y, ROADTYPE_ROAD, INVALID_ROADTYPE, TownID(0), OWNER_TOWN, OWNER_NONE);
+			auto stop = [&](TileIndex t, bool drive, Axis axis, StationID join) {
+				DiagDirection ddir = drive ? (axis == AXIS_X ? DIAGDIR_NE : DIAGDIR_SE) : DIAGDIR_NE;
+				StationCost("road-stop", Command<CMD_BUILD_ROAD_STOP>::Do(exec, t, 1, 1, RoadStopType::Bus, drive, ddir, ROADTYPE_ROAD, ROADSTOP_CLASS_DFLT, 0, join, true));
+				StationNeed(IsStationRoadStop(t), __LINE__);
+			};
+			auto remove = [&](TileIndex t) {
+				StationCost("road-stop-remove", Command<CMD_REMOVE_ROAD_STOP>::Do(exec, t, 1, 1, RoadStopType::Bus, false));
+				StationNeed(!IsAnyRoadStopTile(t), __LINE__);
+			};
+			/* X axis: alone, then a southern join that makes the new stop the parent. */
+			stop(tile(11, 10), true, AXIS_X, NEW_STATION);
+			StationID id = GetStationIndex(tile(11, 10));
+			StationRoadEnter(buses[0], tile(11, 10), DIR_NE, TRACKDIR_X_NE);
+			stop(tile(10, 10), true, AXIS_X, id);
+			stop(tile(13, 10), true, AXIS_X, id);
+			StationRoadEnter(buses[1], tile(13, 10), DIR_SW, TRACKDIR_X_SW);
+			StationRoadStops("x-parts");
+			/* Merge two occupied lines, then join one more tile from the north. */
+			stop(tile(12, 10), true, AXIS_X, id);
+			stop(tile(14, 10), true, AXIS_X, id);
+			StationRoadStops("x-joined");
+			/* Y axis, both directions. */
+			stop(tile(20, 11), true, AXIS_Y, id);
+			StationRoadEnter(buses[2], tile(20, 11), DIR_SE, TRACKDIR_Y_SE);
+			stop(tile(20, 12), true, AXIS_Y, id);
+			StationRoadEnter(buses[3], tile(20, 12), DIR_NW, TRACKDIR_Y_NW);
+			stop(tile(20, 10), true, AXIS_Y, id);
+			StationRoadStops("y-joined");
+			/* Interior removal splits and rebuilds both lines; then head and tail. */
+			remove(tile(12, 10));
+			StationRoadStops("x-split");
+			remove(tile(10, 10));
+			remove(tile(14, 10));
+			StationRoadStops("x-ends");
+			/* Leaving through deletion, then the last tile of a line. */
+			delete buses[3];
+			remove(tile(20, 12));
+			remove(tile(20, 10));
+			StationRoadStops("y-ends");
+			delete buses[2];
+			remove(tile(20, 11));
+			StationRoadStops("y-last");
+			/* Bays: first bay, busy refusal, second bay, full refusal. */
+			stop(tile(24, 4), false, AXIS_X, NEW_STATION);
+			RoadStop *bay = nullptr;
+			for (RoadStop *rs : RoadStop::Iterate()) if (rs->xy == tile(24, 4)) bay = rs;
+			StationNeed(bay != nullptr, __LINE__);
+			StationRoadEnter(buses[4], tile(24, 4), DIR_SW, TRACKDIR_X_SW);
+			StationRoadEnter(buses[5], tile(24, 4), DIR_SW, TRACKDIR_X_SW);
+			bay->status.Reset(RoadStop::RoadStopStatusFlag::EntryBusy);
+			StationRoadEnter(buses[5], tile(24, 4), DIR_SW, TRACKDIR_X_SW);
+			StationRoadStops("bays");
+			bay->status.Reset(RoadStop::RoadStopStatusFlag::EntryBusy);
+			StationRoadEnter(buses[6], tile(24, 4), DIR_SW, TRACKDIR_X_SW);
+			StationRoadStops("bays-full");
+			/* Free bay 1, then admit the previously refused vehicle into it. */
+#ifdef WITH_RUST
+			openttd_rust_road_stop_leave(&GetRustSharedServices(), RustVehicle(buses[5]), buses[5]->GetRustState());
+#else
+			bay->Leave(buses[5]);
+#endif
+			delete buses[5];
+			StationRoadStops("bays-freed");
+			StationRoadEnter(buses[6], tile(24, 4), DIR_SW, TRACKDIR_X_SW);
+			StationRoadStops("bays-reused");
+			fmt::print(stderr, "STCMD complete\n");
+			if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 			current.Restore(); return true;
 		}
 		if (args[1] == "railtype-63") {
@@ -594,6 +717,18 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLib
 """
 
 
+RELOADS = {
+    "reload": ("commands", "inspect"),
+    "road-stops-reload": ("road-stops", "road-stops-inspect"),
+}
+# #354 road stop owner branches; cache checks run only with desync snapshots.
+ROAD_STOPS = (
+    "clear_head clear_last clear_split clear_tail enter_bay0 enter_bay1 enter_drive"
+    " enter_refused leave_bay leave_drive make_alone make_join make_merge make_parent rebuild"
+    " rebuild_vehicle"
+).split()
+
+
 def adapter(build, folder, env):
     from .console_adapter import console_adapter
 
@@ -643,14 +778,16 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
     if binaries["candidate"] == binaries["reference"]:
         executables["candidate"] = executables["reference"]
     scenario = dict(scenario, save=str(source), executables=executables)
-    if scenario["station_commands"] == "reload":
+    # Reload modes capture the command fixture's save, then inspect it after load.
+    capture, inspect = RELOADS.get(scenario["station_commands"], (None, None))
+    if capture:
         saves, logs = {}, {}
         for role in ("reference", "candidate"):
             save = folder / role / "stations.sav"
             run = core.run_game(
                 dict(
                     scenario,
-                    console=[f'stations_scenario commands "{save}"', "unpause"],
+                    console=[f'stations_scenario {capture} "{save}"', "unpause"],
                 ),
                 executables[role],
                 builds[role],
@@ -677,7 +814,7 @@ def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
         return dict(
             scenario,
             role_inputs={role: {"save": str(save)} for role, save in saves.items()},
-            console=["stations_scenario inspect", "unpause"],
+            console=[f"stations_scenario {inspect}", "unpause"],
         )
     return dict(
         scenario,
@@ -728,6 +865,12 @@ def check_commands(scenario, run, mode, role, result):
         for line in evidence:
             if line not in run["log"]:
                 raise RuntimeError("station fidelity witness missing: " + line)
+    if scenario["station_commands"].startswith("road-stops"):
+        reload = scenario["station_commands"] == "road-stops-reload"
+        required = [] if reload else ["build_road", "remove_road_tile"]
+        branches = ["after_load", "rebuild_vehicle"] if reload else ROAD_STOPS
+        cached = ["integrity"] if mode == "snapshots" else []
+        core.branch_witnesses(scenario, run, role, "road_stop", branches + cached)
     core.branch_witnesses(scenario, run, role, "station_command", required)
     lines = [line for line in run["log"] if line.startswith("STCMD ")]
     expected = (

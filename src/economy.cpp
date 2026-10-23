@@ -1647,7 +1647,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	},
 	.cached_total_length = [](OpenTTDVehicle *handle) noexcept -> uint16_t {
 		Vehicle *v = VehicleOf(handle);
-		return v->GetGroundVehicleCache()->cached_total_length;
+		return RustGroundCachedTotalLength(v->GetGroundVehicleCache());
 	},
 	.full_load_order = [](OpenTTDVehicle *handle) noexcept -> bool {
 		Vehicle *v = VehicleOf(handle); return v->current_order.IsFullLoadOrder();

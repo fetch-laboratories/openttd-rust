@@ -38,7 +38,7 @@ static OpenTTDRailTrain RailTrain(void *context) noexcept
 	const Train *rear = v->Last();
 	return {v->GetCompatibleRailTypes().base(), GetAllCompatibleRailTypes(v->GetRailTypes()).base(),
 		v->tile.base(), rear->tile.base(), TileVirtXY(v->x_pos, v->y_pos).base(), TileVirtXY(rear->x_pos, rear->y_pos).base(),
-		v->dest_tile.base(), v->gcache.cached_total_length, static_cast<uint32_t>(std::min<int>(RustVehicleDisplayMaxSpeed(v), RustVehicleOrderMaxSpeed(v))),
+		v->dest_tile.base(), RustGroundCachedTotalLength(&v->gcache), static_cast<uint32_t>(std::min<int>(RustVehicleDisplayMaxSpeed(v), RustVehicleOrderMaxSpeed(v))),
 		v->current_order.GetDestination().base(), GetRustSharedServices().train_trackdir(v), GetRustSharedServices().train_trackdir(rear),
 		static_cast<uint8_t>(v->GetTrack() == TRACK_BIT_WORMHOLE), static_cast<uint8_t>(rear->GetTrack() == TRACK_BIT_WORMHOLE),
 		static_cast<uint8_t>(v->current_order.GetType()), static_cast<uint8_t>(v->current_order.GetDepotActionType().Test(OrderDepotActionFlag::NearestDepot)),

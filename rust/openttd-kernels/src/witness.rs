@@ -119,6 +119,13 @@ witness_blocks! {
         LANDSCAPE_CRASHED_SKIP = 25 => "landscape.crashed_skip",
     }
 
+    landscape_cmd {
+        LANDSCAPE_CMD_RECURSIVE = 0 => "landscape_cmd.recursive",
+        LANDSCAPE_CMD_TWO_PASS = 1 => "landscape_cmd.two_pass",
+        LANDSCAPE_CMD_INDIRECT = 2 => "landscape_cmd.indirect",
+        LANDSCAPE_CMD_PARTIAL = 3 => "landscape_cmd.partial",
+    }
+
     object {
         OBJECT_BUILD = 0 => "object.build",
         OBJECT_REMOVE = 1 => "object.remove",
@@ -252,6 +259,26 @@ witness_blocks! {
         ROAD_COMMANDS_BUILD_ABOVE = 27 => "road_commands.build_above",
         ROAD_COMMANDS_FLOOD_WORKS = 28 => "road_commands.flood_works",
         ROAD_COMMANDS_NON_ROAD = 29 => "road_commands.non_road",
+    }
+    road_stop {
+        ROAD_STOP_AFTER_LOAD = 0 => "road_stop.after_load",
+        ROAD_STOP_CLEAR_HEAD = 1 => "road_stop.clear_head",
+        ROAD_STOP_CLEAR_LAST = 2 => "road_stop.clear_last",
+        ROAD_STOP_CLEAR_SPLIT = 3 => "road_stop.clear_split",
+        ROAD_STOP_CLEAR_TAIL = 4 => "road_stop.clear_tail",
+        ROAD_STOP_ENTER_BAY0 = 5 => "road_stop.enter_bay0",
+        ROAD_STOP_ENTER_BAY1 = 6 => "road_stop.enter_bay1",
+        ROAD_STOP_ENTER_DRIVE = 7 => "road_stop.enter_drive",
+        ROAD_STOP_ENTER_REFUSED = 8 => "road_stop.enter_refused",
+        ROAD_STOP_INTEGRITY = 9 => "road_stop.integrity",
+        ROAD_STOP_LEAVE_BAY = 10 => "road_stop.leave_bay",
+        ROAD_STOP_LEAVE_DRIVE = 11 => "road_stop.leave_drive",
+        ROAD_STOP_MAKE_ALONE = 12 => "road_stop.make_alone",
+        ROAD_STOP_MAKE_JOIN = 13 => "road_stop.make_join",
+        ROAD_STOP_MAKE_MERGE = 14 => "road_stop.make_merge",
+        ROAD_STOP_MAKE_PARENT = 15 => "road_stop.make_parent",
+        ROAD_STOP_REBUILD = 16 => "road_stop.rebuild",
+        ROAD_STOP_REBUILD_VEHICLE = 17 => "road_stop.rebuild_vehicle",
     }
     ship {
         SHIP_LOCK_UP = 0 => "ship.lock_up",
@@ -388,6 +415,24 @@ witness_blocks! {
         TOWN_NAME_SET = 21 => "town.name_set",
         TOWN_ENTRIES = 22 => "town.entries",
         TOWN_NO_CITIES = 23 => "town.no_cities",
+    }
+    town_command {
+        TOWN_COMMAND_ACTION = 0 => "town_command.action",
+        TOWN_COMMAND_BRIBE_FAILED = 1 => "town_command.bribe_failed",
+        TOWN_COMMAND_BRIBE_SUCCESS = 2 => "town_command.bribe_success",
+        TOWN_COMMAND_DELETE = 3 => "town_command.delete",
+        TOWN_COMMAND_DELETE_BRIDGE = 4 => "town_command.delete_bridge",
+        TOWN_COMMAND_DELETE_OILRIG = 5 => "town_command.delete_oilrig",
+        TOWN_COMMAND_DESTRUCT = 6 => "town_command.destruct",
+        TOWN_COMMAND_EXPAND = 7 => "town_command.expand",
+        TOWN_COMMAND_GOAL = 8 => "town_command.goal",
+        TOWN_COMMAND_OBJECT_DETACH = 9 => "town_command.object_detach",
+        TOWN_COMMAND_OBJECT_REHOME = 10 => "town_command.object_rehome",
+        TOWN_COMMAND_RATE = 11 => "town_command.rate",
+        TOWN_COMMAND_RATING = 12 => "town_command.rating",
+        TOWN_COMMAND_RIGHTS_CANCEL = 13 => "town_command.rights_cancel",
+        TOWN_COMMAND_STATUE = 14 => "town_command.statue",
+        TOWN_COMMAND_TEXT = 15 => "town_command.text",
     }
     train {
         TRAIN_TICK_FIRST = 0 => "train.tick_first",

@@ -290,7 +290,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*check_reverse)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(check_reverse);
 	uint64_t (*choose_track)(OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(choose_track);
 	void (*clear_reservation)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_reservation);
-	uint64_t (*compatible_rail_owner)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_rail_owner);
 	void (*consist_windows)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(consist_windows);
 	uint64_t (*cost_class)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(cost_class);
 	uint64_t (*cost_default)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(cost_default);

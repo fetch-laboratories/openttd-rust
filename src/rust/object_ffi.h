@@ -160,7 +160,6 @@ void openttd_rust_object_update_hq(const OpenTTDObjectServices * services, uint3
 void openttd_rust_object_colours(const OpenTTDObjectServices * services, uint8_t company);
 void openttd_rust_object_build_command(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, OpenTTDCommandCost * tmp, OpenTTDCommandCost * aux, uint16_t flags, uint32_t tile, uint16_t kind, uint8_t view);
 void openttd_rust_object_build_area(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, OpenTTDCommandCost * ret, OpenTTDCommandCost * tmp, OpenTTDCommandCost * aux, OpenTTDCommandCost * last, uint16_t flags, uint32_t tile, uint32_t start, uint16_t kind, uint8_t view, bool diagonal);
-void openttd_rust_object_clear(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, OpenTTDCommandCost * tmp, uint32_t tile, uint16_t flags);
 void openttd_rust_object_cargo(const OpenTTDObjectServices * services, uint32_t tile, uint32_t * cargo, uint64_t * accepted);
 void openttd_rust_object_tile_loop(const OpenTTDObjectServices * services, OpenTTDObjectLoopFrame * frame, OpenTTDGroundCall * call, uint32_t tile);
 bool openttd_rust_object_generate(const OpenTTDObjectServices * services, OpenTTDCommandCost * out, OpenTTDCommandCost * tmp, OpenTTDCommandCost * aux, OpenTTDObjectGenerationFrame * frame);

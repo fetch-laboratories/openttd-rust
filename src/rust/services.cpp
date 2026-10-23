@@ -7,12 +7,15 @@
 
 /** @file services.cpp Direct shared-world leaves for Rust game owners. */
 #include "../stdafx.h"
+#include "../source_type.h"
+#include "../airport.h"
 #include "town_services.h"
 #include "services_ffi.h"
 #include "services_bridge.h"
 #include "services_viewport.h"
 #include "station_command_ffi.h"
 #include "road_command_ffi.h"
+#include "road_stop_ffi.h"
 #include "presentation_services.h"
 #include "tile_animation_services.h"
 #include "vehicle_services.h"
@@ -20,6 +23,7 @@
 #include "town_ffi.h"
 #include "services_map.h"
 #include "command_services.h"
+#include "landscape_command_ffi.h"
 #include "command_cost_native_services.h"
 #include "company_services.h"
 #include "company_adapter.h"
@@ -82,6 +86,10 @@ extern "C" uint64_t openttd_orders_tick_counter() noexcept
 
 static CommandCost *NativeCost(OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<CommandCost *>(cost); }
 static const CommandCost *NativeCost(const OpenTTDCommandCost *cost) noexcept { return reinterpret_cast<const CommandCost *>(cost); }
+static_assert(sizeof(CommandCost) <= sizeof(OpenTTDCommandCostStorage));
+static_assert(alignof(CommandCost) <= alignof(OpenTTDCommandCostStorage));
+static OpenTTDCommandCost *CostConstruct(OpenTTDCommandCostStorage *p) noexcept { return reinterpret_cast<OpenTTDCommandCost *>(std::construct_at(reinterpret_cast<CommandCost *>(p))); }
+static void CostDestroy(OpenTTDCommandCost *p) noexcept { std::destroy_at(reinterpret_cast<CommandCost *>(p)); }
 static void CostZero(OpenTTDCommandCost *out) noexcept { OpenTTDCommandCostZero(NativeCost(out)); }
 static void CostError(OpenTTDCommandCost *out, uint32_t message) noexcept { OpenTTDCommandCostError(NativeCost(out), message); }
 static void CostExpenseMoney(OpenTTDCommandCost *out, uint8_t expense, int64_t amount) noexcept { OpenTTDCommandCostExpenseMoney(NativeCost(out), static_cast<ExpensesType>(expense), Money(amount)); }
@@ -97,6 +105,7 @@ static void CostMakeError(OpenTTDCommandCost *cost, uint32_t message) noexcept {
 const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
 {
 	static const OpenTTDCommandCostServices services{
+		.construct = CostConstruct, .destroy = CostDestroy,
 		.zero = CostZero, .error = CostError, .expense_money = CostExpenseMoney,
 		.error_param = CostErrorParam, .add = CostAdd, .move = CostMove,
 		.amount = CostAmount, .success = CostSuccess, .error_message = CostErrorMessage, .money = CostMoney,
@@ -109,10 +118,6 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
  * save/load code. They may reenter Rust owners, but ordinary play cannot unwind
  * these leaves; allocation/error-formatting failures terminate under noexcept.
  * The native returned object is moved whole into its caller's stack sink. */
-static void LandscapeClear(OpenTTDCommandCost *out, uint32_t tile, uint16_t flags) noexcept
-{
-	*NativeCost(out) = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlags(flags), TileIndex{tile});
-}
 static void CommandTileOwnership(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = CheckTileOwnership(TileIndex{tile}); }
 static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner, uint32_t tile) noexcept { *NativeCost(out) = CheckOwnership(Owner(owner), TileIndex{tile}); }
 static void CommandNoVehicle(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = EnsureNoVehicleOnGround(TileIndex{tile}); }
@@ -136,7 +141,7 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 		.finance = &GetRustCompanyFinanceServices(),
 		.infinite_money = CommandInfiniteMoney, .money_error = CommandMoneyError,
 		.infrastructure_dirty = RustInfrastructureDirty,
-		.landscape_clear = LandscapeClear,
+		.landscape_commands = []() noexcept { return &GetRustLandscapeCommandServices(); },
 		.tile_ownership = CommandTileOwnership, .ownership = CommandOwnership,
 		.no_vehicle = CommandNoVehicle, .no_train = CommandNoTrain, .wormhole_free = CommandWormholeFree,
 	};
@@ -184,7 +189,6 @@ static bool SharedBridgeAbove(uint32_t tile) noexcept { return IsBridgeAbove(Til
 static uint8_t SharedTropicZone(uint32_t tile) noexcept { return GetTropicZone(TileIndex{tile}); }
 static int32_t SharedTileZ(uint32_t tile) noexcept { return RustTileZ(TileIndex{tile}); }
 static uint8_t SharedTileSlope(uint32_t tile) noexcept { return GetTileSlope(TileIndex{tile}); }
-static void SharedMarkDirty(uint32_t tile) noexcept { RustMarkTileDirtyHeight(tile, 0); }
 static void SharedFreeTrainReservation(const Train *v) noexcept { FreeTrainTrackReservation(v); }
 static bool SharedTryPathReserve(Train *v, bool mark_as_stuck, bool first_tile_okay) noexcept { return TryPathReserve(v, mark_as_stuck, first_tile_okay); }
 static bool Shared_may_have_road(uint32_t tile) noexcept { return MayHaveRoad(TileIndex{tile}); }
@@ -244,16 +248,17 @@ OpenTTDTownRef OpenTTDTownResolveByID(uint32_t id) noexcept
 static bool Shared_tile_valid(uint32_t tile) noexcept { return IsValidTile(TileIndex{tile}); }
 static uint32_t Shared_distance_from_edge(uint32_t tile) noexcept { return DistanceFromEdge(TileIndex{tile}); }
 static int32_t Shared_tile_max_z(uint32_t tile) noexcept { return OpenTTDTileMaxZ(TileIndex{tile}); }
-static_assert(TILE_HEIGHT == 8);
+static_assert(TILE_HEIGHT == 8 && TILE_SIZE == 16);
 /* Values of the shared Rust header modules (tile_type.rs, slope_func.rs and the like). */
 static_assert(MP_CLEAR == 0 && MP_RAILWAY == 1 && MP_ROAD == 2 && MP_HOUSE == 3 && MP_TREES == 4 && MP_STATION == 5 && MP_WATER == 6 && MP_VOID == 7 && MP_INDUSTRY == 8 && MP_TUNNELBRIDGE == 9 && MP_OBJECT == 10);
 static_assert(INVALID_TILE.base() == UINT32_MAX && TILE_HEIGHT_STEP == 50 && CALLBACK_FAILED == 0xFFFF && INVALID_STRING_ID == 0xFFFF);
 static_assert(SLOPE_FLAT == 0 && SLOPE_W == 1 && SLOPE_S == 2 && SLOPE_E == 4 && SLOPE_N == 8 && SLOPE_STEEP == 0x10 && SLOPE_HALFTILE == 0x20 && SLOPE_HALFTILE_MASK == 0xE0);
-static_assert(DIAGDIR_NE == 0 && DIAGDIR_SE == 1 && DIAGDIR_SW == 2 && DIAGDIR_NW == 3 && INVALID_DIAGDIR == 0xFF);
+static_assert(DIR_END == 8 && DIAGDIR_NE == 0 && DIAGDIR_SE == 1 && DIAGDIR_SW == 2 && DIAGDIR_NW == 3 && INVALID_DIAGDIR == 0xFF);
 static_assert(OWNER_TOWN.base() == 0x0F && OWNER_NONE.base() == 0x10 && OWNER_WATER.base() == 0x11 && OWNER_DEITY.base() == 0x12 && INVALID_OWNER.base() == 0xFF);
 static_assert(to_underlying(DoCommandFlag::Execute) == 0 && to_underlying(DoCommandFlag::Auto) == 1 && to_underlying(DoCommandFlag::QueryCost) == 2 && to_underlying(DoCommandFlag::NoWater) == 3);
 static_assert(to_underlying(DoCommandFlag::NoTestTownRating) == 4 && to_underlying(DoCommandFlag::Bankrupt) == 5 && to_underlying(DoCommandFlag::NoModifyTownRating) == 9 && to_underlying(DoCommandFlag::ForceClearTile) == 10);
 static_assert(std::is_same_v<DoCommandFlags::BaseType, uint16_t>);
+static_assert(PR_TERRAFORM == 21 && PR_CLEAR_CANAL == 61 && PR_CLEAR_TREES == 26);
 static_assert(to_underlying(DoCommandFlag::AutoReplace) == 6 && to_underlying(DoCommandFlag::NoCargoCapacityCheck) == 7);
 static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);
 static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_DUMMY == 5 && OT_GOTO_WAYPOINT == 6 && OT_CONDITIONAL == 7 && OT_IMPLICIT == 8);
@@ -262,7 +267,10 @@ static_assert(to_underlying(StationType::Truck) == 2 && to_underlying(StationTyp
 static_assert(CARGO_AUTO_REFIT == 0xFD && StationID::Invalid().base() == 0xFFFF);
 static_assert(EdgeUpdateModes{EdgeUpdateMode::Increase}.base() == 1 && EdgeUpdateModes{EdgeUpdateMode::Refresh}.base() == 2 && EdgeUpdateModes{EdgeUpdateMode::Restricted}.base() == 4 && EdgeUpdateModes{EdgeUpdateMode::Unrestricted}.base() == 8);
 static_assert(VL_STANDARD == 0 && VL_SHARED_ORDERS == 1 && VL_STATION_LIST == 2 && VL_DEPOT_LIST == 3 && VL_GROUP_LIST == 4);
-static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28 && PR_CLEAR_DEPOT_TRAIN == 30 && PR_CLEAR_WATER == 34 && PR_BUILD_FOUNDATION == 57);
+static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28 && PR_CLEAR_DEPOT_TRAIN == 30 && PR_CLEAR_WATER == 34 && PR_TOWN_ACTION == 56 && PR_BUILD_FOUNDATION == 57);
+static_assert(to_underlying(SourceType::Town) == 1);
+static_assert(AT_OILRIG == 9 && OBJECT_STATUE == 2 && EXPENSES_OTHER == 12 && COMPANY_SPECTATOR.base() == 0xFF && MP_INDUSTRY == 8 && MP_OBJECT == 10);
+static_assert(RATING_MINIMUM == -1000 && RATING_MAXIMUM == 1000 && RATING_BRIBE_UP_STEP == 200 && RATING_BRIBE_MAXIMUM == 800 && RATING_BRIBE_DOWN_TO == -50);
 static uint32_t Shared_tile_height(uint32_t tile) noexcept { return TileHeight(TileIndex{tile}); }
 static uint8_t Shared_bridge_axis(uint32_t tile) noexcept { return GetBridgeAxis(TileIndex{tile}); }
 static bool Shared_has_water_ground(uint32_t tile) noexcept { return HasTileWaterGround(TileIndex{tile}); }
@@ -298,7 +306,11 @@ static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
 static void SharedRebuildTownTree() noexcept { RebuildTownKdtree(); }
 static void SharedForEachStation(void *context, void (*visit)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept
 {
-	for (Station *st : Station::Iterate()) visit(context, RustStation(st), st->rust_service.get(), st->index.base());
+	uint32_t from = 0;
+	while (Station *st = OpenTTDNextStation(from)) {
+		from = st->index.base() + 1U;
+		visit(context, RustStation(st), st->rust_service.get(), st->index.base());
+	}
 }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
@@ -348,7 +360,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.map_max_x = SharedMapMaxX,
 	.map_max_y = SharedMapMaxY,
 	.mark_bridge_dirty = SharedMarkBridgeDirty,
-	.mark_dirty = SharedMarkDirty,
+	.mark_dirty = RustMarkTileDirty,
 	.next_company = SharedNextCompany,
 	.no_jetcrash = SharedNoJetcrash,
 	.normal_road_bits = SharedNormalRoadBits,
@@ -427,6 +439,9 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.tree_ground = OpenTTDTreeGround,
 	.water_services = []() noexcept { return &GetRustWaterGroundServices(); },
 	.for_each_station = SharedForEachStation,
+	// Registry: road stops (#354).
+	.road_stop_type = SharedRoadStopType,
+	.road_stops = []() noexcept { return &GetRustRoadStopServices(); },
 };
 
 const OpenTTDSharedServices &GetRustSharedServices() noexcept

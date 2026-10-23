@@ -158,3 +158,8 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
         && (!allocation.assertions || kind == 6 || crate::water_map::is_coast(&map, tile).is_none())
         && (allocation.assertions || crate::clear_map::is_snow_tile(&map, tile).is_some())
 }
+
+/// `IsTileOwner`.
+pub fn is_tile_owner(s: &crate::services::Services, tile: u32, owner: u8) -> bool {
+    (s.tile_owner)(tile) == owner
+}

@@ -19,6 +19,7 @@
 )]
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::rail_cmd::RailCommandServices;
+use crate::road_stop::{RoadStopServices, Stop};
 use crate::services::{CommandCost, CommandCostServices, CommandServices, Cost, Map, Services};
 use crate::slope_func::{get_inclined_slope_direction, get_slope_max_z, is_steep_slope};
 use crate::station::BaseStation;
@@ -80,10 +81,6 @@ pub struct RailSpecInfo {
 pub struct RoadSpecCost {
     pub multiplier: u8,
     pub shift: i32,
-}
-#[repr(C)]
-pub struct Stop {
-    _private: [u8; 0],
 }
 #[repr(C)]
 pub struct RoadSpecInfo {
@@ -268,19 +265,13 @@ pub struct CommandServicesTable {
     pub road_boolean: extern "C" fn(*const RoadSpec, u16) -> bool,
     pub road_triggers: extern "C" fn(*mut BaseStation, *const RoadSpec),
     pub new_stop: extern "C" fn(u32) -> *mut Stop,
-    pub get_stop: extern "C" fn(u32, bool) -> *mut Stop,
-    pub stop_head: extern "C" fn(*mut BaseStation, bool) -> *mut Stop,
     pub set_stop_head: extern "C" fn(*mut BaseStation, bool, *mut Stop),
-    pub stop_next: extern "C" fn(*const Stop) -> *mut Stop,
     pub set_stop_next: extern "C" fn(*mut Stop, *mut Stop),
-    pub stop_tile: extern "C" fn(*const Stop) -> u32,
     pub add_stop_area: extern "C" fn(*mut BaseStation, bool, u32),
     pub clear_stop_area: extern "C" fn(*mut BaseStation, bool),
     pub before_add_tile: extern "C" fn(*mut CommandCost, *mut BaseStation, u32, u8),
     pub make_drive_stop: extern "C" fn(u32, u8, u8, u8, u16, u8, u8, u8, u8),
     pub make_bay_stop: extern "C" fn(u32, u8, u16, u8, u8, u8, u8),
-    pub stop_make_drive: extern "C" fn(*mut Stop),
-    pub stop_clear_drive: extern "C" fn(*mut Stop),
     pub delete_stop: extern "C" fn(*mut Stop),
     pub set_custom_road_index: extern "C" fn(u32, u8),
     pub custom_road_index: extern "C" fn(u32) -> u32,
@@ -463,7 +454,7 @@ impl<'a> Ctx<'a> {
         };
         if height == 0 {
             if disallowed == 0xffff {
-                (self.command.landscape_clear)(out.0, tile, 2);
+                crate::landscape_cmd::clear_command(self.command, out.0, tile, 2);
             } else {
                 out.error(disallowed);
             }
@@ -1316,7 +1307,7 @@ impl Ctx<'_> {
                     }
                 }
             }
-            (self.command.landscape_clear)(ret.0, tile, flags);
+            crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -2015,6 +2006,10 @@ impl Ctx<'_> {
     fn vehicle(&self) -> &crate::vehicle::VehicleServices {
         unsafe { &*self.s.vehicle }
     }
+    fn stops(&self) -> &RoadStopServices {
+        // SAFETY: The shared table returns a static immutable table.
+        unsafe { &*(self.shared.road_stops)() }
+    }
     fn road_type(&self, tile: u32, tram: bool) -> u8 {
         if tram {
             (self.shared.tram_type)(tile).0
@@ -2207,7 +2202,7 @@ impl Ctx<'_> {
             } else if rt == 63 {
                 cost.error(self.s.strings.no_road);
             } else {
-                (self.command.landscape_clear)(ret.0, tile, flags);
+                crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
                 if !ret.ok() {
                     return cost.take(ret);
                 }
@@ -2423,13 +2418,13 @@ impl Ctx<'_> {
                 (self.s.road_triggers)(st, spec);
             }
             let stop = (self.s.new_stop)(tile);
-            let head = (self.s.stop_head)(st, truck);
+            let head = (self.stops().head)(st, truck);
             if head.is_null() {
                 (self.s.set_stop_head)(st, truck, stop);
             } else {
                 let mut tail = head;
-                while !(self.s.stop_next)(tail).is_null() {
-                    tail = (self.s.stop_next)(tail);
+                while !(self.stops().next)(tail).is_null() {
+                    tail = (self.stops().next)(tail);
                 }
                 (self.s.set_stop_next)(tail, stop);
             }
@@ -2460,7 +2455,7 @@ impl Ctx<'_> {
                 (self.s.make_drive_stop)(
                     tile, owner, road_owner, tram_owner, id, kind, road, tram, axis,
                 );
-                (self.s.stop_make_drive)(stop);
+                crate::road_stop::make_drive_through(self.shared, tile, (self.stops().state)(stop));
             } else {
                 if road == 63 && (self.shared.road_type_is_road)(rt) {
                     road = rt;
@@ -2547,10 +2542,14 @@ impl Ctx<'_> {
             }
         }
         let truck = !waypoint && (self.shared.station_type)(tile).0 == 2;
-        let stop = if waypoint {
-            std::ptr::null_mut()
+        let (stop, stop_state) = if waypoint {
+            (std::ptr::null_mut(), std::ptr::null_mut())
         } else {
-            (self.s.get_stop)(tile, truck)
+            crate::road_stop::get_by_tile(
+                self.shared,
+                tile,
+                crate::services::RoadStopType(u8::from(truck)),
+            )
         };
         if waypoint {
             if flags & 32 == 0 {
@@ -2582,8 +2581,8 @@ impl Ctx<'_> {
         let spec = (self.s.road_spec)(tile);
         if flags & 1 != 0 {
             if !waypoint {
-                let head = (self.s.stop_head)(st, truck);
-                let next = (self.s.stop_next)(stop);
+                let head = (self.stops().head)(st, truck);
+                let next = (self.stops().next)(stop);
                 if head == stop {
                     (self.s.set_stop_head)(st, truck, next);
                     if next.is_null() {
@@ -2592,8 +2591,8 @@ impl Ctx<'_> {
                     }
                 } else {
                     let mut pred = head;
-                    while (self.s.stop_next)(pred) != stop {
-                        pred = (self.s.stop_next)(pred);
+                    while (self.stops().next)(pred) != stop {
+                        pred = (self.stops().next)(pred);
                     }
                     (self.s.set_stop_next)(pred, next);
                 }
@@ -2611,7 +2610,7 @@ impl Ctx<'_> {
             let specindex = (self.s.custom_road_index)(tile);
             (self.s.close_stop_inspect)(tile);
             if !waypoint && (self.shared.is_drive_through_stop)(tile) {
-                (self.s.stop_clear_drive)(stop);
+                crate::road_stop::clear_drive_through(self.shared, tile, stop_state);
                 (self.shared.tile_animation_delete)(tile);
             } else {
                 crate::ground::clear_square(tile, self.shared);
@@ -2642,10 +2641,10 @@ impl Ctx<'_> {
                 }
             } else {
                 (self.s.clear_stop_area)(st, truck);
-                let mut next = (self.s.stop_head)(st, truck);
+                let mut next = (self.stops().head)(st, truck);
                 while !next.is_null() {
-                    (self.s.add_stop_area)(st, truck, (self.s.stop_tile)(next));
-                    next = (self.s.stop_next)(next);
+                    (self.s.add_stop_area)(st, truck, (self.stops().tile)(next));
+                    next = (self.stops().next)(next);
                 }
             }
         }
@@ -3036,7 +3035,7 @@ impl Ctx<'_> {
                 return cost.take(ret);
             }
             cost.add_money(ret.money());
-            (self.command.landscape_clear)(ret.0, t.tile, flags);
+            crate::landscape_cmd::clear_command(self.command, ret.0, t.tile, flags);
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -3450,7 +3449,7 @@ impl Ctx<'_> {
             return;
         }
         cost.set(crate::company::price(14));
-        (self.command.landscape_clear)(ret.0, tile, flags);
+        crate::landscape_cmd::clear_command(self.command, ret.0, tile, flags);
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -3465,7 +3464,7 @@ impl Ctx<'_> {
         }
         let water = (unsafe { &*self.s.clear }.water_class)(flat).0;
         let add_cost = !(self.shared.is_water_tile)(flat);
-        (self.command.landscape_clear)(ret.0, flat, flags);
+        crate::landscape_cmd::clear_command(self.command, ret.0, flat, flags);
         if !ret.ok() {
             return cost.take(ret);
         }
@@ -3981,7 +3980,7 @@ impl Ctx<'_> {
                 return cost.set(crate::company::price(57));
             }
         }
-        (self.command.landscape_clear)(cost.0, tile, flags);
+        crate::landscape_cmd::clear_command(self.command, cost.0, tile, flags);
     }
     fn change_owner(
         &self,
@@ -4058,7 +4057,7 @@ impl Ctx<'_> {
             // SAFETY: Nested removal has returned; the native slots can be reused.
             unsafe { crate::tile_owner::openttd_rust_tile_change_owner(ownership, tile, old, new) };
         } else {
-            (self.command.landscape_clear)(cost.0, tile, 33);
+            crate::landscape_cmd::clear_command(self.command, cost.0, tile, 33);
             let kind = (self.shared.tile_type)(tile);
             if (kind == 6 || (kind == 5 && (self.shared.station_type)(tile).0 == 6))
                 && (self.shared.tile_owner)(tile) == old

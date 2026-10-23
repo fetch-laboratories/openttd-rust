@@ -17,3 +17,6 @@ pub const OWNER_WATER: u8 = 0x11;
 pub const OWNER_DEITY: u8 = 0x12;
 /// `INVALID_OWNER`.
 pub const INVALID_OWNER: u8 = 0xFF;
+
+/// `COMPANY_SPECTATOR`.
+pub const COMPANY_SPECTATOR: u8 = 0xFF;

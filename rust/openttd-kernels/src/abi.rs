@@ -98,7 +98,7 @@ layouts! {
         build_stamp, exclusive_preview, service_flags, wrong_depot,
     };
     "OpenTTDVehicleListId" ["probe"] => crate::vehicle_transactions::mass::ListId { kind, vehicle_type, company, index, valid, };
-    "OpenTTDVehicleMassServices" ["probe"] => crate::vehicle_transactions::mass::Services { common, selection, is_depot, is_tile_owner, send, service, mass_send, dont_cancel, invalid_client, };
+    "OpenTTDVehicleMassServices" ["probe"] => crate::vehicle_transactions::mass::Services { common, selection, is_depot, send, service, mass_send, dont_cancel, invalid_client, };
     "GRFStringID" ["probe"] => crate::vehicle_transactions::GrfStringId { };
     "OpenTTDVehicleRefitCapacity" ["probe"] => crate::vehicle_transactions::refit::Capacity {
         total, mail, cargo,
@@ -706,19 +706,13 @@ layouts! {
         road_boolean,
         road_triggers,
         new_stop,
-        get_stop,
-        stop_head,
         set_stop_head,
-        stop_next,
         set_stop_next,
-        stop_tile,
         add_stop_area,
         clear_stop_area,
         before_add_tile,
         make_drive_stop,
         make_bay_stop,
-        stop_make_drive,
-        stop_clear_drive,
         delete_stop,
         set_custom_road_index,
         custom_road_index,
@@ -1547,14 +1541,31 @@ layouts! {
         infinite_money,
         money_error,
         infrastructure_dirty,
-        landscape_clear,
+        landscape_commands,
         tile_ownership,
         ownership,
         no_vehicle,
         no_train,
         wormhole_free,
     };
+    "OpenTTDLandscapeCommandStrings" ["landscape"] => crate::landscape_cmd::Strings {
+        canal, clear_limit, water, sea_level, high, edge, bridge, bridge_high,
+        tunnel, terraform_limit, levelled,
+    };
+    "OpenTTDLandscapeTileServices" ["landscape"] => crate::landscape_cmd::TileServices {
+        clear, terraform, owners, trees, industry_policy, industry_costs, industry_generation,
+    };
+    "OpenTTDLandscapeCommandServices" ["landscape"] => crate::landscape_cmd::LandscapeServices {
+        shared, costs, commands, strings, tile_procs, water, on_water, coast, buoy, canal,
+        height_limit, max_bridge_height, freeform_edges, editor, exchange_generating,
+        tunnel_in_way, mark_dirty_height, set_height, paused, explosion,
+    };
+    "OpenTTDCommandCostStorage" ["probe"] => crate::services::CommandCostStorage {
+        storage,
+    };
     "OpenTTDCommandCostServices" ["probe"] => crate::services::CommandCostServices {
+        construct,
+        destroy,
         zero,
         error,
         expense_money,
@@ -1920,7 +1931,6 @@ layouts! {
         command_tile,
         command_next,
         command_debit,
-        landscape_clear,
     };
     "OpenTTDTreePlantObservation" ["probe"] => crate::trees::PlantObservation {
         tile_type,
@@ -1978,10 +1988,6 @@ layouts! {
         cost,
         status,
         message,
-    };
-    "OpenTTDTreeLandscapeClear" ["probe"] => crate::trees::LandscapeClear {
-        cost,
-        failed,
     };
     "OpenTTDEffectView" ["probe"] => crate::effect::View {
         x,
@@ -2140,6 +2146,8 @@ layouts! {
         tree_ground,
         water_services,
         for_each_station,
+        road_stop_type,
+        road_stops,
     };
     "OpenTTDVehicleNewPosition" ["probe"] => crate::vehicle::NewPosition {
         x,
@@ -2474,9 +2482,6 @@ layouts! {
         bay_direction,
         is_drive_through,
         is_station_road_stop,
-        stop_type,
-        has_free_bay,
-        continuation,
         move_tile,
         path_read,
         choose_track,
@@ -2485,9 +2490,6 @@ layouts! {
         disconnect,
         stop_read,
         should_stop,
-        stop_leave,
-        stop_entrance,
-        stop_entrance_busy,
         arrival_read,
         arrival_news,
         arrival_triggers,
@@ -2633,6 +2635,61 @@ layouts! {
         grfid,
         kind => type,
     };
+    "OpenTTDTownCommandServices" ["probe"] => crate::town::commands::CommandServices {
+        founding,
+        rail,
+        cargo,
+        objects,
+        subsidies,
+        fund_roads,
+        fund_buildings,
+        exclusive_rights,
+        bribe,
+        invalidate_view,
+        invalidate_authority,
+        modify_station_rating,
+        road_news,
+        road_events,
+        rights_news,
+        rights_events,
+        station_views_dirty,
+        next_station,
+        station_town,
+        station_owner,
+        station_airport,
+        airport_type,
+        airport_tile,
+        station_activity_owner,
+        local_company,
+        bribe_error,
+        next_waypoint,
+        next_depot,
+        next_industry,
+        set_object_town,
+        industry_town_by_tile,
+        town_owned_road,
+        remove_town_indices,
+        delete_town,
+        cleaning_pool,
+        close_view,
+        close_graph,
+        storage_count,
+        delete_storage,
+        clear_storage,
+        delete_inspect,
+        dirty_screen,
+        assertions,
+        too_many_objects,
+        no_statue_place,
+    };
+    "OpenTTDTownPoolRelation" ["probe"] => crate::town::commands::Relation {
+        next,
+        town,
+    };
+    "OpenTTDTownStationCursor" ["probe"] => crate::town::commands::StationCursor {
+        shell,
+        next,
+    };
     "OpenTTDTownFoundingServices" ["probe"] => crate::town::founding::FoundingServices {
         shared,
         growth,
@@ -2755,10 +2812,6 @@ layouts! {
         data,
         size,
     };
-    "OpenTTDTownCommandResult" ["probe"] => crate::town::CommandResult {
-        cost,
-        success,
-    };
     "OpenTTDTownLeaves" ["probe"] => crate::town::Leaves {
         map_log_x,
         growth_rate,
@@ -2798,11 +2851,9 @@ layouts! {
         update_max_pass,
         next_town,
         road_mask,
-        clear_land,
-        terraform_land,
         build_bridge,
         build_tunnel,
-        clear_house_land,
+        assert_clear_house,
         allow_construction,
         houses,
     };
@@ -2939,8 +2990,6 @@ layouts! {
         trackdir,
     };
     "OpenTTDRoadYapfTile" ["probe"] => crate::road_yapf::Tile {
-        occupied,
-        length,
         station,
         r#type => type,
         station_type,
@@ -2949,8 +2998,6 @@ layouts! {
         crossing,
         waypoint,
         drive_through,
-        continuation,
-        busy_bays,
     };
     "OpenTTDRoadYapfFollow" ["probe"] => crate::road_yapf::Follow {
         tile,
@@ -2976,12 +3023,38 @@ layouts! {
         order_speed,
     };
     "OpenTTDRoadYapfLeaves" ["probe"] => crate::road_yapf::Leaves {
+        shared,
         tile,
         follow,
         tracks,
         traversal,
         closest,
         area,
+    };
+    "OpenTTDRoadStopEntry" ["probe"] => crate::road_stop::Entry { length, occupied, };
+    "OpenTTDRoadStopEntries" ["probe"] => crate::road_stop::Entries { east, west, };
+    "OpenTTDRoadStopState" ["probe"] => crate::road_stop::State { status, entries, };
+    "OpenTTDRoadStopPoolItem" ["probe"] => crate::road_stop::PoolStop { state, xy, index, };
+    "OpenTTDRoadStopDriveRead" ["probe"] => crate::road_stop::DriveRead { total_length, direction, };
+    "OpenTTDRoadStopRebuildRead" ["probe"] => crate::road_stop::RebuildRead {
+        road,
+        total_length,
+        vehicle_type,
+        direction,
+        status,
+        primary,
+    };
+    "OpenTTDRoadStopServices" ["probe"] => crate::road_stop::RoadStopServices {
+        vehicle,
+        ground,
+        primary,
+        head,
+        next,
+        tile,
+        state,
+        pool_next,
+        drive_read,
+        rebuild_read,
     };
     "OpenTTDRoadYapfResult" ["probe"] => crate::road_yapf::Result {
         tile,
@@ -3466,7 +3539,6 @@ layouts! {
         terragenesis,
         ignore_restrictions,
         platform,
-        terraform,
         can_allocate,
         allocate,
         prospecting_chance,
@@ -3502,7 +3574,7 @@ layouts! {
         tile_max_z,
         autoslope_callback,
         callback_boolean,
-        landscape_clear,
+        command_checks,
     };
     "OpenTTDIndustryCostServices" ["industry"] => crate::industry::IndustryCostServices {
         zero,
@@ -4232,7 +4304,6 @@ layouts! {
         check_reverse,
         choose_track,
         clear_reservation,
-        compatible_rail_owner,
         consist_windows,
         cost_class,
         cost_default,

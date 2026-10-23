@@ -106,8 +106,6 @@ void OpenTTDAnimateNewHouse(uint32_t tile) noexcept;
 extern "C" {
 void openttd_rust_house_tile_loop(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
 void openttd_rust_house_animate(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
-void openttd_rust_house_clear(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDCommandCost *, uint32_t tile, uint16_t flags);
-void openttd_rust_house_terraform(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDCommandCost *, uint32_t tile, uint16_t flags, int32_t z_new, uint8_t slope);
 void openttd_rust_house_place(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDCommandCost *, uint16_t flags, uint32_t tile, uint16_t house, bool is_protected, bool replace);
 void openttd_rust_house_accepted(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile, uint16_t house, Town *town, void *acceptance, uint64_t *always);
 void openttd_rust_house_produced(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile, void *produced);

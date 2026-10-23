@@ -67,6 +67,13 @@ pub struct EconomyDate(pub i32);
 pub struct CommandCost {
     _private: [u8; 0],
 }
+/// Opaque native stack capacity; no native field is read, copied or represented.
+/// Native compilation pins sufficient size/alignment on every supported platform.
+#[repr(C, align(16))]
+pub struct CommandCostStorage {
+    /// Uninterpreted, uninitialized capacity lent to native lifetime operations.
+    pub storage: [std::mem::MaybeUninit<u8>; 128],
+}
 /// Native `ExpensesType : uint8_t` carrier.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -77,6 +84,10 @@ pub struct ExpenseType(pub u8);
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandCostServices {
+    /// Start a native `CommandCost` lifetime in pinned opaque stack storage.
+    pub construct: unsafe extern "C" fn(*mut CommandCostStorage) -> *mut CommandCost,
+    /// End exactly the native lifetime begun by construct.
+    pub destroy: unsafe extern "C" fn(*mut CommandCost),
     /// Assign native successful zero cost.
     pub zero: extern "C" fn(*mut CommandCost),
     /// Assign the native `StringID` error constructor, including `INVALID_STRING_ID`.
@@ -123,7 +134,7 @@ pub struct CommandServices {
     /// Canonical infrastructure window invalidation.
     pub infrastructure_dirty: extern "C" fn(u8),
     /// Original `CMD_LANDSCAPE_CLEAR`, with actual `DoCommandFlags` width.
-    pub landscape_clear: extern "C" fn(*mut CommandCost, u32, u16),
+    pub landscape_commands: extern "C" fn() -> *const crate::landscape_cmd::LandscapeServices,
     /// Original `CheckTileOwnership`, preserving native encoded errors.
     pub tile_ownership: unsafe extern "C" fn(*mut CommandCost, u32),
     /// Original `CheckOwnership`.
@@ -456,6 +467,11 @@ pub struct Services {
     /// canonical service owner and index. Visits may reenter but never add or
     /// delete a station.
     pub for_each_station: extern "C" fn(*mut c_void, StationVisitor),
+    // Registry: road stops (#354).
+    /// `GetRoadStopType`.
+    pub road_stop_type: extern "C" fn(u32) -> RoadStopType,
+    /// Native road stop shells and their vehicle reads.
+    pub road_stops: extern "C" fn() -> *const crate::road_stop::RoadStopServices,
 }
 /// Station visitor: context, station, its service owner and its index.
 pub type StationVisitor = unsafe extern "C" fn(
@@ -721,6 +737,9 @@ pub fn fixture(
         tree_ground,
         water_services: fixture_water_services,
         for_each_station: fixture_stations,
+        // Registry: road stops (#354).
+        road_stop_type: fixture_road_stop_type,
+        road_stops: fixture_road_stops,
     }
 }
 #[cfg(test)]
@@ -1073,6 +1092,18 @@ impl Cost<'_> {
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct StationType(pub u8);
+/// Native `RoadStopType : uint8_t` (bus 0, truck 1).
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct RoadStopType(pub u8);
+#[cfg(test)]
+extern "C" fn fixture_road_stop_type(_: u32) -> RoadStopType {
+    panic!("unused road stop type")
+}
+#[cfg(test)]
+extern "C" fn fixture_road_stops() -> *const crate::road_stop::RoadStopServices {
+    panic!("unused road stop table")
+}
 #[cfg(test)]
 extern "C" fn fixture_station_type(_: u32) -> StationType {
     panic!("unused station type")

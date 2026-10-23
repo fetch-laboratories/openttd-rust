@@ -9,6 +9,7 @@
 #ifndef RUST_SERVICES_STATION_H
 #define RUST_SERVICES_STATION_H
 #include "../station_base.h"
+#include "../station_func.h"
 #include "../industry.h"
 #include "../waypoint_base.h"
 #include "../station_kdtree.h"
@@ -66,6 +67,8 @@ inline void RustStationRadius(uint32_t tile, uint32_t radius, void *context, voi
 }
 inline Owner OpenTTDStationOwner(const BaseStation *station) noexcept { return station->owner; }
 const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept;
+inline Town *OpenTTDBaseStationTown(const BaseStation *st) noexcept { return st->town; }
+inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Station::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->facilities.Test(StationFacility::Airport); }
 inline bool RustStationHasHangar(const Station *s) noexcept { return s->airport.HasHangar(); }
 inline bool RustStationReserved(uint32_t tile) noexcept { return HasStationReservation(TileIndex{tile}); }
@@ -73,11 +76,11 @@ inline void RustStationPlatformReservation(uint32_t tile, uint8_t dir, bool rese
 inline bool RustCompatibleStationTiles(uint32_t a, uint32_t b) noexcept { return IsCompatibleTrainStationTile(TileIndex{a}, TileIndex{b}); }
 inline bool RustStationStationAvailable() noexcept { return Station::CanAllocateItem(); }
 inline void RustStationSetTown(BaseStation *st, const OpenTTDTownHandle *town) noexcept { st->town = const_cast<Town *>(reinterpret_cast<const Town *>(town)); }
-inline void RustStationHaveRating(BaseStation *st, uint8_t owner) noexcept { st->town->have_ratings.Set(CompanyID(owner)); }
+inline void RustStationHaveRating(BaseStation *st, uint8_t owner) noexcept { OpenTTDBaseStationTown(st)->have_ratings.Set(CompanyID(owner)); }
 inline void RustStationRailTriggers(BaseStation *st, const StationSpec *spec) noexcept { st->cached_anim_triggers.Set(spec->animation.triggers); }
 inline void RustStationResetFacilities(BaseStation *st, uint8_t bits) noexcept { st->facilities.Reset(StationFacilities(bits)); }
 inline void RustStationRoadTriggers(BaseStation *st, const RoadStopSpec *spec) noexcept { st->cached_roadstop_anim_triggers.Set(spec->animation.triggers); }
-inline const OpenTTDTownHandle * RustStationStationTown(BaseStation *st) noexcept { return reinterpret_cast<const OpenTTDTownHandle *>(st->town); }
+inline const OpenTTDTownHandle * RustStationStationTown(BaseStation *st) noexcept { return reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(st)); }
 inline void RustStationStationViewInvalidate(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_VIEW, st->index, data); }
 inline void RustStationDeleteAirportStorage(BaseStation *st) noexcept { delete Station::From(st)->airport.psa; }
 inline Industry *RustStationAssociatedIndustry(BaseStation *st) noexcept { return Station::From(st)->industry; }
@@ -139,4 +142,5 @@ inline uint8_t RustAirportDeltaZ(const AirportFTAClass *airport) noexcept { retu
 /* The existing aircraft table retains its opaque pointers and return widths. */
 inline const void *OpenTTDStationAirportFTA(const OpenTTDStation *station) noexcept { return RustStationAirportFTA(StationOf(station)); }
 inline uint8_t OpenTTDAirportDeltaZ(const void *airport) noexcept { return RustAirportDeltaZ(static_cast<const AirportFTAClass *>(airport)); }
+inline void OpenTTDModifyStationRatingAround(uint32_t tile, uint8_t owner, int amount, uint radius) noexcept { ModifyStationRatingAround(TileIndex(tile), CompanyID(owner), amount, radius); }
 #endif /* RUST_SERVICES_STATION_H */

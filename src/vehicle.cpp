@@ -1021,7 +1021,11 @@ void Vehicle::PreDestructor()
 		RoadVehicle *v = RoadVehicle::From(this);
 		if (!v->vehstatus.Test(VehState::Crashed) && IsInsideMM(v->GetState(), RVSB_IN_DT_ROAD_STOP, RVSB_IN_DT_ROAD_STOP_END)) {
 			/* Leave the drive through roadstop, when you have not already left it. */
+#ifdef WITH_RUST
+			openttd_rust_road_stop_leave(&GetRustSharedServices(), RustVehicle(v), v->GetRustState());
+#else
 			RoadStop::GetByTile(v->tile, GetRoadStopType(v->tile))->Leave(v);
+#endif
 		}
 
 		if (v->disaster_vehicle != VehicleID::Invalid()) ReleaseDisasterVehicle(v->disaster_vehicle);

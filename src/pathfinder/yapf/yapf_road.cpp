@@ -42,20 +42,6 @@ static OpenTTDRoadYapfTile RoadTile(const void *, uint32_t index, uint8_t td, bo
 		out.station_type = static_cast<uint8_t>(GetStationType(tile));
 		out.waypoint = IsRoadWaypoint(tile);
 		out.drive_through = Shared_is_drive_through_stop(index);
-		if (cost && IsStationRoadStopTile(tile) && !out.waypoint && IsDiagonalTrackdir(static_cast<Trackdir>(td))) {
-			const RoadStop *rs = SharedRoadStopAt(index);
-			if (out.drive_through) {
-				DiagDirection dir = TrackdirToExitdir(static_cast<Trackdir>(td));
-				out.continuation = RoadSvcContinuation(index, (tile - TileOffsByDiagDir(dir)).base());
-				if (!out.continuation) {
-					const RoadStop::Entry &entry = rs->GetEntry(dir);
-					out.occupied = entry.GetOccupied();
-					out.length = entry.GetLength();
-				}
-			} else {
-				out.busy_bays = !rs->IsFreeBay(0) + !rs->IsFreeBay(1);
-			}
-		}
 	}
 	return out;
 }
@@ -118,7 +104,7 @@ static OpenTTDRoadYapfArea RoadArea(const void *ctx, uint16_t station) noexcept
 	return out;
 }
 
-static const OpenTTDRoadYapfLeaves _road_yapf_leaves{.tile = RoadTile, .follow = RoadFollow, .tracks = RoadTracks, .traversal = RoadTraversal, .closest = RoadClosest, .area = RoadArea};
+static const OpenTTDRoadYapfLeaves _road_yapf_leaves{.shared = &_rust_shared_services, .tile = RoadTile, .follow = RoadFollow, .tracks = RoadTracks, .traversal = RoadTraversal, .closest = RoadClosest, .area = RoadArea};
 
 static void RoadDebug(const RoadVehicle *v, const OpenTTDRoadYapfResult &result)
 {

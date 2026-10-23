@@ -18,7 +18,7 @@ includes the text you sent.
 
 User input, if any: $ARGUMENTS
 This may be a trigger ("at 50% weekly usage") or scope ("only finish #218",
-"don't merge #244", "stop #220"). User scope overrides the lenient default
+"don't merge #244", "stop #220"). User scope overrides the default action limits
 below. If a PR number or name doesn't match anything, name the one you think
 they meant in your note.
 
@@ -33,23 +33,33 @@ It does not restate process steps (base updates, count runs, records, review
 rounds) or add any that AGENTS.md does not require: root reads a restated step
 as a new rule.
 
-The default wind-down is lenient. Root starts nothing new. Work already in
-flight is finished properly: agents reach their next passing, pushed
-milestone, and PRs whose implementation is complete go through their remaining
-gates. Root merges what passes. Anything needing another review round, another
-fix round or new scope stays a draft with its state recorded. Root then tidies
-up.
+The default is the action-based wind-down in AGENTS.md. There is no time
+estimate or deadline. Finish only the edit or review already underway; save
+unfinished implementation and record review findings without a new fix round.
+Start no new work, reviews, builds, simulations, CI requests or retries, and
+never wait on CI. Merge only already-reviewed combinations that already passed
+Full and still meet strict protection. Anything needing a base update stays
+unmerged for resume. Apply an eligible automatic rollback without asking,
+record the result, and stop; no fix PR or post-reset CI wait is required.
 
-Stopping work means leaving it exactly as it is: the worktree, its uncommitted
-changes and its branch all stay, and a state note goes on the PR or issue.
-Removing worktrees and branches is for merged work only.
+Include these action limits in the message root receives. They replace the
+normal development loop, including the reviewer's usual fix-and-recheck loop.
+Do not turn an unfinished item into a requirement to reach a passing milestone.
+Pending CI and later notifications are recorded for resume, not reasons to
+restart work. A user's explicit alternative, such as "one CI run, no repairs",
+changes only that action allowance, not the merge checks or automatic rollback.
+
+Stopping preserves worktrees, uncommitted changes and branches for resume.
+Remove only verified merged work; do not close unfinished PRs just to stop.
 
 ## 1. Read root's live session
 
 - When root runs in T3 Code, load the T3 tools with ToolSearch
   (`select:mcp__t3-code__t3_thread_list,mcp__t3-code__t3_thread_read,mcp__t3-code__t3_thread_send`).
   `t3_thread_list` with `includeSubagents: true` shows root as the newest
-  top-level, unsettled codex `gpt-6.1-sol` thread started by the user. Its
+  top-level development thread identified by its assignment and roadmap
+  context; do not select by model alone or mistake this wind-down thread for
+  root. Its
   subagents are the threads whose `parentThreadId` is root's id; `running`
   status, or a recent `updatedAt`, marks the active ones. Read root's latest
   messages with `t3_thread_read` (view `messages`, reading from near the end
@@ -66,7 +76,7 @@ Removing worktrees and branches is for merged work only.
   no close-agent tool: an agent is done when `list_agents` shows `completed`.
 - Read root's recent status messages and its latest `list_agents` output. For
   each running subagent, skim its session for its current step, its dirty
-  files, and how close it is to a passing, pushed milestone.
+  files, and the edit or review already underway.
 
 ## 2. Survey the project, in parallel
 
@@ -79,30 +89,27 @@ Removing worktrees and branches is for merged work only.
 - The roadmap's resume checkpoint and the count of unintegrated branches.
 - Running local jobs (cmake, ninja, cargo, openttd, tools/*.py), mapped to
   their worktrees.
-- `.local/` entries that are deletion candidates. Name an entry for deletion
-  only after checking that no tool, workflow or skill reads it, that its PR or
-  issue records what it showed, and that no running agent uses it. List the
-  ones it must keep (caches, the reference, toolchains, current frozen
-  candidates). Leave out anything you could not verify, and mention it in
-  your note.
+- Cleanup only for work already verified as merged. Leave cache/log audits and
+  unrelated housekeeping for normal development.
 
 Verify rather than trust the roadmap or root's messages.
 
 ## 3. Classify everything in flight
 
-- Finish and merge: the implementation is complete. Name each remaining gate
-  (review, `Full validation` at the final head, any other gate AGENTS.md
-  defines) as a pass/fail check. A miss whose fix needs no new review under
-  AGENTS.md (formatting, CI warnings, platform errors) is fixed and rechecked;
-  any other miss stops the PR there.
-- Finish to a milestone: an agent mid-task. Name the milestone it reaches and
-  pushes. Then it stops and its PR stays a draft.
-- Stop: work the user asked to stop. Leave it as it is, as defined above.
+- Merge now: review and required validation already passed for the combination
+  that would be merged, and strict protection allows it. Do not update its base,
+  start CI, or fix a failure to make it eligible during wind-down.
+- Finish the current action: complete the edit already underway and save it,
+  or finish the active review with its findings recorded. No downstream round.
+- Hand off: anything needing implementation, a new review, fixes, validation,
+  or a CI result. Name the next action, not a chain to finish before stopping.
+- Recover: an identified breaking merge eligible for AGENTS.md's automatic
+  rollback. Name it and the restoration target; root verifies current state
+  and performs the rollback without asking. Other failures are handed off.
 - Leave alone: paused or older PRs nobody is working on.
 
-When gates compete for one resource (quiet timing windows, CI capacity), give
-their order. If a path could run for hours (a corpus run plus review plus full
-CI), keep it in and flag it in your note so the user can cut it short.
+Do not preserve an hours-long finish path and ask the user to cut it short.
+Do not weaken validation to fit the wind-down: leave the change unmerged.
 
 ## 4. Write the message
 
@@ -113,31 +120,23 @@ wording.
 
 It needs to get across:
 
-- The tone: wind down calmly and leave work in flight running. Start new
-  things only when the project needs them to be left in a good state. If the
-  user gave a trigger, root keeps working normally until then but prefers
-  finishing to starting.
-- No new components, planners or issues, and the roadmap work order stays as
-  it is. Work that falls due during the wind-down (a speed pass, a planning
-  trigger) is recorded as due in the checkpoint; it does not become a gate on
-  other work at resume.
-- The finish condition for each item from step 3.
-- Reviews and CI finish under the usual process. Root merges what passes.
-  Anything that needs another round stays a draft with its state recorded on
-  the PR.
-- If root finds the state has moved on from what you describe, it records the
-  actual state rather than undoing it.
-- The exact cleanup from step 2, and fixing post-merge CI on `rust-migration`
-  if it goes red.
-- One docs-only roadmap commit, within the `AGENTS.md` roadmap budget, that
-  updates "Where the fork stands" and a resume checkpoint opening "Paused at
-  the user's request", with each remaining draft, its head and its next step.
-- A final report: what was integrated; original C++ retired as a percent of
-  all `src/` and of simulation sources (`port-metrics.py --whole-fork`, #226);
-  each remaining draft and what blocks it; `rust-migration` CI state; and any
-  decision only the user can make (spending, policy, scope). Engineering
-  dispositions, such as closing a draft that saved nothing, are root's to make
-  and record.
+- The action limits above, plus any explicit user override. If the user gave a
+  trigger, normal work continues until it; the limits apply when it fires.
+- The current action or handoff for each item from step 3. Start no new
+  components, planners or repair rounds. Due speed/planning work stays due in
+  the checkpoint, not a new gate on resume.
+- Merge only eligible tested combinations; do not wait on pending checks.
+- Perform an eligible automatic rollback without asking and report afterwards;
+  retain the removed work for a replacement PR on resume. Never demand that
+  root fix a red tip through another PR/CI cycle before stopping.
+- Record changed facts if root's state has moved on. Preserve unfinished work.
+- One docs-only roadmap commit within its budget, updating "Where the fork
+  stands" and a checkpoint opening "Paused at the user's request", with each
+  remaining draft, its head, next action and any running jobs or CI.
+- A final report: integrations and rollbacks, current progress metrics if
+  available, remaining work and next actions, and CI state (including pending
+  or unknown). Do not launch measurement work to fill the report. Report an
+  unperformed or failed recovery honestly; do not wait for a green report.
 
 ## 5. Send it to root
 

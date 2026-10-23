@@ -14,3 +14,11 @@ pub const RATING_TUNNEL_BRIDGE_DOWN_STEP: i32 = -250;
 pub const RATING_TUNNEL_BRIDGE_MINIMUM: i32 = 0;
 /// Maximum town rating.
 pub const RATING_MAXIMUM: i32 = 1000;
+/// Minimum town rating.
+pub const RATING_MINIMUM: i32 = -1000;
+/// Rating increase for a successful bribe.
+pub const RATING_BRIBE_UP_STEP: i32 = 200;
+/// Maximum rating a bribe can reach.
+pub const RATING_BRIBE_MAXIMUM: i32 = 800;
+/// Rating after a failed bribe.
+pub const RATING_BRIBE_DOWN_TO: i32 = -50;

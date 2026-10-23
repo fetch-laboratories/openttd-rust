@@ -467,8 +467,8 @@ public:
 			tr.top += GetCharacterHeight(FS_NORMAL);
 		}
 
-		if (!this->town->text.empty()) {
-			tr.top = DrawStringMultiLine(tr, this->town->text.GetDecodedString(), TC_BLACK);
+		if (this->town->HasText()) {
+			tr.top = DrawStringMultiLine(tr, this->town->GetText().GetDecodedString(), TC_BLACK);
 		}
 	}
 
@@ -551,8 +551,8 @@ public:
 
 		if (_settings_game.economy.station_noise_level) aimed_height += GetCharacterHeight(FS_NORMAL);
 
-		if (!this->town->text.empty()) {
-			aimed_height += GetStringHeight(this->town->text.GetDecodedString(), width - WidgetDimensions::scaled.framerect.Horizontal());
+		if (this->town->HasText()) {
+			aimed_height += GetStringHeight(this->town->GetText().GetDecodedString(), width - WidgetDimensions::scaled.framerect.Horizontal());
 		}
 
 		return aimed_height;
