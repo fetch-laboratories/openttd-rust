@@ -393,10 +393,6 @@ pub unsafe extern "C" fn openttd_rust_live_node_location(graph: *mut Graph, id: 
     unsafe { &mut *graph }.nodes[usize::from(id)].xy = xy;
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_demand(graph: *mut Graph, id: u16, demand: u32) {
-    unsafe { &mut *graph }.nodes[usize::from(id)].set_demand(demand);
-}
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_node_update_supply(
     graph: *mut Graph,
     id: u16,
@@ -442,10 +438,6 @@ pub unsafe extern "C" fn openttd_rust_live_node_update_edge(
 ) {
     unsafe { &mut *graph }.nodes[usize::from(id)]
         .update_edge(to, capacity, usage, time, modes, date, assertions);
-}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_live_node_remove_edge(graph: *mut Graph, id: u16, to: u16) {
-    unsafe { &mut *graph }.nodes[usize::from(id)].remove_edge(to);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_node_append_edge(

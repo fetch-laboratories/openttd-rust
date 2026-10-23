@@ -448,7 +448,7 @@ static void StationGraphs()
 	stations[2]->goods[cargo].status.Set(GoodsEntry::State::Acceptance);
 	join(first, stations[0]); join(first, stations[1]); join(second, stations[2]); join(second, stations[3]);
 	(*first)[0].AddEdge(1, 65535, 5, 120, {EdgeUpdateMode::Increase, EdgeUpdateMode::Restricted});
-	(*second)[0].AddEdge(1, 65536, 4, 17, {EdgeUpdateMode::Unrestricted});
+	(*second)[0].UpdateEdge(1, 65536, 4, 17, {EdgeUpdateMode::Unrestricted});
 	(*second)[0].UpdateSupply(11);
 	LinkGraph copy(*second);
 	stations[2]->goods[cargo].status.Reset(GoodsEntry::State::Acceptance);

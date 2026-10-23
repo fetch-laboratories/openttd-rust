@@ -120,10 +120,8 @@ public:
 		const uint16_t *StationAddress() const { return openttd_rust_live_node_station_address(this->owner, this->id); }
 		void UpdateSupply(uint supply) { openttd_rust_live_node_update_supply(this->owner, this->id, supply, GetRustSharedServices().economy_date()); }
 		void UpdateLocation(TileIndex xy) { openttd_rust_live_node_location(this->owner, this->id, xy.base()); }
-		void SetDemand(uint demand) { openttd_rust_live_node_demand(this->owner, this->id, demand); }
 		void UpdateEdge(NodeID to, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(capacity > 0); assert(usage <= capacity); openttd_rust_live_node_update_edge(this->owner, this->id, to, capacity, usage, time, modes.base(), GetRustSharedServices().economy_date(), GetRustLiveGraphServices().assertions); }
 		void AddEdge(NodeID to, uint capacity, uint usage, uint32_t time, EdgeUpdateModes modes) { assert(!this->HasEdgeTo(to)); openttd_rust_live_node_add_edge(this->owner, this->id, to, capacity, usage, time, modes.base(), GetRustSharedServices().economy_date()); }
-		void RemoveEdge(NodeID to) { openttd_rust_live_node_remove_edge(this->owner, this->id, to); }
 		bool HasEdgeTo(NodeID to) const { return openttd_rust_live_node_edge(this->owner, this->id, to) != nullptr; }
 		const BaseEdge &operator[](NodeID to) const { auto *edge = openttd_rust_live_node_edge(this->owner, this->id, to); assert(edge != nullptr); return *reinterpret_cast<const BaseEdge *>(edge); }
 		std::span<const BaseEdge> Edges() const { size_t size; auto *edges = openttd_rust_live_node_edges(this->owner, this->id, &size); return {reinterpret_cast<const BaseEdge *>(edges), size}; }
