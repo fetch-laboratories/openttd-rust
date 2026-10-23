@@ -122,7 +122,6 @@ src/rust/train_reservation_services.h | TrainReservationBackoff(void *, OpenTTDT
 src/rust/train_reservation_services.h | TrainReservationLineReverse(void *, OpenTTDTrainHandle) noexcept | 1960f2e4194b13e4 | 1
 src/rust/train_reservation_services.h | TrainReservationReservePaths(void *, OpenTTDTrainHandle) noexcept | ca4028cc43e737ca | 1
 src/rust/train_reservation_services.h | TrainReservationSharedMap(void *, OpenTTDTrainHandle, uint32_t tile) noexcept | d2c72c5ff1b66cb5 | 1
-src/rust/train_reservation_services.h | TrainReservationShowRes(void *, OpenTTDTrainHandle) noexcept | 98c3f8c1dc3635aa | 1
 src/rust/train_reservation_services.h | TrainReservationStationTrain(void *, OpenTTDTrainHandle, uint16_t a) noexcept | def73589acac5540 | 1
 src/rust/train_reservation_services.h | TrainReservationStationXy(void *, OpenTTDTrainHandle, uint16_t a) noexcept | 30f910a9db971102 | 1
 src/rust/train_services.h | TrainAccModel(OpenTTDTrainHandle) noexcept | cba5e3d48e960c09 | 1
@@ -135,7 +134,6 @@ src/rust/train_services.h | TrainPlatformLength(OpenTTDTrainHandle, uint16_t a, 
 src/rust/train_services.h | TrainReservePaths(OpenTTDTrainHandle) noexcept | ca4028cc43e737ca | 1
 src/rust/train_services.h | TrainReverseAtSignals(OpenTTDTrainHandle) noexcept | 562ee8ededd55021 | 1
 src/rust/train_services.h | TrainSharedMap(OpenTTDTrainHandle, uint32_t tile) noexcept | d2c72c5ff1b66cb5 | 1
-src/rust/train_services.h | TrainShowReservation(OpenTTDTrainHandle) noexcept | 98c3f8c1dc3635aa | 1
 src/rust/train_services.h | TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept | 01608408cc222048 | 1
 src/rust/train_services.h | TrainWagonSpeedLimits(OpenTTDTrainHandle) noexcept | 1b4981b5c17ac89a | 1
 src/rust/train_services.h | TrainWaitOneway(OpenTTDTrainHandle) noexcept | 99ac10cb2f2f467c | 1

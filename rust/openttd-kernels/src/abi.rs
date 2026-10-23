@@ -4435,6 +4435,27 @@ layouts! {
         visit_near,
         vehicle,
     };
+    "OpenTTDPbsServices" ["probe"] => crate::pbs::PbsServices {
+        shared, rail, train,
+        depot_bits,
+        crossing_bits,
+        station_bits,
+        wormhole_bits,
+        set_depot,
+        set_station,
+        set_wormhole,
+        try_track,
+        unreserve_track,
+        station_reserved,
+        compatible_station,
+        station_axis,
+        show_reservation,
+        assert_track,
+        assert_platform,
+        station,
+        randomisation,
+        animation,
+    };
     "OpenTTDTrainReservationFreeRead" ["probe"] => crate::train_reservation::TrainReservationFreeRead {
         tile,
     };

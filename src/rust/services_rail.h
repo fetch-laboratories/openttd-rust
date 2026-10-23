@@ -71,10 +71,13 @@ inline void RustSetSignalType(uint32_t tile, uint8_t track, uint8_t type) noexce
 inline SignalVariant RustSignalVariant(uint32_t tile, uint8_t track) noexcept { return GetSignalVariant(TileIndex(tile), static_cast<Track>(track)); }
 inline void RustSetSignalVariant(uint32_t tile, uint8_t track, uint8_t variant) noexcept { SetSignalVariant(TileIndex(tile), static_cast<Track>(track), static_cast<SignalVariant>(variant)); }
 inline void RustCycleSignalSide(uint32_t tile, uint8_t track) noexcept { CycleSignalSide(TileIndex(tile), static_cast<Track>(track)); }
+inline bool RustShowTrackReservation() noexcept { return _settings_client.gui.show_track_reservation; }
 inline TrackBits RustReservedTracks(uint32_t tile) noexcept { return GetReservedTrackbits(TileIndex(tile)); }
 inline TrackBits RustRailReservation(uint32_t tile) noexcept { return GetRailReservationTrackBits(TileIndex(tile)); }
 inline void RustSetTrackReservation(uint32_t tile, uint8_t bits) noexcept { SetTrackReservation(TileIndex(tile), static_cast<TrackBits>(bits)); }
 inline bool RustDepotReserved(uint32_t tile) noexcept { return HasDepotReservation(TileIndex(tile)); }
+inline void RustSetDepotReservation(uint32_t tile, bool reserved) noexcept { SetDepotReservation(TileIndex{tile}, reserved); }
+inline void RustSetStationReservation(uint32_t tile, bool reserved) noexcept { SetRailStationReservation(TileIndex{tile}, reserved); }
 inline void RustSetDepotExit(uint32_t tile, uint8_t dir) noexcept { SetRailDepotExitDirection(TileIndex(tile), static_cast<DiagDirection>(dir)); }
 inline void RustMakeRailNormal(uint32_t tile, uint8_t owner, uint8_t bits, uint8_t rt) noexcept { MakeRailNormal(TileIndex(tile), Owner(owner), static_cast<TrackBits>(bits), static_cast<RailType>(rt)); }
 inline void RustMakeRailDepot(uint32_t tile, uint8_t owner, uint16_t depot, uint8_t dir, uint8_t rt) noexcept { MakeRailDepot(TileIndex(tile), Owner(owner), DepotID(depot), static_cast<DiagDirection>(dir), static_cast<RailType>(rt)); }

@@ -55,6 +55,7 @@
 #include "rust/town_founding_ffi.h"
 #include "rust/townname_ffi.h"
 #include "rust/train_ffi.h"
+#include "rust/pbs_ffi.h"
 #include "rust/train_reservation_ffi.h"
 #include "rust/trees_ffi.h"
 #include "rust/utf8_ffi.h"

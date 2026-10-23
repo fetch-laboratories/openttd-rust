@@ -196,11 +196,6 @@ static void TrainReservationService(void *, OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	CheckIfTrainNeedsService(v);
 }
-static void TrainReservationSetDepot(void *, OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	TileIndex t(static_cast<uint32_t>(a));
-	SetDepotReservation(t, b != 0);
-}
 static void TrainReservationSetDepotDest(void *, OpenTTDTrainHandle id, uint32_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -213,10 +208,6 @@ static void TrainReservationSetPlatform(void *, OpenTTDTrainHandle, uint32_t a, 
 	RustStationPlatformReservation(t.base(), b, c != 0);
 }
 
-static uint64_t TrainReservationShowRes(void *, OpenTTDTrainHandle) noexcept
-{
-	return _settings_client.gui.show_track_reservation;
-}
 static void TrainReservationStartStop(void *, OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);

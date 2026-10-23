@@ -589,19 +589,11 @@ static uint64_t TrainServint(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return Company::Get(v->owner)->settings.vehicle.servint_trains;
 }
-static void TrainSetDepotRes(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	SetDepotReservation(TileIndex(a), b != 0);
-}
 
 static void TrainShowEffect(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	v->ShowVisualEffect();
-}
-static uint64_t TrainShowReservation(OpenTTDTrainHandle) noexcept
-{
-	return _settings_client.gui.show_track_reservation;
 }
 static uint64_t TrainSignalHasPbs(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
 {

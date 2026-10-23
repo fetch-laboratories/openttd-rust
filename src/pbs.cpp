@@ -13,8 +13,47 @@
 #include "newgrf_station.h"
 #include "pathfinder/follow_track.hpp"
 
+#ifdef WITH_RUST
+#include "rust/pbs_ffi.h"
+#include "rust/services_rail.h"
+#include "rust/services_station.h"
+#endif
+
 #include "safeguards.h"
 
+#ifdef WITH_RUST
+const OpenTTDPbsServices &GetPbsServices() noexcept
+{
+	static const OpenTTDPbsServices s{
+		.shared = &GetRustSharedServices(),
+		.rail = &GetRustRailMapServices(),
+		.train = &GetTrainServices(),
+		.depot_bits = [](uint32_t t) noexcept { return GetDepotReservationTrackBits(TileIndex{t}); },
+		.crossing_bits = [](uint32_t t) noexcept { return GetCrossingReservationTrackBits(TileIndex{t}); },
+		.station_bits = [](uint32_t t) noexcept { return GetStationReservationTrackBits(TileIndex{t}); },
+		.wormhole_bits = [](uint32_t t) noexcept { return GetTunnelBridgeReservationTrackBits(TileIndex{t}); },
+		.set_depot = RustSetDepotReservation,
+		.set_station = RustSetStationReservation,
+		.set_wormhole = RustSetTunnelBridgeReservation,
+		.try_track = [](uint32_t t, uint8_t track) noexcept { return TryReserveTrack(TileIndex{t}, static_cast<Track>(track)); },
+		.unreserve_track = [](uint32_t t, uint8_t track) noexcept { UnreserveTrack(TileIndex{t}, static_cast<Track>(track)); },
+		.station_reserved = RustStationReserved,
+		.compatible_station = RustCompatibleStationTiles,
+		.station_axis = RustRailStationAxis,
+		.show_reservation = RustShowTrackReservation,
+		.assert_track = [](uint32_t tile, uint8_t t) noexcept { assert(HasTrack(TrackStatusToTrackBits(GetTileTrackStatus(TileIndex{tile}, TRANSPORT_RAIL, 0)), static_cast<Track>(t))); },
+		.assert_platform = [](uint32_t tile, uint8_t dir) noexcept { assert(IsRailStationTile(TileIndex{tile})); assert(GetRailStationAxis(TileIndex{tile}) == DiagDirToAxis(static_cast<DiagDirection>(dir))); },
+		.station = [](uint32_t t) noexcept { return BaseStation::GetByTile(TileIndex{t}); },
+		.randomisation = [](BaseStation *st, uint32_t t) noexcept { TriggerStationRandomisation(st, TileIndex{t}, StationRandomTrigger::PathReservation); },
+		.animation = [](BaseStation *st, uint32_t t) noexcept { RustStationAnimation(st, TileIndex{t}, StationAnimationTrigger::PathReservation); },
+	};
+	return s;
+}
+TrackBits GetReservedTrackbits(TileIndex t) { return static_cast<TrackBits>(openttd_rust_pbs_reserved(&GetPbsServices(), t.base())); }
+void SetRailStationPlatformReservation(TileIndex t, DiagDirection dir, bool b) { openttd_rust_pbs_platform(&GetPbsServices(), t.base(), dir, b); }
+bool TryReserveRailTrack(TileIndex tile, Track t, bool trigger) { return openttd_rust_pbs_try_reserve(&GetPbsServices(), tile.base(), t, trigger); }
+void UnreserveRailTrack(TileIndex tile, Track t) { openttd_rust_pbs_unreserve(&GetPbsServices(), tile.base(), t); }
+#else
 /**
  * Get the reserved trackbits for any tile, regardless of type.
  * @param t the tile
@@ -186,6 +225,8 @@ void UnreserveRailTrack(TileIndex tile, Track t)
 	}
 }
 
+
+#endif
 
 /** Follow a reservation starting from a specific tile to the end. */
 static PBSTileInfo FollowReservation(Owner o, RailTypes rts, TileIndex tile, Trackdir trackdir, bool ignore_oneway = false)
