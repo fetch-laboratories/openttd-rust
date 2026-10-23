@@ -66,7 +66,7 @@ inline OpenTTDRailStep Run(uint32_t limit, uint32_t curve = 29, bool cache = fal
 	static OpenTTDRailServices ground{};
 	static OpenTTDMovementServices movement{};
 	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 1; };
-	rail.rail_tile_type = [](uint32_t) noexcept -> RailTileType { return RAIL_TILE_NORMAL; };
+	rail.rail_tile_type = [](uint32_t) noexcept -> RailTileType { return static_cast<RailTileType>(0); };
 	ground.tracks = [](uint32_t) noexcept -> TrackBits { return static_cast<TrackBits>(5); };
 	movement.rail = &ground;
 	movement.shared = &world; movement.rail_map = &rail;

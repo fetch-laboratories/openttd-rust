@@ -1250,9 +1250,9 @@ pub unsafe extern "C" fn openttd_rust_movement_depot_ticks(
     let length = crate::train::next_offset(s.train(), s.shared(), v);
     let enter = FRACT_ENTER[usize::from(dir)];
     match dir {
-        VEH_TRAIN => (p.x & 15) - (i32::from(enter & 15) - (length + 1)),
-        VEH_ROAD => -((p.y & 15) - (i32::from(enter >> 4) + (length + 1))),
-        VEH_SHIP => -((p.x & 15) - (i32::from(enter & 15) + (length + 1))),
+        0 => (p.x & 15) - (i32::from(enter & 15) - (length + 1)),
+        1 => -((p.y & 15) - (i32::from(enter >> 4) + (length + 1))),
+        2 => -((p.x & 15) - (i32::from(enter & 15) + (length + 1))),
         3 => (p.y & 15) - (i32::from(enter >> 4) - (length + 1)),
         _ => unreachable!("native depot direction"),
     }
