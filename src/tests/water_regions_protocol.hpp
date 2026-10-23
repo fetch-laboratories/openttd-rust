@@ -10,7 +10,6 @@
 #define WATER_REGIONS_PROTOCOL_HPP
 #include "../rust/water_regions_ffi.h"
 #include "../rust/movement_ffi.h"
-#include "../track_func.h"
 #include <algorithm>
 #include <array>
 #include <memory>
@@ -24,7 +23,9 @@ inline uint32_t OPENTTD_WATER_CALL WaterProbeFollow(uint32_t tile, uint8_t dir, 
 {
 	++follow_calls;
 	*bridge = 0;
-	dir = TrackdirToExitdir(static_cast<Trackdir>(dir));
+	/* Synthetic four-neighbour graph, accepting the real movement trackdirs. */
+	constexpr uint8_t exit[]{0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0};
+	dir = exit[dir];
 	const int x = tile % 32, y = tile / 32;
 	constexpr int dx[] = {-1, 0, 1, 0}, dy[] = {0, 1, 0, -1};
 	const int nx = x + dx[dir], ny = y + dy[dir];
