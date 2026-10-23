@@ -281,7 +281,7 @@ const FOUNDATION_INVALID: u8 = 0xFF;
 
 const GROUND_BARREN: u8 = 0;
 const GROUND_HALF_WATER: u8 = 13;
-const RAIL_TILE_NORMAL: u8 = 0;
+use crate::rail_map::RAIL_TILE_NORMAL;
 const RAIL_TILE_SIGNALS: u8 = 1;
 const RAIL_TILE_DEPOT: u8 = 3;
 
