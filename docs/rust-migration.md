@@ -1379,7 +1379,9 @@ helpers borrow only the flags scalar for their call. World clones share an immut
 service-table borrow tied to the Run/future lifetime (#299), ending on destruction,
 including cancellation. Production uses the process-wide const table; Rust fixtures
 own separate tables through destruction, and native partial tables stay in scope.
-Callbacks may mutate their separate context, never the borrowed table.
+Callbacks may mutate their separate context, never the borrowed table. #377 adds
+a borrowed typed occupancy context: movement resolves each shell once, updates
+the Rust index and calls the base viewport leaf; clear retains native costs.
 
 The default `disasters` simulation checks scheduling, crashes, removal, industry reset,
 submarine movement and reload. Legacy save fixtures, viewport pixels, sound output, allocator
@@ -2013,5 +2015,6 @@ full-scan threshold, coordinate extremes and current-shell mutation; native
 checks cover canonical link identity, stale removal, copied cursors and pixel-Z
 command refusal. The existing ABI/range fixtures exercise their direct routes.
 Shared geometry/bit/track modules supply the original header callees.
-Native disaster callbacks still bounce through occupancy facades; root owns the
-bounded repair before integration. GUI/external articulated-GRF gaps remain #156.
+Disaster movement and ground-clear enter occupancy directly through borrowed
+typed context; the exact base viewport and native cost lifetime stay shared.
+GUI/external articulated-GRF gaps remain #156.

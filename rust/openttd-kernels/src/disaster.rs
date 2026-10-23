@@ -1113,11 +1113,11 @@ pub extern "C" fn openttd_rust_disaster_delay() -> *mut u16 {
 }
 /// Create one component continuation; arguments and IDs follow original preconditions.
 /// # Safety
-/// Context/callbacks remain live until destruction. Leaf callbacks cannot throw or
-/// reenter, and copy/write only source-valid canonical scalars. The shared table
-/// and occupancy tables stay immutable and live through Run destruction, including suspension and
-/// all World clones. Its context may mutate independently; no world storage is
-/// borrowed by the table reference. Services are
+/// Context/callbacks remain live until destruction. Read/write leaves cannot
+/// throw or reenter, and copy/write only source-valid canonical scalars. Shared
+/// and occupancy tables, including their pointees, stay immutable and live through
+/// Run destruction, suspension and all World clones. Context may mutate
+/// independently; table references borrow no world storage. Services are
 /// synchronous and noexcept; allocation may construct a separate owner. No raw
 /// State reference spans any service; flight helpers access flags only during
 /// their call. Returned actions 2/14/17 allow deletion/Crash/clear callbacks on
