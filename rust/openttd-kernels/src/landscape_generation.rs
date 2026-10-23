@@ -999,7 +999,7 @@ impl World<'_> {
                 w::hit(w::GENERATION_SNOW);
                 (self.a.set_snow_line)(
                     self.coverage_line(u32::from(g.snow_coverage), 0).max(2) as u8
-                )
+                );
             }
             TROPIC => {
                 let line =

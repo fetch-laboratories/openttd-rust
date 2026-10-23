@@ -49,6 +49,7 @@ mod order_type;
 mod packet;
 mod rail_cmd;
 pub mod rail_yapf;
+mod random_func;
 mod road;
 mod road_cmd;
 mod road_cost;

@@ -137,7 +137,7 @@ impl Generator {
         (self.random)(self.random_context)
     }
     fn range(&self, limit: u32) -> u32 {
-        ((u64::from(self.random()) * u64::from(limit)) >> 32) as u32
+        crate::random_func::scale_to_limit(self.random(), limit)
     }
 
     fn index(&self, x: i32, y: i32) -> usize {

@@ -31,7 +31,7 @@ extern "C" void __wrap__Z31IncreaseGeneratingWorldProgress16GenWorldProgress(Gen
 static void GenerationCancellation()
 {
 	AutoRestoreBackup<uint8_t> generator(_settings_game.game_creation.land_generator, LG_TERRAGENESIS);
-	AutoRestoreBackup<SwitchMode> mode(_switch_mode);
+	AutoRestoreBackup<SwitchMode> mode(_switch_mode, _switch_mode);
 	for (generation_cancel = 0; generation_cancel < 3; generation_cancel++) {
 		generation_events = generation_cleanup = 0; bool caught = false;
 		try { GenerateLandscape(GWM_NEWGAME); } catch (AbortGenerateWorldSignal &) { caught = true; }
@@ -56,8 +56,8 @@ static bool GenerationScenario(std::span<std::string_view> args)
 	GenerationSnapshot("early");
 	if (args[1] == "snapshot") return true;
 	SavedRandomSeeds seeds; SaveRandomSeeds(&seeds);
-	AutoRestoreBackup<uint8_t> rotation(_settings_game.game_creation.heightmap_rotation), height(_settings_game.game_creation.heightmap_height, 31);
-	AutoRestoreBackup<bool> freeform(_settings_game.construction.freeform_edges);
+	AutoRestoreBackup<uint8_t> rotation(_settings_game.game_creation.heightmap_rotation, _settings_game.game_creation.heightmap_rotation), height(_settings_game.game_creation.heightmap_height, 31);
+	AutoRestoreBackup<bool> freeform(_settings_game.construction.freeform_edges, _settings_game.construction.freeform_edges);
 	AutoRestoreBackup<uint8_t> limit(_settings_game.construction.map_height_limit, 32);
 	std::vector<std::array<uint32_t, 10>> map; for (TileIndex tile : Map::Iterate()) map.push_back(GenerationTile(Tile{tile}));
 	for (const char *aspect : {"wide", "tall"}) for (uint8_t rotate : {HM_COUNTER_CLOCKWISE, HM_CLOCKWISE}) for (bool edges : {false, true}) {

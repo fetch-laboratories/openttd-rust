@@ -497,7 +497,7 @@ impl Services {
     /// Scale one word with the original 64-bit multiply and shift.
     #[must_use]
     pub fn random_range(&self, limit: u32) -> u32 {
-        ((u64::from(self.random()) * u64::from(limit)) >> 32) as u32
+        crate::random_func::scale_to_limit(self.random(), limit)
     }
     /// Visit every station in pool order. No owner reference spans a visit.
     #[allow(unsafe_code)]
