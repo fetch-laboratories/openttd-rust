@@ -315,11 +315,6 @@ pub struct VehicleServices {
     pub maintenance: *const maintenance::Services,
 }
 
-/// Position step result: `UpdateInclination`'s old height, then the new height,
-/// speed and track speed limit it leaves.
-
-/// `DoUpdateSpeed` result, then the speed it stored.
-
 /// Post-viewport link; progress is consumed only when this link ends the loop.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -328,23 +323,18 @@ pub struct ViewportNext {
     pub final_progress: u8,
 }
 
-/// `SetLastSpeed`, then the status it leaves before viewport updates.
-
-/// `GroundVehicleBase::Crash` victims, then `IsFrontEngine()`.
-
 /// `GroundVehicle<T>` members, one C++ template instance per vehicle type.
 #[repr(C)]
 pub struct GroundServices {
     pub physics: &'static crate::ground_vehicle::Services,
     /// Invalidate the chain `NewGRF` cache, then reset total length.
     pub cache_begin: extern "C" fn(VehicleRef),
-    /// Store x/y, `UpdatePosition()`, `UpdateInclination(new_tile, delta)`.
+    /// Store x/y, then `UpdatePosition()`.
     pub move_position: extern "C" fn(VehicleRef, i32, i32),
     /// `UpdateViewport(force, delta)`.
     pub update_viewport_then_next: extern "C" fn(VehicleRef, VehicleRef) -> ViewportNext,
     /// Store the direction, then `UpdateViewport(true, true)`.
     pub turn: extern "C" fn(VehicleRef, u8),
-    /// `v->First()->CargoChanged()`.
     /// Set `GVF_SUPPRESS_IMPLICIT_ORDERS`, then `MakeGoToDepot(depot, Service)`.
     pub go_to_depot_service: extern "C" fn(VehicleRef, u16),
     pub write_first_engine: extern "C" fn(VehicleRef, u16),
@@ -381,6 +371,11 @@ impl VehicleServices {
     }
 }
 
+/// `Vehicle::GetAdvanceSpeed`, with the source unsigned multiplication.
+pub const fn advance_speed(speed: u32) -> u32 {
+    speed.wrapping_mul(3) / 4
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -396,9 +391,4 @@ mod tests {
         assert_eq!((map.tile_x(0x1234), map.tile_y(0x1234)), (0x34, 0x12));
         assert_eq!(advance_distance(3), 192);
     }
-}
-
-/// `Vehicle::GetAdvanceSpeed`, with the source unsigned multiplication.
-pub const fn advance_speed(speed: u32) -> u32 {
-    speed.wrapping_mul(3) / 4
 }

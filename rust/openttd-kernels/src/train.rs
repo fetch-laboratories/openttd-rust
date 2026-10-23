@@ -1945,7 +1945,7 @@ impl Game<'_> {
             id.vehicle(),
             new != old,
             false,
-        ) as i32;
+        );
         if prev == Handle::NONE {
             self.speed_z(id, old_z);
         }
@@ -2041,7 +2041,7 @@ impl Game<'_> {
             self.leaves.physics,
             id.vehicle(),
             flooded,
-        ) as u32);
+        ));
         id.set_crash_anim_pos(if flooded { 4000 } else { 1 });
         victims
     }
@@ -3078,3 +3078,10 @@ pub unsafe extern "C" fn openttd_rust_train_force_command(
     };
     u8::from(g.force_command(id, execute != 0))
 }
+
+/// `VehicleRailFlag::PoweredWagon`, from `train.h`.
+pub(crate) const FLAG_POWERED_WAGON: u64 = 1 << 3;
+/// `VehicleRailFlag::Reversing`, from `train.h`.
+pub(crate) const FLAG_REVERSING: u64 = 1 << 0;
+/// `VehicleRailFlag::Stuck`, from `train.h`.
+pub(crate) const FLAG_STUCK: u64 = 1 << 8;

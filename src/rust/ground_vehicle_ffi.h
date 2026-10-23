@@ -18,7 +18,9 @@ struct OpenTTDRoadLeaves;
 struct OpenTTDGroundOwner { OpenTTDGroundState *state; OpenTTDTrainHandle train; OpenTTDRoadState *road; VehicleType kind; };
 struct OpenTTDGroundPowerInput { uint32_t tile; uint8_t subtype; };
 struct OpenTTDGroundWeightInput { const CargoSpec *cargo; OpenTTDCargoList *owner; };
-struct OpenTTDGroundMotion { uint16_t speed; uint8_t status; RoadType roadtype; };
+struct OpenTTDGroundMotion { uint16_t speed; RoadType roadtype; };
+struct OpenTTDGroundAccelerationInput { uint32_t tile; uint16_t speed; uint8_t status; RoadType roadtype; };
+struct OpenTTDGroundSpeedInput { uint16_t speed; uint8_t subspeed; };
 struct OpenTTDGroundPhysicsServices {
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDRoadLeaves *road;
@@ -27,6 +29,8 @@ struct OpenTTDGroundPhysicsServices {
 	OpenTTDVehicle *(*first)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first);
 	OpenTTDGroundPowerInput (*power_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(power_input);
 	OpenTTDGroundWeightInput (*weight_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(weight_input);
+	OpenTTDGroundAccelerationInput (*acceleration_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(acceleration_input);
+	OpenTTDGroundSpeedInput (*speed_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(speed_input);
 	OpenTTDGroundMotion (*motion)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(motion);
 	uint32_t (*capacity)(const OpenTTDEngine *, OpenTTDVehicle *, uint16_t *) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
 	uint64_t (*cargo_weight)(const CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_weight);

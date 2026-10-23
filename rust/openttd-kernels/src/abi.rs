@@ -34,8 +34,10 @@ layouts! {
     "OpenTTDGroundOwner" ["probe"] => crate::ground_vehicle::Owner { state, train, road, kind, };
     "OpenTTDGroundPowerInput" ["probe"] => crate::ground_vehicle::PowerInput { tile, subtype, };
     "OpenTTDGroundWeightInput" ["probe"] => crate::ground_vehicle::WeightInput { cargo, owner, };
-    "OpenTTDGroundMotion" ["probe"] => crate::ground_vehicle::Motion { speed, status, roadtype, };
-    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, first, power_input, weight_input, motion, capacity, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, tram, steepness, display_max_speed, slope_z, viewport, details_dirty, base_crash, depot_tile, };
+    "OpenTTDGroundMotion" ["probe"] => crate::ground_vehicle::Motion { speed, roadtype, };
+    "OpenTTDGroundAccelerationInput" ["probe"] => crate::ground_vehicle::AccelerationInput { tile, speed, status, roadtype, };
+    "OpenTTDGroundSpeedInput" ["probe"] => crate::ground_vehicle::SpeedInput { speed, subspeed, };
+    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, first, power_input, weight_input, acceleration_input, speed_input, motion, capacity, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, tram, steepness, display_max_speed, slope_z, viewport, details_dirty, base_crash, depot_tile, };
 
     "GroundVehicleCache" ["probe"] => crate::ground_vehicle::Cache {
         cached_weight, cached_slope_resistance, cached_max_te, cached_axle_resistance,
@@ -1570,6 +1572,7 @@ layouts! {
         is_depot,
         depot_index,
         wait_unbunch,
+        chain_depot,
         servint,
         max_distance,
         tile_valid,
@@ -2226,8 +2229,9 @@ layouts! {
         maintenance,
     };
     "OpenTTDGroundServices" ["probe"] => crate::vehicle::GroundServices {
-        physics, move_position,
+        physics,
         cache_begin,
+        move_position,
 
         update_viewport_then_next,
         turn,
@@ -4754,6 +4758,7 @@ layouts! {
         articulated,
         crashed,
         stopped,
+        chain_depot,
         first,
         next_unit,
         prev_unit,

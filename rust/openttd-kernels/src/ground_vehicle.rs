@@ -13,6 +13,7 @@
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
     clippy::too_many_lines,
+    clippy::many_single_char_names,
     clippy::struct_field_names
 )]
 use crate::vehicle_base::{GVSF_ENGINE, GVSF_FREE_WAGON, GVSF_FRONT, GVSF_MULTIHEADED, GVSF_WAGON};
@@ -108,7 +109,10 @@ pub unsafe extern "C" fn openttd_rust_ground_destroy(state: *mut State) {
 
 use crate::direction_func::{diag_dir_to_axis, dir_to_diag_dir};
 use crate::engine_type::{ACCELERATION_MAGLEV, ACCELERATION_NORMAL};
-use crate::newgrf_properties::*;
+use crate::newgrf_properties::{
+    PROP_ROADVEH_POWER, PROP_ROADVEH_TRACTIVE_EFFORT, PROP_ROADVEH_WEIGHT, PROP_TRAIN_POWER,
+    PROP_TRAIN_TRACTIVE_EFFORT, PROP_TRAIN_WEIGHT,
+};
 use crate::services::{RailType, RoadType};
 use crate::tile_type::{TILE_SIZE, TILE_UNIT_MASK};
 use crate::track_func::track_status_to_track_bits;
@@ -146,8 +150,22 @@ pub struct WeightInput {
 #[derive(Clone, Copy)]
 pub struct Motion {
     pub speed: u16,
+    pub roadtype: RoadType,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct AccelerationInput {
+    pub tile: u32,
+    pub speed: u16,
     pub status: u8,
     pub roadtype: RoadType,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SpeedInput {
+    pub speed: u16,
+    pub subspeed: u8,
 }
 
 /// Immutable process-wide typed services. No owner borrow crosses any service;
@@ -161,6 +179,8 @@ pub struct Services {
     pub first: extern "C" fn(VehicleRef) -> VehicleRef,
     pub power_input: extern "C" fn(VehicleRef) -> PowerInput,
     pub weight_input: extern "C" fn(VehicleRef) -> WeightInput,
+    pub acceleration_input: extern "C" fn(VehicleRef) -> AccelerationInput,
+    pub speed_input: extern "C" fn(VehicleRef) -> SpeedInput,
     pub motion: extern "C" fn(VehicleRef) -> Motion,
     pub capacity: extern "C" fn(crate::vehicle::EngineRef, VehicleRef, *mut u16) -> u32,
     pub cargo_weight: extern "C" fn(*const std::ffi::c_void, u32) -> u64,
@@ -191,12 +211,14 @@ impl Owner {
         self.kind == VehicleType::TRAIN
     }
     fn powered_wagon(self) -> bool {
-        self.rail() && self.train.get_flags() & (1 << 3) != 0
+        self.rail() && self.train.get_flags() & crate::train::FLAG_POWERED_WAGON != 0
     }
 }
 
 pub(crate) fn power(s: &Services, v: VehicleRef) -> u16 {
-    let o = (s.resolve)(v);
+    power_owned(s, v, (s.resolve)(v))
+}
+fn power_owned(s: &Services, v: VehicleRef, o: Owner) -> u16 {
     let r = (s.power_input)(v);
     if is_articulated_part(true, r.subtype) {
         return 0;
@@ -224,9 +246,11 @@ pub(crate) fn power(s: &Services, v: VehicleRef) -> u16 {
     }
 }
 pub(crate) fn powered_part(s: &Services, v: VehicleRef, head: VehicleRef) -> u16 {
-    let o = (s.resolve)(v);
+    powered_part_owned(s, v, (s.resolve)(v), head)
+}
+fn powered_part_owned(s: &Services, v: VehicleRef, o: Owner, head: VehicleRef) -> u16 {
     if o.powered_wagon() {
-        let head = (s.resolve)(head);
+        let head = if head == v { o } else { (s.resolve)(head) };
         if (s.powered)(
             head.train.get_railtypes(),
             (s.rail_type)((s.vehicle.tile)(v)),
@@ -238,7 +262,9 @@ pub(crate) fn powered_part(s: &Services, v: VehicleRef, head: VehicleRef) -> u16
     0
 }
 pub(crate) fn weight(s: &Services, v: VehicleRef, full: bool) -> u16 {
-    let o = (s.resolve)(v);
+    weight_owned(s, v, (s.resolve)(v), full)
+}
+fn weight_owned(s: &Services, v: VehicleRef, o: Owner, full: bool) -> u16 {
     let r = (s.weight_input)(v);
     let count = if full {
         (s.capacity)((s.vehicle.engine)(v), v, std::ptr::null_mut())
@@ -272,7 +298,9 @@ pub(crate) fn weight(s: &Services, v: VehicleRef, full: bool) -> u16 {
     weight
 }
 pub(crate) fn tractive_effort(s: &Services, v: VehicleRef) -> u8 {
-    let o = (s.resolve)(v);
+    tractive_effort_owned(s, v, (s.resolve)(v))
+}
+fn tractive_effort_owned(s: &Services, v: VehicleRef, o: Owner) -> u8 {
     (s.vehicle.property)(
         v,
         if o.rail() {
@@ -288,19 +316,24 @@ pub(crate) fn air_drag(s: &Services, v: VehicleRef) -> u8 {
 }
 pub(crate) fn air_drag_area(s: &Services, v: VehicleRef) -> u8 {
     let o = (s.resolve)(v);
+    air_drag_area_for(o, if o.rail() { (s.vehicle.status)(v) } else { 0 })
+}
+fn air_drag_area_for(o: Owner, status: u8) -> u8 {
     if !o.rail() {
-        return 6;
-    }
-    if o.train.track() == TRACK_BIT_WORMHOLE && (s.vehicle.status)(v) & VS_HIDDEN != 0 {
+        6
+    } else if o.train.track() == TRACK_BIT_WORMHOLE && status & VS_HIDDEN != 0 {
         28
     } else {
         14
     }
 }
 pub(crate) fn acceleration_status(s: &Services, v: VehicleRef) -> u8 {
-    let o = (s.resolve)(v);
-    if (s.vehicle.status)(v) & VS_STOPPED != 0
-        || (o.rail() && o.train.get_flags() & ((1 << 0) | (1 << 8)) != 0)
+    acceleration_status_for((s.resolve)(v), (s.vehicle.status)(v))
+}
+fn acceleration_status_for(o: Owner, status: u8) -> u8 {
+    if status & VS_STOPPED != 0
+        || (o.rail()
+            && o.train.get_flags() & (crate::train::FLAG_REVERSING | crate::train::FLAG_STUCK) != 0)
     {
         AS_BRAKE
     } else {
@@ -308,24 +341,31 @@ pub(crate) fn acceleration_status(s: &Services, v: VehicleRef) -> u8 {
     }
 }
 pub(crate) fn current_speed(s: &Services, v: VehicleRef) -> u16 {
-    let o = (s.resolve)(v);
-    let speed = (s.vehicle.speed)(v);
+    current_speed_for((s.resolve)(v), (s.vehicle.speed)(v))
+}
+fn current_speed_for(o: Owner, speed: u16) -> u16 {
     if o.rail() { speed } else { speed / 2 }
 }
 pub(crate) fn rolling_friction(s: &Services, v: VehicleRef) -> u32 {
     let o = (s.resolve)(v);
+    let r = (s.motion)(v);
+    rolling_friction_for(s, o, r.roadtype, current_speed_for(o, r.speed))
+}
+fn rolling_friction_for(s: &Services, o: Owner, roadtype: RoadType, speed: u16) -> u32 {
     if o.rail() {
-        15 * (512 + u32::from(current_speed(s, v))) / 512
+        15 * (512 + u32::from(speed)) / 512
     } else {
-        let r = (s.motion)(v);
-        let coeff = if (s.tram)(r.roadtype) { 40 } else { 75 };
-        coeff * (128 + u32::from(current_speed(s, v))) / 128
+        let coeff = if (s.tram)(roadtype) { 40 } else { 75 };
+        coeff * (128 + u32::from(speed)) / 128
     }
 }
 pub(crate) fn acceleration_type(s: &Services, v: VehicleRef) -> u8 {
     let o = (s.resolve)(v);
+    acceleration_type_for(s, o, if o.rail() { (s.vehicle.tile)(v) } else { 0 })
+}
+fn acceleration_type_for(s: &Services, o: Owner, tile: u32) -> u8 {
     if o.rail() {
-        (s.rail_acceleration)((s.rail_type)((s.vehicle.tile)(v)))
+        (s.rail_acceleration)((s.rail_type)(tile))
     } else {
         ACCELERATION_NORMAL
     }
@@ -334,7 +374,9 @@ pub(crate) fn slope_steepness(s: &Services, v: VehicleRef) -> u32 {
     (s.steepness)((s.resolve)(v).kind)
 }
 pub(crate) fn max_track_speed(s: &Services, v: VehicleRef) -> u16 {
-    let o = (s.resolve)(v);
+    max_track_speed_owned(s, v, (s.resolve)(v))
+}
+fn max_track_speed_owned(s: &Services, v: VehicleRef, o: Owner) -> u16 {
     if o.rail() {
         (s.rail_speed)((s.rail_type)((s.vehicle.tile)(v)))
     } else {
@@ -342,7 +384,9 @@ pub(crate) fn max_track_speed(s: &Services, v: VehicleRef) -> u16 {
     }
 }
 pub(crate) fn sloped_track(s: &Services, v: VehicleRef) -> bool {
-    let o = (s.resolve)(v);
+    sloped_track_owned(s, v, (s.resolve)(v))
+}
+fn sloped_track_owned(s: &Services, v: VehicleRef, o: Owner) -> bool {
     let tracks = if o.rail() {
         o.train.track()
     } else {
@@ -362,14 +406,18 @@ pub(crate) fn power_changed(s: &Services, v: VehicleRef) {
     let mut max_track_speed = (s.vehicle.max_speed)(v);
     let mut part = Some(v);
     while let Some(u) = part {
-        let current_power = u32::from(power(s, u)) + u32::from(powered_part(s, u, u));
+        let uo = if u == v { o } else { (s.resolve)(u) };
+        let current_power =
+            u32::from(power_owned(s, u, uo)) + u32::from(powered_part_owned(s, u, uo, u));
         total_power = total_power.wrapping_add(current_power);
         if current_power > 0 {
-            max_te = max_te
-                .wrapping_add(u32::from(weight(s, u, false)) * u32::from(tractive_effort(s, u)));
+            max_te = max_te.wrapping_add(
+                u32::from(weight_owned(s, u, uo, false))
+                    * u32::from(tractive_effort_owned(s, u, uo)),
+            );
         }
         parts = parts.wrapping_add(1);
-        let speed = max_track_speed_fn(s, u);
+        let speed = max_track_speed_owned(s, u, uo);
         if speed > 0 {
             max_track_speed = max_track_speed.min(speed);
         }
@@ -412,10 +460,6 @@ pub(crate) fn power_changed(s: &Services, v: VehicleRef) {
         (*o.state).cache.cached_max_track_speed = max_track_speed;
     }
 }
-// Keep the original helper call separate from the local speed accumulator.
-fn max_track_speed_fn(s: &Services, v: VehicleRef) -> u16 {
-    max_track_speed(s, v)
-}
 pub(crate) fn cargo_changed(s: &Services, v: VehicleRef) {
     if s.assertions {
         assert!((s.first)(v) == v);
@@ -424,10 +468,10 @@ pub(crate) fn cargo_changed(s: &Services, v: VehicleRef) {
     let mut total = 0_u32;
     let mut part = Some(v);
     while let Some(u) = part {
-        let current = u32::from(weight(s, u, false));
+        let uo = if u == v { o } else { (s.resolve)(u) };
+        let current = u32::from(weight_owned(s, u, uo, false));
         total = total.wrapping_add(current);
-        let steepness = slope_steepness(s, u);
-        let uo = (s.resolve)(u);
+        let steepness = (s.steepness)(uo.kind);
         // SAFETY: short canonical scalar write, before advancing the live link.
         unsafe {
             (*uo.state).cache.cached_slope_resistance =
@@ -461,21 +505,28 @@ fn clamp_int(value: i64) -> i32 {
 }
 pub(crate) fn acceleration(s: &Services, v: VehicleRef) -> i32 {
     let o = (s.resolve)(v);
-    let speed = i64::from(current_speed(s, v));
+    let r = (s.acceleration_input)(v);
+    let speed = i64::from(current_speed_for(o, r.speed));
     let mass = i64::from(unsafe { (*o.state).cache.cached_weight });
     let power = i64::from(unsafe { (*o.state).cache.cached_power }) * 746;
-    let maglev = acceleration_type(s, v) == ACCELERATION_MAGLEV;
-    let area = i64::from(air_drag_area(s, v));
+    let maglev = acceleration_type_for(s, o, r.tile) == ACCELERATION_MAGLEV;
+    let area = i64::from(air_drag_area_for(o, r.status));
     let mut resistance = if maglev {
         0
     } else {
         i64::from(unsafe { (*o.state).cache.cached_axle_resistance })
-            + mass * i64::from(rolling_friction(s, v))
+            + mass
+                * i64::from(rolling_friction_for(
+                    s,
+                    o,
+                    r.roadtype,
+                    current_speed_for(o, r.speed),
+                ))
     };
     resistance +=
         area * i64::from(unsafe { (*o.state).cache.cached_air_drag }) * speed * speed / 1000;
     resistance += slope_resistance(s, v);
-    let mode = acceleration_status(s, v);
+    let mode = acceleration_status_for(o, r.status);
     let max_te = unsafe { (*o.state).cache.cached_max_te } as i32;
     let force = if speed > 0 {
         if maglev {
@@ -546,7 +597,7 @@ pub(crate) fn update_z_inclination(s: &Services, v: VehicleRef) {
     unsafe {
         (*o.state).flags &= !SLOPE_FLAGS;
     }
-    if sloped_track(s, v) {
+    if sloped_track_owned(s, v, o) {
         let xy = (s.vehicle.xy)(v);
         let middle = (s.slope_z)(
             (xy.x & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
@@ -598,7 +649,7 @@ pub(crate) fn update_z(s: &Services, v: VehicleRef) {
     if s.assertions {
         let z = (s.vehicle.z)(v);
         let xy = (s.vehicle.xy)(v);
-        assert!(z == (s.slope_z)(xy.x, xy.y, true));
+        assert_eq!(z, (s.slope_z)(xy.x, xy.y, true));
     }
 }
 pub(crate) fn inclination(s: &Services, v: VehicleRef, new_tile: bool, delta: bool) -> i32 {
@@ -627,7 +678,7 @@ pub(crate) fn update_speed(
     min_speed: i32,
     max_speed: i32,
 ) -> u32 {
-    let r = (s.vehicle.speed_inputs)(v);
+    let r = (s.speed_input)(v);
     let mut spd = u32::from(r.subspeed).wrapping_add(accel);
     (s.vehicle.write_subspeed)(v, spd as u8);
     let tempmax = if i32::from(r.speed) > max_speed {

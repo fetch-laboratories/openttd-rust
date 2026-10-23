@@ -29,7 +29,9 @@ static OpenTTDGroundOwner GroundResolve(OpenTTDVehicle *shell) noexcept
 static OpenTTDVehicle *GroundFirst(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleFirst(VehicleOf(v))); }
 static OpenTTDGroundPowerInput GroundPowerInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleTile(v), RustVehicleSubtype(v)}; }
 static OpenTTDGroundWeightInput GroundWeightInput(OpenTTDVehicle *shell) noexcept { Vehicle *v = VehicleOf(shell); return {CargoSpec::Get(v->cargo_type), RustVehicleCargoOwner(v)}; }
-static OpenTTDGroundMotion GroundMotion(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleSpeed(v), RustVehicleStatus(v), v->type == VEH_ROAD ? RoadVehicle::From(v)->roadtype : RoadType{0}}; }
+static OpenTTDGroundMotion GroundMotion(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleSpeed(v), v->type == VEH_ROAD ? RoadVehicle::From(v)->roadtype : RoadType{0}}; }
+static OpenTTDGroundAccelerationInput GroundAccelerationInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {v->type == VEH_TRAIN ? RustVehicleTile(v) : 0, RustVehicleSpeed(v), RustVehicleStatus(v), v->type == VEH_ROAD ? RoadVehicle::From(v)->roadtype : RoadType{0}}; }
+static OpenTTDGroundSpeedInput GroundSpeedInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleSpeed(v), RustVehicleSubspeed(v)}; }
 static uint64_t GroundCargoWeight(const CargoSpec *cargo, uint32_t count) noexcept { return cargo->WeightOfNUnits(count); }
 static uint64_t GroundTrainCargoWeight(const CargoSpec *cargo, uint32_t count) noexcept { return cargo->WeightOfNUnitsInTrain(count); }
 static uint16_t GroundEnginePower(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RailVehInfo(v->engine_type)->power : RoadVehInfo(v->engine_type)->power; }
@@ -55,7 +57,7 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 #else
 		.assertions = false,
 #endif
-		.resolve = GroundResolve, .first = GroundFirst, .power_input = GroundPowerInput, .weight_input = GroundWeightInput, .motion = GroundMotion,
+		.resolve = GroundResolve, .first = GroundFirst, .power_input = GroundPowerInput, .weight_input = GroundWeightInput, .acceleration_input = GroundAccelerationInput, .speed_input = GroundSpeedInput, .motion = GroundMotion,
 		.capacity = RustEngineDetermineCapacity, .cargo_weight = GroundCargoWeight, .train_cargo_weight = GroundTrainCargoWeight,
 		.engine_power = GroundEnginePower, .engine_weight = GroundEngineWeight, .engine_te = GroundEngineTE, .engine_drag = GroundEngineDrag,
 		.wagon_power = GroundWagonPower, .wagon_weight = GroundWagonWeight, .powered = GroundPowered, .rail_type = RustRailType,
