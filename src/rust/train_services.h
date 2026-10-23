@@ -457,10 +457,6 @@ static uint64_t TrainMaxDepotPenalty(OpenTTDTrainHandle) noexcept
 {
 	return RustMaximumDepotPenalty();
 }
-static uint64_t TrainNo90(OpenTTDTrainHandle, uint8_t a, uint8_t b) noexcept
-{
-	return Rail90DegTurnDisallowed(static_cast<RailType>(a), static_cast<RailType>(b));
-}
 
 static void TrainOrderDepotService(OpenTTDTrainHandle id, uint16_t a) noexcept
 {

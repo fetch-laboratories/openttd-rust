@@ -36,7 +36,7 @@ static OpenTTDRailTrain RailTrain(void *context) noexcept
 {
 	const Train *v = static_cast<RailYapfContext *>(context)->train;
 	const Train *rear = v->Last();
-	return {v->GetCompatibleRailTypes().base(), GetAllCompatibleRailTypes(v->GetRailTypes()).base(),
+	return {v->GetCompatibleRailTypes().base(), RustAllCompatibleRailTypes(v->GetRailTypes().base()),
 		v->tile.base(), rear->tile.base(), TileVirtXY(v->x_pos, v->y_pos).base(), TileVirtXY(rear->x_pos, rear->y_pos).base(),
 		v->dest_tile.base(), RustGroundCachedTotalLength(&v->gcache), static_cast<uint32_t>(std::min<int>(RustVehicleDisplayMaxSpeed(v), RustVehicleOrderMaxSpeed(v))),
 		v->current_order.GetDestination().base(), GetRustSharedServices().train_trackdir(v), GetRustSharedServices().train_trackdir(rear),
@@ -54,12 +54,12 @@ static OpenTTDRailTile RailTile(uint32_t tile, uint8_t direction) noexcept
 		| (IsRailWaypointTile(t) ? 16U : 0U) | (IsRailDepotTile(t) ? 32U : 0U)
 		| (IsPlainRailTile(t) ? 64U : 0U) | (IsLevelCrossingTile(t) ? 128U : 0U)
 		| (IsBridgeTile(t) ? 256U : 0U) | (IsTunnelTile(t) ? 512U : 0U);
-	result.railtype = GetTileRailType(t);
+	result.railtype = RustTileRailType(tile);
 	if (IsPlainRailTile(t)) result.tracks = RustRailTracks(tile);
 	if (HasStationTileRail(t)) {
 		result.station = MapSvcStationIndex(tile);
 		result.station_track = RustRailStationTrack(tile);
-		if (RustIsRailStation(tile) && HasStationReservation(t)) result.flags |= 1024U;
+		if (RustIsRailStation(tile) && RustStationReserved(tile)) result.flags |= 1024U;
 	}
 	if (IsTileType(t, MP_TUNNELBRIDGE)) {
 		result.tunnel_dir = GetTunnelBridgeDirection(t);
@@ -76,7 +76,7 @@ static OpenTTDRailTile RailTile(uint32_t tile, uint8_t direction) noexcept
 		}
 		if (result.signal_along) result.signal_green = RustRailSignalState(tile, td) == SIGNAL_STATE_GREEN;
 	}
-	if (HasOnewaySignalBlockingTrackdir(t, td)) result.flags |= 2048U;
+	if (RustOnewaySignalBlocking(tile, td)) result.flags |= 2048U;
 	return result;
 }
 template <typename Follower>
@@ -94,10 +94,6 @@ static OpenTTDRailFollow RailFollow(void *context, uint32_t tile, uint8_t td, ui
 {
 	if (no90) return RailFollowT<CFollowTrackFreeRailNo90>(context, tile, td, types, mask);
 	return RailFollowT<CFollowTrackFreeRail>(context, tile, td, types, mask);
-}
-static uint8_t RailCompatibleStation(uint32_t tile, uint32_t start) noexcept
-{
-	return IsCompatibleTrainStationTile(TileIndex{tile}, TileIndex{start});
 }
 static uint32_t RailPlatformLength(uint32_t tile, uint8_t dir) noexcept
 {
@@ -177,7 +173,7 @@ static void RailDebug(void *context, uint8_t kind, const uint32_t *stats, uint32
 }
 static const OpenTTDRailLeaves _rail_leaves{
 	.train = RailTrain, .tile = RailTile, .follow = RailFollow,
-	.compatible_station = RailCompatibleStation, .platform_length = RailPlatformLength,
+	.compatible_station = OpenTTDMapQuery<uint8_t, RustCompatibleStationTiles, uint32_t, uint32_t>, .platform_length = RailPlatformLength,
 	.closest_station = RailClosestStation, .destination_dirs = RailDestinationDirs,
 	.output = RailOutput, .debug = RailDebug,
 };

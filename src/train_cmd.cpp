@@ -4697,7 +4697,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.lost_warn = TrainLostWarn,
 		.map_size = TrainMapSize,
 		.max_depot_penalty = TrainMaxDepotPenalty,
-		.no_90 = TrainNo90,
+		.no_90 = OpenTTDLegacyMapQuery<uint64_t, RustDefaultRail90Disallowed, OpenTTDTrainHandle, uint8_t, uint8_t>,
 		.oneway_blocking = OpenTTDLegacyMapQuery<uint64_t, RustOnewaySignalBlocking, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.order_depot_service = TrainOrderDepotService,
 		.order_dummy = TrainOrderDummy,
@@ -4845,7 +4845,7 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.other_end = OpenTTDLegacyContextMapQuery<uint64_t, RustOtherTunnelBridgeEnd, OpenTTDTrainHandle, uint32_t>,
 		.overlap = TrainReservationOverlap,
 		.path_result = TrainReservationPathResult,
-		.rail90 = TrainReservationRail90,
+		.rail90 = OpenTTDLegacyContextMapQuery<uint64_t, RustTileRail90Disallowed, OpenTTDTrainHandle, uint32_t, uint32_t>,
 		.reach_dirs = TrainReservationReachDirs,
 		.reach_tracks = TrainReservationReachTracks,
 

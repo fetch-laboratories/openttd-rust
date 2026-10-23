@@ -37,7 +37,7 @@ inline bool RustEngineClimate(const OpenTTDEngine *e) noexcept { return EngineOf
 inline bool RustEngineCanCarry(const Engine *e) noexcept { return e->CanCarryCargo(); }
 inline uint64_t RustEngineRefitMask(EngineID id, bool initial) noexcept { return GetUnionOfArticulatedRefitMasks(id, initial); }
 inline RailVehicleTypes RustEngineRailKind(const Engine *e) noexcept { return e->VehInfo<RailVehicleInfo>().railveh_type; }
-inline uint64_t RustEngineCompatibleRailTypes(const Engine *e) noexcept { return GetAllCompatibleRailTypes(e->VehInfo<RailVehicleInfo>().railtypes).base(); }
+inline uint64_t RustEngineCompatibleRailTypes(const Engine *e) noexcept { return RustAllCompatibleRailTypes(e->VehInfo<RailVehicleInfo>().railtypes.base()); }
 /** Reserve a unit number and assign the returned native ID to the shell. */
 inline void RustVehicleUseUnitNumber(Vehicle *v, uint16_t unit) noexcept { v->unitnumber = RustCompanyUseVehicleUnit(v->owner, v->type, unit); }
 inline void RustVehicleUseCurrentUnit(void *shell) noexcept
@@ -66,6 +66,6 @@ inline OpenTTDEngineCompany Engine_company_next(uint32_t from) noexcept
 inline OpenTTDEngineVehicle Engine_vehicle_next(uint32_t from) noexcept
 {
 	const Vehicle *v = VehicleOf(RustNextVehicle(from));
-	return v == nullptr ? OpenTTDEngineVehicle{nullptr, UINT32_MAX, 0, VEH_INVALID} : OpenTTDEngineVehicle{RustVehicle(v), v->index.base(), RustVehicleOwner(v), RustVehicleVehicleType(v)};
+	return v == nullptr ? OpenTTDEngineVehicle{nullptr, UINT32_MAX, 0, VEH_INVALID} : OpenTTDEngineVehicle{RustVehicle(v), RustVehicleIndexOpaque(v), RustVehicleOwner(v), RustVehicleVehicleType(v)};
 }
 #endif /* RUST_ENGINE_SERVICES_H */

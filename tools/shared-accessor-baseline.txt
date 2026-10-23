@@ -98,7 +98,6 @@ src/rust/fleet_group_services.hpp | FleetGroup_keep_length(uint8_t owner) noexce
 src/rust/fleet_group_services.hpp | FleetGroup_release_number(uint8_t owner, uint16_t number) noexcept | e0e39efee41a55f6 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_vehicle_engine(void *shell) noexcept | 15a8b70a0fe4aa33 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_vehicle_group(void *shell) noexcept | a12f8a6d547d1ae7 | 1
-src/rust/fleet_group_services.hpp | FleetGroup_vehicle_id(void *shell) noexcept | 61b7b9757d720690 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_vehicle_owner(void *shell) noexcept | 4259d81cf1bbb6a9 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_vehicle_type(void *shell) noexcept | 725e4daef5bcf650 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_viewport(void *shell) noexcept | 5fe83f6e19b74226 | 1

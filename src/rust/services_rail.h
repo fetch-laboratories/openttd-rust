@@ -76,6 +76,8 @@ inline void RustCycleSignalSide(uint32_t tile, uint8_t track) noexcept { CycleSi
 inline uint64_t RustAllCompatibleRailTypes(uint64_t types) noexcept { return GetAllCompatibleRailTypes(RailTypes{types}).base(); }
 inline RailType RustTileRailType(uint32_t tile) noexcept { return GetTileRailType(TileIndex{tile}); }
 inline bool RustRail90Disallowed(uint8_t a, uint8_t b, bool def) noexcept { return Rail90DegTurnDisallowed(static_cast<RailType>(a), static_cast<RailType>(b), def); }
+inline bool RustDefaultRail90Disallowed(uint8_t a, uint8_t b) noexcept { return RustRail90Disallowed(a, b, _settings_game.pf.forbid_90_deg); }
+inline bool RustTileRail90Disallowed(uint32_t a, uint32_t b) noexcept { return RustDefaultRail90Disallowed(RustTileRailType(a), RustTileRailType(b)); }
 inline bool RustOnewaySignalBlocking(uint32_t tile, uint8_t td) noexcept { return HasOnewaySignalBlockingTrackdir(TileIndex{tile}, static_cast<Trackdir>(td)); }
 inline bool RustHasPbsSignal(uint32_t tile, uint8_t td) noexcept { return HasPbsSignalOnTrackdir(TileIndex{tile}, static_cast<Trackdir>(td)); }
 inline bool RustShowTrackReservation() noexcept { return _settings_client.gui.show_track_reservation; }

@@ -96,7 +96,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitClose(OpenTTDVehicle *v, int32_t x,
 		const RoadVehicle *r = RoadVehicle::From(u);
 		const RoadVehicle *first = RustVehicleFirst(r);
 		OpenTTDRoadCandidate candidate{.vehicle = RustVehicle(r), .state = RoadStateOf(r), .first = RustVehicle(first), .first_state = RoadStateOf(first),
-			.index = r->index.base(), .x = RustVehicleX(r), .y = RustVehicleY(r), .z = RustVehicleZ(r), .first_speed = RustVehicleSpeed(first), .direction = RustVehicleDirection(r)};
+			.index = RustVehicleIndexOpaque(r), .x = RustVehicleX(r), .y = RustVehicleY(r), .z = RustVehicleZ(r), .first_speed = RustVehicleSpeed(first), .direction = RustVehicleDirection(r)};
 		return visit(context, &candidate);
 	};
 	if (wormhole) {

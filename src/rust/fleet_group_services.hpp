@@ -17,7 +17,6 @@ struct FleetVehicleListContext { VehicleList list; const VehicleListIdentifier &
 static void * FleetGroup_group(uint16_t id) noexcept { auto *g = Group::GetIfValid(GroupID(id)); return g == nullptr ? nullptr : g->state.state; }
 static uint32_t FleetGroup_next_group(uint32_t from) noexcept { for (Group *g : Group::Iterate(from)) { if (g->index.base() >= from) return g->index.base(); } return UINT32_MAX; }
 static void * FleetGroup_vehicle(uint32_t id) noexcept { return Vehicle::GetIfValid(VehicleID(id)); }
-static uint32_t FleetGroup_vehicle_id(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->index.base(); }
 static uint8_t FleetGroup_vehicle_type(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->type; }
 static uint8_t FleetGroup_vehicle_owner(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return RustVehicleOwner(v); }
 static uint16_t FleetGroup_vehicle_group(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->group_id.base(); }
@@ -71,7 +70,7 @@ static const OpenTTDFleetGroupServices _fleet_group_services{
 	.next_company = RustNextCompanyID,
 	.next_vehicle = GetRustSharedServices().vehicle_next,
 	.vehicle = FleetGroup_vehicle,
-	.vehicle_id = FleetGroup_vehicle_id,
+	.vehicle_id = OpenTTDMapQuery<uint32_t, RustVehicleIndexOpaque, void *>,
 	.vehicle_type = FleetGroup_vehicle_type,
 	.vehicle_owner = FleetGroup_vehicle_owner,
 	.vehicle_group = FleetGroup_vehicle_group,

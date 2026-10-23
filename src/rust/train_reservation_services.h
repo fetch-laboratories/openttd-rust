@@ -147,11 +147,6 @@ static void TrainReservationPathResult(void *, OpenTTDTrainHandle id, uint8_t a)
 	Train *v = static_cast<Train *>(id.shell);
 	v->HandlePathfindingResult(a != 0);
 }
-static uint64_t TrainReservationRail90(void *, OpenTTDTrainHandle, uint32_t a, uint32_t b) noexcept
-{
-	TileIndex t(static_cast<uint32_t>(a));
-	return Rail90DegTurnDisallowed(GetTileRailType(t), GetTileRailType(TileIndex(static_cast<uint32_t>(b))));
-}
 static uint64_t TrainReservationReachDirs(void *, OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return TrackdirReachesTrackdirs(static_cast<Trackdir>(a));
