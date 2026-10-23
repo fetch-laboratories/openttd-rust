@@ -16,6 +16,7 @@ use crate::clear_map::{CLEAR_DESERT, CLEAR_ROUGH};
 use crate::clear_map::{CLEAR_GRASS, CLEAR_ROCKS};
 use crate::command_type::DoCommandFlag as F;
 use crate::direction_func::{change_diag_dir, diag_dir_to_axis, reverse_diag_dir};
+use crate::direction_type::AXIS_Y;
 use crate::genworld::{
     CUSTOM_SEA_LEVEL_NUMBER_DIFFICULTY, GWM_HEIGHTMAP, GWP_LANDSCAPE, GWP_RIVER, LG_ORIGINAL,
     LG_TERRAGENESIS, Progress,
@@ -475,7 +476,7 @@ impl World<'_> {
         }
         let direction = ((r >> 22) & 3) as u8;
         let (mut width, mut height) = (template.width, template.height);
-        if diag_dir_to_axis(direction) == 1 {
+        if diag_dir_to_axis(direction) == AXIS_Y {
             std::mem::swap(&mut width, &mut height);
         }
         if flag & 4 != 0 {
