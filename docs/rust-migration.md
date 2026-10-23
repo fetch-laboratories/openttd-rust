@@ -1911,7 +1911,9 @@ fixtures and threaded GUI/presentation remain coverage gaps tracked in #156.
 ### Complete PBS reservation service (#367)
 
 Rust (`pbs.rs`) owns reservation reads/writes, complete platform scans, traversal,
-loop termination, train selection and waiting policy. Native map bits remain
+loop termination, train selection and waiting policy. `follow_track.rs` owns
+reserved-track masking between native Follow and GetSpeedLimit calls, removing
+the YAPF/PBS bounce. Native map bits remain
 canonical. The named `CFollowTrackRail::Follow` leaf carries all partial failure
 observations in a call-local typed result; spatial enumeration retains native
 hash order, while Rust selects the lowest front-train ID. Crossing updates and
