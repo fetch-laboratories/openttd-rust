@@ -163,6 +163,9 @@ def check(scenario, run, mode, role, result):
             ("animation-property-speed", 90),
             ("animation-traversal", 72),
             ("animation-airport", 5),
+            ("animation-visit station", 46),
+            ("animation-visit roadstop", 21),
+            ("animation-visit airport", 9),
         ):
             if (
                 sum(line.startswith("OBJECT " + marker + " ") for line in lines)
