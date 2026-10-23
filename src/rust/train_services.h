@@ -259,10 +259,7 @@ static void TrainCrashSound(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	SndPlayVehicleFx(SND_13_TRAIN_COLLISION, v);
 }
-static uint64_t TrainCrossingBarred(OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	return IsCrossingBarred(TileIndex(a));
-}
+
 static uint64_t TrainCrossingRailAxis(OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	return GetCrossingRailAxis(TileIndex(a));
@@ -378,10 +375,7 @@ static uint64_t TrainIsBridge(OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	return IsBridgeTile(TileIndex(a));
 }
-static uint64_t TrainIsDepot(OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	return IsRailDepotTile(TileIndex(a));
-}
+
 static uint64_t TrainIsRailway(OpenTTDTrainHandle, uint32_t a) noexcept
 {
 	return IsTileType(TileIndex(a), MP_RAILWAY);

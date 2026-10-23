@@ -109,4 +109,7 @@ Result OpenTTDLegacyContextMapQuery(void *, Handle, Args... args) noexcept
 {
 	return static_cast<Result>(Query(args...));
 }
+inline bool RustRailDepotTile(uint32_t tile) noexcept { return IsRailDepotTile(TileIndex{tile}); }
+inline bool RustRailOnewaySignal(uint32_t tile, uint8_t track) noexcept { return IsOnewaySignal(TileIndex{tile}, static_cast<Track>(track)); }
+inline bool RustCrossingBarred(uint32_t tile) noexcept { return IsCrossingBarred(TileIndex{tile}); }
 #endif /* RUST_SERVICES_RAIL_H */

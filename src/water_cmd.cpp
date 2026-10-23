@@ -1526,6 +1526,7 @@ void ConvertGroundTilesIntoWaterTiles()
 	}
 }
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Water(TileIndex tile, TransportType mode, uint, DiagDirection)
 {
 	static const TrackBits coast_tracks[] = {TRACK_BIT_NONE, TRACK_BIT_RIGHT, TRACK_BIT_UPPER, TRACK_BIT_NONE, TRACK_BIT_LEFT, TRACK_BIT_NONE, TRACK_BIT_NONE,
@@ -1552,6 +1553,7 @@ static TrackStatus GetTileTrackStatus_Water(TileIndex tile, TransportType mode, 
 	}
 	return CombineTrackStatus(TrackBitsToTrackdirBits(ts), TRACKDIR_BIT_NONE);
 }
+#endif
 
 static bool ClickTile_Water(TileIndex tile)
 {
@@ -1601,10 +1603,12 @@ static void ChangeTileOwner_Water(TileIndex tile, Owner old_owner, Owner new_own
 
 #endif /* WITH_RUST */
 
+#ifndef WITH_RUST
 static VehicleEnterTileStates VehicleEnter_Water(Vehicle *, TileIndex, int, int)
 {
 	return {};
 }
+#endif
 
 #ifdef WITH_RUST
 static CommandCost TerraformTile_Water(TileIndex tile, DoCommandFlags flags, int, Slope)
@@ -1652,7 +1656,11 @@ extern const TileTypeProcs _tile_type_water_procs = {
 	ClearTile_Water,          // clear_tile_proc
 	nullptr,                     // add_accepted_cargo_proc
 	GetTileDesc_Water,        // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Water, // get_tile_track_status_proc
+#endif
 	ClickTile_Water,          // click_tile_proc
 	nullptr,                     // animate_tile_proc
 	TileLoop_Water,           // tile_loop_proc
@@ -1662,7 +1670,11 @@ extern const TileTypeProcs _tile_type_water_procs = {
 	ChangeTileOwner_Water,    // change_tile_owner_proc
 #endif
 	nullptr,                     // add_produced_cargo_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	VehicleEnter_Water,       // vehicle_enter_tile_proc
+#endif
 #ifdef WITH_RUST
 	nullptr, // Rust movement owner dispatches directly.
 #else

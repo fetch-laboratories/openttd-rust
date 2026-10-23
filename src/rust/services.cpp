@@ -276,7 +276,7 @@ static bool Shared_is_bridge(uint32_t tile) noexcept { return IsBridgeTile(TileI
 static uint8_t Shared_drive_through_axis(uint32_t tile) noexcept { return GetDriveThroughStopAxis(TileIndex{tile}); }
 static bool Shared_is_any_road_stop(uint32_t tile) noexcept { return IsAnyRoadStopTile(TileIndex{tile}); }
 static uint8_t Shared_road_type(uint32_t tile) noexcept { return GetRoadTypeRoad(TileIndex{tile}); }
-static bool Shared_has_road_type(uint32_t tile) noexcept { return HasTileRoadType(TileIndex{tile}, RTT_ROAD); }
+static bool Shared_has_road_type(uint32_t tile) noexcept { return RustHasTileRoadType(tile, RTT_ROAD); }
 static uint8_t Shared_road_owner(uint32_t tile) noexcept { return GetRoadOwner(TileIndex{tile}, RTT_ROAD).base(); }
 static uint16_t Shared_town_index(uint32_t tile) noexcept { return GetTownIndex(TileIndex{tile}).base(); }
 static uint8_t Shared_road_bits(uint32_t tile, uint8_t type, bool straight) noexcept { return GetAnyRoadBits(TileIndex{tile}, static_cast<RoadTramType>(type), straight); }

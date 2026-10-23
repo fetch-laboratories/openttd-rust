@@ -850,6 +850,78 @@ layouts! {
         spec,
         rotation,
     };
+    "OpenTTDMovementServices" ["landscape"] => crate::movement::MovementServices {
+        shared,
+        rail,
+        road,
+        rail_map,
+        train,
+        vehicle,
+        road_vehicle,
+        resolve,
+        pose,
+        depot_position,
+        incline,
+        first,
+        first_speed,
+        write_ground_flags,
+        front_engine,
+        train_engine_class,
+        depot_invalidate,
+        native_assert,
+        rail_depot_tile,
+        has_tile_road_type,
+        oneway_signal,
+        crossing_barred,
+        buoy,
+        water_type,
+        lock_direction,
+        ship_depot_axis,
+        pixel_slope,
+        outside_pixel_slope,
+        max_pixel_z,
+        apply_foundation,
+        owned_land,
+        object_foundation,
+        house_foundation,
+        house_callback,
+        house_boolean,
+        industry_foundation,
+        industry_callback,
+        industry_boolean,
+    };
+    "OpenTTDMovementFoundation" ["landscape"] => crate::movement::CallbackFoundation {
+        spec,
+        kind,
+        callback,
+    };
+    "OpenTTDMovementObjectFoundation" ["landscape"] => crate::movement::ObjectFoundation {
+        enabled,
+        no_foundation,
+    };
+    "OpenTTDMovementVehicle" ["landscape"] => crate::movement::MovementVehicle {
+        train,
+        road,
+        ship,
+        kind,
+    };
+    "OpenTTDMovementPose" ["landscape"] => crate::movement::MovementPose {
+        z,
+        direction,
+    };
+    "OpenTTDMovementDepotPosition" ["landscape"] => crate::movement::DepotPosition {
+        tile,
+        x,
+        y,
+    };
+    "OpenTTDMovementIncline" ["landscape"] => crate::movement::Incline {
+        z,
+        flags,
+    };
+    "OpenTTDMovementFirstSpeed" ["landscape"] => crate::movement::FirstSpeed {
+        first,
+        speed,
+    };
     "OpenTTDFoundationSlope" ["landscape"] => crate::services::FoundationSlope {
         z,
         slope,

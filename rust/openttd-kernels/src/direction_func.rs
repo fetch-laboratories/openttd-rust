@@ -25,3 +25,12 @@ pub const fn dir_to_diag_dir(direction: u8) -> u8 {
 pub const fn reverse_diag_dir(direction: u8) -> u8 {
     direction ^ 2
 }
+
+/// `DiagDirToDir`, with a valid native diagonal direction.
+pub const fn diag_dir_to_dir(d: u8) -> u8 {
+    2 * d + 1
+}
+/// `ReverseDir`.
+pub const fn reverse_dir(d: u8) -> u8 {
+    d ^ 4
+}

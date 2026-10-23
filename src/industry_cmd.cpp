@@ -1054,10 +1054,12 @@ static bool ClickTile_Industry(TileIndex tile)
 	return true;
 }
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Industry(TileIndex, TransportType, uint, DiagDirection)
 {
 	return 0;
 }
+#endif
 
 #ifndef WITH_RUST
 static void ChangeTileOwner_Industry(TileIndex tile, Owner old_owner, Owner new_owner)
@@ -3525,7 +3527,11 @@ extern const TileTypeProcs _tile_type_industry_procs = {
 #endif
 	AddAcceptedCargo_Industry,   // add_accepted_cargo_proc
 	GetTileDesc_Industry,        // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Industry, // get_tile_track_status_proc
+#endif
 	ClickTile_Industry,          // click_tile_proc
 	AnimateTile_Industry,        // animate_tile_proc
 #ifdef WITH_RUST

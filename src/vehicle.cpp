@@ -71,6 +71,10 @@
 #include "rust/vehicle_transaction_ffi.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/movement_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /* Number of bits in the hash to use from each vehicle coord */
@@ -1913,7 +1917,11 @@ Direction GetDirectionTowards(const Vehicle *v, int x, int y)
  */
 VehicleEnterTileStates VehicleEnterTile(Vehicle *v, TileIndex tile, int x, int y)
 {
+#ifdef WITH_RUST
+	return VehicleEnterTileStates{openttd_rust_movement_enter(&GetRustMovementServices(), RustVehicle(v), tile.base(), x, y)};
+#else
 	return _tile_type_procs[GetTileType(tile)]->vehicle_enter_tile_proc(v, tile, x, y);
+#endif
 }
 
 /**

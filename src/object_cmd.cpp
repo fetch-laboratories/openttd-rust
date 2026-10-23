@@ -812,10 +812,12 @@ static void TileLoop_Object(TileIndex tile)
 }
 
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Object(TileIndex, TransportType, uint, DiagDirection)
 {
 	return 0;
 }
+#endif
 
 static bool ClickTile_Object(TileIndex tile)
 {
@@ -1074,7 +1076,11 @@ extern const TileTypeProcs _tile_type_object_procs = {
 #endif
 	AddAcceptedCargo_Object,     // add_accepted_cargo_proc
 	GetTileDesc_Object,          // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Object,   // get_tile_track_status_proc
+#endif
 	ClickTile_Object,            // click_tile_proc
 	AnimateTile_Object,          // animate_tile_proc
 	TileLoop_Object,             // tile_loop_proc

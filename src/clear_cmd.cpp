@@ -386,10 +386,12 @@ get_out:;
 	} while (--i);
 }
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Clear(TileIndex, TransportType, uint, DiagDirection)
 {
 	return 0;
 }
+#endif
 
 static void GetTileDesc_Clear(TileIndex tile, TileDesc &td)
 {
@@ -446,7 +448,11 @@ extern const TileTypeProcs _tile_type_clear_procs = {
 	ClearTile_Clear,          ///< clear_tile_proc
 	nullptr,                     ///< add_accepted_cargo_proc
 	GetTileDesc_Clear,        ///< get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Clear, ///< get_tile_track_status_proc
+#endif
 	nullptr,                     ///< click_tile_proc
 	nullptr,                     ///< animate_tile_proc
 #ifdef WITH_RUST

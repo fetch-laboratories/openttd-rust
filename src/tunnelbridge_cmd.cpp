@@ -2006,6 +2006,7 @@ static void TileLoop_TunnelBridge(TileIndex tile)
 
 #endif
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_TunnelBridge(TileIndex tile, TransportType mode, uint sub_mode, DiagDirection side)
 {
 	TransportType transport_type = GetTunnelBridgeTransportType(tile);
@@ -2015,6 +2016,7 @@ static TrackStatus GetTileTrackStatus_TunnelBridge(TileIndex tile, TransportType
 	if (side != INVALID_DIAGDIR && side != ReverseDiagDir(dir)) return 0;
 	return CombineTrackStatus(TrackBitsToTrackdirBits(DiagDirToDiagTrackBits(dir)), TRACKDIR_BIT_NONE);
 }
+#endif
 
 #ifndef WITH_RUST
 static void ChangeTileOwner_TunnelBridge(TileIndex tile, Owner old_owner, Owner new_owner)
@@ -2084,6 +2086,7 @@ static void ChangeTileOwner_TunnelBridge(TileIndex tile, Owner old_owner, Owner 
  * done here as well.
  * @param gv The ground vehicle entering the bridge.
  */
+#ifndef WITH_RUST
 template <typename T>
 static void PrepareToEnterBridge(T *gv)
 {
@@ -2094,13 +2097,16 @@ static void PrepareToEnterBridge(T *gv)
 		ClrBit(gv->gv_flags, GVF_GOINGDOWN_BIT);
 	}
 }
+#endif
 
 /**
  * Frame when the 'enter tunnel' sound should be played. This is the second
  * frame on a tile, so the sound is played shortly after entering the tunnel
  * tile, while the vehicle is still visible.
  */
+#ifndef WITH_RUST
 static const uint8_t TUNNEL_SOUND_FRAME = 1;
+#endif
 
 /**
  * Frame when a vehicle should be hidden in a tunnel with a certain direction.
@@ -2112,6 +2118,7 @@ static const uint8_t TUNNEL_SOUND_FRAME = 1;
  */
 extern const uint8_t _tunnel_visibility_frame[DIAGDIR_END] = {12, 8, 8, 12};
 
+#ifndef WITH_RUST
 static VehicleEnterTileStates VehicleEnter_TunnelBridge(Vehicle *v, TileIndex tile, int x, int y)
 {
 	int z = GetSlopePixelZ(x, y, true) - v->z_pos;
@@ -2251,6 +2258,7 @@ static VehicleEnterTileStates VehicleEnter_TunnelBridge(Vehicle *v, TileIndex ti
 	}
 	return {};
 }
+#endif
 
 static CommandCost TerraformTile_TunnelBridge(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
 {
@@ -2309,7 +2317,11 @@ extern const TileTypeProcs _tile_type_tunnelbridge_procs = {
 	ClearTile_TunnelBridge,          // clear_tile_proc
 	nullptr,                            // add_accepted_cargo_proc
 	GetTileDesc_TunnelBridge,        // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_TunnelBridge, // get_tile_track_status_proc
+#endif
 	nullptr,                            // click_tile_proc
 	nullptr,                            // animate_tile_proc
 #ifdef WITH_RUST
@@ -2323,7 +2335,11 @@ extern const TileTypeProcs _tile_type_tunnelbridge_procs = {
 	ChangeTileOwner_TunnelBridge,    // change_tile_owner_proc
 #endif
 	nullptr,                            // add_produced_cargo_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	VehicleEnter_TunnelBridge,       // vehicle_enter_tile_proc
+#endif
 #ifdef WITH_RUST
 	nullptr, // Rust movement owner dispatches directly.
 #else

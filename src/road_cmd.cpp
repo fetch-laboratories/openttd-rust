@@ -2188,6 +2188,7 @@ static bool ClickTile_Road(TileIndex tile)
 }
 
 /* Converts RoadBits to TrackBits */
+#ifndef WITH_RUST
 static const TrackBits _road_trackbits[16] = {
 	TRACK_BIT_NONE,                                  // ROAD_NONE
 	TRACK_BIT_NONE,                                  // ROAD_NW
@@ -2206,7 +2207,9 @@ static const TrackBits _road_trackbits[16] = {
 	TRACK_BIT_RIGHT | TRACK_BIT_LOWER | TRACK_BIT_X, // ROAD_X | ROAD_SE
 	TRACK_BIT_ALL,                                   // ROAD_ALL
 };
+#endif
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Road(TileIndex tile, TransportType mode, uint sub_mode, DiagDirection side)
 {
 	TrackdirBits trackdirbits = TRACKDIR_BIT_NONE;
@@ -2270,6 +2273,7 @@ static TrackStatus GetTileTrackStatus_Road(TileIndex tile, TransportType mode, u
 	}
 	return CombineTrackStatus(trackdirbits, red_signals);
 }
+#endif
 
 static const StringID _road_tile_strings[] = {
 	STR_LAI_ROAD_DESCRIPTION_ROAD,
@@ -2352,10 +2356,13 @@ static void GetTileDesc_Road(TileIndex tile, TileDesc &td)
  * Given the direction the road depot is pointing, this is the direction the
  * vehicle should be travelling in in order to enter the depot.
  */
+#ifndef WITH_RUST
 static const uint8_t _roadveh_enter_depot_dir[4] = {
 	TRACKDIR_X_SW, TRACKDIR_Y_NW, TRACKDIR_X_NE, TRACKDIR_Y_SE
 };
+#endif
 
+#ifndef WITH_RUST
 static VehicleEnterTileStates VehicleEnter_Road(Vehicle *v, TileIndex tile, int, int)
 {
 	switch (GetRoadTileType(tile)) {
@@ -2381,6 +2388,7 @@ static VehicleEnterTileStates VehicleEnter_Road(Vehicle *v, TileIndex tile, int,
 	}
 	return {};
 }
+#endif
 
 
 #ifndef WITH_RUST
@@ -2883,7 +2891,11 @@ extern const TileTypeProcs _tile_type_road_procs = {
 	ClearTile_Road,          // clear_tile_proc
 	nullptr,                    // add_accepted_cargo_proc
 	GetTileDesc_Road,        // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Road, // get_tile_track_status_proc
+#endif
 	ClickTile_Road,          // click_tile_proc
 	nullptr,                    // animate_tile_proc
 #ifdef WITH_RUST
@@ -2897,7 +2909,11 @@ extern const TileTypeProcs _tile_type_road_procs = {
 	ChangeTileOwner_Road,    // change_tile_owner_proc
 #endif
 	nullptr,                    // add_produced_cargo_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	VehicleEnter_Road,       // vehicle_enter_tile_proc
+#endif
 #ifdef WITH_RUST
 	nullptr, // Rust movement owner dispatches directly.
 #else

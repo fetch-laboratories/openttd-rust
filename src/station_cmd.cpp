@@ -4219,6 +4219,7 @@ static void GetTileDesc_Station(TileIndex tile, TileDesc &td)
 }
 
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Station(TileIndex tile, TransportType mode, uint sub_mode, DiagDirection side)
 {
 	TrackBits trackbits = TRACK_BIT_NONE;
@@ -4264,6 +4265,7 @@ static TrackStatus GetTileTrackStatus_Station(TileIndex tile, TransportType mode
 
 	return CombineTrackStatus(TrackBitsToTrackdirBits(trackbits), TRACKDIR_BIT_NONE);
 }
+#endif
 
 
 #ifdef WITH_RUST
@@ -4377,6 +4379,7 @@ static bool ClickTile_Station(TileIndex tile)
 	return true;
 }
 
+#ifndef WITH_RUST
 static VehicleEnterTileStates VehicleEnter_Station(Vehicle *v, TileIndex tile, int x, int y)
 {
 	if (v->type == VEH_TRAIN) {
@@ -4429,6 +4432,7 @@ static VehicleEnterTileStates VehicleEnter_Station(Vehicle *v, TileIndex tile, i
 
 	return {};
 }
+#endif
 
 /**
  * Run the watched cargo callback for all houses in the catchment area.
@@ -6043,7 +6047,11 @@ extern const TileTypeProcs _tile_type_station_procs = {
 	ClearTile_Station,          // clear_tile_proc
 	nullptr,                       // add_accepted_cargo_proc
 	GetTileDesc_Station,        // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Station, // get_tile_track_status_proc
+#endif
 	ClickTile_Station,          // click_tile_proc
 	AnimateTile_Station,        // animate_tile_proc
 	TileLoop_Station,           // tile_loop_proc
@@ -6053,7 +6061,11 @@ extern const TileTypeProcs _tile_type_station_procs = {
 	ChangeTileOwner_Station,    // change_tile_owner_proc
 #endif
 	nullptr,                       // add_produced_cargo_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	VehicleEnter_Station,       // vehicle_enter_tile_proc
+#endif
 #ifdef WITH_RUST
 	nullptr, // Rust movement owner dispatches directly.
 #else

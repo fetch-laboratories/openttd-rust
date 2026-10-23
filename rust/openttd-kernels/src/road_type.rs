@@ -8,3 +8,6 @@
 //! Shared values from `road_type.h`.
 /// `INVALID_ROADTYPE`.
 pub const INVALID_ROADTYPE: u8 = 63;
+
+/// `ROAD_X`.
+pub const ROAD_X: u8 = 10;

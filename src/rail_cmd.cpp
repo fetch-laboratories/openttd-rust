@@ -2769,6 +2769,7 @@ set_ground:
 #endif
 
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Track(TileIndex tile, TransportType mode, uint, DiagDirection side)
 {
 	/* Case of half tile slope with water. */
@@ -2830,6 +2831,7 @@ static TrackStatus GetTileTrackStatus_Track(TileIndex tile, TransportType mode, 
 
 	return CombineTrackStatus(TrackBitsToTrackdirBits(trackbits), red_signals);
 }
+#endif
 
 static bool ClickTile_Track(TileIndex tile)
 {
@@ -2962,12 +2964,14 @@ static void ChangeTileOwner_Track(TileIndex tile, Owner old_owner, Owner new_own
 }
 #endif /* WITH_RUST */
 
+#ifndef WITH_RUST
 static const uint8_t _fractcoords_behind[4] = { 0x8F, 0x8, 0x80, 0xF8 };
 static const uint8_t _fractcoords_enter[4] = { 0x8A, 0x48, 0x84, 0xA8 };
 static const int8_t _deltacoord_leaveoffset[8] = {
 	-1,  0,  1,  0, /* x */
 	 0,  1,  0, -1  /* y */
 };
+#endif
 
 
 /**
@@ -2978,6 +2982,9 @@ static const int8_t _deltacoord_leaveoffset[8] = {
  */
 int TicksToLeaveDepot(const Train *v)
 {
+#ifdef WITH_RUST
+	return openttd_rust_movement_depot_ticks(&GetRustMovementServices(), TrainHandle(v));
+#else
 	DiagDirection dir = GetRailDepotDirection(v->tile);
 	int length = v->CalcNextVehicleOffset();
 
@@ -2988,12 +2995,14 @@ int TicksToLeaveDepot(const Train *v)
 		case DIAGDIR_NW: return  ((int)(v->y_pos & 0x0F) - ((_fractcoords_enter[dir] >> 4)   - (length + 1)));
 		default: NOT_REACHED();
 	}
+#endif
 }
 
 /**
  * Tile callback routine when vehicle enters tile
  * @see vehicle_enter_tile_proc
  */
+#ifndef WITH_RUST
 static VehicleEnterTileStates VehicleEnter_Track(Vehicle *u, TileIndex tile, int x, int y)
 {
 	/* This routine applies only to trains in depot tiles. */
@@ -3042,6 +3051,7 @@ static VehicleEnterTileStates VehicleEnter_Track(Vehicle *u, TileIndex tile, int
 
 	return {};
 }
+#endif
 
 #ifndef WITH_RUST
 /**
@@ -3431,7 +3441,11 @@ extern const TileTypeProcs _tile_type_rail_procs = {
 #endif
 	nullptr,                     // add_accepted_cargo_proc
 	GetTileDesc_Track,        // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Track, // get_tile_track_status_proc
+#endif
 	ClickTile_Track,          // click_tile_proc
 	nullptr,                     // animate_tile_proc
 #ifdef WITH_RUST
@@ -3445,7 +3459,11 @@ extern const TileTypeProcs _tile_type_rail_procs = {
 	ChangeTileOwner_Track,    // change_tile_owner_proc
 #endif
 	nullptr,                     // add_produced_cargo_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	VehicleEnter_Track,       // vehicle_enter_tile_proc
+#endif
 #ifdef WITH_RUST
 	nullptr, // Rust movement owner dispatches directly.
 #else

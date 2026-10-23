@@ -70,6 +70,9 @@
 
 #ifdef WITH_RUST
 #include "rust/movement_ffi.h"
+#include "rust/services_movement.h"
+#include "rust/train_ffi.h"
+#include "rust/services_station.h"
 #endif
 
 #include "safeguards.h"
@@ -618,7 +621,11 @@ void DoClearSquare(TileIndex tile)
  */
 TrackStatus GetTileTrackStatus(TileIndex tile, TransportType mode, uint sub_mode, DiagDirection side)
 {
+#ifdef WITH_RUST
+	return openttd_rust_movement_track_status(&GetRustMovementServices(), tile.base(), mode, sub_mode, side);
+#else
 	return _tile_type_procs[GetTileType(tile)]->get_tile_track_status_proc(tile, mode, sub_mode, side);
+#endif
 }
 
 #ifdef WITH_RUST
@@ -1928,6 +1935,29 @@ const OpenTTDMovementServices &GetRustMovementServices() noexcept
 		.shared = &GetRustSharedServices(),
 		.rail = &GetRustRailGroundServices(),
 		.road = &GetRustRoadGroundServices(),
+		.rail_map = &GetRustRailMapServices(),
+		.train = &GetTrainServices(),
+		.vehicle = &GetRustVehicleServices(),
+		.road_vehicle = &GetRustRoadLeaves(),
+		.resolve = RustMovementResolve,
+		.pose = RustMovementPose,
+		.depot_position = RustMovementDepotPosition,
+		.incline = RustMovementIncline,
+		.first = RustMovementFirst,
+		.first_speed = RustMovementFirstSpeed,
+		.write_ground_flags = RustMovementWriteGroundFlags,
+		.front_engine = RustMovementFrontEngine,
+		.train_engine_class = RustMovementTrainEngineClass,
+		.depot_invalidate = RustMovementDepotInvalidate,
+		.native_assert = RustMovementAssert,
+		.rail_depot_tile = RustRailDepotTile,
+		.has_tile_road_type = RustHasTileRoadType,
+		.oneway_signal = RustRailOnewaySignal,
+		.crossing_barred = RustCrossingBarred,
+		.buoy = RustStationBuoy,
+		.water_type = GetRustWaterCommandServices().water_type,
+		.lock_direction = GetRustWaterCommandServices().lock_direction,
+		.ship_depot_axis = RustShipDepotAxis,
 		.pixel_slope = RustTilePixelSlope,
 		.outside_pixel_slope = RustOutsidePixelSlope,
 		.max_pixel_z = GetIndustryTileServices().pixel_max_z,

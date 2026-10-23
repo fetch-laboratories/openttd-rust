@@ -3052,3 +3052,18 @@ pub unsafe extern "C" fn openttd_rust_train_force_command(
     };
     u8::from(g.force_command(id, execute != 0))
 }
+
+/// Same owned stop-location callee for tile admission and train speed control.
+pub(crate) fn stop_location(
+    leaves: &Leaves,
+    services: &Services,
+    id: Handle,
+    station: u16,
+    tile: u32,
+) -> (i32, i32, i32) {
+    Game { leaves, services }.stop_location(id, station, tile)
+}
+/// `Train::CalcNextVehicleOffset`, shared with depot movement policy.
+pub(crate) fn next_offset(leaves: &Leaves, services: &Services, id: Handle) -> i32 {
+    Game { leaves, services }.next_offset(id)
+}

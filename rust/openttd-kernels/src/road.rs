@@ -2131,3 +2131,18 @@ pub(crate) unsafe fn clear_removed_drive_stop(state: *mut State) {
         }
     }
 }
+
+/// `RoadVehicle::GetFrame` on the canonical owner.
+/// # Safety
+/// The serialized live shell owns this state for this scalar access.
+pub(crate) unsafe fn get_frame(s: *const State) -> u8 {
+    unsafe { (*s).scalars[FRAME] as u8 }
+}
+/// `RoadVehicle::SetFrame` on the canonical owner.
+/// # Safety
+/// The serialized live shell owns this state for this scalar access.
+pub(crate) unsafe fn set_frame(s: *mut State, frame: u8) {
+    unsafe {
+        (*s).scalars[FRAME] = u16::from(frame);
+    }
+}

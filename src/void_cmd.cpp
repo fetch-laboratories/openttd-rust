@@ -73,10 +73,12 @@ static void ChangeTileOwner_Void(TileIndex, Owner, Owner)
 	/* not used */
 }
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Void(TileIndex, TransportType, uint, DiagDirection)
 {
 	return 0;
 }
+#endif
 
 static CommandCost TerraformTile_Void(TileIndex, DoCommandFlags, int, Slope)
 {
@@ -93,7 +95,11 @@ extern const TileTypeProcs _tile_type_void_procs = {
 	ClearTile_Void,           // clear_tile_proc
 	nullptr,                     // add_accepted_cargo_proc
 	GetTileDesc_Void,         // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Void,  // get_tile_track_status_proc
+#endif
 	nullptr,                     // click_tile_proc
 	nullptr,                     // animate_tile_proc
 #ifdef WITH_RUST

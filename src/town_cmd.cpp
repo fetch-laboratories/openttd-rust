@@ -973,11 +973,13 @@ static void GetTileDesc_Town(TileIndex tile, TileDesc &td)
 	td.owner[0] = OWNER_TOWN;
 }
 
+#ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Town(TileIndex, TransportType, uint, DiagDirection)
 {
 	/* not used */
 	return 0;
 }
+#endif
 
 static void ChangeTileOwner_Town(TileIndex, Owner, Owner)
 {
@@ -4928,7 +4930,11 @@ extern const TileTypeProcs _tile_type_town_procs = {
 #endif
 	AddAcceptedCargo_Town,   // add_accepted_cargo_proc
 	GetTileDesc_Town,        // get_tile_desc_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetTileTrackStatus_Town, // get_tile_track_status_proc
+#endif
 	nullptr,                    // click_tile_proc
 	AnimateTile_Town,        // animate_tile_proc
 #ifdef WITH_RUST

@@ -28,4 +28,5 @@ inline void RustMakeRiver(uint32_t tile, uint8_t random) noexcept { MakeRiver(Ti
 inline bool RustOnWater(uint32_t tile) noexcept { return IsTileOnWater(TileIndex(tile)); }
 inline bool RustIsCanal(uint32_t tile) noexcept { return IsCanal(TileIndex{tile}); }
 
+inline Axis RustShipDepotAxis(uint32_t tile) noexcept { return GetShipDepotAxis(TileIndex{tile}); }
 #endif /* RUST_SERVICES_WATER_H */

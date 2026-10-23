@@ -23,7 +23,6 @@ static_assert(static_cast<uint8_t>(VehicleEnterTileState::EnteredWormhole) == 1 
 
 static uint32_t Ship_depot_dir(uint32_t tile) noexcept { return GetShipDepotDirection(TileIndex(tile)); }
 
-static uint32_t Ship_depot_axis(uint32_t tile) noexcept { return GetShipDepotAxis(TileIndex(tile)); }
 
 static bool Ship_is_depot(uint32_t tile) noexcept { return IsShipDepotTile(TileIndex(tile)); }
 
@@ -379,7 +378,7 @@ static bool Ship_next_depot(uint32_t first, OpenTTDShipDepot *out) noexcept
 const OpenTTDShipLeaves &GetRustShipServices() noexcept
 {
 	static const OpenTTDShipLeaves leaves{
-		.depot_dir = Ship_depot_dir, .depot_axis = Ship_depot_axis,
+		.depot_dir = Ship_depot_dir, .depot_axis = OpenTTDMapQuery<uint32_t, RustShipDepotAxis, uint32_t>,
 		.is_depot = Ship_is_depot, .depot_index = Ship_depot_index,
 		.wait_unbunch = Ship_wait_unbunch, .chain_depot = Ship_chain_depot,
 		.servint = Ship_servint,
