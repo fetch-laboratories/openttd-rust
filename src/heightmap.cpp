@@ -304,6 +304,7 @@ static bool ReadHeightmapBMP(std::string_view filename, uint *x, uint *y, std::v
  * @param img_height the height of the image in pixels/tiles
  * @param map        the input map
  */
+#ifndef WITH_RUST
 static void GreyscaleToMapHeights(uint img_width, uint img_height, std::span<const uint8_t> map)
 {
 	/* Defines the detail of the aspect ratio (to avoid doubles) */
@@ -396,12 +397,14 @@ static void GreyscaleToMapHeights(uint img_width, uint img_height, std::span<con
 	}
 }
 
+#endif
+
 /**
  * This function takes care of the fact that land in OpenTTD can never differ
  * more than 1 in height
  */
 #ifdef WITH_RUST
-#include "rust/landscape_generation_ffi.h"
+#include "rust/heightmap_services.hpp"
 #endif
 void FixSlopes()
 {
@@ -521,8 +524,25 @@ bool GetHeightmapDimensions(DetailedFileType dft, std::string_view filename, uin
  * @param dft Type of image file.
  * @param filename of the heightmap file to be imported
  */
+#ifdef WITH_RUST
+RustHeightmapDecoder::RustHeightmapDecoder(DetailedFileType type, std::string_view filename) : type(type), filename(filename), view{
+	.context = this,
+	.read = [](void *ctx, OpenTTDHeightmapImage *out) noexcept {
+		auto &decoder = *static_cast<RustHeightmapDecoder *>(ctx);
+		uint width, height;
+		if (!ReadHeightMap(decoder.type, decoder.filename, &width, &height, &decoder.image)) return false;
+		*out = {.width = width, .height = height, .data = decoder.image.data()};
+		return true;
+	},
+} {}
+#endif
+
 bool LoadHeightmap(DetailedFileType dft, std::string_view filename)
 {
+#ifdef WITH_RUST
+	RustHeightmapDecoder decoder(dft, filename);
+	return openttd_rust_load_heightmap(&GetRustLandscapeGenerationServices(), &decoder.view, _settings_game.game_creation.heightmap_rotation, _settings_game.construction.freeform_edges, _settings_game.game_creation.heightmap_height, _settings_game.construction.map_height_limit);
+#else
 	uint x, y;
 	std::vector<uint8_t> map;
 
@@ -540,6 +560,7 @@ bool LoadHeightmap(DetailedFileType dft, std::string_view filename)
 	MarkWholeScreenDirty();
 
 	return true;
+#endif
 }
 
 /**
@@ -548,6 +569,9 @@ bool LoadHeightmap(DetailedFileType dft, std::string_view filename)
  */
 void FlatEmptyWorld(uint8_t tile_height)
 {
+#ifdef WITH_RUST
+	openttd_rust_flat_empty_world(&GetRustLandscapeGenerationServices(), tile_height, _settings_game.construction.freeform_edges, _settings_game.construction.map_height_limit);
+#else
 	int edge_distance = _settings_game.construction.freeform_edges ? 0 : 2;
 	for (uint row = edge_distance; row < Map::SizeY() - edge_distance; row++) {
 		for (uint col = edge_distance; col < Map::SizeX() - edge_distance; col++) {
@@ -557,4 +581,5 @@ void FlatEmptyWorld(uint8_t tile_height)
 
 	FixSlopes();
 	MarkWholeScreenDirty();
+#endif
 }

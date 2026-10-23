@@ -23,17 +23,13 @@
     clippy::many_single_char_names,
     clippy::too_many_lines
 )]
-use crate::clear_map::CLEAR_FIELDS;
+use crate::clear_map::{CLEAR_DESERT, CLEAR_FIELDS, CLEAR_GRASS, CLEAR_ROCKS, CLEAR_ROUGH};
 use crate::services::{Services, chance16_i};
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES, MP_WATER};
 
 const ARCTIC: u8 = 1;
 const TROPIC: u8 = 2;
 const TOYLAND: u8 = 3;
-const CLEAR_GRASS: u8 = 0;
-const CLEAR_ROUGH: u8 = 1;
-const CLEAR_ROCKS: u8 = 2;
-const CLEAR_DESERT: u8 = 5;
 const GROUND_GRASS: u8 = 0;
 const GROUND_ROUGH: u8 = 1;
 const GROUND_SNOW_DESERT: u8 = 2;

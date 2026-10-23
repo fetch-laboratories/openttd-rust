@@ -77,6 +77,7 @@
 #include "rust/ground_ffi.h"
 #include "rust/landscape_loop_ffi.h"
 #include "rust/landscape_command_ffi.h"
+#include "rust/landscape_generation_ffi.h"
 #include "rust/tile_type_access.hpp"
 #include "tests/ground_protocol.hpp"
 #include "tests/landscape_protocol.hpp"

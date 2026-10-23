@@ -1506,8 +1506,10 @@ layouts! {
         no_train,
         wormhole_free,
     };
+    "OpenTTDHeightmapImage" ["landscape"] => crate::landscape_generation::Image { width, height, data, };
+    "OpenTTDHeightmapDecoder" ["landscape"] => crate::landscape_generation::Decoder { context, read, };
     "OpenTTDLandscapeGenerationServices" ["landscape"] => crate::landscape_generation::GenerationServices {
-        shared, clear, water, set_height, inner_tile, make_void, clear_bridge_middle,
+        shared, clear, water, set_height, inner_tile, make_void, screen_dirty, surrounded_by_water, set_freeform, clear_bridge_middle,
     };
     "OpenTTDLandscapeCommandStrings" ["landscape"] => crate::landscape_cmd::Strings {
         canal, clear_limit, water, sea_level, high, edge, bridge, bridge_high,

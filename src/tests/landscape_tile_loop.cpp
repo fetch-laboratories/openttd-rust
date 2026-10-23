@@ -11,6 +11,7 @@
 #ifdef WITH_RUST
 #include "../rust/tile_type_access.hpp"
 #include "../rust/landscape_command_ffi.h"
+#include "../rust/landscape_generation_ffi.h"
 #include "abi_layout.hpp"
 #include "../tile_map.h"
 #include "../rust/landscape_loop_ffi.h"

@@ -991,6 +991,7 @@ void RunTileLoop()
 #ifdef WITH_RUST
 #include "rust/landscape_generation_ffi.h"
 #include "void_map.h"
+#include "rust/presentation_services.h"
 
 const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() noexcept
 {
@@ -1001,6 +1002,9 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.set_height = RustSetTileHeight,
 		.inner_tile = RustInnerTile,
 		.make_void = [](uint32_t t) noexcept { MakeVoid(TileIndex{t}); },
+		.screen_dirty = RustScreenDirty,
+		.surrounded_by_water = []() noexcept { return IsMapSurroundedByWater(); },
+		.set_freeform = [](bool value) noexcept { _settings_game.construction.freeform_edges = value; },
 		.clear_bridge_middle = [](uint32_t t) noexcept { ClearBridgeMiddle(TileIndex{t}); },
 	};
 	return services;

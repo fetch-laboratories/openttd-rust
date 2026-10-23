@@ -35,3 +35,6 @@ pub const MP_OBJECT: u8 = 10;
 pub const MP_TUNNELBRIDGE: u8 = 9;
 /// `INVALID_TILE`.
 pub const INVALID_TILE: u32 = u32::MAX;
+
+/// `MAX_TILE_HEIGHT`.
+pub const MAX_TILE_HEIGHT: u32 = 255;
