@@ -351,6 +351,7 @@ pub struct TruncatedSource {
 }
 #[repr(C)]
 pub struct World {
+    pub(crate) graphs: &'static live::Services,
     pub(crate) station: extern "C" fn(u16) -> LoadingStation,
     pub(crate) station_owner: extern "C" fn(*mut BaseStation) -> u8,
     pub(crate) station_exclusivity: extern "C" fn(*mut BaseStation) -> StationExclusivity,
@@ -513,7 +514,7 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance(
             status(state, cargo, 0, amt >= 8);
         }
         unsafe {
-            live::station_demand(st, cargo, amt / 8);
+            live::station_demand(st, cargo, amt / 8, w.graphs);
         }
     }
     let new = unsafe { acceptance_mask(state) };
@@ -767,7 +768,7 @@ unsafe fn admit(
     }
     (w.append_packet)(st, cargo, amount, source);
     unsafe {
-        live::station_supply(st, cargo, amount, ((*w.shared).economy_date)());
+        live::station_supply(st, cargo, amount, ((*w.shared).economy_date)(), w.graphs);
     }
     if unsafe { (*ge).status } & 2 == 0 {
         (w.station_list_invalidation)(st, 0);
@@ -881,6 +882,7 @@ pub struct Edge {
 }
 #[repr(C)]
 pub struct Links {
+    pub(crate) graphs: &'static live::Services,
     pub(crate) graph: extern "C" fn(*mut BaseStation, u8) -> *mut NativeGraph,
     pub(crate) automatic_distribution: extern "C" fn(u8) -> bool,
     pub(crate) node: extern "C" fn(*mut BaseStation, u8) -> u16,
@@ -943,7 +945,7 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
         }
         let node = u32::from((l.node)(from, cargo)) as u16;
         let mut remove = Vec::new();
-        let owner = unsafe { live::resolve(graph) };
+        let owner = unsafe { live::resolve(graph, l.graphs) };
         let count = unsafe { &*owner }.nodes[usize::from(node)].edges.len();
         for index in 0..count {
             let (destination, last_update) = {
@@ -1957,6 +1959,7 @@ crate::abi::layouts! {
         last_vehicle_type,
     };
     "OpenTTDStationServices" ["probe"] => World {
+        graphs,
         station,
         station_owner,
         station_exclusivity,
@@ -2003,6 +2006,7 @@ crate::abi::layouts! {
         distance,
     };
     "OpenTTDStationLinks" ["probe"] => Links {
+        graphs,
         graph,
         automatic_distribution,
         node,

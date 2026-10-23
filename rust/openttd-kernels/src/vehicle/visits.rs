@@ -195,7 +195,7 @@ pub(crate) fn increase_stats(
                 witness::hit(witness::VISITS_GRAPH_NEW);
                 graph = (s.allocate_graph)(cargo);
                 unsafe {
-                    live::join(graph, (l.station_id)(st2));
+                    live::join(graph, (l.station_id)(st2), l.graphs);
                 }
             } else {
                 witness::hit(witness::VISITS_GRAPH_FAILURE);
@@ -206,27 +206,39 @@ pub(crate) fn increase_stats(
         }
         if !graph.is_null() {
             unsafe {
-                live::join(graph, (l.station_id)(st));
+                live::join(graph, (l.station_id)(st), l.graphs);
             }
         }
     } else if second.is_null() {
         witness::hit(witness::VISITS_GRAPH_JOIN);
         unsafe {
-            live::join(graph, (l.station_id)(st2));
+            live::join(graph, (l.station_id)(st2), l.graphs);
         }
     } else if graph != second {
-        if unsafe { (&*live::resolve(graph)).size() < (&*live::resolve(second)).size() } {
+        if unsafe {
+            (&*live::resolve(graph, l.graphs)).size() < (&*live::resolve(second, l.graphs)).size()
+        } {
             witness::hit(witness::VISITS_GRAPH_MERGE_SECOND);
             unsafe {
-                live::openttd_native_linkgraph_dequeue(graph);
-                live::openttd_rust_live_graph_merge(second, graph, (s.shared.economy_date)());
+                (l.graphs.dequeue)(graph);
+                live::openttd_rust_live_graph_merge(
+                    second,
+                    graph,
+                    (s.shared.economy_date)(),
+                    l.graphs,
+                );
             }
             graph = second;
         } else {
             witness::hit(witness::VISITS_GRAPH_MERGE_FIRST);
             unsafe {
-                live::openttd_native_linkgraph_dequeue(second);
-                live::openttd_rust_live_graph_merge(graph, second, (s.shared.economy_date)());
+                (l.graphs.dequeue)(second);
+                live::openttd_rust_live_graph_merge(
+                    graph,
+                    second,
+                    (s.shared.economy_date)(),
+                    l.graphs,
+                );
             }
         }
     }
@@ -235,7 +247,7 @@ pub(crate) fn increase_stats(
         let from = (l.node)(st, cargo);
         let to = (l.node)(st2, cargo);
         unsafe {
-            (&mut *live::resolve(graph)).nodes[usize::from(from)].update_edge(
+            (&mut *live::resolve(graph, l.graphs)).nodes[usize::from(from)].update_edge(
                 to,
                 capacity,
                 usage,

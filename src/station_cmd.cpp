@@ -770,6 +770,7 @@ static const OpenTTDStationServices _rust_station_services = {
 	.shared = &GetRustSharedServices(),
 };
 static const OpenTTDStationLinks _rust_station_links = {
+	.graphs = &GetRustLiveGraphServices(),
 	.graph = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> OpenTTDLinkGraph * {
 		return LinkGraph::GetIfValid(static_cast<Station *>(handle)->goods[cargo].link_graph);
 	},

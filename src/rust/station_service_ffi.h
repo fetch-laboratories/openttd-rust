@@ -178,6 +178,7 @@ struct OpenTTDStationEdge {
 	uint32_t distance;
 };
 struct OpenTTDStationLinks {
+	const OpenTTDLiveGraphServices *graphs;
 	OpenTTDLinkGraph * (*graph)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(graph);
 	bool (*automatic_distribution)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(automatic_distribution);
 	uint16_t (*node)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(node);

@@ -739,7 +739,7 @@ impl Ctx<'_> {
             let node = (self.links().node)(st, cargo);
             unsafe {
                 crate::linkgraph::live::openttd_rust_live_node_location(
-                    crate::linkgraph::live::resolve(graph),
+                    crate::linkgraph::live::resolve(graph, self.links().graphs),
                     node,
                     (self.s.location)(st),
                 );

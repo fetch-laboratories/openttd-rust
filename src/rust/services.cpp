@@ -608,27 +608,40 @@ bool CheckAbi_services()
 }
 #endif
 
-extern "C" OpenTTDLiveGraphAccess openttd_native_linkgraph_access(OpenTTDLinkGraph *graph) noexcept { return {graph->RustState(), graph->index.base()}; }
-extern "C" OpenTTDLiveStationInput openttd_native_linkgraph_station(uint16_t station, uint8_t cargo) noexcept
+static OpenTTDLiveGraphAccess LiveGraphAccess(OpenTTDLinkGraph *graph) noexcept { return {graph->RustState(), graph->index.base()}; }
+static OpenTTDLiveStationInput LiveGraphStation(uint16_t station, uint8_t cargo) noexcept
 {
 	Station *st = Station::Get(StationID(station));
 	return {st->xy.base(), st->goods[cargo].status.Test(GoodsEntry::State::Acceptance)};
 }
-extern "C" void openttd_native_linkgraph_attach(uint16_t station, uint8_t cargo, uint16_t graph, uint16_t node) noexcept
+static void LiveGraphAttach(uint16_t station, uint8_t cargo, uint16_t graph, uint16_t node) noexcept
 {
 	GoodsEntry &ge = Station::Get(StationID(station))->goods[cargo];
 	ge.link_graph = LinkGraphID(graph);
 	ge.node = node;
 }
-extern "C" void openttd_native_linkgraph_set_node(uint16_t station, uint8_t cargo, uint16_t node) noexcept { Station::Get(StationID(station))->goods[cargo].node = node; }
-extern "C" void openttd_native_linkgraph_delete(OpenTTDLinkGraph *graph) noexcept { delete graph; }
+static void LiveGraphSetNode(uint16_t station, uint8_t cargo, uint16_t node) noexcept { Station::Get(StationID(station))->goods[cargo].node = node; }
+static void LiveGraphDelete(OpenTTDLinkGraph *graph) noexcept { delete graph; }
 
-extern "C" OpenTTDLiveMembership openttd_native_linkgraph_membership(OpenTTDBaseStation *station, uint8_t cargo) noexcept
+static OpenTTDLiveMembership LiveGraphMembership(OpenTTDBaseStation *station, uint8_t cargo) noexcept
 {
 	GoodsEntry &ge = static_cast<Station *>(station)->goods[cargo];
 	return {LinkGraph::GetIfValid(ge.link_graph), ge.node, station->index.base()};
 }
-extern "C" bool openttd_native_linkgraph_available() noexcept { return RustLinkGraphAvailable(); }
-extern "C" OpenTTDLinkGraph *openttd_native_linkgraph_allocate(uint8_t cargo) noexcept { return RustLinkGraphAllocate(cargo); }
-extern "C" void openttd_native_linkgraph_allocation_failure() noexcept { RustLinkGraphAllocationFailure(); }
-extern "C" void openttd_native_linkgraph_dequeue(OpenTTDLinkGraph *graph) noexcept { LinkGraphSchedule::instance.Dequeue(graph); }
+static void LiveGraphDequeue(OpenTTDLinkGraph *graph) noexcept { LinkGraphSchedule::instance.Dequeue(graph); }
+const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
+{
+	static const OpenTTDLiveGraphServices services{
+		.access = LiveGraphAccess,
+		.station = LiveGraphStation,
+		.attach = LiveGraphAttach,
+		.set_node = LiveGraphSetNode,
+		.delete_graph = LiveGraphDelete,
+		.membership = LiveGraphMembership,
+		.available = RustLinkGraphAvailable,
+		.allocate = RustLinkGraphAllocate,
+		.allocation_failure = RustLinkGraphAllocationFailure,
+		.dequeue = LiveGraphDequeue,
+	};
+	return services;
+}

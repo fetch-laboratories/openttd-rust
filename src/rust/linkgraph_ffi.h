@@ -12,6 +12,8 @@
 /** Opaque live native entity, distinct from Rust-owned boundary state. */
 #ifdef __cplusplus
 class LinkGraph;
+struct BaseStation;
+using OpenTTDBaseStation = BaseStation;
 using OpenTTDLinkGraph = LinkGraph;
 #endif
 #include <stdint.h>
@@ -91,11 +93,24 @@ void openttd_rust_live_edge_release(OpenTTDLiveEdge *);
 struct OpenTTDLiveGraphAccess { OpenTTDLiveGraph *owner; uint16_t index; };
 struct OpenTTDLiveMembership { OpenTTDLinkGraph *graph; uint16_t node, station; };
 struct OpenTTDLiveStationInput { uint32_t xy, demand; };
+struct OpenTTDLiveGraphServices {
+	OpenTTDLiveGraphAccess (*access)(OpenTTDLinkGraph *) noexcept;
+	OpenTTDLiveStationInput (*station)(uint16_t, uint8_t) noexcept;
+	void (*attach)(uint16_t, uint8_t, uint16_t, uint16_t) noexcept;
+	void (*set_node)(uint16_t, uint8_t, uint16_t) noexcept;
+	void (*delete_graph)(OpenTTDLinkGraph *) noexcept;
+	OpenTTDLiveMembership (*membership)(OpenTTDBaseStation *, uint8_t) noexcept;
+	bool (*available)() noexcept;
+	OpenTTDLinkGraph *(*allocate)(uint8_t) noexcept;
+	void (*allocation_failure)() noexcept;
+	void (*dequeue)(OpenTTDLinkGraph *) noexcept;
+};
 OpenTTDLinkGraphResult *openttd_rust_live_graph_run(const OpenTTDLiveGraph *, const OpenTTDLinkGraphSettings *, const void *, uint8_t (*)(const void *));
-void openttd_rust_live_graph_merge(OpenTTDLinkGraph *, OpenTTDLinkGraph *, int32_t);
-void openttd_rust_live_graph_remove(OpenTTDLinkGraph *, uint16_t);
-uint16_t openttd_rust_live_graph_add_station(OpenTTDLinkGraph *, uint16_t);
+void openttd_rust_live_graph_merge(OpenTTDLinkGraph *, OpenTTDLinkGraph *, int32_t, const OpenTTDLiveGraphServices *);
+void openttd_rust_live_graph_remove(OpenTTDLinkGraph *, uint16_t, const OpenTTDLiveGraphServices *);
+uint16_t openttd_rust_live_graph_add_station(OpenTTDLinkGraph *, uint16_t, const OpenTTDLiveGraphServices *);
 #ifdef __cplusplus
 }
+const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept;
 #endif
 #endif /* OPENTTD_RUST_LINKGRAPH_FFI_H */

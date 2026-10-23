@@ -242,7 +242,7 @@ public:
 	void Init(uint size) { assert(this->Size() == 0); openttd_rust_live_graph_init(this->owner, size); }
 	void ShiftDates(TimerGameEconomy::Date interval) { openttd_rust_live_graph_shift(this->owner, interval.base()); }
 	void Compress() { openttd_rust_live_graph_compress(this->owner, GetRustSharedServices().economy_date()); }
-	void Merge(LinkGraph *other) { openttd_rust_live_graph_merge(this, other, GetRustSharedServices().economy_date()); }
+	void Merge(LinkGraph *other) { openttd_rust_live_graph_merge(this, other, GetRustSharedServices().economy_date(), &GetRustLiveGraphServices()); }
 	OpenTTDLiveGraph *RustState() const { return this->owner; }
 	int32_t &SaveCompression() { return *openttd_rust_live_graph_date(this->owner); }
 	uint8_t &SaveCargo() { return *openttd_rust_live_graph_cargo(this->owner); }
@@ -333,8 +333,8 @@ public:
 	}
 
 #ifdef WITH_RUST
-	NodeID AddNode(const ::Station *st) { const auto station = st->index; return openttd_rust_live_graph_add_station(this, station.base()); }
-	void RemoveNode(NodeID id) { assert(id < this->Size()); openttd_rust_live_graph_remove(this, id); }
+	NodeID AddNode(const ::Station *st) { const auto station = st->index; return openttd_rust_live_graph_add_station(this, station.base(), &GetRustLiveGraphServices()); }
+	void RemoveNode(NodeID id) { assert(id < this->Size()); openttd_rust_live_graph_remove(this, id, &GetRustLiveGraphServices()); }
 #else
 	NodeID AddNode(const Station *st);
 	void RemoveNode(NodeID id);
