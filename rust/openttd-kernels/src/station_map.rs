@@ -22,3 +22,12 @@ pub(crate) fn is_rail_waypoint_tile(tile: u32, s: &Services) -> bool {
 pub(crate) fn is_road_waypoint_tile(tile: u32, s: &Services) -> bool {
     (s.tile_type)(tile) == MP_STATION && (s.station_type)(tile).0 == ROAD_WAYPOINT
 }
+
+/// `HasStationTileRail`, retaining its guard before `HasStationRail`'s assertions.
+pub(crate) fn has_station_tile_rail(
+    tile: u32,
+    s: &Services,
+    rail: &crate::services::RailMapServices,
+) -> bool {
+    (s.tile_type)(tile) == MP_STATION && (rail.has_station_rail)(tile)
+}

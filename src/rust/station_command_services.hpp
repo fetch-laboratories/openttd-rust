@@ -103,7 +103,7 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.new_station = [](uint32_t tile) noexcept -> BaseStation * { return new Station(TileIndex{tile}); },
 		.index_insert = RustStationIndexInsert,
 		.set_town = RustStationSetTown,
-		.default_name = [](BaseStation *st, uint32_t tile, uint8_t name) noexcept { st->string_id = GenerateStationName(Station::From(st), TileIndex{tile}, static_cast<StationNaming>(name)); },
+		.default_name = [](BaseStation *st, uint32_t tile, uint8_t name) noexcept { RustStationSetStringID(st, GenerateStationName(Station::From(st), TileIndex{tile}, static_cast<StationNaming>(name))); },
 		.have_rating = RustStationHaveRating,
 		.before_add_rect = [](OpenTTDCommandCost *out, BaseStation *st, OpenTTDStationArea area, uint8_t mode) noexcept { *reinterpret_cast<CommandCost *>(out) = st->rect.BeforeAddRect(TileIndex{area.tile}, area.w, area.h, static_cast<StationRect::StationRectMode>(mode)); },
 		.road_waypoint = RustStationRoadWaypoint,

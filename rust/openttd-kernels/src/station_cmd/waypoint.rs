@@ -409,12 +409,13 @@ impl Ctx<'_> {
         let mut tile = start;
         for i in 0..count {
             let gfx = (self.s.waypoint_layout_gfx)(layout, i == 0);
-            let old = if (self.rail_map().has_station_rail)(tile) {
-                (self.s.custom_rail_index)(tile) as u8
-            } else {
-                0
-            };
-            if !(self.rail_map().has_station_rail)(tile) {
+            let old =
+                if crate::station_map::has_station_tile_rail(tile, self.shared, self.rail_map()) {
+                    (self.s.custom_rail_index)(tile) as u8
+                } else {
+                    0
+                };
+            if !crate::station_map::has_station_tile_rail(tile, self.shared, self.rail_map()) {
                 (self.s.station_infrastructure)(owner, 1);
             }
             let track = crate::track_func::axis_to_track(crate::services::Axis(axis)).0;

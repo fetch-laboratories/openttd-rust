@@ -6,6 +6,7 @@
 #include "command_func.h"
 #include "water_cmd.h"
 #include "vehicle_cmd.h"
+#include "vehicle_base.h"
 #include "water.h"
 #include "water_map.h"
 #include "clear_map.h"
