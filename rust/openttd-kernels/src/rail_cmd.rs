@@ -2431,11 +2431,11 @@ mod tests {
     use super::*;
     #[test]
     fn track_helpers_follow_source_tables() {
-        assert!(!tracks_overlap(BIT_HORZ));
-        assert!(!tracks_overlap(BIT_VERT));
+        assert!(!tracks_overlap(crate::track_type::TRACK_BIT_HORZ));
+        assert!(!tracks_overlap(crate::track_type::TRACK_BIT_VERT));
         assert!(tracks_overlap(BIT_X | BIT_Y));
         assert_eq!(pieces(BIT_X | BIT_Y), 4);
-        assert_eq!(pieces(BIT_HORZ), 2);
+        assert_eq!(pieces(crate::track_type::TRACK_BIT_HORZ), 2);
         assert_eq!(trackdir_tracks(reaches(0)), BIT_X | BIT_LOWER | BIT_LEFT);
         assert_eq!(negate(i64::MIN), i64::MAX);
         assert_eq!(kill_first_bit(0xC), 0x8);

@@ -1296,3 +1296,9 @@ pub(crate) fn depot_ticks(shared: &Services, v: crate::train::Handle) -> i32 {
     // SAFETY: Same serialized train as the original synchronous controller call.
     unsafe { openttd_rust_movement_depot_ticks(table(shared), v) }
 }
+
+/// Native afterload uses the same portal table as movement.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_movement_tunnel_visibility(direction: u8) -> u8 {
+    TUNNEL_VISIBILITY[usize::from(direction)]
+}

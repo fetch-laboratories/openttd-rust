@@ -165,6 +165,7 @@ pub const fn opposite_corner(c: u8) -> u8 {
 }
 /// `SlopeWithOneCornerRaised`.
 pub const fn slope_with_one_corner_raised(c: u8) -> u8 {
+    assert!(c < 4); // Native IsValidCorner assertion.
     1 << c
 }
 /// `SlopeWithThreeCornersRaised`.
@@ -173,10 +174,12 @@ pub const fn slope_with_three_corners_raised(c: u8) -> u8 {
 }
 /// `HalftileFoundation`, with a valid native corner.
 pub const fn halftile_foundation(c: u8) -> u8 {
+    assert!(c < 4); // Native IsValidCorner assertion.
     6 + c
 }
 /// `SpecialRailFoundation`, with a valid native corner.
 pub const fn special_rail_foundation(c: u8) -> u8 {
+    assert!(c < 4); // Native IsValidCorner assertion.
     10 + c
 }
 

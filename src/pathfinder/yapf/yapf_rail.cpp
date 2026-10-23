@@ -73,7 +73,7 @@ static OpenTTDRailTile RailTile(uint32_t tile, uint8_t direction) noexcept
 		result.signal_against = RustRailHasSignalTrackdir(tile, ReverseTrackdir(td));
 		if (result.signal_along || result.signal_against) {
 			result.signal_type = RustRailSignalType(tile, TrackdirToTrack(td));
-			result.oneway = IsOnewaySignal(t, TrackdirToTrack(td));
+			result.oneway = RustRailOnewaySignal(tile, TrackdirToTrack(td));
 		}
 		if (result.signal_along) result.signal_green = RustRailSignalState(tile, td) == SIGNAL_STATE_GREEN;
 	}

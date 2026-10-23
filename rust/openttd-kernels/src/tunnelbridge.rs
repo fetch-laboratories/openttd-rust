@@ -20,8 +20,3 @@ pub fn get_tunnel_bridge_length(map: Map, begin: u32, end: u32) -> u32 {
 /// Native tunnel portal sound and visibility frames from `tunnelbridge_cmd.cpp`.
 pub(crate) const TUNNEL_SOUND_FRAME: u8 = 1;
 pub(crate) const TUNNEL_VISIBILITY: [u8; 4] = [12, 8, 8, 12];
-/// Native afterload uses the same portal table as movement.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_movement_tunnel_visibility(direction: u8) -> u8 {
-    TUNNEL_VISIBILITY[usize::from(direction)]
-}

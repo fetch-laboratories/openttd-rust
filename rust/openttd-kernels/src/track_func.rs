@@ -8,15 +8,18 @@
 //! Shared inline track helpers declared in `track_func.h`.
 /// `AxisToTrack`.
 pub const fn axis_to_track(axis: crate::services::Axis) -> crate::services::Track {
+    assert!(axis.0 < 2); // Same precondition assertion as the native header.
     crate::services::Track(axis.0)
 }
 /// `DiagDirToDiagTrack`.
 pub const fn diag_dir_to_diag_track(direction: u8) -> u8 {
+    assert!(direction < 4); // Same precondition assertion as the native header.
     direction & 1
 }
 
 /// `CornerToTrackBits`, with a valid native corner.
 pub const fn corner_to_track_bits(c: u8) -> u8 {
+    assert!(c < 4); // Same precondition assertion as the native header.
     [16, 8, 32, 4][c as usize]
 }
 /// `TracksOverlap`.
@@ -26,6 +29,7 @@ pub const fn tracks_overlap(b: u8) -> bool {
 
 /// `AxisToTrackBits`.
 pub const fn axis_to_track_bits(axis: u8) -> u8 {
+    assert!(axis < 2); // Same precondition assertion as the native header.
     1 << axis
 }
 /// `DiagDirToDiagTrackBits`.
@@ -42,11 +46,13 @@ pub const fn combine_track_status(bits: u16, red: u16) -> u32 {
 }
 /// `DiagDirToDiagTrackdir`.
 pub const fn diag_dir_to_diag_trackdir(dir: u8) -> u8 {
+    assert!(dir < 4); // Same precondition assertion as the native header.
     [0, 1, 8, 9][dir as usize]
 }
 
 /// `IsReversingRoadTrackdir`, under its native valid-road-trackdir precondition.
 pub const fn is_reversing_road_trackdir(dir: u8) -> bool {
+    assert!(dir < 16); // Same precondition assertion as the native header.
     (dir & 7) >= 6
 }
 

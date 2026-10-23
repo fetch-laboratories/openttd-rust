@@ -15,6 +15,15 @@
 #include "../train.h"
 #include "../ship.h"
 #include "../window_func.h"
+#include "../newgrf_sound.h"
+static_assert(VEH_TRAIN == 0 && VEH_ROAD == 1 && VEH_SHIP == 2);
+static_assert(GVF_GOINGUP_BIT == 0 && GVF_GOINGDOWN_BIT == 1);
+static_assert(VSE_TUNNEL == 2 && SND_05_TRAIN_THROUGH_TUNNEL == 3);
+static_assert(static_cast<uint8_t>(VehState::TrainSlowing) == 4);
+static_assert(static_cast<uint8_t>(VehicleEnterTileState::EnteredStation) == 0 &&
+	static_cast<uint8_t>(VehicleEnterTileState::EnteredWormhole) == 1 &&
+	static_cast<uint8_t>(VehicleEnterTileState::CannotEnter) == 2);
+static_assert(sizeof(decltype(TileIndex{}.base())) == sizeof(uint32_t) && sizeof(Track) == sizeof(uint8_t));
 inline OpenTTDMovementVehicle RustMovementResolve(OpenTTDVehicle *handle) noexcept
 {
 	Vehicle *v = VehicleOf(handle);
