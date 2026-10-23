@@ -42,7 +42,7 @@ def adapter(build, folder, env):
             "_Z31IncreaseGeneratingWorldProgress16GenWorldProgress",
             "_Z29GenerateWorldSetAbortCallbackPFvvE",
         ),
-        replace_objects=("/src/object_cmd.cpp.o",),
+        replace_objects=("/src/object_cmd.cpp.o", "/src/saveload/saveload.cpp.o"),
     )
 
 
@@ -53,6 +53,27 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     source, _ = rails.normalize(Path(scenario["save"]), folder / "normalized")
     scenario = dict(scenario, save=str(source))
     executables = prepared_console("objects", adapter, binaries, builds, folder, env)
+    if scenario["objects"] == "gaps":
+        for kind in ("valid", "header", "partial", "excess", "fixed", "riff"):
+            logs = {}
+            for role in ("reference", "candidate"):
+                probe = dict(scenario, console=["objects_scenario anit-" + kind])
+                run = core.run_game(
+                    probe,
+                    executables[role],
+                    builds[role],
+                    folder / role / ("anit-" + kind),
+                    timeout,
+                    env,
+                    False,
+                )
+                logs[role] = [x for x in run["log"] if x.startswith("OBJECT ")]
+                if run["exit"] or logs[role][-1:] != [
+                    "OBJECT animation-load-complete " + kind
+                ]:
+                    raise RuntimeError(f"{role}: missing actual ANIT {kind} evidence")
+            if logs["reference"] != logs["candidate"]:
+                raise RuntimeError(f"actual ANIT {kind} differs: {logs}")
     if scenario["objects"] != "reload":
         return dict(
             scenario,
@@ -113,7 +134,8 @@ def check(scenario, run, mode, role, result):
             "cancellation 0 true|cancellation 1 true|query-animation-order true|"
             "animation-binding house true|animation-binding industry true|"
             "animation-binding station true|animation-binding airport true|"
-            "animation-binding roadstop true|animation-binding object true"
+            "animation-binding roadstop true|animation-binding object true|"
+            "animation-road-zero 0 1 0 true"
         ).split("|"),
         "reload": ("afterload-counts true",),
     }[scenario["objects"]]
