@@ -345,6 +345,8 @@ add_files(
     newgrf_spritegroup.h
     newgrf_station.cpp
     newgrf_station.h
+    rust/newgrf_storage_services.cpp
+    rust/newgrf_storage_ffi.h
     newgrf_storage.cpp
     newgrf_storage.h
     newgrf_text.cpp

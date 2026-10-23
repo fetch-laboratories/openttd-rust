@@ -57,6 +57,7 @@ mod movement;
 mod newgrf_callbacks;
 mod newgrf_properties;
 mod newgrf_sound;
+mod newgrf_storage;
 mod node_hash;
 mod object_type;
 mod objects;
