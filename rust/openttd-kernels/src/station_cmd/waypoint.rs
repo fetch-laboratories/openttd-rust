@@ -643,8 +643,8 @@ impl Ctx<'_> {
                     -((self.shared.normal_road_bits)(tile, 1).0.count_ones() as i32),
                 );
             }
-            update(road, road_owner, ROAD_STOP_TRACKBIT_FACTOR);
-            update(tram, tram_owner, ROAD_STOP_TRACKBIT_FACTOR);
+            update(road, road_owner, ROAD_STOP_TRACKBIT_FACTOR as i32);
+            update(tram, tram_owner, ROAD_STOP_TRACKBIT_FACTOR as i32);
             (self.s.make_drive_stop)(
                 tile,
                 owner,
