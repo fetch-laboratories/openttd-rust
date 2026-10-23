@@ -701,7 +701,7 @@ impl<'a> World<'a> {
             for tile in Self::tiles_with_map(area, map) {
                 if self.do_trigger(obj, tile, trigger, spec, random) {
                     // SB also ORs high bits from the unmasked draw.
-                    crate::math::sb(&mut random, 0, 16, self.shared.random());
+                    crate::bitmath_func::sb(&mut random, 0, 16, self.shared.random());
                 } else {
                     ret = false;
                 }
@@ -1102,7 +1102,7 @@ impl<'a> World<'a> {
                                 out.fail(self.s.strings.edge);
                                 return;
                             }
-                            (self.commands().no_vehicle)(tmp.0, t);
+                            self.commands().no_vehicle(tmp.0, t);
                             out.add(tmp);
                         }
                     } else {

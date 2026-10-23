@@ -44,7 +44,7 @@ const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noe
 		.train_info = VehicleArticInfo<RailVehicleInfo>, .road_info = VehicleArticInfo<RoadVehicleInfo>,
 		.set_part = VehicleArticSetPart, .mark_train = VehicleArticMark<Train>, .mark_road = VehicleArticMark<RoadVehicle>,
 		.copy_common = VehicleArticCopyCommon, .random_bits = RustOpaqueVehicleInvoke<RustVehicleSetRandomBits, uint16_t>,
-		.flip_image = VehicleArticFlip, .reverse = VehicleArticReverse, .position = RustOpaqueVehicleInvoke<RustVehicleUpdatePosition<Vehicle>>,
+		.flip_image = VehicleArticFlip, .reverse = VehicleArticReverse,
 		.available_cargo = VehicleArticAvailableCargo, .warning = VehicleArticWarning,
 		.has_articulated = RustOpaqueVehicleRead<bool, RustGroundHasArticulated<Vehicle>>,
 		.next_articulated = RustOpaqueHandleRead<void *, RustVehicleNextArticulated>, .max_parts = MAX_ARTICULATED_PARTS, .all_cargo = ALL_CARGOTYPES,

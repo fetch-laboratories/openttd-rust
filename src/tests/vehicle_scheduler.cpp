@@ -11,6 +11,9 @@
 #include "../roadveh.h"
 #include "../vehicle_func.h"
 #include "../openttd.h"
+#include "../map_func.h"
+#include "../tile_map.h"
+#include "../landscape.h"
 #include "../rust/vehicle_services.h"
 #include "../rust/vehicle_maintenance_ffi.h"
 #include "../newgrf_sound.h"
@@ -440,5 +443,37 @@ TEST_CASE("Vehicle maintenance native scalar stores and cadence")
 	CHECK(v->breakdown_ctr == 2);
 	pool.CleanPool();
 	CHECK(Vehicle::GetNumItems() == 0);
+}
+
+TEST_CASE("Vehicle occupancy - canonical links, stale removal and copied cursors")
+{
+	Map::Allocate(64, 64);
+	REQUIRE(Vehicle::CanAllocateItem(2));
+	auto *a = new Vehicle(VEH_ROAD), *b = new Vehicle(VEH_ROAD);
+	a->tile = b->tile = TileXY(1, 1);
+	for (auto t : {TileXY(1, 1), TileXY(2, 1), TileXY(1, 2), TileXY(2, 2)}) SetTileHeight(t, 1);
+	a->z_pos = b->z_pos = 8;
+	a->UpdatePosition(); b->UpdatePosition();
+	REQUIRE(GetTileMaxPixelZ(a->tile) == 8);
+	CHECK(EnsureNoVehicleOnGround(a->tile).Failed());
+	a->z_pos = b->z_pos = 9;
+	CHECK(EnsureNoVehicleOnGround(a->tile).Succeeded());
+	const auto &s = GetRustVehicleServices();
+	CHECK(s.tile_links(RustVehicle(a)) == &a->tile_links);
+	CHECK(s.tile_links(RustVehicle(b)) == &b->tile_links);
+	CHECK(b->tile_links.next == RustVehicle(a));
+	CHECK(a->tile_links.prev == &b->tile_links.next);
+	auto it = VehiclesOnTile(a->tile).begin(), copy = it;
+	openttd_rust_occupancy_update(&s, RustVehicle(b), true);
+	CHECK(b->tile_links.current == nullptr);
+	CHECK(b->tile_links.next == RustVehicle(a)); // Source retains stale next.
+	++it; ++copy;
+	CHECK(*it == a); CHECK(it == copy);
+	ResetVehicleHash();
+	CHECK(a->tile_links.current == nullptr);
+	CHECK(b->tile_links.next == RustVehicle(a));
+	a->UpdatePosition(); b->UpdatePosition();
+	CHECK(*VehiclesOnTile(a->tile).begin() == b);
+	delete b; delete a;
 }
 #endif

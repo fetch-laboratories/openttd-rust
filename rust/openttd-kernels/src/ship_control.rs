@@ -189,7 +189,6 @@ pub struct Leaves {
     pub order_leave: extern "C" fn(u32),
     pub order_increment: extern "C" fn(u32),
     pub timetable: extern "C" fn(u32),
-    pub position: extern "C" fn(u32),
     pub start_dirty: extern "C" fn(u32),
     pub depot_dirty: extern "C" fn(u32),
     pub depot_invalidate: extern "C" fn(u32),
@@ -215,7 +214,6 @@ pub struct Leaves {
     pub exit_dir: extern "C" fn(u32, u32) -> u32,
     pub track_direction: extern "C" fn(u32, u32) -> u32,
     pub tracks_reach: extern "C" fn(u32) -> u32,
-    pub busy_tile: extern "C" fn(u32) -> bool,
     pub path_size: extern "C" fn(u32) -> usize,
     pub path_back: extern "C" fn(u32) -> u32,
     pub path_pop: extern "C" fn(u32),
@@ -355,7 +353,7 @@ impl Game<'_> {
         self.set_rotation_x(observed_x as u16);
         self.set_rotation_y(observed_y as u16);
     }
-    fn reverse(&self, id: u32, trackdir: u32) {
+    fn reverse(&self, id: u32, v: VehicleRef, trackdir: u32) {
         crate::witness::hit(crate::witness::SHIP_REVERSE);
         if trackdir == INVALID {
             (self.leaves.set_direction)(id, (((self.leaves.direction)(id) + 4) & 7) as u8);
@@ -367,7 +365,10 @@ impl Game<'_> {
         self.remember_rotation(id);
         (self.leaves.set_speed)(id, 0);
         self.path_clear(id);
-        (self.leaves.position)(id);
+        // SAFETY: Caller retains the live shell across this index update.
+        unsafe {
+            crate::vehicle::occupancy::update(self.vs(), v, false);
+        }
         self.viewport(id);
     }
     fn depot(&self, id: u32, max_distance: u32) -> Option<Depot> {
@@ -482,7 +483,12 @@ impl Game<'_> {
             self.vs().enter_depot(v);
             return true;
         }
-        if observed_dest == 0 || (self.leaves.busy_tile)(id) {
+        if observed_dest == 0
+            || self.vs().any_on_tile((self.leaves.tile)(id), |u| {
+                (self.vs().vehicle_type)(u) == crate::vehicle::VehicleType::SHIP.0
+                    && (self.vs().speed)(u) != 0
+            })
+        {
             return true;
         }
         let mut direction = (self.leaves.depot_dir)(observed_tile) * 2 + 1;
@@ -521,7 +527,7 @@ impl Game<'_> {
             -i32::from(((self.leaves.z)(id) as i32) > (self.leaves.tile_min_z)(tile) as i32 * 8)
         }
     }
-    fn move_lock(&self, id: u32) -> bool {
+    fn move_lock(&self, id: u32, v: VehicleRef) -> bool {
         let delta = self.lock_delta(id);
         if delta > 0 {
             crate::witness::hit(crate::witness::SHIP_LOCK_UP);
@@ -540,7 +546,10 @@ impl Game<'_> {
         }
         if observed_tick & 7 == 0 {
             (self.leaves.set_z)(id, observed_z.wrapping_add(delta as u32) as i32);
-            (self.leaves.position)(id);
+            // SAFETY: Caller retains the live shell across this index update.
+            unsafe {
+                crate::vehicle::occupancy::update(self.vs(), v, false);
+            }
             self.viewport(id);
         }
         true
@@ -644,7 +653,7 @@ impl Game<'_> {
             return;
         }
         if (self.leaves.process_orders)(id) && (self.leaves.yapf_reverse)(id, false).reverse {
-            self.reverse(id, INVALID);
+            self.reverse(id, v, INVALID);
             return;
         }
         self.vs().handle_loading(v, false);
@@ -668,12 +677,12 @@ impl Game<'_> {
             }
             return;
         }
-        if self.move_lock(id) {
+        if self.move_lock(id, v) {
             return;
         }
         let steps = self.accelerate(id);
         for _ in 0..steps {
-            if self.move_lock(id) {
+            if self.move_lock(id, v) {
                 return;
             }
             let position = (self.leaves.new_position)(id);
@@ -692,7 +701,7 @@ impl Game<'_> {
                         }) & 4
                             != 0
                         {
-                            self.reverse(id, INVALID);
+                            self.reverse(id, v, INVALID);
                             return;
                         }
                         let observed_tile = (self.leaves.tile)(id);
@@ -707,7 +716,7 @@ impl Game<'_> {
                                 (self.leaves.exit_dir)(observed_direction, u32::from(self.state()));
                             let tile = observed_tile.wrapping_add((self.leaves.offset)(exit));
                             if crate::movement::water_tracks(self.services, tile, exit as u8) == 0 {
-                                self.reverse(id, INVALID);
+                                self.reverse(id, v, INVALID);
                                 return;
                             }
                         } else if observed_dest != 0 {
@@ -747,7 +756,7 @@ impl Game<'_> {
                     }
                 } else {
                     if !(self.leaves.tile_valid)(new_tile) {
-                        self.reverse(id, INVALID);
+                        self.reverse(id, v, INVALID);
                         return;
                     }
                     let diag = (self.leaves.diag_between)(old_tile, new_tile);
@@ -756,12 +765,12 @@ impl Game<'_> {
                     if tracks == 0 {
                         let result = (self.leaves.yapf_reverse)(id, true);
                         let trackdir = u32::from(result.trackdir);
-                        self.reverse(id, if trackdir == 255 { INVALID } else { trackdir });
+                        self.reverse(id, v, if trackdir == 255 { INVALID } else { trackdir });
                         return;
                     }
                     let track = self.choose(id, new_tile, tracks);
                     if track == 255 {
-                        self.reverse(id, INVALID);
+                        self.reverse(id, v, INVALID);
                         return;
                     }
                     let (sx, sy, direction) = SUBCOORD[diag as usize][track as usize];
@@ -771,7 +780,7 @@ impl Game<'_> {
                         crate::movement::enter(self.services, v, new_tile, x as i32, y as i32)
                     });
                     if entered & 4 != 0 {
-                        self.reverse(id, INVALID);
+                        self.reverse(id, v, INVALID);
                         return;
                     }
                     if entered & 2 == 0 {
@@ -804,7 +813,10 @@ impl Game<'_> {
                 {
                     (self.leaves.set_x)(id, x as i32);
                     (self.leaves.set_y)(id, y as i32);
-                    (self.leaves.position)(id);
+                    // SAFETY: Caller retains the live shell across this index update.
+                    unsafe {
+                        crate::vehicle::occupancy::update(self.vs(), v, false);
+                    }
                     if (self.leaves.status)(id) & 1 == 0 {
                         (self.leaves.base_viewport)(id);
                     }
@@ -816,7 +828,10 @@ impl Game<'_> {
             }
             (self.leaves.set_x)(id, x as i32);
             (self.leaves.set_y)(id, y as i32);
-            (self.leaves.position)(id);
+            // SAFETY: Caller retains the live shell across this index update.
+            unsafe {
+                crate::vehicle::occupancy::update(self.vs(), v, false);
+            }
             self.viewport(id);
         }
     }
@@ -1053,6 +1068,7 @@ pub unsafe extern "C" fn openttd_rust_ship_trackdir(
 /// Only the Rust vehicle build transaction calls this; C++ no longer builds ships.
 pub(crate) unsafe fn ship_build(
     id: u32,
+    v: VehicleRef,
     engine: u32,
     leaves: *const Leaves,
     services: *const Services,
@@ -1090,7 +1106,10 @@ pub(crate) unsafe fn ship_build(
     let capacity = (game.leaves.capacity)(id);
     (game.leaves.build_capacity)(id, capacity);
     (game.leaves.cache_invalidate)(id);
-    (game.leaves.position)(id);
+    // SAFETY: The build transaction retains the new shell.
+    unsafe {
+        crate::vehicle::occupancy::update(game.vs(), v, false);
+    }
 }
 
 crate::abi::layouts! {
@@ -1142,7 +1161,6 @@ crate::abi::layouts! {
         order_leave,
         order_increment,
         timetable,
-        position,
         start_dirty,
         depot_dirty,
         depot_invalidate,
@@ -1168,7 +1186,6 @@ crate::abi::layouts! {
         exit_dir,
         track_direction,
         tracks_reach,
-        busy_tile,
         path_size,
         path_back,
         path_pop,

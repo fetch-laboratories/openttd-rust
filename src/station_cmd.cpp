@@ -626,6 +626,7 @@ struct RustStationTruncation {
 	StationCargoAmountMap::iterator iterator;
 };
 static const OpenTTDStationServices _rust_station_services = {
+	.graphs = &GetRustLiveGraphServices(),
 	.station = [](uint16_t id) noexcept -> OpenTTDLoadingStation {
 		Station *st = Station::Get(StationID(id));
 		return {.native = st, .base = st, .state = st->rust_service.get()};
@@ -698,10 +699,6 @@ static const OpenTTDStationServices _rust_station_services = {
 		if (waiting_changed) SetWindowDirty(WC_STATION_VIEW, st->index);
 		else SetWindowWidgetDirty(WC_STATION_VIEW, st->index, WID_SV_ACCEPT_RATING_LIST);
 	},
-	.set_demand = [](OpenTTDBaseStation *handle, uint8_t cargo, uint32_t amount) noexcept -> void {
-		GoodsEntry &ge = Station::From(static_cast<BaseStation *>(handle))->goods[cargo];
-		if (LinkGraph::IsValidID(ge.link_graph)) (*LinkGraph::Get(ge.link_graph))[ge.node].SetDemand(amount);
-	},
 	.acceptance_news = [](OpenTTDBaseStation *handle, uint64_t cargoes, bool reject) noexcept -> void {
 		ShowRejectOrAcceptNews(Station::From(static_cast<BaseStation *>(handle)), cargoes, reject);
 	},
@@ -725,21 +722,6 @@ static const OpenTTDStationServices _rust_station_services = {
 		GoodsEntry &ge = st->goods[cargo];
 		StationID next = ge.GetVia(st->index);
 		ge.GetOrCreateData().cargo.Append(new CargoPacket(st->index, amount, Source(source.id, source.type)), next);
-	},
-	.update_supply = [](OpenTTDBaseStation *handle, uint8_t cargo, uint32_t amount) noexcept -> void {
-		Station *st = Station::From(static_cast<BaseStation *>(handle));
-		GoodsEntry &ge = st->goods[cargo];
-		LinkGraph *lg = nullptr;
-		if (ge.link_graph == LinkGraphID::Invalid()) {
-			if (RustLinkGraphAvailable()) {
-				lg = RustLinkGraphAllocate(cargo);
-				RustLinkGraphJoin(lg, st, cargo);
-			} else {
-				RustLinkGraphAllocationFailure();
-			}
-		} else {
-			lg = LinkGraph::Get(ge.link_graph);
-		} if (lg != nullptr) (*lg)[ge.node].UpdateSupply(amount);
 	},
 	.station_list_invalidation = RustStationListInvalidation,
 	.new_cargo_animation = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> void {
@@ -789,60 +771,22 @@ static const OpenTTDStationServices _rust_station_services = {
 	.shared = &GetRustSharedServices(),
 };
 static const OpenTTDStationLinks _rust_station_links = {
-	.graph = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> OpenTTDLinkGraph * {
-		return LinkGraph::GetIfValid(static_cast<Station *>(handle)->goods[cargo].link_graph);
-	},
+	.graphs = &GetRustLiveGraphServices(),
 	.automatic_distribution = OpenTTDAutomaticCargoDistribution,
-	.node = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> uint16_t {
-		return static_cast<Station *>(handle)->goods[cargo].node;
-	},
-	.edge_count = [](OpenTTDLinkGraph *handle, uint16_t node) noexcept -> size_t {
-		return (*static_cast<LinkGraph *>(handle))[node].edges.size();
-	},
 	.date = []() noexcept -> int32_t {
 		return TimerGameEconomy::date.base();
 	},
-	.station_id = [](OpenTTDBaseStation *handle) noexcept -> uint16_t {
-		return handle->index.base();
-	},
-	.edge_last_update = [](OpenTTDLinkGraph *handle, uint16_t node, size_t index) noexcept -> int32_t {
-		return (*static_cast<LinkGraph *>(handle))[node].edges[index].LastUpdate().base();
-	},
-	.last_compression = [](OpenTTDLinkGraph *handle) noexcept -> int32_t {
-		return static_cast<LinkGraph *>(handle)->LastCompression().base();
-	},
-	.edge = [](OpenTTDLinkGraph *handle, uint16_t node, size_t index, OpenTTDBaseStation *from_handle) noexcept -> OpenTTDStationEdge {
-		LinkGraph *graph = static_cast<LinkGraph *>(handle);
-		const Edge &edge = (*graph)[node].edges[index];
-		Station *from = static_cast<Station *>(from_handle);
-		Station *to = Station::Get((*graph)[edge.dest_node].station);
-		return {to, edge.LastUpdate().base(), OpenTTDDistanceManhattan(from->xy.base(), to->xy.base())};
-	},
-	.edge_unrestricted = [](OpenTTDLinkGraph *handle, uint16_t node, size_t index) noexcept -> int32_t {
-		return (*static_cast<LinkGraph *>(handle))[node].edges[index].last_unrestricted_update.base();
-	},
-	.edge_restricted = [](OpenTTDLinkGraph *handle, uint16_t node, size_t index) noexcept -> int32_t {
-		return (*static_cast<LinkGraph *>(handle))[node].edges[index].last_restricted_update.base();
+	.edge = [](OpenTTDBaseStation *from, uint16_t destination) noexcept -> OpenTTDStationEdge {
+		Station *to = Station::Get(StationID(destination));
+		return {to, OpenTTDDistanceManhattan(RustStationLocation(from), RustStationLocation(to))};
 	},
 	.delete_flows = [](OpenTTDBaseStation *handle, uint8_t cargo, uint16_t destination) noexcept -> void {
 		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
 		if (ge.HasData()) ge.GetData().flows.DeleteFlows(StationID(destination));
 	},
-	.restrict_edge = [](OpenTTDLinkGraph *handle, uint16_t from, size_t index) noexcept -> void {
-		(*static_cast<LinkGraph *>(handle))[from].edges[index].Restrict();
-	},
 	.restrict_flows = [](OpenTTDBaseStation *handle, uint8_t cargo, uint16_t destination) noexcept -> void {
 		GoodsEntry &ge = static_cast<Station *>(handle)->goods[cargo];
 		if (ge.HasData()) ge.GetData().flows.RestrictFlows(StationID(destination));
-	},
-	.release_edge = [](OpenTTDLinkGraph *handle, uint16_t from, size_t index) noexcept -> void {
-		(*static_cast<LinkGraph *>(handle))[from].edges[index].Release();
-	},
-	.remove_edge = [](OpenTTDLinkGraph *handle, uint16_t from, uint16_t to) noexcept -> void {
-		(*static_cast<LinkGraph *>(handle))[from].RemoveEdge(to);
-	},
-	.compress = [](OpenTTDLinkGraph *handle) noexcept -> void {
-		static_cast<LinkGraph *>(handle)->Compress();
 	},
 	.order_list = [](uint16_t id) noexcept -> OpenTTDOrderList * {
 		return OrderList::GetIfValid(OrderListID(id));
@@ -5178,7 +5122,7 @@ uint MoveGoodsToStation(CargoType cargo, uint amount, Source source, const Stati
 {
 #ifdef WITH_RUST
 	std::pair cursor(all_stations.begin(), all_stations.end());
-	return openttd_rust_station_distribute(cargo, amount, {source.id, source.type}, &cursor, exclusivity.base(), &_rust_station_services);
+	return openttd_rust_station_distribute(cargo, amount, {source.id, source.type}, &cursor, exclusivity.base(), &_rust_station_services, &GetRustVehicleVisits());
 #else
 	/* Return if nothing to do. Also the rounding below fails for 0. */
 	if (all_stations.empty()) return 0;

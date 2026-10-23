@@ -13,6 +13,8 @@
 #include "orders_ffi.h"
 #include "station_service_ffi.h"
 #include "vehicle_visits_ffi.h"
+#include "command_cost_ffi.h"
+#include "tile_animation_services.h"
 #include "engine_services.h"
 #include "services_newgrf.h"
 #include "../vehicle_func.h"
@@ -84,6 +86,7 @@ Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept { return VehicleOf(GetRus
 bool RustTrainMultiheaded(const Vehicle *v) noexcept { return GetRustStationLoading().is_multiheaded(RustVehicle(v)); }
 Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept { return VehicleOf(GetRustStationLoading().other_multiheaded(RustVehicle(v))); }
 
+OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept { return TrainHandle(Train::From(VehicleOf(v))); }
 bool RustTrainIsEngine(const Vehicle *v) noexcept { return Train::From(v)->IsEngine(); }
 uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept { return RustVehicleCallback(CBID_VEHICLE_START_STOP_CHECK, 0, 0, v->engine_type, v, std::span(reg, 1)); }
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_power; }
@@ -137,13 +140,12 @@ static OpenTTDVehicleNewPosition OPENTTD_VEHICLE_CALL VehicleSvcNewPosition(Open
 	GetNewVehiclePosResult gp = GetNewVehiclePos(VehicleOf(v));
 	return {.x = gp.x, .y = gp.y, .tile = gp.new_tile.base()};
 }
-static uint8_t OPENTTD_VEHICLE_CALL VehicleSvcMoveThenStatus(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept
+static void OPENTTD_VEHICLE_CALL VehicleSvcWriteXY(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept
 {
 	Vehicle *u = VehicleOf(v);
 	u->x_pos = x;
 	u->y_pos = y;
-	RustVehicleUpdatePosition(u);
-	return RustVehicleStatus(u);
+
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcBaseViewport(OpenTTDVehicle *v) noexcept { VehicleOf(v)->Vehicle::UpdateViewport(true); }
 static int32_t OPENTTD_VEHICLE_CALL VehicleSvcProperty(OpenTTDVehicle *v, uint8_t property, int32_t fallback) noexcept
@@ -299,8 +301,24 @@ static OpenTTDVehicleAltitudeInputs OPENTTD_VEHICLE_CALL VehicleSvcAltitudeInput
 	return {.max_speed = RustVehicleMaxSpeed(u), .direction = RustVehicleDirection(u)};
 }
 
+const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept
+{
+	static const OpenTTDOccupancyCommands services{.vehicles = &GetRustVehicleServices(), .max_pixel_z = OpenTTDTileMaxPixelZ, .costs = &GetRustCommandCostServices(), .vehicle_error = STR_ERROR_TRAIN_IN_THE_WAY};
+	return &services;
+}
+static_assert(AIR_SHADOW == 4);
+
+static OpenTTDVehicleTileLinks *OPENTTD_VEHICLE_CALL VehicleSvcTileLinks(OpenTTDVehicle *v) noexcept { return &VehicleOf(v)->tile_links; }
+
 constinit const OpenTTDVehicleServices _rust_vehicle_services{
-	.vehicles_on_tile = RustVisitVehiclesOnTile,
+	.tile_links = VehicleSvcTileLinks,
+	.map_log_x = OpenTTDMapLogX,
+#if !defined(NDEBUG) || defined(WITH_ASSERT)
+	.assertions = true,
+#else
+	.assertions = false,
+#endif
+	.train_handle = RustVehicleTrain,
 	.write_counters = VehicleSvcWriteCounters,
 	.waiting_for_unbunching = VehicleSvcWaitingForUnbunching,
 	.leave_unbunching_depot = VehicleSvcLeaveUnbunchingDepot,
@@ -308,7 +326,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.enter_depot = openttd_rust_visit_enter_depot,
 	.pathfinding_result = VehicleSvcPathfindingResult,
 	.new_position = VehicleSvcNewPosition,
-	.move_then_status = VehicleSvcMoveThenStatus,
+	.write_xy = VehicleSvcWriteXY,
 	.base_viewport = VehicleSvcBaseViewport,
 	.property = VehicleSvcProperty,
 	.callback = VehicleSvcCallback,

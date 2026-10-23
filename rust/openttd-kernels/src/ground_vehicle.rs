@@ -759,8 +759,12 @@ pub(crate) fn move_incline(
     new_tile: bool,
     delta: bool,
 ) -> Moved {
-    (gs.move_position)(v, x, y);
     let s = gs.physics;
+    (s.vehicle.write_xy)(v, x, y);
+    // SAFETY: Live shell; index writes end before inclination callbacks.
+    unsafe {
+        crate::vehicle::occupancy::update(s.vehicle, v, false);
+    }
     let o = (s.resolve)(v);
     let old_z = inclination_owned(s, v, o, new_tile, delta);
     Moved {

@@ -292,8 +292,6 @@ pub struct Services {
     pub set_cargo_payment: extern "C" fn(u32, i64),
     pub price_windows_dirty: extern "C" fn(),
     pub industry_daily_changes: extern "C" fn(bool),
-    pub clear_cargo_monitors: extern "C" fn(u8),
-    pub clear_all_cargo_monitors: extern "C" fn(),
     pub generate_company_name: extern "C" fn(u8),
     pub ask_merger: extern "C" fn(u8, u8, i64),
     pub is_interactive_company: extern "C" fn(u8) -> bool,
@@ -1171,7 +1169,8 @@ fn transfer(s: &Services, ownership: &crate::tile_owner::Context, old: u8, new: 
         |from| (s.goal_next_owned)(old, from),
         |id| (s.delete_goal)(id),
     );
-    (s.clear_cargo_monitors)(old);
+    crate::cargomonitor::openttd_rust_monitor_clear_pickups(old);
+    crate::cargomonitor::openttd_rust_monitor_clear_deliveries(old);
     each(
         |from| (s.story_page_next_owned)(old, from),
         |id| (s.delete_story_page)(id),
@@ -1620,10 +1619,11 @@ pub extern "C" fn openttd_rust_economy_startup(s: &Services, es: &EconomySetting
 }
 /// `InitializeEconomy`.
 #[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_economy_initialize(s: &Services) {
+pub extern "C" fn openttd_rust_economy_initialize() {
     put!(e(), 1 << 16, prices);
     put!(e(), 1 << 16, payment);
-    (s.clear_all_cargo_monitors)();
+    crate::cargomonitor::openttd_rust_monitor_clear_pickups(crate::company_type::INVALID_OWNER);
+    crate::cargomonitor::openttd_rust_monitor_clear_deliveries(crate::company_type::INVALID_OWNER);
 }
 /// `GetPrice` after the facade applies the `PR_END` check and the `NewGRF` shift.
 #[unsafe(no_mangle)]
@@ -1951,8 +1951,6 @@ crate::abi::layouts! {
         set_cargo_payment,
         price_windows_dirty,
         industry_daily_changes,
-        clear_cargo_monitors,
-        clear_all_cargo_monitors,
         generate_company_name,
         ask_merger,
         is_interactive_company,

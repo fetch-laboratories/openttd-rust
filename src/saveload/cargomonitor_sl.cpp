@@ -54,6 +54,13 @@ struct CMDLChunkHandler : ChunkHandler {
 		TempStorage storage;
 
 		int i = 0;
+#ifdef WITH_RUST
+		while (openttd_rust_monitor_next_delivery(i == 0, &storage.number, &storage.amount)) {
+			SlSetArrayIndex(i);
+			SlObject(&storage, _cargomonitor_pair_desc);
+			i++;
+		}
+#else
 		CargoMonitorMap::const_iterator iter = _cargo_deliveries.begin();
 		while (iter != _cargo_deliveries.end()) {
 			storage.number = iter->first;
@@ -65,6 +72,7 @@ struct CMDLChunkHandler : ChunkHandler {
 			i++;
 			iter++;
 		}
+#endif /* WITH_RUST */
 	}
 
 	void Load() const override
@@ -81,7 +89,11 @@ struct CMDLChunkHandler : ChunkHandler {
 
 			if (fix) storage.number = FixupCargoMonitor(storage.number);
 
+#ifdef WITH_RUST
+			openttd_rust_monitor_insert_delivery(storage.number, storage.amount);
+#else
 			_cargo_deliveries.emplace(storage.number, storage.amount);
+#endif /* WITH_RUST */
 		}
 	}
 };
@@ -97,6 +109,13 @@ struct CMPUChunkHandler : ChunkHandler {
 		TempStorage storage;
 
 		int i = 0;
+#ifdef WITH_RUST
+		while (openttd_rust_monitor_next_pickup(i == 0, &storage.number, &storage.amount)) {
+			SlSetArrayIndex(i);
+			SlObject(&storage, _cargomonitor_pair_desc);
+			i++;
+		}
+#else
 		CargoMonitorMap::const_iterator iter = _cargo_pickups.begin();
 		while (iter != _cargo_pickups.end()) {
 			storage.number = iter->first;
@@ -108,6 +127,7 @@ struct CMPUChunkHandler : ChunkHandler {
 			i++;
 			iter++;
 		}
+#endif /* WITH_RUST */
 	}
 
 	void Load() const override
@@ -124,7 +144,11 @@ struct CMPUChunkHandler : ChunkHandler {
 
 			if (fix) storage.number = FixupCargoMonitor(storage.number);
 
+#ifdef WITH_RUST
+			openttd_rust_monitor_insert_pickup(storage.number, storage.amount);
+#else
 			_cargo_pickups.emplace(storage.number, storage.amount);
+#endif /* WITH_RUST */
 		}
 	}
 };

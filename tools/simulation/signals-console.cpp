@@ -31,35 +31,6 @@
 #include "settings_type.h"
 #include "../../../src/rust/signal_ffi.h"
 
-#ifdef WITH_RUST
-/* Measurement belongs only to this relinked fixture. The ordinary native query
- * and scalar accessor remain unchanged; count actual short-circuited reads. */
-static uint64_t *_signal_occupancy_reads = nullptr;
-extern "C" uint8_t __real_openttd_rust_train_state_get_track(const OpenTTDTrainState *);
-extern "C" uint8_t __wrap_openttd_rust_train_state_get_track(const OpenTTDTrainState *state)
-{
-	if (_signal_occupancy_reads != nullptr) ++*_signal_occupancy_reads;
-	return __real_openttd_rust_train_state_get_track(state);
-}
-static bool SignalCountTrainOnTile(uint32_t tile) noexcept
-{
-	uint64_t reads = 0;
-	Backup<uint64_t *> counter(_signal_occupancy_reads, &reads);
-	bool result = SignalTrainOnTile(tile);
-	counter.Restore();
-	openttd_rust_signal_count_occupancy(reads);
-	return result;
-}
-static bool SignalCountTrainOnTracks(uint32_t tile, uint8_t tracks) noexcept
-{
-	uint64_t reads = 0;
-	Backup<uint64_t *> counter(_signal_occupancy_reads, &reads);
-	bool result = SignalTrainOnTracks(tile, tracks);
-	counter.Restore();
-	openttd_rust_signal_count_occupancy(reads);
-	return result;
-}
-#endif
 
 extern Company *DoStartupNewCompany(bool is_ai, CompanyID company);
 

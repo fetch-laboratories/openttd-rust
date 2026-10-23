@@ -32,19 +32,6 @@
 #include "rust/environment_services.h"
 #include "rust/vehicle_services.h"
 
-/** Native spatial query; Rust retains traversal and occupancy branching. */
-static bool SignalTrainOnTile(uint32_t tile) noexcept
-{
-	return HasVehicleOnTile(TileIndex(tile), [](const Vehicle *v) {
-		return RustVehicleVehicleType(v) == VEH_TRAIN && Train::From(v)->GetTrack() != TRACK_BIT_DEPOT;
-	});
-}
-static bool SignalTrainOnTracks(uint32_t tile, uint8_t tracks) noexcept
-{
-	CommandCost result;
-	GetRustCommandServices().no_train(RustCommandCost(&result), tile, tracks);
-	return result.Failed();
-}
 static void SignalOverflowTbu() noexcept { Debug(misc, 0, "SignalSegment too complex. Set _tbuset is full (maximum 64)"); }
 static void SignalOverflowTbd() noexcept { Debug(misc, 0, "SignalSegment too complex. Set _tbdset is full (maximum 256)"); }
 static void SignalOverflowGlobal() noexcept { Debug(misc, 0, "SignalSegment too complex. Set _globset is full (maximum 128)"); }
@@ -62,8 +49,7 @@ static const OpenTTDSignalServices _signal_services{
 #endif
 	.assert_condition = RustAssertCondition,
 	.assert_wormhole_start = SignalAssertWormholeStart,
-	.train_on_tile = SignalTrainOnTile,
-	.train_on_tracks = SignalTrainOnTracks,
+	.vehicles = &_rust_vehicle_services,
 	.overflow_tbu = SignalOverflowTbu,
 	.overflow_tbd = SignalOverflowTbd,
 	.overflow_global = SignalOverflowGlobal,

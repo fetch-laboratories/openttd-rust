@@ -1051,7 +1051,7 @@ impl<'a> World<'a> {
         let end = (self.s.other_tunnel_end)(tile);
         // SAFETY: live cost slot and original endpoints; no retained native reference.
         unsafe {
-            (self.cmd.wormhole_free)(ret.0, tile, end, std::ptr::null());
+            self.cmd.wormhole_free(ret.0, tile, end, std::ptr::null());
         }
         if !ret.ok() {
             w::hit(w::TB_OCCUPIED);
@@ -1141,7 +1141,7 @@ impl<'a> World<'a> {
         let end = (self.a.other_bridge_end)(tile);
         // SAFETY: live cost slot and original endpoints; no retained native reference.
         unsafe {
-            (self.cmd.wormhole_free)(ret.0, tile, end, std::ptr::null());
+            self.cmd.wormhole_free(ret.0, tile, end, std::ptr::null());
         }
         if !ret.ok() {
             w::hit(w::TB_OCCUPIED);

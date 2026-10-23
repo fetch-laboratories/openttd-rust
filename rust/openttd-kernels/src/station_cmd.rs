@@ -189,7 +189,6 @@ pub struct CommandServicesTable {
     pub bounds: extern "C" fn(*mut BaseStation) -> Bounds,
     pub location: extern "C" fn(*const BaseStation) -> u32,
     pub move_sign: extern "C" fn(*mut BaseStation, u32),
-    pub node_location: extern "C" fn(*mut crate::linkgraph::NativeGraph, u16, u32),
     pub virtual_coord: extern "C" fn(*mut BaseStation),
     pub catchment: extern "C" fn(*mut BaseStation, bool),
     pub catchment_dirty: extern "C" fn(),
@@ -422,7 +421,7 @@ impl<'a> Ctx<'a> {
             return out.error(self.s.strings.demolish_bridge);
         }
         // SAFETY: the native output is a live command slot for this entry.
-        unsafe { (self.command.no_vehicle)(out.0, tile) };
+        unsafe { self.command.no_vehicle(out.0, tile) };
         if !out.ok() {
             return;
         }
@@ -668,12 +667,18 @@ impl Ctx<'_> {
             return;
         }
         for cargo in 0..64 {
-            let graph = (self.links().graph)(st, cargo);
+            let graph = crate::linkgraph::live::station_graph(st, cargo, self.links().graphs);
             if graph.is_null() {
                 continue;
             }
-            let node = (self.links().node)(st, cargo);
-            (self.s.node_location)(graph, node, (self.s.location)(st));
+            let node = (self.links().graphs.node)(st, cargo);
+            unsafe {
+                crate::linkgraph::live::openttd_rust_live_node_location(
+                    crate::linkgraph::live::resolve(graph, self.links().graphs),
+                    node,
+                    (self.s.location)(st),
+                );
+            }
         }
     }
     fn delete_if_empty(&self, st: *mut BaseStation) {
@@ -810,7 +815,7 @@ unsafe extern "C" fn deleted_visit(context: *mut std::ffi::c_void, st: *mut Base
         search.best = st;
     } else if distance == search.threshold
         && !search.best.is_null()
-        && (c.links().station_id)(st) < (c.links().station_id)(search.best)
+        && (c.links().graphs.station_id)(st) < (c.links().graphs.station_id)(search.best)
     {
         search.best = st;
     }
@@ -960,7 +965,7 @@ impl Ctx<'_> {
         id
     }
     fn shrink(&self, st: *mut BaseStation, mut area: Area, kind: u8) -> Area {
-        let id = (self.links().station_id)(st);
+        let id = (self.links().graphs.station_id)(st);
         let kind = if kind == 0 && !(self.world().is_station)(st) {
             7
         } else {
@@ -1510,7 +1515,7 @@ impl Ctx<'_> {
             (self.s.rail_triggers)(st, spec);
         }
         let owner = (self.world().station_owner)(st);
-        let id = (self.links().station_id)(st);
+        let id = (self.links().graphs.station_id)(st);
         for i in 0..tracks {
             let track_tile = tile.wrapping_add(u32::from(i).wrapping_mul(track_delta));
             for j in 0..length {
@@ -1722,7 +1727,7 @@ impl Ctx<'_> {
                 continue;
             }
             unsafe {
-                (self.command.no_vehicle)(ret.0, tile);
+                self.command.no_vehicle(ret.0, tile);
             }
             error.add(ret);
             if !error.ok() {
@@ -1875,7 +1880,7 @@ impl Ctx<'_> {
         }
         let area = unsafe { (self.s.train_area)(st) };
         cost.set(0);
-        let id = (self.links().station_id)(st);
+        let id = (self.links().graphs.station_id)(st);
         let kind = if waypoint { 7 } else { 0 };
         for tile in area.tiles(self.map()) {
             if (self.shared.tile_type)(tile) != 5
@@ -2387,7 +2392,7 @@ impl Ctx<'_> {
             (self.s.add_facility)(st, if truck { 1 } else { 2 }, tile);
             (self.s.before_add_tile)(ret.0, st, tile, 1);
             let owner = (self.world().station_owner)(st);
-            let id = (self.links().station_id)(st);
+            let id = (self.links().graphs.station_id)(st);
             if drive {
                 if (self.shared.is_normal_road)(tile) {
                     self.road_infrastructure(
@@ -2509,7 +2514,7 @@ impl Ctx<'_> {
         if waypoint {
             if flags & 32 == 0 {
                 unsafe {
-                    (self.command.no_vehicle)(cost.0, tile);
+                    self.command.no_vehicle(cost.0, tile);
                 }
                 if !cost.ok() {
                     return;
@@ -2527,7 +2532,7 @@ impl Ctx<'_> {
             }
         } else {
             unsafe {
-                (self.command.no_vehicle)(cost.0, tile);
+                self.command.no_vehicle(cost.0, tile);
             }
             if !cost.ok() {
                 return;
@@ -2863,7 +2868,7 @@ impl Ctx<'_> {
         st: *mut BaseStation,
     ) -> (*const crate::services::TownHandle, u32) {
         let geometry = (self.s.airport_geometry)(st);
-        let id = (self.links().station_id)(st);
+        let id = (self.links().graphs.station_id)(st);
         self.nearest_town(
             geometry.spec,
             geometry.rotation,
@@ -3032,7 +3037,7 @@ impl Ctx<'_> {
         (self.s.set_airport_details)(st, airport, layout, rotation);
         (self.s.before_add_rect)(ret.0, st, area, 1);
         let owner = (self.world().station_owner)(st);
-        let id = (self.links().station_id)(st);
+        let id = (self.links().graphs.station_id)(st);
         for t in self.airport_tiles(spec, layout, tile) {
             (self.s.make_airport)(t.tile, owner, id, t.gfx, 3);
             (self.s.set_random_bits)(
@@ -3069,7 +3074,7 @@ impl Ctx<'_> {
             }
         }
         cost.set(0);
-        let id = (self.links().station_id)(st);
+        let id = (self.links().graphs.station_id)(st);
         let mut from = 0;
         while let Some(v) = (self.shared.vehicle_next)(from) {
             let identity = (self.s.aircraft_vehicle)(v);
@@ -3107,7 +3112,7 @@ impl Ctx<'_> {
                 continue;
             }
             unsafe {
-                (self.command.no_vehicle)(ret.0, tile);
+                self.command.no_vehicle(ret.0, tile);
             }
             if !ret.ok() {
                 return cost.take(ret);
@@ -3427,7 +3432,13 @@ impl Ctx<'_> {
                 (self.s.water_infrastructure)(owner, 1);
             }
             (self.s.station_infrastructure)(owner, 2);
-            (self.s.make_dock)(tile, owner, (self.links().station_id)(st), dir, water);
+            (self.s.make_dock)(
+                tile,
+                owner,
+                (self.links().graphs.station_id)(st),
+                dir,
+                water,
+            );
             self.update_docking(st);
             self.tiles_changed(st, true, 5);
         }
@@ -3467,11 +3478,11 @@ impl Ctx<'_> {
         }
         let water = self.map().add_diag(land, (self.shared.station_gfx)(land));
         unsafe {
-            (self.command.no_vehicle)(cost.0, land);
+            self.command.no_vehicle(cost.0, land);
         }
         if cost.ok() {
             unsafe {
-                (self.command.no_vehicle)(cost.0, water);
+                self.command.no_vehicle(cost.0, water);
             }
         }
         if !cost.ok() {
@@ -3511,7 +3522,7 @@ impl Ctx<'_> {
             self.tiles_changed(st, false, 5);
             self.clear_docking_neighbours(land);
             self.clear_docking_neighbours(water);
-            let id = (self.links().station_id)(st);
+            let id = (self.links().graphs.station_id)(st);
             let mut from = 0;
             while let Some(v) = (self.shared.vehicle_next)(from) {
                 let identity = (self.s.aircraft_vehicle)(v);
@@ -3573,7 +3584,7 @@ impl Ctx<'_> {
         (self.shared.tile_animation_delete)(tile);
         (self.s.make_oilrig)(
             tile,
-            (self.links().station_id)(st),
+            (self.links().graphs.station_id)(st),
             (unsafe { &*self.s.clear }.water_class)(tile).0,
         );
         (self.s.set_station_owner)(st, 0x10);
@@ -4090,7 +4101,6 @@ crate::abi::layouts! {
         bounds,
         location,
         move_sign,
-        node_location,
         virtual_coord,
         catchment,
         catchment_dirty,

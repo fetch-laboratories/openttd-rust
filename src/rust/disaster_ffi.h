@@ -24,10 +24,16 @@ extern "C" {
 typedef struct { uint32_t image_override, target; uint16_t state; uint8_t flags; } OpenTTDDisasterState;
 typedef struct { uint32_t kind, id, other; int64_t a, b, c, d; } OpenTTDDisasterAction;
 typedef struct OpenTTDDisasterRun OpenTTDDisasterRun;
+struct OpenTTDOccupancyCommands;
+struct OpenTTDVehicle;
+typedef struct {
+	const struct OpenTTDOccupancyCommands *commands;
+	struct OpenTTDVehicle *(OPENTTD_DISASTER_CALL *vehicle)(void *, uint32_t) noexcept;
+} OpenTTDDisasterOccupancy;
 /* Rust state follows its shell's lifetime; scalar serialization addresses are
  * stable until destruction. The shared service table is borrowed: keep it live
- * and immutable through run destruction, including suspended actions and nested
- * owners. Its context may mutate independently. No world/state reference spans
+ * and immutable, along with the occupancy table and its pointees, through run
+ * destruction, including suspended actions and nested owners. Its context may mutate independently. No world/state reference spans
  * a shared-service call.
  * Read/write leaves are noexcept and cannot reenter. Direct services are noexcept;
  * shell allocation may construct a separate Rust owner, and the shared flight
@@ -38,7 +44,7 @@ typedef struct OpenTTDDisasterRun OpenTTDDisasterRun;
 OpenTTDDisasterState *OPENTTD_DISASTER_CALL openttd_rust_disaster_state_create(uint32_t);
 void OPENTTD_DISASTER_CALL openttd_rust_disaster_state_destroy(OpenTTDDisasterState *);
 uint16_t *OPENTTD_DISASTER_CALL openttd_rust_disaster_delay(void);
-OpenTTDDisasterRun *OPENTTD_DISASTER_CALL openttd_rust_disaster_create(uint32_t, uint32_t, int64_t, int64_t, int64_t, int64_t, void *, void (OPENTTD_DISASTER_CALL *)(void *, uint32_t, uint32_t, int64_t, int64_t, int64_t *), void (OPENTTD_DISASTER_CALL *)(void *, uint32_t, uint32_t, int64_t), const OpenTTDSharedServices *, int64_t (OPENTTD_DISASTER_CALL *)(void *, const OpenTTDDisasterAction *));
+OpenTTDDisasterRun *OPENTTD_DISASTER_CALL openttd_rust_disaster_create(uint32_t, uint32_t, int64_t, int64_t, int64_t, int64_t, void *, void (OPENTTD_DISASTER_CALL *)(void *, uint32_t, uint32_t, int64_t, int64_t, int64_t *), void (OPENTTD_DISASTER_CALL *)(void *, uint32_t, uint32_t, int64_t), const OpenTTDSharedServices *, const OpenTTDDisasterOccupancy *, int64_t (OPENTTD_DISASTER_CALL *)(void *, const OpenTTDDisasterAction *));
 OpenTTDDisasterAction OPENTTD_DISASTER_CALL openttd_rust_disaster_advance(OpenTTDDisasterRun *, int64_t);
 void OPENTTD_DISASTER_CALL openttd_rust_disaster_destroy(OpenTTDDisasterRun *);
 #ifdef __cplusplus

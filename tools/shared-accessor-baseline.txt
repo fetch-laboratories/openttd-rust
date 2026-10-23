@@ -1,5 +1,4 @@
 src/economy.cpp | []() noexcept -> bool | 05d6eb800dc27d98 | 1
-src/economy.cpp | [](OpenTTDStation *station) noexcept -> uint16_t | d08f8c5433be9ae1 | 1
 src/economy.cpp | [](OpenTTDStation *station, OpenTTDVehicle *vehicle) noexcept -> uint32_t | 9863489038d87581 | 1
 src/economy.cpp | [](OpenTTDStation *station, uint8_t cargo) noexcept -> uint32_t | f29886bee36a938f | 1
 src/economy.cpp | [](OpenTTDVehicle *handle) noexcept -> OpenTTDNativeCargoPayment * | 6c04ed067ab54477 | 1
@@ -144,8 +143,6 @@ src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 20419761
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 525f6f2cbe8d180f | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> uint8_t | 06dab3257089f706 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> void | 13c7c5aa49806d75 | 1
-src/station_cmd.cpp | [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> OpenTTDLinkGraph * | a0c4a048bc6596fd | 1
-src/station_cmd.cpp | [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> uint16_t | 8c14257fe50590c2 | 1
 src/town_cmd.cpp | RustTownAuthorityDistance() noexcept | e43037648def52db | 1
 src/town_cmd.cpp | RustTownCouncilTolerance() noexcept | cddd8d4718f9a2cd | 1
 src/town_cmd.cpp | RustTown_allow_crossings() noexcept | 1f8c8aa2e0af5a02 | 1

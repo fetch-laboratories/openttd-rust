@@ -33,6 +33,9 @@ pub struct State {
     pub turn_counter: u8,
     pub flags: u8,
 }
+/// `AIR_SHADOW` from `aircraft.h`.
+pub(crate) const AIR_SHADOW: u8 = 4;
+
 use crate::airport::{AT_OILRIG, HANGAR};
 use crate::newgrf_sound::VSE_START;
 use crate::services::{Map, Services, chance16_i};
@@ -214,10 +217,9 @@ pub struct Leaves {
     pub nearest_depot_order: unsafe extern "C" fn(Vehicle) -> bool,
     pub part_of_orders: unsafe extern "C" fn(Vehicle) -> bool,
     pub next_aircraft: unsafe extern "C" fn(u32) -> Vehicle,
-    pub update_position: unsafe extern "C" fn(Vehicle),
+    pub viewport: unsafe extern "C" fn(Vehicle),
     pub rotor_image: unsafe extern "C" fn(Vehicle),
     pub copy_sprite: unsafe extern "C" fn(Vehicle, Vehicle),
-    pub position_viewport: unsafe extern "C" fn(Vehicle),
     pub create_effect: unsafe extern "C" fn(Vehicle, u8, i32, i32, i32),
     pub truncate_cargo: unsafe extern "C" fn(Vehicle),
     pub crash_news: unsafe extern "C" fn(Vehicle, u16, u32),
@@ -580,10 +582,10 @@ impl World<'_> {
         route_node(self; node: *const c_void) -> RouteNode => unsafe { (self.leaves.route_node)(node) };
         block_node(self; node: *const c_void) -> BlockNode => unsafe { (self.leaves.block_node)(node) };
         fta_next_position(self; node: *const c_void) -> u8 => unsafe { (self.leaves.fta_next_position)(node) };
-        update_position(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.update_position)(vehicle) };
+        update_position(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update(self.vs, vehicle.base(), false); (self.leaves.viewport)(vehicle); };
         rotor_image(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.rotor_image)(vehicle) };
         copy_sprite(self; vehicle: Vehicle, source: Vehicle) -> () => unsafe { (self.leaves.copy_sprite)(vehicle, source) };
-        position_viewport(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.position_viewport)(vehicle) };
+        position_viewport(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update(self.vs, vehicle.base(), false); (self.vs.base_viewport)(vehicle.base()); };
         create_effect(self; vehicle: Vehicle, kind: i64, x: i64, y: i64, z: i64) -> () => unsafe { (self.leaves.create_effect)(vehicle, kind as u8, x as i32, y as i32, z as i32) };
         dirty_start_stop(self; vehicle: Vehicle) -> () => (self.vs.start_stop_dirty)(vehicle.base());
         play_sound(self; vehicle: Vehicle, sound: i64) -> () => (self.vs.play_sound)(vehicle.base(), sound as u16);
@@ -2527,10 +2529,9 @@ crate::abi::layouts! {
         nearest_depot_order,
         part_of_orders,
         next_aircraft,
-        update_position,
+        viewport,
         rotor_image,
         copy_sprite,
-        position_viewport,
         create_effect,
         truncate_cargo,
         crash_news,

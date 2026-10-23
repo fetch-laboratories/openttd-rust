@@ -218,7 +218,6 @@ pub struct Leaves {
     #[cfg(test)]
     pub try_track: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub tunnel_dir: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    pub tunnel_free: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u32) -> u64,
     #[cfg(test)]
     pub unreserve: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8),
     pub write_dest: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
@@ -580,7 +579,16 @@ impl Game<'_> {
         (self.leaves.tunnel_dir)(self.context, id, a as u32)
     }
     fn svc_tunnel_free(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.tunnel_free)(self.context, id, a as u32, b as u32)
+        // SAFETY: The current train and all offered shells survive this query.
+        u64::from(unsafe {
+            crate::vehicle::occupancy::wormhole_blocker(
+                &*self.leaves.vehicle,
+                a as u32,
+                b as u32,
+                id.vehicle().0.as_ptr(),
+            )
+            .is_none()
+        })
     }
     fn svc_unreserve(&self, id: Handle, a: u64, b: u64) -> u64 {
         #[cfg(not(test))]
@@ -1624,7 +1632,6 @@ crate::abi::layouts! {
         tile_offset,
         trackdir,
         tunnel_dir,
-        tunnel_free,
         write_dest,
         write_last,
         write_suppress,
@@ -1731,7 +1738,6 @@ mod tests {
 
             try_track: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
             tunnel_dir: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            tunnel_free: unused!((*mut std::ffi::c_void, Handle, u32, u32); u64),
             unreserve: unused!((*mut std::ffi::c_void, Handle, u32, u8); ()),
             write_dest: unused!((*mut std::ffi::c_void, Handle, u32); ()),
             write_last: unused!((*mut std::ffi::c_void, Handle, u16); ()),
