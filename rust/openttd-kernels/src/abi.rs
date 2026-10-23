@@ -851,6 +851,7 @@ layouts! {
     };
     "OpenTTDMovementServices" ["landscape"] => crate::movement::MovementServices {
         shared,
+        orders,
         rail,
         road,
         rail_map,
@@ -4417,7 +4418,6 @@ layouts! {
         order_dummy,
         order_free,
         order_max_speed,
-        order_stop,
         other_end,
         pay_running,
         pbs_signal_type,
@@ -4604,7 +4604,6 @@ layouts! {
         mark_tile,
         oneway,
         order_service,
-        order_stop,
         order_type,
         other_end,
         overlap,

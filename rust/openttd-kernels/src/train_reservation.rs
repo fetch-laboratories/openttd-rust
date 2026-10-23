@@ -178,7 +178,6 @@ pub struct Leaves {
     pub mark_tile: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
     pub oneway: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub order_service: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    pub order_stop: extern "C" fn(*mut std::ffi::c_void, Handle, u16) -> u64,
     pub order_type: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub other_end: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub overlap: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
@@ -383,7 +382,11 @@ impl Game<'_> {
         (self.leaves.order_service)(self.context, id, a as u8)
     }
     fn svc_order_stop(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.order_stop)(self.context, id, a as u16)
+        u64::from(crate::movement::should_stop(
+            self.shared(),
+            id.vehicle(),
+            a as u16,
+        ))
     }
     fn svc_order_type(&self, id: Handle, a: u64) -> u64 {
         (self.leaves.order_type)(self.context, id, a as u8)
@@ -1468,7 +1471,6 @@ mod tests {
             mark_tile: unused!((*mut std::ffi::c_void, Handle, u32); ()),
             oneway: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
             order_service: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            order_stop: unused!((*mut std::ffi::c_void, Handle, u16); u64),
             order_type: unused!((*mut std::ffi::c_void, Handle, u8); u64),
             other_end: unused!((*mut std::ffi::c_void, Handle, u32); u64),
             overlap: unused!((*mut std::ffi::c_void, Handle, u8); u64),

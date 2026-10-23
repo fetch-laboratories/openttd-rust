@@ -133,11 +133,7 @@ static uint64_t TrainReservationOrderService(void *, OpenTTDTrainHandle id, uint
 	Train *v = static_cast<Train *>(id.shell);
 	return v->GetOrder(static_cast<VehicleOrderID>(a))->GetDepotOrderType().Test(OrderDepotTypeFlag::Service);
 }
-static uint64_t TrainReservationOrderStop(void *, OpenTTDTrainHandle id, uint16_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return v->current_order.ShouldStopAtStation(v, StationID(static_cast<uint16_t>(a)));
-}
+
 static uint64_t TrainReservationOrderType(void *, OpenTTDTrainHandle id, uint8_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);

@@ -596,7 +596,6 @@ pub struct Leaves {
     pub order_dummy: extern "C" fn(Handle),
     pub order_free: extern "C" fn(Handle),
     pub order_max_speed: extern "C" fn(Handle) -> u64,
-    pub order_stop: extern "C" fn(Handle, u16) -> u64,
     pub other_end: extern "C" fn(Handle, u32) -> u64,
     pub pay_running: extern "C" fn(Handle, i64),
     pub pbs_signal_type: extern "C" fn(Handle) -> u64,
@@ -972,7 +971,7 @@ impl Game<'_> {
         };
         if model == 1 && (self.leaves.is_station)(id, v.tile) != 0 {
             let station = (self.leaves.station)(id, v.tile) as u16;
-            if (self.leaves.order_stop)(id, station) != 0 {
+            if crate::movement::should_stop(self.services, id.vehicle(), station) {
                 let (stop, ahead, length) = self.stop_location(id, station, v.tile);
                 let distance = ahead / 16 - length.wrapping_sub(stop) / 16;
                 if distance > 0 {

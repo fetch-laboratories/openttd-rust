@@ -175,6 +175,14 @@ witness_blocks! {
         MOVE_BRIDGE_UP = 45 => "movement.bridge_up",
         MOVE_BRIDGE_DOWN = 46 => "movement.bridge_down",
         MOVE_DEPOT_TICKS = 47 => "movement.depot_ticks",
+        MOVE_TRAIN_TUNNEL_ENTER_0 = 48 => "movement.train_tunnel_enter_0",
+        MOVE_TRAIN_TUNNEL_ENTER_1 = 49 => "movement.train_tunnel_enter_1",
+        MOVE_TRAIN_TUNNEL_ENTER_2 = 50 => "movement.train_tunnel_enter_2",
+        MOVE_TRAIN_TUNNEL_ENTER_3 = 51 => "movement.train_tunnel_enter_3",
+        MOVE_TRAIN_TUNNEL_EXIT_0 = 52 => "movement.train_tunnel_exit_0",
+        MOVE_TRAIN_TUNNEL_EXIT_1 = 53 => "movement.train_tunnel_exit_1",
+        MOVE_TRAIN_TUNNEL_EXIT_2 = 54 => "movement.train_tunnel_exit_2",
+        MOVE_TRAIN_TUNNEL_EXIT_3 = 55 => "movement.train_tunnel_exit_3",
     }
 
     object {

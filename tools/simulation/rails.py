@@ -300,13 +300,9 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         normalized, _ = normalize(
             warm["snapshots"][-1], directory / "depot-warm-normalized"
         )
-        if any(
-            15
-            in decode_element(read_save(normalized)["STNN"], body).get(
-                "normal[0]/loading_vehicles", ()
-            )
-            for _, body in read_save(normalized)["STNN"]["elements"]
-        ):
+        from .disasters import rows
+
+        if rows(normalized)[14]["train[0]/common[0]/current_order.type"] & 15 == 3:
             raise RuntimeError("depot staging still has a station loading owner")
         normalized = depot_input(normalized, directory)
     scenario = dict(scenario, save=str(normalized))
@@ -774,24 +770,20 @@ def check(scenario, run, mode, role, result):
     if scenario.get("movement_depot"):
         required += ["train_depot_enter_3", "train_depot_leave_3"]
     if scenario["name"] == "play-padhattan-ridge-2016-manual":
-        required += [
-            "coast",
-            "lock",
-            "ship_depot",
-            "train_tunnel_enter",
-            "train_tunnel_exit",
-            "train_tunnel_sound",
-            "road_bridge_enter",
-            "road_bridge_exit",
-            "station_stop",
-            "station_slow",
-            "bridge_up",
-            "bridge_down",
-        ]
+        required += (
+            "coast lock ship_depot train_tunnel_enter train_tunnel_exit "
+            "train_tunnel_sound road_bridge_enter road_bridge_exit station_stop "
+            "station_slow bridge_up bridge_down"
+        ).split()
         required += [
             f"train_depot_{phase}_{direction}"
             for phase in ("enter", "leave")
             for direction in range(3)
+        ]
+        required += [
+            f"train_tunnel_{phase}_{direction}"
+            for phase in ("enter", "exit")
+            for direction in range(4)
         ]
         required += [f"road_depot_enter_{direction}" for direction in range(4)]
     if scenario.get("rail_control") in ("crossing", "service"):

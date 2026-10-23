@@ -1936,6 +1936,7 @@ const OpenTTDMovementServices &GetRustMovementServices() noexcept
 {
 	static const OpenTTDMovementServices services{
 		.shared = &GetRustSharedServices(),
+		.orders = &GetRustOrdersLeaves(),
 		.rail = &GetRustRailGroundServices(),
 		.road = &GetRustRoadGroundServices(),
 		.rail_map = &GetRustRailMapServices(),

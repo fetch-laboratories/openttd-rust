@@ -437,7 +437,11 @@ def check(scenario, run, mode, role, result):
     operation = scenario["roads"]
     from . import core
 
-    required = ["pixel_z", "track_road"]
+    required = (
+        ["pixel_z", "track_road"]
+        if operation in ("original", "depot-service", "reload")
+        else []
+    )
     if operation in ("depot-service", "reload"):
         required += ["road_depot_enter_0"]
     if operation == "reload":

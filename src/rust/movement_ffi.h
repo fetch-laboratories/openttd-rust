@@ -14,6 +14,7 @@
 #include "road_ffi.h"
 #include "ship_control_ffi.h"
 #include "vehicle_ffi.h"
+#include "orders_ffi.h"
 struct OpenTTDMovementFoundation { const void *spec; uint16_t kind; bool callback; };
 struct OpenTTDMovementObjectFoundation { bool enabled; bool no_foundation; };
 enum class WaterTileType : uint8_t;
@@ -28,6 +29,7 @@ struct OpenTTDMovementIncline { int32_t z; uint16_t flags; };
 struct OpenTTDMovementFirstSpeed { OpenTTDVehicle *first; uint16_t speed; };
 struct OpenTTDMovementServices {
 	const OpenTTDSharedServices *shared;
+	const OpenTTDOrdersLeaves *orders;
 	const OpenTTDRailServices *rail;
 	const OpenTTDRoadGroundServices *road;
 	const OpenTTDRailMapServices *rail_map;

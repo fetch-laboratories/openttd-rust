@@ -364,7 +364,6 @@ struct OpenTTDTrainServices {
 	void (*order_dummy)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(order_dummy);
 	void (*order_free)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(order_free);
 	uint64_t (*order_max_speed)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(order_max_speed);
-	uint64_t (*order_stop)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(order_stop);
 	uint64_t (*other_end)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_end);
 	void (*pay_running)(OpenTTDTrainHandle, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(pay_running);
 	uint64_t (*pbs_signal_type)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(pbs_signal_type);

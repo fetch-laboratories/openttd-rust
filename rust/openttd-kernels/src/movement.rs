@@ -88,6 +88,7 @@ pub struct FirstSpeed {
 #[repr(C)]
 pub struct MovementServices {
     pub shared: *const Services,
+    pub orders: *const crate::orders::Leaves,
     pub rail: *const RailServices,
     pub road: *const RoadServices,
     pub rail_map: *const crate::services::RailMapServices,
@@ -927,7 +928,7 @@ impl MovementServices {
     ) -> u8 {
         if h.kind.0 == VEH_TRAIN {
             let station = (self.shared().station_index)(tile);
-            if (self.train().order_stop)(h.train, station) == 0 {
+            if !should_stop(self.shared(), v, station) {
                 return 0;
             }
             if !(self.rail_station)(tile)
@@ -1053,6 +1054,7 @@ impl MovementServices {
                     }
                     if frame == TUNNEL_VISIBILITY[usize::from(dir)] {
                         w::hit(w::MOVE_TRAIN_TUNNEL_ENTER);
+                        w::hit(w::MOVE_TRAIN_TUNNEL_ENTER_0 + usize::from(dir));
                         (self.vehicle().write_tile)(v, tile);
                         unsafe {
                             crate::train_state::openttd_rust_train_state_set_track(
@@ -1078,6 +1080,7 @@ impl MovementServices {
                     }
                     (self.native_assert)(track != 0);
                     w::hit(w::MOVE_TRAIN_TUNNEL_EXIT);
+                    w::hit(w::MOVE_TRAIN_TUNNEL_EXIT_0 + usize::from(dir));
                     self.hidden(v, false);
                     return ENTERED_WORMHOLE;
                 }
@@ -1301,4 +1304,21 @@ pub(crate) fn depot_ticks(shared: &Services, v: crate::train::Handle) -> i32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_movement_tunnel_visibility(direction: u8) -> u8 {
     TUNNEL_VISIBILITY[usize::from(direction)]
+}
+
+/// Call the existing order owner directly; acquire only its live raw alias and
+/// the source last-station scalar. No owner reference spans either native leaf.
+pub(crate) fn should_stop(shared: &Services, v: VehicleRef, station: u16) -> bool {
+    let s = table(shared);
+    let last = (s.vehicle().last_station)(v);
+    // SAFETY: Both native leaves resolve the same serialized surviving shell.
+    // The Order is owned by Rust and its facade aliases this stable allocation.
+    unsafe {
+        let owner = ((*s.orders).vehicle)(v.0.as_ptr().cast());
+        crate::orders::openttd_rust_order_should_stop(
+            std::ptr::addr_of_mut!((*owner).current).cast(),
+            last,
+            station,
+        ) != 0
+    }
 }
