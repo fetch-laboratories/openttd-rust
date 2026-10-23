@@ -152,6 +152,28 @@ def scenarios(soak):
                 },
             )
         )
+    scenarios.append(
+        dict(
+            name="generate-river-search",
+            kind="generate",
+            seed=2,
+            map_log2=8,
+            land_generator=1,
+            generation_owner="snapshot",
+            ticks=2 * SNAPSHOT_TICKS + TICKS_PER_DAY,
+            settings={
+                "game_creation": {
+                    "landscape": "temperate",
+                    "amount_of_rivers": 4,
+                    "min_river_length": 4,
+                    "tgen_smoothness": 1,
+                },
+                "difficulty": {"terrain_type": 3, "quantity_sea_lakes": 0},
+                "construction": {"map_height_limit": 40},
+                "pf": {"yapf.max_search_nodes": 500},
+            },
+        )
+    )
     return scenarios
 
 
@@ -196,6 +218,14 @@ def check(scenario, run, mode, role, result):
         required += ["coverage_edge", "rainforest"]
     if not scenario["land_generator"]:
         required += ["template_ne", "template_se", "template_sw", "template_nw"]
+    branches = {
+        "generate-original-settings-1": "sea_flatten sea_edge long_attempt short_attempt flow_recurse yapf_open_update",
+        "generate-original-settings-2": "wetland sea_cutoff",
+        "generate-tgp-settings-2-128x256-777": "desert",
+        "generate-tgp-settings-3-256x128-31337": "widen widen_terraform widen_slope",
+        "generate-river-search": "lake wetland wetland_trees yapf_found yapf_limit widen",
+    }
+    required += branches.get(scenario["name"], "").split()
     counts = core.branch_witnesses(scenario, run, role, "generation", required)
     if counts is not None:
         result.setdefault("generation_witnesses", {})[mode] = counts

@@ -1161,7 +1161,7 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.set_tree_ground = RustSetTreeGroundDensity,
 		.make_sea = [](uint32_t t) noexcept { MakeSea(TileIndex{t}); },
 		.buoy_or_dock = [](uint32_t t) noexcept { return IsBuoy(TileIndex{t}) || IsDock(TileIndex{t}); },
-		.canal_or_river = [](uint32_t t) noexcept { return RustIsCanal(t) || IsRiver(TileIndex{t}); },
+		.canal_or_river = RustCanalOrRiver,
 		.region_context = GetRustWaterRegionContext,
 		.remove_rail = [](OpenTTDCommandCost *out, uint32_t t, Track track) noexcept { *NativeGroundCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlag::Execute, TileIndex{t}, track); },
 		.apply_foundation = RustApplyFoundation,

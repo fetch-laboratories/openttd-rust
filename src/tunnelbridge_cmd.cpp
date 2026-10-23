@@ -96,7 +96,7 @@ const OpenTTDTunnelBridgeServices &GetRustTunnelBridgeServices() noexcept
 		.is_tunnel = [](uint32_t t) noexcept -> bool { return IsTunnel(TileIndex{t}); },
 		.tunnel_in_way = [](uint32_t t, int32_t z, DiagDirection d) noexcept -> bool { return IsTunnelInWayDir(TileIndex{t}, z, d); },
 		.set_middle = [](uint32_t t, Axis a) noexcept -> void { SetBridgeMiddle(TileIndex{t}, a); },
-		.clear_middle = [](uint32_t t) noexcept -> void { ClearBridgeMiddle(TileIndex{t}); },
+		.clear_middle = RustClearBridgeMiddle,
 		.set_reservation = RustSetTunnelBridgeReservation,
 		.make_rail_bridge = [](uint32_t t, uint8_t o, BridgeType b, DiagDirection d, RailType rt) noexcept -> void { MakeRailBridgeRamp(TileIndex{t}, Owner{o}, b, d, rt); },
 		.make_road_bridge = [](uint32_t t, uint8_t o, uint8_t road, uint8_t tram, BridgeType b, DiagDirection d, RoadType rt, RoadType tt) noexcept -> void { MakeRoadBridgeRamp(TileIndex{t}, Owner{o}, Owner{road}, Owner{tram}, b, d, rt, tt); },

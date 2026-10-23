@@ -995,6 +995,7 @@ void RunTileLoop()
 
 #include "rust/generation_services.hpp"
 #include "rust/generation_sea_set.hpp"
+#include "rust/services_bridge.h"
 #include "rust/heightmap_services.hpp"
 #include "rust/tgp_ffi.h"
 
@@ -1020,8 +1021,8 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.trees = &GetRustTreeServices(),
 		.landscape_commands = &GetRustLandscapeCommandServices(),
 		.water_commands = &GetRustWaterCommandServices(),
-		.set_progress = [](OpenTTDGenerationFrame *f, GenWorldProgress stage, uint32_t total) noexcept { return RunGenerationProgress(f, [=] { SetGeneratingWorldProgress(stage, total); }); },
-		.increase_progress = [](OpenTTDGenerationFrame *f, GenWorldProgress stage) noexcept { return RunGenerationProgress(f, [=] { IncreaseGeneratingWorldProgress(stage); }); },
+		.set_progress = [](OpenTTDGenerationFrame *f, GenWorldProgress stage, uint32_t total) noexcept { return RunGenerationProgress(f, [=] { RustSetGeneratingWorldProgress(stage, total); }); },
+		.increase_progress = [](OpenTTDGenerationFrame *f, GenWorldProgress stage) noexcept { return RunGenerationProgress(f, [=] { RustIncreaseGeneratingWorldProgress(stage); }); },
 		.begin_loop = [](OpenTTDGenerationFrame *f) noexcept -> const OpenTTDGenerationLoop * { return &f->loop.emplace().view; },
 		.end_loop = [](OpenTTDGenerationFrame *f) noexcept { f->loop.reset(); },
 		.set_abort_callback = [](void (*callback)()) noexcept { GenerateWorldSetAbortCallback(callback); },
@@ -1032,7 +1033,7 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 			return OpenTTDTerrainTemplate{.width = templ->width, .height = templ->height, .data = reinterpret_cast<const uint8_t *>(templ->data)};
 		},
 		.flat_height = RustFlatTileHeight,
-		.river = [](uint32_t t) noexcept { return IsRiver(TileIndex{t}); },
+		.river = RustIsRiver,
 		.set_snow_line = RustSetSnowLineHeight,
 		.assert_condition = []([[maybe_unused]] bool condition) noexcept { assert(condition); },
 		.sea_construct = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Construct(); },
@@ -1048,7 +1049,7 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.screen_dirty = RustScreenDirty,
 		.surrounded_by_water = []() noexcept { return IsMapSurroundedByWater(); },
 		.set_freeform = RustSetFreeformEdges,
-		.clear_bridge_middle = [](uint32_t t) noexcept { ClearBridgeMiddle(TileIndex{t}); },
+		.clear_bridge_middle = RustClearBridgeMiddle,
 	};
 	return services;
 }
