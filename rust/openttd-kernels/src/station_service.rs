@@ -21,6 +21,7 @@ use crate::command_type::DoCommandFlag;
 use crate::linkgraph::live;
 use crate::orders::NativeOrderList;
 use crate::station::{BaseStation, Station};
+use crate::timer_game_common::INVALID_DATE;
 use crate::vehicle::visits::{Services as Visits, refresh_links};
 use crate::vehicle::{EngineRef, VS_CRASHED, VS_STOPPED, VehicleRef};
 use std::ffi::c_void;
@@ -1030,7 +1031,7 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
             } else {
                 let unrestricted = unsafe { &*owner }.nodes[usize::from(node)].edges[index]
                     .last_unrestricted_update;
-                if unrestricted != -1 && date.wrapping_sub(unrestricted) > timeout {
+                if unrestricted != INVALID_DATE && date.wrapping_sub(unrestricted) > timeout {
                     crate::witness::hit(crate::witness::STATION_STALE_RESTRICT);
                     unsafe { &mut *owner }.nodes[usize::from(node)].edges[index].restrict();
                     let to_id = (l.graphs.station_id)(edge.destination);
@@ -1041,7 +1042,7 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
                 } else {
                     let restricted = unsafe { &*owner }.nodes[usize::from(node)].edges[index]
                         .last_restricted_update;
-                    if restricted != -1 && date.wrapping_sub(restricted) > timeout {
+                    if restricted != INVALID_DATE && date.wrapping_sub(restricted) > timeout {
                         crate::witness::hit(crate::witness::STATION_STALE_RELEASE);
                         unsafe { &mut *owner }.nodes[usize::from(node)].edges[index].release();
                     }
