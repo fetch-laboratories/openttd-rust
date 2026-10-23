@@ -53,7 +53,8 @@ inline void RustVehicleNewCargoRandomisation(OpenTTDVehicle *v) noexcept { RustV
 inline void RustVehicleEmptyRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::Empty); }
 inline void RustVehicleDirtyDepot(const Vehicle *v) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); }
 inline void RustVehicleDirtyDepotOpaque(void *v) noexcept { RustVehicleDirtyDepot(static_cast<Vehicle *>(v)); }
-inline void RustVehicleInvalidateDepot(const Vehicle *v) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, v->tile); }
+inline void RustVehicleInvalidateDepotTile(TileIndex tile) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, tile); }
+inline void RustVehicleInvalidateDepot(const Vehicle *v) noexcept { RustVehicleInvalidateDepotTile(v->tile); }
 template <class T> inline void RustVehicleUpdateViewport(T *v, bool update_delta, bool force) noexcept { v->UpdateViewport(update_delta, force); }
 inline void RustVehiclePlayLeaveSound(OpenTTDVehicle *v) noexcept { VehicleOf(v)->PlayLeaveStationSound(); }
 inline void RustVehicleHideFilling(OpenTTDVehicle *v) noexcept { HideFillingPercent(&VehicleOf(v)->fill_percent_te_id); }

@@ -158,7 +158,7 @@ static uint32_t VehicleBuildDisplayCapacity(const OpenTTDEngine *e, uint16_t *ma
 static void VehicleBuildPresentation(void *shell, VehicleType type) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
-	InvalidateWindowData(WC_VEHICLE_DEPOT, v->tile);
+	RustVehicleInvalidateDepot(v);
 	InvalidateWindowClassesData(GetWindowClassForVehicleType(type), 0);
 	SetWindowDirty(WC_COMPANY, OpenTTDCurrentCompany());
 	if (RustIsLocalCompany()) InvalidateAutoreplaceWindow(v->engine_type, v->group_id);

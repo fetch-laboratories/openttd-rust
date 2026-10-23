@@ -219,7 +219,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcDepotExit(OpenTTDVehicle *v, int32_t x, 
 	u->y_pos = y;
 	RustVehicleUpdatePosition(u);
 	u->UpdateInclination(true, true);
-	InvalidateWindowData(WC_VEHICLE_DEPOT, u->tile);
+	RustVehicleInvalidateDepot(u);
 }
 /** `RoadVehCrash` after `v->Crash()`. */
 static void OPENTTD_VEHICLE_CALL RoadSvcCrashNews(OpenTTDVehicle *v, uint32_t victims) noexcept
