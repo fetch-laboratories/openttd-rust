@@ -1924,6 +1924,7 @@ bits, movement/orders and RNG and require PBS branch witnesses. Their adapter
 compiles the pinned algorithm bodies, adapting only migrated field reads, for
 transient endpoints, train_on_res and trigger order; controlled platforms, loops,
 stray/one-way paths, lowest-ID ties and occupied structure ends are restored
-before play. Native ABI/table checks and existing YAPF/controller tests remain.
+before play. Native runtime export/import carries both once-built PBS adapters
+into CI shards. Native ABI/table checks and existing YAPF/controller tests remain.
 External NewGRF trigger reentry, custom railtype turn flags, legacy conversion
 and threaded GUI coverage remain #156 gaps. PR #370 records commands and metrics.
