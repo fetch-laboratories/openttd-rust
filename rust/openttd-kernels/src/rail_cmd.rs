@@ -170,8 +170,6 @@ pub struct RailCommandServices {
     pub slope_z_in_corner: extern "C" fn(u8, u8) -> i32,
     /// `AutoslopeCheckForEntranceEdge`.
     pub entrance_edge: extern "C" fn(u32, i32, u8, u8) -> bool,
-    /// `HasVehicleOnTile(tile, ship)`.
-    pub ship_on_tile: extern "C" fn(u32) -> bool,
     /// `CMD_BUILD_SINGLE_RAIL`.
     pub build_rail: unsafe extern "C" fn(*mut CommandCost, u16, u32, u8, u8, bool),
     /// `CMD_REMOVE_SINGLE_RAIL`.
@@ -243,7 +241,7 @@ pub struct RailCommandServices {
     /// `DiagonalTileArea`/`OrthogonalTileArea(start, end).Contains(tile)`.
     pub area_contains: extern "C" fn(u32, u32, bool, u32) -> bool,
     /// `include(affected, first)` for every train on the tile, in iteration order.
-    pub collect_trains: unsafe extern "C" fn(*mut ConvertFrame, u32),
+    pub include_train: unsafe extern "C" fn(*mut ConvertFrame, crate::vehicle::VehicleRef),
     /// `ConsistChanged(CCF_TRACK)` for each collected train, in insertion order.
     pub consist_changed: unsafe extern "C" fn(*mut ConvertFrame),
 }
@@ -404,6 +402,19 @@ impl<'a> Ctx<'a> {
     }
     fn current(&self) -> u8 {
         (self.shared.current_company)()
+    }
+    fn vehicles(&self) -> &crate::vehicle::VehicleServices {
+        // SAFETY: The getter returns the immutable process-wide command context.
+        unsafe { &*(self.command.occupancy)() }.vehicles
+    }
+    unsafe fn collect_trains(&self, frame: *mut ConvertFrame, tile: u32) {
+        self.vehicles().for_each_on_tile(tile, |v| {
+            if (self.vehicles().vehicle_type)(v) == crate::vehicle::VehicleType::TRAIN.0 {
+                unsafe {
+                    (self.s.include_train)(frame, v);
+                }
+            }
+        });
     }
     fn tracks(&self, tile: u32) -> u8 {
         (self.ground.tracks)(tile).0
@@ -1796,7 +1807,7 @@ impl<'a> Ctx<'a> {
                 }
                 (self.rail.set_rail_type)(tile, totype);
                 (self.shared.mark_dirty)(tile);
-                unsafe { (self.s.collect_trains)(frame, tile) };
+                unsafe { self.collect_trains(frame, tile) };
             }
         }
         match tt {
@@ -1862,8 +1873,8 @@ impl<'a> Ctx<'a> {
                     (self.command.infrastructure_dirty)(owner);
                     (self.rail.set_rail_type)(tile, totype);
                     (self.rail.set_rail_type)(endtile, totype);
-                    unsafe { (self.s.collect_trains)(frame, tile) };
-                    unsafe { (self.s.collect_trains)(frame, endtile) };
+                    unsafe { self.collect_trains(frame, tile) };
+                    unsafe { self.collect_trains(frame, endtile) };
                     (self.s.layout_changed)(tile, track);
                     (self.s.layout_changed)(endtile, track);
                     if (self.shared.is_bridge)(tile) {
@@ -2098,7 +2109,11 @@ impl<'a> Ctx<'a> {
             let bits = self.tracks(tile);
             let was_water = (self.ground.ground)(tile).0 == GROUND_HALF_WATER
                 && is_slope_with_one_corner_raised(tileh_old);
-            if was_water && (self.s.ship_on_tile)(tile) {
+            if was_water
+                && self.vehicles().any_on_tile(tile, |v| {
+                    (self.vehicles().vehicle_type)(v) == crate::vehicle::VehicleType::SHIP.0
+                })
+            {
                 return cost.error(self.s.strings.ship_in_way);
             }
             self.test_autoslope(cost, flags, tile, z_old, tileh_old, z_new, tileh_new, bits);
@@ -2446,7 +2461,6 @@ crate::abi::layouts! {
         rail_foundation,
         slope_z_in_corner,
         entrance_edge,
-        ship_on_tile,
         build_rail,
         remove_rail,
         build_signal,
@@ -2474,7 +2488,7 @@ crate::abi::layouts! {
         area_tile,
         area_next,
         area_contains,
-        collect_trains,
+        include_train,
         consist_changed,
     };
     "OpenTTDRailCommandStrings" ["probe"] => Strings {

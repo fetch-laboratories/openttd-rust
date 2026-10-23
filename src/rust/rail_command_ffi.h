@@ -22,6 +22,7 @@
 enum Foundation : uint8_t;
 enum FloodingBehaviour : uint8_t;
 struct Train;
+struct OpenTTDVehicle;
 struct OpenTTDRailConvertFrame; ///< Caller-owned TileIterator and ordered affected-train list.
 struct OpenTTDRailTrainParking { uint8_t track; uint8_t status; uint16_t speed; uint8_t order; };
 struct OpenTTDRailTrainPosition { uint32_t tile; uint8_t trackdir; };
@@ -53,7 +54,6 @@ struct OpenTTDRailCommandServices {
 	Foundation (*rail_foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_foundation);
 	int32_t (*slope_z_in_corner)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(slope_z_in_corner);
 	bool (*entrance_edge)(uint32_t, int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(entrance_edge);
-	bool (*ship_on_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_on_tile);
 	void (*build_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(build_rail);
 	void (*remove_rail)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(remove_rail);
 	void (*build_signal)(OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, bool, bool, bool, uint8_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(build_signal);
@@ -81,7 +81,7 @@ struct OpenTTDRailCommandServices {
 	uint32_t (*area_tile)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(area_tile);
 	void (*area_next)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(area_next);
 	bool (*area_contains)(uint32_t, uint32_t, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(area_contains);
-	void (*collect_trains)(OpenTTDRailConvertFrame *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(collect_trains);
+	void (*include_train)(OpenTTDRailConvertFrame *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(include_train);
 	void (*consist_changed)(OpenTTDRailConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(consist_changed);
 };
 const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept;

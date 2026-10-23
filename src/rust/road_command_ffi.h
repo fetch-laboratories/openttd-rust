@@ -54,7 +54,7 @@ struct OpenTTDRoadCommandServices {
 	void (*owned_by_town)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(owned_by_town);
 	OpenTTDCommandCost *(*scratch_cost)(OpenTTDRoadCommandScratch *) noexcept OPENTTD_SERVICE_DEFAULT(scratch_cost);
 	OpenTTDRoadConversionScratch (*conversion_scratch)(OpenTTDRoadCommandScratch *) noexcept OPENTTD_SERVICE_DEFAULT(conversion_scratch);
-	void (*collect_vehicles)(OpenTTDRoadConvertFrame *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(collect_vehicles);
+	void (*include_vehicle)(OpenTTDRoadConvertFrame *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(include_vehicle);
 	size_t (*affected_count)(OpenTTDRoadConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(affected_count);
 	OpenTTDVehicle *(*affected_at)(OpenTTDRoadConvertFrame *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(affected_at);
 };

@@ -3186,13 +3186,6 @@ static void RailConvert(OpenTTDCommandCost *out, uint16_t flags, uint32_t tile, 
 {
 	RailCost(out) = Command<CMD_CONVERT_RAIL>::Do(DoCommandFlags{flags}, TileIndex{tile}, TileIndex{area_start}, static_cast<RailType>(rt), diagonal);
 }
-static bool RailShipOnTile(uint32_t tile) noexcept
-{
-	for (const Vehicle *v : VehiclesOnTile(TileIndex{tile})) {
-		if (RustVehicleVehicleType(v) == VEH_SHIP) return true;
-	}
-	return false;
-}
 
 static OpenTTDRailTrainParking RailParking(Train *v) noexcept
 {
@@ -3217,12 +3210,7 @@ static void RailDepotWindows(uint32_t tile) noexcept
 	InvalidateWindowData(WC_VEHICLE_DEPOT, TileIndex{tile});
 	InvalidateWindowData(WC_BUILD_VEHICLE, TileIndex{tile});
 }
-static void RailCollectTrains(OpenTTDRailConvertFrame *frame, uint32_t tile) noexcept
-{
-	for (Vehicle *v : VehiclesOnTile(TileIndex{tile})) {
-		if (RustVehicleVehicleType(v) == VEH_TRAIN) include(frame->affected, RustVehicleFirst(Train::From(v)));
-	}
-}
+static void RailIncludeTrain(OpenTTDRailConvertFrame *frame, OpenTTDVehicle *v) noexcept { include(frame->affected, RustVehicleFirst(Train::From(VehicleOf(v)))); }
 static void RailConsistChanged(OpenTTDRailConvertFrame *frame) noexcept
 {
 	for (Train *v : frame->affected) {
@@ -3273,7 +3261,6 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.rail_foundation = OpenTTDEnumMapQuery<RustRailFoundation, Slope, TrackBits>,
 		.slope_z_in_corner = [](uint8_t tileh, uint8_t corner) noexcept -> int32_t { return GetSlopeZInCorner(static_cast<Slope>(tileh), static_cast<Corner>(corner)); },
 		.entrance_edge = [](uint32_t tile, int32_t z, uint8_t tileh, uint8_t dir) noexcept { return AutoslopeCheckForEntranceEdge(TileIndex{tile}, z, static_cast<Slope>(tileh), static_cast<DiagDirection>(dir)); },
-		.ship_on_tile = RailShipOnTile,
 		.build_rail = RailBuildSingle,
 		.remove_rail = RailRemoveSingle,
 		.build_signal = RailBuildSignal,
@@ -3304,7 +3291,7 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 			if (diagonal) return DiagonalTileArea(TileIndex{start}, TileIndex{end}).Contains(TileIndex{tile});
 			return OrthogonalTileArea(TileIndex{start}, TileIndex{end}).Contains(TileIndex{tile});
 		},
-		.collect_trains = RailCollectTrains,
+		.include_train = RailIncludeTrain,
 		.consist_changed = RailConsistChanged,
 	};
 	return services;
