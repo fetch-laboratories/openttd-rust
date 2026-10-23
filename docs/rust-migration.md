@@ -1377,6 +1377,9 @@ AnimationBase control, six feature bindings, station/airport/road-stop trigger
 traversals and tile dispatch to Rust. Existing owners call it directly; native
 map frames/bits, road-stop data, pools, specs and resolver evaluation remain.
 Initialization installs immutable typed services under the game-state mutex.
+Feature traits bind real spec/owner/extra/frame types and shared callback IDs;
+six native initializers retain stack resolvers. Object rejection precedes owner
+lookup. Generated concrete visitors check every binding, including version8.
 Queue and spec/state accesses end before callbacks; actual scheduled callbacks
 can request deferred deletion but cannot resize or immediately erase the queue.
 ANIT uses one scoped native vector and descriptor pointer: decoding and errors
@@ -1387,8 +1390,9 @@ binding markers and compares loop/stop, speed gates, next-frame sentinels and
 RNG; existing effects-bubble scenarios compare ordered ANIT and bubble catchers.
 Native checks cover queue reactivation/swap removal, cleanup, staging unwind and
 ABI layouts. Trigger traversal/sound evidence, affected owner scenarios, final
-cost disposition and independent review remain pending in PR #389. Historical
-saves, external GRF programs and GUI threading remain #156 coverage limits.
+cost disposition, actual SlError/SlNullPointers evidence and independent review
+remain pending in PR #389. Historical saves, external GRF programs, GUI threading
+and raw speeds >=64 outside the pinned Linux compilation remain #156 limits.
 
 <!-- Subsystem: Vehicles, pathfinding and orders. Add a new entry at the end of its group, not of the file. -->
 
