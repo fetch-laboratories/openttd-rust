@@ -38,12 +38,15 @@ static std::array<int, 2> QueueSizes();
 static void Recycle();
 class LinkGraph {
 public:
-	uint16_t index, size, tag;
-	uint16_t Size() const { trace.push_back({1, this->tag, 0}); return this->size; }
+	uint16_t index, size, tag; int32_t date = 100, node_date = 90;
+	OpenTTDLiveGraph *owner = nullptr;
+	LinkGraph(uint16_t id, uint16_t count, uint16_t label) : index(id), size(count), tag(label) { if (candidate) { this->owner = openttd_rust_live_graph_new(0, this->date); openttd_rust_live_graph_init(this->owner, count); for (uint16_t i = 0; i < count; ++i) *openttd_rust_live_node_fields(this->owner, i).last_update = this->node_date; } }
+	~LinkGraph() { if (this->owner) openttd_rust_live_graph_delete(this->owner); }
+	uint16_t Size() const { return this->size; }
 	static LinkGraph *Get(uint16_t id) { return graphs[id]; }
 	static bool IsValidID(uint16_t id) { return graphs[id] != nullptr; }
 	static std::vector<LinkGraph *> Iterate() { std::vector<LinkGraph *> out; for (auto *g : graphs) if (g != nullptr) out.push_back(g); return out; }
-	void ShiftDates(Date interval) { trace.push_back({5, this->tag, interval.base()}); }
+	void ShiftDates(Date interval) { this->date += interval.base(); this->node_date += interval.base(); }
 };
 static bool recycle;
 class LinkGraphJob {
@@ -75,7 +78,7 @@ LinkGraphSchedule LinkGraphSchedule::instance;
 #include "scheduler-original.inc"
 }
 static const OpenTTDScheduleServices services{
-	.graph_size = [](const LinkGraph *g) noexcept { return g->Size(); },
+	.graph_owner = [](LinkGraph *g) noexcept { return g->owner; },
 	.assert_graph = [](const LinkGraph *g) noexcept { assert(g == LinkGraph::Get(g->index)); },
 	.can_allocate = []() noexcept { return LinkGraphJob::CanAllocateItem(); },
 	.allocation_failure = []() noexcept { NOT_REACHED(); },
@@ -90,7 +93,6 @@ static const OpenTTDScheduleServices services{
 	.abort_job = [](LinkGraphJob *j) noexcept { j->AbortJob(); },
 	.next_graph = [](uint32_t *from) noexcept -> LinkGraph * { while (*from < graphs.size()) { auto *g = graphs[(*from)++]; if (g != nullptr) return g; } return nullptr; },
 	.next_job = [](uint32_t *from) noexcept -> LinkGraphJob * { while (*from < jobs.size()) { auto *j = jobs[(*from)++]; if (j != nullptr) return j; } return nullptr; },
-	.shift_graph = [](LinkGraph *g, int32_t interval) noexcept { g->ShiftDates({interval}); },
 	.shift_job = [](LinkGraphJob *j, int32_t interval) noexcept { j->ShiftJoinDate({interval}); },
 	.post_pause = [](bool paused) noexcept { Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, paused); },
 	.set_pause = []() noexcept { _pause_mode.Set(PauseMode::LinkGraph); },
@@ -117,7 +119,7 @@ static void Capture()
 	for (auto *j : running) trace.push_back({22, j->index, j->graph});
 }
 static void Queue(LinkGraph *g) { if (candidate) openttd_rust_schedule_queue(&services, g); else ref.Queue(g); }
-static void Recycle() { static LinkGraph replacement{1, 2, 19}; graphs[1] = &replacement; Queue(&replacement); Queue(&replacement); }
+static void Recycle() { static std::optional<LinkGraph> replacement; replacement.emplace(1, 2, 19); graphs[1] = &*replacement; Queue(graphs[1]); Queue(graphs[1]); }
 static void Tick(int date, int fract, bool client = false)
 {
 	TimerGameEconomy::date = {date}; TimerGameEconomy::date_fract = fract; _networking = client;
@@ -146,6 +148,7 @@ static auto Run(bool rust)
 	auto *listed = new LinkGraphJob(small); auto *unlisted = new LinkGraphJob(unqueued); Import({&small}, {listed});
 	if (candidate) { openttd_rust_schedule_spawn_all(&services); openttd_rust_schedule_shift(&services, -17); openttd_rust_schedule_clear(&services); }
 	else { ref.SpawnAll(); ref.ShiftDates({-17}); ref.Clear(); }
+	for (auto *g : LinkGraph::Iterate()) { trace.push_back({30, g->tag, candidate ? *openttd_rust_live_graph_date(g->owner) : g->date}); trace.push_back({31, g->tag, candidate ? *openttd_rust_live_node_fields(g->owner, 0).last_update : g->node_date}); }
 	Capture(); assert(jobs[listed->index] == listed && jobs[unlisted->index] == unlisted); // Clear must not delete.
 	auto result = trace; for (auto *j : jobs) delete j; Import({}, {}); return result;
 }

@@ -110,7 +110,6 @@ struct OpenTTDLiveGraphServices {
 	bool (*available)() noexcept;
 	OpenTTDLinkGraph *(*allocate)(uint8_t) noexcept;
 	void (*allocation_failure)() noexcept;
-	void (*dequeue)(OpenTTDLinkGraph *) noexcept;
 };
 OpenTTDLinkGraphResult *openttd_rust_live_graph_run(const OpenTTDLiveGraph *, const OpenTTDLinkGraphSettings *, const void *, uint8_t (*)(const void *));
 void openttd_rust_live_graph_merge(OpenTTDLinkGraph *, OpenTTDLinkGraph *, int32_t, const OpenTTDLiveGraphServices *);

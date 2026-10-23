@@ -1053,7 +1053,13 @@ def check_commands(scenario, run, mode, role, result):
             "movement",
             [] if reload else ["road_stop_admit", "road_stop_refuse"],
         )
-        core.branch_witnesses(scenario, run, role, "occupancy", ["insert", "reset"] + ([] if reload else ["same_bucket"]))
+        core.branch_witnesses(
+            scenario,
+            run,
+            role,
+            "occupancy",
+            ["insert", "reset"] + ([] if reload else ["same_bucket"]),
+        )
     if scenario["station_commands"].startswith("waypoints"):
         required = []
         branches = (

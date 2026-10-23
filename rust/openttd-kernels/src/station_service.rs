@@ -770,7 +770,14 @@ unsafe fn admit(
     }
     (w.append_packet)(st, cargo, amount, source);
     unsafe {
-        live::station_supply(st, cargo, amount, (*w.shared).economy_date, w.graphs, visits.schedule);
+        live::station_supply(
+            st,
+            cargo,
+            amount,
+            (*w.shared).economy_date,
+            w.graphs,
+            visits.schedule,
+        );
     }
     if unsafe { (*ge).status } & 2 == 0 {
         (w.station_list_invalidation)(st, 0);

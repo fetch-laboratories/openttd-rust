@@ -1,7 +1,11 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Whole `LinkGraphSchedule` owner. Workers only touch native job snapshots.
 #![allow(unsafe_code)]
-use crate::{linkgraph::{NativeGraph as Graph, live}, timer_game_common::SECONDS_PER_DAY, witness};
+use crate::{
+    linkgraph::{NativeGraph as Graph, live},
+    timer_game_common::SECONDS_PER_DAY,
+    witness,
+};
 use std::{cell::UnsafeCell, collections::VecDeque, ffi::c_void};
 
 #[repr(C)]

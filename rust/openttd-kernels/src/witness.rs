@@ -105,7 +105,6 @@ witness_blocks! {
         GENERATION_HEIGHTMAP_CCW = 33 => "generation.heightmap_ccw",
         GENERATION_HEIGHTMAP_CW = 34 => "generation.heightmap_cw",
 }
-
     ground {
         GROUND_ROAD_POWER = 0 => "ground.road_power",
         GROUND_RAIL_POWER = 1 => "ground.rail_power",
@@ -121,7 +120,6 @@ witness_blocks! {
         GROUND_SPEED = 11 => "ground.speed",
         GROUND_FULL_WEIGHT = 12 => "ground.full_weight",
     }
-    // Registry: house (#256).
     house {
         HOUSE = 0 => "house.stage",
         HOUSE_COMPLETE = 1 => "house.complete",
@@ -141,8 +139,6 @@ witness_blocks! {
         HOUSE_STATION_REMOVED = 15 => "house.station_removed",
         HOUSE_PROTECTED = 16 => "house.protected",
     }
-
-    // Registry: landscape (#212).
     landscape {
         LANDSCAPE = 0 => "landscape.snow_start",
         LANDSCAPE_SNOW_CHANGE = 1 => "landscape.snow_change",
@@ -171,14 +167,20 @@ witness_blocks! {
         LANDSCAPE_VEHICLE_CRASH = 24 => "landscape.vehicle_crash",
         LANDSCAPE_CRASHED_SKIP = 25 => "landscape.crashed_skip",
     }
-
     landscape_cmd {
         LANDSCAPE_CMD_RECURSIVE = 0 => "landscape_cmd.recursive",
         LANDSCAPE_CMD_TWO_PASS = 1 => "landscape_cmd.two_pass",
         LANDSCAPE_CMD_INDIRECT = 2 => "landscape_cmd.indirect",
         LANDSCAPE_CMD_PARTIAL = 3 => "landscape_cmd.partial",
     }
-
+    linkgraph {
+        LINKGRAPH_MERGE = 0 => "linkgraph.merge",
+        LINKGRAPH_REMOVE_LAST = 1 => "linkgraph.remove_last",
+        LINKGRAPH_REMOVE_NONLAST = 2 => "linkgraph.remove_nonlast",
+        LINKGRAPH_RESTRICT = 3 => "linkgraph.restrict",
+        LINKGRAPH_RELEASE = 4 => "linkgraph.release",
+        LINKGRAPH_COMPRESS = 5 => "linkgraph.compress",
+    }
     movement {
         MOVE_PIXEL_Z = 0 => "movement.pixel_z",
         MOVE_OUTSIDE_Z = 1 => "movement.outside_z",
@@ -237,15 +239,6 @@ witness_blocks! {
         MOVE_TRAIN_TUNNEL_EXIT_2 = 54 => "movement.train_tunnel_exit_2",
         MOVE_TRAIN_TUNNEL_EXIT_3 = 55 => "movement.train_tunnel_exit_3",
     }
-
-    linkgraph {
-        LINKGRAPH_MERGE = 0 => "linkgraph.merge",
-        LINKGRAPH_REMOVE_LAST = 1 => "linkgraph.remove_last",
-        LINKGRAPH_REMOVE_NONLAST = 2 => "linkgraph.remove_nonlast",
-        LINKGRAPH_RESTRICT = 3 => "linkgraph.restrict",
-        LINKGRAPH_RELEASE = 4 => "linkgraph.release",
-        LINKGRAPH_COMPRESS = 5 => "linkgraph.compress",
-    }
     object {
         OBJECT_BUILD = 0 => "object.build",
         OBJECT_REMOVE = 1 => "object.remove",
@@ -267,6 +260,14 @@ witness_blocks! {
         OBJECT_SLOPE_CALLBACK = 17 => "object.slope_callback",
         OBJECT_BUILD_ABOVE = 18 => "object.build_above",
     }
+    occupancy {
+        OCCUPANCY_INSERT = 0 => "occupancy.insert",
+        OCCUPANCY_SAME = 1 => "occupancy.same_bucket",
+        OCCUPANCY_REMOVE = 2 => "occupancy.remove",
+        OCCUPANCY_ALIAS = 3 => "occupancy.alias_filter",
+        OCCUPANCY_RESET = 4 => "occupancy.reset",
+        OCCUPANCY_NEAR = 5 => "occupancy.near",
+    }
     pbs {
         PBS_START_UNRESERVED = 0 => "pbs.start_unreserved",
         PBS_PLATFORM_INTERIOR = 1 => "pbs.platform_interior",
@@ -283,14 +284,6 @@ witness_blocks! {
         PBS_SAFE_PBS = 12 => "pbs.safe_pbs",
         PBS_SAFE_OPPOSING_PBS = 13 => "pbs.safe_opposing_pbs",
         PBS_OVERLAP = 14 => "pbs.overlap",
-    }
-    occupancy {
-        OCCUPANCY_INSERT = 0 => "occupancy.insert",
-        OCCUPANCY_SAME = 1 => "occupancy.same_bucket",
-        OCCUPANCY_REMOVE = 2 => "occupancy.remove",
-        OCCUPANCY_ALIAS = 3 => "occupancy.alias_filter",
-        OCCUPANCY_RESET = 4 => "occupancy.reset",
-        OCCUPANCY_NEAR = 5 => "occupancy.near",
     }
     rail {
         RAIL_CHOOSE = 0 => "rail.choose",
@@ -764,7 +757,6 @@ witness_blocks! {
         WATER_CMD_OWNER = 9 => "water_cmd.owner",
         WATER_CMD_DESERT = 10 => "water_cmd.desert",
     }
-
     waypoint_command {
         WAYPOINT_AXIS_RAIL = 0 => "waypoint_command.axis_rail",
         WAYPOINT_AXIS_ROAD = 1 => "waypoint_command.axis_road",

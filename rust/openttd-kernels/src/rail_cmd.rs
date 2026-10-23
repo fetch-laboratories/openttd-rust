@@ -259,8 +259,6 @@ use crate::track_type::TRACK_BIT_RIGHT as BIT_RIGHT;
 use crate::track_type::TRACK_BIT_UPPER as BIT_UPPER;
 use crate::track_type::TRACK_BIT_X as BIT_X;
 use crate::track_type::TRACK_BIT_Y as BIT_Y;
-#[cfg(test)]
-use crate::track_type::{TRACK_BIT_HORZ as BIT_HORZ, TRACK_BIT_VERT as BIT_VERT};
 const INVALID_TRACKDIR: u8 = 0xFF;
 
 /// `VALID_LEVEL_CROSSING_SLOPES`.

@@ -2319,6 +2319,7 @@ crate::abi::layouts! {
         status,
     };
     "OpenTTDRoadLeaves" ["probe"] => Leaves {
+        candidate,
         vehicle,
         ground,
         shared,
@@ -2335,7 +2336,6 @@ crate::abi::layouts! {
         link,
         link_tile,
         after_enter_tile,
-        candidate,
         has_road,
         any_road_bits,
         is_road_depot_tile,

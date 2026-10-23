@@ -285,7 +285,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.link = RoadSvcLink,
 	.link_tile = RoadSvcLinkTile,
 	.after_enter_tile = RoadSvcAfterEnterTile,
-	.candidate = RoadSvcCandidate,
 	.has_road = RoadSvcHasRoad,
 
 	.any_road_bits = RoadSvcAnyRoadBits,
