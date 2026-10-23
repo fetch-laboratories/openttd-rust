@@ -2635,7 +2635,7 @@ const OpenTTDRailServices &GetRustRailGroundServices() noexcept
 		.set_ground = RustSetRailGroundTyped,
 		.snow = [](uint32_t index) noexcept { auto [z, slope] = RustTileSlopeZ(index); bool plain = RustPlainRailTile(index); return OpenTTDRailSnowGround{.z = z, .slope = slope, .tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .plain = plain}; },
 		.fences = [](uint32_t index) noexcept { bool plain = RustPlainRailTile(index); return OpenTTDRailFenceGround{.tracks = plain ? RustRailTracks(index) : TRACK_BIT_NONE, .owner = plain ? RustTileOwnerValue(index) : uint8_t{}, .plain = plain}; },
-		.foundation = RustRailFoundation,
+
 		.owned_land = [](uint32_t t) noexcept { return IsObjectType(TileIndex{t}, OBJECT_OWNED_LAND); },
 	};
 	return services;
@@ -3297,7 +3297,7 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.rail_convert_cost = [](uint8_t from, uint8_t to) noexcept { return RailConvertCost(static_cast<RailType>(from), static_cast<RailType>(to)).base(); },
 		.crossing_with_competitor = RustCrossingWithCompetitor,
 		.disable_elrails = RustDisableElrails,
-		.rail_foundation = OpenTTDEnumMapQuery<RustRailFoundation, Slope, TrackBits>,
+
 		.apply_foundation = RailApplyFoundation,
 		.slope_z_in_corner = [](uint8_t tileh, uint8_t corner) noexcept -> int32_t { return GetSlopeZInCorner(static_cast<Slope>(tileh), static_cast<Corner>(corner)); },
 		.entrance_edge = [](uint32_t tile, int32_t z, uint8_t tileh, uint8_t dir) noexcept { return AutoslopeCheckForEntranceEdge(TileIndex{tile}, z, static_cast<Slope>(tileh), static_cast<DiagDirection>(dir)); },

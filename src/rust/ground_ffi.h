@@ -64,7 +64,6 @@ struct OpenTTDRailServices {
 	void (*set_ground)(uint32_t, RailGroundType) noexcept OPENTTD_SERVICE_DEFAULT(set_ground);
 	OpenTTDRailSnowGround (*snow)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(snow);
 	OpenTTDRailFenceGround (*fences)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(fences);
-	Foundation (*foundation)(Slope, TrackBits) noexcept OPENTTD_SERVICE_DEFAULT(foundation);
 	bool (*owned_land)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(owned_land);
 };
 struct OpenTTDTunnelGround { int32_t z; bool snow; };

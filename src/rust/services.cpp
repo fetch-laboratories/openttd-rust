@@ -11,6 +11,7 @@
 #include "../airport.h"
 #include "town_services.h"
 #include "services_ffi.h"
+#include "movement_ffi.h"
 #include "services_bridge.h"
 #include "services_viewport.h"
 #include "station_command_ffi.h"
@@ -297,7 +298,7 @@ static bool SharedServiceAtHelipad() noexcept { return RustServiceAtHelipad(); }
 static bool SharedDisasterSound() noexcept { return RustDisasterSound(); }
 static int32_t SharedEconomyDate() noexcept { return TimerGameEconomy::date.base(); }
 static int32_t SharedCalendarDate() noexcept { return TimerGameCalendar::date.base(); }
-static int32_t SharedSlope(int32_t x, int32_t y) noexcept { return SharedSlopePixelZ(x, y, false); }
+
 static size_t SharedTownCount() noexcept { return Town::GetNumItems(); }
 static bool SharedRecession() noexcept { return EconomyIsInRecession(); }
 static void SharedRebuildTownTree() noexcept { RebuildTownKdtree(); }
@@ -311,6 +312,7 @@ static void SharedForEachStation(void *context, void (*visit)(void *, const Open
 }
 
 constinit const OpenTTDSharedServices _rust_shared_services{
+	.movement_services = []() noexcept { return &GetRustMovementServices(); },
 	.set_tile_owner = RustSetTileOwner,
 	.autoslope = RustAutoslopeEnabled,
 	.bay_stop_direction = Shared_bay_stop_direction,
@@ -383,7 +385,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.safe_waiting_position = SharedSafeWaitingPosition,
 	.service_at_helipad = SharedServiceAtHelipad,
 	.set_tropic_zone = SharedSetTropicZone,
-	.slope = SharedSlope,
+
 	.snow_line = SharedSnowLine,
 	.station_index = MapSvcStationIndex,
 	.road_commands = []() noexcept { return &GetRustRoadCommandServices(); },
@@ -427,7 +429,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 
 	// Registry: landscape (#212).
 	.clear_ground = OpenTTDClearGround,
-	.foundation = RustFoundationSlope,
+
 	.has_water_class = RustHasWaterClass,
 	.make_shore = OpenTTDMakeShore,
 	.make_snow = RustMakeSnow,
@@ -541,7 +543,7 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.signal_state = RustRailSignalState,
 		.set_signal_state = RustRailSetSignalState,
 		.other_tunnel_bridge_end = RustOtherTunnelBridgeEnd,
-		.rail_track_status = RustRailTrackStatus,
+
 		.has_signals = RustRailHasSignals,
 		.signal_type = RustRailSignalType,
 		.invalid_rail_type = RustInvalidRailType,

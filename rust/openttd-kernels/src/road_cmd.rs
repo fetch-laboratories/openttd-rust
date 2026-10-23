@@ -23,7 +23,7 @@ use crate::command_type::DoCommandFlag;
 use crate::company::COMPANIES as MAX_COMPANIES;
 use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
 use crate::rail_cmd::{
-    CROSSING_SLOPES, ConvertFrame as Area, CrossingRoad, Foundation, LEVELCROSSING_TRACKBIT_FACTOR,
+    CROSSING_SLOPES, ConvertFrame as Area, CrossingRoad, LEVELCROSSING_TRACKBIT_FACTOR,
     RailCommandServices, TUNNELBRIDGE_TRACKBIT_FACTOR,
 };
 use crate::services::{
@@ -150,7 +150,6 @@ pub struct RoadCommandServices {
     /// Native `set_town` service.
     pub set_town: extern "C" fn(u32, u16),
     /// Native `foundation` service.
-    pub foundation: extern "C" fn(u8, u8) -> Foundation,
     /// Native `extra_dynamite` service.
     pub extra_dynamite: extern "C" fn() -> bool,
     /// Native `depot_slope` service.
@@ -588,7 +587,7 @@ impl<'a> Ctx<'a> {
                 let slope = simple_slope((self.shared.tile_slope)(tile));
                 let mut present = self.bits(tile, rtt);
                 let other = self.bits(tile, rtt ^ 1);
-                let foundation = (self.s.foundation)(slope, present).0;
+                let foundation = crate::movement::road_foundation(slope, present);
                 if (self.shared.has_road_works)(tile)
                     && (self.shared.current_company)() != OWNER_WATER
                 {
@@ -656,7 +655,7 @@ impl<'a> Ctx<'a> {
                     crate::road_cost::clear_cost(self.shared, rt)
                         .saturating_mul(i64::from(pieces.count_ones())),
                 );
-                if foundation == 0 && (self.s.foundation)(slope, present).0 != 0 {
+                if foundation == 0 && crate::movement::road_foundation(slope, present) != 0 {
                     cost.add_money(price(57));
                 }
             }
@@ -739,7 +738,9 @@ impl<'a> Ctx<'a> {
                     return;
                 }
             } else {
-                if existing.is_power_of_two() && (self.s.foundation)(slope, existing).0 == 0 {
+                if existing.is_power_of_two()
+                    && crate::movement::road_foundation(slope, existing) == 0
+                {
                     cost.set(price(57));
                 }
                 return;
@@ -1032,9 +1033,9 @@ impl<'a> Ctx<'a> {
                 pieces &= existing ^ 15;
                 if (self.shared.is_normal_road)(tile) {
                     let slope = (self.shared.tile_slope)(tile);
-                    let new = (self.s.foundation)(slope, pieces | existing).0;
+                    let new = crate::movement::road_foundation(slope, pieces | existing);
                     let bits = self.bits(tile, rtt ^ 1);
-                    if bits != 0 && (self.s.foundation)(slope, bits).0 != new {
+                    if bits != 0 && crate::movement::road_foundation(slope, bits) != new {
                         cost.error(self.r.strings.sloped_wrong);
                         return;
                     }
@@ -1645,13 +1646,15 @@ impl<'a> Ctx<'a> {
                         let mut old_slope = (self.shared.tile_slope)(tile);
                         let mut old_z = (self.shared.tile_z)(tile);
                         let old = (self.r.apply_foundation)(
-                            (self.s.foundation)(old_slope, bits).0,
+                            crate::movement::road_foundation(old_slope, bits),
                             old_slope,
                         );
                         old_z += old.z;
                         old_slope = old.slope;
-                        let new =
-                            (self.r.apply_foundation)((self.s.foundation)(slope, bits).0, slope);
+                        let new = (self.r.apply_foundation)(
+                            crate::movement::road_foundation(slope, bits),
+                            slope,
+                        );
                         z += new.z;
                         slope = new.slope;
                         old_z == z && old_slope == slope

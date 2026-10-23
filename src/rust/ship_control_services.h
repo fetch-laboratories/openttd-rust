@@ -121,7 +121,7 @@ static void Ship_start_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(Vehicle
 
 static void Ship_depot_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); }
 
-static void Ship_depot_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); InvalidateWindowData(WC_VEHICLE_DEPOT, v->tile); }
+static void Ship_depot_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustInvalidateDepotWindow(v->tile); }
 
 static void Ship_ships_dirty() noexcept { SetWindowClassesDirty(WC_SHIPS_LIST); }
 
@@ -205,11 +205,7 @@ static void Ship_path_pop(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(
 
 static void Ship_path_clear(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->path.clear(); }
 
-static uint32_t Ship_enter_tile(uint32_t id, uint32_t tile, uint32_t x, uint32_t y) noexcept
-{
-	Ship *v = Ship::Get(VehicleID(id));
-	return VehicleEnterTile(v, TileIndex(tile), static_cast<int32_t>(x), static_cast<int32_t>(y)).base();
-}
+
 
 static void Ship_enter_depot(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); VehicleEnterDepot(v); }
 
@@ -386,7 +382,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.tile_type = Ship_tile_type, .water_class = Ship_water_class,
 		.lock_middle = GetRustSharedServices().water_middle_lock, .lock_dir = Ship_lock_dir,
 		.tile_min_z = Ship_tile_min_z, .tile_max_z = Ship_tile_max_z,
-		.track_status = OpenTTDLegacyWaterTracks, .offset = Ship_offset,
+		.offset = Ship_offset,
 		.diag_between = Ship_diag_between, .dist_square = OpenTTDDistanceSquare,
 		.dist_manhattan = OpenTTDDistanceManhattan, .docking = GetRustSharedServices().docking_tile,
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
@@ -415,8 +411,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.track_direction = Ship_track_direction, .tracks_reach = Ship_tracks_reach,
 		.busy_tile = Ship_busy_tile, .path_size = Ship_path_size,
 		.path_back = Ship_path_back, .path_pop = Ship_path_pop,
-		.path_clear = Ship_path_clear, .enter_tile = Ship_enter_tile,
-		.enter_depot = Ship_enter_depot, .process_orders = Ship_process_orders,
+		.path_clear = Ship_path_clear, .enter_depot = Ship_enter_depot, .process_orders = Ship_process_orders,
 		.loading = Ship_loading, .begin_loading = Ship_begin_loading,
 		.viewport = Ship_viewport,
 		.base_viewport = Ship_base_viewport, .visual = Ship_visual,

@@ -60,6 +60,7 @@ mod script_list;
 pub mod services;
 mod ship_control;
 mod signal;
+mod signal_func;
 mod slope_func;
 mod station;
 mod station_cargo;

@@ -208,7 +208,6 @@ pub struct Leaves {
     pub tile_add: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub tile_offset: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub trackdir: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
-    pub track_status: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub try_track: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub tunnel_dir: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub tunnel_free: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u32) -> u64,
@@ -485,8 +484,8 @@ impl Game<'_> {
     fn svc_trackdir(&self, id: Handle) -> u64 {
         (self.leaves.trackdir)(self.context, id)
     }
-    fn svc_track_status(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.track_status)(self.context, id, a as u32)
+    fn svc_track_status(&self, _id: Handle, a: u64) -> u64 {
+        u64::from(crate::movement::track_status(self.shared(), a as u32, 0, 0, 255) as u16)
     }
     fn svc_try_track(&self, id: Handle, a: u64, b: u64) -> u64 {
         (self.leaves.try_track)(self.context, id, a as u32, b as u8)
@@ -1499,7 +1498,7 @@ mod tests {
             tile_add: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
             tile_offset: unused!((*mut std::ffi::c_void, Handle, u8); u64),
             trackdir: unused!((*mut std::ffi::c_void, Handle); u64),
-            track_status: unused!((*mut std::ffi::c_void, Handle, u32); u64),
+
             try_track: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
             tunnel_dir: unused!((*mut std::ffi::c_void, Handle, u32); u64),
             tunnel_free: unused!((*mut std::ffi::c_void, Handle, u32, u32); u64),

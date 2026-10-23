@@ -2801,7 +2801,7 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 			return {.tile = town->xy.base(), .radius = town->cache.squared_town_zone_radius[to_underlying(HouseZone::TownEdge)]};
 		},
 		.set_town = RustSetTownIndex,
-		.foundation = [](uint8_t slope, uint8_t bits) noexcept { return GetRoadFoundation(static_cast<Slope>(slope), static_cast<RoadBits>(bits)); },
+
 		.extra_dynamite = RustExtraDynamite,
 		.depot_slope = [](uint8_t dir, uint8_t slope) noexcept { return CanBuildDepotByTileh(static_cast<DiagDirection>(dir), static_cast<Slope>(slope)); },
 		.make_depot = [](uint32_t tile, uint8_t owner, uint16_t depot, uint8_t dir, uint8_t rt) noexcept { MakeRoadDepot(TileIndex{tile}, Owner(owner), DepotID(depot), static_cast<DiagDirection>(dir), static_cast<RoadType>(rt)); },

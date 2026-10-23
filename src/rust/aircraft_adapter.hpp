@@ -211,7 +211,7 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_landing_rating(uint16_t station_id, u
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_dirty_depot(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	InvalidateWindowData(WC_VEHICLE_DEPOT, VehicleOf(vehicle.handle)->tile); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
+	RustInvalidateDepotWindow(VehicleOf(vehicle.handle)->tile); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_first_arrival(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept

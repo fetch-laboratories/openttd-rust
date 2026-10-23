@@ -203,7 +203,6 @@ pub struct RailServices {
     pub set_ground: extern "C" fn(u32, RailGroundType),
     pub snow: extern "C" fn(u32) -> RailSnowGround,
     pub fences: extern "C" fn(u32) -> RailFenceGround,
-    pub foundation: extern "C" fn(Slope, TrackBits) -> Foundation,
     pub owned_land: extern "C" fn(u32) -> bool,
 }
 #[repr(C)]
@@ -480,7 +479,7 @@ pub(crate) unsafe fn rail_tile_loop(
         let mut ground = (r.snow)(tile);
         let mut half = false;
         if ground.plain {
-            let foundation = (r.foundation)(ground.slope, ground.tracks).0;
+            let foundation = crate::movement::rail_foundation(ground.slope.0, ground.tracks.0);
             match foundation {
                 0 => {
                     if is_slope_with_three_corners_raised(ground.slope.0) {
@@ -662,7 +661,9 @@ pub(crate) unsafe fn road_tile_loop(
             zone = group;
             if months != 0 && (distance < 8 || zone != 0) && (s.is_normal_road)(tile) {
                 let bits = (r.all_bits)(tile);
-                if bits.0.count_ones() > 1 && (s.foundation)(tile).slope.0 == 0 {
+                if bits.0.count_ones() > 1
+                    && crate::movement::foundation_slope(s, tile).slope.0 == 0
+                {
                     // SAFETY: The facade owns this live native stack context.
                     let out = unsafe { (c.prepare)(call) };
                     // SAFETY: prepare provides live native result storage.

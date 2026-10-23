@@ -443,7 +443,7 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
             }
             add_tbd(w, Item { tile, dir: INVALID });
         } else if (kind == 1 || kind == 5 || kind == 2)
-            && (track_bits(read!(w, rail, rail_track_status, tile, INVALID))
+            && (track_bits(crate::movement::track_status(w.shared, tile, 0, 0, INVALID))
                 & ENTER_TRACKS[usize::from(dir)])
                 != 0
         {
@@ -458,7 +458,7 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
         } else {
             tile = w.map.add_diag(tile, dir);
             dir = reverse(dir);
-            if (track_bits(read!(w, rail, rail_track_status, tile, INVALID))
+            if (track_bits(crate::movement::track_status(w.shared, tile, 0, 0, INVALID))
                 & ENTER_TRACKS[usize::from(dir)])
                 == 0
             {

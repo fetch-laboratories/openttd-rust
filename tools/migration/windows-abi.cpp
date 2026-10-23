@@ -75,6 +75,7 @@
 
 // Registry: landscape (#212).
 #include "rust/ground_ffi.h"
+#include "rust/movement_ffi.h"
 #include "rust/landscape_loop_ffi.h"
 #include "rust/landscape_command_ffi.h"
 #include "rust/tile_type_access.hpp"
@@ -1129,7 +1130,17 @@ static void RoadBoundary()
 	t.leaves.is_bay_stop = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
 	t.vehicle.play_vehicle_sound = [](OpenTTDVehicle *, VehicleSoundEvent event) noexcept { CHECK(event == 1); return true; };
 	t.vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept {};
-	t.leaves.enter_tile = [](OpenTTDVehicle *, uint32_t, int32_t, int32_t) noexcept -> OpenTTDRoadEntered { return {.tile = 100, .cur_speed = 0, .flags = 4, .direction = 1, .order_type = 0}; };
+	static OpenTTDSharedServices movement_world{};
+	movement_world.map_log_x = []() noexcept -> uint32_t { return 6; };
+	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 9; };
+	static OpenTTDMovementServices movement{};
+	movement.shared = &movement_world;
+	movement.resolve = [](OpenTTDVehicle *) noexcept -> OpenTTDMovementVehicle { return {.train = {}, .road = road_abi_probe->state, .ship = nullptr, .kind = static_cast<VehicleType>(1)}; };
+	movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
+	movement.is_tunnel = [](uint32_t) noexcept { return true; };
+	movement.pose = [](OpenTTDVehicle *) noexcept -> OpenTTDMovementPose { return {.z = 10, .direction = 1}; };
+	t.shared.movement_services = []() noexcept { return &movement; };
+	t.leaves.enter_tile = [](OpenTTDVehicle *, uint8_t flags) noexcept -> OpenTTDRoadEntered { CHECK(flags == 4); return {.tile = 100, .cur_speed = 0, .flags = flags, .direction = 1, .order_type = 0}; };
 	t.vehicle.write_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == 0); };
 	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &probe.entry, &t.leaves, nullptr));
 	CHECK(openttd_rust_road_get(probe.state, 0) == 36 && probe.stop->status == 0x7F);
@@ -1475,7 +1486,7 @@ static void ShipBoundary()
 		.tile_type = ShipProbeUnused<uint32_t, uint32_t>, .water_class = ShipProbeUnused<uint32_t, uint32_t>,
 		.lock_middle = ShipProbeUnused<bool, uint32_t>, .lock_dir = ShipProbeUnused<uint32_t, uint32_t>,
 		.tile_min_z = ShipProbeUnused<uint32_t, uint32_t>, .tile_max_z = ShipProbeUnused<uint32_t, uint32_t>,
-		.track_status = ShipProbeUnused<uint32_t, uint32_t, uint32_t>, .offset = ShipProbeUnused<uint32_t, uint32_t>,
+		.offset = ShipProbeUnused<uint32_t, uint32_t>,
 		.diag_between = ShipProbeUnused<uint32_t, uint32_t, uint32_t>, .dist_square = ShipProbeUnused<uint32_t, uint32_t, uint32_t>,
 		.dist_manhattan = ShipProbeUnused<uint32_t, uint32_t, uint32_t>, .docking = ShipProbeUnused<bool, uint32_t>,
 		.dock = ShipProbeUnused<bool, uint32_t>, .dock_water = ShipProbeUnused<bool, uint32_t>,
@@ -1504,7 +1515,7 @@ static void ShipBoundary()
 		.track_direction = ShipProbeUnused<uint32_t, uint32_t, uint32_t>, .tracks_reach = ShipProbeUnused<uint32_t, uint32_t>,
 		.busy_tile = ShipProbeUnused<bool, uint32_t>, .path_size = ShipProbeUnused<size_t, uint32_t>,
 		.path_back = ShipProbeUnused<uint32_t, uint32_t>, .path_pop = ShipProbeUnused<void, uint32_t>,
-		.path_clear = ShipProbeUnused<void, uint32_t>, .enter_tile = ShipProbeUnused<uint32_t, uint32_t, uint32_t, uint32_t, uint32_t>,
+		.path_clear = ShipProbeUnused<void, uint32_t>,
 		.enter_depot = ShipProbeUnused<void, uint32_t>, .process_orders = ShipProbeUnused<bool, uint32_t>,
 		.loading = ShipProbeUnused<void, uint32_t>, .begin_loading = ShipProbeUnused<void, uint32_t>,
 		.viewport = ShipProbeUnused<void, uint32_t, bool, bool>,
@@ -1756,7 +1767,13 @@ static void AircraftPhaseBoundary()
 	v.write_y = [](OpenTTDVehicle *, int32_t y) noexcept { CHECK(y == -3); };
 	v.y = [](OpenTTDVehicle *) noexcept { return int32_t{-3}; };
 	v.write_z = [](OpenTTDVehicle *, int32_t z) noexcept { CHECK(z == 0); };
-	s.slope = [](int32_t, int32_t) noexcept { return int32_t{0}; };
+	static OpenTTDSharedServices movement_world{};
+	movement_world.map_log_x = []() noexcept -> uint32_t { return 6; };
+	movement_world.tile_type = [](uint32_t) noexcept -> uint8_t { return 0; };
+	static OpenTTDMovementServices movement{};
+	movement.shared = &movement_world;
+	movement.pixel_slope = [](uint32_t) noexcept -> OpenTTDFoundationSlope { return {.z = 0, .slope = SLOPE_FLAT}; };
+	s.movement_services = []() noexcept { return &movement; };
 	leaves.copy_sprite = [](OpenTTDAircraftVehicle, OpenTTDAircraftVehicle) noexcept {};
 	leaves.position_viewport = [](OpenTTDAircraftVehicle) noexcept {};
 	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));

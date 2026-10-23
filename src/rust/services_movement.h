@@ -22,6 +22,7 @@ inline OpenTTDMovementVehicle RustMovementResolve(OpenTTDVehicle *handle) noexce
 		.road = v->type == VEH_ROAD ? RoadStateOf(RoadVehicle::From(v)) : nullptr,
 		.ship = v->type == VEH_SHIP ? Ship::From(v)->GetRustState() : nullptr, .kind = v->type};
 }
+inline RoadTramType RustMovementRoadKind(OpenTTDVehicle *handle) noexcept { return RustRoadTramType(RoadVehicle::From(VehicleOf(handle))->roadtype); }
 inline OpenTTDMovementPose RustMovementPose(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -46,6 +47,6 @@ inline OpenTTDMovementFirstSpeed RustMovementFirstSpeed(OpenTTDVehicle *handle) 
 }
 inline bool RustMovementFrontEngine(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->IsFrontEngine(); }
 inline uint8_t RustMovementTrainEngineClass(OpenTTDVehicle *handle) noexcept { return RailVehInfo(VehicleOf(handle)->engine_type)->engclass; }
-inline void RustMovementDepotInvalidate(OpenTTDVehicle *handle) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, VehicleOf(handle)->tile); }
+inline void RustMovementDepotInvalidate(OpenTTDVehicle *handle) noexcept { RustInvalidateDepotWindow(VehicleOf(handle)->tile); }
 inline void RustMovementAssert(bool condition) noexcept { assert(condition); }
 #endif

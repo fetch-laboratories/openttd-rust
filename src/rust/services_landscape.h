@@ -89,7 +89,6 @@ inline void RustPlayTileSoundBySound(uint16_t sound, uint32_t tile) noexcept { R
 inline void RustUpdateSignals() noexcept { UpdateSignalsInBuffer(); }
 /* Necessary legacy signatures: context handles are unused and scalar return
  * widths are retained. All native work remains in the canonical typed leaves. */
-inline uint32_t RustFoundationSlopeValue(uint32_t tile) noexcept { return RustFoundationSlope(tile).slope; }
 template <typename Context>
 inline void RustCrossingSound(Context, uint32_t tile) noexcept { RustPlayTileSound(tile, SND_0E_LEVEL_CROSSING); }
 

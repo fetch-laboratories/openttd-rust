@@ -324,7 +324,6 @@ struct OpenTTDTrainServices {
 	void (*disconnect)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(disconnect);
 	uint64_t (*engine_power)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(engine_power);
 	void (*enter_depot)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(enter_depot);
-	uint64_t (*enter_tile)(OpenTTDTrainHandle, uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(enter_tile);
 	OpenTTDTrainDepot (*find_depot)(OpenTTDTrainHandle, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(find_depot);
 	uint64_t (*first_track)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(first_track);
 	uint64_t (*grf_version)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(grf_version);
@@ -412,7 +411,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*stop_location)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(stop_location);
 	void (*stuck_news)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(stuck_news);
 	void (*suppress_implicit)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(suppress_implicit);
-	uint64_t (*ticks_leave_depot)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(ticks_leave_depot);
 	uint64_t (*tile_add_diag)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_add_diag);
 	uint64_t (*tile_offset_axis)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_offset_axis);
 	uint64_t (*tile_offset_diag)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_offset_diag);
@@ -424,7 +422,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*track_bits)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(track_bits);
 	uint64_t (*track_crosses)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(track_crosses);
 	uint64_t (*track_direction)(OpenTTDTrainHandle, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(track_direction);
-	uint64_t (*track_status)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(track_status);
 	void (*train_list)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(train_list);
 	uint64_t (*train_visit)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(train_visit);
 	void (*truncate_cargo)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(truncate_cargo);

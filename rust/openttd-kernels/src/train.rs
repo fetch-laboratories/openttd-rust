@@ -556,7 +556,6 @@ pub struct Leaves {
     pub disconnect: extern "C" fn(Handle),
     pub engine_power: extern "C" fn(Handle) -> u64,
     pub enter_depot: extern "C" fn(Handle),
-    pub enter_tile: extern "C" fn(Handle, u32, i32, i32) -> u64,
     pub find_depot: extern "C" fn(Handle, i32) -> Depot,
     pub first_track: extern "C" fn(Handle, u8) -> u64,
     pub grf_version: extern "C" fn(Handle) -> u64,
@@ -644,7 +643,6 @@ pub struct Leaves {
     pub stop_location: extern "C" fn(Handle) -> u64,
     pub stuck_news: extern "C" fn(Handle),
     pub suppress_implicit: extern "C" fn(Handle),
-    pub ticks_leave_depot: extern "C" fn(Handle) -> u64,
     pub tile_add_diag: extern "C" fn(Handle, u32, u8) -> u64,
     pub tile_offset_axis: extern "C" fn(Handle, u8) -> u64,
     pub tile_offset_diag: extern "C" fn(Handle, u8) -> u64,
@@ -656,7 +654,6 @@ pub struct Leaves {
     pub track_bits: extern "C" fn(Handle, u32) -> u64,
     pub track_crosses: extern "C" fn(Handle, u8) -> u64,
     pub track_direction: extern "C" fn(Handle, u8, u8) -> u64,
-    pub track_status: extern "C" fn(Handle, u32, u8) -> u64,
     pub train_list: extern "C" fn(Handle),
     pub train_visit: extern "C" fn(Handle) -> u64,
     pub truncate_cargo: extern "C" fn(Handle, u32),
@@ -1317,11 +1314,11 @@ impl Game<'_> {
         }
         let v = (self.leaves.read_after_swap)(id);
         if id.track() != WORMHOLE {
-            (self.leaves.enter_tile)(id, v.tile, (v.x as u64) as i32, (v.y as u64) as i32);
+            self.movement_enter(id, v.tile, (v.x as u64) as i32, (v.y as u64) as i32);
         } else {
             let vt = (self.leaves.tile_virt)(id, (v.x as u64) as i32, (v.y as u64) as i32) as u32;
             if (self.leaves.is_tunnelbridge)(Handle::NONE, vt) != 0 {
-                (self.leaves.enter_tile)(id, vt, (v.x as u64) as i32, (v.y as u64) as i32);
+                self.movement_enter(id, vt, (v.x as u64) as i32, (v.y as u64) as i32);
                 if id.track() != WORMHOLE
                     && (self.leaves.is_bridge)(Handle::NONE, (self.leaves.read_tile)(id)) != 0
                 {
@@ -1408,7 +1405,7 @@ impl Game<'_> {
         }
         let leave = (self.leaves.read_next)(dep);
         if leave != Handle::NONE {
-            let d = (self.leaves.ticks_leave_depot)(dep) as i32;
+            let d = crate::movement::depot_ticks(self.services, dep);
             if d <= 0 {
                 self.write_status(leave, 1, false);
                 leave.set_track(
@@ -1593,7 +1590,7 @@ impl Game<'_> {
         let tile = v
             .tile
             .wrapping_add((self.leaves.tile_offset_diag)(id, dir) as u32);
-        let ts = (self.leaves.track_status)(id, tile, dir ^ 2) as u32;
+        let ts = self.movement_tracks(tile, dir ^ 2) as u32;
         let reaches = (self.leaves.trackdir_reaches)(id, dir) as u16;
         let tds = ts as u16 & reaches;
         let reds = (ts >> 16) as u16 & reaches;
@@ -1713,8 +1710,7 @@ impl Game<'_> {
                         return (1, false);
                     }
                     let vets =
-                        (self.leaves.enter_tile)(id, new, (x as u64) as i32, (y as u64) as i32)
-                            as u8;
+                        self.movement_enter(id, new, (x as u64) as i32, (y as u64) as i32) as u8;
                     if vets & 4 != 0 {
                         return (2, false);
                     }
@@ -1724,7 +1720,7 @@ impl Game<'_> {
                 }
             } else {
                 entered = (self.leaves.diag_between)(id, old, new) as u8;
-                let ts = (self.leaves.track_status)(id, new, entered ^ 2) as u32;
+                let ts = self.movement_tracks(new, entered ^ 2) as u32;
                 let reaches = (self.leaves.trackdir_reaches)(id, entered) as u16;
                 let tds = ts as u16 & reaches;
                 let reds = (((ts >> 16) as u16 & reaches) | (((ts >> 16) as u16 & reaches) >> 8))
@@ -1844,8 +1840,7 @@ impl Game<'_> {
                 x = (x & !15) | i32::from(sub[0]);
                 y = (y & !15) | i32::from(sub[1]);
                 let dir = sub[2];
-                let vets =
-                    (self.leaves.enter_tile)(id, new, (x as u64) as i32, (y as u64) as i32) as u8;
+                let vets = self.movement_enter(id, new, (x as u64) as i32, (y as u64) as i32) as u8;
                 if vets & 4 != 0 {
                     return (2, false);
                 }
@@ -1912,7 +1907,7 @@ impl Game<'_> {
             }
         } else {
             if (self.leaves.is_tunnelbridge)(Handle::NONE, new) != 0
-                && (self.leaves.enter_tile)(id, new, (x as u64) as i32, (y as u64) as i32) & 2 != 0
+                && self.movement_enter(id, new, (x as u64) as i32, (y as u64) as i32) & 2 != 0
             {
                 if (self.leaves.read_front)(id) != 0 {
                     crate::witness::hit(crate::witness::TRAIN_WORMHOLE_EXIT);
@@ -3066,4 +3061,20 @@ pub(crate) fn stop_location(
 /// `Train::CalcNextVehicleOffset`, shared with depot movement policy.
 pub(crate) fn next_offset(leaves: &Leaves, services: &Services, id: Handle) -> i32 {
     Game { leaves, services }.next_offset(id)
+}
+
+impl Game<'_> {
+    fn movement_enter(&self, id: Handle, tile: u32, x: i32, y: i32) -> u64 {
+        // SAFETY: Same live train as the original synchronous native callback.
+        u64::from(unsafe { crate::movement::enter(self.services, id.vehicle(), tile, x, y) })
+    }
+    fn movement_tracks(&self, tile: u32, side: u8) -> u64 {
+        u64::from(crate::movement::track_status(
+            self.services,
+            tile,
+            0,
+            0,
+            side,
+        ))
+    }
 }

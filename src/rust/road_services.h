@@ -55,7 +55,7 @@ static OpenTTDRoadStep OPENTTD_VEHICLE_CALL RoadSvcStep(OpenTTDVehicle *v) noexc
 {
 	const RoadVehicle *u = RoadOf(v);
 	return {.tile = RustVehicleTile(u), .x = RustVehicleX(u), .y = RustVehicleY(u), .z = RustVehicleZ(u),
-		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = SharedRoadTypeIsTram(u->roadtype)};
+		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = RustVehicleFrontEngine(u), .tram = SharedRoadTypeIsTram(u->roadtype)};
 }
 static OpenTTDRoadCrashPart OPENTTD_VEHICLE_CALL RoadSvcCrashPart(OpenTTDVehicle *v) noexcept
 {
@@ -80,10 +80,9 @@ static OpenTTDRoadLinkTile OPENTTD_VEHICLE_CALL RoadSvcLinkTile(OpenTTDVehicle *
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(u));
 	return {.link = {.next = RustVehicle(next), .next_state = RoadStateOf(next)}, .tile = RustVehicleTile(u)};
 }
-static OpenTTDRoadEntered OPENTTD_VEHICLE_CALL RoadSvcEnterTile(OpenTTDVehicle *v, uint32_t tile, int32_t x, int32_t y) noexcept
+static OpenTTDRoadEntered OPENTTD_VEHICLE_CALL RoadSvcEnterTile(OpenTTDVehicle *v, uint8_t flags) noexcept
 {
 	RoadVehicle *u = RoadOf(v);
-	uint8_t flags = VehicleEnterTile(u, TileIndex(tile), x, y).base();
 	return {.tile = RustVehicleTile(u), .cur_speed = RustVehicleSpeed(u), .flags = flags, .direction = RustVehicleDirection(u), .order_type = RustVehicleOrderType(u)};
 }
 
@@ -125,10 +124,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcVisitTile(uint32_t tile, OpenTTDRoadTile
 }
 
 static bool OPENTTD_VEHICLE_CALL RoadSvcHasRoad(OpenTTDVehicle *v, uint32_t tile) noexcept { return HasTileAnyRoadType(TileIndex(tile), RoadOf(v)->compatible_roadtypes); }
-static uint32_t OPENTTD_VEHICLE_CALL RoadSvcTrackStatus(OpenTTDVehicle *v, uint32_t tile) noexcept
-{
-	return GetTileTrackStatus(TileIndex(tile), TRANSPORT_ROAD, RustRoadTramType(RoadOf(v)->roadtype));
-}
+
 static uint8_t OPENTTD_VEHICLE_CALL RoadSvcAnyRoadBits(OpenTTDVehicle *v, uint32_t tile, bool straight_only) noexcept
 {
 	return GetAnyRoadBits(TileIndex(tile), RustRoadTramType(RoadOf(v)->roadtype), straight_only);
@@ -220,7 +216,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcDepotExit(OpenTTDVehicle *v, int32_t x, 
 	u->y_pos = y;
 	RustVehicleUpdatePosition(u);
 	u->UpdateInclination(true, true);
-	InvalidateWindowData(WC_VEHICLE_DEPOT, u->tile);
+	RustInvalidateDepotWindow(u->tile);
 }
 /** `RoadVehCrash` after `v->Crash()`. */
 static void OPENTTD_VEHICLE_CALL RoadSvcCrashNews(OpenTTDVehicle *v, uint32_t victims) noexcept
@@ -322,7 +318,7 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.visit_trains = RoadSvcVisitTrains,
 	.visit_tile = RoadSvcVisitTile,
 	.has_road = RoadSvcHasRoad,
-	.track_status = RoadSvcTrackStatus,
+
 	.any_road_bits = RoadSvcAnyRoadBits,
 	.is_road_depot_tile = Shared_is_road_depot,
 	.depot_direction = Shared_road_depot_direction,

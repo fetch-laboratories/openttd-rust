@@ -447,12 +447,11 @@ pub struct Leaves {
     pub part: extern "C" fn(VehicleRef) -> PartRead,
     pub link: extern "C" fn(VehicleRef) -> Link,
     pub link_tile: extern "C" fn(VehicleRef) -> LinkTile,
-    pub enter_tile: extern "C" fn(VehicleRef, u32, i32, i32) -> Entered,
+    pub enter_tile: extern "C" fn(VehicleRef, u8) -> Entered,
     pub visit_close: extern "C" fn(VehicleRef, i32, i32, bool, CloseVisitor, *mut c_void),
     pub visit_trains: extern "C" fn(VehicleRef, TrainVisitor, *mut c_void),
     pub visit_tile: extern "C" fn(u32, TileVisitor, *mut c_void),
     pub has_road: extern "C" fn(VehicleRef, u32) -> bool,
-    pub track_status: extern "C" fn(VehicleRef, u32) -> u32,
     pub any_road_bits: extern "C" fn(VehicleRef, u32, bool) -> u8,
     pub is_road_depot_tile: extern "C" fn(u32) -> bool,
     pub depot_direction: extern "C" fn(u32) -> u8,
@@ -804,7 +803,7 @@ impl Game<'_> {
         if !service!(self.l.has_road)(v.v, tile) {
             return true;
         }
-        let ts = service!(self.l.track_status)(v.v, tile);
+        let ts = crate::movement::road_tracks(self.ss, v.v, tile);
         let trackdirs = ts & 0x3f3f;
         let red = (ts >> 16) & 0x3f3f;
         let trackbits = (trackdirs | (trackdirs >> 8)) & 0x3f;
@@ -1079,7 +1078,7 @@ impl Game<'_> {
     }
     /// `RoadFindPathToDest`.
     fn path(&self, v: Part, s: &Step, tile: u32, entry: u8) -> u8 {
-        let ts = service!(self.l.track_status)(v.v, tile);
+        let ts = crate::movement::road_tracks(self.ss, v.v, tile);
         let red = (ts >> 16) & 0x3f3f;
         let mut trackdirs = ts & 0x3f3f;
         let p = service!(self.l.path_read)(v.v);
@@ -1309,7 +1308,7 @@ impl Game<'_> {
                 }
             }
             if service!(self.ss.tile_type)(gp.tile) == MP_TUNNELBRIDGE {
-                let e = service!(self.l.enter_tile)(v.v, gp.tile, gp.x, gp.y);
+                let e = self.movement_enter(v.v, gp.tile, gp.x, gp.y);
                 Self::observe(s, e);
                 if e.flags & VETS_ENTERED_WORMHOLE != 0 {
                     self.move_without_speed(v, s, gp.x, gp.y);
@@ -1402,7 +1401,7 @@ impl Game<'_> {
                         return false;
                     }
                 }
-                let e = service!(self.l.enter_tile)(v.v, tile, x, y);
+                let e = self.movement_enter(v.v, tile, x, y);
                 Self::observe(s, e);
                 if e.flags & VETS_CANNOT_ENTER != 0 {
                     if service!(self.ss.tile_type)(tile) != MP_TUNNELBRIDGE {
@@ -1480,7 +1479,7 @@ impl Game<'_> {
                     return false;
                 }
             }
-            let e = service!(self.l.enter_tile)(v.v, s.tile, x, y);
+            let e = self.movement_enter(v.v, s.tile, x, y);
             Self::observe(s, e);
             if e.flags & VETS_CANNOT_ENTER != 0 {
                 self.set_speed(v, s, 0);
@@ -1589,7 +1588,7 @@ impl Game<'_> {
             self.start_sound(v);
             service!(self.vs.start_stop_dirty)(v.v);
         }
-        let e = service!(self.l.enter_tile)(v.v, s.tile, x, y);
+        let e = self.movement_enter(v.v, s.tile, x, y);
         Self::observe(s, e);
         if e.flags & VETS_CANNOT_ENTER != 0 {
             self.set_speed(v, s, 0);
@@ -2144,5 +2143,13 @@ pub(crate) unsafe fn get_frame(s: *const State) -> u8 {
 pub(crate) unsafe fn set_frame(s: *mut State, frame: u8) {
     unsafe {
         (*s).scalars[FRAME] = u16::from(frame);
+    }
+}
+
+impl Game<'_> {
+    fn movement_enter(&self, v: VehicleRef, tile: u32, x: i32, y: i32) -> Entered {
+        // SAFETY: Same live serialized shell as the original callback; no owner borrow spans it.
+        let flags = unsafe { crate::movement::enter(self.ss, v, tile, x, y) };
+        service!(self.l.enter_tile)(v, flags)
     }
 }

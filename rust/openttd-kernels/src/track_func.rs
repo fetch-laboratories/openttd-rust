@@ -49,3 +49,8 @@ pub const fn diag_dir_to_diag_trackdir(dir: u8) -> u8 {
 pub const fn is_reversing_road_trackdir(dir: u8) -> bool {
     (dir & 7) >= 6
 }
+
+/// `TrackStatusToTrackBits`.
+pub const fn track_status_to_track_bits(status: u32) -> u8 {
+    ((status | (status >> 8)) & 0x3f) as u8
+}

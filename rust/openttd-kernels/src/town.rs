@@ -701,7 +701,6 @@ pub struct Leaves {
     pub station_owner: extern "C" fn(*const crate::station::Station) -> u8,
     pub dirty_authority: extern "C" fn(u32),
     pub dirty_town: extern "C" fn(u32),
-    pub foundation_slope: extern "C" fn(u32) -> u32,
     pub terraform_price: extern "C" fn() -> i64,
     pub clean_road_bits: extern "C" fn(u32, u32) -> u32,
     pub set_road_town: extern "C" fn(u32, u32),
@@ -1125,7 +1124,11 @@ impl Engine<'_> {
             return false;
         }
         let slope = if (self.services.build_on_slopes)() {
-            (self.leaves.foundation_slope)(tile)
+            u32::from(
+                crate::movement::foundation_slope(self.services, tile)
+                    .slope
+                    .0,
+            )
         } else {
             u32::from((self.services.tile_slope)(tile))
         };

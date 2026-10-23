@@ -219,6 +219,8 @@ pub struct ClearSquareServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
+    /// Complete synchronous movement owner; immutable process-lifetime table.
+    pub movement_services: extern "C" fn() -> *const crate::movement::MovementServices<'static>,
     /// Canonical native tile owner write.
     pub set_tile_owner: extern "C" fn(u32, u8),
     /// `AutoslopeEnabled()`.
@@ -363,7 +365,6 @@ pub struct Services {
     /// `SetTropicZone`.
     pub set_tropic_zone: extern "C" fn(u32, u8),
     /// Shared live slope observation.
-    pub slope: extern "C" fn(i32, i32) -> i32,
     /// Current snow line used by town, industry and trees.
     pub snow_line: extern "C" fn() -> u8,
     /// `GetStationIndex`.
@@ -448,7 +449,6 @@ pub struct Services {
     /// `GetClearGround`.
     pub clear_ground: extern "C" fn(u32) -> ClearGroundType,
     /// `GetFoundationSlope`, returning both the foundation slope and its z.
-    pub foundation: extern "C" fn(u32) -> FoundationSlope,
     /// Original `HasTileWaterClass` predicate.
     pub has_water_class: extern "C" fn(u32) -> bool,
     /// `MakeShore`.
@@ -573,9 +573,6 @@ pub fn fixture(
     extern "C" fn word0() -> u32 {
         0
     }
-    extern "C" fn slope(_: i32, _: i32) -> i32 {
-        0
-    }
     extern "C" fn count0() -> usize {
         0
     }
@@ -609,6 +606,7 @@ pub fn fixture(
         false
     }
     Services {
+        movement_services: fixture_movement,
         set_tile_owner: zone,
         autoslope: flag0,
         bay_stop_direction: byte,
@@ -685,7 +683,6 @@ pub fn fixture(
         safe_waiting_position: train_safe,
         service_at_helipad: flag0,
         set_tropic_zone: zone,
-        slope,
         snow_line: zero_byte,
         station_index: short,
         road_commands: fixture_road_commands,
@@ -728,7 +725,6 @@ pub fn fixture(
         town_count: count0,
         // Registry: landscape (#212).
         clear_ground,
-        foundation,
         has_water_class: flag,
         make_shore: tile,
         make_snow,
@@ -985,7 +981,6 @@ pub struct RailMapServices {
     /// Native `other_tunnel_bridge_end` map operation at the original observation point.
     pub other_tunnel_bridge_end: extern "C" fn(u32) -> u32,
     /// Native `rail_track_status` map operation at the original observation point.
-    pub rail_track_status: extern "C" fn(u32, u8) -> u32,
     /// Native `HasSignals`.
     pub has_signals: extern "C" fn(u32) -> bool,
     /// Native `GetSignalType`.
@@ -1171,4 +1166,9 @@ extern "C" fn unused_tile_add_wrap(_: u32, _: i32, _: i32) -> u32 {
 #[cfg(test)]
 extern "C" fn unused_road_is_tram(_: RoadType) -> bool {
     panic!("unused tram classification");
+}
+
+#[cfg(test)]
+extern "C" fn fixture_movement() -> *const crate::movement::MovementServices<'static> {
+    std::ptr::null()
 }

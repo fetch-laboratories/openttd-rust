@@ -7,19 +7,36 @@
 
 //! Complete tile movement policy. Native map/pools remain canonical; services
 //! are immutable and only copied scalars cross the synchronous boundary. No
-//! native borrow survives a callback, including NewGRF foundation callbacks.
+//! native borrow survives a callback, including `NewGRF` foundation callbacks.
 #![allow(
     unsafe_code,
     missing_docs,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
+    clippy::many_single_char_names,
+    clippy::if_not_else,
+    clippy::items_after_statements,
+    clippy::too_many_lines,
+    clippy::collapsible_match,
+    clippy::verbose_bit_mask,
+    clippy::decimal_bitwise_operands,
     clippy::cast_sign_loss
 )]
 use crate::direction_func::diag_dir_to_axis;
 use crate::ground::{RailServices, RoadServices};
 use crate::services::{Foundation, FoundationSlope, RoadBits, Services, Slope, TrackBits};
-use crate::slope_func::*;
-use crate::tile_type::*;
+use crate::slope_func::{
+    FOUNDATION_INCLINED_X, FOUNDATION_INCLINED_Y, FOUNDATION_INVALID, FOUNDATION_LEVELED,
+    FOUNDATION_NONE, FOUNDATION_STEEP_BOTH, FOUNDATION_STEEP_LOWER, SLOPE_E, SLOPE_FLAT, SLOPE_N,
+    SLOPE_NE, SLOPE_NW, SLOPE_S, SLOPE_SE, SLOPE_SW, SLOPE_W, flattening_foundation,
+    get_highest_slope_corner, halftile_foundation, is_slope_with_one_corner_raised,
+    is_slope_with_three_corners_raised, is_steep_slope, opposite_corner,
+    slope_with_one_corner_raised, slope_with_three_corners_raised, special_rail_foundation,
+};
+use crate::tile_type::{
+    INVALID_TILE, MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION,
+    MP_TUNNELBRIDGE, MP_VOID, MP_WATER,
+};
 use std::ffi::c_void;
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -62,14 +79,15 @@ pub struct FirstSpeed {
     pub speed: u16,
 }
 #[repr(C)]
-pub struct MovementServices {
-    pub shared: &'static Services,
-    pub rail: &'static RailServices,
-    pub road: &'static RoadServices,
-    pub rail_map: &'static crate::services::RailMapServices,
-    pub train: &'static crate::train::Leaves,
-    pub vehicle: &'static crate::vehicle::VehicleServices,
-    pub road_vehicle: &'static crate::road::Leaves,
+pub struct MovementServices<'a> {
+    pub shared: &'a Services,
+    pub rail: &'a RailServices,
+    pub road: &'a RoadServices,
+    pub rail_map: &'a crate::services::RailMapServices,
+    pub train: &'a crate::train::Leaves,
+    pub vehicle: &'a crate::vehicle::VehicleServices,
+    pub road_kind: extern "C" fn(VehicleRef) -> crate::services::RoadTramType,
+    pub road_vehicle: &'a crate::road::Leaves,
     pub resolve: extern "C" fn(crate::vehicle::VehicleRef) -> MovementVehicle,
     pub pose: extern "C" fn(crate::vehicle::VehicleRef) -> MovementPose,
     pub depot_position: extern "C" fn(crate::train::Handle) -> DepotPosition,
@@ -81,6 +99,13 @@ pub struct MovementServices {
     pub train_engine_class: extern "C" fn(crate::vehicle::VehicleRef) -> u8,
     pub depot_invalidate: extern "C" fn(crate::vehicle::VehicleRef),
     pub native_assert: extern "C" fn(bool),
+    pub plain_rail: extern "C" fn(u32) -> bool,
+    pub normal_road: extern "C" fn(u32) -> bool,
+    pub is_tunnel: extern "C" fn(u32) -> bool,
+    pub rail_station: extern "C" fn(u32) -> bool,
+    pub road_crossing: extern "C" fn(u32) -> bool,
+    pub tile_flat: extern "C" fn(u32) -> bool,
+    pub add_by_diag_dir: extern "C" fn(u32, u8) -> u32,
     pub rail_depot_tile: extern "C" fn(u32) -> bool,
     pub has_tile_road_type: extern "C" fn(u32, crate::services::RoadTramType) -> bool,
     pub oneway_signal: extern "C" fn(u32, u8) -> bool,
@@ -102,18 +127,19 @@ pub struct MovementServices {
     pub industry_callback: extern "C" fn(u32, u16) -> u16,
     pub industry_boolean: extern "C" fn(*const c_void, u16) -> bool,
 }
-impl MovementServices {
+impl MovementServices<'_> {
     fn foundation(&self, tile: u32, slope: u8) -> u8 {
-        match (self.shared.tile_type)(tile) {
+        let kind = (self.shared.tile_type)(tile);
+        match kind {
             MP_RAILWAY => {
-                if (self.shared.is_plain_rail)(tile) {
+                if (self.plain_rail)(tile) {
                     rail_foundation(slope, (self.rail.tracks)(tile).0)
                 } else {
                     flattening_foundation(slope)
                 }
             }
             MP_ROAD => {
-                if (self.shared.is_normal_road)(tile) {
+                if (self.normal_road)(tile) {
                     road_foundation(slope, (self.road.all_bits)(tile).0)
                 } else {
                     flattening_foundation(slope)
@@ -131,7 +157,7 @@ impl MovementServices {
                 }
             }
             MP_HOUSE | MP_INDUSTRY => {
-                let house = (self.shared.tile_type)(tile) == MP_HOUSE;
+                let house = kind == MP_HOUSE;
                 let p = if house {
                     (self.house_foundation)(tile)
                 } else {
@@ -168,8 +194,8 @@ impl MovementServices {
     }
     fn pixel_z(&self, tile: u32, x: u32, y: u32, ground_vehicle: bool, kind: u8) -> i32 {
         if matches!(kind, MP_HOUSE | MP_INDUSTRY | MP_STATION)
-            || (kind == MP_RAILWAY && !(self.shared.is_plain_rail)(tile))
-            || (kind == MP_ROAD && !(self.shared.is_normal_road)(tile))
+            || (kind == MP_RAILWAY && !(self.plain_rail)(tile))
+            || (kind == MP_ROAD && !(self.normal_road)(tile))
             || (kind == MP_OBJECT && !(self.owned_land)(tile))
         {
             return (self.max_pixel_z)(tile);
@@ -192,7 +218,7 @@ impl MovementServices {
             p.z = p.z.wrapping_add(a.z.wrapping_mul(8));
             p.slope = a.slope;
         } else if kind == MP_TUNNELBRIDGE {
-            if !(self.shared.is_bridge)(tile) {
+            if (self.is_tunnel)(tile) {
                 if ground_vehicle {
                     return p.z;
                 }
@@ -423,10 +449,20 @@ pub unsafe extern "C" fn openttd_rust_movement_foundation(
 
 use crate::direction_func::{axis_to_diag_dir, reverse_diag_dir};
 use crate::direction_type::INVALID_DIAGDIR;
-use crate::track_func::*;
-use crate::track_type::*;
-use crate::transport_type::*;
-impl MovementServices {
+use crate::track_func::{
+    axis_to_track_bits, combine_track_status, diag_dir_to_diag_track_bits,
+    diag_dir_to_diag_trackdir, is_reversing_road_trackdir, track_bits_to_trackdir_bits,
+};
+use crate::track_type::{
+    TRACK_BIT_ALL, TRACK_BIT_DEPOT, TRACK_BIT_LEFT, TRACK_BIT_LOWER, TRACK_BIT_NONE,
+    TRACK_BIT_RIGHT, TRACK_BIT_UPPER, TRACK_BIT_WORMHOLE, TRACK_BIT_X, TRACK_BIT_Y, TRACK_LOWER,
+    TRACK_UPPER, TRACKDIR_BIT_LEFT_N, TRACKDIR_BIT_LEFT_S, TRACKDIR_BIT_LOWER_E,
+    TRACKDIR_BIT_LOWER_W, TRACKDIR_BIT_RIGHT_N, TRACKDIR_BIT_RIGHT_S, TRACKDIR_BIT_UPPER_E,
+    TRACKDIR_BIT_UPPER_W, TRACKDIR_BIT_X_NE, TRACKDIR_BIT_X_SW, TRACKDIR_BIT_Y_NW,
+    TRACKDIR_BIT_Y_SE,
+};
+use crate::transport_type::{TRANSPORT_RAIL, TRANSPORT_ROAD, TRANSPORT_WATER};
+impl MovementServices<'_> {
     fn water_edges(&self, tile: u32, mut bits: u8) -> u8 {
         let map = crate::services::Map {
             log_x: (self.shared.map_log_x)() as u8,
@@ -446,7 +482,7 @@ impl MovementServices {
         match (self.shared.tile_type)(tile) {
             MP_RAILWAY => {
                 if mode == TRANSPORT_WATER
-                    && (self.shared.is_plain_rail)(tile)
+                    && (self.plain_rail)(tile)
                     && (self.rail.ground)(tile).0 == 13
                     && is_slope_with_one_corner_raised((self.shared.tile_slope)(tile))
                 {
@@ -468,11 +504,15 @@ impl MovementServices {
                         bits = (self.rail.tracks)(tile).0;
                         let a = (r.present_signals)(tile) as u8;
                         let mut b = (r.signal_states)(tile) & u32::from(a);
-                        if !(self.oneway_signal)(tile, TRACK_UPPER) || a & 12 == 0 {
-                            b |= u32::from(!a & 12);
+                        if !(self.oneway_signal)(tile, TRACK_UPPER)
+                            || a & crate::signal_func::signal_on_track(TRACK_UPPER) == 0
+                        {
+                            b |= u32::from(!a & crate::signal_func::signal_on_track(TRACK_UPPER));
                         }
-                        if !(self.oneway_signal)(tile, TRACK_LOWER) || a & 3 == 0 {
-                            b |= u32::from(!a & 3);
+                        if !(self.oneway_signal)(tile, TRACK_LOWER)
+                            || a & crate::signal_func::signal_on_track(TRACK_LOWER) == 0
+                        {
+                            b |= u32::from(!a & crate::signal_func::signal_on_track(TRACK_LOWER));
                         }
                         if b & 8 == 0 {
                             red |= TRACKDIR_BIT_LEFT_N
@@ -504,7 +544,7 @@ impl MovementServices {
             }
             MP_ROAD => match mode {
                 TRANSPORT_RAIL => {
-                    if (self.shared.is_level_crossing)(tile) {
+                    if (self.road_crossing)(tile) {
                         bits = (r.crossing_rail_bits)(tile).0;
                     }
                 }
@@ -568,9 +608,6 @@ impl MovementServices {
                                     )
                                 } == 0
                                 {
-                                    let map = crate::services::Map {
-                                        log_x: (self.shared.map_log_x)() as u8,
-                                    };
                                     for (dir, mask) in [
                                         (
                                             axis_to_diag_dir(axis),
@@ -581,7 +618,7 @@ impl MovementServices {
                                             TRACKDIR_BIT_X_NE | TRACKDIR_BIT_Y_NW,
                                         ),
                                     ] {
-                                        let t = tile.wrapping_add(map.offs_by_diag_dir(dir));
+                                        let t = (self.add_by_diag_dir)(tile, dir);
                                         if (self.shared.is_level_crossing)(t)
                                             && (self.crossing_barred)(t)
                                         {
@@ -639,7 +676,7 @@ impl MovementServices {
                 }
                 bits = match (self.water_type)(tile).0 {
                     0 => {
-                        if (self.shared.tile_slope)(tile) == 0 {
+                        if (self.tile_flat)(tile) {
                             TRACK_BIT_ALL
                         } else {
                             TRACK_BIT_NONE
@@ -699,7 +736,7 @@ const TUNNEL_VISIBILITY: [u8; 4] = [12, 8, 8, 12];
 const ENTERED_STATION: u8 = 1;
 const ENTERED_WORMHOLE: u8 = 2;
 const CANNOT_ENTER: u8 = 4;
-impl MovementServices {
+impl MovementServices<'_> {
     fn hidden(&self, v: VehicleRef, hidden: bool) {
         let status = (self.vehicle.status)(v);
         (self.vehicle.write_status)(v, if hidden { status | 1 } else { status & !1 });
@@ -799,7 +836,7 @@ impl MovementServices {
             if (self.train.order_stop)(h.train, station) == 0 {
                 return 0;
             }
-            if !(self.rail_map.is_rail_station)(tile) || !(self.front_engine)(v) {
+            if !(self.rail_station)(tile) || !(self.front_engine)(v) {
                 return 0;
             }
             let (mut stop, ahead, length) =
@@ -878,7 +915,7 @@ impl MovementServices {
         } else {
             pos
         };
-        if !(self.shared.is_bridge)(tile) {
+        if (self.is_tunnel)(tile) {
             if h.kind.0 == 0 {
                 let track = unsafe {
                     crate::train_state::openttd_rust_train_state_get_track(h.train.owner)
@@ -1081,4 +1118,44 @@ pub unsafe extern "C" fn openttd_rust_movement_depot_ticks(
         3 => (p.y & 15) - (i32::from(enter >> 4) - (length + 1)),
         _ => unreachable!("native depot direction"),
     }
+}
+
+/// Resolve the native immutable movement registry. Production callers hold the
+/// game-state mutex; no map or owner borrow is formed by resolving this table.
+pub(crate) fn table(shared: &Services) -> &MovementServices<'_> {
+    // SAFETY: Native registry returns its immutable process-lifetime table.
+    unsafe { &*(shared.movement_services)() }
+}
+pub(crate) fn track_status(shared: &Services, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
+    table(shared).track_status(tile, mode, sub, side)
+}
+pub(crate) fn pixel_z(shared: &Services, x: i32, y: i32, ground: bool) -> i32 {
+    // SAFETY: Callers supply the serialized live native map and registry.
+    unsafe { openttd_rust_movement_pixel_z(table(shared), x, y, ground) }
+}
+pub(crate) fn foundation_slope(shared: &Services, tile: u32) -> FoundationSlope {
+    // SAFETY: Callers supply the serialized live native map and registry.
+    unsafe { openttd_rust_movement_foundation_slope(table(shared), tile) }
+}
+/// # Safety
+/// The vehicle/map stay live through the synchronous entry and its source callbacks.
+pub(crate) unsafe fn enter(shared: &Services, v: VehicleRef, tile: u32, x: i32, y: i32) -> u8 {
+    unsafe { openttd_rust_movement_enter(table(shared), v, tile, x, y) }
+}
+
+pub(crate) fn water_tracks(shared: &Services, tile: u32, side: u8) -> u32 {
+    u32::from(crate::track_func::track_status_to_track_bits(track_status(
+        shared, tile, 2, 0, side,
+    )))
+}
+
+pub(crate) fn road_tracks(shared: &Services, v: VehicleRef, tile: u32) -> u32 {
+    let s = table(shared);
+    let kind = (s.road_kind)(v);
+    s.track_status(tile, 1, u32::from(kind.0), 255)
+}
+
+pub(crate) fn depot_ticks(shared: &Services, v: crate::train::Handle) -> i32 {
+    // SAFETY: Same serialized train as the original synchronous controller call.
+    unsafe { openttd_rust_movement_depot_ticks(table(shared), v) }
 }

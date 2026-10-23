@@ -1282,7 +1282,7 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.station_owner = RustStationOwnerByte<const Station>,
 		.dirty_authority = RustTownDirtyAuthority,
 		.dirty_town = RustTown_dirty_town,
-		.foundation_slope = RustFoundationSlopeValue,
+
 		.terraform_price = RustTown_terraform_price,
 		.clean_road_bits = RustTown_clean_road_bits,
 		.set_road_town = RustTown_set_road_town,

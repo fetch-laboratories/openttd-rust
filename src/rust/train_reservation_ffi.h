@@ -143,7 +143,6 @@ struct OpenTTDTrainReservationLeaves {
 	uint64_t (*tile_add)(void *, OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_add);
 	uint64_t (*tile_offset)(void *, OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_offset);
 	uint64_t (*trackdir)(void *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(trackdir);
-	uint64_t (*track_status)(void *, OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(track_status);
 	uint64_t (*try_track)(void *, OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(try_track);
 	uint64_t (*tunnel_dir)(void *, OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_dir);
 	uint64_t (*tunnel_free)(void *, OpenTTDTrainHandle, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_free);

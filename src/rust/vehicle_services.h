@@ -9,6 +9,7 @@
 #ifndef RUST_VEHICLE_SERVICES_H
 #define RUST_VEHICLE_SERVICES_H
 #include "vehicle_ffi.h"
+#include "services_viewport.h"
 #include "byte_span_ffi.h"
 #include "../ground_vehicle.hpp"
 #include "../engine_base.h"
@@ -102,6 +103,7 @@ Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept;
 bool RustTrainMultiheaded(const Vehicle *v) noexcept;
 Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept;
 bool RustVehiclePrimary(const Vehicle *v) noexcept;
+inline bool RustVehicleFrontEngine(const Vehicle *v) noexcept { return v->IsFrontEngine(); }
 inline uint8_t RustVehicleOwner(const Vehicle *v) noexcept { return v->owner.base(); }
 inline const Direction *RustVehicleDirectionAddress(const Vehicle *v) noexcept { return &v->direction; }
 inline Direction RustVehicleDirection(const Vehicle *v) noexcept { return *RustVehicleDirectionAddress(v); }
@@ -252,7 +254,7 @@ inline OpenTTDGroundCrash OPENTTD_VEHICLE_CALL GroundSvcCrash(OpenTTDVehicle *v,
 {
 	T *u = T::From(VehicleOf(v));
 	uint victims = u->T::GroundVehicleBase::Crash(flooded);
-	return {.victims = victims, .front = u->IsFrontEngine()};
+	return {.victims = victims, .front = RustVehicleFrontEngine(u)};
 }
 template <class T>
 inline void OPENTTD_VEHICLE_CALL GroundSvcFirstCargoChanged(OpenTTDVehicle *v) noexcept

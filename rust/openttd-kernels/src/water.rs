@@ -29,7 +29,7 @@ use crate::{
     ground::{Call, ClearServices, CostServices, RailServices},
     services::{
         self, ClearGroundType, FloodingBehaviour, Foundation, FoundationSlope, RailGroundType,
-        Services, Slope, Track, TrackBits, TreeGround,
+        Services, Slope, Track, TreeGround,
     },
     vehicle::{VehicleRef, VehicleServices, VehicleType},
 };
@@ -376,7 +376,7 @@ impl<'a> World<'a> {
                     return true;
                 }
             }
-            if (5..10).contains(&(self.r().foundation)(Slope(slope), TrackBits(tracks)).0) {
+            if (5..10).contains(&crate::movement::rail_foundation(slope, tracks)) {
                 flooded = true;
                 (self.r().set_ground)(tile, RailGroundType(13));
                 (self.s.mark_dirty)(tile);
@@ -384,7 +384,7 @@ impl<'a> World<'a> {
             }
         } else {
             let foundation = (self.w.apply_foundation)(
-                (self.r().foundation)(Slope(slope), TrackBits(tracks)),
+                Foundation(crate::movement::rail_foundation(slope, tracks)),
                 Slope(slope),
             );
             if foundation.z == 0
@@ -603,7 +603,7 @@ impl<'a> World<'a> {
                     {
                         continue;
                     }
-                    let foundation = (self.s.foundation)(target);
+                    let foundation = crate::movement::foundation_slope(self.s, target);
                     if foundation.z > 0 {
                         continue;
                     }
@@ -618,7 +618,8 @@ impl<'a> World<'a> {
                 }
             }
             3 => {
-                let mask = FLOOD_FROM[usize::from((self.s.foundation)(tile).slope.0 & 15)];
+                let mask = FLOOD_FROM
+                    [usize::from(crate::movement::foundation_slope(self.s, tile).slope.0 & 15)];
                 for direction in 0..8 {
                     if mask & (1 << direction) == 0 {
                         continue;

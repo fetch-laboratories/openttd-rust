@@ -32,7 +32,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	v->SetWagon();
 
 	v->SetFreeWagon();
-	InvalidateWindowData(WC_VEHICLE_DEPOT, v->tile);
+	RustInvalidateDepotWindow(v->tile);
 
 	v->cargo_type = RustEngineDefaultCargo(engine);
 	assert(IsValidCargoType(v->cargo_type));
@@ -154,7 +154,7 @@ static void RailFrontWindows(void *shell) noexcept
 static void RailCompanyDirty() noexcept { SetWindowDirty(WC_COMPANY, OpenTTDCurrentCompany()); }
 static void RailDepotChanged(uint32_t tile) noexcept
 {
-	InvalidateWindowData(WC_VEHICLE_DEPOT, TileIndex(tile));
+	RustInvalidateDepotWindow(TileIndex(tile));
 	InvalidateWindowClassesData(WC_TRAINS_LIST, 0);
 }
 const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcept

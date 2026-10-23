@@ -143,31 +143,6 @@ pub const fn inclined_foundation(axis: u8) -> u8 {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn helpers_match_the_header_tables() {
-        for s in 0..=u8::MAX {
-            assert_eq!(
-                is_slope_with_three_corners_raised(s),
-                matches!(s, 7 | 11 | 13 | 14)
-            );
-            assert_eq!(is_inclined_slope(s), matches!(s, 3 | 6 | 9 | 12));
-            assert_eq!(
-                get_inclined_slope_direction(s) != 0xFF,
-                is_inclined_slope(s)
-            );
-        }
-        assert_eq!(
-            get_slope_max_z(SLOPE_STEEP | SLOPE_S | SLOPE_E | SLOPE_N),
-            2
-        );
-        assert_eq!(get_inclined_slope_direction(SLOPE_NE), 0);
-        assert_eq!(get_inclined_slope_direction(SLOPE_NW), 3);
-    }
-}
-
 /// `FOUNDATION_STEEP_LOWER`.
 pub const FOUNDATION_STEEP_LOWER: u8 = 4;
 /// `FOUNDATION_STEEP_BOTH`.
@@ -203,4 +178,29 @@ pub const fn halftile_foundation(c: u8) -> u8 {
 /// `SpecialRailFoundation`, with a valid native corner.
 pub const fn special_rail_foundation(c: u8) -> u8 {
     10 + c
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn helpers_match_the_header_tables() {
+        for s in 0..=u8::MAX {
+            assert_eq!(
+                is_slope_with_three_corners_raised(s),
+                matches!(s, 7 | 11 | 13 | 14)
+            );
+            assert_eq!(is_inclined_slope(s), matches!(s, 3 | 6 | 9 | 12));
+            assert_eq!(
+                get_inclined_slope_direction(s) != 0xFF,
+                is_inclined_slope(s)
+            );
+        }
+        assert_eq!(
+            get_slope_max_z(SLOPE_STEEP | SLOPE_S | SLOPE_E | SLOPE_N),
+            2
+        );
+        assert_eq!(get_inclined_slope_direction(SLOPE_NE), 0);
+        assert_eq!(get_inclined_slope_direction(SLOPE_NW), 3);
+    }
 }
