@@ -685,7 +685,7 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 		.station = [](uint16_t id) noexcept -> const Station * { return Station::Get(StationID(id)); },
 		.station_empty = RustStationRectangleEmptyHandle<const Station *>,
 		.catchment = RustStationCatchment,
-		.nearby_industry = RustStationNearbyIndustry,
+		.near_industries = RustStationIndustriesNear,
 		.assert_destination = [](Source source) noexcept { if (source.type == SourceType::Town) { assert(Town::Get(source.ToTownID())->cache.part_of_subsidy.Test(PartOfSubsidy::Destination)); } else { assert(Industry::Get(source.ToIndustryID())->part_of_subsidy.Test(PartOfSubsidy::Destination)); } },
 	};
 	return services;

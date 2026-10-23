@@ -38,10 +38,9 @@ inline void RustStationCatchment(const Station *station, void *context, void (*v
 	BitmapTileIterator it(station->catchment_tiles);
 	for (TileIndex tile = it; tile != INVALID_TILE; tile = ++it) visit(context, tile.base());
 }
-inline Industry *RustStationNearbyIndustry(const Station *station, uint32_t index) noexcept
+inline void RustStationIndustriesNear(const Station *station, void *context, void (*visit)(void *, uint16_t)) noexcept
 {
-	const auto &near = station->industries_near;
-	return index < near.size() ? std::next(near.begin(), index)->industry : nullptr;
+	for (const auto &entry : station->industries_near) visit(context, entry.industry->index.base());
 }
 inline const AirportFTAClass *RustAirportFTA(uint8_t type) noexcept { return GetAirport(type); }
 inline const void *RustDummyAirportFTA() noexcept { return RustAirportFTA(AT_DUMMY); }
