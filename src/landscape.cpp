@@ -1983,6 +1983,8 @@ void CallLandscapeTick()
 
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDLandscapeGenerationServices.hpp"
+#include "abi-visit-OpenTTDHeightmapDecoder.hpp"
 #include "abi-visit-OpenTTDLandscapeLoopServices.hpp"
 #include "abi-visit-OpenTTDTileOwnerServices.hpp"
 #include "abi-visit-OpenTTDClearServices.hpp"
@@ -1996,7 +1998,9 @@ bool CheckAbi_landscape()
 	OpenTTDGroundCall call;
 	OpenTTDObjectLoopFrame frame;
 	RustRoadCommandContext road;
-	return AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &frame, &road.view)) &&
+	RustHeightmapDecoder decoder(DFT_HEIGHTMAP_BMP, "");
+	return AbiServicesComplete(GetRustLandscapeGenerationServices()) && AbiServicesComplete(decoder.view) &&
+		AbiServicesComplete(GetRustTileOwnerServices()) && AbiServicesComplete(RustLandscapeLoopServices(&call, &frame, &road.view)) &&
 		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
 		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&
 		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices());
