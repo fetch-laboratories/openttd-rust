@@ -16,6 +16,9 @@ use crate::clear_map::{CLEAR_DESERT, CLEAR_ROUGH};
 use crate::clear_map::{CLEAR_GRASS, CLEAR_ROCKS};
 use crate::command_type::DoCommandFlag as F;
 use crate::direction_func::{change_diag_dir, diag_dir_to_axis, reverse_diag_dir};
+use crate::direction_type::{
+    DIAGDIRDIFF_90LEFT, DIAGDIRDIFF_90RIGHT, DIAGDIRDIFF_END, DIAGDIRDIFF_REVERSE, DIAGDIRDIFF_SAME,
+};
 use crate::genworld::{
     CUSTOM_SEA_LEVEL_NUMBER_DIFFICULTY, GWM_HEIGHTMAP, GWP_LANDSCAPE, GWP_RIVER, LG_ORIGINAL,
     LG_TERRAGENESIS, Progress,
@@ -1069,8 +1072,10 @@ impl World<'_> {
                 if self.water(other) && (self.a.river)(other) {
                     if is_inclined_slope(slope)
                         && (self.s.tile_max_z)(tile) == (self.s.tile_max_z)(other)
-                        && (get_inclined_slope_direction(slope) == change_diag_dir(dir, 1)
-                            || get_inclined_slope_direction(slope) == change_diag_dir(dir, 3))
+                        && (get_inclined_slope_direction(slope)
+                            == change_diag_dir(dir, DIAGDIRDIFF_90RIGHT)
+                            || get_inclined_slope_direction(slope)
+                                == change_diag_dir(dir, DIAGDIRDIFF_90LEFT))
                     {
                         desired = slope;
                         sloped_river = true;
@@ -1098,8 +1103,8 @@ impl World<'_> {
                 self.terraform(tile, complement_slope(current), true, F::EXECUTE | F::AUTO);
             } else if is_inclined_slope(desired) {
                 let direction = reverse_diag_dir(get_inclined_slope_direction(desired));
-                for diff in 0..4 {
-                    if diff == 0 || diff == 2 {
+                for diff in DIAGDIRDIFF_SAME..DIAGDIRDIFF_END {
+                    if diff == DIAGDIRDIFF_SAME || diff == DIAGDIRDIFF_REVERSE {
                         continue;
                     }
                     let other = self.map.add_diag(tile, change_diag_dir(direction, diff));
