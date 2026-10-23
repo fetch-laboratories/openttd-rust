@@ -775,11 +775,9 @@ CommandCost EnsureNoTrainOnTrackBits(TileIndex tile, TrackBits track_bits)
 #endif
 }
 
+#ifndef WITH_RUST
 static void UpdateVehicleTileHash(Vehicle *v, bool remove)
 {
-#ifdef WITH_RUST
-	openttd_rust_occupancy_update(&GetRustVehicleServices(), RustVehicle(v), remove);
-#else
 	Vehicle **old_hash = v->hash_tile_current;
 	Vehicle **new_hash;
 
@@ -807,8 +805,8 @@ static void UpdateVehicleTileHash(Vehicle *v, bool remove)
 
 	/* Remember current hash position */
 	v->hash_tile_current = new_hash;
-#endif
 }
+#endif
 
 static std::array<Vehicle *, 1 << (GEN_HASHX_BITS + GEN_HASHY_BITS)> _vehicle_viewport_hash{};
 
@@ -840,11 +838,12 @@ void ResetVehicleHash()
 {
 #ifdef WITH_RUST
 	openttd_rust_occupancy_reset(&GetRustVehicleSchedulerServices());
+	_vehicle_viewport_hash.fill(nullptr);
 #else
 	for (Vehicle *v : Vehicle::Iterate()) { v->hash_tile_current = nullptr; }
+	_vehicle_viewport_hash.fill(nullptr);
 	_vehicle_tile_hash.fill(nullptr);
 #endif
-	_vehicle_viewport_hash.fill(nullptr);
 }
 
 void ResetVehicleColourMap()
@@ -1086,7 +1085,11 @@ Vehicle::~Vehicle()
 
 	delete v;
 
+#ifdef WITH_RUST
+	openttd_rust_occupancy_update(&GetRustVehicleServices(), RustVehicle(this), true);
+#else
 	UpdateVehicleTileHash(this, true);
+#endif
 	UpdateVehicleViewportHash(this, INVALID_COORD, 0, this->sprite_cache.old_coord.left, this->sprite_cache.old_coord.top);
 	if (this->type != VEH_EFFECT) {
 		DeleteVehicleNews(this->index);
@@ -1931,7 +1934,11 @@ void VehicleEnterDepot(Vehicle *v)
  */
 void Vehicle::UpdatePosition()
 {
+#ifdef WITH_RUST
+	openttd_rust_occupancy_update(&GetRustVehicleServices(), RustVehicle(this), false);
+#else
 	UpdateVehicleTileHash(this, false);
+#endif
 }
 
 /**
