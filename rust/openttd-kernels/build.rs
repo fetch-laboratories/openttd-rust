@@ -20,7 +20,9 @@ fn collect(dir: &Path, module: &str, found: &mut Vec<String>) -> io::Result<()> 
             collect(&path, &name, found)?;
         } else if path.extension().is_some_and(|ext| ext == "rs")
             && !["lib", "abi"].contains(&stem)
-            && fs::read_to_string(&path)?.contains("layouts! {\n    fn abi_layout;")
+            && fs::read_to_string(&path)?
+                .replace("\r\n", "\n")
+                .contains("layouts! {\n    fn abi_layout;")
         {
             println!("cargo:rerun-if-changed={}", path.display());
             found.push(format!("crate::{name}::abi_layout"));
