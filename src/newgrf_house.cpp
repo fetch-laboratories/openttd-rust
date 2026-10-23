@@ -571,6 +571,7 @@ static uint16_t GetSimpleHouseCallback(CallbackID callback, uint32_t param1, uin
 	return GetHouseCallback(callback, param1, param2, spec - HouseSpec::Get(0), town, tile, {}, false, 0, extra_data);
 }
 
+/** Helper class for animation control. */
 #ifdef WITH_RUST
 const OpenTTDHouseAnimation &GetHouseAnimationBinding() noexcept
 {
@@ -580,7 +581,6 @@ const OpenTTDHouseAnimation &GetHouseAnimationBinding() noexcept
 	return binding;
 }
 #else
-/** Helper class for animation control. */
 struct HouseAnimationBase : public AnimationBase<HouseAnimationBase, HouseSpec, Town, CargoTypes, GetSimpleHouseCallback, TileAnimationFrameAnimationHelper<Town> > {
 	static constexpr CallbackID cb_animation_speed      = CBID_HOUSE_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_HOUSE_ANIMATION_NEXT_FRAME;

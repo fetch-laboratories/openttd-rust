@@ -368,6 +368,7 @@ struct RoadStopAnimationFrameAnimationHelper {
 
 #endif
 
+/** Helper class for animation control. */
 #ifdef WITH_RUST
 const OpenTTDRoadStopAnimation &GetRoadStopAnimationBinding() noexcept
 {
@@ -377,7 +378,6 @@ const OpenTTDRoadStopAnimation &GetRoadStopAnimationBinding() noexcept
 	return binding;
 }
 #else
-/** Helper class for animation control. */
 struct RoadStopAnimationBase : public AnimationBase<RoadStopAnimationBase, RoadStopSpec, BaseStation, int, GetAnimRoadStopCallback, RoadStopAnimationFrameAnimationHelper> {
 	static constexpr CallbackID cb_animation_speed      = CBID_STATION_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_STATION_ANIMATION_NEXT_FRAME;

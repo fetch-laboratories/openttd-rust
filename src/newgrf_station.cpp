@@ -887,6 +887,7 @@ uint16_t GetAnimStationCallback(CallbackID callback, uint32_t param1, uint32_t p
 	return GetStationCallback(callback, param1, param2, statspec, st, tile);
 }
 
+/** Helper class for animation control. */
 #ifdef WITH_RUST
 OpenTTDAnimationArea OpenTTDAnimationRailArea(BaseStation *s, uint32_t t, uint8_t area) noexcept { auto a = GetRailTileArea(s, TileIndex{t}, static_cast<TriggerArea>(area)); return {a.tile.base(), a.w, a.h}; }
 const OpenTTDStationAnimation &GetStationAnimationBinding() noexcept
@@ -897,7 +898,6 @@ const OpenTTDStationAnimation &GetStationAnimationBinding() noexcept
 	return binding;
 }
 #else
-/** Helper class for animation control. */
 struct StationAnimationBase : public AnimationBase<StationAnimationBase, StationSpec, BaseStation, int, GetAnimStationCallback, TileAnimationFrameAnimationHelper<BaseStation> > {
 	static constexpr CallbackID cb_animation_speed      = CBID_STATION_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_STATION_ANIMATION_NEXT_FRAME;

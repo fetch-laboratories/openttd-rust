@@ -177,11 +177,12 @@ class GeneratedAbiTests(unittest.TestCase):
             )
 
     def test_concrete_animation_binding_visitors_are_complete(self):
-        source = (ROOT / "rust/openttd-kernels/src/newgrf_animation_base.rs").read_text()
-        body = re.search(r"pub struct Binding<[^>]+> \{(.*?)^\}", source, re.M | re.S)[1]
+        src = ROOT / "rust/openttd-kernels/src"
+        source = (src / "newgrf_animation_base.rs").read_text()
+        body = re.search(r"pub struct Binding.*?\{(.*?)^}", source, re.M | re.S)[1]
         members = re.findall(r"^    pub (\w+):", body, re.M)
         self.assertIn("version8", members)
-        records = [r for r in GENERATOR["declarations"]() if r[2].startswith("Binding<")]
+        records = [r for r in GENERATOR["declarations"]() if "Binding<" in r[2]]
         self.assertEqual(len(records), 6)
         fragments = GENERATOR["generate"]()
         for name, _, _, fields, _, _ in records:

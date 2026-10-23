@@ -558,6 +558,7 @@ uint16_t StubGetObjectCallback(CallbackID callback, uint32_t param1, uint32_t pa
 	return GetObjectCallback(callback, param1, param2, spec, o, tile);
 }
 
+/** Helper class for animation control. */
 #ifdef WITH_RUST
 const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept
 {
@@ -567,7 +568,6 @@ const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept
 	return binding;
 }
 #else
-/** Helper class for animation control. */
 struct ObjectAnimationBase : public AnimationBase<ObjectAnimationBase, ObjectSpec, Object, int, StubGetObjectCallback, TileAnimationFrameAnimationHelper<Object> > {
 	static const CallbackID cb_animation_speed      = CBID_OBJECT_ANIMATION_SPEED;
 	static const CallbackID cb_animation_next_frame = CBID_OBJECT_ANIMATION_NEXT_FRAME;
