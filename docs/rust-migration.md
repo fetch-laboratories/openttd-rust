@@ -2133,3 +2133,27 @@ Shared geometry/bit/track modules supply the original header callees.
 Disaster movement and ground-clear enter occupancy directly through borrowed
 typed context; the exact base viewport and native cost lifetime stay shared.
 GUI/external articulated-GRF gaps remain #156.
+
+### Cargo-monitor accounting and ordered maps (#386, draft #388)
+
+Rust owns both process-wide ordered pickup/delivery maps, shared bit helpers,
+activation/query/reset/stop, selective/global cleanup and delivery accounting.
+Payment and company owners call Rust directly. Payment resolves stations through
+its existing subsidy service at each original observation; independent stack
+cursors preserve nested industry scans. Arrivals update registered keys only,
+without allocating, and unsigned amounts narrow to signed32 before saturation.
+Native facades retain script validation, canonical stations/pools and assertions.
+CMDL/CMPU retain two-scalar TempStorage, ascending save order, native SlObject and
+SlError frames, historical key conversion and incremental first-insertion wins;
+no Rust map borrow spans a native callback or decoding operation.
+Default economy scenarios require nonempty changed maps for manual/cargodist and
+pending unload; stockpile also checks decoded positive maps immediately on reload.
+Company deletion/acquisition compare encoded keys and surviving amounts. The
+existing engine console tests controls, destination membership, signed bounds,
+InitializeEconomy reset and actual native chunk-handler header/partial errors and
+duplicate rows. Production monitor-table completeness runs in native ABI tests.
+Focused evidence: `python3 tools/migration.py simulate economy-manual economy-cargodist economy-stockpile companies-delete companies-acquire engines-monitors`;
+`python3 tools/cargo-income-comparison.py`, Cargo4 and native company/payment/ABI tests.
+Historical monitor-key conversion and external GameScript callers remain #156
+coverage gaps. Independent fixing review is recorded on #388; root cost
+disposition, current-base combination and Full remain pending.

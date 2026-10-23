@@ -683,7 +683,7 @@ const OpenTTDSubsidyServices &GetRustSubsidyServices() noexcept
 		.offer_expired_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyOfferExpired(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyOfferExpired(SubsidyID(id))); },
 		.expired_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventSubsidyExpired(SubsidyID(id))); Game::NewEvent(new ScriptEventSubsidyExpired(SubsidyID(id))); },
 		.dirty = []() noexcept { InvalidateWindowData(WC_SUBSIDIES_LIST, 0); },
-		.station = [](uint16_t id) noexcept -> const Station * { return Station::Get(StationID(id)); },
+		.station = RustStationByID,
 		.station_empty = RustStationRectangleEmptyHandle<const Station *>,
 		.catchment = RustStationCatchment,
 		.begin_nearby = BeginNearbyIndustries,

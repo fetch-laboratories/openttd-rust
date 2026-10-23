@@ -1031,7 +1031,7 @@ void StartupEconomy()
 void InitializeEconomy()
 {
 #ifdef WITH_RUST
-	openttd_rust_economy_initialize(&GetRustCompanyServices());
+	openttd_rust_economy_initialize();
 #else
 	_economy.inflation_prices = _economy.inflation_payment = 1 << 16;
 	ClearCargoPickupMonitoring();
@@ -1075,16 +1075,16 @@ Money GetPrice(Price index, uint cost_factor, const GRFFile *grf_file, int shift
  * NewGRF sprite-group resolution cannot reenter these owners or execute commands.
  * No exception crosses Rust; allocation/debug/UI failures terminate here. */
 static const OpenTTDCargoServices _cargo_services = {
-	[](uint8_t cargo, OpenTTDCargoSpec *out) noexcept {
+	.spec = [](uint8_t cargo, OpenTTDCargoSpec *out) noexcept {
 		const CargoSpec *cs = CargoSpec::Get(cargo);
 		*out = {cs->current_payment.base(), uint8_t(cs->IsValid()), uint8_t(cs->callback_mask.Test(CargoCallbackMask::ProfitCalc)), cs->transit_periods[0], cs->transit_periods[1]};
 	},
-	[](uint8_t cargo, uint32_t var18) noexcept { return GetCargoCallback(CBID_CARGO_PROFIT_CALC, 0, var18, CargoSpec::Get(cargo)); },
-	[](uint16_t station, uint8_t field, uint8_t cargo) noexcept -> uint32_t {
+	.callback = [](uint8_t cargo, uint32_t var18) noexcept { return GetCargoCallback(CBID_CARGO_PROFIT_CALC, 0, var18, CargoSpec::Get(cargo)); },
+	.station_read = [](uint16_t station, uint8_t field, uint8_t cargo) noexcept -> uint32_t {
 		const Station *st = Station::Get(StationID(station));
 		return field == 0 ? st->owner.base() : HasBit(st->always_accepted, cargo);
 	},
-	[](void *handle, uint8_t field, uint32_t slot) noexcept -> uint32_t {
+	.industry_read = [](void *handle, uint8_t field, uint32_t slot) noexcept -> uint32_t {
 		const Industry *i = static_cast<Industry *>(handle);
 		switch (field) {
 			case 1: {
@@ -1106,19 +1106,19 @@ static const OpenTTDCargoServices _cargo_services = {
 			default: NOT_REACHED();
 		}
 	},
-	[](void *handle, uint8_t field, uint32_t slot, uint32_t value) noexcept {
+	.industry_write = [](void *handle, uint8_t field, uint32_t slot, uint32_t value) noexcept {
 		Industry *i = static_cast<Industry *>(handle);
 		if (field == 0) i->produced[slot].waiting = value;
 		else i->accepted[slot].waiting = value;
 	},
-	[](void *handle, uint8_t cargo) noexcept -> uint8_t { return IndustryTemporarilyRefusesCargo(static_cast<Industry *>(handle), cargo); },
-	[](void *handle, uint32_t slot, uint32_t amount) noexcept {
+	.refuses = [](void *handle, uint8_t cargo) noexcept -> uint8_t { return IndustryTemporarilyRefusesCargo(static_cast<Industry *>(handle), cargo); },
+	.accept = [](void *handle, uint32_t slot, uint32_t amount) noexcept {
 		auto &accepted = static_cast<Industry *>(handle)->accepted[slot];
 		accepted.waiting += amount;
 		accepted.GetOrCreateHistory()[THIS_MONTH].accepted += amount;
 		accepted.last_accepted = TimerGameEconomy::date;
 	},
-	[](uint16_t station, uint8_t cargo, uint8_t company, uint32_t amount, uint8_t field) noexcept {
+	.statistics = [](uint16_t station, uint8_t cargo, uint8_t company, uint32_t amount, uint8_t field) noexcept {
 		Station *st = Station::Get(StationID(station));
 		switch (field) {
 			case 0: st->goods[cargo].status.Set({GoodsEntry::State::EverAccepted, GoodsEntry::State::CurrentMonth, GoodsEntry::State::AcceptedBigtick}); break;
@@ -1127,11 +1127,8 @@ static const OpenTTDCargoServices _cargo_services = {
 			default: NOT_REACHED();
 		}
 	},
-	[](uint16_t station, uint8_t cargo, uint8_t company, uint32_t amount, uint32_t source, uint16_t industry) noexcept {
-		AddCargoDelivery(cargo, CompanyID(company), amount, Source(uint16_t(source), SourceType(source >> 16)), Station::Get(StationID(station)), IndustryID(industry));
-	},
-	RustSubsidyServices,
-	[](void *handle, uint8_t op) noexcept {
+	.subsidies = RustSubsidyServices,
+	.industry_effect = [](void *handle, uint8_t op) noexcept {
 		Industry *i = static_cast<Industry *>(handle);
 		switch (op) {
 			case 0: i->was_cargo_delivered = true; break;
@@ -1142,11 +1139,11 @@ static const OpenTTDCargoServices _cargo_services = {
 			default: NOT_REACHED();
 		}
 	},
-	[](void *handle, uint8_t field) noexcept -> uint32_t {
+	.vehicle_read = [](void *handle, uint8_t field) noexcept -> uint32_t {
 		const Vehicle *v = static_cast<Vehicle *>(handle);
 		return field == 0 ? v->last_station_visited.base() : v->owner.base();
 	},
-	[](void *handle, uint8_t op, int64_t first, int64_t second) noexcept -> uint32_t {
+	.settle = [](void *handle, uint8_t op, int64_t first, int64_t second) noexcept -> uint32_t {
 		Vehicle *v = static_cast<Vehicle *>(handle);
 		switch (op) {
 			case 0: v->cargo_payment = nullptr; break;
@@ -1163,8 +1160,8 @@ static const OpenTTDCargoServices _cargo_services = {
 		}
 		return 0;
 	},
-	[](const void *packet, uint32_t count) noexcept -> int64_t { return static_cast<const CargoPacket *>(packet)->GetFeederShare(count).base(); },
-	[](uint8_t field) noexcept -> uint32_t { return field == 0 ? _settings_game.difficulty.subsidy_multiplier : _settings_game.economy.feeder_payment_share; },
+	.feeder = [](const void *packet, uint32_t count) noexcept -> int64_t { return static_cast<const CargoPacket *>(packet)->GetFeederShare(count).base(); },
+	.setting = [](uint8_t field) noexcept -> uint32_t { return field == 0 ? _settings_game.difficulty.subsidy_multiplier : _settings_game.economy.feeder_payment_share; },
 };
 
 static OpenTTDCargoDelivery *GetCargoDeliveryState()
@@ -1191,8 +1188,8 @@ void CargoPayment::PayFinalDelivery(CargoType cargo, const CargoPacket *cp, uint
 {
 	assert(int(count) > 0);
 	Source source = cp->GetSource();
-	RustNearbyIndustryCursor cursor;
-	openttd_rust_cargo_payment_final(this->rust_state, GetCargoDeliveryState(), &_cargo_services, cargo, cp, count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit(), source.id | (uint32_t(source.type) << 16), &cursor);
+	RustNearbyIndustryCursor cursor, monitor_cursor;
+	openttd_rust_cargo_payment_final(this->rust_state, GetCargoDeliveryState(), &_cargo_services, cargo, cp, count, cp->GetDistance(current_tile), cp->GetPeriodsInTransit(), source.id | (uint32_t(source.type) << 16), &cursor, &GetRustCargoMonitorServices(), &monitor_cursor);
 }
 Money CargoPayment::PayTransfer(CargoType cargo, const CargoPacket *cp, uint count, TileIndex current_tile)
 {

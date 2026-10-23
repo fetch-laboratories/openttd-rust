@@ -10,6 +10,7 @@
 #define RUST_CARGO_PAYMENT_FFI_H
 #include "service_defaults.hpp"
 struct OpenTTDSubsidyServices;
+struct OpenTTDCargoMonitorServices;
 struct RustNearbyIndustryCursor;
 
 /** Opaque live native entity, distinct from Rust-owned boundary state. */
@@ -75,7 +76,6 @@ struct OpenTTDCargoServices {
 	uint8_t (OPENTTD_CARGO_CALL *refuses)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(refuses);
 	void (OPENTTD_CARGO_CALL *accept)(void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(accept);
 	void (OPENTTD_CARGO_CALL *statistics)(uint16_t, uint8_t, uint8_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(statistics);
-	void (OPENTTD_CARGO_CALL *monitor)(uint16_t, uint8_t, uint8_t, uint32_t, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(monitor);
 	const OpenTTDSubsidyServices *(OPENTTD_CARGO_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);
 	void (OPENTTD_CARGO_CALL *industry_effect)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_effect);
 	uint32_t (OPENTTD_CARGO_CALL *vehicle_read)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_read);
@@ -89,7 +89,7 @@ void OPENTTD_CARGO_CALL openttd_rust_cargo_payment_destroy(OpenTTDCargoPayment *
 void *OPENTTD_CARGO_CALL openttd_rust_cargo_payment_front(const OpenTTDCargoPayment *);
 void OPENTTD_CARGO_CALL openttd_rust_cargo_payment_afterload(OpenTTDCargoPayment *, const OpenTTDCargoServices *);
 int64_t OPENTTD_CARGO_CALL openttd_rust_cargo_payment_transfer(OpenTTDCargoPayment *, const OpenTTDCargoServices *, uint8_t, const void *, uint32_t, uint32_t, uint16_t);
-void OPENTTD_CARGO_CALL openttd_rust_cargo_payment_final(OpenTTDCargoPayment *, OpenTTDCargoDelivery *, const OpenTTDCargoServices *, uint8_t, const void *, uint32_t, uint32_t, uint16_t, uint32_t, RustNearbyIndustryCursor *);
+void OPENTTD_CARGO_CALL openttd_rust_cargo_payment_final(OpenTTDCargoPayment *, OpenTTDCargoDelivery *, const OpenTTDCargoServices *, uint8_t, const void *, uint32_t, uint32_t, uint16_t, uint32_t, RustNearbyIndustryCursor *, const OpenTTDCargoMonitorServices *, RustNearbyIndustryCursor *);
 int64_t OPENTTD_CARGO_CALL openttd_rust_cargo_income(const OpenTTDCargoServices *, uint32_t, uint32_t, uint16_t, uint8_t);
 OpenTTDCargoDelivery *OPENTTD_CARGO_CALL openttd_rust_cargo_delivery_new();
 void OPENTTD_CARGO_CALL openttd_rust_cargo_delivery_destroy(OpenTTDCargoDelivery *);
