@@ -8,9 +8,10 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 
 - Forty-eight ownership ports. Whole fork: Rust 101,632 / tooling 36,016 / glue 36,555 / original retired 56,470 of 470,612 C/C++ `src/` lines (12.00%). Simulation: 48,330 / 102,615 (47.10%). One reported original line in #382 is a warning-only GUI cast, not ownership progress.
 - Latest integrations: #379 generation/ground/setter, then #382 waypoint/PBS/movement and the #261 nearby-industry cursor (100/100 added lines). Both passed exact current-base Full and strict match-head merge. Probe/portable/MSVC defects were fixed first; no stale-base rerun or CI settings/bootstrap change. `CI_ON_DEMAND=true` is retained.
-- Speed: the single due profile at frozen `032d0d150c` passed six semantic comparisons but failed all anchor identities despite verified preserved liblzma. Read-only diagnosis on #356 must restore comparability; raw counts supply no new projections or threshold decision. Last accepted `4ddd8cfab4`: TGP 1.213575x, Opus 1.231172x, Grok 1.236176x, P1996 1.257340x, P2000 1.336737x, P2016 1.371234x. No retry, wall pass or anchor change selected; ports continue.
+- Speed: the compatible `032d0d150c` profile passed semantic6/6 under exact preserved zlib/lzma. Projections versus `4ddd8cfab4`: TGP 1.213575x (+0.000%), Opus 1.699282x (+38.021%), Grok 1.720302x (+39.163%), P1996 1.500083x (+19.306%), P2000 1.555213x (+16.344%), P2016 1.608537x (+17.306%). The first run's identity failure was solely an unattended zlib upgrade; no normalization or hash-only anchor change.
+- Prescribed quiet six: TGP 1.105480x, Opus 1.427799x, Grok 1.441280x, P1996 1.342173x, P2000 1.393337x, P2016 1.468324x, each median of four interleaved three-pair medians. All72 paired comparisons pass; no measured ceiling exceeded. Opus/Grok/P2016 enter the play band. Attribute net costs on worst P2016; #275 maintenance integrates next. Measured anchors enter through that PR; ports resume after the completed quiet window.
 - CI: four integrations since the last due macOS Debug/Release run; next integration triggers the next due run. #382's first Full exposed stale aircraft/train probe bindings and a timetable narrowing warning; corrected fixture bindings and explicit narrowing passed its second Full on the same base.
-- Component branches: scheduler #380, live graph #383 and occupancy #384 are reviewed and root spot-checked; prepare one concrete combination with direct owner handoffs and scoped conflict review. Animation #385 and cargo monitors #386 start in freed slots from this integrated base (six maximum); early measured boundaries precede evidence expansion.
+- Component branches: scheduler #380, live graph #383 and occupancy #384 are combined in independently reviewed #387, with no findings. Its final-base Full follows speed maintenance. Animation #389 and cargo monitors #388 have early checkpoints; boundary costs need repair before evidence expansion (six components maximum).
 
 ## Integration and wind-down correction (2026-10-22, takes precedence)
 
@@ -25,9 +26,8 @@ failed together. Keep automatic rollback; replace the time deadline with action 
 
 ## Process audit follow-up (2026-10-22)
 
-- **CI maintenance #261/#365 integrated via #368:** bounded setup/retries, early failed-child reporting and conservative coverage fallback; 376/400 changed non-documentation lines. Independent review and bootstrap Full passed; on-demand CI is restored. #361 remained a separate scope in the same tested combination.
-- **Process changes now:** use small ready integration batches; save unfinished checkpoints before long checks or handoff; require independent execution for any unattended provider takeover. AGENTS.md and the migration guide define these rules. No new schedule or verified fallback is established by this documentation.
-- **Existing conflict reduction:** finish #261 / #361's shared ABI split through its pending review and validation; no new issue or repeated unchanged-component review.
+- **Completed:** #261/#365's bounded setup/retries, early failed-child reporting and conservative coverage fallback integrated via #368 at 376/400 changed lines, with #361's shared ABI split. Independent review/bootstrap Full passed; on-demand CI is restored.
+- **Process:** small ready batches, pushed unfinished checkpoints and independent execution for unattended provider takeover remain required by AGENTS.md. No new schedule or verified fallback is established.
 - **Deferred optimization:** root revisits Emscripten image setup and merge-queue tooling after the selected CI fixes land and ten integrations record stale Full reruns and ready-work waits in existing integration notes. No new service, runner upgrade or extra local full suite is selected.
 
 ## Seventeenth steering review (2026-10-22, speed on the merged branch, base-type returns, macOS every fifth merge)
@@ -53,11 +53,7 @@ The earlier unchanged-head merge permission is superseded above. AGENTS.md also 
 
 Provisional, checked next review: the 3% tip-rise threshold (basis: counts repeat to 0.04%; the largest ordinary per-PR move was 1.3%) and factor 2 (measured wall sensitivity 0.75-1.54 at `802ec7d6a4`, so it is conservative). The 6.6% layout spread is retired: a pass's median of four three-pair medians came within 1.4% of every projection.
 
-Actions, in order (apply first; ports keep running alongside):
-1. **#355, #356 and #357 as one batch PR,** before any other integration: the MSVC return fix and compile-time return-type check; the identity fix and the quiet anchors the tip profiles compare against (no pass is due); and macOS out of the pre-merge Full; and the driver's `--jobs` default set to the free cores (AGENTS.md). Until that lands, use the Blacksmith fallback on capacity cancellations.
-2. **Integrate ready drafts** under the corrected integration rule above: #351 after #356 (rustfmt, then Full; no extension), #340 (two deletions, then review), #347 (PR comment items), #353 (fresh review).
-3. **Ports continue:** #349 to its first passing milestone, #315, then owner selection (Phase 2 item 5).
-4. **Batches:** the #261 cleanup list (2026-10-22 comments) as one batch PR, including the per-component split of `abi.rs`/`windows-abi.cpp`, the most frequent base-update conflict; the **#156** slot batches the new gaps.
+The listed steering actions integrated through #358, #351, #340, #347, #353, #360 and #368. Current selections and remaining #156/#261 work appear below.
 
 ## Earlier steering, still in force
 
@@ -140,8 +136,6 @@ Rows below use original retirement and net glue (#223).
 | #261 canonical station reservation setter | #376 | #379 | `dd31616e7a` | in PR; other drafts adopt this definition |
 | #261 shared linear nearby-industry cursor | #381 | #382 | `032d0d150c` | 47 / 25 / 28 / 0; net glue 11; 100/100 added lines |
 
-Earlier maintenance (#307-#345) retains its rows' evidence in those PRs.
-
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
 ## Phase 1: harness and speed maintenance
@@ -170,14 +164,14 @@ Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #281) and #156 run in parallel.
 
 1. **#355, #356 and #357**: integrated as #358.
-2. **#275** has no standing stream. When a pass or a tip rise opens speed work, rank it by net cost (#275 comment, 2026-10-22: aircraft, road-controller tick reads, scheduler carrier, orders).
+2. **#275 current speed batch:** the compatible tip rise and quiet play-band measurements select attribution across #379/#382. Rank two or three excess function costs against the original's inline work, then batch bounded fixes and genuine measured anchors in one reviewed maintenance PR with one Full. This is the next integration; no broader raw-map or Vehicle access. #387 waits for this base, while ports continue.
 3. **#281** part 1 integrated (#340). Part 2: the callee-copy check and the four duplicate wrappers listed in the #340 r2 review.
 4. **#274 map view:** integrated as #351, limited to the scheduler's clear/water/tree loops; C++ keeps the arrays and writes.
 5. **Next whole owners**, as WIP frees, each without draft service dependencies:
-   - #373 scheduler (#380), #378 live graph (#383), #377 occupancy (#384): reviewed, fixed and root spot-checked. Assemble from this integrated base; replace scheduler graph size/shift and queue/dequeue facade bounces with direct owners, retain save/worker lifetimes and occupancy's typed disaster routes. Fresh scoped conflict review and exact-combination Full follow;
+   - #373 scheduler (#380), #378 live graph (#383), #377 occupancy (#384): combined at #387 `4a0a977857`, independently reviewed without findings. Direct owner routing, save/worker lifetimes, typed disaster routes and frozen ancestors are preserved. Prepare its current base and exact-combination Full after speed maintenance;
    - #373 cost is separately accepted with explanation: 185 retired versus 199 implementation net glue and 309 evidence (263 tooling/46 native), after two boundary repairs. Required worker/save support remains; no design rule waived. Ceilings 210 implementation, 270 tooling, 50 native evidence; further raise needs a question issue. Other owners do not offset it;
-   - #385 whole tile-animation scheduling/shared control: queue, six feature bindings, dispatch and ANIT/legacy access; already-owned animation bodies add zero retirement. Native frame/spec services remain. Planning 430-510 retired / 240-330 implementation net / 40-70 native evidence / 180-260 tooling; no cost acceptance yet;
-   - #386 whole cargo-monitor maps/accounting/lifecycle: direct payment/company routes and CMDL/CMPU access. Adopt integrated #381's cursor; no parallel visitor. Planning 190-240 retired / 90-140 implementation net / 20-40 native evidence / 110-160 tooling; no cost acceptance yet.
+   - #385 tile-animation scheduling/shared control (#389): queue, six feature bindings, dispatch and ANIT/legacy access; already-owned bodies add zero retirement. Early inventory 452 retired /358 net native before complete evidence needs an owned boundary repair. Finish representative six-binding evidence and measure; no cost acceptance;
+   - #386 cargo-monitor maps/accounting/lifecycle (#388): canonical maps, direct payment/company routes, CMDL/CMPU and nested integrated cursors work. Early193 retired /118 net native +59 tooling leaves16 for remaining evidence; concrete shared-boundary consolidation is being planned before expansion. No cost acceptance.
 
    A shared service needed by two drafts lands once as its own PR (#376), then drafts adopt the integrated definition. Fresh Astra plans selected these whole owners without draft dependencies. Canonical map/pool storage and typed services remain; #274 grants no new raw access. Tight retirement boundaries get early measured checkpoints and an owned boundary fix if needed. #377 excludes viewport indexing; #378 excludes visits, scheduling and existing graph computation.
 
@@ -193,13 +187,12 @@ Resumed 2026-10-23. Root is Codex (gpt-6.1-sol, ultra); implementation and indep
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #373 / #380 | `effcc1a160` | Source/base review and platform fix spot-checked; MSVC needs explicit unary-plus lambda conversion, constinit retained. Combine with ready owners; cost explanation/caps remain separate. |
-| #378 / #383 | `4df7823f4b` | Review/helper fixes spot-checked; 378 retired >214 net+82 tooling. Direct scheduler/graph reconciliation next. |
-| #377 / #384 | `8f1759804d` | Both disaster bounces fixed in scoped r2 and spot-checked; 233 retired >17 net+161 tooling. Preserve typed create context, command-cost order and viewport leaf. |
-| #385 / #386 | selected | Animation then cargo monitors start from integrated base; first checkpoint includes resolver/save or payment/save compatibility plus representative default evidence. |
-| #356 tip profile | frozen `032d0d150c` | Semantic6/6, all anchor identities failed despite preserved liblzma. Read-only input diagnosis active; preserve reports, no blind retry/projections/quiet pass. |
+| #275 / #356 | frozen `032d0d150c` | Compatible profile and quiet six complete. Rank net excess P2016 costs, stage measured anchors and selected fixes; maintenance integrates next. |
+| #373 / #378 / #377 via #387 | `4a0a977857` | Scoped review passes without findings. Source parents spot-checked; scheduler caps remain separate. Prepare final base and Full after maintenance. |
+| #385 / #389 | early checkpoint | Six-feature evidence and measured boundary repair; build hold released after quiet collection. |
+| #386 / #388 | `983dabacb5` | Read-only concrete boundary plan, then selected repair and remaining default evidence. |
 
-#382 and all four members are merged; their worktrees are removed. CI_ON_DEMAND remains true. The due profile's identity failure is recorded on #356; restore comparability before interpreting counts, alongside ongoing ports. Finish routine docs before final base preparation, then hold base stable. Integration notes carry the ten-integration CI observation.
+#382 and all four members are merged; their worktrees are removed. CI_ON_DEMAND remains true. #356 records compatible counts, quiet medians and method limits; tracked anchors await the maintenance PR. Finish routine docs before final base preparation, then hold base stable. Integration notes carry the ten-integration CI observation.
 Each open draft keeps one worktree; no unmerged component is adopted as another draft's service dependency. #281 part 2 and remaining #261 cleanup stay on their issues; linear traversal is complete. #64/#68/#69 stay paused. Preserve the pinned reference; do not reapply effect helper `73ccd511fb`.
 
 ## Out of scope for the near term
