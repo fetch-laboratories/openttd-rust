@@ -145,6 +145,14 @@ pub struct Services {
     pub waiting_news: extern "C" fn(VehicleRef),
 }
 impl Services {
+    /// Preserve C++ assertions, including when entered directly from Rust.
+    fn check(&self, condition: impl FnOnce() -> bool) {
+        let native = self.refit.common.transactions;
+        if native.assertions {
+            // SAFETY: the shared native assertion leaf retains no state.
+            unsafe { (native.check)(condition()) };
+        }
+    }
     fn vehicles(&self) -> &VehicleServices {
         self.refit.common.vehicles
     }
@@ -381,6 +389,7 @@ impl Refresher {
         seen: &mut HopSet,
         s: &Services,
     ) -> u8 {
+        s.check(|| !s.orders().list(self.vehicle).is_null());
         let o = s.orders();
         let list = o.list(self.vehicle);
         while next < o.count(list)
@@ -409,6 +418,7 @@ impl Refresher {
 
     /// `LinkRefresher::RefreshStats`.
     fn refresh_stats(&self, cur: u8, next: u8, s: &Services) {
+        s.check(|| !s.orders().list(self.vehicle).is_null());
         let o = s.orders();
         let list = o.list(self.vehicle);
         let next_station = o.order(list, next).destination;
@@ -524,6 +534,7 @@ impl Refresher {
         seen: &mut HopSet,
         s: &Services,
     ) {
+        s.check(|| !s.orders().list(self.vehicle).is_null());
         let o = s.orders();
         let list = o.list(self.vehicle);
         while next < o.count(list) {
@@ -632,6 +643,7 @@ pub(crate) fn refresh_links(v: VehicleRef, allow_merge: bool, is_full_loading: b
             remaining: c.remaining,
         });
         if c.remaining > 0 {
+            s.check(|| c.cargo < NUM_CARGO);
             let total = refresher.capacity(c.cargo);
             *total = total.wrapping_add(u32::from(c.remaining));
         }
@@ -719,6 +731,7 @@ pub(crate) fn percent_filled(front: VehicleRef, colour: Option<&mut u32>, s: &Se
 
     // The station may be null when the colour string is not wanted.
     let st = s.station_if_valid((s.vehicles().last_station)(front));
+    s.check(|| colour.is_none() || (!st.is_null() && is_loading));
 
     let order_no_load = is_loading && order.load() == OLFB_NO_LOAD;
     let order_full_load = is_loading && matches!(order.load(), 2 | 3);
@@ -782,6 +795,10 @@ pub unsafe extern "C" fn openttd_rust_percent_filled(
 
 /// `Vehicle::BeginLoading`.
 pub(crate) fn begin_loading(v: VehicleRef, s: &Services) {
+    s.check(|| {
+        (s.shared.tile_type)((s.vehicles().tile)(v)) == MP_STATION
+            || (s.vehicles().vehicle_type)(v) == VehicleType::SHIP.0
+    });
     let front = (s.prediction)(v);
     witness::hit(witness::VISITS_BEGIN_LOADING);
     let travel_time = (s.shared.tick_counter)().wrapping_sub(front.loading_tick);
@@ -812,9 +829,11 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Services) {
 
 /// `Vehicle::LeaveStation`.
 pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
+    s.check(|| s.orders().current(v).kind() == OT_LOADING);
     let l = s.loading;
     // `delete this->cargo_payment`; the destructor clears the vehicle's pointer.
     (l.delete_payment)((l.get_payment)(v));
+    s.check(|| (l.get_payment)(v).is_null());
 
     let o = s.orders();
     // Only update the timetable if the vehicle was supposed to stop here.
@@ -927,6 +946,11 @@ fn entered_depot_this_tick(v: VehicleRef, s: &Services) {
 
 /// `VehicleEnterDepot`.
 pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
+    s.check(|| {
+        // SAFETY: a live serialized shell; First() does not retain a borrow.
+        unsafe { (s.refit.common.transactions.first)(v.0.as_ptr().cast()) }
+            == v.0.as_ptr().cast()
+    });
     witness::hit(witness::VISITS_DEPOT);
     let vs = s.vehicles();
     let m = s.maintenance();
