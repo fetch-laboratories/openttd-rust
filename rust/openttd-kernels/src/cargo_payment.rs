@@ -175,7 +175,7 @@ fn deliver(
             company,
             amount,
             crate::source_type::Source::industry(industry_source),
-            (monitors.station)(station),
+            (subsidies.station)(station),
             (subsidies.industry_id)(ind),
             monitor_cursor,
         );
@@ -200,7 +200,7 @@ fn deliver(
             id: source as u16,
             kind: (source >> 16) as u8,
         },
-        (monitors.station)(station),
+        (subsidies.station)(station),
         0xffff,
         monitor_cursor,
     );

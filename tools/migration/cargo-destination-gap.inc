@@ -130,7 +130,6 @@ static int CheckCargoDestinationGap(OpenTTDCargoServices s)
 	s.vehicle_read = [](void *, uint8_t) noexcept -> uint32_t { return 0; };
 	s.feeder = [](const void *, uint32_t) noexcept -> int64_t { return 0; };
 	OpenTTDCargoMonitorServices monitors{
-		.station = [](uint16_t) noexcept -> const Station * { return &destination_station; },
 		.station_town = [](const Station *) noexcept -> uint16_t { return 0; },
 		.begin_nearby = [](RustNearbyIndustryCursor *c, const Station *) noexcept { c->next = 0; },
 		.next_nearby = [](RustNearbyIndustryCursor *c) noexcept -> Industry * { return c->next < destination_station.industries_near.size() ? destination_station.industries_near[c->next++].industry : nullptr; },

@@ -215,7 +215,6 @@ pub extern "C" fn openttd_rust_monitor_insert_delivery(key: u32, amount: u32) {
 
 #[repr(C)]
 pub struct Services {
-    pub station: extern "C" fn(u16) -> *const Station,
     pub station_town: extern "C" fn(*const Station) -> u16,
     pub begin_nearby: extern "C" fn(*mut NearbyIndustryCursor, *const Station),
     pub next_nearby: extern "C" fn(*mut NearbyIndustryCursor) -> *mut crate::industry::ShellHandle,
@@ -298,6 +297,6 @@ pub unsafe extern "C" fn openttd_rust_monitor_add(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDCargoMonitorServices" ["probe"] => Services {
-        station, station_town, begin_nearby, next_nearby, industry_id, check,
+        station_town, begin_nearby, next_nearby, industry_id, check,
     };
 }

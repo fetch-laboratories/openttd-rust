@@ -18,7 +18,6 @@ struct RustNearbyIndustryCursor;
  * pools, yield, retain arguments or throw. Rust panics abort. Save/load keeps
  * SlObject/SlError native, inserting only complete rows, with no transaction. */
 struct OpenTTDCargoMonitorServices {
-	const Station *(*station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	uint16_t (*station_town)(const Station *) noexcept OPENTTD_SERVICE_DEFAULT(station_town);
 	void (*begin_nearby)(RustNearbyIndustryCursor *, const Station *) noexcept OPENTTD_SERVICE_DEFAULT(begin_nearby);
 	Industry *(*next_nearby)(RustNearbyIndustryCursor *) noexcept OPENTTD_SERVICE_DEFAULT(next_nearby);

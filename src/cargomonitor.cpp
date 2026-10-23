@@ -22,7 +22,6 @@
 const OpenTTDCargoMonitorServices &GetRustCargoMonitorServices() noexcept
 {
 	static const OpenTTDCargoMonitorServices services = {
-		.station = RustStationByID,
 		.station_town = [](const Station *st) noexcept { return RustTownAuthorityIndex(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(st))); },
 		.begin_nearby = BeginNearbyIndustries, .next_nearby = NextNearbyIndustry,
 		.industry_id = RustIndustryID, .check = RustAssertCondition,
@@ -38,7 +37,9 @@ void AddCargoDelivery(CargoType cargo, CompanyID company, uint32_t amount, Sourc
 	RustNearbyIndustryCursor cursor;
 	openttd_rust_monitor_add(&GetRustCargoMonitorServices(), cargo, company.base(), amount, src.id, uint8_t(src.type), st, dest.base(), &cursor);
 }
+#include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDCargoMonitorServices.hpp"
+bool CheckAbi_cargomonitor() { return AbiServicesComplete(GetRustCargoMonitorServices()); }
 #else
 CargoMonitorMap _cargo_pickups;    ///< Map of monitored pick-ups   to the amount since last query/activation.
 CargoMonitorMap _cargo_deliveries; ///< Map of monitored deliveries to the amount since last query/activation.
