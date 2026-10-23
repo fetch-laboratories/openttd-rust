@@ -14,7 +14,7 @@
 #include "../roadveh.h"
 #include <memory>
 #include <optional>
-struct OpenTTDRoadConvertFrame { std::vector<RoadVehicle *> affected; };
+struct OpenTTDRoadConvertFrame { std::vector<OpenTTDVehicle *> affected; };
 struct RoadConversionScratch {
 	OpenTTDRoadConvertFrame frame;
 	OpenTTDRailConvertFrame area;

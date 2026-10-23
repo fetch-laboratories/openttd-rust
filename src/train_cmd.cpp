@@ -4494,6 +4494,9 @@ Trackdir Train::GetVehicleTrackdir() const
 
 uint16_t Train::GetMaxWeight() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_ground_weight(&GetRustGroundPhysicsServices(), this, true);
+#else
 	uint16_t weight = CargoSpec::Get(this->cargo_type)->WeightOfNUnitsInTrain(this->GetEngine()->DetermineCapacity(this));
 
 	/* Vehicle weight is not added for articulated parts. */
@@ -4507,6 +4510,7 @@ uint16_t Train::GetMaxWeight() const
 	}
 
 	return weight;
+#endif
 }
 
 #ifdef WITH_RUST
@@ -4523,6 +4527,7 @@ uint16_t Train::GetMaxWeight() const
 const OpenTTDTrainServices &GetTrainServices() noexcept
 {
 	static const OpenTTDTrainServices services{
+		.physics = &GetRustGroundPhysicsServices(),
 		.read_first = TrainReadFirst,
 		.read_next = TrainReadNext,
 		.read_previous = TrainReadPrevious,
@@ -4604,9 +4609,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.write_last_station = TrainWriteLastStation,
 		.write_colourmap = TrainWriteColourmap,
 		.write_status = TrainWriteStatus,
-		.acceleration = TrainAcceleration,
 		.acc_model = TrainAccModel,
-		.acc_type = TrainAccType,
 		.advance_distance = TrainAdvanceDistance,
 		.all_powered = TrainAllPowered,
 		.ambient_sound = TrainAmbientSound,
@@ -4621,8 +4624,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.capacity = TrainCapacity,
 		.capacity_error = TrainCapacityError,
 		.cargo_age_default = TrainCargoAgeDefault,
-		.cargo_changed = TrainCargoChanged,
-		.chain_depot = TrainChainDepot,
 		.check_next = TrainCheckNext,
 		.check_orders = TrainCheckOrders,
 		.check_reverse = TrainCheckReverse,
@@ -4634,7 +4635,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.cost_divisor = TrainCostDivisor,
 		.count_chain = TrainCountChain,
 		.crash_event = TrainCrashEvent,
-		.crash_ground = TrainCrashGround,
 		.crash_news = TrainCrashNews,
 		.crash_rating = TrainCrashRating,
 		.crash_sound = TrainCrashSound,
@@ -4670,7 +4670,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.has_signals = OpenTTDLegacyMapQuery<uint64_t, RustRailHasSignals, OpenTTDTrainHandle, uint32_t>,
 		.has_signal_td = OpenTTDLegacyMapQuery<uint64_t, RustRailHasSignalTrackdir, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.hide_fill = TrainHideFill,
-		.inclination = TrainInclination,
 		.invalidate_grf = TrainVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
 		.invalid_price = TrainInvalidPrice,
 		.is_bridge = TrainIsBridge,
@@ -4682,7 +4681,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.is_station_any = TrainIsStationAny,
 		.is_tunnelbridge = TrainIsTunnelbridge,
 		.large_explosion = TrainLargeExplosion,
-		.last_speed = TrainLastSpeed,
 		.leave_sound = TrainLeaveSound,
 		.leave_unbunch = TrainLeaveUnbunch,
 		.length_callback = TrainLengthCallback,
@@ -4766,7 +4764,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.tunnel_dir = TrainSharedMap<uint64_t, &OpenTTDSharedServices::tunnel_bridge_direction>,
 		.unreserve = TrainUnreserve,
 		.update_delta = TrainUpdateDelta,
-		.update_speed = TrainUpdateSpeed,
 		.user_default = TrainUserDefault,
 		.veh_exit_dir = TrainVehExitDir,
 		.viewport = TrainViewport,

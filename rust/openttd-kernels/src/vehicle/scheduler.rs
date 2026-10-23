@@ -478,7 +478,6 @@ crate::abi::layouts! {
         vehicle_type => type,
         period,
         counter,
-        motion,
         speed,
         front_type,
         subtype,

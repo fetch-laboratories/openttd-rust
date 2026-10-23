@@ -14,3 +14,16 @@ pub const fn axis_to_track(axis: crate::services::Axis) -> crate::services::Trac
 pub const fn diag_dir_to_diag_track(direction: u8) -> u8 {
     direction & 1
 }
+
+/// `TrackStatusToTrackdirBits`.
+pub const fn track_status_to_trackdir_bits(status: u32) -> u16 {
+    (status & crate::track_type::TRACKDIR_BIT_MASK) as u16
+}
+/// `TrackdirBitsToTrackBits`.
+pub const fn trackdir_bits_to_track_bits(bits: u16) -> u8 {
+    ((bits | (bits >> 8)) & crate::track_type::TRACK_BIT_MASK) as u8
+}
+/// `TrackStatusToTrackBits`.
+pub const fn track_status_to_track_bits(status: u32) -> u8 {
+    trackdir_bits_to_track_bits(track_status_to_trackdir_bits(status))
+}

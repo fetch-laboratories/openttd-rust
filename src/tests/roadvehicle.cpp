@@ -9,6 +9,7 @@
 #include "../stdafx.h"
 #include "../3rdparty/catch2/catch.hpp"
 #include "../roadveh.h"
+#include "../train.h"
 #include "../settings_type.h"
 #ifdef WITH_RUST
 #include "../rust/services_road.h"
@@ -222,6 +223,23 @@ TEST_CASE("Road max speed - front reversal, later curve assignment and hidden br
 		}
 	}
 	openttd_rust_road_destroy(front); openttd_rust_road_destroy(tail);
+}
+TEST_CASE("Ground cache - canonical aliases on normal and indexed construction")
+{
+	static_assert(std::is_trivially_destructible_v<OpenTTDGroundState>);
+	auto check = [](auto *v) {
+		CHECK(&v->gcache == &v->rust_ground.state->cache);
+		CHECK(&v->gv_flags == &v->rust_ground.state->flags);
+		CHECK(v->gcache.first_engine == EngineID::Invalid());
+		v->gv_flags = 0x8003;
+		CHECK(v->rust_ground.state->flags == 0x8003);
+		v->gcache.last_speed = 65535;
+		CHECK(v->rust_ground.state->cache.last_speed == 65535);
+	};
+	REQUIRE(Vehicle::CanAllocateItem());
+	check(new RoadVehicle());
+	check(new (VehicleID(37)) Train());
+	_vehicle_pool.CleanPool();
 }
 TEST_CASE("Road tick prologue - actual scalar places and nonfront entry")
 {

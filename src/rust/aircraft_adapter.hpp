@@ -260,7 +260,7 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_subtract_cost(OpenTTDAircraftVehicle 
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_dirty_lists(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	SetWindowDirty(WC_VEHICLE_DETAILS, vehicle.id); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
+	RustVehicleDetailsDirty(vehicle.handle); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
 }
 
 static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_next_stopping_station(OpenTTDAircraftVehicle vehicle) noexcept
@@ -330,10 +330,6 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_process_orders(OpenTTDAircraftVehicle
 	ProcessOrders(Aircraft::From(VehicleOf(vehicle.handle)));
 }
 
-static uint32_t OPENTTD_AIRCRAFT_CALL Aircraft_vehicle_crash(OpenTTDAircraftVehicle vehicle, bool flooded) noexcept
-{
-	return VehicleOf(vehicle.handle)->Vehicle::Crash(flooded);
-}
 
 static bool OPENTTD_AIRCRAFT_CALL Aircraft_send_to_depot(OpenTTDAircraftVehicle vehicle, bool service) noexcept
 {
@@ -465,7 +461,7 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.rotor_image_if_changed = Aircraft_rotor_image_if_changed,
 	.update_rotor_image = Aircraft_update_rotor_image,
 	.process_orders = Aircraft_process_orders,
-	.vehicle_crash = Aircraft_vehicle_crash,
+	.vehicle_crash = RustVehicleBaseCrashHandle<OpenTTDAircraftVehicle>,
 	.send_to_depot = Aircraft_send_to_depot,
 	.fta_next_position = Aircraft_fta_next_position,
 	.block_node = Aircraft_block_node,

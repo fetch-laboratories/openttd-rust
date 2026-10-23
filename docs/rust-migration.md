@@ -1970,3 +1970,24 @@ flattening, lake/wetland/tree terminals, widening and bounded YAPF. Early map/RN
 snapshots, BMP rotation/aspect/padding/extreme-grey probes and TGP cancellation
 are required, as is the native sea-order unit test. External heightmap formats,
 maximum dimensions, alternate graphics and late/GUI aborts remain #156 gaps.
+
+### Common ground-vehicle dynamics and canonical cache (#372)
+
+`ground_vehicle.rs` owns train/road power and cargo cache rebuilds, acceleration,
+whole-chain depot checks, crash slope-flag clearing, inclination/Z updates and
+speed accumulation, including the selected train/road physics callees. Each
+native shell holds one Rust cache/flags allocation with stable native aliases;
+normal/indexed construction and destruction share that owner. `gv_flags` keeps
+its uint16 save field and old-loader access; the cache remains rebuilt on load.
+C++ keeps shell/pool identity, engine/cargo specifications, NewGRF properties,
+viewport updates, typed map operations and the shared base crash leaf. Controllers
+call the Rust owner directly; original dynamics/helpers compile only portably.
+No owner borrow spans callbacks, and links are read at the original loop points.
+Default road original/realistic/reload/service/collision/flooding, rail acceleration/
+collision/service/reload and fleet build/consist scenarios require ground witnesses
+in plain and desync runs. The existing fleet console compares unchanged reference
+bodies over 30 arithmetic/default-drag inputs per type; native tests check canonical
+aliases on normal/indexed shells and flags cleared before the base crash callback.
+`python3 tools/migration.py verify` checks Cargo4, both native suites and ABI layouts;
+PR #375 records the focused simulation commands and metrics. External powered/
+articulated NewGRFs, maglev traffic, legacy saves and threaded GUI remain #156 gaps.
