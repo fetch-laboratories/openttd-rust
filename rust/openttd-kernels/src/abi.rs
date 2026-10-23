@@ -1506,6 +1506,9 @@ layouts! {
         no_train,
         wormhole_free,
     };
+    "OpenTTDLandscapeGenerationServices" ["landscape"] => crate::landscape_generation::GenerationServices {
+        shared, clear, water, set_height, inner_tile, make_void, clear_bridge_middle,
+    };
     "OpenTTDLandscapeCommandStrings" ["landscape"] => crate::landscape_cmd::Strings {
         canal, clear_limit, water, sea_level, high, edge, bridge, bridge_high,
         tunnel, terraform_limit, levelled,

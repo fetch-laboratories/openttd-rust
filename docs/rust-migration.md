@@ -1885,3 +1885,12 @@ The existing console adapter compiles the unchanged reference monthly lambda for
 zero-countdown, full-pool retry and disabled-expiry RNG gaps; scalar address checks
 cover the reference-alias boundary. External NewGRF programs, legacy conversion
 fixtures and threaded GUI/presentation remain coverage gaps tracked in #156.
+
+### Remaining landscape generation and rivers (#350, in progress)
+
+The draft owns InitializeLandscape and both FixSlopes passes through typed shared
+map operations. C++ retains canonical arrays and native assertions; generation
+has no raw-map authorization. Remaining control, heightmap, river/YAPF and TGP
+facade work is pending. The boundary will retain native unordered-set identity
+only for observable sea-flattening order and return cancellation before native
+rethrow through generation_services.hpp. This checkpoint is not port evidence.

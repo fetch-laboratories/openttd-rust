@@ -904,7 +904,7 @@ const OpenTTDLandscapeCommandServices &GetRustLandscapeCommandServices() noexcep
 		.exchange_generating = GetRustTownFoundingServices().exchange_generating,
 		.tunnel_in_way = [](uint32_t t, int32_t z) noexcept { return IsTunnelInWay(TileIndex{t}, z); },
 		.mark_dirty_height = RustMarkTileDirtyAtHeight,
-		.set_height = [](uint32_t t, uint32_t z) noexcept { SetTileHeight(TileIndex{t}, z); },
+		.set_height = RustSetTileHeight,
 		.paused = []() noexcept { return _pause_mode.Any(); },
 		.explosion = [](uint32_t t, bool small) noexcept { RustCreateEffectAbove(TileX(TileIndex{t}) * TILE_SIZE + TILE_SIZE / 2, TileY(TileIndex{t}) * TILE_SIZE + TILE_SIZE / 2, 2, small ? EV_EXPLOSION_SMALL : EV_EXPLOSION_LARGE); },
 	};
@@ -988,8 +988,30 @@ void RunTileLoop()
 #endif
 }
 
+#ifdef WITH_RUST
+#include "rust/landscape_generation_ffi.h"
+#include "void_map.h"
+
+const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() noexcept
+{
+	static const OpenTTDLandscapeGenerationServices services{
+		.shared = &GetRustSharedServices(),
+		.clear = &GetRustClearServices(),
+		.water = &GetRustWaterGroundServices(),
+		.set_height = RustSetTileHeight,
+		.inner_tile = RustInnerTile,
+		.make_void = [](uint32_t t) noexcept { MakeVoid(TileIndex{t}); },
+		.clear_bridge_middle = [](uint32_t t) noexcept { ClearBridgeMiddle(TileIndex{t}); },
+	};
+	return services;
+}
+#endif
+
 void InitializeLandscape()
 {
+#ifdef WITH_RUST
+	openttd_rust_initialize_landscape(&GetRustLandscapeGenerationServices(), _settings_game.construction.freeform_edges);
+#else
 	for (uint y = _settings_game.construction.freeform_edges ? 1 : 0; y < Map::MaxY(); y++) {
 		for (uint x = _settings_game.construction.freeform_edges ? 1 : 0; x < Map::MaxX(); x++) {
 			MakeClear(TileXY(x, y), CLEAR_GRASS, 3);
@@ -1001,6 +1023,7 @@ void InitializeLandscape()
 
 	for (uint x = 0; x < Map::SizeX(); x++) MakeVoid(TileXY(x, Map::MaxY()));
 	for (uint y = 0; y < Map::SizeY(); y++) MakeVoid(TileXY(Map::MaxX(), y));
+#endif
 }
 
 static const uint8_t _genterrain_tbl_1[5] = { 10, 22, 33, 37, 4  };

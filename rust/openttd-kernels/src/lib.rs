@@ -31,6 +31,7 @@ mod ground;
 mod history;
 mod integer;
 mod landscape;
+mod landscape_generation;
 mod linkgraph;
 mod map_func;
 mod map_type;

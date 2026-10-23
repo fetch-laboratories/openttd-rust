@@ -400,8 +400,14 @@ static void GreyscaleToMapHeights(uint img_width, uint img_height, std::span<con
  * This function takes care of the fact that land in OpenTTD can never differ
  * more than 1 in height
  */
+#ifdef WITH_RUST
+#include "rust/landscape_generation_ffi.h"
+#endif
 void FixSlopes()
 {
+#ifdef WITH_RUST
+	openttd_rust_fix_slopes(&GetRustLandscapeGenerationServices(), _settings_game.construction.map_height_limit);
+#else
 	uint width, height;
 	int row, col;
 	uint8_t current_height;
@@ -467,6 +473,7 @@ void FixSlopes()
 			}
 		}
 	}
+#endif
 }
 
 /**
