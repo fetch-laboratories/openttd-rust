@@ -20,7 +20,7 @@
     clippy::too_many_arguments
 )]
 use crate::{
-    bitmath_func::sb,
+    bitmath_func::{gb, has_bit, sb, set_bit},
     company_type::INVALID_OWNER,
     overflowsafe_type::add_u32,
     source_type::Source,
@@ -115,7 +115,7 @@ pub extern "C" fn openttd_rust_monitor_encode_industry(
     id: u16,
     check: extern "C" fn(bool),
 ) -> u32 {
-    encode(company, cargo, id, check) | (1 << CCB_IS_INDUSTRY_BIT)
+    set_bit(&mut encode(company, cargo, id, check), CCB_IS_INDUSTRY_BIT)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_monitor_encode_town(
@@ -128,30 +128,29 @@ pub extern "C" fn openttd_rust_monitor_encode_town(
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_monitor_company(key: u32) -> u8 {
-    ((key >> CCB_COMPANY_START) & ((1 << CCB_COMPANY_LENGTH) - 1)) as u8
+    gb(key, CCB_COMPANY_START, CCB_COMPANY_LENGTH) as u8
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_monitor_cargo(key: u32) -> u8 {
-    ((key >> CCB_CARGO_TYPE_START) & ((1 << CCB_CARGO_TYPE_LENGTH) - 1)) as u8
+    gb(key, CCB_CARGO_TYPE_START, CCB_CARGO_TYPE_LENGTH) as u8
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_monitor_is_industry(key: u32) -> bool {
-    key & (1 << CCB_IS_INDUSTRY_BIT) != 0
+fn monitor_monitors_industry(key: u32) -> bool {
+    has_bit(key, CCB_IS_INDUSTRY_BIT)
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_monitor_industry(key: u32) -> u16 {
-    if openttd_rust_monitor_is_industry(key) {
-        key as u16
+    if monitor_monitors_industry(key) {
+        gb(key, CCB_TOWN_IND_NUMBER_START, CCB_TOWN_IND_NUMBER_LENGTH) as u16
     } else {
         u16::MAX
     }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_monitor_town(key: u32) -> u16 {
-    if openttd_rust_monitor_is_industry(key) {
+    if monitor_monitors_industry(key) {
         u16::MAX
     } else {
-        key as u16
+        gb(key, CCB_TOWN_IND_NUMBER_START, CCB_TOWN_IND_NUMBER_LENGTH) as u16
     }
 }
 #[unsafe(no_mangle)]

@@ -133,14 +133,12 @@ inline CargoType DecodeMonitorCargoType(CargoMonitorID num)
  * @param num Cargo monitoring number to decode.
  * @return true if monitoring an industry, false if monitoring a town.
  */
+#ifndef WITH_RUST
 inline bool MonitorMonitorsIndustry(CargoMonitorID num)
 {
-#ifdef WITH_RUST
-	return openttd_rust_monitor_is_industry(num);
-#else
 	return HasBit(num, CCB_IS_INDUSTRY_BIT);
-#endif /* WITH_RUST */
 }
+#endif /* WITH_RUST */
 
 /**
  * Extract the industry number from the cargo monitor.

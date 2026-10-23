@@ -30,7 +30,6 @@ uint32_t openttd_rust_monitor_encode_industry(uint8_t, uint8_t, uint16_t, void (
 uint32_t openttd_rust_monitor_encode_town(uint8_t, uint8_t, uint16_t, void (*)(bool) noexcept);
 uint8_t openttd_rust_monitor_company(uint32_t);
 uint8_t openttd_rust_monitor_cargo(uint32_t);
-bool openttd_rust_monitor_is_industry(uint32_t);
 uint16_t openttd_rust_monitor_industry(uint32_t);
 uint16_t openttd_rust_monitor_town(uint32_t);
 void openttd_rust_monitor_clear_pickups(uint8_t);
