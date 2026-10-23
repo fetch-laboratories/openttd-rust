@@ -359,7 +359,7 @@ pub struct Services {
     pub road_powered: extern "C" fn(u8, u8) -> bool,
     /// Canonical native `road_type_valid` service.
     pub road_type_valid: extern "C" fn(u8) -> bool,
-    /// `IsSafeWaitingPosition(v, tile, trackdir, true, forbid_90_deg)`.
+    /// Native leaves for direct calls to the shared Rust PBS owner.
     pub pbs_services: extern "C" fn(*const Services) -> *const crate::pbs::PbsServices,
     /// Shared live service at helipad observation.
     pub service_at_helipad: extern "C" fn() -> bool,
@@ -1022,7 +1022,6 @@ pub struct RailMapServices {
     pub set_signal_variant: extern "C" fn(u32, u8, u8),
     /// Native `CycleSignalSide`.
     pub cycle_signal_side: extern "C" fn(u32, u8),
-    /// Native `GetReservedTrackbits`.
     /// Native `GetRailReservationTrackBits`.
     pub rail_reservation: extern "C" fn(u32) -> TrackBits,
     /// Native `SetTrackReservation`.

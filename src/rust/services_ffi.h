@@ -52,8 +52,8 @@ OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
  * mark_dirty is MarkTileDirtyByTile(tile), set_tropic_zone is SetTropicZone and
  * free_train_reservation is
  * FreeTrainTrackReservation(v), try_path_reserve is TryPathReserve(v, mark_as_stuck,
- * first_tile_okay) and safe_waiting_position is IsSafeWaitingPosition(v, tile,
- * trackdir, true, forbid_90_deg); the last two can reenter Rust train owners.
+ * first_tile_okay). pbs_services acquires leaves for direct Rust PBS calls.
+ * Train reservation services can reenter the Rust train owners.
  * Random logging still runs, but its debug source location names this wrapper.
  * Industry query returns 0 not industry,1 industry,2 bubble catcher and writes
  * TileVirtXY(x,y). It observes only type and industry graphics.

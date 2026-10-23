@@ -63,25 +63,17 @@ struct OpenTTDRailLeaves {
 	void (*output)(void *, uint8_t, const OpenTTDRailStep *) noexcept OPENTTD_SERVICE_DEFAULT(output);
 	void (*debug)(void *, uint8_t, const uint32_t *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(debug);
 };
-/* One serialized game-thread owner holds the rail-change counter and six cache
- * banks. Searches hold private arenas/queues and per-search segments. The opaque
- * context and copied leaves live through destruction. Synchronous leaves are
- * noexcept and cannot reenter rail YAPF; tile/write operations access canonical
- * map/PBS services. Write operation 1 retains TryReserveRailTrack's default
- * station triggers: a waypoint runs randomisation + animation synchronously
- * while search/reservation borrows remain active, as in the original PBS call.
- * No C++ object or STL layout is viewed by Rust. step returns action=1 before
- * the explicit platform/waypoint randomisation + animation (in that order)
- * and releases ALL Rust borrows; a waypoint keeps the original second trigger.
- * The next step resumes the exact interrupted
- * reservation traversal. Destroy once, also if an ordinary station callback
- * throws. Map replacement during a reservation violates the original lifetime.
- * output writes caller outputs immediately at original mutation points. Write
- * operations: 0 mark dirty, 1 try track, 2 unreserve track, 3 reserve platform
- * tile+mark, 4 clear platform tile, 5 red signal+mark, 6 green signal.
- * No owner state is serialized. invalidate only increments the shared counter;
- * each specialization flushes lazily when its next search is constructed.
- * Panics/OOM abort; environmental exceptions terminate inside noexcept leaves. */
+/* One serialized game-thread owner holds the change counter and six cache banks.
+ * Searches keep private arenas/queues and call the PBS Rust owner directly.
+ * Native synchronous leaves are noexcept; no native object/container layout is
+ * viewed by Rust. PBS station triggers run in their original synchronous order.
+ * step returns action=1 before the existing explicit platform/waypoint triggers,
+ * releasing all owner borrows; a waypoint retains its original second trigger.
+ * The next step resumes that traversal. Destroy once, including on unwinding an
+ * ordinary station callback. Map replacement violates the source lifetime.
+ * output writes caller targets at their original observation points. No owner
+ * state is serialized; invalidation advances the counter and banks flush lazily.
+ * Panics/OOM abort; environmental exceptions terminate in noexcept leaves. */
 OpenTTDRailYapf *openttd_rust_rail_new(const OpenTTDRailInput *, const OpenTTDRailLeaves *);
 OpenTTDRailStep openttd_rust_rail_step(OpenTTDRailYapf *);
 void openttd_rust_rail_destroy(OpenTTDRailYapf *);

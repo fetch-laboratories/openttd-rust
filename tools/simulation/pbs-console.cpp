@@ -7,6 +7,8 @@
 #include "pathfinder/follow_track.hpp"
 #include "console_internal.h"
 #include "console_func.h"
+#include "bridge_map.h"
+#include "clear_map.h"
 #ifdef WITH_RUST
 #include "rust/pbs_ffi.h"
 #endif
@@ -97,6 +99,10 @@ static bool PbsProbe([[maybe_unused]] std::span<std::string_view> args)
 	SetPresentSignals(tiles[1], SignalAlongTrackdir(TRACKDIR_RIGHT_S)); PbsRequire(GetTrainForReservation(tiles[1], TRACK_RIGHT) == PbsOriginalGetTrainForReservation(tiles[1], TRACK_RIGHT));
 	for (auto [v, tile, track] : moved) { v->tile = tile; PbsTrainTrack(v, track); v->UpdatePosition(); }
 	PbsMapRestore(original);
+	/* The 2006 input has a rail tunnel and road bridges. Add a native rail bridge
+	 * for the transient end query without changing pool or infrastructure state. */
+	const TileIndex bridge = TileXY(40, 40); for (uint y = 39; y <= 41; ++y) for (uint x = 39; x <= 43; ++x) { MakeClear(TileXY(x, y), CLEAR_GRASS, 3); Tile(TileXY(x, y)).height() = 0; }
+	MakeRailBridgeRamp(bridge, Owner(0), 0, DIAGDIR_SW, RAILTYPE_RAIL); SetBridgeMiddle(bridge + 1, AXIS_X); MakeRailBridgeRamp(bridge + 2, Owner(0), 0, DIAGDIR_NE, RAILTYPE_RAIL);
 	/* Isolate end lookup from unrelated live paths; both roles restore the same map. */
 	for (TileIndex t(0); t < Map::Size(); ++t) for (Track track : SetTrackBitIterator(GetReservedTrackbits(t))) UnreserveRailTrack(t, track);
 	const auto cleared = PbsMapRead(); std::array<uint32_t, 2> ends{};

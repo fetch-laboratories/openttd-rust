@@ -38,6 +38,8 @@ pub struct PbsServices {
     pub randomisation: extern "C" fn(*mut std::ffi::c_void, u32) -> (),
     pub animation: extern "C" fn(*mut std::ffi::c_void, u32) -> (),
     pub is_crossing: extern "C" fn(u32) -> bool,
+    pub read_train_on_res: extern "C" fn(*const TrainOutput) -> Handle,
+    pub write_train_on_res: extern "C" fn(*mut TrainOutput, Handle),
     pub assertions: bool,
     pub handle: extern "C" fn(*const crate::services::Train) -> crate::train::Handle,
     pub all_compatible: extern "C" fn(u64) -> u64,
@@ -400,7 +402,18 @@ impl<'a> Pbs<'a> {
         };
         (self.train().visit_tile)(tile, std::ptr::from_mut(&mut check).cast(), visit);
     }
-    pub(crate) fn follow_train(self, v: Handle, check_other: bool, mut other: Handle) -> TileInfo {
+    pub(crate) fn follow_train(self, v: Handle, check_other: bool, initial: Handle) -> TileInfo {
+        let mut other = initial;
+        let mut res = self.follow_train_output(v, check_other, &mut other);
+        res.other = other;
+        res
+    }
+    fn follow_train_output<O: Output>(
+        self,
+        v: Handle,
+        check_other: bool,
+        other: &mut O,
+    ) -> TileInfo {
         let tile = (self.train().read_tile)(v);
         let td =
             unsafe { crate::train::openttd_rust_train_trackdir(v, self.0.train, self.0.shared) };
@@ -409,7 +422,7 @@ impl<'a> Pbs<'a> {
                 tile,
                 td,
                 okay: 0,
-                other,
+                other: Handle::NONE,
             };
         }
         let mut res = self.follow_reservation(
@@ -424,34 +437,36 @@ impl<'a> Pbs<'a> {
             let mut best = Handle::NONE;
             self.check_trains(&res, res.tile, &mut best);
             if !best.shell.is_null() {
-                other = (self.train().read_first)(best);
+                other.write((self.train().read_first)(best));
             }
-            if other.shell.is_null() && (self.rail().is_rail_station)(res.tile) {
+            if other.read().shell.is_null() && (self.rail().is_rail_station)(res.tile) {
                 let diff = self
                     .map()
                     .offs_by_diag_dir(trackdir_to_exitdir(reverse_trackdir(res.td)));
                 let mut st_tile = res.tile.wrapping_add(diff);
-                while other.shell.is_null() && (self.0.compatible_station)(st_tile, res.tile) {
+                while other.read().shell.is_null() && (self.0.compatible_station)(st_tile, res.tile)
+                {
                     self.check_trains(&res, st_tile, &mut best);
                     if !best.shell.is_null() {
-                        other = (self.train().read_first)(best);
+                        other.write((self.train().read_first)(best));
                     }
                     st_tile = st_tile.wrapping_add(diff);
                 }
             }
-            if other.shell.is_null() && (self.shared().tile_type)(res.tile) == MP_TUNNELBRIDGE {
+            if other.read().shell.is_null()
+                && (self.shared().tile_type)(res.tile) == MP_TUNNELBRIDGE
+            {
                 self.check_trains(
                     &res,
                     (self.rail().other_tunnel_bridge_end)(res.tile),
                     &mut best,
                 );
                 if !best.shell.is_null() {
-                    other = (self.train().read_first)(best);
+                    other.write((self.train().read_first)(best));
                     crate::witness::hit(crate::witness::PBS_OTHER_END_TRAIN);
                 }
             }
         }
-        res.other = other;
         res
     }
     pub(crate) fn train_for(self, tile: u32, track: u8) -> Handle {
@@ -571,10 +586,10 @@ impl<'a> Pbs<'a> {
 pub unsafe extern "C" fn openttd_rust_pbs_follow_train(
     s: *const PbsServices,
     v: Handle,
-    other: bool,
-    initial: Handle,
+    output: *mut TrainOutput,
 ) -> TileInfo {
-    Pbs(unsafe { &*s }).follow_train(v, other, initial)
+    let pbs = Pbs(unsafe { &*s });
+    pbs.follow_train_output(v, !output.is_null(), &mut NativeOutput { pbs, output })
 }
 /// # Safety
 /// Live world and tables; source requires a reserved track on this tile.
@@ -624,4 +639,34 @@ pub unsafe extern "C" fn openttd_rust_pbs_follow(
     td: u8,
 ) -> TileInfo {
     Pbs(unsafe { &*s }).follow_reservation(owner, types, tile, td, false)
+}
+
+/// Opaque native output slot, never dereferenced or borrowed by Rust.
+#[repr(C)]
+pub struct TrainOutput {
+    _private: [u8; 0],
+}
+trait Output {
+    fn read(&self) -> Handle;
+    fn write(&mut self, value: Handle);
+}
+impl Output for Handle {
+    fn read(&self) -> Handle {
+        *self
+    }
+    fn write(&mut self, value: Handle) {
+        *self = value;
+    }
+}
+struct NativeOutput<'a> {
+    pbs: Pbs<'a>,
+    output: *mut TrainOutput,
+}
+impl Output for NativeOutput<'_> {
+    fn read(&self) -> Handle {
+        (self.pbs.0.read_train_on_res)(self.output)
+    }
+    fn write(&mut self, value: Handle) {
+        (self.pbs.0.write_train_on_res)(self.output, value);
+    }
 }

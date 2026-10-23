@@ -10,3 +10,7 @@
 pub const SIGTYPE_PBS_ONEWAY: u8 = 5;
 /// `SIGTYPE_PBS`.
 pub const SIGTYPE_PBS: u8 = 4;
+/// `SIGNAL_STATE_RED`.
+pub const SIGNAL_STATE_RED: u8 = 0;
+/// `SIGNAL_STATE_GREEN`.
+pub const SIGNAL_STATE_GREEN: u8 = 1;

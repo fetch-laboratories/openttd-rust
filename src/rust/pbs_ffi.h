@@ -12,6 +12,7 @@
 #include "train_ffi.h"
 #include "train_reservation_ffi.h"
 struct BaseStation;
+struct OpenTTDPbsTrainOutput;
 struct OpenTTDPbsServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDRailMapServices *rail;
@@ -34,6 +35,8 @@ struct OpenTTDPbsServices {
 	void (*randomisation)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(randomisation);
 	void (*animation)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(animation);
 	bool (*is_crossing)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(is_crossing);
+	OpenTTDTrainHandle (*read_train_on_res)(const OpenTTDPbsTrainOutput *) noexcept OPENTTD_SERVICE_DEFAULT(read_train_on_res);
+	void (*write_train_on_res)(OpenTTDPbsTrainOutput *, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(write_train_on_res);
 	bool assertions;
 	OpenTTDTrainHandle (*handle)(const Train *) noexcept OPENTTD_SERVICE_DEFAULT(handle);
 	uint64_t (*all_compatible)(uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_compatible);
@@ -52,7 +55,7 @@ void openttd_rust_pbs_platform(const OpenTTDPbsServices *, uint32_t, uint8_t, bo
 bool openttd_rust_pbs_try_reserve(const OpenTTDPbsServices *, uint32_t, uint8_t, bool);
 void openttd_rust_pbs_unreserve(const OpenTTDPbsServices *, uint32_t, uint8_t);
 OpenTTDTrainReservationPbs openttd_rust_pbs_follow(const OpenTTDPbsServices *, uint8_t, uint64_t, uint32_t, uint8_t);
-OpenTTDTrainReservationPbs openttd_rust_pbs_follow_train(const OpenTTDPbsServices *, OpenTTDTrainHandle, bool, OpenTTDTrainHandle);
+OpenTTDTrainReservationPbs openttd_rust_pbs_follow_train(const OpenTTDPbsServices *, OpenTTDTrainHandle, OpenTTDPbsTrainOutput *);
 OpenTTDTrainHandle openttd_rust_pbs_train_for(const OpenTTDPbsServices *, uint32_t, uint8_t);
 bool openttd_rust_pbs_safe(const OpenTTDPbsServices *, OpenTTDTrainHandle, uint32_t, uint8_t, bool, bool);
 bool openttd_rust_pbs_free(const OpenTTDPbsServices *, OpenTTDTrainHandle, uint32_t, uint8_t, bool);

@@ -1205,25 +1205,20 @@ impl Search {
         ((a % self.input.map_x).abs_diff(b % self.input.map_x)
             + (a / self.input.map_x).abs_diff(b / self.input.map_x)) as i32
     }
-    fn write(&self, tile: u32, td: u8, op: u8) -> bool {
-        let pbs = self.pbs();
-        let s = unsafe { &*self.input.shared };
-        match op {
-            1 => return pbs.try_reserve(tile, crate::track_func::trackdir_to_track(td), true),
-            2 => pbs.unreserve(tile, crate::track_func::trackdir_to_track(td)),
-            3 => {
-                (pbs.0.set_station)(tile, true);
-                (s.mark_dirty)(tile);
-            }
-            4 => (pbs.0.set_station)(tile, false),
-            5 => {
-                (unsafe { &*pbs.0.rail }.set_signal_state)(tile, td, 0);
-                (s.mark_dirty)(tile);
-            }
-            6 => (unsafe { &*pbs.0.rail }.set_signal_state)(tile, td, 1),
-            _ => unreachable!(),
-        }
-        true
+    fn signal(&self, tile: u32, td: u8, green: bool) {
+        let rail = unsafe { &*self.pbs().0.rail };
+        (rail.set_signal_state)(
+            tile,
+            td,
+            if green {
+                crate::signal_type::SIGNAL_STATE_GREEN
+            } else {
+                crate::signal_type::SIGNAL_STATE_RED
+            },
+        );
+    }
+    fn mark_dirty(&self, tile: u32) {
+        (unsafe { &*self.input.shared }.mark_dirty)(tile);
     }
     fn output(&self, mask: u8, result: &Step) {
         unsafe {
@@ -1337,11 +1332,13 @@ impl Reservation {
             while (tile != fail || td != self.fail_td)
                 && unsafe { (search.leaves.compatible_station)(tile, start) != 0 }
             {
-                search.write(tile, td, 4);
+                (search.pbs().0.set_station)(tile, false);
                 tile = offset(tile, exit(td ^ 8), search.input.map_x);
             }
         } else if tile != fail || td != self.fail_td {
-            search.write(tile, td, 2);
+            search
+                .pbs()
+                .unreserve(tile, crate::track_func::trackdir_to_track(td));
         }
         (tile != self.target_tile || td != self.target_td) && (tile != fail || td != self.fail_td)
     }
@@ -1371,7 +1368,7 @@ impl Reservation {
         }
         // The original restores in insertion order, without dirtying again.
         for &(tile, td) in &self.signals {
-            search.write(tile, td, 6);
+            search.signal(tile, td, true);
             witness::hit(witness::RAIL_SIGNALS_RESTORED);
             let p = [2_u32];
             unsafe {
@@ -1423,7 +1420,8 @@ impl Reservation {
                                 platform_tile != self.target_tile || td != self.target_td;
                             break;
                         }
-                        search.write(platform_tile, td, 3);
+                        (search.pbs().0.set_station)(platform_tile, true);
+                        search.mark_dirty(platform_tile);
                         platform_tile = offset(platform_tile, exit(td ^ 8), search.input.map_x);
                         if unsafe { (search.leaves.compatible_station)(platform_tile, tile) == 0 }
                             || platform_tile == self.origin
@@ -1436,7 +1434,11 @@ impl Reservation {
                         }
                     }
                 } else {
-                    if !search.write(tile, td, 1) {
+                    if !search.pbs().try_reserve(
+                        tile,
+                        crate::track_func::trackdir_to_track(td),
+                        true,
+                    ) {
                         self.fail_tile = tile;
                         self.fail_td = td;
                         continue_segment = false;
@@ -1447,7 +1449,8 @@ impl Reservation {
                             && reverse.signal_green != 0
                         {
                             self.signals.push((tile, td ^ 8));
-                            search.write(tile, td ^ 8, 5);
+                            search.signal(tile, td ^ 8, false);
+                            search.mark_dirty(tile);
                             witness::hit(witness::RAIL_SIGNALS_RED);
                             let p = [1_u32];
                             unsafe {

@@ -47,6 +47,8 @@ const OpenTTDPbsServices &GetPbsServices() noexcept
 		.randomisation = [](BaseStation *st, uint32_t t) noexcept { TriggerStationRandomisation(st, TileIndex{t}, StationRandomTrigger::PathReservation); },
 		.animation = [](BaseStation *st, uint32_t t) noexcept { RustStationAnimation(st, TileIndex{t}, StationAnimationTrigger::PathReservation); },
 		.is_crossing = MapSvcRoadIsLevelCrossing,
+		.read_train_on_res = [](const OpenTTDPbsTrainOutput *slot) noexcept -> OpenTTDTrainHandle { return {*reinterpret_cast<Vehicle *const *>(slot), nullptr}; },
+		.write_train_on_res = [](OpenTTDPbsTrainOutput *slot, OpenTTDTrainHandle v) noexcept { *reinterpret_cast<Vehicle **>(slot) = static_cast<Train *>(v.shell); },
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 		.assertions = true,
 #else
@@ -247,8 +249,7 @@ void UnreserveRailTrack(TileIndex tile, Track t)
 PBSTileInfo FollowTrainReservation(const Train *v, Vehicle **other)
 {
 	assert(v->type == VEH_TRAIN);
-	auto result = openttd_rust_pbs_follow_train(&GetPbsServices(), TrainHandle(v), other != nullptr, OpenTTDTrainHandle{other != nullptr ? *other : nullptr, nullptr});
-	if (other != nullptr) *other = static_cast<Train *>(result.other.shell);
+	auto result = openttd_rust_pbs_follow_train(&GetPbsServices(), TrainHandle(v), reinterpret_cast<OpenTTDPbsTrainOutput *>(other));
 	return {TileIndex{result.tile}, static_cast<Trackdir>(result.td), result.okay != 0};
 }
 Train *GetTrainForReservation(TileIndex tile, Track track) { return static_cast<Train *>(openttd_rust_pbs_train_for(&GetPbsServices(), tile.base(), track).shell); }
