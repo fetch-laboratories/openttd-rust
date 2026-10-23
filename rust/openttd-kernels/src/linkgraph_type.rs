@@ -25,6 +25,10 @@ impl EdgeUpdateModes {
     pub const RESTRICTED: Self = Self(1 << 2);
     /// `EdgeUpdateMode::Unrestricted`.
     pub const UNRESTRICTED: Self = Self(1 << 3);
+    /// `EnumBitSet::Test`, for one named update mode.
+    pub const fn test(self, mode: Self) -> bool {
+        self.0 & mode.0 != 0
+    }
     /// Set union, `{a, b}`.
     #[must_use]
     pub const fn with(self, other: Self) -> Self {

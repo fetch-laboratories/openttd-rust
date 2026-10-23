@@ -35,6 +35,13 @@ pub struct Edge {
     pub dest_node: u16,
 }
 impl Edge {
+    // The two heterogeneous BaseEdge comparison operators from linkgraph.h.
+    fn before(&self, dest: u16) -> bool {
+        self.dest_node < dest
+    }
+    fn after(&self, dest: u16) -> bool {
+        dest < self.dest_node
+    }
     fn new(dest_node: u16) -> Self {
         Self {
             capacity: 0,
@@ -61,7 +68,7 @@ impl Edge {
         self.last_restricted_update = INVALID_DATE;
     }
     fn update(&mut self, capacity: u32, usage: u32, time: u32, modes: EdgeUpdateModes, date: i32) {
-        if modes.0 & EdgeUpdateModes::INCREASE.0 != 0 {
+        if modes.test(EdgeUpdateModes::INCREASE) {
             if self.travel_time_sum == 0 {
                 self.travel_time_sum =
                     u64::from(self.capacity.wrapping_add(capacity)).wrapping_mul(u64::from(time));
@@ -77,7 +84,7 @@ impl Edge {
             }
             self.capacity = self.capacity.wrapping_add(capacity);
             self.usage = self.usage.wrapping_add(usage);
-        } else if modes.0 & EdgeUpdateModes::REFRESH.0 != 0 {
+        } else if modes.test(EdgeUpdateModes::REFRESH) {
             if self.travel_time_sum == 0 {
                 self.capacity = self.capacity.max(capacity);
                 self.travel_time_sum = u64::from(time) * u64::from(self.capacity);
@@ -88,10 +95,10 @@ impl Edge {
             }
             self.usage = self.usage.max(usage);
         }
-        if modes.0 & EdgeUpdateModes::UNRESTRICTED.0 != 0 {
+        if modes.test(EdgeUpdateModes::UNRESTRICTED) {
             self.last_unrestricted_update = date;
         }
-        if modes.0 & EdgeUpdateModes::RESTRICTED.0 != 0 {
+        if modes.test(EdgeUpdateModes::RESTRICTED) {
             self.last_restricted_update = date;
         }
     }
@@ -144,7 +151,7 @@ impl Node {
         self.demand = demand;
     }
     pub(crate) fn edge(&self, dest: u16) -> Option<&Edge> {
-        let index = self.edges.partition_point(|e| e.dest_node < dest);
+        let index = self.edges.partition_point(|e| e.before(dest));
         self.edges.get(index).filter(|e| e.dest_node == dest)
     }
     #[allow(clippy::too_many_arguments)]
@@ -157,15 +164,15 @@ impl Node {
         modes: EdgeUpdateModes,
         date: i32,
     ) {
-        let index = self.edges.partition_point(|e| e.dest_node <= to);
+        let index = self.edges.partition_point(|e| !e.after(to));
         let mut edge = Edge::new(to);
         edge.capacity = capacity;
         edge.usage = usage;
         edge.travel_time_sum = u64::from(time) * u64::from(capacity);
-        if modes.0 & EdgeUpdateModes::UNRESTRICTED.0 != 0 {
+        if modes.test(EdgeUpdateModes::UNRESTRICTED) {
             edge.last_unrestricted_update = date;
         }
-        if modes.0 & EdgeUpdateModes::RESTRICTED.0 != 0 {
+        if modes.test(EdgeUpdateModes::RESTRICTED) {
             edge.last_restricted_update = date;
         }
         self.edges.insert(index, edge);
@@ -183,7 +190,7 @@ impl Node {
     ) {
         assert!(!assertions || capacity > 0);
         assert!(!assertions || usage <= capacity);
-        let index = self.edges.partition_point(|e| e.dest_node < to);
+        let index = self.edges.partition_point(|e| e.before(to));
         if self.edges.get(index).is_some_and(|e| e.dest_node == to) {
             assert!(!assertions || self.edges[index].capacity > 0);
             self.edges[index].update(capacity, usage, time, modes, date);
@@ -192,8 +199,8 @@ impl Node {
         }
     }
     pub(crate) fn remove_edge(&mut self, to: u16) {
-        let first = self.edges.partition_point(|e| e.dest_node < to);
-        let last = self.edges.partition_point(|e| e.dest_node <= to);
+        let first = self.edges.partition_point(|e| e.before(to));
+        let last = self.edges.partition_point(|e| !e.after(to));
         self.edges.drain(first..last);
     }
 }
@@ -253,7 +260,7 @@ impl Graph {
             if n.edges.last().is_some_and(|e| e.dest_node == last) {
                 let mut edge = *n.edges.last().unwrap();
                 edge.dest_node = id;
-                let insert = n.edges.partition_point(|e| e.dest_node < id);
+                let insert = n.edges.partition_point(|e| e.before(id));
                 n.edges.insert(insert, edge);
                 n.edges.pop();
             }
