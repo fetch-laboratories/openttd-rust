@@ -321,10 +321,7 @@ static uint64_t TrainGrfVersion(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return RustEngineGRFVersion(EngineOf(RustVehicleGetEngine(RustVehicle(v))));
 }
-static uint64_t TrainHasReserved(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	return HasReservedTracks(TileIndex(a), static_cast<TrackBits>(b));
-}
+
 static void TrainHideFill(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -405,14 +402,7 @@ static uint64_t TrainMaxDepotPenalty(OpenTTDTrainHandle) noexcept
 {
 	return RustMaximumDepotPenalty();
 }
-static uint64_t TrainNo90(OpenTTDTrainHandle, uint8_t a, uint8_t b) noexcept
-{
-	return Rail90DegTurnDisallowed(static_cast<RailType>(a), static_cast<RailType>(b));
-}
-static uint64_t TrainOnewayBlocking(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	return HasOnewaySignalBlockingTrackdir(TileIndex(a), static_cast<Trackdir>(b));
-}
+
 static void TrainOrderDepotService(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -534,24 +524,13 @@ static uint64_t TrainServint(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return Company::Get(v->owner)->settings.vehicle.servint_trains;
 }
-static void TrainSetDepotRes(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	SetDepotReservation(TileIndex(a), b != 0);
-}
 
 static void TrainShowEffect(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	v->ShowVisualEffect();
 }
-static uint64_t TrainShowReservation(OpenTTDTrainHandle) noexcept
-{
-	return _settings_client.gui.show_track_reservation;
-}
-static uint64_t TrainSignalHasPbs(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	return HasPbsSignalOnTrackdir(TileIndex(a), static_cast<Trackdir>(b));
-}
+
 static uint64_t TrainSignalPbs(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return IsPbsSignal(static_cast<SignalType>(a));
@@ -621,10 +600,7 @@ static uint64_t TrainTileOffsetDiag(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return static_cast<uint32_t>(TileOffsByDiagDir(static_cast<DiagDirection>(a)));
 }
-static uint64_t TrainTileRailType(OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	return GetTileRailType(TileIndex(a));
-}
+
 static uint64_t TrainTileVirt(OpenTTDTrainHandle, int32_t a, int32_t b) noexcept
 {
 	return TileVirtXY(static_cast<int>(a), static_cast<int>(b)).base();
@@ -658,14 +634,8 @@ static void TrainTruncateCargo(OpenTTDTrainHandle id, uint32_t a) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	v->cargo.Truncate(static_cast<uint>(a));
 }
-static uint64_t TrainTryReserve(OpenTTDTrainHandle, uint32_t a, uint8_t b, uint8_t c) noexcept
-{
-	return TryReserveRailTrack(TileIndex(a), static_cast<Track>(b), c != 0);
-}
-static void TrainUnreserve(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	UnreserveRailTrack(TileIndex(a), static_cast<Track>(b));
-}
+
+
 static void TrainUpdateDelta(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);

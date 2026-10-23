@@ -200,6 +200,23 @@ witness_blocks! {
         OBJECT_SLOPE_CALLBACK = 17 => "object.slope_callback",
         OBJECT_BUILD_ABOVE = 18 => "object.build_above",
     }
+    pbs {
+        PBS_START_UNRESERVED = 0 => "pbs.start_unreserved",
+        PBS_PLATFORM_INTERIOR = 1 => "pbs.platform_interior",
+        PBS_ONEWAY_STOP = 2 => "pbs.oneway_stop",
+        PBS_LOOP = 3 => "pbs.loop",
+        PBS_FOLLOW = 4 => "pbs.follow",
+        PBS_LOWER_ID = 5 => "pbs.lower_id",
+        PBS_OTHER_END_TRAIN = 6 => "pbs.other_end_train",
+        PBS_SECOND_DIRECTION = 7 => "pbs.second_direction",
+        PBS_SEARCH_ONEWAY_SKIP = 8 => "pbs.search_oneway_skip",
+        PBS_PLATFORM_TRAIN = 9 => "pbs.platform_train",
+        PBS_STRAY = 10 => "pbs.stray",
+        PBS_SAFE_LINE_END = 11 => "pbs.safe_line_end",
+        PBS_SAFE_PBS = 12 => "pbs.safe_pbs",
+        PBS_SAFE_OPPOSING_PBS = 13 => "pbs.safe_opposing_pbs",
+        PBS_OVERLAP = 14 => "pbs.overlap",
+    }
     rail {
         RAIL_CHOOSE = 0 => "rail.choose",
         RAIL_REVERSE = 1 => "rail.reverse",

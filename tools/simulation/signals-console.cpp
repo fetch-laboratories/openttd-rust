@@ -504,6 +504,7 @@ extern "C" void __real__Z22IConsoleStdLibRegisterv();
 extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 {
 	__real__Z22IConsoleStdLibRegisterv();
+	IConsole::CmdRegister("pbs_probe", PbsProbe);
 	IConsole::CmdRegister("signals_scenario", SignalsScenario);
 	IConsole::CmdRegister("road_commands", RoadCommandsScenario);
 }

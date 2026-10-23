@@ -17,3 +17,16 @@ pub(crate) fn get_rail_ground_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
 
 /// `RailTileType::Normal`, asserted by native compilation.
 pub const RAIL_TILE_NORMAL: u8 = 0;
+/// `IsPbsSignal`, from `rail_map.h`.
+pub const fn is_pbs_signal(kind: u8) -> bool {
+    kind == crate::signal_type::SIGTYPE_PBS || kind == crate::signal_type::SIGTYPE_PBS_ONEWAY
+}
+
+/// `IsRailDepotTile`, retaining the guarded `IsRailDepot` operation.
+pub(crate) fn is_rail_depot_tile(
+    shared: &crate::services::Services,
+    rail: &crate::services::RailMapServices,
+    tile: u32,
+) -> bool {
+    (shared.tile_type)(tile) == crate::tile_type::MP_RAILWAY && (rail.is_rail_depot)(tile)
+}

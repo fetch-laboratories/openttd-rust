@@ -3282,7 +3282,7 @@ const OpenTTDRailCommandServices &GetRustRailCommandServices() noexcept
 		.rail_infrastructure = RustAddRailInfrastructure,
 		.road_infrastructure = RustAddRoadInfrastructure,
 		.signal_infrastructure = RustAddSignalInfrastructure,
-		.reserving_train = [](uint32_t tile, uint8_t track) noexcept { return GetTrainForReservation(TileIndex{tile}, static_cast<Track>(track)); },
+
 		.parking = RailParking,
 		.train_position = [](Train *v) noexcept -> OpenTTDRailTrainPosition { return {.tile = RustVehicleTile(v), .trackdir = GetRustSharedServices().train_trackdir(v)}; },
 		.layout_changed = [](uint32_t tile, uint8_t track) noexcept { YapfNotifyTrackLayoutChange(TileIndex{tile}, static_cast<Track>(track)); },

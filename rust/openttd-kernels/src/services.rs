@@ -219,6 +219,9 @@ pub struct ClearSquareServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
+    /// Private controller unit-test callee stub, absent from the game ABI.
+    #[cfg(test)]
+    pub safe_waiting_position: unsafe extern "C" fn(*const Train, u32, u8, bool) -> bool,
     /// Canonical native tile owner write.
     pub set_tile_owner: extern "C" fn(u32, u8),
     /// `AutoslopeEnabled()`.
@@ -356,8 +359,8 @@ pub struct Services {
     pub road_powered: extern "C" fn(u8, u8) -> bool,
     /// Canonical native `road_type_valid` service.
     pub road_type_valid: extern "C" fn(u8) -> bool,
-    /// `IsSafeWaitingPosition(v, tile, trackdir, true, forbid_90_deg)`.
-    pub safe_waiting_position: unsafe extern "C" fn(*const Train, u32, u8, bool) -> bool,
+    /// Native leaves for direct calls to the shared Rust PBS owner.
+    pub pbs_services: extern "C" fn(*const Services) -> *const crate::pbs::PbsServices,
     /// Shared live service at helipad observation.
     pub service_at_helipad: extern "C" fn() -> bool,
     /// `SetTropicZone`.
@@ -627,7 +630,6 @@ crate::abi::layouts! {
         signal_variant,
         set_signal_variant,
         cycle_signal_side,
-        reserved_tracks,
         rail_reservation,
         set_track_reservation,
         depot_reserved,
@@ -747,7 +749,7 @@ crate::abi::layouts! {
         set_road_directions,
         road_powered,
         road_type_valid,
-        safe_waiting_position,
+        pbs_services,
         service_at_helipad,
         set_tropic_zone,
         slope,
@@ -851,8 +853,8 @@ pub fn fixture(
     extern "C" fn train_path(_: *mut Train, _: bool, _: bool) -> bool {
         false
     }
-    extern "C" fn train_safe(_: *const Train, _: u32, _: u8, _: bool) -> bool {
-        false
+    extern "C" fn train_safe(_: *const Services) -> *const crate::pbs::PbsServices {
+        std::process::abort()
     }
     extern "C" fn zone(_: u32, _: u8) {}
     extern "C" fn word(_: u32) -> u32 {
@@ -909,6 +911,7 @@ pub fn fixture(
         false
     }
     Services {
+        safe_waiting_position: fixture_safe,
         set_tile_owner: zone,
         autoslope: flag0,
         bay_stop_direction: byte,
@@ -982,7 +985,7 @@ pub fn fixture(
         set_road_directions: zone,
         road_powered: two_types,
         road_type_valid: type_valid,
-        safe_waiting_position: train_safe,
+        pbs_services: train_safe,
         service_at_helipad: flag0,
         set_tropic_zone: zone,
         slope,
@@ -1319,8 +1322,6 @@ pub struct RailMapServices {
     pub set_signal_variant: extern "C" fn(u32, u8, u8),
     /// Native `CycleSignalSide`.
     pub cycle_signal_side: extern "C" fn(u32, u8),
-    /// Native `GetReservedTrackbits`.
-    pub reserved_tracks: extern "C" fn(u32) -> TrackBits,
     /// Native `GetRailReservationTrackBits`.
     pub rail_reservation: extern "C" fn(u32) -> TrackBits,
     /// Native `SetTrackReservation`.
@@ -1472,4 +1473,9 @@ extern "C" fn unused_tile_add_wrap(_: u32, _: i32, _: i32) -> u32 {
 #[cfg(test)]
 extern "C" fn unused_road_is_tram(_: RoadType) -> bool {
     panic!("unused tram classification");
+}
+
+#[cfg(test)]
+extern "C" fn fixture_safe(_: *const Train, _: u32, _: u8, _: bool) -> bool {
+    false
 }

@@ -56,7 +56,7 @@
 OpenTTDAircraftVehicle RustAircraftVehicle(Vehicle *v) noexcept
 {
 	if (v == nullptr) return {nullptr, nullptr, VehicleID::Invalid().base()};
-	return {RustVehicle(v), v->type == VEH_AIRCRAFT ? Aircraft::From(v)->rust_state.get() : nullptr, v->index.base()};
+	return {RustVehicle(v), v->type == VEH_AIRCRAFT ? Aircraft::From(v)->rust_state.get() : nullptr, RustVehicleIndexOpaque(v)};
 }
 OpenTTDAircraftVehicle GetRustAircraftVehicle(OpenTTDVehicle *v) noexcept { return RustAircraftVehicle(VehicleOf(v)); }
 

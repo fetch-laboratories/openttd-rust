@@ -11,10 +11,14 @@ pub const TRACK_BIT_X: u8 = 1;
 /// `TRACK_BIT_Y`.
 pub const TRACK_BIT_Y: u8 = 2;
 
-pub const TRACK_BIT_X: u8 = 1;
-pub const TRACK_BIT_Y: u8 = 2;
-pub const TRACK_BIT_WORMHOLE: u8 = 0x40;
-pub const TRACK_BIT_MASK: u16 = 0x3f;
 pub const TRACKDIR_BIT_MASK: u32 = 0x3f3f;
 /// `TRACK_BIT_DEPOT`.
 pub const TRACK_BIT_DEPOT: u8 = 0x80;
+/// `TRACK_BIT_WORMHOLE`.
+pub const TRACK_BIT_WORMHOLE: u8 = 0x40;
+/// `TRACK_BIT_HORZ`.
+pub const TRACK_BIT_HORZ: u8 = (1 << 2) | (1 << 3);
+/// `TRACK_BIT_VERT`.
+pub const TRACK_BIT_VERT: u8 = (1 << 4) | (1 << 5);
+/// `TRACK_BIT_MASK`.
+pub const TRACK_BIT_MASK: u8 = 0x3f;

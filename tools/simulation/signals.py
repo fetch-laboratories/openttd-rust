@@ -63,6 +63,8 @@ def scenarios(soak):
             console=["signals_scenario rail-commands", "unpause"],
         )
     )
+    for case in cases:
+        case["console"] = ["pbs_probe", *case["console"]]
     return cases
 
 
@@ -134,6 +136,9 @@ def adapter(build, folder, env):
     inspection calls the Rust diagnostic entry without resetting its owner.
     """
     folder.mkdir(parents=True, exist_ok=True)
+    from .rails import PBS_WRAPS, pbs_reference
+
+    pbs_reference(folder)
     commands = json.loads((build / "compile_commands.json").read_text())
     signal = Path(
         next(row["file"] for row in commands if row["file"].endswith("/signal.cpp"))
@@ -160,6 +165,9 @@ def adapter(build, folder, env):
     )
     source.write_text(
         native
+        + (core.ROOT / "tools/simulation/pbs-console.cpp")
+        .read_text()
+        .split("// PBS registration")[0]
         + ADAPTER.read_text()
         .replace(
             "../../../src/rust/signal_ffi.h", str(core.ROOT / "src/rust/signal_ffi.h")
@@ -175,7 +183,7 @@ def adapter(build, folder, env):
         env,
         source,
         "signals",
-        wraps=("openttd_rust_train_state_get_track",),
+        wraps=("openttd_rust_train_state_get_track", *PBS_WRAPS),
         replace_objects=("/src/signal.cpp.o",),
     )
 
@@ -317,6 +325,24 @@ def boundary_profile(counts):
 def check(scenario, run, mode, role, result):
     if "signals" not in scenario or run["exit"] or not run["snapshots"]:
         return
+    if not any("PBS checked" in line for line in run["log"]):
+        raise RuntimeError("missing default PBS transient comparison")
+    if scenario["signals"] in ("2006", "rail-commands") and not any(
+        "PBS ends 1 1" in line for line in run["log"]
+    ):
+        raise RuntimeError("missing occupied tunnel/bridge end comparisons")
+    core.branch_witnesses(
+        scenario,
+        run,
+        role,
+        "pbs",
+        ("follow", "loop", "lower_id", "platform_interior")
+        + (
+            ("other_end_train",)
+            if scenario["signals"] in ("2006", "rail-commands")
+            else ()
+        ),
+    )
     lines = [line for line in run["log"] if line.startswith("SIGNALS ")]
     if scenario["signals"] == "rail-commands":
         lines = [line for line in run["log"] if line.startswith("RAILCMD ")]

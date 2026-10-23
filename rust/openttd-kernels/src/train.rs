@@ -554,7 +554,6 @@ pub struct Leaves {
     pub first_track: extern "C" fn(Handle, u8) -> u64,
     pub grf_version: extern "C" fn(Handle) -> u64,
     pub has_depot_res: extern "C" fn(Handle, u32) -> u64,
-    pub has_reserved: extern "C" fn(Handle, u32, u8) -> u64,
     pub has_signal: extern "C" fn(Handle, u32, u8) -> u64,
     pub has_signals: extern "C" fn(Handle, u32) -> u64,
     pub has_signal_td: extern "C" fn(Handle, u32, u8) -> u64,
@@ -611,7 +610,6 @@ pub struct Leaves {
     pub servint: extern "C" fn(Handle) -> u64,
     pub set_depot_res: extern "C" fn(Handle, u32, u8),
     pub set_next: extern "C" fn(Handle, Handle),
-    pub set_platform_res: extern "C" fn(Handle, u32, u8, u8),
     pub set_signal_state: extern "C" fn(Handle, u32, u8, u8),
     pub set_tunnel_res: extern "C" fn(Handle, u32, u8),
     pub show_effect: extern "C" fn(Handle),
@@ -649,9 +647,7 @@ pub struct Leaves {
     pub train_list: extern "C" fn(Handle),
     pub train_visit: extern "C" fn(Handle) -> u64,
     pub truncate_cargo: extern "C" fn(Handle, u32),
-    pub try_reserve: extern "C" fn(Handle, u32, u8, u8) -> u64,
     pub tunnel_dir: extern "C" fn(Handle, u32) -> u64,
-    pub unreserve: extern "C" fn(Handle, u32, u8),
     pub update_delta: extern "C" fn(Handle),
     pub user_default: extern "C" fn(Handle) -> u64,
     pub veh_exit_dir: extern "C" fn(Handle, u8, u8) -> u64,
@@ -1519,11 +1515,10 @@ impl Game<'_> {
                 okay = false;
             }
             if (self.leaves.is_station)(Handle::NONE, tile) != 0 {
-                (self.leaves.set_platform_res)(
-                    id,
+                crate::pbs::Pbs::acquire(self.services).platform(
                     tile,
                     (self.leaves.trackdir_exit)(id, td) as u8,
-                    1,
+                    true,
                 );
             }
             // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
@@ -1818,7 +1813,11 @@ impl Game<'_> {
                         }
                         return (3, false);
                     }
-                    (self.leaves.try_reserve)(id, new, chosen.trailing_zeros() as u8, 0);
+                    crate::pbs::Pbs::acquire(self.services).try_reserve(
+                        new,
+                        chosen.trailing_zeros() as u8,
+                        false,
+                    );
                 } else {
                     let before = (self.leaves.read_tile)(prev);
                     if before == new {
@@ -1946,7 +1945,7 @@ impl Game<'_> {
         }
         if signals {
             if (self.leaves.read_front)(id) != 0 && self.moved_signals(id, new, entered) {
-                if ((self.leaves.has_reserved)(id, new, id.track()) == 0
+                if (!crate::pbs::Pbs::acquire(self.services).has_reserved_tracks(new, id.track())
                     && self.reserve_track(id, new, u64::from(id.track().trailing_zeros())) == 0)
                     // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
                     || !unsafe { (self.services.try_path_reserve)(id.shell.cast(), false, false) }
@@ -2002,8 +2001,8 @@ impl Game<'_> {
 
 impl Game<'_> {
     /// `TryReserveRailTrack(tile, track)` with its default station triggers.
-    fn reserve_track(&self, id: Handle, tile: u32, track: u64) -> u64 {
-        (self.leaves.try_reserve)(id, tile, track as u8, 1)
+    fn reserve_track(&self, _id: Handle, tile: u32, track: u64) -> u64 {
+        u64::from(crate::pbs::Pbs::acquire(self.services).try_reserve(tile, track as u8, true))
     }
     fn crash(&self, id: Handle, flooded: bool) -> u32 {
         let mut victims = 0_u32;
@@ -2156,8 +2155,8 @@ impl Game<'_> {
             tracks = 1 << ((self.leaves.tunnel_dir)(Handle::NONE, tile) & 1);
         }
         let track = tracks.trailing_zeros() as u8;
-        if (self.leaves.has_reserved)(Handle::NONE, tile, tracks) != 0 {
-            (self.leaves.unreserve)(Handle::NONE, tile, track);
+        if crate::pbs::Pbs::acquire(self.services).has_reserved_tracks(tile, tracks) {
+            crate::pbs::Pbs::acquire(self.services).unreserve(tile, track);
             let mut remaining = 0_u8;
             self.visit_tile(tile, |u| {
                 if (self.leaves.read_status)(u) & 128 == 0 {
@@ -2188,8 +2187,8 @@ impl Game<'_> {
                 Handle::NONE,
                 (self.leaves.station_axis)(Handle::NONE, tile) as u8,
             ) as u8;
-            (self.leaves.set_platform_res)(Handle::NONE, tile, dir, u8::from(occupied));
-            (self.leaves.set_platform_res)(Handle::NONE, tile, dir ^ 2, u8::from(occupied));
+            crate::pbs::Pbs::acquire(self.services).platform(tile, dir, occupied);
+            crate::pbs::Pbs::acquire(self.services).platform(tile, dir ^ 2, occupied);
         }
         if (self.leaves.is_tunnelbridge)(Handle::NONE, tile) != 0
             || (self.leaves.is_depot)(Handle::NONE, tile) != 0
@@ -3386,7 +3385,6 @@ crate::abi::layouts! {
         first_track,
         grf_version,
         has_depot_res,
-        has_reserved,
         has_signal,
         has_signals,
         has_signal_td,
@@ -3443,7 +3441,6 @@ crate::abi::layouts! {
         servint,
         set_depot_res,
         set_next,
-        set_platform_res,
         set_signal_state,
         set_tunnel_res,
         show_effect,
@@ -3481,9 +3478,7 @@ crate::abi::layouts! {
         train_list,
         train_visit,
         truncate_cargo,
-        try_reserve,
         tunnel_dir,
-        unreserve,
         update_delta,
         user_default,
         veh_exit_dir,

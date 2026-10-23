@@ -235,10 +235,8 @@ pub struct CommandServicesTable {
     pub reserved: extern "C" fn(u32) -> bool,
     pub last_train:
         unsafe extern "C" fn(*mut crate::services::Train) -> *mut crate::services::Train,
-    pub train_handle: extern "C" fn(*const crate::services::Train) -> crate::train::Handle,
     pub train: *const crate::train::Leaves,
     pub reservation: *const crate::train_reservation::Leaves,
-    pub platform_reservation: extern "C" fn(u32, u8, bool),
     pub compatible_tiles: extern "C" fn(u32, u32) -> bool,
     pub custom_rail_index: extern "C" fn(u32) -> u32,
     pub make_rail_station: extern "C" fn(u32, u8, u16, u8, u8, u8),
@@ -1129,7 +1127,7 @@ impl Ctx<'_> {
     }
     fn free_reservation(&self, train: *mut crate::services::Train) {
         unsafe {
-            let handle = (self.s.train_handle)(train);
+            let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
             crate::train_reservation::openttd_rust_train_reservation_free(
                 handle,
                 crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast())),
@@ -1144,7 +1142,7 @@ impl Ctx<'_> {
     fn restore_reservation(&self, train: *mut crate::services::Train) {
         self.platform_end(train, false, true);
         unsafe {
-            let handle = (self.s.train_handle)(train);
+            let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
             crate::train_reservation::openttd_rust_train_reservation_try_path(
                 handle,
                 crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast())),
@@ -1158,8 +1156,7 @@ impl Ctx<'_> {
         self.platform_end(last, true, true);
     }
     fn platform_end(&self, train: *mut crate::services::Train, reverse: bool, reserved: bool) {
-        const EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
-        let handle = (self.s.train_handle)(train);
+        let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
         // SAFETY: The reached platform update always supplies a live train shell.
         let vehicle = unsafe {
             crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast()))
@@ -1171,7 +1168,11 @@ impl Ctx<'_> {
                 crate::train::openttd_rust_train_trackdir(handle, self.s.train, self.s.shared)
             };
             let td = trackdir ^ if reverse { 8 } else { 0 };
-            (self.s.platform_reservation)(tile, EXIT[usize::from(td)], reserved);
+            crate::pbs::Pbs::acquire(self.shared).platform(
+                tile,
+                crate::track_func::trackdir_to_exitdir(td),
+                reserved,
+            );
         }
     }
     fn flat_rail(
@@ -1223,8 +1224,12 @@ impl Ctx<'_> {
                     let bits = (self.rail_map().traversal)(tile).tracks.0;
                     let track = bits.trailing_zeros() as u8;
                     if bits & bits.wrapping_sub(1) == 0 && track == axis {
-                        if (self.rail_map().reserved_tracks)(tile).0 & (1 << track) != 0 {
-                            let train = (self.rail().reserving_train)(tile, track);
+                        if crate::pbs::Pbs::acquire(self.shared).reserved(tile) & (1 << track) != 0
+                        {
+                            let train = crate::pbs::Pbs::acquire(self.shared)
+                                .train_for(tile, track)
+                                .shell
+                                .cast::<crate::services::Train>();
                             if !train.is_null() {
                                 affected.push(train);
                             }
@@ -1512,7 +1517,10 @@ impl Ctx<'_> {
             for j in 0..length {
                 let t = track_tile.wrapping_add(u32::from(j).wrapping_mul(delta));
                 if self.rail_station(t) && (self.s.reserved)(t) {
-                    let train = (self.rail().reserving_train)(t, self.station_axis(t));
+                    let train = crate::pbs::Pbs::acquire(self.shared)
+                        .train_for(t, self.station_axis(t))
+                        .shell
+                        .cast::<crate::services::Train>();
                     if !train.is_null() {
                         affected.push(train);
                         self.free_reservation(train);
@@ -1618,7 +1626,7 @@ impl Ctx<'_> {
                 cur = cur.wrapping_add(offset);
             }
             if reservation {
-                (self.s.platform_reservation)(begin, dir, true);
+                crate::pbs::Pbs::acquire(self.shared).platform(begin, dir, true);
             }
         }
         (self.s.mark_tiles)(st, false);
@@ -1752,7 +1760,10 @@ impl Ctx<'_> {
             let rt = (self.rail_map().rail_type)(tile).0;
             let mut train = std::ptr::null_mut();
             if (self.s.reserved)(tile) {
-                train = (self.rail().reserving_train)(tile, track);
+                train = crate::pbs::Pbs::acquire(self.shared)
+                    .train_for(tile, track)
+                    .shell
+                    .cast::<crate::services::Train>();
                 if !train.is_null() {
                     self.free_reservation(train);
                 }
@@ -4120,10 +4131,8 @@ crate::abi::layouts! {
         rail_triggers,
         reserved,
         last_train,
-        train_handle,
         train,
         reservation,
-        platform_reservation,
         compatible_tiles,
         custom_rail_index,
         make_rail_station,

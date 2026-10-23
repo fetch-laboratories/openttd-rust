@@ -21,6 +21,11 @@
     clippy::collapsible_else_if,
     clippy::similar_names
 )]
+use crate::rail_map::is_pbs_signal as pbs;
+use crate::track_func::{
+    find_first_trackdir as first, is_diagonal_trackdir as diagonal, trackdir_to_exitdir as exit,
+};
+
 use crate::node_hash::NodeMap;
 use crate::witness;
 use std::cell::UnsafeCell;
@@ -64,7 +69,6 @@ pub struct Tile {
     pub station: u16,
     pub railtype: u8,
     pub tracks: u8,
-    pub reserved: u8,
     pub station_track: u8,
     pub tunnel_dir: u8,
     pub uphill: u8,
@@ -76,15 +80,32 @@ pub struct Tile {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Follow {
+pub struct FollowStep {
     pub tile: u32,
     pub skipped: i32,
-    pub min_speed: i32,
-    pub max_speed: i32,
     pub dirs: u16,
     pub followed: u8,
     pub error: u8,
     pub station: u8,
+    pub exitdir: u8,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Speed {
+    pub min_speed: i32,
+    pub max_speed: i32,
+}
+#[derive(Clone, Copy)]
+struct Follow {
+    step: FollowStep,
+    min_speed: i32,
+    max_speed: i32,
+}
+impl std::ops::Deref for Follow {
+    type Target = FollowStep;
+    fn deref(&self) -> &Self::Target {
+        &self.step
+    }
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -144,14 +165,12 @@ pub struct Step {
 pub struct Leaves {
     pub train: unsafe extern "C" fn(*mut c_void) -> Train,
     pub tile: unsafe extern "C" fn(u32, u8) -> Tile,
-    pub follow: unsafe extern "C" fn(*mut c_void, u32, u8, u64, u8, u8) -> Follow,
-    pub free: unsafe extern "C" fn(*mut c_void, u32, u8, u8) -> u8,
+    pub follow: unsafe extern "C" fn(*mut c_void, u32, u8, u64, u8) -> FollowStep,
+    pub speed: unsafe extern "C" fn(u32) -> Speed,
     pub compatible_station: unsafe extern "C" fn(u32, u32) -> u8,
     pub platform_length: unsafe extern "C" fn(u32, u8) -> u32,
     pub closest_station: unsafe extern "C" fn(*mut c_void, u8) -> u32,
     pub destination_dirs: unsafe extern "C" fn(u32) -> u16,
-    pub origin: unsafe extern "C" fn(*mut c_void, *mut u32, *mut u8),
-    pub write: unsafe extern "C" fn(u32, u8, u8) -> u8,
     pub output: unsafe extern "C" fn(*mut c_void, u8, *const Step),
     pub debug: unsafe extern "C" fn(*mut c_void, u8, *const u32, u32),
 }
@@ -183,22 +202,7 @@ const FIRST_RED: u16 = 1 << 10;
 const POSSIBLE_TARGET: u16 = E_DEPOT | E_WAYPOINT | E_STATION | SAFE;
 const CACHED: u16 = (1 << 9) - 1;
 const ABORT: u16 = DEAD | PATH_TOO_LONG | LOOP | FIRST_RED;
-const EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
 const NEXT: [u8; 14] = [0, 1, 3, 2, 5, 4, 255, 255, 8, 9, 11, 10, 13, 12];
-const CROSS: [u16; 6] = [0x202, 0x101, 0x3030, 0x3030, 0x0c0c, 0x0c0c];
-const REACH_TRACKS: [u8; 4] = [0x19, 0x16, 0x25, 0x2a];
-fn exit(td: u8) -> u8 {
-    EXIT[usize::from(td)]
-}
-fn diagonal(td: u8) -> bool {
-    td & 7 < 2
-}
-fn pbs(signal: u8) -> bool {
-    signal == 4 || signal == 5
-}
-fn first(dirs: u16) -> u8 {
-    dirs.trailing_zeros() as u8
-}
 fn key(tile: u32, td: u8) -> u32 {
     tile.wrapping_shl(4) | u32::from(td)
 }
@@ -207,14 +211,6 @@ fn add(a: i32, b: i32) -> i32 {
 }
 fn mul(a: i32, b: i32) -> i32 {
     a.wrapping_mul(b)
-}
-fn overlaps(reserved: u8, td: u8) -> bool {
-    let bit = 1 << (td & 7);
-    if reserved & bit != 0 {
-        return true;
-    }
-    let bits = reserved | bit;
-    bits & bits.wrapping_sub(1) != 0 && bits != 0x0c && bits != 0x30
 }
 fn offset(tile: u32, dir: u8, map_x: u32) -> u32 {
     match dir {
@@ -550,25 +546,45 @@ impl Search {
         )
     }
     fn follow(&self, tile: u32, td: u8, no90: u8, compatible: u64, mask: bool) -> Follow {
-        unsafe {
-            (self.leaves.follow)(
-                self.input.context,
-                tile,
-                td,
-                compatible,
-                no90,
-                u8::from(mask),
-            )
+        let mut step =
+            unsafe { (self.leaves.follow)(self.input.context, tile, td, compatible, no90) };
+        if step.followed != 0 && mask {
+            let mut ft = crate::train_reservation::Follow {
+                old_tile: tile,
+                old_td: td,
+                new_tile: step.tile,
+                skipped: step.skipped,
+                dirs: step.dirs,
+                exitdir: step.exitdir,
+                station: step.station,
+                error: step.error,
+                ..Default::default()
+            };
+            step.followed = u8::from(crate::follow_track::mask_reserved_tracks(
+                self.pbs(),
+                &mut ft,
+            ));
+            step.dirs = ft.dirs;
+            step.error = ft.error;
         }
+        // Native GetSpeedLimit remains after masking, even if either step failed.
+        let speed = unsafe { (self.leaves.speed)(tile) };
+        Follow {
+            step,
+            min_speed: speed.min_speed,
+            max_speed: speed.max_speed,
+        }
+    }
+    fn pbs(&self) -> crate::pbs::Pbs<'_> {
+        crate::pbs::Pbs::acquire(unsafe { &*self.input.shared })
     }
     fn safe(&self, tile: u32, td: u8, forbid: u8) -> bool {
-        // SAFETY: The immutable shared table and native train outlive this synchronous search.
-        unsafe {
-            ((*self.input.shared).safe_waiting_position)(self.input.vehicle, tile, td, forbid != 0)
-        }
+        let pbs = self.pbs();
+        pbs.safe(pbs.handle(self.input.vehicle), tile, td, true, forbid != 0)
     }
     fn free(&self, tile: u32, td: u8, forbid: u8) -> bool {
-        unsafe { (self.leaves.free)(self.input.context, tile, td, forbid) != 0 }
+        let pbs = self.pbs();
+        pbs.free(pbs.handle(self.input.vehicle), tile, td, forbid != 0)
     }
     fn platform_length(&self, tile: u32, dir: u8) -> u32 {
         unsafe { (self.leaves.platform_length)(tile, dir) }
@@ -729,7 +745,10 @@ impl Search {
                 cur = offset(cur, exit(td ^ 8), self.input.map_x);
             }
         }
-        if overlaps(t.reserved, td) {
+        if crate::track_func::track_overlaps_tracks(
+            self.pbs().reserved(tile),
+            crate::track_func::trackdir_to_track(td),
+        ) {
             let mut cost = self.input.settings.pbs_cross as i32;
             if !diagonal(td) {
                 cost = mul(cost, 71) / 100;
@@ -790,7 +809,7 @@ impl Search {
         loop {
             if !skip_entry {
                 let mut transition = if self.input.forbid90 == 0
-                    && CROSS[usize::from(prev_td & 7)] & (1 << td) != 0
+                    && crate::track_func::trackdir_crosses_trackdirs(prev_td) & (1 << td) != 0
                 {
                     s.curve90 as i32
                 } else if td != NEXT[usize::from(prev_td)] {
@@ -800,8 +819,8 @@ impl Search {
                 };
                 if prev_info.flags & PLAIN != 0 && cur_info.flags & PLAIN != 0 {
                     let dir = exit(prev_td);
-                    let t1 = prev_info.tracks & REACH_TRACKS[usize::from(dir ^ 2)];
-                    let t2 = cur_info.tracks & REACH_TRACKS[usize::from(dir)];
+                    let t1 = prev_info.tracks & crate::track_func::diagdir_reaches_tracks(dir ^ 2);
+                    let t2 = cur_info.tracks & crate::track_func::diagdir_reaches_tracks(dir);
                     if t1 & t1.wrapping_sub(1) != 0 && t2 & t2.wrapping_sub(1) != 0 {
                         transition = add(transition, s.doubleslip as i32);
                     }
@@ -1181,10 +1200,14 @@ impl Search {
     fn init(&mut self) {
         match self.input.kind {
             0 | 2 => {
-                let (mut tile, mut td) = (INVALID, INVALID_TD);
-                unsafe {
-                    (self.leaves.origin)(self.input.context, &raw mut tile, &raw mut td);
-                }
+                let pbs = self.pbs();
+                let origin = pbs.follow_train(
+                    pbs.handle(self.input.vehicle),
+                    false,
+                    crate::train::Handle::NONE,
+                );
+                let tile = origin.tile;
+                let td = origin.td;
                 self.startup(tile, td, 0);
                 if self.input.kind == 2 {
                     self.startup(self.train.rear_tile, self.train.rear_td ^ 8, 100_000);
@@ -1228,8 +1251,20 @@ impl Search {
         ((a % self.input.map_x).abs_diff(b % self.input.map_x)
             + (a / self.input.map_x).abs_diff(b / self.input.map_x)) as i32
     }
-    fn write(&self, tile: u32, td: u8, op: u8) -> bool {
-        unsafe { (self.leaves.write)(tile, td, op) != 0 }
+    fn signal(&self, tile: u32, td: u8, green: bool) {
+        let rail = unsafe { &*self.pbs().0.rail };
+        (rail.set_signal_state)(
+            tile,
+            td,
+            if green {
+                crate::signal_type::SIGNAL_STATE_GREEN
+            } else {
+                crate::signal_type::SIGNAL_STATE_RED
+            },
+        );
+    }
+    fn mark_dirty(&self, tile: u32) {
+        (unsafe { &*self.input.shared }.mark_dirty)(tile);
     }
     fn output(&self, mask: u8, result: &Step) {
         unsafe {
@@ -1343,11 +1378,13 @@ impl Reservation {
             while (tile != fail || td != self.fail_td)
                 && unsafe { (search.leaves.compatible_station)(tile, start) != 0 }
             {
-                search.write(tile, td, 4);
+                (search.pbs().0.set_station)(tile, false);
                 tile = offset(tile, exit(td ^ 8), search.input.map_x);
             }
         } else if tile != fail || td != self.fail_td {
-            search.write(tile, td, 2);
+            search
+                .pbs()
+                .unreserve(tile, crate::track_func::trackdir_to_track(td));
         }
         (tile != self.target_tile || td != self.target_td) && (tile != fail || td != self.fail_td)
     }
@@ -1377,7 +1414,7 @@ impl Reservation {
         }
         // The original restores in insertion order, without dirtying again.
         for &(tile, td) in &self.signals {
-            search.write(tile, td, 6);
+            search.signal(tile, td, true);
             witness::hit(witness::RAIL_SIGNALS_RESTORED);
             let p = [2_u32];
             unsafe {
@@ -1429,7 +1466,8 @@ impl Reservation {
                                 platform_tile != self.target_tile || td != self.target_td;
                             break;
                         }
-                        search.write(platform_tile, td, 3);
+                        (search.pbs().0.set_station)(platform_tile, true);
+                        search.mark_dirty(platform_tile);
                         platform_tile = offset(platform_tile, exit(td ^ 8), search.input.map_x);
                         if unsafe { (search.leaves.compatible_station)(platform_tile, tile) == 0 }
                             || platform_tile == self.origin
@@ -1442,7 +1480,11 @@ impl Reservation {
                         }
                     }
                 } else {
-                    if !search.write(tile, td, 1) {
+                    if !search.pbs().try_reserve(
+                        tile,
+                        crate::track_func::trackdir_to_track(td),
+                        true,
+                    ) {
                         self.fail_tile = tile;
                         self.fail_td = td;
                         continue_segment = false;
@@ -1453,7 +1495,8 @@ impl Reservation {
                             && reverse.signal_green != 0
                         {
                             self.signals.push((tile, td ^ 8));
-                            search.write(tile, td ^ 8, 5);
+                            search.signal(tile, td ^ 8, false);
+                            search.mark_dirty(tile);
                             witness::hit(witness::RAIL_SIGNALS_RED);
                             let p = [1_u32];
                             unsafe {
@@ -1755,7 +1798,6 @@ crate::abi::layouts! {
         station,
         railtype,
         tracks,
-        reserved,
         station_track,
         tunnel_dir,
         uphill,
@@ -1765,27 +1807,24 @@ crate::abi::layouts! {
         signal_type,
         oneway,
     };
-    "OpenTTDRailFollow" ["probe"] => Follow {
+    "OpenTTDRailFollow" ["probe"] => FollowStep {
         tile,
         skipped,
-        min_speed,
-        max_speed,
         dirs,
         followed,
         error,
         station,
+        exitdir,
     };
     "OpenTTDRailLeaves" ["probe"] => Leaves {
         train,
         tile,
         follow,
-        free,
+        speed,
         compatible_station,
         platform_length,
         closest_station,
         destination_dirs,
-        origin,
-        write,
         output,
         debug,
     };
@@ -1835,5 +1874,9 @@ crate::abi::layouts! {
         order,
         nearest_depot,
         complex_waypoint,
+    };
+    "OpenTTDRailSpeed" ["probe"] => Speed {
+        min_speed,
+        max_speed,
     };
 }

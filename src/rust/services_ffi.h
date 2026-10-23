@@ -52,8 +52,8 @@ OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
  * mark_dirty is MarkTileDirtyByTile(tile), set_tropic_zone is SetTropicZone and
  * free_train_reservation is
  * FreeTrainTrackReservation(v), try_path_reserve is TryPathReserve(v, mark_as_stuck,
- * first_tile_okay) and safe_waiting_position is IsSafeWaitingPosition(v, tile,
- * trackdir, true, forbid_90_deg); the last two can reenter Rust train owners.
+ * first_tile_okay). pbs_services acquires leaves for direct Rust PBS calls.
+ * Train reservation services can reenter the Rust train owners.
  * Random logging still runs, but its debug source location names this wrapper.
  * Industry query returns 0 not industry,1 industry,2 bubble catcher and writes
  * TileVirtXY(x,y). It observes only type and industry graphics.
@@ -84,6 +84,7 @@ struct OpenTTDClearSquareServices {
 	bool (*docking)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking);
 	bool (*generating_world)() noexcept OPENTTD_SERVICE_DEFAULT(generating_world);
 };
+struct OpenTTDPbsServices;
 struct OpenTTDSharedServices {
 	void (*set_tile_owner)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tile_owner);
 	bool (*autoslope)() noexcept OPENTTD_SERVICE_DEFAULT(autoslope);
@@ -153,7 +154,7 @@ struct OpenTTDSharedServices {
 	void (*set_road_directions)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_road_directions);
 	bool (*road_powered)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_powered);
 	bool (*road_type_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_type_valid);
-	bool (*safe_waiting_position)(const Train *, uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(safe_waiting_position);
+	const OpenTTDPbsServices *(*pbs_services)(const OpenTTDSharedServices *) noexcept OPENTTD_SERVICE_DEFAULT(pbs_services);
 	bool (*service_at_helipad)() noexcept OPENTTD_SERVICE_DEFAULT(service_at_helipad);
 	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tropic_zone);
 	int32_t (*slope)(int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(slope);
@@ -289,7 +290,6 @@ struct OpenTTDRailMapServices {
 	SignalVariant (*signal_variant)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_variant);
 	void (*set_signal_variant)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_variant);
 	void (*cycle_signal_side)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cycle_signal_side);
-	TrackBits (*reserved_tracks)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reserved_tracks);
 	TrackBits (*rail_reservation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_reservation);
 	void (*set_track_reservation)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_track_reservation);
 	bool (*depot_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_reserved);

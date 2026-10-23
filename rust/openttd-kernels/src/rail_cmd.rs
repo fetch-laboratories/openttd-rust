@@ -20,6 +20,12 @@
     clippy::too_many_lines,
     clippy::fn_params_excessive_bools
 )]
+use crate::rail_map::is_pbs_signal as is_pbs;
+use crate::track_func::{
+    is_diagonal_trackdir as diagonal, trackdir_bits_to_track_bits as trackdir_tracks,
+    tracks_overlap,
+};
+
 use crate::command_type::DoCommandFlag;
 use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_WATER};
 use crate::direction_type::INVALID_DIAGDIR;
@@ -203,7 +209,6 @@ pub struct RailCommandServices {
     pub signal_infrastructure: extern "C" fn(u8, u32),
     /// `DirtyCompanyInfrastructureWindows`.
     /// `GetTrainForReservation`.
-    pub reserving_train: extern "C" fn(u32, u8) -> *mut Train,
     /// Train fields read at the signal re-reservation branch.
     pub parking: unsafe extern "C" fn(*mut Train) -> TrainParking,
     /// `v->tile` and `v->GetVehicleTrackdir()`, read only for the safe-waiting check.
@@ -254,7 +259,9 @@ const BIT_UPPER: u8 = 4;
 const BIT_LOWER: u8 = 8;
 const BIT_LEFT: u8 = 16;
 const BIT_RIGHT: u8 = 32;
+#[cfg(test)]
 const BIT_HORZ: u8 = 12;
+#[cfg(test)]
 const BIT_VERT: u8 = 48;
 const INVALID_TRACKDIR: u8 = 0xFF;
 
@@ -330,32 +337,14 @@ const LEVELED_TRACKS: [u8; 15] = [
 const SIGNAL_ALONG: [u8; 14] = [8, 8, 8, 2, 4, 1, 0, 0, 4, 4, 4, 1, 8, 2];
 const SIGNAL_AGAINST: [u8; 14] = [4, 4, 4, 1, 8, 2, 0, 0, 8, 8, 8, 2, 4, 1];
 const SIGNAL_ON_TRACK: [u8; 6] = [0xC, 0xC, 0xC, 3, 0xC, 3];
-const TRACKDIR_EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
-/// `_exitdir_reaches_trackdirs`.
-const EXIT_REACHES: [u16; 4] = [0x1009, 0x0016, 0x0520, 0x2a00];
 
-fn tracks_overlap(bits: u8) -> bool {
-    if bits == 0 || bits & bits.wrapping_sub(1) == 0 {
-        return false;
-    }
-    bits != BIT_HORZ && bits != BIT_VERT
-}
 /// Infrastructure pieces of a plain rail tile: squared when tracks overlap.
 fn pieces(bits: u8) -> u32 {
     let n = bits.count_ones();
     if tracks_overlap(bits) { n * n } else { n }
 }
-fn diagonal(trackdir: u8) -> bool {
-    trackdir & 7 < 2
-}
 fn reaches(trackdir: u8) -> u16 {
-    EXIT_REACHES[usize::from(TRACKDIR_EXIT[usize::from(trackdir)])]
-}
-fn trackdir_tracks(bits: u16) -> u8 {
-    ((bits | (bits >> 8)) & 0x3F) as u8
-}
-fn is_pbs(sigtype: u8) -> bool {
-    sigtype == 4 || sigtype == 5
+    crate::track_func::diagdir_reaches_trackdirs(crate::track_func::trackdir_to_exitdir(trackdir))
 }
 fn kill_first_bit(value: u8) -> u8 {
     value & value.wrapping_sub(1)
@@ -425,7 +414,7 @@ impl<'a> Ctx<'a> {
             && self.present_signals(tile) & SIGNAL_ON_TRACK[usize::from(track)] != 0
     }
     fn reserved(&self, tile: u32) -> u8 {
-        (self.rail.reserved_tracks)(tile).0
+        crate::pbs::Pbs::acquire(self.shared).reserved(tile)
     }
     fn signal_type(&self, tile: u32, track: u8) -> u8 {
         (self.rail.signal_type)(tile, track).0
@@ -812,7 +801,10 @@ impl<'a> Ctx<'a> {
                     w::hit(w::RAIL_CMD_REMOVE_CROSSING);
                     (self.s.crossing_removed)(tile, (self.rail.crossing_road_axis)(tile).0);
                     if self.reserved(tile) & trackbit != 0 {
-                        v = (self.s.reserving_train)(tile, track);
+                        v = crate::pbs::Pbs::acquire(self.shared)
+                            .train_for(tile, track)
+                            .shell
+                            .cast::<crate::services::Train>();
                         if !v.is_null() {
                             unsafe { (self.shared.free_train_reservation)(v) };
                         }
@@ -868,7 +860,10 @@ impl<'a> Ctx<'a> {
                 if flags & DoCommandFlag::EXECUTE != 0 {
                     w::hit(w::RAIL_CMD_REMOVE_RAIL);
                     if self.reserved(tile) & trackbit != 0 {
-                        v = (self.s.reserving_train)(tile, track);
+                        v = crate::pbs::Pbs::acquire(self.shared)
+                            .train_for(tile, track)
+                            .shell
+                            .cast::<crate::services::Train>();
                         if !v.is_null() {
                             unsafe { (self.shared.free_train_reservation)(v) };
                         }
@@ -1190,7 +1185,10 @@ impl<'a> Ctx<'a> {
         }
         let mut v: *mut Train = std::ptr::null_mut();
         if self.reserved(tile) & (1 << track) != 0 {
-            v = (self.s.reserving_train)(tile, track);
+            v = crate::pbs::Pbs::acquire(self.shared)
+                .train_for(tile, track)
+                .shell
+                .cast::<crate::services::Train>();
             if !v.is_null() {
                 unsafe { (self.shared.free_train_reservation)(v) };
             }
@@ -1286,11 +1284,13 @@ impl<'a> Ctx<'a> {
                 if !parked || {
                     let at = unsafe { (self.s.train_position)(v) };
                     // SAFETY: The reservation train remains live through this synchronous check.
-                    !unsafe {
-                        (self.shared.safe_waiting_position)(
-                            v,
+                    !{
+                        let pbs = crate::pbs::Pbs::acquire(self.shared);
+                        pbs.safe(
+                            pbs.handle(v),
                             at.tile,
                             at.trackdir,
+                            true,
                             (self.shared.forbid_90_deg)(),
                         )
                     }
@@ -1355,7 +1355,7 @@ impl<'a> Ctx<'a> {
                     return false;
                 }
                 if (self.shared.tunnel_bridge_direction)(*tile)
-                    != TRACKDIR_EXIT[usize::from(*trackdir)]
+                    != crate::track_func::trackdir_to_exitdir(*trackdir)
                 {
                     return false;
                 }
@@ -1608,20 +1608,28 @@ impl<'a> Ctx<'a> {
             w::hit(w::RAIL_CMD_SIGNAL_REMOVE);
             let mut v: *mut Train = std::ptr::null_mut();
             if self.reserved(tile) & (1 << track) != 0 {
-                v = (self.s.reserving_train)(tile, track);
+                v = crate::pbs::Pbs::acquire(self.shared)
+                    .train_for(tile, track)
+                    .shell
+                    .cast::<crate::services::Train>();
             } else if is_pbs(self.signal_type(tile, track)) {
                 let mut td = track;
                 let mut i = 0;
                 while v.is_null() && i < 2 {
                     if (self.rail.has_signal_trackdir)(tile, td ^ 8) {
-                        let next = self.map.add_diag(tile, TRACKDIR_EXIT[usize::from(td)]);
+                        let next = self
+                            .map
+                            .add_diag(tile, crate::track_func::trackdir_to_exitdir(td));
                         let tracks = trackdir_tracks(reaches(td));
                         let reserved = self.reserved(next);
                         if reserved & tracks != 0 {
                             w::hit(w::RAIL_CMD_SIGNAL_REMOVE_PATH_END);
                             let found =
                                 (self.reserved(next) & tracks & 0x3F).trailing_zeros() as u8;
-                            v = (self.s.reserving_train)(next, found);
+                            v = crate::pbs::Pbs::acquire(self.shared)
+                                .train_for(next, found)
+                                .shell
+                                .cast::<crate::services::Train>();
                         }
                     }
                     i += 1;
@@ -1899,7 +1907,10 @@ impl<'a> Ctx<'a> {
     }
     /// Free an unpowered reserving train and remember it for re-reservation.
     fn reroute(&self, tile: u32, track: u8, totype: u8) -> Option<*mut Train> {
-        let v = (self.s.reserving_train)(tile, track);
+        let v = crate::pbs::Pbs::acquire(self.shared)
+            .train_for(tile, track)
+            .shell
+            .cast::<crate::services::Train>();
         if !v.is_null() && !unsafe { (self.s.train_powered)(v, totype) } {
             w::hit(w::RAIL_CMD_CONVERT_REROUTE);
             unsafe { (self.shared.free_train_reservation)(v) };
@@ -1929,7 +1940,10 @@ impl<'a> Ctx<'a> {
             let owner = (self.shared.tile_owner)(tile);
             let mut v: *mut Train = std::ptr::null_mut();
             if (self.rail.depot_reserved)(tile) {
-                v = (self.s.reserving_train)(tile, dir & 1);
+                v = crate::pbs::Pbs::acquire(self.shared)
+                    .train_for(tile, dir & 1)
+                    .shell
+                    .cast::<crate::services::Train>();
                 if !v.is_null() {
                     unsafe { (self.shared.free_train_reservation)(v) };
                 }
@@ -2456,7 +2470,6 @@ crate::abi::layouts! {
         rail_infrastructure,
         road_infrastructure,
         signal_infrastructure,
-        reserving_train,
         parking,
         train_position,
         layout_changed,
