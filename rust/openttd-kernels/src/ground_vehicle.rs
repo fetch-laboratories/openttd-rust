@@ -120,6 +120,7 @@ use crate::track_type::{TRACK_BIT_WORMHOLE, TRACK_BIT_X, TRACK_BIT_Y};
 use crate::vehicle::{VS_HIDDEN, VS_STOPPED, VehicleRef, VehicleServices, VehicleType};
 use crate::vehicle_base::is_articulated_part;
 use crate::vehicle_type::GROUND_ACCELERATION;
+use crate::witness::{self, hit};
 
 pub const GVF_GOINGUP_BIT: u16 = 0;
 pub const GVF_GOINGDOWN_BIT: u16 = 1;
@@ -252,6 +253,9 @@ pub(crate) fn weight(s: &Services, v: VehicleRef, full: bool) -> u16 {
     weight_owned(s, v, (s.resolve)(v), full)
 }
 fn weight_owned(s: &Services, v: VehicleRef, o: Owner, full: bool) -> u16 {
+    if full {
+        hit(witness::GROUND_FULL_WEIGHT);
+    }
     let r = (s.weight_input)(v);
     let count = if full {
         (s.capacity)((s.vehicle.engine)(v), v, std::ptr::null_mut())
@@ -360,6 +364,11 @@ pub(crate) fn power_changed(s: &Services, v: VehicleRef) {
         assert!((s.first)(v) == v);
     }
     let o = (s.resolve)(v);
+    hit(if o.rail() {
+        witness::GROUND_RAIL_POWER
+    } else {
+        witness::GROUND_ROAD_POWER
+    });
     let mut total_power = 0_u32;
     let mut max_te = 0_u32;
     let mut parts = 0_u32;
@@ -425,6 +434,11 @@ pub(crate) fn cargo_changed(s: &Services, v: VehicleRef) {
         assert!((s.first)(v) == v);
     }
     let o = (s.resolve)(v);
+    hit(if o.rail() {
+        witness::GROUND_RAIL_WEIGHT
+    } else {
+        witness::GROUND_ROAD_WEIGHT
+    });
     let mut total = 0_u32;
     let mut part = Some(v);
     while let Some(u) = part {
@@ -452,8 +466,10 @@ pub(crate) fn slope_resistance(s: &Services, v: VehicleRef) -> i64 {
         let o = (s.resolve)(u);
         let flags = unsafe { (*o.state).flags };
         if flags & (1 << GVF_GOINGUP_BIT) != 0 {
+            hit(witness::GROUND_UPHILL);
             incline += i64::from(unsafe { (*o.state).cache.cached_slope_resistance });
         } else if flags & (1 << GVF_GOINGDOWN_BIT) != 0 {
+            hit(witness::GROUND_DOWNHILL);
             incline -= i64::from(unsafe { (*o.state).cache.cached_slope_resistance });
         }
         part = (s.vehicle.next)(u);
@@ -487,6 +503,11 @@ pub(crate) fn acceleration(s: &Services, v: VehicleRef) -> i32 {
         area * i64::from(unsafe { (*o.state).cache.cached_air_drag }) * speed * speed / 1000;
     resistance += slope_resistance(s, v);
     let mode = acceleration_status_for(o, r.status);
+    hit(if mode == AS_ACCEL {
+        witness::GROUND_ACCELERATE
+    } else {
+        witness::GROUND_BRAKE
+    });
     let max_te = unsafe { (*o.state).cache.cached_max_te } as i32;
     let force = if speed > 0 {
         if maglev {
@@ -535,6 +556,7 @@ pub(crate) fn chain_in_depot(s: &Services, v: VehicleRef) -> bool {
         }
         part = (s.vehicle.next)(u);
     }
+    hit(witness::GROUND_DEPOT);
     true
 }
 pub(crate) fn crash(s: &Services, v: VehicleRef, flooded: bool) -> u32 {
@@ -546,6 +568,11 @@ pub(crate) fn crash(s: &Services, v: VehicleRef, flooded: bool) -> u32 {
         }
         part = (s.vehicle.next)(u);
     }
+    hit(if flooded {
+        witness::GROUND_FLOOD
+    } else {
+        witness::GROUND_CRASH
+    });
     // All flags are cleared before base Crash makes its original random draw.
     (s.base_crash)(v, flooded)
 }
@@ -638,6 +665,7 @@ pub(crate) fn update_speed(
     min_speed: i32,
     max_speed: i32,
 ) -> u32 {
+    hit(witness::GROUND_SPEED);
     let r = (s.speed_input)(v);
     let mut spd = u32::from(r.subspeed).wrapping_add(accel);
     (s.vehicle.write_subspeed)(v, spd as u8);

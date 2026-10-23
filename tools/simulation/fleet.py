@@ -294,6 +294,11 @@ def check(scenario, run, mode, role, result):
     for line in required:
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
+    if scenario["fleet"] in ("transaction-build-road", "transaction-rail"):
+        kind = "road" if scenario["fleet"] == "transaction-build-road" else "rail"
+        result[f"{mode}_{role}_ground"] = branch_witnesses(
+            scenario, run, role, "ground", [kind + "_power", kind + "_weight"]
+        )
     if scenario["fleet"] in BRANCHES:
         result[mode + "_" + role + "_branches"] = branch_witnesses(
             scenario, run, role, "vehicle_transactions", BRANCHES[scenario["fleet"]]

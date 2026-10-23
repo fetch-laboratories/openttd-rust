@@ -68,6 +68,21 @@ witness_blocks! {
         ENGINE_RENAME = 12 => "engine.rename",
         ENGINE_ENTRIES = 13 => "engine.entries",
     }
+    ground {
+        GROUND_ROAD_POWER = 0 => "ground.road_power",
+        GROUND_RAIL_POWER = 1 => "ground.rail_power",
+        GROUND_ROAD_WEIGHT = 2 => "ground.road_weight",
+        GROUND_RAIL_WEIGHT = 3 => "ground.rail_weight",
+        GROUND_ACCELERATE = 4 => "ground.accelerate",
+        GROUND_BRAKE = 5 => "ground.brake",
+        GROUND_UPHILL = 6 => "ground.uphill",
+        GROUND_DOWNHILL = 7 => "ground.downhill",
+        GROUND_DEPOT = 8 => "ground.depot",
+        GROUND_CRASH = 9 => "ground.crash",
+        GROUND_FLOOD = 10 => "ground.flood",
+        GROUND_SPEED = 11 => "ground.speed",
+        GROUND_FULL_WEIGHT = 12 => "ground.full_weight",
+    }
     // Registry: house (#256).
     house {
         HOUSE = 0 => "house.stage",

@@ -332,6 +332,20 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 
 def check(scenario, run, mode, role, result):
+    if scenario.get("roads"):
+        from . import core
+
+        required = ["road_power", "road_weight"]
+        operation = scenario["roads"]
+        if operation in ("original", "realistic", "reload", "depot-service"):
+            required += ["speed"]
+        if operation == "realistic":
+            required += ["accelerate"]
+        if operation in ("level-crossing", "flooding"):
+            required += ["flood" if operation == "flooding" else "crash"]
+        result[f"{mode}_{role}_ground"] = core.branch_witnesses(
+            scenario, run, role, "ground", required
+        )
     if scenario.get("road_commands"):
         from . import core
 
@@ -981,7 +995,8 @@ def game_environment(scenario):
 
     return (
         core.WITNESS_ENVIRONMENT
-        if scenario.get("road_commands") and scenario.get("witnesses")
+        if (scenario.get("road_commands") or scenario.get("roads"))
+        and scenario.get("witnesses")
         else {}
     )
 
