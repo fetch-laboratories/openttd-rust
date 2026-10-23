@@ -11,6 +11,7 @@
 #include "water_map.h"
 #include "void_map.h"
 #include "pathfinder/water_regions.h"
+#include "pathfinder/pathfinder_func.h"
 #include "road.h"
 #include "newgrf_roadstop.h"
 extern RoadTypeInfo _roadtypes[ROADTYPE_END];
@@ -263,6 +264,11 @@ static bool RoadCommandsScenario(std::span<std::string_view> args)
 	RoadRun<CMD_BUILD_ROAD>("junction", t(5, 2), ROAD_Y, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid());
 	RoadRun<CMD_BUILD_ROAD>("tram", t(6, 2), ROAD_X, ROADTYPE_TRAM, DRD_NONE, TownID::Invalid());
 	RoadRun<CMD_BUILD_ROAD>("half-tram", t(15, 2), ROAD_NE, ROADTYPE_TRAM, DRD_NONE, TownID::Invalid());
+	for (RoadBits bits : {ROAD_NW, ROAD_SW, ROAD_SE, ROAD_NE}) {
+		RoadRun<CMD_LANDSCAPE_CLEAR>("half-tram-clear", t(15, 2));
+		RoadRun<CMD_BUILD_ROAD>("half-tram-direction", t(15, 2), bits, ROADTYPE_TRAM, DRD_NONE, TownID::Invalid());
+		fmt::print(stderr, "ROADCMD movement-half-tram-{} {}\n", static_cast<uint>(bits), GetTrackdirBitsForRoad(t(15, 2), RTT_TRAM));
+	}
 	RoadRun<CMD_BUILD_ROAD_DEPOT>("depot", t(8, 5), ROADTYPE_ROAD, DIAGDIR_NE);
 	RoadRun<CMD_BUILD_ROAD_DEPOT>("depot-same", t(8, 5), ROADTYPE_ROAD, DIAGDIR_NE);
 	RoadRun<CMD_BUILD_ROAD_DEPOT>("rotate", t(8, 5), ROADTYPE_ROAD, DIAGDIR_SE);
