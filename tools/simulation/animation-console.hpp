@@ -78,6 +78,12 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 			fmt::print(stderr, "OBJECT animation-speed {} {} {} {}\n", name, value, tick, frame(-1));
 		}
 	}
+	spec->callback_mask.Reset();
+	for (uint8_t raw : {0, 16, 63, 64, 255}) for (uint64_t tick : {0ULL, 1ULL, 65536ULL}) {
+		spec->animation.speed = raw; TimerGameTick::counter = tick; frame(0); animate(tile);
+		fmt::print(stderr, "OBJECT animation-property-speed {} {} {} {}\n", name, raw, tick, frame(-1));
+	}
+
 	SetAnimationFrame(tile, old_frame); SetAnimatedTileState(tile, state); RestoreAnimationQueue(queue);
 	fmt::print(stderr, "OBJECT animation-binding {} true\n", name);
 }

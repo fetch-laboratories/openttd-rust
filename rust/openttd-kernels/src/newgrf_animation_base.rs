@@ -103,7 +103,9 @@ pub fn animate<S, O, E: Default, F: Frame<O>>(
             speed = (cb as u8).min(16);
         }
     }
-    if !(a.shared().tick_counter)().is_multiple_of(1_u64 << speed) {
+    // Property speeds are raw bytes for five bindings. Keep the native word
+    // shift masking; a Rust checked shift would introduce an overflow abort.
+    if !(a.shared().tick_counter)().is_multiple_of(1_u64.wrapping_shl(u32::from(speed))) {
         return;
     }
     let mut frame = F::get(a, e.object, tile);
