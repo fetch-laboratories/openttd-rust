@@ -89,6 +89,7 @@ pub struct Image {
 pub struct Decoder {
     pub context: *mut c_void,
     pub read: extern "C" fn(*mut c_void, *mut Image) -> bool,
+    pub finish: extern "C" fn(*mut c_void),
 }
 
 #[repr(C)]
@@ -343,6 +344,7 @@ impl World<'_> {
             data: std::ptr::null(),
         };
         if !(decoder.read)(decoder.context, &raw mut image) {
+            (decoder.finish)(decoder.context);
             w::hit(w::GENERATION_LOAD_FAILURE);
             return false;
         }
@@ -356,6 +358,9 @@ impl World<'_> {
         self.fix_slopes(max_height);
         (self.a.set_freeform)(!(self.a.surrounded_by_water)());
         (self.a.screen_dirty)();
+        // End the source's local decoded buffer before returning to progress.
+        // Every read through image.data ended in greyscale above.
+        (decoder.finish)(decoder.context);
         true
     }
 }
@@ -377,7 +382,7 @@ pub unsafe extern "C" fn openttd_rust_flat_empty_world(
     unsafe { World::new(&*a) }.flat_empty_world(height, freeform, max_height);
 }
 /// # Safety
-/// Decoder output is live and initialized until this call returns, and cannot
+/// Decoder output is live and initialized until finish, and cannot
 /// alias map storage. Decode failures retain the source's early false return.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_load_heightmap(

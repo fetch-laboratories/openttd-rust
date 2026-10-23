@@ -1091,6 +1091,7 @@ bool GenerateLandscape(uint8_t mode)
 	const OpenTTDHeightmapDecoder heightmap{
 		.context = &decoder,
 		.read = [](void *ctx, OpenTTDHeightmapImage *out) noexcept { return static_cast<RustHeightmapDecoder *>(ctx)->Read(_file_to_saveload.ftype.detailed, _file_to_saveload.name, out); },
+		.finish = decoder.view.finish,
 	};
 	const auto &g = _settings_game.game_creation;
 	const OpenTTDLandscapeGenerationSettings settings{

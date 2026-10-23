@@ -5,7 +5,8 @@
 #include "landscape_generation_ffi.h"
 #include "../fios.h"
 /* The decoded byte buffer belongs only to the native decoder. Rust borrows it
- * synchronously after read, before destruction; map services cannot resize it. */
+ * synchronously after read, until finish frees it at LoadHeightmap return.
+ * Map services cannot resize it; no filename view crosses generation progress. */
 struct RustHeightmapDecoder {
 	DetailedFileType type;
 	std::string_view filename;

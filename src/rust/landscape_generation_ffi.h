@@ -19,6 +19,7 @@ struct OpenTTDHeightmapImage { uint32_t width, height; const uint8_t *data; };
 struct OpenTTDHeightmapDecoder {
 	void *context;
 	bool (*read)(void *, OpenTTDHeightmapImage *) noexcept OPENTTD_SERVICE_DEFAULT(read);
+	void (*finish)(void *) noexcept OPENTTD_SERVICE_DEFAULT(finish);
 };
 /* Native map storage remains canonical. The immutable tables outlive each call;
  * leaves do not yield or retain pointers. No raw-map descriptor is authorized. */

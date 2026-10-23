@@ -531,6 +531,7 @@ RustHeightmapDecoder::RustHeightmapDecoder(DetailedFileType type, std::string_vi
 		auto &decoder = *static_cast<RustHeightmapDecoder *>(ctx);
 		return decoder.Read(decoder.type, decoder.filename, out);
 	},
+	.finish = [](void *ctx) noexcept { std::vector<uint8_t>{}.swap(static_cast<RustHeightmapDecoder *>(ctx)->image); },
 } {}
 bool RustHeightmapDecoder::Read(DetailedFileType type, std::string_view filename, OpenTTDHeightmapImage *out) noexcept
 {
