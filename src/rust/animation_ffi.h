@@ -4,6 +4,7 @@
 #define RUST_ANIMATION_FFI_H
 #include "services_ffi.h"
 #include "../animated_tile_map.h"
+#include "../tile_cmd.h"
 #include "town_ffi.h"
 #include "industry_ffi.h"
 struct HouseSpec; struct Town; struct IndustryTileSpec; struct Industry;
@@ -86,8 +87,6 @@ size_t openttd_rust_animation_count();
 uint32_t openttd_rust_animation_at(size_t);
 void openttd_rust_animation_append(uint32_t);
 void openttd_rust_animation_afterload(bool, bool);
-bool openttd_rust_may_animate(uint32_t);
-void openttd_rust_animate_tile(uint32_t);
 void openttd_rust_animate_house(uint32_t);
 void openttd_rust_animate_industry(uint32_t);
 void openttd_rust_animate_station(uint32_t);
