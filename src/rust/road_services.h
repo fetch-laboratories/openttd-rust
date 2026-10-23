@@ -272,6 +272,7 @@ static OpenTTDRoadTrackdirRead OPENTTD_VEHICLE_CALL RoadSvcTrackdirRead(OpenTTDV
 static void OPENTTD_VEHICLE_CALL RoadSvcProcessOrders(OpenTTDVehicle *v) noexcept { ProcessOrders(VehicleOf(v)); }
 
 static constinit const OpenTTDRoadLeaves _rust_road_leaves{
+	.candidate = RoadSvcCandidate,
 	.vehicle = &_rust_vehicle_services,
 	.ground = &_rust_ground_services<RoadVehicle>,
 	.shared = &_rust_shared_services,
@@ -288,7 +289,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.link = RoadSvcLink,
 	.link_tile = RoadSvcLinkTile,
 	.enter_tile = RoadSvcEnterTile,
-	.candidate = RoadSvcCandidate,
 	.has_road = RoadSvcHasRoad,
 	.track_status = RoadSvcTrackStatus,
 	.any_road_bits = RoadSvcAnyRoadBits,
