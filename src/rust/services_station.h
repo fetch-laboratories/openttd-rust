@@ -70,6 +70,7 @@ inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Statio
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->facilities.Test(StationFacility::Airport); }
 inline bool RustStationHasHangar(const Station *s) noexcept { return s->airport.HasHangar(); }
 inline bool RustStationReserved(uint32_t tile) noexcept { return HasStationReservation(TileIndex{tile}); }
+inline void RustSetRailStationReservation(uint32_t tile, bool reserved) noexcept { SetRailStationReservation(TileIndex{tile}, reserved); }
 inline void RustStationPlatformReservation(uint32_t tile, uint8_t dir, bool reserved) noexcept { SetRailStationPlatformReservation(TileIndex{tile}, static_cast<DiagDirection>(dir), reserved); }
 inline bool RustCompatibleStationTiles(uint32_t a, uint32_t b) noexcept { return IsCompatibleTrainStationTile(TileIndex{a}, TileIndex{b}); }
 inline bool RustStationStationAvailable() noexcept { return Station::CanAllocateItem(); }
