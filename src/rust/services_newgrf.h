@@ -12,6 +12,7 @@
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
 #include "../newgrf_house.h"
+#include "../house.h"
 #include "../industrytype.h"
 inline const HouseSpec *RustHouseSpec(uint16_t house) noexcept { return HouseSpec::Get(house); }
 
