@@ -33,8 +33,8 @@ pub struct PbsServices {
     pub compatible_station: extern "C" fn(u32, u32) -> bool,
     pub show_reservation: extern "C" fn() -> bool,
     pub assert_platform: extern "C" fn(u32, u8) -> (),
-    pub station: extern "C" fn(u32) -> *mut std::ffi::c_void,
-    pub randomisation: extern "C" fn(*mut std::ffi::c_void, u32) -> (),
+    pub station: extern "C" fn(u32) -> *mut crate::station::BaseStation,
+    pub randomisation: extern "C" fn(*mut crate::station::BaseStation, u32) -> (),
 
     pub is_crossing: extern "C" fn(u32) -> bool,
     pub read_train_on_res: extern "C" fn(*const TrainOutput) -> Handle,

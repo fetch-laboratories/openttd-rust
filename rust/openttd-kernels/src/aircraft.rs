@@ -715,10 +715,9 @@ impl World<'_> {
         i64::from(self.map().tile_y(t))
     }
     fn tile_virt(&self, x: i64, y: i64) -> u32 {
-        ((y as i32 as u32) >> 4)
-            .wrapping_mul(self.map().size_x())
-            .wrapping_add((x as i32 as u32) >> 4)
+        self.map().tile_virt_xy(x as i32 as u32, y as i32 as u32)
     }
+
     fn height(&self, id: Vehicle, observed: Option<&MovementObservations>) -> i64 {
         let point = observed.map_or_else(|| self.xy(id), MovementObservations::xy);
         let x = i64::from(point.x).clamp(0, self.map_max_x() * 16);

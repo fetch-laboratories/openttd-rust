@@ -587,8 +587,8 @@ crate::abi::layouts! {
     "OpenTTDRoadStopAnimationEntry" ["probe"] => Entry<RoadSpec, BaseStation> { spec, object };
 }
 
-/// Native station lookup keeps the source's strict Station::Get operation and
-/// performs its BaseStation conversion before crossing the boundary.
+/// Native station lookup keeps the source's strict `Station::Get` operation and
+/// performs its `BaseStation` conversion before crossing the boundary.
 pub(crate) fn station_base(id: u16) -> *mut BaseStation {
     (services().station_base)(id)
 }
