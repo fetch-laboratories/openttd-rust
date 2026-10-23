@@ -55,8 +55,7 @@ static void FleetGroup_colour_dirty(uint8_t owner, uint8_t type) noexcept { Inva
 static void FleetGroup_replace_dirty(uint8_t type) noexcept { SetWindowDirty(WC_REPLACE_VEHICLE, type); }
 static void FleetGroup_replace_invalidate(uint8_t type) noexcept { InvalidateWindowData(WC_REPLACE_VEHICLE, type); }
 static void FleetGroup_alter_dirty(uint8_t type) noexcept { InvalidateWindowData(WC_REPLACE_VEHICLE, type, 1); InvalidateWindowClassesData(WC_VEHICLE_VIEW); InvalidateWindowClassesData(WC_VEHICLE_DETAILS); }
-static void FleetGroup_vehicle_dirty(uint32_t id) noexcept { InvalidateWindowData(WC_VEHICLE_VIEW, VehicleID(id)); InvalidateWindowData(WC_VEHICLE_DETAILS, VehicleID(id)); }
-static void FleetGroup_depot_dirty(void *shell) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, static_cast<Vehicle *>(shell)->tile); }
+static void FleetGroup_vehicle_dirty(uint32_t id) noexcept { RustVehicleInvalidateView(VehicleID(id)); InvalidateWindowData(WC_VEHICLE_DETAILS, VehicleID(id)); }
 static void FleetGroup_close_replace(uint8_t type) noexcept { CloseWindowById(WC_REPLACE_VEHICLE, type); }
 static bool FleetGroup_list_generate(void *context) noexcept { auto *c = static_cast<FleetVehicleListContext *>(context); return GenerateVehicleSortList(&c->list, c->vli); }
 static size_t FleetGroup_list_size(void *context) noexcept { return static_cast<FleetVehicleListContext *>(context)->list.size(); }
@@ -116,7 +115,7 @@ static const OpenTTDFleetGroupServices _fleet_group_services{
 	.replace_invalidate = FleetGroup_replace_invalidate,
 	.alter_dirty = FleetGroup_alter_dirty,
 	.vehicle_dirty = FleetGroup_vehicle_dirty,
-	.depot_dirty = FleetGroup_depot_dirty,
+	.depot_dirty = RustVehicleDirtyDepotOpaque,
 	.close_replace = FleetGroup_close_replace,
 	.screen_dirty = RustScreenDirty,
 	.list_generate = FleetGroup_list_generate,

@@ -15,7 +15,30 @@ pub const OT_GOTO_DEPOT: u8 = 2;
 pub const OT_LOADING: u8 = 3;
 /// `OT_LEAVESTATION`.
 pub const OT_LEAVESTATION: u8 = 4;
+/// `OT_DUMMY`.
+pub const OT_DUMMY: u8 = 5;
 /// `OT_GOTO_WAYPOINT`.
 pub const OT_GOTO_WAYPOINT: u8 = 6;
+/// `OT_CONDITIONAL`.
+pub const OT_CONDITIONAL: u8 = 7;
 /// `OT_IMPLICIT`.
 pub const OT_IMPLICIT: u8 = 8;
+/// `INVALID_VEH_ORDER_ID`.
+pub const INVALID_VEH_ORDER_ID: u8 = 0xFF;
+/// `OrderLoadType::FullLoad` and `FullLoadAny`.
+pub const OLFB_FULL_LOAD: u8 = 2;
+pub const OLFB_FULL_LOAD_ANY: u8 = 3;
+/// `OrderDepotTypeFlag::PartOfOrders`.
+pub const ODTF_PART_OF_ORDERS: u8 = 1 << 1;
+/// `OrderDepotActionFlag::Halt`.
+pub const ODATF_HALT: u8 = 1 << 0;
+/// `OrderDepotActionFlag::NearestDepot`.
+pub const ODATF_NEAREST_DEPOT: u8 = 1 << 1;
+/// `OrderLoadType::NoLoad`.
+pub const OLFB_NO_LOAD: u8 = 4;
+/// `OrderUnloadType::Unload`.
+pub const OUFB_UNLOAD: u8 = 1;
+/// `OrderUnloadType::Transfer`.
+pub const OUFB_TRANSFER: u8 = 2;
+/// `OrderUnloadType::NoUnload`.
+pub const OUFB_NO_UNLOAD: u8 = 4;

@@ -27,7 +27,8 @@ use crate::rail_cmd::{
     RailCommandServices, TUNNELBRIDGE_TRACKBIT_FACTOR,
 };
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Map, RailMapServices, Services, TownHandle,
+    CommandCost, CommandCostServices, CommandServices, Map, RailMapServices, Services, Slope,
+    TownHandle,
 };
 use crate::slope_func::{get_slope_max_z, is_slope_with_one_corner_raised, is_steep_slope};
 use crate::strings_type::INVALID_STRING_ID;
@@ -1646,16 +1647,18 @@ impl<'a> Ctx<'a> {
                     if scratch.ok() && bits == copy {
                         let mut old_slope = (self.shared.tile_slope)(tile);
                         let mut old_z = (self.shared.tile_z)(tile);
-                        let old = (self.r.apply_foundation)(
-                            (self.s.foundation)(old_slope, bits).0,
-                            old_slope,
+                        let old = (self.shared.apply_foundation)(
+                            (self.s.foundation)(old_slope, bits),
+                            Slope(old_slope),
                         );
                         old_z += old.z;
-                        old_slope = old.slope;
-                        let new =
-                            (self.r.apply_foundation)((self.s.foundation)(slope, bits).0, slope);
+                        old_slope = old.slope.0;
+                        let new = (self.shared.apply_foundation)(
+                            (self.s.foundation)(slope, bits),
+                            Slope(slope),
+                        );
                         z += new.z;
-                        slope = new.slope;
+                        slope = new.slope.0;
                         old_z == z && old_slope == slope
                     } else {
                         false
@@ -2228,4 +2231,61 @@ pub(crate) unsafe fn update_company_road_infrastructure(
     (rail.road_infrastructure)(owner, rt, count as u32);
     let commands = unsafe { &*rail.command };
     (commands.infrastructure_dirty)(owner);
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRoadNearestTownTile" ["probe"] => NearestTownTile { road, depot, town_owned, };
+    "OpenTTDRoadCommandContext" ["probe"] => CommandContext {
+        services,
+        scratch,
+        cost,
+        ret,
+    };
+    "OpenTTDRoadCommandServices" ["probe"] => RoadCommandServices {
+        do_build,
+        rail_commands,
+        town,
+        authority,
+        strings,
+        nearest_tile,
+        town_valid,
+        town_edge,
+        set_town,
+        foundation,
+        extra_dynamite,
+        depot_slope,
+        make_depot,
+        depot_exit,
+        next_effect,
+        delete_effect,
+        owned_by_town,
+        scratch_cost,
+        conversion_scratch,
+        collect_vehicles,
+        cargo_changed,
+    };
+    "OpenTTDRoadConversionScratch" ["probe"] => ConversionScratch {
+        frame,
+        area,
+        error,
+        ret,
+    };
+    "OpenTTDRoadTownEdge" ["probe"] => TownEdge {
+        tile,
+        radius,
+    };
+    "OpenTTDRoadWorksEffect" ["probe"] => WorksEffect {
+        id,
+        tile,
+    };
+    "OpenTTDRoadCommandStrings" ["probe"] => Strings {
+        no_road,
+        no_tram,
+        junction,
+        remove_road,
+        no_suitable_road,
+        no_suitable_tram,
+        authority,
+    };
 }

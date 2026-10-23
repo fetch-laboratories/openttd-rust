@@ -670,3 +670,42 @@ impl Output for NativeOutput<'_> {
         (self.pbs.0.write_train_on_res)(self.output, value);
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDPbsServices" ["probe"] => PbsServices {
+        shared,
+        rail,
+        train,
+        depot_bits,
+        crossing_bits,
+        station_bits,
+        wormhole_bits,
+        set_depot,
+        set_station,
+        set_wormhole,
+        try_track,
+        unreserve_track,
+        station_reserved,
+        compatible_station,
+        show_reservation,
+        assert_track,
+        assert_platform,
+        station,
+        randomisation,
+        animation,
+        is_crossing,
+        read_train_on_res,
+        write_train_on_res,
+        assertions,
+        handle,
+        all_compatible,
+        compatible,
+        tile_rail_type,
+        rail90,
+        blocking,
+        has_pbs,
+        index,
+        follow,
+    };
+}

@@ -464,3 +464,28 @@ pub unsafe extern "C" fn openttd_rust_water_visit_next(
         0
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDWaterRegionContext" ["common"] => Context {
+        owner,
+        leaves,
+    };
+    "OpenTTDWaterPatch" ["probe"] => Patch {
+        x,
+        y,
+        label,
+    };
+    "OpenTTDWaterSnapshot" ["probe"] => Snapshot {
+        edges,
+        labels,
+        patches,
+        aqueducts,
+    };
+    "OpenTTDWaterLeaves" ["probe"] => Leaves {
+        tracks,
+        follow,
+        aqueduct,
+        debug,
+    };
+}

@@ -49,7 +49,6 @@ jobs:
 
     # Keep the Clang build's upstream PCH coverage; cache both GCC flavours.
     - name: Identify compiler cache
-      if: inputs.compiler != 'clang'
       id: compiler-image
       env:
         EXTRA_CMAKE_PARAMETERS: ${{ inputs.extra-cmake-parameters }}
@@ -66,18 +65,31 @@ jobs:
         key: ccache-linux-v2-${{ inputs.compiler }}-${{ steps.compiler-image.outputs.flavour }}-${{ steps.compiler-image.outputs.version }}-${{ hashFiles('migration/ccache.conf') }}-${{ inputs.checkout-ref || github.sha }}
         restore-keys: ccache-linux-v2-${{ inputs.compiler }}-${{ steps.compiler-image.outputs.flavour }}-${{ steps.compiler-image.outputs.version }}-${{ hashFiles('migration/ccache.conf') }}-
 
+    # Use the same ABI-hashed file cache as Windows/macOS, without Mono/NuGet.
+    - name: Restore vcpkg binary cache
+      id: vcpkg-binary-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/vcpkg-binary-cache
+        key: vcpkg-bin-x64-linux-${{ inputs.compiler }}-${{ hashFiles('vcpkg.json') }}-${{ steps.compiler-image.outputs.version }}
+        restore-keys: vcpkg-bin-x64-linux-${{ inputs.compiler }}-${{ hashFiles('vcpkg.json') }}-
+
     - name: Setup vcpkg
-      id: vcpkg
-      uses: OpenTTD/actions/setup-vcpkg@v6
+      timeout-minutes: 5
+      run: |
+        git -c http.lowSpeedLimit=1000 -c http.lowSpeedTime=60 clone --depth 1 https://github.com/microsoft/vcpkg "$RUNNER_TEMP/vcpkg"
+        "$RUNNER_TEMP/vcpkg/bootstrap-vcpkg.sh" -disableMetrics
 
     - name: Install dependencies
+      timeout-minutes: 10
       run: |
         echo "::group::Update apt"
-        sudo apt-get update
+        sudo rm -f /etc/apt/sources.list.d/microsoft*.list /etc/apt/sources.list.d/microsoft*.sources
+        sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
         echo "::endgroup::"
 
         echo "::group::Install dependencies"
-        sudo apt-get install -y --no-install-recommends \
+        sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y --no-install-recommends \
           ccache \
           liballegro4-dev \
           libcurl4-openssl-dev \
@@ -100,11 +112,19 @@ jobs:
 
         # We only use breakpad from vcpkg, as its CMake files
         # are a bit special. So the Ubuntu's variant doesn't work.
-        ${{ steps.vcpkg.outputs.vcpkg }} install breakpad
+        "$RUNNER_TEMP/vcpkg/vcpkg" install breakpad
 
         echo "::endgroup::"
       env:
         DEBIAN_FRONTEND: noninteractive
+        VCPKG_BINARY_SOURCES: clear;files,${{ runner.temp }}/vcpkg-binary-cache,readwrite
+
+    - name: Save vcpkg binary cache
+      if: github.event_name == 'push' && github.ref == 'refs/heads/rust-migration' && steps.vcpkg-binary-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/vcpkg-binary-cache
+        key: ${{ steps.vcpkg-binary-cache.outputs.cache-primary-key }}
 
     - name: Install OpenGFX
       uses: ./.github/actions/install-opengfx

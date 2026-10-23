@@ -130,7 +130,7 @@ static void TrainArrivalNews(OpenTTDTrainHandle id, uint16_t a) noexcept
 static void TrainArrivalTriggers(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	Station *st = Station::Get(StationID(a)); TriggerStationRandomisation(st, v->tile, StationRandomTrigger::VehicleArrives); RustStationAnimation(st, v->tile, StationAnimationTrigger::VehicleArrives);
+	Station *st = Station::Get(StationID(a)); RustStationRandomisation(st, v->tile, StationRandomTrigger::VehicleArrives); RustStationAnimation(st, v->tile, StationAnimationTrigger::VehicleArrives);
 }
 static uint64_t TrainAxisDiag(OpenTTDTrainHandle, uint8_t a) noexcept
 {
@@ -144,11 +144,6 @@ static void TrainBaseViewport(OpenTTDTrainHandle id, uint8_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	v->Vehicle::UpdateViewport(a != 0);
-}
-static void TrainBeginLoading(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	v->BeginLoading();
 }
 static void TrainCacheOverride(OpenTTDTrainHandle id) noexcept
 {
@@ -289,7 +284,7 @@ static void TrainDeleteVehicle(OpenTTDTrainHandle id) noexcept
 static void TrainDepotDirty(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	InvalidateWindowData(WC_VEHICLE_DEPOT, v->tile);
+	RustVehicleInvalidateDepot(v);
 }
 static uint64_t TrainDepotTrack(OpenTTDTrainHandle, uint32_t a) noexcept
 {
@@ -332,11 +327,6 @@ static uint64_t TrainEnginePower(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return RailVehInfo(v->engine_type)->power;
 }
-static void TrainEnterDepot(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	VehicleEnterDepot(v);
-}
 static uint64_t TrainEnterTile(OpenTTDTrainHandle id, uint32_t a, int32_t b, int32_t c) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -360,7 +350,7 @@ static uint64_t TrainGrfVersion(OpenTTDTrainHandle id) noexcept
 static void TrainHideFill(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	HideFillingPercent(&v->fill_percent_te_id);
+	RustVehicleHideFilling(RustVehicle(v));
 }
 static uint64_t TrainInclination(OpenTTDTrainHandle id, uint8_t a, uint8_t b) noexcept
 {
@@ -404,12 +394,7 @@ static void TrainLastSpeed(OpenTTDTrainHandle id) noexcept
 static void TrainLeaveSound(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	v->PlayLeaveStationSound();
-}
-static void TrainLeaveStation(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	RustVehicleLeaveStation(RustVehicle(v));
+	RustVehiclePlayLeaveSound(RustVehicle(v));
 }
 static void TrainLeaveUnbunch(OpenTTDTrainHandle id) noexcept
 {
@@ -435,11 +420,6 @@ static void TrainLengthError(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	RustUnknownCallbackResult(EngineOf(RustVehicleGetEngine(RustVehicle(v)))->GetGRFID(), CBID_VEHICLE_LENGTH, static_cast<uint16_t>(a));
-}
-static void TrainLoading(OpenTTDTrainHandle id, uint8_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	v->HandleLoading(a != 0);
 }
 static uint64_t TrainLocalCompany(OpenTTDTrainHandle) noexcept
 {
@@ -567,7 +547,7 @@ static uint64_t TrainReverseSingleBlocked(OpenTTDTrainHandle id) noexcept
 static void TrainReverseWindows(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); SetWindowDirty(WC_VEHICLE_DETAILS, v->index); SetWindowDirty(WC_VEHICLE_VIEW, v->index); SetWindowClassesDirty(WC_TRAINS_LIST);
+	RustVehicleDirtyDepot(v); SetWindowDirty(WC_VEHICLE_DETAILS, v->index); SetWindowDirty(WC_VEHICLE_VIEW, v->index); SetWindowClassesDirty(WC_TRAINS_LIST);
 }
 static void TrainRunningWindows(OpenTTDTrainHandle id) noexcept
 {
@@ -713,7 +693,7 @@ static uint64_t TrainVehExitDir(OpenTTDTrainHandle, uint8_t a, uint8_t b) noexce
 static void TrainViewport(OpenTTDTrainHandle id, uint8_t a, uint8_t b) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	v->UpdateViewport(a != 0, b != 0);
+	RustVehicleUpdateViewport(v, a != 0, b != 0);
 }
 static uint64_t TrainVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
 {

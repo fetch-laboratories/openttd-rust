@@ -8,9 +8,9 @@
 //! Bridge height helpers from `bridge_map.h`/`bridge_map.cpp`.
 #![allow(unsafe_code)]
 use crate::direction_func::diag_dir_to_axis;
-use crate::services::Services;
+use crate::services::{Foundation, Services};
 /// `GetBridgeHeight`. Each original operation remains a named shared callee.
-pub(crate) fn get_bridge_height(tile: u32, s: &Services, apply: impl FnOnce(u8, u8) -> i32) -> i32 {
+pub(crate) fn get_bridge_height(tile: u32, s: &Services) -> i32 {
     let slope_z = (s.tile_slope_z)(tile);
     let foundation = crate::bridge::get_bridge_foundation(
         slope_z.slope.0,
@@ -19,26 +19,17 @@ pub(crate) fn get_bridge_height(tile: u32, s: &Services, apply: impl FnOnce(u8, 
     slope_z
         .z
         .wrapping_add(1)
-        .wrapping_add(apply(foundation, slope_z.slope.0))
+        .wrapping_add((s.apply_foundation)(Foundation(foundation), slope_z.slope).z)
 }
 /// `GetBridgePixelHeight`.
-pub(crate) fn get_bridge_pixel_height(
-    tile: u32,
-    s: &Services,
-    apply: impl FnOnce(u8, u8) -> i32,
-) -> i32 {
-    get_bridge_height(tile, s, apply).wrapping_mul(crate::tile_type::TILE_HEIGHT.cast_signed())
+pub(crate) fn get_bridge_pixel_height(tile: u32, s: &Services) -> i32 {
+    get_bridge_height(tile, s).wrapping_mul(crate::tile_type::TILE_HEIGHT.cast_signed())
 }
 /// Thin facade for native rendering/map consumers.
 /// # Safety
-/// Tables are immutable, live and serialized by the game-state mutex.
+/// The table is immutable, live and serialized by the game-state mutex.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_bridge_height(
-    s: *const Services,
-    r: *const crate::rail_cmd::RailCommandServices,
-    tile: u32,
-) -> i32 {
-    // SAFETY: canonical native tables; no world borrow is formed.
-    let (s, r) = unsafe { (&*s, &*r) };
-    get_bridge_height(tile, s, |f, h| (r.apply_foundation)(f, h).z)
+pub unsafe extern "C" fn openttd_rust_bridge_height(s: *const Services, tile: u32) -> i32 {
+    // SAFETY: canonical native table; no world borrow is formed.
+    get_bridge_height(tile, unsafe { &*s })
 }

@@ -448,6 +448,8 @@ pub struct Services {
     /// Number of towns in the pool.
     pub town_count: extern "C" fn() -> usize,
     // Registry: landscape (#212).
+    /// `ApplyFoundationToSlope`, returning the height added and the modified slope.
+    pub apply_foundation: extern "C" fn(Foundation, Slope) -> FoundationSlope,
     /// `GetClearGround`.
     pub clear_ground: extern "C" fn(u32) -> ClearGroundType,
     /// `GetFoundationSlope`, returning both the foundation slope and its z.
@@ -524,6 +526,300 @@ impl Services {
         (self.for_each_station)(std::ptr::from_mut(&mut visit).cast(), invoke::<F>);
     }
 }
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDNativeTileTypeAccess::ExtendedTile" ["landscape"] => crate::services::ExtendedTileLayout {
+        m6,
+        m7,
+        m8,
+    };
+    "OpenTTDCommandCostStorage" ["probe"] => crate::services::CommandCostStorage {
+        storage,
+    };
+    "OpenTTDEnvironmentServices" ["common"] => EnvironmentServices {
+        editor,
+        freeform_edges,
+    };
+    "OpenTTDFoundationSlope" ["landscape"] => FoundationSlope {
+        z,
+        slope,
+    };
+    "OpenTTDTileTypeAllocation" ["landscape"] => crate::services::TileTypeAllocation {
+        base,
+        extended,
+        count,
+        assertions,
+    };
+    "OpenTTDNativeTileTypeAccess::BaseTile" ["landscape"] => BaseTileLayout {
+        kind => type,
+        height,
+        m2,
+        m1,
+        m3,
+        m4,
+        m5,
+    };
+    "OpenTTDRandomSeeds" ["engine"] => RandomSeeds {
+        random,
+        interactive,
+    };
+    "OpenTTDRandomServices" ["engine"] => RandomServices {
+        save,
+        restore,
+        set_seed,
+    };
+    "OpenTTDRailTraversal" ["probe"] => RailTraversal {
+        depot,
+        tracks,
+    };
+    "OpenTTDRailSignalPresence" ["probe"] => RailSignalPresence {
+        signals,
+        track,
+        kind,
+        forward,
+        reverse,
+    };
+    "OpenTTDRailSignalUpdate" ["probe"] => RailSignalUpdate {
+        kind,
+        reservations,
+    };
+    "OpenTTDRailStationAdmission" ["probe"] => RailStationAdmission {
+        rail,
+        owner,
+        axis,
+        blocked,
+    };
+    "OpenTTDRailCrossingAdmission" ["probe"] => RailCrossingAdmission {
+        crossing,
+        owner,
+        axis,
+    };
+    "OpenTTDRailWormholeAdmission" ["probe"] => RailWormholeAdmission {
+        owner,
+        transport,
+        direction,
+    };
+    "OpenTTDRailMapServices" ["probe"] => RailMapServices {
+        ground,
+        traversal,
+        signal_presence,
+        signal_update,
+        station_admission,
+        crossing_admission,
+        wormhole_admission,
+        is_rail_depot,
+        rail_depot_direction,
+        has_signal_trackdir,
+        signal_state,
+        set_signal_state,
+        other_tunnel_bridge_end,
+        rail_track_status,
+        has_signals,
+        signal_type,
+        invalid_rail_type,
+        rail_type,
+        set_rail_type,
+        rail_tile_type,
+        set_track_bits,
+        present_signals,
+        set_present_signals,
+        signal_states,
+        set_signal_states,
+        set_has_signals,
+        set_signal_type,
+        signal_variant,
+        set_signal_variant,
+        cycle_signal_side,
+        rail_reservation,
+        set_track_reservation,
+        depot_reserved,
+        set_depot_exit,
+        make_rail_normal,
+        make_rail_depot,
+        crossing_rail_bits,
+        crossing_road_axis,
+        has_station_rail,
+        is_rail_station,
+        station_blocked,
+        station_track,
+        wormhole_reserved,
+    };
+    "OpenTTDCommandServices" ["probe"] => crate::services::CommandServices {
+        enter,
+        leave,
+        finance,
+        infinite_money,
+        money_error,
+        infrastructure_dirty,
+        landscape_commands,
+        tile_ownership,
+        ownership,
+        no_vehicle,
+        no_train,
+        wormhole_free,
+    };
+    "OpenTTDCommandCostServices" ["probe"] => crate::services::CommandCostServices {
+        construct,
+        destroy,
+        zero,
+        error,
+        expense_money,
+        error_param,
+        add,
+        move_cost => move,
+        amount,
+        success,
+        error_message,
+        money,
+        expense,
+        make_error,
+    };
+    "OpenTTDClearSquareServices" ["probe"] => ClearSquareServices {
+        may_animate,
+        delete_animated,
+        docking,
+        generating_world,
+    };
+    "OpenTTDSharedServices" ["probe"] => crate::services::Services {
+        set_tile_owner,
+        autoslope,
+        bay_stop_direction,
+        bridge_above,
+        bridge_axis,
+        bridge_speed,
+        build_on_slopes,
+        calendar_date,
+        calendar_year,
+        clear_square_services,
+        calc_closest_town,
+        closest_town,
+        company_valid,
+        context,
+        crossing_road_bits,
+        current_company,
+        depot_index,
+        disallowed_road_directions,
+        disaster_sound,
+        distance_from_edge,
+        drive_through_axis,
+        economy_date,
+        forbid_90_deg,
+        free_train_reservation,
+        has_road_type,
+        has_road_works,
+        has_water_ground,
+        industry,
+        is_any_road_stop,
+        is_bay_stop,
+        is_bridge,
+        is_drive_through_stop,
+        is_level_crossing,
+        is_normal_road,
+        is_plain_rail,
+        is_road_depot,
+        is_sea,
+        is_water_tile,
+        map_log_x,
+        map_max_x,
+        map_max_y,
+        mark_bridge_dirty,
+        mark_dirty,
+        next_company,
+        no_jetcrash,
+        normal_road_bits,
+        other_tunnel_end,
+        plane_crashes,
+        plane_speed,
+        random,
+        road_bits,
+        road_tram_type,
+        road_type_is_tram,
+        road_type_is_road,
+        road_cost_multiplier,
+        road_depot_direction,
+        road_owner,
+        road_type,
+        crossing_reserved,
+        set_crossing_reserved,
+        may_have_road,
+        road_tile_kind,
+        set_road_bits,
+        set_road_type,
+        set_road_owner,
+        set_road_directions,
+        road_powered,
+        road_type_valid,
+        pbs_services,
+        service_at_helipad,
+        set_tropic_zone,
+        slope,
+        snow_line,
+        station_index,
+        road_commands,
+        station_commands,
+        docking_tile,
+        station_gfx,
+        station_serve_neutral,
+        station_type,
+        tile_animation_add,
+        tile_animation_delete,
+        tile_animation_set_frame,
+        town_next_id,
+        town_owner_by_id,
+        utf8_length,
+        vehicle_next,
+        water_middle_lock,
+        tile_height,
+        tile_max_z,
+        tile_owner,
+        tile_slope,
+        tile_type,
+        tile_add_wrap,
+        tile_valid,
+        tile_slope_z,
+        tile_z,
+        town_index,
+        town_owner,
+        train_trackdir,
+        tram_owner,
+        tram_type,
+        tropic_zone,
+        try_path_reserve,
+        tunnel_bridge_direction,
+        tunnel_transport,
+        update_level_crossing,
+        rebuild_town_tree,
+        recession,
+        tick_counter,
+        town_count,
+        apply_foundation,
+        clear_ground,
+        foundation,
+        has_water_class,
+        make_shore,
+        make_snow,
+        play_sound,
+        set_fence,
+        tree_ground,
+        water_services,
+        for_each_station,
+        road_stop_type,
+        road_stops,
+    };
+    "OpenTTDByteSpan" ["industry"] => ByteSpan {
+        data,
+        size,
+    };
+    "OpenTTDCalendarDate" ["maintenance"] => CalendarDate {
+        0 => value,
+    };
+    "OpenTTDEconomyDate" ["maintenance"] => EconomyDate {
+        0 => value,
+    };
+    "LandscapeType" ["maintenance"] => LandscapeType {
+    };
+}
+
 /// Standalone test table: map predicates return zero and writes do nothing.
 #[cfg(test)]
 #[must_use]
@@ -594,6 +890,9 @@ pub fn fixture(
     extern "C" fn make_snow(_: u32, _: u32) {}
     extern "C" fn play_sound(_: u32, _: u16) {}
     extern "C" fn set_fence(_: u32, _: DiagDirection, _: u32) {}
+    extern "C" fn apply_foundation(_: Foundation, slope: Slope) -> FoundationSlope {
+        FoundationSlope { z: 0, slope }
+    }
     extern "C" fn foundation(_: u32) -> FoundationSlope {
         FoundationSlope {
             z: 0,
@@ -731,6 +1030,7 @@ pub fn fixture(
         tick_counter: tick0,
         town_count: count0,
         // Registry: landscape (#212).
+        apply_foundation,
         clear_ground,
         foundation,
         has_water_class: flag,

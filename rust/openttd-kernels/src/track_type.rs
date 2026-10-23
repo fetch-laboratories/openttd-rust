@@ -5,7 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Special track bits from `track_type.h`.
+//! `track_type.h` constants shared by simulation owners.
+
+/// `TRACK_BIT_DEPOT`.
+pub const TRACK_BIT_DEPOT: u8 = 0x80;
 /// `TRACK_BIT_WORMHOLE`.
 pub const TRACK_BIT_WORMHOLE: u8 = 0x40;
 /// `TRACK_BIT_HORZ`.

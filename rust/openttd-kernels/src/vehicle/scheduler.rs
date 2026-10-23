@@ -78,7 +78,7 @@ pub struct Tables {
     pub pending: *const fleet::pending::Services,
     pub transaction: *const fleet::transactions::Services,
     pub group: *const fleet::GroupServices,
-    pub refit: *const crate::vehicle_transactions::refit::Services,
+    pub visits: *const super::visits::Services,
     pub refit_cost: *mut crate::services::CommandCost,
     pub refit_temporary: *mut crate::services::CommandCost,
 }
@@ -390,7 +390,7 @@ unsafe extern "C" fn load_stations<const COUNTED: bool>(tables: *const Tables) {
                 service,
                 tables.station,
                 tables.loading,
-                tables.refit,
+                tables.visits,
                 tables.refit_cost,
                 tables.refit_temporary,
             );
@@ -464,6 +464,58 @@ unsafe fn run_ticks<const COUNTED: bool>(
             tables.group,
             cost,
         );
+    };
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDVehiclePoolCursor" ["scheduler"] => PoolCursor {
+        slots,
+        slots_len,
+        first_unused,
+    };
+    "OpenTTDVehiclePostTick" ["scheduler"] => PostTick {
+        vehicle_type => type,
+        period,
+        counter,
+        motion,
+        speed,
+        front_type,
+        subtype,
+        tick,
+        front_status,
+        status,
+    };
+    "OpenTTDVehicleDayCallback" ["scheduler"] => DayCallback {
+        day,
+        has_engine,
+    };
+    "OpenTTDVehicleSchedulerServices" ["scheduler"] => SchedulerServices {
+        pool,
+        assertions,
+        tick,
+        calendar_day,
+        economy_day,
+        day_callback_read,
+        randomise_callback,
+        first_dirty,
+        cargo_owner,
+        vehicle,
+        shared,
+        with_loading_timer,
+        reset_accumulators,
+    };
+    "OpenTTDVehicleSchedulerTables" ["scheduler"] => Tables {
+        scheduler,
+        cargo,
+        station,
+        loading,
+        pending,
+        transaction,
+        group,
+        visits,
+        refit_cost,
+        refit_temporary,
     };
 }
 

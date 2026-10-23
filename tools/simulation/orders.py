@@ -5,14 +5,28 @@ import hashlib
 from .core import (
     ROOT,
     RUNTIME_DIRECTORIES,
+    SNAPSHOT_TICKS,
+    WITNESS_ENVIRONMENT,
+    branch_witnesses,
     compare_saves,
     decode_element,
     read_save,
     run_game,
 )
+from .play_saves import DISTRIBUTIONS
 
 ADAPTER = ROOT / "tools/simulation/orders-console.cpp"
 COMMON = "roadveh[0]/common[0]/"
+# Station/depot visits and route prediction (#349) reached by the visits
+# fixture's refit, autorefit, conditional, full-load, cross-graph, depot and
+# unload-only orders. Unreached (#156): graph_failure (exhausted link-graph
+# pool), depot_refit_failed (refit cost beyond cash), depot_elsewhere,
+# dummy and reservation (departure with reserved cargo).
+VISITS = ["aircraft_mail", "autorefit", "begin_loading", "conditional_branch"]
+VISITS += ["depot", "depot_halt", "depot_refit", "full_load_increase"]
+VISITS += ["graph_join", "graph_merge_first", "graph_merge_second", "graph_new"]
+VISITS += ["leave_empty", "leave_loaded", "loading_depart", "merge_blocked"]
+VISITS += ["refit", "reset_refit"]
 
 
 def scenarios(soak):
@@ -37,10 +51,22 @@ def scenarios(soak):
             "implicit-wrap",
             "oversized",
         )
+    ] + [
+        {
+            "name": "orders-visits",
+            "kind": "save",
+            "save": str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+            "orders": "visits",
+            "console": [*DISTRIBUTIONS["cargodist"][:-1], "orders_scenario visits"]
+            + ["unpause"],
+            "ticks": 4 * SNAPSHOT_TICKS,
+        }
     ]
 
 
 def game_environment(scenario):
+    if scenario.get("orders") == "visits" and scenario.get("witnesses"):
+        return WITNESS_ENVIRONMENT
     return {"OPENTTD_ORDERS_CLIENT": "1"} if scenario.get("orders_client") else {}
 
 
@@ -85,6 +111,13 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                     builds[role] / name, target_is_directory=True
                 )
     mode = scenario["orders"]
+    if mode == "visits":
+        from pathlib import Path
+
+        from .rails import normalize
+
+        save, result["visits_input"] = normalize(Path(scenario["save"]), folder)
+        return dict(scenario, executables=executables, save=str(save))
     if mode in ("commands", "implicit-wrap", "oversized"):
         return dict(
             scenario,
@@ -200,6 +233,12 @@ def check(scenario, run, mode, role, result):
     if "orders" not in scenario or run["exit"] or not run["snapshots"]:
         return
     operation = scenario["orders"]
+    if operation == "visits":
+        if "VISITS setup 3 3 120 0" not in run["log"]:
+            result["problems"].append(f"{mode}/{role}: missing visits setup")
+        if counts := branch_witnesses(scenario, run, role, "vehicle_visits", VISITS):
+            result[f"{mode}_{role}_visit_branches"] = counts
+        return
     required = {
         "commands": ["ORDERS backups captured 2", "ORDERS waiting true true"],
         "offline-reload": ["ORDERS backups offline 0"],

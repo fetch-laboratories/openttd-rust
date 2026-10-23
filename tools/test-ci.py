@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -464,6 +465,92 @@ class PolicyTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/ci-build.yml").read_text()
         self.assertIn("-${{ github.event_name }}-build-", workflow)
 
+    def test_coverage_lookup_retries_transients_and_falls_back_only_after_exhaustion(
+        self,
+    ):
+        script = script_for("ci-policy.yml", "policy")
+        for failure, recover, expected_calls, expected in (
+            ({"status": 500}, True, 2, {"heavy": "false"}),
+            ({"status": 503}, False, 3, {"heavy": "true"}),
+            ({"status": 429}, False, 3, {"heavy": "true"}),
+            ({"code": "ECONNRESET"}, False, 3, {"heavy": "true"}),
+            *[
+                (dict(status=status), False, 1, {})
+                for status in (400, 401, 403, 404, 422)
+            ],
+            ({}, False, 1, {}),
+        ):
+            with self.subTest(failure=failure, recover=recover):
+                result = node(f"""
+                process.env.CI_ON_DEMAND = 'true';
+                const outputs = {{}}, delays = [];
+                let calls = 0;
+                const context = {{eventName: 'push', repo: {{}}, sha: 'head', payload: {{before: 'base'}}}};
+                const core = {{setOutput: (k,v) => outputs[k] = v, info: () => {{}}, warning: () => {{}}}};
+                const setTimeout = (resolve, delay) => {{ delays.push(delay); resolve(); }};
+                const github = {{rest: {{repos: {{
+                  compareCommitsWithBasehead: async () => {{
+                    if (++calls === 1 || !{json.dumps(recover)}) throw Object.assign(new Error('API failed'), {json.dumps(failure)});
+                    return {{data: {{files: [{{filename: 'README.md'}}]}}}};
+                  }},
+                  getCommit: async () => ({{data: {{commit: {{tree: {{sha: 'tree'}}}}}}}})
+                }}, git: {{getTree: async args => ({{data: {{sha: args.tree_sha, truncated: false,
+                  tree: [{{path: 'src/main.cpp', type: 'blob', mode: '100644', sha: '{HEAD}'}}]}}}})}}}}}};
+                (async () => {{{script}}})().then(() => console.log(JSON.stringify({{outputs, calls, delays}})))
+                  .catch(error => console.log(JSON.stringify({{outputs, calls, delays, error: error.message}})));
+                """)
+                self.assertEqual(result["calls"], expected_calls)
+                self.assertEqual(result["outputs"], expected)
+                self.assertEqual(result["delays"], [1000, 2000][: expected_calls - 1])
+                self.assertEqual("error" in result, not expected)
+
+    def test_platform_annotations_run_after_each_platform_and_gate_completion(self):
+        workflow = (ROOT / ".github/workflows/ci-build.yml").read_text()
+        for platform in ("emscripten", "linux", "macos", "windows"):
+            section = (
+                workflow.split(f"  annotations_{platform}:\n")[1]
+                .split("\n  annotations_", 1)[0]
+                .split("\n  check_annotations:", 1)[0]
+            )
+            self.assertIn(f"    needs: {platform}\n", section)
+            self.assertIn(f"needs.{platform}.result != 'skipped'", section)
+            self.assertIn("uses: OpenTTD/actions/annotation-check@v6", section)
+        complete = workflow.split("  complete:\n")[1]
+        script = re.search(
+            r"        python3 - <<'PY'\n(.*?)        PY", complete, re.S
+        )[1]
+        script = "\n".join(line[8:] for line in script.splitlines())
+        results = {
+            name: {"result": "success"}
+            for name in (
+                "linux",
+                "emscripten",
+                "windows",
+                "check_annotations",
+                "annotations_linux",
+                "annotations_emscripten",
+                "annotations_windows",
+            )
+        }
+        for failed in (None, "annotations_linux", "windows"):
+            with tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "output"
+                needs = json.loads(json.dumps(results))
+                if failed:
+                    needs[failed]["result"] = "failure"
+                result = subprocess.run(
+                    ["python3", "-c", script],
+                    capture_output=True,
+                    env={
+                        **os.environ,
+                        "PROFILE": "full",
+                        "RESULTS": json.dumps(needs),
+                        "GITHUB_OUTPUT": str(output),
+                    },
+                )
+                self.assertEqual(result.returncode == 0, failed is None)
+                self.assertEqual(output.exists(), failed is None)
+
     def test_bootstrap_on_demand_and_docs_classification(self):
         script = script_for("ci-policy.yml", "policy")
         cases = [
@@ -747,6 +834,61 @@ class RequestTests(unittest.TestCase):
                 with patch.object(ci, "api", side_effect=[moved, run]):
                     with self.assertRaisesRegex(ValueError, "head changed"):
                         ci.status(path)
+
+    def test_status_and_wait_report_failed_child_while_other_jobs_continue(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "request.json"
+            record = {
+                "schema_version": 1,
+                "repository": "example/fork",
+                "pr": 170,
+                "head": HEAD,
+                "profile": "full",
+                "run_id": 123,
+            }
+            ci.write_request(path, record)
+            run = {
+                "id": 123,
+                "status": "in_progress",
+                "conclusion": None,
+                "html_url": RUN,
+            }
+            failed = {
+                "name": "Linux / CI",
+                "conclusion": "failure",
+                "html_url": RUN + "/job/1",
+            }
+            pages = [
+                {"jobs": [{"conclusion": "success"}, {"conclusion": None}]},
+                {"jobs": [failed]},
+            ]
+            with (
+                patch.object(ci, "api", side_effect=[PULL, run]),
+                patch.object(ci, "gh", return_value=json.dumps(pages)) as gh,
+            ):
+                _, observed = ci.status(path)
+                self.assertIn("--paginate", gh.call_args.args)
+                self.assertIn("filter=latest", gh.call_args.args[-1])
+            self.assertEqual(observed["failed_jobs"], [failed])
+            self.assertEqual(observed["status"], "in_progress")
+            with (
+                patch.object(ci, "status", return_value=(record, observed)),
+                patch.object(ci, "verify_completion") as complete,
+                patch.object(ci.time, "sleep") as sleep,
+            ):
+                with self.assertRaisesRegex(
+                    ValueError, "Failed child jobs: Linux / CI"
+                ):
+                    ci.wait(path, 60, 15)
+                complete.assert_not_called()
+                sleep.assert_not_called()
+            with (
+                patch.object(ci, "status", return_value=(record, observed)),
+                patch("sys.argv", ["ci.py", "status", str(path)]),
+                patch("builtins.print"),
+            ):
+                self.assertEqual(ci.main(), 1)
+            ci.verify_children({"failed_jobs": []})
 
     def test_successful_run_without_full_status_is_rejected(self):
         record = {

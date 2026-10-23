@@ -168,7 +168,40 @@ def status(path: Path) -> tuple[dict, dict | None]:
             record["run_id"] = run["id"]
             record["run_url"] = run["html_url"]
             write_request(path, record)
+    if run and run["status"] != "completed":
+        pages = json.loads(
+            gh(
+                "api",
+                "--paginate",
+                "--slurp",
+                f"repos/{repository}/actions/runs/{run['id']}/jobs?filter=latest&per_page=100",
+            )
+        )
+        run["failed_jobs"] = [
+            job
+            for page in pages
+            for job in page["jobs"]
+            if job["conclusion"]
+            in (
+                "failure",
+                "timed_out",
+                "cancelled",
+                "action_required",
+                "startup_failure",
+                "stale",
+            )
+        ]
     return record, run
+
+
+def verify_children(run: dict) -> None:
+    if run.get("failed_jobs"):
+        failed = ", ".join(
+            f"{job['name']} ({job['html_url']})" for job in run["failed_jobs"]
+        )
+        raise ValueError(
+            f"Failed child jobs: {failed}. Other jobs continue; successful jobs remain available for retry."
+        )
 
 
 def verify_completion(record: dict, run: dict) -> None:
@@ -201,6 +234,8 @@ def wait(path: Path, timeout: int, interval: int) -> None:
         if state != previous:
             print(state + (f": {run['html_url']}" if run else ""), flush=True)
             previous = state
+        if run:
+            verify_children(run)
         if run and run["status"] == "completed":
             verify_completion(record, run)
             print(f"{record['profile']} CI passed for {record['head']}")
@@ -244,6 +279,8 @@ def main() -> int:
         else:
             record, run = status(args.request_file)
             print(json.dumps({"request": record, "run": run}, indent=2))
+            if run:
+                verify_children(run)
             if run and run["status"] == "completed":
                 verify_completion(record, run)
         return 0

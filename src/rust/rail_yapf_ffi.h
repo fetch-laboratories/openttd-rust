@@ -25,7 +25,7 @@ struct OpenTTDRailTile {
 	uint32_t flags, other_end;
 	uint16_t station;
 	uint8_t railtype, tracks, station_track, tunnel_dir;
-	uint8_t uphill, flat_ramp, signal_along, signal_against, signal_green, signal_type, oneway;
+	uint8_t uphill, signal_along, signal_against, signal_green, signal_type, oneway;
 };
 struct OpenTTDRailFollow {
 	uint32_t tile;

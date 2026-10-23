@@ -95,10 +95,7 @@ struct OpenTTDShipLeaves {
 	void (*path_pop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_pop);
 	void (*path_clear)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_clear);
 	uint32_t (*enter_tile)(uint32_t, uint32_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(enter_tile);
-	void (*enter_depot)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(enter_depot);
 	bool (*process_orders)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);
-	void (*loading)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(loading);
-	void (*begin_loading)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(begin_loading);
 	void (*viewport)(uint32_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (*base_viewport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
 	void (*visual)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(visual);
@@ -189,6 +186,5 @@ OpenTTDShipDepotResult openttd_rust_ship_find_depot(uint32_t, uint32_t, const Op
 bool openttd_rust_ship_is_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 uint32_t openttd_rust_ship_station_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 uint8_t openttd_rust_ship_trackdir(uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
-void openttd_rust_ship_build(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 }
 #endif

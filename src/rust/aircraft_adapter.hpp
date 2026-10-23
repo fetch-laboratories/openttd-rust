@@ -165,7 +165,7 @@ static OpenTTDAircraftVehicle OPENTTD_AIRCRAFT_CALL Aircraft_next_aircraft(uint3
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_update_position(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustVehicleUpdatePosition(v); v->UpdateViewport(true, false);
+	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustVehicleUpdatePosition(v); RustVehicleUpdateViewport(v, true, false);
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_rotor_image(OpenTTDAircraftVehicle vehicle) noexcept
@@ -211,7 +211,7 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_landing_rating(uint16_t station_id, u
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_dirty_depot(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	InvalidateWindowData(WC_VEHICLE_DEPOT, VehicleOf(vehicle.handle)->tile); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
+	RustVehicleInvalidateDepot(VehicleOf(vehicle.handle)); SetWindowClassesDirty(WC_AIRCRAFT_LIST);
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_first_arrival(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept
@@ -219,11 +219,6 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_first_arrival(OpenTTDAircraftVehicle 
 	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); Station *st = Station::Get(station); st->had_vehicle_of_type |= HVOT_AIRCRAFT;
 	AddVehicleNewsItem(GetEncodedString(STR_NEWS_FIRST_AIRCRAFT_ARRIVAL, st->index), v->owner == _local_company ? NewsType::ArrivalCompany : NewsType::ArrivalOther, v->index, st->index);
 	AI::NewEvent(v->owner, new ScriptEventStationFirstVehicle(st->index, v->index)); Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, v->index));
-}
-
-static void OPENTTD_AIRCRAFT_CALL Aircraft_begin_loading(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	VehicleOf(vehicle.handle)->BeginLoading();
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_update_delta(OpenTTDAircraftVehicle vehicle) noexcept
@@ -451,7 +446,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.landing_rating = Aircraft_landing_rating,
 	.dirty_depot = Aircraft_dirty_depot,
 	.first_arrival = Aircraft_first_arrival,
-	.begin_loading = Aircraft_begin_loading,
 	.update_delta = Aircraft_update_delta,
 	.touchdown_animation = Aircraft_touchdown_animation,
 	.destination_too_far = Aircraft_destination_too_far,
@@ -491,7 +485,6 @@ bool Aircraft::Tick()
 void Aircraft::OnNewCalendarDay() { openttd_rust_aircraft_calendar_day(&_aircraft_leaves, RustAircraftVehicle(this)); }
 void Aircraft::OnNewEconomyDay() { openttd_rust_aircraft_economy_day(&_aircraft_leaves, RustAircraftVehicle(this)); }
 void SetAircraftPosition(Aircraft *v, int x, int y, int z) { openttd_rust_aircraft_position(&_aircraft_leaves, RustAircraftVehicle(v), x, y, z); }
-void HandleAircraftEnterHangar(Aircraft *v) { openttd_rust_aircraft_enter_hangar(&_aircraft_leaves, RustAircraftVehicle(v)); }
 void UpdateAircraftCache(Aircraft *v, bool update_range) { openttd_rust_aircraft_cache(&_aircraft_leaves, RustAircraftVehicle(v), update_range); }
 void GetAircraftFlightLevelBounds(const Vehicle *v, int *min, int *max) { openttd_rust_aircraft_flight_bounds(&_aircraft_leaves, RustAircraftVehicle(const_cast<Vehicle *>(v)), min, max); }
 static uint8_t &GetFlightFlags(Aircraft *v) { return v->flags; }

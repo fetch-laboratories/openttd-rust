@@ -218,7 +218,6 @@ struct OpenTTDStationCommandServices {
 	void (*water_infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_infrastructure);
 	void (*make_dock)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_dock);
 	BaseStation *(*neutral_for_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(neutral_for_tile);
-	void (*leave_station)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(leave_station);
 	void (*oilrig_unavailable)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(oilrig_unavailable);
 	void (*associate_industry)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(associate_industry);
 	void (*make_oilrig)(uint32_t, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_oilrig);

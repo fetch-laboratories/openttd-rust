@@ -27,6 +27,7 @@ pub mod founding;
 pub mod house;
 pub mod names;
 
+use crate::history_type::LAST_MONTH;
 use crate::services::{Map, Services, chance16_i};
 use crate::slope_func::{is_slope_with_one_corner_raised, is_steep_slope};
 
@@ -2410,7 +2411,142 @@ pub(crate) unsafe fn subsidy_percent_transported(state: *const State, cargo: u8)
     if at == rows.len() {
         return 0;
     }
-    unsafe { openttd_rust_town_percent_transported(&raw const rows[at].history[1]) }
+    unsafe {
+        openttd_rust_town_percent_transported(&raw const rows[at].history[usize::from(LAST_MONTH)])
+    }
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDTownSuppliedEntry" ["probe"] => SuppliedEntry {
+        entry,
+        created,
+    };
+    "OpenTTDTownAuthorityServices" ["probe"] => AuthorityServices {
+        council_tolerance,
+        bulldozer,
+        authority_distance,
+        town_index,
+        refusal,
+    };
+    "OpenTTDTownRef" ["probe"] => TownRef {
+        shell,
+        state,
+        id,
+    };
+    "OpenTTDTownSimulationFields" ["probe"] => SimulationFields {
+        valid_history,
+        xy,
+        num_houses,
+        population,
+        radius,
+        goal,
+        ratings,
+        received,
+        noise_reached,
+        time_until_rebuild,
+        statues,
+        have_ratings,
+        unwanted,
+        exclusivity,
+        exclusive_counter,
+        larger_town,
+        layout,
+        townnamegrfid,
+        townnametype,
+        townnameparts,
+    };
+    "OpenTTDTownReceived" ["probe"] => Received {
+        old_max,
+        new_max,
+        old_act,
+        new_act,
+    };
+    "OpenTTDTownSuppliedHistory" ["probe"] => SuppliedHistory {
+        production,
+        transported,
+    };
+    "OpenTTDTownSupplied" ["probe"] => Supplied {
+        cargo,
+        history,
+    };
+    "OpenTTDTownRoadChoice" ["probe"] => RoadChoice {
+        introduction_date,
+        max_speed,
+        town_build,
+    };
+    "OpenTTDTownHouseAvailability" ["probe"] => HouseAvailability {
+        zones,
+        override_id,
+        class_id,
+        probability,
+        enabled,
+    };
+    "OpenTTDTownHousePlacement" ["probe"] => HousePlacement {
+        min_year,
+        max_year,
+    };
+    "OpenTTDTownStationActivity" ["probe"] => StationActivity {
+        time_since_load,
+        time_since_unload,
+    };
+    "OpenTTDTownGrowthFields" ["probe"] => GrowthFields {
+        counter,
+        rate,
+        funding,
+        road,
+        flags,
+    };
+    "OpenTTDTownSlots" ["probe"] => Slots {
+        data,
+        size,
+    };
+
+    "OpenTTDTownLeaves" ["probe"] => crate::town::Leaves {
+        map_log_x,
+        growth_rate,
+        snow_line,
+        environment,
+        generating_world,
+        allow_crossings,
+        climate,
+        highest_snow_line,
+        calendar_year,
+        allow_roads,
+        road_flags,
+        house_availability,
+        house_placement,
+        house_population,
+        house_flags,
+        house_extra_flags,
+        house_callbacks,
+        road_info,
+        resolve_owner,
+        stations,
+        station_activity_owner,
+        station_owner,
+        dirty_authority,
+        dirty_town,
+        foundation_slope,
+        terraform_price,
+        clean_road_bits,
+        set_road_town,
+        exchange_company,
+        house_class,
+        make_house,
+        add_animation,
+        population_changed,
+        nearby_stations,
+        house_count,
+        update_max_pass,
+        next_town,
+        road_mask,
+        build_bridge,
+        build_tunnel,
+        assert_clear_house,
+        allow_construction,
+        houses,
+    };
 }
 
 #[cfg(test)]

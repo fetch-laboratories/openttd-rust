@@ -85,13 +85,14 @@ struct OpenTTDVehicleMovementObservations {
 };
 struct OpenTTDVehicleAltitudeInputs { uint16_t max_speed; uint8_t direction; };
 struct OpenTTDVehicleMaintenanceServices;
+struct OpenTTDVehicleVisits;
 struct OpenTTDVehicleServices {
 	void (*vehicles_on_tile)(uint32_t, void *, void (*)(void *, OpenTTDVehicle *)) noexcept OPENTTD_SERVICE_DEFAULT(vehicles_on_tile);
 	void (OPENTTD_VEHICLE_CALL *write_counters)(OpenTTDVehicle *, uint8_t, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_counters);
 	bool (OPENTTD_VEHICLE_CALL *waiting_for_unbunching)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_for_unbunching);
 	void (OPENTTD_VEHICLE_CALL *leave_unbunching_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(leave_unbunching_depot);
 	void (OPENTTD_VEHICLE_CALL *reset_depot_unbunching)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reset_depot_unbunching);
-	void (OPENTTD_VEHICLE_CALL *enter_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(enter_depot);
+	void (*enter_depot)(OpenTTDVehicle *, const OpenTTDVehicleVisits *) noexcept OPENTTD_SERVICE_DEFAULT(enter_depot);
 	void (OPENTTD_VEHICLE_CALL *pathfinding_result)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(pathfinding_result);
 	OpenTTDVehicleNewPosition (OPENTTD_VEHICLE_CALL *new_position)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(new_position);
 	uint8_t (OPENTTD_VEHICLE_CALL *move_then_status)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(move_then_status);
@@ -166,7 +167,7 @@ struct OpenTTDVehicleServices {
 	OpenTTDVehicleTickStatus (OPENTTD_VEHICLE_CALL *tick_status)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tick_status);
 	OpenTTDVehicleDayCost (OPENTTD_VEHICLE_CALL *day_cost)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(day_cost);
 	void (OPENTTD_VEHICLE_CALL *make_dummy)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(make_dummy);
-	void (OPENTTD_VEHICLE_CALL *loading)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(loading);
+	void (*loading)(OpenTTDVehicle *, bool, const OpenTTDVehicleVisits *) noexcept OPENTTD_SERVICE_DEFAULT(loading);
 	void (OPENTTD_VEHICLE_CALL *check_orders_only)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(check_orders_only);
 	void (OPENTTD_VEHICLE_CALL *write_coordinates)(OpenTTDVehicle *, int32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_coordinates);
 	OpenTTDVehicleAltitudeInputs (OPENTTD_VEHICLE_CALL *altitude_inputs)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(altitude_inputs);
@@ -174,6 +175,7 @@ struct OpenTTDVehicleServices {
 	OpenTTDVehicleMovementObservations (OPENTTD_VEHICLE_CALL *movement_observations)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(movement_observations);
 	uint16_t (OPENTTD_VEHICLE_CALL *max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(max_speed);
 	const OpenTTDVehicleMaintenanceServices *maintenance;
+	const OpenTTDVehicleVisits *(*visits)() noexcept OPENTTD_SERVICE_DEFAULT(visits);
 };
 struct OpenTTDGroundMoved {
 	int32_t old_z;
@@ -261,7 +263,6 @@ struct OpenTTDVehicleSchedulerServices {
 	void (OPENTTD_VEHICLE_CALL *with_loading_timer)(const OpenTTDVehicleSchedulerTables *, void (OPENTTD_VEHICLE_CALL *)(const OpenTTDVehicleSchedulerTables *)) noexcept OPENTTD_SERVICE_DEFAULT(with_loading_timer);
 	void (OPENTTD_VEHICLE_CALL *reset_accumulators)() noexcept OPENTTD_SERVICE_DEFAULT(reset_accumulators);
 };
-struct OpenTTDVehicleRefitServices;
 struct OpenTTDCommandCost;
 struct OpenTTDVehicleSchedulerTables {
 	const OpenTTDVehicleSchedulerServices *scheduler;
@@ -271,7 +272,7 @@ struct OpenTTDVehicleSchedulerTables {
 	const OpenTTDFleetPendingServices *pending;
 	const OpenTTDFleetTransactionServices *transaction;
 	const OpenTTDFleetGroupServices *group;
-	const OpenTTDVehicleRefitServices *refit;
+	const OpenTTDVehicleVisits *visits;
 	OpenTTDCommandCost *refit_cost;
 	OpenTTDCommandCost *refit_temporary;
 };
