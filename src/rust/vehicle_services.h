@@ -308,8 +308,6 @@ const OpenTTDGroundServices &GetRustGroundServices() noexcept
 
 inline OpenTTDVehicle *RustGroundFirst(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleFirst(VehicleOf(v))); }
 
-inline int32_t RustGroundDisplayMaxSpeed(OpenTTDVehicle *shell) noexcept { return RustVehicleDisplayMaxSpeed(VehicleOf(shell)); }
-
 inline void RustVehicleDetailsDirty(OpenTTDVehicle *shell) noexcept { SetWindowDirty(WC_VEHICLE_DETAILS, VehicleOf(shell)->index); }
 
 template <typename Handle>

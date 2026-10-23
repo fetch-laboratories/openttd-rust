@@ -70,7 +70,7 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 		.road_speed = GroundRoadSpeed,
 		.tram = SharedRoadTypeIsTram,
 		.steepness = GroundSteepness,
-		.display_max_speed = RustGroundDisplayMaxSpeed,
+		.display_max_speed = RustVehicleDisplaySpeed,
 		.slope_z = SharedSlopePixelZ,
 		.viewport = GroundViewport,
 		.details_dirty = RustVehicleDetailsDirty,
