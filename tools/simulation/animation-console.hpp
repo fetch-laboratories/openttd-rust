@@ -232,9 +232,9 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 				spec->animation.triggers = std::string_view(rejection) == "disabled" ? StationAnimationTriggers{} : StationAnimationTriggers{StationAnimationTrigger::Built};
 				SetCustomStationSpecIndex(tile, std::string_view(rejection) == "nullspec" ? 0 : 1);
 				uint calls = 0; group->observation = [&](ResolverObject &) { ++calls; }; group->next = 0xFD;
-				fmt::print(stderr, "OBJECT animation-rejection {} before {} {}\n", rejection, _random.state[0], _random.state[1]);
+				fmt::print(stderr, "OBJECT animation-rejection {} before {} {}\n", rejection, _random.state[0], _random.state[1]); animation_case = fmt::format("reject-{}", rejection); animation_sequence = 0; AnimationTrace("rejection-before");
 				TriggerStationAnimation(st, std::string_view(rejection) == "nonmember" ? TileXY(0, 0) : tile, StationAnimationTrigger::Built, INVALID_CARGO);
-				fmt::print(stderr, "OBJECT animation-rejection {} after {} {} {}\n", rejection, _random.state[0], _random.state[1], calls);
+				fmt::print(stderr, "OBJECT animation-rejection {} after {} {} {}\n", rejection, _random.state[0], _random.state[1], calls); AnimationTrace("rejection-after"); animation_case.clear();
 			}
 			SetCustomStationSpecIndex(tile, 1); group->observation = {};
 		}
