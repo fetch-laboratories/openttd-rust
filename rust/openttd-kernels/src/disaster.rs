@@ -74,7 +74,16 @@ struct World<'a> {
     write: unsafe extern "C" fn(*mut c_void, u32, u32, i64),
     channel: Rc<Channel>,
     services: &'a Services,
+    occupancy: &'a Occupancy,
     service: unsafe extern "C" fn(*mut c_void, *const Action) -> i64,
+}
+/// Borrowed immutable tables and shell resolver, live through every World clone
+/// and Run drop/yield. The context remains independently mutable; no owner data
+/// is borrowed by this table. Calls use the game-state mutex like native callers.
+#[repr(C)]
+pub struct Occupancy {
+    pub commands: *const crate::vehicle::occupancy::Commands,
+    pub vehicle: unsafe extern "C" fn(*mut c_void, u32) -> crate::vehicle::VehicleRef,
 }
 // The fixed copied-record slots below are shared with disaster_adapter.hpp.
 const SUBTYPE: usize = 0;
@@ -285,7 +294,18 @@ impl World<'_> {
         self.service(6, id, 0, 0, 0, 0, 0)
     }
     fn viewport(&self, id: u32) {
-        self.service(4, id, 0, 0, 0, 0, 0);
+        // Resolve the same shell once at the original service observation point.
+        // Index accesses end before the exact base viewport leaf can reenter.
+        unsafe {
+            let v = (self.occupancy.vehicle)(self.context, id);
+            let s = (&*self.occupancy.commands).vehicles;
+            if (s.vehicle_type)(v) != crate::vehicle::VehicleType::EFFECT.0 {
+                crate::vehicle::occupancy::update(s, v, false);
+            }
+            (s.base_viewport)(v);
+        }
+        self.channel.vehicle.set(None);
+        self.channel.world.set(None);
     }
     fn effect_rel(&self, id: u32, x: i64, y: i64, z: i64, kind: u32) {
         self.service(7, id, kind, x, y, z, 0);
@@ -374,7 +394,18 @@ impl World<'_> {
     }
 
     async fn clear(&self, tile: u32) {
-        if self.service(16, tile, 0, 0, 0, 0, 0) != 0 {
+        // Keep full native result construction, error observation and destruction;
+        // the occupancy traversal itself never returns through a native facade.
+        let failed = unsafe {
+            let c = &*self.occupancy.commands;
+            crate::command::with_cost(c.costs, |cost| {
+                crate::vehicle::occupancy::openttd_rust_occupancy_ground(c, cost.0, tile);
+                !cost.ok()
+            })
+        };
+        self.channel.vehicle.set(None);
+        self.channel.world.set(None);
+        if failed {
             return;
         }
         let t = self.tile(tile);
@@ -1084,7 +1115,7 @@ pub extern "C" fn openttd_rust_disaster_delay() -> *mut u16 {
 /// # Safety
 /// Context/callbacks remain live until destruction. Leaf callbacks cannot throw or
 /// reenter, and copy/write only source-valid canonical scalars. The shared table
-/// stays immutable and live through Run destruction, including suspension and
+/// and occupancy tables stay immutable and live through Run destruction, including suspension and
 /// all World clones. Its context may mutate independently; no world storage is
 /// borrowed by the table reference. Services are
 /// synchronous and noexcept; allocation may construct a separate owner. No raw
@@ -1092,7 +1123,7 @@ pub extern "C" fn openttd_rust_disaster_delay() -> *mut u16 {
 /// their call. Returned actions 2/14/17 allow deletion/Crash/clear callbacks on
 /// the C++ stack. All operations run on the game thread.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_disaster_create(
+pub unsafe extern "C" fn openttd_rust_disaster_create<'a>(
     operation: u32,
     id: u32,
     a: i64,
@@ -1102,9 +1133,10 @@ pub unsafe extern "C" fn openttd_rust_disaster_create(
     context: *mut c_void,
     read: unsafe extern "C" fn(*mut c_void, u32, u32, i64, i64, *mut i64),
     write: unsafe extern "C" fn(*mut c_void, u32, u32, i64),
-    services: &Services,
+    services: &'a Services,
+    occupancy: &'a Occupancy,
     service: unsafe extern "C" fn(*mut c_void, *const Action) -> i64,
-) -> *mut Run<'_> {
+) -> *mut Run<'a> {
     let channel = Rc::new(Channel {
         action: Cell::new(Action::default()),
         response: Cell::new(0),
@@ -1116,6 +1148,7 @@ pub unsafe extern "C" fn openttd_rust_disaster_create(
         read,
         write,
         services,
+        occupancy,
         service,
         channel: channel.clone(),
     };
@@ -1161,6 +1194,7 @@ pub unsafe extern "C" fn openttd_rust_disaster_destroy(owner: *mut Run<'_>) {
 
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDDisasterOccupancy" ["probe"] => Occupancy { commands, vehicle, };
     "OpenTTDDisasterState" ["probe"] => State {
         image_override,
         target,
@@ -1181,6 +1215,9 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::{CommandCost, CommandCostServices, CommandCostStorage};
+    use crate::vehicle::{self, VehicleRef, VehicleServices};
+    static INDEX_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
     struct Fixture {
         world: [i64; 24],
         vehicle: [i64; 24],
@@ -1192,6 +1229,7 @@ mod tests {
         draws: u32,
         calls: Vec<Action>,
         viewport_age: Option<i64>,
+        links: vehicle::occupancy::Links,
     }
     impl Default for Fixture {
         fn default() -> Self {
@@ -1215,6 +1253,11 @@ mod tests {
                 draws: 0,
                 calls: Vec::new(),
                 viewport_age: None,
+                links: vehicle::occupancy::Links {
+                    next: std::ptr::null_mut(),
+                    prev: std::ptr::null_mut(),
+                    current: std::ptr::null_mut(),
+                },
             }
         }
     }
@@ -1283,12 +1326,6 @@ mod tests {
         let action = unsafe { *request };
         fixture.calls.push(action);
         match action.kind {
-            4 => {
-                if let Some(age) = fixture.viewport_age {
-                    fixture.vehicle[AGE] = age;
-                }
-                0
-            }
             5 => {
                 fixture.private.flags = 0xab;
                 100
@@ -1298,6 +1335,172 @@ mod tests {
             _ => 0,
         }
     }
+    // Unused typed slots abort if a controller starts using an unmodelled leaf.
+    macro_rules! unused {
+        ($($arg:ty),* $(; $result:ty)?) => {{
+            extern "C" fn unused($(_: $arg),*) $(-> $result)? { panic!("unexpected fixture leaf") }
+            unused
+        }};
+    }
+    unsafe extern "C" fn shell(context: *mut c_void, _: u32) -> VehicleRef {
+        VehicleRef(std::ptr::NonNull::new(context.cast()).unwrap())
+    }
+    extern "C" fn links(v: VehicleRef) -> *mut vehicle::occupancy::Links {
+        unsafe { &raw mut (*v.0.as_ptr().cast::<Fixture>()).links }
+    }
+    extern "C" fn tile(v: VehicleRef) -> u32 {
+        unsafe { (*v.0.as_ptr().cast::<Fixture>()).vehicle[TILE] as u32 }
+    }
+    extern "C" fn kind(_: VehicleRef) -> u8 {
+        vehicle::VehicleType::DISASTER.0
+    }
+    extern "C" fn log_x() -> u32 {
+        6
+    }
+    extern "C" fn viewport(v: VehicleRef) {
+        // The actual owner must have indexed the shell before entering the leaf.
+        assert!(unsafe { vehicle::occupancy::OnTile::new(&VEHICLES, tile(v)).get() } == Some(v));
+        unsafe {
+            vehicle::occupancy::update(&VEHICLES, v, true);
+        }
+        let f = unsafe { &mut *v.0.as_ptr().cast::<Fixture>() };
+        f.calls.push(Action {
+            kind: 4,
+            ..Action::default()
+        });
+        if let Some(age) = f.viewport_age {
+            f.vehicle[AGE] = age;
+        }
+    }
+    const VEHICLES: VehicleServices = VehicleServices {
+        tile_links: links,
+        map_log_x: log_x,
+        assertions: true,
+        train_handle: unused!(*mut vehicle::OpenTTDVehicle ; crate::train::Handle),
+        write_counters: unused!(vehicle::VehicleRef, u8, u8, i32),
+        waiting_for_unbunching: unused!(vehicle::VehicleRef ; bool),
+        leave_unbunching_depot: unused!(vehicle::VehicleRef),
+        reset_depot_unbunching: unused!(vehicle::VehicleRef),
+        enter_depot: unused!(vehicle::VehicleRef, *const vehicle::visits::Services),
+        pathfinding_result: unused!(vehicle::VehicleRef, bool),
+        new_position: unused!(vehicle::VehicleRef ; vehicle::NewPosition),
+        write_xy: unused!(vehicle::VehicleRef, i32, i32),
+        base_viewport: viewport,
+        property: unused!(vehicle::VehicleRef, u8, i32 ; i32),
+        callback: unused!(vehicle::VehicleRef, crate::newgrf_callbacks::CallbackID ; u16),
+        unknown_callback_result: unused!(
+            vehicle::EngineRef,
+            crate::newgrf_callbacks::CallbackID,
+            u16
+        ),
+        length_changed: unused!(vehicle::VehicleRef),
+        play_vehicle_sound: unused!(vehicle::VehicleRef, crate::newgrf_sound::VehicleSoundEvent ; bool),
+        play_sound: unused!(vehicle::VehicleRef, u16),
+        large_explosion: unused!(vehicle::VehicleRef),
+        order_free: unused!(vehicle::VehicleRef),
+        order_dummy: unused!(vehicle::VehicleRef),
+        start_stop_dirty: unused!(vehicle::VehicleRef),
+        destroy: unused!(vehicle::VehicleRef),
+        check_orders: unused!(vehicle::VehicleRef ; u8),
+        day: unused!(vehicle::VehicleRef ; u8),
+        write_day: unused!(vehicle::VehicleRef, u8),
+        write_direction: unused!(vehicle::VehicleRef, u8),
+        write_speed: unused!(vehicle::VehicleRef, u16),
+        last_station: unused!(vehicle::VehicleRef ; u16),
+        write_last_station: unused!(vehicle::VehicleRef, u16),
+        set_dest_tile: unused!(vehicle::VehicleRef, u32),
+        write_dest: unused!(vehicle::VehicleRef, u32),
+        write_progress: unused!(vehicle::VehicleRef, u8),
+        write_max_speed: unused!(vehicle::VehicleRef, u16),
+        previous_tile: unused!(vehicle::VehicleRef ; vehicle::PreviousTile),
+        detach_last: unused!(
+            vehicle::VehicleRef,
+            vehicle::VehicleRef,
+            vehicle::VehicleRef
+        ),
+        next: unused!(vehicle::VehicleRef ; Option<vehicle::VehicleRef>),
+        engine_id: unused!(vehicle::VehicleRef ; u16),
+        engine: unused!(vehicle::VehicleRef ; vehicle::EngineRef),
+        engine_for_length: unused!(vehicle::VehicleRef ; vehicle::EngineForLength),
+        write_tick: unused!(vehicle::VehicleRef, u8),
+        direction: unused!(vehicle::VehicleRef ; u8),
+        status: unused!(vehicle::VehicleRef ; u8),
+        tile: tile,
+        progress: unused!(vehicle::VehicleRef ; u8),
+        dest_tile: unused!(vehicle::VehicleRef ; u32),
+        order_type: unused!(vehicle::VehicleRef ; u8),
+        order_destination: unused!(vehicle::VehicleRef ; u16),
+        order_nonstop: unused!(vehicle::VehicleRef ; u8),
+        subtype: unused!(vehicle::VehicleRef ; u8),
+        x: unused!(vehicle::VehicleRef ; i32),
+        y: unused!(vehicle::VehicleRef ; i32),
+        z: unused!(vehicle::VehicleRef ; i32),
+        tick: unused!(vehicle::VehicleRef ; u8),
+        owner: unused!(vehicle::VehicleRef ; u8),
+        speed: unused!(vehicle::VehicleRef ; u16),
+        subspeed: unused!(vehicle::VehicleRef ; u8),
+        running: unused!(vehicle::VehicleRef ; u8),
+        order_time: unused!(vehicle::VehicleRef ; i32),
+        vehicle_type: kind,
+        write_x: unused!(vehicle::VehicleRef, i32),
+        write_y: unused!(vehicle::VehicleRef, i32),
+        write_z: unused!(vehicle::VehicleRef, i32),
+        write_tile: unused!(vehicle::VehicleRef, u32),
+        write_status: unused!(vehicle::VehicleRef, u8),
+        write_subspeed: unused!(vehicle::VehicleRef, u8),
+        write_breakdown_counter: unused!(vehicle::VehicleRef, u8),
+        write_running: unused!(vehicle::VehicleRef, u8),
+        write_order_time: unused!(vehicle::VehicleRef, i32),
+        write_profit: unused!(vehicle::VehicleRef, i64),
+        write_economy_service: unused!(vehicle::VehicleRef, i32),
+        write_calendar_service: unused!(vehicle::VehicleRef, i32),
+        write_breakdowns: unused!(vehicle::VehicleRef, u8),
+        write_reliability: unused!(vehicle::VehicleRef, u16),
+        write_cargo_age: unused!(vehicle::VehicleRef, u16),
+        coordinates: unused!(vehicle::VehicleRef ; vehicle::Coordinates),
+        xy: unused!(vehicle::VehicleRef ; vehicle::XY),
+        speed_inputs: unused!(vehicle::VehicleRef ; vehicle::SpeedInputs),
+        direction_progress: unused!(vehicle::VehicleRef ; vehicle::DirectionProgress),
+        tick_status: unused!(vehicle::VehicleRef ; vehicle::TickStatus),
+        day_cost: unused!(vehicle::VehicleRef ; vehicle::DayCost),
+        make_dummy: unused!(vehicle::VehicleRef),
+        loading: unused!(vehicle::VehicleRef, bool, *const vehicle::visits::Services),
+        check_orders_only: unused!(vehicle::VehicleRef),
+        write_coordinates: unused!(vehicle::VehicleRef, i32, i32, i32),
+        altitude_inputs: unused!(vehicle::VehicleRef ; vehicle::AltitudeInputs),
+        position_observations: unused!(vehicle::VehicleRef ; vehicle::PositionObservations),
+        movement_observations: unused!(vehicle::VehicleRef ; vehicle::MovementObservations),
+        max_speed: unused!(vehicle::VehicleRef ; u16),
+        maintenance: std::ptr::null(),
+        visits: unused!( ; *const vehicle::visits::Services),
+    };
+    // Existing tests never clear; the native ABI fixture below covers full costs.
+    const OCCUPANCY: Occupancy = Occupancy {
+        commands: &COMMANDS,
+        vehicle: shell,
+    };
+    const COMMANDS: vehicle::occupancy::Commands = vehicle::occupancy::Commands {
+        vehicles: &VEHICLES,
+        max_pixel_z: unused!(u32; i32),
+        costs: &COSTS,
+        vehicle_error: 0,
+    };
+    const COSTS: CommandCostServices = CommandCostServices {
+        construct: unused!(*mut CommandCostStorage ; *mut CommandCost),
+        destroy: unused!(*mut CommandCost),
+        zero: unused!(*mut CommandCost),
+        error: unused!(*mut CommandCost, u32),
+        expense_money: unused!(*mut CommandCost, u8, i64),
+        error_param: unused!(*mut CommandCost, u32, u64),
+        add: unused!(*mut CommandCost, *mut CommandCost),
+        move_cost: unused!(*mut CommandCost, *mut CommandCost),
+        amount: unused!(*mut CommandCost, i64),
+        success: unused!(*const CommandCost ; bool),
+        error_message: unused!(*const CommandCost ; u32),
+        money: unused!(*const CommandCost ; i64),
+        expense: unused!(*const CommandCost ; crate::services::ExpenseType),
+        make_error: unused!(*mut CommandCost, u32),
+    };
     fn owner(services: &Services, operation: u32, id: u32) -> *mut Run<'_> {
         // SAFETY: Fixture and immutable table remain stable through run destruction;
         // leaves never reenter. Reuse the table's raw context so no new exclusive
@@ -1314,6 +1517,7 @@ mod tests {
                 read,
                 write,
                 services,
+                &OCCUPANCY,
                 service,
             )
         }
@@ -1330,6 +1534,7 @@ mod tests {
     }
     #[test]
     fn cancelling_suspended_deletion_calls_no_world_service() {
+        let _guard = INDEX_TEST.lock().unwrap();
         let mut fixture = Fixture::default();
         fixture.vehicle[SUBTYPE] = 13;
         fixture.vehicle[AGE] = 8880;
@@ -1345,6 +1550,7 @@ mod tests {
     }
     #[test]
     fn submarine_expiry_wraps_tick_before_returning_delete() {
+        let _guard = INDEX_TEST.lock().unwrap();
         let mut fixture = Fixture::default();
         fixture.vehicle[SUBTYPE] = 13;
         fixture.vehicle[TICK] = 255;
@@ -1360,6 +1566,7 @@ mod tests {
     }
     #[test]
     fn flight_helper_mutates_stable_private_flags_synchronously() {
+        let _guard = INDEX_TEST.lock().unwrap();
         let mut fixture = Fixture::default();
         fixture.vehicle[TICK] = 1;
         let address = &raw mut fixture.private;
@@ -1379,6 +1586,7 @@ mod tests {
     }
     #[test]
     fn big_ufo_initializer_uses_map_max_x_for_y_on_rectangular_maps() {
+        let _guard = INDEX_TEST.lock().unwrap();
         let mut fixture = Fixture::default();
         let services =
             crate::services::fixture(std::ptr::from_mut(&mut fixture).cast(), random, industry);
@@ -1405,6 +1613,7 @@ mod tests {
     }
     #[test]
     fn industry_release_commits_private_state_before_return() {
+        let _guard = INDEX_TEST.lock().unwrap();
         let mut fixture = Fixture::default();
         fixture.vehicle[SUBTYPE] = 4;
         fixture.private.state = 1;
@@ -1419,6 +1628,7 @@ mod tests {
     }
     #[test]
     fn direct_service_refreshes_canonical_age_before_phase_transition() {
+        let _guard = INDEX_TEST.lock().unwrap();
         let mut fixture = Fixture::default();
         fixture.vehicle[TICK] = 1;
         fixture.private.state = 1;
@@ -1432,6 +1642,7 @@ mod tests {
     }
     #[test]
     fn failed_pool_capacity_consumes_no_initializer_rng() {
+        let _guard = INDEX_TEST.lock().unwrap();
         for kind in 0..7 {
             let mut fixture = Fixture::default();
             fixture.world[9] = 0;

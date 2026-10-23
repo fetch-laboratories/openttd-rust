@@ -19,6 +19,7 @@
 #include "command_services_ffi.h"
 #include "command_cost_services.h"
 
+static_assert(VEH_EFFECT == 4);
 static_assert(VehicleID::Invalid().base() == 1048575);
 static_assert(ST_BIG_SUBMARINE == 14 && ROTOR_Z_OFFSET == 5);
 static_assert(SPR_BLIMP == 3905 && SPR_BLIMP_CRASHING == 3906 && SPR_BLIMP_CRASHED == 3907);
@@ -124,7 +125,6 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 	const auto &step = *request;
 	int64_t response = 0;
 	switch (step.kind) {
-		case 4: Vehicle::Get(step.id)->UpdatePositionAndViewport(); break;
 		case 5: response = GetAircraftFlightLevel(DisasterVehicle::Get(step.id)); break;
 		case 6: { int z; GetAircraftFlightLevelBounds(DisasterVehicle::Get(step.id), &z, nullptr); response = z; break; }
 		case 7: CreateEffectVehicleRel(Vehicle::Get(step.id), step.a, step.b, step.c, static_cast<EffectVehicleType>(step.other)); break;
@@ -157,11 +157,6 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 			break;
 		}
 		case 15: response = (new DisasterVehicle(step.a, step.b, static_cast<Direction>(step.c), static_cast<DisasterSubType>(step.id), VehicleID{step.other}))->index.base(); break;
-		case 16: {
-			CommandCost result = EnsureNoVehicleOnGround(TileIndex(step.id));
-			response = result.Failed();
-			break;
-		}
 		case 18: RustUpdateSignals(); break;
 		case 20: ResetIndustryConstructionStage(TileIndex{step.id}); MarkTileDirtyByTile(TileIndex{step.id}); break;
 		case 21: response = ClosestTownFromTile(TileIndex{step.id}, UINT_MAX)->index.base(); break;
@@ -171,10 +166,16 @@ static int64_t OPENTTD_DISASTER_CALL DisasterService(void *, const OpenTTDDisast
 	return response;
 }
 
+static OpenTTDVehicle *OPENTTD_DISASTER_CALL DisasterVehicleShell(void *, uint32_t id) noexcept
+{
+	return RustIndexedVehicleRead<OpenTTDVehicle *, RustVehicle>(id);
+}
+
 static int64_t RunDisaster(uint32_t operation, uint32_t id = 0, int64_t a = 0, int64_t b = 0, int64_t c = 0, int64_t d = 0)
 {
+	const OpenTTDDisasterOccupancy occupancy{.commands = GetRustOccupancyCommands(), .vehicle = DisasterVehicleShell};
 	std::unique_ptr<OpenTTDDisasterRun, decltype(&openttd_rust_disaster_destroy)> run{
-		openttd_rust_disaster_create(operation, id, a, b, c, d, nullptr, DisasterRead, DisasterWrite, &GetRustSharedServices(), DisasterService), openttd_rust_disaster_destroy};
+		openttd_rust_disaster_create(operation, id, a, b, c, d, nullptr, DisasterRead, DisasterWrite, &GetRustSharedServices(), &occupancy, DisasterService), openttd_rust_disaster_destroy};
 	int64_t response = 0;
 	for (;;) {
 		auto step = openttd_rust_disaster_advance(run.get(), response);

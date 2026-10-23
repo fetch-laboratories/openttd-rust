@@ -43,6 +43,8 @@ impl VehicleType {
     pub const SHIP: Self = Self(2);
     /// Native `VEH_AIRCRAFT`.
     pub const AIRCRAFT: Self = Self(3);
+    /// Native `VEH_EFFECT`.
+    pub const EFFECT: Self = Self(4);
     /// Native `VEH_DISASTER`.
     pub const DISASTER: Self = Self(5);
 }
