@@ -23,6 +23,44 @@ import migration
 
 
 class SimulationDeterminismTests(unittest.TestCase):
+    def test_unnamed_fixture_runs_and_named_river_diagnostics(self):
+        # Disaster and aircraft preparation call run_game directly with unnamed
+        # generation/setup and save/stepping dictionaries. All hooks run there.
+        generated = dict(kind="generate", seed=86, map_log2=7, land_generator=1)
+        cases = (
+            (generated, []),
+            (dict(kind="save", save="fixture.sav"), []),
+            (dict(generated, name="generate-river-search"), ["-d", "yapf=3"]),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for scenario, diagnostics in cases:
+                with (
+                    self.subTest(scenario=scenario),
+                    patch.object(
+                        simulate, "game_slot", return_value=contextlib.nullcontext()
+                    ),
+                    patch.object(simulate.subprocess, "run") as launch,
+                ):
+                    launch.return_value.returncode = 0
+                    run = simulate.run_game(
+                        dict(scenario, ticks=1),
+                        root / "openttd",
+                        root,
+                        root / "run",
+                        10,
+                        {},
+                        False,
+                    )
+                    self.assertEqual(run["exit"], 0)
+                    options = [
+                        run["command"][index - 1 : index + 1]
+                        for index, arg in enumerate(run["command"])
+                        if arg == "yapf=3"
+                    ]
+                    self.assertEqual(options, [diagnostics] if diagnostics else [])
+                    launch.assert_called_once()
+
     def test_each_requested_selector_must_match_before_any_run(self):
         stderr = io.StringIO()
         with (

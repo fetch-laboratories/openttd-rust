@@ -122,6 +122,7 @@ pub struct Strings {
 /// Native immutable table; pointer callbacks require live stack costs/frames.
 #[repr(C)]
 pub struct RoadCommandServices {
+    pub physics: &'static crate::ground_vehicle::Services,
     /// Native `rail_commands` service.
     /// Direct Rust owner entry; production binds `openttd_rust_road_do_build`.
     pub do_build: unsafe extern "C" fn(
@@ -173,7 +174,8 @@ pub struct RoadCommandServices {
     /// Native `collect_vehicles` service.
     pub collect_vehicles: unsafe extern "C" fn(*mut ConvertFrame, u32),
     /// Native `cargo_changed` service.
-    pub cargo_changed: unsafe extern "C" fn(*mut ConvertFrame),
+    pub affected_count: unsafe extern "C" fn(*mut ConvertFrame) -> usize,
+    pub affected_at: unsafe extern "C" fn(*mut ConvertFrame, usize) -> crate::vehicle::VehicleRef,
 }
 use crate::road_type::INVALID_ROADTYPE as INVALID;
 use crate::services::Cost;
@@ -1736,7 +1738,11 @@ impl<'a> Ctx<'a> {
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
             unsafe {
-                (self.s.cargo_changed)(frame);
+                let count = (self.s.affected_count)(frame);
+                for i in 0..count {
+                    let v = (self.s.affected_at)(frame, i);
+                    crate::ground_vehicle::cargo_changed(self.s.physics, v);
+                }
             }
         }
         if !found {
@@ -2261,7 +2267,9 @@ crate::abi::layouts! {
         scratch_cost,
         conversion_scratch,
         collect_vehicles,
-        cargo_changed,
+        physics,
+        affected_count,
+        affected_at,
     };
     "OpenTTDRoadConversionScratch" ["probe"] => ConversionScratch {
         frame,

@@ -1933,6 +1933,9 @@ Trackdir RoadVehicle::GetVehicleTrackdir() const
 
 uint16_t RoadVehicle::GetMaxWeight() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_ground_weight(&GetRustGroundPhysicsServices(), this, true);
+#else
 	uint16_t weight = CargoSpec::Get(this->cargo_type)->WeightOfNUnits(this->GetEngine()->DetermineCapacity(this));
 
 	/* Vehicle weight is not added for articulated parts. */
@@ -1942,19 +1945,14 @@ uint16_t RoadVehicle::GetMaxWeight() const
 	}
 
 	return weight;
+#endif
 }
 
 #ifdef WITH_RUST
 #include "rust/road_services.h"
 #endif /* WITH_RUST */
 
-#ifdef WITH_RUST
-bool RoadVehicle::HasToUseGetSlopePixelZ()
-{
-	const RoadVehicle *first = this->First();
-	return openttd_rust_road_slope_pixel(RustVehicle(this), RustVehicle(first), first->GetRustState(), this->direction, &GetRoadLeaves());
-}
-#endif
+
 
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"

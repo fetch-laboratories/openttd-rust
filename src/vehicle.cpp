@@ -106,7 +106,7 @@ static void VehicleVisitArrivalDirty(OpenTTDVehicle *handle) noexcept
 	Vehicle *v = VehicleOf(handle);
 	SetWindowDirty(GetWindowClassForVehicleType(v->type), v->owner);
 	SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP);
-	SetWindowDirty(WC_VEHICLE_DETAILS, v->index);
+	RustVehicleDetailsDirty(handle);
 	SetWindowDirty(WC_STATION_VIEW, v->last_station_visited);
 
 	RustStationMarkTilesDirty(Station::Get(v->last_station_visited), true);

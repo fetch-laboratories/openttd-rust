@@ -10,6 +10,10 @@
 #define RUST_GENERATION_SERVICES_HPP
 #include "../genworld.h"
 #include <exception>
+/* Native-only throwing operations. These never enter a service table: each
+ * caller catches inside its native handoff before returning across Rust. */
+static inline void RustSetGeneratingWorldProgress(GenWorldProgress stage, uint total) { SetGeneratingWorldProgress(stage, total); }
+static inline void RustIncreaseGeneratingWorldProgress(GenWorldProgress stage) { IncreaseGeneratingWorldProgress(stage); }
 template <typename Frame, typename F>
 inline bool RunGenerationProgress(Frame *context, F &&progress) noexcept
 {

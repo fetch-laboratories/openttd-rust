@@ -215,6 +215,8 @@ add_files(
     goal_type.h
     graph_gui.cpp
     graph_gui.h
+    rust/ground_vehicle_services.cpp
+    rust/ground_vehicle_ffi.h
     ground_vehicle.cpp
     ground_vehicle.hpp
     group.h

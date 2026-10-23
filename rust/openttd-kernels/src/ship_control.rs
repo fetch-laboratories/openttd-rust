@@ -30,8 +30,8 @@ pub extern "C" fn openttd_rust_ship_control_reload_rotation() {
 }
 
 const INVALID: u32 = u32::MAX;
-const DEPOT: u16 = 128;
-const WORMHOLE: u16 = 64;
+const DEPOT: u16 = crate::track_type::TRACK_BIT_DEPOT as u16;
+const WORMHOLE: u16 = crate::track_type::TRACK_BIT_WORMHOLE as u16;
 // Match FindFirstBit and FindFirstTrack, including their distinct zero results.
 fn first_bit(bits: u32) -> u32 {
     if bits == 0 { 0 } else { bits.trailing_zeros() }
