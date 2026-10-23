@@ -1038,7 +1038,7 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.river = RustIsRiver,
 		.set_snow_line = RustSetSnowLineHeight,
 		.not_reached = RustNotReached,
-		.river_debug = [](bool found, uint32_t rounds, uint32_t open, uint32_t closed, int32_t cost, int32_t distance) noexcept { RustYapfDebug('~', found, 0, rounds, open, closed, 0.0f, cost, distance); },
+		.river_debug = RustRiverYapfDebug,
 		.assert_condition = []([[maybe_unused]] bool condition) noexcept { assert(condition); },
 		.sea_construct = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Construct(); },
 		.sea_destroy = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Destroy(); },
