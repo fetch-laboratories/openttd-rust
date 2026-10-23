@@ -726,9 +726,7 @@ static const OpenTTDStationServices _rust_station_services = {
 		StationID next = ge.GetVia(st->index);
 		ge.GetOrCreateData().cargo.Append(new CargoPacket(st->index, amount, Source(source.id, source.type)), next);
 	},
-	.supply_graph = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> uint16_t {
-		return RustStationLinkGraphIndex(handle, cargo);
-	},
+	.supply_graph = RustStationLinkGraphIndex,
 	.update_supply = [](OpenTTDLinkGraph *graph, uint16_t node, uint32_t amount) noexcept {
 		(*graph)[node].UpdateSupply(amount);
 	},
