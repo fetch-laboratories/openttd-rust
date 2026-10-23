@@ -1908,7 +1908,7 @@ struct StationViewWindow : public Window {
 			DrawString(tr.Indent(WidgetDimensions::scaled.hsep_indent, rtl),
 				GetString(STR_STATION_VIEW_CARGO_SUPPLY_RATING,
 					cs->name,
-					lg != nullptr ? lg->Monthly((*lg)[ge->node].supply) : 0,
+					lg != nullptr ? lg->Monthly((*lg)[ge->node].Supply()) : 0,
 					STR_CARGO_RATING_APPALLING + (ge->rating >> 5),
 					ToPercent8(ge->rating)));
 			tr.top += GetCharacterHeight(FS_NORMAL);

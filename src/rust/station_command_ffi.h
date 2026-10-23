@@ -76,7 +76,6 @@ struct OpenTTDStationCommandServices {
 	OpenTTDStationBounds (*bounds)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(bounds);
 	uint32_t (*location)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
 	void (*move_sign)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(move_sign);
-	void (*node_location)(OpenTTDLinkGraph *, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(node_location);
 	void (*virtual_coord)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(virtual_coord);
 	void (*catchment)(BaseStation *, bool) noexcept OPENTTD_SERVICE_DEFAULT(catchment);
 	void (*catchment_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(catchment_dirty);

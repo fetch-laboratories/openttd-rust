@@ -182,7 +182,6 @@ pub struct CommandServicesTable {
     pub bounds: extern "C" fn(*mut BaseStation) -> Bounds,
     pub location: extern "C" fn(*const BaseStation) -> u32,
     pub move_sign: extern "C" fn(*mut BaseStation, u32),
-    pub node_location: extern "C" fn(*mut crate::linkgraph::NativeGraph, u16, u32),
     pub virtual_coord: extern "C" fn(*mut BaseStation),
     pub catchment: extern "C" fn(*mut BaseStation, bool),
     pub catchment_dirty: extern "C" fn(),
@@ -738,7 +737,13 @@ impl Ctx<'_> {
                 continue;
             }
             let node = (self.links().node)(st, cargo);
-            (self.s.node_location)(graph, node, (self.s.location)(st));
+            unsafe {
+                crate::linkgraph::live::openttd_rust_live_node_location(
+                    crate::linkgraph::live::resolve(graph),
+                    node,
+                    (self.s.location)(st),
+                );
+            }
         }
     }
     fn delete_if_empty(&self, st: *mut BaseStation) {
@@ -4168,7 +4173,6 @@ crate::abi::layouts! {
         bounds,
         location,
         move_sign,
-        node_location,
         virtual_coord,
         catchment,
         catchment_dirty,

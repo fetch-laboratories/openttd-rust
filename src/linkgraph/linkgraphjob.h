@@ -77,7 +77,12 @@ public:
 	 * Annotation for a link graph node.
 	 */
 	struct NodeAnnotation {
-		const LinkGraph::BaseNode &base; ///< Reference to the node that is annotated.
+#ifdef WITH_RUST
+		const LinkGraph::BaseNode base;
+#else
+		const LinkGraph::BaseNode &base;
+#endif
+		// ///< Reference to the node that is annotated.
 
 		uint undelivered_supply = 0; ///< Amount of supply that hasn't been distributed yet.
 		PathList paths{}; ///< Paths through this node, sorted so that those with flow == 0 are in the back.
@@ -86,10 +91,10 @@ public:
 		std::vector<EdgeAnnotation> edges{}; ///< Annotations for all edges originating at this node.
 		std::vector<DemandAnnotation> demands{}; ///< Annotations for the demand to all other nodes.
 
-		NodeAnnotation(const LinkGraph::BaseNode &node, size_t size) : base(node), undelivered_supply(node.supply)
+		NodeAnnotation(const LinkGraph::BaseNode &node, size_t size) : base(node), undelivered_supply(node.Supply())
 		{
-			this->edges.reserve(node.edges.size());
-			for (auto &e : node.edges) this->edges.emplace_back(e);
+			this->edges.reserve(node.Edges().size());
+			for (auto &e : node.Edges()) this->edges.emplace_back(e);
 #ifndef WITH_RUST
 			this->demands.resize(size);
 #else

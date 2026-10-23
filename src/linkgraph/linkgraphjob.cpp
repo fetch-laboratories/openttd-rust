@@ -94,16 +94,16 @@ static uint32_t ReadCargoFlowJob(void *context, uint8_t op, uint16_t node, uint1
 	switch (op) {
 		case 0: return LinkGraph::IsValidID(job.LinkGraphIndex());
 		case 1: return job.Size();
-		case 2: return job[node].base.station.base();
-		case 3: return Station::IsValidID(job[node].base.station);
+		case 2: return job[node].base.Station().base();
+		case 3: return Station::IsValidID(job[node].base.Station());
 		case 4: return static_cast<uint32_t>(job[node].edges.size());
 		case 5: return job[node].edges[edge_index].Flow();
 		case 6: return job[node].edges[edge_index].base.dest_node;
 		case 7: return (*LinkGraph::Get(job.LinkGraphIndex()))[node].HasEdgeTo(edge_index);
 		case 8: return _settings_game.linkgraph.GetDistributionType(job.Cargo()) == DT_MANUAL;
-		case 9: return Station::Get(job[node].base.station)->goods[job.Cargo()].GetData().IsEmpty();
-		case 10: return Station::Get(job[node].base.station)->goods[job.Cargo()].link_graph.base();
-		case 11: return Station::Get(job[node].base.station)->goods[job.Cargo()].node;
+		case 9: return Station::Get(job[node].base.Station())->goods[job.Cargo()].GetData().IsEmpty();
+		case 10: return Station::Get(job[node].base.Station())->goods[job.Cargo()].link_graph.base();
+		case 11: return Station::Get(job[node].base.Station())->goods[job.Cargo()].node;
 		case 12: return job.LinkGraphIndex().base();
 		case 13: return (*LinkGraph::Get(job.LinkGraphIndex()))[node][edge_index].LastUpdate() != EconomyTime::INVALID_DATE;
 		case 14: return (*LinkGraph::Get(job.LinkGraphIndex()))[node][edge_index].last_unrestricted_update != EconomyTime::INVALID_DATE;
@@ -119,20 +119,20 @@ static OpenTTDCargoFlowMap *CargoJobFlows(void *context, uint16_t node) noexcept
 static OpenTTDCargoFlowMap *CargoLiveFlows(void *context, uint16_t node) noexcept
 {
 	auto &job = *static_cast<LinkGraphJob *>(context);
-	return Station::Get(job[node].base.station)->goods[job.Cargo()].GetOrCreateData().flows.RustState();
+	return Station::Get(job[node].base.Station())->goods[job.Cargo()].GetOrCreateData().flows.RustState();
 }
 
 static void CargoFlowReroute(void *context, uint16_t node, uint16_t via) noexcept
 {
 	auto &job = *static_cast<LinkGraphJob *>(context);
-	Station *st = Station::Get(job[node].base.station);
+	Station *st = Station::Get(job[node].base.Station());
 	RerouteCargo(st, job.Cargo(), StationID(via), st->index);
 }
 
 static void CargoFlowFinish(void *context, uint16_t node, uint8_t clear) noexcept
 {
 	auto &job = *static_cast<LinkGraphJob *>(context);
-	Station *st = Station::Get(job[node].base.station);
+	Station *st = Station::Get(job[node].base.Station());
 	if (clear != 0) st->goods[job.Cargo()].ClearData();
 	InvalidateWindowData(WC_STATION_VIEW, st->index, job.Cargo());
 }
@@ -259,7 +259,7 @@ void LinkGraphJob::Init()
 	uint size = this->Size();
 	this->nodes.reserve(size);
 	for (uint i = 0; i < size; ++i) {
-		this->nodes.emplace_back(this->link_graph.nodes[i], this->link_graph.Size());
+		this->nodes.emplace_back(this->link_graph[i], this->link_graph.Size());
 	}
 }
 
@@ -341,20 +341,13 @@ static_assert(Ticks::DAY_TICKS == 74);
 void LinkGraphJob::RunRust()
 {
 	this->Init();
-	std::vector<OpenTTDLinkGraphNode> input_nodes;
-	std::vector<OpenTTDLinkGraphEdge> input_edges;
-	input_nodes.reserve(this->Size());
-	for (const auto &node : this->nodes) {
-		input_nodes.push_back({node.base.supply, node.base.demand, node.base.station.base(), TileX(node.base.xy), TileY(node.base.xy), static_cast<uint32_t>(input_edges.size()), static_cast<uint32_t>(node.base.edges.size())});
-		for (const auto &edge : node.base.edges) input_edges.push_back({edge.capacity, edge.TravelTime(), edge.dest_node});
-	}
 	const auto &s = this->settings;
 	auto runtime = this->JoinDate() - s.recalc_time / CalendarTime::SECONDS_PER_DAY - this->LastCompression() + 1;
 	OpenTTDLinkGraphSettings settings{s.accuracy, s.demand_distance, s.demand_size, s.short_path_saturation, static_cast<uint32_t>(s.GetDistributionType(this->Cargo())),
 		IsCargoInClass(this->Cargo(), CargoClass::Passengers) || IsCargoInClass(this->Cargo(), CargoClass::Mail) || IsCargoInClass(this->Cargo(), CargoClass::Express), Map::MaxX(), Map::MaxY(), static_cast<uint32_t>(runtime.base())};
 	auto abort = [](const void *ctx) noexcept -> uint8_t { return static_cast<const LinkGraphJob *>(ctx)->IsJobAborted(); };
 	std::unique_ptr<OpenTTDLinkGraphResult, decltype(&openttd_rust_linkgraph_destroy)> result(
-		openttd_rust_linkgraph_run(input_nodes.data(), input_nodes.size(), input_edges.data(), input_edges.size(), &settings, this, abort), &openttd_rust_linkgraph_destroy);
+		openttd_rust_live_graph_run(this->link_graph.RustState(), &settings, this, abort), &openttd_rust_linkgraph_destroy);
 	if (this->IsJobAborted()) return;
 	size_t count = 0;
 	const auto *shares = openttd_rust_linkgraph_shares(result.get(), &count);

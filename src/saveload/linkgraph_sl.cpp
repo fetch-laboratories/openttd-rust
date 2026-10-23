@@ -21,7 +21,22 @@
 
 #include "../safeguards.h"
 
+#ifdef WITH_RUST
+/** Save-only stack carrier of canonical scalar addresses. No load transaction:
+ * scalar writes and appended edges survive partially decoded objects as before. */
+struct Node : LinkGraph::BaseNode {
+	OpenTTDLiveNodeFields fields;
+	auto &Field_xy() { return *this->fields.xy; }
+	auto &Field_supply() { return *this->fields.supply; }
+	auto &Field_demand() { return *this->fields.demand; }
+	auto &Field_station() { return *this->fields.station; }
+	auto &Field_last_update() { return *this->fields.last_update; }
+
+	Node(LinkGraph *graph, NodeID id) : LinkGraph::BaseNode{graph->RustState(), id}, fields(openttd_rust_live_node_fields(graph->RustState(), id)) {}
+};
+#else
 typedef LinkGraph::BaseNode Node;
+#endif
 typedef LinkGraph::BaseEdge Edge;
 
 static uint16_t _num_nodes;
@@ -43,9 +58,9 @@ public:
 
 	void Save(Node *bn) const override
 	{
-		SlSetStructListLength(bn->edges.size());
-		for (Edge &e : bn->edges) {
-			SlObject(&e, this->GetDescription());
+		SlSetStructListLength(bn->Edges().size());
+		for (const Edge &e : bn->Edges()) {
+			SlObject(const_cast<Edge *>(&e), this->GetDescription());
 		}
 	}
 
@@ -77,16 +92,18 @@ public:
 
 			/* Build edge list from edge matrix. */
 			for (NodeID to = edges[_linkgraph_from].dest_node; to != INVALID_NODE; to = edges[to].dest_node) {
-				auto &edge = bn->edges.emplace_back(edges[to]);
+				auto &edge = bn->AppendEdge();
+				edge = edges[to];
 				edge.dest_node = to;
 			}
 			/* Sort by destination. */
-			std::sort(bn->edges.begin(), bn->edges.end());
+			auto edges = bn->Edges();
+			std::sort(const_cast<Edge *>(edges.data()), const_cast<Edge *>(edges.data()) + edges.size());
 		} else {
 			/* Edge data is now a simple vector and not any kind of matrix. */
 			size_t size = SlGetStructListLength(UINT16_MAX);
 			for (size_t i = 0; i < size; i++) {
-				auto &edge = bn->edges.emplace_back();
+				auto &edge = bn->AppendEdge();
 				SlObject(&edge, this->GetLoadDescription());
 			}
 		}
@@ -96,11 +113,19 @@ public:
 class SlLinkgraphNode : public DefaultSaveLoadHandler<SlLinkgraphNode, LinkGraph> {
 public:
 	static inline const SaveLoad description[] = {
+#ifdef WITH_RUST
+		SLE_CONDVARNAME(Node, Field_xy(), "xy", SLE_UINT32, SLV_191, SL_MAX_VERSION),
+		SLE_VARNAME(Node, Field_supply(), "supply", SLE_UINT32),
+		SLE_VARNAME(Node, Field_demand(), "demand", SLE_UINT32),
+		SLE_VARNAME(Node, Field_station(), "station", SLE_UINT16),
+		SLE_VARNAME(Node, Field_last_update(), "last_update", SLE_INT32),
+#else
 		SLE_CONDVAR(Node, xy,          SLE_UINT32, SLV_191, SL_MAX_VERSION),
 		    SLE_VAR(Node, supply,      SLE_UINT32),
 		    SLE_VAR(Node, demand,      SLE_UINT32),
 		    SLE_VAR(Node, station,     SLE_UINT16),
 		    SLE_VAR(Node, last_update, SLE_INT32),
+#endif
 		SLEG_STRUCTLIST("edges", SlLinkgraphEdge),
 	};
 	static inline const SaveLoadCompatTable compat_description = _linkgraph_node_sl_compat;
@@ -112,7 +137,12 @@ public:
 		SlSetStructListLength(lg->Size());
 		for (NodeID from = 0; from < lg->Size(); ++from) {
 			_linkgraph_from = from;
+#ifdef WITH_RUST
+			Node node(lg, from);
+			SlObject(&node, this->GetDescription());
+#else
 			SlObject(&lg->nodes[from], this->GetDescription());
+#endif
 		}
 	}
 
@@ -124,7 +154,12 @@ public:
 		lg->Init(length);
 		for (NodeID from = 0; from < length; ++from) {
 			_linkgraph_from = from;
+#ifdef WITH_RUST
+			Node node(lg, from);
+			SlObject(&node, this->GetLoadDescription());
+#else
 			SlObject(&lg->nodes[from], this->GetLoadDescription());
+#endif
 		}
 	}
 };
@@ -136,9 +171,17 @@ public:
 SaveLoadTable GetLinkGraphDesc()
 {
 	static const SaveLoad link_graph_desc[] = {
+#ifdef WITH_RUST
+		SLE_VARNAME(LinkGraph, SaveCompression(), "last_compression", SLE_INT32),
+#else
 		 SLE_VAR(LinkGraph, last_compression, SLE_INT32),
+#endif
 		SLEG_CONDVAR("num_nodes", _num_nodes, SLE_UINT16, SL_MIN_VERSION, SLV_SAVELOAD_LIST_LENGTH),
+#ifdef WITH_RUST
+		SLE_VARNAME(LinkGraph, SaveCargo(), "cargo", SLE_UINT8),
+#else
 		 SLE_VAR(LinkGraph, cargo,            SLE_UINT8),
+#endif
 		SLEG_STRUCTLIST("nodes", SlLinkgraphNode),
 	};
 	return link_graph_desc;
@@ -234,7 +277,7 @@ void AfterLoadLinkGraphs()
 	if (IsSavegameVersionBefore(SLV_191)) {
 		for (LinkGraph *lg : LinkGraph::Iterate()) {
 			for (NodeID node_id = 0; node_id < lg->Size(); ++node_id) {
-				const Station *st = Station::GetIfValid((*lg)[node_id].station);
+				const Station *st = Station::GetIfValid((*lg)[node_id].Station());
 				if (st != nullptr) (*lg)[node_id].UpdateLocation(st->xy);
 			}
 		}
@@ -242,7 +285,7 @@ void AfterLoadLinkGraphs()
 		for (LinkGraphJob *lgj : LinkGraphJob::Iterate()) {
 			LinkGraph *lg = &(const_cast<LinkGraph &>(lgj->Graph()));
 			for (NodeID node_id = 0; node_id < lg->Size(); ++node_id) {
-				const Station *st = Station::GetIfValid((*lg)[node_id].station);
+				const Station *st = Station::GetIfValid((*lg)[node_id].Station());
 				if (st != nullptr) (*lg)[node_id].UpdateLocation(st->xy);
 			}
 		}

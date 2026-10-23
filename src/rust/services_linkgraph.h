@@ -23,10 +23,4 @@ inline OpenTTDLinkGraph *RustLinkGraphAllocate(uint8_t cargo) noexcept
 	return lg;
 }
 inline void RustLinkGraphAllocationFailure() noexcept { Debug(misc, 0, "Can't allocate link graph"); }
-inline void RustLinkGraphJoin(OpenTTDLinkGraph *lg, OpenTTDBaseStation *st, uint8_t cargo) noexcept
-{
-	GoodsEntry &ge = static_cast<Station *>(st)->goods[cargo];
-	ge.link_graph = lg->index;
-	ge.node = lg->AddNode(static_cast<Station *>(st));
-}
 #endif /* RUST_SERVICES_LINKGRAPH_H */

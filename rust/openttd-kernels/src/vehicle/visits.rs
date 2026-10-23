@@ -22,7 +22,7 @@ use crate::{
     cargo_storage::List,
     cargo_type::{CARGO_AUTO_REFIT, INVALID_CARGO, NUM_CARGO},
     cargopacket::MTA_LOAD,
-    linkgraph::NativeGraph,
+    linkgraph::{NativeGraph, live},
     linkgraph_type::EdgeUpdateModes,
     map_func::Map,
     order_type::{
@@ -99,14 +99,6 @@ pub struct Services {
     pub allocate_graph: extern "C" fn(u8) -> *mut NativeGraph,
     /// `Debug(misc, 0, "Can't allocate link graph")`.
     pub allocation_failure: extern "C" fn(),
-    /// `ge.link_graph = lg->index; ge.node = lg->AddNode(st);`
-    pub join_graph: extern "C" fn(*mut NativeGraph, *mut BaseStation, u8),
-    /// `LinkGraph::Size()`.
-    pub graph_size: extern "C" fn(*mut NativeGraph) -> u16,
-    /// `LinkGraphSchedule::instance.Dequeue(from)`, then `into->Merge(from)`.
-    pub merge_graph: extern "C" fn(*mut NativeGraph, *mut NativeGraph),
-    /// `(*lg)[from].UpdateEdge(to, capacity, usage, time, modes)`.
-    pub update_edge: extern "C" fn(*mut NativeGraph, u16, u16, u32, u32, u32, EdgeUpdateModes),
     pub percent: PercentStrings,
     /// `v->last_loading_station = station`.
     pub set_last_loading: extern "C" fn(VehicleRef, u16),
@@ -202,7 +194,9 @@ pub(crate) fn increase_stats(
             if (s.graph_available)() {
                 witness::hit(witness::VISITS_GRAPH_NEW);
                 graph = (s.allocate_graph)(cargo);
-                (s.join_graph)(graph, st2, cargo);
+                unsafe {
+                    live::join(graph, (l.station_id)(st2));
+                }
             } else {
                 witness::hit(witness::VISITS_GRAPH_FAILURE);
                 (s.allocation_failure)();
@@ -211,26 +205,45 @@ pub(crate) fn increase_stats(
             graph = second;
         }
         if !graph.is_null() {
-            (s.join_graph)(graph, st, cargo);
+            unsafe {
+                live::join(graph, (l.station_id)(st));
+            }
         }
     } else if second.is_null() {
         witness::hit(witness::VISITS_GRAPH_JOIN);
-        (s.join_graph)(graph, st2, cargo);
+        unsafe {
+            live::join(graph, (l.station_id)(st2));
+        }
     } else if graph != second {
-        if (s.graph_size)(graph) < (s.graph_size)(second) {
+        if unsafe { (&*live::resolve(graph)).size() < (&*live::resolve(second)).size() } {
             witness::hit(witness::VISITS_GRAPH_MERGE_SECOND);
-            (s.merge_graph)(second, graph);
+            unsafe {
+                live::openttd_native_linkgraph_dequeue(graph);
+                live::openttd_rust_live_graph_merge(second, graph, (s.shared.economy_date)());
+            }
             graph = second;
         } else {
             witness::hit(witness::VISITS_GRAPH_MERGE_FIRST);
-            (s.merge_graph)(graph, second);
+            unsafe {
+                live::openttd_native_linkgraph_dequeue(second);
+                live::openttd_rust_live_graph_merge(graph, second, (s.shared.economy_date)());
+            }
         }
     }
     if !graph.is_null() {
         // Merging rewrites both goods entries, so the nodes are read afterwards.
         let from = (l.node)(st, cargo);
         let to = (l.node)(st2, cargo);
-        (s.update_edge)(graph, from, to, capacity, usage, time, modes);
+        unsafe {
+            (&mut *live::resolve(graph)).nodes[usize::from(from)].update_edge(
+                to,
+                capacity,
+                usage,
+                time,
+                modes,
+                (s.shared.economy_date)(),
+            );
+        }
     }
 }
 
@@ -1133,10 +1146,6 @@ crate::abi::layouts! {
         graph_available,
         allocate_graph,
         allocation_failure,
-        join_graph,
-        graph_size,
-        merge_graph,
-        update_edge,
         percent,
         set_last_loading,
         set_loading_tick,

@@ -111,7 +111,7 @@ Station::~Station()
 		if (lg == nullptr) continue;
 
 		for (NodeID node = 0; node < lg->Size(); ++node) {
-			Station *st = Station::Get((*lg)[node].station);
+			Station *st = Station::Get((*lg)[node].Station());
 			if (!st->goods[cargo].HasData()) continue;
 			st->goods[cargo].GetData().flows.erase(this->index);
 			if ((*lg)[node].HasEdgeTo(this->goods[cargo].node) && (*lg)[node][this->goods[cargo].node].LastUpdate() != EconomyTime::INVALID_DATE) {
