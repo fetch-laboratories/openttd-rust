@@ -14,6 +14,7 @@
 //! Services are synchronous and `noexcept`; none retains a Rust reference, and
 //! callers end every owner borrow before calling one that can reenter Rust.
 pub(crate) mod maintenance;
+pub(crate) mod occupancy;
 pub(crate) mod scheduler;
 pub(crate) mod visits;
 
@@ -42,6 +43,10 @@ impl VehicleType {
     pub const SHIP: Self = Self(2);
     /// Native `VEH_AIRCRAFT`.
     pub const AIRCRAFT: Self = Self(3);
+    /// Native `VEH_EFFECT`.
+    pub const EFFECT: Self = Self(4);
+    /// Native `VEH_DISASTER`.
+    pub const DISASTER: Self = Self(5);
 }
 
 /// Native `OrderType : uint8_t`, including every unnamed byte pattern.
@@ -207,12 +212,10 @@ pub struct MovementObservations {
 /// Base `Vehicle` operations and writes shared by every vehicle type.
 #[repr(C)]
 pub struct VehicleServices {
-    /// Shared live tile-hash traversal. Callback preserves the current shell.
-    pub vehicles_on_tile: unsafe extern "C" fn(
-        u32,
-        *mut std::ffi::c_void,
-        unsafe extern "C" fn(*mut std::ffi::c_void, VehicleRef),
-    ),
+    pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
+    pub map_log_x: extern "C" fn() -> u32,
+    pub assertions: bool,
+    pub train_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::train::Handle,
     /// Consecutive `tick_counter`, `running_ticks` and `current_order_time` stores.
     pub write_counters: extern "C" fn(VehicleRef, u8, u8, i32),
     pub waiting_for_unbunching: extern "C" fn(VehicleRef) -> bool,
@@ -222,8 +225,8 @@ pub struct VehicleServices {
     pub enter_depot: unsafe extern "C" fn(VehicleRef, *const visits::Services),
     pub pathfinding_result: extern "C" fn(VehicleRef, bool),
     pub new_position: extern "C" fn(VehicleRef) -> NewPosition,
-    /// Store x/y, `UpdatePosition()`, then observe `vehstatus`.
-    pub move_then_status: extern "C" fn(VehicleRef, i32, i32) -> u8,
+    /// Store canonical native x/y. The Rust caller updates the tile index.
+    pub write_xy: extern "C" fn(VehicleRef, i32, i32),
     /// `Vehicle::UpdateViewport(true)`.
     pub base_viewport: extern "C" fn(VehicleRef),
     /// `GetVehicleProperty(v, property, fallback)`.
@@ -353,8 +356,6 @@ pub struct GroundServices {
     pub physics: &'static crate::ground_vehicle::Services,
     /// Invalidate the chain `NewGRF` cache, then reset total length.
     pub cache_begin: extern "C" fn(VehicleRef),
-    /// Store x/y, then `UpdatePosition()`.
-    pub move_position: extern "C" fn(VehicleRef, i32, i32),
     /// `UpdateViewport(force, delta)`.
     pub update_viewport_then_next: extern "C" fn(VehicleRef, VehicleRef) -> ViewportNext,
     /// Store the direction, then `UpdateViewport(true, true)`.
@@ -379,18 +380,13 @@ impl VehicleServices {
     /// but cannot delete the current shell. No owner reference spans a callback.
     #[allow(unsafe_code)]
     pub(crate) fn for_each_on_tile<F: FnMut(VehicleRef)>(&self, tile: u32, mut visit: F) {
-        unsafe extern "C" fn invoke<F: FnMut(VehicleRef)>(
-            context: *mut std::ffi::c_void,
-            vehicle: VehicleRef,
-        ) {
-            // SAFETY: The service borrows this unique closure only during the call.
-            unsafe {
-                (&mut *context.cast::<F>())(vehicle);
-            }
-        }
-        // SAFETY: Closure lives through synchronous traversal; caller preserves shells.
+        // SAFETY: Caller preserves the current shell; no index borrow spans visit.
         unsafe {
-            (self.vehicles_on_tile)(tile, std::ptr::from_mut(&mut visit).cast(), invoke::<F>);
+            let mut it = occupancy::OnTile::new(self, tile);
+            while let Some(v) = it.get() {
+                visit(v);
+                it.advance(self);
+            }
         }
     }
 }
@@ -403,7 +399,10 @@ crate::abi::layouts! {
         tile,
     };
     "OpenTTDVehicleServices" ["probe"] => VehicleServices {
-        vehicles_on_tile,
+        tile_links,
+        map_log_x,
+        assertions,
+        train_handle,
         write_counters,
         waiting_for_unbunching,
         leave_unbunching_depot,
@@ -411,7 +410,7 @@ crate::abi::layouts! {
         enter_depot,
         pathfinding_result,
         new_position,
-        move_then_status,
+        write_xy,
         base_viewport,
         property,
         callback,
@@ -507,7 +506,6 @@ crate::abi::layouts! {
         cached_length,
         has_articulated,
         physics,
-        move_position,
     };
     "OpenTTDVehiclePreviousTile" ["probe"] => PreviousTile {
         tile,
@@ -571,6 +569,43 @@ crate::abi::layouts! {
 /// `Vehicle::GetAdvanceSpeed`, with the source unsigned multiplication.
 pub const fn advance_speed(speed: u32) -> u32 {
     speed.wrapping_mul(3) / 4
+}
+
+impl VehicleServices {
+    /// Live traversal under the same current-shell lifetime contract as the
+    /// native iterators. No owner borrow spans a potentially reentrant visitor.
+    #[allow(unsafe_code)]
+    pub(crate) fn any_on_tile(&self, tile: u32, mut visit: impl FnMut(VehicleRef) -> bool) -> bool {
+        unsafe {
+            let mut it = occupancy::OnTile::new(self, tile);
+            while let Some(v) = it.get() {
+                if visit(v) {
+                    return true;
+                }
+                it.advance(self);
+            }
+        }
+        false
+    }
+    #[allow(unsafe_code)]
+    pub(crate) fn any_near(
+        &self,
+        x: i32,
+        y: i32,
+        distance: u32,
+        mut visit: impl FnMut(VehicleRef) -> bool,
+    ) -> bool {
+        unsafe {
+            let mut it = occupancy::Near::new(self, x, y, distance);
+            while let Some(v) = it.get() {
+                if visit(v) {
+                    return true;
+                }
+                it.advance(self);
+            }
+        }
+        false
+    }
 }
 
 #[cfg(test)]

@@ -106,6 +106,8 @@ impl Regions {
         if self.data[index].valid {
             return index;
         }
+        // SAFETY: Immutable registry outlives this synchronous rebuild.
+        let movement = crate::movement::CachedTable::new(unsafe { &*leaves.shared });
         // SAFETY: All leaves are synchronous, noexcept and cannot reenter cache ownership.
         crate::witness::hit(crate::witness::WATER_REBUILDS);
         unsafe {
@@ -126,12 +128,12 @@ impl Regions {
             while let Some(tile) = self.scratch.pop() {
                 // SAFETY: See leaf contract above; no live world reference is retained.
                 crate::witness::hit(crate::witness::WATER_TRACKS);
-                let mut dirs =
-                    crate::track_func::track_bits_to_trackdir_bits(crate::movement::water_tracks(
-                        unsafe { &*leaves.shared },
-                        tile,
-                        crate::direction_type::INVALID_DIAGDIR,
-                    ) as u8);
+                let mut dirs = crate::track_func::track_bits_to_trackdir_bits(
+                    movement
+                        .get()
+                        .water_tracks(tile, crate::direction_type::INVALID_DIAGDIR)
+                        as u8,
+                );
                 if dirs == 0 {
                     continue;
                 }

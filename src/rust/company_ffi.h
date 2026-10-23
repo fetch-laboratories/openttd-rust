@@ -124,8 +124,6 @@ struct OpenTTDCompanyServices {
 	void (OPENTTD_COMPANY_CALL *set_cargo_payment)(uint32_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(set_cargo_payment);
 	void (OPENTTD_COMPANY_CALL *price_windows_dirty)() noexcept OPENTTD_SERVICE_DEFAULT(price_windows_dirty);
 	void (OPENTTD_COMPANY_CALL *industry_daily_changes)(bool) noexcept OPENTTD_SERVICE_DEFAULT(industry_daily_changes);
-	void (OPENTTD_COMPANY_CALL *clear_cargo_monitors)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_cargo_monitors);
-	void (OPENTTD_COMPANY_CALL *clear_all_cargo_monitors)() noexcept OPENTTD_SERVICE_DEFAULT(clear_all_cargo_monitors);
 	void (OPENTTD_COMPANY_CALL *generate_company_name)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(generate_company_name);
 	void (OPENTTD_COMPANY_CALL *ask_merger)(uint8_t, uint8_t, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(ask_merger);
 	bool (OPENTTD_COMPANY_CALL *is_interactive_company)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(is_interactive_company);
@@ -225,7 +223,7 @@ void OPENTTD_COMPANY_CALL openttd_rust_economy_calendar_month(const OpenTTDCompa
 void OPENTTD_COMPANY_CALL openttd_rust_economy_reset_price_multipliers();
 void OPENTTD_COMPANY_CALL openttd_rust_economy_set_price_multiplier(uint32_t, int32_t);
 void OPENTTD_COMPANY_CALL openttd_rust_economy_startup(const OpenTTDCompanyServices *, const OpenTTDEconomySettings *);
-void OPENTTD_COMPANY_CALL openttd_rust_economy_initialize(const OpenTTDCompanyServices *);
+void OPENTTD_COMPANY_CALL openttd_rust_economy_initialize();
 int64_t OPENTTD_COMPANY_CALL openttd_rust_economy_price(uint32_t, uint32_t, int32_t);
 int64_t OPENTTD_COMPANY_CALL openttd_rust_company_available_money(const CompanyFinances *, bool);
 int64_t OPENTTD_COMPANY_CALL openttd_rust_company_max_loan(const CompanyFinances *);

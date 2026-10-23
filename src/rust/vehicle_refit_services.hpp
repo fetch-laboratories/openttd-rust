@@ -23,7 +23,6 @@ static void VehicleRefitWrite(OpenTTDVehicle *handle, uint8_t cargo, uint16_t ca
 	RustVehicleSetCargoCap(handle, cap);
 	RustVehicleSetCargoSubtype(handle, subtype);
 }
-static OpenTTDTrainHandle VehicleRefitTrain(OpenTTDVehicle *v) noexcept { return TrainHandle(Train::From(VehicleOf(v))); }
 static OpenTTDRoadState *VehicleRefitRoadState(OpenTTDVehicle *v) noexcept { return RoadStateOf(RoadVehicle::From(VehicleOf(v))); }
 static void VehicleRefitDetailsUI(OpenTTDVehicle *v) noexcept { InvalidateWindowData(WC_VEHICLE_DETAILS, VehicleOf(v)->index); }
 static void VehicleRefitListsUI(uint8_t type) noexcept { InvalidateWindowClassesData(GetWindowClassForVehicleType(static_cast<VehicleType>(type)), 0); }
@@ -69,7 +68,7 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.set_capacity = RustVehicleSetCargoCap,
 		.write_refit = VehicleRefitWrite,
 		.mail_cargo = OpenTTDMailCargo,
-		.train_handle = VehicleRefitTrain,
+		.train_handle = RustVehicleTrain,
 		.road_state = VehicleRefitRoadState,
 		.aircraft_handle = GetRustAircraftVehicle,
 		.road_acceleration = RustRoadAccelerationModel,

@@ -109,7 +109,9 @@ pub(crate) unsafe fn road(
             (r.road_ground.physics.first)(unsafe { vehicle_ref(v) }),
         );
     }
-    (a.position)(v);
+    unsafe {
+        a.position(v);
+    }
     unsafe { articulated::consistency(a, v) };
     v
 }
@@ -186,8 +188,12 @@ pub(crate) unsafe fn aircraft(
     (k.service_flags)(v, (k.exclusive_preview)(e), (b.interval_percent)(company));
     (k.aircraft_capacity)(e, v, u);
     unsafe { crate::aircraft::openttd_rust_aircraft_cache(r.aircraft, hv, true) };
-    (a.position)(v);
-    (a.position)(u);
+    unsafe {
+        a.position(v);
+    }
+    unsafe {
+        a.position(u);
+    }
     if subtype == AIR_HELICOPTER {
         crate::witness::hit(crate::witness::VT_ROTOR);
         let w = (k.new_aircraft)();
@@ -199,7 +205,9 @@ pub(crate) unsafe fn aircraft(
             (*hw.state).state = HRS_ROTOR_STOPPED;
             (r.aircraft.update_delta)(hw);
         }
-        (a.position)(w);
+        unsafe {
+            a.position(w);
+        }
     }
     v
 }

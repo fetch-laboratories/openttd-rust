@@ -589,7 +589,6 @@ pub struct Leaves {
     pub pbs_signal_type: extern "C" fn(Handle) -> u64,
     pub platform_ahead: extern "C" fn(Handle, u16, u32) -> u64,
     pub platform_length: extern "C" fn(Handle, u16, u32) -> u64,
-    pub position: extern "C" fn(Handle),
     pub pow_wag_power: extern "C" fn(Handle) -> u64,
     pub price: extern "C" fn(Handle, u32) -> u64,
     pub process_orders: extern "C" fn(Handle) -> u64,
@@ -634,7 +633,7 @@ pub struct Leaves {
     pub tile_offset_diag: extern "C" fn(Handle, u8) -> u64,
     pub tile_owner: extern "C" fn(Handle, u32) -> u64,
     pub tile_rail_type: extern "C" fn(Handle, u32) -> u64,
-    pub tile_virt: extern "C" fn(Handle, i32, i32) -> u64,
+    pub tile_virt: extern "C" fn(i32, i32) -> u32,
     pub trackdir_exit: extern "C" fn(Handle, u8) -> u64,
     pub trackdir_reaches: extern "C" fn(Handle, u8) -> u64,
     pub track_bits: extern "C" fn(Handle, u32) -> u64,
@@ -659,17 +658,6 @@ pub struct Leaves {
     pub write_crossing_bar: extern "C" fn(Handle, u32, u8),
     pub write_visit_type: extern "C" fn(Handle, u16),
 
-    pub visit_tile: extern "C" fn(
-        u32,
-        *mut std::ffi::c_void,
-        extern "C" fn(*mut std::ffi::c_void, Handle) -> u8,
-    ) -> u8,
-    pub visit_near: extern "C" fn(
-        i32,
-        i32,
-        *mut std::ffi::c_void,
-        extern "C" fn(*mut std::ffi::c_void, Handle) -> u8,
-    ) -> u8,
     /// Base vehicle table, immutable for the process.
     pub vehicle: *const VehicleServices,
 }
@@ -677,12 +665,16 @@ pub struct Leaves {
 struct Game<'a> {
     leaves: &'a Leaves,
     services: &'a Services,
+    movement: crate::movement::CachedTable<'a>,
 }
-extern "C" fn visit<F: FnMut(Handle) -> bool>(context: *mut std::ffi::c_void, part: Handle) -> u8 {
-    // SAFETY: Native visitors call synchronously with this live stack closure; no borrow of world state is held.
-    u8::from(unsafe { (&mut *context.cast::<F>())(part) })
-}
-impl Game<'_> {
+impl<'a> Game<'a> {
+    fn new(leaves: &'a Leaves, services: &'a Services) -> Self {
+        Self {
+            leaves,
+            services,
+            movement: crate::movement::CachedTable::new(services),
+        }
+    }
     fn vs(&self) -> &VehicleServices {
         // SAFETY: The native table names the immutable process-wide base table.
         unsafe { &*self.leaves.vehicle }
@@ -705,10 +697,18 @@ impl Game<'_> {
         (unsafe { &*self.vs().maintenance }.view_dirty)(id.vehicle());
     }
     fn visit_tile<F: FnMut(Handle) -> bool>(&self, tile: u32, mut visitor: F) -> bool {
-        (self.leaves.visit_tile)(tile, std::ptr::from_mut(&mut visitor).cast(), visit::<F>) != 0
+        let vs = self.vs();
+        vs.any_on_tile(tile, |v| {
+            (vs.vehicle_type)(v) == crate::vehicle::VehicleType::TRAIN.0
+                && visitor((vs.train_handle)(v.0.as_ptr()))
+        })
     }
     fn visit_near<F: FnMut(Handle) -> bool>(&self, x: i32, y: i32, mut visitor: F) -> bool {
-        (self.leaves.visit_near)(x, y, std::ptr::from_mut(&mut visitor).cast(), visit::<F>) != 0
+        let vs = self.vs();
+        vs.any_near(x, y, 7, |v| {
+            (vs.vehicle_type)(v) == crate::vehicle::VehicleType::TRAIN.0
+                && visitor((vs.train_handle)(v.0.as_ptr()))
+        })
     }
 
     fn signal_context(&self) -> crate::signal::Context {
@@ -1001,7 +1001,8 @@ impl Game<'_> {
                 (i64::from(i32::from(v.acceleration) * if braking { -4 } else { 2 }) as u64) as u32,
                 0,
                 (max as u64) as i32,
-            ) as i32
+            )
+            .distance as i32
         } else {
             crate::ground_vehicle::update_speed(
                 self.leaves.physics,
@@ -1009,7 +1010,8 @@ impl Game<'_> {
                 crate::ground_vehicle::acceleration(self.leaves.physics, id.vehicle()) as u32,
                 (u64::from(!braking) * 2) as i32,
                 (max as u64) as i32,
-            ) as i32
+            )
+            .distance as i32
         }
     }
     fn mark_dirty(&self, id: Handle) {
@@ -1301,13 +1303,16 @@ impl Game<'_> {
         if id.track() != WORMHOLE {
             self.movement_enter(id, v.tile, (v.x as u64) as i32, (v.y as u64) as i32);
         } else {
-            let vt = (self.leaves.tile_virt)(id, (v.x as u64) as i32, (v.y as u64) as i32) as u32;
+            let vt = (self.leaves.tile_virt)((v.x as u64) as i32, (v.y as u64) as i32);
             if (self.leaves.is_tunnelbridge)(Handle::NONE, vt) != 0 {
                 self.movement_enter(id, vt, (v.x as u64) as i32, (v.y as u64) as i32);
                 if id.track() != WORMHOLE
                     && (self.leaves.is_bridge)(Handle::NONE, (self.leaves.read_tile)(id)) != 0
                 {
-                    (self.leaves.position)(id);
+                    // SAFETY: The controller retains this live shell through the index update.
+                    unsafe {
+                        crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
+                    }
                     crate::ground_vehicle::inclination(
                         self.leaves.physics,
                         id.vehicle(),
@@ -1318,7 +1323,10 @@ impl Game<'_> {
                 }
             }
         }
-        (self.leaves.position)(id);
+        // SAFETY: The controller retains this live shell through the index update.
+        unsafe {
+            crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
+        }
         (self.leaves.viewport)(id, 1, 1);
     }
     fn swap_ground_flags(&self, a: Handle, b: Handle) {
@@ -1690,7 +1698,7 @@ impl Game<'_> {
         let (dx, dy) = delta[usize::from(v.direction)];
         let (mut x, mut y) = (v.x.wrapping_add(dx), v.y.wrapping_add(dy));
         let mut old = v.tile;
-        let new = (self.leaves.tile_virt)(id, (x as u64) as i32, (y as u64) as i32) as u32;
+        let new = (self.leaves.tile_virt)((x as u64) as i32, (y as u64) as i32);
         let mut entered = 0_u8;
         let mut signals = false;
         let mut changed = false;
@@ -1922,7 +1930,10 @@ impl Game<'_> {
             } else {
                 (self.leaves.write_x)(id, (x as u64) as i32);
                 (self.leaves.write_y)(id, (y as u64) as i32);
-                (self.leaves.position)(id);
+                // SAFETY: The controller retains this live shell through the index update.
+                unsafe {
+                    crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
+                }
                 if (self.leaves.read_status)(id) & 1 == 0 {
                     (self.leaves.base_viewport)(id, 1);
                 }
@@ -1932,7 +1943,10 @@ impl Game<'_> {
         (self.leaves.update_delta)(id);
         (self.leaves.write_x)(id, (x as u64) as i32);
         (self.leaves.write_y)(id, (y as u64) as i32);
-        (self.leaves.position)(id);
+        // SAFETY: The controller retains this live shell through the index update.
+        unsafe {
+            crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
+        }
         let old_z = crate::ground_vehicle::inclination(
             self.leaves.physics,
             id.vehicle(),
@@ -2206,7 +2220,10 @@ impl Game<'_> {
                     (u64::from((self.leaves.read_direction)(id).wrapping_add(delta) & 7)) as u8,
                 );
                 if id.track() != WORMHOLE {
-                    (self.leaves.position)(id);
+                    // SAFETY: The controller retains this live shell through the index update.
+                    unsafe {
+                        crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
+                    }
                     crate::ground_vehicle::inclination(
                         self.leaves.physics,
                         id.vehicle(),
@@ -2331,7 +2348,10 @@ impl Game<'_> {
         self.write_status(id, 1, false);
         (self.leaves.write_speed)(id, 0_u16);
         (self.leaves.viewport)(id, 1, 1);
-        (self.leaves.position)(id);
+        // SAFETY: The controller retains this live shell through the index update.
+        unsafe {
+            crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false);
+        }
         self.signal_segment(id, (self.leaves.read_tile)(id), u8::MAX);
         self.update_acceleration(id);
         (self.leaves.depot_dirty)(id);
@@ -2674,7 +2694,7 @@ const VRF_REVERSED: u64 = 1 << 7;
 /// The train part of `VehicleEnterDepot` (#349): clear the depot reservation,
 /// update the segment's signals and arrange the consist.
 pub(crate) fn enter_depot(id: Handle, leaves: &Leaves, services: &Services) {
-    let g = Game { leaves, services };
+    let g = Game::new(leaves, services);
     let tile = (leaves.read_tile)(id);
     (leaves.set_depot_res)(id, tile, 0);
     if (leaves.show_reservation)(id) != 0 {
@@ -2696,12 +2716,8 @@ pub unsafe extern "C" fn openttd_rust_train_consist_changed(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.consist_changed(id, allowed);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2713,12 +2729,8 @@ pub unsafe extern "C" fn openttd_rust_train_curve_limit(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u16 {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.curve_limit(id)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2730,12 +2742,8 @@ pub unsafe extern "C" fn openttd_rust_train_current_max_speed(
     leaves: *const Leaves,
     services: *const Services,
 ) -> i32 {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.current_max_speed(id)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2747,12 +2755,8 @@ pub unsafe extern "C" fn openttd_rust_train_update_acceleration(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.update_acceleration(id);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2764,12 +2768,8 @@ pub unsafe extern "C" fn openttd_rust_train_update_speed(
     leaves: *const Leaves,
     services: *const Services,
 ) -> i32 {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.update_speed(id)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2781,12 +2781,8 @@ pub unsafe extern "C" fn openttd_rust_train_mark_dirty(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.mark_dirty(id);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2798,12 +2794,8 @@ pub unsafe extern "C" fn openttd_rust_train_tick(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     u8::from(g.tick(id))
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2815,12 +2807,8 @@ pub unsafe extern "C" fn openttd_rust_train_calendar_day(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     // SAFETY: Live serialized shell; no owner borrow spans the call.
     unsafe { maintenance::age_vehicle(id.vehicle(), g.vs()) };
 }
@@ -2833,12 +2821,8 @@ pub unsafe extern "C" fn openttd_rust_train_economy_day(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.economy_day(id);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2850,12 +2834,8 @@ pub unsafe extern "C" fn openttd_rust_train_running_cost(
     leaves: *const Leaves,
     services: *const Services,
 ) -> i64 {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.running_cost(id)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2867,12 +2847,8 @@ pub unsafe extern "C" fn openttd_rust_train_trackdir(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.trackdir(id)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2884,12 +2860,8 @@ pub unsafe extern "C" fn openttd_rust_train_mark_stuck(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.mark_stuck(id);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2903,12 +2875,8 @@ pub unsafe extern "C" fn openttd_rust_train_reverse_swap(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.reverse_swap(id, left, right);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2920,12 +2888,8 @@ pub unsafe extern "C" fn openttd_rust_train_train_on_tile(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     u8::from(g.train_on_tile(tile))
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2939,12 +2903,8 @@ pub unsafe extern "C" fn openttd_rust_train_update_crossing(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.update_crossing(tile, sound != 0, force_bar != 0);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2957,12 +2917,8 @@ pub unsafe extern "C" fn openttd_rust_train_adjacent_crossing_dirty(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.adjacent_crossing_dirty(tile, u64::from(axis));
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2975,12 +2931,8 @@ pub unsafe extern "C" fn openttd_rust_train_crossing_removed(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.crossing_removed(tile, u64::from(axis));
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -2992,12 +2944,8 @@ pub unsafe extern "C" fn openttd_rust_train_reverse(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.reverse(id);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -3011,12 +2959,8 @@ pub unsafe extern "C" fn openttd_rust_train_controller(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     u8::from(g.controller(id, nomove, reverse != 0))
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -3029,12 +2973,8 @@ pub unsafe extern "C" fn openttd_rust_train_crash(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u32 {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.crash(id, flooded != 0)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -3046,12 +2986,8 @@ pub unsafe extern "C" fn openttd_rust_train_needs_service(
     leaves: *const Leaves,
     services: *const Services,
 ) {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.needs_service(id);
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -3065,12 +3001,8 @@ pub unsafe extern "C" fn openttd_rust_train_reverse_command(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     g.reverse_command(id, execute != 0, single != 0)
 }
 /// Invoke synchronous train policy with live serialized services.
@@ -3083,12 +3015,8 @@ pub unsafe extern "C" fn openttd_rust_train_force_command(
     leaves: *const Leaves,
     services: *const Services,
 ) -> u8 {
-    let g = Game {
-        // SAFETY: The immutable callback table is live for this call.
-        leaves: unsafe { &*leaves },
-        // SAFETY: The immutable services table is live for this call.
-        services: unsafe { &*services },
-    };
+    // SAFETY: Both immutable tables outlive this synchronous entry.
+    let g = Game::new(unsafe { &*leaves }, unsafe { &*services });
     u8::from(g.force_command(id, execute != 0))
 }
 
@@ -3419,7 +3347,6 @@ crate::abi::layouts! {
         pbs_signal_type,
         platform_ahead,
         platform_length,
-        position,
         pow_wag_power,
         price,
         process_orders,
@@ -3488,8 +3415,6 @@ crate::abi::layouts! {
         wait_unbunch,
         write_crossing_bar,
         write_visit_type,
-        visit_tile,
-        visit_near,
         vehicle,
         physics,
     };
@@ -3513,25 +3438,27 @@ pub(crate) fn stop_location(
     station: u16,
     tile: u32,
 ) -> (i32, i32, i32) {
-    Game { leaves, services }.stop_location(id, station, tile)
+    Game::new(leaves, services).stop_location(id, station, tile)
 }
 /// `Train::CalcNextVehicleOffset`, shared with depot movement policy.
 pub(crate) fn next_offset(leaves: &Leaves, services: &Services, id: Handle) -> i32 {
-    Game { leaves, services }.next_offset(id)
+    Game::new(leaves, services).next_offset(id)
 }
 
 impl Game<'_> {
     fn movement_enter(&self, id: Handle, tile: u32, x: i32, y: i32) -> u64 {
         // SAFETY: Same live train as the original synchronous native callback.
-        u64::from(unsafe { crate::movement::enter(self.services, id.vehicle(), tile, x, y) })
+        u64::from(unsafe {
+            crate::movement::openttd_rust_movement_enter(
+                self.movement.get(),
+                id.vehicle(),
+                tile,
+                x,
+                y,
+            )
+        })
     }
     fn movement_tracks(&self, tile: u32, side: u8) -> u64 {
-        u64::from(crate::movement::track_status(
-            self.services,
-            tile,
-            0,
-            0,
-            side,
-        ))
+        u64::from(self.movement.get().track_status(tile, 0, 0, side))
     }
 }

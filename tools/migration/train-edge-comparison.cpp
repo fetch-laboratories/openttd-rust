@@ -11,6 +11,7 @@
 #include "direction_func.h"
 #include "rust/train_ffi.h"
 #include "rust/movement_ffi.h"
+#include "rust/vehicle_ffi.h"
 #include <cstdio>
 #include <vector>
 
@@ -44,6 +45,7 @@ struct Train {
 	struct { uint16_t cached_veh_length; } gcache;
 	struct { bool cached_tilt; int16_t cached_curve_speed_mod; } tcache;
 	OpenTTDTrainState *state;
+	OpenTTDVehicleTileLinks links{};
 	const Train *First() const;
 	Train *Next() const { return this->next; }
 	uint16_t GetCurveSpeedLimit() const;
@@ -68,6 +70,7 @@ static Train &Part(OpenTTDTrainHandle part) noexcept { return *static_cast<Train
 static uint32_t UnexpectedRandom(void *) noexcept { std::abort(); }
 static uint32_t UnexpectedIndustry(int32_t, int32_t, uint32_t *) noexcept { std::abort(); }
 static OpenTTDMovementServices movement;
+static OpenTTDVehicleServices vehicle;
 static uint32_t entered_tile;
 static OpenTTDTrainServices Leaves()
 {
@@ -90,9 +93,12 @@ static OpenTTDTrainServices Leaves()
 	leaves.write_status = [](OpenTTDTrainHandle h, uint8_t value) noexcept { Part(h).vehstatus.bits = value; };
 	leaves.acc_model = [](OpenTTDTrainHandle) noexcept { return uint64_t(_settings_game.vehicle.train_acceleration_model); };
 	leaves.curve_advantage = [](OpenTTDTrainHandle) noexcept { return uint64_t(rail.curve_speed); };
-	leaves.position = [](OpenTTDTrainHandle h) noexcept { Part(h).UpdatePosition(); };
+	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<Train *>(v)->links; };
+	vehicle.tile = [](OpenTTDVehicle *v) noexcept { auto &part = *reinterpret_cast<Train *>(v); part.UpdatePosition(); return part.tile; };
+	vehicle.map_log_x = []() noexcept { return uint32_t{8}; };
+	leaves.vehicle = &vehicle;
 	leaves.viewport = [](OpenTTDTrainHandle h, uint8_t a, uint8_t b) noexcept { Part(h).UpdateViewport(a != 0, b != 0); };
-	leaves.tile_virt = [](OpenTTDTrainHandle, int32_t x, int32_t y) noexcept { return uint64_t(TileVirtXY(x, y)); };
+	leaves.tile_virt = [](int32_t x, int32_t y) noexcept { return uint32_t(TileVirtXY(x, y)); };
 	leaves.is_tunnelbridge = [](OpenTTDTrainHandle, uint32_t) noexcept { return uint64_t(0); };
 	return leaves;
 }
@@ -161,6 +167,7 @@ int main()
 		std::copy(std::begin(original), std::end(original), std::begin(trains)); Sync(); events.clear(); RustReverse(l, r);
 		for (Train &v : trains) v.track = uint8_t(openttd_rust_train_state_get_track(v.state));
 		if (expected != State()) { std::fprintf(stderr, "reversal mismatch %u\n", trial); return 1; }
+		for (Train &v : trains) openttd_rust_occupancy_update(&vehicle, reinterpret_cast<OpenTTDVehicle *>(&v), true);
 	}
 	for (Train &v : trains) openttd_rust_train_state_destroy(v.state);
 	std::printf("20000 variable-length curve and 20000 reversal cases equal through production Rust entries\n");

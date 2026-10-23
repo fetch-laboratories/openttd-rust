@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from . import economy, orders, rails
-from .console_adapter import prepared_console
+from . import economy, rails
+from .console_adapter import console_adapter, prepared_console
 from .core import (
     ROOT,
     WITNESS_ENVIRONMENT,
@@ -15,6 +15,7 @@ from .core import (
 
 ADAPTER = ROOT / "tools/simulation/engines-console.cpp"
 REQUIRED = {
+    "monitors": (),
     "commands": ("rename", "visibility", "control"),
     "preview": ("offer", "accept", "join", "penalty"),
     "reliability": ("retire", "never_expire", "sync", "cutoff"),
@@ -23,6 +24,7 @@ REQUIRED = {
     "subsidies-reload": (),
 }
 EXPECTED = {
+    "monitors": ("controls true",),
     "commands": (
         "company-bits true",
         "clear-special true",
@@ -63,7 +65,7 @@ def scenarios(soak):
             "short_checkpoint": True,
             "ticks": 74 if soak else 1,
         }
-        for mode in ("commands", "preview", "reliability", "reload")
+        for mode in ("commands", "preview", "reliability", "reload", "monitors")
     ]
 
 
@@ -77,8 +79,8 @@ def game_environment(scenario):
 
 def adapter(build, folder, env):
     economy.subsidy_reference(folder)
-    return orders.adapter(
-        build, folder, env, source=ADAPTER, name="engines", afterload=False
+    return console_adapter(
+        build, folder, env, ADAPTER, "engines", replace_objects=("saveload.cpp.o",)
     )
 
 
@@ -90,6 +92,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     result["engines_input"] = record
     scenario = dict(scenario, save=str(normalized))
     executables = prepared_console("engines", adapter, binaries, builds, folder, env)
+    if scenario["engines"] == "monitors":
+        economy.monitor_load_probes(scenario, executables, builds, folder, timeout, env)
     if scenario["engines"] not in ("reload", "subsidies-reload"):
         return dict(
             scenario,
@@ -156,7 +160,11 @@ def check(scenario, run, mode, role, result):
     if "engines" not in scenario or run["exit"] or not run["snapshots"]:
         return
     variant = scenario["engines"]
-    component = "subsidy" if variant.startswith("subsidies") else "engine"
+    component = (
+        "monitor"
+        if variant == "monitors"
+        else ("subsidy" if variant.startswith("subsidies") else "engine")
+    )
     prefix = component.upper() + " "
     if variant == "subsidies" and not any(
         line.startswith(prefix + "retry-rng ") for line in run["log"]

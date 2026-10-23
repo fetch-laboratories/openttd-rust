@@ -351,15 +351,16 @@ fn max_track_speed_owned(s: &Services, v: VehicleRef, o: Owner) -> u16 {
         (s.road_speed)(v)
     }
 }
-fn sloped_track_owned(s: &Services, v: VehicleRef, o: Owner) -> bool {
+fn sloped_track_owned(
+    s: &Services,
+    movement: &crate::movement::CachedTable<'_>,
+    v: VehicleRef,
+    o: Owner,
+) -> bool {
     let tracks = if o.rail() {
         o.train.track()
     } else {
-        track_status_to_track_bits(crate::movement::road_tracks(
-            unsafe { &*s.road.shared },
-            v,
-            (s.vehicle.tile)(v),
-        ))
+        track_status_to_track_bits(movement.get().road_tracks(v, (s.vehicle.tile)(v)))
     };
     tracks == TRACK_BIT_X || tracks == TRACK_BIT_Y
 }
@@ -585,17 +586,21 @@ pub(crate) fn crash(s: &Services, v: VehicleRef, flooded: bool) -> u32 {
     // All flags are cleared before base Crash makes its original random draw.
     (s.base_crash)(v, flooded)
 }
-fn update_z_inclination(s: &Services, v: VehicleRef, o: Owner) {
+fn update_z_inclination(
+    s: &Services,
+    movement: &crate::movement::CachedTable<'_>,
+    v: VehicleRef,
+    o: Owner,
+) {
     let xy = (s.vehicle.xy)(v);
-    let z = crate::movement::pixel_z(unsafe { &*s.road.shared }, xy.x, xy.y, true);
+    let z = movement.get().pixel_z_at(xy.x, xy.y, true);
     (s.vehicle.write_z)(v, z);
     unsafe {
         (*o.state).flags &= !SLOPE_FLAGS;
     }
-    if sloped_track_owned(s, v, o) {
+    if sloped_track_owned(s, movement, v, o) {
         let xy = (s.vehicle.xy)(v);
-        let middle = crate::movement::pixel_z(
-            unsafe { &*s.road.shared },
+        let middle = movement.get().pixel_z_at(
             (xy.x & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
             (xy.y & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
             true,
@@ -613,11 +618,11 @@ fn update_z_inclination(s: &Services, v: VehicleRef, o: Owner) {
         }
     }
 }
-fn update_z(s: &Services, v: VehicleRef, o: Owner) {
+fn update_z(s: &Services, movement: &crate::movement::CachedTable<'_>, v: VehicleRef, o: Owner) {
     if unsafe { (*o.state).flags } & SLOPE_FLAGS != 0 {
         if !o.rail() && reversing(s, v) {
             let xy = (s.vehicle.xy)(v);
-            let z = crate::movement::pixel_z(unsafe { &*s.road.shared }, xy.x, xy.y, true);
+            let z = movement.get().pixel_z_at(xy.x, xy.y, true);
             (s.vehicle.write_z)(v, z);
             return;
         }
@@ -653,21 +658,20 @@ fn update_z(s: &Services, v: VehicleRef, o: Owner) {
     if s.assertions {
         let z = (s.vehicle.z)(v);
         let xy = (s.vehicle.xy)(v);
-        assert_eq!(
-            z,
-            crate::movement::pixel_z(unsafe { &*s.road.shared }, xy.x, xy.y, true)
-        );
+        assert_eq!(z, movement.get().pixel_z_at(xy.x, xy.y, true));
     }
 }
 pub(crate) fn inclination(s: &Services, v: VehicleRef, new_tile: bool, delta: bool) -> i32 {
     inclination_owned(s, v, (s.resolve)(v), new_tile, delta)
 }
 fn inclination_owned(s: &Services, v: VehicleRef, o: Owner, new_tile: bool, delta: bool) -> i32 {
+    // SAFETY: Only the immutable registry is retained for this entry.
+    let movement = crate::movement::CachedTable::new(unsafe { &*s.road.shared });
     let old_z = (s.vehicle.z)(v);
     if new_tile {
-        update_z_inclination(s, v, o);
+        update_z_inclination(s, &movement, v, o);
     } else {
-        update_z(s, v, o);
+        update_z(s, &movement, v, o);
     }
     (s.viewport)(v, true, delta);
     old_z
@@ -681,13 +685,17 @@ pub(crate) fn last_speed(s: &Services, v: VehicleRef) {
         }
     }
 }
+pub(crate) struct SpeedResult {
+    pub distance: u32,
+    pub stored_speed: u16,
+}
 pub(crate) fn update_speed(
     s: &Services,
     v: VehicleRef,
     accel: u32,
     min_speed: i32,
     max_speed: i32,
-) -> u32 {
+) -> SpeedResult {
     hit(witness::GROUND_SPEED);
     let r = (s.speed_input)(v);
     let mut spd = u32::from(r.subspeed).wrapping_add(accel);
@@ -701,11 +709,17 @@ pub(crate) fn update_speed(
         .wrapping_add((spd as i32) >> 8)
         .min(tempmax)
         .max(min_speed)) as u32;
-    (s.vehicle.write_speed)(v, spd as u16);
+    // Native speed/subspeed stores and progress read/reset are scalar leaves;
+    // none reenters or changes cur_speed after this store (vehicle_services.cpp).
+    let stored_speed = spd as u16;
+    (s.vehicle.write_speed)(v, stored_speed);
     let scaled = crate::vehicle::advance_speed(spd) as i32;
     let scaled = scaled.wrapping_add(i32::from((s.vehicle.progress)(v)));
     (s.vehicle.write_progress)(v, 0);
-    scaled as u32
+    SpeedResult {
+        distance: scaled as u32,
+        stored_speed,
+    }
 }
 
 // Every entry receives immutable services and a live serialized native shell.
@@ -745,8 +759,12 @@ pub(crate) fn move_incline(
     new_tile: bool,
     delta: bool,
 ) -> Moved {
-    (gs.move_position)(v, x, y);
     let s = gs.physics;
+    (s.vehicle.write_xy)(v, x, y);
+    // SAFETY: Live shell; index writes end before inclination callbacks.
+    unsafe {
+        crate::vehicle::occupancy::update(s.vehicle, v, false);
+    }
     let o = (s.resolve)(v);
     let old_z = inclination_owned(s, v, o, new_tile, delta);
     Moved {

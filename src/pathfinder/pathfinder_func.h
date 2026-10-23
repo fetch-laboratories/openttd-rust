@@ -63,7 +63,8 @@ inline TileIndex CalcClosestStationTile(StationID station, TileIndex tile, Stati
 inline TrackdirBits GetTrackdirBitsForRoad(TileIndex tile, RoadTramType rtt)
 {
 #ifdef WITH_RUST
-	return static_cast<TrackdirBits>(openttd_rust_road_trackdirs(&GetRustSharedServices(), tile.base(), rtt));
+	static const OpenTTDMovementServices * const movement = &GetRustMovementServices();
+	return static_cast<TrackdirBits>(openttd_rust_road_trackdirs(movement, tile.base(), rtt));
 #else
 	TrackdirBits bits = TrackStatusToTrackdirBits(GetTileTrackStatus(tile, TRANSPORT_ROAD, rtt));
 

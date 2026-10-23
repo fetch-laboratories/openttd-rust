@@ -375,6 +375,10 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             check_competitors(scenario, live, prepared, live["snapshots"][-1])
         prepared = folder / "reload-input.sav"
         record["reload"] = patch(live["snapshots"][-1], prepared, {})
+    if operation in ("delete", "acquire"):
+        from .economy import active_monitors
+
+        active_monitors(prepared, cargoes=(63,), amount=17)
     result["company_input"] = record
     return dict(scenario, save=str(prepared))
 
@@ -494,6 +498,15 @@ def check(scenario, run, mode, role, result):
         )
     depot, station, vehicle, group = result["company_input"]["assets"]
     if operation in ("acquire", "delete", "reuse"):
+        if operation != "reuse":
+            for cid in ("CMDL", "CMPU"):
+                old = {v["number"]: v["amount"] for v in rows(source, cid).values()}
+                new = {v["number"]: v["amount"] for v in rows(final, cid).values()}
+                require(
+                    old
+                    and new == {k: v for k, v in old.items() if (k >> 25) & 15 != 1},
+                    "selective monitor cleanup " + cid,
+                )
         vehicles, groups, stations = (
             rows(final, "VEHS"),
             rows(final, "GRPS"),

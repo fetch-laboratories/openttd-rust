@@ -84,7 +84,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, enter_depot);
 		VEHICLE_UNUSED(vehicle, pathfinding_result);
 		VEHICLE_UNUSED(vehicle, new_position);
-		VEHICLE_UNUSED(vehicle, move_then_status);
+		VEHICLE_UNUSED(vehicle, write_xy);
 		VEHICLE_UNUSED(vehicle, base_viewport);
 		VEHICLE_UNUSED(vehicle, property);
 		VEHICLE_UNUSED(vehicle, callback);
@@ -106,7 +106,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, write_last_station);
 		VEHICLE_UNUSED(vehicle, write_dest);
 		VEHICLE_UNUSED(vehicle, write_progress);
-		VEHICLE_UNUSED(ground, move_position);
 		VEHICLE_UNUSED(ground, update_viewport_then_next);
 		VEHICLE_UNUSED(ground, turn);
 		VEHICLE_UNUSED(ground, go_to_depot_service);
@@ -128,9 +127,7 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, link);
 		VEHICLE_UNUSED(leaves, link_tile);
 		VEHICLE_UNUSED(leaves, after_enter_tile);
-		VEHICLE_UNUSED(leaves, visit_close);
-		VEHICLE_UNUSED(leaves, visit_trains);
-		VEHICLE_UNUSED(leaves, visit_tile);
+		VEHICLE_UNUSED(leaves, candidate);
 		VEHICLE_UNUSED(leaves, has_road);
 		VEHICLE_UNUSED(leaves, any_road_bits);
 		VEHICLE_UNUSED(leaves, is_road_depot_tile);

@@ -156,7 +156,7 @@ impl World<'_> {
     fn no_vehicle(&self, ret: *mut CommandCost, tile: u32) {
         // SAFETY: The facade owns this live native stack slot across reentry.
         unsafe {
-            (self.cmd.no_vehicle)(ret, tile);
+            self.cmd.no_vehicle(ret, tile);
         }
     }
     fn class(&self, t: u32) -> u8 {

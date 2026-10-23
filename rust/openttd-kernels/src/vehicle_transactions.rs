@@ -274,7 +274,9 @@ unsafe fn depot_list<F: FnMut(*mut (), bool)>(
         emit: &mut emit,
     };
     unsafe {
-        (s.vehicles.vehicles_on_tile)(tile, std::ptr::from_mut(&mut ctx).cast(), visit::<&mut F>);
+        s.vehicles.for_each_on_tile(tile, |v| {
+            visit::<&mut F>(std::ptr::from_mut(&mut ctx).cast(), v);
+        });
     };
 }
 /// # Safety

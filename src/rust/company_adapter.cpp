@@ -201,16 +201,6 @@ static void Co_price_windows_dirty() noexcept
 	InvalidateWindowData(WC_PAYMENT_RATES, 0);
 }
 static void Co_industry_daily_changes(bool init_counter) noexcept { StartupIndustryDailyChanges(init_counter); }
-static void Co_clear_cargo_monitors(uint8_t id) noexcept
-{
-	ClearCargoPickupMonitoring(CompanyID(id));
-	ClearCargoDeliveryMonitoring(CompanyID(id));
-}
-static void Co_clear_all_cargo_monitors() noexcept
-{
-	ClearCargoPickupMonitoring();
-	ClearCargoDeliveryMonitoring();
-}
 static void Co_ask_merger(uint8_t best, uint8_t id, int64_t value) noexcept { AI::NewEvent(CompanyID(best), new ScriptEventCompanyAskMerger(CompanyID(id), value)); }
 static void Co_show_buy_company(uint8_t id) noexcept { ShowBuyCompanyDialog(CompanyID(id), false); }
 static uint32_t Co_script_random_next(uint32_t max) noexcept { return ScriptObject::GetRandomizer(OWNER_NONE).Next(max); }
@@ -434,7 +424,6 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.recession_news = Co_recession_news, .price_base = Co_price_base,
 		.cargo_next = Co_cargo_next, .set_cargo_payment = Co_set_cargo_payment,
 		.price_windows_dirty = Co_price_windows_dirty, .industry_daily_changes = Co_industry_daily_changes,
-		.clear_cargo_monitors = Co_clear_cargo_monitors, .clear_all_cargo_monitors = Co_clear_all_cargo_monitors,
 		.generate_company_name = RustCompanyGenerateName, .ask_merger = Co_ask_merger,
 		.is_interactive_company = RustIsInteractiveCompany, .show_buy_company = Co_show_buy_company,
 		.script_random_next = Co_script_random_next, .reset_competitor_timeout = Co_reset_competitor_timeout,

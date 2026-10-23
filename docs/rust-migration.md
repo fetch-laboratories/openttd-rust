@@ -1427,7 +1427,9 @@ helpers borrow only the flags scalar for their call. World clones share an immut
 service-table borrow tied to the Run/future lifetime (#299), ending on destruction,
 including cancellation. Production uses the process-wide const table; Rust fixtures
 own separate tables through destruction, and native partial tables stay in scope.
-Callbacks may mutate their separate context, never the borrowed table.
+Callbacks may mutate their separate context, never the borrowed table. #377 adds
+a borrowed typed occupancy context: movement resolves each shell once, updates
+the Rust index and calls the base viewport leaf; clear retains native costs.
 
 The default `disasters` simulation checks scheduling, crashes, removal, industry reset,
 submarine movement and reload. Legacy save fixtures, viewport pixels, sound output, allocator
@@ -1814,7 +1816,7 @@ pages, hostile purchase, multiplayer runtime and NewGRFs remain evidence limits.
 
 Issue #74 moves demands, both MCF passes, cycle elimination, path lifetime and flow mapping into
 Rust. Rust owns copied graph/settings, private demand/edge annotations, a reusable path arena
-and ordered cumulative-share maps. C++ keeps job scheduling/thread/abort flags, LGRP/LGRJ
+and ordered cumulative-share maps. C++ keeps worker launch/join and abort flags, LGRP/LGRJ
 save/load and the existing station flow join.
 
 ABI IDs 34-37 cover scalar node/edge/settings/share records. Its sole callback reads the job's
@@ -1826,6 +1828,54 @@ distance/size/accuracy/saturation settings and reload from a reference snapshot 
 LGRJ records (GLOG history is reset only in prepared road inputs so both loaders log their
 revision). Graphs, allocator failures and abort timing are not exhaustive; resource exhaustion
 timing differs with the allocation strategy.
+
+### Link graph scheduler ownership (#373, #380 via #391)
+
+One process-wide Rust owner holds ordered queued/running pointers and controls
+rotation, spawn/join/requeue, pool-wide date shifts and pause policy. Native pools,
+job snapshots, worker launch/join, abort and acquire/release completion publication
+remain unchanged; existing job computation is not counted as new retirement.
+A constant-initialized member table supplies the graph owner and 18 typed native leaves; Time is
+one narrow entry observation. Visits and cargo admission call queues directly in Rust. Shared
+graph owner/ID/validity/get helpers serve the job reader and existing consumers.
+No queue borrow crosses native callbacks, including synchronous fallback and deletion.
+LGRS keeps two native scoped vectors with the original reference field names/order.
+Exported spans are copied without callbacks/yield/reset under game-state serialization
+and discarded before SlObject. SlSaveChunks precedes asynchronous compression.
+Native RAII publishes partial staging on return/unwind; recursive SlNullPointers uses
+and publishes the same active vectors before returning, preventing stale restoration.
+Default symmetric/asymmetric cargodist reloads require both queues, LGRP/LGRJ refs
+and queue/spawn/join/requeue/reload/import witnesses. Their module compiles unchanged
+pinned scheduler bodies for worker/pause, duplicate rotation, recycled-ID, clear and
+pool-shift gaps, failing absent completion markers. Native tests exercise ABI,
+partial-state unwind and real SlError recursive cleanup. Actual concurrent worker,
+multiplayer/GUI timing and historical LGRS versions remain #156 gaps. Independent
+source/conflict reviews, root cost disposition and exact-combination Full passed in #391.
+
+### Live link graph contents and mutation (#378)
+
+Rust owns cargo, compression date, nodes and sorted edge vectors in one owner per
+native shell. Lifecycle/copy/init, node and edge mutation, supply/demand/location,
+restriction/release, merge/scaling, compression, dates and queries run in Rust.
+C++ keeps pool IDs/reuse and station membership leaves; Rust owns the scheduler.
+Each job deep-copies the same representation; native annotations borrow canonical
+station scalars and immutable edge references until the existing worker join.
+The computation and flow-application ports are unchanged ownership, not new retirement.
+
+LGRP/LGRJ retain field names, widths/order and legacy matrix/list conversions.
+Native SlObject writes canonical scalar addresses and appends edges before decoding;
+partial effects remain visible. Legacy matrix staging retains its original scope.
+SlErrorCorrupt/SlNullPointers and all exception unwinding remain C++ frames. LGRP/J
+have no pointer-fixup handler; graph borrows end before station writes or deletion.
+Read-only job access never creates an exclusive Rust borrow during worker execution.
+
+Default evidence extends the station fixture with merge, last/nonlast replacement,
+current acceptance, fresh timestamps, compression thresholds, unsigned travel sums,
+Scale narrowing and date sentinels against unchanged reference bodies. Required owner
+witnesses cover those mutations and real stale restriction/release. Native tests pin
+scalar layouts/addresses and distinct job snapshot storage/lifetime. Focused station
+stale/removal/reload and symmetric/asymmetric LGRJ reload compare graphs, station flows
+and full semantic state. Legacy/corrupt-load matrices and real-thread timing remain #156.
 
 <!-- Subsystem: Towns, industries and subsidies. Add a new entry at the end of its group, not of the file. -->
 
@@ -2084,3 +2134,53 @@ aliases on normal/indexed shells and flags cleared before the base crash callbac
 `python3 tools/migration.py verify` checks Cargo4, both native suites and ABI layouts;
 PR #375 records the focused simulation commands and metrics. External powered/
 articulated NewGRFs, maglev traffic, legacy saves and threaded GUI remain #156 gaps.
+
+### Vehicle tile occupancy and live spatial queries (#377)
+
+`vehicle/occupancy.rs` owns the process-wide tile buckets, complete on-tile/near
+cursors, hash update/reset, and ground/track/tunnel occupancy command checks.
+Each stable native shell carries the sole intrusive link record; Rust owns its
+mutations. Native pools, IDs, coordinates and viewport indexing stay in C++.
+Original bodies compile only portably. Rust road/train collision, signal,
+flooding, road-stop rebuild, ship and fleet/command scans enter the owner directly;
+position operations update the index before calling native viewport leaves.
+No query/update/advance allocation or mirrored occupancy state is introduced.
+Reset retains stale links and rebuild order; iterators read live next after
+callbacks. No owner borrow spans crash/flood reentry, and no generation guard
+changes source admission or revisitation. Shared native command costs preserve
+local error messages; occupancy consumes no random draws.
+Default road/crash/flood/reload, train collision, road-stop and fleet scenarios
+require occupancy witnesses alongside their semantic vehicle/cargo/RNG checks.
+The existing fleet console compares unchanged public iterator bodies at the
+full-scan threshold, coordinate extremes and current-shell mutation; native
+checks cover canonical link identity, stale removal, copied cursors and pixel-Z
+command refusal. The existing ABI/range fixtures exercise their direct routes.
+Shared geometry/bit/track modules supply the original header callees.
+Disaster movement and ground-clear enter occupancy directly through borrowed
+typed context; the exact base viewport and native cost lifetime stay shared.
+GUI/external articulated-GRF gaps remain #156.
+
+### Cargo-monitor accounting and ordered maps (#386, #388 via #391)
+
+Rust owns both process-wide ordered pickup/delivery maps, shared bit helpers,
+activation/query/reset/stop, selective/global cleanup and delivery accounting.
+Payment and company owners call Rust directly. Payment resolves stations through
+its existing subsidy service at each original observation; independent stack
+cursors preserve nested industry scans. Arrivals update registered keys only,
+without allocating, and unsigned amounts narrow to signed32 before saturation.
+Native facades retain script validation, canonical stations/pools and assertions.
+CMDL/CMPU retain two-scalar TempStorage, ascending save order, native SlObject and
+SlError frames, historical key conversion and incremental first-insertion wins;
+no Rust map borrow spans a native callback or decoding operation.
+Default economy scenarios require nonempty changed maps for manual/cargodist and
+pending unload; stockpile also checks decoded positive maps immediately on reload.
+Company deletion/acquisition compare encoded keys and surviving amounts. The
+existing engine console tests controls, destination membership, signed bounds,
+InitializeEconomy reset and actual native chunk-handler header/partial errors and
+duplicate rows. Production monitor-table completeness runs in native ABI tests.
+Focused evidence: `python3 tools/migration.py simulate economy-manual economy-cargodist economy-stockpile companies-delete companies-acquire engines-monitors`;
+`python3 tools/cargo-income-comparison.py`, Cargo4 and native company/payment/ABI tests.
+Historical monitor-key conversion and external GameScript callers remain #156
+coverage gaps. Independent fixing review and the separate root cost disposition
+are recorded on #388; #391 integrated the frozen owners on the routing base after
+scoped reconciliation review and exact-combination Full passed.

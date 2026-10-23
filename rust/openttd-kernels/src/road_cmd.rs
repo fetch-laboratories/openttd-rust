@@ -169,8 +169,8 @@ pub struct RoadCommandServices {
     pub scratch_cost: unsafe extern "C" fn(*mut CommandScratch) -> *mut CommandCost,
     /// Lazily construct the nested conversion stack objects, resetting prior use.
     pub conversion_scratch: unsafe extern "C" fn(*mut CommandScratch) -> ConversionScratch,
-    /// Native `collect_vehicles` service.
-    pub collect_vehicles: unsafe extern "C" fn(*mut ConvertFrame, u32),
+    /// Native insertion into the command-local affected vehicle container.
+    pub include_vehicle: unsafe extern "C" fn(*mut ConvertFrame, crate::vehicle::VehicleRef),
     /// Native `cargo_changed` service.
     pub affected_count: unsafe extern "C" fn(*mut ConvertFrame) -> usize,
     pub affected_at: unsafe extern "C" fn(*mut ConvertFrame, usize) -> crate::vehicle::VehicleRef,
@@ -357,9 +357,19 @@ impl<'a> Ctx<'a> {
     fn clear(&self, c: Cost<'_>, flags: u16, tile: u32) {
         crate::landscape_cmd::clear_command(self.commands, c.0, tile, flags);
     }
+    unsafe fn collect_vehicles(&self, frame: *mut ConvertFrame, tile: u32) {
+        let p = self.s.physics;
+        p.vehicle.for_each_on_tile(tile, |v| {
+            if (p.vehicle.vehicle_type)(v) == crate::vehicle::VehicleType::ROAD.0 {
+                unsafe {
+                    (self.s.include_vehicle)(frame, (p.first)(v));
+                }
+            }
+        });
+    }
     fn no_vehicle(&self, c: Cost<'_>, tile: u32) {
         unsafe {
-            (self.commands.no_vehicle)(c.0, tile);
+            self.commands.no_vehicle(c.0, tile);
         }
     }
     fn ownership(&self, c: Cost<'_>, owner: u8, tile: u32) {
@@ -374,7 +384,8 @@ impl<'a> Ctx<'a> {
     }
     fn free(&self, c: Cost<'_>, tile: u32, end: u32) {
         unsafe {
-            (self.commands.wormhole_free)(c.0, tile, end, core::ptr::null());
+            self.commands
+                .wormhole_free(c.0, tile, end, core::ptr::null());
         }
     }
     fn infrastructure(&self, rt: u8, owner: u8, count: i32) {
@@ -1867,7 +1878,7 @@ impl<'a> Ctx<'a> {
                 (self.shared.set_road_type)(tile, rtt, to);
                 (self.shared.mark_dirty)(tile);
                 unsafe {
-                    (self.s.collect_vehicles)(frame, tile);
+                    self.collect_vehicles(frame, tile);
                 }
                 if self.tile_type(tile) == MP_ROAD && (self.shared.is_road_depot)(tile) {
                     (self.r.depot_windows)(tile);
@@ -1917,8 +1928,8 @@ impl<'a> Ctx<'a> {
                 (self.shared.set_road_type)(tile, rtt, to);
                 (self.shared.set_road_type)(other, rtt, to);
                 unsafe {
-                    (self.s.collect_vehicles)(frame, tile);
-                    (self.s.collect_vehicles)(frame, other);
+                    self.collect_vehicles(frame, tile);
+                    self.collect_vehicles(frame, other);
                 }
                 self.dirty_wormhole(tile, other);
             }
@@ -2276,7 +2287,7 @@ crate::abi::layouts! {
         owned_by_town,
         scratch_cost,
         conversion_scratch,
-        collect_vehicles,
+        include_vehicle,
         physics,
         affected_count,
         affected_at,

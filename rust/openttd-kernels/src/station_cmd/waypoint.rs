@@ -238,7 +238,7 @@ impl Ctx<'_> {
         let owner = (self.shared.tile_owner)(tile);
         unsafe { (self.command.ownership)(out.0, owner, 0) };
         if out.ok() {
-            unsafe { (self.command.no_vehicle)(out.0, tile) };
+            unsafe { self.command.no_vehicle(out.0, tile) };
         }
         if !out.ok() {
             return;
@@ -415,7 +415,7 @@ impl Ctx<'_> {
             (self.s.waypoint_default_name)(wp);
         }
         (self.s.virtual_coord)(wp);
-        let id = (self.links().station_id)(wp);
+        let id = (self.links().graphs.station_id)(wp);
         let mut tile = start;
         for i in 0..count {
             let gfx = (self.s.waypoint_layout_gfx)(layout, i == 0);
@@ -604,7 +604,7 @@ impl Ctx<'_> {
             (self.s.waypoint_default_name)(wp);
         }
         (self.s.virtual_coord)(wp);
-        let id = (self.links().station_id)(wp);
+        let id = (self.links().graphs.station_id)(wp);
         for tile in area.tiles(self.map()) {
             let road = if self.may_have_road(tile) {
                 self.road_type(tile, false)
@@ -722,7 +722,7 @@ impl Ctx<'_> {
         let clear = unsafe { &*self.s.clear };
         (self.s.make_buoy)(
             tile,
-            (self.links().station_id)(wp),
+            (self.links().graphs.station_id)(wp),
             (clear.water_class)(tile),
         );
         self.check_docking(tile);
@@ -748,7 +748,7 @@ impl Ctx<'_> {
         }
         let wp = (self.world().get)((self.shared.station_index)(tile));
         if self.in_orders(
-            (self.links().station_id)(wp),
+            (self.links().graphs.station_id)(wp),
             false,
             (self.shared.current_company)(),
         ) {
@@ -758,7 +758,7 @@ impl Ctx<'_> {
             w::hit(w::WAYPOINT_BANKRUPT);
         }
         if flags & DoCommandFlag::BANKRUPT == 0 {
-            unsafe { (self.command.no_vehicle)(cost.0, tile) };
+            unsafe { self.command.no_vehicle(cost.0, tile) };
             if !cost.ok() {
                 return;
             }

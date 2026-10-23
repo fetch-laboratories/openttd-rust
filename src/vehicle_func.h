@@ -11,6 +11,9 @@
 #define VEHICLE_FUNC_H
 
 #include "gfx_type.h"
+#ifdef WITH_RUST
+#include "rust/vehicle_ffi.h"
+#endif
 #include "direction_type.h"
 #include "timer/timer_game_economy.h"
 #include "command_type.h"
@@ -65,10 +68,10 @@ public:
 
 		explicit Iterator(TileIndex tile);
 
-		bool operator==(const Iterator &rhs) const { return this->current == rhs.current; }
-		bool operator==(const std::default_sentinel_t &) const { return this->current == nullptr; }
+		bool operator==(const Iterator &rhs) const { return this->Current() == rhs.Current(); }
+		bool operator==(const std::default_sentinel_t &) const { return this->Current() == nullptr; }
 
-		Vehicle *operator*() const { return this->current; }
+		Vehicle *operator*() const { return this->Current(); }
 
 		Iterator &operator++()
 		{
@@ -84,11 +87,19 @@ public:
 			return result;
 		}
 	private:
+#ifdef WITH_RUST
+		OpenTTDVehicleOnTile cursor;
+		Vehicle *Current() const { return reinterpret_cast<Vehicle *>(this->cursor.current); }
+		void Increment();
+		void SkipFalseMatches() {}
+#else
 		TileIndex tile;
 		Vehicle *current;
 
 		void Increment();
 		void SkipFalseMatches();
+		Vehicle *Current() const { return this->current; }
+#endif
 	};
 
 	explicit VehiclesOnTile(TileIndex tile) : start(tile) {}
@@ -131,10 +142,10 @@ public:
 
 		explicit Iterator(int32_t x, int32_t y, uint max_dist);
 
-		bool operator==(const Iterator &rhs) const { return this->current_veh == rhs.current_veh; }
-		bool operator==(const std::default_sentinel_t &) const { return this->current_veh == nullptr; }
+		bool operator==(const Iterator &rhs) const { return this->Current() == rhs.Current(); }
+		bool operator==(const std::default_sentinel_t &) const { return this->Current() == nullptr; }
 
-		Vehicle *operator*() const { return this->current_veh; }
+		Vehicle *operator*() const { return this->Current(); }
 
 		Iterator &operator++()
 		{
@@ -150,6 +161,12 @@ public:
 			return result;
 		}
 	private:
+#ifdef WITH_RUST
+		OpenTTDVehicleNear cursor;
+		Vehicle *Current() const { return reinterpret_cast<Vehicle *>(this->cursor.current); }
+		void Increment();
+		void SkipFalseMatches() {}
+#else
 		Rect pos_rect;
 		uint hxmin, hxmax, hymin, hymax;
 		uint hx, hy;
@@ -158,6 +175,8 @@ public:
 		void Increment();
 		void SkipEmptyBuckets();
 		void SkipFalseMatches();
+		Vehicle *Current() const { return this->current_veh; }
+#endif
 	};
 
 	explicit VehiclesNearTileXY(int32_t x, int32_t y, uint max_dist) : start(x, y, max_dist) {}

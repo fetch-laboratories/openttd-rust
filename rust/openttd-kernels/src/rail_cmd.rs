@@ -26,6 +26,7 @@ use crate::track_func::{
     tracks_overlap,
 };
 
+use crate::bitmath_func::kill_first_bit;
 use crate::command_type::DoCommandFlag;
 use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_WATER};
 use crate::direction_type::INVALID_DIAGDIR;
@@ -173,8 +174,6 @@ pub struct RailCommandServices {
     pub slope_z_in_corner: extern "C" fn(u8, u8) -> i32,
     /// `AutoslopeCheckForEntranceEdge`.
     pub entrance_edge: extern "C" fn(u32, i32, u8, u8) -> bool,
-    /// `HasVehicleOnTile(tile, ship)`.
-    pub ship_on_tile: extern "C" fn(u32) -> bool,
     /// `CMD_BUILD_SINGLE_RAIL`.
     pub build_rail: unsafe extern "C" fn(*mut CommandCost, u16, u32, u8, u8, bool),
     /// `CMD_REMOVE_SINGLE_RAIL`.
@@ -245,7 +244,7 @@ pub struct RailCommandServices {
     /// `DiagonalTileArea`/`OrthogonalTileArea(start, end).Contains(tile)`.
     pub area_contains: extern "C" fn(u32, u32, bool, u32) -> bool,
     /// `include(affected, first)` for every train on the tile, in iteration order.
-    pub collect_trains: unsafe extern "C" fn(*mut ConvertFrame, u32),
+    pub include_train: unsafe extern "C" fn(*mut ConvertFrame, crate::vehicle::VehicleRef),
     /// `ConsistChanged(CCF_TRACK)` for each collected train, in insertion order.
     pub consist_changed: unsafe extern "C" fn(*mut ConvertFrame),
 }
@@ -340,9 +339,6 @@ fn pieces(bits: u8) -> u32 {
 fn reaches(trackdir: u8) -> u16 {
     crate::track_func::diagdir_reaches_trackdirs(crate::track_func::trackdir_to_exitdir(trackdir))
 }
-fn kill_first_bit(value: u8) -> u8 {
-    value & value.wrapping_sub(1)
-}
 /// Saturating unary minus of `OverflowSafeInt64`.
 fn negate(money: i64) -> i64 {
     if money == i64::MIN { i64::MAX } else { -money }
@@ -391,6 +387,19 @@ impl<'a> Ctx<'a> {
     }
     fn current(&self) -> u8 {
         (self.shared.current_company)()
+    }
+    fn vehicles(&self) -> &crate::vehicle::VehicleServices {
+        // SAFETY: The getter returns the immutable process-wide command context.
+        unsafe { &*(self.command.occupancy)() }.vehicles
+    }
+    unsafe fn collect_trains(&self, frame: *mut ConvertFrame, tile: u32) {
+        self.vehicles().for_each_on_tile(tile, |v| {
+            if (self.vehicles().vehicle_type)(v) == crate::vehicle::VehicleType::TRAIN.0 {
+                unsafe {
+                    (self.s.include_train)(frame, v);
+                }
+            }
+        });
     }
     fn tracks(&self, tile: u32) -> u8 {
         (self.ground.tracks)(tile).0
@@ -523,7 +532,7 @@ impl<'a> Ctx<'a> {
                 }
                 if ret.ok() {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                    unsafe { (self.command.no_train)(ret.0, tile, trackbit) };
+                    unsafe { self.command.no_train(ret.0, tile, trackbit) };
                 }
                 if !ret.ok() {
                     return cost.take(ret);
@@ -593,7 +602,7 @@ impl<'a> Ctx<'a> {
                     }
                 }
                 // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                unsafe { (self.command.no_vehicle)(ret.0, tile) };
+                unsafe { self.command.no_vehicle(ret.0, tile) };
                 if !ret.ok() {
                     return cost.take(ret);
                 }
@@ -791,7 +800,7 @@ impl<'a> Ctx<'a> {
                 }
                 if flags & DoCommandFlag::BANKRUPT == 0 {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                    unsafe { (self.command.no_vehicle)(ret.0, tile) };
+                    unsafe { self.command.no_vehicle(ret.0, tile) };
                     if !ret.ok() {
                         return cost.take(ret);
                     }
@@ -840,7 +849,7 @@ impl<'a> Ctx<'a> {
                     }
                 }
                 // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                unsafe { (self.command.no_train)(ret.0, tile, trackbit) };
+                unsafe { self.command.no_train(ret.0, tile, trackbit) };
                 if !ret.ok() {
                     return cost.take(ret);
                 }
@@ -1080,7 +1089,7 @@ impl<'a> Ctx<'a> {
                 return cost.zero();
             }
             // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-            unsafe { (self.command.no_vehicle)(ret.0, tile) };
+            unsafe { self.command.no_vehicle(ret.0, tile) };
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -1267,7 +1276,7 @@ impl<'a> Ctx<'a> {
             let mask = u32::from(self.present_signals(tile) & on_track);
             let reserved = (self.rail.rail_reservation)(tile).0 >> track & 1 != 0 && {
                 // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                unsafe { (self.command.no_vehicle)(ret.0, tile) };
+                unsafe { self.command.no_vehicle(ret.0, tile) };
                 ret.ok()
             };
             let states = (self.rail.signal_states)(tile);
@@ -1773,10 +1782,10 @@ impl<'a> Ctx<'a> {
             if !(self.s.compatible_rail)(kind, totype) {
                 if (self.shared.is_plain_rail)(tile) {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                    unsafe { (self.command.no_train)(ret.0, tile, self.tracks(tile)) };
+                    unsafe { self.command.no_train(ret.0, tile, self.tracks(tile)) };
                 } else {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                    unsafe { (self.command.no_vehicle)(ret.0, tile) };
+                    unsafe { self.command.no_vehicle(ret.0, tile) };
                 }
                 if !ret.ok() {
                     error.take(ret);
@@ -1809,7 +1818,7 @@ impl<'a> Ctx<'a> {
                 }
                 (self.rail.set_rail_type)(tile, totype);
                 (self.shared.mark_dirty)(tile);
-                unsafe { (self.s.collect_trains)(frame, tile) };
+                unsafe { self.collect_trains(frame, tile) };
             }
         }
         match tt {
@@ -1847,7 +1856,10 @@ impl<'a> Ctx<'a> {
                 }
                 if !(self.s.compatible_rail)((self.rail.rail_type)(tile).0, totype) {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                    unsafe { (self.command.wormhole_free)(ret.0, tile, endtile, std::ptr::null()) };
+                    unsafe {
+                        self.command
+                            .wormhole_free(ret.0, tile, endtile, std::ptr::null());
+                    };
                     if !ret.ok() {
                         error.take(ret);
                         return false;
@@ -1872,8 +1884,8 @@ impl<'a> Ctx<'a> {
                     (self.command.infrastructure_dirty)(owner);
                     (self.rail.set_rail_type)(tile, totype);
                     (self.rail.set_rail_type)(endtile, totype);
-                    unsafe { (self.s.collect_trains)(frame, tile) };
-                    unsafe { (self.s.collect_trains)(frame, endtile) };
+                    unsafe { self.collect_trains(frame, tile) };
+                    unsafe { self.collect_trains(frame, endtile) };
                     (self.s.layout_changed)(tile, track);
                     (self.s.layout_changed)(endtile, track);
                     if (self.shared.is_bridge)(tile) {
@@ -1934,7 +1946,7 @@ impl<'a> Ctx<'a> {
             }
         }
         // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-        unsafe { (self.command.no_vehicle)(cost.0, tile) };
+        unsafe { self.command.no_vehicle(cost.0, tile) };
         if !cost.ok() {
             return;
         }
@@ -1999,7 +2011,7 @@ impl<'a> Ctx<'a> {
                     && (self.shared.company_valid)(self.current())
                 {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                    unsafe { (self.command.no_vehicle)(ret.0, tile) };
+                    unsafe { self.command.no_vehicle(ret.0, tile) };
                     if !ret.ok() {
                         return cost.take(ret);
                     }
@@ -2121,7 +2133,11 @@ impl<'a> Ctx<'a> {
             let bits = self.tracks(tile);
             let was_water = (self.ground.ground)(tile).0 == GROUND_HALF_WATER
                 && is_slope_with_one_corner_raised(tileh_old);
-            if was_water && (self.s.ship_on_tile)(tile) {
+            if was_water
+                && self.vehicles().any_on_tile(tile, |v| {
+                    (self.vehicles().vehicle_type)(v) == crate::vehicle::VehicleType::SHIP.0
+                })
+            {
                 return cost.error(self.s.strings.ship_in_way);
             }
             self.test_autoslope(cost, flags, tile, z_old, tileh_old, z_new, tileh_new, bits);
@@ -2470,7 +2486,6 @@ crate::abi::layouts! {
         disable_elrails,
         slope_z_in_corner,
         entrance_edge,
-        ship_on_tile,
         build_rail,
         remove_rail,
         build_signal,
@@ -2497,7 +2512,7 @@ crate::abi::layouts! {
         area_tile,
         area_next,
         area_contains,
-        collect_trains,
+        include_train,
         consist_changed,
     };
     "OpenTTDRailCommandStrings" ["probe"] => Strings {

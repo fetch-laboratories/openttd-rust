@@ -62,7 +62,6 @@ struct OpenTTDShipLeaves {
 	void (*order_leave)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(order_leave);
 	void (*order_increment)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(order_increment);
 	void (*timetable)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(timetable);
-	void (*position)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(position);
 	void (*start_dirty)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(start_dirty);
 	void (*depot_dirty)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_dirty);
 	void (*depot_invalidate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_invalidate);
@@ -88,7 +87,6 @@ struct OpenTTDShipLeaves {
 	uint32_t (*exit_dir)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(exit_dir);
 	uint32_t (*track_direction)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(track_direction);
 	uint32_t (*tracks_reach)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tracks_reach);
-	bool (*busy_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(busy_tile);
 	size_t (*path_size)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_size);
 	uint32_t (*path_back)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_back);
 	void (*path_pop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(path_pop);

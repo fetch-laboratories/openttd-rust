@@ -4703,7 +4703,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.pbs_signal_type = TrainPbsSignalType,
 		.platform_ahead = TrainPlatformAhead,
 		.platform_length = TrainPlatformLength,
-		.position = TrainPosition,
 		.pow_wag_power = TrainPowWagPower,
 		.price = TrainPrice,
 		.process_orders = TrainProcessOrders,
@@ -4750,7 +4749,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.tile_offset_diag = TrainTileOffsetDiag,
 		.tile_owner = TrainSharedMap<uint64_t, &OpenTTDSharedServices::tile_owner>,
 		.tile_rail_type = OpenTTDLegacyMapQuery<uint64_t, RustTileRailType, OpenTTDTrainHandle, uint32_t>,
-		.tile_virt = TrainTileVirt,
+		.tile_virt = RustTileVirtXY,
 		.trackdir_exit = TrainTrackdirExit,
 		.trackdir_reaches = TrainTrackdirReaches,
 		.track_bits = OpenTTDLegacyMapQuery<uint64_t, RustRailTracks, OpenTTDTrainHandle, uint32_t>,
@@ -4777,8 +4776,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.wait_unbunch = TrainWaitUnbunch,
 		.write_crossing_bar = TrainWriteCrossingBar,
 		.write_visit_type = TrainWriteVisitType,
-		.visit_tile = TrainVisitTile,
-		.visit_near = TrainVisitNear,
 		.vehicle = &GetRustVehicleServices(),
 	};
 	return services;
@@ -4863,8 +4860,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.tile_offset = TrainReservationTileOffset,
 		.trackdir = TrainReservationTrackdir,
 		.tunnel_dir = TrainReservationSharedMap<uint64_t, &OpenTTDSharedServices::tunnel_bridge_direction>,
-		.tunnel_free = TrainReservationTunnelFree,
-
 		.write_dest = TrainReservationWriteDest,
 		.write_last = TrainReservationWriteLast,
 		.write_suppress = TrainReservationWriteSuppress,

@@ -85,7 +85,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.bounds = [](BaseStation *st) noexcept -> OpenTTDStationBounds { return {st->rect.left, st->rect.top, st->rect.right, st->rect.bottom}; },
 		.location = RustStationLocation,
 		.move_sign = [](BaseStation *st, uint32_t tile) noexcept { st->MoveSign(TileIndex{tile}); },
-		.node_location = [](OpenTTDLinkGraph *graph, uint16_t node, uint32_t tile) noexcept { (*graph)[node].UpdateLocation(TileIndex{tile}); },
 		.virtual_coord = [](BaseStation *st) noexcept { st->UpdateVirtCoord(); },
 		.catchment = [](BaseStation *st, bool no_clear) noexcept { Station::From(st)->RecomputeCatchment(no_clear); },
 		.catchment_dirty = []() noexcept { MarkCatchmentTilesDirty(); },

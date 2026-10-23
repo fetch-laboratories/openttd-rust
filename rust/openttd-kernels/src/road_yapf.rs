@@ -156,7 +156,8 @@ struct SerializedScratch(UnsafeCell<Option<Scratch>>);
 unsafe impl Sync for SerializedScratch {}
 static SCRATCH: SerializedScratch = SerializedScratch(UnsafeCell::new(None));
 
-struct Search {
+struct Search<'a> {
+    movement: crate::movement::CachedTable<'a>,
     input: Input,
     leaves: Leaves,
     context: *const c_void,
@@ -177,7 +178,7 @@ struct Search {
     calcs: i32,
     reuse_scratch: bool,
 }
-impl Search {
+impl Search<'_> {
     fn new(
         input: Input,
         leaves: Leaves,
@@ -224,6 +225,8 @@ impl Search {
         scratch.heap.clear();
         scratch.heap.push(usize::MAX);
         Self {
+            // SAFETY: The shared registry outlives this synchronous search.
+            movement: crate::movement::CachedTable::new(unsafe { &*leaves.shared }),
             input,
             leaves,
             context,
@@ -246,18 +249,17 @@ impl Search {
     }
     fn tracks(&self, tile: u32, status: u8) -> u16 {
         // SAFETY: The native search keeps the same live road vehicle context.
-        let shared = unsafe { &*self.leaves.shared };
+        let movement = self.movement.get();
         let tram = unsafe { (self.leaves.road_kind)(self.context) }.0;
         if status != 0 {
-            crate::track_func::track_status_to_trackdir_bits(crate::movement::track_status(
-                shared,
+            crate::track_func::track_status_to_trackdir_bits(movement.track_status(
                 tile,
                 crate::transport_type::TRANSPORT_ROAD,
                 u32::from(tram),
                 crate::direction_type::INVALID_DIAGDIR,
             ))
         } else {
-            crate::pathfinder_func::road_trackdirs(shared, tile, tram)
+            crate::pathfinder_func::road_trackdirs(movement, tile, tram)
         }
     }
     fn tile(&self, tile: u32, td: u8, cost: bool) -> Tile {
@@ -445,13 +447,12 @@ impl Search {
             tiles = tiles.wrapping_add(f.skipped.wrapping_add(1) as u32);
             // SAFETY: After accepted continuation, observe current/next height,
             // then vehicle and old-tile follower limits, without world mutation.
-            let shared = unsafe { &*self.leaves.shared };
+            let movement = self.movement.get();
             let map = crate::services::Map {
                 log_x: self.input.map_x.trailing_zeros() as u8,
             };
             let center_z = |tile| {
-                crate::movement::pixel_z(
-                    shared,
+                movement.pixel_z_at(
                     (map.tile_x(tile) * crate::tile_type::TILE_SIZE
                         + crate::tile_type::TILE_SIZE / 2)
                         .cast_signed(),
@@ -642,7 +643,7 @@ impl Search {
     }
 }
 
-impl Drop for Search {
+impl Drop for Search<'_> {
     fn drop(&mut self) {
         if self.reuse_scratch {
             let scratch = Scratch {

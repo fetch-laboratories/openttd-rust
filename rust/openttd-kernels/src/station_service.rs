@@ -18,9 +18,10 @@
 )]
 use crate::cargo_payment::NativePayment;
 use crate::command_type::DoCommandFlag;
-use crate::linkgraph::NativeGraph;
+use crate::linkgraph::live;
 use crate::orders::NativeOrderList;
 use crate::station::{BaseStation, Station};
+use crate::timer_game_common::INVALID_DATE;
 use crate::vehicle::visits::{Services as Visits, refresh_links};
 use crate::vehicle::{EngineRef, VS_CRASHED, VS_STOPPED, VehicleRef};
 use std::ffi::c_void;
@@ -351,6 +352,7 @@ pub struct TruncatedSource {
 }
 #[repr(C)]
 pub struct World {
+    pub(crate) graphs: &'static live::Services,
     pub(crate) station: extern "C" fn(u16) -> LoadingStation,
     pub(crate) station_owner: extern "C" fn(*mut BaseStation) -> u8,
     pub(crate) station_exclusivity: extern "C" fn(*mut BaseStation) -> StationExclusivity,
@@ -374,7 +376,6 @@ pub struct World {
     pub(crate) passenger_cargo: extern "C" fn(u8) -> bool,
     pub(crate) packet_available: extern "C" fn() -> bool,
     pub(crate) rating_redraw: extern "C" fn(*mut BaseStation, bool),
-    pub(crate) set_demand: extern "C" fn(*mut BaseStation, u8, u32),
     pub(crate) acceptance_news: extern "C" fn(*mut BaseStation, u64, bool),
     pub(crate) acceptance_redraw: extern "C" fn(*mut BaseStation),
     pub(crate) delete_station: extern "C" fn(*mut BaseStation),
@@ -382,7 +383,6 @@ pub struct World {
     pub(crate) watched_animation: extern "C" fn(u32, u64),
     pub(crate) append_packet:
         extern "C" fn(*mut BaseStation, u8, u32, crate::cargo_storage::Source),
-    pub(crate) update_supply: extern "C" fn(*mut BaseStation, u8, u32),
     pub(crate) station_list_invalidation: extern "C" fn(*mut BaseStation, i32),
 
     pub(crate) waiting_redraw: extern "C" fn(*mut BaseStation),
@@ -514,7 +514,9 @@ pub unsafe extern "C" fn openttd_rust_station_acceptance(
         unsafe {
             status(state, cargo, 0, amt >= 8);
         }
-        (w.set_demand)(st, cargo, amt / 8);
+        unsafe {
+            live::station_demand(st, cargo, amt / 8, w.graphs);
+        }
     }
     let new = unsafe { acceptance_mask(state) };
     if old == new {
@@ -751,6 +753,7 @@ unsafe fn admit(
     mut amount: u32,
     source: crate::cargo_storage::Source,
     w: &World,
+    visits: &Visits,
 ) -> u32 {
     if u32::from((w.packet_available)()) == 0 {
         return 0;
@@ -766,7 +769,16 @@ unsafe fn admit(
         return 0;
     }
     (w.append_packet)(st, cargo, amount, source);
-    (w.update_supply)(st, cargo, amount);
+    unsafe {
+        live::station_supply(
+            st,
+            cargo,
+            amount,
+            (*w.shared).economy_date,
+            w.graphs,
+            visits.schedule,
+        );
+    }
     if unsafe { (*ge).status } & 2 == 0 {
         (w.station_list_invalidation)(st, 0);
         unsafe {
@@ -791,6 +803,7 @@ pub unsafe extern "C" fn openttd_rust_station_distribute(
     stations: *mut c_void,
     exclusivity: u8,
     world: *const World,
+    visits: &Visits,
 ) -> u32 {
     if amount == 0 {
         return 0;
@@ -840,7 +853,16 @@ pub unsafe extern "C" fn openttd_rust_station_distribute(
         return 0;
     };
     if used.is_empty() {
-        return unsafe { admit(st, cargo, amount.wrapping_mul(rating + 1), source, w) };
+        return unsafe {
+            admit(
+                st,
+                cargo,
+                amount.wrapping_mul(rating + 1),
+                source,
+                w,
+                visits,
+            )
+        };
     }
     let mut company_best = [0_u32; 19];
     let mut company_sum = [0_u32; 19];
@@ -872,7 +894,7 @@ pub unsafe extern "C" fn openttd_rust_station_distribute(
     }
     let mut moved = 0_u32;
     for (st, _, _, share) in used {
-        moved = moved.wrapping_add(unsafe { admit(st, cargo, share, source, w) });
+        moved = moved.wrapping_add(unsafe { admit(st, cargo, share, source, w, visits) });
     }
     moved
 }
@@ -881,28 +903,16 @@ pub unsafe extern "C" fn openttd_rust_station_distribute(
 #[derive(Default)]
 pub struct Edge {
     pub(crate) destination: *mut BaseStation,
-    pub(crate) last_update: i32,
     pub(crate) distance: u32,
 }
 #[repr(C)]
 pub struct Links {
-    pub(crate) graph: extern "C" fn(*mut BaseStation, u8) -> *mut NativeGraph,
+    pub(crate) graphs: &'static live::Services,
     pub(crate) automatic_distribution: extern "C" fn(u8) -> bool,
-    pub(crate) node: extern "C" fn(*mut BaseStation, u8) -> u16,
-    pub(crate) edge_count: extern "C" fn(*mut NativeGraph, u16) -> usize,
     pub(crate) date: extern "C" fn() -> i32,
-    pub(crate) station_id: extern "C" fn(*mut BaseStation) -> u16,
-    pub(crate) edge_last_update: extern "C" fn(*mut NativeGraph, u16, usize) -> i32,
-    pub(crate) last_compression: extern "C" fn(*mut NativeGraph) -> i32,
-    pub(crate) edge: extern "C" fn(*mut NativeGraph, u16, usize, *mut BaseStation) -> Edge,
-    pub(crate) edge_unrestricted: extern "C" fn(*mut NativeGraph, u16, usize) -> i32,
-    pub(crate) edge_restricted: extern "C" fn(*mut NativeGraph, u16, usize) -> i32,
+    pub(crate) edge: extern "C" fn(*mut BaseStation, u16) -> Edge,
     pub(crate) delete_flows: extern "C" fn(*mut BaseStation, u8, u16),
-    pub(crate) restrict_edge: extern "C" fn(*mut NativeGraph, u16, usize),
     pub(crate) restrict_flows: extern "C" fn(*mut BaseStation, u8, u16),
-    pub(crate) release_edge: extern "C" fn(*mut NativeGraph, u16, usize),
-    pub(crate) remove_edge: extern "C" fn(*mut NativeGraph, u16, u16),
-    pub(crate) compress: extern "C" fn(*mut NativeGraph),
     pub(crate) order_list: extern "C" fn(u16) -> *mut NativeOrderList,
     pub(crate) order_pool_size: extern "C" fn() -> usize,
     pub(crate) order_count: extern "C" fn(*mut NativeOrderList) -> usize,
@@ -951,23 +961,29 @@ pub unsafe extern "C" fn openttd_rust_station_reroute(
 unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
     for cargo in 0..64 {
         let auto = (l.automatic_distribution)(cargo);
-        let graph = (l.graph)(from, cargo);
+        let graph = live::station_graph(from, cargo, l.graphs);
         if graph.is_null() {
             continue;
         }
-        let node = u32::from((l.node)(from, cargo)) as u16;
+        let node = u32::from((l.graphs.node)(from, cargo)) as u16;
         let mut remove = Vec::new();
-        let count = (l.edge_count)(graph, node);
+        let owner = unsafe { live::resolve(graph, l.graphs) };
+        let count = unsafe { &*owner }.nodes[usize::from(node)].edges.len();
         for index in 0..count {
-            let edge = (l.edge)(graph, node, index, from);
+            let (destination, last_update) = {
+                let g = unsafe { &*owner };
+                let e = &g.nodes[usize::from(node)].edges[index];
+                (g.nodes[usize::from(e.dest_node)].station, e.last_update())
+            };
+            let edge = (l.edge)(from, destination);
             let date = (l.date)();
-            let timeout = 32_u32.wrapping_add(edge.distance >> 3) as i32;
-            if date.wrapping_sub(edge.last_update) > timeout {
+            let timeout = live::MIN_TIMEOUT_DISTANCE.wrapping_add(edge.distance >> 3) as i32;
+            if date.wrapping_sub(last_update) > timeout {
                 let mut updated = false;
                 if auto {
                     let mut vehicles = Vec::new();
-                    let from_id = (l.station_id)(from);
-                    let to_id = (l.station_id)(edge.destination);
+                    let from_id = (l.graphs.station_id)(from);
+                    let to_id = (l.graphs.station_id)(edge.destination);
                     let order_count = (l.order_pool_size)();
                     for id in 0..order_count {
                         // OrderList pool IDs are bounded by their u16 representation.
@@ -1003,11 +1019,14 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
                     while iterator < vehicles.len() {
                         let vehicle = vehicles[iterator];
                         if !(l.stopped_in_depot)(vehicle)
-                            || date.wrapping_sub((l.last_service)(vehicle)) <= 1024
+                            || date.wrapping_sub((l.last_service)(vehicle))
+                                <= live::STALE_LINK_DEPOT_TIMEOUT
                         {
                             refresh_links(vehicle, false, false, visits);
                         }
-                        if (l.edge_last_update)(graph, node, index) == date {
+                        if unsafe { &*owner }.nodes[usize::from(node)].edges[index].last_update()
+                            == date
+                        {
                             crate::witness::hit(crate::witness::STATION_STALE_REFRESH);
                             updated = true;
                             break;
@@ -1026,38 +1045,40 @@ unsafe fn stale(from: *mut BaseStation, w: &World, l: &Links, visits: &Visits) {
                 }
                 if !updated {
                     crate::witness::hit(crate::witness::STATION_STALE_REMOVE);
-                    remove.push((l.node)(edge.destination, cargo));
-                    let to_id = (l.station_id)(edge.destination);
+                    remove.push((l.graphs.node)(edge.destination, cargo));
+                    let to_id = (l.graphs.station_id)(edge.destination);
                     (l.delete_flows)(from, cargo, to_id);
                     unsafe {
-                        reroute(from, cargo, to_id, (l.station_id)(from), w, l);
+                        reroute(from, cargo, to_id, (l.graphs.station_id)(from), w, l);
                     }
                 }
             } else {
-                let unrestricted = (l.edge_unrestricted)(graph, node, index);
-                if unrestricted != -1 && date.wrapping_sub(unrestricted) > timeout {
+                let unrestricted = unsafe { &*owner }.nodes[usize::from(node)].edges[index]
+                    .last_unrestricted_update;
+                if unrestricted != INVALID_DATE && date.wrapping_sub(unrestricted) > timeout {
                     crate::witness::hit(crate::witness::STATION_STALE_RESTRICT);
-                    (l.restrict_edge)(graph, node, index);
-                    let to_id = (l.station_id)(edge.destination);
+                    unsafe { &mut *owner }.nodes[usize::from(node)].edges[index].restrict();
+                    let to_id = (l.graphs.station_id)(edge.destination);
                     (l.restrict_flows)(from, cargo, to_id);
                     unsafe {
-                        reroute(from, cargo, to_id, (l.station_id)(from), w, l);
+                        reroute(from, cargo, to_id, (l.graphs.station_id)(from), w, l);
                     }
                 } else {
-                    let restricted = (l.edge_restricted)(graph, node, index);
-                    if restricted != -1 && date.wrapping_sub(restricted) > timeout {
+                    let restricted = unsafe { &*owner }.nodes[usize::from(node)].edges[index]
+                        .last_restricted_update;
+                    if restricted != INVALID_DATE && date.wrapping_sub(restricted) > timeout {
                         crate::witness::hit(crate::witness::STATION_STALE_RELEASE);
-                        (l.release_edge)(graph, node, index);
+                        unsafe { &mut *owner }.nodes[usize::from(node)].edges[index].release();
                     }
                 }
             }
         }
         for dest in remove {
-            (l.remove_edge)(graph, node, dest);
+            unsafe { &mut *owner }.nodes[usize::from(node)].remove_edge(dest);
         }
         let date = (l.date)();
-        if date.wrapping_sub((l.last_compression)(graph)) > 256 {
-            (l.compress)(graph);
+        if date.wrapping_sub(unsafe { &*owner }.last_compression) > live::COMPRESSION_INTERVAL {
+            unsafe { &mut *owner }.compress(date);
         }
     }
 }
@@ -1222,7 +1243,6 @@ pub struct Loading {
     pub(crate) has_cargo_for: extern "C" fn(*mut Station, u8, *mut c_void) -> bool,
     pub(crate) platform_length: extern "C" fn(*mut Station, VehicleRef) -> u32,
     pub(crate) vehicle_tile: extern "C" fn(VehicleRef) -> u32,
-    pub(crate) station_index: extern "C" fn(*mut Station) -> u16,
     pub(crate) station_cargo_total: extern "C" fn(*mut Station, u8) -> u32,
     pub(crate) load_property: extern "C" fn(VehicleRef) -> u16,
     pub(crate) load_callback: extern "C" fn(VehicleRef) -> u16,
@@ -1564,7 +1584,7 @@ unsafe fn load_vehicle(
             let tile = (l.vehicle_tile)(front);
             let shared = unsafe { &*w.shared };
             (shared.tile_type)(tile) != crate::vehicle::MP_STATION
-                || (shared.station_index)(tile) != (l.station_index)(st.native)
+                || (shared.station_index)(tile) != (w.graphs.station_id)(st.base)
         } {
             (l.set_loading_finished)(front, true);
             (l.set_load_ticks)(front, 1);
@@ -1972,6 +1992,7 @@ crate::abi::layouts! {
         last_vehicle_type,
     };
     "OpenTTDStationServices" ["probe"] => World {
+        graphs,
         station,
         station_owner,
         station_exclusivity,
@@ -1995,14 +2016,12 @@ crate::abi::layouts! {
         passenger_cargo,
         packet_available,
         rating_redraw,
-        set_demand,
         acceptance_news,
         acceptance_redraw,
         delete_station,
 
         watched_animation,
         append_packet,
-        update_supply,
         station_list_invalidation,
 
         waiting_redraw,
@@ -2017,27 +2036,15 @@ crate::abi::layouts! {
     };
     "OpenTTDStationEdge" ["station_service"] => Edge {
         destination,
-        last_update,
         distance,
     };
     "OpenTTDStationLinks" ["probe"] => Links {
-        graph,
+        graphs,
         automatic_distribution,
-        node,
-        edge_count,
         date,
-        station_id,
-        edge_last_update,
-        last_compression,
         edge,
-        edge_unrestricted,
-        edge_restricted,
         delete_flows,
-        restrict_edge,
         restrict_flows,
-        release_edge,
-        remove_edge,
-        compress,
         order_list,
         order_pool_size,
         order_count,
@@ -2119,7 +2126,6 @@ crate::abi::layouts! {
         has_cargo_for,
         platform_length,
         vehicle_tile,
-        station_index,
         station_cargo_total,
         load_property,
         load_callback,

@@ -432,7 +432,15 @@ impl<'a> Pbs<'a> {
             td: res.td,
             best,
         };
-        (self.train().visit_tile)(tile, std::ptr::from_mut(&mut check).cast(), visit);
+        // SAFETY: the serialized query keeps shells and service tables live.
+        let vs = unsafe { &*self.train().vehicle };
+        vs.any_on_tile(tile, |v| {
+            (vs.vehicle_type)(v) == crate::vehicle::VehicleType::TRAIN.0
+                && visit(
+                    std::ptr::from_mut(&mut check).cast(),
+                    (vs.train_handle)(v.0.as_ptr()),
+                ) != 0
+        });
     }
     pub(crate) fn follow_train(self, v: Handle, check_other: bool, initial: Handle) -> TileInfo {
         let mut other = initial;
