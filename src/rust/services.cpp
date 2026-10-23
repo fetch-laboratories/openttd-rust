@@ -262,6 +262,7 @@ static_assert(to_underlying(StationType::RailWaypoint) == 7 && to_underlying(Sta
 static_assert(StationFacilities(StationFacility::Train).base() == 1 && StationFacilities(StationFacility::TruckStop).base() == 2 && StationFacilities(StationFacility::BusStop).base() == 4 && StationFacilities(StationFacility::Dock).base() == 16);
 static_assert(MAX_LENGTH_STATION_NAME_CHARS == 32 && StationRect::ADD_TEST == 0 && StationRect::ADD_TRY == 1);
 static_assert(PR_BUILD_STATION_TRUCK == 13 && PR_BUILD_WAYPOINT_RAIL == 52 && PR_BUILD_WAYPOINT_BUOY == 54 && PR_CLEAR_WAYPOINT_BUOY == 55 && ROAD_STOP_TRACKBIT_FACTOR == 2);
+static_assert(to_underlying(RailTileType::Normal) == 0 && TRACK_BIT_X == 1 && TRACK_BIT_Y == 2 && AXIS_END == 2);
 static_assert(ROAD_X == 10 && ROAD_Y == 5);
 static_assert(AXIS_X == 0 && AXIS_Y == 1 && INVALID_AXIS == 0xFF);
 static_assert(PR_TERRAFORM == 21 && PR_CLEAR_CANAL == 61 && PR_CLEAR_TREES == 26);

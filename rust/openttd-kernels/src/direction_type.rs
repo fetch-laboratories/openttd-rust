@@ -27,3 +27,6 @@ pub const AXIS_X: u8 = 0;
 pub const AXIS_Y: u8 = 1;
 /// `INVALID_AXIS`.
 pub const INVALID_AXIS: u8 = 0xFF;
+
+/// `AXIS_END`.
+pub const AXIS_END: u8 = 2;
