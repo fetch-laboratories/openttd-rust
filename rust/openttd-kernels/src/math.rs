@@ -12,13 +12,6 @@ pub(crate) const fn is_inside_mm(x: usize, min: usize, max: usize) -> bool {
     x.wrapping_sub(min) < max.wrapping_sub(min)
 }
 
-/// Original `SB` for a 32-bit word: clear the window, OR the unmasked data.
-/// The original preconditions are `n < 32` and `s + n <= 32`.
-pub(crate) fn sb(value: &mut u32, s: u8, n: u8, data: u32) {
-    *value &= !(((1_u32 << n) - 1) << s);
-    *value |= data << s;
-}
-
 fn mask(width: u8) -> u64 {
     assert!(matches!(width, 1 | 8 | 16 | 32 | 64));
     u64::MAX >> (64 - width)
