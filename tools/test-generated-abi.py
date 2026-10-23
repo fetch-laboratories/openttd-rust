@@ -149,22 +149,32 @@ class GeneratedAbiTests(unittest.TestCase):
             },
         }
         records = {row[0]: row for row in GENERATOR["declarations"]()}
+        current = {
+            "OpenTTDGroundServices": "vehicle",
+            "OpenTTDRoadSpeedRead": "road",
+            "OpenTTDRoadLeaves": "road",
+            "OpenTTDTrainServices": "train",
+            "OpenTTDRoadCommandServices": "road_cmd",
+            "OpenTTDVehiclePostTick": "vehicle/scheduler",
+        }
         for module, names in inventory.items():
             source = (ROOT / f"rust/openttd-kernels/src/{module}.rs").read_text()
             self.assertEqual(source.count("layouts! {\n    fn abi_layout;"), 1)
             declared = set(re.findall(r'"([^"\n]+)" \["\w+"\] =>', source))
             self.assertEqual(declared, names)
-            for name in names:
-                _, _, rust, fields, _, _ = records[name]
-                structure = rust.rsplit("::", 1)[-1]
-                body = re.search(
-                    rf"pub struct {structure}\s*\{{(.*?)^\}}", source, re.M | re.S
-                )[1]
-                self.assertEqual(
-                    {field for field, _ in fields},
-                    set(re.findall(r"^    pub (\w+):", body, re.M)),
-                    name,
-                )
+            current.update(dict.fromkeys(names, module))
+        for name, module in current.items():
+            source = (ROOT / f"rust/openttd-kernels/src/{module}.rs").read_text()
+            _, _, rust, fields, _, _ = records[name]
+            structure = rust.rsplit("::", 1)[-1]
+            body = re.search(
+                rf"pub struct {structure}\s*\{{(.*?)^\}}", source, re.M | re.S
+            )[1]
+            self.assertEqual(
+                {field for field, _ in fields},
+                set(re.findall(r"^    pub (\w+):", body, re.M)),
+                name,
+            )
 
     def test_generation_is_deterministic_and_build_directory_only(self):
         with tempfile.TemporaryDirectory() as directory:
