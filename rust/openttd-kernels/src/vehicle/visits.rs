@@ -194,7 +194,7 @@ pub(crate) fn increase_stats(
 ) {
     let l = s.links;
     // `Station::Get(next_station_id)`.
-    let st2 = (s.station.get)(next);
+    let st2 = (s.station.station)(next).base;
     let mut graph = (l.graph)(st, cargo);
     let second = (l.graph)(st2, cargo);
     if graph.is_null() {
@@ -431,7 +431,7 @@ impl Refresher {
         {
             return;
         }
-        let st_to = (s.station.get)(next_station);
+        let st_to = (s.station.station)(next_station).base;
         let v = self.vehicle;
         let map = Map {
             log_x: (s.shared.map_log_x)() as u8,
@@ -805,7 +805,7 @@ pub(crate) fn begin_loading(v: VehicleRef, s: &Services) {
     {
         // `IncreaseStats(Station::Get(...), this, ..., travel_time)` narrows to uint32.
         increase_vehicle_stats(
-            (s.station.get)(front.last_loading),
+            (s.station.station)(front.last_loading).base,
             v,
             front.last_station,
             travel_time as u32,
