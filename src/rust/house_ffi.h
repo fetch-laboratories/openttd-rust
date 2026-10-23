@@ -74,14 +74,14 @@ struct OpenTTDHouseServices {
 	void (*set_random_bits)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_random_bits);
 	void (*set_random_triggers)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_random_triggers);
 	void (*set_type)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_type);
-	void (*animate_new)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(animate_new);
+
 	void (*delete_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_inspect);
 	uint16_t (*callback)(uint16_t, uint32_t, uint32_t, uint16_t, Town *, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(callback);
 	uint8_t (*cargo_translation)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_translation);
 	bool (*convert_boolean)(uint16_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_boolean);
 	bool (*convert_8bit)(uint16_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_8bit);
 	OpenTTDHouseReseed (*resolve_reseed)(uint16_t, uint32_t, Town *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_reseed);
-	void (*change_frame)(uint16_t, uint16_t, Town *, uint32_t, uint32_t, uint32_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(change_frame);
+
 	OpenTTDStation *(*next_near_station)(Town *, OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(next_near_station);
 	void (*erase_near_station)(Town *, OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(erase_near_station);
 	bool (*station_catchment)(const OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_catchment);
@@ -100,8 +100,6 @@ struct OpenTTDHouseServices {
 };
 /* Resolver and AnimationBase services live beside their native templates. */
 OpenTTDHouseReseed OpenTTDHouseResolveReseed(uint16_t house, uint32_t tile, Town *town, uint8_t waiting) noexcept;
-void OpenTTDHouseChangeFrame(uint16_t callback, uint16_t house, Town *town, uint32_t tile, uint32_t random, uint32_t trigger, uint64_t cargoes) noexcept;
-void OpenTTDAnimateNewHouse(uint32_t tile) noexcept;
 
 extern "C" {
 void openttd_rust_house_tile_loop(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);

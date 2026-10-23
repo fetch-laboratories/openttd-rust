@@ -74,7 +74,7 @@ struct OpenTTDObjectQueryServices {
 	uint32_t (*manhattan)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(manhattan);
 	uint32_t (*square)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(square);
 	uint16_t (*triggers)(const ObjectSpec *) noexcept OPENTTD_SERVICE_DEFAULT(triggers);
-	void (*change_frame)(const ObjectSpec *, Object *, uint32_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(change_frame);
+
 	void (*unhandled)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
 };
 const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept;

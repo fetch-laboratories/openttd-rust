@@ -59,8 +59,8 @@ pub(crate) fn check_build_above_clear(out: crate::services::Cost<'_>) {
 /// owner borrow survives their invocation; world access is serialized.
 pub(crate) fn clear_square(tile: u32, s: &Services) {
     let leaves = &s.clear_square_services;
-    if (leaves.may_animate)(tile) {
-        (leaves.delete_animated)(tile, true);
+    if crate::animated_tile::openttd_rust_may_animate(tile) {
+        crate::animated_tile::openttd_rust_animation_delete(tile, true);
     }
     let remove = (leaves.docking)(tile);
     // SAFETY: the native getter supplies immutable process-lifetime service tables.

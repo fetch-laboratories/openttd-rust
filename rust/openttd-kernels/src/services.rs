@@ -201,9 +201,9 @@ pub struct EnvironmentServices {
 #[derive(Clone, Copy)]
 pub struct ClearSquareServices {
     /// Original tile procedure animation capability.
-    pub may_animate: extern "C" fn(u32) -> bool,
+
     /// Original animated-tile erasure, including immediate erasure mode.
-    pub delete_animated: extern "C" fn(u32, bool),
+
     /// Original docking marker before map replacement.
     pub docking: extern "C" fn(u32) -> bool,
     /// Original generation setting at map replacement.
@@ -386,9 +386,9 @@ pub struct Services {
     /// Canonical shared `station_type` service.
     pub station_type: extern "C" fn(u32) -> StationType,
     /// Canonical shared `tile_animation_add` service.
-    pub tile_animation_add: extern "C" fn(u32, bool),
+
     /// Canonical shared `tile_animation_delete` service.
-    pub tile_animation_delete: extern "C" fn(u32),
+
     /// Canonical shared `tile_animation_set_frame` service.
     pub tile_animation_set_frame: extern "C" fn(u32, u8),
     /// Canonical shared `town_next_id` service.
@@ -674,8 +674,8 @@ crate::abi::layouts! {
         make_error,
     };
     "OpenTTDClearSquareServices" ["probe"] => ClearSquareServices {
-        may_animate,
-        delete_animated,
+
+
         docking,
         generating_world,
     };
@@ -760,8 +760,7 @@ crate::abi::layouts! {
         station_gfx,
         station_serve_neutral,
         station_type,
-        tile_animation_add,
-        tile_animation_delete,
+
         tile_animation_set_frame,
         town_next_id,
         town_owner_by_id,
@@ -918,8 +917,6 @@ pub fn fixture(
         calendar_date: zero_year,
         calendar_year: zero_year,
         clear_square_services: ClearSquareServices {
-            may_animate: flag,
-            delete_animated: unused_clear_animation,
             docking: flag,
             generating_world: flag0,
         },
@@ -992,8 +989,7 @@ pub fn fixture(
         station_gfx: byte,
         station_serve_neutral: flag0,
         station_type: fixture_station_type,
-        tile_animation_add: unused_animation_add,
-        tile_animation_delete: tile,
+
         tile_animation_set_frame: zone,
         town_next_id: word,
         town_owner_by_id: unused_town_owner_by_id,
@@ -1404,10 +1400,6 @@ extern "C" fn fixture_station_type(_: u32) -> StationType {
 }
 
 #[cfg(test)]
-extern "C" fn unused_animation_add(_: u32, _: bool) {
-    panic!("unused animation add");
-}
-#[cfg(test)]
 extern "C" fn unused_town_owner_by_id(_: u32) -> *mut crate::town::State {
     panic!("unused town lookup");
 }
@@ -1440,11 +1432,6 @@ extern "C" fn unused_road_cost_multiplier(_: u8) -> u16 {
 #[cfg(test)]
 extern "C" fn unused_road_tram_type(_: u8) -> RoadTramType {
     panic!("unused road tram type")
-}
-
-#[cfg(test)]
-extern "C" fn unused_clear_animation(_: u32, _: bool) {
-    panic!("unused clear animation")
 }
 
 /// Native road tile kind.

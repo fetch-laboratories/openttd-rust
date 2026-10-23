@@ -8,6 +8,9 @@
 /** @file object_cmd.cpp Handling of object tiles. */
 
 #include "stdafx.h"
+#ifdef WITH_RUST
+#include "rust/animation_ffi.h"
+#endif
 #include "landscape.h"
 #include "command_func.h"
 #include "company_func.h"
@@ -588,7 +591,6 @@ static void ReallyClearObjectTile(Object *o)
 #ifndef WITH_RUST
 std::vector<ClearedObjectArea> _cleared_object_areas;
 
-
 /**
  * Find the entry in _cleared_object_areas which occupies a certain tile.
  * @param tile Tile of interest
@@ -734,7 +736,6 @@ static void AddProducedCargo_Object(TileIndex tile, CargoArray &produced)
 #endif
 }
 
-
 static void GetTileDesc_Object(TileIndex tile, TileDesc &td)
 {
 	const ObjectSpec *spec = ObjectSpec::GetByTile(tile);
@@ -811,7 +812,6 @@ static void TileLoop_Object(TileIndex tile)
 #endif
 }
 
-
 #ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Object(TileIndex, TransportType, uint, DiagDirection)
 {
@@ -829,7 +829,11 @@ static bool ClickTile_Object(TileIndex tile)
 
 static void AnimateTile_Object(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_animate_tile(tile.base());
+#else
 	AnimateNewObjectTile(tile);
+#endif
 }
 
 /**

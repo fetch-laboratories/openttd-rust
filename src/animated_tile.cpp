@@ -16,6 +16,53 @@
 
 #include "safeguards.h"
 
+#ifdef WITH_RUST
+#include "rust/animation_ffi.h"
+#include "rust/tile_animation_services.h"
+#include "rust/sound_services.h"
+#include "station_base.h"
+#include "newgrf_station.h"
+#include "newgrf_roadstop.h"
+#include "newgrf_airporttiles.h"
+#include "house.h"
+#include "industry.h"
+
+extern "C" const OpenTTDAnimationServices *openttd_animation_services() noexcept
+{
+	static const OpenTTDAnimationServices services{
+		.shared = &GetRustSharedServices(), .town = &GetRustTownServices(), .industries = &GetIndustryRustServices(),
+		.construction = &GetIndustryConstructionServices(), .industry_tiles = &GetIndustryTileServices(),
+		.house = &GetHouseAnimationBinding(), .industry = &GetIndustryAnimationBinding(), .station = &GetStationAnimationBinding(),
+		.airport = &GetAirportAnimationBinding(), .object = &GetObjectAnimationBinding(), .roadstop = &GetRoadStopAnimationBinding(),
+		.state = [](uint32_t t) noexcept { return to_underlying(GetAnimatedTileState(TileIndex{t})); },
+		.set_state = [](uint32_t t, uint8_t s) noexcept { SetAnimatedTileState(TileIndex{t}, static_cast<AnimatedTileState>(s)); },
+		.frame = OpenTTDAnimationFrame, .ambient = OpenTTDAmbientSound,
+		.house_spec = [](uint16_t h) noexcept { return HouseSpec::Get(h); },
+		.road_frame = [](BaseStation *s, uint32_t t) noexcept { return s->GetRoadStopAnimationFrame(TileIndex{t}); },
+		.set_road_frame = [](BaseStation *s, uint32_t t, uint8_t f) noexcept { return s->SetRoadStopAnimationFrame(TileIndex{t}, f); },
+		.rail_area = OpenTTDAnimationRailArea,
+		.rail_belongs = [](BaseStation *s, uint32_t t) noexcept { return s->TileBelongsToRailStation(TileIndex{t}); },
+		.station_triggers = [](BaseStation *s, uint8_t t) noexcept { return s->cached_anim_triggers.Test(static_cast<StationAnimationTrigger>(t)); },
+		.road_triggers = [](BaseStation *s, uint8_t t) noexcept { return s->cached_roadstop_anim_triggers.Test(static_cast<StationAnimationTrigger>(t)); },
+		.rail_spec_triggers = [](const StationSpec *s) noexcept { return s->animation.triggers.base(); },
+		.road_spec_triggers = [](const RoadStopSpec *s) noexcept { return s->animation.triggers.base(); },
+		.airport_spec_triggers = [](const AirportTileSpec *s) noexcept -> uint16_t { return s->animation.triggers.base(); },
+		.rail_cargo = [](const StationSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },
+		.road_cargo = [](const RoadStopSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },
+		.airport_cargo = [](const AirportTileSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },
+		.airport_grf = [](const AirportTileSpec *s) noexcept { return s->grf_prop.grffile != nullptr; },
+		.airport_area = [](Station *s) noexcept -> OpenTTDAnimationArea { return {s->airport.tile.base(), s->airport.w, s->airport.h}; },
+		.airport_belongs = [](Station *s, uint32_t t) noexcept { return s->TileBelongsToAirport(TileIndex{t}); },
+		.road_count = [](BaseStation *s) noexcept { return s->custom_roadstop_tile_data.size(); },
+		.road_tile = [](BaseStation *s, size_t i) noexcept { return s->custom_roadstop_tile_data[i].tile.base(); },
+	};
+	return &services;
+}
+void AddAnimatedTile(TileIndex tile, bool dirty) { openttd_rust_animation_add(tile.base(), dirty); }
+void DeleteAnimatedTile(TileIndex tile, bool immediate) { openttd_rust_animation_delete(tile.base(), immediate); }
+void AnimateAnimatedTiles() { PerformanceAccumulator landscape_framerate(PFE_GL_LANDSCAPE); openttd_rust_animation_run(); }
+void InitializeAnimatedTiles() { openttd_rust_animation_initialize(); }
+#else
 /** The table/list with animated tiles. */
 std::vector<TileIndex> _animated_tiles;
 
@@ -107,3 +154,5 @@ void InitializeAnimatedTiles()
 {
 	_animated_tiles.clear();
 }
+
+#endif /* WITH_RUST */

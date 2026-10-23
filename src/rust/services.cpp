@@ -337,7 +337,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.calendar_date = SharedCalendarDate,
 	.calendar_year = SharedCalendarYear,
 	.clear_square_services = {
-		.may_animate = OpenTTDMayAnimateTile, .delete_animated = OpenTTDDeleteAnimatedTileWithMode,
+
 		.docking = OpenTTDIsDockingTile,
 		.generating_world = OpenTTDGeneratingWorld,
 	},
@@ -408,8 +408,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.station_gfx = [](uint32_t tile) noexcept { return GetStationGfx(TileIndex{tile}); },
 	.station_serve_neutral = RustServeNeutralIndustries,
 	.station_type = [](uint32_t tile) noexcept { return GetStationType(TileIndex{tile}); },
-	.tile_animation_add = OpenTTDAddAnimatedTile,
-	.tile_animation_delete = OpenTTDDeleteAnimatedTile,
+
 	.tile_animation_set_frame = OpenTTDSetAnimationFrame,
 	.town_next_id = OpenTTDNextTownID,
 	.town_owner_by_id = OpenTTDTownOwnerByID,

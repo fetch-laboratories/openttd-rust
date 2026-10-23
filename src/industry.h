@@ -464,7 +464,6 @@ const OpenTTDIndustryLifecycleServices &GetIndustryLifecycleRustServices();
 OpenTTDIndustryRandomisationSpec IndustryRandomisationSpec(uint32_t tile) noexcept;
 OpenTTDIndustryReseed IndustryResolveReseed(uint32_t tile, uint16_t gfx, void *industry, uint8_t waiting) noexcept;
 OpenTTDIndustryAnimationSpec IndustryAnimationSpec(uint32_t tile) noexcept;
-void IndustryChangeAnimationFrame(const void *spec, uint32_t tile, uint32_t random, uint32_t parameter) noexcept;
 #endif
 
 #endif /* INDUSTRY_H */

@@ -16,17 +16,28 @@
 
 #include "../safeguards.h"
 
+#ifdef WITH_RUST
+#include "../rust/animation_save.hpp"
+#else
 extern std::vector<TileIndex> _animated_tiles;
 
 static const SaveLoad _animated_tile_desc[] = {
 	 SLEG_VECTOR("tiles", _animated_tiles, SLE_UINT32),
 };
 
+#endif
+
 struct ANITChunkHandler : ChunkHandler {
 	ANITChunkHandler() : ChunkHandler('ANIT', CH_TABLE) {}
 
 	void Save() const override
 	{
+#ifdef WITH_RUST
+		RustAnimationSave staging(false);
+		auto &_animated_tiles = staging.tiles;
+		const SaveLoad _animated_tile_desc[] = {SLEG_VECTOR("tiles", _animated_tiles, SLE_UINT32)};
+#endif
+
 		SlTableHeader(_animated_tile_desc);
 
 		SlSetArrayIndex(0);
@@ -35,6 +46,12 @@ struct ANITChunkHandler : ChunkHandler {
 
 	void Load() const override
 	{
+#ifdef WITH_RUST
+		RustAnimationSave staging(true);
+		auto &_animated_tiles = staging.tiles;
+		const SaveLoad _animated_tile_desc[] = {SLEG_VECTOR("tiles", _animated_tiles, SLE_UINT32)};
+#endif
+
 		/* Before version 80 we did NOT have a variable length animated tile table */
 		if (IsSavegameVersionBefore(SLV_80)) {
 			/* In pre version 6, we has 16bit per tile, now we have 32bit per tile, convert it ;) */
@@ -63,7 +80,6 @@ struct ANITChunkHandler : ChunkHandler {
 		if (SlIterateArray() != -1) SlErrorCorrupt("Too many ANIT entries");
 	}
 };
-
 
 static const ANITChunkHandler ANIT;
 static const ChunkHandlerRef animated_tile_chunk_handlers[] = {

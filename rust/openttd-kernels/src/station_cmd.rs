@@ -1535,7 +1535,7 @@ impl Ctx<'_> {
                     }
                     (self.s.station_infrastructure)(owner, u32::MAX);
                 }
-                (self.shared.tile_animation_delete)(t);
+                crate::animated_tile::openttd_rust_animation_delete(t, false);
                 let old =
                     if (self.shared.tile_type)(t) == 5 && (self.rail_map().has_station_rail)(t) {
                         (self.s.custom_rail_index)(t) as u8
@@ -2566,7 +2566,7 @@ impl Ctx<'_> {
             (self.s.close_stop_inspect)(tile);
             if !waypoint && (self.shared.is_drive_through_stop)(tile) {
                 crate::road_stop::clear_drive_through(self.shared, tile, stop_state);
-                (self.shared.tile_animation_delete)(tile);
+                crate::animated_tile::openttd_rust_animation_delete(tile, false);
             } else {
                 crate::ground::clear_square(tile, self.shared);
             }
@@ -3041,7 +3041,7 @@ impl Ctx<'_> {
             );
             (self.s.airport_add)(st, t.tile);
             if (self.s.airport_animated)(t.gfx) {
-                (self.shared.tile_animation_add)(t.tile, true);
+                crate::animated_tile::openttd_rust_animation_add(t.tile, true);
             }
         }
         for t in self.airport_tiles(spec, layout, tile) {
@@ -3570,7 +3570,7 @@ impl Ctx<'_> {
         (self.s.set_town)(st, (self.shared.closest_town)(tile, u32::MAX));
         (self.s.default_name)(st, tile, 3);
         (self.s.associate_industry)(st, tile);
-        (self.shared.tile_animation_delete)(tile);
+        crate::animated_tile::openttd_rust_animation_delete(tile, false);
         (self.s.make_oilrig)(
             tile,
             (self.links().station_id)(st),

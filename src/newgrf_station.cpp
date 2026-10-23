@@ -23,6 +23,9 @@
 #include "company_func.h"
 #include "tunnelbridge_map.h"
 #include "newgrf_animation_base.h"
+#ifdef WITH_RUST
+#include "rust/animation_binding.hpp"
+#endif
 #include "timer/timer_game_calendar.h"
 
 #include "table/strings.h"
@@ -30,7 +33,6 @@
 #include "newgrf_class_func.h"
 
 #include "safeguards.h"
-
 
 template <>
 /* static */ void StationClass::InsertDefaults()
@@ -104,7 +106,6 @@ TileArea GetRailTileArea(const BaseStation *st, TileIndex tile, TriggerArea ta)
 	}
 }
 
-
 /**
  * Evaluate a tile's position within a station, and return the result in a bit-stuffed format.
  * if not centered: .TNLcCpP, if centered: .TNL..CP
@@ -146,7 +147,6 @@ uint32_t GetPlatformInfo(Axis axis, uint8_t tile, int platforms, int length, int
 	return retval;
 }
 
-
 /**
  * Find the end of a railway station, from the \a tile, in the direction of \a delta.
  * @param tile Start tile.
@@ -177,7 +177,6 @@ static TileIndex FindRailStationEnd(TileIndex tile, TileIndexDiff delta, bool ch
 	return tile;
 }
 
-
 static uint32_t GetPlatformInfoHelper(TileIndex tile, bool check_type, bool check_axis, bool centred)
 {
 	int tx = TileX(tile);
@@ -192,7 +191,6 @@ static uint32_t GetPlatformInfoHelper(TileIndex tile, bool check_type, bool chec
 
 	return GetPlatformInfo(GetRailStationAxis(tile), GetStationGfx(tile), ex, ey, tx, ty, centred);
 }
-
 
 static uint32_t GetRailContinuationInfo(TileIndex tile)
 {
@@ -234,19 +232,16 @@ static uint32_t GetRailContinuationInfo(TileIndex tile)
 	return res;
 }
 
-
 /* Station Resolver Functions */
 /* virtual */ uint32_t StationScopeResolver::GetRandomBits() const
 {
 	return (this->st == nullptr ? 0 : this->st->random_bits) | (this->tile == INVALID_TILE ? 0 : GetStationTileRandomBits(this->tile) << 16);
 }
 
-
 /* virtual */ uint32_t StationScopeResolver::GetRandomTriggers() const
 {
 	return this->st == nullptr ? 0 : this->st->waiting_random_triggers.base();
 }
-
 
 /**
  * Get the town scope associated with a station, if it exists.
@@ -656,7 +651,6 @@ SpriteID GetCustomStationFoundationRelocation(const StationSpec *statspec, BaseS
 	return group->sprite + offset;
 }
 
-
 uint16_t GetStationCallback(CallbackID callback, uint32_t param1, uint32_t param2, const StationSpec *statspec, BaseStation *st, TileIndex tile, std::span<int32_t> regs100)
 {
 	StationResolverObject object(statspec, st, tile, callback, param1, param2);
@@ -693,7 +687,6 @@ CommandCost PerformStationTileSlopeCheck(TileIndex north_tile, TileIndex cur_til
 	if (statspec->grf_prop.grffile->grf_version < 8) ToggleBit(cb_res, 10);
 	return GetErrorMessageFromLocationCallbackResult(cb_res, regs100, statspec->grf_prop.grffile, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION);
 }
-
 
 /**
  * Allocate a StationSpec to a Station. This is called once per build operation.
@@ -867,7 +860,6 @@ bool DrawStationTile(int x, int y, RailType railtype, Axis axis, StationClassID 
 	return true;
 }
 
-
 const StationSpec *GetStationSpec(TileIndex t)
 {
 	if (!IsCustomStationSpecIndex(t)) return nullptr;
@@ -884,24 +876,42 @@ uint16_t GetAnimStationCallback(CallbackID callback, uint32_t param1, uint32_t p
 }
 
 /** Helper class for animation control. */
+#ifdef WITH_RUST
+struct StationAnimationBase {
+	static bool Enabled(const StationSpec *) noexcept { return true; }
+	static bool Random(const StationSpec *s) noexcept { return s->flags.Test(StationSpecFlag::Cb141RandomBits); }
+	static OpenTTDAnimationEntry<StationSpec, BaseStation> Entry(uint32_t t) noexcept { const auto *s = GetStationSpec(TileIndex{t}); return {s, s == nullptr ? nullptr : BaseStation::GetByTile(TileIndex{t})}; }
+#else
 struct StationAnimationBase : public AnimationBase<StationAnimationBase, StationSpec, BaseStation, int, GetAnimStationCallback, TileAnimationFrameAnimationHelper<BaseStation> > {
+#endif
 	static constexpr CallbackID cb_animation_speed      = CBID_STATION_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_STATION_ANIMATION_NEXT_FRAME;
 
 	static constexpr StationCallbackMask cbm_animation_speed      = StationCallbackMask::AnimationSpeed;
 	static constexpr StationCallbackMask cbm_animation_next_frame = StationCallbackMask::AnimationNextFrame;
 };
+#ifdef WITH_RUST
+OpenTTDAnimationArea OpenTTDAnimationRailArea(BaseStation *s, uint32_t t, uint8_t area) noexcept { auto a = GetRailTileArea(s, TileIndex{t}, static_cast<TriggerArea>(area)); return {a.tile.base(), a.w, a.h}; }
+const OpenTTDStationAnimation &GetStationAnimationBinding() noexcept { return RustAnimationBinding<StationAnimationBase, StationSpec, BaseStation, int, GetAnimStationCallback>::Get(); }
+#endif
 
 void AnimateStationTile(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_animate_station(tile.base());
+#else
 	const StationSpec *ss = GetStationSpec(tile);
 	if (ss == nullptr) return;
 
 	StationAnimationBase::AnimateTile(ss, BaseStation::GetByTile(tile), tile, ss->flags.Test(StationSpecFlag::Cb141RandomBits));
+#endif
 }
 
 void TriggerStationAnimation(BaseStation *st, TileIndex trigger_tile, StationAnimationTrigger trigger, CargoType cargo_type)
 {
+#ifdef WITH_RUST
+	openttd_rust_trigger_station(st, trigger_tile.base(), to_underlying(trigger), cargo_type);
+#else
 	/* List of coverage areas for each animation trigger */
 	static const TriggerArea tas[] = {
 		TA_TILE, // Built
@@ -937,6 +947,7 @@ void TriggerStationAnimation(BaseStation *st, TileIndex trigger_tile, StationAni
 			}
 		}
 	}
+#endif
 }
 
 /**
@@ -1035,4 +1046,3 @@ void StationUpdateCachedTriggers(BaseStation *st)
 		st->cached_cargo_triggers |= sm.spec->cargo_triggers;
 	}
 }
-

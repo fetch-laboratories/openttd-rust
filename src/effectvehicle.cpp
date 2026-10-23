@@ -19,7 +19,6 @@
 
 #include "safeguards.h"
 
-
 #ifndef WITH_RUST
 /**
  * Increment the sprite unless it has reached the end of the animation.
@@ -335,7 +334,6 @@ static const BubbleMovement _bubble_float_sw[] = {
 	ME(1)
 };
 
-
 static const BubbleMovement _bubble_float_ne[] = {
 	MK( 0, 0, 1, 0),
 	MK(-1, 0, 1, 1),
@@ -588,14 +586,9 @@ static void OPENTTD_EFFECT_CALL EffectSound(void *context, uint8_t success) noex
 	SndPlayVehicleFx(success == 0 ? SND_2F_BUBBLE_GENERATOR_FAIL : SND_31_BUBBLE_GENERATOR_SUCCESS, static_cast<EffectVehicle *>(context));
 }
 
-static void OPENTTD_EFFECT_CALL EffectAnimated(uint32_t tile) noexcept
-{
-	AddAnimatedTile(TileIndex{tile});
-}
-
 static const OpenTTDEffectLeaves &EffectServices()
 {
-	static const OpenTTDEffectLeaves leaves{EffectObserve, EffectWrite, EffectViewport, EffectSound, EffectAnimated};
+	static const OpenTTDEffectLeaves leaves{EffectObserve, EffectWrite, EffectViewport, EffectSound};
 	return leaves;
 }
 

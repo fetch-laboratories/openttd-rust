@@ -199,7 +199,7 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.exchange_company = TownProtocol_exchange_company,
 		.house_class = TownProtocol_house_class,
 		.make_house = TownProtocol_make_house,
-		.add_animation = TownProtocol_add_animation,
+
 		.population_changed = TownProtocol_population_changed,
 		.nearby_stations = TownProtocol_nearby_stations,
 		.house_count = TownProtocol_house_count,

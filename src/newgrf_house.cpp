@@ -20,6 +20,9 @@
 #include "town.h"
 #include "genworld.h"
 #include "newgrf_animation_base.h"
+#ifdef WITH_RUST
+#include "rust/animation_binding.hpp"
+#endif
 #include "newgrf_cargo.h"
 #include "station_base.h"
 #ifdef WITH_RUST
@@ -569,35 +572,43 @@ static uint16_t GetSimpleHouseCallback(CallbackID callback, uint32_t param1, uin
 }
 
 /** Helper class for animation control. */
+#ifdef WITH_RUST
+struct HouseAnimationBase {
+	static bool Enabled(const HouseSpec *) noexcept { return true; }
+	static bool Random(const HouseSpec *s) noexcept { return s->extra_flags.Test(HouseExtraFlag::Callback1ARandomBits); }
+	static OpenTTDAnimationEntry<HouseSpec, Town> Entry(uint32_t t) noexcept { const auto *s = HouseSpec::Get(GetHouseType(TileIndex{t})); return {s, s == nullptr ? nullptr : Town::GetByTile(TileIndex{t})}; }
+#else
 struct HouseAnimationBase : public AnimationBase<HouseAnimationBase, HouseSpec, Town, CargoTypes, GetSimpleHouseCallback, TileAnimationFrameAnimationHelper<Town> > {
+#endif
 	static constexpr CallbackID cb_animation_speed      = CBID_HOUSE_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_HOUSE_ANIMATION_NEXT_FRAME;
 
 	static constexpr HouseCallbackMask cbm_animation_speed      = HouseCallbackMask::AnimationSpeed;
 	static constexpr HouseCallbackMask cbm_animation_next_frame = HouseCallbackMask::AnimationNextFrame;
 };
+#ifdef WITH_RUST
+const OpenTTDHouseAnimation &GetHouseAnimationBinding() noexcept { return RustAnimationBinding<HouseAnimationBase, HouseSpec, Town, CargoTypes, GetSimpleHouseCallback>::Get(); }
+#endif
 
 void AnimateNewHouseTile(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_animate_house(tile.base());
+#else
 	const HouseSpec *hs = HouseSpec::Get(GetHouseType(tile));
 	if (hs == nullptr) return;
 
 	HouseAnimationBase::AnimateTile(hs, Town::GetByTile(tile), tile, hs->extra_flags.Test(HouseExtraFlag::Callback1ARandomBits));
+#endif
 }
 
 #ifdef WITH_RUST
-void OpenTTDAnimateNewHouse(uint32_t tile) noexcept { AnimateNewHouseTile(TileIndex{tile}); }
 OpenTTDHouseReseed OpenTTDHouseResolveReseed(uint16_t house, uint32_t tile, Town *town, uint8_t waiting) noexcept
 {
 	HouseResolverObject object(house, TileIndex{tile}, town, CBID_RANDOM_TRIGGER);
 	object.SetWaitingRandomTriggers(HouseRandomTriggers{waiting});
 	object.ResolveRerandomisation();
 	return {object.GetReseedSum(), object.GetUsedRandomTriggers().base()};
-}
-void OpenTTDHouseChangeFrame(uint16_t callback, uint16_t house, Town *town, uint32_t tile, uint32_t random, uint32_t trigger, uint64_t cargoes) noexcept
-{
-	TileIndex index{tile};
-	HouseAnimationBase::ChangeAnimationFrame(static_cast<CallbackID>(callback), HouseSpec::Get(house), town, index, random, trigger, cargoes);
 }
 void TriggerHouseAnimation_WatchedCargoAccepted(TileIndex tile, CargoTypes trigger_cargoes)
 {
@@ -784,4 +795,3 @@ void TriggerHouseAnimation_WatchedCargoAccepted(TileIndex tile, CargoTypes trigg
 	if (hs->building_flags.Any(BUILDING_HAS_4_TILES)) DoTriggerHouseAnimation_WatchedCargoAccepted(TileAddXY(north, 1, 1), tile, trigger_cargoes, r);
 }
 #endif
-

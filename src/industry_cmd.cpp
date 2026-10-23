@@ -70,7 +70,7 @@
 #include "rust/sound_services.h"
 #include "rust/tile_animation_services.h"
 #include "rust/orders_ffi.h"
-static const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
+const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
 const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices();
 static const OpenTTDIndustryCommandServices &GetIndustryCommandServices();
 const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept;
@@ -278,7 +278,6 @@ void Industry::PostDestructor(size_t)
 	SetWindowDirty(WC_BUILD_INDUSTRY, 0);
 }
 
-
 /**
  * Return a random valid industry.
  * @return random industry, nullptr if there are no industries
@@ -302,7 +301,6 @@ void Industry::PostDestructor(size_t)
 
 	return Industry::Get(index);
 }
-
 
 static void IndustryDrawSugarMine(const TileInfo *ti)
 {
@@ -1022,7 +1020,6 @@ static void TileLoop_Industry(TileIndex tile)
 		CreateEffectVehicleAbove(TileX(tile) * TILE_SIZE + 6, TileY(tile) * TILE_SIZE + 6, 43, EV_COPPER_MINE_SMOKE);
 		break;
 
-
 	case GFX_TOY_FACTORY: {
 			Industry *i = Industry::GetByTile(tile);
 			if (i->was_cargo_delivered) {
@@ -1436,7 +1433,6 @@ static CommandCost CheckNewIndustry_OilRefinery(TileIndex tile)
 	return CommandCost(STR_ERROR_CAN_ONLY_BE_POSITIONED);
 }
 
-
 /**
  * Check the conditions of #CHECK_OIL_RIG (Industries at sea should be positioned near edge of the map).
  * @param tile %Tile to perform the checking.
@@ -1809,7 +1805,6 @@ static bool CheckIfCanLevelIndustryPlatform(TileIndex tile, DoCommandFlags flags
 	cur_company.Restore();
 	return true;
 }
-
 
 /**
  * Check that the new industry is far enough from conflicting industries.
@@ -2405,7 +2400,6 @@ CommandCost CmdIndustrySetExclusivity(DoCommandFlags flags, IndustryID ind_id, O
 		}
 	}
 
-
 	return CommandCost();
 #endif
 }
@@ -2604,7 +2598,6 @@ static uint GetCurrentTotalNumberOfIndustries()
 	}
 	return total;
 }
-
 
 /** Reset the entry. */
 void IndustryTypeBuildData::Reset()
@@ -3320,16 +3313,13 @@ static const IntervalTimer<TimerGameEconomy> _economy_industries_daily({TimerGam
 #else
 	_economy.industry_daily_change_counter += _economy.industry_daily_increment;
 
-
 	/* Bits 16-31 of industry_construction_counter contain the number of industries to change/create today,
 	 * the lower 16 bit are a fractional part that might accumulate over several days until it
 	 * is sufficient for an industry. */
 	uint16_t change_loop = _economy.industry_daily_change_counter >> 16;
 
-
 	/* Reset the active part of the counter, just keeping the "fractional part" */
 	_economy.industry_daily_change_counter &= 0xFFFF;
-
 
 	if (change_loop == 0) {
 		return;  // Nothing to do? get out
@@ -3387,7 +3377,6 @@ static const IntervalTimer<TimerGameEconomy> _economy_industries_monthly({TimerG
 	InvalidateWindowData(WC_INDUSTRY_DIRECTORY, 0, IDIWD_PRODUCTION_CHANGE);
 #endif
 });
-
 
 void InitializeIndustries()
 {
@@ -3788,7 +3777,7 @@ static const OpenTTDIndustryLifecycleServices _industry_lifecycle_services = {
 	.random_bits = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryRandomBits(TileIndex(tile)); },
 	.set_random_bits = [](uint32_t tile, uint8_t bits) noexcept { SetIndustryRandomBits(TileIndex(tile), bits); },
 	.animation_spec = IndustryAnimationSpec,
-	.change_frame = IndustryChangeAnimationFrame,
+
 };
 const OpenTTDIndustryLifecycleServices &GetIndustryLifecycleRustServices() { return _industry_lifecycle_services; }
 #endif
@@ -3831,7 +3820,7 @@ const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 #endif
 
 #ifdef WITH_RUST
-static const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
+const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 {
 	static const OpenTTDIndustryConstructionServices services = {
 		.cargo_lists = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> OpenTTDIndustryCargoLists {
@@ -3864,7 +3853,7 @@ static const OpenTTDIndustryConstructionServices &GetIndustryConstructionService
 		.set_construction_stage = [](uint32_t tile, uint8_t stage) noexcept { SetIndustryConstructionStage(TileIndex(tile), stage); },
 		.translated_gfx = [](uint16_t gfx) noexcept -> uint16_t { return GetTranslatedIndustryTileID(gfx); },
 		.animation_enabled = [](uint16_t gfx) noexcept -> bool { return GetIndustryTileSpec(gfx)->animation.status != AnimationStatus::NoAnimation; },
-		.add_animated = GetRustSharedServices().tile_animation_add,
+
 		.build_window_dirty = []() noexcept { SetWindowDirty(WC_BUILD_INDUSTRY, 0); },
 		.serve_neutral = GetRustSharedServices().station_serve_neutral,
 		.insert_near_station = [](void *shell, OpenTTDIndustryStationHandle *station) noexcept { RustIndustry(shell)->stations_near.insert(reinterpret_cast<Station *>(station)); },
@@ -3888,7 +3877,7 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept
 		.animation_loop = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryAnimationLoop(TileIndex(tile)); },
 		.set_animation_loop = [](uint32_t tile, uint8_t value) noexcept { SetIndustryAnimationLoop(TileIndex(tile), value); },
 		.ambient = OpenTTDAmbientSound,
-		.animate_new = [](uint32_t tile) noexcept { AnimateNewIndustryTile(TileIndex(tile)); },
+
 		.construction_counter = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryConstructionCounter(TileIndex(tile)); },
 		.construction_stage = [](uint32_t tile) noexcept -> uint8_t { return GetIndustryConstructionStage(TileIndex(tile)); },
 		.completed = [](uint32_t tile) noexcept -> bool { return IsIndustryCompleted(TileIndex(tile)); },

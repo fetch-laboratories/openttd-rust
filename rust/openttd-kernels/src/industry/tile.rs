@@ -53,7 +53,7 @@ pub struct TileServices {
     pub animation_loop: unsafe extern "C" fn(u32) -> u8,
     pub set_animation_loop: unsafe extern "C" fn(u32, u8),
     pub ambient: unsafe extern "C" fn() -> bool,
-    pub animate_new: unsafe extern "C" fn(u32),
+
     pub construction_counter: unsafe extern "C" fn(u32) -> u8,
     pub construction_stage: unsafe extern "C" fn(u32) -> u8,
     pub completed: unsafe extern "C" fn(u32) -> bool,
@@ -146,7 +146,7 @@ fn bigger(
             (t.set_frame)(tile, 0);
             (t.set_animation_loop)(tile, 0);
         },
-        148..=155 => unsafe { (c.add_animated)(tile, false) },
+        148..=155 => crate::animated_tile::openttd_rust_animation_add(tile, false),
         _ => {}
     }
 }
@@ -203,7 +203,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
     let (s, c, t) = unsafe { (&*s, &*c, &*t) };
     let gfx = unsafe { (t.gfx)(tile) };
     if unsafe { (c.animation_enabled)(gfx) } {
-        unsafe { (t.animate_new)(tile) };
+        crate::animated_tile::openttd_rust_animate_industry(tile);
         return;
     }
     match gfx {
@@ -218,7 +218,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             }
             if frame >= 96 {
                 frame = 0;
-                (s.shared().tile_animation_delete)(tile);
+                crate::animated_tile::openttd_rust_animation_delete(tile, false);
             }
             unsafe { (t.set_frame)(tile, frame) };
             dirty(tile, s);
@@ -231,7 +231,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             frame = frame.wrapping_add(1);
             if frame >= 70 {
                 frame = 0;
-                (s.shared().tile_animation_delete)(tile);
+                crate::animated_tile::openttd_rust_animation_delete(tile, false);
             }
             unsafe { (t.set_frame)(tile, frame) };
             dirty(tile, s);
@@ -240,7 +240,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             let mut frame = unsafe { (t.frame)(tile) }.wrapping_add(1);
             if frame >= 40 {
                 frame = 0;
-                (s.shared().tile_animation_delete)(tile);
+                crate::animated_tile::openttd_rust_animation_delete(tile, false);
             }
             unsafe { (t.set_frame)(tile, frame) };
             dirty(tile, s);
@@ -250,7 +250,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
             if frame == 6 {
                 unsafe {
                     (t.set_frame)(tile, 0);
-                    (s.shared().tile_animation_delete)(tile);
+                    crate::animated_tile::openttd_rust_animation_delete(tile, false);
                 }
             } else {
                 unsafe { (t.set_frame)(tile, frame.wrapping_add(1)) };
@@ -270,7 +270,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
                         frame = 0;
                         if count >= 8 {
                             count = 0;
-                            (s.shared().tile_animation_delete)(tile);
+                            crate::animated_tile::openttd_rust_animation_delete(tile, false);
                         }
                         unsafe { (t.set_animation_loop)(tile, count as u8) };
                     }
@@ -303,7 +303,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_animate(
                 unsafe {
                     (t.set_gfx)(tile, 29);
                     (c.set_construction_stage)(tile, 3);
-                    (s.shared().tile_animation_delete)(tile);
+                    crate::animated_tile::openttd_rust_animation_delete(tile, false);
                 }
             } else {
                 unsafe {
@@ -424,7 +424,7 @@ pub(crate) unsafe fn tile_loop(
                 unsafe {
                     (t.set_gfx)(tile, gfx);
                     (t.set_frame)(tile, 0x80);
-                    (c.add_animated)(tile, true);
+                    crate::animated_tile::openttd_rust_animation_add(tile, true);
                 }
             }
         }
@@ -433,7 +433,7 @@ pub(crate) unsafe fn tile_loop(
                 unsafe {
                     (t.set_gfx)(tile, 30);
                     (t.set_frame)(tile, 0);
-                    (c.add_animated)(tile, true);
+                    crate::animated_tile::openttd_rust_animation_add(tile, true);
                 }
             }
         }
@@ -448,7 +448,7 @@ pub(crate) unsafe fn tile_loop(
                     (t.set_gfx)(tile, gfx);
                     (t.set_completed)(tile);
                     (c.set_construction_stage)(tile, 3);
-                    (s.shared().tile_animation_delete)(tile);
+                    crate::animated_tile::openttd_rust_animation_delete(tile, false);
                 }
                 dirty(tile, s);
             }
@@ -456,7 +456,7 @@ pub(crate) unsafe fn tile_loop(
         10 => {
             if chance(s, 1, 3) {
                 sound(tile, 10, s, t);
-                unsafe { (c.add_animated)(tile, true) };
+                crate::animated_tile::openttd_rust_animation_add(tile, true);
             }
         }
         49 => {
@@ -477,14 +477,14 @@ pub(crate) unsafe fn tile_loop(
                 unsafe {
                     (*industry.owner).fields.was_cargo_delivered = 0;
                     (t.set_animation_loop)(tile, 0);
-                    (c.add_animated)(tile, true);
+                    crate::animated_tile::openttd_rust_animation_add(tile, true);
                 }
             }
         }
         161 => bubble(tile, s, map, t),
-        165 => unsafe { (c.add_animated)(tile, true) },
+        165 => crate::animated_tile::openttd_rust_animation_add(tile, true),
         174 if chance(s, 1, 3) => {
-            unsafe { (c.add_animated)(tile, true) };
+            crate::animated_tile::openttd_rust_animation_add(tile, true);
         }
         _ => {}
     }

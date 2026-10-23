@@ -199,6 +199,12 @@ inline void AddProducedCargo(TileIndex tile, CargoArray &produced)
  * @param tile Tile to test.
  * @returns True iff the type of the tile has a handler for tile animation.
  */
+#ifdef WITH_RUST
+extern "C" bool openttd_rust_may_animate(uint32_t);
+extern "C" void openttd_rust_animate_tile(uint32_t);
+inline bool MayAnimateTile(TileIndex tile) { return openttd_rust_may_animate(tile.base()); }
+inline void AnimateTile(TileIndex tile) { openttd_rust_animate_tile(tile.base()); }
+#else
 inline bool MayAnimateTile(TileIndex tile)
 {
 	return _tile_type_procs[GetTileType(tile)]->animate_tile_proc != nullptr;
@@ -210,6 +216,8 @@ inline void AnimateTile(TileIndex tile)
 	assert(proc != nullptr);
 	proc(tile);
 }
+
+#endif
 
 inline bool ClickTile(TileIndex tile)
 {

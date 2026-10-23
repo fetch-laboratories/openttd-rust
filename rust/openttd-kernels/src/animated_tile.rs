@@ -1,0 +1,565 @@
+/*
+ * This file is part of OpenTTD.
+ * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
+ * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
+ */
+
+//! Process-wide animated-tile queue, dispatch and animation-trigger traversal.
+//! The game-state mutex serializes GUI/game threads. Queue accesses end before
+//! every callback. Actual scheduled animation callbacks only change frames,
+//! sounds and deferred deletion; they cannot allocate/erase queue entries.
+//! Specs/pool shells stay live across resolver calls: GRF evaluation neither
+//! resets specs/map nor yields or destroys the animated shell.
+#![allow(unsafe_code, missing_docs, clippy::cast_possible_truncation)]
+use crate::newgrf_animation_base::{Binding, Entry};
+use crate::{
+    industry::{ConstructionServices, Services as Industries, TileServices},
+    objects::{Object, Spec as ObjectSpec},
+    services::{Services as Shared, TownHandle},
+    station::BaseStation,
+    tile_type::*,
+    town::Leaves,
+};
+use std::cell::UnsafeCell;
+#[repr(C)]
+pub struct HouseSpec {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct IndustrySpec {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct IndustryShell {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct RailSpec {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct AirportSpec {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct Station {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct RoadSpec {
+    _private: [u8; 0],
+}
+#[repr(C)]
+pub struct Area {
+    pub tile: u32,
+    pub width: u16,
+    pub height: u16,
+}
+#[repr(C)]
+pub struct Services {
+    pub shared: *const Shared,
+    pub town: *const Leaves,
+    pub industries: *const Industries,
+    pub construction: *const ConstructionServices,
+    pub industry_tiles: *const TileServices,
+    pub house: *const Binding<HouseSpec, TownHandle, u64>,
+    pub industry: *const Binding<IndustrySpec, IndustryShell, i32>,
+    pub station: *const Binding<RailSpec, BaseStation, i32>,
+    pub airport: *const Binding<AirportSpec, Station, i32>,
+    pub object: *const Binding<ObjectSpec, Object, i32>,
+    pub roadstop: *const Binding<RoadSpec, BaseStation, i32>,
+    pub state: extern "C" fn(u32) -> u8,
+    pub set_state: extern "C" fn(u32, u8),
+    pub frame: extern "C" fn(u32) -> u8,
+    pub ambient: extern "C" fn() -> bool,
+    pub house_spec: extern "C" fn(u16) -> *const HouseSpec,
+    pub road_frame: extern "C" fn(*mut BaseStation, u32) -> u8,
+    pub set_road_frame: extern "C" fn(*mut BaseStation, u32, u8) -> bool,
+    pub rail_area: extern "C" fn(*mut BaseStation, u32, u8) -> Area,
+    pub rail_belongs: extern "C" fn(*mut BaseStation, u32) -> bool,
+    pub station_triggers: extern "C" fn(*mut BaseStation, u8) -> bool,
+    pub road_triggers: extern "C" fn(*mut BaseStation, u8) -> bool,
+    pub rail_spec_triggers: extern "C" fn(*const RailSpec) -> u16,
+    pub road_spec_triggers: extern "C" fn(*const RoadSpec) -> u16,
+    pub airport_spec_triggers: extern "C" fn(*const AirportSpec) -> u16,
+    pub rail_cargo: extern "C" fn(*const RailSpec, u8) -> u8,
+    pub road_cargo: extern "C" fn(*const RoadSpec, u8) -> u8,
+    pub airport_cargo: extern "C" fn(*const AirportSpec, u8) -> u8,
+    pub airport_grf: extern "C" fn(*const AirportSpec) -> bool,
+    pub airport_area: extern "C" fn(*mut Station) -> Area,
+    pub airport_belongs: extern "C" fn(*mut Station, u32) -> bool,
+    pub road_count: extern "C" fn(*mut BaseStation) -> usize,
+    pub road_tile: extern "C" fn(*mut BaseStation, usize) -> u32,
+}
+unsafe extern "C" {
+    fn openttd_animation_services() -> *const Services;
+}
+pub(crate) fn services() -> &'static Services {
+    unsafe { &*openttd_animation_services() }
+}
+impl Services {
+    pub fn shared(&self) -> &Shared {
+        unsafe { &*self.shared }
+    }
+}
+struct Queue(UnsafeCell<Vec<u32>>);
+// SAFETY: all entries run under the native game-state mutex (including GUI
+// commands). No queue reference escapes its callback-free lexical access.
+unsafe impl Sync for Queue {}
+static QUEUE: Queue = Queue(UnsafeCell::new(Vec::new()));
+fn queue<R>(f: impl FnOnce(&mut Vec<u32>) -> R) -> R {
+    unsafe { f(&mut *QUEUE.0.get()) }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_animation_count() -> usize {
+    queue(|q| q.len())
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_animation_at(i: usize) -> u32 {
+    queue(|q| q[i])
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_animation_append(t: u32) {
+    queue(|q| q.push(t));
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_animation_initialize() {
+    queue(Vec::clear);
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_animation_add(tile: u32, dirty: bool) {
+    let a = services();
+    let s = a.shared();
+    if dirty {
+        (s.mark_dirty)(tile);
+    }
+    let state = (a.state)(tile);
+    if state == 3 {
+        return;
+    }
+    if state == 0 {
+        queue(|q| q.push(tile));
+    }
+    (a.set_state)(tile, 3);
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_animation_delete(tile: u32, immediate: bool) {
+    let a = services();
+    if immediate {
+        if (a.state)(tile) == 0 {
+            return;
+        }
+        (a.set_state)(tile, 0);
+        queue(|q| {
+            if let Some(i) = q.iter().position(|t| *t == tile) {
+                q.swap_remove(i);
+            }
+        });
+    } else if (a.state)(tile) == 3 {
+        (a.set_state)(tile, 1);
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_animation_run() {
+    let a = services();
+    let mut i = 0;
+    while i < openttd_rust_animation_count() {
+        let tile = openttd_rust_animation_at(i);
+        if (a.state)(tile) != 3 {
+            (a.set_state)(tile, 0);
+            queue(|q| {
+                q.swap_remove(i);
+            });
+            continue;
+        }
+        openttd_rust_animate_tile(tile);
+        i += 1;
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_may_animate(tile: u32) -> bool {
+    matches!(
+        (services().shared().tile_type)(tile),
+        MP_HOUSE | MP_STATION | MP_INDUSTRY | MP_OBJECT
+    )
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_animate_tile(tile: u32) {
+    let a = services();
+    let s = a.shared();
+    match (s.tile_type)(tile) {
+        MP_HOUSE => unsafe {
+            crate::town::house::openttd_rust_house_animate(a.town, a.shared, tile)
+        },
+        MP_INDUSTRY => unsafe {
+            crate::industry::openttd_rust_industry_tile_animate(
+                tile,
+                a.industries,
+                a.construction,
+                a.industry_tiles,
+            )
+        },
+        MP_OBJECT => openttd_rust_animate_object(tile),
+        MP_STATION => {
+            if (unsafe { &*(*((s.movement_services)())).rail_map }.has_station_rail)(tile) {
+                openttd_rust_animate_station(tile);
+            } else if (s.station_type)(tile).0 == 1 {
+                openttd_rust_animate_airport(tile);
+            } else if (s.is_any_road_stop)(tile) {
+                openttd_rust_animate_roadstop(tile);
+            }
+        }
+        _ => crate::movement::native_assert(s, false),
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_animation_afterload(clean: bool, flags: bool) {
+    let a = services();
+    if clean {
+        let mut i = 0;
+        while i < openttd_rust_animation_count() {
+            let tile = openttd_rust_animation_at(i);
+            let remove = !openttd_rust_may_animate(tile) || queue(|q| q[..i].contains(&tile));
+            if remove {
+                queue(|q| {
+                    q.remove(i);
+                });
+            } else {
+                i += 1;
+            }
+        }
+    }
+    if flags {
+        for t in 0..(1_u32 << (a.shared().map_log_x)()) * ((a.shared().map_max_y)() + 1) {
+            if openttd_rust_may_animate(t) {
+                (a.set_state)(t, 0);
+            }
+        }
+        for i in 0..openttd_rust_animation_count() {
+            let t = openttd_rust_animation_at(i);
+            if t != INVALID_TILE {
+                (a.set_state)(t, 3);
+            }
+        }
+    }
+}
+macro_rules! animate {
+    ($fn:ident,$field:ident,$frame:ty) => {
+        #[unsafe(no_mangle)]
+        pub extern "C" fn $fn(tile: u32) {
+            let a = services();
+            let b = unsafe { &*a.$field };
+            let e = (b.entry)(tile);
+            if !e.spec.is_null() {
+                crate::newgrf_animation_base::animate::<_, _, _, $frame>(a, b, e, tile);
+            }
+        }
+    };
+}
+animate!(
+    openttd_rust_animate_house,
+    house,
+    crate::newgrf_animation_base::TileFrame
+);
+animate!(
+    openttd_rust_animate_industry,
+    industry,
+    crate::newgrf_animation_base::TileFrame
+);
+animate!(
+    openttd_rust_animate_station,
+    station,
+    crate::newgrf_animation_base::TileFrame
+);
+animate!(
+    openttd_rust_animate_airport,
+    airport,
+    crate::newgrf_animation_base::TileFrame
+);
+animate!(
+    openttd_rust_animate_object,
+    object,
+    crate::newgrf_animation_base::TileFrame
+);
+animate!(
+    openttd_rust_animate_roadstop,
+    roadstop,
+    crate::newgrf_animation_base::RoadFrame
+);
+pub(crate) unsafe fn house_change(
+    cb: u16,
+    house: u16,
+    obj: *mut TownHandle,
+    tile: u32,
+    random: u32,
+    trigger: u32,
+    extra: u64,
+) {
+    let a = services();
+    crate::newgrf_animation_base::change::<_, _, _, crate::newgrf_animation_base::TileFrame>(
+        a,
+        unsafe { &*a.house },
+        Entry {
+            spec: (a.house_spec)(house),
+            object: obj,
+        },
+        tile,
+        cb,
+        random,
+        trigger,
+        extra,
+    );
+}
+pub(crate) unsafe fn industry_change(
+    spec: *const std::ffi::c_void,
+    tile: u32,
+    random: u32,
+    trigger: u32,
+) {
+    let a = services();
+    let b = unsafe { &*a.industry };
+    let e = (b.entry)(tile);
+    crate::newgrf_animation_base::change::<_, _, _, crate::newgrf_animation_base::TileFrame>(
+        a,
+        b,
+        Entry {
+            spec: spec.cast(),
+            object: e.object,
+        },
+        tile,
+        0x25,
+        random,
+        trigger,
+        0,
+    );
+}
+pub(crate) unsafe fn object_change(
+    spec: *const ObjectSpec,
+    obj: *mut Object,
+    tile: u32,
+    random: u32,
+    trigger: u32,
+) {
+    let a = services();
+    crate::newgrf_animation_base::change::<_, _, _, crate::newgrf_animation_base::TileFrame>(
+        a,
+        unsafe { &*a.object },
+        Entry { spec, object: obj },
+        tile,
+        0x159,
+        random,
+        trigger,
+        0,
+    );
+}
+fn tiles(area: Area, width: u32, mut f: impl FnMut(u32)) {
+    for y in 0..u32::from(area.height) {
+        for x in 0..u32::from(area.width) {
+            f(area
+                .tile
+                .wrapping_add(y.wrapping_mul(width))
+                .wrapping_add(x));
+        }
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_trigger_station(
+    st: *mut BaseStation,
+    tile: u32,
+    trigger: u8,
+    cargo: u8,
+) {
+    let a = services();
+    if !(a.station_triggers)(st, trigger) {
+        return;
+    }
+    let random = a.shared().random() as u16;
+    let areas = [0, 2, 2, 1, 1, 1, 2, 0, 1];
+    let area = (a.rail_area)(st, tile, areas[usize::from(trigger)]);
+    let b = unsafe { &*a.station };
+    tiles(area, 1_u32 << (a.shared().map_log_x)(), |t| {
+        if !(a.rail_belongs)(st, t) {
+            return;
+        }
+        let e = (b.entry)(t);
+        if !e.spec.is_null() && (a.rail_spec_triggers)(e.spec) & (1 << trigger) != 0 {
+            let extra = if cargo < 64 {
+                (u16::from((a.rail_cargo)(e.spec, cargo)) << 8) as u8
+            } else {
+                0
+            };
+            crate::newgrf_animation_base::change::<_, _, _, crate::newgrf_animation_base::TileFrame>(
+                a,
+                b,
+                Entry {
+                    spec: e.spec,
+                    object: st,
+                },
+                t,
+                0x140,
+                (u32::from(random) << 16) | (a.shared().random() & 0xFFFF),
+                u32::from(trigger) | u32::from(extra),
+                0,
+            );
+        }
+    });
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_trigger_roadstop(
+    st: *mut BaseStation,
+    tile: u32,
+    trigger: u8,
+    cargo: u8,
+) {
+    let a = services();
+    if !(a.road_triggers)(st, trigger) {
+        return;
+    }
+    let random = a.shared().random() as u16;
+    let b = unsafe { &*a.roadstop };
+    let process = |t| {
+        let e = (b.entry)(t);
+        if !e.spec.is_null() && (a.road_spec_triggers)(e.spec) & (1 << trigger) != 0 {
+            let extra = if cargo < 64 {
+                (u16::from((a.road_cargo)(e.spec, cargo)) << 8) as u8
+            } else {
+                0
+            };
+            crate::newgrf_animation_base::change::<_, _, _, crate::newgrf_animation_base::RoadFrame>(
+                a,
+                b,
+                Entry {
+                    spec: e.spec,
+                    object: st,
+                },
+                t,
+                0x140,
+                (u32::from(random) << 16) | (a.shared().random() & 0xFFFF),
+                u32::from(trigger) | u32::from(extra),
+                0,
+            );
+        }
+    };
+    if matches!(trigger, 1 | 2 | 6) {
+        for i in 0..(a.road_count)(st) {
+            process((a.road_tile)(st, i));
+        }
+    } else {
+        process(tile);
+    }
+}
+fn airport_trigger(
+    a: &Services,
+    st: *mut Station,
+    tile: u32,
+    trigger: u8,
+    random: u32,
+    extra: u8,
+) -> bool {
+    let b = unsafe { &*a.airport };
+    let e = (b.entry)(tile);
+    if (a.airport_spec_triggers)(e.spec) & (1 << trigger) == 0 {
+        return false;
+    }
+    crate::newgrf_animation_base::change::<_, _, _, crate::newgrf_animation_base::TileFrame>(
+        a,
+        b,
+        Entry {
+            spec: e.spec,
+            object: st,
+        },
+        tile,
+        0x152,
+        random,
+        u32::from(trigger) | u32::from(extra),
+        0,
+    );
+    true
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_trigger_airport_tile(
+    st: *mut Station,
+    tile: u32,
+    trigger: u8,
+) -> bool {
+    let a = services();
+    airport_trigger(a, st, tile, trigger, a.shared().random(), 0)
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_trigger_airport(st: *mut Station, trigger: u8, cargo: u8) -> bool {
+    let a = services();
+    let area = (a.airport_area)(st);
+    if area.tile == INVALID_TILE {
+        return false;
+    }
+    let mut ret = true;
+    let mut random = a.shared().random();
+    let b = unsafe { &*a.airport };
+    tiles(area, 1_u32 << (a.shared().map_log_x)(), |t| {
+        if !(a.airport_belongs)(st, t) {
+            return;
+        }
+        let e = (b.entry)(t);
+        if !(a.airport_grf)(e.spec) {
+            return;
+        }
+        let extra = if cargo < 64 {
+            (u16::from((a.airport_cargo)(e.spec, cargo)) << 8) as u8
+        } else {
+            0
+        };
+        if airport_trigger(a, st, t, trigger, random, extra) {
+            random = (random & 0xFFFF0000) | (a.shared().random() & 0xFFFF);
+        } else {
+            ret = false;
+        }
+    });
+    ret
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDAnimationServices" ["probe"] => Services {
+        shared,
+        town,
+        industries,
+        construction,
+        industry_tiles,
+        house,
+        industry,
+        station,
+        airport,
+        object,
+        roadstop,
+        state,
+        set_state,
+        frame,
+        ambient,
+        house_spec,
+        road_frame,
+        set_road_frame,
+        rail_area,
+        rail_belongs,
+        station_triggers,
+        road_triggers,
+        rail_spec_triggers,
+        road_spec_triggers,
+        airport_spec_triggers,
+        rail_cargo,
+        road_cargo,
+        airport_cargo,
+        airport_grf,
+        airport_area,
+        airport_belongs,
+        road_count,
+        road_tile,
+    };
+    "OpenTTDAnimationArea" ["probe"] => Area { tile, width, height };
+    "OpenTTDHouseAnimation" ["probe"] => Binding<HouseSpec, TownHandle, u64> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
+    "OpenTTDIndustryAnimation" ["probe"] => Binding<IndustrySpec, IndustryShell, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
+    "OpenTTDStationAnimation" ["probe"] => Binding<RailSpec, BaseStation, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
+    "OpenTTDAirportAnimation" ["probe"] => Binding<AirportSpec, Station, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
+    "OpenTTDObjectAnimation" ["probe"] => Binding<ObjectSpec, Object, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
+    "OpenTTDRoadStopAnimation" ["probe"] => Binding<RoadSpec, BaseStation, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
+}

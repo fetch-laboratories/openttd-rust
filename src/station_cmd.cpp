@@ -8,6 +8,9 @@
 /** @file station_cmd.cpp Handling of station tiles. */
 
 #include "stdafx.h"
+#ifdef WITH_RUST
+#include "rust/animation_ffi.h"
+#endif
 #include "core/flatset_type.hpp"
 #include "aircraft.h"
 #include "bridge_map.h"
@@ -438,7 +441,6 @@ static Station *GetClosestDeletedStation(TileIndex tile)
 
 	return best_station;
 }
-
 
 #endif
 
@@ -2299,7 +2301,6 @@ CommandCost CmdRemoveFromRailWaypoint(DoCommandFlags flags, TileIndex start, Til
 #endif
 }
 
-
 /**
  * Remove a rail station/waypoint
  * @param st The station/waypoint to remove the rail part from
@@ -2380,7 +2381,6 @@ static CommandCost RemoveRailWaypoint(TileIndex tile, DoCommandFlags flags)
 	return RemoveRailStation(Waypoint::GetByTile(tile), flags, _price[PR_CLEAR_WAYPOINT_RAIL]);
 }
 #endif
-
 
 /**
  * @param truck_station Determines whether a stop is #RoadStopType::Bus or #RoadStopType::Truck
@@ -3055,7 +3055,6 @@ static Town *AirportGetNearestTown(const Station *st, uint &mindist)
 {
 	return AirportGetNearestTown(st->airport.GetSpec(), st->airport.rotation, st->airport.tile, AirportTileIterator(st), mindist);
 }
-
 
 #endif
 
@@ -4191,7 +4190,6 @@ static void GetTileDesc_Station(TileIndex tile, TileDesc &td)
 	td.str = str;
 }
 
-
 #ifndef WITH_RUST
 static TrackStatus GetTileTrackStatus_Station(TileIndex tile, TransportType mode, uint sub_mode, DiagDirection side)
 {
@@ -4239,7 +4237,6 @@ static TrackStatus GetTileTrackStatus_Station(TileIndex tile, TransportType mode
 	return CombineTrackStatus(TrackBitsToTrackdirBits(trackbits), TRACKDIR_BIT_NONE);
 }
 #endif
-
 
 #ifdef WITH_RUST
 static void TileLoop_Station(uint32_t tile_index) noexcept
@@ -4317,9 +4314,11 @@ static void TileLoop_Station(TileIndex tile)
 	}
 }
 
-
 static void AnimateTile_Station(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_animate_tile(tile.base());
+#else
 	if (HasStationRail(tile)) {
 		AnimateStationTile(tile);
 		return;
@@ -4334,8 +4333,8 @@ static void AnimateTile_Station(TileIndex tile)
 		AnimateRoadStopTile(tile);
 		return;
 	}
+#endif
 }
-
 
 static bool ClickTile_Station(TileIndex tile)
 {
@@ -4456,7 +4455,6 @@ static bool StationHandleBigTick(BaseStation *st)
 			ge.status.Reset(GoodsEntry::State::AcceptedBigtick);
 		}
 	}
-
 
 	if (!st->facilities.Test(StationFacility::Waypoint)) UpdateStationAcceptance(Station::From(st), true);
 
@@ -4998,7 +4996,6 @@ static uint UpdateStationWaiting(Station *st, CargoType cargo, uint amount, Sour
 	TriggerRoadStopRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
 	TriggerRoadStopAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
 
-
 	SetWindowDirty(WC_STATION_VIEW, st->index);
 	st->MarkTilesDirty(true);
 	return amount;
@@ -5148,7 +5145,6 @@ const StationList &StationFinder::GetStations()
 	}
 	return this->stations;
 }
-
 
 #ifndef WITH_RUST
 static bool CanMoveGoodsToStation(const Station *st, CargoType cargo)
