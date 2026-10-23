@@ -162,7 +162,9 @@ struct TileTypeProcs {
 	GetTileDescProc *get_tile_desc_proc;           ///< Get a description of a tile (for the 'land area information' tool)
 	GetTileTrackStatusProc *get_tile_track_status_proc; ///< Get available tracks and status of a tile
 	ClickTileProc *click_tile_proc;                ///< Called when tile is clicked
+#ifndef WITH_RUST
 	AnimateTileProc *animate_tile_proc;
+#endif
 	TileLoopProc *tile_loop_proc;
 	ChangeTileOwnerProc *change_tile_owner_proc;
 	AddProducedCargoProc *add_produced_cargo_proc; ///< Adds produced cargo of the tile to cargo array supplied as parameter

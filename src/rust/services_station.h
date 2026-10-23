@@ -29,8 +29,9 @@
 #include "../station_map.h"
 #include "../pbs.h"
 
-inline BaseStation *RustAnimationStationBase(uint16_t id) noexcept { return Station::Get(StationID{id}); }
+template <class Handle> inline Handle RustStationGet(uint16_t id) noexcept { return Station::Get(StationID{id}); }
 inline Station *RustAnimationStation(BaseStation *st) noexcept { return Station::From(st); }
+inline bool RustStationAirportMember(const Station *st, uint32_t tile) noexcept { return st->TileBelongsToAirport(TileIndex{tile}); }
 inline bool RustStationHasAnimationTrigger(BaseStation *s, uint8_t trigger) noexcept { return s->cached_anim_triggers.Test(static_cast<StationAnimationTrigger>(trigger)); }
 inline bool RustRoadStopHasAnimationTrigger(BaseStation *s, uint8_t trigger) noexcept { return s->cached_roadstop_anim_triggers.Test(static_cast<StationAnimationTrigger>(trigger)); }
 inline size_t RustRoadStopTileDataCount(BaseStation *s) noexcept { return s->custom_roadstop_tile_data.size(); }

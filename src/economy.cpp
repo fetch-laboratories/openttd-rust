@@ -1807,12 +1807,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		openttd_rust_cargo_delivery_flush(GetCargoDeliveryState(), &_cargo_services);
 	},
 	.vehicle_new_cargo = RustVehicleNewCargoRandomisation,
-
-
-
-
-
-
 	.vehicle_empty = RustVehicleEmptyRandomisation,
 	.station_dirty = [](OpenTTDStation *station) noexcept -> void {
 		Station *st = static_cast<Station *>(station);

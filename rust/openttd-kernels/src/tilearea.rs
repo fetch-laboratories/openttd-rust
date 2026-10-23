@@ -35,10 +35,16 @@ impl TileArea {
         self.h = (ey - sy) as u16;
     }
     /// Original row-major orthogonal tile iterator.
-    pub fn tiles(&self, map: Map) -> impl Iterator<Item = u32> {
+    pub fn tiles(&self, map: Map) -> impl Iterator<Item = u32> + use<> {
         let tile = self.tile;
         let width = u32::from(self.w);
         (0..u32::from(self.h))
-            .flat_map(move |y| (0..width).map(move |x| tile + y * map.size_x() + x))
+            .flat_map(move |y| {
+                (0..width).map(move |x| {
+                    tile.wrapping_add(y.wrapping_mul(map.size_x()))
+                        .wrapping_add(x)
+                })
+            })
+            .take_while(|&tile| tile != crate::tile_type::INVALID_TILE)
     }
 }

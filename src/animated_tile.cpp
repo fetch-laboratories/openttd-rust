@@ -33,7 +33,7 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 {
 	static const OpenTTDAnimationServices services{
 		.shared = &GetRustSharedServices(),
-		.station_base = RustAnimationStationBase, .as_station = RustAnimationStation, .location = RustStationLocation,
+		.station_base = RustStationGet<BaseStation *>, .as_station = RustAnimationStation, .location = RustStationLocation,
 		.is_station = GetRustStationServices().is_station, .rail_randomisation = RustStationRandomisationAt, .road_randomisation = RustRoadStopRandomisationAt,
 		.town = &GetRustTownServices(), .industries = &GetIndustryRustServices(),
 		.construction = &GetIndustryConstructionServices(), .industry_tiles = &GetIndustryTileServices(),
@@ -58,7 +58,7 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.airport_cargo = [](const AirportTileSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },
 		.airport_grf = [](const AirportTileSpec *s) noexcept { return s->grf_prop.grffile != nullptr; },
 		.airport_area = [](Station *s) noexcept -> OpenTTDAnimationArea { return {s->airport.tile.base(), s->airport.w, s->airport.h}; },
-		.airport_belongs = [](Station *s, uint32_t t) noexcept { return s->TileBelongsToAirport(TileIndex{t}); },
+		.airport_belongs = RustStationAirportMember,
 		.road_count = RustRoadStopTileDataCount,
 		.road_tile = RustRoadStopDataTile,
 	};

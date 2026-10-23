@@ -117,7 +117,6 @@ static void TrainArrivalNews(OpenTTDTrainHandle id, uint16_t a) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	Station *st = Station::Get(StationID(a)); AddVehicleNewsItem(GetEncodedString(STR_NEWS_FIRST_TRAIN_ARRIVAL, st->index), v->owner == _local_company ? NewsType::ArrivalCompany : NewsType::ArrivalOther, v->index, st->index); AI::NewEvent(v->owner, new ScriptEventStationFirstVehicle(st->index, v->index)); Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, v->index));
 }
-
 static uint64_t TrainAxisDiag(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return AxisToDiagDir(static_cast<Axis>(a));

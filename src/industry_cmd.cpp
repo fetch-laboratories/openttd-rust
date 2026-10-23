@@ -765,11 +765,9 @@ static void AnimateMineTower(TileIndex tile)
 
 #endif
 
+#ifndef WITH_RUST
 static void AnimateTile_Industry(TileIndex tile)
 {
-#ifdef WITH_RUST
-	openttd_rust_industry_tile_animate(tile.base(), &GetIndustryRustServices(), &GetIndustryConstructionServices(), &GetIndustryTileServices());
-#else
 	IndustryGfx gfx = GetIndustryGfx(tile);
 
 	if (GetIndustryTileSpec(gfx)->animation.status != AnimationStatus::NoAnimation) {
@@ -817,8 +815,8 @@ static void AnimateTile_Industry(TileIndex tile)
 		AnimateMineTower(tile);
 		break;
 	}
-#endif
 }
+#endif
 
 #ifndef WITH_RUST
 static void CreateChimneySmoke(TileIndex tile)
@@ -3533,7 +3531,9 @@ extern const TileTypeProcs _tile_type_industry_procs = {
 	GetTileTrackStatus_Industry, // get_tile_track_status_proc
 #endif
 	ClickTile_Industry,          // click_tile_proc
+#ifndef WITH_RUST
 	AnimateTile_Industry,        // animate_tile_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust scheduler calls the owner directly.
 #else

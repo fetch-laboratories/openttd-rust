@@ -228,7 +228,6 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_update_delta(OpenTTDAircraftVehicle v
 }
 
 
-
 static void OPENTTD_AIRCRAFT_CALL Aircraft_destination_too_far(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); AI::NewEvent(v->owner, new ScriptEventAircraftDestTooFar(v->index));
@@ -438,8 +437,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.dirty_depot = Aircraft_dirty_depot,
 	.first_arrival = Aircraft_first_arrival,
 	.update_delta = Aircraft_update_delta,
-
-
 	.destination_too_far = Aircraft_destination_too_far,
 	.delete_range_news = Aircraft_delete_range_news,
 	.service_order = Aircraft_service_order,

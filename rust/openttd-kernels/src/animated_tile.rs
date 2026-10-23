@@ -88,7 +88,7 @@ pub struct Services {
     pub airport_cargo: extern "C" fn(*const AirportSpec, u8) -> u8,
     pub airport_grf: extern "C" fn(*const AirportSpec) -> bool,
     pub airport_area: extern "C" fn(*mut Station) -> Area,
-    pub airport_belongs: extern "C" fn(*mut Station, u32) -> bool,
+    pub airport_belongs: extern "C" fn(*const Station, u32) -> bool,
     pub road_count: extern "C" fn(*mut BaseStation) -> usize,
     pub road_tile: extern "C" fn(*mut BaseStation, usize) -> u32,
 }
@@ -224,7 +224,7 @@ pub extern "C" fn openttd_rust_animate_tile(tile: u32) {
         MP_STATION => {
             if (unsafe { &*(*((s.movement_services)())).rail_map }.has_station_rail)(tile) {
                 openttd_rust_animate_station(tile);
-            } else if (s.station_type)(tile).0 == 1 {
+            } else if crate::station_map::is_airport(tile, s) {
                 openttd_rust_animate_airport(tile);
             } else if (s.is_any_road_stop)(tile) {
                 openttd_rust_animate_roadstop(tile);
@@ -373,15 +373,14 @@ pub(crate) unsafe fn object_change(
         0,
     );
 }
-fn tiles(area: Area, width: u32, mut f: impl FnMut(u32)) {
-    for y in 0..u32::from(area.height) {
-        for x in 0..u32::from(area.width) {
-            f(area
-                .tile
-                .wrapping_add(y.wrapping_mul(width))
-                .wrapping_add(x));
-        }
+fn tiles(area: Area, log_x: u8, f: impl FnMut(u32)) {
+    crate::tilearea::TileArea {
+        tile: area.tile,
+        w: area.width,
+        h: area.height,
     }
+    .tiles(crate::map_func::Map { log_x })
+    .for_each(f);
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_trigger_station(
@@ -398,7 +397,7 @@ pub extern "C" fn openttd_rust_trigger_station(
     let areas = [0, 2, 2, 1, 1, 1, 2, 0, 1];
     let area = (a.rail_area)(st, tile, areas[usize::from(trigger)]);
     let b = unsafe { &*a.station };
-    tiles(area, 1_u32 << (a.shared().map_log_x)(), |t| {
+    tiles(area, (a.shared().map_log_x)() as u8, |t| {
         if !(a.rail_belongs)(st, t) {
             return;
         }
@@ -509,7 +508,7 @@ pub extern "C" fn openttd_rust_trigger_airport(st: *mut Station, trigger: u8, ca
     }
     let mut ret = true;
     let mut random = a.shared().random();
-    tiles(area, 1_u32 << (a.shared().map_log_x)(), |t| {
+    tiles(area, (a.shared().map_log_x)() as u8, |t| {
         if !(a.airport_belongs)(st, t) {
             return;
         }

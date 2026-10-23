@@ -830,14 +830,12 @@ static bool ClickTile_Object(TileIndex tile)
 	return true;
 }
 
+#ifndef WITH_RUST
 static void AnimateTile_Object(TileIndex tile)
 {
-#ifdef WITH_RUST
-	openttd_rust_animate_tile(tile.base());
-#else
 	AnimateNewObjectTile(tile);
-#endif
 }
+#endif
 
 /**
  * Try to build a lighthouse.
@@ -1089,7 +1087,9 @@ extern const TileTypeProcs _tile_type_object_procs = {
 	GetTileTrackStatus_Object,   // get_tile_track_status_proc
 #endif
 	ClickTile_Object,            // click_tile_proc
+#ifndef WITH_RUST
 	AnimateTile_Object,          // animate_tile_proc
+#endif
 	TileLoop_Object,             // tile_loop_proc
 	ChangeTileOwner_Object,      // change_tile_owner_proc
 	AddProducedCargo_Object,     // add_produced_cargo_proc

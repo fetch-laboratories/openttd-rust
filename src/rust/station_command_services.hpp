@@ -142,8 +142,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.set_custom_rail_index = [](uint32_t tile, uint8_t index) noexcept { SetCustomStationSpecIndex(TileIndex{tile}, index); },
 		.set_random_bits = [](uint32_t tile, uint8_t bits) noexcept { SetStationTileRandomBits(TileIndex{tile}, bits); },
 		.set_gfx = [](uint32_t tile, uint8_t gfx) noexcept { SetStationGfx(TileIndex{tile}, gfx); },
-
-
 		.tile_flag_count = [](const StationSpec *spec) noexcept { return spec->tileflags.size(); },
 		.tile_flags = [](const StationSpec *spec, uint8_t gfx) noexcept { return spec->tileflags[gfx].base(); },
 		.set_tile_flags = [](uint32_t tile, bool blocked, bool pylons, bool wires) noexcept { SetStationTileBlocked(TileIndex{tile}, blocked); SetStationTileHavePylons(TileIndex{tile}, pylons); SetStationTileHaveWires(TileIndex{tile}, wires); },
@@ -181,8 +179,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.set_custom_road_index = [](uint32_t tile, uint8_t index) noexcept { SetCustomRoadStopSpecIndex(TileIndex{tile}, index); },
 		.custom_road_index = [](uint32_t tile) noexcept { return GetCustomRoadStopSpecIndex(TileIndex{tile}); },
 		.stop_random_bits = [](BaseStation *st, uint32_t tile, uint8_t bits) noexcept { st->SetRoadStopRandomBits(TileIndex{tile}, bits); },
-
-
 		.remove_stop_tile_data = [](BaseStation *st, uint32_t tile) noexcept { st->RemoveRoadStopTileData(TileIndex{tile}); },
 		.close_stop_inspect = RustRoadStopCloseInspect,
 		.road_waypoint_area = [](BaseStation *st) noexcept -> OpenTTDStationArea { auto area = Waypoint::From(st)->road_waypoint_area; return {area.tile.base(), area.w, area.h}; },
@@ -211,8 +207,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.make_airport = [](uint32_t tile, uint8_t owner, uint16_t id, uint8_t gfx, uint8_t water) noexcept { MakeAirport(Tile{TileIndex{tile}}, Owner(owner), StationID(id), gfx, static_cast<WaterClass>(water)); },
 		.airport_add = [](BaseStation *st, uint32_t tile) noexcept { Station::From(st)->airport.Add(TileIndex{tile}); },
 		.airport_animated = [](uint8_t gfx) noexcept { return AirportTileSpec::Get(GetTranslatedAirportTileID(gfx))->animation.status != AnimationStatus::NoAnimation; },
-
-
 		.airport_infrastructure = RustStationAirportInfrastructure,
 		.station_view_invalidate = RustStationStationViewInvalidate,
 		.town_view_dirty = [](const OpenTTDTownHandle *town) noexcept { SetWindowDirty(WC_TOWN_VIEW, reinterpret_cast<const Town *>(town)->index); },

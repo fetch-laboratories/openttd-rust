@@ -377,9 +377,7 @@ static Foundation GetFoundation_Town(TileIndex tile, Slope tileh)
  * The newhouses animation supersedes regular ones.
  * @param tile TileIndex of the house to animate.
  */
-#ifdef WITH_RUST
-static void AnimateTile_Town(TileIndex tile) { openttd_rust_house_animate(&GetRustTownServices(), &GetRustSharedServices(), tile.base()); }
-#else
+#ifndef WITH_RUST
 static void AnimateTile_Town(TileIndex tile)
 {
 	if (GetHouseType(tile) >= NEW_HOUSE_OFFSET) {
@@ -4936,7 +4934,9 @@ extern const TileTypeProcs _tile_type_town_procs = {
 	GetTileTrackStatus_Town, // get_tile_track_status_proc
 #endif
 	nullptr,                    // click_tile_proc
+#ifndef WITH_RUST
 	AnimateTile_Town,        // animate_tile_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust scheduler calls the owner directly.
 #else

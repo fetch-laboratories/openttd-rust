@@ -630,7 +630,7 @@ struct RustStationTruncation {
 };
 static const OpenTTDStationServices _rust_station_services = {
 	.station = [](uint16_t id) noexcept -> OpenTTDLoadingStation {
-		Station *st = Station::Get(StationID(id));
+		Station *st = RustStationGet<Station *>(id);
 		return {.native = st, .base = st, .state = st->rust_service.get()};
 	},
 	.station_owner = RustStationOwnerByte<BaseStation>,
@@ -4311,11 +4311,9 @@ static void TileLoop_Station(TileIndex tile)
 }
 
 
+#ifndef WITH_RUST
 static void AnimateTile_Station(TileIndex tile)
 {
-#ifdef WITH_RUST
-	openttd_rust_animate_tile(tile.base());
-#else
 	if (HasStationRail(tile)) {
 		AnimateStationTile(tile);
 		return;
@@ -4330,8 +4328,8 @@ static void AnimateTile_Station(TileIndex tile)
 		AnimateRoadStopTile(tile);
 		return;
 	}
-#endif
 }
+#endif
 
 
 static bool ClickTile_Station(TileIndex tile)
@@ -6025,7 +6023,9 @@ extern const TileTypeProcs _tile_type_station_procs = {
 	GetTileTrackStatus_Station, // get_tile_track_status_proc
 #endif
 	ClickTile_Station,          // click_tile_proc
+#ifndef WITH_RUST
 	AnimateTile_Station,        // animate_tile_proc
+#endif
 	TileLoop_Station,           // tile_loop_proc
 #ifdef WITH_RUST
 	nullptr,                 // Rust ownership dispatcher calls the owner directly.

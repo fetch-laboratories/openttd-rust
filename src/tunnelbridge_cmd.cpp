@@ -2325,7 +2325,9 @@ extern const TileTypeProcs _tile_type_tunnelbridge_procs = {
 	GetTileTrackStatus_TunnelBridge, // get_tile_track_status_proc
 #endif
 	nullptr,                            // click_tile_proc
+#ifndef WITH_RUST
 	nullptr,                            // animate_tile_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust scheduler calls the owner directly.
 #else

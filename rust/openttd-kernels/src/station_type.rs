@@ -19,6 +19,8 @@ pub const MAX_LENGTH_STATION_NAME_CHARS: usize = 32;
 
 /// `StationType::Truck`.
 pub const STATION_TRUCK: u8 = 2;
+/// `StationType::Airport`.
+pub const STATION_AIRPORT: u8 = 1;
 /// `StationType::Bus`.
 pub const STATION_BUS: u8 = 3;
 

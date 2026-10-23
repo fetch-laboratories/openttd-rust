@@ -64,7 +64,7 @@ struct OpenTTDAnimationServices {
 	uint8_t (*airport_cargo)(const AirportTileSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_cargo);
 	bool (*airport_grf)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_grf);
 	OpenTTDAnimationArea (*airport_area)(Station *) noexcept OPENTTD_SERVICE_DEFAULT(airport_area);
-	bool (*airport_belongs)(Station *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_belongs);
+	bool (*airport_belongs)(const Station *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_belongs);
 	size_t (*road_count)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(road_count);
 	uint32_t (*road_tile)(BaseStation *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(road_tile);
 };

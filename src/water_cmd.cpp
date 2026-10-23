@@ -1170,7 +1170,7 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.remove_rail = [](OpenTTDCommandCost *out, uint32_t t, Track track) noexcept { *NativeGroundCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlag::Execute, TileIndex{t}, track); },
 		.airport_tile = RustAirportTile,
 		.airport = [](uint32_t t) noexcept { const Station *st = Station::GetByTile(TileIndex{t}); return OpenTTDAirportGround{.station = st, .tile = RustStationAirportTile(st), .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st)}; },
-		.airport_member = [](const OpenTTDStation *st, uint32_t t) noexcept { return st->TileBelongsToAirport(TileIndex{t}); },
+		.airport_member = RustStationAirportMember,
 		.airport_z = [](uint32_t t) noexcept { return int32_t{RustAirportDeltaZ(RustStationAirportFTA(Station::GetByTile(TileIndex{t})))} + 1; },
 		.victim = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDFloodVictim{.status = RustVehicleStatus(u), .type = RustVehicleVehicleType(u)}; },
 		.aircraft_pose = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDAircraftFloodPose{.tile = RustVehicleTile(u), .z = RustVehicleZ(u), .subtype = RustVehicleSubtype(u)}; },
@@ -1668,7 +1668,9 @@ extern const TileTypeProcs _tile_type_water_procs = {
 	GetTileTrackStatus_Water, // get_tile_track_status_proc
 #endif
 	ClickTile_Water,          // click_tile_proc
+#ifndef WITH_RUST
 	nullptr,                     // animate_tile_proc
+#endif
 	TileLoop_Water,           // tile_loop_proc
 #ifdef WITH_RUST
 	nullptr,                 // Rust ownership dispatcher calls the owner directly.

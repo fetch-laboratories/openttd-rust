@@ -1759,7 +1759,9 @@ impl World<'_> {
                 let point = self.xy(id);
                 let tile = self.tile_virt(i64::from(point.x), i64::from(point.y));
                 crate::animated_tile::openttd_rust_trigger_airport_tile(
-                    (self.station(u32::from(self.target(id)))).cast_mut(),
+                    (crate::animated_tile::services().as_station)(
+                        crate::animated_tile::station_base(self.target(id)),
+                    ),
                     tile,
                     crate::station_type::AAT_AIRPLANE_TOUCHDOWN,
                 );
