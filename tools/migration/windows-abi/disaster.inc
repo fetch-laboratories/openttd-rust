@@ -38,7 +38,7 @@ static void Disasters()
 	vehicles.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<DisasterProbe *>(v)->links; };
 	vehicles.map_log_x = []() noexcept { return 6U; };
 	vehicles.tile = [](OpenTTDVehicle *) noexcept { return 0U; };
-	vehicles.vehicle_type = [](OpenTTDVehicle *v) noexcept { return reinterpret_cast<DisasterProbe *>(v)->type; };
+	vehicles.vehicle_type = [](OpenTTDVehicle *v) noexcept { return static_cast<uint8_t>(reinterpret_cast<DisasterProbe *>(v)->type); };
 	vehicles.subtype = [](OpenTTDVehicle *) noexcept { return uint8_t{0}; };
 	vehicles.z = [](OpenTTDVehicle *) noexcept { return int32_t{0}; };
 	vehicles.base_viewport = [](OpenTTDVehicle *v) noexcept {
