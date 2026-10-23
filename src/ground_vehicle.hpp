@@ -50,6 +50,22 @@ struct GroundVehicleCache {
 	auto operator<=>(const GroundVehicleCache &) const = default;
 };
 
+#ifdef WITH_RUST
+/** One canonical Rust allocation, shared by stable native reference aliases.
+ * Construction (including indexed loading) and destruction follow the shell.
+ * SaveLoad and legacy loaders address gv_flags through the alias, unchanged. */
+struct OpenTTDGroundState { GroundVehicleCache cache; uint16_t flags = 0; };
+extern "C" OpenTTDGroundState *openttd_rust_ground_new();
+extern "C" void openttd_rust_ground_destroy(OpenTTDGroundState *);
+struct GroundStateOwner {
+	OpenTTDGroundState *state;
+	GroundStateOwner() : state(openttd_rust_ground_new()) { new (this->state) OpenTTDGroundState(); }
+	GroundStateOwner(const GroundStateOwner &) = delete;
+	GroundStateOwner &operator=(const GroundStateOwner &) = delete;
+	~GroundStateOwner() { openttd_rust_ground_destroy(this->state); }
+};
+#endif
+
 /** Ground vehicle flags. */
 enum GroundVehicleFlags : uint8_t {
 	GVF_GOINGUP_BIT              = 0,  ///< Vehicle is currently going uphill. (Cached track information for acceleration)
@@ -80,8 +96,14 @@ enum GroundVehicleFlags : uint8_t {
  */
 template <class T, VehicleType Type>
 struct GroundVehicle : public SpecializedVehicle<T, Type> {
+#ifdef WITH_RUST
+	GroundStateOwner rust_ground;
+	GroundVehicleCache &gcache = this->rust_ground.state->cache;
+	uint16_t &gv_flags = this->rust_ground.state->flags;
+#else
 	GroundVehicleCache gcache{}; ///< Cache of often calculated values.
 	uint16_t gv_flags = 0; ///< @see GroundVehicleFlags.
+#endif
 
 	typedef GroundVehicle<T, Type> GroundVehicleBase; ///< Our type
 

@@ -31,6 +31,12 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "GroundVehicleCache" ["probe"] => crate::ground_vehicle::Cache {
+        cached_weight, cached_slope_resistance, cached_max_te, cached_axle_resistance,
+        cached_max_track_speed, cached_power, cached_air_drag, cached_total_length,
+        first_engine, cached_veh_length, last_speed,
+    };
+    "OpenTTDGroundState" ["probe"] => crate::ground_vehicle::State { cache, flags, };
     "Source" ["probe"] => crate::subsidy::Source { id, kind => type, };
     "OpenTTDSubsidyState" ["probe"] => crate::subsidy::State { cargo_type, remaining, awarded, src, dst, };
     "OpenTTDSubsidyCargo" ["probe"] => crate::subsidy::Cargo { object, data, };
