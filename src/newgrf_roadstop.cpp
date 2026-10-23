@@ -26,6 +26,7 @@
 #include "newgrf_animation_base.h"
 #ifdef WITH_RUST
 #include "rust/animation_binding.hpp"
+#include "rust/services_station.h"
 #endif
 #include "newgrf_sound.h"
 
@@ -372,7 +373,7 @@ struct RoadStopAnimationFrameAnimationHelper {
 struct RoadStopAnimationBase {
 	static bool Enabled(const RoadStopSpec *) noexcept { return true; }
 	static bool Random(const RoadStopSpec *s) noexcept { return s->flags.Test(RoadStopSpecFlag::Cb141RandomBits); }
-	static OpenTTDAnimationEntry<RoadStopSpec, BaseStation> Entry(uint32_t t) noexcept { const auto *s = GetRoadStopSpec(TileIndex{t}); return {s, s == nullptr ? nullptr : BaseStation::GetByTile(TileIndex{t})}; }
+	static OpenTTDAnimationEntry<RoadStopSpec, BaseStation> Entry(uint32_t t) noexcept { const auto *s = RustAnimationRoadSpec(t); return {s, s == nullptr ? nullptr : BaseStation::GetByTile(TileIndex{t})}; }
 #else
 struct RoadStopAnimationBase : public AnimationBase<RoadStopAnimationBase, RoadStopSpec, BaseStation, int, GetAnimRoadStopCallback, RoadStopAnimationFrameAnimationHelper> {
 #endif

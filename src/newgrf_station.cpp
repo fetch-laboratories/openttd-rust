@@ -25,6 +25,7 @@
 #include "newgrf_animation_base.h"
 #ifdef WITH_RUST
 #include "rust/animation_binding.hpp"
+#include "rust/services_station.h"
 #endif
 #include "timer/timer_game_calendar.h"
 
@@ -891,7 +892,7 @@ uint16_t GetAnimStationCallback(CallbackID callback, uint32_t param1, uint32_t p
 struct StationAnimationBase {
 	static bool Enabled(const StationSpec *) noexcept { return true; }
 	static bool Random(const StationSpec *s) noexcept { return s->flags.Test(StationSpecFlag::Cb141RandomBits); }
-	static OpenTTDAnimationEntry<StationSpec, BaseStation> Entry(uint32_t t) noexcept { const auto *s = GetStationSpec(TileIndex{t}); return {s, s == nullptr ? nullptr : BaseStation::GetByTile(TileIndex{t})}; }
+	static OpenTTDAnimationEntry<StationSpec, BaseStation> Entry(uint32_t t) noexcept { const auto *s = RustAnimationRailSpec(t); return {s, s == nullptr ? nullptr : BaseStation::GetByTile(TileIndex{t})}; }
 #else
 struct StationAnimationBase : public AnimationBase<StationAnimationBase, StationSpec, BaseStation, int, GetAnimStationCallback, TileAnimationFrameAnimationHelper<BaseStation> > {
 #endif

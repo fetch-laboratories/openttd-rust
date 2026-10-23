@@ -46,6 +46,7 @@ pub struct Binding<S, O, E> {
     pub info: extern "C" fn(*const S) -> Info,
     pub callback: extern "C" fn(u16, u32, u32, *const S, *mut O, u32, E) -> u16,
     pub sound: extern "C" fn(*const S, u8, u32),
+    pub version8: extern "C" fn(*const S) -> bool,
     pub speed_error: extern "C" fn(*const S, u16),
     pub speed_callback: u16,
     pub next_callback: u16,
@@ -96,7 +97,9 @@ pub fn animate<S, O, E: Default, F: Frame<O>>(
     if info.speed_callback {
         let cb = (b.callback)(b.speed_callback, 0, 0, e.spec, e.object, tile, E::default());
         if cb != CALLBACK_FAILED {
-            (b.speed_error)(e.spec, cb);
+            if cb >= 0x100 && (b.version8)(e.spec) {
+                (b.speed_error)(e.spec, cb);
+            }
             speed = (cb as u8).min(16);
         }
     }

@@ -273,8 +273,8 @@ template <typename Check> void CheckTownProtocol(Check check)
 	};
 	const OpenTTDAnimationServices animation{
 		.shared = &services, .house = &animation_house,
-		.state = [](uint32_t) noexcept -> uint8_t { return 1; },
-		.set_state = [](uint32_t tile, uint8_t) noexcept { TownProtocolLeaf(11, tile, 0, 0, 0); },
+		.state = [](uint32_t) noexcept -> AnimatedTileState { return AnimatedTileState::Deleted; },
+		.set_state = [](uint32_t tile, AnimatedTileState) noexcept { TownProtocolLeaf(11, tile, 0, 0, 0); },
 		.house_spec = [](uint16_t) noexcept -> const HouseSpec * { return nullptr; },
 	};
 	RustAnimationScope animation_scope(animation);

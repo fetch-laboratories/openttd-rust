@@ -3,6 +3,7 @@
 #ifndef RUST_ANIMATION_FFI_H
 #define RUST_ANIMATION_FFI_H
 #include "services_ffi.h"
+#include "../animated_tile_map.h"
 #include "town_ffi.h"
 #include "industry_ffi.h"
 struct HouseSpec; struct Town; struct IndustryTileSpec; struct Industry;
@@ -26,6 +27,12 @@ using OpenTTDRoadStopAnimationEntry = OpenTTDAnimationEntry<RoadStopSpec, BaseSt
 struct OpenTTDAnimationArea { uint32_t tile; uint16_t width, height; };
 struct OpenTTDAnimationServices {
 	const OpenTTDSharedServices *shared;
+	BaseStation *(*station_base)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(station_base);
+	Station *(*as_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(as_station);
+	uint32_t (*location)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
+	bool (*is_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
+	void (*rail_randomisation)(BaseStation *, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_randomisation);
+	void (*road_randomisation)(BaseStation *, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_randomisation);
 	const OpenTTDTownLeaves *town;
 	const OpenTTDIndustryServices *industries;
 	const OpenTTDIndustryConstructionServices *construction;
@@ -36,8 +43,8 @@ struct OpenTTDAnimationServices {
 	const OpenTTDAirportAnimation *airport;
 	const OpenTTDObjectAnimation *object;
 	const OpenTTDRoadStopAnimation *roadstop;
-	uint8_t (*state)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(state);
-	void (*set_state)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_state);
+	AnimatedTileState (*state)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(state);
+	void (*set_state)(uint32_t, AnimatedTileState) noexcept OPENTTD_SERVICE_DEFAULT(set_state);
 	uint8_t (*frame)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(frame);
 	bool (*ambient)() noexcept OPENTTD_SERVICE_DEFAULT(ambient);
 	const HouseSpec *(*house_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_spec);
@@ -47,6 +54,10 @@ struct OpenTTDAnimationServices {
 	bool (*rail_belongs)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_belongs);
 	bool (*station_triggers)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_triggers);
 	bool (*road_triggers)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_triggers);
+	const StationSpec *(*rail_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec);
+	const RoadStopSpec *(*road_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_spec);
+	const AirportTileSpec *(*airport_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_spec);
+	Industry *(*industry_object)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_object);
 	uint16_t (*rail_spec_triggers)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec_triggers);
 	uint16_t (*road_spec_triggers)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_triggers);
 	uint16_t (*airport_spec_triggers)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_spec_triggers);

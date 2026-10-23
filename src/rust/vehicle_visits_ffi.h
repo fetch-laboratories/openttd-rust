@@ -63,8 +63,7 @@ struct OpenTTDVehicleVisits {
 	void (*reservation_log)() noexcept OPENTTD_SERVICE_DEFAULT(reservation_log);
 	void (*hide_filling)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(hide_filling);
 	void (*set_occupancy)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_occupancy);
-	void (*station_departure)(OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_departure);
-	void (*road_stop_departure)(OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_stop_departure);
+
 	void (*leave_sound)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(leave_sound);
 	void (*depot_windows)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(depot_windows);
 	void (*ship_depot_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(ship_depot_viewport);

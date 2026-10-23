@@ -123,9 +123,9 @@ pub struct Services {
     /// `v->trip_occupancy = value`.
     pub set_occupancy: extern "C" fn(VehicleRef, u8),
     /// Station randomisation and animation triggers for a departing train.
-    pub station_departure: extern "C" fn(*mut Station, u32),
+
     /// Road stop randomisation and animation triggers for a departing road vehicle.
-    pub road_stop_departure: extern "C" fn(*mut Station, u32),
+
     /// Virtual `PlayLeaveStationSound()`.
     pub leave_sound: extern "C" fn(VehicleRef),
     /// Depot window invalidation (`InvalidateWindowData` only off rails).
@@ -154,7 +154,7 @@ impl Services {
             unsafe { (native.check)(condition()) };
         }
     }
-    fn vehicles(&self) -> &VehicleServices {
+    pub(crate) fn vehicles(&self) -> &VehicleServices {
         self.refit.common.vehicles
     }
     fn maintenance(&self) -> &super::maintenance::Services {
@@ -870,7 +870,12 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
         // Trigger station animation (trains only).
         let tile = (s.vehicles().tile)(v);
         if (s.shared.tile_type)(tile) == MP_STATION {
-            (s.station_departure)(st.native, tile);
+            crate::animated_tile::rail_event(
+                st.base,
+                tile,
+                crate::station_type::SAT_VEHICLE_DEPARTS,
+                crate::station_type::SRT_VEHICLE_DEPARTS,
+            );
         }
         let train = (s.refit.train_handle)(v.0.as_ptr());
         train.set_flags(train.get_flags() | VRF_LEAVING_STATION);
@@ -879,7 +884,12 @@ pub(crate) fn leave_station(v: VehicleRef, s: &Services) {
         // Trigger road stop animation.
         let tile = (s.vehicles().tile)(v);
         if is_station_road_stop_tile(s.shared, tile) {
-            (s.road_stop_departure)(st.native, tile);
+            crate::animated_tile::road_event(
+                st.base,
+                tile,
+                crate::station_type::SAT_VEHICLE_DEPARTS,
+                crate::station_type::SRT_VEHICLE_DEPARTS,
+            );
         }
     }
 
@@ -1145,8 +1155,7 @@ crate::abi::layouts! {
         reservation_log,
         hide_filling,
         set_occupancy,
-        station_departure,
-        road_stop_departure,
+
         leave_sound,
         depot_windows,
         ship_depot_viewport,

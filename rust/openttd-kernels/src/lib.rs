@@ -12,6 +12,7 @@ mod aircraft;
 mod airport;
 mod alternating;
 mod animated_tile;
+mod animated_tile_map;
 mod auth;
 mod base_consist;
 mod base_station_base;

@@ -20,6 +20,8 @@
 #include "rust/animation_ffi.h"
 #include "rust/tile_animation_services.h"
 #include "rust/sound_services.h"
+#include "rust/services_station.h"
+#include "rust/station_service_ffi.h"
 #include "station_base.h"
 #include "newgrf_station.h"
 #include "newgrf_roadstop.h"
@@ -30,12 +32,15 @@
 static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 {
 	static const OpenTTDAnimationServices services{
-		.shared = &GetRustSharedServices(), .town = &GetRustTownServices(), .industries = &GetIndustryRustServices(),
+		.shared = &GetRustSharedServices(),
+		.station_base = RustAnimationStationBase, .as_station = RustAnimationStation, .location = RustStationLocation,
+		.is_station = GetRustStationServices().is_station, .rail_randomisation = RustStationRandomisationAt, .road_randomisation = RustRoadStopRandomisationAt,
+		.town = &GetRustTownServices(), .industries = &GetIndustryRustServices(),
 		.construction = &GetIndustryConstructionServices(), .industry_tiles = &GetIndustryTileServices(),
 		.house = &GetHouseAnimationBinding(), .industry = &GetIndustryAnimationBinding(), .station = &GetStationAnimationBinding(),
 		.airport = &GetAirportAnimationBinding(), .object = &GetObjectAnimationBinding(), .roadstop = &GetRoadStopAnimationBinding(),
-		.state = [](uint32_t t) noexcept { return to_underlying(GetAnimatedTileState(TileIndex{t})); },
-		.set_state = [](uint32_t t, uint8_t s) noexcept { SetAnimatedTileState(TileIndex{t}, static_cast<AnimatedTileState>(s)); },
+		.state = [](uint32_t t) noexcept { return GetAnimatedTileState(TileIndex{t}); },
+		.set_state = [](uint32_t t, AnimatedTileState s) noexcept { SetAnimatedTileState(TileIndex{t}, s); },
 		.frame = OpenTTDAnimationFrame, .ambient = OpenTTDAmbientSound,
 		.house_spec = [](uint16_t h) noexcept -> const HouseSpec * { return HouseSpec::Get(h); },
 		.road_frame = [](BaseStation *s, uint32_t t) noexcept { return s->GetRoadStopAnimationFrame(TileIndex{t}); },
@@ -44,6 +49,8 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.rail_belongs = [](BaseStation *s, uint32_t t) noexcept { return s->TileBelongsToRailStation(TileIndex{t}); },
 		.station_triggers = [](BaseStation *s, uint8_t t) noexcept { return s->cached_anim_triggers.Test(static_cast<StationAnimationTrigger>(t)); },
 		.road_triggers = [](BaseStation *s, uint8_t t) noexcept { return s->cached_roadstop_anim_triggers.Test(static_cast<StationAnimationTrigger>(t)); },
+		.rail_spec = RustAnimationRailSpec, .road_spec = RustAnimationRoadSpec, .airport_spec = RustAnimationAirportSpec,
+		.industry_object = [](uint32_t t) noexcept { return Industry::GetByTile(TileIndex{t}); },
 		.rail_spec_triggers = [](const StationSpec *s) noexcept { return s->animation.triggers.base(); },
 		.road_spec_triggers = [](const RoadStopSpec *s) noexcept { return s->animation.triggers.base(); },
 		.airport_spec_triggers = [](const AirportTileSpec *s) noexcept -> uint16_t { return s->animation.triggers.base(); },

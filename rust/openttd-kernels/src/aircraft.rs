@@ -226,7 +226,7 @@ pub struct Leaves {
     pub dirty_depot: unsafe extern "C" fn(Vehicle),
     pub first_arrival: unsafe extern "C" fn(Vehicle, u16),
     pub update_delta: unsafe extern "C" fn(Vehicle),
-    pub touchdown_animation: unsafe extern "C" fn(Vehicle, u16),
+
     pub destination_too_far: unsafe extern "C" fn(Vehicle),
     pub delete_range_news: unsafe extern "C" fn(Vehicle),
     pub service_order: unsafe extern "C" fn(Vehicle, u16),
@@ -383,12 +383,7 @@ fn service_witness(name: &str, bytes: usize) {
     witness::add(witness::AIRCRAFT_BYTES, bytes as u64);
     if matches!(
         name,
-        "station"
-            | "hangar_height"
-            | "hangar_exit"
-            | "landing_rating"
-            | "first_arrival"
-            | "touchdown_animation"
+        "station" | "hangar_height" | "hangar_exit" | "landing_rating" | "first_arrival"
     ) {
         witness::hit(witness::AIRCRAFT_STATIONS);
     }
@@ -595,7 +590,7 @@ impl World<'_> {
         begin_loading(self; vehicle: Vehicle) -> () => crate::vehicle::visits::begin_loading(vehicle.base(), self.vs.visits());
         dirty_details(self; vehicle: Vehicle) -> () => (self.maintenance().details_dirty)(vehicle.base());
         update_delta(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.update_delta)(vehicle) };
-        touchdown_animation(self; vehicle: Vehicle, station: i64) -> () => unsafe { (self.leaves.touchdown_animation)(vehicle, station as u16) };
+
         destination_too_far(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.destination_too_far)(vehicle) };
         delete_range_news(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.delete_range_news)(vehicle) };
         handle_loading(self; vehicle: Vehicle, second: i64) -> () => self.vs.handle_loading(vehicle.base(), second != 0);
@@ -1762,7 +1757,13 @@ impl World<'_> {
             LANDING => {
                 self.set_state(id, ENDLANDING);
                 self.update_delta(id);
-                self.touchdown_animation(id, i64::from(self.target(id)));
+                let point = self.xy(id);
+                let tile = self.tile_virt(i64::from(point.x), i64::from(point.y));
+                crate::animated_tile::openttd_rust_trigger_airport_tile(
+                    (self.station(u32::from(self.target(id)))).cast_mut(),
+                    tile,
+                    crate::station_type::AAT_AIRPLANE_TOUCHDOWN,
+                );
                 if self.touchdown_sound(id) == 0 {
                     self.play_sound(id, SKID_SOUND);
                 }
@@ -2537,7 +2538,7 @@ crate::abi::layouts! {
         dirty_depot,
         first_arrival,
         update_delta,
-        touchdown_animation,
+
         destination_too_far,
         delete_range_news,
         service_order,

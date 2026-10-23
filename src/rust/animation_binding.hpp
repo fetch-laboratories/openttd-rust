@@ -16,11 +16,10 @@ struct RustAnimationBinding {
 	}
 	static uint16_t Resolve(uint16_t cb, uint32_t a, uint32_t b, const Spec *s, Obj *o, uint32_t t, Extra extra) noexcept { return Callback(static_cast<CallbackID>(cb), a, b, s, o, TileIndex{t}, extra); }
 	static void Sound(const Spec *s, uint8_t sound, uint32_t t) noexcept { PlayTileSound(s->grf_prop.grffile, sound, TileIndex{t}); }
-	static void Error(const Spec *s, uint16_t result) noexcept {
-		if (result >= 0x100 && s->grf_prop.grffile->grf_version >= 8) RustUnknownCallbackResult(s->grf_prop.grfid, Base::cb_animation_speed, result);
-	}
+	static bool Version8(const Spec *s) noexcept { return s->grf_prop.grffile->grf_version >= 8; }
+
 	static const Binding &Get() noexcept {
-		static const Binding binding{.entry = Base::Entry, .info = Info, .callback = Resolve, .sound = Sound, .speed_error = Error,
+		static const Binding binding{.entry = Base::Entry, .info = Info, .callback = Resolve, .sound = Sound, .version8 = Version8, .speed_error = RustFixedSpecCallbackError<Base::cb_animation_speed, Spec>,
 			.speed_callback = Base::cb_animation_speed, .next_callback = Base::cb_animation_next_frame};
 		return binding;
 	}

@@ -65,8 +65,8 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	animation_shared.mark_dirty = [](uint32_t) noexcept {};
 	const OpenTTDAnimationServices animation{
 		.shared = &animation_shared,
-		.state = [](uint32_t) noexcept -> uint8_t { return 1; },
-		.set_state = [](uint32_t tile, uint8_t) noexcept { effect_test_world->animated = tile; },
+		.state = [](uint32_t) noexcept -> AnimatedTileState { return AnimatedTileState::Deleted; },
+		.set_state = [](uint32_t tile, AnimatedTileState) noexcept { effect_test_world->animated = tile; },
 	};
 	RustAnimationScope animation_scope(animation);
 

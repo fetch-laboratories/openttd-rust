@@ -714,12 +714,8 @@ static const OpenTTDStationServices _rust_station_services = {
 	.delete_station = [](OpenTTDBaseStation *handle) noexcept -> void {
 		delete static_cast<BaseStation *>(handle);
 	},
-	.acceptance_animation = [](OpenTTDBaseStation *handle) noexcept -> void {
-		BaseStation *bst = static_cast<BaseStation *>(handle);
-		RustStationAnimation(bst, bst->xy, StationAnimationTrigger::AcceptanceTick);
-		RustRoadStopAnimation(bst, bst->xy, StationAnimationTrigger::AcceptanceTick);
-		if (Station::IsExpected(bst)) TriggerAirportAnimation(Station::From(bst), AirportAnimationTrigger::AcceptanceTick);
-	},
+
+
 	.watched_animation = [](uint32_t tile, uint64_t cargoes) noexcept -> void {
 		TriggerHouseAnimation_WatchedCargoAccepted(TileIndex(tile), cargoes);
 	},
@@ -745,14 +741,8 @@ static const OpenTTDStationServices _rust_station_services = {
 		} if (lg != nullptr) (*lg)[ge.node].UpdateSupply(amount);
 	},
 	.station_list_invalidation = RustStationListInvalidation,
-	.new_cargo_animation = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> void {
-		Station *st = Station::From(static_cast<BaseStation *>(handle));
-		RustStationRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
-		RustStationAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
-		TriggerAirportAnimation(st, AirportAnimationTrigger::NewCargo, cargo);
-		RustRoadStopRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
-		RustRoadStopAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
-	},
+
+
 	.waiting_redraw = [](OpenTTDBaseStation *handle) noexcept -> void {
 		SetWindowDirty(WC_STATION_VIEW, static_cast<BaseStation *>(handle)->index);
 		RustStationMarkTilesDirty(static_cast<BaseStation *>(handle), true);

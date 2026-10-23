@@ -35,6 +35,7 @@ static void RestoreAnimationQueue(const std::vector<TileIndex> &tiles)
 #endif
 }
 struct AnimationGroup : SpriteGroup {
+	AnimationGroup() {} // Preserve the pool index assigned by operator new.
 	uint16_t speed = 0, next = 0;
 	ResolverResult Resolve(ResolverObject &ro) const override {
 		fmt::print(stderr, "OBJECT animation-callback {} {} {}\n", to_underlying(ro.callback), ro.callback_param1, ro.callback_param2);

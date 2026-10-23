@@ -29,6 +29,11 @@
 #include "../station_map.h"
 #include "../pbs.h"
 
+inline BaseStation *RustAnimationStationBase(uint16_t id) noexcept { return Station::Get(StationID{id}); }
+inline Station *RustAnimationStation(BaseStation *st) noexcept { return Station::From(st); }
+inline const StationSpec *RustAnimationRailSpec(uint32_t tile) noexcept { return GetStationSpec(TileIndex{tile}); }
+inline const RoadStopSpec *RustAnimationRoadSpec(uint32_t tile) noexcept { return GetRoadStopSpec(TileIndex{tile}); }
+inline const AirportTileSpec *RustAnimationAirportSpec(uint32_t tile) noexcept { return AirportTileSpec::GetByTile(TileIndex{tile}); }
 inline bool RustStationRectangleEmpty(const BaseStation *station) noexcept { return station->rect.IsEmpty(); }
 /** `&st->goods[cargo].GetOrCreateData().cargo`'s Rust owner. */
 inline OpenTTDCargoList *RustStationCargoOwner(OpenTTDStation *st, uint8_t cargo) noexcept { return static_cast<Station *>(st)->goods[cargo].GetOrCreateData().cargo.RustOwner(); }
@@ -63,9 +68,8 @@ inline uint32_t RustStationHangarTileValue(BaseStation *st, uint32_t index) noex
 inline void RustStationMarkTilesDirty(BaseStation *st, bool cargo) noexcept { Station::From(st)->MarkTilesDirty(cargo); }
 inline void RustStationRandomisation(BaseStation *st, TileIndex tile, StationRandomTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerStationRandomisation(st, tile, trigger, cargo); }
 inline void RustRoadStopRandomisation(Station *st, TileIndex tile, StationRandomTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerRoadStopRandomisation(st, tile, trigger, cargo); }
-inline void RustStationAnimation(BaseStation *st, TileIndex tile, StationAnimationTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerStationAnimation(st, tile, trigger, cargo); }
-inline void RustRoadStopAnimation(BaseStation *st, TileIndex tile, StationAnimationTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerRoadStopAnimation(st, tile, trigger, cargo); }
-inline bool RustAirportTileAnimation(Station *st, TileIndex tile, AirportAnimationTrigger trigger) noexcept { return TriggerAirportTileAnimation(st, tile, trigger); }
+inline void RustStationRandomisationAt(BaseStation *st, uint32_t tile, uint8_t trigger, uint8_t cargo) noexcept { RustStationRandomisation(st, TileIndex{tile}, static_cast<StationRandomTrigger>(trigger), cargo); }
+inline void RustRoadStopRandomisationAt(BaseStation *st, uint32_t tile, uint8_t trigger, uint8_t cargo) noexcept { RustRoadStopRandomisation(Station::From(st), TileIndex{tile}, static_cast<StationRandomTrigger>(trigger), cargo); }
 inline const OpenTTDStation *RustStation(const Station *s) noexcept { return reinterpret_cast<const OpenTTDStation *>(s); }
 inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s); }
 inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return Station::From(s)->airport.tile.base(); }

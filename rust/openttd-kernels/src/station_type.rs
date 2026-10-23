@@ -21,3 +21,26 @@ pub const MAX_LENGTH_STATION_NAME_CHARS: usize = 32;
 pub const STATION_TRUCK: u8 = 2;
 /// `StationType::Bus`.
 pub const STATION_BUS: u8 = 3;
+
+/// `StationAnimationTrigger` values shared by its existing callers.
+pub const SAT_BUILT: u8 = 0;
+pub const SAT_NEW_CARGO: u8 = 1;
+pub const SAT_CARGO_TAKEN: u8 = 2;
+pub const SAT_VEHICLE_ARRIVES: u8 = 3;
+pub const SAT_VEHICLE_DEPARTS: u8 = 4;
+pub const SAT_VEHICLE_LOADS: u8 = 5;
+pub const SAT_ACCEPTANCE_TICK: u8 = 6;
+pub const SAT_PATH_RESERVATION: u8 = 8;
+/// `AirportAnimationTrigger` values.
+pub const AAT_BUILT: u8 = 0;
+pub const AAT_NEW_CARGO: u8 = 2;
+pub const AAT_CARGO_TAKEN: u8 = 3;
+pub const AAT_ACCEPTANCE_TICK: u8 = 4;
+pub const AAT_AIRPLANE_TOUCHDOWN: u8 = 5;
+
+/// `StationRandomTrigger` values: native resolvers retain reseed policy.
+pub const SRT_NEW_CARGO: u8 = 0;
+pub const SRT_CARGO_TAKEN: u8 = 1;
+pub const SRT_VEHICLE_ARRIVES: u8 = 2;
+pub const SRT_VEHICLE_DEPARTS: u8 = 3;
+pub const SRT_VEHICLE_LOADS: u8 = 4;

@@ -273,7 +273,7 @@ struct OpenTTDTrainServices {
 	uint64_t (*all_powered)(OpenTTDTrainHandle, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_powered);
 	uint64_t (*ambient_sound)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(ambient_sound);
 	void (*arrival_news)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_news);
-	void (*arrival_triggers)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(arrival_triggers);
+
 	uint64_t (*axis_diag)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(axis_diag);
 	uint64_t (*backoff)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(backoff);
 	void (*base_viewport)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
