@@ -27,8 +27,7 @@ use crate::clear_map::{CLEAR_DESERT, CLEAR_FIELDS, CLEAR_GRASS, CLEAR_ROCKS, CLE
 use crate::services::{Services, chance16_i};
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES, MP_WATER};
 
-const ARCTIC: u8 = 1;
-const TROPIC: u8 = 2;
+use crate::landscape_type::{ARCTIC, TROPIC};
 const TOYLAND: u8 = 3;
 const GROUND_GRASS: u8 = 0;
 const GROUND_ROUGH: u8 = 1;
@@ -50,7 +49,7 @@ const ETP_NO_SPREAD: u8 = 0;
 const ETP_SPREAD_RAINFOREST: u8 = 1;
 const ETP_SPREAD_ALL: u8 = 2;
 const ETP_NO_GROWTH_NO_SPREAD: u8 = 3;
-const TP_NONE: u8 = 0;
+use crate::tree_cmd::TP_NONE;
 const TP_ORIGINAL: u8 = 1;
 const TP_IMPROVED: u8 = 2;
 const DEFAULT_TREE_STEPS: u32 = 1000;

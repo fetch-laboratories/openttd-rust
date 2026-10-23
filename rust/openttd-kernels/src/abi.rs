@@ -1506,10 +1506,15 @@ layouts! {
         no_train,
         wormhole_free,
     };
+    "OpenTTDTGPSettings" ["landscape"] => crate::tgp::Input { log_x,log_y,terrain,custom_height,height_limit,smoothness,landscape,variety,sea,custom_sea,freeform,borders,seed,creation_log_x,creation_log_y, };
+    "OpenTTDTerrainTemplate" ["landscape"] => crate::landscape_generation::Template {width,height,data,};
+    "OpenTTDFlatTileHeight" ["landscape"] => crate::landscape_generation::FlatHeight {height,flat,};
+    "OpenTTDGenerationLoop" ["landscape"] => crate::landscape_generation::Loop {settings,services,};
+    "OpenTTDLandscapeGenerationSettings" ["landscape"] => crate::landscape_generation::Settings {max_search_nodes,climate,generator,rivers,min_river_length,route_random,terrain,sea,snow_coverage,desert_coverage,tree_placer,height_limit,rotation,heightmap_height,freeform,};
     "OpenTTDHeightmapImage" ["landscape"] => crate::landscape_generation::Image { width, height, data, };
     "OpenTTDHeightmapDecoder" ["landscape"] => crate::landscape_generation::Decoder { context, read, };
     "OpenTTDLandscapeGenerationServices" ["landscape"] => crate::landscape_generation::GenerationServices {
-        shared, clear, water, set_height, inner_tile, make_void, screen_dirty, surrounded_by_water, set_freeform, clear_bridge_middle,
+        shared, clear, water, trees, landscape_commands, water_commands, set_progress, increase_progress, begin_loop, end_loop, set_abort_callback, tgp_settings, terrain_template, flat_height, river, set_snow_line, assert_condition, sea_construct, sea_destroy, sea_insert, sea_contains, sea_size, sea_first, sea_next, set_height, inner_tile, make_void, screen_dirty, surrounded_by_water, set_freeform, clear_bridge_middle,
     };
     "OpenTTDLandscapeCommandStrings" ["landscape"] => crate::landscape_cmd::Strings {
         canal, clear_limit, water, sea_level, high, edge, bridge, bridge_high,

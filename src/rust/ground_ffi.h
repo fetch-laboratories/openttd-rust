@@ -33,6 +33,7 @@ enum VehicleType : uint8_t;
 #include "command_cost_ffi.h"
 /* Post-climate guarded reads only; inactive members contain neutral wire values.
  * Three bytes, returned in one register; density is GetClearDensity's two bits. */
+struct OpenTTDFlatTileHeight { int32_t height; bool flat; };
 struct OpenTTDClearSurface { ClearGround ground; uint8_t density; bool snow; };
 struct OpenTTDFieldFences { uint32_t ne; uint32_t se; uint32_t sw; uint32_t nw; };
 /* Strong IDs (IndustryID16, Owner/CompanyID8) and VehStates8 retain their

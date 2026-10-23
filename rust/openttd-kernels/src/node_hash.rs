@@ -7,7 +7,7 @@
 
 //! Fixed, unseeded hasher for lookup-only YAPF node maps.
 //! Only use it for maps whose iteration order never affects results.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasherDefault, Hasher};
 
 /// Fx-style multiply-rotate hasher; all arithmetic wraps by design.
@@ -50,6 +50,9 @@ impl Hasher for NodeHasher {
 
 /// Lookup-only map with the fixed hasher.
 pub type NodeMap<K, V> = HashMap<K, V, BuildHasherDefault<NodeHasher>>;
+
+/// Lookup-only set with the fixed hasher. Never iterate for simulation order.
+pub type NodeSet<K> = HashSet<K, BuildHasherDefault<NodeHasher>>;
 
 #[cfg(test)]
 mod tests {

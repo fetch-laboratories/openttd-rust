@@ -7,8 +7,8 @@
 
 //! `TerraGenesis` Perlin generator. Owns the temporary height map and every stage.
 //!
-//! Progress can throw in C++, so callers return to C++ between stages. The only
-//! callbacks made inside Rust are nonthrowing leaf calls to the shared RNG.
+//! Progress can abort in C++. The shared cancellation handoff catches that signal,
+//! runs the registered cleanup and returns before the native caller rethrows.
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -19,7 +19,30 @@
     clippy::manual_midpoint // Preserve original operation order and truncation.
 )]
 
-use std::ffi::c_void;
+use crate::genworld::GWP_LANDSCAPE;
+use crate::landscape_generation::{Frame, World};
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+#[allow(missing_docs)]
+pub struct Input {
+    pub log_x: u32,
+    pub log_y: u32,
+    pub terrain: u32,
+    pub custom_height: u32,
+    pub height_limit: u32,
+    pub smoothness: u32,
+    pub landscape: u32,
+    pub variety: u32,
+    pub sea: u32,
+    pub custom_sea: u32,
+    pub freeform: u32,
+    pub borders: u32,
+    pub seed: u32,
+    pub creation_log_x: u32,
+    pub creation_log_y: u32,
+}
+
 const ONE: i16 = 16;
 const PI_2: f64 = std::f64::consts::FRAC_PI_2;
 
@@ -41,23 +64,23 @@ struct Settings {
     creation_log_y: u32,
 }
 impl Settings {
-    fn from_values(v: [u32; 15]) -> Self {
+    fn from_values(v: Input) -> Self {
         Self {
-            log_x: v[0],
-            log_y: v[1],
-            terrain: v[2] as usize,
-            custom_height: v[3],
-            height_limit: v[4],
-            smoothness: v[5] as usize,
-            landscape: v[6],
-            variety: v[7],
-            sea: v[8] as usize,
-            custom_sea: v[9],
-            freeform: v[10] != 0,
-            borders: v[11],
-            seed: v[12],
-            creation_log_x: v[13],
-            creation_log_y: v[14],
+            log_x: v.log_x,
+            log_y: v.log_y,
+            terrain: v.terrain as usize,
+            custom_height: v.custom_height,
+            height_limit: v.height_limit,
+            smoothness: v.smoothness as usize,
+            landscape: v.landscape,
+            variety: v.variety,
+            sea: v.sea as usize,
+            custom_sea: v.custom_sea,
+            freeform: v.freeform != 0,
+            borders: v.borders,
+            seed: v.seed,
+            creation_log_x: v.creation_log_x,
+            creation_log_y: v.creation_log_y,
         }
     }
     fn max_height(&self) -> i16 {
@@ -106,11 +129,17 @@ pub struct Generator {
     heights: Vec<i16>,
     sx: i32,
     sy: i32,
-    random: extern "C" fn() -> u32,
-    range: extern "C" fn(u32) -> u32,
-    stage: u8,
+    random: extern "C" fn(*mut std::ffi::c_void) -> u32,
+    random_context: *mut std::ffi::c_void,
 }
 impl Generator {
+    fn random(&self) -> u32 {
+        (self.random)(self.random_context)
+    }
+    fn range(&self, limit: u32) -> u32 {
+        ((u64::from(self.random()) * u64::from(limit)) >> 32) as u32
+    }
+
     fn index(&self, x: i32, y: i32) -> usize {
         (x + y * (self.sx + 1)) as usize
     }
@@ -126,8 +155,10 @@ impl Generator {
     }
     fn random_height(&self, amplitude: i32) -> i16 {
         // RandomRange's unsigned subtraction converts back to int before A2H.
-        (((self.range)((2 * amplitude + 1) as u32).wrapping_sub(amplitude as u32) as i32) >> 6)
-            as i16
+        ((self
+            .range((2 * amplitude + 1) as u32)
+            .wrapping_sub(amplitude as u32) as i32)
+            >> 6) as i16
     }
     fn generate(&mut self) {
         let start = (10 - self.settings.log_x.min(self.settings.log_y) as i32).max(0);
@@ -289,7 +320,7 @@ impl Generator {
         let sy = sy.clamp(1, 128) as u32;
         let mut c = vec![0u8; (sx * sy) as usize];
         for value in &mut c {
-            *value = (self.range)(4) as u8;
+            *value = self.range(4) as u8;
         }
         for x in 0..self.sx {
             let fx = (sx * x as u32) as f32 / self.sx as f32 + 1.0;
@@ -533,7 +564,7 @@ impl Generator {
             15
         };
         if borders == 16 {
-            borders = (self.random)() & 15;
+            borders = self.random() & 15;
         }
         self.coast_lines(borders);
         self.smooth_slopes(roughness);
@@ -576,82 +607,79 @@ fn interpolated_noise(x: f64, y: f64, prime: i32, seed: u32) -> f64 {
 
 /// Return the generator's height estimate without allocating.
 /// # Safety
-/// `values` points to 15 initialized u32 settings in the documented header order,
-/// with valid game settings (map logs 6..=12, terrain 0..=5, smoothness 0..=3,
-/// landscape 0..=3, variety 0..=10, sea choice 0..=4).
+/// The named settings are initialized with original game settings and dimensions.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_tgp_estimate(values: *const [u32; 15]) -> u32 {
-    // SAFETY: Caller supplies the settings array; no pointer is retained.
-    let settings = Settings::from_values(unsafe { values.read_unaligned() });
+pub unsafe extern "C" fn openttd_rust_tgp_estimate(input: *const Input) -> u32 {
+    let settings = Settings::from_values(unsafe { input.read_unaligned() });
     (settings.max_height() >> 4) as u32
 }
-/// Allocate the private map. The returned owner is destroyed once.
-/// # Safety
-/// `values` has the estimate call's contract; RNG callbacks never throw/reenter
-/// this owner and remain callable until destruction. Calls run on one thread.
+
+// The original height map and abort hook have process scope. No reference to this
+// allocation lives across progress, which may invoke abort and destroy it.
 #[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_tgp_create(
-    values: *const [u32; 15],
-    random: extern "C" fn() -> u32,
-    range: extern "C" fn(u32) -> u32,
-) -> *mut c_void {
-    // SAFETY: The caller supplies the initialized settings array.
-    let settings = Settings::from_values(unsafe { values.read_unaligned() });
-    let sx = 1i32 << settings.log_x;
-    let sy = 1i32 << settings.log_y;
+static mut OWNER: *mut Generator = std::ptr::null_mut();
+#[allow(unsafe_code)]
+extern "C" fn abort() {
+    let owner = unsafe { std::ptr::replace(&raw mut OWNER, std::ptr::null_mut()) };
+    if !owner.is_null() {
+        drop(unsafe { Box::from_raw(owner) });
+    }
+}
+/// Complete native facade loops beside the generator, without an output copy.
+/// Each generator borrow ends before the progress/cancellation callback.
+#[allow(unsafe_code)]
+pub(crate) fn run(world: &World<'_>, frame: *mut Frame, input: Input) -> bool {
+    let settings = Settings::from_values(input);
+    let sx = 1_i32 << settings.log_x;
+    let sy = 1_i32 << settings.log_y;
     let generator = Box::new(Generator {
         settings,
         heights: vec![0; ((sx + 1) * (sy + 1)) as usize],
         sx,
         sy,
-        random,
-        range,
-        stage: 0,
+        random: world.s.random,
+        random_context: world.s.context,
     });
-    Box::into_raw(generator).cast()
-}
-/// Advance generation, returning 1 for a C++ progress event, 0 when complete.
-/// The caller dispatches each progress event before advancing again.
-/// # Safety
-/// `owner` is live and exclusively accessed, returned by create.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_tgp_advance(owner: *mut c_void) -> u8 {
-    // SAFETY: Exclusive live owner, RNG callbacks cannot reenter it.
-    let generator = unsafe { &mut *owner.cast::<Generator>() };
-    match generator.stage {
-        0 => generator.generate(),
-        1 => generator.normalize(),
-        _ => return 0,
+    let owner = Box::into_raw(generator);
+    unsafe {
+        OWNER = owner;
     }
-    generator.stage += 1;
-    1
-}
-/// Copy final tile heights in row-major order after the second progress event.
-/// # Safety
-/// Live exclusive `owner`; `output` writes sx*sy bytes in one allocation and
-/// cannot alias the owner. No output pointer is retained.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_tgp_heights(owner: *const c_void, output: *mut u8) {
-    // SAFETY: Owner and output satisfy the caller's allocation/lifetime contract.
-    let g = unsafe { &*owner.cast::<Generator>() };
-    let output = unsafe { std::slice::from_raw_parts_mut(output, (g.sx * g.sy) as usize) };
-    let max = i32::from(g.settings.max_height() >> 4);
-    for y in 0..g.sy {
-        for x in 0..g.sx {
-            output[(x + y * g.sx) as usize] = i32::from(g.get(x, y) >> 4).clamp(0, max) as u8;
+    (world.a.set_abort_callback)(Some(abort));
+    unsafe {
+        (*owner).generate();
+    }
+    if !(world.a.increase_progress)(frame, GWP_LANDSCAPE) {
+        return false;
+    }
+    unsafe {
+        (*owner).normalize();
+    }
+    if !(world.a.increase_progress)(frame, GWP_LANDSCAPE) {
+        return false;
+    }
+    if input.freeform != 0 {
+        world.void_top_edges();
+    }
+    for y in 0..sy {
+        for x in 0..sx {
+            let height = {
+                let g = unsafe { &*owner };
+                let max = i32::from(g.settings.max_height() >> 4);
+                i32::from(g.get(x, y) >> 4).clamp(0, max) as u32
+            };
+            let tile = world.map.tile_xy(x as u32, y as u32);
+            (world.a.set_height)(tile, height);
+            if (world.a.inner_tile)(tile) {
+                (world.clear.make_clear)(
+                    tile,
+                    crate::services::ClearGroundType(crate::clear_map::CLEAR_GRASS),
+                    3,
+                );
+            }
         }
     }
-}
-/// Free the owner, including when C++ aborts at a progress event.
-/// # Safety
-/// `owner` is live, returned by create, exclusively accessed and destroyed once.
-#[allow(unsafe_code)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_tgp_destroy(owner: *mut c_void) {
-    // SAFETY: Sole matching destruction of the Box created above.
-    drop(unsafe { Box::from_raw(owner.cast::<Generator>()) });
+    abort();
+    (world.a.set_abort_callback)(None);
+    true
 }

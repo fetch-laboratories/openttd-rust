@@ -993,18 +993,61 @@ void RunTileLoop()
 #include "void_map.h"
 #include "rust/presentation_services.h"
 
+#include "rust/generation_services.hpp"
+#include "rust/generation_sea_set.hpp"
+#include "rust/heightmap_services.hpp"
+#include "rust/tgp_ffi.h"
+
+struct RustGenerationLoop {
+	OpenTTDGroundCall ground;
+	OpenTTDObjectLoopFrame objects;
+	RustRoadCommandContext road;
+	OpenTTDLandscapeLoopServices services{RustLandscapeLoopServices(&ground, &objects, &road.view)};
+	OpenTTDGenerationLoop view{GetRustTreeLoopSettings(), &services};
+};
+struct OpenTTDGenerationFrame {
+	std::exception_ptr cancellation;
+	RustGenerationSeaSet sea;
+	std::optional<RustGenerationLoop> loop;
+};
+
 const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() noexcept
 {
 	static const OpenTTDLandscapeGenerationServices services{
 		.shared = &GetRustSharedServices(),
 		.clear = &GetRustClearServices(),
 		.water = &GetRustWaterGroundServices(),
+		.trees = &GetRustTreeServices(),
+		.landscape_commands = &GetRustLandscapeCommandServices(),
+		.water_commands = &GetRustWaterCommandServices(),
+		.set_progress = [](OpenTTDGenerationFrame *f, GenWorldProgress stage, uint32_t total) noexcept { return RunGenerationProgress(f, [=] { SetGeneratingWorldProgress(stage, total); }); },
+		.increase_progress = [](OpenTTDGenerationFrame *f, GenWorldProgress stage) noexcept { return RunGenerationProgress(f, [=] { IncreaseGeneratingWorldProgress(stage); }); },
+		.begin_loop = [](OpenTTDGenerationFrame *f) noexcept { return &f->loop.emplace().view; },
+		.end_loop = [](OpenTTDGenerationFrame *f) noexcept { f->loop.reset(); },
+		.set_abort_callback = [](void (*callback)()) noexcept { GenerateWorldSetAbortCallback(callback); },
+		.tgp_settings = RustTGPSettings,
+		.terrain_template = [](uint32_t index) noexcept {
+			const Sprite *templ = GetSprite(index, SpriteType::MapGen);
+			if (templ == nullptr) UserError("Map generator sprites could not be loaded");
+			return OpenTTDTerrainTemplate{.width = templ->width, .height = templ->height, .data = reinterpret_cast<const uint8_t *>(templ->data)};
+		},
+		.flat_height = RustFlatTileHeight,
+		.river = [](uint32_t t) noexcept { return IsRiver(TileIndex{t}); },
+		.set_snow_line = RustSetSnowLineHeight,
+		.assert_condition = []([[maybe_unused]] bool condition) noexcept { assert(condition); },
+		.sea_construct = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Construct(); },
+		.sea_destroy = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Destroy(); },
+		.sea_insert = [](OpenTTDGenerationFrame *f, uint32_t tile) noexcept { f->sea.Insert(tile); },
+		.sea_contains = [](OpenTTDGenerationFrame *f, uint32_t tile) noexcept { return f->sea.Contains(tile); },
+		.sea_size = [](OpenTTDGenerationFrame *f) noexcept { return f->sea.Size(); },
+		.sea_first = [](OpenTTDGenerationFrame *f) noexcept { return f->sea.First(); },
+		.sea_next = [](OpenTTDGenerationFrame *f) noexcept { return f->sea.Next(); },
 		.set_height = RustSetTileHeight,
 		.inner_tile = RustInnerTile,
 		.make_void = [](uint32_t t) noexcept { MakeVoid(TileIndex{t}); },
 		.screen_dirty = RustScreenDirty,
 		.surrounded_by_water = []() noexcept { return IsMapSurroundedByWater(); },
-		.set_freeform = [](bool value) noexcept { _settings_game.construction.freeform_edges = value; },
+		.set_freeform = RustSetFreeformEdges,
 		.clear_bridge_middle = [](uint32_t t) noexcept { ClearBridgeMiddle(TileIndex{t}); },
 	};
 	return services;
@@ -1030,6 +1073,28 @@ void InitializeLandscape()
 #endif
 }
 
+#ifdef WITH_RUST
+bool GenerateLandscape(uint8_t mode)
+{
+	static_assert(GWP_LANDSCAPE == 1 && GWP_RIVER == 2 && GWM_HEIGHTMAP == 3 && LG_ORIGINAL == 0 && LG_TERRAGENESIS == 1 && MAX_TILE_HEIGHT == 255);
+	static_assert(SPR_MAPGEN_BEGIN == 4845 && TILE_UPDATE_FREQUENCY == 256);
+	OpenTTDGenerationFrame frame;
+	RustHeightmapDecoder decoder(_file_to_saveload.ftype.detailed, _file_to_saveload.name);
+	const auto &g = _settings_game.game_creation;
+	const OpenTTDLandscapeGenerationSettings settings{
+		.max_search_nodes = static_cast<int32_t>(_settings_game.pf.yapf.max_search_nodes),
+		.climate = to_underlying(g.landscape), .generator = g.land_generator,
+		.rivers = g.amount_of_rivers, .min_river_length = g.min_river_length, .route_random = g.river_route_random,
+		.terrain = _settings_game.difficulty.terrain_type, .sea = _settings_game.difficulty.quantity_sea_lakes,
+		.snow_coverage = g.snow_coverage, .desert_coverage = g.desert_coverage, .tree_placer = g.tree_placer,
+		.height_limit = _settings_game.construction.map_height_limit, .rotation = g.heightmap_rotation, .heightmap_height = g.heightmap_height,
+		.freeform = _settings_game.construction.freeform_edges,
+	};
+	bool generated = openttd_rust_generate_landscape(&GetRustLandscapeGenerationServices(), &frame, &decoder.view, settings, mode);
+	if (frame.cancellation) std::rethrow_exception(frame.cancellation);
+	return generated;
+}
+#else
 static const uint8_t _genterrain_tbl_1[5] = { 10, 22, 33, 37, 4  };
 static const uint8_t _genterrain_tbl_2[5] = {  0,  0,  0,  0, 33 };
 
@@ -1885,6 +1950,8 @@ bool GenerateLandscape(uint8_t mode)
 	CreateRivers();
 	return true;
 }
+
+#endif /* WITH_RUST */
 
 void OnTick_Town();
 void OnTick_Trees();

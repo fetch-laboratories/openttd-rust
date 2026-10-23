@@ -180,7 +180,7 @@ Town *OpenTTDTownShellByID(uint32_t id) noexcept
 
 void OpenTTDAssertTownGenerationContext() noexcept { assert(_game_mode == GM_EDITOR || _generating_world); }
 
-bool OpenTTDIsTileFlat(uint32_t tile) noexcept { return IsTileFlat(TileIndex(tile)); }
+bool OpenTTDIsTileFlat(uint32_t tile) noexcept { return RustFlatTileHeight(tile).flat; }
 ClearGround OpenTTDClearGround(uint32_t tile) noexcept { return RustClearGround(Tile{TileIndex{tile}}); }
 TreeGround OpenTTDTreeGround(uint32_t tile) noexcept { return RustTreeGround(Tile{TileIndex{tile}}); }
 
