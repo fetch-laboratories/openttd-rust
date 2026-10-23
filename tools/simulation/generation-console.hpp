@@ -55,6 +55,8 @@ static bool GenerationScenario(std::span<std::string_view> args)
 	if (args.size() != 2) return false;
 	GenerationSnapshot("early");
 	if (args[1] == "snapshot") return true;
+	/* Nested probes must not replace the enclosing new-game progress stage. */
+	extern bool _in_modal_progress; AutoRestoreBackup<bool> modal(_in_modal_progress, false);
 	SavedRandomSeeds seeds; SaveRandomSeeds(&seeds);
 	AutoRestoreBackup<uint8_t> rotation(_settings_game.game_creation.heightmap_rotation, _settings_game.game_creation.heightmap_rotation), height(_settings_game.game_creation.heightmap_height, 31);
 	AutoRestoreBackup<bool> freeform(_settings_game.construction.freeform_edges, _settings_game.construction.freeform_edges);
