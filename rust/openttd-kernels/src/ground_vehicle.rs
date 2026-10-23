@@ -362,10 +362,12 @@ fn sloped_track_owned(s: &Services, v: VehicleRef, o: Owner) -> bool {
 }
 
 pub(crate) fn power_changed(s: &Services, v: VehicleRef) {
+    power_changed_owned(s, v, (s.resolve)(v));
+}
+fn power_changed_owned(s: &Services, v: VehicleRef, o: Owner) {
     if s.assertions {
         assert!((s.first)(v) == v);
     }
-    let o = (s.resolve)(v);
     hit(if o.rail() {
         witness::GROUND_RAIL_POWER
     } else {
@@ -459,13 +461,13 @@ pub(crate) fn cargo_changed(s: &Services, v: VehicleRef) {
         (*o.state).cache.cached_weight = total.max(1);
         (*o.state).cache.cached_axle_resistance = total.wrapping_mul(10) as u16;
     }
-    power_changed(s, v);
+    power_changed_owned(s, v, o);
 }
-pub(crate) fn slope_resistance(s: &Services, v: VehicleRef) -> i64 {
+fn slope_resistance(s: &Services, v: VehicleRef, first: Owner) -> i64 {
     let mut incline = 0_i64;
     let mut part = Some(v);
     while let Some(u) = part {
-        let o = (s.resolve)(u);
+        let o = if u == v { first } else { (s.resolve)(u) };
         let flags = unsafe { (*o.state).flags };
         if flags & (1 << GVF_GOINGUP_BIT) != 0 {
             hit(witness::GROUND_UPHILL);
@@ -503,7 +505,7 @@ pub(crate) fn acceleration(s: &Services, v: VehicleRef) -> i32 {
     };
     resistance +=
         area * i64::from(unsafe { (*o.state).cache.cached_air_drag }) * speed * speed / 1000;
-    resistance += slope_resistance(s, v);
+    resistance += slope_resistance(s, v, o);
     let mode = acceleration_status_for(o, r.status);
     hit(if mode == AS_ACCEL {
         witness::GROUND_ACCELERATE
@@ -553,7 +555,9 @@ pub(crate) fn chain_in_depot(s: &Services, v: VehicleRef) -> bool {
     }
     let mut part = Some(first);
     while let Some(u) = part {
-        if !in_depot(s, u) || (s.vehicle.tile)(u) != (s.vehicle.tile)(v) {
+        if !in_depot(if u == v { o } else { (s.resolve)(u) })
+            || (s.vehicle.tile)(u) != (s.vehicle.tile)(v)
+        {
             return false;
         }
         part = (s.vehicle.next)(u);
@@ -578,8 +582,7 @@ pub(crate) fn crash(s: &Services, v: VehicleRef, flooded: bool) -> u32 {
     // All flags are cleared before base Crash makes its original random draw.
     (s.base_crash)(v, flooded)
 }
-pub(crate) fn update_z_inclination(s: &Services, v: VehicleRef) {
-    let o = (s.resolve)(v);
+fn update_z_inclination(s: &Services, v: VehicleRef, o: Owner) {
     let xy = (s.vehicle.xy)(v);
     let z = (s.slope_z)(xy.x, xy.y, true);
     (s.vehicle.write_z)(v, z);
@@ -606,8 +609,7 @@ pub(crate) fn update_z_inclination(s: &Services, v: VehicleRef) {
         }
     }
 }
-pub(crate) fn update_z(s: &Services, v: VehicleRef) {
-    let o = (s.resolve)(v);
+fn update_z(s: &Services, v: VehicleRef, o: Owner) {
     if unsafe { (*o.state).flags } & SLOPE_FLAGS != 0 {
         if !o.rail() && reversing(s, v) {
             let xy = (s.vehicle.xy)(v);
@@ -642,11 +644,14 @@ pub(crate) fn update_z(s: &Services, v: VehicleRef) {
     }
 }
 pub(crate) fn inclination(s: &Services, v: VehicleRef, new_tile: bool, delta: bool) -> i32 {
+    inclination_owned(s, v, (s.resolve)(v), new_tile, delta)
+}
+fn inclination_owned(s: &Services, v: VehicleRef, o: Owner, new_tile: bool, delta: bool) -> i32 {
     let old_z = (s.vehicle.z)(v);
     if new_tile {
-        update_z_inclination(s, v);
+        update_z_inclination(s, v, o);
     } else {
-        update_z(s, v);
+        update_z(s, v, o);
     }
     (s.viewport)(v, true, delta);
     old_z
@@ -728,8 +733,8 @@ pub(crate) fn move_incline(
 ) -> Moved {
     (gs.move_position)(v, x, y);
     let s = gs.physics;
-    let old_z = inclination(s, v, new_tile, delta);
     let o = (s.resolve)(v);
+    let old_z = inclination_owned(s, v, o, new_tile, delta);
     Moved {
         old_z,
         z: (s.vehicle.z)(v),
@@ -738,8 +743,7 @@ pub(crate) fn move_incline(
     }
 }
 
-fn in_depot(s: &Services, v: VehicleRef) -> bool {
-    let o = (s.resolve)(v);
+fn in_depot(o: Owner) -> bool {
     if o.rail() {
         o.train.track() == crate::track_type::TRACK_BIT_DEPOT
     } else {
