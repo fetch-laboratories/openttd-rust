@@ -108,7 +108,7 @@ static void VehicleConstructEngineCommon(void *shell, const OpenTTDEngine *engin
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	const Engine *e = EngineOf(engine);
 	v->last_station_visited = StationID::Invalid();
-	v->last_loading_station = StationID::Invalid();
+	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 	v->engine_type = e->index;
 	v->reliability = RustEngineReliability(e);
 	v->reliability_spd_dec = e->reliability_spd_dec;

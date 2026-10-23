@@ -354,7 +354,9 @@ public:
 	/** We want to 'destruct' the right class. */
 	virtual ~Vehicle();
 
+#ifndef WITH_RUST
 	void BeginLoading();
+#endif
 	void CancelReservation(StationID next, Station *st);
 	void LeaveStation();
 
@@ -366,7 +368,9 @@ public:
 
 	void DeleteUnreachedImplicitOrders();
 
+#ifndef WITH_RUST
 	void HandleLoading(bool mode = false);
+#endif
 
 	/**
 	 * Marks the vehicles to be redrawn and updates cached variables
@@ -737,7 +741,9 @@ public:
 		this->orders->GetNextStoppingStation(next_station, this);
 	}
 
+#ifndef WITH_RUST
 	void ResetRefitCaps();
+#endif
 
 	void ReleaseUnitNumber();
 

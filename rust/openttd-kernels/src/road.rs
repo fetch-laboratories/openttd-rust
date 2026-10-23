@@ -436,7 +436,8 @@ pub struct Leaves {
     pub ground: *const GroundServices,
     pub shared: *const Services,
     pub max_depot_penalty: extern "C" fn() -> u32,
-    pub process_orders_then_loading: extern "C" fn(VehicleRef) -> u8,
+    /// `ProcessOrders(v)`.
+    pub process_orders: extern "C" fn(VehicleRef),
     pub visual_read: extern "C" fn(VehicleRef) -> VisualRead,
     pub visual_effect_then_speed: extern "C" fn(VehicleRef, u32, bool) -> SpeedRead,
     pub speed_read: extern "C" fn(VehicleRef, bool) -> SpeedRead,
@@ -473,7 +474,8 @@ pub struct Leaves {
     pub should_stop: extern "C" fn(VehicleRef, u32) -> bool,
     pub arrival_read: extern "C" fn(VehicleRef, u16) -> ArrivalRead,
     pub arrival_news: extern "C" fn(VehicleRef, u16, u8, u8),
-    pub begin_loading_at: extern "C" fn(VehicleRef, u16),
+    /// The road stop arrival randomisation and animation triggers.
+    pub arrival_triggers: extern "C" fn(VehicleRef, u16),
     pub overtake_read: extern "C" fn(VehicleRef) -> OvertakeRead,
     pub sound_read: extern "C" fn(VehicleRef) -> SoundRead,
     pub depot_exit: extern "C" fn(VehicleRef, i32, i32),
@@ -1211,7 +1213,7 @@ impl Game<'_> {
             if service!(self.vs.order_type)(v.v) == OT_GOTO_DEPOT
                 && d.tile == service!(self.vs.dest_tile)(v.v)
             {
-                service!(self.vs.enter_depot)(v.v);
+                self.vs.enter_depot(v.v);
                 return true;
             }
             if self.close(v, d.z, x, y, direction, false).is_some() {
@@ -1275,7 +1277,8 @@ impl Game<'_> {
             let headline = if r.bus { 0 } else { 2 } + u8::from(s.tram);
             service!(self.l.arrival_news)(v.v, station, bit, headline);
         }
-        service!(self.l.begin_loading_at)(v.v, station);
+        crate::vehicle::visits::begin_loading(v.v, self.vs.visits());
+        service!(self.l.arrival_triggers)(v.v, station);
     }
     /// Drive-through stop test shared by the blocked and stop-frame paths.
     fn stops_here(&self, v: Part, tile: u32) -> bool {
@@ -1653,7 +1656,9 @@ impl Game<'_> {
             service!(self.gs.set_last_speed)(v.v);
             return true;
         }
-        if service!(self.l.process_orders_then_loading)(v.v) == OT_LOADING {
+        service!(self.l.process_orders)(v.v);
+        self.vs.handle_loading(v.v, false);
+        if service!(self.vs.order_type)(v.v) == OT_LOADING {
             return true;
         }
         if v.state() == DEPOT {

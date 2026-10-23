@@ -1907,3 +1907,29 @@ The existing console adapter compiles the unchanged reference monthly lambda for
 zero-countdown, full-pool retry and disabled-expiry RNG gaps; scalar address checks
 cover the reference-alias boundary. External NewGRF programs, legacy conversion
 fixtures and threaded GUI/presentation remain coverage gaps tracked in #156.
+
+### Vehicle station/depot visits and route-link prediction (#349)
+
+`rust/openttd-kernels/src/vehicle/visits.rs` owns `BeginLoading`, `HandleLoading`,
+`LeaveStation`, `CancelReservation`, `ResetRefitCaps`, `CalcPercentVehicleFilled`,
+`VehicleEnterDepot` with depot-entry recording, all of `LinkRefresher` and both
+`IncreaseStats` overloads. It calls the Rust orders, station loading
+(`prepare_unload`), cargo storage, refit command, train/ship state, maintenance
+and pending-autoreplace owners directly, including aircraft hangar entry.
+Train, ship, aircraft, road, orders,
+station-command and loading callers reach it through `VehicleServices::visits`;
+the C++ member functions are thin facades for the remaining native callers
+(destruction, station removal, saves).
+
+C++ keeps link-graph pool identity, allocation, node/merge/schedule and edge
+updates, station/vehicle shells, NewGRF triggers, window/news/sound leaves,
+and two `CommandCost` stack slots for the nested
+depot refit. Prediction frames are entry-local (`Vec`, `BTreeSet`); temporary
+refit cargo/subtype writes are restored in source order. No ordinary-play
+callback unwinds; `AI::NewEvent` queues. Direct Rust entries preserve original
+assertions through the shared native assertion policy.
+
+`orders-visits` (padhattan-ridge-2000, cargodist) gives the running fleet refit,
+autorefit, conditional, full-load and cross-graph orders and requires the
+`vehicle_visits.*` prediction witnesses; the station scenarios require the
+arrival/refresh/full-load ones. Link-graph pool exhaustion is a #156 gap.

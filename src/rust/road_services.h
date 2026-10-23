@@ -192,13 +192,12 @@ static void OPENTTD_VEHICLE_CALL RoadSvcArrivalNews(OpenTTDVehicle *v, uint16_t 
 	AI::NewEvent(u->owner, new ScriptEventStationFirstVehicle(st->index, u->index));
 	Game::NewEvent(new ScriptEventStationFirstVehicle(st->index, u->index));
 }
-/** `v->BeginLoading()` and the road stop arrival triggers. */
-static void OPENTTD_VEHICLE_CALL RoadSvcBeginLoadingAt(OpenTTDVehicle *v, uint16_t station) noexcept
+/** The road stop arrival triggers after `BeginLoading`. */
+static void OPENTTD_VEHICLE_CALL RoadSvcArrivalTriggers(OpenTTDVehicle *v, uint16_t station) noexcept
 {
 	RoadVehicle *u = RoadOf(v);
 	Station *st = Station::Get(StationID(station));
-	u->BeginLoading();
-	TriggerRoadStopRandomisation(st, u->tile, StationRandomTrigger::VehicleArrives);
+	RustRoadStopRandomisation(st, u->tile, StationRandomTrigger::VehicleArrives);
 	RustRoadStopAnimation(st, u->tile, StationAnimationTrigger::VehicleArrives);
 }
 static OpenTTDRoadOvertakeRead OPENTTD_VEHICLE_CALL RoadSvcOvertakeRead(OpenTTDVehicle *v) noexcept
@@ -293,20 +292,14 @@ static OpenTTDRoadTrackdirRead OPENTTD_VEHICLE_CALL RoadSvcTrackdirRead(OpenTTDV
 	return {.tile = RustVehicleTile(u), .direction = RustVehicleDirection(u), .status = RustVehicleStatus(u)};
 }
 
-static uint8_t OPENTTD_VEHICLE_CALL RoadSvcProcessOrdersThenLoading(OpenTTDVehicle *v) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	ProcessOrders(u);
-	u->HandleLoading();
-	return RustVehicleOrderType(u);
-}
+static void OPENTTD_VEHICLE_CALL RoadSvcProcessOrders(OpenTTDVehicle *v) noexcept { ProcessOrders(VehicleOf(v)); }
 
 static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.vehicle = &_rust_vehicle_services,
 	.ground = &_rust_ground_services<RoadVehicle>,
 	.shared = &_rust_shared_services,
 	.max_depot_penalty = RustMaximumDepotPenalty,
-	.process_orders_then_loading = RoadSvcProcessOrdersThenLoading,
+	.process_orders = RoadSvcProcessOrders,
 	.visual_read = RoadSvcVisualRead,
 	.visual_effect_then_speed = RoadSvcVisualEffectThenSpeed,
 	.speed_read = RoadSvcSpeedRead,
@@ -342,7 +335,7 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.should_stop = RoadSvcShouldStop,
 	.arrival_read = RoadSvcArrivalRead,
 	.arrival_news = RoadSvcArrivalNews,
-	.begin_loading_at = RoadSvcBeginLoadingAt,
+	.arrival_triggers = RoadSvcArrivalTriggers,
 	.overtake_read = RoadSvcOvertakeRead,
 	.sound_read = RoadSvcSoundRead,
 	.depot_exit = RoadSvcDepotExit,

@@ -66,7 +66,8 @@
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
 #include "rust/industry_shell_services.h"
-#include "rust/vehicle_refit_ffi.h"
+#include "rust/vehicle_visits_ffi.h"
+#include "rust/services_station.h"
 #include "rust/command_cost_services.h"
 #endif
 
@@ -1500,7 +1501,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Vehicle *v = VehicleOf(handle);
 		bool refit = v->current_order.IsRefit();
 		return {
-			.ticks = v->load_unload_ticks,
+			.ticks = RustVehicleLoadUnloadTicks(handle),
 			.vehicle_type = v->type,
 			.unload_type = to_underlying(v->current_order.GetUnloadType()),
 			.load_type = to_underlying(v->current_order.GetLoadType()),
@@ -1622,9 +1623,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.has_orders = [](OpenTTDVehicle *handle) noexcept -> bool {
 		Vehicle *v = VehicleOf(handle); return v->orders != nullptr;
 	},
-	.load_unload_ticks = [](OpenTTDVehicle *handle) noexcept -> uint16_t {
-		Vehicle *v = VehicleOf(handle); return v->load_unload_ticks;
-	},
+	.load_unload_ticks = RustVehicleLoadUnloadTicks,
 	.status = GetRustVehicleServices().status,
 	.has_articulated_part = RustVehicleHasArticulated,
 	.is_articulated_part = [](OpenTTDVehicle *handle) noexcept -> bool {
@@ -1695,25 +1694,22 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Vehicle *front = VehicleOf(handle);
 		ErrorUnknownCallbackResult(front->GetEngine()->GetGRFID(), CBID_VEHICLE_LOAD_AMOUNT, value);
 	},
-	.refresh_capacity = [](OpenTTDVehicle *handle) noexcept -> void {
-		Vehicle *front = VehicleOf(handle); LinkRefresher::Run(front, true, true);
-	},
 	.vehicle_dirty = [](OpenTTDVehicle *handle) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
 		SetWindowDirty(GetWindowClassForVehicleType(front->type), front->owner);
 		SetWindowDirty(WC_VEHICLE_DETAILS, front->index);
 		front->MarkDirty();
 	},
-	.update_indicator = [](OpenTTDVehicle *handle) noexcept -> void {
+	.indicator = [](OpenTTDVehicle *handle) noexcept -> bool {
+		const Vehicle *front = VehicleOf(handle);
+		return _game_mode != GM_MENU && (_settings_client.gui.loading_indicators > (uint)(front->owner != _local_company && _local_company != COMPANY_SPECTATOR));
+	},
+	.show_indicator = [](OpenTTDVehicle *handle, uint8_t percent, uint32_t percent_up_down) noexcept -> void {
 		Vehicle *front = VehicleOf(handle);
-		if (_game_mode != GM_MENU && (_settings_client.gui.loading_indicators > (uint)(front->owner != _local_company && _local_company != COMPANY_SPECTATOR))) {
-			StringID percent_up_down = STR_NULL;
-			int percent = CalcPercentVehicleFilled(front, &percent_up_down);
-			if (front->fill_percent_te_id == INVALID_TE_ID) {
-				front->fill_percent_te_id = ShowFillingPercent(front->x_pos, front->y_pos, front->z_pos + 20, percent, percent_up_down);
-			} else {
-				UpdateFillingPercent(front->fill_percent_te_id, percent, percent_up_down);
-			}
+		if (front->fill_percent_te_id == INVALID_TE_ID) {
+			front->fill_percent_te_id = ShowFillingPercent(front->x_pos, front->y_pos, front->z_pos + 20, percent, percent_up_down);
+		} else {
+			UpdateFillingPercent(front->fill_percent_te_id, percent, percent_up_down);
 		}
 	},
 	.set_current_company = GetRustCompanyFinanceServices().set_current_company,
@@ -1813,34 +1809,28 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.flush_delivery = []() noexcept -> void {
 		openttd_rust_cargo_delivery_flush(GetCargoDeliveryState(), &_cargo_services);
 	},
-	.vehicle_new_cargo = [](OpenTTDVehicle *vehicle) noexcept -> void {
-		Vehicle *v = VehicleOf(vehicle);
-		TriggerVehicleRandomisation(v, VehicleRandomTrigger::NewCargo);
-	},
+	.vehicle_new_cargo = RustVehicleNewCargoRandomisation,
 	.cargo_taken = [](OpenTTDStation *station, uint8_t cargo) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
-		TriggerStationRandomisation(st, st->xy, StationRandomTrigger::CargoTaken, cargo);
-		TriggerStationAnimation(st, st->xy, StationAnimationTrigger::CargoTaken, cargo);
+		RustStationRandomisation(st, st->xy, StationRandomTrigger::CargoTaken, cargo);
+		RustStationAnimation(st, st->xy, StationAnimationTrigger::CargoTaken, cargo);
 		TriggerAirportAnimation(st, AirportAnimationTrigger::CargoTaken, cargo);
-		TriggerRoadStopRandomisation(st, st->xy, StationRandomTrigger::CargoTaken, cargo);
-		TriggerRoadStopAnimation(st, st->xy, StationAnimationTrigger::CargoTaken, cargo);
+		RustRoadStopRandomisation(st, st->xy, StationRandomTrigger::CargoTaken, cargo);
+		RustRoadStopAnimation(st, st->xy, StationAnimationTrigger::CargoTaken, cargo);
 	},
 	.train_loads = [](OpenTTDStation *station, OpenTTDVehicle *vehicle) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
-		TriggerStationRandomisation(st, v->tile, StationRandomTrigger::VehicleLoads);
-		TriggerStationAnimation(st, v->tile, StationAnimationTrigger::VehicleLoads);
+		RustStationRandomisation(st, v->tile, StationRandomTrigger::VehicleLoads);
+		RustStationAnimation(st, v->tile, StationAnimationTrigger::VehicleLoads);
 	},
 	.road_loads = [](OpenTTDStation *station, OpenTTDVehicle *vehicle) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
 		Vehicle *v = VehicleOf(vehicle);
-		TriggerRoadStopRandomisation(st, v->tile, StationRandomTrigger::VehicleLoads);
-		TriggerRoadStopAnimation(st, v->tile, StationAnimationTrigger::VehicleLoads);
+		RustRoadStopRandomisation(st, v->tile, StationRandomTrigger::VehicleLoads);
+		RustRoadStopAnimation(st, v->tile, StationAnimationTrigger::VehicleLoads);
 	},
-	.vehicle_empty = [](OpenTTDVehicle *vehicle) noexcept -> void {
-		Vehicle *v = VehicleOf(vehicle);
-		TriggerVehicleRandomisation(v, VehicleRandomTrigger::Empty);
-	},
+	.vehicle_empty = RustVehicleEmptyRandomisation,
 	.station_dirty = [](OpenTTDStation *station) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
 		st->MarkTilesDirty(true);
@@ -1854,11 +1844,9 @@ static const OpenTTDStationLoading _rust_station_loading = {
  * Prepare the vehicle to be unloaded.
  * @param front_v the vehicle to be unloaded
  */
+#ifndef WITH_RUST
 void PrepareUnload(Vehicle *front_v)
 {
-#ifdef WITH_RUST
-	openttd_rust_station_prepare(RustVehicle(front_v), &GetRustStationServices(), &_rust_station_loading);
-#else
 	Station *curr_station = Station::Get(front_v->last_station_visited);
 	curr_station->loading_vehicles.push_back(front_v);
 
@@ -1892,10 +1880,8 @@ void PrepareUnload(Vehicle *front_v)
 			}
 		}
 	}
-#endif
 }
 
-#ifndef WITH_RUST
 /**
  * Gets the amount of cargo the given vehicle can load in the current tick.
  * This is only about loading speed. The free capacity is ignored.
@@ -2543,7 +2529,7 @@ void LoadUnloadStation(Station *st)
 {
 #ifdef WITH_RUST
 	CommandCost cost, temporary;
-	openttd_rust_station_load(st->rust_service.get(), &GetRustStationServices(), &_rust_station_loading, &GetRustVehicleRefitServices(), RustCommandCost(&cost), RustCommandCost(&temporary));
+	openttd_rust_station_load(st->rust_service.get(), &GetRustStationServices(), &_rust_station_loading, &GetRustVehicleVisits(), RustCommandCost(&cost), RustCommandCost(&temporary));
 #else
 	/* No vehicle is here... */
 	if (st->loading_vehicles.empty()) return;
