@@ -415,6 +415,7 @@ pub struct TrainReverseCommandRead {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Leaves {
+    pub physics: &'static crate::ground_vehicle::Services,
     pub read_first: extern "C" fn(Handle) -> Handle,
     pub read_next: extern "C" fn(Handle) -> Handle,
     pub read_previous: extern "C" fn(Handle) -> Handle,
@@ -498,9 +499,7 @@ pub struct Leaves {
     pub write_colourmap: extern "C" fn(Handle, u64),
     pub write_status: extern "C" fn(Handle, u8),
 
-    pub acceleration: extern "C" fn(Handle) -> u64,
     pub acc_model: extern "C" fn(Handle) -> u64,
-    pub acc_type: extern "C" fn(Handle) -> u64,
     pub advance_distance: extern "C" fn(Handle) -> u64,
     pub all_powered: extern "C" fn(Handle, u64) -> u64,
     pub ambient_sound: extern "C" fn(Handle) -> u64,
@@ -516,8 +515,6 @@ pub struct Leaves {
     pub capacity: extern "C" fn(Handle) -> u64,
     pub capacity_error: extern "C" fn(Handle),
     pub cargo_age_default: extern "C" fn(Handle) -> u64,
-    pub cargo_changed: extern "C" fn(Handle),
-    pub chain_depot: extern "C" fn(Handle) -> u64,
     pub check_next: extern "C" fn(Handle),
     pub check_orders: extern "C" fn(Handle),
     pub check_reverse: extern "C" fn(Handle) -> u64,
@@ -529,7 +526,6 @@ pub struct Leaves {
     pub cost_divisor: extern "C" fn(Handle) -> u64,
     pub count_chain: extern "C" fn(Handle) -> u64,
     pub crash_event: extern "C" fn(Handle, u32),
-    pub crash_ground: extern "C" fn(Handle, u8) -> u64,
     pub crash_news: extern "C" fn(Handle, u32),
     pub crash_rating: extern "C" fn(Handle),
     pub crash_sound: extern "C" fn(Handle),
@@ -566,7 +562,6 @@ pub struct Leaves {
     pub has_signals: extern "C" fn(Handle, u32) -> u64,
     pub has_signal_td: extern "C" fn(Handle, u32, u8) -> u64,
     pub hide_fill: extern "C" fn(Handle),
-    pub inclination: extern "C" fn(Handle, u8, u8) -> u64,
     pub invalidate_grf: extern "C" fn(Handle),
     pub invalid_price: extern "C" fn(Handle) -> u64,
     pub is_bridge: extern "C" fn(Handle, u32) -> u64,
@@ -578,7 +573,6 @@ pub struct Leaves {
     pub is_station_any: extern "C" fn(Handle, u32) -> u64,
     pub is_tunnelbridge: extern "C" fn(Handle, u32) -> u64,
     pub large_explosion: extern "C" fn(Handle),
-    pub last_speed: extern "C" fn(Handle),
     pub leave_sound: extern "C" fn(Handle),
     pub leave_station: extern "C" fn(Handle),
     pub leave_unbunch: extern "C" fn(Handle),
@@ -664,7 +658,6 @@ pub struct Leaves {
     pub tunnel_dir: extern "C" fn(Handle, u32) -> u64,
     pub unreserve: extern "C" fn(Handle, u32, u8),
     pub update_delta: extern "C" fn(Handle),
-    pub update_speed: extern "C" fn(Handle, u32, i32, i32) -> u64,
     pub user_default: extern "C" fn(Handle) -> u64,
     pub veh_exit_dir: extern "C" fn(Handle, u8, u8) -> u64,
     pub viewport: extern "C" fn(Handle, u8, u8),
@@ -873,7 +866,7 @@ impl Game<'_> {
         id.set_cached_tilt(u64::from(tilt));
         id.set_cached_curve_speed_mod(u64::from(min_curve_mod as u16));
         id.set_cached_max_curve_speed(u64::from(self.curve_limit(id)));
-        (self.leaves.cargo_changed)(id);
+        crate::ground_vehicle::cargo_changed(self.leaves.physics, id.vehicle());
         if (self.leaves.read_front)(id) != 0 {
             self.update_acceleration(id);
             (self.leaves.consist_windows)(id);
@@ -1015,16 +1008,18 @@ impl Game<'_> {
         let braking = v.status & 2 != 0 || id.flag(0) || id.flag(8);
         let max = self.current_max_speed(id);
         if (self.leaves.acc_model)(id) == 0 {
-            (self.leaves.update_speed)(
-                id,
+            crate::ground_vehicle::update_speed(
+                self.leaves.physics,
+                id.vehicle(),
                 (i64::from(i32::from(v.acceleration) * if braking { -4 } else { 2 }) as u64) as u32,
                 0,
                 (max as u64) as i32,
             ) as i32
         } else {
-            (self.leaves.update_speed)(
-                id,
-                (self.leaves.acceleration)(id) as u32,
+            crate::ground_vehicle::update_speed(
+                self.leaves.physics,
+                id.vehicle(),
+                crate::ground_vehicle::acceleration(self.leaves.physics, id.vehicle()) as u32,
                 (u64::from(!braking) * 2) as i32,
                 (max as u64) as i32,
             ) as i32
@@ -1040,7 +1035,7 @@ impl Game<'_> {
                 break;
             }
         }
-        (self.leaves.cargo_changed)(id);
+        crate::ground_vehicle::cargo_changed(self.leaves.physics, id.vehicle());
         self.update_acceleration(id);
     }
     fn trackdir(&self, id: Handle) -> u8 {
@@ -1281,7 +1276,7 @@ impl Game<'_> {
             id.set_wait_counter(0);
             (self.leaves.write_speed)(id, 0_u16);
             (self.leaves.write_subspeed)(id, 0_u8);
-            (self.leaves.last_speed)(id);
+            crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
             (self.leaves.start_stop_dirty)(id);
         }
     }
@@ -1326,7 +1321,12 @@ impl Game<'_> {
                     && (self.leaves.is_bridge)(Handle::NONE, (self.leaves.read_tile)(id)) != 0
                 {
                     (self.leaves.position)(id);
-                    (self.leaves.inclination)(id, 1, 1);
+                    crate::ground_vehicle::inclination(
+                        self.leaves.physics,
+                        id.vehicle(),
+                        true,
+                        true,
+                    );
                     return;
                 }
             }
@@ -1880,7 +1880,11 @@ impl Game<'_> {
                 if dir != (self.leaves.read_direction)(id) {
                     if prev == Handle::NONE && (self.leaves.acc_model)(id) == 0 {
                         let diff = (self.leaves.read_direction)(id).wrapping_sub(dir) & 7;
-                        let small = if (self.leaves.acc_type)(id) == 2 {
+                        let small = if u64::from(crate::ground_vehicle::acceleration_type(
+                            self.leaves.physics,
+                            id.vehicle(),
+                        )) == 2
+                        {
                             0
                         } else {
                             64
@@ -1936,7 +1940,12 @@ impl Game<'_> {
         (self.leaves.write_x)(id, (x as u64) as i32);
         (self.leaves.write_y)(id, (y as u64) as i32);
         (self.leaves.position)(id);
-        let old_z = (self.leaves.inclination)(id, u8::from(new != old), 0) as i32;
+        let old_z = crate::ground_vehicle::inclination(
+            self.leaves.physics,
+            id.vehicle(),
+            new != old,
+            false,
+        ) as i32;
         if prev == Handle::NONE {
             self.speed_z(id, old_z);
         }
@@ -2028,7 +2037,11 @@ impl Game<'_> {
             }
             (self.leaves.hide_fill)(id);
         }
-        victims = victims.wrapping_add((self.leaves.crash_ground)(id, u8::from(flooded)) as u32);
+        victims = victims.wrapping_add(crate::ground_vehicle::crash(
+            self.leaves.physics,
+            id.vehicle(),
+            flooded,
+        ) as u32);
         id.set_crash_anim_pos(if flooded { 4000 } else { 1 });
         victims
     }
@@ -2201,7 +2214,12 @@ impl Game<'_> {
                 );
                 if id.track() != WORMHOLE {
                     (self.leaves.position)(id);
-                    (self.leaves.inclination)(id, 0, 1);
+                    crate::ground_vehicle::inclination(
+                        self.leaves.physics,
+                        id.vehicle(),
+                        false,
+                        true,
+                    );
                 } else {
                     (self.leaves.viewport)(id, 0, 1);
                 }
@@ -2430,7 +2448,7 @@ impl Game<'_> {
         let mut advance = (self.leaves.advance_distance)(id) as i32;
         if distance < advance {
             if (self.leaves.read_speed)(id) == 0 {
-                (self.leaves.last_speed)(id);
+                crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
             }
         } else {
             self.line_ends(id, true);
@@ -2453,7 +2471,7 @@ impl Game<'_> {
                     (self.leaves.process_orders)(id);
                 }
             }
-            (self.leaves.last_speed)(id);
+            crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
         }
         let mut u = id;
         while u != Handle::NONE {
@@ -2500,7 +2518,11 @@ impl Game<'_> {
         if (self.leaves.servint)(id) == 0 || !self.needs_automatic_servicing(id) {
             return;
         }
-        if (self.leaves.chain_depot)(id) != 0 {
+        if u64::from(crate::ground_vehicle::chain_in_depot(
+            self.leaves.physics,
+            id.vehicle(),
+        )) != 0
+        {
             crate::witness::hit(crate::witness::TRAIN_DEPOT_SERVICE);
             self.service_in_depot(id);
             return;
@@ -2566,7 +2588,11 @@ impl Game<'_> {
             return 0;
         }
         if !id.flag(8) {
-            return if (self.leaves.chain_depot)(id) != 0 {
+            return if u64::from(crate::ground_vehicle::chain_in_depot(
+                self.leaves.physics,
+                id.vehicle(),
+            )) != 0
+            {
                 1
             } else {
                 2
@@ -2625,7 +2651,7 @@ impl Game<'_> {
                     id.set_flag(0, !id.flag(0));
                 } else {
                     (self.leaves.write_speed)(id, 0_u16);
-                    (self.leaves.last_speed)(id);
+                    crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
                     (self.leaves.hide_fill)(id);
                     self.reverse(id);
                 }

@@ -226,7 +226,6 @@ pub struct SpeedRead {
     pub x: i32,
     pub y: i32,
     pub z: i32,
-    pub acceleration: i32,
     pub length: u8,
     pub tram: bool,
 }
@@ -438,8 +437,8 @@ pub struct Leaves {
     pub max_depot_penalty: extern "C" fn() -> u32,
     pub process_orders_then_loading: extern "C" fn(VehicleRef) -> u8,
     pub visual_read: extern "C" fn(VehicleRef) -> VisualRead,
-    pub visual_effect_then_speed: extern "C" fn(VehicleRef, u32, bool) -> SpeedRead,
-    pub speed_read: extern "C" fn(VehicleRef, bool) -> SpeedRead,
+    pub visual_effect_then_speed: extern "C" fn(VehicleRef, u32) -> SpeedRead,
+    pub speed_read: extern "C" fn(VehicleRef) -> SpeedRead,
     pub max_speed_read: extern "C" fn(VehicleRef) -> MaxSpeedRead,
     pub speed_part: extern "C" fn(VehicleRef) -> SpeedPart,
     pub step: extern "C" fn(VehicleRef) -> Step,
@@ -476,6 +475,7 @@ pub struct Leaves {
     pub begin_loading_at: extern "C" fn(VehicleRef, u16),
     pub overtake_read: extern "C" fn(VehicleRef) -> OvertakeRead,
     pub sound_read: extern "C" fn(VehicleRef) -> SoundRead,
+    pub depot_exit_dirty: extern "C" fn(VehicleRef),
     pub depot_exit: extern "C" fn(VehicleRef, i32, i32),
     pub crash_news: extern "C" fn(VehicleRef, u32),
     pub shorten_factor: extern "C" fn(crate::vehicle::EngineRef) -> u8,
@@ -717,9 +717,9 @@ impl Game<'_> {
             let speed = max_speed(v, r.max, self.acceleration_model, self.l);
             // Effects can reenter: the native tail then reobserves all speed/movement
             // inputs. No owner borrow or earlier max-speed observation crosses it.
-            service!(self.l.visual_effect_then_speed)(v.v, speed as u32, self.realistic())
+            service!(self.l.visual_effect_then_speed)(v.v, speed as u32)
         } else {
-            service!(self.l.speed_read)(v.v, self.realistic())
+            service!(self.l.speed_read)(v.v)
         }
     }
     /// `RoadVehicle::UpdateSpeed`, returning the distance and stored speed.
@@ -727,19 +727,21 @@ impl Game<'_> {
         let over = front.overtaking() != 0;
         let (accel, min) = if self.realistic() {
             (
-                r.acceleration.wrapping_add(if over { 256 } else { 0 }) as u32,
+                crate::ground_vehicle::acceleration(self.gs.physics, front.v)
+                    .wrapping_add(if over { 256 } else { 0 }) as u32,
                 if r.max.status & VS_STOPPED != 0 { 0 } else { 4 },
             )
         } else {
             (if over { 512 } else { 256 }, 0)
         };
-        let speed = service!(self.gs.do_update_speed)(
+        let distance = crate::ground_vehicle::update_speed(
+            self.gs.physics,
             front.v,
             accel,
             min,
             max_speed(front, r.max, self.acceleration_model, self.l),
         );
-        (speed.distance, speed.cur_speed)
+        (distance as i32, service!(self.vs.speed)(front.v))
     }
     /// `RoadVehFindCloseTo`; `v` is always the front part.
     fn close(&self, v: Part, z: i32, x: i32, y: i32, dir: u8, update: bool) -> Option<Candidate> {
@@ -842,16 +844,17 @@ impl Game<'_> {
         if service!(self.gs.has_articulated)(v.v) {
             return;
         }
-        let u_speed = if self.original() || service!(self.gs.acceleration)(u.v) > 0 {
-            max_speed(
-                u,
-                service!(self.l.max_speed_read)(u.v),
-                self.acceleration_model,
-                self.l,
-            )
-        } else {
-            i32::from(ur.cur_speed)
-        };
+        let u_speed =
+            if self.original() || crate::ground_vehicle::acceleration(self.gs.physics, u.v) > 0 {
+                max_speed(
+                    u,
+                    service!(self.l.max_speed_read)(u.v),
+                    self.acceleration_model,
+                    self.l,
+                )
+            } else {
+                i32::from(ur.cur_speed)
+            };
         if u_speed
             >= max_speed(
                 v,
@@ -912,7 +915,7 @@ impl Game<'_> {
     }
     /// x/y store, `UpdatePosition`, `UpdateInclination` and `RoadZPosAffectSpeed`.
     fn move_to(&self, v: Part, s: &mut Step, x: i32, y: i32, new_tile: bool, delta: bool) {
-        let m = service!(self.gs.move_incline)(v.v, x, y, new_tile, delta);
+        let m = crate::ground_vehicle::move_incline(self.gs, v.v, x, y, new_tile, delta);
         s.x = x;
         s.y = y;
         s.z = m.z;
@@ -942,9 +945,8 @@ impl Game<'_> {
     }
     /// `RoadVehicle::Crash`.
     fn crash(&self, v: Part, flooded: bool) -> u32 {
-        let c = service!(self.gs.crash)(v.v, flooded);
-        let mut victims = c.victims;
-        if c.front {
+        let mut victims = crate::ground_vehicle::crash(self.gs.physics, v.v, flooded);
+        if crate::vehicle_base::is_front_engine(true, service!(self.vs.subtype)(v.v)) {
             victims = victims.wrapping_add(1);
             if in_range(v.state(), DT_STOP, DT_STOP + 16) {
                 // SAFETY: Live front owner; no owner access spans the stop update.
@@ -1226,6 +1228,8 @@ impl Game<'_> {
         v.set(STATE, u16::from(tdir));
         v.set(FRAME, 6);
         service!(self.l.depot_exit)(v.v, x, y);
+        crate::ground_vehicle::inclination(self.gs.physics, v.v, true, true);
+        service!(self.l.depot_exit_dirty)(v.v);
         true
     }
     /// `FollowPreviousRoadVehicle`.
@@ -1441,7 +1445,10 @@ impl Game<'_> {
                         if s.front {
                             self.update_cache(v, false);
                         }
-                        service!(self.gs.first_cargo_changed)(v.v);
+                        crate::ground_vehicle::cargo_changed(
+                            self.gs.physics,
+                            (self.gs.physics.first)(v.v),
+                        );
                     }
                 }
                 if new_dir != s.direction {
@@ -1606,7 +1613,7 @@ impl Game<'_> {
     }
     /// Wormhole entry: x/y, `UpdatePosition`, `UpdateInclination(true, true)`.
     fn move_without_speed(&self, v: Part, s: &mut Step, x: i32, y: i32) {
-        let m = service!(self.gs.move_incline)(v.v, x, y, true, true);
+        let m = crate::ground_vehicle::move_incline(self.gs, v.v, x, y, true, true);
         s.x = x;
         s.y = y;
         s.z = m.z;
@@ -1650,7 +1657,7 @@ impl Game<'_> {
             return true;
         }
         if b.status & VS_STOPPED != 0 {
-            service!(self.gs.set_last_speed)(v.v);
+            crate::ground_vehicle::last_speed(self.gs.physics, v.v);
             return true;
         }
         if service!(self.l.process_orders_then_loading)(v.v) == OT_LOADING {
@@ -1706,9 +1713,10 @@ impl Game<'_> {
                 }
             }
         }
-        let last = service!(self.gs.set_last_speed)(v.v);
+        crate::ground_vehicle::last_speed(self.gs.physics, v.v);
+        let status = service!(self.vs.status)(v.v);
         let mut final_progress = None;
-        let mut next = if last.status & VS_HIDDEN == 0 {
+        let mut next = if status & VS_HIDDEN == 0 {
             let r = service!(self.gs.update_viewport_then_next)(v.v, v.v);
             if r.next.is_none() {
                 final_progress = Some(r.final_progress);
@@ -2130,4 +2138,10 @@ pub(crate) unsafe fn clear_removed_drive_stop(state: *mut State) {
             p.write(u16::from(value & 9));
         }
     }
+}
+
+/// Shared `RoadVehicle::IsInDepot` over the canonical private owner.
+pub(crate) fn is_in_depot(state: *mut State) -> bool {
+    // SAFETY: caller holds this live shell under the game-state mutex.
+    unsafe { (*state).scalars[STATE] == u16::from(crate::roadveh::RVSB_IN_DEPOT) }
 }

@@ -32,7 +32,9 @@ struct OpenTTDRoadNearestTownTile { bool road, depot, town_owned; };
 struct OpenTTDRoadTownEdge { uint32_t tile, radius; };
 struct OpenTTDRoadWorksEffect { uint32_t id, tile; };
 struct OpenTTDRoadCommandStrings { uint32_t no_road, no_tram, junction, remove_road, no_suitable_road, no_suitable_tram, authority; };
+struct OpenTTDGroundPhysicsServices;
 struct OpenTTDRoadCommandServices {
+	const OpenTTDGroundPhysicsServices *physics;
 	void (*do_build)(const OpenTTDRoadCommandServices *, OpenTTDRoadCommandScratch *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t, uint8_t, uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(do_build);
 	const OpenTTDRailCommandServices *rail_commands;
 	const OpenTTDTownLeaves *town;
@@ -53,7 +55,8 @@ struct OpenTTDRoadCommandServices {
 	OpenTTDCommandCost *(*scratch_cost)(OpenTTDRoadCommandScratch *) noexcept OPENTTD_SERVICE_DEFAULT(scratch_cost);
 	OpenTTDRoadConversionScratch (*conversion_scratch)(OpenTTDRoadCommandScratch *) noexcept OPENTTD_SERVICE_DEFAULT(conversion_scratch);
 	void (*collect_vehicles)(OpenTTDRoadConvertFrame *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(collect_vehicles);
-	void (*cargo_changed)(OpenTTDRoadConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_changed);
+	size_t (*affected_count)(OpenTTDRoadConvertFrame *) noexcept OPENTTD_SERVICE_DEFAULT(affected_count);
+	OpenTTDVehicle *(*affected_at)(OpenTTDRoadConvertFrame *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(affected_at);
 };
 const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept;
 extern "C" {

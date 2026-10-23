@@ -303,7 +303,6 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	}
 
 #ifdef WITH_RUST
-	uint RustDoUpdateSpeed(uint accel, int min_speed, int max_speed) { return this->DoUpdateSpeed(accel, min_speed, max_speed); }
 #endif
 
 	friend struct GroundVehicle<Train, VEH_TRAIN>; // GroundVehicle needs to use the acceleration functions defined at Train.

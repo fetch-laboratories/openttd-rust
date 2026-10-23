@@ -15,6 +15,7 @@
 #include "engine_services.h"
 #include "services_rail.h"
 #include "services_map.h"
+#include "services_road.h"
 #include "road_ffi.h"
 #include "ground_vehicle_ffi.h"
 #include "../safeguards.h"
@@ -22,8 +23,8 @@
 static OpenTTDGroundOwner GroundResolve(OpenTTDVehicle *shell) noexcept
 {
 	Vehicle *v = VehicleOf(shell);
-	if (v->type == VEH_TRAIN) { Train *t = Train::From(v); return {t->rust_ground.state, {t, t->GetRustState()}, v->type}; }
-	return {RoadVehicle::From(v)->rust_ground.state, {nullptr, nullptr}, v->type};
+	if (v->type == VEH_TRAIN) { Train *t = Train::From(v); return {t->rust_ground.state, {t, t->GetRustState()}, nullptr, v->type}; }
+	return {RoadVehicle::From(v)->rust_ground.state, {nullptr, nullptr}, RoadVehicle::From(v)->GetRustState(), v->type};
 }
 static OpenTTDVehicle *GroundFirst(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleFirst(VehicleOf(v))); }
 static OpenTTDGroundPowerInput GroundPowerInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleTile(v), RustVehicleSubtype(v)}; }
@@ -41,8 +42,7 @@ static bool GroundPowered(uint64_t types, RailType type) noexcept { return RustR
 static uint16_t GroundRoadSpeed(OpenTTDVehicle *shell) noexcept { const RoadVehicle *v = RoadVehicle::From(VehicleOf(shell)); return GetRoadTypeInfo(GetRoadType(v->tile, RustRoadTramType(v->roadtype)))->max_speed; }
 static uint32_t GroundSteepness(VehicleType type) noexcept { return type == VEH_TRAIN ? _settings_game.vehicle.train_slope_steepness : _settings_game.vehicle.roadveh_slope_steepness; }
 static int32_t GroundDisplayMaxSpeed(OpenTTDVehicle *shell) noexcept { return RustVehicleDisplayMaxSpeed(VehicleOf(shell)); }
-static bool GroundReversing(OpenTTDVehicle *shell) noexcept { return RoadVehicle::From(VehicleOf(shell))->HasToUseGetSlopePixelZ(); }
-static void GroundViewport(OpenTTDVehicle *shell, bool force, bool delta) noexcept { VehicleOf(shell)->UpdateViewport(force, delta); }
+static void GroundViewport(OpenTTDVehicle *shell, bool force, bool delta) noexcept { Vehicle *v = VehicleOf(shell); if (v->type == VEH_TRAIN) Train::From(v)->UpdateViewport(force, delta); else RoadVehicle::From(v)->UpdateViewport(force, delta); }
 static void GroundDetailsDirty(OpenTTDVehicle *shell) noexcept { SetWindowDirty(WC_VEHICLE_DETAILS, VehicleOf(shell)->index); }
 static bool GroundDepotTile(uint32_t tile, TransportType type) noexcept { return IsDepotTypeTile(TileIndex(tile), type); }
 
@@ -61,11 +61,12 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 		.wagon_power = GroundWagonPower, .wagon_weight = GroundWagonWeight, .powered = GroundPowered, .rail_type = RustRailType,
 		.rail_acceleration = RustRailAccelerationType, .rail_speed = RustRailMaxSpeed, .road_speed = GroundRoadSpeed,
 		.tram = SharedRoadTypeIsTram, .steepness = GroundSteepness, .display_max_speed = GroundDisplayMaxSpeed,
-		.slope_z = SharedSlopePixelZ, .reversing = GroundReversing, .viewport = GroundViewport, .details_dirty = GroundDetailsDirty,
-		.base_crash = RustVehicleBaseCrash, .depot_tile = GroundDepotTile, .in_depot = RustVehicleInDepotOf,
+		.slope_z = SharedSlopePixelZ, .viewport = GroundViewport, .details_dirty = GroundDetailsDirty,
+		.base_crash = RustVehicleBaseCrash, .depot_tile = GroundDepotTile,
 	};
 	return services;
 }
+static_assert(TRACK_BIT_X == 1 && TRACK_BIT_Y == 2 && TRACK_BIT_WORMHOLE == 0x40 && TRACK_BIT_DEPOT == 0x80 && TRACK_BIT_MASK == 0x3f && TRACKDIR_BIT_MASK == 0x3f3f);
 static_assert(GROUND_ACCELERATION == 9800 && GVF_GOINGUP_BIT == 0 && GVF_GOINGDOWN_BIT == 1);
 static_assert(PROP_TRAIN_POWER == 0x0B && PROP_TRAIN_WEIGHT == 0x16 && PROP_TRAIN_TRACTIVE_EFFORT == 0x1F);
 static_assert(PROP_ROADVEH_POWER == 0x13 && PROP_ROADVEH_WEIGHT == 0x14 && PROP_ROADVEH_TRACTIVE_EFFORT == 0x18);

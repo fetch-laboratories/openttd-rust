@@ -104,7 +104,10 @@ pub(crate) unsafe fn road(
         );
     }
     if (r.road_acceleration)() != 0 {
-        (r.road_ground.first_cargo_changed)(unsafe { vehicle_ref(v) });
+        crate::ground_vehicle::cargo_changed(
+            r.road_ground.physics,
+            (r.road_ground.physics.first)(unsafe { vehicle_ref(v) }),
+        );
     }
     (a.position)(v);
     unsafe { articulated::consistency(a, v) };

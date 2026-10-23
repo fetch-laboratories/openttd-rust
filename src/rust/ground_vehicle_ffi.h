@@ -15,7 +15,7 @@ struct Vehicle;
 struct CargoSpec;
 struct OpenTTDGroundState;
 struct OpenTTDRoadLeaves;
-struct OpenTTDGroundOwner { OpenTTDGroundState *state; OpenTTDTrainHandle train; VehicleType kind; };
+struct OpenTTDGroundOwner { OpenTTDGroundState *state; OpenTTDTrainHandle train; OpenTTDRoadState *road; VehicleType kind; };
 struct OpenTTDGroundPowerInput { uint32_t tile; uint8_t subtype; };
 struct OpenTTDGroundWeightInput { const CargoSpec *cargo; OpenTTDCargoList *owner; };
 struct OpenTTDGroundMotion { uint16_t speed; uint8_t status; RoadType roadtype; };
@@ -46,12 +46,10 @@ struct OpenTTDGroundPhysicsServices {
 	uint32_t (*steepness)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(steepness);
 	int32_t (*display_max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(display_max_speed);
 	int32_t (*slope_z)(int32_t, int32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(slope_z);
-	bool (*reversing)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(reversing);
 	void (*viewport)(OpenTTDVehicle *, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(viewport);
 	void (*details_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(details_dirty);
 	uint32_t (*base_crash)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(base_crash);
 	bool (*depot_tile)(uint32_t, TransportType) noexcept OPENTTD_SERVICE_DEFAULT(depot_tile);
-	bool (*in_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(in_depot);
 };
 const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept;
 extern "C" {

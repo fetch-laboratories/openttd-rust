@@ -31,11 +31,11 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
-    "OpenTTDGroundOwner" ["probe"] => crate::ground_vehicle::Owner { state, train, kind, };
+    "OpenTTDGroundOwner" ["probe"] => crate::ground_vehicle::Owner { state, train, road, kind, };
     "OpenTTDGroundPowerInput" ["probe"] => crate::ground_vehicle::PowerInput { tile, subtype, };
     "OpenTTDGroundWeightInput" ["probe"] => crate::ground_vehicle::WeightInput { cargo, owner, };
     "OpenTTDGroundMotion" ["probe"] => crate::ground_vehicle::Motion { speed, status, roadtype, };
-    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, first, power_input, weight_input, motion, capacity, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, tram, steepness, display_max_speed, slope_z, reversing, viewport, details_dirty, base_crash, depot_tile, in_depot, };
+    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, first, power_input, weight_input, motion, capacity, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, tram, steepness, display_max_speed, slope_z, viewport, details_dirty, base_crash, depot_tile, };
 
     "GroundVehicleCache" ["probe"] => crate::ground_vehicle::Cache {
         cached_weight, cached_slope_resistance, cached_max_te, cached_axle_resistance,
@@ -1466,6 +1466,7 @@ layouts! {
         refusal,
     };
     "OpenTTDRoadCommandServices" ["probe"] => crate::road_cmd::RoadCommandServices {
+        physics,
         do_build,
         rail_commands,
         town,
@@ -1486,7 +1487,8 @@ layouts! {
         scratch_cost,
         conversion_scratch,
         collect_vehicles,
-        cargo_changed,
+        affected_count,
+        affected_at,
     };
     "OpenTTDRoadConversionScratch" ["probe"] => crate::road_cmd::ConversionScratch {
         frame,
@@ -1568,7 +1570,6 @@ layouts! {
         is_depot,
         depot_index,
         wait_unbunch,
-        chain_depot,
         servint,
         max_distance,
         tile_valid,
@@ -2224,33 +2225,13 @@ layouts! {
         max_speed,
         maintenance,
     };
-    "OpenTTDGroundMoved" ["probe"] => crate::vehicle::Moved {
-        old_z,
-        z,
-        cur_speed,
-        max_track_speed,
-    };
-    "OpenTTDGroundSpeed" ["probe"] => crate::vehicle::Speed {
-        distance,
-        cur_speed,
-    };
-    "OpenTTDGroundLastSpeed" ["probe"] => crate::vehicle::LastSpeed {
-        status,
-    };
-    "OpenTTDGroundCrash" ["probe"] => crate::vehicle::Crash {
-        victims,
-        front,
-    };
     "OpenTTDGroundServices" ["probe"] => crate::vehicle::GroundServices {
+        physics, move_position,
         cache_begin,
-        move_incline,
+
         update_viewport_then_next,
         turn,
-        do_update_speed,
-        set_last_speed,
-        acceleration,
-        crash,
-        first_cargo_changed,
+
         go_to_depot_service,
         write_first_engine,
         write_length,
@@ -2293,7 +2274,7 @@ layouts! {
         x,
         y,
         z,
-        acceleration,
+
         length,
         tram,
     };
@@ -2431,6 +2412,7 @@ layouts! {
         status,
     };
     "OpenTTDRoadLeaves" ["probe"] => crate::road::Leaves {
+        depot_exit_dirty,
         vehicle,
         ground,
         shared,
@@ -4182,6 +4164,7 @@ layouts! {
         front,
     };
     "OpenTTDTrainServices" ["probe"] => crate::train::Leaves {
+        physics,
         read_first,
         read_next,
         read_previous,
@@ -4263,9 +4246,9 @@ layouts! {
         write_last_station,
         write_colourmap,
         write_status,
-        acceleration,
+
         acc_model,
-        acc_type,
+
         advance_distance,
         all_powered,
         ambient_sound,
@@ -4281,8 +4264,7 @@ layouts! {
         capacity,
         capacity_error,
         cargo_age_default,
-        cargo_changed,
-        chain_depot,
+
         check_next,
         check_orders,
         check_reverse,
@@ -4294,7 +4276,7 @@ layouts! {
         cost_divisor,
         count_chain,
         crash_event,
-        crash_ground,
+
         crash_news,
         crash_rating,
         crash_sound,
@@ -4331,7 +4313,7 @@ layouts! {
         has_signals,
         has_signal_td,
         hide_fill,
-        inclination,
+
         invalidate_grf,
         invalid_price,
         is_bridge,
@@ -4343,7 +4325,7 @@ layouts! {
         is_station_any,
         is_tunnelbridge,
         large_explosion,
-        last_speed,
+
         leave_sound,
         leave_station,
         leave_unbunch,
@@ -4429,7 +4411,7 @@ layouts! {
         tunnel_dir,
         unreserve,
         update_delta,
-        update_speed,
+
         user_default,
         veh_exit_dir,
         viewport,
@@ -4772,7 +4754,6 @@ layouts! {
         articulated,
         crashed,
         stopped,
-        chain_depot,
         first,
         next_unit,
         prev_unit,

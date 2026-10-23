@@ -127,6 +127,7 @@ pub const AS_BRAKE: u8 = 1;
 pub struct Owner {
     pub state: *mut State,
     pub train: crate::train::Handle,
+    pub road: *mut crate::road::State,
     pub kind: VehicleType,
 }
 #[repr(C)]
@@ -179,12 +180,10 @@ pub struct Services {
     pub steepness: extern "C" fn(VehicleType) -> u32,
     pub display_max_speed: extern "C" fn(VehicleRef) -> i32,
     pub slope_z: extern "C" fn(i32, i32, bool) -> i32,
-    pub reversing: extern "C" fn(VehicleRef) -> bool,
     pub viewport: extern "C" fn(VehicleRef, bool, bool),
     pub details_dirty: extern "C" fn(VehicleRef),
     pub base_crash: extern "C" fn(VehicleRef, bool) -> u32,
     pub depot_tile: extern "C" fn(u32, u8) -> bool,
-    pub in_depot: extern "C" fn(VehicleRef) -> bool,
 }
 
 impl Owner {
@@ -520,7 +519,7 @@ pub(crate) fn chain_in_depot(s: &Services, v: VehicleRef) -> bool {
     }
     let mut part = Some(first);
     while let Some(u) = part {
-        if !(s.in_depot)(u) || (s.vehicle.tile)(u) != (s.vehicle.tile)(v) {
+        if !in_depot(s, u) || (s.vehicle.tile)(u) != (s.vehicle.tile)(v) {
             return false;
         }
         part = (s.vehicle.next)(u);
@@ -570,7 +569,7 @@ pub(crate) fn update_z_inclination(s: &Services, v: VehicleRef) {
 pub(crate) fn update_z(s: &Services, v: VehicleRef) {
     let o = (s.resolve)(v);
     if unsafe { (*o.state).flags } & SLOPE_FLAGS != 0 {
-        if !o.rail() && (s.reversing)(v) {
+        if !o.rail() && reversing(s, v) {
             let xy = (s.vehicle.xy)(v);
             let z = (s.slope_z)(xy.x, xy.y, true);
             (s.vehicle.write_z)(v, z);
@@ -685,3 +684,46 @@ entry!(openttd_rust_ground_acceleration_type, acceleration_type => u8);
 entry!(openttd_rust_ground_slope_steepness, slope_steepness => u32);
 entry!(openttd_rust_ground_max_track_speed, max_track_speed => u16);
 entry!(openttd_rust_ground_sloped_track, sloped_track => bool);
+
+/// The native position mutation ends before the Rust inclination update.
+pub(crate) struct Moved {
+    pub old_z: i32,
+    pub z: i32,
+    pub cur_speed: u16,
+    pub max_track_speed: u16,
+}
+pub(crate) fn move_incline(
+    gs: &crate::vehicle::GroundServices,
+    v: VehicleRef,
+    x: i32,
+    y: i32,
+    new_tile: bool,
+    delta: bool,
+) -> Moved {
+    (gs.move_position)(v, x, y);
+    let s = gs.physics;
+    let old_z = inclination(s, v, new_tile, delta);
+    let o = (s.resolve)(v);
+    Moved {
+        old_z,
+        z: (s.vehicle.z)(v),
+        cur_speed: (s.vehicle.speed)(v),
+        max_track_speed: unsafe { (*o.state).cache.cached_max_track_speed },
+    }
+}
+
+fn in_depot(s: &Services, v: VehicleRef) -> bool {
+    let o = (s.resolve)(v);
+    if o.rail() {
+        o.train.track() == crate::track_type::TRACK_BIT_DEPOT
+    } else {
+        crate::road::is_in_depot(o.road)
+    }
+}
+fn reversing(s: &Services, v: VehicleRef) -> bool {
+    let first = (s.first)(v);
+    let o = (s.resolve)(first);
+    let direction = (s.vehicle.direction)(v);
+    // SAFETY: the shared slope predicate gets live owners and immutable services.
+    unsafe { crate::road::openttd_rust_road_slope_pixel(v, first, o.road, direction, s.road) }
+}

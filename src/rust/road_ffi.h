@@ -54,7 +54,7 @@ struct OpenTTDRoadSpeedRead {
 	int32_t x;
 	int32_t y;
 	int32_t z;
-	int32_t acceleration;
+
 	uint8_t length;
 	bool tram;
 };
@@ -189,8 +189,8 @@ struct OpenTTDRoadLeaves {
 	uint32_t (OPENTTD_VEHICLE_CALL *max_depot_penalty)() noexcept OPENTTD_SERVICE_DEFAULT(max_depot_penalty);
 	uint8_t (OPENTTD_VEHICLE_CALL *process_orders_then_loading)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(process_orders_then_loading);
 	OpenTTDRoadVisualRead (OPENTTD_VEHICLE_CALL *visual_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(visual_read);
-	OpenTTDRoadSpeedRead (OPENTTD_VEHICLE_CALL *visual_effect_then_speed)(OpenTTDVehicle *, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(visual_effect_then_speed);
-	OpenTTDRoadSpeedRead (OPENTTD_VEHICLE_CALL *speed_read)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(speed_read);
+	OpenTTDRoadSpeedRead (OPENTTD_VEHICLE_CALL *visual_effect_then_speed)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(visual_effect_then_speed);
+	OpenTTDRoadSpeedRead (OPENTTD_VEHICLE_CALL *speed_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(speed_read);
 	OpenTTDRoadMaxSpeedRead (OPENTTD_VEHICLE_CALL *max_speed_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(max_speed_read);
 	OpenTTDRoadSpeedPart (OPENTTD_VEHICLE_CALL *speed_part)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(speed_part);
 	OpenTTDRoadStep (OPENTTD_VEHICLE_CALL *step)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(step);
@@ -226,6 +226,7 @@ struct OpenTTDRoadLeaves {
 	void (OPENTTD_VEHICLE_CALL *begin_loading_at)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(begin_loading_at);
 	OpenTTDRoadOvertakeRead (OPENTTD_VEHICLE_CALL *overtake_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(overtake_read);
 	OpenTTDRoadSoundRead (OPENTTD_VEHICLE_CALL *sound_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(sound_read);
+	void (OPENTTD_VEHICLE_CALL *depot_exit_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(depot_exit_dirty);
 	void (OPENTTD_VEHICLE_CALL *depot_exit)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_exit);
 	void (OPENTTD_VEHICLE_CALL *crash_news)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_news);
 	uint8_t (OPENTTD_VEHICLE_CALL *shorten_factor)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(shorten_factor);

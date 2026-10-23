@@ -317,22 +317,8 @@ pub struct VehicleServices {
 
 /// Position step result: `UpdateInclination`'s old height, then the new height,
 /// speed and track speed limit it leaves.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Moved {
-    pub old_z: i32,
-    pub z: i32,
-    pub cur_speed: u16,
-    pub max_track_speed: u16,
-}
 
 /// `DoUpdateSpeed` result, then the speed it stored.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Speed {
-    pub distance: i32,
-    pub cur_speed: u16,
-}
 
 /// Post-viewport link; progress is consumed only when this link ends the loop.
 #[repr(C)]
@@ -343,37 +329,22 @@ pub struct ViewportNext {
 }
 
 /// `SetLastSpeed`, then the status it leaves before viewport updates.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct LastSpeed {
-    pub status: u8,
-}
 
 /// `GroundVehicleBase::Crash` victims, then `IsFrontEngine()`.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Crash {
-    pub victims: u32,
-    pub front: bool,
-}
 
 /// `GroundVehicle<T>` members, one C++ template instance per vehicle type.
 #[repr(C)]
 pub struct GroundServices {
+    pub physics: &'static crate::ground_vehicle::Services,
     /// Invalidate the chain `NewGRF` cache, then reset total length.
     pub cache_begin: extern "C" fn(VehicleRef),
     /// Store x/y, `UpdatePosition()`, `UpdateInclination(new_tile, delta)`.
-    pub move_incline: extern "C" fn(VehicleRef, i32, i32, bool, bool) -> Moved,
+    pub move_position: extern "C" fn(VehicleRef, i32, i32),
     /// `UpdateViewport(force, delta)`.
     pub update_viewport_then_next: extern "C" fn(VehicleRef, VehicleRef) -> ViewportNext,
     /// Store the direction, then `UpdateViewport(true, true)`.
     pub turn: extern "C" fn(VehicleRef, u8),
-    pub do_update_speed: extern "C" fn(VehicleRef, u32, i32, i32) -> Speed,
-    pub set_last_speed: extern "C" fn(VehicleRef) -> LastSpeed,
-    pub acceleration: extern "C" fn(VehicleRef) -> i32,
-    pub crash: extern "C" fn(VehicleRef, bool) -> Crash,
     /// `v->First()->CargoChanged()`.
-    pub first_cargo_changed: extern "C" fn(VehicleRef),
     /// Set `GVF_SUPPRESS_IMPLICIT_ORDERS`, then `MakeGoToDepot(depot, Service)`.
     pub go_to_depot_service: extern "C" fn(VehicleRef, u16),
     pub write_first_engine: extern "C" fn(VehicleRef, u16),

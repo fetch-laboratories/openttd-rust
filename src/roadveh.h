@@ -126,7 +126,6 @@ struct RoadVehicle final : public GroundVehicle<RoadVehicle, VEH_ROAD> {
 
 #ifdef WITH_RUST
 	OpenTTDRoadState *GetRustState() const { return this->rust_state.get(); }
-	uint RustDoUpdateSpeed(uint accel, int min_speed, int max_speed) { return this->DoUpdateSpeed(accel, min_speed, max_speed); }
 #endif
 
 	uint8_t GetState() const
