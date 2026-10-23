@@ -509,16 +509,17 @@ impl World<'_> {
             0 => (height, width, self.map.diff(1, 0), self.map.diff(0, 1)),
             1 => (width, height, self.map.diff(0, 1), self.map.diff(1, 0)),
             2 => {
-                tile = tile.wrapping_add(self.map.diff((width - 1) as i32, 0));
+                tile = tile.wrapping_add(self.map.diff(width.wrapping_sub(1) as i32, 0));
                 (height, width, self.map.diff(-1, 0), self.map.diff(0, 1))
             }
             _ => {
-                tile = tile.wrapping_add(self.map.diff(0, (height - 1) as i32));
+                tile = tile.wrapping_add(self.map.diff(0, height.wrapping_sub(1) as i32));
                 (width, height, self.map.diff(0, -1), self.map.diff(1, 0))
             }
         };
         let mut position = 0;
-        for _ in 0..outer {
+        let mut remaining = outer;
+        loop {
             let mut current = tile;
             for _ in 0..inner {
                 let level = u32::from(unsafe { *template.data.add(position) } & 15);
@@ -529,6 +530,11 @@ impl World<'_> {
                 current = current.wrapping_add(step);
             }
             tile = tile.wrapping_add(advance);
+            // Source uses do/while (--h/--w != 0), including unsigned zero.
+            remaining = remaining.wrapping_sub(1);
+            if remaining == 0 {
+                break;
+            }
         }
     }
     fn coverage_line(&self, coverage: u32, edge_multiplier: u32) -> u32 {
