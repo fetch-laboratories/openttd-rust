@@ -67,6 +67,13 @@ pub struct EconomyDate(pub i32);
 pub struct CommandCost {
     _private: [u8; 0],
 }
+/// Opaque native stack capacity; no native field is read, copied or represented.
+/// Native compilation pins sufficient size/alignment on every supported platform.
+#[repr(C, align(16))]
+pub struct CommandCostStorage {
+    /// Uninterpreted, uninitialized capacity lent to native lifetime operations.
+    pub storage: [std::mem::MaybeUninit<u8>; 128],
+}
 /// Native `ExpensesType : uint8_t` carrier.
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -77,6 +84,10 @@ pub struct ExpenseType(pub u8);
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CommandCostServices {
+    /// Start a native `CommandCost` lifetime in pinned opaque stack storage.
+    pub construct: unsafe extern "C" fn(*mut CommandCostStorage) -> *mut CommandCost,
+    /// End exactly the native lifetime begun by construct.
+    pub destroy: unsafe extern "C" fn(*mut CommandCost),
     /// Assign native successful zero cost.
     pub zero: extern "C" fn(*mut CommandCost),
     /// Assign the native `StringID` error constructor, including `INVALID_STRING_ID`.
@@ -123,7 +134,7 @@ pub struct CommandServices {
     /// Canonical infrastructure window invalidation.
     pub infrastructure_dirty: extern "C" fn(u8),
     /// Original `CMD_LANDSCAPE_CLEAR`, with actual `DoCommandFlags` width.
-    pub landscape_clear: extern "C" fn(*mut CommandCost, u32, u16),
+    pub landscape_commands: extern "C" fn() -> *const crate::landscape_cmd::LandscapeServices,
     /// Original `CheckTileOwnership`, preserving native encoded errors.
     pub tile_ownership: unsafe extern "C" fn(*mut CommandCost, u32),
     /// Original `CheckOwnership`.
@@ -153,88 +164,9 @@ pub struct ByteSpan {
     pub size: usize,
 }
 
-/// Allocation descriptor acquired once by an audited native entry. The base
-/// pointer comes from `Tile::base_tiles.get()`, with the full allocation's provenance.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct TileTypeAllocation {
-    /// Allocation-derived bytes; null only together with a zero count.
-    pub base: *const u8,
-    /// Actual native `Map::Size()` at acquisition, not a copied tile snapshot;
-    /// zero selects the original callback backend for every read.
-    pub count: u32,
-}
+pub use crate::map_func::TileTypeAllocation;
+pub(crate) use crate::map_func::{BaseTileLayout, ExtendedTileLayout, TileTypeAccess};
 
-/// Layout-only shell for the actual native base tile. Never create a reference,
-/// read or copy a value of this type; it supplies stride/ABI metadata only.
-#[repr(C)]
-pub(crate) struct BaseTileLayout {
-    pub kind: u8,
-    pub height: u8,
-    pub m2: u16,
-    pub m1: u8,
-    pub m3: u8,
-    pub m4: u8,
-    pub m5: u8,
-}
-
-/// One shared reader with callback and audited entry-resolved raw backends.
-/// No clone/copy implementation: allocation validity covers this entry-local
-/// reader's entire lifetime. No map reference or slice is ever formed.
-pub(crate) struct TileTypeAccess {
-    allocation: TileTypeAllocation,
-    callback: extern "C" fn(u32) -> u8,
-}
-impl TileTypeAccess {
-    /// Resolve the audited allocation once, retaining only descriptor metadata.
-    /// # Safety
-    /// A nonzero count needs a nonnull base that retains provenance for `count * sizeof(TileBase)` live,
-    /// initialized bytes, within `isize::MAX`, until this reader is dropped. Map
-    /// reset and game-state-mutex yield are excluded throughout the entry. Each
-    /// read must be serialized with native writes; native aliases are permitted.
-    pub(crate) unsafe fn raw(
-        allocation: TileTypeAllocation,
-        callback: extern "C" fn(u32) -> u8,
-    ) -> Self {
-        Self {
-            allocation,
-            callback,
-        }
-    }
-
-    /// Reader for entries without an audited allocation: every read uses the
-    /// original noexcept accessor.
-    pub(crate) fn callback(callback: extern "C" fn(u32) -> u8) -> Self {
-        Self {
-            allocation: TileTypeAllocation {
-                base: std::ptr::null(),
-                count: 0,
-            },
-            callback,
-        }
-    }
-
-    /// Read the original high nibble at this observation point. Out-of-range
-    /// reads go through the original native accessor/assertion policy; no new
-    /// rejection, panic or unchecked in-range-only timing shortcut is added.
-    #[inline]
-    #[allow(clippy::cast_possible_truncation)]
-    pub(crate) fn read(&self, tile: u32) -> u8 {
-        if tile < self.allocation.count {
-            // SAFETY: Constructor contract gives live allocation provenance and
-            // serialization. Original map bounds keep the byte offset in isize
-            // even on 32-bit targets. Exactly one initialized u8 is read; no
-            // Rust/C++ field reference is made or retained across a callback.
-            let offset = (tile as usize) * std::mem::size_of::<BaseTileLayout>()
-                + std::mem::offset_of!(BaseTileLayout, kind);
-            unsafe { self.allocation.base.add(offset).read() >> 4 }
-        } else {
-            (self.callback)(tile)
-        }
-    }
-}
-
-/// Default native ABI probe of the same shared reader used by every owner.
 /// # Safety
 /// For nonzero counts, uphold `TileTypeAccess::raw`'s validity/serialization
 /// contract for this call. The callback is the original noexcept accessor or an
@@ -537,6 +469,11 @@ pub struct Services {
     /// canonical service owner and index. Visits may reenter but never add or
     /// delete a station.
     pub for_each_station: extern "C" fn(*mut c_void, StationVisitor),
+    // Registry: road stops (#354).
+    /// `GetRoadStopType`.
+    pub road_stop_type: extern "C" fn(u32) -> RoadStopType,
+    /// Native road stop shells and their vehicle reads.
+    pub road_stops: extern "C" fn() -> *const crate::road_stop::RoadStopServices,
 }
 /// Station visitor: context, station, its service owner and its index.
 pub type StationVisitor = unsafe extern "C" fn(
@@ -588,6 +525,14 @@ impl Services {
 }
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDNativeTileTypeAccess::ExtendedTile" ["landscape"] => crate::services::ExtendedTileLayout {
+        m6,
+        m7,
+        m8,
+    };
+    "OpenTTDCommandCostStorage" ["probe"] => crate::services::CommandCostStorage {
+        storage,
+    };
     "OpenTTDEnvironmentServices" ["common"] => EnvironmentServices {
         editor,
         freeform_edges,
@@ -596,9 +541,11 @@ crate::abi::layouts! {
         z,
         slope,
     };
-    "OpenTTDTileTypeAllocation" ["landscape"] => TileTypeAllocation {
+    "OpenTTDTileTypeAllocation" ["landscape"] => crate::services::TileTypeAllocation {
         base,
+        extended,
         count,
+        assertions,
     };
     "OpenTTDNativeTileTypeAccess::BaseTile" ["landscape"] => BaseTileLayout {
         kind => type,
@@ -695,21 +642,23 @@ crate::abi::layouts! {
         station_track,
         wormhole_reserved,
     };
-    "OpenTTDCommandServices" ["probe"] => CommandServices {
+    "OpenTTDCommandServices" ["probe"] => crate::services::CommandServices {
         enter,
         leave,
         finance,
         infinite_money,
         money_error,
         infrastructure_dirty,
-        landscape_clear,
+        landscape_commands,
         tile_ownership,
         ownership,
         no_vehicle,
         no_train,
         wormhole_free,
     };
-    "OpenTTDCommandCostServices" ["probe"] => CommandCostServices {
+    "OpenTTDCommandCostServices" ["probe"] => crate::services::CommandCostServices {
+        construct,
+        destroy,
         zero,
         error,
         expense_money,
@@ -729,7 +678,7 @@ crate::abi::layouts! {
         docking,
         generating_world,
     };
-    "OpenTTDSharedServices" ["probe"] => Services {
+    "OpenTTDSharedServices" ["probe"] => crate::services::Services {
         set_tile_owner,
         autoslope,
         bay_stop_direction,
@@ -852,6 +801,8 @@ crate::abi::layouts! {
         tree_ground,
         water_services,
         for_each_station,
+        road_stop_type,
+        road_stops,
     };
     "OpenTTDByteSpan" ["industry"] => ByteSpan {
         data,
@@ -1087,6 +1038,9 @@ pub fn fixture(
         tree_ground,
         water_services: fixture_water_services,
         for_each_station: fixture_stations,
+        // Registry: road stops (#354).
+        road_stop_type: fixture_road_stop_type,
+        road_stops: fixture_road_stops,
     }
 }
 #[cfg(test)]
@@ -1439,6 +1393,18 @@ impl Cost<'_> {
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 pub struct StationType(pub u8);
+/// Native `RoadStopType : uint8_t` (bus 0, truck 1).
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct RoadStopType(pub u8);
+#[cfg(test)]
+extern "C" fn fixture_road_stop_type(_: u32) -> RoadStopType {
+    panic!("unused road stop type")
+}
+#[cfg(test)]
+extern "C" fn fixture_road_stops() -> *const crate::road_stop::RoadStopServices {
+    panic!("unused road stop table")
+}
 #[cfg(test)]
 extern "C" fn fixture_station_type(_: u32) -> StationType {
     panic!("unused station type")

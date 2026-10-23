@@ -141,9 +141,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, bay_direction);
 		VEHICLE_UNUSED(leaves, is_drive_through);
 		VEHICLE_UNUSED(leaves, is_station_road_stop);
-		VEHICLE_UNUSED(leaves, stop_type);
-		VEHICLE_UNUSED(leaves, has_free_bay);
-		VEHICLE_UNUSED(leaves, continuation);
 		VEHICLE_UNUSED(leaves, move_tile);
 		VEHICLE_UNUSED(leaves, path_read);
 		VEHICLE_UNUSED(leaves, choose_track);
@@ -153,9 +150,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, disconnect);
 		VEHICLE_UNUSED(leaves, stop_read);
 		VEHICLE_UNUSED(leaves, should_stop);
-		VEHICLE_UNUSED(leaves, stop_leave);
-		VEHICLE_UNUSED(leaves, stop_entrance);
-		VEHICLE_UNUSED(leaves, stop_entrance_busy);
 		VEHICLE_UNUSED(leaves, arrival_read);
 		VEHICLE_UNUSED(leaves, arrival_news);
 		VEHICLE_UNUSED(leaves, begin_loading_at);

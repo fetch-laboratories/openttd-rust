@@ -82,7 +82,6 @@ pub struct TransactionServices {
     pub terragenesis: unsafe extern "C" fn() -> bool,
     pub ignore_restrictions: unsafe extern "C" fn() -> bool,
     pub platform: unsafe extern "C" fn() -> u8,
-    pub terraform: unsafe extern "C" fn(*mut IndustryCost, u32, u16, bool),
     pub can_allocate: unsafe extern "C" fn() -> bool,
     pub allocate: unsafe extern "C" fn(u32) -> Allocation,
     pub prospecting_chance: unsafe extern "C" fn(*const SpecHandle) -> u32,
@@ -322,14 +321,26 @@ impl Engine<'_> {
                     }
                     let company = self.swap_company(15);
                     unsafe {
-                        (self.p.landscape_clear)(self.out, current, 0);
+                        crate::landscape_cmd::clear_command(
+                            &*self.context.command_checks,
+                            self.out.cast(),
+                            current,
+                            0,
+                        );
                         (self.x.set_company)(company);
                     };
                     if !self.succeeded() {
                         return false;
                     }
                 } else {
-                    unsafe { (self.p.landscape_clear)(self.out, current, 2 | 16 | 512) };
+                    unsafe {
+                        crate::landscape_cmd::clear_command(
+                            &*self.context.command_checks,
+                            self.out.cast(),
+                            current,
+                            2 | 16 | 512,
+                        );
+                    };
                     if !self.succeeded() {
                         return false;
                     }
@@ -464,7 +475,16 @@ impl Engine<'_> {
                         unsafe { (self.x.set_company)(company) };
                         return false;
                     }
-                    unsafe { (self.x.terraform)(self.out, walk, flags & !1, current <= height) };
+                    unsafe {
+                        crate::landscape_cmd::terraform_command(
+                            &*self.context.command_checks,
+                            self.out.cast(),
+                            walk,
+                            crate::slope_func::SLOPE_N,
+                            current <= height,
+                            flags & !1,
+                        )
+                    };
                     if !self.succeeded() {
                         unsafe { (self.x.set_company)(company) };
                         return false;
@@ -478,7 +498,16 @@ impl Engine<'_> {
                     let walk = self.offset(origin, x as i32, y as i32);
                     let mut current = unsafe { (self.x.tile_height)(walk) };
                     while current != height {
-                        unsafe { (self.x.terraform)(self.out, walk, flags, current <= height) };
+                        unsafe {
+                            crate::landscape_cmd::terraform_command(
+                                &*self.context.command_checks,
+                                self.out.cast(),
+                                walk,
+                                crate::slope_func::SLOPE_N,
+                                current <= height,
+                                flags,
+                            )
+                        };
                         current = if current > height {
                             current.wrapping_sub(1)
                         } else {

@@ -123,7 +123,7 @@ def sources(revision=None):
     return {
         p: git("show", f"{revision}:{p}") if revision else (ROOT / p).read_text()
         for p in git(*command, "--", "src", "rust", "tools").splitlines()
-        if Path(p).suffix in {".rs", ".cpp", ".h", ".hpp", ".py"}
+        if Path(p).suffix in {".rs", ".cpp", ".h", ".hpp", ".inc", ".py"}
         and (revision or (ROOT / p).is_file())
     }
 

@@ -4,13 +4,31 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-22, code at `802ec7d6a4`)
+## Where the fork stands (2026-10-22, code at `8c370210b4`)
 
-- Thirty-eight ownership ports. Whole fork: Rust 88,388 / tooling 33,537 / glue 34,397 / original retired 49,636 of 470,612 C/C++ `src/` lines (10.55%). Simulation: 41,518 / 102,615 (40.46%), up from 37.09% at the sixteenth review.
-- Since then, twelve integrations, four of them ownership ports (#313 objects, #329 vehicle transactions, #346 subsidies, #352 tunnels/bridges). Retired 3,534 lines against 2,151 net glue plus 1,960 tooling.
-- Speed: a quiet six at this code (#356) matches every projection within -0.7% to +1.4% (TGP 1.214, Opus 1.199, Grok 1.202, P1996 1.254, P2000 1.323, P2016 1.359). No scenario is in its 5% band. TGP is nearest its ceiling in relative terms: before #351 it is 0.8% loop Ir from its band.
-- CI on `rust-migration` is green. On 2026-10-21, hosted macOS arm64 capacity cancelled 19 Full attempts; macOS moves to every fifth integration (#357).
-- Component branches: #347, #353 and uncommitted #349 (three of six). Maintenance drafts: #340, #351.
+- Forty-one ownership ports. Whole fork: Rust 91,994 / tooling 34,241 / glue 34,815 / original retired 51,203 of 470,612 C/C++ `src/` lines (10.88%). Simulation: 43,067 / 102,615 (41.97%), up from 40.46% at the seventeenth review.
+- Since the seventeenth review: maintenance #358 (#355/#356/#357 batch, free-core `--jobs`), #340 (#281 part 1) and #351 (#274); ownership ports #353 (landscape), #362 (road stops) and #347 (town commands).
+- Speed: last tip profile at `9a991a1c23` showed no rise and no scenario near its ceiling (TGP 1.2138; play saves at or below their anchors). Due: a tip profile at `8c370210b4` (#351, #353, #362, #347 landed since).
+- CI: `8c370210b4` failed to compile (#347 used a command field #353 removed; both were validated before the other landed). #363 fixed it (`9f2c92b51e`, Full passed); its post-merge run was in progress at the pause. The macOS run is due (fifth integration since #357).
+- Component branches: #360, #359 and #350 (three of six). Maintenance: #361 (#261 batch).
+
+## Integration and wind-down correction (2026-10-22, takes precedence)
+
+User authorized replacing the rules after #347 and #353 passed separately but
+failed together. Keep automatic rollback; replace the time deadline with action limits.
+
+- Final Full tests the combination to integrate; GitHub strict/up-to-date protection blocks old passing results after base moves. Update when preparing final validation; batch ready, reviewed work to avoid serial runs. Implementation and review stay parallel.
+- Keep focused local checks and the full suite in CI; no extra local integration build gate. Avoid routine docs pushes during final validation, since they advance base too.
+- Wind-down finishes the current edit/review and records its state, merges only eligible already-tested combinations, and starts no new CI, retries or repairs. Pending checks are handed off; no deadline or time estimate.
+- A confirmed breaking merge with only docs after it is reset automatically without asking, with work preserved remotely and docs corrected. The tracking issue reopens; a replacement PR follows on resume. AGENTS.md and the migration guide define recovery and exceptions.
+- Implementation uses platform settings and five existing documentation files; tooling budget: zero new code, workflows or controllers. Earlier unchanged-head merge permission below is superseded.
+
+## Process audit follow-up (2026-10-22)
+
+- **Selected next CI maintenance batch, #261:** fix Linux dependency/cache setup, report failed child jobs and platform annotations promptly, and make transient coverage-lookup failures retry then select full validation. Root owns selection and assigns one implementer on resume. Budget: at most 400 changed non-documentation lines including tests, reusing existing CI suites; one independent review and one final Full through the workflow bootstrap procedure. This is a separate scope from the zero-code integration correction above; keep #361's existing scope.
+- **Process changes now:** use small ready integration batches; save unfinished checkpoints before long checks or handoff; require independent execution for any unattended provider takeover. AGENTS.md and the migration guide define these rules. No new schedule or verified fallback is established by this documentation.
+- **Existing conflict reduction:** finish #261 / #361's shared ABI split through its pending review and validation; no new issue or repeated unchanged-component review.
+- **Deferred optimization:** root revisits Emscripten image setup and merge-queue tooling after the selected CI fixes land and ten integrations record stale Full reruns and ready-work waits in existing integration notes. No new service, runner upgrade or extra local full suite is selected.
 
 ## Seventeenth steering review (2026-10-22, speed on the merged branch, base-type returns, macOS every fifth merge)
 
@@ -31,13 +49,13 @@ Independent Claude Opus audits of integrated #329, #346 and #352 and draft #347,
 - Agents run only the scenarios their change touches locally; the full default suite (38 minutes locally, repeated by Full in about 12) runs in CI.
 - Local commands pass the free cores as `--jobs`, not a fixed 2. Last session they took 503 agent-minutes at 2 while half the cores sat idle for 171 of 261 minutes; 31 scenarios ran in 164 s at 2 and 44 s at 8, and the full suite in 10 minutes at 8.
 
-AGENTS.md also says: a PR whose exact-head Full passed and that merges cleanly integrates without a base update; a C++ class type crosses as its base type (#355); a local container the original builds stays a local `Vec`; review reports name orphaned WITH_RUST bodies, exports and declarations.
+The earlier unchanged-head merge permission is superseded above. AGENTS.md also says: a C++ class type crosses as its base type (#355); a local container the original builds stays a local `Vec`; review reports name orphaned WITH_RUST bodies, exports and declarations.
 
 Provisional, checked next review: the 3% tip-rise threshold (basis: counts repeat to 0.04%; the largest ordinary per-PR move was 1.3%) and factor 2 (measured wall sensitivity 0.75-1.54 at `802ec7d6a4`, so it is conservative). The 6.6% layout spread is retired: a pass's median of four three-pair medians came within 1.4% of every projection.
 
 Actions, in order (apply first; ports keep running alongside):
 1. **#355, #356 and #357 as one batch PR,** before any other integration: the MSVC return fix and compile-time return-type check; the identity fix and the quiet anchors the tip profiles compare against (no pass is due); and macOS out of the pre-merge Full; and the driver's `--jobs` default set to the free cores (AGENTS.md). Until that lands, use the Blacksmith fallback on capacity cancellations.
-2. **Integrate ready drafts,** without base updates unless a conflict blocks: #351 after #356 (rustfmt, then Full; no extension), #340 (two deletions, then review), #347 (PR comment items), #353 (fresh review).
+2. **Integrate ready drafts** under the corrected integration rule above: #351 after #356 (rustfmt, then Full; no extension), #340 (two deletions, then review), #347 (PR comment items), #353 (fresh review).
 3. **Ports continue:** #349 to its first passing milestone, #315, then owner selection (Phase 2 item 5).
 4. **Batches:** the #261 cleanup list (2026-10-22 comments) as one batch PR, including the per-component split of `abi.rs`/`windows-abi.cpp`, the most frequent base-update conflict; the **#156** slot batches the new gaps.
 
@@ -52,7 +70,7 @@ Actions, in order (apply first; ports keep running alongside):
 - **Ownership:** prioritize simulation ownership. Keep state at the original's process scope.
 - **Map storage:** #108 retains C++ map arrays; #351's descriptor is limited to the audited scheduler loops (AGENTS.md).
 - **Harness evidence:** end moments (#154), default branch witnesses and reference probes (#198/#204/#210/#211), the speed guard (#155/#282/#321) and documented coverage gaps (#156).
-- **Tooling, WIP and CI:** proportionate tooling (#109) with a stated budget for infrastructure work; platform defaults over controllers (#233); six component branches at most; exact-head Full on demand (#171), validated concurrently, with no admin bypass.
+- **Tooling, WIP and CI:** proportionate tooling (#109) with a stated budget for infrastructure work; platform defaults over controllers (#233); six component branches at most; Full on demand (#171), strict final integration as corrected above, with no admin bypass for new code.
 - **Metrics:** original retirement excludes removed fork glue (#223).
 
 ## Completed ownership ports
@@ -99,31 +117,20 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #314 | Vehicle transactions and non-rail construction | #329 | `43257e3744` | 3231 / 206 / 1200 / 1312 |
 | #316 | Subsidy state and route lifecycle | #346 | `7e83fe925e` | 915 / 177 / 277 / 430 |
 | #293 | Tunnel/bridge commands and ownership | #352 | `802ec7d6a4` | 1862 / 178 / 325 / 854 |
+| #348 | Landscape clear, terraform and leveling | #353 | `33fc37e973` | 1289 / 189 / 301 / 447 |
+| #354 | Road-stop bays and drive-through occupancy | #362 | `4075c50384` | 875 / 164 / 181 / 501 |
+| #247 | Town commands, authority actions and deletion | #347 | `8c370210b4` | 977 / 270 / 298 / 589 |
 
 Harness/process #72/#84/#97/#88/#75/#90 and maintenance #209-#302 retain evidence in their PRs.
 Rows below use original retirement and net glue (#223).
 
 | Issues | Maintenance PRs | Integration | Commit | Metrics |
 | --- | --- | --- | --- | --- |
-| #307 (#156 scheduler deletion/pool growth) | #309 | direct | `ad58d65c10` | 0 / 7 / 74 / 0; tests only |
-| #284 (generated ABI and typed defaults) | #298 | direct | `79dea34092` | 4541 / 287 / 2650 / 0; net glue +196 |
-| #311 (#275 road speed/effect boundary) | #319 | direct | `08053fda50` | 88 / 35 / 101 / 5; net glue +90 |
-| #310 (#275 immutable road service tables) | #318 | direct | `4c4c5a0eab` | 0 / 27 / 312 / 0; net glue +7 |
-| #306 (#275 ship search scratch) | #308 | direct | `e996032875` | 108 / 0 / 0 / 0; net glue 0 |
-| #320 station command fidelity | #323 | direct | `bc25c51d44` | 60 / 118 / 34 / 0; net glue -5 |
-| #261 R5 tile-loop cleanup and signal boundary | #324 | direct | `69d0365a9f` | 14 / 0 / 36 / 11; net glue -11 |
-| #327 shared direct command lifecycle | #328 | direct | `764e1fa92d` | 45 / 0 / 0 / 0; net glue 0 |
-| #325 aircraft movement observations | #326 | direct | `7b0a82cbd1` | 213 / 35 / 99 / 0; net glue +56 |
-| #330 road tick prologue | #332 | direct | `4476646d19` | 22 / 36 / 67 / 0; net glue +36 |
-| #331 shared ownership dispatch | #333 | direct | `5e2f570eee` | 143 / 90 / 122 / 1; net glue +101 |
-| #321 instruction-count speed guard and first anchors | #322 | direct | `f6cddca557` | 0 / 576 / 0 / 0; net glue 0 |
-| #156 ownership-dispatch coverage | #335 | direct | `caadbabc38` | 0 / 173 / 0 / 0; tests only |
-| #261 R6 shared header modules | #334 | direct | `18dbc15675` | 858 / 7 / 64 / 10; net glue +10 |
-| #338 instruction identity and rolling record | #339 | direct | `c4efe7bc72` | 0 / 30 / 0 / 0; net glue 0 |
-| #156 road/water command coverage | #337 | direct | `9da106b61f` | 0 / 128 / 0 / 0; tests only |
-| #275 lazy tram command context | #336 | direct | `43f8d27304` | 17 / 2 / 23 / 0; net glue +11 |
-| #344 train speed observations | #345 | direct | `fc72e5cc1a` | 4 / 1 / 71 / 0; net glue +59 |
-| #156 tram-turn coverage | #342 | direct | `6017f98f3d` | 7 / 71 / 0 / 0; tests only |
+| #355, #356, #357 batch and free-core `--jobs` | #358 | direct | `f141b6e91a` | 0 / 84 / 9 / 0; net glue +5 |
+| #281 part 1 vehicle maintenance direct calls | #340 | direct | `9a991a1c23` | in PR |
+| #274 shared assertion-faithful map reads | #351 | direct | `71d4f1d020` | in PR |
+
+Earlier maintenance (#307-#345) retains its rows' evidence in those PRs.
 
 Paused, not fallbacks: #64 curve family, #68 SHA-512/Ed25519, #69 tile areas.
 
@@ -152,17 +159,16 @@ go in `KNOWN_FAILURES` with an issue, never in masks (`docs/rust-migration.md`).
 Integrate reviewed work first, in order of readiness, with at most six
 unintegrated component branches. Maintenance (#261, #281) and #156 run in parallel.
 
-1. **#355, #356 and #357**, one batch PR (seventeenth review, action 1).
+1. **#355, #356 and #357**: integrated as #358.
 2. **#275** has no standing stream. When a pass or a tip rise opens speed work, rank it by net cost (#275 comment, 2026-10-22: aircraft, road-controller tick reads, scheduler carrier, orders).
-3. **#281** vehicle maintenance direct calls: #340 deletes the orphan aircraft reliability wrapper and the duplicate engine accessor, then gets a fresh review. The callee-copy check follows.
-4. **#274 map view (#351):** limited to the scheduler's clear/water/tree loops; C++ keeps the arrays and writes. Remaining: rustfmt and exact-head Full after #356. No extension for TGP speed.
+3. **#281** part 1 integrated (#340). Part 2: the callee-copy check and the four duplicate wrappers listed in the #340 r2 review.
+4. **#274 map view:** integrated as #351, limited to the scheduler's clear/water/tree loops; C++ keeps the arrays and writes.
 5. **Next whole owners**, as WIP frees, each without draft service dependencies:
-   - #247 town commands (#347): the PR comment items, then review;
-   - #348 landscape clearing, terraforming and leveling (#353): fresh review;
-   - #349 vehicle station/depot visits with LinkRefresher and IncreaseStats: first passing milestone;
-   - #315 rail construction and consist transactions (unblocked: #329 is integrated).
+   - #315 rail construction (#360): base merge and conflict review, then Full;
+   - #349 visits (#359): review, then Full;
+   - #350 generation and rivers: restart implementation.
 
-   A shared service that two owners need lands first, as its own PR. #315 is the only selected owner not yet started, so selection is due. Root decides on the amended #350 (generation and rivers; plan on #3, 2026-10-22) and #354 (road-stop occupancy) when a slot frees. Generation owners land after #351 so its TGP saving gives them headroom.
+   A shared service that two owners need lands first, as its own PR. Selection is due: fewer than two selected owners remain unstarted. Plan with the next tip profile.
 6. **#168 tail, largest first.** `order_cmd.cpp` and `economy.cpp` hold 65 of the 198 baseline copies.
 
 New owners reuse integrated services, never draft copies. A Rust-allocated
@@ -171,21 +177,18 @@ staging only for a field a `SaveLoad` descriptor cannot address through the alia
 
 ## Resume checkpoint
 
-Paused at the user's request; resume with the seventeenth review's actions. Root is gpt-6.1-sol (xhigh).
+Paused at the user's request (wind-down, 2026-10-22 ~10:00 EDT). Root was Claude Code (claude-opus-5-5, xhigh); reviews ran on gpt-6.1-sol. Seventeenth-review actions 1-2 are done.
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #355 + #356 + #357 | none | One batch PR from `rust-migration`, first: MSVC return fix, instruction identity fix and anchors, macOS every fifth integration. |
-| #281 / #340 | `0c8a5e15f3` | Two deletions from the conflict review, fresh review, counts, Full. |
-| #247 / #347 | `134a40b026` | PR comment items (subsidy direct call, shared object iterator, `InvalidateWindowData`, base merge), then review, counts, Full. |
-| #274 / #351 | `edc8b95bdc` | rustfmt the merged `lib.rs`, then exact-head Full after #356. |
-| #348 / #353 | `6d10b6c900` | Fresh independent review, then semantic, count and Full gates. |
-| #349 (no PR) | `bc30c0fc25` + dirty WIP | Finish visit bindings/callers to a first passing commit and draft PR. State is on #349. |
+| #315 / #360 | `247ed46e34` | Reviewed, Full passed, but conflicts after #362 (`fleet/transactions.rs`). Base merge, conflict review, exact-head Full, integrate. |
+| #349 / #359 | `189e58cfd9` | Implementation complete, not reviewed. Independent review, then exact-head Full. |
+| #350 (no PR) | `33fc37e973` | Agent stopped with nothing committed; worktree t3-bb7e4cd6 clean, no remote branch. Restart implementation. |
+| #261 / #361 | `4b4bb9dd21` | Build, rust-checks, preflight passed (scenarios not run). Base merge (conflicts), review, Full. |
 
-All retained drafts and WIP keep their worktrees and branches: three component branches of six.
-#261 R7 and #281 part 2 inputs remain on their issues. #64/#68/#69 stay paused.
+First on resume: confirm post-merge CI on `9f2c92b51e` is green. Due, not gating: the tip speed profile and the macOS run on `rust-migration`.
+Retained drafts keep their worktrees and branches. #281 part 2 and #261 R7 inputs remain on their issues. #64/#68/#69 stay paused.
 Preserve the pinned reference; do not reapply effect helper `73ccd511fb`.
-Pass `--jobs` as the free cores (AGENTS.md), not a fixed 2.
 
 ## Out of scope for the near term
 

@@ -3389,19 +3389,7 @@ CommandCost CmdConvertRail(DoCommandFlags flags, TileIndex tile, TileIndex area_
 	return cost;
 }
 
-static CommandCost ClearTile_Track(TileIndex tile, DoCommandFlags flags)
-{
-	CommandCost cost, ret;
-	openttd_rust_rail_clear_tile(RailServices(), RustCommandCost(&cost), RustCommandCost(&ret), flags.base(), tile.base());
-	return cost;
-}
 
-static CommandCost TerraformTile_Track(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
-{
-	CommandCost cost;
-	openttd_rust_rail_terraform(RailServices(), RustCommandCost(&cost), flags.base(), tile.base(), z_new, tileh_new);
-	return cost;
-}
 
 static CommandCost CheckBuildAbove_Track(TileIndex tile, DoCommandFlags flags, Axis, int)
 {
@@ -3414,7 +3402,11 @@ static CommandCost CheckBuildAbove_Track(TileIndex tile, DoCommandFlags flags, A
 extern const TileTypeProcs _tile_type_rail_procs = {
 	DrawTile_Track,           // draw_tile_proc
 	GetSlopePixelZ_Track,     // get_slope_z_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	ClearTile_Track,          // clear_tile_proc
+#endif
 	nullptr,                     // add_accepted_cargo_proc
 	GetTileDesc_Track,        // get_tile_desc_proc
 	GetTileTrackStatus_Track, // get_tile_track_status_proc
@@ -3433,7 +3425,11 @@ extern const TileTypeProcs _tile_type_rail_procs = {
 	nullptr,                     // add_produced_cargo_proc
 	VehicleEnter_Track,       // vehicle_enter_tile_proc
 	GetFoundation_Track,      // get_foundation_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	TerraformTile_Track,      // terraform_tile_proc
+#endif
 	CheckBuildAbove_Track, // check_build_above_proc
 };
 

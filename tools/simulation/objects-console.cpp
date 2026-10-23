@@ -243,9 +243,11 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 	std::fflush(stderr); return true;
 }
+#include "landscape-console.hpp"
 extern "C" void __real__Z22IConsoleStdLibRegisterv();
 extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 {
 	__real__Z22IConsoleStdLibRegisterv();
 	IConsole::CmdRegister("objects_scenario", ObjectsScenario);
+	IConsole::CmdRegister("landscape_scenario", LandscapeScenario);
 }

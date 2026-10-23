@@ -265,7 +265,20 @@ struct Town : TownPool::PoolItem<&_town_pool> {
 	ValidHistoryMask valid_history = 0; ///< Mask of valid history records.
 #endif
 
+#ifdef WITH_RUST
+	bool HasText() const { return openttd_rust_town_text(this->growth_owner.get()).size != 0; }
+	EncodedString GetText() const
+	{
+		auto view = openttd_rust_town_text(this->growth_owner.get());
+		return EncodedString(std::string(reinterpret_cast<const char *>(view.data), view.size));
+	}
+	static OpenTTDByteSpan TextView(const EncodedString &value) { return {reinterpret_cast<const uint8_t *>(value.string.data()), value.string.size()}; }
+	void SetText(const EncodedString &value) { openttd_rust_town_set_text(this->growth_owner.get(), TextView(value)); }
+#else
+	bool HasText() const { return !this->text.empty(); }
+	EncodedString GetText() const { return this->text; }
 	EncodedString text{}; ///< General text with additional information.
+#endif
 
 	inline SuppliedCargo &GetOrCreateCargoSupplied(CargoType cargo)
 	{

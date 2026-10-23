@@ -198,7 +198,7 @@ impl<'a> World<'a> {
         crate::bridge_map::get_bridge_height(tile, self.s)
     }
     fn clear_command(&self, out: Cost<'_>, tile: u32, flags: u16) {
-        (self.cmd.landscape_clear)(out.0, tile, flags);
+        crate::landscape_cmd::clear_command(self.cmd, out.0, tile, flags);
     }
     fn ownership(&self, out: Cost<'_>, owner: u8, tile: u32) {
         // SAFETY: live native output slot, no world borrow.

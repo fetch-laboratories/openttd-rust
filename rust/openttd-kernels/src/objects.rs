@@ -373,7 +373,7 @@ pub struct ObjectServices {
 
 const HQ: u16 = 4;
 const OWNED: u16 = 3;
-const STATUE: u16 = 2;
+use crate::object_type::OBJECT_STATUE as STATUE;
 const LIGHTHOUSE: u16 = 1;
 const TRANSMITTER: u16 = 0;
 const NEW_OBJECT_OFFSET: u16 = 5;
@@ -749,10 +749,6 @@ impl<'a> World<'a> {
     fn owner(&self, tile: u32) -> u8 {
         (self.shared.tile_owner)(tile)
     }
-    /// Original `IsTileOwner`.
-    fn is_owner(&self, tile: u32, owner: u8) -> bool {
-        self.owner(tile) == owner
-    }
     /// Original `ObjectSpec::GetBuildCost`; native storage supplies its factors.
     unsafe fn get_build_cost(&self, spec: *const Spec) -> i64 {
         let price = unsafe { (self.s.build_price)(spec) };
@@ -831,7 +827,8 @@ impl<'a> World<'a> {
                 };
                 if wc.0 == 1
                     && owner != OWNER_NONE
-                    && (self.is_owner(t, OWNER_NONE) || self.is_owner(t, OWNER_WATER))
+                    && (crate::tile_map::is_tile_owner(self.shared, t, OWNER_NONE)
+                        || crate::tile_map::is_tile_owner(self.shared, t, OWNER_WATER))
                 {
                     ((*self.s.restoration).infrastructure)(owner, 1);
                     ((*self.s.restoration).infrastructure_dirty)(owner);
@@ -1066,7 +1063,7 @@ impl<'a> World<'a> {
                 }
             }
             if kind == OWNED {
-                (self.commands().landscape_clear)(tmp.0, tile, flags);
+                crate::landscape_cmd::clear_command(self.commands(), tmp.0, tile, flags);
                 out.add(tmp);
             } else {
                 let water = shape.flags & (BUILT_ON_WATER | NOT_ON_LAND) != 0;
@@ -1078,7 +1075,8 @@ impl<'a> World<'a> {
                             return;
                         }
                         if !(self.shared.is_water_tile)(t) {
-                            (self.commands().landscape_clear)(
+                            crate::landscape_cmd::clear_command(
+                                self.commands(),
                                 tmp.0,
                                 t,
                                 flags & !(DoCommandFlag::NO_WATER | DoCommandFlag::EXECUTE),
@@ -1114,10 +1112,11 @@ impl<'a> World<'a> {
                         }
                         if !(kind == HQ
                             && (self.shared.tile_type)(t) == 10
-                            && self.is_owner(t, self.current())
+                            && crate::tile_map::is_tile_owner(self.shared, t, self.current())
                             && self.object_type_is(t, HQ))
                         {
-                            (self.commands().landscape_clear)(
+                            crate::landscape_cmd::clear_command(
+                                self.commands(),
                                 tmp.0,
                                 t,
                                 flags & !DoCommandFlag::EXECUTE,
@@ -1174,14 +1173,15 @@ impl<'a> World<'a> {
                     for t in self.tiles(area) {
                         if (self.shared.has_water_ground)(t) {
                             if !(self.shared.is_water_tile)(t) {
-                                (self.commands().landscape_clear)(
+                                crate::landscape_cmd::clear_command(
+                                    self.commands(),
                                     tmp.0,
                                     t,
                                     flags & !DoCommandFlag::NO_WATER,
                                 );
                             }
                         } else {
-                            (self.commands().landscape_clear)(tmp.0, t, flags);
+                            crate::landscape_cmd::clear_command(self.commands(), tmp.0, t, flags);
                         }
                     }
                 }
@@ -1215,7 +1215,7 @@ impl<'a> World<'a> {
                 }
                 OWNED => {
                     if (self.shared.tile_type)(tile) == 10
-                        && self.is_owner(tile, self.current())
+                        && crate::tile_map::is_tile_owner(self.shared, tile, self.current())
                         && self.object_type_is(tile, OWNED)
                     {
                         out.fail(self.s.strings.own);
@@ -1411,7 +1411,7 @@ impl World<'_> {
                     }
                 }
             }
-            (self.commands().landscape_clear)(out.0, tile, flags);
+            crate::landscape_cmd::clear_command(self.commands(), out.0, tile, flags);
         }
     }
     fn build_above(&self, out: Cost<'_>, tile: u32, flags: u16, height: i32) {
@@ -1424,11 +1424,11 @@ impl World<'_> {
                 out.zero();
                 return;
             }
-            (self.commands().landscape_clear)(out.0, tile, flags);
+            crate::landscape_cmd::clear_command(self.commands(), out.0, tile, flags);
         }
     }
     fn change_owner(&self, ownership: &crate::tile_owner::Context, tile: u32, old: u8, new: u8) {
-        if !self.is_owner(tile, old) {
+        if !crate::tile_map::is_tile_owner(self.shared, tile, old) {
             return;
         }
         unsafe {
@@ -1934,7 +1934,23 @@ pub unsafe extern "C" fn openttd_rust_object_build(
     view: u8,
 ) {
     // SAFETY: native tables and stack storage outlive the synchronous call.
-    let w = unsafe { World::new::<true>(&*s) };
+    unsafe { build(&*s, kind, tile, owner, town, view) };
+}
+
+/// Original `BuildObject`, shared by Rust component owners.
+/// # Safety
+/// Live immutable services and native town shell, under the game-state mutex.
+/// No caller borrow may span the object's reentrant callbacks.
+pub(crate) unsafe fn build(
+    s: &ObjectServices,
+    kind: u16,
+    tile: u32,
+    owner: u8,
+    town: *const TownHandle,
+    view: u8,
+) {
+    // SAFETY: Caller supplies the canonical live service tables.
+    let w = unsafe { World::new::<true>(s) };
     w.build(kind, tile, owner, town, view);
 }
 
@@ -2034,8 +2050,7 @@ pub unsafe extern "C" fn openttd_rust_object_build_area(
 /// preconditions; serialized with reset/save/load. No native pointer is retained.
 /// Services may reenter after all state accesses end. Native cancellation is
 /// returned before C++ rethrows; other leaves are noexcept. Panics abort.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_clear(
+pub(crate) unsafe fn openttd_rust_object_clear(
     s: *const ObjectServices,
     out: *mut CommandCost,
     tmp: *mut CommandCost,

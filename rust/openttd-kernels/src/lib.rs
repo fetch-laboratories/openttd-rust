@@ -35,10 +35,12 @@ mod integer;
 mod landscape;
 mod linkgraph;
 mod map_func;
+mod map_type;
 mod math;
 mod newgrf_callbacks;
 mod newgrf_sound;
 mod node_hash;
+mod object_type;
 mod objects;
 mod order_type;
 mod packet;
@@ -49,8 +51,10 @@ mod road_cmd;
 mod road_cost;
 mod road_data;
 mod road_map;
+mod road_stop;
 mod road_type;
 mod road_yapf;
+mod roadveh;
 mod script_list;
 pub mod services;
 mod ship_control;
@@ -82,6 +86,7 @@ mod vehiclelist;
 mod viewport_func;
 mod water;
 mod water_cmd;
+mod water_type;
 mod widget_parser;
 mod witness;
 
@@ -1352,7 +1357,12 @@ mod train_reservation;
 
 mod fleet;
 
+pub(crate) mod clear_map;
+pub(crate) mod rail_map;
 mod subsidy;
+pub(crate) mod tile_map;
+pub(crate) mod tree_map;
+pub(crate) mod water_map;
 
 mod cargo_type;
 mod source_type;
@@ -1361,3 +1371,5 @@ mod tilearea;
 mod timer_game_common;
 
 mod subsidy_type;
+
+pub mod landscape_cmd;

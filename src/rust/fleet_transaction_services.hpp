@@ -36,7 +36,7 @@ static bool FleetTransaction_stopped(void *shell) noexcept { auto *v = static_ca
 static bool FleetTransaction_chain_depot(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsChainInDepot(); }
 static void * FleetTransaction_next_unit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetNextUnit(); }
 static void * FleetTransaction_prev_unit(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->GetPrevUnit(); }
-static uint16_t FleetTransaction_length(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->gcache.cached_total_length; }
+static uint16_t FleetTransaction_length(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return RustGroundCachedTotalLength(&Train::From(v)->gcache); }
 static bool FleetTransaction_stopped_in_depot(void *shell) noexcept { return static_cast<Vehicle *>(shell)->IsStoppedInDepot(); }
 static uint8_t FleetTransaction_max_length() noexcept { return _settings_game.vehicle.max_train_length; }
 /* Original assertion sites; Rust evaluates their conditions only when assertions is set. */

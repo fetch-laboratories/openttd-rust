@@ -521,7 +521,6 @@ pub struct Leaves {
     pub check_reverse: extern "C" fn(Handle) -> u64,
     pub choose_track: extern "C" fn(Handle, u32, u8, u8) -> u64,
     pub clear_reservation: extern "C" fn(Handle, u32, u8),
-    pub compatible_rail_owner: extern "C" fn(Handle, u32) -> u64,
     pub consist_windows: extern "C" fn(Handle),
     pub cost_class: extern "C" fn(Handle) -> u64,
     pub cost_default: extern "C" fn(Handle) -> u64,
@@ -1104,7 +1103,7 @@ impl Game<'_> {
         (self.leaves.veh_exit_dir)(id, (self.leaves.read_direction)(id), id.track()) as u8
     }
     fn compatible(&self, id: Handle, tile: u32) -> bool {
-        (self.leaves.compatible_rail_owner)(id, tile) != 0
+        crate::tile_map::is_tile_owner(self.services, tile, (self.leaves.read_owner)(id))
             && ((self.leaves.read_front)(id) == 0
                 || id.get_compatible_railtypes()
                     & (1 << (self.leaves.rail_type)(Handle::NONE, tile))
@@ -3206,7 +3205,7 @@ crate::abi::layouts! {
         breakdown,
         front,
     };
-    "OpenTTDTrainServices" ["probe"] => Leaves {
+    "OpenTTDTrainServices" ["probe"] => crate::train::Leaves {
         read_first,
         read_next,
         read_previous,
@@ -3313,7 +3312,6 @@ crate::abi::layouts! {
         check_reverse,
         choose_track,
         clear_reservation,
-        compatible_rail_owner,
         consist_windows,
         cost_class,
         cost_default,

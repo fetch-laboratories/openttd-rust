@@ -63,6 +63,16 @@ pub struct Service {
     // temporary Box/&mut reborrow on a surviving entry would invalidate them.
     queue: Vec<*mut QueueEntry>,
 }
+/// Clear every goods rating at the failed-bribe point, without crossing back
+/// into the native station shell.
+/// # Safety
+/// The caller supplies a live serialized station owner.
+pub(crate) unsafe fn clear_ratings(state: *mut Service) {
+    // SAFETY: No callback or other access while the immediate slots are written.
+    for cargo in unsafe { &mut (*state).cargo } {
+        cargo.rating = 0;
+    }
+}
 /// Activity fields consumed together after a station-radius filter.
 #[repr(C)]
 pub struct StationActivity {

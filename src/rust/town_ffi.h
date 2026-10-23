@@ -42,7 +42,6 @@ struct OpenTTDTownSupplied { uint8_t cargo; OpenTTDTownSuppliedHistory history[6
 struct OpenTTDTownSuppliedEntry { OpenTTDTownSupplied *entry; bool created; };
 struct OpenTTDTownSlots { void *data; size_t size; };
 using OpenTTDTownStationActivity = OpenTTDStationActivity;
-struct OpenTTDTownCommandResult { int64_t cost; bool success; };
 struct OpenTTDTownRoadChoice { int32_t introduction_date; uint16_t max_speed; bool town_build; };
 struct OpenTTDTownHouseAvailability { uint16_t zones; uint16_t override_id; uint16_t class_id; uint8_t probability; bool enabled; };
 struct OpenTTDTownHousePlacement { int32_t min_year; int32_t max_year; };
@@ -92,11 +91,9 @@ struct OpenTTDTownLeaves {
 	void (*update_max_pass)(uint32_t town) noexcept OPENTTD_SERVICE_DEFAULT(update_max_pass);
 	uint32_t (*next_town)(uint32_t from) noexcept OPENTTD_SERVICE_DEFAULT(next_town);
 	uint64_t (*road_mask)() noexcept OPENTTD_SERVICE_DEFAULT(road_mask);
-	bool (*clear_land)(uint32_t tile, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(clear_land);
-	OpenTTDTownCommandResult (*terraform_land)(uint32_t tile, uint32_t slope, uint32_t up, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(terraform_land);
 	bool (*build_bridge)(uint32_t tile, uint32_t end, uint32_t bridge, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_bridge);
 	bool (*build_tunnel)(uint32_t tile, uint32_t road_type, uint32_t execute) noexcept OPENTTD_SERVICE_DEFAULT(build_tunnel);
-	void (*clear_house_land)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(clear_house_land);
+	void (*assert_clear_house)(bool) noexcept OPENTTD_SERVICE_DEFAULT(assert_clear_house);
 	bool (*allow_construction)(uint32_t town, uint32_t tile, uint32_t house, uint32_t random) noexcept OPENTTD_SERVICE_DEFAULT(allow_construction);
 	const OpenTTDHouseServices *houses;
 };
@@ -107,6 +104,8 @@ uint32_t OpenTTDNextTownID(uint32_t from) noexcept;
 const OpenTTDTownAuthorityServices &GetRustTownAuthorityServices() noexcept;
 
 extern "C" {
+OpenTTDByteSpan openttd_rust_town_text(const OpenTTDTownState *);
+void openttd_rust_town_set_text(OpenTTDTownState *, OpenTTDByteSpan);
 OpenTTDByteSpan openttd_rust_town_name(const OpenTTDTownState *);
 void openttd_rust_town_set_name(OpenTTDTownState *, OpenTTDByteSpan);
 void openttd_rust_town_authority_station(const OpenTTDTownAuthorityServices *, const OpenTTDSharedServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint32_t, bool);
@@ -137,10 +136,7 @@ OpenTTDTownState *openttd_rust_town_new();
 void openttd_rust_town_destroy(OpenTTDTownState *);
 OpenTTDTownGrowthFields *openttd_rust_town_growth(OpenTTDTownState *);
 void openttd_rust_town_tick_all(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *);
-void openttd_rust_town_update_growth(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town);
 void openttd_rust_town_expand(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t amount, uint32_t modes);
-void openttd_rust_town_custom_rate(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town, uint32_t rate);
-void openttd_rust_town_fund(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t town);
 uint32_t openttd_rust_town_road_type(const OpenTTDTownLeaves *, const OpenTTDSharedServices *);
 bool openttd_rust_town_tunnel(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, const OpenTTDRoadCommandContext *, uint32_t town, uint32_t tile, uint32_t dir);
 }

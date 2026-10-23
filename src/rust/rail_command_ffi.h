@@ -95,8 +95,6 @@ void openttd_rust_rail_build_signal(const OpenTTDRailCommandServices *, OpenTTDC
 void openttd_rust_rail_signal_drag(const OpenTTDRailCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, uint8_t, uint8_t, bool, bool, bool, bool, int32_t);
 void openttd_rust_rail_remove_signal(const OpenTTDRailCommandServices *, OpenTTDCommandCost *, uint16_t, uint32_t, uint8_t);
 void openttd_rust_rail_convert(const OpenTTDRailCommandServices *, OpenTTDRailConvertFrame *, OpenTTDCommandCost *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t, uint32_t, uint8_t, bool);
-void openttd_rust_rail_clear_tile(const OpenTTDRailCommandServices *, OpenTTDCommandCost *, OpenTTDCommandCost *, uint16_t, uint32_t);
-void openttd_rust_rail_terraform(const OpenTTDRailCommandServices *, OpenTTDCommandCost *, uint16_t, uint32_t, int32_t, uint8_t);
 void openttd_rust_rail_build_above(const OpenTTDRailCommandServices *, OpenTTDCommandCost *, uint16_t, uint32_t);
 }
 #endif /* RUST_RAIL_COMMAND_FFI_H */

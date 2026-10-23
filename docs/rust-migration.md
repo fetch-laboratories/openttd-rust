@@ -125,21 +125,13 @@ LD_LIBRARY_PATH="$PWD/.local/deps/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$L
 
 ### Generated ABI probes and fixture defaults (#284)
 
-Each component declares `layouts!` in the module that owns the type; they name the C++ type,
-probe group and ordered Rust fields. Use `rust_field => cpp_field` for aliases and
-`width field: RustType` for an extra native-width check. Native-only groups remain in their
-owning unit tests. `rust/openttd-kernels/build.rs` lists every module that invokes `layouts!`
-for `abi::layout`, and `tools/generate-abi.py` scans the same modules, so a port edits no shared
-registry file. CMake runs the generator into the build directory; probes compare the complete
-list and its `SIZE_MAX` terminator through the named metadata API. Generated `abi-includes.inc`
-includes each layout type's header. Add declarations to the owning module, never a second C++
-field list or numeric type ID.
-
-A component's native ABI probes live in `tools/migration/windows-abi/NAME.inc`: its own
-`#include`s, helpers, and a probe function registered with `ABI_PROBE(function)`. The generator
-lists every fragment in `abi-probes.inc`, in file-name order (`ABI_PROBE_FIRST` runs before the
-rest); a fragment that needs another includes it. `windows-abi.cpp` keeps only the kernel probes
-that predate the split.
+`layouts!` declarations in `abi.rs`, `company.rs`, `crypto_primitives.rs`, `blake2b.rs`,
+`x25519.rs` and `auth.rs` name the C++ type, probe group and ordered Rust fields. Use
+`rust_field => cpp_field` for aliases and `width field: RustType` for an extra
+native-width check. Native-only groups remain in their owning unit tests.
+CMake runs `tools/generate-abi.py` into the build directory; probes compare the
+complete list and its `SIZE_MAX` terminator through the named metadata API.
+Add declarations there, never a second C++ field list or numeric type ID.
 
 Callback declarations inherit signature-correct abort defaults. Fixtures specify
 only callbacks they actually use; data pointers and scalar carriers retain their
@@ -379,7 +371,7 @@ references, closing the [MSVC i686 alignment gap](https://doc.rust-lang.org/rust
 
 `windows-rust-evidence.py` checks PE machine headers, Ninja response files, exact
 archive linkage, MSVC maps and static CRT imports, and runs the native ABI
-executable: struct sizes, alignments and field offsets for every `layouts!` declaration
+executable: struct sizes, alignments and field offsets for every `abi.rs` layout
 ID, high-bit scalars, by-value returns, sentinels, null/empty inputs, Rust
 allocation/view/destroy paths, history-engine staging and a per-thread non-C
 locale lowercase check (signed negative compare arguments stay outside the defined
@@ -401,11 +393,16 @@ which writes the user's message pausing root. Steering reviews put their
 corrections in the roadmap and edit `/start-development` only to improve it;
 root follows these skills and leaves them unedited.
 
+For unattended provider handoff, establish an independently executable takeover
+before the source provider exhausts its allowance. A scheduled prompt that needs
+the exhausted provider to launch its replacement is not a fallback. Verify the
+host's actual execution provider; naming another model in the prompt is not
+enough. If the host cannot provide independent takeover, record that limitation
+and preserve a checkpoint before stopping. This rule creates no schedule itself.
+
 Shared append lists group by component (reserve sections for concurrent ports),
-then sort entries by name: includes after stdafx/before safeguards, and shared table
-fields/mirrors/initializers (one field per line). ABI layouts and probes are per-component
-files, not shared lists. Component entries below
-are grouped by subsystem: insert yours at the end of its group, not at the end of the file.
+then sort entries by name: includes after stdafx/before safeguards, independent
+ABI probe calls, and shared table fields/mirrors/initializers/layouts (one field per line).
 Witness blocks are alphabetical; keep names and consecutive local indices
 together in `witness_blocks!`; global indices/array lengths are derived.
 
@@ -432,8 +429,14 @@ python3 tools/ci.py wait .local/ci-requests/REQUEST.json
 `rust` runs four Cargo checks; `native` adds the Linux matrix and full migration
 comparison; `platform` runs the platform matrix including macOS. All include quick checks.
 Only `full` satisfies the merge gate. Unmergeable or pending-mergeability PRs
-are refused; a changed PR head needs a new full request. A later base advance
-does not invalidate an unchanged head; independent reviewed PRs can validate concurrently.
+are refused; a changed PR head needs a new full request. Before final Full,
+update the PR from current `origin/rust-migration`; GitHub strict status checks
+require it to stay up to date before merging. A passing status for an old base
+does not validate the new combination. If base advances, update and request
+Full again. Keep implementation/review parallel and batch ready changes in one
+integration PR to avoid serial runs. Do not push routine docs while that final
+run is in progress; docs advance base too. This replaces the #233 policy that
+accepted unchanged PR heads and checked new combinations after merging.
 The CLI records the SHA and request/run identity and refuses a changed PR head.
 `CI_ON_DEMAND=true` enables this scheduling after root installs and verifies the
 required status. With the variable absent, automatic full CI remains as a safe
@@ -441,12 +444,26 @@ bootstrap. For a workflow-changing PR, root reviews its workflow definitions,
 temporarily unsets `CI_ON_DEMAND`, and requests `--profile full --bootstrap`
 (the `ci:full` label path tests the PR definitions). Root restores the variable
 to `true` after merge and records both changes in the PR; never use `--admin`.
-For capacity batching, test a concrete integration PR and merge it once. A stack
-organizes dependent PRs but does not itself combine validation runs.
+At an integration opportunity, batch two or three ready, reviewed component
+heads if available; integrate a lone ready PR without waiting to fill a batch.
+Assemble an integration PR from current base, preserving component commits and
+linking their reviews. Review only substantive conflict resolutions under
+AGENTS.md; unchanged components do not need another review. Request Full on the
+combined PR, without requiring separate component Full runs first.
+Finish routine base-doc updates before requesting Full. Freeze batch membership
+and coordinate root sessions to avoid base pushes during the run; implementation
+and review continue. Any head, membership or base change needs fresh Full,
+including removing a failing component. Merge only the passing, current head
+with `--match-head-commit`, then record and close the included component PRs.
+Keep batches small: the integration merge is the automatic rollback unit.
+A stack organizes dependent PRs but does not itself combine validation runs.
 
-Required checks must pass on the PR head; branches need not be up to date with the
-base. The publisher records the immutable tested merge tree separately from the
-head status.
+Required checks must pass on the PR head and the branch must be up to date with
+base (`required_status_checks.strict=true`). The publisher still records the
+immutable tested merge tree separately from the head status; its green status
+alone is insufficient when the branch is behind. Root uses ordinary protected
+merging with the reviewed head pinned by `--match-head-commit`, never `--admin`.
+No extra local integration build or full local simulation run is required.
 Protected pushes queue without cancelling a running validation; a newer push
 replaces a pending one, so a burst of merges validates the newest tip and the
 intermediate pushes show as cancelled. Markdown-only pushes do not start these
@@ -461,11 +478,48 @@ complete selected suite. A combined tree no full request
 covered receives all native and platform checks. Tree comparisons must be complete;
 missing or truncated GitHub inventories retain heavy validation. A Markdown-only push that still
 starts (GitHub runs path-filtered workflows when it cannot compute the diff) skips heavy
-builds only after complete classification of fewer than 300 changed files. A post-merge failure is fixed forward first. Force pushes and branch deletion are disallowed,
-including for administrators. The approving-review count is zero because agents
+builds only after complete classification of fewer than 300 changed files.
+Post-merge checks remain a backstop for missed defects; they do not authorize
+untested combinations. Ordinary force pushes and branch deletion are disabled.
+The approving-review count is zero because agents
 share credentials; the attributed independent review report is the process gate
 before root integrates. Repository controls are enforced separately from these
 documents.
+
+### Automatic rollback (user-authorized, 2026-10-22)
+
+A confirmed breaking merge with no later code is removed without asking, during
+development or wind-down. This is an explicit exception to ordinary PR-only
+code changes, not a repair PR or a new validation cycle. Runner/API errors alone
+do not identify a breaking merge. Read the failing result and identify its code
+cause; do not roll back an arbitrary latest commit because a check is red.
+
+1. Fetch the current remote tip and identify the breaking merge and its first
+   parent. Check that all later changes are docs-only. Preserve the old tip on
+   an origin recovery branch and record the component PR's head on its issue
+   before changing the shared branch. Do not discard dirty work in any checkout.
+2. Prepare the replacement from that first parent in a clean checkout. Reapply
+   later docs with their completion claims corrected for the removed work.
+   Keep the new integration/rollback rules if they were among those docs.
+3. Push the replacement with an explicit lease:
+   `git push --force-with-lease=refs/heads/rust-migration:OLD_REMOTE_SHA origin REPLACEMENT_SHA:refs/heads/rust-migration`.
+   If the lease fails, fetch and reassess the new tip; never use bare `--force`.
+   Root is authorized to temporarily enable force pushes for this operation
+   if protection requires it. Preserve all other settings, restore the prior
+   force-push setting even on failure, and read it back. Administrative access
+   also permits the documented direct docs pushes; it never permits bypassing
+   validation for a new code integration.
+4. Reopen the tracking issue if it was closed, record the recovery branch/head
+   and next repair step, and report the reset afterwards. GitHub keeps the old
+   PR marked merged; it cannot be reopened. Resume through a replacement PR
+   linked to it. Wind-down records that next step without opening the repair PR
+   or waiting for post-reset CI. Keep the recovery ref until the replacement
+   work is safely retained; do not restore the rejected merge by pulling it
+   back from a stale local branch.
+
+If later code makes this bounded reset inapplicable, stop integrations and
+record the recovery needed. During wind-down, hand it off without starting a
+fix cycle. A failed recovery operation is reported as failed, never as a reset.
 
 Native validation exports both frozen runtimes and once-built fleet/orders adapters,
 then runs component comparisons and three simulation shards concurrently
@@ -571,6 +625,7 @@ Unless an entry says otherwise, these properties hold for every port:
 - Evidence is the unchanged upstream tests first; named comparisons cover only listed gaps.
   C++ sanitizers do not instrument Rust accesses. These checks establish neither whole-game
   equivalence nor cryptographic security or complete secret erasure.
+
 
 <!-- Subsystem: Support libraries and text. Add a new entry at the end of its group, not of the file. -->
 
@@ -1001,8 +1056,22 @@ callback unwinds; generation-progress cancellation stays outside tick.
 exercise real ABI calls, declared endpoints and required named branch witnesses;
 `--self`/`--soak` extend evidence. Missing witnesses fail. The unchanged scheduler
 probe covers dimensions/cursor/reentry phases unreachable through ordinary saves.
-Remaining matrix/editor/NewGRF/threaded gaps are in #156. `TreeObservation` remains;
-the scheduler gate does not remove its full facade cost.
+Remaining matrix/editor/NewGRF/threaded gaps are in #156.
+
+#274 extends the canonical allocation descriptor with typed base/extended pointers,
+count and native assertion policy. The scheduler's clear/water/tree reads use
+header-named Rust helpers; shore-tree flooding shares that reader. Field-sized raw
+loads finish before callbacks, and observations reload after mutation. The audited
+scheduler no-reset/no-yield interval alone permits descriptor metadata to survive
+callbacks. C++ retains arrays, allocation and all writes. Standalone water/tree,
+generation, planting/command and unrelated owner reads retain canonical typed
+callbacks; no descriptor is carried into these unaudited entries.
+Generated named probes pin both layouts. Default native tests compare field/slope
+encodings, extended fences, live mutation, reallocation and assertion-policy
+fallbacks with unchanged native services. Assertions-off raw reads add no bounds,
+type or field rejection. The PR retains the historical same-base TGP profile;
+speed is checked on the integrated branch, without per-PR counts or a speed gate.
+This maintenance moves no storage or whole owner.
 
 ### Landscape partial-pixel height
 
@@ -1258,6 +1327,27 @@ including drags, one-way/tram coexistence, reserved crossings, stops, bridges,
 depots, slopes, town removal, owner changes and low-funds removal.
 The fixture declares builtin-like road-type inputs; external NewGRF programs and
 legacy save variants remain corpus gaps. PR #290 records validation and speed.
+
+### Road stop bays and drive-through entries (#354)
+
+Rust (`road_stop.rs`) owns each RoadStop's status byte and the shared
+drive-through entries: bay admission and freeing, entrance status, `GetByTile`,
+continuation, both `Enter`/`Leave` levels, joining (alone, parent, join, merge)
+and splitting (last, head, tail, split with rebuild), `Rebuild`,
+`CheckIntegrity`, destruction and both `AfterLoadRoadStops` passes. One Rust
+allocation per shell holds the status and entries pointer; the BaseEntry stop
+owns the entries, allocated and freed where the original does. `status` stays a
+native reference alias for the ROAD descriptor; `GetEntry` is a const reader.
+The road controller, station commands and road YAPF call the owner directly.
+C++ keeps the shell, pool, `xy`/`next` links and station stop lists
+(`OpenTTDRoadStopServices`), two compound vehicle reads, the tile hash and
+`GetNextRoadStop`, whose only caller is the native YAPF area leaf. Native
+vehicle entry, PreDestructor, cache check and load call typed entries.
+`stations-commands-road-stops` and `-road-stops-reload` compare every stop's
+status and entry length/occupancy through joins on both axes, occupied merges,
+interior/head/tail/last removal, bay admission and reload, and require every
+`road_stop` branch (`integrity` in desync runs). Articulated bay refusal and the
+unreachable `include` duplicate remain #156 gaps.
 
 <!-- Subsystem: Vehicles, pathfinding and orders. Add a new entry at the end of its group, not of the file. -->
 

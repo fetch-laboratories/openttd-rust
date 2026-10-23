@@ -53,7 +53,7 @@ template<typename Check> void Run(Check check)
 	const OpenTTDObjectServices objects{.shared = &shared, .industry_tiles = &object_tiles, .loop_policy = ProbeObjectPolicy};
 	const OpenTTDLandscapeLoopServices services{
 		.shared = &shared,
-		.tile_types = {nullptr, 0},
+		.tile_types = {},
 		.trees = nullptr,
 		.industry = {},
 		.ground = {},

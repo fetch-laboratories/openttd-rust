@@ -155,6 +155,9 @@ void AfterLoadStations()
  */
 void AfterLoadRoadStops()
 {
+#ifdef WITH_RUST
+	openttd_rust_road_stop_after_load(&GetRustSharedServices());
+#else
 	/* First construct the drive through entries */
 	for (RoadStop *rs : RoadStop::Iterate()) {
 		if (IsDriveThroughStopTile(rs->xy)) rs->MakeDriveThrough();
@@ -166,6 +169,7 @@ void AfterLoadRoadStops()
 		rs->GetEntry(DIAGDIR_NE).Rebuild(rs);
 		rs->GetEntry(DIAGDIR_NW).Rebuild(rs);
 	}
+#endif
 }
 
 static const SaveLoad _roadstop_desc[] = {

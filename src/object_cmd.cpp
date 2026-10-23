@@ -230,7 +230,9 @@ void UpdateObjectColours(const Company *c)
 }
 
 extern CommandCost CheckBuildableTile(TileIndex tile, DiagDirections invalid_dirs, int &allowed_z, bool allow_steep, bool check_bridge);
+#ifndef WITH_RUST
 static CommandCost ClearTile_Object(TileIndex tile, DoCommandFlags flags);
+#endif
 
 /**
  * Build an object object
@@ -589,13 +591,9 @@ ClearedObjectArea *FindClearedObject(TileIndex tile)
 }
 #endif
 
+#ifndef WITH_RUST
 static CommandCost ClearTile_Object(TileIndex tile, DoCommandFlags flags)
 {
-#ifdef WITH_RUST
-	CommandCost out, tmp;
-	openttd_rust_object_clear(&GetRustObjectServices(), RustCommandCost(&out), RustCommandCost(&tmp), tile.base(), flags.base());
-	return out;
-#else
 	/* Get to the northern most tile. */
 	Object *o = Object::GetByTile(tile);
 	TileArea ta = o->location;
@@ -671,8 +669,8 @@ static CommandCost ClearTile_Object(TileIndex tile, DoCommandFlags flags)
 	if (flags.Test(DoCommandFlag::Execute)) ReallyClearObjectTile(o);
 
 	return cost;
-#endif
 }
+#endif
 
 static void AddAcceptedCargo_Object(TileIndex tile, CargoArray &acceptance, CargoTypes &always_accepted)
 {
@@ -1050,7 +1048,11 @@ static CommandCost CheckBuildAbove_Object(TileIndex tile, DoCommandFlags flags, 
 extern const TileTypeProcs _tile_type_object_procs = {
 	DrawTile_Object,             // draw_tile_proc
 	GetSlopePixelZ_Object,       // get_slope_z_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	ClearTile_Object,            // clear_tile_proc
+#endif
 	AddAcceptedCargo_Object,     // add_accepted_cargo_proc
 	GetTileDesc_Object,          // get_tile_desc_proc
 	GetTileTrackStatus_Object,   // get_tile_track_status_proc

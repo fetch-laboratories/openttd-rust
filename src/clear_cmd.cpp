@@ -413,10 +413,12 @@ static void ChangeTileOwner_Clear(TileIndex, Owner, Owner)
 	return;
 }
 
+#ifndef WITH_RUST
 static CommandCost TerraformTile_Clear(TileIndex tile, DoCommandFlags flags, int, Slope)
 {
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
 }
+#endif
 
 #ifndef WITH_RUST
 static CommandCost CheckBuildAbove_Clear(TileIndex, DoCommandFlags, Axis, int)
@@ -444,7 +446,11 @@ extern const TileTypeProcs _tile_type_clear_procs = {
 	nullptr,                     ///< add_produced_cargo_proc
 	nullptr,                     ///< vehicle_enter_tile_proc
 	GetFoundation_Clear,      ///< get_foundation_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	TerraformTile_Clear,      ///< terraform_tile_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust tunnel and bridge construction owns the check.
 #else

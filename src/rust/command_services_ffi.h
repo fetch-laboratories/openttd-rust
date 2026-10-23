@@ -12,6 +12,7 @@
 #include "command_cost_ffi.h"
 struct Train;
 struct OpenTTDCompanyFinanceServices;
+struct OpenTTDLandscapeCommandServices;
 struct OpenTTDCommandServices {
 	bool (*enter)() noexcept OPENTTD_SERVICE_DEFAULT(enter);
 	void (*leave)() noexcept OPENTTD_SERVICE_DEFAULT(leave);
@@ -19,7 +20,7 @@ struct OpenTTDCommandServices {
 	bool (*infinite_money)() noexcept OPENTTD_SERVICE_DEFAULT(infinite_money);
 	void (*money_error)(OpenTTDCommandCost *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(money_error);
 	void (*infrastructure_dirty)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(infrastructure_dirty);
-	void (*landscape_clear)(OpenTTDCommandCost *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(landscape_clear);
+	const OpenTTDLandscapeCommandServices *(*landscape_commands)() noexcept OPENTTD_SERVICE_DEFAULT(landscape_commands);
 	void (*tile_ownership)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_ownership);
 	void (*ownership)(OpenTTDCommandCost *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ownership);
 	void (*no_vehicle)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(no_vehicle);
@@ -28,6 +29,7 @@ struct OpenTTDCommandServices {
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
 extern "C" {
+bool openttd_rust_command_stack_probe(const OpenTTDCommandCostServices *);
 void openttd_rust_command_before(const OpenTTDCommandServices *, bool, bool);
 void openttd_rust_command_after(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, OpenTTDCommandCost *, uint16_t, bool, bool);
 void openttd_rust_command_subtract_money(const OpenTTDCommandServices *, const OpenTTDCommandCostServices *, const OpenTTDCommandCost *);

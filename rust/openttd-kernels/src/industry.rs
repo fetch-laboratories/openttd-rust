@@ -1263,9 +1263,6 @@ pub unsafe extern "C" fn openttd_rust_industry_trim(i: *mut Industry) {
     }
 }
 
-fn tile_xy(x: u32, y: u32, map: Map) -> u32 {
-    y.wrapping_mul(map.size_x).wrapping_add(x)
-}
 fn suitable(tile: u32, fields: bool, rough: bool, s: &Services) -> bool {
     let info = unsafe { (s.farm_tile)(tile) };
     match info.kind {
@@ -1318,6 +1315,9 @@ fn plant(tile: u32, industry: u16, map: Map, s: &Services, landscape: &impl Fn()
         r += 0x404;
     }
     let (width, height) = (map.size_x, map.size_y);
+    let tiles = crate::map_func::Map {
+        log_x: width.trailing_zeros() as u8,
+    };
     let sx = r & 255;
     let sy = (r >> 8) & 255;
     let x = tile % width;
@@ -1332,7 +1332,7 @@ fn plant(tile: u32, industry: u16, map: Map, s: &Services, landscape: &impl Fn()
     let mut count = 0;
     for yy in y..y + sy {
         for xx in x..x + sx {
-            count += u32::from(suitable(tile_xy(xx, yy, map), false, false, s));
+            count += u32::from(suitable(tiles.tile_xy(xx, yy), false, false, s));
         }
     }
     if count * 2 < sx * sy {
@@ -1343,7 +1343,7 @@ fn plant(tile: u32, industry: u16, map: Map, s: &Services, landscape: &impl Fn()
     let field = ((((r >> 8) & 255) * 9) >> 8) as u8;
     for yy in y..y + sy {
         for xx in x..x + sx {
-            let tile = tile_xy(xx, yy, map);
+            let tile = tiles.tile_xy(xx, yy);
             if suitable(tile, true, true, s) {
                 unsafe { (s.make_field)(tile, field, counter, industry) };
             }
@@ -1353,10 +1353,10 @@ fn plant(tile: u32, industry: u16, map: Map, s: &Services, landscape: &impl Fn()
     if landscape() != LANDSCAPE_ARCTIC && landscape() != LANDSCAPE_TROPIC {
         kind = [1, 1, 1, 1, 1, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6][(rand(s) & 15) as usize];
     }
-    fence(tile_xy(x, y, map), sy, kind, 0, map, s);
-    fence(tile_xy(x, y, map), sx, kind, 3, map, s);
-    fence(tile_xy(x + sx - 1, y, map), sy, kind, 2, map, s);
-    fence(tile_xy(x, y + sy - 1, map), sx, kind, 1, map, s);
+    fence(tiles.tile_xy(x, y), sy, kind, 0, map, s);
+    fence(tiles.tile_xy(x, y), sx, kind, 3, map, s);
+    fence(tiles.tile_xy(x + sx - 1, y), sy, kind, 2, map, s);
+    fence(tiles.tile_xy(x, y + sy - 1), sx, kind, 1, map, s);
 }
 fn farm_with_landscape(
     i: *mut c_void,
@@ -1398,16 +1398,19 @@ fn chop(i: *mut c_void, owner: *mut Industry, map: Map, s: &Services, builder: *
     }
     let l = unsafe { (s.location)(i) };
     let width = map.size_x;
+    let tiles = crate::map_func::Map {
+        log_x: width.trailing_zeros() as u8,
+    };
     for y in l.tile / width..l.tile / width + u32::from(l.height) {
         for x in l.tile % width..l.tile % width + u32::from(l.width) {
-            if unsafe { !(s.tile_completed)(i, tile_xy(x, y, map)) } {
+            if unsafe { !(s.tile_completed)(i, tiles.tile_xy(x, y)) } {
                 return;
             }
         }
     }
     let mut spiral = crate::spiral::square(l.tile % width, l.tile / width, 40, width, map.size_y);
     while !spiral.is_end() {
-        let tile = tile_xy(spiral.x, spiral.y, map);
+        let tile = tiles.tile_xy(spiral.x, spiral.y);
         let info = unsafe { (s.farm_tile)(tile) };
         if info.kind == MP_TREES && info.grown != 0 {
             let b = build_fields(builder);
@@ -1745,7 +1748,6 @@ crate::abi::layouts! {
         terragenesis,
         ignore_restrictions,
         platform,
-        terraform,
         can_allocate,
         allocate,
         prospecting_chance,
@@ -1781,7 +1783,7 @@ crate::abi::layouts! {
         tile_max_z,
         autoslope_callback,
         callback_boolean,
-        landscape_clear,
+        command_checks,
     };
     "OpenTTDIndustryCostServices" ["industry"] => crate::industry::IndustryCostServices {
         zero,
