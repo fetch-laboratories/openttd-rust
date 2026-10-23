@@ -10,6 +10,8 @@
 
 /// `DIR_END`.
 pub const DIR_END: u8 = 8;
+/// `AXIS_Y`.
+pub const AXIS_Y: u8 = 1;
 /// `DIAGDIR_NE`.
 pub const DIAGDIR_NE: u8 = 0;
 /// `DIAGDIR_SE`.
