@@ -1,6 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file animation-console.hpp Controlled resolver programs on real tiles; both games execute their own bodies. */
-#include "saveload/saveload.cpp" // Unchanged native reader/dispatcher; objects adapter replaces this object.
 #include "animated_tile_map.h"
 #include "animated_tile_func.h"
 #include "industrytype.h"
@@ -57,7 +56,7 @@ static void AnimationLoadProbe(std::string_view kind)
 	SlSaveChunk(handler);
 	const auto size = _sl.dumper->GetSize();
 	std::vector<uint8_t> bytes(_sl.dumper->blocks[0].get() + 4, _sl.dumper->blocks[0].get() + size);
-	if (kind == "header") bytes = {0xF}; // Rejected before invoking Load().
+	if (kind == "header") bytes = {CH_TABLE, 2, 0xFF}; // Invalid table field type, before vector decoding.
 	if (kind == "partial") bytes.resize(bytes.size() - 5); // Two values decoded, third default-constructed.
 	if (kind == "excess") { bytes.back() = 2; bytes.push_back(0); bytes.push_back(0); }
 	if (kind == "fixed" || kind == "riff") {
@@ -65,6 +64,7 @@ static void AnimationLoadProbe(std::string_view kind)
 		if (kind == "fixed") { bytes.resize(1028); bytes[2] = 4; bytes[3] = 0; }
 	}
 	RestoreAnimationQueue({TileIndex{11}, TileIndex{22}});
+	if (AnimationQueue().size() != 2) std::abort();
 	_sl = {}; _sl.action = SLA_LOAD; _next_offs = 0;
 	_sl_version = kind == "fixed" ? static_cast<SaveLoadVersion>(79) : kind == "riff" ? SLV_80 : SAVEGAME_VERSION;
 	_sl.reader = std::make_unique<ReadBuffer>(std::make_shared<AnimationInput>(std::move(bytes)));
@@ -77,6 +77,7 @@ static void AnimationLoadProbe(std::string_view kind)
 #ifdef WITH_RUST
 	restored = RustAnimationSave::active == &outer.tiles;
 #endif
+	if (!restored || AnimationQueue().empty() || caught != (kind != "valid" && kind != "fixed") || (caught && _sl.action != SLA_NULL)) std::abort();
 	fmt::print(stderr, "OBJECT animation-load {} {} {} {} {} {}", kind, caught, _sl.action == SLA_NULL, restored, _sl.error_str, _sl.extra_msg);
 	for (TileIndex tile : AnimationQueue()) fmt::print(stderr, " {}", tile.base());
 	fmt::print(stderr, "\nOBJECT animation-load-complete {}\n", kind);
@@ -165,11 +166,14 @@ static void AnimationBindingsProbe()
 	Backup<std::vector<RoadStopTileData>> road_data(rs->custom_roadstop_tile_data);
 	const auto road_index = GetCustomRoadStopSpecIndex(tiles[4]); rs->roadstop_speclist.resize(2); rs->roadstop_speclist[1].spec = &road; SetCustomRoadStopSpecIndex(tiles[4], 1);
 	AnimationBindingProbe("roadstop", tiles[4], &road, RoadStopCallbackMask::AnimationSpeed, RoadStopCallbackMask::AnimationNextFrame, AnimateRoadStopTile, [rs, t = tiles[4]](int value) { if (value >= 0) rs->SetRoadStopAnimationFrame(t, value); return rs->GetRoadStopAnimationFrame(t); }, [&road](bool bits) { road.flags.Set(RoadStopSpecFlag::Cb141RandomBits, bits); });
+	const auto zero_queue = AnimationQueue(); const auto zero_state = GetAnimatedTileState(tiles[4]);
 	rs->custom_roadstop_tile_data.clear();
 	fmt::print(stderr, "OBJECT animation-road-zero {}", rs->GetRoadStopAnimationFrame(tiles[4]));
 	road.animation.frames = 0; road.animation.speed = 0; road.callback_mask.Reset();
+	SetAnimatedTileState(tiles[4], AnimatedTileState::None); AddAnimatedTile(tiles[4], false);
 	AnimateRoadStopTile(tiles[4]);
 	fmt::print(stderr, " {} {} {}\n", rs->custom_roadstop_tile_data.size(), rs->GetRoadStopAnimationFrame(tiles[4]), GetAnimatedTileState(tiles[4]) == AnimatedTileState::Deleted);
+	RestoreAnimationQueue(zero_queue); SetAnimatedTileState(tiles[4], zero_state);
 	SetCustomRoadStopSpecIndex(tiles[4], road_index);
 	auto *o = const_cast<ObjectSpec *>(ObjectSpec::GetByTile(tiles[5]));
 	Backup<ObjectFlags> flags(o->flags); o->flags.Set(ObjectFlag::Animation);

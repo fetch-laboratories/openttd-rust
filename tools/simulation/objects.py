@@ -68,9 +68,11 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                     False,
                 )
                 logs[role] = [x for x in run["log"] if x.startswith("OBJECT ")]
-                if run["exit"] or logs[role][-1:] != [
-                    "OBJECT animation-load-complete " + kind
-                ]:
+                if (
+                    run["exit"]
+                    or len(logs[role]) != 2
+                    or logs[role][-1:] != ["OBJECT animation-load-complete " + kind]
+                ):
                     raise RuntimeError(f"{role}: missing actual ANIT {kind} evidence")
             if logs["reference"] != logs["candidate"]:
                 raise RuntimeError(f"actual ANIT {kind} differs: {logs}")

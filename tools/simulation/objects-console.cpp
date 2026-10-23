@@ -6,6 +6,7 @@
  */
 
 /** @file objects-console.cpp Identical inputs to unchanged original and Rust-backed bodies. */
+#include "saveload/saveload.cpp" // Unchanged native reader/dispatcher; relink replaces this object.
 #define GetObjectCallback ObjectProbeCallback
 #define SetGeneratingWorldProgress ObjectProbeSetProgress
 #define IncreaseGeneratingWorldProgress ObjectProbeIncreaseProgress
