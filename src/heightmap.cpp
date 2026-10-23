@@ -525,6 +525,8 @@ bool GetHeightmapDimensions(DetailedFileType dft, std::string_view filename, uin
  * @param filename of the heightmap file to be imported
  */
 #ifdef WITH_RUST
+static_assert(HM_COUNTER_CLOCKWISE == 0 && HM_CLOCKWISE == 1);
+static_assert(16384 <= std::numeric_limits<uint>::max() / MAX_HEIGHTMAP_SIDE_LENGTH_IN_PIXELS);
 RustHeightmapDecoder::RustHeightmapDecoder(DetailedFileType type, std::string_view filename) : type(type), filename(filename), view{
 	.context = this,
 	.read = [](void *ctx, OpenTTDHeightmapImage *out) noexcept {

@@ -31,6 +31,7 @@ mod engine_type;
 mod genland;
 mod genworld;
 mod ground;
+mod heightmap;
 mod history;
 mod integer;
 mod landscape;

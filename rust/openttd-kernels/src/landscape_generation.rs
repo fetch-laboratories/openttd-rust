@@ -21,6 +21,7 @@ use crate::genworld::{
     LG_TERRAGENESIS, Progress,
 };
 use crate::ground::ClearServices;
+use crate::heightmap::{HM_CLOCKWISE, HM_COUNTER_CLOCKWISE};
 use crate::landscape_type::{ARCTIC, TROPIC};
 use crate::node_hash::{NodeMap, NodeSet};
 use crate::services::chance16_i;
@@ -266,10 +267,10 @@ impl World<'_> {
     }
     fn greyscale(&self, image: &Image, rotation: u8, freeform: bool, heightmap_height: u8) {
         const DIV: u32 = 16384;
-        if rotation > 1 {
+        if rotation != HM_COUNTER_CLOCKWISE && rotation != HM_CLOCKWISE {
             (self.a.not_reached)();
         }
-        let (width, height) = if rotation == 0 {
+        let (width, height) = if rotation == HM_COUNTER_CLOCKWISE {
             (self.map.size_x(), self.size_y)
         } else {
             (self.size_y, self.map.size_x())
@@ -286,7 +287,7 @@ impl World<'_> {
         }
         for row in 0..height {
             for col in 0..width {
-                let tile = if rotation == 0 {
+                let tile = if rotation == HM_COUNTER_CLOCKWISE {
                     self.map.tile_xy(col, row)
                 } else {
                     self.map.tile_xy(row, col)
@@ -300,7 +301,7 @@ impl World<'_> {
                     (self.a.set_height)(tile, 0);
                 } else {
                     let img_row = (row - row_pad) * DIV / scale;
-                    let img_col = if rotation == 0 {
+                    let img_col = if rotation == HM_COUNTER_CLOCKWISE {
                         (width - 1 - col - col_pad) * DIV / scale
                     } else {
                         (col - col_pad) * DIV / scale
@@ -349,7 +350,7 @@ impl World<'_> {
             return false;
         }
         w::hit(w::GENERATION_HEIGHTMAP);
-        w::hit(if rotation == 0 {
+        w::hit(if rotation == HM_COUNTER_CLOCKWISE {
             w::GENERATION_HEIGHTMAP_CCW
         } else {
             w::GENERATION_HEIGHTMAP_CW
@@ -804,8 +805,9 @@ impl World<'_> {
                 && (flat.height < begin_height || (flat.height == begin_height && self.water(end)))
             {
                 if self.water(end) && (self.clear.water_class)(end) == WATER_CLASS_SEA {
+                    const MAX_SEA_SIZE_THRESHOLD: usize = 1024;
                     let threshold = (2.0 * f64::from(self.size()).sqrt()) as usize;
-                    let threshold = threshold.min(1024);
+                    let threshold = threshold.min(MAX_SEA_SIZE_THRESHOLD);
                     (self.a.sea_construct)(frame);
                     let edge = self.connected_sea(frame, end, threshold);
                     if edge || (self.a.sea_size)(frame) > threshold {
@@ -924,9 +926,18 @@ impl World<'_> {
         true
     }
     fn generate(&self, frame: *mut Frame, decoder: &Decoder, mode: u8, g: &Settings) -> bool {
-        let steps = if g.climate == TROPIC { 12 } else { 0 };
+        const GLS_HEIGHTMAP: u32 = 3;
+        const GLS_TERRAGENESIS: u32 = 4;
+        const GLS_ORIGINAL: u32 = 2;
+        const GLS_TROPIC: u32 = 12;
+        const GLS_OTHER: u32 = 0;
+        let steps = if g.climate == TROPIC {
+            GLS_TROPIC
+        } else {
+            GLS_OTHER
+        };
         if mode == GWM_HEIGHTMAP {
-            if !(self.a.set_progress)(frame, GWP_LANDSCAPE, steps + 3) {
+            if !(self.a.set_progress)(frame, GWP_LANDSCAPE, steps + GLS_HEIGHTMAP) {
                 return false;
             }
             if !self.load_heightmap(
@@ -943,7 +954,7 @@ impl World<'_> {
             }
         } else if g.generator == LG_TERRAGENESIS {
             w::hit(w::GENERATION_TGP);
-            if !(self.a.set_progress)(frame, GWP_LANDSCAPE, steps + 4) {
+            if !(self.a.set_progress)(frame, GWP_LANDSCAPE, steps + GLS_TERRAGENESIS) {
                 return false;
             }
             if !crate::tgp::run(self, frame, (self.a.tgp_settings)()) {
@@ -951,7 +962,7 @@ impl World<'_> {
             }
         } else {
             w::hit(w::GENERATION_ORIGINAL);
-            if !(self.a.set_progress)(frame, GWP_LANDSCAPE, steps + 2) {
+            if !(self.a.set_progress)(frame, GWP_LANDSCAPE, steps + GLS_ORIGINAL) {
                 return false;
             }
             if g.freeform {
