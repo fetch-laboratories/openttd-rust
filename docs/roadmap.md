@@ -8,7 +8,7 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 
 - Forty-three ownership ports. Whole fork: Rust 94,876 / tooling 34,817 / glue 35,264 / original retired 52,852 of 470,612 C/C++ `src/` lines (11.23%). Simulation: 44,716 / 102,615 (43.58%).
 - Latest integrations: #360 rail construction, then #368 combining visits #359, cleanup #361 and CI #365. Both used current-base Full and strict protection; #368 restored verified `CI_ON_DEMAND=true`. The linear nearby-industry repair remains on #261.
-- Speed: the due profile is running at frozen `4ddd8cfab4` with the verified anchored runtime (#356). Last accepted pre-rail profile at code `9f2c92b51e`: TGP 1.213575x, Opus 1.218885x, Grok 1.225347x, P1996 1.254140x, P2000 1.323060x, P2016 1.358763x. Largest prior rise: 1.92%; none in its speed-pass band. Anchors remain unchanged.
+- Speed: merged-tip profile at `4ddd8cfab4` passed all six comparisons/identities with the verified anchored runtime (#356): TGP 1.213575x, Opus 1.231172x, Grok 1.236176x, P1996 1.257340x, P2000 1.336737x, P2016 1.371234x. Largest rise since the accepted pre-rail tip: 1.04%; none in its speed-pass band. Anchors remain unchanged; next profile after two integrations.
 - CI: the last due macOS Debug/Release run passed; two integrations since it, next due after three more. Bootstrap also tested both macOS configurations. #368 fixed observed Windows ABI-discovery/UTF-8 errors and one unused facade; its final runner dependency timeout passed a failed-jobs retry without moving head/base.
 - Component branches: #364, #369, #370, #374 and #375 (five of six), with #373 selected for the sixth slot. All are implemented; movement review runs while the others await final-base reconciliation. Shared station reservation #376 is reviewed and precedes waypoint/PBS adoption. Next concrete batch: ready generation, ground dynamics and this shared service.
 
@@ -197,7 +197,7 @@ Resumed 2026-10-23. Root is Codex (gpt-6.1-sol, ultra); implementation and indep
 | #261 / #376 | `b0657f8bbf` | Canonical reservation setter reviewed; conflict-free #368 update. Include with ready owners in next concrete validation. |
 | #373 / #377 / #378 | selected | Start scheduler from integrated base, then occupancy and graph contents as component slots free. Scopes/evidence/budgets are on issues. |
 
-#368 merged its exact validated combination; member PRs are merged and their worktrees removed. CI_ON_DEMAND is restored true. Root profiles the frozen tip in the background and records its six projections when complete. Complete routine docs before the next Full, then keep base stable. #368 needed platform fixes and one runner retry, with no stale-base Full rerun; integration notes carry the ten-integration observation.
+#368 merged its exact validated combination; member PRs are merged and their worktrees removed. CI_ON_DEMAND is restored true. The due frozen-tip profile passed; no >3% rise or speed-pass band was reached. Complete routine docs before the next Full, then keep base stable. #368 needed platform fixes and one runner retry, with no stale-base Full rerun; integration notes carry the ten-integration observation.
 Each open draft keeps one worktree. #281 part 2 and #261 R7/linear traversal remain on their issues. #64/#68/#69 stay paused. Preserve the pinned reference; do not reapply effect helper `73ccd511fb`.
 
 ## Out of scope for the near term
