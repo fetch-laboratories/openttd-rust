@@ -1372,27 +1372,28 @@ coverage gaps under #156. Independent review and exact-head Full are root's gate
 
 ### Animated-tile scheduling and shared animation control (#385, draft)
 
-The draft moves the process-wide queue, Add/Delete/Animate/Initialize, shared
-AnimationBase control, six feature bindings, station/airport/road-stop trigger
-traversals and tile dispatch to Rust. Existing owners call it directly; native
-map frames/bits, road-stop data, pools, specs and resolver evaluation remain.
-Initialization installs immutable typed services under the game-state mutex.
-Feature traits bind real spec/owner/extra/frame types and shared callback IDs;
-six native initializers retain stack resolvers. Object rejection precedes owner
-lookup. Generated concrete visitors check every binding, including version8.
-Queue and spec/state accesses end before callbacks; actual scheduled callbacks
-can request deferred deletion but cannot resize or immediately erase the queue.
-ANIT uses one scoped native vector and descriptor pointer: decoding and errors
-stay on native frames, publishing partial contents on unwind. Legacy append and
-first-occurrence cleanup retain source order. No persistent queue mirror exists.
-`python3 tools/migration.py simulate objects-gaps` requires six live resolver
-binding markers and compares loop/stop, speed gates, next-frame sentinels and
-RNG; existing effects-bubble scenarios compare ordered ANIT and bubble catchers.
-Native checks cover queue reactivation/swap removal, cleanup, staging unwind and
-ABI layouts. Trigger traversal/sound evidence, affected owner scenarios, final
-cost disposition, actual SlError/SlNullPointers evidence and independent review
-remain pending in PR #389. Historical saves, external GRF programs, GUI threading
-and raw speeds >=64 outside the pinned Linux compilation remain #156 limits.
+Rust owns the process-wide queue, Add/Delete/Animate/Initialize, shared animation
+control, six feature bindings, station/airport/road-stop triggers and dispatch.
+Existing owners call it directly; native map frames/bits, road-stop records,
+pools, specs, PSA and stack resolvers remain. Immutable typed services are
+installed under the game-state mutex. Spec/queue borrows end before callbacks.
+Feature traits fix actual types/callback IDs; generated visitors include version8.
+ANIT keeps scoped native staging, descriptor/active-pointer nesting and all Sl*
+frames, including partial publication on unwind. Historical append and cleanup
+retain source order. There is no persistent native queue mirror.
+`python3 tools/migration.py simulate objects-gaps objects-reload` requires all six
+live bindings, callback/speed rows, station/platform and stored road-stop trigger
+order, airport filters/RNG parameters, zero-frame road-stop record insertion,
+and nonempty modern ANIT reload observed before animation (queue/frame/bits,
+road-stop records/RNG). The unchanged native saveload source/actual ANIT handler
+also exercise malformed table headers, decoded/default partial contents, excess
+rows through SlError/SlNullPointers, fixed-array append and RIFF resize semantics.
+Airport refresh calls shared SB, including its unmasked high-bit OR behavior.
+Native ABI/queue tests and effects-bubble comparisons remain. Trigger sentinel/
+sound/leaf-order matrices, explicit null-spec/member order and nonempty affected
+removal routes remain unfinished under the evidence cap; review/cost disposition
+are pending. Historical corpus, external GRFs, GUI threads and raw speeds >=64
+outside the observed pinned Linux compilation remain #156 limits.
 
 <!-- Subsystem: Vehicles, pathfinding and orders. Add a new entry at the end of its group, not of the file. -->
 
