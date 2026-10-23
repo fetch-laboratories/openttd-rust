@@ -1787,7 +1787,7 @@ rotation, spawn/join/requeue, pool-wide date shifts and pause policy. Native poo
 job snapshots, worker launch/join, abort and acquire/release completion publication
 remain unchanged; existing job computation is not counted as new retirement.
 A constant-initialized member table supplies 20 typed noexcept operations; Time is
-one narrow entry observation. Visits call queue/dequeue directly in Rust. Shared
+one narrow entry observation. Visits and cargo admission call queues directly in Rust. Shared
 graph size/ID/validity/get helpers serve the job reader and existing consumers.
 No queue borrow crosses native callbacks, including synchronous fallback and deletion.
 LGRS keeps two native scoped vectors with the original reference field names/order.
@@ -1800,8 +1800,8 @@ and queue/spawn/join/requeue/reload/import witnesses. Their module compiles unch
 pinned scheduler bodies for worker/pause, duplicate rotation, recycled-ID, clear and
 pool-shift gaps, failing absent completion markers. Native tests exercise ABI,
 partial-state unwind and real SlError recursive cleanup. Actual concurrent worker,
-multiplayer/GUI timing and historical LGRS versions remain #156 gaps. Root still
-must arrange independent fixing review and decide actual cost/retirement disposition.
+multiplayer/GUI timing and historical LGRS versions remain #156 gaps. Independent
+source review and focused checks pass; root must decide actual cost/retirement disposition.
 
 <!-- Subsystem: Towns, industries and subsidies. Add a new entry at the end of its group, not of the file. -->
 
