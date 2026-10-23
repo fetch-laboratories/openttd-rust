@@ -67,6 +67,7 @@ static void GroundPhysicsProbe(T *v, Info &info)
 		++cases;
 	}
 	fmt::print(stderr, "FLEET ground-probe {} {} {}\n", v->type, cases, static_cast<Vehicle *>(v)->GetMaxWeight());
+	cache.Restore(); flags.Restore(); speed.Restore(); subspeed.Restore(); progress.Restore(); status.Restore();
 }
 
 static void Cost(const char *name, const CommandCost &cost)

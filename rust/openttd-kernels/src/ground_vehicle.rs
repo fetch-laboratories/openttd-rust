@@ -5,8 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! `ground_vehicle.hpp` subtype helpers over a copied `Vehicle::subtype`.
-//! Setters return the new value; callers store it at the original point.
+//! Canonical ground cache/flags, dynamics and train/road physics callees.
+//! Native shells own one stable allocation. Every raw scalar access ends before
+//! property, viewport, crash or other potentially reentrant services.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -108,6 +109,7 @@ pub unsafe extern "C" fn openttd_rust_ground_destroy(state: *mut State) {
 }
 
 use crate::direction_func::{diag_dir_to_axis, dir_to_diag_dir};
+use crate::direction_type::{DIAGDIR_NE, DIAGDIR_NW};
 use crate::engine_type::{ACCELERATION_MAGLEV, ACCELERATION_NORMAL};
 use crate::newgrf_properties::{
     PROP_ROADVEH_POWER, PROP_ROADVEH_TRACTIVE_EFFORT, PROP_ROADVEH_WEIGHT, PROP_TRAIN_POWER,
@@ -624,7 +626,7 @@ pub(crate) fn update_z(s: &Services, v: VehicleRef) {
         } else {
             xy.y as i8
         }) & 1;
-        d ^= i8::from(dir == 3 || dir == 0);
+        d ^= i8::from(dir == DIAGDIR_NW || dir == DIAGDIR_NE);
         let z = (s.vehicle.z)(v);
         let delta = if unsafe { (*o.state).flags } & (1 << GVF_GOINGUP_BIT) != 0 {
             d
