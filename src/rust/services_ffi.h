@@ -288,7 +288,6 @@ struct OpenTTDRailMapServices {
 	SignalVariant (*signal_variant)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_variant);
 	void (*set_signal_variant)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_variant);
 	void (*cycle_signal_side)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cycle_signal_side);
-	TrackBits (*reserved_tracks)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(reserved_tracks);
 	TrackBits (*rail_reservation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_reservation);
 	void (*set_track_reservation)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_track_reservation);
 	bool (*depot_reserved)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_reserved);

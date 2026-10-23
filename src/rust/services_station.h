@@ -70,7 +70,6 @@ inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Statio
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->facilities.Test(StationFacility::Airport); }
 inline bool RustStationHasHangar(const Station *s) noexcept { return s->airport.HasHangar(); }
 inline bool RustStationReserved(uint32_t tile) noexcept { return HasStationReservation(TileIndex{tile}); }
-inline void RustStationPlatformReservation(uint32_t tile, uint8_t dir, bool reserved) noexcept { SetRailStationPlatformReservation(TileIndex{tile}, static_cast<DiagDirection>(dir), reserved); }
 inline bool RustCompatibleStationTiles(uint32_t a, uint32_t b) noexcept { return IsCompatibleTrainStationTile(TileIndex{a}, TileIndex{b}); }
 inline bool RustStationStationAvailable() noexcept { return Station::CanAllocateItem(); }
 inline void RustStationSetTown(BaseStation *st, const OpenTTDTownHandle *town) noexcept { st->town = const_cast<Town *>(reinterpret_cast<const Town *>(town)); }
@@ -88,7 +87,6 @@ inline void RustStationSetBuildDate(BaseStation *st, int32_t date) noexcept { st
 inline void RustStationListInvalidation(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_LIST, st->owner, data); }
 /** Width/handle adapters for older typed service tables. */
 template <class T> inline uint8_t RustStationOwnerByte(T *st) noexcept { return OpenTTDStationOwner(st).base(); }
-template <class Handle> inline void RustStationLegacyPlatformReservation(Handle, uint32_t tile, uint8_t dir, uint8_t reserved) noexcept { RustStationPlatformReservation(tile, dir, reserved != 0); }
 template <class Handle> inline uint64_t RustStationLegacyCompatible(Handle, uint32_t a, uint32_t b) noexcept { return RustCompatibleStationTiles(a, b); }
 inline bool RustStationRoadWaypoint(BaseStation *st) noexcept { return HasBit(Waypoint::From(st)->waypoint_flags, WPF_ROAD); }
 inline void RustStationClearAirport(BaseStation *st) noexcept { Station::From(st)->airport.Clear(); }

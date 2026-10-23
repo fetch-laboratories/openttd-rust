@@ -22,7 +22,7 @@ static Result TrainReservationSharedMap(void *, OpenTTDTrainHandle, uint32_t til
 static uint64_t TrainReservationAllCompat(void *, OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return GetAllCompatibleRailTypes(v->GetRailTypes()).base();
+	return RustAllCompatibleRailTypes(v->GetRailTypes().base());
 }
 static uint64_t TrainReservationBackoff(void *, OpenTTDTrainHandle) noexcept
 {
@@ -32,11 +32,7 @@ static uint64_t TrainReservationBitsTrack(void *, OpenTTDTrainHandle, uint8_t a)
 {
 	return TrackBitsToTrack(static_cast<TrackBits>(a));
 }
-static uint64_t TrainReservationBlocking(void *, OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	TileIndex t(static_cast<uint32_t>(a));
-	return HasOnewaySignalBlockingTrackdir(t, static_cast<Trackdir>(b));
-}
+
 static uint64_t TrainReservationCheckReverse(void *, OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -82,11 +78,7 @@ static uint64_t TrainReservationExitDir(void *, OpenTTDTrainHandle, uint8_t a) n
 	return TrackdirToExitdir(static_cast<Trackdir>(a));
 }
 
-static uint64_t TrainReservationHasPbs(void *, OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	TileIndex t(static_cast<uint32_t>(a));
-	return HasPbsSignalOnTrackdir(t, static_cast<Trackdir>(b));
-}
+
 
 static void TrainReservationIncrementOrder(void *, OpenTTDTrainHandle id) noexcept
 {
@@ -259,15 +251,7 @@ static void TrainReservationWriteSuppress(void *, OpenTTDTrainHandle id, uint8_t
 }
 static uint8_t TrainReservationFollow(OpenTTDTrainHandle id, uint64_t railtypes, OpenTTDTrainReservationFollow *out) noexcept
 {
-	CFollowTrackRail ft(static_cast<Train *>(id.shell), RailTypes(railtypes));
-	ft.new_tile = TileIndex(out->new_tile); ft.new_td_bits = static_cast<TrackdirBits>(out->dirs);
-	ft.exitdir = static_cast<DiagDirection>(out->exitdir); ft.is_tunnel = out->tunnel;
-	ft.is_bridge = out->bridge; ft.is_station = out->station; ft.tiles_skipped = out->skipped;
-	bool followed = ft.Follow(TileIndex(out->old_tile), static_cast<Trackdir>(out->old_td));
-	*out = {ft.old_tile.base(), ft.new_tile.base(), ft.tiles_skipped, ft.new_td_bits,
-	ft.old_td, ft.exitdir, static_cast<uint8_t>(ft.is_tunnel), static_cast<uint8_t>(ft.is_bridge),
-	static_cast<uint8_t>(ft.is_station), ft.err};
-	return followed;
+	return RustFollowTrackRail(id, 0, railtypes, out);
 }
 
 

@@ -22,20 +22,6 @@
 #include "safeguards.h"
 
 #ifdef WITH_RUST
-/* The named follower is reconstructed without allocation. Carry every mutated
- * output across calls, including partial failure observations. No native pointer
- * into map/pool storage is retained by Rust. */
-static bool PbsFollow(OpenTTDTrainHandle v, uint8_t owner, uint64_t types, OpenTTDTrainReservationFollow *out) noexcept
-{
-	CFollowTrackRail ft = v.shell != nullptr ? CFollowTrackRail(static_cast<const Train *>(v.shell), RailTypes{types}) : CFollowTrackRail(Owner{owner}, RailTypes{types});
-	ft.new_tile = TileIndex{out->new_tile}; ft.new_td_bits = static_cast<TrackdirBits>(out->dirs);
-	ft.exitdir = static_cast<DiagDirection>(out->exitdir); ft.is_tunnel = out->tunnel;
-	ft.is_bridge = out->bridge; ft.is_station = out->station; ft.tiles_skipped = out->skipped;
-	bool followed = ft.Follow(TileIndex{out->old_tile}, static_cast<Trackdir>(out->old_td));
-	*out = {ft.old_tile.base(), ft.new_tile.base(), ft.tiles_skipped, ft.new_td_bits, ft.old_td, ft.exitdir,
-		static_cast<uint8_t>(ft.is_tunnel), static_cast<uint8_t>(ft.is_bridge), static_cast<uint8_t>(ft.is_station), ft.err};
-	return followed;
-}
 const OpenTTDPbsServices &GetPbsServices() noexcept
 {
 	static const OpenTTDPbsServices s{
@@ -73,7 +59,7 @@ const OpenTTDPbsServices &GetPbsServices() noexcept
 		.blocking = RustOnewaySignalBlocking,
 		.has_pbs = RustHasPbsSignal,
 		.index = RustVehicleIndexOpaque,
-		.follow = PbsFollow,
+		.follow = RustFollowTrackRail,
 	};
 	return s;
 }

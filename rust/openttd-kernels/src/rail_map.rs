@@ -14,3 +14,8 @@ use crate::map_func::TileTypeAccess;
 pub(crate) fn get_rail_ground_type(m: &TileTypeAccess, t: u32) -> Option<u8> {
     Some(m.m4(t)? & 15)
 }
+
+/// `IsPbsSignal`, from `rail_map.h`.
+pub const fn is_pbs_signal(kind: u8) -> bool {
+    kind == crate::signal_type::SIGTYPE_PBS || kind == crate::signal_type::SIGTYPE_PBS_ONEWAY
+}

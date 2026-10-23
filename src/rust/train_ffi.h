@@ -389,7 +389,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*servint)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(servint);
 	void (*set_depot_res)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_depot_res);
 	void (*set_next)(OpenTTDTrainHandle, OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(set_next);
-	void (*set_platform_res)(OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_platform_res);
 	void (*set_signal_state)(OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_state);
 	void (*set_tunnel_res)(OpenTTDTrainHandle, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tunnel_res);
 	void (*show_effect)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(show_effect);

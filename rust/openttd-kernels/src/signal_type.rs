@@ -8,7 +8,5 @@
 //! Signal types and inline policy from `signal_type.h`.
 /// `SIGTYPE_PBS_ONEWAY`.
 pub const SIGTYPE_PBS_ONEWAY: u8 = 5;
-/// `IsPbsSignal`.
-pub const fn is_pbs_signal(kind: u8) -> bool {
-    kind >= 4
-}
+/// `SIGTYPE_PBS`.
+pub const SIGTYPE_PBS: u8 = 4;

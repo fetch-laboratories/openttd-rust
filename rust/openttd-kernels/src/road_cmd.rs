@@ -949,7 +949,9 @@ impl<'a> Ctx<'a> {
                                 );
                                 (self.commands.infrastructure_dirty)(owner);
                             }
-                            let reserved = (self.rail.reserved_tracks)(tile).0 & (1 << track) != 0;
+                            let reserved = crate::pbs::Pbs::acquire(self.shared).reserved(tile)
+                                & (1 << track)
+                                != 0;
                             (self.r.make_crossing)(
                                 tile,
                                 company,

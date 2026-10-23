@@ -621,7 +621,6 @@ pub struct Leaves {
     pub servint: extern "C" fn(Handle) -> u64,
     pub set_depot_res: extern "C" fn(Handle, u32, u8),
     pub set_next: extern "C" fn(Handle, Handle),
-    pub set_platform_res: extern "C" fn(Handle, u32, u8, u8),
     pub set_signal_state: extern "C" fn(Handle, u32, u8, u8),
     pub set_tunnel_res: extern "C" fn(Handle, u32, u8),
     pub show_effect: extern "C" fn(Handle),
@@ -1521,11 +1520,10 @@ impl Game<'_> {
                 okay = false;
             }
             if (self.leaves.is_station)(Handle::NONE, tile) != 0 {
-                (self.leaves.set_platform_res)(
-                    id,
+                crate::pbs::Pbs::acquire(self.services).platform(
                     tile,
                     (self.leaves.trackdir_exit)(id, td) as u8,
-                    1,
+                    true,
                 );
             }
             // SAFETY: id.shell is the live Train for this serialized entry; no owner borrow spans the call.
@@ -2181,8 +2179,8 @@ impl Game<'_> {
                 Handle::NONE,
                 (self.leaves.station_axis)(Handle::NONE, tile) as u8,
             ) as u8;
-            (self.leaves.set_platform_res)(Handle::NONE, tile, dir, u8::from(occupied));
-            (self.leaves.set_platform_res)(Handle::NONE, tile, dir ^ 2, u8::from(occupied));
+            crate::pbs::Pbs::acquire(self.services).platform(tile, dir, occupied);
+            crate::pbs::Pbs::acquire(self.services).platform(tile, dir ^ 2, occupied);
         }
         if (self.leaves.is_tunnelbridge)(Handle::NONE, tile) != 0
             || (self.leaves.is_depot)(Handle::NONE, tile) != 0

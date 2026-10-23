@@ -1215,7 +1215,10 @@ impl<'a> World<'a> {
             return std::ptr::null_mut();
         }
         w::hit(w::TB_RESERVATION);
-        let train = (self.r.reserving_train)(tile, track);
+        let train = crate::pbs::Pbs::acquire(self.s)
+            .train_for(tile, track)
+            .shell
+            .cast::<Train>();
         if !train.is_null() {
             unsafe {
                 (self.s.free_train_reservation)(train);

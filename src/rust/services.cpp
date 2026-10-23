@@ -558,7 +558,7 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 		.signal_variant = RustSignalVariant,
 		.set_signal_variant = RustSetSignalVariant,
 		.cycle_signal_side = RustCycleSignalSide,
-		.reserved_tracks = RustReservedTracks,
+
 		.rail_reservation = RustRailReservation,
 		.set_track_reservation = RustSetTrackReservation,
 		.depot_reserved = RustDepotReserved,

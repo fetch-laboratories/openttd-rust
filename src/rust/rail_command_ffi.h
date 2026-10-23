@@ -64,7 +64,6 @@ struct OpenTTDRailCommandServices {
 	void (*rail_infrastructure)(uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_infrastructure);
 	void (*road_infrastructure)(uint8_t, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_infrastructure);
 	void (*signal_infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_infrastructure);
-	Train *(*reserving_train)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reserving_train);
 	OpenTTDRailTrainParking (*parking)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(parking);
 	OpenTTDRailTrainPosition (*train_position)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(train_position);
 	void (*layout_changed)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_changed);

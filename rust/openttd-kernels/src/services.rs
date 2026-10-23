@@ -1023,7 +1023,6 @@ pub struct RailMapServices {
     /// Native `CycleSignalSide`.
     pub cycle_signal_side: extern "C" fn(u32, u8),
     /// Native `GetReservedTrackbits`.
-    pub reserved_tracks: extern "C" fn(u32) -> TrackBits,
     /// Native `GetRailReservationTrackBits`.
     pub rail_reservation: extern "C" fn(u32) -> TrackBits,
     /// Native `SetTrackReservation`.

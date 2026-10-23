@@ -64,7 +64,6 @@ pub struct Tile {
     pub station: u16,
     pub railtype: u8,
     pub tracks: u8,
-    pub reserved: u8,
     pub station_track: u8,
     pub tunnel_dir: u8,
     pub uphill: u8,
@@ -719,7 +718,7 @@ impl Search {
                 cur = offset(cur, exit(td ^ 8), self.input.map_x);
             }
         }
-        if overlaps(t.reserved, td) {
+        if overlaps(self.pbs().reserved(tile), td) {
             let mut cost = self.input.settings.pbs_cross as i32;
             if !diagonal(td) {
                 cost = mul(cost, 71) / 100;

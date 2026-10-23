@@ -281,7 +281,7 @@ impl<'a> Pbs<'a> {
     fn block_signal(self, tile: u32, td: u8) -> bool {
         (self.shared().tile_type)(tile) == MP_RAILWAY
             && (self.rail().has_signal_trackdir)(tile, td)
-            && !crate::signal_type::is_pbs_signal(
+            && !crate::rail_map::is_pbs_signal(
                 (self.rail().signal_type)(tile, trackdir_to_track(td)).0,
             )
     }

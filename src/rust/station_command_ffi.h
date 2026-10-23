@@ -118,7 +118,6 @@ struct OpenTTDStationCommandServices {
 	Train *(*last_train)(Train *) noexcept OPENTTD_SERVICE_DEFAULT(last_train);
 	const OpenTTDTrainServices *train;
 	const OpenTTDTrainReservationLeaves *reservation;
-	void (*platform_reservation)(uint32_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(platform_reservation);
 	bool (*compatible_tiles)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_tiles);
 	uint32_t (*custom_rail_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(custom_rail_index);
 	void (*make_rail_station)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_rail_station);

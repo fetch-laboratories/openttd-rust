@@ -55,7 +55,6 @@ static OpenTTDRailTile RailTile(uint32_t tile, uint8_t direction) noexcept
 		| (IsPlainRailTile(t) ? 64U : 0U) | (IsLevelCrossingTile(t) ? 128U : 0U)
 		| (IsBridgeTile(t) ? 256U : 0U) | (IsTunnelTile(t) ? 512U : 0U);
 	result.railtype = GetTileRailType(t);
-	result.reserved = RustReservedTracks(tile);
 	if (IsPlainRailTile(t)) result.tracks = RustRailTracks(tile);
 	if (HasStationTileRail(t)) {
 		result.station = MapSvcStationIndex(tile);

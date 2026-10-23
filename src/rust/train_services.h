@@ -461,10 +461,7 @@ static uint64_t TrainNo90(OpenTTDTrainHandle, uint8_t a, uint8_t b) noexcept
 {
 	return Rail90DegTurnDisallowed(static_cast<RailType>(a), static_cast<RailType>(b));
 }
-static uint64_t TrainOnewayBlocking(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	return HasOnewaySignalBlockingTrackdir(TileIndex(a), static_cast<Trackdir>(b));
-}
+
 static void TrainOrderDepotService(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -592,10 +589,7 @@ static void TrainShowEffect(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	v->ShowVisualEffect();
 }
-static uint64_t TrainSignalHasPbs(OpenTTDTrainHandle, uint32_t a, uint8_t b) noexcept
-{
-	return HasPbsSignalOnTrackdir(TileIndex(a), static_cast<Trackdir>(b));
-}
+
 static uint64_t TrainSignalPbs(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return IsPbsSignal(static_cast<SignalType>(a));
@@ -665,10 +659,7 @@ static uint64_t TrainTileOffsetDiag(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return static_cast<uint32_t>(TileOffsByDiagDir(static_cast<DiagDirection>(a)));
 }
-static uint64_t TrainTileRailType(OpenTTDTrainHandle, uint32_t a) noexcept
-{
-	return GetTileRailType(TileIndex(a));
-}
+
 static uint64_t TrainTileVirt(OpenTTDTrainHandle, int32_t a, int32_t b) noexcept
 {
 	return TileVirtXY(static_cast<int>(a), static_cast<int>(b)).base();
