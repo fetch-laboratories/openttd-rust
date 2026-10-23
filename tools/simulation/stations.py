@@ -442,6 +442,7 @@ static void StationGraphs()
 	auto it = Station::Iterate().begin();
 	for (size_t i = 0; i < stations.size(); i++, ++it) { StationNeed(it != Station::Iterate().end(), __LINE__); stations[i] = *it; graphs[i] = stations[i]->goods[cargo].link_graph; nodes[i] = stations[i]->goods[cargo].node; }
 	auto join = [cargo](LinkGraph *g, Station *st) { st->goods[cargo].link_graph = g->index; st->goods[cargo].node = g->AddNode(st); };
+	StationNeed(LinkGraph::CanAllocateItem(2), __LINE__);
 	LinkGraph *first = new LinkGraph(cargo), *second = new LinkGraph(cargo);
 	Backup<GoodsEntry::States> acceptance(stations[2]->goods[cargo].status);
 	stations[2]->goods[cargo].status.Set(GoodsEntry::State::Acceptance);
