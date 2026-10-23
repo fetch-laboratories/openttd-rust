@@ -10,7 +10,6 @@
 #define RUST_COMMAND_SERVICES_FFI_H
 #include "service_defaults.hpp"
 #include "command_cost_ffi.h"
-struct Train;
 struct OpenTTDOccupancyCommands;
 struct OpenTTDCompanyFinanceServices;
 struct OpenTTDLandscapeCommandServices;

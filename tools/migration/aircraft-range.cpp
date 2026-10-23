@@ -28,7 +28,6 @@ struct Aircraft {
 static std::array<Station, 2> stations;
 static std::array<bool, 2> valid;
 static std::array<unsigned, 4> messages{};
-	OpenTTDVehicleTileLinks links[2];
 Station *Station::GetIfValid(uint16_t id) { return id < 2 && valid[id] ? &stations[id] : nullptr; }
 static uint32_t DistanceSquare(uint32_t a, uint32_t b) { int dx = (a & 63) - (b & 63), dy = (a >> 6) - (b >> 6); return dx * dx + dy * dy; }
 static bool HasBit(uint8_t value, uint8_t bit) { return (value & (1 << bit)) != 0; }
