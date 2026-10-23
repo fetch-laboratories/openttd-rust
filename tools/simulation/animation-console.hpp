@@ -87,7 +87,9 @@ static void AnimationLoadProbe(std::string_view kind)
 struct AnimationGroup : SpriteGroup {
 	AnimationGroup() {} // Preserve the pool index assigned by operator new.
 	uint16_t speed = 0, next = 0;
+	std::function<void(ResolverObject &)> observation;
 	ResolverResult Resolve(ResolverObject &ro) const override {
+		if (this->observation) this->observation(ro);
 		fmt::print(stderr, "OBJECT animation-callback {} {} {}\n", to_underlying(ro.callback), ro.callback_param1, ro.callback_param2);
 		bool is_speed = ro.callback == CBID_HOUSE_ANIMATION_SPEED || ro.callback == CBID_INDTILE_ANIMATION_SPEED || ro.callback == CBID_STATION_ANIMATION_SPEED || ro.callback == CBID_AIRPTILE_ANIMATION_SPEED || ro.callback == CBID_OBJECT_ANIMATION_SPEED;
 		return CallbackResult(is_speed ? speed : next);
@@ -134,20 +136,102 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 		fmt::print(stderr, "OBJECT animation-property-speed {} {} {} {}\n", name, raw, tick, frame(-1));
 	}
 
+	if constexpr (std::is_same_v<Spec, StationSpec> || std::is_same_v<Spec, RoadStopSpec>) {
+		auto *st = BaseStation::GetByTile(tile);
+		std::vector<TileIndex> members;
+		if constexpr (std::is_same_v<Spec, StationSpec>) {
+			for (TileIndex t : st->train_station) if (st->TileBelongsToRailStation(t)) members.push_back(t);
+		} else {
+			for (TileIndex t : Map::Iterate()) if (IsAnyRoadStopTile(t) && GetStationIndex(t) == st->index) members.push_back(t);
+		}
+		if (members.size() < 2) std::abort();
+		std::vector<std::tuple<TileIndex, uint8_t, uint8_t, AnimatedTileState>> saved;
+		for (TileIndex t : members) {
+			uint8_t index;
+			if constexpr (std::is_same_v<Spec, StationSpec>) { index = GetCustomStationSpecIndex(t); SetCustomStationSpecIndex(t, 1); }
+			else { index = GetCustomRoadStopSpecIndex(t); SetCustomRoadStopSpecIndex(t, 1); }
+			saved.emplace_back(t, index, GetAnimationFrame(t), GetAnimatedTileState(t));
+		}
+		auto &cached = [&]() -> StationAnimationTriggers & {
+			if constexpr (std::is_same_v<Spec, StationSpec>) return st->cached_anim_triggers;
+			else return st->cached_roadstop_anim_triggers;
+		}();
+		Backup<StationAnimationTriggers> old_cached(cached);
+		Backup<std::vector<RoadStopTileData>> data(st->custom_roadstop_tile_data);
+		if constexpr (std::is_same_v<Spec, RoadStopSpec>) {
+			st->custom_roadstop_tile_data.clear();
+			for (auto it = members.rbegin(); it != members.rend(); ++it) st->custom_roadstop_tile_data.push_back({*it, 19, 0});
+		}
+		group->next = 0xFD; file.cargo_map[0] = 37;
+		for (uint8_t phase = 0; phase < 4; phase++) for (uint8_t value = 0; value < 9; value++) {
+			auto event = static_cast<StationAnimationTrigger>(value);
+			cached = phase == 0 ? StationAnimationTriggers{} : StationAnimationTriggers{event};
+			spec->animation.triggers = phase == 1 ? StationAnimationTriggers{} : StationAnimationTriggers{event};
+			group->observation = [&, phase](ResolverObject &ro) {
+				TileIndex t;
+				if constexpr (std::is_same_v<Spec, StationSpec>) t = static_cast<StationResolverObject &>(ro).station_scope.tile;
+				else t = static_cast<RoadStopResolverObject &>(ro).roadstop_scope.tile;
+				fmt::print(stderr, "OBJECT animation-visit {} {} {} {} {} {}\n", name, t.base(), ro.callback_param1, ro.callback_param2, _random.state[0], _random.state[1]);
+				if (phase == 3) spec->animation.triggers.Reset();
+			};
+			if constexpr (std::is_same_v<Spec, StationSpec>) TriggerStationAnimation(st, tile, event, 0);
+			else TriggerRoadStopAnimation(st, tile, event, 0);
+			fmt::print(stderr, "OBJECT animation-traversal {} {} {} {} {}\n", name, phase, value, _random.state[0], _random.state[1]);
+		}
+		for (auto [t, index, f, flags] : saved) {
+			if constexpr (std::is_same_v<Spec, StationSpec>) SetCustomStationSpecIndex(t, index);
+			else SetCustomRoadStopSpecIndex(t, index);
+			SetAnimationFrame(t, f); SetAnimatedTileState(t, flags);
+		}
+		group->observation = {};
+	}
+	if constexpr (std::is_same_v<Spec, AirportTileSpec>) {
+		auto *st = Station::GetByTile(tile);
+		const auto airport_tile = st->airport.tile; Backup<TileIndex> origin(st->airport.tile);
+		Backup<uint16_t> width(st->airport.w, st->airport.w + 1); // Include nonmembers; the real traversal must filter them.
+		std::vector<std::pair<AirportTileSpec *, AirportTileSpec>> saved;
+		for (TileIndex t : st->airport) if (st->TileBelongsToAirport(t)) {
+			auto *ats = const_cast<AirportTileSpec *>(AirportTileSpec::GetByTile(t));
+			if (std::ranges::none_of(saved, [ats](const auto &entry) { return entry.first == ats; })) saved.emplace_back(ats, *ats);
+		}
+		if (saved.size() < 3) std::abort();
+		group->next = 0xFD; file.cargo_map[0] = 37;
+		for (uint8_t phase = 0; phase < 5; phase++) {
+			st->airport.tile = phase == 0 ? INVALID_TILE : airport_tile;
+			size_t index = 0;
+			for (auto &[ats, old] : saved) {
+				ats->grf_prop.grffile = phase == 1 || (phase == 3 && index % 3 == 0) ? nullptr : &file;
+				ats->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, group.get());
+				ats->animation.triggers = phase == 3 && index % 3 == 1 ? AirportAnimationTriggers{} : AirportAnimationTriggers{AirportAnimationTrigger::NewCargo};
+				index++;
+			}
+			group->observation = [phase](ResolverObject &ro) {
+				auto &scope = static_cast<AirportTileResolverObject &>(ro).tiles_scope;
+				fmt::print(stderr, "OBJECT animation-visit airport {} {} {} {} {}\n", scope.tile.base(), ro.callback_param1, ro.callback_param2, _random.state[0], _random.state[1]);
+				if (phase == 4) const_cast<AirportTileSpec *>(scope.ats)->animation.triggers.Reset();
+			};
+			bool accepted = TriggerAirportAnimation(st, AirportAnimationTrigger::NewCargo, 0);
+			fmt::print(stderr, "OBJECT animation-airport {} {} {} {}\n", phase, accepted, _random.state[0], _random.state[1]);
+		}
+		for (auto &[ats, old] : saved) *ats = old;
+		group->observation = {};
+	}
 	SetAnimationFrame(tile, old_frame); SetAnimatedTileState(tile, state); RestoreAnimationQueue(queue);
 	fmt::print(stderr, "OBJECT animation-binding {} true\n", name);
 }
 static void AnimationBindingsProbe()
 {
 	std::array<TileIndex, 6> tiles; tiles.fill(INVALID_TILE);
+	std::map<StationID, std::vector<TileIndex>> stops;
 	for (TileIndex t : Map::Iterate()) {
 		if (IsTileType(t, MP_HOUSE)) tiles[0] = t;
 		if (IsTileType(t, MP_INDUSTRY)) tiles[1] = t;
-		if (HasStationTileRail(t)) tiles[2] = t;
+		if (HasStationTileRail(t) && (tiles[2] == INVALID_TILE || BaseStation::GetByTile(t)->train_station.w * BaseStation::GetByTile(t)->train_station.h > BaseStation::GetByTile(tiles[2])->train_station.w * BaseStation::GetByTile(tiles[2])->train_station.h)) tiles[2] = t;
 		if (IsTileType(t, MP_STATION) && IsAirport(t)) tiles[3] = t;
-		if (IsAnyRoadStopTile(t)) tiles[4] = t;
+		if (IsAnyRoadStopTile(t)) stops[GetStationIndex(t)].push_back(t);
 		if (IsTileType(t, MP_OBJECT)) tiles[5] = t;
 	}
+	size_t largest = 0; for (const auto &[id, members] : stops) if (members.size() > largest) { largest = members.size(); tiles[4] = members.front(); }
 	if (std::ranges::find(tiles, INVALID_TILE) != tiles.end()) std::abort();
 	auto frame = [](TileIndex t) { return [t](int value) { if (value >= 0) SetAnimationFrame(t, value); return GetAnimationFrame(t); }; };
 	auto *h = HouseSpec::Get(GetHouseType(tiles[0]));

@@ -12,3 +12,10 @@
 pub fn has_bit(value: u8, bit: u8) -> bool {
     u32::from(value) & 1_u32.wrapping_shl(u32::from(bit)) != 0
 }
+
+/// Original `SB` for a 32-bit word: clear the window, OR the unmasked data.
+/// The original preconditions are `n < 32` and `s + n <= 32`.
+pub(crate) fn sb(value: &mut u32, s: u8, n: u8, data: u32) {
+    *value &= !(((1_u32 << n) - 1) << s);
+    *value |= data << s;
+}

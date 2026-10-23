@@ -523,7 +523,7 @@ pub extern "C" fn openttd_rust_trigger_airport(st: *mut Station, trigger: u8, ca
             0
         };
         if airport_trigger(a, st, t, trigger, random, extra) {
-            random = (random & 0xFFFF_0000) | (a.shared().random() & 0xFFFF);
+            crate::bitmath_func::sb(&mut random, 0, 16, a.shared().random());
         } else {
             ret = false;
         }
