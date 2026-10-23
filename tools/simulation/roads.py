@@ -13,18 +13,18 @@ ROAD = "roadveh[0]/"
 COMMON = ROAD + "common[0]/"
 AI_FOLDER = "road-scenario-ai"
 
-# Quiet speed pass at 032d0d150c (#356): ratio is the median of
+# Quiet speed pass at 824ebd56c5 (#356): ratio is the median of
 # four three-pair medians; Ir and compatible identity come from profiles of the
 # same build.
-SPEED_HEAD = "032d0d150c"
+SPEED_HEAD = "824ebd56c5"
 # fmt: off
 SPEED_PASS = (
-    ("generate-tgp-256-1", 1.1054795062509892, 2783330073, "f6f82b6bbc4769f652d1451890003fef0f2c7f12c76c6d8d5549614a7d35a1e1"),
-    ("play-opus-55-167-002-manual", 1.4277994922504624, 30025047662, "b4ecf7337dcda62268175b3e99de2e43ffb3a3ffe4f608ee365751dbaabc23a2"),
-    ("play-grok-159-001-manual", 1.4412803256895979, 28635684690, "46dcbfc4ceba5d11801053ac2eb8d35ac640082a6393744d0825fe9dca7229c8"),
-    ("play-padhattan-ridge-1996-manual", 1.342172832746384, 4650811080, "27801b82dceb31797d73fc2f2f9448be781d1551b2594408b562d7f96b79323d"),
-    ("play-padhattan-ridge-2000-manual", 1.3933374888065595, 7580019339, "17e34235425021ca2f96c739312d9f15ca167ac5f579617d6c9eb1047e8c2627"),
-    ("play-padhattan-ridge-2016-manual", 1.4683241702644358, 13722835152, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
+    ("generate-tgp-256-1", 1.108913109585314, 2787348181, "f6f82b6bbc4769f652d1451890003fef0f2c7f12c76c6d8d5549614a7d35a1e1"),
+    ("play-opus-55-167-002-manual", 1.3979779582095517, 29329157319, "b4ecf7337dcda62268175b3e99de2e43ffb3a3ffe4f608ee365751dbaabc23a2"),
+    ("play-grok-159-001-manual", 1.398183266216794, 27913569337, "46dcbfc4ceba5d11801053ac2eb8d35ac640082a6393744d0825fe9dca7229c8"),
+    ("play-padhattan-ridge-1996-manual", 1.3056388939092716, 4602887067, "27801b82dceb31797d73fc2f2f9448be781d1551b2594408b562d7f96b79323d"),
+    ("play-padhattan-ridge-2000-manual", 1.3777502425720503, 7509652914, "17e34235425021ca2f96c739312d9f15ca167ac5f579617d6c9eb1047e8c2627"),
+    ("play-padhattan-ridge-2016-manual", 1.4531236650339472, 13559636035, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
 )
 # Loop Ir at the anchor, in SPEED_PASS order. PRs record no counts: root profiles
 # the integrated tip against these anchors (user decision 2026-10-22, AGENTS.md).
