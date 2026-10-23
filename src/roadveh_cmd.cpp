@@ -1934,7 +1934,7 @@ Trackdir RoadVehicle::GetVehicleTrackdir() const
 uint16_t RoadVehicle::GetMaxWeight() const
 {
 #ifdef WITH_RUST
-		return openttd_rust_ground_weight(&GetRustGroundPhysicsServices(), this, true);
+	return openttd_rust_ground_weight(&GetRustGroundPhysicsServices(), this, true);
 #else
 	uint16_t weight = CargoSpec::Get(this->cargo_type)->WeightOfNUnits(this->GetEngine()->DetermineCapacity(this));
 
@@ -1946,7 +1946,7 @@ uint16_t RoadVehicle::GetMaxWeight() const
 
 	return weight;
 #endif
-	}
+}
 
 #ifdef WITH_RUST
 #include "rust/road_services.h"

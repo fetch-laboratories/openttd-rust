@@ -60,7 +60,6 @@ inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
 
 /** Shared native field definitions, also used by bundled observations. */
 template <class T> inline auto RustVehicleFirst(T *v) noexcept { return v->First(); }
-/** Canonical typed ground-vehicle cargo update for command/list adapters. */
 template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last(); }
 /** Signature adapter for existing opaque fleet and orders callbacks. */
 inline void *RustVehicleFirstOpaque(void *v) noexcept { return RustVehicleFirst(static_cast<const Vehicle *>(v)); }
@@ -285,4 +284,14 @@ const OpenTTDGroundServices &GetRustGroundServices() noexcept
 {
 	return _rust_ground_services<T>;
 }
+
+
+inline OpenTTDVehicle *RustGroundFirst(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleFirst(VehicleOf(v))); }
+
+inline int32_t RustGroundDisplayMaxSpeed(OpenTTDVehicle *shell) noexcept { return RustVehicleDisplayMaxSpeed(VehicleOf(shell)); }
+
+inline void RustVehicleDetailsDirty(OpenTTDVehicle *shell) noexcept { SetWindowDirty(WC_VEHICLE_DETAILS, VehicleOf(shell)->index); }
+
+template <typename Handle>
+inline uint32_t RustVehicleBaseCrashHandle(Handle vehicle, bool flooded) noexcept { return RustVehicleBaseCrash(vehicle.handle, flooded); }
 #endif /* RUST_VEHICLE_SERVICES_H */

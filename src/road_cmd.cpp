@@ -2757,7 +2757,7 @@ static OpenTTDRoadWorksEffect RoadNextEffect(uint32_t from) noexcept
 static void RoadCollectVehicles(OpenTTDRoadConvertFrame *frame, uint32_t tile) noexcept
 {
 	for (Vehicle *v : RustVehiclesOnTile(TileIndex{tile})) {
-		if (RustVehicleVehicleType(v) == VEH_ROAD) include(frame->affected, RustVehicleFirst(RoadVehicle::From(v)));
+		if (RustVehicleVehicleType(v) == VEH_ROAD) include(frame->affected, RustVehicle(RustVehicleFirst(RoadVehicle::From(v))));
 	}
 }
 const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
@@ -2797,7 +2797,7 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 		},
 		.collect_vehicles = RoadCollectVehicles,
 		.affected_count = [](OpenTTDRoadConvertFrame *frame) noexcept { return frame->affected.size(); },
-		.affected_at = [](OpenTTDRoadConvertFrame *frame, size_t i) noexcept { return RustVehicle(frame->affected[i]); },
+		.affected_at = [](OpenTTDRoadConvertFrame *frame, size_t i) noexcept { return frame->affected[i]; },
 	};
 	return services;
 }

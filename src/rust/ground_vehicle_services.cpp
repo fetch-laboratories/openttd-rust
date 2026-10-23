@@ -26,26 +26,16 @@ static OpenTTDGroundOwner GroundResolve(OpenTTDVehicle *shell) noexcept
 	if (v->type == VEH_TRAIN) { Train *t = Train::From(v); return {t->rust_ground.state, {t, t->GetRustState()}, nullptr, v->type}; }
 	return {RoadVehicle::From(v)->rust_ground.state, {nullptr, nullptr}, RoadVehicle::From(v)->GetRustState(), v->type};
 }
-static OpenTTDVehicle *GroundFirst(OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleFirst(VehicleOf(v))); }
 static OpenTTDGroundPowerInput GroundPowerInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleTile(v), RustVehicleSubtype(v)}; }
 static OpenTTDGroundWeightInput GroundWeightInput(OpenTTDVehicle *shell) noexcept { Vehicle *v = VehicleOf(shell); return {CargoSpec::Get(v->cargo_type), RustVehicleCargoOwner(v)}; }
-static OpenTTDGroundMotion GroundMotion(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleSpeed(v), v->type == VEH_ROAD ? RoadVehicle::From(v)->roadtype : RoadType{0}}; }
 static OpenTTDGroundAccelerationInput GroundAccelerationInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {v->type == VEH_TRAIN ? RustVehicleTile(v) : 0, RustVehicleSpeed(v), RustVehicleStatus(v), v->type == VEH_ROAD ? RoadVehicle::From(v)->roadtype : RoadType{0}}; }
 static OpenTTDGroundSpeedInput GroundSpeedInput(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return {RustVehicleSpeed(v), RustVehicleSubspeed(v)}; }
 static uint64_t GroundCargoWeight(const CargoSpec *cargo, uint32_t count) noexcept { return cargo->WeightOfNUnits(count); }
 static uint64_t GroundTrainCargoWeight(const CargoSpec *cargo, uint32_t count) noexcept { return cargo->WeightOfNUnitsInTrain(count); }
-static uint16_t GroundEnginePower(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RailVehInfo(v->engine_type)->power : RoadVehInfo(v->engine_type)->power; }
-static uint16_t GroundEngineWeight(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RailVehInfo(v->engine_type)->weight : RoadVehInfo(v->engine_type)->weight; }
-static uint8_t GroundEngineTE(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RailVehInfo(v->engine_type)->tractive_effort : RoadVehInfo(v->engine_type)->tractive_effort; }
-static uint8_t GroundEngineDrag(OpenTTDVehicle *shell) noexcept { const Vehicle *v = VehicleOf(shell); return v->type == VEH_TRAIN ? RailVehInfo(v->engine_type)->air_drag : RoadVehInfo(v->engine_type)->air_drag; }
-static uint16_t GroundWagonPower(uint16_t engine) noexcept { return RailVehInfo(EngineID(engine))->pow_wag_power; }
-static uint8_t GroundWagonWeight(uint16_t engine) noexcept { return RailVehInfo(EngineID(engine))->pow_wag_weight; }
 static bool GroundPowered(uint64_t types, RailType type) noexcept { return RustRailPowered(RailTypes(types), type); }
 static uint16_t GroundRoadSpeed(OpenTTDVehicle *shell) noexcept { const RoadVehicle *v = RoadVehicle::From(VehicleOf(shell)); return GetRoadTypeInfo(GetRoadType(v->tile, RustRoadTramType(v->roadtype)))->max_speed; }
 static uint32_t GroundSteepness(VehicleType type) noexcept { return type == VEH_TRAIN ? _settings_game.vehicle.train_slope_steepness : _settings_game.vehicle.roadveh_slope_steepness; }
-static int32_t GroundDisplayMaxSpeed(OpenTTDVehicle *shell) noexcept { return RustVehicleDisplayMaxSpeed(VehicleOf(shell)); }
 static void GroundViewport(OpenTTDVehicle *shell, bool force, bool delta) noexcept { Vehicle *v = VehicleOf(shell); if (v->type == VEH_TRAIN) Train::From(v)->UpdateViewport(force, delta); else RoadVehicle::From(v)->UpdateViewport(force, delta); }
-static void GroundDetailsDirty(OpenTTDVehicle *shell) noexcept { SetWindowDirty(WC_VEHICLE_DETAILS, VehicleOf(shell)->index); }
 static bool GroundDepotTile(uint32_t tile, TransportType type) noexcept { return IsDepotTypeTile(TileIndex(tile), type); }
 
 const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
@@ -57,13 +47,13 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 #else
 		.assertions = false,
 #endif
-		.resolve = GroundResolve, .first = GroundFirst, .power_input = GroundPowerInput, .weight_input = GroundWeightInput, .acceleration_input = GroundAccelerationInput, .speed_input = GroundSpeedInput, .motion = GroundMotion,
+		.resolve = GroundResolve, .first = RustGroundFirst, .power_input = GroundPowerInput, .weight_input = GroundWeightInput, .acceleration_input = GroundAccelerationInput, .speed_input = GroundSpeedInput,
 		.capacity = RustEngineDetermineCapacity, .cargo_weight = GroundCargoWeight, .train_cargo_weight = GroundTrainCargoWeight,
-		.engine_power = GroundEnginePower, .engine_weight = GroundEngineWeight, .engine_te = GroundEngineTE, .engine_drag = GroundEngineDrag,
-		.wagon_power = GroundWagonPower, .wagon_weight = GroundWagonWeight, .powered = GroundPowered, .rail_type = RustRailType,
+		.engine_power = RustGroundEnginePower, .engine_weight = RustGroundEngineWeight, .engine_te = RustGroundEngineTE, .engine_drag = RustGroundEngineDrag,
+		.wagon_power = RustEngineWagonPower, .wagon_weight = RustEngineWagonWeight, .powered = GroundPowered, .rail_type = RustRailType,
 		.rail_acceleration = RustRailAccelerationType, .rail_speed = RustRailMaxSpeed, .road_speed = GroundRoadSpeed,
-		.tram = SharedRoadTypeIsTram, .steepness = GroundSteepness, .display_max_speed = GroundDisplayMaxSpeed,
-		.slope_z = SharedSlopePixelZ, .viewport = GroundViewport, .details_dirty = GroundDetailsDirty,
+		.tram = SharedRoadTypeIsTram, .steepness = GroundSteepness, .display_max_speed = RustGroundDisplayMaxSpeed,
+		.slope_z = SharedSlopePixelZ, .viewport = GroundViewport, .details_dirty = RustVehicleDetailsDirty,
 		.base_crash = RustVehicleBaseCrash, .depot_tile = GroundDepotTile,
 	};
 	return services;

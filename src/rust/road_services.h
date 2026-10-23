@@ -276,7 +276,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcPayRunning(OpenTTDVehicle *v, int64_t am
 
 	SubtractMoneyFromCompanyFract(u->owner, cost);
 
-	SetWindowDirty(WC_VEHICLE_DETAILS, u->index);
+	RustVehicleDetailsDirty(RustVehicle(u));
 	SetWindowClassesDirty(WC_ROADVEH_LIST);
 }
 static OpenTTDRoadServiceRead OPENTTD_VEHICLE_CALL RoadSvcServiceRead(OpenTTDVehicle *v) noexcept

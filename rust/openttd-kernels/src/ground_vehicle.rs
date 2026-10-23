@@ -146,12 +146,6 @@ pub struct WeightInput {
     pub cargo: *const std::ffi::c_void,
     pub owner: *mut crate::cargo_storage::List,
 }
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Motion {
-    pub speed: u16,
-    pub roadtype: RoadType,
-}
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -181,7 +175,6 @@ pub struct Services {
     pub weight_input: extern "C" fn(VehicleRef) -> WeightInput,
     pub acceleration_input: extern "C" fn(VehicleRef) -> AccelerationInput,
     pub speed_input: extern "C" fn(VehicleRef) -> SpeedInput,
-    pub motion: extern "C" fn(VehicleRef) -> Motion,
     pub capacity: extern "C" fn(crate::vehicle::EngineRef, VehicleRef, *mut u16) -> u32,
     pub cargo_weight: extern "C" fn(*const std::ffi::c_void, u32) -> u64,
     pub train_cargo_weight: extern "C" fn(*const std::ffi::c_void, u32) -> u64,
@@ -215,9 +208,6 @@ impl Owner {
     }
 }
 
-pub(crate) fn power(s: &Services, v: VehicleRef) -> u16 {
-    power_owned(s, v, (s.resolve)(v))
-}
 fn power_owned(s: &Services, v: VehicleRef, o: Owner) -> u16 {
     let r = (s.power_input)(v);
     if is_articulated_part(true, r.subtype) {
@@ -244,9 +234,6 @@ fn power_owned(s: &Services, v: VehicleRef, o: Owner) -> u16 {
     } else {
         p.wrapping_mul(10) as u16
     }
-}
-pub(crate) fn powered_part(s: &Services, v: VehicleRef, head: VehicleRef) -> u16 {
-    powered_part_owned(s, v, (s.resolve)(v), head)
 }
 fn powered_part_owned(s: &Services, v: VehicleRef, o: Owner, head: VehicleRef) -> u16 {
     if o.powered_wagon() {
@@ -297,9 +284,6 @@ fn weight_owned(s: &Services, v: VehicleRef, o: Owner, full: bool) -> u16 {
     }
     weight
 }
-pub(crate) fn tractive_effort(s: &Services, v: VehicleRef) -> u8 {
-    tractive_effort_owned(s, v, (s.resolve)(v))
-}
 fn tractive_effort_owned(s: &Services, v: VehicleRef, o: Owner) -> u8 {
     (s.vehicle.property)(
         v,
@@ -314,10 +298,6 @@ fn tractive_effort_owned(s: &Services, v: VehicleRef, o: Owner) -> u8 {
 pub(crate) fn air_drag(s: &Services, v: VehicleRef) -> u8 {
     (s.engine_drag)(v)
 }
-pub(crate) fn air_drag_area(s: &Services, v: VehicleRef) -> u8 {
-    let o = (s.resolve)(v);
-    air_drag_area_for(o, if o.rail() { (s.vehicle.status)(v) } else { 0 })
-}
 fn air_drag_area_for(o: Owner, status: u8) -> u8 {
     if !o.rail() {
         6
@@ -326,9 +306,6 @@ fn air_drag_area_for(o: Owner, status: u8) -> u8 {
     } else {
         14
     }
-}
-pub(crate) fn acceleration_status(s: &Services, v: VehicleRef) -> u8 {
-    acceleration_status_for((s.resolve)(v), (s.vehicle.status)(v))
 }
 fn acceleration_status_for(o: Owner, status: u8) -> u8 {
     if status & VS_STOPPED != 0
@@ -340,16 +317,8 @@ fn acceleration_status_for(o: Owner, status: u8) -> u8 {
         AS_ACCEL
     }
 }
-pub(crate) fn current_speed(s: &Services, v: VehicleRef) -> u16 {
-    current_speed_for((s.resolve)(v), (s.vehicle.speed)(v))
-}
 fn current_speed_for(o: Owner, speed: u16) -> u16 {
     if o.rail() { speed } else { speed / 2 }
-}
-pub(crate) fn rolling_friction(s: &Services, v: VehicleRef) -> u32 {
-    let o = (s.resolve)(v);
-    let r = (s.motion)(v);
-    rolling_friction_for(s, o, r.roadtype, current_speed_for(o, r.speed))
 }
 fn rolling_friction_for(s: &Services, o: Owner, roadtype: RoadType, speed: u16) -> u32 {
     if o.rail() {
@@ -370,21 +339,12 @@ fn acceleration_type_for(s: &Services, o: Owner, tile: u32) -> u8 {
         ACCELERATION_NORMAL
     }
 }
-pub(crate) fn slope_steepness(s: &Services, v: VehicleRef) -> u32 {
-    (s.steepness)((s.resolve)(v).kind)
-}
-pub(crate) fn max_track_speed(s: &Services, v: VehicleRef) -> u16 {
-    max_track_speed_owned(s, v, (s.resolve)(v))
-}
 fn max_track_speed_owned(s: &Services, v: VehicleRef, o: Owner) -> u16 {
     if o.rail() {
         (s.rail_speed)((s.rail_type)((s.vehicle.tile)(v)))
     } else {
         (s.road_speed)(v)
     }
-}
-pub(crate) fn sloped_track(s: &Services, v: VehicleRef) -> bool {
-    sloped_track_owned(s, v, (s.resolve)(v))
 }
 fn sloped_track_owned(s: &Services, v: VehicleRef, o: Owner) -> bool {
     let tracks = if o.rail() {
@@ -716,25 +676,10 @@ entry!(openttd_rust_ground_cargo_changed, cargo_changed => ());
 entry!(openttd_rust_ground_acceleration, acceleration => i32);
 entry!(openttd_rust_ground_chain_in_depot, chain_in_depot => bool);
 entry!(openttd_rust_ground_crash, crash, flooded: bool => u32);
-entry!(openttd_rust_ground_slope_resistance, slope_resistance => i64);
-entry!(openttd_rust_ground_update_z_inclination, update_z_inclination => ());
-entry!(openttd_rust_ground_update_z, update_z => ());
 entry!(openttd_rust_ground_inclination, inclination, new_tile: bool, delta: bool => i32);
 entry!(openttd_rust_ground_last_speed, last_speed => ());
-entry!(openttd_rust_ground_update_speed, update_speed, accel: u32, min_speed: i32, max_speed: i32 => u32);
-entry!(openttd_rust_ground_power, power => u16);
-entry!(openttd_rust_ground_powered_part, powered_part, head: VehicleRef => u16);
 entry!(openttd_rust_ground_weight, weight, full: bool => u16);
-entry!(openttd_rust_ground_tractive_effort, tractive_effort => u8);
-entry!(openttd_rust_ground_air_drag, air_drag => u8);
-entry!(openttd_rust_ground_air_drag_area, air_drag_area => u8);
-entry!(openttd_rust_ground_acceleration_status, acceleration_status => u8);
-entry!(openttd_rust_ground_current_speed, current_speed => u16);
-entry!(openttd_rust_ground_rolling_friction, rolling_friction => u32);
 entry!(openttd_rust_ground_acceleration_type, acceleration_type => u8);
-entry!(openttd_rust_ground_slope_steepness, slope_steepness => u32);
-entry!(openttd_rust_ground_max_track_speed, max_track_speed => u16);
-entry!(openttd_rust_ground_sloped_track, sloped_track => bool);
 
 /// The native position mutation ends before the Rust inclination update.
 pub(crate) struct Moved {

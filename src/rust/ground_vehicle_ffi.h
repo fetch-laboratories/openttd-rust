@@ -18,7 +18,6 @@ struct OpenTTDRoadLeaves;
 struct OpenTTDGroundOwner { OpenTTDGroundState *state; OpenTTDTrainHandle train; OpenTTDRoadState *road; VehicleType kind; };
 struct OpenTTDGroundPowerInput { uint32_t tile; uint8_t subtype; };
 struct OpenTTDGroundWeightInput { const CargoSpec *cargo; OpenTTDCargoList *owner; };
-struct OpenTTDGroundMotion { uint16_t speed; RoadType roadtype; };
 struct OpenTTDGroundAccelerationInput { uint32_t tile; uint16_t speed; uint8_t status; RoadType roadtype; };
 struct OpenTTDGroundSpeedInput { uint16_t speed; uint8_t subspeed; };
 struct OpenTTDGroundPhysicsServices {
@@ -31,7 +30,6 @@ struct OpenTTDGroundPhysicsServices {
 	OpenTTDGroundWeightInput (*weight_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(weight_input);
 	OpenTTDGroundAccelerationInput (*acceleration_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(acceleration_input);
 	OpenTTDGroundSpeedInput (*speed_input)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(speed_input);
-	OpenTTDGroundMotion (*motion)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(motion);
 	uint32_t (*capacity)(const OpenTTDEngine *, OpenTTDVehicle *, uint16_t *) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
 	uint64_t (*cargo_weight)(const CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_weight);
 	uint64_t (*train_cargo_weight)(const CargoSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(train_cargo_weight);
@@ -62,24 +60,9 @@ void openttd_rust_ground_cargo_changed(const OpenTTDGroundPhysicsServices *, con
 int32_t openttd_rust_ground_acceleration(const OpenTTDGroundPhysicsServices *, const Vehicle *);
 bool openttd_rust_ground_chain_in_depot(const OpenTTDGroundPhysicsServices *, const Vehicle *);
 uint32_t openttd_rust_ground_crash(const OpenTTDGroundPhysicsServices *, const Vehicle *, bool);
-int64_t openttd_rust_ground_slope_resistance(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-void openttd_rust_ground_update_z_inclination(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-void openttd_rust_ground_update_z(const OpenTTDGroundPhysicsServices *, const Vehicle *);
 int32_t openttd_rust_ground_inclination(const OpenTTDGroundPhysicsServices *, const Vehicle *, bool, bool);
 void openttd_rust_ground_last_speed(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-uint32_t openttd_rust_ground_update_speed(const OpenTTDGroundPhysicsServices *, const Vehicle *, uint32_t, int32_t, int32_t);
-uint16_t openttd_rust_ground_power(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-uint16_t openttd_rust_ground_powered_part(const OpenTTDGroundPhysicsServices *, const Vehicle *, const Vehicle *);
 uint16_t openttd_rust_ground_weight(const OpenTTDGroundPhysicsServices *, const Vehicle *, bool);
-uint8_t openttd_rust_ground_tractive_effort(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-uint8_t openttd_rust_ground_air_drag(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-uint8_t openttd_rust_ground_air_drag_area(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-uint8_t openttd_rust_ground_acceleration_status(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-uint16_t openttd_rust_ground_current_speed(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-uint32_t openttd_rust_ground_rolling_friction(const OpenTTDGroundPhysicsServices *, const Vehicle *);
 VehicleAccelerationModel openttd_rust_ground_acceleration_type(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-uint32_t openttd_rust_ground_slope_steepness(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-uint16_t openttd_rust_ground_max_track_speed(const OpenTTDGroundPhysicsServices *, const Vehicle *);
-bool openttd_rust_ground_sloped_track(const OpenTTDGroundPhysicsServices *, const Vehicle *);
 }
 #endif /* RUST_GROUND_VEHICLE_FFI_H */

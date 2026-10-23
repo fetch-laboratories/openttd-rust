@@ -580,7 +580,6 @@ static void OPENTTD_VEHICLE_CALL MaintenanceSmokeAnimation(OpenTTDVehicle *handl
 static void OPENTTD_VEHICLE_CALL MaintenanceAircraftBroken(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->vehstatus.Set(VehState::AircraftBroken); }
 static void OPENTTD_VEHICLE_CALL MaintenanceMarkDirty(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->MarkDirty(); }
 static void OPENTTD_VEHICLE_CALL MaintenanceViewDirty(OpenTTDVehicle *handle) noexcept { SetWindowDirty(WC_VEHICLE_VIEW, VehicleOf(handle)->index); }
-static void OPENTTD_VEHICLE_CALL MaintenanceDetailsDirty(OpenTTDVehicle *handle) noexcept { SetWindowDirty(WC_VEHICLE_DETAILS, VehicleOf(handle)->index); }
 static OpenTTDVehicleMaintenanceAge OPENTTD_VEHICLE_CALL MaintenanceAge(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -651,7 +650,7 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.aircraft_broken = MaintenanceAircraftBroken,
 	.mark_dirty = MaintenanceMarkDirty,
 	.view_dirty = MaintenanceViewDirty,
-	.details_dirty = MaintenanceDetailsDirty,
+	.details_dirty = RustVehicleDetailsDirty,
 	.age = MaintenanceAge,
 	.age_write = MaintenanceAgeWrite,
 	.decay_write = MaintenanceDecayWrite,

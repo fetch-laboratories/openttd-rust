@@ -193,7 +193,7 @@ static void TrainClearReservation(OpenTTDTrainHandle id, uint32_t a, uint8_t b) 
 static void TrainConsistWindows(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	SetWindowDirty(WC_VEHICLE_DETAILS, v->index); InvalidateWindowData(WC_VEHICLE_REFIT, v->index, VIWD_CONSIST_CHANGED); InvalidateWindowData(WC_VEHICLE_ORDERS, v->index, VIWD_CONSIST_CHANGED); InvalidateNewGRFInspectWindow(GSF_TRAINS, v->index); InvalidateWindowData(WC_VEHICLE_VIEW, v->index, VIWD_CONSIST_CHANGED);
+	RustVehicleDetailsDirty(RustVehicle(v)); InvalidateWindowData(WC_VEHICLE_REFIT, v->index, VIWD_CONSIST_CHANGED); InvalidateWindowData(WC_VEHICLE_ORDERS, v->index, VIWD_CONSIST_CHANGED); InvalidateNewGRFInspectWindow(GSF_TRAINS, v->index); InvalidateWindowData(WC_VEHICLE_VIEW, v->index, VIWD_CONSIST_CHANGED);
 }
 static uint64_t TrainCostClass(OpenTTDTrainHandle id) noexcept
 {
@@ -305,7 +305,7 @@ static void TrainDisconnect(OpenTTDTrainHandle) noexcept
 static uint64_t TrainEnginePower(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return RailVehInfo(v->engine_type)->power;
+	return RustGroundEnginePower(RustVehicle(v));
 }
 static void TrainEnterDepot(OpenTTDTrainHandle id) noexcept
 {
@@ -484,7 +484,7 @@ static void TrainPosition(OpenTTDTrainHandle id) noexcept
 static uint64_t TrainPowWagPower(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return RailVehInfo(v->engine_type)->pow_wag_power;
+	return RustEngineWagonPower(v->engine_type.base());
 }
 static uint64_t TrainPrice(OpenTTDTrainHandle id, uint32_t a) noexcept
 {
@@ -542,12 +542,12 @@ static uint64_t TrainReverseSingleBlocked(OpenTTDTrainHandle id) noexcept
 static void TrainReverseWindows(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); SetWindowDirty(WC_VEHICLE_DETAILS, v->index); SetWindowDirty(WC_VEHICLE_VIEW, v->index); SetWindowClassesDirty(WC_TRAINS_LIST);
+	SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); RustVehicleDetailsDirty(RustVehicle(v)); SetWindowDirty(WC_VEHICLE_VIEW, v->index); SetWindowClassesDirty(WC_TRAINS_LIST);
 }
 static void TrainRunningWindows(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	SetWindowDirty(WC_VEHICLE_DETAILS, v->index); SetWindowClassesDirty(WC_TRAINS_LIST);
+	RustVehicleDetailsDirty(RustVehicle(v)); SetWindowClassesDirty(WC_TRAINS_LIST);
 }
 static uint64_t TrainServint(OpenTTDTrainHandle id) noexcept
 {

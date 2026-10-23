@@ -143,11 +143,9 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * Calculates the total slope resistance for this vehicle.
 	 * @return Slope resistance.
 	 */
+#ifndef WITH_RUST
 	inline int64_t GetSlopeResistance() const
 	{
-#ifdef WITH_RUST
-		return openttd_rust_ground_slope_resistance(&GetRustGroundPhysicsServices(), this);
-#else
 		int64_t incl = 0;
 
 		for (const T *u = T::From(this); u != nullptr; u = u->Next()) {
@@ -159,8 +157,8 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 		}
 
 		return incl;
-#endif
 	}
+#endif
 
 	/**
 	 * Updates vehicle's Z position and inclination.
@@ -168,11 +166,9 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * @pre The vehicle has to be at (or near to) a border of the tile,
 	 *      directed towards tile centre
 	 */
+#ifndef WITH_RUST
 	inline void UpdateZPositionAndInclination()
 	{
-#ifdef WITH_RUST
-		return openttd_rust_ground_update_z_inclination(&GetRustGroundPhysicsServices(), this);
-#else
 		this->z_pos = GetSlopePixelZ(this->x_pos, this->y_pos, true);
 		ClrBit(this->gv_flags, GVF_GOINGUP_BIT);
 		ClrBit(this->gv_flags, GVF_GOINGDOWN_BIT);
@@ -188,8 +184,8 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 				SetBit(this->gv_flags, (middle_z > this->z_pos) ? GVF_GOINGUP_BIT : GVF_GOINGDOWN_BIT);
 			}
 		}
-#endif
 	}
+#endif
 
 	/**
 	 * Updates vehicle's Z position.
@@ -197,11 +193,9 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 * The faster code is used for trains and road vehicles unless they are
 	 * reversing on a sloped tile.
 	 */
+#ifndef WITH_RUST
 	inline void UpdateZPosition()
 	{
-#ifdef WITH_RUST
-		return openttd_rust_ground_update_z(&GetRustGroundPhysicsServices(), this);
-#else
 #if 0
 		/* The following code does this: */
 
@@ -263,8 +257,8 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 		}
 
 		assert(this->z_pos == GetSlopePixelZ(this->x_pos, this->y_pos, true));
-#endif
 	}
+#endif
 
 	/**
 	 * Checks if the vehicle is in a slope and sets the required flags in that case.
@@ -411,11 +405,9 @@ protected:
 	 * @param max_speed The maximum speed here, in vehicle specific units.
 	 * @return Distance to drive.
 	 */
+#ifndef WITH_RUST
 	inline uint DoUpdateSpeed(uint accel, int min_speed, int max_speed)
 	{
-#ifdef WITH_RUST
-		return openttd_rust_ground_update_speed(&GetRustGroundPhysicsServices(), this, accel, min_speed, max_speed);
-#else
 		uint spd = this->subspeed + accel;
 		this->subspeed = (uint8_t)spd;
 
@@ -438,8 +430,8 @@ protected:
 		scaled_spd += this->progress;
 		this->progress = 0; // set later in *Handler or *Controller
 		return scaled_spd;
-#endif
 	}
+#endif
 };
 
 #endif /* GROUND_VEHICLE_HPP */
