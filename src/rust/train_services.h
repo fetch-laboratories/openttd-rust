@@ -95,19 +95,9 @@ static void TrainWriteColourmap(OpenTTDTrainHandle id, uint64_t value) noexcept
 {Train *v=static_cast<Train *>(id.shell); v->colourmap = static_cast<PaletteID>(value);}
 static void TrainWriteStatus(OpenTTDTrainHandle id, uint8_t value) noexcept
 {Train *v=static_cast<Train *>(id.shell); v->vehstatus = VehStates(static_cast<uint8_t>(value));}
-static uint64_t TrainAcceleration(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return static_cast<uint64_t>(RustGroundAcceleration(v));
-}
 static uint64_t TrainAccModel(OpenTTDTrainHandle) noexcept
 {
 	return _settings_game.vehicle.train_acceleration_model;
-}
-static uint64_t TrainAccType(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return static_cast<uint8_t>(GetRailTypeInfo(RustRailType(v->tile.base()))->acceleration_type);
 }
 static uint64_t TrainAdvanceDistance(OpenTTDTrainHandle id) noexcept
 {
@@ -170,16 +160,6 @@ static uint64_t TrainCargoAgeDefault(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return EngineOf(RustVehicleGetEngine(RustVehicle(v)))->info.cargo_age_period;
 }
-static void TrainCargoChanged(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	RustGroundCargoChanged(v);
-}
-static uint64_t TrainChainDepot(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return v->IsChainInDepot();
-}
 static void TrainCheckNext(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -208,7 +188,7 @@ static void TrainClearReservation(OpenTTDTrainHandle id, uint32_t a, uint8_t b) 
 static void TrainConsistWindows(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	SetWindowDirty(WC_VEHICLE_DETAILS, v->index); InvalidateWindowData(WC_VEHICLE_REFIT, v->index, VIWD_CONSIST_CHANGED); InvalidateWindowData(WC_VEHICLE_ORDERS, v->index, VIWD_CONSIST_CHANGED); InvalidateNewGRFInspectWindow(GSF_TRAINS, v->index); InvalidateWindowData(WC_VEHICLE_VIEW, v->index, VIWD_CONSIST_CHANGED);
+	RustVehicleDetailsDirty(RustVehicle(v)); InvalidateWindowData(WC_VEHICLE_REFIT, v->index, VIWD_CONSIST_CHANGED); InvalidateWindowData(WC_VEHICLE_ORDERS, v->index, VIWD_CONSIST_CHANGED); InvalidateNewGRFInspectWindow(GSF_TRAINS, v->index); InvalidateWindowData(WC_VEHICLE_VIEW, v->index, VIWD_CONSIST_CHANGED);
 }
 static uint64_t TrainCostClass(OpenTTDTrainHandle id) noexcept
 {
@@ -233,11 +213,6 @@ static void TrainCrashEvent(OpenTTDTrainHandle id, uint32_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	AI::NewEvent(v->owner, new ScriptEventVehicleCrashed(v->index, v->tile, ScriptEventVehicleCrashed::CRASH_TRAIN, static_cast<uint>(a), v->owner)); Game::NewEvent(new ScriptEventVehicleCrashed(v->index, v->tile, ScriptEventVehicleCrashed::CRASH_TRAIN, static_cast<uint>(a), v->owner));
-}
-static uint64_t TrainCrashGround(OpenTTDTrainHandle id, uint8_t a) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return v->GroundVehicleBase::Crash(a != 0);
 }
 static void TrainCrashNews(OpenTTDTrainHandle id, uint32_t a) noexcept
 {
@@ -325,7 +300,7 @@ static void TrainDisconnect(OpenTTDTrainHandle) noexcept
 static uint64_t TrainEnginePower(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return RailVehInfo(v->engine_type)->power;
+	return RustGroundEnginePower(RustVehicle(v));
 }
 static uint64_t TrainEnterTile(OpenTTDTrainHandle id, uint32_t a, int32_t b, int32_t c) noexcept
 {
@@ -355,11 +330,6 @@ static void TrainHideFill(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	RustVehicleHideFilling(RustVehicle(v));
 }
-static uint64_t TrainInclination(OpenTTDTrainHandle id, uint8_t a, uint8_t b) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return static_cast<uint64_t>(v->UpdateInclination(a != 0, b != 0));
-}
 static uint64_t TrainInvalidPrice(OpenTTDTrainHandle) noexcept
 {
 	return static_cast<uint32_t>(INVALID_PRICE);
@@ -388,11 +358,6 @@ static void TrainLargeExplosion(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	CreateEffectVehicleRel(v, 4, 4, 8, EV_EXPLOSION_LARGE);
-}
-static void TrainLastSpeed(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	v->SetLastSpeed();
 }
 static void TrainLeaveSound(OpenTTDTrainHandle id) noexcept
 {
@@ -499,7 +464,7 @@ static void TrainPosition(OpenTTDTrainHandle id) noexcept
 static uint64_t TrainPowWagPower(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return RailVehInfo(v->engine_type)->pow_wag_power;
+	return RustEngineWagonPower(v->engine_type.base());
 }
 static uint64_t TrainPrice(OpenTTDTrainHandle id, uint32_t a) noexcept
 {
@@ -557,12 +522,12 @@ static uint64_t TrainReverseSingleBlocked(OpenTTDTrainHandle id) noexcept
 static void TrainReverseWindows(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	RustVehicleDirtyDepot(v); SetWindowDirty(WC_VEHICLE_DETAILS, v->index); SetWindowDirty(WC_VEHICLE_VIEW, v->index); SetWindowClassesDirty(WC_TRAINS_LIST);
+	RustVehicleDirtyDepot(v); RustVehicleDetailsDirty(RustVehicle(v)); SetWindowDirty(WC_VEHICLE_VIEW, v->index); SetWindowClassesDirty(WC_TRAINS_LIST);
 }
 static void TrainRunningWindows(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	SetWindowDirty(WC_VEHICLE_DETAILS, v->index); SetWindowClassesDirty(WC_TRAINS_LIST);
+	RustVehicleDetailsDirty(RustVehicle(v)); SetWindowClassesDirty(WC_TRAINS_LIST);
 }
 static uint64_t TrainServint(OpenTTDTrainHandle id) noexcept
 {
@@ -705,11 +670,6 @@ static void TrainUpdateDelta(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	v->UpdateDeltaXY();
-}
-static uint64_t TrainUpdateSpeed(OpenTTDTrainHandle id, uint32_t a, int32_t b, int32_t c) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return v->RustDoUpdateSpeed(static_cast<uint>(a), static_cast<int>(b), static_cast<int>(c));
 }
 static uint64_t TrainUserDefault(OpenTTDTrainHandle id) noexcept
 {

@@ -25,6 +25,23 @@ impl Map {
     pub fn tile_xy(self, x: u32, y: u32) -> u32 {
         y.wrapping_shl(u32::from(self.log_x)).wrapping_add(x)
     }
+    /// `Map::ScaleBySize`, preserving its pre-division unsigned shift.
+    #[must_use]
+    pub fn scale_by_size(self, size_y: u32, n: u32) -> u32 {
+        let scaled = n.wrapping_shl(u32::from(self.log_x) + size_y.ilog2() - 12);
+        scaled.wrapping_add(15) / 16
+    }
+    /// `AddTileIndexDiffCWrap` for an arbitrary original coordinate offset.
+    #[must_use]
+    pub fn add_offset_c_wrap(self, tile: u32, dx: i32, dy: i32, size_y: u32) -> u32 {
+        let x = self.tile_x(tile).wrapping_add_signed(dx);
+        let y = self.tile_y(tile).wrapping_add_signed(dy);
+        if x >= self.size_x() || y >= size_y {
+            crate::tile_type::INVALID_TILE
+        } else {
+            self.tile_xy(x, y)
+        }
+    }
     /// `Map::MaxX`.
     #[must_use]
     pub fn max_x(self) -> u32 {
@@ -103,13 +120,7 @@ impl Map {
     #[must_use]
     pub fn add_diff_c_wrap(self, tile: u32, dir: u8, size_y: u32) -> u32 {
         let (dx, dy) = tile_index_diff_c_by_diag_dir(dir);
-        let x = self.tile_x(tile).wrapping_add_signed(dx);
-        let y = self.tile_y(tile).wrapping_add_signed(dy);
-        if x >= self.size_x() || y >= size_y {
-            crate::tile_type::INVALID_TILE
-        } else {
-            y * self.size_x() + x
-        }
+        self.add_offset_c_wrap(tile, dx, dy, size_y)
     }
 }
 

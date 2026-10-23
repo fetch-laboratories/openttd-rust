@@ -2757,12 +2757,13 @@ static OpenTTDRoadWorksEffect RoadNextEffect(uint32_t from) noexcept
 static void RoadCollectVehicles(OpenTTDRoadConvertFrame *frame, uint32_t tile) noexcept
 {
 	for (Vehicle *v : RustVehiclesOnTile(TileIndex{tile})) {
-		if (RustVehicleVehicleType(v) == VEH_ROAD) include(frame->affected, RustVehicleFirst(RoadVehicle::From(v)));
+		if (RustVehicleVehicleType(v) == VEH_ROAD) include(frame->affected, RustVehicle(RustVehicleFirst(RoadVehicle::From(v))));
 	}
 }
 const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 {
 	static const OpenTTDRoadCommandServices services{
+		.physics = &GetRustGroundPhysicsServices(),
 		.do_build = openttd_rust_road_do_build,
 		.rail_commands = &GetRustRailCommandServices(), .town = &GetRustTownServices(), .authority = &GetRustTownAuthorityServices(),
 		.strings = { .no_road = STR_ERROR_THERE_IS_NO_ROAD, .no_tram = STR_ERROR_THERE_IS_NO_TRAMWAY,
@@ -2795,7 +2796,8 @@ const OpenTTDRoadCommandServices &GetRustRoadCommandServices() noexcept
 			return {.frame = &s.frame, .area = &s.area, .error = RustCommandCost(&s.error), .ret = RustCommandCost(&s.ret)};
 		},
 		.collect_vehicles = RoadCollectVehicles,
-		.cargo_changed = [](OpenTTDRoadConvertFrame *frame) noexcept { for (RoadVehicle *v : frame->affected) RustGroundCargoChanged(v); },
+		.affected_count = [](OpenTTDRoadConvertFrame *frame) noexcept { return frame->affected.size(); },
+		.affected_at = [](OpenTTDRoadConvertFrame *frame, size_t i) noexcept { return frame->affected[i]; },
 	};
 	return services;
 }

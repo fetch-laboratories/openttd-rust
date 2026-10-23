@@ -21,8 +21,10 @@
 
 #ifdef WITH_RUST
 #include "../../rust/rail_yapf_ffi.h"
+#include "../../rust/services_yapf.h"
 #include "../../rust/services_map.h"
 #include "../../rust/services_rail.h"
+#include "../../rust/services_station.h"
 #include "../../rust/vehicle_services.h"
 #include <cstdio>
 
@@ -130,8 +132,8 @@ static uint8_t RailWrite(uint32_t tile, uint8_t direction, uint8_t operation) no
 		case 0: MarkTileDirtyByTile(t); break;
 		case 1: return TryReserveRailTrack(t, TrackdirToTrack(td));
 		case 2: UnreserveRailTrack(t, TrackdirToTrack(td)); break;
-		case 3: SetRailStationReservation(t, true); MarkTileDirtyByTile(t); break;
-		case 4: SetRailStationReservation(t, false); break;
+		case 3: RustSetRailStationReservation(tile, true); MarkTileDirtyByTile(t); break;
+		case 4: RustSetRailStationReservation(tile, false); break;
 		case 5: RustRailSetSignalState(tile, td, SIGNAL_STATE_RED); MarkTileDirtyByTile(t); break;
 		case 6: RustRailSetSignalState(tile, td, SIGNAL_STATE_GREEN); break;
 		default: NOT_REACHED();
@@ -155,8 +157,7 @@ static void RailDebug(void *context, uint8_t kind, const uint32_t *stats, uint32
 	if (kind == 0) {
 		const Train *v = static_cast<RailYapfContext *>(context)->train;
 		const float ratio = stats[3] == 0 ? 0.0f : static_cast<float>(stats[3]) / static_cast<float>(stats[3] + stats[4]) * 100.0f;
-		Debug(yapf, 3, "[YAPFt]{}{:4d} - {} rounds - {} open - {} closed - CHR {:4.1f}% - C {} D {}",
-			stats[5] ? '-' : '!', v->unitnumber, stats[0], stats[1], stats[2], ratio, static_cast<int32_t>(stats[6]), static_cast<int32_t>(stats[7]));
+		RustYapfDebug('t', stats[5] != 0, v->unitnumber, stats[0], stats[1], stats[2], ratio, static_cast<int32_t>(stats[6]), static_cast<int32_t>(stats[7]));
 	} else if (kind == 3) {
 		if (stats[0] == 0) Debug(desync, 2, "warning: ChooseRailTrack cache mismatch: {} vs {}", stats[1], stats[2]);
 		else Debug(desync, 2, "warning: {} cache mismatch: {} vs {}", stats[0] == 1 ? "CheckReverseTrain" : stats[0] == 2 ? "FindNearestDepotTwoWay" : "FindSafeTile", stats[1] ? "T" : "F", stats[2] ? "T" : "F");

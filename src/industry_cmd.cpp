@@ -3797,10 +3797,10 @@ const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 		/* Only AbortGenerateWorldSignal is ordinary here. Retain the native
 		 * exception on this stack frame and rethrow after the Rust entry returns. */
 		.set_progress = [](OpenTTDIndustryGenerationContext *context, bool water, uint32_t total) noexcept -> bool {
-			return RunGenerationProgress(context, [&] { SetGeneratingWorldProgress(water ? GWP_WATER_INDUSTRY : GWP_LAND_INDUSTRY, total); });
+			return RunGenerationProgress(context, [&] { RustSetGeneratingWorldProgress(water ? GWP_WATER_INDUSTRY : GWP_LAND_INDUSTRY, total); });
 		},
 		.increase_progress = [](OpenTTDIndustryGenerationContext *context, bool water) noexcept -> bool {
-			return RunGenerationProgress(context, [&] { IncreaseGeneratingWorldProgress(water ? GWP_WATER_INDUSTRY : GWP_LAND_INDUSTRY); });
+			return RunGenerationProgress(context, [&] { RustIncreaseGeneratingWorldProgress(water ? GWP_WATER_INDUSTRY : GWP_LAND_INDUSTRY); });
 		},
 		.missing_warning = [](const OpenTTDIndustrySpecHandle *handle) noexcept {
 			const auto *spec = reinterpret_cast<const IndustrySpec *>(handle);

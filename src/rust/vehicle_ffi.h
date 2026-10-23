@@ -177,37 +177,17 @@ struct OpenTTDVehicleServices {
 	const OpenTTDVehicleMaintenanceServices *maintenance;
 	const OpenTTDVehicleVisits *(*visits)() noexcept OPENTTD_SERVICE_DEFAULT(visits);
 };
-struct OpenTTDGroundMoved {
-	int32_t old_z;
-	int32_t z;
-	uint16_t cur_speed;
-	uint16_t max_track_speed;
-};
-struct OpenTTDGroundSpeed {
-	int32_t distance;
-	uint16_t cur_speed;
-};
 struct OpenTTDGroundViewportNext {
 	OpenTTDVehicle *next;
 	uint8_t final_progress;
 };
-struct OpenTTDGroundLastSpeed {
-	uint8_t status;
-};
-struct OpenTTDGroundCrash {
-	uint32_t victims;
-	bool front;
-};
+struct OpenTTDGroundPhysicsServices;
 struct OpenTTDGroundServices {
+	const OpenTTDGroundPhysicsServices *physics;
 	void (OPENTTD_VEHICLE_CALL *cache_begin)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cache_begin);
-	OpenTTDGroundMoved (OPENTTD_VEHICLE_CALL *move_incline)(OpenTTDVehicle *, int32_t, int32_t, bool, bool) noexcept OPENTTD_SERVICE_DEFAULT(move_incline);
+	void (OPENTTD_VEHICLE_CALL *move_position)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(move_position);
 	OpenTTDGroundViewportNext (OPENTTD_VEHICLE_CALL *update_viewport_then_next)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_viewport_then_next);
 	void (OPENTTD_VEHICLE_CALL *turn)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(turn);
-	OpenTTDGroundSpeed (OPENTTD_VEHICLE_CALL *do_update_speed)(OpenTTDVehicle *, uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(do_update_speed);
-	OpenTTDGroundLastSpeed (OPENTTD_VEHICLE_CALL *set_last_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(set_last_speed);
-	int32_t (OPENTTD_VEHICLE_CALL *acceleration)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(acceleration);
-	OpenTTDGroundCrash (OPENTTD_VEHICLE_CALL *crash)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(crash);
-	void (OPENTTD_VEHICLE_CALL *first_cargo_changed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first_cargo_changed);
 	void (OPENTTD_VEHICLE_CALL *go_to_depot_service)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(go_to_depot_service);
 	void (OPENTTD_VEHICLE_CALL *write_first_engine)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_first_engine);
 	void (OPENTTD_VEHICLE_CALL *write_length)(OpenTTDVehicle *, uint8_t, OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_length);

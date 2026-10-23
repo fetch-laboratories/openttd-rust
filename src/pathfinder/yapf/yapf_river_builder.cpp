@@ -15,6 +15,7 @@
 
 #include "../../safeguards.h"
 
+#ifndef WITH_RUST
 /* River builder pathfinder node. */
 struct YapfRiverBuilderNode : CYapfNodeT<CYapfNodeKeyTrackDir, YapfRiverBuilderNode> {};
 
@@ -145,3 +146,5 @@ void YapfBuildRiver(TileIndex start_tile, TileIndex end_tile, TileIndex spring_t
 {
 	YapfRiverBuilder::BuildRiver(start_tile, end_tile, spring_tile, main_river);
 }
+
+#endif /* WITH_RUST */

@@ -9,3 +9,8 @@
 
 /// `AIR_CTOL`.
 pub const AIR_CTOL: u8 = 1;
+
+/// `VehicleAccelerationModel::Normal`.
+pub const ACCELERATION_NORMAL: u8 = 0;
+/// `VehicleAccelerationModel::Maglev`.
+pub const ACCELERATION_MAGLEV: u8 = 2;

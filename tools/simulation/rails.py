@@ -692,6 +692,14 @@ def controller_witnesses(scenario, run, mode):
 def check(scenario, run, mode, role, result):
     if not scenario.get("rail_fixture"):
         return
+    ground = ["rail_power", "rail_weight"]
+    if scenario["name"] == "rail-padhattan-ridge-1996-realistic":
+        ground += ["speed", "accelerate", "brake", "depot"]
+    if scenario.get("rail_control") == "collision":
+        ground += ["crash"]
+    result[f"{mode}_{role}_ground"] = core.branch_witnesses(
+        scenario, run, role, "ground", ground
+    )
     counts = core.branch_witnesses(
         scenario, run, role, "train", train_required(scenario)
     )

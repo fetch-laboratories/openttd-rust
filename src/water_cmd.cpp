@@ -1161,7 +1161,7 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.set_tree_ground = RustSetTreeGroundDensity,
 		.make_sea = [](uint32_t t) noexcept { MakeSea(TileIndex{t}); },
 		.buoy_or_dock = [](uint32_t t) noexcept { return IsBuoy(TileIndex{t}) || IsDock(TileIndex{t}); },
-		.canal_or_river = [](uint32_t t) noexcept { return RustIsCanal(t) || IsRiver(TileIndex{t}); },
+		.canal_or_river = RustCanalOrRiver,
 		.region_context = GetRustWaterRegionContext,
 		.remove_rail = [](OpenTTDCommandCost *out, uint32_t t, Track track) noexcept { *NativeGroundCost(out) = Command<CMD_REMOVE_SINGLE_RAIL>::Do(DoCommandFlag::Execute, TileIndex{t}, track); },
 		.airport_tile = RustAirportTile,
@@ -1486,8 +1486,14 @@ void TileLoop_Water(TileIndex tile)
 
 #endif
 
+#ifdef WITH_RUST
+#include "rust/landscape_generation_ffi.h"
+#endif
 void ConvertGroundTilesIntoWaterTiles()
 {
+#ifdef WITH_RUST
+	openttd_rust_convert_ground_water(&GetRustLandscapeGenerationServices());
+#else
 	for (const auto tile : Map::Iterate()) {
 		auto [slope, z] = GetTileSlopeZ(tile);
 		if (IsTileType(tile, MP_CLEAR) && z == 0) {
@@ -1519,6 +1525,7 @@ void ConvertGroundTilesIntoWaterTiles()
 			}
 		}
 	}
+#endif
 }
 
 static TrackStatus GetTileTrackStatus_Water(TileIndex tile, TransportType mode, uint, DiagDirection)

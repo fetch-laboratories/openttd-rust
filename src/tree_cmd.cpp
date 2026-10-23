@@ -47,6 +47,7 @@ enum ExtraTreePlacement : uint8_t {
 
 #ifdef WITH_RUST
 #include "rust/trees_ffi.h"
+#include "rust/generation_services.hpp"
 #include "rust/settings_services.h"
 #include "rust/ground_services.h"
 #include "rust/landscape_loop_ffi.h"
@@ -163,8 +164,8 @@ static const OpenTTDTreeServices _tree_services{
 	.set_growth = [](uint32_t tile, uint8_t growth) noexcept { SetTreeGrowth(TileIndex{tile}, static_cast<TreeGrowthStage>(growth)); },
 	.make_clear = RustMakeClearValue,
 	.ambient = RustAmbientSoundLegacy,
-	.progress = []() noexcept { return TreeProgress([] { IncreaseGeneratingWorldProgress(GWP_TREE); }); },
-	.progress_total = [](uint32_t total) noexcept { return TreeProgress([total] { SetGeneratingWorldProgress(GWP_TREE, total); }); },
+	.progress = []() noexcept { return TreeProgress([] { RustIncreaseGeneratingWorldProgress(GWP_TREE); }); },
+	.progress_total = [](uint32_t total) noexcept { return TreeProgress([total] { RustSetGeneratingWorldProgress(GWP_TREE, total); }); },
 	.town_rating = TreeTownRating,
 	.command_begin = TreeCommandBegin,
 	.command_tile = [](OpenTTDTreeCommand *ctx) noexcept { return static_cast<TileIndex>(*ctx->iter).base(); },

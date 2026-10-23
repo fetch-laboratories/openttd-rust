@@ -17,10 +17,9 @@
     clippy::many_single_char_names,
     clippy::items_after_statements
 )]
+use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE};
 use crate::train::Handle;
 const INVALID: u32 = u32::MAX;
-const DEPOT: u8 = 0x80;
-const WORMHOLE: u8 = 0x40;
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct TrainReservationFreeRead {

@@ -15,11 +15,15 @@ static OpenTTDVehicleMaintenanceServices _vehicle_maintenance_probe;
 struct RoadTestTables {
 	OpenTTDVehicleServices vehicle;
 	OpenTTDGroundServices ground;
+	OpenTTDGroundPhysicsServices physics{};
+	OpenTTDVehicleServices physics_vehicle{};
 	OpenTTDSharedServices shared;
 	OpenTTDRoadLeaves leaves;
 	explicit RoadTestTables(const OpenTTDSharedServices *world) : shared(*world)
 	{
 		vehicle.maintenance = &_vehicle_maintenance_probe;
+		ground.physics = &physics;
+		physics.vehicle = &physics_vehicle;
 		VEHICLE_UNUSED(vehicle, write_counters);
 
 		VEHICLE_UNUSED(vehicle, altitude_inputs);
@@ -102,14 +106,9 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, write_last_station);
 		VEHICLE_UNUSED(vehicle, write_dest);
 		VEHICLE_UNUSED(vehicle, write_progress);
-		VEHICLE_UNUSED(ground, move_incline);
+		VEHICLE_UNUSED(ground, move_position);
 		VEHICLE_UNUSED(ground, update_viewport_then_next);
 		VEHICLE_UNUSED(ground, turn);
-		VEHICLE_UNUSED(ground, do_update_speed);
-		VEHICLE_UNUSED(ground, set_last_speed);
-		VEHICLE_UNUSED(ground, acceleration);
-		VEHICLE_UNUSED(ground, crash);
-		VEHICLE_UNUSED(ground, first_cargo_changed);
 		VEHICLE_UNUSED(ground, go_to_depot_service);
 		VEHICLE_UNUSED(ground, write_first_engine);
 		VEHICLE_UNUSED(ground, write_length);

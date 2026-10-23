@@ -12,4 +12,5 @@
 #include "../tunnelbridge_map.h"
 inline BridgeType RustBridgeType(uint32_t tile) noexcept { return GetBridgeType(TileIndex{tile}); }
 inline uint16_t RustBridgeSpecSpeed(BridgeType type) noexcept { return GetBridgeSpec(type)->speed; }
+inline void RustClearBridgeMiddle(uint32_t tile) noexcept { ClearBridgeMiddle(TileIndex{tile}); }
 #endif /* RUST_SERVICES_BRIDGE_H */

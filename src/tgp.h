@@ -10,7 +10,9 @@
 #ifndef TGP_H
 #define TGP_H
 
+#ifndef WITH_RUST
 void GenerateTerrainPerlin();
+#endif
 uint GetEstimationTGPMapHeight();
 
 #endif /* TGP_H */
