@@ -63,6 +63,7 @@ mod slope_func;
 mod station;
 mod station_cargo;
 mod station_cmd;
+mod station_map;
 mod station_service;
 mod station_type;
 mod string_validation;

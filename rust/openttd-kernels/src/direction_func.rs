@@ -32,5 +32,6 @@ pub const fn is_valid_axis(axis: u8) -> bool {
 }
 /// `OtherAxis`.
 pub const fn other_axis(axis: u8) -> u8 {
+    assert!(is_valid_axis(axis));
     axis ^ 1
 }

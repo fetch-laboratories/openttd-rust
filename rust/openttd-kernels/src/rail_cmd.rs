@@ -295,8 +295,7 @@ const SIG_SEMAPHORE: u8 = 1;
 const RAILTYPE_RAIL: u8 = 0;
 const RAILTYPE_ELECTRIC: u8 = 1;
 use crate::road_type::INVALID_ROADTYPE;
-const ROAD_X: u8 = 10;
-const ROAD_Y: u8 = 5;
+use crate::road_type::{ROAD_X, ROAD_Y};
 const STOPPED: u8 = 1 << 1;
 
 const TILE_AXIAL_DISTANCE: i32 = 192;

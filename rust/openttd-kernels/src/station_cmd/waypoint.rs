@@ -29,15 +29,9 @@ use crate::tile_type::INVALID_TILE;
 use crate::witness as w;
 
 impl Ctx<'_> {
-    fn rail_waypoint(&self, tile: u32) -> bool {
-        (self.shared.tile_type)(tile) == 5 && (self.shared.station_type)(tile).0 == 7
-    }
-    fn road_waypoint_tile(&self, tile: u32) -> bool {
-        (self.shared.tile_type)(tile) == 5 && (self.shared.station_type)(tile).0 == 8
-    }
     fn waypoint_rail_axis(&self, tile: u32) -> u8 {
         w::hit(w::WAYPOINT_AXIS_RAIL);
-        if self.rail_waypoint(tile) {
+        if crate::station_map::is_rail_waypoint_tile(tile, self.shared) {
             return (self.s.rail_axis)(tile).0;
         }
         if (self.shared.tile_type)(tile) != 1 || (self.rail_map().rail_tile_type)(tile).0 != 0 {
@@ -52,7 +46,7 @@ impl Ctx<'_> {
     }
     fn waypoint_road_axis(&self, tile: u32) -> u8 {
         w::hit(w::WAYPOINT_AXIS_ROAD);
-        if self.road_waypoint_tile(tile) {
+        if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
             return (self.shared.drive_through_axis)(tile);
         }
         if !(self.shared.is_normal_road)(tile) {
@@ -220,7 +214,7 @@ impl Ctx<'_> {
     fn valid_waypoint_tile(&self, out: Cost<'_>, tile: u32, axis: u8, waypoint: &mut u16) {
         w::hit(w::WAYPOINT_VALIDATE);
         if (self.shared.tile_type)(tile) == 5 {
-            if (self.shared.station_type)(tile).0 != RAIL_WAYPOINT {
+            if !crate::station_map::is_rail_waypoint(tile, self.shared) {
                 return self.auto_clear(out, tile);
             }
             let wp = (self.shared.station_index)(tile);
@@ -306,7 +300,7 @@ impl Ctx<'_> {
         };
         cost.set(0);
         for tile in area.tiles(self.map()) {
-            if !self.rail_waypoint(tile) {
+            if !crate::station_map::is_rail_waypoint_tile(tile, self.shared) {
                 cost.add_money(crate::company::price(PR_BUILD_WAYPOINT_RAIL));
             }
         }
@@ -618,7 +612,7 @@ impl Ctx<'_> {
             } else {
                 owner
             };
-            if self.road_waypoint_tile(tile) {
+            if crate::station_map::is_road_waypoint_tile(tile, self.shared) {
                 self.remove_road_tile(ret, ret, tile, flags, i32::from(specindex.value), true);
             }
             (self.s.road_waypoint_area_add)(wp, tile);

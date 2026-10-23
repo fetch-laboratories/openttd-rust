@@ -898,7 +898,9 @@ impl Ctx<'_> {
             return;
         }
         if length != 0 {
-            if (self.shared.utf8_length)(text, length) >= 32 {
+            if (self.shared.utf8_length)(text, length)
+                >= crate::station_type::MAX_LENGTH_STATION_NAME_CHARS
+            {
                 return out.error(0xffff);
             }
             for index in 0..(self.world().pool_size)() {

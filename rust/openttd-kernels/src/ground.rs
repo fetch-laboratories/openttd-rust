@@ -31,16 +31,13 @@ pub(crate) fn set_tunnel_bridge_owner(begin: u32, end: u32, owner: u8, s: &Servi
     (s.set_tile_owner)(end, owner);
 }
 
-/// Original `OtherAxis` for a source-valid axis.
-fn other_axis(axis: Axis) -> Axis {
-    Axis(axis.0 ^ 1)
-}
-
 use crate::track_func::axis_to_track;
 
 /// Original `GetCrossingRailAxis`, over the canonical road-axis accessor.
 fn crossing_rail_axis(tile: u32, rail: &RailMapServices) -> Axis {
-    other_axis((rail.crossing_road_axis)(tile))
+    Axis(crate::direction_func::other_axis(
+        (rail.crossing_road_axis)(tile).0,
+    ))
 }
 
 /// Original `GetCrossingRailTrack`, retaining its named helper composition.
