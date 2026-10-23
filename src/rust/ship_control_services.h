@@ -226,7 +226,7 @@ static void Ship_visual(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id
 
 static void Ship_cache(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateCache(); }
 
-static void Ship_play_sound(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->PlayLeaveStationSound(); }
+static void Ship_play_sound(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehiclePlayLeaveSound(RustVehicle(v)); }
 
 static OpenTTDShipReverseResult Ship_yapf_reverse(uint32_t id, bool return_trackdir) noexcept
 {

@@ -118,7 +118,7 @@ static void TrainArrivalNews(OpenTTDTrainHandle id, uint16_t a) noexcept
 static void TrainArrivalTriggers(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	Station *st = Station::Get(StationID(a)); TriggerStationRandomisation(st, v->tile, StationRandomTrigger::VehicleArrives); RustStationAnimation(st, v->tile, StationAnimationTrigger::VehicleArrives);
+	Station *st = Station::Get(StationID(a)); RustStationRandomisation(st, v->tile, StationRandomTrigger::VehicleArrives); RustStationAnimation(st, v->tile, StationAnimationTrigger::VehicleArrives);
 }
 static uint64_t TrainAxisDiag(OpenTTDTrainHandle, uint8_t a) noexcept
 {
@@ -341,7 +341,7 @@ static uint64_t TrainHasReserved(OpenTTDTrainHandle, uint32_t a, uint8_t b) noex
 static void TrainHideFill(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	HideFillingPercent(&v->fill_percent_te_id);
+	RustVehicleHideFilling(RustVehicle(v));
 }
 static uint64_t TrainInclination(OpenTTDTrainHandle id, uint8_t a, uint8_t b) noexcept
 {
@@ -390,7 +390,7 @@ static void TrainLastSpeed(OpenTTDTrainHandle id) noexcept
 static void TrainLeaveSound(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	v->PlayLeaveStationSound();
+	RustVehiclePlayLeaveSound(RustVehicle(v));
 }
 static void TrainLeaveUnbunch(OpenTTDTrainHandle id) noexcept
 {

@@ -119,7 +119,7 @@ static void VehicleTransactionStartstopUI(void *shell) noexcept
 	GetRustVehicleServices().start_stop_dirty(RustVehicle(v));
 	FleetGroupServices().depot_dirty(shell);
 	openttd_orders_dirty_vehicle_windows(shell);
-	InvalidateWindowData(WC_VEHICLE_VIEW, v->index);
+	RustVehicleInvalidateView(v->index);
 }
 static void VehicleTransactionSellRail(OpenTTDCommandCost *out, uint16_t flags, void *v, bool chain, bool backup, uint32_t client) noexcept
 {

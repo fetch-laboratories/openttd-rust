@@ -123,14 +123,10 @@ pub struct Services {
     pub road_stop_departure: extern "C" fn(*mut Station, u32),
     /// Virtual `PlayLeaveStationSound()`.
     pub leave_sound: extern "C" fn(VehicleRef),
-    /// `SetWindowClassesDirty` of the vehicle type's list windows.
-    pub depot_lists: extern "C" fn(u8),
     /// Depot window invalidation (`InvalidateWindowData` only off rails).
     pub depot_windows: extern "C" fn(VehicleRef, bool),
     /// Ship `UpdateViewport(true, true)` and its depot window.
     pub ship_depot_viewport: extern "C" fn(VehicleRef),
-    /// `HandleAircraftEnterHangar`.
-    pub enter_hangar: extern "C" fn(VehicleRef),
     /// `TriggerVehicleRandomisation(v, VehicleRandomTrigger::Depot)`.
     pub depot_randomisation: extern "C" fn(VehicleRef),
     /// `InvalidateWindowData(WC_VEHICLE_VIEW, v->index)`.
@@ -948,14 +944,13 @@ fn entered_depot_this_tick(v: VehicleRef, s: &Services) {
 pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     s.check(|| {
         // SAFETY: a live serialized shell; First() does not retain a borrow.
-        unsafe { (s.refit.common.transactions.first)(v.0.as_ptr().cast()) }
-            == v.0.as_ptr().cast()
+        (unsafe { (s.refit.common.transactions.first)(v.0.as_ptr().cast()) }) == v.0.as_ptr().cast()
     });
     witness::hit(witness::VISITS_DEPOT);
     let vs = s.vehicles();
     let m = s.maintenance();
     let kind = VehicleType((vs.vehicle_type)(v));
-    (s.depot_lists)(kind.0);
+    s.orders().dirty_vehicle_windows(v);
     match kind {
         VehicleType::TRAIN => {
             let train = (s.refit.train_handle)(v.0.as_ptr());
@@ -975,7 +970,13 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
             }
             (s.ship_depot_viewport)(v);
         }
-        VehicleType::AIRCRAFT => (s.enter_hangar)(v),
+        VehicleType::AIRCRAFT => {
+            let aircraft = (s.refit.aircraft_handle)(v.0.as_ptr());
+            // SAFETY: the live aircraft handle and its static controller table.
+            unsafe {
+                crate::aircraft::openttd_rust_aircraft_enter_hangar(s.refit.aircraft, aircraft)
+            };
+        }
         _ => unreachable!(),
     }
     (m.view_dirty)(v);

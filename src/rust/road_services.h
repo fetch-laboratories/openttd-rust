@@ -197,7 +197,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcArrivalTriggers(OpenTTDVehicle *v, uint1
 {
 	RoadVehicle *u = RoadOf(v);
 	Station *st = Station::Get(StationID(station));
-	TriggerRoadStopRandomisation(st, u->tile, StationRandomTrigger::VehicleArrives);
+	RustRoadStopRandomisation(st, u->tile, StationRandomTrigger::VehicleArrives);
 	RustRoadStopAnimation(st, u->tile, StationAnimationTrigger::VehicleArrives);
 }
 static OpenTTDRoadOvertakeRead OPENTTD_VEHICLE_CALL RoadSvcOvertakeRead(OpenTTDVehicle *v) noexcept

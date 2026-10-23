@@ -97,6 +97,7 @@
 #include "rust/industry_shell_services.h"
 #include "rust/services_road.h"
 #include "rust/vehicle_visits_ffi.h"
+#include "rust/services_linkgraph.h"
 #endif
 
 #include "safeguards.h"
@@ -730,13 +731,11 @@ static const OpenTTDStationServices _rust_station_services = {
 		GoodsEntry &ge = st->goods[cargo];
 		LinkGraph *lg = nullptr;
 		if (ge.link_graph == LinkGraphID::Invalid()) {
-			if (LinkGraph::CanAllocateItem()) {
-				lg = new LinkGraph(cargo);
-				LinkGraphSchedule::instance.Queue(lg);
-				ge.link_graph = lg->index;
-				ge.node = lg->AddNode(st);
+			if (RustLinkGraphAvailable()) {
+				lg = RustLinkGraphAllocate(cargo);
+				RustLinkGraphJoin(lg, st, cargo);
 			} else {
-				Debug(misc, 0, "Can't allocate link graph");
+				RustLinkGraphAllocationFailure();
 			}
 		} else {
 			lg = LinkGraph::Get(ge.link_graph);
@@ -745,10 +744,10 @@ static const OpenTTDStationServices _rust_station_services = {
 	.station_list_invalidation = RustStationListInvalidation,
 	.new_cargo_animation = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> void {
 		Station *st = Station::From(static_cast<BaseStation *>(handle));
-		TriggerStationRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
+		RustStationRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
 		RustStationAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
 		TriggerAirportAnimation(st, AirportAnimationTrigger::NewCargo, cargo);
-		TriggerRoadStopRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
+		RustRoadStopRandomisation(st, st->xy, StationRandomTrigger::NewCargo, cargo);
 		RustRoadStopAnimation(st, st->xy, StationAnimationTrigger::NewCargo, cargo);
 	},
 	.waiting_redraw = [](OpenTTDBaseStation *handle) noexcept -> void {

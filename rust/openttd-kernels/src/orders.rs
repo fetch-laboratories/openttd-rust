@@ -4970,6 +4970,11 @@ impl VisitOrders {
     pub(crate) fn increment_implicit(self, v: VehicleRef) {
         self.0.increment_implicit(Self::shell(v));
     }
+    /// The vehicle type's list-window invalidation.
+    pub(crate) fn dirty_vehicle_windows(self, v: VehicleRef) {
+        // SAFETY: the live shell is read synchronously; no owner borrow survives.
+        unsafe { (self.0.0.dirty_vehicle_windows)(Self::shell(v)) };
+    }
     /// `UpdateVehicleTimetable`.
     pub(crate) fn update_timetable(self, v: VehicleRef, travelling: bool) {
         self.0.update_timetable(Self::shell(v), travelling);

@@ -68,7 +68,7 @@
 #include "rust/vehicle_services.h"
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/services_station.h"
-#include "linkgraph/linkgraphschedule.h"
+#include "rust/services_linkgraph.h"
 #endif
 #ifdef WITH_RUST
 #include "rust/vehicle_transaction_ffi.h"
@@ -85,20 +85,6 @@ static OpenTTDVisitPrediction VehicleVisitPrediction(OpenTTDVehicle *handle) noe
 {
 	const Vehicle *v = VehicleOf(handle);
 	return {.loading_tick = v->last_loading_tick, .last_loading = v->last_loading_station.base(), .last_station = v->last_station_visited.base(), .ticks = v->load_unload_ticks};
-}
-static bool VehicleVisitGraphAvailable() noexcept { return LinkGraph::CanAllocateItem(); }
-static OpenTTDLinkGraph *VehicleVisitAllocateGraph(uint8_t cargo) noexcept
-{
-	LinkGraph *lg = new LinkGraph(cargo);
-	LinkGraphSchedule::instance.Queue(lg);
-	return lg;
-}
-static void VehicleVisitAllocationFailure() noexcept { Debug(misc, 0, "Can't allocate link graph"); }
-static void VehicleVisitJoinGraph(OpenTTDLinkGraph *lg, OpenTTDBaseStation *st, uint8_t cargo) noexcept
-{
-	GoodsEntry &ge = Station::From(st)->goods[cargo];
-	ge.link_graph = lg->index;
-	ge.node = lg->AddNode(Station::From(st));
 }
 static uint16_t VehicleVisitGraphSize(OpenTTDLinkGraph *lg) noexcept { return lg->Size(); }
 static void VehicleVisitMergeGraph(OpenTTDLinkGraph *lg, OpenTTDLinkGraph *other) noexcept
@@ -121,21 +107,18 @@ static void VehicleVisitArrivalDirty(OpenTTDVehicle *handle) noexcept
 	Station::Get(v->last_station_visited)->MarkTilesDirty(true);
 }
 static void VehicleVisitReservationLog() noexcept { Debug(misc, 1, "cancelling cargo reservation"); }
-static void VehicleVisitHideFilling(OpenTTDVehicle *handle) noexcept { HideFillingPercent(&VehicleOf(handle)->fill_percent_te_id); }
 static void VehicleVisitStationDeparture(OpenTTDStation *handle, uint32_t tile) noexcept
 {
 	Station *st = static_cast<Station *>(handle);
-	TriggerStationRandomisation(st, TileIndex(tile), StationRandomTrigger::VehicleDeparts);
-	TriggerStationAnimation(st, TileIndex(tile), StationAnimationTrigger::VehicleDeparts);
+	RustStationRandomisation(st, TileIndex(tile), StationRandomTrigger::VehicleDeparts);
+	RustStationAnimation(st, TileIndex(tile), StationAnimationTrigger::VehicleDeparts);
 }
 static void VehicleVisitRoadStopDeparture(OpenTTDStation *handle, uint32_t tile) noexcept
 {
 	Station *st = static_cast<Station *>(handle);
-	TriggerRoadStopRandomisation(st, TileIndex(tile), StationRandomTrigger::VehicleDeparts);
-	TriggerRoadStopAnimation(st, TileIndex(tile), StationAnimationTrigger::VehicleDeparts);
+	RustRoadStopRandomisation(st, TileIndex(tile), StationRandomTrigger::VehicleDeparts);
+	RustRoadStopAnimation(st, TileIndex(tile), StationAnimationTrigger::VehicleDeparts);
 }
-static void VehicleVisitLeaveSound(OpenTTDVehicle *handle) noexcept { VehicleOf(handle)->PlayLeaveStationSound(); }
-static void VehicleVisitDepotLists(uint8_t type) noexcept { SetWindowClassesDirty(GetWindowClassForVehicleType(static_cast<VehicleType>(type))); }
 static void VehicleVisitDepotWindows(OpenTTDVehicle *handle, bool invalidate) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -148,9 +131,7 @@ static void VehicleVisitShipDepotViewport(OpenTTDVehicle *handle) noexcept
 	ship->UpdateViewport(true, true);
 	SetWindowDirty(WC_VEHICLE_DEPOT, ship->tile);
 }
-static void VehicleVisitEnterHangar(OpenTTDVehicle *handle) noexcept { HandleAircraftEnterHangar(Aircraft::From(VehicleOf(handle))); }
 static void VehicleVisitDepotRandomisation(OpenTTDVehicle *handle) noexcept { TriggerVehicleRandomisation(VehicleOf(handle), VehicleRandomTrigger::Depot); }
-static void VehicleVisitViewInvalidate(OpenTTDVehicle *handle) noexcept { InvalidateWindowData(WC_VEHICLE_VIEW, VehicleOf(handle)->index); }
 static void VehicleVisitWithCosts(void *context, void (*scope)(void *, void *)) noexcept
 {
 	CommandCost cost, temporary;
@@ -191,10 +172,10 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.prediction = VehicleVisitPrediction,
 		.display_speed = RustVehicleDisplaySpeed,
 		.location = RustStationLocation,
-		.graph_available = VehicleVisitGraphAvailable,
-		.allocate_graph = VehicleVisitAllocateGraph,
-		.allocation_failure = VehicleVisitAllocationFailure,
-		.join_graph = VehicleVisitJoinGraph,
+		.graph_available = RustLinkGraphAvailable,
+		.allocate_graph = RustLinkGraphAllocate,
+		.allocation_failure = RustLinkGraphAllocationFailure,
+		.join_graph = RustLinkGraphJoin,
 		.graph_size = VehicleVisitGraphSize,
 		.merge_graph = VehicleVisitMergeGraph,
 		.update_edge = VehicleVisitUpdateEdge,
@@ -204,17 +185,15 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.arrival_dirty = VehicleVisitArrivalDirty,
 		.station_cargo = RustStationCargoOwner,
 		.reservation_log = VehicleVisitReservationLog,
-		.hide_filling = VehicleVisitHideFilling,
+		.hide_filling = RustVehicleHideFilling,
 		.set_occupancy = RustVehicleSetTripOccupancy,
 		.station_departure = VehicleVisitStationDeparture,
 		.road_stop_departure = VehicleVisitRoadStopDeparture,
-		.leave_sound = VehicleVisitLeaveSound,
-		.depot_lists = VehicleVisitDepotLists,
+		.leave_sound = RustVehiclePlayLeaveSound,
 		.depot_windows = VehicleVisitDepotWindows,
 		.ship_depot_viewport = VehicleVisitShipDepotViewport,
-		.enter_hangar = VehicleVisitEnterHangar,
 		.depot_randomisation = VehicleVisitDepotRandomisation,
-		.view_invalidate = VehicleVisitViewInvalidate,
+		.view_invalidate = RustVehicleVisitInvalidateView,
 		.with_costs = VehicleVisitWithCosts,
 		.refit_failed_news = VehicleVisitRefitFailedNews,
 		.cost_animation = VehicleVisitCostAnimation,
