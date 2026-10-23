@@ -247,9 +247,9 @@ impl Near {
     unsafe fn filter(&mut self, s: &VehicleServices) {
         while let Some(v) = self.get() {
             let xy = (s.xy)(v);
-            if xy.x.wrapping_sub(self.left) as u32 <= self.right.wrapping_sub(self.left) as u32
-                && xy.y.wrapping_sub(self.top) as u32 <= self.bottom.wrapping_sub(self.top) as u32
-            {
+            if crate::geometry_type::rect_contains(
+                self.left, self.top, self.right, self.bottom, xy.x, xy.y,
+            ) {
                 break;
             }
             unsafe {

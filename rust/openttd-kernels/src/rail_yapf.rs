@@ -214,7 +214,7 @@ fn overlaps(reserved: u8, td: u8) -> bool {
         return true;
     }
     let bits = reserved | bit;
-    bits & bits.wrapping_sub(1) != 0 && bits != 0x0c && bits != 0x30
+    crate::track_func::tracks_overlap(bits)
 }
 fn offset(tile: u32, dir: u8, map_x: u32) -> u32 {
     match dir {

@@ -33,6 +33,7 @@ mod economy_type;
 mod engine_type;
 mod genland;
 mod genworld;
+mod geometry_type;
 mod ground;
 mod ground_vehicle;
 mod heightmap;
