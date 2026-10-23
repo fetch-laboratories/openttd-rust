@@ -91,7 +91,11 @@ impl Ctx<'_> {
             }
         }
         if flags & DoCommandFlag::EXECUTE != 0 {
-            (self.s.set_name)(st, text, length);
+            if length == 0 {
+                (self.s.clear_name)(st);
+            } else {
+                (self.s.set_name)(st, text, length);
+            }
             (self.s.virtual_coord)(st);
         }
         out.zero();
@@ -401,7 +405,7 @@ impl Ctx<'_> {
         );
         (self.s.assign_rail_spec)(spec, wp, specindex.value);
         self.reset_delete_counter(wp);
-        (self.s.set_facilities)(wp, (self.world().facilities)(wp) | FACILITY_TRAIN);
+        (self.s.set_facility_bits)(wp, FACILITY_TRAIN);
         (self.s.set_build_date)(wp, (self.shared.calendar_date)());
         (self.s.set_string_id)(wp, self.s.strings.waypoint_name);
         (self.s.set_train_area)(wp, area);
@@ -585,10 +589,7 @@ impl Ctx<'_> {
             (self.s.road_triggers)(wp, spec);
         }
         self.reset_delete_counter(wp);
-        (self.s.set_facilities)(
-            wp,
-            (self.world().facilities)(wp) | FACILITY_BUS | FACILITY_TRUCK,
-        );
+        (self.s.set_facility_bits)(wp, FACILITY_BUS | FACILITY_TRUCK);
         (self.s.set_build_date)(wp, (self.shared.calendar_date)());
         (self.s.set_string_id)(wp, self.s.strings.waypoint_name);
         if (self.s.station_town)(wp).is_null() {
@@ -704,7 +705,7 @@ impl Ctx<'_> {
         }
         (self.s.before_add_tile)(ret.0, wp, tile, ADD_TRY);
         (self.s.set_string_id)(wp, self.s.strings.buoy_name);
-        (self.s.set_facilities)(wp, (self.world().facilities)(wp) | FACILITY_DOCK);
+        (self.s.set_facility_bits)(wp, FACILITY_DOCK);
         (self.s.set_station_owner)(wp, OWNER_NONE);
         (self.s.set_build_date)(wp, (self.shared.calendar_date)());
         if (self.s.station_town)(wp).is_null() {

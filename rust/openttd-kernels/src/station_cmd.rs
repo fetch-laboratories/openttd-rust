@@ -359,12 +359,14 @@ pub struct CommandServicesTable {
     pub station_list_classes_invalidate: extern "C" fn(),
     // Waypoint command leaves; canonical shells and shared map services.
     pub clear_cached_name: extern "C" fn(*mut BaseStation),
+    pub clear_name: extern "C" fn(*mut BaseStation),
     pub make_buoy: extern "C" fn(u32, u16, crate::services::WaterClass),
     pub make_rail_waypoint: extern "C" fn(u32, u8, u16, u8, u8, crate::services::RailType),
     pub new_waypoint: extern "C" fn(u32) -> *mut BaseStation,
     pub rail_axis: extern "C" fn(u32) -> crate::services::Axis,
     pub road_ground: *const crate::ground::RoadServices,
     pub road_waypoint_area_add: extern "C" fn(*mut BaseStation, u32),
+    pub set_facility_bits: extern "C" fn(*mut BaseStation, u8),
     pub set_location: extern "C" fn(*mut BaseStation, u32),
     pub set_rail_station_reservation: extern "C" fn(u32, bool),
     pub set_road_waypoint: extern "C" fn(*mut BaseStation),
@@ -912,7 +914,11 @@ impl Ctx<'_> {
         }
         if flags & 1 != 0 {
             (self.s.clear_cached_name)(st);
-            (self.s.set_name)(st, text, length);
+            if length == 0 {
+                (self.s.clear_name)(st);
+            } else {
+                (self.s.set_name)(st, text, length);
+            }
             (self.s.virtual_coord)(st);
             (self.world().station_list_invalidation)(st, 1);
         }

@@ -86,6 +86,8 @@ inline void RustStationSetStationOwner(BaseStation *st, uint8_t owner) noexcept 
 inline void RustStationSetFacilities(BaseStation *st, uint8_t facilities) noexcept { st->facilities = StationFacilities(facilities); }
 inline void RustStationSetBuildDate(BaseStation *st, int32_t date) noexcept { st->build_date = TimerGameCalendar::Date(date); }
 inline void RustStationListInvalidation(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_LIST, st->owner, data); }
+inline void RustStationClearName(BaseStation *st) noexcept { st->name.clear(); }
+inline void RustStationSetFacilityBits(BaseStation *st, uint8_t bits) noexcept { st->facilities.Set(StationFacilities(bits)); }
 inline void RustStationClearCachedName(BaseStation *st) noexcept { st->cached_name.clear(); }
 inline void RustStationSetName(BaseStation *st, const uint8_t *text, size_t length) noexcept { st->name.assign(reinterpret_cast<const char *>(text), length); }
 inline bool RustWaypointAvailable() noexcept { return Waypoint::CanAllocateItem(); }

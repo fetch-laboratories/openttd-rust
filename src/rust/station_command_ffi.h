@@ -239,12 +239,14 @@ struct OpenTTDStationCommandServices {
 	bool (*autoslope_axis)(uint32_t, int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(autoslope_axis);
 	void (*station_list_classes_invalidate)() noexcept OPENTTD_SERVICE_DEFAULT(station_list_classes_invalidate);
 	void (*clear_cached_name)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(clear_cached_name);
+	void (*clear_name)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(clear_name);
 	void (*make_buoy)(uint32_t, uint16_t, WaterClass) noexcept OPENTTD_SERVICE_DEFAULT(make_buoy);
 	void (*make_rail_waypoint)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t, RailType) noexcept OPENTTD_SERVICE_DEFAULT(make_rail_waypoint);
 	BaseStation *(*new_waypoint)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_waypoint);
 	Axis (*rail_axis)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_axis);
 	const OpenTTDRoadGroundServices *road_ground;
 	void (*road_waypoint_area_add)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_waypoint_area_add);
+	void (*set_facility_bits)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_facility_bits);
 	void (*set_location)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_location);
 	void (*set_rail_station_reservation)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(set_rail_station_reservation);
 	void (*set_road_waypoint)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(set_road_waypoint);
