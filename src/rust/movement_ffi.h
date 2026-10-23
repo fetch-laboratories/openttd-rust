@@ -78,6 +78,7 @@ struct OpenTTDMovementServices {
 void RustMovementAssert(bool condition) noexcept;
 const OpenTTDMovementServices &GetRustMovementServices() noexcept;
 extern "C" {
+uint16_t openttd_rust_road_trackdirs(const OpenTTDSharedServices *, uint32_t, RoadTramType);
 uint8_t openttd_rust_movement_tunnel_visibility(uint8_t);
 uint8_t openttd_rust_movement_enter(const OpenTTDMovementServices *, OpenTTDVehicle *, uint32_t, int32_t, int32_t);
 int32_t openttd_rust_movement_depot_ticks(const OpenTTDMovementServices *, OpenTTDTrainHandle);

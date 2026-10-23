@@ -14,3 +14,10 @@ pub const ROAD_X: u8 = 10;
 
 /// `ROAD_NW`.
 pub const ROAD_NW: u8 = 1;
+
+/// `ROAD_SW`.
+pub const ROAD_SW: u8 = 2;
+/// `ROAD_SE`.
+pub const ROAD_SE: u8 = 4;
+/// `ROAD_NE`.
+pub const ROAD_NE: u8 = 8;

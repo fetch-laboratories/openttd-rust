@@ -60,6 +60,9 @@ inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
 }
 
 /** Shared native field definitions, also used by bundled observations. */
+/* Typed signature adapter for synchronous pathfinder vehicle contexts. */
+template <typename Result, typename Shell, auto Query>
+inline Result RustVehicleContextQuery(const void *context) noexcept { return Query(RustVehicle(static_cast<const Shell *>(context))); }
 template <class T> inline auto RustVehicleFirst(T *v) noexcept { return v->First(); }
 /** Canonical typed ground-vehicle cargo update for command/list adapters. */
 template <class T> inline void RustGroundCargoChanged(T *v) noexcept { v->CargoChanged(); }

@@ -26,8 +26,9 @@ struct OpenTTDShipYapfInput {
 struct OpenTTDShipFollow { uint32_t tile; int32_t skipped; uint16_t dirs; uint8_t followed; };
 struct OpenTTDShipTile { uint32_t ships; uint8_t docking, sea, lock_middle, destination; };
 struct OpenTTDShipYapfResult { uint8_t direction, found, origin; uint32_t stats[13]; };
+struct OpenTTDShipYapfDestination { uint32_t tile; bool station; };
 struct OpenTTDShipYapfLeaves {
-	void (*destination)(const void *, uint32_t *, uint16_t *) noexcept OPENTTD_SERVICE_DEFAULT(destination);
+	OpenTTDShipYapfDestination (*destination)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(destination);
 	OpenTTDShipFollow (*follow)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(follow);
 	OpenTTDShipTile (*tile)(const void *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(tile);
 	OpenTTDWaterPatch (*patch)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(patch);

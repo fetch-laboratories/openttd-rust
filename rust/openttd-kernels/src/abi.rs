@@ -2572,7 +2572,7 @@ layouts! {
         aqueducts,
     };
     "OpenTTDWaterLeaves" ["probe"] => crate::water_regions::Leaves {
-        tracks,
+        shared,
         follow,
         aqueduct,
         debug,
@@ -2628,6 +2628,7 @@ layouts! {
         station,
         unit_number,
     };
+    "OpenTTDShipYapfDestination" ["probe"] => crate::ship_yapf::Destination { tile, station, };
     "OpenTTDShipYapfLeaves" ["probe"] => crate::ship_yapf::Leaves {
         destination,
         follow,
@@ -3051,8 +3052,6 @@ layouts! {
         next,
     };
     "OpenTTDRoadYapfTraversal" ["probe"] => crate::road_yapf::Traversal {
-        current_z,
-        next_z,
         display_speed,
         max_speed,
         min_speed,
@@ -3060,9 +3059,9 @@ layouts! {
     };
     "OpenTTDRoadYapfLeaves" ["probe"] => crate::road_yapf::Leaves {
         shared,
+        road_kind,
         tile,
         follow,
-        tracks,
         traversal,
         closest,
         area,

@@ -9,6 +9,7 @@
 #ifndef SHIP_YAPF_PROTOCOL_HPP
 #define SHIP_YAPF_PROTOCOL_HPP
 #include "../rust/ship_yapf_ffi.h"
+#include "../rust/movement_ffi.h"
 #include <array>
 #include <vector>
 #include <memory>
@@ -19,7 +20,7 @@ inline uint32_t draws;
 inline uint32_t Random(void *) noexcept { ++draws; return 0x9abcdef0; }
 inline uint32_t destination;
 inline bool snake, region_chain;
-inline void Destination(const void *, uint32_t *tile, uint16_t *dirs) noexcept { *tile = destination; *dirs = (1 << 1) | (1 << 9); }
+inline OpenTTDShipYapfDestination Destination(const void *) noexcept { return {.tile = destination, .station = false}; }
 inline OpenTTDShipFollow Follow(const void *, uint32_t tile, uint8_t td) noexcept
 {
 	if (!snake) return {static_cast<uint32_t>(tile + (td == 1 ? 32 : -32)), 0, static_cast<uint16_t>(1 << td), 1};
@@ -83,7 +84,14 @@ template <typename Check> void Run(Check check)
 	openttd_rust_ship_path_clear(path.get());
 	OpenTTDShipYapfInput input{32, 32, 10 + 32 * 20, 10 + 32 * 24, 100, 20, 100, 0, 1 << 9, 1, 0, 0, 0, 0};
 	const OpenTTDShipYapfLeaves leaves{Destination, Follow, Tile, Patch, VisitNew, VisitNext, VisitDestroy, Report};
-	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
+	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, Random, Industry);
+	static OpenTTDSharedServices world{};
+	world.tile_type = [](uint32_t) noexcept -> uint8_t { return 9; };
+	world.tunnel_transport = [](uint32_t) noexcept -> uint8_t { return 2; };
+	world.tunnel_bridge_direction = [](uint32_t) noexcept -> uint8_t { return 1; };
+	static OpenTTDMovementServices movement{};
+	movement.shared = &world;
+	services.movement_services = []() noexcept -> const OpenTTDMovementServices * { return &movement; };
 	destination = input.dest_tile;
 	auto result = openttd_rust_ship_choose(path.get(), &input, &leaves, &services, nullptr, input.tile, 1 << 1, 0, &destination, 1);
 	check(result.found == 1 && result.direction == 1 && result.origin == 1 && openttd_rust_ship_path_size(path.get()) == 0 && draws == 0);

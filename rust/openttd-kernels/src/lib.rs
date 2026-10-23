@@ -44,6 +44,7 @@ mod object_type;
 mod objects;
 mod order_type;
 mod packet;
+mod pathfinder_func;
 mod rail_cmd;
 pub mod rail_yapf;
 mod road;
