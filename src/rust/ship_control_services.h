@@ -262,7 +262,7 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	RustVehicleSetCargoCap(RustVehicle(v), svi.capacity);
 	RustVehicleSetRefitCap(RustVehicle(v), 0);
 	v->last_station_visited = StationID::Invalid();
-	v->last_loading_station = StationID::Invalid();
+	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 	v->engine_type = e->index;
 	v->reliability = RustEngineReliability(e);
 	v->reliability_spd_dec = e->reliability_spd_dec;

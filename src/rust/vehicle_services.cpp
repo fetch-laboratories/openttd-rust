@@ -182,7 +182,6 @@ static uint8_t OPENTTD_VEHICLE_CALL VehicleSvcDay(OpenTTDVehicle *v) noexcept { 
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteDay(OpenTTDVehicle *v, uint8_t day) noexcept { VehicleOf(v)->day_counter = day; }
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteDirection(OpenTTDVehicle *v, uint8_t direction) noexcept { VehicleOf(v)->direction = static_cast<Direction>(direction); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteSpeed(OpenTTDVehicle *v, uint16_t speed) noexcept { VehicleOf(v)->cur_speed = speed; }
-static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcLastStation(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_station_visited.base(); }
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteLastStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_station_visited = StationID(station); }
 /* Legacy orders context adapter; the virtual operation has one shared definition. */
 extern "C" void openttd_orders_set_destination(void *ctx, uint32_t tile) noexcept
@@ -327,7 +326,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.write_day = VehicleSvcWriteDay,
 	.write_direction = VehicleSvcWriteDirection,
 	.write_speed = VehicleSvcWriteSpeed,
-	.last_station = VehicleSvcLastStation,
+	.last_station = RustVehicleLastStationVisited,
 	.write_last_station = VehicleSvcWriteLastStation,
 	.set_dest_tile = RustVehicleSetDestTile,
 	.write_dest = VehicleSvcWriteDest,

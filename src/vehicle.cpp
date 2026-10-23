@@ -89,7 +89,7 @@ static OpenTTDVisitCapacity VehicleVisitCapacity(OpenTTDVehicle *handle) noexcep
 static OpenTTDVisitPrediction VehicleVisitPrediction(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	return {.loading_tick = v->last_loading_tick, .last_loading = v->last_loading_station.base(), .last_station = v->last_station_visited.base(), .ticks = v->load_unload_ticks};
+	return {.loading_tick = v->last_loading_tick, .last_loading = v->last_loading_station.base(), .last_station = RustVehicleLastStationVisited(handle), .ticks = RustVehicleLoadUnloadTicks(handle)};
 }
 static uint16_t VehicleVisitGraphSize(OpenTTDLinkGraph *lg) noexcept { return lg->Size(); }
 static void VehicleVisitMergeGraph(OpenTTDLinkGraph *lg, OpenTTDLinkGraph *other) noexcept

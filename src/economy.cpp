@@ -1500,7 +1500,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Vehicle *v = VehicleOf(handle);
 		bool refit = v->current_order.IsRefit();
 		return {
-			.ticks = v->load_unload_ticks,
+			.ticks = RustVehicleLoadUnloadTicks(handle),
 			.vehicle_type = v->type,
 			.unload_type = to_underlying(v->current_order.GetUnloadType()),
 			.load_type = to_underlying(v->current_order.GetLoadType()),
@@ -1622,9 +1622,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.has_orders = [](OpenTTDVehicle *handle) noexcept -> bool {
 		Vehicle *v = VehicleOf(handle); return v->orders != nullptr;
 	},
-	.load_unload_ticks = [](OpenTTDVehicle *handle) noexcept -> uint16_t {
-		Vehicle *v = VehicleOf(handle); return v->load_unload_ticks;
-	},
+	.load_unload_ticks = RustVehicleLoadUnloadTicks,
 	.status = GetRustVehicleServices().status,
 	.has_articulated_part = RustVehicleHasArticulated,
 	.is_articulated_part = [](OpenTTDVehicle *handle) noexcept -> bool {
