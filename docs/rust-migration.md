@@ -2061,7 +2061,7 @@ articulated NewGRFs, maglev traffic, legacy saves and threaded GUI remain #156 g
 
 ### Cargo-monitor accounting and ordered maps (#386, draft #388)
 
-Rust owns both process-wide ordered pickup/delivery maps, key helpers,
+Rust owns both process-wide ordered pickup/delivery maps, shared bit helpers,
 activation/query/reset/stop, selective/global cleanup and delivery accounting.
 Payment and company owners call Rust directly. Payment resolves stations through
 its existing subsidy service at each original observation; independent stack
@@ -2080,5 +2080,5 @@ duplicate rows. Production monitor-table completeness runs in native ABI tests.
 Focused evidence: `python3 tools/migration.py simulate economy-manual economy-cargodist economy-stockpile companies-delete companies-acquire engines-monitors`;
 `python3 tools/cargo-income-comparison.py`, Cargo4 and native company/payment/ABI tests.
 Historical monitor-key conversion and external GameScript callers remain #156
-coverage gaps. This draft's measured cost still requires root disposition and
-fresh independent review; passing focused checks does not establish integration.
+coverage gaps. Independent fixing review is recorded on #388; root cost
+disposition, current-base combination and Full remain pending.
