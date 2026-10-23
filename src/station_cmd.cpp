@@ -4095,15 +4095,19 @@ void StationPickerDrawSprite(int x, int y, StationType st, RailType railtype, Ro
 	DrawRailTileSeqInGUI(x, y, t, (st == StationType::RailWaypoint || st == StationType::RoadWaypoint) ? 0 : total_offset, 0, pal);
 }
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Station(TileIndex tile, uint, uint, bool)
 {
 	return GetTileMaxPixelZ(tile);
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_Station(TileIndex, Slope tileh)
 {
 	return FlatteningFoundation(tileh);
 }
+#endif
 
 static void FillTileDescRoadStop(TileIndex tile, TileDesc &td)
 {
@@ -6031,7 +6035,11 @@ static CommandCost CheckBuildAbove_Station(TileIndex tile, DoCommandFlags, Axis,
 
 extern const TileTypeProcs _tile_type_station_procs = {
 	DrawTile_Station,           // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Station,     // get_slope_z_proc
+#endif
 	ClearTile_Station,          // clear_tile_proc
 	nullptr,                       // add_accepted_cargo_proc
 	GetTileDesc_Station,        // get_tile_desc_proc
@@ -6046,7 +6054,11 @@ extern const TileTypeProcs _tile_type_station_procs = {
 #endif
 	nullptr,                       // add_produced_cargo_proc
 	VehicleEnter_Station,       // vehicle_enter_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Station,      // get_foundation_proc
+#endif
 	TerraformTile_Station,      // terraform_tile_proc
 	CheckBuildAbove_Station, // check_build_above_proc
 };

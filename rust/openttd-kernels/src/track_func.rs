@@ -14,3 +14,12 @@ pub const fn axis_to_track(axis: crate::services::Axis) -> crate::services::Trac
 pub const fn diag_dir_to_diag_track(direction: u8) -> u8 {
     direction & 1
 }
+
+/// `CornerToTrackBits`, with a valid native corner.
+pub const fn corner_to_track_bits(c: u8) -> u8 {
+    [16, 8, 32, 4][c as usize]
+}
+/// `TracksOverlap`.
+pub const fn tracks_overlap(b: u8) -> bool {
+    b != 0 && b & b.wrapping_sub(1) != 0 && b != 12 && b != 48
+}

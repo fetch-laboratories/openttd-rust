@@ -68,6 +68,10 @@
 #include "rust/environment_services.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/movement_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 extern const TileTypeProcs
@@ -344,9 +348,13 @@ uint GetPartialPixelZ(int x, int y, Slope corners)
  */
 int GetSlopePixelZ(int x, int y, bool ground_vehicle)
 {
+#ifdef WITH_RUST
+	return openttd_rust_movement_pixel_z(&GetRustMovementServices(), x, y, ground_vehicle);
+#else
 	TileIndex tile = TileVirtXY(x, y);
 
 	return _tile_type_procs[GetTileType(tile)]->get_slope_z_proc(tile, x, y, ground_vehicle);
+#endif
 }
 
 /**
@@ -359,11 +367,15 @@ int GetSlopePixelZ(int x, int y, bool ground_vehicle)
  */
 int GetSlopePixelZOutsideMap(int x, int y)
 {
+#ifdef WITH_RUST
+	return openttd_rust_movement_outside_z(&GetRustMovementServices(), x, y);
+#else
 	if (IsInsideBS(x, 0, Map::SizeX() * TILE_SIZE) && IsInsideBS(y, 0, Map::SizeY() * TILE_SIZE)) {
 		return GetSlopePixelZ(x, y, false);
 	} else {
 		return _tile_type_procs[MP_VOID]->get_slope_z_proc(INVALID_TILE, x, y, false);
 	}
+#endif
 }
 
 /**
@@ -423,10 +435,15 @@ void GetSlopePixelZOnEdge(Slope tileh, DiagDirection edge, int &z1, int &z2)
  */
 std::tuple<Slope, int> GetFoundationSlope(TileIndex tile)
 {
+#ifdef WITH_RUST
+	auto result = openttd_rust_movement_foundation_slope(&GetRustMovementServices(), tile.base());
+	return {result.slope, result.z};
+#else
 	auto [tileh, z] = GetTileSlopeZ(tile);
 	Foundation f = _tile_type_procs[GetTileType(tile)]->get_foundation_proc(tile, tileh);
 	z += ApplyFoundationToSlope(f, tileh);
 	return {tileh, z};
+#endif
 }
 
 
@@ -1901,5 +1918,29 @@ bool CheckAbi_landscape()
 		AbiServicesComplete(GetRustClearServices()) && AbiServicesComplete(GetRustRailGroundServices()) &&
 		AbiServicesComplete(GetRustRoadGroundServices()) && AbiServicesComplete(GetRustTunnelGroundServices()) &&
 		AbiServicesComplete(GetRustWaterGroundServices()) && AbiServicesComplete(GetRustGroundCostServices());
+}
+#endif
+
+#ifdef WITH_RUST
+const OpenTTDMovementServices &GetRustMovementServices() noexcept
+{
+	static const OpenTTDMovementServices services{
+		.shared = &GetRustSharedServices(),
+		.rail = &GetRustRailGroundServices(),
+		.road = &GetRustRoadGroundServices(),
+		.pixel_slope = RustTilePixelSlope,
+		.outside_pixel_slope = RustOutsidePixelSlope,
+		.max_pixel_z = GetIndustryTileServices().pixel_max_z,
+		.apply_foundation = RustApplyFoundation,
+		.owned_land = GetRustRailGroundServices().owned_land,
+		.object_foundation = RustObjectFoundation,
+		.house_foundation = RustHouseFoundation,
+		.house_callback = RustHouseFoundationCallback,
+		.house_boolean = RustHouseFoundationBoolean,
+		.industry_foundation = RustIndustryFoundation,
+		.industry_callback = RustIndustryFoundationCallback,
+		.industry_boolean = RustIndustryFoundationBoolean,
+	};
+	return services;
 }
 #endif

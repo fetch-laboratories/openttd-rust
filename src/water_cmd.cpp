@@ -1105,17 +1105,21 @@ void DrawShipDepotSprite(int x, int y, Axis axis, DepotPart part)
 }
 
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Water(TileIndex tile, uint x, uint y, bool)
 {
 	auto [tileh, z] = GetTilePixelSlope(tile);
 
 	return z + GetPartialPixelZ(x & 0xF, y & 0xF, tileh);
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_Water(TileIndex, Slope)
 {
 	return FOUNDATION_NONE;
 }
+#endif
 
 static void GetTileDesc_Water(TileIndex tile, TileDesc &td)
 {
@@ -1640,7 +1644,11 @@ static CommandCost CheckBuildAbove_Water(TileIndex tile, DoCommandFlags flags, A
 
 extern const TileTypeProcs _tile_type_water_procs = {
 	DrawTile_Water,           // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Water,     // get_slope_z_proc
+#endif
 	ClearTile_Water,          // clear_tile_proc
 	nullptr,                     // add_accepted_cargo_proc
 	GetTileDesc_Water,        // get_tile_desc_proc
@@ -1655,7 +1663,11 @@ extern const TileTypeProcs _tile_type_water_procs = {
 #endif
 	nullptr,                     // add_produced_cargo_proc
 	VehicleEnter_Water,       // vehicle_enter_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Water,      // get_foundation_proc
+#endif
 	TerraformTile_Water,      // terraform_tile_proc
 	CheckBuildAbove_Water, // check_build_above_proc
 };

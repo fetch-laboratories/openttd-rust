@@ -1859,6 +1859,7 @@ void DrawBridgeMiddle(const TileInfo *ti, BridgePillarFlags blocked_pillars)
 }
 
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_TunnelBridge(TileIndex tile, uint x, uint y, bool ground_vehicle)
 {
 	auto [tileh, z] = GetTilePixelSlope(tile);
@@ -1889,11 +1890,14 @@ static int GetSlopePixelZ_TunnelBridge(TileIndex tile, uint x, uint y, bool grou
 
 	return z + GetPartialPixelZ(x, y, tileh);
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_TunnelBridge(TileIndex tile, Slope tileh)
 {
 	return IsTunnel(tile) ? FOUNDATION_NONE : GetBridgeFoundation(tileh, DiagDirToAxis(GetTunnelBridgeDirection(tile)));
 }
+#endif
 
 static void GetTileDesc_TunnelBridge(TileIndex tile, TileDesc &td)
 {
@@ -2297,7 +2301,11 @@ static CommandCost CheckBuildAbove_TunnelBridge(TileIndex tile, DoCommandFlags f
 
 extern const TileTypeProcs _tile_type_tunnelbridge_procs = {
 	DrawTile_TunnelBridge,           // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_TunnelBridge,     // get_slope_z_proc
+#endif
 	ClearTile_TunnelBridge,          // clear_tile_proc
 	nullptr,                            // add_accepted_cargo_proc
 	GetTileDesc_TunnelBridge,        // get_tile_desc_proc
@@ -2316,7 +2324,11 @@ extern const TileTypeProcs _tile_type_tunnelbridge_procs = {
 #endif
 	nullptr,                            // add_produced_cargo_proc
 	VehicleEnter_TunnelBridge,       // vehicle_enter_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_TunnelBridge,      // get_foundation_proc
+#endif
 	TerraformTile_TunnelBridge,      // terraform_tile_proc
 	CheckBuildAbove_TunnelBridge, // check_build_above_proc
 };

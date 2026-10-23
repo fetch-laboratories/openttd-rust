@@ -55,6 +55,10 @@
 #include "rust/environment_services.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/movement_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 
@@ -1323,6 +1327,9 @@ struct DrawRoadTileStruct {
  */
 static Foundation GetRoadFoundation(Slope tileh, RoadBits bits)
 {
+#ifdef WITH_RUST
+	return openttd_rust_road_foundation(tileh, bits);
+#else
 	/* Flat land and land without a road doesn't require a foundation */
 	if (tileh == SLOPE_FLAT || bits == ROAD_NONE) return FOUNDATION_NONE;
 
@@ -1341,6 +1348,7 @@ static Foundation GetRoadFoundation(Slope tileh, RoadBits bits)
 
 	/* Roads on steep Slopes or on Slopes with one corner raised */
 	return (bits == ROAD_X ? FOUNDATION_INCLINED_X : FOUNDATION_INCLINED_Y);
+#endif
 }
 
 const uint8_t _road_sloped_sprites[14] = {
@@ -1995,6 +2003,7 @@ void UpdateNearestTownForRoadTiles(bool invalidate)
 }
 #endif /* WITH_RUST */
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Road(TileIndex tile, uint x, uint y, bool)
 {
 
@@ -2009,7 +2018,9 @@ static int GetSlopePixelZ_Road(TileIndex tile, uint x, uint y, bool)
 		return GetTileMaxPixelZ(tile);
 	}
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_Road(TileIndex tile, Slope tileh)
 {
 	if (IsNormalRoad(tile)) {
@@ -2018,6 +2029,7 @@ static Foundation GetFoundation_Road(TileIndex tile, Slope tileh)
 		return FlatteningFoundation(tileh);
 	}
 }
+#endif
 
 #ifdef WITH_RUST
 const OpenTTDRoadGroundServices &GetRustRoadGroundServices() noexcept
@@ -2863,7 +2875,11 @@ static CommandCost CheckBuildAbove_Road(TileIndex tile, DoCommandFlags flags, Ax
 /** Tile callback functions for road tiles */
 extern const TileTypeProcs _tile_type_road_procs = {
 	DrawTile_Road,           // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Road,     // get_slope_z_proc
+#endif
 	ClearTile_Road,          // clear_tile_proc
 	nullptr,                    // add_accepted_cargo_proc
 	GetTileDesc_Road,        // get_tile_desc_proc
@@ -2882,7 +2898,11 @@ extern const TileTypeProcs _tile_type_road_procs = {
 #endif
 	nullptr,                    // add_produced_cargo_proc
 	VehicleEnter_Road,       // vehicle_enter_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Road,      // get_foundation_proc
+#endif
 	TerraformTile_Road,      // terraform_tile_proc
 	CheckBuildAbove_Road, // check_build_above_proc
 };

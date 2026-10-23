@@ -9,6 +9,14 @@
 #ifndef RUST_SERVICES_LANDSCAPE_H
 #define RUST_SERVICES_LANDSCAPE_H
 #include "ground_ffi.h"
+#include "movement_ffi.h"
+#include "../newgrf_house.h"
+#include "../newgrf_industrytiles.h"
+#include "../newgrf_object.h"
+#include "../house.h"
+#include "../town.h"
+#include "../industry.h"
+#include "../object_map.h"
 #include "../clear_map.h"
 #include "services_rail.h"
 #include "services_viewport.h"
@@ -84,4 +92,28 @@ inline void RustUpdateSignals() noexcept { UpdateSignalsInBuffer(); }
 inline uint32_t RustFoundationSlopeValue(uint32_t tile) noexcept { return RustFoundationSlope(tile).slope; }
 template <typename Context>
 inline void RustCrossingSound(Context, uint32_t tile) noexcept { RustPlayTileSound(tile, SND_0E_LEVEL_CROSSING); }
+
+inline OpenTTDFoundationSlope RustTilePixelSlope(uint32_t tile) noexcept { auto [slope, z] = GetTilePixelSlope(TileIndex{tile}); return {.z = z, .slope = slope}; }
+inline OpenTTDFoundationSlope RustOutsidePixelSlope(uint32_t x, uint32_t y) noexcept { auto [slope, z] = GetTilePixelSlopeOutsideMap(x, y); return {.z = z, .slope = slope}; }
+inline OpenTTDMovementObjectFoundation RustObjectFoundation(uint32_t tile) noexcept
+{
+	const auto *spec = ObjectSpec::Get(GetObjectType(TileIndex{tile}));
+	return {.enabled = spec->IsEnabled(), .no_foundation = spec->flags.Test(ObjectFlag::HasNoFoundation)};
+}
+inline OpenTTDMovementFoundation RustHouseFoundation(uint32_t tile) noexcept
+{
+	HouseID kind = GetHouseType(TileIndex{tile});
+	const auto *spec = kind >= NEW_HOUSE_OFFSET ? HouseSpec::Get(kind) : nullptr;
+	return {.spec = spec, .kind = kind, .callback = spec != nullptr && spec->callback_mask.Test(HouseCallbackMask::DrawFoundations)};
+}
+inline uint16_t RustHouseFoundationCallback(uint32_t tile, uint16_t kind) noexcept { return GetHouseCallback(CBID_HOUSE_DRAW_FOUNDATIONS, 0, 0, kind, Town::GetByTile(TileIndex{tile}), TileIndex{tile}); }
+inline bool RustHouseFoundationBoolean(const void *spec, uint16_t result) noexcept { return ConvertBooleanCallback(static_cast<const HouseSpec *>(spec)->grf_prop.grffile, CBID_HOUSE_DRAW_FOUNDATIONS, result); }
+inline OpenTTDMovementFoundation RustIndustryFoundation(uint32_t tile) noexcept
+{
+	IndustryGfx kind = GetIndustryGfx(TileIndex{tile});
+	const auto *spec = kind >= NEW_INDUSTRYTILEOFFSET ? GetIndustryTileSpec(kind) : nullptr;
+	return {.spec = spec, .kind = kind, .callback = spec != nullptr && spec->callback_mask.Test(IndustryTileCallbackMask::DrawFoundations)};
+}
+inline uint16_t RustIndustryFoundationCallback(uint32_t tile, uint16_t kind) noexcept { return GetIndustryTileCallback(CBID_INDTILE_DRAW_FOUNDATIONS, 0, 0, kind, Industry::GetByTile(TileIndex{tile}), TileIndex{tile}); }
+inline bool RustIndustryFoundationBoolean(const void *spec, uint16_t result) noexcept { return ConvertBooleanCallback(static_cast<const IndustryTileSpec *>(spec)->grf_prop.grffile, CBID_INDTILE_DRAW_FOUNDATIONS, result); }
 #endif /* RUST_SERVICES_LANDSCAPE_H */

@@ -58,6 +58,10 @@
 #include "rust/settings_services.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/movement_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 ObjectPool _object_pool("Object");
@@ -486,7 +490,14 @@ CommandCost CmdBuildObjectArea(DoCommandFlags flags, TileIndex tile, TileIndex s
 #endif
 }
 
+#ifdef WITH_RUST
+static Foundation GetFoundation_Object(TileIndex tile, Slope tileh)
+{
+	return openttd_rust_movement_foundation(&GetRustMovementServices(), tile.base(), tileh);
+}
+#else
 static Foundation GetFoundation_Object(TileIndex tile, Slope tileh);
+#endif
 
 static void DrawTile_Object(TileInfo *ti)
 {
@@ -536,6 +547,7 @@ static void DrawTile_Object(TileInfo *ti)
 	DrawBridgeMiddle(ti, {});
 }
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Object(TileIndex tile, uint x, uint y, bool)
 {
 	if (IsObjectType(tile, OBJECT_OWNED_LAND)) {
@@ -546,12 +558,15 @@ static int GetSlopePixelZ_Object(TileIndex tile, uint x, uint y, bool)
 		return GetTileMaxPixelZ(tile);
 	}
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_Object(TileIndex tile, Slope tileh)
 {
 	const ObjectSpec *spec = ObjectSpec::Get(GetObjectType(tile));
 	return spec->IsEnabled() && spec->flags.Test(ObjectFlag::HasNoFoundation) ? FOUNDATION_NONE : FlatteningFoundation(tileh);
 }
+#endif
 
 /**
  * Perform the actual removal of the object from the map.
@@ -1047,7 +1062,11 @@ static CommandCost CheckBuildAbove_Object(TileIndex tile, DoCommandFlags flags, 
 
 extern const TileTypeProcs _tile_type_object_procs = {
 	DrawTile_Object,             // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Object,       // get_slope_z_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else
@@ -1062,7 +1081,11 @@ extern const TileTypeProcs _tile_type_object_procs = {
 	ChangeTileOwner_Object,      // change_tile_owner_proc
 	AddProducedCargo_Object,     // add_produced_cargo_proc
 	nullptr,                        // vehicle_enter_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Object,        // get_foundation_proc
+#endif
 	TerraformTile_Object,        // terraform_tile_proc
 	CheckBuildAbove_Object, // check_build_above_proc
 };

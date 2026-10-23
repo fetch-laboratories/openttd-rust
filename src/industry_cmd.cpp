@@ -445,11 +445,14 @@ static void DrawTile_Industry(TileInfo *ti)
 	}
 }
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Industry(TileIndex tile, uint, uint, bool)
 {
 	return GetTileMaxPixelZ(tile);
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_Industry(TileIndex tile, Slope tileh)
 {
 	IndustryGfx gfx = GetIndustryGfx(tile);
@@ -467,6 +470,7 @@ static Foundation GetFoundation_Industry(TileIndex tile, Slope tileh)
 	}
 	return FlatteningFoundation(tileh);
 }
+#endif
 
 static void AddAcceptedCargo_Industry(TileIndex tile, CargoArray &acceptance, CargoTypes &always_accepted)
 {
@@ -3509,7 +3513,11 @@ static CommandCost TerraformTile_Industry(TileIndex tile, DoCommandFlags flags, 
 
 extern const TileTypeProcs _tile_type_industry_procs = {
 	DrawTile_Industry,           // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Industry,     // get_slope_z_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else
@@ -3532,7 +3540,11 @@ extern const TileTypeProcs _tile_type_industry_procs = {
 #endif
 	nullptr,                        // add_produced_cargo_proc
 	nullptr,                        // vehicle_enter_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Industry,      // get_foundation_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else

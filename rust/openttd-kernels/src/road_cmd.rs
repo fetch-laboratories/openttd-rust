@@ -182,7 +182,7 @@ const RATING_ROAD_DOWN_STEP_INNER: i32 = -50;
 const RATING_ROAD_MINIMUM: i32 = -100;
 const ROAD_DEPOT_TRACKBIT_FACTOR: u32 = 2;
 const ROAD_STOP_TRACKBIT_FACTOR: u32 = 2;
-const INVALID_SLOPES: [[u8; 15]; 2] = [
+pub(crate) const INVALID_SLOPES: [[u8; 15]; 2] = [
     [0, 12, 9, 8, 3, 0, 1, 0, 6, 4, 0, 0, 2, 0, 0],
     [0, 0, 0, 5, 0, 15, 10, 15, 0, 10, 15, 15, 5, 15, 15],
 ];

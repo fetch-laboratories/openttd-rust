@@ -44,6 +44,10 @@
 #include "rust/environment_services.h"
 #endif
 
+#ifdef WITH_RUST
+#include "rust/movement_ffi.h"
+#endif
+
 #include "safeguards.h"
 
 /** Helper type for lists/vectors of trains */
@@ -316,6 +320,9 @@ static const TrackBits _valid_tracks_on_leveled_foundation[15] = {
  */
 Foundation GetRailFoundation(Slope tileh, TrackBits bits)
 {
+#ifdef WITH_RUST
+	return openttd_rust_rail_foundation(tileh, bits);
+#else
 	if (bits == TRACK_BIT_NONE) return FOUNDATION_NONE;
 
 	if (IsSteepSlope(tileh)) {
@@ -382,6 +389,7 @@ Foundation GetRailFoundation(Slope tileh, TrackBits bits)
 		/* else special anti-zig-zag foundation */
 		return SpecialRailFoundation(track_corner);
 	}
+#endif
 }
 
 
@@ -2596,6 +2604,7 @@ void DrawTrainDepotSprite(int x, int y, int dir, RailType railtype)
 	DrawRailTileSeqInGUI(x, y, dts, offset, 0, palette);
 }
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Track(TileIndex tile, uint x, uint y, bool)
 {
 	if (IsPlainRail(tile)) {
@@ -2608,11 +2617,14 @@ static int GetSlopePixelZ_Track(TileIndex tile, uint x, uint y, bool)
 		return GetTileMaxPixelZ(tile);
 	}
 }
+#endif
 
+#ifndef WITH_RUST
 static Foundation GetFoundation_Track(TileIndex tile, Slope tileh)
 {
 	return IsPlainRail(tile) ? GetRailFoundation(tileh, GetTrackBits(tile)) : FlatteningFoundation(tileh);
 }
+#endif
 
 #ifdef WITH_RUST
 const OpenTTDRailServices &GetRustRailGroundServices() noexcept
@@ -3407,7 +3419,11 @@ static CommandCost CheckBuildAbove_Track(TileIndex tile, DoCommandFlags flags, A
 
 extern const TileTypeProcs _tile_type_rail_procs = {
 	DrawTile_Track,           // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Track,     // get_slope_z_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else
@@ -3430,7 +3446,11 @@ extern const TileTypeProcs _tile_type_rail_procs = {
 #endif
 	nullptr,                     // add_produced_cargo_proc
 	VehicleEnter_Track,       // vehicle_enter_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Track,      // get_foundation_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else

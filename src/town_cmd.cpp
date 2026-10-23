@@ -339,16 +339,19 @@ static void DrawTile_Town(TileInfo *ti)
 	}
 }
 
+#ifndef WITH_RUST
 static int GetSlopePixelZ_Town(TileIndex tile, uint, uint, bool)
 {
 	return GetTileMaxPixelZ(tile);
 }
+#endif
 
 /**
  * Get the foundation for a house. This is a tile callback routine.
  * @param tile The tile to find a foundation for.
  * @param tileh The slope of the tile.
  */
+#ifndef WITH_RUST
 static Foundation GetFoundation_Town(TileIndex tile, Slope tileh)
 {
 	HouseID hid = GetHouseType(tile);
@@ -366,6 +369,7 @@ static Foundation GetFoundation_Town(TileIndex tile, Slope tileh)
 	}
 	return FlatteningFoundation(tileh);
 }
+#endif
 
 /**
  * Animate a tile for a town.
@@ -4912,7 +4916,11 @@ static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int 
 /** Tile callback functions for a town */
 extern const TileTypeProcs _tile_type_town_procs = {
 	DrawTile_Town,           // draw_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetSlopePixelZ_Town,     // get_slope_z_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else
@@ -4931,7 +4939,11 @@ extern const TileTypeProcs _tile_type_town_procs = {
 	ChangeTileOwner_Town,    // change_tile_owner_proc
 	AddProducedCargo_Town,   // add_produced_cargo_proc
 	nullptr,                    // vehicle_enter_tile_proc
+#ifdef WITH_RUST
+	nullptr, // Rust movement owner dispatches directly.
+#else
 	GetFoundation_Town,      // get_foundation_proc
+#endif
 #ifdef WITH_RUST
 	nullptr,                 // Rust landscape commands call the owner directly.
 #else

@@ -167,3 +167,40 @@ mod tests {
         assert_eq!(get_inclined_slope_direction(SLOPE_NW), 3);
     }
 }
+
+/// `FOUNDATION_STEEP_LOWER`.
+pub const FOUNDATION_STEEP_LOWER: u8 = 4;
+/// `FOUNDATION_STEEP_BOTH`.
+pub const FOUNDATION_STEEP_BOTH: u8 = 5;
+/// `FOUNDATION_INVALID`.
+pub const FOUNDATION_INVALID: u8 = 255;
+/// `GetHighestSlopeCorner`, on the native helper's reachable domain.
+pub fn get_highest_slope_corner(s: u8) -> u8 {
+    match remove_halftile_slope(s) {
+        1 | 27 => 0,
+        2 | 23 => 1,
+        4 | 30 => 2,
+        8 | 29 => 3,
+        _ => unreachable!("native highest slope corner"),
+    }
+}
+/// `OppositeCorner`.
+pub const fn opposite_corner(c: u8) -> u8 {
+    c ^ 2
+}
+/// `SlopeWithOneCornerRaised`.
+pub const fn slope_with_one_corner_raised(c: u8) -> u8 {
+    1 << c
+}
+/// `SlopeWithThreeCornersRaised`.
+pub const fn slope_with_three_corners_raised(c: u8) -> u8 {
+    slope_with_one_corner_raised(c) ^ SLOPE_ELEVATED
+}
+/// `HalftileFoundation`, with a valid native corner.
+pub const fn halftile_foundation(c: u8) -> u8 {
+    6 + c
+}
+/// `SpecialRailFoundation`, with a valid native corner.
+pub const fn special_rail_foundation(c: u8) -> u8 {
+    10 + c
+}
