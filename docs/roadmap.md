@@ -10,7 +10,7 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 - Latest integrations: #360 rail construction, then #368 combining visits #359, cleanup #361 and CI #365. Both used current-base Full and strict protection; #368 restored verified `CI_ON_DEMAND=true`. The linear nearby-industry repair remains on #261.
 - Speed: merged-tip profile at `4ddd8cfab4` passed all six comparisons/identities with the verified anchored runtime (#356): TGP 1.213575x, Opus 1.231172x, Grok 1.236176x, P1996 1.257340x, P2000 1.336737x, P2016 1.371234x. Largest rise since the accepted pre-rail tip: 1.04%; none in its speed-pass band. Anchors remain unchanged; next profile after two integrations.
 - CI: the last due macOS Debug/Release run passed; two integrations since it, next due after three more. Bootstrap also tested both macOS configurations. #368 fixed observed Windows ABI-discovery/UTF-8 errors and one unused facade; its final runner dependency timeout passed a failed-jobs retry without moving head/base.
-- Component branches: #364, #369, #370, #374 and #375 (five of six), with #373 selected for the sixth slot. All are implemented; movement review runs while the others await final-base reconciliation. Shared station reservation #376 is reviewed and precedes waypoint/PBS adoption. Next concrete batch: ready generation, ground dynamics and this shared service.
+- Component branches: five reviewed owners (#364/#369/#370/#374/#375) and unfinished scheduler #380 (six of six). #379 combines generation, ground dynamics and shared station reservation #376; scoped review is complete, final current-base Full next. Waypoint/PBS/movement have completed #368 base reconciliation and await the integrated setter. #373 retains its owned boundary/linkage repair; #377/#378 start as slots free.
 
 ## Integration and wind-down correction (2026-10-22, takes precedence)
 
@@ -25,7 +25,7 @@ failed together. Keep automatic rollback; replace the time deadline with action 
 
 ## Process audit follow-up (2026-10-22)
 
-- **Selected next CI maintenance batch, #261:** fix Linux dependency/cache setup, report failed child jobs and platform annotations promptly, and make transient coverage-lookup failures retry then select full validation. Root owns selection and assigns one implementer on resume. Budget: at most 400 changed non-documentation lines including tests, reusing existing CI suites; one independent review and one final Full through the workflow bootstrap procedure. This is a separate scope from the zero-code integration correction above; keep #361's existing scope.
+- **CI maintenance #261/#365 integrated via #368:** bounded setup/retries, early failed-child reporting and conservative coverage fallback; 376/400 changed non-documentation lines. Independent review and bootstrap Full passed; on-demand CI is restored. #361 remained a separate scope in the same tested combination.
 - **Process changes now:** use small ready integration batches; save unfinished checkpoints before long checks or handoff; require independent execution for any unattended provider takeover. AGENTS.md and the migration guide define these rules. No new schedule or verified fallback is established by this documentation.
 - **Existing conflict reduction:** finish #261 / #361's shared ABI split through its pending review and validation; no new issue or repeated unchanged-component review.
 - **Deferred optimization:** root revisits Emscripten image setup and merge-queue tooling after the selected CI fixes land and ten integrations record stale Full reruns and ready-work waits in existing integration notes. No new service, runner upgrade or extra local full suite is selected.
@@ -167,11 +167,10 @@ unintegrated component branches. Maintenance (#261, #281) and #156 run in parall
 3. **#281** part 1 integrated (#340). Part 2: the callee-copy check and the four duplicate wrappers listed in the #340 r2 review.
 4. **#274 map view:** integrated as #351, limited to the scheduler's clear/water/tree loops; C++ keeps the arrays and writes.
 5. **Next whole owners**, as WIP frees, each without draft service dependencies:
-   - #350 generation/rivers (#364): reviews complete; reconcile integrated #368;
+   - #350 generation/rivers (#364) and #372 ground dynamics/cache (#375): reconciled and reviewed in #379; final Full next;
    - #366 waypoints (#369) and #367 PBS (#370): reviews complete; adopt #376 after it integrates;
-   - #371 tile movement (#374): implemented, independent fixing review active;
-   - #372 ground dynamics/cache (#375): reviewed; reconcile integrated #368;
-   - #373 live link-graph scheduling/queues: next implementation in the sixth slot;
+   - #371 tile movement (#374): source/base fixing reviews complete; later combination Full;
+   - #373 live link-graph scheduling/queues (#380): early checkpoint fails ratio and native-generator linkage; fresh Astra boundary design selects the same-owner repair before evidence expands;
    - #377 vehicle tile occupancy/index and queries: selected after scheduling;
    - #378 live link-graph contents/mutation lifecycle: selected after occupancy.
 
@@ -189,16 +188,15 @@ Resumed 2026-10-23. Root is Codex (gpt-6.1-sol, ultra); implementation and indep
 
 | Issue / PR | Head | Next step |
 | --- | --- | --- |
-| #350 / #364 | `81f8720ec8` | Both source groups and peer merge reviewed; root spot-check passed. Current-base ABI reconciliation and scoped conflict review, then batch Full. |
-| #366 / #369 | `c990832841` | Reviewed; root spot-check passed. Adopt integrated #376, remove its local setter and reconcile #361 before combination Full. |
-| #367 / #370 | `6f622067e8` | Reviewed, including artifact import and follower masking; root spot-check passed. Adopt #376 and preserve movement's later direct-order deletion. |
-| #371 / #374 | `0d3444c816` | Complete; fresh fixing review active, then current-base Full. |
-| #372 / #375 | `30b9257466` | Reviewed; root spot-check passed. Current-base ABI reconciliation and scoped conflict review, then batch Full. |
-| #261 / #376 | `b0657f8bbf` | Canonical reservation setter reviewed; conflict-free #368 update. Include with ready owners in next concrete validation. |
-| #373 / #377 / #378 | selected | Start scheduler from integrated base, then occupancy and graph contents as component slots free. Scopes/evidence/budgets are on issues. |
+| #350 / #372 / #261, batch #379 | `3fb2f988c4` | Frozen #364 `81f8720ec8`, #375 `30b9257466`, #376 `b0657f8bbf` preserved; scoped review and root fix spot-check complete. Update from this docs base, then final Full. |
+| #366 / #369 | `0e85aebefa` | Base reconciliation reviewed; root price-shift/ABI spot-check passed. Adopt integrated #376, then concrete combination Full. |
+| #367 / #370 | `f00356144a` | Base reconciliation reviewed; root spot-check passed. Adopt #376 and preserve movement's callback deletions in combination. |
+| #371 / #374 | `fa2a503894` | Source/base reviews and root spot-check complete; preserve canonical foundation and direct Orders/visits routes in later combination. |
+| #373 / #380 | `7295bec4d1` | Unfinished: 179 retired / 175 net glue / 0 tooling; direct game externs fail native generator linking; orphan audit remains. Astra boundary design active; no broad evidence started. |
+| #377 / #378 | selected | Occupancy/index, then live graph contents as slots free. Exact scopes/evidence/planning budgets are on issues. |
 
 #368 merged its exact validated combination; member PRs are merged and their worktrees removed. CI_ON_DEMAND is restored true. The due frozen-tip profile passed; no >3% rise or speed-pass band was reached. Complete routine docs before the next Full, then keep base stable. #368 needed platform fixes and one runner retry, with no stale-base Full rerun; integration notes carry the ten-integration observation.
-Each open draft keeps one worktree. #281 part 2 and #261 R7/linear traversal remain on their issues. #64/#68/#69 stay paused. Preserve the pinned reference; do not reapply effect helper `73ccd511fb`.
+Each open draft keeps one worktree; no unmerged component is adopted as another draft's service dependency. #281 part 2 and #261 R7/linear traversal remain on their issues. #64/#68/#69 stay paused. Preserve the pinned reference; do not reapply effect helper `73ccd511fb`.
 
 ## Out of scope for the near term
 
