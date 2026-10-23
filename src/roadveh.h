@@ -364,7 +364,7 @@ protected: // These functions should not be called outside acceleration code.
 	 * @return Zero, because road vehicles don't have powered parts.
 	 */
 #ifndef WITH_RUST
-	inline uint16_t GetPoweredPartPower(const RoadVehicle *head) const
+	inline uint16_t GetPoweredPartPower(const RoadVehicle *) const
 	{
 		return 0;
 	}
