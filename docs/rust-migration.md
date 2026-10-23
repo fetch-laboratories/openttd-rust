@@ -1372,29 +1372,29 @@ coverage gaps under #156. Independent review and exact-head Full are root's gate
 
 ### Animated-tile scheduling and shared animation control (#385, draft)
 
-Rust owns the process-wide queue, scheduling/control, six bindings, trigger
-traversals and dispatch; existing owners call it directly. Native map frames/bits,
-road records, pools/specs/PSA and stack resolvers remain. Immutable typed services
-are installed under the game-state mutex; borrows end before callbacks.
-Traits preserve binding types/callback IDs; generated visitors include version8.
-ANIT retains Sl* staging, nested active pointers, append/resize and partial publication.
+Rust owns the process-wide queue, scheduling/control, six typed bindings,
+trigger traversals and dispatch; existing owners call it directly. Native map
+frames/bits, road records, pools/specs/PSA and stack resolvers remain. Borrows end
+before callbacks. Generated visitors include all six version8 fields.
+ANIT retains native Sl* frames, nested active pointers, append/resize and partial
+publication. Shared station lookup/membership, IsAirport and orthogonal iteration
+preserve original callees; unused native animation table/facades are portable-only.
 `python3 tools/migration.py simulate objects-gaps objects-reload effects-controllers-1`
-requires six bindings (240/144/90 rows), traversal72, airport5 and visits46/21/9;
-zero-frame road-record insertion; six actual native ANIT loads/errors; and positive
-immediate reload of queue/frame/bits/road records/RNG. Airport SB retains unmasked OR.
-The56 keyed sound/sentinel cases compare actual PlayTileSound entry/exit, road
-setter attempts and dirty calls (20 each), frames, records, queue and sequence.
-The36 keyed version cases require six actual version8-0100 diagnostics with valid
-native GRFConfig lookup. Five rejection cases compare real RNG/callback outcomes;
-GetRailTileArea/GetStationSpec and inline member/mask ordering are source-compared,
-not intercepted: same-TU reference calls bind locally. That selected trace gap
-remains open; no internal-helper trace is claimed. Thirteen successful native
-owner-operation pairs require two live survivors and exact swap/deferred order;
-the effect controller requires exact catcher append with two live survivors.
-Native185/ABI and Cargo4 pass. Purpose cost345 implementation/81 native evidence/550
-tooling including CMake versus unchanged415 basis; root disposition/review remain
-pending. Historical/pre6 corpus, external GRFs, GUI threads and raw>=64 outside
-the observed pinned Linux compilation remain #156 limits.
+requires bindings240/144/90, traversal72, airport5, visits46/21/9, zero-frame road
+insertion, six actual ANIT load/error processes and positive immediate reload of
+queue/frame/bits/road records/RNG. Airport SB retains unmasked OR.
+The56 keyed sound/sentinel cases delegate real sound/setter/dirty calls (20 each),
+comparing frames, records, ordered queue and sequence;36 version cases require
+six actual version8-0100 diagnostics with valid native GRFConfig lookup.
+Five rejection cases compare RNG/callback/queue outcomes and retain mask mutation.
+Area/spec/member/mask reads and initial-RNG-before-area are source-compared, not
+independently traced; this precise dynamic limit remains on #156 under root's
+revised evidence scope. Thirteen successful owner pairs require two live survivors
+and exact swap/deferred order; the catcher pair requires exact queue append.
+Purpose cost349 implementation/81 native evidence/550 tooling including CMake
+versus unchanged415 basis;57 retired scaffolding lines add no behavior. Root cost
+and current-base Full remain pending. Historical/pre6/TTO saves, external GRFs,
+GUI threads and raw>=64 outside pinned Linux compilation remain #156 limits.
 
 <!-- Subsystem: Vehicles, pathfinding and orders. Add a new entry at the end of its group, not of the file. -->
 
