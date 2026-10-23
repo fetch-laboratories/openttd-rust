@@ -165,7 +165,7 @@ static OpenTTDAircraftVehicle OPENTTD_AIRCRAFT_CALL Aircraft_next_aircraft(uint3
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_update_position(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustVehicleUpdatePosition(v); v->UpdateViewport(true, false);
+	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustVehicleUpdatePosition(v); RustVehicleUpdateViewport(v, true, false);
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_rotor_image(OpenTTDAircraftVehicle vehicle) noexcept
