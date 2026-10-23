@@ -45,7 +45,9 @@ void StartupIndustryDailyChanges(bool init_counter);
 Money GetTransportedGoodsIncome(uint num_pieces, uint dist, uint16_t transit_periods, CargoType cargo_type);
 uint MoveGoodsToStation(CargoType cargo, uint amount, Source source, const StationList &all_stations, Owner exclusivity = INVALID_OWNER);
 
+#ifndef WITH_RUST
 void PrepareUnload(Vehicle *front_v);
+#endif
 void LoadUnloadStation(Station *st);
 
 Money GetPrice(Price index, uint cost_factor, const struct GRFFile *grf_file, int shift = 0);

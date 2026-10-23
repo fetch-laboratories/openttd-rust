@@ -132,7 +132,6 @@ struct OpenTTDWaterGroundServices {
 	bool (*canal_or_river)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(canal_or_river);
 	OpenTTDWaterRegionContext (*region_context)() noexcept OPENTTD_SERVICE_DEFAULT(region_context);
 	void (*remove_rail)(OpenTTDCommandCost *, uint32_t, Track) noexcept OPENTTD_SERVICE_DEFAULT(remove_rail);
-	OpenTTDFoundationSlope (*apply_foundation)(Foundation, Slope) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
 	bool (*airport_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
 	OpenTTDAirportGround (*airport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport);
 	bool (*airport_member)(const OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_member);
@@ -171,6 +170,5 @@ struct OpenTTDGroundABICalls {
 };
 extern "C" bool openttd_rust_ground_abi_calls(const OpenTTDGroundABICalls *);
 extern "C" void openttd_rust_water_restore(uint32_t, uint8_t, const OpenTTDSharedServices *, const OpenTTDWaterGroundServices *, const OpenTTDWaterRestorationServices *);
-extern "C" void openttd_rust_clear_build_above(const OpenTTDCommandCostServices *, OpenTTDCommandCost *);
 extern "C" void openttd_rust_clear_square(uint32_t, const OpenTTDSharedServices *);
 #endif /* RUST_GROUND_FFI_H */

@@ -115,3 +115,22 @@ pub unsafe extern "C" fn openttd_rust_fleet_pending_drain(
     }
     unsafe { (w.set_current)(previous) };
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDFleetPendingServices" ["fleet"] => Services {
+        set_current,
+        restart,
+        x,
+        y,
+        z,
+        reserve,
+        subtract,
+        command,
+        animation,
+        length_news,
+        failed_news,
+        cash,
+        limit,
+    };
+}

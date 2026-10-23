@@ -971,6 +971,56 @@ pub unsafe extern "C" fn openttd_rust_ship_heap_probe(
     }
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDShipYapfDestination" ["probe"] => Destination { tile, station, };
+    "OpenTTDShipYapfInput" ["probe"] => Input {
+        map_x,
+        map_y,
+        tile,
+        dest_tile,
+        curve90,
+        curve45,
+        max_speed,
+        dest_dirs,
+        reverse_dirs,
+        trackdir,
+        ocean_frac,
+        canal_frac,
+        station,
+        unit_number,
+    };
+    "OpenTTDShipYapfLeaves" ["probe"] => Leaves {
+        destination,
+        follow,
+        tile,
+        patch,
+        visit_new,
+        visit_next,
+        visit_destroy,
+        debug,
+    };
+    "OpenTTDShipFollow" ["probe"] => Follow {
+        tile,
+        skipped,
+        dirs,
+        followed,
+    };
+    "OpenTTDShipTile" ["probe"] => Tile {
+        ships,
+        docking,
+        sea,
+        lock_middle,
+        destination,
+    };
+    "OpenTTDShipYapfResult" ["probe"] => Result {
+        direction,
+        found,
+        origin,
+        stats,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

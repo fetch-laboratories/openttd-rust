@@ -705,6 +705,53 @@ pub unsafe extern "C" fn openttd_rust_signal_inspect(output: *mut Snapshot) {
     });
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDSignalSetTrace" ["probe"] => SetTrace {
+        duplicate_count,
+        duplicate_pop,
+        full_failed,
+        overflow_full,
+        first_after_remove,
+        refill_succeeded,
+        refill_pop,
+        drained_count,
+        overflow_drained,
+        overflow_reset,
+    };
+    "OpenTTDSignalSnapshot" ["probe"] => Snapshot {
+        tbu_count,
+        tbd_count,
+        global_count,
+        overflow,
+        last_owner,
+        tbu,
+        tbd,
+        global,
+    };
+    "OpenTTDSignalItem" ["probe"] => SignalItem {
+        tile,
+        dir,
+    };
+    "OpenTTDSignalServices" ["probe"] => SignalServices {
+        assertions,
+        assert_condition,
+        assert_wormhole_start,
+        train_on_tile,
+        train_on_tracks,
+        overflow_tbu,
+        overflow_tbd,
+        overflow_global,
+        assert_company,
+    };
+    "OpenTTDSignalContext" ["probe"] => Context {
+        shared,
+        rail,
+        native,
+        log_x,
+    } width log_x: std::ffi::c_uint;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

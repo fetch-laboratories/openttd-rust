@@ -12,6 +12,15 @@ PREPARE_ORDER = 5
 PREFIX = "normal[0]/"
 VEHICLE = "roadveh[0]/common[0]/"
 CARGODIST = ("cargodist", "stale-refresh", "stale-restrict", "stale-release")
+# LinkRefresher/IncreaseStats branches (#349) reached by real arrivals,
+# departures, full-load waits and stale-link refreshes in these inputs.
+VISIT_ROUTES = ["arrival_stats", "full_load_random", "full_load_refresh"]
+VISIT_WITNESSES = {
+    "manual": VISIT_ROUTES + ["refresh", "seen_hop", "stats"],
+    "cargodist": VISIT_ROUTES + ["refresh", "seen_hop", "stats"],
+    "full-gradual": ["full_load_random", "full_load_refresh", "refresh", "stats"],
+    "stale-refresh": ["refresh", "seen_hop", "stats"],
+}
 
 
 def game_environment(scenario):
@@ -251,6 +260,10 @@ def check(scenario, run, mode, role, result):
     }.get(kind, [])
     if counts := core.branch_witnesses(scenario, run, role, "station", required):
         result[f"{mode}_{role}_station_branches"] = counts
+    # Route prediction and link statistics (#349) on real station visits.
+    visits = VISIT_WITNESSES.get(kind, [])
+    if counts := core.branch_witnesses(scenario, run, role, "vehicle_visits", visits):
+        result[f"{mode}_{role}_visit_branches"] = counts
     if not run["snapshots"]:
         return
     saved = [read_save(path) for path in run["snapshots"]]

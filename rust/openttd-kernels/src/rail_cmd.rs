@@ -30,7 +30,8 @@ use crate::economy_type::{
 use crate::order_type::OT_LOADING;
 pub use crate::services::Train;
 use crate::services::{
-    CommandCost, CommandCostServices, CommandServices, Cost, Map, RailMapServices, Services,
+    CommandCost, CommandCostServices, CommandServices, Cost, Foundation, Map, RailMapServices,
+    Services, Slope,
 };
 use crate::slope_func::{
     FOUNDATION_NONE, SLOPE_EW, SLOPE_FLAT, SLOPE_HALFTILE_MASK, SLOPE_NS,
@@ -47,15 +48,6 @@ pub struct ConvertFrame {
     _private: [u8; 0],
 }
 
-/// `ApplyFoundationToSlope` result: height increase and the modified slope.
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct SlopeZ {
-    /// Height added by the foundation.
-    pub z: i32,
-    /// Slope on top of the foundation.
-    pub slope: u8,
-}
 /// Train position read only when the safe-waiting check runs.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -171,9 +163,6 @@ pub struct RailCommandServices {
     pub crossing_with_competitor: extern "C" fn() -> bool,
     /// `vehicle.disable_elrails`.
     pub disable_elrails: extern "C" fn() -> bool,
-    /// `GetRailFoundation`.
-    /// `ApplyFoundationToSlope`.
-    pub apply_foundation: extern "C" fn(u8, u8) -> SlopeZ,
     /// `GetSlopeZInCorner`.
     pub slope_z_in_corner: extern "C" fn(u8, u8) -> i32,
     /// `AutoslopeCheckForEntranceEdge`.
@@ -2061,22 +2050,22 @@ impl<'a> Ctx<'a> {
             return cost.error(remove_track);
         }
         // ApplyFoundationToSlope also rewrites the slope in place.
-        let top = (self.s.apply_foundation)(
-            crate::movement::rail_foundation(tileh_old, bits, |ok| {
+        let top = (self.shared.apply_foundation)(
+            Foundation(crate::movement::rail_foundation(tileh_old, bits, |ok| {
                 crate::movement::native_assert(self.shared, ok);
-            }),
-            tileh_old,
+            })),
+            Slope(tileh_old),
         );
         z_old += top.z;
-        tileh_old = top.slope;
-        let top = (self.s.apply_foundation)(
-            crate::movement::rail_foundation(tileh_new, bits, |ok| {
+        tileh_old = top.slope.0;
+        let top = (self.shared.apply_foundation)(
+            Foundation(crate::movement::rail_foundation(tileh_new, bits, |ok| {
                 crate::movement::native_assert(self.shared, ok);
-            }),
-            tileh_new,
+            })),
+            Slope(tileh_new),
         );
         z_new += top.z;
-        tileh_new = top.slope;
+        tileh_new = top.slope.0;
         let corner = match bits {
             BIT_LEFT => 0,
             BIT_LOWER => 1,
@@ -2440,6 +2429,96 @@ pub unsafe extern "C" fn openttd_rust_rail_build_above(
     }
     w::hit(w::RAIL_CMD_BUILD_ABOVE_CLEAR);
     crate::landscape_cmd::clear_command(x.command, out, tile, flags);
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRailCommandServices" ["probe"] => RailCommandServices {
+        shared,
+        rail,
+        cost,
+        command,
+        signal,
+        strings,
+        rail_type_valid,
+        compatible_rail,
+        powered_rail,
+        train_powered,
+        rail_no_crossings,
+        road_no_crossing,
+        rail_build_cost,
+        rail_clear_cost,
+        rail_convert_cost,
+        crossing_with_competitor,
+        disable_elrails,
+        slope_z_in_corner,
+        entrance_edge,
+        ship_on_tile,
+        build_rail,
+        remove_rail,
+        build_signal,
+        remove_signal,
+        convert_rail,
+        rail_infrastructure,
+        road_infrastructure,
+        signal_infrastructure,
+        reserving_train,
+        parking,
+        train_position,
+        layout_changed,
+        mark_crossings,
+        crossing_removed,
+        make_crossing,
+        make_road,
+        depot_available,
+        new_depot,
+        depot_name,
+        delete_depot,
+        depot_windows,
+        close_inspect,
+        make_shore,
+        area_begin,
+        area_tile,
+        area_next,
+        area_contains,
+        collect_trains,
+        consist_changed,
+    };
+    "OpenTTDRailCommandStrings" ["probe"] => Strings {
+        impossible_combination,
+        already_built,
+        build_on_water,
+        sloped_wrong,
+        remove_signals_first,
+        road_works,
+        oneway_road,
+        crossing_rail,
+        crossing_road,
+        no_track,
+        owned_by,
+        flat_land,
+        demolish_bridge,
+        no_suitable_track,
+        no_signals,
+        owned_by_another,
+        remove_track,
+        demolish_building,
+        ship_in_way,
+    };
+    "OpenTTDRailTrainParking" ["probe"] => TrainParking {
+        track,
+        status,
+        speed,
+        order,
+    };
+    "OpenTTDCrossingRoad" ["probe"] => CrossingRoad {
+        bits,
+        road_type,
+        tram_type,
+        town,
+        road_owner,
+        tram_owner,
+    };
 }
 
 #[cfg(test)]

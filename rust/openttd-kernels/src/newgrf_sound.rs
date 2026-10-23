@@ -18,3 +18,9 @@ pub const VSE_BREAKDOWN: VehicleSoundEvent = VehicleSoundEvent(3);
 pub const VSE_RUNNING: VehicleSoundEvent = VehicleSoundEvent(4);
 pub const VSE_RUNNING_16: VehicleSoundEvent = VehicleSoundEvent(7);
 pub const VSE_STOPPED_16: VehicleSoundEvent = VehicleSoundEvent(8);
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "VehicleSoundEvent" ["maintenance"] => VehicleSoundEvent {
+    };
+}

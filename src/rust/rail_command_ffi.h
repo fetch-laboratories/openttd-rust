@@ -23,7 +23,6 @@ enum Foundation : uint8_t;
 enum FloodingBehaviour : uint8_t;
 struct Train;
 struct OpenTTDRailConvertFrame; ///< Caller-owned TileIterator and ordered affected-train list.
-struct OpenTTDSlopeZ { int32_t z; uint8_t slope; };
 struct OpenTTDRailTrainParking { uint8_t track; uint8_t status; uint16_t speed; uint8_t order; };
 struct OpenTTDRailTrainPosition { uint32_t tile; uint8_t trackdir; };
 struct OpenTTDCrossingRoad { uint8_t bits, road_type, tram_type; uint16_t town; uint8_t road_owner, tram_owner; };
@@ -51,7 +50,6 @@ struct OpenTTDRailCommandServices {
 	int64_t (*rail_convert_cost)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_convert_cost);
 	bool (*crossing_with_competitor)() noexcept OPENTTD_SERVICE_DEFAULT(crossing_with_competitor);
 	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
-	OpenTTDSlopeZ (*apply_foundation)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
 	int32_t (*slope_z_in_corner)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(slope_z_in_corner);
 	bool (*entrance_edge)(uint32_t, int32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(entrance_edge);
 	bool (*ship_on_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_on_tile);

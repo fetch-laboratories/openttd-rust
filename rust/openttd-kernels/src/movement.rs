@@ -944,7 +944,7 @@ impl MovementServices {
                 reverse_dir(direction, |ok| (self.native_assert)(ok)),
             );
             if (self.vehicle().next)(v).is_none() {
-                (self.vehicle().enter_depot)((self.first)(v));
+                self.vehicle().enter_depot((self.first)(v));
             }
             (self.vehicle().write_tile)(v, tile);
             (self.depot_invalidate)(v);
@@ -969,7 +969,7 @@ impl MovementServices {
                     reverse_dir((self.vehicle().direction)(v), |ok| (self.native_assert)(ok)),
                 );
                 if (self.vehicle().next)(v).is_none() {
-                    (self.vehicle().enter_depot)((self.first)(v));
+                    self.vehicle().enter_depot((self.first)(v));
                 }
                 (self.vehicle().write_tile)(v, tile);
                 (self.depot_invalidate)(v);
@@ -1410,4 +1410,88 @@ pub(crate) fn should_stop(shared: &Services, v: VehicleRef, station: u16) -> boo
 /// native registry; failed assertions follow the native build's assertion policy.
 pub(crate) fn native_assert(shared: &Services, condition: bool) {
     (table(shared).native_assert)(condition);
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDMovementFirstSpeed" ["landscape"] => FirstSpeed {
+        first,
+        speed,
+    };
+    "OpenTTDMovementIncline" ["landscape"] => Incline {
+        z,
+        flags,
+    };
+    "OpenTTDMovementDepotPosition" ["landscape"] => DepotPosition {
+        tile,
+        x,
+        y,
+    };
+    "OpenTTDMovementPose" ["landscape"] => MovementPose {
+        z,
+        direction,
+    };
+    "OpenTTDMovementVehicle" ["landscape"] => MovementVehicle {
+        train,
+        road,
+        ship,
+        kind,
+    };
+    "OpenTTDMovementObjectFoundation" ["landscape"] => ObjectFoundation {
+        enabled,
+        no_foundation,
+    };
+    "OpenTTDMovementFoundation" ["landscape"] => CallbackFoundation {
+        spec,
+        kind,
+        callback,
+    };
+    "OpenTTDMovementServices" ["landscape"] => MovementServices {
+        shared,
+        orders,
+        rail,
+        road,
+        rail_map,
+        train,
+        vehicle,
+        road_kind,
+        road_vehicle,
+        resolve,
+        pose,
+        depot_position,
+        incline,
+        first,
+        first_speed,
+        write_ground_flags,
+        train_engine_class,
+        depot_invalidate,
+        native_assert,
+        plain_rail,
+        normal_road,
+        is_tunnel,
+        rail_station,
+        road_crossing,
+        tile_flat,
+        add_by_diag_dir,
+        rail_depot_tile,
+        has_tile_road_type,
+        oneway_signal,
+        crossing_barred,
+        buoy,
+        water_type,
+        lock_direction,
+        ship_depot_axis,
+        pixel_slope,
+        outside_pixel_slope,
+        max_pixel_z,
+        apply_foundation,
+        owned_land,
+        object_foundation,
+        house_foundation,
+        house_callback,
+        house_boolean,
+        industry_foundation,
+        industry_callback,
+        industry_boolean,
+    };
 }

@@ -921,3 +921,14 @@ pub unsafe extern "C" fn openttd_rust_train_move(
 ) {
     unsafe { move_vehicle(b, out, flags, src_veh, dest_veh, move_chain) };
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRailConstructionServices" ["probe"] => Services {
+        cargo_capacity, strings, compatible, powered, new_wagon, new_engine, new_rear, link_multihead, subtype,
+        set_subtype, previous, last, set_next, next_vehicle, last_engine_part, ground, first_engine,
+        invalidate_grf, attach_callback, unknown_attach, train_limit, unit,
+        use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
+    };
+    "OpenTTDRailConstructionStrings" ["probe"] => Strings { rear_follow, depot_only, no_orders, };
+}

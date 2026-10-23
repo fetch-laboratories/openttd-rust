@@ -169,11 +169,7 @@ impl World<'_> {
     fn bridge_height(&self, tile: u32) -> i32 {
         // SAFETY: canonical immutable station services; no owner state is borrowed.
         let stations = unsafe { &*(self.s.station_commands)() };
-        crate::bridge_map::get_bridge_height(
-            (stations.southern_bridge_end)(tile),
-            self.s,
-            |f, h| (self.rail().apply_foundation)(f, h).z,
-        )
+        crate::bridge_map::get_bridge_height((stations.southern_bridge_end)(tile), self.s)
     }
     fn check_docking(&self, tile: u32) {
         // SAFETY: the immutable station table is live; docking borrows no water owner.
@@ -780,4 +776,40 @@ pub(crate) unsafe fn openttd_rust_water_change_owner(
     // SAFETY: The ownership dispatcher upholds the common synchronous contract.
     let world = unsafe { World::new(a) };
     world.owner(ret, tile, old, new);
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDWaterCommandStrings" ["common"] => Strings {
+        built_on_water,
+        demolish_bridge,
+        unsuitable,
+        sloped_wrong,
+        edge,
+        low_bridge,
+        flat,
+        already_built,
+        build_on_water,
+        demolish_building,
+        demolish_canal,
+    };
+    "OpenTTDWaterCommandServices" ["common"] => WaterCommandServices {
+        shared,
+        cost,
+        command,
+        water,
+        rail,
+        water_type,
+        lock_part,
+        lock_direction,
+        other_depot_tile,
+        restoration,
+        environment,
+        make_depot,
+        make_lock_tile,
+        area_begin,
+        area_tile,
+        area_next,
+        strings,
+    };
 }

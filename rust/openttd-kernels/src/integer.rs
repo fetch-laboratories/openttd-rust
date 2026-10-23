@@ -132,3 +132,14 @@ pub(super) fn skip(src: &[u8], mut base: u8) -> usize {
     }
     pos
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRustIntegerResult" ["probe"] => IntegerResult {
+        value_bits,
+        length,
+        error_offset,
+        error_length,
+        error_kind,
+    };
+}

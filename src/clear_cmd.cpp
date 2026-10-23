@@ -426,17 +426,13 @@ static CommandCost TerraformTile_Clear(TileIndex tile, DoCommandFlags flags, int
 }
 #endif
 
+#ifndef WITH_RUST
 static CommandCost CheckBuildAbove_Clear(TileIndex, DoCommandFlags, Axis, int)
 {
-#ifdef WITH_RUST
-	CommandCost cost;
-	openttd_rust_clear_build_above(&GetRustCommandCostServices(), RustCommandCost(&cost));
-	return cost;
-#else
 	/* Can always build above clear tiles. */
 	return CommandCost();
-#endif
 }
+#endif
 
 extern const TileTypeProcs _tile_type_clear_procs = {
 	DrawTile_Clear,           ///< draw_tile_proc
@@ -473,5 +469,9 @@ extern const TileTypeProcs _tile_type_clear_procs = {
 #else
 	TerraformTile_Clear,      ///< terraform_tile_proc
 #endif
+#ifdef WITH_RUST
+	nullptr,                 // Rust tunnel and bridge construction owns the check.
+#else
 	CheckBuildAbove_Clear, // check_build_above_proc
+#endif
 };

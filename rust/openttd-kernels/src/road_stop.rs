@@ -737,3 +737,32 @@ pub unsafe extern "C" fn openttd_rust_road_stop_after_load(s: *const Services) {
         index = rs.index + 1;
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRoadStopRebuildRead" ["probe"] => crate::road_stop::RebuildRead {
+        road,
+        total_length,
+        vehicle_type,
+        direction,
+        status,
+        primary,
+    };
+    "OpenTTDRoadStopDriveRead" ["probe"] => crate::road_stop::DriveRead { total_length, direction, };
+    "OpenTTDRoadStopEntry" ["probe"] => crate::road_stop::Entry { length, occupied, };
+    "OpenTTDRoadStopPoolItem" ["probe"] => crate::road_stop::PoolStop { state, xy, index, };
+    "OpenTTDRoadStopEntries" ["probe"] => crate::road_stop::Entries { east, west, };
+    "OpenTTDRoadStopState" ["probe"] => crate::road_stop::State { status, entries, };
+    "OpenTTDRoadStopServices" ["probe"] => crate::road_stop::RoadStopServices {
+        vehicle,
+        ground,
+        primary,
+        head,
+        next,
+        tile,
+        state,
+        pool_next,
+        drive_read,
+        rebuild_read,
+    };
+}

@@ -66,6 +66,9 @@
 #ifdef WITH_RUST
 #include "rust/vehicle_maintenance_ffi.h"
 #include "rust/vehicle_services.h"
+#include "rust/vehicle_visits_ffi.h"
+#include "rust/services_station.h"
+#include "rust/services_linkgraph.h"
 #endif
 #ifdef WITH_RUST
 #include "rust/vehicle_transaction_ffi.h"
@@ -76,6 +79,137 @@
 #endif
 
 #include "safeguards.h"
+
+#ifdef WITH_RUST
+static_assert(VehicleFlags{VehicleFlag::LoadingFinished}.base() == 1 && VehicleFlags{VehicleFlag::StopLoading}.base() == 64);
+static_assert(VehicleRailFlags{VehicleRailFlag::Reversed}.base() == 128 && VehicleRailFlags{VehicleRailFlag::LeavingStation}.base() == 512);
+static_assert(CCF_ARRANGE.base() == 3 && TRACK_BIT_DEPOT == 0x80 && VehicleCargoList::MTA_LOAD == 3);
+static_assert(OrderDepotTypeFlags{OrderDepotTypeFlag::PartOfOrders}.base() == 2 && OrderDepotActionFlags{OrderDepotActionFlag::Halt}.base() == 1 && OrderDepotActionFlags{OrderDepotActionFlag::NearestDepot}.base() == 2);
+static_assert(to_underlying(OrderLoadType::FullLoad) == 2 && to_underlying(OrderLoadType::FullLoadAny) == 3);
+static OpenTTDVisitCapacity VehicleVisitCapacity(OpenTTDVehicle *handle) noexcept
+{
+	return {.capacity = RustVehicleCargoCap(handle), .remaining = RustVehicleRefitCap(handle), .cargo = RustVehicleCargoType(handle)};
+}
+static OpenTTDVisitPrediction VehicleVisitPrediction(OpenTTDVehicle *handle) noexcept
+{
+	const Vehicle *v = VehicleOf(handle);
+	return {.loading_tick = v->last_loading_tick, .last_loading = v->last_loading_station.base(), .last_station = RustVehicleLastStationVisited(handle), .ticks = RustVehicleLoadUnloadTicks(handle)};
+}
+static uint16_t VehicleVisitGraphSize(OpenTTDLinkGraph *lg) noexcept { return lg->Size(); }
+static void VehicleVisitMergeGraph(OpenTTDLinkGraph *lg, OpenTTDLinkGraph *other) noexcept
+{
+	LinkGraphSchedule::instance.Dequeue(other);
+	lg->Merge(other); // Updates GoodsEntries of other
+}
+static void VehicleVisitUpdateEdge(OpenTTDLinkGraph *lg, uint16_t from, uint16_t to, uint32_t capacity, uint32_t usage, uint32_t time, uint8_t modes) noexcept
+{
+	(*lg)[from].UpdateEdge(to, capacity, usage, time, EdgeUpdateModes{modes});
+}
+static void VehicleVisitArrivalDirty(OpenTTDVehicle *handle) noexcept
+{
+	Vehicle *v = VehicleOf(handle);
+	SetWindowDirty(GetWindowClassForVehicleType(v->type), v->owner);
+	SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP);
+	SetWindowDirty(WC_VEHICLE_DETAILS, v->index);
+	SetWindowDirty(WC_STATION_VIEW, v->last_station_visited);
+
+	RustStationMarkTilesDirty(Station::Get(v->last_station_visited), true);
+}
+static void VehicleVisitReservationLog() noexcept { Debug(misc, 1, "cancelling cargo reservation"); }
+static void VehicleVisitStationDeparture(OpenTTDStation *handle, uint32_t tile) noexcept
+{
+	Station *st = static_cast<Station *>(handle);
+	RustStationRandomisation(st, TileIndex(tile), StationRandomTrigger::VehicleDeparts);
+	RustStationAnimation(st, TileIndex(tile), StationAnimationTrigger::VehicleDeparts);
+}
+static void VehicleVisitRoadStopDeparture(OpenTTDStation *handle, uint32_t tile) noexcept
+{
+	Station *st = static_cast<Station *>(handle);
+	RustRoadStopRandomisation(st, TileIndex(tile), StationRandomTrigger::VehicleDeparts);
+	RustRoadStopAnimation(st, TileIndex(tile), StationAnimationTrigger::VehicleDeparts);
+}
+static void VehicleVisitDepotWindows(OpenTTDVehicle *handle, bool invalidate) noexcept
+{
+	const Vehicle *v = VehicleOf(handle);
+	if (invalidate) RustVehicleInvalidateDepot(v);
+	RustVehicleDirtyDepot(v);
+}
+static void VehicleVisitShipDepotViewport(OpenTTDVehicle *handle) noexcept
+{
+	Ship *ship = Ship::From(VehicleOf(handle));
+	RustVehicleUpdateViewport(ship, true, true);
+	RustVehicleDirtyDepot(ship);
+}
+static void VehicleVisitWithCosts(void *context, void (*scope)(void *, void *)) noexcept
+{
+	CommandCost cost, temporary;
+	OpenTTDVisitCosts costs{reinterpret_cast<OpenTTDCommandCost *>(&cost), reinterpret_cast<OpenTTDCommandCost *>(&temporary)};
+	scope(context, &costs);
+}
+static void VehicleVisitRefitFailedNews(OpenTTDVehicle *handle) noexcept
+{
+	const Vehicle *v = VehicleOf(handle);
+	if (v->owner == _local_company) {
+		/* Notify the user that we stopped the vehicle */
+		AddVehicleAdviceNewsItem(AdviceType::RefitFailed, GetEncodedString(STR_NEWS_ORDER_REFIT_FAILED, v->index), v->index);
+	}
+}
+static void VehicleVisitCostAnimation(OpenTTDVehicle *handle, int64_t cost) noexcept
+{
+	const Vehicle *v = VehicleOf(handle);
+	if (v->owner == _local_company) ShowCostOrIncomeAnimation(v->x_pos, v->y_pos, v->z_pos, cost);
+}
+static void VehicleVisitWaitingNews(OpenTTDVehicle *handle) noexcept
+{
+	const Vehicle *v = VehicleOf(handle);
+	/* Announce that the vehicle is waiting to players and AIs. */
+	if (v->owner == _local_company) {
+		AddVehicleAdviceNewsItem(AdviceType::VehicleWaiting, GetEncodedString(STR_NEWS_TRAIN_IS_WAITING + v->type, v->index), v->index);
+	}
+	AI::NewEvent(v->owner, new ScriptEventVehicleWaitingInDepot(v->index));
+}
+const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
+{
+	static const OpenTTDVehicleVisits services{
+		.shared = &GetRustSharedServices(),
+		.station = &GetRustStationServices(),
+		.links = &GetRustStationLinks(),
+		.loading = &GetRustStationLoading(),
+		.refit = &GetRustVehicleRefitServices(),
+		.capacity = VehicleVisitCapacity,
+		.prediction = VehicleVisitPrediction,
+		.display_speed = RustVehicleDisplaySpeed,
+		.location = RustStationLocation,
+		.graph_available = RustLinkGraphAvailable,
+		.allocate_graph = RustLinkGraphAllocate,
+		.allocation_failure = RustLinkGraphAllocationFailure,
+		.join_graph = RustLinkGraphJoin,
+		.graph_size = VehicleVisitGraphSize,
+		.merge_graph = VehicleVisitMergeGraph,
+		.update_edge = VehicleVisitUpdateEdge,
+		.percent = {.up = STR_PERCENT_UP, .down = STR_PERCENT_DOWN, .up_down = STR_PERCENT_UP_DOWN, .none = STR_PERCENT_NONE},
+		.set_last_loading = RustVehicleSetLastLoadingStation,
+		.set_loading_tick = RustVehicleSetLastLoadingTick,
+		.arrival_dirty = VehicleVisitArrivalDirty,
+		.station_cargo = RustStationCargoOwner,
+		.reservation_log = VehicleVisitReservationLog,
+		.hide_filling = RustVehicleHideFilling,
+		.set_occupancy = RustVehicleSetTripOccupancy,
+		.station_departure = VehicleVisitStationDeparture,
+		.road_stop_departure = VehicleVisitRoadStopDeparture,
+		.leave_sound = RustVehiclePlayLeaveSound,
+		.depot_windows = VehicleVisitDepotWindows,
+		.ship_depot_viewport = VehicleVisitShipDepotViewport,
+		.depot_randomisation = RustVehicleDepotRandomisation,
+		.view_invalidate = RustVehicleVisitInvalidateView,
+		.with_costs = VehicleVisitWithCosts,
+		.refit_failed_news = VehicleVisitRefitFailedNews,
+		.cost_animation = VehicleVisitCostAnimation,
+		.waiting_news = VehicleVisitWaitingNews,
+	};
+	return services;
+}
+#endif
 
 /* Number of bits in the hash to use from each vehicle coord */
 static const uint GEN_HASHX_BITS = 6;
@@ -694,7 +828,6 @@ void ResetVehicleColourMap()
 #ifdef WITH_RUST
 #include "rust/fleet_pending_services.hpp"
 static void ClearPendingAutoreplace() { openttd_rust_fleet_pending_clear(); }
-static void RecordPendingAutoreplace(VehicleID id, bool leave) { openttd_rust_fleet_pending_add(id.base(), leave); }
 #else
 using AutoreplaceMap = std::map<VehicleID, bool>;
 static AutoreplaceMap _vehicles_to_autoreplace;
@@ -930,6 +1063,7 @@ Vehicle::~Vehicle()
 	}
 }
 
+#ifndef WITH_RUST
 /**
  * Adds a vehicle to the list of vehicles that visited a depot this tick
  * @param *v vehicle to add
@@ -946,6 +1080,7 @@ static void VehicleEnteredDepotThisTick(Vehicle *v)
 	 * stopped the vehicle, so autoreplace can start it again */
 	v->vehstatus.Set(VehState::Stopped);
 }
+#endif /* WITH_RUST */
 
 #ifdef WITH_RUST
 #include "rust/vehicle_ffi.h"
@@ -953,7 +1088,7 @@ static void VehicleEnteredDepotThisTick(Vehicle *v)
 #include "rust/vehicle_refit_ffi.h"
 static OpenTTDVehicleSchedulerTables VehicleSchedulerTables(OpenTTDCommandCost *refit_cost = nullptr, OpenTTDCommandCost *temporary = nullptr) noexcept
 {
-	return {.scheduler = &GetRustVehicleSchedulerServices(), .cargo = CargoStorageServices(), .station = &GetRustStationServices(), .loading = &GetRustStationLoading(), .pending = &_fleet_pending_services, .transaction = &FleetTransactionServices(), .group = &FleetGroupServices(), .refit = &GetRustVehicleRefitServices(), .refit_cost = refit_cost, .refit_temporary = temporary};
+	return {.scheduler = &GetRustVehicleSchedulerServices(), .cargo = CargoStorageServices(), .station = &GetRustStationServices(), .loading = &GetRustStationLoading(), .pending = &_fleet_pending_services, .transaction = &FleetTransactionServices(), .group = &FleetGroupServices(), .visits = &GetRustVehicleVisits(), .refit_cost = refit_cost, .refit_temporary = temporary};
 }
 void RunVehicleCalendarDayProc()
 {
@@ -1555,6 +1690,10 @@ void AgeVehicle(Vehicle *v)
  */
 uint8_t CalcPercentVehicleFilled(const Vehicle *front, StringID *colour)
 {
+#ifdef WITH_RUST
+	assert(colour == nullptr || (Station::GetIfValid(front->last_station_visited) != nullptr && front->current_order.IsType(OT_LOADING)));
+	return openttd_rust_percent_filled(RustVehicle(front), colour, &GetRustVehicleVisits());
+#else
 	int count = 0;
 	int max = 0;
 	int cars = 0;
@@ -1606,6 +1745,7 @@ uint8_t CalcPercentVehicleFilled(const Vehicle *front, StringID *colour)
 		/* More than 50%; round down, so that 100% means really full. */
 		return (count * 100) / max;
 	}
+#endif
 }
 
 /**
@@ -1617,6 +1757,9 @@ void VehicleEnterDepot(Vehicle *v)
 	/* Always work with the front of the vehicle */
 	assert(v == v->First());
 
+#ifdef WITH_RUST
+	openttd_rust_visit_enter_depot(RustVehicle(v), &GetRustVehicleVisits());
+#else
 	switch (v->type) {
 		case VEH_TRAIN: {
 			Train *t = Train::From(v);
@@ -1733,9 +1876,6 @@ void VehicleEnterDepot(Vehicle *v)
 			AI::NewEvent(v->owner, new ScriptEventVehicleWaitingInDepot(v->index));
 		}
 
-#ifdef WITH_RUST
-		openttd_rust_measure_unbunching(v, &GetRustOrdersLeaves());
-#else
 		/* If we've entered our unbunching depot, record the round trip duration. */
 		if (v->current_order.GetDepotActionType().Test(OrderDepotActionFlag::Unbunch) && v->depot_unbunching_last_departure > 0) {
 			TimerGameTick::Ticks measured_round_trip = TimerGameTick::counter - v->depot_unbunching_last_departure;
@@ -1747,10 +1887,10 @@ void VehicleEnterDepot(Vehicle *v)
 				v->round_trip_time = Clamp(measured_round_trip, (v->round_trip_time / 2), ClampTo<TimerGameTick::Ticks>(v->round_trip_time * 2));
 			}
 		}
-#endif
 
 		v->current_order.MakeDummy();
 	}
+#endif
 }
 
 
@@ -2287,14 +2427,12 @@ void Vehicle::DeleteUnreachedImplicitOrders()
  * Prepare everything to begin the loading when arriving at a station.
  * @pre IsTileType(this->tile, MP_STATION) || this->type == VEH_SHIP.
  */
+#ifndef WITH_RUST
 void Vehicle::BeginLoading()
 {
 	assert(IsTileType(this->tile, MP_STATION) || this->type == VEH_SHIP);
 
 	TimerGameTick::Ticks travel_time = TimerGameTick::counter - this->last_loading_tick;
-#ifdef WITH_RUST
-	openttd_rust_begin_loading(this, &GetRustOrdersLeaves());
-#else
 	if (this->current_order.IsType(OT_GOTO_STATION) &&
 			this->current_order.GetDestination() == this->last_station_visited) {
 		this->DeleteUnreachedImplicitOrders();
@@ -2393,7 +2531,6 @@ void Vehicle::BeginLoading()
 		}
 		this->current_order.MakeLoading(false);
 	}
-#endif
 
 	if (this->last_loading_station != StationID::Invalid() &&
 			this->last_loading_station != this->last_station_visited &&
@@ -2413,6 +2550,7 @@ void Vehicle::BeginLoading()
 	this->cur_speed = 0;
 	this->MarkDirty();
 }
+#endif
 
 /**
  * Return all reserved cargo packets to the station and reset all packets
@@ -2421,6 +2559,9 @@ void Vehicle::BeginLoading()
  */
 void Vehicle::CancelReservation(StationID next, Station *st)
 {
+#ifdef WITH_RUST
+	openttd_rust_visit_cancel_reservation(RustVehicle(this), next.base(), st, &GetRustVehicleVisits());
+#else
 	for (Vehicle *v = this; v != nullptr; v = v->next) {
 		VehicleCargoList &cargo = v->cargo;
 		if (cargo.ActionCount(VehicleCargoList::MTA_LOAD) > 0) {
@@ -2429,6 +2570,7 @@ void Vehicle::CancelReservation(StationID next, Station *st)
 		}
 		cargo.KeepAll();
 	}
+#endif
 }
 
 /**
@@ -2439,6 +2581,9 @@ void Vehicle::LeaveStation()
 {
 	assert(this->current_order.IsType(OT_LOADING));
 
+#ifdef WITH_RUST
+	openttd_rust_visit_leave_station(RustVehicle(this), &GetRustVehicleVisits());
+#else
 	delete this->cargo_payment;
 	assert(this->cargo_payment == nullptr); // cleared by ~CargoPayment
 
@@ -2491,8 +2636,10 @@ void Vehicle::LeaveStation()
 
 
 	this->MarkDirty();
+#endif
 }
 
+#ifndef WITH_RUST
 /**
  * Reset all refit_cap in the consist to cargo_cap.
  */
@@ -2500,6 +2647,7 @@ void Vehicle::ResetRefitCaps()
 {
 	for (Vehicle *v = this; v != nullptr; v = v->Next()) v->refit_cap = v->cargo_cap;
 }
+#endif
 
 /**
  * Release the vehicle's unit number.
@@ -2515,6 +2663,7 @@ void Vehicle::ReleaseUnitNumber()
  * orders and does nothing in all other cases.
  * @param mode is the non-first call for this vehicle in this tick?
  */
+#ifndef WITH_RUST
 void Vehicle::HandleLoading(bool mode)
 {
 	switch (this->current_order.GetType()) {
@@ -2545,6 +2694,7 @@ void Vehicle::HandleLoading(bool mode)
 
 	this->IncrementImplicitOrderIndex();
 }
+#endif
 
 /**
  * Check if the current vehicle has a full load order.
@@ -3438,10 +3588,12 @@ bool VehiclesHaveSameOrderList(const Vehicle *v1, const Vehicle *v2)
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDGroundServices.hpp"
 #include "abi-visit-OpenTTDFleetPendingServices.hpp"
+#include "abi-visit-OpenTTDVehicleVisits.hpp"
 bool CheckAbi_vehicle()
 {
 	return AbiServicesComplete(GetRustGroundServices<Train>()) &&
 		AbiServicesComplete(GetRustGroundServices<RoadVehicle>()) &&
-		AbiServicesComplete(_fleet_pending_services);
+		AbiServicesComplete(_fleet_pending_services) &&
+		AbiServicesComplete(GetRustVehicleVisits());
 }
 #endif

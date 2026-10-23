@@ -836,3 +836,62 @@ pub unsafe extern "C" fn openttd_rust_town_post_destruct(s: &CommandServices) {
         }
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDTownStationCursor" ["probe"] => crate::town::commands::StationCursor {
+        shell,
+        next,
+    };
+    "OpenTTDTownPoolRelation" ["probe"] => crate::town::commands::Relation {
+        next,
+        town,
+    };
+    "OpenTTDTownCommandServices" ["probe"] => crate::town::commands::CommandServices {
+        founding,
+        rail,
+        cargo,
+        objects,
+        subsidies,
+        fund_roads,
+        fund_buildings,
+        exclusive_rights,
+        bribe,
+        invalidate_view,
+        invalidate_authority,
+        modify_station_rating,
+        road_news,
+        road_events,
+        rights_news,
+        rights_events,
+        station_views_dirty,
+        next_station,
+        station_town,
+        station_owner,
+        station_airport,
+        airport_type,
+        airport_tile,
+        station_activity_owner,
+        local_company,
+        bribe_error,
+        next_waypoint,
+        next_depot,
+        next_industry,
+        set_object_town,
+        industry_town_by_tile,
+        town_owned_road,
+        remove_town_indices,
+        delete_town,
+        cleaning_pool,
+        close_view,
+        close_graph,
+        storage_count,
+        delete_storage,
+        clear_storage,
+        delete_inspect,
+        dirty_screen,
+        assertions,
+        too_many_objects,
+        no_statue_place,
+    };
+}

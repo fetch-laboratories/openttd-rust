@@ -11,6 +11,8 @@
 pub const NUM_CARGO: u8 = 64;
 /// `INVALID_CARGO` sentinel.
 pub const INVALID_CARGO: u8 = 255;
+/// `CARGO_AUTO_REFIT`: automatically choose the cargo when auto-refitting.
+pub const CARGO_AUTO_REFIT: u8 = 0xFD;
 /// Original `IsValidCargoType`; validity differs from cargo-spec validity.
 #[must_use]
 pub const fn is_valid_cargo_type(cargo: u8) -> bool {

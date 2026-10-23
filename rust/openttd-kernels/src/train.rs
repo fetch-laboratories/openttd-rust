@@ -509,7 +509,6 @@ pub struct Leaves {
     pub axis_diag: extern "C" fn(Handle, u8) -> u64,
     pub backoff: extern "C" fn(Handle) -> u64,
     pub base_viewport: extern "C" fn(Handle, u8),
-    pub begin_loading: extern "C" fn(Handle),
     pub bridge_speed: extern "C" fn(Handle, u32) -> u64,
     pub cache_override: extern "C" fn(Handle),
     pub callback_length: extern "C" fn(Handle) -> u64,
@@ -555,7 +554,6 @@ pub struct Leaves {
     pub disaster_sound: extern "C" fn(Handle) -> u64,
     pub disconnect: extern "C" fn(Handle),
     pub engine_power: extern "C" fn(Handle) -> u64,
-    pub enter_depot: extern "C" fn(Handle),
     pub find_depot: extern "C" fn(Handle, i32) -> Depot,
     pub first_track: extern "C" fn(Handle, u8) -> u64,
     pub grf_version: extern "C" fn(Handle) -> u64,
@@ -579,13 +577,11 @@ pub struct Leaves {
     pub large_explosion: extern "C" fn(Handle),
     pub last_speed: extern "C" fn(Handle),
     pub leave_sound: extern "C" fn(Handle),
-    pub leave_station: extern "C" fn(Handle),
     pub leave_unbunch: extern "C" fn(Handle),
     pub length_callback: extern "C" fn(Handle) -> u64,
     pub length_changed: extern "C" fn(Handle),
     pub length_default: extern "C" fn(Handle) -> u64,
     pub length_error: extern "C" fn(Handle, u16),
-    pub loading: extern "C" fn(Handle, u8),
     pub local_company: extern "C" fn(Handle) -> u64,
     pub lost_warn: extern "C" fn(Handle) -> u64,
     pub map_size: extern "C" fn(Handle) -> u64,
@@ -1631,7 +1627,7 @@ impl Game<'_> {
         }
         id.set_force_proceed(0);
         self.view_dirty(id);
-        (self.leaves.begin_loading)(id);
+        crate::vehicle::visits::begin_loading(id.vehicle(), self.vs().visits());
         (self.leaves.arrival_triggers)(id, station);
     }
     fn speed_z(&self, id: Handle, old: i32) {
@@ -2284,7 +2280,7 @@ impl Game<'_> {
         {
             if (self.leaves.has_depot_res)(Handle::NONE, (self.leaves.read_tile)(id)) == 0 {
                 crate::witness::hit(crate::witness::TRAIN_DEPOT_REENTRY);
-                (self.leaves.enter_depot)(id);
+                self.vs().enter_depot(id.vehicle());
             }
             return true;
         }
@@ -2367,7 +2363,7 @@ impl Game<'_> {
             }
             id.set_flag(9, false);
         }
-        (self.leaves.loading)(id, u8::from(mode));
+        self.vs().handle_loading(id.vehicle(), mode);
         if (self.leaves.read_order)(id) == 3 || self.stay_depot(id) {
             return true;
         }
@@ -2610,7 +2606,7 @@ impl Game<'_> {
                         || (self.leaves.station)(Handle::NONE, last)
                             != (self.leaves.station)(Handle::NONE, (self.leaves.read_tile)(id))
                     {
-                        (self.leaves.leave_station)(id);
+                        crate::vehicle::visits::leave_station(id.vehicle(), self.vs().visits());
                     }
                 }
                 id.set_force_proceed(0);
@@ -2641,6 +2637,26 @@ impl Game<'_> {
     }
 }
 
+/// `VehicleRailFlag::LeavingStation`.
+pub(crate) const VRF_LEAVING_STATION: u64 = 1 << 9;
+/// `VehicleRailFlag::Reversed`.
+const VRF_REVERSED: u64 = 1 << 7;
+
+/// The train part of `VehicleEnterDepot` (#349): clear the depot reservation,
+/// update the segment's signals and arrange the consist.
+pub(crate) fn enter_depot(id: Handle, leaves: &Leaves, services: &Services) {
+    let g = Game { leaves, services };
+    let tile = (leaves.read_tile)(id);
+    (leaves.set_depot_res)(id, tile, 0);
+    if (leaves.show_reservation)(id) != 0 {
+        (leaves.dirty_tile)(Handle::NONE, tile);
+    }
+    g.signal_segment(id, tile, crate::direction_type::INVALID_DIAGDIR);
+    id.set_wait_counter(0);
+    id.set_force_proceed(0);
+    id.set_flags(id.get_flags() & !VRF_REVERSED);
+    g.consist_changed(id, CCF_ARRANGE);
+}
 /// Invoke synchronous train policy with live serialized services.
 /// # Safety
 /// The descriptors and shell must remain live until the call returns; callbacks may reenter.
@@ -3045,6 +3061,424 @@ pub unsafe extern "C" fn openttd_rust_train_force_command(
         services: unsafe { &*services },
     };
     u8::from(g.force_command(id, execute != 0))
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDTrainHandle" ["probe"] => Handle {
+        shell,
+        owner,
+    };
+    "OpenTTDTrainConsistChangedRead" ["probe"] => TrainConsistChangedRead {
+        engine,
+        front,
+    };
+    "OpenTTDTrainConsistChanged1Read" ["probe"] => TrainConsistChanged1Read {
+        engine,
+        engine_part,
+    };
+    "OpenTTDTrainConsistChanged2Read" ["probe"] => TrainConsistChanged2Read {
+        cargo_cap,
+    };
+    "OpenTTDTrainCurveLimitRead" ["probe"] => TrainCurveLimitRead {
+        next,
+        direction,
+    };
+    "OpenTTDTrainStopLocationRead" ["probe"] => TrainStopLocationRead {
+        length,
+        total_length,
+        order_destination,
+        order,
+    };
+    "OpenTTDTrainCurrentMaxSpeedRead" ["probe"] => TrainCurrentMaxSpeedRead {
+        tile,
+        max_track_speed,
+        speed,
+    };
+    "OpenTTDTrainUpdateAccelerationRead" ["probe"] => TrainUpdateAccelerationRead {
+        power,
+        weight,
+    };
+    "OpenTTDTrainUpdateSpeedRead" ["probe"] => TrainUpdateSpeedRead {
+        status,
+        acceleration,
+    };
+    "OpenTTDTrainTrackdirRead" ["probe"] => TrainTrackdirRead {
+        tile,
+        direction,
+        status,
+    };
+    "OpenTTDTrainCanLeaveRead" ["probe"] => TrainCanLeaveRead {
+        tile,
+        direction,
+    };
+    "OpenTTDTrainCrossingApproachRead" ["probe"] => TrainCrossingApproachRead {
+        status,
+        front,
+    };
+    "OpenTTDTrainNextOffsetRead" ["probe"] => TrainNextOffsetRead {
+        next,
+        length,
+    };
+    "OpenTTDTrainAfterSwapRead" ["probe"] => TrainAfterSwapRead {
+        tile,
+        x,
+        y,
+    };
+    "OpenTTDTrainReverseSwapRead" ["probe"] => TrainReverseSwapRead {
+        tile,
+        x,
+        y,
+        z,
+        direction,
+        status,
+    };
+    "OpenTTDTrainApproachingEndRead" ["probe"] => TrainApproachingEndRead {
+        x,
+        y,
+        length,
+        speed,
+        direction,
+    };
+    "OpenTTDTrainLineEndsRead" ["probe"] => TrainLineEndsRead {
+        tile,
+        speed,
+        breakdown,
+    };
+    "OpenTTDTrainSpeedZRead" ["probe"] => TrainSpeedZRead {
+        z,
+        max_track_speed,
+        speed,
+    };
+    "OpenTTDTrainMoveVehicleRead" ["probe"] => TrainMoveVehicleRead {
+        tile,
+        x,
+        y,
+        direction,
+        front,
+        articulated,
+    };
+    "OpenTTDTrainMoveVehicle20Read" ["probe"] => TrainMoveVehicle20Read {
+        speed,
+        status,
+        front,
+    };
+    "OpenTTDTrainCollisionOneRead" ["probe"] => TrainCollisionOneRead {
+        first,
+        x,
+        y,
+        z,
+        length,
+        owner,
+    };
+    "OpenTTDTrainCollisionOne22Read" ["probe"] => TrainCollisionOne22Read {
+        x,
+        y,
+        z,
+        length,
+        owner,
+    };
+    "OpenTTDTrainDeleteLastRead" ["probe"] => TrainDeleteLastRead {
+        tile,
+        owner,
+    };
+    "OpenTTDTrainStayDepotRead" ["probe"] => TrainStayDepotRead {
+        tile,
+        power,
+    };
+    "OpenTTDTrainLocoRead" ["probe"] => TrainLocoRead {
+        speed,
+        status,
+        order,
+    };
+    "OpenTTDTrainLoco26Read" ["probe"] => TrainLoco26Read {
+        tile,
+        order_destination,
+        order,
+        nonstop,
+    };
+    "OpenTTDTrainTickRead" ["probe"] => TrainTickRead {
+        speed,
+        status,
+        running,
+        front,
+        free_wagon,
+    };
+    "OpenTTDTrainNeedsServiceRead" ["probe"] => TrainNeedsServiceRead {
+        order_destination,
+        order,
+    };
+    "OpenTTDTrainNextForceRead" ["probe"] => TrainNextForceRead {
+        tile,
+        status,
+    };
+    "OpenTTDTrainReverseCommandRead" ["probe"] => TrainReverseCommandRead {
+        status,
+        breakdown,
+        front,
+    };
+    "OpenTTDTrainServices" ["probe"] => Leaves {
+        read_first,
+        read_next,
+        read_previous,
+        read_next_unit,
+        read_last,
+        read_tile,
+        read_dest,
+        read_order_time,
+        read_length,
+        read_total_length,
+        read_max_track_speed,
+        read_speed,
+        read_gv_flags,
+        read_refit_cap,
+        read_last_station,
+        read_direction,
+        read_status,
+        read_tick,
+        read_running,
+        read_day,
+        read_progress,
+        read_order,
+        read_front,
+        read_articulated,
+        read_multiheaded,
+        read_owner,
+        read_vis_effect,
+        read_consist_changed,
+        read_consist_changed_1,
+        read_consist_changed_2,
+        read_curve_limit,
+        read_stop_location,
+        read_current_max_speed,
+        read_update_acceleration,
+        read_update_speed,
+        read_trackdir,
+        read_can_leave,
+        read_crossing_approach,
+        read_next_offset,
+        read_after_swap,
+        read_reverse_swap,
+        read_approaching_end,
+        read_line_ends,
+        read_speed_z,
+        read_move_vehicle,
+        read_move_vehicle_20,
+        read_collision_one,
+        read_collision_one_22,
+        read_delete_last,
+        read_stay_depot,
+        read_loco,
+        read_loco_26,
+        read_tick_state,
+        read_needs_service,
+        read_next_force,
+        read_reverse_command,
+        write_tile,
+        write_dest,
+        write_x,
+        write_y,
+        write_z,
+        write_direction,
+        write_speed,
+        write_tick,
+        write_running,
+        write_day,
+        write_order_time,
+        write_progress,
+        write_subspeed,
+        write_gv_flags,
+        write_acceleration,
+        write_length,
+        write_total_length,
+        write_first_engine,
+        write_max_speed,
+        write_cargo_cap,
+        write_refit_cap,
+        write_cargo_age,
+        write_last_station,
+        write_colourmap,
+        write_status,
+        acceleration,
+        acc_model,
+        acc_type,
+        advance_distance,
+        all_powered,
+        ambient_sound,
+        arrival_news,
+        arrival_triggers,
+        axis_diag,
+        backoff,
+        base_viewport,
+        bridge_speed,
+        cache_override,
+        callback_length,
+        capacity,
+        capacity_error,
+        cargo_age_default,
+        cargo_changed,
+        chain_depot,
+        check_next,
+        check_orders,
+        check_reverse,
+        choose_track,
+        clear_reservation,
+        consist_windows,
+        cost_class,
+        cost_default,
+        cost_divisor,
+        count_chain,
+        crash_event,
+        crash_ground,
+        crash_news,
+        crash_rating,
+        crash_sound,
+        crossing_barred,
+        crossing_rail_axis,
+        crossing_road_axis,
+        crossing_sound,
+        curve_advantage,
+        curve_mod,
+        day_ticks,
+        delete_vehicle,
+        depot_dir,
+        depot_dirty,
+        depot_index,
+        depot_track,
+        depot_window,
+        diag_axis,
+        diag_between,
+        diag_reaches_tracks,
+        diag_trackdir,
+        dirty_tile,
+        dir_diag,
+        disaster_sound,
+        disconnect,
+        engine_power,
+        find_depot,
+        first_track,
+        grf_version,
+        has_depot_res,
+        has_reserved,
+        has_signal,
+        has_signals,
+        has_signal_td,
+        hide_fill,
+        inclination,
+        invalidate_grf,
+        invalid_price,
+        is_bridge,
+        is_crossing,
+        is_depot,
+        is_plain_rail,
+        is_railway,
+        is_station,
+        is_station_any,
+        is_tunnelbridge,
+        large_explosion,
+        last_speed,
+        leave_sound,
+        leave_unbunch,
+        length_callback,
+        length_changed,
+        length_default,
+        length_error,
+        local_company,
+        lost_warn,
+        map_size,
+        max_depot_penalty,
+        no_90,
+        oneway_blocking,
+        order_depot_service,
+        order_dummy,
+        order_free,
+        order_max_speed,
+        other_end,
+        pay_running,
+        pbs_signal_type,
+        platform_ahead,
+        platform_length,
+        position,
+        pow_wag_power,
+        price,
+        process_orders,
+        property,
+        railveh_wagon,
+        rail_tilt,
+        rail_type,
+        rail_types,
+        reserve_paths,
+        reserve_under,
+        reset_unbunch,
+        reverse_at_signals,
+        reverse_single_blocked,
+        reverse_windows,
+        running_windows,
+        servint,
+        set_depot_res,
+        set_next,
+        set_platform_res,
+        set_signal_state,
+        set_tunnel_res,
+        show_effect,
+        show_reservation,
+        signal_context,
+        signal_has_pbs,
+        signal_pbs,
+        signal_type,
+        sigseg_full,
+        sigseg_pbs,
+        small_explosion,
+        speed_default,
+        start_stop_dirty,
+        station,
+        station_axis,
+        station_compatible,
+        station_dest,
+        stopped_in_depot,
+        stop_location,
+        stuck_news,
+        suppress_implicit,
+        tile_add_diag,
+        tile_offset_axis,
+        tile_offset_diag,
+        tile_owner,
+        tile_rail_type,
+        tile_virt,
+        trackdir_exit,
+        trackdir_reaches,
+        track_bits,
+        track_crosses,
+        track_direction,
+        train_list,
+        train_visit,
+        truncate_cargo,
+        try_reserve,
+        tunnel_dir,
+        unreserve,
+        update_delta,
+        update_speed,
+        user_default,
+        veh_exit_dir,
+        viewport,
+        visit_type,
+        vis_effect,
+        wagon_override,
+        wagon_speed_limits,
+        wait_oneway,
+        wait_pbs,
+        wait_twoway,
+        wait_unbunch,
+        write_crossing_bar,
+        write_visit_type,
+        visit_tile,
+        visit_near,
+        vehicle,
+    };
+    "OpenTTDTrainDepot" ["probe"] => Depot {
+        tile,
+        length,
+    };
 }
 
 /// Same owned stop-location callee for tile admission and train speed control.

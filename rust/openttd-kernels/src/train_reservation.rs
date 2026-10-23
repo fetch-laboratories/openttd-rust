@@ -1414,6 +1414,161 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_reserve_under(
     }
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDTrainReservationFreeRead" ["probe"] => TrainReservationFreeRead {
+        tile,
+    };
+    "OpenTTDTrainReservationFree1Read" ["probe"] => TrainReservationFree1Read {
+        tile,
+        next,
+    };
+    "OpenTTDTrainReservationNewRead" ["probe"] => TrainReservationNewRead {
+        dest,
+        last_station,
+        order_index,
+        suppress,
+    };
+    "OpenTTDTrainReservationChooseRead" ["probe"] => TrainReservationChooseRead {
+        tile,
+        dest,
+        destination,
+        order,
+    };
+    "OpenTTDTrainReservationChoose4Read" ["probe"] => TrainReservationChoose4Read {
+        order,
+        nearest,
+    };
+    "OpenTTDTrainReservationCheckNextRead" ["probe"] => TrainReservationCheckNextRead {
+        tile,
+        dest,
+        destination,
+        order,
+        num_orders,
+    };
+    "OpenTTDTrainReservationFollow" ["probe"] => Follow {
+        old_tile,
+        new_tile,
+        skipped,
+        dirs,
+        old_td,
+        exitdir,
+        tunnel,
+        bridge,
+        station,
+        error,
+    };
+    "OpenTTDTrainReservationPbs" ["probe"] => Pbs {
+        tile,
+        other,
+        td,
+        okay,
+    };
+    "OpenTTDTrainReservationSearch" ["probe"] => Search {
+        track,
+        tile,
+        final_dest,
+        td,
+        found,
+        okay,
+    };
+    "OpenTTDTrainReservationLeaves" ["probe"] => Leaves {
+        read_tile,
+        read_next,
+        read_last_station,
+        read_direction,
+        read_order,
+        read_num_orders,
+        read_order_index,
+        read_free,
+        read_free_1,
+        read_new,
+        read_choose,
+        read_choose_4,
+        read_check_next,
+        all_compat,
+        backoff,
+        bits_track,
+        blocking,
+        check_reverse,
+        compat_station,
+        conditional,
+        copy_order,
+        cross_dirs,
+        cross_tracks,
+        depot_dir,
+        depot_reserved,
+        diag_reach_dirs,
+        diag_track,
+        enter_td,
+        exit_dir,
+        free,
+        green,
+        has_pbs,
+        has_reserved,
+        has_signal,
+        increment_order,
+        is_bridge,
+        is_depot,
+        is_pbs,
+        is_plain,
+        is_railway,
+        is_station,
+        is_tunnel,
+        is_waypoint,
+        line_reverse,
+        mark_tile,
+        oneway,
+        order_service,
+        order_type,
+        other_end,
+        overlap,
+        path_result,
+        rail90,
+        reach_dirs,
+        reach_tracks,
+        reserved,
+        reserve_paths,
+        restore_order,
+        save_order,
+        service,
+        set_depot,
+        set_depot_dest,
+        set_platform,
+        set_signal,
+        set_tunnel,
+        show_res,
+        signal_context,
+        vehicle,
+        shared,
+        start_stop,
+        station,
+        station_train,
+        station_xy,
+        stuck,
+        tile_add,
+        tile_offset,
+        trackdir,
+        try_track,
+        tunnel_dir,
+        tunnel_free,
+        unreserve,
+        write_dest,
+        write_last,
+        write_suppress,
+        follow,
+        origin,
+        pathfind,
+        safe_track,
+        process_orders,
+        update_order_dest,
+    };
+    "OpenTTDTrainReservationChoice" ["probe"] => Choice {
+        track,
+        reserved,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -68,7 +68,6 @@ pub struct Tile {
     pub station_track: u8,
     pub tunnel_dir: u8,
     pub uphill: u8,
-    pub flat_ramp: u8,
     pub signal_along: u8,
     pub signal_against: u8,
     pub signal_green: u8,
@@ -539,6 +538,16 @@ impl Search {
     fn tile(&self, tile: u32, td: u8) -> Tile {
         unsafe { (self.leaves.tile)(tile, td) }
     }
+    /// Original `HasBridgeFlatRamp(GetTileSlope(tile), DiagDirToAxis(GetTunnelBridgeDirection(tile)))`.
+    fn bridge_flat_ramp(&self, tile: u32, direction: u8) -> bool {
+        // SAFETY: The immutable shared table outlives this synchronous search.
+        let shared = unsafe { &*self.input.shared };
+        crate::bridge::has_bridge_flat_ramp(
+            shared,
+            (shared.tile_slope)(tile),
+            crate::direction_func::diag_dir_to_axis(direction),
+        )
+    }
     fn follow(&self, tile: u32, td: u8, no90: u8, compatible: u64, mask: bool) -> Follow {
         unsafe {
             (self.leaves.follow)(
@@ -843,7 +852,8 @@ impl Search {
             segment_cost = add(segment_cost, mul(100, follower.skipped));
             if diagonal(td) {
                 let slope = if cur_info.flags & BRIDGE != 0 {
-                    cur_info.tunnel_dir == exit(td) && cur_info.flat_ramp == 0
+                    cur_info.tunnel_dir == exit(td)
+                        && !self.bridge_flat_ramp(cur, cur_info.tunnel_dir)
                 } else {
                     cur_info.flags & TUNNEL == 0 && cur_info.uphill != 0
                 };
@@ -1716,4 +1726,120 @@ pub unsafe extern "C" fn openttd_rust_rail_destroy(owner: *mut Owner) {
 pub extern "C" fn openttd_rust_rail_invalidate() {
     invalidate();
     witness::hit(witness::RAIL_INVALIDATIONS);
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRailSettings" ["probe"] => Settings {
+        max_nodes,
+        firstred,
+        firstred_exit,
+        lastred,
+        lastred_exit,
+        station,
+        slope,
+        curve45,
+        curve90,
+        depot_reverse,
+        crossing,
+        lookahead,
+        p0,
+        p1,
+        p2,
+        pbs_cross,
+        pbs_station,
+        pbs_back,
+        doubleslip,
+        longer,
+        longer_tile,
+        shorter,
+        shorter_tile,
+        firstred_eol,
+    };
+    "OpenTTDRailTile" ["probe"] => Tile {
+        flags,
+        other_end,
+        station,
+        railtype,
+        tracks,
+        reserved,
+        station_track,
+        tunnel_dir,
+        uphill,
+        signal_along,
+        signal_against,
+        signal_green,
+        signal_type,
+        oneway,
+    };
+    "OpenTTDRailFollow" ["probe"] => Follow {
+        tile,
+        skipped,
+        min_speed,
+        max_speed,
+        dirs,
+        followed,
+        error,
+        station,
+    };
+    "OpenTTDRailLeaves" ["probe"] => Leaves {
+        train,
+        tile,
+        follow,
+        free,
+        compatible_station,
+        platform_length,
+        closest_station,
+        origin,
+        write,
+        output,
+        debug,
+    };
+    "OpenTTDRailInput" ["probe"] => Input {
+        context,
+        vehicle,
+        shared,
+        settings,
+        map_x,
+        tile,
+        max_cost,
+        desync,
+        kind,
+        td,
+        override_railtype,
+        forbid90,
+        reserve,
+    };
+    "OpenTTDRailStep" ["probe"] => Step {
+        tile,
+        destination,
+        target_tile,
+        best_length,
+        action,
+        td,
+        found,
+        reverse,
+        value,
+        target_td,
+        target_okay,
+    };
+    "OpenTTDRailTrain" ["probe"] => Train {
+        compatible,
+        all_compatible,
+        tile,
+        rear_tile,
+        virtual_tile,
+        rear_virtual_tile,
+        dest_tile,
+        length,
+        speed,
+        order_destination,
+        td,
+        rear_td,
+        wormhole,
+        rear_wormhole,
+        order,
+        nearest_depot,
+        complex_waypoint,
+    };
 }

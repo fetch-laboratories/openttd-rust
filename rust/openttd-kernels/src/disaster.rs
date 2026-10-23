@@ -1164,6 +1164,25 @@ pub unsafe extern "C" fn openttd_rust_disaster_destroy(owner: *mut Run<'_>) {
     }
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDDisasterState" ["probe"] => State {
+        image_override,
+        target,
+        state,
+        flags,
+    };
+    "OpenTTDDisasterAction" ["probe"] => Action {
+        kind,
+        id,
+        other,
+        a,
+        b,
+        c,
+        d,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

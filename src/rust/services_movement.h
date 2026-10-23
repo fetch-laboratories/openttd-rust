@@ -55,5 +55,5 @@ inline OpenTTDMovementFirstSpeed RustMovementFirstSpeed(OpenTTDVehicle *handle) 
 	return {.first = RustVehicle(first), .speed = RustVehicleSpeed(first)};
 }
 inline uint8_t RustMovementTrainEngineClass(OpenTTDVehicle *handle) noexcept { return RailVehInfo(VehicleOf(handle)->engine_type)->engclass; }
-inline void RustMovementDepotInvalidate(OpenTTDVehicle *handle) noexcept { RustInvalidateDepotWindow(VehicleOf(handle)->tile); }
+inline void RustMovementDepotInvalidate(OpenTTDVehicle *handle) noexcept { RustVehicleInvalidateDepot(VehicleOf(handle)); }
 #endif

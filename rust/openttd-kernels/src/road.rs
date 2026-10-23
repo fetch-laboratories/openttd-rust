@@ -435,7 +435,8 @@ pub struct Leaves {
     pub ground: *const GroundServices,
     pub shared: *const Services,
     pub max_depot_penalty: extern "C" fn() -> u32,
-    pub process_orders_then_loading: extern "C" fn(VehicleRef) -> u8,
+    /// `ProcessOrders(v)`.
+    pub process_orders: extern "C" fn(VehicleRef),
     pub visual_read: extern "C" fn(VehicleRef) -> VisualRead,
     pub visual_effect_then_speed: extern "C" fn(VehicleRef, u32, bool) -> SpeedRead,
     pub speed_read: extern "C" fn(VehicleRef, bool) -> SpeedRead,
@@ -471,7 +472,8 @@ pub struct Leaves {
     pub should_stop: extern "C" fn(VehicleRef, u32) -> bool,
     pub arrival_read: extern "C" fn(VehicleRef, u16) -> ArrivalRead,
     pub arrival_news: extern "C" fn(VehicleRef, u16, u8, u8),
-    pub begin_loading_at: extern "C" fn(VehicleRef, u16),
+    /// The road stop arrival randomisation and animation triggers.
+    pub arrival_triggers: extern "C" fn(VehicleRef, u16),
     pub overtake_read: extern "C" fn(VehicleRef) -> OvertakeRead,
     pub sound_read: extern "C" fn(VehicleRef) -> SoundRead,
     pub depot_exit: extern "C" fn(VehicleRef, i32, i32),
@@ -1221,7 +1223,7 @@ impl Game<'_> {
             if service!(self.vs.order_type)(v.v) == OT_GOTO_DEPOT
                 && d.tile == service!(self.vs.dest_tile)(v.v)
             {
-                service!(self.vs.enter_depot)(v.v);
+                self.vs.enter_depot(v.v);
                 return true;
             }
             if self.close(v, d.z, x, y, direction, false).is_some() {
@@ -1287,7 +1289,8 @@ impl Game<'_> {
             let headline = if r.bus { 0 } else { 2 } + u8::from(s.tram);
             service!(self.l.arrival_news)(v.v, station, bit, headline);
         }
-        service!(self.l.begin_loading_at)(v.v, station);
+        crate::vehicle::visits::begin_loading(v.v, self.vs.visits());
+        service!(self.l.arrival_triggers)(v.v, station);
     }
     /// Drive-through stop test shared by the blocked and stop-frame paths.
     fn stops_here(&self, v: Part, tile: u32) -> bool {
@@ -1665,7 +1668,9 @@ impl Game<'_> {
             service!(self.gs.set_last_speed)(v.v);
             return true;
         }
-        if service!(self.l.process_orders_then_loading)(v.v) == OT_LOADING {
+        service!(self.l.process_orders)(v.v);
+        self.vs.handle_loading(v.v, false);
+        if service!(self.vs.order_type)(v.v) == OT_LOADING {
             return true;
         }
         if v.state() == DEPOT {
@@ -2155,6 +2160,227 @@ pub(crate) unsafe fn clear_removed_drive_stop(state: *mut State) {
             p.write(u16::from(value & 9));
         }
     }
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRoadTramBuildRead" ["probe"] => TramBuildRead { owner, road_type, road, };
+    "OpenTTDRoadPathElement" ["probe"] => PathElement {
+        trackdir,
+        tile,
+    };
+    "OpenTTDRoadEntry" ["probe"] => Entry {
+        acceleration_model,
+        road_side,
+        queue,
+        map_log_x,
+    };
+    "OpenTTDRoadTickRead" ["probe"] => TickRead {
+        tick,
+        front,
+        movement,
+        order_time,
+        running,
+        status,
+    };
+    "OpenTTDRoadMaxSpeedRead" ["probe"] => MaxSpeedRead {
+        next,
+        next_state,
+        tile,
+        max_track_speed,
+        order_max_speed,
+        direction,
+        status,
+    };
+    "OpenTTDRoadVisualRead" ["probe"] => VisualRead {
+        max,
+        eligible,
+    };
+    "OpenTTDRoadSpeedRead" ["probe"] => SpeedRead {
+        max,
+        x,
+        y,
+        z,
+        acceleration,
+        length,
+        tram,
+    };
+    "OpenTTDRoadSpeedPart" ["probe"] => SpeedPart {
+        next,
+        next_state,
+        tile,
+        direction,
+        status,
+    };
+    "OpenTTDRoadStep" ["probe"] => Step {
+        tile,
+        x,
+        y,
+        z,
+        cur_speed,
+        direction,
+        length,
+        front,
+        tram,
+    };
+    "OpenTTDRoadCrashPart" ["probe"] => CrashPart {
+        next,
+        next_state,
+        tile,
+        z,
+        crossing,
+    };
+    "OpenTTDRoadEntered" ["probe"] => Entered {
+        tile,
+        cur_speed,
+        flags,
+        direction,
+        order_type,
+    };
+    "OpenTTDRoadCandidate" ["probe"] => Candidate {
+        vehicle,
+        state,
+        first,
+        first_state,
+        index,
+        x,
+        y,
+        z,
+        first_speed,
+        direction,
+    };
+    "OpenTTDRoadTileVehicle" ["probe"] => TileVehicle {
+        vehicle,
+        first,
+    };
+    "OpenTTDRoadPartRead" ["probe"] => PartRead {
+        next,
+        next_state,
+        tile,
+        z,
+        tram,
+    };
+    "OpenTTDRoadPathRead" ["probe"] => PathRead {
+        dest,
+        owner,
+        articulated,
+        bus,
+    };
+    "OpenTTDRoadStopRead" ["probe"] => StopRead {
+        owner,
+        bus,
+    };
+    "OpenTTDRoadOvertakeRead" ["probe"] => OvertakeRead {
+        tile,
+        cur_speed,
+        direction,
+        status,
+    };
+    "OpenTTDRoadRoadTypes" ["probe"] => RoadTypes {
+        before,
+        after,
+    };
+    "OpenTTDRoadTrackChoice" ["probe"] => TrackChoice {
+        trackdir,
+        found,
+    };
+    "OpenTTDRoadDepotResult" ["probe"] => DepotResult {
+        tile,
+        length,
+    };
+    "OpenTTDRoadArrivalRead" ["probe"] => ArrivalRead {
+        had_vehicle_of_type,
+        bus,
+    };
+    "OpenTTDRoadSoundRead" ["probe"] => SoundRead {
+        sound,
+        tick,
+    };
+    "OpenTTDRoadLink" ["probe"] => Link {
+        next,
+        next_state,
+    };
+    "OpenTTDRoadLinkTile" ["probe"] => LinkTile {
+        link,
+        tile,
+    };
+    "OpenTTDRoadCostRead" ["probe"] => CostRead {
+        engine,
+        cost_class,
+        cost_factor,
+    };
+    "OpenTTDRoadServiceRead" ["probe"] => ServiceRead {
+        tile,
+        servint,
+        cur_speed,
+    };
+    "OpenTTDRoadTurnRead" ["probe"] => TurnRead {
+        tile,
+        breakdown_ctr,
+        direction,
+        order_type,
+        status,
+    };
+    "OpenTTDRoadTrackdirRead" ["probe"] => TrackdirRead {
+        tile,
+        direction,
+        status,
+    };
+    "OpenTTDRoadLeaves" ["probe"] => Leaves {
+        vehicle,
+        ground,
+        shared,
+        process_orders,
+        max_depot_penalty,
+        visual_read,
+        visual_effect_then_speed,
+        speed_read,
+        max_speed_read,
+        speed_part,
+        step,
+        crash_part,
+        part,
+        link,
+        link_tile,
+        after_enter_tile,
+        visit_close,
+        visit_trains,
+        visit_tile,
+        has_road,
+        any_road_bits,
+        is_road_depot_tile,
+        depot_direction,
+        is_normal_road,
+        disallowed_directions,
+        is_bay_stop,
+        bay_direction,
+        is_drive_through,
+        is_station_road_stop,
+        move_tile,
+        path_read,
+        choose_track,
+        find_depot,
+        tram_build_read,
+        disconnect,
+        stop_read,
+        should_stop,
+        arrival_read,
+        arrival_news,
+        arrival_triggers,
+        overtake_read,
+        sound_read,
+        depot_exit,
+        crash_news,
+        shorten_factor,
+        default_max_speed,
+        update_cargo_age,
+        cost_read,
+        price,
+        pay_running,
+        service_read,
+        turn_read,
+        trackdir_read,
+    };
 }
 
 /// `RoadVehicle::GetFrame` on the canonical owner.

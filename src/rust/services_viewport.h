@@ -9,8 +9,6 @@
 #ifndef RUST_SERVICES_VIEWPORT_H
 #define RUST_SERVICES_VIEWPORT_H
 #include "../viewport_func.h"
-#include "../window_func.h"
-inline void RustInvalidateDepotWindow(TileIndex tile) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, tile); }
 inline void RustMarkTileDirty(uint32_t tile) noexcept { MarkTileDirtyByTile(TileIndex{tile}); }
 inline void RustMarkTileDirtyHeight(uint32_t tile, int32_t offset) noexcept { MarkTileDirtyByTile(TileIndex{tile}, offset); }
 /* MarkTileDirtyByTile(tile, 0, tile_height_override) */

@@ -10,7 +10,6 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCES = ("abi", "company", "crypto_primitives", "blake2b", "x25519", "auth")
 DECLARATION = re.compile(
     r'"([^"]+)"\s*\["([^"]+)"\]\s*=>\s*([^{}]+)\{([^{}]*)\}'
     r"\s*(?:width\s+(\w+)\s*:\s*([^;]+))?;"
@@ -20,8 +19,10 @@ DECLARATION = re.compile(
 def declarations(root=ROOT):
     """Yield C++ name, probe group, Rust type, field pairs and optional width."""
     seen = set()
-    for module in SOURCES:
-        source = (root / f"rust/openttd-kernels/src/{module}.rs").read_text()
+    for path in sorted((root / "rust/openttd-kernels/src").rglob("*.rs")):
+        source = path.read_text(encoding="utf-8")
+        if "layouts! {" not in source:
+            continue
         source = re.sub(r"//[^\n]*", "", source)
         for name, group, rust, body, width, width_type in DECLARATION.findall(source):
             if name in seen:
@@ -47,12 +48,14 @@ def generate(root=ROOT):
     output = defaultdict(list)
     headers = {}
     for header in sorted((root / "src/rust").glob("*.h")):
-        text = re.sub(r"//[^\n]*|/\*.*?\*/", "", header.read_text(), flags=re.S)
+        source = header.read_text(encoding="utf-8")
+        text = re.sub(r"//[^\n]*|/\*.*?\*/", "", source, flags=re.S)
         for tag, body, alias in re.findall(
             r"(?:typedef\s+)?struct\s*(\w+)?\s*\{([^{}]*)\}\s*(\w+)?\s*;", text, re.S
         ):
             headers[alias or tag] = (header.name, body)
-    records = list(declarations(root))
+    # Sorted by C++ name, so the output does not depend on the hosting module.
+    records = sorted(declarations(root))
     for name, (_, body) in headers.items():
         if re.search(r"\(\s*(?:\w+\s+)?\*\w+\)\s*\(", body):
             if name not in {record[0] for record in records}:
@@ -81,6 +84,15 @@ def generate(root=ROOT):
         visitor += [f'\tvisit("{cpp}", table.{cpp});' for _, cpp in fields]
         visitor.append("}")
         output[f"abi-visit-{name}.hpp"].extend(visitor)
+    # Layout types need their declaring headers; component fragments add their own.
+    output["abi-includes.inc"] = sorted(
+        f'#include "rust/{headers[name][0]}"' for name, *_ in records if name in headers
+    )
+    # Component probe fragments, in file-name order; each registers itself.
+    probes = sorted((root / "tools/migration/windows-abi").glob("*.inc"))
+    output["abi-probes.inc"] = [
+        f'#include "windows-abi/{path.name}"' for path in probes
+    ]
     return {name: "\n".join(lines) + "\n" for name, lines in output.items()}
 
 
@@ -92,8 +104,8 @@ def write_fragments(output, fragments):
             path.unlink()
     for name, contents in fragments.items():
         path = output / name
-        if not path.exists() or path.read_text() != contents:
-            path.write_text(contents)
+        if not path.exists() or path.read_text(encoding="utf-8") != contents:
+            path.write_text(contents, encoding="utf-8")
 
 
 def main():
