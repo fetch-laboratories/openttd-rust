@@ -265,14 +265,14 @@ pub extern "C" fn openttd_rust_animation_afterload(clean: bool, flags: bool) {
     }
 }
 macro_rules! animate {
-    ($fn:ident,$field:ident,$frame:ty) => {
+    ($fn:ident,$field:ident,$feature:ty) => {
         #[unsafe(no_mangle)]
         pub extern "C" fn $fn(tile: u32) {
             let a = services();
             let b = unsafe { &*a.$field };
             let e = (b.entry)(tile);
             if !e.spec.is_null() {
-                crate::newgrf_animation_base::animate::<_, _, _, $frame>(a, b, e, tile);
+                crate::newgrf_animation_base::animate::<$feature>(a, b, e, tile);
             }
         }
     };
@@ -280,32 +280,32 @@ macro_rules! animate {
 animate!(
     openttd_rust_animate_house,
     house,
-    crate::newgrf_animation_base::TileFrame
+    crate::newgrf_animation_base::House
 );
 animate!(
     openttd_rust_animate_industry,
     industry,
-    crate::newgrf_animation_base::TileFrame
+    crate::newgrf_animation_base::Industry
 );
 animate!(
     openttd_rust_animate_station,
     station,
-    crate::newgrf_animation_base::TileFrame
+    crate::newgrf_animation_base::Station
 );
 animate!(
     openttd_rust_animate_airport,
     airport,
-    crate::newgrf_animation_base::TileFrame
+    crate::newgrf_animation_base::Airport
 );
 animate!(
     openttd_rust_animate_object,
     object,
-    crate::newgrf_animation_base::TileFrame
+    crate::newgrf_animation_base::Object
 );
 animate!(
     openttd_rust_animate_roadstop,
     roadstop,
-    crate::newgrf_animation_base::RoadFrame
+    crate::newgrf_animation_base::RoadStop
 );
 pub(crate) unsafe fn house_change(
     cb: u16,
@@ -317,7 +317,7 @@ pub(crate) unsafe fn house_change(
     extra: u64,
 ) {
     let a = services();
-    crate::newgrf_animation_base::change::<_, _, _, crate::newgrf_animation_base::TileFrame>(
+    crate::newgrf_animation_base::change::<crate::newgrf_animation_base::House>(
         a,
         unsafe { &*a.house },
         Entry {
@@ -340,7 +340,7 @@ pub(crate) unsafe fn industry_change(
     let a = services();
     let b = unsafe { &*a.industry };
     let object = (a.industry_object)(tile);
-    crate::newgrf_animation_base::change::<_, _, _, crate::newgrf_animation_base::TileFrame>(
+    crate::newgrf_animation_base::change::<crate::newgrf_animation_base::Industry>(
         a,
         b,
         Entry {
@@ -362,7 +362,7 @@ pub(crate) unsafe fn object_change(
     trigger: u32,
 ) {
     let a = services();
-    crate::newgrf_animation_base::change::<_, _, _, crate::newgrf_animation_base::TileFrame>(
+    crate::newgrf_animation_base::change::<crate::newgrf_animation_base::Object>(
         a,
         unsafe { &*a.object },
         Entry { spec, object: obj },
@@ -409,7 +409,7 @@ pub extern "C" fn openttd_rust_trigger_station(
             } else {
                 0
             };
-            crate::newgrf_animation_base::change::<_, _, _, crate::newgrf_animation_base::TileFrame>(
+            crate::newgrf_animation_base::change::<crate::newgrf_animation_base::Station>(
                 a,
                 b,
                 Entry { spec, object: st },
@@ -443,7 +443,7 @@ pub extern "C" fn openttd_rust_trigger_roadstop(
             } else {
                 0
             };
-            crate::newgrf_animation_base::change::<_, _, _, crate::newgrf_animation_base::RoadFrame>(
+            crate::newgrf_animation_base::change::<crate::newgrf_animation_base::RoadStop>(
                 a,
                 b,
                 Entry { spec, object: st },
@@ -479,7 +479,7 @@ fn airport_trigger(
     if (a.airport_spec_triggers)(spec) & (1 << trigger) == 0 {
         return false;
     }
-    crate::newgrf_animation_base::change::<_, _, _, crate::newgrf_animation_base::TileFrame>(
+    crate::newgrf_animation_base::change::<crate::newgrf_animation_base::Airport>(
         a,
         b,
         Entry { spec, object: st },
@@ -569,12 +569,12 @@ crate::abi::layouts! {
         road_tile,
     };
     "OpenTTDAnimationArea" ["probe"] => Area { tile, width, height };
-    "OpenTTDHouseAnimation" ["probe"] => Binding<HouseSpec, TownHandle, u64> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
-    "OpenTTDIndustryAnimation" ["probe"] => Binding<IndustrySpec, IndustryShell, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
-    "OpenTTDStationAnimation" ["probe"] => Binding<RailSpec, BaseStation, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
-    "OpenTTDAirportAnimation" ["probe"] => Binding<AirportSpec, Station, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
-    "OpenTTDObjectAnimation" ["probe"] => Binding<ObjectSpec, Object, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
-    "OpenTTDRoadStopAnimation" ["probe"] => Binding<RoadSpec, BaseStation, i32> { entry, info, callback, sound, speed_error, speed_callback, next_callback };
+    "OpenTTDHouseAnimation" ["probe"] => Binding<HouseSpec, TownHandle, u64> { entry, info, callback, sound, version8, speed_error };
+    "OpenTTDIndustryAnimation" ["probe"] => Binding<IndustrySpec, IndustryShell, i32> { entry, info, callback, sound, version8, speed_error };
+    "OpenTTDStationAnimation" ["probe"] => Binding<RailSpec, BaseStation, i32> { entry, info, callback, sound, version8, speed_error };
+    "OpenTTDAirportAnimation" ["probe"] => Binding<AirportSpec, Station, i32> { entry, info, callback, sound, version8, speed_error };
+    "OpenTTDObjectAnimation" ["probe"] => Binding<ObjectSpec, Object, i32> { entry, info, callback, sound, version8, speed_error };
+    "OpenTTDRoadStopAnimation" ["probe"] => Binding<RoadSpec, BaseStation, i32> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDHouseAnimationEntry" ["probe"] => Entry<HouseSpec, TownHandle> { spec, object };
     "OpenTTDIndustryAnimationEntry" ["probe"] => Entry<IndustrySpec, IndustryShell> { spec, object };
     "OpenTTDStationAnimationEntry" ["probe"] => Entry<RailSpec, BaseStation> { spec, object };

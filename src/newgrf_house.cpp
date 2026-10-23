@@ -571,23 +571,23 @@ static uint16_t GetSimpleHouseCallback(CallbackID callback, uint32_t param1, uin
 	return GetHouseCallback(callback, param1, param2, spec - HouseSpec::Get(0), town, tile, {}, false, 0, extra_data);
 }
 
-/** Helper class for animation control. */
 #ifdef WITH_RUST
-struct HouseAnimationBase {
-	static bool Enabled(const HouseSpec *) noexcept { return true; }
-	static bool Random(const HouseSpec *s) noexcept { return s->extra_flags.Test(HouseExtraFlag::Callback1ARandomBits); }
-	static OpenTTDAnimationEntry<HouseSpec, Town> Entry(uint32_t t) noexcept { const auto *s = HouseSpec::Get(GetHouseType(TileIndex{t})); return {s, s == nullptr ? nullptr : Town::GetByTile(TileIndex{t})}; }
+const OpenTTDHouseAnimation &GetHouseAnimationBinding() noexcept
+{
+	static const auto binding = MakeRustAnimationBinding<HouseSpec, Town, CargoTypes, GetSimpleHouseCallback>(
+		[](uint32_t t) noexcept -> OpenTTDHouseAnimationEntry { const auto *s = HouseSpec::Get(GetHouseType(TileIndex{t})); if (s == nullptr) return {nullptr, nullptr}; return {s, Town::GetByTile(TileIndex{t})}; },
+		[](const HouseSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(HouseCallbackMask::AnimationSpeed), s->callback_mask.Test(HouseCallbackMask::AnimationNextFrame), s->extra_flags.Test(HouseExtraFlag::Callback1ARandomBits), true}; });
+	return binding;
+}
 #else
+/** Helper class for animation control. */
 struct HouseAnimationBase : public AnimationBase<HouseAnimationBase, HouseSpec, Town, CargoTypes, GetSimpleHouseCallback, TileAnimationFrameAnimationHelper<Town> > {
-#endif
 	static constexpr CallbackID cb_animation_speed      = CBID_HOUSE_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_HOUSE_ANIMATION_NEXT_FRAME;
 
 	static constexpr HouseCallbackMask cbm_animation_speed      = HouseCallbackMask::AnimationSpeed;
 	static constexpr HouseCallbackMask cbm_animation_next_frame = HouseCallbackMask::AnimationNextFrame;
 };
-#ifdef WITH_RUST
-const OpenTTDHouseAnimation &GetHouseAnimationBinding() noexcept { return RustAnimationBinding<HouseAnimationBase, HouseSpec, Town, CargoTypes, GetSimpleHouseCallback>::Get(); }
 #endif
 
 void AnimateNewHouseTile(TileIndex tile)

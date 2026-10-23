@@ -291,23 +291,23 @@ static uint16_t GetSimpleAirportTileCallback(CallbackID callback, uint32_t param
 	return GetAirportTileCallback(callback, param1, param2, ats, st, tile);
 }
 
-/** Helper class for animation control. */
 #ifdef WITH_RUST
-struct AirportTileAnimationBase {
-	static bool Enabled(const AirportTileSpec *) noexcept { return true; }
-	static bool Random(const AirportTileSpec *s) noexcept { return HasBit(s->animation_special_flags, 0); }
-	static OpenTTDAnimationEntry<AirportTileSpec, Station> Entry(uint32_t t) noexcept { const auto *s = AirportTileSpec::GetByTile(TileIndex{t}); return {s, s == nullptr ? nullptr : Station::GetByTile(TileIndex{t})}; }
+const OpenTTDAirportAnimation &GetAirportAnimationBinding() noexcept
+{
+	static const auto binding = MakeRustAnimationBinding<AirportTileSpec, Station, int, GetSimpleAirportTileCallback>(
+		[](uint32_t t) noexcept -> OpenTTDAirportAnimationEntry { const auto *s = AirportTileSpec::GetByTile(TileIndex{t}); if (s == nullptr) return {nullptr, nullptr}; return {s, Station::GetByTile(TileIndex{t})}; },
+		[](const AirportTileSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(AirportTileCallbackMask::AnimationSpeed), s->callback_mask.Test(AirportTileCallbackMask::AnimationNextFrame), HasBit(s->animation_special_flags, 0), true}; });
+	return binding;
+}
 #else
+/** Helper class for animation control. */
 struct AirportTileAnimationBase : public AnimationBase<AirportTileAnimationBase, AirportTileSpec, Station, int, GetSimpleAirportTileCallback, TileAnimationFrameAnimationHelper<Station>> {
-#endif
 	static constexpr CallbackID cb_animation_speed      = CBID_AIRPTILE_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_AIRPTILE_ANIMATION_NEXT_FRAME;
 
 	static constexpr AirportTileCallbackMask cbm_animation_speed      = AirportTileCallbackMask::AnimationSpeed;
 	static constexpr AirportTileCallbackMask cbm_animation_next_frame = AirportTileCallbackMask::AnimationNextFrame;
 };
-#ifdef WITH_RUST
-const OpenTTDAirportAnimation &GetAirportAnimationBinding() noexcept { return RustAnimationBinding<AirportTileAnimationBase, AirportTileSpec, Station, int, GetSimpleAirportTileCallback>::Get(); }
 #endif
 
 void AnimateAirportTile(TileIndex tile)

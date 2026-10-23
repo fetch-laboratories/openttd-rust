@@ -70,6 +70,12 @@ void AnimateAnimatedTiles() { PerformanceAccumulator landscape_framerate(PFE_GL_
 void InitializeAnimatedTiles() { openttd_rust_animation_exchange(&GetRustAnimationServices()); openttd_rust_animation_initialize(); }
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDAnimationServices.hpp"
+#include "abi-visit-OpenTTDHouseAnimation.hpp"
+#include "abi-visit-OpenTTDIndustryAnimation.hpp"
+#include "abi-visit-OpenTTDStationAnimation.hpp"
+#include "abi-visit-OpenTTDAirportAnimation.hpp"
+#include "abi-visit-OpenTTDObjectAnimation.hpp"
+#include "abi-visit-OpenTTDRoadStopAnimation.hpp"
 bool CheckAbi_animated_tile()
 {
 	const auto &s = GetRustAnimationServices();

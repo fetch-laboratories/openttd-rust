@@ -272,23 +272,23 @@ uint16_t GetSimpleIndustryCallback(CallbackID callback, uint32_t param1, uint32_
 	return GetIndustryTileCallback(callback, param1, param2, spec - GetIndustryTileSpec(0), ind, tile);
 }
 
-/** Helper class for animation control. */
 #ifdef WITH_RUST
-struct IndustryAnimationBase {
-	static bool Enabled(const IndustryTileSpec *) noexcept { return true; }
-	static bool Random(const IndustryTileSpec *s) noexcept { return s->special_flags.Test(IndustryTileSpecialFlag::NextFrameRandomBits); }
-	static OpenTTDAnimationEntry<IndustryTileSpec, Industry> Entry(uint32_t t) noexcept { const auto *s = GetIndustryTileSpec(GetIndustryGfx(TileIndex{t})); return {s, s == nullptr ? nullptr : Industry::GetByTile(TileIndex{t})}; }
+const OpenTTDIndustryAnimation &GetIndustryAnimationBinding() noexcept
+{
+	static const auto binding = MakeRustAnimationBinding<IndustryTileSpec, Industry, int, GetSimpleIndustryCallback>(
+		[](uint32_t t) noexcept -> OpenTTDIndustryAnimationEntry { const auto *s = GetIndustryTileSpec(GetIndustryGfx(TileIndex{t})); if (s == nullptr) return {nullptr, nullptr}; return {s, Industry::GetByTile(TileIndex{t})}; },
+		[](const IndustryTileSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(IndustryTileCallbackMask::AnimationSpeed), s->callback_mask.Test(IndustryTileCallbackMask::AnimationNextFrame), s->special_flags.Test(IndustryTileSpecialFlag::NextFrameRandomBits), true}; });
+	return binding;
+}
 #else
+/** Helper class for animation control. */
 struct IndustryAnimationBase : public AnimationBase<IndustryAnimationBase, IndustryTileSpec, Industry, int, GetSimpleIndustryCallback, TileAnimationFrameAnimationHelper<Industry> > {
-#endif
 	static constexpr CallbackID cb_animation_speed      = CBID_INDTILE_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_INDTILE_ANIMATION_NEXT_FRAME;
 
 	static constexpr IndustryTileCallbackMask cbm_animation_speed      = IndustryTileCallbackMask::AnimationSpeed;
 	static constexpr IndustryTileCallbackMask cbm_animation_next_frame = IndustryTileCallbackMask::AnimationNextFrame;
 };
-#ifdef WITH_RUST
-const OpenTTDIndustryAnimation &GetIndustryAnimationBinding() noexcept { return RustAnimationBinding<IndustryAnimationBase, IndustryTileSpec, Industry, int, GetSimpleIndustryCallback>::Get(); }
 #endif
 
 void AnimateNewIndustryTile(TileIndex tile)

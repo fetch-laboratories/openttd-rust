@@ -558,23 +558,23 @@ uint16_t StubGetObjectCallback(CallbackID callback, uint32_t param1, uint32_t pa
 	return GetObjectCallback(callback, param1, param2, spec, o, tile);
 }
 
-/** Helper class for animation control. */
 #ifdef WITH_RUST
-struct ObjectAnimationBase {
-	static bool Enabled(const ObjectSpec *s) noexcept { return s->flags.Test(ObjectFlag::Animation); }
-	static bool Random(const ObjectSpec *s) noexcept { return s->flags.Test(ObjectFlag::AnimRandomBits); }
-	static OpenTTDAnimationEntry<ObjectSpec, Object> Entry(uint32_t t) noexcept { const auto *s = ObjectSpec::GetByTile(TileIndex{t}); return {s, s == nullptr ? nullptr : Object::GetByTile(TileIndex{t})}; }
+const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept
+{
+	static const auto binding = MakeRustAnimationBinding<ObjectSpec, Object, int, StubGetObjectCallback>(
+		[](uint32_t t) noexcept -> OpenTTDObjectAnimationEntry { const auto *s = ObjectSpec::GetByTile(TileIndex{t}); if (s == nullptr || !s->flags.Test(ObjectFlag::Animation)) return {nullptr, nullptr}; return {s, Object::GetByTile(TileIndex{t})}; },
+		[](const ObjectSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(ObjectCallbackMask::AnimationSpeed), s->callback_mask.Test(ObjectCallbackMask::AnimationNextFrame), s->flags.Test(ObjectFlag::AnimRandomBits), true}; });
+	return binding;
+}
 #else
+/** Helper class for animation control. */
 struct ObjectAnimationBase : public AnimationBase<ObjectAnimationBase, ObjectSpec, Object, int, StubGetObjectCallback, TileAnimationFrameAnimationHelper<Object> > {
-#endif
 	static const CallbackID cb_animation_speed      = CBID_OBJECT_ANIMATION_SPEED;
 	static const CallbackID cb_animation_next_frame = CBID_OBJECT_ANIMATION_NEXT_FRAME;
 
 	static const ObjectCallbackMask cbm_animation_speed      = ObjectCallbackMask::AnimationSpeed;
 	static const ObjectCallbackMask cbm_animation_next_frame = ObjectCallbackMask::AnimationNextFrame;
 };
-#ifdef WITH_RUST
-const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept { return RustAnimationBinding<ObjectAnimationBase, ObjectSpec, Object, int, StubGetObjectCallback>::Get(); }
 #endif
 
 /**

@@ -6,22 +6,18 @@
 #include "services_newgrf.h"
 #include "../newgrf_animation_type.h"
 #include "../newgrf_sound.h"
-template <typename Base, typename Spec, typename Obj, typename Extra,
+/* Configuration is immutable during synchronous Action2 evaluation: resolvers
+ * mutate PSA/owner state, not specs. Keep live GRF-version reads branch-local. */
+template <typename Spec, typename Obj, typename Extra,
 	uint16_t (*Callback)(CallbackID, uint32_t, uint32_t, const Spec *, Obj *, TileIndex, Extra)>
-struct RustAnimationBinding {
-	using Binding = OpenTTDAnimationBinding<Spec, Obj, Extra>;
-	static OpenTTDAnimationInfo Info(const Spec *s) noexcept {
-		return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping,
-			s->callback_mask.Test(Base::cbm_animation_speed), s->callback_mask.Test(Base::cbm_animation_next_frame), Base::Random(s), Base::Enabled(s)};
-	}
-	static uint16_t Resolve(uint16_t cb, uint32_t a, uint32_t b, const Spec *s, Obj *o, uint32_t t, Extra extra) noexcept { return Callback(static_cast<CallbackID>(cb), a, b, s, o, TileIndex{t}, extra); }
-	static void Sound(const Spec *s, uint8_t sound, uint32_t t) noexcept { PlayTileSound(s->grf_prop.grffile, sound, TileIndex{t}); }
-	static bool Version8(const Spec *s) noexcept { return s->grf_prop.grffile->grf_version >= 8; }
-
-	static const Binding &Get() noexcept {
-		static const Binding binding{.entry = Base::Entry, .info = Info, .callback = Resolve, .sound = Sound, .version8 = Version8, .speed_error = RustFixedSpecCallbackError<Base::cb_animation_speed, Spec>,
-			.speed_callback = Base::cb_animation_speed, .next_callback = Base::cb_animation_next_frame};
-		return binding;
-	}
-};
+OpenTTDAnimationBinding<Spec, Obj, Extra> MakeRustAnimationBinding(
+	OpenTTDAnimationEntry<Spec, Obj> (*entry)(uint32_t) noexcept,
+	OpenTTDAnimationInfo (*info)(const Spec *) noexcept) noexcept
+{
+	return {.entry = entry, .info = info,
+		.callback = [](uint16_t cb, uint32_t a, uint32_t b, const Spec *s, Obj *o, uint32_t t, Extra extra) noexcept { return Callback(static_cast<CallbackID>(cb), a, b, s, o, TileIndex{t}, extra); },
+		.sound = [](const Spec *s, uint8_t sound, uint32_t t) noexcept { PlayTileSound(s->grf_prop.grffile, sound, TileIndex{t}); },
+		.version8 = [](const Spec *s) noexcept { return s->grf_prop.grffile->grf_version >= 8; },
+		.speed_error = RustSpecCallbackError<Spec, Spec>};
+}
 #endif /* RUST_ANIMATION_BINDING_HPP */

@@ -20,6 +20,17 @@ pub const CBID_STATION_ANIMATION_TRIGGER: CallbackID = CallbackID(0x140);
 pub const CBID_AIRPTILE_ANIMATION_TRIGGER: CallbackID = CallbackID(0x152);
 pub const CBID_OBJECT_ANIMATION_TRIGGER: CallbackID = CallbackID(0x159);
 
+pub const CBID_HOUSE_ANIMATION_NEXT_FRAME: CallbackID = CallbackID(0x1A);
+pub const CBID_HOUSE_ANIMATION_SPEED: CallbackID = CallbackID(0x20);
+pub const CBID_INDTILE_ANIMATION_NEXT_FRAME: CallbackID = CallbackID(0x26);
+pub const CBID_INDTILE_ANIMATION_SPEED: CallbackID = CallbackID(0x27);
+pub const CBID_STATION_ANIMATION_NEXT_FRAME: CallbackID = CallbackID(0x141);
+pub const CBID_STATION_ANIMATION_SPEED: CallbackID = CallbackID(0x142);
+pub const CBID_AIRPTILE_ANIMATION_NEXT_FRAME: CallbackID = CallbackID(0x153);
+pub const CBID_AIRPTILE_ANIMATION_SPEED: CallbackID = CallbackID(0x154);
+pub const CBID_OBJECT_ANIMATION_NEXT_FRAME: CallbackID = CallbackID(0x158);
+pub const CBID_OBJECT_ANIMATION_SPEED: CallbackID = CallbackID(0x15A);
+
 /// `CALLBACK_FAILED`.
 pub const CALLBACK_FAILED: u16 = 0xFFFF;
 

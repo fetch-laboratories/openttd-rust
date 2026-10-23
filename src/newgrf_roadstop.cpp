@@ -368,23 +368,23 @@ struct RoadStopAnimationFrameAnimationHelper {
 
 #endif
 
-/** Helper class for animation control. */
 #ifdef WITH_RUST
-struct RoadStopAnimationBase {
-	static bool Enabled(const RoadStopSpec *) noexcept { return true; }
-	static bool Random(const RoadStopSpec *s) noexcept { return s->flags.Test(RoadStopSpecFlag::Cb141RandomBits); }
-	static OpenTTDAnimationEntry<RoadStopSpec, BaseStation> Entry(uint32_t t) noexcept { const auto *s = RustAnimationRoadSpec(t); return {s, s == nullptr ? nullptr : BaseStation::GetByTile(TileIndex{t})}; }
+const OpenTTDRoadStopAnimation &GetRoadStopAnimationBinding() noexcept
+{
+	static const auto binding = MakeRustAnimationBinding<RoadStopSpec, BaseStation, int, GetAnimRoadStopCallback>(
+		[](uint32_t t) noexcept -> OpenTTDRoadStopAnimationEntry { const auto *s = RustAnimationRoadSpec(t); if (s == nullptr) return {nullptr, nullptr}; return {s, BaseStation::GetByTile(TileIndex{t})}; },
+		[](const RoadStopSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(RoadStopCallbackMask::AnimationSpeed), s->callback_mask.Test(RoadStopCallbackMask::AnimationNextFrame), s->flags.Test(RoadStopSpecFlag::Cb141RandomBits), true}; });
+	return binding;
+}
 #else
+/** Helper class for animation control. */
 struct RoadStopAnimationBase : public AnimationBase<RoadStopAnimationBase, RoadStopSpec, BaseStation, int, GetAnimRoadStopCallback, RoadStopAnimationFrameAnimationHelper> {
-#endif
 	static constexpr CallbackID cb_animation_speed      = CBID_STATION_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_STATION_ANIMATION_NEXT_FRAME;
 
 	static constexpr RoadStopCallbackMask cbm_animation_speed      = RoadStopCallbackMask::AnimationSpeed;
 	static constexpr RoadStopCallbackMask cbm_animation_next_frame = RoadStopCallbackMask::AnimationNextFrame;
 };
-#ifdef WITH_RUST
-const OpenTTDRoadStopAnimation &GetRoadStopAnimationBinding() noexcept { return RustAnimationBinding<RoadStopAnimationBase, RoadStopSpec, BaseStation, int, GetAnimRoadStopCallback>::Get(); }
 #endif
 
 void AnimateRoadStopTile(TileIndex tile)

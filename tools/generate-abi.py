@@ -47,9 +47,11 @@ def generate(root=ROOT):
     """Fragments live only in the build directory; no generated inventory is checked in."""
     output = defaultdict(list)
     headers = {}
+    aliases = {}
     for header in sorted((root / "src/rust").glob("*.h")):
         source = header.read_text(encoding="utf-8")
         text = re.sub(r"//[^\n]*|/\*.*?\*/", "", source, flags=re.S)
+        aliases.update(re.findall(r"using\s+(\w+)\s*=\s*([^;]+);", text))
         for tag, body, alias in re.findall(
             r"(?:typedef\s+)?struct\s*(\w+)?\s*\{([^{}]*)\}\s*(\w+)?\s*;", text, re.S
         ):
@@ -71,6 +73,8 @@ def generate(root=ROOT):
         # Data pointers and scalar carriers never acquire callback defaults or checks.
         header, body = headers.get(name, ("", ""))
         callbacks = re.findall(r"\(\s*(?:\w+\s+)?\*(\w+)\)\s*\(", body)
+        if "<" in aliases.get(name, ""):
+            callbacks = [cpp for _, cpp in fields]
         if not callbacks:
             continue
         missing = set(callbacks) - {cpp for _, cpp in fields}
