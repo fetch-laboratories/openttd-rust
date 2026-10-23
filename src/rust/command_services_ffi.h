@@ -11,6 +11,7 @@
 #include "service_defaults.hpp"
 #include "command_cost_ffi.h"
 struct Train;
+struct OpenTTDOccupancyCommands;
 struct OpenTTDCompanyFinanceServices;
 struct OpenTTDLandscapeCommandServices;
 struct OpenTTDCommandServices {
@@ -23,9 +24,7 @@ struct OpenTTDCommandServices {
 	const OpenTTDLandscapeCommandServices *(*landscape_commands)() noexcept OPENTTD_SERVICE_DEFAULT(landscape_commands);
 	void (*tile_ownership)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_ownership);
 	void (*ownership)(OpenTTDCommandCost *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ownership);
-	void (*no_vehicle)(OpenTTDCommandCost *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(no_vehicle);
-	void (*no_train)(OpenTTDCommandCost *, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(no_train);
-	void (*wormhole_free)(OpenTTDCommandCost *, uint32_t, uint32_t, const Train *) noexcept OPENTTD_SERVICE_DEFAULT(wormhole_free);
+	const OpenTTDOccupancyCommands *(*occupancy)() noexcept OPENTTD_SERVICE_DEFAULT(occupancy);
 };
 const OpenTTDCommandServices &GetRustCommandServices() noexcept;
 extern "C" {

@@ -398,7 +398,7 @@ impl<'a> Ctx<'a> {
             return out.error(self.s.strings.demolish_bridge);
         }
         // SAFETY: the native output is a live command slot for this entry.
-        unsafe { (self.command.no_vehicle)(out.0, tile) };
+        unsafe { self.command.no_vehicle(out.0, tile) };
         if !out.ok() {
             return;
         }
@@ -1770,7 +1770,7 @@ impl Ctx<'_> {
                 continue;
             }
             unsafe {
-                (self.command.no_vehicle)(ret.0, tile);
+                self.command.no_vehicle(ret.0, tile);
             }
             error.add(ret);
             if !error.ok() {
@@ -2554,7 +2554,7 @@ impl Ctx<'_> {
         if waypoint {
             if flags & 32 == 0 {
                 unsafe {
-                    (self.command.no_vehicle)(cost.0, tile);
+                    self.command.no_vehicle(cost.0, tile);
                 }
                 if !cost.ok() {
                     return;
@@ -2572,7 +2572,7 @@ impl Ctx<'_> {
             }
         } else {
             unsafe {
-                (self.command.no_vehicle)(cost.0, tile);
+                self.command.no_vehicle(cost.0, tile);
             }
             if !cost.ok() {
                 return;
@@ -3200,7 +3200,7 @@ impl Ctx<'_> {
                 continue;
             }
             unsafe {
-                (self.command.no_vehicle)(ret.0, tile);
+                self.command.no_vehicle(ret.0, tile);
             }
             if !ret.ok() {
                 return cost.take(ret);
@@ -3560,11 +3560,11 @@ impl Ctx<'_> {
         }
         let water = self.map().add_diag(land, (self.shared.station_gfx)(land));
         unsafe {
-            (self.command.no_vehicle)(cost.0, land);
+            self.command.no_vehicle(cost.0, land);
         }
         if cost.ok() {
             unsafe {
-                (self.command.no_vehicle)(cost.0, water);
+                self.command.no_vehicle(cost.0, water);
             }
         }
         if !cost.ok() {

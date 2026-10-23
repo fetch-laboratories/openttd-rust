@@ -361,7 +361,7 @@ impl<'a> Ctx<'a> {
     }
     fn no_vehicle(&self, c: Cost<'_>, tile: u32) {
         unsafe {
-            (self.commands.no_vehicle)(c.0, tile);
+            self.commands.no_vehicle(c.0, tile);
         }
     }
     fn ownership(&self, c: Cost<'_>, owner: u8, tile: u32) {
@@ -376,7 +376,8 @@ impl<'a> Ctx<'a> {
     }
     fn free(&self, c: Cost<'_>, tile: u32, end: u32) {
         unsafe {
-            (self.commands.wormhole_free)(c.0, tile, end, core::ptr::null());
+            self.commands
+                .wormhole_free(c.0, tile, end, core::ptr::null());
         }
     }
     fn infrastructure(&self, rt: u8, owner: u8, count: i32) {

@@ -4703,7 +4703,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.pbs_signal_type = TrainPbsSignalType,
 		.platform_ahead = TrainPlatformAhead,
 		.platform_length = TrainPlatformLength,
-		.position = TrainPosition,
 		.pow_wag_power = TrainPowWagPower,
 		.price = TrainPrice,
 		.process_orders = TrainProcessOrders,
@@ -4777,8 +4776,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.wait_unbunch = TrainWaitUnbunch,
 		.write_crossing_bar = TrainWriteCrossingBar,
 		.write_visit_type = TrainWriteVisitType,
-		.visit_tile = TrainVisitTile,
-		.visit_near = TrainVisitNear,
 		.vehicle = &GetRustVehicleServices(),
 	};
 	return services;

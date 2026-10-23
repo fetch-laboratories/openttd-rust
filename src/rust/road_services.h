@@ -87,41 +87,17 @@ static OpenTTDRoadEntered OPENTTD_VEHICLE_CALL RoadSvcEnterTile(OpenTTDVehicle *
 	return {.tile = RustVehicleTile(u), .cur_speed = RustVehicleSpeed(u), .flags = flags, .direction = RustVehicleDirection(u), .order_type = RustVehicleOrderType(u)};
 }
 
-/** Pool-order traversals; C++ skips what the original predicate rejects by type or consist, Rust decides the rest. */
-static void OPENTTD_VEHICLE_CALL RoadSvcVisitClose(OpenTTDVehicle *v, int32_t x, int32_t y, bool wormhole, OpenTTDRoadCloseVisitor visit, void *context) noexcept
+
+/** Only the fields consumed by FindClosestBlockingRoadVeh after admission. */
+static bool OPENTTD_VEHICLE_CALL RoadSvcCandidate(OpenTTDVehicle *vehicle, OpenTTDVehicle *probe, OpenTTDRoadCandidate *out) noexcept
 {
-	const RoadVehicle *front = RoadOf(v);
-	auto offer = [&](const Vehicle *u) {
-		if (u->type != VEH_ROAD || RustVehicleFirst(u) == front) return true;
-		const RoadVehicle *r = RoadVehicle::From(u);
-		const RoadVehicle *first = RustVehicleFirst(r);
-		OpenTTDRoadCandidate candidate{.vehicle = RustVehicle(r), .state = RoadStateOf(r), .first = RustVehicle(first), .first_state = RoadStateOf(first),
-			.index = r->index.base(), .x = RustVehicleX(r), .y = RustVehicleY(r), .z = RustVehicleZ(r), .first_speed = RustVehicleSpeed(first), .direction = RustVehicleDirection(r)};
-		return visit(context, &candidate);
-	};
-	if (wormhole) {
-		for (const Vehicle *u : RustVehiclesOnTile(front->tile)) if (!offer(u)) return;
-		for (const Vehicle *u : RustVehiclesOnTile(GetOtherTunnelBridgeEnd(front->tile))) if (!offer(u)) return;
-	} else {
-		for (const Vehicle *u : VehiclesNearTileXY(x, y, 8)) if (!offer(u)) return;
-	}
-}
-static void OPENTTD_VEHICLE_CALL RoadSvcVisitTrains(OpenTTDVehicle *v, OpenTTDRoadTrainVisitor visit, void *context) noexcept
-{
-	const RoadVehicle *front = RoadOf(v);
-	for (const Vehicle *t : VehiclesNearTileXY(RustVehicleX(front), RustVehicleY(front), 4)) {
-		if (t->type != VEH_TRAIN) continue;
-		int32_t z = RustVehicleZ(t);
-		if (!visit(context, &z)) return;
-	}
-}
-static void OPENTTD_VEHICLE_CALL RoadSvcVisitTile(uint32_t tile, OpenTTDRoadTileVisitor visit, void *context) noexcept
-{
-	for (const Vehicle *u : RustVehiclesOnTile(TileIndex(tile))) {
-		if (u->type != VEH_ROAD) continue;
-		OpenTTDRoadTileVehicle item{.vehicle = RustVehicle(u), .first = RustVehicle(RustVehicleFirst(u))};
-		if (!visit(context, &item)) return;
-	}
+	const Vehicle *u = VehicleOf(vehicle);
+	if (u->type != VEH_ROAD || RustVehicleFirst(u) == VehicleOf(probe)) return false;
+	const RoadVehicle *r = RoadVehicle::From(u);
+	const RoadVehicle *first = RustVehicleFirst(r);
+	*out = {.vehicle = vehicle, .state = RoadStateOf(r), .first = RustVehicle(first), .first_state = RoadStateOf(first),
+		.index = r->index.base(), .x = RustVehicleX(r), .y = RustVehicleY(r), .z = RustVehicleZ(r), .first_speed = RustVehicleSpeed(first), .direction = RustVehicleDirection(r)};
+	return true;
 }
 
 static bool OPENTTD_VEHICLE_CALL RoadSvcHasRoad(OpenTTDVehicle *v, uint32_t tile) noexcept { return HasTileAnyRoadType(TileIndex(tile), RoadOf(v)->compatible_roadtypes); }
@@ -217,7 +193,6 @@ static void OPENTTD_VEHICLE_CALL RoadSvcDepotExit(OpenTTDVehicle *v, int32_t x, 
 	u->vehstatus.Reset(VehState::Hidden);
 	u->x_pos = x;
 	u->y_pos = y;
-	RustVehicleUpdatePosition(u);
 }
 static void OPENTTD_VEHICLE_CALL RoadSvcDepotExitDirty(OpenTTDVehicle *v) noexcept
 {
@@ -313,9 +288,7 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.link = RoadSvcLink,
 	.link_tile = RoadSvcLinkTile,
 	.enter_tile = RoadSvcEnterTile,
-	.visit_close = RoadSvcVisitClose,
-	.visit_trains = RoadSvcVisitTrains,
-	.visit_tile = RoadSvcVisitTile,
+	.candidate = RoadSvcCandidate,
 	.has_road = RoadSvcHasRoad,
 	.track_status = RoadSvcTrackStatus,
 	.any_road_bits = RoadSvcAnyRoadBits,

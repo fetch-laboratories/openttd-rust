@@ -110,10 +110,6 @@ struct OpenTTDRoadCandidate {
 	uint16_t first_speed;
 	uint8_t direction;
 };
-struct OpenTTDRoadTileVehicle {
-	OpenTTDVehicle *vehicle;
-	OpenTTDVehicle *first;
-};
 struct OpenTTDRoadPartRead {
 	OpenTTDVehicle *next;
 	OpenTTDRoadState *next_state;
@@ -179,10 +175,8 @@ struct OpenTTDRoadTrackdirRead {
 	uint8_t direction;
 	uint8_t status;
 };
-using OpenTTDRoadCloseVisitor = bool (OPENTTD_VEHICLE_CALL *)(void *, const OpenTTDRoadCandidate *);
-using OpenTTDRoadTrainVisitor = bool (OPENTTD_VEHICLE_CALL *)(void *, const int32_t *);
-using OpenTTDRoadTileVisitor = bool (OPENTTD_VEHICLE_CALL *)(void *, const OpenTTDRoadTileVehicle *);
 struct OpenTTDRoadLeaves {
+	bool (OPENTTD_VEHICLE_CALL *candidate)(OpenTTDVehicle *, OpenTTDVehicle *, OpenTTDRoadCandidate *) noexcept OPENTTD_SERVICE_DEFAULT(candidate);
 	const OpenTTDVehicleServices *vehicle;
 	const OpenTTDGroundServices *ground;
 	const OpenTTDSharedServices *shared;
@@ -199,9 +193,6 @@ struct OpenTTDRoadLeaves {
 	OpenTTDRoadLink (OPENTTD_VEHICLE_CALL *link)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(link);
 	OpenTTDRoadLinkTile (OPENTTD_VEHICLE_CALL *link_tile)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(link_tile);
 	OpenTTDRoadEntered (OPENTTD_VEHICLE_CALL *enter_tile)(OpenTTDVehicle *, uint32_t, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(enter_tile);
-	void (OPENTTD_VEHICLE_CALL *visit_close)(OpenTTDVehicle *, int32_t, int32_t, bool, OpenTTDRoadCloseVisitor, void *) noexcept OPENTTD_SERVICE_DEFAULT(visit_close);
-	void (OPENTTD_VEHICLE_CALL *visit_trains)(OpenTTDVehicle *, OpenTTDRoadTrainVisitor, void *) noexcept OPENTTD_SERVICE_DEFAULT(visit_trains);
-	void (OPENTTD_VEHICLE_CALL *visit_tile)(uint32_t, OpenTTDRoadTileVisitor, void *) noexcept OPENTTD_SERVICE_DEFAULT(visit_tile);
 	bool (OPENTTD_VEHICLE_CALL *has_road)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_road);
 	uint32_t (OPENTTD_VEHICLE_CALL *track_status)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(track_status);
 	uint8_t (OPENTTD_VEHICLE_CALL *any_road_bits)(OpenTTDVehicle *, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(any_road_bits);

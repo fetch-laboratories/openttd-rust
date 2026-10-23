@@ -22,6 +22,7 @@
 
 inline uint16_t RustVehicleCallback(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, std::span<int32_t> registers = {}) noexcept { return GetVehicleCallback(callback, param1, param2, engine, v, registers); }
 uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept;
+OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept;
 bool RustTrainIsEngine(const Vehicle *v) noexcept;
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
@@ -41,7 +42,6 @@ inline Vehicle *VehicleOf(OpenTTDVehicle *v) noexcept { return reinterpret_cast<
 inline std::optional<bool> RustVehicleBuildProbability(Vehicle *v, EngineID engine, BuildProbabilityType type) noexcept { return TestVehicleBuildProbability(v, engine, type); }
 inline bool RustVehicleHasReverseProbability(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); return RustVehicleBuildProbability(v, v->engine_type, BuildProbabilityType::Reversed).has_value(); }
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine; }
-template <class T> inline void RustVehicleUpdatePosition(T *v) noexcept { v->UpdatePosition(); }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
 inline uint16_t RustVehicleLastStationVisited(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_station_visited.base(); }
 inline uint16_t RustVehicleLoadUnloadTicks(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->load_unload_ticks; }
@@ -62,14 +62,10 @@ inline void RustVehicleInvalidateView(VehicleID id) noexcept { InvalidateWindowD
 inline void RustVehicleVisitInvalidateView(OpenTTDVehicle *v) noexcept { RustVehicleInvalidateView(VehicleOf(v)->index); }
 inline void RustVehicleSetTripOccupancy(OpenTTDVehicle *v, uint8_t occupancy) noexcept { VehicleOf(v)->trip_occupancy = occupancy; }
 inline bool RustVehicleCanAllocate(size_t count) noexcept { return Vehicle::CanAllocateItem(count); }
-inline VehiclesOnTile RustVehiclesOnTile(TileIndex tile) noexcept { return VehiclesOnTile(tile); }
 
 /** Callback may reenter Rust but must preserve the current native shell. Advance
  * after it returns, matching the original live hash traversal. No allocation. */
-inline void RustVisitVehiclesOnTile(uint32_t tile, void *context, void (*visit)(void *, OpenTTDVehicle *)) noexcept
-{
-	for (Vehicle *v : RustVehiclesOnTile(TileIndex(tile))) visit(context, RustVehicle(v));
-}
+
 
 /** Shared ascending vehicle pool traversal for lifecycle and fleet ports. */
 inline OpenTTDVehicle *RustNextVehicle(uint32_t from) noexcept
@@ -218,13 +214,6 @@ inline uint8_t RustEngineGRFVersion(const Engine *engine) noexcept
 	return grf == nullptr ? uint8_t(0) : grf->grf_version;
 }
 
-inline void OPENTTD_VEHICLE_CALL GroundSvcMovePosition(OpenTTDVehicle *v, int32_t x, int32_t y) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	u->x_pos = x;
-	u->y_pos = y;
-	RustVehicleUpdatePosition(u);
-}
 template <class T>
 inline OpenTTDGroundViewportNext OPENTTD_VEHICLE_CALL GroundSvcUpdateViewportThenNext(OpenTTDVehicle *part, OpenTTDVehicle *front) noexcept
 {
@@ -290,7 +279,6 @@ template <class T>
 inline const OpenTTDGroundServices _rust_ground_services{
 	.physics = &GetRustGroundPhysicsServices(),
 	.cache_begin = GroundSvcCacheBegin<T>,
-	.move_position = GroundSvcMovePosition,
 	.update_viewport_then_next = GroundSvcUpdateViewportThenNext<T>,
 	.turn = GroundSvcTurn<T>,
 	.go_to_depot_service = GroundSvcGoToDepotService<T>,

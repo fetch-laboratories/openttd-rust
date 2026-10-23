@@ -456,11 +456,6 @@ static uint64_t TrainPlatformLength(OpenTTDTrainHandle, uint16_t a, uint32_t b) 
 {
 	return Station::Get(StationID(a))->GetPlatformLength(TileIndex(b));
 }
-static void TrainPosition(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	RustVehicleUpdatePosition(v);
-}
 static uint64_t TrainPowWagPower(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -728,21 +723,6 @@ static void TrainWriteVisitType(OpenTTDTrainHandle, uint16_t a) noexcept
 {
 	Station::Get(StationID(a))->had_vehicle_of_type |= HVOT_TRAIN;
 }
-static uint8_t TrainVisitTile(uint32_t tile, void *context, uint8_t (*visit)(void *, OpenTTDTrainHandle)) noexcept
-{
-	for (const Vehicle *v : RustVehiclesOnTile(TileIndex(tile))) {
-		if (v->type == VEH_TRAIN && visit(context, TrainHandle(Train::From(v))) != 0) return 1;
-	}
-	return 0;
-}
-static uint8_t TrainVisitNear(int32_t x, int32_t y, void *context, uint8_t (*visit)(void *, OpenTTDTrainHandle)) noexcept
-{
-	for (const Vehicle *v : VehiclesNearTileXY(x, y, 7)) {
-		if (v->type == VEH_TRAIN && visit(context, TrainHandle(Train::From(v))) != 0) return 1;
-	}
-	return 0;
-}
-
 static OpenTTDTrainHandle TrainReadFirst(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);

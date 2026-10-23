@@ -36,13 +36,24 @@ pub struct Services {
     pub random_bits: extern "C" fn(*mut (), u16),
     pub flip_image: extern "C" fn(*mut ()),
     pub reverse: extern "C" fn(*mut (), u16) -> Probability,
-    pub position: extern "C" fn(*mut ()),
     pub available_cargo: extern "C" fn(u16, bool) -> u64,
     pub warning: extern "C" fn(*const OpenTTDEngine),
     pub has_articulated: extern "C" fn(*mut ()) -> bool,
     pub next_articulated: extern "C" fn(*mut ()) -> *mut (),
     pub max_parts: u32,
     pub all_cargo: u64,
+}
+impl Services {
+    /// Caller retains the live native shell through this synchronous update.
+    pub(crate) unsafe fn position(&self, v: *mut ()) {
+        unsafe {
+            crate::vehicle::occupancy::update(
+                self.refit.common.vehicles,
+                crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(v.cast())),
+                false,
+            );
+        }
+    }
 }
 /// # Safety
 /// A live head and immutable native specification/pool services. Every short
@@ -127,7 +138,9 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
                 (r.train_handle)(v.cast()).set_flag(crate::train::FLIPPED, probability.value);
             }
         }
-        (s.position)(v);
+        unsafe {
+            s.position(v);
+        }
         previous = v;
     }
 }
@@ -212,7 +225,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleArticulatedServices" ["probe"] => Services {
         refit, default_cargo, capacity, pool_available, has_callback, next_part, prepare_previous,
         new_train, new_road, road_length, copy_roadtype, train_info, road_info, set_part, mark_train,
-        mark_road, copy_common, random_bits, flip_image, reverse, position, available_cargo, warning,
+        mark_road, copy_common, random_bits, flip_image, reverse, available_cargo, warning,
         has_articulated, next_articulated, max_parts, all_cargo,
     };
 }

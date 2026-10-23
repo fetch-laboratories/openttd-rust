@@ -44,7 +44,6 @@ use crate::vehicle::{
     VEHICLE_LENGTH, VETS_CANNOT_ENTER, VETS_ENTERED_WORMHOLE, VS_CRASHED, VS_HIDDEN, VS_STOPPED,
     VehicleRef, VehicleServices, YEAR_TICKS, advance_distance,
 };
-use std::ffi::c_void;
 use std::ptr::NonNull;
 
 const WORMHOLE: u8 = 255;
@@ -310,13 +309,6 @@ pub struct Candidate {
     pub direction: u8,
 }
 
-/// Road vehicle on a tile checked for overtaking.
-#[repr(C)]
-pub struct TileVehicle {
-    pub vehicle: VehicleRef,
-    pub first: VehicleRef,
-}
-
 /// Generic part read: link, tile, height and road/tram type.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -425,13 +417,10 @@ pub struct TrackdirRead {
     pub status: u8,
 }
 
-pub type CloseVisitor = extern "C" fn(*mut c_void, *const Candidate) -> bool;
-pub type TrainVisitor = extern "C" fn(*mut c_void, *const i32) -> bool;
-pub type TileVisitor = extern "C" fn(*mut c_void, *const TileVehicle) -> bool;
-
 /// Road-specific services; the shared tables are borrowed through pointers.
 #[repr(C)]
 pub struct Leaves {
+    pub candidate: unsafe extern "C" fn(VehicleRef, VehicleRef, *mut Candidate) -> bool,
     pub vehicle: *const VehicleServices,
     pub ground: *const GroundServices,
     pub shared: *const Services,
@@ -449,9 +438,6 @@ pub struct Leaves {
     pub link: extern "C" fn(VehicleRef) -> Link,
     pub link_tile: extern "C" fn(VehicleRef) -> LinkTile,
     pub enter_tile: extern "C" fn(VehicleRef, u32, i32, i32) -> Entered,
-    pub visit_close: extern "C" fn(VehicleRef, i32, i32, bool, CloseVisitor, *mut c_void),
-    pub visit_trains: extern "C" fn(VehicleRef, TrainVisitor, *mut c_void),
-    pub visit_tile: extern "C" fn(u32, TileVisitor, *mut c_void),
     pub has_road: extern "C" fn(VehicleRef, u32) -> bool,
     pub track_status: extern "C" fn(VehicleRef, u32) -> u32,
     pub any_road_bits: extern "C" fn(VehicleRef, u32, bool) -> u8,
@@ -554,22 +540,6 @@ impl Part {
 fn state_of(s: *mut State) -> u8 {
     // SAFETY: Live owner supplied by a native traversal for this dispatch only.
     unsafe { (*s).scalars[STATE] as u8 }
-}
-
-/// Synchronously visit native candidates with a Rust closure.
-fn visit<T, F: FnMut(&T) -> bool>(
-    call: impl FnOnce(extern "C" fn(*mut c_void, *const T) -> bool, *mut c_void),
-    mut visitor: F,
-) {
-    extern "C" fn dispatch<T, F: FnMut(&T) -> bool>(context: *mut c_void, item: *const T) -> bool {
-        // SAFETY: Native traversal calls synchronously and once at a time; item is
-        // borrowed for this dispatch only.
-        {
-            crate::witness::hit(crate::witness::ROAD_VISITORS);
-            unsafe { (*context.cast::<F>())(&*item) }
-        }
-    }
-    call(dispatch::<T, F>, (&raw mut visitor).cast());
 }
 
 /// Fields consumed together by `CanBuildTramTrackOnTile`.
@@ -754,12 +724,17 @@ impl Game<'_> {
         let mut best: Option<Candidate> = None;
         let mut best_diff = u32::MAX;
         let wormhole = v.state() == WORMHOLE;
-        visit(
-            |dispatch, context| {
-                service!(self.l.visit_close)(v.v, x, y, wormhole, dispatch, context);
-            },
-            |u: &Candidate| {
-                // FindClosestBlockingRoadVeh; C++ already skipped other types and our consist.
+        let mut offer = |vehicle| {
+            let mut out = std::mem::MaybeUninit::<Candidate>::uninit();
+            // SAFETY: Live shell; successful admission initializes the narrow read.
+            if !unsafe { (self.l.candidate)(vehicle, v.v, out.as_mut_ptr()) } {
+                return false;
+            }
+            let candidate = unsafe { out.assume_init() };
+            let u = &candidate;
+            crate::witness::hit(crate::witness::ROAD_VISITORS);
+            let mut consider = || {
+                // FindClosestBlockingRoadVeh after type/consist admission.
                 if state_of(u.state) == DEPOT {
                     return true;
                 }
@@ -789,8 +764,18 @@ impl Game<'_> {
                     best_diff = diff;
                 }
                 true
-            },
-        );
+            };
+            consider();
+            false
+        };
+        if wormhole {
+            let tile = (self.vs.tile)(v.v);
+            self.vs.any_on_tile(tile, &mut offer);
+            self.vs
+                .any_on_tile(service!(self.ss.other_tunnel_end)(tile), &mut offer);
+        } else {
+            self.vs.any_near(x, y, 8, offer);
+        }
         if best_diff == u32::MAX {
             v.set(BLOCKED, 0);
             return None;
@@ -816,15 +801,12 @@ impl Game<'_> {
         if trackdirs & (1 << trackdir) == 0 || trackbits & !3 != 0 || red != 0 {
             return true;
         }
-        let mut blocked = false;
-        visit(
-            |dispatch, context| service!(self.l.visit_tile)(tile, dispatch, context),
-            |w: &TileVehicle| {
-                blocked = w.first == w.vehicle && w.vehicle != u && w.vehicle != v.v;
-                !blocked
-            },
-        );
-        blocked
+        self.vs.any_on_tile(tile, |w| {
+            (self.vs.vehicle_type)(w) == crate::vehicle::VehicleType::ROAD.0
+                && (self.gs.physics.first)(w) == w
+                && w != u
+                && w != v.v
+        })
     }
     /// `RoadVehCheckOvertake(v, u)`; pure predicates are evaluated cheapest first.
     fn overtake(&self, v: Part, s: &Step, u: Part) {
@@ -966,14 +948,11 @@ impl Game<'_> {
         loop {
             if part.state() != WORMHOLE && u.crossing {
                 let z = u.z;
-                let mut hit = false;
-                visit(
-                    |dispatch, context| service!(self.l.visit_trains)(v.v, dispatch, context),
-                    |tz: &i32| {
-                        hit = tz.wrapping_sub(z).wrapping_abs() <= 6;
-                        !hit
-                    },
-                );
+                let xy = (self.vs.xy)(v.v);
+                let hit = self.vs.any_near(xy.x, xy.y, 4, |t| {
+                    (self.vs.vehicle_type)(t) == crate::vehicle::VehicleType::TRAIN.0
+                        && (self.vs.z)(t).wrapping_sub(z).wrapping_abs() <= 6
+                });
                 if hit {
                     let victims = self.crash(v, false);
                     service!(self.l.crash_news)(v.v, victims);
@@ -1231,6 +1210,10 @@ impl Game<'_> {
         v.set(STATE, u16::from(tdir));
         v.set(FRAME, 6);
         service!(self.l.depot_exit)(v.v, x, y);
+        // SAFETY: The newly visible shell survives depot exit.
+        unsafe {
+            crate::vehicle::occupancy::update(self.vs, v.v, false);
+        }
         crate::ground_vehicle::inclination(self.gs.physics, v.v, true, true);
         service!(self.l.depot_exit_dirty)(v.v);
         true
@@ -1324,7 +1307,12 @@ impl Game<'_> {
                     return true;
                 }
             }
-            let status = service!(self.vs.move_then_status)(v.v, gp.x, gp.y);
+            service!(self.vs.write_xy)(v.v, gp.x, gp.y);
+            // SAFETY: The live road shell survives the synchronous index update.
+            unsafe {
+                crate::vehicle::occupancy::update(self.vs, v.v, false);
+            }
+            let status = service!(self.vs.status)(v.v);
             s.x = gp.x;
             s.y = gp.y;
             if status & VS_HIDDEN == 0 {
@@ -2232,10 +2220,6 @@ crate::abi::layouts! {
         first_speed,
         direction,
     };
-    "OpenTTDRoadTileVehicle" ["probe"] => TileVehicle {
-        vehicle,
-        first,
-    };
     "OpenTTDRoadPartRead" ["probe"] => PartRead {
         next,
         next_state,
@@ -2326,9 +2310,7 @@ crate::abi::layouts! {
         link,
         link_tile,
         enter_tile,
-        visit_close,
-        visit_trains,
-        visit_tile,
+        candidate,
         has_road,
         track_status,
         any_road_bits,

@@ -26,7 +26,21 @@ enum Direction : uint8_t;
  * Each service is one typed noexcept function defined once; it resolves its
  * vehicle once and reads only the fields it returns. Rust holds no reference into
  * a vehicle or the map across a service call; an escaping exception terminates. */
+struct OpenTTDTrainState;
+struct OpenTTDTrainHandle { void *shell; OpenTTDTrainState *owner; };
 struct OpenTTDVehicle;
+/** Canonical stable NOSAVE links; only the Rust occupancy owner mutates them. */
+struct OpenTTDVehicleTileLinks {
+	OpenTTDVehicle *next = nullptr;
+	OpenTTDVehicle **prev = nullptr;
+	OpenTTDVehicle **current = nullptr;
+};
+struct OpenTTDVehicleOnTile { uint32_t tile; OpenTTDVehicle *current; };
+struct OpenTTDVehicleNear {
+	int32_t left, top, right, bottom;
+	uint32_t hxmin, hxmax, hymin, hymax, hx, hy;
+	OpenTTDVehicle *current;
+};
 /** Captured immutable engine context, valid across synchronous vehicle callbacks. */
 struct OpenTTDEngine;
 struct OpenTTDEngineForLength {
@@ -87,7 +101,10 @@ struct OpenTTDVehicleAltitudeInputs { uint16_t max_speed; uint8_t direction; };
 struct OpenTTDVehicleMaintenanceServices;
 struct OpenTTDVehicleVisits;
 struct OpenTTDVehicleServices {
-	void (*vehicles_on_tile)(uint32_t, void *, void (*)(void *, OpenTTDVehicle *)) noexcept OPENTTD_SERVICE_DEFAULT(vehicles_on_tile);
+	OpenTTDVehicleTileLinks *(OPENTTD_VEHICLE_CALL *tile_links)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tile_links);
+	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
+	bool assertions;
+	OpenTTDTrainHandle (*train_handle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_handle);
 	void (OPENTTD_VEHICLE_CALL *write_counters)(OpenTTDVehicle *, uint8_t, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_counters);
 	bool (OPENTTD_VEHICLE_CALL *waiting_for_unbunching)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_for_unbunching);
 	void (OPENTTD_VEHICLE_CALL *leave_unbunching_depot)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(leave_unbunching_depot);
@@ -95,7 +112,7 @@ struct OpenTTDVehicleServices {
 	void (*enter_depot)(OpenTTDVehicle *, const OpenTTDVehicleVisits *) noexcept OPENTTD_SERVICE_DEFAULT(enter_depot);
 	void (OPENTTD_VEHICLE_CALL *pathfinding_result)(OpenTTDVehicle *, bool) noexcept OPENTTD_SERVICE_DEFAULT(pathfinding_result);
 	OpenTTDVehicleNewPosition (OPENTTD_VEHICLE_CALL *new_position)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(new_position);
-	uint8_t (OPENTTD_VEHICLE_CALL *move_then_status)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(move_then_status);
+	void (OPENTTD_VEHICLE_CALL *write_xy)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_xy);
 	void (OPENTTD_VEHICLE_CALL *base_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
 	int32_t (OPENTTD_VEHICLE_CALL *property)(OpenTTDVehicle *, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(property);
 	uint16_t (OPENTTD_VEHICLE_CALL *callback)(OpenTTDVehicle *, CallbackID) noexcept OPENTTD_SERVICE_DEFAULT(callback);
@@ -185,7 +202,6 @@ struct OpenTTDGroundPhysicsServices;
 struct OpenTTDGroundServices {
 	const OpenTTDGroundPhysicsServices *physics;
 	void (OPENTTD_VEHICLE_CALL *cache_begin)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cache_begin);
-	void (OPENTTD_VEHICLE_CALL *move_position)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(move_position);
 	OpenTTDGroundViewportNext (OPENTTD_VEHICLE_CALL *update_viewport_then_next)(OpenTTDVehicle *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_viewport_then_next);
 	void (OPENTTD_VEHICLE_CALL *turn)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(turn);
 	void (OPENTTD_VEHICLE_CALL *go_to_depot_service)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(go_to_depot_service);
@@ -257,6 +273,26 @@ struct OpenTTDVehicleSchedulerTables {
 	OpenTTDCommandCost *refit_temporary;
 };
 const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcept;
+struct OpenTTDCommandCostServices;
+struct OpenTTDCommandCost;
+struct OpenTTDOccupancyCommands {
+	const OpenTTDVehicleServices *vehicles;
+	const OpenTTDSharedServices *shared;
+	const OpenTTDCommandCostServices *costs;
+	uint32_t vehicle_error;
+};
+const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept;
+extern "C" {
+void openttd_rust_occupancy_ground(const OpenTTDOccupancyCommands *, OpenTTDCommandCost *, uint32_t);
+void openttd_rust_occupancy_train(const OpenTTDOccupancyCommands *, OpenTTDCommandCost *, uint32_t, uint8_t);
+void openttd_rust_occupancy_wormhole(const OpenTTDOccupancyCommands *, OpenTTDCommandCost *, uint32_t, uint32_t, const OpenTTDVehicle *);
+void openttd_rust_occupancy_update(const OpenTTDVehicleServices *, OpenTTDVehicle *, bool);
+void openttd_rust_occupancy_reset(const OpenTTDVehicleSchedulerServices *);
+OpenTTDVehicleOnTile openttd_rust_occupancy_on_tile(const OpenTTDVehicleServices *, uint32_t);
+void openttd_rust_occupancy_on_advance(const OpenTTDVehicleServices *, OpenTTDVehicleOnTile *);
+OpenTTDVehicleNear openttd_rust_occupancy_near(const OpenTTDVehicleServices *, int32_t, int32_t, uint32_t);
+void openttd_rust_occupancy_near_advance(const OpenTTDVehicleServices *, OpenTTDVehicleNear *);
+}
 extern "C" {
 OpenTTDVehicle *openttd_rust_vehicle_cursor_next(const OpenTTDVehicleSchedulerServices *, OpenTTDVehiclePoolCursor *, size_t *);
 void openttd_rust_vehicle_calendar_day(const OpenTTDVehicleSchedulerTables *, bool, size_t);

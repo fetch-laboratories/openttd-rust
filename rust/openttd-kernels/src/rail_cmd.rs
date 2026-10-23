@@ -38,6 +38,7 @@ use crate::slope_func::{
 };
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{INVALID_TILE, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
+use crate::track_func::tracks_overlap;
 use crate::track_type::{TRACK_BIT_DEPOT as BIT_DEPOT, TRACK_BIT_X as BIT_X, TRACK_BIT_Y as BIT_Y};
 use crate::witness as w;
 
@@ -254,8 +255,8 @@ const BIT_UPPER: u8 = 4;
 const BIT_LOWER: u8 = 8;
 const BIT_LEFT: u8 = 16;
 const BIT_RIGHT: u8 = 32;
-const BIT_HORZ: u8 = 12;
-const BIT_VERT: u8 = 48;
+#[cfg(test)]
+use crate::track_type::{TRACK_BIT_HORZ as BIT_HORZ, TRACK_BIT_VERT as BIT_VERT};
 const INVALID_TRACKDIR: u8 = 0xFF;
 
 /// `VALID_LEVEL_CROSSING_SLOPES`.
@@ -335,12 +336,6 @@ const TRACKDIR_EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
 /// `_exitdir_reaches_trackdirs`.
 const EXIT_REACHES: [u16; 4] = [0x1009, 0x0016, 0x0520, 0x2a00];
 
-fn tracks_overlap(bits: u8) -> bool {
-    if bits == 0 || bits & bits.wrapping_sub(1) == 0 {
-        return false;
-    }
-    bits != BIT_HORZ && bits != BIT_VERT
-}
 /// Infrastructure pieces of a plain rail tile: squared when tracks overlap.
 fn pieces(bits: u8) -> u32 {
     let n = bits.count_ones();
@@ -535,7 +530,7 @@ impl<'a> Ctx<'a> {
                 }
                 if ret.ok() {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                    unsafe { (self.command.no_train)(ret.0, tile, trackbit) };
+                    unsafe { self.command.no_train(ret.0, tile, trackbit) };
                 }
                 if !ret.ok() {
                     return cost.take(ret);
@@ -605,7 +600,7 @@ impl<'a> Ctx<'a> {
                     }
                 }
                 // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                unsafe { (self.command.no_vehicle)(ret.0, tile) };
+                unsafe { self.command.no_vehicle(ret.0, tile) };
                 if !ret.ok() {
                     return cost.take(ret);
                 }
@@ -803,7 +798,7 @@ impl<'a> Ctx<'a> {
                 }
                 if flags & DoCommandFlag::BANKRUPT == 0 {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                    unsafe { (self.command.no_vehicle)(ret.0, tile) };
+                    unsafe { self.command.no_vehicle(ret.0, tile) };
                     if !ret.ok() {
                         return cost.take(ret);
                     }
@@ -849,7 +844,7 @@ impl<'a> Ctx<'a> {
                     }
                 }
                 // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                unsafe { (self.command.no_train)(ret.0, tile, trackbit) };
+                unsafe { self.command.no_train(ret.0, tile, trackbit) };
                 if !ret.ok() {
                     return cost.take(ret);
                 }
@@ -1086,7 +1081,7 @@ impl<'a> Ctx<'a> {
                 return cost.zero();
             }
             // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-            unsafe { (self.command.no_vehicle)(ret.0, tile) };
+            unsafe { self.command.no_vehicle(ret.0, tile) };
             if !ret.ok() {
                 return cost.take(ret);
             }
@@ -1270,7 +1265,7 @@ impl<'a> Ctx<'a> {
             let mask = u32::from(self.present_signals(tile) & on_track);
             let reserved = (self.rail.rail_reservation)(tile).0 >> track & 1 != 0 && {
                 // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                unsafe { (self.command.no_vehicle)(ret.0, tile) };
+                unsafe { self.command.no_vehicle(ret.0, tile) };
                 ret.ok()
             };
             let states = (self.rail.signal_states)(tile);
@@ -1765,10 +1760,10 @@ impl<'a> Ctx<'a> {
             if !(self.s.compatible_rail)(kind, totype) {
                 if (self.shared.is_plain_rail)(tile) {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                    unsafe { (self.command.no_train)(ret.0, tile, self.tracks(tile)) };
+                    unsafe { self.command.no_train(ret.0, tile, self.tracks(tile)) };
                 } else {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                    unsafe { (self.command.no_vehicle)(ret.0, tile) };
+                    unsafe { self.command.no_vehicle(ret.0, tile) };
                 }
                 if !ret.ok() {
                     error.take(ret);
@@ -1839,7 +1834,10 @@ impl<'a> Ctx<'a> {
                 }
                 if !(self.s.compatible_rail)((self.rail.rail_type)(tile).0, totype) {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                    unsafe { (self.command.wormhole_free)(ret.0, tile, endtile, std::ptr::null()) };
+                    unsafe {
+                        self.command
+                            .wormhole_free(ret.0, tile, endtile, std::ptr::null());
+                    };
                     if !ret.ok() {
                         error.take(ret);
                         return false;
@@ -1920,7 +1918,7 @@ impl<'a> Ctx<'a> {
             }
         }
         // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-        unsafe { (self.command.no_vehicle)(cost.0, tile) };
+        unsafe { self.command.no_vehicle(cost.0, tile) };
         if !cost.ok() {
             return;
         }
@@ -1982,7 +1980,7 @@ impl<'a> Ctx<'a> {
                     && (self.shared.company_valid)(self.current())
                 {
                     // SAFETY: The entry supplies live native cost slots and source-valid map/train inputs.
-                    unsafe { (self.command.no_vehicle)(ret.0, tile) };
+                    unsafe { self.command.no_vehicle(ret.0, tile) };
                     if !ret.ok() {
                         return cost.take(ret);
                     }

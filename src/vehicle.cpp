@@ -66,6 +66,7 @@
 #ifdef WITH_RUST
 #include "rust/vehicle_maintenance_ffi.h"
 #include "rust/vehicle_services.h"
+#include "rust/command_cost_services.h"
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/services_station.h"
 #include "rust/services_linkgraph.h"
@@ -539,6 +540,7 @@ Vehicle::Vehicle(VehicleType type)
 	this->last_loading_station = StationID::Invalid();
 }
 
+#ifndef WITH_RUST
 /* Size of the hash, 6 = 64 x 64, 7 = 128 x 128. Larger sizes will (in theory) reduce hash
  * lookup times at the expense of memory usage. */
 constexpr uint TILE_HASH_BITS = 7;
@@ -678,6 +680,13 @@ void VehiclesOnTile::Iterator::SkipFalseMatches()
 	while (this->current != nullptr && this->current->tile != this->tile) this->Increment();
 }
 
+#else
+VehiclesOnTile::Iterator::Iterator(TileIndex tile) : cursor(openttd_rust_occupancy_on_tile(&GetRustVehicleServices(), tile.base())) {}
+void VehiclesOnTile::Iterator::Increment() { openttd_rust_occupancy_on_advance(&GetRustVehicleServices(), &this->cursor); }
+VehiclesNearTileXY::Iterator::Iterator(int32_t x, int32_t y, uint max_dist) : cursor(openttd_rust_occupancy_near(&GetRustVehicleServices(), x, y, max_dist)) {}
+void VehiclesNearTileXY::Iterator::Increment() { openttd_rust_occupancy_near_advance(&GetRustVehicleServices(), &this->cursor); }
+#endif
+
 /**
  * Ensure there is no vehicle at the ground at the given position.
  * @param tile Position to examine.
@@ -685,6 +694,11 @@ void VehiclesOnTile::Iterator::SkipFalseMatches()
  */
 CommandCost EnsureNoVehicleOnGround(TileIndex tile)
 {
+#ifdef WITH_RUST
+	CommandCost out;
+	openttd_rust_occupancy_ground(GetRustOccupancyCommands(), RustCommandCost(&out), tile.base());
+	return out;
+#else
 	int z = GetTileMaxPixelZ(tile);
 
 	/* Value v is not safe in MP games, however, it is used to generate a local
@@ -698,6 +712,7 @@ CommandCost EnsureNoVehicleOnGround(TileIndex tile)
 		return CommandCost(STR_ERROR_TRAIN_IN_THE_WAY + v->type);
 	}
 	return CommandCost();
+#endif
 }
 
 /**
@@ -709,6 +724,11 @@ CommandCost EnsureNoVehicleOnGround(TileIndex tile)
  */
 CommandCost TunnelBridgeIsFree(TileIndex tile, TileIndex endtile, const Vehicle *ignore)
 {
+#ifdef WITH_RUST
+	CommandCost out;
+	openttd_rust_occupancy_wormhole(GetRustOccupancyCommands(), RustCommandCost(&out), tile.base(), endtile.base(), RustVehicle(ignore));
+	return out;
+#else
 	for (TileIndex t : {tile, endtile}) {
 		/* Value v is not safe in MP games, however, it is used to generate a local
 		 * error message only (which may be different for different machines).
@@ -721,6 +741,7 @@ CommandCost TunnelBridgeIsFree(TileIndex tile, TileIndex endtile, const Vehicle 
 		}
 	}
 	return CommandCost();
+#endif
 }
 
 /**
@@ -733,6 +754,11 @@ CommandCost TunnelBridgeIsFree(TileIndex tile, TileIndex endtile, const Vehicle 
  */
 CommandCost EnsureNoTrainOnTrackBits(TileIndex tile, TrackBits track_bits)
 {
+#ifdef WITH_RUST
+	CommandCost out;
+	openttd_rust_occupancy_train(GetRustOccupancyCommands(), RustCommandCost(&out), tile.base(), track_bits);
+	return out;
+#else
 	/* Value v is not safe in MP games, however, it is used to generate a local
 	 * error message only (which may be different for different machines).
 	 * Such a message does not affect MP synchronisation.
@@ -746,10 +772,14 @@ CommandCost EnsureNoTrainOnTrackBits(TileIndex tile, TrackBits track_bits)
 		return CommandCost(STR_ERROR_TRAIN_IN_THE_WAY + v->type);
 	}
 	return CommandCost();
+#endif
 }
 
 static void UpdateVehicleTileHash(Vehicle *v, bool remove)
 {
+#ifdef WITH_RUST
+	openttd_rust_occupancy_update(&GetRustVehicleServices(), RustVehicle(v), remove);
+#else
 	Vehicle **old_hash = v->hash_tile_current;
 	Vehicle **new_hash;
 
@@ -777,6 +807,7 @@ static void UpdateVehicleTileHash(Vehicle *v, bool remove)
 
 	/* Remember current hash position */
 	v->hash_tile_current = new_hash;
+#endif
 }
 
 static std::array<Vehicle *, 1 << (GEN_HASHX_BITS + GEN_HASHY_BITS)> _vehicle_viewport_hash{};
@@ -807,9 +838,13 @@ static void UpdateVehicleViewportHash(Vehicle *v, int x, int y, int old_x, int o
 
 void ResetVehicleHash()
 {
+#ifdef WITH_RUST
+	openttd_rust_occupancy_reset(&GetRustVehicleSchedulerServices());
+#else
 	for (Vehicle *v : Vehicle::Iterate()) { v->hash_tile_current = nullptr; }
-	_vehicle_viewport_hash.fill(nullptr);
 	_vehicle_tile_hash.fill(nullptr);
+#endif
+	_vehicle_viewport_hash.fill(nullptr);
 }
 
 void ResetVehicleColourMap()

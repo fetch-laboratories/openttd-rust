@@ -164,9 +164,9 @@ static OpenTTDAircraftVehicle OPENTTD_AIRCRAFT_CALL Aircraft_next_aircraft(uint3
 	return RustAircraftVehicle(nullptr);
 }
 
-static void OPENTTD_AIRCRAFT_CALL Aircraft_update_position(OpenTTDAircraftVehicle vehicle) noexcept
+static void OPENTTD_AIRCRAFT_CALL Aircraft_viewport(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustVehicleUpdatePosition(v); RustVehicleUpdateViewport(v, true, false);
+	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustVehicleUpdateViewport(v, true, false);
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_rotor_image(OpenTTDAircraftVehicle vehicle) noexcept
@@ -179,10 +179,6 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_copy_sprite(OpenTTDAircraftVehicle ve
 	VehicleOf(vehicle.handle)->sprite_cache.sprite_seq.CopyWithoutPalette(VehicleOf(source.handle)->sprite_cache.sprite_seq);
 }
 
-static void OPENTTD_AIRCRAFT_CALL Aircraft_position_viewport(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	VehicleOf(vehicle.handle)->UpdatePositionAndViewport();
-}
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_create_effect(OpenTTDAircraftVehicle vehicle, uint8_t kind, int32_t x, int32_t y, int32_t z) noexcept
 {
@@ -429,10 +425,9 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.nearest_depot_order = Aircraft_nearest_depot_order,
 	.part_of_orders = Aircraft_part_of_orders,
 	.next_aircraft = Aircraft_next_aircraft,
-	.update_position = Aircraft_update_position,
+	.viewport = Aircraft_viewport,
 	.rotor_image = Aircraft_rotor_image,
 	.copy_sprite = Aircraft_copy_sprite,
-	.position_viewport = Aircraft_position_viewport,
 	.create_effect = Aircraft_create_effect,
 	.truncate_cargo = Aircraft_truncate_cargo,
 	.crash_news = Aircraft_crash_news,

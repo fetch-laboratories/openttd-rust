@@ -9,6 +9,10 @@
 
 pub const TRACK_BIT_X: u8 = 1;
 pub const TRACK_BIT_Y: u8 = 2;
+/// `TRACK_BIT_HORZ`.
+pub const TRACK_BIT_HORZ: u8 = 12;
+/// `TRACK_BIT_VERT`.
+pub const TRACK_BIT_VERT: u8 = 48;
 pub const TRACK_BIT_WORMHOLE: u8 = 0x40;
 pub const TRACK_BIT_MASK: u16 = 0x3f;
 pub const TRACKDIR_BIT_MASK: u32 = 0x3f3f;

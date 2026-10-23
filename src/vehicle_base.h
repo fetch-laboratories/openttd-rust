@@ -11,6 +11,9 @@
 #define VEHICLE_BASE_H
 
 #include "sprite.h"
+#ifdef WITH_RUST
+#include "rust/vehicle_ffi.h"
+#endif
 #include "track_type.h"
 #include "command_type.h"
 #include "order_base.h"
@@ -249,9 +252,13 @@ public:
 	Vehicle *hash_viewport_next = nullptr; ///< NOSAVE: Next vehicle in the visual location hash.
 	Vehicle **hash_viewport_prev = nullptr; ///< NOSAVE: Previous vehicle in the visual location hash.
 
+#ifdef WITH_RUST
+	OpenTTDVehicleTileLinks tile_links; ///< NOSAVE: Canonical Rust tile-index links.
+#else
 	Vehicle *hash_tile_next = nullptr; ///< NOSAVE: Next vehicle in the tile location hash.
 	Vehicle **hash_tile_prev = nullptr; ///< NOSAVE: Previous vehicle in the tile location hash.
 	Vehicle **hash_tile_current = nullptr; ///< NOSAVE: Cache of the current hash chain.
+#endif
 
 	SpriteID colourmap{}; ///< NOSAVE: cached colour mapping
 

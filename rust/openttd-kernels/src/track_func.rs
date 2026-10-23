@@ -27,3 +27,12 @@ pub const fn trackdir_bits_to_track_bits(bits: u16) -> u8 {
 pub const fn track_status_to_track_bits(status: u32) -> u8 {
     trackdir_bits_to_track_bits(track_status_to_trackdir_bits(status))
 }
+
+/// `TracksOverlap`.
+pub fn tracks_overlap(bits: u8) -> bool {
+    use crate::track_type::{TRACK_BIT_HORZ, TRACK_BIT_VERT};
+    if bits == 0 || bits & bits.wrapping_sub(1) == 0 {
+        return false;
+    }
+    bits != TRACK_BIT_HORZ && bits != TRACK_BIT_VERT
+}

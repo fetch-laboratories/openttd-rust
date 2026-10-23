@@ -139,12 +139,8 @@ pub struct CommandServices {
     pub tile_ownership: unsafe extern "C" fn(*mut CommandCost, u32),
     /// Original `CheckOwnership`.
     pub ownership: unsafe extern "C" fn(*mut CommandCost, u8, u32),
-    /// Original `EnsureNoVehicleOnGround`.
-    pub no_vehicle: unsafe extern "C" fn(*mut CommandCost, u32),
-    /// Original `EnsureNoTrainOnTrackBits`.
-    pub no_train: unsafe extern "C" fn(*mut CommandCost, u32, u8),
-    /// Original `TunnelBridgeIsFree`, with the source optional ignored train.
-    pub wormhole_free: unsafe extern "C" fn(*mut CommandCost, u32, u32, *const Train),
+    /// Direct Rust occupancy owner, shared by every command.
+    pub occupancy: extern "C" fn() -> *const crate::vehicle::occupancy::Commands,
 }
 
 /// Opaque native town shell. Its address identifies the shell, not the Rust owner.
@@ -652,9 +648,7 @@ crate::abi::layouts! {
         landscape_commands,
         tile_ownership,
         ownership,
-        no_vehicle,
-        no_train,
-        wormhole_free,
+        occupancy,
     };
     "OpenTTDCommandCostServices" ["probe"] => crate::services::CommandCostServices {
         construct,
