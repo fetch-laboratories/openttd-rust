@@ -468,7 +468,7 @@ def check_effects(scenario, path):
         maps = read_save(path)["MAPS"]
         width = struct.unpack(">II", maps["elements"][0][1])[0]
         catcher = (row["y_pos"] // 16) * width + row["x_pos"] // 16
-        if current != prior + [catcher]:
+        if current != prior + (catcher,):
             raise RuntimeError(
                 "bubble absorption did not add its natural catcher tile to ANIT"
             )
