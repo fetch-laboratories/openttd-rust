@@ -1893,17 +1893,19 @@ fixtures and threaded GUI/presentation remain coverage gaps tracked in #156.
 `VehicleEnterDepot` with depot-entry recording, all of `LinkRefresher` and both
 `IncreaseStats` overloads. It calls the Rust orders, station loading
 (`prepare_unload`), cargo storage, refit command, train/ship state, maintenance
-and pending-autoreplace owners directly. Train, ship, aircraft, road, orders,
+and pending-autoreplace owners directly, including aircraft hangar entry.
+Train, ship, aircraft, road, orders,
 station-command and loading callers reach it through `VehicleServices::visits`;
 the C++ member functions are thin facades for the remaining native callers
 (destruction, station removal, saves).
 
 C++ keeps link-graph pool identity, allocation, node/merge/schedule and edge
 updates, station/vehicle shells, NewGRF triggers, window/news/sound leaves,
-`HandleAircraftEnterHangar` and two `CommandCost` stack slots for the nested
+and two `CommandCost` stack slots for the nested
 depot refit. Prediction frames are entry-local (`Vec`, `BTreeSet`); temporary
 refit cargo/subtype writes are restored in source order. No ordinary-play
-callback unwinds; `AI::NewEvent` queues.
+callback unwinds; `AI::NewEvent` queues. Direct Rust entries preserve original
+assertions through the shared native assertion policy.
 
 `orders-visits` (padhattan-ridge-2000, cargodist) gives the running fleet refit,
 autorefit, conditional, full-load and cross-graph orders and requires the

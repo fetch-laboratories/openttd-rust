@@ -354,7 +354,6 @@ public:
 	/** We want to 'destruct' the right class. */
 	virtual ~Vehicle();
 
-
 #ifndef WITH_RUST
 	void BeginLoading();
 #endif
