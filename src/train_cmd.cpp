@@ -4704,7 +4704,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.pbs_signal_type = TrainPbsSignalType,
 		.platform_ahead = TrainPlatformAhead,
 		.platform_length = TrainPlatformLength,
-		.position = TrainPosition,
 		.pow_wag_power = TrainPowWagPower,
 		.price = TrainPrice,
 		.process_orders = TrainProcessOrders,
@@ -4778,8 +4777,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.wait_unbunch = TrainWaitUnbunch,
 		.write_crossing_bar = TrainWriteCrossingBar,
 		.write_visit_type = TrainWriteVisitType,
-		.visit_tile = TrainVisitTile,
-		.visit_near = TrainVisitNear,
 		.vehicle = &GetRustVehicleServices(),
 	};
 	return services;
@@ -4864,8 +4861,6 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 		.tile_offset = TrainReservationTileOffset,
 		.trackdir = TrainReservationTrackdir,
 		.tunnel_dir = TrainReservationSharedMap<uint64_t, &OpenTTDSharedServices::tunnel_bridge_direction>,
-		.tunnel_free = TrainReservationTunnelFree,
-
 		.write_dest = TrainReservationWriteDest,
 		.write_last = TrainReservationWriteLast,
 		.write_suppress = TrainReservationWriteSuppress,

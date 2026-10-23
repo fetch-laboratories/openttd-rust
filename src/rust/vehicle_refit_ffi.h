@@ -88,7 +88,6 @@ struct OpenTTDVehicleArticulatedServices {
 	void (*random_bits)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
 	void (*flip_image)(void *) noexcept OPENTTD_SERVICE_DEFAULT(flip_image);
 	OpenTTDArticulatedProbability (*reverse)(void *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(reverse);
-	void (*position)(void *) noexcept OPENTTD_SERVICE_DEFAULT(position);
 	uint64_t (*available_cargo)(uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(available_cargo);
 	void (*warning)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(warning);
 	bool (*has_articulated)(void *) noexcept OPENTTD_SERVICE_DEFAULT(has_articulated);

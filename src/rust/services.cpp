@@ -124,9 +124,6 @@ const OpenTTDCommandCostServices &GetRustCommandCostServices() noexcept
  * The native returned object is moved whole into its caller's stack sink. */
 static void CommandTileOwnership(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = CheckTileOwnership(TileIndex{tile}); }
 static void CommandOwnership(OpenTTDCommandCost *out, uint8_t owner, uint32_t tile) noexcept { *NativeCost(out) = CheckOwnership(Owner(owner), TileIndex{tile}); }
-static void CommandNoVehicle(OpenTTDCommandCost *out, uint32_t tile) noexcept { *NativeCost(out) = EnsureNoVehicleOnGround(TileIndex{tile}); }
-static void CommandNoTrain(OpenTTDCommandCost *out, uint32_t tile, uint8_t bits) noexcept { *NativeCost(out) = EnsureNoTrainOnTrackBits(TileIndex{tile}, static_cast<TrackBits>(bits)); }
-static void CommandWormholeFree(OpenTTDCommandCost *out, uint32_t tile, uint32_t end, const Train *ignore) noexcept { *NativeCost(out) = TunnelBridgeIsFree(TileIndex{tile}, TileIndex{end}, ignore); }
 static bool CommandInfiniteMoney() noexcept { return _settings_game.difficulty.infinite_money; }
 static void CommandMoneyError(OpenTTDCommandCost *cost, int64_t amount) noexcept
 {
@@ -147,7 +144,7 @@ const OpenTTDCommandServices &GetRustCommandServices() noexcept
 		.infrastructure_dirty = RustInfrastructureDirty,
 		.landscape_commands = []() noexcept { return &GetRustLandscapeCommandServices(); },
 		.tile_ownership = CommandTileOwnership, .ownership = CommandOwnership,
-		.no_vehicle = CommandNoVehicle, .no_train = CommandNoTrain, .wormhole_free = CommandWormholeFree,
+		.occupancy = GetRustOccupancyCommands,
 	};
 	return services;
 }

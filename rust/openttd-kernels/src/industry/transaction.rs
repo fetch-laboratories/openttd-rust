@@ -298,7 +298,7 @@ impl Engine<'_> {
                     return self.fail(self.e.site);
                 }
             } else {
-                unsafe { ((*self.context.command_checks).no_vehicle)(self.out.cast(), current) };
+                unsafe { (*self.context.command_checks).no_vehicle(self.out.cast(), current) };
                 if !self.succeeded() {
                     return false;
                 }

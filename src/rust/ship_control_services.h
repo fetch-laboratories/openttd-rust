@@ -115,7 +115,6 @@ static void Ship_order_increment(uint32_t id) noexcept { Ship *v = Ship::Get(Veh
 
 static void Ship_timetable(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); UpdateVehicleTimetable(v, true); }
 
-static void Ship_position(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleUpdatePosition(v); }
 
 static void Ship_start_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP); }
 
@@ -190,12 +189,6 @@ static uint32_t Ship_track_direction(uint32_t track, uint32_t direction) noexcep
 }
 
 static uint32_t Ship_tracks_reach(uint32_t direction) noexcept { return DiagdirReachesTracks(static_cast<DiagDirection>(direction)); }
-
-static bool Ship_busy_tile(uint32_t id) noexcept
-{
-	Ship *v = Ship::Get(VehicleID(id));
-	return HasVehicleOnTile(v->tile, [](const Vehicle *u) { return u->type == VEH_SHIP && u->cur_speed != 0; });
-}
 
 static size_t Ship_path_size(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return v->path.size(); }
 
@@ -392,7 +385,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.path_result = Ship_path_result, .order_free = Ship_order_free,
 		.order_dummy = Ship_order_dummy, .order_depot = Ship_order_depot,
 		.order_leave = Ship_order_leave, .order_increment = Ship_order_increment,
-		.timetable = Ship_timetable, .position = Ship_position,
+		.timetable = Ship_timetable,
 		.start_dirty = Ship_start_dirty, .depot_dirty = Ship_depot_dirty,
 		.depot_invalidate = Ship_depot_invalidate, .ships_dirty = Ship_ships_dirty,
 		.check_orders = Ship_check_orders,
@@ -406,7 +399,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.build_flag = RustIndexedEngineRead<bool, RustEngineExclusivePreview, uint32_t>, .build_random = Ship_build_random,
 		.new_position = Ship_new_position, .exit_dir = Ship_exit_dir,
 		.track_direction = Ship_track_direction, .tracks_reach = Ship_tracks_reach,
-		.busy_tile = Ship_busy_tile, .path_size = Ship_path_size,
+		 .path_size = Ship_path_size,
 		.path_back = Ship_path_back, .path_pop = Ship_path_pop,
 		.path_clear = Ship_path_clear, .process_orders = Ship_process_orders,
 		.viewport = Ship_viewport,

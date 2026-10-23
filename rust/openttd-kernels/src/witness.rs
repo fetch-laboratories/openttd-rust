@@ -284,6 +284,14 @@ witness_blocks! {
         PBS_SAFE_OPPOSING_PBS = 13 => "pbs.safe_opposing_pbs",
         PBS_OVERLAP = 14 => "pbs.overlap",
     }
+    occupancy {
+        OCCUPANCY_INSERT = 0 => "occupancy.insert",
+        OCCUPANCY_SAME = 1 => "occupancy.same_bucket",
+        OCCUPANCY_REMOVE = 2 => "occupancy.remove",
+        OCCUPANCY_ALIAS = 3 => "occupancy.alias_filter",
+        OCCUPANCY_RESET = 4 => "occupancy.reset",
+        OCCUPANCY_NEAR = 5 => "occupancy.near",
+    }
     rail {
         RAIL_CHOOSE = 0 => "rail.choose",
         RAIL_REVERSE = 1 => "rail.reverse",

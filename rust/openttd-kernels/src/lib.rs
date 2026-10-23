@@ -36,6 +36,7 @@ mod engine_type;
 mod follow_track;
 mod genland;
 mod genworld;
+mod geometry_type;
 mod ground;
 mod ground_vehicle;
 mod heightmap;

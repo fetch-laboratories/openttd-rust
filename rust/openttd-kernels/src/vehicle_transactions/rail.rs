@@ -197,7 +197,8 @@ fn free_wagons(x: Ctx, tile: u32) -> Vec<u32> {
         free: Vec::new(),
     };
     unsafe {
-        (x.c.vehicles.vehicles_on_tile)(tile, ptr::from_mut(&mut ctx).cast(), visit);
+        x.c.vehicles
+            .for_each_on_tile(tile, |v| visit(ptr::from_mut(&mut ctx).cast(), v));
     }
     ctx.free.sort_unstable();
     ctx.free
@@ -247,7 +248,9 @@ unsafe fn build_wagon(
         unsafe { (x.g.set_membership)(v, DEFAULT_GROUP) };
         x.reverse_on_build(v);
         unsafe { super::articulated::add(a, v) };
-        (a.position)(v);
+        unsafe {
+            a.position(v);
+        }
         let first = x.first(v);
         x.consist_changed(first);
         x.update_group(x.first(v));
@@ -295,7 +298,9 @@ fn add_rear_engine(x: Ctx, v: *mut ()) {
     x.set_subtype(u, gv::set_multiheaded);
     x.set_next(v, u);
     x.reverse_on_build(u);
-    (a.position)(u);
+    unsafe {
+        a.position(u);
+    }
     (x.s.link_multihead)(v, u);
 }
 
@@ -332,7 +337,9 @@ pub(crate) unsafe fn build(
         x.set_subtype(v, gv::set_front_engine);
         x.set_subtype(v, gv::set_engine);
         x.reverse_on_build(v);
-        (a.position)(v);
+        unsafe {
+            a.position(v);
+        }
         if kind == RailVehicleTypes::MULTIHEAD {
             crate::witness::hit(crate::witness::VT_RAIL_MULTIHEAD);
             add_rear_engine(x, v);

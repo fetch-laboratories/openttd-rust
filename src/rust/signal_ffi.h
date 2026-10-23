@@ -15,12 +15,12 @@
  * entries, including calls from main and game threads. Each native service is
  * synchronous and noexcept. Rust releases every state borrow before a callback;
  * map, occupancy and dirtying cannot unwind ordinary-play exceptions. */
+struct OpenTTDVehicleServices;
 struct OpenTTDSignalServices {
 	bool assertions;
 	void (*assert_condition)(bool) noexcept OPENTTD_SERVICE_DEFAULT(assert_condition);
 	void (*assert_wormhole_start)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assert_wormhole_start);
-	bool (*train_on_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(train_on_tile);
-	bool (*train_on_tracks)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(train_on_tracks);
+	const OpenTTDVehicleServices *vehicles;
 	void (*overflow_tbu)() noexcept OPENTTD_SERVICE_DEFAULT(overflow_tbu);
 	void (*overflow_tbd)() noexcept OPENTTD_SERVICE_DEFAULT(overflow_tbd);
 	void (*overflow_global)() noexcept OPENTTD_SERVICE_DEFAULT(overflow_global);
@@ -56,7 +56,6 @@ struct OpenTTDSignalSetTrace {
 };
 
 extern "C" {
-void openttd_rust_signal_count_occupancy(uint64_t);
 void openttd_rust_signal_workset_probe(const OpenTTDSignalServices *, OpenTTDSignalSetTrace *);
 void openttd_rust_signal_inspect(OpenTTDSignalSnapshot *);
 void openttd_rust_signal_flush(const OpenTTDSharedServices *, const OpenTTDRailMapServices *, const OpenTTDSignalServices *, unsigned int);

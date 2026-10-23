@@ -56,6 +56,7 @@ struct Fixture {
 	Direction direction{};
 	uint64_t blocks = 0;
 	std::array<unsigned, 4> messages{};
+	OpenTTDVehicleTileLinks links[2];
 };
 #include "aircraft-boundary.hpp"
 static Fixture *fixture;
@@ -119,7 +120,11 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	shared.tile_height = [](uint32_t) noexcept { return uint32_t{0}; };
 	leaves.airport_entry = [](const void *, uint8_t) noexcept { return uint8_t{0}; };
 	vehicle.write_x = vehicle.write_y = vehicle.write_z = [](OpenTTDVehicle *, int32_t) noexcept {};
-	leaves.update_position = leaves.position_viewport = [](OpenTTDAircraftVehicle) noexcept {};
+	leaves.viewport = [](OpenTTDAircraftVehicle) noexcept {};
+	vehicle.base_viewport = [](OpenTTDVehicle *) noexcept {};
+	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == reinterpret_cast<OpenTTDVehicle *>(fixture) ? 0 : 1]; };
+	vehicle.tile = [](OpenTTDVehicle *) noexcept { return uint32_t{0}; };
+	vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	leaves.copy_sprite = [](OpenTTDAircraftVehicle, OpenTTDAircraftVehicle) noexcept {};
 	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { if (v.id == 17) { v.id = 18; v.handle = reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}); return v; } return OpenTTDAircraftVehicle{nullptr, nullptr, 1048575}; };
 	vehicle.speed = [](OpenTTDVehicle *) noexcept { return uint16_t{0}; };
@@ -157,6 +162,8 @@ int main()
 		const auto leaves = RangeLeaves();
 		openttd_rust_aircraft_event(&leaves, {reinterpret_cast<OpenTTDVehicle *>(&f), f.state.get(), 17}, false);
 		if ((f.state->flags & 1) != (f.aircraft.flags & 1) || f.messages != expected) { std::fprintf(stderr, "range mismatch range=%u dest=%u state=%u flags=%u validity=%u\n", range, destination, state, flag, validity); return 1; }
+		openttd_rust_occupancy_update(&vehicle, reinterpret_cast<OpenTTDVehicle *>(&f), true);
+		openttd_rust_occupancy_update(&vehicle, reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}), true);
 		cases++;
 	}
 	std::printf("finite range transition: %u unchanged-reference cases passed\n", cases);

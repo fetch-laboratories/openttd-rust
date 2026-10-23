@@ -12,3 +12,14 @@
 pub fn has_bit(value: u8, bit: u8) -> bool {
     u32::from(value) & 1_u32.wrapping_shl(u32::from(bit)) != 0
 }
+
+/// `GB` for a 32-bit input, with source preconditions `count < 32` and
+/// `start + count <= 32`.
+pub const fn gb(value: u32, start: u8, count: u8) -> u32 {
+    (value >> start) & ((1_u32 << count) - 1)
+}
+
+/// `KillFirstBit` for the byte-sized track bitsets.
+pub const fn kill_first_bit(value: u8) -> u8 {
+    value & value.wrapping_sub(1)
+}
