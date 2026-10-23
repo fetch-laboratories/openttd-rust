@@ -17,6 +17,8 @@
 #include "../newgrf_engine.h"
 #include "../newgrf_commons.h"
 #include "services_newgrf.h"
+#include "../window_func.h"
+#include "../texteff.hpp"
 
 inline uint16_t RustVehicleCallback(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, std::span<int32_t> registers = {}) noexcept { return GetVehicleCallback(callback, param1, param2, engine, v, registers); }
 uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept;
@@ -41,6 +43,24 @@ inline bool RustVehicleHasReverseProbability(void *shell) noexcept { Vehicle *v 
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine; }
 template <class T> inline void RustVehicleUpdatePosition(T *v) noexcept { v->UpdatePosition(); }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
+inline uint16_t RustVehicleLastStationVisited(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_station_visited.base(); }
+inline uint16_t RustVehicleLoadUnloadTicks(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->load_unload_ticks; }
+inline void RustVehicleSetLastLoadingStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_loading_station = StationID(station); }
+inline void RustVehicleSetLastLoadingTick(OpenTTDVehicle *v, uint64_t tick) noexcept { VehicleOf(v)->last_loading_tick = tick; }
+inline void RustVehicleRandomisation(Vehicle *v, VehicleRandomTrigger trigger) noexcept { TriggerVehicleRandomisation(v, trigger); }
+inline void RustVehicleDepotRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::Depot); }
+inline void RustVehicleNewCargoRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::NewCargo); }
+inline void RustVehicleEmptyRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::Empty); }
+inline void RustVehicleDirtyDepot(const Vehicle *v) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); }
+inline void RustVehicleDirtyDepotOpaque(void *v) noexcept { RustVehicleDirtyDepot(static_cast<Vehicle *>(v)); }
+inline void RustVehicleInvalidateDepotTile(TileIndex tile) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, tile); }
+inline void RustVehicleInvalidateDepot(const Vehicle *v) noexcept { RustVehicleInvalidateDepotTile(v->tile); }
+template <class T> inline void RustVehicleUpdateViewport(T *v, bool update_delta, bool force) noexcept { v->UpdateViewport(update_delta, force); }
+inline void RustVehiclePlayLeaveSound(OpenTTDVehicle *v) noexcept { VehicleOf(v)->PlayLeaveStationSound(); }
+inline void RustVehicleHideFilling(OpenTTDVehicle *v) noexcept { HideFillingPercent(&VehicleOf(v)->fill_percent_te_id); }
+inline void RustVehicleInvalidateView(VehicleID id) noexcept { InvalidateWindowData(WC_VEHICLE_VIEW, id); }
+inline void RustVehicleVisitInvalidateView(OpenTTDVehicle *v) noexcept { RustVehicleInvalidateView(VehicleOf(v)->index); }
+inline void RustVehicleSetTripOccupancy(OpenTTDVehicle *v, uint8_t occupancy) noexcept { VehicleOf(v)->trip_occupancy = occupancy; }
 inline bool RustVehicleCanAllocate(size_t count) noexcept { return Vehicle::CanAllocateItem(count); }
 inline VehiclesOnTile RustVehiclesOnTile(TileIndex tile) noexcept { return VehiclesOnTile(tile); }
 
@@ -66,7 +86,6 @@ template <class T> inline auto RustVehicleLast(T *v) noexcept { return v->Last()
 /** Signature adapter for existing opaque fleet and orders callbacks. */
 inline void *RustVehicleFirstOpaque(void *v) noexcept { return RustVehicleFirst(static_cast<const Vehicle *>(v)); }
 inline void OPENTTD_VEHICLE_CALL RustVehicleSetDestTile(OpenTTDVehicle *v, uint32_t tile) noexcept { VehicleOf(v)->SetDestTile(TileIndex(tile)); }
-inline void RustVehicleLeaveStation(OpenTTDVehicle *v) noexcept { VehicleOf(v)->LeaveStation(); }
 inline uint32_t RustVehicleOrderStationLocation(OpenTTDVehicle *v, uint16_t station) noexcept { return VehicleOf(v)->GetOrderStationLocation(StationID(station)).base(); }
 inline uint64_t RustVehicleLegacyOrderStationLocation(void *v, uint16_t station) noexcept { return RustVehicleOrderStationLocation(RustVehicle(static_cast<Vehicle *>(v)), station); }
 template <class T> inline auto RustVehicleNextVehicle(const T *v) noexcept { return v->GetNextVehicle(); }
@@ -95,6 +114,7 @@ inline OrderType RustVehicleOrderType(const Vehicle *v) noexcept { return v->cur
 inline uint16_t RustVehicleOrderDestination(const Vehicle *v) noexcept { return v->current_order.GetDestination().base(); }
 inline uint16_t RustVehicleOrderMaxSpeed(const Vehicle *v) noexcept { return v->current_order.GetMaxSpeed(); }
 template <class T> inline int RustVehicleDisplayMaxSpeed(const T *v) noexcept { return v->GetDisplayMaxSpeed(); }
+inline int32_t RustVehicleDisplaySpeed(OpenTTDVehicle *v) noexcept { return RustVehicleDisplayMaxSpeed(VehicleOf(v)); }
 inline uint8_t RustVehicleOrderNonStop(const Vehicle *v) noexcept { return v->current_order.GetNonStopType().base(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept;
 bool RustTrainFreeWagon(const Vehicle *v) noexcept;
@@ -216,7 +236,7 @@ inline OpenTTDGroundViewportNext OPENTTD_VEHICLE_CALL GroundSvcUpdateViewportThe
 {
 	T *u = T::From(VehicleOf(part));
 	/* UpdateViewport may reenter Rust; no Rust borrow survives this call. */
-	u->UpdateViewport(false, false);
+	RustVehicleUpdateViewport(u, false, false);
 	Vehicle *next = RustVehicleNext(u);
 	/* Only the final iteration consumes front progress, after every viewport. */
 	return {.next = RustVehicle(next), .final_progress = next == nullptr ? RustVehicleProgress(VehicleOf(front)) : uint8_t(0)};
@@ -226,7 +246,7 @@ inline void OPENTTD_VEHICLE_CALL GroundSvcTurn(OpenTTDVehicle *v, uint8_t direct
 {
 	T *u = T::From(VehicleOf(v));
 	u->direction = static_cast<Direction>(direction);
-	u->UpdateViewport(true, true);
+	RustVehicleUpdateViewport(u, true, true);
 }
 template <class T>
 inline OpenTTDGroundSpeed OPENTTD_VEHICLE_CALL GroundSvcDoUpdateSpeed(OpenTTDVehicle *v, uint32_t accel, int32_t min_speed, int32_t max_speed) noexcept

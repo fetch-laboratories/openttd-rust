@@ -24,6 +24,7 @@
 )]
 use crate::command_type::DoCommandFlag;
 use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
+use crate::economy_func::get_price;
 use crate::economy_type::PR_BUILD_FOUNDATION;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
@@ -164,12 +165,8 @@ use std::ptr;
 #[repr(C)]
 pub struct Price {
     pub factor: u32,
+    /// The spec GRF's `price_base_multipliers[price]`, zero without a GRF file.
     pub shift: i32,
-}
-impl Price {
-    fn get_price(self, index: u32) -> i64 {
-        crate::company::openttd_rust_economy_price(index, self.factor, self.shift)
-    }
 }
 
 /// Native `ObjectAnimationTrigger : uint8_t` carrier.
@@ -754,11 +751,13 @@ impl<'a> World<'a> {
     }
     /// Original `ObjectSpec::GetBuildCost`; native storage supplies its factors.
     unsafe fn get_build_cost(&self, spec: *const Spec) -> i64 {
-        unsafe { (self.s.build_price)(spec) }.get_price(PR_BUILD_OBJECT)
+        let price = unsafe { (self.s.build_price)(spec) };
+        get_price(PR_BUILD_OBJECT, price.factor, price.shift, 0)
     }
     /// Original `ObjectSpec::GetClearCost`; native storage supplies its factors.
     unsafe fn get_clear_cost(&self, spec: *const Spec) -> i64 {
-        unsafe { (self.s.clear_price)(spec) }.get_price(PR_CLEAR_OBJECT)
+        let price = unsafe { (self.s.clear_price)(spec) };
+        get_price(PR_CLEAR_OBJECT, price.factor, price.shift, 0)
     }
     fn current(&self) -> u8 {
         (self.shared.current_company)()
@@ -1198,7 +1197,6 @@ impl<'a> World<'a> {
                             crate::bridge_map::get_bridge_height(
                                 (station.southern_bridge_end)(t),
                                 self.shared,
-                                |f, h| ((*station.rail).apply_foundation)(f, h).z,
                             )
                         })
                 {
@@ -1499,7 +1497,7 @@ impl World<'_> {
                 u32::from(self.get_company_hq_size(tile)) + 1
             };
             let pass = (self.s.passengers)();
-            if crate::cargo_storage::is_valid_cargo_type(pass) {
+            if crate::cargo_type::is_valid_cargo_type(pass) {
                 let entry = cargo.add(usize::from(pass));
                 *entry = (*entry).wrapping_add(if accepted.is_null() { 1 } else { level.max(1) });
                 if !accepted.is_null() {
@@ -1507,7 +1505,7 @@ impl World<'_> {
                 }
             }
             let mail = (self.s.mail)();
-            if crate::cargo_storage::is_valid_cargo_type(mail) {
+            if crate::cargo_type::is_valid_cargo_type(mail) {
                 let entry = cargo.add(usize::from(mail));
                 *entry = (*entry).wrapping_add(if accepted.is_null() {
                     1
@@ -1556,7 +1554,7 @@ impl World<'_> {
             (self.s.hq_begin)(frame, tile, level);
             let random = self.shared.random();
             let pass = (self.s.passengers)();
-            if crate::cargo_storage::is_valid_cargo_type(pass)
+            if crate::cargo_type::is_valid_cargo_type(pass)
                 && random & 255 < 256 / 4 / (6_u32.wrapping_sub(level))
             {
                 let mut amount = (random & 255) / 8 / 4 + 1;
@@ -1568,7 +1566,7 @@ impl World<'_> {
                 crate::witness::hit(crate::witness::OBJECT_HQ_PASS);
             }
             let mail = (self.s.mail)();
-            if crate::cargo_storage::is_valid_cargo_type(mail)
+            if crate::cargo_type::is_valid_cargo_type(mail)
                 && (random >> 8) & 255 < 196 / 4 / (6_u32.wrapping_sub(level))
             {
                 let mut amount = ((random >> 8) & 255) / 8 / 4 + 1;
@@ -2184,6 +2182,186 @@ pub unsafe extern "C" fn openttd_rust_object_build_above(
     let costs = unsafe { &*(*s).cost };
     let out = Cost(out, costs);
     w.build_above(out, tile, flags, height);
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDObjectHiddenArea" ["landscape"] => HiddenArea {
+        index,
+        first_tile,
+    };
+    "OpenTTDObjectPrice" ["landscape"] => Price {
+        factor,
+        shift,
+    };
+    "OpenTTDObjectArea" ["landscape"] => Area {
+        tile,
+        width,
+        height,
+    };
+    "OpenTTDObjectIdentity" ["landscape"] => Identity {
+        object,
+        area,
+        kind,
+    };
+    "OpenTTDObjectAllocation" ["landscape"] => Allocation {
+        object,
+        id,
+    };
+    "OpenTTDObjectNext" ["landscape"] => Next {
+        object,
+        id,
+        tile,
+    };
+    "OpenTTDObjectLoopPolicy" ["landscape"] => LoopPolicy {
+        spec,
+        object,
+        north,
+        flags,
+        kind,
+    };
+    "OpenTTDObjectPolicy" ["landscape"] => Policy {
+        flags,
+        callbacks,
+    };
+    "OpenTTDObjectFootprint" ["landscape"] => Footprint {
+        flags,
+        callbacks,
+        size,
+    };
+    "OpenTTDObjectClearance" ["landscape"] => Clearance {
+        flags,
+        height,
+    };
+    "OpenTTDObjectAdmission" ["landscape"] => Admission {
+        views,
+        height,
+    };
+    "OpenTTDObjectAreaShape" ["landscape"] => AreaShape {
+        views,
+        size,
+    };
+    "OpenTTDObjectGeneration" ["landscape"] => Generation {
+        flags,
+        amount,
+        views,
+        ever,
+    };
+    "OpenTTDObjectSlopeResult" ["landscape"] => SlopeResult {
+        callback,
+        registers,
+        version,
+    };
+    "OpenTTDObjectStrings" ["landscape"] => Strings {
+        too_many,
+        no_town,
+        edge_sub,
+        water,
+        edge,
+        on_water,
+        bridge,
+        flat,
+        own,
+        built,
+        limit,
+        hq,
+        object,
+    };
+    "OpenTTDObjectDefinition" ["landscape"] => Definition {
+        grfid,
+        local_id,
+        view,
+        has_file,
+    };
+    "OpenTTDObjectQueryServices" ["landscape"] => QueryServices {
+        random_bits,
+        index,
+        by_tile,
+        definition,
+        object_index,
+        kind,
+        north,
+        town,
+        town_tile,
+        date,
+        colour,
+        view,
+        nearby,
+        nearby_info,
+        terrain,
+        town_zone,
+        badges,
+        register_100,
+        grfid,
+        version8,
+        override_id,
+        manhattan,
+        square,
+        triggers,
+        change_frame,
+        unhandled,
+    };
+    "OpenTTDObjectServices" ["landscape"] => ObjectServices {
+        shared,
+        cost,
+        command,
+        company,
+        cargo,
+        town,
+        founding,
+        industry_tiles,
+        strings,
+        spec_count,
+        spec,
+        callbacks,
+        colour_policy,
+        flags,
+        footprint,
+        clearance,
+        available,
+        ever,
+        area_shape,
+        admission,
+        generation,
+        can_allocate,
+        allocate,
+        object_type,
+        loop_policy,
+        identity,
+        location,
+        next,
+        set_colour,
+        recolour,
+        colour_callback,
+        colour_error,
+        make,
+        delete_object,
+        query,
+        slope_callback,
+        slope_error,
+        build_price,
+        clear_price,
+        set_hq,
+        statue_town,
+        hq_begin,
+        hq_deliver,
+        hq_end,
+        autoslope_callback,
+        boolean_callback,
+        enabled,
+        close_inspect,
+        progress_set,
+        progress_increase,
+        normal,
+        bulldozer,
+        water_class,
+        restoration,
+        set_owner,
+        scale_size_1d,
+        passengers,
+        mail,
+        scale_cargo,
+    };
 }
 
 #[cfg(test)]

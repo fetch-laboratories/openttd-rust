@@ -351,3 +351,29 @@ pub(super) fn replace<'a>(
     result.serialize(id, &parameters, string_assertions);
     result
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRustEncodedParameter" ["probe"] => Descriptor {
+        value,
+        bytes,
+        length,
+        kind,
+    };
+    "OpenTTDRustEncodedView" ["probe"] => View {
+        bytes,
+        length,
+        diagnostic_count,
+        assertion_offset,
+        assertion_length,
+        assertion_codepoint,
+        apply,
+        assertion_kind,
+    };
+    "OpenTTDRustEncodedDiagnostic" ["probe"] => Diagnostic {
+        offset,
+        length,
+        tail_length,
+        kind,
+    };
+}

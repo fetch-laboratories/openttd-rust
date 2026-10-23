@@ -13,6 +13,7 @@
 #include "../cargo_type.h"
 #include "../vehicle_base.h"
 
+#ifndef WITH_RUST
 /**
  * Utility to refresh links a consist will visit.
  */
@@ -97,5 +98,6 @@ protected:
 
 	void RefreshLinks(VehicleOrderID cur, VehicleOrderID next, RefreshFlags flags, uint num_hops = 0);
 };
+#endif /* WITH_RUST */
 
 #endif /* REFRESH_H */

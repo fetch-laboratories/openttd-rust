@@ -7,7 +7,7 @@
 
 //! Bridge helpers declared in `bridge.h`.
 #![allow(unsafe_code, missing_docs)]
-use crate::services::{Axis, Foundation};
+use crate::services::{Axis, Foundation, Services, Slope};
 use crate::slope_func::{
     FOUNDATION_NONE, SLOPE_FLAT, SLOPE_NE, SLOPE_NW, SLOPE_SE, SLOPE_SW, flattening_foundation,
     has_slope_highest_corner, inclined_foundation,
@@ -54,15 +54,22 @@ pub extern "C" fn openttd_rust_bridge_length_cost(length: i32) -> i32 {
 pub extern "C" fn openttd_rust_bridge_foundation(slope: u8, axis: Axis) -> Foundation {
     Foundation(get_bridge_foundation(slope, axis.0))
 }
+/// Original `HasBridgeFlatRamp`: if the foundation slope is flat the bridge has a
+/// non-flat ramp and vice versa.
+pub(crate) fn has_bridge_flat_ramp(s: &Services, slope: u8, axis: u8) -> bool {
+    (s.apply_foundation)(Foundation(get_bridge_foundation(slope, axis)), Slope(slope))
+        .slope
+        .0
+        != SLOPE_FLAT
+}
 /// # Safety
-/// The native facade supplies its immutable process-lifetime rail table.
+/// The native facade supplies its immutable process-lifetime shared table.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_bridge_flat_ramp(
-    s: *const crate::rail_cmd::RailCommandServices,
+    s: *const Services,
     slope: u8,
     axis: Axis,
 ) -> bool {
     // SAFETY: canonical immutable table from the native facade.
-    let s = unsafe { &*s };
-    (s.apply_foundation)(get_bridge_foundation(slope, axis.0), slope).slope != SLOPE_FLAT
+    has_bridge_flat_ramp(unsafe { &*s }, slope, axis.0)
 }

@@ -676,6 +676,28 @@ pub unsafe extern "C" fn openttd_rust_flow_apply(services: *const Services) {
     }
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDCargoShare" ["probe"] => Share {
+        cumulative,
+        station,
+        found,
+    };
+    "OpenTTDCargoOrigin" ["probe"] => Origin {
+        flow,
+        origin,
+        found,
+    };
+    "OpenTTDCargoFlowServices" ["probe"] => Services {
+        context,
+        read,
+        job_flows,
+        live_flows,
+        reroute,
+        finish,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -271,3 +271,11 @@ pub unsafe extern "C" fn openttd_rust_bytes_trim(
     let (bytes, set) = unsafe { (borrowed(data, length), borrowed(set, set_length)) };
     trim(bytes, set)
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRustByteTrim" ["probe"] => TrimResult {
+        offset,
+        length,
+    };
+}

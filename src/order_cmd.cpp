@@ -163,11 +163,6 @@ extern "C" uint64_t openttd_orders_vehicle_id(void *ctx) noexcept
 	return v->index.base();
 }
 
-extern "C" uint64_t openttd_orders_percent_filled(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return CalcPercentVehicleFilled(v, nullptr);
-}
 
 extern "C" uint64_t openttd_orders_display_speed(void *ctx) noexcept
 {
@@ -540,11 +535,6 @@ extern "C" void openttd_orders_delete_list(void *ctx) noexcept
 	delete static_cast<OrderList *>(ctx);
 }
 
-extern "C" void openttd_orders_leave_station(void *ctx) noexcept
-{
-	Vehicle *v = static_cast<Vehicle *>(ctx);
-	v->LeaveStation();
-}
 
 extern "C" void openttd_orders_reverse_train(void *ctx) noexcept
 {
@@ -629,7 +619,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.suppress_implicit = openttd_orders_suppress_implicit,
 	.shared_window = openttd_orders_shared_window,
 	.vehicle_id = openttd_orders_vehicle_id,
-	.percent_filled = openttd_orders_percent_filled,
 	.reliability = openttd_orders_reliability,
 	.display_speed = openttd_orders_display_speed,
 	.age_years = openttd_orders_age_years,
@@ -703,7 +692,6 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.debug_list = openttd_orders_debug_list,
 	.assert_departure_range = openttd_orders_assert_departure_range,
 	.delete_list = openttd_orders_delete_list,
-	.leave_station = openttd_orders_leave_station,
 	.reverse_train = openttd_orders_reverse_train,
 	.next_airport = openttd_orders_next_airport,
 	.set_destination = openttd_orders_set_destination,

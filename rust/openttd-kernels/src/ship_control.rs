@@ -222,10 +222,7 @@ pub struct Leaves {
     pub path_pop: extern "C" fn(u32),
     pub path_clear: extern "C" fn(u32),
     pub enter_tile: extern "C" fn(u32, u32, u32, u32) -> u32,
-    pub enter_depot: extern "C" fn(u32),
     pub process_orders: extern "C" fn(u32) -> bool,
-    pub loading: extern "C" fn(u32),
-    pub begin_loading: extern "C" fn(u32),
     pub viewport: extern "C" fn(u32, bool, bool),
     pub base_viewport: extern "C" fn(u32),
     pub visual: extern "C" fn(u32),
@@ -484,7 +481,7 @@ impl Game<'_> {
             && (self.leaves.is_depot)(observed_tile)
             && (self.leaves.depot_index)(observed_tile) == observed_order_destination
         {
-            (self.leaves.enter_depot)(id);
+            self.vs().enter_depot(v);
             return true;
         }
         if observed_dest == 0 || (self.leaves.busy_tile)(id) {
@@ -652,7 +649,7 @@ impl Game<'_> {
             self.reverse(id, INVALID);
             return;
         }
-        (self.leaves.loading)(id);
+        self.vs().handle_loading(v, false);
         if (self.leaves.order_type)(id) == 3 {
             return;
         }
@@ -722,7 +719,7 @@ impl Game<'_> {
                             } else if observed_order_type == 2 && observed_dest == new_tile {
                                 if x & 15 == 8 && y & 15 == 8 {
                                     crate::witness::hit(crate::witness::SHIP_DEPOT_ENTER);
-                                    (self.leaves.enter_depot)(id);
+                                    self.vs().enter_depot(v);
                                     return;
                                 }
                             } else if observed_order_type == 1 && (self.leaves.docking)(new_tile) {
@@ -734,7 +731,10 @@ impl Game<'_> {
                                     if (self.leaves.station_dock)(station) {
                                         crate::witness::hit(crate::witness::SHIP_LOADING);
                                         self.arrives(id, station);
-                                        (self.leaves.begin_loading)(id);
+                                        crate::vehicle::visits::begin_loading(
+                                            v,
+                                            self.vs().visits(),
+                                        );
                                     } else {
                                         (self.leaves.order_leave)(id);
                                         (self.leaves.order_increment)(id);
@@ -1043,8 +1043,8 @@ pub unsafe extern "C" fn openttd_rust_ship_trackdir(
         )
     }) as u8
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_ship_build(
+/// Only the Rust vehicle build transaction calls this; C++ no longer builds ships.
+pub(crate) unsafe fn ship_build(
     id: u32,
     engine: u32,
     leaves: *const Leaves,
@@ -1084,4 +1084,166 @@ pub unsafe extern "C" fn openttd_rust_ship_build(
     (game.leaves.build_capacity)(id, capacity);
     (game.leaves.cache_invalidate)(id);
     (game.leaves.position)(id);
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDShipPosition" ["probe"] => Position {
+        x,
+        y,
+        old_tile,
+        new_tile,
+    };
+    "OpenTTDShipLeaves" ["probe"] => Leaves {
+        depot_dir,
+        depot_axis,
+        is_depot,
+        depot_index,
+        wait_unbunch,
+        chain_depot,
+        servint,
+        max_distance,
+        tile_valid,
+        tile_type,
+        water_class,
+        lock_middle,
+        lock_dir,
+        tile_min_z,
+        tile_max_z,
+        track_status,
+        offset,
+        diag_between,
+        dist_square,
+        dist_manhattan,
+        docking,
+        dock,
+        dock_water,
+        station,
+        industry_station,
+        oilrig,
+        station_use,
+        station_xy,
+        station_contains,
+        station_dock,
+        station_visits,
+        visit_set,
+        arrival,
+        leave_unbunch,
+        path_result,
+        order_free,
+        order_dummy,
+        order_depot,
+        order_leave,
+        order_increment,
+        timetable,
+        position,
+        start_dirty,
+        depot_dirty,
+        depot_invalidate,
+        ships_dirty,
+        check_orders,
+        running_cost,
+        cost_divisor,
+        pay_running,
+        speed_default,
+        age_default,
+        speed_frac,
+        speed_property,
+        age_property,
+        update_visual,
+        cache_invalidate,
+        capacity,
+        sprite_direction,
+        tile_x,
+        tile_y,
+        build_flag,
+        build_random,
+        new_position,
+        exit_dir,
+        track_direction,
+        tracks_reach,
+        busy_tile,
+        path_size,
+        path_back,
+        path_pop,
+        path_clear,
+        enter_tile,
+        process_orders,
+        viewport,
+        base_viewport,
+        visual,
+        cache,
+        play_sound,
+        yapf_reverse,
+        yapf_choose,
+        update_delta,
+        build_owner,
+        build_z,
+        build_properties,
+        build_dates,
+        build_acceleration,
+        build_prototype,
+        build_interval_percent,
+        build_capacity,
+        set_tile,
+        set_x,
+        set_y,
+        set_z,
+        set_direction,
+        set_speed,
+        set_tick,
+        set_running,
+        set_day,
+        set_order_time,
+        set_progress,
+        set_last_station,
+        set_hidden,
+        set_max_speed,
+        set_cargo_age,
+        set_dest,
+        tile,
+        dest,
+        x,
+        y,
+        z,
+        direction,
+        speed,
+        tick,
+        running,
+        day,
+        order_time,
+        progress,
+        status,
+        owner,
+        last_station,
+        order_destination,
+        order_type,
+        order_max_speed,
+        acceleration,
+        max_speed,
+        state_owner,
+        patch,
+        neighbours,
+        next_depot,
+        vehicle,
+    };
+    "OpenTTDShipReverseResult" ["probe"] => ReverseResult {
+        reverse,
+        trackdir,
+    };
+    "OpenTTDShipDepot" ["probe"] => Depot {
+        id,
+        tile,
+        owner,
+        ship,
+    };
+    "OpenTTDShipTrackResult" ["probe"] => TrackResult {
+        track,
+        found,
+    };
+    "OpenTTDShipDepotResult" ["probe"] => DepotResult {
+        tile,
+        id,
+        valid,
+    };
 }

@@ -68,7 +68,6 @@ static OpenTTDRailTile RailTile(uint32_t tile, uint8_t direction) noexcept
 		result.other_end = RustOtherTunnelBridgeEnd(tile);
 	}
 	result.uphill = IsUphillTrackdir(GetTileSlope(t), td);
-	if (IsBridgeTile(t)) result.flat_ramp = HasBridgeFlatRamp(GetTileSlope(t), DiagDirToAxis(GetTunnelBridgeDirection(t)));
 	if (IsTileType(t, MP_RAILWAY)) {
 		result.signal_along = RustRailHasSignalTrackdir(tile, td);
 		result.signal_against = RustRailHasSignalTrackdir(tile, ReverseTrackdir(td));
