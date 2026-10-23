@@ -13,11 +13,6 @@ pub fn has_bit(value: impl Into<u32>, bit: u8) -> bool {
     value.into() & 1_u32.wrapping_shl(u32::from(bit)) != 0
 }
 
-/// `GB` for uint32 fields, retaining the original's source-valid shift domain.
-pub fn gb(value: u32, start: u8, length: u8) -> u32 {
-    value.wrapping_shr(u32::from(start)) & (1_u32.wrapping_shl(u32::from(length)) - 1)
-}
-
 /// `SetBit` for uint32 fields; return the updated value as in the native helper.
 pub fn set_bit(value: &mut u32, bit: u8) -> u32 {
     *value |= 1_u32.wrapping_shl(u32::from(bit));
