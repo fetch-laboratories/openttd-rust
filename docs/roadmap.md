@@ -51,7 +51,8 @@ projections exceeded quiet play ratios by 9.55-19.36%; keep using quiet passes t
 decide actual ceiling proximity, not treating projections as wall results.
 No user speed/CI/wind-down policy is reversed. The removed gates were agent
 interpretations. The requested whole quiet-six retry remains. The steer skill
-now defaults to Codex audits; the start-development prompt is unchanged.
+uses the active host's native subagents, whether Codex or Claude Code;
+the start-development prompt is unchanged.
 
 ## Earlier steering, still in force
 
