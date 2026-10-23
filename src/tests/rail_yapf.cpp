@@ -142,10 +142,14 @@ TEST_CASE("Rail YAPF observes Follow then optional masking then speed limits")
 		RailYapfProbe::Run(1, 29, false, false, kind);
 		const auto &reads = RailYapfProbe::follow_reads;
 		REQUIRE(std::count(reads.begin(), reads.end(), 'f') > 0);
+		size_t masked = 0;
 		for (size_t i = 0; i < reads.size(); ++i) if (reads[i] == 'f') {
-			if (kind == 3 && !fail) { REQUIRE(i + 2 < reads.size()); CHECK(reads[i + 1] == 'r'); CHECK(reads[i + 2] == 's'); }
-			else { REQUIRE(i + 1 < reads.size()); CHECK(reads[i + 1] == 's'); }
+			REQUIRE(i + 1 < reads.size());
+			if (reads[i + 1] == 'r') { ++masked; REQUIRE(i + 2 < reads.size()); CHECK(reads[i + 2] == 's'); }
+			else CHECK(reads[i + 1] == 's');
 		}
+		/* Segment-cost followers remain unmasked in the safe-position search. */
+		CHECK((masked != 0) == (kind == 3 && !fail));
 	}
 	RailYapfProbe::follow_fail = false;
 	openttd_rust_rail_invalidate();
