@@ -2647,8 +2647,6 @@ impl Game<'_> {
 pub(crate) const VRF_LEAVING_STATION: u64 = 1 << 9;
 /// `VehicleRailFlag::Reversed`.
 const VRF_REVERSED: u64 = 1 << 7;
-/// `CCF_ARRANGE`: length and capacity.
-const CCF_ARRANGE: u8 = 3;
 
 /// The train part of `VehicleEnterDepot` (#349): clear the depot reservation,
 /// update the segment's signals and arrange the consist.
