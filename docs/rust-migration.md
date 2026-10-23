@@ -1372,28 +1372,29 @@ coverage gaps under #156. Independent review and exact-head Full are root's gate
 
 ### Animated-tile scheduling and shared animation control (#385, draft)
 
-Rust owns the process-wide queue, Add/Delete/Animate/Initialize, shared animation
-control, six feature bindings, station/airport/road-stop triggers and dispatch.
-Existing owners call it directly; native map frames/bits, road-stop records,
-pools, specs, PSA and stack resolvers remain. Immutable typed services are
-installed under the game-state mutex. Spec/queue borrows end before callbacks.
-Feature traits fix actual types/callback IDs; generated visitors include version8.
-ANIT keeps scoped native staging, descriptor/active-pointer nesting and all Sl*
-frames, including partial publication on unwind. Historical append and cleanup
-retain source order. There is no persistent native queue mirror.
-`python3 tools/migration.py simulate objects-gaps objects-reload` requires all six
-live bindings, callback/speed rows, station/platform and stored road-stop trigger
-order, airport filters/RNG parameters, zero-frame road-stop record insertion,
-and nonempty modern ANIT reload observed before animation (queue/frame/bits,
-road-stop records/RNG). The unchanged native saveload source/actual ANIT handler
-also exercise malformed table headers, decoded/default partial contents, excess
-rows through SlError/SlNullPointers, fixed-array append and RIFF resize semantics.
-Airport refresh calls shared SB, including its unmasked high-bit OR behavior.
-Native ABI/queue tests and effects-bubble comparisons remain. Trigger sentinel/
-sound/leaf-order matrices, explicit null-spec/member order and nonempty affected
-removal routes remain unfinished under the evidence cap; review/cost disposition
-are pending. Historical corpus, external GRFs, GUI threads and raw speeds >=64
-outside the observed pinned Linux compilation remain #156 limits.
+Rust owns the process-wide queue, scheduling/control, six bindings, trigger
+traversals and dispatch; existing owners call it directly. Native map frames/bits,
+road records, pools/specs/PSA and stack resolvers remain. Immutable typed services
+are installed under the game-state mutex; borrows end before callbacks.
+Traits preserve binding types/callback IDs; generated visitors include version8.
+ANIT retains Sl* staging, nested active pointers, append/resize and partial publication.
+`python3 tools/migration.py simulate objects-gaps objects-reload effects-controllers-1`
+requires six bindings (240/144/90 rows), traversal72, airport5 and visits46/21/9;
+zero-frame road-record insertion; six actual native ANIT loads/errors; and positive
+immediate reload of queue/frame/bits/road records/RNG. Airport SB retains unmasked OR.
+The56 keyed sound/sentinel cases compare actual PlayTileSound entry/exit, road
+setter attempts and dirty calls (20 each), frames, records, queue and sequence.
+The36 keyed version cases require six actual version8-0100 diagnostics with valid
+native GRFConfig lookup. Five rejection cases compare real RNG/callback outcomes;
+GetRailTileArea/GetStationSpec and inline member/mask ordering are source-compared,
+not intercepted: same-TU reference calls bind locally. That selected trace gap
+remains open; no internal-helper trace is claimed. Thirteen successful native
+owner-operation pairs require two live survivors and exact swap/deferred order;
+the effect controller requires exact catcher append with two live survivors.
+Native185/ABI and Cargo4 pass. Purpose cost345 implementation/81 native evidence/550
+tooling including CMake versus unchanged415 basis; root disposition/review remain
+pending. Historical/pre6 corpus, external GRFs, GUI threads and raw>=64 outside
+the observed pinned Linux compilation remain #156 limits.
 
 <!-- Subsystem: Vehicles, pathfinding and orders. Add a new entry at the end of its group, not of the file. -->
 
