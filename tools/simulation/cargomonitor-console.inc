@@ -21,7 +21,7 @@ static bool MonitorScenario(std::span<std::string_view> args)
 		bool failed = false;
 		try { SlLoadChunk(*SlFindChunkHandler(args[3] == "CMDL" ? 'CMDL' : 'CMPU')); } catch (const std::exception &) { failed = true; }
 		auto query = args[3] == "CMDL" ? GetDeliveryAmount : GetPickupAmount;
-		bool good = failed == (args[4] != "duplicate") && query(town, false) == (args[4] == "header" ? 17 : 0) && query(1, false) == (args[4] == "header" ? 0 : 11) && query(2, false) == 0;
+		bool good = failed == (args[4] != "duplicate") && (!failed || _sl.extra_msg == (args[4] == "header" ? "Field type is different than expected" : "Unexpected end of chunk")) && query(town, false) == (args[4] == "header" ? 17 : 0) && query(1, false) == (args[4] == "header" ? 0 : 11) && query(2, false) == 0;
 		if (!good) FixtureAbort(__LINE__);
 		fmt::print(stderr, "MONITOR load {} {} true\n", args[3], args[4]); std::fflush(stderr); std::_Exit(0);
 	}
@@ -39,8 +39,8 @@ static bool MonitorScenario(std::span<std::string_view> args)
 	AddCargoDelivery(cargo, company, 7, {i->index, SourceType::Industry}, st, j->index);
 	good &= GetPickupAmount(industry, false) == 7 && GetDeliveryAmount(town, false) == 0 && GetDeliveryAmount(absent, false) == 0 && GetDeliveryAmount(industry, false) == 0;
 	for (Source src : {Source{Source::Invalid, SourceType::Town}, Source{st->town->index, SourceType::Headquarters}}) {
-		GetPickupAmount(town, true); GetDeliveryAmount(town, true); AddCargoDelivery(cargo, company, 9, src, st);
-		good &= GetPickupAmount(town, false) == 0 && GetDeliveryAmount(town, false) == 9;
+		GetPickupAmount(town, true); GetDeliveryAmount(town, true); AddCargoDelivery(cargo, company, 9, src, st, i->index);
+		good &= GetPickupAmount(town, false) == 0 && GetDeliveryAmount(town, false) == 9 && GetDeliveryAmount(industry, false) == 0;
 	}
 	for (auto [first, second, expected] : std::initializer_list<std::tuple<uint32_t, uint32_t, int32_t>>{{INT32_MAX, 1, INT32_MAX}, {INT32_MAX, 0x80000000U, -1}, {0x80000000U, UINT32_MAX, INT32_MIN}, {0x80000000U, 1, INT32_MIN + 1}}) {
 		GetPickupAmount(industry, true); GetDeliveryAmount(town, true);
