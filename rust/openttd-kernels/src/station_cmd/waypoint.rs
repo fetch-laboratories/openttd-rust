@@ -26,6 +26,7 @@ use crate::station_type::{
 };
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::INVALID_TILE;
+use crate::witness as w;
 
 impl Ctx<'_> {
     fn rail_waypoint(&self, tile: u32) -> bool {
@@ -35,6 +36,7 @@ impl Ctx<'_> {
         (self.shared.tile_type)(tile) == 5 && (self.shared.station_type)(tile).0 == 8
     }
     fn waypoint_rail_axis(&self, tile: u32) -> u8 {
+        w::hit(w::WAYPOINT_AXIS_RAIL);
         if self.rail_waypoint(tile) {
             return (self.s.rail_axis)(tile).0;
         }
@@ -49,6 +51,7 @@ impl Ctx<'_> {
         }
     }
     fn waypoint_road_axis(&self, tile: u32) -> u8 {
+        w::hit(w::WAYPOINT_AXIS_ROAD);
         if self.road_waypoint_tile(tile) {
             return (self.shared.drive_through_axis)(tile);
         }
@@ -66,6 +69,7 @@ impl Ctx<'_> {
         }
     }
     fn rename_waypoint(&self, out: Cost<'_>, flags: u16, id: u16, text: *const u8, length: usize) {
+        w::hit(w::WAYPOINT_RENAME);
         let st = self.waypoint(id);
         if st.is_null() {
             return out.error(0xffff);
@@ -95,6 +99,7 @@ impl Ctx<'_> {
         out.zero();
     }
     fn move_waypoint_name(&self, out: Cost<'_>, flags: u16, id: u16, tile: u32) -> u16 {
+        w::hit(w::WAYPOINT_MOVE_NAME);
         let st = self.waypoint(id);
         if st.is_null() {
             out.error(0xffff);
@@ -199,14 +204,21 @@ impl Ctx<'_> {
             }
             let xy = (self.s.location)(wp);
             let distance = self.map().distance_manhattan(tile, xy);
+            if distance == threshold && !best.is_null() {
+                w::hit(w::WAYPOINT_TIE);
+            }
             if distance < threshold {
                 threshold = distance;
                 best = wp;
             }
         }
+        if !best.is_null() {
+            w::hit(w::WAYPOINT_REUSE);
+        }
         best
     }
     fn valid_waypoint_tile(&self, out: Cost<'_>, tile: u32, axis: u8, waypoint: &mut u16) {
+        w::hit(w::WAYPOINT_VALIDATE);
         if (self.shared.tile_type)(tile) == 5 {
             if (self.shared.station_type)(tile).0 != RAIL_WAYPOINT {
                 return self.auto_clear(out, tile);
@@ -261,6 +273,7 @@ impl Ctx<'_> {
         mut target: u16,
         adjacent: bool,
     ) {
+        w::hit(w::WAYPOINT_BUILD_RAIL);
         if !crate::direction_func::is_valid_axis(axis) {
             return cost.error(INVALID_STRING_ID);
         }
@@ -451,6 +464,7 @@ impl Ctx<'_> {
         mut target: u16,
         adjacent: bool,
     ) {
+        w::hit(w::WAYPOINT_BUILD_ROAD);
         if !crate::direction_func::is_valid_axis(axis) {
             return cost.error(INVALID_STRING_ID);
         }
@@ -652,6 +666,7 @@ impl Ctx<'_> {
         (self.command.infrastructure_dirty)(owner);
     }
     fn build_buoy(&self, cost: Cost<'_>, ret: Cost<'_>, flags: u16, tile: u32) {
+        w::hit(w::WAYPOINT_BUILD_BUOY);
         if tile == 0 || !(self.shared.has_water_ground)(tile) {
             return cost.error(self.s.strings.unsuitable);
         }
@@ -717,6 +732,7 @@ impl Ctx<'_> {
         (self.s.waypoint_view_invalidate)(wp);
     }
     pub(super) fn remove_buoy(&self, cost: Cost<'_>, tile: u32, flags: u16) {
+        w::hit(w::WAYPOINT_REMOVE_BUOY);
         if !(self.shared.company_valid)((self.shared.current_company)())
             && flags & DoCommandFlag::BANKRUPT == 0
         {
@@ -729,6 +745,9 @@ impl Ctx<'_> {
             (self.shared.current_company)(),
         ) {
             return cost.error(self.s.strings.buoy_in_use);
+        }
+        if flags & DoCommandFlag::BANKRUPT != 0 {
+            w::hit(w::WAYPOINT_BANKRUPT);
         }
         if flags & DoCommandFlag::BANKRUPT == 0 {
             unsafe { (self.command.no_vehicle)(cost.0, tile) };

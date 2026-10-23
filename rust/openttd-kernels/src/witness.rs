@@ -579,6 +579,20 @@ witness_blocks! {
         WATER_CMD_DESERT = 10 => "water_cmd.desert",
     }
 
+    waypoint_command {
+        WAYPOINT_AXIS_RAIL = 0 => "waypoint_command.axis_rail",
+        WAYPOINT_AXIS_ROAD = 1 => "waypoint_command.axis_road",
+        WAYPOINT_BUILD_RAIL = 2 => "waypoint_command.build_rail",
+        WAYPOINT_BUILD_ROAD = 3 => "waypoint_command.build_road",
+        WAYPOINT_BUILD_BUOY = 4 => "waypoint_command.build_buoy",
+        WAYPOINT_REMOVE_BUOY = 5 => "waypoint_command.remove_buoy",
+        WAYPOINT_BANKRUPT = 6 => "waypoint_command.bankrupt",
+        WAYPOINT_REUSE = 7 => "waypoint_command.reuse",
+        WAYPOINT_TIE = 8 => "waypoint_command.tie",
+        WAYPOINT_RENAME = 9 => "waypoint_command.rename",
+        WAYPOINT_MOVE_NAME = 10 => "waypoint_command.move_name",
+        WAYPOINT_VALIDATE = 11 => "waypoint_command.validate",
+    }
 }
 
 static ENABLED: AtomicBool = AtomicBool::new(false);

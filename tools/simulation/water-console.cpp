@@ -24,6 +24,7 @@
 #include "rust/command_services.h"
 #endif
 #include "station_base.h"
+#include "waypoint_base.h"
 #include "rail_cmd.h"
 #include "road_cmd.h"
 #include "station_cmd.h"
@@ -117,6 +118,26 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 		WaterState("force-first", tile); WaterState("force-other", other);
 		WaterCost("no-water", _tile_type_water_procs.clear_tile_proc(other, DoCommandFlag::NoWater));
 		WaterCost("clear-canal", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, other));
+	}
+	/* #366: water classes, occupied refusal, bankruptcy and deleted-buoy reuse. */
+	for (WaterClass wc : {WaterClass::Sea, WaterClass::Canal, WaterClass::River}) {
+		tile = TileXY(45, 45); WaterLand(tile, wc == WaterClass::Sea ? 0 : 3);
+		MakeWater(tile, wc == WaterClass::Canal ? Owner(_current_company) : OWNER_WATER, wc, 7);
+		WaterCost("buoy-test", Command<CMD_BUILD_BUOY>::Do({}, tile));
+		WaterCost("buoy-build", Command<CMD_BUILD_BUOY>::Do(DoCommandFlag::Execute, tile));
+		if (!IsBuoyTile(tile)) std::abort();
+		StationID id = GetStationIndex(tile); WaterState("buoy", tile);
+		Vehicle *v = nullptr; for (Vehicle *ship : Vehicle::Iterate()) if (ship->type == VEH_SHIP && !ship->vehstatus.Test(VehState::Hidden)) { v = ship; break; }
+		if (v == nullptr) std::abort();
+		TileIndex old_tile = v->tile; int old_x = v->x_pos, old_y = v->y_pos, old_z = v->z_pos;
+		v->tile = tile; v->x_pos = TileX(tile) * TILE_SIZE + 8; v->y_pos = TileY(tile) * TILE_SIZE + 8; v->z_pos = GetTileZ(tile); v->UpdatePosition();
+		WaterCost("buoy-occupied", Command<CMD_LANDSCAPE_CLEAR>::Do({}, tile));
+		WaterCost("buoy-bankrupt", Command<CMD_LANDSCAPE_CLEAR>::Do({DoCommandFlag::Execute, DoCommandFlag::Bankrupt}, tile));
+		v->tile = old_tile; v->x_pos = old_x; v->y_pos = old_y; v->z_pos = old_z; v->UpdatePosition();
+		if (!IsWaterTile(tile) || GetWaterClass(tile) != wc) std::abort(); WaterState("buoy-restored", tile);
+		WaterCost("buoy-reuse", Command<CMD_BUILD_BUOY>::Do(DoCommandFlag::Execute, tile));
+		if (GetStationIndex(tile) != id) std::abort();
+		WaterCost("buoy-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile));
 	}
 	WaterCost("invalid-axis", Command<CMD_BUILD_SHIP_DEPOT>::Do({}, tile, INVALID_AXIS));
 	WaterCost("invalid-lock", Command<CMD_BUILD_LOCK>::Do({}, tile));

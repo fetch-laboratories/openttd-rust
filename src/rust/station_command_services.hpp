@@ -9,6 +9,7 @@
 #ifndef RUST_STATION_COMMAND_SERVICES_HPP
 #define RUST_STATION_COMMAND_SERVICES_HPP
 #include "services_map.h"
+#include "services_rail.h"
 #include "company_services.h"
 #include "waypoint_layout.h"
 
