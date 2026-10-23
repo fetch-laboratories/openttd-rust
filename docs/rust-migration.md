@@ -1809,9 +1809,9 @@ One process-wide Rust owner holds ordered queued/running pointers and controls
 rotation, spawn/join/requeue, pool-wide date shifts and pause policy. Native pools,
 job snapshots, worker launch/join, abort and acquire/release completion publication
 remain unchanged; existing job computation is not counted as new retirement.
-A constant-initialized member table supplies 20 typed noexcept operations; Time is
+A constant-initialized member table supplies the graph owner and 18 typed native leaves; Time is
 one narrow entry observation. Visits and cargo admission call queues directly in Rust. Shared
-graph size/ID/validity/get helpers serve the job reader and existing consumers.
+graph owner/ID/validity/get helpers serve the job reader and existing consumers.
 No queue borrow crosses native callbacks, including synchronous fallback and deletion.
 LGRS keeps two native scoped vectors with the original reference field names/order.
 Exported spans are copied without callbacks/yield/reset under game-state serialization
@@ -1824,13 +1824,14 @@ pinned scheduler bodies for worker/pause, duplicate rotation, recycled-ID, clear
 pool-shift gaps, failing absent completion markers. Native tests exercise ABI,
 partial-state unwind and real SlError recursive cleanup. Actual concurrent worker,
 multiplayer/GUI timing and historical LGRS versions remain #156 gaps. Independent
-source review and focused checks pass; root must decide actual cost/retirement disposition.
+source reviews and root cost disposition stand; combined conflict review and Full remain.
+
 ### Live link graph contents and mutation (#378)
 
 Rust owns cargo, compression date, nodes and sorted edge vectors in one owner per
 native shell. Lifecycle/copy/init, node and edge mutation, supply/demand/location,
 restriction/release, merge/scaling, compression, dates and queries run in Rust.
-C++ keeps pool IDs/reuse, station membership leaves and the independent scheduler.
+C++ keeps pool IDs/reuse and station membership leaves; Rust owns the scheduler.
 Each job deep-copies the same representation; native annotations borrow canonical
 station scalars and immutable edge references until the existing worker join.
 The computation and flow-application ports are unchanged ownership, not new retirement.
