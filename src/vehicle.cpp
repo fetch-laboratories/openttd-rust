@@ -824,7 +824,6 @@ void ResetVehicleColourMap()
 #ifdef WITH_RUST
 #include "rust/fleet_pending_services.hpp"
 static void ClearPendingAutoreplace() { openttd_rust_fleet_pending_clear(); }
-static void RecordPendingAutoreplace(VehicleID id, bool leave) { openttd_rust_fleet_pending_add(id.base(), leave); }
 #else
 using AutoreplaceMap = std::map<VehicleID, bool>;
 static AutoreplaceMap _vehicles_to_autoreplace;
