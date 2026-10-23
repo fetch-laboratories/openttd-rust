@@ -18,6 +18,9 @@
 #include "../network/network.h"
 #include "../settings_internal.h"
 #include "../settings_table.h"
+#ifdef WITH_RUST
+#include "../rust/linkgraph_schedule_ffi.h"
+#endif
 
 #include "../safeguards.h"
 
@@ -216,6 +219,40 @@ SaveLoadTable GetLinkGraphJobDesc()
  * Get a SaveLoad array for the link graph schedule.
  * @return SaveLoad array for the link graph schedule.
  */
+#ifdef WITH_RUST
+/* Only native frames own staging. SlObject may throw or recursively null pointers;
+ * import follows normal completion only. No Rust frame or borrowed span survives it. */
+struct ScheduleStaging {
+	std::vector<LinkGraph *> schedule;
+	std::vector<LinkGraphJob *> running;
+	ScheduleStaging()
+	{
+		OpenTTDScheduleQueues q;
+		openttd_rust_schedule_export(&q);
+		if (q.schedule_len != 0) this->schedule.assign(q.schedule, q.schedule + q.schedule_len);
+		if (q.running_len != 0) this->running.assign(q.running, q.running + q.running_len);
+	}
+	void Import() const
+	{
+		OpenTTDScheduleQueues q{this->schedule.data(), this->schedule.size(), this->running.data(), this->running.size()};
+		openttd_rust_schedule_import(&q);
+	}
+};
+SaveLoadTable GetLinkGraphScheduleDesc()
+{
+	static const SaveLoad schedule_desc[] = {
+		SLE_REFVECTOR(ScheduleStaging, schedule, REF_LINK_GRAPH),
+		SLE_REFVECTOR(ScheduleStaging, running, REF_LINK_GRAPH_JOB),
+	};
+	return schedule_desc;
+}
+static void ScheduleObject(SaveLoadTable desc, bool import)
+{
+	ScheduleStaging staging;
+	SlObject(&staging, desc);
+	if (import) staging.Import();
+}
+#else
 SaveLoadTable GetLinkGraphScheduleDesc()
 {
 	static const SaveLoad schedule_desc[] = {
@@ -224,6 +261,11 @@ SaveLoadTable GetLinkGraphScheduleDesc()
 	};
 	return schedule_desc;
 }
+static void ScheduleObject(SaveLoadTable desc, bool)
+{
+	SlObject(&LinkGraphSchedule::instance, desc);
+}
+#endif
 
 /**
  * Spawn the threads for running link graph calculations.
@@ -322,7 +364,7 @@ struct LGRSChunkHandler : ChunkHandler {
 		SlTableHeader(GetLinkGraphScheduleDesc());
 
 		SlSetArrayIndex(0);
-		SlObject(&LinkGraphSchedule::instance, GetLinkGraphScheduleDesc());
+		ScheduleObject(GetLinkGraphScheduleDesc(), false);
 	}
 
 	void Load() const override
@@ -330,13 +372,13 @@ struct LGRSChunkHandler : ChunkHandler {
 		const std::vector<SaveLoad> slt = SlCompatTableHeader(GetLinkGraphScheduleDesc(), _linkgraph_schedule_sl_compat);
 
 		if (!IsSavegameVersionBefore(SLV_RIFF_TO_ARRAY) && SlIterateArray() == -1) return;
-		SlObject(&LinkGraphSchedule::instance, slt);
+		ScheduleObject(slt, true);
 		if (!IsSavegameVersionBefore(SLV_RIFF_TO_ARRAY) && SlIterateArray() != -1) SlErrorCorrupt("Too many LGRS entries");
 	}
 
 	void FixPointers() const override
 	{
-		SlObject(&LinkGraphSchedule::instance, GetLinkGraphScheduleDesc());
+ScheduleObject(GetLinkGraphScheduleDesc(), true);
 	}
 };
 

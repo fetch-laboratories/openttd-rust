@@ -102,7 +102,7 @@ pub struct Services {
     /// `ge.link_graph = lg->index; ge.node = lg->AddNode(st);`
     pub join_graph: extern "C" fn(*mut NativeGraph, *mut BaseStation, u8),
     /// `LinkGraph::Size()`.
-    pub graph_size: extern "C" fn(*mut NativeGraph) -> u16,
+    pub graph_size: extern "C" fn(*const NativeGraph) -> u16,
     /// `LinkGraphSchedule::instance.Dequeue(from)`, then `into->Merge(from)`.
     pub merge_graph: extern "C" fn(*mut NativeGraph, *mut NativeGraph),
     /// `(*lg)[from].UpdateEdge(to, capacity, usage, time, modes)`.

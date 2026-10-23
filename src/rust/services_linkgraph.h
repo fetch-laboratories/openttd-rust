@@ -12,7 +12,7 @@
 #include "../linkgraph/linkgraphschedule.h"
 #include "../station_base.h"
 #include "../debug.h"
-#include "linkgraph_ffi.h"
+#include "linkgraph_schedule_ffi.h"
 #include "station_service_ffi.h"
 
 inline bool RustLinkGraphAvailable() noexcept { return LinkGraph::CanAllocateItem(); }

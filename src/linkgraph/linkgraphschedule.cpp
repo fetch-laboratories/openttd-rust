@@ -20,6 +20,11 @@
 #include "../command_func.h"
 #include "../network/network.h"
 #include "../misc_cmd.h"
+#ifdef WITH_RUST
+#include "../rust/linkgraph_schedule_ffi.h"
+#include "../rust/services_ffi.h"
+#include "../rust/services_linkgraph.h"
+#endif
 
 #include "../safeguards.h"
 
@@ -30,6 +35,57 @@
  */
 /* static */ LinkGraphSchedule LinkGraphSchedule::instance;
 
+#ifdef WITH_RUST
+static_assert(LinkGraphSchedule::SPAWN_JOIN_TICK == 21 && EconomyTime::SECONDS_PER_DAY == 2);
+void OpenTTDScheduleAssertGraph(const LinkGraph *g) noexcept { assert(g == LinkGraph::Get(g->index)); }
+bool OpenTTDScheduleCanAllocate() noexcept { return LinkGraphJob::CanAllocateItem(); }
+void OpenTTDScheduleAllocationFailure() noexcept { NOT_REACHED(); }
+LinkGraphJob *OpenTTDScheduleNewJob(const LinkGraph *g) noexcept { return new LinkGraphJob(*g); }
+void OpenTTDScheduleSpawn(LinkGraphJob *j) noexcept { j->SpawnThread(); }
+bool OpenTTDScheduleDue(const LinkGraphJob *j) noexcept { return j->IsScheduledToBeJoined(); }
+bool OpenTTDScheduleCompleted(const LinkGraphJob *j) noexcept { return j->IsJobCompleted(); }
+uint16_t OpenTTDScheduleGraphIndex(const LinkGraphJob *j) noexcept { return j->LinkGraphIndex().base(); }
+void OpenTTDScheduleDestroyJob(LinkGraphJob *j) noexcept { delete j; }
+bool OpenTTDScheduleGraphValid(uint16_t id) noexcept { return LinkGraph::IsValidID(LinkGraphID(id)); }
+LinkGraph *OpenTTDScheduleGraphGet(uint16_t id) noexcept { return LinkGraph::Get(LinkGraphID(id)); }
+void OpenTTDScheduleAbortJob(LinkGraphJob *j) noexcept { j->AbortJob(); }
+LinkGraph *OpenTTDScheduleNextGraph(uint32_t *from) noexcept
+{
+	for (LinkGraph *g : LinkGraph::Iterate(*from)) { *from = g->index.base() + 1U; return g; }
+	return nullptr;
+}
+LinkGraphJob *OpenTTDScheduleNextJob(uint32_t *from) noexcept
+{
+	for (LinkGraphJob *j : LinkGraphJob::Iterate(*from)) { *from = j->index.base() + 1U; return j; }
+	return nullptr;
+}
+OpenTTDScheduleTime OpenTTDScheduleTimeNow() noexcept { return {_rust_shared_services.economy_date(), TimerGameEconomy::date_fract, _settings_game.linkgraph.recalc_interval}; }
+void OpenTTDSchedulePostPause(bool pause) noexcept { Command<CMD_PAUSE>::Post(PauseMode::LinkGraph, pause); }
+void OpenTTDScheduleSetPause() noexcept { _pause_mode.Set(PauseMode::LinkGraph); }
+void OpenTTDScheduleBeginMeasurement(void *storage, bool client) noexcept
+{
+	if (client) static_cast<std::optional<PerformanceMeasurer> *>(storage)->emplace(PFE_GL_LINKGRAPH);
+	else PerformanceMeasurer::SetInactive(PFE_GL_LINKGRAPH);
+}
+
+void LinkGraphSchedule::Queue(LinkGraph *g) { openttd_rust_schedule_queue(g); }
+void LinkGraphSchedule::Dequeue(LinkGraph *g) { openttd_rust_schedule_dequeue(g); }
+void LinkGraphSchedule::SpawnNext() { openttd_rust_schedule_spawn_next(); }
+bool LinkGraphSchedule::IsJoinWithUnfinishedJobDue() const { return openttd_rust_schedule_unfinished(); }
+void LinkGraphSchedule::JoinNext() { openttd_rust_schedule_join_next(); }
+void LinkGraphSchedule::SpawnAll() { openttd_rust_schedule_spawn_all(); }
+void LinkGraphSchedule::Clear() { openttd_rust_schedule_clear(); }
+void LinkGraphSchedule::ShiftDates(TimerGameEconomy::Date interval) { openttd_rust_schedule_shift(interval.base()); }
+void StateGameLoop_LinkGraphPauseControl() { openttd_rust_schedule_pause(_pause_mode.Test(PauseMode::LinkGraph), _pause_mode.None()); }
+void AfterLoad_LinkGraphPauseControl() { openttd_rust_schedule_after_load(); }
+void OnTick_LinkGraph()
+{
+	std::optional<PerformanceMeasurer> measurement;
+	openttd_rust_schedule_tick(_networking && !_network_server, &measurement);
+}
+LinkGraphSchedule::LinkGraphSchedule() = default;
+LinkGraphSchedule::~LinkGraphSchedule() { this->Clear(); }
+#else
 /**
  * Start the next job in the schedule.
  */
@@ -83,6 +139,8 @@ void LinkGraphSchedule::JoinNext()
 	}
 }
 
+#endif /* !WITH_RUST */
+
 /**
  * Run all handlers for the given Job.
  * @param job Pointer to a link graph job.
@@ -113,6 +171,7 @@ void LinkGraphSchedule::JoinNext()
 	job->job_completed.store(true, std::memory_order_release);
 }
 
+#ifndef WITH_RUST
 /**
  * Start all threads in the running list. This is only useful for save/load.
  * Usually threads are started when the job is created.
@@ -228,3 +287,4 @@ void OnTick_LinkGraph()
 }
 
 
+#endif /* WITH_RUST */

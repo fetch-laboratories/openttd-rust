@@ -37,6 +37,7 @@ mod history_type;
 mod integer;
 mod landscape;
 mod linkgraph;
+mod linkgraph_schedule;
 mod linkgraph_type;
 mod map_func;
 mod map_type;

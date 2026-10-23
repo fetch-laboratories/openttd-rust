@@ -52,7 +52,7 @@ struct OpenTTDVehicleVisits {
 	OpenTTDLinkGraph *(*allocate_graph)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(allocate_graph);
 	void (*allocation_failure)() noexcept OPENTTD_SERVICE_DEFAULT(allocation_failure);
 	void (*join_graph)(OpenTTDLinkGraph *, OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(join_graph);
-	uint16_t (*graph_size)(OpenTTDLinkGraph *) noexcept OPENTTD_SERVICE_DEFAULT(graph_size);
+	uint16_t (*graph_size)(const OpenTTDLinkGraph *) noexcept OPENTTD_SERVICE_DEFAULT(graph_size);
 	void (*merge_graph)(OpenTTDLinkGraph *, OpenTTDLinkGraph *) noexcept OPENTTD_SERVICE_DEFAULT(merge_graph);
 	void (*update_edge)(OpenTTDLinkGraph *, uint16_t, uint16_t, uint32_t, uint32_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(update_edge);
 	OpenTTDVisitPercentStrings percent;

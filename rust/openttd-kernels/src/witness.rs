@@ -280,6 +280,16 @@ witness_blocks! {
         ROAD_STOP_REBUILD = 16 => "road_stop.rebuild",
         ROAD_STOP_REBUILD_VEHICLE = 17 => "road_stop.rebuild_vehicle",
     }
+    schedule {
+        SCHEDULE_QUEUE = 0 => "schedule.queue",
+        SCHEDULE_ROTATE = 1 => "schedule.rotate",
+        SCHEDULE_SPAWN = 2 => "schedule.spawn",
+        SCHEDULE_REQUEUE = 3 => "schedule.requeue",
+        SCHEDULE_JOIN = 4 => "schedule.join",
+        SCHEDULE_RELOAD_JOB = 5 => "schedule.reload_job",
+        SCHEDULE_PAUSE = 6 => "schedule.pause",
+        SCHEDULE_IMPORT = 7 => "schedule.import",
+    }
     ship {
         SHIP_LOCK_UP = 0 => "ship.lock_up",
         SHIP_LOCK_DOWN = 1 => "ship.lock_down",

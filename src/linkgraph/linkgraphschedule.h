@@ -45,8 +45,10 @@ protected:
 #ifndef WITH_RUST
 	std::array<std::unique_ptr<ComponentHandler>, 6> handlers{}; ///< Handlers to be run for each job.
 #endif
+#ifndef WITH_RUST
 	GraphList schedule;            ///< Queue for new jobs.
 	JobList running;               ///< Currently running jobs.
+#endif
 
 public:
 	/* This is a tick where not much else is happening, so a small lag might go unnoticed. */
@@ -66,17 +68,25 @@ public:
 	 * Queue a link graph for execution.
 	 * @param lg Link graph to be queued.
 	 */
+#ifdef WITH_RUST
+	void Queue(LinkGraph *lg);
+#else
 	void Queue(LinkGraph *lg)
 	{
 		assert(LinkGraph::Get(lg->index) == lg);
 		this->schedule.push_back(lg);
 	}
+#endif
 
 	/**
 	 * Remove a link graph from the execution queue.
 	 * @param lg Link graph to be removed.
 	 */
+#ifdef WITH_RUST
+	void Dequeue(LinkGraph *lg);
+#else
 	void Dequeue(LinkGraph *lg) { this->schedule.remove(lg); }
+#endif
 };
 
 void StateGameLoop_LinkGraphPauseControl();
