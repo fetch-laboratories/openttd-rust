@@ -33,9 +33,11 @@ checkpoint and work order.
    and you spot-check its fix commits, green required CI, integration and
    worktree removal. Commit roadmap updates when you take stock (step 4) or
    change the work order, not after every integration; PR and issue state
-   carry the rest. Update a draft from base only when a conflict blocks its
-   integration or its own work. If a check on rust-migration itself is red,
-   fix it first.
+   carry the rest. Update from base when preparing final Full or resolving a
+   blocking conflict; batch ready work when it avoids repeated validation.
+   Integrate only the tested combination under strict branch protection.
+   For a regression on rust-migration, apply AGENTS.md's automatic rollback
+   rule before more integrations; do not assume a fix PR is required.
 3. When fewer than two unstarted components remain ahead of active work, spawn a
    fresh high-effort planning agent (Astra in Codex) to select the next whole
    simulation owners, guided by the world-state design and the latest speed
@@ -52,6 +54,10 @@ checkpoint and work order.
    passing milestone and keep one status comment per task, edited in place.
    Keep the roadmap's resume checkpoint table current with each roadmap commit,
    so a restart can continue from it and the linked issues alone.
+
+When the user winds down, AGENTS.md's action limits replace this work loop:
+record active work, merge only eligible validated results, perform any eligible
+automatic rollback, and stop without new CI or repair rounds.
 
 Only the user ends the assignment. If something needs their decision, open an
 issue labeled "question" with your recommendation, mention it in your status

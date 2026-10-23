@@ -11,6 +11,7 @@
 #include "ground_ffi.h"
 #include "../clear_map.h"
 #include "services_rail.h"
+#include "services_viewport.h"
 #include "services_water.h"
 #include "../road_internal.h"
 #include "../tree_map.h"
@@ -21,6 +22,7 @@
 #include "../sound_func.h"
 #include "../signal_func.h"
 #include "../effectvehicle_func.h"
+#include "../viewport_func.h"
 #include "tile_animation_services.h"
 
 inline OpenTTDFoundationSlope RustTileSlopeZ(uint32_t tile) noexcept { auto [slope, z] = GetTileSlopeZ(TileIndex{tile}); return {.z = z, .slope = slope}; }

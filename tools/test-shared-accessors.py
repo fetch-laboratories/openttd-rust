@@ -80,6 +80,8 @@ with tempfile.TemporaryDirectory() as directory:
     owner.write_text('#[unsafe(no_mangle)] pub extern "C" fn openttd_rust_dead() {}')
     caller = root / "tools/caller.py"
     caller.write_text("")
+    include_caller = root / "tools/caller.inc"
+    include_caller.write_text("")
     git("add", ".")
     assert "orphan | openttd_rust_dead" in check().stdout
     port.write_text(original + "\nvoid openttd_rust_dead();\n")
@@ -88,6 +90,8 @@ with tempfile.TemporaryDirectory() as directory:
         (port, "void Call() { openttd_rust_dead(); }", False),
         (owner, "fn call() { openttd_rust_dead(); }", False),
         (caller, "source = 'openttd_rust_dead();'", False),
+        (include_caller, "void FixtureCall() { openttd_rust_dead(); }", False),
+        (include_caller, "// openttd_rust_dead()", True),
         (port, "void Call() {\n    openttd_rust_dead();\n}", False),
         (port, "void Call() {\n    openttd_rust_dead(\n        1);\n}", False),
         (port, "// openttd_rust_dead\n/* openttd_rust_dead */", True),

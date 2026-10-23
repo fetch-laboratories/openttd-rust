@@ -6,6 +6,8 @@
  */
 
 //! Inline direction helpers from `direction_func.h`.
+use crate::direction_type::DIR_END;
+
 /// `DiagDirToAxis`.
 pub const fn diag_dir_to_axis(direction: u8) -> u8 {
     direction & 1
@@ -13,6 +15,11 @@ pub const fn diag_dir_to_axis(direction: u8) -> u8 {
 /// `AxisToDiagDir`.
 pub const fn axis_to_diag_dir(axis: u8) -> u8 {
     2 - axis
+}
+/// `DirToDiagDir`.
+pub const fn dir_to_diag_dir(direction: u8) -> u8 {
+    debug_assert!(direction < DIR_END);
+    direction >> 1
 }
 /// `ReverseDiagDir`.
 pub const fn reverse_diag_dir(direction: u8) -> u8 {

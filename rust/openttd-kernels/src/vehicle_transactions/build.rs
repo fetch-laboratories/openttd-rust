@@ -65,7 +65,7 @@ pub(crate) unsafe fn build(
     let b = c.base;
     let value = Cost(out, b.cost);
     let company = (b.shared.current_company)();
-    if !(s.mass.is_depot)(tile) || !(s.mass.is_tile_owner)(tile, company) {
+    if !(s.mass.is_depot)(tile) || !crate::tile_map::is_tile_owner(b.shared, tile, company) {
         value.error(ERROR);
         return Result::default();
     }

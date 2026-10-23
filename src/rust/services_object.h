@@ -9,6 +9,7 @@
 #ifndef RUST_SERVICES_OBJECT_H
 #define RUST_SERVICES_OBJECT_H
 #include "object_ffi.h"
+#include "../object_base.h"
 #include "../station_func.h"
 #include "../newgrf_object.h"
 #include "generation_services.hpp"
@@ -18,4 +19,5 @@ struct OpenTTDObjectGenerationFrame { std::exception_ptr cancellation; };
 inline uint16_t RustObjectSpecFlags(const ObjectSpec *spec) noexcept { return spec->flags.base(); }
 inline uint8_t RustObjectSpecCallbacks(const ObjectSpec *spec) noexcept { return spec->callback_mask.base(); }
 inline bool RustObjectEverAvailable(const ObjectSpec *spec) noexcept { return spec->WasEverAvailable(); }
+inline void OpenTTDSetObjectTown(Object *object, Town *town) noexcept { object->town = town; }
 #endif /* RUST_SERVICES_OBJECT_H */

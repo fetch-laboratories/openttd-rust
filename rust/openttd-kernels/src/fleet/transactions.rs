@@ -11,6 +11,7 @@ use super::{
     add_replacement, group, remove_replacement, replacement, update_autoreplace,
 };
 use crate::command_type::DoCommandFlag;
+use crate::tile_type::TILE_SIZE;
 /// `EngineID::Invalid()`; shares the 0xFFFF encoding with `GroupID::Invalid()`.
 const INVALID_ENGINE: u16 = INVALID_GROUP;
 use std::ptr;
@@ -287,7 +288,6 @@ unsafe fn direct_copy_group(w: &Services, out: *mut (), old: *mut (), new: *mut 
 
 const INVALID_CARGO: u8 = 255;
 const NO_REFIT: u8 = 254;
-use crate::tile_type::TILE_SIZE;
 
 /// Original `assert` site: the condition is evaluated only in builds whose C++
 /// `assert` is active, and the native wrapper terminates exactly like it.

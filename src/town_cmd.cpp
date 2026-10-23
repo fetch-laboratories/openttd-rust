@@ -56,6 +56,11 @@
 #include "rust/town_founding_ffi.h"
 #include "rust/generation_services.hpp"
 #include "rust/house_ffi.h"
+#include "rust/town_command_ffi.h"
+#include "rust/services_object.h"
+#include "rust/services_industry.h"
+#include "rust/presentation_services.h"
+#include "rust/services_rail.h"
 #endif
 #include "town_kdtree.h"
 #include "townname_func.h"
@@ -113,6 +118,13 @@ static bool _generating_town = false;
  * @param t The town we are interested in
  * @return true If town 'owns' a bridge.
  */
+#ifdef WITH_RUST
+Town::~Town()
+{
+	openttd_rust_town_destruct(&GetRustTownCommandServices(), {.shell = this, .state = this->growth_owner.get(), .id = this->index.base()});
+}
+void Town::PostDestructor(size_t) { openttd_rust_town_post_destruct(&GetRustTownCommandServices()); }
+#else
 static bool TestTownOwnsBridge(TileIndex tile, const Town *t)
 {
 	if (!IsTileOwner(tile, OWNER_TOWN)) return false;
@@ -198,6 +210,8 @@ void Town::PostDestructor(size_t)
 		if (o->town == nullptr) o->town = CalcClosestTownFromTile(o->location.tile, UINT_MAX);
 	}
 }
+
+#endif
 
 /**
  * Assign the town layout.
@@ -503,12 +517,6 @@ static void *RustHouseStationFinder(uint32_t tile) noexcept
 	static std::optional<StationFinder> stations;
 	stations.emplace(TileArea(TileIndex{tile}, 1, 1));
 	return &*stations;
-}
-static CommandCost ClearTile_Town(TileIndex tile, DoCommandFlags flags)
-{
-	CommandCost result;
-	openttd_rust_house_clear(&GetRustTownServices(), &GetRustSharedServices(), RustCommandCost(&result), tile.base(), flags.base());
-	return result;
 }
 static void AddProducedCargo_Town(TileIndex tile, CargoArray &produced)
 {
@@ -1030,7 +1038,7 @@ static void RustTown_make_house(uint32_t tile, uint32_t town, uint32_t house, ui
 static void RustTown_population_changed(uint32_t town) noexcept
 {
 	Town *t = Town::Get(TownID(town));
-	InvalidateWindowData(WC_TOWN_VIEW, t->index);
+	OpenTTDInvalidateTownView(t->index.base());
 	if (_settings_client.gui.population_in_label) t->UpdateVirtCoord();
 	InvalidateWindowData(WC_TOWN_DIRECTORY, 0, TDIWD_POPULATION_CHANGE);
 }
@@ -1059,21 +1067,6 @@ static uint64_t RustTown_road_mask() noexcept
 {
 	return GetMaskForRoadTramType(RTT_ROAD).base();
 }
-static bool RustTown_clear_land(uint32_t tile, uint32_t execute) noexcept
-{
-	DoCommandFlags flags{DoCommandFlag::Auto, DoCommandFlag::NoWater};
-	if (execute != 0) flags.Set(DoCommandFlag::Execute);
-	CommandCost result;
-	GetRustCommandServices().landscape_clear(RustCommandCost(&result), tile, flags.base());
-	return result.Succeeded();
-}
-static OpenTTDTownCommandResult RustTown_terraform_land(uint32_t tile, uint32_t slope, uint32_t up, uint32_t execute) noexcept
-{
-	DoCommandFlags flags{DoCommandFlag::Auto, DoCommandFlag::NoWater};
-	if (execute != 0) flags.Set(DoCommandFlag::Execute);
-	const auto result = std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(flags, TileIndex{tile}, static_cast<Slope>(slope), up != 0));
-	return {.cost = result.GetCost(), .success = result.Succeeded()};
-}
 static bool RustTown_build_bridge(uint32_t tile, uint32_t end, uint32_t bridge, uint32_t road_type, uint32_t execute) noexcept
 {
 	auto flags = CommandFlagsToDCFlags(GetCommandFlags<CMD_BUILD_BRIDGE>());
@@ -1086,12 +1079,7 @@ static bool RustTown_build_tunnel(uint32_t tile, uint32_t road_type, uint32_t ex
 	if (execute != 0) flags.Set(DoCommandFlag::Execute);
 	return Command<CMD_BUILD_TUNNEL>::Do(flags, TileIndex{tile}, TRANSPORT_ROAD, static_cast<RoadType>(road_type)).Succeeded();
 }
-static void RustTown_clear_house_land(uint32_t tile) noexcept
-{
-	CommandCost result;
-	GetRustCommandServices().landscape_clear(RustCommandCost(&result), tile, DoCommandFlags{DoCommandFlag::Auto, DoCommandFlag::NoWater, DoCommandFlag::Execute}.base());
-	assert(result.Succeeded());
-}
+static void RustTown_assert_clear_house([[maybe_unused]] bool success) noexcept { assert(success); }
 static bool RustTown_allow_construction(uint32_t town, uint32_t tile, uint32_t house, uint32_t random) noexcept
 {
 	const auto *hs = HouseSpec::Get(house);
@@ -1302,11 +1290,9 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.update_max_pass = RustTown_update_max_pass,
 		.next_town = GetRustSharedServices().town_next_id,
 		.road_mask = RustTown_road_mask,
-		.clear_land = RustTown_clear_land,
-		.terraform_land = RustTown_terraform_land,
 		.build_bridge = RustTown_build_bridge,
 		.build_tunnel = RustTown_build_tunnel,
-		.clear_house_land = RustTown_clear_house_land,
+		.assert_clear_house = RustTown_assert_clear_house,
 		.allow_construction = RustTown_allow_construction,
 		.houses = &GetRustHouseServices(),
 	};
@@ -2442,8 +2428,8 @@ void UpdateTownMaxPass(Town *t)
 
 #ifndef WITH_RUST
 static void UpdateTownGrowthRate(Town *t);
-#endif
 static void UpdateTownGrowth(Town *t);
+#endif
 
 /**
  * Actually create a town.
@@ -3684,6 +3670,79 @@ const CargoSpec *FindFirstCargoWithTownAcceptanceEffect(TownAcceptanceEffect eff
  * @param goal The new goal value.
  * @return Empty cost or an error.
  */
+#ifdef WITH_RUST
+const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
+{
+	static const OpenTTDTownCommandServices services{
+		.founding = &GetRustTownFoundingServices(),
+		.rail = &GetRustRailMapServices(),
+		.cargo = CargoStorageServices(),
+		.objects = &GetRustObjectServices(),
+		.subsidies = &GetRustSubsidyServices(),
+		.fund_roads = OpenTTDFundRoads,
+		.fund_buildings = OpenTTDFundBuildings,
+		.exclusive_rights = OpenTTDExclusiveRights,
+		.bribe = OpenTTDBribe,
+		.invalidate_view = OpenTTDInvalidateTownView,
+		.invalidate_authority = [](uint16_t town) noexcept { InvalidateWindowData(WC_TOWN_AUTHORITY, TownID(town)); },
+		.modify_station_rating = OpenTTDModifyStationRatingAround,
+		.road_news = [](uint16_t id) noexcept {
+			std::string company_name = GetString(STR_COMPANY_NAME, _current_company);
+			AddNewsItem(GetEncodedString(TimerGameEconomy::UsingWallclockUnits() ? STR_NEWS_ROAD_REBUILDING_MINUTES : STR_NEWS_ROAD_REBUILDING_MONTHS, TownID(id), company_name), NewsType::General, NewsStyle::Normal, {}, TownID(id));
+		},
+		.road_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventRoadReconstruction(_current_company, TownID(id))); Game::NewEvent(new ScriptEventRoadReconstruction(_current_company, TownID(id))); },
+		.rights_news = [](uint16_t id) noexcept {
+			auto cni = std::make_unique<CompanyNewsInformation>(STR_NEWS_EXCLUSIVE_RIGHTS_TITLE, Company::Get(_current_company));
+			EncodedString message = GetEncodedString(TimerGameEconomy::UsingWallclockUnits() ? STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MINUTES : STR_NEWS_EXCLUSIVE_RIGHTS_DESCRIPTION_MONTHS, TownID(id), cni->company_name);
+			AddNewsItem(std::move(message), NewsType::General, NewsStyle::Company, {}, TownID(id), {}, std::move(cni));
+		},
+		.rights_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventExclusiveTransportRights(_current_company, TownID(id))); Game::NewEvent(new ScriptEventExclusiveTransportRights(_current_company, TownID(id))); },
+		.station_views_dirty = []() noexcept { SetWindowClassesDirty(WC_STATION_VIEW); },
+		.next_station = [](uint32_t from) noexcept -> OpenTTDTownStationCursor { if (Station *st = OpenTTDNextStation(from)) return {.shell = st, .next = st->index.base() + 1U}; return {.shell = nullptr, .next = UINT32_MAX}; },
+		.station_town = RustStationStationTown,
+		.station_owner = RustStationOwnerByte<const BaseStation>,
+		.station_airport = RustStationHasAirport,
+		.airport_type = RustStationAirportType,
+		.airport_tile = RustStationAirportTile,
+		.station_activity_owner = OpenTTDStationActivityOwner,
+		.local_company = RustIsLocalCompany,
+		.bribe_error = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_BRIBE_FAILED), {}, WL_INFO); },
+		.next_waypoint = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Waypoint *wp : Waypoint::Iterate(from)) return {.next = wp->index.base() + 1U, .town = OpenTTDBaseStationTown(wp)}; return {.next = UINT32_MAX, .town = nullptr}; },
+		.next_depot = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Depot *d : Depot::Iterate(from)) return {.next = d->index.base() + 1U, .town = d->town}; return {.next = UINT32_MAX, .town = nullptr}; },
+		.next_industry = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { if (const Industry *i = OpenTTDNextIndustry(from)) return {.next = i->index.base() + 1U, .town = OpenTTDIndustryTown(i)}; return {.next = UINT32_MAX, .town = nullptr}; },
+		.set_object_town = OpenTTDSetObjectTown,
+		.industry_town_by_tile = OpenTTDIndustryTownByTile,
+		.town_owned_road = OpenTTDHasTownOwnedRoad,
+		.remove_town_indices = [](Town *t) noexcept { _town_kdtree.Remove(t->index); if (t->cache.sign.kdtree_valid) _viewport_sign_kdtree.Remove(ViewportSignKdtreeItem::MakeTown(t->index)); },
+		.delete_town = [](Town *town) noexcept { delete town; },
+		.cleaning_pool = []() noexcept { return Town::CleaningPool(); },
+		.close_view = [](uint16_t town) noexcept { CloseWindowById(WC_TOWN_VIEW, TownID(town)); },
+		.close_graph = [](uint16_t town) noexcept { CloseWindowById(WC_TOWN_CARGO_GRAPH, TownID(town)); },
+		.storage_count = [](Town *town) noexcept { return town->psa_list.size(); },
+		.delete_storage = [](Town *town, size_t index) noexcept { delete town->psa_list[index]; },
+		.clear_storage = [](Town *town) noexcept { town->psa_list.clear(); },
+		.delete_inspect = OpenTTDDeleteTownInspect,
+		.dirty_screen = RustScreenDirty,
+#ifdef WITH_ASSERT
+		.assertions = true,
+#else
+		.assertions = false,
+#endif
+		.too_many_objects = STR_ERROR_TOO_MANY_OBJECTS,
+		.no_statue_place = STR_ERROR_STATUE_NO_SUITABLE_PLACE,
+	};
+	return services;
+}
+#endif
+
+#ifdef WITH_RUST
+CommandCost CmdTownCargoGoal(DoCommandFlags flags, TownID town_id, TownAcceptanceEffect tae, uint32_t goal)
+{
+	CommandCost result;
+	openttd_rust_town_cargo_goal(&GetRustTownCommandServices(), RustCommandCost(&result), flags.base(), town_id.base(), tae, goal);
+	return result;
+}
+#else
 CommandCost CmdTownCargoGoal(DoCommandFlags flags, TownID town_id, TownAcceptanceEffect tae, uint32_t goal)
 {
 	if (_current_company != OWNER_DEITY) return CMD_ERROR;
@@ -3705,6 +3764,7 @@ CommandCost CmdTownCargoGoal(DoCommandFlags flags, TownID town_id, TownAcceptanc
 
 	return CommandCost();
 }
+#endif
 
 /**
  * Set a custom text in the Town window.
@@ -3713,6 +3773,14 @@ CommandCost CmdTownCargoGoal(DoCommandFlags flags, TownID town_id, TownAcceptanc
  * @param text The new text (empty to remove the text).
  * @return Empty cost or an error.
  */
+#ifdef WITH_RUST
+CommandCost CmdTownSetText(DoCommandFlags flags, TownID town_id, const EncodedString &text)
+{
+	CommandCost result;
+	openttd_rust_town_text_command(&GetRustTownCommandServices(), RustCommandCost(&result), flags.base(), town_id.base(), Town::TextView(text));
+	return result;
+}
+#else
 CommandCost CmdTownSetText(DoCommandFlags flags, TownID town_id, const EncodedString &text)
 {
 	if (_current_company != OWNER_DEITY) return CMD_ERROR;
@@ -3727,6 +3795,7 @@ CommandCost CmdTownSetText(DoCommandFlags flags, TownID town_id, const EncodedSt
 
 	return CommandCost();
 }
+#endif
 
 /**
  * Change the growth rate of the town.
@@ -3735,6 +3804,14 @@ CommandCost CmdTownSetText(DoCommandFlags flags, TownID town_id, const EncodedSt
  * @param growth_rate Amount of days between growth, or TOWN_GROWTH_RATE_NONE, or 0 to reset custom growth rate.
  * @return Empty cost or an error.
  */
+#ifdef WITH_RUST
+CommandCost CmdTownGrowthRate(DoCommandFlags flags, TownID town_id, uint16_t growth_rate)
+{
+	CommandCost result;
+	openttd_rust_town_growth_command(&GetRustTownCommandServices(), RustCommandCost(&result), flags.base(), town_id.base(), growth_rate);
+	return result;
+}
+#else
 CommandCost CmdTownGrowthRate(DoCommandFlags flags, TownID town_id, uint16_t growth_rate)
 {
 	if (_current_company != OWNER_DEITY) return CMD_ERROR;
@@ -3743,9 +3820,6 @@ CommandCost CmdTownGrowthRate(DoCommandFlags flags, TownID town_id, uint16_t gro
 	if (t == nullptr) return CMD_ERROR;
 
 	if (flags.Test(DoCommandFlag::Execute)) {
-#ifdef WITH_RUST
-		openttd_rust_town_custom_rate(&GetRustTownServices(), &GetRustSharedServices(), t->index.base(), growth_rate);
-#else
 		if (growth_rate == 0) {
 			/* Just clear the flag, UpdateTownGrowth will determine a proper growth rate */
 			t->flags.Reset(TownFlag::CustomGrowth);
@@ -3762,12 +3836,12 @@ CommandCost CmdTownGrowthRate(DoCommandFlags flags, TownID town_id, uint16_t gro
 			t->flags.Set(TownFlag::CustomGrowth);
 		}
 		UpdateTownGrowth(t);
-#endif
 		InvalidateWindowData(WC_TOWN_VIEW, town_id);
 	}
 
 	return CommandCost();
 }
+#endif
 
 /**
  * Change the rating of a company in a town
@@ -3777,6 +3851,14 @@ CommandCost CmdTownGrowthRate(DoCommandFlags flags, TownID town_id, uint16_t gro
  * @param rating New rating of company (signed int16_t).
  * @return Empty cost or an error.
  */
+#ifdef WITH_RUST
+CommandCost CmdTownRating(DoCommandFlags flags, TownID town_id, CompanyID company_id, int16_t rating)
+{
+	CommandCost result;
+	openttd_rust_town_rating_command(&GetRustTownCommandServices(), RustCommandCost(&result), flags.base(), town_id.base(), company_id.base(), rating);
+	return result;
+}
+#else
 CommandCost CmdTownRating(DoCommandFlags flags, TownID town_id, CompanyID company_id, int16_t rating)
 {
 	if (_current_company != OWNER_DEITY) return CMD_ERROR;
@@ -3794,6 +3876,7 @@ CommandCost CmdTownRating(DoCommandFlags flags, TownID town_id, CompanyID compan
 
 	return CommandCost();
 }
+#endif
 
 /**
  * Expand a town (scenario editor only).
@@ -3802,6 +3885,15 @@ CommandCost CmdTownRating(DoCommandFlags flags, TownID town_id, CompanyID compan
  * @param grow_amount Amount to grow, or 0 to grow a random size up to the current amount of houses.
  * @return Empty cost or an error.
  */
+#ifdef WITH_RUST
+CommandCost CmdExpandTown(DoCommandFlags flags, TownID town_id, uint32_t grow_amount, TownExpandModes modes)
+{
+	CommandCost result;
+	RustRoadCommandContext road;
+	openttd_rust_town_expand_command(&GetRustTownCommandServices(), &road.view, RustCommandCost(&result), flags.base(), town_id.base(), grow_amount, modes.base());
+	return result;
+}
+#else
 CommandCost CmdExpandTown(DoCommandFlags flags, TownID town_id, uint32_t grow_amount, TownExpandModes modes)
 {
 	if (_game_mode != GM_EDITOR && _current_company != OWNER_DEITY) return CMD_ERROR;
@@ -3810,10 +3902,6 @@ CommandCost CmdExpandTown(DoCommandFlags flags, TownID town_id, uint32_t grow_am
 	if (t == nullptr) return CMD_ERROR;
 
 	if (flags.Test(DoCommandFlag::Execute)) {
-#ifdef WITH_RUST
-		RustRoadCommandContext road;
-		openttd_rust_town_expand(&GetRustTownServices(), &GetRustSharedServices(), &road.view, t->index.base(), grow_amount, modes.base());
-#else
 		/* The more houses, the faster we grow */
 		if (grow_amount == 0) {
 			uint amount = RandomRange(ClampTo<uint16_t>(t->cache.num_houses / 10)) + 3;
@@ -3833,11 +3921,11 @@ CommandCost CmdExpandTown(DoCommandFlags flags, TownID town_id, uint32_t grow_am
 		UpdateTownRadius(t);
 
 		UpdateTownMaxPass(t);
-#endif
 	}
 
 	return CommandCost();
 }
+#endif
 
 /**
  * Delete a town (scenario editor or worldgen only).
@@ -3845,6 +3933,14 @@ CommandCost CmdExpandTown(DoCommandFlags flags, TownID town_id, uint32_t grow_am
  * @param town_id Town ID to delete.
  * @return Empty cost or an error.
  */
+#ifdef WITH_RUST
+CommandCost CmdDeleteTown(DoCommandFlags flags, TownID town_id)
+{
+	CommandCost result;
+	openttd_rust_town_delete_command(&GetRustTownCommandServices(), RustCommandCost(&result), flags.base(), town_id.base());
+	return result;
+}
+#else
 CommandCost CmdDeleteTown(DoCommandFlags flags, TownID town_id)
 {
 	if (_game_mode != GM_EDITOR && !_generating_world) return CMD_ERROR;
@@ -3935,12 +4031,20 @@ CommandCost CmdDeleteTown(DoCommandFlags flags, TownID town_id)
 
 	return CommandCost();
 }
+#endif
 
 /**
  * Get cost factors for a TownAction
  * @param action TownAction to get cost factor for.
  * @returns Cost factor.
  */
+#ifdef WITH_RUST
+uint8_t GetTownActionCost(TownAction action) { return openttd_rust_town_action_cost(to_underlying(action)); }
+TownActions GetMaskOfTownActions(CompanyID cid, const Town *t)
+{
+	return TownActions(openttd_rust_town_action_mask(&GetRustTownCommandServices(), cid.base(), {.shell = const_cast<Town *>(t), .state = t->growth_owner.get(), .id = t->index.base()}));
+}
+#else
 uint8_t GetTownActionCost(TownAction action)
 {
 	/**
@@ -4109,9 +4213,6 @@ static CommandCost TownActionFundBuildings(Town *t, DoCommandFlags flags)
 
 	if (flags.Test(DoCommandFlag::Execute)) {
 		/* And grow for 3 months */
-#ifdef WITH_RUST
-		openttd_rust_town_fund(&GetRustTownServices(), &GetRustSharedServices(), t->index.base());
-#else
 		t->fund_buildings_months = 3;
 
 		/* Enable growth (also checking GameScript's opinion) */
@@ -4128,7 +4229,6 @@ static CommandCost TownActionFundBuildings(Town *t, DoCommandFlags flags)
 		t->grow_counter = std::min<uint16_t>(t->grow_counter, 2 * Ticks::TOWN_GROWTH_TICKS - (t->growth_rate - t->grow_counter) % Ticks::TOWN_GROWTH_TICKS);
 
 		SetWindowDirty(WC_TOWN_VIEW, t->index);
-#endif
 	}
 	return CommandCost();
 }
@@ -4273,6 +4373,8 @@ TownActions GetMaskOfTownActions(CompanyID cid, const Town *t)
 	return buttons;
 }
 
+#endif
+
 /**
  * Do a town action.
  * This performs an action such as advertising, building a statue, funding buildings,
@@ -4282,6 +4384,14 @@ TownActions GetMaskOfTownActions(CompanyID cid, const Town *t)
  * @param action action to perform, @see _town_action_proc for the list of available actions
  * @return the cost of this operation or an error
  */
+#ifdef WITH_RUST
+CommandCost CmdDoTownAction(DoCommandFlags flags, TownID town_id, TownAction action)
+{
+	CommandCost result;
+	openttd_rust_town_action(&GetRustTownCommandServices(), RustCommandCost(&result), flags.base(), town_id.base(), to_underlying(action));
+	return result;
+}
+#else
 CommandCost CmdDoTownAction(DoCommandFlags flags, TownID town_id, TownAction action)
 {
 	Town *t = Town::GetIfValid(town_id);
@@ -4300,6 +4410,7 @@ CommandCost CmdDoTownAction(DoCommandFlags flags, TownID town_id, TownAction act
 
 	return cost;
 }
+#endif
 
 #ifndef WITH_RUST
 template <typename Func>
@@ -4361,9 +4472,7 @@ static void UpdateTownRating(Town *t)
  * @param t The town to calculate grow counter for
  * @param prev_growth_rate Town growth rate before it changed (one that was used with grow counter to be updated)
  */
-#ifdef WITH_RUST
-static void UpdateTownGrowth(Town *t) { openttd_rust_town_update_growth(&GetRustTownServices(), &GetRustSharedServices(), t->index.base()); }
-#else
+#ifndef WITH_RUST
 static void UpdateTownGrowCounter(Town *t, uint16_t prev_growth_rate)
 {
 	if (t->growth_rate == TOWN_GROWTH_RATE_NONE) return;
@@ -4770,14 +4879,7 @@ static const IntervalTimer<TimerGameEconomy> _economy_towns_yearly({TimerGameEco
 #endif
 });
 
-#ifdef WITH_RUST
-static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
-{
-	CommandCost result;
-	openttd_rust_house_terraform(&GetRustTownServices(), &GetRustSharedServices(), RustCommandCost(&result), tile.base(), flags.base(), z_new, tileh_new);
-	return result;
-}
-#else
+#ifndef WITH_RUST
 static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int z_new, Slope tileh_new)
 {
 	if (AutoslopeEnabled()) {
@@ -4811,7 +4913,11 @@ static CommandCost TerraformTile_Town(TileIndex tile, DoCommandFlags flags, int 
 extern const TileTypeProcs _tile_type_town_procs = {
 	DrawTile_Town,           // draw_tile_proc
 	GetSlopePixelZ_Town,     // get_slope_z_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	ClearTile_Town,          // clear_tile_proc
+#endif
 	AddAcceptedCargo_Town,   // add_accepted_cargo_proc
 	GetTileDesc_Town,        // get_tile_desc_proc
 	GetTileTrackStatus_Town, // get_tile_track_status_proc
@@ -4826,7 +4932,11 @@ extern const TileTypeProcs _tile_type_town_procs = {
 	AddProducedCargo_Town,   // add_produced_cargo_proc
 	nullptr,                    // vehicle_enter_tile_proc
 	GetFoundation_Town,      // get_foundation_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	TerraformTile_Town,      // terraform_tile_proc
+#endif
 	nullptr, // check_build_above_proc
 };
 
@@ -4838,13 +4948,14 @@ std::span<const DrawBuildingsTileStruct> GetTownDrawTileData()
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDTownLeaves.hpp"
+#include "abi-visit-OpenTTDTownCommandServices.hpp"
 #include "abi-visit-OpenTTDTownFoundingServices.hpp"
 #include "abi-visit-OpenTTDTownAuthorityServices.hpp"
 #include "abi-visit-OpenTTDHouseServices.hpp"
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
 bool CheckAbi_town_cmd()
 {
-	return AbiServicesComplete(GetRustTownServices().environment) &&
+	return AbiServicesComplete(GetRustTownCommandServices()) && AbiServicesComplete(GetRustTownServices().environment) &&
 		AbiServicesComplete(GetRustTownServices()) &&
 		AbiServicesComplete(GetRustTownFoundingServices()) &&
 		AbiServicesComplete(GetRustTownAuthorityServices()) &&

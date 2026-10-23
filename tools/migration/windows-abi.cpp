@@ -42,6 +42,7 @@
 #include "rust/rail_yapf_ffi.h"
 #include "rust/road_command_ffi.h"
 #include "rust/road_ffi.h"
+#include "rust/road_stop_ffi.h"
 #include "rust/road_yapf_ffi.h"
 #include "rust/script_list_ffi.h"
 #include "rust/ship_control_ffi.h"
@@ -50,6 +51,7 @@
 #include "rust/station_cargo_ffi.h"
 #include "rust/station_service_ffi.h"
 #include "rust/string_validation_ffi.h"
+#include "rust/town_command_ffi.h"
 #include "rust/town_founding_ffi.h"
 #include "rust/townname_ffi.h"
 #include "rust/train_ffi.h"
@@ -74,6 +76,7 @@
 // Registry: landscape (#212).
 #include "rust/ground_ffi.h"
 #include "rust/landscape_loop_ffi.h"
+#include "rust/landscape_command_ffi.h"
 #include "rust/tile_type_access.hpp"
 #include "tests/ground_protocol.hpp"
 #include "tests/landscape_protocol.hpp"
@@ -674,12 +677,11 @@ static const OpenTTDTreeServices tree_probe_services{
 	.ambient = TreeUnused<bool, uint32_t>,
 	.progress = []() noexcept { return tree_probe.abort; },
 	.progress_total = TreeUnused<bool, uint32_t>,
-	.town_rating = TreeUnused<void, OpenTTDTreeCommand *, uint32_t, bool>,
+	.town_rating = TreeUnused<void, uint16_t, uint32_t, bool>,
 	.command_begin = [](OpenTTDTreeCommand *, uint32_t, uint32_t, bool) noexcept { return INT32_MAX; },
 	.command_tile = [](OpenTTDTreeCommand *) noexcept { return uint32_t{1}; },
 	.command_next = [](OpenTTDTreeCommand *) noexcept { return UINT32_MAX; },
 	.command_debit = TreeUnused<void, OpenTTDTreeCommand *>,
-	.landscape_clear = TreeUnused<OpenTTDTreeLandscapeClear, OpenTTDTreeCommand *, uint32_t>,
 };
 static void Trees()
 {
@@ -723,7 +725,7 @@ static void Trees()
 	shared.tree_ground = [](uint32_t tile) noexcept {
 		/* A water observation reenters trees; no owner borrow spans the call. */
 		++tree_probe.waters;
-		tree_probe.nested_cost = openttd_rust_trees_clear_tile(nullptr, tile + 1, 5, true, false, &tree_probe_services, tree_probe.shared);
+		tree_probe.nested_cost = openttd_rust_trees_clear_tile(tile + 1, 1, 5, false, &tree_probe_services, tree_probe.shared);
 		return static_cast<TreeGround>(0);
 	};
 	shared.clear_square_services = {
@@ -746,8 +748,9 @@ static void Trees()
 	openttd_rust_trees_plant(1, 12, 2, 6, &tree_probe_services, &shared);
 	CHECK(tree_probe.writes == 1 && openttd_rust_trees_can_plant(1, false, &tree_probe_services));
 	tree_probe.plant.tile_type = 4;
+	const OpenTTDCommandServices commands{};
 	const auto command = openttd_rust_trees_cmd_plant(nullptr, 1, 1, 255, false,
-		{.build_price = 15, .size = 4096, .climate = 0, .editor = false, .execute = false, .company_valid = false}, &tree_probe_services, &shared);
+		{.build_price = 15, .size = 4096, .climate = 0, .editor = false, .execute = false, .company_valid = false}, &tree_probe_services, &shared, nullptr, &commands, 0);
 	CHECK(command.cost == 30 && command.status == 0);
 	tree_probe.plant.tile_type = 0;
 	openttd_rust_trees_tile_loop(1, {.tick_counter = 0, .size_x = 64, .climate = 0, .extra = 2, .ambient = false}, nullptr, &tree_probe_services, &shared);
@@ -903,9 +906,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, bay_direction);
 		VEHICLE_UNUSED(leaves, is_drive_through);
 		VEHICLE_UNUSED(leaves, is_station_road_stop);
-		VEHICLE_UNUSED(leaves, stop_type);
-		VEHICLE_UNUSED(leaves, has_free_bay);
-		VEHICLE_UNUSED(leaves, continuation);
 		VEHICLE_UNUSED(leaves, move_tile);
 		VEHICLE_UNUSED(leaves, path_read);
 		VEHICLE_UNUSED(leaves, choose_track);
@@ -915,9 +915,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(leaves, disconnect);
 		VEHICLE_UNUSED(leaves, stop_read);
 		VEHICLE_UNUSED(leaves, should_stop);
-		VEHICLE_UNUSED(leaves, stop_leave);
-		VEHICLE_UNUSED(leaves, stop_entrance);
-		VEHICLE_UNUSED(leaves, stop_entrance_busy);
 		VEHICLE_UNUSED(leaves, arrival_read);
 		VEHICLE_UNUSED(leaves, arrival_news);
 		VEHICLE_UNUSED(leaves, begin_loading_at);
@@ -952,6 +949,8 @@ struct RoadTestTables {
 #undef VEHICLE_UNUSED
 struct RoadAbiProbe {
 	OpenTTDRoadState *state = openttd_rust_road_new();
+	std::unique_ptr<OpenTTDRoadStopState, decltype(&openttd_rust_road_stop_destroy)> stop{openttd_rust_road_stop_new(), openttd_rust_road_stop_destroy};
+	OpenTTDRoadStopEntries entries{};
 	const OpenTTDRoadLeaves *leaves = nullptr;
 	OpenTTDRoadEntry entry{.acceleration_model = 0, .road_side = 0, .queue = false, .map_log_x = 8};
 	uint32_t dest = 0, nested = 0, destroyed = 0, departures = 0, progress = 255;
@@ -968,6 +967,21 @@ static RoadAbiProbe *road_abi_probe;
 static int road_abi_second, road_abi_hidden, road_abi_engine, road_abi_new_engine;
 static int road_abi_vehicle; ///< Its address is the opaque vehicle handle.
 static OpenTTDVehicle *RoadAbiHandle() { return reinterpret_cast<OpenTTDVehicle *>(&road_abi_vehicle); }
+static int road_abi_stop; ///< Its address is the opaque road stop shell.
+/* The road controller calls the Rust road stop owner directly; these native
+ * shell services resolve the probe's single stop at tile 100. */
+static const OpenTTDRoadStopServices road_abi_stops{
+	.vehicle = nullptr,
+	.ground = nullptr,
+	.primary = [](uint32_t tile, RoadStopType) noexcept { CHECK(tile == 100); return reinterpret_cast<RoadStop *>(&road_abi_stop); },
+	.tile = [](const RoadStop *) noexcept -> uint32_t { return 100; },
+	.state = [](const RoadStop *) noexcept { return road_abi_probe->stop.get(); },
+	.drive_read = [](OpenTTDVehicle *u) noexcept -> OpenTTDRoadStopDriveRead {
+		CHECK(u == RoadAbiHandle());
+		++road_abi_probe->departures;
+		return {.total_length = 8, .direction = 1};
+	},
+};
 static OpenTTDRoadMaxSpeedRead RoadAbiMaxSpeed()
 {
 	return {.next = nullptr, .next_state = nullptr, .tile = 100, .max_track_speed = 80, .order_max_speed = 65535, .direction = 1, .status = 0};
@@ -1003,9 +1017,14 @@ static void RoadBoundary()
 		openttd_rust_road_set(road_abi_probe->state, 0, 64);
 		return {.victims = 7, .front = true};
 	};
-	t.leaves.stop_leave = [](OpenTTDVehicle *) noexcept { ++road_abi_probe->departures; };
+	t.vehicle.tile = [](OpenTTDVehicle *u) noexcept -> uint32_t { CHECK(u == RoadAbiHandle()); return 100; };
+	t.shared.road_stop_type = [](uint32_t tile) noexcept { CHECK(tile == 100); return RoadStopType::Bus; };
+	t.shared.road_stops = []() noexcept { return &road_abi_stops; };
+	t.shared.is_bay_stop = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
+	probe.stop->entries = &probe.entries;
+	probe.entries.east.occupied = 8;
 	CHECK(openttd_rust_road_crash(v, probe.state, false, &t.leaves) == 8);
-	CHECK(probe.departures == 1 && openttd_rust_road_get(probe.state, 5) == 1);
+	CHECK(probe.departures == 1 && openttd_rust_road_get(probe.state, 5) == 1 && probe.entries.east.occupied == 0);
 
 	/* Entries nested in a NewGRF property callback see and change the same owner. */
 	t.leaves.trackdir_read = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadTrackdirRead { return {.tile = 100, .direction = 1, .status = 0}; };
@@ -1104,7 +1123,7 @@ static void RoadBoundary()
 	t.leaves.link = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadLink { return {.next = nullptr, .next_state = nullptr}; };
 	t.shared.station_index = [](uint32_t tile) noexcept -> uint16_t { CHECK(tile == 100); return 55; };
 	t.leaves.is_drive_through = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
-	t.leaves.stop_entrance = [](OpenTTDVehicle *, bool busy) noexcept { CHECK(!busy); };
+	probe.stop->status = 0xFF; // Entering the bay frees its entrance.
 	t.vehicle.write_last_station = [](OpenTTDVehicle *, uint16_t station) noexcept { CHECK(station == 55); };
 	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept -> uint8_t { return 0; };
 	t.leaves.is_bay_stop = [](uint32_t tile) noexcept { CHECK(tile == 100); return false; };
@@ -1113,7 +1132,8 @@ static void RoadBoundary()
 	t.leaves.enter_tile = [](OpenTTDVehicle *, uint32_t, int32_t, int32_t) noexcept -> OpenTTDRoadEntered { return {.tile = 100, .cur_speed = 0, .flags = 4, .direction = 1, .order_type = 0}; };
 	t.vehicle.write_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == 0); };
 	CHECK(!openttd_rust_road_individual(v, probe.state, nullptr, nullptr, &probe.entry, &t.leaves, nullptr));
-	CHECK(openttd_rust_road_get(probe.state, 0) == 36);
+	CHECK(openttd_rust_road_get(probe.state, 0) == 36 && probe.stop->status == 0x7F);
+	probe.stop->entries = nullptr;
 	openttd_rust_road_set(probe.state, 0, 0);
 	openttd_rust_road_set(probe.state, 6, 0);
 

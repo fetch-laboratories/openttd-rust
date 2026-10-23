@@ -28,7 +28,23 @@
 #include "town_map.h"
 #include "newgrf_spritegroup.h"
 #include "animated_tile_func.h"
+#include "station_base.h"
+#include "station_kdtree.h"
+#include "waypoint_base.h"
+#include "depot_base.h"
+#include "object.h"
+#include "object_base.h"
+#include "clear_map.h"
+#include "bridge_map.h"
+#include "industry_cmd.h"
+#include "subsidy_base.h"
+#include "newgrf_storage.h"
+#include "industry_map.h"
+#include "water_map.h"
+#include "road_map.h"
+#include "tunnelbridge_cmd.h"
 #include <map>
+#include <set>
 #ifdef WITH_RUST
 #include "rust/town_founding_ffi.h"
 #include "rust/generation_services.hpp"
@@ -36,6 +52,8 @@
 class AbortGenerateWorldSignal { };
 #endif
 extern Company *DoStartupNewCompany(bool, CompanyID);
+extern bool _ignore_industry_restrictions;
+void BuildOilRig(TileIndex);
 namespace TownCancellationReference {
 static uint phase, last_total;
 static void SetProgress(GenWorldProgress, uint total) { last_total = total; if (phase == 0) throw AbortGenerateWorldSignal(); }
@@ -191,9 +209,180 @@ static bool HousesScenario(std::span<std::string_view> args)
 	fmt::print(stderr, "TOWN house-done {}\n", cleared);
 	return true;
 }
+/* Commands use the unchanged native bodies in the reference. The explicit pool
+ * associations below cover editor/lifetime inputs absent from ordinary games. */
+static bool CommandsScenario(std::span<std::string_view> args)
+{
+	if (args[1] == "authority-inspect") {
+		const Town *town = *Town::Iterate().begin();
+#ifdef WITH_RUST
+		bool text = town->HasText();
+#else
+		bool text = !town->text.empty();
+#endif
+		fmt::print(stderr, "TOWN authority-reload {}\n", text); return true;
+	}
+	Company *company = Company::GetNumItems() == 0 ? DoStartupNewCompany(false, CompanyID::Invalid()) : *Company::Iterate().begin();
+	Company *other = DoStartupNewCompany(false, CompanyID::Invalid());
+	Town *town = *Town::Iterate().begin(); TownID id = town->index;
+	Backup<CompanyID> owner(_current_company, company->index);
+	Backup<GameMode> mode(_game_mode, GM_EDITOR);
+	Backup<bool> roads(_settings_game.economy.fund_roads, true), buildings(_settings_game.economy.fund_buildings, true), rights(_settings_game.economy.exclusive_rights, true), bribes(_settings_game.economy.bribe, true);
+#ifdef WITH_RUST
+	Backup<Money> money(company->Finances().money, 1000000000000LL), other_money(other->Finances().money, 1000000000000LL);
+#else
+	Backup<Money> money(company->money, 1000000000000LL), other_money(other->money, 1000000000000LL);
+#endif
+	Cost("goal-wrong-owner", CmdTownCargoGoal({}, id, TAE_PASSENGERS, 100));
+	Cost("text-wrong-owner", CmdTownSetText({}, id, {}));
+	Cost("rate-wrong-owner", CmdTownGrowthRate({}, id, 1));
+	Cost("rating-wrong-owner", CmdTownRating({}, id, company->index, 1));
+	owner.Change(OWNER_DEITY);
+	Cost("goal-invalid", CmdTownCargoGoal({}, id, static_cast<TownAcceptanceEffect>(255), 1));
+	Cost("text-invalid", CmdTownSetText({}, TownID::Invalid(), {}));
+	Cost("rating-invalid", CmdTownRating({}, id, CompanyID::Invalid(), 1));
+	for (uint8_t effect = TAE_BEGIN; effect < TAE_END; ++effect) {
+		Cost("goal-test", CmdTownCargoGoal({}, id, static_cast<TownAcceptanceEffect>(effect), 100 + effect));
+		Cost("goal-exec", CmdTownCargoGoal(DoCommandFlag::Execute, id, static_cast<TownAcceptanceEffect>(effect), 100 + effect));
+	}
+	EncodedString text = GetEncodedString(STR_TOWN_NAME, id);
+	Cost("text-test", CmdTownSetText({}, id, text));
+	Cost("text-exec", CmdTownSetText(DoCommandFlag::Execute, id, text));
+	Cost("text-clear", CmdTownSetText(DoCommandFlag::Execute, id, {}));
+	Cost("text-restore", CmdTownSetText(DoCommandFlag::Execute, id, text));
+	for (uint16_t rate : {uint16_t{1}, uint16_t{65535}, uint16_t{0}}) {
+		Cost("rate-test", CmdTownGrowthRate({}, id, rate)); Cost("rate-exec", CmdTownGrowthRate(DoCommandFlag::Execute, id, rate));
+	}
+	for (int16_t rating : {int16_t{-32768}, int16_t{32767}, int16_t{500}}) {
+		Cost("rating-test", CmdTownRating({}, id, company->index, rating)); Cost("rating-exec", CmdTownRating(DoCommandFlag::Execute, id, company->index, rating));
+	}
+	Cost("expand-invalid", CmdExpandTown({}, id, 1, {}));
+	Cost("expand-test", CmdExpandTown({}, id, 1, TownExpandMode::Buildings));
+	Cost("expand-exec", CmdExpandTown(DoCommandFlag::Execute, id, 1, TownExpandMode::Buildings));
+	Cost("expand-random", CmdExpandTown(DoCommandFlag::Execute, id, 0, TownExpandMode::Roads));
+	owner.Change(company->index);
+	if (!Station::CanAllocateItem()) std::abort();
+	Station *station = new Station(town->xy); _station_kdtree.Insert(station->index); station->town = town; station->owner = company->index;
+	fmt::print(stderr, "TOWN action-mask {} {}\n", GetMaskOfTownActions(company->index, town).base(), GetMaskOfTownActions(COMPANY_SPECTATOR, town).base());
+	for (TownAction action{}; action < TownAction::Bribe; ++action) {
+		Cost("action-test", CmdDoTownAction({}, id, action)); Cost("action-exec", CmdDoTownAction(DoCommandFlag::Execute, id, action));
+	}
+	for (bool failed : {false, true}) {
+		for (uint seed = 1; ; ++seed) { Randomizer trial; trial.SetSeed(seed); if (Chance16I(1, 14, trial.Next()) == failed) { _random.SetSeed(seed); break; } }
+		town->unwanted[company->index] = 0; town->ratings[company->index] = 500;
+		town->exclusivity = other->index; town->exclusive_counter = 12;
+		Cost("bribe-test", CmdDoTownAction({}, id, TownAction::Bribe));
+		Cost("bribe-exec", CmdDoTownAction(DoCommandFlag::Execute, id, TownAction::Bribe));
+		fmt::print(stderr, "TOWN bribe {} {} {} {} {} {} {}\n", failed, town->ratings[company->index], town->unwanted[company->index], station->goods[0].rating, town->exclusive_counter, town->exclusivity.base(), GetMaskOfTownActions(company->index, town).base());
+	}
+	/* Querying a different company must retain the original _current_company comparison. */
+	town->ratings[other->index] = RATING_BRIBE_MAXIMUM;
+	fmt::print(stderr, "TOWN foreign-mask {}\n", GetMaskOfTownActions(other->index, town).base());
+	delete station;
+	roads.Change(false); buildings.Change(false); rights.Change(false); bribes.Change(false);
+	fmt::print(stderr, "TOWN disabled-mask {}\n", GetMaskOfTownActions(company->index, town).base());
+	Cost("action-invalid", CmdDoTownAction({}, id, static_cast<TownAction>(255)));
+	/* Real founded town and real command-built map contents; explicit shells cover later veto phases. */
+	owner.Change(OWNER_DEITY);
+	auto [founded, unused, removed] = CmdFoundTown(DoCommandFlag::Execute, Site(), TSZ_SMALL, false, TL_ORIGINAL, false, 0, "Deleted town");
+	Cost("delete-found", founded, unused, removed); if (founded.Failed()) std::abort();
+	Town *target = Town::Get(removed);
+	/* Build an oil rig through the original industry command, then require the
+	 * original station clearer's refusal before testing later veto phases. */
+	Backup<bool> restrictions(_ignore_industry_restrictions, true);
+	for (uint y = 6; y < 23; ++y) for (uint x = 6; x < 23; ++x) {
+		TileIndex sea = TileXY(x, y); CommandCost cleared = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, sea);
+		if (cleared.Failed()) { Cost("fixture-sea", cleared); std::abort(); }
+		SetTileHeight(sea, 0); MakeSea(sea);
+	}
+	IndustryID oilrig = IndustryID::Invalid();
+	std::set<IndustryID> original_industries; for (const Industry *i : Industry::Iterate()) original_industries.insert(i->index);
+	for (TileIndex at{}; at < Map::Size(); ++at) {
+		if (!IsTileType(at, MP_WATER) || CmdBuildIndustry({}, at, IndustryType{5}, 0, true, 123).Failed()) continue;
+		CommandCost built = CmdBuildIndustry(DoCommandFlag::Execute, at, IndustryType{5}, 0, true, 123); Cost("delete-oilrig-build", built);
+		if (built.Failed()) std::abort();
+		Industry *industry = nullptr; for (Industry *i : Industry::Iterate()) if (!original_industries.contains(i->index)) industry = i;
+		if (industry == nullptr) std::abort();
+		industry->town = target; oilrig = industry->index;
+		for (TileIndex part : industry->location) if (IsTileType(part, MP_INDUSTRY) && GetIndustryGfx(part) == GFX_OILRIG_1 && IsTileType(part + TileDiffXY(0, 1), MP_INDUSTRY)) { BuildOilRig(part); break; }
+		for (Station *st : Station::Iterate()) if (st->industry == industry) st->town = target;
+		break;
+	}
+	restrictions.Restore();
+	if (oilrig == IndustryID::Invalid()) { Cost("fixture-oilrig", CmdBuildIndustry({}, TileXY(8, 8), IndustryType{5}, 0, true, 123)); std::abort(); }
+	CommandCost oilrig_refusal = CmdDeleteTown(DoCommandFlag::Execute, removed); Cost("delete-oilrig-refusal", oilrig_refusal);
+	fmt::print(stderr, "TOWN oilrig-refusal {} {}\n", oilrig_refusal.Failed(), Industry::IsValidID(oilrig));
+	for (TileIndex part : Industry::Get(oilrig)->location) if (IsTileType(part, MP_INDUSTRY)) { Cost("delete-oilrig-remove", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, part)); break; }
+	if (!Station::CanAllocateItem()) std::abort();
+	Station *veto = new Station(target->xy); _station_kdtree.Insert(veto->index); veto->town = target; veto->owner = company->index;
+	Cost("delete-station-veto", CmdDeleteTown(DoCommandFlag::Execute, removed));
+	delete veto;
+	if (!Waypoint::CanAllocateItem()) std::abort();
+	Waypoint *waypoint = new Waypoint(target->xy); waypoint->town = target; waypoint->owner = company->index;
+	Cost("delete-waypoint-veto", CmdDeleteTown({}, removed)); delete waypoint;
+	if (!Depot::CanAllocateItem()) std::abort();
+	Depot *depot = new Depot(target->xy); depot->town = target;
+	Cost("delete-depot-veto", CmdDeleteTown({}, removed)); delete depot;
+	bool industry_built = false;
+	for (TileIndex at{}; at < Map::Size(); ++at) {
+		if (!IsTileType(at, MP_CLEAR) || CmdBuildIndustry({}, at, IndustryType{0}, 0, true, 321).Failed()) continue;
+		CommandCost built = CmdBuildIndustry(DoCommandFlag::Execute, at, IndustryType{0}, 0, true, 321); Cost("delete-industry-build", built);
+		if (built.Failed()) std::abort();
+		Industry::GetByTile(at)->town = target; industry_built = true; break;
+	}
+	if (!industry_built) std::abort();
+	for (uint y = 40; y <= 44; ++y) for (uint x = 40; x <= 50; ++x) {
+		TileIndex at = TileXY(x, y); CommandCost clear = Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, at);
+		if (clear.Failed()) { Cost("fixture-bridge-clear", clear); std::abort(); }
+		SetTileHeight(at, 1); MakeClear(at, CLEAR_GRASS, 3);
+	}
+	bool bridge_built = false;
+	owner.Change(OWNER_TOWN);
+	for (TileIndex at = TileXY(5, 5); at < Map::Size() - Map::SizeX() * 5; ++at) {
+		bool free = TileX(at) > 3 && TileX(at) < Map::MaxX() - 5;
+		for (int x = -1; x <= 4 && free; ++x) free &= IsTileType(at + x, MP_CLEAR) && GetTileSlope(at + x) == SLOPE_FLAT && !IsBridgeAbove(at + x);
+		if (!free || CmdBuildBridge({}, at + 3, at, TRANSPORT_ROAD, BridgeType{0}, ROADTYPE_ROAD).Failed()) continue;
+		CommandCost built = CmdBuildBridge(DoCommandFlag::Execute, at + 3, at, TRANSPORT_ROAD, BridgeType{0}, ROADTYPE_ROAD); Cost("delete-bridge-build", built);
+		if (built.Failed()) std::abort();
+		MakeRoadNormal(at - 1, ROAD_X, ROADTYPE_ROAD, INVALID_ROADTYPE, removed, OWNER_TOWN, OWNER_NONE); bridge_built = true; break;
+	}
+	owner.Change(OWNER_DEITY);
+	if (!bridge_built) { Cost("fixture-bridge", CmdBuildBridge({}, TileXY(45, 42), TileXY(42, 42), TRANSPORT_ROAD, BridgeType{0}, ROADTYPE_ROAD)); std::abort(); }
+	if (!Object::CanAllocateItem()) std::abort();
+	Object *detached = nullptr;
+	for (TileIndex at{}; at < Map::Size(); ++at) if (IsTileType(at, MP_CLEAR) && GetTileSlope(at) == SLOPE_FLAT && !IsBridgeAbove(at)) { BuildObject(OBJECT_TRANSMITTER, at, OWNER_NONE, target); detached = Object::GetByTile(at); break; }
+	if (detached == nullptr) std::abort();
+	if (!PersistentStorage::CanAllocateItem() || !CargoPacket::CanAllocateItem() || !Subsidy::CanAllocateItem()) std::abort();
+	auto *storage = new PersistentStorage(0x12345678, GSF_FAKE_TOWNS, target->xy); auto storage_id = storage->index; target->psa_list.push_back(storage);
+	auto *packet = new CargoPacket(StationID::Invalid(), 7, {removed, SourceType::Town});
+	auto *subsidy = new Subsidy(CargoType{0}, {removed, SourceType::Town}, {id, SourceType::Town}, 12); auto subsidy_id = subsidy->index;
+	Cost("delete-test", CmdDeleteTown({}, removed));
+	CommandCost deleted = CmdDeleteTown(DoCommandFlag::Execute, removed); Cost("delete-exec", deleted);
+	fmt::print(stderr, "TOWN deleted-dependencies {} {} {}\n", !PersistentStorage::IsValidID(storage_id), !Subsidy::IsValidID(subsidy_id), !packet->GetSource().IsValid()); delete packet;
+	fmt::print(stderr, "TOWN deletion {} {} {}\n", deleted.Succeeded(), !Town::IsValidID(removed), detached->town != nullptr && detached->town != target);
+	/* Reuse the released ID through the actual founding command. */
+	auto [reused, extra, reused_id] = CmdFoundTown(DoCommandFlag::Execute, Site(), TSZ_SMALL, false, TL_ORIGINAL, false, 0, "Reused town");
+	Cost("delete-reuse", reused, extra, reused_id); fmt::print(stderr, "TOWN deletion-reuse {}\n", reused.Succeeded() && reused_id == removed);
+	mode.Restore(); money.Restore(); other_money.Restore(); owner.Restore(); roads.Restore(); buildings.Restore(); rights.Restore(); bribes.Restore();
+	SetGeneratingWorldProgress(GWP_GAME_START, 1);
+	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
+	else {
+		Backup<GameMode> cleanup_mode(_game_mode, GM_EDITOR); Backup<CompanyID> cleanup_owner(_current_company, OWNER_DEITY);
+		while (Town::GetNumItems() != 0) {
+			TownID last = (*Town::Iterate().begin())->index;
+			CommandCost cost = CmdDeleteTown(DoCommandFlag::Execute, last); Cost("delete-final", cost); if (cost.Failed()) std::abort();
+		}
+		fmt::print(stderr, "TOWN final-town {} {}\n", Town::GetNumItems(), Object::GetNumItems());
+		/* Keep the simulation valid after the final-town input. */
+		Cost("delete-final-recover", CmdFoundTown(DoCommandFlag::Execute, TileIndex{}, TSZ_SMALL, false, TL_ORIGINAL, true, 0, "Recovery town"));
+		cleanup_owner.Restore(); cleanup_mode.Restore();
+	}
+	return true;
+}
 static bool TownsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1] == "authority" || args[1] == "authority-inspect") return CommandsScenario(args);
 	if (args[1] == "inspect") {
 		bool found = false;
 		for (const Town *town : Town::Iterate()) found |= town->GetCachedName() == "Migration renamed";

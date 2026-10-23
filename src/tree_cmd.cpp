@@ -47,6 +47,7 @@ enum ExtraTreePlacement : uint8_t {
 
 #ifdef WITH_RUST
 #include "rust/trees_ffi.h"
+#include "rust/settings_services.h"
 #include "rust/ground_services.h"
 #include "rust/landscape_loop_ffi.h"
 #include "rust/services_ffi.h"
@@ -123,14 +124,14 @@ static bool TreeProgress(Update update) noexcept
 	return false;
 }
 
-static void TreeTownRating(OpenTTDTreeCommand *ctx, uint32_t tile, bool up) noexcept
+static void TreeTownRating(uint16_t flags, uint32_t tile, bool up) noexcept
 {
 	Town *t = ClosestTownFromTile(TileIndex{tile}, _settings_game.economy.dist_local_authority);
 	if (t == nullptr) return;
 	if (up) {
-		ChangeTownRating(t, RATING_TREE_UP_STEP, RATING_TREE_MAXIMUM, ctx->flags);
+		ChangeTownRating(t, RATING_TREE_UP_STEP, RATING_TREE_MAXIMUM, DoCommandFlags{flags});
 	} else {
-		ChangeTownRating(t, RATING_TREE_DOWN_STEP, RATING_TREE_MINIMUM, ctx->flags);
+		ChangeTownRating(t, RATING_TREE_DOWN_STEP, RATING_TREE_MINIMUM, DoCommandFlags{flags});
 	}
 }
 
@@ -140,12 +141,6 @@ static int32_t TreeCommandBegin(OpenTTDTreeCommand *ctx, uint32_t tile, uint32_t
 	int limit = (ctx->company == nullptr ? INT32_MAX : GB(ctx->company->Finances().tree_limit, 16, 16));
 	ctx->iter = TileIterator::Create(TileIndex{tile}, TileIndex{start_tile}, diagonal);
 	return limit;
-}
-
-static OpenTTDTreeLandscapeClear TreeLandscapeClear(OpenTTDTreeCommand *ctx, uint32_t tile) noexcept
-{
-	ctx->nested = Command<CMD_LANDSCAPE_CLEAR>::Do(ctx->flags, TileIndex{tile});
-	return {.cost = ctx->nested.GetCost(), .failed = ctx->nested.Failed()};
 }
 
 static const OpenTTDTreeServices _tree_services{
@@ -175,7 +170,6 @@ static const OpenTTDTreeServices _tree_services{
 	.command_tile = [](OpenTTDTreeCommand *ctx) noexcept { return static_cast<TileIndex>(*ctx->iter).base(); },
 	.command_next = [](OpenTTDTreeCommand *ctx) noexcept { return static_cast<TileIndex>(++(*ctx->iter)).base(); },
 	.command_debit = [](OpenTTDTreeCommand *ctx) noexcept { if (ctx->company != nullptr) ctx->company->Finances().tree_limit -= 1 << 16; },
-	.landscape_clear = TreeLandscapeClear,
 };
 
 /** Rethrow a world-generation abort after the Rust entry returned. */
@@ -190,7 +184,7 @@ static OpenTTDTreeGenerateSettings TreeGenerateSettings()
 		.size = Map::Size(), .size_x = Map::SizeX(), .size_y = Map::SizeY(),
 		.climate = to_underlying(_settings_game.game_creation.landscape),
 		.placer = _settings_game.game_creation.tree_placer,
-		.height_limit = _settings_game.construction.map_height_limit,
+		.height_limit = RustMapHeightLimit(),
 		.editor = _game_mode == GM_EDITOR,
 		.freeform_edges = _settings_game.construction.freeform_edges,
 	};
@@ -232,19 +226,12 @@ CommandCost CmdPlantTree(DoCommandFlags flags, TileIndex tile, TileIndex start_t
 		.execute = flags.Test(DoCommandFlag::Execute),
 		.company_valid = Company::IsValidID(_current_company),
 	};
-	auto result = openttd_rust_trees_cmd_plant(&ctx, tile.base(), start_tile.base(), tree_to_plant, diagonal, settings, &_tree_services, &GetRustSharedServices());
+	auto result = openttd_rust_trees_cmd_plant(&ctx, tile.base(), start_tile.base(), tree_to_plant, diagonal, settings, &_tree_services, &GetRustSharedServices(), RustCommandCost(&ctx.nested), &GetRustCommandServices(), flags.base());
 	if (result.status == 1) return CMD_ERROR;
 	if (result.status == 2) return ctx.nested;
 	static const StringID messages[] = {INVALID_STRING_ID, STR_ERROR_TREE_ALREADY_HERE, STR_ERROR_TREE_PLANT_LIMIT_REACHED,
 		STR_ERROR_CAN_T_BUILD_ON_WATER, STR_ERROR_SITE_UNSUITABLE, STR_ERROR_TREE_WRONG_TERRAIN_FOR_TREE_TYPE};
 	return result.cost == 0 ? CommandCost(messages[result.message]) : CommandCost(EXPENSES_OTHER, Money(result.cost));
-}
-
-static CommandCost ClearTile_Trees(TileIndex tile, DoCommandFlags flags)
-{
-	OpenTTDTreeCommand ctx(flags);
-	return CommandCost(EXPENSES_CONSTRUCTION, Money(openttd_rust_trees_clear_tile(&ctx, tile.base(), static_cast<int64_t>(_price[PR_CLEAR_TREES]),
-		flags.Test(DoCommandFlag::Execute), Company::IsValidID(_current_company), &_tree_services, &GetRustSharedServices())));
 }
 
 const OpenTTDTreeServices &GetRustTreeServices() noexcept { return _tree_services; }
@@ -1267,16 +1254,22 @@ void InitializeTrees()
 
 #endif /* !WITH_RUST */
 
+#ifndef WITH_RUST
 static CommandCost TerraformTile_Trees(TileIndex tile, DoCommandFlags flags, int, Slope)
 {
 	return Command<CMD_LANDSCAPE_CLEAR>::Do(flags, tile);
 }
+#endif
 
 
 extern const TileTypeProcs _tile_type_trees_procs = {
 	DrawTile_Trees,           // draw_tile_proc
 	GetSlopePixelZ_Trees,     // get_slope_z_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	ClearTile_Trees,          // clear_tile_proc
+#endif
 	nullptr,                     // add_accepted_cargo_proc
 	GetTileDesc_Trees,        // get_tile_desc_proc
 	GetTileTrackStatus_Trees, // get_tile_track_status_proc
@@ -1291,7 +1284,11 @@ extern const TileTypeProcs _tile_type_trees_procs = {
 	nullptr,                     // add_produced_cargo_proc
 	nullptr,                     // vehicle_enter_tile_proc
 	GetFoundation_Trees,      // get_foundation_proc
+#ifdef WITH_RUST
+	nullptr,                 // Rust landscape commands call the owner directly.
+#else
 	TerraformTile_Trees,      // terraform_tile_proc
+#endif
 	nullptr, // check_build_above_proc
 };
 

@@ -13,6 +13,10 @@
 #include "station_type.h"
 #include "core/pool_type.hpp"
 #include "vehicle_type.h"
+#ifdef WITH_RUST
+#include "rust/road_stop_ffi.h"
+#include <memory>
+#endif
 
 using RoadStopPool = Pool<RoadStop, RoadStopID, 32>;
 extern RoadStopPool _roadstop_pool;
@@ -27,6 +31,35 @@ struct RoadStop : RoadStopPool::PoolItem<&_roadstop_pool> {
 	};
 	using RoadStopStatusFlags = EnumBitSet<RoadStopStatusFlag, uint8_t>;
 
+#ifdef WITH_RUST
+	/** Drive-through entry point; Rust owns its storage, native readers only load. */
+	using Entry = OpenTTDRoadStopEntry;
+
+	/* Rust owns status and the shared entries; the destructor frees the head's entries. */
+	std::unique_ptr<OpenTTDRoadStopState, decltype(&openttd_rust_road_stop_destroy)> rust_state{openttd_rust_road_stop_new(), openttd_rust_road_stop_destroy};
+	/* Native typed status aliases the Rust-owned byte for the save descriptor;
+	 * start its trivial lifetime in the fixed allocation. Rust stores raw bytes. */
+	RoadStopStatusFlags &status = *new (std::addressof(this->rust_state->status)) RoadStopStatusFlags{RoadStopStatusFlag::Bay0Free, RoadStopStatusFlag::Bay1Free}; ///< Current status of the Stop.
+	TileIndex xy = INVALID_TILE; ///< Position on the map
+	RoadStop *next = nullptr; ///< Next stop of the given type at this station
+
+	/** Initializes a RoadStop */
+	inline RoadStop(TileIndex tile = INVALID_TILE) : xy(tile) { }
+
+	OpenTTDRoadStopState *GetRustState() const { return this->rust_state.get(); }
+
+	/**
+	 * Get the drive through road stop entry struct for the given direction.
+	 * @param dir The direction to get the entry for.
+	 * @return the entry
+	 */
+	inline const Entry &GetEntry(DiagDirection dir) const
+	{
+		return dir >= DIAGDIR_SW ? this->rust_state->entries->west : this->rust_state->entries->east;
+	}
+
+	RoadStop *GetNextRoadStop(const struct RoadVehicle *v) const;
+#else
 	/** Container for each entry point of a drive through road stop */
 	struct Entry {
 	private:
@@ -193,6 +226,13 @@ private:
 			default: NOT_REACHED();
 		}
 	}
+#endif /* WITH_RUST */
 };
+
+#ifdef WITH_RUST
+static_assert(sizeof(RoadStop::RoadStopStatusFlags) == sizeof(uint8_t));
+static_assert(alignof(RoadStop::RoadStopStatusFlags) == alignof(uint8_t));
+static_assert(std::is_trivially_copyable_v<RoadStop::RoadStopStatusFlags>);
+#endif
 
 #endif /* ROADSTOP_BASE_H */

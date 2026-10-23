@@ -13,6 +13,7 @@
 #include "services_road.h"
 #include "services_station.h"
 
+static_assert(RVS_USING_SECOND_BAY == 1 && RVS_IN_ROAD_STOP == 5 && RVS_IN_DT_ROAD_STOP == 6);
 static_assert(RVSB_IN_DEPOT == 254 && RVSB_WORMHOLE == 255 && RVSB_IN_ROAD_STOP == 32 && RVSB_IN_DT_ROAD_STOP == 64);
 static_assert(to_underlying(RoadStopType::Bus) == 0 && to_underlying(RoadStopType::Truck) == 1);
 static_assert(PROP_ROADVEH_SHORTEN_FACTOR == 0x23 && PROP_ROADVEH_CARGO_AGE_PERIOD == 0x22 && PROP_ROADVEH_SPEED == 0x15 && PROP_ROADVEH_RUNNING_COST_FACTOR == 0x09);
@@ -133,10 +134,6 @@ static uint8_t OPENTTD_VEHICLE_CALL RoadSvcAnyRoadBits(OpenTTDVehicle *v, uint32
 	return GetAnyRoadBits(TileIndex(tile), RustRoadTramType(RoadOf(v)->roadtype), straight_only);
 }
 static bool OPENTTD_VEHICLE_CALL RoadSvcIsStationRoadStop(uint32_t tile) noexcept { return IsStationRoadStop(TileIndex(tile)); }
-static bool OPENTTD_VEHICLE_CALL RoadSvcHasFreeBay(uint32_t tile) noexcept
-{
-	return SharedRoadStopAt(tile)->HasFreeBay();
-}
 /** `old_tile = v->tile; v->tile = tile;` then both road types of the vehicle's road/tram kind. */
 static OpenTTDRoadRoadTypes OPENTTD_VEHICLE_CALL RoadSvcMoveTile(OpenTTDVehicle *v, uint32_t tile) noexcept
 {
@@ -179,21 +176,6 @@ static bool OPENTTD_VEHICLE_CALL RoadSvcShouldStop(OpenTTDVehicle *v, uint32_t t
 {
 	const RoadVehicle *u = RoadOf(v);
 	return u->current_order.ShouldStopAtStation(u, StationID(GetRustSharedServices().station_index(tile)));
-}
-static void OPENTTD_VEHICLE_CALL RoadSvcStopLeave(OpenTTDVehicle *v) noexcept
-{
-	RoadVehicle *u = RoadOf(v);
-	SharedRoadStopAt(u->tile.base())->Leave(u);
-}
-static void OPENTTD_VEHICLE_CALL RoadSvcStopEntrance(OpenTTDVehicle *v, bool busy) noexcept
-{
-	const RoadVehicle *u = RoadOf(v);
-	SharedRoadStopAt(u->tile.base())->SetEntranceBusy(busy);
-}
-static bool OPENTTD_VEHICLE_CALL RoadSvcStopEntranceBusy(OpenTTDVehicle *v) noexcept
-{
-	const RoadVehicle *u = RoadOf(v);
-	return SharedRoadStopAt(u->tile.base())->IsEntranceBusy();
 }
 static OpenTTDRoadArrivalRead OPENTTD_VEHICLE_CALL RoadSvcArrivalRead(OpenTTDVehicle *v, uint16_t station) noexcept
 {
@@ -254,7 +236,7 @@ static void OPENTTD_VEHICLE_CALL RoadSvcCrashNews(OpenTTDVehicle *v, uint32_t vi
 
 	AddTileNewsItem(std::move(headline), newstype, u->tile);
 
-	ModifyStationRatingAround(u->tile, u->owner, -160, 22);
+	OpenTTDModifyStationRatingAround(u->tile.base(), u->owner.base(), -160, 22);
 	if (_settings_client.sound.disaster) SndPlayVehicleFx(SND_12_EXPLOSION, u);
 }
 static uint8_t OPENTTD_VEHICLE_CALL RoadSvcShortenFactor(const OpenTTDEngine *e) noexcept
@@ -350,9 +332,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.bay_direction = Shared_bay_stop_direction,
 	.is_drive_through = Shared_is_drive_through_stop,
 	.is_station_road_stop = RoadSvcIsStationRoadStop,
-	.stop_type = SharedRoadStopTypeByte,
-	.has_free_bay = RoadSvcHasFreeBay,
-	.continuation = RoadSvcContinuation,
 	.move_tile = RoadSvcMoveTile,
 	.path_read = RoadSvcPathRead,
 	.choose_track = RoadSvcChooseTrack,
@@ -361,9 +340,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.disconnect = RoadSvcDisconnect,
 	.stop_read = RoadSvcStopRead,
 	.should_stop = RoadSvcShouldStop,
-	.stop_leave = RoadSvcStopLeave,
-	.stop_entrance = RoadSvcStopEntrance,
-	.stop_entrance_busy = RoadSvcStopEntranceBusy,
 	.arrival_read = RoadSvcArrivalRead,
 	.arrival_news = RoadSvcArrivalNews,
 	.begin_loading_at = RoadSvcBeginLoadingAt,

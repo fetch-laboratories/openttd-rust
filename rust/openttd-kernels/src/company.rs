@@ -27,6 +27,7 @@
     clippy::verbose_bit_mask
 )]
 use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE};
+use crate::economy_type::EXPENSES_OTHER;
 use std::ptr::{addr_of, addr_of_mut};
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -433,7 +434,6 @@ const TICKS_PER_SECOND: i32 = 37;
 const PROFIT_MIN_AGE: i32 = 730;
 const EXPENSES_PROPERTY: usize = 6;
 const EXPENSES_LOAN_INTEREST: usize = 11;
-const EXPENSES_OTHER: u8 = 12;
 const EXPENSES_END: u8 = 13;
 const NO_EXPENSE: u8 = 255;
 const SCORE_NEEDED: [i64; 9] = [

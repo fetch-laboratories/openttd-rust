@@ -8,6 +8,8 @@
 //! `direction_type.h` values used by the shared helpers and ports.
 //! `services.cpp` asserts every value.
 
+/// `DIR_END`.
+pub const DIR_END: u8 = 8;
 /// `DIAGDIR_NE`.
 pub const DIAGDIR_NE: u8 = 0;
 /// `DIAGDIR_SE`.

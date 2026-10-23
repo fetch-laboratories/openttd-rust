@@ -29,9 +29,11 @@
     clippy::collapsible_if,
     clippy::if_not_else
 )]
+use crate::direction_func::dir_to_diag_dir as diag;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
 use crate::newgrf_sound::VSE_START;
-use crate::services::{Map, Services};
+use crate::roadveh::{RVSB_IN_DT_ROAD_STOP as DT_STOP, RVSB_IN_ROAD_STOP as STOP};
+use crate::services::{Map, RoadStopType, Services};
 use crate::vehicle::maintenance;
 use crate::vehicle::{
     AM_REALISTIC, CALLBACK_FAILED, GroundServices, HVOT_BUS, HVOT_TRUCK, INVALID_ENGINE,
@@ -45,8 +47,6 @@ use std::ptr::NonNull;
 
 const DEPOT: u8 = 254;
 const WORMHOLE: u8 = 255;
-const STOP: u8 = 32;
-const DT_STOP: u8 = 64;
 const REVERSE: [u8; 4] = [6, 7, 14, 15];
 const DIAG_TRACK: [u8; 4] = [0, 1, 8, 9];
 /// Owner scalar selectors, shared with `openttd_rust_road_get/set`.
@@ -95,6 +95,12 @@ pub(crate) unsafe fn set_state(state: *mut State, value: u8) {
     unsafe {
         (*state).scalars[STATE] = u16::from(value);
     }
+}
+/// Original `RoadVehicle::GetState`.
+/// # Safety
+/// The serialized native shell owns this live state for the whole scalar access.
+pub(crate) unsafe fn get_state(state: *const State) -> u8 {
+    unsafe { (*state).scalars[STATE] as u8 }
 }
 /// Original `RoadVehicle::SetState(RVSB_IN_DEPOT)` without a native-owner bounce.
 /// # Safety
@@ -456,9 +462,6 @@ pub struct Leaves {
     pub bay_direction: extern "C" fn(u32) -> u8,
     pub is_drive_through: extern "C" fn(u32) -> bool,
     pub is_station_road_stop: extern "C" fn(u32) -> bool,
-    pub stop_type: extern "C" fn(u32) -> u8,
-    pub has_free_bay: extern "C" fn(u32) -> bool,
-    pub continuation: extern "C" fn(u32, u32) -> bool,
     pub move_tile: extern "C" fn(VehicleRef, u32) -> RoadTypes,
     pub path_read: extern "C" fn(VehicleRef) -> PathRead,
     pub choose_track: extern "C" fn(VehicleRef, u32, u8, u16) -> TrackChoice,
@@ -468,9 +471,6 @@ pub struct Leaves {
     pub disconnect: extern "C" fn(),
     pub stop_read: extern "C" fn(VehicleRef) -> StopRead,
     pub should_stop: extern "C" fn(VehicleRef, u32) -> bool,
-    pub stop_leave: extern "C" fn(VehicleRef),
-    pub stop_entrance: extern "C" fn(VehicleRef, bool),
-    pub stop_entrance_busy: extern "C" fn(VehicleRef) -> bool,
     pub arrival_read: extern "C" fn(VehicleRef, u16) -> ArrivalRead,
     pub arrival_news: extern "C" fn(VehicleRef, u16, u8, u8),
     pub begin_loading_at: extern "C" fn(VehicleRef, u16),
@@ -606,10 +606,6 @@ fn reversing(dir: u8) -> bool {
 fn straight(dir: u8) -> bool {
     dir & 6 == 0
 }
-fn diag(dir: u8) -> u8 {
-    (dir >> 1) & 3
-}
-
 /// `RoadVehicle::GetCurrentMaxSpeed`.
 fn max_speed(front: Part, r: MaxSpeedRead, acceleration_model: u8, l: &Leaves) -> i32 {
     let mut speed = i32::from(r.max_track_speed);
@@ -951,7 +947,8 @@ impl Game<'_> {
         if c.front {
             victims = victims.wrapping_add(1);
             if in_range(v.state(), DT_STOP, DT_STOP + 16) {
-                service!(self.l.stop_leave)(v.v);
+                // SAFETY: Live front owner; no owner access spans the stop update.
+                unsafe { crate::road_stop::leave_vehicle(self.ss, self.vs, v.v, v.s.as_ptr()) };
             }
         }
         v.set(CRASHED, if flooded { 2000 } else { 1 });
@@ -1016,7 +1013,10 @@ impl Game<'_> {
             }
             service!(self.vs.detach_last)(previous.v, last.v, v.v);
             if in_range(last.state(), STOP, STOP + 16) {
-                service!(self.l.stop_leave)(last.v);
+                // SAFETY: Live last part owner; no owner access spans the stop update.
+                unsafe {
+                    crate::road_stop::leave_vehicle(self.ss, self.vs, last.v, last.s.as_ptr());
+                };
             }
             service!(self.vs.destroy)(last.v);
             return alive;
@@ -1097,8 +1097,16 @@ impl Game<'_> {
                 || p.articulated
             {
                 trackdirs = 0;
-            } else if service!(self.l.stop_type)(tile) != u8::from(!p.bus)
-                || (!self.queue && !service!(self.l.has_free_bay)(tile))
+            } else if service!(self.ss.road_stop_type)(tile).0 != u8::from(!p.bus)
+                || (!self.queue
+                    && !crate::road_stop::has_free_bay(
+                        crate::road_stop::get_by_tile(
+                            self.ss,
+                            tile,
+                            RoadStopType(u8::from(!p.bus)),
+                        )
+                        .1,
+                    ))
             {
                 trackdirs = 0;
             }
@@ -1274,7 +1282,7 @@ impl Game<'_> {
         let r = service!(self.l.stop_read)(v.v);
         service!(self.l.should_stop)(v.v, tile)
             && r.owner == service!(self.ss.tile_owner)(tile)
-            && service!(self.l.stop_type)(tile) == u8::from(!r.bus)
+            && service!(self.ss.road_stop_type)(tile).0 == u8::from(!r.bus)
     }
     /// `IndividualRoadVehicleController`; `s` is a fresh observation of `v`.
     fn individual(&self, v: Part, prev: Option<Part>, s: &mut Step) -> bool {
@@ -1413,12 +1421,15 @@ impl Game<'_> {
                         return false;
                     }
                     if service!(self.l.is_drive_through)(s.tile)
-                        && service!(self.l.continuation)(s.tile, tile)
+                        && crate::road_stop::continuation(self.ss, s.tile, tile)
                         && s.tile != tile
                     {
                         dir = v.state();
                     } else if service!(self.l.is_station_road_stop)(s.tile) {
-                        service!(self.l.stop_leave)(v.v);
+                        // SAFETY: Live front owner; no owner access spans the stop update.
+                        unsafe {
+                            crate::road_stop::leave_vehicle(self.ss, self.vs, v.v, v.s.as_ptr());
+                        };
                     }
                 }
                 if e.flags & VETS_ENTERED_WORMHOLE == 0 {
@@ -1510,7 +1521,7 @@ impl Game<'_> {
                     let r = service!(self.l.stop_read)(v.v);
                     if r.owner == service!(self.ss.tile_owner)(s.tile)
                         && service!(self.vs.order_type)(v.v) != OT_LEAVESTATION
-                        && service!(self.l.stop_type)(s.tile) == u8::from(!r.bus)
+                        && service!(self.ss.road_stop_type)(s.tile).0 == u8::from(!r.bus)
                     {
                         let station = service!(self.ss.station_index)(s.tile);
                         service!(self.vs.write_last_station)(v.v, station);
@@ -1540,11 +1551,12 @@ impl Game<'_> {
                     && frame == 11
                     && self.stops_here(v, s.tile)))
         {
+            let rs = crate::road_stop::at(self.ss, s.tile);
             let station = service!(self.ss.station_index)(s.tile);
             if state & 4 == 0 {
                 if service!(self.l.is_drive_through)(s.tile) {
                     let next = self.map.add_dir(s.tile, s.direction);
-                    if service!(self.l.continuation)(s.tile, next)
+                    if crate::road_stop::continuation(self.ss, s.tile, next)
                         && service!(self.l.has_road)(v.v, next)
                     {
                         v.set(FRAME, u16::from(frame) + 1);
@@ -1552,7 +1564,7 @@ impl Game<'_> {
                         return true;
                     }
                 }
-                service!(self.l.stop_entrance)(v.v, false);
+                crate::road_stop::set_entrance_busy(rs, false);
                 v.set(STATE, u16::from(state | 4));
                 service!(self.vs.write_last_station)(v.v, station);
                 if service!(self.l.is_drive_through)(s.tile)
@@ -1563,7 +1575,7 @@ impl Game<'_> {
                     return false;
                 }
             } else {
-                if service!(self.l.stop_entrance_busy)(v.v) {
+                if crate::road_stop::is_entrance_busy(rs) {
                     self.set_speed(v, s, 0);
                     return false;
                 }
@@ -1572,7 +1584,7 @@ impl Game<'_> {
                 }
             }
             if service!(self.l.is_bay_stop)(s.tile) {
-                service!(self.l.stop_entrance)(v.v, true);
+                crate::road_stop::set_entrance_busy(rs, true);
             }
             self.start_sound(v);
             service!(self.vs.start_stop_dirty)(v.v);

@@ -120,6 +120,7 @@ private:
 	friend class EndianBufferReader;
 	friend class ScriptText;
 	friend struct Industry;
+	friend struct Town;
 };
 
 #endif /* STRINGS_TYPE_H */

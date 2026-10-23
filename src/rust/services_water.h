@@ -26,4 +26,6 @@ inline uint32_t OpenTTDLegacyWaterTracks(uint32_t tile, uint32_t entry) noexcept
 inline void RustMakeCanal(uint32_t tile, uint8_t owner, uint8_t random) noexcept { MakeCanal(TileIndex{tile}, Owner(owner), random); }
 inline void RustMakeRiver(uint32_t tile, uint8_t random) noexcept { MakeRiver(TileIndex{tile}, random); }
 inline bool RustOnWater(uint32_t tile) noexcept { return IsTileOnWater(TileIndex(tile)); }
+inline bool RustIsCanal(uint32_t tile) noexcept { return IsCanal(TileIndex{tile}); }
+
 #endif /* RUST_SERVICES_WATER_H */

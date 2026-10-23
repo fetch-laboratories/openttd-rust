@@ -8,6 +8,7 @@
 /** @file services_ffi.h Synchronous shared game services for Rust owners. */
 #ifndef RUST_SERVICES_FFI_H
 #define RUST_SERVICES_FFI_H
+#include "../tile_storage_type.h"
 #include "service_defaults.hpp"
 #include <cstdint>
 #include <cstddef>
@@ -17,7 +18,9 @@
 enum class LandscapeType : uint8_t;
 enum class StationType : uint8_t;
 struct OpenTTDStationService;
+enum class RoadStopType : uint8_t;
 struct OpenTTDStationCommandServices;
+struct OpenTTDRoadStopServices;
 struct OpenTTDRoadCommandServices;
 enum class RoadTileType : uint8_t;
 
@@ -28,13 +31,15 @@ struct OpenTTDEconomyDate { int32_t value; };
 static_assert(std::is_trivially_copyable_v<OpenTTDCalendarDate> && std::is_standard_layout_v<OpenTTDCalendarDate>);
 static_assert(std::is_trivially_copyable_v<OpenTTDEconomyDate> && std::is_standard_layout_v<OpenTTDEconomyDate>);
 
-/* Allocation-derived base array address, never a reference to tile zero's byte.
+/* Canonical typed allocation addresses, never references to tile zero's fields.
  * Only an audited serialized entry may retain it. It expires before map reset or
- * mutex yield. Raw reads consume only type@0 of each actual eight-byte base tile;
+ * mutex yield. Only field-sized raw reads in audited scheduler entries are allowed;
  * C++ owns allocation/construction/reset/destruction and every write. */
 struct OpenTTDTileTypeAllocation {
-	const uint8_t *base;
+	const TileBaseStorage *base;
+	const TileExtendedStorage *extended;
 	uint32_t count;
+	bool assertions;
 };
 OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
 
@@ -204,6 +209,9 @@ struct OpenTTDSharedServices {
 	TreeGround (*tree_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_ground);
 	const OpenTTDWaterGroundServices *(*water_services)() noexcept OPENTTD_SERVICE_DEFAULT(water_services); ///< Immutable table; getter avoids recursive static initialization.
 	void (*for_each_station)(void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(for_each_station); ///< Station::Iterate(); visits never add or delete stations.
+	// Registry: road stops (#354).
+	RoadStopType (*road_stop_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_stop_type);
+	const OpenTTDRoadStopServices *(*road_stops)() noexcept OPENTTD_SERVICE_DEFAULT(road_stops);
 };
 extern const OpenTTDSharedServices _rust_shared_services;
 struct OpenTTDSubsidyServices;

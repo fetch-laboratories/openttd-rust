@@ -10,14 +10,46 @@
 #include "../3rdparty/catch2/catch.hpp"
 #ifdef WITH_RUST
 #include "../rust/tile_type_access.hpp"
+#include "../rust/landscape_command_ffi.h"
 #include "abi_layout.hpp"
 #include "../tile_map.h"
+#include "../rust/landscape_loop_ffi.h"
 #include "landscape_protocol.hpp"
 #include "ground_protocol.hpp"
 #endif
 #include "../safeguards.h"
 
 #ifdef WITH_RUST
+extern "C" bool openttd_rust_map_read_probe(OpenTTDTileTypeAllocation, const OpenTTDSharedServices *, const OpenTTDClearServices *, const OpenTTDTreeServices *, uint32_t);
+TEST_CASE("Rust map fields preserve native helpers, mutation and reset")
+{
+	for (const uint size : {64U, 128U}) {
+		Map::Allocate(size, 64);
+		const auto allocation = GetRustTileTypeAllocation();
+		CHECK(allocation.extended != nullptr);
+#if !defined(NDEBUG) || defined(WITH_ASSERT)
+		CHECK(allocation.assertions);
+#else
+		CHECK(!allocation.assertions);
+#endif
+		for (const TileIndex tile : {TileXY(1, 1), TileIndex{Map::Size() - 1}}) {
+			for (const uint8_t kind : {0, 4, 6, 7}) {
+				for (uint value = 0; value < 256; value++) {
+					Tile t{tile};
+					t.type() = (kind << 4) | (value & 3);
+					t.m1() = value; t.m2() = value * 257; t.m3() = value;
+					t.m4() = value; t.m5() = value; t.m6() = value;
+					SetTileHeight(tile, value);
+					CHECK(openttd_rust_map_read_probe(allocation, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base()));
+					auto unchecked = allocation;
+					unchecked.assertions = false;
+					CHECK(openttd_rust_map_read_probe(unchecked, &GetRustSharedServices(), &GetRustClearServices(), &GetRustTreeServices(), tile.base()));
+				}
+			}
+		}
+	}
+	Map::Allocate(64, 64);
+}
 TEST_CASE("Rust ground enum and consumed-record native calls")
 {
 	CHECK(GroundProbe::Run());
@@ -43,7 +75,7 @@ TEST_CASE("Rust shared tile-type allocation and all native byte values")
 		for (uint byte = 0; byte < 256; byte++) {
 			Tile(tile).type() = byte;
 			CHECK(openttd_rust_shared_tile_type(allocation, shared.tile_type, tile.base()) == static_cast<uint8_t>(GetTileType(tile)));
-			CHECK(openttd_rust_shared_tile_type({nullptr, 0}, shared.tile_type, tile.base()) == static_cast<uint8_t>(GetTileType(tile)));
+			CHECK(openttd_rust_shared_tile_type({.base = nullptr, .extended = nullptr, .count = 0, .assertions = false}, shared.tile_type, tile.base()) == static_cast<uint8_t>(GetTileType(tile)));
 		}
 	}
 	/* Real native writes between accesses must be observed without a new snapshot.
@@ -67,7 +99,9 @@ TEST_CASE("Rust shared tile-type allocation and all native byte values")
 TEST_CASE("Rust shared tile-type out-of-range preserves callback policy")
 {
 	Map::Allocate(64, 64);
-	const auto allocation = GetRustTileTypeAllocation();
+	auto allocation = GetRustTileTypeAllocation();
+	/* Exercise the checked backend without executing native asserts-off UB. */
+	allocation.assertions = true;
 	/* The original native accessor stays the production oracle. This fixture
 	 * records fallback rather than executing source UB with assertions disabled. */
 	static uint calls;
@@ -80,7 +114,7 @@ TEST_CASE("Rust shared tile-type out-of-range preserves callback policy")
 	CHECK(openttd_rust_shared_tile_type(allocation, callback, UINT32_MAX) == 231);
 	CHECK(calls == 2);
 	CHECK(observed == UINT32_MAX);
-	CHECK(openttd_rust_shared_tile_type({nullptr, 0}, callback, 0) == 231);
+	CHECK(openttd_rust_shared_tile_type({.base = nullptr, .extended = nullptr, .count = 0, .assertions = false}, callback, 0) == 231);
 	CHECK(calls == 3);
 	CHECK(observed == 0);
 }

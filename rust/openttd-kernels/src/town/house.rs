@@ -913,7 +913,7 @@ impl House<'_> {
             }
         }
         // SAFETY: Static command table referenced by the house table.
-        (unsafe { &*self.h.commands }.landscape_clear)(result, tile, flags);
+        crate::landscape_cmd::clear_command(unsafe { &*self.h.commands }, result, tile, flags);
     }
     /// `CmdPlaceHouse`; test clears write into the result, replaced on success.
     fn place(
@@ -979,7 +979,8 @@ impl House<'_> {
                 return;
             }
             if !(replace && (self.s.tile_type)(subtile) == MP_HOUSE) {
-                (commands.landscape_clear)(
+                crate::landscape_cmd::clear_command(
+                    commands,
                     result,
                     subtile,
                     DoCommandFlag::AUTO | DoCommandFlag::NO_WATER,
@@ -1287,8 +1288,7 @@ pub unsafe extern "C" fn openttd_rust_house_animate(
 ) {
     house(leaves, services).animate(tile);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_clear(
+pub(crate) unsafe fn openttd_rust_house_clear(
     leaves: *const Leaves,
     services: *const Services,
     result: *mut CommandCost,
@@ -1297,8 +1297,7 @@ pub unsafe extern "C" fn openttd_rust_house_clear(
 ) {
     house(leaves, services).clear(result, tile, flags);
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_terraform(
+pub(crate) unsafe fn openttd_rust_house_terraform(
     leaves: *const Leaves,
     services: *const Services,
     result: *mut CommandCost,
