@@ -432,6 +432,11 @@ def check(scenario, run, mode, role, result):
     before, after = rows(source), rows(final)
     chunks = read_save(source)
     operation = scenario["roads"]
+    from . import core
+
+    result[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
+        scenario, run, role, "movement", ["pixel_z", "track_road"]
+    )
     witnesses = {}
 
     def require(condition, message):
@@ -981,7 +986,8 @@ def game_environment(scenario):
 
     return (
         core.WITNESS_ENVIRONMENT
-        if scenario.get("road_commands") and scenario.get("witnesses")
+        if (scenario.get("road_commands") or scenario.get("roads"))
+        and scenario.get("witnesses")
         else {}
     )
 

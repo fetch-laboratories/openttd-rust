@@ -232,6 +232,9 @@ def check(scenario, run, mode, role, result):
     if "station_service" not in scenario:
         return
     kind = scenario["station_service"]
+    result[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
+        scenario, run, role, "movement", []
+    )
     required = {
         "acceptance-loss": ["rejected_delivery"],
         "full-gradual": ["full_load_reserve", "gradual_unload"],

@@ -330,12 +330,17 @@ def scheduler_gap():
     start = source.index("void RunTileLoop()")
     end = source.index("\nvoid InitializeLandscape()", start)
     (out / "landscape-loop-reference.inc").write_text(source[start:end])
+
     # Movement gaps: impossible foundation outcomes and off-map signed extrema.
     # Every algorithm/helper body below is extracted from the unchanged reference.
     def function(text, name):
         import re
 
-        match = re.search(r"[^\n;{}]*\b" + name + r"\([^;{}]*\)\s*\{", text)
+        match = re.search(
+            r"^(?:static )?(?:inline )?[\w:<>]+\s+" + name + r"\([^;{}]*\)\s*\{",
+            text,
+            re.M,
+        )
         start = text.rfind("\n", 0, match.start()) + 1
         end, depth = match.end(), 1
         while depth:
@@ -343,8 +348,10 @@ def scheduler_gap():
             end += 1
         return text[start:end] + "\n"
 
-    fragments = (migration.REFERENCE / "src/slope_func.h").read_text().replace(
-        '#include "tile_type.h"', ""
+    fragments = (
+        (migration.REFERENCE / "src/slope_func.h")
+        .read_text()
+        .replace('#include "tile_type.h"', "")
     )
     track = (migration.REFERENCE / "src/track_func.h").read_text()
     fragments += function(track, "TracksOverlap") + function(track, "CornerToTrackBits")
@@ -352,18 +359,33 @@ def scheduler_gap():
     begin = data.index("extern const TrackBits _corner_to_trackbits")
     fragments += data[begin : data.index("};", begin) + 2] + "\n"
     for file, table, name in (
-        ("rail_cmd.cpp", "static const TrackBits _valid_tracks_without", "GetRailFoundation"),
-        ("road_cmd.cpp", "static const RoadBits _invalid_tileh_slopes_road", "GetRoadFoundation"),
+        (
+            "rail_cmd.cpp",
+            "static const TrackBits _valid_tracks_without",
+            "GetRailFoundation",
+        ),
+        (
+            "road_cmd.cpp",
+            "static const RoadBits _invalid_tileh_slopes_road",
+            "GetRoadFoundation",
+        ),
     ):
         text = (migration.REFERENCE / "src" / file).read_text()
         begin = text.index(table)
         end = text.index("/**", text.index("};", begin))
-        fragments += text[begin:end] + function(text, name)
+        fragments += text[begin:end]
+        if file == "rail_cmd.cpp":
+            begin = text.index(
+                "static const TrackBits _valid_tracks_on_leveled_foundation"
+            )
+            fragments += text[begin : text.index("};", begin) + 2] + "\n"
+        fragments += function(text, name)
     fragments += function(source, "GetPartialPixelZ")
     (out / "movement-foundation-reference.inc").write_text(fragments)
     void = (migration.REFERENCE / "src/void_cmd.cpp").read_text()
     (out / "movement-coordinate-reference.inc").write_text(
-        function(void, "GetSlopePixelZ_Void") + function(source, "GetSlopePixelZOutsideMap")
+        function(void, "GetSlopePixelZ_Void")
+        + function(source, "GetSlopePixelZOutsideMap")
     )
     binary = out / "landscape-loop-gap"
     subprocess.run(

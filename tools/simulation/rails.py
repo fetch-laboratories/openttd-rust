@@ -692,6 +692,9 @@ def controller_witnesses(scenario, run, mode):
 def check(scenario, run, mode, role, result):
     if not scenario.get("rail_fixture"):
         return
+    result[f"{mode}_{role}_movement_profile"] = core.branch_witnesses(
+        scenario, run, role, "movement", ["pixel_z", "track_rail"]
+    )
     counts = core.branch_witnesses(
         scenario, run, role, "train", train_required(scenario)
     )

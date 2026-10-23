@@ -12,6 +12,7 @@
 #include <limits>
 #include <tuple>
 #include <cassert>
+#include <optional>
 #include "rust/movement_ffi.h"
 #include "slope_type.h"
 #include "track_type.h"
