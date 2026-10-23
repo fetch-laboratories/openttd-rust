@@ -20,7 +20,7 @@ def declarations(root=ROOT):
     """Yield C++ name, probe group, Rust type, field pairs and optional width."""
     seen = set()
     for path in sorted((root / "rust/openttd-kernels/src").rglob("*.rs")):
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         if "layouts! {" not in source:
             continue
         source = re.sub(r"//[^\n]*", "", source)
@@ -48,7 +48,8 @@ def generate(root=ROOT):
     output = defaultdict(list)
     headers = {}
     for header in sorted((root / "src/rust").glob("*.h")):
-        text = re.sub(r"//[^\n]*|/\*.*?\*/", "", header.read_text(), flags=re.S)
+        source = header.read_text(encoding="utf-8")
+        text = re.sub(r"//[^\n]*|/\*.*?\*/", "", source, flags=re.S)
         for tag, body, alias in re.findall(
             r"(?:typedef\s+)?struct\s*(\w+)?\s*\{([^{}]*)\}\s*(\w+)?\s*;", text, re.S
         ):
@@ -103,8 +104,8 @@ def write_fragments(output, fragments):
             path.unlink()
     for name, contents in fragments.items():
         path = output / name
-        if not path.exists() or path.read_text() != contents:
-            path.write_text(contents)
+        if not path.exists() or path.read_text(encoding="utf-8") != contents:
+            path.write_text(contents, encoding="utf-8")
 
 
 def main():

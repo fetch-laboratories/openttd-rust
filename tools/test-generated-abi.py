@@ -2,6 +2,7 @@
 """Check generated probes against the deleted lists, without keeping another inventory."""
 
 import io
+import os
 import re
 import runpy
 import subprocess
@@ -125,7 +126,15 @@ class GeneratedAbiTests(unittest.TestCase):
     def test_generation_is_deterministic_and_build_directory_only(self):
         with tempfile.TemporaryDirectory() as directory:
             subprocess.run(
-                ["python3", str(ROOT / "tools/generate-abi.py"), directory], check=True
+                [
+                    "python3",
+                    "-X",
+                    "utf8=0",
+                    str(ROOT / "tools/generate-abi.py"),
+                    directory,
+                ],
+                env={**os.environ, "LC_ALL": "C", "PYTHONCOERCECLOCALE": "0"},
+                check=True,
             )
             self.assertEqual(
                 GENERATOR["generate"](),
