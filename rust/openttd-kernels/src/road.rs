@@ -2136,3 +2136,225 @@ pub(crate) unsafe fn clear_removed_drive_stop(state: *mut State) {
         }
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRoadTramBuildRead" ["probe"] => TramBuildRead { owner, road_type, road, };
+    "OpenTTDRoadPathElement" ["probe"] => PathElement {
+        trackdir,
+        tile,
+    };
+    "OpenTTDRoadEntry" ["probe"] => Entry {
+        acceleration_model,
+        road_side,
+        queue,
+        map_log_x,
+    };
+    "OpenTTDRoadTickRead" ["probe"] => TickRead {
+        tick,
+        front,
+        movement,
+        order_time,
+        running,
+        status,
+    };
+    "OpenTTDRoadMaxSpeedRead" ["probe"] => MaxSpeedRead {
+        next,
+        next_state,
+        tile,
+        max_track_speed,
+        order_max_speed,
+        direction,
+        status,
+    };
+    "OpenTTDRoadVisualRead" ["probe"] => VisualRead {
+        max,
+        eligible,
+    };
+    "OpenTTDRoadSpeedRead" ["probe"] => SpeedRead {
+        max,
+        x,
+        y,
+        z,
+        acceleration,
+        length,
+        tram,
+    };
+    "OpenTTDRoadSpeedPart" ["probe"] => SpeedPart {
+        next,
+        next_state,
+        tile,
+        direction,
+        status,
+    };
+    "OpenTTDRoadStep" ["probe"] => Step {
+        tile,
+        x,
+        y,
+        z,
+        cur_speed,
+        direction,
+        length,
+        front,
+        tram,
+    };
+    "OpenTTDRoadCrashPart" ["probe"] => CrashPart {
+        next,
+        next_state,
+        tile,
+        z,
+        crossing,
+    };
+    "OpenTTDRoadEntered" ["probe"] => Entered {
+        tile,
+        cur_speed,
+        flags,
+        direction,
+        order_type,
+    };
+    "OpenTTDRoadCandidate" ["probe"] => Candidate {
+        vehicle,
+        state,
+        first,
+        first_state,
+        index,
+        x,
+        y,
+        z,
+        first_speed,
+        direction,
+    };
+    "OpenTTDRoadTileVehicle" ["probe"] => TileVehicle {
+        vehicle,
+        first,
+    };
+    "OpenTTDRoadPartRead" ["probe"] => PartRead {
+        next,
+        next_state,
+        tile,
+        z,
+        tram,
+    };
+    "OpenTTDRoadPathRead" ["probe"] => PathRead {
+        dest,
+        owner,
+        articulated,
+        bus,
+    };
+    "OpenTTDRoadStopRead" ["probe"] => StopRead {
+        owner,
+        bus,
+    };
+    "OpenTTDRoadOvertakeRead" ["probe"] => OvertakeRead {
+        tile,
+        cur_speed,
+        direction,
+        status,
+    };
+    "OpenTTDRoadRoadTypes" ["probe"] => RoadTypes {
+        before,
+        after,
+    };
+    "OpenTTDRoadTrackChoice" ["probe"] => TrackChoice {
+        trackdir,
+        found,
+    };
+    "OpenTTDRoadDepotResult" ["probe"] => DepotResult {
+        tile,
+        length,
+    };
+    "OpenTTDRoadArrivalRead" ["probe"] => ArrivalRead {
+        had_vehicle_of_type,
+        bus,
+    };
+    "OpenTTDRoadSoundRead" ["probe"] => SoundRead {
+        sound,
+        tick,
+    };
+    "OpenTTDRoadLink" ["probe"] => Link {
+        next,
+        next_state,
+    };
+    "OpenTTDRoadLinkTile" ["probe"] => LinkTile {
+        link,
+        tile,
+    };
+    "OpenTTDRoadCostRead" ["probe"] => CostRead {
+        engine,
+        cost_class,
+        cost_factor,
+    };
+    "OpenTTDRoadServiceRead" ["probe"] => ServiceRead {
+        tile,
+        servint,
+        cur_speed,
+    };
+    "OpenTTDRoadTurnRead" ["probe"] => TurnRead {
+        tile,
+        breakdown_ctr,
+        direction,
+        order_type,
+        status,
+    };
+    "OpenTTDRoadTrackdirRead" ["probe"] => TrackdirRead {
+        tile,
+        direction,
+        status,
+    };
+    "OpenTTDRoadLeaves" ["probe"] => Leaves {
+        vehicle,
+        ground,
+        shared,
+        process_orders,
+        max_depot_penalty,
+        visual_read,
+        visual_effect_then_speed,
+        speed_read,
+        max_speed_read,
+        speed_part,
+        step,
+        crash_part,
+        part,
+        link,
+        link_tile,
+        enter_tile,
+        visit_close,
+        visit_trains,
+        visit_tile,
+        has_road,
+        track_status,
+        any_road_bits,
+        is_road_depot_tile,
+        depot_direction,
+        is_normal_road,
+        disallowed_directions,
+        is_bay_stop,
+        bay_direction,
+        is_drive_through,
+        is_station_road_stop,
+        move_tile,
+        path_read,
+        choose_track,
+        find_depot,
+        tram_build_read,
+        disconnect,
+        stop_read,
+        should_stop,
+        arrival_read,
+        arrival_news,
+        arrival_triggers,
+        overtake_read,
+        sound_read,
+        depot_exit,
+        crash_news,
+        shorten_factor,
+        default_max_speed,
+        update_cargo_age,
+        cost_read,
+        price,
+        pay_running,
+        service_read,
+        turn_read,
+        trackdir_read,
+    };
+}

@@ -64,3 +64,16 @@ pub fn compare(left: AlternatingState, right: AlternatingState) -> i8 {
         std::cmp::Ordering::Greater => 1,
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRustAlternatingState" ["probe"] => AlternatingState {
+        position,
+        next_after,
+        current_after,
+    };
+    "OpenTTDRustAlternatingStep" ["probe"] => AlternatingStep {
+        state,
+        movement,
+    };
+}

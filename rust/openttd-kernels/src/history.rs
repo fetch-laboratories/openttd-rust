@@ -329,3 +329,27 @@ impl Engine {
         }
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRustHistoryDescriptor" ["probe"] => Descriptor {
+        child,
+        periods,
+        records,
+        first,
+        last,
+        division,
+        total_division,
+        child_periods,
+        child_division,
+    };
+    "OpenTTDRustHistoryStep" ["probe"] => Step {
+        kind,
+        count,
+        first,
+        last,
+        target,
+        token,
+        value,
+    };
+}

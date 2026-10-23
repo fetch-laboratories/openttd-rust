@@ -196,6 +196,17 @@ pub unsafe extern "C" fn openttd_rust_town_generate_name(
     unsafe { generate(&*s, frame, random, result, params, names) }
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDTownNameServices" ["probe"] => NameServices {
+        next,
+        render,
+        render_other,
+        utf8_length,
+        random_next,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -22,14 +22,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::c_void;
 
-/// Native `INVALID_CARGO` sentinel.
-pub(crate) const INVALID_CARGO: u8 = u8::MAX;
-
-/// Original `IsValidCargoType`; cargo validity here only excludes the sentinel.
-pub(crate) const fn is_valid_cargo_type(cargo: u8) -> bool {
-    cargo != INVALID_CARGO
-}
-
 /// Native cargo Source, passed by value without packing its ID and type.
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -179,6 +171,62 @@ unsafe fn tile(p: *mut Packet, s: Services, at: u32, loading: bool) {
 unsafe fn fields(l: *const List) -> Fields {
     unsafe { (*l).fields }
 }
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDCargoSource" ["probe"] => Source {
+        id,
+        source_type => type,
+    };
+    "OpenTTDCargoPacketFields" ["probe"] => Packet {
+        feeder_share,
+        source_xy,
+        count,
+        periods_in_transit,
+        first_station,
+        next_hop,
+        source_id,
+        travelled_x,
+        travelled_y,
+        source_type,
+        in_vehicle,
+    };
+    "OpenTTDCargoListFields" ["probe"] => Fields {
+        cargo_periods_in_transit,
+        feeder_share,
+        count,
+        reserved_count,
+        action_counts,
+    };
+    "OpenTTDCargoStorageServices" ["probe"] => Services {
+        can_allocate,
+        create,
+        packet,
+        destroy,
+        random,
+        coordinate,
+        flow,
+        pay,
+        origin,
+        flow_owner,
+        random_draw,
+        packet_next,
+    };
+    "OpenTTDCargoCapacityVehicle" ["probe"] => Vehicle {
+        list,
+        capacity,
+        cargo,
+        train,
+        articulated,
+    };
+    "OpenTTDCargoCapacityServices" ["probe"] => CapacityServices {
+        read,
+        next_part,
+        last_engine_part,
+        other_multiheaded_part,
+        cargo,
+    };
+}
+
 #[cfg(test)]
 unsafe fn nodes(l: *const List) -> Vec<Node> {
     let mut result = Vec::new();

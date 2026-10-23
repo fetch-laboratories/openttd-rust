@@ -186,6 +186,5 @@ OpenTTDShipDepotResult openttd_rust_ship_find_depot(uint32_t, uint32_t, const Op
 bool openttd_rust_ship_is_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 uint32_t openttd_rust_ship_station_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 uint8_t openttd_rust_ship_trackdir(uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
-void openttd_rust_ship_build(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 }
 #endif

@@ -303,7 +303,6 @@ const HELICOPTER_SOUND: i64 = 22;
 const EXPLOSION_SOUND: i64 = 16;
 const SKID_SOUND: i64 = 21;
 const TICKS_PER_YEAR: i64 = YEAR_TICKS;
-const NUM_CARGO: i64 = 64;
 const INVALID_STATION: u32 = 65535;
 const OWNER_NONE: i64 = 16;
 const HIDDEN: i64 = 1;
@@ -1454,7 +1453,7 @@ impl World<'_> {
         if self.random() & ((1 << 22) - 1) > prob {
             return;
         }
-        for cargo in 0..NUM_CARGO {
+        for cargo in 0..i64::from(crate::cargo_type::NUM_CARGO) {
             self.landing_rating(i64::from(self.target(id)), cargo);
         }
         self.crash_airplane(id);
@@ -2447,4 +2446,155 @@ pub unsafe extern "C" fn openttd_rust_aircraft_invalidate_target(
             }
         }
     }
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDAircraftState" ["probe"] => State {
+        cached_max_range_sqr,
+        cached_max_range,
+        cache_padding,
+        crashed_counter,
+        targetairport,
+        pos,
+        previous_pos,
+        state,
+        last_direction,
+        number_consecutive_turns,
+        turn_counter,
+        flags,
+    };
+    "OpenTTDAircraftVehicle" ["probe"] => Vehicle {
+        handle,
+        state,
+        id,
+    };
+    "OpenTTDAircraftNode" ["probe"] => Node {
+        next,
+        blocks,
+        position,
+        next_position,
+        heading,
+    };
+    "OpenTTDAircraftMoving" ["probe"] => Moving {
+        x,
+        y,
+        flags,
+        direction,
+    };
+    "OpenTTDAircraftLeaves" ["probe"] => Leaves {
+        hangar_candidate,
+        geometry,
+        layout_blocks,
+        layout_heading,
+        layout_next_position,
+        layout_next,
+        layout_route,
+        vehicle,
+        shared,
+        next,
+        station,
+        airport_tile,
+        station_tile,
+        rotation,
+        airport_type,
+        station_owner,
+        has_hangar,
+        airport_fta,
+        airport_blocks,
+        had_vehicle,
+        dummy_airport,
+        airport_elements,
+        helipads,
+        airport_flags,
+        airport_delta_z,
+        node,
+        fta,
+        moving,
+        engine_speed,
+        engine_subtype,
+        engine_sound,
+        airport_entry,
+        direction_towards,
+        hangar_height,
+        terminal_count,
+        hangar_exit,
+        can_use_station,
+        service_interval,
+        chain_in_depot,
+        nearest_depot_order,
+        part_of_orders,
+        next_aircraft,
+        update_position,
+        rotor_image,
+        copy_sprite,
+        position_viewport,
+        create_effect,
+        truncate_cargo,
+        crash_news,
+        station_rating,
+        landing_rating,
+        dirty_depot,
+        first_arrival,
+        update_delta,
+        touchdown_animation,
+        destination_too_far,
+        delete_range_news,
+        service_order,
+        running_cost,
+        subtract_cost,
+        dirty_lists,
+        next_stopping_station,
+        remove_depot_orders,
+        assert_flying,
+        invalid_movement,
+        invalid_position,
+        invalid_scheme,
+        unreachable,
+        cargo_age_property,
+        range_property,
+        touchdown_sound,
+        rotor_image_if_changed,
+        update_rotor_image,
+        process_orders,
+        vehicle_crash,
+        send_to_depot,
+        fta_next_position,
+        block_node,
+        route_node,
+        block_choice,
+    };
+    "OpenTTDAircraftBlockNode" ["probe"] => BlockNode {
+        blocks,
+        position,
+        next_position,
+    };
+    "OpenTTDAircraftRouteNode" ["probe"] => RouteNode {
+        next,
+        next_position,
+        heading,
+    };
+    "OpenTTDAircraftBlockChoice" ["probe"] => BlockChoice {
+        next,
+        blocks,
+        heading,
+    };
+    "OpenTTDAircraftGeometry" ["probe"] => Geometry {
+        tile,
+        rotation,
+        width,
+        height,
+        airport,
+    };
+    "OpenTTDAircraftLayoutRoute" ["probe"] => LayoutRoute {
+        node,
+        next,
+        next_position,
+        heading,
+    };
+    "OpenTTDAircraftHangarCandidate" ["probe"] => HangarCandidate {
+        owner,
+        airport,
+        hangar,
+    };
 }

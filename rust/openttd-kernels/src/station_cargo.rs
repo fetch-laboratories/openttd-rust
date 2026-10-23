@@ -92,3 +92,16 @@ pub fn plan(mode: u8, selector: u8) -> u8 {
         _ => u8::MAX,
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDCargoCollector" ["probe"] => Collector {
+        amount,
+        previous,
+        last_key,
+        other,
+        origin,
+        selector,
+        finalized,
+    };
+}

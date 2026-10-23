@@ -10,6 +10,7 @@ use super::{
     ALL_GROUP, DEFAULT_GROUP, ERROR, GroupFields, GroupServices, INVALID_GROUP, add_profit,
     add_replacement, group, remove_replacement, replacement, update_autoreplace,
 };
+use crate::cargo_type::INVALID_CARGO;
 use crate::command_type::DoCommandFlag;
 use crate::tile_type::TILE_SIZE;
 /// `EngineID::Invalid()`; shares the 0xFFFF encoding with `GroupID::Invalid()`.
@@ -247,7 +248,7 @@ unsafe fn direct_clone_order(w: &Services, out: *mut (), old: *mut (), new: *mut
                 new.cast(),
                 old.cast(),
                 s.strings.share_orders,
-                u8::from(flags & 1 != 0),
+                u8::from(flags & DoCommandFlag::EXECUTE != 0),
                 out.cast(),
                 s.orders,
             );
@@ -286,7 +287,6 @@ unsafe fn direct_copy_group(w: &Services, out: *mut (), old: *mut (), new: *mut 
     );
 }
 
-const INVALID_CARGO: u8 = 255;
 const NO_REFIT: u8 = 254;
 
 /// Original `assert` site: the condition is evaluated only in builds whose C++
@@ -1123,4 +1123,83 @@ pub unsafe extern "C" fn openttd_rust_fleet_set_rule(
     old: bool,
 ) -> u32 {
     unsafe { set_rule(&*w, &*gw, flags, id, from, to, old) }
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDFleetTransactionServices" ["fleet"] => Services {
+        common, refit_services, build_services,
+        cost_zero,
+        cost_vehicles,
+        cost_error,
+        cost_add,
+        cost_move,
+        cost_amount,
+        success,
+        error,
+        money,
+        commands,
+        rear,
+        articulated,
+        crashed,
+        stopped,
+        chain_depot,
+        first,
+        next_unit,
+        prev_unit,
+        length,
+        cargo_type,
+        can_carry,
+        stopped_in_depot,
+        max_length,
+        check,
+        needs_renew,
+        engine_valid,
+        company_valid,
+        engine_buildable,
+        rail_compatible,
+        road_powered,
+        wagon,
+        tram,
+        plane,
+        refit_mask,
+        refit_masks,
+        vehicle_cargo,
+        default_cargo,
+        orders,
+        order_count,
+        order_count_id,
+        order_at,
+        order_refit,
+        order_auto,
+        order_cargo,
+        local,
+        refit_news,
+        subtype,
+        reverse_probability,
+        reverse,
+        copy_configuration,
+        viewports,
+        view_window,
+        news,
+        transfer_cargo,
+        capacity,
+        event,
+        save_rng,
+        restore_rng,
+        rule_window,
+        assertions,
+        unavailable,
+        too_long,
+        too_long_replacement,
+        nothing,
+    };
+    "OpenTTDFleetCosts" ["fleet"] => Costs {
+        result,
+        replace,
+        build,
+        copy,
+        temporary,
+        seeds,
+    };
 }

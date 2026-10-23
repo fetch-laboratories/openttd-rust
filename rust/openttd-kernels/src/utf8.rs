@@ -137,3 +137,15 @@ pub unsafe fn borrow<'a>(data: *const u8, length: usize) -> &'a [u8] {
     // SAFETY: The ABI caller supplies the documented readable, immutable span.
     unsafe { std::slice::from_raw_parts(data, length) }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDRustUtf8Encoded" ["probe"] => Encoded {
+        bytes,
+        length,
+    };
+    "OpenTTDRustUtf8Decoded" ["probe"] => Decoded {
+        length,
+        codepoint,
+    };
+}

@@ -547,7 +547,6 @@ impl<'a> World<'a> {
                         let height = crate::bridge_map::get_bridge_height(
                             (station.southern_bridge_end)(t),
                             self.s,
-                            |f, h| unsafe { ((*station.rail).apply_foundation)(f, h).z },
                         );
                         if direction == 1 && height <= high {
                             out.error(self.a.strings.bridge);
@@ -915,4 +914,20 @@ pub(crate) fn terraform_command(
     // SAFETY: the getter supplies canonical immutable tables for the native caller.
     let world = unsafe { World::new(&*(commands.landscape_commands)()) };
     world.terraform_do(world.cost(out), tile, slope, up, flags)
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDLandscapeCommandStrings" ["landscape"] => crate::landscape_cmd::Strings {
+        canal, clear_limit, water, sea_level, high, edge, bridge, bridge_high,
+        tunnel, terraform_limit, levelled,
+    };
+    "OpenTTDLandscapeCommandServices" ["landscape"] => crate::landscape_cmd::LandscapeServices {
+        shared, costs, commands, strings, tile_procs, water, on_water, coast, buoy, canal,
+        height_limit, max_bridge_height, freeform_edges, editor, exchange_generating,
+        tunnel_in_way, mark_dirty_height, set_height, paused, explosion,
+    };
+    "OpenTTDLandscapeTileServices" ["landscape"] => crate::landscape_cmd::TileServices {
+        clear, terraform, owners, trees, industry_policy, industry_costs, industry_generation,
+    };
 }

@@ -467,6 +467,58 @@ unsafe fn run_ticks<const COUNTED: bool>(
     };
 }
 
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDVehiclePoolCursor" ["scheduler"] => PoolCursor {
+        slots,
+        slots_len,
+        first_unused,
+    };
+    "OpenTTDVehiclePostTick" ["scheduler"] => PostTick {
+        vehicle_type => type,
+        period,
+        counter,
+        motion,
+        speed,
+        front_type,
+        subtype,
+        tick,
+        front_status,
+        status,
+    };
+    "OpenTTDVehicleDayCallback" ["scheduler"] => DayCallback {
+        day,
+        has_engine,
+    };
+    "OpenTTDVehicleSchedulerServices" ["scheduler"] => SchedulerServices {
+        pool,
+        assertions,
+        tick,
+        calendar_day,
+        economy_day,
+        day_callback_read,
+        randomise_callback,
+        first_dirty,
+        cargo_owner,
+        vehicle,
+        shared,
+        with_loading_timer,
+        reset_accumulators,
+    };
+    "OpenTTDVehicleSchedulerTables" ["scheduler"] => Tables {
+        scheduler,
+        cargo,
+        station,
+        loading,
+        pending,
+        transaction,
+        group,
+        visits,
+        refit_cost,
+        refit_temporary,
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

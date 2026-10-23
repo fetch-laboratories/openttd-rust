@@ -626,93 +626,8 @@ Unless an entry says otherwise, these properties hold for every port:
   C++ sanitizers do not instrument Rust accesses. These checks establish neither whole-game
   equivalence nor cryptographic security or complete secret erasure.
 
-### TGP terrain generation
 
-Rust owns the temporary height map and every TerraGenesis generation stage, including
-height estimation, noise, water histogram, smoothing and regional curves. `src/tgp.cpp` keeps
-settings extraction, shared RNG callbacks, progress and final tile writes; the original
-implementation compiles only without `WITH_RUST`.
-
-An opaque owner advances through generation and normalization, returning progress actions to
-C++. Settings are copied; RNG draw order and fixed-point conversions follow the source. Abortion
-frees the owner after Rust returns, so the progress exception never crosses a Rust frame.
-
-Default CI verifies the build and runs `python3 tools/migration.py simulate` with four curated
-settings cases spanning all four climates and selected terrain, smoothness, variety, sea/border,
-height and map-shape values. Maximum-map performance and Windows/macOS runtime parity remain
-untested.
-
-### Landscape scheduler, ground and flooding
-
-The #212 owner ([PR #255](https://github.com/fetch-laboratories/openttd-rust/pull/255))
-controls `RunTileLoop`, clear/rail/road/tunnel ground evolution, flooding behaviour,
-half-tile rail removal, dry-up, neighbour wakeups and live flood-victim traversal.
-The process-global saved cursor commits after the complete source batch; DATE,
-legacy loading, reset and zero repair retain their widths/order. Original selected
-bodies compile only without `WITH_RUST`; packed map/pool storage remains native.
-
-The in-entry LFSR keeps native unsigned map-log widths and reads each live type
-byte from audited allocation metadata. All seven Rust tile owners dispatch directly,
-void tiles straight to the water owner, which reuses the dispatched type and reader
-and derives `IsValidTile` from the map size; only house/station/object have native
-scalar handlers with local strong-index construction; the five unused facade slots
-are null.
-Flooding calls the Rust signal flush through the canonical signal context.
-Leaves shared by several
-owners (clear/tree ground, snow, shore, sound, foundation) live in shared tables.
-Tree/industry water loops, tree wakeups, rail flooding queries and road town-type
-selection call Rust directly; canonical rail leaves have one binding. Ground
-boundaries use actual native enums, unrestricted transparent
-Rust carriers, exact counters and typed station handles. Legacy protocols adapt
-explicitly. Each native entry owns independent lazy stack command-result storage.
-No hot call allocates a protocol object or copies a complete native tile/vehicle.
-Vehicle iterators advance after crash/events/news/effects; airport membership,
-bridge endpoint order and company restoration follow source. No ordinary tick
-callback unwinds; generation-progress cancellation stays outside tick.
-
-`verify`, the default scheduler comparison and `simulate landscape roads-flooding`
-exercise real ABI calls, declared endpoints and required named branch witnesses;
-`--self`/`--soak` extend evidence. Missing witnesses fail. The unchanged scheduler
-probe covers dimensions/cursor/reentry phases unreachable through ordinary saves.
-Remaining matrix/editor/NewGRF/threaded gaps are in #156.
-
-#274 extends the canonical allocation descriptor with typed base/extended pointers,
-count and native assertion policy. The scheduler's clear/water/tree reads use
-header-named Rust helpers; shore-tree flooding shares that reader. Field-sized raw
-loads finish before callbacks, and observations reload after mutation. The audited
-scheduler no-reset/no-yield interval alone permits descriptor metadata to survive
-callbacks. C++ retains arrays, allocation and all writes. Standalone water/tree,
-generation, planting/command and unrelated owner reads retain canonical typed
-callbacks; no descriptor is carried into these unaudited entries.
-Generated named probes pin both layouts. Default native tests compare field/slope
-encodings, extended fences, live mutation, reallocation and assertion-policy
-fallbacks with unchanged native services. Assertions-off raw reads add no bounds,
-type or field rejection. The PR retains the historical same-base TGP profile;
-speed is checked on the integrated branch, without per-PR counts or a speed gate.
-This maintenance moves no storage or whole owner.
-
-### Landscape partial-pixel height
-
-`GetPartialPixelZ`, the scalar landscape height kernel, runs in Rust behind its
-original C++ interface. The ABI takes two `int32_t` coordinates and one `uint8_t`
-slope; a `uint64_t` result carries the complete `uint32_t` height domain plus
-`UINT64_MAX` for the original unsupported-base-slope `NOT_REACHED` dispatch.
-No pointers, allocations, shared state or ownership cross it. C++ asserts widths,
-tile dimensions and slope/corner encodings. Rust preserves half-tile returns
-before base validation, upper-bit clearing, signed arithmetic shifts, unsigned
-TILE_SIZE/TILE_HEIGHT promotions and wrapping, and signed-to-unsigned returns.
-Coordinates outside the tile remain accepted, including legitimate `UINT32_MAX`
-heights. Original signed-overflow inputs have no equivalence guarantee; Rust
-adds no overflow panic. Unsafe code is denied except for the export attribute.
-
-Evidence: 32 unchanged upstream cases through the C++ entry point, Rust boundary
-cases, native ABI sentinel/height probes, and `python3 tools/math-comparison.py`
-against the unchanged pinned body, portable C++ and Rust: all 256 slope bytes on
-an extended -32..32 grid and selected full-width coordinate pairs, with C++ UBSan.
-The comparator excludes only executed signed-overflow expressions; it exercises
-the out-of-tile arithmetic gap that the simulation harness's callers cannot reach.
-The harness checks game state; the direct corpus is bounded, not exhaustive over
-all coordinate pairs.
+<!-- Subsystem: Support libraries and text. Add a new entry at the end of its group, not of the file. -->
 
 ### StringConsumer integer parsing
 
@@ -766,31 +681,6 @@ borrow survives that boundary.
 Default CI retains the unchanged consumer tests and runs `python3 tools/run-comparisons.py` for
 all registered reference comparisons. The public tests cover byte reads, offsets and shortfalls;
 release behavior outside original preconditions remains unspecified.
-
-### Spiral tile traversal
-
-Rust owns square/hole initialization, position initialization, per-direction
-movement, shell jumps, outside-map skipping, end detection and coordinate-only
-equality. C++ keeps the typed iterator/sequence facade, TileXY dereference,
-copies/postfix wrappers and map storage. Map dimensions are passed at each
-constructor and prefix increment; Rust caches none. Orthogonal and diagonal
-tile-area algorithms remain C++.
-
-`src/rust/spiral_ffi.h` has five pointer-free by-value operations and a copyable
-40-byte state (nine uint32_t fields counting the four extents, then a uint8_t
-direction at byte 36; alignment 4), asserted on both sides. Directions are
-NE(-1,0), SE(0,1), SW(1,0), NW(0,-1), with west shell jumps (+1,-1). Coordinate,
-extent, position and radius arithmetic wraps explicitly at 32 bits, including
-temporary outside-map coordinates; there is no new clamp or diameter cap. Positive
-diameter/radius and increment-before-end remain original preconditions. End is
-radius equality with a non-invalid direction; equality compares x,y only.
-
-Evidence: the five unchanged ordered tests (217 assertions) plus four public cases
-(clipped sequences on 128x64/64x128 maps, live map dimensions, copy/postfix/equality
-and sentinel state, UINT32_MAX hole-initialization wrapping), compiled against
-pinned reference algorithms, Rust facades and portable C++ bodies. The huge
-inherited perimeter after a wrapped extent is not traversed. Native generators do
-not use spiral traversal.
 
 ### StringBuilder numeric byte encoders
 
@@ -1027,26 +917,6 @@ Default CI runs `python3 tools/auth-comparison.py` against pinned vendor functio
 portable C++. Existing network tests and the comparison cover the primitive family; C++
 sanitizer coverage does not instrument Rust memory accesses.
 
-### Station cargo-list queries
-
-Issue #51 reuses the Rust ScriptList owner. Rust owns the four selector/filter rules, pending
-run keys and unsigned 32-bit totals, positive flush decisions, add-versus-set merges, per-origin
-cumulative-share decoding, and query-plan selection (waiting/all versus equal_range, planned/all
-versus find). C++ keeps station/cargo validation, pool/GoodsEntry access, HasData checks,
-packet/flow iterators and scalar extraction.
-
-A caller-owned 16-byte collector (uint32 amount/previous, uint16 station IDs including 0xFFFF,
-byte selector/finalized) is asserted in C++ and ABI layout ID 18; Windows x86 uses explicit
-cdecl. Rust borrows the destination only during feed/finalize, and the destination outlives the
-collector; no world pointer, STL/VM layout, iterator, callback or C++ exception enters or
-survives a Rust call. Fresh collector totals are bounded by packet-pool/origin limits;
-modification tokens use the shared owner's wrapping arithmetic.
-
-Evidence: the unchanged stationlist script (24 constructions, 41 output rows), both scripted
-suites, the upstream unit inventory, and the bounded cargo mode of `python3
-tools/script-list-comparison.py` (pinned loop bodies, portable and Rust feeds, FlowStat origins,
-wrapping, sentinel keys, repeats, reentry, a C++ exception between feeds).
-
 ### BLAKE2b family
 
 Bundled Monocypher BLAKE2b keeps all six public C functions. Rust owns the twelve compression
@@ -1136,36 +1006,120 @@ and C-string suffix bytes, missing terminators, empty/unchanged inputs,
 copy/assignment/self/rvalue copies, live consumer rewinding, defined left overlap and overtake
 fatal state.
 
-### Link graph job computation
+<!-- Subsystem: Landscape, water and map structures. Add a new entry at the end of its group, not of the file. -->
 
-Issue #74 moves demands, both MCF passes, cycle elimination, path lifetime and flow mapping into
-Rust. Rust owns copied graph/settings, private demand/edge annotations, a reusable path arena
-and ordered cumulative-share maps. C++ keeps job scheduling/thread/abort flags, LGRP/LGRJ
-save/load and the existing station flow join.
+### TGP terrain generation
 
-ABI IDs 34-37 cover scalar node/edge/settings/share records. Its sole callback reads the job's
-atomic abort flag and cannot throw/reenter. C++ allocations happen outside Rust.
+Rust owns the temporary height map and every TerraGenesis generation stage, including
+height estimation, noise, water histogram, smoothing and regional curves. `src/tgp.cpp` keeps
+settings extraction, shared RNG callbacks, progress and final tile writes; the original
+implementation compiles only without `WITH_RUST`.
 
-Evidence: the unchanged regressions/comparisons and `python3 tools/migration.py simulate` with
-manual/cargodist road saves, symmetric/asymmetric scalers, boundary
-distance/size/accuracy/saturation settings and reload from a reference snapshot with outstanding
-LGRJ records (GLOG history is reset only in prepared road inputs so both loaders log their
-revision). Graphs, allocator failures and abort timing are not exhaustive; resource exhaustion
-timing differs with the allocation strategy.
+An opaque owner advances through generation and normalization, returning progress actions to
+C++. Settings are copied; RNG draw order and fixed-point conversions follow the source. Abortion
+frees the owner after Rust returns, so the progress exception never crosses a Rust frame.
 
-### Built-in town-name generation
+Default CI verifies the build and runs `python3 tools/migration.py simulate` with four curated
+settings cases spanning all four climates and selected terrain, smoothness, variety, sea/border,
+height and map-shape values. Maximum-map performance and Windows/macOS runtime parity remain
+untested.
 
-Issue #96 moves all 21 built-in generators, seed selection, English replacements, Finnish vowel
-handling, Czech grammatical matching and private constants into Rust. C++ keeps NewGRF routing,
-settings and save/load; #246 owns retries/uniqueness.
+### Landscape scheduler, ground and flooding
 
-One coarse call owns complete output behind an opaque result. C++ appends the immutable byte
-view with RAII destruction, including on append exceptions; no builder/world pointer, callback
-or shared RNG enters Rust.
+The #212 owner ([PR #255](https://github.com/fetch-laboratories/openttd-rust/pull/255))
+controls `RunTileLoop`, clear/rail/road/tunnel ground evolution, flooding behaviour,
+half-tile rail removal, dry-up, neighbour wakeups and live flood-victim traversal.
+The process-global saved cursor commits after the complete source batch; DATE,
+legacy loading, reset and zero repair retain their widths/order. Original selected
+bodies compile only without `WITH_RUST`; packed map/pool storage remains native.
 
-Evidence: the semantic harness observes actual built-in rendered names through read-only AI logs
-and compares every saved field in plain/desync modes. This samples seeds; it is not exhaustive
-coverage of 21 * 2^32 combinations, every allocator failure or NewGRF town-name behavior.
+The in-entry LFSR keeps native unsigned map-log widths and reads each live type
+byte from audited allocation metadata. All seven Rust tile owners dispatch directly,
+void tiles straight to the water owner, which reuses the dispatched type and reader
+and derives `IsValidTile` from the map size; only house/station/object have native
+scalar handlers with local strong-index construction; the five unused facade slots
+are null.
+Flooding calls the Rust signal flush through the canonical signal context.
+Leaves shared by several
+owners (clear/tree ground, snow, shore, sound, foundation) live in shared tables.
+Tree/industry water loops, tree wakeups, rail flooding queries and road town-type
+selection call Rust directly; canonical rail leaves have one binding. Ground
+boundaries use actual native enums, unrestricted transparent
+Rust carriers, exact counters and typed station handles. Legacy protocols adapt
+explicitly. Each native entry owns independent lazy stack command-result storage.
+No hot call allocates a protocol object or copies a complete native tile/vehicle.
+Vehicle iterators advance after crash/events/news/effects; airport membership,
+bridge endpoint order and company restoration follow source. No ordinary tick
+callback unwinds; generation-progress cancellation stays outside tick.
+
+`verify`, the default scheduler comparison and `simulate landscape roads-flooding`
+exercise real ABI calls, declared endpoints and required named branch witnesses;
+`--self`/`--soak` extend evidence. Missing witnesses fail. The unchanged scheduler
+probe covers dimensions/cursor/reentry phases unreachable through ordinary saves.
+Remaining matrix/editor/NewGRF/threaded gaps are in #156.
+
+#274 extends the canonical allocation descriptor with typed base/extended pointers,
+count and native assertion policy. The scheduler's clear/water/tree reads use
+header-named Rust helpers; shore-tree flooding shares that reader. Field-sized raw
+loads finish before callbacks, and observations reload after mutation. The audited
+scheduler no-reset/no-yield interval alone permits descriptor metadata to survive
+callbacks. C++ retains arrays, allocation and all writes. Standalone water/tree,
+generation, planting/command and unrelated owner reads retain canonical typed
+callbacks; no descriptor is carried into these unaudited entries.
+Generated named probes pin both layouts. Default native tests compare field/slope
+encodings, extended fences, live mutation, reallocation and assertion-policy
+fallbacks with unchanged native services. Assertions-off raw reads add no bounds,
+type or field rejection. The PR retains the historical same-base TGP profile;
+speed is checked on the integrated branch, without per-PR counts or a speed gate.
+This maintenance moves no storage or whole owner.
+
+### Landscape partial-pixel height
+
+`GetPartialPixelZ`, the scalar landscape height kernel, runs in Rust behind its
+original C++ interface. The ABI takes two `int32_t` coordinates and one `uint8_t`
+slope; a `uint64_t` result carries the complete `uint32_t` height domain plus
+`UINT64_MAX` for the original unsupported-base-slope `NOT_REACHED` dispatch.
+No pointers, allocations, shared state or ownership cross it. C++ asserts widths,
+tile dimensions and slope/corner encodings. Rust preserves half-tile returns
+before base validation, upper-bit clearing, signed arithmetic shifts, unsigned
+TILE_SIZE/TILE_HEIGHT promotions and wrapping, and signed-to-unsigned returns.
+Coordinates outside the tile remain accepted, including legitimate `UINT32_MAX`
+heights. Original signed-overflow inputs have no equivalence guarantee; Rust
+adds no overflow panic. Unsafe code is denied except for the export attribute.
+
+Evidence: 32 unchanged upstream cases through the C++ entry point, Rust boundary
+cases, native ABI sentinel/height probes, and `python3 tools/math-comparison.py`
+against the unchanged pinned body, portable C++ and Rust: all 256 slope bytes on
+an extended -32..32 grid and selected full-width coordinate pairs, with C++ UBSan.
+The comparator excludes only executed signed-overflow expressions; it exercises
+the out-of-tile arithmetic gap that the simulation harness's callers cannot reach.
+The harness checks game state; the direct corpus is bounded, not exhaustive over
+all coordinate pairs.
+
+### Spiral tile traversal
+
+Rust owns square/hole initialization, position initialization, per-direction
+movement, shell jumps, outside-map skipping, end detection and coordinate-only
+equality. C++ keeps the typed iterator/sequence facade, TileXY dereference,
+copies/postfix wrappers and map storage. Map dimensions are passed at each
+constructor and prefix increment; Rust caches none. Orthogonal and diagonal
+tile-area algorithms remain C++.
+
+`src/rust/spiral_ffi.h` has five pointer-free by-value operations and a copyable
+40-byte state (nine uint32_t fields counting the four extents, then a uint8_t
+direction at byte 36; alignment 4), asserted on both sides. Directions are
+NE(-1,0), SE(0,1), SW(1,0), NW(0,-1), with west shell jumps (+1,-1). Coordinate,
+extent, position and radius arithmetic wraps explicitly at 32 bits, including
+temporary outside-map coordinates; there is no new clamp or diameter cap. Positive
+diameter/radius and increment-before-end remain original preconditions. End is
+radius equality with a non-invalid direction; equality compares x,y only.
+
+Evidence: the five unchanged ordered tests (217 assertions) plus four public cases
+(clipped sequences on 128x64/64x128 maps, live map dimensions, copy/postfix/equality
+and sentinel state, UINT32_MAX hole-initialization wrapping), compiled against
+pinned reference algorithms, Rust facades and portable C++ bodies. The huge
+inherited perimeter after a wrapped extent is not traversed. Native generators do
+not use spiral traversal.
 
 ### Tree generation, simulation and planting
 
@@ -1188,21 +1142,6 @@ DATE LoadCheck omission.
 reloads. Cargo tests and the native ABI probe cover explicit/editor policy, Money bounds,
 bitpattern 7, abort return order, reentry and `GetTileZ` call points. Editor interaction,
 diagonal traversal, legacy saves, NewGRF ambient callbacks and the abort rethrow are unreached.
-
-### Effect vehicles
-
-Rust owns all twelve controllers, movement tables and private animation bytes (#101/#107). Each
-C++ EffectVehicle shell owns one zero-created opaque state, also on indexed load; RAII destroys
-it on ordinary deletion and pool cleanup.
-
-Copied call-scoped observations and immediate scalar writes keep original mutation order. Rust
-calls common Random/map and effect-specific sound, viewport and animated-tile noexcept wrappers
-directly; none can reenter Rust. The immutable shared service table is borrowed only
-until the controller returns (#299); no full table is copied.
-
-`python3 tools/migration.py simulate effects` compares save chunks across subtypes, expiry,
-reload and natural creation. Viewport pixels, audible output, full legacy fixtures and every
-caller remain limits.
 
 ### Water-region cache and graph service
 
@@ -1229,6 +1168,204 @@ visitors cannot trigger. `tools/water-scenario-ai/README.md` gives preparation,
 negative-probe and optional crossing/timing measurement commands. Arbitrary
 maps/NewGRFs and exhaustive region/path limits remain evidence limits.
 
+### Water construction, clearing and restoration (#294)
+
+Rust (`water_cmd.rs`, shared `water.rs`/`ground.rs`) owns ship depot/lock/canal
+commands/removal, water clearing/restoration, river/desert traversal and owner/terraform/
+build-above policy. Original command bodies and `MakeLock` remain portable-only.
+Lock checks/build/removal order, depot partial clears and post-clear accounting,
+conditional RNG draws, narrowing and wrapping retain the original sequence.
+
+C++ keeps packed map primitives, depot identities, drawing, native stack
+`CommandCost` objects and a lazy stack area iterator. Generic landscape commands
+retain the complete native `Command::Do` lifecycle. Rust helpers call the
+integrated clear-square, flooding/neighbor, region-cache and economy owners directly.
+Shared restoration retains class/accounting/RNG order; docking calls its Rust owner.
+Shared command/depot/environment services replace touched rail/town/industry
+copies. Named generated layouts, aborting unused fixture slots and actual
+production table checks cover the boundary; no native world borrow spans reentry.
+
+`python3 tools/migration.py verify --jobs 2`, default `water-commands` and existing
+water traffic/mutation/reload scenarios compare semantic saves and require
+restoration/clear witnesses. The console fixture compares results/parameters,
+map/depot fields, infrastructure, docking membership and RNG across both axes,
+all lock directions/parts, occupied/bankrupt queries, force/partial clearing,
+editor/desert and restoration inputs. Pool exhaustion, construction under bridges,
+water objects, arbitrary NewGRF/legacy layouts and GUI remain #156 coverage gaps.
+
+### Tunnel and bridge commands and ownership (#293)
+
+Rust (`tunnelbridge_cmd.rs`) owns complete bridge/tunnel construction, removal
+permission and clearing, ownership, terraform and build-above policy, including
+ordered replacement, partial effects, reservations and infrastructure updates.
+Header-named modules share bridge prices/foundations/heights, length and track
+helpers, and source constants. The hidden tunnel end tile is one process-wide
+Rust atomic, shared with GUI readers; no component world borrow crosses reentry.
+
+C++ keeps canonical map/spec/pool storage, rendering, vehicle entry and native
+stack command results. Direct typed noexcept services retain shared operations;
+ordinary play reaches no throwing script VM or save service. Bridge height calls
+Rust foundation directly, including existing station/water/object consumers.
+Slope/z has one canonical shared observation. Tunnel exit terraform uses the
+integrated object scratch owner's stable index across recursive clears.
+
+Default `roads-commands` and its reload compare all bridge transports/both axes,
+road/rail tunnels, test/execute/query (including AI), replacement, ownership,
+refusal, occupied clearing, bankruptcy, autoslope, recursive exit terraforming,
+hidden failure end tiles and price thresholds at 25/50/100 tunnel tiles.
+The existing default object probe checks scratch growth/restoration. Live train
+re-reservation, rectangular-map tunnel intersection choices, external NewGRFs
+and legacy layouts remain #156 coverage gaps. PR #352 records checks and limits.
+### Object construction, generation and HQ lifecycle (#295)
+
+Rust (`objects.rs`) owns build/area commands, clear and ownership policy,
+terraform/build-above, HQ growth/acceptance/production, colour updates,
+object tile loops and generation including lighthouse/transmitter searches.
+It also owns object NewGRF variables, nearby/sister queries and animation triggers;
+native interpreter, badge, override and generic animation-frame services remain.
+Process-wide wrapping type counts and ordered cleared-area command scratch
+have one Rust owner. Tunnel clients retain indices over nested append, and
+industry transactions snapshot/restore the same scratch at the original points.
+C++ retains the native object pool/specs/map/save/render records, stack command
+results and typed shared services; original bodies remain portable-only.
+
+Generation progress cancellation returns before native rethrow. Other leaves
+are synchronous noexcept calls. Borrows end before callbacks; HQ passenger/mail
+production shares one random word and lazily discovers stations. Command calls
+use the shared `command::nested` lifecycle. Command, finance, clearing and water
+restoration reuse the integrated shared owners; ownership enters from and
+redispatches through the shared Rust dispatcher (#333). Named ABI
+metadata and typed abort defaults cover the object table and consumed records.
+
+Default `objects` semantic scenarios cover four climates/borders, HQ relocation,
+cargo, owned-land area construction, statues, ownership, clearing back to
+canal/river/sea with water redispatch, ID reuse and afterload
+counts. Compact unchanged-body probes cover count wrapping/destruction, scratch
+growth, cancellation, query availability/register/nearby/count decisions and callback/RNG
+ordering, including unmasked `SB` refresh and reentry. External NewGRF/legacy,
+autoslope and generation branches remain tracked in #156.
+
+### Shared tile ownership dispatch (#331)
+
+Rust owns the general `ChangeTileOwner` tile-kind dispatch and directly calls the
+integrated rail, road, station, water and industry owners. Native clear, house,
+tree, void, tunnel/bridge and object handlers remain separate typed leaves; the
+original general dispatcher remains portable. Company transfer/control/buy and
+native landscape/station entries own call-local constructed costs and the full
+canonical road context. Nested station removal returns before scratch reuse;
+AI startup still returns to its native outer frame before it can throw.
+The default `water-commands` scenario compares captured ownership errors,
+restored-tile transfer/bankruptcy, native objects, depot bankruptcy, map state,
+both water balances, docking and RNG. This is shared boundary maintenance, with
+no new subsystem ownership or retirement completion claim.
+The default `ownership-dispatch` scenario builds company-owned road stops and
+waypoints, level crossings, rail stations, an airport, dock, buoy, lock, ship depot,
+tunnels and bridges, and sets industry founder/exclusivity, then runs a merger and a
+bankruptcy through `ChangeOwnershipOfCompanyItems` (#156), with required witnesses.
+
+<!-- Subsystem: Rail and road infrastructure. Add a new entry at the end of its group, not of the file. -->
+
+### Rail signal blocks and fixed work sets (#219)
+
+Rust owns complete signal-block exploration, immediate signal update/propagation, first-segment
+classification and all three fixed 64/256/128 work sets, including counts, sticky overflow
+flags, private direction tables and last owner. State has process lifetime under the game-state
+mutex; loading adds no new reset.
+
+C++ keeps public signal constants, shared map/pools/spatial queries, commands and rendering.
+Native assertion configuration remains authoritative.
+
+The default `signals` simulation compares movement, commands, pending state, reservations,
+reload and ownership barriers. Real tbd/global propagation overflow, threaded play and arbitrary
+mod layouts remain #156 limits.
+
+### Rail track, depot and signal commands (#265)
+
+Rust (`rail_cmd.rs`) owns single-track build/remove and drag, depot build/removal,
+single/drag signal commands and autofill, rail conversion, and rail tile clear,
+owner-change, autoslope/terraform and build-above policy. Test/execute partial
+effects, error precedence, costs and wrapping remain source-ordered; none draws RNG.
+Original bodies remain portable-only.
+
+C++ retains stack `CommandCost` slots, nested commands, crossing/depot map writes,
+PBS, and the conversion iterator/ordered affected-train list. Shared command checks
+serve rail, fleet and industry; canonical road/rail map services supply reads.
+Shared services also provide slope settings, `DoClearSquare` for trees/rail,
+reservation release/path requests and one safe-waiting service for train/YAPF/rail.
+Native enum return types retain their widths through transparent Rust carriers.
+No owner borrow spans reentry. Rail tile loops, track status and drawing stay native.
+
+`python3 tools/migration.py simulate signals-rail-commands --jobs 2` compares
+command results, semantic saves and required `rail_cmd.*` witnesses: obstacle drags,
+crossings/depots/slopes, signal cycling/conversion/copy/autofill through a bridge,
+conversion/reroutes, clearing/terraforming, company transfer/deletion and reservations.
+Coast/half-tile water and PBS path-end removal remain #156 gaps. PR #270 records
+exact-head checks and outstanding full-simulation, speed and CI gates.
+
+### Road track, depot and conversion commands (#266)
+
+Rust (`road_cmd.rs`) owns road removal permissions and slopes, single and long
+build/removal, depots, clear/owner/nearest-town updates, terraform, conversion and
+build-above. Portable originals remain. Native road-type allocation, drawing,
+track-status/vehicle-enter and tile loops stay outside this command port.
+The boundary reuses shared command checks and native stack costs, road/rail map
+leaves, company counters, depots, crossings and the rail conversion cursor.
+Rust road/station helpers share the ordinary nesting, test/execute, rating and
+finance lifecycle. Outer native town, founding, controller and tile-loop frames
+provide one stack scratch and two result slots for direct Rust owner calls.
+Shared Rust also owns road prices and tile clearing; native facades retain portable
+originals and typed storage/error leaves. Town/tram builds enter the Rust road
+owner directly; ground removal, nearest-town and bankrupt rail calls are direct.
+Town authority and rating policy call the integrated Rust owner directly.
+Crossing reservation reads/writes now have one canonical definition shared with
+trains. The canonical `MayHaveRoad` predicate preserves rail-station/head guards.
+The nearest-town map scan bundles only its reached original predicates per tile.
+No world-state borrow spans nested commands or vehicle/town callbacks.
+The default `roads-commands` and `roads-commands-reload` scenarios compare test and
+execute outcomes, costs/extra cash, semantic maps, company/town state and RNG,
+including drags, one-way/tram coexistence, reserved crossings, stops, bridges,
+depots, slopes, town removal, owner changes and low-funds removal.
+The fixture declares builtin-like road-type inputs; external NewGRF programs and
+legacy save variants remain corpus gaps. PR #290 records validation and speed.
+
+### Road stop bays and drive-through entries (#354)
+
+Rust (`road_stop.rs`) owns each RoadStop's status byte and the shared
+drive-through entries: bay admission and freeing, entrance status, `GetByTile`,
+continuation, both `Enter`/`Leave` levels, joining (alone, parent, join, merge)
+and splitting (last, head, tail, split with rebuild), `Rebuild`,
+`CheckIntegrity`, destruction and both `AfterLoadRoadStops` passes. One Rust
+allocation per shell holds the status and entries pointer; the BaseEntry stop
+owns the entries, allocated and freed where the original does. `status` stays a
+native reference alias for the ROAD descriptor; `GetEntry` is a const reader.
+The road controller, station commands and road YAPF call the owner directly.
+C++ keeps the shell, pool, `xy`/`next` links and station stop lists
+(`OpenTTDRoadStopServices`), two compound vehicle reads, the tile hash and
+`GetNextRoadStop`, whose only caller is the native YAPF area leaf. Native
+vehicle entry, PreDestructor, cache check and load call typed entries.
+`stations-commands-road-stops` and `-road-stops-reload` compare every stop's
+status and entry length/occupancy through joins on both axes, occupied merges,
+interior/head/tail/last removal, bay admission and reload, and require every
+`road_stop` branch (`integrity` in desync runs). Articulated bay refusal and the
+unreachable `include` duplicate remain #156 gaps.
+
+<!-- Subsystem: Vehicles, pathfinding and orders. Add a new entry at the end of its group, not of the file. -->
+
+### Effect vehicles
+
+Rust owns all twelve controllers, movement tables and private animation bytes (#101/#107). Each
+C++ EffectVehicle shell owns one zero-created opaque state, also on indexed load; RAII destroys
+it on ordinary deletion and pool cleanup.
+
+Copied call-scoped observations and immediate scalar writes keep original mutation order. Rust
+calls common Random/map and effect-specific sound, viewport and animated-tile noexcept wrappers
+directly; none can reenter Rust. The immutable shared service table is borrowed only
+until the controller returns (#299); no full table is copied.
+
+`python3 tools/migration.py simulate effects` compares save chunks across subtypes, expiry,
+reload and natural creation. Viewport pixels, audible output, full legacy fixtures and every
+caller remain limits.
+
 ### Disaster scheduling and vehicles
 
 Issue #103 moves all fifteen subtype controllers, eight initializers, eligibility,
@@ -1248,79 +1385,6 @@ Callbacks may mutate their separate context, never the borrowed table.
 The default `disasters` simulation checks scheduling, crashes, removal, industry reset,
 submarine movement and reload. Legacy save fixtures, viewport pixels, sound output, allocator
 failure timing and exhaustive NewGRF combinations remain limits.
-
-### Cargo payment and delivery
-
-Issue #117 moves CargoPayment state/lifetime, final/transfer payment and settlement, industry
-acceptance, statistics/payment ordering, destination deduplication and the complete production
-flush into Rust. C++ retains pool shells, canonical world and packet storage,
-loading/reservation, subsidy checks, NewGRF resolution and UI.
-
-ABI IDs 49-51 and 60 describe cargo observations, saved fields, synchronous services and the
-repr(C) payment, which CAPY saves in place through `CargoPayment` reference aliases.
-Cargo/refusal/production/randomisation/animation and vehicle-sound resolution uses the NewGRF
-evaluator, without script VM entry or payment/destination reentry; wrappers are noexcept. Money
-saturates arithmetic but retains native shifts; callback unsigned products, BigMulS narrowing,
-stockpile limits and ordered randomisation/animation are explicit.
-
-The default `economy` simulation compares delivery, transfer, active CAPY reload and partial
-acceptance. NewGRF resolver execution, legacy CAPY files and every industry layout are not
-exhaustive in the semantic corpus; the narrow fixture supplies callback results.
-
-### Ship YAPF searches and canonical path cache
-
-Rust owns both region and track searches, arena indices/parent chains, open and closed
-membership, the original binary-heap tie/removal rules, destination estimates, region corridor,
-two attempts, random lost paths and cache extraction (#119). Search arenas/maps/heaps retain
-process-wide capacity (#306); active searches own storage, with no cached world pointers.
-Each Ship owns one opaque Rust path
-with copied controller access; modern VEHS stages one byte across C++ load errors and commits it
-on unwind, while the pre-struct-list loader retains its reversed path order.
-
-C++ keeps ship/world pools, track following, station/dock queries, engine/settings observations
-and canonical map arrays. No ordinary throwing/reentrant world callback occurs in this search;
-save errors remain outside Rust frames.
-
-The existing `python3 tools/migration.py simulate water --jobs 2` corpus compares all chunks for
-ferry manual/cargodist, canal/lock loss and recovery, aqueducts, depot reversals and
-reference-produced live-path reload. Arbitrary maps/NewGRFs and complete legacy saves are not
-exhaustive.
-
-### Town growth and lifecycle state
-
-Issue #120 moves town tick traversal, road/build choices, terrain retries, house
-selection/placement and expansion into Rust. The partial #148 extension owns town metadata,
-histories, ratings and building counts; #256 moves house tile loops and deletion
-commands. Native field aliases expose one Rust owner, with process-wide state
-under the game-state mutex.
-
-Rust ends owner borrows before commands or NewGRF callbacks that can reenter. The default
-`town-growth` simulation and native tests cover growth, layouts, reload, reentry and aliases.
-Natural tunnel construction, custom NewGRF callbacks and complete historical saves remain
-evidence limits; #148 is not a complete lifecycle port.
-
-### Town founding, generation and names
-
-#246 extends the sole town owner with canonical custom-name bytes and owns founding,
-placement/coastal/grid search, initial growth, generation counts/retries, layout, rename and
-automatic/custom-name uniqueness. C++ keeps map/pool shells, house specs, rendering/NewGRF
-resolvers, spatial/noise/news services and native save decoding. A separate native custom-name
-presentation string retains the original `GetCachedName()` reference identity through
-rename/reset/re-rename; commands, validation and save authority read Rust bytes. Generated-name
-cache stays separate. All descriptor-addressable town scalars/growth fields load directly
-through their aliases. Only the opaque Rust name uses scoped native string staging, committing
-partial decoded state on unwind. Legacy compatibility scratch remains native. Named typed
-services return native enum/scalar widths; allocation resolves the canonical owner once. Borrows
-end before growth, rendering, deletion and reentry. Only
-`SetGeneratingWorldProgress`/`IncreaseGeneratingWorldProgress` return cancellation to a native
-frame; Rust drops uniqueness scratch before native rethrow. Portable original bodies remain
-unchanged in non-Rust branches. `python3 tools/migration.py simulate town-founding- --jobs 2`
-compares climate/layout, no-city generation, coastal generation, manual/deity/editor commands, exact
-cost/error/extra-money/ID, zero-growth deletion/reuse, rename/cache lifetime, name exhaustion
-and reload. Default module-owned adapters also compare cancellation against unchanged source,
-full-width count clamps/RNG and otherwise unreachable name bytes; missing markers fail. Real
-NewGRF, historical saves, GUI threading and final 10,000-attempt fallback remain coverage limits
-tracked in #156; house lifecycle belongs to #256.
 
 ### Road vehicle control and private state
 
@@ -1346,155 +1410,6 @@ identity, fresh loads, status resets, front/nonfront policy and counter boundari
 The default `roads-` simulation compares acceleration, servicing, path, RNG, crash expiry and
 reload. Legacy saves, custom NewGRFs, articulated/tram turns, sounds and viewport pixels remain
 limits tracked by #156.
-
-### Shared tile ownership dispatch (#331)
-
-Rust owns the general `ChangeTileOwner` tile-kind dispatch and directly calls the
-integrated rail, road, station, water and industry owners. Native clear, house,
-tree, void, tunnel/bridge and object handlers remain separate typed leaves; the
-original general dispatcher remains portable. Company transfer/control/buy and
-native landscape/station entries own call-local constructed costs and the full
-canonical road context. Nested station removal returns before scratch reuse;
-AI startup still returns to its native outer frame before it can throw.
-The default `water-commands` scenario compares captured ownership errors,
-restored-tile transfer/bankruptcy, native objects, depot bankruptcy, map state,
-both water balances, docking and RNG. This is shared boundary maintenance, with
-no new subsystem ownership or retirement completion claim.
-The default `ownership-dispatch` scenario builds company-owned road stops and
-waypoints, level crossings, rail stations, an airport, dock, buoy, lock, ship depot,
-tunnels and bridges, and sets industry founder/exclusivity, then runs a merger and a
-bankruptcy through `ChangeOwnershipOfCompanyItems` (#156), with required witnesses.
-
-### Company finances and economy lifecycle
-
-Issue #137 moves cash/fraction accounting, loans, histories, rating/value,
-construction budgets, maintenance/interest/year rotation, bankruptcy/recovery,
-ranked offers, creation/deletion, acquisition and the complete ownership-transfer
-traversal into Rust. Rust also owns periodic scheduling, prices/multipliers,
-inflation/recession, score parts and the company tick cursor. Selected bodies
-compile only portably except StartupCompanies/InitializeCompanies: their native
-timer/reset control remains, and InitializeCompanies writes Rust's tick cursor.
-Identity, settings, networking, UI, AI and shared world services remain C++.
-One Rust allocation per CompanyProperties holds finance/history fields with C++
-field lifetimes and stable addresses; economy/prices/scores have process lifetimes.
-#192 makes every entry a named synchronous call taking borrowed designated tables
-(`OpenTTDCompanyFinanceServices`, `OpenTTDCompanyServices`) of typed noexcept
-services; facades resolve owners and settings once. Pool scans filter owner, then
-type, before detail reads; tile-owner changes, deletions, allocation, the nested
-service-interval command, the bankruptcy Post and `StopAI` run directly. Only
-`AI::StartNew` (script memory policy can throw before ScriptInstance's catch) and
-the `CCA_NEW_AI` Post return through caller-owned stack frames (startup, control,
-tick, competitor timeout). ABI 210-214 and 400-417 check layouts.
-`python3 tools/migration.py simulate companies economy` compares all chunks/RNG;
-Native CTest covers lifetimes, network deferred deletion, posting
-order and abandoned startup frames. Subsidies, exclusive rights, goals/story
-pages, hostile purchase, multiplayer runtime and NewGRFs remain evidence limits.
-
-### Rail YAPF search, caches and reservation
-
-[#133](https://github.com/fetch-laboratories/openttd-rust/pull/133) moves all four searches,
-node/segment arenas, exact-order heap, costs, lookahead, limits and reconstruction
-into Rust. Rust owns six specialization-specific cache banks, rail-change
-invalidation, reservation traversal and ordered signal rollback. C++ retains
-the train controller, shared track follower, PBS and canonical world services.
-Explicit platform/waypoint station triggers return to C++ with borrows released;
-waypoint track reservation also retains the original synchronous PBS station
-triggers while search/reservation borrows remain active, before its second trigger.
-Original search bodies remain portable-only; diagnostic dumps use temporary
-views and the original format, with no canonical C++ search mirror.
-
-The default `padhattan` and `rail-reservation` simulations exercise cache reuse, reversal,
-depot/safe-tile search, reservation, busy targets, rollback and reload under both 90-degree
-policies.
-Native unchanged-base/heap probes cover finite limits, live cost invalidation
-and ordered opposing PBS signal restoration absent from the supplied network.
-They do not prove full rail-cost semantics for arbitrary maps, NewGRFs, legacy
-saves or every signal family. Controller reservation extension belongs to #130.
-
-### Road YAPF search and path construction
-
-Issue #124 moves track/depot searches, exit-direction keys, node arena, lookup
-maps, exact-order heap, segment traversal/cost, heuristic, limits and intermediate
-fallback into Rust. Reconstruction and station-area trimming write #121's sole
-canonical path. Original specialization/node types compile only portably.
-C++ retains map/pools/settings, station/stop observations and `CFollowTrackRoad`
-behind copied scalar `noexcept` leaves. None runs scripts, mutates/reenters the
-search/road owner or throws in ordinary play. Short owner access ends before
-leaves. Neither search draws RNG; wrapping, exit-key replacement, strict ties
-and follow-before-limit timing retain source behavior. Panics/OOM abort.
-Arena/maps/heap retain process-wide scratch capacity (#278); active searches own
-it, with no cached native pointers. Inputs/destinations/counters reset per call.
-#288 shares one tile observation across segment cost/destination/depot checks.
-Endpoint predicates invalidate on advance; startup and >4096 exits remain
-unevaluated until needed, without stop-cost lookups. Only accepted continuations
-read ordered current/next ground-vehicle center Z, vehicle speed fields and
-old-tile follower limits; arithmetic stays Rust and Follow is never repeated.
-
-`python3 tools/migration.py simulate roads --jobs 2` compares plain/desync state,
-station trimming and competing penalties. Native tests compare heap/origin masks
-and depot transcripts with unchanged C++ at node limits 0/1/2/7 and cost bounds
-0/70/71/100; a transient trace checks rejected/accepted queries, costs and long
-segment cache invalidation. Native ABI checks cover every field. Arbitrary maps,
-NewGRFs, articulated/tram, waypoints, exhaustive stop/loop/segment branches and
-legacy saves remain #156 gaps; shared follower logic remains native.
-
-### Orders lifecycle ownership
-
-Issue #138 / PR #176 moves order storage, links, backups and consist timetable/unbunching state
-into Rust, including traversal, command edits, sharing, depot execution and backup lifecycle.
-C++ retains pool identity, vehicle shells, command execution, VM callbacks and save/load
-adapters; original bodies remain in portable builds.
-
-Typed synchronous services preserve source ordering. Rust releases owner borrows before
-callbacks, commands or deletion, and native exceptions remain in C++. The default orders
-simulation and existing tests cover commands, sharing, backups, reload and reentry. NewGRF
-callback variants and legacy saves remain coverage limits tracked in #156.
-
-### Station cargo service
-
-Issue #125 moves the ordered loading queue, station service counters, acceptance mask and cargo
-rating/pickup/speed/age/waiting/fraction metadata into one opaque Rust owner per BaseStation.
-Native scalar references and the queue facade share it; ordinary/indexed construction,
-retirement, reuse, STNN/STNS and legacy fixups share it without persistent native mirrors.
-Packet, flow, link-graph, map and geometry storage remain C++.
-
-Issue #214 replaces numeric dispatch with borrowed typed noexcept tables (ABI 110-115), narrow
-observations (500-515), and caller-owned native iterator/container frames. Portable bodies
-remain unchanged.
-
-`python3 tools/migration.py simulate stations economy` uses the existing road/CAPY inputs for
-loading queues, fractional admission, acceptance loss, full/gradual loading, rating
-expiry/decay/capping, stale-link refresh/removal/restriction/release and active reload. Legacy, NewGRF and refit
-gaps remain in #156.
-
-### Station construction, joining and removal (#267)
-
-Rust owns the station command policy for rail platforms and waypoints, bay and
-through road stops, airports, docks and oil rigs, plus sign/name/owner, terrain,
-bridge clearance, joining, deletion/reuse and docking-neighbour decisions.
-`water_cmd.cpp` docking eligibility and registration belong to this owner.
-Original command bodies compile only in portable builds. The existing #125/#214
-station state remains canonical; there is no second station owner or save layout.
-
-C++ retains shell/spec/road-stop allocation, NewGRF resolvers, spatial indices,
-rendering/description and the hot tile-loop/animation/vehicle-entry/track/slope
-services. Entries use borrowed typed synchronous tables (ABI 1060-1072), shared
-Rust command pre/post checks, prices, clear-square/water restoration and native
-result slots. No ordinary-play script VM or save/load exception crosses the boundary.
-Rust ends owner access before reentry and calls owned aircraft/station/reservation
-policy directly. Reservation lookahead saves the existing layout-checked order
-value in each Rust stack guard; native pool/container allocation follows the original.
-
-`python3 tools/migration.py simulate stations-commands aircraft-controller-removal
-water-structures-mutate --jobs 2` compares command costs/errors, RNG, STNN/STNS,
-map, town and company state, including partial removal, joins, delete/reuse and
-modern reload. The station module includes unchanged-reference private callbacks
-in fixture executables and requires `station_command` witnesses in default CI.
-Default #320 cases require removed-destination path clearing, `TileAddWrap` border
-refusals and type-63 overbuilding through `AllocateRailType`. Retargeting uses virtual
-`SetDestTile`; shared native traversal serves stations and flooding. Builtin tram,
-airport noise and reload cases remain required. External NewGRF programs, legacy
-and unusual occupied/reservation branches remain tracked by #156.
 
 ### Ship controller and private state (#146)
 
@@ -1531,64 +1446,6 @@ deletion. The default rail simulation and native checks cover movement, reservat
 service, commands and reload. Arbitrary NewGRFs, legacy saves and unexercised controller
 branches remain limits tracked in #156.
 
-### Rail signal blocks and fixed work sets (#219)
-
-Rust owns complete signal-block exploration, immediate signal update/propagation, first-segment
-classification and all three fixed 64/256/128 work sets, including counts, sticky overflow
-flags, private direction tables and last owner. State has process lifetime under the game-state
-mutex; loading adds no new reset.
-
-C++ keeps public signal constants, shared map/pools/spatial queries, commands and rendering.
-Native assertion configuration remains authoritative.
-
-The default `signals` simulation compares movement, commands, pending state, reservations,
-reload and ownership barriers. Real tbd/global propagation overflow, threaded play and arbitrary
-mod layouts remain #156 limits.
-
-### Industry periodic production and builder ownership (#129)
-
-Rust owns the produced/accepted slots, optional accepted histories, production fields, sound
-countdown and industry-builder records. C++ industry shells expose nonowning views of these
-allocations; INDY, IBLD, ITBL, ECMY and TTO/TTD load adapters preserve the original names,
-widths, version gates and ordering. INDY, IBLD, ECMY and TTO/TTD industry scalars load and
-save through the reference aliases; only the Rust-owned industry text is staged.
-
-Rust runs production/transport ticks, farm and lumber updates, NewGRF production application,
-monthly statistics/closure, daily changes and builder targets/retries. Borrows end before reentry.
-
-Pool/map/spec storage, construction and landscape-clear transactions, presentation and bounded
-NewGRF resolution stay in C++ behind typed `noexcept` slots (#203). CargoPayment delivery
-remains #117.
-
-The default `industry-` scenarios exercise production, closure, builder retries and resets. The
-corpus does not exhaust legacy saves, NewGRF resolver programs or every industry layout; native
-tests check ABI/lifetimes.
-
-### Industry construction and tile lifecycle (#150)
-
-Rust owns industry metadata/text, ordered type registries, builder scratch,
-destruction, initial generation, full validation/funding/prospecting transactions,
-initialization, construction-stage completion, tile loops, builtin animation,
-acceptance, clear/terraform policy and NewGRF tile/parent trigger traversal.
-Native aliases and scoped load adapters preserve saved names/reference fixups,
-partial initialization and ID reuse. Water destruction retains the tile-type recheck.
-Packed map/pool shells, rendering, specs, resolvers and persistent storage stay C++.
-Only progress cancellation (`AbortGenerateWorldSignal`) returns to the native
-exception frame after source-order restoration. Direct synchronous services use
-native stack costs; temporary resolver shells borrow a Rust stack owner through
-the original constructor/destructor scope. No state borrow survives reentry.
-`python3 tools/migration.py simulate industry-command-fund industry-command-prospect
-industry-command-clear industry-command-terraform --jobs 2` compares command tests,
-execution, ID reuse and autoslope; default industry scenarios also cover four
-climates, lumber, generation and builder/farm cleanup. Default industry comparisons
-check absent NewGRF acceptance/triggers and rare animation against unchanged bodies;
-native tests check cancellation/restoration, callback policy and borrowed lifetimes.
-Default `industry-water-check-*` scenarios require oil-rig funding refusal over
-real depots/lower lock parts and acceptance after removal (#234).
-Shared map/RNG leaves use the canonical typed services; stable dimensions are
-captured once per consuming entry. [PR #218](https://github.com/fetch-laboratories/openttd-rust/pull/218) records integration evidence.
-Legacy saves, resolver programs and exhaustive industry layouts remain #156 corpus limits.
-
 ### Aircraft controllers and airport movement
 
 #136 owns both tick passes, movement/speed/flight, shadow/rotor, FTA traversal, terminal/helipad
@@ -1609,28 +1466,6 @@ load/reset. Standalone flight/disaster entries retain their narrow services.
 The default `aircraft` and `disasters` scenarios exercise traffic, service, removal, crash and
 reload. Real NewGRF/refit/airport rotations, threaded GUI, legacy-save fixtures and presentation
 remain gaps tracked on #156; these checks do not establish full subsystem equivalence.
-
-### Cargo storage and movement (#139)
-
-Rust owns packet fields, ordered station/vehicle lists, count/age/feeder/action/ reservation
-caches, cumulative flow shares and origin maps. It runs packet operations, cargo
-movement/staging/rerouting, live-flow reconciliation, capacity redistribution and autoreplace
-cargo transfer. Stable arena slots and linked ordering give constant-time list operations;
-destination endpoints bound station lookups to the selected queue. Freed slots are reused; arena
-capacity is retained. C++ retains packet pool identity/allocation/hooks, payment/delivery
-(#117), loading policy (#125), link-graph computation (#74), world access and thread join.
-CAPA saves the repr(C) packet in place; STNN/VEHS/flow adapters export call-local containers
-or scalar-key readers; pointer fixups
-and save errors finish outside Rust. Payment getters reenter after owner borrows end;
-ConsistChanged runs after Rust returns. Portable bodies stay.
-
-Checks: `python3 tools/migration.py verify --jobs 2`, and the default cargo-storage, economy,
-station, Padhattan and aircraft scenarios. Active CAPY scenarios check saved packet
-references/actions, aging, feeder credits and forced policies. Rust tests cover partial
-movement, payment getter reentry, same-list rerouting and capacity changes. `python3
-tools/cargo-storage-comparison.py` checks unreachable pool-limit Split failure against the
-unchanged pinned body. Legacy conversions and complete refit/autoreplace transactions lack
-additional play witnesses (#156).
 
 ### Fleet grouping and replacement lifecycle (#147)
 
@@ -1716,104 +1551,286 @@ timing. External NewGRF programs/retire_early, ENGS and TTO/TTD fixtures, legacy
 conversion and threaded GUI/presentation remain #156 gaps. #248 records the fixing reviews,
 source comparisons and final-head CI/speed results.
 
-### Rail track, depot and signal commands (#265)
+### Orders lifecycle ownership
 
-Rust (`rail_cmd.rs`) owns single-track build/remove and drag, depot build/removal,
-single/drag signal commands and autofill, rail conversion, and rail tile clear,
-owner-change, autoslope/terraform and build-above policy. Test/execute partial
-effects, error precedence, costs and wrapping remain source-ordered; none draws RNG.
-Original bodies remain portable-only.
+Issue #138 / PR #176 moves order storage, links, backups and consist timetable/unbunching state
+into Rust, including traversal, command edits, sharing, depot execution and backup lifecycle.
+C++ retains pool identity, vehicle shells, command execution, VM callbacks and save/load
+adapters; original bodies remain in portable builds.
 
-C++ retains stack `CommandCost` slots, nested commands, crossing/depot map writes,
-PBS, and the conversion iterator/ordered affected-train list. Shared command checks
-serve rail, fleet and industry; canonical road/rail map services supply reads.
-Shared services also provide slope settings, `DoClearSquare` for trees/rail,
-reservation release/path requests and one safe-waiting service for train/YAPF/rail.
-Native enum return types retain their widths through transparent Rust carriers.
-No owner borrow spans reentry. Rail tile loops, track status and drawing stay native.
+Typed synchronous services preserve source ordering. Rust releases owner borrows before
+callbacks, commands or deletion, and native exceptions remain in C++. The default orders
+simulation and existing tests cover commands, sharing, backups, reload and reentry. NewGRF
+callback variants and legacy saves remain coverage limits tracked in #156.
 
-`python3 tools/migration.py simulate signals-rail-commands --jobs 2` compares
-command results, semantic saves and required `rail_cmd.*` witnesses: obstacle drags,
-crossings/depots/slopes, signal cycling/conversion/copy/autofill through a bridge,
-conversion/reroutes, clearing/terraforming, company transfer/deletion and reservations.
-Coast/half-tile water and PBS path-end removal remain #156 gaps. PR #270 records
-exact-head checks and outstanding full-simulation, speed and CI gates.
+### Ship YAPF searches and canonical path cache
 
-### Object construction, generation and HQ lifecycle (#295)
+Rust owns both region and track searches, arena indices/parent chains, open and closed
+membership, the original binary-heap tie/removal rules, destination estimates, region corridor,
+two attempts, random lost paths and cache extraction (#119). Search arenas/maps/heaps retain
+process-wide capacity (#306); active searches own storage, with no cached world pointers.
+Each Ship owns one opaque Rust path
+with copied controller access; modern VEHS stages one byte across C++ load errors and commits it
+on unwind, while the pre-struct-list loader retains its reversed path order.
 
-Rust (`objects.rs`) owns build/area commands, clear and ownership policy,
-terraform/build-above, HQ growth/acceptance/production, colour updates,
-object tile loops and generation including lighthouse/transmitter searches.
-It also owns object NewGRF variables, nearby/sister queries and animation triggers;
-native interpreter, badge, override and generic animation-frame services remain.
-Process-wide wrapping type counts and ordered cleared-area command scratch
-have one Rust owner. Tunnel clients retain indices over nested append, and
-industry transactions snapshot/restore the same scratch at the original points.
-C++ retains the native object pool/specs/map/save/render records, stack command
-results and typed shared services; original bodies remain portable-only.
+C++ keeps ship/world pools, track following, station/dock queries, engine/settings observations
+and canonical map arrays. No ordinary throwing/reentrant world callback occurs in this search;
+save errors remain outside Rust frames.
 
-Generation progress cancellation returns before native rethrow. Other leaves
-are synchronous noexcept calls. Borrows end before callbacks; HQ passenger/mail
-production shares one random word and lazily discovers stations. Command calls
-use the shared `command::nested` lifecycle. Command, finance, clearing and water
-restoration reuse the integrated shared owners; ownership enters from and
-redispatches through the shared Rust dispatcher (#333). Named ABI
-metadata and typed abort defaults cover the object table and consumed records.
+The existing `python3 tools/migration.py simulate water --jobs 2` corpus compares all chunks for
+ferry manual/cargodist, canal/lock loss and recovery, aqueducts, depot reversals and
+reference-produced live-path reload. Arbitrary maps/NewGRFs and complete legacy saves are not
+exhaustive.
 
-Default `objects` semantic scenarios cover four climates/borders, HQ relocation,
-cargo, owned-land area construction, statues, ownership, clearing back to
-canal/river/sea with water redispatch, ID reuse and afterload
-counts. Compact unchanged-body probes cover count wrapping/destruction, scratch
-growth, cancellation, query availability/register/nearby/count decisions and callback/RNG
-ordering, including unmasked `SB` refresh and reentry. External NewGRF/legacy,
-autoslope and generation branches remain tracked in #156.
+### Rail YAPF search, caches and reservation
 
-### Road track, depot and conversion commands (#266)
+[#133](https://github.com/fetch-laboratories/openttd-rust/pull/133) moves all four searches,
+node/segment arenas, exact-order heap, costs, lookahead, limits and reconstruction
+into Rust. Rust owns six specialization-specific cache banks, rail-change
+invalidation, reservation traversal and ordered signal rollback. C++ retains
+the train controller, shared track follower, PBS and canonical world services.
+Explicit platform/waypoint station triggers return to C++ with borrows released;
+waypoint track reservation also retains the original synchronous PBS station
+triggers while search/reservation borrows remain active, before its second trigger.
+Original search bodies remain portable-only; diagnostic dumps use temporary
+views and the original format, with no canonical C++ search mirror.
 
-Rust (`road_cmd.rs`) owns road removal permissions and slopes, single and long
-build/removal, depots, clear/owner/nearest-town updates, terraform, conversion and
-build-above. Portable originals remain. Native road-type allocation, drawing,
-track-status/vehicle-enter and tile loops stay outside this command port.
-The boundary reuses shared command checks and native stack costs, road/rail map
-leaves, company counters, depots, crossings and the rail conversion cursor.
-Rust road/station helpers share the ordinary nesting, test/execute, rating and
-finance lifecycle. Outer native town, founding, controller and tile-loop frames
-provide one stack scratch and two result slots for direct Rust owner calls.
-Shared Rust also owns road prices and tile clearing; native facades retain portable
-originals and typed storage/error leaves. Town/tram builds enter the Rust road
-owner directly; ground removal, nearest-town and bankrupt rail calls are direct.
-Town authority and rating policy call the integrated Rust owner directly.
-Crossing reservation reads/writes now have one canonical definition shared with
-trains. The canonical `MayHaveRoad` predicate preserves rail-station/head guards.
-The nearest-town map scan bundles only its reached original predicates per tile.
-No world-state borrow spans nested commands or vehicle/town callbacks.
-The default `roads-commands` and `roads-commands-reload` scenarios compare test and
-execute outcomes, costs/extra cash, semantic maps, company/town state and RNG,
-including drags, one-way/tram coexistence, reserved crossings, stops, bridges,
-depots, slopes, town removal, owner changes and low-funds removal.
-The fixture declares builtin-like road-type inputs; external NewGRF programs and
-legacy save variants remain corpus gaps. PR #290 records validation and speed.
+The default `padhattan` and `rail-reservation` simulations exercise cache reuse, reversal,
+depot/safe-tile search, reservation, busy targets, rollback and reload under both 90-degree
+policies.
+Native unchanged-base/heap probes cover finite limits, live cost invalidation
+and ordered opposing PBS signal restoration absent from the supplied network.
+They do not prove full rail-cost semantics for arbitrary maps, NewGRFs, legacy
+saves or every signal family. Controller reservation extension belongs to #130.
 
-### Road stop bays and drive-through entries (#354)
+### Road YAPF search and path construction
 
-Rust (`road_stop.rs`) owns each RoadStop's status byte and the shared
-drive-through entries: bay admission and freeing, entrance status, `GetByTile`,
-continuation, both `Enter`/`Leave` levels, joining (alone, parent, join, merge)
-and splitting (last, head, tail, split with rebuild), `Rebuild`,
-`CheckIntegrity`, destruction and both `AfterLoadRoadStops` passes. One Rust
-allocation per shell holds the status and entries pointer; the BaseEntry stop
-owns the entries, allocated and freed where the original does. `status` stays a
-native reference alias for the ROAD descriptor; `GetEntry` is a const reader.
-The road controller, station commands and road YAPF call the owner directly.
-C++ keeps the shell, pool, `xy`/`next` links and station stop lists
-(`OpenTTDRoadStopServices`), two compound vehicle reads, the tile hash and
-`GetNextRoadStop`, whose only caller is the native YAPF area leaf. Native
-vehicle entry, PreDestructor, cache check and load call typed entries.
-`stations-commands-road-stops` and `-road-stops-reload` compare every stop's
-status and entry length/occupancy through joins on both axes, occupied merges,
-interior/head/tail/last removal, bay admission and reload, and require every
-`road_stop` branch (`integrity` in desync runs). Articulated bay refusal and the
-unreachable `include` duplicate remain #156 gaps.
+Issue #124 moves track/depot searches, exit-direction keys, node arena, lookup
+maps, exact-order heap, segment traversal/cost, heuristic, limits and intermediate
+fallback into Rust. Reconstruction and station-area trimming write #121's sole
+canonical path. Original specialization/node types compile only portably.
+C++ retains map/pools/settings, station/stop observations and `CFollowTrackRoad`
+behind copied scalar `noexcept` leaves. None runs scripts, mutates/reenters the
+search/road owner or throws in ordinary play. Short owner access ends before
+leaves. Neither search draws RNG; wrapping, exit-key replacement, strict ties
+and follow-before-limit timing retain source behavior. Panics/OOM abort.
+Arena/maps/heap retain process-wide scratch capacity (#278); active searches own
+it, with no cached native pointers. Inputs/destinations/counters reset per call.
+#288 shares one tile observation across segment cost/destination/depot checks.
+Endpoint predicates invalidate on advance; startup and >4096 exits remain
+unevaluated until needed, without stop-cost lookups. Only accepted continuations
+read ordered current/next ground-vehicle center Z, vehicle speed fields and
+old-tile follower limits; arithmetic stays Rust and Follow is never repeated.
+
+`python3 tools/migration.py simulate roads --jobs 2` compares plain/desync state,
+station trimming and competing penalties. Native tests compare heap/origin masks
+and depot transcripts with unchanged C++ at node limits 0/1/2/7 and cost bounds
+0/70/71/100; a transient trace checks rejected/accepted queries, costs and long
+segment cache invalidation. Native ABI checks cover every field. Arbitrary maps,
+NewGRFs, articulated/tram, waypoints, exhaustive stop/loop/segment branches and
+legacy saves remain #156 gaps; shared follower logic remains native.
+
+<!-- Subsystem: Stations, cargo and economy. Add a new entry at the end of its group, not of the file. -->
+
+### Station cargo-list queries
+
+Issue #51 reuses the Rust ScriptList owner. Rust owns the four selector/filter rules, pending
+run keys and unsigned 32-bit totals, positive flush decisions, add-versus-set merges, per-origin
+cumulative-share decoding, and query-plan selection (waiting/all versus equal_range, planned/all
+versus find). C++ keeps station/cargo validation, pool/GoodsEntry access, HasData checks,
+packet/flow iterators and scalar extraction.
+
+A caller-owned 16-byte collector (uint32 amount/previous, uint16 station IDs including 0xFFFF,
+byte selector/finalized) is asserted in C++ and ABI layout ID 18; Windows x86 uses explicit
+cdecl. Rust borrows the destination only during feed/finalize, and the destination outlives the
+collector; no world pointer, STL/VM layout, iterator, callback or C++ exception enters or
+survives a Rust call. Fresh collector totals are bounded by packet-pool/origin limits;
+modification tokens use the shared owner's wrapping arithmetic.
+
+Evidence: the unchanged stationlist script (24 constructions, 41 output rows), both scripted
+suites, the upstream unit inventory, and the bounded cargo mode of `python3
+tools/script-list-comparison.py` (pinned loop bodies, portable and Rust feeds, FlowStat origins,
+wrapping, sentinel keys, repeats, reentry, a C++ exception between feeds).
+
+### Station cargo service
+
+Issue #125 moves the ordered loading queue, station service counters, acceptance mask and cargo
+rating/pickup/speed/age/waiting/fraction metadata into one opaque Rust owner per BaseStation.
+Native scalar references and the queue facade share it; ordinary/indexed construction,
+retirement, reuse, STNN/STNS and legacy fixups share it without persistent native mirrors.
+Packet, flow, link-graph, map and geometry storage remain C++.
+
+Issue #214 replaces numeric dispatch with borrowed typed noexcept tables (ABI 110-115), narrow
+observations (500-515), and caller-owned native iterator/container frames. Portable bodies
+remain unchanged.
+
+`python3 tools/migration.py simulate stations economy` uses the existing road/CAPY inputs for
+loading queues, fractional admission, acceptance loss, full/gradual loading, rating
+expiry/decay/capping, stale-link refresh/removal/restriction/release and active reload. Legacy, NewGRF and refit
+gaps remain in #156.
+
+### Station construction, joining and removal (#267)
+
+Rust owns the station command policy for rail platforms and waypoints, bay and
+through road stops, airports, docks and oil rigs, plus sign/name/owner, terrain,
+bridge clearance, joining, deletion/reuse and docking-neighbour decisions.
+`water_cmd.cpp` docking eligibility and registration belong to this owner.
+Original command bodies compile only in portable builds. The existing #125/#214
+station state remains canonical; there is no second station owner or save layout.
+
+C++ retains shell/spec/road-stop allocation, NewGRF resolvers, spatial indices,
+rendering/description and the hot tile-loop/animation/vehicle-entry/track/slope
+services. Entries use borrowed typed synchronous tables (ABI 1060-1072), shared
+Rust command pre/post checks, prices, clear-square/water restoration and native
+result slots. No ordinary-play script VM or save/load exception crosses the boundary.
+Rust ends owner access before reentry and calls owned aircraft/station/reservation
+policy directly. Reservation lookahead saves the existing layout-checked order
+value in each Rust stack guard; native pool/container allocation follows the original.
+
+`python3 tools/migration.py simulate stations-commands aircraft-controller-removal
+water-structures-mutate --jobs 2` compares command costs/errors, RNG, STNN/STNS,
+map, town and company state, including partial removal, joins, delete/reuse and
+modern reload. The station module includes unchanged-reference private callbacks
+in fixture executables and requires `station_command` witnesses in default CI.
+Default #320 cases require removed-destination path clearing, `TileAddWrap` border
+refusals and type-63 overbuilding through `AllocateRailType`. Retargeting uses virtual
+`SetDestTile`; shared native traversal serves stations and flooding. Builtin tram,
+airport noise and reload cases remain required. External NewGRF programs, legacy
+and unusual occupied/reservation branches remain tracked by #156.
+
+### Cargo storage and movement (#139)
+
+Rust owns packet fields, ordered station/vehicle lists, count/age/feeder/action/ reservation
+caches, cumulative flow shares and origin maps. It runs packet operations, cargo
+movement/staging/rerouting, live-flow reconciliation, capacity redistribution and autoreplace
+cargo transfer. Stable arena slots and linked ordering give constant-time list operations;
+destination endpoints bound station lookups to the selected queue. Freed slots are reused; arena
+capacity is retained. C++ retains packet pool identity/allocation/hooks, payment/delivery
+(#117), loading policy (#125), link-graph computation (#74), world access and thread join.
+CAPA saves the repr(C) packet in place; STNN/VEHS/flow adapters export call-local containers
+or scalar-key readers; pointer fixups
+and save errors finish outside Rust. Payment getters reenter after owner borrows end;
+ConsistChanged runs after Rust returns. Portable bodies stay.
+
+Checks: `python3 tools/migration.py verify --jobs 2`, and the default cargo-storage, economy,
+station, Padhattan and aircraft scenarios. Active CAPY scenarios check saved packet
+references/actions, aging, feeder credits and forced policies. Rust tests cover partial
+movement, payment getter reentry, same-list rerouting and capacity changes. `python3
+tools/cargo-storage-comparison.py` checks unreachable pool-limit Split failure against the
+unchanged pinned body. Legacy conversions and complete refit/autoreplace transactions lack
+additional play witnesses (#156).
+
+### Cargo payment and delivery
+
+Issue #117 moves CargoPayment state/lifetime, final/transfer payment and settlement, industry
+acceptance, statistics/payment ordering, destination deduplication and the complete production
+flush into Rust. C++ retains pool shells, canonical world and packet storage,
+loading/reservation, subsidy checks, NewGRF resolution and UI.
+
+ABI IDs 49-51 and 60 describe cargo observations, saved fields, synchronous services and the
+repr(C) payment, which CAPY saves in place through `CargoPayment` reference aliases.
+Cargo/refusal/production/randomisation/animation and vehicle-sound resolution uses the NewGRF
+evaluator, without script VM entry or payment/destination reentry; wrappers are noexcept. Money
+saturates arithmetic but retains native shifts; callback unsigned products, BigMulS narrowing,
+stockpile limits and ordered randomisation/animation are explicit.
+
+The default `economy` simulation compares delivery, transfer, active CAPY reload and partial
+acceptance. NewGRF resolver execution, legacy CAPY files and every industry layout are not
+exhaustive in the semantic corpus; the narrow fixture supplies callback results.
+
+### Company finances and economy lifecycle
+
+Issue #137 moves cash/fraction accounting, loans, histories, rating/value,
+construction budgets, maintenance/interest/year rotation, bankruptcy/recovery,
+ranked offers, creation/deletion, acquisition and the complete ownership-transfer
+traversal into Rust. Rust also owns periodic scheduling, prices/multipliers,
+inflation/recession, score parts and the company tick cursor. Selected bodies
+compile only portably except StartupCompanies/InitializeCompanies: their native
+timer/reset control remains, and InitializeCompanies writes Rust's tick cursor.
+Identity, settings, networking, UI, AI and shared world services remain C++.
+One Rust allocation per CompanyProperties holds finance/history fields with C++
+field lifetimes and stable addresses; economy/prices/scores have process lifetimes.
+#192 makes every entry a named synchronous call taking borrowed designated tables
+(`OpenTTDCompanyFinanceServices`, `OpenTTDCompanyServices`) of typed noexcept
+services; facades resolve owners and settings once. Pool scans filter owner, then
+type, before detail reads; tile-owner changes, deletions, allocation, the nested
+service-interval command, the bankruptcy Post and `StopAI` run directly. Only
+`AI::StartNew` (script memory policy can throw before ScriptInstance's catch) and
+the `CCA_NEW_AI` Post return through caller-owned stack frames (startup, control,
+tick, competitor timeout). ABI 210-214 and 400-417 check layouts.
+`python3 tools/migration.py simulate companies economy` compares all chunks/RNG;
+Native CTest covers lifetimes, network deferred deletion, posting
+order and abandoned startup frames. Subsidies, exclusive rights, goals/story
+pages, hostile purchase, multiplayer runtime and NewGRFs remain evidence limits.
+
+### Link graph job computation
+
+Issue #74 moves demands, both MCF passes, cycle elimination, path lifetime and flow mapping into
+Rust. Rust owns copied graph/settings, private demand/edge annotations, a reusable path arena
+and ordered cumulative-share maps. C++ keeps job scheduling/thread/abort flags, LGRP/LGRJ
+save/load and the existing station flow join.
+
+ABI IDs 34-37 cover scalar node/edge/settings/share records. Its sole callback reads the job's
+atomic abort flag and cannot throw/reenter. C++ allocations happen outside Rust.
+
+Evidence: the unchanged regressions/comparisons and `python3 tools/migration.py simulate` with
+manual/cargodist road saves, symmetric/asymmetric scalers, boundary
+distance/size/accuracy/saturation settings and reload from a reference snapshot with outstanding
+LGRJ records (GLOG history is reset only in prepared road inputs so both loaders log their
+revision). Graphs, allocator failures and abort timing are not exhaustive; resource exhaustion
+timing differs with the allocation strategy.
+
+<!-- Subsystem: Towns, industries and subsidies. Add a new entry at the end of its group, not of the file. -->
+
+### Built-in town-name generation
+
+Issue #96 moves all 21 built-in generators, seed selection, English replacements, Finnish vowel
+handling, Czech grammatical matching and private constants into Rust. C++ keeps NewGRF routing,
+settings and save/load; #246 owns retries/uniqueness.
+
+One coarse call owns complete output behind an opaque result. C++ appends the immutable byte
+view with RAII destruction, including on append exceptions; no builder/world pointer, callback
+or shared RNG enters Rust.
+
+Evidence: the semantic harness observes actual built-in rendered names through read-only AI logs
+and compares every saved field in plain/desync modes. This samples seeds; it is not exhaustive
+coverage of 21 * 2^32 combinations, every allocator failure or NewGRF town-name behavior.
+
+### Town growth and lifecycle state
+
+Issue #120 moves town tick traversal, road/build choices, terrain retries, house
+selection/placement and expansion into Rust. The partial #148 extension owns town metadata,
+histories, ratings and building counts; #256 moves house tile loops and deletion
+commands. Native field aliases expose one Rust owner, with process-wide state
+under the game-state mutex.
+
+Rust ends owner borrows before commands or NewGRF callbacks that can reenter. The default
+`town-growth` simulation and native tests cover growth, layouts, reload, reentry and aliases.
+Natural tunnel construction, custom NewGRF callbacks and complete historical saves remain
+evidence limits; #148 is not a complete lifecycle port.
+
+### Town founding, generation and names
+
+#246 extends the sole town owner with canonical custom-name bytes and owns founding,
+placement/coastal/grid search, initial growth, generation counts/retries, layout, rename and
+automatic/custom-name uniqueness. C++ keeps map/pool shells, house specs, rendering/NewGRF
+resolvers, spatial/noise/news services and native save decoding. A separate native custom-name
+presentation string retains the original `GetCachedName()` reference identity through
+rename/reset/re-rename; commands, validation and save authority read Rust bytes. Generated-name
+cache stays separate. All descriptor-addressable town scalars/growth fields load directly
+through their aliases. Only the opaque Rust name uses scoped native string staging, committing
+partial decoded state on unwind. Legacy compatibility scratch remains native. Named typed
+services return native enum/scalar widths; allocation resolves the canonical owner once. Borrows
+end before growth, rendering, deletion and reentry. Only
+`SetGeneratingWorldProgress`/`IncreaseGeneratingWorldProgress` return cancellation to a native
+frame; Rust drops uniqueness scratch before native rethrow. Portable original bodies remain
+unchanged in non-Rust branches. `python3 tools/migration.py simulate town-founding- --jobs 2`
+compares climate/layout, no-city generation, coastal generation, manual/deity/editor commands, exact
+cost/error/extra-money/ID, zero-growth deletion/reuse, rename/cache lifetime, name exhaustion
+and reload. Default module-owned adapters also compare cancellation against unchanged source,
+full-width count clamps/RNG and otherwise unreachable name bytes; missing markers fail. Real
+NewGRF, historical saves, GUI threading and final 10,000-attempt fallback remain coverage limits
+tracked in #156; house lifecycle belongs to #256.
 
 ### House lifecycle and tile simulation (#256)
 
@@ -1838,54 +1855,50 @@ terraform, company clearance until refusal and aged-house rebuild in both cargo 
 requires candidate `house.*` witnesses. NewGRF house callbacks and station removal on house
 clearance remain #156 gaps.
 
-### Water construction, clearing and restoration (#294)
+### Industry periodic production and builder ownership (#129)
 
-Rust (`water_cmd.rs`, shared `water.rs`/`ground.rs`) owns ship depot/lock/canal
-commands/removal, water clearing/restoration, river/desert traversal and owner/terraform/
-build-above policy. Original command bodies and `MakeLock` remain portable-only.
-Lock checks/build/removal order, depot partial clears and post-clear accounting,
-conditional RNG draws, narrowing and wrapping retain the original sequence.
+Rust owns the produced/accepted slots, optional accepted histories, production fields, sound
+countdown and industry-builder records. C++ industry shells expose nonowning views of these
+allocations; INDY, IBLD, ITBL, ECMY and TTO/TTD load adapters preserve the original names,
+widths, version gates and ordering. INDY, IBLD, ECMY and TTO/TTD industry scalars load and
+save through the reference aliases; only the Rust-owned industry text is staged.
 
-C++ keeps packed map primitives, depot identities, drawing, native stack
-`CommandCost` objects and a lazy stack area iterator. Generic landscape commands
-retain the complete native `Command::Do` lifecycle. Rust helpers call the
-integrated clear-square, flooding/neighbor, region-cache and economy owners directly.
-Shared restoration retains class/accounting/RNG order; docking calls its Rust owner.
-Shared command/depot/environment services replace touched rail/town/industry
-copies. Named generated layouts, aborting unused fixture slots and actual
-production table checks cover the boundary; no native world borrow spans reentry.
+Rust runs production/transport ticks, farm and lumber updates, NewGRF production application,
+monthly statistics/closure, daily changes and builder targets/retries. Borrows end before reentry.
 
-`python3 tools/migration.py verify --jobs 2`, default `water-commands` and existing
-water traffic/mutation/reload scenarios compare semantic saves and require
-restoration/clear witnesses. The console fixture compares results/parameters,
-map/depot fields, infrastructure, docking membership and RNG across both axes,
-all lock directions/parts, occupied/bankrupt queries, force/partial clearing,
-editor/desert and restoration inputs. Pool exhaustion, construction under bridges,
-water objects, arbitrary NewGRF/legacy layouts and GUI remain #156 coverage gaps.
+Pool/map/spec storage, construction and landscape-clear transactions, presentation and bounded
+NewGRF resolution stay in C++ behind typed `noexcept` slots (#203). CargoPayment delivery
+remains #117.
 
-### Tunnel and bridge commands and ownership (#293)
+The default `industry-` scenarios exercise production, closure, builder retries and resets. The
+corpus does not exhaust legacy saves, NewGRF resolver programs or every industry layout; native
+tests check ABI/lifetimes.
 
-Rust (`tunnelbridge_cmd.rs`) owns complete bridge/tunnel construction, removal
-permission and clearing, ownership, terraform and build-above policy, including
-ordered replacement, partial effects, reservations and infrastructure updates.
-Header-named modules share bridge prices/foundations/heights, length and track
-helpers, and source constants. The hidden tunnel end tile is one process-wide
-Rust atomic, shared with GUI readers; no component world borrow crosses reentry.
+### Industry construction and tile lifecycle (#150)
 
-C++ keeps canonical map/spec/pool storage, rendering, vehicle entry and native
-stack command results. Direct typed noexcept services retain shared operations;
-ordinary play reaches no throwing script VM or save service. Bridge height calls
-Rust foundation directly, including existing station/water/object consumers.
-Slope/z has one canonical shared observation. Tunnel exit terraform uses the
-integrated object scratch owner's stable index across recursive clears.
+Rust owns industry metadata/text, ordered type registries, builder scratch,
+destruction, initial generation, full validation/funding/prospecting transactions,
+initialization, construction-stage completion, tile loops, builtin animation,
+acceptance, clear/terraform policy and NewGRF tile/parent trigger traversal.
+Native aliases and scoped load adapters preserve saved names/reference fixups,
+partial initialization and ID reuse. Water destruction retains the tile-type recheck.
+Packed map/pool shells, rendering, specs, resolvers and persistent storage stay C++.
+Only progress cancellation (`AbortGenerateWorldSignal`) returns to the native
+exception frame after source-order restoration. Direct synchronous services use
+native stack costs; temporary resolver shells borrow a Rust stack owner through
+the original constructor/destructor scope. No state borrow survives reentry.
+`python3 tools/migration.py simulate industry-command-fund industry-command-prospect
+industry-command-clear industry-command-terraform --jobs 2` compares command tests,
+execution, ID reuse and autoslope; default industry scenarios also cover four
+climates, lumber, generation and builder/farm cleanup. Default industry comparisons
+check absent NewGRF acceptance/triggers and rare animation against unchanged bodies;
+native tests check cancellation/restoration, callback policy and borrowed lifetimes.
+Default `industry-water-check-*` scenarios require oil-rig funding refusal over
+real depots/lower lock parts and acceptance after removal (#234).
+Shared map/RNG leaves use the canonical typed services; stable dimensions are
+captured once per consuming entry. [PR #218](https://github.com/fetch-laboratories/openttd-rust/pull/218) records integration evidence.
+Legacy saves, resolver programs and exhaustive industry layouts remain #156 corpus limits.
 
-Default `roads-commands` and its reload compare all bridge transports/both axes,
-road/rail tunnels, test/execute/query (including AI), replacement, ownership,
-refusal, occupied clearing, bankruptcy, autoslope, recursive exit terraforming,
-hidden failure end tiles and price thresholds at 25/50/100 tunnel tiles.
-The existing default object probe checks scratch growth/restoration. Live train
-re-reservation, rectangular-map tunnel intersection choices, external NewGRFs
-and legacy layouts remain #156 coverage gaps. PR #352 records checks and limits.
 ### Subsidy lifecycle, route search and awards (#316)
 
 Rust owns each subsidy’s canonical scalars, all route searches, creation/deity

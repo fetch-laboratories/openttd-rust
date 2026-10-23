@@ -68,6 +68,7 @@
 #include "rust/industry_shell_services.h"
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/services_station.h"
+#include "rust/vehicle_refit_ffi.h"
 #include "rust/command_cost_services.h"
 #endif
 
@@ -1080,8 +1081,7 @@ static const OpenTTDCargoServices _cargo_services = {
 	},
 	[](uint8_t cargo, uint32_t var18) noexcept { return GetCargoCallback(CBID_CARGO_PROFIT_CALC, 0, var18, CargoSpec::Get(cargo)); },
 	[](uint16_t station, uint32_t index) noexcept -> void * {
-		const auto &near = Station::Get(StationID(station))->industries_near;
-		return index < near.size() ? std::next(near.begin(), index)->industry : nullptr;
+		return RustStationNearbyIndustry(Station::Get(StationID(station)), index);
 	},
 	[](uint16_t station, uint8_t field, uint8_t cargo) noexcept -> uint32_t {
 		const Station *st = Station::Get(StationID(station));

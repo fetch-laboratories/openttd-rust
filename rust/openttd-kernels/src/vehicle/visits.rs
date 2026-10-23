@@ -1117,3 +1117,48 @@ visit_entry!(openttd_rust_visit_leave_station() => leave_station);
 visit_entry!(openttd_rust_visit_handle_loading(mode: bool) => handle_loading);
 visit_entry!(openttd_rust_visit_enter_depot() => enter_depot);
 visit_entry!(openttd_rust_visit_cancel_reservation(next: u16, st: *mut Station) => cancel_reservation);
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDVehicleVisits" ["probe"] => Services {
+        shared,
+        station,
+        links,
+        loading,
+        refit,
+        capacity,
+        prediction,
+        display_speed,
+        location,
+        graph_available,
+        allocate_graph,
+        allocation_failure,
+        join_graph,
+        graph_size,
+        merge_graph,
+        update_edge,
+        percent,
+        set_last_loading,
+        set_loading_tick,
+        arrival_dirty,
+        station_cargo,
+        reservation_log,
+        hide_filling,
+        set_occupancy,
+        station_departure,
+        road_stop_departure,
+        leave_sound,
+        depot_windows,
+        ship_depot_viewport,
+        depot_randomisation,
+        view_invalidate,
+        with_costs,
+        refit_failed_news,
+        cost_animation,
+        waiting_news,
+    };
+    "OpenTTDVisitCosts" ["probe"] => Costs { out, temporary, };
+    "OpenTTDVisitPercentStrings" ["probe"] => PercentStrings { up, down, up_down, none, };
+    "OpenTTDVisitPrediction" ["probe"] => Prediction { loading_tick, last_loading, last_station, ticks, };
+    "OpenTTDVisitCapacity" ["probe"] => Capacity { capacity, remaining, cargo, };
+}

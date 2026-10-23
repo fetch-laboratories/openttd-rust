@@ -80,6 +80,7 @@ pub struct RailSpecInfo {
 #[repr(C)]
 pub struct RoadSpecCost {
     pub multiplier: u8,
+    /// The spec GRF's `price_base_multipliers[price]`, zero without a GRF file.
     pub shift: i32,
 }
 #[repr(C)]
@@ -432,9 +433,7 @@ impl<'a> Ctx<'a> {
         }
     }
     fn bridge_height(&self, tile: u32) -> i32 {
-        crate::bridge_map::get_bridge_height(tile, self.shared, |f, h| {
-            (self.rail().apply_foundation)(f, h).z
-        })
+        crate::bridge_map::get_bridge_height(tile, self.shared)
     }
     fn bridge_ok(
         &self,
@@ -2336,10 +2335,11 @@ impl Ctx<'_> {
         } else {
             {
                 let factor = (self.s.road_spec_build_cost)(spec, category);
-                crate::company::openttd_rust_economy_price(
+                crate::economy_func::get_price(
                     u32::from(category),
                     u32::from(factor.multiplier),
                     factor.shift,
+                    -4,
                 )
             }
         };
@@ -2654,10 +2654,11 @@ impl Ctx<'_> {
         } else {
             {
                 let factor = (self.s.road_spec_clear_cost)(spec, category);
-                crate::company::openttd_rust_economy_price(
+                crate::economy_func::get_price(
                     u32::from(category),
                     u32::from(factor.multiplier),
                     factor.shift,
+                    -4,
                 )
             }
         });
@@ -4143,4 +4144,285 @@ pub unsafe extern "C" fn openttd_rust_station_join_waypoint(
             c.s.strings.remove_rail_waypoint
         },
     )
+}
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDStationCommandServices" ["probe"] => CommandServicesTable {
+        shared,
+        station,
+        rail,
+        cost,
+        command,
+        authority,
+        strings,
+        spread,
+        default_bridge_info,
+        rail_bridge_info,
+        road_bridge_info,
+        southern_bridge_end,
+        train_area,
+        rail_spec,
+        road_spec,
+        links,
+        bounds,
+        location,
+        move_sign,
+        node_location,
+        virtual_coord,
+        catchment,
+        catchment_dirty,
+        facility_widget,
+        select_invalidate,
+        radius,
+        station_available,
+        new_station,
+        index_insert,
+        set_town,
+        default_name,
+        have_rating,
+        before_add_rect,
+        road_waypoint,
+        name_equals,
+        set_name,
+        rect_contains,
+        flip_airport_closed,
+        closed_widget,
+        distant_join,
+        rail_class_count,
+        rail_waypoint_class,
+        rail_spec_count,
+        class_rail_spec,
+        rail_spec_info,
+        station_slope_check,
+        rail_layout,
+        rail_callback,
+        platform_info,
+        allocate_rail_spec,
+        assign_rail_spec,
+        deallocate_rail_spec,
+        rail_boolean,
+        rail_callback_error,
+        set_train_area,
+        add_facility,
+        rail_triggers,
+        reserved,
+        last_train,
+        train_handle,
+        train,
+        reservation,
+        platform_reservation,
+        compatible_tiles,
+        custom_rail_index,
+        make_rail_station,
+        close_station_inspect,
+        set_custom_rail_index,
+        set_random_bits,
+        set_gfx,
+        rail_animation,
+        tile_flag_count,
+        tile_flags,
+        set_tile_flags,
+        station_infrastructure,
+        mark_tiles,
+        after_remove_tile,
+        reset_facilities,
+        orders_dirty,
+        vehicle,
+        stop_on_town_road,
+        stop_on_competitor_road,
+        road_class_count,
+        road_waypoint_class,
+        road_spec_count,
+        class_road_spec,
+        road_spec_info,
+        road_spec_build_cost,
+        road_spec_clear_cost,
+        stops_available,
+        allocate_road_spec,
+        assign_road_spec,
+        deallocate_road_spec,
+        road_callback,
+        road_boolean,
+        road_triggers,
+        new_stop,
+        set_stop_head,
+        set_stop_next,
+        add_stop_area,
+        clear_stop_area,
+        before_add_tile,
+        make_drive_stop,
+        make_bay_stop,
+        delete_stop,
+        set_custom_road_index,
+        custom_road_index,
+        stop_random_bits,
+        road_animation,
+        remove_stop_tile_data,
+        close_stop_inspect,
+        road_waypoint_area,
+        set_road_waypoint_area,
+        road_vehicle_owner,
+        order_station_location,
+        aircraft,
+        airport_spec,
+        airport_available,
+        airport_layout_count,
+        airport_in_bounds,
+        airport_size,
+        airport_layout,
+        airport_layout_tile,
+        iterator_tile,
+        iterator_next,
+        airport_noise,
+        noise_enabled,
+        town_max_noise,
+        station_town,
+        airport_tile,
+        airport_type,
+        airport_geometry,
+        airport_airplanes,
+        set_airport_details,
+        make_airport,
+        airport_add,
+        airport_animated,
+        airport_animation,
+        airport_infrastructure,
+        station_view_invalidate,
+        town_view_dirty,
+        aircraft_vehicle,
+        hangar_count,
+        hangar_tile,
+        close_hangar,
+        close_airport_tile_inspect,
+        delete_airport_storage,
+        after_remove_rect,
+        clear_airport,
+        close_airport_inspect,
+        ship,
+        clear,
+        restoration,
+        water_tracks,
+        set_docking,
+        ship_area,
+        set_ship_area,
+        ship_area_add,
+        docking_clear,
+        docking_add,
+        water_infrastructure,
+        make_dock,
+        neutral_for_tile,
+        oilrig_unavailable,
+        associate_industry,
+        make_oilrig,
+        set_station_owner,
+        set_airport_kind_rotation,
+        set_facilities,
+        set_build_date,
+        with_nearby,
+        associated_industry,
+        industry_neutral,
+        clear_industry_neutral,
+        industry_area,
+        remove_buoy,
+        autoslope_axis,
+        station_list_classes_invalidate,
+    };
+    "OpenTTDStationCommandStrings" ["probe"] => Strings {
+        demolish_bridge,
+        flat_land,
+        spread,
+        bridge_too_low,
+        too_many_stations,
+        adjoins_multiple,
+        remove_station,
+        remove_rail_waypoint,
+        remove_road_waypoint,
+        remove_road_stop,
+        name_unique,
+        unsuitable,
+        too_many_specs,
+        disallowed_tracks,
+        disallowed_length,
+        remove_signals,
+        no_station,
+        drive_direction,
+        drive_corner,
+        drive_junction,
+        drive_town,
+        no_road,
+        unsuitable_road,
+        too_many_truck,
+        too_many_bus,
+        refuse_noise,
+        refuse_airport,
+        close_airport,
+        aircraft_in_way,
+        demolish_railroad,
+        demolish_building,
+        demolish_airport,
+        demolish_cargo_tram,
+        demolish_truck,
+        demolish_passenger_tram,
+        demolish_bus,
+        buoy_in_way,
+        demolish_dock,
+        object_in_way,
+        oilrig_name,
+    };
+    "OpenTTDStationArea" ["probe"] => Area {
+        tile,
+        w,
+        h,
+    };
+    "BridgeableTileInfo" ["probe"] => BridgeInfo {
+        height,
+        pillars => disallowed_pillars,
+    };
+    "OpenTTDStationBridgeInfo" ["probe"] => BridgeSpan {
+        data,
+        size,
+    };
+    "OpenTTDStationBounds" ["probe"] => Bounds {
+        left,
+        top,
+        right,
+        bottom,
+    };
+    "OpenTTDStationSpecIndex" ["probe"] => SpecIndex {
+        value,
+        valid,
+    };
+    "OpenTTDRailStationSpecInfo" ["probe"] => RailSpecInfo {
+        platforms,
+        lengths,
+        slope_callback,
+        availability_callback,
+    };
+    "OpenTTDRoadStationSpecCost" ["probe"] => RoadSpecCost {
+        multiplier,
+        shift,
+    };
+    "OpenTTDRoadStationSpecInfo" ["probe"] => RoadSpecInfo {
+        stop_type,
+        drive_only,
+        availability_callback,
+    };
+    "OpenTTDAirportSize" ["probe"] => AirportSize {
+        w,
+        h,
+    };
+    "OpenTTDAirportLayout" ["probe"] => AirportLayout {
+        size,
+        rotation,
+    };
+    "OpenTTDAirportLayoutTile" ["probe"] => AirportTile {
+        tile,
+        gfx,
+    };
+    "OpenTTDAirportGeometry" ["probe"] => AirportGeometry {
+        area,
+        spec,
+        rotation,
+    };
 }

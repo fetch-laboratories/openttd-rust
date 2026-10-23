@@ -504,3 +504,24 @@ pub unsafe extern "C" fn openttd_rust_effect_run(
         u8::from(controller.tick())
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDEffectView" ["probe"] => View {
+        x,
+        y,
+        z,
+        sprite,
+        progress,
+        spritenum,
+        subtype,
+        ambient,
+    };
+    "OpenTTDEffectLeaves" ["probe"] => Leaves {
+        observe,
+        write,
+        viewport,
+        sound,
+        animated,
+    };
+}

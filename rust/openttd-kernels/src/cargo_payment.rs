@@ -389,3 +389,42 @@ pub unsafe extern "C" fn openttd_rust_cargo_delivery_flush(d: *mut Delivery, s: 
         (*d).destinations.clear();
     }
 }
+
+crate::abi::layouts! {
+    fn abi_layout;
+    "OpenTTDCargoSpec" ["probe"] => Spec {
+        payment,
+        valid,
+        callback,
+        periods1,
+        periods2,
+    };
+    "OpenTTDCargoPaymentFields" ["probe"] => Fields {
+        front,
+        route_profit,
+        visual_profit,
+        visual_transfer,
+    };
+    "OpenTTDCargoPayment" ["probe"] => Payment {
+        fields,
+        station,
+    };
+    "OpenTTDCargoServices" ["probe"] => Services {
+        spec,
+        callback,
+        nearby_industry,
+        station_read,
+        industry_read,
+        industry_write,
+        refuses,
+        accept,
+        statistics,
+        monitor,
+        subsidies,
+        industry_effect,
+        vehicle_read,
+        settle,
+        feeder,
+        setting,
+    };
+}

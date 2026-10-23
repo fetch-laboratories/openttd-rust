@@ -900,6 +900,7 @@ void Ship::SetDestTile(TileIndex tile)
 #endif
 }
 
+#ifndef WITH_RUST
 /**
  * Build a ship.
  * @param flags    type of operation.
@@ -910,16 +911,6 @@ void Ship::SetDestTile(TileIndex tile)
  */
 CommandCost CmdBuildShip(DoCommandFlags flags, TileIndex tile, const Engine *e, Vehicle **ret)
 {
-#ifdef WITH_RUST
-	tile = GetShipDepotNorthTile(tile);
-	if (flags.Test(DoCommandFlag::Execute)) {
-		Ship *v = new Ship();
-		*ret = v;
-		v->tile = tile;
-		openttd_rust_ship_build(v->index.base(), e->index.base(), &GetRustShipServices(), &GetRustSharedServices());
-	}
-	return CommandCost();
-#else
 	tile = GetShipDepotNorthTile(tile);
 	if (flags.Test(DoCommandFlag::Execute)) {
 		int x;
@@ -985,8 +976,8 @@ CommandCost CmdBuildShip(DoCommandFlags flags, TileIndex tile, const Engine *e, 
 	}
 
 	return CommandCost();
-#endif
 }
+#endif /* WITH_RUST */
 
 ClosestDepot Ship::FindClosestDepot()
 {

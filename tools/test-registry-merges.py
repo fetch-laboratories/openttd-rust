@@ -8,12 +8,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WITNESS = "rust/openttd-kernels/src/witness.rs"
-ABI = "tools/migration/windows-abi.cpp"
 RUST = "rust/openttd-kernels/src/services.rs"
 HEADER = "src/rust/services_ffi.h"
 NATIVE = "src/rust/services.cpp"
 ADAPTER = "src/rust/company_adapter.cpp"
-LAYOUT = "rust/openttd-kernels/src/abi.rs"
 
 with tempfile.TemporaryDirectory() as directory:
     root = Path(directory)
@@ -54,15 +52,9 @@ with tempfile.TemporaryDirectory() as directory:
         probe = f"{component}_probe"
         field = f"{component}_registry_probe"
         assert f"pub {field}:" not in (root / RUST).read_text(), field
-        header = f"{component}_registry_probe_ffi"
-        assert f'#include "rust/{header}.h"' not in (root / ABI).read_text(), header
         additions = {
             WITNESS: [
                 f'    {probe} {{\n        {probe.upper()} = 0 => "{probe}.hit",\n    }}\n'
-            ],
-            ABI: [
-                f'#include "rust/{header}.h"\n',
-                f"\t{component.title()}Probe();\n",
             ],
             RUST: [
                 f'    /// Fictitious merge probe.\n    pub {field}: extern "C" fn() -> bool,\n',
@@ -74,7 +66,6 @@ with tempfile.TemporaryDirectory() as directory:
             ],
             NATIVE: [f"\t\t.{field} = {component.title()}Probe,\n"],
             ADAPTER: [f'#include "{field}.h"\n'],
-            LAYOUT: [f"        {field},\n"],
         }
         for name, entries in additions.items():
             path = root / name
@@ -88,12 +79,25 @@ with tempfile.TemporaryDirectory() as directory:
                 )
             )
             expected.setdefault(name, []).extend(entries)
+        # Layouts and ABI probes are per-component files: no shared registry to edit.
+        (root / f"rust/openttd-kernels/src/{component}_probe.rs").write_text(
+            f'crate::abi::layouts! {{\n    fn abi_layout;\n    "{component}" ["probe"] => Probe {{ {field} }};\n}}\n'
+        )
+        probe = root / f"tools/migration/windows-abi/{component}_probe.inc"
+        probe.parent.mkdir(exist_ok=True)
+        probe.write_text(
+            f"static void {component.title()}Probe() {{}}\nABI_PROBE({component.title()}Probe);\n"
+        )
+        git("add", ".")
         git("commit", "-qam", f"Add: Fictitious {component} registry entries")
     tree = git("merge-tree", "--write-tree", "house", "landscape")
     for name, entries in expected.items():
         merged = git("show", f"{tree}:{name}")
         assert all(entry in merged for entry in entries), name
         assert "<<<<<<<" not in merged, name
+    for component in ("house", "landscape"):
+        git("show", f"{tree}:rust/openttd-kernels/src/{component}_probe.rs")
+        git("show", f"{tree}:tools/migration/windows-abi/{component}_probe.inc")
     names = set(re.findall(r'=> "([^"]+)"', git("show", f"{tree}:{WITNESS}")))
     assert names == original_names | {"house_probe.hit", "landscape_probe.hit"}
     print(
