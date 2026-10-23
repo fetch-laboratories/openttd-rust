@@ -2869,6 +2869,7 @@ layouts! {
         followed,
         error,
         station,
+        exitdir,
     };
     "OpenTTDRailSpeed" ["probe"] => crate::rail_yapf::Speed {
         min_speed,

@@ -41,7 +41,7 @@ inline OpenTTDRailFollow Follow(void *, uint32_t tile, uint8_t td, uint64_t, uin
 {
 	follows.push_back((tile << 4) | td);
 	follow_reads.push_back('f');
-	return {tile + 1, 0, (1 << 0) | (1 << 2), static_cast<uint8_t>(!follow_fail), 0, 0};
+	return {tile + 1, 0, (1 << 0) | (1 << 2), static_cast<uint8_t>(!follow_fail), 0, 0, 0};
 }
 inline OpenTTDRailSpeed Speed(uint32_t) noexcept { follow_reads.push_back('s'); return {0, INT32_MAX}; }
 inline uint8_t Station(uint32_t, uint32_t) noexcept { return 0; }

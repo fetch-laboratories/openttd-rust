@@ -88,6 +88,7 @@ pub struct FollowStep {
     pub followed: u8,
     pub error: u8,
     pub station: u8,
+    pub exitdir: u8,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -545,7 +546,7 @@ impl Search {
                 new_tile: step.tile,
                 skipped: step.skipped,
                 dirs: step.dirs,
-                exitdir: exit(td),
+                exitdir: step.exitdir,
                 station: step.station,
                 error: step.error,
                 ..Default::default()

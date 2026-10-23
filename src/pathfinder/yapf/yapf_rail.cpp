@@ -86,7 +86,7 @@ static OpenTTDRailFollow RailFollowT(void *context, uint32_t tile, uint8_t direc
 	Follower follower{static_cast<RailYapfContext *>(context)->train, RailTypes{types}};
 	bool followed = follower.Follow(TileIndex{tile}, static_cast<Trackdir>(direction));
 	return {follower.new_tile.base(), follower.tiles_skipped,
-		static_cast<uint16_t>(follower.new_td_bits), static_cast<uint8_t>(followed), static_cast<uint8_t>(follower.err), static_cast<uint8_t>(follower.is_station)};
+		static_cast<uint16_t>(follower.new_td_bits), static_cast<uint8_t>(followed), static_cast<uint8_t>(follower.err), static_cast<uint8_t>(follower.is_station), follower.exitdir};
 }
 static OpenTTDRailFollow RailFollow(void *context, uint32_t tile, uint8_t td, uint64_t types, uint8_t no90) noexcept
 {

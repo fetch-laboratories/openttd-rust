@@ -31,7 +31,7 @@ struct OpenTTDRailFollow {
 	uint32_t tile;
 	int32_t skipped;
 	uint16_t dirs;
-	uint8_t followed, error, station;
+	uint8_t followed, error, station, exitdir;
 };
 struct OpenTTDRailSpeed { int32_t min_speed, max_speed; };
 struct OpenTTDRailTrain {
