@@ -1391,9 +1391,9 @@ Area/spec/member/mask reads and initial-RNG-before-area are source-compared, not
 independently traced; this precise dynamic limit remains on #156 under root's
 revised evidence scope. Thirteen successful owner pairs require two live survivors
 and exact swap/deferred order; the catcher pair requires exact queue append.
-Purpose cost349 implementation/81 native evidence/550 tooling including CMake
-versus unchanged415 basis;57 retired scaffolding lines add no behavior. Root cost
-and current-base Full remain pending. Historical/pre6/TTO saves, external GRFs,
+Purpose cost348 implementation/81 native evidence/550 tooling including CMake
+versus unchanged415 basis;57 retired scaffolding lines add no behavior. Root accepted
+the reviewed cost; scoped conflict review/Full remain. Historical/pre6/TTO saves, external GRFs,
 GUI threads and raw>=64 outside pinned Linux compilation remain #156 limits.
 
 <!-- Subsystem: Vehicles, pathfinding and orders. Add a new entry at the end of its group, not of the file. -->
