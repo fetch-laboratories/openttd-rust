@@ -248,7 +248,12 @@ impl Near {
         while let Some(v) = self.get() {
             let xy = (s.xy)(v);
             if crate::geometry_type::rect_contains(
-                self.left, self.top, self.right, self.bottom, xy.x, xy.y,
+                self.left,
+                self.top,
+                self.right,
+                self.bottom,
+                xy.x,
+                xy.y,
             ) {
                 break;
             }
