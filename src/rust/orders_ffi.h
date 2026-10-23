@@ -246,7 +246,6 @@ uint64_t openttd_orders_tick_counter() noexcept;
 uint64_t openttd_orders_primary_vehicle(void *ctx) noexcept;
 uint64_t openttd_orders_vehicle_ownership(void *ctx, void *result) noexcept;
 uint64_t openttd_orders_ticks_per_second() noexcept;
-uint64_t openttd_orders_unit_number(void *ctx) noexcept;
 uint64_t openttd_orders_economy_date() noexcept;
 uint64_t openttd_orders_economy_fraction() noexcept;
 uint64_t openttd_orders_maximum_date() noexcept;

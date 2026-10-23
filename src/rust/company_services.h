@@ -15,7 +15,15 @@ int32_t RustGRFPriceShift(const GRFFile *, uint32_t) noexcept;
 #include "../company_base.h"
 #include "company_ffi.h"
 #include "../company_gui.h"
+#include "../vehicle_base.h"
 
+inline UnitID RustCompanyUseVehicleUnit(CompanyID owner, VehicleType type, UnitID unit) noexcept { return Company::Get(owner)->freeunits[type].UseID(unit); }
+inline void RustCompanyAssignVehicleUnit(uint32_t id, uint8_t company) noexcept
+{
+	Vehicle *v = Vehicle::Get(id);
+	auto &units = Company::Get(CompanyID(company))->freeunits[v->type];
+	v->unitnumber = RustCompanyUseVehicleUnit(CompanyID(company), v->type, units.NextID());
+}
 inline bool OpenTTDCompanyIsValid(uint8_t company) noexcept { return Company::IsValidID(CompanyID(company)); }
 inline bool OpenTTDCompanyIsValidHuman(uint8_t company) noexcept { return Company::IsValidHumanID(CompanyID(company)); }
 inline CompanyID OpenTTDCurrentCompany() noexcept { return _current_company; }

@@ -262,6 +262,8 @@ static_assert(to_underlying(DoCommandFlag::AutoReplace) == 6 && to_underlying(Do
 static_assert(AIR_HELICOPTER == 0 && AIR_AIRCRAFT == 2 && AIR_CTOL == 1 && HANGAR == 1);
 static_assert(OT_GOTO_STATION == 1 && OT_GOTO_DEPOT == 2 && OT_LOADING == 3 && OT_LEAVESTATION == 4 && OT_GOTO_WAYPOINT == 6 && OT_IMPLICIT == 8);
 static_assert(VL_STANDARD == 0 && VL_SHARED_ORDERS == 1 && VL_STATION_LIST == 2 && VL_DEPOT_LIST == 3 && VL_GROUP_LIST == 4);
+static_assert(GVSF_FRONT == 0 && GVSF_ARTICULATED_PART == 1 && GVSF_WAGON == 2 && GVSF_ENGINE == 3 && GVSF_FREE_WAGON == 4 && GVSF_MULTIHEADED == 5);
+static_assert(CCF_ARRANGE.base() == 3);
 static_assert(PR_BUILD_SIGNALS == 3 && PR_BUILD_DEPOT_TRAIN == 5 && PR_CLEAR_ROUGH == 23 && PR_CLEAR_SIGNALS == 28 && PR_CLEAR_DEPOT_TRAIN == 30 && PR_CLEAR_WATER == 34 && PR_TOWN_ACTION == 56 && PR_BUILD_FOUNDATION == 57);
 static_assert(to_underlying(SourceType::Town) == 1);
 static_assert(AT_OILRIG == 9 && OBJECT_STATUE == 2 && EXPENSES_OTHER == 12 && COMPANY_SPECTATOR.base() == 0xFF && MP_INDUSTRY == 8 && MP_OBJECT == 10);

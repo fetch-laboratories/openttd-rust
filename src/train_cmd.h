@@ -15,8 +15,10 @@
 #include "network/network_type.h"
 #include "vehicle_type.h"
 
+#ifndef WITH_RUST
 CommandCost CmdBuildRailVehicle(DoCommandFlags flags, TileIndex tile, const Engine *e, Vehicle **ret);
 CommandCost CmdSellRailWagon(DoCommandFlags flags, Vehicle *t, bool sell_chain, bool backup_order, ClientID user);
+#endif
 
 CommandCost CmdMoveRailVehicle(DoCommandFlags flags, VehicleID src_veh, VehicleID dest_veh, bool move_chain);
 CommandCost CmdForceTrainProceed(DoCommandFlags flags, VehicleID veh_id);

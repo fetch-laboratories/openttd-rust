@@ -1661,14 +1661,36 @@ cleanup sells partial consists. Commands nest through `command::nested` and call
 cargo, fleet, road and aircraft owners directly. Original bodies compile only portably.
 
 C++ keeps pools, shells and their field stores, specs/NewGRF callbacks, unit allocation,
-native stack `CommandCost`s and UI leaves. Rail construction, moves and rail sale stay native
-until #315.
+native stack `CommandCost`s and UI leaves. Rail construction, moves and sale are #315 (below).
 
 Checks: `python3 tools/migration.py verify --jobs 2` and the default `fleet-` scenarios. The
 `transaction-build-road`/`-aircraft` and `transaction-clone` scenarios require
 `vehicle_transactions` witnesses for road, aircraft, rotor, RNG restoration and clone join
 failure. Articulated road vehicles (NewGRF only), wrong-depot road types, airports refusing an
 engine and clone build failure after the front part are #156 gaps.
+
+### Rail construction and depot consist transactions (#315)
+
+Rust (`vehicle_transactions/rail.rs`) owns the `train_cmd.cpp` bodies from `GetFreeWagonsInDepot`
+through `CmdSellRailWagon`: wagon, engine and rear-head construction, free-chain joining and
+`NormalizeTrainVehInDepot`, backup/restore lists, arrangement, dual-head and subtype
+normalisation, attachment/limit validation (an error leaves the chain split until the caller
+restores, as the original), head promotion/demotion with order, configuration and unit transfer,
+and rail sale. `CmdMoveRailVehicle` is a facade; build, clone and fleet autoreplace nest the Rust
+body directly. Original bodies compile only portably.
+
+C++ keeps shell allocation and source-ordered field stores (including the rear head's `Money`
+halving), the attach callback, unit-ID pools and presentation leaves. Chain links stay native and
+change only through `SetNext`; rail moves call the Rust cargo capacity owner directly. Shared
+leaves in `vehicle_services.h`/`engine_services.h` serve the train controller, cargo capacity and
+this owner. `vehicle_base.rs`/`ground_vehicle.rs` hold the
+GVSF values and subtype helpers.
+
+Checks: `python3 tools/migration.py simulate fleet-transaction-rail --jobs 2` requires the
+`vehicle_transactions.rail_*` witnesses: free-chain join, normalisation, front demotion and head
+transfer, new front, move and sale length refusals with restoration, multihead build, dual-head
+relocation and sale order transfer, plus semantic chain/unit/group/order/money dumps and ID reuse.
+NewGRF attach-callback results, the GRF-version branches and order-pool exhaustion are #156 gaps.
 
 ### Engine lifecycle and availability (#220)
 

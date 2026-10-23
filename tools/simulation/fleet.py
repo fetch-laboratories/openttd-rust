@@ -18,6 +18,18 @@ BRANCHES = {
     "transaction-build-road": ["road", "restore"],
     "transaction-build-aircraft": ["aircraft", "rotor", "restore"],
     "transaction-clone": ["clone_join_sell"],
+    "transaction-rail": [
+        "rail_wagon_join",
+        "rail_normalize",
+        "rail_front_trashed",
+        "rail_head_transfer",
+        "rail_new_front",
+        "rail_move_restore",
+        "rail_sell_restore",
+        "rail_multihead",
+        "rail_dual_heads",
+        "rail_sell_transfer",
+    ],
 }
 
 
@@ -37,6 +49,7 @@ def scenarios(soak):
                         "transaction-refit-train",
                         "transaction-mass-train",
                         "transaction-clone",
+                        "transaction-rail",
                     )
                     else "padhattan-ridge-2000.sav"
                     if mode.startswith("drain") or mode == "transaction-meta"
@@ -74,6 +87,7 @@ def scenarios(soak):
             "transaction-build-road",
             "transaction-build-aircraft",
             "transaction-clone",
+            "transaction-rail",
             "list",
             "replace",
             "cash",
@@ -118,6 +132,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         "transaction-refit-train",
         "transaction-mass-train",
         "transaction-clone",
+        "transaction-rail",
     ):
         from .rails import normalize
 
@@ -220,6 +235,9 @@ def check(scenario, run, mode, role, result):
             for kind in ("road", "aircraft")
         },
         "transaction-clone": ["FLEET clone-join false true true true"],
+        "transaction-rail": [
+            "FLEET rail-checks true true true true true true true true true"
+        ],
         "transaction-meta": [
             f"FLEET transaction-meta {kind} true 50 true true" for kind in range(4)
         ],

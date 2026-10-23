@@ -109,21 +109,20 @@ static void CargoCapacityRead(void *shell, OpenTTDCargoCapacityVehicle *out) noe
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	*out = {RustVehicleCargoOwner(v), v->cargo_cap, v->cargo_type, static_cast<uint8_t>(v->type == VEH_TRAIN), static_cast<uint8_t>(v->IsArticulatedPart())};
 }
-void *CargoCapacityNextPart(void *shell) noexcept
-{
-	return static_cast<Vehicle *>(shell)->Next();
-}
-static void *CargoCapacityLastEnginePart(void *shell) noexcept
-{
-	return static_cast<Vehicle *>(shell)->GetLastEnginePart();
-}
 static void *CargoCapacityOtherMultiheadedPart(void *shell) noexcept
 {
 	return Train::From(static_cast<Vehicle *>(shell))->other_multiheaded_part;
 }
-static OpenTTDCargoCapacityServices CargoCapacityServices()
+const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept
 {
-	return {CargoCapacityRead, CargoCapacityNextPart, CargoCapacityLastEnginePart, CargoCapacityOtherMultiheadedPart, CargoStorageServices()};
+	static const OpenTTDCargoCapacityServices services{
+		.read = CargoCapacityRead,
+		.next_part = RustOpaqueVehicleRead<void *, RustVehicleNext>,
+		.last_engine_part = RustOpaqueVehicleRead<void *, RustVehicleLastEnginePart>,
+		.other_multiheaded_part = CargoCapacityOtherMultiheadedPart,
+		.cargo = CargoStorageServices(),
+	};
+	return services;
 }
 #endif
 
@@ -136,7 +135,7 @@ static OpenTTDCargoCapacityServices CargoCapacityServices()
 void CheckCargoCapacity(Vehicle *v)
 {
 #ifdef WITH_RUST
-	auto services = CargoCapacityServices();
+	const auto &services = GetRustCargoCapacityServices();
 	openttd_rust_cargo_capacity(&services, v, nullptr, 0, 0);
 #else
 	assert(v == nullptr || v->First() == v);
@@ -176,7 +175,7 @@ void CheckCargoCapacity(Vehicle *v)
 static void TransferCargo(Vehicle *old_veh, Vehicle *new_head, bool part_of_chain)
 {
 #ifdef WITH_RUST
-	auto services = CargoCapacityServices();
+	const auto &services = GetRustCargoCapacityServices();
 	if (openttd_rust_cargo_capacity(&services, old_veh, new_head, 1, part_of_chain) != 0) Train::From(new_head)->ConsistChanged(CCF_LOADUNLOAD);
 #else
 	assert(!part_of_chain || new_head->IsPrimaryVehicle());
@@ -927,6 +926,6 @@ CommandCost CmdSetAutoReplace(DoCommandFlags flags, GroupID id_g, EngineID old_e
 bool CheckAbi_autoreplace_cmd()
 {
 	return AbiServicesComplete(_fleet_transaction_services) &&
-		AbiServicesComplete(CargoCapacityServices());
+		AbiServicesComplete(GetRustCargoCapacityServices());
 }
 #endif

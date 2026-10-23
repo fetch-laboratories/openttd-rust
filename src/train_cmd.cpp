@@ -45,6 +45,10 @@
 #include "rust/train_ffi.h"
 #include "rust/train_reservation_ffi.h"
 #include "rust/vehicle_services.h"
+#include "rust/vehicle_refit_ffi.h"
+#include "rust/command_cost_services.h"
+#include "rust/engine_services.h"
+#include "rust/settings_services.h"
 OpenTTDTrainHandle TrainHandle(const Train *v) noexcept
 {
 	return {const_cast<Train *>(v), v == nullptr ? nullptr : v->GetRustState()};
@@ -639,6 +643,7 @@ void GetTrainSpriteSize(EngineID engine, uint &width, uint &height, int &xoffs, 
 	}
 }
 
+#ifndef WITH_RUST
 /**
  * Get a list of free wagons in a depot.
  * @param tile Tile of depot.
@@ -1242,6 +1247,8 @@ static void NormaliseTrainHead(Train *head)
 	head->unitnumber = Company::Get(head->owner)->freeunits[head->type].UseID(GetFreeUnitNumber(VEH_TRAIN));
 }
 
+#endif /* WITH_RUST */
+
 /**
  * Move a rail vehicle around inside the depot.
  * @param flags type of operation
@@ -1253,6 +1260,11 @@ static void NormaliseTrainHead(Train *head)
  */
 CommandCost CmdMoveRailVehicle(DoCommandFlags flags, VehicleID src_veh, VehicleID dest_veh, bool move_chain)
 {
+#ifdef WITH_RUST
+	CommandCost cost;
+	openttd_rust_train_move(&GetRustVehicleBuildServices(), RustCommandCost(&cost), flags.base(), src_veh.base(), dest_veh.base(), move_chain);
+	return cost;
+#else
 	Train *src = Train::GetIfValid(src_veh);
 	if (src == nullptr) return CMD_ERROR;
 
@@ -1435,8 +1447,10 @@ CommandCost CmdMoveRailVehicle(DoCommandFlags flags, VehicleID src_veh, VehicleI
 	}
 
 	return CommandCost();
+#endif /* WITH_RUST */
 }
 
+#ifndef WITH_RUST
 /**
  * Sell a (single) train wagon/engine.
  * @param flags type of operation
@@ -1522,6 +1536,7 @@ CommandCost CmdSellRailWagon(DoCommandFlags flags, Vehicle *t, bool sell_chain, 
 
 	return cost;
 }
+#endif /* WITH_RUST */
 
 void Train::UpdateDeltaXY()
 {
@@ -4658,7 +4673,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.has_signal_td = OpenTTDLegacyMapQuery<uint64_t, RustRailHasSignalTrackdir, OpenTTDTrainHandle, uint32_t, uint8_t>,
 		.hide_fill = TrainHideFill,
 		.inclination = TrainInclination,
-		.invalidate_grf = TrainInvalidateGrf,
+		.invalidate_grf = TrainVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
 		.invalid_price = TrainInvalidPrice,
 		.is_bridge = TrainIsBridge,
 		.is_crossing = TrainSharedMap<uint64_t, &OpenTTDSharedServices::is_level_crossing>,
@@ -4712,7 +4727,7 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.running_windows = TrainRunningWindows,
 		.servint = TrainServint,
 		.set_depot_res = TrainSetDepotRes,
-		.set_next = TrainSetNext,
+		.set_next = TrainVehiclePair<RustVehicleSetNext>,
 		.set_platform_res = RustStationLegacyPlatformReservation<OpenTTDTrainHandle>,
 		.set_signal_state = OpenTTDLegacyMapQuery<void, RustRailSetSignalState, OpenTTDTrainHandle, uint32_t, uint8_t, uint8_t>,
 		.set_tunnel_res = OpenTTDLegacyMapQuery<void, RustSetTunnelBridgeReservation, OpenTTDTrainHandle, uint32_t, uint8_t>,
@@ -4876,12 +4891,15 @@ const OpenTTDTrainReservationLeaves &GetTrainReservationServices() noexcept
 #endif
 
 #ifdef WITH_RUST
+#include "rust/rail_construction_services.hpp"
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDTrainServices.hpp"
 #include "abi-visit-OpenTTDTrainReservationLeaves.hpp"
+#include "abi-visit-OpenTTDRailConstructionServices.hpp"
 bool CheckAbi_train_cmd()
 {
 	return AbiServicesComplete(GetTrainServices()) &&
-		AbiServicesComplete(GetTrainReservationServices());
+		AbiServicesComplete(GetTrainReservationServices()) &&
+		AbiServicesComplete(GetRustRailConstructionServices());
 }
 #endif

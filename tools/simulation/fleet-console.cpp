@@ -224,6 +224,117 @@ static bool FleetScenario(std::span<std::string_view> args)
 		fmt::print(stderr, "FLEET clone-join {} {} {} {}\n", cost.Succeeded(), cost.GetErrorMessage() == STR_ERROR_TRAIN_TOO_LONG, id == VehicleID::Invalid(), before == after);
 		return true;
 	}
+	if (args[1] == "transaction-rail") {
+		/* Depot consist transactions: free chains, normalisation, same-chain and cross-train moves,
+		 * front promotion/demotion, refusals with restoration, dual heads, sales and ID reuse. */
+		Train *v = Train::From(BuildFixture(VEH_TRAIN));
+		TileIndex tile = v->tile;
+		EngineID wagon = v->GetNextVehicle()->engine_type;
+		EngineID single = EngineID::Invalid(), multi = EngineID::Invalid();
+		for (const Engine *e : Engine::Iterate()) {
+			if (e->type != VEH_TRAIN || !std::get<0>(Command<CMD_BUILD_VEHICLE>::Do({}, tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID)).Succeeded()) continue;
+			RailVehicleTypes kind = RailVehInfo(e->index)->railveh_type;
+			if (kind == RAILVEH_SINGLEHEAD && single == EngineID::Invalid()) single = e->index;
+			if (kind == RAILVEH_MULTIHEAD && multi == EngineID::Invalid()) multi = e->index;
+		}
+		if (single == EngineID::Invalid() || multi == EngineID::Invalid()) FixtureAbort(__LINE__);
+		auto build = [&](EngineID e, bool free) {
+			auto built = Command<CMD_BUILD_VEHICLE>::Do(DoCommandFlag::Execute, tile, e, free, INVALID_CARGO, INVALID_CLIENT_ID);
+			Checked("rail-build", std::get<0>(built));
+			return std::get<1>(built);
+		};
+		auto move = [&](const char *name, DoCommandFlags flags, VehicleID src, VehicleID dst, bool chain) {
+			CommandCost cost = Command<CMD_MOVE_RAIL_VEHICLE>::Do(flags, src, dst, chain);
+			Cost(name, cost);
+			return cost;
+		};
+		auto sell = [&](const char *name, DoCommandFlags flags, VehicleID id, bool chain) {
+			CommandCost cost = Command<CMD_SELL_VEHICLE>::Do(flags, id, chain, false, INVALID_CLIENT_ID);
+			Cost(name, cost);
+			return cost;
+		};
+		auto chain = [](VehicleID id) {
+			std::string out;
+			const Train *t = Train::GetIfValid(id);
+			if (t == nullptr) return std::string("gone");
+			for (const Train *u = t->First(); u != nullptr; u = u->Next()) out += fmt::format("{}:{}:{}:{} ", u->index, u->subtype, u->engine_type, u->cargo_cap);
+			return out;
+		};
+		auto dump = [&](const char *name, VehicleID id) {
+			const Train *t = Train::GetIfValid(id);
+			if (t == nullptr) { fmt::print(stderr, "FLEET rail {} gone\n", name); return; }
+			t = t->First();
+			fmt::print(stderr, "FLEET rail {} head {} unit {} group {} orders {} length {} front {} money {} chain {}\n", name, t->index, t->unitnumber, t->group_id.base(), t->GetNumOrders(), t->gcache.cached_total_length, t->IsFrontEngine(), CompanyMoney(Company::Get(_current_company)), chain(id));
+		};
+		SavedRandomSeeds before, after;
+		/* The second free wagon joins the first; a new engine with free vehicles takes the chain. */
+		VehicleID w1 = build(wagon, false);
+		VehicleID w2 = build(wagon, false);
+		bool joined = Train::Get(w2)->First()->index == w1;
+		dump("free-chain", w1);
+		VehicleID a = build(single, true);
+		bool normalized = Train::Get(w1)->First()->index == a;
+		dump("normalized", a);
+		/* Same-chain move, test then execute. */
+		VehicleID second = v->GetNextVehicle()->index, last = v->Last()->index;
+		std::string original = chain(v->index);
+		SaveRandomSeeds(&before);
+		move("same-chain-test", {}, second, last, false);
+		SaveRandomSeeds(&after);
+		bool test_restored = chain(v->index) == original && SameRandom(before, after);
+		move("same-chain", DoCommandFlag::Execute, second, last, false);
+		dump("same-chain", v->index);
+		/* Train B: E1 E2 W sharing the fixture's orders. Moving E1 behind W hands the front to E2. */
+		VehicleID e1 = build(single, false), e2 = build(single, false), wb = build(wagon, false);
+		Checked("rail-share", Command<CMD_CLONE_ORDER>::Do(DoCommandFlag::Execute, CO_SHARE, e1, v->index));
+		move("b-engine", DoCommandFlag::Execute, e2, e1, false);
+		move("b-wagon", DoCommandFlag::Execute, wb, e2, false);
+		dump("b", e1);
+		move("front-trashed", DoCommandFlag::Execute, e1, wb, false);
+		bool transferred = Train::Get(e2)->IsFrontEngine() && Train::Get(e2)->GetNumOrders() == v->GetNumOrders() && Train::Get(e1)->unitnumber == 0;
+		dump("front-trashed", e2);
+		/* The trailing engine becomes a new train in the default group. */
+		move("new-front", DoCommandFlag::Execute, e1, VehicleID::Invalid(), false);
+		bool new_front = Train::Get(e1)->IsFrontEngine() && Train::Get(e1)->group_id == DEFAULT_GROUP && Train::Get(e1)->unitnumber != 0;
+		dump("new-front", e1);
+		dump("after-new-front", e2);
+		/* Length refusals restore both chains, for moves and sales. */
+		Backup<uint8_t> max_length(_settings_game.vehicle.max_train_length);
+		max_length.Change(1);
+		std::string src_before = chain(e2), dst_before = chain(v->index);
+		CommandCost too_long = move("too-long", DoCommandFlag::Execute, wb, v->index, false);
+		bool refused = too_long.Failed() && too_long.GetErrorMessage() == STR_ERROR_TRAIN_TOO_LONG && chain(e2) == src_before && chain(v->index) == dst_before;
+		CommandCost sell_long = sell("sell-too-long", DoCommandFlag::Execute, v->index, false);
+		bool sell_refused = sell_long.Failed() && chain(v->index) == dst_before;
+		max_length.Restore();
+		dump("restored", v->index);
+		/* A multiheaded engine, a wagon between its heads, then the front moved away takes its rear along. */
+		VehicleID m = build(multi, false), wm = build(wagon, false);
+		move("mh-wagon", DoCommandFlag::Execute, wm, m, false);
+		dump("mh-wagon", m);
+		move("mh-split", DoCommandFlag::Execute, m, VehicleID::Invalid(), false);
+		const Train *mt = Train::Get(m);
+		bool paired = mt->Next() != nullptr && mt->Next() == mt->other_multiheaded_part && Train::Get(wm)->IsFreeWagon();
+		dump("mh", m);
+		dump("mh-free", wm);
+		/* Sales: a free wagon, a chain from a wagon, a front engine handing over its orders. */
+		sell("sell-wagon-test", {}, wm, false);
+		sell("sell-wagon", DoCommandFlag::Execute, wm, false);
+		sell("sell-chain", DoCommandFlag::Execute, v->GetNextVehicle()->GetNextVehicle()->index, true);
+		dump("sold-chain", v->index);
+		VehicleID e3 = build(single, false);
+		move("c-engine", DoCommandFlag::Execute, e3, e2, false);
+		dump("c", e2);
+		sell("sell-front", DoCommandFlag::Execute, e2, false);
+		bool sold_transfer = Train::IsValidID(e3) && Train::Get(e3)->IsFrontEngine() && Train::Get(e3)->GetNumOrders() == v->GetNumOrders();
+		dump("sold-front", e3);
+		/* Freed IDs are reused by the next builds. */
+		VehicleID reused = build(wagon, false);
+		fmt::print(stderr, "FLEET rail reused {} {}\n", reused, reused == e2 || reused == wm);
+		dump("reused", reused);
+		fmt::print(stderr, "FLEET rail-checks {} {} {} {} {} {} {} {} {}\n", joined, normalized, test_restored, transferred, new_front, refused, sell_refused, paired, sold_transfer);
+		return true;
+	}
 	if (args[1] == "transaction-meta") {
 		for (VehicleType type : {VEH_TRAIN, VEH_ROAD, VEH_SHIP, VEH_AIRCRAFT}) {
 			Vehicle *v = nullptr;

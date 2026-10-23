@@ -88,7 +88,14 @@ layouts! {
     "OpenTTDVehicleBuildServices" ["probe"] => crate::vehicle_transactions::build::Services {
         refit, mass, random, depot_kind, engine_cost, default_cargo, articulate_count, pool_available,
         free_unit, construct, rail, ship_tile, new_ship, set_purchase, articulated_capacity,
-        display_capacity, is_engine, normalize, presentation, use_unit, too_many, unavailable,
+        display_capacity, is_engine, presentation, use_unit, too_many, unavailable,
+    };
+    "OpenTTDRailConstructionStrings" ["probe"] => crate::vehicle_transactions::rail::Strings { rear_follow, depot_only, no_orders, };
+    "OpenTTDRailConstructionServices" ["probe"] => crate::vehicle_transactions::rail::Services {
+        cargo_capacity, strings, compatible, powered, new_wagon, new_engine, new_rear, link_multihead, subtype,
+        set_subtype, previous, last, set_next, next_vehicle, last_engine_part, ground, first_engine,
+        invalidate_grf, attach_callback, unknown_attach, train_limit, unit,
+        use_unit, release_unit, head_windows, front_windows, company_dirty, depot_changed,
     };
     "OpenTTDAircraftInfo" ["probe"] => crate::vehicle_transactions::construct::AircraftInfo { image, passengers, mail, subtype, };
     "OpenTTDVehicleConstructServices" ["probe"] => crate::vehicle_transactions::construct::Services {
@@ -133,7 +140,7 @@ layouts! {
     "OpenTTDVehicleCommonServices" ["probe"] => crate::vehicle_transactions::CommonServices {
         base, transactions, vehicles, orders, strings, train_power, aircraft_start,
         startstop_callback, grf_version, grf_string, waiting_news, flip_stopped,
-        startstop_ui, sell_rail, value, valid_cargo,
+        startstop_ui, value, valid_cargo,
     };
     "OpenTTDVehicleSelectionServices" ["probe"] => crate::vehicle_transactions::SelectionServices {
         groups, transactions, vehicles, in_depot, free_wagon, first_engine_part,
@@ -4788,7 +4795,6 @@ layouts! {
         subtype,
         reverse_probability,
         reverse,
-        move_vehicle => move,
         copy_configuration,
         viewports,
         view_window,

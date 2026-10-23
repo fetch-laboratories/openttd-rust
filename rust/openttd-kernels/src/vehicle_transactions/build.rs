@@ -1,6 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Common build transaction, including speculative construction and RNG rollback.
-use super::{ERROR, construct, mass, refit};
+use super::{ERROR, construct, mass, rail, refit};
 use crate::command_type::DoCommandFlag;
 use crate::services::{CommandCost, Cost, RandomServices};
 use crate::vehicle::{OpenTTDEngine, RailVehicleTypes, VehicleType};
@@ -30,14 +30,13 @@ pub struct Services {
     pub pool_available: extern "C" fn(usize) -> bool,
     pub free_unit: extern "C" fn(VehicleType) -> u16,
     pub construct: &'static construct::Services,
-    pub rail: extern "C" fn(*mut CommandCost, u16, u32, *const OpenTTDEngine) -> *mut (),
+    pub rail: &'static rail::Services,
     pub ship_tile: extern "C" fn(u32) -> u32,
     pub new_ship: extern "C" fn(u32) -> *mut (),
     pub set_purchase: extern "C" fn(*mut (), u16, i64),
     pub articulated_capacity: extern "C" fn(u16, *mut u32),
     pub display_capacity: extern "C" fn(*const OpenTTDEngine, *mut u16) -> u32,
     pub is_engine: extern "C" fn(*mut ()) -> bool,
-    pub normalize: extern "C" fn(*mut ()),
     pub presentation: extern "C" fn(*mut (), VehicleType),
     pub use_unit: extern "C" fn(*mut ()),
     pub too_many: u32,
@@ -50,7 +49,7 @@ pub struct Services {
 /// callback; speculative destruction leaves only the original returned ID value.
 #[allow(clippy::too_many_lines, clippy::many_single_char_names)]
 pub(crate) unsafe fn build(
-    s: &Services,
+    s: &'static Services,
     out: *mut CommandCost,
     temporary: *mut CommandCost,
     refit_temporary: *mut CommandCost,
@@ -126,7 +125,7 @@ pub(crate) unsafe fn build(
     };
     let seeds = unsafe { (s.random.save)() };
     let v = match kind.0 {
-        0 => (s.rail)(temporary, subflags, tile, e),
+        0 => unsafe { rail::build(s, temporary, subflags, tile, e) },
         1 => unsafe { construct::road(s, temporary, subflags, tile, e) },
         2 => {
             let north = (s.ship_tile)(tile);
@@ -193,7 +192,8 @@ pub(crate) unsafe fn build(
                 && flags & DoCommandFlag::AUTO_REPLACE == 0
                 && (s.is_engine)(v)
             {
-                (s.normalize)(v);
+                // The speculative-build result in `temporary` was consumed above.
+                unsafe { rail::normalize(s, temporary, v) };
             }
             (s.presentation)(v, kind);
         }
@@ -248,7 +248,7 @@ pub(crate) unsafe fn build(
 /// Same synchronous stack-cost and native-shell contract as `build`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_build(
-    s: &Services,
+    s: &'static Services,
     out: *mut CommandCost,
     temporary: *mut CommandCost,
     refit_temporary: *mut CommandCost,

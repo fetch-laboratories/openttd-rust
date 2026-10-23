@@ -17,7 +17,7 @@ use super::VehicleType;
 const TRAIN: VehicleType = VehicleType::TRAIN;
 const ROAD: VehicleType = VehicleType::ROAD;
 const AIRCRAFT: VehicleType = VehicleType::AIRCRAFT;
-const FRONT: u8 = 1;
+const FRONT: u8 = 1 << crate::vehicle_base::GVSF_FRONT;
 const ENGINE: u8 = 1 << 3;
 const NORMAL_AIRCRAFT: u8 = 2;
 const TRAIN_SLOWING: u8 = 1 << 4;

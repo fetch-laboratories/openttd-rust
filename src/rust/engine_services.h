@@ -14,10 +14,12 @@
 #include "environment_services.h"
 #include "../articulated_vehicles.h"
 #include "../rail.h"
+#include "services_rail.h"
 #include "../road.h"
 inline const OpenTTDEngine *RustEngineByID(uint16_t id) noexcept { return RustEngine(Engine::Get(EngineID(id))); }
 inline bool RustEngineHasArticulatedCallback(uint16_t engine) noexcept { return EngInfo(EngineID(engine))->callback_mask.Test(VehicleCallbackMask::ArticEngine); }
 inline void RustArticulatedCapacity(uint16_t engine, uint32_t *out) noexcept { auto capacity = GetCapacityOfArticulatedParts(EngineID(engine)); std::copy(capacity.begin(), capacity.end(), out); }
+inline TimerGameCalendar::Date RustEngineLifeLength(const Engine *e) noexcept { return e->GetLifeLengthInDays(); }
 inline int64_t RustEngineCost(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetCost().base(); }
 inline uint8_t RustEngineDefaultCargo(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetDefaultCargoType(); }
 inline VehicleType RustEngineType(const OpenTTDEngine *e) noexcept { return EngineOf(e)->type; }
@@ -36,6 +38,15 @@ inline bool RustEngineCanCarry(const Engine *e) noexcept { return e->CanCarryCar
 inline uint64_t RustEngineRefitMask(EngineID id, bool initial) noexcept { return GetUnionOfArticulatedRefitMasks(id, initial); }
 inline RailVehicleTypes RustEngineRailKind(const Engine *e) noexcept { return e->VehInfo<RailVehicleInfo>().railveh_type; }
 inline uint64_t RustEngineCompatibleRailTypes(const Engine *e) noexcept { return GetAllCompatibleRailTypes(e->VehInfo<RailVehicleInfo>().railtypes).base(); }
+/** Reserve a unit number and assign the returned native ID to the shell. */
+inline void RustVehicleUseUnitNumber(Vehicle *v, uint16_t unit) noexcept { v->unitnumber = RustCompanyUseVehicleUnit(v->owner, v->type, unit); }
+inline void RustVehicleUseCurrentUnit(void *shell) noexcept
+{
+	Vehicle *v = static_cast<Vehicle *>(shell);
+	RustCompanyUseVehicleUnit(v->owner, v->type, RustVehicleUnitNumber(v));
+}
+inline bool RustEngineCompatibleRail(const OpenTTDEngine *e, uint32_t tile) noexcept { return RustRailCompatible(EngineOf(e)->VehInfo<RailVehicleInfo>().railtypes, RustRailType(tile)); }
+inline bool RustEngineHasPowerOnRail(const OpenTTDEngine *e, uint32_t tile) noexcept { return RustRailPowered(EngineOf(e)->VehInfo<RailVehicleInfo>().railtypes, RustRailType(tile)); }
 inline uint64_t RustEnginePoweredRoadTypes(const Engine *e) noexcept { return GetRoadTypeInfo(e->VehInfo<RoadVehicleInfo>().roadtype)->powered_roadtypes.base(); }
 inline bool FleetTransaction_can_carry(void *shell) noexcept { return RustEngineCanCarry(static_cast<Vehicle *>(shell)->GetEngine()); }
 inline uint64_t FleetTransaction_rail_compatible(uint16_t id) noexcept { return RustEngineCompatibleRailTypes(Engine::Get(EngineID{id})); }

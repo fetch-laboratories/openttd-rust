@@ -65,7 +65,6 @@ static uint8_t FleetTransaction_order_cargo(void *order) noexcept { return stati
 static void FleetTransaction_refit_news(void *shell, int32_t order) noexcept { auto *v = static_cast<Vehicle *>(shell); VehicleID id = (v->type == VEH_TRAIN) ? RustVehicleFirst(v)->index : v->index; EncodedString headline = order != -1 ? GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_REFIT, order + 1) : GetEncodedString(STR_NEWS_VEHICLE_AUTORENEW_FAILED, id, STR_ERROR_AUTOREPLACE_INCOMPATIBLE_CARGO, CargoSpec::Get(v->cargo_type)->name); AddVehicleAdviceNewsItem(AdviceType::AutorenewFailed, std::move(headline), id); }
 static uint8_t FleetTransaction_subtype(void *old, void *replacement, uint8_t cargo) noexcept { return GetBestFittingSubType(static_cast<Vehicle *>(old), static_cast<Vehicle *>(replacement), cargo); }
 static void FleetTransaction_reverse(void *shell) noexcept { Command<CMD_REVERSE_TRAIN_DIRECTION>::Do(DoCommandFlag::Execute, static_cast<Vehicle *>(shell)->index, true); }
-static void FleetTransaction_move(void *out, void *shell, void *after, uint32_t flags, bool whole) noexcept { *static_cast<CommandCost *>(out) = Command<CMD_MOVE_RAIL_VEHICLE>::Do(DoCommandFlags(static_cast<uint16_t>(flags)), static_cast<Vehicle *>(shell)->index, after == nullptr ? VehicleID::Invalid() : static_cast<Vehicle *>(after)->index, whole); }
 static void FleetTransaction_copy_configuration(void *old, void *replacement) noexcept { static_cast<Vehicle *>(replacement)->CopyVehicleConfigAndStatistics(static_cast<Vehicle *>(old)); }
 static void FleetTransaction_viewports(void *old, void *replacement) noexcept { ChangeVehicleViewports(static_cast<Vehicle *>(old)->index, static_cast<Vehicle *>(replacement)->index); }
 static void FleetTransaction_view_window(void *old, void *replacement) noexcept { ChangeVehicleViewWindow(static_cast<Vehicle *>(old)->index, static_cast<Vehicle *>(replacement)->index); }
@@ -129,7 +128,6 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.subtype = FleetTransaction_subtype,
 	.reverse_probability = RustVehicleHasReverseProbability,
 	.reverse = FleetTransaction_reverse,
-	.move = FleetTransaction_move,
 	.copy_configuration = FleetTransaction_copy_configuration,
 	.viewports = FleetTransaction_viewports,
 	.view_window = FleetTransaction_view_window,

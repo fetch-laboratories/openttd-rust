@@ -145,7 +145,6 @@ struct OpenTTDFleetTransactionServices {
 	uint8_t (*subtype)(void *old, void *replacement, uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(subtype);
 	bool (*reverse_probability)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(reverse_probability);
 	void (*reverse)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(reverse);
-	void (*move)(void *out, void *shell, void *after, uint32_t flags, bool whole) noexcept OPENTTD_SERVICE_DEFAULT(move);
 	void (*copy_configuration)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(copy_configuration);
 	void (*viewports)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(viewports);
 	void (*view_window)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(view_window);
@@ -180,7 +179,6 @@ struct OpenTTDFleetPendingServices {
 const OpenTTDFleetGroupServices &FleetGroupServices();
 const OpenTTDFleetTransactionServices &FleetTransactionServices();
 /** #139 capacity traversal service, shared as the fleet next-part service. */
-void *CargoCapacityNextPart(void *shell) noexcept;
 extern "C" {
 void *openttd_rust_fleet_group_create();
 void openttd_rust_fleet_group_destroy(void *);

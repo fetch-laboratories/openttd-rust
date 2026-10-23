@@ -83,7 +83,6 @@ TEST_CASE("Fleet - service tables match the Rust layout and fill every slot")
 	const T &transaction = FleetTransactionServices();
 	CHECK(AbiServicesComplete(group));
 	CHECK(AbiServicesComplete(transaction));
-	CHECK(group.next_part == CargoCapacityNextPart);
 	CHECK(group.recursion_error == STR_ERROR_GROUP_CAN_T_SET_PARENT_RECURSION);
 	CHECK(transaction.unavailable == STR_ERROR_RAIL_VEHICLE_NOT_AVAILABLE);
 	CHECK(transaction.too_long == STR_ERROR_TRAIN_TOO_LONG);

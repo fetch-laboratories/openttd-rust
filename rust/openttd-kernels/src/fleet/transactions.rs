@@ -81,7 +81,6 @@ pub struct Services {
     pub(crate) subtype: unsafe extern "C" fn(*mut (), *mut (), u8) -> u8,
     pub(crate) reverse_probability: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) reverse: unsafe extern "C" fn(*mut ()),
-    pub(crate) move_vehicle: unsafe extern "C" fn(*mut (), *mut (), *mut (), u32, bool),
     pub(crate) copy_configuration: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) viewports: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) view_window: unsafe extern "C" fn(*mut (), *mut ()),
@@ -108,15 +107,23 @@ unsafe fn move_vehicle(
     flags: u32,
     whole: bool,
 ) {
+    let b = (w.build_services)();
+    let g = b.refit.common.base.groups;
+    let after = if after.is_null() {
+        super::INVALID_VEHICLE
+    } else {
+        unsafe { (g.vehicle_id)(after) }
+    };
     unsafe {
-        (w.move_vehicle)(
-            out,
-            v,
+        crate::vehicle_transactions::rail::nested_move(
+            b,
+            out.cast(),
+            (flags | u32::from(DoCommandFlag::NO_CARGO_CAPACITY_CHECK)) as u16,
+            (g.vehicle_id)(v),
             after,
-            flags | u32::from(DoCommandFlag::NO_CARGO_CAPACITY_CHECK),
             whole,
         );
-    };
+    }
 }
 
 unsafe fn direct_build(w: &Services, costs: Costs, old: *mut (), engine: u16) -> *mut () {

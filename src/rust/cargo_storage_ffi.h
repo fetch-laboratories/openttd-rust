@@ -77,6 +77,7 @@ struct OpenTTDCargoCapacityServices {
 	void *(*other_multiheaded_part)(void *) noexcept OPENTTD_SERVICE_DEFAULT(other_multiheaded_part);
 	const OpenTTDCargoStorageServices *cargo;
 };
+const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept;
 /* capacity mode0 spreads/shrinks, mode1 transfers. Return1 requires the native
  * ConsistChanged callback after Rust returns (no borrowed part/list survives). */
 extern "C" {

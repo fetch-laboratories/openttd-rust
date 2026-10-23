@@ -195,13 +195,13 @@ static void OPENTTD_VEHICLE_CALL VehicleSvcWriteProgress(OpenTTDVehicle *v, uint
 
 static OpenTTDVehiclePreviousTile OPENTTD_VEHICLE_CALL VehicleSvcPreviousTile(OpenTTDVehicle *v) noexcept
 {
-	const Vehicle *previous = VehicleOf(v)->Previous();
+	const Vehicle *previous = RustVehiclePrevious(VehicleOf(v));
 	return {.tile = previous == nullptr ? 0 : RustVehicleTile(previous), .exists = previous != nullptr};
 }
 /** `DeleteLastRoadVeh` before the road stop check: unlink the last part and copy the station. */
 static void OPENTTD_VEHICLE_CALL VehicleSvcDetachLast(OpenTTDVehicle *previous, OpenTTDVehicle *last, OpenTTDVehicle *first) noexcept
 {
-	VehicleOf(previous)->SetNext(nullptr);
+	RustVehicleSetNext(VehicleOf(previous), nullptr);
 	VehicleOf(last)->last_station_visited = VehicleOf(first)->last_station_visited;
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteMaxSpeed(OpenTTDVehicle *v, uint16_t speed) noexcept { VehicleOf(v)->vcache.cached_max_speed = speed; }
@@ -591,7 +591,7 @@ static void OPENTTD_VEHICLE_CALL MaintenanceDecayWrite(OpenTTDVehicle *handle, u
 static OpenTTDVehicleMaintenanceWarning OPENTTD_VEHICLE_CALL MaintenanceWarning(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	return {.enabled = _settings_client.gui.old_vehicle_warn, .has_previous = v->Previous() != nullptr, .local = RustVehicleOwner(v) == RustLocalCompanyID(), .status = RustVehicleStatus(v)};
+	return {.enabled = _settings_client.gui.old_vehicle_warn, .has_previous = RustVehiclePrevious(v) != nullptr, .local = RustVehicleOwner(v) == RustLocalCompanyID(), .status = RustVehicleStatus(v)};
 }
 static OpenTTDVehicleMaintenanceWarningCompany OPENTTD_VEHICLE_CALL MaintenanceWarningCompany(OpenTTDVehicle *handle) noexcept
 {

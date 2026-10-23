@@ -71,7 +71,6 @@ struct OpenTTDVehicleCommonServices {
 	void (*waiting_news)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(waiting_news);
 	void (*flip_stopped)(void *) noexcept OPENTTD_SERVICE_DEFAULT(flip_stopped);
 	void (*startstop_ui)(void *) noexcept OPENTTD_SERVICE_DEFAULT(startstop_ui);
-	void (*sell_rail)(OpenTTDCommandCost *, uint16_t, void *, bool, bool, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sell_rail);
 	int64_t (*value)(void *) noexcept OPENTTD_SERVICE_DEFAULT(value);
 	bool (*valid_cargo)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(valid_cargo);
 };
