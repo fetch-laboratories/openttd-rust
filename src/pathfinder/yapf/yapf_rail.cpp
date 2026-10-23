@@ -23,6 +23,7 @@
 #include "../../rust/rail_yapf_ffi.h"
 #include "../../rust/services_map.h"
 #include "../../rust/services_rail.h"
+#include "../../rust/services_station.h"
 #include "../../rust/vehicle_services.h"
 #include <cstdio>
 
