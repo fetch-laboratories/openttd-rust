@@ -484,6 +484,7 @@ pub struct Services {
     pub get: extern "C" fn(u16) -> *mut super::NativeGraph,
     pub get_if_valid: extern "C" fn(u16) -> *mut super::NativeGraph,
     pub station_id: extern "C" fn(*const crate::station::BaseStation) -> u16,
+    pub owner: extern "C" fn(*mut super::NativeGraph) -> *mut Graph,
     pub access: extern "C" fn(*mut super::NativeGraph) -> Access,
     pub station: extern "C" fn(u16, u8) -> StationInput,
     pub attach: extern "C" fn(u16, u8, u16, u16),
@@ -501,7 +502,7 @@ struct GraphAccess {
 }
 /// Resolve once per Rust caller entry; the shell remains live under the game mutex.
 pub(crate) unsafe fn resolve(graph: *mut super::NativeGraph, services: &Services) -> *mut Graph {
-    (services.access)(graph).owner
+    (services.owner)(graph)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_add_station(
@@ -510,14 +511,10 @@ pub unsafe extern "C" fn openttd_rust_live_graph_add_station(
     services: *const Services,
 ) -> u16 {
     let services = unsafe { &*services };
-    let native = (services.access)(graph);
-    let access = GraphAccess {
-        owner: native.owner,
-        index: native.index,
-    };
-    let cargo = unsafe { (*access.owner).cargo };
+    let owner = unsafe { resolve(graph, services) };
+    let cargo = unsafe { (*owner).cargo };
     let input = (services.station)(station, cargo);
-    unsafe { &mut *access.owner }.add_node(input.xy, station, input.demand)
+    unsafe { &mut *owner }.add_node(input.xy, station, input.demand)
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_live_graph_remove(
@@ -706,7 +703,7 @@ crate::abi::layouts! {
     "OpenTTDLiveMembership" ["station_service"] => Membership { graph, node, };
     "OpenTTDLiveStationInput" ["station_service"] => StationInput { xy, demand, };
     "OpenTTDLiveGraphServices" ["station_service"] => Services {
-        assertions, get, get_if_valid, station_id, access, station, attach, set_node, delete_graph, membership, available, allocate, allocation_failure, dequeue,
+        assertions, get, get_if_valid, station_id, owner, access, station, attach, set_node, delete_graph, membership, available, allocate, allocation_failure, dequeue,
     };
 }
 

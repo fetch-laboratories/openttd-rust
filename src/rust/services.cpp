@@ -612,7 +612,8 @@ bool CheckAbi_services()
 }
 #endif
 
-static OpenTTDLiveGraphAccess LiveGraphAccess(OpenTTDLinkGraph *graph) noexcept { return {graph->RustState(), graph->index.base()}; }
+static OpenTTDLiveGraph *LiveGraphOwner(OpenTTDLinkGraph *graph) noexcept { return graph->RustState(); }
+static OpenTTDLiveGraphAccess LiveGraphAccess(OpenTTDLinkGraph *graph) noexcept { return {LiveGraphOwner(graph), graph->index.base()}; }
 static OpenTTDLiveStationInput LiveGraphStation(uint16_t station, uint8_t cargo) noexcept
 {
 	Station *st = Station::Get(StationID(station));
@@ -647,6 +648,7 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 		.get = LiveGraphGet,
 		.get_if_valid = LiveGraphGetIfValid,
 		.station_id = LiveGraphStationID,
+		.owner = LiveGraphOwner,
 		.access = LiveGraphAccess,
 		.station = LiveGraphStation,
 		.attach = LiveGraphAttach,

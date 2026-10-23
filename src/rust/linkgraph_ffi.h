@@ -101,6 +101,7 @@ struct OpenTTDLiveGraphServices {
 	OpenTTDLinkGraph *(*get)(uint16_t) noexcept;
 	OpenTTDLinkGraph *(*get_if_valid)(uint16_t) noexcept;
 	uint16_t (*station_id)(const OpenTTDBaseStation *) noexcept;
+	OpenTTDLiveGraph *(*owner)(OpenTTDLinkGraph *) noexcept;
 	OpenTTDLiveGraphAccess (*access)(OpenTTDLinkGraph *) noexcept;
 	OpenTTDLiveStationInput (*station)(uint16_t, uint8_t) noexcept;
 	void (*attach)(uint16_t, uint8_t, uint16_t, uint16_t) noexcept;
