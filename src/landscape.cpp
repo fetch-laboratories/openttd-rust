@@ -997,6 +997,7 @@ void RunTileLoop()
 #include "rust/generation_sea_set.hpp"
 #include "rust/services_bridge.h"
 #include "rust/services_yapf.h"
+#include "rust/services_assert.h"
 #include "rust/heightmap_services.hpp"
 #include "rust/tgp_ffi.h"
 
@@ -1036,6 +1037,7 @@ const OpenTTDLandscapeGenerationServices &GetRustLandscapeGenerationServices() n
 		.flat_height = RustFlatTileHeight,
 		.river = RustIsRiver,
 		.set_snow_line = RustSetSnowLineHeight,
+		.not_reached = RustNotReached,
 		.river_debug = [](bool found, uint32_t rounds, uint32_t open, uint32_t closed, int32_t cost, int32_t distance) noexcept { RustYapfDebug('~', found, 0, rounds, open, closed, 0.0f, cost, distance); },
 		.assert_condition = []([[maybe_unused]] bool condition) noexcept { assert(condition); },
 		.sea_construct = [](OpenTTDGenerationFrame *f) noexcept { f->sea.Construct(); },

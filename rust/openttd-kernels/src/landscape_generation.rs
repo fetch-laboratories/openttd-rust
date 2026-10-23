@@ -109,6 +109,7 @@ pub struct GenerationServices {
     pub flat_height: extern "C" fn(u32) -> FlatHeight,
     pub river: extern "C" fn(u32) -> bool,
     pub set_snow_line: extern "C" fn(u8),
+    pub not_reached: extern "C" fn(),
     pub river_debug: extern "C" fn(bool, u32, u32, u32, i32, i32),
     pub assert_condition: extern "C" fn(bool),
     pub sea_construct: extern "C" fn(*mut Frame),
@@ -264,6 +265,9 @@ impl World<'_> {
     }
     fn greyscale(&self, image: &Image, rotation: u8, freeform: bool, heightmap_height: u8) {
         const DIV: u32 = 16384;
+        if rotation > 1 {
+            (self.a.not_reached)();
+        }
         let (width, height) = if rotation == 0 {
             (self.map.size_x(), self.size_y)
         } else {
@@ -1191,7 +1195,9 @@ impl World<'_> {
                     continue;
                 }
                 if let Some(&old) = closed.get(&tile) {
-                    (self.a.assert_condition)(estimate >= nodes[old].estimate);
+                    if estimate < nodes[old].estimate {
+                        (self.a.not_reached)();
+                    }
                     continue;
                 }
                 let id = nodes.len();

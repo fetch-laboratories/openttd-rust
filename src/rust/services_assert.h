@@ -1,0 +1,6 @@
+/* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
+/** @file services_assert.h Canonical native invariant-failure operation. */
+#ifndef RUST_SERVICES_ASSERT_H
+#define RUST_SERVICES_ASSERT_H
+inline void RustNotReached() noexcept { NOT_REACHED(); }
+#endif /* RUST_SERVICES_ASSERT_H */

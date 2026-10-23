@@ -6,6 +6,7 @@
  */
 /** @file aircraft_adapter.hpp Canonical pool observations and direct shared leaves. */
 #include "aircraft_ffi.h"
+#include "services_assert.h"
 #include "vehicle_services.h"
 #include "services_station.h"
 #include "company_services.h"
@@ -284,7 +285,7 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_assert_flying([[maybe_unused]] OpenTT
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_invalid_movement(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	Debug(misc, 0, "[Ap] cannot move further on Airport! (pos {} state {}) for vehicle {}", Aircraft::From(VehicleOf(vehicle.handle))->pos, Aircraft::From(VehicleOf(vehicle.handle))->state, vehicle.id); NOT_REACHED();
+	Debug(misc, 0, "[Ap] cannot move further on Airport! (pos {} state {}) for vehicle {}", Aircraft::From(VehicleOf(vehicle.handle))->pos, Aircraft::From(VehicleOf(vehicle.handle))->state, vehicle.id); RustNotReached();
 }
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_invalid_position(OpenTTDAircraftVehicle vehicle, const void * ap) noexcept
@@ -299,7 +300,7 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_invalid_scheme(OpenTTDAircraftVehicle
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_unreachable(OpenTTDAircraftVehicle) noexcept
 {
-	NOT_REACHED();
+	RustNotReached();
 }
 
 static uint32_t OPENTTD_AIRCRAFT_CALL Aircraft_cargo_age_property(OpenTTDAircraftVehicle vehicle) noexcept
