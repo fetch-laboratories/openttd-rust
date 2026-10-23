@@ -772,9 +772,7 @@ static const OpenTTDStationServices _rust_station_services = {
 };
 static const OpenTTDStationLinks _rust_station_links = {
 	.graphs = &GetRustLiveGraphServices(),
-	.graph = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> OpenTTDLinkGraph * {
-		return GetRustLiveGraphServices().get_if_valid(static_cast<Station *>(handle)->goods[cargo].link_graph.base());
-	},
+	.graph = RustStationGraph,
 	.automatic_distribution = OpenTTDAutomaticCargoDistribution,
 	.node = [](OpenTTDBaseStation *handle, uint8_t cargo) noexcept -> uint16_t {
 		return static_cast<Station *>(handle)->goods[cargo].node;
