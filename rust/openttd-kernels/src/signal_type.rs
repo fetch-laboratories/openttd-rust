@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Signal types and inline policy from `signal_type.h`.
+//! Signal type values from `signal_type.h`.
 /// `SIGTYPE_PBS_ONEWAY`.
 pub const SIGTYPE_PBS_ONEWAY: u8 = 5;
 /// `SIGTYPE_PBS`.

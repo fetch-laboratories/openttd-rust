@@ -21,6 +21,11 @@
     clippy::collapsible_else_if,
     clippy::similar_names
 )]
+use crate::rail_map::is_pbs_signal as pbs;
+use crate::track_func::{
+    find_first_trackdir as first, is_diagonal_trackdir as diagonal, trackdir_to_exitdir as exit,
+};
+
 use crate::node_hash::NodeMap;
 use crate::witness;
 use std::cell::UnsafeCell;
@@ -180,22 +185,7 @@ const FIRST_RED: u16 = 1 << 10;
 const POSSIBLE_TARGET: u16 = E_DEPOT | E_WAYPOINT | E_STATION | SAFE;
 const CACHED: u16 = (1 << 9) - 1;
 const ABORT: u16 = DEAD | PATH_TOO_LONG | LOOP | FIRST_RED;
-const EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
 const NEXT: [u8; 14] = [0, 1, 3, 2, 5, 4, 255, 255, 8, 9, 11, 10, 13, 12];
-const CROSS: [u16; 6] = [0x202, 0x101, 0x3030, 0x3030, 0x0c0c, 0x0c0c];
-const REACH_TRACKS: [u8; 4] = [0x19, 0x16, 0x25, 0x2a];
-fn exit(td: u8) -> u8 {
-    EXIT[usize::from(td)]
-}
-fn diagonal(td: u8) -> bool {
-    td & 7 < 2
-}
-fn pbs(signal: u8) -> bool {
-    signal == 4 || signal == 5
-}
-fn first(dirs: u16) -> u8 {
-    dirs.trailing_zeros() as u8
-}
 fn key(tile: u32, td: u8) -> u32 {
     tile.wrapping_shl(4) | u32::from(td)
 }
@@ -204,14 +194,6 @@ fn add(a: i32, b: i32) -> i32 {
 }
 fn mul(a: i32, b: i32) -> i32 {
     a.wrapping_mul(b)
-}
-fn overlaps(reserved: u8, td: u8) -> bool {
-    let bit = 1 << (td & 7);
-    if reserved & bit != 0 {
-        return true;
-    }
-    let bits = reserved | bit;
-    bits & bits.wrapping_sub(1) != 0 && bits != 0x0c && bits != 0x30
 }
 fn offset(tile: u32, dir: u8, map_x: u32) -> u32 {
     match dir {
@@ -718,7 +700,10 @@ impl Search {
                 cur = offset(cur, exit(td ^ 8), self.input.map_x);
             }
         }
-        if overlaps(self.pbs().reserved(tile), td) {
+        if crate::track_func::track_overlaps_tracks(
+            self.pbs().reserved(tile),
+            crate::track_func::trackdir_to_track(td),
+        ) {
             let mut cost = self.input.settings.pbs_cross as i32;
             if !diagonal(td) {
                 cost = mul(cost, 71) / 100;
@@ -779,7 +764,7 @@ impl Search {
         loop {
             if !skip_entry {
                 let mut transition = if self.input.forbid90 == 0
-                    && CROSS[usize::from(prev_td & 7)] & (1 << td) != 0
+                    && crate::track_func::trackdir_crosses_trackdirs(prev_td) & (1 << td) != 0
                 {
                     s.curve90 as i32
                 } else if td != NEXT[usize::from(prev_td)] {
@@ -789,8 +774,8 @@ impl Search {
                 };
                 if prev_info.flags & PLAIN != 0 && cur_info.flags & PLAIN != 0 {
                     let dir = exit(prev_td);
-                    let t1 = prev_info.tracks & REACH_TRACKS[usize::from(dir ^ 2)];
-                    let t2 = cur_info.tracks & REACH_TRACKS[usize::from(dir)];
+                    let t1 = prev_info.tracks & crate::track_func::diagdir_reaches_tracks(dir ^ 2);
+                    let t2 = cur_info.tracks & crate::track_func::diagdir_reaches_tracks(dir);
                     if t1 & t1.wrapping_sub(1) != 0 && t2 & t2.wrapping_sub(1) != 0 {
                         transition = add(transition, s.doubleslip as i32);
                     }

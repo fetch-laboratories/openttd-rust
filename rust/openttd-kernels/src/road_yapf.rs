@@ -108,7 +108,6 @@ pub struct Result {
     pub calcs: i32,
     pub distance: i32,
 }
-const EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
 const DIAGONAL: [u8; 4] = [0, 1, 8, 9];
 const REACHES: [u16; 4] = [
     (1 << 0) | (1 << 3) | (1 << 12),
@@ -131,7 +130,7 @@ struct Node {
 }
 impl Node {
     fn key(self) -> (u32, u8) {
-        (self.tile, EXIT[usize::from(self.td)])
+        (self.tile, crate::track_func::trackdir_to_exitdir(self.td))
     }
     fn new(tile: u32, td: u8, parent: Option<usize>, choice: bool) -> Self {
         Self {
@@ -381,7 +380,7 @@ impl Search {
             let rs = crate::road_stop::at(shared, tile);
             if t.drive_through != 0 {
                 cost = cost.wrapping_add(self.input.stop);
-                let dir = EXIT[usize::from(td)];
+                let dir = crate::track_func::trackdir_to_exitdir(td);
                 let map = Map {
                     log_x: self.input.map_x.trailing_zeros() as u8,
                 };
@@ -469,7 +468,7 @@ impl Search {
         if self.depot || self.endpoint_detected(n) {
             return n.cost;
         }
-        let dir = usize::from(EXIT[usize::from(n.last_td)]);
+        let dir = usize::from(crate::track_func::trackdir_to_exitdir(n.last_td));
         let x = (2 * (n.last_tile % self.input.map_x)) as i32 + [-1, 0, 1, 0][dir];
         let y = (2 * (n.last_tile / self.input.map_x)) as i32 + [0, 1, 0, -1][dir];
         let dx = (x - (2 * (self.destination % self.input.map_x)) as i32).abs();

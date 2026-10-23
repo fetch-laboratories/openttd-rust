@@ -17,6 +17,11 @@
     clippy::many_single_char_names,
     clippy::items_after_statements
 )]
+use crate::track_func::{
+    find_first_trackdir as first, track_bits_to_trackdir_bits as dirs,
+    trackdir_bits_to_track_bits as tracks,
+};
+
 use crate::train::Handle;
 const INVALID: u32 = u32::MAX;
 const DEPOT: u8 = 0x80;
@@ -676,21 +681,8 @@ impl Game<'_> {
         self.svc_trackdir(id) as u8
     }
 }
-fn first(bits: u16) -> u8 {
-    if bits == 0 {
-        0xff
-    } else {
-        bits.trailing_zeros() as u8
-    }
-}
 fn single(bits: u16) -> bool {
     bits & bits.wrapping_sub(1) == 0
-}
-fn tracks(bits: u16) -> u8 {
-    (bits | (bits >> 8)) as u8
-}
-fn dirs(bits: u8) -> u16 {
-    u16::from(bits) | (u16::from(bits) << 8)
 }
 fn pbs(step: Search) -> Pbs {
     Pbs {

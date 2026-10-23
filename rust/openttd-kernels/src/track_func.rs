@@ -27,10 +27,10 @@ pub const fn track_to_track_bits(track: u8) -> u8 {
 pub const fn track_bits_to_trackdir_bits(bits: u8) -> u16 {
     (bits as u16) * 0x101
 }
-/// `TrackdirBitsToTrackBits` (native uint8 narrowing).
+/// `TrackdirBitsToTrackBits`, including the native track mask.
 #[allow(clippy::cast_possible_truncation)]
 pub const fn trackdir_bits_to_track_bits(bits: u16) -> u8 {
-    (bits | (bits >> 8)) as u8
+    ((bits | (bits >> 8)) & crate::track_type::TRACK_BIT_MASK as u16) as u8
 }
 /// `FindFirstTrackdir`.
 #[allow(clippy::cast_possible_truncation)]
@@ -67,9 +67,21 @@ pub fn trackdir_crosses_trackdirs(td: u8) -> u16 {
 }
 /// `TracksOverlap`.
 pub const fn tracks_overlap(bits: u8) -> bool {
-    bits != 0 && bits & bits.wrapping_sub(1) != 0 && bits != 12 && bits != 48
+    bits != 0
+        && bits & bits.wrapping_sub(1) != 0
+        && bits != crate::track_type::TRACK_BIT_HORZ
+        && bits != crate::track_type::TRACK_BIT_VERT
 }
 /// `TrackOverlapsTracks`.
 pub const fn track_overlaps_tracks(bits: u8, track: u8) -> bool {
     bits & track_to_track_bits(track) != 0 || tracks_overlap(bits | track_to_track_bits(track))
+}
+
+/// `IsDiagonalTrackdir`.
+pub const fn is_diagonal_trackdir(td: u8) -> bool {
+    trackdir_to_track(td) < 2
+}
+/// `DiagdirReachesTracks`.
+pub fn diagdir_reaches_tracks(dir: u8) -> u8 {
+    trackdir_bits_to_track_bits(diagdir_reaches_trackdirs(dir))
 }

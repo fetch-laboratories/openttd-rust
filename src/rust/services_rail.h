@@ -97,8 +97,8 @@ inline void RustSetTunnelBridgeReservation(uint32_t tile, bool reserved) noexcep
 inline void RustSetTileOwner(uint32_t tile, uint8_t owner) noexcept { SetTileOwner(TileIndex(tile), Owner(owner)); }
 
 /* The named follower is reconstructed without allocation. Carry every mutated
- * output across calls, including partial failure observations. No native pointer
- * into map/pool storage is retained by Rust. */
+ * output across calls, including partial failure observations. The follower retains no output
+ * pointer and exposes no native map or pool layout. */
 inline bool RustFollowTrackRail(OpenTTDTrainHandle v, uint8_t owner, uint64_t types, OpenTTDTrainReservationFollow *out) noexcept
 {
 	CFollowTrackRail ft = v.shell != nullptr ? CFollowTrackRail(static_cast<const Train *>(v.shell), RailTypes{types}) : CFollowTrackRail(Owner{owner}, RailTypes{types});

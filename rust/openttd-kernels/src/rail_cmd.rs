@@ -20,6 +20,12 @@
     clippy::too_many_lines,
     clippy::fn_params_excessive_bools
 )]
+use crate::rail_map::is_pbs_signal as is_pbs;
+use crate::track_func::{
+    is_diagonal_trackdir as diagonal, trackdir_bits_to_track_bits as trackdir_tracks,
+    tracks_overlap,
+};
+
 use crate::command_type::DoCommandFlag;
 use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_WATER};
 use crate::direction_type::INVALID_DIAGDIR;
@@ -265,7 +271,9 @@ const BIT_UPPER: u8 = 4;
 const BIT_LOWER: u8 = 8;
 const BIT_LEFT: u8 = 16;
 const BIT_RIGHT: u8 = 32;
+#[cfg(test)]
 const BIT_HORZ: u8 = 12;
+#[cfg(test)]
 const BIT_VERT: u8 = 48;
 const BIT_DEPOT: u8 = 0x80;
 const INVALID_TRACKDIR: u8 = 0xFF;
@@ -343,32 +351,14 @@ const LEVELED_TRACKS: [u8; 15] = [
 const SIGNAL_ALONG: [u8; 14] = [8, 8, 8, 2, 4, 1, 0, 0, 4, 4, 4, 1, 8, 2];
 const SIGNAL_AGAINST: [u8; 14] = [4, 4, 4, 1, 8, 2, 0, 0, 8, 8, 8, 2, 4, 1];
 const SIGNAL_ON_TRACK: [u8; 6] = [0xC, 0xC, 0xC, 3, 0xC, 3];
-const TRACKDIR_EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
-/// `_exitdir_reaches_trackdirs`.
-const EXIT_REACHES: [u16; 4] = [0x1009, 0x0016, 0x0520, 0x2a00];
 
-fn tracks_overlap(bits: u8) -> bool {
-    if bits == 0 || bits & bits.wrapping_sub(1) == 0 {
-        return false;
-    }
-    bits != BIT_HORZ && bits != BIT_VERT
-}
 /// Infrastructure pieces of a plain rail tile: squared when tracks overlap.
 fn pieces(bits: u8) -> u32 {
     let n = bits.count_ones();
     if tracks_overlap(bits) { n * n } else { n }
 }
-fn diagonal(trackdir: u8) -> bool {
-    trackdir & 7 < 2
-}
 fn reaches(trackdir: u8) -> u16 {
-    EXIT_REACHES[usize::from(TRACKDIR_EXIT[usize::from(trackdir)])]
-}
-fn trackdir_tracks(bits: u16) -> u8 {
-    ((bits | (bits >> 8)) & 0x3F) as u8
-}
-fn is_pbs(sigtype: u8) -> bool {
-    sigtype == 4 || sigtype == 5
+    crate::track_func::diagdir_reaches_trackdirs(crate::track_func::trackdir_to_exitdir(trackdir))
 }
 fn kill_first_bit(value: u8) -> u8 {
     value & value.wrapping_sub(1)
@@ -1379,7 +1369,7 @@ impl<'a> Ctx<'a> {
                     return false;
                 }
                 if (self.shared.tunnel_bridge_direction)(*tile)
-                    != TRACKDIR_EXIT[usize::from(*trackdir)]
+                    != crate::track_func::trackdir_to_exitdir(*trackdir)
                 {
                     return false;
                 }
@@ -1641,7 +1631,9 @@ impl<'a> Ctx<'a> {
                 let mut i = 0;
                 while v.is_null() && i < 2 {
                     if (self.rail.has_signal_trackdir)(tile, td ^ 8) {
-                        let next = self.map.add_diag(tile, TRACKDIR_EXIT[usize::from(td)]);
+                        let next = self
+                            .map
+                            .add_diag(tile, crate::track_func::trackdir_to_exitdir(td));
                         let tracks = trackdir_tracks(reaches(td));
                         let reserved = self.reserved(next);
                         if reserved & tracks != 0 {

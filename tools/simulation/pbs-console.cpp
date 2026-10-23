@@ -86,6 +86,7 @@ static bool PbsProbe([[maybe_unused]] std::span<std::string_view> args)
 	PbsRequire(PbsSame(PbsOriginalFollowReservation(Owner(0), RailTypes(1), a, TRACKDIR_LOWER_W), PbsFollow(Owner(0), RailTypes(1), a, TRACKDIR_LOWER_W))); PbsRequire(GetTrainForReservation(a, TRACK_LOWER) == PbsOriginalGetTrainForReservation(a, TRACK_LOWER));
 	std::vector<std::tuple<Train *, TileIndex, TrackBits>> moved;
 	for (Train *v : Train::Iterate()) if (v->IsFrontEngine() && !v->vehstatus.Test(VehState::Crashed) && moved.size() < 2) { moved.emplace_back(v, v->tile, PbsTrainTrack(v)); v->tile = tiles[1]; PbsTrainTrack(v, TRACK_BIT_WORMHOLE); v->UpdatePosition(); }
+	PbsRequire(moved.size() == 2);
 	PbsRequire(!IsWaitingPositionFree(std::get<0>(moved[0]), a, TRACKDIR_LOWER_W, false));
 	PbsRequire(moved.size() == 2 && GetTrainForReservation(a, TRACK_LOWER) == std::get<0>(moved[0]) && GetTrainForReservation(a, TRACK_LOWER) == PbsOriginalGetTrainForReservation(a, TRACK_LOWER));
 	/* One-way blocking, its PBS search exception, and opposing PBS waiting policy. */

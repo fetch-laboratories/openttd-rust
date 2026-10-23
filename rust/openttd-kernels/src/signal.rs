@@ -10,16 +10,16 @@
 //! owner access ends before a native callback, including occupancy and dirtying.
 //! Native leaves are noexcept; environmental failures terminate, panics abort.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::collapsible_if)]
+use crate::rail_map::is_pbs_signal as pbs;
+
 use crate::services::{Map, RailMapServices, Services};
 use std::cell::UnsafeCell;
 use std::ffi::c_uint;
 
 const INVALID: u8 = 255;
 const ENTER_TRACKS: [u8; 4] = [0x25, 0x2a, 0x19, 0x16];
-const ENTER_TRACKDIRS: [u16; 4] = [0x0520, 0x2a00, 0x1009, 0x0016];
 const SEARCH_ONE: [u8; 6] = [0, 1, 0, 1, 2, 1];
 const SEARCH_TWO: [u8; 6] = [2, 3, 3, 2, 3, 0];
-const TRACKDIR_EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
 const TRAIN: u16 = 1 << 0;
 const EXIT: u16 = 1 << 1;
 const MULTI_EXIT: u16 = 1 << 2;
@@ -145,9 +145,6 @@ fn track_bits(status: u32) -> u8 {
 fn reverse(dir: u8) -> u8 {
     dir ^ 2
 }
-fn pbs(kind: u8) -> bool {
-    kind == 4 || kind == 5
-}
 fn presignal_exit(kind: u8) -> bool {
     kind == 2 || kind == 3
 }
@@ -247,7 +244,9 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                         crate::witness::hit(crate::witness::SIGNAL_SPLIT);
                     }
                     let td = ((u32::from(tracks) * 0x101)
-                        & u32::from(ENTER_TRACKDIRS[usize::from(dir)]))
+                        & u32::from(crate::track_func::diagdir_reaches_trackdirs(
+                            crate::direction_func::reverse_diag_dir(dir),
+                        )))
                     .trailing_zeros() as u8;
                     let signal = read!(w, rail, signal_presence, tile, masked, td);
                     if signal.signals {
@@ -394,7 +393,9 @@ fn update_around(w: &World<'_>, flags: u16) {
                     w,
                     Item {
                         tile,
-                        dir: TRACKDIR_EXIT[usize::from(td ^ 8)],
+                        dir: crate::track_func::trackdir_to_exitdir(
+                            crate::track_func::reverse_trackdir(td),
+                        ),
                     },
                 );
                 crate::witness::hit(crate::witness::SIGNAL_PROPAGATE);

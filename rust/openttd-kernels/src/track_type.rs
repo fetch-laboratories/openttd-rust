@@ -8,3 +8,9 @@
 //! Special track bits from `track_type.h`.
 /// `TRACK_BIT_WORMHOLE`.
 pub const TRACK_BIT_WORMHOLE: u8 = 0x40;
+/// `TRACK_BIT_HORZ`.
+pub const TRACK_BIT_HORZ: u8 = (1 << 2) | (1 << 3);
+/// `TRACK_BIT_VERT`.
+pub const TRACK_BIT_VERT: u8 = (1 << 4) | (1 << 5);
+/// `TRACK_BIT_MASK`.
+pub const TRACK_BIT_MASK: u8 = 0x3f;
