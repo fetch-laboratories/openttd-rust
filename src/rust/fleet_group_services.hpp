@@ -57,7 +57,7 @@ static void FleetGroup_replace_dirty(uint8_t type) noexcept { SetWindowDirty(WC_
 static void FleetGroup_replace_invalidate(uint8_t type) noexcept { InvalidateWindowData(WC_REPLACE_VEHICLE, type); }
 static void FleetGroup_alter_dirty(uint8_t type) noexcept { InvalidateWindowData(WC_REPLACE_VEHICLE, type, 1); InvalidateWindowClassesData(WC_VEHICLE_VIEW); InvalidateWindowClassesData(WC_VEHICLE_DETAILS); }
 static void FleetGroup_vehicle_dirty(uint32_t id) noexcept { RustVehicleInvalidateView(VehicleID(id)); InvalidateWindowData(WC_VEHICLE_DETAILS, VehicleID(id)); }
-static void FleetGroup_depot_dirty(void *shell) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, static_cast<Vehicle *>(shell)->tile); }
+static void FleetGroup_depot_dirty(void *shell) noexcept { RustVehicleDirtyDepot(static_cast<Vehicle *>(shell)); }
 static void FleetGroup_close_replace(uint8_t type) noexcept { CloseWindowById(WC_REPLACE_VEHICLE, type); }
 static bool FleetGroup_list_generate(void *context) noexcept { auto *c = static_cast<FleetVehicleListContext *>(context); return GenerateVehicleSortList(&c->list, c->vli); }
 static size_t FleetGroup_list_size(void *context) noexcept { return static_cast<FleetVehicleListContext *>(context)->list.size(); }

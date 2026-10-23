@@ -433,7 +433,7 @@ static OpenTTDVehicleDayCallback OPENTTD_VEHICLE_CALL VehicleSchedulerDayCallbac
 }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerRandomiseCallback(OpenTTDVehicle *shell) noexcept
 {
-	TriggerVehicleRandomisation(VehicleOf(shell), VehicleRandomTrigger::Callback32);
+	RustVehicleRandomisation(VehicleOf(shell), VehicleRandomTrigger::Callback32);
 }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerFirstDirty(OpenTTDVehicle *shell) noexcept { RustVehicleFirst(VehicleOf(shell))->MarkDirty(); }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerWithLoadingTimer(const OpenTTDVehicleSchedulerTables *tables, void (OPENTTD_VEHICLE_CALL *load)(const OpenTTDVehicleSchedulerTables *)) noexcept

@@ -109,7 +109,7 @@ static void VehicleVisitArrivalDirty(OpenTTDVehicle *handle) noexcept
 	SetWindowDirty(WC_VEHICLE_DETAILS, v->index);
 	SetWindowDirty(WC_STATION_VIEW, v->last_station_visited);
 
-	Station::Get(v->last_station_visited)->MarkTilesDirty(true);
+	RustStationMarkTilesDirty(Station::Get(v->last_station_visited), true);
 }
 static void VehicleVisitReservationLog() noexcept { Debug(misc, 1, "cancelling cargo reservation"); }
 static void VehicleVisitStationDeparture(OpenTTDStation *handle, uint32_t tile) noexcept
@@ -127,16 +127,16 @@ static void VehicleVisitRoadStopDeparture(OpenTTDStation *handle, uint32_t tile)
 static void VehicleVisitDepotWindows(OpenTTDVehicle *handle, bool invalidate) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	if (invalidate) InvalidateWindowData(WC_VEHICLE_DEPOT, v->tile);
-	SetWindowDirty(WC_VEHICLE_DEPOT, v->tile);
+	if (invalidate) RustVehicleInvalidateDepot(v);
+	RustVehicleDirtyDepot(v);
 }
 static void VehicleVisitShipDepotViewport(OpenTTDVehicle *handle) noexcept
 {
 	Ship *ship = Ship::From(VehicleOf(handle));
-	ship->UpdateViewport(true, true);
-	SetWindowDirty(WC_VEHICLE_DEPOT, ship->tile);
+	RustVehicleUpdateViewport(ship, true, true);
+	RustVehicleDirtyDepot(ship);
 }
-static void VehicleVisitDepotRandomisation(OpenTTDVehicle *handle) noexcept { TriggerVehicleRandomisation(VehicleOf(handle), VehicleRandomTrigger::Depot); }
+static void VehicleVisitDepotRandomisation(OpenTTDVehicle *handle) noexcept { RustVehicleRandomisation(VehicleOf(handle), VehicleRandomTrigger::Depot); }
 static void VehicleVisitWithCosts(void *context, void (*scope)(void *, void *)) noexcept
 {
 	CommandCost cost, temporary;

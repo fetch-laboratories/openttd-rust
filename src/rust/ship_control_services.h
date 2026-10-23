@@ -120,9 +120,9 @@ static void Ship_position(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(
 
 static void Ship_start_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); SetWindowWidgetDirty(WC_VEHICLE_VIEW, v->index, WID_VV_START_STOP); }
 
-static void Ship_depot_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); }
+static void Ship_depot_dirty(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleDirtyDepot(v); }
 
-static void Ship_depot_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); InvalidateWindowData(WC_VEHICLE_DEPOT, v->tile); }
+static void Ship_depot_invalidate(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleInvalidateDepot(v); }
 
 static void Ship_ships_dirty() noexcept { SetWindowClassesDirty(WC_SHIPS_LIST); }
 
@@ -218,7 +218,7 @@ static bool Ship_process_orders(uint32_t id) noexcept { Ship *v = Ship::Get(Vehi
 
 
 
-static void Ship_viewport(uint32_t id, bool update_delta, bool force) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateViewport(update_delta, force); }
+static void Ship_viewport(uint32_t id, bool update_delta, bool force) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleUpdateViewport(v, update_delta, force); }
 
 static void Ship_base_viewport(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->Vehicle::UpdateViewport(true); }
 

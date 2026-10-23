@@ -47,6 +47,10 @@ inline uint16_t RustVehicleLastStationVisited(OpenTTDVehicle *v) noexcept { retu
 inline uint16_t RustVehicleLoadUnloadTicks(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->load_unload_ticks; }
 inline void RustVehicleSetLastLoadingStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_loading_station = StationID(station); }
 inline void RustVehicleSetLastLoadingTick(OpenTTDVehicle *v, uint64_t tick) noexcept { VehicleOf(v)->last_loading_tick = tick; }
+inline void RustVehicleRandomisation(Vehicle *v, VehicleRandomTrigger trigger) noexcept { TriggerVehicleRandomisation(v, trigger); }
+inline void RustVehicleDirtyDepot(const Vehicle *v) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); }
+inline void RustVehicleInvalidateDepot(const Vehicle *v) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, v->tile); }
+template <class T> inline void RustVehicleUpdateViewport(T *v, bool update_delta, bool force) noexcept { v->UpdateViewport(update_delta, force); }
 inline void RustVehiclePlayLeaveSound(OpenTTDVehicle *v) noexcept { VehicleOf(v)->PlayLeaveStationSound(); }
 inline void RustVehicleHideFilling(OpenTTDVehicle *v) noexcept { HideFillingPercent(&VehicleOf(v)->fill_percent_te_id); }
 inline void RustVehicleInvalidateView(VehicleID id) noexcept { InvalidateWindowData(WC_VEHICLE_VIEW, id); }
@@ -215,7 +219,7 @@ inline OpenTTDGroundViewportNext OPENTTD_VEHICLE_CALL GroundSvcUpdateViewportThe
 {
 	T *u = T::From(VehicleOf(part));
 	/* UpdateViewport may reenter Rust; no Rust borrow survives this call. */
-	u->UpdateViewport(false, false);
+	RustVehicleUpdateViewport(u, false, false);
 	Vehicle *next = RustVehicleNext(u);
 	/* Only the final iteration consumes front progress, after every viewport. */
 	return {.next = RustVehicle(next), .final_progress = next == nullptr ? RustVehicleProgress(VehicleOf(front)) : uint8_t(0)};
@@ -225,7 +229,7 @@ inline void OPENTTD_VEHICLE_CALL GroundSvcTurn(OpenTTDVehicle *v, uint8_t direct
 {
 	T *u = T::From(VehicleOf(v));
 	u->direction = static_cast<Direction>(direction);
-	u->UpdateViewport(true, true);
+	RustVehicleUpdateViewport(u, true, true);
 }
 template <class T>
 inline OpenTTDGroundSpeed OPENTTD_VEHICLE_CALL GroundSvcDoUpdateSpeed(OpenTTDVehicle *v, uint32_t accel, int32_t min_speed, int32_t max_speed) noexcept

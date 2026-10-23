@@ -272,7 +272,7 @@ static void TrainDeleteVehicle(OpenTTDTrainHandle id) noexcept
 static void TrainDepotDirty(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	InvalidateWindowData(WC_VEHICLE_DEPOT, v->tile);
+	RustVehicleInvalidateDepot(v);
 }
 static uint64_t TrainDepotTrack(OpenTTDTrainHandle, uint32_t a) noexcept
 {
@@ -550,7 +550,7 @@ static uint64_t TrainReverseSingleBlocked(OpenTTDTrainHandle id) noexcept
 static void TrainReverseWindows(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); SetWindowDirty(WC_VEHICLE_DETAILS, v->index); SetWindowDirty(WC_VEHICLE_VIEW, v->index); SetWindowClassesDirty(WC_TRAINS_LIST);
+	RustVehicleDirtyDepot(v); SetWindowDirty(WC_VEHICLE_DETAILS, v->index); SetWindowDirty(WC_VEHICLE_VIEW, v->index); SetWindowClassesDirty(WC_TRAINS_LIST);
 }
 static void TrainRunningWindows(OpenTTDTrainHandle id) noexcept
 {
