@@ -11,6 +11,9 @@
 #include "../core/pool_func.hpp"
 #include "../window_func.h"
 #include "linkgraphjob.h"
+#ifdef WITH_RUST
+#include "../rust/services_linkgraph.h"
+#endif
 #include "linkgraphschedule.h"
 #ifdef WITH_RUST
 #include "../rust/linkgraph_ffi.h"
@@ -92,21 +95,21 @@ static uint32_t ReadCargoFlowJob(void *context, uint8_t op, uint16_t node, uint1
 {
 	auto &job = *static_cast<LinkGraphJob *>(context);
 	switch (op) {
-		case 0: return LinkGraph::IsValidID(job.LinkGraphIndex());
+		case 0: return RustLinkGraphValid(RustLinkGraphJobGraphIndex(&job));
 		case 1: return job.Size();
 		case 2: return job[node].base.station.base();
 		case 3: return Station::IsValidID(job[node].base.station);
 		case 4: return static_cast<uint32_t>(job[node].edges.size());
 		case 5: return job[node].edges[edge_index].Flow();
 		case 6: return job[node].edges[edge_index].base.dest_node;
-		case 7: return (*LinkGraph::Get(job.LinkGraphIndex()))[node].HasEdgeTo(edge_index);
+		case 7: return (*RustLinkGraphGet(RustLinkGraphJobGraphIndex(&job)))[node].HasEdgeTo(edge_index);
 		case 8: return _settings_game.linkgraph.GetDistributionType(job.Cargo()) == DT_MANUAL;
 		case 9: return Station::Get(job[node].base.station)->goods[job.Cargo()].GetData().IsEmpty();
-		case 10: return Station::Get(job[node].base.station)->goods[job.Cargo()].link_graph.base();
+		case 10: return RustStationLinkGraphIndex(Station::Get(job[node].base.station), job.Cargo());
 		case 11: return Station::Get(job[node].base.station)->goods[job.Cargo()].node;
-		case 12: return job.LinkGraphIndex().base();
-		case 13: return (*LinkGraph::Get(job.LinkGraphIndex()))[node][edge_index].LastUpdate() != EconomyTime::INVALID_DATE;
-		case 14: return (*LinkGraph::Get(job.LinkGraphIndex()))[node][edge_index].last_unrestricted_update != EconomyTime::INVALID_DATE;
+		case 12: return RustLinkGraphJobGraphIndex(&job);
+		case 13: return (*RustLinkGraphGet(RustLinkGraphJobGraphIndex(&job)))[node][edge_index].LastUpdate() != EconomyTime::INVALID_DATE;
+		case 14: return (*RustLinkGraphGet(RustLinkGraphJobGraphIndex(&job)))[node][edge_index].last_unrestricted_update != EconomyTime::INVALID_DATE;
 		default: NOT_REACHED();
 	}
 }

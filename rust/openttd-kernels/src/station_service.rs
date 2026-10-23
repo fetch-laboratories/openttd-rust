@@ -382,7 +382,8 @@ pub struct World {
     pub(crate) watched_animation: extern "C" fn(u32, u64),
     pub(crate) append_packet:
         extern "C" fn(*mut BaseStation, u8, u32, crate::cargo_storage::Source),
-    pub(crate) update_supply: extern "C" fn(*mut BaseStation, u8, u32),
+    pub(crate) supply_graph: extern "C" fn(*mut BaseStation, u8) -> u16,
+    pub(crate) update_supply: extern "C" fn(*mut NativeGraph, u16, u32),
     pub(crate) station_list_invalidation: extern "C" fn(*mut BaseStation, i32),
     pub(crate) new_cargo_animation: extern "C" fn(*mut BaseStation, u8),
     pub(crate) waiting_redraw: extern "C" fn(*mut BaseStation),
@@ -751,6 +752,7 @@ unsafe fn admit(
     mut amount: u32,
     source: crate::cargo_storage::Source,
     w: &World,
+    visits: &Visits,
 ) -> u32 {
     if u32::from((w.packet_available)()) == 0 {
         return 0;
@@ -766,7 +768,23 @@ unsafe fn admit(
         return 0;
     }
     (w.append_packet)(st, cargo, amount, source);
-    (w.update_supply)(st, cargo, amount);
+    let graph_id = (w.supply_graph)(st, cargo);
+    let graph = if graph_id == crate::linkgraph_type::INVALID_LINK_GRAPH {
+        if (visits.graph_available)() {
+            let graph = (visits.allocate_graph)(cargo);
+            crate::linkgraph_schedule::openttd_rust_schedule_queue(visits.schedule, graph);
+            (visits.join_graph)(graph, st, cargo);
+            graph
+        } else {
+            (visits.allocation_failure)();
+            std::ptr::null_mut()
+        }
+    } else {
+        (visits.schedule.graph_get)(graph_id)
+    };
+    if !graph.is_null() {
+        (w.update_supply)(graph, (visits.links.node)(st, cargo), amount);
+    }
     if unsafe { (*ge).status } & 2 == 0 {
         (w.station_list_invalidation)(st, 0);
         unsafe {
@@ -785,6 +803,7 @@ pub unsafe extern "C" fn openttd_rust_station_distribute(
     stations: *mut c_void,
     exclusivity: u8,
     world: *const World,
+    visits: &Visits,
 ) -> u32 {
     if amount == 0 {
         return 0;
@@ -834,7 +853,16 @@ pub unsafe extern "C" fn openttd_rust_station_distribute(
         return 0;
     };
     if used.is_empty() {
-        return unsafe { admit(st, cargo, amount.wrapping_mul(rating + 1), source, w) };
+        return unsafe {
+            admit(
+                st,
+                cargo,
+                amount.wrapping_mul(rating + 1),
+                source,
+                w,
+                visits,
+            )
+        };
     }
     let mut company_best = [0_u32; 19];
     let mut company_sum = [0_u32; 19];
@@ -866,7 +894,7 @@ pub unsafe extern "C" fn openttd_rust_station_distribute(
     }
     let mut moved = 0_u32;
     for (st, _, _, share) in used {
-        moved = moved.wrapping_add(unsafe { admit(st, cargo, share, source, w) });
+        moved = moved.wrapping_add(unsafe { admit(st, cargo, share, source, w, visits) });
     }
     moved
 }
@@ -1982,6 +2010,7 @@ crate::abi::layouts! {
         acceptance_animation,
         watched_animation,
         append_packet,
+        supply_graph,
         update_supply,
         station_list_invalidation,
         new_cargo_animation,

@@ -1788,7 +1788,7 @@ pages, hostile purchase, multiplayer runtime and NewGRFs remain evidence limits.
 
 Issue #74 moves demands, both MCF passes, cycle elimination, path lifetime and flow mapping into
 Rust. Rust owns copied graph/settings, private demand/edge annotations, a reusable path arena
-and ordered cumulative-share maps. C++ keeps job scheduling/thread/abort flags, LGRP/LGRJ
+and ordered cumulative-share maps. C++ keeps worker launch/join and abort flags, LGRP/LGRJ
 save/load and the existing station flow join.
 
 ABI IDs 34-37 cover scalar node/edge/settings/share records. Its sole callback reads the job's
@@ -1800,6 +1800,29 @@ distance/size/accuracy/saturation settings and reload from a reference snapshot 
 LGRJ records (GLOG history is reset only in prepared road inputs so both loaders log their
 revision). Graphs, allocator failures and abort timing are not exhaustive; resource exhaustion
 timing differs with the allocation strategy.
+
+### Link graph scheduler ownership (#373, draft #380)
+
+One process-wide Rust owner holds ordered queued/running pointers and controls
+rotation, spawn/join/requeue, pool-wide date shifts and pause policy. Native pools,
+job snapshots, worker launch/join, abort and acquire/release completion publication
+remain unchanged; existing job computation is not counted as new retirement.
+A constant-initialized member table supplies 20 typed noexcept operations; Time is
+one narrow entry observation. Visits and cargo admission call queues directly in Rust. Shared
+graph size/ID/validity/get helpers serve the job reader and existing consumers.
+No queue borrow crosses native callbacks, including synchronous fallback and deletion.
+LGRS keeps two native scoped vectors with the original reference field names/order.
+Exported spans are copied without callbacks/yield/reset under game-state serialization
+and discarded before SlObject. SlSaveChunks precedes asynchronous compression.
+Native RAII publishes partial staging on return/unwind; recursive SlNullPointers uses
+and publishes the same active vectors before returning, preventing stale restoration.
+Default symmetric/asymmetric cargodist reloads require both queues, LGRP/LGRJ refs
+and queue/spawn/join/requeue/reload/import witnesses. Their module compiles unchanged
+pinned scheduler bodies for worker/pause, duplicate rotation, recycled-ID, clear and
+pool-shift gaps, failing absent completion markers. Native tests exercise ABI,
+partial-state unwind and real SlError recursive cleanup. Actual concurrent worker,
+multiplayer/GUI timing and historical LGRS versions remain #156 gaps. Independent
+source review and focused checks pass; root must decide actual cost/retirement disposition.
 
 <!-- Subsystem: Towns, industries and subsidies. Add a new entry at the end of its group, not of the file. -->
 

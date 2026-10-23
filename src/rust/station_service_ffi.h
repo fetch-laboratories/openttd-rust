@@ -161,7 +161,8 @@ struct OpenTTDStationServices {
 	void (*acceptance_animation)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(acceptance_animation);
 	void (*watched_animation)(uint32_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(watched_animation);
 	void (*append_packet)(OpenTTDBaseStation *, uint8_t, uint32_t, OpenTTDCargoSource) noexcept OPENTTD_SERVICE_DEFAULT(append_packet);
-	void (*update_supply)(OpenTTDBaseStation *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(update_supply);
+	uint16_t (*supply_graph)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(supply_graph);
+	void (*update_supply)(OpenTTDLinkGraph *, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(update_supply);
 	void (*station_list_invalidation)(OpenTTDBaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_list_invalidation);
 	void (*new_cargo_animation)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(new_cargo_animation);
 	void (*waiting_redraw)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_redraw);
@@ -324,7 +325,7 @@ void openttd_rust_station_stale(OpenTTDBaseStation *, const OpenTTDStationServic
 void openttd_rust_station_reroute(OpenTTDBaseStation *, uint8_t, uint16_t, uint16_t, const OpenTTDStationServices *, const OpenTTDStationLinks *);
 void openttd_rust_station_monthly(const OpenTTDStationServices *);
 void openttd_rust_station_modify_rating(OpenTTDStationService *, int32_t);
-uint32_t openttd_rust_station_distribute(uint8_t, uint32_t, OpenTTDCargoSource, void *, uint8_t, const OpenTTDStationServices *);
+uint32_t openttd_rust_station_distribute(uint8_t, uint32_t, OpenTTDCargoSource, void *, uint8_t, const OpenTTDStationServices *, const OpenTTDVehicleVisits *);
 
 }
 #endif

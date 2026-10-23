@@ -95,10 +95,8 @@ static OpenTTDVisitPrediction VehicleVisitPrediction(OpenTTDVehicle *handle) noe
 	const Vehicle *v = VehicleOf(handle);
 	return {.loading_tick = v->last_loading_tick, .last_loading = v->last_loading_station.base(), .last_station = RustVehicleLastStationVisited(handle), .ticks = RustVehicleLoadUnloadTicks(handle)};
 }
-static uint16_t VehicleVisitGraphSize(OpenTTDLinkGraph *lg) noexcept { return lg->Size(); }
 static void VehicleVisitMergeGraph(OpenTTDLinkGraph *lg, OpenTTDLinkGraph *other) noexcept
 {
-	LinkGraphSchedule::instance.Dequeue(other);
 	lg->Merge(other); // Updates GoodsEntries of other
 }
 static void VehicleVisitUpdateEdge(OpenTTDLinkGraph *lg, uint16_t from, uint16_t to, uint32_t capacity, uint32_t usage, uint32_t time, uint8_t modes) noexcept
@@ -176,6 +174,7 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.links = &GetRustStationLinks(),
 		.loading = &GetRustStationLoading(),
 		.refit = &GetRustVehicleRefitServices(),
+		.schedule = &LinkGraphSchedule::services,
 		.capacity = VehicleVisitCapacity,
 		.prediction = VehicleVisitPrediction,
 		.display_speed = RustVehicleDisplaySpeed,
@@ -184,7 +183,7 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.allocate_graph = RustLinkGraphAllocate,
 		.allocation_failure = RustLinkGraphAllocationFailure,
 		.join_graph = RustLinkGraphJoin,
-		.graph_size = VehicleVisitGraphSize,
+		.graph_size = RustLinkGraphSize,
 		.merge_graph = VehicleVisitMergeGraph,
 		.update_edge = VehicleVisitUpdateEdge,
 		.percent = {.up = STR_PERCENT_UP, .down = STR_PERCENT_DOWN, .up_down = STR_PERCENT_UP_DOWN, .none = STR_PERCENT_NONE},

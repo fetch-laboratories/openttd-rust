@@ -8,7 +8,7 @@
 //! Route-link prediction (`LinkRefresher`, `linkgraph/refresh.cpp`) and both
 //! `IncreaseStats` overloads (`station_cmd.cpp`). Native shells keep vehicle,
 //! station and link-graph pool identity; graph allocation, nodes, merging,
-//! scheduling and edges stay native operations. Entries are serialized by the
+//! and edges stay native operations; scheduling calls its Rust owner directly. Entries are serialized by the
 //! game-state mutex. Prediction frames (capacities, refit descriptions and the
 //! shared seen-hop set) are private to one entry: no callback can reach them.
 //! Temporary cargo/subtype writes happen in source order around the native
@@ -23,6 +23,7 @@ use crate::{
     cargo_type::{CARGO_AUTO_REFIT, INVALID_CARGO, NUM_CARGO},
     cargopacket::MTA_LOAD,
     linkgraph::NativeGraph,
+    linkgraph_schedule::{self, Services as ScheduleServices},
     linkgraph_type::EdgeUpdateModes,
     map_func::Map,
     order_type::{
@@ -87,6 +88,7 @@ pub struct Services {
     pub links: &'static Links,
     pub loading: &'static Loading,
     pub refit: &'static refit::Services,
+    pub(crate) schedule: &'static ScheduleServices,
     pub capacity: extern "C" fn(VehicleRef) -> Capacity,
     pub prediction: extern "C" fn(VehicleRef) -> Prediction,
     /// Virtual `GetDisplayMaxSpeed()`.
@@ -95,15 +97,15 @@ pub struct Services {
     pub location: extern "C" fn(*const BaseStation) -> u32,
     /// `LinkGraph::CanAllocateItem()`.
     pub graph_available: extern "C" fn() -> bool,
-    /// `new LinkGraph(cargo)`, then `LinkGraphSchedule::instance.Queue`.
+    /// `new LinkGraph(cargo)`.
     pub allocate_graph: extern "C" fn(u8) -> *mut NativeGraph,
     /// `Debug(misc, 0, "Can't allocate link graph")`.
     pub allocation_failure: extern "C" fn(),
     /// `ge.link_graph = lg->index; ge.node = lg->AddNode(st);`
     pub join_graph: extern "C" fn(*mut NativeGraph, *mut BaseStation, u8),
     /// `LinkGraph::Size()`.
-    pub graph_size: extern "C" fn(*mut NativeGraph) -> u16,
-    /// `LinkGraphSchedule::instance.Dequeue(from)`, then `into->Merge(from)`.
+    pub graph_size: extern "C" fn(*const NativeGraph) -> u16,
+    /// `into->Merge(from)`.
     pub merge_graph: extern "C" fn(*mut NativeGraph, *mut NativeGraph),
     /// `(*lg)[from].UpdateEdge(to, capacity, usage, time, modes)`.
     pub update_edge: extern "C" fn(*mut NativeGraph, u16, u16, u32, u32, u32, EdgeUpdateModes),
@@ -202,6 +204,7 @@ pub(crate) fn increase_stats(
             if (s.graph_available)() {
                 witness::hit(witness::VISITS_GRAPH_NEW);
                 graph = (s.allocate_graph)(cargo);
+                linkgraph_schedule::openttd_rust_schedule_queue(s.schedule, graph);
                 (s.join_graph)(graph, st2, cargo);
             } else {
                 witness::hit(witness::VISITS_GRAPH_FAILURE);
@@ -219,10 +222,12 @@ pub(crate) fn increase_stats(
     } else if graph != second {
         if (s.graph_size)(graph) < (s.graph_size)(second) {
             witness::hit(witness::VISITS_GRAPH_MERGE_SECOND);
+            linkgraph_schedule::openttd_rust_schedule_dequeue(graph);
             (s.merge_graph)(second, graph);
             graph = second;
         } else {
             witness::hit(witness::VISITS_GRAPH_MERGE_FIRST);
+            linkgraph_schedule::openttd_rust_schedule_dequeue(second);
             (s.merge_graph)(graph, second);
         }
     }
@@ -1126,6 +1131,7 @@ crate::abi::layouts! {
         links,
         loading,
         refit,
+        schedule,
         capacity,
         prediction,
         display_speed,

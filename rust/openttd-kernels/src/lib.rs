@@ -46,6 +46,7 @@ mod landscape;
 mod landscape_generation;
 mod landscape_type;
 mod linkgraph;
+mod linkgraph_schedule;
 mod linkgraph_type;
 mod map_func;
 mod map_type;
