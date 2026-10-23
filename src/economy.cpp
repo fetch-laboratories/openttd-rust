@@ -66,6 +66,7 @@
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
 #include "rust/industry_shell_services.h"
+#include "rust/services_station.h"
 #include "rust/vehicle_refit_ffi.h"
 #include "rust/command_cost_services.h"
 #endif
