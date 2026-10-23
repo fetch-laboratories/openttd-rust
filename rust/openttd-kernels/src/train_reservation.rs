@@ -160,9 +160,11 @@ pub struct Leaves {
     pub diag_track: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub enter_td: extern "C" fn(*mut std::ffi::c_void, Handle, u8, u8) -> u64,
     pub exit_dir: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
+    #[cfg(test)]
     pub free: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub green: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub has_pbs: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
+    #[cfg(test)]
     pub has_reserved: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub has_signal: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub increment_order: extern "C" fn(*mut std::ffi::c_void, Handle),
@@ -186,6 +188,7 @@ pub struct Leaves {
     pub rail90: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u32) -> u64,
     pub reach_dirs: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub reach_tracks: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
+    #[cfg(test)]
     pub reserved: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub reserve_paths: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
     pub restore_order: unsafe extern "C" fn(Handle, *const crate::orders::Order),
@@ -193,6 +196,7 @@ pub struct Leaves {
     pub service: extern "C" fn(*mut std::ffi::c_void, Handle),
     pub set_depot: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8),
     pub set_depot_dest: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
+    #[cfg(test)]
     pub set_platform: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8, u8),
     pub set_signal: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8, u8),
     pub set_tunnel: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8),
@@ -209,15 +213,18 @@ pub struct Leaves {
     pub tile_offset: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub trackdir: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
     pub track_status: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
+    #[cfg(test)]
     pub try_track: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub tunnel_dir: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub tunnel_free: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u32) -> u64,
+    #[cfg(test)]
     pub unreserve: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8),
     pub write_dest: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
     pub write_last: extern "C" fn(*mut std::ffi::c_void, Handle, u16),
     pub write_suppress: extern "C" fn(*mut std::ffi::c_void, Handle, u8),
 
     pub follow: extern "C" fn(Handle, u64, *mut Follow) -> u8,
+    #[cfg(test)]
     pub origin: extern "C" fn(Handle, u8) -> Pbs,
     pub pathfind: extern "C" fn(Handle, u32, u8, u8, u8, u8) -> Search,
     pub safe_track: extern "C" fn(Handle, u32, u8, u8) -> u8,
@@ -321,7 +328,19 @@ impl Game<'_> {
         (self.leaves.exit_dir)(self.context, id, a as u8)
     }
     fn svc_free(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.free)(self.context, id, a as u32, b as u8)
+        #[cfg(not(test))]
+        {
+            u64::from(crate::pbs::Pbs::acquire(self.shared()).free(
+                id,
+                a as u32,
+                b as u8,
+                (self.shared().forbid_90_deg)(),
+            ))
+        }
+        #[cfg(test)]
+        {
+            (self.leaves.free)(self.context, id, a as u32, b as u8)
+        }
     }
     fn svc_green(&self, id: Handle, a: u64, b: u64) -> u64 {
         (self.leaves.green)(self.context, id, a as u32, b as u8)
@@ -330,7 +349,17 @@ impl Game<'_> {
         (self.leaves.has_pbs)(self.context, id, a as u32, b as u8)
     }
     fn svc_has_reserved(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.has_reserved)(self.context, id, a as u32, b as u8)
+        #[cfg(not(test))]
+        {
+            let _ = id;
+            u64::from(
+                crate::pbs::Pbs::acquire(self.shared()).has_reserved_tracks(a as u32, b as u8),
+            )
+        }
+        #[cfg(test)]
+        {
+            (self.leaves.has_reserved)(self.context, id, a as u32, b as u8)
+        }
     }
     fn svc_has_signal(&self, id: Handle, a: u64, b: u64) -> u64 {
         (self.leaves.has_signal)(self.context, id, a as u32, b as u8)
@@ -409,10 +438,41 @@ impl Game<'_> {
         (self.leaves.reach_tracks)(self.context, id, a as u8)
     }
     fn svc_reserved(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.reserved)(self.context, id, a as u32)
+        #[cfg(not(test))]
+        {
+            let _ = id;
+            u64::from(crate::pbs::Pbs::acquire(self.shared()).reserved(a as u32))
+        }
+        #[cfg(test)]
+        {
+            (self.leaves.reserved)(self.context, id, a as u32)
+        }
     }
     fn svc_reserve_paths(&self, id: Handle) -> u64 {
         (self.leaves.reserve_paths)(self.context, id)
+    }
+    fn safe(&self, id: Handle, tile: u32, td: u8) -> bool {
+        #[cfg(not(test))]
+        {
+            crate::pbs::Pbs::acquire(self.shared()).safe(
+                id,
+                tile,
+                td,
+                true,
+                (self.shared().forbid_90_deg)(),
+            )
+        }
+        #[cfg(test)]
+        {
+            unsafe {
+                (self.shared().safe_waiting_position)(
+                    id.shell.cast(),
+                    tile,
+                    td,
+                    (self.shared().forbid_90_deg)(),
+                )
+            }
+        }
     }
     fn shared(&self) -> &crate::services::Services {
         // SAFETY: Native installs the process-lifetime shared table; tests a live fixture.
@@ -431,8 +491,17 @@ impl Game<'_> {
         0
     }
     fn svc_set_platform(&self, id: Handle, a: u64, b: u64, c: u64) -> u64 {
-        (self.leaves.set_platform)(self.context, id, a as u32, b as u8, c as u8);
-        0
+        #[cfg(not(test))]
+        {
+            let _ = id;
+            crate::pbs::Pbs::acquire(self.shared()).platform(a as u32, b as u8, c != 0);
+            0
+        }
+        #[cfg(test)]
+        {
+            (self.leaves.set_platform)(self.context, id, a as u32, b as u8, c as u8);
+            0
+        }
     }
     fn svc_set_signal(&self, id: Handle, a: u64, b: u64, c: u64) -> u64 {
         (self.leaves.set_signal)(self.context, id, a as u32, b as u8, c as u8);
@@ -489,7 +558,15 @@ impl Game<'_> {
         (self.leaves.track_status)(self.context, id, a as u32)
     }
     fn svc_try_track(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.try_track)(self.context, id, a as u32, b as u8)
+        #[cfg(not(test))]
+        {
+            let _ = id;
+            u64::from(crate::pbs::Pbs::acquire(self.shared()).try_reserve(a as u32, b as u8, true))
+        }
+        #[cfg(test)]
+        {
+            (self.leaves.try_track)(self.context, id, a as u32, b as u8)
+        }
     }
     fn svc_tunnel_dir(&self, id: Handle, a: u64) -> u64 {
         (self.leaves.tunnel_dir)(self.context, id, a as u32)
@@ -498,8 +575,17 @@ impl Game<'_> {
         (self.leaves.tunnel_free)(self.context, id, a as u32, b as u32)
     }
     fn svc_unreserve(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.unreserve)(self.context, id, a as u32, b as u8);
-        0
+        #[cfg(not(test))]
+        {
+            let _ = id;
+            crate::pbs::Pbs::acquire(self.shared()).unreserve(a as u32, b as u8);
+            0
+        }
+        #[cfg(test)]
+        {
+            (self.leaves.unreserve)(self.context, id, a as u32, b as u8);
+            0
+        }
     }
     fn svc_update_buffer(&self, _id: Handle) -> u64 {
         crate::signal::acquire_context(self.leaves.signal_context).flush();
@@ -519,7 +605,15 @@ impl Game<'_> {
     }
 
     fn reserve_track(&self, id: Handle, tile: u32, track: u8) -> bool {
-        (self.leaves.try_track)(self.context, id, tile, track) != 0
+        #[cfg(not(test))]
+        {
+            let _ = id;
+            crate::pbs::Pbs::acquire(self.shared()).try_reserve(tile, track, true)
+        }
+        #[cfg(test)]
+        {
+            (self.leaves.try_track)(self.context, id, tile, track) != 0
+        }
     }
     fn pathfind(
         &self,
@@ -549,7 +643,14 @@ impl Game<'_> {
         (self.leaves.follow)(id, types, ft) != 0
     }
     fn origin(&self, id: Handle, other: bool) -> Pbs {
-        (self.leaves.origin)(id, u8::from(other))
+        #[cfg(not(test))]
+        {
+            crate::pbs::Pbs::acquire(self.shared()).follow_train(id, other, Handle::NONE)
+        }
+        #[cfg(test)]
+        {
+            (self.leaves.origin)(id, u8::from(other))
+        }
     }
     fn dir(&self, id: Handle, td: u8) -> u8 {
         self.svc_exit_dir(id, u64::from(td)) as u8
@@ -749,14 +850,7 @@ fn extend(g: &Game, id: Handle, new_tracks: &mut u8, enterdir: &mut u8) -> Pbs {
         td = first(ft.dirs);
         let rev = td ^ 8;
         // SAFETY: The entry keeps the native train live; no owner borrow spans the callback.
-        if unsafe {
-            (g.shared().safe_waiting_position)(
-                id.shell.cast(),
-                tile,
-                td,
-                (g.shared().forbid_90_deg)(),
-            )
-        } {
+        if g.safe(id, tile, td) {
             if !((g.svc_free(id, u64::from(tile), u64::from(td)) != 0)
                 && g.reserve_bounded(id, tile, td))
             {
@@ -1043,14 +1137,7 @@ fn choose(
     }
     got = true;
     // SAFETY: The entry keeps the native train live through reservation traversal.
-    while !unsafe {
-        (g.shared().safe_waiting_position)(
-            id.shell.cast(),
-            dest.tile,
-            dest.td,
-            (g.shared().forbid_90_deg)(),
-        )
-    } {
+    while !g.safe(id, dest.tile, dest.td) {
         let exit = g.dir(id, dest.td);
         let next = g.add(id, dest.tile, exit);
         let mut reachable = tracks(g.svc_track_status(id, u64::from(next)) as u16)

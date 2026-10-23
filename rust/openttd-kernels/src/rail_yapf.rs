@@ -146,13 +146,10 @@ pub struct Leaves {
     pub train: unsafe extern "C" fn(*mut c_void) -> Train,
     pub tile: unsafe extern "C" fn(u32, u8) -> Tile,
     pub follow: unsafe extern "C" fn(*mut c_void, u32, u8, u64, u8, u8) -> Follow,
-    pub free: unsafe extern "C" fn(*mut c_void, u32, u8, u8) -> u8,
     pub compatible_station: unsafe extern "C" fn(u32, u32) -> u8,
     pub platform_length: unsafe extern "C" fn(u32, u8) -> u32,
     pub closest_station: unsafe extern "C" fn(*mut c_void, u8) -> u32,
     pub destination_dirs: unsafe extern "C" fn(u32) -> u16,
-    pub origin: unsafe extern "C" fn(*mut c_void, *mut u32, *mut u8),
-    pub write: unsafe extern "C" fn(u32, u8, u8) -> u8,
     pub output: unsafe extern "C" fn(*mut c_void, u8, *const Step),
     pub debug: unsafe extern "C" fn(*mut c_void, u8, *const u32, u32),
 }
@@ -552,14 +549,16 @@ impl Search {
             )
         }
     }
+    fn pbs(&self) -> crate::pbs::Pbs<'_> {
+        crate::pbs::Pbs::acquire(unsafe { &*self.input.shared })
+    }
     fn safe(&self, tile: u32, td: u8, forbid: u8) -> bool {
-        // SAFETY: The immutable shared table and native train outlive this synchronous search.
-        unsafe {
-            ((*self.input.shared).safe_waiting_position)(self.input.vehicle, tile, td, forbid != 0)
-        }
+        let pbs = self.pbs();
+        pbs.safe(pbs.handle(self.input.vehicle), tile, td, true, forbid != 0)
     }
     fn free(&self, tile: u32, td: u8, forbid: u8) -> bool {
-        unsafe { (self.leaves.free)(self.input.context, tile, td, forbid) != 0 }
+        let pbs = self.pbs();
+        pbs.free(pbs.handle(self.input.vehicle), tile, td, forbid != 0)
     }
     fn platform_length(&self, tile: u32, dir: u8) -> u32 {
         unsafe { (self.leaves.platform_length)(tile, dir) }
@@ -1171,10 +1170,14 @@ impl Search {
     fn init(&mut self) {
         match self.input.kind {
             0 | 2 => {
-                let (mut tile, mut td) = (INVALID, INVALID_TD);
-                unsafe {
-                    (self.leaves.origin)(self.input.context, &raw mut tile, &raw mut td);
-                }
+                let pbs = self.pbs();
+                let origin = pbs.follow_train(
+                    pbs.handle(self.input.vehicle),
+                    false,
+                    crate::train::Handle::NONE,
+                );
+                let tile = origin.tile;
+                let td = origin.td;
                 self.startup(tile, td, 0);
                 if self.input.kind == 2 {
                     self.startup(self.train.rear_tile, self.train.rear_td ^ 8, 100_000);
@@ -1219,7 +1222,24 @@ impl Search {
             + (a / self.input.map_x).abs_diff(b / self.input.map_x)) as i32
     }
     fn write(&self, tile: u32, td: u8, op: u8) -> bool {
-        unsafe { (self.leaves.write)(tile, td, op) != 0 }
+        let pbs = self.pbs();
+        let s = unsafe { &*self.input.shared };
+        match op {
+            1 => return pbs.try_reserve(tile, crate::track_func::trackdir_to_track(td), true),
+            2 => pbs.unreserve(tile, crate::track_func::trackdir_to_track(td)),
+            3 => {
+                (pbs.0.set_station)(tile, true);
+                (s.mark_dirty)(tile);
+            }
+            4 => (pbs.0.set_station)(tile, false),
+            5 => {
+                (unsafe { &*pbs.0.rail }.set_signal_state)(tile, td, 0);
+                (s.mark_dirty)(tile);
+            }
+            6 => (unsafe { &*pbs.0.rail }.set_signal_state)(tile, td, 1),
+            _ => unreachable!(),
+        }
+        true
     }
     fn output(&self, mask: u8, result: &Step) {
         unsafe {

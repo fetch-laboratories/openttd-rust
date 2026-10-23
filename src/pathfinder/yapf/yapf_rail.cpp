@@ -96,10 +96,6 @@ static OpenTTDRailFollow RailFollow(void *context, uint32_t tile, uint8_t td, ui
 	if (no90) return RailFollowT<CFollowTrackFreeRailNo90>(context, tile, td, types, mask);
 	return RailFollowT<CFollowTrackFreeRail>(context, tile, td, types, mask);
 }
-static uint8_t RailFree(void *context, uint32_t tile, uint8_t td, uint8_t no90) noexcept
-{
-	return IsWaitingPositionFree(static_cast<RailYapfContext *>(context)->train, TileIndex{tile}, static_cast<Trackdir>(td), no90);
-}
 static uint8_t RailCompatibleStation(uint32_t tile, uint32_t start) noexcept
 {
 	return IsCompatibleTrainStationTile(TileIndex{tile}, TileIndex{start});
@@ -116,28 +112,6 @@ static uint32_t RailClosestStation(void *context, uint8_t station) noexcept
 static uint16_t RailDestinationDirs(uint32_t tile) noexcept
 {
 	return TrackStatusToTrackdirBits(RustRailTrackStatus(tile, INVALID_DIAGDIR));
-}
-static void RailOrigin(void *context, uint32_t *tile, uint8_t *td) noexcept
-{
-	const auto origin = FollowTrainReservation(static_cast<RailYapfContext *>(context)->train);
-	*tile = origin.tile.base();
-	*td = origin.trackdir;
-}
-static uint8_t RailWrite(uint32_t tile, uint8_t direction, uint8_t operation) noexcept
-{
-	const TileIndex t{tile};
-	const Trackdir td = static_cast<Trackdir>(direction);
-	switch (operation) {
-		case 0: MarkTileDirtyByTile(t); break;
-		case 1: return TryReserveRailTrack(t, TrackdirToTrack(td));
-		case 2: UnreserveRailTrack(t, TrackdirToTrack(td)); break;
-		case 3: SetRailStationReservation(t, true); MarkTileDirtyByTile(t); break;
-		case 4: SetRailStationReservation(t, false); break;
-		case 5: RustRailSetSignalState(tile, td, SIGNAL_STATE_RED); MarkTileDirtyByTile(t); break;
-		case 6: RustRailSetSignalState(tile, td, SIGNAL_STATE_GREEN); break;
-		default: NOT_REACHED();
-	}
-	return true;
 }
 static void RailOutput(void *context, uint8_t mask, const OpenTTDRailStep *result) noexcept
 {

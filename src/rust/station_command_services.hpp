@@ -125,7 +125,6 @@ const OpenTTDStationCommandServices &GetRustStationCommandServices() noexcept
 		.rail_triggers = RustStationRailTriggers,
 		.reserved = RustStationReserved,
 		.last_train = RustVehicleLast<Train>,
-		.train_handle = TrainHandle,
 		.train = &GetTrainServices(),
 		.reservation = &GetTrainReservationServices(),
 		.platform_reservation = RustStationPlatformReservation,

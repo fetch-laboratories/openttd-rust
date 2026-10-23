@@ -10,6 +10,7 @@
 #define OPENTTD_RUST_PBS_FFI_H
 #include "services_ffi.h"
 #include "train_ffi.h"
+#include "train_reservation_ffi.h"
 struct BaseStation;
 struct OpenTTDPbsServices {
 	const OpenTTDSharedServices *shared;
@@ -33,6 +34,16 @@ struct OpenTTDPbsServices {
 	BaseStation * (*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	void (*randomisation)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(randomisation);
 	void (*animation)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(animation);
+	bool assertions;
+	OpenTTDTrainHandle (*handle)(const Train *) noexcept OPENTTD_SERVICE_DEFAULT(handle);
+	uint64_t (*all_compatible)(uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(all_compatible);
+	uint64_t (*compatible)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible);
+	RailType (*tile_rail_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_rail_type);
+	bool (*rail90)(uint8_t, uint8_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(rail90);
+	bool (*blocking)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(blocking);
+	bool (*has_pbs)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(has_pbs);
+	uint32_t (*index)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(index);
+	bool (*follow)(OpenTTDTrainHandle, uint8_t, uint64_t, OpenTTDTrainReservationFollow *) noexcept OPENTTD_SERVICE_DEFAULT(follow);
 };
 const OpenTTDPbsServices &GetPbsServices() noexcept;
 extern "C" {
@@ -40,5 +51,9 @@ uint8_t openttd_rust_pbs_reserved(const OpenTTDPbsServices *, uint32_t);
 void openttd_rust_pbs_platform(const OpenTTDPbsServices *, uint32_t, uint8_t, bool);
 bool openttd_rust_pbs_try_reserve(const OpenTTDPbsServices *, uint32_t, uint8_t, bool);
 void openttd_rust_pbs_unreserve(const OpenTTDPbsServices *, uint32_t, uint8_t);
+OpenTTDTrainReservationPbs openttd_rust_pbs_follow_train(const OpenTTDPbsServices *, OpenTTDTrainHandle, bool, OpenTTDTrainHandle);
+OpenTTDTrainHandle openttd_rust_pbs_train_for(const OpenTTDPbsServices *, uint32_t, uint8_t);
+bool openttd_rust_pbs_safe(const OpenTTDPbsServices *, OpenTTDTrainHandle, uint32_t, uint8_t, bool, bool);
+bool openttd_rust_pbs_free(const OpenTTDPbsServices *, OpenTTDTrainHandle, uint32_t, uint8_t, bool);
 }
 #endif

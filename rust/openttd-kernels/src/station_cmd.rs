@@ -227,7 +227,6 @@ pub struct CommandServicesTable {
     pub reserved: extern "C" fn(u32) -> bool,
     pub last_train:
         unsafe extern "C" fn(*mut crate::services::Train) -> *mut crate::services::Train,
-    pub train_handle: extern "C" fn(*const crate::services::Train) -> crate::train::Handle,
     pub train: *const crate::train::Leaves,
     pub reservation: *const crate::train_reservation::Leaves,
     pub platform_reservation: extern "C" fn(u32, u8, bool),
@@ -1186,7 +1185,7 @@ impl Ctx<'_> {
     }
     fn free_reservation(&self, train: *mut crate::services::Train) {
         unsafe {
-            let handle = (self.s.train_handle)(train);
+            let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
             crate::train_reservation::openttd_rust_train_reservation_free(
                 handle,
                 crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast())),
@@ -1201,7 +1200,7 @@ impl Ctx<'_> {
     fn restore_reservation(&self, train: *mut crate::services::Train) {
         self.platform_end(train, false, true);
         unsafe {
-            let handle = (self.s.train_handle)(train);
+            let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
             crate::train_reservation::openttd_rust_train_reservation_try_path(
                 handle,
                 crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast())),
@@ -1216,7 +1215,7 @@ impl Ctx<'_> {
     }
     fn platform_end(&self, train: *mut crate::services::Train, reverse: bool, reserved: bool) {
         const EXIT: [u8; 14] = [0, 1, 0, 1, 2, 1, 0, 0, 2, 3, 3, 2, 3, 0];
-        let handle = (self.s.train_handle)(train);
+        let handle = crate::pbs::Pbs::acquire(self.shared).handle(train);
         // SAFETY: The reached platform update always supplies a live train shell.
         let vehicle = unsafe {
             crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(handle.shell.cast()))

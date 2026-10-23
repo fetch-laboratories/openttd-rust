@@ -22,6 +22,20 @@
 #include "safeguards.h"
 
 #ifdef WITH_RUST
+/* The named follower is reconstructed without allocation. Carry every mutated
+ * output across calls, including partial failure observations. No native pointer
+ * into map/pool storage is retained by Rust. */
+static bool PbsFollow(OpenTTDTrainHandle v, uint8_t owner, uint64_t types, OpenTTDTrainReservationFollow *out) noexcept
+{
+	CFollowTrackRail ft = v.shell != nullptr ? CFollowTrackRail(static_cast<const Train *>(v.shell), RailTypes{types}) : CFollowTrackRail(Owner{owner}, RailTypes{types});
+	ft.new_tile = TileIndex{out->new_tile}; ft.new_td_bits = static_cast<TrackdirBits>(out->dirs);
+	ft.exitdir = static_cast<DiagDirection>(out->exitdir); ft.is_tunnel = out->tunnel;
+	ft.is_bridge = out->bridge; ft.is_station = out->station; ft.tiles_skipped = out->skipped;
+	bool followed = ft.Follow(TileIndex{out->old_tile}, static_cast<Trackdir>(out->old_td));
+	*out = {ft.old_tile.base(), ft.new_tile.base(), ft.tiles_skipped, ft.new_td_bits, ft.old_td, ft.exitdir,
+		static_cast<uint8_t>(ft.is_tunnel), static_cast<uint8_t>(ft.is_bridge), static_cast<uint8_t>(ft.is_station), ft.err};
+	return followed;
+}
 const OpenTTDPbsServices &GetPbsServices() noexcept
 {
 	static const OpenTTDPbsServices s{
@@ -46,6 +60,20 @@ const OpenTTDPbsServices &GetPbsServices() noexcept
 		.station = [](uint32_t t) noexcept { return BaseStation::GetByTile(TileIndex{t}); },
 		.randomisation = [](BaseStation *st, uint32_t t) noexcept { TriggerStationRandomisation(st, TileIndex{t}, StationRandomTrigger::PathReservation); },
 		.animation = [](BaseStation *st, uint32_t t) noexcept { RustStationAnimation(st, TileIndex{t}, StationAnimationTrigger::PathReservation); },
+#if !defined(NDEBUG) || defined(WITH_ASSERT)
+		.assertions = true,
+#else
+		.assertions = false,
+#endif
+		.handle = TrainHandle,
+		.all_compatible = RustAllCompatibleRailTypes,
+		.compatible = [](uint8_t rt) noexcept { return GetRailTypeInfo(static_cast<RailType>(rt))->compatible_railtypes.base(); },
+		.tile_rail_type = RustTileRailType,
+		.rail90 = RustRail90Disallowed,
+		.blocking = RustOnewaySignalBlocking,
+		.has_pbs = RustHasPbsSignal,
+		.index = RustVehicleIndexOpaque,
+		.follow = PbsFollow,
 	};
 	return s;
 }
@@ -228,6 +256,18 @@ void UnreserveRailTrack(TileIndex tile, Track t)
 
 #endif
 
+#ifdef WITH_RUST
+PBSTileInfo FollowTrainReservation(const Train *v, Vehicle **other)
+{
+	assert(v->type == VEH_TRAIN);
+	auto result = openttd_rust_pbs_follow_train(&GetPbsServices(), TrainHandle(v), other != nullptr, OpenTTDTrainHandle{other != nullptr ? *other : nullptr, nullptr});
+	if (other != nullptr) *other = static_cast<Train *>(result.other.shell);
+	return {TileIndex{result.tile}, static_cast<Trackdir>(result.td), result.okay != 0};
+}
+Train *GetTrainForReservation(TileIndex tile, Track track) { return static_cast<Train *>(openttd_rust_pbs_train_for(&GetPbsServices(), tile.base(), track).shell); }
+bool IsSafeWaitingPosition(const Train *v, TileIndex tile, Trackdir td, bool end, bool no90) { return openttd_rust_pbs_safe(&GetPbsServices(), TrainHandle(v), tile.base(), td, end, no90); }
+bool IsWaitingPositionFree(const Train *v, TileIndex tile, Trackdir td, bool no90) { return openttd_rust_pbs_free(&GetPbsServices(), TrainHandle(v), tile.base(), td, no90); }
+#else
 /** Follow a reservation starting from a specific tile to the end. */
 static PBSTileInfo FollowReservation(Owner o, RailTypes rts, TileIndex tile, Trackdir trackdir, bool ignore_oneway = false)
 {
@@ -489,3 +529,5 @@ bool IsWaitingPositionFree(const Train *v, TileIndex tile, Trackdir trackdir, bo
 
 	return !HasReservedTracks(ft.new_tile, TrackdirBitsToTrackBits(ft.new_td_bits));
 }
+
+#endif

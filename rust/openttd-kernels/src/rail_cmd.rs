@@ -1300,11 +1300,13 @@ impl<'a> Ctx<'a> {
                 if !parked || {
                     let at = unsafe { (self.s.train_position)(v) };
                     // SAFETY: The reservation train remains live through this synchronous check.
-                    !unsafe {
-                        (self.shared.safe_waiting_position)(
-                            v,
+                    !{
+                        let pbs = crate::pbs::Pbs::acquire(self.shared);
+                        pbs.safe(
+                            pbs.handle(v),
                             at.tile,
                             at.trackdir,
+                            true,
                             (self.shared.forbid_90_deg)(),
                         )
                     }

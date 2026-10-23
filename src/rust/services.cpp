@@ -11,6 +11,7 @@
 #include "../airport.h"
 #include "town_services.h"
 #include "services_ffi.h"
+#include "pbs_ffi.h"
 #include "services_bridge.h"
 #include "services_viewport.h"
 #include "station_command_ffi.h"
@@ -197,7 +198,6 @@ static void Shared_set_road_type(uint32_t tile, uint8_t rtt, uint8_t rt) noexcep
 static void Shared_set_road_directions(uint32_t tile, uint8_t drd) noexcept { SetDisallowedRoadDirections(TileIndex{tile}, static_cast<DisallowedRoadDirections>(drd)); }
 static bool Shared_road_powered(uint8_t from, uint8_t to) noexcept { return HasPowerOnRoad(static_cast<RoadType>(from), static_cast<RoadType>(to)); }
 static bool Shared_road_type_valid(uint8_t rt) noexcept { return ValParamRoadType(static_cast<RoadType>(rt)); }
-static bool SharedSafeWaitingPosition(const Train *v, uint32_t tile, uint8_t trackdir, bool forbid_90_deg) noexcept { return IsSafeWaitingPosition(v, TileIndex{tile}, static_cast<Trackdir>(trackdir), true, forbid_90_deg); }
 static void SharedSetTropicZone(uint32_t tile, uint8_t zone) noexcept { SetTropicZone(TileIndex{tile}, static_cast<TropicZone>(zone)); }
 
 /** Pure map query; no allocation, reentry or C++ exception crosses into Rust. */
@@ -380,7 +380,7 @@ constinit const OpenTTDSharedServices _rust_shared_services{
 	.set_road_directions = Shared_set_road_directions,
 	.road_powered = Shared_road_powered,
 	.road_type_valid = Shared_road_type_valid,
-	.safe_waiting_position = SharedSafeWaitingPosition,
+	.pbs_services = [](const OpenTTDSharedServices *) noexcept { return &GetPbsServices(); },
 	.service_at_helipad = SharedServiceAtHelipad,
 	.set_tropic_zone = SharedSetTropicZone,
 	.slope = SharedSlope,
@@ -584,12 +584,13 @@ const OpenTTDRailMapServices &GetRustRailMapServices() noexcept
 #include "abi-visit-OpenTTDCommandServices.hpp"
 #include "abi-visit-OpenTTDCommandCostServices.hpp"
 #include "abi-visit-OpenTTDSharedServices.hpp"
+#include "abi-visit-OpenTTDPbsServices.hpp"
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
 #include "abi-visit-OpenTTDClearSquareServices.hpp"
 #include "abi-visit-OpenTTDWaterRestorationServices.hpp"
 bool CheckAbi_services()
 {
-	return AbiServicesComplete(GetRustEnvironmentServices()) &&
+	return AbiServicesComplete(GetPbsServices()) && AbiServicesComplete(GetRustEnvironmentServices()) &&
 		AbiServicesComplete(GetRustRandomServices()) &&
 		AbiServicesComplete(GetRustRailMapServices()) &&
 		AbiServicesComplete(GetRustCommandServices()) &&
