@@ -1808,10 +1808,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.flush_delivery = []() noexcept -> void {
 		openttd_rust_cargo_delivery_flush(GetCargoDeliveryState(), &_cargo_services);
 	},
-	.vehicle_new_cargo = [](OpenTTDVehicle *vehicle) noexcept -> void {
-		Vehicle *v = VehicleOf(vehicle);
-		RustVehicleRandomisation(v, VehicleRandomTrigger::NewCargo);
-	},
+	.vehicle_new_cargo = RustVehicleNewCargoRandomisation,
 	.cargo_taken = [](OpenTTDStation *station, uint8_t cargo) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
 		RustStationRandomisation(st, st->xy, StationRandomTrigger::CargoTaken, cargo);
@@ -1832,10 +1829,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		RustRoadStopRandomisation(st, v->tile, StationRandomTrigger::VehicleLoads);
 		RustRoadStopAnimation(st, v->tile, StationAnimationTrigger::VehicleLoads);
 	},
-	.vehicle_empty = [](OpenTTDVehicle *vehicle) noexcept -> void {
-		Vehicle *v = VehicleOf(vehicle);
-		RustVehicleRandomisation(v, VehicleRandomTrigger::Empty);
-	},
+	.vehicle_empty = RustVehicleEmptyRandomisation,
 	.station_dirty = [](OpenTTDStation *station) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
 		st->MarkTilesDirty(true);

@@ -136,7 +136,6 @@ static void VehicleVisitShipDepotViewport(OpenTTDVehicle *handle) noexcept
 	RustVehicleUpdateViewport(ship, true, true);
 	RustVehicleDirtyDepot(ship);
 }
-static void VehicleVisitDepotRandomisation(OpenTTDVehicle *handle) noexcept { RustVehicleRandomisation(VehicleOf(handle), VehicleRandomTrigger::Depot); }
 static void VehicleVisitWithCosts(void *context, void (*scope)(void *, void *)) noexcept
 {
 	CommandCost cost, temporary;
@@ -197,7 +196,7 @@ const OpenTTDVehicleVisits &GetRustVehicleVisits() noexcept
 		.leave_sound = RustVehiclePlayLeaveSound,
 		.depot_windows = VehicleVisitDepotWindows,
 		.ship_depot_viewport = VehicleVisitShipDepotViewport,
-		.depot_randomisation = VehicleVisitDepotRandomisation,
+		.depot_randomisation = RustVehicleDepotRandomisation,
 		.view_invalidate = RustVehicleVisitInvalidateView,
 		.with_costs = VehicleVisitWithCosts,
 		.refit_failed_news = VehicleVisitRefitFailedNews,

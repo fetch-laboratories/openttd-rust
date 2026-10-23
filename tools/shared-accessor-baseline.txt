@@ -94,7 +94,6 @@ src/rust/company_adapter.cpp | Co_vehicle_previous(uint32_t id) noexcept | 69c96
 src/rust/company_adapter.cpp | Co_vehicle_service_interval_is_custom(uint32_t id) noexcept | df7f6be000c1cef1 | 1
 src/rust/company_adapter.cpp | [](const Station *st) | 7599e8780f547b28 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_company_livery(uint8_t owner) noexcept | 502ec0f6fa5ed147 | 1
-src/rust/fleet_group_services.hpp | FleetGroup_depot_dirty(void *shell) noexcept | dd859961d1abb6ea | 1
 src/rust/fleet_group_services.hpp | FleetGroup_head(uint8_t company) noexcept | f3fae9779eabda33 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_keep_length(uint8_t owner) noexcept | ad49c9eeaeecb3c1 | 1
 src/rust/fleet_group_services.hpp | FleetGroup_release_number(uint8_t owner, uint16_t number) noexcept | e0e39efee41a55f6 | 1

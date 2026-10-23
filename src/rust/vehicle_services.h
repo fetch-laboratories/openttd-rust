@@ -48,7 +48,11 @@ inline uint16_t RustVehicleLoadUnloadTicks(OpenTTDVehicle *v) noexcept { return 
 inline void RustVehicleSetLastLoadingStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_loading_station = StationID(station); }
 inline void RustVehicleSetLastLoadingTick(OpenTTDVehicle *v, uint64_t tick) noexcept { VehicleOf(v)->last_loading_tick = tick; }
 inline void RustVehicleRandomisation(Vehicle *v, VehicleRandomTrigger trigger) noexcept { TriggerVehicleRandomisation(v, trigger); }
+inline void RustVehicleDepotRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::Depot); }
+inline void RustVehicleNewCargoRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::NewCargo); }
+inline void RustVehicleEmptyRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::Empty); }
 inline void RustVehicleDirtyDepot(const Vehicle *v) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); }
+inline void RustVehicleDirtyDepotOpaque(void *v) noexcept { RustVehicleDirtyDepot(static_cast<Vehicle *>(v)); }
 inline void RustVehicleInvalidateDepot(const Vehicle *v) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, v->tile); }
 template <class T> inline void RustVehicleUpdateViewport(T *v, bool update_delta, bool force) noexcept { v->UpdateViewport(update_delta, force); }
 inline void RustVehiclePlayLeaveSound(OpenTTDVehicle *v) noexcept { VehicleOf(v)->PlayLeaveStationSound(); }
