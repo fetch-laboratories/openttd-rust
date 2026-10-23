@@ -229,3 +229,7 @@ def check(scenario, run, mode, role, result):
     counts = core.branch_witnesses(scenario, run, role, "generation", required)
     if counts is not None:
         result.setdefault("generation_witnesses", {})[mode] = counts
+
+
+def game_args(scenario):
+    return ["-d", "yapf=3"] if scenario["name"] == "generate-river-search" else []

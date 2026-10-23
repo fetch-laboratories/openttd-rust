@@ -109,6 +109,7 @@ pub struct GenerationServices {
     pub flat_height: extern "C" fn(u32) -> FlatHeight,
     pub river: extern "C" fn(u32) -> bool,
     pub set_snow_line: extern "C" fn(u8),
+    pub river_debug: extern "C" fn(bool, u32, u32, u32, i32, i32),
     pub assert_condition: extern "C" fn(bool),
     pub sea_construct: extern "C" fn(*mut Frame),
     pub sea_destroy: extern "C" fn(*mut Frame),
@@ -1150,7 +1151,13 @@ impl World<'_> {
         open.insert(start, 0_usize);
         heap.include(0, |a, b| nodes[a].estimate < nodes[b].estimate);
         let mut destination = None;
-        while let Some(best) = heap.first() {
+        let mut rounds = 0_u32;
+        #[allow(clippy::while_let_loop)] // Native counts the final empty-open round.
+        loop {
+            rounds = rounds.wrapping_add(1);
+            let Some(best) = heap.first() else {
+                break;
+            };
             if nodes[best].tile == end {
                 destination = Some(best);
                 break;
@@ -1200,6 +1207,20 @@ impl World<'_> {
             heap.remove(best, |a, b| nodes[a].estimate < nodes[b].estimate);
             closed.insert(nodes[best].tile, best);
         }
+        let (cost, distance) = destination.map_or((-1, -1), |id| {
+            (
+                nodes[id].cost,
+                nodes[id].estimate.wrapping_sub(nodes[id].cost),
+            )
+        });
+        (self.a.river_debug)(
+            destination.is_some(),
+            rounds,
+            open.len() as u32,
+            closed.len() as u32,
+            cost,
+            distance,
+        );
         let Some(destination) = destination else {
             return;
         };
