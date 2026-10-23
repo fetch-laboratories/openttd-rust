@@ -7,7 +7,14 @@
 
 //! `ground_vehicle.hpp` subtype helpers over a copied `Vehicle::subtype`.
 //! Setters return the new value; callers store it at the original point.
-#![allow(unsafe_code)]
+#![allow(
+    unsafe_code,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines,
+    clippy::struct_field_names
+)]
 use crate::vehicle_base::{GVSF_ENGINE, GVSF_FREE_WAGON, GVSF_FRONT, GVSF_MULTIHEADED, GVSF_WAGON};
 
 const fn has(subtype: u8, flag: u8) -> bool {
@@ -98,3 +105,583 @@ pub unsafe extern "C" fn openttd_rust_ground_destroy(state: *mut State) {
     // SAFETY: exactly one matching allocation, no aliases remain in use.
     drop(unsafe { Box::from_raw(state) });
 }
+
+use crate::direction_func::{diag_dir_to_axis, dir_to_diag_dir};
+use crate::engine_type::{ACCELERATION_MAGLEV, ACCELERATION_NORMAL};
+use crate::newgrf_properties::*;
+use crate::services::{RailType, RoadType};
+use crate::tile_type::{TILE_SIZE, TILE_UNIT_MASK};
+use crate::track_func::track_status_to_track_bits;
+use crate::track_type::{TRACK_BIT_WORMHOLE, TRACK_BIT_X, TRACK_BIT_Y};
+use crate::vehicle::{VS_HIDDEN, VS_STOPPED, VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle_base::is_articulated_part;
+use crate::vehicle_type::GROUND_ACCELERATION;
+
+pub const GVF_GOINGUP_BIT: u16 = 0;
+pub const GVF_GOINGDOWN_BIT: u16 = 1;
+const SLOPE_FLAGS: u16 = (1 << GVF_GOINGUP_BIT) | (1 << GVF_GOINGDOWN_BIT);
+pub const AS_ACCEL: u8 = 0;
+pub const AS_BRAKE: u8 = 1;
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Owner {
+    pub state: *mut State,
+    pub train: crate::train::Handle,
+    pub kind: VehicleType,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PowerInput {
+    pub tile: u32,
+    pub subtype: u8,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct WeightInput {
+    pub cargo: *const std::ffi::c_void,
+    pub owner: *mut crate::cargo_storage::List,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Motion {
+    pub speed: u16,
+    pub status: u8,
+    pub roadtype: RoadType,
+}
+
+/// Immutable process-wide typed services. No owner borrow crosses any service;
+/// native shells and the canonical allocation are live under the game-state mutex.
+#[repr(C)]
+pub struct Services {
+    pub vehicle: &'static VehicleServices,
+    pub road: &'static crate::road::Leaves,
+    pub assertions: bool,
+    pub resolve: extern "C" fn(VehicleRef) -> Owner,
+    pub first: extern "C" fn(VehicleRef) -> VehicleRef,
+    pub power_input: extern "C" fn(VehicleRef) -> PowerInput,
+    pub weight_input: extern "C" fn(VehicleRef) -> WeightInput,
+    pub motion: extern "C" fn(VehicleRef) -> Motion,
+    pub capacity: extern "C" fn(crate::vehicle::EngineRef, VehicleRef, *mut u16) -> u32,
+    pub cargo_weight: extern "C" fn(*const std::ffi::c_void, u32) -> u64,
+    pub train_cargo_weight: extern "C" fn(*const std::ffi::c_void, u32) -> u64,
+    pub engine_power: extern "C" fn(VehicleRef) -> u16,
+    pub engine_weight: extern "C" fn(VehicleRef) -> u16,
+    pub engine_te: extern "C" fn(VehicleRef) -> u8,
+    pub engine_drag: extern "C" fn(VehicleRef) -> u8,
+    pub wagon_power: extern "C" fn(u16) -> u16,
+    pub wagon_weight: extern "C" fn(u16) -> u8,
+    pub powered: extern "C" fn(u64, RailType) -> bool,
+    pub rail_type: extern "C" fn(u32) -> RailType,
+    pub rail_acceleration: extern "C" fn(RailType) -> u8,
+    pub rail_speed: extern "C" fn(RailType) -> u16,
+    pub road_speed: extern "C" fn(VehicleRef) -> u16,
+    pub tram: extern "C" fn(RoadType) -> bool,
+    pub steepness: extern "C" fn(VehicleType) -> u32,
+    pub display_max_speed: extern "C" fn(VehicleRef) -> i32,
+    pub slope_z: extern "C" fn(i32, i32, bool) -> i32,
+    pub reversing: extern "C" fn(VehicleRef) -> bool,
+    pub viewport: extern "C" fn(VehicleRef, bool, bool),
+    pub details_dirty: extern "C" fn(VehicleRef),
+    pub base_crash: extern "C" fn(VehicleRef, bool) -> u32,
+    pub depot_tile: extern "C" fn(u32, u8) -> bool,
+    pub in_depot: extern "C" fn(VehicleRef) -> bool,
+}
+
+impl Owner {
+    fn rail(self) -> bool {
+        self.kind == VehicleType::TRAIN
+    }
+    fn powered_wagon(self) -> bool {
+        self.rail() && self.train.get_flags() & (1 << 3) != 0
+    }
+}
+
+pub(crate) fn power(s: &Services, v: VehicleRef) -> u16 {
+    let o = (s.resolve)(v);
+    let r = (s.power_input)(v);
+    if is_articulated_part(true, r.subtype) {
+        return 0;
+    }
+    if o.rail() && !(s.powered)(o.train.get_railtypes(), (s.rail_type)(r.tile)) {
+        return 0;
+    }
+    let p = (s.vehicle.property)(
+        v,
+        if o.rail() {
+            PROP_TRAIN_POWER
+        } else {
+            PROP_ROADVEH_POWER
+        },
+        i32::from((s.engine_power)(v)),
+    );
+    if o.rail() {
+        let mut p = p as u16;
+        if is_multiheaded((s.vehicle.subtype)(v)) {
+            p /= 2;
+        }
+        p
+    } else {
+        p.wrapping_mul(10) as u16
+    }
+}
+pub(crate) fn powered_part(s: &Services, v: VehicleRef, head: VehicleRef) -> u16 {
+    let o = (s.resolve)(v);
+    if o.powered_wagon() {
+        let head = (s.resolve)(head);
+        if (s.powered)(
+            head.train.get_railtypes(),
+            (s.rail_type)((s.vehicle.tile)(v)),
+        ) {
+            // SAFETY: scalar load ends before the specification lookup.
+            return (s.wagon_power)(unsafe { (*o.state).cache.first_engine });
+        }
+    }
+    0
+}
+pub(crate) fn weight(s: &Services, v: VehicleRef, full: bool) -> u16 {
+    let o = (s.resolve)(v);
+    let r = (s.weight_input)(v);
+    let count = if full {
+        (s.capacity)((s.vehicle.engine)(v), v, std::ptr::null_mut())
+    } else {
+        // SAFETY: live canonical cargo owner; no borrow survives this read.
+        unsafe { crate::cargo_storage::openttd_rust_cargo_list_stored(r.owner) }
+    };
+    let mut weight = if o.rail() {
+        (s.train_cargo_weight)(r.cargo, count)
+    } else {
+        (s.cargo_weight)(r.cargo, count)
+    } as u16;
+    if !is_articulated_part(true, (s.vehicle.subtype)(v)) {
+        let w = (s.vehicle.property)(
+            v,
+            if o.rail() {
+                PROP_TRAIN_WEIGHT
+            } else {
+                PROP_ROADVEH_WEIGHT
+            },
+            i32::from((s.engine_weight)(v)),
+        );
+        weight = weight.wrapping_add(if o.rail() { w } else { w / 4 } as u16);
+    }
+    if o.powered_wagon() {
+        // SAFETY: no borrow spans the spec leaf.
+        weight = weight.wrapping_add(u16::from((s.wagon_weight)(unsafe {
+            (*o.state).cache.first_engine
+        })));
+    }
+    weight
+}
+pub(crate) fn tractive_effort(s: &Services, v: VehicleRef) -> u8 {
+    let o = (s.resolve)(v);
+    (s.vehicle.property)(
+        v,
+        if o.rail() {
+            PROP_TRAIN_TRACTIVE_EFFORT
+        } else {
+            PROP_ROADVEH_TRACTIVE_EFFORT
+        },
+        i32::from((s.engine_te)(v)),
+    ) as u8
+}
+pub(crate) fn air_drag(s: &Services, v: VehicleRef) -> u8 {
+    (s.engine_drag)(v)
+}
+pub(crate) fn air_drag_area(s: &Services, v: VehicleRef) -> u8 {
+    let o = (s.resolve)(v);
+    if !o.rail() {
+        return 6;
+    }
+    if o.train.track() == TRACK_BIT_WORMHOLE && (s.vehicle.status)(v) & VS_HIDDEN != 0 {
+        28
+    } else {
+        14
+    }
+}
+pub(crate) fn acceleration_status(s: &Services, v: VehicleRef) -> u8 {
+    let o = (s.resolve)(v);
+    if (s.vehicle.status)(v) & VS_STOPPED != 0
+        || (o.rail() && o.train.get_flags() & ((1 << 0) | (1 << 8)) != 0)
+    {
+        AS_BRAKE
+    } else {
+        AS_ACCEL
+    }
+}
+pub(crate) fn current_speed(s: &Services, v: VehicleRef) -> u16 {
+    let o = (s.resolve)(v);
+    let speed = (s.vehicle.speed)(v);
+    if o.rail() { speed } else { speed / 2 }
+}
+pub(crate) fn rolling_friction(s: &Services, v: VehicleRef) -> u32 {
+    let o = (s.resolve)(v);
+    if o.rail() {
+        15 * (512 + u32::from(current_speed(s, v))) / 512
+    } else {
+        let r = (s.motion)(v);
+        let coeff = if (s.tram)(r.roadtype) { 40 } else { 75 };
+        coeff * (128 + u32::from(current_speed(s, v))) / 128
+    }
+}
+pub(crate) fn acceleration_type(s: &Services, v: VehicleRef) -> u8 {
+    let o = (s.resolve)(v);
+    if o.rail() {
+        (s.rail_acceleration)((s.rail_type)((s.vehicle.tile)(v)))
+    } else {
+        ACCELERATION_NORMAL
+    }
+}
+pub(crate) fn slope_steepness(s: &Services, v: VehicleRef) -> u32 {
+    (s.steepness)((s.resolve)(v).kind)
+}
+pub(crate) fn max_track_speed(s: &Services, v: VehicleRef) -> u16 {
+    let o = (s.resolve)(v);
+    if o.rail() {
+        (s.rail_speed)((s.rail_type)((s.vehicle.tile)(v)))
+    } else {
+        (s.road_speed)(v)
+    }
+}
+pub(crate) fn sloped_track(s: &Services, v: VehicleRef) -> bool {
+    let o = (s.resolve)(v);
+    let tracks = if o.rail() {
+        o.train.track()
+    } else {
+        track_status_to_track_bits((s.road.track_status)(v, (s.vehicle.tile)(v)))
+    };
+    tracks == TRACK_BIT_X || tracks == TRACK_BIT_Y
+}
+
+pub(crate) fn power_changed(s: &Services, v: VehicleRef) {
+    if s.assertions {
+        assert!((s.first)(v) == v);
+    }
+    let o = (s.resolve)(v);
+    let mut total_power = 0_u32;
+    let mut max_te = 0_u32;
+    let mut parts = 0_u32;
+    let mut max_track_speed = (s.vehicle.max_speed)(v);
+    let mut part = Some(v);
+    while let Some(u) = part {
+        let current_power = u32::from(power(s, u)) + u32::from(powered_part(s, u, u));
+        total_power = total_power.wrapping_add(current_power);
+        if current_power > 0 {
+            max_te = max_te
+                .wrapping_add(u32::from(weight(s, u, false)) * u32::from(tractive_effort(s, u)));
+        }
+        parts = parts.wrapping_add(1);
+        let speed = max_track_speed_fn(s, u);
+        if speed > 0 {
+            max_track_speed = max_track_speed.min(speed);
+        }
+        part = (s.vehicle.next)(u);
+    }
+    let drag = air_drag(s, v);
+    let drag = if drag == 0 {
+        let speed = (s.display_max_speed)(v) as u16;
+        if speed <= 10 {
+            192
+        } else {
+            (2048 / speed).max(1) as u8
+        }
+    } else if drag == 1 {
+        0
+    } else {
+        drag
+    };
+    // SAFETY: each scalar access ends before any callback; cache remains canonical.
+    unsafe {
+        (*o.state).cache.cached_air_drag = u32::from(drag)
+            .wrapping_add(3_u32.wrapping_mul(u32::from(drag)).wrapping_mul(parts) / 20);
+    }
+    max_te = max_te.wrapping_mul(GROUND_ACCELERATION) / 256;
+    if unsafe {
+        (*o.state).cache.cached_power != total_power || (*o.state).cache.cached_max_te != max_te
+    } {
+        if total_power == 0 {
+            let status = (s.vehicle.status)(v);
+            (s.vehicle.write_status)(v, status | VS_STOPPED);
+        }
+        unsafe {
+            (*o.state).cache.cached_power = total_power;
+            (*o.state).cache.cached_max_te = max_te;
+        }
+        (s.details_dirty)(v);
+        (s.vehicle.start_stop_dirty)(v);
+    }
+    unsafe {
+        (*o.state).cache.cached_max_track_speed = max_track_speed;
+    }
+}
+// Keep the original helper call separate from the local speed accumulator.
+fn max_track_speed_fn(s: &Services, v: VehicleRef) -> u16 {
+    max_track_speed(s, v)
+}
+pub(crate) fn cargo_changed(s: &Services, v: VehicleRef) {
+    if s.assertions {
+        assert!((s.first)(v) == v);
+    }
+    let o = (s.resolve)(v);
+    let mut total = 0_u32;
+    let mut part = Some(v);
+    while let Some(u) = part {
+        let current = u32::from(weight(s, u, false));
+        total = total.wrapping_add(current);
+        let steepness = slope_steepness(s, u);
+        let uo = (s.resolve)(u);
+        // SAFETY: short canonical scalar write, before advancing the live link.
+        unsafe {
+            (*uo.state).cache.cached_slope_resistance =
+                current.wrapping_mul(steepness).wrapping_mul(100);
+        }
+        part = (s.vehicle.next)(u);
+    }
+    unsafe {
+        (*o.state).cache.cached_weight = total.max(1);
+        (*o.state).cache.cached_axle_resistance = total.wrapping_mul(10) as u16;
+    }
+    power_changed(s, v);
+}
+pub(crate) fn slope_resistance(s: &Services, v: VehicleRef) -> i64 {
+    let mut incline = 0_i64;
+    let mut part = Some(v);
+    while let Some(u) = part {
+        let o = (s.resolve)(u);
+        let flags = unsafe { (*o.state).flags };
+        if flags & (1 << GVF_GOINGUP_BIT) != 0 {
+            incline += i64::from(unsafe { (*o.state).cache.cached_slope_resistance });
+        } else if flags & (1 << GVF_GOINGDOWN_BIT) != 0 {
+            incline -= i64::from(unsafe { (*o.state).cache.cached_slope_resistance });
+        }
+        part = (s.vehicle.next)(u);
+    }
+    incline
+}
+fn clamp_int(value: i64) -> i32 {
+    value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+}
+pub(crate) fn acceleration(s: &Services, v: VehicleRef) -> i32 {
+    let o = (s.resolve)(v);
+    let speed = i64::from(current_speed(s, v));
+    let mass = i64::from(unsafe { (*o.state).cache.cached_weight });
+    let power = i64::from(unsafe { (*o.state).cache.cached_power }) * 746;
+    let maglev = acceleration_type(s, v) == ACCELERATION_MAGLEV;
+    let area = i64::from(air_drag_area(s, v));
+    let mut resistance = if maglev {
+        0
+    } else {
+        i64::from(unsafe { (*o.state).cache.cached_axle_resistance })
+            + mass * i64::from(rolling_friction(s, v))
+    };
+    resistance +=
+        area * i64::from(unsafe { (*o.state).cache.cached_air_drag }) * speed * speed / 1000;
+    resistance += slope_resistance(s, v);
+    let mode = acceleration_status(s, v);
+    let max_te = unsafe { (*o.state).cache.cached_max_te } as i32;
+    let force = if speed > 0 {
+        if maglev {
+            power / 25
+        } else {
+            let force = power * 18 / (speed * 5);
+            if mode == AS_ACCEL && force > i64::from(max_te) {
+                i64::from(max_te)
+            } else {
+                force
+            }
+        }
+    } else {
+        // `std::min<int>` narrows watts to signed int at kickoff in the source.
+        let force = if mode == AS_ACCEL && !maglev {
+            i64::from(max_te.min(power as i32))
+        } else {
+            power
+        };
+        force.max(mass * 8 + resistance)
+    };
+    if mode == AS_ACCEL {
+        if force == resistance {
+            return 0;
+        }
+        let accel = clamp_int((force - resistance) / (mass * 4));
+        if force < resistance {
+            (-1).min(accel)
+        } else {
+            1.max(accel)
+        }
+    } else {
+        clamp_int((-force - resistance).min(-10000) / mass)
+    }
+}
+pub(crate) fn chain_in_depot(s: &Services, v: VehicleRef) -> bool {
+    let first = (s.first)(v);
+    let o = (s.resolve)(v);
+    if !(s.depot_tile)((s.vehicle.tile)(first), o.kind.0) || (s.vehicle.speed)(first) != 0 {
+        return false;
+    }
+    let mut part = Some(first);
+    while let Some(u) = part {
+        if !(s.in_depot)(u) || (s.vehicle.tile)(u) != (s.vehicle.tile)(v) {
+            return false;
+        }
+        part = (s.vehicle.next)(u);
+    }
+    true
+}
+pub(crate) fn crash(s: &Services, v: VehicleRef, flooded: bool) -> u32 {
+    let mut part = Some(v);
+    while let Some(u) = part {
+        let o = (s.resolve)(u);
+        unsafe {
+            (*o.state).flags &= !SLOPE_FLAGS;
+        }
+        part = (s.vehicle.next)(u);
+    }
+    // All flags are cleared before base Crash makes its original random draw.
+    (s.base_crash)(v, flooded)
+}
+pub(crate) fn update_z_inclination(s: &Services, v: VehicleRef) {
+    let o = (s.resolve)(v);
+    let xy = (s.vehicle.xy)(v);
+    let z = (s.slope_z)(xy.x, xy.y, true);
+    (s.vehicle.write_z)(v, z);
+    unsafe {
+        (*o.state).flags &= !SLOPE_FLAGS;
+    }
+    if sloped_track(s, v) {
+        let xy = (s.vehicle.xy)(v);
+        let middle = (s.slope_z)(
+            (xy.x & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
+            (xy.y & !(TILE_UNIT_MASK as i32)) | (TILE_SIZE / 2) as i32,
+            true,
+        );
+        let z = (s.vehicle.z)(v);
+        if middle != z {
+            unsafe {
+                (*o.state).flags |= 1
+                    << if middle > z {
+                        GVF_GOINGUP_BIT
+                    } else {
+                        GVF_GOINGDOWN_BIT
+                    };
+            }
+        }
+    }
+}
+pub(crate) fn update_z(s: &Services, v: VehicleRef) {
+    let o = (s.resolve)(v);
+    if unsafe { (*o.state).flags } & SLOPE_FLAGS != 0 {
+        if !o.rail() && (s.reversing)(v) {
+            let xy = (s.vehicle.xy)(v);
+            let z = (s.slope_z)(xy.x, xy.y, true);
+            (s.vehicle.write_z)(v, z);
+            return;
+        }
+        let direction = (s.vehicle.direction)(v);
+        if s.assertions {
+            assert!(direction < crate::direction_type::DIR_END);
+        }
+        let dir = dir_to_diag_dir(direction);
+        let xy = (s.vehicle.xy)(v);
+        let mut d = (if diag_dir_to_axis(dir) == 0 {
+            xy.x as i8
+        } else {
+            xy.y as i8
+        }) & 1;
+        d ^= i8::from(dir == 3 || dir == 0);
+        let z = (s.vehicle.z)(v);
+        let delta = if unsafe { (*o.state).flags } & (1 << GVF_GOINGUP_BIT) != 0 {
+            d
+        } else {
+            -d
+        };
+        (s.vehicle.write_z)(v, z.wrapping_add(i32::from(delta)));
+    }
+    if s.assertions {
+        let z = (s.vehicle.z)(v);
+        let xy = (s.vehicle.xy)(v);
+        assert!(z == (s.slope_z)(xy.x, xy.y, true));
+    }
+}
+pub(crate) fn inclination(s: &Services, v: VehicleRef, new_tile: bool, delta: bool) -> i32 {
+    let old_z = (s.vehicle.z)(v);
+    if new_tile {
+        update_z_inclination(s, v);
+    } else {
+        update_z(s, v);
+    }
+    (s.viewport)(v, true, delta);
+    old_z
+}
+pub(crate) fn last_speed(s: &Services, v: VehicleRef) {
+    let o = (s.resolve)(v);
+    if (s.vehicle.speed)(v) != unsafe { (*o.state).cache.last_speed } {
+        (s.vehicle.start_stop_dirty)(v);
+        unsafe {
+            (*o.state).cache.last_speed = (s.vehicle.speed)(v);
+        }
+    }
+}
+pub(crate) fn update_speed(
+    s: &Services,
+    v: VehicleRef,
+    accel: u32,
+    min_speed: i32,
+    max_speed: i32,
+) -> u32 {
+    let r = (s.vehicle.speed_inputs)(v);
+    let mut spd = u32::from(r.subspeed).wrapping_add(accel);
+    (s.vehicle.write_subspeed)(v, spd as u8);
+    let tempmax = if i32::from(r.speed) > max_speed {
+        (i32::from(r.speed) - i32::from(r.speed / 10) - 1).max(max_speed)
+    } else {
+        max_speed
+    };
+    spd = (i32::from(r.speed)
+        .wrapping_add((spd as i32) >> 8)
+        .min(tempmax)
+        .max(min_speed)) as u32;
+    (s.vehicle.write_speed)(v, spd as u16);
+    let scaled = crate::vehicle::advance_speed(spd) as i32;
+    let scaled = scaled.wrapping_add(i32::from((s.vehicle.progress)(v)));
+    (s.vehicle.write_progress)(v, 0);
+    scaled as u32
+}
+
+// Every entry receives immutable services and a live serialized native shell.
+// Panics/allocations abort; callbacks are noexcept and can reenter only after
+// the field-sized access above ends. No Rust borrow spans a callback.
+macro_rules! entry {
+    ($export:ident, $function:ident $(, $arg:ident : $ty:ty)* => $ret:ty) => {
+        /// # Safety
+        /// Services and shell must remain live under the game-state mutex.
+        #[unsafe(no_mangle)]
+        pub unsafe extern "C" fn $export(s: *const Services, v: VehicleRef, $($arg: $ty),*) -> $ret {
+            // SAFETY: immutable native table lives for the synchronous entry.
+            $function(unsafe {&*s}, v, $($arg),*)
+        }
+    };
+}
+entry!(openttd_rust_ground_power_changed, power_changed => ());
+entry!(openttd_rust_ground_cargo_changed, cargo_changed => ());
+entry!(openttd_rust_ground_acceleration, acceleration => i32);
+entry!(openttd_rust_ground_chain_in_depot, chain_in_depot => bool);
+entry!(openttd_rust_ground_crash, crash, flooded: bool => u32);
+entry!(openttd_rust_ground_slope_resistance, slope_resistance => i64);
+entry!(openttd_rust_ground_update_z_inclination, update_z_inclination => ());
+entry!(openttd_rust_ground_update_z, update_z => ());
+entry!(openttd_rust_ground_inclination, inclination, new_tile: bool, delta: bool => i32);
+entry!(openttd_rust_ground_last_speed, last_speed => ());
+entry!(openttd_rust_ground_update_speed, update_speed, accel: u32, min_speed: i32, max_speed: i32 => u32);
+entry!(openttd_rust_ground_power, power => u16);
+entry!(openttd_rust_ground_powered_part, powered_part, head: VehicleRef => u16);
+entry!(openttd_rust_ground_weight, weight, full: bool => u16);
+entry!(openttd_rust_ground_tractive_effort, tractive_effort => u8);
+entry!(openttd_rust_ground_air_drag, air_drag => u8);
+entry!(openttd_rust_ground_air_drag_area, air_drag_area => u8);
+entry!(openttd_rust_ground_acceleration_status, acceleration_status => u8);
+entry!(openttd_rust_ground_current_speed, current_speed => u16);
+entry!(openttd_rust_ground_rolling_friction, rolling_friction => u32);
+entry!(openttd_rust_ground_acceleration_type, acceleration_type => u8);
+entry!(openttd_rust_ground_slope_steepness, slope_steepness => u32);
+entry!(openttd_rust_ground_max_track_speed, max_track_speed => u16);
+entry!(openttd_rust_ground_sloped_track, sloped_track => bool);

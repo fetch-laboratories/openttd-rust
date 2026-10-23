@@ -383,7 +383,11 @@ struct Train final : public GroundVehicle<Train, VEH_TRAIN> {
 	 */
 	inline VehicleAccelerationModel GetAccelerationType() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_acceleration_type(&GetRustGroundPhysicsServices(), this);
+#else
 		return GetRailTypeInfo(GetRailType(this->tile))->acceleration_type;
+#endif
 	}
 
 protected: // These functions should not be called outside acceleration code.
@@ -394,6 +398,9 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline uint16_t GetPower() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_power(&GetRustGroundPhysicsServices(), this);
+#else
 		/* Power is not added for articulated parts */
 		if (!this->IsArticulatedPart() && HasPowerOnRail(this->GetRailTypes(), GetRailType(this->tile))) {
 			uint16_t power = GetVehicleProperty(this, PROP_TRAIN_POWER, RailVehInfo(this->engine_type)->power);
@@ -403,6 +410,7 @@ protected: // These functions should not be called outside acceleration code.
 		}
 
 		return 0;
+#endif
 	}
 
 	/**
@@ -411,12 +419,16 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline uint16_t GetPoweredPartPower(const Train *head) const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_powered_part(&GetRustGroundPhysicsServices(), this, head);
+#else
 		/* For powered wagons the engine defines the type of engine (i.e. railtype) */
 		if (this->GetTrainFlags().Test(VehicleRailFlag::PoweredWagon) && HasPowerOnRail(head->GetRailTypes(), GetRailType(this->tile))) {
 			return RailVehInfo(this->gcache.first_engine)->pow_wag_power;
 		}
 
 		return 0;
+#endif
 	}
 
 	/**
@@ -425,6 +437,9 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline uint16_t GetWeight() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_weight(&GetRustGroundPhysicsServices(), this, false);
+#else
 		uint16_t weight = CargoSpec::Get(this->cargo_type)->WeightOfNUnitsInTrain(this->cargo.StoredCount());
 
 		/* Vehicle weight is not added for articulated parts. */
@@ -438,6 +453,7 @@ protected: // These functions should not be called outside acceleration code.
 		}
 
 		return weight;
+#endif
 	}
 
 	/**
@@ -452,7 +468,11 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline uint8_t GetTractiveEffort() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_tractive_effort(&GetRustGroundPhysicsServices(), this);
+#else
 		return GetVehicleProperty(this, PROP_TRAIN_TRACTIVE_EFFORT, RailVehInfo(this->engine_type)->tractive_effort);
+#endif
 	}
 
 	/**
@@ -461,8 +481,12 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline uint8_t GetAirDragArea() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_air_drag_area(&GetRustGroundPhysicsServices(), this);
+#else
 		/* Air drag is higher in tunnels due to the limited cross-section. */
 		return (this->GetTrack() == TRACK_BIT_WORMHOLE && this->vehstatus.Test(VehState::Hidden)) ? 28 : 14;
+#endif
 	}
 
 	/**
@@ -471,7 +495,11 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline uint8_t GetAirDrag() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_air_drag(&GetRustGroundPhysicsServices(), this);
+#else
 		return RailVehInfo(this->engine_type)->air_drag;
+#endif
 	}
 
 	/**
@@ -480,7 +508,11 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline AccelStatus GetAccelerationStatus() const
 	{
+#ifdef WITH_RUST
+		return static_cast<AccelStatus>(openttd_rust_ground_acceleration_status(&GetRustGroundPhysicsServices(), this));
+#else
 		return this->vehstatus.Test(VehState::Stopped) || this->GetTrainFlags().Any({VehicleRailFlag::Reversing, VehicleRailFlag::Stuck}) ? AS_BRAKE : AS_ACCEL;
+#endif
 	}
 
 	/**
@@ -489,7 +521,11 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline uint16_t GetCurrentSpeed() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_current_speed(&GetRustGroundPhysicsServices(), this);
+#else
 		return this->cur_speed;
+#endif
 	}
 
 	/**
@@ -498,10 +534,14 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline uint32_t GetRollingFriction() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_rolling_friction(&GetRustGroundPhysicsServices(), this);
+#else
 		/* Rolling friction for steel on steel is between 0.1% and 0.2%.
 		 * The friction coefficient increases with speed in a way that
 		 * it doubles at 512 km/h, triples at 1024 km/h and so on. */
 		return 15 * (512 + this->GetCurrentSpeed()) / 512;
+#endif
 	}
 
 	/**
@@ -510,7 +550,11 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline uint32_t GetSlopeSteepness() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_slope_steepness(&GetRustGroundPhysicsServices(), this);
+#else
 		return _settings_game.vehicle.train_slope_steepness;
+#endif
 	}
 
 	/**
@@ -519,7 +563,11 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline uint16_t GetMaxTrackSpeed() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_max_track_speed(&GetRustGroundPhysicsServices(), this);
+#else
 		return GetRailTypeInfo(GetRailType(this->tile))->max_speed;
+#endif
 	}
 
 	/**
@@ -537,8 +585,12 @@ protected: // These functions should not be called outside acceleration code.
 	 */
 	inline bool TileMayHaveSlopedTrack() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_sloped_track(&GetRustGroundPhysicsServices(), this);
+#else
 		/* Any track that isn't TRACK_BIT_X or TRACK_BIT_Y cannot be sloped. */
 		return this->GetTrack() == TRACK_BIT_X || this->GetTrack() == TRACK_BIT_Y;
+#endif
 	}
 
 	/**

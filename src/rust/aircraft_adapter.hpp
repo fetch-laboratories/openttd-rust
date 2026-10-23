@@ -339,7 +339,7 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_process_orders(OpenTTDAircraftVehicle
 
 static uint32_t OPENTTD_AIRCRAFT_CALL Aircraft_vehicle_crash(OpenTTDAircraftVehicle vehicle, bool flooded) noexcept
 {
-	return VehicleOf(vehicle.handle)->Vehicle::Crash(flooded);
+	return RustVehicleBaseCrash(vehicle.handle, flooded);
 }
 
 static bool OPENTTD_AIRCRAFT_CALL Aircraft_send_to_depot(OpenTTDAircraftVehicle vehicle, bool service) noexcept

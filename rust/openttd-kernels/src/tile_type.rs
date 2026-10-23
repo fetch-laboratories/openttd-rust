@@ -35,3 +35,6 @@ pub const MP_OBJECT: u8 = 10;
 pub const MP_TUNNELBRIDGE: u8 = 9;
 /// `INVALID_TILE`.
 pub const INVALID_TILE: u32 = u32::MAX;
+
+/// `TILE_UNIT_MASK`.
+pub const TILE_UNIT_MASK: u32 = TILE_SIZE - 1;

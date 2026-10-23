@@ -16,6 +16,9 @@
 #include "window_func.h"
 
 #include "widgets/vehicle_widget.h"
+#ifdef WITH_RUST
+#include "rust/ground_vehicle_ffi.h"
+#endif
 
 /** What is the status of our acceleration? */
 enum AccelStatus : uint8_t {
@@ -124,12 +127,16 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 */
 	uint Crash(bool flooded) override
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_crash(&GetRustGroundPhysicsServices(), this, flooded);
+#else
 		/* Crashed vehicles aren't going up or down */
 		for (T *v = T::From(this); v != nullptr; v = v->Next()) {
 			ClrBit(v->gv_flags, GVF_GOINGUP_BIT);
 			ClrBit(v->gv_flags, GVF_GOINGDOWN_BIT);
 		}
 		return this->Vehicle::Crash(flooded);
+#endif
 	}
 
 	/**
@@ -138,6 +145,9 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 */
 	inline int64_t GetSlopeResistance() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_slope_resistance(&GetRustGroundPhysicsServices(), this);
+#else
 		int64_t incl = 0;
 
 		for (const T *u = T::From(this); u != nullptr; u = u->Next()) {
@@ -149,6 +159,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 		}
 
 		return incl;
+#endif
 	}
 
 	/**
@@ -159,6 +170,9 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 */
 	inline void UpdateZPositionAndInclination()
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_update_z_inclination(&GetRustGroundPhysicsServices(), this);
+#else
 		this->z_pos = GetSlopePixelZ(this->x_pos, this->y_pos, true);
 		ClrBit(this->gv_flags, GVF_GOINGUP_BIT);
 		ClrBit(this->gv_flags, GVF_GOINGDOWN_BIT);
@@ -174,6 +188,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 				SetBit(this->gv_flags, (middle_z > this->z_pos) ? GVF_GOINGUP_BIT : GVF_GOINGDOWN_BIT);
 			}
 		}
+#endif
 	}
 
 	/**
@@ -184,6 +199,9 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 */
 	inline void UpdateZPosition()
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_update_z(&GetRustGroundPhysicsServices(), this);
+#else
 #if 0
 		/* The following code does this: */
 
@@ -245,6 +263,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 		}
 
 		assert(this->z_pos == GetSlopePixelZ(this->x_pos, this->y_pos, true));
+#endif
 	}
 
 	/**
@@ -255,6 +274,9 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 */
 	inline int UpdateInclination(bool new_tile, bool update_delta)
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_inclination(&GetRustGroundPhysicsServices(), this, new_tile, update_delta);
+#else
 		int old_z = this->z_pos;
 
 		if (new_tile) {
@@ -265,6 +287,7 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 
 		this->UpdateViewport(true, update_delta);
 		return old_z;
+#endif
 	}
 
 	/**
@@ -364,10 +387,14 @@ struct GroundVehicle : public SpecializedVehicle<T, Type> {
 	 */
 	inline void SetLastSpeed()
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_last_speed(&GetRustGroundPhysicsServices(), this);
+#else
 		if (this->cur_speed != this->gcache.last_speed) {
 			SetWindowWidgetDirty(WC_VEHICLE_VIEW, this->index, WID_VV_START_STOP);
 			this->gcache.last_speed = this->cur_speed;
 		}
+#endif
 	}
 
 protected:
@@ -386,6 +413,9 @@ protected:
 	 */
 	inline uint DoUpdateSpeed(uint accel, int min_speed, int max_speed)
 	{
+#ifdef WITH_RUST
+		return openttd_rust_ground_update_speed(&GetRustGroundPhysicsServices(), this, accel, min_speed, max_speed);
+#else
 		uint spd = this->subspeed + accel;
 		this->subspeed = (uint8_t)spd;
 
@@ -408,6 +438,7 @@ protected:
 		scaled_spd += this->progress;
 		this->progress = 0; // set later in *Handler or *Controller
 		return scaled_spd;
+#endif
 	}
 };
 

@@ -97,6 +97,8 @@ inline uint16_t RustVehicleOrderMaxSpeed(const Vehicle *v) noexcept { return v->
 template <class T> inline int RustVehicleDisplayMaxSpeed(const T *v) noexcept { return v->GetDisplayMaxSpeed(); }
 inline uint8_t RustVehicleOrderNonStop(const Vehicle *v) noexcept { return v->current_order.GetNonStopType().base(); }
 bool RustVehicleInDepot(const Vehicle *v) noexcept;
+inline bool RustVehicleInDepotOf(OpenTTDVehicle *v) noexcept { return RustVehicleInDepot(VehicleOf(v)); }
+inline uint32_t RustVehicleBaseCrash(OpenTTDVehicle *v, bool flooded) noexcept { return VehicleOf(v)->Vehicle::Crash(flooded); }
 bool RustTrainFreeWagon(const Vehicle *v) noexcept;
 Vehicle *RustTrainFirstEnginePart(Vehicle *v) noexcept;
 bool RustTrainMultiheaded(const Vehicle *v) noexcept;

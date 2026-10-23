@@ -107,7 +107,7 @@ static uint64_t TrainAccModel(OpenTTDTrainHandle) noexcept
 static uint64_t TrainAccType(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return static_cast<uint8_t>(GetRailTypeInfo(RustRailType(v->tile.base()))->acceleration_type);
+	return static_cast<uint8_t>(RustRailAccelerationType(RustRailType(v->tile.base())));
 }
 static uint64_t TrainAdvanceDistance(OpenTTDTrainHandle id) noexcept
 {

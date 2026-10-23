@@ -14,12 +14,16 @@
 
 #include "safeguards.h"
 
+
 /**
  * Recalculates the cached total power of a vehicle. Should be called when the consist is changed.
  */
 template <class T, VehicleType Type>
 void GroundVehicle<T, Type>::PowerChanged()
 {
+#ifdef WITH_RUST
+		return openttd_rust_ground_power_changed(&GetRustGroundPhysicsServices(), this);
+#else
 	assert(this->First() == this);
 	const T *v = T::From(this);
 
@@ -69,7 +73,8 @@ void GroundVehicle<T, Type>::PowerChanged()
 	}
 
 	this->gcache.cached_max_track_speed = max_track_speed;
-}
+#endif
+	}
 
 /**
  * Recalculates the cached weight of a vehicle and its parts. Should be called each time the cargo on
@@ -78,6 +83,9 @@ void GroundVehicle<T, Type>::PowerChanged()
 template <class T, VehicleType Type>
 void GroundVehicle<T, Type>::CargoChanged()
 {
+#ifdef WITH_RUST
+		return openttd_rust_ground_cargo_changed(&GetRustGroundPhysicsServices(), this);
+#else
 	assert(this->First() == this);
 	uint32_t weight = 0;
 
@@ -95,7 +103,8 @@ void GroundVehicle<T, Type>::CargoChanged()
 
 	/* Now update vehicle power (tractive effort is dependent on weight). */
 	this->PowerChanged();
-}
+#endif
+	}
 
 /**
  * Calculates the acceleration of the vehicle under its current conditions.
@@ -104,6 +113,9 @@ void GroundVehicle<T, Type>::CargoChanged()
 template <class T, VehicleType Type>
 int GroundVehicle<T, Type>::GetAcceleration() const
 {
+#ifdef WITH_RUST
+		return openttd_rust_ground_acceleration(&GetRustGroundPhysicsServices(), this);
+#else
 	/* Templated class used for function calls for performance reasons. */
 	const T *v = T::From(this);
 	/* Speed is used squared later on, so U16 * U16, and then multiplied by other values. */
@@ -180,7 +192,8 @@ int GroundVehicle<T, Type>::GetAcceleration() const
 	} else {
 		return ClampTo<int32_t>(std::min<int64_t>(-force - resistance, -10000) / mass);
 	}
-}
+#endif
+	}
 
 /**
  * Check whether the whole vehicle chain is in the depot.
@@ -189,6 +202,9 @@ int GroundVehicle<T, Type>::GetAcceleration() const
 template <class T, VehicleType Type>
 bool GroundVehicle<T, Type>::IsChainInDepot() const
 {
+#ifdef WITH_RUST
+		return openttd_rust_ground_chain_in_depot(&GetRustGroundPhysicsServices(), this);
+#else
 	const T *v = this->First();
 	/* Is the front engine stationary in the depot? */
 	static_assert((int)TRANSPORT_RAIL == (int)VEH_TRAIN);
@@ -201,7 +217,8 @@ bool GroundVehicle<T, Type>::IsChainInDepot() const
 	}
 
 	return true;
-}
+#endif
+	}
 
 /* Instantiation for Train */
 template struct GroundVehicle<Train, VEH_TRAIN>;

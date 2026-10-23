@@ -31,6 +31,12 @@ pub(crate) use layouts;
 
 layouts! {
     fn local_layout;
+    "OpenTTDGroundOwner" ["probe"] => crate::ground_vehicle::Owner { state, train, kind, };
+    "OpenTTDGroundPowerInput" ["probe"] => crate::ground_vehicle::PowerInput { tile, subtype, };
+    "OpenTTDGroundWeightInput" ["probe"] => crate::ground_vehicle::WeightInput { cargo, owner, };
+    "OpenTTDGroundMotion" ["probe"] => crate::ground_vehicle::Motion { speed, status, roadtype, };
+    "OpenTTDGroundPhysicsServices" ["probe"] => crate::ground_vehicle::Services { vehicle, road, assertions, resolve, first, power_input, weight_input, motion, capacity, cargo_weight, train_cargo_weight, engine_power, engine_weight, engine_te, engine_drag, wagon_power, wagon_weight, powered, rail_type, rail_acceleration, rail_speed, road_speed, tram, steepness, display_max_speed, slope_z, reversing, viewport, details_dirty, base_crash, depot_tile, in_depot, };
+
     "GroundVehicleCache" ["probe"] => crate::ground_vehicle::Cache {
         cached_weight, cached_slope_resistance, cached_max_te, cached_axle_resistance,
         cached_max_track_speed, cached_power, cached_air_drag, cached_total_length,

@@ -426,3 +426,8 @@ mod tests {
         assert_eq!(advance_distance(3), 192);
     }
 }
+
+/// `Vehicle::GetAdvanceSpeed`, with the source unsigned multiplication.
+pub const fn advance_speed(speed: u32) -> u32 {
+    speed.wrapping_mul(3) / 4
+}
