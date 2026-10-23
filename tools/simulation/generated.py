@@ -232,4 +232,4 @@ def check(scenario, run, mode, role, result):
 
 
 def game_args(scenario):
-    return ["-d", "yapf=3"] if scenario["name"] == "generate-river-search" else []
+    return ["-d", "yapf=3"] if scenario.get("name") == "generate-river-search" else []
