@@ -432,14 +432,17 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
                 0
             }
         }
-        0x42 => unsafe {
-            let state = &*scope.town.owner;
-            u32::from(super::radius_group(
-                state.growth.funding != 0,
-                &state.simulation.radius,
-                map().distance_square(tile, state.simulation.xy),
-            ))
-        },
+        0x42 => {
+            let map = map();
+            unsafe {
+                let state = &*scope.town.owner;
+                u32::from(super::radius_group(
+                    state.growth.funding != 0,
+                    &state.simulation.radius,
+                    map.distance_square(tile, state.simulation.xy),
+                ))
+            }
+        }
         0x43 => (s.terrain)(tile),
         0x44 => unsafe { num_houses(scope.town.owner, scope.house, (l.house_class)(scope.house)) },
         0x45 => u32::from((l.generating_world)()),
@@ -697,9 +700,7 @@ pub(super) unsafe fn allow_construction(
 }
 pub(crate) unsafe fn foundation(tile: u32, house: u16) -> u16 {
     let l = unsafe { &*services().towns };
-    let town = (unsafe { &*l.houses }.town_shell)(u32::from(
-        (unsafe { &*services().shared }.town_index)(tile)
-    ));
+    let town = (unsafe { &*l.houses }.town)(tile).shell;
     unsafe {
         callback(
             CBID_HOUSE_DRAW_FOUNDATIONS.0,

@@ -15,6 +15,7 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	const HouseID first = old_size + 3;
 	std::array<TileIndex, 4> parts{tile, tile + TileDiffXY(0, 1), tile + TileDiffXY(1, 0), tile + TileDiffXY(1, 1)};
 	std::array<HouseID, 4> old_ids;
+	std::array<EntityIDMapping, 4> old_mappings;
 	GRFFile grf, foreign; grf.grfid = 0x40912345; grf.grf_version = 8; foreign.grfid = 0x40954321; foreign.grf_version = 7;
 	const CargoType cargo = GetCargoTypeByLabel(CT_PASSENGERS);
 	require(IsValidCargoType(cargo)); grf.cargo_list = {CT_PASSENGERS};
@@ -25,6 +26,8 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	HouseSpec::Specs().resize(first + 4);
 	for (size_t i = 0; i < parts.size(); ++i) {
 		old_ids[i] = GetHouseType(parts[i]);
+		old_mappings[i] = _house_mngr.mappings[first + i];
+		_house_mngr.mappings[first + i] = {.grfid = grf.grfid, .entity_id = static_cast<uint16_t>(0x45 + i), .substitute_id = old_ids[i]};
 		*HouseSpec::Get(first + i) = *HouseSpec::Get(old_ids[i]);
 		auto *spec = HouseSpec::Get(first + i);
 		spec->grf_prop.grffile = &grf; spec->grf_prop.grfid = grf.grfid; spec->grf_prop.local_id = 0x345 + i; spec->class_id = 2;
@@ -36,12 +39,17 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	DeterministicSpriteGroup program;
 	program.size = DSG_SIZE_DWORD; program.var_scope = VSG_SCOPE_SELF;
 	program.default_result.group = &result; program.error_group = &error;
+	int32_t offset = 0;
 	auto run = [&](const char *label, CallbackID callback, uint8_t variable, uint8_t parameter, bool prospective, TileIndex where, int view = 0, VarSpriteGroupScope scope = VSG_SCOPE_SELF) {
 		program.var_scope = scope;
 		program.adjusts = {
 			{.operation = DSGA_OP_RST, .variable = variable, .parameter = parameter, .and_mask = UINT32_MAX},
 			{.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101},
 		};
+		if (variable == 0x64) program.adjusts.insert(program.adjusts.begin(), {
+			{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = static_cast<uint32_t>(offset)},
+			{.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100},
+		});
 		HouseSpec::Get(first)->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, &program);
 		HouseSpec::Get(first)->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, &program);
 		std::array<int32_t, 2> registers{};
@@ -55,6 +63,13 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 		run("production", CBID_HOUSE_PRODUCE_CARGO, var, 0, false, tile);
 		run("prototype", CBID_HOUSE_ALLOW_CONSTRUCTION, var, 0, true, INVALID_TILE, 5);
 	}
+	require(run("local-mapping", CBID_HOUSE_PRODUCE_CARGO, 0x61, 0x45, false, tile) == 0x04040101);
+	HouseSpec::Get(first + 1)->grf_prop.grffile = &foreign;
+	run("foreign-house", CBID_HOUSE_PRODUCE_CARGO, 0x66, 0x10, false, tile);
+	HouseSpec::Get(first + 1)->grf_prop.grffile = nullptr;
+	run("missing-house-file", CBID_HOUSE_PRODUCE_CARGO, 0x66, 0x10, false, tile);
+	require(run("missing-house-grfid", CBID_HOUSE_PRODUCE_CARGO, 0x67, 0x10, false, tile) == grf.grfid);
+	HouseSpec::Get(first + 1)->grf_prop.grffile = &grf;
 	/* Construction checks run over unrelated houses; random bits/triggers must
 	 * use the supplied prospective state rather than the existing map fields. */
 	RandomizedSpriteGroup random;
@@ -96,15 +111,20 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 		for (TileIndex part : parts) station->catchment_tiles.SetTile(part);
 		town->stations_near.insert(station); stations.push_back(station);
 	}
-	ResolverObject register_context(&grf); register_context.SetRegister(0x100, 0);
+	offset = 0;
 	require(run("acceptance-history", CBID_HOUSE_ANIMATION_TRIGGER_WATCHED_CARGO_ACCEPTED, 0x64, 0, false, tile) == 31);
-	register_context.SetRegister(0x100, 0xFFFF);
-	run("signed-offset", CBID_HOUSE_ANIMATION_TRIGGER_WATCHED_CARGO_ACCEPTED, 0x64, 0, false, parts[3]);
+	offset = 0xFFFF;
+	require(run("signed-offset", CBID_HOUSE_ANIMATION_TRIGGER_WATCHED_CARGO_ACCEPTED, 0x64, 0, false, parts[3]) == 31);
 	run("invalid-cargo", CBID_HOUSE_ANIMATION_TRIGGER_WATCHED_CARGO_ACCEPTED, 0x64, 255, false, tile);
 	for (auto *station : stations) { town->stations_near.erase(station); delete station; }
 	/* Preserve signed ratings, high-byte aliases, transported percentages,
 	 * native history periods and null/unavailable parent behavior. */
 	const auto old_rating = town->ratings[0]; town->ratings[0] = -1234;
+	const auto old_received = town->received; const auto old_population = town->cache.population;
+	town->cache.population = UINT32_MAX;
+	town->received[TAE_FOOD].new_act = 0xABCD; town->received[TAE_FOOD].old_act = 0x5678;
+	town->received[TAE_WATER].new_act = 0x2345; town->received[TAE_WATER].old_act = 0xFEDC;
+
 	for (CargoLabel label : {CT_PASSENGERS, CT_MAIL}) {
 		CargoType type = GetCargoTypeByLabel(label); if (!IsValidCargoType(type)) continue;
 		auto &supply = town->GetOrCreateCargoSupplied(type);
@@ -115,14 +135,18 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	for (uint8_t var : {0x40, 0x41, 0x80, 0x81, 0x82, 0x83, 0x8A, 0x92, 0x93, 0x94, 0x95, 0x9C, 0x9D, 0x9E, 0x9F, 0xAE, 0xB2, 0xB6, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF, 0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xFF}) {
 		run("parent", CBID_HOUSE_ALLOW_CONSTRUCTION, var, 0, true, tile, 0, VSG_SCOPE_PARENT);
 	}
-	town->ratings[0] = old_rating;
+	town->ratings[0] = old_rating; town->received = old_received; town->cache.population = old_population;
 	HouseResolverObject future(first, tile, town, CBID_HOUSE_ALLOW_CONSTRUCTION, 0, 0, true);
 	const size_t psa_count = town->psa_list.size(); future.GetScope(VSG_SCOPE_PARENT)->StorePSA(0, 409);
 	require(psa_count == town->psa_list.size());
+	program.var_scope = VSG_SCOPE_PARENT;
+	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 409}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 3}};
+	HouseSpec::Get(first)->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, &program);
+	require(GetHouseCallback(CBID_HOUSE_ALLOW_CONSTRUCTION, 0, 0, first, town, tile, {}, true) == 7 && psa_count == town->psa_list.size());
 	TownResolverObject null_town(&grf, nullptr, true); bool available = true;
 	require(null_town.GetScope()->GetVariable(0x41, 0, available) == UINT32_MAX && !available);
 	fmt::print(stderr, "HOUSE_RESOLVER parent-readonly-null true\n");
-	for (size_t i = 0; i < parts.size(); ++i) SetHouseType(parts[i], old_ids[i]);
+	for (size_t i = 0; i < parts.size(); ++i) { SetHouseType(parts[i], old_ids[i]); _house_mngr.mappings[first + i] = old_mappings[i]; }
 	HouseSpec::Specs().resize(old_size); ResetHouseClassIDs(); RebuildTownCaches();
 	fmt::print(stderr, "HOUSE_RESOLVER construction-production-var44-var64-var65 true\n");
 }
