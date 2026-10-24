@@ -51,8 +51,6 @@ int32_t openttd_rust_storage_temp_get(uint32_t);
 void openttd_rust_storage_temp_clear();
 void openttd_rust_storage_industry(const OpenTTDStorageServices *, Industry *, uint32_t, int32_t);
 void openttd_rust_storage_airport(const OpenTTDStorageServices *, Station *, const GRFFile *, uint32_t, int32_t);
-void openttd_rust_storage_town(const OpenTTDStorageServices *, Town *, bool, const GRFFile *, uint32_t, int32_t);
-uint32_t openttd_rust_storage_town_get(const OpenTTDStorageServices *, const Town *, const GRFFile *, uint32_t);
 }
 #define OPENTTD_STORAGE_OVERLOADS(N) \
 inline OpenTTDStorage##N *RustStorageNew(std::integral_constant<uint, N>, void *shell) { return openttd_rust_storage##N##_new(shell); } \

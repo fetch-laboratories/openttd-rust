@@ -505,6 +505,11 @@ pub struct FoundationSlope {
     pub slope: Slope,
 }
 impl Services {
+    /// Capture `Map::LogX()` once for a synchronous entry.
+    #[must_use]
+    pub fn map(&self) -> Map {
+        Map::from_log_x((self.map_log_x)())
+    }
     /// Draw one shared random word.
     #[must_use]
     pub fn random(&self) -> u32 {
@@ -1064,11 +1069,6 @@ extern "C" fn fixture_crossing_update(_: u32, _: bool) {}
 extern "C" fn fixture_train_trackdir(_: *const Train) -> Trackdir {
     Trackdir(0)
 }
-/// Source `Chance16I` uses uint32 multiplication/addition after uint16 truncation.
-#[must_use]
-pub fn chance16_i(a: u32, b: u32, r: u32) -> bool {
-    (((r & 65535).wrapping_mul(b).wrapping_add(b / 2)) >> 16) < a
-}
 
 #[cfg(test)]
 pub(crate) extern "C" fn unused_company_valid(_: u8) -> bool {
@@ -1095,7 +1095,7 @@ pub(crate) extern "C" fn unused_current_company() -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::random_func::chance16_i;
     #[test]
     fn chance_retains_low_word_rounding_and_u32_wrap() {
         assert!(chance16_i(1, 200, 0));
@@ -1361,7 +1361,7 @@ impl Cost<'_> {
         (self.1.error)(self.0, message);
     }
     pub(crate) fn set(self, money: i64) {
-        (self.1.expense_money)(self.0, 0, money);
+        (self.1.expense_money)(self.0, crate::economy_type::EXPENSES_CONSTRUCTION, money);
     }
     pub(crate) fn add_money(self, money: i64) {
         (self.1.amount)(self.0, money);

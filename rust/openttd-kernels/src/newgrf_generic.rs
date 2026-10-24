@@ -11,7 +11,8 @@ use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CBID_GENERIC_AI_PURCHASE_SELECTION, CBID_SOUNDS_AMBIENT_EFFECT,
 };
 use crate::newgrf_spritegroup::VSG_SCOPE_SELF;
-use crate::services::{Services as Shared, WaterClass, chance16_i};
+use crate::random_func::chance16_i;
+use crate::services::{Services as Shared, WaterClass};
 use crate::tile_type::{MP_CLEAR, MP_TREES, MP_WATER};
 use std::{cell::UnsafeCell, ffi::c_void, ptr};
 #[repr(C)]

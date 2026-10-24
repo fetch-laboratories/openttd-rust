@@ -12,6 +12,7 @@
     clippy::cast_sign_loss,
     clippy::cast_possible_wrap
 )]
+use crate::tile_type::INVALID_TILE;
 
 #[repr(C)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -62,7 +63,6 @@ pub struct Regions {
 }
 
 const OFFSETS: [(i32, i32); 4] = [(-1, 0), (0, 1), (1, 0), (0, -1)];
-const INVALID: u32 = u32::MAX;
 
 impl Regions {
     fn index(&self, x: i32, y: i32) -> usize {
@@ -152,7 +152,7 @@ impl Regions {
                     // SAFETY: Initialized output is call-local; follower neither borrows nor mutates cache.
                     crate::witness::hit(crate::witness::WATER_FOLLOWS);
                     let next = unsafe { (leaves.follow)(tile, dir, &raw mut bridge) };
-                    if next == INVALID {
+                    if next == INVALID_TILE {
                         continue;
                     }
                     if self.coords(next) == (x, y) {
@@ -320,7 +320,7 @@ impl Visit {
                 // SAFETY: No world or cache storage is borrowed by the query.
                 crate::witness::hit(crate::witness::WATER_AQUEDUCTS);
                 let other = unsafe { (leaves.aqueduct)(tile) };
-                if other != INVALID && regions.coords(tile) != regions.coords(other) {
+                if other != INVALID_TILE && regions.coords(tile) != regions.coords(other) {
                     return Some(regions.patch(other, leaves));
                 }
             }

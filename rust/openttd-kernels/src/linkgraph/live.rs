@@ -602,9 +602,7 @@ pub unsafe extern "C" fn openttd_rust_live_graph_run(
 ) -> *mut super::Result {
     let g = unsafe { &*graph };
     let s = unsafe { &*settings };
-    let map = crate::map_func::Map {
-        log_x: (s.map_max_x + 1).ilog2() as u8,
-    };
+    let map = crate::map_func::Map::from_log_x((s.map_max_x + 1).ilog2());
     let mut nodes = Vec::with_capacity(usize::from(g.size()));
     let mut edges = Vec::new();
     for n in g.nodes.iter().take(usize::from(g.size())) {

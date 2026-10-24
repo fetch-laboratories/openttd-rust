@@ -142,9 +142,7 @@ impl Services {
         unsafe { &*(*self.commands().rail).rail }
     }
     fn map(&self) -> Map {
-        Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        }
+        self.shared().map()
     }
     fn count(&self, st: *mut BaseStation, cargo: u8) -> u32 {
         let list = (self.cargo_owner)(st, cargo);
@@ -879,8 +877,8 @@ pub extern "C" fn openttd_rust_station_randomisation(
     let map = native.map();
     let mut whole = 0;
     let mut used = 0;
-    for y in 0..area.height {
-        for x in 0..area.width {
+    for y in 0..area.h {
+        for x in 0..area.w {
             let t = area.tile.wrapping_add(map.diff(i32::from(x), i32::from(y)));
             if !(a.rail_belongs)(st, t) {
                 continue;

@@ -24,7 +24,8 @@
     clippy::too_many_lines
 )]
 use crate::clear_map::{CLEAR_DESERT, CLEAR_FIELDS, CLEAR_GRASS, CLEAR_ROCKS, CLEAR_ROUGH};
-use crate::services::{Services, chance16_i};
+use crate::random_func::chance16_i;
+use crate::services::Services;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES, MP_WATER};
 
 use crate::landscape_type::{ARCTIC, TROPIC};

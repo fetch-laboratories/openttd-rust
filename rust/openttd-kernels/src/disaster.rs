@@ -18,7 +18,8 @@
     clippy::struct_field_names,
     clippy::verbose_bit_mask
 )]
-use crate::services::{Services, chance16_i};
+use crate::random_func::chance16_i;
+use crate::services::Services;
 use crate::tile_type::INVALID_TILE;
 use std::cell::Cell;
 use std::ffi::c_void;
@@ -219,28 +220,21 @@ impl World<'_> {
         self.read(10, id, 0, 0)
     }
     fn tile_xy(&self, x: u32, y: u32) -> u32 {
-        crate::map_func::Map {
-            log_x: (self.world()[0] as u32).trailing_zeros() as u8,
-        }
-        .tile_xy(x, y)
+        crate::map_func::Map::from_log_x((self.world()[0] as u32).trailing_zeros()).tile_xy(x, y)
     }
     fn tile_virt(&self, x: i64, y: i64) -> u32 {
         self.tile_xy((x as i32 as u32) >> 4, (y as i32 as u32) >> 4)
     }
     fn tile_x(&self, tile: u32) -> i64 {
         i64::from(
-            crate::map_func::Map {
-                log_x: (self.world()[0] as u32).trailing_zeros() as u8,
-            }
-            .tile_x(tile),
+            crate::map_func::Map::from_log_x((self.world()[0] as u32).trailing_zeros())
+                .tile_x(tile),
         )
     }
     fn tile_y(&self, tile: u32) -> i64 {
         i64::from(
-            crate::map_func::Map {
-                log_x: (self.world()[0] as u32).trailing_zeros() as u8,
-            }
-            .tile_y(tile),
+            crate::map_func::Map::from_log_x((self.world()[0] as u32).trailing_zeros())
+                .tile_y(tile),
         )
     }
     async fn action(&self, kind: u32, id: u32, other: u32, a: i64, b: i64, c: i64, d: i64) -> i64 {

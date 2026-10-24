@@ -14,7 +14,6 @@
     unsafe_code,
     missing_docs,
     clippy::too_many_arguments,
-    clippy::too_many_lines,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
@@ -30,7 +29,7 @@ use crate::slope_func::{
     get_inclined_slope_direction, is_inclined_slope, is_slope_with_one_corner_raised,
 };
 use crate::strings_type::INVALID_STRING_ID;
-use crate::tile_type::INVALID_TILE;
+use crate::tile_type::{INVALID_TILE, MP_WATER};
 use crate::viewport_func::TILE_HEIGHT_STEP;
 use crate::water::{RIVER_OFFSET_DESERT_DISTANCE, WaterServices};
 use crate::witness as w;
@@ -122,9 +121,7 @@ impl World<'_> {
             water,
             size_x,
             size_y: (s.map_max_y)() + 1,
-            map: Map {
-                log_x: size_x.trailing_zeros() as u8,
-            },
+            map: Map::from_log_x(size_x.trailing_zeros()),
         }
     }
     fn error(&self, out: *mut CommandCost, string: u32) {
@@ -555,7 +552,7 @@ impl World<'_> {
                     (self.c.amount)(out, (self.c.money)(ret));
                 }
                 if flags & DoCommandFlag::EXECUTE != 0 {
-                    if (self.s.tile_type)(tile) == 6 && self.canal(tile) {
+                    if (self.s.tile_type)(tile) == MP_WATER && self.canal(tile) {
                         let owner = (self.s.tile_owner)(tile);
                         if (self.s.company_valid)(owner) {
                             self.infra(owner, u32::MAX, true);

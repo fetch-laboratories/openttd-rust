@@ -11,12 +11,14 @@
 //! Native leaves are noexcept; environmental failures terminate, panics abort.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::collapsible_if)]
 use crate::rail_map::is_pbs_signal as pbs;
+use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 
+use crate::company_type::INVALID_OWNER;
+use crate::direction_type::INVALID_DIAGDIR;
 use crate::services::{Map, RailMapServices, Services};
 use std::cell::UnsafeCell;
 use std::ffi::c_uint;
 
-const INVALID: u8 = 255;
 const ENTER_TRACKS: [u8; 4] = [0x25, 0x2a, 0x19, 0x16];
 const SEARCH_ONE: [u8; 6] = [0, 1, 0, 1, 2, 1];
 const SEARCH_TWO: [u8; 6] = [2, 3, 3, 2, 3, 0];
@@ -117,7 +119,7 @@ static STATE: ProcessState = ProcessState(UnsafeCell::new(State {
     tbu: SmallSet::new(),
     tbd: SmallSet::new(),
     global: SmallSet::new(),
-    last_owner: INVALID,
+    last_owner: INVALID_OWNER,
 }));
 fn access<T>(f: impl FnOnce(&mut State) -> T) -> T {
     // SAFETY: caller holds the native game-state mutex; closure never reenters.
@@ -210,20 +212,20 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
     while let Some(Item { mut tile, mut dir }) = access(|s| s.tbd.get()) {
         crate::witness::hit(crate::witness::SIGNAL_TILES);
         let old_tile = tile;
-        let mut exitdir = if dir == INVALID {
-            INVALID
+        let mut exitdir = if dir == INVALID_DIAGDIR {
+            INVALID_DIAGDIR
         } else {
             reverse(dir)
         };
         match read!(w, shared, tile_type, tile) {
-            1 => {
+            MP_RAILWAY => {
                 if read!(w, shared, tile_owner, tile) != owner {
                     crate::witness::hit(crate::witness::SIGNAL_OWNER_BARRIER);
                     continue;
                 }
                 let geometry = read!(w, rail, traversal, tile);
                 if geometry.depot {
-                    if dir == INVALID {
+                    if dir == INVALID_DIAGDIR {
                         crate::witness::hit(crate::witness::SIGNAL_DEPOT);
                         train_on_tile(w, tile, &mut flags);
                         exitdir = read!(w, rail, rail_depot_direction, tile).0;
@@ -317,7 +319,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                     continue;
                 }
             }
-            5 => {
+            MP_STATION => {
                 let station = read!(w, rail, station_admission, tile, owner, dir);
                 if !station.rail
                     || station.owner != owner
@@ -330,7 +332,7 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                 train_on_tile(w, tile, &mut flags);
                 tile = w.map.add_diag(tile, exitdir);
             }
-            2 => {
+            MP_ROAD => {
                 let crossing = read!(w, rail, crossing_admission, tile, owner);
                 if !crossing.crossing || crossing.owner != owner || (dir & 1) == crossing.axis.0 {
                     continue;
@@ -339,14 +341,14 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                 train_on_tile(w, tile, &mut flags);
                 tile = w.map.add_diag(tile, exitdir);
             }
-            9 => {
+            MP_TUNNELBRIDGE => {
                 let wormhole = read!(w, rail, wormhole_admission, tile, owner);
                 if wormhole.owner != owner || wormhole.transport.0 != 0 {
                     continue;
                 }
                 crate::witness::hit(crate::witness::SIGNAL_WORMHOLE);
                 let direction = wormhole.direction.0;
-                if dir == INVALID {
+                if dir == INVALID_DIAGDIR {
                     train_on_tile(w, tile, &mut flags);
                     dir = direction;
                     exitdir = reverse(direction);
@@ -357,8 +359,8 @@ fn explore(w: &World<'_>, owner: u8) -> u16 {
                     }
                     train_on_tile(w, tile, &mut flags);
                     tile = read!(w, rail, other_tunnel_bridge_end, tile);
-                    dir = INVALID;
-                    exitdir = INVALID;
+                    dir = INVALID_DIAGDIR;
+                    exitdir = INVALID_DIAGDIR;
                 }
             }
             _ => continue,
@@ -436,30 +438,47 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
         source_assert(w, access(|s| s.tbu.count == 0));
         source_assert(w, access(|s| s.tbd.count == 0));
         let kind = read!(w, shared, tile_type, tile);
-        if kind == 9 {
+        if kind == MP_TUNNELBRIDGE {
             if w.native.assertions {
                 read!(w, native, assert_wormhole_start, tile, dir);
             }
-            add_tbd(w, Item { tile, dir: INVALID });
+            add_tbd(
+                w,
+                Item {
+                    tile,
+                    dir: INVALID_DIAGDIR,
+                },
+            );
             let other = read!(w, rail, other_tunnel_bridge_end, tile);
             add_tbd(
                 w,
                 Item {
                     tile: other,
-                    dir: INVALID,
+                    dir: INVALID_DIAGDIR,
                 },
             );
-        } else if kind == 1 && read!(w, rail, is_rail_depot, tile) {
+        } else if kind == MP_RAILWAY && read!(w, rail, is_rail_depot, tile) {
             if w.native.assertions {
                 source_assert(
                     w,
-                    dir == INVALID || dir == read!(w, rail, rail_depot_direction, tile).0,
+                    dir == INVALID_DIAGDIR || dir == read!(w, rail, rail_depot_direction, tile).0,
                 );
             }
-            add_tbd(w, Item { tile, dir: INVALID });
-        } else if (kind == 1 || kind == 5 || kind == 2)
-            && (track_bits(crate::movement::track_status(w.shared, tile, 0, 0, INVALID))
-                & ENTER_TRACKS[usize::from(dir)])
+            add_tbd(
+                w,
+                Item {
+                    tile,
+                    dir: INVALID_DIAGDIR,
+                },
+            );
+        } else if (kind == MP_RAILWAY || kind == MP_STATION || kind == MP_ROAD)
+            && (track_bits(crate::movement::track_status(
+                w.shared,
+                tile,
+                0,
+                0,
+                INVALID_DIAGDIR,
+            )) & ENTER_TRACKS[usize::from(dir)])
                 != 0
         {
             add_tbd(w, Item { tile, dir });
@@ -473,8 +492,13 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
         } else {
             tile = w.map.add_diag(tile, dir);
             dir = reverse(dir);
-            if (track_bits(crate::movement::track_status(w.shared, tile, 0, 0, INVALID))
-                & ENTER_TRACKS[usize::from(dir)])
+            if (track_bits(crate::movement::track_status(
+                w.shared,
+                tile,
+                0,
+                0,
+                INVALID_DIAGDIR,
+            )) & ENTER_TRACKS[usize::from(dir)])
                 == 0
             {
                 crate::witness::hit(crate::witness::SIGNAL_NEIGHBOUR_CONTINUE);
@@ -530,13 +554,13 @@ fn force_flush(w: &World<'_>) {
     if access(|s| s.global.count >= 64) {
         crate::witness::hit(crate::witness::SIGNAL_FORCED_FLUSH);
         update_buffer(w, access(|s| s.last_owner));
-        access(|s| s.last_owner = INVALID);
+        access(|s| s.last_owner = INVALID_OWNER);
     }
 }
 fn flush(w: &World<'_>) {
     if access(|s| s.global.count != 0) {
         update_buffer(w, access(|s| s.last_owner));
-        access(|s| s.last_owner = INVALID);
+        access(|s| s.last_owner = INVALID_OWNER);
     }
 }
 fn add_side(w: &World<'_>, tile: u32, side: u8, owner: u8) {
@@ -572,7 +596,7 @@ unsafe fn world<'a>(
             native: &*native,
             // Native allocation constrains LogX to 6..=12 (or zero before allocation);
             // adapt once to the existing shared Map representation without guards.
-            map: Map { log_x: log_x as u8 },
+            map: Map::from_log_x(log_x),
         }
     }
 }
@@ -857,7 +881,7 @@ fn probe_set<const N: usize>(overflow: extern "C" fn()) -> SetTrace {
         a,
         Item {
             tile: 2,
-            dir: INVALID,
+            dir: INVALID_DIAGDIR,
         },
         a,
         Item { tile: 1, dir: 2 },
@@ -876,7 +900,7 @@ fn probe_set<const N: usize>(overflow: extern "C" fn()) -> SetTrace {
     }
     let full_failed = !set.add(Item {
         tile: u32::MAX,
-        dir: INVALID,
+        dir: INVALID_DIAGDIR,
     });
     if full_failed {
         overflow();
@@ -886,7 +910,7 @@ fn probe_set<const N: usize>(overflow: extern "C" fn()) -> SetTrace {
     let first_after_remove = set.data[0].into();
     let mut refill_succeeded = set.add(Item {
         tile: u32::MAX,
-        dir: INVALID,
+        dir: INVALID_DIAGDIR,
     });
     let refill_pop = set.get().unwrap().into();
     while set.get().is_some() {}
@@ -894,7 +918,7 @@ fn probe_set<const N: usize>(overflow: extern "C" fn()) -> SetTrace {
     let overflow_drained = set.overflowed;
     refill_succeeded &= set.add(Item {
         tile: u32::MAX,
-        dir: INVALID,
+        dir: INVALID_DIAGDIR,
     });
     set.reset();
     refill_succeeded &= set.count == 0;

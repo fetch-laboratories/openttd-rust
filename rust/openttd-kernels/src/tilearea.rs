@@ -8,6 +8,8 @@
 //! Shared orthogonal tile-area helpers from `tilearea_type.h` and `tilearea.cpp`.
 use crate::map_func::Map;
 /// Native `OrthogonalTileArea` scalar fields.
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct TileArea {
     /// North-west corner.
     pub tile: u32,
@@ -17,6 +19,35 @@ pub struct TileArea {
     pub h: u16,
 }
 impl TileArea {
+    /// `OrthogonalTileArea(start, end)`, spanning both corners in either order.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn between(map: Map, a: u32, b: u32) -> Self {
+        let x = map.tile_x(a).min(map.tile_x(b));
+        let y = map.tile_y(a).min(map.tile_y(b));
+        Self {
+            tile: (y << map.log_x) + x,
+            w: (map.tile_x(a).max(map.tile_x(b)) - x + 1) as u16,
+            h: (map.tile_y(a).max(map.tile_y(b)) - y + 1) as u16,
+        }
+    }
+    /// Original `Intersects`, including empty-area handling.
+    #[must_use]
+    pub fn intersects(self, other: Self, map: Map) -> bool {
+        if other.w == 0 || self.w == 0 {
+            return false;
+        }
+        assert!(other.h != 0 && self.h != 0);
+        let left1 = map.tile_x(self.tile);
+        let top1 = map.tile_y(self.tile);
+        let right1 = left1 + u32::from(self.w) - 1;
+        let bottom1 = top1 + u32::from(self.h) - 1;
+        let left2 = map.tile_x(other.tile);
+        let top2 = map.tile_y(other.tile);
+        let right2 = left2 + u32::from(other.w) - 1;
+        let bottom2 = top2 + u32::from(other.h) - 1;
+        !(left2 > right1 || right2 < left1 || top2 > bottom1 || bottom2 < top1)
+    }
     /// Original `Expand`, including its clipping to the full map dimensions.
     #[allow(
         clippy::cast_possible_truncation,
@@ -35,7 +66,7 @@ impl TileArea {
         self.h = (ey - sy) as u16;
     }
     /// Original row-major orthogonal tile iterator.
-    pub fn tiles(&self, map: Map) -> impl Iterator<Item = u32> + use<> {
+    pub fn tiles(self, map: Map) -> impl Iterator<Item = u32> + use<> {
         let tile = self.tile;
         let width = u32::from(self.w);
         (0..u32::from(self.h))

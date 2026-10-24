@@ -15,12 +15,12 @@
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
-    clippy::too_many_lines,
     clippy::struct_field_names,
     clippy::struct_excessive_bools,
     clippy::fn_params_excessive_bools
 )]
 use crate::services::ByteSpan;
+use crate::timer_game_common::{DAYS_IN_LEAP_YEAR, DAYS_IN_YEAR};
 #[repr(C)]
 #[derive(Default, Clone, Copy)]
 pub struct Lifecycle {
@@ -243,7 +243,7 @@ pub struct Services {
 const AVAILABLE: u8 = 1;
 const EXCLUSIVE: u8 = 2;
 use crate::company_type::OWNER_DEITY;
-use crate::vehicle::INVALID_ENGINE as INVALID;
+use crate::engine_type::INVALID_ENGINE as INVALID;
 // Original static year is process-wide; all engine entries run serialized by
 // the game-state mutex, including main-thread GUI commands and game timers.
 static mut AGING_STOPS: i32 = 0;
@@ -471,7 +471,7 @@ pub unsafe extern "C" fn openttd_rust_engine_aging_stops(s: *const Services) {
         let cfg = unsafe { call!(s, aging_year, e.shell) };
         let date = cfg
             .base_intro
-            .wrapping_add(cfg.lifelength.wrapping_mul(366) / 2);
+            .wrapping_add(cfg.lifelength.wrapping_mul(DAYS_IN_LEAP_YEAR) / 2);
         year = year.max(unsafe { call!(s, date_to_ymd, date) }.year);
     }
     unsafe {
@@ -820,7 +820,9 @@ pub unsafe extern "C" fn openttd_rust_engine_monthly(s: *const Services) {
         if !unsafe { call!(s, enabled, e.shell) } {
             continue;
         }
-        if read!(e, flags) & AVAILABLE == 0 && date >= read!(e, intro_date).wrapping_add(365) {
+        if read!(e, flags) & AVAILABLE == 0
+            && date >= read!(e, intro_date).wrapping_add(DAYS_IN_YEAR)
+        {
             unsafe {
                 available(s, e, date);
             }

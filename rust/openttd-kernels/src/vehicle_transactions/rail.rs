@@ -55,9 +55,8 @@ pub struct Services {
     pub depot_changed: extern "C" fn(u32),
 }
 
-/// `CCF_ARRANGE`: `ConsistChangeFlag::Length | ConsistChangeFlag::Capacity`.
-const CCF_ARRANGE: u8 = crate::train::CCF_ARRANGE;
-const VEH_TRAIN: u8 = 0;
+use crate::train::CCF_ARRANGE;
+use crate::vehicle_type::VEH_TRAIN;
 
 /// Resolved immutable service tables; holds no world or owner borrow.
 #[derive(Clone, Copy)]
@@ -519,7 +518,7 @@ fn check_train_attachment(x: Ctx, mut t: *mut ()) -> Option<u32> {
             let first_engine = (x.s.first_engine)(t);
             (x.s.ground.write_first_engine)(
                 unsafe { super::vehicle_ref(t) },
-                crate::vehicle::INVALID_ENGINE,
+                crate::engine_type::INVALID_ENGINE,
             );
             (x.s.invalidate_grf)(t);
             let mut regs100 = MaybeUninit::<i32>::uninit();

@@ -7,6 +7,8 @@
 
 //! `engine_type.h` values. `services.cpp` asserts every value.
 
+/// `EngineID::Invalid()`.
+pub const INVALID_ENGINE: u16 = 0xFFFF;
 /// `AIR_CTOL`.
 pub const AIR_CTOL: u8 = 1;
 

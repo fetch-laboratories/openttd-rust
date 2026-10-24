@@ -11,5 +11,4 @@
 #include <cstdint>
 struct OpenTTDStationService;
 struct OpenTTDStationActivity { uint8_t time_since_load, time_since_unload; };
-extern "C" OpenTTDStationActivity openttd_rust_station_activity(const OpenTTDStationService *);
 #endif /* RUST_STATION_ACTIVITY_FFI_H */

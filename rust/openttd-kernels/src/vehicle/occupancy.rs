@@ -83,9 +83,7 @@ pub(crate) unsafe fn update(s: &VehicleServices, v: VehicleRef, remove: bool) {
     if remove {
         unsafe { update_bucket(s, v, (s.tile_links)(v), ptr::null_mut()) };
     } else {
-        let map = Map {
-            log_x: (s.map_log_x)() as u8,
-        };
+        let map = Map::from_log_x((s.map_log_x)());
         unsafe { update_position(s, v, map) };
     }
 }
@@ -161,9 +159,7 @@ pub struct OnTile {
 }
 impl OnTile {
     pub(crate) unsafe fn new(s: &VehicleServices, tile: u32) -> Self {
-        let map = Map {
-            log_x: (s.map_log_x)() as u8,
-        };
+        let map = Map::from_log_x((s.map_log_x)());
         let mut it = Self {
             tile,
             current: unsafe { *tile_bucket(map, tile) },
