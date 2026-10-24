@@ -128,13 +128,9 @@ pub struct Strings {
     pub ship_in_way: u32,
 }
 
-/// Immutable native service table. Every function is a direct `noexcept`
-/// call; nested commands, reservations and crossing updates may reenter Rust
-/// owners, which is safe because no Rust borrow of native state exists.
-/// Pointer-taking leaves require live native cost slots, trains and conversion
-/// frames under the entry contract; their function-pointer types are unsafe.
-/// Private policy calls uphold that contract and retain only copied identities,
-/// never native references, through destructive or reentrant services.
+/// Immutable native service table. Pointer-taking leaves require live native cost slots,
+/// trains and conversion frames under the entry contract, so their function-pointer types
+/// are unsafe.
 #[repr(C)]
 pub struct RailCommandServices {
     pub shared: *const Services,
