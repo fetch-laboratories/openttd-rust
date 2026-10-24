@@ -55,7 +55,6 @@ struct OpenTTDAnimationServices {
 	bool (*station_triggers)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_triggers);
 	bool (*road_triggers)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_triggers);
 	const StationSpec *(*rail_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec);
-	const RoadStopSpec *(*road_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_spec);
 	const AirportTileSpec *(*airport_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_spec);
 	Industry *(*industry_object)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_object);
 	uint16_t (*rail_spec_triggers)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec_triggers);
@@ -79,6 +78,8 @@ const OpenTTDAirportAnimation &GetAirportAnimationBinding() noexcept;
 const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept;
 const OpenTTDRoadStopAnimation &GetRoadStopAnimationBinding() noexcept;
 extern "C" {
+OpenTTDRoadStopAnimationEntry openttd_rust_roadstop_animation_entry(uint32_t) noexcept;
+uint16_t openttd_rust_roadstop_animation_callback(uint16_t, uint32_t, uint32_t, const RoadStopSpec *, BaseStation *, uint32_t, int32_t) noexcept;
 const OpenTTDAnimationServices *openttd_rust_animation_exchange(const OpenTTDAnimationServices *);
 void openttd_rust_animation_add(uint32_t, bool);
 void openttd_rust_animation_delete(uint32_t, bool);

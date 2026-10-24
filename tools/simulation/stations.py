@@ -1255,8 +1255,7 @@ def check_commands(scenario, run, mode, role, result):
             if marker not in run["log"]:
                 raise RuntimeError("road-stop owner evidence missing: " + marker)
         if not reload and sum(
-            line.startswith("STCMD resolver-mask ")
-            for line in run["log"]
+            line.startswith("STCMD resolver-mask ") for line in run["log"]
         ) != (9 if waypoint else 15):
             raise RuntimeError("road-stop owner reseed matrix incomplete")
     if scenario["station_commands"] != "linkgraph":

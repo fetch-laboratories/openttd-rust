@@ -37,10 +37,19 @@ pub struct State {
     pub cargo: u8,
 }
 #[repr(C)]
-pub struct SpecSlot {
-    pub spec: *const RoadSpec,
+pub struct SpecKey {
     pub grfid: u32,
     pub local_id: u16,
+}
+#[repr(C)]
+pub struct SpecVacancy {
+    pub spec: *const RoadSpec,
+    pub grfid: u32,
+}
+#[repr(C)]
+pub struct SpecTriggers {
+    pub animation: u16,
+    pub cargo: u64,
 }
 #[repr(C)]
 pub struct Reseed {
@@ -49,57 +58,60 @@ pub struct Reseed {
 }
 #[repr(C)]
 pub struct Services {
-    pub shared: *const Shared,
-    pub by_tile: unsafe extern "C" fn(u32) -> *mut BaseStation,
-    pub is_station: unsafe extern "C" fn(*mut BaseStation) -> bool,
-    pub station_id: unsafe extern "C" fn(*mut BaseStation) -> u16,
-    pub town: unsafe extern "C" fn(*const BaseStation) -> *mut TownHandle,
-    pub owner: unsafe extern "C" fn(*mut BaseStation) -> u8,
-    pub facilities: unsafe extern "C" fn(*const BaseStation) -> u8,
+    pub badges: unsafe extern "C" fn(*const c_void, *const RoadSpec, u32) -> u32,
+    pub base_scope: unsafe extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     pub build_date: unsafe extern "C" fn(*const BaseStation) -> i32,
+    pub by_tile: unsafe extern "C" fn(u32) -> *mut BaseStation,
+    pub cached_cargo: unsafe extern "C" fn(*const BaseStation) -> u64,
     pub cargo_owner:
         unsafe extern "C" fn(*mut BaseStation, u8) -> *const crate::cargo_storage::List,
-    pub random_bits: unsafe extern "C" fn(*const BaseStation) -> u16,
-    pub set_random_bits: unsafe extern "C" fn(*mut BaseStation, u16) -> (),
-    pub waiting: unsafe extern "C" fn(*const BaseStation) -> u8,
-    pub set_waiting: unsafe extern "C" fn(*mut BaseStation, u8) -> (),
-    pub tile_random: unsafe extern "C" fn(*const BaseStation, u32) -> u8,
-    pub set_tile_random: unsafe extern "C" fn(*mut BaseStation, u32, u8) -> (),
-    pub frame: unsafe extern "C" fn(*mut BaseStation, u32) -> u8,
-    pub tile_count: unsafe extern "C" fn(*mut BaseStation) -> usize,
-    pub tile: unsafe extern "C" fn(*mut BaseStation, usize) -> u32,
-    pub spec_count: unsafe extern "C" fn(*const BaseStation) -> usize,
-    pub slot: unsafe extern "C" fn(*const BaseStation, usize) -> SpecSlot,
-    pub resize: unsafe extern "C" fn(*mut BaseStation, usize) -> (),
     pub clear: unsafe extern "C" fn(*mut BaseStation) -> (),
-    pub set_slot: unsafe extern "C" fn(*mut BaseStation, u8, *const RoadSpec, u32, u16) -> (),
+    pub company: unsafe extern "C" fn(u8, *const c_void) -> u32,
     pub custom: unsafe extern "C" fn(u32) -> bool,
-    pub index: unsafe extern "C" fn(u32) -> u32,
-    pub cached_cargo: unsafe extern "C" fn(*const BaseStation) -> u64,
-    pub set_cached: unsafe extern "C" fn(*mut BaseStation, u16, u64) -> (),
-    pub spec_cargo: unsafe extern "C" fn(*const RoadSpec) -> u64,
-    pub spec_animation: unsafe extern "C" fn(*const RoadSpec) -> u16,
-    pub spec_grfid: unsafe extern "C" fn(*const RoadSpec) -> u32,
-    pub spec_local_id: unsafe extern "C" fn(*const RoadSpec) -> u16,
-    pub group_count: unsafe extern "C" fn(*const RoadSpec) -> usize,
-    pub group_cargo: unsafe extern "C" fn(*const RoadSpec, usize) -> u8,
+    pub facilities: unsafe extern "C" fn(*const BaseStation) -> u8,
+    pub frame: unsafe extern "C" fn(*mut BaseStation, u32) -> u8,
     pub group: unsafe extern "C" fn(*const RoadSpec, u8) -> *const c_void,
-    pub version: unsafe extern "C" fn(*const c_void) -> u8,
-    pub badges: unsafe extern "C" fn(*const c_void, *const RoadSpec, u32) -> u32,
+    pub group_cargo: unsafe extern "C" fn(*const RoadSpec, usize) -> u8,
+    pub group_count: unsafe extern "C" fn(*const RoadSpec) -> usize,
+    pub index: unsafe extern "C" fn(u32) -> u32,
+    pub is_station: unsafe extern "C" fn(*mut BaseStation) -> bool,
+    pub make_town: unsafe extern "C" fn(*mut c_void, *mut TownHandle, bool) -> *mut c_void,
     pub nearby: unsafe extern "C" fn(u8, u32) -> u32,
     pub nearby_info: unsafe extern "C" fn(u32, bool) -> u32,
-    pub terrain: unsafe extern "C" fn(u32) -> u32,
-    pub town_zone: unsafe extern "C" fn(*const TownHandle, u32) -> u8,
-    pub town_tile: unsafe extern "C" fn(*const TownHandle) -> u32,
-    pub company: unsafe extern "C" fn(u8, *const c_void) -> u32,
-    pub reverse_road: unsafe extern "C" fn(u8, *const c_void) -> u8,
-    pub spec_file: unsafe extern "C" fn(*const RoadSpec) -> *const c_void,
-    pub station_variable:
-        unsafe extern "C" fn(*mut BaseStation, *mut c_void, u8, u8, *mut bool) -> u32,
-    pub make_town: unsafe extern "C" fn(*mut c_void, *mut TownHandle, bool) -> *mut c_void,
-    pub base_scope: unsafe extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
+    pub owner: unsafe extern "C" fn(*mut BaseStation) -> u8,
+    pub random_bits: unsafe extern "C" fn(*const BaseStation) -> u16,
+    pub resize: unsafe extern "C" fn(*mut BaseStation, usize) -> (),
     pub resolve_callback: unsafe extern "C" fn(*const State, u16, u32, u32, *mut i32, usize) -> u16,
     pub resolve_reseed: unsafe extern "C" fn(*const State, u8) -> Reseed,
+    pub reverse_road: unsafe extern "C" fn(u8, *const c_void) -> u8,
+    pub set_cached: unsafe extern "C" fn(*mut BaseStation, u16, u64) -> (),
+    pub set_random_bits: unsafe extern "C" fn(*mut BaseStation, u16) -> (),
+    pub set_slot: unsafe extern "C" fn(*mut BaseStation, u8, *const RoadSpec, u32, u16) -> (),
+    pub set_tile_random: unsafe extern "C" fn(*mut BaseStation, u32, u8) -> (),
+    pub set_waiting: unsafe extern "C" fn(*mut BaseStation, u8) -> (),
+    pub shared: *const Shared,
+    pub slot_grfid: unsafe extern "C" fn(*const BaseStation, usize) -> u32,
+    pub slot_key: unsafe extern "C" fn(*const BaseStation, usize) -> SpecKey,
+    pub slot_spec: unsafe extern "C" fn(*const BaseStation, usize) -> *const RoadSpec,
+    pub slot_vacancy: unsafe extern "C" fn(*const BaseStation, usize) -> SpecVacancy,
+    pub spec_cargo: unsafe extern "C" fn(*const RoadSpec) -> u64,
+    pub spec_count: unsafe extern "C" fn(*const BaseStation) -> usize,
+    pub spec_file: unsafe extern "C" fn(*const RoadSpec) -> *const c_void,
+    pub spec_grfid: unsafe extern "C" fn(*const RoadSpec) -> u32,
+    pub spec_local_id: unsafe extern "C" fn(*const RoadSpec) -> u16,
+    pub spec_triggers: unsafe extern "C" fn(*const RoadSpec) -> SpecTriggers,
+    pub station_id: unsafe extern "C" fn(*mut BaseStation) -> u16,
+    pub station_variable:
+        unsafe extern "C" fn(*mut BaseStation, *mut c_void, u8, u8, *mut bool) -> u32,
+    pub terrain: unsafe extern "C" fn(u32) -> u32,
+    pub tile: unsafe extern "C" fn(*mut BaseStation, usize) -> u32,
+    pub tile_count: unsafe extern "C" fn(*mut BaseStation) -> usize,
+    pub tile_random: unsafe extern "C" fn(*const BaseStation, u32) -> u8,
+    pub town: unsafe extern "C" fn(*const BaseStation) -> *mut TownHandle,
+    pub town_tile: unsafe extern "C" fn(*const TownHandle) -> u32,
+    pub town_zone: unsafe extern "C" fn(*const TownHandle, u32) -> u8,
+    pub version: unsafe extern "C" fn(*const c_void) -> u8,
+    pub waiting: unsafe extern "C" fn(*const BaseStation) -> u8,
 }
 impl Services {
     fn shared(&self) -> &Shared {
@@ -242,12 +254,17 @@ unsafe fn variable(
             };
         }
         0x45 | 0x46 => {
+            let edge = if variable == 0x45 {
+                u32::from(crate::house::HOUSE_ZONE_TOWN_EDGE) << 16
+            } else {
+                0
+            };
             if c.tile == INVALID_TILE {
-                return 0;
+                return edge;
             }
             let t = unsafe { town(c, s) };
             if t.is_null() {
-                return 0;
+                return edge;
             }
             let xy = unsafe { (s.town_tile)(t) };
             return if variable == 0x45 {
@@ -315,7 +332,7 @@ unsafe fn variable(
             }
             if variable == 0x6a {
                 return if unsafe { (s.custom)(tile) } {
-                    unsafe { (s.slot)((s.by_tile)(tile), (s.index)(tile) as usize).grfid }
+                    unsafe { (s.slot_grfid)((s.by_tile)(tile), (s.index)(tile) as usize) }
                 } else {
                     0
                 };
@@ -323,9 +340,9 @@ unsafe fn variable(
             if variable == 0x6b && !unsafe { (s.custom)(tile) } {
                 return 0xfffe;
             }
-            let grfid = unsafe { (s.slot)(c.station, (s.index)(c.tile) as usize).grfid };
+            let grfid = unsafe { (s.slot_grfid)(c.station, (s.index)(c.tile) as usize) };
             if variable == 0x6b {
-                let slot = unsafe { (s.slot)((s.by_tile)(tile), (s.index)(tile) as usize) };
+                let slot = unsafe { (s.slot_key)((s.by_tile)(tile), (s.index)(tile) as usize) };
                 return if slot.grfid == grfid {
                     u32::from(slot.local_id)
                 } else {
@@ -347,7 +364,7 @@ unsafe fn variable(
                 res |= 1 << 20;
             }
             if unsafe { (s.custom)(tile) } {
-                let slot = unsafe { (s.slot)((s.by_tile)(tile), (s.index)(tile) as usize) };
+                let slot = unsafe { (s.slot_key)((s.by_tile)(tile), (s.index)(tile) as usize) };
                 res |= (1 << if slot.grfid == grfid { 8 } else { 9 })
                     | u32::from(slot.local_id.min(255));
             }
@@ -468,21 +485,70 @@ pub unsafe extern "C" fn openttd_rust_roadstop_callback(
     let c = state(spec, st, tile, roadtype, kind, view, s);
     unsafe { (s.resolve_callback)(&raw const c, cb, p1, p2, regs, size) }
 }
+unsafe fn spec_entry(
+    tile: u32,
+    s: &Services,
+) -> crate::newgrf_animation_base::Entry<RoadSpec, BaseStation> {
+    let mut entry = crate::newgrf_animation_base::Entry {
+        spec: ptr::null(),
+        object: ptr::null_mut(),
+    };
+    if !unsafe { (s.custom)(tile) } {
+        return entry;
+    }
+    let st = unsafe { (s.by_tile)(tile) };
+    let index = unsafe { (s.index)(tile) } as usize;
+    if index < unsafe { (s.spec_count)(st) } {
+        entry.spec = unsafe { (s.slot_spec)(st, index) };
+        if !entry.spec.is_null() {
+            entry.object = st;
+        }
+    }
+    entry
+}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_roadstop_spec(
     tile: u32,
     s: *const Services,
 ) -> *const RoadSpec {
-    let s = unsafe { &*s };
-    if !unsafe { (s.custom)(tile) } {
-        return ptr::null();
-    }
-    let st = unsafe { (s.by_tile)(tile) };
-    let index = unsafe { (s.index)(tile) } as usize;
-    if index < unsafe { (s.spec_count)(st) } {
-        unsafe { (s.slot)(st, index).spec }
-    } else {
-        ptr::null()
+    unsafe { spec_entry(tile, &*s).spec }
+}
+/// Direct animation binding: the registry is installed before synchronous play;
+/// native spec/pool handles remain live until this entry returns.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_roadstop_animation_entry(
+    tile: u32,
+) -> crate::newgrf_animation_base::Entry<RoadSpec, BaseStation> {
+    unsafe { spec_entry(tile, &*crate::animated_tile::roadstop_resolver_services()) }
+}
+/// Direct callback route; the animation owner retains ordering and frame policy.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_roadstop_animation_callback(
+    cb: u16,
+    p1: u32,
+    p2: u32,
+    spec: *const RoadSpec,
+    st: *mut BaseStation,
+    tile: u32,
+    _extra: i32,
+) -> u16 {
+    let s = crate::animated_tile::roadstop_resolver_services();
+    let shared = unsafe { (&*s).shared() };
+    unsafe {
+        openttd_rust_roadstop_callback(
+            cb,
+            p1,
+            p2,
+            spec,
+            st,
+            tile,
+            crate::road_type::INVALID_ROADTYPE,
+            (shared.station_type)(tile).0,
+            (shared.station_gfx)(tile),
+            ptr::null_mut(),
+            0,
+            s,
+        )
     }
 }
 #[unsafe(no_mangle)]
@@ -501,13 +567,13 @@ pub unsafe extern "C" fn openttd_rust_roadstop_allocate(
     let count = unsafe { (s.spec_count)(st) };
     let limit = crate::newgrf_roadstop::NUM_ROADSTOPSPECS_PER_STATION;
     for i in 1..count.min(limit) {
-        if unsafe { (s.slot)(st, i).spec } == spec {
+        if unsafe { (s.slot_spec)(st, i) } == spec {
             return i as i16;
         }
     }
     let mut i = 1;
     while i < count && i < limit {
-        let slot = unsafe { (s.slot)(st, i) };
+        let slot = unsafe { (s.slot_vacancy)(st, i) };
         if slot.spec.is_null() && slot.grfid == 0 {
             break;
         }
@@ -524,12 +590,13 @@ pub unsafe extern "C" fn openttd_rust_roadstop_cache(st: *mut BaseStation, s: *c
         (s.set_cached)(st, 0, 0);
     }
     for i in 0..unsafe { (s.spec_count)(st) } {
-        let spec = unsafe { (s.slot)(st, i).spec };
+        let spec = unsafe { (s.slot_spec)(st, i) };
         if spec.is_null() {
             continue;
         }
-        animation |= unsafe { (s.spec_animation)(spec) };
-        cargo |= unsafe { (s.spec_cargo)(spec) };
+        let triggers = unsafe { (s.spec_triggers)(spec) };
+        animation |= triggers.animation;
+        cargo |= triggers.cargo;
         unsafe {
             (s.set_cached)(st, animation, cargo);
         }
@@ -585,7 +652,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_deallocate(
     if usize::from(index) == count - 1 {
         let mut num = count - 1;
         while num > 0 {
-            if unsafe { (services.slot)(st, num).grfid } != 0 {
+            if unsafe { (services.slot_grfid)(st, num) } != 0 {
                 break;
             }
             num -= 1;
@@ -692,7 +759,9 @@ pub unsafe extern "C" fn openttd_rust_roadstop_randomise(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDRoadStopResolverState" ["station_service"] => State { station, spec, root, town_scope, tile, roadtype, kind => type, view, cargo, };
-    "OpenTTDRoadStopSpecSlot" ["station_service"] => SpecSlot { spec, grfid, local_id, };
+    "OpenTTDRoadStopSpecKey" ["station_service"] => SpecKey { grfid, local_id, };
+    "OpenTTDRoadStopSpecVacancy" ["station_service"] => SpecVacancy { spec, grfid, };
+    "OpenTTDRoadStopSpecTriggers" ["station_service"] => SpecTriggers { animation, cargo, };
     "OpenTTDRoadStopReseed" ["station_service"] => Reseed { reseed, used, };
-    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { shared, by_tile, is_station, station_id, town, owner, facilities, build_date, cargo_owner, random_bits, set_random_bits, waiting, set_waiting, tile_random, set_tile_random, frame, tile_count, tile, spec_count, slot, resize, clear, set_slot, custom, index, cached_cargo, set_cached, spec_cargo, spec_animation, spec_grfid, spec_local_id, group_count, group_cargo, group, version, badges, nearby, nearby_info, terrain, town_zone, town_tile, company, reverse_road, spec_file, station_variable, make_town, base_scope, resolve_callback, resolve_reseed, };
+    "OpenTTDRoadStopResolverServices" ["station_service"] => Services { badges, base_scope, build_date, by_tile, cached_cargo, cargo_owner, clear, company, custom, facilities, frame, group, group_cargo, group_count, index, is_station, make_town, nearby, nearby_info, owner, random_bits, resize, resolve_callback, resolve_reseed, reverse_road, set_cached, set_random_bits, set_slot, set_tile_random, set_waiting, shared, slot_grfid, slot_key, slot_spec, slot_vacancy, spec_cargo, spec_count, spec_file, spec_grfid, spec_local_id, spec_triggers, station_id, station_variable, terrain, tile, tile_count, tile_random, town, town_tile, town_zone, version, waiting, };
 }

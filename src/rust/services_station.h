@@ -47,7 +47,11 @@ inline uint8_t RustRoadStopRandomBits(const BaseStation *st, uint32_t tile) noex
 inline void RustRoadStopSetRandomBits(BaseStation *st, uint32_t tile, uint8_t bits) noexcept { st->SetRoadStopRandomBits(TileIndex(tile), bits); }
 inline uint8_t RustRoadStopAnimationFrame(BaseStation *st, uint32_t tile) noexcept { return st->GetRoadStopAnimationFrame(TileIndex(tile)); }
 inline size_t RustRoadStopSpecCount(const BaseStation *st) noexcept { return st->roadstop_speclist.size(); }
-inline OpenTTDRoadStopSpecSlot RustRoadStopSpecSlot(const BaseStation *st, size_t index) noexcept { const auto &slot = st->roadstop_speclist[index]; return {slot.spec, slot.grfid, slot.localidx}; }
+inline const RoadStopSpec *RustRoadStopSlotSpec(const BaseStation *st, size_t index) noexcept { return st->roadstop_speclist[index].spec; }
+inline uint32_t RustRoadStopSlotGRFID(const BaseStation *st, size_t index) noexcept { return st->roadstop_speclist[index].grfid; }
+inline OpenTTDRoadStopSpecKey RustRoadStopSlotKey(const BaseStation *st, size_t index) noexcept { const auto &slot = st->roadstop_speclist[index]; return {slot.grfid, slot.localidx}; }
+inline OpenTTDRoadStopSpecVacancy RustRoadStopSlotVacancy(const BaseStation *st, size_t index) noexcept { const auto &slot = st->roadstop_speclist[index]; return {slot.spec, slot.grfid}; }
+inline OpenTTDRoadStopSpecTriggers RustRoadStopSpecTriggers(const RoadStopSpec *spec) noexcept { return {spec->animation.triggers.base(), spec->cargo_triggers}; }
 inline void RustRoadStopSpecResize(BaseStation *st, size_t size) noexcept { st->roadstop_speclist.resize(size); }
 inline void RustRoadStopSpecClear(BaseStation *st) noexcept { st->roadstop_speclist.clear(); }
 inline void RustRoadStopSetSpecSlot(BaseStation *st, uint8_t index, const RoadStopSpec *spec, uint32_t grfid, uint16_t local_id) noexcept { auto &slot = st->roadstop_speclist[index]; slot.spec = spec; slot.grfid = grfid; slot.localidx = local_id; }
@@ -71,7 +75,6 @@ inline bool RustRoadStopHasAnimationTrigger(BaseStation *s, uint8_t trigger) noe
 inline size_t RustRoadStopTileDataCount(BaseStation *s) noexcept { return s->custom_roadstop_tile_data.size(); }
 inline uint32_t RustRoadStopDataTile(BaseStation *s, size_t i) noexcept { return s->custom_roadstop_tile_data[i].tile.base(); }
 inline const StationSpec *RustAnimationRailSpec(uint32_t tile) noexcept { return GetStationSpec(TileIndex{tile}); }
-inline const RoadStopSpec *RustAnimationRoadSpec(uint32_t tile) noexcept { return GetRoadStopSpec(TileIndex{tile}); }
 inline const AirportTileSpec *RustAnimationAirportSpec(uint32_t tile) noexcept { return AirportTileSpec::GetByTile(TileIndex{tile}); }
 inline bool RustStationRectangleEmpty(const BaseStation *station) noexcept { return station->rect.IsEmpty(); }
 /** `&st->goods[cargo].GetOrCreateData().cargo`'s Rust owner. */
