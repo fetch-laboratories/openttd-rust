@@ -729,6 +729,12 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
                 )
     scenario = dict(scenario, executables=executables)
     if scenario["town_founding"] == "storage":
+        from .rails import normalize
+
+        source, result["storage_source_input"] = normalize(
+            Path(scenario["save"]), folder / "source"
+        )
+        scenario = dict(scenario, save=str(source))
         captures, saves = {}, {}
         for role, executable in executables.items():
             save = folder / role / "storage.sav"
@@ -769,8 +775,6 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
         storage_load_probes(
             scenario, executables, builds, folder, saves["reference"], timeout, env
         )
-        from .rails import normalize
-
         save, result["storage_reload_input"] = normalize(
             saves["reference"], folder / "normalized"
         )

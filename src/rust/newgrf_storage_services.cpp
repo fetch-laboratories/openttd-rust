@@ -7,6 +7,7 @@
 #include "../newgrf_industries.h"
 #include "../station_base.h"
 #include "../town.h"
+#include "town_services.h"
 #include "../safeguards.h"
 
 static uint32_t StorageGRFID(const GRFFile *grf) noexcept { return grf->grfid; }
@@ -29,7 +30,6 @@ static OpenTTDStorage256 *StorageCreateAirport(Station *station, uint32_t grfid)
 	station->airport.psa = new PersistentStorage(grfid, GSF_AIRPORTS, station->airport.tile);
 	return station->airport.psa->rust_storage;
 }
-static size_t StorageTownCount(const Town *town) noexcept { return town->psa_list.size(); }
 static OpenTTDStorageReference StorageTown(const Town *town, size_t index) noexcept
 {
 	const PersistentStorage *storage = town->psa_list[index];
@@ -50,7 +50,7 @@ const OpenTTDStorageServices &GetRustStorageServices() noexcept
 		.create_industry = StorageCreateIndustry,
 		.airport = StorageAirport,
 		.create_airport = StorageCreateAirport,
-		.town_count = StorageTownCount,
+		.town_count = RustTownStorageCount<const Town>,
 		.town_storage = StorageTown,
 		.create_town = StorageCreateTown,
 		.append_town = StorageAppendTown,
