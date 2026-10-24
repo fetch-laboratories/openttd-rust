@@ -2236,7 +2236,7 @@ save-registry retention, pending destruction and temporary-key rollover.
 External NewGRF programs, complete pre-161 conversion saves and GUI thread
 scheduling remain #156 limits. PR validation and metrics carry the exact evidence.
 
-### Vehicle NewGRF resolver runtime (#392, PR #397; integration #415 pending)
+### Vehicle NewGRF resolver runtime (#392, #397 via #415)
 
 Rust owns the canonical stack cache, self/parent/relative scopes, root and real-group
 selection, complete variable dispatch including 0x61 and purchase contexts,
@@ -2253,9 +2253,9 @@ semantic vehicle/cargo/save state plus both RNG streams. Native ABI and existing
 aircraft comparison probes supplement these cases. Exact commands, inventories,
 necessary-cost disposition and two function-group fixing reviews are on #397.
 Unreached external-GRF, historical and GUI paths remain on #156. Final shared
-adoption/current-base combination evidence belongs to #415.
+adoption/current-base combination passed exact-head Full in #415.
 
-### Industry and industry-tile NewGRF resolvers (#398, PR #407; #415 pending)
+### Industry and industry-tile NewGRF resolvers (#398, #407 via #415)
 
 Rust owns both stack feature contexts, roots/lazy town, variables, count/search
 and tile-relative helpers, probability/refusal and feature resolution policy.
@@ -2273,4 +2273,4 @@ caller-file cargo, legacy version/location rules and tile identities. Semantic
 INDY/map/save/log and RNG comparisons accompany existing production/lifecycle/
 animation/acceptance and cargo probes. Commands, metrics, accepted boundary cost
 and fixing/adoption reviews are on #407; external/historical limits are on #156.
-Final exact-current-base combination validation belongs to #415.
+The final exact-current-base combination passed Full in #415.
