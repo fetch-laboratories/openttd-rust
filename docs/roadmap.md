@@ -4,14 +4,14 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-24, code at `268c7c140d`)
+## Where the fork stands (2026-10-24, code at `09eda66766`)
 
-- Fifty-six ownership ports. Original retirement: 59,788 / 470,612 C/C++ src lines (12.70%); simulation 51,422 / 102,615 (50.11%). Whole-fork Rust/tooling/glue: 108,442 / 39,106 / 38,636. Source-line measures include comments/data, not completed behavior percentages.
-- Since the seventeenth steering: 18 owners, 10,152 original lines retired, 4,239 net glue and 7,015 tooling lines added. #415 integrates vehicle #397, industry #407, metadata #413 and bribe coverage #414. #412 integrated storage #400, structures #405 and metadata #408; earlier batches remain recorded below. No rollback.
-- Latest completed profile at 6bb, with BOTH 6a and 6bb using quiet-ac7 anchors: TGP 1.123906x; Opus 1.456272x; Grok 1.443931x; P1996 1.343440x; P2000 1.413525x; P2016 1.484664x. Counts rose 0.008-0.345%; only TGP projection rose, by 0.021%. No >3% trigger; these are not wall savings. Next profile is due after the next integration, the second since this assessment.
-- Repaired-tip quiet 6bb pass: TGP 1.125882x; Opus 1.408100x; Grok 1.403127x; P1996 1.321189x; P2000 1.377896x; P2016 1.455912x. Four interleaved three-pair medians, all 144 exits/72 semantic pairs passed. Prepared before the actual hold and released at the final exit; no competing builds/profiles/games. All below ceilings; only P2016 remains in band. Its current net attribution selects aircraft positioning, scheduler orchestration and pixel-height compiler/boundary repairs on #275. Costs include necessary work, not promised savings. New anchors are queued in shared maintenance; recompute both tips under those anchors.
-- Integrated combinations passed exact-current-base Full. Since steering: 34 Full requests, 19 successful, nine failed and six cancelled. #415's frozen industry loader repair passed fresh review and final Full. Strict protection is enabled. Both due macOS configurations passed at 6bb; next run is due after four integrations. CI maintenance observation is 9/10. CI_ON_DEMAND stays true.
-- Six unintegrated components: reviewed station #411; preserved house/town #416 awaiting shared helpers/candidate checks; selected road-stop #410; one shared-helper/anchor batch; one speed-repair batch; one standing #156 coverage batch. Following whole Action2 #417 and airport #418 owners are selected and queued. Completed checkouts are removed under #259; protected speed inputs remain until consumed.
+- Fifty-seven ownership ports. Original retirement: 60,349 / 470,612 C/C++ src lines (12.82%); simulation 51,983 / 102,615 (50.66%). Whole-fork Rust/tooling/glue: 109,657 / 39,527 / 38,965. Source-line measures include comments/data, not completed behavior percentages.
+- Since the seventeenth steering: 19 owners, 10,713 original lines retired, 4,568 net glue and 7,436 tooling lines added. #423 integrates station #411, goods/base-scope/anchors #419, affordability coverage #420 and boundary repairs #421. Earlier batches remain below. No rollback.
+- Latest completed profile is 6bb. Recomputing BOTH 6a and 6bb under the newly integrated quiet-6bb anchors gives TGP 1.125882x; Opus 1.408100x; Grok 1.403127x; P1996 1.321189x; P2000 1.377896x; P2016 1.455912x, all floor-limited with 0% projection rise. Counts rose 0.008-0.345%; no >3% trigger. The due profile of merged 09eda is running; compare it with retained 6bb counts under these same anchors.
+- Quiet 6bb used four interleaved three-pair medians; all 144 exits/72 semantic pairs passed. Prepared before the actual hold and released at final exit; no competing builds/profiles/games. Only P2016 remains in band. Its three net-ranked aircraft/scheduler/pixel repairs are now integrated; assess merged-tip counts and remeasure six wall ratios after preparation. Necessary excess costs are not promised savings. No timing hold is active.
+- Integrated combinations passed exact-current-base Full. Since steering: 37 Full requests, 20 successful, ten failed and seven cancelled. #423's PBS observer repair passed fresh review and final Full; map/RNG had already matched. Strict protection is enabled. Both due macOS configurations passed at 6bb; next run is due after three integrations. CI maintenance observation reached 10/10; broader infrastructure remains unselected. CI_ON_DEMAND stays true.
+- Five unintegrated components: house/town #416 completion, reviewed road-stop #422 awaiting direct station/shared adoption, one shared metadata batch, common Action2 #417 and one standing #156 coverage batch. Airport #418 is selected and queued; fresh planning covers the following owners. Completed checkouts are removed under #259; protected speed inputs remain until consumed.
 
 ## Eighteenth steering review (2026-10-23, remove accidental gates and close shared-layer debt)
 
@@ -132,6 +132,7 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 
 | #392 | Complete vehicle NewGRF resolver/cache runtime | #397 via #415 | `268c7c140d` | 2047 / 442 / 599 / 1076; net glue 378 |
 | #398 | Industry/industry-tile NewGRF resolver runtime | #407 via #415 | `268c7c140d` | 1076 / 436 / 364 / 516; net glue 329 |
+| #399 | Complete station/waypoint NewGRF resolver runtime | #411 via #423 | `09eda66766` | 1207 / 261 / 267 / 561; net glue 254 |
 
 Harness/process #72/#84/#97/#88/#75/#90 and maintenance #209-#302 retain evidence in their PRs.
 Rows below use original retirement and net glue (#223).
@@ -152,6 +153,7 @@ Rows below use original retirement and net glue (#223).
 | #156 structure coverage; #261 shared resolver metadata | #405, #408 | #412 | `6bb78266d2` | 0 / 136 / 40 / 0; net glue 28 |
 
 | #261 shared metadata; #156 bribe coverage and frozen industry loader | #413, #414; #415 repair | #415 | `268c7c140d` | in PRs; combined 3120 / 1099 / 979 / 1592, net glue 723 |
+| #261 goods/base scope; #275 anchors and repairs; #156 affordability/PBS observation | #419, #420, #421; #423 repair | #423 | `09eda66766` | in PRs; combined with #411: 1297 / 439 / 350 / 561, net glue 329 |
 
 ## Phase 1: selected maintenance and coverage
 
@@ -164,11 +166,10 @@ new tooling stream is introduced. Keep one worker closing the coverage backlog.
 
 Integrate ready reviewed work first. Keep at most six component branches.
 
-1. **#399 / #411 station/waypoint resolver:** whole-owner fixing review and root spot-check pass at d35afa82c5. Root's minimal #261 shared ConvertState/base-scope and quiet-anchor batch starts from integrated 268. Prepare one combination with canonical real-group/airport/helper adoption and scoped resolution review, then current-base Full; no repeated whole-owner review/cost gate or serial Full for shared services.
-2. **#409 / #416 house/shared-town resolver:** whole source/default fixtures preserved at 2e7d2e665c; cost accepted once. Reference house/reload pass, candidate remains unvalidated. Adopt actual integrated helpers/metadata, finish build/Cargo4/default comparisons/audit, then fresh fixing review and Full. No temporary parallel helper or unmerged base adoption.
-3. **#410 road-stop resolver/spec associations:** active from integrated 268. Own stack/root/cargo/lazy parent, complete triggers and association lifecycle over native vectors. Require the selected real availability/reseed/command lifecycle checkpoint and once-only cost disposition; final common station policy adoption calls Rust directly.
-4. **Speed #275, coverage #156 and cleanup #259:** implement the three net-ranked repairs in one batch; ready owners proceed while prepared. Standing coverage worker closes one remaining integrated-owner gap outside active resolver/speed fixtures. Shared maintenance records measured six anchors; root profiles every second integration and remeasures after fixes. Keep protected inputs; broader CI tooling stays unselected until observation 10/10.
-5. **Queued #417 common Action2, then #418 airport/airport-tile resolution:** fresh Astra/high planning verified whole remaining gameplay runtimes, direct existing owners and real default fixture plans. Issue scopes define concrete checkpoints and fidelity/native boundaries; start by readiness/capacity. No utility/GUI fallback or draft-service dependency.
+1. **#409 / #416 house/shared-town resolver:** whole source/default fixtures preserved at 2e7d2e665c; cost accepted once. Fresh completion worker adopts actual integrated helpers, finishes candidate build/Cargo4/default comparisons/audit, then fresh fixing review and Full. Reference-only success is not candidate evidence.
+2. **#410 / #422 road-stop resolver/spec associations:** whole review/root spot-check pass at bcd9567c87; necessary boundary cost accepted once. Root promotes common station/spec metadata independently. Adopt it and integrated #411 common variables/cargo reducers directly, delete temporary facades/copies, then scoped adoption review/current-base Full. Preserve ordinary CBID_NO_CALLBACK zero reseeds; explicit-callback fixtures do not claim otherwise-unreachable ordinary draws.
+3. **Shared #261, speed #275, coverage #156 and cleanup #259:** land canonical metadata once, batch ready reviewed items without delaying ready owners. The three selected speed repairs are integrated; profile merged 09eda, prepare and remeasure the six ratios. Standing coverage closes one remaining integrated-owner gap outside active resolver/speed fixtures. Preserve protected inputs; no new infrastructure selection follows automatically from observation 10/10.
+4. **#417 common Action2, then #418 airport/airport-tile resolution:** whole Action2 implementation starts from integrated 09eda; airport is next by readiness/capacity. Issue scopes define concrete checkpoints, fidelity/native boundaries and default evidence. Fresh Astra/high planning selects the following whole simulation owners; no utility/GUI fallback or draft-service dependency.
 
 New owners start from integrated rust-migration, never draft services. Root lands
 a shared service once, and other drafts adopt it when preparing final validation.
@@ -179,25 +180,24 @@ when the existing restart loop calls for it; completing this list does not stop 
 
 ## Resume checkpoint
 
-Development is active. #415 merged after the repaired exact-current-base Full.
-Minimal shared services unblock the reviewed station and preserved house owners;
-source repairs, road-stop ownership and standing coverage proceed independently.
+Development is active. #423 merged after repaired exact-current-base Full.
+Integrated goods/base-scope helpers unblock house candidate validation;
+road-stop adoption, whole Action2 and standing coverage proceed independently.
 
 | Item | Saved head | Resume action | Jobs / CI |
 | --- | --- | --- | --- |
-| #411 station resolver | `d35afa82c5` | Canonical adoption/combination scoped review, then Full. | Whole review/root spot-check pass; no local jobs. |
-| #416 house/town | `2e7d2e665c` | Integrated helpers, fresh completion checks, then review. | Preserved clean; candidate unvalidated. |
-| #261 shared / #275 anchors | base `268c7c140d` | Minimal goods/base scope; record measured six anchors. | Fresh implementation active. |
-| #410 road-stop | base `268c7c140d` | Complete owner; real callback/association checkpoint. | Fresh implementation active. |
-| #275 speed repairs | base `268c7c140d` | Aircraft/scheduler/pixel fixes; root assesses merged tip. | Fresh implementation; no timed hold. |
-| #156 coverage | base `268c7c140d` | One remaining integrated-owner gap and targeted mutations. | Fresh standing worker active. |
-| #417 / #418 | selected | Common Action2 first, airport runtime second. | Queued, not started. |
+| #416 house/town | `2e7d2e665c` | Integrated helper adoption, candidate checks, fresh review. | Fresh continuation active; original preserved. |
+| #261 shared metadata | base `09eda66766` | Promote station/spec leaves and integrated copies once. | Fresh implementation active. |
+| #422 road-stop | `bcd9567c87` | Integrated shared/direct station adoption, scoped review/Full. | Whole review/root spot-check pass; no jobs. |
+| #275 merged-tip profile | `09eda66766` | Same-anchor count assessment, then prepared quiet remeasurement. | Background profile active; no timed hold. |
+| #156 coverage | base `09eda66766` | One remaining integrated-owner gap and targeted mutations. | Fresh standing worker active. |
+| #417 / #418 | base `09eda66766` | Complete common Action2; airport next when capacity frees. | Action2 implementation active; airport queued. |
 
 Preserve speed checkouts `af1fea6a`, `bf961767`, `72a1223d`, `7ece2878`, `2a35b1c0`
 and their exact runtime until #275 consumes them. Keep the pinned reference
 unchanged. Current root is gpt-6.1-sol xhigh; implementation/review workers use
 Sol high and planning uses Astra high. CI_ON_DEMAND stays true; macOS is due
-after four integrations. Old wind-down messages bind only the stopped session.
+after three integrations. Old wind-down messages bind only the stopped session.
 
 ## Progress metric
 
