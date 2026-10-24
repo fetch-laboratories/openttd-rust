@@ -44,8 +44,36 @@ static void State(const char *name, const Vehicle *v)
 	fmt::print(stderr, "ORDERS state {} {} {} {} {} {} {} {} {} {} {}\n", name, v->index.base(), v->GetNumOrders(), v->orders == nullptr ? 0 : v->orders->GetNumVehicles(), v->cur_real_order_index, v->cur_implicit_order_index, v->round_trip_time, v->depot_unbunching_last_departure, v->depot_unbunching_next_departure, v->timetable_start, v->lateness_counter);
 }
 
+static void ReservedDeparture()
+{
+	/* The committed save has no reservations. Add seven ordinary station cargo
+	 * units, reserve them through the real cargo list, then leave by SkipToOrder. */
+	bool reservation = false;
+	for (Vehicle *u : Vehicle::Iterate()) {
+		if (!u->IsPrimaryVehicle() || !u->current_order.IsType(OT_LOADING) || u->cargo_cap < u->cargo.TotalCount() + 7) continue;
+		Station *st = Station::Get(u->last_station_visited);
+		auto &cargo = st->goods[u->cargo_type].GetOrCreateData().cargo;
+		if (!CargoPacket::CanAllocateItem()) std::abort();
+		cargo.Append(new CargoPacket(7, 3, st->index, st->xy, Money(133)), StationID::Invalid());
+		const std::array<StationID, 1> next{StationID::Invalid()};
+		uint amount = cargo.Reserve(7, &u->cargo, next, u->tile);
+		uint waiting = cargo.AvailableCount(), reserved = cargo.ReservedCount();
+		uint load = u->cargo.ActionCount(VehicleCargoList::MTA_LOAD);
+		CheckCommand("reserved-skip", Command<CMD_SKIP_TO_ORDER>::Do(DoCommandFlag::Execute, u->index, u->orders->GetNext(u->cur_implicit_order_index)));
+		reservation = amount == 7 && load == 7 && u->cargo.ActionCount(VehicleCargoList::MTA_LOAD) == 0;
+		fmt::print(stderr, "VISITS reservation {} {} {} {} {}\n", u->index, amount, reservation, cargo.ReservedCount() + 7 == reserved, cargo.AvailableCount() == waiting + 7);
+		break;
+	}
+	if (!reservation) std::abort();
+}
+
 static bool VisitsScenario(std::span<std::string_view> args)
 {
+	if (args[1] == "visits-reserved") {
+		Backup<CompanyID> company(_current_company, CompanyID::Begin());
+		ReservedDeparture(); company.Restore();
+		return true;
+	}
 	if (args[1] != "visits") return false;
 	/* Declared inputs on padhattan-ridge-2000's running fleet (#349): each order
 	 * change is an ordinary command, checked against the vehicle it expects. */
@@ -116,25 +144,7 @@ static bool VisitsScenario(std::span<std::string_view> args)
 	Vehicle *empty = vehicle(11, VEH_ROAD);
 	CheckCommand("unload", Command<CMD_MODIFY_ORDER>::Do(DoCommandFlag::Execute, empty->index, 0, MOF_UNLOAD, to_underlying(OrderUnloadType::Unload)));
 	CheckCommand("no-load", Command<CMD_MODIFY_ORDER>::Do(DoCommandFlag::Execute, empty->index, 0, MOF_LOAD, to_underlying(OrderLoadType::NoLoad)));
-	/* The committed save has no reservations. Add seven ordinary station cargo
-	 * units, reserve them through the real cargo list, then leave by SkipToOrder. */
-	bool reservation = false;
-	for (Vehicle *u : Vehicle::Iterate()) {
-		if (!u->IsPrimaryVehicle() || !u->current_order.IsType(OT_LOADING) || u->cargo_cap < u->cargo.TotalCount() + 7) continue;
-		Station *st = Station::Get(u->last_station_visited);
-		auto &cargo = st->goods[u->cargo_type].GetOrCreateData().cargo;
-		cargo.Append(new CargoPacket(7, 3, st->index, st->xy, Money(133)), StationID::Invalid());
-		const std::array<StationID, 1> next{StationID::Invalid()};
-		uint amount = cargo.Reserve(7, &u->cargo, next, u->tile);
-		uint waiting = cargo.AvailableCount(), reserved = cargo.ReservedCount();
-		uint load = u->cargo.ActionCount(VehicleCargoList::MTA_LOAD);
-		CheckCommand("reserved-skip", Command<CMD_SKIP_TO_ORDER>::Do(DoCommandFlag::Execute, u->index, u->orders->GetNext(u->cur_implicit_order_index)));
-		reservation = amount == 7 && load == 7 && u->cargo.ActionCount(VehicleCargoList::MTA_LOAD) == 0;
-		fmt::print(stderr, "VISITS reservation {} {} {} {} {}\n", u->index, amount, reservation, cargo.ReservedCount() + 7 == reserved, cargo.AvailableCount() == waiting + 7);
-		break;
-	}
-	if (!reservation) std::abort();
-	/* Also skip any pre-existing reservation, if future fixture saves add one. */
+	/* Skipping a loading order returns any pre-existing reserved cargo. */
 	size_t reserved = 0;
 	for (Vehicle *u : Vehicle::Iterate()) {
 		if (!u->IsPrimaryVehicle() || !u->current_order.IsType(OT_LOADING)) continue;

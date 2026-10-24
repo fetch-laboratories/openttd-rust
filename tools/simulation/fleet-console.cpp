@@ -44,6 +44,7 @@ static bool SameRandom(const SavedRandomSeeds &a, const SavedRandomSeeds &b);
 /* Observe the real resolver at its Action2 entry, then run a normal deterministic
  * group (including register 100). No callback service or command body is replaced. */
 struct AttachmentObserver : SpriteGroup {
+	AttachmentObserver() : SpriteGroup() {}
 	const SpriteGroup *program = nullptr;
 	mutable uint calls = 0;
 	mutable bool valid = true;
@@ -69,7 +70,7 @@ struct AttachmentObserver : SpriteGroup {
 static void AttachmentCallbacks(Train *head)
 {
 	Engine *engine = Engine::Get(head->engine_type);
-	AutoRestoreBackup<CargoGRFFileProps> props(engine->grf_prop, engine->grf_prop);
+	Backup<CargoGRFFileProps> props(engine->grf_prop);
 	GRFFile grf;
 	grf.grfid = 0x156CA110;
 	auto config = std::make_unique<GRFConfig>("attachment-fixture.grf");
@@ -80,6 +81,7 @@ static void AttachmentCallbacks(Train *head)
 	StringID regtext = AddGRFString(grf.grfid, GRFStringID(0xD042), 0x7F, true, false, "attachment register", STR_UNDEFINED);
 	/* Pool-allocated Action2 inputs stay alive until the engine's original groups
 	 * are restored. The observer delegates to the unchanged Action2 interpreter. */
+	if (!SpriteGroup::CanAllocateItem(3)) FixtureAbort(__LINE__);
 	auto *result = new CallbackResultSpriteGroup(CALLBACK_FAILED);
 	auto *program = new DeterministicSpriteGroup();
 	program->size = DSG_SIZE_DWORD;
@@ -103,11 +105,11 @@ static void AttachmentCallbacks(Train *head)
 	for (const auto &c : cases) {
 		grf.grf_version = c.version; result->result = c.result;
 		for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
-			Train *wagon = head->Last();
+			Train *wagon = head->GetNextVehicle();
 			EngineID first = wagon->gcache.first_engine;
 			observer->calls = 0; observer->valid = true;
 			SavedRandomSeeds before, after; SaveRandomSeeds(&before);
-			CommandCost cost = Command<CMD_MOVE_RAIL_VEHICLE>::Do(flags, wagon->index, head->index, false);
+			CommandCost cost = Command<CMD_MOVE_RAIL_VEHICLE>::Do(flags, wagon->index, head->Last()->index, false);
 			SaveRandomSeeds(&after);
 			bool restored = wagon->First() == head && wagon->gcache.first_engine == first;
 			bool outcome = c.error == STR_NULL ? cost.Succeeded() : cost.Failed() && cost.GetErrorMessage() == c.error;
