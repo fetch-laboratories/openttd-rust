@@ -46,8 +46,8 @@ retained evidence; steering verified each claim acted on. No fidelity audit ran.
 Actions:
 1. **Local cleanup (#259):** done; #275 received the retained conclusions.
 2. **#449-#452:** done through #454, #455, #458, #459 and #460, with no
-   behavior change; #450 and #451 missed their line estimates within the
-   recorded margins (PRs explain).
+   behavior change. #450 reached about -1,690 of its -2,000 line estimate and
+   #451 about -1,090 of -1,800; #455 and #460 explain the misses.
 3. **AGENTS.md** adds comment, prose and test rules, tracked speed tooling,
    evidence-free component entries, and tracker bodies as current lists with
    task status kept on the PR. #261 is closed; batching names #449-#452.
