@@ -10,7 +10,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from . import core, orders
+from . import core
 from .core import (
     ROOT,
     SNAPSHOT_TICKS,
