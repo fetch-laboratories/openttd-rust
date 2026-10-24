@@ -52,6 +52,15 @@ witness_blocks! {
         AIRCRAFT_CACHE_ENTRIES = 5 => "aircraft.cache_entries",
         AIRCRAFT_DISASTER_ENTRIES = 6 => "aircraft.disaster_entries",
     }
+    common_action2 {
+        ACTION2_BINARY = 0 => "common_action2.binary",
+        ACTION2_ERROR = 1 => "common_action2.error",
+        ACTION2_INDIRECT = 2 => "common_action2.indirect",
+        ACTION2_LINEAR = 3 => "common_action2.linear",
+        ACTION2_PROCEDURE = 4 => "common_action2.procedure",
+        ACTION2_RESEED = 5 => "common_action2.reseed",
+        ACTION2_STORAGE = 6 => "common_action2.storage",
+    }
     engine {
         ENGINE_SERVICES = 0 => "engine.services",
         ENGINE_BYTES = 1 => "engine.bytes",
