@@ -177,7 +177,6 @@ static uint32_t GetAirportTileIDAtOffset(TileIndex tile, const Station *st, uint
 /* virtual */ uint32_t AirportTileScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
 #ifdef WITH_RUST
-	assert(this->context.station != nullptr);
 	return openttd_rust_airport_tile_variable(&this->context, &this->ro, variable, parameter, &available, &GetAirportResolverServices());
 #else
 	assert(this->st != nullptr);

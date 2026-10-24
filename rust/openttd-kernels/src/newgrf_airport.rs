@@ -436,6 +436,7 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
 ) -> u32 {
     let c = unsafe { *state };
     let s = unsafe { &*s };
+    (s.check)(!c.station.is_null());
     match variable {
         0x41 => (s.terrain)(c.tile),
         0x42 => {
