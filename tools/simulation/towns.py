@@ -10,7 +10,7 @@ import subprocess
 import threading
 from pathlib import Path
 
-from . import core, orders
+from . import core
 from .core import (
     ROOT,
     SNAPSHOT_TICKS,
@@ -690,8 +690,11 @@ def adapter(build, folder, env):
     (folder / "town-generation-original.hpp").write_text(original)
     local = folder / "towns-console.cpp"
     local.write_bytes((ROOT / "tools/simulation/towns-console.cpp").read_bytes())
-    return orders.adapter(
-        build, folder, env, source=local, name="towns", afterload=False
+    shutil.copy2(ROOT / "tools/simulation/storage-console.inc", folder)
+    from .console_adapter import console_adapter
+
+    return console_adapter(
+        build, folder, env, local, "towns", replace_objects=("saveload.cpp.o",)
     )
 
 
@@ -725,6 +728,62 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
                     builds[role] / name, target_is_directory=True
                 )
     scenario = dict(scenario, executables=executables)
+    if scenario["town_founding"] == "storage":
+        from .rails import normalize
+
+        source, result["storage_source_input"] = normalize(
+            Path(scenario["save"]), folder / "source"
+        )
+        scenario = dict(scenario, save=str(source))
+        captures, saves = {}, {}
+        for role, executable in executables.items():
+            save = folder / role / "storage.sav"
+            setup = dict(
+                scenario, console=[f'towns_scenario storage "{save}"'], ticks=1
+            )
+            run = run_game(
+                setup,
+                executable,
+                builds[role],
+                folder / role / "capture",
+                timeout,
+                env,
+                False,
+            )
+            if (
+                run["exit"]
+                or "STORAGE policies rollback reuse saved true" not in run["log"]
+                or not save.is_file()
+            ):
+                raise RuntimeError(f"{role} nonempty storage capture failed")
+            chunk = read_save(save)["PSAC"]
+            values = [decode_element(chunk, body) for _, body in chunk["elements"]]
+            if len(values) != 4 or not all(any(row["storage"]) for row in values):
+                raise RuntimeError(f"{role} nonempty PSAC marker missing")
+            captures[role] = values
+            saves[role] = save
+        if captures["reference"] != captures["candidate"] or core.compare_saves(
+            saves["reference"],
+            saves["candidate"],
+            scenario["name"],
+            10,
+            {"chunks": 0, "elements": 0, "masked": {}},
+        ):
+            raise RuntimeError(
+                "captured storage payloads or native associations differ"
+            )
+        storage_load_probes(
+            scenario, executables, builds, folder, saves["reference"], timeout, env
+        )
+        save, result["storage_reload_input"] = normalize(
+            saves["reference"], folder / "normalized"
+        )
+        return dict(
+            scenario,
+            kind="save",
+            save=str(save),
+            console=["towns_scenario storage-inspect", "unpause"],
+        )
     if scenario["town_founding"] == "authority":
         if not scenario.get("town_commands_reload"):
             return dict(scenario, console=["towns_scenario authority", "unpause"])
@@ -796,6 +855,53 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
         save=str(save),
         console=["towns_scenario inspect", "unpause"],
     )
+
+
+def storage_load_probes(scenario, executables, builds, folder, capture, timeout, env):
+    """Real PSAC header failure, incremental partial publication and 16-word import."""
+    from .disasters import gamma
+
+    chunk = read_save(capture)["PSAC"]
+    data = capture.read_bytes()
+    reader = Reader(data, chunk["span"][0] + 5)
+    reader.take(reader.gamma() - 1)
+    header = data[chunk["span"][0] + 4 : reader.pos]
+    body = chunk["elements"][0][1]
+    partial = struct.pack(">I", 0xAABBCCDD) + gamma(256) + struct.pack(">i", -7)
+    bad_header = bytearray(header + b"\0")
+    bad_header[len(gamma(len(header) - 1)) + 1] = 5
+    old_body = struct.pack(">I16i", 0x39312345, -(1 << 31), *([0] * 14), -393)
+    inputs = {
+        "header": bad_header,
+        "partial": header
+        + gamma(len(body) + 1)
+        + body
+        + gamma(len(body) + 1)
+        + partial,
+        "legacy16": b"\1" + gamma(len(old_body) + 1) + old_body + b"\0",
+    }
+    for case, raw in inputs.items():
+        path = folder / f"PSAC-{case}.bin"
+        path.write_bytes(raw)
+        for role, executable in executables.items():
+            probe = dict(
+                scenario,
+                console=[f'towns_scenario storage-load "{path}" {case}'],
+                ticks=1,
+            )
+            run = run_game(
+                probe,
+                executable,
+                builds[role],
+                folder / f"{role}-{case}",
+                timeout,
+                env,
+                False,
+            )
+            if run["exit"] or f"STORAGE load {case} true" not in run["log"]:
+                raise RuntimeError(
+                    f"{role} native PSAC/{case} publication probe failed"
+                )
 
 
 def founding_scenarios(soak):
@@ -884,6 +990,16 @@ def scenarios(soak):
         + founding_scenarios(soak)
         + house_scenarios(soak)
         + command_scenarios(soak)
+        + [
+            {
+                "name": "town-storage-reload",
+                "kind": "save",
+                "save": str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+                "town_founding": "storage",
+                "short_checkpoint": True,
+                "ticks": 1,
+            }
+        ]
     )
 
 
@@ -920,7 +1036,10 @@ FOUNDING_BRANCHES = (
 
 
 def check(scenario, run, mode, role, result):
-    if scenario.get("town_founding") == "authority" and not run["exit"]:
+    if scenario.get("town_founding") == "storage" and not run["exit"]:
+        if "STORAGE reloaded true" not in run["log"]:
+            raise RuntimeError("nonempty storage reference/owner reload marker missing")
+    elif scenario.get("town_founding") == "authority" and not run["exit"]:
         required = (
             ()
             if scenario["town_commands_reload"]

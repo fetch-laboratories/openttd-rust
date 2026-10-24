@@ -204,6 +204,9 @@ uint32_t AirportResolverObject::GetDebugID() const
  */
 /* virtual */ void AirportScopeResolver::StorePSA(uint pos, int32_t value)
 {
+#ifdef WITH_RUST
+	openttd_rust_storage_airport(&GetRustStorageServices(), this->st, this->ro.grffile, pos, value);
+#else
 	if (this->st == nullptr) return;
 
 	if (this->st->airport.psa == nullptr) {
@@ -216,6 +219,7 @@ uint32_t AirportResolverObject::GetDebugID() const
 		this->st->airport.psa = new PersistentStorage(grfid, GSF_AIRPORTS, this->st->airport.tile);
 	}
 	this->st->airport.psa->StoreValue(pos, value);
+#endif
 }
 
 /**

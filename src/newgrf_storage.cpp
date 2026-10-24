@@ -17,6 +17,18 @@
 PersistentStoragePool _persistent_storage_pool("PersistentStorage");
 INSTANTIATE_POOL_METHODS(PersistentStorage)
 
+#ifdef WITH_RUST
+BasePersistentStorageArray::~BasePersistentStorageArray() = default;
+static void StorageDiscard(void *shell) noexcept
+{
+	auto *it = static_cast<BasePersistentStorageArray *>(shell);
+	Debug(desync, 2, "warning: discarding persistent storage changes: Feature {}, GrfID {:08X}, Tile {}", it->feature, std::byteswap(it->grfid), it->tile);
+}
+void BasePersistentStorageArray::SwitchMode(PersistentStorageMode mode, bool ignore_prev_mode)
+{
+	openttd_rust_storage_switch_mode(mode, ignore_prev_mode, RustAssertCondition, StorageDiscard);
+}
+#else
 /** The changed storage arrays */
 static std::set<BasePersistentStorageArray*> *_changed_storage_arrays = new std::set<BasePersistentStorageArray*>;
 
@@ -95,3 +107,5 @@ void AddChangedPersistentStorage(BasePersistentStorageArray *storage)
 	}
 	_changed_storage_arrays->clear();
 }
+
+#endif /* WITH_RUST */
