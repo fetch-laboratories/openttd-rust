@@ -227,9 +227,6 @@ pub struct ClearSquareServices {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Services {
-    /// Private controller unit-test callee stub, absent from the game ABI.
-    #[cfg(test)]
-    pub safe_waiting_position: unsafe extern "C" fn(*const Train, u32, u8, bool) -> bool,
     /// Complete synchronous movement owner; immutable process-lifetime table.
     pub movement_services: extern "C" fn() -> *const crate::movement::MovementServices,
     /// Canonical native tile owner write.
@@ -923,7 +920,6 @@ pub fn fixture(
         false
     }
     Services {
-        safe_waiting_position: fixture_safe,
         movement_services: fixture_movement,
         set_tile_owner: zone,
         autoslope: flag0,
@@ -1461,11 +1457,6 @@ extern "C" fn unused_tile_add_wrap(_: u32, _: i32, _: i32) -> u32 {
 #[cfg(test)]
 extern "C" fn unused_road_is_tram(_: RoadType) -> bool {
     panic!("unused tram classification");
-}
-
-#[cfg(test)]
-extern "C" fn fixture_safe(_: *const Train, _: u32, _: u8, _: bool) -> bool {
-    false
 }
 
 #[cfg(test)]

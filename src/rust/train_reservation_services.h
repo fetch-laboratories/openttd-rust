@@ -13,20 +13,10 @@
 
 /** @file train_reservation_services.h Direct map/PBS/follower services. */
 
-template <typename Result, auto Member>
-static Result TrainReservationSharedMap(void *, OpenTTDTrainHandle, uint32_t tile) noexcept
-{
-	return (GetRustSharedServices().*Member)(tile);
-}
-
 static uint64_t TrainReservationAllCompat(void *, OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	return RustAllCompatibleRailTypes(v->GetRailTypes().base());
-}
-static uint64_t TrainReservationBackoff(void *, OpenTTDTrainHandle) noexcept
-{
-	return _settings_game.pf.path_backoff_interval;
 }
 static uint64_t TrainReservationBitsTrack(void *, OpenTTDTrainHandle, uint8_t a) noexcept
 {
@@ -138,10 +128,6 @@ static uint64_t TrainReservationReachDirs(void *, OpenTTDTrainHandle, uint8_t a)
 static uint64_t TrainReservationReachTracks(void *, OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return DiagdirReachesTracks(static_cast<DiagDirection>(a));
-}
-static uint64_t TrainReservationReservePaths(void *, OpenTTDTrainHandle) noexcept
-{
-	return _settings_game.pf.reserve_paths;
 }
 /* Order has the existing OrderFields layout and trivial copy/destruction. Rust
  * owns each nested snapshot on its stack; no native context survives a call. */

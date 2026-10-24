@@ -168,12 +168,8 @@ pub struct Leaves {
     pub diag_track: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub enter_td: extern "C" fn(*mut std::ffi::c_void, Handle, u8, u8) -> u64,
     pub exit_dir: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    #[cfg(test)]
-    pub free: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub green: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub has_pbs: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
-    #[cfg(test)]
-    pub has_reserved: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub has_signal: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub increment_order: extern "C" fn(*mut std::ffi::c_void, Handle),
     pub is_bridge: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
@@ -195,16 +191,12 @@ pub struct Leaves {
     pub rail90: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u32) -> u64,
     pub reach_dirs: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub reach_tracks: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
-    #[cfg(test)]
-    pub reserved: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
     pub reserve_paths: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
     pub restore_order: unsafe extern "C" fn(Handle, *const crate::orders::Order),
     pub save_order: extern "C" fn(Handle) -> crate::orders::Order,
     pub service: extern "C" fn(*mut std::ffi::c_void, Handle),
     pub set_depot: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8),
     pub set_depot_dest: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
-    #[cfg(test)]
-    pub set_platform: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8, u8),
     pub set_signal: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8, u8),
     pub set_tunnel: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8),
     pub show_res: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
@@ -219,18 +211,12 @@ pub struct Leaves {
     pub tile_add: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub tile_offset: extern "C" fn(*mut std::ffi::c_void, Handle, u8) -> u64,
     pub trackdir: extern "C" fn(*mut std::ffi::c_void, Handle) -> u64,
-    #[cfg(test)]
-    pub try_track: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8) -> u64,
     pub tunnel_dir: extern "C" fn(*mut std::ffi::c_void, Handle, u32) -> u64,
-    #[cfg(test)]
-    pub unreserve: extern "C" fn(*mut std::ffi::c_void, Handle, u32, u8),
     pub write_dest: extern "C" fn(*mut std::ffi::c_void, Handle, u32),
     pub write_last: extern "C" fn(*mut std::ffi::c_void, Handle, u16),
     pub write_suppress: extern "C" fn(*mut std::ffi::c_void, Handle, u8),
 
     pub follow: extern "C" fn(Handle, u64, *mut Follow) -> u8,
-    #[cfg(test)]
-    pub origin: extern "C" fn(Handle, u8) -> Pbs,
     pub pathfind: extern "C" fn(Handle, u32, u8, u8, u8, u8) -> Search,
     pub safe_track: extern "C" fn(Handle, u32, u8, u8) -> u8,
     pub process_orders: extern "C" fn(Handle) -> u8,
@@ -283,357 +269,73 @@ impl Game<'_> {
         (self.leaves.read_check_next)(id)
     }
 
-    fn svc_all_compat(&self, id: Handle) -> u64 {
-        (self.leaves.all_compat)(self.context, id)
+    fn pbs(&self) -> crate::pbs::Pbs<'_> {
+        crate::pbs::Pbs::acquire(self.shared())
     }
-    fn svc_backoff(&self, id: Handle) -> u64 {
-        (self.leaves.backoff)(self.context, id)
+    fn free(&self, id: Handle, tile: u32, td: u8) -> bool {
+        self.pbs()
+            .free(id, tile, td, (self.shared().forbid_90_deg)())
     }
-    fn svc_bits_track(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.bits_track)(self.context, id, a as u8)
+    fn has_reserved(&self, tile: u32, tracks: u8) -> bool {
+        self.pbs().has_reserved_tracks(tile, tracks)
     }
-    fn svc_blocking(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.blocking)(self.context, id, a as u32, b as u8)
-    }
-    fn svc_check_reverse(&self, id: Handle) -> u64 {
-        (self.leaves.check_reverse)(self.context, id)
-    }
-    fn svc_compat_station(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.compat_station)(self.context, id, a as u32, b as u32)
-    }
-    fn svc_conditional(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.conditional)(self.context, id, a as u8)
-    }
-    fn svc_copy_order(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.copy_order)(self.context, id, a as u8);
-        0
-    }
-    fn svc_cross_dirs(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.cross_dirs)(self.context, id, a as u8)
-    }
-    fn svc_cross_tracks(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.cross_tracks)(self.context, id, a as u8)
-    }
-    fn svc_depot_dir(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.depot_dir)(self.context, id, a as u32)
-    }
-    fn svc_depot_reserved(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.depot_reserved)(self.context, id, a as u32)
-    }
-    fn svc_diag_reach_dirs(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.diag_reach_dirs)(self.context, id, a as u8)
-    }
-    fn svc_diag_track(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.diag_track)(self.context, id, a as u8)
-    }
-    fn svc_enter_td(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.enter_td)(self.context, id, a as u8, b as u8)
-    }
-    fn svc_exit_dir(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.exit_dir)(self.context, id, a as u8)
-    }
-    fn svc_free(&self, id: Handle, a: u64, b: u64) -> u64 {
-        #[cfg(not(test))]
-        {
-            u64::from(crate::pbs::Pbs::acquire(self.shared()).free(
-                id,
-                a as u32,
-                b as u8,
-                (self.shared().forbid_90_deg)(),
-            ))
-        }
-        #[cfg(test)]
-        {
-            (self.leaves.free)(self.context, id, a as u32, b as u8)
-        }
-    }
-    fn svc_green(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.green)(self.context, id, a as u32, b as u8)
-    }
-    fn svc_has_pbs(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.has_pbs)(self.context, id, a as u32, b as u8)
-    }
-    fn svc_has_reserved(&self, id: Handle, a: u64, b: u64) -> u64 {
-        #[cfg(not(test))]
-        {
-            let _ = id;
-            u64::from(
-                crate::pbs::Pbs::acquire(self.shared()).has_reserved_tracks(a as u32, b as u8),
-            )
-        }
-        #[cfg(test)]
-        {
-            (self.leaves.has_reserved)(self.context, id, a as u32, b as u8)
-        }
-    }
-    fn svc_has_signal(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.has_signal)(self.context, id, a as u32, b as u8)
-    }
-    fn svc_increment_order(&self, id: Handle) -> u64 {
-        (self.leaves.increment_order)(self.context, id);
-        0
-    }
-    fn svc_is_bridge(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.is_bridge)(self.context, id, a as u32)
-    }
-    fn svc_is_depot(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.is_depot)(self.context, id, a as u32)
-    }
-    fn svc_is_pbs(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.is_pbs)(self.context, id, a as u32, b as u8)
-    }
-    fn svc_is_plain(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.is_plain)(self.context, id, a as u32)
-    }
-    fn svc_is_railway(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.is_railway)(self.context, id, a as u32)
-    }
-    fn svc_is_station(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.is_station)(self.context, id, a as u32)
-    }
-    fn svc_is_tunnel(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.is_tunnel)(self.context, id, a as u32)
-    }
-    fn svc_is_waypoint(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.is_waypoint)(self.context, id, a as u32)
-    }
-    fn svc_line_reverse(&self, id: Handle) -> u64 {
-        (self.leaves.line_reverse)(self.context, id)
-    }
-    fn svc_mark_tile(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.mark_tile)(self.context, id, a as u32);
-        0
-    }
-    fn svc_needs_service(&self, id: Handle) -> u64 {
+    fn needs_service(&self, id: Handle) -> bool {
         // SAFETY: Live serialized train and immutable table; no owner borrow
         // spans the direct `Vehicle::NeedsServicing` port.
-        u64::from(unsafe {
-            crate::vehicle::maintenance::needs_servicing(id.vehicle(), &*self.leaves.vehicle)
-        })
+        unsafe { crate::vehicle::maintenance::needs_servicing(id.vehicle(), &*self.leaves.vehicle) }
     }
-    fn svc_oneway(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.oneway)(self.context, id, a as u32, b as u8)
+    fn order_stop(&self, id: Handle, station: u16) -> bool {
+        crate::movement::should_stop(self.shared(), id.vehicle(), station)
     }
-    fn svc_order_service(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.order_service)(self.context, id, a as u8)
-    }
-    fn svc_order_stop(&self, id: Handle, a: u64) -> u64 {
-        u64::from(crate::movement::should_stop(
-            self.shared(),
-            id.vehicle(),
-            a as u16,
-        ))
-    }
-    fn svc_order_type(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.order_type)(self.context, id, a as u8)
-    }
-    fn svc_other_end(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.other_end)(self.context, id, a as u32)
-    }
-    fn svc_overlap(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.overlap)(self.context, id, a as u8)
-    }
-    fn svc_path_result(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.path_result)(self.context, id, a as u8);
-        0
-    }
-    fn svc_rail90(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.rail90)(self.context, id, a as u32, b as u32)
-    }
-    fn svc_reach_dirs(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.reach_dirs)(self.context, id, a as u8)
-    }
-    fn svc_reach_tracks(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.reach_tracks)(self.context, id, a as u8)
-    }
-    fn svc_reserved(&self, id: Handle, a: u64) -> u64 {
-        #[cfg(not(test))]
-        {
-            let _ = id;
-            u64::from(crate::pbs::Pbs::acquire(self.shared()).reserved(a as u32))
-        }
-        #[cfg(test)]
-        {
-            (self.leaves.reserved)(self.context, id, a as u32)
-        }
-    }
-    fn svc_reserve_paths(&self, id: Handle) -> u64 {
-        (self.leaves.reserve_paths)(self.context, id)
+    fn reserved(&self, tile: u32) -> u8 {
+        self.pbs().reserved(tile)
     }
     fn safe(&self, id: Handle, tile: u32, td: u8) -> bool {
-        #[cfg(not(test))]
-        {
-            crate::pbs::Pbs::acquire(self.shared()).safe(
-                id,
-                tile,
-                td,
-                true,
-                (self.shared().forbid_90_deg)(),
-            )
-        }
-        #[cfg(test)]
-        {
-            unsafe {
-                (self.shared().safe_waiting_position)(
-                    id.shell.cast(),
-                    tile,
-                    td,
-                    (self.shared().forbid_90_deg)(),
-                )
-            }
-        }
+        self.pbs()
+            .safe(id, tile, td, true, (self.shared().forbid_90_deg)())
     }
     fn shared(&self) -> &crate::services::Services {
-        // SAFETY: Native installs the process-lifetime shared table; tests a live fixture.
+        // SAFETY: The entry's shared table lives for the process (or the test fixture's scope).
         unsafe { &*self.leaves.shared }
     }
-    fn svc_service(&self, id: Handle) -> u64 {
-        (self.leaves.service)(self.context, id);
-        0
+    fn set_platform(&self, tile: u32, dir: u8, reserved: bool) {
+        self.pbs().platform(tile, dir, reserved);
     }
-    fn svc_set_depot(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.set_depot)(self.context, id, a as u32, b as u8);
-        0
-    }
-    fn svc_set_depot_dest(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.set_depot_dest)(self.context, id, a as u32);
-        0
-    }
-    fn svc_set_platform(&self, id: Handle, a: u64, b: u64, c: u64) -> u64 {
-        #[cfg(not(test))]
-        {
-            let _ = id;
-            crate::pbs::Pbs::acquire(self.shared()).platform(a as u32, b as u8, c != 0);
-            0
-        }
-        #[cfg(test)]
-        {
-            (self.leaves.set_platform)(self.context, id, a as u32, b as u8, c as u8);
-            0
-        }
-    }
-    fn svc_set_signal(&self, id: Handle, a: u64, b: u64, c: u64) -> u64 {
-        (self.leaves.set_signal)(self.context, id, a as u32, b as u8, c as u8);
-        0
-    }
-    fn svc_set_tunnel(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.set_tunnel)(self.context, id, a as u32, b as u8);
-        0
-    }
-    fn svc_show_res(&self, id: Handle) -> u64 {
-        (self.leaves.show_res)(self.context, id)
-    }
-    fn svc_signal_buffer(&self, _id: Handle, a: u64, b: u64) -> u64 {
+    fn signal_buffer(&self, tile: u32, td: u8) {
         // SAFETY: C++ supplies the adjusted Vehicle base of the entry train.
         // The live shell and immutable table survive this call; no owner borrow
-        // spans the canonical shared callback. free() retains that entry train.
+        // spans the shared callback. free() retains that entry train.
         let owner = unsafe {
             let vehicle =
                 crate::vehicle::VehicleRef(std::ptr::NonNull::new_unchecked(self.vehicle));
             ((*self.leaves.vehicle).owner)(vehicle)
         };
         crate::signal::count_context_owner_read();
-        crate::signal::acquire_context(self.leaves.signal_context)
-            .add_side(a as u32, b as u8, owner);
-        0
+        crate::signal::acquire_context(self.leaves.signal_context).add_side(tile, td, owner);
     }
-    fn svc_start_stop(&self, id: Handle) -> u64 {
-        (self.leaves.start_stop)(self.context, id);
-        0
-    }
-    fn svc_station(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.station)(self.context, id, a as u32)
-    }
-    fn svc_station_train(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.station_train)(self.context, id, a as u16)
-    }
-    fn svc_station_xy(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.station_xy)(self.context, id, a as u16)
-    }
-    fn svc_stuck(&self, id: Handle) -> u64 {
-        (self.leaves.stuck)(self.context, id);
-        0
-    }
-    fn svc_tile_add(&self, id: Handle, a: u64, b: u64) -> u64 {
-        (self.leaves.tile_add)(self.context, id, a as u32, b as u8)
-    }
-    fn svc_tile_offset(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.tile_offset)(self.context, id, a as u8)
-    }
-    fn svc_trackdir(&self, id: Handle) -> u64 {
-        (self.leaves.trackdir)(self.context, id)
-    }
-    fn svc_track_status(&self, _id: Handle, a: u64) -> u64 {
-        u64::from(crate::track_func::track_status_to_trackdir_bits(
-            crate::movement::track_status(self.shared(), a as u32, 0, 0, 255),
+    fn track_status(&self, tile: u32) -> u16 {
+        crate::track_func::track_status_to_trackdir_bits(crate::movement::track_status(
+            self.shared(),
+            tile,
+            0,
+            0,
+            255,
         ))
     }
-    fn svc_try_track(&self, id: Handle, a: u64, b: u64) -> u64 {
-        #[cfg(not(test))]
-        {
-            let _ = id;
-            u64::from(crate::pbs::Pbs::acquire(self.shared()).try_reserve(a as u32, b as u8, true))
-        }
-        #[cfg(test)]
-        {
-            (self.leaves.try_track)(self.context, id, a as u32, b as u8)
-        }
-    }
-    fn svc_tunnel_dir(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.tunnel_dir)(self.context, id, a as u32)
-    }
-    fn svc_tunnel_free(&self, id: Handle, a: u64, b: u64) -> u64 {
+    fn tunnel_free(&self, id: Handle, tile: u32, end: u32) -> bool {
         // SAFETY: The current train and all offered shells survive this query.
-        u64::from(unsafe {
+        unsafe {
             crate::vehicle::occupancy::wormhole_blocker(
                 &*self.leaves.vehicle,
-                a as u32,
-                b as u32,
+                tile,
+                end,
                 id.vehicle().0.as_ptr(),
             )
             .is_none()
-        })
-    }
-    fn svc_unreserve(&self, id: Handle, a: u64, b: u64) -> u64 {
-        #[cfg(not(test))]
-        {
-            let _ = id;
-            crate::pbs::Pbs::acquire(self.shared()).unreserve(a as u32, b as u8);
-            0
-        }
-        #[cfg(test)]
-        {
-            (self.leaves.unreserve)(self.context, id, a as u32, b as u8);
-            0
         }
     }
-    fn svc_update_buffer(&self, _id: Handle) -> u64 {
+    fn update_buffer(&self) {
         crate::signal::acquire_context(self.leaves.signal_context).flush();
-        0
-    }
-    fn svc_write_dest(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.write_dest)(self.context, id, a as u32);
-        0
-    }
-    fn svc_write_last(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.write_last)(self.context, id, a as u16);
-        0
-    }
-    fn svc_write_suppress(&self, id: Handle, a: u64) -> u64 {
-        (self.leaves.write_suppress)(self.context, id, a as u8);
-        0
-    }
-
-    fn reserve_track(&self, id: Handle, tile: u32, track: u8) -> bool {
-        #[cfg(not(test))]
-        {
-            let _ = id;
-            crate::pbs::Pbs::acquire(self.shared()).try_reserve(tile, track, true)
-        }
-        #[cfg(test)]
-        {
-            (self.leaves.try_track)(self.context, id, tile, track) != 0
-        }
     }
     fn pathfind(
         &self,
@@ -663,37 +365,31 @@ impl Game<'_> {
         (self.leaves.follow)(id, types, ft) != 0
     }
     fn origin(&self, id: Handle, other: bool) -> Pbs {
-        #[cfg(not(test))]
-        {
-            crate::pbs::Pbs::acquire(self.shared()).follow_train(id, other, Handle::NONE)
-        }
-        #[cfg(test)]
-        {
-            (self.leaves.origin)(id, u8::from(other))
-        }
+        self.pbs().follow_train(id, other, Handle::NONE)
     }
     fn dir(&self, id: Handle, td: u8) -> u8 {
-        self.svc_exit_dir(id, u64::from(td)) as u8
+        (self.leaves.exit_dir)(self.context, id, td) as u8
     }
     fn add(&self, id: Handle, tile: u32, dir: u8) -> u32 {
-        self.svc_tile_add(id, u64::from(tile), u64::from(dir)) as u32
+        (self.leaves.tile_add)(self.context, id, tile, dir) as u32
     }
     fn signal(&self, id: Handle, tile: u32, td: u8, green: bool) {
-        self.svc_set_signal(id, u64::from(tile), u64::from(td), u64::from(green));
+        (self.leaves.set_signal)(self.context, id, tile, td, u8::from(green));
     }
-    fn reserve_bounded(&self, id: Handle, tile: u32, td: u8) -> bool {
-        self.svc_try_track(id, u64::from(tile), u64::from(td & 7)) != 0
+    fn reserve_track(&self, tile: u32, track: u8) -> bool {
+        self.pbs().try_reserve(tile, track, true)
     }
-
-    fn reserve(&self, id: Handle, tile: u32, td: u8) -> bool {
-        self.reserve_track(id, tile, td & 7)
+    /// `TryReserveRailTrack(tile, TrackdirToTrack(td))`.
+    fn reserve(&self, tile: u32, td: u8) -> bool {
+        self.reserve_track(tile, td & 7)
     }
-    fn unreserve(&self, id: Handle, tile: u32, td: u8) {
-        self.svc_unreserve(id, u64::from(tile), u64::from(td & 7));
+    /// `UnreserveRailTrack(tile, TrackdirToTrack(td))`.
+    fn unreserve(&self, tile: u32, td: u8) {
+        self.pbs().unreserve(tile, td & 7);
     }
 
     fn td(&self, id: Handle) -> u8 {
-        self.svc_trackdir(id) as u8
+        (self.leaves.trackdir)(self.context, id) as u8
     }
 }
 fn single(bits: u16) -> bool {
@@ -709,29 +405,29 @@ fn pbs(step: Search) -> Pbs {
 }
 fn clear(g: &Game, id: Handle, tile: u32, td: u8) {
     let dir = g.dir(id, td);
-    if g.svc_is_tunnel(id, u64::from(tile)) != 0 {
-        if g.svc_tunnel_dir(id, u64::from(tile)) as u8 == dir ^ 2 {
-            let end = g.svc_other_end(id, u64::from(tile)) as u32;
-            if g.svc_tunnel_free(id, u64::from(tile), u64::from(end)) != 0 {
-                g.svc_set_tunnel(id, u64::from(tile), 0);
-                g.svc_set_tunnel(id, u64::from(end), 0);
-                if g.svc_show_res(id) != 0 {
-                    if g.svc_is_bridge(id, u64::from(tile)) != 0 {
+    if (g.leaves.is_tunnel)(g.context, id, tile) != 0 {
+        if (g.leaves.tunnel_dir)(g.context, id, tile) as u8 == dir ^ 2 {
+            let end = (g.leaves.other_end)(g.context, id, tile) as u32;
+            if g.tunnel_free(id, tile, end) {
+                (g.leaves.set_tunnel)(g.context, id, tile, 0);
+                (g.leaves.set_tunnel)(g.context, id, end, 0);
+                if (g.leaves.show_res)(g.context, id) != 0 {
+                    if (g.leaves.is_bridge)(g.context, id, tile) != 0 {
                         (g.shared().mark_bridge_dirty)(tile);
                     } else {
-                        g.svc_mark_tile(id, u64::from(tile));
-                        g.svc_mark_tile(id, u64::from(end));
+                        (g.leaves.mark_tile)(g.context, id, tile);
+                        (g.leaves.mark_tile)(g.context, id, end);
                     }
                 }
             }
         }
-    } else if g.svc_is_station(id, u64::from(tile)) != 0 {
+    } else if (g.leaves.is_station)(g.context, id, tile) != 0 {
         let next = g.add(id, tile, dir);
-        if g.svc_compat_station(id, u64::from(next), u64::from(tile)) == 0 {
-            g.svc_set_platform(id, u64::from(tile), u64::from(dir ^ 2), 0);
+        if (g.leaves.compat_station)(g.context, id, next, tile) == 0 {
+            g.set_platform(tile, dir ^ 2, false);
         }
     } else {
-        g.unreserve(id, tile, td);
+        g.unreserve(tile, td);
     }
 }
 fn free(g: &Game, id: Handle) {
@@ -739,15 +435,15 @@ fn free(g: &Game, id: Handle) {
     let v = g.read_free(id);
     let mut tile = v.tile;
     let mut td = g.td(id);
-    let mut free_tile = !((g.svc_is_station(id, u64::from(tile)) != 0)
-        || (g.svc_is_tunnel(id, u64::from(tile)) != 0));
-    let station = if g.svc_is_station(id, u64::from(tile)) != 0 {
-        g.svc_station(id, u64::from(tile)) as u16
+    let mut free_tile = !(((g.leaves.is_station)(g.context, id, tile) != 0)
+        || ((g.leaves.is_tunnel)(g.context, id, tile) != 0));
+    let station = if (g.leaves.is_station)(g.context, id, tile) != 0 {
+        (g.leaves.station)(g.context, id, tile) as u16
     } else {
         u16::MAX
     };
-    if (g.svc_is_depot(id, u64::from(tile)) != 0)
-        && g.dir(id, td) != g.svc_depot_dir(id, u64::from(tile)) as u8
+    if ((g.leaves.is_depot)(g.context, id, tile) != 0)
+        && g.dir(id, td) != (g.leaves.depot_dir)(g.context, id, tile) as u8
     {
         return;
     }
@@ -761,42 +457,43 @@ fn free(g: &Game, id: Handle) {
             u = part.next;
         }
     }
-    let reserved = g.svc_reserved(id, u64::from(tile)) as u8;
-    if g.svc_overlap(id, u64::from(reserved | (1 << (td & 7)))) != 0 {
+    let reserved = g.reserved(tile);
+    if (g.leaves.overlap)(g.context, id, reserved | (1 << (td & 7))) != 0 {
         return;
     }
-    let types = g.svc_all_compat(id);
+    let types = (g.leaves.all_compat)(g.context, id);
     let mut ft = Follow::default();
     while g.follow(id, types, &mut ft, tile, td) {
         tile = ft.new_tile;
-        let bits = ft.dirs & dirs(g.svc_reserved(id, u64::from(tile)) as u8);
+        let bits = ft.dirs & dirs(g.reserved(tile));
         td = first(bits);
         if td == 0xff {
             break;
         }
-        if g.svc_is_railway(id, u64::from(tile)) != 0 {
-            if (g.svc_has_signal(id, u64::from(tile), u64::from(td)) != 0)
-                && (g.svc_is_pbs(id, u64::from(tile), u64::from(td & 7)) == 0)
+        if (g.leaves.is_railway)(g.context, id, tile) != 0 {
+            if ((g.leaves.has_signal)(g.context, id, tile, td) != 0)
+                && ((g.leaves.is_pbs)(g.context, id, tile, td & 7) == 0)
             {
-                g.unreserve(id, tile, td);
+                g.unreserve(tile, td);
                 break;
             }
-            if g.svc_has_pbs(id, u64::from(tile), u64::from(td)) != 0 {
-                if g.svc_green(id, u64::from(tile), u64::from(td)) == 0 {
+            if (g.leaves.has_pbs)(g.context, id, tile, td) != 0 {
+                if (g.leaves.green)(g.context, id, tile, td) == 0 {
                     break;
                 }
                 g.signal(id, tile, td, false);
-                g.svc_mark_tile(id, u64::from(tile));
-            } else if g.svc_has_pbs(id, u64::from(tile), u64::from(td ^ 8)) != 0 {
-                g.svc_signal_buffer(id, u64::from(tile), u64::from(g.dir(id, td ^ 8)));
-            } else if (g.svc_has_signal(id, u64::from(tile), u64::from(td ^ 8)) != 0)
-                && (g.svc_oneway(id, u64::from(tile), u64::from(td & 7)) != 0)
+                (g.leaves.mark_tile)(g.context, id, tile);
+            } else if (g.leaves.has_pbs)(g.context, id, tile, td ^ 8) != 0 {
+                g.signal_buffer(tile, g.dir(id, td ^ 8));
+            } else if ((g.leaves.has_signal)(g.context, id, tile, td ^ 8) != 0)
+                && ((g.leaves.oneway)(g.context, id, tile, td & 7) != 0)
             {
                 break;
             }
         }
         if free_tile
-            || (!(ft.station != 0 && g.svc_station(id, u64::from(ft.new_tile)) as u16 == station)
+            || (!(ft.station != 0
+                && (g.leaves.station)(g.context, id, ft.new_tile) as u16 == station)
                 && ft.tunnel == 0
                 && ft.bridge == 0)
         {
@@ -804,42 +501,42 @@ fn free(g: &Game, id: Handle) {
         }
         free_tile = true;
     }
-    g.svc_update_buffer(id);
+    g.update_buffer();
 }
 fn extend(g: &Game, id: Handle, new_tracks: &mut u8, enterdir: &mut u8) -> Pbs {
     crate::witness::hit(crate::witness::TRAIN_CONTROLLER_EXTENSION);
-    let origin = g.origin(id, false);
+    extend_from(g, id, g.origin(id, false), new_tracks, enterdir)
+}
+/// `ExtendTrainReservation` after its `FollowTrainReservation`.
+fn extend_from(g: &Game, id: Handle, origin: Pbs, new_tracks: &mut u8, enterdir: &mut u8) -> Pbs {
     let types = id.get_compatible_railtypes();
     let mut ft = Follow::default();
     let mut red = Vec::new();
     let mut tile = origin.tile;
     let mut td = origin.td;
     while g.follow(id, types, &mut ft, tile, td) {
-        if single(ft.dirs)
-            && (g.svc_blocking(id, u64::from(ft.new_tile), u64::from(first(ft.dirs))) != 0)
+        if single(ft.dirs) && ((g.leaves.blocking)(g.context, id, ft.new_tile, first(ft.dirs)) != 0)
         {
             break;
         }
-        if g.svc_rail90(id, u64::from(ft.old_tile), u64::from(ft.new_tile)) != 0 {
-            ft.dirs &= !(g.svc_cross_dirs(id, u64::from(ft.old_td)) as u16);
+        if (g.leaves.rail90)(g.context, id, ft.old_tile, ft.new_tile) != 0 {
+            ft.dirs &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td) as u16);
             if ft.dirs == 0 {
                 break;
             }
         }
         let target = ft.station != 0
-            || ((g.svc_is_railway(id, u64::from(ft.new_tile)) != 0)
-                && (g.svc_is_plain(id, u64::from(ft.new_tile)) == 0));
+            || (((g.leaves.is_railway)(g.context, id, ft.new_tile) != 0)
+                && ((g.leaves.is_plain)(g.context, id, ft.new_tile) == 0));
         if target || !single(ft.dirs) {
-            if g.svc_has_reserved(
-                id,
-                u64::from(ft.new_tile),
-                u64::from(tracks(g.svc_reach_dirs(id, u64::from(ft.old_td)) as u16)),
-            ) != 0
-            {
+            if g.has_reserved(
+                ft.new_tile,
+                tracks((g.leaves.reach_dirs)(g.context, id, ft.old_td) as u16),
+            ) {
                 break;
             }
             if ft.skipped != 0 {
-                let off = g.svc_tile_offset(id, u64::from(ft.exitdir)) as i32;
+                let off = (g.leaves.tile_offset)(g.context, id, ft.exitdir) as i32;
                 ft.new_tile = ft
                     .new_tile
                     .wrapping_sub(off.wrapping_mul(ft.skipped) as u32);
@@ -858,18 +555,16 @@ fn extend(g: &Game, id: Handle, new_tracks: &mut u8, enterdir: &mut u8) -> Pbs {
         let rev = td ^ 8;
         // SAFETY: The entry keeps the native train live; no owner borrow spans the callback.
         if g.safe(id, tile, td) {
-            if !((g.svc_free(id, u64::from(tile), u64::from(td)) != 0)
-                && g.reserve_bounded(id, tile, td))
-            {
+            if !(g.free(id, tile, td) && g.reserve(tile, td)) {
                 break;
             }
-            if (g.svc_has_pbs(id, u64::from(tile), u64::from(rev)) != 0)
-                && (g.svc_green(id, u64::from(tile), u64::from(rev)) != 0)
+            if ((g.leaves.has_pbs)(g.context, id, tile, rev) != 0)
+                && ((g.leaves.green)(g.context, id, tile, rev) != 0)
             {
                 crate::witness::hit(crate::witness::TRAIN_EXTENSION_OPPOSING_RED);
                 red.push((tile, rev));
                 g.signal(id, tile, rev, false);
-                g.svc_mark_tile(id, u64::from(tile));
+                (g.leaves.mark_tile)(g.context, id, tile);
             }
             return Pbs {
                 tile,
@@ -878,16 +573,16 @@ fn extend(g: &Game, id: Handle, new_tracks: &mut u8, enterdir: &mut u8) -> Pbs {
                 other: Handle::NONE,
             };
         }
-        if !g.reserve_bounded(id, tile, td) {
+        if !g.reserve(tile, td) {
             break;
         }
-        if (g.svc_has_pbs(id, u64::from(tile), u64::from(rev)) != 0)
-            && (g.svc_green(id, u64::from(tile), u64::from(rev)) != 0)
+        if ((g.leaves.has_pbs)(g.context, id, tile, rev) != 0)
+            && ((g.leaves.green)(g.context, id, tile, rev) != 0)
         {
             crate::witness::hit(crate::witness::TRAIN_EXTENSION_OPPOSING_RED);
             red.push((tile, rev));
             g.signal(id, tile, rev, false);
-            g.svc_mark_tile(id, u64::from(tile));
+            (g.leaves.mark_tile)(g.context, id, tile);
         }
     }
     if ft.error == 1 || ft.error == 4 {
@@ -907,13 +602,13 @@ fn extend(g: &Game, id: Handle, new_tracks: &mut u8, enterdir: &mut u8) -> Pbs {
         if !g.follow(id, types, &mut ft, tile, td) {
             break;
         }
-        if g.svc_rail90(id, u64::from(ft.old_tile), u64::from(ft.new_tile)) != 0 {
-            ft.dirs &= !(g.svc_cross_dirs(id, u64::from(ft.old_td)) as u16);
+        if (g.leaves.rail90)(g.context, id, ft.old_tile, ft.new_tile) != 0 {
+            ft.dirs &= !((g.leaves.cross_dirs)(g.context, id, ft.old_td) as u16);
         }
         tile = ft.new_tile;
         td = first(ft.dirs);
         crate::witness::hit(crate::witness::TRAIN_EXTENSION_ROLLBACK);
-        g.unreserve(id, tile, td);
+        g.unreserve(tile, td);
     }
     for (tile, td) in red {
         crate::witness::hit(crate::witness::TRAIN_EXTENSION_RESTORE);
@@ -950,9 +645,9 @@ impl<'a> Orders<'a> {
         crate::witness::hit(crate::witness::TRAIN_ORDER_RESTORE);
         // SAFETY: this stack snapshot is live; the service copies it before returning.
         unsafe { (self.g.leaves.restore_order)(self.id, &raw const self.saved_order) };
-        self.g.svc_write_dest(self.id, u64::from(self.dest));
-        self.g.svc_write_last(self.id, u64::from(self.last));
-        self.g.svc_write_suppress(self.id, u64::from(self.suppress));
+        (self.g.leaves.write_dest)(self.g.context, self.id, self.dest);
+        (self.g.leaves.write_last)(self.g.context, self.id, self.last);
+        (self.g.leaves.write_suppress)(self.g.context, self.id, self.suppress);
         self.restored = true;
     }
     fn next(&mut self, skip: bool) -> bool {
@@ -970,19 +665,19 @@ impl<'a> Orders<'a> {
             if self.index >= g.read_num_orders(id) {
                 self.index = 0;
             }
-            let kind = g.svc_order_type(id, u64::from(self.index)) as u8;
+            let kind = (g.leaves.order_type)(g.context, id, self.index) as u8;
             match kind {
                 1 | 2 | 6 => {
                     if kind != 2
-                        || g.svc_order_service(id, u64::from(self.index)) == 0
-                        || g.svc_needs_service(id) != 0
+                        || (g.leaves.order_service)(g.context, id, self.index) == 0
+                        || g.needs_service(id)
                     {
-                        g.svc_copy_order(id, u64::from(self.index));
+                        (g.leaves.copy_order)(g.context, id, self.index);
                         return (g.leaves.update_order_dest)(id, self.index) != 0;
                     }
                 }
                 7 => {
-                    let next = g.svc_conditional(id, u64::from(self.index)) as u8;
+                    let next = (g.leaves.conditional)(g.context, id, self.index) as u8;
                     if next != 0xff {
                         depth += 1;
                         self.index = next;
@@ -1022,22 +717,22 @@ fn choose(
 ) -> (u8, bool) {
     crate::witness::hit(crate::witness::TRAIN_CHOOSE_TRACK);
     let mut best = 0xff;
-    let mut reserve = g.svc_reserve_paths(id) != 0 || force;
+    let mut reserve = (g.leaves.reserve_paths)(g.context, id) != 0 || force;
     let mut changed = false;
     let mut final_dest = INVALID_TILE;
     let mut got = false;
-    let res =
-        g.svc_reserved(id, u64::from(tile)) as u8 & g.svc_reach_tracks(id, u64::from(dir)) as u8;
+    let res = g.reserved(tile) & (g.leaves.reach_tracks)(g.context, id, dir) as u8;
     if res != 0 {
         return (first(u16::from(res)), false);
     }
     if single(u16::from(available)) {
         let track = first(u16::from(available));
         if track != 0xff
-            && (g.svc_has_pbs(
+            && ((g.leaves.has_pbs)(
+                g.context,
                 id,
-                u64::from(tile),
-                u64::from(g.svc_enter_td(id, u64::from(track), u64::from(dir)) as u8),
+                tile,
+                (g.leaves.enter_td)(g.context, id, track, dir) as u8,
             ) != 0)
         {
             reserve = true;
@@ -1045,7 +740,7 @@ fn choose(
             g.signal(
                 id,
                 tile,
-                g.svc_enter_td(id, u64::from(track), u64::from(dir)) as u8,
+                (g.leaves.enter_td)(g.context, id, track, dir) as u8,
                 true,
             );
         } else if !reserve {
@@ -1064,13 +759,13 @@ fn choose(
         dest = extend(g, id, &mut available, &mut dest_dir);
         if dest.tile == INVALID_TILE {
             if mark {
-                g.svc_stuck(id);
+                (g.leaves.stuck)(g.context, id);
             }
             if changed {
                 g.signal(
                     id,
                     tile,
-                    g.svc_enter_td(id, u64::from(best), u64::from(dir)) as u8,
+                    (g.leaves.enter_td)(g.context, id, best, dir) as u8,
                     false,
                 );
             }
@@ -1078,12 +773,12 @@ fn choose(
         }
         if dest.okay != 0 {
             if changed {
-                g.svc_mark_tile(id, u64::from(tile));
+                (g.leaves.mark_tile)(g.context, id, tile);
             }
-            g.reserve(id, g.read_tile(id), g.td(id));
+            g.reserve(g.read_tile(id), g.td(id));
             return (best, true);
         }
-        g.svc_service(id);
+        (g.leaves.service)(g.context, id);
         if matches!(g.read_order(id), OT_GOTO_DEPOT | OT_DUMMY | OT_CONDITIONAL) {
             (g.leaves.process_orders)(id);
         }
@@ -1095,8 +790,8 @@ fn choose(
     } else if v.order == OT_LOADING
         || (v.order != OT_GOTO_DEPOT
             && if v.order == OT_GOTO_STATION {
-                (g.svc_is_station(id, u64::from(v.tile)) != 0)
-                    && u64::from(v.destination) == g.svc_station(id, u64::from(v.tile))
+                ((g.leaves.is_station)(g.context, id, v.tile) != 0)
+                    && u64::from(v.destination) == (g.leaves.station)(g.context, id, v.tile)
             } else {
                 v.tile == v.dest
             })
@@ -1111,14 +806,14 @@ fn choose(
         if new_tile == tile {
             best = result.track;
         }
-        g.svc_path_result(id, u64::from(result.found));
+        (g.leaves.path_result)(g.context, id, result.found);
     }
     if !reserve {
         return (best, false);
     }
     if dest.tile != INVALID_TILE && dest.okay == 0 {
         if mark {
-            g.svc_stuck(id);
+            (g.leaves.stuck)(g.context, id);
         }
         free(g, id);
         return (best, false);
@@ -1126,18 +821,17 @@ fn choose(
     if dest.tile == INVALID_TILE {
         let origin = g.origin(id, false);
         if g.safe_track(id, origin.tile, origin.td, false) {
-            let res = g.svc_reserved(id, u64::from(tile)) as u8
-                & g.svc_reach_tracks(id, u64::from(dir)) as u8;
+            let res = g.reserved(tile) & (g.leaves.reach_tracks)(g.context, id, dir) as u8;
             best = first(u16::from(res));
-            g.reserve(id, g.read_tile(id), g.td(id));
+            g.reserve(g.read_tile(id), g.td(id));
             got = true;
             if changed {
-                g.svc_mark_tile(id, u64::from(tile));
+                (g.leaves.mark_tile)(g.context, id, tile);
             }
         } else {
             free(g, id);
             if mark {
-                g.svc_stuck(id);
+                (g.leaves.stuck)(g.context, id);
             }
         }
         return (best, got);
@@ -1147,10 +841,10 @@ fn choose(
     while !g.safe(id, dest.tile, dest.td) {
         let exit = g.dir(id, dest.td);
         let next = g.add(id, dest.tile, exit);
-        let mut reachable = tracks(g.svc_track_status(id, u64::from(next)) as u16)
-            & g.svc_reach_tracks(id, u64::from(exit)) as u8;
-        if g.svc_rail90(id, u64::from(dest.tile), u64::from(next)) != 0 {
-            reachable &= !(g.svc_cross_tracks(id, u64::from(dest.td & 7)) as u8);
+        let mut reachable =
+            tracks(g.track_status(next)) & (g.leaves.reach_tracks)(g.context, id, exit) as u8;
+        if (g.leaves.rail90)(g.context, id, dest.tile, next) != 0 {
+            reachable &= !((g.leaves.cross_tracks)(g.context, id, dest.td & 7) as u8);
         }
         if orders.next(true) {
             let current = pbs(g.pathfind(id, next, exit, reachable, true, false));
@@ -1161,7 +855,7 @@ fn choose(
                 }
                 free(g, id);
                 if mark {
-                    g.svc_stuck(id);
+                    (g.leaves.stuck)(g.context, id);
                 }
                 got = false;
                 changed = false;
@@ -1171,90 +865,88 @@ fn choose(
         if !g.safe_track(id, dest.tile, dest.td, true) {
             free(g, id);
             if mark {
-                g.svc_stuck(id);
+                (g.leaves.stuck)(g.context, id);
             }
             got = false;
             changed = false;
         }
         break;
     }
-    g.reserve(id, g.read_tile(id), g.td(id));
+    g.reserve(g.read_tile(id), g.td(id));
     if changed {
-        g.svc_mark_tile(id, u64::from(tile));
+        (g.leaves.mark_tile)(g.context, id, tile);
     }
     orders.restore();
     let v = g.read_choose_4(id);
     if v.order == OT_GOTO_DEPOT
         && v.nearest != 0
         && final_dest != INVALID_TILE
-        && (g.svc_is_depot(id, u64::from(final_dest)) != 0)
+        && ((g.leaves.is_depot)(g.context, id, final_dest) != 0)
     {
-        g.svc_set_depot_dest(id, u64::from(final_dest));
-        g.svc_write_dest(id, u64::from(final_dest));
-        g.svc_start_stop(id);
+        (g.leaves.set_depot_dest)(g.context, id, final_dest);
+        (g.leaves.write_dest)(g.context, id, final_dest);
+        (g.leaves.start_stop)(g.context, id);
     }
     (best, got)
 }
 fn try_path(g: &Game, id: Handle, mark: bool, first_okay: bool) -> bool {
     let v = g.read_free(id);
     if id.get_track() == u64::from(DEPOT) {
-        if g.svc_depot_reserved(id, u64::from(v.tile)) != 0 {
+        if (g.leaves.depot_reserved)(g.context, id, v.tile) != 0 {
             if mark {
-                g.svc_stuck(id);
+                (g.leaves.stuck)(g.context, id);
             }
             return false;
         }
-        let dir = g.svc_depot_dir(id, u64::from(v.tile)) as u8;
+        let dir = (g.leaves.depot_dir)(g.context, id, v.tile) as u8;
         let next = g.add(id, v.tile, dir);
-        if g.svc_has_reserved(id, u64::from(next), g.svc_reach_tracks(id, u64::from(dir))) != 0 {
+        if g.has_reserved(next, (g.leaves.reach_tracks)(g.context, id, dir) as u8) {
             return false;
         }
     }
     let origin = g.origin(id, true);
     if origin.other != Handle::NONE && origin.other != id {
         if mark {
-            g.svc_stuck(id);
+            (g.leaves.stuck)(g.context, id);
         }
         return false;
     }
     if origin.okay != 0 && (v.tile != origin.tile || first_okay) {
         if id.stuck() {
-            g.svc_start_stop(id);
+            (g.leaves.start_stop)(g.context, id);
         }
         id.clear_stuck();
         return true;
     }
     if id.get_track() == u64::from(DEPOT) {
-        g.svc_set_depot(id, u64::from(v.tile), 1);
-        if g.svc_show_res(id) != 0 {
-            g.svc_mark_tile(id, u64::from(v.tile));
+        (g.leaves.set_depot)(g.context, id, v.tile, 1);
+        if (g.leaves.show_res)(g.context, id) != 0 {
+            (g.leaves.mark_tile)(g.context, id, v.tile);
         }
     }
     let exit = g.dir(id, origin.td);
     let new_tile = g.add(id, origin.tile, exit);
-    let mut reachable = tracks(
-        g.svc_track_status(id, u64::from(new_tile)) as u16
-            & g.svc_diag_reach_dirs(id, u64::from(exit)) as u16,
-    );
-    if g.svc_rail90(id, u64::from(origin.tile), u64::from(new_tile)) != 0 {
-        reachable &= !(g.svc_cross_tracks(id, u64::from(origin.td & 7)) as u8);
+    let mut reachable =
+        tracks(g.track_status(new_tile) & (g.leaves.diag_reach_dirs)(g.context, id, exit) as u16);
+    if (g.leaves.rail90)(g.context, id, origin.tile, new_tile) != 0 {
+        reachable &= !((g.leaves.cross_tracks)(g.context, id, origin.td & 7) as u8);
     }
     let (_, made) = choose(g, id, new_tile, exit, reachable, true, mark);
     if !made {
         if id.get_track() == u64::from(DEPOT) {
-            g.svc_set_depot(id, u64::from(g.read_tile(id)), 0);
+            (g.leaves.set_depot)(g.context, id, g.read_tile(id), 0);
         }
         return false;
     }
     if id.stuck() {
         id.set_wait_counter(0);
-        g.svc_start_stop(id);
+        (g.leaves.start_stop)(g.context, id);
     }
     id.clear_stuck();
     true
 }
 fn check_next(g: &Game, id: Handle) {
-    if g.svc_backoff(id) == 255 || id.get_track() == u64::from(DEPOT) {
+    if (g.leaves.backoff)(g.context, id) == 255 || id.get_track() == u64::from(DEPOT) {
         return;
     }
     let v = g.read_check_next(id);
@@ -1265,8 +957,8 @@ fn check_next(g: &Game, id: Handle) {
             }
         }
         OT_GOTO_WAYPOINT => {
-            if (g.svc_is_waypoint(id, u64::from(v.tile)) != 0)
-                && g.svc_station(id, u64::from(v.tile)) == u64::from(v.destination)
+            if ((g.leaves.is_waypoint)(g.context, id, v.tile) != 0)
+                && (g.leaves.station)(g.context, id, v.tile) == u64::from(v.destination)
             {
                 (g.leaves.process_orders)(id);
             }
@@ -1275,16 +967,16 @@ fn check_next(g: &Game, id: Handle) {
         _ => {}
     }
     let tile = g.read_tile(id);
-    if (g.svc_is_station(id, u64::from(tile)) != 0)
-        && g.svc_order_stop(id, g.svc_station(id, u64::from(tile))) != 0
+    if ((g.leaves.is_station)(g.context, id, tile) != 0)
+        && g.order_stop(id, (g.leaves.station)(g.context, id, tile) as u16)
     {
         return;
     }
     let td = g.td(id);
-    if (g.svc_is_railway(id, u64::from(tile)) != 0)
-        && (g.svc_has_signal(id, u64::from(tile), u64::from(td)) != 0)
-        && (g.svc_is_pbs(id, u64::from(tile), u64::from(td & 7)) == 0)
-        && (g.svc_green(id, u64::from(tile), u64::from(td)) == 0)
+    if ((g.leaves.is_railway)(g.context, id, tile) != 0)
+        && ((g.leaves.has_signal)(g.context, id, tile, td) != 0)
+        && ((g.leaves.is_pbs)(g.context, id, tile, td & 7) == 0)
+        && ((g.leaves.green)(g.context, id, tile, td) == 0)
     {
         return;
     }
@@ -1292,13 +984,13 @@ fn check_next(g: &Game, id: Handle) {
     if !g.follow(id, id.get_compatible_railtypes(), &mut ft, tile, td) {
         return;
     }
-    if g.svc_has_reserved(id, u64::from(ft.new_tile), u64::from(tracks(ft.dirs))) == 0
+    if !g.has_reserved(ft.new_tile, tracks(ft.dirs))
         && single(ft.dirs)
-        && (g.svc_has_pbs(id, u64::from(ft.new_tile), u64::from(first(ft.dirs))) != 0)
+        && ((g.leaves.has_pbs)(g.context, id, ft.new_tile, first(ft.dirs)) != 0)
     {
         let mut available = tracks(ft.dirs);
-        if g.svc_rail90(id, u64::from(ft.old_tile), u64::from(ft.new_tile)) != 0 {
-            available &= !(g.svc_cross_tracks(id, u64::from(ft.old_td & 7)) as u8);
+        if (g.leaves.rail90)(g.context, id, ft.old_tile, ft.new_tile) != 0 {
+            available &= !((g.leaves.cross_tracks)(g.context, id, ft.old_td & 7) as u8);
         }
         choose(g, id, ft.new_tile, ft.exitdir, available, false, false);
     }
@@ -1428,12 +1120,12 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_check_reverse(
         leaves: unsafe { &*leaves },
         context,
     };
-    if g.svc_line_reverse(id) == 0
+    if (g.leaves.line_reverse)(g.context, id) == 0
         && id.get_track() != u64::from(DEPOT)
         && id.get_track() != u64::from(WORMHOLE)
         && g.read_direction(id) & 1 != 0
     {
-        g.svc_check_reverse(id) as u8
+        (g.leaves.check_reverse)(g.context, id) as u8
     } else {
         0
     }
@@ -1457,13 +1149,13 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_station_location(
         context,
     };
     if station == g.read_last_station(id) {
-        g.svc_write_last(id, u64::from(u16::MAX));
+        (g.leaves.write_last)(g.context, id, u16::MAX);
     }
-    if g.svc_station_train(id, u64::from(station)) == 0 {
-        g.svc_increment_order(id);
+    if (g.leaves.station_train)(g.context, id, station) == 0 {
+        (g.leaves.increment_order)(g.context, id);
         0
     } else {
-        g.svc_station_xy(id, u64::from(station)) as u32
+        (g.leaves.station_xy)(g.context, id, station) as u32
     }
 }
 
@@ -1490,14 +1182,17 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_reserve_under(
         match track {
             WORMHOLE => {
                 g.reserve_track(
-                    part,
                     v.tile,
-                    g.svc_diag_track(part, g.svc_tunnel_dir(part, u64::from(v.tile))) as u8,
+                    (g.leaves.diag_track)(
+                        g.context,
+                        part,
+                        ((g.leaves.tunnel_dir)(g.context, part, v.tile)) as u8,
+                    ) as u8,
                 );
             }
             DEPOT => {}
             _ => {
-                g.reserve_track(part, v.tile, g.svc_bits_track(part, u64::from(track)) as u8);
+                g.reserve_track(v.tile, (g.leaves.bits_track)(g.context, part, track) as u8);
             }
         }
         part = g.read_next(part);
@@ -1654,104 +1349,132 @@ crate::abi::layouts! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pbs::PbsServices;
+    use crate::services::RailMapServices;
     use crate::train_state::State;
-    macro_rules! unused {
-        (($($ty:ty),*); $ret:ty) => {{
-            extern "C" fn abort($(_: $ty),*) -> $ret { std::process::abort() }
-            abort
-        }};
+    use std::cell::Cell;
+    use std::ffi::c_void;
+
+    /// An aborting callee of any fixture slot's signature.
+    trait Unused {
+        fn unused() -> Self;
     }
+    macro_rules! unused_arity {
+        ($($arg:ident),*) => {
+            impl<R, $($arg),*> Unused for extern "C" fn($($arg),*) -> R {
+                fn unused() -> Self {
+                    #[allow(improper_ctypes_definitions)]
+                    extern "C" fn abort<R, $($arg),*>($(_: $arg),*) -> R {
+                        std::process::abort()
+                    }
+                    abort::<R, $($arg),*>
+                }
+            }
+            impl<R, $($arg),*> Unused for unsafe extern "C" fn($($arg),*) -> R {
+                fn unused() -> Self {
+                    #[allow(improper_ctypes_definitions)]
+                    unsafe extern "C" fn abort<R, $($arg),*>($(_: $arg),*) -> R {
+                        std::process::abort()
+                    }
+                    abort::<R, $($arg),*>
+                }
+            }
+        };
+    }
+    unused_arity!();
+    unused_arity!(A);
+    unused_arity!(A, B);
+    unused_arity!(A, B, C);
+    unused_arity!(A, B, C, D);
+    unused_arity!(A, B, C, D, E);
+    unused_arity!(A, B, C, D, E, F);
+    fn unused<T: Unused>() -> T {
+        T::unused()
+    }
+
     fn leaves() -> Leaves {
         Leaves {
-            read_tile: unused!((Handle); u32),
-            read_next: unused!((Handle); Handle),
-            read_last_station: unused!((Handle); u16),
-            read_direction: unused!((Handle); u8),
-            read_order: unused!((Handle); u8),
-            read_num_orders: unused!((Handle); u8),
-            read_order_index: unused!((Handle); u8),
-            read_free: unused!((Handle); TrainReservationFreeRead),
-            read_free_1: unused!((Handle); TrainReservationFree1Read),
-            read_new: unused!((Handle); TrainReservationNewRead),
-            read_choose: unused!((Handle); TrainReservationChooseRead),
-            read_choose_4: unused!((Handle); TrainReservationChoose4Read),
-            read_check_next: unused!((Handle); TrainReservationCheckNextRead),
-            all_compat: unused!((*mut std::ffi::c_void, Handle); u64),
-            backoff: unused!((*mut std::ffi::c_void, Handle); u64),
-            bits_track: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            blocking: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
-            check_reverse: unused!((*mut std::ffi::c_void, Handle); u64),
-            compat_station: unused!((*mut std::ffi::c_void, Handle, u32, u32); u64),
-            conditional: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            copy_order: unused!((*mut std::ffi::c_void, Handle, u8); ()),
-            cross_dirs: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            cross_tracks: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            depot_dir: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            depot_reserved: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            diag_reach_dirs: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            diag_track: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            enter_td: unused!((*mut std::ffi::c_void, Handle, u8, u8); u64),
-            exit_dir: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            free: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
-            green: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
-            has_pbs: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
-            has_reserved: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
-            has_signal: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
-            increment_order: unused!((*mut std::ffi::c_void, Handle); ()),
-            is_bridge: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            is_depot: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            is_pbs: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
-            is_plain: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            is_railway: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            is_station: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            is_tunnel: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            is_waypoint: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            line_reverse: unused!((*mut std::ffi::c_void, Handle); u64),
-            mark_tile: unused!((*mut std::ffi::c_void, Handle, u32); ()),
-            oneway: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
-            order_service: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            order_type: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            other_end: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            overlap: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            path_result: unused!((*mut std::ffi::c_void, Handle, u8); ()),
-            rail90: unused!((*mut std::ffi::c_void, Handle, u32, u32); u64),
-            reach_dirs: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            reach_tracks: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            reserved: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            reserve_paths: unused!((*mut std::ffi::c_void, Handle); u64),
-            restore_order: unused!((Handle, *const crate::orders::Order); ()),
-            save_order: unused!((Handle); crate::orders::Order),
-            service: unused!((*mut std::ffi::c_void, Handle); ()),
-            set_depot: unused!((*mut std::ffi::c_void, Handle, u32, u8); ()),
-            set_depot_dest: unused!((*mut std::ffi::c_void, Handle, u32); ()),
-            set_platform: unused!((*mut std::ffi::c_void, Handle, u32, u8, u8); ()),
-            set_signal: unused!((*mut std::ffi::c_void, Handle, u32, u8, u8); ()),
-            set_tunnel: unused!((*mut std::ffi::c_void, Handle, u32, u8); ()),
-            show_res: unused!((*mut std::ffi::c_void, Handle); u64),
-            signal_context: unused!(() ; crate::signal::Context),
+            read_tile: unused(),
+            read_next: unused(),
+            read_last_station: unused(),
+            read_direction: unused(),
+            read_order: unused(),
+            read_num_orders: unused(),
+            read_order_index: unused(),
+            read_free: unused(),
+            read_free_1: unused(),
+            read_new: unused(),
+            read_choose: unused(),
+            read_choose_4: unused(),
+            read_check_next: unused(),
+            all_compat: unused(),
+            backoff: unused(),
+            bits_track: unused(),
+            blocking: unused(),
+            check_reverse: unused(),
+            compat_station: unused(),
+            conditional: unused(),
+            copy_order: unused(),
+            cross_dirs: unused(),
+            cross_tracks: unused(),
+            depot_dir: unused(),
+            depot_reserved: unused(),
+            diag_reach_dirs: unused(),
+            diag_track: unused(),
+            enter_td: unused(),
+            exit_dir: unused(),
+            green: unused(),
+            has_pbs: unused(),
+            has_signal: unused(),
+            increment_order: unused(),
+            is_bridge: unused(),
+            is_depot: unused(),
+            is_pbs: unused(),
+            is_plain: unused(),
+            is_railway: unused(),
+            is_station: unused(),
+            is_tunnel: unused(),
+            is_waypoint: unused(),
+            line_reverse: unused(),
+            mark_tile: unused(),
+            oneway: unused(),
+            order_service: unused(),
+            order_type: unused(),
+            other_end: unused(),
+            overlap: unused(),
+            path_result: unused(),
+            rail90: unused(),
+            reach_dirs: unused(),
+            reach_tracks: unused(),
+            reserve_paths: unused(),
+            restore_order: unused(),
+            save_order: unused(),
+            service: unused(),
+            set_depot: unused(),
+            set_depot_dest: unused(),
+            set_signal: unused(),
+            set_tunnel: unused(),
+            show_res: unused(),
+            signal_context: unused(),
             vehicle: std::ptr::null(),
             shared: std::ptr::null(),
-            start_stop: unused!((*mut std::ffi::c_void, Handle); ()),
-            station: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            station_train: unused!((*mut std::ffi::c_void, Handle, u16); u64),
-            station_xy: unused!((*mut std::ffi::c_void, Handle, u16); u64),
-            stuck: unused!((*mut std::ffi::c_void, Handle); ()),
-            tile_add: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
-            tile_offset: unused!((*mut std::ffi::c_void, Handle, u8); u64),
-            trackdir: unused!((*mut std::ffi::c_void, Handle); u64),
-
-            try_track: unused!((*mut std::ffi::c_void, Handle, u32, u8); u64),
-            tunnel_dir: unused!((*mut std::ffi::c_void, Handle, u32); u64),
-            unreserve: unused!((*mut std::ffi::c_void, Handle, u32, u8); ()),
-            write_dest: unused!((*mut std::ffi::c_void, Handle, u32); ()),
-            write_last: unused!((*mut std::ffi::c_void, Handle, u16); ()),
-            write_suppress: unused!((*mut std::ffi::c_void, Handle, u8); ()),
-            follow: unused!((Handle, u64, *mut Follow); u8),
-            origin: unused!((Handle, u8); Pbs),
-            pathfind: unused!((Handle, u32, u8, u8, u8, u8); Search),
-            safe_track: unused!((Handle, u32, u8, u8); u8),
-            process_orders: unused!((Handle); u8),
-            update_order_dest: unused!((Handle, u8); u8),
+            start_stop: unused(),
+            station: unused(),
+            station_train: unused(),
+            station_xy: unused(),
+            stuck: unused(),
+            tile_add: unused(),
+            tile_offset: unused(),
+            trackdir: unused(),
+            tunnel_dir: unused(),
+            write_dest: unused(),
+            write_last: unused(),
+            write_suppress: unused(),
+            follow: unused(),
+            pathfind: unused(),
+            safe_track: unused(),
+            process_orders: unused(),
+            update_order_dest: unused(),
         }
     }
     struct Mock {
@@ -1785,28 +1508,196 @@ mod tests {
         }
     }
     unsafe fn mock<'a>(h: Handle) -> &'a mut Mock {
-        // SAFETY: Every test installs this handle to its live exclusive thread-local stack mock.
+        // SAFETY: Every test installs this handle to its live exclusive stack mock.
         unsafe { &mut *h.shell.cast::<Mock>() }
     }
-    extern "C" fn zero_tile(_: *mut std::ffi::c_void, _: Handle, _: u32) -> u64 {
-        0
+
+    // A PBS service has no vehicle argument; each test thread names its world here.
+    thread_local! {
+        static TRAIN: Cell<Handle> = const { Cell::new(Handle::NONE) };
+        static PBS: Cell<*const PbsServices> = const { Cell::new(std::ptr::null()) };
     }
-    extern "C" fn zero_pair(_: *mut std::ffi::c_void, _: Handle, _: u32, _: u32) -> u64 {
-        0
+    fn current<'a>() -> &'a mut Mock {
+        // SAFETY: The installing test keeps this mock live; callbacks end each access.
+        unsafe { mock(TRAIN.get()) }
     }
-    extern "C" fn zero_track(_: *mut std::ffi::c_void, _: Handle, _: u32, _: u8) -> u64 {
-        0
+    /// One railway world: every tile is plain unsignalled, unreserved rail.
+    struct World {
+        shared: crate::services::Services,
+        rail: RailMapServices,
+        pbs: PbsServices,
     }
-    extern "C" fn one_track(_: *mut std::ffi::c_void, _: Handle, _: u32, _: u8) -> u64 {
-        1
+    extern "C" fn pbs_services(_: *const crate::services::Services) -> *const PbsServices {
+        PBS.get()
     }
-    extern "C" fn origin(_: Handle, _: u8) -> Pbs {
-        Pbs {
-            tile: 0,
-            other: Handle::NONE,
-            td: 0,
-            okay: 0,
+    extern "C" fn railway(_: u32) -> u8 {
+        crate::tile_type::MP_RAILWAY
+    }
+    extern "C" fn yes(_: u32) -> bool {
+        true
+    }
+    extern "C" fn no(_: u32) -> bool {
+        false
+    }
+    extern "C" fn no_signal(_: u32, _: u8) -> bool {
+        false
+    }
+    extern "C" fn no_reservation(_: u32) -> crate::services::TrackBits {
+        crate::services::TrackBits(0)
+    }
+    extern "C" fn no_show() -> bool {
+        false
+    }
+    extern "C" fn every_type(_: u64) -> u64 {
+        u64::MAX
+    }
+    extern "C" fn rail_type(_: u32) -> crate::services::RailType {
+        crate::services::RailType(0)
+    }
+    extern "C" fn same_types(_: u8, _: u8, _: bool) -> bool {
+        false
+    }
+    extern "C" fn try_track(tile: u32, track: u8) -> bool {
+        let m = current();
+        m.log.push(("try", tile, track));
+        tile != 3 || m.stop == 1
+    }
+    extern "C" fn unreserve_track(tile: u32, track: u8) {
+        current().log.push(("unreserve", tile, track));
+    }
+    /// `IsSafeWaitingPosition` follows with the train's types and `IsWaitingPositionFree`
+    /// with none: the line ends at tile 2 for a stop-2 train, and every position is free.
+    unsafe extern "C" fn pbs_follow(_: Handle, _: u8, types: u64, out: *mut Follow) -> bool {
+        // SAFETY: Pbs passes its live stack follower for this call only.
+        let ft = unsafe { &mut *out };
+        if types == 0 || (current().stop == 2 && ft.old_tile == 2) {
+            return false;
         }
+        ft.new_tile = ft.old_tile + 1;
+        ft.exitdir = 0;
+        ft.dirs = crate::track_func::diagdir_reaches_trackdirs(0);
+        true
+    }
+    extern "C" fn no_random(_: *mut c_void) -> u32 {
+        std::process::abort()
+    }
+    extern "C" fn no_industry(_: i32, _: i32, _: *mut u32) -> u32 {
+        std::process::abort()
+    }
+    impl World {
+        fn new() -> Box<Self> {
+            let mut world = Box::new(Self {
+                shared: crate::services::Services {
+                    pbs_services,
+                    tile_type: railway,
+                    is_plain_rail: yes,
+                    ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
+                },
+                rail: rail_map(),
+                pbs: pbs_table(),
+            });
+            world.pbs.shared = &raw const world.shared;
+            world.pbs.rail = &raw const world.rail;
+            world
+        }
+        /// Route this thread's PBS queries to the world and to `train`'s mock.
+        fn install(&self, train: Handle) {
+            TRAIN.set(train);
+            PBS.set(&raw const self.pbs);
+        }
+    }
+    fn rail_map() -> RailMapServices {
+        RailMapServices {
+            ground: std::ptr::null(),
+            traversal: unused(),
+            signal_presence: unused(),
+            signal_update: unused(),
+            station_admission: unused(),
+            crossing_admission: unused(),
+            wormhole_admission: unused(),
+            is_rail_depot: no,
+            rail_depot_direction: unused(),
+            has_signal_trackdir: no_signal,
+            signal_state: unused(),
+            set_signal_state: unused(),
+            other_tunnel_bridge_end: unused(),
+            has_signals: unused(),
+            signal_type: unused(),
+            invalid_rail_type: unused(),
+            rail_type: unused(),
+            set_rail_type: unused(),
+            rail_tile_type: unused(),
+            set_track_bits: unused(),
+            present_signals: unused(),
+            set_present_signals: unused(),
+            signal_states: unused(),
+            set_signal_states: unused(),
+            set_has_signals: unused(),
+            set_signal_type: unused(),
+            signal_variant: unused(),
+            set_signal_variant: unused(),
+            cycle_signal_side: unused(),
+            rail_reservation: no_reservation,
+            set_track_reservation: unused(),
+            depot_reserved: unused(),
+            set_depot_exit: unused(),
+            make_rail_normal: unused(),
+            make_rail_depot: unused(),
+            crossing_rail_bits: unused(),
+            crossing_road_axis: unused(),
+            has_station_rail: unused(),
+            is_rail_station: unused(),
+            station_blocked: unused(),
+            station_track: unused(),
+            wormhole_reserved: unused(),
+        }
+    }
+    fn pbs_table() -> PbsServices {
+        PbsServices {
+            shared: std::ptr::null(),
+            rail: std::ptr::null(),
+            train: std::ptr::null(),
+            depot_bits: unused(),
+            crossing_bits: unused(),
+            station_bits: unused(),
+            wormhole_bits: unused(),
+            set_depot: unused(),
+            set_station: unused(),
+            set_wormhole: unused(),
+            try_track,
+            unreserve_track,
+            station_reserved: unused(),
+            compatible_station: unused(),
+            show_reservation: no_show,
+            assert_platform: unused(),
+            station: unused(),
+            is_crossing: unused(),
+            read_train_on_res: unused(),
+            write_train_on_res: unused(),
+            assertions: false,
+            handle: unused(),
+            all_compatible: every_type,
+            compatible: unused(),
+            tile_rail_type: rail_type,
+            rail90: same_types,
+            blocking: unused(),
+            has_pbs: unused(),
+            index: unused(),
+            follow: pbs_follow,
+        }
+    }
+
+    extern "C" fn zero_tile(_: *mut c_void, _: Handle, _: u32) -> u64 {
+        0
+    }
+    extern "C" fn zero_pair(_: *mut c_void, _: Handle, _: u32, _: u32) -> u64 {
+        0
+    }
+    extern "C" fn zero_track(_: *mut c_void, _: Handle, _: u32, _: u8) -> u64 {
+        0
+    }
+    extern "C" fn one_track(_: *mut c_void, _: Handle, _: u32, _: u8) -> u64 {
+        1
     }
     extern "C" fn follow(h: Handle, _: u64, out: *mut Follow) -> u8 {
         // SAFETY: The mock and output live throughout this synchronous callback; no recursive callback here.
@@ -1823,43 +1714,13 @@ mod tests {
             1
         }
     }
-    extern "C" fn safe(v: *const crate::services::Train, tile: u32, _: u8, _: bool) -> bool {
-        // SAFETY: The train shell is the live mock for this synchronous scalar callback.
-        unsafe { (*v.cast::<Mock>()).stop == 2 && tile == 2 }
-    }
-    extern "C" fn no_random(_: *mut std::ffi::c_void) -> u32 {
-        std::process::abort()
-    }
-    extern "C" fn no_industry(_: i32, _: i32, _: *mut u32) -> u32 {
-        std::process::abort()
-    }
-    fn extension_shared() -> crate::services::Services {
-        crate::services::Services {
-            safe_waiting_position: safe,
-            ..crate::services::fixture(std::ptr::null_mut(), no_random, no_industry)
-        }
-    }
-    extern "C" fn try_track(_: *mut std::ffi::c_void, h: Handle, tile: u32, track: u8) -> u64 {
-        // SAFETY: The callback ends this mock access before returning to policy.
-        unsafe {
-            let m = mock(h);
-            m.log.push(("try", tile, track));
-            u64::from(tile != 3 || m.stop == 1)
-        }
-    }
-    extern "C" fn signal(_: *mut std::ffi::c_void, h: Handle, tile: u32, _: u8, green: u8) {
+    extern "C" fn signal(_: *mut c_void, h: Handle, tile: u32, _: u8, green: u8) {
         // SAFETY: Live exclusive test mock.
         unsafe {
             mock(h).log.push(("signal", tile, green));
         }
     }
-    extern "C" fn unreserve(_: *mut std::ffi::c_void, h: Handle, tile: u32, track: u8) {
-        // SAFETY: Live exclusive test mock.
-        unsafe {
-            mock(h).log.push(("unreserve", tile, track));
-        }
-    }
-    extern "C" fn mark(_: *mut std::ffi::c_void, h: Handle, tile: u32) {
+    extern "C" fn mark(_: *mut c_void, h: Handle, tile: u32) {
         // SAFETY: Live exclusive test mock.
         unsafe {
             mock(h).log.push(("mark", tile, 0));
@@ -1871,24 +1732,27 @@ mod tests {
             blocking: zero_track,
             rail90: zero_pair,
             is_railway: zero_tile,
-            free: one_track,
             has_pbs: one_track,
             green: one_track,
-            try_track,
             set_signal: signal,
-            unreserve,
             mark_tile: mark,
-            origin,
             follow,
             ..leaves()
         }
     }
+    const ORIGIN: Pbs = Pbs {
+        tile: 0,
+        other: Handle::NONE,
+        td: 0,
+        okay: 0,
+    };
     #[test]
     fn controller_extension_rolls_back_only_new_tracks_and_restores_signal_order() {
         let mut m = Mock::new(0);
         let h = m.handle();
-        let shared = extension_shared();
-        let ls = extension_leaves(&shared);
+        let world = World::new();
+        world.install(h);
+        let ls = extension_leaves(&world.shared);
         let g = Game {
             vehicle: std::ptr::null_mut(),
             leaves: &ls,
@@ -1896,7 +1760,8 @@ mod tests {
         };
         let mut available = 0;
         let mut dir = 0;
-        assert_eq!(extend(&g, h, &mut available, &mut dir).tile, INVALID_TILE);
+        let result = extend_from(&g, h, ORIGIN, &mut available, &mut dir);
+        assert_eq!(result.tile, INVALID_TILE);
         assert_eq!(
             m.log,
             vec![
@@ -1919,8 +1784,9 @@ mod tests {
         for stop in [1, 2] {
             let mut m = Mock::new(stop);
             let h = m.handle();
-            let shared = extension_shared();
-            let ls = extension_leaves(&shared);
+            let world = World::new();
+            world.install(h);
+            let ls = extension_leaves(&world.shared);
             let g = Game {
                 vehicle: std::ptr::null_mut(),
                 leaves: &ls,
@@ -1928,7 +1794,7 @@ mod tests {
             };
             let mut available = 0;
             let mut dir = 0;
-            let result = extend(&g, h, &mut available, &mut dir);
+            let result = extend_from(&g, h, ORIGIN, &mut available, &mut dir);
             assert_eq!(
                 (result.tile, result.td, result.okay),
                 (if stop == 1 { 3 } else { 2 }, 0, 1)
@@ -1983,19 +1849,19 @@ mod tests {
         m.order_token = u32::from(order.destination) | (u32::from(order.wait) << 16);
         m.restores += 1;
     }
-    extern "C" fn write_dest(_: *mut std::ffi::c_void, h: Handle, dest: u32) {
+    extern "C" fn write_dest(_: *mut c_void, h: Handle, dest: u32) {
         // SAFETY: Live exclusive mock.
         unsafe {
             mock(h).dest = dest;
         }
     }
-    extern "C" fn write_last(_: *mut std::ffi::c_void, h: Handle, last: u16) {
+    extern "C" fn write_last(_: *mut c_void, h: Handle, last: u16) {
         // SAFETY: Live exclusive mock.
         unsafe {
             mock(h).last = last;
         }
     }
-    extern "C" fn write_suppress(_: *mut std::ffi::c_void, h: Handle, suppress: u8) {
+    extern "C" fn write_suppress(_: *mut c_void, h: Handle, suppress: u8) {
         // SAFETY: Live exclusive mock.
         unsafe {
             mock(h).suppress = suppress;
@@ -2059,14 +1925,15 @@ mod tests {
     }
     #[test]
     fn direct_station_reservation_can_reenter_the_same_owner() {
-        extern "C" fn nested(_: *mut std::ffi::c_void, h: Handle, _: u32, _: u8) -> u64 {
-            extern "C" fn line_reverse(_: *mut std::ffi::c_void, _: Handle) -> u64 {
+        extern "C" fn nested(_: u32, _: u8) -> bool {
+            extern "C" fn line_reverse(_: *mut c_void, _: Handle) -> u64 {
                 0
             }
             let ls = Leaves {
                 line_reverse,
                 ..leaves()
             };
+            let h = TRAIN.get();
             h.set_track(u64::from(DEPOT));
             // SAFETY: Nested direct entry receives the same live owner and its own native stack context.
             assert_eq!(
@@ -2084,12 +1951,15 @@ mod tests {
             h.clear_stuck();
             h.set_wait_counter(0x1_0000);
             h.set_flags(7);
-            1
+            true
         }
         let mut m = Mock::new(0);
         let h = m.handle();
+        let mut world = World::new();
+        world.pbs.try_track = nested;
+        world.install(h);
         let ls = Leaves {
-            try_track: nested,
+            shared: &raw const world.shared,
             ..leaves()
         };
         let g = Game {
@@ -2097,7 +1967,7 @@ mod tests {
             leaves: &ls,
             context: std::ptr::null_mut(),
         };
-        assert!(g.reserve_track(h, 7, 2));
+        assert!(g.reserve_track(7, 2));
         assert_eq!(h.get_flags(), 7);
         assert_eq!(m.state.wait_counter, 0);
     }
