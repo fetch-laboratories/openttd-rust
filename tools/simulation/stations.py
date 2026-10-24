@@ -13,7 +13,7 @@ PREPARE_ORDER = 5
 PREFIX = "normal[0]/"
 VEHICLE = "roadveh[0]/common[0]/"
 CARGODIST = ("cargodist", "stale-refresh", "stale-restrict", "stale-release")
-# LinkRefresher/IncreaseStats branches (#349) reached by real arrivals,
+# LinkRefresher/IncreaseStats branches (vehicle/visits.rs) reached by real arrivals,
 # departures, full-load waits and stale-link refreshes in these inputs.
 VISIT_ROUTES = ["arrival_stats", "full_load_random", "full_load_refresh"]
 VISIT_WITNESSES = {
@@ -272,7 +272,7 @@ def check(scenario, run, mode, role, result):
         kind, []
     )
     core.branch_witnesses(scenario, run, role, "linkgraph", graph_required)
-    # Route prediction and link statistics (#349) on real station visits.
+    # Route prediction and link statistics on real station visits.
     visits = VISIT_WITNESSES.get(kind, [])
     if counts := core.branch_witnesses(scenario, run, role, "vehicle_visits", visits):
         result[f"{mode}_{role}_visit_branches"] = counts
@@ -362,9 +362,10 @@ def check(scenario, run, mode, role, result):
             )
 
 
-# #267: inputs for the unchanged reference bodies and Rust command owner. The
-# private tile callbacks need a fixture translation unit; the pinned source is
-# included verbatim and its ordinary object is replaced only in this executable.
+# Station construction (station_cmd.rs): inputs for the unchanged reference
+# bodies and Rust command owner. The private tile callbacks need a fixture
+# translation unit; the pinned source is included verbatim and its ordinary
+# object is replaced only in this executable.
 COMMAND_SOURCE = r"""
 #include "station_cmd.cpp"
 #include "console_internal.h"
@@ -1058,7 +1059,7 @@ RELOADS = {
     "airport-reload": ("airport", "airport-inspect"),
     "waypoints-reload": ("waypoints", "waypoints-inspect"),
 }
-# #354 road stop owner branches; cache checks run only with desync snapshots.
+# Road stop owner (road_stop.rs) branches; cache checks run only with desync snapshots.
 ROAD_STOPS = (
     "clear_head clear_last clear_split clear_tail enter_bay0 enter_bay1 enter_drive"
     " enter_refused leave_bay leave_drive make_alone make_join make_merge make_parent rebuild"

@@ -256,7 +256,7 @@ impl Ctx<'_> {
     }
     fn reset_delete_counter(&self, st: *mut BaseStation) {
         let owner = (self.world().owner)(st);
-        // SAFETY: #125 owns the sole canonical counter; no borrow survives a callback.
+        // SAFETY: The station service owner holds the counter; no borrow survives a callback.
         let fields = unsafe { crate::station_service::openttd_rust_station_service_fields(owner) };
         unsafe { (&raw mut (*fields).delete_ctr).write(0) };
     }

@@ -1,4 +1,4 @@
-"""Owner-built multimodal fixtures and rail controller evidence (#86/#179/#183/#221)."""
+"""Owner-built multimodal fixtures and rail controller evidence."""
 
 import hashlib
 import json
@@ -530,7 +530,7 @@ def controller_input(source, directory, scenario):
     if scenario["rail_control"] == "reservation":
         data, chunks = target.read_bytes(), read_save(target)
         work, allowed = bytearray(data), set()
-        # rail_map.h reservation bits8..11; copy TRACK_Y's real reservation
+        # rail_map.h reservation bits 8..11; copy TRACK_Y's real reservation
         # from the owner's already reserved approach tile onto occupied tiles.
         reserved = (
             int.from_bytes(chunks["MAP2"]["raw"][2007 * 2 : 2007 * 2 + 2], "big")
@@ -568,8 +568,8 @@ def reservation_rows(path):
     tile_types = chunks["MAPT"]["raw"]
     m2 = chunks["MAP2"]["raw"]
     m5, m6 = chunks["MAP5"]["raw"], chunks["MAPE"]["raw"]
-    # rail_map.h: plain railway m5 top bits 00/01, m2 bits8..11.
-    # station_map.h: rail station/waypoint subtype0/7, m6 bit2.
+    # rail_map.h: plain railway m5 top bits 00/01, m2 bits 8..11.
+    # station_map.h: rail station/waypoint subtype 0/7, m6 bit 2.
     rail = [
         (tile, int.from_bytes(m2[tile * 2 : tile * 2 + 2], "big") >> 8 & 15)
         for tile, kind in enumerate(tile_types)
@@ -654,8 +654,8 @@ def structure_inventory(path):
     chunks = read_save(path)
     types, m5 = chunks["MAPT"]["raw"], chunks["MAP5"]["raw"]
     m1, m8 = chunks["MAPO"]["raw"], chunks["MAP8"]["raw"]
-    # rail_map.h: m8 bits0..5; tunnelbridge_map.h: m5 bit7/type bits2..3.
-    # water_map.h: m5 subtype bits4..7, m1 waterclass bits5..6.
+    # rail_map.h: m8 bits 0..5; tunnelbridge_map.h: m5 bit 7/type bits 2..3.
+    # water_map.h: m5 subtype bits 4..7, m1 waterclass bits 5..6.
     return {
         "monorail": [
             tile
@@ -711,7 +711,7 @@ def structure_witnesses(paths, observations, mode):
                 witnessed["tunnels"].append(
                     [checkpoint, vehicle, row["tile"], row["x_pos"], row["y_pos"]]
                 )
-            # Road bridges use state255; compare physical position with the
+            # Road bridges use state 255; compare physical position with the
             # saved bridge-above axis bits (tile_map/bridge_map.h).
             if (
                 row["type"] == 1

@@ -1,8 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Industry and industry-tile resolver ownership. Contexts are stack values;
-//! canonical industry state and ordered registries are read directly. Every
-//! owner/registry borrow ends before native Action2, town or storage reentry.
-//! Native leaves are noexcept; panics abort and no unwind crosses the boundary.
+//! Industry and industry-tile resolvers. Contexts are stack values; industry state and the
+//! ordered registries are read directly, and Action2, town and storage calls can reenter.
 use super::{
     Builder, ConstructionServices, GenerationServices, Industry, LifecycleServices, SpecHandle,
     TileServices, TileSpec, TownHandle,

@@ -12,12 +12,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-/* No layout contains a pointer/allocator. State and opaque destination are live,
- * aligned, exclusive and disjoint during each call only. No pointer is retained;
- * world/VM/iterator calls and C++ exceptions occur between Rust returns. Destination
- * outlives collector. Finalize flushes once, including early return/unwinding.
- * uint32 runs/share differences wrap; original signed result/token overflow is
- * outside defined input. Rust panics/OOM abort under existing ScriptList limits. */
+/* State and the opaque destination are exclusive and disjoint during each call; world, VM and
+ * iterator calls and C++ exceptions occur between Rust returns. The destination outlives the
+ * collector, and finalize flushes once, also on early return or unwinding. uint32 runs and share
+ * differences wrap; original signed result and token overflow is outside defined input.
+ * State and destination are live and aligned for each call. */
 typedef struct {
 	uint32_t amount;
 	uint32_t previous;
@@ -28,7 +27,7 @@ typedef struct {
 	uint8_t finalized;
 } OpenTTDCargoCollector;
 /* Plan: 0 all waiting packets, 1 equal_range(via), 2 all origins, 3 find(from).
- * Invalid mode/selector returns255 for the original C++ fatal policy. */
+ * Invalid mode/selector returns 255 for the original C++ fatal policy. */
 uint8_t OPENTTD_LIST_CALL openttd_rust_cargo_plan(uint8_t mode, uint8_t selector);
 void OPENTTD_LIST_CALL openttd_rust_cargo_init(OpenTTDCargoCollector *, uint8_t selector, uint16_t other);
 void OPENTTD_LIST_CALL openttd_rust_cargo_packet(OpenTTDCargoCollector *, struct OpenTTDScriptList *, uint16_t from, uint16_t via, uint32_t amount);

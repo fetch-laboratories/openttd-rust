@@ -5,11 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Water construction, clearing, restoration and tile policy (#294). Map/pool
-//! identities and `CommandCost` storage remain native. The world mutex serializes
-//! each synchronous entry. No native reference is formed or retained over a
-//! callback; nested clear commands may reenter any owner. Native leaves are
-//! noexcept (no ordinary-play throwing service); panics abort.
+//! Water construction, clearing, restoration and tile policy. Map and pool identities and
+//! `CommandCost` storage stay native; nested clear commands may reenter any owner.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -201,7 +198,7 @@ impl World<'_> {
         (self.s.random)(self.s.context) as u8
     }
     fn dirty_neighbours(&self, tile: u32) {
-        // SAFETY: Direct call to the integrated Rust owner with the same tables.
+        // SAFETY: Calls the Rust owner with the same tables.
         unsafe {
             crate::water::dirty_water_neighbours(
                 tile,

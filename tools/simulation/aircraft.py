@@ -1,4 +1,4 @@
-"""Reference-built aircraft transport/controller evidence (#86/#136)."""
+"""Reference-built aircraft transport/controller evidence."""
 
 import hashlib
 import json
@@ -757,8 +757,8 @@ def check_breakdown(scenario, run, mode, role, result):
         )
     ):
         raise RuntimeError("breakdown loading boundary moved or departed")
-    # Stock engine238 (aircraft 23) is Dinger 100: max speed (74*128)/10=947.
-    # International position38 has NoSpeedClamp/SlowTurn, so neither limit
+    # Stock engine 238 (aircraft 23) is Dinger 100: max speed (74*128)/10=947.
+    # International position 38 has NoSpeedClamp/SlowTurn, so neither limit
     # selects 320 itself.
     if (
         b[common + "tick_counter"] != tick + 1
@@ -969,8 +969,8 @@ def check_control(scenario, run, mode, role, result):
                 waiting_details.append(
                     [head, state, position, station["normal[0]/airport.type"], mask]
                 )
-                # Unchanged international FTA roots: hangar0 -> entrance block13;
-                # hangar1 -> hangar2-area block16. These source HasBlock paths
+                # Unchanged international FTA roots: hangar 0 -> entrance block 13;
+                # hangar 1 -> hangar 2 area block 16. These source HasBlock paths
                 # reset speed while another aircraft owns the actual next block.
                 if (
                     state == 1
@@ -981,7 +981,7 @@ def check_control(scenario, run, mode, role, result):
                     if mask & (1 << bit):
                         occupied_wait += 1
                         blocked.append((sample, head, target, position, bit))
-                # Helistation buffer16 -> hangar-entry23 takes Hangar2Area16;
+                # Helistation buffer 16 -> hangar entry 23 takes Hangar2Area16;
                 # an aircraft headed to HANGAR waits here for its owner to leave.
                 if (
                     state == 1

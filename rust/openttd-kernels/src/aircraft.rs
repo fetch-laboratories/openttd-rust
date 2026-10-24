@@ -1068,14 +1068,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.set_previous(id, pos);
     }
     fn controller(&self, id: Vehicle) -> bool {
-        // Acquired after event's orders/loading, never in deleting crashed_tick.
-        // Geometry/layout/map, speed writes/dirtying, direction/new-position,
-        // cache/NewGRF property, sound, position/viewport/rotor and MaybeCrash
-        // callbacks preserve this shell and chain. They may reenter or allocate
-        // other vehicles; pool growth does not move existing shells. MaybeCrash
-        // marks a crash, but destruction occurs on a later crashed_tick only.
-        // This descriptor ends before airport_next's state-handler/depot work;
-        // no load/reset, replacement command or deleting callback is reachable.
+        // Acquired after the event's orders and loading, never in the deleting crashed_tick.
+        // The movement callbacks keep this shell and chain (pool growth does not move shells;
+        // MaybeCrash destroys only on a later crashed_tick). The descriptor ends before
+        // airport_next's state-handler and depot work; callbacks cannot load, reset or yield.
         let observed = self.movement_observations(id);
         let s = self.target_station(id);
         let valid = !s.is_null();

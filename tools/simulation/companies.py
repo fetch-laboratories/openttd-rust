@@ -1,4 +1,4 @@
-"""Company lifecycle witnesses using real reference-built AI companies (#137)."""
+"""Company lifecycle witnesses using real reference-built AI companies."""
 
 import datetime
 import hashlib

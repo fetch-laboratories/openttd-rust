@@ -5,14 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Shared vehicle boundary used by every vehicle port: one opaque handle, the
-//! base-`Vehicle` and `GroundVehicle` service tables and constants. Shared map
-//! operations and arithmetic live in `services.rs`. The tables are defined once in `src/rust/vehicle_ffi.h` and filled
-//! with designated initializers in `src/rust/vehicle_services.cpp`.
-//!
-//! A handle is a live `Vehicle *`, valid until the service that deletes it.
-//! Services are synchronous and `noexcept`; none retains a Rust reference, and
-//! callers end every owner borrow before calling one that can reenter Rust.
+//! Shared vehicle boundary: one opaque handle (a live `Vehicle *`, valid until the service that
+//! deletes it), the base-`Vehicle` and `GroundVehicle` service tables and constants. The tables
+//! are declared in `src/rust/vehicle_ffi.h` and filled in `src/rust/vehicle_services.cpp`.
+//! Callers end every owner borrow before a service that can reenter Rust.
 pub(crate) mod maintenance;
 pub(crate) mod occupancy;
 pub(crate) mod scheduler;
@@ -318,7 +314,7 @@ pub struct VehicleServices {
     pub movement_observations: extern "C" fn(VehicleRef) -> MovementObservations,
     pub max_speed: extern "C" fn(VehicleRef) -> u16,
     pub maintenance: *const maintenance::Services,
-    /// The static station/depot visit table, resolved on use (#349).
+    /// The static station and depot visit table (`vehicle/visits.rs`), resolved on use.
     pub visits: extern "C" fn() -> *const visits::Services,
     /// The same canonical orders table used by visits/refit.
     pub orders: extern "C" fn() -> *const crate::orders::Leaves,

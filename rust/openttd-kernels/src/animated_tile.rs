@@ -5,12 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Process-wide animated-tile queue, dispatch and animation-trigger traversal.
-//! The game-state mutex serializes GUI/game threads. Queue accesses end before
-//! every callback. Actual scheduled animation callbacks only change frames,
-//! sounds and deferred deletion; they cannot allocate/erase queue entries.
-//! Specs/pool shells stay live across resolver calls: GRF evaluation neither
-//! resets specs/map nor yields or destroys the animated shell.
+//! Process-wide animated-tile queue, dispatch and animation-trigger traversal. Scheduled
+//! animation callbacks change only frames, sounds and deferred deletion; they cannot add or
+//! erase queue entries. Specs and pool shells stay live across resolver calls, which cannot
+//! reset specs or the map, yield, or destroy the animated shell.
 #![allow(unsafe_code, missing_docs, clippy::cast_possible_truncation)]
 use crate::animated_tile_map::AnimatedTileState;
 use crate::cargo_type::{INVALID_CARGO, NUM_CARGO};

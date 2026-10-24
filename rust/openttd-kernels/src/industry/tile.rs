@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Industry tile construction, builtin animation and tile-loop control.
-//! Map writes and resolver callbacks stay synchronous and can reenter. Owner
-//! fields are read through short raw accesses, never borrowed across callbacks.
+//! Industry tile construction, builtin animation and tile-loop control. Map writes and
+//! resolver callbacks can reenter.
 // Retain the original tick masks for source comparison.
 #![allow(clippy::verbose_bit_mask)]
 use super::{

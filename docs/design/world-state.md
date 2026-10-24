@@ -168,6 +168,20 @@ assertion policy captured once per entry. Assertion-disabled builds gain no new
 panics or rejected inputs. Delete displaced reads and orphan bindings; remaining
 unaudited callers share the canonical native fallback.
 
+The tile scheduler (`tile_loop.rs`) relies on this interval. `Map::Allocate` runs
+only from game reset (`InitializeGame`), the MAPS and legacy loaders and tests,
+and the mutex yield (`GameLoopPause`) only in generation progress and GRF
+scanning, all outside `RunTileLoop`. Tile handlers may mutate tiles and pools,
+run landscape, road and crash commands or queue script events (`InsertEvent`),
+but never reset, load, report progress or run a script VM, and none changes map
+dimensions, climate, tree placement, the tick counter, editor mode or the
+road-rebuild and ambient settings; `_misc_grf_features` changes only on reset and
+GRF `ActionD` loading. So a batch reads those settings once and keeps only
+descriptor metadata across dispatch, ending each field-sized read first. Ambient
+callbacks keep their original RNG position, and the tree adapter rereads the
+feature bit after the call.
+Threaded and arbitrary NewGRF corpus limits are open in #156.
+
 Extending the view requires default mutation/reallocation checks and semantic
 comparisons. This selects a bounded candidate, not a storage transfer or a
 general raw API.

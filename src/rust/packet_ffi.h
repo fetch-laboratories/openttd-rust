@@ -29,14 +29,11 @@ typedef struct {
 	size_t message;
 	size_t payload;
 } OpenTTDPacketFrame;
-/* Stack scalar state copies with Packet bytes. No allocator crosses ABI. All
- * pointers are live/aligned and borrowed only here, exclusive for writes; state,
- * byte storage and outputs are disjoint. Bytes are one allocation <= PTRDIFF_MAX,
- * readable/writable as declared. No borrow survives vector allocation, external
- * handler/transfer calls or copying. C++ exceptions never cross a Rust frame.
- * Original bounds/span/count preconditions apply; no new clamping or max length.
- * Persistent cursor narrows uint16 after each consumption and live post-callback
- * positive result. Panics abort; C++ owns all allocation/failure behavior. */
+/* Stack scalar state copies with Packet bytes. State, byte storage and outputs are disjoint, and no
+ * borrow survives vector allocation, external handler or transfer calls, or copying. Original
+ * bounds, span and count preconditions apply, with no new clamping or maximum length. The
+ * persistent cursor narrows to uint16 after each consumption and each positive post-callback result.
+ * Pointers are live and aligned, exclusive for writes; bytes occupy one allocation <= PTRDIFF_MAX. */
 void OPENTTD_PACKET_CALL openttd_rust_packet_init(OpenTTDPacketState *, size_t limit);
 uint8_t OPENTTD_PACKET_CALL openttd_rust_packet_boolean(uint8_t value);
 uint8_t OPENTTD_PACKET_CALL openttd_rust_packet_can_write(const OpenTTDPacketState *, size_t size, size_t amount);

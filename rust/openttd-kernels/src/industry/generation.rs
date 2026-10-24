@@ -5,9 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Initial industry probability, forced placement and weighted traversal.
-//! Scratch arrays live on the invocation stack. Only progress cancellation returns
-//! early to a native stack exception frame; no owner borrow spans a service.
+//! Initial industry probability, forced placement and weighted traversal, with scratch arrays
+//! on the invocation stack. Only progress cancellation returns early, to a native stack
+//! exception frame.
 use super::{Builder, Services, TYPES, place};
 
 #[repr(C)]

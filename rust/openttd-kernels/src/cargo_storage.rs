@@ -5,11 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical cargo packet fields, ordered lists, metadata and cargo actions.
-//! Pool allocation and identity remain native. All raw owner accesses are short:
-//! payment can call getters, so no reference into an owner survives any service.
-//! Save import stores unresolved shell handles without dereferencing them. The
-//! complete safety/lifetime contract is in `cargo_storage_ffi.h`; panics abort.
+//! Cargo packet fields, ordered lists, metadata and cargo actions; pool allocation and
+//! identity stay native. Payment can call getters, so every raw owner access is short. Save
+//! import stores unresolved shell handles without dereferencing them; the pointer contract is
+//! in `cargo_storage_ffi.h`.
 #![allow(
     unsafe_code,
     clippy::missing_safety_doc,
@@ -1003,8 +1002,8 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
     u8::from(f.action_counts[DELIVER] > 0 || f.action_counts[TRANSFER] > 0)
 }
 
-// Action selectors: 0 return,1 transfer,2 deliver,3 shift,4 remove vehicle,
-// 5 reroute vehicle,6 reserve,7 load,8 reroute station,9 truncate station,
+// Action selectors: 0 return, 1 transfer, 2 deliver, 3 shift, 4 remove vehicle,
+// 5 reroute vehicle, 6 reserve, 7 load, 8 reroute station, 9 truncate station,
 // 10 unload dispatch. Walker tokens reproduce stable source iterator identity.
 unsafe fn action(
     src: *mut List,

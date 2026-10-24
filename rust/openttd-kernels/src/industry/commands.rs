@@ -149,7 +149,7 @@ pub(crate) unsafe fn openttd_rust_industry_change_owner(owner: *mut Industry, ol
     }
 }
 
-/// Native-owned complete stack `CommandCost`, never a reconstructed cost snapshot.
+/// Native-owned stack `CommandCost`.
 #[repr(C)]
 pub struct IndustryCost {
     _private: [u8; 0],

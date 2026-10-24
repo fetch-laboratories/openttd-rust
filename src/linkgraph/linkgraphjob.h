@@ -78,7 +78,7 @@ public:
 	 */
 	struct NodeAnnotation {
 #ifdef WITH_RUST
-		const uint16_t *station; ///< Canonical immutable snapshot scalar, not a mirror.
+		const uint16_t *station; ///< Immutable snapshot scalar.
 		StationID Station() const { return StationID(*this->station); }
 #else
 		const LinkGraph::BaseNode &base;

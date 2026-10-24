@@ -5,14 +5,11 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Route-link prediction (`LinkRefresher`, `linkgraph/refresh.cpp`) and both
-//! `IncreaseStats` overloads (`station_cmd.cpp`). Native shells keep vehicle,
-//! station and link-graph pool identity; graph allocation, nodes, merging,
-//! and edges stay native operations; scheduling calls its Rust owner directly. Entries are serialized by the
-//! game-state mutex. Prediction frames (capacities, refit descriptions and the
-//! shared seen-hop set) are private to one entry: no callback can reach them.
-//! Temporary cargo/subtype writes happen in source order around the native
-//! subtype and capacity callbacks and are restored before the next vehicle.
+//! Route-link prediction (`LinkRefresher`, `linkgraph/refresh.cpp`) and both `IncreaseStats`
+//! overloads (`station_cmd.cpp`). Graph allocation, nodes, merging and edges stay native.
+//! Prediction frames are private to one entry. Temporary cargo and subtype writes happen in
+//! source order around the native subtype and capacity callbacks and are restored before the
+//! next vehicle.
 // Truncating casts are the original's `uint` to `uint16_t` stores (below the
 // stored value) and its `Map::LogX()` byte; `if_not_else` keeps source order.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::if_not_else)]

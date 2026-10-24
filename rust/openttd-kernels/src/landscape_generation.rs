@@ -425,7 +425,7 @@ impl World<'_> {
         g.climate == TROPIC && (self.s.tropic_zone)(tile) == TROPICZONE_DESERT
     }
     fn river_tile(&self, tile: u32) {
-        // Direct call to the existing water owner, no native simulation bounce.
+        // `MakeRiverAndModifyDesertZoneAround` in `water_cmd.rs`.
         unsafe {
             crate::water_cmd::openttd_rust_water_make_river(self.a.water_commands, tile);
         }

@@ -1,7 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! House and shared-town query runtime. Stack contexts live with native Action2
-//! facades, which retain no parallel state. Native game-state serialization covers
-//! every entry. No owner/container borrow survives a leaf, evaluator or PSA call.
+//! House and shared-town query runtime. Stack contexts live with the native Action2 facades.
 use super::{BUILDING_COUNTS, GameState, Leaves, State, house};
 use crate::cargo_type::{CT_MAIL, CT_PASSENGERS, is_valid_cargo_type};
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
@@ -611,7 +609,7 @@ crate::abi::layouts! {
 }
 
 /// Immutable process-lifetime native leaves, installed on house-class reset
-/// before any callback. The native table contains no mutable world-state mirror.
+/// before any callback.
 struct Registry(UnsafeCell<*const ResolverServices>);
 // SAFETY: Installation and all reads hold the native game-state mutex.
 unsafe impl Sync for Registry {}

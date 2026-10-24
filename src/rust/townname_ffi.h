@@ -21,13 +21,10 @@
 extern "C" {
 #endif
 typedef struct OpenTTDTownNameResult OpenTTDTownNameResult;
-/* lang is an original valid built-in ID (0..20), seed any uint32_t.
- * Generate owns all output in an opaque Rust allocation; no world/string pointer,
- * callback or shared RNG enters Rust. Data returns immutable bytes (not NUL
- * terminated), valid until destroy; length is a writable size_t. Copy/append in
- * C++ before destroying exactly once, including on a C++ allocation exception.
- * No Rust borrow survives destruction. Allocation exhaustion/panics abort, and
- * no call unwinds across this ABI. Allocator failure timing is not reproduced. */
+/* lang is an original valid built-in ID (0..20), seed any uint32_t. Generate owns its output in an
+ * opaque Rust allocation. Data returns immutable bytes (not NUL terminated), valid until destroy;
+ * length is a writable size_t. Copy or append in C++ before destroying once, also on a C++
+ * allocation exception. Rust allocation failure timing differs from the original. */
 OpenTTDTownNameResult *OPENTTD_TOWNNAME_CALL openttd_rust_townname_generate(size_t lang, uint32_t seed);
 const char *OPENTTD_TOWNNAME_CALL openttd_rust_townname_data(const OpenTTDTownNameResult *, size_t *length);
 void OPENTTD_TOWNNAME_CALL openttd_rust_townname_destroy(OpenTTDTownNameResult *);

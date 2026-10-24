@@ -5,7 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Migrated game and text kernels exposed through the documented `src/rust` ABIs.
+//! Migrated game and text kernels exposed through the documented `src/rust` ABIs. Entries are
+//! synchronous calls with typed `noexcept` C++ services; both profiles abort on panic, so nothing
+//! unwinds across the boundary. Game-state entries hold the native mutex; worker jobs use private
+//! snapshots. No borrow of owner or world state survives a service that can reenter Rust.
 
 mod admin_conversion;
 mod aircraft;
@@ -151,15 +154,9 @@ pub use widget_parser::Action as WidgetAction;
 
 /// Height at a coordinate within a tile, preserving `OpenTTD`'s slope rounding.
 ///
-/// Coordinates retain the original int domain. A height is widened from u32;
-/// `u64::MAX` denotes only an unsupported base slope after half-tile handling,
-/// allowing the C++ adapter to invoke its original `NOT_REACHED` handler. In
-/// particular, `u32::MAX` remains a valid height.
-///
-/// No pointers, ownership transfer, allocation, or mutable state cross this ABI.
-/// Unsigned arithmetic wraps and signed results narrow exactly as in C++;
-/// source signed-overflow inputs have no equivalence guarantee. Both build
-/// profiles abort on panic, and this C ABI never unwinds into C++.
+/// `u64::MAX` denotes only an unsupported base slope after half-tile handling, so the C++
+/// adapter can reach its original `NOT_REACHED`; `u32::MAX` is a valid height. Unsigned
+/// arithmetic wraps and signed results narrow as in C++; signed overflow has no equivalence guarantee.
 #[allow(unsafe_code)] // Only the exported symbol attribute; the function is safe Rust.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_get_partial_pixel_z(x: i32, y: i32, corners: u8) -> u64 {
@@ -169,13 +166,9 @@ pub extern "C" fn openttd_rust_get_partial_pixel_z(x: i32, y: i32, corners: u8) 
 /// Parse borrowed arbitrary bytes using the original integer grammar.
 ///
 /// # Safety
-/// For nonzero length, `src` must point to `length` readable bytes in a single
-/// live allocation, with length at most `isize::MAX` and no concurrent mutation
-/// during the call. Zero length
-/// permits a null pointer. No pointer is retained or allocation transferred.
-/// Base must be 0/8/10/16 and width 1..=64; the C++ adapter supplies native integer
-/// widths and preserves the original base assertion. Signed/clamp are 0 or 1.
-/// This C ABI never unwinds; workspace build profiles abort on panic.
+/// For nonzero length, `src` points to `length` readable bytes for the call; zero length
+/// permits null. The span follows `ffi.h`: one live immutable allocation <= `isize::MAX`.
+/// Base is 0/8/10/16 and width 1..=64; signed/clamp are 0/1.
 #[allow(unsafe_code)] // Export and the one borrowed-slice construction only.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_parse_integer(
@@ -360,8 +353,6 @@ pub extern "C" fn openttd_rust_encode_uint_le(value: u64) -> LittleEndian {
 /// Format integer bits into the original fixed 32-byte scratch capacity.
 /// Base must be 2..36; negative is one only for a signed negative input converted
 /// directly to `uint64_t` modulo 2^64. Zero length suppresses the C++ sink call.
-/// No pointer, allocation, ownership transfer, callback, or state crosses this ABI.
-/// Panics abort, and this C ABI never unwinds into C++.
 ///
 /// # Panics
 /// Invalid bases violate the original `std::to_chars` precondition and abort.
@@ -575,14 +566,9 @@ unsafe fn encoded_parameter<'a>(descriptor: &EncodedDescriptor) -> encoded::Para
 /// Aborts if the descriptor count exceeds the documented byte-extent limit.
 ///
 /// # Safety
-/// Nonzero count addresses count initialized descriptors in one immutable
-/// allocation with byte size <= `isize::MAX`. All tag-2 spans meet the descriptor
-/// contract above, remain live for this call, and may overlap read-only input.
-/// Zero count permits null. No C++ pointer is retained in the returned owner.
-/// `string_assertions` matches the original `WITH_ASSERT` guard (0/1).
-/// The caller destroys the result exactly once using `encoded_destroy`, including
-/// when later C++ allocation/logging throws. Rust allocation failure and panic
-/// abort; this ABI never unwinds. Output sizing is checked before each append.
+/// Nonzero count addresses count initialized descriptors, and tag-2 spans stay live for the
+/// call; zero count permits null. `string_assertions` is the original `WITH_ASSERT` guard
+/// (0/1). The caller destroys the result once with `encoded_destroy` (see `encoded_ffi.h`).
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_encoded_serialize(
@@ -649,12 +635,9 @@ pub unsafe extern "C" fn openttd_rust_encoded_negatives(
 /// Parse, replace, and serialize an internal encoded string in a single operation.
 ///
 /// # Safety
-/// Input and replacement spans satisfy the same immutable-borrow contract above.
-/// Input/replacement may overlap read-only. No C++ pointer is retained. Numeric
-/// assertions are active when !`NDEBUG` or `WITH_ASSERT`; string assertions follow
-/// the separate `WITH_ASSERT` guard. Each flag is 0/1. Before an enabled assertion,
-/// replay all preceding diagnostics, then assert without copying/committing output.
-/// The owner and all returned views have `encoded_serialize`'s destroy contract.
+/// Input and replacement spans follow `encoded_ffi.h` and may overlap. Numeric assertions
+/// are active when !`NDEBUG` or `WITH_ASSERT`, string assertions under `WITH_ASSERT`; each
+/// flag is 0/1. The result has `encoded_serialize`'s destroy contract.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_encoded_replace(
@@ -744,16 +727,10 @@ pub extern "C" fn openttd_rust_soft_clamp(
 
 pub use history::{Descriptor as HistoryDescriptor, Step as HistoryStep};
 
-/// Allocate a scalar history engine; no typed history pointer enters Rust.
+/// Allocate a scalar history engine; the contract is in `history_ffi.h`.
 ///
-/// Mode is 0 update, 1 first-child validity, 2 rotation, 3 query. Descriptor
-/// identities are C++ uintptr values, interpreted only by C++. All identified
-/// descriptors must remain live and immutable until destroy, forming an acyclic
-/// chain with the original valid-index/divisor/bit-shift preconditions. Age uses
-/// native 32-bit unsigned arithmetic; month is explicit for update/rotation and
-/// current global phase for validity. Query phase is supplied after C++ constructs
-/// each scratch array. Rust owns its scalar frame allocations; OOM/panic aborts.
-/// The handle is uniquely owned and returned to Rust exactly once for destruction.
+/// Month is explicit for update and rotation and the current global phase for validity;
+/// query phase is supplied after C++ constructs each scratch array. Destroy the handle once.
 #[allow(unsafe_code)] // Export attribute only; the descriptor token is never dereferenced.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_history_create(
@@ -1187,19 +1164,19 @@ pub extern "C" fn openttd_rust_packet_buffer_size(length: usize) -> usize {
     length.wrapping_add(2)
 }
 
-/// Narrow a length-prefix or MAC skip to the original unsigned16 width.
+/// Narrow a length-prefix or MAC skip to the original unsigned 16-bit width.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_packet_prefix(length: usize) -> u16 {
     packet::prefix(length)
 }
 
-/// Decode width1/2/4/8 with persistent cursor narrowing after every byte.
+/// Decode width 1, 2, 4 or 8 with persistent cursor narrowing after every byte.
 ///
 /// # Safety
 /// State is initialized/aligned/exclusive. Bytes are one readable allocation of
 /// length <= `ISIZE_MAX`; state/bytes are disjoint and no concurrent mutation occurs.
-/// Original scalar-read bounds check succeeded; width is1/2/4/8. Borrows end here.
+/// Original scalar-read bounds check succeeded; width is 1, 2, 4 or 8. Borrows end here.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_packet_recv(
@@ -1257,7 +1234,7 @@ pub unsafe extern "C" fn openttd_rust_packet_parse_size(
     unsafe { &*state }.parse_size(unsafe { utf8::borrow(bytes, length) })
 }
 
-/// Commit read cursor2, before external receive-handler operations or after resize.
+/// Set the read cursor to 2, before external receive-handler operations or after resize.
 ///
 /// # Safety
 /// State is live, aligned and exclusive for this call only.
@@ -1268,7 +1245,7 @@ pub unsafe extern "C" fn openttd_rust_packet_read_start(state: *mut packet::Stat
     unsafe { &mut *state }.read_start();
 }
 
-/// Commit send cursor0 only after Encrypt returns normally, before `shrink_to_fit`.
+/// Set the send cursor to 0 only after Encrypt returns normally, before `shrink_to_fit`.
 ///
 /// # Safety
 /// State is live, aligned and exclusive; all C++ callbacks have returned normally.
@@ -1312,7 +1289,7 @@ pub unsafe extern "C" fn openttd_rust_packet_skip_mac(state: *mut packet::State,
     unsafe { &mut *state }.skip_mac(mac);
 }
 
-/// Write low16 size header bytes before external send-handler calls.
+/// Write the low 16 bits of the size header before external send-handler calls.
 ///
 /// # Safety
 /// Bytes are one exclusive writable allocation >=2 and <= `ISIZE_MAX`; caller has
@@ -1361,16 +1338,9 @@ pub unsafe extern "C" fn openttd_rust_validation_valid(bytes: *const u8, length:
 /// Check live consumer capacity, copy in original forward order, then commit.
 ///
 /// # Safety
-/// On accepted capacity, source contains `length` initialized readable bytes and
-/// destination has writable bytes at `position..position+length`, with original
-/// valid pointer/range preconditions. Each is within one live allocation of size
-/// <= `ISIZE_MAX`. The output start is outside the nonempty source range: disjoint
-/// or defined left overlap is allowed, destination inside source is excluded.
-/// No Rust references to these bytes are created. C++ views may remain alive,
-/// without concurrent access during writing. Zero-length copying accesses neither pointer. Raw reads happen
-/// before each raw write, without simultaneous overlapping Rust slices/references.
-/// On overtake neither bytes nor position change; C++ dispatches its fatal path
-/// after return. No allocation/callback occurs here, and panic aborts.
+/// The `string_validation_ffi.h` contract: with capacity accepted, `length` source bytes are
+/// readable and `position..position+length` of the destination is writable, the output start
+/// lies outside a nonempty source range, and zero length accesses neither pointer.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_inplace_write(

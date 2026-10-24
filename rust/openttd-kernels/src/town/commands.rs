@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Town commands, authority actions and ordered deletion. The native game-state
-//! mutex serializes all access. Immediate owner reads/writes end before every
-//! callback, including deleting callbacks; post-destruction never resolves an ID.
+//! Town commands, authority actions and ordered deletion. Post-destruction code never
+//! resolves an ID.
 use super::founding::{AcceptanceEffect, FoundingServices};
 use super::{Engine, State, TownId, TownRef, engine};
 use crate::command_type::DoCommandFlag;
@@ -331,7 +330,7 @@ impl<'a> Commands<'a> {
             }
             w::hit(w::TOWN_COMMAND_BRIBE_FAILED);
         } else {
-            // SAFETY: Canonical owner is live; direct existing rating owner retains scratch/cheat semantics.
+            // SAFETY: The town owner is live; the rating owner keeps its scratch and cheat semantics.
             unsafe {
                 super::openttd_rust_town_change_rating(
                     self.f.growth,

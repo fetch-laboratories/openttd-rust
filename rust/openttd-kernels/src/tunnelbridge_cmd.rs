@@ -5,10 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete tunnel/bridge construction, removal and tile ownership policy.
-//! Native tables and result slots are borrowed synchronously under the game-state
-//! mutex; no map/pool or owner borrow crosses a callback. Panics abort, and native
-//! noexcept leaves have no ordinary-play throwing service.
+//! Tunnel and bridge construction, removal and tile ownership policy. Native tables and result
+//! slots are borrowed for one call.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -212,7 +210,7 @@ impl<'a> World<'a> {
         .add_side(tile, direction, owner);
     }
     fn check_docking(&self, tile: u32) {
-        // SAFETY: direct integrated owner; all access scopes end before reentry.
+        // SAFETY: Rust owner; all access scopes end before reentry.
         unsafe {
             crate::station_cmd::openttd_rust_station_check_docking(
                 (self.s.station_commands)(),

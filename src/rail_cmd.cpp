@@ -3164,7 +3164,7 @@ static CommandCost CheckBuildAbove_Track(TileIndex tile, DoCommandFlags flags, A
 
 #ifdef WITH_RUST
 /* Rust owns the rail track, depot and signal commands and the rail clear,
- * owner, terraform and build-above tile procs (#265). Map, pools, company
+ * owner, terraform and build-above tile procs (rail_cmd.rs). Map, pools, company
  * counters and every CommandCost stay native; the original bodies remain
  * under #ifndef WITH_RUST above. */
 #include "rust/rail_command_ffi.h"

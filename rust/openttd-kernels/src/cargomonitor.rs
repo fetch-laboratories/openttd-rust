@@ -5,11 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete process-wide cargo-monitor maps, accounting and lifecycle.
-//! The native game-state mutex serializes every entry, including script queries,
-//! saving and loading. No owner borrow survives a native callback. Native entry
-//! frames own independent cursors for nested payment and monitor scans. Handles
-//! are never dereferenced or retained; no delivery allocates or inserts a key.
+//! Process-wide cargo-monitor maps, accounting and lifecycle. Native entry frames own
+//! independent cursors for nested payment and monitor scans. Handles are never dereferenced
+//! or retained, and no delivery allocates or inserts a key.
 #![allow(
     unsafe_code,
     missing_docs,

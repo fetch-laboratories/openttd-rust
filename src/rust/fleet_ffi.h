@@ -12,18 +12,11 @@
 #include <cstdint>
 #include <cstddef>
 #include "command_services_ffi.h"
-/* Serial game-thread calls only. Group, statistics, renewal and company-head
- * owners are stable Rust allocations with C++ scalar object lifetimes in their
- * prefix; C++ views alias canonical storage. Vehicle::group_id stays C++ shell
- * storage that Rust reads and writes through vehicle_group/set_membership.
- * GRPS/ERNW/PLYR adapters retain widths, references and indexed pool identity.
- * Name/children/engine maps and pending IDs are Rust containers. Names have
- * call-local GUI/save exports; ordered child views do not allocate.
- * Typed synchronous entries own group/rule/replacement and tick-end policy.
- * Native commands retain full caller-owned stack CommandCost objects and their
- * original move/AddCost behavior. No owner borrow spans reentry/destruction.
- * Panics and escaping environmental exceptions abort. ABI 390-396 pin the owner
- * prefixes, the three service tables and the native cost slots. */
+/* Group, statistics, renewal and company-head owners are stable Rust allocations whose prefix holds
+ * the C++ scalar objects that views alias. Vehicle::group_id stays in the C++ shell, read and written
+ * through vehicle_group/set_membership; GRPS/ERNW/PLYR adapters keep widths, references and indexed
+ * pool identity. Name, children and engine maps and pending IDs are Rust containers. Commands keep
+ * caller-owned stack CommandCost objects with their original move and AddCost behavior. */
 struct OpenTTDVehicle;
 struct OpenTTDFleetGroupServices {
 	void * (*group)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(group);
@@ -176,7 +169,7 @@ struct OpenTTDFleetPendingServices {
 };
 const OpenTTDFleetGroupServices &FleetGroupServices();
 const OpenTTDFleetTransactionServices &FleetTransactionServices();
-/** #139 capacity traversal service, shared as the fleet next-part service. */
+/** Cargo capacity traversal service (cargo_storage.rs), shared as the fleet next-part service. */
 extern "C" {
 void *openttd_rust_fleet_group_create();
 void openttd_rust_fleet_group_destroy(void *);

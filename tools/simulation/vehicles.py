@@ -1,4 +1,4 @@
-"""Base scheduler and maintenance evidence over actual transport saves (#213)."""
+"""Base scheduler and maintenance evidence over actual transport saves."""
 
 from pathlib import Path
 

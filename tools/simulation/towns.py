@@ -856,7 +856,7 @@ def founding_scenarios(soak):
 
 
 def house_scenarios(soak):
-    """Placement, clearance, autoslope, lift, rebuild and both cargo modes (#256)."""
+    """Placement, clearance, autoslope, lift, rebuild and both cargo modes."""
     cases = []
     for mode in ("original", "binomial"):
         scenario = founding_scenarios(soak)[0]

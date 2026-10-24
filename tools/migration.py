@@ -349,7 +349,7 @@ def supply_graphics(build):
 
 
 def free_cores():
-    """Cores the 1-minute load leaves idle, read once per run (#355)."""
+    """Cores the 1-minute load leaves idle, read once per run."""
     return max(2, (os.cpu_count() or 2) - round(os.getloadavg()[0]))
 
 

@@ -2723,7 +2723,7 @@ pub(crate) const VRF_LEAVING_STATION: u64 = 1 << 9;
 /// `VehicleRailFlag::Reversed`.
 pub const VRF_REVERSED: u64 = 1 << 7;
 
-/// The train part of `VehicleEnterDepot` (#349): clear the depot reservation,
+/// The train part of `VehicleEnterDepot`: clear the depot reservation,
 /// update the segment's signals and arrange the consist.
 pub(crate) fn enter_depot(id: Handle, leaves: &Leaves, services: &Services) {
     let g = Game::new(leaves, services);
