@@ -477,7 +477,7 @@ struct Airport : public TileArea {
 
 	inline TileIndex GetRotatedTileFromOffset(TileIndexDiffC tidc, const AirportSpec *as) const
 	{
-				switch (this->rotation) {
+		switch (this->rotation) {
 			case DIR_N: return this->tile + ToTileIndexDiff(tidc);
 
 			case DIR_E: return this->tile + TileDiffXY(tidc.y, as->size_x - 1 - tidc.x);
@@ -524,7 +524,7 @@ struct Airport : public TileArea {
 
 	inline Direction GetHangarExitDirection(TileIndex tile, const AirportSpec *as) const
 	{
-				const HangarTileTable *htt = GetHangarDataByTile(tile, as);
+		const HangarTileTable *htt = GetHangarDataByTile(tile, as);
 		return ChangeDir(htt->dir, DirDifference(this->rotation, as->layouts[0].rotation));
 	}
 
