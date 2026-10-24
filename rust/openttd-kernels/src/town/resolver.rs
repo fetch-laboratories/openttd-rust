@@ -13,10 +13,9 @@ use std::{
     ffi::c_void,
 };
 
-use crate::house::{HOUSE_NO_CLASS, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET};
+use crate::house::{HOUSE_NO_CLASS, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET, TOWN_HOUSE_COMPLETED};
 use crate::newgrf_callbacks::{CBID_HOUSE_ALLOW_CONSTRUCTION, CBID_HOUSE_DRAW_FOUNDATIONS};
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
-use crate::town_map::TOWN_HOUSE_COMPLETED;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct TownScope {
@@ -404,7 +403,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
     let shared = unsafe { &*s.shared };
     if scope.tile == INVALID_TILE {
         return match variable {
-            0x40 => TOWN_HOUSE_COMPLETED | (scope.view as u32).wrapping_shl(2),
+            0x40 => u32::from(TOWN_HOUSE_COMPLETED) | (scope.view as u32).wrapping_shl(2),
             0x41..=0x44 | 0x46 | 0x47 | 0x60..=0x65 | 0x67 => 0,
             0x45 => u32::from((l.generating_world)()),
             0x66 => u32::MAX,
