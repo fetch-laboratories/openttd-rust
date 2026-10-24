@@ -47,6 +47,12 @@ pub struct State {
     root: Group,
 }
 #[repr(C)]
+pub struct OrderState {
+    unload: u8,
+    load: u8,
+    loading: bool,
+}
+#[repr(C)]
 pub struct RandomFields {
     bits: u16,
     waiting: u8,
@@ -105,7 +111,7 @@ pub struct Services {
     write_waiting: unsafe extern "C" fn(V, u8),
     resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
     resolve_random: unsafe extern "C" fn(*mut State, u16, u8) -> RandomResult,
-    in_motion: unsafe extern "C" fn(V) -> bool,
+    order: unsafe extern "C" fn(V) -> OrderState,
     cargo_owner: unsafe extern "C" fn(V) -> *const crate::cargo_storage::List,
     cargo_capacity: unsafe extern "C" fn(V) -> u16,
     real_count: unsafe extern "C" fn(Group, bool) -> u32,
@@ -488,7 +494,10 @@ pub unsafe extern "C" fn openttd_rust_vehicle_resolve_real(
             }
             return null();
         }
-        let motion = (s.in_motion)(v);
+        let order = (s.order)((s.first)(v));
+        let not_loading = order.unload == crate::order_type::OUFB_NO_UNLOAD
+            && order.load == crate::order_type::OLFB_NO_LOAD;
+        let motion = !order.loading || not_loading;
         let total = (s.real_count)(group, motion);
         if total == 0 {
             return null();
@@ -663,6 +672,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_shell_callback(
 }
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDVehicleOrderState" ["vehicle_resolver"] => OrderState { unload, load, loading };
     "OpenTTDVehicleRandomFields" ["vehicle_resolver"] => RandomFields { bits, waiting };
     "OpenTTDVehicleRandomResult" ["vehicle_resolver"] => RandomResult { used, reseed };
     "OpenTTDVehicleCargoQuery" ["vehicle_resolver"] => CargoQuery { cargo, subtype, engine };
@@ -673,7 +683,7 @@ crate::abi::layouts! {
         cargo_classes, cargo_bitnum, cargo_translation, grf_version, get_register, current_company,
         valid_company, livery, company_info, first_engine, articulated, has_articulated,
         overrides, override_at, override_engine, cached_override, spritegroup, random_fields,
-        write_random, write_waiting, resolve_callback, resolve_random, in_motion, cargo_owner,
+        write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,
         cargo_capacity, real_count, real_at, check
     };
     "NewGRFCache" ["vehicle_resolver"] => Cache { position_consist_length, position_same_id_length, consist_cargo_information, company_information, position_in_vehicle, cache_valid };

@@ -18,6 +18,7 @@ struct OpenTTDVehicleResolverState {
 	uint8_t cached_relative_count;
 	const SpriteGroup *root;
 };
+struct OpenTTDVehicleOrderState { uint8_t unload, load; bool loading; };
 struct OpenTTDVehicleRandomFields { uint16_t bits; uint8_t waiting; };
 struct OpenTTDVehicleRandomResult { uint32_t used, reseed; };
 struct OpenTTDVehicleCargoQuery { uint8_t cargo, subtype; const OpenTTDEngine *engine; };
@@ -54,7 +55,7 @@ struct OpenTTDVehicleResolverServices {
 	void (*write_waiting)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_waiting);
 	uint16_t (*resolve_callback)(OpenTTDVehicleResolverState *, uint16_t, uint16_t, uint32_t, uint32_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_callback);
 	OpenTTDVehicleRandomResult (*resolve_random)(OpenTTDVehicleResolverState *, uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_random);
-	bool (*in_motion)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(in_motion);
+	OpenTTDVehicleOrderState (*order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order);
 	OpenTTDCargoList *(*cargo_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_owner);
 	uint16_t (*cargo_capacity)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_capacity);
 	uint32_t (*real_count)(const RealSpriteGroup *, bool) noexcept OPENTTD_SERVICE_DEFAULT(real_count);

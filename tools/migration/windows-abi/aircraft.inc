@@ -40,7 +40,8 @@ static void AircraftDirectBoundary()
 		openttd_rust_aircraft_cache(&aircraft_probe.leaves, v, true);
 		v.state->pos = 19;
 	};
-	vehicle.property = [](OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { CHECK(property == 0x0C && fallback == 0); return int32_t{200}; };
+	vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return nullptr; };
+	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { CHECK(property == 0x0C && fallback == 0); return int32_t{200}; };
 	leaves.cargo_age_property = [](OpenTTDAircraftVehicle) noexcept { return uint32_t{71}; };
 	leaves.range_property = [](OpenTTDAircraftVehicle) noexcept { return uint32_t{41}; };
 	vehicle.write_max_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { aircraft_probe.maximum_speed = speed; };

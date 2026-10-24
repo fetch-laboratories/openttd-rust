@@ -101,7 +101,8 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	leaves.fta = [](const void *) noexcept { return OpenTTDAircraftNode{nullptr, uint64_t{1} << 30, 0, 0, 0}; };
 	leaves.airport_blocks = [](const OpenTTDStation *) noexcept { return &fixture->blocks; };
 	vehicle.write_subspeed = [](OpenTTDVehicle *, uint8_t) noexcept {};
-	vehicle.property = [](OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if (property != 0x0C || fallback != 0) std::abort(); return int32_t{0}; };
+	vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return nullptr; };
+	vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t property, int32_t fallback) noexcept { if (property != 0x0C || fallback != 0) std::abort(); return int32_t{0}; };
 	leaves.engine_speed = [](OpenTTDAircraftVehicle) noexcept { return uint16_t{100}; };
 	vehicle.write_max_speed = [](OpenTTDVehicle *, uint16_t) noexcept {};
 	vehicle.write_cargo_age = [](OpenTTDVehicle *, uint16_t) noexcept {};
