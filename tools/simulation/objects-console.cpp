@@ -166,7 +166,7 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 	for (TileIndex t : TileArea(tile, 2, 2)) { heights[corner++] = TileHeight(t); SetTileHeight(t, 4); }
 	GRFFile file; file.grfid = 0x43004300; file.grf_version = 8;
 	spec->grf_prop.grffile = &file; spec->grf_prop.grfid = file.grfid; spec->grf_prop.local_id = 23;
-	spec->flags = {}; spec->views = 4; spec->size = OBJECT_SIZE_1X1; spec->climate = LandscapeTypes::All();
+	spec->flags = {}; spec->views = 4; spec->size = OBJECT_SIZE_1X1; spec->climate = LandscapeTypes{0x0F};
 	spec->introduction_date = TimerGameCalendar::date - 400; spec->end_of_life_date = TimerGameCalendar::date + 400;
 	spec->callback_mask = {ObjectCallbackMask::SlopeCheck, ObjectCallbackMask::Colour, ObjectCallbackMask::Autoslope};
 	std::vector<SpriteGroup *> groups;
@@ -234,7 +234,7 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 		Backup<GameMode> game_mode(_game_mode, mode); Backup<bool> world(_generating_world, generating);
 		Backup<CompanyID> company(_current_company, mode == GM_EDITOR || generating ? OWNER_NONE : _current_company);
 		spec->flags = {}; spec->views = boundary == 0 ? 0 : 4;
-		spec->climate = boundary == 1 ? LandscapeTypes{} : LandscapeTypes::All();
+		spec->climate = boundary == 1 ? LandscapeTypes{} : LandscapeTypes{0x0F};
 		spec->introduction_date = TimerGameCalendar::date - (boundary == 2 ? 0 : 400);
 		spec->end_of_life_date = TimerGameCalendar::date + (boundary == 3 ? 0 : boundary == 4 ? -36 : boundary == 5 ? -35 : 400);
 		if (boundary >= 6) spec->flags.Set(boundary == 6 ? ObjectFlag::OnlyInScenedit : ObjectFlag::OnlyInGame);
