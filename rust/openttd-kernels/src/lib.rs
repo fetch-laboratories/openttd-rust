@@ -1411,10 +1411,12 @@ pub(crate) mod tree_map;
 pub(crate) mod water_map;
 
 mod cargo_type;
+mod cargotype;
 mod source_type;
 mod subsidy_base;
 mod tilearea;
 mod timer_game_common;
+mod timer_game_tick;
 
 mod subsidy_type;
 

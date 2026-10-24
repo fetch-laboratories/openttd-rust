@@ -12,6 +12,9 @@
 
 #include "town_type.h"
 #include "newgrf_spritegroup.h"
+#ifdef WITH_RUST
+#include "rust/house_resolver_ffi.h"
+#endif
 
 /**
  * Scope resolver for a town.
@@ -20,8 +23,12 @@
  *       and to check the town's persistent storage.
  */
 struct TownScopeResolver : public ScopeResolver {
+#ifdef WITH_RUST
+	OpenTTDTownScope context;
+#else
 	Town *t;       ///< %Town of the scope.
 	bool readonly; ///< When set, persistent storage of the town is read-only,
+#endif
 
 	/**
 	 * Resolver of a town scope.
@@ -29,10 +36,7 @@ struct TownScopeResolver : public ScopeResolver {
 	 * @param t %Town of the scope.
 	 * @param readonly Scope may change persistent storage of the town.
 	 */
-	TownScopeResolver(ResolverObject &ro, Town *t, bool readonly)
-		: ScopeResolver(ro), t(t), readonly(readonly)
-	{
-	}
+	TownScopeResolver(ResolverObject &ro, Town *t, bool readonly);
 
 	uint32_t GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const override;
 	void StorePSA(uint reg, int32_t value) override;
@@ -46,10 +50,14 @@ struct TownResolverObject : public ResolverObject {
 
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
 	{
+#ifdef WITH_RUST
+		return openttd_rust_town_scope(this, &this->town_scope, scope, relative);
+#else
 		switch (scope) {
 			case VSG_SCOPE_SELF: return &town_scope;
 			default: return ResolverObject::GetScope(scope, relative);
 		}
+#endif
 	}
 };
 

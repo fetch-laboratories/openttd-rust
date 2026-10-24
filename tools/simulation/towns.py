@@ -691,6 +691,7 @@ def adapter(build, folder, env):
     local = folder / "towns-console.cpp"
     local.write_bytes((ROOT / "tools/simulation/towns-console.cpp").read_bytes())
     shutil.copy2(ROOT / "tools/simulation/storage-console.inc", folder)
+    shutil.copy2(ROOT / "tools/simulation/house-resolver-console.inc", folder)
     from .console_adapter import console_adapter
 
     return console_adapter(
@@ -825,6 +826,31 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
         )
     if scenario["town_founding"] == "houses":
         mode = scenario["house_mode"]
+        if scenario.get("house_reload"):
+            from .rails import normalize
+
+            save = folder / "reference" / "house-resolver.sav"
+            setup = dict(
+                scenario, console=[f'towns_scenario houses recession "{save}"'], ticks=1
+            )
+            run = run_game(
+                setup,
+                executables["reference"],
+                builds["reference"],
+                folder / "capture",
+                timeout,
+                env,
+                False,
+            )
+            if (
+                run["exit"]
+                or not save.is_file()
+                or "HOUSE_RESOLVER construction-production-var44-var64-var65 true"
+                not in run["log"]
+            ):
+                raise RuntimeError("house resolver reload capture failed")
+            save, result["house_reload_input"] = normalize(save, folder / "normalized")
+            scenario = dict(scenario, kind="save", save=str(save))
         return dict(
             scenario,
             console=[
@@ -943,6 +969,7 @@ def house_scenarios(soak):
             ticks=(90 if soak else 60) * TICKS_PER_DAY + SNAPSHOT_TICKS,
         )
         cases.append(scenario)
+    cases.append(dict(cases[0], name="town-houses-reload", house_reload=True))
     return cases
 
 
@@ -1292,6 +1319,19 @@ def check(scenario, run, mode, role, result):
         required = HOUSE_BRANCHES + HOUSE_MODE_BRANCHES[scenario["house_mode"]]
         if counts := branch_witnesses(scenario, run, role, "house", required):
             result[mode + "_house_branches"] = counts
+        markers = (
+            "class-reset true",
+            "parent-readonly-null true",
+            "construction-production-var44-var64-var65 true",
+        )
+        if any("HOUSE_RESOLVER " + marker not in run["log"] for marker in markers):
+            raise RuntimeError("house resolver mandatory semantic marker missing")
+        lines = [line for line in run["log"] if line.startswith("HOUSE_RESOLVER ")]
+        key = mode + "_house_resolver"
+        if role == "reference":
+            result[key] = lines
+        elif result[key] != lines:
+            raise RuntimeError("house resolver callback/register outcomes differ")
         if not any(line.startswith("TOWN house-done ") for line in run["log"]):
             raise RuntimeError("house command witness missing")
         overrides = [

@@ -160,7 +160,6 @@ pub struct MovementServices {
     pub owned_land: extern "C" fn(u32) -> bool,
     pub object_foundation: extern "C" fn(u32) -> ObjectFoundation,
     pub house_foundation: extern "C" fn(u32) -> CallbackFoundation,
-    pub house_callback: extern "C" fn(u32, u16) -> u16,
     pub house_boolean: extern "C" fn(*const c_void, u16) -> bool,
     pub industry_foundation: extern "C" fn(u32) -> CallbackFoundation,
     pub industry_callback: extern "C" fn(u32, u16) -> u16,
@@ -239,7 +238,7 @@ impl MovementServices {
                 };
                 if p.callback {
                     let result = if house {
-                        (self.house_callback)(tile, p.kind)
+                        unsafe { crate::town::resolver::foundation(tile, p.kind) }
                     } else {
                         (self.industry_callback)(tile, p.kind)
                     };
@@ -1528,7 +1527,6 @@ crate::abi::layouts! {
         owned_land,
         object_foundation,
         house_foundation,
-        house_callback,
         house_boolean,
         industry_foundation,
         industry_callback,
