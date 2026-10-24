@@ -425,7 +425,6 @@ pub struct Leaves {
     pub shared: *const Services,
     pub max_depot_penalty: extern "C" fn() -> u32,
     /// `ProcessOrders(v)`.
-    pub process_orders: extern "C" fn(VehicleRef),
     pub visual_read: extern "C" fn(VehicleRef) -> VisualRead,
     pub visual_effect_then_speed: extern "C" fn(VehicleRef, u32) -> SpeedRead,
     pub speed_read: extern "C" fn(VehicleRef) -> SpeedRead,
@@ -1685,7 +1684,9 @@ impl Game<'_> {
             crate::ground_vehicle::last_speed(self.gs.physics, v.v);
             return true;
         }
-        service!(self.l.process_orders)(v.v);
+        let orders = service!(self.vs.orders)();
+        // SAFETY: The original live shell survives orders; no owner borrow spans reentry.
+        unsafe { crate::orders::openttd_rust_process_orders(v.v.0.as_ptr().cast(), &*orders) };
         self.vs.handle_loading(v.v, false);
         if service!(self.vs.order_type)(v.v) == OT_LOADING {
             return true;
@@ -2345,7 +2346,6 @@ crate::abi::layouts! {
         vehicle,
         ground,
         shared,
-        process_orders,
         max_depot_penalty,
         visual_read,
         visual_effect_then_speed,

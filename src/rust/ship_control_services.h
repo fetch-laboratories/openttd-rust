@@ -192,7 +192,6 @@ static void Ship_path_clear(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleI
 
 
 
-static bool Ship_process_orders(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return ProcessOrders(v); }
 
 
 
@@ -391,7 +390,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.track_direction = Ship_track_direction, .tracks_reach = Ship_tracks_reach,
 		 .path_size = Ship_path_size,
 		.path_back = Ship_path_back, .path_pop = Ship_path_pop,
-		.path_clear = Ship_path_clear, .process_orders = Ship_process_orders,
+		.path_clear = Ship_path_clear,
 		.viewport = Ship_viewport,
 		.base_viewport = Ship_base_viewport, .visual = Ship_visual,
 		.cache = Ship_cache, .play_sound = Ship_play_sound,

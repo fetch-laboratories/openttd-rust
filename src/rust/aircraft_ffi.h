@@ -117,7 +117,6 @@ struct OpenTTDAircraftLeaves {
 	uint16_t (OPENTTD_AIRCRAFT_CALL *range_default)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(range_default);
 	bool (OPENTTD_AIRCRAFT_CALL *rotor_image_if_changed)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(rotor_image_if_changed);
 	void (OPENTTD_AIRCRAFT_CALL *update_rotor_image)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(update_rotor_image);
-	void (OPENTTD_AIRCRAFT_CALL *process_orders)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);
 	uint32_t (OPENTTD_AIRCRAFT_CALL *vehicle_crash)(OpenTTDAircraftVehicle, bool) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_crash);
 	bool (OPENTTD_AIRCRAFT_CALL *send_to_depot)(OpenTTDAircraftVehicle, bool) noexcept OPENTTD_SERVICE_DEFAULT(send_to_depot);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *fta_next_position)(const void *) noexcept OPENTTD_SERVICE_DEFAULT(fta_next_position);

@@ -152,6 +152,8 @@ static void OPENTTD_VEHICLE_CALL VehicleSvcWriteXY(OpenTTDVehicle *v, int32_t x,
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcBaseViewport(OpenTTDVehicle *v) noexcept { VehicleOf(v)->Vehicle::UpdateViewport(true); }
 Train *RustTrainGetIfValid(uint32_t id) noexcept { return Train::GetIfValid(VehicleID(id)); }
+OpenTTDVehicle *RustShipGet(uint32_t id) noexcept { return RustVehicle(Ship::Get(VehicleID(id))); }
+static const OpenTTDOrdersLeaves *VehicleOrders() noexcept { return &GetRustOrdersLeaves(); }
 
 static void OPENTTD_VEHICLE_CALL VehicleSvcUnknownCallbackResult(const OpenTTDEngine *e, CallbackID callback, uint16_t result) noexcept
 {
@@ -416,6 +418,8 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.max_speed = VehicleSvcMaxSpeed,
 	.maintenance = &_rust_vehicle_maintenance_services,
 	.visits = RustVehicleVisits,
+	.orders = VehicleOrders,
+	.ship_get = RustShipGet,
 };
 
 const OpenTTDVehicleServices &GetRustVehicleServices() noexcept

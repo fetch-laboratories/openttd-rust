@@ -1487,6 +1487,8 @@ mod tests {
         max_speed: unused!(vehicle::VehicleRef ; u16),
         maintenance: std::ptr::null(),
         visits: unused!( ; *const vehicle::visits::Services),
+        orders: unused!( ; *const crate::orders::Leaves),
+        ship_get: unused!(u32 ; vehicle::VehicleRef),
     };
     // Existing tests never clear; the native ABI fixture below covers full costs.
     const OCCUPANCY: Occupancy = Occupancy {

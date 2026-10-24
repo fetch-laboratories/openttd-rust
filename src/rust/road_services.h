@@ -255,7 +255,6 @@ static OpenTTDRoadTrackdirRead OPENTTD_VEHICLE_CALL RoadSvcTrackdirRead(OpenTTDV
 	return {.tile = RustVehicleTile(u), .direction = RustVehicleDirection(u), .status = RustVehicleStatus(u)};
 }
 
-static void OPENTTD_VEHICLE_CALL RoadSvcProcessOrders(OpenTTDVehicle *v) noexcept { ProcessOrders(VehicleOf(v)); }
 
 static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.candidate = RoadSvcCandidate,
@@ -263,7 +262,6 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.ground = &_rust_ground_services<RoadVehicle>,
 	.shared = &_rust_shared_services,
 	.max_depot_penalty = RustMaximumDepotPenalty,
-	.process_orders = RoadSvcProcessOrders,
 	.visual_read = RoadSvcVisualRead,
 	.visual_effect_then_speed = RoadSvcVisualEffectThenSpeed,
 	.speed_read = RoadSvcSpeedRead,

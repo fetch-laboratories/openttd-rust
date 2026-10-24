@@ -302,10 +302,7 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_update_rotor_image(OpenTTDAircraftVeh
 	GetRotorImage(v, EIT_ON_MAP, &seq); rotor->sprite_cache.sprite_seq = seq;
 }
 
-static void OPENTTD_AIRCRAFT_CALL Aircraft_process_orders(OpenTTDAircraftVehicle vehicle) noexcept
-{
-	ProcessOrders(Aircraft::From(VehicleOf(vehicle.handle)));
-}
+
 
 
 static bool OPENTTD_AIRCRAFT_CALL Aircraft_send_to_depot(OpenTTDAircraftVehicle vehicle, bool service) noexcept
@@ -434,7 +431,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.range_default = RustVehicleEngineObservation<uint16_t, OpenTTDAircraftVehicle, RustEngineAircraftRange>,
 	.rotor_image_if_changed = Aircraft_rotor_image_if_changed,
 	.update_rotor_image = Aircraft_update_rotor_image,
-	.process_orders = Aircraft_process_orders,
 	.vehicle_crash = RustVehicleBaseCrashHandle<OpenTTDAircraftVehicle>,
 	.send_to_depot = Aircraft_send_to_depot,
 	.fta_next_position = Aircraft_fta_next_position,

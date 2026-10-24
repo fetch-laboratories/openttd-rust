@@ -75,7 +75,6 @@ struct RoadTestTables {
 		VEHICLE_UNUSED(vehicle, order_nonstop);
 		VEHICLE_UNUSED(ground, has_articulated);
 		VEHICLE_UNUSED(leaves, max_depot_penalty);
-		VEHICLE_UNUSED(leaves, process_orders);
 		VEHICLE_UNUSED(vehicle, loading);
 		VEHICLE_UNUSED(vehicle, visits);
 		VEHICLE_UNUSED(vehicle, waiting_for_unbunching);

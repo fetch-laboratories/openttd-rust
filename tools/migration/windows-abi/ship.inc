@@ -1,3 +1,4 @@
+#include "controller-orders.hpp"
 #pragma once
 #include "rust/ship_control_ffi.h"
 
@@ -79,7 +80,6 @@ static void ShipBoundary()
 		.path_size = ShipProbeUnused<size_t, uint32_t>,
 		.path_back = ShipProbeUnused<uint32_t, uint32_t>, .path_pop = ShipProbeUnused<void, uint32_t>,
 		.path_clear = ShipProbeUnused<void, uint32_t>,
-		.process_orders = ShipProbeUnused<bool, uint32_t>,
 		.viewport = ShipProbeUnused<void, uint32_t, bool, bool>,
 		.base_viewport = ShipProbeUnused<void, uint32_t>, .visual = ShipProbeUnused<void, uint32_t>,
 		.cache = ShipProbeUnused<void, uint32_t>, .play_sound = ShipProbeUnused<void, uint32_t>,
@@ -140,7 +140,17 @@ static void ShipBoundary()
 		CHECK(ship_probe.tick == 0 && ship_probe.running == 0 && ship_probe.order_time == 0);
 		return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0};
 	};
-	leaves.process_orders = [](uint32_t) noexcept { CHECK(ship_probe.stage++ == 1); return true; };
+	ControllerOrders orders(&ship_vehicle);
+	static ControllerOrders *ship_orders;
+	ship_orders = &orders;
+	static OpenTTDVehicle *orders_shell;
+	orders_shell = shell;
+	ship_vehicle.orders = []() noexcept { return &ship_orders->services; };
+	ship_vehicle.ship_get = [](uint32_t id) noexcept { CHECK(id == 4); return orders_shell; };
+	orders.services.vehicle = [](void *v) noexcept { CHECK(v == orders_shell); return ship_orders->vehicle.get(); };
+	orders.services.consist = [](void *) noexcept { return &ship_orders->consist; };
+	orders.services.vehicle_type = [](void *) noexcept { return uint64_t{2}; };
+	orders.services.invalidate_order = [](void *, int32_t reason) noexcept { CHECK(reason == -2 && ship_probe.stage++ == 1); };
 	leaves.yapf_reverse = [](uint32_t, bool trackdir) noexcept {
 		CHECK(ship_probe.stage++ == 2 && !trackdir);
 		return OpenTTDShipReverseResult{true, 255};

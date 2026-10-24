@@ -326,6 +326,10 @@ pub struct VehicleServices {
     pub maintenance: *const maintenance::Services,
     /// The static station/depot visit table, resolved on use (#349).
     pub visits: extern "C" fn() -> *const visits::Services,
+    /// The same canonical orders table used by visits/refit.
+    pub orders: extern "C" fn() -> *const crate::orders::Leaves,
+    /// Strict `Ship::Get`, never a nullable pool lookup.
+    pub ship_get: extern "C" fn(u32) -> VehicleRef,
 }
 // The visit table and its entries are native-supplied static Rust functions.
 #[allow(unsafe_code)]
@@ -334,6 +338,11 @@ impl VehicleServices {
     pub(crate) fn visits(&self) -> &'static visits::Services {
         // SAFETY: the getter returns the immutable process-wide visit table.
         unsafe { &*(self.visits)() }
+    }
+    /// The immutable canonical orders services, shared by every controller.
+    pub(crate) fn orders(&self) -> &'static crate::orders::Leaves {
+        // SAFETY: the getter returns the immutable process-wide orders table.
+        unsafe { &*(self.orders)() }
     }
     /// `VehicleEnterDepot(v)`.
     pub(crate) fn enter_depot(&self, v: VehicleRef) {
@@ -499,6 +508,8 @@ crate::abi::layouts! {
         max_speed,
         maintenance,
         visits,
+        orders,
+        ship_get,
     };
 
 

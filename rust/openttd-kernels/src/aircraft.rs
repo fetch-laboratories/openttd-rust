@@ -246,7 +246,6 @@ pub struct Leaves {
     pub range_default: unsafe extern "C" fn(Vehicle) -> u16,
     pub rotor_image_if_changed: unsafe extern "C" fn(Vehicle) -> bool,
     pub update_rotor_image: unsafe extern "C" fn(Vehicle),
-    pub process_orders: unsafe extern "C" fn(Vehicle),
     pub vehicle_crash: unsafe extern "C" fn(Vehicle, bool) -> u32,
     pub send_to_depot: unsafe extern "C" fn(Vehicle, bool) -> bool,
     pub fta_next_position: unsafe extern "C" fn(*const c_void) -> u8,
@@ -358,7 +357,7 @@ macro_rules! scalar_services {
         fn $name(&$receiver, $($arg:$ty),*) -> i64 {
             // SAFETY: No canonical owner borrow survives this noexcept callback.
             let result = $call;
-            $receiver.service_witness(stringify!($name), std::mem::size_of_val(&result));
+            Self::service_witness(stringify!($name), std::mem::size_of_val(&result));
             i64::from(result)
         }
     )*};
@@ -368,7 +367,7 @@ macro_rules! direct_services {
         fn $name(&$receiver, $($arg:$ty),*) -> $ret {
             // SAFETY: No canonical owner borrow survives this noexcept callback.
             let result = $call;
-            $receiver.service_witness(stringify!($name), std::mem::size_of_val(&result));
+            Self::service_witness(stringify!($name), std::mem::size_of_val(&result));
             result
         }
     )*};
@@ -378,7 +377,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     /// production enable call is `WitnessWriter`'s process-start constructor;
     /// callbacks cannot change it during this synchronous World invocation.
     #[inline]
-    fn service_witness(&self, name: &str, bytes: usize) {
+    fn service_witness(name: &str, bytes: usize) {
         use crate::witness;
         if !COUNTED {
             return;
@@ -411,7 +410,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     fn map(&self) -> Map {
         self.map.get().unwrap_or_else(|| {
             let log_x = (self.ss.map_log_x)();
-            self.service_witness("map_log_x", std::mem::size_of_val(&log_x));
+            Self::service_witness("map_log_x", std::mem::size_of_val(&log_x));
             let map = Map { log_x: log_x as u8 };
             self.map.set(Some(map));
             map
@@ -420,9 +419,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     fn map_bounds(&self) -> (u32, u32) {
         self.map_bounds.get().unwrap_or_else(|| {
             let bounds = (self.ss.map_max_x)();
-            self.service_witness("map_max_x", 4);
+            Self::service_witness("map_max_x", 4);
             let y = (self.ss.map_max_y)();
-            self.service_witness("map_max_y", 4);
+            Self::service_witness("map_max_y", 4);
             self.map_bounds.set(Some((bounds, y)));
             (bounds, y)
         })
@@ -456,9 +455,18 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     fn check_breakdown(&self, v: Vehicle) {
         unsafe { maintenance::check_vehicle_breakdown(v.base(), self.vs) };
     }
+    fn process_orders(&self, v: Vehicle) {
+        let orders = self.vs.orders();
+        Self::service_witness(
+            "orders",
+            std::mem::size_of::<*const crate::orders::Leaves>(),
+        );
+        // SAFETY: The original live shell survives orders; no state borrow spans reentry.
+        unsafe { crate::orders::openttd_rust_process_orders(v.handle.cast(), orders) };
+    }
     fn random(&self) -> u32 {
         let word = self.ss.random();
-        self.service_witness("random", 4);
+        Self::service_witness("random", 4);
         word
     }
 
@@ -614,7 +622,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         invalid_scheme(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.invalid_scheme)(vehicle) };
         unreachable(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.unreachable)(vehicle) };
         update_rotor_image(self; v: Vehicle) -> () => unsafe { (self.leaves.update_rotor_image)(v) };
-        process_orders(self; v: Vehicle) -> () => unsafe { (self.leaves.process_orders)(v) };
         enter_depot(self; v: Vehicle) -> () => self.vs.enter_depot(v.base());
         delete_aircraft(self; v: Vehicle) -> () => (self.vs.destroy)(v.base());
     }
@@ -622,14 +629,14 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     fn next(&self, v: Vehicle) -> Vehicle {
         {
             let result = unsafe { (self.leaves.next)(v) };
-            self.service_witness("next", std::mem::size_of_val(&result));
+            Self::service_witness("next", std::mem::size_of_val(&result));
             result
         }
     }
     fn station(&self, id: u32) -> *const Station {
         {
             let result = unsafe { (self.leaves.station)(id as u16) };
-            self.service_witness("station", std::mem::size_of_val(&result));
+            Self::service_witness("station", std::mem::size_of_val(&result));
             result
         }
     }
@@ -637,7 +644,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         // SAFETY: Synchronous noexcept service; no owner borrow spans this call.
         {
             let m = unsafe { (self.leaves.moving)(airport, pos as u8) };
-            self.service_witness("moving", std::mem::size_of_val(&m));
+            Self::service_witness("moving", std::mem::size_of_val(&m));
             Movement {
                 x: i64::from(m.x),
                 y: i64::from(m.y),
@@ -650,7 +657,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         // SAFETY: Synchronous noexcept service; no owner borrow spans this call.
         {
             let p = (self.vs.new_position)(v.base());
-            self.service_witness("new_position", std::mem::size_of_val(&p));
+            Self::service_witness("new_position", std::mem::size_of_val(&p));
             NewPosition {
                 x: i64::from(p.x),
                 y: i64::from(p.y),
@@ -661,12 +668,12 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     fn next_aircraft(&self, last: u32) -> Vehicle {
         {
             let result = unsafe { (self.leaves.next_aircraft)(last) };
-            self.service_witness("next_aircraft", std::mem::size_of_val(&result));
+            Self::service_witness("next_aircraft", std::mem::size_of_val(&result));
             result
         }
     }
     fn station_rating(&self, tile: i64, owner: i64, amount: i64, radius: i64) {
-        self.service_witness("station_rating", 0);
+        Self::service_witness("station_rating", 0);
         // SAFETY: Synchronous noexcept service; no owner borrow spans this call.
         unsafe {
             (self.leaves.station_rating)(tile as u32, owner as u8, amount as i32, radius as u32);
@@ -1997,7 +2004,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
         unsafe { maintenance::economy_age_vehicle(id.base(), self.vs) };
         let day = (self.vs.day)(id.base());
-        self.service_witness("day", 1);
+        Self::service_witness("day", 1);
         let day = day.wrapping_add(1);
         self.set_day_counter(id, i64::from(day));
         if day & 7 == 0 {
@@ -2047,7 +2054,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let next = self.station(next);
         let engine_subtype = self.engine_subtype(id);
         let owner = self.owner(id) as u8;
-        self.service_witness("for_each_station", 0);
+        Self::service_witness("for_each_station", 0);
         self.ss.for_each_station(|st, _, cursor| {
             let cursor = u32::from(cursor);
             let candidate = self.hangar_candidate(st, owner);
@@ -2200,7 +2207,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_calendar_day(leaves: *const Leave
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         w.day(id, true);
-    })
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2211,7 +2218,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_economy_day(leaves: *const Leaves
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         w.day(id, false);
-    })
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2228,7 +2235,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_position(
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         w.position(id, i64::from(x), i64::from(y), i64::from(z));
-    })
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2238,7 +2245,7 @@ pub(crate) unsafe fn enter_hangar(leaves: &Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         w.enter_hangar(id);
-    })
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2254,7 +2261,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_cache(
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         w.cache(id, range);
-    })
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2285,7 +2292,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_bounds(
                 }
             }
         }
-    })
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2341,7 +2348,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_missing_orders(leaves: *const Lea
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         w.missing_orders(id);
-    })
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2365,7 +2372,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_next_airport(leaves: *const Leave
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         w.next_airport(id);
-    })
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2380,7 +2387,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_leave_hangar(
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         w.leave_hangar(id, i64::from(direction));
-    })
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2393,7 +2400,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_order_location(leaves: *const Lea
         if w.state(id) == FLYING {
             w.next_airport(id);
         }
-    })
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2404,7 +2411,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_replacement(leaves: *const Leaves
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
     with_world!(leaves, |w| {
         w.replacement(u32::from(station));
-    })
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2458,7 +2465,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_release_blocks(leaves: *const Lea
             let bits = w.layout_blocks(ap, w.previous(id)) | w.layout_blocks(ap, w.pos(id));
             AirportAccess::new(station).release(&w, bits);
         }
-    })
+    });
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2483,7 +2490,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_invalidate_target(
                 }
             }
         }
-    })
+    });
 }
 
 crate::abi::layouts! {
@@ -2592,7 +2599,6 @@ crate::abi::layouts! {
         range_default,
         rotor_image_if_changed,
         update_rotor_image,
-        process_orders,
         vehicle_crash,
         send_to_depot,
         fta_next_position,

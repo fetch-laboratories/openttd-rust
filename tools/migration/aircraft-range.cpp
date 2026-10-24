@@ -59,11 +59,13 @@ struct Fixture {
 	OpenTTDVehicleTileLinks links[2];
 };
 #include "aircraft-boundary.hpp"
+#include "controller-orders.hpp"
 static Fixture *fixture;
 static OpenTTDVehicleServices vehicle;
 static OpenTTDVehicleMaintenanceServices maintenance;
 static OpenTTDSharedServices shared;
 static OpenTTDMovementServices movement;
+static std::unique_ptr<ControllerOrders> range_orders;
 static OpenTTDAircraftLeaves RangeLeaves()
 {
 	auto leaves = AircraftTestLeaves(vehicle, shared);
@@ -75,7 +77,14 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.order_destination = [](OpenTTDVehicle *) noexcept { return fixture->aircraft.current_order.destination; };
 	vehicle.maintenance = &maintenance;
 	maintenance.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
-	leaves.process_orders = [](OpenTTDAircraftVehicle) noexcept {};
+	range_orders = std::make_unique<ControllerOrders>(&vehicle);
+	/* Matching current/list station orders take the ordinary unchanged-order
+	 * path. This preserves the range reference's deliberate no-op orders. */
+	range_orders->vehicle->current = openttd_rust_order_vector_data(range_orders->vector.get())[0];
+	range_orders->services.vehicle_type = [](void *) noexcept { return uint64_t{3}; };
+	range_orders->services.vehicle = [](void *v) noexcept { if (v != fixture) std::abort(); return range_orders->vehicle.get(); };
+	range_orders->services.consist = [](void *) noexcept { return &range_orders->consist; };
+	vehicle.orders = []() noexcept { return &range_orders->services; };
 	vehicle.loading = [](OpenTTDVehicle *, bool, const OpenTTDVehicleVisits *) noexcept {};
 	vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	vehicle.start_stop_dirty = [](OpenTTDVehicle *) noexcept { fixture->messages[0]++; };

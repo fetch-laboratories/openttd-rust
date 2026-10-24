@@ -216,7 +216,6 @@ pub struct Leaves {
     pub path_back: extern "C" fn(u32) -> u32,
     pub path_pop: extern "C" fn(u32),
     pub path_clear: extern "C" fn(u32),
-    pub process_orders: extern "C" fn(u32) -> bool,
     pub viewport: extern "C" fn(u32, bool, bool),
     pub base_viewport: extern "C" fn(u32),
     pub visual: extern "C" fn(u32),
@@ -660,7 +659,16 @@ impl Game<'_> {
         if breakdown.status & VS_STOPPED != 0 {
             return;
         }
-        if (self.leaves.process_orders)(id) && (self.leaves.yapf_reverse)(id, false).reverse {
+        // Reacquire with the source strict Ship::Get at the original orders call.
+        // No owner borrow spans the lookup or order mutation/reentry.
+        let orders_vehicle = (self.vs().ship_get)(id);
+        let reverse = unsafe {
+            crate::orders::openttd_rust_process_orders(
+                orders_vehicle.0.as_ptr().cast(),
+                self.vs().orders(),
+            )
+        } != 0;
+        if reverse && (self.leaves.yapf_reverse)(id, false).reverse {
             self.reverse(id, v, INVALID);
             return;
         }
@@ -1197,7 +1205,6 @@ crate::abi::layouts! {
         path_back,
         path_pop,
         path_clear,
-        process_orders,
         viewport,
         base_viewport,
         visual,
