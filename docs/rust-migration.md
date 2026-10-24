@@ -2158,3 +2158,25 @@ Historical monitor-key conversion and external GameScript callers remain #156
 coverage gaps. Independent fixing review and the separate root cost disposition
 are recorded on #388; #391 integrated the frozen owners on the routing base after
 scoped reconciliation review and exact-combination Full passed.
+
+### NewGRF transactional storage (#393)
+
+`newgrf_storage.rs` owns process-wide modes, the pointer-ordered changed registry,
+temporary registers/generation keys and canonical 16/256-word payloads/backups.
+Native pool shells retain IDs and feature associations; save/debug aliases address
+the Rust arrays directly. Every mode switch restores temporary changes in shell
+pointer order. PSAC saving restores payloads without removing registry membership;
+destruction removes pending entries, and the registry outlives native destructors.
+Rust also owns industry/airport/town StorePSA and town GRFID selection/traversal.
+Native typed leaves retain pool allocation/publication and ordered town associations;
+town publishes after StoreValue, while industry/airport publish before it.
+Original bodies remain portable. Native SlObject, reference fixup, legacy copies
+and SlError frames keep their original order, with no live Rust frame or borrow
+across save errors. Compression workers receive already serialized bytes.
+Default `town-storage-reload` uses real resolvers and PSAC: all creation policies,
+GRFID reads/writes, command-test/save rollback, deletion/reuse, nonempty modern
+save/reload and native header/partial-load plus 16-word compatibility probes.
+Native storage tests cover alias identity, legacy copying, all six modes,
+save-registry retention, pending destruction and temporary-key rollover.
+External NewGRF programs, complete pre-161 conversion saves and GUI thread
+scheduling remain #156 limits. PR validation and metrics carry the exact evidence.

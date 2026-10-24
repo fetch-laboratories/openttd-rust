@@ -73,7 +73,9 @@ static bool StorageScenario(std::span<std::string_view> args)
 	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_TESTMODE);
 	Require(writable.GetVariable(0x7C, 0, available) == 0x80000000 && industry->psa->GetValue(15) == -393 && station->airport.psa->GetValue(255) == 393);
 	/* Destroy a registered array and require native pool ID reuse. */
+	Require(PersistentStorage::CanAllocateItem());
 	auto *pending = new PersistentStorage(0, GSF_INVALID, TileIndex{}); auto id = pending->index; pending->StoreValue(0, 1); delete pending;
+	Require(PersistentStorage::CanAllocateItem());
 	auto *reused = new PersistentStorage(0, GSF_INVALID, TileIndex{}); Require(reused->index == id); delete reused;
 	/* Real PSAC saving restores temporary payloads; the next switch still visits them. */
 	writable.StorePSA(0, 4); ind.StorePSA(15, 5); airport.StorePSA(255, 6);
