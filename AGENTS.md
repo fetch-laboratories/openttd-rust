@@ -361,7 +361,10 @@ an independent expectation (the original, a fixture or a table). Tests do not
 match substrings of source, workflow or documentation text (parse it when its
 structure is the behavior, as for workflow permissions), count incidental
 structure, or check results at fixed historical commits, and `cfg(test)` never
-changes a production layout or body. Prefer one table-driven test to copies.
+changes a production layout or body. Judge redundancy by the behavior a test
+can distinguish, not by how directly its assertions follow the implementation:
+serialized-thread state tests must distinguish process-wide from thread-local
+storage. Prefer one table-driven test to copies.
 
 Rust changes require reproducible `cargo fmt --all -- --check`,
 `cargo check --workspace --all-targets --locked`,

@@ -1,80 +1,64 @@
 # OpenTTD-Rust near-term roadmap
 
-Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define process.
-If an issue conflicts, follow this roadmap and report it to root. Keep this
-forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
+Root selects here; `AGENTS.md` and `docs/rust-migration.md` define process. Follow
+this roadmap over conflicting issues. Keep about 200 lines; evidence stays in PRs.
 
 ## Where the fork stands (2026-10-24, code at `d4a0700869`)
 
 - 63 ownership ports. Original C++ retired: 62,169 of 470,612 source lines
   (13.21%); simulation sources: 53,345 of 102,615 (51.99%). Whole-fork Rust,
-  tooling and glue (`tools/port-metrics.py`, which does not measure behavior):
-  112,742, 39,255 and 40,073 lines. The nineteenth-steering housekeeping
-  (#259, #449-#452, five integrations) removed 1,352 Rust, 2,007 tooling and
-  486 glue lines; no regression or rollback.
-- Projections at `00ab107424` from the 103ee anchors: TGP 1.209x, Opus 1.420x,
-  Grok 1.415x, P1996 1.344x, P2000 1.413x, P2016 1.484x, equal to the anchors.
-  P2016 stays in its band; #275 holds its attribution and two repair
-  candidates, so no new pass ran. `d4a0700869` (#459, #460: YAPF heaps and
-  shared accessors) is unprofiled; its profile was interrupted at handoff.
-- Unintegrated branches: paused #446 and #447 (two of six).
+  tooling and glue: 112,742, 39,255 and 40,073 lines. These source-line measures
+  include comments/data, not completed behavior. Since review nineteen: the ready
+  batch plus five housekeeping integrations, zero original retirement;
+  housekeeping removed 1,352 Rust, 2,007 tooling and 486 glue lines.
+- **Integrated regression #462 requires recovery before further integrations.**
+  #446 exposed a null-to-non-null clone callback from #415; later code prevents rollback.
+- Latest complete quiet anchors are at `103ee7cff8`: TGP 1.209x, Opus 1.420x,
+  Grok 1.414x, P1996 1.344x, P2000 1.413x, P2016 1.484x. Projections at
+  `00ab107424` equal those floors; `d4a0700869` remains unprofiled. P2016 is
+  in band. #275 owns the two selected repairs; #450 must fix the new collector
+  before its first timed pass. No current anchor contamination is established.
+- Two drafts (#446/#447) retain worktrees; local caches/output occupy 8.5 GiB.
 
-## Nineteenth steering review (2026-10-24, housekeeping)
+## Twentieth steering review (2026-10-24, recovery and production evidence)
 
-The user asked for a tech-debt audit. Five fresh Claude Code (claude-opus-5-5)
-audits covered tests, Rust and glue, Python tooling, comments and docs, and
-retained evidence; steering verified each claim acted on. No fidelity audit ran.
+Five fresh Codex gpt-6.1-sol/high audits covered both drafts, shared code, evidence
+and process. Root verified source, the retained stack and mocked collector behavior.
 
-- **Tests** are mostly behavioral; none asserts on docs. About 40 cannot fail,
-  restate their setup or pin YAML and source text. One pin cost #444 a Full.
-- **Rust and glue** repeat what AGENTS.md says to port once: `DAY_TICKS` is a
-  literal `74` in 8 places, 41 constants have 104 definitions, three
-  pathfinders keep private heaps, 739 of 1,379 SAFETY lines are copies. One
-  export has no caller; the orphan check misses `extern "C"` declarations.
-- **Housekeeping slipped:** #261's 2026-10-15 glue and Rust plan never ran
-  while Rust grew from 60K to 114K lines; #261 became a selection log.
-- **Tooling:** the harness is proportionate; comparison drivers, platform
-  evidence tools and copied scenario helpers carry about 2,000 extra lines.
-- **Comments and docs:** about 55 module docs are review checklists; "shell",
-  "leaf", "canonical" and "owner" are undefined. `rust-migration.md` grew 304
-  lines in a day, mostly evidence; AGENTS.md repeats 13 rule groups.
-- **Evidence:** the speed pass has no tracked collector. Each pass copies the
-  last pass's `.local/` script, now from a stale worktree, with the removed CPU
-  cutoff stripped by string replace. Stale worktrees and quiet-pass output hold
-  about 23 GB. #156 has 202 comments and a stale body.
+- #462 is an inherited reachable source defect, not a #446 fixture failure.
+  Restore the nullable original callback contract through one shared repair.
+- #450 accepts compiler-overlapped timings and rejects unrelated user tar files.
+  Reopened for bounded repairs using existing observations and identity checks.
+- #454 deleted two meaningful serialized-thread tests. #156 selects their
+  restoration and production tree ambient/reread coverage for #275. This corrects
+  nineteenth-steering test cleanup: an explicit state contract is still behavior.
+- #446/#447 have per-field engine boundaries and unfinished evidence. Their PR
+  comments hold the fixes and measured costs; complete a bounded repair and one
+  cost disposition. No new arithmetic divergence or shared-heap regression was established.
 
-Actions:
-1. **Local cleanup (#259):** done; #275 received the retained conclusions.
-2. **#449-#452:** done through #454, #455, #458, #459 and #460, with no
-   behavior change. #450 reached about -1,690 of its -2,000 line estimate and
-   #451 about -1,090 of -1,800; #455 and #460 explain the misses.
-3. **AGENTS.md** adds comment, prose and test rules, tracked speed tooling,
-   evidence-free component entries, and tracker bodies as current lists with
-   task status kept on the PR. #261 is closed; batching names #449-#452.
-
-| Eighteenth-steering correction | Verdict and cost |
+| Standing correction from reviews eighteen/nineteen | Verdict and cost/result |
 | --- | --- |
-| Ready owners do not wait for speed maintenance | Applied: nine integrations on 2026-10-24. |
-| Quiet holds end at the last timed exit; no CPU cutoff | Applied, through untracked code; #450 tracks it. |
-| Owner evidence without infrastructure budgets | Applied: 25 owners since the seventeenth steering. |
-| Same-anchor projection comparisons | Applied. |
-| Standing #156 coverage worker | Applied; status went to #156 and the PR. Now PR only. |
-| Strict tested combinations, batching | Applied: 44 Full requests, 24 passed, 12 failed, 8 cancelled. Keep. |
+| Ownership; necessary owner cost once | Applied before the user's scoped pauses: 11 owners and 4,707 retired lines since review eighteen. |
+| Strict combinations, batching, fixing review | Keep: 24 Full requests since review eighteen, 16 passed, 6 failed, 2 cancelled; 239.7 elapsed run-minutes. Housekeeping used five passing Fulls, 59.0 minutes, and 17 tasks. |
+| Ready owners alongside speed; no per-PR timing | Applied in development; sequential resume wording and old issue gates risked recurrence. Work order and #168/#199/#312 corrected. |
+| Same anchors, merged-tip cadence, bounded quiet holds | Applied through `00ab107424`; final profile interrupted. Five completed passes released after 720 timed exits. New collector needs #450. |
+| macOS cadence, focused local checks, review exemption | Applied; one no-finding conflict review unnecessarily reran tests. No new gate needed. |
+| Shared callees, scope, orphan checks, #156 capacity | Improved; nine coverage PRs before the scope restriction. #462 and pending boundary findings show remaining gaps. |
+| Housekeeping, current lists, cleanup | Applied with limits: 3,845 lines removed, local output 25 to 8.5 GiB; #275's body was stale, now refreshed. Two useful tests must return. |
+| Checkpoints, wind-down, rollback | User pauses respected; drafts preserved. Newly confirmed #462 requires forward recovery because later code rules out bounded rollback. |
 
-No user direction is reversed. The start-development prompt is unchanged.
+No user policy is reversed. AGENTS.md clarifies test retention; the restart prompt is unchanged.
 
 ## Earlier steering, still in force
 
-Ownership and original observable behavior come first; C++ retains canonical map
-arrays except the audited #274 read descriptor. Preserve original callees,
-shared services, process scope and RNG; no per-call allocation the original
-lacks, opcode dispatch, whole-record copies or owner bounces. Evidence is
-default semantic checks plus exact-combination CI, gaps on #156, and retirement
-excluding glue (#223). Ready owners never wait for speed maintenance, quiet
-holds cover only timed collection, projections compare under one anchor, and
-owner evidence has no infrastructure budget. The 3% trigger and factor 2 stay
-provisional. Keep six component branches, strict protection, no admin merge,
-automatic bounded rollback and action-based wind-down. AGENTS.md is authoritative.
+Ownership and original behavior come first: named callees, shared typed services,
+process scope and RNG; no extra hot allocation, opcode dispatch, whole-record
+copies or owner bounces. #274 stays bounded. Keep default semantic evidence, #156
+gaps, strict exact-combination CI and original retirement separate from glue.
+Ready owners proceed alongside speed work; holds cover timed collection only.
+Compare one anchor; 3% and factor 2 remain provisional. Owner evidence has no
+infrastructure budget. Keep six branches, batched maintenance, fixing reviews,
+bounded rollback and action-based wind-down. AGENTS.md is authoritative.
 
 ## Completed ownership ports
 
@@ -174,44 +158,42 @@ Maintenance rows use original retirement and net glue (#223); evidence stays in 
 | #452 comment pass outside the #451 structural files (comments only) | #459 | direct | `e5c8c62a96` | 221 / 49 / 248 / 0; net glue -191 |
 | #451 YAPF heaps, `GameState`, shared macros, raw-access contracts, reservation callbacks | #460 | direct | `d4a0700869` | 2479 / 9 / 968 / 0; net glue -83; net -1,030 lines |
 
-
 ## Phase 1: maintenance and coverage
 
-#275 owns measured speed and #156 missing branches; #461 tracks the ship depot
-scratch's `thread_local!` scope. The nineteenth-steering housekeeping is done
-(#259 and #449-#452 closed). #168 and #199 own the remaining boundary
-conversions (disaster's async protocol, opcode switches, the width mismatches
-#456 and #460 left). Maintenance PRs count toward the six branches.
+Root owns #462 recovery; #275 speed, #450 collector, #461 ship scope and #156
+coverage repairs follow. #168/#199 retain boundary debt without per-PR timing
+gates. #312 stays unselected pending current #275 attribution, blocking no owner.
+Closed #449/#451/#452 housekeeping is not a standing task.
 
 ## Phase 2: work order
 
-1. **Merged-tip profile of `d4a0700869`** with the 103ee anchors and the pinned
-   zlib runtime; #460 changed the YAPF heaps and many hot accessors.
-2. **#275 growth repair** (#436's per-call ambient gate, the airport animation
-   entry in the shared dispatcher) batched with **#461**, then the first speed
-   pass with the tracked collector (`python3 tools/simulate.py speed
-   prepare|collect DIR`), since P2016 is in band.
-3. **#446** investigates the refit-cost clone crash; **#447** validates its
-   TownID fixture repair. Both need cost checkpoints, review and Full.
-4. **Next owners** (planned, unselected): vehicle effect emission and cache
-   policy, then the cargo registry and callback lifecycle, once the branch
-   limit allows. Catchment, #64/#68/#69 and vendored, GUI and platform work
-   stay unselected.
+1. **Recover #462 first:** one small PR from integrated main, default nullable
+   clone/refit-cost evidence, fresh fixing review and exact-head Full. No other
+   integration proceeds until recovery; #446 adopts the shared fix.
+2. **Resume #446 and #447 alongside maintenance.** Complete their PR-comment
+   boundary/evidence actions and cost dispositions. Root coordinates any genuinely
+   shared new engine observation under #199 once; keep policy and loops in Rust.
+   Integrate in readiness order after recovery, without a speed wait.
+3. **Assign the ready maintenance batch:** #450, #275's ambient/airport repairs,
+   #461 and #156's two thread checks/production tree path. An unfinished item
+   leaves the batch. Run the due merged-tip profile in the background; after the
+   collector repair and source fixes, run the due tracked quiet pass. No new
+   per-PR timing or private collector. Preserve the user's tar files.
+4. **Next owners, still unselected:** vehicle effect emission/cache policy, then
+   cargo registry/callback lifecycle. Plan when capacity permits; catchment,
+   #64/#68/#69, vendored, GUI and platform work remain outside this order.
 
 ## Resume checkpoint
 
-Wound down after the requested #259 and #449-#452 work: five integrations
-(#455, #454, #458, #459, #460), no draft with a Full at its head, no local jobs
-or agents running. Merged worktrees and branches are removed; `.local/` holds
-caches, the pinned zlib runtime and `.local/speed-collector/` (superseded by
-`tools/simulation/speed.py`; delete after the first tracked pass).
+Audits complete; no steering builds, games, profiles or CI. Draft worktrees preserved.
 
 | Item | Saved head | Next action |
 | --- | --- | --- |
-| Merged-tip profile | `d4a0700869` | Interrupted at handoff; rerun first (work order 1). |
-| #446 engine/articulated (#439) | `e96e45c240` | Refit-cost clone crash; simulate passed 1 of 3. |
-| #447 type admission (#440) | `c3fdd2227d` | Validate TownID fixture repair; last pair failed. |
-| #461 ship depot scratch | issue | Batch with the #275 repair. |
+| #462 recovery | issue | Repair integrated null context first; subsequent code prevents rollback. |
+| #446 engine/articulated (#439) | `e96e45c240` | Adopt recovery; PR comment specifies boundary and evidence fixes. |
+| #447 type admission (#440) | `c3fdd2227d` | Repair observation boundary; validate TownID and negative masks. |
+| #450/#275/#461/#156 | issues | Ready maintenance batch; collector fixes precede timed use. |
+| Merged-tip profile | code `d4a0700869` | Interrupted; profile next integrated tip alongside work. |
 
-macOS passed at `00ab107424`; the next run is due after three more
-integrations. The user's tar files stay.
+macOS passed at `00ab107424`; next cadence run is due after three integrations.
+Delete the superseded private speed collector after the first successful tracked pass.
