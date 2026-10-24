@@ -7,10 +7,10 @@
 #include "../newgrf_industries.h"
 #include "../station_base.h"
 #include "../town.h"
+#include "services_newgrf.h"
 #include "town_services.h"
 #include "../safeguards.h"
 
-static uint32_t StorageGRFID(const GRFFile *grf) noexcept { return grf->grfid; }
 static OpenTTDIndustryStorage StorageIndustry(Industry *industry) noexcept
 {
 	if (industry->index == IndustryID::Invalid()) return {nullptr, false};
@@ -45,7 +45,7 @@ const OpenTTDStorageServices &GetRustStorageServices() noexcept
 {
 	static const OpenTTDStorageServices services{
 		.check = RustStorageCheck,
-		.grfid = StorageGRFID,
+		.grfid = RustGRFFileID,
 		.industry = StorageIndustry,
 		.create_industry = StorageCreateIndustry,
 		.airport = StorageAirport,
