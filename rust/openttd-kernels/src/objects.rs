@@ -32,6 +32,7 @@ use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use crate::strings_type::INVALID_STRING_ID;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_OBJECT, MP_WATER};
+use crate::tilearea::TileArea;
 use std::cell::UnsafeCell;
 
 struct State {
@@ -94,19 +95,15 @@ pub(crate) fn clear_areas() {
 }
 fn openttd_rust_object_areas_find(tile: u32, log_x: u32) -> usize {
     let map = crate::services::Map::from_log_x(log_x);
-    let tile_area = Area {
-        tile,
-        width: 1,
-        height: 1,
-    };
+    let tile_area = TileArea { tile, w: 1, h: 1 };
     // SAFETY: serialized entry, no callbacks while reading.
     unsafe { &(*STATE.0.get()).areas }
         .iter()
         .position(|a| {
-            Area {
+            TileArea {
                 tile: a.tile,
-                width: a.width,
-                height: a.height,
+                w: a.width,
+                h: a.height,
             }
             .intersects(tile_area, map)
         })
@@ -199,34 +196,9 @@ pub struct GenerationFrame {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Area {
-    pub tile: u32,
-    pub width: u16,
-    pub height: u16,
-}
-impl Area {
-    /// Original `OrthogonalTileArea::Intersects`, including empty-area handling.
-    fn intersects(self, other: Self, map: crate::services::Map) -> bool {
-        if other.width == 0 || self.width == 0 {
-            return false;
-        }
-        assert!(other.height != 0 && self.height != 0);
-        let left1 = map.tile_x(self.tile);
-        let top1 = map.tile_y(self.tile);
-        let right1 = left1 + u32::from(self.width) - 1;
-        let bottom1 = top1 + u32::from(self.height) - 1;
-        let left2 = map.tile_x(other.tile);
-        let top2 = map.tile_y(other.tile);
-        let right2 = left2 + u32::from(other.width) - 1;
-        let bottom2 = top2 + u32::from(other.height) - 1;
-        !(left2 > right1 || right2 < left1 || top2 > bottom1 || bottom2 < top1)
-    }
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct Identity {
     pub object: *mut Object,
-    pub area: Area,
+    pub area: TileArea,
     pub kind: u16,
 }
 #[repr(C)]
@@ -330,11 +302,11 @@ pub struct ObjectServices {
     pub admission: unsafe extern "C" fn(*const Spec) -> Admission,
     pub generation: unsafe extern "C" fn(*const Spec) -> Generation,
     pub can_allocate: unsafe extern "C" fn() -> bool,
-    pub allocate: unsafe extern "C" fn(u16, *const TownHandle, Area, u8) -> Allocation,
+    pub allocate: unsafe extern "C" fn(u16, *const TownHandle, TileArea, u8) -> Allocation,
     pub object_type: unsafe extern "C" fn(u32) -> u16,
     pub loop_policy: unsafe extern "C" fn(u32) -> LoopPolicy,
     pub identity: unsafe extern "C" fn(u32) -> Identity,
-    pub location: unsafe extern "C" fn(*mut Object) -> Area,
+    pub location: unsafe extern "C" fn(*mut Object) -> TileArea,
     pub next: unsafe extern "C" fn(u32) -> Next,
     pub set_colour: unsafe extern "C" fn(*mut Object, u8) -> (),
     pub recolour: unsafe extern "C" fn(u8, bool) -> u8,
@@ -666,7 +638,7 @@ impl<'a> World<'a> {
             // The tile-loop entry has no captured map. Acquire the actual stride
             // only when the original whole-object iterator is constructed.
             let map = self.shared.map();
-            for tile in Self::tiles_with_map(area, map) {
+            for tile in area.tiles(map) {
                 if self.do_trigger(obj, tile, trigger, spec, random) {
                     // SB also ORs high bits from the unmasked draw.
                     crate::bitmath_func::sb(&mut random, 0, 16, self.shared.random());
@@ -685,27 +657,19 @@ impl<'a> World<'a> {
         // SAFETY: entry provides the immutable table when company services are used.
         unsafe { &*self.s.company }
     }
-    fn tiles(&self, a: Area) -> impl Iterator<Item = u32> {
-        Self::tiles_with_map(a, self.map)
+    fn tiles(&self, a: TileArea) -> impl Iterator<Item = u32> {
+        a.tiles(self.map)
     }
-    fn tiles_with_map(a: Area, map: crate::services::Map) -> impl Iterator<Item = u32> {
-        crate::tilearea::TileArea {
-            tile: a.tile,
-            w: a.width,
-            h: a.height,
-        }
-        .tiles(map)
-    }
-    fn footprint(tile: u32, shape: Footprint, view: u8) -> Area {
+    fn footprint(tile: u32, shape: Footprint, view: u8) -> TileArea {
         let (x, y) = if view & 1 == 0 {
             (shape.size & 15, shape.size >> 4)
         } else {
             (shape.size >> 4, shape.size & 15)
         };
-        Area {
+        TileArea {
             tile,
-            width: u16::from(x),
-            height: u16::from(y),
+            w: u16::from(x),
+            h: u16::from(y),
         }
     }
     fn is_type(&self, tile: u32, kind: u16) -> bool {
@@ -883,8 +847,8 @@ impl<'a> World<'a> {
             let flags_spec = (self.s.flags)(spec);
             let price = self
                 .get_clear_cost(spec)
-                .saturating_mul(i64::from(object.area.width))
-                .saturating_mul(i64::from(object.area.height))
+                .saturating_mul(i64::from(object.area.w))
+                .saturating_mul(i64::from(object.area.h))
                 / 5;
             out.set(if flags_spec & CLEAR_INCOME == 0 {
                 price
@@ -965,8 +929,8 @@ impl<'a> World<'a> {
             openttd_rust_object_areas_append(ClearArea {
                 first_tile: tile,
                 tile: object.area.tile,
-                width: object.area.width,
-                height: object.area.height,
+                width: object.area.w,
+                height: object.area.h,
             });
             if flags & DoCommandFlag::EXECUTE != 0 {
                 self.really_clear(object);
@@ -1236,7 +1200,7 @@ impl<'a> World<'a> {
                     return;
                 }
                 _ => {
-                    size = u32::from(area.width) * u32::from(area.height);
+                    size = u32::from(area.w) * u32::from(area.h);
                 }
             }
             let finance = self.finance(self.current());
@@ -2438,10 +2402,10 @@ crate::abi::layouts! {
         factor,
         shift,
     };
-    "OpenTTDObjectArea" ["landscape"] => Area {
+    "OpenTTDObjectArea" ["landscape"] => TileArea {
         tile,
-        width,
-        height,
+        w => width,
+        h => height,
     };
     "OpenTTDObjectIdentity" ["landscape"] => Identity {
         object,

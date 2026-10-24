@@ -103,11 +103,11 @@ fn add_location(owner: *mut Industry, tile: u32, size_x: u32) {
     unsafe {
         (*owner).metadata.tile = ny.wrapping_mul(size_x).wrapping_add(nx);
         (*owner).metadata.width = x
-            .wrapping_add(u32::from(area.width))
+            .wrapping_add(u32::from(area.w))
             .max(tx.wrapping_add(1))
             .wrapping_sub(nx) as u16;
         (*owner).metadata.height = y
-            .wrapping_add(u32::from(area.height))
+            .wrapping_add(u32::from(area.h))
             .max(ty.wrapping_add(1))
             .wrapping_sub(ny) as u16;
     }

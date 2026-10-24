@@ -877,8 +877,8 @@ pub extern "C" fn openttd_rust_station_randomisation(
     let map = native.map();
     let mut whole = 0;
     let mut used = 0;
-    for y in 0..area.height {
-        for x in 0..area.width {
+    for y in 0..area.h {
+        for x in 0..area.w {
             let t = area.tile.wrapping_add(map.diff(i32::from(x), i32::from(y)));
             if !(a.rail_belongs)(st, t) {
                 continue;

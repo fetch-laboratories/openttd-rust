@@ -27,6 +27,7 @@
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::random_func::chance16_i;
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES};
+use crate::tilearea::TileArea;
 use crate::timer_game_tick::DAY_TICKS;
 use std::ffi::c_void;
 use std::ptr;
@@ -369,13 +370,6 @@ pub struct Entry {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct Location {
-    pub tile: u32,
-    pub width: u16,
-    pub height: u16,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub struct FarmTile {
     pub kind: u8,
     pub snow: u8,
@@ -404,7 +398,7 @@ pub struct Services {
     pub next_tick: unsafe extern "C" fn(u32) -> Entry,
     pub sound_count: unsafe extern "C" fn(*mut c_void) -> u16,
     pub behaviour: unsafe extern "C" fn(*mut c_void) -> u32,
-    pub location: unsafe extern "C" fn(*mut c_void) -> Location,
+    pub location: unsafe extern "C" fn(*mut c_void) -> TileArea,
     pub industry_sound: unsafe extern "C" fn(*mut c_void, u32),
     pub play_sound: unsafe extern "C" fn(u16, u32),
     pub special_effect: unsafe extern "C" fn(*mut c_void, u32, u32) -> u16,
@@ -1418,10 +1412,10 @@ fn farm_with_landscape(
     landscape: &impl Fn() -> u8,
 ) {
     let l = unsafe { (s.location)(i) };
-    let x = (u32::from(l.width) / 2)
+    let x = (u32::from(l.w) / 2)
         .wrapping_add(rand(s) % 31)
         .wrapping_sub(16) as i32;
-    let y = (u32::from(l.height) / 2)
+    let y = (u32::from(l.h) / 2)
         .wrapping_add(rand(s) % 31)
         .wrapping_sub(16) as i32;
     let tile = unsafe { (s.tile_add_wrap)(l.tile, x, y) };
@@ -1451,8 +1445,8 @@ fn chop(i: *mut c_void, owner: *mut Industry, map: Map, s: &Services, builder: *
     let l = unsafe { (s.location)(i) };
     let width = map.size_x;
     let tiles = crate::map_func::Map::from_log_x(width.trailing_zeros());
-    for y in l.tile / width..l.tile / width + u32::from(l.height) {
-        for x in l.tile % width..l.tile % width + u32::from(l.width) {
+    for y in l.tile / width..l.tile / width + u32::from(l.h) {
+        for x in l.tile % width..l.tile % width + u32::from(l.w) {
             if unsafe { !(s.tile_completed)(i, tiles.tile_xy(x, y)) } {
                 return;
             }
@@ -2141,10 +2135,10 @@ crate::abi::layouts! {
         id,
         callbacks,
     };
-    "OpenTTDIndustryLocation" ["industry"] => Location {
+    "OpenTTDIndustryLocation" ["industry"] => TileArea {
         tile,
-        width,
-        height,
+        w => width,
+        h => height,
     };
     "OpenTTDIndustryFarmTile" ["industry"] => FarmTile {
         kind => type,

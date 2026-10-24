@@ -19,6 +19,7 @@
 )]
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::tile_type::{MP_INDUSTRY, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
+use crate::tilearea::TileArea;
 mod waypoint;
 use crate::rail_cmd::RailCommandServices;
 use crate::road_stop::{RoadStopServices, Stop};
@@ -29,13 +30,6 @@ use crate::station_service::World;
 use crate::town::AuthorityServices;
 use waypoint::WaypointLayout;
 
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Area {
-    pub tile: u32,
-    pub w: u16,
-    pub h: u16,
-}
 #[repr(C)]
 pub struct Industry {
     _private: [u8; 0],
@@ -117,7 +111,7 @@ pub struct AirportTile {
 }
 #[repr(C)]
 pub struct AirportGeometry {
-    pub area: Area,
+    pub area: TileArea,
     pub rotation: u8,
 }
 #[repr(C)]
@@ -182,7 +176,7 @@ pub struct CommandServicesTable {
     pub rail_bridge_info: unsafe extern "C" fn(*const RailSpec) -> BridgeSpan,
     pub road_bridge_info: unsafe extern "C" fn(*const RoadSpec) -> BridgeSpan,
     pub southern_bridge_end: extern "C" fn(u32) -> u32,
-    pub train_area: unsafe extern "C" fn(*const BaseStation) -> Area,
+    pub train_area: unsafe extern "C" fn(*const BaseStation) -> TileArea,
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
     pub links: *const crate::station_service::Links,
     pub bounds: extern "C" fn(*mut BaseStation) -> Bounds,
@@ -205,7 +199,7 @@ pub struct CommandServicesTable {
     pub set_town: extern "C" fn(*mut BaseStation, *const crate::services::TownHandle),
     pub default_name: extern "C" fn(*mut BaseStation, u32, u8),
     pub have_rating: extern "C" fn(*mut BaseStation, u8),
-    pub before_add_rect: extern "C" fn(*mut CommandCost, *mut BaseStation, Area, u8),
+    pub before_add_rect: extern "C" fn(*mut CommandCost, *mut BaseStation, TileArea, u8),
     pub road_waypoint: extern "C" fn(*mut BaseStation) -> bool,
     pub name_equals: extern "C" fn(*mut BaseStation, *const u8, usize) -> bool,
     pub set_name: extern "C" fn(*mut BaseStation, *const u8, usize),
@@ -224,7 +218,7 @@ pub struct CommandServicesTable {
     pub deallocate_rail_spec: extern "C" fn(*mut BaseStation, u32),
     pub rail_boolean: extern "C" fn(*const RailSpec, u16, u16) -> bool,
     pub rail_callback_error: extern "C" fn(*const RailSpec, u16, u16),
-    pub set_train_area: extern "C" fn(*mut BaseStation, Area),
+    pub set_train_area: extern "C" fn(*mut BaseStation, TileArea),
     pub add_facility: extern "C" fn(*mut BaseStation, u8, u32),
     pub rail_triggers: extern "C" fn(*mut BaseStation, *const RailSpec),
     pub reserved: extern "C" fn(u32) -> bool,
@@ -277,8 +271,8 @@ pub struct CommandServicesTable {
 
     pub remove_stop_tile_data: extern "C" fn(*mut BaseStation, u32),
     pub close_stop_inspect: extern "C" fn(u32),
-    pub road_waypoint_area: extern "C" fn(*mut BaseStation) -> Area,
-    pub set_road_waypoint_area: extern "C" fn(*mut BaseStation, Area),
+    pub road_waypoint_area: extern "C" fn(*mut BaseStation) -> TileArea,
+    pub set_road_waypoint_area: extern "C" fn(*mut BaseStation, TileArea),
     pub road_vehicle_owner: extern "C" fn(crate::vehicle::VehicleRef) -> *mut crate::road::State,
     pub order_station_location: extern "C" fn(crate::vehicle::VehicleRef, u16) -> u32,
     pub aircraft: *const crate::aircraft::Leaves,
@@ -311,15 +305,15 @@ pub struct CommandServicesTable {
     pub close_hangar: extern "C" fn(u32),
     pub close_airport_tile_inspect: extern "C" fn(u32),
     pub delete_airport_storage: extern "C" fn(*mut BaseStation),
-    pub after_remove_rect: extern "C" fn(*mut BaseStation, Area),
+    pub after_remove_rect: extern "C" fn(*mut BaseStation, TileArea),
     pub clear_airport: extern "C" fn(*mut BaseStation),
     pub close_airport_inspect: extern "C" fn(*mut BaseStation),
     pub ship: *const crate::ship_control::Leaves,
     pub clear: *const crate::ground::ClearServices,
     pub restoration: *const crate::water::RestorationServices,
     pub set_docking: extern "C" fn(u32, bool),
-    pub ship_area: extern "C" fn(*mut BaseStation) -> Area,
-    pub set_ship_area: extern "C" fn(*mut BaseStation, Area),
+    pub ship_area: extern "C" fn(*mut BaseStation) -> TileArea,
+    pub set_ship_area: extern "C" fn(*mut BaseStation, TileArea),
     pub ship_area_add: extern "C" fn(*mut BaseStation, u32),
     pub docking_clear: extern "C" fn(*mut BaseStation),
     pub docking_add: extern "C" fn(*mut BaseStation, u32),
@@ -341,7 +335,7 @@ pub struct CommandServicesTable {
     pub associated_industry: extern "C" fn(*mut BaseStation) -> *mut Industry,
     pub industry_neutral: extern "C" fn(*mut Industry) -> *mut BaseStation,
     pub clear_industry_neutral: extern "C" fn(*mut Industry),
-    pub industry_area: extern "C" fn(*mut Industry) -> Area,
+    pub industry_area: extern "C" fn(*mut Industry) -> TileArea,
     pub autoslope_axis: extern "C" fn(u32, i32, u8, u8) -> bool,
     pub station_list_classes_invalidate: extern "C" fn(),
     // Waypoint command leaves; canonical shells and shared map services.
@@ -711,7 +705,7 @@ impl Ctx<'_> {
         existing: u16,
         target: u16,
         adjacent: bool,
-        area: Area,
+        area: TileArea,
         waypoint: bool,
         road: bool,
         overbuild_error: u32,
@@ -741,35 +735,27 @@ impl Ctx<'_> {
             check = false;
         }
         if check {
-            // TileArea::Expand(1), clamped at the map perimeter.
-            let x = self.map().tile_x(area.tile).saturating_sub(1);
-            let y = self.map().tile_y(area.tile).saturating_sub(1);
-            let right =
-                (self.map().tile_x(area.tile) + u32::from(area.w) + 1).min(self.map().size_x());
-            let bottom = (self.map().tile_y(area.tile) + u32::from(area.h) + 1)
-                .min((self.shared.map_max_y)() + 1);
+            let mut around = area;
+            around.expand(1, self.map(), (self.shared.map_max_y)() + 1);
             let current = (self.shared.current_company)();
             let mut closest = existing;
-            for ty in y..bottom {
-                for tx in x..right {
-                    let tile = (ty << self.map().log_x) + tx;
-                    if (self.shared.tile_type)(tile) != MP_STATION {
-                        continue;
-                    }
-                    let id = (self.shared.station_index)(tile);
-                    let candidate = get(id);
-                    if candidate.is_null()
-                        || (self.world().station_owner)(candidate) != current
-                        || !filter(candidate)
-                    {
-                        continue;
-                    }
-                    if closest == 0xffff {
-                        closest = id;
-                    } else if closest != id {
-                        out.error(self.s.strings.adjoins_multiple);
-                        return std::ptr::null_mut();
-                    }
+            for tile in around.tiles(self.map()) {
+                if (self.shared.tile_type)(tile) != MP_STATION {
+                    continue;
+                }
+                let id = (self.shared.station_index)(tile);
+                let candidate = get(id);
+                if candidate.is_null()
+                    || (self.world().station_owner)(candidate) != current
+                    || !filter(candidate)
+                {
+                    continue;
+                }
+                if closest == 0xffff {
+                    closest = id;
+                } else if closest != id {
+                    out.error(self.s.strings.adjoins_multiple);
+                    return std::ptr::null_mut();
                 }
             }
             st = if closest == 0xffff {
@@ -818,7 +804,7 @@ impl Ctx<'_> {
         mut st: *mut BaseStation,
         flags: u16,
         reuse: bool,
-        area: Area,
+        area: TileArea,
         name: u8,
     ) -> *mut BaseStation {
         if st.is_null() && reuse {
@@ -955,7 +941,7 @@ impl Ctx<'_> {
         out.zero();
         id
     }
-    fn shrink(&self, st: *mut BaseStation, mut area: Area, kind: u8) -> Area {
+    fn shrink(&self, st: *mut BaseStation, mut area: TileArea, kind: u8) -> TileArea {
         let id = (self.links().graphs.station_id)(st);
         let kind = if kind == 0 && !(self.world().is_station)(st) {
             7
@@ -969,7 +955,7 @@ impl Ctx<'_> {
         };
         'restart: loop {
             if area.w == 0 || area.h == 0 {
-                return Area {
+                return TileArea {
                     tile: u32::MAX,
                     w: 0,
                     h: 0,
@@ -1084,13 +1070,6 @@ pub unsafe extern "C" fn openttd_rust_station_open_close_airport(
     out.zero();
 }
 
-impl Area {
-    fn tiles(self, map: Map) -> impl Iterator<Item = u32> {
-        (0..self.h).flat_map(move |y| {
-            (0..self.w).map(move |x| self.tile.wrapping_add(map.diff(i32::from(x), i32::from(y))))
-        })
-    }
-}
 impl Ctx<'_> {
     fn rail(&self) -> &RailCommandServices {
         unsafe { &*self.s.rail }
@@ -1362,7 +1341,7 @@ impl Ctx<'_> {
         if h > spread || w > spread {
             return cost.error(0xffff);
         }
-        let mut area = Area {
+        let mut area = TileArea {
             tile,
             w: u16::from(w),
             h: u16::from(h),
@@ -1511,7 +1490,7 @@ impl Ctx<'_> {
         (self.s.before_add_rect)(
             ret.0,
             st,
-            Area {
+            TileArea {
                 tile,
                 w: u16::from(w),
                 h: u16::from(h),
@@ -1619,13 +1598,13 @@ impl Ctx<'_> {
             self.restore_reservation(train);
         }
         let update = if axis == 0 {
-            Area {
+            TileArea {
                 tile,
                 w: 1,
                 h: u16::from(tracks),
             }
         } else {
-            Area {
+            TileArea {
                 tile,
                 w: u16::from(tracks),
                 h: 1,
@@ -1708,17 +1687,6 @@ pub unsafe extern "C" fn openttd_rust_station_set_rail_flags(
     unsafe { Ctx::new(s) }.set_rail_flags(tile, spec);
 }
 
-impl Area {
-    fn between(map: Map, a: u32, b: u32) -> Self {
-        let x = map.tile_x(a).min(map.tile_x(b));
-        let y = map.tile_y(a).min(map.tile_y(b));
-        Self {
-            tile: (y << map.log_x) + x,
-            w: (map.tile_x(a).max(map.tile_x(b)) - x + 1) as u16,
-            h: (map.tile_y(a).max(map.tile_y(b)) - y + 1) as u16,
-        }
-    }
-}
 impl Ctx<'_> {
     fn signals(&self) -> crate::signal::Context {
         crate::signal::Context {
@@ -1737,7 +1705,7 @@ impl Ctx<'_> {
         cost: Cost<'_>,
         ret: Cost<'_>,
         error: Cost<'_>,
-        area: Area,
+        area: TileArea,
         flags: u16,
         unit: i64,
         keep: bool,
@@ -1871,7 +1839,7 @@ impl Ctx<'_> {
             cost,
             ret,
             error,
-            Area::between(self.map(), start, end),
+            TileArea::between(self.map(), start, end),
             flags,
             crate::company::price(if waypoint { 53 } else { 35 }),
             keep,
@@ -1922,7 +1890,7 @@ impl Ctx<'_> {
                 cost,
                 ret,
                 error,
-                Area { tile, w: 1, h: 1 },
+                TileArea { tile, w: 1, h: 1 },
                 flags,
                 crate::company::price(if waypoint { 53 } else { 35 }),
                 false,
@@ -2202,7 +2170,7 @@ impl Ctx<'_> {
         &self,
         cost: Cost<'_>,
         ret: Cost<'_>,
-        area: Area,
+        area: TileArea,
         flags: u16,
         drive: bool,
         kind: u8,
@@ -2300,7 +2268,7 @@ impl Ctx<'_> {
         {
             return cost.error(0xffff);
         }
-        let area = Area {
+        let area = TileArea {
             tile,
             w: u16::from(width),
             h: u16::from(length),
@@ -2704,7 +2672,7 @@ impl Ctx<'_> {
         ret: Cost<'_>,
         error: Cost<'_>,
         flags: u16,
-        area: Area,
+        area: TileArea,
         waypoint: bool,
         remove_road: bool,
     ) {
@@ -2792,7 +2760,7 @@ impl Ctx<'_> {
             if start >= size || end >= size {
                 return cost.error(0xffff);
             }
-            Area::between(self.map(), start, end)
+            TileArea::between(self.map(), start, end)
         } else {
             if stop_type >= 2
                 || width == 0
@@ -2802,7 +2770,7 @@ impl Ctx<'_> {
             {
                 return cost.error(0xffff);
             }
-            Area {
+            TileArea {
                 tile: start,
                 w: u16::from(width),
                 h: u16::from(height),
@@ -3006,7 +2974,7 @@ impl Ctx<'_> {
         } else {
             (size.w, size.h)
         };
-        let area = Area {
+        let area = TileArea {
             tile,
             w: u16::from(w),
             h: u16::from(h),
@@ -3373,7 +3341,7 @@ impl Ctx<'_> {
         let y1 = y.saturating_sub(1);
         let x2 = (x + u32::from(area.w) + 1).min(self.map().size_x());
         let y2 = (y + u32::from(area.h) + 1).min((self.shared.map_max_y)() + 1);
-        let area = Area {
+        let area = TileArea {
             tile: (y1 << self.map().log_x) + x1,
             w: (x2 - x1) as u16,
             h: (y2 - y1) as u16,
@@ -3483,7 +3451,7 @@ impl Ctx<'_> {
             3 => (0, -1),
             _ => (0, 0),
         };
-        let area = Area {
+        let area = TileArea {
             tile: tile.wrapping_add(self.map().diff(dx, dy)),
             w: if dir & 1 == 0 { 2 } else { 1 },
             h: if dir & 1 == 0 { 1 } else { 2 },
@@ -3598,7 +3566,7 @@ impl Ctx<'_> {
             if area.tile == u32::MAX {
                 (self.s.set_ship_area)(
                     st,
-                    Area {
+                    TileArea {
                         tile: u32::MAX,
                         w: 0,
                         h: 0,
@@ -4127,7 +4095,7 @@ pub(crate) unsafe fn openttd_rust_station_change_owner(
 }
 
 impl Ctx<'_> {
-    fn expand_rail(&self, out: Cost<'_>, st: *const BaseStation, new_area: Area) -> Area {
+    fn expand_rail(&self, out: Cost<'_>, st: *const BaseStation, new_area: TileArea) -> TileArea {
         let old = unsafe { (self.s.train_area)(st) };
         let x = self
             .map()
@@ -4137,7 +4105,7 @@ impl Ctx<'_> {
             .map()
             .tile_y(old.tile)
             .min(self.map().tile_y(new_area.tile));
-        let area = Area {
+        let area = TileArea {
             tile: (y << self.map().log_x) + x,
             w: (self
                 .map()
@@ -4405,7 +4373,7 @@ crate::abi::layouts! {
         waypoint_close,
         waypoint_name,
     };
-    "OpenTTDStationArea" ["probe"] => Area {
+    "OpenTTDStationArea" ["probe"] => TileArea {
         tile,
         w,
         h,
