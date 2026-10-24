@@ -1200,7 +1200,7 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.animation_spec = RustHouseAnimationSpec,
 		.new_spec = RustHouseNewSpec,
 		.production = RustHouseProduction,
-		.sprite_groups = [](uint16_t house) noexcept { return HouseSpec::Get(house)->grf_prop.HasSpriteGroups(); },
+		.sprite_groups = [](uint16_t house) noexcept { return RustSpecHasSpriteGroups(RustHouseSpec(house)); },
 		.removal = [](uint16_t house) noexcept -> OpenTTDHouseRemoval { const HouseSpec *hs = HouseSpec::Get(house); return {static_cast<int64_t>(hs->GetRemovalCost()), hs->remove_rating_decrease}; },
 		.acceptance = RustHouseAcceptance,
 		.watched = [](uint16_t house) noexcept -> uint64_t { return HouseSpec::Get(house)->watched_cargoes; },

@@ -836,7 +836,7 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.tile_local_id = RustSpecLocalID<IndustryTileSpec>,
 		.tile_override = [](const IndustryTileSpec *spec) noexcept { return spec->grf_prop.override_id; },
 		.tile_grfid = RustSpecGRFID<IndustryTileSpec>,
-		.tile_has_groups = [](const IndustryTileSpec *spec) noexcept { return spec->grf_prop.HasSpriteGroups(); },
+		.tile_has_groups = RustSpecHasSpriteGroups<IndustryTileSpec>,
 		.tile_substitute = [](const IndustryTileSpec *spec) noexcept { return spec->grf_prop.subst_id; },
 		.clean_gfx = [](uint32_t tile) noexcept { return GetCleanIndustryGfx(TileIndex(tile)); },
 		.nearby = RustNearbyTile,
