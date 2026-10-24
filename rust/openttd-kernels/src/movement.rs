@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete tile movement policy. Native map/pools remain canonical; services
-//! are immutable and only copied scalars cross the synchronous boundary. No
-//! native borrow survives a callback, including `NewGRF` foundation callbacks.
+//! Tile movement policy. Map and pools stay native; only copied scalars cross, including
+//! around `NewGRF` foundation callbacks.
 #![allow(
     unsafe_code,
     missing_docs,

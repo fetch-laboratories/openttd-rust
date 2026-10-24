@@ -886,12 +886,10 @@ impl Job {
 /// Copy an input snapshot and compute all demands, paths and final flows.
 ///
 /// # Safety
-/// Input arrays are readable, aligned, disjoint and live for this call; lengths
-/// fit `isize::MAX` and edge ranges/destinations satisfy original graph invariants.
-/// Settings is readable and aligned. Empty arrays permit null. The nonthrowing
-/// abort callback reads only the job's atomic abort flag and cannot reenter Rust.
-/// No pointer or reference to C++ storage survives the call. The opaque returned
-/// owner must be destroyed exactly once. Panics abort; no unwind crosses FFI.
+/// Input arrays are readable, aligned, disjoint and live for this call, with edge ranges and
+/// destinations satisfying the original graph invariants; empty arrays permit null. Destroy
+/// the returned owner once. Arrays and readable, aligned settings follow `linkgraph_ffi.h`;
+/// the abort callback is nonthrowing, atomic-only and cannot reenter Rust.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_linkgraph_run(

@@ -5,12 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! House lifecycle and tile simulation: construction stages, builtin lifts,
-//! cargo production and acceptance, clearing, rebuilding, placement, cache
-//! rebuild and house-specific `NewGRF` trigger traversal. Packed map fields,
-//! pools, specs, sprite resolvers and `AnimationBase` stay native. Every
-//! service is a synchronous typed call that may reenter; owner fields are
-//! accessed only immediately, never borrowed across a service.
+//! House lifecycle and tile simulation: construction stages, builtin lifts, cargo, clearing,
+//! rebuilding, placement, cache rebuild and house `NewGRF` trigger traversal. Packed map
+//! fields, pools, specs, sprite resolvers and `AnimationBase` stay native.
 use super::{AuthorityServices, Leaves, State, TownRef, change_population, engine, update_radius};
 use crate::cargo_type::INVALID_CARGO;
 use crate::command_type::DoCommandFlag;

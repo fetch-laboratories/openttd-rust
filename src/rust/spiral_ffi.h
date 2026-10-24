@@ -32,14 +32,9 @@ static_assert(sizeof(OpenTTDRustSpiralState) == 40 && alignof(OpenTTDRustSpiralS
 static_assert(offsetof(OpenTTDRustSpiralState, direction) == 36);
 #endif
 
-/**
- * All arithmetic preserves original uint32_t wrapping, including out-of-map
- * coordinates. Direction offsets are NE(-1,0), SE(0,1), SW(1,0), NW(0,-1);
- * shell jumps are west(+1,-1). Map dimensions are live operation inputs.
- * No pointer, tile, allocator, ownership, callback or random state crosses this
- * ABI. Results/state are copyable by value; no allocation. Panic aborts and no
- * Rust unwind enters C++. State must originate from initialization/advancement.
- */
+/** All arithmetic keeps the original uint32_t wrapping, including out-of-map coordinates.
+ * Direction offsets are NE(-1,0), SE(0,1), SW(1,0), NW(0,-1); shell jumps are west(+1,-1). Map
+ * dimensions are live operation inputs. State must come from initialization or advancement. */
 OpenTTDRustSpiralState openttd_rust_spiral_square(uint32_t x, uint32_t y, uint32_t diameter, uint32_t size_x, uint32_t size_y); ///< diameter > 0.
 OpenTTDRustSpiralState openttd_rust_spiral_hole(uint32_t x, uint32_t y, uint32_t radius, uint32_t width, uint32_t height, uint32_t size_x, uint32_t size_y); ///< radius > 0.
 OpenTTDRustSpiralState openttd_rust_spiral_advance(OpenTTDRustSpiralState state, uint32_t size_x, uint32_t size_y); ///< State must not be at end.

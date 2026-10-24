@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Flooding ownership, including live vehicle-hash traversal and nested command
-//! results. Native leaves are noexcept. No Rust borrow denotes a native pool/map
-//! object across calls; shared native traversal advances after each callback.
+//! Flooding, including live vehicle-hash traversal and nested command results. Native
+//! traversal advances after each callback.
 #![allow(
     unsafe_code,
     missing_docs,
@@ -326,7 +325,7 @@ impl<'a> World<'a> {
     fn result(&self, call: *mut Call, out: *const services::CommandCost) -> bool {
         // SAFETY: prepare constructed this result; release ends its native lifetime.
         let success = unsafe { ((*self.costs().costs).success)(out) };
-        // SAFETY: The live result is no longer read, ending its native lifetime.
+        // SAFETY: The live result is not read again, ending its native lifetime.
         unsafe { (self.costs().release)(call) };
         success
     }

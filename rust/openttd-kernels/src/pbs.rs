@@ -128,7 +128,7 @@ impl<'a> Pbs<'a> {
         }
     }
     fn crossing(self, tile: u32, sound: bool) {
-        // SAFETY: synchronous integrated owner, static service tables. No owner borrow crosses it.
+        // SAFETY: synchronous Rust owner, static service tables. No owner borrow crosses it.
         unsafe {
             crate::train::openttd_rust_train_update_crossing(
                 tile,

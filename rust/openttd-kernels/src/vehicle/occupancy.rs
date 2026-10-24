@@ -5,8 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical NOSAVE tile index. Native shells own only these stable intrusive
-//! links, never a second index. The game-state mutex serializes all access.
+//! NOSAVE vehicle tile index. Native shells own only its stable intrusive links.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,

@@ -135,8 +135,7 @@ static void NativeVisit(uint32_t tile, uint8_t kind) noexcept
 		if (rust_run) RustRun(); else RunTileLoop();
 	}
 }
-/* These states cannot be built through commands; this extends the existing
- * default gap probe, not a second movement comparison tool. */
+/* These states cannot be built through commands, so the default gap probe sets them. */
 static void MovementGap()
 {
 	const Slope slopes[]{SLOPE_FLAT, SLOPE_W, SLOPE_S, SLOPE_SW, SLOPE_E, SLOPE_EW, SLOPE_SE, SLOPE_WSE, SLOPE_N, SLOPE_NW, SLOPE_NS, SLOPE_ENW, SLOPE_NE, SLOPE_SEN, SLOPE_NWS, SLOPE_STEEP_W, SLOPE_STEEP_S, SLOPE_STEEP_E, SLOPE_STEEP_N};

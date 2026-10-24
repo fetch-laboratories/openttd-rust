@@ -5,12 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Road vehicles own their movement, consist traversal and private counters/cache.
-//! Each entry receives a live vehicle handle and its Rust owner; consist links
-//! carry both. Owner scalars are read and written in place through the raw owner
-//! pointer, so no reference into an owner survives a service call. Observations
-//! are copies taken at the original read points and refreshed after every service
-//! that can change them.
+//! Road vehicle movement, consist traversal and private counters and cache. Observations are
+//! copies taken at the original read points and refreshed after every service that can
+//! change them.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -103,7 +100,7 @@ pub(crate) unsafe fn set_state(state: *mut State, value: u8) {
 pub(crate) unsafe fn get_state(state: *const State) -> u8 {
     unsafe { (*state).scalars[STATE] as u8 }
 }
-/// Original `RoadVehicle::SetState(RVSB_IN_DEPOT)` without a native-owner bounce.
+/// Original `RoadVehicle::SetState(RVSB_IN_DEPOT)`.
 /// # Safety
 /// A live serialized road owner; the scalar access ends before any callback.
 pub(crate) unsafe fn set_depot_state(state: *mut State) {
@@ -2445,7 +2442,7 @@ pub(crate) unsafe fn crashed_counter(state: *const State) -> u16 {
     unsafe { (*state).scalars[CRASHED] }
 }
 
-/// `RoadVehicle::GetCurrentMaxSpeed`, entering its owner without a native virtual bounce.
+/// `RoadVehicle::GetCurrentMaxSpeed`.
 /// # Safety
 /// Live serialized shell/private owner; immutable services, no borrow spans callbacks.
 pub(crate) unsafe fn current_max_speed(

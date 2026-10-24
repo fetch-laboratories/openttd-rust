@@ -245,7 +245,7 @@ static void SignalOverflowLayout(Owner owner)
 	SignalPending("empty-neighbour");
 
 }
-/* Rail command owner inputs (#265): every result is printed and compared; the
+/* Rail command owner (rail_cmd.rs) inputs: every result is printed and compared; the
  * geometry is built only through real commands on a declared flat area. */
 static void RailPrint(std::string_view name, const CommandCost &cost)
 {

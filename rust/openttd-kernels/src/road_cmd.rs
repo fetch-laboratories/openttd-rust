@@ -5,10 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete selected road command policy. Shared map and pool storage remain
-//! native. Calls retain only copied identities; no Rust world borrow spans a
-//! command, town rating update, vehicle callback or other reentry. Native costs
-//! are stack-owned opaque objects, and panics/environmental exceptions abort.
+//! Road command policy. Map and pool storage stay native; calls keep only copied identities,
+//! and costs are stack-owned opaque native objects.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,

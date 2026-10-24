@@ -292,8 +292,7 @@ static void OccupancyProbe()
 	fmt::print(stderr, "FLEET occupancy-probe 18 live-next {}\n", SameRandom(before, after));
 }
 
-/* Public-variable results over live stock shells; this is comparison evidence,
- * not an oracle or a second implementation of the compatibility formulas. */
+/* Public-variable results over live stock shells, compared against the reference. */
 static void ResolverVariables(Vehicle *v)
 {
 	GRFFile grf;

@@ -242,15 +242,12 @@ int32_t OPENTTD_RUST_CALL openttd_rust_road_max_speed(OpenTTDVehicle *, OpenTTDR
 void OPENTTD_RUST_CALL openttd_rust_road_set_dest(OpenTTDVehicle *, OpenTTDRoadState *, uint32_t, uint32_t, const OpenTTDRoadLeaves *);
 bool OPENTTD_RUST_CALL openttd_rust_road_turn(OpenTTDVehicle *, OpenTTDRoadState *, bool, const OpenTTDRoadLeaves *);
 uint8_t OPENTTD_RUST_CALL openttd_rust_road_trackdir(OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadLeaves *);
-/* Each ordinary or indexed-load shell owns one zero-created state. Destruction
- * follows PreDestructor and occurs exactly once, also during pool cleanup.
- * Scalars 0..6: state:u8, frame:u8, blocked:u16, overtaking:u8,
- * overtaking-counter:u8, crashed:u16, reverse:u8. Set narrows to source widths.
- * No returned references or persistent C++ cache. Save/load stages fields and
- * path outside Rust frames, commits partial loads on unwind and preserves nesting.
- * Path access requires the same index/nonempty preconditions as std::vector.
- * Replacing copies in forward order; count zero permits a null input.
- * Game-thread access only; panic/OOM abort and no exception crosses this ABI. */
+/* Each ordinary or indexed-load shell owns one zero-created state, destroyed once after
+ * PreDestructor, also during pool cleanup. Scalars 0..6: state:u8, frame:u8, blocked:u16,
+ * overtaking:u8, overtaking-counter:u8, crashed:u16, reverse:u8; set narrows to source widths.
+ * Save/load stages fields and path outside Rust frames and commits partial loads on unwind.
+ * Path access has std::vector's index/nonempty preconditions; replacement copies in forward order,
+ * with a null input allowed for zero count. */
 OpenTTDRoadState *OPENTTD_RUST_CALL openttd_rust_road_new();
 void OPENTTD_RUST_CALL openttd_rust_road_destroy(OpenTTDRoadState *);
 uint16_t OPENTTD_RUST_CALL openttd_rust_road_get(const OpenTTDRoadState *, uint8_t);

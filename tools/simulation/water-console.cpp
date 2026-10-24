@@ -120,7 +120,7 @@ static bool WaterScenario([[maybe_unused]] std::span<std::string_view> args)
 		WaterCost("no-water", _tile_type_water_procs.clear_tile_proc(other, DoCommandFlag::NoWater));
 		WaterCost("clear-canal", Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, other));
 	}
-	/* #366: water classes, occupied refusal, bankruptcy and deleted-buoy reuse. */
+	/* Buoys (station_cmd/waypoint.rs): water classes, occupied refusal, bankruptcy and deleted-buoy reuse. */
 	for (WaterClass wc : {WaterClass::Sea, WaterClass::Canal, WaterClass::River}) {
 		tile = TileXY(45, 45); WaterLand(tile, wc == WaterClass::Sea ? 0 : 3);
 		MakeWater(tile, wc == WaterClass::Canal ? Owner(_current_company) : OWNER_WATER, wc, 7);

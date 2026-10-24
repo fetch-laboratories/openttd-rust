@@ -5,10 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete signal-block traversal and canonical process-wide fixed work sets.
-//! The native game-state mutex serializes entries on main/game threads. Every
-//! owner access ends before a native callback, including occupancy and dirtying.
-//! Native leaves are noexcept; environmental failures terminate, panics abort.
+//! Signal-block traversal and its process-wide fixed work sets. Occupancy and dirtying
+//! callbacks can reenter.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::collapsible_if)]
 use crate::game_state::GameState;
 use crate::rail_map::is_pbs_signal as pbs;
@@ -785,7 +783,7 @@ crate::abi::layouts! {
 
 /// Call-scoped bridge to a direct Rust signal entry from other Rust owners.
 /// All pointers address immutable process-lifetime native service tables; map
-/// width is captured for this invocation. This contains no signal-state mirror.
+/// width is captured for this invocation.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Context {

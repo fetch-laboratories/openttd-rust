@@ -12,7 +12,7 @@
 template <typename T> struct OpenTTDAbortService;
 /* MSVC returns a class type (base class, user-provided constructor or copy) through
  * a hidden pointer where Rust expects a register, so such a type crosses as its
- * base type (#355). No standard trait detects a base class of an aggregate. */
+ * base type. No standard trait detects a base class of an aggregate. */
 template <typename R> inline constexpr bool OPENTTD_SERVICE_RETURN_TYPE = std::is_void_v<R> || std::is_scalar_v<R> || std::is_reference_v<R> || (std::is_aggregate_v<R> && std::is_trivially_copyable_v<R> && std::is_standard_layout_v<R>);
 template <typename R, typename... A> struct OpenTTDAbortService<R (OPENTTD_RUST_CALL *)(A...)> {
 	static_assert(OPENTTD_SERVICE_RETURN_TYPE<R>, "service returns cross as void, a scalar, a reference or a trivially copyable standard-layout aggregate; return a class type as its base type");

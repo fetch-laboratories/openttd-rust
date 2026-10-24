@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Whole landscape clear, terraform and level transactions. Ordered command-local
-//! scratch matches `std::map/set`; canonical map writes and tile owners stay shared.
-//! No borrow of shared scratch or finance state survives a reentrant command.
+//! Landscape clear, terraform and level transactions. Ordered command-local scratch matches
+//! the original `std::map` and `std::set`; map writes and tile owners stay shared.
 #![allow(
     unsafe_code,
     missing_docs,

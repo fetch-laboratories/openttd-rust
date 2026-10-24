@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical station cargo-service state. Native scalar aliases and packet
-//! services never overlap Rust references into this owner. Addresses are stable
-//! for the shell lifetime, including indexed loading and retired-station reuse.
+//! Station cargo-service state. Addresses are stable for the shell lifetime, including
+//! indexed loading and retired-station reuse.
 #![allow(
     unsafe_code,
     clippy::missing_safety_doc,
@@ -1561,7 +1560,7 @@ pub unsafe extern "C" fn openttd_rust_station_prepare(
 /// `PrepareUnload`.
 pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
     // SAFETY: the shared immutable vehicle table outlives this entry. Station
-    // identities and owner are resolved before next-station discovery (#228).
+    // identities and owner are resolved before next-station discovery.
     let vehicle = unsafe { &*l.vehicle };
     let st = (w.station)((vehicle.last_station)(front));
     unsafe {
@@ -1610,7 +1609,7 @@ unsafe fn load_vehicle(
     visits: &Visits,
 ) {
     // SAFETY: the shared immutable vehicle table outlives this entry. Station
-    // identities and owner are resolved before next-station discovery (#228).
+    // identities and owner are resolved before next-station discovery.
     let vehicle = unsafe { &*l.vehicle };
     let st = (w.station)((vehicle.last_station)(front));
     let mut body = |next| {

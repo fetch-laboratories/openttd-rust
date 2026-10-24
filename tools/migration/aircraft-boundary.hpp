@@ -19,7 +19,7 @@ static OpenTTDAircraftLeaves AircraftTestLeaves(OpenTTDVehicleServices &vehicle,
 	leaves.vehicle = &vehicle;
 	leaves.shared = &shared;
 	shared.context = nullptr;
-	/* Pure airport selection now runs in Rust. These explicit leaves stand in
+	/* Pure airport selection runs in Rust. These explicit leaves stand in
 	 * for immutable native specs; unexpected services retain abort defaults. */
 	static int airport_tag;
 	auto &runtime = AircraftTestAirportServices(); runtime = OpenTTDAirportResolverServices{};

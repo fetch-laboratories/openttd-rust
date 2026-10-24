@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the real #249 CLI for every seeded category, upstream scope and ratchet."""
+"""Run the real shared-accessors CLI for every seeded category, upstream scope and ratchet."""
 
 import re
 import subprocess

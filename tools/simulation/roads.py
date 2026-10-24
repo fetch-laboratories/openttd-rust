@@ -1,4 +1,4 @@
-"""Road controller and YAPF branch witnesses from the committed player saves (#121)."""
+"""Road controller and YAPF branch witnesses from the committed player saves."""
 
 import hashlib
 import json
@@ -979,7 +979,7 @@ def game_environment(scenario):
 
 
 def prepare_commands(scenario, binaries, builds, out, timeout, env, result):
-    # Reuse the integrated signal fixture and its frozen-object relinking path.
+    # Reuse the signal fixture and its frozen-object relinking path.
     from . import core, signals
 
     prepared = signals.prepare(

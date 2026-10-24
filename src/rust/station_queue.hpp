@@ -17,7 +17,7 @@ struct Vehicle;
 /**
  * The station shell borrows its BaseStation's Rust owner. Queue nodes have stable
  * identity until erased, like the original std::list nodes; duplicate vehicle
- * pointers are separate entries. No native container mirrors the queue.
+ * pointers are separate entries.
  */
 class RustStationLoadingQueue {
 	OpenTTDStationService *state;

@@ -227,8 +227,8 @@ template <typename Check> void CheckTownProtocol(Check check)
 	auto *fields = openttd_rust_town_simulation(owner.get()); fields->xy = 2080; std::fill_n(fields->radius, 5, 100);
 	const auto leaves = TownProtocolServices();
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, TownProtocolRandom, TownProtocolIndustry);
-	/* The callback still reenters the canonical owner through the new direct
-	 * resolver entry; preserve the original fixture's mutation and success. */
+	/* The callback reenters the town owner through the direct resolver entry;
+	 * preserve the original fixture's mutation and success. */
 	const OpenTTDHouseResolverServices resolver{
 		.town_by_id = [](uint32_t) noexcept -> Town * { return nullptr; },
 		.evaluate = [](const OpenTTDHouseCallbackArgs *, int32_t *, size_t) noexcept -> uint16_t {

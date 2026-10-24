@@ -48,13 +48,9 @@ typedef struct {
  */
 OpenTTDRustConsumerBound openttd_rust_consumer_bound(size_t size, size_t position, size_t requested);
 
-/**
- * Every nonempty span addresses readable initialized bytes in one allocation,
- * length <= PTRDIFF_MAX, immutable and valid for this call. Empty spans permit
- * NULL. Read-only spans may overlap. No pointer or slice is retained, no C++
- * storage is allocated/transferred, and there are no callbacks while borrowing.
- * All results are by value. Panic aborts and Rust never unwinds into C++.
- */
+/** Nonempty spans address readable initialized bytes, immutable for this call; empty spans permit
+ * NULL and read-only spans may overlap. Each span lies in one allocation of length <= PTRDIFF_MAX.
+ * No callback runs while borrowing; all results are by value. */
 OpenTTDRustConsumerByte openttd_rust_consumer_little_endian(const uint8_t *data, size_t length, uint8_t width); ///< Width is 1/2/4/8 bytes.
 OpenTTDRustConsumerMatch openttd_rust_consumer_prefix(const uint8_t *data, size_t length, const uint8_t *pattern, size_t pattern_length); ///< Empty patterns are valid.
 size_t openttd_rust_consumer_find(const uint8_t *data, size_t length, const uint8_t *pattern, size_t pattern_length, uint8_t mode); ///< Nonempty pattern; mode 0 substring, 1 set membership, 2 nonmembership. SIZE_MAX is not found.

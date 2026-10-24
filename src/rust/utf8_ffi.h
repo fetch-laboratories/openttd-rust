@@ -31,13 +31,9 @@ typedef struct {
 OpenTTDRustUtf8Encoded openttd_rust_encode_utf8(uint32_t codepoint);
 uint8_t openttd_rust_is_utf8_part(uint8_t byte);
 
-/**
- * All byte spans are borrowed, readable initialized bytes in one allocation,
- * immutable and valid for the call, with length <= PTRDIFF_MAX. Zero length
- * accepts a null pointer. No allocation, ownership transfer or retained pointer;
- * read-only overlapping spans are allowed. Results are returned by value, so no
- * mutable output can alias the input. Rust never unwinds into C++; panics abort.
- */
+/** Byte spans are borrowed, initialized and immutable for the call; zero length accepts a null
+ * pointer and read-only spans may overlap. Each span lies in one allocation <= PTRDIFF_MAX.
+ * Results are returned by value, so no output aliases input. */
 OpenTTDRustUtf8Decoded openttd_rust_decode_utf8(const uint8_t *data, size_t length);
 /** Position < length; the caller preserves the original iterator assertion. */
 size_t openttd_rust_utf8_next(const uint8_t *data, size_t length, size_t position);

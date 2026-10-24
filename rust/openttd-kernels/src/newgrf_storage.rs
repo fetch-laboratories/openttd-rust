@@ -1,8 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Canonical `NewGRF` payloads, transactional registry/modes and temporary registers.
-//! Native game-state serialization covers main, command and generation entries.
-//! Statics have no destructor, outliving native global storage/pool destruction.
-//! Native aliases access only live arrays; no Rust borrow spans a native callback.
+//! `NewGRF` payloads, the transactional registry and modes, and temporary registers. Statics
+//! have no destructor, so they outlive native global storage and pool destruction.
 #![allow(unsafe_code, clippy::missing_safety_doc, clippy::cast_sign_loss)]
 use crate::game_state::GameState;
 use std::{
