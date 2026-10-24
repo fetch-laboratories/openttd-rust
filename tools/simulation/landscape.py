@@ -313,7 +313,7 @@ def check(scenario, run, mode, role, result):
         lines = [line for line in run["log"] if line.startswith("GENERIC ")]
         required = (
             "fallback-duplicates-registers priority-v7-v8 "
-            "industry-sentinels-narrowing unavailable-all-fail-reset programs-complete"
+            "industry-sentinels-narrowing unavailable-all-fail-reset programs-complete ambient-unavailable-all-fail"
         ).split()
         if any(lines.count(f"GENERIC {name} true") != 2 for name in required):
             raise RuntimeError("missing generic registry/AI real-group witnesses")

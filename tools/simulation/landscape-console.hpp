@@ -134,7 +134,7 @@ static void GenericPrograms()
 	AddGenericCallback(GSF_STATIONS, &second, &program); answer = ai(); GenericNeed(answer.first == &second && answer.second == 0x1234 && registers.GetRegister(0x100) == 22 && no.attempts == 2);
 	fmt::print(stderr, "GENERIC priority-v7-v8 true\n");
 	IndustrySpec *spec = const_cast<IndustrySpec *>(GetIndustrySpec(0));
-	{ AutoRestoreBackup<uint16_t> subst(spec->grf_prop.subst_id, 0x123); ai(0, IT_AI_UNKNOWN); GenericNeed(registers.GetRegister(0x104) == 0x23 && registers.GetRegister(0x105) == IT_AI_UNKNOWN); }
+	{ AutoRestoreBackup<uint16_t> subst(spec->grf_prop.subst_id, 0x123); ai(0, IT_AI_UNKNOWN); GenericNeed(registers.GetRegister(0x104) == 0x23 && registers.GetRegister(0x105) == IT_AI_UNKNOWN); ai(0, 0); GenericNeed(registers.GetRegister(0x104) == 0x23 && registers.GetRegister(0x105) == 0x23); }
 	{ AutoRestoreBackup<uint16_t> subst(spec->grf_prop.subst_id, IT_INVALID); ai(IT_AI_TOWN, 0); GenericNeed(registers.GetRegister(0x104) == IT_AI_TOWN && registers.GetRegister(0x105) == 0); }
 	fmt::print(stderr, "GENERIC industry-sentinels-narrowing true\n");
 	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x89, .and_mask = UINT32_MAX}};
@@ -146,7 +146,7 @@ static void GenericPrograms()
 	const TileIndex tile = TileXY(4, 4); Tile t(tile);
 	auto fields = std::tuple(t.height(), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m7(), t.m8());
 	std::vector<uint8_t> types; for (Tile one : Map::Iterate()) { types.push_back(one.type()); one.type() = MP_VOID << 4; }
-	AutoRestoreBackup<LandscapeType> climate(_settings_game.game_creation.landscape, LandscapeType::Temperate);
+	AutoRestoreBackup<LandscapeType> climate(_settings_game.game_creation.landscape, LandscapeType::Tropic);
 	AutoRestoreBackup<decltype(TimerGameTick::counter)> tick(TimerGameTick::counter, 1);
 	AutoRestoreBackup<GrfMiscBits> features(_misc_grf_features, {});
 	AutoRestoreBackup<bool> setting(_settings_client.sound.ambient, true);
@@ -162,7 +162,7 @@ static void GenericPrograms()
 		if (kind == MP_CLEAR) MakeClear(tile, CLEAR_GRASS, 3);
 		if (kind == MP_TREES) MakeTree(tile, 0, 1, TreeGrowthStage::Grown, TREE_GROUND_GRASS, 3);
 		if (kind == MP_WATER) { MakeCanal(tile, OWNER_NONE, 0); SetNonFloodingWaterTile(tile, true); }
-		SetTileHeight(tile, 19);
+		SetTileHeight(tile, 19); SetTropicZone(tile, TROPICZONE_DESERT);
 		_misc_grf_features = mode == 0 ? GrfMiscBits{} : GrfMiscBits{GrfMiscBit::AmbientSoundCallback};
 		_settings_client.sound.ambient = mode != 1;
 		Randomizer before; uint32_t draw = 0;
@@ -181,6 +181,16 @@ static void GenericPrograms()
 		if (mode == 3) GenericNeed(generic_sound_file == &first && generic_sound_id == 4 && generic_sound_tile == tile && registers.GetRegister(0x100) == static_cast<int32_t>(packed) && registers.GetRegister(0x101) == CBID_SOUNDS_AMBIENT_EFFECT && registers.GetRegister(0x102) == 0);
 		fmt::print(stderr, "GENERIC ambient {} {} {} {} {} {} {} {}\n", to_underlying(kind), version, mode, generic_sound_calls, mode == 3 ? packed : 0, generic_sound_file == &first, _random.state[0], _random.state[1]);
 	}
+	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x80, .and_mask = UINT32_MAX}}; program.error_group = &no;
+	for (uint seed = 1;; ++seed) { _random.SetSeed(seed); auto next = _random; if (Chance16I(1, 200, next.Next())) break; }
+	auto expected_rng = _random; expected_rng.Next(); generic_sound_calls = 0;
+#ifdef WITH_RUST
+	cursor = tile.base();
+#else
+	cursor = tile;
+#endif
+	RunTileLoop(); GenericNeed(generic_sound_calls == 0 && _random.state[0] == expected_rng.state[0] && _random.state[1] == expected_rng.state[1]);
+	fmt::print(stderr, "GENERIC ambient-unavailable-all-fail true\n");
 	cursor = saved_cursor; uint i = 0; for (Tile one : Map::Iterate()) one.type() = types[i++];
 	std::tie(t.height(), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m7(), t.m8()) = fields;
 	ResetGenericCallbacks(); // Before every graph/file destruction, including native reload.

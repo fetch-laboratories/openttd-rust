@@ -108,10 +108,6 @@ static uint64_t TrainAllPowered(OpenTTDTrainHandle, uint64_t a) noexcept
 {
 	return GetAllPoweredRailTypes(RailTypes(a)).base();
 }
-static uint64_t TrainAmbientSound(OpenTTDTrainHandle) noexcept
-{
-	return OpenTTDAmbientSound();
-}
 static void TrainArrivalNews(OpenTTDTrainHandle id, uint16_t a) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
