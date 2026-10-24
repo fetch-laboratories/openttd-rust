@@ -144,6 +144,7 @@ def check(scenario, run, mode, role, result):
         "invocation-parent",
         "invocation-animation",
         "invocation-complete",
+        "invocation-rng",
     ):
         if sum(x.startswith("OBJECT " + marker + " ") for x in run["log"]) != 1:
             raise RuntimeError(f"{mode}/{role}: missing {marker}")
