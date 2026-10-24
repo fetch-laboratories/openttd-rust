@@ -34,6 +34,7 @@ TEST_CASE("Shared station traversal - live filtered pool mutation and reentry")
 		const auto Create = [](uint32_t id) {
 			REQUIRE(BaseStation::CanAllocateItem());
 			auto *st = new (StationID(id)) Station(TileIndex(1));
+			st->owner = OWNER_NONE;
 			_station_kdtree.Insert(st->index);
 		};
 		for (uint32_t id : {0, 2, 4, 5}) Create(id);
