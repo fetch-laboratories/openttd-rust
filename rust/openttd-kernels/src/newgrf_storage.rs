@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Canonical NewGRF payloads, transactional registry/modes and temporary registers.
+//! Canonical `NewGRF` payloads, transactional registry/modes and temporary registers.
 //! Native game-state serialization covers main, command and generation entries.
 //! Statics have no destructor, outliving native global storage/pool destruction.
 //! Native aliases access only live arrays; no Rust borrow spans a native callback.

@@ -379,9 +379,12 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	}
 	return true;
 }
+#include "saveload/saveload.cpp"
+#include "storage-console.inc"
 static bool TownsScenario(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
+	if (args[1].starts_with("storage")) return StorageScenario(args);
 	if (args[1] == "authority" || args[1] == "authority-inspect") return CommandsScenario(args);
 	if (args[1] == "inspect") {
 		bool found = false;
