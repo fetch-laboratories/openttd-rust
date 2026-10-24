@@ -22,6 +22,7 @@
 #include "rust/sound_services.h"
 #include "rust/services_station.h"
 #include "rust/services_industry.h"
+#include "rust/services_cargo.h"
 #include "rust/station_service_ffi.h"
 #include "station_base.h"
 #include "newgrf_station.h"
@@ -54,9 +55,9 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.rail_spec_triggers = [](const StationSpec *s) noexcept { return s->animation.triggers.base(); },
 		.road_spec_triggers = [](const RoadStopSpec *s) noexcept { return s->animation.triggers.base(); },
 		.airport_spec_triggers = [](const AirportTileSpec *s) noexcept { return s->animation.triggers.base(); },
-		.rail_cargo = [](const StationSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },
-		.road_cargo = [](const RoadStopSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },
-		.airport_cargo = [](const AirportTileSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },
+		.rail_cargo = RustSpecCargoMap<StationSpec>,
+		.road_cargo = RustSpecCargoMap<RoadStopSpec>,
+		.airport_cargo = RustSpecCargoMap<AirportTileSpec>,
 		.airport_grf = [](const AirportTileSpec *s) noexcept { return s->grf_prop.grffile != nullptr; },
 		.airport_area = [](Station *s) noexcept -> OpenTTDAnimationArea { return {s->airport.tile.base(), s->airport.w, s->airport.h}; },
 		.airport_belongs = RustStationAirportMember,

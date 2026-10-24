@@ -21,6 +21,7 @@ struct OpenTTDIndustrySpecHandle;
 inline uint OpenTTDScaleCargo(uint amount, bool town) noexcept { return ScaleByCargoScale(amount, town); }
 inline CargoType OpenTTDCargoTranslation(uint8_t cargo, const GRFFile *grf) noexcept { return GetCargoTranslation(cargo, grf); }
 inline CargoType RustResolverCargoTranslation(const ResolverObject *resolver, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, resolver->grffile); }
+template <typename Spec> inline uint8_t RustSpecCargoMap(const Spec *spec, CargoType cargo) noexcept { return spec->grf_prop.grffile->cargo_map[cargo]; }
 inline CargoType OpenTTDCargoByLabel(CargoLabel label) noexcept { return GetCargoTypeByLabel(label); }
 inline uint OpenTTDMoveGoodsToStation(CargoType cargo, uint amount, Source source, const StationList &stations, Owner exclusivity = INVALID_OWNER) noexcept
 {

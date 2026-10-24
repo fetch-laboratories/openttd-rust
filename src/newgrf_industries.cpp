@@ -855,7 +855,7 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.callback_id = RustResolverCallback,
 		.register_value = RustResolverRegister,
 		.cargo_translation = RustResolverCargoTranslation,
-		.cargo_map = [](const IndustrySpec *spec, uint8_t cargo) noexcept { return spec->grf_prop.grffile->cargo_map[cargo]; },
+		.cargo_map = RustSpecCargoMap<IndustrySpec>,
 		.badges = RustSpecBadges<IndustrySpec>,
 		.tile_badges = RustSpecBadges<IndustryTileSpec>,
 		.storage_value = [](Industry *i, uint32_t pos) noexcept { return i->psa != nullptr ? i->psa->GetValue(pos) : 0; },
