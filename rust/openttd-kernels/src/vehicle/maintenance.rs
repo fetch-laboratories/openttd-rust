@@ -933,3 +933,15 @@ crate::abi::layouts! {
         news_very_old_and,
     };
 }
+impl VehicleServices {
+    /// Run one direct maintenance call on a vehicle port's live serialized shell.
+    #[inline]
+    pub(crate) fn maintain<R>(
+        &self,
+        v: VehicleRef,
+        entry: unsafe fn(VehicleRef, &VehicleServices) -> R,
+    ) -> R {
+        // SAFETY: Live serialized shell; no owner borrow spans the call.
+        unsafe { entry(v, self) }
+    }
+}

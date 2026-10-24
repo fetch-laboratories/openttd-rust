@@ -1382,6 +1382,35 @@ impl Cost<'_> {
         (self.1.money)(self.0)
     }
 }
+/// Command checks that write their result into a `Cost`, whose native slot is live for
+/// the synchronous entry; the checks take plain tile, owner and track values.
+impl Cost<'_> {
+    /// `CheckTileOwnership`.
+    pub(crate) fn tile_ownership(self, command: &CommandServices, tile: u32) {
+        // SAFETY: The impl contract above.
+        unsafe { (command.tile_ownership)(self.0, tile) };
+    }
+    /// `CheckOwnership`.
+    pub(crate) fn ownership(self, command: &CommandServices, owner: u8, tile: u32) {
+        // SAFETY: The impl contract above.
+        unsafe { (command.ownership)(self.0, owner, tile) };
+    }
+    /// `EnsureNoVehicleOnGround`.
+    pub(crate) fn no_vehicle(self, command: &CommandServices, tile: u32) {
+        // SAFETY: The impl contract above.
+        unsafe { command.no_vehicle(self.0, tile) };
+    }
+    /// `EnsureNoTrainOnTrackBits`.
+    pub(crate) fn no_train(self, command: &CommandServices, tile: u32, bits: u8) {
+        // SAFETY: The impl contract above.
+        unsafe { command.no_train(self.0, tile, bits) };
+    }
+    /// `TunnelBridgeIsFree` with no ignored vehicle.
+    pub(crate) fn wormhole_free(self, command: &CommandServices, tile: u32, end: u32) {
+        // SAFETY: The impl contract above; a null `ignore` names no vehicle.
+        unsafe { command.wormhole_free(self.0, tile, end, std::ptr::null()) };
+    }
+}
 
 /// Native station tile kind (uint8).
 #[repr(transparent)]

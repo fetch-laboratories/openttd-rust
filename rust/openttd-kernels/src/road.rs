@@ -1226,8 +1226,7 @@ impl Game<'_> {
             if self.close(v, d.z, x, y, direction, false).is_some() {
                 return true;
             }
-            // SAFETY: Live serialized shell; no owner borrow spans the call.
-            unsafe { maintenance::service_in_depot(v.v, self.vs) };
+            self.vs.maintain(v.v, maintenance::service_in_depot);
             service!(self.vs.leave_unbunching_depot)(v.v);
             self.start_sound(v);
             service!(self.vs.write_speed)(v.v, 0);
@@ -1820,7 +1819,11 @@ impl Game<'_> {
     /// `CheckIfRoadVehNeedsService`; `IsChainInDepot` and `FindClosestRoadDepot` inline.
     fn service(&self, v: Part) {
         let r = service!(self.l.service_read)(v.v);
-        if r.servint == 0 || !unsafe { maintenance::needs_automatic_servicing(v.v, self.vs) } {
+        if r.servint == 0
+            || !self
+                .vs
+                .maintain(v.v, maintenance::needs_automatic_servicing)
+        {
             return;
         }
         let depot_tile = service!(self.l.is_road_depot_tile)(r.tile);
@@ -1843,8 +1846,7 @@ impl Game<'_> {
             }
         }
         if all_in_depot {
-            // SAFETY: Live serialized shell; no owner borrow spans the call.
-            unsafe { maintenance::service_in_depot(v.v, self.vs) };
+            self.vs.maintain(v.v, maintenance::service_in_depot);
             return;
         }
         let penalty = service!(self.l.max_depot_penalty)();
@@ -1875,15 +1877,14 @@ impl Game<'_> {
     }
     /// `RoadVehicle::OnNewEconomyDay`.
     fn economy_day(&self, v: Part) {
-        // SAFETY: Live serialized shell; no owner borrow spans these calls.
-        unsafe { maintenance::economy_age_vehicle(v.v, self.vs) };
+        self.vs.maintain(v.v, maintenance::economy_age_vehicle);
         let day = service!(self.vs.day)(v.v).wrapping_add(1);
         service!(self.vs.write_day)(v.v, day);
         if day & 7 == 0 {
-            unsafe { maintenance::decrease_vehicle_value(v.v, self.vs) };
+            self.vs.maintain(v.v, maintenance::decrease_vehicle_value);
         }
         if v.get(BLOCKED) == 0 {
-            unsafe { maintenance::check_vehicle_breakdown(v.v, self.vs) };
+            self.vs.maintain(v.v, maintenance::check_vehicle_breakdown);
         }
         self.service(v);
         let running = service!(self.vs.check_orders)(v.v);

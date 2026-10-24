@@ -1000,7 +1000,7 @@ impl Trees<'_> {
 /// # Safety
 /// Both pointers address live immutable tables for the whole entry.
 unsafe fn trees<'a>(services: *const TreeServices, shared: *const Services) -> Trees<'a> {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: This function's contract keeps both tables live and immutable for the entry.
     unsafe {
         Trees {
             t: &*services,
@@ -1037,7 +1037,7 @@ pub unsafe extern "C" fn openttd_rust_trees_tile_loop(
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: The contract above supplies the live immutable tables `trees` needs.
     unsafe { trees(services, shared) }.tile_loop(tile, &settings, call);
 }
 
@@ -1050,7 +1050,7 @@ pub unsafe extern "C" fn openttd_rust_trees_tick(
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: As for `openttd_rust_trees_tile_loop`.
     unsafe { trees(services, shared) }.tick(&settings);
 }
 
@@ -1063,7 +1063,7 @@ pub unsafe extern "C" fn openttd_rust_trees_generate(
     services: *const TreeServices,
     shared: *const Services,
 ) -> bool {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: As for `openttd_rust_trees_tile_loop`.
     unsafe { trees(services, shared) }.generate(&settings)
 }
 
@@ -1076,7 +1076,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place_randomly(
     services: *const TreeServices,
     shared: *const Services,
 ) -> bool {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: As for `openttd_rust_trees_tile_loop`.
     unsafe { trees(services, shared) }.place_randomly(&settings)
 }
 
@@ -1092,7 +1092,7 @@ pub unsafe extern "C" fn openttd_rust_trees_place(
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: As for `openttd_rust_trees_tile_loop`.
     let trees = unsafe { trees(services, shared) };
     let p = trees.plant_observation(tile);
     trees.place(tile, p, r, keep_density, climate);
@@ -1110,7 +1110,7 @@ pub unsafe extern "C" fn openttd_rust_trees_plant(
     services: *const TreeServices,
     shared: *const Services,
 ) {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: As for `openttd_rust_trees_tile_loop`.
     let trees = unsafe { trees(services, shared) };
     let p = trees.plant_observation(tile);
     trees.plant(tile, p, tree, count, growth);
@@ -1125,7 +1125,7 @@ pub unsafe extern "C" fn openttd_rust_trees_can_plant(
     allow_desert: bool,
     services: *const TreeServices,
 ) -> bool {
-    // SAFETY: Guaranteed by the caller.
+    // SAFETY: The contract above keeps the table live and immutable for the call.
     (unsafe { &*services }.plant_observation)(tile).suitable(allow_desert)
 }
 
@@ -1146,7 +1146,7 @@ pub unsafe extern "C" fn openttd_rust_trees_cmd_plant(
     commands: &crate::services::CommandServices,
     flags: u16,
 ) -> CommandResult {
-    // SAFETY: Guaranteed by the caller. The existing native nested result slot
+    // SAFETY: The contract above supplies the tables. The existing native nested result slot
     // keeps the complete error returned by a failed clear for status 2.
     unsafe { trees(services, shared) }.plant_command(
         ctx,
