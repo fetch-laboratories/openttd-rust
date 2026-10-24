@@ -43,6 +43,7 @@ mod ground_vehicle;
 mod heightmap;
 mod history;
 mod history_type;
+mod industry_type;
 mod integer;
 mod landscape;
 mod landscape_generation;

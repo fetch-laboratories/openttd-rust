@@ -21,6 +21,9 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/industry_resolver_services.hpp"
+#endif
 #include "safeguards.h"
 
 /**
@@ -34,10 +37,14 @@
  */
 uint32_t GetNearbyIndustryTileInformation(uint8_t parameter, TileIndex tile, IndustryID index, bool signed_offsets, bool grf_version8)
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_nearby_information(parameter, tile.base(), index.base(), signed_offsets, grf_version8, &GetIndustryResolverServices());
+#else
 	if (parameter != 0) tile = GetNearbyTile(parameter, tile, signed_offsets); // only perform if it is required
 	bool is_same_industry = (IsTileType(tile, MP_INDUSTRY) && GetIndustryIndex(tile) == index);
 
 	return GetNearbyTileInformation(tile, grf_version8) | (is_same_industry ? 1 : 0) << 8;
+#endif
 }
 
 /**
@@ -53,14 +60,21 @@ uint32_t GetNearbyIndustryTileInformation(uint8_t parameter, TileIndex tile, Ind
  */
 uint32_t GetRelativePosition(TileIndex tile, TileIndex ind_tile)
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_relative_position(tile.base(), ind_tile.base(), Map::LogX());
+#else
 	uint8_t x = TileX(tile) - TileX(ind_tile);
 	uint8_t y = TileY(tile) - TileY(ind_tile);
 
 	return ((y & 0xF) << 20) | ((x & 0xF) << 16) | (y << 8) | x;
+#endif
 }
 
 /* virtual */ uint32_t IndustryTileScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_tile_variable(&this->context, &this->ro, variable, parameter, &available, &GetIndustryResolverServices());
+#else
 	switch (variable) {
 		/* Construction state of the tile: a value between 0 and 3 */
 		case 0x40: return (IsTileType(this->tile, MP_INDUSTRY)) ? GetIndustryConstructionStage(this->tile) : 0;
@@ -100,22 +114,35 @@ uint32_t GetRelativePosition(TileIndex tile, TileIndex ind_tile)
 
 	available = false;
 	return UINT_MAX;
+#endif
 }
 
 /* virtual */ uint32_t IndustryTileScopeResolver::GetRandomBits() const
 {
+#ifdef WITH_RUST
+	assert(this->context.industry != nullptr && IsValidTile(TileIndex(this->context.tile)));
+	assert(this->context.id == IndustryID::Invalid().base() || IsTileType(TileIndex(this->context.tile), MP_INDUSTRY));
+	return openttd_rust_industry_tile_random(&this->context, &GetIndustryResolverServices());
+#else
 	assert(this->industry != nullptr && IsValidTile(this->tile));
 	assert(this->industry->index == IndustryID::Invalid() || IsTileType(this->tile, MP_INDUSTRY));
 
 	return (this->industry->index != IndustryID::Invalid()) ? GetIndustryRandomBits(this->tile) : 0;
+#endif
 }
 
 /* virtual */ uint32_t IndustryTileScopeResolver::GetRandomTriggers() const
 {
+#ifdef WITH_RUST
+	assert(this->context.industry != nullptr && IsValidTile(TileIndex(this->context.tile)));
+	assert(this->context.id == IndustryID::Invalid().base() || IsTileType(TileIndex(this->context.tile), MP_INDUSTRY));
+	return openttd_rust_industry_tile_triggers(&this->context, &GetIndustryResolverServices());
+#else
 	assert(this->industry != nullptr && IsValidTile(this->tile));
 	assert(this->industry->index == IndustryID::Invalid() || IsTileType(this->tile, MP_INDUSTRY));
 	if (this->industry->index == IndustryID::Invalid()) return 0;
 	return GetIndustryRandomTriggers(this->tile).base();
+#endif
 }
 
 /**
@@ -145,7 +172,11 @@ IndustryTileResolverObject::IndustryTileResolverObject(IndustryGfx gfx, TileInde
 	ind_scope(*this, tile, indus, indus->type),
 	gfx(gfx)
 {
+#ifdef WITH_RUST
+	this->root_spritegroup = openttd_rust_industry_tile_root(&this->indtile_scope.context, gfx, &GetIndustryResolverServices());
+#else
 	this->root_spritegroup = GetIndustryTileSpec(gfx)->grf_prop.GetSpriteGroup(indus->index != IndustryID::Invalid());
+#endif
 }
 
 GrfSpecFeature IndustryTileResolverObject::GetFeature() const
@@ -458,5 +489,16 @@ OpenTTDIndustryAnimationSpec IndustryAnimationSpec(uint32_t tile) noexcept
 void IndustryChangeAnimationFrame(const void *spec, uint32_t tile, uint32_t random, uint32_t parameter) noexcept
 {
 	IndustryAnimationBase::ChangeAnimationFrame(CBID_INDTILE_ANIMATION_TRIGGER, static_cast<const IndustryTileSpec *>(spec), Industry::GetByTile(TileIndex(tile)), TileIndex(tile), random, parameter);
+}
+#endif
+
+#ifdef WITH_RUST
+IndustryTileScopeResolver::IndustryTileScopeResolver(ResolverObject &ro, Industry *industry, TileIndex tile)
+	: ScopeResolver(ro), context{industry == nullptr ? nullptr : industry->production_owner.get(), industry, industry == nullptr ? nullptr : industry->town, tile.base(), 0, industry == nullptr ? uint16_t{0xFFFF} : industry->index.base(), 0}
+{
+}
+ScopeResolver *IndustryTileResolverObject::GetScope(VarSpriteGroupScope scope, uint8_t relative)
+{
+	return openttd_rust_industry_tile_scope(this, &this->indtile_scope, &this->ind_scope, scope, relative, &GetIndustryResolverServices());
 }
 #endif

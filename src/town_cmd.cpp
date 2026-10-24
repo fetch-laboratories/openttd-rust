@@ -2464,7 +2464,7 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.can_allocate = []() noexcept { return Town::CanAllocateItem(); },
 		.close_to_town = [](uint32_t tile, uint distance) noexcept { return IsCloseToTown(TileIndex(tile), distance); },
 		.flat = OpenTTDIsTileFlat,
-		.water_distance = [](uint32_t tile, bool water) noexcept { return GetClosestWaterDistance(TileIndex(tile), water); },
+		.water_distance = RustClosestWaterDistance,
 		.scale_size = OpenTTDMapScaleSize,
 		.scale_land = OpenTTDMapScaleLandProportion,
 		.found_setting = OpenTTDTownFoundingSetting,

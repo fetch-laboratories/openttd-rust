@@ -15,11 +15,28 @@
 #include "../newgrf_house.h"
 #include "../newgrf_spritegroup.h"
 #include "../industrytype.h"
+#include "../newgrf_badge.h"
+#include "../town.h"
 
 /* These synchronous field reads borrow live native objects. Callers retain
  * the original non-null resolver/file preconditions; nothing is cached. */
 inline uint32_t RustGRFFileID(const GRFFile *file) noexcept { return file->grfid; }
 inline uint32_t RustResolverGRFFileID(const ResolverObject *resolver) noexcept { return RustGRFFileID(resolver->grffile); }
+
+inline uint8_t RustGRFFileVersion(const GRFFile *file) noexcept { return file->grf_version; }
+inline uint8_t RustResolverGRFVersion(const ResolverObject *resolver) noexcept { return RustGRFFileVersion(resolver->grffile); }
+inline int32_t RustResolverRegister(const ResolverObject *resolver, uint16_t reg) noexcept { return resolver->GetRegister(reg); }
+inline int32_t RustResolverRegister100(const ResolverObject *resolver) noexcept { return RustResolverRegister(resolver, 0x100); }
+inline uint16_t RustResolverCallback(const ResolverObject *resolver) noexcept { return resolver->callback; }
+inline uint32_t RustNearbyTile(uint8_t parameter, uint32_t tile, bool signed_offsets) noexcept { return GetNearbyTile(parameter, TileIndex(tile), signed_offsets).base(); }
+inline uint32_t RustSignedNearbyTile(uint8_t parameter, uint32_t tile) noexcept { return RustNearbyTile(parameter, tile, true); }
+inline uint32_t RustNearbyTileInformation(uint32_t tile, bool version8) noexcept { return GetNearbyTileInformation(TileIndex(tile), version8); }
+inline uint32_t RustTerrainType(uint32_t tile) noexcept { return GetTerrainType(TileIndex(tile)); }
+inline HouseZone RustTownRadiusGroup(const Town *town, uint32_t tile) noexcept { return GetTownRadiusGroup(town, TileIndex(tile)); }
+template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
+template <typename Spec> inline uint32_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }
+template <typename Spec> inline const SpriteGroup *RustSpecSpriteGroup(const Spec *spec, bool live) noexcept { return spec->grf_prop.GetSpriteGroup(live); }
+template <typename Spec> inline uint32_t RustSpecBadges(const ResolverObject *resolver, const Spec *spec, uint32_t parameter) noexcept { return GetBadgeVariableResult(*resolver->grffile, spec->badges, parameter); }
 
 /* Borrowed GRF files remain native and live for the synchronous conversion.
  * A town shell is live for resolution (or null for a prototype); no Rust

@@ -24,6 +24,9 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/industry_resolver_services.hpp"
+#endif
 #include "safeguards.h"
 
 /* Since the industry IDs defined by the GRF file don't necessarily correlate
@@ -40,10 +43,14 @@ IndustryTileOverrideManager _industile_mngr(NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRY
  */
 IndustryType MapNewGRFIndustryType(IndustryType grf_type, uint32_t grf_id)
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_map_type(grf_type, grf_id, &GetIndustryResolverServices());
+#else
 	if (grf_type == IT_INVALID) return IT_INVALID;
 	if (!HasBit(grf_type, 7)) return GB(grf_type, 0, 7);
 
 	return _industry_mngr.GetID(GB(grf_type, 0, 7), grf_id);
+#endif
 }
 
 /**
@@ -56,6 +63,9 @@ IndustryType MapNewGRFIndustryType(IndustryType grf_type, uint32_t grf_id)
  */
 uint32_t GetIndustryIDAtOffset(TileIndex tile, const Industry *i, uint32_t cur_grfid)
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_id_at_offset(tile.base(), i->index.base(), cur_grfid, &GetIndustryResolverServices());
+#else
 	if (!i->TileBelongsToIndustry(tile)) {
 		/* No industry and/or the tile does not have the same industry as the one we match it with */
 		return 0xFFFF;
@@ -88,8 +98,10 @@ uint32_t GetIndustryIDAtOffset(TileIndex tile, const Industry *i, uint32_t cur_g
 	}
 	/* The tile has no spritegroup */
 	return 0xFF << 8 | indtsp->grf_prop.subst_id; // so just give it the substitute
+#endif
 }
 
+#ifndef WITH_RUST
 static uint32_t GetClosestIndustry(TileIndex tile, IndustryType type, const Industry *current)
 {
 	uint32_t best_dist = UINT32_MAX;
@@ -162,8 +174,13 @@ static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &objec
 	return count << 16 | GB(closest_dist, 0, 16);
 }
 
+#endif
+
 /* virtual */ uint32_t IndustriesScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_variable(&this->context, &this->ro, variable, parameter, &available, _industry_builder.owner.get(), &GetIndustryResolverServices());
+#else
 	if (this->ro.callback == CBID_INDUSTRY_LOCATION) {
 		/* Variables available during construction check. */
 
@@ -425,11 +442,16 @@ static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &objec
 
 	available = false;
 	return UINT_MAX;
+#endif
 }
 
 /* virtual */ uint32_t IndustriesScopeResolver::GetRandomBits() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_resolver_random(&this->context);
+#else
 	return this->industry != nullptr ? this->industry->random : 0;
+#endif
 }
 
 /* virtual */ uint32_t IndustriesScopeResolver::GetRandomTriggers() const
@@ -439,6 +461,17 @@ static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &objec
 
 /* virtual */ void IndustriesScopeResolver::StorePSA(uint pos, int32_t value)
 {
+#ifdef WITH_RUST
+	Industry *industry = this->context.industry;
+	if (industry->index == IndustryID::Invalid()) return;
+	if (industry->psa == nullptr) {
+		if (value == 0) return;
+		const IndustrySpec *indsp = GetIndustrySpec(industry->type);
+		assert(PersistentStorage::CanAllocateItem());
+		industry->psa = new PersistentStorage(indsp->grf_prop.grfid, GSF_INDUSTRIES, industry->location.tile);
+	}
+	industry->psa->StoreValue(pos, value);
+#else
 	if (this->industry->index == IndustryID::Invalid()) return;
 
 	if (this->industry->psa == nullptr) {
@@ -452,6 +485,7 @@ static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &objec
 	}
 
 	this->industry->psa->StoreValue(pos, value);
+#endif
 }
 
 /**
@@ -480,7 +514,11 @@ IndustriesResolverObject::IndustriesResolverObject(TileIndex tile, Industry *ind
 	: ResolverObject(GetGrffile(type), callback, callback_param1, callback_param2),
 	industries_scope(*this, tile, indus, type, random_bits)
 {
+#ifdef WITH_RUST
+	this->root_spritegroup = openttd_rust_industry_resolver_root(&this->industries_scope.context, &GetIndustryResolverServices());
+#else
 	this->root_spritegroup = GetIndustrySpec(type)->grf_prop.GetSpriteGroup(indus != nullptr && indus->index != IndustryID::Invalid());
+#endif
 }
 
 /**
@@ -489,6 +527,9 @@ IndustriesResolverObject::IndustriesResolverObject(TileIndex tile, Industry *ind
  */
 TownScopeResolver *IndustriesResolverObject::GetTown()
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_resolver_town(&this->industries_scope.context, this, &GetIndustryResolverServices());
+#else
 	if (!this->town_scope.has_value()) {
 		Town *t = nullptr;
 		bool readonly = true;
@@ -502,6 +543,7 @@ TownScopeResolver *IndustriesResolverObject::GetTown()
 		this->town_scope.emplace(*this, t, readonly);
 	}
 	return &*this->town_scope;
+#endif
 }
 
 GrfSpecFeature IndustriesResolverObject::GetFeature() const
@@ -511,7 +553,11 @@ GrfSpecFeature IndustriesResolverObject::GetFeature() const
 
 uint32_t IndustriesResolverObject::GetDebugID() const
 {
+#ifdef WITH_RUST
+	return RustSpecLocalID(GetIndustrySpec(this->industries_scope.context.type));
+#else
 	return GetIndustrySpec(this->industries_scope.type)->grf_prop.local_id;
+#endif
 }
 
 /**
@@ -588,6 +634,9 @@ extern "C" OpenTTDIndustryLocationResult openttd_industry_resolve_location(Indus
  */
 uint32_t GetIndustryProbabilityCallback(IndustryType type, IndustryAvailabilityCallType creation_type, uint32_t default_prob)
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_probability(type, creation_type, default_prob, &GetIndustryResolverServices());
+#else
 	const IndustrySpec *indspec = GetIndustrySpec(type);
 
 	if (indspec->callback_mask.Test(IndustryCallbackMask::Probability)) {
@@ -607,6 +656,7 @@ uint32_t GetIndustryProbabilityCallback(IndustryType type, IndustryAvailabilityC
 		}
 	}
 	return default_prob;
+#endif
 }
 
 /**
@@ -729,6 +779,11 @@ void IndustryProductionCallback(Industry *ind, int reason)
  */
 bool IndustryTemporarilyRefusesCargo(Industry *ind, CargoType cargo_type)
 {
+#ifdef WITH_RUST
+	assert(ind->IsCargoAccepted(cargo_type));
+	OpenTTDIndustryResolverContext context{ind->production_owner.get(), ind, ind->town, ind->location.tile.base(), 0, ind->index.base(), ind->type};
+	return openttd_rust_industry_refuses(&context, cargo_type, &GetIndustryResolverServices());
+#else
 	assert(ind->IsCargoAccepted(cargo_type));
 
 	const IndustrySpec *indspec = GetIndustrySpec(ind->type);
@@ -739,4 +794,16 @@ bool IndustryTemporarilyRefusesCargo(Industry *ind, CargoType cargo_type)
 		if (res != CALLBACK_FAILED) return !ConvertBooleanCallback(indspec->grf_prop.grffile, CBID_INDUSTRY_REFUSE_CARGO, res);
 	}
 	return false;
+#endif
 }
+
+#ifdef WITH_RUST
+IndustriesScopeResolver::IndustriesScopeResolver(ResolverObject &ro, TileIndex tile, Industry *industry, IndustryType type, uint32_t random_bits)
+	: ScopeResolver(ro), context{industry == nullptr ? nullptr : industry->production_owner.get(), industry, industry == nullptr ? nullptr : industry->town, tile.base(), random_bits, industry == nullptr ? uint16_t{0xFFFF} : industry->index.base(), type}
+{
+}
+ScopeResolver *IndustriesResolverObject::GetScope(VarSpriteGroupScope scope, uint8_t relative)
+{
+	return openttd_rust_industry_resolver_scope(&this->industries_scope.context, this, &this->industries_scope, scope, relative, &GetIndustryResolverServices());
+}
+#endif

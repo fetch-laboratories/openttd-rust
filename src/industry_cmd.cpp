@@ -70,7 +70,7 @@
 #include "rust/sound_services.h"
 #include "rust/tile_animation_services.h"
 #include "rust/orders_ffi.h"
-static const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
+const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
 const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices();
 static const OpenTTDIndustryCommandServices &GetIndustryCommandServices();
 const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept;
@@ -3831,7 +3831,7 @@ const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices()
 #endif
 
 #ifdef WITH_RUST
-static const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
+const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 {
 	static const OpenTTDIndustryConstructionServices services = {
 		.cargo_lists = [](const OpenTTDIndustrySpecHandle *handle) noexcept -> OpenTTDIndustryCargoLists {

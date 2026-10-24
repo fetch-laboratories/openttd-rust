@@ -28,6 +28,7 @@ use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES};
 use std::ffi::c_void;
 use std::ptr;
+pub mod resolver;
 mod transaction;
 pub use transaction::*;
 mod commands;
@@ -501,11 +502,48 @@ fn accepted_count(owner: *mut Industry) -> usize {
 fn valid(cargo: u8) -> bool {
     crate::cargo_type::is_valid_cargo_type(cargo)
 }
+/// `Industry::GetProduced`, including its invalid-cargo empty slot.
+unsafe fn get_produced(owner: *const Industry, slot: usize) -> *const Produced {
+    static EMPTY: Produced = Produced {
+        cargo: crate::cargo_type::INVALID_CARGO,
+        waiting: 0,
+        rate: 0,
+        history: [Pair {
+            first: 0,
+            second: 0,
+        }; RECORDS],
+    };
+    let produced = unsafe { &(*owner).produced };
+    produced.get(slot).map_or(&raw const EMPTY, ptr::from_ref)
+}
+/// `Industry::GetAccepted`. The shared empty slot is immutable, as in the header.
+unsafe fn get_accepted(owner: *const Industry, slot: usize) -> *const Accepted {
+    struct Empty(Accepted);
+    // SAFETY: immutable static, null history pointer; no mutation is exposed.
+    unsafe impl Sync for Empty {}
+    static EMPTY: Empty = Empty(Accepted {
+        cargo: crate::cargo_type::INVALID_CARGO,
+        waiting: 0,
+        accumulated_waiting: 0,
+        last_accepted: 0,
+        history: ptr::null_mut(),
+    });
+    let accepted = unsafe { &(*owner).accepted };
+    accepted.get(slot).map_or(&raw const EMPTY.0, ptr::from_ref)
+}
+
 fn transported(p: Pair) -> u32 {
-    if p.first == 0 {
-        0
-    } else {
-        (u32::from(p.second) * 256 / u32::from(p.first)).min(255)
+    u32::from(p.pct_transported())
+}
+impl Pair {
+    /// `Industry::ProducedHistory::PctTransported`, shared by production and resolution.
+    fn pct_transported(self) -> u8 {
+        let p = self;
+        if p.first == 0 {
+            0
+        } else {
+            (u32::from(p.second) * 256 / u32::from(p.first)).min(255) as u8
+        }
     }
 }
 fn helper(owner: *mut Industry, s: &Services, scale: bool) {

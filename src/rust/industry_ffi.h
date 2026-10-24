@@ -466,5 +466,6 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept;
 const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcept;
 const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept;
 const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices();
+const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
 #endif
 #endif

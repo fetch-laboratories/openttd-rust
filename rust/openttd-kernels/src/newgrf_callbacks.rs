@@ -15,6 +15,10 @@ pub struct CallbackID(pub u16);
 pub const CBID_VEHICLE_LENGTH: CallbackID = CallbackID(0x11);
 pub const CBID_VEHICLE_32DAY_CALLBACK: CallbackID = CallbackID(0x32);
 
+pub const CBID_INDUSTRY_PROBABILITY: u16 = 0x22;
+pub const CBID_INDUSTRY_LOCATION: u16 = 0x28;
+pub const CBID_INDUSTRY_REFUSE_CARGO: u16 = 0x3d;
+
 /// `CALLBACK_FAILED`.
 pub const CALLBACK_FAILED: u16 = 0xFFFF;
 
