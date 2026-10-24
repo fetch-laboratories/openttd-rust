@@ -72,13 +72,20 @@ def adapter(build, folder, env):
     pbs_reference(folder)
     source = folder / "pbs-source.cpp"
     source.write_text((ROOT / "tools/simulation/pbs-console.cpp").read_text())
-    return console_adapter(build, folder, env, source, "rails", wraps=PBS_WRAPS)
+    return console_adapter(build, folder, env, source, "rails", wraps=pbs_wraps(build))
 
 
 PBS_WRAPS = (
     "_Z27TriggerStationRandomisationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE20StationRandomTriggerh",
     "_Z23TriggerStationAnimationP11BaseStationN10StrongType7TypedefIj12TileIndexTagJNS1_7CompareENS1_7IntegerENS1_10CompatibleIiEENS6_IlEEEEE23StationAnimationTriggerh",
 )
+
+
+def pbs_wraps(build):
+    # Animation moved into Rust; its C++ facade no longer sees owner-to-owner calls.
+    if (build / "openttd-rust").exists():
+        return (PBS_WRAPS[0], "openttd_rust_trigger_station")
+    return PBS_WRAPS
 
 
 def uses_ai(scenario):
