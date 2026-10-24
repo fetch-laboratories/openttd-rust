@@ -223,7 +223,7 @@ static void RoadBoundary()
 	/* Visual eligibility precedes lookup; effect reentry changes the later speed inputs. */
 	static std::unique_ptr<ControllerOrders> road_orders;
 	road_orders = std::make_unique<ControllerOrders>(&t.vehicle);
-	t.vehicle.orders = []() noexcept { return &road_orders->services; };
+	t.vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &road_orders->services; };
 	road_orders->services.vehicle = [](void *shell) noexcept { CHECK(shell == RoadAbiHandle()); return road_orders->vehicle.get(); };
 	road_orders->services.consist = [](void *) noexcept { return &road_orders->consist; };
 	road_orders->services.vehicle_type = [](void *) noexcept { return uint64_t{1}; };

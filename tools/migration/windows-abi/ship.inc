@@ -145,7 +145,7 @@ static void ShipBoundary()
 	ship_orders = &orders;
 	static OpenTTDVehicle *orders_shell;
 	orders_shell = shell;
-	ship_vehicle.orders = []() noexcept { return &ship_orders->services; };
+	ship_vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &ship_orders->services; };
 	ship_vehicle.ship_get = [](uint32_t id) noexcept { CHECK(id == 4); return orders_shell; };
 	orders.services.vehicle = [](void *v) noexcept { CHECK(v == orders_shell); return ship_orders->vehicle.get(); };
 	orders.services.consist = [](void *) noexcept { return &ship_orders->consist; };

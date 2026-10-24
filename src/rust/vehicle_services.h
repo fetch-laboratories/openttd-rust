@@ -29,7 +29,7 @@ OpenTTDShipState *RustVehicleShipOwner(const Vehicle *v) noexcept;
 OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept;
 bool RustTrainIsEngine(const Vehicle *v) noexcept;
 Train *RustTrainGetIfValid(uint32_t id) noexcept;
-/** Strict Ship::Get lookup, preserving source pool/type assertions. */
+/** Strict Ship::Get lookup, preserving source pool assertions. */
 OpenTTDVehicle *RustShipGet(uint32_t id) noexcept;
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;

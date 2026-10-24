@@ -37,7 +37,7 @@ static void AircraftDirectBoundary()
 	vehicle.loading = [](OpenTTDVehicle *, bool, const OpenTTDVehicleVisits *) noexcept { aircraft_probe.order_owner->vehicle->current.type = 3; };
 	vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	p.order_owner = std::make_unique<ControllerOrders>(&vehicle);
-	vehicle.orders = []() noexcept { return &aircraft_probe.order_owner->services; };
+	vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &aircraft_probe.order_owner->services; };
 	p.order_owner->services.vehicle_type = [](void *) noexcept { return uint64_t{3}; };
 	p.order_owner->services.vehicle = [](void *shell) noexcept { CHECK(shell == aircraft_probe.vehicle.handle); return aircraft_probe.order_owner->vehicle.get(); };
 	p.order_owner->services.consist = [](void *) noexcept { return &aircraft_probe.order_owner->consist; };
@@ -129,7 +129,7 @@ static void AircraftPhaseBoundary()
 	v.maintenance = &_vehicle_maintenance_probe;
 	_vehicle_maintenance_probe.breakdown_probe = [](OpenTTDVehicle *) noexcept { return OpenTTDVehicleMaintenanceBreakdownProbe{.counter = 0, .status = 0}; };
 	p.order_owner = std::make_unique<ControllerOrders>(&v);
-	v.orders = []() noexcept { return &aircraft_probe.order_owner->services; };
+	v.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &aircraft_probe.order_owner->services; };
 	p.order_owner->services.vehicle_type = [](void *) noexcept { return uint64_t{3}; };
 	p.order_owner->services.vehicle = [](void *shell) noexcept { CHECK(shell == aircraft_probe.vehicle.handle); return aircraft_probe.order_owner->vehicle.get(); };
 	p.order_owner->services.consist = [](void *) noexcept { return &aircraft_probe.order_owner->consist; };
