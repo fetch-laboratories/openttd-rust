@@ -561,13 +561,14 @@ static void RoadResolverRandom(BaseStation *st, TileIndex tile, bool waypoint)
 static void StationRoadResolver(TileIndex tile, bool waypoint, DoCommandFlags test, DoCommandFlags exec)
 {
 	auto &f = RoadResolverSpecs(waypoint);
-	if (waypoint) for (uint i = 0; i < 2; i++) StationNeed(Command<CMD_BUILD_ROAD>::Do(exec, tile + TileDiffXY(i, 0), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()).Succeeded(), __LINE__);
-	auto build = [&](DoCommandFlags flags, uint16_t spec, uint8_t width, StationID join) { return waypoint ? Command<CMD_BUILD_ROAD_WAYPOINT>::Do(flags, tile, AXIS_X, width, 1, f.cls, spec, join, true) : Command<CMD_BUILD_ROAD_STOP>::Do(flags, tile, width, 1, RoadStopType::Bus, true, DIAGDIR_NE, ROADTYPE_ROAD, f.cls, spec, join, true); };
+	TileIndexDiff step = waypoint ? TileDiffXY(0, 1) : TileDiffXY(1, 0);
+	if (waypoint) for (uint i = 0; i < 2; i++) StationNeed(Command<CMD_BUILD_ROAD>::Do(exec, tile + i * step, ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()).Succeeded(), __LINE__);
+	auto build = [&](DoCommandFlags flags, uint16_t spec, uint8_t width, StationID join) { return waypoint ? Command<CMD_BUILD_ROAD_WAYPOINT>::Do(flags, tile, AXIS_X, 1, width, f.cls, spec, join, true) : Command<CMD_BUILD_ROAD_STOP>::Do(flags, tile, width, 1, RoadStopType::Bus, true, DIAGDIR_NE, ROADTYPE_ROAD, f.cls, spec, join, true); };
 	auto remove = [&](TileIndex t) { return waypoint ? Command<CMD_REMOVE_FROM_ROAD_WAYPOINT>::Do(exec, t, t) : Command<CMD_REMOVE_ROAD_STOP>::Do(exec, t, 1, 1, RoadStopType::Bus, false); };
 	StationNeed(build(test, f.indices[0], 2, NEW_STATION).Succeeded() && !IsAnyRoadStopTile(tile), __LINE__);
 	StationNeed(build(exec, f.indices[0], 2, NEW_STATION).Succeeded(), __LINE__);
 	BaseStation *st = BaseStation::GetByTile(tile); StationID id = st->index; st->name = waypoint ? "Owner410 waypoint" : "Owner410 stop";
-	StationNeed(st->roadstop_speclist.size() == 2 && GetCustomRoadStopSpecIndex(tile) == 1 && GetCustomRoadStopSpecIndex(tile + TileDiffXY(1, 0)) == 1, __LINE__);
+	StationNeed(st->roadstop_speclist.size() == 2 && GetCustomRoadStopSpecIndex(tile) == 1 && GetCustomRoadStopSpecIndex(tile + step) == 1, __LINE__);
 	RoadResolverState("assigned", st); RoadResolverQueries(st, tile, waypoint); RoadResolverRandom(st, tile, waypoint);
 	StationNeed(remove(tile).Succeeded() && st->roadstop_speclist[1].spec == &f.specs[0], __LINE__);
 	StationNeed(build(test, f.indices[1], 1, id).Succeeded() && st->roadstop_speclist.size() == 2, __LINE__);
@@ -582,7 +583,7 @@ static void StationRoadResolver(TileIndex tile, bool waypoint, DoCommandFlags te
 	StationNeed(!AllocateSpecToRoadStop(&f.specs[3], st).has_value() && build(test, f.indices[3], 1, id).Failed() && !IsAnyRoadStopTile(tile), __LINE__);
 	for (uint8_t index = 62; index > 1; index--) DeallocateSpecFromRoadStop(st, index);
 	StationNeed(st->roadstop_speclist.size() == 2 && AllocateSpecToRoadStop(nullptr, st) == 0 && AllocateSpecToRoadStop(&f.specs[0], nullptr) == 1, __LINE__);
-	StationNeed(remove(tile + TileDiffXY(1, 0)).Succeeded() && st->roadstop_speclist.empty() && st->cached_roadstop_anim_triggers.None() && st->cached_roadstop_cargo_triggers == 0, __LINE__);
+	StationNeed(remove(tile + step).Succeeded() && st->roadstop_speclist.empty() && st->cached_roadstop_anim_triggers.None() && st->cached_roadstop_cargo_triggers == 0, __LINE__);
 	StationNeed(build(exec, f.indices[0], 2, id).Succeeded(), __LINE__);
 	RoadResolverState("lifecycle", st);
 	fmt::print(stderr, "STCMD resolver-lifecycle {} test execute reuse full partial clear shrink\n", waypoint);
@@ -1255,7 +1256,7 @@ def check_commands(scenario, run, mode, role, result):
                 raise RuntimeError("road-stop owner evidence missing: " + marker)
         if not reload and sum(
             line.startswith("STCMD resolver-mask ")
-            for line in run["log"].splitlines()
+            for line in run["log"]
         ) != (9 if waypoint else 15):
             raise RuntimeError("road-stop owner reseed matrix incomplete")
     if scenario["station_commands"] != "linkgraph":
