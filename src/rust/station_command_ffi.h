@@ -26,6 +26,7 @@ struct Industry;
 struct OpenTTDTileOwnerContext;
 struct StationSpec;
 struct RoadStopSpec;
+struct OpenTTDRoadStopResolverServices;
 struct BridgeableTileInfo;
 struct OpenTTDStationArea { uint32_t tile; uint16_t w, h; };
 struct OpenTTDStationBridgeInfo { const BridgeableTileInfo *data; size_t size; };
@@ -74,7 +75,6 @@ struct OpenTTDStationCommandServices {
 	uint32_t (*southern_bridge_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(southern_bridge_end);
 	OpenTTDStationArea (*train_area)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(train_area);
 	const StationSpec *(*rail_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec);
-	const RoadStopSpec *(*road_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_spec);
 	const OpenTTDStationLinks *links;
 	OpenTTDStationBounds (*bounds)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(bounds);
 	uint32_t (*location)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
@@ -144,10 +144,7 @@ struct OpenTTDStationCommandServices {
 	OpenTTDRoadStationSpecCost (*road_spec_build_cost)(const RoadStopSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_build_cost);
 	OpenTTDRoadStationSpecCost (*road_spec_clear_cost)(const RoadStopSpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_clear_cost);
 	bool (*stops_available)(size_t) noexcept OPENTTD_SERVICE_DEFAULT(stops_available);
-	OpenTTDStationSpecIndex (*allocate_road_spec)(const RoadStopSpec *, BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(allocate_road_spec);
-	void (*assign_road_spec)(const RoadStopSpec *, BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assign_road_spec);
-	void (*deallocate_road_spec)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(deallocate_road_spec);
-	uint16_t (*road_callback)(const RoadStopSpec *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_callback);
+	const OpenTTDRoadStopResolverServices *roadstop_resolver;
 	bool (*road_boolean)(const RoadStopSpec *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(road_boolean);
 	void (*road_triggers)(BaseStation *, const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(road_triggers);
 	RoadStop *(*new_stop)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(new_stop);

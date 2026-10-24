@@ -467,7 +467,7 @@ uint Aircraft::Crash(bool flooded) { return openttd_rust_aircraft_crash(&_aircra
 void AircraftNextAirportPos_and_Order(Aircraft *v) { openttd_rust_aircraft_next_airport(&_aircraft_leaves, RustAircraftVehicle(v)); }
 void AircraftLeaveHangar(Aircraft *v, Direction exit_dir) { openttd_rust_aircraft_leave_hangar(&_aircraft_leaves, RustAircraftVehicle(v), exit_dir); }
 TileIndex Aircraft::GetOrderStationLocation(StationID) { openttd_rust_aircraft_order_location(&_aircraft_leaves, RustAircraftVehicle(this)); return TileIndex{}; }
-void UpdateAirplanesOnNewStation(const Station *st) { openttd_rust_aircraft_replacement(&_aircraft_leaves, st->index.base()); }
+void UpdateAirplanesOnNewStation(const Station *st) { openttd_rust_aircraft_replacement(&_aircraft_leaves, RustBaseStationID(st)); }
 ClosestDepot Aircraft::FindClosestDepot()
 {
 	StationID station{openttd_rust_aircraft_closest_depot(&_aircraft_leaves, RustAircraftVehicle(this))};
