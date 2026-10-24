@@ -332,6 +332,8 @@ def check(scenario, run, mode, role, result):
             [
                 "heightmap_ccw",
                 "heightmap_cw",
+                "fix_slopes",
+                "watering",
                 "flat",
                 "load_failure",
                 "tgp_abort",
@@ -343,6 +345,11 @@ def check(scenario, run, mode, role, result):
             ],
         )
         if counts is not None:
+            # One initial world + eight direct loads + two slope passes for
+            # each complete heightmap world + FlatEmptyWorld. In particular,
+            # a no-op second slope pass must not hide an early continuation exit.
+            if counts["fix_slopes"] < 18 or counts["watering"] < 11:
+                raise RuntimeError("missing downstream heightmap slope/watering passes")
             result.setdefault("generation_witnesses", {})[mode] = counts
         return
 
