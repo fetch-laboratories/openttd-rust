@@ -40,7 +40,6 @@ struct OpenTTDRailCommandServices {
 	const OpenTTDCommandServices *command;
 	const OpenTTDSignalServices *signal;
 	OpenTTDRailCommandStrings strings;
-	bool (*rail_type_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_type_valid);
 	bool (*compatible_rail)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible_rail);
 	bool (*powered_rail)(uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(powered_rail);
 	bool (*train_powered)(Train *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(train_powered);

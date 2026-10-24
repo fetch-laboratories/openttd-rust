@@ -15,6 +15,8 @@ from .core import (
 
 ADAPTER = ROOT / "tools/simulation/engines-console.cpp"
 REQUIRED = {
+    "types": (),
+    "types-reload": (),
     "monitors": (),
     "commands": ("rename", "visibility", "control"),
     "preview": ("offer", "accept", "join", "penalty"),
@@ -24,6 +26,40 @@ REQUIRED = {
     "subsidies-reload": (),
 }
 EXPECTED = {
+    "types": (
+        "types-case afterload-masks true",
+        "types-case fixedpoint true",
+        "types-case excluded-50 true",
+        "types-case excluded-52 true",
+        "types-case excluded-53 true",
+        "types-case excluded-54 true",
+        "types-case excluded-55 true",
+        "types-case excluded-56 true",
+        "types-case excluded-57 true",
+        "types-case date-zero true",
+        "types-case seeded-cycle true",
+        "types-case inclusive-day true",
+        "types-case max-date true",
+        "types-case before-release true",
+        "types-case company-bits true",
+        "types-case all-multirail true",
+        "types-case preview-owner true",
+        "types-case one-year true",
+        "types-case wagon-only true",
+        "types-case climate true",
+        "types-case lifecycle-enable true",
+        "types-case lifecycle-disable true",
+        "types-case monthly-publication true",
+        "types-case daily-publication true",
+        "types-case hidden-and-masks true",
+        "types-case company-hidden true",
+        "types-case town true",
+        "types-case deity true",
+        "types-case editor true",
+        "types-case generation true",
+        "types-case restoration true",
+    ),
+    "types-reload": ("types-case afterload-masks true", "types-case restoration true"),
     "monitors": ("controls true",),
     "commands": (
         "company-bits true",
@@ -65,22 +101,39 @@ def scenarios(soak):
             "short_checkpoint": True,
             "ticks": 74 if soak else 1,
         }
-        for mode in ("commands", "preview", "reliability", "reload", "monitors")
+        for mode in (
+            "commands",
+            "preview",
+            "reliability",
+            "reload",
+            "monitors",
+            "types",
+            "types-reload",
+        )
     ]
 
 
 def game_environment(scenario):
-    return (
-        WITNESS_ENVIRONMENT
+    env = (
+        dict(WITNESS_ENVIRONMENT)
         if scenario.get("engines") and scenario.get("witnesses")
         else {}
     )
+    if scenario.get("engines", "").startswith("types"):
+        env["OPENTTD_ENGINE_TYPES"] = "1"
+    return env
 
 
 def adapter(build, folder, env):
     economy.subsidy_reference(folder)
     return console_adapter(
-        build, folder, env, ADAPTER, "engines", replace_objects=("saveload.cpp.o",)
+        build,
+        folder,
+        env,
+        ADAPTER,
+        "engines",
+        wraps=("_Z18CopyTempEngineDatav",),
+        replace_objects=("saveload.cpp.o",),
     )
 
 
@@ -94,14 +147,17 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     executables = prepared_console("engines", adapter, binaries, builds, folder, env)
     if scenario["engines"] == "monitors":
         economy.monitor_load_probes(scenario, executables, builds, folder, timeout, env)
-    if scenario["engines"] not in ("reload", "subsidies-reload"):
+    if scenario["engines"] not in ("reload", "subsidies-reload", "types-reload"):
         return dict(
             scenario,
             executables=executables,
             console=["engines_scenario " + scenario["engines"], "unpause"],
         )
+    types = scenario["engines"] == "types-reload"
     subsidy = scenario["engines"] == "subsidies-reload"
     variant, prefix = ("subsidies", "SUBSIDY ") if subsidy else ("commands", "ENGINE ")
+    if types:
+        variant, prefix = "types", "ENGINE "
     saves, captures = {}, {}
     for role in ("reference", "candidate"):
         save = folder / role / "engines.sav"
@@ -119,11 +175,18 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             env,
             False,
         )
+        required = (
+            EXPECTED["types"]
+            if types
+            else ("transfer true true",)
+            if subsidy
+            else ("hidden true",)
+        )
         if (
             run["exit"]
             or not save.is_file()
-            or ("SUBSIDY transfer true true" if subsidy else "ENGINE hidden true")
-            not in run["log"]
+            or any(prefix + marker not in run["log"] for marker in required)
+            or (types and not type_markers(run["log"], capture=True))
         ):
             raise RuntimeError("engine reload capture failed")
         saves[role] = save
@@ -144,7 +207,14 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         executables=executables,
         role_inputs={role: {"save": str(save)} for role, save in saves.items()},
         console=[
-            "engines_scenario " + ("subsidies-inspect" if subsidy else "inspect"),
+            "engines_scenario "
+            + (
+                "types-inspect"
+                if types
+                else "subsidies-inspect"
+                if subsidy
+                else "inspect"
+            ),
             "unpause",
         ],
     )
@@ -160,6 +230,10 @@ def check(scenario, run, mode, role, result):
     if "engines" not in scenario or run["exit"] or not run["snapshots"]:
         return
     variant = scenario["engines"]
+    if variant.startswith("types") and not type_markers(
+        run["log"], capture=variant == "types"
+    ):
+        raise RuntimeError("type loadphase/mask/command/restoration markers missing")
     component = (
         "monitor"
         if variant == "monitors"
@@ -181,3 +255,29 @@ def check(scenario, run, mode, role, result):
         raise RuntimeError("engine command/branch results differ")
     if counts := branch_witnesses(scenario, run, role, component, REQUIRED[variant]):
         result[mode + "_" + component + "_branches"] = counts
+
+
+def type_markers(lines, capture):
+    required = ["ENGINE types-loadphase true", "ENGINE types-complete true"]
+    if not all(marker in lines for marker in required):
+        return False
+    if not any(line.startswith("ENGINE types-masks loaded ") for line in lines):
+        return False
+    if capture:
+        for label in (
+            "rail-before",
+            "road-before",
+            "tram-before",
+            "rail-after",
+            "road-after",
+            "tram-after",
+            "hidden-company",
+            "hidden-town",
+        ):
+            for execute in ("false", "true"):
+                if not any(
+                    line.startswith(f"ENGINE types-command {label} {execute} ")
+                    for line in lines
+                ):
+                    return False
+    return True

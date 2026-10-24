@@ -63,6 +63,7 @@
 #include "rust/services_industry.h"
 #include "rust/presentation_services.h"
 #include "rust/services_rail.h"
+#include "rust/type_availability_services.h"
 #endif
 #include "town_kdtree.h"
 #include "townname_func.h"
@@ -1012,7 +1013,7 @@ static uint16_t RustTownHouseCallbacks(const HouseSpec *spec) noexcept { return 
 static OpenTTDTownRoadChoice RustTownRoadInfo(uint8_t id) noexcept
 {
 	const auto *rti = GetRoadTypeInfo(static_cast<RoadType>(id));
-	return {.introduction_date = rti->introduction_date.base(), .max_speed = rti->max_speed, .town_build = rti->flags.Test(RoadTypeFlag::TownBuild)};
+	return {.introduction_date = RustRoadTypeIntroductionDate(rti), .max_speed = rti->max_speed, .town_build = RustRoadTypeTownBuild(rti)};
 }
 static void RustTown_dirty_town(uint32_t town) noexcept
 {
@@ -1070,7 +1071,7 @@ uint32_t OpenTTDNextTownID(uint32_t from) noexcept
 }
 static uint64_t RustTown_road_mask() noexcept
 {
-	return GetMaskForRoadTramType(RTT_ROAD).base();
+	return RustMaskForRoadTramType(RTT_ROAD);
 }
 static bool RustTown_build_bridge(uint32_t tile, uint32_t end, uint32_t bridge, uint32_t road_type, uint32_t execute) noexcept
 {

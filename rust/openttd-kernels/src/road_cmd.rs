@@ -828,7 +828,11 @@ impl<'a> Ctx<'a> {
                 }
             }
         }
-        if pieces == 0 || pieces & !15 != 0 || toggle >= 4 || !(self.shared.road_type_valid)(rt) {
+        if pieces == 0
+            || pieces & !15 != 0
+            || toggle >= 4
+            || !crate::road::val_param_road_type(self.shared, rt)
+        {
             cost.error(INVALID_STRING_ID);
             return;
         }
@@ -1188,7 +1192,7 @@ impl<'a> Ctx<'a> {
     }
     fn valid_drag(&self, start: u32, end: u32, rt: u8, axis: u8) -> bool {
         start < self.size()
-            && (self.shared.road_type_valid)(rt)
+            && crate::road::val_param_road_type(self.shared, rt)
             && axis < 2
             && (if axis == 0 {
                 self.map.tile_y(start) == self.map.tile_y(end)
@@ -1393,7 +1397,7 @@ impl<'a> Ctx<'a> {
     }
     fn build_depot(&self, cost: Cost<'_>, ret: Cost<'_>, flags: u16, tile: u32, rt: u8, dir: u8) {
         w::hit(w::ROAD_COMMANDS_DEPOT_BUILD);
-        if !(self.shared.road_type_valid)(rt) || dir >= 4 {
+        if !crate::road::val_param_road_type(self.shared, rt) || dir >= 4 {
             cost.error(INVALID_STRING_ID);
             return;
         }
@@ -1745,7 +1749,7 @@ impl<'a> Ctx<'a> {
         diagonal: bool,
     ) {
         w::hit(w::ROAD_COMMANDS_CONVERT);
-        if !(self.shared.road_type_valid)(to) || start >= self.size() {
+        if !crate::road::val_param_road_type(self.shared, to) || start >= self.size() {
             cost.error(INVALID_STRING_ID);
             return;
         }

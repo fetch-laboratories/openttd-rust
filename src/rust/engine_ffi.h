@@ -34,9 +34,11 @@ struct OpenTTDEngineVehicleCargo { const OpenTTDEngine *engine; uint8_t cargo; }
  * No owner borrow survives any callback, including native type availability,
  * articulated/NewGRF reads, windows, and recursively joined variants.
  * Pool traversal preserves IDs/order; prototypes arrive by shell, never ID. */
+struct OpenTTDTypeAvailabilityServices;
 struct OpenTTDEngineServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDRandomServices *rng;
+	const OpenTTDTypeAvailabilityServices *types;
 	OpenTTDEngineRef (*next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(next);
 	OpenTTDEngineRef (*resolve)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve);
 	OpenTTDEngineSyncVariant (*sync_variant)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(sync_variant);
@@ -74,9 +76,6 @@ struct OpenTTDEngineServices {
 	OpenTTDEngineVehicleCargo (*vehicle_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);
 	bool (*can_carry)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(can_carry);
 	uint64_t (*refit_mask)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_mask);
-	void (*update_railtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(update_railtypes);
-	void (*update_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(update_roadtypes);
-	void (*date_company_types)(uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(date_company_types);
 	bool (*company_valid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_valid);
 	uint64_t (*compatible_railtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(compatible_railtypes);
 	uint64_t (*powered_roadtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(powered_roadtypes);
@@ -84,10 +83,6 @@ struct OpenTTDEngineServices {
 	uint64_t (*company_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_roadtypes);
 	uint (*company_engine_count)(uint8_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(company_engine_count);
 	void (*block_preview)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(block_preview);
-	uint64_t (*introduces_railtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(introduces_railtypes);
-	uint64_t (*introduces_roadtypes)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(introduces_roadtypes);
-	void (*set_railtypes)(uint8_t, uint64_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_railtypes);
-	void (*set_roadtypes)(uint8_t, uint64_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_roadtypes);
 	uint8_t (*current_company)() noexcept OPENTTD_SERVICE_DEFAULT(current_company);
 	uint8_t (*local_company)() noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	void (*toolbar_enable)(VehicleType) noexcept OPENTTD_SERVICE_DEFAULT(toolbar_enable);
