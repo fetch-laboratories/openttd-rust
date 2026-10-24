@@ -369,6 +369,15 @@ macro_rules! direct_services {
         }
     )*};
 }
+fn can_use_station(v: Vehicle, st: *const Station) -> i64 {
+    i64::from(unsafe {
+        crate::vehicle_func::can_vehicle_use_station(
+            v.handle,
+            st.cast(),
+            crate::newgrf_airport::runtime(),
+        )
+    })
+}
 impl<const COUNTED: bool> World<'_, COUNTED> {
     /// Count the actual boundary return type before integer promotion. The only
     /// production enable call is `WitnessWriter`'s process-start constructor;
@@ -718,15 +727,6 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             self.airport_spec(st),
         ))
     }
-    fn can_use_station(v: Vehicle, st: *const Station) -> i64 {
-        i64::from(unsafe {
-            crate::vehicle_func::can_vehicle_use_station(
-                v.handle,
-                st.cast(),
-                crate::newgrf_airport::runtime(),
-            )
-        })
-    }
     fn hangar_candidate(&self, st: *const Station, vehicle_owner: u8) -> HangarCandidate {
         let owner = self.station_owner(st) as u8;
         let runtime = crate::newgrf_airport::runtime();
@@ -745,14 +745,14 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             crate::newgrf_airport::station_by_id(station as u16, crate::newgrf_airport::runtime())
                 .cast();
         let result = unsafe { (self.leaves.hangar_height)(st, self.airport_spec(st)) };
-        self.service_witness("hangar_height", std::mem::size_of_val(&result));
+        Self::service_witness("hangar_height", std::mem::size_of_val(&result));
         i64::from(result)
     }
     fn hangar_exit(&self, v: Vehicle) -> i64 {
         let tile = (self.vs.tile)(v.base());
         let st = self.station(u32::from((self.ss.station_index)(tile)));
         let result = unsafe { (self.leaves.hangar_exit)(st, tile, self.airport_spec(st)) };
-        self.service_witness("hangar_exit", std::mem::size_of_val(&result));
+        Self::service_witness("hangar_exit", std::mem::size_of_val(&result));
         i64::from(result)
     }
     fn valid_airport(&self, id: Vehicle) -> bool {
@@ -762,7 +762,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     fn airport(&self, id: Vehicle) -> *const c_void {
         let s = self.target_station(id);
         if s.is_null() {
-            World::dummy_airport()
+            Self::dummy_airport()
         } else {
             self.airport_fta(s)
         }
@@ -1063,7 +1063,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let ap = if valid {
             self.airport_fta(s)
         } else {
-            World::dummy_airport()
+            Self::dummy_airport()
         };
         let rotation = if valid { self.rotation(s) } else { 0 };
         let pos = self.entry_point(id, ap, rotation, tile);
@@ -1096,7 +1096,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             has_airport = geometry.airport;
         }
         let ap = if tile == INVALID_TILE {
-            World::dummy_airport()
+            Self::dummy_airport()
         } else {
             self.airport_fta(s)
         };
@@ -1786,7 +1786,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             }
             FLYING => {
                 let s = airport.station;
-                if World::can_use_station(id, s) != 0
+                if can_use_station(id, s) != 0
                     && (self.station_owner(s) == OWNER_NONE
                         || self.station_owner(s) == self.owner(id))
                     && airport.read(self) & CLOSED == 0
@@ -1922,7 +1922,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
         let station = self.target_station(id);
         let ap = if station.is_null() {
-            World::dummy_airport()
+            Self::dummy_airport()
         } else {
             self.airport_fta(station)
         };
@@ -2037,7 +2037,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
         let station = self.order_destination(id) as u32;
         let st = self.station(station);
-        if self.has_hangar(st) != 0 && World::can_use_station(id, st) != 0 {
+        if self.has_hangar(st) != 0 && can_use_station(id, st) != 0 {
             self.service_order(id, i64::from(station));
             self.dirty_start_stop(id);
         } else if self.order_type(id) == 2 {
@@ -2164,7 +2164,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             if self.order_type(cursor) == 2
                 && self.part_of_orders(cursor) == 0
                 && self.order_destination(cursor) == i64::from(station)
-                && (self.has_hangar(st) == 0 || World::can_use_station(cursor, st) == 0)
+                && (self.has_hangar(st) == 0 || can_use_station(cursor, st) == 0)
             {
                 self.dummy_order(cursor);
                 self.dirty_start_stop(cursor);
@@ -2479,7 +2479,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_closest_depot(
             let st = w.target_station(id);
             if !st.is_null()
                 && w.airport_tile(st) as u32 != INVALID_TILE
-                && w.can_use_station(id, st) != 0
+                && can_use_station(id, st) != 0
                 && w.has_hangar(st) != 0
             {
                 w.target(id)
