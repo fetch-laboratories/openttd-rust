@@ -242,11 +242,15 @@ AirportTileResolverObject::AirportTileResolverObject(const AirportTileSpec *ats,
 		CallbackID callback, uint32_t callback_param1, uint32_t callback_param2)
 	: ResolverObject(ats->grf_prop.grffile, callback, callback_param1, callback_param2),
 		tiles_scope(*this, ats, tile, st),
+#ifdef WITH_RUST
+		airport_scope(*this, tile, st, nullptr, 0)
+#else
 		airport_scope(*this, tile, st, st != nullptr ? AirportSpec::Get(st->airport.type) : nullptr, st != nullptr ? st->airport.layout : 0)
+#endif
 {
 #ifdef WITH_RUST
 	/* The parent scope initializes last; publish the tile invocation root. */
-	this->root_spritegroup = openttd_rust_airport_root(&this->tiles_scope.context, &GetAirportResolverServices());
+	this->root_spritegroup = openttd_rust_airport_tile_init(&this->tiles_scope.context, &this->airport_scope.context, &GetAirportResolverServices());
 #else
 	this->root_spritegroup = ats->grf_prop.GetSpriteGroup(st != nullptr);
 #endif

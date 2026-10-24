@@ -70,6 +70,7 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.manager_grfid = [](uint8_t type) noexcept { return _airport_mngr.GetGRFID(type); },
 		.substitute = [](uint8_t type) noexcept { return _airport_mngr.GetSubstituteID(type); },
 		.never_expire = RustNeverExpireAirports,
+		.station_layout = RustStationAirportLayout,
 		.random = RustStationRandomBits,
 		.build_date = RustStationBuildDate,
 		.root = RustSpecSpriteGroup<AirportSpec>,

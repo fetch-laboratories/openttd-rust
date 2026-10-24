@@ -43,6 +43,7 @@ struct OpenTTDAirportResolverServices {
 	uint32_t (*manager_grfid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(manager_grfid);
 	uint16_t (*substitute)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(substitute);
 	bool (*never_expire)() noexcept OPENTTD_SERVICE_DEFAULT(never_expire);
+	uint8_t (*station_layout)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_layout);
 	uint16_t (*random)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(random);
 	int32_t (*build_date)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(build_date);
 	const SpriteGroup *(*root)(const AirportSpec *, bool) noexcept OPENTTD_SERVICE_DEFAULT(root);
@@ -81,6 +82,7 @@ const AirportSpec *openttd_rust_airport_spec(uint8_t, const OpenTTDAirportResolv
 bool openttd_rust_airport_available(const AirportSpec *, const OpenTTDAirportResolverServices *);
 bool openttd_rust_airport_in_bounds(const AirportSpec *, uint8_t, uint32_t, const OpenTTDAirportResolverServices *);
 void openttd_rust_airport_init(OpenTTDAirportResolverState *, Station *, const AirportSpec *, const AirportTileSpec *, uint32_t, uint8_t, const OpenTTDAirportResolverServices *);
+const SpriteGroup *openttd_rust_airport_tile_init(const OpenTTDAirportResolverState *, OpenTTDAirportResolverState *, const OpenTTDAirportResolverServices *);
 const SpriteGroup *openttd_rust_airport_root(const OpenTTDAirportResolverState *, const OpenTTDAirportResolverServices *);
 TownScopeResolver *openttd_rust_airport_town(OpenTTDAirportResolverState *, AirportResolverObject *, const OpenTTDAirportResolverServices *);
 ScopeResolver *openttd_rust_airport_scope(OpenTTDAirportResolverState *, ResolverObject *, ScopeResolver *, ScopeResolver *, uint8_t, uint8_t, const OpenTTDAirportResolverServices *);

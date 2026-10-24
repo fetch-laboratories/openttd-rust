@@ -76,6 +76,7 @@ pub struct Services {
     manager_grfid: extern "C" fn(u8) -> u32,
     substitute: extern "C" fn(u8) -> u16,
     never_expire: extern "C" fn() -> bool,
+    station_layout: extern "C" fn(*const BaseStation) -> u8,
     random: extern "C" fn(*mut BaseStation) -> u16,
     build_date: extern "C" fn(*mut BaseStation) -> i32,
     root: extern "C" fn(*const AirportSpec, bool) -> *const c_void,
@@ -257,6 +258,28 @@ pub unsafe extern "C" fn openttd_rust_airport_init(
             town: ptr::null_mut(),
         });
     }
+}
+/// Finish the tile invocation's parent selection in the Rust owner, before
+/// returning to the native common evaluator frame. No spec borrow crosses it.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_tile_init(
+    tile: *const State,
+    parent: *mut State,
+    services: *const Services,
+) -> *const c_void {
+    let tile = unsafe { *tile };
+    let s = unsafe { &*services };
+    let (spec, layout) = if tile.station.is_null() {
+        (ptr::null(), 0)
+    } else {
+        let spec = get((s.commands().airport_type)(tile.station), s);
+        (spec, (s.station_layout)(tile.station))
+    };
+    unsafe {
+        (&raw mut (*parent).spec).write(spec);
+        (&raw mut (*parent).layout).write(layout);
+    }
+    (s.tile_root)(tile.tile_spec, !tile.station.is_null())
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_airport_root(
@@ -521,7 +544,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, primary_road_stop, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, base_spec, enabled, min_year, max_year, override_id, manager_grfid, substitute, never_expire, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, primary_road_stop, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, base_spec, enabled, min_year, max_year, override_id, manager_grfid, substitute, never_expire, station_layout, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
 }
 
 #[unsafe(no_mangle)]
