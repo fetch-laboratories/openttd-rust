@@ -39,23 +39,11 @@ static void TrainVehiclePair(OpenTTDTrainHandle id, OpenTTDTrainHandle other) no
 	Operation(static_cast<Train *>(id.shell), static_cast<Train *>(other.shell));
 }
 
-/** Services of the train table that the reservation table also binds; its slots take a leading `void *` context. */
-template <typename... Context>
-struct TrainCommonServices {
-	template <typename Result, auto Member>
-	static Result SharedMap(Context..., OpenTTDTrainHandle, uint32_t tile) noexcept
-	{
-		return (GetRustSharedServices().*Member)(tile);
-	}
-	static uint64_t Backoff(Context..., OpenTTDTrainHandle) noexcept
-	{
-		return _settings_game.pf.path_backoff_interval;
-	}
-	static uint64_t ReservePaths(Context..., OpenTTDTrainHandle) noexcept
-	{
-		return _settings_game.pf.reserve_paths;
-	}
-};
+template <typename Result, auto Member>
+static Result TrainSharedMap(OpenTTDTrainHandle, uint32_t tile) noexcept
+{
+	return (GetRustSharedServices().*Member)(tile);
+}
 
 static void TrainWriteTile(OpenTTDTrainHandle id, uint32_t value) noexcept
 {Train *v=static_cast<Train *>(id.shell); v->tile = TileIndex(static_cast<uint32_t>(value));}
@@ -128,6 +116,10 @@ static void TrainArrivalNews(OpenTTDTrainHandle id, uint16_t a) noexcept
 static uint64_t TrainAxisDiag(OpenTTDTrainHandle, uint8_t a) noexcept
 {
 	return AxisToDiagDir(static_cast<Axis>(a));
+}
+static uint64_t TrainBackoff(OpenTTDTrainHandle) noexcept
+{
+	return _settings_game.pf.path_backoff_interval;
 }
 static void TrainBaseViewport(OpenTTDTrainHandle id, uint8_t a) noexcept
 {
@@ -277,7 +269,7 @@ static uint64_t TrainDirDiag(OpenTTDTrainHandle, uint8_t a) noexcept
 }
 static uint64_t TrainDisasterSound(OpenTTDTrainHandle) noexcept
 {
-	return RustDisasterSound();
+	return _settings_client.sound.disaster;
 }
 static void TrainDisconnect(OpenTTDTrainHandle) noexcept
 {
@@ -430,6 +422,10 @@ static uint64_t TrainRailTypes(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	return RailVehInfo(v->engine_type)->railtypes.base();
+}
+static uint64_t TrainReservePaths(OpenTTDTrainHandle) noexcept
+{
+	return _settings_game.pf.reserve_paths;
 }
 static void TrainReserveUnder(OpenTTDTrainHandle id) noexcept
 {
