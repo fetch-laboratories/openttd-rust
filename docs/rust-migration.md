@@ -1248,6 +1248,15 @@ growth, cancellation, query availability/register/nearby/count decisions and cal
 ordering, including unmasked `SB` refresh and reentry. External NewGRF/legacy,
 autoslope and generation branches remain tracked in #156.
 
+### Object invocation and eligibility (#430, in progress)
+
+The selected port moves stack invocation context, roots, lazy parent selection,
+callback entry and spec eligibility into `objects.rs`, reusing its existing
+variables, command and animation owners. Native object/spec/map/save records and
+resolver virtual facades remain canonical. Focused default object scenarios will
+exercise actual Action2 groups, admission boundaries and transient reload setup.
+Validation is pending; this checkpoint records the implementation scope only.
+
 ### Shared tile ownership dispatch (#331)
 
 Rust owns the general `ChangeTileOwner` tile-kind dispatch and directly calls the
