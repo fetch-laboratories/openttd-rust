@@ -37,7 +37,36 @@ struct OpenTTDGroupAdjust {
 	uint8_t operation, type, variable, parameter, shift_num;
 };
 struct OpenTTDGroupRange { OpenTTDGroupResult result; uint32_t low, high; };
+struct OpenTTDVehicleResolverServices;
+struct OpenTTDIndustryResolverServices;
+struct OpenTTDObjectServices;
+struct OpenTTDStorageServices;
+struct OpenTTDIndustryBuilder;
+struct OpenTTDVehicleScopeState;
+struct OpenTTDIndustryResolverContext;
+struct Station;
+struct Town;
+struct Object;
+struct ObjectSpec;
+struct OpenTTDResolverBinding { void *state; ScopeResolver *self, *parent, *relative, *default_scope; uint8_t kind; };
+struct OpenTTDObjectScope { Object *object; const ObjectSpec *spec; uint32_t tile; uint8_t view; };
+struct OpenTTDTownScope { Town *town; bool readonly; };
+union OpenTTDScopeData { const OpenTTDVehicleScopeState *vehicle; const OpenTTDIndustryResolverContext *industry; void *station; OpenTTDObjectScope object; OpenTTDTownScope town; Station *airport; };
+struct OpenTTDScopeBinding { OpenTTDScopeData data; uint8_t kind; };
 struct OpenTTDSpriteGroupServices {
+	const OpenTTDVehicleResolverServices *vehicle;
+	const OpenTTDIndustryResolverServices *industry;
+	const OpenTTDObjectServices *object;
+	const OpenTTDStorageServices *storage;
+	void (*resolver_binding)(ResolverObject *, OpenTTDResolverBinding *) noexcept OPENTTD_SERVICE_DEFAULT(resolver_binding);
+	void (*scope_binding)(ScopeResolver *, OpenTTDScopeBinding *) noexcept OPENTTD_SERVICE_DEFAULT(scope_binding);
+	OpenTTDIndustryBuilder *(*industry_builder)() noexcept OPENTTD_SERVICE_DEFAULT(industry_builder);
+
+	void (*tile_random_check)(const OpenTTDIndustryResolverContext *) noexcept OPENTTD_SERVICE_DEFAULT(tile_random_check);
+	size_t (*loaded_count)(const struct RealSpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(loaded_count);
+	size_t (*loading_count)(const struct RealSpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(loading_count);
+	const SpriteGroup *(*loaded)(const struct RealSpriteGroup *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(loaded);
+	const SpriteGroup *(*loading)(const struct RealSpriteGroup *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(loading);
 	void (*node)(const SpriteGroup *, OpenTTDGroupNode *) noexcept OPENTTD_SERVICE_DEFAULT(node);
 	OpenTTDGroupAdjust (*adjust)(const SpriteGroup *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(adjust);
 	OpenTTDGroupRange (*range)(const SpriteGroup *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(range);
@@ -56,6 +85,7 @@ struct OpenTTDSpriteGroupServices {
 };
 const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept;
 extern "C" {
+const SpriteGroup *openttd_rust_resolver_default_real(const OpenTTDSpriteGroupServices *, const struct RealSpriteGroup *);
 void openttd_rust_resolver_init(OpenTTDResolverState *, CallbackID, uint32_t, uint32_t);
 OpenTTDResolverResult openttd_rust_spritegroup_resolve(const OpenTTDSpriteGroupServices *, const SpriteGroup *, ResolverObject *, OpenTTDResolverState *, const GRFFile *, bool);
 OpenTTDResolverResult openttd_rust_resolver_resolve(const OpenTTDSpriteGroupServices *, const SpriteGroup *, ResolverObject *, OpenTTDResolverState *, const GRFFile *);

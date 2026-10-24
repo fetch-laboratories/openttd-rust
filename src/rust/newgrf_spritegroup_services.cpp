@@ -7,6 +7,16 @@
 #include "../newgrf.h"
 #include "../debug.h"
 #include "services_newgrf.h"
+#include "../newgrf_engine.h"
+#include "../newgrf_station.h"
+#include "../newgrf_industries.h"
+#include "../newgrf_industrytiles.h"
+#include "../newgrf_airport.h"
+#include "../newgrf_object.h"
+#include "../industry.h"
+#include "../industry_map.h"
+#include "object_ffi.h"
+#include "newgrf_storage_ffi.h"
 #include "../safeguards.h"
 
 static ResolverResult NativeResult(const OpenTTDResolverResult &result)
@@ -66,9 +76,50 @@ static NewGRFProfiler *ProfileEnter(ResolverObject *resolver, bool top) noexcept
 	return &*p;
 }
 static void ProfileEnd(NewGRFProfiler *profiler, const OpenTTDResolverResult *result) noexcept { profiler->EndResolve(NativeResult(*result)); }
+static void ResolverBinding(ResolverObject *ro, OpenTTDResolverBinding *out) noexcept
+{
+	*out = {.state = nullptr, .self = nullptr, .parent = nullptr, .relative = nullptr, .default_scope = &ro->default_scope, .kind = 0};
+	if (auto *v = dynamic_cast<VehicleResolverObject *>(ro)) {
+		out->state = &v->state; out->self = &v->self_scope; out->parent = &v->parent_scope; out->relative = &v->relative_scope; out->kind = 1;
+	} else if (auto *st = dynamic_cast<StationResolverObject *>(ro)) {
+		out->state = &st->station_scope.state; out->self = &st->station_scope; out->kind = 2;
+	} else if (auto *i = dynamic_cast<IndustriesResolverObject *>(ro)) {
+		out->state = &i->industries_scope.context; out->self = &i->industries_scope; out->kind = 3;
+	} else if (auto *it = dynamic_cast<IndustryTileResolverObject *>(ro)) {
+		out->self = &it->indtile_scope; out->parent = &it->ind_scope; out->kind = 4;
+	} else if (typeid(*ro) != typeid(ResolverObject)) {
+		out->kind = 5; // Remaining native feature scope-selection behavior.
+	}
+}
+static void ScopeBinding(ScopeResolver *scope, OpenTTDScopeBinding *out) noexcept
+{
+	if (auto *v = dynamic_cast<VehicleScopeResolver *>(scope)) { out->kind = 1; out->data.vehicle = &v->state; }
+	else if (auto *st = dynamic_cast<StationScopeResolver *>(scope)) { out->kind = 2; out->data.station = &st->state; }
+	else if (auto *i = dynamic_cast<IndustriesScopeResolver *>(scope)) { out->kind = 3; out->data.industry = &i->context; }
+	else if (auto *it = dynamic_cast<IndustryTileScopeResolver *>(scope)) { out->kind = 4; out->data.industry = &it->context; }
+	else if (auto *o = dynamic_cast<ObjectScopeResolver *>(scope)) { out->kind = 5; out->data.object = {o->obj, o->spec, o->tile.base(), o->view}; }
+	else if (auto *t = dynamic_cast<TownScopeResolver *>(scope)) { out->kind = 6; out->data.town = {t->t, t->readonly}; }
+	else if (auto *a = dynamic_cast<AirportScopeResolver *>(scope)) { out->kind = 7; out->data.airport = a->st; }
+	else { out->kind = typeid(*scope) == typeid(ScopeResolver) ? 0 : 8; }
+}
 const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
 {
 	static const OpenTTDSpriteGroupServices services{
+		.vehicle = &GetRustVehicleResolverServices(),
+		.industry = &GetIndustryResolverServices(),
+		.object = &GetRustObjectServices(),
+		.storage = &GetRustStorageServices(),
+		.resolver_binding = ResolverBinding,
+		.scope_binding = ScopeBinding,
+		.industry_builder = []() noexcept { return _industry_builder.owner.get(); },
+		.tile_random_check = [](const OpenTTDIndustryResolverContext *c) noexcept {
+			assert(c->industry != nullptr && IsValidTile(TileIndex(c->tile)));
+			assert(c->id == IndustryID::Invalid().base() || IsTileType(TileIndex(c->tile), MP_INDUSTRY));
+		},
+		.loaded_count = RustRealLoadedCount,
+		.loading_count = RustRealLoadingCount,
+		.loaded = RustRealLoaded,
+		.loading = RustRealLoading,
 		.node = GroupNode,
 		.adjust = GroupAdjust,
 		.range = GroupRange,
@@ -106,9 +157,7 @@ uint32_t ScopeResolver::GetVariable(uint8_t variable, uint32_t, bool &available)
 void ScopeResolver::StorePSA(uint, int32_t) {}
 const SpriteGroup *ResolverObject::ResolveReal(const RealSpriteGroup &group) const
 {
-	if (!group.loaded.empty()) return group.loaded[0];
-	if (!group.loading.empty()) return group.loading[0];
-	return nullptr;
+	return openttd_rust_resolver_default_real(&GetRustSpriteGroupServices(), &group);
 }
 ScopeResolver *ResolverObject::GetScope(VarSpriteGroupScope, uint8_t) { return &this->default_scope; }
 #endif
