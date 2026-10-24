@@ -934,7 +934,8 @@ crate::abi::layouts! {
     };
 }
 impl VehicleServices {
-    /// Run one direct maintenance call on a vehicle port's live serialized shell.
+    /// Run a `vehicle::maintenance` port whose only precondition is the live serialized
+    /// shell `v` that every vehicle entry supplies.
     #[inline]
     pub(crate) fn maintain<R>(
         &self,
