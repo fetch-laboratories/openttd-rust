@@ -1589,7 +1589,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 			RustVehicleCargoOwner(v), RustVehicleCargoCap(handle), v->cargo_type
 		};
 	},
-	.vehicle_type = RustVehicleRead<uint8_t, RustVehicleVehicleType>,
+	.vehicle_type = GetRustVehicleServices().vehicle_type,
 	.cargo_type = RustVehicleCargoType,
 	.cargo_cap = RustVehicleCargoCap,
 	.stored_count = [](OpenTTDVehicle *handle) noexcept -> uint32_t {
