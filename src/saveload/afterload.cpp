@@ -78,6 +78,9 @@
 
 #include "../rust/tile_loop_cursor.h"
 
+#ifdef WITH_RUST
+#include "../rust/animation_ffi.h"
+#endif
 #include "../safeguards.h"
 
 extern Company *DoStartupNewCompany(bool is_ai, CompanyID company = CompanyID::Invalid());
@@ -2260,6 +2263,9 @@ bool AfterLoadGame()
 	}
 
 	if (IsSavegameVersionBefore(SLV_122)) {
+#ifdef WITH_RUST
+		openttd_rust_animation_afterload(true, false);
+#else
 		/* Animated tiles would sometimes not be actually animated or
 		 * in case of old savegames duplicate. */
 
@@ -2280,6 +2286,7 @@ bool AfterLoadGame()
 				tile++;
 			}
 		}
+#endif
 	}
 
 	if (IsSavegameVersionBefore(SLV_NONFLOODING_WATER_TILES)) {
@@ -2290,6 +2297,9 @@ bool AfterLoadGame()
 	}
 
 	if (IsSavegameVersionBefore(SLV_ANIMATED_TILE_STATE_IN_MAP)) {
+#ifdef WITH_RUST
+		openttd_rust_animation_afterload(false, true);
+#else
 		/* Animated tile state is stored in the map array, allowing
 		 * quicker addition and deletion of animated tiles. */
 
@@ -2304,6 +2314,7 @@ bool AfterLoadGame()
 		for (const TileIndex &tile : _animated_tiles) {
 			if (tile != INVALID_TILE) SetAnimatedTileState(tile, AnimatedTileState::Animated);
 		}
+#endif
 	}
 
 	if (IsSavegameVersionBefore(SLV_124) && !IsSavegameVersionBefore(SLV_1)) {

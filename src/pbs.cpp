@@ -44,7 +44,7 @@ const OpenTTDPbsServices &GetPbsServices() noexcept
 		.assert_platform = []([[maybe_unused]] uint32_t tile, [[maybe_unused]] uint8_t dir) noexcept { assert(IsRailStationTile(TileIndex{tile})); assert(GetRailStationAxis(TileIndex{tile}) == DiagDirToAxis(static_cast<DiagDirection>(dir))); },
 		.station = [](uint32_t t) noexcept { return BaseStation::GetByTile(TileIndex{t}); },
 		.randomisation = [](BaseStation *st, uint32_t t) noexcept { RustStationRandomisation(st, TileIndex{t}, StationRandomTrigger::PathReservation); },
-		.animation = [](BaseStation *st, uint32_t t) noexcept { RustStationAnimation(st, TileIndex{t}, StationAnimationTrigger::PathReservation); },
+
 		.is_crossing = MapSvcRoadIsLevelCrossing,
 		.read_train_on_res = [](const OpenTTDPbsTrainOutput *slot) noexcept -> OpenTTDTrainHandle { return {*reinterpret_cast<Vehicle *const *>(slot), nullptr}; },
 		.write_train_on_res = [](OpenTTDPbsTrainOutput *slot, OpenTTDTrainHandle v) noexcept { *reinterpret_cast<Vehicle **>(slot) = static_cast<Train *>(v.shell); },

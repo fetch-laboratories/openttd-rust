@@ -1803,26 +1803,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		openttd_rust_cargo_delivery_flush(GetCargoDeliveryState(), &_cargo_services);
 	},
 	.vehicle_new_cargo = RustVehicleNewCargoRandomisation,
-	.cargo_taken = [](OpenTTDStation *station, uint8_t cargo) noexcept -> void {
-		Station *st = static_cast<Station *>(station);
-		RustStationRandomisation(st, st->xy, StationRandomTrigger::CargoTaken, cargo);
-		RustStationAnimation(st, st->xy, StationAnimationTrigger::CargoTaken, cargo);
-		TriggerAirportAnimation(st, AirportAnimationTrigger::CargoTaken, cargo);
-		RustRoadStopRandomisation(st, st->xy, StationRandomTrigger::CargoTaken, cargo);
-		RustRoadStopAnimation(st, st->xy, StationAnimationTrigger::CargoTaken, cargo);
-	},
-	.train_loads = [](OpenTTDStation *station, OpenTTDVehicle *vehicle) noexcept -> void {
-		Station *st = static_cast<Station *>(station);
-		Vehicle *v = VehicleOf(vehicle);
-		RustStationRandomisation(st, v->tile, StationRandomTrigger::VehicleLoads);
-		RustStationAnimation(st, v->tile, StationAnimationTrigger::VehicleLoads);
-	},
-	.road_loads = [](OpenTTDStation *station, OpenTTDVehicle *vehicle) noexcept -> void {
-		Station *st = static_cast<Station *>(station);
-		Vehicle *v = VehicleOf(vehicle);
-		RustRoadStopRandomisation(st, v->tile, StationRandomTrigger::VehicleLoads);
-		RustRoadStopAnimation(st, v->tile, StationAnimationTrigger::VehicleLoads);
-	},
 	.vehicle_empty = RustVehicleEmptyRandomisation,
 	.station_dirty = [](OpenTTDStation *station) noexcept -> void {
 		Station *st = static_cast<Station *>(station);

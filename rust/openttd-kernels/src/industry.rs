@@ -1817,7 +1817,7 @@ crate::abi::layouts! {
         animation_loop,
         set_animation_loop,
         ambient,
-        animate_new,
+
         construction_counter,
         construction_stage,
         completed,
@@ -1880,7 +1880,7 @@ crate::abi::layouts! {
         set_construction_stage,
         translated_gfx,
         animation_enabled,
-        add_animated,
+
         build_window_dirty,
         serve_neutral,
         insert_near_station,
@@ -1968,7 +1968,7 @@ crate::abi::layouts! {
         random_bits,
         set_random_bits,
         animation_spec,
-        change_frame,
+
     };
     "OpenTTDIndustryFields" ["industry"] => Fields {
         valid_history,

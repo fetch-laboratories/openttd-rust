@@ -33,9 +33,9 @@ pub struct PbsServices {
     pub compatible_station: extern "C" fn(u32, u32) -> bool,
     pub show_reservation: extern "C" fn() -> bool,
     pub assert_platform: extern "C" fn(u32, u8) -> (),
-    pub station: extern "C" fn(u32) -> *mut std::ffi::c_void,
-    pub randomisation: extern "C" fn(*mut std::ffi::c_void, u32) -> (),
-    pub animation: extern "C" fn(*mut std::ffi::c_void, u32) -> (),
+    pub station: extern "C" fn(u32) -> *mut crate::station::BaseStation,
+    pub randomisation: extern "C" fn(*mut crate::station::BaseStation, u32) -> (),
+
     pub is_crossing: extern "C" fn(u32) -> bool,
     pub read_train_on_res: extern "C" fn(*const TrainOutput) -> Handle,
     pub write_train_on_res: extern "C" fn(*mut TrainOutput, Handle),
@@ -188,7 +188,12 @@ impl<'a> Pbs<'a> {
                     if trigger {
                         let station = (self.0.station)(tile);
                         (self.0.randomisation)(station, tile);
-                        (self.0.animation)(station, tile);
+                        crate::animated_tile::openttd_rust_trigger_station(
+                            station,
+                            tile,
+                            crate::station_type::SAT_PATH_RESERVATION,
+                            crate::cargo_type::INVALID_CARGO,
+                        );
                     }
                     (s.mark_dirty)(tile);
                     return true;
@@ -735,7 +740,7 @@ crate::abi::layouts! {
         assert_platform,
         station,
         randomisation,
-        animation,
+
         is_crossing,
         read_train_on_res,
         write_train_on_res,

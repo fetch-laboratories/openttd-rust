@@ -158,11 +158,11 @@ struct OpenTTDStationServices {
 	void (*acceptance_news)(OpenTTDBaseStation *, uint64_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(acceptance_news);
 	void (*acceptance_redraw)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(acceptance_redraw);
 	void (*delete_station)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(delete_station);
-	void (*acceptance_animation)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(acceptance_animation);
+
 	void (*watched_animation)(uint32_t, uint64_t) noexcept OPENTTD_SERVICE_DEFAULT(watched_animation);
 	void (*append_packet)(OpenTTDBaseStation *, uint8_t, uint32_t, OpenTTDCargoSource) noexcept OPENTTD_SERVICE_DEFAULT(append_packet);
 	void (*station_list_invalidation)(OpenTTDBaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_list_invalidation);
-	void (*new_cargo_animation)(OpenTTDBaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(new_cargo_animation);
+
 	void (*waiting_redraw)(OpenTTDBaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(waiting_redraw);
 	uint16_t (*rating_callback)(OpenTTDBaseStation *, uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rating_callback);
 	void (*with_tiles)(OpenTTDBaseStation *, void *, OpenTTDStationScope) noexcept OPENTTD_SERVICE_DEFAULT(with_tiles);
@@ -275,9 +275,7 @@ struct OpenTTDStationLoading {
 	void (*delete_payment)(OpenTTDNativeCargoPayment *) noexcept OPENTTD_SERVICE_DEFAULT(delete_payment);
 	void (*flush_delivery)() noexcept OPENTTD_SERVICE_DEFAULT(flush_delivery);
 	void (*vehicle_new_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_new_cargo);
-	void (*cargo_taken)(OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_taken);
-	void (*train_loads)(OpenTTDStation *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_loads);
-	void (*road_loads)(OpenTTDStation *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(road_loads);
+
 	void (*vehicle_empty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_empty);
 	void (*station_dirty)(OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_dirty);
 };
