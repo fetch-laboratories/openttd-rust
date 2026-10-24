@@ -53,11 +53,6 @@ pub struct OrderState {
     loading: bool,
 }
 #[repr(C)]
-pub struct RandomFields {
-    bits: u16,
-    waiting: u8,
-}
-#[repr(C)]
 pub struct RandomResult {
     used: u32,
     reseed: u32,
@@ -106,7 +101,8 @@ pub struct Services {
     override_engine: unsafe extern "C" fn(*const OpenTTDEngine, usize, usize) -> u16,
     cached_override: unsafe extern "C" fn(V) -> Group,
     spritegroup: unsafe extern "C" fn(u16, u8) -> Group,
-    random_fields: unsafe extern "C" fn(V) -> RandomFields,
+    random_bits: unsafe extern "C" fn(V) -> u16,
+    waiting: unsafe extern "C" fn(V) -> u8,
     write_random: unsafe extern "C" fn(V, u16),
     write_waiting: unsafe extern "C" fn(V, u8),
     resolve_callback: unsafe extern "C" fn(*mut State, u16, u16, u32, u32, *mut i32, usize) -> u16,
@@ -424,11 +420,10 @@ pub unsafe extern "C" fn openttd_rust_vehicle_scope_random(
         if v.is_null() {
             return 0;
         }
-        let f = (s.random_fields)(v);
         if triggers {
-            u32::from(f.waiting)
+            u32::from((s.waiting)(v))
         } else {
-            u32::from(f.bits)
+            u32::from((s.random_bits)(v))
         }
     }
 }
@@ -591,12 +586,12 @@ unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
     unsafe {
         (s.check)(!v.is_null());
         let mut state = init(s, engine(s, v), v, 2, false);
-        let waiting = (s.random_fields)(v).waiting | (1 << trigger);
+        let waiting = (s.waiting)(v) | (1 << trigger);
         (s.write_waiting)(v, waiting);
         let result = (s.resolve_random)(&raw mut state, engine(s, v), waiting);
-        (s.write_waiting)(v, (s.random_fields)(v).waiting & !(result.used as u8));
+        (s.write_waiting)(v, (s.waiting)(v) & !(result.used as u8));
         let random = s.shared.random() as u16; // Draw even if reseed is zero.
-        let bits = (s.random_fields)(v).bits;
+        let bits = (s.random_bits)(v);
         (s.write_random)(
             v,
             (bits & !(result.reseed as u16))
@@ -673,7 +668,6 @@ pub unsafe extern "C" fn openttd_rust_vehicle_shell_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDVehicleOrderState" ["vehicle_resolver"] => OrderState { unload, load, loading };
-    "OpenTTDVehicleRandomFields" ["vehicle_resolver"] => RandomFields { bits, waiting };
     "OpenTTDVehicleRandomResult" ["vehicle_resolver"] => RandomResult { used, reseed };
     "OpenTTDVehicleCargoQuery" ["vehicle_resolver"] => CargoQuery { cargo, subtype, engine };
     "OpenTTDVehicleOverride" ["vehicle_resolver"] => Override { group, cargo, count };
@@ -682,7 +676,7 @@ crate::abi::layouts! {
         vehicle, shared, cache, first, move_vehicle => move, previous, cargo, can_carry,
         cargo_classes, cargo_bitnum, cargo_translation, grf_version, get_register, current_company,
         valid_company, livery, company_info, first_engine, articulated, has_articulated,
-        overrides, override_at, override_engine, cached_override, spritegroup, random_fields,
+        overrides, override_at, override_engine, cached_override, spritegroup, random_bits, waiting,
         write_random, write_waiting, resolve_callback, resolve_random, order, cargo_owner,
         cargo_capacity, real_count, real_at, check
     };

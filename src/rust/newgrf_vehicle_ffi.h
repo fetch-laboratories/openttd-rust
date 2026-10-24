@@ -19,7 +19,6 @@ struct OpenTTDVehicleResolverState {
 	const SpriteGroup *root;
 };
 struct OpenTTDVehicleOrderState { uint8_t unload, load; bool loading; };
-struct OpenTTDVehicleRandomFields { uint16_t bits; uint8_t waiting; };
 struct OpenTTDVehicleRandomResult { uint32_t used, reseed; };
 struct OpenTTDVehicleCargoQuery { uint8_t cargo, subtype; const OpenTTDEngine *engine; };
 struct OpenTTDVehicleOverride { const SpriteGroup *group; uint8_t cargo; size_t count; };
@@ -50,7 +49,8 @@ struct OpenTTDVehicleResolverServices {
 	uint16_t (*override_engine)(const OpenTTDEngine *, size_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(override_engine);
 	const SpriteGroup *(*cached_override)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cached_override);
 	const SpriteGroup *(*spritegroup)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(spritegroup);
-	OpenTTDVehicleRandomFields (*random_fields)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(random_fields);
+	uint16_t (*random_bits)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
+	uint8_t (*waiting)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(waiting);
 	void (*write_random)(OpenTTDVehicle *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(write_random);
 	void (*write_waiting)(OpenTTDVehicle *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(write_waiting);
 	uint16_t (*resolve_callback)(OpenTTDVehicleResolverState *, uint16_t, uint16_t, uint32_t, uint32_t, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_callback);
