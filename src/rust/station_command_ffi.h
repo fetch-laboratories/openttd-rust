@@ -43,7 +43,7 @@ class TileIterator;
 struct OpenTTDAirportSize { uint8_t w, h; };
 struct OpenTTDAirportLayout { size_t size; uint8_t rotation; };
 struct OpenTTDAirportLayoutTile { uint32_t tile; uint8_t gfx; };
-struct OpenTTDAirportGeometry { OpenTTDStationArea area; const AirportSpec *spec; uint8_t rotation; };
+struct OpenTTDAirportGeometry { OpenTTDStationArea area; uint8_t rotation; };
 struct OpenTTDStationCommandStrings {
 	uint32_t demolish_bridge, flat_land, spread;
 	uint32_t bridge_too_low[9];
@@ -185,18 +185,18 @@ struct OpenTTDStationCommandServices {
 	uint32_t (*airport_tile)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
 	uint8_t (*airport_type)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_type);
 	OpenTTDAirportGeometry (*airport_geometry)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_geometry);
-	bool (*airport_airplanes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_airplanes);
+	bool (*airport_airplanes)(const AirportFTAClass *) noexcept OPENTTD_SERVICE_DEFAULT(airport_airplanes);
 	void (*set_airport_details)(BaseStation *, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_airport_details);
 	void (*make_airport)(uint32_t, uint8_t, uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(make_airport);
 	void (*airport_add)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_add);
-	bool (*airport_animated)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_animated);
+	bool (*airport_animated)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_animated);
 
 	void (*airport_infrastructure)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_infrastructure);
 	void (*station_view_invalidate)(BaseStation *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_view_invalidate);
 	void (*town_view_dirty)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_view_dirty);
 	OpenTTDAircraftVehicle (*aircraft_vehicle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_vehicle);
-	uint32_t (*hangar_count)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_count);
-	uint32_t (*hangar_tile)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(hangar_tile);
+	uint32_t (*hangar_count)(BaseStation *, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_count);
+	uint32_t (*hangar_tile)(const BaseStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_tile);
 	void (*close_hangar)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_hangar);
 	void (*close_airport_tile_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(close_airport_tile_inspect);
 	void (*delete_airport_storage)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(delete_airport_storage);

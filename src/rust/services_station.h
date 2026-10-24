@@ -65,14 +65,16 @@ inline Industry *NextNearbyIndustry(RustNearbyIndustryCursor *cursor) noexcept
 	return cursor->current == cursor->end ? nullptr : cursor->current->industry;
 }
 inline const AirportFTAClass *RustAirportFTA(uint8_t type) noexcept { return GetAirport(type); }
-inline const void *RustDummyAirportFTA() noexcept { return RustAirportFTA(AT_DUMMY); }
-inline TileIndex RustStationHangarTile(const BaseStation *st, uint32_t index) noexcept { return Station::From(st)->airport.GetHangarTile(index); }
+inline uint8_t RustAirportFlags(const AirportFTAClass *airport) noexcept { return airport->flags.base(); }
+inline bool RustSelectedAirportHasHangar(const BaseStation *st, const AirportSpec *spec) noexcept { return Station::From(st)->airport.HasHangar(spec); }
+inline TileIndex RustStationHangarTile(const BaseStation *st, uint32_t index, const AirportSpec *spec) noexcept { return Station::From(st)->airport.GetHangarTile(index, spec); }
+inline uint32_t RustSelectedHangarTile(const BaseStation *st, uint32_t index, const AirportSpec *spec) noexcept { return RustStationHangarTile(st, index, spec).base(); }
+inline RoadStop *RustStationPrimaryRoadStop(const OpenTTDVehicle *vehicle, const Station *st) noexcept { return st->GetPrimaryRoadStop(RoadVehicle::From(VehicleOf(vehicle))); }
 inline bool RustStationConvert8bitBoolean(const StationSpec *spec, uint16_t id, uint16_t value) noexcept { return OpenTTDConvert8bitBooleanCallback(spec->grf_prop.grffile, static_cast<CallbackID>(id), value); }
 inline bool RustRoadStopConvert8bitBoolean(const RoadStopSpec *spec, uint16_t value) noexcept { return OpenTTDConvert8bitBooleanCallback(spec->grf_prop.grffile, CBID_STATION_AVAILABILITY, value); }
 inline void RustStationCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_STATIONS, tile); }
 inline void RustRoadStopCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_ROADSTOPS, tile); }
 inline void RustAirportTileCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_AIRPORTTILES, tile); }
-inline uint32_t RustStationHangarTileValue(BaseStation *st, uint32_t index) noexcept { return RustStationHangarTile(st, index).base(); }
 inline void RustStationMarkTilesDirty(BaseStation *st, bool cargo) noexcept { Station::From(st)->MarkTilesDirty(cargo); }
 inline void RustRoadStopRandomisation(Station *st, TileIndex tile, StationRandomTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerRoadStopRandomisation(st, tile, trigger, cargo); }
 inline void RustRoadStopRandomisationAt(BaseStation *st, uint32_t tile, uint8_t trigger, uint8_t cargo) noexcept { RustRoadStopRandomisation(Station::From(st), TileIndex{tile}, static_cast<StationRandomTrigger>(trigger), cargo); }
@@ -80,10 +82,9 @@ inline const OpenTTDStation *RustStation(const Station *s) noexcept { return rei
 inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s); }
 /* GetSpec preserves the native dummy-airport fallback. Resolver-specific tile
  * gates remain with their callers; all handles are borrowed synchronously. */
+inline const AirportFTAClass *RustAirportSpecFTA(const AirportSpec *spec) noexcept { return spec->fsm; }
 inline const AirportSpec *RustStationAirportSpec(const Station *st) noexcept { return st->airport.GetSpec(); }
-inline const AirportSpec *RustBaseStationAirportSpec(BaseStation *st) noexcept { return RustStationAirportSpec(Station::From(st)); }
 inline TTDPAirportType RustAirportTTDType(const AirportSpec *spec) noexcept { return spec->ttd_airport_type; }
-inline uint8_t RustStationAirportTTDType(const OpenTTDStation *st) noexcept { return RustAirportTTDType(RustStationAirportSpec(StationOf(st))); }
 inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return Station::From(s)->airport.tile.base(); }
 inline uint8_t RustStationAirportType(const BaseStation *s) noexcept { return Station::From(s)->airport.type; }
 inline Direction RustStationAirportRotation(const BaseStation *s) noexcept { return Station::From(s)->airport.rotation; }
@@ -166,12 +167,6 @@ inline uint8_t Aircraft_station_owner(const OpenTTDStation *s) noexcept
 	return OpenTTDStationOwner(st).base();
 }
 
-inline bool Aircraft_has_hangar(const OpenTTDStation *s) noexcept
-{
-	const Station *st = StationOf(s);
-	return RustStationHasHangar(st);
-}
-
 inline void RustStationIndexInsert(BaseStation *st) noexcept { _station_kdtree.Insert(st->index); }
 inline void RustStationClosedWidget(BaseStation *st) noexcept { SetWindowWidgetDirty(WC_STATION_VIEW, st->index, WID_SV_CLOSE_AIRPORT); }
 inline void RustStationCloseAirportInspect(BaseStation *st) noexcept { RustCloseNewGRFInspect(GSF_AIRPORTS, st->index.base()); }
@@ -182,7 +177,6 @@ inline const AirportFTAClass *RustStationAirportFTA(const Station *station) noex
 inline uint8_t RustAirportDeltaZ(const AirportFTAClass *airport) noexcept { return airport->delta_z; }
 
 /* The existing aircraft table retains its opaque pointers and return widths. */
-inline const void *OpenTTDStationAirportFTA(const OpenTTDStation *station) noexcept { return RustStationAirportFTA(StationOf(station)); }
 inline uint8_t OpenTTDAirportDeltaZ(const void *airport) noexcept { return RustAirportDeltaZ(static_cast<const AirportFTAClass *>(airport)); }
 inline void OpenTTDModifyStationRatingAround(uint32_t tile, uint8_t owner, int amount, uint radius) noexcept { ModifyStationRatingAround(TileIndex(tile), CompanyID(owner), amount, radius); }
 inline bool RustMovementRailStation(uint32_t tile) noexcept { return IsRailStation(TileIndex{tile}); }

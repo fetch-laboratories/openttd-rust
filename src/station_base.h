@@ -427,8 +427,12 @@ struct Airport : public TileArea {
 	 */
 	const AirportSpec *GetSpec() const
 	{
+#ifdef WITH_RUST
+		return openttd_rust_airport_get_spec(this->tile.base(), this->type, &GetAirportResolverServices());
+#else
 		if (this->tile == INVALID_TILE) return &AirportSpec::dummy;
 		return AirportSpec::Get(this->type);
+#endif
 	}
 
 	/**
@@ -439,13 +443,23 @@ struct Airport : public TileArea {
 	 */
 	const AirportFTAClass *GetFTA() const
 	{
-		return this->GetSpec()->fsm;
+		return this->GetFTA(this->GetSpec());
+	}
+
+	const AirportFTAClass *GetFTA(const AirportSpec *as) const
+	{
+		return as->fsm;
 	}
 
 	/** Check if this airport has at least one hangar. */
 	inline bool HasHangar() const
 	{
-		return !this->GetSpec()->depots.empty();
+		return this->HasHangar(this->GetSpec());
+	}
+
+	inline bool HasHangar(const AirportSpec *as) const
+	{
+		return !as->depots.empty();
 	}
 
 	/**
@@ -458,8 +472,12 @@ struct Airport : public TileArea {
 	 */
 	inline TileIndex GetRotatedTileFromOffset(TileIndexDiffC tidc) const
 	{
-		const AirportSpec *as = this->GetSpec();
-		switch (this->rotation) {
+		return this->GetRotatedTileFromOffset(tidc, this->GetSpec());
+	}
+
+	inline TileIndex GetRotatedTileFromOffset(TileIndexDiffC tidc, const AirportSpec *as) const
+	{
+				switch (this->rotation) {
 			case DIR_N: return this->tile + ToTileIndexDiff(tidc);
 
 			case DIR_E: return this->tile + TileDiffXY(tidc.y, as->size_x - 1 - tidc.x);
@@ -480,9 +498,14 @@ struct Airport : public TileArea {
 	 */
 	inline TileIndex GetHangarTile(uint hangar_num) const
 	{
-		for (const auto &depot : this->GetSpec()->depots) {
+		return this->GetHangarTile(hangar_num, this->GetSpec());
+	}
+
+	inline TileIndex GetHangarTile(uint hangar_num, const AirportSpec *as) const
+	{
+		for (const auto &depot : as->depots) {
 			if (depot.hangar_num == hangar_num) {
-				return this->GetRotatedTileFromOffset(depot.ti);
+				return this->GetRotatedTileFromOffset(depot.ti, as);
 			}
 		}
 		NOT_REACHED();
@@ -496,8 +519,12 @@ struct Airport : public TileArea {
 	 */
 	inline Direction GetHangarExitDirection(TileIndex tile) const
 	{
-		const AirportSpec *as = this->GetSpec();
-		const HangarTileTable *htt = GetHangarDataByTile(tile);
+		return this->GetHangarExitDirection(tile, this->GetSpec());
+	}
+
+	inline Direction GetHangarExitDirection(TileIndex tile, const AirportSpec *as) const
+	{
+				const HangarTileTable *htt = GetHangarDataByTile(tile, as);
 		return ChangeDir(htt->dir, DirDifference(this->rotation, as->layouts[0].rotation));
 	}
 
@@ -509,16 +536,26 @@ struct Airport : public TileArea {
 	 */
 	inline uint GetHangarNum(TileIndex tile) const
 	{
-		const HangarTileTable *htt = GetHangarDataByTile(tile);
+		return this->GetHangarNum(tile, this->GetSpec());
+	}
+
+	inline uint GetHangarNum(TileIndex tile, const AirportSpec *as) const
+	{
+		const HangarTileTable *htt = GetHangarDataByTile(tile, as);
 		return htt->hangar_num;
 	}
 
 	/** Get the number of hangars on this airport. */
 	inline uint GetNumHangars() const
 	{
+		return this->GetNumHangars(this->GetSpec());
+	}
+
+	inline uint GetNumHangars(const AirportSpec *as) const
+	{
 		uint num = 0;
 		uint counted = 0;
-		for (const auto &depot : this->GetSpec()->depots) {
+		for (const auto &depot : as->depots) {
 			if (!HasBit(counted, depot.hangar_num)) {
 				num++;
 				SetBit(counted, depot.hangar_num);
@@ -536,8 +573,13 @@ private:
 	 */
 	inline const HangarTileTable *GetHangarDataByTile(TileIndex tile) const
 	{
-		for (const auto &depot : this->GetSpec()->depots) {
-			if (this->GetRotatedTileFromOffset(depot.ti) == tile) {
+		return this->GetHangarDataByTile(tile, this->GetSpec());
+	}
+
+	inline const HangarTileTable *GetHangarDataByTile(TileIndex tile, const AirportSpec *as) const
+	{
+		for (const auto &depot : as->depots) {
+			if (this->GetRotatedTileFromOffset(depot.ti, as) == tile) {
 				return &depot;
 			}
 		}

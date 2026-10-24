@@ -48,3 +48,37 @@ pub const AT_INVALID: u16 = 254;
 pub const NEW_AIRPORTTILE_OFFSET: u8 = 74;
 /// Invalid airport tile spec.
 pub const INVALID_AIRPORTTILE: u16 = 256;
+
+/// Dummy airport type with its separate finite-state machine.
+pub const AT_DUMMY: u8 = 255;
+
+/// `AirportFTAClass::Flag` bit masks.
+pub const FTA_AIRPLANES: u8 = 1;
+pub const FTA_HELICOPTERS: u8 = 2;
+pub const FTA_SHORT_STRIP: u8 = 4;
+/// `GetAirport`, preserving the distinct dummy finite-state machine.
+pub(crate) fn get_airport(
+    kind: u8,
+    s: &crate::newgrf_airport::Services,
+) -> *const std::ffi::c_void {
+    if kind == AT_DUMMY {
+        s.dummy_fta
+    } else {
+        (s.fta)(crate::newgrf_airport::get(kind, s))
+    }
+}
+/// Original `GetVehiclePosOnBuild`; the named hangar operation consumes the
+/// selected spec directly, keeping its native scan/rotation implementation.
+pub(crate) fn get_vehicle_pos_on_build(tile: u32, s: &crate::newgrf_airport::Services) -> u8 {
+    let st = crate::station_map::station_by_tile(tile, s);
+    let spec = crate::newgrf_airport::station_spec(st, s);
+    let fta = (s.fta)(spec);
+    let mut i = 0_u32;
+    loop {
+        if (s.hangar_tile)(st, i, spec) == tile {
+            (s.check)((s.fta_heading)(fta, i) == HANGAR);
+            return (s.fta_position)(fta, i);
+        }
+        i = i.wrapping_add(1);
+    }
+}

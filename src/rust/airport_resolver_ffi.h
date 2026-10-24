@@ -4,7 +4,7 @@
 #define RUST_AIRPORT_RESOLVER_FFI_H
 #include "station_command_ffi.h"
 #include "newgrf_storage_ffi.h"
-struct AirportResolverObject; struct AirportTileResolverObject; struct ScopeResolver; struct TownScopeResolver; struct ResolverObject; struct SpriteGroup;
+struct AirportResolverObject; struct AirportTileResolverObject; struct ScopeResolver; struct TownScopeResolver; struct ResolverObject; struct SpriteGroup; struct AirportFTAClass; struct OpenTTDVehicleServices; struct OpenTTDEngine; struct RoadStop;
 struct OpenTTDAirportResolverState {
 	Station *station; const AirportSpec *spec; const AirportTileSpec *tile_spec;
 	uint32_t tile; uint8_t layout; TownScopeResolver *town;
@@ -13,6 +13,24 @@ struct OpenTTDAirportAvailability { bool enabled; int32_t min_year, max_year; };
 struct OpenTTDAirportResolverServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStorageServices *storage;
+	const OpenTTDVehicleServices *vehicles;
+	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
+	const OpenTTDEngine *(*engine_if_valid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_if_valid);
+	uint16_t (*engine_id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_id);
+	VehicleType (*engine_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_kind);
+	uint8_t (*engine_subtype)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_subtype);
+	RoadStop *(*primary_road_stop)(const OpenTTDVehicle *, const Station *) noexcept OPENTTD_SERVICE_DEFAULT(primary_road_stop);
+	uint8_t (*fta_flags)(const AirportFTAClass *) noexcept OPENTTD_SERVICE_DEFAULT(fta_flags);
+	bool (*has_hangar)(const BaseStation *, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(has_hangar);
+	uint32_t (*hangar_tile)(const BaseStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_tile);
+	size_t (*depot_count)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(depot_count);
+	TileIndexDiffC (*depot_offset)(const AirportSpec *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_offset);
+	uint32_t (*rotated_offset)(const BaseStation *, TileIndexDiffC, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rotated_offset);
+	uint8_t (*fta_heading)(const AirportFTAClass *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(fta_heading);
+	uint8_t (*fta_position)(const AirportFTAClass *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(fta_position);
+	const AirportSpec *dummy_spec;
+	const AirportFTAClass *dummy_fta;
+	const AirportFTAClass *(*fta)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(fta);
 	const AirportSpec *(*base_spec)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_spec);
 	OpenTTDAirportAvailability (*availability)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(availability);
 	uint16_t (*override_id)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(override_id);
@@ -46,6 +64,12 @@ struct OpenTTDAirportResolverServices {
 };
 const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept;
 extern "C" {
+bool openttd_rust_can_engine_use_station(uint16_t, const Station *, const OpenTTDAirportResolverServices *);
+bool openttd_rust_can_vehicle_use_station(const OpenTTDVehicle *, const Station *, const OpenTTDAirportResolverServices *);
+bool openttd_rust_is_hangar(uint32_t, const OpenTTDAirportResolverServices *);
+uint8_t openttd_rust_vehicle_pos_on_build(uint32_t, const OpenTTDAirportResolverServices *);
+const AirportFTAClass *openttd_rust_airport_fta(uint8_t, const OpenTTDAirportResolverServices *);
+const AirportSpec *openttd_rust_airport_get_spec(uint32_t, uint8_t, const OpenTTDAirportResolverServices *);
 const AirportSpec *openttd_rust_airport_spec(uint8_t, const OpenTTDAirportResolverServices *);
 bool openttd_rust_airport_available(const AirportSpec *, const OpenTTDAirportResolverServices *);
 bool openttd_rust_airport_in_bounds(const AirportSpec *, uint8_t, uint32_t, const OpenTTDAirportResolverServices *);

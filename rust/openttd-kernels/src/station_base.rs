@@ -19,3 +19,24 @@ pub(crate) fn has_rating(status: u8) -> bool {
 pub(crate) fn has_vehicle_ever_tried_loading(last_speed: u8) -> bool {
     last_speed != 0
 }
+
+/// `Airport::GetSpec`, including the dummy spec when there is no airport.
+pub(crate) fn airport_get_spec(
+    tile: u32,
+    kind: u8,
+    s: &crate::newgrf_airport::Services,
+) -> *const crate::station_cmd::AirportSpec {
+    if tile == crate::tile_type::INVALID_TILE {
+        s.dummy_spec
+    } else {
+        crate::newgrf_airport::get(kind, s)
+    }
+}
+
+/// `Airport::HasHangar`, after its canonical spec selection.
+pub(crate) fn airport_has_hangar(
+    st: *const crate::station::BaseStation,
+    s: &crate::newgrf_airport::Services,
+) -> bool {
+    (s.has_hangar)(st, crate::newgrf_airport::station_spec(st.cast_mut(), s))
+}

@@ -165,7 +165,9 @@ pub struct Services {
     vehicle_flags: unsafe extern "C" fn(V) -> u16,
     aircraft: unsafe extern "C" fn(V) -> *mut crate::aircraft::State,
     target_airport: unsafe extern "C" fn(V) -> *const crate::station::Station,
-    airport_ttd_type: unsafe extern "C" fn(*const crate::station::Station) -> u8,
+    airport_ttd_type: unsafe extern "C" fn(
+        *const crate::station_cmd::AirportSpec,
+    ) -> crate::newgrf_airport::TtdpAirportType,
     moving_flags: unsafe extern "C" fn(*const c_void, u8) -> u16,
     roadtype: unsafe extern "C" fn(V) -> crate::services::RoadType,
     tile_roadtype:
@@ -1037,7 +1039,11 @@ unsafe fn variable(
                 let airport = if !st.is_null()
                     && (leaves.airport_tile)(st) != crate::tile_type::INVALID_TILE
                 {
-                    (s.airport_ttd_type)(st)
+                    (s.airport_ttd_type)(crate::newgrf_airport::station_spec(
+                        st.cast_mut().cast(),
+                        crate::newgrf_airport::runtime(),
+                    ))
+                    .0
                 } else {
                     crate::airport::ATP_TTDP_LARGE
                 };

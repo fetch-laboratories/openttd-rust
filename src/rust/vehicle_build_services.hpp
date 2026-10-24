@@ -30,14 +30,12 @@ static void VehicleConstructRoadFront(void *shell, const OpenTTDEngine *e) noexc
 	v->gcache.cached_veh_length = VEHICLE_LENGTH;
 }
 static const OpenTTDStation *VehicleConstructStation(uint32_t tile) noexcept { return RustStation(Station::GetByTile(TileIndex(tile))); }
-static bool VehicleConstructCanUse(const OpenTTDEngine *e, const OpenTTDStation *st) noexcept { return CanVehicleUseStation(EngineOf(e)->index, StationOf(st)); }
-static uint32_t VehicleConstructHangar(const OpenTTDStation *station, uint32_t tile) noexcept
+static uint32_t VehicleConstructHangar(const OpenTTDStation *station, uint32_t tile, const AirportSpec *spec) noexcept
 {
 	const Station *st = StationOf(station);
-	uint hangar = st->airport.GetHangarNum(TileIndex(tile));
-	return RustStationHangarTile(st, hangar).base();
+	uint hangar = st->airport.GetHangarNum(TileIndex(tile), spec);
+	return RustStationHangarTile(st, hangar, spec).base();
 }
-static uint8_t VehicleConstructPosOnBuild(uint32_t tile) noexcept { return GetVehiclePosOnBuild(TileIndex(tile)); }
 static void *VehicleConstructNewAircraft() noexcept { return new Aircraft(); }
 static void VehicleConstructAircraftPlace(void *aircraft, void *shadow, uint32_t tile) noexcept
 {
@@ -139,8 +137,8 @@ static const OpenTTDVehicleConstructServices &GetVehicleConstructServices() noex
 		.articulated = &GetRustVehicleArticulatedServices(),
 		.powered_roadtypes = Engine_powered_roadtypes, .any_roadtype = VehicleConstructRoadTile,
 		.new_road = VehicleConstructNewRoad, .road_front = VehicleConstructRoadFront,
-		.station = VehicleConstructStation, .can_use_station = VehicleConstructCanUse, .hangar_tile = VehicleConstructHangar,
-		.pos_on_build = VehicleConstructPosOnBuild, .new_aircraft = VehicleConstructNewAircraft,
+		.station = VehicleConstructStation, .hangar_tile = VehicleConstructHangar,
+		.new_aircraft = VehicleConstructNewAircraft,
 		.aircraft_place = VehicleConstructAircraftPlace, .aircraft_info = VehicleConstructAircraftInfo,
 		.aircraft_properties = VehicleConstructAircraftProperties, .rotor = VehicleConstructRotor,
 		.aircraft_capacity = VehicleConstructAircraftCapacity, .road_capacity = VehicleConstructRoadCapacity,

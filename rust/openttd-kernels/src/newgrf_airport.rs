@@ -48,6 +48,31 @@ pub struct Availability {
 pub struct Services {
     shared: *const crate::services::Services,
     storage: *const crate::newgrf_storage::Services,
+    pub(crate) vehicles: *const crate::vehicle::VehicleServices,
+    pub(crate) check: extern "C" fn(bool),
+    pub(crate) engine_if_valid: extern "C" fn(u16) -> *const crate::vehicle::OpenTTDEngine,
+    pub(crate) engine_id: extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> u16,
+    pub(crate) engine_kind:
+        extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> crate::vehicle::VehicleType,
+    pub(crate) engine_subtype: extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> u8,
+    pub(crate) primary_road_stop:
+        extern "C" fn(*const crate::vehicle::OpenTTDVehicle, *const BaseStation) -> *mut c_void,
+    pub(crate) fta_flags: extern "C" fn(*const c_void) -> u8,
+    pub(crate) has_hangar: extern "C" fn(*const BaseStation, *const AirportSpec) -> bool,
+    pub(crate) hangar_tile: extern "C" fn(*const BaseStation, u32, *const AirportSpec) -> u32,
+    pub(crate) depot_count: extern "C" fn(*const AirportSpec) -> usize,
+    pub(crate) depot_offset:
+        extern "C" fn(*const AirportSpec, usize) -> crate::map_type::TileIndexDiffC,
+    pub(crate) rotated_offset: extern "C" fn(
+        *const BaseStation,
+        crate::map_type::TileIndexDiffC,
+        *const AirportSpec,
+    ) -> u32,
+    pub(crate) fta_heading: extern "C" fn(*const c_void, u32) -> u8,
+    pub(crate) fta_position: extern "C" fn(*const c_void, u32) -> u8,
+    pub(crate) dummy_spec: *const AirportSpec,
+    pub(crate) dummy_fta: *const c_void,
+    pub(crate) fta: extern "C" fn(*const AirportSpec) -> *const c_void,
     base_spec: extern "C" fn(u8) -> *const AirportSpec,
     availability: extern "C" fn(*const AirportSpec) -> Availability,
     override_id: extern "C" fn(*const AirportSpec) -> u16,
@@ -88,11 +113,14 @@ pub struct Services {
     ) -> u16,
     unhandled: extern "C" fn(u8),
 }
+pub(crate) fn runtime() -> &'static Services {
+    unsafe { &*crate::animated_tile::services().airport_runtime }
+}
 impl Services {
-    fn shared(&self) -> &crate::services::Services {
+    pub(crate) fn shared(&self) -> &crate::services::Services {
         unsafe { &*self.shared }
     }
-    fn commands(&self) -> &crate::station_cmd::CommandServicesTable {
+    pub(crate) fn commands(&self) -> &crate::station_cmd::CommandServicesTable {
         unsafe { &*(self.shared().station_commands)() }
     }
     fn map(&self) -> crate::map_func::Map {
@@ -101,6 +129,36 @@ impl Services {
         }
     }
 }
+
+/// Canonical `Airport::GetSpec` facade, shared with native-facing wrappers.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_get_spec(
+    tile: u32,
+    kind: u8,
+    s: *const Services,
+) -> *const AirportSpec {
+    crate::station_base::airport_get_spec(tile, kind, unsafe { &*s })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_fta(kind: u8, s: *const Services) -> *const c_void {
+    crate::airport::get_airport(kind, unsafe { &*s })
+}
+/// Observe only the station airport association at its original query point.
+pub(crate) fn station_by_id(id: u16, s: &Services) -> *mut BaseStation {
+    unsafe { ((*s.commands().station).get)(id) }
+}
+pub(crate) fn station_spec(st: *mut BaseStation, s: &Services) -> *const AirportSpec {
+    let tile = (s.commands().airport_tile)(st);
+    if tile == INVALID_TILE {
+        s.dummy_spec
+    } else {
+        crate::station_base::airport_get_spec(tile, (s.commands().airport_type)(st), s)
+    }
+}
+pub(crate) fn station_fta(st: *mut BaseStation, s: &Services) -> *const c_void {
+    (s.fta)(station_spec(st, s))
+}
+
 /// Source `AirportSpec::Get`: disabled custom substitution precedes overrides.
 pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
     let mut spec = (s.base_spec)(kind);
@@ -425,6 +483,9 @@ pub unsafe extern "C" fn openttd_rust_airport_translate_tile(gfx: u8, s: *const 
     translate_tile(gfx, unsafe { &*s })
 }
 /// Direct entry from the Rust animation owner; native common evaluator only.
+pub(crate) fn tile_spec_by_gfx(gfx: u8, s: &Services) -> *const TileSpec {
+    (s.tile_spec)(translate_tile(gfx, s))
+}
 pub(crate) fn tile_spec_by_tile(tile: u32, s: &Services) -> *const TileSpec {
     (s.tile_spec)(crate::station_map::get_airport_gfx(tile, s.shared(), s))
 }
@@ -453,5 +514,30 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
     "OpenTTDAirportAvailability" ["probe"] => Availability { enabled, min_year, max_year, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, base_spec, availability, override_id, manager_grfid, substitute, never_expire, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, check, engine_if_valid, engine_id, engine_kind, engine_subtype, primary_road_stop, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, base_spec, availability, override_id, manager_grfid, substitute, never_expire, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_can_engine_use_station(
+    engine: u16,
+    station: *const BaseStation,
+    s: *const Services,
+) -> bool {
+    crate::vehicle_func::can_engine_use_station(engine, station, unsafe { &*s })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_can_vehicle_use_station(
+    vehicle: *const crate::vehicle::OpenTTDVehicle,
+    station: *const BaseStation,
+    s: *const Services,
+) -> bool {
+    unsafe { crate::vehicle_func::can_vehicle_use_station(vehicle, station, &*s) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_is_hangar(tile: u32, s: *const Services) -> bool {
+    crate::station_map::is_hangar(tile, unsafe { &*s })
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_vehicle_pos_on_build(tile: u32, s: *const Services) -> u8 {
+    crate::airport::get_vehicle_pos_on_build(tile, unsafe { &*s })
 }

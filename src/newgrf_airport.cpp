@@ -24,6 +24,8 @@
 #include "rust/services_station.h"
 #include "rust/tile_animation_services.h"
 #include "rust/settings_services.h"
+#include "rust/engine_services.h"
+#include "rust/services_assert.h"
 #include "rust/airport_resolver_ffi.h"
 #endif
 #include "safeguards.h"
@@ -41,6 +43,24 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 	static const OpenTTDAirportResolverServices services{
 		.shared = &GetRustSharedServices(),
 		.storage = &GetRustStorageServices(),
+		.vehicles = &GetRustVehicleServices(),
+		.check = RustAssertCondition,
+		.engine_if_valid = RustEngineByIDIfValid,
+		.engine_id = RustEngineID,
+		.engine_kind = RustEngineType,
+		.engine_subtype = RustEngineAircraftSubtype,
+		.primary_road_stop = RustStationPrimaryRoadStop,
+		.fta_flags = RustAirportFlags,
+		.has_hangar = RustSelectedAirportHasHangar,
+		.hangar_tile = RustSelectedHangarTile,
+		.depot_count = [](const AirportSpec *spec) noexcept { return spec->depots.size(); },
+		.depot_offset = [](const AirportSpec *spec, size_t index) noexcept { return spec->depots[index].ti; },
+		.rotated_offset = [](const BaseStation *st, TileIndexDiffC offset, const AirportSpec *spec) noexcept { return Station::From(st)->airport.GetRotatedTileFromOffset(offset, spec).base(); },
+		.fta_heading = [](const AirportFTAClass *fta, uint32_t index) noexcept { return fta->layout[index].heading; },
+		.fta_position = [](const AirportFTAClass *fta, uint32_t index) noexcept { return fta->layout[index].position; },
+		.dummy_spec = &AirportSpec::dummy,
+		.dummy_fta = RustDummyAirportFTA(),
+		.fta = RustAirportSpecFTA,
 		.base_spec = [](uint8_t type) noexcept -> const AirportSpec * { return AirportSpec::GetWithoutOverride(type); },
 		.availability = [](const AirportSpec *spec) noexcept -> OpenTTDAirportAvailability { return {spec->enabled, spec->min_year.base(), spec->max_year.base()}; },
 		.override_id = RustSpecOverride<AirportSpec>,

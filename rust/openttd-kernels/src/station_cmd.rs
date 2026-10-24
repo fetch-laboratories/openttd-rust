@@ -117,7 +117,6 @@ pub struct AirportTile {
 #[repr(C)]
 pub struct AirportGeometry {
     pub area: Area,
-    pub spec: *const AirportSpec,
     pub rotation: u8,
 }
 #[repr(C)]
@@ -300,18 +299,18 @@ pub struct CommandServicesTable {
     pub airport_tile: extern "C" fn(*const BaseStation) -> u32,
     pub airport_type: extern "C" fn(*const BaseStation) -> u8,
     pub airport_geometry: extern "C" fn(*mut BaseStation) -> AirportGeometry,
-    pub airport_airplanes: extern "C" fn(u8) -> bool,
+    pub airport_airplanes: extern "C" fn(*const std::ffi::c_void) -> bool,
     pub set_airport_details: extern "C" fn(*mut BaseStation, u8, u8, u8),
     pub make_airport: extern "C" fn(u32, u8, u16, u8, u8),
     pub airport_add: extern "C" fn(*mut BaseStation, u32),
-    pub airport_animated: extern "C" fn(u8) -> bool,
+    pub airport_animated: extern "C" fn(*const crate::animated_tile::AirportSpec) -> bool,
 
     pub airport_infrastructure: extern "C" fn(u8, u32),
     pub station_view_invalidate: extern "C" fn(*mut BaseStation, i32),
     pub town_view_dirty: extern "C" fn(*const crate::services::TownHandle),
     pub aircraft_vehicle: extern "C" fn(crate::vehicle::VehicleRef) -> crate::aircraft::Vehicle,
-    pub hangar_count: extern "C" fn(*mut BaseStation) -> u32,
-    pub hangar_tile: extern "C" fn(*mut BaseStation, u32) -> u32,
+    pub hangar_count: extern "C" fn(*mut BaseStation, *const AirportSpec) -> u32,
+    pub hangar_tile: extern "C" fn(*const BaseStation, u32, *const AirportSpec) -> u32,
     pub close_hangar: extern "C" fn(u32),
     pub close_airport_tile_inspect: extern "C" fn(u32),
     pub delete_airport_storage: extern "C" fn(*mut BaseStation),
@@ -2904,7 +2903,7 @@ impl Ctx<'_> {
         let geometry = (self.s.airport_geometry)(st);
         let id = (self.links().graphs.station_id)(st);
         self.nearest_town(
-            geometry.spec,
+            crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
             geometry.rotation,
             geometry.area.tile,
             geometry.area.tiles(self.map()).filter(|&t| {
@@ -3047,7 +3046,9 @@ impl Ctx<'_> {
         if st.is_null() && distant {
             st = self.full_station(target);
         }
-        let name = if (self.s.airport_airplanes)(airport) {
+        let name = if (self.s.airport_airplanes)(crate::airport::get_airport(airport, unsafe {
+            &*self.s.airport_runtime
+        })) {
             2
         } else {
             5
@@ -3080,7 +3081,9 @@ impl Ctx<'_> {
                 ((self.shared.random)(self.shared.context) & 15) as u8,
             );
             (self.s.airport_add)(st, t.tile);
-            if (self.s.airport_animated)(t.gfx) {
+            if (self.s.airport_animated)(crate::newgrf_airport::tile_spec_by_gfx(t.gfx, unsafe {
+                &*self.s.airport_runtime
+            })) {
                 crate::animated_tile::openttd_rust_animation_add(t.tile, true);
             }
         }
@@ -3124,12 +3127,21 @@ impl Ctx<'_> {
             }
         }
         if flags & 1 != 0 {
-            for index in 0..(self.s.hangar_count)(st) {
-                (self.s.close_hangar)((self.s.hangar_tile)(st, index));
+            for index in 0..(self.s.hangar_count)(
+                st,
+                crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
+            ) {
+                (self.s.close_hangar)((self.s.hangar_tile)(
+                    st,
+                    index,
+                    crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
+                ));
             }
             let (nearest, distance) = self.nearest_existing_airport(st);
-            let geometry = (self.s.airport_geometry)(st);
-            let noise = self.noise(geometry.spec, distance);
+            let noise = self.noise(
+                crate::newgrf_airport::station_spec(st, unsafe { &*self.s.airport_runtime }),
+                distance,
+            );
             let ptr = self.noise_pointer(nearest);
             unsafe {
                 ptr.write(ptr.read().wrapping_sub(u16::from(noise)));
@@ -3223,7 +3235,7 @@ pub unsafe extern "C" fn openttd_rust_station_update_airport_noise(s: *const Com
         }
         if (c.s.airport_tile)(st) != u32::MAX && (c.s.airport_type)(st) != 9 {
             let (nearest, distance) = c.nearest_existing_airport(st);
-            let spec = (c.s.airport_geometry)(st).spec;
+            let spec = crate::newgrf_airport::station_spec(st, unsafe { &*c.s.airport_runtime });
             let noise = c.noise(spec, distance);
             let ptr = c.noise_pointer(nearest);
             unsafe {
@@ -4405,7 +4417,6 @@ crate::abi::layouts! {
     };
     "OpenTTDAirportGeometry" ["probe"] => AirportGeometry {
         area,
-        spec,
         rotation,
     };
 }

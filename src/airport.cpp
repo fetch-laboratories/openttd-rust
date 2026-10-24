@@ -185,9 +185,16 @@ static void AirportBuildAutomata(std::vector<AirportFTA> &layout, uint8_t nofele
  */
 const AirportFTAClass *GetAirport(const uint8_t airport_type)
 {
+#ifdef WITH_RUST
+	return openttd_rust_airport_fta(airport_type, &GetAirportResolverServices());
+#else
 	if (airport_type == AT_DUMMY) return &_airportfta_dummy;
 	return AirportSpec::Get(airport_type)->fsm;
+#endif
 }
+#ifdef WITH_RUST
+const AirportFTAClass *RustDummyAirportFTA() noexcept { return &_airportfta_dummy; }
+#endif
 
 /**
  * Get the vehicle position when an aircraft is build at the given tile
@@ -196,6 +203,9 @@ const AirportFTAClass *GetAirport(const uint8_t airport_type)
  */
 uint8_t GetVehiclePosOnBuild(TileIndex hangar_tile)
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_pos_on_build(hangar_tile.base(), &GetAirportResolverServices());
+#else
 	const Station *st = Station::GetByTile(hangar_tile);
 	const AirportFTAClass *apc = st->airport.GetFTA();
 	/* When we click on hangar we know the tile it is on. By that we know
@@ -209,4 +219,5 @@ uint8_t GetVehiclePosOnBuild(TileIndex hangar_tile)
 		}
 	}
 	NOT_REACHED();
+#endif
 }

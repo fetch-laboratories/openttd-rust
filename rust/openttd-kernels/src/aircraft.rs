@@ -175,7 +175,6 @@ pub struct HangarCandidate {
 }
 #[repr(C)]
 pub struct Leaves {
-    pub hangar_candidate: unsafe extern "C" fn(*const Station, u8) -> HangarCandidate,
     pub geometry: unsafe extern "C" fn(*const Station) -> Geometry,
     pub layout_blocks: unsafe extern "C" fn(*const c_void, u8) -> u64,
     pub layout_heading: unsafe extern "C" fn(*const c_void, u8) -> u8,
@@ -191,11 +190,8 @@ pub struct Leaves {
     pub rotation: unsafe extern "C" fn(*const Station) -> u8,
     pub airport_type: unsafe extern "C" fn(*const Station) -> u8,
     pub station_owner: unsafe extern "C" fn(*const Station) -> u8,
-    pub has_hangar: unsafe extern "C" fn(*const Station) -> bool,
-    pub airport_fta: unsafe extern "C" fn(*const Station) -> *const c_void,
     pub airport_blocks: unsafe extern "C" fn(*const Station) -> *mut u64,
     pub had_vehicle: unsafe extern "C" fn(*const Station) -> u8,
-    pub dummy_airport: unsafe extern "C" fn() -> *const c_void,
     pub airport_elements: unsafe extern "C" fn(*const c_void) -> u8,
     pub helipads: unsafe extern "C" fn(*const c_void) -> u8,
     pub airport_flags: unsafe extern "C" fn(*const c_void) -> u8,
@@ -208,10 +204,11 @@ pub struct Leaves {
     pub engine_sound: unsafe extern "C" fn(Vehicle) -> u16,
     pub airport_entry: unsafe extern "C" fn(*const c_void, u8) -> u8,
     pub direction_towards: unsafe extern "C" fn(Vehicle, i32, i32) -> u8,
-    pub hangar_height: unsafe extern "C" fn(u16) -> i32,
+    pub hangar_height:
+        unsafe extern "C" fn(*const Station, *const crate::station_cmd::AirportSpec) -> i32,
     pub terminal_count: unsafe extern "C" fn(*const c_void, u32) -> u8,
-    pub hangar_exit: unsafe extern "C" fn(Vehicle) -> u8,
-    pub can_use_station: unsafe extern "C" fn(Vehicle, *const Station) -> bool,
+    pub hangar_exit:
+        unsafe extern "C" fn(*const Station, u32, *const crate::station_cmd::AirportSpec) -> u8,
     pub service_interval: unsafe extern "C" fn(Vehicle) -> u16,
     pub chain_in_depot: unsafe extern "C" fn(Vehicle) -> bool,
     pub nearest_depot_order: unsafe extern "C" fn(Vehicle) -> bool,
@@ -493,7 +490,6 @@ impl World<'_> {
         rotation(self; s: *const Station) => unsafe { (self.leaves.rotation)(s) };
         airport_type(self; s: *const Station) => unsafe { (self.leaves.airport_type)(s) };
         station_owner(self; s: *const Station) => unsafe { (self.leaves.station_owner)(s) };
-        has_hangar(self; s: *const Station) => unsafe { (self.leaves.has_hangar)(s) };
         had_vehicle(self; s: *const Station) => unsafe { (self.leaves.had_vehicle)(s) };
         airport_elements(self; airport: *const c_void) => unsafe { (self.leaves.airport_elements)(airport) };
         helipads(self; airport: *const c_void) => unsafe { (self.leaves.helipads)(airport) };
@@ -509,10 +505,7 @@ impl World<'_> {
         tile_height(self; tile: i64) => (self.ss.tile_height)(tile as u32).wrapping_mul(crate::tile_type::TILE_HEIGHT) as i32;
         airport_entry(self; ap: *const c_void, direction: i64) => unsafe { (self.leaves.airport_entry)(ap, direction as u8) };
         direction_towards(self; v: Vehicle, x: i64, y: i64) => unsafe { (self.leaves.direction_towards)(v, x as i32, y as i32) };
-        hangar_height(self; station: i64) => unsafe { (self.leaves.hangar_height)(station as u16) };
         terminal_count(self; ap: *const c_void, index: i64) => unsafe { (self.leaves.terminal_count)(ap, index as u32) };
-        hangar_exit(self; v: Vehicle) => unsafe { (self.leaves.hangar_exit)(v) };
-        can_use_station(self; v: Vehicle, station: *const Station) => unsafe { (self.leaves.can_use_station)(v, station) };
         service_interval(self; v: Vehicle) => unsafe { (self.leaves.service_interval)(v) };
         chain_in_depot(self; v: Vehicle) => unsafe { (self.leaves.chain_in_depot)(v) };
         waiting_unbunching(self; v: Vehicle) => (self.vs.waiting_for_unbunching)(v.base());
@@ -528,7 +521,6 @@ impl World<'_> {
         send_to_depot(self; v: Vehicle, service: i64) => unsafe { (self.leaves.send_to_depot)(v, service != 0) };
     }
     direct_services! {
-        hangar_candidate(self; s: *const Station, owner: u8) -> HangarCandidate => unsafe { (self.leaves.hangar_candidate)(s, owner) };
         movement_observations(self; v: Vehicle) -> MovementObservations => (self.vs.movement_observations)(v.base());
         position_observations(self; v: Vehicle) -> PositionObservations => (self.vs.position_observations)(v.base());
         maximum_speed(self; v: Vehicle) -> u16 => (self.vs.max_speed)(v.base());
@@ -570,9 +562,7 @@ impl World<'_> {
         set_breakdowns(self; v: Vehicle, value: i64) -> () => (self.vs.write_breakdowns)(v.base(), value as u8);
         set_reliability(self; v: Vehicle, value: i64) -> () => (self.vs.write_reliability)(v.base(), value as u16);
         set_cargo_age(self; v: Vehicle, value: i64) -> () => (self.vs.write_cargo_age)(v.base(), value as u16);
-        airport_fta(self; s: *const Station) -> *const c_void => unsafe { (self.leaves.airport_fta)(s) };
         airport_blocks(self; s: *const Station) -> *mut u64 => unsafe { (self.leaves.airport_blocks)(s) };
-        dummy_airport(self; ) -> *const c_void => unsafe { (self.leaves.dummy_airport)() };
         node(self; airport: *const c_void, pos: u8) -> *const c_void => unsafe { (self.leaves.node)(airport, pos) };
         fta(self; node: *const c_void) -> Node => unsafe { (self.leaves.fta)(node) };
         block_choice(self; node: *const c_void) -> BlockChoice => unsafe { (self.leaves.block_choice)(node) };
@@ -698,6 +688,65 @@ impl World<'_> {
     }
     fn target_station(&self, id: Vehicle) -> *const Station {
         self.station(u32::from(self.target(id)))
+    }
+    fn airport_spec(&self, st: *const Station) -> *const crate::station_cmd::AirportSpec {
+        let tile = unsafe { (self.leaves.airport_tile)(st) };
+        if tile == INVALID_TILE {
+            crate::newgrf_airport::runtime().dummy_spec
+        } else {
+            crate::station_base::airport_get_spec(
+                tile,
+                unsafe { (self.leaves.airport_type)(st) },
+                crate::newgrf_airport::runtime(),
+            )
+        }
+    }
+    fn airport_fta(&self, st: *const Station) -> *const c_void {
+        (crate::newgrf_airport::runtime().fta)(self.airport_spec(st))
+    }
+    fn dummy_airport(&self) -> *const c_void {
+        crate::airport::get_airport(crate::airport::AT_DUMMY, crate::newgrf_airport::runtime())
+    }
+    fn has_hangar(&self, st: *const Station) -> i64 {
+        i64::from((crate::newgrf_airport::runtime().has_hangar)(
+            st.cast(),
+            self.airport_spec(st),
+        ))
+    }
+    fn can_use_station(&self, v: Vehicle, st: *const Station) -> i64 {
+        i64::from(unsafe {
+            crate::vehicle_func::can_vehicle_use_station(
+                v.handle,
+                st.cast(),
+                crate::newgrf_airport::runtime(),
+            )
+        })
+    }
+    fn hangar_candidate(&self, st: *const Station, vehicle_owner: u8) -> HangarCandidate {
+        let owner = self.station_owner(st) as u8;
+        let runtime = crate::newgrf_airport::runtime();
+        let airport = owner == vehicle_owner
+            && unsafe { ((*runtime.commands().station).facilities)(st.cast_mut().cast()) }
+                & crate::station_type::FACILITY_AIRPORT
+                != 0;
+        HangarCandidate {
+            owner,
+            airport,
+            hangar: airport && self.has_hangar(st) != 0,
+        }
+    }
+    fn hangar_height(&self, station: i64) -> i64 {
+        let st = self.station(station as u16);
+        let result = unsafe { (self.leaves.hangar_height)(st, self.airport_spec(st)) };
+        self.service_witness("hangar_height", std::mem::size_of_val(&result));
+        i64::from(result)
+    }
+    fn hangar_exit(&self, v: Vehicle) -> i64 {
+        let tile = (self.vs.tile)(v.base());
+        let st = self.station((self.ss.station_index)(tile));
+        let result = unsafe { (self.leaves.hangar_exit)(st, tile, self.airport_spec(st)) };
+        self.service_witness("hangar_exit", std::mem::size_of_val(&result));
+        i64::from(result)
     }
     fn valid_airport(&self, id: Vehicle) -> bool {
         let s = self.target_station(id);
@@ -2496,7 +2545,6 @@ crate::abi::layouts! {
         direction,
     };
     "OpenTTDAircraftLeaves" ["probe"] => Leaves {
-        hangar_candidate,
         geometry,
         layout_blocks,
         layout_heading,
@@ -2512,11 +2560,8 @@ crate::abi::layouts! {
         rotation,
         airport_type,
         station_owner,
-        has_hangar,
-        airport_fta,
         airport_blocks,
         had_vehicle,
-        dummy_airport,
         airport_elements,
         helipads,
         airport_flags,
@@ -2532,7 +2577,6 @@ crate::abi::layouts! {
         hangar_height,
         terminal_count,
         hangar_exit,
-        can_use_station,
         service_interval,
         chain_in_depot,
         nearest_depot_order,
