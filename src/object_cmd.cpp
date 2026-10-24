@@ -1128,11 +1128,9 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.flags = RustObjectSpecFlags,
 		.footprint = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectFootprint { return {RustObjectSpecFlags(spec), RustObjectSpecCallbacks(spec), spec->size}; },
 		.clearance = [](uint32_t tile) noexcept -> OpenTTDObjectClearance { const ObjectSpec *spec = RustObjectSpecByTile(tile); return {RustObjectSpecFlags(spec), spec->height}; },
-		.available = [](const ObjectSpec *spec) noexcept -> bool { return spec->IsAvailable(); },
-		.ever = RustObjectEverAvailable,
-		.area_shape = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectAreaShape { return {spec->views, spec->size}; },
-		.admission = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectAdmission { return {spec->views, spec->height}; },
-		.generation = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectGeneration { return {RustObjectSpecFlags(spec), spec->generate_amount, spec->views, RustObjectEverAvailable(spec)}; },
+		.area_shape = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectAreaShape { return {RustObjectViews(spec), spec->size}; },
+		.admission = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectAdmission { return {RustObjectViews(spec), spec->height}; },
+		.generation = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectGeneration { return {RustObjectSpecFlags(spec), spec->generate_amount, RustObjectViews(spec)}; },
 		.can_allocate = []() noexcept -> bool { return Object::CanAllocateItem(); },
 		.allocate = [](uint16_t type, const Town *town, OpenTTDObjectArea area, uint8_t view) noexcept -> OpenTTDObjectAllocation { Object *o = new Object(type, const_cast<Town *>(town), TileArea(TileIndex(area.tile), area.width, area.height), TimerGameCalendar::date, view); return {o, o->index.base()}; },
 		.object_type = [](uint32_t tile) noexcept { return GetObjectType(TileIndex(tile)); },
@@ -1142,12 +1140,11 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.next = [](uint32_t from) noexcept -> OpenTTDObjectNext { for (Object *o : Object::Iterate(from)) return {o, o->index.base(), o->location.tile.base()}; return {nullptr, UINT32_MAX, 0}; },
 		.set_colour = [](Object *o, uint8_t colour) noexcept -> void { o->colour = colour; },
 		.recolour = RustObjectRecolour,
-		.colour_callback = [](const ObjectSpec *spec, Object *o, uint8_t colour, uint32_t tile) noexcept -> uint16_t { return GetObjectCallback(CBID_OBJECT_COLOUR, colour, 0, spec, o, TileIndex(tile)); },
 		.colour_error = RustFixedSpecCallbackError<CBID_OBJECT_COLOUR, ObjectSpec>,
 		.make = [](uint32_t tile, uint8_t owner, uint32_t id, WaterClass water, uint32_t random) noexcept -> void { MakeObject(TileIndex(tile), Owner(owner), ObjectID(id), water, random); },
 		.delete_object = [](Object *o) noexcept -> void { delete o; },
 		.query = &GetRustObjectQueryServices(),
-		.slope_callback = [](const ObjectSpec *spec, uint32_t tile, Slope slope, uint32_t offset, uint8_t view) noexcept -> OpenTTDObjectSlopeResult { OpenTTDObjectSlopeResult r{}; r.callback = GetObjectCallback(CBID_OBJECT_LAND_SLOPE_CHECK, slope, offset, spec, nullptr, TileIndex(tile), r.registers, view); if (r.callback != CALLBACK_FAILED) r.version = RustSpecGRFVersion<ObjectSpec>(spec); return r; },
+		.resolver = &GetObjectResolverServices(),
 		.slope_error = RustLocationCallbackError<ObjectSpec, ObjectSpec, OpenTTDObjectSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
 		.build_price = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectPrice { return {spec->build_cost_multiplier, RustGRFPriceShift(RustSpecGRFFile(spec), PR_BUILD_OBJECT)}; },
 		.clear_price = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectPrice { return {spec->clear_cost_multiplier, RustGRFPriceShift(RustSpecGRFFile(spec), PR_CLEAR_OBJECT)}; },
@@ -1156,9 +1153,7 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 		.hq_begin = [](OpenTTDObjectLoopFrame *frame, uint32_t tile, [[maybe_unused]] uint32_t level) noexcept -> void { assert(level < 6); frame->stations.emplace(TileArea(TileIndex(tile), 2, 2)); },
 		.hq_deliver = [](OpenTTDObjectLoopFrame *frame, uint8_t cargo, uint32_t amount, uint8_t owner) noexcept -> void { OpenTTDMoveGoodsToStation(cargo, amount, {owner, SourceType::Headquarters}, frame->stations->GetStations()); },
 		.hq_end = [](OpenTTDObjectLoopFrame *frame) noexcept -> void { frame->stations.reset(); },
-		.autoslope_callback = [](const ObjectSpec *spec, Object *o, uint32_t tile) noexcept -> uint16_t { return GetObjectCallback(CBID_OBJECT_AUTOSLOPE, 0, 0, spec, o, TileIndex(tile)); },
 		.boolean_callback = RustSpecBooleanCallback<ObjectSpec>,
-		.enabled = [](const ObjectSpec *spec) noexcept -> bool { return spec->IsEnabled(); },
 		.close_inspect = RustCloseInspect<GSF_OBJECTS, uint32_t>,
 		.progress_set = [](OpenTTDObjectGenerationFrame *frame, uint32_t total) noexcept -> bool { return RunGenerationProgress(frame, [total] { RustSetGeneratingWorldProgress(GWP_OBJECT, total); }); },
 		.progress_increase = [](OpenTTDObjectGenerationFrame *frame) noexcept -> bool { return RunGenerationProgress(frame, [] { RustIncreaseGeneratingWorldProgress(GWP_OBJECT); }); },
@@ -1180,5 +1175,6 @@ const OpenTTDObjectServices &GetRustObjectServices() noexcept
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDObjectServices.hpp"
 #include "abi-visit-OpenTTDObjectQueryServices.hpp"
-bool CheckAbi_object_cmd() { return AbiServicesComplete(GetRustObjectServices()) && AbiServicesComplete(*GetRustObjectServices().query); }
+#include "abi-visit-OpenTTDObjectResolverServices.hpp"
+bool CheckAbi_object_cmd() { return AbiServicesComplete(GetRustObjectServices()) && AbiServicesComplete(*GetRustObjectServices().query) && AbiServicesComplete(*GetRustObjectServices().resolver); }
 #endif

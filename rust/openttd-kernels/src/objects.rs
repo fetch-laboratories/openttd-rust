@@ -283,7 +283,6 @@ pub struct Generation {
     pub flags: u16,
     pub amount: u8,
     pub views: u8,
-    pub ever: bool,
 }
 #[repr(C)]
 pub struct SlopeResult {
@@ -325,8 +324,6 @@ pub struct ObjectServices {
     pub flags: unsafe extern "C" fn(*const Spec) -> u16,
     pub footprint: unsafe extern "C" fn(*const Spec) -> Footprint,
     pub clearance: unsafe extern "C" fn(u32) -> Clearance,
-    pub available: unsafe extern "C" fn(*const Spec) -> bool,
-    pub ever: unsafe extern "C" fn(*const Spec) -> bool,
     pub area_shape: unsafe extern "C" fn(*const Spec) -> AreaShape,
     pub admission: unsafe extern "C" fn(*const Spec) -> Admission,
     pub generation: unsafe extern "C" fn(*const Spec) -> Generation,
@@ -339,13 +336,11 @@ pub struct ObjectServices {
     pub next: unsafe extern "C" fn(u32) -> Next,
     pub set_colour: unsafe extern "C" fn(*mut Object, u8) -> (),
     pub recolour: unsafe extern "C" fn(u8, bool) -> u8,
-    pub colour_callback: unsafe extern "C" fn(*const Spec, *mut Object, u8, u32) -> u16,
     pub colour_error: unsafe extern "C" fn(*const Spec, u16) -> (),
     pub make: unsafe extern "C" fn(u32, u8, u32, WaterClass, u32) -> (),
     pub delete_object: unsafe extern "C" fn(*mut Object) -> (),
     pub query: *const QueryServices,
-    pub slope_callback:
-        unsafe extern "C" fn(*const Spec, u32, crate::services::Slope, u32, u8) -> SlopeResult,
+    pub resolver: *const ResolverServices,
     pub slope_error: unsafe extern "C" fn(*mut CommandCost, *const SlopeResult, *const Spec) -> (),
     pub build_price: unsafe extern "C" fn(*const Spec) -> Price,
     pub clear_price: unsafe extern "C" fn(*const Spec) -> Price,
@@ -354,9 +349,7 @@ pub struct ObjectServices {
     pub hq_begin: unsafe extern "C" fn(*mut LoopFrame, u32, u32) -> (),
     pub hq_deliver: unsafe extern "C" fn(*mut LoopFrame, u8, u32, u8) -> (),
     pub hq_end: unsafe extern "C" fn(*mut LoopFrame) -> (),
-    pub autoslope_callback: unsafe extern "C" fn(*const Spec, *mut Object, u32) -> u16,
     pub boolean_callback: unsafe extern "C" fn(*const Spec, u16, u16) -> bool,
-    pub enabled: unsafe extern "C" fn(*const Spec) -> bool,
     pub close_inspect: unsafe extern "C" fn(u32) -> (),
     pub progress_set: unsafe extern "C" fn(*mut GenerationFrame, u32) -> bool,
     pub progress_increase: unsafe extern "C" fn(*mut GenerationFrame) -> bool,
@@ -490,6 +483,24 @@ impl<'a> World<'a> {
                     0
                 },
             },
+        }
+    }
+    unsafe fn callback(
+        &self,
+        callback: u16,
+        param1: u32,
+        param2: u32,
+        spec: *const Spec,
+        object: *mut Object,
+        tile: u32,
+        registers: *mut i32,
+        count: usize,
+        view: u8,
+    ) -> u16 {
+        unsafe {
+            openttd_rust_object_callback(
+                self.s, callback, param1, param2, spec, object, tile, registers, count, view,
+            )
         }
     }
     fn query(&self) -> &QueryServices {
@@ -792,7 +803,17 @@ impl<'a> World<'a> {
             }
             (self.s.set_colour)(object.object, colour);
             if shape.callbacks & 8 != 0 {
-                let result = (self.s.colour_callback)(spec, object.object, colour, tile);
+                let result = self.callback(
+                    crate::newgrf_callbacks::CBID_OBJECT_COLOUR.0,
+                    u32::from(colour),
+                    0,
+                    spec,
+                    object.object,
+                    tile,
+                    ptr::null_mut(),
+                    0,
+                    0,
+                );
                 if result != CALLBACK_FAILED {
                     if result >= 256 {
                         (self.s.colour_error)(spec, result);
@@ -1006,15 +1027,13 @@ impl<'a> World<'a> {
             }
             let spec = (self.s.spec)(kind);
             let admission = (self.s.admission)(spec);
-            if (self.s.normal)()
-                && !(self.s.available)(spec)
-                && !((*self.s.town).generating_world)()
+            if (self.s.normal)() && !available(self.s, spec) && !((*self.s.town).generating_world)()
             {
                 out.error();
                 return;
             }
             if (((*self.s.town).environment.editor)() || ((*self.s.town).generating_world)())
-                && !(self.s.ever)(spec)
+                && !was_available(self.s, spec)
             {
                 out.error();
                 return;
@@ -1131,13 +1150,21 @@ impl<'a> World<'a> {
                     };
                     if shape.callbacks & 1 != 0 {
                         let diff = t.wrapping_sub(tile);
-                        result = (self.s.slope_callback)(
-                            spec,
-                            t,
-                            crate::services::Slope((self.shared.tile_slope)(t)),
+                        result.callback = self.callback(
+                            crate::newgrf_callbacks::CBID_OBJECT_LAND_SLOPE_CHECK.0,
+                            u32::from((self.shared.tile_slope)(t)),
                             self.map.tile_y(diff) << 4 | self.map.tile_x(diff),
+                            spec,
+                            ptr::null_mut(),
+                            t,
+                            result.registers.as_mut_ptr(),
+                            result.registers.len(),
                             view,
                         );
+                        if result.callback != CALLBACK_FAILED {
+                            let r = resolver_services(self.s);
+                            result.version = (r.version)((r.file)(spec));
+                        }
                         crate::witness::hit(crate::witness::OBJECT_SLOPE_CALLBACK);
                     }
                     if result.callback == CALLBACK_FAILED {
@@ -1387,16 +1414,22 @@ impl World<'_> {
                     let callbacks = (self.s.callbacks)(spec);
                     if if callbacks & 32 != 0 {
                         {
-                            let result = (self.s.autoslope_callback)(
+                            let result = self.callback(
+                                CBID_OBJECT_AUTOSLOPE,
+                                0,
+                                0,
                                 spec,
                                 (self.query().by_tile)(tile),
                                 tile,
+                                ptr::null_mut(),
+                                0,
+                                0,
                             );
                             result == CALLBACK_FAILED
                                 || !(self.s.boolean_callback)(spec, CBID_OBJECT_AUTOSLOPE, result)
                         }
                     } else {
-                        (self.s.enabled)(spec)
+                        enabled(self.s, spec)
                     } {
                         out.set(crate::company::price(PR_BUILD_FOUNDATION));
                         crate::witness::hit(crate::witness::OBJECT_AUTOSLOPE);
@@ -1688,7 +1721,7 @@ impl World<'_> {
             for kind in 0..(self.s.spec_count)() {
                 let spec = (self.s.spec)(kind as u16);
                 let generation = (self.s.generation)(spec);
-                if !generation.ever || generation.amount == 0 {
+                if !was_available(self.s, spec) || generation.amount == 0 {
                     continue;
                 }
                 let mut amount = if generation.flags & SCALE_WATER != 0
@@ -1845,6 +1878,260 @@ impl Drag {
             self.tile = INVALID_TILE;
         }
     }
+}
+
+/// Stack context owned by the object invocation. Successful parent lookup is
+/// cached for this lifetime; a null result leaves the next lookup free to retry.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ObjectScope {
+    pub object: *mut Object,
+    pub spec: *const Spec,
+    pub parent: *const TownHandle,
+    pub tile: u32,
+    pub view: u8,
+}
+#[repr(C)]
+pub struct Eligibility {
+    pub flags: u16,
+    pub climate: u8,
+    pub views: u8,
+}
+#[repr(C)]
+pub struct Lifetime {
+    pub introduction: i32,
+    pub end: i32,
+}
+#[repr(C)]
+pub struct ResolverServices {
+    pub file: unsafe extern "C" fn(*const Spec) -> *const std::ffi::c_void,
+    pub root: unsafe extern "C" fn(*const Spec, bool) -> *const std::ffi::c_void,
+    pub local_id: unsafe extern "C" fn(*const Spec) -> u16,
+    pub version: unsafe extern "C" fn(*const std::ffi::c_void) -> u8,
+    pub views: unsafe extern "C" fn(*const Spec) -> u8,
+    pub eligibility: unsafe extern "C" fn(*const Spec) -> Eligibility,
+    pub introduction: unsafe extern "C" fn(*const Spec) -> i32,
+    pub lifetime: unsafe extern "C" fn(*const Spec) -> Lifetime,
+    pub town_scope:
+        unsafe extern "C" fn(*mut Resolver, *const TownHandle, bool) -> *mut std::ffi::c_void,
+    pub base_scope: unsafe extern "C" fn(*mut Resolver, u8, u8) -> *mut std::ffi::c_void,
+    pub evaluate: unsafe extern "C" fn(*const ObjectScope, u16, u32, u32, *mut i32, usize) -> u16,
+}
+struct InvocationRegistry(UnsafeCell<*const ObjectServices>);
+// SAFETY: native game-state serialization covers installation and every use,
+// including GUI commands and the game thread. Reset does not overlap resolution.
+unsafe impl Sync for InvocationRegistry {}
+static INVOCATIONS: InvocationRegistry = InvocationRegistry(UnsafeCell::new(ptr::null()));
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_services_exchange(
+    s: *const ObjectServices,
+) -> *const ObjectServices {
+    unsafe { ptr::replace(INVOCATIONS.0.get(), s) }
+}
+fn invocation_services<'a>() -> &'a ObjectServices {
+    // SAFETY: ResetObjects installs the immutable process-live native table
+    // before use. No Rust reference into a context or world record escapes.
+    unsafe { &**INVOCATIONS.0.get() }
+}
+fn resolver_services(s: &ObjectServices) -> &ResolverServices {
+    // SAFETY: native table lives for the serialized entry.
+    unsafe { &*s.resolver }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_scope_init(
+    object: *mut Object,
+    spec: *const Spec,
+    tile: u32,
+    view: u8,
+) -> ObjectScope {
+    ObjectScope {
+        object,
+        spec,
+        parent: ptr::null(),
+        tile,
+        view,
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_file(spec: *const Spec) -> *const std::ffi::c_void {
+    unsafe { (resolver_services(invocation_services()).file)(spec) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_root(
+    context: *const ObjectScope,
+) -> *const std::ffi::c_void {
+    let ObjectScope { object, spec, .. } = unsafe { *context };
+    unsafe { (resolver_services(invocation_services()).root)(spec, !object.is_null()) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_debug_id(context: *const ObjectScope) -> u32 {
+    let spec = unsafe { (*context).spec };
+    unsafe { u32::from((resolver_services(invocation_services()).local_id)(spec)) }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_object_feature() -> u8 {
+    0x0f
+}
+unsafe fn object_town(context: *mut ObjectScope, ro: *mut Resolver) -> *mut std::ffi::c_void {
+    let s = invocation_services();
+    let ObjectScope {
+        object,
+        parent,
+        tile,
+        ..
+    } = unsafe { *context };
+    let town = if parent.is_null() {
+        if object.is_null() {
+            // ClosestTownFromTile has no invalid-tile guard in this source body.
+            (unsafe { &*s.shared }.closest_town)(tile, u32::MAX)
+        } else {
+            unsafe { ((*s.query).town)(object) }
+        }
+    } else {
+        parent
+    };
+    if town.is_null() {
+        return ptr::null_mut();
+    }
+    // End the context access before constructing the native virtual facade,
+    // which uses the integrated town/storage owner and can reenter it.
+    unsafe {
+        (*context).parent = town;
+    }
+    unsafe { (resolver_services(s).town_scope)(ro, town, object.is_null()) }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_scope(
+    context: *mut ObjectScope,
+    ro: *mut Resolver,
+    own: *mut std::ffi::c_void,
+    scope: u8,
+    relative: u8,
+) -> *mut std::ffi::c_void {
+    use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
+    if scope == VSG_SCOPE_SELF {
+        return own;
+    }
+    if scope == VSG_SCOPE_PARENT {
+        let town = unsafe { object_town(context, ro) };
+        if !town.is_null() {
+            return town;
+        }
+    }
+    unsafe { (resolver_services(invocation_services()).base_scope)(ro, scope, relative) }
+}
+/// Direct object owner entry. Native evaluation constructs only its stack
+/// virtual facade for the directly called common Action2 owner.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_callback(
+    s: *const ObjectServices,
+    callback: u16,
+    param1: u32,
+    param2: u32,
+    spec: *const Spec,
+    object: *mut Object,
+    tile: u32,
+    registers: *mut i32,
+    count: usize,
+    view: u8,
+) -> u16 {
+    let context = openttd_rust_object_scope_init(object, spec, tile, view);
+    unsafe {
+        (resolver_services(&*s).evaluate)(
+            &raw const context,
+            callback,
+            param1,
+            param2,
+            registers,
+            count,
+        )
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_animation_callback(
+    callback: u16,
+    param1: u32,
+    param2: u32,
+    spec: *const Spec,
+    object: *mut Object,
+    tile: u32,
+    _extra: i32,
+) -> u16 {
+    unsafe {
+        openttd_rust_object_callback(
+            invocation_services(),
+            callback,
+            param1,
+            param2,
+            spec,
+            object,
+            tile,
+            ptr::null_mut(),
+            0,
+            0,
+        )
+    }
+}
+fn is_enabled(views: u8) -> bool {
+    views > 0
+}
+fn enabled(s: &ObjectServices, spec: *const Spec) -> bool {
+    is_enabled(unsafe { (resolver_services(s).views)(spec) })
+}
+fn ever_available(s: &ObjectServices, spec: *const Spec) -> bool {
+    let policy = unsafe { (resolver_services(s).eligibility)(spec) };
+    is_enabled(policy.views)
+        && policy.climate & (1 << (unsafe { &*s.town }.climate)()) != 0
+        && policy.flags
+            & if !(unsafe { &*s.town }.environment.editor)()
+                && !(unsafe { &*s.town }.generating_world)()
+            {
+                SCENEDIT
+            } else {
+                IN_GAME
+            }
+            == 0
+}
+fn was_available(s: &ObjectServices, spec: *const Spec) -> bool {
+    ever_available(s, spec)
+        && (unsafe { &*s.shared }.calendar_date)()
+            > unsafe { (resolver_services(s).introduction)(spec) }
+}
+fn available(s: &ObjectServices, spec: *const Spec) -> bool {
+    if !was_available(s, spec) {
+        return false;
+    }
+    let dates = unsafe { (resolver_services(s).lifetime)(spec) };
+    (unsafe { &*s.shared }.calendar_date)() < dates.end
+        || dates.end < dates.introduction.wrapping_add(365)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_enabled(
+    s: *const ObjectServices,
+    spec: *const Spec,
+) -> bool {
+    enabled(unsafe { &*s }, spec)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_ever_available(
+    s: *const ObjectServices,
+    spec: *const Spec,
+) -> bool {
+    ever_available(unsafe { &*s }, spec)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_was_available(
+    s: *const ObjectServices,
+    spec: *const Spec,
+) -> bool {
+    was_available(unsafe { &*s }, spec)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_object_available(
+    s: *const ObjectServices,
+    spec: *const Spec,
+) -> bool {
+    available(unsafe { &*s }, spec)
 }
 
 /// Synchronous `NewGRF` query/animation entries. Native records stay opaque.
@@ -2238,7 +2525,6 @@ crate::abi::layouts! {
         flags,
         amount,
         views,
-        ever,
     };
     "OpenTTDObjectSlopeResult" ["landscape"] => SlopeResult {
         callback,
@@ -2293,6 +2579,10 @@ crate::abi::layouts! {
 
         unhandled,
     };
+    "OpenTTDObjectScope" ["landscape"] => ObjectScope { object, spec, parent, tile, view };
+    "OpenTTDObjectEligibility" ["landscape"] => Eligibility { flags, climate, views };
+    "OpenTTDObjectLifetime" ["landscape"] => Lifetime { introduction, end };
+    "OpenTTDObjectResolverServices" ["landscape"] => ResolverServices { file, root, local_id, version, views, eligibility, introduction, lifetime, town_scope, base_scope, evaluate };
     "OpenTTDObjectServices" ["landscape"] => ObjectServices {
         shared,
         cost,
@@ -2310,8 +2600,6 @@ crate::abi::layouts! {
         flags,
         footprint,
         clearance,
-        available,
-        ever,
         area_shape,
         admission,
         generation,
@@ -2324,12 +2612,11 @@ crate::abi::layouts! {
         next,
         set_colour,
         recolour,
-        colour_callback,
         colour_error,
         make,
         delete_object,
         query,
-        slope_callback,
+        resolver,
         slope_error,
         build_price,
         clear_price,
@@ -2338,9 +2625,7 @@ crate::abi::layouts! {
         hq_begin,
         hq_deliver,
         hq_end,
-        autoslope_callback,
         boolean_callback,
-        enabled,
         close_inspect,
         progress_set,
         progress_increase,

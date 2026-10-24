@@ -139,6 +139,34 @@ def check(scenario, run, mode, role, result):
         branch_witnesses(scenario, run, role, "object", branches)
     if "objects" not in scenario:
         return
+    for marker in (
+        "invocation-roots",
+        "invocation-parent",
+        "invocation-animation",
+        "invocation-complete",
+        "invocation-rng",
+    ):
+        if sum(x.startswith("OBJECT " + marker + " ") for x in run["log"]) != 1:
+            raise RuntimeError(f"{mode}/{role}: missing {marker}")
+    for name in (
+        "invocation-slope-reject-test",
+        "invocation-slope-reject-execute",
+        "invocation-autoslope-disabled",
+    ):
+        if sum(x.startswith("OBJECT cost " + name + " ") for x in run["log"]) != 1:
+            raise RuntimeError(f"{mode}/{role}: missing real callback result {name}")
+    admissions = [
+        tuple(x.split()[2:5])
+        for x in run["log"]
+        if x.startswith("OBJECT invocation-eligibility ")
+    ]
+    expected_admissions = set(
+        product(("1", "2"), ("false", "true"), map(str, range(8)))
+    )
+    if len(admissions) != 32 or set(admissions) != expected_admissions:
+        raise RuntimeError(
+            f"{mode}/{role}: missing actual availability admission boundaries"
+        )
     required = {
         "commands": ("hq-cargo 5 2 1", "id-reused true", "water-clear 1 16 2 17 0 17"),
         "gaps": (

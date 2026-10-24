@@ -195,19 +195,11 @@ pub struct ResolverBinding {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct ObjectScope {
-    object: *mut crate::objects::Object,
-    spec: *const crate::objects::Spec,
-    tile: u32,
-    view: u8,
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
 pub union ScopeData {
     vehicle: *const crate::newgrf_vehicle::Scope,
     industry: *const crate::industry::resolver::ResolverContext,
     station: Resolver,
-    object: ObjectScope,
+    object: *const crate::objects::ObjectScope,
     town: *const crate::town::resolver::TownScope,
     airport: *const crate::newgrf_airport::State,
     house: *const crate::town::resolver::HouseScope,
@@ -316,6 +308,13 @@ impl<'a> Invocation<'a> {
                 11 => {
                     crate::newgrf_generic::openttd_rust_generic_scope(b.own, b.default_scope, kind)
                 }
+                12 => crate::objects::openttd_rust_object_scope(
+                    b.state.cast(),
+                    self.ro.cast(),
+                    b.own,
+                    kind,
+                    relative,
+                ),
                 _ => (self.s.scope)(self.ro, kind, relative),
             };
             let mut binding = std::mem::MaybeUninit::uninit();
@@ -376,14 +375,18 @@ impl<'a> Invocation<'a> {
                     self.s.industry,
                 ),
                 5 => {
-                    let o = b.data.object;
+                    let context = b.data.object;
+                    let object = (*context).object;
+                    let spec = (*context).spec;
+                    let tile = (*context).tile;
+                    let view = (*context).view;
                     crate::objects::openttd_rust_object_variable(
                         self.s.object,
                         self.ro.cast(),
-                        o.object,
-                        o.spec,
-                        o.tile,
-                        o.view,
+                        object,
+                        spec,
+                        tile,
+                        view,
                         variable,
                         parameter,
                         available,
@@ -465,7 +468,7 @@ impl<'a> Invocation<'a> {
                 }
                 5 => crate::objects::openttd_rust_object_random_bits(
                     self.s.object,
-                    scope.binding.data.object.tile,
+                    (*scope.binding.data.object).tile,
                 ),
                 9 => crate::newgrf_roadstop::openttd_rust_roadstop_random(
                     scope.binding.data.roadstop,
@@ -967,7 +970,6 @@ pub unsafe extern "C" fn openttd_rust_resolver_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDResolverBinding" ["storage"] => ResolverBinding { state, own => self, parent, relative, default_scope, kind };
-    "OpenTTDObjectScope" ["storage"] => ObjectScope { object, spec, tile, view };
     "OpenTTDScopeBinding" ["storage"] => ScopeBinding { data, kind };
     "OpenTTDResolverState" ["storage"] => State { callback, callback_param1, callback_param2, last_value, waiting_random_triggers, used_random_triggers, reseed };
     "OpenTTDResolverResult" ["storage"] => ResultValue { group, callback, kind };
