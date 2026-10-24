@@ -790,7 +790,7 @@ crate::abi::layouts! {
 
 /// Call-scoped bridge to a direct Rust signal entry from other Rust owners.
 /// All pointers address immutable process-lifetime native service tables; map
-/// width is captured for this invocation. This contains no signal-state mirror.
+/// width is captured for this invocation.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Context {

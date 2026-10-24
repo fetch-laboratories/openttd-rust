@@ -351,7 +351,7 @@ pub unsafe extern "C" fn openttd_rust_live_graph_monthly(
             .wrapping_add(1) as u32
 }
 
-/// Save-only address carrier; these point to the canonical fields, never a mirror.
+/// Save-only address carrier pointing at the live fields.
 #[repr(C)]
 pub struct NodeFields {
     pub supply: *mut u32,

@@ -850,7 +850,7 @@ pub(crate) unsafe extern "C" fn openttd_rust_aead_unlock(
     result
 }
 
-// Metadata only; no secret context layout is mirrored across languages.
+// Layout metadata only; secret context contents never cross.
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDCryptoLeaves" ["probe"] => Leaves {

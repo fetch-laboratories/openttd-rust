@@ -198,7 +198,7 @@ impl World<'_> {
         (self.s.random)(self.s.context) as u8
     }
     fn dirty_neighbours(&self, tile: u32) {
-        // SAFETY: Direct call to the integrated Rust owner with the same tables.
+        // SAFETY: Calls the Rust owner with the same tables.
         unsafe {
             crate::water::dirty_water_neighbours(
                 tile,

@@ -152,7 +152,7 @@ unsafe fn derive(
         {
             return 0;
         }
-        // Vendor final wipes the hash context itself. No duplicate secret-bearing value exists.
+        // Vendor final wipes the hash context itself.
         let hash = Buffer::new(p.hash_size, p.hash_alignment, None);
         (p.hash_init)(hash.ptr(), 64);
         (p.hash_update)(hash.ptr(), shared.ptr().cast(), 32);

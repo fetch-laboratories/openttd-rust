@@ -210,7 +210,7 @@ impl<'a> World<'a> {
         .add_side(tile, direction, owner);
     }
     fn check_docking(&self, tile: u32) {
-        // SAFETY: direct integrated owner; all access scopes end before reentry.
+        // SAFETY: Rust owner; all access scopes end before reentry.
         unsafe {
             crate::station_cmd::openttd_rust_station_check_docking(
                 (self.s.station_commands)(),

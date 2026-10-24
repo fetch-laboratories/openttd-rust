@@ -330,7 +330,7 @@ impl<'a> Commands<'a> {
             }
             w::hit(w::TOWN_COMMAND_BRIBE_FAILED);
         } else {
-            // SAFETY: Canonical owner is live; direct existing rating owner retains scratch/cheat semantics.
+            // SAFETY: The town owner is live; the rating owner keeps its scratch and cheat semantics.
             unsafe {
                 super::openttd_rust_town_change_rating(
                     self.f.growth,

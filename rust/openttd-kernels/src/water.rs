@@ -325,7 +325,7 @@ impl<'a> World<'a> {
     fn result(&self, call: *mut Call, out: *const services::CommandCost) -> bool {
         // SAFETY: prepare constructed this result; release ends its native lifetime.
         let success = unsafe { ((*self.costs().costs).success)(out) };
-        // SAFETY: The live result is no longer read, ending its native lifetime.
+        // SAFETY: The live result is not read again, ending its native lifetime.
         unsafe { (self.costs().release)(call) };
         success
     }

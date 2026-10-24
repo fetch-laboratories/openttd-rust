@@ -81,7 +81,7 @@ pub struct Cache {
     pub cached_veh_length: u8,
     pub last_speed: u16,
 }
-/// One owner per native train/road shell, never relocated or mirrored.
+/// One owner per native train/road shell, never relocated.
 #[repr(C)]
 #[derive(Default)]
 pub struct State {

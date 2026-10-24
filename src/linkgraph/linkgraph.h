@@ -111,7 +111,7 @@ public:
 	 * in a separate thread.
 	 */
 #ifdef WITH_RUST
-	/** Stack-only node handle; it owns no allocation or scalar mirror. */
+	/** Stack-only node handle; it owns no allocation. */
 	struct BaseNode {
 		OpenTTDLiveGraph *owner;
 		NodeID id;

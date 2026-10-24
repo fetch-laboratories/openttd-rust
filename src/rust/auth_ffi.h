@@ -28,7 +28,7 @@ extern "C" {
 /* All callbacks are nonthrowing, synchronous primitive operations. They retain
  * no input pointer and invoke no Packet, RNG, logger, allocator, or UI callback.
  * The host starts the actual trivial vendor-context lifetime in init/copy.
- * Layouts describe the host vendor types, not a mirrored Rust representation. */
+ * Layouts describe the host vendor types. */
 struct OpenTTDAuthPrimitives {
 	uint32_t version;
 	uint32_t reserved;

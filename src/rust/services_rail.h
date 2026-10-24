@@ -31,8 +31,7 @@ inline OpenTTDSignalContext GetRustSignalContext() noexcept
 }
 
 /* Preserve native accessor types and assertion policy. The FFI tables adapt
- * only result widths; native consumers inline these same reads without another
- * service-table call or a second definition of the map query. */
+ * only result widths; native consumers inline these same reads. */
 template <typename EngineType>
 inline bool RustRailCompatible(EngineType engine, RailType tile) noexcept { return IsCompatibleRail(engine, tile); }
 template <typename EngineType>

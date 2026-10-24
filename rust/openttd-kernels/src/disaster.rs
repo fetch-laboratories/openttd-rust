@@ -5,8 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 //! Disaster-private ownership and complete controllers over canonical C++ world data.
-// Source-width casts and bit masks intentionally preserve the original encodings.
-// Keeping controller bodies intact makes their service ordering reviewable.
+// Source-width casts and bit masks preserve the original encodings. Controller
+// bodies stay whole, as in the original, so their service order reads alongside it.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,

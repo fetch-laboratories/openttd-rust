@@ -609,7 +609,7 @@ crate::abi::layouts! {
 }
 
 /// Immutable process-lifetime native leaves, installed on house-class reset
-/// before any callback. The native table contains no mutable world-state mirror.
+/// before any callback.
 struct Registry(UnsafeCell<*const ResolverServices>);
 // SAFETY: Installation and all reads hold the native game-state mutex.
 unsafe impl Sync for Registry {}

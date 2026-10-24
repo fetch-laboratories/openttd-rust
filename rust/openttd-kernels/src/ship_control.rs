@@ -1100,7 +1100,7 @@ pub unsafe extern "C" fn openttd_rust_ship_trackdir(
         )
     }) as u8
 }
-/// Only the Rust vehicle build transaction calls this; C++ no longer builds ships.
+/// Only the Rust vehicle build transaction calls this.
 pub(crate) unsafe fn ship_build(
     id: u32,
     v: VehicleRef,

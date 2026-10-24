@@ -176,7 +176,7 @@ struct Ship final : public SpecializedVehicle<Ship, VEH_SHIP> {
 bool IsShipDestinationTile(TileIndex tile, StationID station);
 
 #ifdef WITH_RUST
-/** Nested save staging exists only during save/load; no persistent state mirror. */
+/** Nested save staging exists only during save/load. */
 class ShipStateScope {
 	static inline ShipStateScope *active = nullptr;
 	ShipStateScope *previous;

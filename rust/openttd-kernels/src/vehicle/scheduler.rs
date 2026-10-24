@@ -538,7 +538,7 @@ mod tests {
     const SHIP: VehicleType = VehicleType::SHIP;
     use std::ptr::{NonNull, null, null_mut};
 
-    // Only test-owned scalar cells, never a replica of the native Vehicle layout.
+    // Test-owned scalar cells, not the native Vehicle layout.
     #[allow(clippy::struct_excessive_bools)] // Independent inaccessible-field probes.
     struct Cells {
         period: u16,

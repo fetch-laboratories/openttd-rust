@@ -100,7 +100,7 @@ pub(crate) unsafe fn set_state(state: *mut State, value: u8) {
 pub(crate) unsafe fn get_state(state: *const State) -> u8 {
     unsafe { (*state).scalars[STATE] as u8 }
 }
-/// Original `RoadVehicle::SetState(RVSB_IN_DEPOT)` without a native-owner bounce.
+/// Original `RoadVehicle::SetState(RVSB_IN_DEPOT)`.
 /// # Safety
 /// A live serialized road owner; the scalar access ends before any callback.
 pub(crate) unsafe fn set_depot_state(state: *mut State) {
@@ -2442,7 +2442,7 @@ pub(crate) unsafe fn crashed_counter(state: *const State) -> u16 {
     unsafe { (*state).scalars[CRASHED] }
 }
 
-/// `RoadVehicle::GetCurrentMaxSpeed`, entering its owner without a native virtual bounce.
+/// `RoadVehicle::GetCurrentMaxSpeed`.
 /// # Safety
 /// Live serialized shell/private owner; immutable services, no borrow spans callbacks.
 pub(crate) unsafe fn current_max_speed(
