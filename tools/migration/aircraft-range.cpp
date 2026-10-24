@@ -128,7 +128,8 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.tile = [](OpenTTDVehicle *) noexcept { return uint32_t{0}; };
 	vehicle.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = vehicle.tile_links(shell), .tile = vehicle.tile(shell)}; };
 	vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
-	leaves.copy_sprite = [](OpenTTDAircraftVehicle, OpenTTDAircraftVehicle) noexcept {};
+	leaves.copy_sprite = [](OpenTTDVehicle *, OpenTTDVehicle *) noexcept {};
+	vehicle.next = [](OpenTTDVehicle *v) noexcept -> OpenTTDVehicle * { return v == reinterpret_cast<OpenTTDVehicle *>(fixture) ? reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}) : nullptr; };
 	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { if (v.id == 17) { v.id = 18; v.handle = reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}); return v; } return OpenTTDAircraftVehicle{nullptr, nullptr, 1048575}; };
 	vehicle.speed = [](OpenTTDVehicle *) noexcept { return uint16_t{0}; };
 	leaves.can_use_station = [](OpenTTDAircraftVehicle, const OpenTTDStation *) noexcept { return true; };
