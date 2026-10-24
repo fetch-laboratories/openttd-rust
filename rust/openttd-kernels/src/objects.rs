@@ -2021,7 +2021,7 @@ pub unsafe extern "C" fn openttd_rust_object_scope(
     unsafe { (resolver_services(invocation_services()).base_scope)(ro, scope, relative) }
 }
 /// Direct object owner entry. Native evaluation constructs only its stack
-/// virtual facade and calls the assigned base's common Action2 evaluator.
+/// virtual facade for the directly called common Action2 owner.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_object_callback(
     s: *const ObjectServices,

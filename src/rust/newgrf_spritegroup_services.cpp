@@ -110,6 +110,8 @@ static void ResolverBinding(ResolverObject *ro, OpenTTDResolverBinding *out) noe
 		out->self = &h->house_scope; out->parent = &h->town_scope; out->kind = 7;
 	} else if (auto *t = dynamic_cast<TownResolverObject *>(ro)) {
 		out->self = &t->town_scope; out->kind = 8;
+	} else if (auto *o = dynamic_cast<ObjectResolverObject *>(ro)) {
+		out->state = &o->object_scope.context; out->self = &o->object_scope; out->kind = 12;
 	} else if (typeid(*ro) != typeid(ResolverObject)) {
 		out->kind = 5; // Remaining native feature scope-selection behavior.
 	}
@@ -121,7 +123,7 @@ static void ScopeBinding(ScopeResolver *scope, OpenTTDScopeBinding *out) noexcep
 	else if (auto *st = dynamic_cast<StationScopeResolver *>(scope)) { out->kind = 2; out->data.station = &st->state; }
 	else if (auto *i = dynamic_cast<IndustriesScopeResolver *>(scope)) { out->kind = 3; out->data.industry = &i->context; }
 	else if (auto *it = dynamic_cast<IndustryTileScopeResolver *>(scope)) { out->kind = 4; out->data.industry = &it->context; }
-	else if (auto *o = dynamic_cast<ObjectScopeResolver *>(scope)) { out->kind = 5; out->data.object = {o->obj, o->spec, o->tile.base(), o->view}; }
+	else if (auto *o = dynamic_cast<ObjectScopeResolver *>(scope)) { out->kind = 5; out->data.object = &o->context; }
 	else if (auto *t = dynamic_cast<TownScopeResolver *>(scope)) { out->kind = 6; out->data.town = &t->context; }
 	else if (auto *a = dynamic_cast<AirportScopeResolver *>(scope)) { out->kind = 7; out->data.airport = a->st; }
 	else if (auto *rs = dynamic_cast<RoadStopScopeResolver *>(scope)) { out->kind = 9; out->data.roadstop = &rs->state; }
