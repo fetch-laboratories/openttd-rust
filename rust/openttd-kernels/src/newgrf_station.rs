@@ -46,7 +46,7 @@ pub struct SpecIdentity {
 #[repr(C)]
 pub struct Reseed {
     reseed: u32,
-    used: u32,
+    used: u8,
 }
 #[repr(C)]
 pub struct Spec {
@@ -898,7 +898,7 @@ pub extern "C" fn openttd_rust_station_randomisation(
             }
         }
     }
-    (native.set_waiting)(st, (native.waiting)(st) & !(used as u8));
+    (native.set_waiting)(st, (native.waiting)(st) & !used);
     if whole & 0xffff != 0 {
         // The native compound assignments publish the cleared station bits
         // before Random, then read the live bits again for the final OR.

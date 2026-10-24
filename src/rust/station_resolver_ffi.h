@@ -12,7 +12,7 @@ struct OpenTTDStationResolverState {
 	uint32_t tile; uint8_t cargo; Axis axis; uint8_t valid; uint32_t cache[6];
 };
 struct OpenTTDStationSpecIdentity { uint32_t grfid; uint16_t local; };
-struct OpenTTDStationReseed { uint32_t reseed, used; };
+struct OpenTTDStationReseed { uint32_t reseed; uint8_t used; };
 struct OpenTTDStationResolverSpec { uint16_t threshold; bool divide; };
 struct OpenTTDStationSlopeResult { uint16_t callback; int32_t registers[16]; };
 struct OpenTTDStationResolverServices {
