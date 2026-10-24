@@ -353,7 +353,9 @@ alignment gap](https://doc.rust-lang.org/rustc/platform-support.html).
 
 `tools/check-rust-platform.py` also requires only `/MT` in every Windows Rust consumer's compile
 command and no dynamic C/C++ runtime import, and runs each unsupported configuration above as a
-refusal smoke test. CTest runs the native ABI executable (`rust-abi-layout-and-calls`): struct
+refusal smoke test. It checks the ordered native library arguments, including duplicates, in
+each Ninja link command and its response files. CTest runs the native ABI executable
+(`rust-abi-layout-and-calls`): struct
 sizes, alignments and field offsets for every `abi.rs` layout, high-bit scalars, by-value
 returns, sentinels, null/empty inputs, Rust allocation/view/destroy paths, history-engine staging
 and a per-thread non-C locale lowercase check (signed negative compare arguments stay outside the

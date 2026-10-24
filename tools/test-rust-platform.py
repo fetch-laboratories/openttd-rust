@@ -15,6 +15,58 @@ import migration
 
 platform = runpy.run_path(str(Path(__file__).with_name("check-rust-platform.py")))
 freshness = platform["freshness"]
+check_windows_link = platform["check_windows_link"]
+
+
+class WindowsLinkTests(unittest.TestCase):
+    def test_native_group_in_nested_response_files(self):
+        with tempfile.TemporaryDirectory(prefix="Rust link ") as directory:
+            build = Path(directory)
+            arguments = [
+                "kernel32.lib",
+                "kernel32.lib",
+                "C:/Program Files/SDK/native.lib",
+                "/defaultlib:libcmt",
+            ]
+            group = 'kernel32.lib kernel32.lib "C:/Program Files/SDK/native.lib" /defaultlib:libcmt'
+            (build / "link.rsp").write_text(
+                '/out:src/strgen/strgen.exe @"inner response.rsp"', encoding="utf-8-sig"
+            )
+            result = SimpleNamespace(
+                returncode=0,
+                stdout=b"cl.exe /c strgen.cpp\ncmake -E vs_link_exe -- link.exe @link.rsp\nlink.exe /out:openttd.exe\n",
+            )
+            for content, accepted in (
+                (group, True),
+                (group.replace("kernel32.lib kernel32.lib", "kernel32.lib"), False),
+                (group.replace(" /defaultlib", " unrelated.lib /defaultlib"), False),
+                (group.replace("kernel32.lib", "kernel32.lib.other"), False),
+            ):
+                with self.subTest(content=content):
+                    (build / "inner response.rsp").write_text(content)
+                    with patch.dict(
+                        check_windows_link.__globals__, run=lambda *args: result
+                    ):
+
+                        def check():
+                            check_windows_link(
+                                build,
+                                build,
+                                "tools",
+                                "strgen",
+                                "src/strgen/strgen",
+                                {"native_libraries": arguments},
+                            )
+
+                        if accepted:
+                            check()
+                        else:
+                            with self.assertRaises(RuntimeError):
+                                check()
+            (build / "inner response.rsp").unlink()
+            with patch.dict(check_windows_link.__globals__, run=lambda *args: result):
+                with self.assertRaises(FileNotFoundError):
+                    check()
 
 
 class FreshnessTests(unittest.TestCase):

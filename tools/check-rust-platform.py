@@ -86,6 +86,52 @@ def assertion_policy(command, consumer, build_type, windows):
         raise RuntimeError(f"{consumer} is not only the static release CRT: {command}")
 
 
+def check_windows_link(out, build, label, consumer, binary, configuration):
+    """MSVC may link successfully after CMake drops repeated native arguments."""
+    target = {
+        "game": "openttd",
+        "tests": "openttd_test",
+        "abi": "openttd_rust_abi",
+    }.get(consumer, consumer)
+    result = run(
+        ["ninja", "-C", build, "-t", "commands", target],
+        out / f"{label}-{consumer}-link.log",
+    )
+    if result.returncode:
+        raise RuntimeError(f"Cannot read {consumer} link command")
+
+    def expand(text, seen):
+        for match in re.finditer(r'@(?:"([^"]+)"|([^\s"&]+))', text):
+            path = (build / (match[1] or match[2])).resolve()
+            if path not in seen:
+                seen.add(path)
+                text += "\n" + expand(path.read_text(encoding="utf-8-sig"), seen)
+        return text
+
+    links = []
+    for line in result.stdout.decode().splitlines():
+        if not re.search(r"(?:vs_link_exe|\blink(?:\.exe)?\b)", line, re.I):
+            continue
+        command = expand(line, set())
+        normalized = command.replace("\\", "/").replace('"', "")
+        if re.search(
+            r"(?:^|\s)/out:" + re.escape(binary) + r"\.exe(?=\s|$)", normalized, re.I
+        ):
+            links.append(command)
+    arguments = [
+        r'(?:"' + re.escape(arg) + r'"|' + re.escape(arg) + r")"
+        for arg in configuration["native_libraries"]
+    ]
+    if (
+        len(links) != 1
+        or not arguments
+        or not re.search(
+            r"(?:^|\s)" + r"\s+".join(arguments) + r"(?=\s|$)", links[0], re.I
+        )
+    ):
+        raise RuntimeError(f"{consumer} lost the ordered native library argument group")
+
+
 def check_build(out, label, build, target, windows):
     configuration = migration.rust_configuration(build)
     if configuration["target"] != target:
@@ -112,6 +158,7 @@ def check_build(out, label, build, target, windows):
         for command in matching:
             assertion_policy(command, consumer, configuration["build_type"], windows)
         if windows:
+            check_windows_link(out, build, label, consumer, binary, configuration)
             log = out / f"{label}-{consumer}-imports.log"
             imports = run(["dumpbin", "/dependents", build / f"{binary}.exe"], log)
             dynamic = rb"\b(?:VCRUNTIME\w*|MSVCP\w*|UCRTBASE)\.dll"
