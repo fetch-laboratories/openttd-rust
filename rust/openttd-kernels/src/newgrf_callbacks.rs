@@ -15,6 +15,9 @@ pub struct CallbackID(pub u16);
 pub const CBID_VEHICLE_LENGTH: CallbackID = CallbackID(0x11);
 pub const CBID_VEHICLE_32DAY_CALLBACK: CallbackID = CallbackID(0x32);
 
+pub const CBID_INDUSTRY_PROBABILITY: u16 = 0x22;
+pub const CBID_INDUSTRY_LOCATION: u16 = 0x28;
+pub const CBID_INDUSTRY_REFUSE_CARGO: u16 = 0x3d;
 pub const CBID_INDTILE_ANIMATION_TRIGGER: CallbackID = CallbackID(0x25);
 pub const CBID_STATION_ANIMATION_TRIGGER: CallbackID = CallbackID(0x140);
 pub const CBID_AIRPTILE_ANIMATION_TRIGGER: CallbackID = CallbackID(0x152);
@@ -39,3 +42,22 @@ crate::abi::layouts! {
     "CallbackID" ["maintenance"] => CallbackID {
     };
 }
+
+pub const CBID_VEHICLE_MODIFY_PROPERTY: CallbackID = CallbackID(0x36);
+pub const CBID_VEHICLE_BUILD_PROBABILITY: CallbackID = CallbackID(0x162);
+
+pub const CBID_NO_CALLBACK: CallbackID = CallbackID(0x00);
+pub const CBID_RANDOM_TRIGGER: CallbackID = CallbackID(0x01);
+pub const CBID_TRAIN_ALLOW_WAGON_ATTACH: CallbackID = CallbackID(0x1d);
+pub const CBID_VEHICLE_START_STOP_CHECK: CallbackID = CallbackID(0x31);
+pub const CBID_VEHICLE_COLOUR_MAPPING: CallbackID = CallbackID(0x2d);
+pub const CBID_VEHICLE_SPAWN_VISUAL_EFFECT: CallbackID = CallbackID(0x160);
+
+pub const CBID_VEHICLE_REFIT_COST: CallbackID = CallbackID(0x15e);
+pub const CBID_VEHICLE_LOAD_AMOUNT: CallbackID = CallbackID(0x12);
+
+/// Masks from `newgrf_callbacks.h::IndustryCallbackMask`.
+pub const INDUSTRY_PROBABILITY: u16 = 1 << 0;
+pub const INDUSTRY_PRODUCTION_CARGO_ARRIVAL: u16 = 1 << 1;
+pub const INDUSTRY_PRODUCTION_256_TICKS: u16 = 1 << 2;
+pub const INDUSTRY_REFUSE_CARGO: u16 = 1 << 10;

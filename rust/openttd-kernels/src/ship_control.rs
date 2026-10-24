@@ -200,8 +200,6 @@ pub struct Leaves {
     pub speed_default: extern "C" fn(u32) -> u32,
     pub age_default: extern "C" fn(u32) -> u32,
     pub speed_frac: extern "C" fn(u32, bool) -> u32,
-    pub speed_property: extern "C" fn(u32, u32) -> u32,
-    pub age_property: extern "C" fn(u32, u32) -> u32,
     pub update_visual: extern "C" fn(u32),
     pub cache_invalidate: extern "C" fn(u32),
     pub capacity: extern "C" fn(u32) -> u32,
@@ -453,15 +451,25 @@ impl Game<'_> {
             (self.leaves.start_dirty)(id);
         }
     }
-    fn cache(&self, id: u32) {
+    fn cache(&self, id: u32, v: VehicleRef) {
         let observed_tile = (self.leaves.tile)(id);
         let sea = (self.leaves.water_class)(observed_tile) == 0;
         let speed = (self.leaves.speed_default)(id);
-        let raw = (self.leaves.speed_property)(id, speed);
+        let raw = (self.vs().property)(
+            (self.vs().newgrf)(),
+            v,
+            crate::newgrf_properties::PROP_SHIP_SPEED,
+            speed as i32,
+        ) as u32;
         let frac = (self.leaves.speed_frac)(id, sea);
         (self.leaves.set_max_speed)(id, (raw.wrapping_mul(256 - frac) / 256) as u16);
         let period = (self.leaves.age_default)(id);
-        let age = (self.leaves.age_property)(id, period);
+        let age = (self.vs().property)(
+            (self.vs().newgrf)(),
+            v,
+            crate::newgrf_properties::PROP_SHIP_CARGO_AGE_PERIOD,
+            period as i32,
+        ) as u32;
         (self.leaves.set_cargo_age)(id, age as u16);
         (self.leaves.update_visual)(id);
     }
@@ -946,6 +954,7 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_cache(
+    v: VehicleRef,
     id: u32,
     leaves: *const Leaves,
     services: *const Services,
@@ -957,7 +966,7 @@ pub unsafe extern "C" fn openttd_rust_ship_cache(
         services: unsafe { &*services },
         owner: (leaves.state_owner)(id),
     };
-    game.cache(id);
+    game.cache(id, v);
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_destination(
@@ -1172,8 +1181,6 @@ crate::abi::layouts! {
         speed_default,
         age_default,
         speed_frac,
-        speed_property,
-        age_property,
         update_visual,
         cache_invalidate,
         capacity,
@@ -1268,4 +1275,9 @@ crate::abi::layouts! {
         id,
         valid,
     };
+}
+
+/// `Ship::GetCurrentMaxSpeed`, from `ship.h`.
+pub(crate) fn current_max_speed(cached: u16, order: u16) -> i32 {
+    i32::from(cached).min(i32::from(order) * 2)
 }

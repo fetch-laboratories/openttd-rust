@@ -466,7 +466,7 @@ pub struct Leaves {
     pub crash_news: extern "C" fn(VehicleRef, u32),
     pub shorten_factor: extern "C" fn(crate::vehicle::EngineRef) -> u8,
     pub default_max_speed: extern "C" fn(VehicleRef) -> u16,
-    pub update_cargo_age: extern "C" fn(VehicleRef),
+    pub cargo_age_default: extern "C" fn(VehicleRef) -> u16,
     pub cost_read: extern "C" fn(VehicleRef) -> CostRead,
     pub price: extern "C" fn(crate::vehicle::EngineRef, u32) -> i64,
     pub pay_running: extern "C" fn(VehicleRef, i64),
@@ -1034,7 +1034,12 @@ impl Game<'_> {
             let engine = service!(self.vs.engine_for_length)(u);
             let mut length = VEHICLE_LENGTH;
             let mut factor = if engine.grf_version >= 8 {
-                let value = service!(self.vs.property)(u, 0x23, i32::from(CALLBACK_FAILED)) as u16;
+                let value = service!(self.vs.property)(
+                    (self.vs.newgrf)(),
+                    u,
+                    0x23,
+                    i32::from(CALLBACK_FAILED),
+                ) as u16;
                 if value != CALLBACK_FAILED && value >= u16::from(VEHICLE_LENGTH) {
                     service!(self.vs.unknown_callback_result)(
                         engine.engine,
@@ -1044,7 +1049,7 @@ impl Game<'_> {
                 }
                 value
             } else {
-                service!(self.vs.callback)(u, CBID_VEHICLE_LENGTH)
+                service!(self.vs.callback)((self.vs.newgrf)(), u, CBID_VEHICLE_LENGTH)
             };
             if factor == CALLBACK_FAILED {
                 factor = u16::from(service!(self.l.shorten_factor)(engine.engine));
@@ -1057,13 +1062,20 @@ impl Game<'_> {
             }
             total = total.wrapping_add(u16::from(length));
             service!(self.gs.write_length)(u, length, v.v, total);
-            service!(self.l.update_cargo_age)(u);
+            let period = service!(self.l.cargo_age_default)(u);
+            let age = service!(self.vs.property)(
+                (self.vs.newgrf)(),
+                u,
+                crate::newgrf_properties::PROP_ROADVEH_CARGO_AGE_PERIOD,
+                i32::from(period),
+            );
+            service!(self.vs.write_cargo_age)(u, age as u16);
             let Some(next) = service!(self.vs.next)(u) else {
                 break;
             };
             u = next;
         }
-        let speed = service!(self.vs.property)(v.v, 0x15, 0) as u32;
+        let speed = service!(self.vs.property)((self.vs.newgrf)(), v.v, 0x15, 0) as u32;
         service!(self.vs.write_max_speed)(
             v.v,
             if speed != 0 {
@@ -1796,7 +1808,8 @@ impl Game<'_> {
         if r.cost_class == INVALID_PRICE {
             return 0;
         }
-        let factor = service!(self.vs.property)(v.v, 9, i32::from(r.cost_factor)) as u32;
+        let factor =
+            service!(self.vs.property)((self.vs.newgrf)(), v.v, 9, i32::from(r.cost_factor)) as u32;
         if factor == 0 {
             return 0;
         }
@@ -2372,7 +2385,7 @@ crate::abi::layouts! {
         crash_news,
         shorten_factor,
         default_max_speed,
-        update_cargo_age,
+        cargo_age_default,
         cost_read,
         price,
         pay_running,
@@ -2412,4 +2425,38 @@ impl Game<'_> {
         };
         service!(self.l.after_enter_tile)(v, flags)
     }
+}
+
+/// `RoadVehicle::GetBlockedCounter`; live serialized owner, no borrow spans reentry.
+pub(crate) unsafe fn blocked_counter(state: *const State) -> u16 {
+    unsafe { (*state).scalars[BLOCKED] }
+}
+/// `RoadVehicle::GetOvertaking`; live serialized owner, no borrow spans reentry.
+pub(crate) unsafe fn overtaking(state: *const State) -> u8 {
+    unsafe { (*state).scalars[OVERTAKING] as u8 }
+}
+/// `RoadVehicle::GetOvertakingCounter`; live serialized owner, no borrow spans reentry.
+pub(crate) unsafe fn overtaking_counter(state: *const State) -> u8 {
+    unsafe { (*state).scalars[OVERTAKING_CTR] as u8 }
+}
+/// `RoadVehicle::GetCrashedCounter`; live serialized owner, no borrow spans reentry.
+pub(crate) unsafe fn crashed_counter(state: *const State) -> u16 {
+    unsafe { (*state).scalars[CRASHED] }
+}
+
+/// `RoadVehicle::GetCurrentMaxSpeed`, entering its owner without a native virtual bounce.
+/// # Safety
+/// Live serialized shell/private owner; immutable services, no borrow spans callbacks.
+pub(crate) unsafe fn current_max_speed(
+    v: VehicleRef,
+    state: *mut State,
+    model: u8,
+    leaves: &Leaves,
+) -> i32 {
+    max_speed(
+        Part::new(v, state),
+        (leaves.max_speed_read)(v),
+        model,
+        leaves,
+    )
 }

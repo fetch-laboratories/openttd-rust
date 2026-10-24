@@ -458,7 +458,6 @@ pub struct CommonServices {
     pub strings: TransactionStrings,
     pub train_power: extern "C" fn(*mut ()) -> u32,
     pub aircraft_start: extern "C" fn(*mut ()) -> AircraftStartState,
-    pub startstop_callback: extern "C" fn(*mut (), *mut i32) -> u16,
     pub grf_version: extern "C" fn(*mut ()) -> u8,
     pub grf_string: extern "C" fn(*mut (), u32) -> u32,
     pub waiting_news: extern "C" fn(u32),
@@ -558,7 +557,19 @@ pub(crate) unsafe fn startstop(
     }
     if evaluate {
         let mut register100 = std::mem::MaybeUninit::<i32>::uninit();
-        let callback = (s.startstop_callback)(v, register100.as_mut_ptr());
+        let callback = unsafe {
+            crate::newgrf_vehicle::callback(
+                s.vehicles,
+                vehicle_ref(v),
+                (s.vehicles.engine_id)(vehicle_ref(v)),
+                crate::newgrf_callbacks::CBID_VEHICLE_START_STOP_CHECK.0,
+                0,
+                std::ptr::null_mut(),
+                false,
+                register100.as_mut_ptr(),
+                1,
+            )
+        };
         let mut error = s.strings.null_string;
         if callback != crate::vehicle::CALLBACK_FAILED {
             if (s.grf_version)(v) < 8 {
@@ -642,7 +653,7 @@ crate::abi::layouts! {
     };
     "OpenTTDVehicleCommonServices" ["probe"] => CommonServices {
         base, transactions, vehicles, orders, strings, train_power, aircraft_start,
-        startstop_callback, grf_version, grf_string, waiting_news, flip_stopped,
+        grf_version, grf_string, waiting_news, flip_stopped,
         startstop_ui, value, valid_cargo,
     };
     "OpenTTDVehicleSelectionServices" ["probe"] => SelectionServices {

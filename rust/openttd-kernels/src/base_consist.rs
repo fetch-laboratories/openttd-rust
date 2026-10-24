@@ -11,3 +11,8 @@
 pub const VF_LOADING_FINISHED: u16 = 1 << 0;
 /// `VehicleFlag::StopLoading`.
 pub const VF_STOP_LOADING: u16 = 1 << 6;
+
+/// `VehicleFlag::CargoUnloading`.
+pub const VF_CARGO_UNLOADING: u16 = 1 << 1;
+/// `VehicleFlag::BuiltAsPrototype`.
+pub const VF_BUILT_AS_PROTOTYPE: u16 = 1 << 2;

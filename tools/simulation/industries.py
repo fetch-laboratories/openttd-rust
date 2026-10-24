@@ -4,7 +4,16 @@ import shutil
 from pathlib import Path
 
 from . import companies, disasters, economy
-from .core import SNAPSHOT_TICKS, TICKS_PER_DAY, read_save, run_game
+from .console_adapter import console_adapter, prepared_console
+from .core import (
+    ROOT,
+    SNAPSHOT_TICKS,
+    TICKS_PER_DAY,
+    WITNESS_ENVIRONMENT,
+    branch_witnesses,
+    read_save,
+    run_game,
+)
 
 AI_FOLDER = "industry-scenario-ai"
 # Calibrated on the pinned original with this one-town, treeless input. The
@@ -196,11 +205,53 @@ def scenarios(soak):
         for scenario in companies.scenarios(soak)
         if scenario["companies"] in ("acquire", "delete", "reuse")
     )
+    result.append(
+        dict(
+            name="industry-resolver",
+            kind="save",
+            industry="resolver",
+            ticks=1,
+            short_checkpoint=True,
+            save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+        )
+    )
     return result
+
+
+def game_environment(scenario):
+    return (
+        WITNESS_ENVIRONMENT
+        if scenario.get("industry") == "resolver" and scenario.get("witnesses")
+        else {}
+    )
+
+
+def adapter(build, folder, env):
+    return console_adapter(
+        build,
+        folder,
+        env,
+        ROOT / "tools/simulation/industries-console.cpp",
+        "industries",
+    )
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     mode = scenario.get("industry")
+    if mode == "resolver":
+        from . import rails
+
+        folder = out / scenario["name"] / "input"
+        source, _ = rails.normalize(Path(scenario["save"]), folder / "normalized")
+        executables = prepared_console(
+            "industries", adapter, binaries, builds, folder, env
+        )
+        return dict(
+            scenario,
+            save=str(source),
+            executables=executables,
+            console=["industries_scenario", "unpause"],
+        )
     if mode == "transfer":
         # Company preparation runs first and builds real AI assets with the
         # unchanged reference. Both roles receive these same reachable settings.
@@ -355,6 +406,45 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 def check(scenario, run, mode, role, result):
     kind = scenario.get("industry")
+    if kind == "resolver":
+        branch_witnesses(
+            scenario,
+            run,
+            role,
+            "industry_resolver",
+            (
+                "variable",
+                "tile_variable",
+                "count",
+                "filtered_count",
+                "location",
+                "root",
+                "tile_root",
+                "town",
+                "refusal",
+                "probability",
+            ),
+        )
+        for marker in (
+            "var67 0",
+            "var68 0",
+            "refusal true",
+            "location 0 2271560481",
+            "checkpoint true",
+            "unavailable-fallback true",
+            "count-wrap true",
+            "tile-identities true",
+            "production-params true",
+            "production 0 12",
+            "callbacks true",
+            "randomized true",
+            "complete true",
+        ):
+            if not any("INDUSTRY-RESOLVER " + marker in line for line in run["log"]):
+                raise RuntimeError(
+                    f"{mode}/{role}: missing industry resolver evidence: {marker}"
+                )
+        return
     if kind == "water-check":
         for branch in ("plain", scenario["industry_water"], "fund"):
             marker = f"INDUSTRY-WATER {branch} ready true"

@@ -70,6 +70,15 @@ static void Cost(const char *label, const CommandCost &cost, Money money = 0, To
 	fmt::print(stderr, "TOWN cost {} {} {} {} {} {}\n", label, cost.Succeeded(), cost.GetCost(), cost.GetErrorMessage(), money, id.base());
 }
 static void Cost(const char *label, const std::tuple<CommandCost, Money, TownID> &result) { const auto &[cost, money, id] = result; Cost(label, cost, money, id); }
+/* Observe the real presentation request, then forward it unchanged. The null
+ * driver cannot establish rendered errors or authority-window refreshes. */
+static uint bribe_errors;
+extern "C" void __real__Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE(EncodedString &&, EncodedString &&, WarningLevel, int, int, EncodedString &&, CompanyID);
+extern "C" void __wrap__Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE(EncodedString &&summary, EncodedString &&detail, WarningLevel level, int x, int y, EncodedString &&extra, CompanyID company)
+{
+	if (summary == GetEncodedString(STR_ERROR_BRIBE_FAILED) && detail.empty() && level == WL_INFO) ++bribe_errors;
+	__real__Z16ShowErrorMessageO13EncodedStringS0_12WarningLeveliiS0_6PoolIDIh12CompanyIDTagLh15ELh255EE(std::move(summary), std::move(detail), level, x, y, std::move(extra), company);
+}
 static TileIndex Site()
 {
 	for (TileIndex tile{}; tile < Map::Size(); ++tile) {
@@ -267,18 +276,54 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	for (TownAction action{}; action < TownAction::Bribe; ++action) {
 		Cost("action-test", CmdDoTownAction({}, id, action)); Cost("action-exec", CmdDoTownAction(DoCommandFlag::Execute, id, action));
 	}
-	for (bool failed : {false, true}) {
-		for (uint seed = 1; ; ++seed) { Randomizer trial; trial.SetSeed(seed); if (Chance16I(1, 14, trial.Next()) == failed) { _random.SetSeed(seed); break; } }
-		town->unwanted[company->index] = 0; town->ratings[company->index] = 500;
+	owner.Change(OWNER_DEITY);
+	auto [neighbour_cost, neighbour_money, neighbour_id] = CmdFoundTown(DoCommandFlag::Execute, Site(), TSZ_SMALL, false, TL_ORIGINAL, false, 0, "Bribe neighbour");
+	Cost("bribe-neighbour", neighbour_cost, neighbour_money, neighbour_id); if (neighbour_cost.Failed()) std::abort();
+	Town *neighbour = Town::Get(neighbour_id);
+	owner.Change(company->index);
+	std::array<Station *, 4> stations{station};
+	for (size_t i = 1; i < stations.size(); ++i) {
+		if (!Station::CanAllocateItem()) std::abort();
+		stations[i] = new Station(i < 2 ? town->xy : neighbour->xy);
+		_station_kdtree.Insert(stations[i]->index);
+		stations[i]->town = i < 2 ? town : neighbour;
+		stations[i]->owner = i % 2 == 0 ? company->index : other->index;
+	}
+	Backup<CompanyID> local(_local_company, company->index);
+	/* Observe ShowErrorMessage without creating a GUI window under -vnull. */
+	Backup<uint8_t> duration(_settings_client.gui.errmsg_duration, 0);
+	for (int16_t initial : {500, -51, -50, -49}) {
+		const bool failed = initial != 500;
+		uint seed = 1;
+		for (; ; ++seed) { Randomizer trial; trial.SetSeed(seed); if (Chance16I(1, 14, trial.Next()) == failed) break; }
+		_random.SetSeed(seed); _interactive_random.SetSeed(12345);
+		Randomizer expected = _random; expected.Next();
+		const Randomizer interactive = _interactive_random;
+		town->unwanted[company->index] = 0; town->ratings[company->index] = initial;
 		town->exclusivity = other->index; town->exclusive_counter = 12;
+		for (size_t i = 0; i < stations.size(); ++i) {
+			for (size_t cargo = 0; cargo < stations[i]->goods.size(); ++cargo) stations[i]->goods[cargo].rating = 70 + 20 * i + cargo;
+		}
+		fmt::print(stderr, "TOWN bribe-input {} {} {} {} {} {} {} {} {} {} {}\n", initial, failed, seed, id.base(), company->index.base(), other->index.base(), neighbour_id.base(), stations[0]->index.base(), stations[1]->index.base(), stations[2]->index.base(), stations[3]->index.base());
+		auto save = [&](const char *phase) {
+			std::string path = fmt::format("{}/bribe-{}-{}.sav", std::getenv("HOME"), initial, phase);
+			if (SaveOrLoad(path, SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) != SL_OK) std::abort();
+		};
+		save("before");
+		bribe_errors = 0;
 		Cost("bribe-test", CmdDoTownAction({}, id, TownAction::Bribe));
+		save("test");
+		fmt::print(stderr, "TOWN bribe-test-errors {} {}\n", initial, bribe_errors);
 		Cost("bribe-exec", CmdDoTownAction(DoCommandFlag::Execute, id, TownAction::Bribe));
+		fmt::print(stderr, "TOWN bribe-outcome {} {} {} {} {} {} {}\n", initial, bribe_errors, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1], _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1] && _interactive_random.state[0] == interactive.state[0] && _interactive_random.state[1] == interactive.state[1]);
+		save("after");
 		fmt::print(stderr, "TOWN bribe {} {} {} {} {} {} {}\n", failed, town->ratings[company->index], town->unwanted[company->index], station->goods[0].rating, town->exclusive_counter, town->exclusivity.base(), GetMaskOfTownActions(company->index, town).base());
 	}
+	duration.Restore(); local.Restore();
 	/* Querying a different company must retain the original _current_company comparison. */
 	town->ratings[other->index] = RATING_BRIBE_MAXIMUM;
 	fmt::print(stderr, "TOWN foreign-mask {}\n", GetMaskOfTownActions(other->index, town).base());
-	delete station;
+	for (Station *st : stations) delete st;
 	roads.Change(false); buildings.Change(false); rights.Change(false); bribes.Change(false);
 	fmt::print(stderr, "TOWN disabled-mask {}\n", GetMaskOfTownActions(company->index, town).base());
 	Cost("action-invalid", CmdDoTownAction({}, id, static_cast<TownAction>(255)));
@@ -374,7 +419,8 @@ static bool CommandsScenario(std::span<std::string_view> args)
 		}
 		fmt::print(stderr, "TOWN final-town {} {}\n", Town::GetNumItems(), Object::GetNumItems());
 		/* Keep the simulation valid after the final-town input. */
-		Cost("delete-final-recover", CmdFoundTown(DoCommandFlag::Execute, TileIndex{}, TSZ_SMALL, false, TL_ORIGINAL, true, 0, "Recovery town"));
+		auto recovery = CmdFoundTown(DoCommandFlag::Execute, Site(), TSZ_SMALL, false, TL_ORIGINAL, false, 0, "Recovery town");
+		Cost("delete-final-recover", recovery); if (std::get<0>(recovery).Failed()) std::abort();
 		cleanup_owner.Restore(); cleanup_mode.Restore();
 	}
 	return true;

@@ -8,6 +8,7 @@
 /** @file services_station.h Canonical station fields and opaque handles for Rust ports. */
 #ifndef RUST_SERVICES_STATION_H
 #define RUST_SERVICES_STATION_H
+#include "../airport.h"
 #include "../station_base.h"
 #include "../station_func.h"
 #include "../industry.h"
@@ -25,9 +26,12 @@
 #include "vehicle_services.h"
 #include "services_ffi.h"
 #include "services_newgrf.h"
+#include "environment_services.h"
 #include "../base_station_base.h"
 #include "../station_map.h"
 #include "../pbs.h"
+
+inline uint16_t RustAirportMovingFlags(const AirportMovingData *moving) noexcept { return moving->flags.base(); }
 
 template <class Handle> inline Handle RustStationGet(uint16_t id) noexcept { return Station::Get(StationID{id}); }
 inline Station *RustAnimationStation(BaseStation *st) noexcept { return Station::From(st); }
@@ -77,6 +81,11 @@ inline void RustStationRandomisationAt(BaseStation *st, uint32_t tile, uint8_t t
 inline void RustRoadStopRandomisationAt(BaseStation *st, uint32_t tile, uint8_t trigger, uint8_t cargo) noexcept { RustRoadStopRandomisation(Station::From(st), TileIndex{tile}, static_cast<StationRandomTrigger>(trigger), cargo); }
 inline const OpenTTDStation *RustStation(const Station *s) noexcept { return reinterpret_cast<const OpenTTDStation *>(s); }
 inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s); }
+/* GetSpec preserves the native dummy-airport fallback. Resolver-specific tile
+ * gates remain with their callers; all handles are borrowed synchronously. */
+inline const AirportSpec *RustStationAirportSpec(const Station *st) noexcept { return st->airport.GetSpec(); }
+inline TTDPAirportType RustAirportTTDType(const AirportSpec *spec) noexcept { return spec->ttd_airport_type; }
+inline uint8_t RustStationAirportTTDType(const OpenTTDStation *st) noexcept { return RustAirportTTDType(RustStationAirportSpec(StationOf(st))); }
 inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return Station::From(s)->airport.tile.base(); }
 inline uint8_t RustStationAirportType(const BaseStation *s) noexcept { return Station::From(s)->airport.type; }
 inline Direction RustStationAirportRotation(const BaseStation *s) noexcept { return Station::From(s)->airport.rotation; }
@@ -88,6 +97,7 @@ inline void RustStationRadius(uint32_t tile, uint32_t radius, void *context, voi
 inline Owner OpenTTDStationOwner(const BaseStation *station) noexcept { return station->owner; }
 const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept;
 inline Town *OpenTTDBaseStationTown(const BaseStation *st) noexcept { return st->town; }
+inline uint16_t RustStationTownID(const Station *station) noexcept { return RustTownAuthorityIndex(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(station))); }
 inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Station::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->facilities.Test(StationFacility::Airport); }
 inline bool RustStationHasHangar(const Station *s) noexcept { return s->airport.HasHangar(); }

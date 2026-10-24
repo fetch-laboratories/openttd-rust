@@ -197,8 +197,18 @@ unsafe fn clone(
                 if unsafe { (b.groups.vehicle_type)(v) } == VehicleType::TRAIN.0 {
                     let old_train = (r.train_handle)(v.cast());
                     if old_train.get_flags() & (1 << crate::train::FLIPPED) != 0
-                        && !unsafe { (c.transactions.reverse_probability)(v) }
-                        && !unsafe { (c.transactions.reverse_probability)(w) }
+                        && !unsafe {
+                            crate::newgrf_vehicle::reverse_probability(
+                                c.vehicles,
+                                super::vehicle_ref(v),
+                            )
+                        }
+                        && !unsafe {
+                            crate::newgrf_vehicle::reverse_probability(
+                                c.vehicles,
+                                super::vehicle_ref(w),
+                            )
+                        }
                     {
                         (r.train_handle)(w.cast()).set_flag(crate::train::FLIPPED, true);
                     }

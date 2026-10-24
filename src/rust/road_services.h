@@ -10,6 +10,7 @@
 
 /** @file road_services.h Typed road services; each resolves its vehicle once and reads only what it returns. */
 #include "services_map.h"
+#include "engine_services.h"
 #include "services_road.h"
 #include "services_station.h"
 
@@ -35,7 +36,7 @@ static OpenTTDRoadVisualRead OPENTTD_VEHICLE_CALL RoadSvcVisualRead(OpenTTDVehic
 static OpenTTDRoadSpeedRead RoadSpeedRead(const RoadVehicle *u) noexcept
 {
 	return {.max = RoadMaxSpeedRead(u), .x = RustVehicleX(u), .y = RustVehicleY(u), .z = RustVehicleZ(u),
-		.length = RustGroundCachedLength(u), .tram = SharedRoadTypeIsTram(u->roadtype)};
+		.length = RustGroundCachedLength(u), .tram = SharedRoadTypeIsTram(RustRoadVehicleType(u))};
 }
 static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcSpeedRead(OpenTTDVehicle *v) noexcept { return RoadSpeedRead(RoadOf(v)); }
 static OpenTTDRoadSpeedRead OPENTTD_VEHICLE_CALL RoadSvcVisualEffectThenSpeed(OpenTTDVehicle *v, uint32_t speed) noexcept
@@ -55,7 +56,7 @@ static OpenTTDRoadStep OPENTTD_VEHICLE_CALL RoadSvcStep(OpenTTDVehicle *v) noexc
 {
 	const RoadVehicle *u = RoadOf(v);
 	return {.tile = RustVehicleTile(u), .x = RustVehicleX(u), .y = RustVehicleY(u), .z = RustVehicleZ(u),
-		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = SharedRoadTypeIsTram(u->roadtype)};
+		.cur_speed = RustVehicleSpeed(u), .direction = RustVehicleDirection(u), .length = RustGroundCachedLength(u), .front = u->IsFrontEngine(), .tram = SharedRoadTypeIsTram(RustRoadVehicleType(u))};
 }
 static OpenTTDRoadCrashPart OPENTTD_VEHICLE_CALL RoadSvcCrashPart(OpenTTDVehicle *v) noexcept
 {
@@ -67,7 +68,7 @@ static OpenTTDRoadPartRead OPENTTD_VEHICLE_CALL RoadSvcPart(OpenTTDVehicle *v) n
 {
 	const RoadVehicle *u = RoadOf(v);
 	const RoadVehicle *next = static_cast<const RoadVehicle *>(RustVehicleNext(u));
-	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = RustVehicleZ(u), .tram = SharedRoadTypeIsTram(u->roadtype)};
+	return {.next = RustVehicle(next), .next_state = RoadStateOf(next), .tile = RustVehicleTile(u), .z = RustVehicleZ(u), .tram = SharedRoadTypeIsTram(RustRoadVehicleType(u))};
 }
 static OpenTTDRoadLink OPENTTD_VEHICLE_CALL RoadSvcLink(OpenTTDVehicle *v) noexcept
 {
@@ -103,7 +104,7 @@ static bool OPENTTD_VEHICLE_CALL RoadSvcHasRoad(OpenTTDVehicle *v, uint32_t tile
 
 static uint8_t OPENTTD_VEHICLE_CALL RoadSvcAnyRoadBits(OpenTTDVehicle *v, uint32_t tile, bool straight_only) noexcept
 {
-	return GetAnyRoadBits(TileIndex(tile), RustRoadTramType(RoadOf(v)->roadtype), straight_only);
+	return GetAnyRoadBits(TileIndex(tile), RustRoadTramType(RustRoadVehicleType(RoadOf(v))), straight_only);
 }
 static bool OPENTTD_VEHICLE_CALL RoadSvcIsStationRoadStop(uint32_t tile) noexcept { return IsStationRoadStop(TileIndex(tile)); }
 /** `old_tile = v->tile; v->tile = tile;` then both road types of the vehicle's road/tram kind. */
@@ -112,8 +113,8 @@ static OpenTTDRoadRoadTypes OPENTTD_VEHICLE_CALL RoadSvcMoveTile(OpenTTDVehicle 
 	RoadVehicle *u = RoadOf(v);
 	TileIndex old_tile = u->tile;
 	u->tile = TileIndex(tile);
-	RoadTramType rtt = RustRoadTramType(u->roadtype);
-	return {.before = GetRoadType(old_tile, rtt), .after = GetRoadType(u->tile, rtt)};
+	RoadTramType rtt = RustRoadTramType(RustRoadVehicleType(u));
+	return {.before = RustRoadTileType(old_tile.base(), rtt), .after = RustRoadTileType(u->tile.base(), rtt)};
 }
 static OpenTTDRoadPathRead OPENTTD_VEHICLE_CALL RoadSvcPathRead(OpenTTDVehicle *v) noexcept
 {
@@ -136,7 +137,7 @@ static OpenTTDRoadTramBuildRead OPENTTD_VEHICLE_CALL RoadSvcTramBuildRead(OpenTT
 	const RoadVehicle *u = RoadOf(v);
 	if (slot->built) slot->road.~RustRoadCommandContext();
 	slot->built = true;
-	return {.owner = RustVehicleOwner(u), .road_type = u->roadtype, .road = &std::construct_at(&slot->road)->view};
+	return {.owner = RustVehicleOwner(u), .road_type = RustRoadVehicleType(u), .road = &std::construct_at(&slot->road)->view};
 }
 static void OPENTTD_VEHICLE_CALL RoadSvcDisconnect() noexcept { FatalError("Disconnecting road vehicle."); }
 static OpenTTDRoadStopRead OPENTTD_VEHICLE_CALL RoadSvcStopRead(OpenTTDVehicle *v) noexcept
@@ -212,11 +213,7 @@ static uint16_t OPENTTD_VEHICLE_CALL RoadSvcDefaultMaxSpeed(OpenTTDVehicle *v) n
 {
 	return RoadVehInfo(EngineID(RustVehicleEngineID(VehicleOf(v))))->max_speed;
 }
-static void OPENTTD_VEHICLE_CALL RoadSvcUpdateCargoAge(OpenTTDVehicle *v) noexcept
-{
-	RoadVehicle *u = RoadOf(v);
-	u->vcache.cached_cargo_age_period = GetVehicleProperty(u, PROP_ROADVEH_CARGO_AGE_PERIOD, EngInfo(u->engine_type)->cargo_age_period);
-}
+
 static OpenTTDRoadCostRead OPENTTD_VEHICLE_CALL RoadSvcCostRead(OpenTTDVehicle *v) noexcept
 {
 	const Engine *e = RoadOf(v)->GetEngine();
@@ -306,7 +303,7 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.crash_news = RoadSvcCrashNews,
 	.shorten_factor = RoadSvcShortenFactor,
 	.default_max_speed = RoadSvcDefaultMaxSpeed,
-	.update_cargo_age = RoadSvcUpdateCargoAge,
+	.cargo_age_default = RustVehicleEngineRead<uint16_t, RustEngineCargoAge>,
 	.cost_read = RoadSvcCostRead,
 	.price = RoadSvcPrice,
 	.pay_running = RoadSvcPayRunning,

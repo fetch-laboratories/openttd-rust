@@ -66,6 +66,7 @@
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
 #include "rust/industry_shell_services.h"
+#include "rust/industry_resolver_ffi.h"
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/services_station.h"
 #include "rust/vehicle_refit_ffi.h"
@@ -1111,7 +1112,7 @@ static const OpenTTDCargoServices _cargo_services = {
 		if (field == 0) i->produced[slot].waiting = value;
 		else i->accepted[slot].waiting = value;
 	},
-	.refuses = [](void *handle, uint8_t cargo) noexcept -> uint8_t { return IndustryTemporarilyRefusesCargo(static_cast<Industry *>(handle), cargo); },
+	.resolver = &GetIndustryResolverServices(),
 	.accept = [](void *handle, uint32_t slot, uint32_t amount) noexcept {
 		auto &accepted = static_cast<Industry *>(handle)->accepted[slot];
 		accepted.waiting += amount;
@@ -1497,8 +1498,8 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		return {
 			.ticks = RustVehicleLoadUnloadTicks(handle),
 			.vehicle_type = v->type,
-			.unload_type = to_underlying(v->current_order.GetUnloadType()),
-			.load_type = to_underlying(v->current_order.GetLoadType()),
+			.unload_type = to_underlying(RustVehicleOrderUnloadType(v)),
+			.load_type = to_underlying(RustVehicleOrderLoadType(v)),
 			.refit_cargo = refit ? v->current_order.GetRefitCargo() : uint8_t(0),
 			.refit = refit,
 			.full_load = v->current_order.IsFullLoadOrder(),
@@ -1610,10 +1611,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Vehicle *v = VehicleOf(handle);
 		return v->cargo.ActionCount(VehicleCargoList::MTA_LOAD);
 	},
-	.unload_type = [](OpenTTDVehicle *handle) noexcept -> uint8_t {
-		Vehicle *v = VehicleOf(handle);
-		return to_underlying(v->current_order.GetUnloadType());
-	},
+	.unload_type = RustVehicleRead<uint8_t, RustVehicleOrderUnloadType>,
 	.has_orders = [](OpenTTDVehicle *handle) noexcept -> bool {
 		Vehicle *v = VehicleOf(handle); return v->orders != nullptr;
 	},
@@ -1777,14 +1775,8 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.station_cargo_total = [](OpenTTDStation *station, uint8_t cargo) noexcept -> uint32_t {
 		return static_cast<Station *>(station)->goods[cargo].GetData().cargo.TotalCount();
 	},
-	.load_property = [](OpenTTDVehicle *handle) noexcept -> uint16_t {
-		Vehicle *v = VehicleOf(handle);
-		return GetVehicleProperty(v, PROP_VEHICLE_LOAD_AMOUNT, CALLBACK_FAILED);
-	},
-	.load_callback = [](OpenTTDVehicle *handle) noexcept -> uint16_t {
-		Vehicle *v = VehicleOf(handle);
-		return GetVehicleCallback(CBID_VEHICLE_LOAD_AMOUNT, 0, 0, v->engine_type, v);
-	},
+
+
 	.get_payment = [](OpenTTDVehicle *handle) noexcept -> OpenTTDNativeCargoPayment * {
 		return VehicleOf(handle)->cargo_payment;
 	},
@@ -1802,8 +1794,6 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.flush_delivery = []() noexcept -> void {
 		openttd_rust_cargo_delivery_flush(GetCargoDeliveryState(), &_cargo_services);
 	},
-	.vehicle_new_cargo = RustVehicleNewCargoRandomisation,
-	.vehicle_empty = RustVehicleEmptyRandomisation,
 	.station_dirty = [](OpenTTDStation *station) noexcept -> void {
 		Station *st = static_cast<Station *>(station);
 		st->MarkTilesDirty(true);

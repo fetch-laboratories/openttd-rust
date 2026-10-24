@@ -13,6 +13,7 @@
 #include "sprite.h"
 #ifdef WITH_RUST
 #include "rust/vehicle_ffi.h"
+#include "rust/newgrf_vehicle_ffi.h"
 #endif
 #include "track_type.h"
 #include "command_type.h"
@@ -66,6 +67,19 @@ struct NewGRFCache {
 
 	auto operator<=>(const NewGRFCache &) const = default;
 };
+
+#ifdef WITH_RUST
+/** Exactly one Rust allocation per shell, including indexed load construction.
+ * Stable native aliases address the canonical bytes; cachecheck copies are
+ * diagnostic values only. Pool cleanup/destruction releases the same owner. */
+struct VehicleGRFCacheOwner {
+	NewGRFCache *state;
+	VehicleGRFCacheOwner() : state(openttd_rust_vehicle_grf_cache_new()) { new (this->state) NewGRFCache(); }
+	VehicleGRFCacheOwner(const VehicleGRFCacheOwner &) = delete;
+	VehicleGRFCacheOwner &operator=(const VehicleGRFCacheOwner &) = delete;
+	~VehicleGRFCacheOwner() { openttd_rust_vehicle_grf_cache_delete(this->state); }
+};
+#endif
 
 /** Models for spawning visual effects. */
 enum VisualEffectSpawnModel : uint8_t {
@@ -339,7 +353,12 @@ public:
 
 #endif
 
+#ifdef WITH_RUST
+	VehicleGRFCacheOwner rust_grf_cache;
+	NewGRFCache &grf_cache = *this->rust_grf_cache.state;
+#else
 	NewGRFCache grf_cache{}; ///< Cache of often used calculated NewGRF values
+#endif
 	VehicleCache vcache{}; ///< Cache of often used vehicle values.
 
 	GroupID group_id = GroupID::Invalid(); ///< Index of group Pool array
@@ -477,7 +496,11 @@ public:
 	 */
 	inline void InvalidateNewGRFCache()
 	{
+#ifdef WITH_RUST
+		openttd_rust_vehicle_grf_invalidate(&GetRustVehicleResolverServices(), this, false);
+#else
 		this->grf_cache.cache_valid = 0;
+#endif
 	}
 
 	/**
@@ -486,9 +509,13 @@ public:
 	 */
 	inline void InvalidateNewGRFCacheOfChain()
 	{
+#ifdef WITH_RUST
+		openttd_rust_vehicle_grf_invalidate(&GetRustVehicleResolverServices(), this, true);
+#else
 		for (Vehicle *u = this; u != nullptr; u = u->Next()) {
 			u->InvalidateNewGRFCache();
 		}
+#endif
 	}
 
 	/**

@@ -242,8 +242,8 @@ pub struct Leaves {
     pub invalid_position: unsafe extern "C" fn(Vehicle, *const c_void),
     pub invalid_scheme: unsafe extern "C" fn(Vehicle),
     pub unreachable: unsafe extern "C" fn(Vehicle),
-    pub cargo_age_property: unsafe extern "C" fn(Vehicle) -> u32,
-    pub range_property: unsafe extern "C" fn(Vehicle) -> u32,
+    pub cargo_age_default: unsafe extern "C" fn(Vehicle) -> u16,
+    pub range_default: unsafe extern "C" fn(Vehicle) -> u16,
     pub rotor_image_if_changed: unsafe extern "C" fn(Vehicle) -> bool,
     pub update_rotor_image: unsafe extern "C" fn(Vehicle),
     pub process_orders: unsafe extern "C" fn(Vehicle),
@@ -516,9 +516,9 @@ impl World<'_> {
         nearest_depot_order(self; v: Vehicle) => unsafe { (self.leaves.nearest_depot_order)(v) };
         part_of_orders(self; v: Vehicle) => unsafe { (self.leaves.part_of_orders)(v) };
         next_stopping_station(self; vehicle: Vehicle) => unsafe { (self.leaves.next_stopping_station)(vehicle) };
-        speed_property(self; v: Vehicle) => (self.vs.property)(v.base(), PROP_AIRCRAFT_SPEED, 0) as u32;
-        cargo_age_property(self; v: Vehicle) => unsafe { (self.leaves.cargo_age_property)(v) };
-        range_property(self; v: Vehicle) => unsafe { (self.leaves.range_property)(v) };
+        speed_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), PROP_AIRCRAFT_SPEED, 0) as u32;
+        cargo_age_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_CARGO_AGE_PERIOD, i32::from(unsafe { (self.leaves.cargo_age_default)(v) })) as u32;
+        range_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_RANGE, i32::from(unsafe { (self.leaves.range_default)(v) })) as u32;
         start_sound(self; v: Vehicle) => (self.vs.play_vehicle_sound)(v.base(), VSE_START);
         rotor_image_if_changed(self; v: Vehicle) => unsafe { (self.leaves.rotor_image_if_changed)(v) };
         vehicle_crash(self; v: Vehicle, flooded: i64) => unsafe { (self.leaves.vehicle_crash)(v, flooded != 0) };
@@ -2554,8 +2554,8 @@ crate::abi::layouts! {
         invalid_position,
         invalid_scheme,
         unreachable,
-        cargo_age_property,
-        range_property,
+        cargo_age_default,
+        range_default,
         rotor_image_if_changed,
         update_rotor_image,
         process_orders,
@@ -2599,4 +2599,14 @@ crate::abi::layouts! {
         airport,
         hangar,
     };
+}
+
+/// `Aircraft::GetSpeedOldUnits` applied to `cached_max_speed`.
+pub(crate) fn speed_old_units(speed: u32) -> u32 {
+    speed * 10 / 128
+}
+
+/// `Aircraft::IsNormalAircraft`.
+pub(crate) const fn is_normal_aircraft(subtype: u8) -> bool {
+    subtype <= AIR_AIRCRAFT
 }

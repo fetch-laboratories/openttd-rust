@@ -15,9 +15,13 @@
 
 /** Resolver for the industry tiles scope. */
 struct IndustryTileScopeResolver : public ScopeResolver {
+#ifdef WITH_RUST
+	OpenTTDIndustryResolverContext context; ///< Stack invocation, shared canonical industry owner.
+#else
 	Industry *industry; ///< Industry owning the tiles.
 	TileIndex tile;     ///< %Tile being resolved.
 
+#endif
 	/**
 	 * Constructor of the scope resolver for the industry tile.
 	 * @param ro Surrounding resolver.
@@ -25,9 +29,13 @@ struct IndustryTileScopeResolver : public ScopeResolver {
 	 * @param tile %Tile of the industry.
 	 */
 	IndustryTileScopeResolver(ResolverObject &ro, Industry *industry, TileIndex tile)
+#ifdef WITH_RUST
+		;
+#else
 		: ScopeResolver(ro), industry(industry), tile(tile)
 	{
 	}
+#endif
 
 	uint32_t GetRandomBits() const override;
 	uint32_t GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const override;
@@ -43,6 +51,9 @@ struct IndustryTileResolverObject : public SpecializedResolverObject<IndustryRan
 	IndustryTileResolverObject(IndustryGfx gfx, TileIndex tile, Industry *indus,
 			CallbackID callback = CBID_NO_CALLBACK, uint32_t callback_param1 = 0, uint32_t callback_param2 = 0);
 
+#ifdef WITH_RUST
+	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override;
+#else
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
 	{
 		switch (scope) {
@@ -51,6 +62,8 @@ struct IndustryTileResolverObject : public SpecializedResolverObject<IndustryRan
 			default: return ResolverObject::GetScope(scope, relative);
 		}
 	}
+
+#endif
 
 	GrfSpecFeature GetFeature() const override;
 	uint32_t GetDebugID() const override;

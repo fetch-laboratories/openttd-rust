@@ -7,14 +7,14 @@
 
 /** @file vehicle_refit_services.hpp Native refit observations, scalar stores and UI leaves. */
 #include "services_road.h"
+#include "services_cargo.h"
 
-static OpenTTDRefitCargo VehicleRefitCargo(const OpenTTDEngine *e, uint8_t cargo) noexcept { return {.classes = CargoSpec::Get(cargo)->classes.base(), .local = EngineOf(e)->GetGRF()->cargo_map[cargo]}; }
-static uint16_t VehicleRefitCostCallback(OpenTTDVehicle *v, uint16_t engine, uint32_t param) noexcept { return RustVehicleCallback(CBID_VEHICLE_REFIT_COST, param, 0, EngineID(engine), VehicleOf(v)); }
+static OpenTTDRefitCargo VehicleRefitCargo(const OpenTTDEngine *e, uint8_t cargo) noexcept { return {.classes = RustCargoClasses(cargo), .local = RustGRFCargoMap(EngineOf(e)->GetGRF(), cargo)}; }
 static OpenTTDRefitEngine VehicleRefitEngine(const OpenTTDEngine *e) noexcept { return {.mask = EngineOf(e)->info.refit_mask, .automatic = EngineOf(e)->info.misc_flags.Test(EngineMiscFlag::AutoRefit)}; }
 static OpenTTDRefitCargoKind VehicleRefitCargoKind(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	return {.cargo = RustVehicleCargoType(handle), .subtype = v->cargo_subtype};
+	return {.cargo = RustVehicleCargoType(handle), .subtype = RustVehicleCargoSubtype(v)};
 }
 static OpenTTDRefitCommit VehicleRefitCommit(OpenTTDVehicle *v) noexcept { return {.cargo = RustVehicleCargoType(v), .capacity = RustVehicleRefitCap(v)}; }
 static void VehicleRefitWrite(OpenTTDVehicle *handle, uint8_t cargo, uint16_t cap, uint8_t subtype) noexcept
@@ -50,7 +50,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.has_grf = RustEngineHasGRF,
 		.refit_cost = RustEngineRefitCost,
 		.refit_cargo = VehicleRefitCargo,
-		.cost_callback = VehicleRefitCostCallback,
 		.engine_kind = RustEngineType,
 		.rail_kind = Engine_rail_kind,
 		.price_shift = RustEnginePriceShift,

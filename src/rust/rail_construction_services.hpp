@@ -107,7 +107,7 @@ static void *RailNewRear(void *front) noexcept
 	u->SetTrack(TRACK_BIT_DEPOT);
 	u->vehstatus = v->vehstatus;
 	u->vehstatus.Reset(VehState::Stopped);
-	u->spritenum = v->spritenum + 1;
+	u->spritenum = RustVehicleSprite(v) + 1;
 	u->cargo_type = v->cargo_type;
 	u->cargo_subtype = v->cargo_subtype;
 	u->cargo_cap = v->cargo_cap;
@@ -115,8 +115,8 @@ static void *RailNewRear(void *front) noexcept
 	u->SetRailTypes(v->GetRailTypes());
 	u->engine_type = v->engine_type;
 	u->date_of_last_service = v->date_of_last_service;
-	u->date_of_last_service_newgrf = v->date_of_last_service_newgrf;
-	u->build_year = v->build_year;
+	u->date_of_last_service_newgrf = RustVehicleCalendarService(v);
+	u->build_year = RustVehicleBuildYear(v);
 	u->sprite_cache.sprite_seq.Set(SPR_IMG_QUERY);
 	return u;
 }
@@ -127,13 +127,6 @@ static void RailLinkMultihead(void *front, void *rear) noexcept
 	v->other_multiheaded_part = u;
 	u->other_multiheaded_part = v;
 }
-static uint16_t RailAttachCallback(void *part, void *head, int32_t *regs100) noexcept
-{
-	const Train *t = static_cast<Train *>(part);
-	const Train *h = static_cast<Train *>(head);
-	return GetVehicleCallbackParent(CBID_TRAIN_ALLOW_WAGON_ATTACH, 0, 0, h->engine_type, t, h, std::span(regs100, 1));
-}
-static void RailUnknownAttach(void *head, uint16_t callback) noexcept { RustUnknownCallbackResult(static_cast<Train *>(head)->GetGRFID(), CBID_TRAIN_ALLOW_WAGON_ATTACH, callback); }
 static void RailHeadWindows(void *shell) noexcept
 {
 	const Vehicle *head = static_cast<Vehicle *>(shell);
@@ -179,8 +172,7 @@ const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcep
 		.ground = &GetRustGroundServices<Train>(),
 		.first_engine = RustOpaqueVehicleRead<uint16_t, RustGroundFirstEngine>,
 		.invalidate_grf = RustOpaqueVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
-		.attach_callback = RailAttachCallback,
-		.unknown_attach = RailUnknownAttach,
+		.unknown_attach = RustVehicleCallbackError<CBID_TRAIN_ALLOW_WAGON_ATTACH>,
 		.train_limit = RustTrainLimit,
 		.unit = RustOpaqueVehicleRead<uint16_t, RustVehicleUnitNumber>,
 		.use_unit = RustOpaqueVehicleInvoke<RustVehicleUseUnitNumber, uint16_t>,

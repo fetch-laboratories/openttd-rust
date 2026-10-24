@@ -36,6 +36,16 @@ inline bool RustSpecGRFVersion8(const Spec *spec) noexcept { return RustSpecGRFV
 inline int32_t RustResolverRegister(const ResolverObject *resolver, uint16_t reg) noexcept { return resolver->GetRegister(reg); }
 inline int32_t RustResolverRegister100(const ResolverObject *resolver) noexcept { return RustResolverRegister(resolver, 0x100); }
 
+/* Container reads retain the native index preconditions and full size_t width.
+ * Selection and narrowing belong to the caller; these leaves allocate nothing. */
+inline size_t RustRealLoadingCount(const RealSpriteGroup *group) noexcept { return group->loading.size(); }
+inline size_t RustRealLoadedCount(const RealSpriteGroup *group) noexcept { return group->loaded.size(); }
+inline const SpriteGroup *RustRealLoading(const RealSpriteGroup *group, size_t index) noexcept { return group->loading[index]; }
+inline const SpriteGroup *RustRealLoaded(const RealSpriteGroup *group, size_t index) noexcept { return group->loaded[index]; }
+template <typename Spec>
+inline bool RustSpecHasSpriteGroups(const Spec *spec) noexcept { return spec->grf_prop.HasSpriteGroups(); }
+inline bool RustHouseHasSpriteGroups(uint16_t house) noexcept { return RustSpecHasSpriteGroups(RustHouseSpec(house)); }
+
 /* Keep the native map wrapping, station-axis handling and signed-offset default. */
 inline uint32_t RustNearbyTileWithAxis(uint8_t parameter, uint32_t tile, bool signed_offsets, Axis axis) noexcept { return GetNearbyTile(parameter, TileIndex(tile), signed_offsets, axis).base(); }
 inline uint32_t RustNearbyTile(uint8_t parameter, uint32_t tile, bool signed_offsets) noexcept { return RustNearbyTileWithAxis(parameter, tile, signed_offsets, INVALID_AXIS); }
@@ -50,6 +60,11 @@ inline uint32_t RustSpecBadges(const ResolverObject *resolver, const Spec *spec,
 /* Preserve native default-livery and nullable-file translation behavior. */
 inline uint32_t RustCompanyInfo(uint8_t owner, const Livery *livery) noexcept { return GetCompanyInfo(CompanyID(owner), livery); }
 inline uint8_t RustReverseRailTypeTranslation(RailType railtype, const GRFFile *file) noexcept { return GetReverseRailTypeTranslation(railtype, file); }
+
+inline uint16_t RustResolverCallback(const ResolverObject *resolver) noexcept { return resolver->callback; }
+template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
+template <typename Spec> inline uint16_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }
+template <typename Spec> inline const SpriteGroup *RustSpecSpriteGroup(const Spec *spec, bool live) noexcept { return spec->grf_prop.GetSpriteGroup(live); }
 
 /* Borrowed GRF files remain native and live for the synchronous conversion.
  * A town shell is live for resolution (or null for a prototype); no Rust

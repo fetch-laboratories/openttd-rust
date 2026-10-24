@@ -221,7 +221,7 @@ struct OpenTTDRoadLeaves {
 	void (OPENTTD_VEHICLE_CALL *crash_news)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crash_news);
 	uint8_t (OPENTTD_VEHICLE_CALL *shorten_factor)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(shorten_factor);
 	uint16_t (OPENTTD_VEHICLE_CALL *default_max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(default_max_speed);
-	void (OPENTTD_VEHICLE_CALL *update_cargo_age)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(update_cargo_age);
+	uint16_t (OPENTTD_VEHICLE_CALL *cargo_age_default)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_age_default);
 	OpenTTDRoadCostRead (OPENTTD_VEHICLE_CALL *cost_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cost_read);
 	int64_t (OPENTTD_VEHICLE_CALL *price)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price);
 	void (OPENTTD_VEHICLE_CALL *pay_running)(OpenTTDVehicle *, int64_t) noexcept OPENTTD_SERVICE_DEFAULT(pay_running);
