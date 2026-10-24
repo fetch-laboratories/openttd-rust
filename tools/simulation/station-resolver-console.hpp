@@ -98,12 +98,12 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 		for (bool divide : {false, true}) for (uint16_t threshold : {0, 8, 9, 36, 37, 4095, 65535}) {
 			spec.cargo_threshold = threshold; spec.flags.Set(StationSpecFlag::DivByStationSize, divide);
 			StationResolverObject choice(&spec, st, tile);
-			fmt::print(stderr, "STCMD resolver-root {} {} {} {} {}\n", cargo, divide, threshold, choice.station_scope.cargo_type, choice.ResolveCallback());
+			fmt::print(stderr, "STCMD resolver-root {} {} {} {} {}\n", cargo, divide, threshold, choice.station_scope.cargo_type, choice.ResolveCallback({}));
 		}
 	}
 	for (BaseStation *base : {static_cast<BaseStation *>(wp), static_cast<BaseStation *>(nullptr)}) {
 		StationResolverObject choice(&spec, base, base == nullptr ? INVALID_TILE : waytile);
-		fmt::print(stderr, "STCMD resolver-root-null {} {} {}\n", base == nullptr, choice.station_scope.cargo_type, choice.ResolveCallback());
+		fmt::print(stderr, "STCMD resolver-root-null {} {} {}\n", base == nullptr, choice.station_scope.cargo_type, choice.ResolveCallback({}));
 	}
 	spec.grf_prop.spritegroups.clear(); spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det); spec.grf_prop.SetSpriteGroup(0, det);
 	StationNeed(GetStationCallback(CBID_STATION_LAND_SLOPE_CHECK, 1, 2, &spec, st, tile) == 0x400, __LINE__);
@@ -140,14 +140,24 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 			fmt::print(stderr, "\n");
 		}
 	}
+	/* Nested lower/upper groups combine masks in one resolution. */
+	auto *upper = new RandomizedSpriteGroup(); upper->var_scope = VSG_SCOPE_SELF; upper->triggers = 1; upper->lowest_randbit = 16; upper->groups = {result, result};
+	random->lowest_randbit = 0; random->triggers = 1; random->groups = {upper, upper}; spec.cargo_triggers = 1; st->cached_cargo_triggers = 1;
+	TriggerStationRandomisation(st, tile, StationRandomTrigger::NewCargo, INVALID_CARGO);
+	fmt::print(stderr, "STCMD resolver-rng combined {} {} {} {}\n", st->random_bits, GetStationTileRandomBits(tile), _random.state[0], _random.state[1]);
+	random->groups = {result, result}; random->lowest_randbit = 17;
+	/* Waypoints use the same runtime without station cargo ownership. */
+	random->triggers = 4; wp->cached_cargo_triggers = 1;
+	TriggerStationRandomisation(wp, waytile, StationRandomTrigger::VehicleArrives, INVALID_CARGO);
+	fmt::print(stderr, "STCMD resolver-rng waypoint {} {} {} {} {}\n", wp->waiting_random_triggers.base(), wp->random_bits, GetStationTileRandomBits(waytile), _random.state[0], _random.state[1]);
 	/* A cargo absent from the station admits CargoTaken and its whole-area draw. */
 	random->triggers = 2; spec.cargo_triggers = CargoTypes{1} << 63; st->cached_cargo_triggers = spec.cargo_triggers;
 	TriggerStationRandomisation(st, tile, StationRandomTrigger::CargoTaken, 63);
 	fmt::print(stderr, "STCMD resolver-rng empty {} {} {} {}\n", st->waiting_random_triggers.base(), st->random_bits, _random.state[0], _random.state[1]);
 	for (TileIndex t : st->train_station) if (st->TileBelongsToRailStation(t)) SetCustomStationSpecIndex(t, 0);
-	SetCustomStationSpecIndex(waytile, 0); wp->speclist.clear();
+	SetCustomStationSpecIndex(waytile, 0); wp->speclist.clear(); StationUpdateCachedTriggers(wp);
 	st->speclist.clear(); StationUpdateCachedTriggers(st);
 	/* Saved random/waiting/cargo fields persist; local Action2 programs and spec
 	 * associations are removed before save and reconstructed by resolver-inspect. */
-	delete real; delete other; delete random; delete det; delete result;
+	delete real; delete other; delete upper; delete random; delete det; delete result;
 }

@@ -845,9 +845,11 @@ pub extern "C" fn openttd_rust_station_randomisation(
     }
     (native.set_waiting)(st, (native.waiting)(st) & !(used as u8));
     if whole & 0xffff != 0 {
-        let random =
-            u32::from((native.station_random)(st)) & !whole | native.shared().random() & whole;
-        (native.set_random)(st, random as u16);
+        // The native compound assignments publish the cleared station bits
+        // before Random, then read the live bits again for the final OR.
+        (native.set_random)(st, (u32::from((native.station_random)(st)) & !whole) as u16);
+        let random = native.shared().random() & whole;
+        (native.set_random)(st, (u32::from((native.station_random)(st)) | random) as u16);
     }
 }
 #[unsafe(no_mangle)]

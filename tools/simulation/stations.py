@@ -1099,6 +1099,8 @@ def check_commands(scenario, run, mode, role, result):
             "resolver-rng lower",
             "resolver-rng cases",
             "resolver-rng empty",
+            "resolver-rng combined",
+            "resolver-rng waypoint",
             "cost resolver-slope",
             "resolver-reconstruction",
             "resolver-variable station",
