@@ -17,6 +17,7 @@
 static void CommonAction2(Industry *industry, GRFFile &grf)
 {
 	auto Require = [](bool good, const std::source_location line = std::source_location::current()) { if (!good) { fmt::print(stderr, "STORAGE assertion {}\n", line.line()); std::abort(); } };
+	Require(SpriteGroup::CanAllocateItem(32));
 	std::array<int32_t, 256> saved;
 	for (uint i = 0; i < saved.size(); ++i) saved[i] = industry->psa->GetValue(i);
 	std::vector<std::unique_ptr<SpriteGroup>> nodes;
@@ -29,6 +30,7 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 	};
 	IndustriesResolverObject ro(industry->location.tile, industry, industry->type);
 	ro.grffile = &grf;
+	int32_t saved_register100 = ro.GetRegister(0x100);
 	ro.callback_param1 = 0x8005; ro.callback_param2 = 9;
 	auto *procedure = Det();
 	procedure->adjusts = {Adjust(0x10), Adjust(0x1A, DSGA_OP_STO, 14), Adjust(0x1A, DSGA_OP_STOP, 15)};
@@ -168,7 +170,9 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 					Require(base.ResolveCallback({}) == (value & 0x7FFF) && base.last_value == value);
 					digest = digest * 31337 + value;
 				}
+				date.Restore(); current_year.Restore();
 			}
+			road_side.Restore(); elrails.Restore(); pitch.Restore(); width.Restore(); landscape.Restore();
 		}
 	}
 	_grfconfig.pop_back();
@@ -176,6 +180,8 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 	arithmetic->adjusts = {Adjust(0x21)}; Require(base.ResolveCallback({}) == (version & 0x7FFF) && base.last_value == version);
 	uint32_t unknown = 417; Require(!GetGlobalVariable(0xFF, &unknown, &grf) && unknown == 417);
 	for (uint i = 0; i < saved.size(); ++i) industry->psa->StoreValue(i, saved[i]);
+	ro.SetRegister(0x100, saved_register100);
+	maglev_cost.Restore(); mono_cost.Restore(); electric_cost.Restore(); normal_cost.Restore(); random_bits.Restore();
 	fmt::print(stderr, "STORAGE action2 nested ranges arithmetic terminals reseed globals {}\n", digest);
 }
 static bool StorageScenario(std::span<std::string_view> args)

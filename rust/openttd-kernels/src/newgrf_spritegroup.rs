@@ -526,6 +526,9 @@ impl<'a> Invocation<'a> {
         if group.is_null() {
             return ResultValue::failed();
         }
+        unsafe { self.resolve_non_null(group, top) }
+    }
+    unsafe fn resolve_non_null(self, group: Handle, top: bool) -> ResultValue {
         unsafe {
             let profiler = (self.s.profile_enter)(self.ro, top);
             let mut node = std::mem::MaybeUninit::<Node>::uninit();
@@ -759,15 +762,6 @@ impl<'a> Invocation<'a> {
         };
         unsigned(result)
     }
-    unsafe fn do_resolve(self, group: Handle) -> ResultValue {
-        unsafe {
-            openttd_rust_storage_temp_clear();
-            (*self.state).last_value = 0;
-            (*self.state).used_random_triggers = 0;
-            (*self.state).reseed = [0; 3];
-            self.resolve(group, true)
-        }
-    }
 }
 unsafe fn default_real(s: &Services, group: Handle) -> Handle {
     unsafe {
@@ -839,7 +833,11 @@ pub unsafe extern "C" fn openttd_rust_spritegroup_resolve(
     file: Handle,
     top: bool,
 ) -> ResultValue {
-    unsafe { Invocation::new(s, ro, state, file).resolve(group, top) }
+    // Preserve the original null-group fast path before reading a feature owner.
+    if group.is_null() {
+        return ResultValue::failed();
+    }
+    unsafe { Invocation::new(s, ro, state, file).resolve_non_null(group, top) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_resolver_resolve(
@@ -849,7 +847,13 @@ pub unsafe extern "C" fn openttd_rust_resolver_resolve(
     state: *mut State,
     file: Handle,
 ) -> ResultValue {
-    unsafe { Invocation::new(s, ro, state, file).do_resolve(group) }
+    unsafe {
+        openttd_rust_storage_temp_clear();
+        (*state).last_value = 0;
+        (*state).used_random_triggers = 0;
+        (*state).reseed = [0; 3];
+        openttd_rust_spritegroup_resolve(s, group, ro, state, file, true)
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_resolver_callback(
@@ -862,7 +866,7 @@ pub unsafe extern "C" fn openttd_rust_resolver_callback(
     count: usize,
 ) -> u16 {
     unsafe {
-        let result = Invocation::new(s, ro, state, file).do_resolve(group);
+        let result = openttd_rust_resolver_resolve(s, group, ro, state, file);
         if result.kind != 1 {
             return CALLBACK_FAILED;
         }
