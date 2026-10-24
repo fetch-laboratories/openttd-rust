@@ -160,10 +160,12 @@ unsafe fn num_houses(owner: *const State, house: u16, class: u16) -> u32 {
 /// `TownHistoryHelper`: lookup is performed after the shared label translation.
 unsafe fn history(owner: *const State, cargo: u8, period: u8, transported: bool) -> u32 {
     unsafe {
-        let Some(supplied) = (*owner).supplied.iter().find(|s| s.cargo == cargo) else {
+        let index = super::openttd_rust_town_supplied_find(owner, cargo);
+        let rows = &(*owner).supplied;
+        if index == rows.len() {
             return 0;
-        };
-        let h = supplied.history[usize::from(period)];
+        }
+        let h = rows[index].history[usize::from(period)];
         (if transported {
             h.transported
         } else {

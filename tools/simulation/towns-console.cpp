@@ -129,6 +129,7 @@ static void HouseOverridePlacement(TileIndex tile, HouseID house)
 	}
 	HouseSpec::Specs().resize(override);
 }
+#include "house-resolver-console.inc"
 /* Every original house through CmdPlaceHouse, replacement, protection,
  * autoslope and company clearance; aged houses then reach the rebuild path. */
 static bool HousesScenario(std::span<std::string_view> args)
@@ -164,6 +165,7 @@ static bool HousesScenario(std::span<std::string_view> args)
 		for (const auto &[message, count] : errors) fmt::print(stderr, "TOWN house-errors {} {} {}\n", house, message, count);
 	}
 	fmt::print(stderr, "TOWN house-sites {}\n", sites.size());
+	HouseResolverScenario(sites);
 	BuildingFlags covered;
 	for (const auto &[tile, house] : sites) {
 		const auto size = HouseSpec::Get(house)->building_flags & BUILDING_HAS_1_TILE;

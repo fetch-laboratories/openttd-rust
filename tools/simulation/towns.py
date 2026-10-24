@@ -691,6 +691,7 @@ def adapter(build, folder, env):
     local = folder / "towns-console.cpp"
     local.write_bytes((ROOT / "tools/simulation/towns-console.cpp").read_bytes())
     shutil.copy2(ROOT / "tools/simulation/storage-console.inc", folder)
+    shutil.copy2(ROOT / "tools/simulation/house-resolver-console.inc", folder)
     from .console_adapter import console_adapter
 
     return console_adapter(
@@ -1076,6 +1077,19 @@ def check(scenario, run, mode, role, result):
         required = HOUSE_BRANCHES + HOUSE_MODE_BRANCHES[scenario["house_mode"]]
         if counts := branch_witnesses(scenario, run, role, "house", required):
             result[mode + "_house_branches"] = counts
+        markers = (
+            "class-reset true",
+            "parent-readonly-null true",
+            "construction-production-var44-var64-var65 true",
+        )
+        if any("HOUSE_RESOLVER " + marker not in run["log"] for marker in markers):
+            raise RuntimeError("house resolver mandatory semantic marker missing")
+        lines = [line for line in run["log"] if line.startswith("HOUSE_RESOLVER ")]
+        key = mode + "_house_resolver"
+        if role == "reference":
+            result[key] = lines
+        elif result[key] != lines:
+            raise RuntimeError("house resolver callback/register outcomes differ")
         if not any(line.startswith("TOWN house-done ") for line in run["log"]):
             raise RuntimeError("house command witness missing")
         overrides = [
