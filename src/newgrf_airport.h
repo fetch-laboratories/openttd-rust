@@ -130,6 +130,10 @@ struct AirportSpec : NewGRFSpecBase<AirportClassID> {
 
 	static const AirportSpec *Get(uint8_t type);
 	static AirportSpec *GetWithoutOverride(uint8_t type);
+#ifdef WITH_RUST
+	/** Canonical array read; callers retain the original branch-specific checks. */
+	static AirportSpec *RustRawSpec(uint16_t type) noexcept;
+#endif
 
 	bool IsAvailable() const;
 	bool IsWithinMapBounds(uint8_t table, TileIndex index) const;

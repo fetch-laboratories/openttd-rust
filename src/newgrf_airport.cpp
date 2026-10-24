@@ -65,7 +65,7 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.dummy_spec = &AirportSpec::dummy,
 		.dummy_fta = RustDummyAirportFTA(),
 		.fta = RustAirportSpecFTA,
-		.base_spec = [](uint8_t type) noexcept -> const AirportSpec * { return AirportSpec::GetWithoutOverride(type); },
+		.base_spec = [](uint16_t type) noexcept -> const AirportSpec * { return AirportSpec::RustRawSpec(type); },
 		.enabled = [](const AirportSpec *spec) noexcept { return spec->enabled; },
 		.min_year = [](const AirportSpec *spec) noexcept { return spec->min_year.base(); },
 		.max_year = [](const AirportSpec *spec) noexcept { return spec->max_year.base(); },
@@ -130,6 +130,10 @@ template class NewGRFClass<AirportSpec, AirportClassID, APC_MAX>;
 AirportOverrideManager _airport_mngr(NEW_AIRPORT_OFFSET, NUM_AIRPORTS, AT_INVALID);
 
 AirportSpec AirportSpec::specs[NUM_AIRPORTS]; ///< Airport specifications.
+#ifdef WITH_RUST
+AirportSpec *AirportSpec::RustRawSpec(uint16_t type) noexcept { return &AirportSpec::specs[type]; }
+static_assert(NUM_AIRPORTS == 128 && NEW_AIRPORT_OFFSET == 10 && AT_INVALID == 254 && INVALID_AIRPORTTILE == 256 && NEW_AIRPORTTILE_OFFSET == 74);
+#endif
 
 /**
  * Retrieve airport spec for the given airport. If an override is available
@@ -164,7 +168,12 @@ AirportSpec AirportSpec::specs[NUM_AIRPORTS]; ///< Airport specifications.
 /* static */ AirportSpec *AirportSpec::GetWithoutOverride(uint8_t type)
 {
 	assert(type < lengthof(AirportSpec::specs));
+
+#ifdef WITH_RUST
+	return AirportSpec::RustRawSpec(type);
+#else
 	return &AirportSpec::specs[type];
+#endif
 }
 
 /** Check whether this airport is available to build. */

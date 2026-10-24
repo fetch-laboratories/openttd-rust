@@ -71,7 +71,7 @@ pub struct Services {
     pub(crate) dummy_spec: *const AirportSpec,
     pub(crate) dummy_fta: *const c_void,
     pub(crate) fta: extern "C" fn(*const AirportSpec) -> *const c_void,
-    base_spec: extern "C" fn(u8) -> *const AirportSpec,
+    base_spec: extern "C" fn(u16) -> *const AirportSpec,
     enabled: extern "C" fn(*const AirportSpec) -> bool,
     min_year: extern "C" fn(*const AirportSpec) -> i32,
     max_year: extern "C" fn(*const AirportSpec) -> i32,
@@ -174,7 +174,8 @@ pub(crate) fn station_fta(st: *mut BaseStation, s: &Services) -> *const c_void {
 
 /// Source `AirportSpec::Get`: disabled custom substitution precedes overrides.
 pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
-    let mut spec = (s.base_spec)(kind);
+    (s.check)(u16::from(kind) < crate::airport::NUM_AIRPORTS);
+    let mut spec = (s.base_spec)(u16::from(kind));
     if kind >= NEW_AIRPORT_OFFSET && !(s.enabled)(spec) {
         if (s.manager_grfid)(kind) == 0 {
             return spec;
@@ -183,11 +184,11 @@ pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
         if u16::from(substitute) == AT_INVALID {
             return spec;
         }
-        spec = (s.base_spec)(substitute);
+        spec = (s.base_spec)(u16::from(substitute));
     }
     let over = (s.override_id)(spec);
     if over != AT_INVALID {
-        (s.base_spec)(over as u8)
+        (s.base_spec)(over)
     } else {
         spec
     }
