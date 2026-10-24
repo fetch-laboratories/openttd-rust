@@ -107,12 +107,13 @@ impl OrderAccess {
             unsafe { (*self.list).manual }
         }
     }
-    fn order(&self, index: u8) -> Option<Order> {
+    fn order_ptr(&self, index: u8) -> Option<*const Order> {
         if index >= self.count() {
             None
         } else {
-            // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
-            unsafe { Some((*self.vector).data().add(usize::from(index)).read()) }
+            // SAFETY: The live serialized owner contains this index. The handle
+            // must not survive list mutation; it creates no borrow of storage.
+            unsafe { Some((*self.vector).data().add(usize::from(index)).cast_const()) }
         }
     }
     fn kind(&self, index: usize) -> u8 {
@@ -796,7 +797,7 @@ impl Order {
     pub(crate) fn action(&self) -> u8 {
         (self.flags >> 3) & 15
     }
-    pub(crate) fn depot_type(self) -> u8 {
+    pub(crate) fn depot_type(&self) -> u8 {
         self.flags & 7
     }
     fn variable(self) -> u8 {
@@ -860,7 +861,7 @@ impl Order {
         }
         !(!self.wait_timetabled() && self.kind() == 1 && self.non_stop() & 2 == 0)
     }
-    fn equals(self, other: Self) -> bool {
+    fn equals(&self, other: &Self) -> bool {
         if self.kind() == 2 && self.kind == other.kind && (self.action() | other.action()) & 2 != 0
         {
             return self.depot_type() == other.depot_type()
@@ -1207,7 +1208,7 @@ impl Game {
             let state = self.consist(u);
             let mut current = self.current(u);
             // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
-            if unsafe { (*state).real == index } && current.equals(order) {
+            if unsafe { (*state).real == index } && current.equals(&order) {
                 match field {
                     0 => {
                         current.wait = val;
@@ -2159,10 +2160,9 @@ pub unsafe extern "C" fn openttd_rust_order_refit(p: *mut Order, cargo: u8) -> u
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_order_equals(p: *mut Order, q: *const Order) -> u32 {
-    // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
-    let order = unsafe { p.read() };
-    // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
-    u32::from(order.equals(unsafe { q.read() }))
+    // SAFETY: Both orders are live and equality calls no external service or
+    // mutation; these shared borrows end before returning to native code.
+    u32::from(unsafe { (&*p).equals(&*q) })
 }
 
 #[unsafe(no_mangle)]
@@ -3403,8 +3403,10 @@ impl Control {
         access.update_real(state);
         let order = access
             // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
-            .order(unsafe { (*state).real })
-            .filter(|o| o.kind() != 8);
+            .order_ptr(unsafe { (*state).real })
+            // SAFETY: The handle addresses a live order; this scalar observation
+            // ends before the next service call.
+            .filter(|o| unsafe { (&**o).kind() != 8 });
         // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
         let kind = unsafe { (g.0.vehicle_type)(v) };
         if order.is_none() || (kind == 3 && !access.valid()) {
@@ -3431,17 +3433,30 @@ impl Control {
             return false;
         }
         let order = order.unwrap();
-        // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
-        if order.equals(unsafe { (*vehicle).current.as_ptr().read() })
+        // After update_real and order_ptr, valid only inspects the list.
+        // From order_ptr to materialization, vehicle_type,
+        // destination_tile and ship_station_tile are read-only native leaves;
+        // none reenters or mutates orders. Thus the raw handle stays live, with
+        // no owner/storage borrow crossing any callback. Earlier implicit-order
+        // mutations have already reacquired vehicle and order storage above.
+        // SAFETY: Equality only reads the canonical orders and calls no service;
+        // both shared borrows end before destination_tile or ship_station_tile.
+        if unsafe { (&*order).equals(&*(*vehicle).current.as_ptr()) }
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
             && (kind == 3 || unsafe { (g.0.destination_tile)(v) } != 0)
             && (kind != 2
-                || order.kind() != 1
+                // SAFETY: Fresh scalar read of the still-live order after the
+                // destination gate, without retaining a borrow across a service.
+                || unsafe { (&*order).kind() } != 1
                 // SAFETY: The source branch supplies a live destination of the required pool type.
-                || unsafe { (g.0.ship_station_tile)(order.destination) } != u64::from(u32::MAX))
+                || unsafe { (g.0.ship_station_tile)((*order).destination) } != u64::from(u32::MAX))
         {
             return false;
         }
+        // SAFETY: The unchanged-order gates above cannot mutate storage. Only
+        // this changed-order path needs the full value; no borrow crosses stores
+        // or the following invalidation/window/destination callbacks.
+        let order = unsafe { order.read() };
         // SAFETY: Writes one Order into live storage at an in-bounds index; no reference survives.
         unsafe {
             (*vehicle).current.as_mut_ptr().write(order);
@@ -4720,7 +4735,7 @@ impl Control {
         }
         if g.count(v) > 1
             && g.stored_order(list, 0)
-                .equals(g.stored_order(list, g.stored_count(list) - 1))
+                .equals(&g.stored_order(list, g.stored_count(list) - 1))
         {
             message = 4;
         }
