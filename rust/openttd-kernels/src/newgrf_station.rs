@@ -326,10 +326,26 @@ fn platform(
     )
 }
 fn continuation(native: &Services, tile: u32) -> u32 {
+    use crate::direction_type::{
+        DIAGDIR_NE, DIAGDIR_NW, DIAGDIR_SE, DIAGDIR_SW, DIR_E, DIR_N, DIR_NE, DIR_NW, DIR_S,
+        DIR_SE, DIR_SW, DIR_W,
+    };
     let (dirs, exits) = if (native.axis)(tile).0 == AXIS_X {
-        ([5, 1, 3, 7, 4, 2, 6, 0], [2, 0, 1, 3, 2, 0, 2, 0])
+        (
+            [DIR_SW, DIR_NE, DIR_SE, DIR_NW, DIR_S, DIR_E, DIR_W, DIR_N],
+            [
+                DIAGDIR_SW, DIAGDIR_NE, DIAGDIR_SE, DIAGDIR_NW, DIAGDIR_SW, DIAGDIR_NE, DIAGDIR_SW,
+                DIAGDIR_NE,
+            ],
+        )
     } else {
-        ([3, 7, 5, 1, 4, 6, 2, 0], [1, 3, 2, 0, 1, 3, 1, 3])
+        (
+            [DIR_SE, DIR_NW, DIR_SW, DIR_NE, DIR_S, DIR_W, DIR_E, DIR_N],
+            [
+                DIAGDIR_SE, DIAGDIR_NW, DIAGDIR_SW, DIAGDIR_NE, DIAGDIR_SE, DIAGDIR_NW, DIAGDIR_SE,
+                DIAGDIR_NW,
+            ],
+        )
     };
     let map = native.map();
     let mut result = 0;
