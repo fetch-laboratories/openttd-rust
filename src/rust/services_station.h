@@ -49,9 +49,8 @@ inline uint8_t RustRoadStopAnimationFrame(BaseStation *st, uint32_t tile) noexce
 inline size_t RustRoadStopSpecCount(const BaseStation *st) noexcept { return st->roadstop_speclist.size(); }
 inline const RoadStopSpec *RustRoadStopSlotSpec(const BaseStation *st, size_t index) noexcept { return st->roadstop_speclist[index].spec; }
 inline uint32_t RustRoadStopSlotGRFID(const BaseStation *st, size_t index) noexcept { return st->roadstop_speclist[index].grfid; }
-inline OpenTTDRoadStopSpecKey RustRoadStopSlotKey(const BaseStation *st, size_t index) noexcept { const auto &slot = st->roadstop_speclist[index]; return {slot.grfid, slot.localidx}; }
-inline OpenTTDRoadStopSpecVacancy RustRoadStopSlotVacancy(const BaseStation *st, size_t index) noexcept { const auto &slot = st->roadstop_speclist[index]; return {slot.spec, slot.grfid}; }
-inline OpenTTDRoadStopSpecTriggers RustRoadStopSpecTriggers(const RoadStopSpec *spec) noexcept { return {spec->animation.triggers.base(), spec->cargo_triggers}; }
+inline OpenTTDRoadStopSpecKey RustRoadStopSlotKey(const BaseStation *st, size_t index) noexcept { return {RustRoadStopSlotGRFID(st, index), st->roadstop_speclist[index].localidx}; }
+inline OpenTTDRoadStopSpecVacancy RustRoadStopSlotVacancy(const BaseStation *st, size_t index) noexcept { return {RustRoadStopSlotSpec(st, index), RustRoadStopSlotGRFID(st, index)}; }
 inline void RustRoadStopSpecResize(BaseStation *st, size_t size) noexcept { st->roadstop_speclist.resize(size); }
 inline void RustRoadStopSpecClear(BaseStation *st) noexcept { st->roadstop_speclist.clear(); }
 inline void RustRoadStopSetSpecSlot(BaseStation *st, uint8_t index, const RoadStopSpec *spec, uint32_t grfid, uint16_t local_id) noexcept { auto &slot = st->roadstop_speclist[index]; slot.spec = spec; slot.grfid = grfid; slot.localidx = local_id; }
@@ -61,6 +60,7 @@ inline CargoTypes RustRoadStopCachedCargo(const BaseStation *st) noexcept { retu
 inline void RustRoadStopSetCachedTriggers(BaseStation *st, uint16_t animation, CargoTypes cargo) noexcept { st->cached_roadstop_anim_triggers = StationAnimationTriggers(animation); st->cached_roadstop_cargo_triggers = cargo; }
 inline CargoTypes RustRoadStopCargoTriggers(const RoadStopSpec *spec) noexcept { return spec->cargo_triggers; }
 inline uint16_t RustRoadStopAnimationTriggers(const RoadStopSpec *spec) noexcept { return spec->animation.triggers.base(); }
+inline OpenTTDRoadStopSpecTriggers RustRoadStopSpecTriggers(const RoadStopSpec *spec) noexcept { return {RustRoadStopAnimationTriggers(spec), RustRoadStopCargoTriggers(spec)}; }
 /* Temporary native common station operation until #411 is integrated. Preserve
  * its uint8_t parameter narrowing; callers adopt its Rust owner at integration. */
 inline uint32_t RustBaseStationVariable(BaseStation *st, ResolverObject *ro, uint8_t variable, uint8_t parameter, bool *available) noexcept { return st->GetNewGRFVariable(*ro, variable, parameter, *available); }
