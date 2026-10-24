@@ -520,6 +520,14 @@ def check(scenario, run, mode, role, result):
         return
 
     if "water" in scenario:
+        if scenario.get("water_operation") == "route":
+            result[f"{mode}_{role}_movement"] = branch_witnesses(
+                scenario,
+                run,
+                role,
+                "movement",
+                ["ship_bridge_enter", "ship_bridge_exit"],
+            )
         required = ["economy_day", "path_cache", "reverse", "rotate", "buoy"]
         required += (
             ["loading", "auto_service", "rotation_reload"]
