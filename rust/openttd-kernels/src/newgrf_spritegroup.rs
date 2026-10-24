@@ -778,11 +778,7 @@ unsafe fn default_real(s: &Services, group: Handle) -> Handle {
 pub unsafe extern "C" fn openttd_rust_resolver_default_real(s: &Services, group: Handle) -> Handle {
     unsafe { default_real(s, group) }
 }
-/// Native facades pass the original default frame and availability output.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_scope_default(scope: Resolver) -> Resolver {
-    scope
-}
+/// Native facades pass the availability output; frame addresses stay native.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_scope_default_random() -> u32 {
     0

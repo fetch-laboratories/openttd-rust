@@ -94,7 +94,7 @@ static NewGRFProfiler *ProfileEnter(ResolverObject *resolver, bool top) noexcept
 static void ProfileEnd(NewGRFProfiler *profiler, const OpenTTDResolverResult *result) noexcept { profiler->EndResolve(NativeResult(*result)); }
 static void ResolverBinding(ResolverObject *ro, OpenTTDResolverBinding *out) noexcept
 {
-	*out = {.state = nullptr, .self = nullptr, .parent = nullptr, .relative = nullptr, .default_scope = &ro->default_scope, .kind = 0};
+	*out = {.state = nullptr, .self = nullptr, .parent = nullptr, .relative = nullptr, .default_scope = RustResolverBaseScope(ro, VSG_SCOPE_SELF, 0), .kind = 0};
 	if (auto *v = dynamic_cast<VehicleResolverObject *>(ro)) {
 		out->state = &v->state; out->self = &v->self_scope; out->parent = &v->parent_scope; out->relative = &v->relative_scope; out->kind = 1;
 	} else if (auto *st = dynamic_cast<StationResolverObject *>(ro)) {
@@ -193,7 +193,7 @@ const SpriteGroup *ResolverObject::ResolveReal(const RealSpriteGroup &group) con
 {
 	return openttd_rust_resolver_default_real(&GetRustSpriteGroupServices(), &group);
 }
-ScopeResolver *ResolverObject::GetScope(VarSpriteGroupScope, uint8_t) { return openttd_rust_scope_default(&this->default_scope); }
+ScopeResolver *ResolverObject::GetScope(VarSpriteGroupScope scope, uint8_t relative) { return RustResolverBaseScope(this, scope, relative); }
 #include "service_table_check.hpp"
 #include "abi-visit-OpenTTDSpriteGroupServices.hpp"
 #include "abi-visit-OpenTTDGlobalVariableServices.hpp"

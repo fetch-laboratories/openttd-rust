@@ -89,7 +89,6 @@ const SpriteGroup *openttd_rust_resolver_default_real(const OpenTTDSpriteGroupSe
 uint32_t openttd_rust_resolver_reseed_sum(const OpenTTDResolverState *);
 uint32_t openttd_rust_scope_default_random();
 uint32_t openttd_rust_scope_default_variable(const OpenTTDSpriteGroupServices *, uint8_t, bool *);
-ScopeResolver *openttd_rust_scope_default(ScopeResolver *);
 void openttd_rust_resolver_init(OpenTTDResolverState *, CallbackID, uint32_t, uint32_t);
 OpenTTDResolverResult openttd_rust_spritegroup_resolve(const OpenTTDSpriteGroupServices *, const SpriteGroup *, ResolverObject *, OpenTTDResolverState *, const GRFFile *, bool);
 OpenTTDResolverResult openttd_rust_resolver_resolve(const OpenTTDSpriteGroupServices *, const SpriteGroup *, ResolverObject *, OpenTTDResolverState *, const GRFFile *);
