@@ -86,6 +86,7 @@ def scenarios(soak):
             "waypoints",
             "waypoints-reload",
             "resolver",
+            "resolver-reload",
         )
     ]
 
@@ -599,6 +600,7 @@ static bool StationCommands(std::span<std::string_view> args)
 	_settings_game.construction.road_stop_on_competitor_road = true;
 	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
 	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
+	if (args[1] == "resolver-inspect") { StationResolverFixture(INVALID_TILE, exec, true); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true; }
 	if (args[1] == "waypoints-inspect") {
 		uint found = 0;
 		for (Waypoint *wp : Waypoint::Iterate()) if (wp->name.starts_with("Migration ")) { ++found; StationCost("wp-reload-name", Command<CMD_RENAME_WAYPOINT>::Do(test, wp->index, wp->name)); }
@@ -618,7 +620,7 @@ static bool StationCommands(std::span<std::string_view> args)
 	} else {
 		TileIndex origin = StationPatch();
 		auto tile = [origin](int x, int y) { return origin + TileDiffXY(x, y); };
-		if (args[1] == "resolver") { StationResolverFixture(origin, exec); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true; }
+		if (args[1] == "resolver") { StationResolverFixture(origin, exec); fmt::print(stderr, "STCMD complete\n"); if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false); current.Restore(); return true; }
 		if (args[1] == "waypoints") {
 			StationWaypoints(origin, company, test, exec); fmt::print(stderr, "STCMD complete\n");
 			if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
@@ -882,6 +884,7 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv() { __real__Z22IConsoleStdLib
 RELOADS = {
     "reload": ("commands", "inspect"),
     "road-stops-reload": ("road-stops", "road-stops-inspect"),
+    "resolver-reload": ("resolver", "resolver-inspect"),
     "waypoints-reload": ("waypoints", "waypoints-inspect"),
 }
 # #354 road stop owner branches; cache checks run only with desync snapshots.
@@ -1086,11 +1089,28 @@ def check_commands(scenario, run, mode, role, result):
             ]
         )
         core.branch_witnesses(scenario, run, role, "waypoint_command", branches)
-    if scenario["station_commands"] == "resolver":
-        required = ["build_rail"]
+    if scenario["station_commands"].startswith("resolver"):
+        required = (
+            [] if scenario["station_commands"].endswith("reload") else ["build_rail"]
+        )
         for marker in [
             "resolver-cache " + v for v in ("40", "41", "45", "46", "47", "49")
-        ] + ["resolver-rng lower", "cost resolver-slope"]:
+        ] + [
+            "resolver-rng lower",
+            "resolver-rng cases",
+            "resolver-rng empty",
+            "cost resolver-slope",
+            "resolver-reconstruction",
+            "resolver-variable station",
+            "resolver-variable waypoint",
+            "resolver-variable purchase",
+            "resolver-variable slope-x",
+            "resolver-variable slope-y",
+            "resolver-parent",
+            "resolver-root",
+            "resolver-root-null",
+            "resolver-state",
+        ]:
             if not any(line.startswith("STCMD " + marker) for line in run["log"]):
                 raise RuntimeError("station resolver witness missing: " + marker)
     if scenario["station_commands"] != "linkgraph":

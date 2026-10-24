@@ -103,7 +103,9 @@ pub struct Services {
     translate: extern "C" fn(u8, *const c_void) -> u8,
     build_date: extern "C" fn(*mut BaseStation) -> i32,
     airport_spec: extern "C" fn(*mut BaseStation) -> *const crate::station_cmd::AirportSpec,
-    airport_ttd_type: extern "C" fn(*const crate::station_cmd::AirportSpec) -> u8,
+    airport_ttd_type: extern "C" fn(
+        *const crate::station_cmd::AirportSpec,
+    ) -> crate::newgrf_airport::TtdpAirportType,
     identity: extern "C" fn(*mut BaseStation, u8) -> SpecIdentity,
     unhandled: extern "C" fn(u8),
     slope_error: extern "C" fn(*mut CommandCost, *const SlopeResult, *const RailSpec),
@@ -352,12 +354,7 @@ fn continuation(native: &Services, tile: u32) -> u32 {
     }
     result
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_cached_variable(
-    state: *mut State,
-    var: u8,
-    out: *mut u32,
-) -> bool {
+unsafe fn cached_variable(state: *mut State, var: u8, out: *mut u32) -> bool {
     let (slot, typed, axis, centred) = match var {
         0x40 => (0, false, false, false),
         0x41 => (1, true, false, false),
@@ -500,7 +497,7 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
         }
         0xf1 => {
             return if (native.commands().airport_tile)(st) != u32::MAX {
-                u32::from((native.airport_ttd_type)((native.airport_spec)(st)))
+                u32::from((native.airport_ttd_type)((native.airport_spec)(st)).0)
             } else {
                 u32::from(crate::newgrf_airport::ATP_TTDP_LARGE)
             };
@@ -609,7 +606,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         };
     }
     let mut cached = 0;
-    if unsafe { openttd_rust_station_cached_variable(state, variable, &raw mut cached) } {
+    if unsafe { cached_variable(state, variable, &raw mut cached) } {
         return cached;
     }
     match variable {

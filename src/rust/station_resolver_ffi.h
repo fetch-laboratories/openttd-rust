@@ -5,6 +5,7 @@
 #include "station_command_ffi.h"
 #include "animation_ffi.h"
 #include "cargo_storage_ffi.h"
+#include "../newgrf_airport.h"
 struct Livery; struct AirportSpec; struct ResolverObject; struct RealSpriteGroup; struct SpriteGroup; struct GRFFile;
 struct OpenTTDStationResolverState {
 	BaseStation *station; const StationSpec *spec; const Town *town;
@@ -49,7 +50,7 @@ struct OpenTTDStationResolverServices {
 	uint8_t (*translate)(uint8_t, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(translate);
 	int32_t (*build_date)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(build_date);
 	const AirportSpec *(*airport_spec)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_spec);
-	uint8_t (*airport_ttd_type)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);
+	TTDPAirportType (*airport_ttd_type)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);
 	OpenTTDStationSpecIdentity (*identity)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(identity);
 	void (*unhandled)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
 	void (*slope_error)(OpenTTDCommandCost *, const OpenTTDStationSlopeResult *, const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(slope_error);
@@ -64,7 +65,6 @@ bool openttd_rust_station_scope_is_parent(OpenTTDStationResolverState *, uint8_t
 uint32_t openttd_rust_station_variable(OpenTTDStationResolverState *, const ResolverObject *, const GRFFile *, uint8_t, uint32_t, bool *);
 uint32_t openttd_rust_station_base_variable(BaseStation *, const GRFFile *, uint8_t, uint8_t, bool *);
 const SpriteGroup *openttd_rust_station_resolver_init(OpenTTDStationResolverState *, const StationSpec *, BaseStation *, uint32_t);
-bool openttd_rust_station_cached_variable(OpenTTDStationResolverState *, uint8_t, uint32_t *);
 const SpriteGroup *openttd_rust_station_resolve_real(const OpenTTDStationResolverState *, const RealSpriteGroup *);
 uint32_t openttd_rust_station_random_bits(const OpenTTDStationResolverState *);
 uint32_t openttd_rust_station_random_triggers(const OpenTTDStationResolverState *);

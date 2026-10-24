@@ -104,6 +104,7 @@ inline void RustStationDeleteAirportStorage(BaseStation *st) noexcept { delete S
 inline Industry *RustStationAssociatedIndustry(BaseStation *st) noexcept { return Station::From(st)->industry; }
 inline void RustStationSetStationOwner(BaseStation *st, uint8_t owner) noexcept { st->owner = Owner(owner); }
 inline void RustStationSetFacilities(BaseStation *st, uint8_t facilities) noexcept { st->facilities = StationFacilities(facilities); }
+inline int32_t RustStationBuildDate(BaseStation *st) noexcept { return st->build_date.base(); }
 inline void RustStationSetBuildDate(BaseStation *st, int32_t date) noexcept { st->build_date = TimerGameCalendar::Date(date); }
 inline void RustStationListInvalidation(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_LIST, st->owner, data); }
 inline void RustStationClearName(BaseStation *st) noexcept { st->name.clear(); }
