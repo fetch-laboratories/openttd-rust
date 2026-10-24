@@ -359,6 +359,32 @@ def check(scenario, run, mode, role, result):
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
     if scenario["fleet"] == "resolver":
+        # Frozen callback results from the unchanged native first-match policy.
+        overrides = [
+            line.split()[2:]
+            for line in run["log"]
+            if line.startswith("FLEET resolver-override-order ")
+        ]
+        expected_overrides = [
+            [str(test), str(cargo), str(value)]
+            for test, values in enumerate(
+                ((311, 311), (419, 311), (311, 523), (523, 419), (311, 523), (523, 523))
+            )
+            for cargo, value in enumerate(values)
+        ]
+        if overrides != expected_overrides:
+            result["problems"].append(
+                f"{mode}/{role}: wagon override first-match order"
+            )
+        restored_overrides = [
+            line
+            for line in run["log"]
+            if line.startswith("FLEET resolver-override-restored ")
+        ]
+        if len(restored_overrides) != 1 or not restored_overrides[0].startswith(
+            "FLEET resolver-override-restored true true "
+        ):
+            result["problems"].append(f"{mode}/{role}: wagon override restoration/RNG")
         # Real-group policy is observed through normal callback/property entries.
         # Explicit boundary results distinguish empty-vector fallback and clamps.
         purchases = [
