@@ -48,7 +48,7 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	for (CargoType cargo = 0; cargo < NUM_CARGO; cargo++) { file.cargo_map[cargo] = cargo; file.cargo_list.push_back(CargoSpec::Get(cargo)->label); }
 	spec->grf_prop.grffile = &file; spec->grf_prop.grfid = file.grfid; spec->grf_prop.local_id = 17;
 	tile_spec->grf_prop.grffile = &file; tile_spec->grf_prop.grfid = file.grfid; tile_spec->grf_prop.local_id = 19;
-	SpriteGroup::CanAllocateItem();
+	SpriteGroup::CanAllocateItem(6);
 	auto *zero = new CallbackResultSpriteGroup(0);
 	auto *one = new CallbackResultSpriteGroup(1);
 	auto *count = Query(0x67, i->type, zero);
