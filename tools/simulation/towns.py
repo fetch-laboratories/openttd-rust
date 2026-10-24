@@ -756,8 +756,16 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
                 raise RuntimeError(f"{role} nonempty PSAC marker missing")
             captures[role] = values
             saves[role] = save
-        if captures["reference"] != captures["candidate"]:
-            raise RuntimeError("captured PSAC payloads differ")
+        if captures["reference"] != captures["candidate"] or core.compare_saves(
+            saves["reference"],
+            saves["candidate"],
+            scenario["name"],
+            10,
+            {"chunks": 0, "elements": 0, "masked": {}},
+        ):
+            raise RuntimeError(
+                "captured storage payloads or native associations differ"
+            )
         storage_load_probes(
             scenario, executables, builds, folder, saves["reference"], timeout, env
         )
