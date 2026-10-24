@@ -88,9 +88,9 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 			for (const Station *station : finder.GetStations()) visit(context, station);
 		},
 		.town_by_id = OpenTTDTownShellByID,
-		.root = [](uint16_t house, bool live) noexcept { return RustSpecSpriteGroup(RustHouseSpec(house), live); },
+		.root = RustHouseSpriteGroup,
 		.spec_house = [](const HouseSpec *spec) noexcept -> uint16_t { return spec - HouseSpec::Get(0); },
-		.local_id = [](uint16_t house) noexcept { return RustSpecLocalID(RustHouseSpec(house)); },
+		.local_id = RustHouseLocalID,
 		.base_scope = RustResolverBaseScope,
 		.evaluate = EvaluateHouseCallback,
 		.reseed = EvaluateHouseReseed,

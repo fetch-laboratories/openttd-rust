@@ -302,7 +302,7 @@ impl<'a> Founding<'a> {
                 self.shared,
                 town.state,
                 (self.leaves.house_count)() as usize,
-            )
+            );
         };
         unsafe {
             (*town.state).growth.counter = town.id.0 % 70;

@@ -79,6 +79,8 @@ inline uint16_t RustResolverCallback(const ResolverObject *resolver) noexcept { 
 template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
 template <typename Spec> inline uint16_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }
 template <typename Spec> inline const SpriteGroup *RustSpecSpriteGroup(const Spec *spec, bool live) noexcept { return spec->grf_prop.GetSpriteGroup(live); }
+inline const SpriteGroup *RustHouseSpriteGroup(uint16_t house, bool live) noexcept { return RustSpecSpriteGroup(RustHouseSpec(house), live); }
+inline uint16_t RustHouseLocalID(uint16_t house) noexcept { return RustSpecLocalID(RustHouseSpec(house)); }
 
 /* Borrowed GRF files remain native and live for the synchronous conversion.
  * A town shell is live for resolution (or null for a prototype); no Rust

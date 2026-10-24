@@ -172,9 +172,8 @@ unsafe fn supplied_history(state: *const State, cargo: u8, period: u8) -> Option
     }
     let index = unsafe { openttd_rust_town_supplied_find(state, cargo) };
     unsafe {
-        (&(*state).supplied)
-            .get(index)
-            .map(|s| s.history[usize::from(period)])
+        let rows = &(*state).supplied;
+        rows.get(index).map(|s| s.history[usize::from(period)])
     }
 }
 /// Canonical `Town::GetPercentTransported`, without a native owner bounce.

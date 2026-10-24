@@ -1204,7 +1204,7 @@ impl House<'_> {
                 self.s,
                 std::ptr::null_mut(),
                 (self.l.house_count)() as usize,
-            )
+            );
         };
         (self.s.rebuild_town_tree)();
         // SAFETY: Immediate owner writes; no service runs while accessed.

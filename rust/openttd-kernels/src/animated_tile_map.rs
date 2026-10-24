@@ -20,6 +20,7 @@ crate::abi::layouts! {
 }
 
 /// Canonical `GetAnimationFrame` service, shared with the animation owner.
+#[allow(unsafe_code)] // One immutable native service-table pointer, no world view.
 pub(crate) fn animation_frame(services: &crate::animated_tile::Services, tile: u32) -> u8 {
     // SAFETY: InitializeAnimatedTiles installs this immutable native service
     // before map use. The callback reads no Rust owner or borrowed world view.

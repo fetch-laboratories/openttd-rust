@@ -119,7 +119,7 @@ pub extern "C" fn openttd_rust_house_class_allocate(class: u8, grfid: u32) -> u1
             return (index + 1) as u16;
         }
         let index = classes.len();
-        classes.push(ClassMapping { class, grfid });
+        classes.push(ClassMapping { grfid, class });
         index as u16
     })
 }
@@ -315,7 +315,7 @@ pub unsafe extern "C" fn openttd_rust_town_scope_store(
             file,
             pos,
             value,
-        )
+        );
     };
 }
 #[unsafe(no_mangle)]
@@ -550,14 +550,6 @@ unsafe fn acceptance_history(
     parameter: u32,
     map: Map,
 ) -> u32 {
-    let cargo = (s.cargo_translation)(parameter as u8, (s.file)(ro));
-    if !is_valid_cargo_type(cargo) {
-        return 0;
-    }
-    let register = (s.get_register)(ro, 0x100) as u32;
-    let offset = map.diff(i32::from(register as i8), i32::from((register >> 8) as i8));
-    let shared = unsafe { &*s.shared };
-    let tile = map.wrap_to_map(scope.tile.wrapping_add(offset), (shared.map_max_y)() + 1);
     struct Context {
         leaves: *const Leaves,
         cargo: u8,
@@ -578,6 +570,14 @@ unsafe fn acceptance_history(
         let state = crate::station_service::openttd_rust_goods_convert_state(status);
         unsafe { (*context.cast::<Context>()).result |= u32::from(state) };
     }
+    let cargo = (s.cargo_translation)(parameter as u8, (s.file)(ro));
+    if !is_valid_cargo_type(cargo) {
+        return 0;
+    }
+    let register = (s.get_register)(ro, 0x100) as u32;
+    let offset = map.diff(i32::from(register as i8), i32::from((register >> 8) as i8));
+    let shared = unsafe { &*s.shared };
+    let tile = map.wrap_to_map(scope.tile.wrapping_add(offset), (shared.map_max_y)() + 1);
     let mut context = Context {
         leaves: s.towns,
         cargo,
@@ -592,6 +592,7 @@ unsafe fn acceptance_history(
 
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDHouseCallbackArgs" ["probe"] => CallbackArgs { town, watched, param1, param2, tile, view, house, callback, initial_random, prospective };
     "OpenTTDTownScope" ["probe"] => TownScope { town, owner, id, readonly };
     "OpenTTDHouseScope" ["probe"] => HouseScope { town, watched, tile, view, house, initial_random, prospective };
     "OpenTTDHouseSearchSpec" ["probe"] => SearchSpec { grfid, local, house_class, has_file };
@@ -755,10 +756,6 @@ pub extern "C" fn openttd_rust_town_scope(
     } else {
         (services().base_scope)(ro, scope, relative)
     }
-}
-crate::abi::layouts! {
-    fn abi_args;
-    "OpenTTDHouseCallbackArgs" ["probe"] => CallbackArgs { town, watched, param1, param2, tile, view, house, callback, initial_random, prospective };
 }
 
 #[unsafe(no_mangle)]
