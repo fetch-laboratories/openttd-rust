@@ -59,7 +59,7 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.rail_cargo = RustSpecCargoMap<StationSpec>,
 		.road_cargo = RustSpecCargoMap<RoadStopSpec>,
 		.airport_cargo = RustSpecCargoMap<AirportTileSpec>,
-		.airport_grf = [](const AirportTileSpec *s) noexcept { return s->grf_prop.grffile != nullptr; },
+		.airport_grf = [](const AirportTileSpec *s) noexcept { return RustSpecGRFFile(s) != nullptr; },
 		.airport_area = [](Station *s) noexcept -> OpenTTDAnimationArea { return {s->airport.tile.base(), s->airport.w, s->airport.h}; },
 		.airport_belongs = RustStationAirportMember,
 		.road_count = RustRoadStopTileDataCount,
