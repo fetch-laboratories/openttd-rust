@@ -90,7 +90,7 @@ static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_engine_speed(OpenTTDAircraftVehic
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_engine_subtype(OpenTTDAircraftVehicle vehicle) noexcept
 {
 	const Vehicle *v = VehicleOf(vehicle.handle);
-	return RustAircraftInfoSubtype(AircraftVehInfo(v->engine_type));
+	return RustAircraftInfoSubtype(AircraftVehInfo(EngineID(RustVehicleEngineID(v))));
 }
 
 static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_engine_sound(OpenTTDAircraftVehicle vehicle) noexcept

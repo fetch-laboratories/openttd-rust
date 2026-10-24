@@ -16,6 +16,7 @@
 #include "vehicle_func.h"
 #ifdef WITH_RUST
 #include "rust/services_road.h"
+#include "rust/services_station.h"
 #include "rust/vehicle_services.h"
 #endif
 

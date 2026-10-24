@@ -48,7 +48,6 @@ src/order_cmd.cpp | openttd_orders_destination_tile(void *ctx) noexcept | 0b76ca
 src/order_cmd.cpp | openttd_orders_dirty_vehicle_windows(void *ctx) noexcept | 8876801f39931566 | 1
 src/order_cmd.cpp | openttd_orders_economy_date() noexcept | b7b2717268568730 | 1
 src/order_cmd.cpp | openttd_orders_economy_fraction() noexcept | 1d0bc137e6e8cdeb | 1
-src/order_cmd.cpp | openttd_orders_fast_aircraft(void *ctx) noexcept | bd7e7c281b2eeda7 | 1
 src/order_cmd.cpp | openttd_orders_invalidate_shared_window(void *ctx, uint32_t window, int32_t data) noexcept | cb66b8a463e43dbf | 1
 src/order_cmd.cpp | openttd_orders_invalidate_vehicle_list(void *ctx) noexcept | 1a5042d4ba5f5c18 | 1
 src/order_cmd.cpp | openttd_orders_last_station(void *ctx) noexcept | 37d09a120f34bb0c | 1
@@ -70,7 +69,6 @@ src/pathfinder/yapf/yapf_rail.cpp | YapfTrainFindNearestSafeTile(const Train *v,
 src/rust/aircraft_adapter.hpp | Aircraft_airport_blocks(const OpenTTDStation *s) noexcept | 97ae30fe84ad813b | 1
 src/rust/aircraft_adapter.hpp | Aircraft_engine_sound(OpenTTDAircraftVehicle vehicle) noexcept | ab16a3a16a30787d | 1
 src/rust/aircraft_adapter.hpp | Aircraft_engine_speed(OpenTTDAircraftVehicle vehicle) noexcept | a6cd81a57940c095 | 1
-src/rust/aircraft_adapter.hpp | Aircraft_engine_subtype(OpenTTDAircraftVehicle vehicle) noexcept | d686df951ef1732d | 1
 src/rust/aircraft_adapter.hpp | Aircraft_had_vehicle(const OpenTTDStation *s) noexcept | 20ea2629b76c3ff3 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_nearest_depot_order(OpenTTDAircraftVehicle vehicle) noexcept | c2837c0411ced584 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_part_of_orders(OpenTTDAircraftVehicle vehicle) noexcept | 42a2fa6130a76f6a | 1

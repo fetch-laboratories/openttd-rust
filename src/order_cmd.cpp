@@ -404,7 +404,7 @@ extern "C" uint64_t openttd_orders_local_owner(void *ctx) noexcept
 extern "C" uint64_t openttd_orders_fast_aircraft(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return (RustAircraftInfoSubtype(AircraftVehInfo(v->engine_type)) & AIR_FAST) != 0;
+	return (RustAircraftInfoSubtype(AircraftVehInfo(EngineID(RustVehicleEngineID(v)))) & AIR_FAST) != 0;
 }
 
 
