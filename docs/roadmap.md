@@ -4,22 +4,20 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-24, code at `951eec41e5`)
+## Where the fork stands (2026-10-24, code at `00ab107424`)
 
 - 63 ownership ports. Original C++ retired: 62,169 of 470,612 source lines
   (13.21%); simulation sources: 53,345 of 102,615 (51.99%). Whole-fork Rust,
   tooling and glue (`tools/port-metrics.py`, which does not measure behavior):
-  114,094, 41,262 and 40,559 lines. Since the seventeenth steering: 25 owners
-  and 12,533 original lines; no regression or rollback.
-- Projections at `103ee7cff8` from the 156915 anchor: TGP 1.403x, Opus 1.406x,
-  Grok 1.411x, P1996 1.369x, P2000 1.422x, P2016 1.502x. Quiet wall pass: TGP
-  1.209x, Opus 1.420x, Grok 1.414x, P1996 1.344x, P2000 1.413x, P2016 1.484x;
-  all below ceiling, only P2016 in band. TGP loop work grew 13.2%; #275 holds
-  the attribution.
-- #442, #445 and #448 integrated together in #453. Paused at the user's
-  request with two unintegrated branches, #446 and #447; neither has a Full
-  at its current head. The merged tip is unprofiled; #448 commits the complete
-  103ee anchors. The next integration makes the next merged-tip profile due.
+  113,870, 39,261 and 40,347 lines. The nineteenth-steering housekeeping so far
+  removed 224 Rust, 2,001 tooling and 212 glue lines; no regression or rollback.
+- Projections at `00ab107424` from the 103ee anchors: TGP 1.209x, Opus 1.420x,
+  Grok 1.415x, P1996 1.344x, P2000 1.413x, P2016 1.484x, equal to the anchors
+  (`79f6598254` was within 0.5%). P2016 stays in its band; the 103ee quiet pass
+  already measured it and #275 holds its attribution and two repair candidates,
+  so no new pass ran. macOS passed at `79f6598254` and `00ab107424`.
+- Unintegrated branches: paused #446 and #447, plus the #451 structural and
+  #452 code-comment PRs in progress (four of six).
 
 ## Nineteenth steering review (2026-10-24, housekeeping)
 
@@ -46,9 +44,7 @@ retained evidence; steering verified each claim acted on. No fidelity audit ran.
   about 23 GB. #156 has 202 comments and a stale body.
 
 Actions:
-1. **Local cleanup (#259), root, on resume:** copy the speed444 `prepare.py`
-   and `collect.py` out of `.local` and keep the pinned zlib runtime first.
-   Post #275's privately retained conclusions before removing t3-497bcf98.
+1. **Local cleanup (#259):** done; #275 received the retained conclusions.
 2. **#449 tests, #450 harness and tooling, #451 Rust and glue, #452 comments
    and docs.** Each gets the PRs its issue names, with no behavior change;
    batch integration when several are ready. The user may assign them to a
@@ -176,37 +172,47 @@ Maintenance rows use original retirement and net glue (#223); evidence stays in 
 | #156 property sign/failure boundaries; MSVC assertion-only warning | #435; #437 repair | #437 | `8b3dd5ebef` | combined with #425: 1120 / 290 / 520 / 458, net glue 479 |
 | #156 statue search; #275 whole anchors; concrete animation ABI test | #441, #443; #444 repair | #444 | `103ee7cff8` | combined owners: 1768 / 800 / 840 / 563, net glue 627 |
 | #275 aircraft witnesses, direct orders and quiet anchors; #156 order flags | #442, #445, #448 | #453 | `951eec41e5` | 189 / 183 / 12 / 0; net glue -7 |
+| #450 one comparison driver and one platform check (bootstrap Full) | #455 | direct | `79f6598254` | 0 / 1331 / 0 / 0; net tooling -1,863 |
+| #449 tests that cannot fail and workflow text pins | #454 | direct | `1168de46e6` | 14 / 518 / 89 / 0; net glue -200; net -750 lines |
+| #451 shared header constants; #450 harness helpers and tracked speed collector | #456, #457 | #458 | `00ab107424` | 921 / 1207 / 8 / 0; net glue -12 |
 
 
 ## Phase 1: maintenance and coverage
 
-#275 owns measured speed, #156 missing branches, #449-#452 housekeeping and #259
-local cleanup. #168 and #199 own the remaining boundary conversions (disaster's
-async protocol, opcode switches). Housekeeping PRs count toward the six branches.
+#275 owns measured speed, #156 missing branches and #451-#452 the remaining
+housekeeping (#259, #449 and #450 are closed). #168 and #199 own the remaining
+boundary conversions (disaster's async protocol, opcode switches). Housekeeping
+PRs count toward the six branches.
 
 ## Phase 2: work order
 
-1. **#259 local cleanup**, then **#275 growth repair** (the next maintenance PR
-   to integrate; candidates: #436's per-call ambient gate, shared airport
-   animation dispatch) alongside **#449-#452** where files do not overlap.
-2. **#446** investigates the refit-cost clone crash; **#447** validates its
+1. **#451 structural PR** (YAPF heaps, registries, macros, SAFETY accessors,
+   `train_reservation.rs` forwarders; it applies #452's comment rules to the
+   files it rewrites) and **#452 code-comment PR** (every other file), then
+   review, Full and integration.
+2. **#275 growth repair** (#436's per-call ambient gate, the airport animation
+   entry in the shared dispatcher), then the next speed pass with the tracked
+   collector (`python3 tools/simulate.py speed prepare|collect DIR`).
+3. **#446** investigates the refit-cost clone crash; **#447** validates its
    TownID fixture repair. Both need cost checkpoints, review and Full.
-3. **Next owners** (planned, unselected): vehicle effect emission and cache
-   policy, then the cargo registry and callback lifecycle, once the housekeeping
-   PRs are open and the branch limit allows. Catchment, #64/#68/#69 and
-   vendored, GUI and platform work stay unselected.
+4. **Next owners** (planned, unselected): vehicle effect emission and cache
+   policy, then the cargo registry and callback lifecycle, once the branch
+   limit allows. Catchment, #64/#68/#69 and vendored, GUI and platform work
+   stay unselected.
 
 ## Resume checkpoint
 
-Paused after the requested #453 batch. Its merged worktrees and branches are
-removed; unfinished worktrees remain. No local jobs run. Automatic post-merge
-CI was still running at handoff; #453 links it. No draft has a Full at its head.
+Three integrations this session (#455, #454, #458). Merged worktrees and
+branches are removed; `.local/` holds only caches, the pinned zlib runtime and
+`.local/speed-collector/` (superseded by `tools/simulation/speed.py`; delete
+after the first tracked pass).
 
 | Item | Saved head | Next action |
 | --- | --- | --- |
 | #446 engine/articulated (#439) | `e96e45c240` | Refit-cost clone crash; simulate passed 1 of 3. |
 | #447 type admission (#440) | `c3fdd2227d` | Validate TownID fixture repair; last pair failed. |
-| #275, #259, #449-#452 | issues | As Phase 2 says; no PRs yet. |
-| Merged-tip profile | `951eec41e5` | Due after the next integration; use the 103ee anchors. |
+| #451 structural | `housekeeping-451-structure` | Implementation running; then review and Full. |
+| #452 code comments | `housekeeping-452-comments` | Implementation running; then review and Full. |
+| Merged-tip profile | `00ab107424` | Done; next after two more integrations. |
 
-The next macOS run is due after three more integrations. The user's tar files stay.
+The next macOS run is due after five more integrations. The user's tar files stay.
