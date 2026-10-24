@@ -3567,7 +3567,7 @@ impl Control {
                         // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
                         if unsafe { order_can_use_station(v, destination as u16) } == 0
                             // SAFETY: The source branch supplies a live destination of the required pool type.
-                            || unsafe { u64::from(crate::station_base::airport_has_hangar(crate::newgrf_airport::station_by_id(destination as u16, crate::newgrf_airport::runtime()), crate::newgrf_airport::runtime())) } == 0
+                            || u64::from(crate::station_base::airport_has_hangar(crate::newgrf_airport::station_by_id(destination as u16, crate::newgrf_airport::runtime()), crate::newgrf_airport::runtime())) == 0
                         {
                             return self.g.error(output, 0);
                         }
@@ -4708,7 +4708,7 @@ impl Control {
                         // SAFETY: The source branch has established that this live vehicle is an aircraft.
                         && unsafe { (g.0.fast_aircraft)(v) } != 0
                         // SAFETY: The source branch supplies a live destination of the required pool type.
-                        && unsafe { u64::from((crate::newgrf_airport::runtime().fta_flags)(crate::newgrf_airport::station_fta(crate::newgrf_airport::station_by_id(order.destination, crate::newgrf_airport::runtime()), crate::newgrf_airport::runtime())) & crate::airport::FTA_SHORT_STRIP != 0) } != 0
+                        && u64::from((crate::newgrf_airport::runtime().fta_flags)(crate::newgrf_airport::station_fta(crate::newgrf_airport::station_by_id(order.destination, crate::newgrf_airport::runtime()), crate::newgrf_airport::runtime())) & crate::airport::FTA_SHORT_STRIP != 0) != 0
                         && (g.0.no_jet_crash)() == 0
                         && message == 0
                     {

@@ -136,7 +136,7 @@ struct OpenTTDWaterGroundServices {
 	bool (*airport_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
 	OpenTTDAirportGround (*airport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport);
 	bool (*airport_member)(const OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_member);
-	int32_t (*airport_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_z);
+	int32_t (*airport_z)(const AirportFTAClass *) noexcept OPENTTD_SERVICE_DEFAULT(airport_z);
 	OpenTTDFloodVictim (*victim)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(victim);
 	OpenTTDAircraftFloodPose (*aircraft_pose)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_pose);
 	OpenTTDGroundFloodPose (*ground_pose)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(ground_pose);

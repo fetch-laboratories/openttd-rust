@@ -77,7 +77,7 @@ pub struct WaterServices {
     pub airport_tile: extern "C" fn(u32) -> bool,
     pub airport: extern "C" fn(u32) -> AirportGround,
     pub airport_member: unsafe extern "C" fn(*const crate::station::Station, u32) -> bool,
-    pub airport_z: extern "C" fn(u32) -> i32,
+    pub airport_z: extern "C" fn(*const std::ffi::c_void) -> i32,
     pub victim: extern "C" fn(VehicleRef) -> FloodVictim,
     pub aircraft_pose: extern "C" fn(VehicleRef) -> AircraftFloodPose,
     pub ground_pose: extern "C" fn(VehicleRef) -> GroundFloodPose,
@@ -433,7 +433,12 @@ impl<'a> World<'a> {
                 if pose.subtype == 4 {
                     return;
                 }
-                if pose.z != (self.w.airport_z)(tile) {
+                if pose.z
+                    != (self.w.airport_z)(crate::newgrf_airport::station_fta(
+                        crate::station_map::station_by_tile(tile, crate::newgrf_airport::runtime()),
+                        crate::newgrf_airport::runtime(),
+                    ))
+                {
                     return;
                 }
                 self.crash(v);

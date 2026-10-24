@@ -736,14 +736,14 @@ impl World<'_> {
         }
     }
     fn hangar_height(&self, station: i64) -> i64 {
-        let st = self.station(station as u16);
+        let st = self.station(u32::from(station as u16));
         let result = unsafe { (self.leaves.hangar_height)(st, self.airport_spec(st)) };
         self.service_witness("hangar_height", std::mem::size_of_val(&result));
         i64::from(result)
     }
     fn hangar_exit(&self, v: Vehicle) -> i64 {
         let tile = (self.vs.tile)(v.base());
-        let st = self.station((self.ss.station_index)(tile));
+        let st = self.station(u32::from((self.ss.station_index)(tile)));
         let result = unsafe { (self.leaves.hangar_exit)(st, tile, self.airport_spec(st)) };
         self.service_witness("hangar_exit", std::mem::size_of_val(&result));
         i64::from(result)
@@ -2646,11 +2646,6 @@ crate::abi::layouts! {
         next,
         next_position,
         heading,
-    };
-    "OpenTTDAircraftHangarCandidate" ["probe"] => HangarCandidate {
-        owner,
-        airport,
-        hangar,
     };
 }
 

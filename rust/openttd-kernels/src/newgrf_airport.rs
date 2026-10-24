@@ -49,6 +49,7 @@ pub struct Services {
     shared: *const crate::services::Services,
     storage: *const crate::newgrf_storage::Services,
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
+    pub(crate) get_station: extern "C" fn(u16) -> *mut BaseStation,
     pub(crate) check: extern "C" fn(bool),
     pub(crate) engine_if_valid: extern "C" fn(u16) -> *const crate::vehicle::OpenTTDEngine,
     pub(crate) engine_id: extern "C" fn(*const crate::vehicle::OpenTTDEngine) -> u16,
@@ -145,7 +146,7 @@ pub unsafe extern "C" fn openttd_rust_airport_fta(kind: u8, s: *const Services) 
 }
 /// Observe only the station airport association at its original query point.
 pub(crate) fn station_by_id(id: u16, s: &Services) -> *mut BaseStation {
-    unsafe { ((*s.commands().station).get)(id) }
+    (s.get_station)(id)
 }
 pub(crate) fn station_spec(st: *mut BaseStation, s: &Services) -> *const AirportSpec {
     let tile = (s.commands().airport_tile)(st);
@@ -514,7 +515,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
     "OpenTTDAirportAvailability" ["probe"] => Availability { enabled, min_year, max_year, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, check, engine_if_valid, engine_id, engine_kind, engine_subtype, primary_road_stop, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, base_spec, availability, override_id, manager_grfid, substitute, never_expire, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, primary_road_stop, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, base_spec, availability, override_id, manager_grfid, substitute, never_expire, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
 }
 
 #[unsafe(no_mangle)]

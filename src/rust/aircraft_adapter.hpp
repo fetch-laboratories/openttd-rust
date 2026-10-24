@@ -364,7 +364,7 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.had_vehicle = Aircraft_had_vehicle,
 	.airport_elements = Aircraft_airport_elements,
 	.helipads = Aircraft_helipads,
-	.airport_flags = RustAirportFlags,
+	.airport_flags = OpenTTDAirportFlags,
 	.airport_delta_z = OpenTTDAirportDeltaZ,
 	.node = Aircraft_node,
 	.fta = Aircraft_fta,

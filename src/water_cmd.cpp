@@ -1171,7 +1171,7 @@ const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept
 		.airport_tile = RustAirportTile,
 		.airport = [](uint32_t t) noexcept { const Station *st = Station::GetByTile(TileIndex{t}); return OpenTTDAirportGround{.station = st, .tile = RustStationAirportTile(st), .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st)}; },
 		.airport_member = RustStationAirportMember,
-		.airport_z = [](uint32_t t) noexcept { return int32_t{RustAirportDeltaZ(RustStationAirportFTA(Station::GetByTile(TileIndex{t})))} + 1; },
+		.airport_z = [](const AirportFTAClass *fta) noexcept { return int32_t{RustAirportDeltaZ(fta)} + 1; },
 		.victim = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDFloodVictim{.status = RustVehicleStatus(u), .type = RustVehicleVehicleType(u)}; },
 		.aircraft_pose = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDAircraftFloodPose{.tile = RustVehicleTile(u), .z = RustVehicleZ(u), .subtype = RustVehicleSubtype(u)}; },
 		.ground_pose = [](OpenTTDVehicle *v) noexcept { Vehicle *u = VehicleOf(v); return OpenTTDGroundFloodPose{.z = RustVehicleZ(u), .first = RustVehicle(RustVehicleFirst(u))}; },

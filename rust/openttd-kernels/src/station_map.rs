@@ -6,6 +6,7 @@
  */
 
 //! Shared station predicates from `station_map.h`, through typed map services.
+#![allow(unsafe_code)]
 use crate::services::Services;
 use crate::station_type::{
     RAIL_WAYPOINT, ROAD_WAYPOINT, STATION_AIRPORT, STATION_BUS, STATION_TRUCK,
@@ -61,7 +62,7 @@ pub(crate) fn station_by_tile(
     tile: u32,
     s: &crate::newgrf_airport::Services,
 ) -> *mut crate::station::BaseStation {
-    unsafe { ((*s.commands().station).get)((s.shared().station_index)(tile)) }
+    (s.get_station)((s.shared().station_index)(tile))
 }
 /// Original `IsHangar`, retaining its assertion and airport gate before lookup.
 pub(crate) fn is_hangar(tile: u32, s: &crate::newgrf_airport::Services) -> bool {

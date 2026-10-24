@@ -45,7 +45,6 @@ struct OpenTTDAircraftBlockChoice { const void *next; uint64_t blocks; uint8_t h
  * Flight helpers accept actual Vehicle identity, with null state for disasters. */
 struct OpenTTDAircraftGeometry { uint32_t tile; uint8_t rotation; uint16_t width, height; bool airport; };
 struct OpenTTDAircraftLayoutRoute { const void *node, *next; uint8_t next_position, heading; };
-struct OpenTTDAircraftHangarCandidate { uint8_t owner; bool airport, hangar; };
 struct OpenTTDAircraftLeaves {
 	OpenTTDAircraftGeometry (OPENTTD_AIRCRAFT_CALL *geometry)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(geometry);
 	uint64_t (OPENTTD_AIRCRAFT_CALL *layout_blocks)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(layout_blocks);

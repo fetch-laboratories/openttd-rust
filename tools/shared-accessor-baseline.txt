@@ -49,7 +49,6 @@ src/order_cmd.cpp | openttd_orders_dirty_vehicle_windows(void *ctx) noexcept | 8
 src/order_cmd.cpp | openttd_orders_economy_date() noexcept | b7b2717268568730 | 1
 src/order_cmd.cpp | openttd_orders_economy_fraction() noexcept | 1d0bc137e6e8cdeb | 1
 src/order_cmd.cpp | openttd_orders_fast_aircraft(void *ctx) noexcept | bd7e7c281b2eeda7 | 1
-src/order_cmd.cpp | openttd_orders_has_hangar(uint16_t destination) noexcept | 22172c992806fc42 | 1
 src/order_cmd.cpp | openttd_orders_invalidate_shared_window(void *ctx, uint32_t window, int32_t data) noexcept | cb66b8a463e43dbf | 1
 src/order_cmd.cpp | openttd_orders_invalidate_vehicle_list(void *ctx) noexcept | 1a5042d4ba5f5c18 | 1
 src/order_cmd.cpp | openttd_orders_last_station(void *ctx) noexcept | 37d09a120f34bb0c | 1

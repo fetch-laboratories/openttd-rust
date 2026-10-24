@@ -72,7 +72,6 @@ static uint32_t Ship_industry_station(uint32_t tile) noexcept
 
 static bool Ship_oilrig(uint32_t tile) noexcept { return IsTileType(TileIndex(tile), MP_STATION) && IsOilRig(TileIndex(tile)); }
 
-static bool Ship_station_use(uint32_t id, uint32_t station) noexcept { Ship *v = Ship::Get(VehicleID(id)); return CanVehicleUseStation(v, Station::Get(StationID(station))); }
 
 static uint32_t Ship_station_xy(uint32_t station) noexcept { return Station::Get(StationID(station))->xy.base(); }
 
@@ -367,7 +366,7 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.dist_manhattan = OpenTTDDistanceManhattan, .docking = GetRustSharedServices().docking_tile,
 		.dock = Ship_dock, .dock_water = Ship_dock_water,
 		.station = Ship_station, .industry_station = Ship_industry_station,
-		.oilrig = Ship_oilrig, .station_use = Ship_station_use,
+		.oilrig = Ship_oilrig,
 		.station_xy = Ship_station_xy, .station_contains = Ship_station_contains,
 		.station_dock = Ship_station_dock, .station_visits = Ship_station_visits,
 		.visit_set = Ship_visit_set, .arrival = Ship_arrival,
