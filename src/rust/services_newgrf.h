@@ -31,7 +31,7 @@ inline bool RustResolverGRFVersion8(const ResolverObject *resolver) noexcept { r
 template <typename Spec, typename Handle = Spec>
 inline uint8_t RustSpecGRFVersion(const Handle *handle) noexcept { return RustGRFFileVersion(reinterpret_cast<const Spec *>(handle)->grf_prop.grffile); }
 template <typename Spec>
-inline bool RustSpecGRFVersion8(const Spec *spec) noexcept { return RustSpecGRFVersion(spec) >= 8; }
+inline bool RustSpecGRFVersion8(const Spec *spec) noexcept { return RustSpecGRFVersion<Spec>(spec) >= 8; }
 /* GetRegister retains its native register-range precondition (reg < 0x110). */
 inline int32_t RustResolverRegister(const ResolverObject *resolver, uint16_t reg) noexcept { return resolver->GetRegister(reg); }
 inline int32_t RustResolverRegister100(const ResolverObject *resolver) noexcept { return RustResolverRegister(resolver, 0x100); }
