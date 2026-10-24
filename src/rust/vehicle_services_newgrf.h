@@ -125,7 +125,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.rail_catenary = [](RailType rt) noexcept -> bool { return GetRailTypeInfo(rt)->flags.Test(RailTypeFlag::Catenary); },
 		.road_catenary = [](RoadType rt) noexcept -> bool { return GetRoadTypeInfo(rt)->flags.Test(RoadTypeFlag::Catenary); },
 		.reverse_rail = RustReverseRailTypeTranslation,
-		.reverse_road = [](RoadType rt, const GRFFile * grf) noexcept -> uint8_t { return GetReverseRoadTypeTranslation(rt, grf); },
+		.reverse_road = RustReverseRoadTypeTranslation,
 		.translate_rail = [](uint8_t type, const GRFFile * grf) noexcept -> RailType { return GetRailTypeTranslation(type, grf); },
 		.translate_road = [](RoadTramType rtt, uint8_t type, const GRFFile * grf) noexcept -> RoadType { return GetRoadTypeTranslation(rtt, type, grf); },
 		.compatible_rail = RustRailCompatible<RailType>,

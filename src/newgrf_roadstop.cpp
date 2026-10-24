@@ -759,6 +759,8 @@ ScopeResolver *RoadStopResolverObject::GetScope(VarSpriteGroupScope scope, uint8
 }
 const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 {
+	static_assert(CargoGRFFileProps::SG_DEFAULT_NA == NUM_CARGO + 2);
+	static_assert(CBID_STATION_AVAILABILITY == 0x13);
 	static const OpenTTDRoadStopResolverServices services{
 		.shared = &GetRustSharedServices(),
 		.by_tile = RustBaseStationByTile,
@@ -799,7 +801,7 @@ const OpenTTDRoadStopResolverServices &GetRoadStopResolverServices() noexcept
 		.nearby = RustSignedNearbyTile,
 		.nearby_info = RustNearbyTileInformation,
 		.terrain = RustTerrainType,
-		.town_zone = [](const Town *town, uint32_t tile) noexcept { return to_underlying(RustTownRadiusGroup(town, tile)); },
+		.town_zone = RustTownRadiusGroup,
 		.town_tile = OpenTTDTownTile,
 		.company = RustCompanyInfo,
 		.reverse_road = RustReverseRoadTypeTranslation,

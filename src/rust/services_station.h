@@ -52,7 +52,7 @@ inline void RustRoadStopSpecResize(BaseStation *st, size_t size) noexcept { st->
 inline void RustRoadStopSpecClear(BaseStation *st) noexcept { st->roadstop_speclist.clear(); }
 inline void RustRoadStopSetSpecSlot(BaseStation *st, uint8_t index, const RoadStopSpec *spec, uint32_t grfid, uint16_t local_id) noexcept { auto &slot = st->roadstop_speclist[index]; slot.spec = spec; slot.grfid = grfid; slot.localidx = local_id; }
 inline bool RustCustomRoadStopSpecIndex(uint32_t tile) noexcept { return IsCustomRoadStopSpecIndex(TileIndex(tile)); }
-inline uint8_t RustCustomRoadStopIndex(uint32_t tile) noexcept { return GetCustomRoadStopSpecIndex(TileIndex(tile)); }
+inline uint32_t RustCustomRoadStopIndex(uint32_t tile) noexcept { return GetCustomRoadStopSpecIndex(TileIndex(tile)); }
 inline CargoTypes RustRoadStopCachedCargo(const BaseStation *st) noexcept { return st->cached_roadstop_cargo_triggers; }
 inline void RustRoadStopSetCachedTriggers(BaseStation *st, uint16_t animation, CargoTypes cargo) noexcept { st->cached_roadstop_anim_triggers = StationAnimationTriggers(animation); st->cached_roadstop_cargo_triggers = cargo; }
 inline CargoTypes RustRoadStopCargoTriggers(const RoadStopSpec *spec) noexcept { return spec->cargo_triggers; }

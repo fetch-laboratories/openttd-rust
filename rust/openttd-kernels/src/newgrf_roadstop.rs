@@ -2,7 +2,16 @@
 //! Road-stop invocation and spec-association policy. Native shells/vectors remain
 //! canonical; all element observations end before resize or Action2 evaluation.
 //! No allocation, map reset, yield or unwind crosses a resolver invocation.
-#![allow(unsafe_code, missing_docs, clippy::too_many_arguments)]
+// Casts preserve the native uint8/uint16 assignments and accessor narrowing.
+#![allow(
+    unsafe_code,
+    missing_docs,
+    clippy::too_many_arguments,
+    clippy::too_many_lines,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
 use crate::cargo_type::NUM_CARGO;
 use crate::station_type::{
     ROAD_WAYPOINT, SRT_CARGO_TAKEN, SRT_NEW_CARGO, STATION_BUS, STATION_TRUCK,
@@ -65,7 +74,7 @@ pub struct Services {
     pub clear: unsafe extern "C" fn(*mut BaseStation) -> (),
     pub set_slot: unsafe extern "C" fn(*mut BaseStation, u8, *const RoadSpec, u32, u16) -> (),
     pub custom: unsafe extern "C" fn(u32) -> bool,
-    pub index: unsafe extern "C" fn(u32) -> u8,
+    pub index: unsafe extern "C" fn(u32) -> u32,
     pub cached_cargo: unsafe extern "C" fn(*const BaseStation) -> u64,
     pub set_cached: unsafe extern "C" fn(*mut BaseStation, u16, u64) -> (),
     pub spec_cargo: unsafe extern "C" fn(*const RoadSpec) -> u64,
@@ -159,7 +168,7 @@ fn state(
         cargo: 0,
     };
     unsafe {
-        init(&mut c, s);
+        init(&raw mut c, s);
     }
     c
 }
@@ -306,7 +315,7 @@ unsafe fn variable(
             }
             if variable == 0x6a {
                 return if unsafe { (s.custom)(tile) } {
-                    unsafe { (s.slot)((s.by_tile)(tile), usize::from((s.index)(tile))).grfid }
+                    unsafe { (s.slot)((s.by_tile)(tile), (s.index)(tile) as usize).grfid }
                 } else {
                     0
                 };
@@ -314,9 +323,9 @@ unsafe fn variable(
             if variable == 0x6b && !unsafe { (s.custom)(tile) } {
                 return 0xfffe;
             }
-            let grfid = unsafe { (s.slot)(c.station, usize::from((s.index)(c.tile))).grfid };
+            let grfid = unsafe { (s.slot)(c.station, (s.index)(c.tile) as usize).grfid };
             if variable == 0x6b {
-                let slot = unsafe { (s.slot)((s.by_tile)(tile), usize::from((s.index)(tile))) };
+                let slot = unsafe { (s.slot)((s.by_tile)(tile), (s.index)(tile) as usize) };
                 return if slot.grfid == grfid {
                     u32::from(slot.local_id)
                 } else {
@@ -338,8 +347,8 @@ unsafe fn variable(
                 res |= 1 << 20;
             }
             if unsafe { (s.custom)(tile) } {
-                let slot = unsafe { (s.slot)((s.by_tile)(tile), usize::from((s.index)(tile))) };
-                res |= (1 << if slot.grfid != grfid { 9 } else { 8 })
+                let slot = unsafe { (s.slot)((s.by_tile)(tile), (s.index)(tile) as usize) };
+                res |= (1 << if slot.grfid == grfid { 8 } else { 9 })
                     | u32::from(slot.local_id.min(255));
             }
             return res;
@@ -457,7 +466,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_callback(
 ) -> u16 {
     let s = unsafe { &*s };
     let c = state(spec, st, tile, roadtype, kind, view, s);
-    unsafe { (s.resolve_callback)(&c, cb, p1, p2, regs, size) }
+    unsafe { (s.resolve_callback)(&raw const c, cb, p1, p2, regs, size) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_roadstop_spec(
@@ -469,7 +478,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_spec(
         return ptr::null();
     }
     let st = unsafe { (s.by_tile)(tile) };
-    let index = usize::from(unsafe { (s.index)(tile) });
+    let index = unsafe { (s.index)(tile) } as usize;
     if index < unsafe { (s.spec_count)(st) } {
         unsafe { (s.slot)(st, index).spec }
     } else {
@@ -565,7 +574,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_deallocate(
     let services = unsafe { &*s };
     for i in 0..unsafe { (services.tile_count)(st) } {
         let tile = unsafe { (services.tile)(st, i) };
-        if unsafe { (services.index)(tile) } == index {
+        if unsafe { (services.index)(tile) } == u32::from(index) {
             return;
         }
     }
@@ -646,7 +655,7 @@ pub unsafe extern "C" fn openttd_rust_roadstop_randomise(
             (s.shared().station_gfx)(tile),
             s,
         );
-        let reseed = unsafe { (s.resolve_reseed)(&c, (s.waiting)(st)) };
+        let reseed = unsafe { (s.resolve_reseed)(&raw const c, (s.waiting)(st)) };
         used |= reseed.used;
         if reseed.reseed != 0 {
             whole_reseed |= reseed.reseed;
@@ -671,6 +680,9 @@ pub unsafe extern "C" fn openttd_rust_roadstop_randomise(
     }
     if whole_reseed & 0xffff != 0 {
         let bits = u32::from(unsafe { (s.random_bits)(st) }) & !whole_reseed;
+        unsafe {
+            (s.set_random_bits)(st, bits as u16);
+        }
         unsafe {
             (s.set_random_bits)(st, (bits | (s.random() & whole_reseed)) as u16);
         }

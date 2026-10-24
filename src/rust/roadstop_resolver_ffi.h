@@ -11,6 +11,7 @@ struct TownScopeResolver;
 struct Town;
 struct GRFFile;
 struct Livery;
+enum class HouseZone : uint8_t;
 struct OpenTTDCargoList;
 struct OpenTTDRoadStopResolverState {
 	BaseStation *station;
@@ -47,7 +48,7 @@ struct OpenTTDRoadStopResolverServices {
 	void (*clear)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(clear);
 	void (*set_slot)(BaseStation *, uint8_t, const RoadStopSpec *, uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_slot);
 	bool (*custom)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(custom);
-	uint8_t (*index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(index);
+	uint32_t (*index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(index);
 	CargoTypes (*cached_cargo)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(cached_cargo);
 	void (*set_cached)(BaseStation *, uint16_t, CargoTypes) noexcept OPENTTD_SERVICE_DEFAULT(set_cached);
 	CargoTypes (*spec_cargo)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_cargo);
@@ -62,7 +63,7 @@ struct OpenTTDRoadStopResolverServices {
 	uint32_t (*nearby)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby);
 	uint32_t (*nearby_info)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_info);
 	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);
-	uint8_t (*town_zone)(const Town *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_zone);
+	HouseZone (*town_zone)(const Town *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_zone);
 	uint32_t (*town_tile)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_tile);
 	uint32_t (*company)(uint8_t, const Livery *) noexcept OPENTTD_SERVICE_DEFAULT(company);
 	uint8_t (*reverse_road)(RoadType, const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(reverse_road);
