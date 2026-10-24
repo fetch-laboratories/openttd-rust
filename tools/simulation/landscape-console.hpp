@@ -99,10 +99,13 @@ extern TileIndex _cur_tileloop_tile;
 #endif
 extern GrfMiscBits _misc_grf_features;
 static void GenericNeed(bool ok) { if (!ok) std::abort(); }
-struct GenericObservedResult : CallbackResultSpriteGroup {
+/* This is a native observation terminal, not a parsed callback node: the common
+ * evaluator must invoke its virtual method so duplicate-attempt counts are real. */
+struct GenericObservedResult : SpriteGroup {
+	uint16_t result;
 	mutable uint attempts = 0;
-	explicit GenericObservedResult(uint16_t result) : CallbackResultSpriteGroup(result) {}
-	ResolverResult Resolve(ResolverObject &object) const override { this->attempts++; return CallbackResultSpriteGroup::Resolve(object); }
+	explicit GenericObservedResult(uint16_t result) : result(result) {}
+	ResolverResult Resolve(ResolverObject &) const override { this->attempts++; return CallbackResult(this->result); }
 };
 static void GenericPrograms()
 {
