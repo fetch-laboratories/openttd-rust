@@ -14,6 +14,9 @@
 #ifdef WITH_RUST
 #include "../rust/services_road.h"
 #include "../rust/vehicle_services.h"
+#include "abi_layout.hpp"
+#include "../rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDVehicleResolverServices.hpp"
 #endif
 #include "../safeguards.h"
 
@@ -238,6 +241,37 @@ TEST_CASE("Ground cache - canonical aliases on normal and indexed construction")
 	};
 	REQUIRE(Vehicle::CanAllocateItem());
 	check(new RoadVehicle());
+	check(new (VehicleID(37)) Train());
+	_vehicle_pool.CleanPool();
+}
+TEST_CASE("Vehicle resolver - boundary layouts and complete service table")
+{
+	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
+#include "abi-layout-vehicle_resolver.inc"
+	CHECK(AbiServicesComplete(GetRustVehicleResolverServices()));
+}
+TEST_CASE("NewGRF cache - canonical native aliases, snapshots and indexed reuse")
+{
+	static_assert(std::is_trivially_destructible_v<NewGRFCache>);
+	auto check = [](Vehicle *v) {
+		CHECK(&v->grf_cache == v->rust_grf_cache.state);
+		CHECK(v->grf_cache == NewGRFCache{});
+		v->grf_cache.consist_cargo_information = 0x12345678;
+		v->grf_cache.cache_valid = 31;
+		CHECK(v->rust_grf_cache.state->consist_cargo_information == 0x12345678);
+		NewGRFCache diagnostic = v->grf_cache;
+		v->InvalidateNewGRFCache();
+		CHECK(v->rust_grf_cache.state->cache_valid == 0);
+		CHECK(diagnostic.cache_valid == 31);
+		CHECK(v->grf_cache.consist_cargo_information == diagnostic.consist_cargo_information);
+	};
+	REQUIRE(Vehicle::CanAllocateItem());
+	auto *v = new RoadVehicle();
+	auto id = v->index;
+	check(v);
+	delete v;
+	v = new (id) RoadVehicle();
+	check(v);
 	check(new (VehicleID(37)) Train());
 	_vehicle_pool.CleanPool();
 }

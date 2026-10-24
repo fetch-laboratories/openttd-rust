@@ -23,3 +23,6 @@ crate::abi::layouts! {
     "CallbackID" ["maintenance"] => CallbackID {
     };
 }
+
+pub const CBID_VEHICLE_MODIFY_PROPERTY: CallbackID = CallbackID(0x36);
+pub const CBID_VEHICLE_BUILD_PROBABILITY: CallbackID = CallbackID(0x162);

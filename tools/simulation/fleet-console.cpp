@@ -33,6 +33,8 @@
 #include "console_func.h"
 #include "news_gui.h"
 #include "table/strings.h"
+#include "newgrf_engine.h"
+#include "newgrf.h"
 
 [[noreturn]] static void FixtureAbort(int line) { fmt::print(stderr, "FLEET setup-failure {}\n", line); std::fflush(stderr); std::abort(); }
 
@@ -202,6 +204,71 @@ static void OccupancyProbe()
 	fmt::print(stderr, "FLEET occupancy-probe 18 live-next {}\n", SameRandom(before, after));
 }
 
+/* Exercise real Action2 groups through the unchanged public native API on both
+ * runtimes. Cache values are captured before any diagnostic rebuild can hide them. */
+static void ResolverProbe()
+{
+	Train *v = nullptr;
+	for (Train *t : Train::Iterate()) if (t->IsFrontEngine() && t->Next() != nullptr) { v = t; break; }
+	if (v == nullptr) FixtureAbort(__LINE__);
+	Engine *e = Engine::Get(v->engine_type);
+	Backup<decltype(e->grf_prop.spritegroups)> sprites(e->grf_prop.spritegroups);
+	Backup<const GRFFile *> file(e->grf_prop.grffile);
+	GRFFile grf;
+	grf.grf_version = 8;
+	for (uint i = 0; i < NUM_CARGO; ++i) grf.cargo_map[i] = NUM_CARGO - 1 - i;
+	file.Change(&grf);
+	auto *det = new DeterministicSpriteGroup();
+	det->size = DSG_SIZE_DWORD;
+	det->var_scope = VSG_SCOPE_SELF;
+	det->default_result.calculated_result = true;
+	det->adjusts.push_back({.operation = DSGA_OP_RST, .variable = 0x42, .and_mask = UINT32_MAX});
+	e->grf_prop.spritegroups.fill(det);
+	v->InvalidateNewGRFCacheOfChain();
+	VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
+	bool available = true;
+	uint32_t translated = ro.self_scope.GetVariable(0x42, 0, available);
+	NewGRFCache before = v->grf_cache;
+	uint32_t hit = ro.self_scope.GetVariable(0x42, 0, available);
+	uint16_t callback = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v);
+	fmt::print(stderr, "FLEET resolver-cache {} {} {} {} {}\n", available, translated, before.consist_cargo_information, hit == translated, callback == (translated & 0x7FFF));
+	ro.grffile = nullptr;
+	uint32_t untranslated = ro.self_scope.GetVariable(0x42, 0, available);
+	fmt::print(stderr, "FLEET resolver-translation {} {}\n", untranslated, v->grf_cache == before);
+	ro.SetRegister(0x10F, 1);
+	ro.SetRegister(0x10E, 0);
+	uint32_t relative = ro.self_scope.GetVariable(0x61, 0x40, available);
+	VehicleResolverObject other(v->engine_type, v->Next(), VehicleResolverObject::WO_NONE);
+	uint32_t direct = other.self_scope.GetVariable(0x40, 0, available);
+	fmt::print(stderr, "FLEET resolver-var61 {} {} {}\n", available, relative, relative == direct);
+	det->var_scope = VSG_SCOPE_PARENT;
+	det->adjusts[0].variable = 0x84;
+	uint16_t parent = GetVehicleCallbackParent(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v, v->Next());
+	fmt::print(stderr, "FLEET resolver-parent {}\n", parent == (v->Next()->index.base() & 0x7FFF));
+	ro.SetRegister(0x100, 1);
+	auto *scope = ro.GetScope(VSG_SCOPE_RELATIVE, 0);
+	fmt::print(stderr, "FLEET resolver-relative {}\n", scope->GetVariable(0x84, 0, available) == v->Next()->index.base());
+	auto *result = new CallbackResultSpriteGroup(7);
+	auto *random = new RandomizedSpriteGroup();
+	random->var_scope = VSG_SCOPE_SELF;
+	random->triggers = 1 << to_underlying(VehicleRandomTrigger::Depot);
+	random->lowest_randbit = 3;
+	random->groups = {result, result};
+	e->grf_prop.spritegroups.fill(random);
+	Backup<const SpriteGroup *> wagon(v->tcache.cached_override);
+	wagon.Change(random);
+	SavedRandomSeeds seed;
+	SaveRandomSeeds(&seed);
+	TriggerVehicleRandomisation(v, VehicleRandomTrigger::Depot);
+	SavedRandomSeeds after;
+	SaveRandomSeeds(&after);
+	fmt::print(stderr, "FLEET resolver-trigger {} {} {} {}\n", !SameRandom(seed, after), v->random_bits, v->waiting_random_triggers.base(), v->grf_cache.cache_valid);
+	wagon.Restore(); sprites.Restore(); file.Restore();
+	delete random; delete result; delete det;
+	v->InvalidateNewGRFCacheOfChain();
+	fmt::print(stderr, "FLEET resolver-checkpoint complete\n");
+}
+
 /** Running road vehicle 12 of padhattan-ridge-2000 heads to a service depot; the witness runs on 2001-01-01. */
 static VehicleID _drain_vehicle = VehicleID::Invalid();
 static UnitID _drain_unit = 0;
@@ -209,6 +276,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
 	Backup<CompanyID> company(_current_company);
+	if (args[1] == "resolver") { ResolverProbe(); return true; }
 	if (args[1].starts_with("transaction-mass-")) {
 		VehicleType type = args[1].ends_with("train") ? VEH_TRAIN : args[1].ends_with("road") ? VEH_ROAD : args[1].ends_with("ship") ? VEH_SHIP : VEH_AIRCRAFT;
 		Vehicle *v = BuildFixture(type);

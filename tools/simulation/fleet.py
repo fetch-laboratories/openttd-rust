@@ -50,6 +50,7 @@ def scenarios(soak):
                         "transaction-mass-train",
                         "transaction-clone",
                         "transaction-rail",
+                        "resolver",
                     )
                     else "padhattan-ridge-2000.sav"
                     if mode.startswith("drain") or mode == "transaction-meta"
@@ -74,6 +75,7 @@ def scenarios(soak):
             "console": ["fleet_scenario " + mode, "unpause"],
         }
         for mode in (
+            "resolver",
             "groups",
             "transaction-meta",
             "transaction-mass-train",
@@ -218,6 +220,7 @@ def check(scenario, run, mode, role, result):
     if "fleet" not in scenario or run["exit"] or not run["snapshots"]:
         return
     required = {
+        "resolver": ["FLEET resolver-checkpoint complete", "FLEET resolver-parent true", "FLEET resolver-relative true"],
         **{
             "transaction-mass-" + kind: [
                 "FLEET mass-test true true",
