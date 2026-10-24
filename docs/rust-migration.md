@@ -2319,10 +2319,27 @@ review and exact-current-base Full are recorded in #427. Remaining historical,
 external-GRF and named unreachable branches remain on #156. Necessary typed
 native vector/spec/evaluator boundary cost was accepted once at the checkpoint.
 
-### Airport and airport-tile NewGRF runtime (#418, draft)
+### Airport and airport-tile NewGRF runtime (#418, #428)
 
-The selected owner moves stack contexts, scope selection, variables, random bits,
-callback invocation and live airport selection/eligibility into Rust. Native
-spec/layout storage, loading, rendering and text remain. Implementation and
-focused station-fixture evidence are in progress; this entry claims no completed
-migration or validation yet.
+Rust owns both resolver stack contexts, roots, self/parent/default scopes,
+lazy town selection, variables, random packing, tile callbacks and live airport
+selection/availability/bounds. Native parsing, spec/layout/override storage,
+rendering, preview drawing and text remain. Canonical station/cargo/town/storage
+owners and the industry relative-position helper are called directly; native
+common evaluator/virtual frames remain while that shared runtime is unported.
+Animation and construction admission call the Rust owner. Shared named support
+ports CanVehicleUseStation, IsHangar/IsHangarTile, GetVehiclePosOnBuild,
+GetAirport and Airport::GetSpec preserve the original gates. Native hangar and
+rotation algorithms accept selected specs; existing aircraft/orders/ship controls
+remain in their owners. Displaced callback slots and orphan relative-position
+exports are removed; unused GetAirportCallback has no Rust export.
+Default airport/reload fixtures install real deterministic/randomized/procedure
+groups and compare construction test/execute, rotated bounds, Built/animation,
+parent PSA, variables/IDs, scopes, registers, STNN/PSAC/map and both RNG streams.
+Groups are explicitly reinstalled after reload; external GRF loading is unproved.
+Temporary admission builds carry no storage-writing group because native removal
+leaves a deleted PSA pointer; the retained airport's PSA is saved and reloaded.
+Build/Cargo4, native ABI, affected defaults and callee/shared/orphan audit are
+recorded in #428. Necessary selected-spec support cost was accepted once (#418).
+External loading, historical saves, GUI scheduling and the exact native removal
+setup limitation remain on #156. Fresh review/current-base Full remain pending.
