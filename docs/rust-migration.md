@@ -2235,3 +2235,42 @@ Native storage tests cover alias identity, legacy copying, all six modes,
 save-registry retention, pending destruction and temporary-key rollover.
 External NewGRF programs, complete pre-161 conversion saves and GUI thread
 scheduling remain #156 limits. PR validation and metrics carry the exact evidence.
+
+### Vehicle NewGRF resolver runtime (#392, PR #397; integration #415 pending)
+
+Rust owns the canonical stack cache, self/parent/relative scopes, root and real-group
+selection, complete variable dispatch including 0x61 and purchase contexts,
+callbacks/properties/probability, subtype/aircraft helpers and randomisation.
+Native virtual facades retain common Action2 evaluation, immutable specs, shells
+and saved random/waiting fields. Direct Rust callers replace displaced callback
+bounces. Typed shared services preserve metadata observation, native indexing and
+GetSpec fallback behavior; no invocation allocation or mirrored world state.
+Cache aliases and lifetime follow the resolver object. Owner borrows end before
+common evaluation, storage and reentry. Original bodies remain portable.
+Default fleet resolver/reload, rail and aircraft fixtures use real deterministic
+and randomized groups, require variable/register/trigger witnesses and compare
+semantic vehicle/cargo/save state plus both RNG streams. Native ABI and existing
+aircraft comparison probes supplement these cases. Exact commands, inventories,
+necessary-cost disposition and two function-group fixing reviews are on #397.
+Unreached external-GRF, historical and GUI paths remain on #156. Final shared
+adoption/current-base combination evidence belongs to #415.
+
+### Industry and industry-tile NewGRF resolvers (#398, PR #407; #415 pending)
+
+Rust owns both stack feature contexts, roots/lazy town, variables, count/search
+and tile-relative helpers, probability/refusal and feature resolution policy.
+Existing industry/registry/cargo owners supply canonical state directly; PSA
+reads and writes use the integrated storage owner. Small copied invocation state
+ends native context borrows before evaluator/storage reentry. Native adapters
+retain common Action2 frames, virtual facade construction, specs/map/pool identity
+and consumed result copying; no per-resolution allocation or world-record view.
+Original bodies remain portable. Displaced probability/refusal caller bounces,
+dead query facades and orphan bindings are removed.
+Default industry-resolver uses actual deterministic/randomized production, parent,
+self and tile reseed groups. Required witnesses exercise live/null/temporary
+contexts, unavailable-variable/register results, var67/68 counting and wrapping,
+caller-file cargo, legacy version/location rules and tile identities. Semantic
+INDY/map/save/log and RNG comparisons accompany existing production/lifecycle/
+animation/acceptance and cargo probes. Commands, metrics, accepted boundary cost
+and fixing/adoption reviews are on #407; external/historical limits are on #156.
+Final exact-current-base combination validation belongs to #415.
