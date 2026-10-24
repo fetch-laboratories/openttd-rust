@@ -78,7 +78,8 @@ pub struct ResolverServices {
     pub cargo_map: unsafe extern "C" fn(*const SpecHandle, u8) -> u8,
     pub badges: unsafe extern "C" fn(*const c_void, *const SpecHandle, u32) -> u32,
     pub tile_badges: unsafe extern "C" fn(*const c_void, *const TileSpec, u32) -> u32,
-    pub storage_value: unsafe extern "C" fn(*mut c_void, u32) -> i32,
+    pub storage_owner:
+        unsafe extern "C" fn(*mut c_void) -> *mut crate::newgrf_storage::Payload<256>,
     pub unhandled: unsafe extern "C" fn(u8, bool, bool, u16),
     pub pointer_magic: unsafe extern "C" fn(),
     pub base_scope: unsafe extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
@@ -464,7 +465,18 @@ fn variable(
             }
         }
         0x7a => unsafe { (s.badges)(ro, s.spec(c.kind), parameter) },
-        0x7c => (unsafe { (s.storage_value)(c.industry, parameter) }) as u32,
+        0x7c => {
+            // Resolve the native shell association once, then read the canonical
+            // Rust payload directly. Temporary invalid-ID scopes can read PSA;
+            // the invalid-ID gate belongs only to the storage write operation.
+            let owner = unsafe { (s.storage_owner)(c.industry) };
+            if owner.is_null() {
+                0
+            } else {
+                (unsafe { crate::newgrf_storage::openttd_rust_storage256_get(owner, parameter) })
+                    as u32
+            }
+        }
         0x80 => unsafe { (*i).metadata.tile },
         0x81 => (unsafe { (*i).metadata.tile } >> 8) & 255,
         0x82 => town_id(c.town, s),
@@ -920,7 +932,7 @@ crate::abi::layouts! {
         cargo_map,
         badges,
         tile_badges,
-        storage_value,
+        storage_owner,
         unhandled,
         pointer_magic,
         base_scope,

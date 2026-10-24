@@ -3,6 +3,7 @@
 #ifndef RUST_INDUSTRY_RESOLVER_FFI_H
 #define RUST_INDUSTRY_RESOLVER_FFI_H
 #include "industry_ffi.h"
+#include "newgrf_storage_ffi.h"
 #include "../town_type.h"
 enum class HouseZone : uint8_t;
 struct ResolverObject;
@@ -57,7 +58,7 @@ struct OpenTTDIndustryResolverServices {
 	uint8_t (*cargo_map)(const IndustrySpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_map);
 	uint32_t (*badges)(const ResolverObject *, const IndustrySpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
 	uint32_t (*tile_badges)(const ResolverObject *, const IndustryTileSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tile_badges);
-	int32_t (*storage_value)(Industry *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(storage_value);
+	OpenTTDStorage256 *(*storage_owner)(Industry *) noexcept OPENTTD_SERVICE_DEFAULT(storage_owner);
 	void (*unhandled)(uint8_t, bool, bool, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
 	void (*pointer_magic)() noexcept OPENTTD_SERVICE_DEFAULT(pointer_magic);
 	ScopeResolver *(*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);

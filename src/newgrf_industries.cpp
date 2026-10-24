@@ -850,7 +850,7 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.cargo_map = RustSpecCargoMap<IndustrySpec>,
 		.badges = RustSpecBadges<IndustrySpec>,
 		.tile_badges = RustSpecBadges<IndustryTileSpec>,
-		.storage_value = [](Industry *i, uint32_t pos) noexcept { return i->psa != nullptr ? i->psa->GetValue(pos) : 0; },
+		.storage_owner = RustIndustryStorageOwner,
 		.unhandled = [](uint8_t variable, bool tile, bool missing, uint16_t callback) noexcept {
 			if (missing) Debug(grf, 1, "Unhandled variable 0x{:X} (no available industry) in callback 0x{:x}", variable, callback);
 			else if (tile) Debug(grf, 1, "Unhandled industry tile variable 0x{:X}", variable);
