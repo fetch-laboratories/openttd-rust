@@ -22,6 +22,7 @@ struct OpenTTDIndustryResolverContext {
 };
 /** Strict pool lookup consumes only canonical owner and native town association. */
 struct OpenTTDIndustryResolverRef { OpenTTDIndustry *owner; Town *town; };
+struct OpenTTDIndustryFounderInfo { uint8_t colours; bool is_ai; };
 struct OpenTTDIndustryResolverServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDIndustryGenerationServices *generation;
@@ -31,10 +32,10 @@ struct OpenTTDIndustryResolverServices {
 	OpenTTDIndustryResolverRef (*get)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get);
 	uint16_t (*map_type)(uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(map_type);
 	uint32_t (*spec_grfid)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_grfid);
-	uint32_t (*spec_local_id)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_local_id);
+	uint16_t (*spec_local_id)(const IndustrySpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_local_id);
 	const SpriteGroup *(*root)(const IndustrySpec *, bool) noexcept OPENTTD_SERVICE_DEFAULT(root);
 	const SpriteGroup *(*tile_root)(const IndustryTileSpec *, bool) noexcept OPENTTD_SERVICE_DEFAULT(tile_root);
-	uint32_t (*tile_local_id)(const IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_local_id);
+	uint16_t (*tile_local_id)(const IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_local_id);
 	uint16_t (*tile_override)(const IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_override);
 	uint32_t (*tile_grfid)(const IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_grfid);
 	bool (*tile_has_groups)(const IndustryTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(tile_has_groups);
@@ -47,7 +48,7 @@ struct OpenTTDIndustryResolverServices {
 	uint32_t (*water_distance)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(water_distance);
 	uint32_t (*town_tile)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_tile);
 	uint16_t (*town_id)(const OpenTTDTownHandle *) noexcept OPENTTD_SERVICE_DEFAULT(town_id);
-	uint32_t (*founder_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(founder_info);
+	OpenTTDIndustryFounderInfo (*founder_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(founder_info);
 	uint32_t (*grfid)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);
 	uint8_t (*version)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(version);
 	uint16_t (*callback_id)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(callback_id);
@@ -83,6 +84,6 @@ uint32_t openttd_rust_industry_id_at_offset(uint32_t, uint16_t, uint32_t, const 
 uint32_t openttd_rust_industry_nearby_information(uint8_t, uint32_t, uint16_t, bool, bool, const OpenTTDIndustryResolverServices *);
 uint32_t openttd_rust_industry_relative_position(uint32_t, uint32_t, uint8_t);
 uint32_t openttd_rust_industry_probability(uint8_t, uint8_t, uint32_t, const OpenTTDIndustryResolverServices *);
-bool openttd_rust_industry_refuses(const OpenTTDIndustryResolverContext *, uint8_t, const OpenTTDIndustryResolverServices *);
+bool openttd_rust_industry_refuses(Industry *, OpenTTDIndustry *, uint8_t, const OpenTTDIndustryResolverServices *);
 }
 #endif

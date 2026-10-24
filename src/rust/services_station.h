@@ -25,9 +25,11 @@
 #include "vehicle_services.h"
 #include "services_ffi.h"
 #include "services_newgrf.h"
+#include "environment_services.h"
 #include "../base_station_base.h"
 #include "../station_map.h"
 #include "../pbs.h"
+
 
 inline const Station *RustStationByID(uint16_t id) noexcept { return Station::Get(StationID(id)); }
 inline bool RustStationRectangleEmpty(const BaseStation *station) noexcept { return station->rect.IsEmpty(); }
@@ -80,6 +82,7 @@ inline void RustStationRadius(uint32_t tile, uint32_t radius, void *context, voi
 inline Owner OpenTTDStationOwner(const BaseStation *station) noexcept { return station->owner; }
 const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept;
 inline Town *OpenTTDBaseStationTown(const BaseStation *st) noexcept { return st->town; }
+inline uint16_t RustStationTownID(const Station *station) noexcept { return RustTownAuthorityIndex(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(station))); }
 inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Station::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->facilities.Test(StationFacility::Airport); }
 inline bool RustStationHasHangar(const Station *s) noexcept { return s->airport.HasHangar(); }

@@ -433,7 +433,7 @@ pub struct Services {
     pub type_count: unsafe extern "C" fn(u8) -> u16,
     pub total: unsafe extern "C" fn() -> u32,
     pub type_info: unsafe extern "C" fn(u8) -> TypeInfo,
-    pub probability_callback: unsafe extern "C" fn(u8, u8, u32) -> u32,
+    pub resolver: *const resolver::ResolverServices,
     pub scale_by_map_size: unsafe extern "C" fn(u32) -> u32,
     pub company_none: unsafe extern "C" fn() -> u8,
     pub restore_company: unsafe extern "C" fn(u8),
@@ -532,6 +532,24 @@ unsafe fn get_accepted(owner: *const Industry, slot: usize) -> *const Accepted {
     accepted.get(slot).map_or(&raw const EMPTY.0, ptr::from_ref)
 }
 
+/// `Industry::GetCargoProduced`: invalid cargo never matches, then first slot wins.
+unsafe fn get_cargo_produced(owner: *const Industry, cargo: u8) -> Option<usize> {
+    if !valid(cargo) {
+        return None;
+    }
+    unsafe { &(*owner).produced }
+        .iter()
+        .position(|p| p.cargo == cargo)
+}
+/// `Industry::GetCargoAccepted`, with the same validity and ordering contract.
+unsafe fn get_cargo_accepted(owner: *const Industry, cargo: u8) -> Option<usize> {
+    if !valid(cargo) {
+        return None;
+    }
+    unsafe { &(*owner).accepted }
+        .iter()
+        .position(|a| a.cargo == cargo)
+}
 fn transported(p: Pair) -> u32 {
     u32::from(p.pct_transported())
 }
@@ -1009,7 +1027,9 @@ fn game_probability(kind: u8, s: &Services) -> u64 {
     {
         return 0;
     }
-    let probability = unsafe { (s.probability_callback)(kind, 1, u32::from(info.appear)) } as u8;
+    let probability = unsafe {
+        resolver::openttd_rust_industry_probability(kind, 1, u32::from(info.appear), s.resolver)
+    } as u8;
     if probability == 0 {
         return 0;
     }
@@ -1541,12 +1561,7 @@ pub unsafe extern "C" fn openttd_rust_industry_production_callback(
                 Some(n)
             } else {
                 let cargo = result.cargo_input[n];
-                if !valid(cargo) {
-                    None
-                } else {
-                    (0..accepted_count(owner))
-                        .find(|&n| unsafe { (*accepted(owner, n)).cargo == cargo })
-                }
+                unsafe { get_cargo_accepted(owner, cargo) }
             };
             if let Some(nslot) = slot {
                 let a = accepted(owner, nslot);
@@ -1568,12 +1583,7 @@ pub unsafe extern "C" fn openttd_rust_industry_production_callback(
                 Some(n)
             } else {
                 let cargo = result.cargo_output[n];
-                if !valid(cargo) {
-                    None
-                } else {
-                    (0..produced_count(owner))
-                        .find(|&n| unsafe { (*produced(owner, n)).cargo == cargo })
-                }
+                unsafe { get_cargo_produced(owner, cargo) }
             };
             if let Some(nslot) = slot {
                 let p = produced(owner, nslot);
@@ -2095,7 +2105,7 @@ crate::abi::layouts! {
         type_count,
         total,
         type_info,
-        probability_callback,
+        resolver,
         scale_by_map_size,
         company_none,
         restore_company,

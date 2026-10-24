@@ -66,6 +66,7 @@
 #include "rust/vehicle_services.h"
 #include "rust/company_services.h"
 #include "rust/industry_shell_services.h"
+#include "rust/industry_resolver_ffi.h"
 #include "rust/vehicle_visits_ffi.h"
 #include "rust/services_station.h"
 #include "rust/vehicle_refit_ffi.h"
@@ -1111,7 +1112,7 @@ static const OpenTTDCargoServices _cargo_services = {
 		if (field == 0) i->produced[slot].waiting = value;
 		else i->accepted[slot].waiting = value;
 	},
-	.refuses = [](void *handle, uint8_t cargo) noexcept -> uint8_t { return IndustryTemporarilyRefusesCargo(static_cast<Industry *>(handle), cargo); },
+	.resolver = &GetIndustryResolverServices(),
 	.accept = [](void *handle, uint32_t slot, uint32_t amount) noexcept {
 		auto &accepted = static_cast<Industry *>(handle)->accepted[slot];
 		accepted.waiting += amount;

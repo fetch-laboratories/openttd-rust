@@ -422,6 +422,7 @@ def check(scenario, run, mode, role, result):
                 "tile_root",
                 "town",
                 "refusal",
+                "probability",
             ),
         )
         for marker in (
@@ -430,6 +431,11 @@ def check(scenario, run, mode, role, result):
             "refusal true",
             "location 0 2271560481",
             "checkpoint true",
+            "count-wrap true",
+            "production 0 12",
+            "callbacks true",
+            "randomized true",
+            "complete true",
         ):
             if not any("INDUSTRY-RESOLVER " + marker in line for line in run["log"]):
                 raise RuntimeError(

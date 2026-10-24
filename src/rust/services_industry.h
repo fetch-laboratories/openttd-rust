@@ -5,6 +5,7 @@
 #include "../industry.h"
 #include "../newgrf_industrytiles.h"
 #include "services_ffi.h"
+template <typename ID> inline Industry *RustIndustryByID(ID id) noexcept { return Industry::Get(id); }
 inline Industry *OpenTTDNextIndustry(uint32_t from) noexcept { auto range = Industry::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
 inline Town *OpenTTDIndustryTown(const Industry *industry) noexcept { return industry->town; }
 inline const OpenTTDTownHandle *OpenTTDIndustryTownHandle(Industry *industry) noexcept { return reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDIndustryTown(industry)); }

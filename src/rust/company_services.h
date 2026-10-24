@@ -63,5 +63,6 @@ inline void RustAddWaterInfrastructure(uint8_t owner, uint32_t delta) noexcept {
 inline void RustStationStationInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.station += delta; }
 inline void RustStationAirportInfrastructure(uint8_t owner, uint32_t delta) noexcept { Company::Get(CompanyID(owner))->infrastructure.airport += delta; }
 inline uint32_t RustCompanyHQ(uint8_t id) noexcept { return Company::Get(CompanyID(id))->location_of_HQ.base(); }
-inline uint8_t RustObjectRecolour(uint8_t owner, bool two) noexcept { return Company::Get(CompanyID(owner))->GetCompanyRecolourOffset(LS_DEFAULT, two); }
+inline uint8_t RustCompanyRecolour(const Company *company, bool two) noexcept { return company->GetCompanyRecolourOffset(LS_DEFAULT, two); }
+inline uint8_t RustObjectRecolour(uint8_t owner, bool two) noexcept { return RustCompanyRecolour(Company::Get(CompanyID(owner)), two); }
 #endif /* RUST_COMPANY_SERVICES_H */

@@ -827,8 +827,14 @@ pub unsafe extern "C" fn openttd_rust_industry_build(
         return;
     }
     if !(e.g.environment.editor)()
-        && unsafe { (e.s.probability_callback)(kind, if e.company() == 18 { 1 } else { 2 }, 1) }
-            == 0
+        && unsafe {
+            super::resolver::openttd_rust_industry_probability(
+                kind,
+                if e.company() == 18 { 1 } else { 2 },
+                1,
+                e.s.resolver,
+            )
+        } == 0
     {
         e.fail(0xffff);
         return;

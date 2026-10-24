@@ -9,11 +9,15 @@ use super::{
 };
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::industry_type::{
-    INVALID_INDUSTRYTILE, IT_INVALID, NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRYTYPES,
+    BUILT_ON_WATER, INVALID_INDUSTRY, INVALID_INDUSTRYTILE, IT_INVALID, NEW_INDUSTRYTILEOFFSET,
+    NUM_INDUSTRYTYPES, PROD_MULTI_HANDLING,
 };
 use crate::newgrf_callbacks::{
     CALLBACK_FAILED, CBID_INDUSTRY_LOCATION, CBID_INDUSTRY_PROBABILITY, CBID_INDUSTRY_REFUSE_CARGO,
+    INDUSTRY_PROBABILITY, INDUSTRY_PRODUCTION_256_TICKS, INDUSTRY_PRODUCTION_CARGO_ARRIVAL,
+    INDUSTRY_REFUSE_CARGO,
 };
+use crate::newgrf_spritegroup::{VSG_SCOPE_PARENT, VSG_SCOPE_SELF};
 use crate::tile_type::{INVALID_TILE, MP_INDUSTRY};
 use crate::timer_game_common::{DAYS_TILL_ORIGINAL_BASE_YEAR, ORIGINAL_BASE_YEAR};
 use crate::witness;
@@ -35,6 +39,11 @@ pub struct ResolverRef {
     pub town: *mut TownHandle,
 }
 #[repr(C)]
+pub struct FounderInfo {
+    pub colours: u8,
+    pub is_ai: bool,
+}
+#[repr(C)]
 pub struct ResolverServices {
     pub shared: *const crate::services::Services,
     pub generation: *const GenerationServices,
@@ -44,10 +53,10 @@ pub struct ResolverServices {
     pub get: unsafe extern "C" fn(u16) -> ResolverRef,
     pub map_type: unsafe extern "C" fn(u8, u32) -> u16,
     pub spec_grfid: unsafe extern "C" fn(*const SpecHandle) -> u32,
-    pub spec_local_id: unsafe extern "C" fn(*const SpecHandle) -> u32,
+    pub spec_local_id: unsafe extern "C" fn(*const SpecHandle) -> u16,
     pub root: unsafe extern "C" fn(*const SpecHandle, bool) -> *const c_void,
     pub tile_root: unsafe extern "C" fn(*const TileSpec, bool) -> *const c_void,
-    pub tile_local_id: unsafe extern "C" fn(*const TileSpec) -> u32,
+    pub tile_local_id: unsafe extern "C" fn(*const TileSpec) -> u16,
     pub tile_override: unsafe extern "C" fn(*const TileSpec) -> u16,
     pub tile_grfid: unsafe extern "C" fn(*const TileSpec) -> u32,
     pub tile_has_groups: unsafe extern "C" fn(*const TileSpec) -> bool,
@@ -60,7 +69,7 @@ pub struct ResolverServices {
     pub water_distance: unsafe extern "C" fn(u32, bool) -> u32,
     pub town_tile: unsafe extern "C" fn(*const crate::services::TownHandle) -> u32,
     pub town_id: unsafe extern "C" fn(*const crate::services::TownHandle) -> u16,
-    pub founder_info: unsafe extern "C" fn(u8) -> u32,
+    pub founder_info: unsafe extern "C" fn(u8) -> FounderInfo,
     pub grfid: unsafe extern "C" fn(*const c_void) -> u32,
     pub version: unsafe extern "C" fn(*const c_void) -> u8,
     pub callback_id: unsafe extern "C" fn(*const c_void) -> u16,
@@ -136,14 +145,14 @@ fn id_at_offset(tile: u32, id: u16, grfid: u32, s: &ResolverServices) -> u32 {
         }
         let other = unsafe { (s.tile().spec)(override_id) };
         return if unsafe { (s.tile_grfid)(other) } == grfid {
-            unsafe { (s.tile_local_id)(other) }
+            u32::from(unsafe { (s.tile_local_id)(other) })
         } else {
             0xfffe
         };
     }
     if unsafe { (s.tile_has_groups)(spec) } {
         if unsafe { (s.tile_grfid)(spec) } == grfid {
-            unsafe { (s.tile_local_id)(spec) }
+            u32::from(unsafe { (s.tile_local_id)(spec) })
         } else {
             0xfffe
         }
@@ -309,7 +318,7 @@ fn variable(
                 return unsafe {
                     (s.water_distance)(
                         c.tile,
-                        s.behaviour(s.spec((*i).metadata.kind)) & (1 << 2) == 0,
+                        s.behaviour(s.spec((*i).metadata.kind)) & BUILT_ON_WATER == 0,
                     )
                 };
             }
@@ -330,10 +339,11 @@ fn variable(
     match variable {
         0x40..=0x42 => {
             let callbacks = unsafe { (s.construction().callback_mask)(spec) };
-            if callbacks & ((1 << 1) | (1 << 2)) == 0 {
+            if callbacks & (INDUSTRY_PRODUCTION_CARGO_ARRIVAL | INDUSTRY_PRODUCTION_256_TICKS) == 0
+            {
                 return 0;
             }
-            let multiplier = if s.behaviour(spec) & (1 << 14) != 0 {
+            let multiplier = if s.behaviour(spec) & PROD_MULTI_HANDLING != 0 {
                 let level = unsafe { (*i).fields.prod_level };
                 if level == 0 {
                     return 0;
@@ -348,12 +358,15 @@ fn variable(
             )
         }
         0x43 if c.tile != INVALID_TILE => unsafe {
-            (s.water_distance)(c.tile, s.behaviour(spec) & (1 << 2) == 0)
+            (s.water_distance)(c.tile, s.behaviour(spec) & BUILT_ON_WATER == 0)
         },
         0x44 => u32::from(unsafe { (*i).metadata.selected_layout }),
         0x45 => {
             let founder = unsafe { (*i).metadata.founder };
-            u32::from(founder) | unsafe { (s.founder_info)(founder) }
+            {
+                let info = unsafe { (s.founder_info)(founder) };
+                u32::from(founder) | (u32::from(info.is_ai) << 16) | (u32::from(info.colours) << 24)
+            }
         }
         0x46 => (unsafe { (*i).metadata.construction_date }) as u32,
         0x47 => u32::from(unsafe { (*i).fields.ctlflags }),
@@ -374,7 +387,7 @@ fn variable(
         0x62 if c.tile != INVALID_TILE => nearby_information(
             parameter as u8,
             c.tile,
-            u16::MAX,
+            INVALID_INDUSTRY,
             false,
             unsafe { (s.version)(ro) } >= 8,
             s,
@@ -424,15 +437,10 @@ fn variable(
         }
         0x69..=0x6d | 0x70 | 0x71 => {
             let cargo = unsafe { (s.cargo_translation)(ro, parameter as u8) };
-            if !super::valid(cargo) {
-                return 0;
-            }
-            // `GetCargoProduced`: validity first, then first matching slot.
-            let produced = unsafe { &(*i).produced };
-            let slot = produced.iter().find(|p| p.cargo == cargo);
-            let Some(p) = slot else {
+            let Some(slot) = (unsafe { super::get_cargo_produced(i, cargo) }) else {
                 return 0;
             };
+            let p = unsafe { &*super::produced(i, slot) };
             match variable {
                 0x69 => u32::from(p.waiting),
                 0x6a => u32::from(p.history[usize::from(THIS_MONTH)].first),
@@ -445,13 +453,10 @@ fn variable(
         }
         0x6e | 0x6f => {
             let cargo = unsafe { (s.cargo_translation)(ro, parameter as u8) };
-            if !super::valid(cargo) {
-                return 0;
-            }
-            let accepted = unsafe { &(*i).accepted };
-            let Some(a) = accepted.iter().find(|a| a.cargo == cargo) else {
+            let Some(slot) = (unsafe { super::get_cargo_accepted(i, cargo) }) else {
                 return 0;
             };
+            let a = unsafe { &*super::accepted(i, slot) };
             if variable == 0x6e {
                 a.last_accepted as u32
             } else {
@@ -514,7 +519,7 @@ fn variable(
             (*super::get_produced(i, usize::from(variable - 0x9c))).history[usize::from(LAST_MONTH)]
                 .pct_transported()
         }),
-        0xa6 => unsafe { (s.spec_local_id)(spec) },
+        0xa6 => u32::from(unsafe { (s.spec_local_id)(spec) }),
         0xa7 => u32::from(unsafe { (*i).metadata.founder }),
         0xa8 => u32::from(unsafe { (*i).metadata.random_colour }),
         0xa9 => unsafe { (*i).fields.last_prod_year }
@@ -657,7 +662,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_random(
     s: *const ResolverServices,
 ) -> u32 {
     let c = unsafe { &*c };
-    if c.id == u16::MAX {
+    if c.id == INVALID_INDUSTRY {
         0
     } else {
         u32::from(unsafe { ((*(*s).lifecycle).random_bits)(c.tile) })
@@ -671,7 +676,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_triggers(
     s: *const ResolverServices,
 ) -> u32 {
     let c = unsafe { &*c };
-    if c.id == u16::MAX {
+    if c.id == INVALID_INDUSTRY {
         0
     } else {
         u32::from(unsafe { ((*(*s).lifecycle).random_triggers)(c.tile) })
@@ -687,7 +692,12 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_root(
     witness::hit(witness::INDUSTRY_RESOLVER_ROOT);
     let c = unsafe { &*c };
     let s = unsafe { &*s };
-    unsafe { (s.root)(s.spec(c.kind), !c.owner.is_null() && c.id != u16::MAX) }
+    unsafe {
+        (s.root)(
+            s.spec(c.kind),
+            !c.owner.is_null() && c.id != INVALID_INDUSTRY,
+        )
+    }
 }
 /// # Safety
 /// Original non-null industry and valid gfx preconditions; stable native group.
@@ -698,7 +708,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_root(
     s: *const ResolverServices,
 ) -> *const c_void {
     witness::hit(witness::INDUSTRY_RESOLVER_TILE_ROOT);
-    unsafe { ((*s).tile_root)(((*(*s).tile).spec)(gfx), (*c).id != u16::MAX) }
+    unsafe { ((*s).tile_root)(((*(*s).tile).spec)(gfx), (*c).id != INVALID_INDUSTRY) }
 }
 fn town(c: &ResolverContext, ro: *mut c_void, s: &ResolverServices) -> *mut c_void {
     witness::hit(witness::INDUSTRY_RESOLVER_TOWN);
@@ -707,7 +717,7 @@ fn town(c: &ResolverContext, ro: *mut c_void, s: &ResolverServices) -> *mut c_vo
         return existing;
     }
     let (town, readonly) = if !c.owner.is_null() {
-        (c.town, c.id == u16::MAX)
+        (c.town, c.id == INVALID_INDUSTRY)
     } else if c.tile != INVALID_TILE {
         (
             (s.shared().closest_town)(c.tile, u32::MAX)
@@ -747,8 +757,8 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_scope(
 ) -> *mut c_void {
     let s = unsafe { &*s };
     match scope {
-        0 => own,
-        1 => {
+        VSG_SCOPE_SELF => own,
+        VSG_SCOPE_PARENT => {
             let town = town(unsafe { &*c }, ro, s);
             if town.is_null() {
                 unsafe { (s.base_scope)(ro, scope, relative) }
@@ -771,8 +781,8 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_scope(
     s: *const ResolverServices,
 ) -> *mut c_void {
     match scope {
-        0 => own,
-        1 => parent,
+        VSG_SCOPE_SELF => own,
+        VSG_SCOPE_PARENT => parent,
         _ => unsafe { ((*s).base_scope)(ro, scope, relative) },
     }
 }
@@ -826,7 +836,7 @@ pub unsafe extern "C" fn openttd_rust_industry_probability(
     witness::hit(witness::INDUSTRY_RESOLVER_PROBABILITY);
     let s = unsafe { &*s };
     let spec = s.spec(kind);
-    if unsafe { (s.construction().callback_mask)(spec) } & 1 != 0 {
+    if unsafe { (s.construction().callback_mask)(spec) } & INDUSTRY_PROBABILITY != 0 {
         let result = unsafe {
             (s.callback)(
                 CBID_INDUSTRY_PROBABILITY,
@@ -857,24 +867,35 @@ pub unsafe extern "C" fn openttd_rust_industry_probability(
 /// Live owner and original accepted-cargo assertion, checked by the native facade.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_industry_refuses(
-    c: *const ResolverContext,
+    industry: *mut c_void,
+    owner: *mut Industry,
     cargo: u8,
     s: *const ResolverServices,
 ) -> bool {
+    unsafe { refuses(industry, owner, cargo, &*s) }
+}
+/// SAFETY: live owner/shell, caller has established an accepted cargo slot.
+/// Action2 may reenter; owner observations end before every native call.
+pub(crate) unsafe fn refuses(
+    industry: *mut c_void,
+    owner: *mut Industry,
+    cargo: u8,
+    s: &ResolverServices,
+) -> bool {
     witness::hit(witness::INDUSTRY_RESOLVER_REFUSAL);
-    let c = unsafe { &*c };
-    let s = unsafe { &*s };
-    let spec = s.spec(unsafe { (*c.owner).metadata.kind });
-    if unsafe { (s.construction().callback_mask)(spec) } & (1 << 10) != 0 {
+    let kind = unsafe { (*owner).metadata.kind };
+    let spec = s.spec(kind);
+    if unsafe { (s.construction().callback_mask)(spec) } & INDUSTRY_REFUSE_CARGO != 0 {
         let parameter = unsafe { (s.cargo_map)(spec, cargo) };
+        let tile = unsafe { (*owner).metadata.tile };
         let result = unsafe {
             (s.callback)(
                 CBID_INDUSTRY_REFUSE_CARGO,
                 0,
                 u32::from(parameter),
-                c.industry,
-                (*c.owner).metadata.kind,
-                (*c.owner).metadata.tile,
+                industry,
+                kind,
+                tile,
             )
         };
         if result != CALLBACK_FAILED {
@@ -886,6 +907,7 @@ pub unsafe extern "C" fn openttd_rust_industry_refuses(
 
 crate::abi::layouts! {
     fn abi_layout;
+    "OpenTTDIndustryFounderInfo" ["industry"] => FounderInfo { colours, is_ai, };
     "OpenTTDIndustryResolverContext" ["industry"] => ResolverContext { owner, industry, town, tile, random_bits, id, kind => type, };
     "OpenTTDIndustryResolverRef" ["industry"] => ResolverRef { owner, town, };
     "OpenTTDIndustryResolverServices" ["industry"] => ResolverServices {

@@ -27,3 +27,9 @@ crate::abi::layouts! {
     "CallbackID" ["maintenance"] => CallbackID {
     };
 }
+
+/// Masks from `newgrf_callbacks.h::IndustryCallbackMask`.
+pub const INDUSTRY_PROBABILITY: u16 = 1 << 0;
+pub const INDUSTRY_PRODUCTION_CARGO_ARRIVAL: u16 = 1 << 1;
+pub const INDUSTRY_PRODUCTION_256_TICKS: u16 = 1 << 2;
+pub const INDUSTRY_REFUSE_CARGO: u16 = 1 << 10;

@@ -22,7 +22,7 @@
 #include "table/strings.h"
 
 #ifdef WITH_RUST
-#include "rust/industry_resolver_services.hpp"
+#include "rust/industry_resolver_ffi.h"
 #endif
 #include "safeguards.h"
 
