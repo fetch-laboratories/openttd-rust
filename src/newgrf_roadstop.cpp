@@ -373,7 +373,7 @@ struct RoadStopAnimationFrameAnimationHelper {
 const OpenTTDRoadStopAnimation &GetRoadStopAnimationBinding() noexcept
 {
 	static const auto binding = MakeRustAnimationBinding<RoadStopSpec, BaseStation, int, GetAnimRoadStopCallback>(
-		[](uint32_t t) noexcept -> OpenTTDRoadStopAnimationEntry { const auto *s = RustAnimationRoadSpec(t); if (s == nullptr) return {nullptr, nullptr}; return {s, BaseStation::GetByTile(TileIndex{t})}; },
+		[](uint32_t t) noexcept -> OpenTTDRoadStopAnimationEntry { const auto *s = RustAnimationRoadSpec(t); if (s == nullptr) return {nullptr, nullptr}; return {s, RustBaseStationByTile(t)}; },
 		[](const RoadStopSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(RoadStopCallbackMask::AnimationSpeed), s->callback_mask.Test(RoadStopCallbackMask::AnimationNextFrame), s->flags.Test(RoadStopSpecFlag::Cb141RandomBits), true}; });
 	return binding;
 }

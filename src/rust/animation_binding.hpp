@@ -16,7 +16,7 @@ OpenTTDAnimationBinding<Spec, Obj, Extra> MakeRustAnimationBinding(
 {
 	return {.entry = entry, .info = info,
 		.callback = [](uint16_t cb, uint32_t a, uint32_t b, const Spec *s, Obj *o, uint32_t t, Extra extra) noexcept { return Callback(static_cast<CallbackID>(cb), a, b, s, o, TileIndex{t}, extra); },
-		.sound = [](const Spec *s, uint8_t sound, uint32_t t) noexcept { PlayTileSound(s->grf_prop.grffile, sound, TileIndex{t}); },
+		.sound = [](const Spec *s, uint8_t sound, uint32_t t) noexcept { PlayTileSound(RustSpecGRFFile(s), sound, TileIndex{t}); },
 		.version8 = RustSpecGRFVersion8<Spec>,
 		.speed_error = RustSpecCallbackError<Spec, Spec>};
 }

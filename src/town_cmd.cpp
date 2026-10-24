@@ -1090,7 +1090,7 @@ static bool RustTown_allow_construction(uint32_t town, uint32_t tile, uint32_t h
 {
 	const auto *hs = HouseSpec::Get(house);
 	uint16_t cb = OpenTTDHouseCallback(CBID_HOUSE_ALLOW_CONSTRUCTION, 0, 0, house, Town::Get(TownID(town)), TileIndex{tile}, true, random);
-	return cb == CALLBACK_FAILED || OpenTTDConvert8bitBooleanCallback(hs->grf_prop.grffile, CBID_HOUSE_ALLOW_CONSTRUCTION, cb);
+	return cb == CALLBACK_FAILED || OpenTTDConvert8bitBooleanCallback(RustSpecGRFFile(hs), CBID_HOUSE_ALLOW_CONSTRUCTION, cb);
 }
 static void RustTownStations(uint32_t tile, uint32_t radius, void *context, void (*visit)(void *, const OpenTTDStation *, uint32_t)) noexcept
 {
@@ -1176,7 +1176,6 @@ static OpenTTDHouseAcceptance RustHouseAcceptance(uint16_t house) noexcept
 	std::copy(std::begin(hs->cargo_acceptance), std::end(hs->cargo_acceptance), result.amounts);
 	return result;
 }
-static const GRFFile *RustHouseGrf(uint16_t house) noexcept { return HouseSpec::Get(house)->grf_prop.grffile; }
 static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 {
 	static const OpenTTDHouseServices services{
@@ -1222,9 +1221,9 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.callback = [](uint16_t callback, uint32_t param1, uint32_t param2, uint16_t house, Town *town, uint32_t tile, bool not_yet_constructed) noexcept -> uint16_t {
 			return OpenTTDHouseCallback(static_cast<CallbackID>(callback), param1, param2, house, town, TileIndex{tile}, not_yet_constructed);
 		},
-		.cargo_translation = [](uint16_t house, uint8_t cargo) noexcept -> uint8_t { return OpenTTDCargoTranslation(cargo, RustHouseGrf(house)); },
-		.convert_boolean = [](uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvertBooleanCallback(RustHouseGrf(house), callback, result); },
-		.convert_8bit = [](uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvert8bitBooleanCallback(RustHouseGrf(house), callback, result); },
+		.cargo_translation = RustHouseCargoTranslation,
+		.convert_boolean = RustHouseConvertBoolean,
+		.convert_8bit = RustHouseConvert8bitBoolean,
 		.resolve_reseed = OpenTTDHouseResolveReseed,
 
 		.next_near_station = [](Town *t, Station *previous) noexcept -> Station * {
