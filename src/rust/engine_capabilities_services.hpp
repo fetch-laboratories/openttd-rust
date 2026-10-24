@@ -4,13 +4,10 @@
 #include "services_cargo.h"
 #include "services_assert.h"
 static OpenTTDVehicle *EngineTemporaryNew() noexcept { return RustVehicle(new Vehicle()); }
-static void EngineTemporaryDelete(OpenTTDVehicle *v) noexcept { delete VehicleOf(v); }
-static void EngineTemporarySetEngine(OpenTTDVehicle *v, uint16_t engine) noexcept { VehicleOf(v)->engine_type = EngineID(engine); }
-static void EngineTemporarySetOwner(OpenTTDVehicle *v, uint8_t owner) noexcept { VehicleOf(v)->owner = Owner(owner); }
 const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noexcept
 {
 	static const OpenTTDEngineCapabilitiesServices services{
-		.resolver = []() noexcept { return &GetRustVehicleResolverServices(); },
+		.resolver = GetRustVehicleServices().newgrf,
 		.engine = RustEngineByID,
 		.engine_if_valid = RustEngineByIDIfValid,
 		.kind = RustEngineType,
@@ -33,9 +30,9 @@ const OpenTTDEngineCapabilitiesServices &GetRustEngineCapabilitiesServices() noe
 		.cargo_by_label = OpenTTDCargoByLabel,
 		.pool_available = RustVehicleCanAllocate,
 		.new_temporary = EngineTemporaryNew,
-		.destroy_temporary = EngineTemporaryDelete,
-		.set_engine = EngineTemporarySetEngine,
-		.set_owner = EngineTemporarySetOwner,
+		.destroy_temporary = GetRustVehicleServices().destroy,
+		.set_engine = RustVehicleSetEngine,
+		.set_owner = RustVehicleSetOwner,
 		.current_company = OpenTTDCurrentCompany,
 		.vehicle_engine = RustVehicleRead<uint16_t, RustVehicleEngineID>,
 		.vehicle_cargo = RustVehicleCargoType,

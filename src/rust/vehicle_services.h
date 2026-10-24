@@ -159,6 +159,8 @@ inline uint32_t RustVehiclePreviousID(const Vehicle *v) noexcept
 	const Vehicle *previous = RustVehiclePrevious(v);
 	return previous == nullptr ? UINT32_MAX : RustVehicleIndexOpaque(previous);
 }
+inline void RustVehicleSetEngine(OpenTTDVehicle *v, uint16_t engine) noexcept { VehicleOf(v)->engine_type = EngineID(engine); }
+inline void RustVehicleSetOwner(OpenTTDVehicle *v, uint8_t owner) noexcept { VehicleOf(v)->owner = Owner(owner); }
 inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->engine_type.base(); }
 inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return reinterpret_cast<const OpenTTDEngine *>(e); }
 inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return reinterpret_cast<const Engine *>(e); }
