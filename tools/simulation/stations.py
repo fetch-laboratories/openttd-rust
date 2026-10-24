@@ -1273,6 +1273,7 @@ def check_commands(scenario, run, mode, role, result):
             "airport-variable nowhere",
             "airport-date",
             "airport-storage-zero",
+            "airport-roots live-default purchase",
             "airport-parameter",
             "airport-relative-wrap",
             "airport-town",

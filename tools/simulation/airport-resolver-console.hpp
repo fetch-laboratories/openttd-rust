@@ -81,6 +81,9 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 	file.grf_version = 8;
 	/* Null purchase roots, layout/badges before the null gate, station parameter
 	 * narrowing and the signed build-date clamp. */
+	AirportResolverObject live_root(tile, st, spec, 0), purchase_root(tile, nullptr, spec, 0);
+	StationNeed(live_root.ResolveCallback({}) == 3 && purchase_root.ResolveCallback({}) == 4, __LINE__);
+	fmt::print(stderr, "STCMD airport-roots live-default purchase\n");
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, det);
 	AirportResolverObject preview(tile, nullptr, spec, 2), nowhere(INVALID_TILE, nullptr, spec, 3);
 	variables("preview", preview, preview.airport_scope); variables("nowhere", nowhere, nowhere.airport_scope);
