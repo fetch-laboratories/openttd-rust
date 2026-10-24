@@ -50,7 +50,7 @@ shared random-number behavior.
 - **Witness**: a named branch counter in `witness.rs`. Simulation scenarios that set `witnesses`
   require their listed counters to be nonzero, so a scenario fails when it stops reaching the
   branch it claims to cover.
-- **Anchor**: a `SPEED_ANCHORS` record in `tools/simulation/roads.py` holding a speed pass's
+- **Anchor**: a `SPEED_ANCHORS` record in `tools/simulation/instructions.py` holding a speed pass's
   measured wall ratio and game-loop instruction count for one scenario; speed projections scale
   from it.
 
@@ -270,9 +270,19 @@ full-log comparisons still run, including on reference-count cache hits. Profile
 never enter `plain_speed` samples. Only reference Ir is cached; identity covers executable,
 runtime files (not their CMake bookkeeping)/libraries, resolved inputs, build/profile settings,
 architecture and Valgrind version. Candidate executable identity stays separate from the
-compatibility identity checked against anchors.
+compatibility identity checked against anchors. Identity hashes the `ldd` libraries, so the
+current anchors match only with the main checkout's pinned zlib and lzma runtime: prefix profiles
+and speed passes with
+`LD_LIBRARY_PATH=<main>/.local/tip-profile-anchored-runtime-zlib-20261023/runtime/usr/lib/x86_64-linux-gnu`.
 
-`SPEED_ANCHORS` in `tools/simulation/roads.py` holds each measured anchor `{head, ratio, Ir,
+A speed pass runs `tools/simulation/speed.py` from a clean checkout of the head it anchors.
+Build and profile with `simulate --instructions`, then run `python3 tools/simulate.py speed
+prepare DIR --profile REPORT` (frozen runtimes and identity proof, no games) and `python3
+tools/simulate.py speed collect DIR`. Collection stops other builds, links, profiles and games
+only while its 144 interleaved timed games run, records load and process observations without a
+CPU threshold, and prints the `SPEED_PASS` rows after release.
+
+`SPEED_ANCHORS` in `tools/simulation/instructions.py` holds each measured anchor `{head, ratio, Ir,
 identity}` and a separate `integrated` record with its head and Ir. Empty anchors mean
 collection only, never a passing speed guard. Each speed pass fills them from its same-head
 quiet medians. Compute each projection as `R0 * (1 + 2 * max(0, I / I0 - 1))`, directly from the
