@@ -52,7 +52,6 @@ struct OpenTTDRoadStopResolverState;
 struct OpenTTDIndustryBuilder;
 struct OpenTTDVehicleScopeState;
 struct OpenTTDIndustryResolverContext;
-struct Station;
 struct Town;
 struct Object;
 struct ObjectSpec;
