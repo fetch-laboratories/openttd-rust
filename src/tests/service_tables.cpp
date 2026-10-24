@@ -10,97 +10,59 @@
 #include "abi-visit-OpenTTDRandomServices.hpp"
 static_assert(!OPENTTD_SERVICE_RETURN_TYPE<CompanyID>);
 static_assert(!OPENTTD_SERVICE_RETURN_TYPE<GRFStringID>);
-extern bool CheckAbi_industry_cmd();
-extern bool CheckAbi_town_cmd();
-extern bool CheckAbi_station_cmd();
-extern bool CheckAbi_rail_cmd();
-extern bool CheckAbi_road_cmd();
-extern bool CheckAbi_townname();
-extern bool CheckAbi_order_cmd();
-extern bool CheckAbi_signal();
-extern bool CheckAbi_tree_cmd();
-extern bool CheckAbi_economy();
-extern bool CheckAbi_train_cmd();
-extern bool CheckAbi_ship_cmd();
-extern bool CheckAbi_group_cmd();
-extern bool CheckAbi_vehicle();
-extern bool CheckAbi_vehicle_cmd();
-extern bool CheckAbi_vehiclelist();
-extern bool CheckAbi_engine();
-extern bool CheckAbi_aircraft_cmd();
-extern bool CheckAbi_cargopacket();
-extern bool CheckAbi_roadveh_cmd();
-extern bool CheckAbi_roadstop();
-extern bool CheckAbi_effectvehicle();
-extern bool CheckAbi_services();
-extern bool CheckAbi_vehicle_services();
-extern bool CheckAbi_ground_physics();
-extern bool CheckAbi_company_adapter();
-extern bool CheckAbi_autoreplace_cmd();
-extern bool CheckAbi_linkgraphjob();
-extern bool CheckAbi_water_regions();
-extern bool CheckAbi_yapf_rail();
-extern bool CheckAbi_yapf_road();
-extern bool CheckAbi_yapf_ship();
-extern bool CheckAbi_monocypher();
-extern bool CheckAbi_network_crypto();
-extern bool CheckAbi_landscape();
-extern bool CheckAbi_object_cmd();
-extern bool CheckAbi_water_cmd();
-extern bool CheckAbi_tunnelbridge_cmd();
-extern bool CheckAbi_subsidy();
-extern bool CheckAbi_animated_tile();
-extern bool CheckAbi_cargomonitor();
-extern bool CheckAbi_spritegroup();
-extern bool CheckAbi_storage();
-extern bool CheckAbi_generic();
+/* Every production unit that defines CheckAbi_<unit>() for its callback tables. */
+#define OPENTTD_ABI_CHECKED_UNITS(X) \
+	X(animated_tile) \
+	X(industry_cmd) \
+	X(town_cmd) \
+	X(station_cmd) \
+	X(rail_cmd) \
+	X(road_cmd) \
+	X(townname) \
+	X(order_cmd) \
+	X(signal) \
+	X(tree_cmd) \
+	X(economy) \
+	X(train_cmd) \
+	X(ship_cmd) \
+	X(group_cmd) \
+	X(vehicle) \
+	X(vehicle_cmd) \
+	X(vehiclelist) \
+	X(engine) \
+	X(aircraft_cmd) \
+	X(cargopacket) \
+	X(roadveh_cmd) \
+	X(roadstop) \
+	X(effectvehicle) \
+	X(services) \
+	X(vehicle_services) \
+	X(ground_physics) \
+	X(company_adapter) \
+	X(autoreplace_cmd) \
+	X(linkgraphjob) \
+	X(water_regions) \
+	X(yapf_rail) \
+	X(yapf_road) \
+	X(yapf_ship) \
+	X(monocypher) \
+	X(network_crypto) \
+	X(landscape) \
+	X(object_cmd) \
+	X(water_cmd) \
+	X(tunnelbridge_cmd) \
+	X(subsidy) \
+	X(cargomonitor) \
+	X(spritegroup) \
+	X(storage) \
+	X(generic)
+#define OPENTTD_DECLARE_ABI_CHECK(unit) extern bool CheckAbi_##unit();
+OPENTTD_ABI_CHECKED_UNITS(OPENTTD_DECLARE_ABI_CHECK)
 
 TEST_CASE("Rust ABI - actual production callback tables are complete")
 {
-	CHECK(CheckAbi_animated_tile());
-	CHECK(CheckAbi_industry_cmd());
-	CHECK(CheckAbi_town_cmd());
-	CHECK(CheckAbi_station_cmd());
-	CHECK(CheckAbi_rail_cmd());
-	CHECK(CheckAbi_road_cmd());
-	CHECK(CheckAbi_townname());
-	CHECK(CheckAbi_order_cmd());
-	CHECK(CheckAbi_signal());
-	CHECK(CheckAbi_tree_cmd());
-	CHECK(CheckAbi_economy());
-	CHECK(CheckAbi_train_cmd());
-	CHECK(CheckAbi_ship_cmd());
-	CHECK(CheckAbi_group_cmd());
-	CHECK(CheckAbi_vehicle());
-	CHECK(CheckAbi_vehicle_cmd());
-	CHECK(CheckAbi_vehiclelist());
-	CHECK(CheckAbi_engine());
-	CHECK(CheckAbi_aircraft_cmd());
-	CHECK(CheckAbi_cargopacket());
-	CHECK(CheckAbi_roadveh_cmd());
-	CHECK(CheckAbi_roadstop());
-	CHECK(CheckAbi_effectvehicle());
-	CHECK(CheckAbi_services());
-	CHECK(CheckAbi_vehicle_services());
-	CHECK(CheckAbi_ground_physics());
-	CHECK(CheckAbi_company_adapter());
-	CHECK(CheckAbi_autoreplace_cmd());
-	CHECK(CheckAbi_linkgraphjob());
-	CHECK(CheckAbi_water_regions());
-	CHECK(CheckAbi_yapf_rail());
-	CHECK(CheckAbi_yapf_road());
-	CHECK(CheckAbi_yapf_ship());
-	CHECK(CheckAbi_monocypher());
-	CHECK(CheckAbi_network_crypto());
-	CHECK(CheckAbi_landscape());
-	CHECK(CheckAbi_object_cmd());
-	CHECK(CheckAbi_water_cmd());
-	CHECK(CheckAbi_tunnelbridge_cmd());
-	CHECK(CheckAbi_subsidy());
-	CHECK(CheckAbi_cargomonitor());
-	CHECK(CheckAbi_spritegroup());
-	CHECK(CheckAbi_storage());
-	CHECK(CheckAbi_generic());
+#define OPENTTD_CHECK_ABI(unit) CHECK(CheckAbi_##unit());
+	OPENTTD_ABI_CHECKED_UNITS(OPENTTD_CHECK_ABI)
 }
 TEST_CASE("Rust ABI - omitted and explicit null callbacks fail completeness")
 {

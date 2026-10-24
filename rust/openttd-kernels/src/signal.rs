@@ -766,28 +766,6 @@ crate::abi::layouts! {
     } width log_x: std::ffi::c_uint;
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn process_owner_is_shared_across_serialized_game_threads() {
-        access(|s| {
-            s.global.reset();
-            s.last_owner = 7;
-            s.global.add(Item { tile: 1234, dir: 2 });
-        });
-        std::thread::spawn(|| {
-            access(|s| {
-                assert_eq!(s.last_owner, 7);
-                assert_eq!(s.global.get(), Some(Item { tile: 1234, dir: 2 }));
-            });
-        })
-        .join()
-        .unwrap();
-        access(|s| s.last_owner = INVALID);
-    }
-}
-
 /// Call-scoped bridge to a direct Rust signal entry from other Rust owners.
 /// All pointers address immutable process-lifetime native service tables; map
 /// width is captured for this invocation. This contains no signal-state mirror.

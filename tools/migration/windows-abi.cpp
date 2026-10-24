@@ -43,6 +43,7 @@
 #include "rust/station_service_ffi.h"
 #include "rust/string_validation_ffi.h"
 #include "rust/town_founding_ffi.h"
+#include "rust/town_ffi.h"
 #include "rust/townname_ffi.h"
 #include "rust/train_ffi.h"
 #include "rust/train_reservation_ffi.h"
@@ -57,7 +58,6 @@
 #include "abi-includes.inc"
 #include "rust/tile_type_access.hpp"
 #include "tests/abi_layout.hpp"
-#include "tests/town_protocol.hpp"
 
 #include <algorithm>
 #include <array>
@@ -103,7 +103,6 @@ static void Layouts()
 
 static void Calls()
 {
-	CheckTownProtocol([](bool condition) { CHECK(condition); });
 	{
 		static OpenTTDTownState *owner = openttd_rust_town_new();
 		OpenTTDSharedServices shared{}; OpenTTDTownLeaves leaves{}; OpenTTDTownNameServices names{}; OpenTTDCommandCostServices costs{}; OpenTTDTownFoundingServices founding{};

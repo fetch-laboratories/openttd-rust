@@ -25,7 +25,7 @@
 #ifdef WITH_RUST
 TEST_CASE("Company economy - canonical owner layouts and property copy lifetime")
 {
-	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
+	ABI_LAYOUT_CHECK;
 #include "abi-layout-company_economy.inc"
 
 	CompanyProperties original;

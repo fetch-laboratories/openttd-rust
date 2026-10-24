@@ -129,7 +129,6 @@ witness_blocks! {
         GROUND_SPEED = 11 => "ground.speed",
         GROUND_FULL_WEIGHT = 12 => "ground.full_weight",
     }
-    // Registry: house (#256).
     house {
         HOUSE = 0 => "house.stage",
         HOUSE_COMPLETE = 1 => "house.complete",
@@ -149,7 +148,6 @@ witness_blocks! {
         HOUSE_STATION_REMOVED = 15 => "house.station_removed",
         HOUSE_PROTECTED = 16 => "house.protected",
     }
-    // Registry: landscape (#212).
     industry_resolver {
         INDUSTRY_RESOLVER_VARIABLE = 0 => "industry_resolver.variable",
         INDUSTRY_RESOLVER_TILE_VARIABLE = 1 => "industry_resolver.tile_variable",
