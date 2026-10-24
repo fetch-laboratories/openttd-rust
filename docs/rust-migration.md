@@ -1254,9 +1254,9 @@ autoslope and generation branches remain tracked in #156.
 lazy parent caching, scope/feature/debug identity, callback entry and complete
 spec eligibility. Failed parent lookups retry; construction town scopes are
 readonly. Native object/spec vectors, overrides, map/save adapters, rendering
-and virtual resolver/town facades stay canonical. Common Action2 evaluation uses
-the assigned base's native evaluator; final-base adoption follows root's #425
-integration. No context/town/storage borrow spans evaluation or reentry. Leaves
+and virtual resolver/town facades stay canonical. Common Action2 uses direct Rust
+object scope/variable/random dispatch through the canonical context pointer;
+native frames supply stack lifetimes. No owner borrow spans reentry. Leaves
 are typed noexcept calls; native cancellation and save/load frames stay outside.
 
 Command colour/slope/autoslope and animation enter the owner directly. Shared
@@ -1270,7 +1270,7 @@ transient groups/specs before saving. Reload explicitly reinstalls them. These
 checks and generation scenarios compare full semantic saves and named witnesses.
 Build/Cargo4, native ABI and focused object/generation checks pass (PR #438).
 External GRF loading and historical layouts remain #156 gaps; this fixture does
-not establish loader equivalence. Root owns final-base adoption and Full.
+not establish loader equivalence. Root owns exact-combination Full.
 
 ### Shared tile ownership dispatch (#331)
 
@@ -2398,8 +2398,9 @@ Rust owns both resolver stack contexts, roots, self/parent/default scopes,
 lazy town selection, variables, random packing, tile callbacks and live airport
 selection/availability/bounds. Native parsing, spec/layout/override storage,
 rendering, preview drawing and text remain. Canonical station/cargo/town/storage
-owners and the industry relative-position helper are called directly; native
-common evaluator/virtual frames remain while that shared runtime is unported.
+owners and the industry relative-position helper are called directly. Common
+Action2 and airport operations dispatch directly in Rust; native stack frames
+retain their synchronous lifetimes.
 Animation and construction admission call the Rust owner. Shared named support
 ports CanVehicleUseStation, IsHangar/IsHangarTile, GetVehiclePosOnBuild,
 GetAirport and Airport::GetSpec preserve the original gates. Native hangar and
@@ -2415,7 +2416,7 @@ leaves a deleted PSA pointer; the retained airport's PSA is saved and reloaded.
 Build/Cargo4, native ABI, affected defaults and callee/shared/orphan audit are
 recorded in #428. Necessary selected-spec support cost was accepted once (#418).
 External loading, historical saves, GUI scheduling and the exact native removal
-setup limitation remain on #156. Fresh review/current-base Full remain pending.
+setup limitation remain on #156. Fixing review passed; combination Full follows.
 
 ### Generic NewGRF callbacks (#429, PR #436)
 
@@ -2429,8 +2430,9 @@ Common Action2 evaluation and generic scope/variable dispatch call their Rust
 owners directly. The native evaluation leaf constructs only the required stack
 virtual/profiler frame, exposing the actual invocation and common carrier through
 typed bindings (resolver11/scope12); no mirrored state or virtual forwarding.
-C++ retains files, parsed graphs, specifications, map, loading callers and playback. Typed noexcept leaves have no ordinary-play throwing
-operation; script commands run after the callback returns. Portable originals stay.
+C++ retains files, parsed graphs, specs, map, loading callers and playback. Typed
+noexcept leaves do not throw during play; script commands follow callback return.
+Portable originals stay.
 Clear/tree/water call Rust directly; tree retains its post-call feature observation
 before refresh. Cargo bitnum and GRF-aware playback have canonical shared leaves
 adopted by vehicle/animation consumers; displaced ambient callbacks are removed.
@@ -2443,4 +2445,4 @@ registrations are cleared before graph destruction and rebuilt after native relo
 Build/Cargo4, native ABI/table completeness, focused ground/vehicle/animation checks
 and exact commands are recorded on #436. External-GRF loading, script station-build
 integration, other feature registrations, arbitrary programs, historical saves and
-GUI scheduling remain #156 gaps. Root owns fixing review and combination Full.
+GUI scheduling remain #156 gaps. Fixing review passed; root owns combination Full.

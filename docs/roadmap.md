@@ -12,7 +12,7 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 - New quiet156915 whole pass completed144 exits/72 equal pairs, four interleaved three-pair medians: TGP1.110315x, Opus1.396654x, Grok1.401286x, P1996 1.317390x, P2000 1.380024x, P2016 1.460536x. All below ceilings, onlyP2016 in band. Proposed complete anchors/baseline are ready maintenance; both09eda/156915 recomputed under them show no rise. No causal savings claim; collection hold ended before assessment. No hold is active.
 - Current retained-only P2016 net attribution conserves3,064,970,050 excess Ir, preserving unexplained original raw/cache-5,691,628. Root selected aircraft counted/plain specialization and four direct controller-to-orders routes. Repaired track/deferred-order/occupancy families are not recycled; necessary scheduler/pixel costs have no further bounded defect established. Ready owners proceed while repairs are prepared.
 - Exact-current-base Full remains strict:42 requests since steering,23 successful,12 failed,7 cancelled. #437's only failed attempt was one MSVC assertion-only unused parameter; all builds/native/shards passed, then the warning fix passed fresh Full. Due macOS Debug/Release both passed at8b3; next macOS is due after five more integrations. CI_ON_DEMAND stays true, broader infrastructure unselected.
-- Six component branches: airport428, generic436 and object438 adoption/fixing reviews; reviewed statue441; whole quiet156915 anchors; selected speed source repairs. Next439 engine cargo-capability/articulated queries, then440 rail/road introduction/admission are root-selected from fresh Astra research and source checks, queued after430. Cleanup count92; protected speed inputs remain until consumed.
+- Six component branches: reviewed airport428, generic436 and object438; reviewed statue441; whole quiet156915 anchors443; speed source repairs442. Next439 engine cargo-capability/articulated queries, then440 rail/road introduction/admission are root-selected from fresh Astra research and source checks, queued after430. Cleanup count99; protected speed inputs remain until consumed.
 
 ## Eighteenth steering review (2026-10-23, remove accidental gates and close shared-layer debt)
 
@@ -169,9 +169,9 @@ new tooling stream is introduced. Keep one worker closing the coverage backlog.
 
 Integrate ready reviewed work first. Keep at most six component branches.
 
-1. **Airport428 and generic436:** assigned-base whole fixing reviews pass; fresh scoped workers adopt actual8b once and route integrated common evaluation/scope/variables/random/PSA directly to their owners. Preserve strict/nullable lookups and shared house/frame metadata. No draft-service dependency, renewed cost gate or waiting on future speed maintenance; root spot-check/current-base Full follows readiness.
-2. **Object438:** first real-program checkpoint/cost accepted once; actual remaining51 original lines receive no second query/command/animation credit. Fresh whole fixing review includes actual common8b context/binding adoption, real rejection/autoslope/cadence/root/parent/PSA/date evidence, then root spot-check/Full.
-3. **#156/#275 maintenance:** statue441 is independently reviewed; batch it with the ready whole quiet156915 anchors. Source speed worker implements exactly counted/plain aircraft specialization and direct ProcessOrders routing using existing canonical ownership. Default gameplay/ABI evidence, fresh review and current-base Full; no per-PR speed. Rank net current costs, preserve raw/cache discrepancy, never promise all exposure is savings.
+1. **Ready owner batch428/436/438:** whole and actual8b fixing reviews passed. Root spot-checked strict/nullable lookups, canonical state pointers, direct common/scope/variable/random/PSA dispatch and shared house/frame composition. Combine all three with reviewed maintenance, review substantive combination resolutions, then strict current-base Full. No renewed cost gate or future speed-base wait.
+2. **#156/#275 ready maintenance:** statue441 and whole quiet156915 anchors443 join that concrete owner batch. Complete measured baseline stays together; no new median review or per-PR speed run.
+3. **Speed source repairs442:** exactly counted/plain aircraft specialization and four direct ProcessOrders routes using canonical ownership. Focused checks are active, then fresh fixing review and next ready maintenance combination. Preserve raw/cache discrepancy and rank net costs; exposure is not promised savings.
 4. **Next439 then440:** whole engine cargo-capability/articulated-query runtime first, paired rail/road introduction/admission second. Root source-checks confirm native bodies over existing Rust state. Scope/evidence/checkpoints are in the issues; start independently from integrated main only when capacity frees, with one concrete necessary-cost/bounded-repair disposition each.
 
 Shared operations land once and drafts adopt them at final validation. Core owners
@@ -181,15 +181,15 @@ the queued owners triggers fresh planning; it does not end development.
 
 ## Resume checkpoint
 
-Development active; common437 merged and due macOS passed. No timing hold.
+Development active; common437 merged and due macOS passed. Ready NewGRF batch in preparation; no timing hold.
 
 | Item | Saved head | Resume action | Jobs / CI |
 | --- | --- | --- | --- |
-| #428 airport | `b4125df91c` | Actual8b/direct owner/assertion adoption; finish affected checks/report. | Fresh scoped review, native build active. |
-| #436 generic | `d60fb36ce6` | Actual8b/direct evaluator/scope/default-random adoption; affected checks/report. | Fresh scoped review active. |
-| #438 object | `9f6f71ebff` | Whole fidelity/current-base fixing review and affected defaults. | Fresh review active; original preserved. |
-| #441 statue / quiet anchors | `17b808c0b7` / prepared | Root batches reviewed coverage and whole measured156915 baseline. | Median-only record needs no new review; Full next by readiness. |
-| #275 source repairs | base `8b3dd5ebef` | Aircraft witness specialization/direct orders, focused checks/fresh review. | Fresh implementation active; no speed run. |
+| #428 airport | `f099371635` | Final fixing commits spot-checked; combine reviewed runtime. | Cargo4/build/ABI and eight affected defaults pass. |
+| #436 generic | `cb6ba96e0b` | Direct common adoption and observer fix spot-checked; combine. | Cargo4/build/ABI and seven affected defaults pass. |
+| #438 object | `9a76a9707f` | Whole review/common context adoption spot-checked; combine. | Cargo4/build/ABI and eight selected defaults pass. |
+| #441 statue / #443 quiet anchors | `17b808c0b7` / `433f453614` | Ready fragments included with owners. | Coverage reviewed; median-only record exempt; combination Full pending. |
+| #442 speed repairs | `5700049e8d` | Aircraft witness/direct orders; finish checks, fresh review. | Cargo4 passed; native/semantic pipeline active; no speed run. |
 | #439 / #440 | selected | Engine capabilities/articulated queries, then rail/road introduction/admission. | Queued, not started. |
 
 Protected profiles/quiet inputs stay until #275 consumers finish; pinned reference
