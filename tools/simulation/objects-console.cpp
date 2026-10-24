@@ -7,11 +7,9 @@
 
 /** @file objects-console.cpp Identical inputs to unchanged original and Rust-backed bodies. */
 #include "saveload/saveload.cpp" // Unchanged native reader/dispatcher; relink replaces this object.
-#define GetObjectCallback ObjectProbeCallback
 #define SetGeneratingWorldProgress ObjectProbeSetProgress
 #define IncreaseGeneratingWorldProgress ObjectProbeIncreaseProgress
 #include "object_cmd.cpp"
-#undef GetObjectCallback
 #undef SetGeneratingWorldProgress
 #undef IncreaseGeneratingWorldProgress
 #include "console_internal.h"
@@ -37,17 +35,6 @@ uint16_t GetObjectCallback(CallbackID, uint32_t, uint32_t, const ObjectSpec *, O
 void SetGeneratingWorldProgress(GenWorldProgress, uint);
 void IncreaseGeneratingWorldProgress(GenWorldProgress);
 static int cancellation = -1;
-static bool callbacks = false;
-uint16_t ObjectProbeCallback(CallbackID id, uint32_t a, uint32_t b, const ObjectSpec *s, Object *o, TileIndex t, std::span<int32_t> regs, uint8_t view)
-{
-	if (!callbacks) return GetObjectCallback(id, a, b, s, o, t, regs, view);
-	std::ranges::fill(regs, 0);
-	if (id == CBID_OBJECT_LAND_SLOPE_CHECK) {
-		fmt::print(stderr, "OBJECT callback-before-clear {}\n", IsObjectTypeTile(t, OBJECT_OWNED_LAND));
-		return s->grf_prop.grffile->grf_version < 8 ? 0 : 0x400;
-	}
-	return id == CBID_OBJECT_COLOUR ? 0xA5 : 0;
-}
 void ObjectProbeSetProgress(GenWorldProgress kind, uint total)
 {
 	if (cancellation == 0) throw AbortGenerateWorldSignal{};
@@ -74,12 +61,30 @@ struct ObjectPolicyGroup : SpriteGroup {
 	bool disable = false, refresh = true;
 	ResolverResult Resolve(ResolverObject &ro) const override {
 		auto &scope = static_cast<ObjectResolverObject &>(ro).object_scope;
+#ifdef WITH_RUST
+		TileIndex tile{scope.context.tile}; const ObjectSpec *spec = scope.context.spec;
+#else
+		TileIndex tile = scope.tile; const ObjectSpec *spec = scope.spec;
+#endif
 		equal &= ro.callback == CBID_OBJECT_ANIMATION_TRIGGER && ro.callback_param1 == word && ro.callback_param2 == trigger;
-		fmt::print(stderr, "OBJECT animation-callback {} {} {}\n", calls++, scope.tile.base(), ro.callback_param1);
-		equal &= scope.GetRandomBits() == (IsTileType(scope.tile, MP_OBJECT) ? GetObjectRandomBits(scope.tile) : 0);
+		fmt::print(stderr, "OBJECT animation-callback {} {} {}\n", calls++, tile.base(), ro.callback_param1);
+		equal &= scope.GetRandomBits() == (IsTileType(tile, MP_OBJECT) ? GetObjectRandomBits(tile) : 0);
 		if (refresh) SB(word, 0, 16, expected.Next());
-		if (disable) const_cast<ObjectSpec *>(scope.spec)->animation.triggers = {};
+		if (disable) const_cast<ObjectSpec *>(spec)->animation.triggers = {};
 		return CallbackResult(0xFD);
+	}
+};
+struct ObjectClearOrderGroup : SpriteGroup {
+	ResolverResult Resolve(ResolverObject &ro) const override {
+		if (ro.callback != CBID_OBJECT_LAND_SLOPE_CHECK) return CallbackResult(0xA5);
+		auto &scope = static_cast<ObjectResolverObject &>(ro).object_scope;
+#ifdef WITH_RUST
+		TileIndex tile{scope.context.tile};
+#else
+		TileIndex tile = scope.tile;
+#endif
+		fmt::print(stderr, "OBJECT callback-before-clear {}\n", IsObjectTypeTile(tile, OBJECT_OWNED_LAND));
+		return CallbackResult(ro.grffile->grf_version < 8 ? 0 : 0x400);
 	}
 };
 static void ObjectPolicyProbe(Object *o, ObjectSpec *spec)
@@ -146,6 +151,107 @@ static void ObjectPolicyProbe(Object *o, ObjectSpec *spec)
 	delete group;
 	fmt::print(stderr, "OBJECT query-animation-order {}\n", same);
 }
+static void ObjectNeed(bool value, int line)
+{
+	if (!value) { fmt::print(stderr, "OBJECT invocation-failed {}\n", line); std::abort(); }
+}
+/** Actual deterministic/procedure/randomized Action2, reconstructed after load. */
+static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
+{
+	extern std::vector<ObjectSpec> _object_specs;
+	const auto saved_count = _object_specs.size(); const ObjectType kind = saved_count;
+	ObjectSpec fixture = *ObjectSpec::Get(OBJECT_TRANSMITTER); _object_specs.push_back(fixture);
+	ObjectSpec *spec = &_object_specs.back();
+	std::array<uint8_t, 4> heights{}; uint corner = 0;
+	for (TileIndex t : TileArea(tile, 2, 2)) { heights[corner++] = TileHeight(t); SetTileHeight(t, 4); }
+	GRFFile file; file.grfid = 0x43004300; file.grf_version = 8;
+	spec->grf_prop.grffile = &file; spec->grf_prop.grfid = file.grfid; spec->grf_prop.local_id = 23;
+	spec->flags = {}; spec->views = 4; spec->size = OBJECT_SIZE_1X1; spec->climate = LandscapeTypes::All();
+	spec->introduction_date = TimerGameCalendar::date - 400; spec->end_of_life_date = TimerGameCalendar::date + 400;
+	spec->callback_mask = {ObjectCallbackMask::SlopeCheck, ObjectCallbackMask::Colour, ObjectCallbackMask::Autoslope};
+	std::vector<SpriteGroup *> groups;
+	auto result = [&](uint16_t value) { ObjectNeed(SpriteGroup::CanAllocateItem(), __LINE__); auto *g = new CallbackResultSpriteGroup(value); groups.push_back(g); return g; };
+	auto program = [&](VarSpriteGroupScope scope, const SpriteGroup *end) { ObjectNeed(SpriteGroup::CanAllocateItem(), __LINE__); auto *g = new DeterministicSpriteGroup(); groups.push_back(g); g->size = DSG_SIZE_DWORD; g->var_scope = scope; g->default_result = {false, end}; return g; };
+	auto *slope = result(0x400), *frame = result(1), *autoslope = result(0), *procedure_result = result(0x77);
+	auto *procedure = program(VSG_SCOPE_SELF, procedure_result);
+	procedure->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x48, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}, {.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101}, {.operation = DSGA_OP_RST, .variable = 0x18, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x102}};
+	ObjectNeed(SpriteGroup::CanAllocateItem(), __LINE__); auto *random = new RandomizedSpriteGroup(); groups.push_back(random);
+	random->var_scope = VSG_SCOPE_SELF; random->groups = {result(0xA4), result(0xA5)};
+	auto *live_root = program(VSG_SCOPE_SELF, frame), *purchase_root = program(VSG_SCOPE_SELF, frame);
+	for (auto *root : {live_root, purchase_root}) {
+		root->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x7E, .and_mask = UINT32_MAX, .subroutine = procedure}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x103}, {.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = root == live_root ? 111U : 222U}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x104}, {.operation = DSGA_OP_RST, .variable = 0x0C, .and_mask = UINT32_MAX}};
+		root->ranges = {{{false, slope}, CBID_OBJECT_LAND_SLOPE_CHECK, CBID_OBJECT_LAND_SLOPE_CHECK}, {{false, random}, CBID_OBJECT_COLOUR, CBID_OBJECT_COLOUR}, {{false, autoslope}, CBID_OBJECT_AUTOSLOPE, CBID_OBJECT_AUTOSLOPE}};
+	}
+	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, live_root); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, purchase_root);
+	auto tested = Command<CMD_BUILD_OBJECT>::Do({}, tile, kind, 3); Result("invocation-test", tested); ObjectNeed(tested.Succeeded(), __LINE__);
+	auto built = Command<CMD_BUILD_OBJECT>::Do(DoCommandFlag::Execute, tile, kind, 3); Result("invocation-build", built); ObjectNeed(built.Succeeded(), __LINE__);
+	Object *object = Object::GetByTile(tile);
+	ObjectNeed(object->colour == 0xA4, __LINE__);
+	ObjectNeed(GetObjectCallback(CBID_OBJECT_COLOUR, 0, 0, spec, object, tile) == 0xA4 + (GetObjectRandomBits(tile) & 1), __LINE__);
+	std::array<int32_t, 5> regs{};
+	auto callback = GetObjectCallback(CBID_OBJECT_LAND_SLOPE_CHECK, 0x12345678, 0x87654321, spec, nullptr, tile, regs, 2);
+	ObjectNeed(callback == 0x400 && regs == std::array<int32_t, 5>{2, 0x12345678, static_cast<int32_t>(0x87654321), 0x77, 222}, __LINE__);
+	ObjectResolverObject live(spec, object, tile), purchase(spec, nullptr, tile, 2), invalid(spec, nullptr, INVALID_TILE);
+	ObjectNeed(live.root_spritegroup == live_root && purchase.root_spritegroup == purchase_root && invalid.root_spritegroup == purchase_root, __LINE__);
+	ObjectNeed(live.GetFeature() == GSF_OBJECTS && live.GetDebugID() == 23 && live.callback == CBID_NO_CALLBACK && live.callback_param1 == 0 && live.callback_param2 == 0, __LINE__);
+	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, nullptr);
+	ObjectResolverObject fallback(spec, nullptr, tile); ObjectNeed(fallback.root_spritegroup == live_root, __LINE__);
+	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, nullptr);
+	ObjectResolverObject missing(spec, object, tile); regs.fill(0x1234); ObjectNeed(missing.ResolveCallback(regs) == CALLBACK_FAILED && regs[0] == 0x1234, __LINE__);
+	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, live_root); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, purchase_root);
+	fmt::print(stderr, "OBJECT invocation-roots {} {} {}\n", reloaded, callback, object->colour);
+	/* The procedure reenters self queries; the parent program enters integrated
+	 * town persistent storage and preserves readonly construction semantics. */
+	auto *parent = program(VSG_SCOPE_PARENT, slope);
+	parent->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}, {.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x430}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 3}, {.operation = DSGA_OP_RST, .variable = 0x7C, .parameter = 3, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101}};
+	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, parent); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, parent);
+	ObjectResolverObject writable(spec, object, tile), readonly(spec, nullptr, tile);
+	ObjectNeed(writable.ResolveCallback(regs) == 0x400 && regs[1] == 0x430, __LINE__);
+	auto *town = object->town; auto *cached = writable.GetScope(VSG_SCOPE_PARENT);
+	object->town = nullptr; ObjectNeed(writable.GetScope(VSG_SCOPE_PARENT) == cached && writable.ResolveCallback(regs) == 0x400, __LINE__);
+	ObjectResolverObject retry(spec, object, tile);
+	ObjectNeed(retry.GetScope(VSG_SCOPE_PARENT, 239) == retry.ResolverObject::GetScope(VSG_SCOPE_PARENT, 239) && retry.ResolveCallback({}) == CALLBACK_FAILED, __LINE__);
+	object->town = town; ObjectNeed(retry.ResolveCallback(regs) == 0x400 && regs[1] == 0x430, __LINE__);
+	parent->adjusts[2].and_mask = 0x431; ObjectNeed(readonly.ResolveCallback(regs) == 0x400 && regs[1] == 0x430, __LINE__);
+	ObjectNeed(writable.GetScope(VSG_SCOPE_RELATIVE, 127) == writable.ResolverObject::GetScope(VSG_SCOPE_RELATIVE, 127), __LINE__);
+	fmt::print(stderr, "OBJECT invocation-parent {} {}\n", town->index.base(), regs[1]);
+	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, live_root); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, purchase_root);
+	Backup<bool> autosloping(_settings_game.construction.autoslope, true);
+	Result("invocation-autoslope", TerraformTile_Object(tile, {}, GetTileZ(tile), GetTileSlope(tile)));
+	spec->flags.Set(ObjectFlag::Animation); spec->animation.frames = 3; spec->animation.status = AnimationStatus::Looping; spec->animation.speed = 0;
+	spec->animation.triggers = {ObjectAnimationTrigger::Built};
+	ObjectNeed(TriggerObjectAnimation(object, ObjectAnimationTrigger::Built, spec) && GetAnimationFrame(tile) == 1, __LINE__);
+	spec->callback_mask.Set({ObjectCallbackMask::AnimationSpeed, ObjectCallbackMask::AnimationNextFrame});
+	AnimateNewObjectTile(tile); ObjectNeed(GetAnimationFrame(tile) == 1, __LINE__);
+	fmt::print(stderr, "OBJECT invocation-animation {}\n", GetAnimationFrame(tile));
+	/* Eligibility is observed through actual command test and execute admission.
+	 * The temporary editor/world-generation modes use the original owner rules. */
+	spec->flags = {}; spec->callback_mask = {}; spec->animation.triggers = {};
+	Backup<bool> bulldozer(_cheats.magic_bulldozer.value, true);
+	ObjectNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile).Succeeded(), __LINE__);
+	for (auto mode : {GM_NORMAL, GM_EDITOR}) for (bool generating : {false, true}) for (uint8_t boundary = 0; boundary < 8; boundary++) {
+		Backup<GameMode> game_mode(_game_mode, mode); Backup<bool> world(_generating_world, generating);
+		Backup<CompanyID> company(_current_company, mode == GM_EDITOR || generating ? OWNER_NONE : _current_company);
+		spec->flags = {}; spec->views = boundary == 0 ? 0 : 4;
+		spec->climate = boundary == 1 ? LandscapeTypes{} : LandscapeTypes::All();
+		spec->introduction_date = TimerGameCalendar::date - (boundary == 2 ? 0 : 400);
+		spec->end_of_life_date = TimerGameCalendar::date + (boundary == 3 ? 0 : boundary == 4 ? -36 : boundary == 5 ? -35 : 400);
+		if (boundary >= 6) spec->flags.Set(boundary == 6 ? ObjectFlag::OnlyInScenedit : ObjectFlag::OnlyInGame);
+		auto test = Command<CMD_BUILD_OBJECT>::Do({}, tile, kind, 0);
+		auto execute = Command<CMD_BUILD_OBJECT>::Do(DoCommandFlag::Execute, tile, kind, 0);
+		ObjectNeed(test.Succeeded() == execute.Succeeded(), __LINE__);
+		fmt::print(stderr, "OBJECT invocation-eligibility {} {} {} {} {} {} {} {}\n", to_underlying(mode), generating, boundary, spec->IsEnabled(), spec->IsEverAvailable(), spec->WasEverAvailable(), spec->IsAvailable(), execute.Succeeded());
+		if (execute.Succeeded()) ObjectNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile).Succeeded(), __LINE__);
+	}
+	/* Leave a real object in the save with transient groups/specs detached. The
+	 * inspect path repeats this installation after native load, never serializes it. */
+	_object_specs.resize(saved_count);
+	ObjectNeed(Command<CMD_BUILD_OBJECT>::Do(DoCommandFlag::Execute, tile, OBJECT_TRANSMITTER, 0).Succeeded(), __LINE__);
+	corner = 0; for (TileIndex t : TileArea(tile, 2, 2)) SetTileHeight(t, heights[corner++]);
+	for (auto *group : groups) delete group;
+	fmt::print(stderr, "OBJECT invocation-complete {}\n", reloaded);
+}
+
 #include "animation-console.hpp"
 static bool ObjectsScenario(std::span<std::string_view> args)
 {
@@ -155,6 +261,11 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 	Backup<CompanyID> company(_current_company, c->index);
 	if (args[1] == "inspect") {
 		AnimationReloadObservation();
+		TileIndex invocation_tile = INVALID_TILE;
+		for (const Object *o : Object::Iterate()) if (o->type == OBJECT_TRANSMITTER) { invocation_tile = o->location.tile; break; }
+		ObjectNeed(invocation_tile != INVALID_TILE, __LINE__);
+		ObjectNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, invocation_tile).Succeeded(), __LINE__);
+		ObjectInvocationProbe(invocation_tile, true);
 		std::array<uint16_t, NUM_OBJECTS> counts{};
 		for (const Object *o : Object::Iterate()) counts[o->type]++;
 		bool equal = true;
@@ -196,7 +307,8 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		ObjectSpec *spec = const_cast<ObjectSpec *>(ObjectSpec::Get(OBJECT_TRANSMITTER));
 		Backup<ObjectSpec> backup(*spec);
 		spec->flags = {}; spec->callback_mask = {ObjectCallbackMask::SlopeCheck, ObjectCallbackMask::Colour}; spec->grf_prop.grffile = &file;
-		callbacks = true;
+		ObjectNeed(SpriteGroup::CanAllocateItem(), __LINE__); auto *clear_group = new ObjectClearOrderGroup();
+		spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, clear_group); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, nullptr);
 		for (uint8_t version : {7, 8}) {
 			file.grf_version = version; Result("owned", build(OBJECT_OWNED_LAND, tile));
 			ResetScratch(); SetBridgeMiddle(tile, AXIS_X);
@@ -209,7 +321,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		fmt::print(stderr, "OBJECT callback-colour {}\n", Object::GetByTile(tile)->colour == 0xA5);
 		ObjectPolicyProbe(Object::GetByTile(tile), spec);
 		AnimationBindingsProbe();
-		callbacks = false; backup.Restore();
+		backup.Restore(); delete clear_group;
 		Backup<bool> generating(_generating_world, true);
 		for (cancellation = 0; cancellation < 2; cancellation++) {
 			bool caught = false;
@@ -245,6 +357,7 @@ static bool ObjectsScenario(std::span<std::string_view> args)
 		for (TileIndex t : {tile + 7, tile + 8, sea}) { Object::CanAllocateItem(); BuildObject(OBJECT_OWNED_LAND, t, c->index); ChangeTileOwner(t, c->index, INVALID_OWNER); fmt::print(stderr, " {} {}", to_underlying(GetWaterClass(t)), GetTileOwner(t).base()); }
 		fmt::print(stderr, "\n");
 	}
+	ObjectInvocationProbe(tile + TileDiffXY(8, 8), false);
 	uint index = 0; for (TileIndex t : TileArea(tile - TileDiffXY(3, 3), 14, 14)) SetTileHeight(t, heights[index++]);
 	if (args.size() == 3) {
 		for (auto t : AnimationQueue()) SetAnimatedTileState(t, AnimatedTileState::None);
