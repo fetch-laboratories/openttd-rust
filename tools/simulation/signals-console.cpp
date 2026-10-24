@@ -494,9 +494,9 @@ static bool MovementStructures(std::span<std::string_view> args)
 		for (uint x : {2u, 17u}) SignalCost("movement-station", Command<CMD_BUILD_RAIL_STATION>::Do(exec, t(x), RAILTYPE_RAIL, AXIS_X, 1, 3, STAT_CLASS_DFLT, 0, StationID::Invalid(), false));
 		SignalCost("movement-depot", Command<CMD_BUILD_TRAIN_DEPOT>::Do(exec, t(21), RAILTYPE_RAIL, DIAGDIR_NE));
 	} else {
-		SignalCost("movement-hill", Command<CMD_TERRAFORM_LAND>::Do(exec, t(10), SLOPE_ELEVATED, true));
+		SignalCost("movement-hill", std::get<0>(Command<CMD_TERRAFORM_LAND>::Do(exec, t(10), SLOPE_ELEVATED, true)));
 		SignalCost("movement-tunnel", Command<CMD_BUILD_TUNNEL>::Do(exec, t(9), TRANSPORT_ROAD, ROADTYPE_ROAD));
-		for (uint x = 2; x <= 20; ++x) {
+		for (uint x = 1; x <= 20; ++x) {
 			if (x >= 9 && x <= 11) continue;
 			SignalCost("movement-road", Command<CMD_BUILD_ROAD>::Do(exec, t(x), ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()));
 		}
@@ -507,7 +507,7 @@ static bool MovementStructures(std::span<std::string_view> args)
 	EngineID engine = EngineID::Invalid();
 	for (const Engine *e : Engine::Iterate()) {
 		if (!IsEngineBuildable(e->index, type, _current_company)) continue;
-		if (rail ? RailVehInfo(e->index)->railveh_type == RAILVEH_WAGON : e->GetDefaultCargoType() != CT_PASSENGERS) continue;
+		if (rail ? RailVehInfo(e->index)->railveh_type == RAILVEH_WAGON : e->GetDefaultCargoType() != GetCargoTypeByLabel(CT_PASSENGERS)) continue;
 		if (std::get<0>(Command<CMD_BUILD_VEHICLE>::Do({}, t(21), e->index, false, INVALID_CARGO, INVALID_CLIENT_ID)).Failed()) continue;
 		engine = e->index; break;
 	}
@@ -518,6 +518,7 @@ static bool MovementStructures(std::span<std::string_view> args)
 	for (uint x : {2u, rail ? 17u : 19u}) {
 		Order order;
 		order.MakeGoToStation(GetStationIndex(t(x)));
+		order.SetStopLocation(OrderStopLocation::FarEnd);
 		SignalCost("movement-order", Command<CMD_INSERT_ORDER>::Do(exec, id, Vehicle::Get(id)->GetNumOrders(), order));
 	}
 	SignalCost("movement-start", Command<CMD_START_STOP_VEHICLE>::Do(exec, id, false));
