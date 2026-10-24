@@ -8,7 +8,8 @@
 #include "town_ffi.h"
 #include "industry_ffi.h"
 struct HouseSpec; struct Town; struct IndustryTileSpec; struct Industry;
-struct StationSpec; struct BaseStation; struct AirportTileSpec; struct Station;
+struct StationSpec; struct BaseStation;
+struct OpenTTDRoadStopResolverServices; struct AirportTileSpec; struct Station;
 struct ObjectSpec; struct Object; struct RoadStopSpec;
 struct OpenTTDAnimationInfo { uint8_t speed, frames; bool looping, speed_callback, next_callback, random, enabled; };
 template <typename Spec, typename Obj> struct OpenTTDAnimationEntry { const Spec *spec; Obj *object; };
@@ -32,7 +33,7 @@ struct OpenTTDAnimationServices {
 	Station *(*as_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(as_station);
 	uint32_t (*location)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
 	bool (*is_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
-	void (*road_randomisation)(BaseStation *, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_randomisation);
+	const OpenTTDRoadStopResolverServices *roadstop_resolver;
 	const OpenTTDTownLeaves *town;
 	const OpenTTDIndustryServices *industries;
 	const OpenTTDIndustryConstructionServices *construction;
@@ -53,7 +54,6 @@ struct OpenTTDAnimationServices {
 	bool (*station_triggers)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_triggers);
 	bool (*road_triggers)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_triggers);
 	const StationSpec *(*rail_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec);
-	const RoadStopSpec *(*road_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_spec);
 	const AirportTileSpec *(*airport_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_spec);
 	Industry *(*industry_object)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_object);
 	uint16_t (*rail_spec_triggers)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec_triggers);
@@ -77,6 +77,8 @@ const OpenTTDAirportAnimation &GetAirportAnimationBinding() noexcept;
 const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept;
 const OpenTTDRoadStopAnimation &GetRoadStopAnimationBinding() noexcept;
 extern "C" {
+OpenTTDRoadStopAnimationEntry openttd_rust_roadstop_animation_entry(uint32_t) noexcept;
+uint16_t openttd_rust_roadstop_animation_callback(uint16_t, uint32_t, uint32_t, const RoadStopSpec *, BaseStation *, uint32_t, int32_t) noexcept;
 const OpenTTDAnimationServices *openttd_rust_animation_exchange(const OpenTTDAnimationServices *);
 void openttd_rust_animation_add(uint32_t, bool);
 void openttd_rust_animation_delete(uint32_t, bool);

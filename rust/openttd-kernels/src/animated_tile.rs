@@ -55,7 +55,7 @@ pub struct Services {
     pub as_station: extern "C" fn(*mut BaseStation) -> *mut Station,
     pub location: extern "C" fn(*const BaseStation) -> u32,
     pub is_station: extern "C" fn(*mut BaseStation) -> bool,
-    pub road_randomisation: extern "C" fn(*mut BaseStation, u32, u8, u8),
+    pub roadstop_resolver: *const crate::newgrf_roadstop::Services,
     pub town: *const Leaves,
     pub industries: *const Industries,
     pub construction: *const ConstructionServices,
@@ -76,7 +76,6 @@ pub struct Services {
     pub station_triggers: extern "C" fn(*mut BaseStation, u8) -> bool,
     pub road_triggers: extern "C" fn(*mut BaseStation, u8) -> bool,
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
-    pub road_spec: extern "C" fn(u32) -> *const RoadSpec,
     pub airport_spec: extern "C" fn(u32) -> *const AirportSpec,
     pub industry_object: extern "C" fn(u32) -> *mut IndustryShell,
     pub rail_spec_triggers: extern "C" fn(*const RailSpec) -> u16,
@@ -434,7 +433,8 @@ pub extern "C" fn openttd_rust_trigger_roadstop(
     let random = a.shared().random() as u16;
     let b = unsafe { &*a.roadstop };
     let process = |t| {
-        let spec = (a.road_spec)(t);
+        let spec =
+            unsafe { crate::newgrf_roadstop::openttd_rust_roadstop_spec(t, a.roadstop_resolver) };
         if !spec.is_null() && (a.road_spec_triggers)(spec) & (1 << trigger) != 0 {
             let extra = if cargo < NUM_CARGO {
                 (u16::from((a.road_cargo)(spec, cargo)) << 8) as u8
@@ -533,7 +533,7 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAnimationServices" ["probe"] => Services {
         shared,
-        station_base, as_station, location, is_station, road_randomisation,
+        station_base, as_station, location, is_station, roadstop_resolver,
         town,
         industries,
         construction,
@@ -553,7 +553,7 @@ crate::abi::layouts! {
         rail_belongs,
         station_triggers,
         road_triggers,
-        rail_spec, road_spec, airport_spec, industry_object,
+        rail_spec, airport_spec, industry_object,
         rail_spec_triggers,
         road_spec_triggers,
         airport_spec_triggers,
@@ -596,7 +596,15 @@ pub(crate) fn rail_event(st: *mut BaseStation, tile: u32, trigger: u8, random_tr
     openttd_rust_trigger_station(st, tile, trigger, INVALID_CARGO);
 }
 pub(crate) fn road_event(st: *mut BaseStation, tile: u32, trigger: u8, random_trigger: u8) {
-    (services().road_randomisation)(st, tile, random_trigger, INVALID_CARGO);
+    unsafe {
+        crate::newgrf_roadstop::openttd_rust_roadstop_randomise(
+            st,
+            tile,
+            random_trigger,
+            INVALID_CARGO,
+            services().roadstop_resolver,
+        );
+    }
     openttd_rust_trigger_roadstop(st, tile, trigger, INVALID_CARGO);
 }
 pub(crate) fn cargo_event(
@@ -611,7 +619,15 @@ pub(crate) fn cargo_event(
     crate::newgrf_station::openttd_rust_station_randomisation(st, tile, random_trigger, cargo);
     openttd_rust_trigger_station(st, tile, trigger, cargo);
     openttd_rust_trigger_airport((a.as_station)(st), airport_trigger, cargo);
-    (a.road_randomisation)(st, tile, random_trigger, cargo);
+    unsafe {
+        crate::newgrf_roadstop::openttd_rust_roadstop_randomise(
+            st,
+            tile,
+            random_trigger,
+            cargo,
+            a.roadstop_resolver,
+        );
+    }
     openttd_rust_trigger_roadstop(st, tile, trigger, cargo);
 }
 pub(crate) fn acceptance(st: *mut BaseStation) {
@@ -625,4 +641,9 @@ pub(crate) fn acceptance(st: *mut BaseStation) {
 }
 pub(crate) fn airport_built(st: *mut BaseStation, tile: u32) {
     openttd_rust_trigger_airport_tile((services().as_station)(st), tile, AAT_BUILT);
+}
+
+/// Borrow the immutable road-stop leaf table installed before animation/gameplay.
+pub(crate) fn roadstop_resolver_services() -> *const crate::newgrf_roadstop::Services {
+    services().roadstop_resolver
 }
