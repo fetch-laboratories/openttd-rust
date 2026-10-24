@@ -1,10 +1,11 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Vehicle invocation state and the single canonical per-shell NewGRF cache.
+//! Vehicle invocation state and the single canonical per-shell `NewGRF` cache.
 //! Shells and generic Action2 evaluation remain native. No cache or invocation
 //! borrow spans evaluator reentry. All calls are synchronous; panic aborts.
 #![allow(
     unsafe_code,
     missing_docs,
+    clippy::struct_field_names,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
@@ -122,7 +123,7 @@ fn engine(s: &Services, v: V) -> u16 {
     (s.vehicle.engine_id)(handle(v))
 }
 fn ground(s: &Services, v: V) -> bool {
-    (s.vehicle.vehicle_type)(handle(v)) <= 1
+    crate::vehicle_base::is_ground_vehicle((s.vehicle.vehicle_type)(handle(v)))
 }
 // SAFETY throughout: the game-state mutex serializes shell/cache access. The
 // caller retains live shells and immutable services. Raw cache reads/writes are
@@ -134,12 +135,12 @@ unsafe fn livery(s: &Services, id: u16, v: V) -> *const c_void {
             if !(s.valid_company)(company) {
                 return null();
             }
-            (s.livery)(id, company, u16::MAX, v)
+            (s.livery)(id, company, crate::vehicle::INVALID_ENGINE, v)
         } else {
             let first_engine = if ground(s, v) {
                 (s.first_engine)(v)
             } else {
-                u16::MAX
+                crate::vehicle::INVALID_ENGINE
             };
             (s.livery)(engine(s, v), (s.vehicle.owner)(handle(v)), first_engine, v)
         }
@@ -324,7 +325,7 @@ unsafe fn wagon_override(s: &Services, id: u16, cargo: u8, overriding: u16) -> G
         let entries = (s.overrides)(id);
         for i in 0..entries.count {
             let entry = (s.override_at)(entries.engine, i);
-            if entry.cargo != cargo && entry.cargo != NUM_CARGO {
+            if entry.cargo != cargo && entry.cargo != crate::newgrf_commons::SG_DEFAULT {
                 continue;
             }
             for j in 0..entry.count {
@@ -363,7 +364,7 @@ unsafe fn init(s: &Services, id: u16, v: V, wagon: u8, rotor: bool) -> State {
             root: null(),
         };
         if wagon == 3 {
-            state.root = wagon_override(s, id, NUM_CARGO, id);
+            state.root = wagon_override(s, id, crate::newgrf_commons::SG_DEFAULT, id);
         } else {
             if wagon != 0 && !v.is_null() && ground(s, v) {
                 (s.check)(engine(s, v) == id);
@@ -375,14 +376,14 @@ unsafe fn init(s: &Services, id: u16, v: V, wagon: u8, rotor: bool) -> State {
             }
             if state.root.is_null() {
                 let cargo = if v.is_null() {
-                    NUM_CARGO + 1
+                    crate::newgrf_commons::SG_PURCHASE
                 } else {
                     (s.cargo)(v).cargo
                 };
-                state.root = (s.spritegroup)(id, cargo);
-                if state.root.is_null() {
-                    state.root = (s.spritegroup)(id, NUM_CARGO);
-                }
+                state.root = crate::newgrf_commons::first_sprite_group_of(
+                    [cargo, crate::newgrf_commons::SG_DEFAULT],
+                    |cargo| (s.spritegroup)(id, cargo),
+                );
             }
         }
         state
@@ -580,6 +581,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_build_probability(
 }
 unsafe fn randomise(s: &Services, v: V, trigger: u8, base: u16, first: bool) {
     unsafe {
+        (s.check)(!v.is_null());
         let mut state = init(s, engine(s, v), v, 2, false);
         let waiting = (s.random_fields)(v).waiting | (1 << trigger);
         (s.write_waiting)(v, waiting);
@@ -626,6 +628,43 @@ pub unsafe extern "C" fn openttd_rust_vehicle_randomise(s: &Services, v: V, trig
         openttd_rust_vehicle_grf_invalidate(s, v, true);
         randomise(s, v, trigger, 0, true);
         openttd_rust_vehicle_grf_invalidate(s, v, true);
+    }
+}
+// Native getter resolves the immutable table once; the property/callback table
+// entries point directly to these Rust functions, avoiding an owner bounce.
+unsafe extern "C" {
+    fn openttd_vehicle_resolver_services() -> *const Services;
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_vehicle_shell_property(
+    v: V,
+    property: u8,
+    fallback: i32,
+) -> i32 {
+    unsafe {
+        let s = &*openttd_vehicle_resolver_services();
+        openttd_rust_vehicle_property(s, engine(s, v), property, fallback, v, false)
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_vehicle_shell_callback(
+    v: V,
+    callback: crate::newgrf_callbacks::CallbackID,
+) -> u16 {
+    unsafe {
+        let s = &*openttd_vehicle_resolver_services();
+        openttd_rust_vehicle_callback(
+            s,
+            callback.0,
+            0,
+            0,
+            engine(s, v),
+            v,
+            null_mut(),
+            false,
+            null_mut(),
+            0,
+        )
     }
 }
 crate::abi::layouts! {

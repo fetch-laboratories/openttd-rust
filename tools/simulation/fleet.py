@@ -220,7 +220,11 @@ def check(scenario, run, mode, role, result):
     if "fleet" not in scenario or run["exit"] or not run["snapshots"]:
         return
     required = {
-        "resolver": ["FLEET resolver-checkpoint complete", "FLEET resolver-parent true", "FLEET resolver-relative true"],
+        "resolver": [
+            "FLEET resolver-checkpoint complete",
+            "FLEET resolver-parent true",
+            "FLEET resolver-relative true",
+        ],
         **{
             "transaction-mass-" + kind: [
                 "FLEET mass-test true true",
@@ -297,6 +301,17 @@ def check(scenario, run, mode, role, result):
     for line in required:
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
+    if scenario["fleet"] == "resolver":
+        for label in ("cache", "translation", "var61", "trigger"):
+            lines = [
+                line
+                for line in run["log"]
+                if line.startswith(f"FLEET resolver-{label} ")
+            ]
+            if len(lines) != 1:
+                result["problems"].append(f"{mode}/{role}: missing resolver {label}")
+            elif label in ("translation", "var61") and not lines[0].endswith(" true"):
+                result["problems"].append(f"{mode}/{role}: resolver {label} invariant")
     if scenario["fleet"] in ("transaction-build-road", "transaction-rail"):
         kind = "road" if scenario["fleet"] == "transaction-build-road" else "rail"
         probes = [line for line in run["log"] if line.startswith("FLEET ground-probe ")]

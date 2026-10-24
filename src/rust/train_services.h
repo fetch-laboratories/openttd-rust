@@ -734,7 +734,7 @@ static uint8_t TrainReadFront(OpenTTDTrainHandle id) noexcept
 static uint8_t TrainReadArticulated(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return v->IsArticulatedPart();
+	return RustVehicleArticulated(v);
 }
 static uint8_t TrainReadMultiheaded(OpenTTDTrainHandle id) noexcept
 {
@@ -834,7 +834,7 @@ static OpenTTDTrainSpeedZRead TrainReadSpeedZ(OpenTTDTrainHandle id) noexcept
 static OpenTTDTrainMoveVehicleRead TrainReadMoveVehicle(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
-	return {RustVehicleTile(v), RustVehicleX(v), RustVehicleY(v), RustVehicleDirection(v), v->IsFrontEngine(), v->IsArticulatedPart()};
+	return {RustVehicleTile(v), RustVehicleX(v), RustVehicleY(v), RustVehicleDirection(v), v->IsFrontEngine(), RustVehicleArticulated(v)};
 }
 static OpenTTDTrainMoveVehicle20Read TrainReadMoveVehicle20(OpenTTDTrainHandle id) noexcept
 {

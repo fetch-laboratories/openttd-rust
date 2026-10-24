@@ -148,15 +148,6 @@ static void OPENTTD_VEHICLE_CALL VehicleSvcWriteXY(OpenTTDVehicle *v, int32_t x,
 
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcBaseViewport(OpenTTDVehicle *v) noexcept { VehicleOf(v)->Vehicle::UpdateViewport(true); }
-static int32_t OPENTTD_VEHICLE_CALL VehicleSvcProperty(OpenTTDVehicle *v, uint8_t property, int32_t fallback) noexcept
-{
-	return GetVehicleProperty(VehicleOf(v), static_cast<PropertyID>(property), fallback);
-}
-static uint16_t OPENTTD_VEHICLE_CALL VehicleSvcCallback(OpenTTDVehicle *v, CallbackID callback) noexcept
-{
-	Vehicle *u = VehicleOf(v);
-	return RustVehicleCallback(callback, 0, 0, u->engine_type, u);
-}
 static void OPENTTD_VEHICLE_CALL VehicleSvcUnknownCallbackResult(const OpenTTDEngine *e, CallbackID callback, uint16_t result) noexcept
 {
 	RustUnknownCallbackResult(EngineOf(e)->GetGRFID(), callback, result);
@@ -328,8 +319,8 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.new_position = VehicleSvcNewPosition,
 	.write_xy = VehicleSvcWriteXY,
 	.base_viewport = VehicleSvcBaseViewport,
-	.property = VehicleSvcProperty,
-	.callback = VehicleSvcCallback,
+	.property = openttd_rust_vehicle_shell_property,
+	.callback = openttd_rust_vehicle_shell_callback,
 	.unknown_callback_result = VehicleSvcUnknownCallbackResult,
 	.length_changed = VehicleSvcLengthChanged,
 	.play_vehicle_sound = VehicleSvcPlayVehicleSound,

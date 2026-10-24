@@ -14,7 +14,7 @@ static OpenTTDRefitEngine VehicleRefitEngine(const OpenTTDEngine *e) noexcept { 
 static OpenTTDRefitCargoKind VehicleRefitCargoKind(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
-	return {.cargo = RustVehicleCargoType(handle), .subtype = v->cargo_subtype};
+	return {.cargo = RustVehicleCargoType(handle), .subtype = RustVehicleCargoSubtype(v)};
 }
 static OpenTTDRefitCommit VehicleRefitCommit(OpenTTDVehicle *v) noexcept { return {.cargo = RustVehicleCargoType(v), .capacity = RustVehicleRefitCap(v)}; }
 static void VehicleRefitWrite(OpenTTDVehicle *handle, uint8_t cargo, uint16_t cap, uint8_t subtype) noexcept

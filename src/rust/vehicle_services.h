@@ -204,6 +204,8 @@ template <typename Result, auto Read>
 static Result RustIndexedVehicleRead(uint32_t id) noexcept { return Read(Vehicle::Get(VehicleID(id))); }
 
 /** Base vehicle cargo and articulated fields shared by loading and link refresh. */
+inline bool RustVehicleArticulated(const Vehicle *v) noexcept { return v->IsArticulatedPart(); }
+inline uint8_t RustVehicleCargoSubtype(const Vehicle *v) noexcept { return v->cargo_subtype; }
 inline uint8_t RustVehicleCargoType(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->cargo_type; }
 inline uint8_t RustVehicleOwnerOf(OpenTTDVehicle *handle) noexcept { return RustVehicleOwner(VehicleOf(handle)); }
 inline bool RustVehicleHasArticulated(OpenTTDVehicle *handle) noexcept { return RustGroundHasArticulated(VehicleOf(handle)); }

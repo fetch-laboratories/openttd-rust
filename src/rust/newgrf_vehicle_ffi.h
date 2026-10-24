@@ -64,6 +64,8 @@ struct OpenTTDVehicleResolverServices {
 };
 const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept;
 extern "C" {
+int32_t openttd_rust_vehicle_shell_property(OpenTTDVehicle *, uint8_t, int32_t) noexcept;
+uint16_t openttd_rust_vehicle_shell_callback(OpenTTDVehicle *, CallbackID) noexcept;
 NewGRFCache *openttd_rust_vehicle_grf_cache_new();
 void openttd_rust_vehicle_grf_cache_delete(NewGRFCache *);
 void openttd_rust_vehicle_grf_invalidate(const OpenTTDVehicleResolverServices *, const Vehicle *, bool);
