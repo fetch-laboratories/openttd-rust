@@ -200,8 +200,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                     let mut u = v;
                     while !u.is_null() {
                         if (s.vehicle.vehicle_type)(handle(v)) == 0 {
-                            user_data |=
-                                (s.vehicle.train_handle)(handle(u)).get_user_def_data() as u8;
+                            user_data |= (s.vehicle.train_handle)(u).get_user_def_data() as u8;
                         }
                         let c = (s.cargo)(u);
                         if (s.can_carry)(c.engine) {

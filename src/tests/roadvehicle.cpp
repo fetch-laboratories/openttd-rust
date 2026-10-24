@@ -269,11 +269,19 @@ TEST_CASE("NewGRF cache - canonical native aliases, snapshots and indexed reuse"
 	auto *v = new RoadVehicle();
 	auto id = v->index;
 	check(v);
-	delete v;
+	_vehicle_pool.CleanPool();
 	v = new (id) RoadVehicle();
 	check(v);
 	check(new (VehicleID(37)) Train());
 	_vehicle_pool.CleanPool();
+	/* The base Effect shell has no engine/company pre-destructor requirements. */
+	auto *effect = new Vehicle(VEH_EFFECT);
+	id = effect->index;
+	check(effect);
+	delete effect;
+	effect = new (id) Vehicle(VEH_EFFECT);
+	check(effect);
+	delete effect;
 }
 TEST_CASE("Road tick prologue - actual scalar places and nonfront entry")
 {
