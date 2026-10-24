@@ -1188,6 +1188,7 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.processing = [](uint32_t tile) noexcept -> uint8_t { return GetHouseProcessingTime(TileIndex{tile}); },
 		.clean_type = [](uint32_t tile) noexcept -> uint16_t { return GetCleanHouseType(TileIndex{tile}); },
 		.town = RustHouseTown,
+		.town_shell = OpenTTDTownShellByID,
 		.loop_spec = RustHouseLoopSpec,
 		.animation_spec = RustHouseAnimationSpec,
 		.new_spec = RustHouseNewSpec,

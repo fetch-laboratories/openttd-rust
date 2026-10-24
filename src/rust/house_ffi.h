@@ -53,6 +53,7 @@ struct OpenTTDHouseServices {
 	uint8_t (*processing)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(processing);
 	uint16_t (*clean_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clean_type);
 	OpenTTDTownRef (*town)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town);
+	Town *(*town_shell)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_shell);
 	OpenTTDHouseLoopSpec (*loop_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(loop_spec);
 	OpenTTDHouseAnimationSpec (*animation_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(animation_spec);
 	OpenTTDHouseNewSpec (*new_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(new_spec);

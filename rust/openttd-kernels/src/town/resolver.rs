@@ -612,8 +612,14 @@ struct Registry(UnsafeCell<*const ResolverServices>);
 unsafe impl Sync for Registry {}
 static REGISTRY: Registry = Registry(UnsafeCell::new(std::ptr::null()));
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_house_resolver_install(s: *const ResolverServices) {
-    unsafe { *REGISTRY.0.get() = s };
+pub unsafe extern "C" fn openttd_rust_house_resolver_exchange(
+    s: *const ResolverServices,
+) -> *const ResolverServices {
+    unsafe {
+        let previous = *REGISTRY.0.get();
+        *REGISTRY.0.get() = s;
+        previous
+    }
 }
 fn services<'a>() -> &'a ResolverServices {
     // SAFETY: ResetHouses installs before use. Table is immutable and process-live.

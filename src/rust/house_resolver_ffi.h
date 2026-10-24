@@ -79,7 +79,7 @@ struct OpenTTDHouseResolverServices {
 };
 const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept;
 extern "C" {
-void openttd_rust_house_resolver_install(const OpenTTDHouseResolverServices *);
+const OpenTTDHouseResolverServices *openttd_rust_house_resolver_exchange(const OpenTTDHouseResolverServices *);
 uint16_t openttd_rust_house_animation_callback(uint16_t, uint32_t, uint32_t, const HouseSpec *, Town *, uint32_t, uint64_t) noexcept;
 uint16_t openttd_rust_house_callback(const OpenTTDHouseCallbackArgs *, int32_t *, size_t);
 const SpriteGroup *openttd_rust_house_root(const OpenTTDHouseScope *);
