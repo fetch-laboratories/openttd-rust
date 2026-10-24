@@ -400,7 +400,7 @@ struct RoadStopAnimationFrameAnimationHelper {
 const OpenTTDRoadStopAnimation &GetRoadStopAnimationBinding() noexcept
 {
 	static const auto binding = MakeRustAnimationBindingDirect<RoadStopSpec, BaseStation, int>(
-		openttd_rust_roadstop_animation_entry,
+		[](uint32_t tile) noexcept { OpenTTDRoadStopAnimationEntry entry; openttd_rust_roadstop_animation_entry(tile, &entry); return entry; },
 		[](const RoadStopSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(RoadStopCallbackMask::AnimationSpeed), s->callback_mask.Test(RoadStopCallbackMask::AnimationNextFrame), s->flags.Test(RoadStopSpecFlag::Cb141RandomBits), true}; },
 		openttd_rust_roadstop_animation_callback);
 	return binding;

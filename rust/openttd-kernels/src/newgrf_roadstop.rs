@@ -514,8 +514,16 @@ pub unsafe extern "C" fn openttd_rust_roadstop_spec(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_roadstop_animation_entry(
     tile: u32,
-) -> crate::newgrf_animation_base::Entry<RoadSpec, BaseStation> {
-    unsafe { spec_entry(tile, &*crate::animated_tile::roadstop_resolver_services()) }
+    out: *mut crate::newgrf_animation_base::Entry<RoadSpec, BaseStation>,
+) {
+    // SAFETY: the synchronous native adapter supplies aligned stack output that
+    // remains valid until this call returns; spec_entry initializes both handles.
+    unsafe {
+        out.write(spec_entry(
+            tile,
+            &*crate::animated_tile::roadstop_resolver_services(),
+        ));
+    }
 }
 /// Direct callback route; the animation owner retains ordering and frame policy.
 #[unsafe(no_mangle)]

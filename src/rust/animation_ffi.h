@@ -77,7 +77,7 @@ const OpenTTDAirportAnimation &GetAirportAnimationBinding() noexcept;
 const OpenTTDObjectAnimation &GetObjectAnimationBinding() noexcept;
 const OpenTTDRoadStopAnimation &GetRoadStopAnimationBinding() noexcept;
 extern "C" {
-OpenTTDRoadStopAnimationEntry openttd_rust_roadstop_animation_entry(uint32_t) noexcept;
+void openttd_rust_roadstop_animation_entry(uint32_t, OpenTTDRoadStopAnimationEntry *) noexcept;
 uint16_t openttd_rust_roadstop_animation_callback(uint16_t, uint32_t, uint32_t, const RoadStopSpec *, BaseStation *, uint32_t, int32_t) noexcept;
 const OpenTTDAnimationServices *openttd_rust_animation_exchange(const OpenTTDAnimationServices *);
 void openttd_rust_animation_add(uint32_t, bool);
