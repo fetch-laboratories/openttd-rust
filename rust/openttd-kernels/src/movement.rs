@@ -160,7 +160,6 @@ pub struct MovementServices {
     pub owned_land: extern "C" fn(u32) -> bool,
     pub object_foundation: extern "C" fn(u32) -> ObjectFoundation,
     pub house_foundation: extern "C" fn(u32) -> CallbackFoundation,
-    pub house_callback: extern "C" fn(u32, u16) -> u16,
     pub house_boolean: extern "C" fn(*const c_void, u16) -> bool,
     pub industry_foundation: extern "C" fn(u32) -> CallbackFoundation,
     pub industry_callback: extern "C" fn(u32, u16) -> u16,
@@ -239,7 +238,7 @@ impl MovementServices {
                 };
                 if p.callback {
                     let result = if house {
-                        (self.house_callback)(tile, p.kind)
+                        unsafe { crate::town::resolver::foundation(tile, p.kind) }
                     } else {
                         (self.industry_callback)(tile, p.kind)
                     };
@@ -573,6 +572,10 @@ impl MovementServices {
         }
         bits
     }
+    // Keep one policy body visible to constant propagation at literal Rust callers.
+    // The native facade below still supplies dynamic transport/subtype/side values.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
         let mut bits = TRACK_BIT_NONE;
         let mut red = 0;
@@ -1382,6 +1385,9 @@ pub(crate) fn table(shared: &Services) -> &MovementServices {
     // SAFETY: Native registry returns its immutable process-lifetime table.
     unsafe { &*(shared.movement_services)() }
 }
+// Forward literal transport/side arguments through this registry facade too.
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn track_status(shared: &Services, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
     table(shared).track_status(tile, mode, sub, side)
 }
@@ -1528,7 +1534,6 @@ crate::abi::layouts! {
         owned_land,
         object_foundation,
         house_foundation,
-        house_callback,
         house_boolean,
         industry_foundation,
         industry_callback,

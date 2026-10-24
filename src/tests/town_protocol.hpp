@@ -11,6 +11,7 @@
 #include "../rust/town_ffi.h"
 #include "../rust/road_command_ffi.h"
 #include "../rust/house_ffi.h"
+#include "../rust/house_resolver_ffi.h"
 #include "../rust/command_services_ffi.h"
 #include "../rust/ground_ffi.h"
 #include "../rust/movement_ffi.h"
@@ -88,10 +89,6 @@ static inline bool TownProtocol_build_road(uint32_t, uint32_t, uint32_t, uint32_
 static inline bool TownProtocol_build_bridge(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) noexcept { return false; }
 static inline bool TownProtocol_build_tunnel(uint32_t, uint32_t, uint32_t) noexcept { return false; }
 static inline void TownProtocol_assert_clear_house(bool) noexcept {}
-static inline bool TownProtocol_allow_construction(uint32_t, uint32_t, uint32_t, uint32_t) noexcept
-{
-	openttd_rust_town_growth(town_protocol_world->owner)->flags = 0x88; return true;
-}
 /* House 2 is an unpopulated, completed old 1x1 house; its rebuild reaches TryBuildTownHouse. */
 static inline OpenTTDHouseLoopTile TownProtocol_house_tile(uint32_t) noexcept { return {.age = 255, .completed = true, .lift_has_destination = false}; }
 static inline uint16_t TownProtocol_house_callbacks(uint16_t) noexcept { return (1U << 3) | (town_protocol_world->house_callback ? 1U : 0U); }
@@ -207,7 +204,6 @@ static inline OpenTTDTownLeaves TownProtocolServices()
 		.build_bridge = TownProtocol_build_bridge,
 		.build_tunnel = TownProtocol_build_tunnel,
 		.assert_clear_house = TownProtocol_assert_clear_house,
-		.allow_construction = TownProtocol_allow_construction,
 		.houses = &town_protocol_houses,
 	};
 }
@@ -231,6 +227,17 @@ template <typename Check> void CheckTownProtocol(Check check)
 	auto *fields = openttd_rust_town_simulation(owner.get()); fields->xy = 2080; std::fill_n(fields->radius, 5, 100);
 	const auto leaves = TownProtocolServices();
 	OpenTTDSharedServices services = OpenTTDFixtureSharedServices(nullptr, TownProtocolRandom, TownProtocolIndustry);
+	/* The callback still reenters the canonical owner through the new direct
+	 * resolver entry; preserve the original fixture's mutation and success. */
+	const OpenTTDHouseResolverServices resolver{
+		.town_by_id = [](uint32_t) noexcept -> Town * { return nullptr; },
+		.evaluate = [](const OpenTTDHouseCallbackArgs *, int32_t *, size_t) noexcept -> uint16_t {
+			openttd_rust_town_growth(town_protocol_world->owner)->flags = 0x88;
+			return UINT16_MAX;
+		},
+	};
+	const auto *previous_resolver = openttd_rust_house_resolver_exchange(&resolver);
+
 	/* This fixture models flat, empty ground without roads, depots or bridges. */
 	services.is_road_depot = [](uint32_t) noexcept { return false; };
 	services.is_any_road_stop = [](uint32_t) noexcept { return false; };
@@ -351,6 +358,7 @@ template <typename Check> void CheckTownProtocol(Check check)
 	openttd_rust_town_global_class_counts_resize(saved_classes.size());
 	std::copy(saved_ids.begin(), saved_ids.end(), static_cast<uint32_t *>(openttd_rust_town_global_id_counts().data));
 	std::copy(saved_classes.begin(), saved_classes.end(), static_cast<uint32_t *>(openttd_rust_town_global_class_counts().data));
+	openttd_rust_house_resolver_exchange(previous_resolver);
 	town_protocol_world = nullptr;
 }
 #endif /* TOWN_PROTOCOL_HPP */

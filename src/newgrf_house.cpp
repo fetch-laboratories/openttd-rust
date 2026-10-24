@@ -27,16 +27,83 @@
 #include "station_base.h"
 #ifdef WITH_RUST
 #include "rust/house_ffi.h"
+#include "rust/services_newgrf.h"
+#include "rust/services_cargo.h"
+#include "rust/settings_services.h"
+#include "rust/environment_services.h"
 #endif
 
 #include "safeguards.h"
 
 #ifdef WITH_RUST
-static RustTownBuildingCounts<uint32_t> _building_counts{};
+static uint16_t EvaluateHouseCallback(const OpenTTDHouseCallbackArgs *args, int32_t *regs, size_t count) noexcept
+{
+	HouseResolverObject object(args->house, TileIndex{args->tile}, args->town, static_cast<CallbackID>(args->callback), args->param1, args->param2, args->prospective, args->initial_random, args->watched, args->view);
+	return object.ResolveCallback({regs, count});
+}
+static OpenTTDHouseReseed EvaluateHouseReseed(uint16_t house, uint32_t tile, Town *town, uint8_t waiting) noexcept
+{
+	HouseResolverObject object(house, TileIndex{tile}, town, CBID_RANDOM_TRIGGER);
+	object.SetWaitingRandomTriggers(HouseRandomTriggers{waiting});
+	object.ResolveRerandomisation();
+	return {object.GetReseedSum(), object.GetUsedRandomTriggers().base()};
+}
+static OpenTTDHouseSearchSpec HouseSearchSpec(uint16_t house) noexcept
+{
+	const auto *s = RustHouseSpec(house);
+	return {.grfid = RustSpecGRFID(s), .local = RustSpecLocalID(s), .house_class = RustTownHouseClass(s), .has_file = RustSpecHasGRFFile(s)};
+}
+static OpenTTDHouseNearbySpec HouseNearbySpec(uint16_t house) noexcept
+{
+	const auto *s = RustHouseSpec(house);
+	return {.file = RustSpecGRFFile(s), .local = RustSpecLocalID(s), .house_class = RustTownHouseClass(s)};
+}
+const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
+{
+	static const OpenTTDHouseResolverServices services{
+		.towns = &GetRustTownServices(),
+		.shared = &GetRustSharedServices(),
+		.storage = &GetRustStorageServices(),
+		.larger_towns = OpenTTDLargerTowns,
+		.cargo_by_label = [](uint32_t label) noexcept { return OpenTTDCargoByLabel(CargoLabel{label}); },
+		.file = RustResolverGRFFile,
+		.version = RustGRFFileVersion,
+		.cargo_translation = OpenTTDCargoTranslation,
+		.nearby = RustSignedNearbyTile,
+		.nearby_info = RustNearbyTileInformation,
+		.terrain = RustTerrainType,
+		.stage = [](uint32_t tile) noexcept { return GetHouseBuildingStage(TileIndex{tile}); },
+		.age = RustHouseAge,
+		.random_bits = RustHouseRandomBits,
+		.random_triggers = RustHouseRandomTriggers,
+		.search_spec = HouseSearchSpec,
+		.nearby_spec = HouseNearbySpec,
+		.file_identity = [](uint16_t house) noexcept -> OpenTTDHouseFileIdentity { const auto *spec = RustHouseSpec(house); return {.grfid = RustSpecGRFID(spec), .has_file = RustSpecHasGRFFile(spec)}; },
+		.house_id = [](uint16_t local, uint32_t grfid) noexcept { return _house_mngr.GetID(local, grfid); },
+		.house_grfid = [](uint16_t house) noexcept { return _house_mngr.GetGRFID(house); },
+		.badges = RustHouseBadges,
+		.stations = [](uint32_t tile, void *context, void (*visit)(void *, const Station *)) noexcept {
+			StationFinder finder(TileArea(TileIndex{tile}, 1, 1));
+			for (const Station *station : finder.GetStations()) visit(context, station);
+		},
+		.town_by_id = OpenTTDTownShellByID,
+		.root = RustHouseSpriteGroup,
+		.spec_house = [](const HouseSpec *spec) noexcept -> uint16_t { return spec - HouseSpec::Get(0); },
+		.local_id = RustHouseLocalID,
+		.base_scope = RustResolverBaseScope,
+		.evaluate = EvaluateHouseCallback,
+		.reseed = EvaluateHouseReseed,
+		.unhandled_house = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled house variable 0x{:X}", variable); },
+		.unhandled_town = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled town variable 0x{:X}", variable); },
+	};
+	return services;
+}
 #else
 static BuildingCounts<uint32_t> _building_counts{};
 #endif
+#ifndef WITH_RUST
 static std::vector<HouseClassMapping> _class_mapping{};
+#endif
 
 HouseOverrideManager _house_mngr(NEW_HOUSE_OFFSET, NUM_HOUSES, INVALID_HOUSE_ID);
 
@@ -47,8 +114,13 @@ HouseOverrideManager _house_mngr(NEW_HOUSE_OFFSET, NUM_HOUSES, INVALID_HOUSE_ID)
  */
 static const GRFFile *GetHouseSpecGrf(HouseID house_id)
 {
+#ifdef WITH_RUST
+	const HouseSpec *hs = RustHouseSpec(house_id);
+	return (hs != nullptr) ? RustSpecGRFFile(hs) : nullptr;
+#else
 	const HouseSpec *hs  = HouseSpec::Get(house_id);
 	return (hs != nullptr) ? hs->grf_prop.grffile : nullptr;
+#endif
 }
 
 extern const HouseSpec _original_house_specs[NEW_HOUSE_OFFSET];
@@ -114,6 +186,16 @@ void ResetHouses()
  * @param initial_random_bits Random bits during construction checks.
  * @param watched_cargo_triggers Cargo types that triggered the watched cargo callback.
  */
+HouseScopeResolver::HouseScopeResolver(ResolverObject &ro, HouseID house_id, TileIndex tile, Town *town,
+		bool not_yet_constructed, uint8_t initial_random_bits, CargoTypes watched_cargo_triggers, int view)
+#ifdef WITH_RUST
+	: ScopeResolver(ro), context{{town, town == nullptr ? nullptr : town->growth_owner.get(), town == nullptr ? uint16_t{} : town->index.base(), not_yet_constructed}, watched_cargo_triggers, tile.base(), view, house_id, initial_random_bits, not_yet_constructed}
+#else
+	: ScopeResolver(ro), house_id(house_id), tile(tile), town(town), not_yet_constructed(not_yet_constructed), initial_random_bits(initial_random_bits), watched_cargo_triggers(watched_cargo_triggers), view(view)
+#endif
+{
+}
+
 HouseResolverObject::HouseResolverObject(HouseID house_id, TileIndex tile, Town *town,
 		CallbackID callback, uint32_t param1, uint32_t param2,
 		bool not_yet_constructed, uint8_t initial_random_bits, CargoTypes watched_cargo_triggers, int view)
@@ -124,7 +206,11 @@ HouseResolverObject::HouseResolverObject(HouseID house_id, TileIndex tile, Town 
 	/* Tile must be valid and a house tile, unless not yet constructed in which case it may also be INVALID_TILE. */
 	assert((IsValidTile(tile) && (not_yet_constructed || IsTileType(tile, MP_HOUSE))) || (not_yet_constructed && tile == INVALID_TILE));
 
+#ifdef WITH_RUST
+	this->root_spritegroup = openttd_rust_house_root(&this->house_scope.context);
+#else
 	this->root_spritegroup = HouseSpec::Get(house_id)->grf_prop.GetSpriteGroup(!not_yet_constructed);
+#endif
 }
 
 GrfSpecFeature HouseResolverObject::GetFeature() const
@@ -134,9 +220,23 @@ GrfSpecFeature HouseResolverObject::GetFeature() const
 
 uint32_t HouseResolverObject::GetDebugID() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_house_debug_id(&this->house_scope.context);
+#else
 	return HouseSpec::Get(this->house_scope.house_id)->grf_prop.local_id;
+#endif
 }
 
+#ifdef WITH_RUST
+void ResetHouseClassIDs()
+{
+	openttd_rust_house_resolver_exchange(&GetHouseResolverServices());
+	openttd_rust_house_classes_reset();
+}
+HouseClassID AllocateHouseClassID(uint8_t grf_class_id, uint32_t grfid) { return openttd_rust_house_class_allocate(grf_class_id, grfid); }
+void InitializeBuildingCounts(Town *t) { openttd_rust_house_counts_init(&GetRustTownServices(), &GetRustSharedServices(), t->growth_owner.get(), HouseSpec::Specs().size()); }
+void InitializeBuildingCounts() { openttd_rust_house_counts_init(&GetRustTownServices(), &GetRustSharedServices(), nullptr, HouseSpec::Specs().size()); }
+#else
 void ResetHouseClassIDs()
 {
 	_class_mapping.clear();
@@ -183,13 +283,20 @@ void InitializeBuildingCounts()
 	}
 }
 
+#endif
+
 /**
  * Get read-only span of total HouseID building counts.
  * @return span of HouseID building counts.
  */
 std::span<const uint> GetBuildingHouseIDCounts()
 {
+#ifdef WITH_RUST
+	const auto counts = openttd_rust_town_global_id_counts();
+	return {static_cast<const uint *>(counts.data), counts.size};
+#else
 	return _building_counts.id_count;
+#endif
 }
 
 #ifndef WITH_RUST
@@ -232,6 +339,14 @@ void DecreaseBuildingCount(Town *t, HouseID house_id)
 }
 #endif
 
+#ifdef WITH_RUST
+uint32_t HouseScopeResolver::GetRandomBits() const { return openttd_rust_house_random(&GetHouseResolverServices(), &this->context, false); }
+uint32_t HouseScopeResolver::GetRandomTriggers() const { return openttd_rust_house_random(&GetHouseResolverServices(), &this->context, true); }
+uint32_t HouseScopeResolver::GetVariable(uint8_t variable, uint32_t parameter, bool &available) const
+{
+	return openttd_rust_house_variable(&GetHouseResolverServices(), &this->context, &this->ro, variable, parameter, &available);
+}
+#else
 /* virtual */ uint32_t HouseScopeResolver::GetRandomBits() const
 {
 	/* Note: Towns build houses over houses. So during construction checks 'tile' may be a valid but unrelated house. */
@@ -465,12 +580,19 @@ static uint32_t GetDistanceFromNearbyHouse(uint8_t parameter, TileIndex start_ti
 	return UINT_MAX;
 }
 
+#endif
+
 uint16_t GetHouseCallback(CallbackID callback, uint32_t param1, uint32_t param2, HouseID house_id, Town *town, TileIndex tile, std::span<int32_t> regs100,
 		bool not_yet_constructed, uint8_t initial_random_bits, CargoTypes watched_cargo_triggers, int view)
 {
+#ifdef WITH_RUST
+	const OpenTTDHouseCallbackArgs args{town, watched_cargo_triggers, param1, param2, tile.base(), view, house_id, callback, initial_random_bits, not_yet_constructed};
+	return openttd_rust_house_callback(&args, regs100.data(), regs100.size());
+#else
 	HouseResolverObject object(house_id, tile, town, callback, param1, param2,
 			not_yet_constructed, initial_random_bits, watched_cargo_triggers, view);
 	return object.ResolveCallback(regs100);
+#endif
 }
 
 static void DrawTileLayout(const TileInfo *ti, const DrawTileSpriteSpan &dts, uint8_t stage, HouseID house_id)
@@ -565,19 +687,22 @@ void DrawNewHouseTileInGUI(int x, int y, const HouseSpec *spec, HouseID house_id
 	DrawNewGRFTileSeqInGUI(x, y, &dts, stage, palette);
 }
 
+#ifndef WITH_RUST
 /* Simple wrapper for GetHouseCallback to keep the animation unified. */
 static uint16_t GetSimpleHouseCallback(CallbackID callback, uint32_t param1, uint32_t param2, const HouseSpec *spec, Town *town, TileIndex tile, CargoTypes extra_data)
 {
 	return GetHouseCallback(callback, param1, param2, spec - HouseSpec::Get(0), town, tile, {}, false, 0, extra_data);
 }
 
+#endif
+
 /** Helper class for animation control. */
 #ifdef WITH_RUST
 const OpenTTDHouseAnimation &GetHouseAnimationBinding() noexcept
 {
-	static const auto binding = MakeRustAnimationBinding<HouseSpec, Town, CargoTypes, GetSimpleHouseCallback>(
+	static const auto binding = MakeRustAnimationBindingDirect<HouseSpec, Town, CargoTypes>(
 		[](uint32_t t) noexcept -> OpenTTDHouseAnimationEntry { const auto *s = RustHouseSpec(GetHouseType(TileIndex{t})); if (s == nullptr) return {nullptr, nullptr}; return {s, Town::GetByTile(TileIndex{t})}; },
-		[](const HouseSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(HouseCallbackMask::AnimationSpeed), s->callback_mask.Test(HouseCallbackMask::AnimationNextFrame), s->extra_flags.Test(HouseExtraFlag::Callback1ARandomBits), true}; });
+		[](const HouseSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(HouseCallbackMask::AnimationSpeed), s->callback_mask.Test(HouseCallbackMask::AnimationNextFrame), s->extra_flags.Test(HouseExtraFlag::Callback1ARandomBits), true}; }, openttd_rust_house_animation_callback);
 	return binding;
 }
 #else
@@ -603,13 +728,6 @@ void AnimateNewHouseTile(TileIndex tile)
 }
 
 #ifdef WITH_RUST
-OpenTTDHouseReseed OpenTTDHouseResolveReseed(uint16_t house, uint32_t tile, Town *town, uint8_t waiting) noexcept
-{
-	HouseResolverObject object(house, TileIndex{tile}, town, CBID_RANDOM_TRIGGER);
-	object.SetWaitingRandomTriggers(HouseRandomTriggers{waiting});
-	object.ResolveRerandomisation();
-	return {object.GetReseedSum(), object.GetUsedRandomTriggers().base()};
-}
 void TriggerHouseAnimation_WatchedCargoAccepted(TileIndex tile, CargoTypes trigger_cargoes)
 {
 	openttd_rust_house_watched(&GetRustTownServices(), &GetRustSharedServices(), tile.base(), trigger_cargoes);

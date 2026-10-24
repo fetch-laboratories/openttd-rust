@@ -89,11 +89,21 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	 * Action2 program exercises native persistent storage reentry. */
 	StationNeed(object.GetTown() != nullptr, __LINE__);
 	auto *parent = object.GetTown(); auto *original_town = st->town; st->town = nullptr;
-	StationNeed(object.GetTown() == parent && parent->t == original_town, __LINE__); st->town = original_town;
+#ifdef WITH_RUST
+	StationNeed(object.GetTown() == parent && parent->context.town == original_town, __LINE__);
+#else
+	StationNeed(object.GetTown() == parent && parent->t == original_town, __LINE__);
+#endif
+	st->town = original_town;
 	det->var_scope = VSG_SCOPE_PARENT;
 	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}, {.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x399}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 3}, {.operation = DSGA_OP_RST, .variable = 0x7C, .parameter = 3, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101}};
 	std::array<int32_t, 2> parent_regs{}; StationNeed(object.ResolveCallback(parent_regs) == 0x400 && parent_regs[1] == 0x399, __LINE__);
-	StationResolverObject prototype(&spec, nullptr, tile); StationNeed(prototype.GetTown() != nullptr && prototype.GetTown()->readonly, __LINE__);
+	StationResolverObject prototype(&spec, nullptr, tile);
+#ifdef WITH_RUST
+	StationNeed(prototype.GetTown() != nullptr && prototype.GetTown()->context.readonly, __LINE__);
+#else
+	StationNeed(prototype.GetTown() != nullptr && prototype.GetTown()->readonly, __LINE__);
+#endif
 	StationResolverObject no_town(&spec, nullptr, INVALID_TILE); StationNeed(no_town.GetTown() == nullptr, __LINE__);
 	StationNeed(no_town.ResolveCallback({}) == CALLBACK_FAILED, __LINE__);
 	det->var_scope = VSG_SCOPE_RELATIVE;
@@ -105,7 +115,11 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	StationNeed(retry.ResolveCallback(parent_regs) == 0x400 && parent_regs[1] == 0x399, __LINE__);
 	fmt::print(stderr, "STCMD resolver-scope-fallback parent relative readonly retry\n");
 
+#ifdef WITH_RUST
+	fmt::print(stderr, "STCMD resolver-parent {} {} {}\n", parent->context.town->index.base(), parent_regs[1], prototype.GetTown()->context.town->index.base());
+#else
 	fmt::print(stderr, "STCMD resolver-parent {} {} {}\n", parent->t->index.base(), parent_regs[1], prototype.GetTown()->t->index.base());
+#endif
 	det->var_scope = VSG_SCOPE_SELF;
 	/* Real-group thresholds, division, fallbacks and cargo-map order use the
 	 * same actual groups in both games. New owners snapshot root choice only. */

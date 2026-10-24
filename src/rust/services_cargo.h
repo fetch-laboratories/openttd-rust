@@ -25,7 +25,7 @@ inline uint16_t RustCargoClasses(CargoType cargo) noexcept { return RustCargoSpe
 inline uint OpenTTDScaleCargo(uint amount, bool town) noexcept { return ScaleByCargoScale(amount, town); }
 inline CargoType OpenTTDCargoTranslation(uint8_t cargo, const GRFFile *grf) noexcept { return GetCargoTranslation(cargo, grf); }
 inline CargoType RustHouseCargoTranslation(uint16_t house, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, RustHouseGrf(house)); }
-inline CargoType RustResolverCargoTranslation(const ResolverObject *resolver, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, resolver->grffile); }
+inline CargoType RustResolverCargoTranslation(const ResolverObject *resolver, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, RustResolverGRFFile(resolver)); }
 /* Raw inverse-map reads retain the native file and cargo-index preconditions;
  * they do not apply GetCargoTranslation's version or nullable-file policy. */
 inline uint8_t RustGRFCargoMap(const GRFFile *file, CargoType cargo) noexcept { return file->cargo_map[cargo]; }

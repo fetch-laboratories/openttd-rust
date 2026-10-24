@@ -76,11 +76,9 @@ struct OpenTTDHouseServices {
 	void (*set_type)(uint32_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(set_type);
 
 	void (*delete_inspect)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(delete_inspect);
-	uint16_t (*callback)(uint16_t, uint32_t, uint32_t, uint16_t, Town *, uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(callback);
 	uint8_t (*cargo_translation)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_translation);
 	bool (*convert_boolean)(uint16_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_boolean);
 	bool (*convert_8bit)(uint16_t, uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(convert_8bit);
-	OpenTTDHouseReseed (*resolve_reseed)(uint16_t, uint32_t, Town *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(resolve_reseed);
 
 	OpenTTDStation *(*next_near_station)(Town *, OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(next_near_station);
 	void (*erase_near_station)(Town *, OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(erase_near_station);
@@ -95,11 +93,9 @@ struct OpenTTDHouseServices {
 	uint8_t (*cargogen_mode)() noexcept OPENTTD_SERVICE_DEFAULT(cargogen_mode);
 	uint8_t (*place_houses)() noexcept OPENTTD_SERVICE_DEFAULT(place_houses);
 	bool (*company_human)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(company_human);
-	void (*init_counts)() noexcept OPENTTD_SERVICE_DEFAULT(init_counts);
 	OpenTTDHouseErrors errors;
 };
 /* Resolver and AnimationBase services live beside their native templates. */
-OpenTTDHouseReseed OpenTTDHouseResolveReseed(uint16_t house, uint32_t tile, Town *town, uint8_t waiting) noexcept;
 
 extern "C" {
 void openttd_rust_house_tile_loop(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, uint32_t tile);
