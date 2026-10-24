@@ -147,7 +147,15 @@ def check(scenario, run, mode, role, result):
     ):
         if sum(x.startswith("OBJECT " + marker + " ") for x in run["log"]) != 1:
             raise RuntimeError(f"{mode}/{role}: missing {marker}")
-    if sum(x.startswith("OBJECT invocation-eligibility ") for x in run["log"]) != 32:
+    admissions = [
+        tuple(x.split()[2:5])
+        for x in run["log"]
+        if x.startswith("OBJECT invocation-eligibility ")
+    ]
+    expected_admissions = set(
+        product(("1", "2"), ("false", "true"), map(str, range(8)))
+    )
+    if len(admissions) != 32 or set(admissions) != expected_admissions:
         raise RuntimeError(
             f"{mode}/{role}: missing actual availability admission boundaries"
         )

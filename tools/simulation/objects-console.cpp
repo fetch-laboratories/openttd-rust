@@ -31,7 +31,6 @@ static HiddenObjectArea HideObjectForTunnel(TileIndex t) {
 static void RestoreObjectFirstTile(HiddenObjectArea h) { _cleared_object_areas[h.index].first_tile = TileIndex(h.first_tile); }
 static bool IsObjectIndirectlyCleared(TileIndex t) { auto *p = FindClearedObject(t); return p != nullptr && p->first_tile != t; }
 #endif
-uint16_t GetObjectCallback(CallbackID, uint32_t, uint32_t, const ObjectSpec *, Object *, TileIndex, std::span<int32_t>, uint8_t);
 void SetGeneratingWorldProgress(GenWorldProgress, uint);
 void IncreaseGeneratingWorldProgress(GenWorldProgress);
 static int cancellation = -1;
