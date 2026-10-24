@@ -23,6 +23,7 @@ use crate::timer_game_common::{DAYS_TILL_ORIGINAL_BASE_YEAR, ORIGINAL_BASE_YEAR}
 use crate::witness;
 use std::{ffi::c_void, ptr};
 
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct ResolverContext {
     pub owner: *mut Industry,
@@ -630,15 +631,9 @@ pub unsafe extern "C" fn openttd_rust_industry_variable(
     builder: *mut Builder,
     s: *const ResolverServices,
 ) -> u32 {
-    variable(
-        unsafe { &*c },
-        ro,
-        var,
-        parameter,
-        available,
-        builder,
-        unsafe { &*s },
-    )
+    // End the native context borrow before a synchronous service can reenter.
+    let c = unsafe { *c };
+    variable(&c, ro, var, parameter, available, builder, unsafe { &*s })
 }
 /// # Safety
 /// Live scope/resolver/table; original variable-specific map/industry preconditions.
@@ -651,9 +646,8 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_variable(
     available: *mut bool,
     s: *const ResolverServices,
 ) -> u32 {
-    tile_variable(unsafe { &*c }, ro, var, parameter, available, unsafe {
-        &*s
-    })
+    let c = unsafe { *c };
+    tile_variable(&c, ro, var, parameter, available, unsafe { &*s })
 }
 /// # Safety
 /// Live context; a non-null owner remains live through the immediate read.
@@ -673,7 +667,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_random(
     c: *const ResolverContext,
     s: *const ResolverServices,
 ) -> u32 {
-    let c = unsafe { &*c };
+    let c = unsafe { *c };
     if c.id == INVALID_INDUSTRY {
         0
     } else {
@@ -687,7 +681,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tile_triggers(
     c: *const ResolverContext,
     s: *const ResolverServices,
 ) -> u32 {
-    let c = unsafe { &*c };
+    let c = unsafe { *c };
     if c.id == INVALID_INDUSTRY {
         0
     } else {
@@ -702,7 +696,7 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_root(
     s: *const ResolverServices,
 ) -> *const c_void {
     witness::hit(witness::INDUSTRY_RESOLVER_ROOT);
-    let c = unsafe { &*c };
+    let c = unsafe { *c };
     let s = unsafe { &*s };
     unsafe {
         (s.root)(
@@ -754,7 +748,8 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_town(
     ro: *mut c_void,
     s: *const ResolverServices,
 ) -> *mut c_void {
-    town(unsafe { &*c }, ro, unsafe { &*s })
+    let c = unsafe { *c };
+    town(&c, ro, unsafe { &*s })
 }
 /// # Safety
 /// All native scopes and resolver live for this synchronous resolution.
@@ -771,7 +766,8 @@ pub unsafe extern "C" fn openttd_rust_industry_resolver_scope(
     match scope {
         VSG_SCOPE_SELF => own,
         VSG_SCOPE_PARENT => {
-            let town = town(unsafe { &*c }, ro, s);
+            let c = unsafe { *c };
+            let town = town(&c, ro, s);
             if town.is_null() {
                 unsafe { (s.base_scope)(ro, scope, relative) }
             } else {
