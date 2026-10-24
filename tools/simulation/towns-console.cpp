@@ -108,8 +108,8 @@ static void TownActionMoney(Town *town, Company *company, Company *other)
 	const auto random = _random, interactive = _interactive_random;
 	for (bool foreign : {false, true}) {
 		for (Money balance : balances) {
-			cash.Change(foreign ? 1000000000000LL : balance);
-			peer.Change(foreign ? balance : 1000000000000LL);
+			cash.Change(foreign ? Money{1000000000000LL} : balance);
+			peer.Change(foreign ? balance : Money{1000000000000LL});
 			fmt::print(stderr, "TOWN money-mask {} {} {} {}\n", foreign, balance, GetMaskOfTownActions(foreign ? other->index : company->index, town).base(), GetMaskOfTownActions(foreign ? company->index : other->index, town).base());
 		}
 	}
