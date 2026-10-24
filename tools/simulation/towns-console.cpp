@@ -151,8 +151,13 @@ static void TownStatueSearch(Town *town, Company *company)
 		if (Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile).Failed()) std::abort();
 	}
 	/* Canonical fixture terrain: every road tile and all its corners are flat. */
+	std::map<TileIndex, uint8_t> heights;
 	for (TileIndex tile : tiles) {
-		for (int dy : {0, 1}) for (int dx : {0, 1}) SetTileHeight(TileAddXY(tile, dx, dy), 4);
+		for (int dy : {0, 1}) for (int dx : {0, 1}) {
+			TileIndex corner = TileAddXY(tile, dx, dy);
+			heights.try_emplace(corner, TileHeight(corner));
+			SetTileHeight(corner, 4);
+		}
 	}
 	owner.Change(company->index);
 	for (TileIndex tile : tiles) {
@@ -185,8 +190,12 @@ static void TownStatueSearch(Town *town, Company *company)
 		fmt::print(stderr, "TOWN statue-state {} {} {} {}\n", open, placed, statues, town->statues.Test(company->index));
 	}
 	owner.Change(OWNER_DEITY);
-	if (Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, last).Failed()) std::abort();
-	fmt::print(stderr, "TOWN statue-cleanup {}\n", !town->statues.Test(company->index) && !IsObjectTypeTile(last, OBJECT_STATUE));
+	for (TileIndex tile : tiles) {
+		if (Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile).Failed()) std::abort();
+	}
+	for (const auto &[corner, height] : heights) SetTileHeight(corner, height);
+	bool restored = std::ranges::all_of(heights, [](const auto &entry) { return TileHeight(entry.first) == entry.second; });
+	fmt::print(stderr, "TOWN statue-cleanup {} {}\n", !town->statues.Test(company->index) && !IsObjectTypeTile(last, OBJECT_STATUE), restored);
 	owner.Restore(); interactive_seed.Restore();
 }
 /* Real CmdPlaceHouse and animation bodies in both games, with controlled spec

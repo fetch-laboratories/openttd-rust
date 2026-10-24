@@ -1207,7 +1207,7 @@ def check_statue_search(scenario, run, mode, role, result):
             "TOWN statue-state false false 0 false",
             "TOWN statue-state true true 1 true",
         ]
-        or "TOWN statue-cleanup true" not in run["log"]
+        or "TOWN statue-cleanup true true" not in run["log"]
     ):
         raise RuntimeError("town statue exact placement/owner/town/bit missing")
     for label in ("test", "exec"):
