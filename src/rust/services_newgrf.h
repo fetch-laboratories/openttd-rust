@@ -50,6 +50,10 @@ inline uint32_t RustSpecBadges(const ResolverObject *resolver, const Spec *spec,
 /* Preserve native default-livery and nullable-file translation behavior. */
 inline uint32_t RustCompanyInfo(uint8_t owner, const Livery *livery) noexcept { return GetCompanyInfo(CompanyID(owner), livery); }
 inline uint8_t RustReverseRailTypeTranslation(RailType railtype, const GRFFile *file) noexcept { return GetReverseRailTypeTranslation(railtype, file); }
+/* A spec's file can differ from its caller resolver's file. */
+template <typename Spec>
+inline uint8_t RustSpecReverseRailTypeTranslation(RailType railtype, const Spec *spec) noexcept { return RustReverseRailTypeTranslation(railtype, spec->grf_prop.grffile); }
+
 
 /* Borrowed GRF files remain native and live for the synchronous conversion.
  * A town shell is live for resolution (or null for a prototype); no Rust
