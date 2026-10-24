@@ -34,7 +34,6 @@ static const OpenTTDTreeServices tree_probe_services{
 	.add_growth = TreeUnused<void, uint32_t, int32_t>,
 	.set_growth = TreeUnused<void, uint32_t, uint8_t>,
 	.make_clear = TreeUnused<void, uint32_t, uint8_t, uint32_t>,
-	.ambient = TreeUnused<bool, uint32_t>,
 	.progress = []() noexcept { return tree_probe.abort; },
 	.progress_total = TreeUnused<bool, uint32_t>,
 	.town_rating = TreeUnused<void, uint16_t, uint32_t, bool>,

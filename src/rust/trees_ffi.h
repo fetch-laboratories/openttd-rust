@@ -89,7 +89,6 @@ struct OpenTTDTreeServices {
 	void (*add_growth)(uint32_t tile, int32_t growth) noexcept OPENTTD_SERVICE_DEFAULT(add_growth);
 	void (*set_growth)(uint32_t tile, uint8_t growth) noexcept OPENTTD_SERVICE_DEFAULT(set_growth);
 	void (*make_clear)(uint32_t tile, uint8_t ground, uint32_t density) noexcept OPENTTD_SERVICE_DEFAULT(make_clear);
-	bool (*ambient)(uint32_t tile) noexcept OPENTTD_SERVICE_DEFAULT(ambient);
 	bool (*progress)() noexcept OPENTTD_SERVICE_DEFAULT(progress);
 	bool (*progress_total)(uint32_t total) noexcept OPENTTD_SERVICE_DEFAULT(progress_total);
 	void (*town_rating)(uint16_t, uint32_t tile, bool up) noexcept OPENTTD_SERVICE_DEFAULT(town_rating);

@@ -15,7 +15,66 @@
 #include "newgrf_sound.h"
 #include "water_map.h"
 
+#ifdef WITH_RUST
+#include "rust/generic_ffi.h"
+#include "rust/services_newgrf.h"
+#include "rust/services_cargo.h"
+#include "rust/services_landscape.h"
+#include "rust/sound_services.h"
+#include "rust/services_water.h"
+#endif
+
 #include "safeguards.h"
+
+#ifdef WITH_RUST
+static_assert(GSF_SOUNDFX == 12 && GSF_END == 22);
+static_assert(CBID_GENERIC_AI_PURCHASE_SELECTION == 0x18 && CBID_SOUNDS_AMBIENT_EFFECT == 0x144);
+static_assert(IT_AI_UNKNOWN == 0xFE && IT_AI_TOWN == 0xFF);
+struct GenericScopeResolver final : ScopeResolver {
+	const OpenTTDGenericInvocation &invocation;
+	GenericScopeResolver(ResolverObject &ro, const OpenTTDGenericInvocation &invocation) : ScopeResolver(ro), invocation(invocation) {}
+	uint32_t GetVariable(uint8_t variable, uint32_t, bool &available) const override { return openttd_rust_generic_variable(&this->invocation, variable, &available); }
+};
+struct GenericResolverObject final : ResolverObject {
+	GenericScopeResolver generic_scope;
+	GenericResolverObject(const OpenTTDGenericInvocation &invocation) : ResolverObject(invocation.file, static_cast<CallbackID>(invocation.callback), invocation.param1), generic_scope(*this, invocation) { this->root_spritegroup = invocation.root; }
+	ScopeResolver *GetScope(VarSpriteGroupScope scope, uint8_t relative) override { return openttd_rust_generic_scope(this, &this->generic_scope, scope, relative); }
+	GrfSpecFeature GetFeature() const override { return static_cast<GrfSpecFeature>(this->generic_scope.invocation.scope.feature); }
+	uint32_t GetDebugID() const override { return 0; }
+};
+static uint16_t EvaluateGeneric(const OpenTTDGenericInvocation *invocation, int32_t *regs, size_t count) noexcept
+{
+	GenericResolverObject object(*invocation);
+	return object.ResolveCallback({regs, count});
+}
+void ResetGenericCallbacks()
+{
+	static const OpenTTDGenericServices services{
+		.shared = &GetRustSharedServices(),
+		.version = RustGRFFileVersion,
+		.cargo_map = RustGRFCargoMap,
+		.cargo_bitnum = RustCargoBitnum,
+		.industry_substitute = RustIndustrySubstitute,
+		.evaluate = EvaluateGeneric,
+		.base_scope = RustResolverBaseScope,
+		.enabled = RustAmbientSoundEnabled,
+		.ambient = OpenTTDAmbientSound,
+		.terrain = RustTerrainType,
+		.water_class = RustWaterClass,
+		.sound = RustGRFPlayTileSound,
+		.unsupported = [](uint8_t feature) noexcept { GrfMsg(5, "AddGenericCallback: Unsupported feature 0x{:02X}", feature); },
+		.unhandled = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled generic feature variable 0x{:02X}", variable); },
+	};
+	openttd_rust_generic_reset(&services);
+}
+void AddGenericCallback(GrfSpecFeature feature, const GRFFile *file, const SpriteGroup *group) { openttd_rust_generic_add(feature, file, group); }
+std::pair<const GRFFile *, uint16_t> GetAiPurchaseCallbackResult(GrfSpecFeature feature, CargoType cargo, uint8_t selection, IndustryType source, IndustryType destination, uint8_t distance, AIConstructionEvent event, uint8_t count, uint8_t station_size)
+{
+	auto result = openttd_rust_generic_ai(feature, cargo, selection, source, destination, distance, event, count, station_size);
+	return {result.file, result.result};
+}
+void AmbientSoundEffectCallback(TileIndex tile) { openttd_rust_generic_ambient_callback(tile.base()); }
+#else
 
 /** Scope resolver for generic objects and properties. */
 struct GenericScopeResolver : public ScopeResolver {
@@ -255,3 +314,5 @@ void AmbientSoundEffectCallback(TileIndex tile)
 
 	if (callback.second != CALLBACK_FAILED) PlayTileSound(callback.first, callback.second, tile);
 }
+
+#endif /* WITH_RUST */

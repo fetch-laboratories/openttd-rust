@@ -1189,7 +1189,7 @@ FloodingBehaviour GetFloodingBehaviour(TileIndex tile)
 void TileLoop_Water(uint32_t tile) noexcept
 {
 	OpenTTDGroundCall call;
-	openttd_rust_water_tile_loop(tile, Map::SizeX(), Map::SizeY(), RustAmbientSoundEnabled(), &call, &GetRustWaterGroundServices(), &GetRustSharedServices());
+	openttd_rust_water_tile_loop(tile, Map::SizeX(), Map::SizeY(), &call, &GetRustWaterGroundServices(), &GetRustSharedServices());
 }
 #else
 static void FloodVehicle(Vehicle *v)

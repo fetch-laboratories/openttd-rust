@@ -87,6 +87,16 @@ def scenarios(soak):
         ]
         + [
             dict(
+                name="landscape-generic-callbacks",
+                kind="save",
+                generic_callbacks=True,
+                save=str(ROOT / "migration/saves/padhattan-ridge-2000.sav"),
+                short_checkpoint=True,
+                ticks=1,
+            )
+        ]
+        + [
+            dict(
                 name="generate-heightmap-and-cancellation",
                 kind="generate",
                 seed=1,
@@ -112,6 +122,20 @@ def game_environment(scenario):
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
+    if scenario.get("generic_callbacks"):
+        executables = prepared_console(
+            "objects",
+            objects.adapter,
+            binaries,
+            builds,
+            out / scenario["name"] / "input",
+            env,
+        )
+        return dict(
+            scenario,
+            executables=executables,
+            console=["generic_scenario probe", "unpause"],
+        )
     if scenario.get("generation_probe"):
         executables = prepared_console(
             "objects",
@@ -285,6 +309,38 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
 
 def check(scenario, run, mode, role, result):
+    if scenario.get("generic_callbacks"):
+        lines = [line for line in run["log"] if line.startswith("GENERIC ")]
+        required = (
+            "fallback-duplicates-registers priority-v7-v8 "
+            "industry-sentinels-narrowing unavailable-all-fail-reset programs-complete"
+        ).split()
+        if any(lines.count(f"GENERIC {name} true") != 2 for name in required):
+            raise RuntimeError("missing generic registry/AI real-group witnesses")
+        if "GENERIC reinstalled-after-native-reload true" not in lines:
+            raise RuntimeError("missing generic transient reload reattachment")
+        expected = {
+            (str(t), str(v), str(m))
+            for t in (0, 4, 6)
+            for v in (7, 8)
+            for m in range(4)
+        }
+        ambient = [
+            line.split() for line in lines if line.startswith("GENERIC ambient ")
+        ]
+        if len(ambient) != 48 or {tuple(p[2:5]) for p in ambient} != expected:
+            raise RuntimeError("missing direct ambient tile/gate/version witnesses")
+        if any(
+            p[5] != str(int(p[4] == "3")) or p[7] != str(p[4] == "3").lower()
+            for p in ambient
+        ):
+            raise RuntimeError("ambient playback/file outcome missing")
+        key = mode + "_generic_callbacks"
+        if role == "reference":
+            result[key] = lines
+        elif result[key] != lines:
+            raise RuntimeError("generic callback results/parameters/RNG differ")
+        return
     if scenario.get("generation_probe"):
         lines = [line for line in run["log"] if line.startswith("GENERATION ")]
         expected = [

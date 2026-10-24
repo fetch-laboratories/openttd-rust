@@ -85,3 +85,110 @@ static bool LandscapeScenario(std::span<std::string_view> args)
 	if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 	std::fflush(stderr); return true;
 }
+
+/* Generic callback programs are transient: reset before stack graphs die and
+ * reinstall after native ReloadNewGRFData. Playback observation forwards normally. */
+#include "newgrf_generic.h"
+#include "tree_map.h"
+#include "water_map.h"
+#include "tile_cmd.h"
+#ifdef WITH_RUST
+#include "rust/landscape_loop_ffi.h"
+#else
+extern TileIndex _cur_tileloop_tile;
+#endif
+extern GrfMiscBits _misc_grf_features;
+static void GenericNeed(bool ok) { if (!ok) std::abort(); }
+struct GenericObservedResult : CallbackResultSpriteGroup {
+	mutable uint attempts = 0;
+	explicit GenericObservedResult(uint16_t result) : CallbackResultSpriteGroup(result) {}
+	ResolverResult Resolve(ResolverObject &object) const override { this->attempts++; return CallbackResultSpriteGroup::Resolve(object); }
+};
+static void GenericPrograms()
+{
+	GRFFile first, second; first.grfid = 0x42900001; second.grfid = 0x42900002; first.grf_version = 7; second.grf_version = 8;
+	const CargoType cargo = GetCargoTypeByLabel(CT_PASSENGERS); GenericNeed(IsValidCargoType(cargo));
+	first.cargo_map[cargo] = 11; second.cargo_map[cargo] = 22;
+	GenericObservedResult yes(0x1234), no(CALLBACK_FAILED), error(0x4567);
+	DeterministicSpriteGroup program, failure, procedure;
+	for (auto *p : {&program, &failure, &procedure}) { p->size = DSG_SIZE_DWORD; p->var_scope = VSG_SCOPE_SELF; }
+	procedure.default_result.calculated_result = true;
+	procedure.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x7D, .parameter = 0x10F, .and_mask = UINT32_MAX}};
+	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x7E, .and_mask = UINT32_MAX, .subroutine = &procedure}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x10E}};
+	for (uint8_t variable : {0x40, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88}) {
+		program.adjusts.push_back({.operation = DSGA_OP_RST, .variable = variable, .and_mask = UINT32_MAX});
+		program.adjusts.push_back({.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = uint32_t(0x100 + (variable == 0x40 ? 0 : variable - 0x7F))});
+	}
+	program.default_result.group = &yes; program.error_group = &error;
+	failure.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 77}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x10F}};
+	failure.default_result.group = &no;
+	ResolverObject registers(nullptr);
+	auto ai = [&](uint8_t source = IT_AI_UNKNOWN, uint8_t destination = IT_AI_TOWN) { return GetAiPurchaseCallbackResult(GSF_STATIONS, cargo, 13, source, destination, 55, AICE_STATION_GET_STATION_ID, 17, 19); };
+	ResetGenericCallbacks(); GenericNeed(ai() == std::pair<const GRFFile *, uint16_t>{nullptr, CALLBACK_FAILED});
+	AddGenericCallback(GSF_INVALID, &first, &program); GenericNeed(ai().second == CALLBACK_FAILED);
+	AddGenericCallback(GSF_STATIONS, &first, &program); AddGenericCallback(GSF_STATIONS, &second, &failure); AddGenericCallback(GSF_STATIONS, &second, &failure);
+	auto answer = ai(); GenericNeed(answer.first == &first && answer.second == 0x34 && no.attempts == 2 && yes.attempts == 1 && registers.GetRegister(0x10E) == 0);
+	std::array<int32_t, 10> expected{11, cargo, CargoSpec::Get(cargo)->bitnum, 13, IT_AI_UNKNOWN, IT_AI_TOWN, 55, AICE_STATION_GET_STATION_ID, 17, 19};
+	for (uint i = 0; i < expected.size(); ++i) GenericNeed(registers.GetRegister(0x100 + i) == expected[i]);
+	fmt::print(stderr, "GENERIC fallback-duplicates-registers true\n");
+	AddGenericCallback(GSF_STATIONS, &second, &program); answer = ai(); GenericNeed(answer.first == &second && answer.second == 0x1234 && registers.GetRegister(0x100) == 22 && no.attempts == 2);
+	fmt::print(stderr, "GENERIC priority-v7-v8 true\n");
+	IndustrySpec *spec = const_cast<IndustrySpec *>(GetIndustrySpec(0));
+	{ AutoRestoreBackup<uint16_t> subst(spec->grf_prop.subst_id, 0x123); ai(0, IT_AI_UNKNOWN); GenericNeed(registers.GetRegister(0x104) == 0x23 && registers.GetRegister(0x105) == IT_AI_UNKNOWN); }
+	{ AutoRestoreBackup<uint16_t> subst(spec->grf_prop.subst_id, IT_INVALID); ai(IT_AI_TOWN, 0); GenericNeed(registers.GetRegister(0x104) == IT_AI_TOWN && registers.GetRegister(0x105) == 0); }
+	fmt::print(stderr, "GENERIC industry-sentinels-narrowing true\n");
+	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x89, .and_mask = UINT32_MAX}};
+	GenericNeed(ai().second == 0x4567); program.var_scope = VSG_SCOPE_PARENT; GenericNeed(ai().second == 0x4567); program.var_scope = VSG_SCOPE_SELF;
+	ResetGenericCallbacks(); AddGenericCallback(GSF_STATIONS, &first, &failure); AddGenericCallback(GSF_STATIONS, &second, &failure); GenericNeed(ai().first == nullptr && ai().second == CALLBACK_FAILED);
+	fmt::print(stderr, "GENERIC unavailable-all-fail-reset true\n");
+	ResetGenericCallbacks(); yes.result = 4;
+	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}, {.operation = DSGA_OP_RST, .variable = 0x0C, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101}, {.operation = DSGA_OP_RST, .variable = 0x18, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x102}};
+	const TileIndex tile = TileXY(4, 4); Tile t(tile);
+	auto fields = std::tuple(t.height(), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m7(), t.m8());
+	std::vector<uint8_t> types; for (Tile one : Map::Iterate()) { types.push_back(one.type()); one.type() = MP_VOID << 4; }
+	AutoRestoreBackup<LandscapeType> climate(_settings_game.game_creation.landscape, LandscapeType::Temperate);
+	AutoRestoreBackup<decltype(TimerGameTick::counter)> tick(TimerGameTick::counter, 1);
+	AutoRestoreBackup<GrfMiscBits> features(_misc_grf_features, {});
+	AutoRestoreBackup<bool> setting(_settings_client.sound.ambient, true);
+#ifdef WITH_RUST
+	auto &cursor = *openttd_rust_tile_loop_cursor();
+#else
+	auto &cursor = _cur_tileloop_tile;
+#endif
+	const auto saved_cursor = cursor;
+	for (const TileType kind : {MP_CLEAR, MP_TREES, MP_WATER}) for (uint version : {7U, 8U}) for (uint mode = 0; mode < 4; ++mode) {
+		ResetGenericCallbacks(); first.grf_version = version;
+		AddGenericCallback(GSF_SOUNDFX, &first, &program); AddGenericCallback(GSF_SOUNDFX, &second, &failure);
+		if (kind == MP_CLEAR) MakeClear(tile, CLEAR_GRASS, 3);
+		if (kind == MP_TREES) MakeTree(tile, 0, 1, TreeGrowthStage::Grown, TREE_GROUND_GRASS, 3);
+		if (kind == MP_WATER) { MakeCanal(tile, OWNER_NONE, 0); SetNonFloodingWaterTile(tile, true); }
+		SetTileHeight(tile, 19);
+		_misc_grf_features = mode == 0 ? GrfMiscBits{} : GrfMiscBits{GrfMiscBit::AmbientSoundCallback};
+		_settings_client.sound.ambient = mode != 1;
+		Randomizer before; uint32_t draw = 0;
+		for (uint seed = 1;; ++seed) { before.SetSeed(seed); auto next = before; draw = next.Next(); if (Chance16I(1, 200, draw) == (mode != 2)) break; }
+		auto expected_rng = before; if (mode != 0) expected_rng.Next(); _random = before;
+		uint32_t packed = version < 8 ? kind << 28 | 15U << 24 | GB(draw, 16, 8) << 16 | GetTerrainType(tile) : kind << 24 | GetTileZ(tile) << 16 | GB(draw, 16, 8) << 8 | (HasTileWaterClass(tile) ? to_underlying(GetWaterClass(tile)) : 0) << 3 | GetTerrainType(tile);
+		generic_sound_calls = 0; generic_sound_file = nullptr;
+#ifdef WITH_RUST
+		cursor = tile.base();
+#else
+		cursor = tile;
+#endif
+		 RunTileLoop();
+		GenericNeed(_random.state[0] == expected_rng.state[0] && _random.state[1] == expected_rng.state[1]);
+		GenericNeed(generic_sound_calls == uint(mode == 3));
+		if (mode == 3) GenericNeed(generic_sound_file == &first && generic_sound_id == 4 && generic_sound_tile == tile && registers.GetRegister(0x100) == static_cast<int32_t>(packed) && registers.GetRegister(0x101) == CBID_SOUNDS_AMBIENT_EFFECT && registers.GetRegister(0x102) == 0);
+		fmt::print(stderr, "GENERIC ambient {} {} {} {} {} {} {} {}\n", to_underlying(kind), version, mode, generic_sound_calls, mode == 3 ? packed : 0, generic_sound_file == &first, _random.state[0], _random.state[1]);
+	}
+	cursor = saved_cursor; uint i = 0; for (Tile one : Map::Iterate()) one.type() = types[i++];
+	std::tie(t.height(), t.m1(), t.m2(), t.m3(), t.m4(), t.m5(), t.m6(), t.m7(), t.m8()) = fields;
+	ResetGenericCallbacks(); // Before every graph/file destruction, including native reload.
+	fmt::print(stderr, "GENERIC programs-complete true\n");
+}
+static bool GenericScenario(std::span<std::string_view> args)
+{
+	if (args.size() != 2) return false;
+	GenericPrograms(); ReloadNewGRFData(); GenericPrograms();
+	fmt::print(stderr, "GENERIC reinstalled-after-native-reload true\n"); std::fflush(stderr); return true;
+}

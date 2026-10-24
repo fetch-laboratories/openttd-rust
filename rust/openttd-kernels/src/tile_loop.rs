@@ -90,7 +90,6 @@ pub struct GroundServices {
     pub climate: services::LandscapeType,
     pub editor: bool,
     pub rebuild: bool,
-    pub ambient_callback: bool,
 }
 
 /// Each native handler remains separately typed; map reads use the shared table.
@@ -130,7 +129,6 @@ unsafe fn dispatch(
                 tile,
                 g.climate,
                 g.editor,
-                g.ambient_callback,
                 settings.size_x,
                 g.clear,
                 s.shared,
@@ -141,7 +139,6 @@ unsafe fn dispatch(
             ground::rail_tile_loop(
                 tile,
                 g.climate,
-                g.ambient_callback,
                 settings.size_x,
                 size_y,
                 g.call,
@@ -177,7 +174,6 @@ unsafe fn dispatch(
                 tile_type,
                 settings.size_x,
                 size_y,
-                g.ambient_callback,
                 g.call,
                 g.water,
                 s.shared,
@@ -260,7 +256,6 @@ crate::abi::layouts! {
         climate,
         editor,
         rebuild,
-        ambient_callback,
     };
     "OpenTTDIndustryLoopServices" ["landscape"] => IndustryServices {
         production,

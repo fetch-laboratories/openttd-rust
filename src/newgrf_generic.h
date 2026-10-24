@@ -50,13 +50,21 @@ void AddGenericCallback(GrfSpecFeature feature, const GRFFile *file, const Sprit
 std::pair<const GRFFile *, uint16_t> GetAiPurchaseCallbackResult(GrfSpecFeature feature, CargoType cargo_type, uint8_t default_selection, IndustryType src_industry, IndustryType dst_industry, uint8_t distance, AIConstructionEvent event, uint8_t count, uint8_t station_size);
 void AmbientSoundEffectCallback(TileIndex tile);
 
+#ifdef WITH_RUST
+#include "rust/generic_ffi.h"
+#endif
+
 /** Play an ambient sound effect for an empty tile. */
 inline void AmbientSoundEffect(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_generic_ambient(tile.base());
+#else
 	/* Only run callback if enabled. */
 	if (!HasGrfMiscBit(GrfMiscBit::AmbientSoundCallback)) return;
 
 	AmbientSoundEffectCallback(tile);
+#endif
 }
 
 #endif /* NEWGRF_GENERIC_H */

@@ -49,9 +49,14 @@ static void AnimationTrace(std::string_view event)
 	for (const auto &r : st->custom_roadstop_tile_data) fmt::print(stderr, " r{}:{}:{}", r.tile.base(), r.random_bits, r.animation_frame);
 	fmt::print(stderr, "\n");
 }
+static uint generic_sound_calls = 0;
+static const GRFFile *generic_sound_file = nullptr;
+static SoundID generic_sound_id = 0;
+static TileIndex generic_sound_tile;
 extern "C" void __real__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE(const GRFFile *, SoundID, TileIndex);
 extern "C" void __wrap__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE(const GRFFile *f, SoundID s, TileIndex t)
 {
+	generic_sound_calls++; generic_sound_file = f; generic_sound_id = s; generic_sound_tile = t;
 	AnimationTrace("sound-enter");
 	__real__Z13PlayTileSoundPK7GRFFiletN10StrongType7TypedefIj12TileIndexTagJNS2_7CompareENS2_7IntegerENS2_10CompatibleIiEENS7_IlEEEEE(f, s, t);
 	AnimationTrace("sound-exit");

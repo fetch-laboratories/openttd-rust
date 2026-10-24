@@ -12,6 +12,7 @@
 #include "../newgrf.h"
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
+#include "../newgrf_sound.h"
 #include "../newgrf_house.h"
 #include "../house.h"
 #include "../town_map.h"
@@ -21,6 +22,8 @@
 #include "../newgrf_railtype.h"
 #include "../newgrf_roadtype.h"
 #include "../town.h"
+inline void RustGRFPlayTileSound(const GRFFile *file, uint16_t sound, uint32_t tile) noexcept { PlayTileSound(file, sound, TileIndex{tile}); }
+inline uint16_t RustIndustrySubstitute(uint8_t industry) noexcept { return GetIndustrySpec(industry)->grf_prop.subst_id; }
 inline int32_t RustHouseAge(uint32_t tile) noexcept { return GetHouseAge(TileIndex{tile}).base(); }
 inline uint8_t RustHouseRandomBits(uint32_t tile) noexcept { return GetHouseRandomBits(TileIndex{tile}); }
 inline uint8_t RustHouseRandomTriggers(uint32_t tile) noexcept { return GetHouseRandomTriggers(TileIndex{tile}).base(); }

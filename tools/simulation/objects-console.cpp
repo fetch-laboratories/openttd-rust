@@ -263,5 +263,6 @@ extern "C" void __wrap__Z22IConsoleStdLibRegisterv()
 	__real__Z22IConsoleStdLibRegisterv();
 	IConsole::CmdRegister("objects_scenario", ObjectsScenario);
 	IConsole::CmdRegister("landscape_scenario", LandscapeScenario);
+	IConsole::CmdRegister("generic_scenario", GenericScenario);
 	IConsole::CmdRegister("generation_scenario", GenerationScenario);
 }

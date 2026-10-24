@@ -648,7 +648,6 @@ pub unsafe extern "C" fn openttd_rust_water_tile_loop(
     tile: u32,
     size_x: u32,
     size_y: u32,
-    ambient_callback: bool,
     call: *mut Call,
     w: *const WaterServices,
     s: *const Services,
@@ -658,17 +657,7 @@ pub unsafe extern "C" fn openttd_rust_water_tile_loop(
     unsafe {
         let types = TileTypeAccess::callback((*s).tile_type);
         let tile_type = types.read(tile);
-        water_tile_loop(
-            tile,
-            tile_type,
-            size_x,
-            size_y,
-            ambient_callback,
-            call,
-            w,
-            s,
-            &types,
-        );
+        water_tile_loop(tile, tile_type, size_x, size_y, call, w, s, &types);
     };
 }
 /// Original `TileLoop_Water` after its caller has read `GetTileType(tile)`.
@@ -679,7 +668,6 @@ pub(crate) unsafe fn water_tile_loop(
     tile_type: u8,
     size_x: u32,
     size_y: u32,
-    ambient_callback: bool,
     call: *mut Call,
     w: *const WaterServices,
     s: *const Services,
@@ -688,10 +676,7 @@ pub(crate) unsafe fn water_tile_loop(
     if tile_type == 6 {
         // SAFETY: Live immutable tables; no owner access spans ambient sound.
         let water = unsafe { &*w };
-        if ambient_callback {
-            // SAFETY: The water table's clear table is live for this entry.
-            (unsafe { &*water.clear }.ambient)(tile);
-        }
+        crate::newgrf_generic::ambient(tile);
         if crate::water_map::is_non_flooding_water_tile(types, tile)
             .unwrap_or_else(|| (water.non_flooding)(tile))
         {
@@ -773,7 +758,7 @@ pub(crate) unsafe fn tree_industry_water_loop(tile: u32, call: *mut Call, s: &Se
     let size_y = (s.map_max_y)().wrapping_add(1);
     // SAFETY: Same serialized table/context contract as the native water entry.
     unsafe {
-        openttd_rust_water_tile_loop(tile, size_x, size_y, false, call, (s.water_services)(), s);
+        openttd_rust_water_tile_loop(tile, size_x, size_y, call, (s.water_services)(), s);
     }
 }
 
