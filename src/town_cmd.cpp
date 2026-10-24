@@ -3448,6 +3448,7 @@ static bool TryBuildTownHouse(Town *t, TileIndex tile, TownExpandModes modes)
  * @param house Is changed to the HouseID of the north tile of the same house
  * @return TileDiff from the tile of the given HouseID to the north tile
  */
+#ifndef WITH_RUST
 TileIndexDiff GetHouseNorthPart(HouseID &house)
 {
 	if (house >= 3) { // house id 0,1,2 MUST be single tile houses, or this code breaks.
@@ -3467,6 +3468,8 @@ TileIndexDiff GetHouseNorthPart(HouseID &house)
 	}
 	return TileDiffXY(0, 0);
 }
+
+#endif
 
 /**
  * Place an individual house.
