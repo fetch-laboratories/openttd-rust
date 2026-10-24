@@ -57,6 +57,7 @@ static OpenTTDResolverResult RustResult(const ResolverResult &result)
 OpenTTDResolverResult RustNativeSpriteGroup(const SpriteGroup *group, ResolverObject *resolver) noexcept { return RustResult(group->Resolve(*resolver)); }
 static void GroupNode(const SpriteGroup *group, OpenTTDGroupNode *out) noexcept
 {
+	out->data.callback = 0; // The unused union alternative is still initialized.
 	out->kind = static_cast<uint8_t>(group->kind);
 	switch (group->kind) {
 		case SpriteGroup::Kind::Deterministic: {
@@ -108,6 +109,7 @@ static void ResolverBinding(ResolverObject *ro, OpenTTDResolverBinding *out) noe
 }
 static void ScopeBinding(ScopeResolver *scope, OpenTTDScopeBinding *out) noexcept
 {
+	out->data.station = nullptr;
 	if (auto *v = dynamic_cast<VehicleScopeResolver *>(scope)) { out->kind = 1; out->data.vehicle = &v->state; }
 	else if (auto *st = dynamic_cast<StationScopeResolver *>(scope)) { out->kind = 2; out->data.station = &st->state; }
 	else if (auto *i = dynamic_cast<IndustriesScopeResolver *>(scope)) { out->kind = 3; out->data.industry = &i->context; }

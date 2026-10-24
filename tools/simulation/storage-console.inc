@@ -9,6 +9,7 @@
 #include "newgrf_config.h"
 #include "newgrf_profiling.h"
 #include "rail.h"
+#include "rev.h"
 #include <source_location>
 /* Executable native parsed groups, rebuilt for both initial and post-load runs.
  * The normal resolver methods provide results and storage effects; neither
