@@ -100,6 +100,7 @@ inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNu
 inline uint16_t RustGroundFirstEngine(const Vehicle *v) noexcept { return v->GetGroundVehicleCache()->first_engine.base(); }
 #ifdef WITH_RUST
 inline OpenTTDCargoList *RustVehicleCargoOwner(Vehicle *v) noexcept { return v->cargo.RustOwner(); }
+inline OpenTTDVehicleTileLinks *RustVehicleTileLinks(Vehicle *v) noexcept { return &v->tile_links; }
 #endif
 inline bool RustVehicleHasEngine(const Vehicle *v) noexcept { return v->HasEngineType(); }
 inline uint8_t RustVehicleDay(const Vehicle *v) noexcept { return v->day_counter; }

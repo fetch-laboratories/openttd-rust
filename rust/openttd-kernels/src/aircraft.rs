@@ -580,10 +580,10 @@ impl World<'_> {
         route_node(self; node: *const c_void) -> RouteNode => unsafe { (self.leaves.route_node)(node) };
         block_node(self; node: *const c_void) -> BlockNode => unsafe { (self.leaves.block_node)(node) };
         fta_next_position(self; node: *const c_void) -> u8 => unsafe { (self.leaves.fta_next_position)(node) };
-        update_position(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update(self.vs, vehicle.base(), false); (self.leaves.viewport)(vehicle); };
+        update_position(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update_position(self.vs, vehicle.base(), self.map()); (self.leaves.viewport)(vehicle); };
         rotor_image(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.rotor_image)(vehicle) };
         copy_sprite(self; vehicle: Vehicle, source: Vehicle) -> () => unsafe { (self.leaves.copy_sprite)(vehicle, source) };
-        position_viewport(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update(self.vs, vehicle.base(), false); (self.vs.base_viewport)(vehicle.base()); };
+        position_viewport(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update_position(self.vs, vehicle.base(), self.map()); (self.vs.base_viewport)(vehicle.base()); };
         create_effect(self; vehicle: Vehicle, kind: i64, x: i64, y: i64, z: i64) -> () => unsafe { (self.leaves.create_effect)(vehicle, kind as u8, x as i32, y as i32, z as i32) };
         dirty_start_stop(self; vehicle: Vehicle) -> () => (self.vs.start_stop_dirty)(vehicle.base());
         play_sound(self; vehicle: Vehicle, sound: i64) -> () => (self.vs.play_sound)(vehicle.base(), sound as u16);

@@ -310,10 +310,22 @@ const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept
 }
 static_assert(AIR_SHADOW == 4);
 
-static OpenTTDVehicleTileLinks *OPENTTD_VEHICLE_CALL VehicleSvcTileLinks(OpenTTDVehicle *v) noexcept { return &VehicleOf(v)->tile_links; }
+static OpenTTDVehicleTileLinks *OPENTTD_VEHICLE_CALL VehicleSvcTileLinks(OpenTTDVehicle *v) noexcept { return RustVehicleTileLinks(VehicleOf(v)); }
+static OpenTTDOccupancyUpdateObservation OPENTTD_VEHICLE_CALL VehicleSvcOccupancyUpdate(OpenTTDVehicle *shell) noexcept
+{
+	Vehicle *v = VehicleOf(shell);
+	return {.links = RustVehicleTileLinks(v), .tile = RustVehicleTile(v)};
+}
+static OpenTTDOccupancyNearObservation OPENTTD_VEHICLE_CALL VehicleSvcOccupancyNear(OpenTTDVehicle *shell) noexcept
+{
+	Vehicle *v = VehicleOf(shell);
+	return {.links = RustVehicleTileLinks(v), .xy = {.x = RustVehicleX(v), .y = RustVehicleY(v)}};
+}
 
 constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.tile_links = VehicleSvcTileLinks,
+	.occupancy_update = VehicleSvcOccupancyUpdate,
+	.occupancy_near = VehicleSvcOccupancyNear,
 	.map_log_x = OpenTTDMapLogX,
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 	.assertions = true,
