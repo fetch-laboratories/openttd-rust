@@ -903,6 +903,20 @@ Assertions-off raw reads add no bounds, type or field rejection. Checks: `verify
 scheduler comparison and `python3 tools/migration.py simulate landscape roads-flooding`. Matrix,
 editor, NewGRF and threaded gaps are in #156. PR #255; descriptor #351.
 
+### Landscape clear, terraform and level (#348)
+
+Rust owns `CmdLandscapeClear` and `CmdClearArea` and all of `terraform_cmd.cpp`: the command-local
+ordered height and dirty state (matching `std::map` and `std::set` iteration), recursive height
+propagation, both terraform validation passes, the height commit, `CmdTerraformLand` and
+`CmdLevelLand`. Integrated tile owners and clear callers dispatch to each other directly in
+Rust. C++ keeps the packed map arrays and setters, the unported tile procedures and the
+presentation leaves behind the original command facades; the original bodies compile only
+without `WITH_RUST`. A shared opaque native stack-cost utility supplies a distinct command
+result for each recursive frame without heap allocation. No owner borrow spans a nested command.
+Checks: `python3 tools/migration.py verify --jobs 2` and the default `landscape` simulation,
+which requires the two-pass, recursive-height, indirect-clear and partial-success witnesses.
+Editor, NewGRF and threaded gaps are #156. PR #353.
+
 ### Landscape partial-pixel height
 
 `GetPartialPixelZ`, the scalar landscape height kernel, runs in Rust behind its original C++
@@ -1229,6 +1243,20 @@ Standalone flight/disaster entries retain their narrow services. Checks: the def
 and `disasters` scenarios. Real NewGRF/refit/airport rotations, threaded GUI, legacy-save
 fixtures and presentation remain #156 gaps. PRs #145, #238 and #326.
 
+### Vehicle scheduling and base maintenance (#213)
+
+Rust owns the base vehicle calendar-day and economy-day scheduling, the live pool traversal of
+`CallVehicleTicks`, survival checks, cargo aging, motion and sound policy, loading and fleet
+sequencing, renewal, service and depot resets, reliability decay, breakdown triggers and
+countdowns, and age and value decrease. A growth-checked pool cursor and post-Tick scalar
+addresses keep creation, holes and deletion during a tick in source order; Tick completes before
+survival checks and no owner borrow spans a callback that can reenter or delete. C++ keeps the
+canonical `Vehicle` shells and pools, the type-specific controllers and day procedures, NewGRF
+callbacks, commands and presentation behind the original facades; the original bodies compile
+only without `WITH_RUST`. Checks: `python3 tools/migration.py verify --jobs 2` and the default
+vehicle, fleet and aircraft simulations. Replacement and old-news branches, NewGRF and reentrant
+sound, custom and articulated combinations, and legacy saves remain #156 gaps. PR #257.
+
 ### Fleet grouping and replacement lifecycle (#147)
 
 Rust owns group metadata/names/ordered children, group/company statistics and engine counts,
@@ -1547,6 +1575,21 @@ unchanged in non-Rust branches. Checks: `python3 tools/migration.py simulate tow
 otherwise unreachable name bytes against unchanged source. Real NewGRF, historical saves, GUI
 threading and the final 10,000-attempt fallback remain #156 gaps; house lifecycle belongs to
 #256. PR #258.
+
+### Town commands, authority actions and deletion (#247)
+
+Rust extends the sole town owner with the encoded town text and owns the deity and editor
+commands (cargo goal, text, growth rate, rating, expansion, deletion), all eight authority
+actions with their costs and masks, `TestTownOwnsBridge`, and the ordered town destructor and
+post-destructor cleanup. Command and error order, random draws, the statue inner-circle
+fall-through and the queried-company mask quirk follow the original, and the real-oilrig refusal
+precedes the later deletion phases. C++ keeps pool and map identities, persistent-storage
+shells, native costs, news and events, and save decoding behind the original facades; the
+original bodies compile only without `WITH_RUST`. The growth, rating, road, station-rating,
+cargo, subsidy and object owners are called directly in Rust. Post-destruction never resolves a
+recycled ID, and no owner borrow spans a callback. Checks: `python3 tools/migration.py simulate
+town-commands town-commands-reload --jobs 2`. Station allocation and statue search, NewGRF
+callbacks, live-vehicle deletion, legacy text decoding and threaded-GUI gaps are #156. PR #347.
 
 ### House lifecycle and tile simulation (#256)
 
