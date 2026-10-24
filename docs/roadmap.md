@@ -9,8 +9,8 @@ forward-looking, about 200 lines; completed work is one row, with evidence in PR
 - Fifty-two ownership ports. Original retirement: 57,462 / 470,612 C/C++ src lines (12.21%); simulation 49,264 / 102,615 (48.01%). Whole-fork Rust/tooling/glue: 103,834 / 36,703 / 37,169. These are source-line measures, including comments/data, not completed behavior percentages.
 - Since the seventeenth steering: 14 owners, 7,826 original lines retired, 2,772 net glue and 4,612 tooling lines added. Latest #391 integrates scheduler #380, live graph #383, occupancy #384 and monitors #388. The previous migration session integrated #360/#368/#379/#382/#390/#391; #395 subsequently trimmed CI setup/export idle time. No rollback.
 - Current tip projections, using the 824 quiet anchors: TGP 1.112461x; Opus 1.473042x; Grok 1.464168x; P1996 1.368048x; P2000 1.442738x; P2016 1.516110x. All five play rises exceed 3% when BOTH tips use those anchors (#275). These are not wall measurements. The last complete quiet pass was at 824: P2016 1.453124x, the only measured scenario still in band. The ac7 attempt is incomplete and supplies no new anchors.
-- Integrated code and current docs Quick are green; final combinations passed Full. Since steering: 27 Full requests, 15 successful, six failed and six cancelled. Strict current-base protection is enabled. macOS is due after three more integrations; CI maintenance observation is 5/10. CI_ON_DEMAND stays true.
-- Three unfinished owners: animation #389 passed its scoped conflict review; #392/#393 are resumed from pushed sketches. Source maintenance, coverage and both NewGRF workers are active, with retained speed attribution alongside them. Ten completed checkouts were safely removed under #259; protected speed inputs remain. Four component/batch branches plus one coverage fragment are active; no new owner starts before selection.
+- Integrated code and current docs Quick are green; final combinations passed Full. Since steering: 28 Full requests, 15 successful, seven failed and six cancelled. Strict current-base protection is enabled. macOS is due after three more integrations; CI maintenance observation is 5/10. CI_ON_DEMAND stays true.
+- Six unintegrated components/batches: animation #389 needs Full-failure repairs; #396 and shared prerequisite #401 are reviewed; speed fixes #402 are in review; storage #400 is reviewed pending shared-leaf adoption; resolver #397 continues whole-owner completion. Protected speed inputs remain; completed task/fragment checkouts were safely removed under #259. Next owners #398/#399 are selected but wait for the six-branch limit to fall.
 
 ## Eighteenth steering review (2026-10-23, remove accidental gates and close shared-layer debt)
 
@@ -149,13 +149,13 @@ new tooling stream is introduced. Keep one worker closing the coverage backlog.
 ## Phase 2: current work, in order of readiness
 
 Integrate ready reviewed work first. Keep at most six component branches; the
-three active owners below leave room, but fill maintenance/coverage capacity first.
+three owners and three maintenance/shared branches fill the six-branch limit.
 
-1. **Animation #385 / PR #389:** keep the reviewed owner and saved reconciliation. Fresh review covers substantive conflict resolutions only, then affected checks/base/Full. The source fixes and accepted evidence/cost explanation remain on the PR; do not restart its helper-interception design or three-ledger approvals.
-2. **Maintenance #261/#281 and coverage #156:** selected checklists own allocation/lookup/helper fixes, direct fleet capacity, the existing 120-line callee-checker task, and concrete callback/heightmap/reserved-cargo coverage. One PR carries ready items with one reviewer and Full; an unready item carries forward. No per-PR speed check. Broader #168/R2/R3 tails follow the selected defects.
-3. **Speed #275:** retained ac7/824 attribution and the whole quiet-six retry are next measurement work. Select fixes from net removable costs; ready ports do not wait. Keep six anchors coherent and compare both tips under the same anchor.
-4. **#392 vehicle NewGRF resolver/cache:** finish the complete vehicle-specific scope/root/variable/callback/property/randomisation runtime and canonical cache. Native common Action2/specs/pools/rendering remain shared. Issue owns the first concrete checkpoint and default callback/reload evidence; split review above about 1,000 retired lines.
-5. **#393 transactional NewGRF storage:** finish process registry/modes/registers, payloads/backups and industry/airport/town creation policies. Native associations/save-error frames remain. Prove aliases, transitions and nonempty reload in existing modules. Issue estimates are planning inputs, not inherited budget gates.
+1. **Ready maintenance #396/#401/#402:** source/coverage/checker batch #396 and canonical GRFFile-ID prerequisite #401 are reviewed; #402 carries the three attributed speed repairs and receives fresh fixing review. Batch ready reviewed heads on current base for one Full; the speed fix is the next maintenance integration. Root adopts the shared leaf into active owners only after integration.
+2. **Animation #385 / PR #389:** whole-owner and conflict reviews passed; build/native188 and eight affected scenarios passed. First Full exposed stale industry/town probes and rail/PBS checks. Two scoped repair workers retain canonical owners/oracles, then root combines fixes for one fresh repair review and Full. No helper-trace redesign, cost ledger or future speed-base gate.
+3. **Speed #275 and standing coverage #156:** retained ac7/824 net attribution selected #402; whole quiet-six retry is prepared outside its hold and remains to collect. Keep six coherent anchors and compare both tips under one anchor. The three selected coverage gaps are implemented in #396; resume backlog closure after integration. No per-PR speed check or new framework.
+4. **#392 / PR #397 vehicle resolver/cache:** canonical cache/runtime first checkpoint passes; fresh completion worker ports native variable/0x61/purchase/subtype/aircraft control and remaining owner bounces, then finishes selected trigger/register/nonempty reload checks. Root accepts necessary cache/evaluator boundaries at the checkpoint; no new cost planner. Split final review above about 1,000 retired lines.
+5. **#393 / PR #400 storage:** complete payload/process/creation owner and nonempty PSAC evidence pass independent review. Adopt integrated #401, remove the duplicate GRFID leaf, then current-base combination Full. Root accepted the necessary boundary/evidence cost; native associations/save-error frames remain.
 6. **#259 lifecycle cleanup:** remove verified completed review/fix checkouts, retaining pending speed inputs until consumed. Broader infrastructure is unselected; revisit CI tooling only after the ten-integration observation already chosen.
 7. **#398 industry and industry-tile NewGRF resolver:** own both feature runtimes, stack contexts, variables/roots/town selection, type/nearby policy and callback/probability/refusal routes. Reuse industry state directly; common Action2/specs remain native and storage stays #393. First checkpoint requires actual var67/68 and production/refusal callbacks in default industry scenarios.
 8. **#399 rail-station/waypoint NewGRF resolver:** own scope/root/cargo policy, six caches for each resolver lifetime, platform/continuation queries, slope callbacks and randomisation. Direct cargo/movement routes and exact reseed RNG are the first checkpoint; animation stays #389. No draft-service dependency. Issues hold the interface/evidence plans; root selects a fresh worker when capacity frees.
@@ -169,20 +169,20 @@ when the existing restart loop calls for it; completing this list does not stop 
 
 ## Resume checkpoint
 
-Development resumed. Animation's fresh scoped conflict review passed without fixes;
-root owns current-base adoption, native/ABI/affected scenarios and final Full.
-Four implementation workers and a retained-speed analyst are active. No final Full
-is running; finish routine roadmap changes before freezing its base.
+Development is active. Animation's first Full failed before integration; main is
+unchanged. Ready maintenance/shared work proceeds while two scoped animation
+repairs and resolver completion run. No Full is currently running.
 
 | Item | Saved head | Resume action | Jobs / CI |
 | --- | --- | --- | --- |
-| #389 animation | `f7bd701c2a` | Scoped review/base adoption complete; native/ABI/scenarios, Full. | Build passed; native/scenarios running; prior Cargo4/Quick retained. |
-| #392 vehicle resolver | `48727d8fd1` | Assigned: complete canonical cache/runtime and first default callback checkpoint. | Implementing; no PR yet. |
-| #393 storage | `8b5e305555` | Assigned: finish interface audit, creation policies and nonempty reload. | Implementing; no PR yet. |
-| #261/#281 source batch | current base | Assigned selected source fixes; checker carries separately. | Implementing. |
-| #156 coverage | current base | Assigned real rail callbacks, then heightmap/reserved-cargo gaps; batch ready work. | Implementing. |
-| #275 speed | frozen `ac7d2b60f2` | Assigned retained ac7/824 attribution; whole quiet-six inputs prepared. | No timed collection. |
-| #398 / #399 next owners | selected | Industry resolver first, then station/waypoint resolver; fresh agents when capacity frees. | Not started. |
+| #389 animation | `98c7fdb1e0` | Combine industry/town and rail/PBS repairs, fresh scoped review, Full. | Repair workers active; first Full failed. |
+| #396 source/coverage/checker | `a8f83a312d` | Reviewed; root spot-checked scalar-narrowing fix. Batch current-base Full. | All affected checks pass. |
+| #401 shared GRFFile ID | `e7058ac276` | Reviewed; batch ready prerequisite, then drafts adopt. | Build/native/object checks pass. |
+| #402 speed repairs | `ace1f2cfbb` | Fresh fixing review, next maintenance combination. | Build/Cargo4/native/15 scenarios pass. |
+| #397 resolver | `1b641104b7` | Fresh worker completes variable/helper control and selected evidence. | First-checkpoint checks pass. |
+| #400 storage | `13fe137ba3` | Review passed; adopt #401/current base and Full. | No local jobs. |
+| #275 quiet retry | frozen `ac7d2b60f2` | Prepared; collect whole six only during actual timed hold. | No timed collection or hold. |
+| #398 / #399 next owners | selected | Industry resolver, then station/waypoint; start after integrations free branches. | Not started. |
 
 Preserve speed checkouts `af1fea6a`, `bf961767`, `72a1223d`, `7ece2878`, `2a35b1c0`
 and their exact runtime until #275 consumes them. Keep the pinned reference
