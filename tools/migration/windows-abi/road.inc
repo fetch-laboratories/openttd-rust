@@ -1,3 +1,4 @@
+#include "controller-orders.hpp"
 #pragma once
 #include "ground_vehicle.hpp"
 #include "rust/road_stop_ffi.h"
@@ -220,10 +221,20 @@ static void RoadBoundary()
 	openttd_rust_road_set(probe.state, 6, 0);
 
 	/* Visual eligibility precedes lookup; effect reentry changes the later speed inputs. */
-	t.leaves.process_orders = [](OpenTTDVehicle *u) noexcept {
+	static std::unique_ptr<ControllerOrders> road_orders;
+	road_orders = std::make_unique<ControllerOrders>(&t.vehicle);
+	t.vehicle.orders = []() noexcept -> const OpenTTDOrdersLeaves * { return &road_orders->services; };
+	road_orders->services.vehicle = [](void *shell) noexcept { CHECK(shell == RoadAbiHandle()); return road_orders->vehicle.get(); };
+	road_orders->services.consist = [](void *) noexcept { return &road_orders->consist; };
+	road_orders->services.vehicle_type = [](void *) noexcept { return uint64_t{1}; };
+	road_orders->services.station_location = [](void *, uint16_t) noexcept { return uint64_t{100}; };
+	road_orders->services.set_destination = [](void *shell, uint32_t destination) noexcept {
+		CHECK(destination == 100);
+		auto *u = static_cast<OpenTTDVehicle *>(shell);
 		auto &p = *road_abi_probe;
-		openttd_rust_road_set_dest(u, p.state, 100, p.dest, p.leaves);
+		openttd_rust_road_set_dest(u, p.state, destination, p.dest, p.leaves);
 	};
+	t.vehicle.order_type = [](OpenTTDVehicle *) noexcept { return road_orders->vehicle->current.type; };
 	t.vehicle.loading = [](OpenTTDVehicle *, bool, const OpenTTDVehicleVisits *) noexcept {};
 	t.vehicle.visits = []() noexcept -> const OpenTTDVehicleVisits * { return nullptr; };
 	t.leaves.visual_read = [](OpenTTDVehicle *) noexcept -> OpenTTDRoadVisualRead {

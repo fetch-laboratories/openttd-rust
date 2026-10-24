@@ -587,7 +587,6 @@ pub struct Leaves {
     pub platform_length: extern "C" fn(Handle, u16, u32) -> u64,
     pub pow_wag_power: extern "C" fn(Handle) -> u64,
     pub price: extern "C" fn(Handle, u32) -> u64,
-    pub process_orders: extern "C" fn(Handle) -> u64,
     pub railveh_wagon: extern "C" fn(Handle) -> u64,
     pub rail_tilt: extern "C" fn(Handle) -> u64,
     pub rail_type: extern "C" fn(Handle, u32) -> u64,
@@ -2399,7 +2398,12 @@ impl Game<'_> {
             return true;
         }
         let valid_order = v.order != 0 && v.order != 7;
-        if (self.leaves.process_orders)(id) != 0 && (self.leaves.check_reverse)(id) != 0 {
+        // SAFETY: The original live train shell survives orders; no owner borrow spans reentry.
+        if unsafe {
+            crate::orders::openttd_rust_process_orders(id.shell.cast(), self.vs().orders())
+        } != 0
+            && (self.leaves.check_reverse)(id) != 0
+        {
             id.set_wait_counter(0);
             (self.leaves.write_speed)(id, 0_u16);
             (self.leaves.write_subspeed)(id, 0_u8);
@@ -2499,7 +2503,13 @@ impl Game<'_> {
                     && (self.leaves.is_station_any)(Handle::NONE, v.tile) != 0
                     && u64::from(v.order_destination) == (self.leaves.station)(Handle::NONE, v.tile)
                 {
-                    (self.leaves.process_orders)(id);
+                    // SAFETY: The orders owner is resolved at this source call; no owner borrow remains.
+                    unsafe {
+                        crate::orders::openttd_rust_process_orders(
+                            id.shell.cast(),
+                            self.vs().orders(),
+                        )
+                    };
                 }
             }
             crate::ground_vehicle::last_speed(self.leaves.physics, id.vehicle());
@@ -3363,7 +3373,6 @@ crate::abi::layouts! {
         platform_length,
         pow_wag_power,
         price,
-        process_orders,
         railveh_wagon,
         rail_tilt,
         rail_type,

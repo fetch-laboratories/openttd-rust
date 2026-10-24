@@ -181,7 +181,6 @@ struct OpenTTDRoadLeaves {
 	const OpenTTDGroundServices *ground;
 	const OpenTTDSharedServices *shared;
 	uint32_t (OPENTTD_VEHICLE_CALL *max_depot_penalty)() noexcept OPENTTD_SERVICE_DEFAULT(max_depot_penalty);
-	void (OPENTTD_VEHICLE_CALL *process_orders)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);
 	OpenTTDRoadVisualRead (OPENTTD_VEHICLE_CALL *visual_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(visual_read);
 	OpenTTDRoadSpeedRead (OPENTTD_VEHICLE_CALL *visual_effect_then_speed)(OpenTTDVehicle *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(visual_effect_then_speed);
 	OpenTTDRoadSpeedRead (OPENTTD_VEHICLE_CALL *speed_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(speed_read);
