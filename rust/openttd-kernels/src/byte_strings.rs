@@ -134,13 +134,9 @@ unsafe fn borrowed<'a>(data: *const u8, length: usize) -> &'a [u8] {
 /// Compare/equal/prefix/suffix/contains using native toupper(char).
 ///
 /// # Safety
-/// Each nonempty span addresses initialized readable bytes in one live allocation,
-/// length <= `isize::MAX`, immutable for the call; empty spans permit null and
-/// read-only spans may overlap. No pointer is retained. mode is 0 compare, 1
-/// equal, 2 prefix, 3 suffix, 4 contains; `signed_char` is the native C++ char sign.
-/// `length_order` is the installed C++ library's equal-prefix length comparison.
-/// Native C locale must not change concurrently. See upper's historical domain
-/// caveat. Panic aborts and this C ABI never unwinds.
+/// Spans follow `byte_strings_ffi.h`: nonempty spans are readable for the call, empty spans
+/// permit null and read-only spans may overlap. The native C locale must not change
+/// concurrently.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_bytes_case(
@@ -218,12 +214,9 @@ pub unsafe extern "C" fn openttd_rust_bytes_hex_encode(
 /// Decode hex sequentially, preserving partial writes and legal overlapping views.
 ///
 /// # Safety
-/// Nonempty hex is initialized readable bytes; output is live writable storage
-/// and may be uninitialized, except bytes also read through overlapping input.
-/// Each span is in a live allocation, length <= `isize::MAX`. They may overlap and have
-/// no other accesses during this call. Empty permits null. No Rust references
-/// are formed: both nibbles are read before each write, and subsequent reads see
-/// earlier writes, as in C++. No pointer is retained; panic aborts, never unwinds.
+/// Nonempty hex is initialized readable bytes; output is writable and may be uninitialized
+/// except bytes also read through overlapping input. Both nibbles are read before each write,
+/// and later reads see earlier writes, as in C++. Empty spans permit null.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_bytes_hex_decode(

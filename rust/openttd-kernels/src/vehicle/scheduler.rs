@@ -234,13 +234,10 @@ macro_rules! post_svc {
 }
 
 /// # Safety
-/// Tick survived. Native shells are separately allocated: pool array growth
-/// cannot move their scalar members. Cargo packet lookup and `NewGRF` sound
-/// resolution may reenter, but cannot destroy these shells, reset the pool or
-/// yield the game-state mutex. Only addresses survive those audited callbacks;
-/// field loads/stores end before each callback and subsequent values are fresh.
-/// Never retain a descriptor across Tick, traversal, loading, day or fleet work.
-/// `cargo` is the bundle the surviving Tick filled; it is read only here.
+/// Tick survived. Shells are separately allocated, so pool growth cannot move their members;
+/// cargo packet lookup and `NewGRF` sound resolution may reenter but cannot destroy these
+/// shells, reset the pool or yield the mutex. Never retain a descriptor across Tick,
+/// traversal, loading, day or fleet work. `cargo` is the bundle the surviving Tick filled.
 unsafe fn post_tick<const COUNTED: bool>(
     schedule: &PostTickServices,
     vehicle: VehicleRef,

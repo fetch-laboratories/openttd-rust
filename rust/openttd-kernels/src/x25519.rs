@@ -988,14 +988,8 @@ fn x25519(leaves: &Leaves, out: *mut u8, secret: *const u8, point: *const u8) {
     scalarmult(leaves, out, e, point, 255);
     wipe(leaves, e, 32);
 }
-// SAFETY for exports: original fixed 32-byte readable/writable buffer extents;
-// immutable initialized leaf table is borrowed synchronously, only original
-// nonthrowing wipe/verify32 callbacks. Output may overlap inputs, including
-// partial overlap: scalar/point reads finish before ladder serialization.
-// Trim separately preserves original forward-copy overlap behavior. Coarse
-// ladder callers supply 255 or 256 bits. No field/layout crosses FFI, no pointers
-// survive calls, no external buffer becomes overlapping Rust references.
-// No heap, global registration or C++ unwinding; Rust panics abort.
+// SAFETY for exports: the `x25519_ffi.h` contract. Buffers are fixed 32-byte spans
+// that output may overlap, because scalar and point reads finish before serialization.
 #[unsafe(no_mangle)]
 pub(crate) unsafe extern "C" fn openttd_rust_x25519_trim(out: *mut u8, input: *const u8) {
     trim(out, input);

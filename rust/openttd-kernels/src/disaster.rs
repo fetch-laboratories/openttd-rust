@@ -1112,15 +1112,10 @@ pub extern "C" fn openttd_rust_disaster_delay() -> *mut u16 {
 }
 /// Create one component continuation; arguments and IDs follow original preconditions.
 /// # Safety
-/// Context/callbacks remain live until destruction. Read/write leaves cannot
-/// throw or reenter, and copy/write only source-valid canonical scalars. Shared
-/// and occupancy tables, including their pointees, stay immutable and live through
-/// Run destruction, suspension and all World clones. Context may mutate
-/// independently; table references borrow no world storage. Services are
-/// synchronous and noexcept; allocation may construct a separate owner. No raw
-/// State reference spans any service; flight helpers access flags only during
-/// their call. Returned actions 2/14/17 allow deletion/Crash/clear callbacks on
-/// the C++ stack. All operations run on the game thread.
+/// Context and callbacks stay live until destruction; the shared and occupancy tables and
+/// their pointees stay immutable and live through destruction, suspension and all `World`
+/// clones (see `disaster_ffi.h`). Returned actions 2, 14 and 17 run deletion, `Crash` and clear
+/// callbacks on the C++ stack.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_disaster_create<'a>(
     operation: u32,
