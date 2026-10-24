@@ -814,6 +814,7 @@ const AMS_TTDP_FLIGHT_APPROACH: u32 = 16;
 const AMS_TTDP_FLIGHT_TO_TOWER: u32 = 18;
 const AMS_TTDP_FLIGHT_DESCENT: u32 = 21;
 const AMS_TTDP_BRAKING: u32 = 22;
+const AMS_TTDP_HELI_TAKEOFF_AIRPORT: u32 = 23;
 const AMS_TTDP_HELI_LAND_AIRPORT: u32 = 25;
 const AMS_TTDP_HELI_TAKEOFF_HELIPORT: u32 = 26;
 const AMS_TTDP_HELI_LAND_HELIPORT: u32 = 28;
@@ -892,7 +893,11 @@ unsafe fn aircraft_movement_state(s: &Services, v: V) -> u32 {
             ENDTAKEOFF => AMS_TTDP_CLIMBING,
             HELITAKEOFF => {
                 if (leaves.airport_delta_z)(airport) == 0 {
-                    if has(AMD_HELI_RAISE) { 23 } else { 7 }
+                    if has(AMD_HELI_RAISE) {
+                        AMS_TTDP_HELI_TAKEOFF_AIRPORT
+                    } else {
+                        AMS_TTDP_TO_JUNCTION
+                    }
                 } else {
                     AMS_TTDP_HELI_TAKEOFF_HELIPORT
                 }

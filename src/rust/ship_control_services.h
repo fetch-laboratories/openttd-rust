@@ -333,7 +333,7 @@ static uint32_t Ship_order_max_speed(uint32_t id) noexcept { const Ship *v = Shi
 
 static uint32_t Ship_acceleration(uint32_t id) noexcept { const Ship *v = Ship::Get(VehicleID(id)); return static_cast<uint32_t>(v->acceleration); }
 
-static OpenTTDShipState *Ship_state_owner(uint32_t id) noexcept { return Ship::Get(VehicleID(id))->GetRustState(); }
+static OpenTTDShipState *Ship_state_owner(uint32_t id) noexcept { return RustVehicleShipOwner(Ship::Get(VehicleID(id))); }
 static OpenTTDWaterPatch Ship_patch(uint32_t tile) noexcept { auto p = GetWaterRegionPatchInfo(TileIndex(tile)); return {p.x, p.y, p.label.base()}; }
 static size_t Ship_neighbours(OpenTTDWaterPatch patch, OpenTTDWaterPatch *out) noexcept
 {

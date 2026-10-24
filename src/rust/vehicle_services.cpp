@@ -39,6 +39,7 @@
 #include "../sound_type.h"
 #include "../framerate_type.h"
 #include "../aircraft.h"
+#include "../ship.h"
 #include "../train.h"
 #include "../station_base.h"
 #include "vehicle_maintenance_ffi.h"
@@ -55,10 +56,13 @@
 #include "../news_func.h"
 #include "../strings_func.h"
 #include "../table/strings.h"
+OpenTTDAircraftState *RustVehicleAircraftOwner(const Vehicle *v) noexcept { return Aircraft::From(v)->rust_state.get(); }
+OpenTTDShipState *RustVehicleShipOwner(const Vehicle *v) noexcept { return Ship::From(v)->GetRustState(); }
+
 OpenTTDAircraftVehicle RustAircraftVehicle(Vehicle *v) noexcept
 {
 	if (v == nullptr) return {nullptr, nullptr, VehicleID::Invalid().base()};
-	return {RustVehicle(v), v->type == VEH_AIRCRAFT ? Aircraft::From(v)->rust_state.get() : nullptr, RustVehicleIndexOpaque(v)};
+	return {RustVehicle(v), v->type == VEH_AIRCRAFT ? RustVehicleAircraftOwner(v) : nullptr, RustVehicleIndexOpaque(v)};
 }
 OpenTTDAircraftVehicle GetRustAircraftVehicle(OpenTTDVehicle *v) noexcept { return RustAircraftVehicle(VehicleOf(v)); }
 

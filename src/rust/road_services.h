@@ -114,7 +114,7 @@ static OpenTTDRoadRoadTypes OPENTTD_VEHICLE_CALL RoadSvcMoveTile(OpenTTDVehicle 
 	TileIndex old_tile = u->tile;
 	u->tile = TileIndex(tile);
 	RoadTramType rtt = RustRoadTramType(RustRoadVehicleType(u));
-	return {.before = GetRoadType(old_tile, rtt), .after = GetRoadType(u->tile, rtt)};
+	return {.before = RustRoadTileType(old_tile.base(), rtt), .after = RustRoadTileType(u->tile.base(), rtt)};
 }
 static OpenTTDRoadPathRead OPENTTD_VEHICLE_CALL RoadSvcPathRead(OpenTTDVehicle *v) noexcept
 {
