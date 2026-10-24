@@ -21,8 +21,6 @@
 #include "../window_func.h"
 #include "../texteff.hpp"
 
-inline uint16_t RustVehicleCallback(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, std::span<int32_t> registers = {}) noexcept { return GetVehicleCallback(callback, param1, param2, engine, v, registers); }
-uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept;
 OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept;
 bool RustTrainIsEngine(const Vehicle *v) noexcept;
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
@@ -40,18 +38,12 @@ inline OpenTTDVehicle *RustVehicle(const Vehicle *v) noexcept { return reinterpr
 /** The vehicle behind a Rust handle. */
 inline Vehicle *VehicleOf(OpenTTDVehicle *v) noexcept { return reinterpret_cast<Vehicle *>(v); }
 
-inline std::optional<bool> RustVehicleBuildProbability(Vehicle *v, EngineID engine, BuildProbabilityType type) noexcept { return TestVehicleBuildProbability(v, engine, type); }
-inline bool RustVehicleHasReverseProbability(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); return RustVehicleBuildProbability(v, v->engine_type, BuildProbabilityType::Reversed).has_value(); }
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine; }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
 inline uint16_t RustVehicleLastStationVisited(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_station_visited.base(); }
 inline uint16_t RustVehicleLoadUnloadTicks(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->load_unload_ticks; }
 inline void RustVehicleSetLastLoadingStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_loading_station = StationID(station); }
 inline void RustVehicleSetLastLoadingTick(OpenTTDVehicle *v, uint64_t tick) noexcept { VehicleOf(v)->last_loading_tick = tick; }
-inline void RustVehicleRandomisation(Vehicle *v, VehicleRandomTrigger trigger) noexcept { TriggerVehicleRandomisation(v, trigger); }
-inline void RustVehicleDepotRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::Depot); }
-inline void RustVehicleNewCargoRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::NewCargo); }
-inline void RustVehicleEmptyRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::Empty); }
 inline void RustVehicleDirtyDepot(const Vehicle *v) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); }
 inline void RustVehicleDirtyDepotOpaque(void *v) noexcept { RustVehicleDirtyDepot(static_cast<Vehicle *>(v)); }
 inline void RustVehicleInvalidateDepotTile(TileIndex tile) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, tile); }

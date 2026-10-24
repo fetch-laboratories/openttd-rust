@@ -146,23 +146,12 @@ static void Ship_pay_running(uint32_t id, int64_t amount) noexcept
 
 static uint32_t Ship_speed_default(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return ShipVehInfo(v->engine_type)->max_speed; }
 
-static uint32_t Ship_age_default(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return EngInfo(v->engine_type)->cargo_age_period; }
+static uint32_t Ship_age_default(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); return RustEngineCargoAge(RustVehicleGetEngine(RustVehicle(v))); }
 
 static uint32_t Ship_speed_frac(uint32_t id, bool sea) noexcept
 {
 	Ship *v = Ship::Get(VehicleID(id));
 	return sea ? ShipVehInfo(v->engine_type)->ocean_speed_frac : ShipVehInfo(v->engine_type)->canal_speed_frac;
-}
-
-static uint32_t Ship_speed_property(uint32_t id, uint32_t default_speed) noexcept
-{
-	Ship *v = Ship::Get(VehicleID(id));
-	return GetVehicleProperty(v, PROP_SHIP_SPEED, default_speed);
-}
-static uint32_t Ship_age_property(uint32_t id, uint32_t default_period) noexcept
-{
-	Ship *v = Ship::Get(VehicleID(id));
-	return GetVehicleProperty(v, PROP_SHIP_CARGO_AGE_PERIOD, default_period);
 }
 
 static void Ship_update_visual(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateVisualEffect(); }
@@ -392,7 +381,6 @@ const OpenTTDShipLeaves &GetRustShipServices() noexcept
 		.running_cost = Ship_running_cost, .cost_divisor = Ship_cost_divisor,
 		.pay_running = Ship_pay_running, .speed_default = Ship_speed_default,
 		.age_default = Ship_age_default, .speed_frac = Ship_speed_frac,
-		.speed_property = Ship_speed_property, .age_property = Ship_age_property,
 		.update_visual = Ship_update_visual, .cache_invalidate = Ship_cache_invalidate,
 		.capacity = Ship_capacity, .sprite_direction = Ship_sprite_direction,
 		.tile_x = Ship_tile_x, .tile_y = Ship_tile_y,

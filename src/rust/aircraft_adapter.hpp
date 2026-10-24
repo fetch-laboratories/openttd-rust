@@ -8,6 +8,7 @@
 #include "aircraft_ffi.h"
 #include "services_assert.h"
 #include "vehicle_services.h"
+#include "engine_services.h"
 #include "services_map.h"
 #include "services_station.h"
 #include "company_services.h"
@@ -292,16 +293,14 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_invalid_scheme(OpenTTDAircraftVehicle
 
 
 
-static uint32_t OPENTTD_AIRCRAFT_CALL Aircraft_cargo_age_property(OpenTTDAircraftVehicle vehicle) noexcept
+static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_cargo_age_default(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	const Vehicle *v = VehicleOf(vehicle.handle);
-	return GetVehicleProperty(v, PROP_AIRCRAFT_CARGO_AGE_PERIOD, EngInfo(v->engine_type)->cargo_age_period);
+	return RustEngineCargoAge(RustVehicleGetEngine(vehicle.handle));
 }
 
-static uint32_t OPENTTD_AIRCRAFT_CALL Aircraft_range_property(OpenTTDAircraftVehicle vehicle) noexcept
+static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_range_default(OpenTTDAircraftVehicle vehicle) noexcept
 {
-	const Vehicle *v = VehicleOf(vehicle.handle);
-	return GetVehicleProperty(v, PROP_AIRCRAFT_RANGE, AircraftVehInfo(v->engine_type)->max_range);
+	return RustEngineAircraftRange(RustVehicleGetEngine(vehicle.handle));
 }
 
 static bool OPENTTD_AIRCRAFT_CALL Aircraft_touchdown_sound(OpenTTDAircraftVehicle vehicle) noexcept
@@ -451,8 +450,8 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.invalid_position = Aircraft_invalid_position,
 	.invalid_scheme = Aircraft_invalid_scheme,
 	.unreachable = RustNotReachedWithUnusedOwner<OpenTTDAircraftVehicle>,
-	.cargo_age_property = Aircraft_cargo_age_property,
-	.range_property = Aircraft_range_property,
+	.cargo_age_default = Aircraft_cargo_age_default,
+	.range_default = Aircraft_range_default,
 	.touchdown_sound = Aircraft_touchdown_sound,
 	.rotor_image_if_changed = Aircraft_rotor_image_if_changed,
 	.update_rotor_image = Aircraft_update_rotor_image,

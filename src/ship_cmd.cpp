@@ -241,7 +241,7 @@ static void CheckIfShipNeedsService(Vehicle *v)
 void Ship::UpdateCache()
 {
 #ifdef WITH_RUST
-	openttd_rust_ship_cache(this->index.base(), &GetRustShipServices(), &GetRustSharedServices());
+	openttd_rust_ship_cache(RustVehicle(this), this->index.base(), &GetRustShipServices(), &GetRustSharedServices());
 #else
 	const ShipVehicleInfo *svi = ShipVehInfo(this->engine_type);
 

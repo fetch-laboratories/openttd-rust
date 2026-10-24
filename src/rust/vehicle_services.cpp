@@ -88,7 +88,6 @@ Vehicle *RustTrainOtherMultihead(const Vehicle *v) noexcept { return VehicleOf(G
 
 OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept { return TrainHandle(Train::From(VehicleOf(v))); }
 bool RustTrainIsEngine(const Vehicle *v) noexcept { return Train::From(v)->IsEngine(); }
-uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept { return RustVehicleCallback(CBID_VEHICLE_START_STOP_CHECK, 0, 0, v->engine_type, v, std::span(reg, 1)); }
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_power; }
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept { return RustEngineGRFVersion(EngineOf(RustVehicleGetEngine(RustVehicle(v)))); }
 uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept { return GetGRFStringID(v->GetGRFID(), GRFStringID(string)); }
@@ -441,10 +440,6 @@ static OpenTTDVehicleDayCallback OPENTTD_VEHICLE_CALL VehicleSchedulerDayCallbac
 	const Vehicle *v = VehicleOf(shell);
 	return {.day = RustVehicleDay(v), .has_engine = RustVehicleHasEngine(v)};
 }
-static void OPENTTD_VEHICLE_CALL VehicleSchedulerRandomiseCallback(OpenTTDVehicle *shell) noexcept
-{
-	RustVehicleRandomisation(VehicleOf(shell), VehicleRandomTrigger::Callback32);
-}
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerFirstDirty(OpenTTDVehicle *shell) noexcept { RustVehicleFirst(VehicleOf(shell))->MarkDirty(); }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerWithLoadingTimer(const OpenTTDVehicleSchedulerTables *tables, void (OPENTTD_VEHICLE_CALL *load)(const OpenTTDVehicleSchedulerTables *)) noexcept
 {
@@ -472,7 +467,6 @@ const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcep
 		.calendar_day = VehicleSchedulerCalendarDay,
 		.economy_day = VehicleSchedulerEconomyDay,
 		.day_callback_read = VehicleSchedulerDayCallbackRead,
-		.randomise_callback = VehicleSchedulerRandomiseCallback,
 		.first_dirty = VehicleSchedulerFirstDirty,
 		.cargo_owner = VehicleSchedulerCargoOwner,
 		.vehicle = &_rust_vehicle_services,

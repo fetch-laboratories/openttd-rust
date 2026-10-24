@@ -77,7 +77,6 @@ pub struct Services {
     pub has_grf: extern "C" fn(*const OpenTTDEngine) -> bool,
     pub refit_cost: extern "C" fn(*const OpenTTDEngine) -> u8,
     pub refit_cargo: extern "C" fn(*const OpenTTDEngine, u8) -> Cargo,
-    pub cost_callback: extern "C" fn(*mut OpenTTDVehicle, u16, u32) -> u16,
     pub engine_kind: extern "C" fn(*const OpenTTDEngine) -> VehicleType,
     pub rail_kind: extern "C" fn(*const OpenTTDEngine) -> RailVehicleTypes,
     pub price_shift: extern "C" fn(*const OpenTTDEngine, u32) -> i32,
@@ -148,7 +147,19 @@ unsafe fn cost_factor(
     if (s.has_grf)(e) {
         let cs = (s.refit_cargo)(e, cargo);
         let param = (u32::from(cs.classes) << 16) | (u32::from(subtype) << 8) | u32::from(cs.local);
-        let result = (s.cost_callback)(v.cast(), engine, param);
+        let result = unsafe {
+            crate::newgrf_vehicle::callback(
+                s.common.vehicles,
+                super::vehicle_ref(v),
+                engine,
+                crate::newgrf_callbacks::CBID_VEHICLE_REFIT_COST.0,
+                param,
+                std::ptr::null_mut(),
+                false,
+                std::ptr::null_mut(),
+                0,
+            )
+        };
         if result != crate::vehicle::CALLBACK_FAILED {
             let mut factor = i32::from(result & 0x3fff);
             if factor >= 0x2000 {
@@ -478,6 +489,7 @@ pub(crate) unsafe fn refit(
                 (s.invalidate_chain)(v.cast());
                 unsafe {
                     crate::ship_control::openttd_rust_ship_cache(
+                        vehicle_ref(v),
                         (b.groups.vehicle_id)(v),
                         s.ship,
                         b.shared,
@@ -553,6 +565,6 @@ crate::abi::layouts! {
         train, wagon, road, ship, aircraft, train_run, road_run, ship_run, aircraft_run, auto_refit, refit,
     };
     "OpenTTDVehicleRefitServices" ["probe"] => Services {
-        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, has_grf, refit_cost, refit_cargo, cost_callback, engine_kind, rail_kind, price_shift, can_carry, refit_engine, capacity, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, set_refit_cap, refit_cap, cargo_cap, set_capacity, write_refit, mail_cargo, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
+        common, selection, cargo, scheduler, train, road, aircraft, ship, road_ground, prices, engine, vehicle_engine, has_grf, refit_cost, refit_cargo, engine_kind, rail_kind, price_shift, can_carry, refit_engine, capacity, cargo_kind, set_cargo_kind, expense, invalidate_chain, commit, set_refit_cap, refit_cap, cargo_cap, set_capacity, write_refit, mail_cargo, train_handle, road_state, aircraft_handle, road_acceleration, details_ui, lists_ui,
     };
 }

@@ -275,8 +275,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*backoff)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(backoff);
 	void (*base_viewport)(OpenTTDTrainHandle, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
 	uint64_t (*bridge_speed)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(bridge_speed);
-	void (*cache_override)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(cache_override);
-	uint64_t (*callback_length)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(callback_length);
 	uint64_t (*capacity)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
 	void (*capacity_error)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(capacity_error);
 	uint64_t (*cargo_age_default)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(cargo_age_default);
@@ -299,7 +297,7 @@ struct OpenTTDTrainServices {
 	uint64_t (*crossing_road_axis)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_road_axis);
 	void (*crossing_sound)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(crossing_sound);
 	uint64_t (*curve_advantage)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(curve_advantage);
-	uint64_t (*curve_mod)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(curve_mod);
+	int16_t (*curve_mod_default)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(curve_mod_default);
 	uint64_t (*day_ticks)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(day_ticks);
 	void (*delete_vehicle)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(delete_vehicle);
 	uint64_t (*depot_dir)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(depot_dir);
@@ -359,7 +357,6 @@ struct OpenTTDTrainServices {
 	uint64_t (*pow_wag_power)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(pow_wag_power);
 	uint64_t (*price)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(price);
 	uint64_t (*process_orders)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);
-	uint64_t (*property)(OpenTTDTrainHandle, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(property);
 	uint64_t (*railveh_wagon)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(railveh_wagon);
 	uint64_t (*rail_tilt)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(rail_tilt);
 	uint64_t (*rail_type)(OpenTTDTrainHandle, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_type);

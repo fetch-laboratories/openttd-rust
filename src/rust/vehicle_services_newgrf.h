@@ -17,6 +17,7 @@
 #include "../debug.h"
 #include "aircraft_ffi.h"
 #include "ground_vehicle_ffi.h"
+#include "settings_services.h"
 #include "cargo_storage_ffi.h"
 #include "services_station.h"
 
@@ -59,6 +60,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.override_at = [](const OpenTTDEngine *engine, size_t i) noexcept -> OpenTTDVehicleOverride { const auto &o = EngineOf(engine)->overrides[i]; return {o.group, o.cargo, o.engines.size()}; },
 		.override_engine = [](const OpenTTDEngine *engine, size_t i, size_t j) noexcept { return EngineOf(engine)->overrides[i].engines[j].base(); },
 		.cached_override = [](OpenTTDVehicle *v) noexcept { return Train::From(VehicleOf(v))->tcache.cached_override; },
+		.write_override = [](OpenTTDVehicle *v, const SpriteGroup *group) noexcept { Train::From(VehicleOf(v))->tcache.cached_override = group; },
 		.spritegroup = [](uint16_t engine, uint8_t cargo) noexcept { return Engine::Get(EngineID(engine))->grf_prop.GetSpriteGroup(cargo); },
 		.random_bits = [](OpenTTDVehicle *v) noexcept { return VehicleOf(v)->random_bits; },
 		.waiting = [](OpenTTDVehicle *v) noexcept { return VehicleOf(v)->waiting_random_triggers.base(); },
@@ -75,12 +77,14 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.default_cargo = [](const OpenTTDEngine * e) noexcept -> uint8_t { return RustEngineDefaultCargo(e); },
 		.engine_flags = [](const OpenTTDEngine * e) noexcept -> uint8_t { return EngineOf(e)->flags.base(); },
 		.local_id = [](const OpenTTDEngine * e) noexcept -> uint16_t { return EngineOf(e)->grf_prop.local_id; },
-		.cargo_weight = [](uint8_t cargo) noexcept -> uint16_t { return CargoSpec::Get(cargo)->weight; },
+		.cargo_info = [](uint8_t cargo) noexcept -> OpenTTDVehicleCargoInfo { const CargoSpec *cs = CargoSpec::Get(cargo); return {cs->classes.base(), cs->weight}; },
 		.motion = [](OpenTTDVehicle * v) noexcept -> uint32_t { return *RustVehicleMotionAddress(VehicleOf(v)); },
 		.build_year = [](OpenTTDVehicle * v) noexcept -> int32_t { return VehicleOf(v)->build_year.base(); },
 		.last_service = [](OpenTTDVehicle * v) noexcept -> int32_t { return VehicleOf(v)->date_of_last_service_newgrf.base(); },
 		.primary = [](OpenTTDVehicle * v) noexcept -> bool { return RustVehiclePrimary(VehicleOf(v)); },
-		.current_max_speed = [](OpenTTDVehicle * v) noexcept -> int32_t { return VehicleOf(v)->GetCurrentMaxSpeed(); },
+		.train_services = []() noexcept { return &GetTrainServices(); },
+		.road_acceleration = RustRoadAccelerationModel,
+		.order_max_speed = [](OpenTTDVehicle *v) noexcept { return RustVehicleOrderMaxSpeed(VehicleOf(v)); },
 		.id = [](OpenTTDVehicle * v) noexcept -> uint32_t { return RustVehicleIndexOpaque(VehicleOf(v)); },
 		.old_order = [](OpenTTDVehicle * v) noexcept -> uint16_t { return VehicleOf(v)->current_order.MapOldOrder(); },
 		.num_orders = [](OpenTTDVehicle * v) noexcept -> uint8_t { return VehicleOf(v)->GetNumOrders(); },

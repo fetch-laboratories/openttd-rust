@@ -253,7 +253,6 @@ struct OpenTTDVehicleSchedulerServices {
 	void (OPENTTD_VEHICLE_CALL *calendar_day)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(calendar_day);
 	void (OPENTTD_VEHICLE_CALL *economy_day)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(economy_day);
 	OpenTTDVehicleDayCallback (OPENTTD_VEHICLE_CALL *day_callback_read)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(day_callback_read);
-	void (OPENTTD_VEHICLE_CALL *randomise_callback)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(randomise_callback);
 	void (OPENTTD_VEHICLE_CALL *first_dirty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first_dirty);
 	OpenTTDCargoList *(OPENTTD_VEHICLE_CALL *cargo_owner)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo_owner);
 	const OpenTTDVehicleServices *vehicle; ///< Base vehicle table, immutable for the process.

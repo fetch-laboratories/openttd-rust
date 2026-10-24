@@ -33,3 +33,6 @@ pub const CBID_TRAIN_ALLOW_WAGON_ATTACH: CallbackID = CallbackID(0x1d);
 pub const CBID_VEHICLE_START_STOP_CHECK: CallbackID = CallbackID(0x31);
 pub const CBID_VEHICLE_COLOUR_MAPPING: CallbackID = CallbackID(0x2d);
 pub const CBID_VEHICLE_SPAWN_VISUAL_EFFECT: CallbackID = CallbackID(0x160);
+
+pub const CBID_VEHICLE_REFIT_COST: CallbackID = CallbackID(0x15e);
+pub const CBID_VEHICLE_LOAD_AMOUNT: CallbackID = CallbackID(0x12);

@@ -9,7 +9,6 @@
 #include "services_road.h"
 
 static OpenTTDRefitCargo VehicleRefitCargo(const OpenTTDEngine *e, uint8_t cargo) noexcept { return {.classes = RustCargoClasses(cargo), .local = RustGRFCargoMap(EngineOf(e)->GetGRF(), cargo)}; }
-static uint16_t VehicleRefitCostCallback(OpenTTDVehicle *v, uint16_t engine, uint32_t param) noexcept { return RustVehicleCallback(CBID_VEHICLE_REFIT_COST, param, 0, EngineID(engine), VehicleOf(v)); }
 static OpenTTDRefitEngine VehicleRefitEngine(const OpenTTDEngine *e) noexcept { return {.mask = EngineOf(e)->info.refit_mask, .automatic = EngineOf(e)->info.misc_flags.Test(EngineMiscFlag::AutoRefit)}; }
 static OpenTTDRefitCargoKind VehicleRefitCargoKind(OpenTTDVehicle *handle) noexcept
 {
@@ -50,7 +49,6 @@ const OpenTTDVehicleRefitServices &GetRustVehicleRefitServices() noexcept
 		.has_grf = RustEngineHasGRF,
 		.refit_cost = RustEngineRefitCost,
 		.refit_cargo = VehicleRefitCargo,
-		.cost_callback = VehicleRefitCostCallback,
 		.engine_kind = RustEngineType,
 		.rail_kind = Engine_rail_kind,
 		.price_shift = RustEnginePriceShift,

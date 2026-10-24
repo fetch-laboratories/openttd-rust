@@ -127,12 +127,6 @@ static void RailLinkMultihead(void *front, void *rear) noexcept
 	v->other_multiheaded_part = u;
 	u->other_multiheaded_part = v;
 }
-static uint16_t RailAttachCallback(void *part, void *head, int32_t *regs100) noexcept
-{
-	const Train *t = static_cast<Train *>(part);
-	const Train *h = static_cast<Train *>(head);
-	return GetVehicleCallbackParent(CBID_TRAIN_ALLOW_WAGON_ATTACH, 0, 0, h->engine_type, t, h, std::span(regs100, 1));
-}
 static void RailUnknownAttach(void *head, uint16_t callback) noexcept { RustUnknownCallbackResult(static_cast<Train *>(head)->GetGRFID(), CBID_TRAIN_ALLOW_WAGON_ATTACH, callback); }
 static void RailHeadWindows(void *shell) noexcept
 {
@@ -178,7 +172,6 @@ const OpenTTDRailConstructionServices &GetRustRailConstructionServices() noexcep
 		.ground = &GetRustGroundServices<Train>(),
 		.first_engine = RustOpaqueVehicleRead<uint16_t, RustGroundFirstEngine>,
 		.invalidate_grf = RustOpaqueVehicleInvoke<RustVehicleInvalidateNewGRFCache>,
-		.attach_callback = RailAttachCallback,
 		.unknown_attach = RailUnknownAttach,
 		.train_limit = RustTrainLimit,
 		.unit = RustOpaqueVehicleRead<uint16_t, RustVehicleUnitNumber>,

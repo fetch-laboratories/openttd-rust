@@ -125,7 +125,6 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.local = RustIsLocalCompany,
 	.refit_news = FleetTransaction_refit_news,
 	.subtype = FleetTransaction_subtype,
-	.reverse_probability = RustVehicleHasReverseProbability,
 	.reverse = FleetTransaction_reverse,
 	.copy_configuration = FleetTransaction_copy_configuration,
 	.viewports = FleetTransaction_viewports,

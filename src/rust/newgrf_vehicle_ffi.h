@@ -15,6 +15,7 @@ struct OpenTTDSharedServices;
 struct OpenTTDAircraftState;
 struct OpenTTDAircraftLeaves;
 struct OpenTTDGroundPhysicsServices;
+struct OpenTTDTrainServices;
 struct OpenTTDCargoStorageServices;
 struct OpenTTDShipState;
 enum RoadTramType : bool;
@@ -29,6 +30,7 @@ struct OpenTTDVehicleResolverState {
 };
 struct OpenTTDVehicleLoadingOrder { uint8_t unload, load; bool loading; };
 struct OpenTTDVehicleRandomResult { uint32_t used, reseed; };
+struct OpenTTDVehicleCargoInfo { uint16_t classes; uint8_t weight; };
 struct OpenTTDVehicleOverride { const SpriteGroup *group; uint8_t cargo; size_t count; };
 struct OpenTTDVehicleOverrides { const OpenTTDEngine *engine; size_t count; };
 struct OpenTTDVehicleResolverServices {
@@ -55,6 +57,7 @@ struct OpenTTDVehicleResolverServices {
 	OpenTTDVehicleOverride (*override_at)(const OpenTTDEngine *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(override_at);
 	uint16_t (*override_engine)(const OpenTTDEngine *, size_t, size_t) noexcept OPENTTD_SERVICE_DEFAULT(override_engine);
 	const SpriteGroup *(*cached_override)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cached_override);
+	void (*write_override)(OpenTTDVehicle *, const SpriteGroup *) noexcept OPENTTD_SERVICE_DEFAULT(write_override);
 	const SpriteGroup *(*spritegroup)(uint16_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(spritegroup);
 	uint16_t (*random_bits)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
 	uint8_t (*waiting)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(waiting);
@@ -72,12 +75,14 @@ struct OpenTTDVehicleResolverServices {
 	uint8_t (*default_cargo)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
 	uint8_t (*engine_flags)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_flags);
 	uint16_t (*local_id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(local_id);
-	uint16_t (*cargo_weight)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_weight);
+	OpenTTDVehicleCargoInfo (*cargo_info)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_info);
 	uint32_t (*motion)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(motion);
 	int32_t (*build_year)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(build_year);
 	int32_t (*last_service)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(last_service);
 	bool (*primary)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(primary);
-	int32_t (*current_max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(current_max_speed);
+	const OpenTTDTrainServices *(*train_services)() noexcept OPENTTD_SERVICE_DEFAULT(train_services);
+	uint8_t (*road_acceleration)() noexcept OPENTTD_SERVICE_DEFAULT(road_acceleration);
+	uint16_t (*order_max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(order_max_speed);
 	uint32_t (*id)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(id);
 	uint16_t (*old_order)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(old_order);
 	uint8_t (*num_orders)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(num_orders);

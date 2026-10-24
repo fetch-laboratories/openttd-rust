@@ -135,16 +135,6 @@ static void TrainBaseViewport(OpenTTDTrainHandle id, uint8_t a) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	v->Vehicle::UpdateViewport(a != 0);
 }
-static void TrainCacheOverride(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	v->tcache.cached_override = GetWagonOverrideSpriteSet(v->engine_type, v->cargo_type, EngineID(RustGroundFirstEngine(v)));
-}
-static uint64_t TrainCallbackLength(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return RustVehicleCallback(CBID_VEHICLE_LENGTH, 0, 0, v->engine_type, v);
-}
 static uint64_t TrainCapacity(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
@@ -158,7 +148,7 @@ static void TrainCapacityError(OpenTTDTrainHandle id) noexcept
 static uint64_t TrainCargoAgeDefault(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return EngineOf(RustVehicleGetEngine(RustVehicle(v)))->info.cargo_age_period;
+	return RustEngineCargoAge(RustVehicleGetEngine(RustVehicle(v)));
 }
 static void TrainCheckNext(OpenTTDTrainHandle id) noexcept
 {
@@ -239,10 +229,10 @@ static uint64_t TrainCurveAdvantage(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	return GetRailTypeInfo(RustRailType(v->tile.base()))->curve_speed;
 }
-static uint64_t TrainCurveMod(OpenTTDTrainHandle id) noexcept
+static int16_t TrainCurveModDefault(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return static_cast<uint16_t>(GetVehicleProperty(v, PROP_TRAIN_CURVE_SPEED_MOD, RailVehInfo(v->engine_type)->curve_speed_mod, true));
+	return RailVehInfo(v->engine_type)->curve_speed_mod;
 }
 static uint64_t TrainDayTicks(OpenTTDTrainHandle) noexcept
 {
@@ -445,11 +435,6 @@ static uint64_t TrainProcessOrders(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
 	return ProcessOrders(v);
-}
-static uint64_t TrainProperty(OpenTTDTrainHandle id, uint8_t a, uint32_t b) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return GetVehicleProperty(v, static_cast<PropertyID>(a), static_cast<uint32_t>(b));
 }
 static uint64_t TrainRailvehWagon(OpenTTDTrainHandle id) noexcept
 {

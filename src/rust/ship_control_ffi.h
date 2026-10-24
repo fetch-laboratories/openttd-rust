@@ -73,8 +73,6 @@ struct OpenTTDShipLeaves {
 	uint32_t (*speed_default)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(speed_default);
 	uint32_t (*age_default)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(age_default);
 	uint32_t (*speed_frac)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(speed_frac);
-	uint32_t (*speed_property)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(speed_property);
-	uint32_t (*age_property)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(age_property);
 	void (*update_visual)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(update_visual);
 	void (*cache_invalidate)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(cache_invalidate);
 	uint32_t (*capacity)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
@@ -176,7 +174,7 @@ void openttd_rust_ship_set_rotation_y(OpenTTDShipState *, int16_t);
 bool openttd_rust_ship_tick(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_ship_calendar_day(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_ship_economy_day(uint32_t, OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
-void openttd_rust_ship_cache(uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
+void openttd_rust_ship_cache(OpenTTDVehicle *, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 void openttd_rust_ship_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 OpenTTDShipDepotResult openttd_rust_ship_find_depot(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 bool openttd_rust_ship_is_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);

@@ -242,8 +242,8 @@ pub struct Leaves {
     pub invalid_position: unsafe extern "C" fn(Vehicle, *const c_void),
     pub invalid_scheme: unsafe extern "C" fn(Vehicle),
     pub unreachable: unsafe extern "C" fn(Vehicle),
-    pub cargo_age_property: unsafe extern "C" fn(Vehicle) -> u32,
-    pub range_property: unsafe extern "C" fn(Vehicle) -> u32,
+    pub cargo_age_default: unsafe extern "C" fn(Vehicle) -> u16,
+    pub range_default: unsafe extern "C" fn(Vehicle) -> u16,
     pub touchdown_sound: unsafe extern "C" fn(Vehicle) -> bool,
     pub rotor_image_if_changed: unsafe extern "C" fn(Vehicle) -> bool,
     pub update_rotor_image: unsafe extern "C" fn(Vehicle),
@@ -523,8 +523,8 @@ impl World<'_> {
         part_of_orders(self; v: Vehicle) => unsafe { (self.leaves.part_of_orders)(v) };
         next_stopping_station(self; vehicle: Vehicle) => unsafe { (self.leaves.next_stopping_station)(vehicle) };
         speed_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), PROP_AIRCRAFT_SPEED, 0) as u32;
-        cargo_age_property(self; v: Vehicle) => unsafe { (self.leaves.cargo_age_property)(v) };
-        range_property(self; v: Vehicle) => unsafe { (self.leaves.range_property)(v) };
+        cargo_age_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_CARGO_AGE_PERIOD, unsafe { (self.leaves.cargo_age_default)(v) } as i32) as u32;
+        range_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_RANGE, unsafe { (self.leaves.range_default)(v) } as i32) as u32;
         start_sound(self; v: Vehicle) => (self.vs.play_vehicle_sound)(v.base(), VSE_START);
         touchdown_sound(self; v: Vehicle) => unsafe { (self.leaves.touchdown_sound)(v) };
         rotor_image_if_changed(self; v: Vehicle) => unsafe { (self.leaves.rotor_image_if_changed)(v) };
@@ -2554,8 +2554,8 @@ crate::abi::layouts! {
         invalid_position,
         invalid_scheme,
         unreachable,
-        cargo_age_property,
-        range_property,
+        cargo_age_default,
+        range_default,
         touchdown_sound,
         rotor_image_if_changed,
         update_rotor_image,

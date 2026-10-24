@@ -80,7 +80,6 @@ pub struct Services {
     pub(crate) local: unsafe extern "C" fn() -> bool,
     pub(crate) refit_news: unsafe extern "C" fn(*mut (), i32),
     pub(crate) subtype: unsafe extern "C" fn(*mut (), *mut (), u8) -> u8,
-    pub(crate) reverse_probability: unsafe extern "C" fn(*mut ()) -> bool,
     pub(crate) reverse: unsafe extern "C" fn(*mut ()),
     pub(crate) copy_configuration: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) viewports: unsafe extern "C" fn(*mut (), *mut ()),
@@ -503,8 +502,18 @@ unsafe fn build(
         && ((w.refit_services)().train_handle)(old.cast()).get_flags()
             & (1 << crate::train::FLIPPED)
             != 0
-        && !unsafe { (w.reverse_probability)(old) }
-        && !unsafe { (w.reverse_probability)(new) }
+        && !unsafe {
+            crate::newgrf_vehicle::reverse_probability(
+                (w.common)().vehicles,
+                vehicle_ref_for_build(old),
+            )
+        }
+        && !unsafe {
+            crate::newgrf_vehicle::reverse_probability(
+                (w.common)().vehicles,
+                vehicle_ref_for_build(new),
+            )
+        }
     {
         unsafe { (w.reverse)(new) };
     }
@@ -1176,7 +1185,6 @@ crate::abi::layouts! {
         local,
         refit_news,
         subtype,
-        reverse_probability,
         reverse,
         copy_configuration,
         viewports,

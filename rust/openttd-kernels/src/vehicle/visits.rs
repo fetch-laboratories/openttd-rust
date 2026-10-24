@@ -121,7 +121,6 @@ pub struct Services {
     /// Ship `UpdateViewport(true, true)` and its depot window.
     pub ship_depot_viewport: extern "C" fn(VehicleRef),
     /// `TriggerVehicleRandomisation(v, VehicleRandomTrigger::Depot)`.
-    pub depot_randomisation: extern "C" fn(VehicleRef),
     /// `InvalidateWindowData(WC_VEHICLE_VIEW, v->index)`.
     pub view_invalidate: extern "C" fn(VehicleRef),
     /// Runs the scope with two native `CommandCost` stack slots.
@@ -989,7 +988,7 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
                     (ship.state_owner)(id),
                     TRACK_BIT_DEPOT,
                 );
-                crate::ship_control::openttd_rust_ship_cache(id, ship, s.shared);
+                crate::ship_control::openttd_rust_ship_cache(v, id, ship, s.shared);
             }
             (s.ship_depot_viewport)(v);
         }
@@ -1017,7 +1016,9 @@ pub(crate) fn enter_depot(v: VehicleRef, s: &Services) {
     entered_depot_this_tick(v, s);
 
     // After a vehicle trigger, the graphics and properties could change.
-    (s.depot_randomisation)(v);
+    unsafe {
+        crate::newgrf_vehicle::trigger(s.vehicles(), v, crate::newgrf_vehicle::Trigger::Depot);
+    };
     (m.mark_dirty)(v);
 
     (s.view_invalidate)(v);
@@ -1170,7 +1171,6 @@ crate::abi::layouts! {
         leave_sound,
         depot_windows,
         ship_depot_viewport,
-        depot_randomisation,
         view_invalidate,
         with_costs,
         refit_failed_news,

@@ -467,7 +467,7 @@ pub struct Leaves {
     pub crash_news: extern "C" fn(VehicleRef, u32),
     pub shorten_factor: extern "C" fn(crate::vehicle::EngineRef) -> u8,
     pub default_max_speed: extern "C" fn(VehicleRef) -> u16,
-    pub update_cargo_age: extern "C" fn(VehicleRef),
+    pub cargo_age_default: extern "C" fn(VehicleRef) -> u16,
     pub cost_read: extern "C" fn(VehicleRef) -> CostRead,
     pub price: extern "C" fn(crate::vehicle::EngineRef, u32) -> i64,
     pub pay_running: extern "C" fn(VehicleRef, i64),
@@ -1060,7 +1060,14 @@ impl Game<'_> {
             }
             total = total.wrapping_add(u16::from(length));
             service!(self.gs.write_length)(u, length, v.v, total);
-            service!(self.l.update_cargo_age)(u);
+            let period = service!(self.l.cargo_age_default)(u);
+            let age = service!(self.vs.property)(
+                (self.vs.newgrf)(),
+                u,
+                crate::newgrf_properties::PROP_ROADVEH_CARGO_AGE_PERIOD,
+                i32::from(period),
+            );
+            service!(self.vs.write_cargo_age)(u, age as u16);
             let Some(next) = service!(self.vs.next)(u) else {
                 break;
             };
@@ -2371,7 +2378,7 @@ crate::abi::layouts! {
         crash_news,
         shorten_factor,
         default_max_speed,
-        update_cargo_age,
+        cargo_age_default,
         cost_read,
         price,
         pay_running,
@@ -2428,4 +2435,21 @@ pub(crate) unsafe fn overtaking_counter(state: *const State) -> u8 {
 /// `RoadVehicle::GetCrashedCounter`; live serialized owner, no borrow spans reentry.
 pub(crate) unsafe fn crashed_counter(state: *const State) -> u16 {
     unsafe { (*state).scalars[CRASHED] }
+}
+
+/// `RoadVehicle::GetCurrentMaxSpeed`, entering its owner without a native virtual bounce.
+/// # Safety
+/// Live serialized shell/private owner; immutable services, no borrow spans callbacks.
+pub(crate) unsafe fn current_max_speed(
+    v: VehicleRef,
+    state: *mut State,
+    model: u8,
+    leaves: &Leaves,
+) -> i32 {
+    max_speed(
+        Part::new(v, state),
+        (leaves.max_speed_read)(v),
+        model,
+        leaves,
+    )
 }
