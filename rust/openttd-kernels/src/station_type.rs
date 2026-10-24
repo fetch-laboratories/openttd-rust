@@ -14,6 +14,7 @@ pub const BUOY: u8 = 6;
 pub const FACILITY_TRAIN: u8 = 1;
 pub const FACILITY_TRUCK: u8 = 2;
 pub const FACILITY_BUS: u8 = 4;
+pub const FACILITY_AIRPORT: u8 = 8;
 pub const FACILITY_DOCK: u8 = 16;
 pub const MAX_LENGTH_STATION_NAME_CHARS: usize = 32;
 

@@ -102,7 +102,6 @@ pub struct Services {
     badges: extern "C" fn(*const c_void, *const RailSpec, u32) -> u32,
     translate: extern "C" fn(u8, *const c_void) -> u8,
     build_date: extern "C" fn(*mut BaseStation) -> i32,
-    airport_spec: extern "C" fn(*mut BaseStation) -> *const crate::station_cmd::AirportSpec,
     airport_ttd_type: extern "C" fn(
         *const crate::station_cmd::AirportSpec,
     ) -> crate::newgrf_airport::TtdpAirportType,
@@ -542,7 +541,12 @@ pub unsafe extern "C" fn openttd_rust_station_base_variable(
         }
         0xf1 => {
             return if (native.commands().airport_tile)(st) != crate::tile_type::INVALID_TILE {
-                u32::from((native.airport_ttd_type)((native.airport_spec)(st)).0)
+                u32::from(
+                    (native.airport_ttd_type)(crate::newgrf_airport::station_spec(st, unsafe {
+                        &*native.commands().airport_runtime
+                    }))
+                    .0,
+                )
             } else {
                 u32::from(crate::newgrf_airport::ATP_TTDP_LARGE)
             };
@@ -987,7 +991,7 @@ crate::abi::layouts! {
  "OpenTTDStationResolverServices" ["station_service"] => Services {
  shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count,
  loading, loaded, axis, tile_add, tile_random, station_random, waiting, set_waiting, set_random,
- cached_cargo, spec_cargo, resolve_random, resolve_callback, file_version, company, spec_reverse_rail, nearby, nearby_station, nearby_info, terrain, badges, translate, build_date, airport_spec, airport_ttd_type, identity, town_scope, default_scope, unhandled, slope_error
+ cached_cargo, spec_cargo, resolve_random, resolve_callback, file_version, company, spec_reverse_rail, nearby, nearby_station, nearby_info, terrain, badges, translate, build_date, airport_ttd_type, identity, town_scope, default_scope, unhandled, slope_error
  };
 }
 

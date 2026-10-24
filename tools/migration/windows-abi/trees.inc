@@ -68,7 +68,7 @@ static void Trees()
 		.airport_tile = TreeUnused<bool, uint32_t>,
 		.airport = TreeUnused<OpenTTDAirportGround, uint32_t>,
 		.airport_member = TreeUnused<bool, const OpenTTDStation *, uint32_t>,
-		.airport_z = TreeUnused<int32_t, uint32_t>,
+		.airport_z = TreeUnused<int32_t, const AirportFTAClass *>,
 		.victim = TreeUnused<OpenTTDFloodVictim, OpenTTDVehicle *>,
 		.aircraft_pose = TreeUnused<OpenTTDAircraftFloodPose, OpenTTDVehicle *>,
 		.ground_pose = TreeUnused<OpenTTDGroundFloodPose, OpenTTDVehicle *>,

@@ -97,7 +97,6 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		.badges = RustSpecBadges<StationSpec>,
 		.translate = OpenTTDCargoTranslation,
 		.build_date = RustStationBuildDate<BaseStation>,
-		.airport_spec = RustBaseStationAirportSpec,
 		.airport_ttd_type = RustAirportTTDType,
 		.identity = [](BaseStation *st, uint8_t i) noexcept { const auto &sm = st->speclist[i]; return OpenTTDStationSpecIdentity{sm.grfid, sm.localidx}; },
 		/* Only shared native ScopeResolver frames are materialized here; Rust

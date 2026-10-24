@@ -116,7 +116,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.vehicle_flags = [](OpenTTDVehicle * v) noexcept -> uint16_t { return VehicleOf(v)->vehicle_flags.base(); },
 		.aircraft = RustVehicleRead<OpenTTDAircraftState *, RustVehicleAircraftOwner>,
 		.target_airport = [](OpenTTDVehicle * v) noexcept -> const OpenTTDStation * { return RustStation(GetTargetAirportIfValid(Aircraft::From(VehicleOf(v)))); },
-		.airport_ttd_type = RustStationAirportTTDType,
+		.airport_ttd_type = RustAirportTTDType,
 		.moving_flags = [](const void * airport, uint8_t pos) noexcept -> uint16_t { return RustAirportMovingFlags(static_cast<const AirportFTAClass *>(airport)->MovingData(pos)); },
 		.roadtype = [](OpenTTDVehicle * v) noexcept -> RoadType { return RustRoadVehicleType(RoadVehicle::From(VehicleOf(v))); },
 		.tile_roadtype = RustRoadTileType,

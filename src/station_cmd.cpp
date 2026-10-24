@@ -122,6 +122,9 @@
  */
 bool IsHangar(Tile t)
 {
+#ifdef WITH_RUST
+	return openttd_rust_is_hangar(TileIndex(t).base(), &GetAirportResolverServices());
+#else
 	assert(IsTileType(t, MP_STATION));
 
 	/* If the tile isn't an airport there's no chance it's a hangar. */
@@ -135,6 +138,7 @@ bool IsHangar(Tile t)
 	}
 
 	return false;
+#endif
 }
 
 /**

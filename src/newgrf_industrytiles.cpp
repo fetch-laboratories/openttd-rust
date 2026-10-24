@@ -60,17 +60,15 @@ uint32_t GetNearbyIndustryTileInformation(uint8_t parameter, TileIndex tile, Ind
  * @param tile TileIndex of the tile to evaluate
  * @param ind_tile northernmost tile of the industry
  */
+#ifndef WITH_RUST
 uint32_t GetRelativePosition(TileIndex tile, TileIndex ind_tile)
 {
-#ifdef WITH_RUST
-	return openttd_rust_industry_relative_position(tile.base(), ind_tile.base(), Map::LogX());
-#else
 	uint8_t x = TileX(tile) - TileX(ind_tile);
 	uint8_t y = TileY(tile) - TileY(ind_tile);
 
 	return ((y & 0xF) << 20) | ((x & 0xF) << 16) | (y << 8) | x;
-#endif
 }
+#endif
 
 /* virtual */ uint32_t IndustryTileScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {

@@ -41,7 +41,8 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.town = &GetRustTownServices(), .industries = &GetIndustryRustServices(),
 		.construction = &GetIndustryConstructionServices(), .industry_tiles = &GetIndustryTileServices(),
 		.house = &GetHouseAnimationBinding(), .industry = &GetIndustryAnimationBinding(), .station = &GetStationAnimationBinding(),
-		.airport = &GetAirportAnimationBinding(), .object = &GetObjectAnimationBinding(), .roadstop = &GetRoadStopAnimationBinding(),
+		.airport = &GetAirportAnimationBinding(),
+		.airport_runtime = &GetAirportResolverServices(), .object = &GetObjectAnimationBinding(), .roadstop = &GetRoadStopAnimationBinding(),
 		.state = [](uint32_t t) noexcept { return GetAnimatedTileState(TileIndex{t}); },
 		.set_state = [](uint32_t t, AnimatedTileState s) noexcept { SetAnimatedTileState(TileIndex{t}, s); },
 		.house_spec = RustHouseSpec,
@@ -51,7 +52,7 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.rail_belongs = [](BaseStation *s, uint32_t t) noexcept { return s->TileBelongsToRailStation(TileIndex{t}); },
 		.station_triggers = RustStationHasAnimationTrigger,
 		.road_triggers = RustRoadStopHasAnimationTrigger,
-		.rail_spec = RustAnimationRailSpec, .airport_spec = RustAnimationAirportSpec,
+		.rail_spec = RustAnimationRailSpec,
 		.industry_object = RustIndustryByTile,
 		.rail_spec_triggers = [](const StationSpec *s) noexcept { return s->animation.triggers.base(); },
 		.road_spec_triggers = RustRoadStopAnimationTriggers,
@@ -73,7 +74,7 @@ void AnimateAnimatedTiles() { PerformanceAccumulator landscape_framerate(PFE_GL_
 /* InitializeGame calls this for generated, intro and loaded worlds before
  * commands, PBS, cargo/visits, animation ticks or purchase/render resolvers run.
  * All direct Rust station entries share this process-wide serialized table. */
-void InitializeAnimatedTiles() { openttd_rust_animation_exchange(&GetRustAnimationServices()); openttd_rust_station_resolver_exchange(&GetStationResolverServices()); openttd_rust_animation_initialize(); }
+void InitializeAnimatedTiles() { openttd_rust_airport_exchange(&GetAirportResolverServices()); openttd_rust_animation_exchange(&GetRustAnimationServices()); openttd_rust_station_resolver_exchange(&GetStationResolverServices()); openttd_rust_animation_initialize(); }
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDAnimationServices.hpp"
 #include "abi-visit-OpenTTDRoadStopResolverServices.hpp"

@@ -11,11 +11,13 @@
 
 #include "services_ffi.h"
 #include "../landscape.h"
+#include "../animated_tile_func.h"
 #include "../depot_map.h"
 #include "../road.h"
 #include "../road_map.h"
 #include "../station_map.h"
 
+inline uint8_t OpenTTDAnimationFrame(uint32_t tile) noexcept { return GetAnimationFrame(TileIndex(tile)); }
 inline uint RustClosestWaterDistance(uint32_t tile, bool water) noexcept { return GetClosestWaterDistance(TileIndex(tile), water); }
 inline uint32_t RustTileAddByDiagDir(uint32_t tile, uint8_t dir) noexcept { return TileAddByDiagDir(TileIndex{tile}, static_cast<DiagDirection>(dir)).base(); }
 inline bool SharedIsDepotTile(uint32_t tile) noexcept { return IsDepotTile(TileIndex(tile)); }
