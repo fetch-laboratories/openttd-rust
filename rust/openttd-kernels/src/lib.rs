@@ -62,10 +62,12 @@ mod newgrf;
 mod newgrf_animation_base;
 mod newgrf_callbacks;
 mod newgrf_commons;
+mod newgrf_engine;
 mod newgrf_generic;
 mod newgrf_properties;
 mod newgrf_sound;
 mod newgrf_spritegroup;
+mod settings_type;
 
 mod newgrf_station;
 mod newgrf_storage;

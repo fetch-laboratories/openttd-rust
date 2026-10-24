@@ -30,6 +30,10 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "../rust/newgrf_global_ffi.h"
+#endif
+
 #include "../safeguards.h"
 
 /**
@@ -421,6 +425,9 @@ static ChangeInfoResult GlobalVarReserveInfo(uint first, uint last, int prop, By
  */
 bool GetGlobalVariable(uint8_t param, uint32_t *value, const GRFFile *grffile)
 {
+#ifdef WITH_RUST
+	return openttd_rust_global_variable(&GetRustGlobalVariableServices(), param, value, grffile);
+#else
 	switch (param) {
 		case 0x00: // current date
 			*value = std::max(TimerGameCalendar::date - CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR, TimerGameCalendar::Date(0)).base();
@@ -551,6 +558,7 @@ bool GetGlobalVariable(uint8_t param, uint32_t *value, const GRFFile *grffile)
 
 		default: return false;
 	}
+#endif
 }
 
 template <> ChangeInfoResult GrfChangeInfoHandler<GSF_GLOBALVAR>::Reserve(uint first, uint last, int prop, ByteReader &buf) { return GlobalVarReserveInfo(first, last, prop, buf); }

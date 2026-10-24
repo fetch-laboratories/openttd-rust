@@ -55,7 +55,6 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.cargo_bitnum = RustCargoBitnum,
 		.cargo_translation = RustGRFCargoMap,
 		.grf_version = RustGRFFileVersion,
-		.get_register = RustResolverRegister,
 		.current_company = RustCurrentCompanyID,
 		.valid_company = OpenTTDCompanyIsValid,
 		.livery = [](uint16_t engine, uint8_t owner, uint16_t first, OpenTTDVehicle *v) noexcept { return GetEngineLivery(EngineID(engine), CompanyID(owner), EngineID(first), VehicleOf(v), LIT_ALL); },

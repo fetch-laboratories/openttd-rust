@@ -2,3 +2,12 @@
 //! Shared constants from `rail_type.h`.
 /// `INVALID_RAILTYPE`.
 pub const INVALID_RAILTYPE: u8 = 255;
+
+/// Native standard railtype identities.
+pub const RAILTYPE_RAIL: u8 = 0;
+/// `RAILTYPE_ELECTRIC`.
+pub const RAILTYPE_ELECTRIC: u8 = 1;
+/// `RAILTYPE_MONO`.
+pub const RAILTYPE_MONO: u8 = 2;
+/// `RAILTYPE_MAGLEV`.
+pub const RAILTYPE_MAGLEV: u8 = 3;

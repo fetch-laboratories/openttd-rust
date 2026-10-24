@@ -459,6 +459,37 @@ static void ResolverOverrideOrder(Train *wagon)
 	interactive.Restore();
 }
 
+/* Observe callback-36 sign extension at its 15-bit boundary and failure-only
+ * fallback through both live-vehicle and purchase property entry points. */
+static void ResolverPropertyBoundaries(Train *v, Engine *engine)
+{
+	if (!SpriteGroup::CanAllocateItem()) FixtureAbort(__LINE__);
+	Backup<decltype(engine->grf_prop.spritegroups)> sprites(engine->grf_prop.spritegroups);
+	Backup<Randomizer> interactive(_interactive_random);
+	_interactive_random.SetSeed(12345);
+	SavedRandomSeeds before, after;
+	SaveRandomSeeds(&before);
+	auto *det = new DeterministicSpriteGroup();
+	det->size = DSG_SIZE_DWORD;
+	det->var_scope = VSG_SCOPE_SELF;
+	det->default_result.calculated_result = true;
+	for (uint32_t value : {0U, 1U, 0x3FFEU, 0x3FFFU, 0x4000U, 0x4001U, 0x7FFEU, 0x7FFFU, 0xFFFFU}) {
+		engine->grf_prop.spritegroups.clear();
+		if (value != CALLBACK_FAILED) engine->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
+		det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = value}};
+		for (int fallback : {INT32_MIN, -17, 0, 17, INT32_MAX}) for (bool is_signed : {false, true}) {
+			fmt::print(stderr, "FLEET resolver-property-boundary {} {} {} {} {}\n", value, fallback, is_signed, GetVehicleProperty(v, PROP_TRAIN_SPEED, fallback, is_signed), GetEngineProperty(v->engine_type, PROP_TRAIN_SPEED, fallback, nullptr, is_signed));
+		}
+	}
+	sprites.Revert();
+	const bool restored = engine->grf_prop.spritegroups == sprites.GetOriginalValue();
+	sprites.Restore();
+	delete det;
+	SaveRandomSeeds(&after);
+	fmt::print(stderr, "FLEET resolver-property-restored {} {} {} {} {} {}\n", restored, SameRandom(before, after), after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
+	interactive.Restore();
+}
+
 /* Exercise real Action2 groups through the unchanged public native API on both
  * runtimes. Cache values are captured before any diagnostic rebuild can hide them. */
 static void ResolverProbe()
@@ -476,6 +507,7 @@ static void ResolverProbe()
 	file.Change(&grf);
 	ResolverRealBoundaries(v, e);
 	ResolverOverrideOrder(v->GetNextVehicle());
+	ResolverPropertyBoundaries(v, e);
 	if (!SpriteGroup::CanAllocateItem(8)) FixtureAbort(__LINE__);
 	auto *det = new DeterministicSpriteGroup();
 	det->size = DSG_SIZE_DWORD;

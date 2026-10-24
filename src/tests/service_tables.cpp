@@ -51,6 +51,7 @@ extern bool CheckAbi_tunnelbridge_cmd();
 extern bool CheckAbi_subsidy();
 extern bool CheckAbi_animated_tile();
 extern bool CheckAbi_cargomonitor();
+extern bool CheckAbi_spritegroup();
 extern bool CheckAbi_storage();
 extern bool CheckAbi_generic();
 
@@ -97,6 +98,7 @@ TEST_CASE("Rust ABI - actual production callback tables are complete")
 	CHECK(CheckAbi_tunnelbridge_cmd());
 	CHECK(CheckAbi_subsidy());
 	CHECK(CheckAbi_cargomonitor());
+	CHECK(CheckAbi_spritegroup());
 	CHECK(CheckAbi_storage());
 	CHECK(CheckAbi_generic());
 }
