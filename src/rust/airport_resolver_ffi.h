@@ -4,12 +4,12 @@
 #define RUST_AIRPORT_RESOLVER_FFI_H
 #include "station_command_ffi.h"
 #include "newgrf_storage_ffi.h"
+#include "../map_type.h"
 struct AirportResolverObject; struct AirportTileResolverObject; struct ScopeResolver; struct TownScopeResolver; struct ResolverObject; struct SpriteGroup; struct AirportFTAClass; struct OpenTTDVehicleServices; struct OpenTTDEngine; struct RoadStop;
 struct OpenTTDAirportResolverState {
 	Station *station; const AirportSpec *spec; const AirportTileSpec *tile_spec;
 	uint32_t tile; uint8_t layout; TownScopeResolver *town;
 };
-struct OpenTTDAirportAvailability { bool enabled; int32_t min_year, max_year; };
 struct OpenTTDAirportResolverServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStorageServices *storage;
@@ -33,7 +33,9 @@ struct OpenTTDAirportResolverServices {
 	const AirportFTAClass *dummy_fta;
 	const AirportFTAClass *(*fta)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(fta);
 	const AirportSpec *(*base_spec)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_spec);
-	OpenTTDAirportAvailability (*availability)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(availability);
+	bool (*enabled)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(enabled);
+	int32_t (*min_year)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(min_year);
+	int32_t (*max_year)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(max_year);
 	uint16_t (*override_id)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(override_id);
 	uint32_t (*manager_grfid)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(manager_grfid);
 	uint16_t (*substitute)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(substitute);

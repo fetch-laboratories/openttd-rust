@@ -5165,6 +5165,7 @@ crate::abi::layouts! {
 
 /// Shared named station eligibility operation, keeping the source vehicle gate.
 unsafe fn order_can_use_station(vehicle: *mut std::ffi::c_void, destination: u16) -> u64 {
+    // SAFETY: The caller supplies live serialized vehicle and destination shells.
     u64::from(unsafe {
         crate::vehicle_func::can_vehicle_use_station(
             vehicle.cast(),

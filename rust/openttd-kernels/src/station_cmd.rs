@@ -3599,6 +3599,7 @@ impl Ctx<'_> {
                         crate::ship_control::openttd_rust_ship_station_destination(
                             identity.id,
                             u32::from(id),
+                            v.0.as_ptr(),
                             self.s.ship,
                             self.s.shared,
                         )

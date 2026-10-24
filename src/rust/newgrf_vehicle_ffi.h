@@ -14,6 +14,8 @@ struct Livery;
 struct OpenTTDSharedServices;
 struct OpenTTDAircraftState;
 struct OpenTTDAircraftLeaves;
+struct AirportSpec;
+enum TTDPAirportType : uint8_t;
 struct OpenTTDGroundPhysicsServices;
 struct OpenTTDTrainServices;
 struct OpenTTDCargoStorageServices;

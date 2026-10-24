@@ -39,12 +39,6 @@ pub struct State {
     town: *mut c_void,
 }
 #[repr(C)]
-pub struct Availability {
-    enabled: bool,
-    min_year: i32,
-    max_year: i32,
-}
-#[repr(C)]
 pub struct Services {
     shared: *const crate::services::Services,
     storage: *const crate::newgrf_storage::Services,
@@ -75,7 +69,9 @@ pub struct Services {
     pub(crate) dummy_fta: *const c_void,
     pub(crate) fta: extern "C" fn(*const AirportSpec) -> *const c_void,
     base_spec: extern "C" fn(u8) -> *const AirportSpec,
-    availability: extern "C" fn(*const AirportSpec) -> Availability,
+    enabled: extern "C" fn(*const AirportSpec) -> bool,
+    min_year: extern "C" fn(*const AirportSpec) -> i32,
+    max_year: extern "C" fn(*const AirportSpec) -> i32,
     override_id: extern "C" fn(*const AirportSpec) -> u16,
     manager_grfid: extern "C" fn(u8) -> u32,
     substitute: extern "C" fn(u8) -> u16,
@@ -163,7 +159,7 @@ pub(crate) fn station_fta(st: *mut BaseStation, s: &Services) -> *const c_void {
 /// Source `AirportSpec::Get`: disabled custom substitution precedes overrides.
 pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
     let mut spec = (s.base_spec)(kind);
-    if kind >= NEW_AIRPORT_OFFSET && !(s.availability)(spec).enabled {
+    if kind >= NEW_AIRPORT_OFFSET && !(s.enabled)(spec) {
         if (s.manager_grfid)(kind) == 0 {
             return spec;
         }
@@ -181,17 +177,16 @@ pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
     }
 }
 pub(crate) fn available(spec: *const AirportSpec, s: &Services) -> bool {
-    let a = (s.availability)(spec);
-    if !a.enabled {
+    if !(s.enabled)(spec) {
         return false;
     }
-    if (s.shared().calendar_year)() < a.min_year {
+    if (s.shared().calendar_year)() < (s.min_year)(spec) {
         return false;
     }
     if (s.never_expire)() {
         return true;
     }
-    (s.shared().calendar_year)() <= a.max_year
+    (s.shared().calendar_year)() <= (s.max_year)(spec)
 }
 pub(crate) fn in_bounds(spec: *const AirportSpec, layout: u8, tile: u32, s: &Services) -> bool {
     let c = s.commands();
@@ -514,8 +509,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportAvailability" ["probe"] => Availability { enabled, min_year, max_year, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, primary_road_stop, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, base_spec, availability, override_id, manager_grfid, substitute, never_expire, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, primary_road_stop, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, base_spec, enabled, min_year, max_year, override_id, manager_grfid, substitute, never_expire, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
 }
 
 #[unsafe(no_mangle)]

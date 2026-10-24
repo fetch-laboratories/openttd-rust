@@ -39,6 +39,7 @@ struct OpenTTDRoadStationSpecCost { uint8_t multiplier; int32_t shift; };
 struct OpenTTDRoadStationSpecInfo { uint8_t stop_type; bool drive_only, availability_callback; };
 struct OpenTTDAirportResolverServices;
 struct AirportSpec;
+struct AirportFTAClass;
 class TileIterator;
 struct OpenTTDAirportSize { uint8_t w, h; };
 struct OpenTTDAirportLayout { size_t size; uint8_t rotation; };

@@ -843,6 +843,7 @@ unsafe fn aircraft_movement_state(s: &Services, v: V) -> u32 {
         if st.is_null() {
             return AMS_TTDP_FLIGHT_TO_TOWER;
         } // AMS_TTDP_FLIGHT_TO_TOWER
+        let leaves = &*(s.aircraft_leaves)();
         let airport = crate::newgrf_airport::station_fta(
             st.cast_mut().cast(),
             crate::newgrf_airport::runtime(),

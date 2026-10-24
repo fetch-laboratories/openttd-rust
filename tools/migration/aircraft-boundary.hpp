@@ -28,7 +28,7 @@ static OpenTTDAircraftLeaves AircraftTestLeaves(OpenTTDVehicleServices &vehicle,
 	runtime.dummy_spec = reinterpret_cast<const AirportSpec *>(&airport_tag);
 	runtime.dummy_fta = reinterpret_cast<const AirportFTAClass *>(&airport_tag);
 	runtime.base_spec = [](uint8_t) noexcept { return reinterpret_cast<const AirportSpec *>(&airport_tag); };
-	runtime.availability = [](const AirportSpec *) noexcept { return OpenTTDAirportAvailability{true, 0, 0}; };
+	runtime.enabled = [](const AirportSpec *) noexcept { return true; };
 	runtime.override_id = [](const AirportSpec *) noexcept { return uint16_t{254}; };
 	runtime.fta = [](const AirportSpec *spec) noexcept { return reinterpret_cast<const AirportFTAClass *>(spec); };
 	runtime.check = [](bool condition) noexcept { if (!condition) std::abort(); };

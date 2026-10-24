@@ -8,6 +8,7 @@
 /** @file ground_ffi.h Consumed terrain fields and direct synchronous leaves. */
 #ifndef RUST_GROUND_FFI_H
 #define RUST_GROUND_FFI_H
+struct AirportFTAClass;
 #include "service_defaults.hpp"
 #include "services_ffi.h"
 #include "water_regions_ffi.h"

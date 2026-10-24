@@ -704,7 +704,7 @@ impl World<'_> {
     fn airport_fta(&self, st: *const Station) -> *const c_void {
         (crate::newgrf_airport::runtime().fta)(self.airport_spec(st))
     }
-    fn dummy_airport(&self) -> *const c_void {
+    fn dummy_airport() -> *const c_void {
         crate::airport::get_airport(crate::airport::AT_DUMMY, crate::newgrf_airport::runtime())
     }
     fn has_hangar(&self, st: *const Station) -> i64 {
@@ -713,7 +713,7 @@ impl World<'_> {
             self.airport_spec(st),
         ))
     }
-    fn can_use_station(&self, v: Vehicle, st: *const Station) -> i64 {
+    fn can_use_station(v: Vehicle, st: *const Station) -> i64 {
         i64::from(unsafe {
             crate::vehicle_func::can_vehicle_use_station(
                 v.handle,
@@ -755,7 +755,7 @@ impl World<'_> {
     fn airport(&self, id: Vehicle) -> *const c_void {
         let s = self.target_station(id);
         if s.is_null() {
-            self.dummy_airport()
+            World::dummy_airport()
         } else {
             self.airport_fta(s)
         }
@@ -1056,7 +1056,7 @@ impl World<'_> {
         let ap = if valid {
             self.airport_fta(s)
         } else {
-            self.dummy_airport()
+            World::dummy_airport()
         };
         let rotation = if valid { self.rotation(s) } else { 0 };
         let pos = self.entry_point(id, ap, rotation, tile);
@@ -1089,7 +1089,7 @@ impl World<'_> {
             has_airport = geometry.airport;
         }
         let ap = if tile == INVALID_TILE {
-            self.dummy_airport()
+            World::dummy_airport()
         } else {
             self.airport_fta(s)
         };
@@ -1779,7 +1779,7 @@ impl World<'_> {
             }
             FLYING => {
                 let s = airport.station;
-                if self.can_use_station(id, s) != 0
+                if World::can_use_station(id, s) != 0
                     && (self.station_owner(s) == OWNER_NONE
                         || self.station_owner(s) == self.owner(id))
                     && airport.read(self) & CLOSED == 0
@@ -1915,7 +1915,7 @@ impl World<'_> {
         }
         let station = self.target_station(id);
         let ap = if station.is_null() {
-            self.dummy_airport()
+            World::dummy_airport()
         } else {
             self.airport_fta(station)
         };
@@ -2030,7 +2030,7 @@ impl World<'_> {
         }
         let station = self.order_destination(id) as u32;
         let st = self.station(station);
-        if self.has_hangar(st) != 0 && self.can_use_station(id, st) != 0 {
+        if self.has_hangar(st) != 0 && World::can_use_station(id, st) != 0 {
             self.service_order(id, i64::from(station));
             self.dirty_start_stop(id);
         } else if self.order_type(id) == 2 {
@@ -2157,7 +2157,7 @@ impl World<'_> {
             if self.order_type(cursor) == 2
                 && self.part_of_orders(cursor) == 0
                 && self.order_destination(cursor) == i64::from(station)
-                && (self.has_hangar(st) == 0 || self.can_use_station(cursor, st) == 0)
+                && (self.has_hangar(st) == 0 || World::can_use_station(cursor, st) == 0)
             {
                 self.dummy_order(cursor);
                 self.dirty_start_stop(cursor);
@@ -2447,7 +2447,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_closest_depot(
         let st = w.target_station(id);
         if !st.is_null()
             && w.airport_tile(st) as u32 != INVALID_TILE
-            && w.can_use_station(id, st) != 0
+            && World::can_use_station(id, st) != 0
             && w.has_hangar(st) != 0
         {
             w.target(id)

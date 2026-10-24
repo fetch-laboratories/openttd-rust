@@ -15,4 +15,7 @@ pub struct TileIndexDiffC {
     pub x: i16,
     pub y: i16,
 }
-crate::abi::layouts! { fn offset_abi; "TileIndexDiffC" ["probe"] => TileIndexDiffC { x, y, }; }
+crate::abi::layouts! {
+    fn abi_layout;
+    "TileIndexDiffC" ["probe"] => TileIndexDiffC { x, y, };
+}
