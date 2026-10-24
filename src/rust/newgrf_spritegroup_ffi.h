@@ -38,6 +38,8 @@ struct OpenTTDGroupAdjust {
 	uint8_t operation, type, variable, parameter, shift_num;
 };
 struct OpenTTDGroupRange { OpenTTDGroupResult result; uint32_t low, high; };
+struct OpenTTDAirportResolverServices;
+struct OpenTTDAirportResolverState;
 struct OpenTTDVehicleResolverServices;
 struct OpenTTDIndustryResolverServices;
 struct OpenTTDObjectServices;
@@ -56,10 +58,11 @@ struct Object;
 struct ObjectSpec;
 struct OpenTTDResolverBinding { void *state; ScopeResolver *self, *parent, *relative, *default_scope; uint8_t kind; };
 struct OpenTTDObjectScope { Object *object; const ObjectSpec *spec; uint32_t tile; uint8_t view; };
-union OpenTTDScopeData { const OpenTTDVehicleScopeState *vehicle; const OpenTTDIndustryResolverContext *industry; void *station; OpenTTDObjectScope object; const OpenTTDTownScope *town; Station *airport; const OpenTTDHouseScope *house; const OpenTTDRoadStopResolverState *roadstop; };
+union OpenTTDScopeData { const OpenTTDVehicleScopeState *vehicle; const OpenTTDIndustryResolverContext *industry; void *station; OpenTTDObjectScope object; const OpenTTDTownScope *town; const OpenTTDAirportResolverState *airport; const OpenTTDHouseScope *house; const OpenTTDRoadStopResolverState *roadstop; };
 struct OpenTTDScopeBinding { OpenTTDScopeData data; uint8_t kind; };
 struct OpenTTDSpriteGroupServices {
 	OpenTTDGroupAdjust (*adjust)(const SpriteGroup *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(adjust);
+	const OpenTTDAirportResolverServices *airport;
 	const OpenTTDGlobalVariableServices *global;
 	const OpenTTDHouseResolverServices *house;
 	const OpenTTDIndustryResolverServices *industry;

@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Airport and airport-tile invocation ownership; native frames are evaluator facades.
+//! Airport and airport-tile invocation ownership; native frames supply stack lifetimes.
 #![allow(
     unsafe_code,
     clippy::missing_safety_doc,
@@ -31,7 +31,7 @@ use std::{ffi::c_void, ptr};
 #[derive(Clone, Copy)]
 #[repr(C)]
 pub struct State {
-    station: *mut BaseStation,
+    pub(crate) station: *mut BaseStation,
     spec: *const AirportSpec,
     tile_spec: *const TileSpec,
     tile: u32,
@@ -264,7 +264,7 @@ pub unsafe extern "C" fn openttd_rust_airport_init(
     }
 }
 /// Finish the tile invocation's parent selection in the Rust owner, before
-/// returning to the native common evaluator frame. No spec borrow crosses it.
+/// returning to the native stack frame. No spec borrow crosses it.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_airport_tile_init(
     tile: *const State,
@@ -516,7 +516,7 @@ pub(crate) fn translate_tile(gfx: u8, s: &Services) -> u8 {
 pub unsafe extern "C" fn openttd_rust_airport_translate_tile(gfx: u8, s: *const Services) -> u8 {
     translate_tile(gfx, unsafe { &*s })
 }
-/// Direct entry from the Rust animation owner; native common evaluator only.
+/// Direct entry from the Rust animation owner; native stack frame construction only.
 pub(crate) fn tile_spec_by_gfx(gfx: u8, s: &Services) -> *const TileSpec {
     (s.tile_spec)(translate_tile(gfx, s))
 }

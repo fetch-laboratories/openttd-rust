@@ -33,10 +33,10 @@
 #ifdef WITH_RUST
 static uint16_t RustEvaluateAirportTile(uint16_t callback, uint32_t p1, uint32_t p2, const AirportTileSpec *spec, Station *station, uint32_t tile, int32_t *registers, size_t count) noexcept
 {
-	/* The common evaluator owns the native virtual frames until its own port
-	 * integrates. Feature policy and context initialization stay in Rust. */
+	/* Native shells and optional scopes live for this synchronous invocation.
+	 * Common evaluation and feature operations call their canonical Rust owners. */
 	AirportTileResolverObject object(spec, TileIndex{tile}, station, static_cast<CallbackID>(callback), p1, p2);
-	return object.ResolveCallback({registers, count});
+	return openttd_rust_resolver_callback(&GetRustSpriteGroupServices(), object.root_spritegroup, &object, object.CommonState(), object.grffile, registers, count);
 }
 const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 {
