@@ -672,7 +672,7 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 		.badges = RustSpecBadges<ObjectSpec>,
 		.register_100 = RustResolverRegister100,
 		.grfid = RustResolverGRFFileID,
-		.version8 = [](const ResolverObject *r) noexcept { return r->grffile->grf_version >= 8; },
+		.version8 = RustResolverGRFVersion8,
 		.override_id = [](uint16_t id, uint32_t grfid) noexcept { return _object_mngr.GetID(id, grfid); },
 		.manhattan = OpenTTDDistanceManhattan,
 		.square = OpenTTDDistanceSquare,

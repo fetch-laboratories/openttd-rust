@@ -470,15 +470,7 @@ static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &objec
 /* virtual */ void IndustriesScopeResolver::StorePSA(uint pos, int32_t value)
 {
 #ifdef WITH_RUST
-	Industry *industry = this->context.industry;
-	if (industry->index == IndustryID::Invalid()) return;
-	if (industry->psa == nullptr) {
-		if (value == 0) return;
-		const IndustrySpec *indsp = GetIndustrySpec(industry->type);
-		assert(PersistentStorage::CanAllocateItem());
-		industry->psa = new PersistentStorage(indsp->grf_prop.grfid, GSF_INDUSTRIES, industry->location.tile);
-	}
-	industry->psa->StoreValue(pos, value);
+	openttd_rust_storage_industry(&GetRustStorageServices(), this->context.industry, pos, value);
 #else
 	if (this->industry->index == IndustryID::Invalid()) return;
 

@@ -3852,7 +3852,7 @@ const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices()
 			return GetIndustryCallback(static_cast<CallbackID>(callback), parameter, random, i, i->type, INVALID_TILE);
 		},
 		.callback_error = RustSpecCallbackError<IndustrySpec, OpenTTDIndustrySpecHandle>,
-		.grf_version = [](const OpenTTDIndustrySpecHandle *spec) noexcept -> uint8_t { return reinterpret_cast<const IndustrySpec *>(spec)->grf_prop.grffile->grf_version; },
+		.grf_version = RustSpecGRFVersion<IndustrySpec, OpenTTDIndustrySpecHandle>,
 		.cargo_translation = OpenTTDIndustryCargoTranslation,
 		.layout_size = [](const OpenTTDIndustryLayoutHandle *layout) noexcept -> size_t { return reinterpret_cast<const IndustryTileLayout *>(layout)->size(); },
 		.layout_tile = [](const OpenTTDIndustryLayoutHandle *layout, size_t index) noexcept -> OpenTTDIndustryLayoutTile {
@@ -3997,7 +3997,7 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.resolve_shape = openttd_industry_resolve_shape,
 		.location_error = RustLocationCallbackError<IndustrySpec, OpenTTDIndustrySpecHandle, OpenTTDIndustryLocationResult, OpenTTDIndustryCost, STR_ERROR_SITE_UNSUITABLE>,
 		.shape_error = RustLocationCallbackError<IndustryTileSpec, IndustryTileSpec, OpenTTDIndustryLocationResult, OpenTTDIndustryCost, STR_ERROR_SITE_UNSUITABLE>,
-		.tile_grf_version = [](const OpenTTDIndustryTileSpec *spec) noexcept -> uint8_t { return spec->grf_prop.grffile->grf_version; },
+		.tile_grf_version = RustSpecGRFVersion<IndustryTileSpec>,
 		.shape_callback = [](const OpenTTDIndustryTileSpec *spec) noexcept -> bool { return spec->callback_mask.Test(IndustryTileCallbackMask::ShapeCheck); },
 		.terragenesis = []() noexcept -> bool { return _settings_game.game_creation.land_generator == LG_TERRAGENESIS; },
 		.ignore_restrictions = []() noexcept -> bool { return _ignore_industry_restrictions; },

@@ -119,6 +119,9 @@ def check_water(scenario, run, desync):
                 key: row[common + key]
                 for key in (
                     "tile",
+                    "x_pos",
+                    "y_pos",
+                    "z_pos",
                     "motion_counter",
                     "profit_this_year",
                     "profit_last_year",
@@ -126,6 +129,7 @@ def check_water(scenario, run, desync):
                     "cur_real_order_index",
                 )
             },
+            "state": row["ship[0]/state"],
             "path_length": sum(k.startswith("ship[0]/path[") for k in row),
         }
 
@@ -520,6 +524,14 @@ def check(scenario, run, mode, role, result):
         return
 
     if "water" in scenario:
+        if scenario.get("water_operation") == "route":
+            result[f"{mode}_{role}_movement"] = branch_witnesses(
+                scenario,
+                run,
+                role,
+                "movement",
+                ["ship_bridge_enter", "ship_bridge_exit"],
+            )
         required = ["economy_day", "path_cache", "reverse", "rotate", "buoy"]
         required += (
             ["loading", "auto_service", "rotation_reload"]

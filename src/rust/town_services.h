@@ -10,4 +10,7 @@ inline Town *RustCalcClosestTown(TileIndex tile, uint threshold) noexcept
 {
 	return CalcClosestTownFromTile(tile, threshold);
 }
+/** One definition for const resolver scans and mutable town destruction tables. */
+template <typename TTown>
+inline size_t RustTownStorageCount(TTown *town) noexcept { return town->psa_list.size(); }
 #endif /* OPENTTD_RUST_TOWN_SERVICES_H */
