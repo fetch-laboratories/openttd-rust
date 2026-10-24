@@ -1132,17 +1132,19 @@ def check_bribes(scenario, run, mode, role, result):
         for phase, path in saves.items():
             captures[f"{initial}/{phase}"] = path
     key = mode + "_town_bribe_saves"
-    if role == "reference":
-        result[key] = captures
-    else:
+    if role == "candidate":
         for label, path in captures.items():
             if differences := core.compare_saves(
-                result[key][label], path, scenario["name"], 10, result["stats"]
+                run["dir"].with_name("reference") / path.name,
+                path,
+                scenario["name"],
+                10,
+                result["stats"],
             ):
                 raise RuntimeError(
                     f"town bribe {label} semantic state differs: {differences}"
                 )
-        result[key] = list(captures)
+    result[key] = list(captures)
 
 
 def check(scenario, run, mode, role, result):
