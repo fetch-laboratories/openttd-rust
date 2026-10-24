@@ -8,6 +8,7 @@
 //! Native `track_type.h` values used by movement policies.
 #![allow(missing_docs)]
 pub const TRACK_BIT_NONE: u8 = 0;
+pub const INVALID_TRACKDIR: u8 = 0xFF;
 pub const TRACK_BIT_X: u8 = 1;
 pub const TRACK_BIT_Y: u8 = 2;
 pub const TRACK_BIT_UPPER: u8 = 4;

@@ -23,7 +23,8 @@ use crate::roadveh::{
 use crate::services::{Map, RoadStopType, Services};
 use crate::station::BaseStation;
 use crate::tile_type::{MP_STATION, TILE_SIZE};
-use crate::vehicle::{GroundServices, VS_CRASHED, VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle::{GroundServices, VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle_base::VS_CRASHED;
 
 /// `RoadStopStatusFlag::Bay0Free`.
 const BAY0_FREE: u8 = 1 << 0;

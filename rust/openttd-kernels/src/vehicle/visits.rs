@@ -16,7 +16,8 @@
 // Truncating casts are the original's `uint` to `uint16_t` stores (below the
 // stored value) and its `Map::LogX()` byte; `if_not_else` keeps source order.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::if_not_else)]
-use super::{VS_CRASHED, VS_HIDDEN, VS_STOPPED, VehicleRef, VehicleServices, VehicleType};
+use super::{VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use crate::{
     base_consist::{VF_LOADING_FINISHED, VF_STOP_LOADING},
     cargo_storage::List,

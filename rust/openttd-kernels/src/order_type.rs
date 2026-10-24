@@ -7,6 +7,8 @@
 
 //! `order_type.h` values. `services.cpp` asserts every value.
 
+/// `OT_NOTHING`.
+pub const OT_NOTHING: u8 = 0;
 /// `OT_GOTO_STATION`.
 pub const OT_GOTO_STATION: u8 = 1;
 /// `OT_GOTO_DEPOT`.

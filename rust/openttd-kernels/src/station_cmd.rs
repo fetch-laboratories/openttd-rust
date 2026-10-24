@@ -18,6 +18,7 @@
     clippy::too_many_arguments
 )]
 use crate::direction_type::INVALID_DIAGDIR;
+use crate::tile_type::{MP_INDUSTRY, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
 mod waypoint;
 use crate::rail_cmd::RailCommandServices;
 use crate::road_stop::{RoadStopServices, Stop};
@@ -754,7 +755,7 @@ impl Ctx<'_> {
             for ty in y..bottom {
                 for tx in x..right {
                     let tile = (ty << self.map().log_x) + tx;
-                    if (self.shared.tile_type)(tile) != 5 {
+                    if (self.shared.tile_type)(tile) != MP_STATION {
                         continue;
                     }
                     let id = (self.shared.station_index)(tile);
@@ -964,7 +965,7 @@ impl Ctx<'_> {
             kind
         };
         let belongs = |tile| {
-            (self.shared.tile_type)(tile) == 5
+            (self.shared.tile_type)(tile) == MP_STATION
                 && (self.shared.station_type)(tile).0 == kind
                 && (self.shared.station_index)(tile) == id
         };
@@ -1205,7 +1206,7 @@ impl Ctx<'_> {
                 return cost.take(ret);
             }
         }
-        if (self.shared.tile_type)(tile) == 5 {
+        if (self.shared.tile_type)(tile) == MP_STATION {
             if !self.rail_station(tile) {
                 return self.auto_clear(cost, tile);
             }
@@ -1550,12 +1551,13 @@ impl Ctx<'_> {
                     (self.s.station_infrastructure)(owner, u32::MAX);
                 }
                 crate::animated_tile::openttd_rust_animation_delete(t, false);
-                let old =
-                    if (self.shared.tile_type)(t) == 5 && (self.rail_map().has_station_rail)(t) {
-                        (self.s.custom_rail_index)(t) as u8
-                    } else {
-                        0
-                    };
+                let old = if (self.shared.tile_type)(t) == MP_STATION
+                    && (self.rail_map().has_station_rail)(t)
+                {
+                    (self.s.custom_rail_index)(t) as u8
+                } else {
+                    0
+                };
                 let gfx = Self::layout_gfx(
                     layout,
                     u32::from(i) * u32::from(length) + u32::from(j),
@@ -1749,7 +1751,9 @@ impl Ctx<'_> {
         cost.set(0);
         error.zero();
         for tile in area.tiles(self.map()) {
-            if (self.shared.tile_type)(tile) != 5 || !(self.rail_map().has_station_rail)(tile) {
+            if (self.shared.tile_type)(tile) != MP_STATION
+                || !(self.rail_map().has_station_rail)(tile)
+            {
                 continue;
             }
             unsafe {
@@ -1909,7 +1913,7 @@ impl Ctx<'_> {
         let id = (self.links().graphs.station_id)(st);
         let kind = if waypoint { 7 } else { 0 };
         for tile in area.tiles(self.map()) {
-            if (self.shared.tile_type)(tile) != 5
+            if (self.shared.tile_type)(tile) != MP_STATION
                 || (self.shared.station_type)(tile).0 != kind
                 || (self.shared.station_index)(tile) != id
             {
@@ -2011,9 +2015,9 @@ impl Ctx<'_> {
     }
     fn may_have_road(&self, tile: u32) -> bool {
         match (self.shared.tile_type)(tile) {
-            2 => true,
-            5 => (self.shared.is_any_road_stop)(tile),
-            9 => (self.shared.tunnel_transport)(tile) == 1,
+            MP_ROAD => true,
+            MP_STATION => (self.shared.is_any_road_stop)(tile),
+            MP_TUNNELBRIDGE => (self.shared.tunnel_transport)(tile) == 1,
             _ => false,
         }
     }
@@ -2079,7 +2083,7 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        if (self.shared.tile_type)(tile) == 5 {
+        if (self.shared.tile_type)(tile) == MP_STATION {
             if !(self.shared.is_any_road_stop)(tile)
                 || kind != (self.shared.station_type)(tile).0
                 || drive != (self.shared.is_drive_through_stop)(tile)
@@ -2239,7 +2243,8 @@ impl Ctx<'_> {
             }
             let tile_cost = cost.money();
             cost.set(total);
-            if (self.shared.tile_type)(tile) != 5 || !(self.shared.is_any_road_stop)(tile) {
+            if (self.shared.tile_type)(tile) != MP_STATION || !(self.shared.is_any_road_stop)(tile)
+            {
                 cost.add_money(tile_cost);
                 cost.add_money(unit);
             }
@@ -2427,7 +2432,7 @@ impl Ctx<'_> {
             } else {
                 (self.shared.current_company)()
             };
-            if (self.shared.tile_type)(tile) == 5
+            if (self.shared.tile_type)(tile) == MP_STATION
                 && matches!((self.shared.station_type)(tile).0, 2 | 3)
             {
                 self.remove_road_tile(ret, ret, tile, flags, i32::from(specindex.value), false);
@@ -2709,7 +2714,7 @@ impl Ctx<'_> {
         error.error(self.s.strings.no_station);
         let mut success = false;
         for tile in area.tiles(self.map()) {
-            if (self.shared.tile_type)(tile) != 5
+            if (self.shared.tile_type)(tile) != MP_STATION
                 || !(self.shared.is_any_road_stop)(tile)
                 || ((self.shared.station_type)(tile).0 == 8) != waypoint
             {
@@ -2945,7 +2950,7 @@ impl Ctx<'_> {
             geometry.rotation,
             geometry.area.tile,
             geometry.area.tiles(self.map()).filter(|&t| {
-                (self.shared.tile_type)(t) == 5
+                (self.shared.tile_type)(t) == MP_STATION
                     && (self.shared.station_type)(t).0 == 1
                     && (self.shared.station_index)(t) == id
             }),
@@ -3190,7 +3195,7 @@ impl Ctx<'_> {
         }
         let area = (self.s.airport_geometry)(st).area;
         for tile in area.tiles(self.map()) {
-            if (self.shared.tile_type)(tile) != 5
+            if (self.shared.tile_type)(tile) != MP_STATION
                 || (self.shared.station_type)(tile).0 != 1
                 || (self.shared.station_index)(tile) != id
             {
@@ -3311,16 +3316,16 @@ pub unsafe extern "C" fn openttd_rust_station_build_airport(
 
 impl Ctx<'_> {
     fn dock(&self, tile: u32) -> bool {
-        (self.shared.tile_type)(tile) == 5 && (self.shared.station_type)(tile).0 == 5
+        (self.shared.tile_type)(tile) == MP_STATION && (self.shared.station_type)(tile).0 == 5
     }
     fn possible_docking(&self, tile: u32) -> bool {
         match (self.shared.tile_type)(tile) {
-            6 => {
+            MP_WATER => {
                 if (self.shared.water_middle_lock)(tile) {
                     return false;
                 }
             }
-            1 | 5 | 9 => (),
+            MP_RAILWAY | MP_STATION | MP_TUNNELBRIDGE => (),
             _ => return false,
         }
         crate::movement::water_tracks(self.shared, tile, 255) != 0
@@ -3337,14 +3342,16 @@ impl Ctx<'_> {
                 (self.s.docking_add)(st, tile);
                 (self.s.set_docking)(tile, true);
             }
-            if (self.shared.tile_type)(next) == 8 {
+            if (self.shared.tile_type)(next) == MP_INDUSTRY {
                 let st = (self.s.neutral_for_tile)(next);
                 if !st.is_null() {
                     (self.s.docking_add)(st, tile);
                     (self.s.set_docking)(tile, true);
                 }
             }
-            if (self.shared.tile_type)(next) == 5 && (self.shared.station_type)(next).0 == 4 {
+            if (self.shared.tile_type)(next) == MP_STATION
+                && (self.shared.station_type)(next).0 == 4
+            {
                 let st = self.full_station((self.shared.station_index)(next));
                 (self.s.docking_add)(st, tile);
                 (self.s.set_docking)(tile, true);
@@ -3385,12 +3392,12 @@ impl Ctx<'_> {
             if !(self.shared.tile_valid)(next) {
                 continue;
             }
-            if (self.shared.tile_type)(next) == 5 {
+            if (self.shared.tile_type)(next) == MP_STATION {
                 let st = self.full_station((self.shared.station_index)(next));
                 if !st.is_null() {
                     self.update_docking(st);
                 }
-            } else if (self.shared.tile_type)(next) == 8 {
+            } else if (self.shared.tile_type)(next) == MP_INDUSTRY {
                 let st = (self.s.neutral_for_tile)(next);
                 if !st.is_null() {
                     self.update_docking(st);
@@ -3470,7 +3477,7 @@ impl Ctx<'_> {
             cost.add_money(ret.money());
         }
         let beyond = self.map().add_diag(flat, dir);
-        if (self.shared.tile_type)(beyond) != 6 || (self.shared.tile_slope)(beyond) != 0 {
+        if (self.shared.tile_type)(beyond) != MP_WATER || (self.shared.tile_slope)(beyond) != 0 {
             return cost.error(self.s.strings.unsuitable);
         }
         let (dx, dy) = match dir {

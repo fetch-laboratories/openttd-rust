@@ -252,6 +252,7 @@ pub struct RailCommandServices {
 const TRACK_X: u8 = 0;
 const TRACK_Y: u8 = 1;
 const INVALID_TRACK: u8 = 0xFF;
+use crate::track_type::INVALID_TRACKDIR;
 use crate::track_type::TRACK_BIT_DEPOT as BIT_DEPOT;
 use crate::track_type::TRACK_BIT_LEFT as BIT_LEFT;
 use crate::track_type::TRACK_BIT_LOWER as BIT_LOWER;
@@ -259,7 +260,6 @@ use crate::track_type::TRACK_BIT_RIGHT as BIT_RIGHT;
 use crate::track_type::TRACK_BIT_UPPER as BIT_UPPER;
 use crate::track_type::TRACK_BIT_X as BIT_X;
 use crate::track_type::TRACK_BIT_Y as BIT_Y;
-const INVALID_TRACKDIR: u8 = 0xFF;
 
 /// `VALID_LEVEL_CROSSING_SLOPES`.
 pub(crate) const CROSSING_SLOPES: u32 =
@@ -281,11 +281,10 @@ const SIGTYPE_LAST: u8 = 5;
 const SIG_ELECTRIC: u8 = 0;
 const SIG_SEMAPHORE: u8 = 1;
 
-const RAILTYPE_RAIL: u8 = 0;
-const RAILTYPE_ELECTRIC: u8 = 1;
+use crate::rail_type::{RAILTYPE_ELECTRIC, RAILTYPE_RAIL};
 use crate::road_type::INVALID_ROADTYPE;
 use crate::road_type::{ROAD_X, ROAD_Y};
-const STOPPED: u8 = 1 << 1;
+use crate::vehicle_base::VS_STOPPED;
 
 const TILE_AXIAL_DISTANCE: i32 = 192;
 const TILE_CORNER_DISTANCE: i32 = 128;
@@ -1289,7 +1288,7 @@ impl<'a> Ctx<'a> {
         if !v.is_null() {
             let p = unsafe { (self.s.parking)(v) };
             if p.track != BIT_DEPOT {
-                let parked = (p.status & STOPPED != 0 && p.speed == 0) || p.order == OT_LOADING;
+                let parked = (p.status & VS_STOPPED != 0 && p.speed == 0) || p.order == OT_LOADING;
                 if !parked || {
                     let at = unsafe { (self.s.train_position)(v) };
                     // SAFETY: The reservation train remains live through this synchronous check.

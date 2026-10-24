@@ -917,9 +917,9 @@ impl MovementServices {
         (self.vehicle().write_status)(
             v,
             if hidden {
-                status | crate::vehicle::VS_HIDDEN
+                status | crate::vehicle_base::VS_HIDDEN
             } else {
-                status & !crate::vehicle::VS_HIDDEN
+                status & !crate::vehicle_base::VS_HIDDEN
             },
         );
     }

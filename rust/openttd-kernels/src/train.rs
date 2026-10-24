@@ -22,6 +22,9 @@
     clippy::collapsible_if,
     clippy::verbose_bit_mask
 )]
+use crate::order_type::{
+    OT_CONDITIONAL, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_NOTHING,
+};
 use crate::services::Services;
 use crate::train_state::State;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
@@ -203,7 +206,7 @@ impl Handle {
 pub(crate) const FLIPPED: u8 = 4;
 /// `CCF_ARRANGE`: `ConsistChangeFlag::Length` and `ConsistChangeFlag::Capacity`.
 pub(crate) const CCF_ARRANGE: u8 = 3;
-const INVALID: u32 = u32::MAX;
+use crate::tile_type::INVALID_TILE;
 use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE};
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -948,7 +951,7 @@ impl Game<'_> {
         let mut loc = 1;
         if i32::from(v.total_length) >= length {
             loc = 2;
-        } else if v.order == 1 && v.order_destination == station {
+        } else if v.order == OT_GOTO_STATION && v.order_destination == station {
             loc = (self.leaves.stop_location)(id);
         }
         let stop = match loc {
@@ -1132,7 +1135,7 @@ impl Game<'_> {
     }
     fn approaching_crossing(&self, id: Handle) -> u32 {
         if !self.can_leave(id) {
-            return INVALID;
+            return INVALID_TILE;
         }
         let base = (self.leaves.read_tile)(id);
         let dir = self.exitdir(id);
@@ -1142,7 +1145,7 @@ impl Game<'_> {
                 == (self.leaves.crossing_road_axis)(Handle::NONE, tile)
             || !self.compatible(id, tile)
         {
-            return INVALID;
+            return INVALID_TILE;
         }
         tile
     }
@@ -1498,11 +1501,11 @@ impl Game<'_> {
             (self.leaves.viewport)(u, 0, 0);
             u = (self.leaves.read_next)(u);
         }
-        if crossing != INVALID {
+        if crossing != INVALID_TILE {
             self.update_crossing(crossing, true, false);
         }
         let crossing = self.approaching_crossing(id);
-        if crossing != INVALID {
+        if crossing != INVALID_TILE {
             self.bar_crossing(crossing);
         }
         if id.track() == DEPOT {
@@ -1920,7 +1923,7 @@ impl Game<'_> {
                 if (self.leaves.read_front)(id) != 0 {
                     id.set_wait_counter(0);
                     let crossing = self.approaching_crossing(id);
-                    if crossing != INVALID
+                    if crossing != INVALID_TILE
                         && (self.services.crossing_reserved)(crossing)
                         && (self.leaves.ambient_sound)(id) != 0
                     {
@@ -2056,7 +2059,7 @@ impl Game<'_> {
                 u = (self.leaves.read_next)(u);
             }
             let crossing = self.approaching_crossing(id);
-            if crossing != INVALID {
+            if crossing != INVALID_TILE {
                 self.update_crossing(crossing, true, false);
             }
             (self.leaves.hide_fill)(id);
@@ -2397,7 +2400,7 @@ impl Game<'_> {
         if v.status & 2 != 0 && v.speed == 0 {
             return true;
         }
-        let valid_order = v.order != 0 && v.order != 7;
+        let valid_order = v.order != OT_NOTHING && v.order != OT_CONDITIONAL;
         // SAFETY: The original live train shell survives orders; no owner borrow spans reentry.
         if unsafe {
             crate::orders::openttd_rust_process_orders(id.shell.cast(), self.vs().orders())
@@ -2498,7 +2501,7 @@ impl Game<'_> {
                     break;
                 }
                 let v = (self.leaves.read_loco_26)(id);
-                if (v.order == 6 || v.order == 1)
+                if (v.order == OT_GOTO_WAYPOINT || v.order == OT_GOTO_STATION)
                     && v.nonstop & 2 != 0
                     && (self.leaves.is_station_any)(Handle::NONE, v.tile) != 0
                     && u64::from(v.order_destination) == (self.leaves.station)(Handle::NONE, v.tile)
@@ -2581,7 +2584,7 @@ impl Game<'_> {
         let tile = depot.tile;
         let depot_id = (self.leaves.depot_index)(Handle::NONE, tile) as u16;
         let v = (self.leaves.read_needs_service)(id);
-        if v.order == 2
+        if v.order == OT_GOTO_DEPOT
             && v.order_destination != depot_id
             && !crate::services::chance16_i(3, 16, self.services.random())
         {
@@ -2608,7 +2611,7 @@ impl Game<'_> {
             (self.leaves.check_orders)(id);
             if (self.leaves.read_order)(id) == 1 {
                 let tile = (self.leaves.station_dest)(id) as u32;
-                if tile != INVALID {
+                if tile != INVALID_TILE {
                     (self.leaves.write_dest)(id, (u64::from(tile)) as u32);
                 }
             }
@@ -2641,7 +2644,7 @@ impl Game<'_> {
         }
         let dir = (self.leaves.trackdir_exit)(id, self.trackdir(id)) as u8;
         let tile = self.tile_diag(v.tile, dir);
-        if tile == INVALID
+        if tile == INVALID_TILE
             || (self.leaves.is_railway)(Handle::NONE, tile) == 0
             || (self.leaves.has_signals)(Handle::NONE, tile) == 0
         {

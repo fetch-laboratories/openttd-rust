@@ -18,6 +18,7 @@
 )]
 use crate::node_hash::NodeMap;
 use crate::services::Services;
+use crate::track_type::INVALID_TRACKDIR;
 use crate::water_regions::Patch;
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
@@ -84,7 +85,6 @@ pub struct Leaves {
 #[derive(Clone, Default)]
 pub struct Path(Vec<u8>);
 pub struct RegionPath(Vec<Patch>);
-const INVALID: u8 = 255;
 const NEXT: [u8; 14] = [0, 1, 3, 2, 5, 4, 255, 255, 8, 9, 11, 10, 13, 12];
 #[derive(Clone, Copy)]
 struct Node {
@@ -576,7 +576,7 @@ fn random_dir(services: &Services, mut dirs: u16) -> u8 {
         dirs &= dirs - 1;
     }
     if dirs == 0 {
-        INVALID
+        INVALID_TRACKDIR
     } else {
         dirs.trailing_zeros() as u8
     }
@@ -608,7 +608,7 @@ fn random_path(
         cache.0.push(td);
     }
     if cache.0.is_empty() {
-        return INVALID;
+        return INVALID_TRACKDIR;
     }
     cache.0.reverse();
     cache.0.pop().unwrap()
@@ -625,9 +625,9 @@ fn choose(
     origins: &[u32],
 ) -> Result {
     let mut result = Result {
-        direction: INVALID,
+        direction: INVALID_TRACKDIR,
         found: 0,
-        origin: INVALID,
+        origin: INVALID_TRACKDIR,
         stats: [0; 13],
     };
     let path = region_path(input, leaves, start, 5, origins, &mut result.stats);
@@ -861,7 +861,7 @@ pub unsafe extern "C" fn openttd_rust_ship_reverse(
         )
     };
     if blocked != 0 {
-        result.direction = if result.found != 0 && result.origin != INVALID {
+        result.direction = if result.found != 0 && result.origin != INVALID_TRACKDIR {
             result.origin
         } else {
             result.stats[10] += 1;

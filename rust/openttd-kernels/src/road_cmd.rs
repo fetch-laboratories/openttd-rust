@@ -20,8 +20,9 @@
     clippy::fn_params_excessive_bools
 )]
 use crate::command_type::DoCommandFlag;
-use crate::company::COMPANIES as MAX_COMPANIES;
-use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
+use crate::company_type::{
+    INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
+};
 use crate::rail_cmd::{
     CROSSING_SLOPES, ConvertFrame as Area, CrossingRoad, LEVELCROSSING_TRACKBIT_FACTOR,
     RailCommandServices, TUNNELBRIDGE_TRACKBIT_FACTOR,
@@ -1713,9 +1714,7 @@ impl<'a> Ctx<'a> {
     }
     fn convert_owner(&self, tile: u32, num: u32, owner: u8, from: u8, to: u8) {
         let company = (self.shared.current_company)();
-        if u32::from(company) >= MAX_COMPANIES
-            || (u32::from(owner) >= MAX_COMPANIES && owner != OWNER_NONE)
-        {
+        if company >= MAX_COMPANIES || (owner >= MAX_COMPANIES && owner != OWNER_NONE) {
             return;
         }
         if owner == OWNER_NONE {

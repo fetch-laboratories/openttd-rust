@@ -30,23 +30,25 @@
     clippy::if_not_else
 )]
 use crate::direction_func::dir_to_diag_dir as diag;
+use crate::engine_type::INVALID_ENGINE;
 use crate::newgrf_callbacks::CBID_VEHICLE_LENGTH;
 use crate::newgrf_sound::VSE_START;
 use crate::roadveh::{
     RVSB_IN_DEPOT as DEPOT, RVSB_IN_DT_ROAD_STOP as DT_STOP, RVSB_IN_ROAD_STOP as STOP,
+    RVSB_WORMHOLE,
 };
 use crate::services::{Map, RoadStopType, Services};
+use crate::track_type::INVALID_TRACKDIR;
 use crate::vehicle::maintenance;
 use crate::vehicle::{
-    AM_REALISTIC, CALLBACK_FAILED, GroundServices, HVOT_BUS, HVOT_TRUCK, INVALID_ENGINE,
-    INVALID_PRICE, INVALID_TRACKDIR, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, OT_GOTO_DEPOT,
-    OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING, SND_DEPARTURE_OLD_RV_1, SND_DEPARTURE_OLD_RV_2,
-    VEHICLE_LENGTH, VETS_CANNOT_ENTER, VETS_ENTERED_WORMHOLE, VS_CRASHED, VS_HIDDEN, VS_STOPPED,
-    VehicleRef, VehicleServices, YEAR_TICKS, advance_distance,
+    AM_REALISTIC, CALLBACK_FAILED, GroundServices, HVOT_BUS, HVOT_TRUCK, INVALID_PRICE, MP_ROAD,
+    MP_STATION, MP_TUNNELBRIDGE, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING,
+    SND_DEPARTURE_OLD_RV_1, SND_DEPARTURE_OLD_RV_2, VEHICLE_LENGTH, VETS_CANNOT_ENTER,
+    VETS_ENTERED_WORMHOLE, VehicleRef, VehicleServices, YEAR_TICKS, advance_distance,
 };
+use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use std::ptr::NonNull;
 
-const WORMHOLE: u8 = 255;
 const REVERSE: [u8; 4] = [6, 7, 14, 15];
 /// Owner scalar selectors, shared with `openttd_rust_road_get/set`.
 const STATE: usize = 0;
@@ -599,7 +601,7 @@ fn max_speed(front: Part, r: MaxSpeedRead, acceleration_model: u8, l: &Leaves) -
                 speed = i32::from(r.max_track_speed) * 3 / 4;
             }
         }
-        if part.state() == WORMHOLE && u.status & VS_HIDDEN == 0 {
+        if part.state() == RVSB_WORMHOLE && u.status & VS_HIDDEN == 0 {
             // SAFETY: The static shared table outlives this synchronous query.
             speed = speed.min(i32::from(service!(unsafe { (*l.shared).bridge_speed })(u.tile)) * 2);
         }
@@ -723,7 +725,7 @@ impl Game<'_> {
         }
         let mut best: Option<Candidate> = None;
         let mut best_diff = u32::MAX;
-        let wormhole = v.state() == WORMHOLE;
+        let wormhole = v.state() == RVSB_WORMHOLE;
         let mut offer = |vehicle| {
             let mut out = std::mem::MaybeUninit::<Candidate>::uninit();
             // SAFETY: Live shell; successful admission initializes the narrow read.
@@ -956,7 +958,7 @@ impl Game<'_> {
         let mut part = v;
         let mut u = first;
         loop {
-            if part.state() != WORMHOLE && u.crossing {
+            if part.state() != RVSB_WORMHOLE && u.crossing {
                 let z = u.z;
                 let xy = (self.vs.xy)(v.v);
                 let hit = self.vs.any_near(xy.x, xy.y, 4, |t| {
@@ -1250,7 +1252,7 @@ impl Game<'_> {
         }
         let state = prev.state();
         let dir;
-        if state == WORMHOLE || state == DEPOT {
+        if state == RVSB_WORMHOLE || state == DEPOT {
             let diagonal = if service!(self.ss.tile_type)(tile) == MP_TUNNELBRIDGE {
                 service!(self.ss.tunnel_bridge_direction)(tile)
             } else if service!(self.l.is_road_depot_tile)(tile) {
@@ -1322,7 +1324,7 @@ impl Game<'_> {
         if v.state() == DEPOT {
             return true;
         }
-        if v.state() == WORMHOLE {
+        if v.state() == RVSB_WORMHOLE {
             let gp = service!(self.vs.new_position)(v.v);
             if s.front {
                 if let Some(u) = self.close(v, s.z, gp.x, gp.y, s.direction, true) {
@@ -1726,7 +1728,8 @@ impl Game<'_> {
             }
             adv = advance_distance(s.direction);
             if j >= adv {
-                let crossing = v.state() != WORMHOLE && service!(self.ss.is_level_crossing)(s.tile);
+                let crossing =
+                    v.state() != RVSB_WORMHOLE && service!(self.ss.is_level_crossing)(s.tile);
                 let link = service!(self.l.link)(v.v);
                 let first = CrashPart {
                     next: link.next,
@@ -1897,7 +1900,7 @@ impl Game<'_> {
         if r.status & (VS_STOPPED | VS_CRASHED) != 0
             || r.breakdown_ctr != 0
             || v.overtaking() != 0
-            || v.state() == WORMHOLE
+            || v.state() == RVSB_WORMHOLE
             || v.state() == DEPOT
             || r.order_type == OT_LOADING
         {

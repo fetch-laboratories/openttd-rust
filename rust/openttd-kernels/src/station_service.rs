@@ -23,7 +23,8 @@ use crate::orders::NativeOrderList;
 use crate::station::{BaseStation, Station};
 use crate::timer_game_common::INVALID_DATE;
 use crate::vehicle::visits::{Services as Visits, refresh_links};
-use crate::vehicle::{EngineRef, VS_CRASHED, VS_STOPPED, VehicleRef};
+use crate::vehicle::{EngineRef, VehicleRef};
+use crate::vehicle_base::{VS_CRASHED, VS_STOPPED};
 use std::ffi::c_void;
 use std::ptr::NonNull;
 /// `GoodsEntry::ConvertState`: the four history bits keep their native order.

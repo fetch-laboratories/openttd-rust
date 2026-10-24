@@ -26,6 +26,7 @@
 )]
 use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_TREES};
+use crate::timer_game_tick::DAY_TICKS;
 use std::ffi::c_void;
 use std::ptr;
 pub mod resolver;
@@ -463,8 +464,7 @@ impl Map {
 }
 const SND_36_LUMBER_MILL_3: u16 = 0x36;
 const SND_37_LUMBER_MILL_2: u16 = 0x37;
-const LANDSCAPE_ARCTIC: u8 = 1;
-const LANDSCAPE_TROPIC: u8 = 2;
+use crate::landscape_type::{ARCTIC, TROPIC};
 fn observe(s: &Services, i: *mut c_void) -> Observation {
     let mut o = Observation::default();
     unsafe {
@@ -679,7 +679,7 @@ pub unsafe extern "C" fn openttd_rust_industry_tick(
         }
         from = u32::from(e.id) + 1;
         produce(e, &t, s, builder);
-        if t.counter.wrapping_add(u64::from(e.id)) % 74 == 0 {
+        if t.counter.wrapping_add(u64::from(e.id)) % DAY_TICKS as u64 == 0 {
             for n in 0..accepted_count(e.owner) {
                 let a = accepted(e.owner, n);
                 unsafe {
@@ -1363,13 +1363,13 @@ fn fence(mut tile: u32, mut size: u32, kind: u8, side: u8, map: Map, s: &Service
     }
 }
 fn plant(tile: u32, industry: u16, map: Map, s: &Services, landscape: &impl Fn() -> u8) {
-    if landscape() == LANDSCAPE_ARCTIC
+    if landscape() == ARCTIC
         && (s.shared().tile_z)(tile) + 2 >= i32::from(unsafe { (s.snow_line)() })
     {
         return;
     }
     let mut r = (rand(s) & 0x303) + 0x404;
-    if landscape() == LANDSCAPE_ARCTIC {
+    if landscape() == ARCTIC {
         r += 0x404;
     }
     let (width, height) = (map.size_x, map.size_y);
@@ -1408,7 +1408,7 @@ fn plant(tile: u32, industry: u16, map: Map, s: &Services, landscape: &impl Fn()
         }
     }
     let mut kind = 3;
-    if landscape() != LANDSCAPE_ARCTIC && landscape() != LANDSCAPE_TROPIC {
+    if landscape() != ARCTIC && landscape() != TROPIC {
         kind = [1, 1, 1, 1, 1, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6][(rand(s) & 15) as usize];
     }
     fence(tiles.tile_xy(x, y), sy, kind, 0, map, s);

@@ -31,6 +31,8 @@ pub mod resolver;
 use crate::history_type::LAST_MONTH;
 use crate::services::{Map, Services, chance16_i};
 use crate::slope_func::{is_slope_with_one_corner_raised, is_steep_slope};
+use crate::tile_type::{MP_HOUSE, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
+use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -238,7 +240,7 @@ pub extern "C" fn openttd_rust_town_generating_exchange(generating: bool) -> boo
 }
 /// Convert original town tick counters, including tick zero, to game ticks.
 fn town_ticks_to_game_ticks(ticks: u16) -> u16 {
-    ((u32::from(ticks.min(930)) + 1) * 70 - 1) as u16
+    ((u32::from(ticks.min(930)) + 1) * u32::from(TOWN_GROWTH_TICKS) - 1) as u16
 }
 
 unsafe fn update_radius(state: *mut State) {
@@ -1190,7 +1192,7 @@ impl Engine<'_> {
         true
     }
     fn level(&self, tile: u32) {
-        if (self.services.tile_type)(tile) == 3 {
+        if (self.services.tile_type)(tile) == MP_HOUSE {
             return;
         }
         let slope = u32::from((self.services.tile_slope)(tile));
@@ -1248,11 +1250,11 @@ impl Engine<'_> {
             return false;
         }
         match (self.services.tile_type)(next) {
-            9 => {
+            MP_TUNNELBRIDGE => {
                 return (self.services.tunnel_transport)(next) == 1
                     && u32::from((self.services.tunnel_bridge_direction)(next)) == dir;
             }
-            5 => {
+            MP_STATION => {
                 if (self.services.is_drive_through_stop)(next) {
                     return u32::from((self.services.drive_through_axis)(next)) == dir & 1;
                 }
@@ -1261,11 +1263,11 @@ impl Engine<'_> {
                 }
                 return false;
             }
-            2 => {
+            MP_ROAD => {
                 return (self.services.is_road_depot)(next)
                     && u32::from((self.services.road_depot_direction)(next)) == reverse(dir);
             }
-            1 => {
+            MP_RAILWAY => {
                 if !(self.leaves.allow_crossings)() {
                     return false;
                 }
@@ -1398,7 +1400,8 @@ impl Engine<'_> {
         ] {
             let at = self.offset(tile, x, y);
             if !self.valid(at)
-                || !((self.services.tile_type)(at) == 2 || (self.services.is_any_road_stop)(at))
+                || !((self.services.tile_type)(at) == MP_ROAD
+                    || (self.services.is_any_road_stop)(at))
             {
                 continue;
             }
@@ -1411,7 +1414,7 @@ impl Engine<'_> {
         !found
     }
     fn grow_road(&self, tile: u32) -> bool {
-        if (self.services.tile_type)(tile) != 2 {
+        if (self.services.tile_type)(tile) != MP_ROAD {
             return true;
         }
         let road_type = (self.services.road_type)(tile);
@@ -1445,7 +1448,7 @@ impl Engine<'_> {
         let mut bits;
         if cur == 0 {
             if modes & 2 == 0
-                || (!(self.leaves.allow_crossings)() && (self.services.tile_type)(at) == 1)
+                || (!(self.leaves.allow_crossings)() && (self.services.tile_type)(at) == MP_RAILWAY)
             {
                 return 1;
             }
@@ -1496,7 +1499,7 @@ impl Engine<'_> {
             };
         } else {
             let mut allow = true;
-            if (self.services.tile_type)(at) == 9 {
+            if (self.services.tile_type)(at) == MP_TUNNELBRIDGE {
                 if (self.services.tunnel_transport)(at) == 1 && (dir != 4 || self.chance(1, 2)) {
                     *tile = (self.services.other_tunnel_end)(at);
                 }
@@ -1544,7 +1547,7 @@ impl Engine<'_> {
             }
             allow &= self.roads_allow_house(house_tile);
             if allow {
-                if (self.services.tile_type)(house_tile) != 3 {
+                if (self.services.tile_type)(house_tile) != MP_HOUSE {
                     if self.chance(1, 6) {
                         self.level(house_tile);
                     }
@@ -1592,7 +1595,7 @@ impl Engine<'_> {
             if cur == 0 {
                 return false;
             }
-            if (self.services.tile_type)(tile) == 9 {
+            if (self.services.tile_type)(tile) == MP_TUNNELBRIDGE {
                 dir = reverse(u32::from((self.services.tunnel_bridge_direction)(tile)));
             } else {
                 loop {
@@ -1613,7 +1616,7 @@ impl Engine<'_> {
                 }
             }
             tile = self.step(tile, dir);
-            if (self.services.tile_type)(tile) == 2
+            if (self.services.tile_type)(tile) == MP_ROAD
                 && !(self.services.is_road_depot)(tile)
                 && (self.services.has_road_type)(tile)
             {
@@ -1662,7 +1665,7 @@ impl Engine<'_> {
         if modes & 2 != 0 {
             tile = self.position();
             for (x, y) in OFFSETS {
-                if (self.services.tile_type)(tile) != 3
+                if (self.services.tile_type)(tile) != MP_HOUSE
                     && (self.services.tile_slope)(tile) == 0
                     && self.clear(tile, false)
                 {
@@ -2105,7 +2108,7 @@ impl Engine<'_> {
         self.update_growth(town);
         let counter = i32::from(self.counter());
         let rate = i32::from(self.rate());
-        let ticks = 70;
+        let ticks = i32::from(TOWN_GROWTH_TICKS);
         self.set_counter((counter.min(2 * ticks - (rate - counter) % ticks)) as u16);
     }
 }

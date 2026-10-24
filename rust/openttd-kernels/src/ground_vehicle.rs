@@ -119,8 +119,8 @@ use crate::services::{RailType, RoadType};
 use crate::tile_type::{TILE_SIZE, TILE_UNIT_MASK};
 use crate::track_func::track_status_to_track_bits;
 use crate::track_type::{TRACK_BIT_WORMHOLE, TRACK_BIT_X, TRACK_BIT_Y};
-use crate::vehicle::{VS_HIDDEN, VS_STOPPED, VehicleRef, VehicleServices, VehicleType};
-use crate::vehicle_base::is_articulated_part;
+use crate::vehicle::{VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle_base::{VS_HIDDEN, VS_STOPPED, is_articulated_part};
 use crate::vehicle_type::GROUND_ACCELERATION;
 use crate::witness::{self, hit};
 

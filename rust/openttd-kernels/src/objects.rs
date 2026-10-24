@@ -23,13 +23,15 @@
     clippy::fn_params_excessive_bools
 )]
 use crate::command_type::DoCommandFlag;
-use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
+use crate::company_type::{
+    INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
+};
 use crate::economy_func::get_price;
 use crate::economy_type::PR_BUILD_FOUNDATION;
 use crate::newgrf_callbacks::CALLBACK_FAILED;
 use crate::slope_func::{get_slope_max_z, is_steep_slope};
 use crate::strings_type::INVALID_STRING_ID;
-use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_WATER};
+use crate::tile_type::{INVALID_TILE, MP_CLEAR, MP_OBJECT, MP_WATER};
 use std::cell::UnsafeCell;
 
 struct State {
@@ -370,7 +372,6 @@ use crate::object_type::OBJECT_STATUE as STATUE;
 const LIGHTHOUSE: u16 = 1;
 const TRANSMITTER: u16 = 0;
 const NEW_OBJECT_OFFSET: u16 = 5;
-const MAX_COMPANIES: u8 = 15;
 const OBJECT_SIZE_1X1: u8 = 0x11;
 const INVALID_WATER_CLASS: WaterClass = WaterClass(3);
 const SOURCE_HEADQUARTERS: u8 = 2;
@@ -508,14 +509,14 @@ impl<'a> World<'a> {
         unsafe { &*self.s.query }
     }
     fn random_bits(&self, tile: u32) -> u32 {
-        if (self.shared.tile_valid)(tile) && (self.shared.tile_type)(tile) == 10 {
+        if (self.shared.tile_valid)(tile) && (self.shared.tile_type)(tile) == MP_OBJECT {
             unsafe { u32::from((self.query().random_bits)(tile)) }
         } else {
             0
         }
     }
     fn id_at_offset(&self, tile: u32, grfid: u32) -> u32 {
-        if (self.shared.tile_type)(tile) != 10 {
+        if (self.shared.tile_type)(tile) != MP_OBJECT {
             return 0xffff;
         }
         // SAFETY: object tile owns a live native object and specification.
@@ -533,7 +534,7 @@ impl<'a> World<'a> {
             if parameter != 0 {
                 tile = (q.nearby)(parameter, tile);
             }
-            let same = (self.shared.tile_type)(tile) == 10 && (q.index)(tile) == index;
+            let same = (self.shared.tile_type)(tile) == MP_OBJECT && (q.index)(tile) == index;
             (q.nearby_info)(tile, version8) | u32::from(same) << 8
         }
     }
@@ -627,7 +628,7 @@ impl<'a> World<'a> {
                 0x60 => self.id_at_offset((q.nearby)(parameter as u8, tile), (q.grfid)(ro)),
                 0x61 | 0x63 => {
                     let near = (q.nearby)(parameter as u8, tile);
-                    if (self.shared.tile_type)(near) == 10 && (q.by_tile)(near) == obj {
+                    if (self.shared.tile_type)(near) == MP_OBJECT && (q.by_tile)(near) == obj {
                         if variable == 0x61 {
                             u32::from((q.random_bits)(near))
                         } else {
@@ -744,7 +745,7 @@ impl<'a> World<'a> {
         }
     }
     fn is_type(&self, tile: u32, kind: u16) -> bool {
-        (self.shared.tile_type)(tile) == 10 && self.object_type_is(tile, kind)
+        (self.shared.tile_type)(tile) == MP_OBJECT && self.object_type_is(tile, kind)
     }
     /// Original `IsObjectType`; callers uphold its object-tile precondition.
     fn object_type_is(&self, tile: u32, kind: u16) -> bool {
@@ -1123,7 +1124,7 @@ impl<'a> World<'a> {
                             return;
                         }
                         if !(kind == HQ
-                            && (self.shared.tile_type)(t) == 10
+                            && (self.shared.tile_type)(t) == MP_OBJECT
                             && crate::tile_map::is_tile_owner(self.shared, t, self.current())
                             && self.object_type_is(t, HQ))
                         {
@@ -1234,7 +1235,7 @@ impl<'a> World<'a> {
                     }
                 }
                 OWNED => {
-                    if (self.shared.tile_type)(tile) == 10
+                    if (self.shared.tile_type)(tile) == MP_OBJECT
                         && crate::tile_map::is_tile_owner(self.shared, tile, self.current())
                         && self.object_type_is(tile, OWNED)
                     {

@@ -15,6 +15,8 @@ pub const OWNER_NONE: u8 = 0x10;
 pub const OWNER_WATER: u8 = 0x11;
 /// `OWNER_DEITY`.
 pub const OWNER_DEITY: u8 = 0x12;
+/// `MAX_COMPANIES`.
+pub const MAX_COMPANIES: u8 = 0x0F;
 /// `INVALID_OWNER`.
 pub const INVALID_OWNER: u8 = 0xFF;
 

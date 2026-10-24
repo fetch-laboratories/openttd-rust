@@ -24,10 +24,16 @@
     clippy::if_not_else,
     clippy::collapsible_match
 )]
+use crate::company_type::OWNER_NONE;
 use crate::order_type::{
-    OLFB_FULL_LOAD, OLFB_FULL_LOAD_ANY, OLFB_NO_LOAD, OUFB_TRANSFER, OUFB_UNLOAD,
+    OLFB_FULL_LOAD, OLFB_FULL_LOAD_ANY, OLFB_NO_LOAD, OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT,
+    OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_IMPLICIT, OT_LEAVESTATION, OT_LOADING, OT_NOTHING,
+    OUFB_TRANSFER, OUFB_UNLOAD,
 };
+use crate::timer_game_common::DAYS_IN_LEAP_YEAR;
+use crate::timer_game_tick::DAY_TICKS;
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
+use crate::vehicle_type::{VEH_AIRCRAFT, VEH_ROAD, VEH_SHIP, VEH_TRAIN};
 use std::ffi::c_void;
 
 /// Opaque live native `OrderList`; never dereferenced by Rust.
@@ -131,7 +137,7 @@ impl OrderAccess {
         }
         if self.manual() > 0 {
             // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
-            while self.kind(usize::from(unsafe { (*state).real })) == 8 {
+            while self.kind(usize::from(unsafe { (*state).real })) == OT_IMPLICIT {
                 // SAFETY: Exclusive serialized scalar write to a live owner; no borrow survives the statement.
                 unsafe {
                     (*state).real = (*state).real.wrapping_add(1);
@@ -151,7 +157,7 @@ impl OrderAccess {
         !self.vector.is_null()
             // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
             && (0..unsafe { (*self.vector).length })
-                .any(|index| matches!(self.kind(index), 1 | 2 | 6))
+                .any(|index| matches!(self.kind(index), OT_GOTO_STATION | OT_GOTO_DEPOT | OT_GOTO_WAYPOINT))
     }
 }
 
@@ -697,13 +703,13 @@ impl Game {
             return u8::MAX;
         }
         let order = self.order(list, next).unwrap();
-        if order.kind() == 7 {
+        if order.kind() == OT_CONDITIONAL {
             if order.variable() != 5 {
                 return next;
             }
             return self.decision(list, order.flags, hops.wrapping_add(1));
         }
-        if order.kind() == 2 {
+        if order.kind() == OT_GOTO_DEPOT {
             if order.action() & 1 != 0 {
                 return u8::MAX;
             }
@@ -740,7 +746,7 @@ impl Game {
         loop {
             hops = hops.wrapping_add(1);
             next = self.decision(list, next, hops);
-            while next != u8::MAX && self.order(list, next).unwrap().kind() == 7 {
+            while next != u8::MAX && self.order(list, next).unwrap().kind() == OT_CONDITIONAL {
                 let skip = self.decision(list, self.order(list, next).unwrap().flags, hops);
                 let advance = self.decision(list, self.next_index(list, next), hops);
                 if advance == u8::MAX || advance == first || skip == advance {
@@ -760,13 +766,13 @@ impl Game {
             let order = self.order(list, next).unwrap();
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
             let last = (unsafe { (self.0.last_station)(v) }) as u16;
-            if (order.kind() == 1 || order.kind() == 8)
+            if (order.kind() == OT_GOTO_STATION || order.kind() == OT_IMPLICIT)
                 && order.destination == last
                 && matches!(order.unload(), 1 | 2)
             {
                 return;
             }
-            if order.kind() == 2 || order.destination == last {
+            if order.kind() == OT_GOTO_DEPOT || order.destination == last {
                 continue;
             }
             // SAFETY: Output is the entry's live native station vector; no borrow crosses its mutation.
@@ -822,14 +828,14 @@ impl Order {
         matches!(self.load(), OLFB_FULL_LOAD | OLFB_FULL_LOAD_ANY)
     }
     fn wait_timetabled(self) -> bool {
-        if self.kind() == 7 {
+        if self.kind() == OT_CONDITIONAL {
             self.wait > 0
         } else {
             self.flags & 8 != 0
         }
     }
     fn travel_timetabled(self) -> bool {
-        if self.kind() == 7 {
+        if self.kind() == OT_CONDITIONAL {
             self.travel > 0
         } else {
             self.flags & 128 != 0
@@ -846,19 +852,23 @@ impl Order {
         }
     }
     fn can_load_unload(self) -> bool {
-        if (self.kind() != 1 && self.kind() != 8) || self.non_stop() & 2 != 0 {
+        if (self.kind() != OT_GOTO_STATION && self.kind() != OT_IMPLICIT)
+            || self.non_stop() & 2 != 0
+        {
             return false;
         }
         !(self.load() == 4 && self.unload() == 4)
     }
     fn complete(self) -> bool {
-        if !self.travel_timetabled() && self.kind() != 7 {
+        if !self.travel_timetabled() && self.kind() != OT_CONDITIONAL {
             return false;
         }
-        !(!self.wait_timetabled() && self.kind() == 1 && self.non_stop() & 2 == 0)
+        !(!self.wait_timetabled() && self.kind() == OT_GOTO_STATION && self.non_stop() & 2 == 0)
     }
     fn equals(&self, other: &Self) -> bool {
-        if self.kind() == 2 && self.kind == other.kind && (self.action() | other.action()) & 2 != 0
+        if self.kind() == OT_GOTO_DEPOT
+            && self.kind == other.kind
+            && (self.action() | other.action()) & 2 != 0
         {
             return self.depot_type() == other.depot_type()
                 && self.action() & !2 == other.action() & !2;
@@ -868,12 +878,12 @@ impl Order {
             && self.destination == other.destination
     }
     fn set_wait_timetabled(&mut self, b: bool) {
-        if self.kind() != 7 {
+        if self.kind() != OT_CONDITIONAL {
             self.flags = (self.flags & !8) | if b { 8 } else { 0 };
         }
     }
     fn set_travel_timetabled(&mut self, b: bool) {
-        if self.kind() != 7 {
+        if self.kind() != OT_CONDITIONAL {
             self.flags = (self.flags & !128) | if b { 128 } else { 0 };
         }
     }
@@ -900,7 +910,7 @@ pub unsafe extern "C" fn openttd_rust_list_init(
             let order = g.stored_order(list, index);
             // SAFETY: Exclusive serialized scalar write to a live owner; no borrow survives the statement.
             unsafe {
-                if order.kind() != 8 {
+                if order.kind() != OT_IMPLICIT {
                     (*state).manual = (*state).manual.wrapping_add(1);
                 }
                 (*state).total = (*state)
@@ -951,7 +961,7 @@ pub unsafe extern "C" fn openttd_rust_list_free(
     {
         for index in 0..g.stored_count(list) {
             let order = g.stored_order(list, index);
-            if matches!(order.kind(), 1 | 6)
+            if matches!(order.kind(), OT_GOTO_STATION | OT_GOTO_WAYPOINT)
                 // SAFETY: This mode uses GetIfValid and accepts missing stations.
                 && unsafe { (g.0.ownerless_station)(order.destination, 1) } != 0
             {
@@ -1012,7 +1022,7 @@ pub unsafe extern "C" fn openttd_rust_list_insert(
         // SAFETY: Reentry with this entry's live shell, outputs and static table.
         unsafe {
             openttd_rust_order_vector_insert(g.vector(list), index as usize, input);
-            if order.kind() != 8 {
+            if order.kind() != OT_IMPLICIT {
                 (*state).manual = (*state).manual.wrapping_add(1);
             }
             (*state).timetable = (*state).timetable.wrapping_add(
@@ -1022,7 +1032,7 @@ pub unsafe extern "C" fn openttd_rust_list_insert(
                 .total
                 .wrapping_add(i32::from(order.wait) + i32::from(order.travel));
         }
-        if matches!(order.kind(), 1 | 6)
+        if matches!(order.kind(), OT_GOTO_STATION | OT_GOTO_WAYPOINT)
             // SAFETY: List insertion supplies a live station/waypoint for these order kinds.
             && unsafe { (g.0.ownerless_station)(order.destination, 0) } != 0
         {
@@ -1044,7 +1054,7 @@ pub unsafe extern "C" fn openttd_rust_list_delete(
         let order = g.stored_order(list, index as usize);
         // SAFETY: Reentry with this entry's live shell, outputs and static table.
         unsafe {
-            if order.kind() != 8 {
+            if order.kind() != OT_IMPLICIT {
                 (*state).manual = (*state).manual.wrapping_sub(1);
             }
             (*state).timetable = (*state).timetable.wrapping_sub(
@@ -1103,7 +1113,7 @@ pub unsafe extern "C" fn openttd_rust_list_complete(
     {
         u32::from((0..g.stored_count(list)).all(|i| {
             let order = g.stored_order(list, i);
-            order.kind() == 8 || order.complete()
+            order.kind() == OT_IMPLICIT || order.complete()
         }))
     }
 }
@@ -1139,7 +1149,7 @@ impl Game {
     fn complete(self, list: *mut c_void) -> bool {
         (0..self.stored_count(list)).all(|i| {
             let o = self.stored_order(list, i);
-            o.kind() == 8 || o.complete()
+            o.kind() == OT_IMPLICIT || o.complete()
         })
     }
     fn duration(self, list: *mut c_void) -> i32 {
@@ -1231,7 +1241,7 @@ impl Game {
         unsafe {
             (*state).time = 0;
         }
-        if self.current(v).kind() == 8 {
+        if self.current(v).kind() == OT_IMPLICIT {
             return;
         }
         // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
@@ -1243,7 +1253,7 @@ impl Game {
         let mut first = 0u8;
         let list = self.orders(v);
         for i in 0..self.stored_count(list) {
-            if self.stored_order(list, i).kind() != 8 {
+            if self.stored_order(list, i).kind() != OT_IMPLICIT {
                 break;
             }
             first = first.wrapping_add(1);
@@ -1283,7 +1293,9 @@ impl Game {
         if just_started {
             return;
         }
-        if order.kind() != 7 && (travelling || time > i32::from(order.wait) || remeasure) {
+        if order.kind() != OT_CONDITIONAL
+            && (travelling || time > i32::from(order.wait) || remeasure)
+        {
             let seconds = (self.0.ticks_per_second)() as i32;
             let value =
                 (time.max(1).wrapping_add(seconds - 1) / seconds).wrapping_mul(seconds) as u16;
@@ -1358,10 +1370,10 @@ impl Game {
         let raw = i32::from(bi) - i32::from(ai);
         let ao = self.current(a);
         let bo = self.current(b);
-        if ao.kind() != 3 || ao.non_stop() == 0 {
+        if ao.kind() != OT_LOADING || ao.non_stop() == 0 {
             ai = ai.wrapping_sub(1);
         }
-        if bo.kind() != 3 || bo.non_stop() == 0 {
+        if bo.kind() != OT_LOADING || bo.non_stop() == 0 {
             bi = bi.wrapping_sub(1);
         }
         let index = i32::from(bi) - i32::from(ai);
@@ -1404,7 +1416,7 @@ pub unsafe extern "C" fn openttd_rust_timetable_change(
         let Some(order) = g.vehicle_order(v, index) else {
             return g.command_error(output, 0);
         };
-        if order.kind() == 8 || field >= 3 {
+        if order.kind() == OT_IMPLICIT || field >= 3 {
             return g.command_error(output, 0);
         }
         let mut wait = order.wait;
@@ -1427,11 +1439,14 @@ pub unsafe extern "C" fn openttd_rust_timetable_change(
                 _ => return g.command_error(output, 2),
             }
         }
-        if travel != order.travel && order.kind() == 7 {
+        if travel != order.travel && order.kind() == OT_CONDITIONAL {
             return g.command_error(output, 0);
         }
-        // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-        if speed != order.speed && (order.kind() == 7 || unsafe { (g.0.vehicle_type)(v) } == 3) {
+        if speed != order.speed
+            && (order.kind() == OT_CONDITIONAL
+                // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
+                || unsafe { (g.0.vehicle_type)(v) } == u64::from(VEH_AIRCRAFT))
+        {
             return g.command_error(output, 0);
         }
         if execute != 0 {
@@ -1572,21 +1587,21 @@ pub unsafe extern "C" fn openttd_rust_timetable_start(
         let start_date = date.wrapping_add(
             (start.wrapping_sub((g.0.tick_counter)()) as i32)
                 .wrapping_add((g.0.economy_fraction)() as i32)
-                / 74,
+                / DAY_TICKS,
         );
         let max_date = (g.0.maximum_date)() as i32;
         if start_date < 0 || start_date > max_date {
             return g.command_error(output, 0);
         }
         if start_date.wrapping_sub(date) > (g.0.timetable_year_limit)() as i32
-            || date.wrapping_sub(start_date) > 366
+            || date.wrapping_sub(start_date) > DAYS_IN_LEAP_YEAR
         {
             return g.command_error(output, 0);
         }
         if all != 0 && !g.complete(list) {
             return g.command_error(output, 4);
         }
-        if all != 0 && start_date.wrapping_add(total / 74) > max_date {
+        if all != 0 && start_date.wrapping_add(total / DAY_TICKS) > max_date {
             return g.command_error(output, 0);
         }
         if execute != 0 {
@@ -1697,7 +1712,7 @@ pub extern "C" fn openttd_rust_orders_start_tick(
 ) -> u64 {
     counter.wrapping_add(
         date.wrapping_sub(current_date)
-            .wrapping_mul(74)
+            .wrapping_mul(DAY_TICKS)
             .wrapping_sub(i32::from(fract)) as u64,
     )
 }
@@ -1708,7 +1723,9 @@ pub extern "C" fn openttd_rust_orders_start_date(
     fract: u16,
     counter: u64,
 ) -> i32 {
-    date.wrapping_add((start.wrapping_sub(counter) as i32).wrapping_add(i32::from(fract)) / 74)
+    date.wrapping_add(
+        (start.wrapping_sub(counter) as i32).wrapping_add(i32::from(fract)) / DAY_TICKS,
+    )
 }
 
 impl Game {
@@ -1816,7 +1833,7 @@ impl Game {
             implicit.wrapping_sub(1)
         };
         self.vehicle_order(v, index)
-            .is_some_and(|o| o.kind() == 2 && o.action() & 4 != 0)
+            .is_some_and(|o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0)
     }
     fn leave_unbunching(self, v: *mut c_void) {
         if !self.previous_unbunching(v) {
@@ -1930,7 +1947,7 @@ pub unsafe extern "C" fn openttd_rust_increment_real(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_has_depot(v: *mut c_void, leaves: &'static Leaves) -> u32 {
     let g = Game(leaves);
-    u32::from(g.any_order(v, |o| o.kind() == 2))
+    u32::from(g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT))
 }
 
 #[unsafe(no_mangle)]
@@ -1939,7 +1956,9 @@ pub unsafe extern "C" fn openttd_rust_has_full_load(
     leaves: &'static Leaves,
 ) -> u32 {
     let g = Game(leaves);
-    u32::from(g.any_order(v, |o| o.kind() == 1 && matches!(o.load(), 2 | 3)))
+    u32::from(g.any_order(v, |o| {
+        o.kind() == OT_GOTO_STATION && matches!(o.load(), 2 | 3)
+    }))
 }
 
 #[unsafe(no_mangle)]
@@ -1948,7 +1967,7 @@ pub unsafe extern "C" fn openttd_rust_has_conditional(
     leaves: &'static Leaves,
 ) -> u32 {
     let g = Game(leaves);
-    u32::from(g.any_order(v, |o| o.kind() == 7))
+    u32::from(g.any_order(v, |o| o.kind() == OT_CONDITIONAL))
 }
 
 #[unsafe(no_mangle)]
@@ -1957,7 +1976,7 @@ pub unsafe extern "C" fn openttd_rust_has_unbunching(
     leaves: &'static Leaves,
 ) -> u32 {
     let g = Game(leaves);
-    u32::from(g.any_order(v, |o| o.kind() == 2 && o.action() & 4 != 0))
+    u32::from(g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0))
 }
 
 #[unsafe(no_mangle)]
@@ -1995,7 +2014,7 @@ pub unsafe extern "C" fn openttd_rust_order_free(p: *mut Order) -> u32 {
     // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
     let mut order = unsafe { p.read() };
     {
-        order.kind = 0;
+        order.kind = OT_NOTHING;
         order.flags = 0;
         order.destination = 0;
     };
@@ -2011,7 +2030,7 @@ pub unsafe extern "C" fn openttd_rust_order_station(p: *mut Order, destination: 
     // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
     let mut order = unsafe { p.read() };
     {
-        order.kind = 1;
+        order.kind = OT_GOTO_STATION;
         order.flags = 0;
         order.destination = destination;
     };
@@ -2034,7 +2053,7 @@ pub unsafe extern "C" fn openttd_rust_order_depot(
     // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
     let mut order = unsafe { p.read() };
     {
-        order.kind = 2;
+        order.kind = OT_GOTO_DEPOT;
         order.flags = (order.flags & !7) | (depot_type & 7);
         order.flags = (order.flags & !0x78) | ((action & 15) << 3);
         order.kind = (order.kind & !0xc0) | ((nonstop & 3) << 6);
@@ -2053,7 +2072,7 @@ pub unsafe extern "C" fn openttd_rust_order_waypoint(p: *mut Order, destination:
     // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
     let mut order = unsafe { p.read() };
     {
-        order.kind = 6;
+        order.kind = OT_GOTO_WAYPOINT;
         order.flags = 0;
         order.destination = destination;
     };
@@ -2069,7 +2088,7 @@ pub unsafe extern "C" fn openttd_rust_order_loading(p: *mut Order, ordered: u8) 
     // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
     let mut order = unsafe { p.read() };
     {
-        order.kind = 3;
+        order.kind = OT_LOADING;
         if ordered == 0 {
             order.flags = 0;
         }
@@ -2086,7 +2105,7 @@ pub unsafe extern "C" fn openttd_rust_order_leave(p: *mut Order) -> u32 {
     // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
     let mut order = unsafe { p.read() };
     {
-        order.kind = 4;
+        order.kind = OT_LEAVESTATION;
         order.flags = 0;
     };
     // SAFETY: Writes one Order into live storage at an in-bounds index; no reference survives.
@@ -2101,7 +2120,7 @@ pub unsafe extern "C" fn openttd_rust_order_dummy(p: *mut Order) -> u32 {
     // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
     let mut order = unsafe { p.read() };
     {
-        order.kind = 5;
+        order.kind = OT_DUMMY;
         order.flags = 0;
     };
     // SAFETY: Writes one Order into live storage at an in-bounds index; no reference survives.
@@ -2116,7 +2135,7 @@ pub unsafe extern "C" fn openttd_rust_order_conditional(p: *mut Order, skip: u8)
     // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
     let mut order = unsafe { p.read() };
     {
-        order.kind = 7;
+        order.kind = OT_CONDITIONAL;
         order.flags = skip;
         order.destination = 0;
     };
@@ -2132,7 +2151,7 @@ pub unsafe extern "C" fn openttd_rust_order_implicit(p: *mut Order, destination:
     // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
     let mut order = unsafe { p.read() };
     {
-        order.kind = 8;
+        order.kind = OT_IMPLICIT;
         order.destination = destination;
     };
     // SAFETY: Writes one Order into live storage at an in-bounds index; no reference survives.
@@ -2240,10 +2259,10 @@ pub unsafe extern "C" fn openttd_rust_order_should_stop(
     let order = unsafe { p.read() };
     {
         u32::from(
-            (order.kind() != 2 || order.depot_type() & 2 != 0)
+            (order.kind() != OT_GOTO_DEPOT || order.depot_type() & 2 != 0)
                 && last_station != station
                 && order.non_stop()
-                    & (if order.kind() == 1 && order.destination == station {
+                    & (if order.kind() == OT_GOTO_STATION && order.destination == station {
                         2
                     } else {
                         1
@@ -2320,8 +2339,10 @@ impl Control {
                 }
             }
             // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
-            // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-            if index == unsafe { (*state).implicit } && unsafe { (g.0.vehicle_type)(u) } < 2 {
+            if index == unsafe { (*state).implicit }
+                // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
+                && unsafe { (g.0.vehicle_type)(u) } < u64::from(VEH_SHIP)
+            {
                 // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
                 unsafe {
                     (g.0.suppress_implicit_write)(u, 1);
@@ -2348,7 +2369,7 @@ impl Control {
         let list = g.orders(v);
         for i in 0..g.stored_count(list) {
             let mut o = g.stored_order(list, i);
-            if o.kind() == 7 {
+            if o.kind() == OT_CONDITIONAL {
                 let target = o.flags;
                 if target >= index {
                     o.flags = target.wrapping_add(1);
@@ -2386,7 +2407,7 @@ impl Control {
         while !u.is_null() {
             let state = g.consist(u);
             // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
-            if index == unsafe { (*state).real } && g.current(u).kind() == 3 {
+            if index == unsafe { (*state).real } && g.current(u).kind() == OT_LOADING {
                 self.cancel_loading(u);
             }
             // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
@@ -2441,7 +2462,7 @@ impl Control {
         let list = g.orders(v);
         for i in 0..g.stored_count(list) {
             let mut o = g.stored_order(list, i);
-            if o.kind() == 7 {
+            if o.kind() == OT_CONDITIONAL {
                 let mut target = o.flags;
                 if target >= index {
                     target = target.saturating_sub(1);
@@ -2462,7 +2483,10 @@ impl Control {
         let g = self.g;
         let state = g.consist(v);
         // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-        if unsafe { (g.0.vehicle_type)(v) } < 2 && unsafe { (g.0.suppress_implicit)(v) } != 0 {
+        if unsafe { (g.0.vehicle_type)(v) } < u64::from(VEH_SHIP)
+            // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
+            && unsafe { (g.0.suppress_implicit)(v) } != 0
+        {
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
             unsafe {
                 (g.0.suppress_implicit_write)(v, 0);
@@ -2496,7 +2520,7 @@ impl Control {
             // typed/live, including the retained former last order. No reference
             // or borrow crosses the deletion/window callbacks.
             // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
-            if unsafe { orders.add(usize::from(current)).read() }.kind() == 8 {
+            if unsafe { orders.add(usize::from(current)).read() }.kind() == OT_IMPLICIT {
                 // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
                 self.delete(v, unsafe { (*state).implicit });
             } else {
@@ -2555,7 +2579,7 @@ impl Control {
         }
         for i in 0..g.stored_count(list) {
             let mut o = g.stored_order(list, i);
-            if o.kind() == 7 {
+            if o.kind() == OT_CONDITIONAL {
                 o.flags = remap(o.flags, from, to);
                 g.put_stored(list, i, o);
             }
@@ -2684,7 +2708,7 @@ impl Control {
                 (*state).implicit = 0;
                 (*state).real = 0;
             }
-            if g.current(v).kind() == 3 {
+            if g.current(v).kind() == OT_LOADING {
                 self.cancel_loading(v);
             }
         }
@@ -2779,7 +2803,7 @@ pub unsafe extern "C" fn openttd_rust_timetable_bulk(
             let mut index = 0u8;
             while index < g.count(v) {
                 let order = g.vehicle_order(v, index);
-                if order.is_some_and(|o| o.kind() != 8) {
+                if order.is_some_and(|o| o.kind() != OT_IMPLICIT) {
                     // SAFETY: The vehicle is live; no owner borrow spans the nested timetable command.
                     unsafe {
                         (g.0.change_timetable_command)(v, index, field, value);
@@ -3081,7 +3105,7 @@ pub struct Closest {
 }
 impl Game {
     fn conditional(self, order: Order, v: *mut c_void) -> u8 {
-        if order.kind() != 7 {
+        if order.kind() != OT_CONDITIONAL {
             return u8::MAX;
         }
         let variable = match order.variable() {
@@ -3126,7 +3150,7 @@ impl Game {
         match order.kind() {
             1 | 6 | 8 => {
                 // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                (if airport && unsafe { (self.0.vehicle_type)(v) } == 3 {
+                (if airport && unsafe { (self.0.vehicle_type)(v) } == u64::from(VEH_AIRCRAFT) {
                     // SAFETY: The source branch supplies a live destination of the required pool type.
                     unsafe { (self.0.airport_tile)(order.destination) }
                 } else {
@@ -3139,7 +3163,7 @@ impl Game {
                     return u32::MAX;
                 }
                 // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                (if unsafe { (self.0.vehicle_type)(v) } == 3 {
+                (if unsafe { (self.0.vehicle_type)(v) } == u64::from(VEH_AIRCRAFT) {
                     // SAFETY: The source branch supplies a live destination of the required pool type.
                     unsafe { (self.0.station_tile)(order.destination) }
                 } else {
@@ -3156,7 +3180,7 @@ impl Game {
         // uint8 count. Oversized save-loaded lists can still have conditional
         // destinations beyond their narrowed GetNumOrders value.
         let order = self.stored_order(list, usize::from(current));
-        if order.kind() == 7 {
+        if order.kind() == OT_CONDITIONAL {
             if depth > i32::from(self.count(v)) {
                 return 0;
             }
@@ -3185,7 +3209,7 @@ impl Control {
         loop {
             if depth > i32::from(g.count(v)) {
                 let mut current = g.current(v);
-                current.kind = 0;
+                current.kind = OT_NOTHING;
                 current.flags = 0;
                 current.destination = 0;
                 g.put_current(v, current);
@@ -3214,7 +3238,7 @@ impl Control {
                         // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
                         if unsafe { (g.0.destination_tile)(v) } == 0
                             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                            && (g.0.economy_fraction)() != unsafe { (g.0.vehicle_id)(v) } % 74
+                            && (g.0.economy_fraction)() != unsafe { (g.0.vehicle_id)(v) } % DAY_TICKS as u64
                         {
                         } else {
                             let mut closest = Closest::default();
@@ -3232,14 +3256,16 @@ impl Control {
                                 current.destination = closest.destination;
                                 g.put_current(v, current);
                                 // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                                if unsafe { (g.0.vehicle_type)(v) } == 0 && closest.reverse != 0 {
+                                if unsafe { (g.0.vehicle_type)(v) } == u64::from(VEH_TRAIN)
+                                    && closest.reverse != 0
+                                {
                                     // SAFETY: The vehicle is a live train; no owner borrow spans the nested reverse command.
                                     unsafe {
                                         (g.0.reverse_train)(v);
                                     }
                                 }
                                 // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                                if unsafe { (g.0.vehicle_type)(v) } == 3
+                                if unsafe { (g.0.vehicle_type)(v) } == u64::from(VEH_AIRCRAFT)
                                     // SAFETY: The source branch has established that this live vehicle is an aircraft.
                                     && unsafe { (g.0.aircraft_flying)(v) } != 0
                                     // SAFETY: The source branch has established that this live vehicle is an aircraft.
@@ -3260,7 +3286,7 @@ impl Control {
                         }
                     } else {
                         // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                        if unsafe { (g.0.vehicle_type)(v) } != 3 {
+                        if unsafe { (g.0.vehicle_type)(v) } != u64::from(VEH_AIRCRAFT) {
                             // SAFETY: The source branch supplies a live destination of the required pool type.
                             let tile = unsafe { (g.0.depot_tile)(order.destination) };
                             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
@@ -3312,7 +3338,7 @@ impl Control {
                             (*state).time = (*state).time.wrapping_add(i32::from(travel));
                         }
                         // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                        if unsafe { (g.0.vehicle_type)(v) } < 2 {
+                        if unsafe { (g.0.vehicle_type)(v) } < u64::from(VEH_SHIP) {
                             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
                             unsafe {
                                 (g.0.suppress_implicit_write)(v, 1);
@@ -3333,10 +3359,10 @@ impl Control {
             }
             // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
             let real = unsafe { (*g.consist(v)).real };
-            let next = g.vehicle_order(v, real).filter(|o| o.kind() != 8);
+            let next = g.vehicle_order(v, real).filter(|o| o.kind() != OT_IMPLICIT);
             let Some(next) = next else {
                 let mut current = g.current(v);
-                current.kind = 0;
+                current.kind = OT_NOTHING;
                 current.flags = 0;
                 current.destination = 0;
                 g.put_current(v, current);
@@ -3360,25 +3386,25 @@ impl Control {
         // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
         let order_kind = unsafe { (*current_ptr).kind } & 15;
         match order_kind {
-            2 => {
+            OT_GOTO_DEPOT => {
                 // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
                 if (unsafe { (*current_ptr).flags } & 7) & 2 == 0 {
                     return false;
                 }
             }
-            3 => return false,
-            4 => {
+            OT_LOADING => return false,
+            OT_LEAVESTATION => {
                 // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                if unsafe { (g.0.vehicle_type)(v) } != 3 {
+                if unsafe { (g.0.vehicle_type)(v) } != u64::from(VEH_AIRCRAFT) {
                     return false;
                 }
             }
             _ => {}
         }
-        let reverse = order_kind == 0;
+        let reverse = order_kind == OT_NOTHING;
         // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
         let current = unsafe { current_ptr.read() };
-        if ((order_kind == 1 && current.non_stop() & 2 != 0) || order_kind == 6)
+        if ((order_kind == OT_GOTO_STATION && current.non_stop() & 2 != 0) || order_kind == OT_GOTO_WAYPOINT)
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
             && unsafe { (g.0.at_station)(v) } != 0
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
@@ -3402,11 +3428,11 @@ impl Control {
             .order_ptr(unsafe { (*state).real })
             // SAFETY: The handle addresses a live order; this scalar observation
             // ends before the next service call.
-            .filter(|o| unsafe { (&**o).kind() != 8 });
+            .filter(|o| unsafe { (&**o).kind() != OT_IMPLICIT });
         // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
         let kind = unsafe { (g.0.vehicle_type)(v) };
-        if order.is_none() || (kind == 3 && !access.valid()) {
-            if kind == 3 {
+        if order.is_none() || (kind == u64::from(VEH_AIRCRAFT) && !access.valid()) {
+            if kind == u64::from(VEH_AIRCRAFT) {
                 // SAFETY: The vehicle is a live aircraft; no owner borrow spans order mutation.
                 unsafe {
                     (g.0.missing_aircraft_orders)(v);
@@ -3415,7 +3441,7 @@ impl Control {
             }
             // SAFETY: Reads one Order from live storage; the source is valid and no reference survives.
             let mut current = unsafe { (*vehicle).current.as_ptr().read() };
-            current.kind = 0;
+            current.kind = OT_NOTHING;
             current.flags = 0;
             current.destination = 0;
             // SAFETY: Writes one Order into live storage at an in-bounds index; no reference survives.
@@ -3439,11 +3465,11 @@ impl Control {
         // both shared borrows end before destination_tile or ship_station_tile.
         if unsafe { (&*order).equals(&*(*vehicle).current.as_ptr()) }
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-            && (kind == 3 || unsafe { (g.0.destination_tile)(v) } != 0)
-            && (kind != 2
+            && (kind == u64::from(VEH_AIRCRAFT) || unsafe { (g.0.destination_tile)(v) } != 0)
+            && (kind != u64::from(VEH_SHIP)
                 // SAFETY: Fresh scalar read of the still-live order after the
                 // destination gate, without retaining a borrow across a service.
-                || unsafe { (&*order).kind() } != 1
+                || unsafe { (&*order).kind() } != OT_GOTO_STATION
                 // SAFETY: The source branch supplies a live destination of the required pool type.
                 || unsafe { (g.0.ship_station_tile)((*order).destination) } != u64::from(u32::MAX))
         {
@@ -3461,7 +3487,7 @@ impl Control {
         unsafe {
             (g.0.invalidate_order)(v, ((-2i64) as u64) as i32);
         }
-        if kind == 2 || kind == 3 {
+        if kind == u64::from(VEH_SHIP) || kind == u64::from(VEH_AIRCRAFT) {
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
             unsafe {
                 (g.0.dirty_vehicle_windows)(v);
@@ -3510,13 +3536,13 @@ impl Control {
         let kind = unsafe { (g.0.vehicle_type)(v) };
         let destination = u64::from(order.destination);
         match order.kind() {
-            1 => {
+            OT_GOTO_STATION => {
                 if (g.0.valid_station)(destination as u16) == 0 {
                     return self.g.error(output, 0);
                 }
                 // SAFETY: The source branch supplies a live destination of the required pool type.
                 let owner = unsafe { (g.0.station_owner)(destination as u16) };
-                if owner != 0x10 && !self.g.check_owner(owner, output) {
+                if owner != u64::from(OWNER_NONE) && !self.g.check_owner(owner, output) {
                     return 0;
                 }
                 // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
@@ -3541,13 +3567,13 @@ impl Control {
                     }
                     u = g.next(u);
                 }
-                if order.non_stop() != 0 && kind >= 2 {
+                if order.non_stop() != 0 && kind >= u64::from(VEH_SHIP) {
                     return self.g.error(output, 0);
                 }
                 match order.load() {
                     0 | 4 => {}
                     2 | 3 => {
-                        if g.any_order(v, |o| o.kind() == 2 && o.action() & 4 != 0) {
+                        if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0) {
                             return self.g.error(output, 7);
                         }
                     }
@@ -3558,7 +3584,7 @@ impl Control {
                 }
                 match (order.kind >> 4) & 3 {
                     0 | 1 => {
-                        if kind != 0 {
+                        if kind != u64::from(VEH_TRAIN) {
                             return self.g.error(output, 0);
                         }
                     }
@@ -3566,9 +3592,9 @@ impl Control {
                     _ => return self.g.error(output, 0),
                 }
             }
-            2 => {
+            OT_GOTO_DEPOT => {
                 if order.action() & 2 == 0 {
-                    if kind == 3 {
+                    if kind == u64::from(VEH_AIRCRAFT) {
                         if (g.0.valid_station)(destination as u16) == 0 {
                             return self.g.error(output, 0);
                         }
@@ -3597,12 +3623,16 @@ impl Control {
                         {
                             return 0;
                         }
-                        if kind > 2
+                        if kind > u64::from(VEH_SHIP)
                             || match kind {
                                 // SAFETY: The source branch supplies a live destination of the required pool type.
-                                0 => unsafe { (g.0.rail_depot)(destination as u16) },
+                                k if k == u64::from(VEH_TRAIN) => unsafe {
+                                    (g.0.rail_depot)(destination as u16)
+                                },
                                 // SAFETY: The source branch supplies a live destination of the required pool type.
-                                1 => unsafe { (g.0.road_depot)(destination as u16) },
+                                k if k == u64::from(VEH_ROAD) => unsafe {
+                                    (g.0.road_depot)(destination as u16)
+                                },
                                 // SAFETY: The source branch supplies a live destination of the required pool type.
                                 _ => unsafe { (g.0.ship_depot)(destination as u16) },
                             } == 0
@@ -3611,7 +3641,7 @@ impl Control {
                         }
                     }
                 }
-                if order.non_stop() != 0 && kind >= 2 {
+                if order.non_stop() != 0 && kind >= u64::from(VEH_SHIP) {
                     return self.g.error(output, 0);
                 }
                 let mut flags = order.depot_type();
@@ -3626,25 +3656,27 @@ impl Control {
                     return self.g.error(output, 0);
                 }
                 if order.action() & 4 != 0 {
-                    if g.any_order(v, |o| o.kind() == 1 && matches!(o.load(), 2 | 3)) {
+                    if g.any_order(v, |o| {
+                        o.kind() == OT_GOTO_STATION && matches!(o.load(), 2 | 3)
+                    }) {
                         return self.g.error(output, 8);
                     }
-                    if g.any_order(v, |o| o.kind() == 2 && o.action() & 4 != 0) {
+                    if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0) {
                         return self.g.error(output, 9);
                     }
-                    if g.any_order(v, |o| o.kind() == 7) {
+                    if g.any_order(v, |o| o.kind() == OT_CONDITIONAL) {
                         return self.g.error(output, 10);
                     }
                 }
             }
-            6 => {
+            OT_GOTO_WAYPOINT => {
                 if (g.0.valid_waypoint)(destination as u16) == 0 {
                     return self.g.error(output, 0);
                 }
                 // SAFETY: The source branch supplies a live destination of the required pool type.
                 let facilities = unsafe { (g.0.waypoint_facilities)(destination as u16) };
                 match kind {
-                    0 => {
+                    k if k == u64::from(VEH_TRAIN) => {
                         if facilities & 1 == 0 {
                             return self.g.error(output, 11);
                         }
@@ -3656,7 +3688,7 @@ impl Control {
                             return 0;
                         }
                     }
-                    1 => {
+                    k if k == u64::from(VEH_ROAD) => {
                         if facilities & 6 == 0 {
                             return self.g.error(output, 12);
                         }
@@ -3668,30 +3700,30 @@ impl Control {
                             return 0;
                         }
                     }
-                    2 => {
+                    k if k == u64::from(VEH_SHIP) => {
                         if facilities & 16 == 0 {
                             return self.g.error(output, 13);
                         }
                         // SAFETY: The source branch supplies a live destination of the required pool type.
                         let owner = unsafe { (g.0.waypoint_owner)(destination as u16) };
-                        if owner != 0x10 && !self.g.check_owner(owner, output) {
+                        if owner != u64::from(OWNER_NONE) && !self.g.check_owner(owner, output) {
                             return 0;
                         }
                     }
                     _ => return self.g.error(output, 0),
                 }
-                if order.non_stop() != 0 && kind >= 2 {
+                if order.non_stop() != 0 && kind >= u64::from(VEH_SHIP) {
                     return self.g.error(output, 0);
                 }
             }
-            7 => {
+            OT_CONDITIONAL => {
                 if order.flags != 0 && order.flags >= g.count(v) {
                     return self.g.error(output, 0);
                 }
                 if order.variable() >= 8 {
                     return self.g.error(output, 0);
                 }
-                if g.any_order(v, |o| o.kind() == 2 && o.action() & 4 != 0) {
+                if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0) {
                     return self.g.error(output, 14);
                 }
                 let compare = order.comparator();
@@ -3782,7 +3814,7 @@ impl Control {
             return 0;
         }
         if execute {
-            if g.current(v).kind() == 3 {
+            if g.current(v).kind() == OT_LOADING {
                 // SAFETY: The vehicle is live; no owner borrow spans station departure.
                 let vehicle = VehicleRef(unsafe { ptr::NonNull::new_unchecked(v.cast()) });
                 crate::vehicle::visits::leave_station(vehicle, g.0.base.visits());
@@ -3887,7 +3919,7 @@ impl Control {
         match field {
             0 => {
                 // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                if unsafe { (g.0.vehicle_type)(v) } >= 2
+                if unsafe { (g.0.vehicle_type)(v) } >= u64::from(VEH_SHIP)
                     || byte == order.non_stop()
                     || byte & !3 != 0
                 {
@@ -3896,7 +3928,7 @@ impl Control {
             }
             1 => {
                 // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                if unsafe { (g.0.vehicle_type)(v) } != 0 || data >= 3 {
+                if unsafe { (g.0.vehicle_type)(v) } != u64::from(VEH_TRAIN) || data >= 3 {
                     return self.g.error(output, 0);
                 }
             }
@@ -3915,7 +3947,7 @@ impl Control {
                 match byte {
                     0 | 4 => {}
                     2 | 3 => {
-                        if g.any_order(v, |o| o.kind() == 2 && o.action() & 4 != 0) {
+                        if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0) {
                             return self.g.error(output, 7);
                         }
                     }
@@ -3927,15 +3959,17 @@ impl Control {
                     return self.g.error(output, 0);
                 }
                 if byte == 3 {
-                    if g.any_order(v, |o| o.kind() == 2 && o.action() & 4 != 0)
+                    if g.any_order(v, |o| o.kind() == OT_GOTO_DEPOT && o.action() & 4 != 0)
                         && order.action() & 4 == 0
                     {
                         return self.g.error(output, 9);
                     }
-                    if g.any_order(v, |o| o.kind() == 7) {
+                    if g.any_order(v, |o| o.kind() == OT_CONDITIONAL) {
                         return self.g.error(output, 10);
                     }
-                    if g.any_order(v, |o| o.kind() == 1 && matches!(o.load(), 2 | 3)) {
+                    if g.any_order(v, |o| {
+                        o.kind() == OT_GOTO_STATION && matches!(o.load(), 2 | 3)
+                    }) {
                         return self.g.error(output, 8);
                     }
                 }
@@ -4057,7 +4091,7 @@ impl Control {
                 let mut current = g.current(u);
                 // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
                 if index == unsafe { (*state).real }
-                    && matches!(current.kind(), 1 | 3)
+                    && matches!(current.kind(), OT_GOTO_STATION | OT_LOADING)
                     && current.load() != order.load()
                 {
                     current.flags = (current.flags & !0x70) | ((order.load() & 7) << 4);
@@ -4094,7 +4128,7 @@ impl Control {
         let Some(mut order) = g.vehicle_order(v, index) else {
             return self.g.error(output, 0);
         };
-        if cargo == 0xfd && order.kind() != 1 {
+        if cargo == 0xfd && order.kind() != OT_GOTO_STATION {
             return self.g.error(output, 0);
         }
         if order.load() == 4 {
@@ -4102,7 +4136,7 @@ impl Control {
         }
         if execute {
             order.refit = cargo;
-            if cargo != 0xfe && order.kind() == 2 {
+            if cargo != 0xfe && order.kind() == OT_GOTO_DEPOT {
                 order.flags &= !(1 | 8);
             }
             g.put_order(g.orders(v), index, order);
@@ -4248,7 +4282,8 @@ impl Control {
         let kind = unsafe { (g.0.vehicle_type)(src) };
         if action == 0 {
             // SAFETY: The source branch has established that both live vehicles are road vehicles.
-            if kind == 1 && unsafe { (g.0.bus)(src) } != unsafe { (g.0.bus)(dst) } {
+            if kind == u64::from(VEH_ROAD) && unsafe { (g.0.bus)(src) } != unsafe { (g.0.bus)(dst) }
+            {
                 return self.g.error(output, 0);
             }
             if g.first(src) == g.first(dst) {
@@ -4259,8 +4294,10 @@ impl Control {
         if !list.is_null() {
             for i in 0..g.stored_count(list) {
                 let order = g.stored_order(list, i);
-                if order.kind() != 1
-                    && !(kind == 3 && order.kind() == 2 && order.destination != u16::MAX)
+                if order.kind() != OT_GOTO_STATION
+                    && !(kind == u64::from(VEH_AIRCRAFT)
+                        && order.kind() == OT_GOTO_DEPOT
+                        && order.destination != u16::MAX)
                 {
                     continue;
                 }
@@ -4279,7 +4316,7 @@ impl Control {
                 }
             }
         }
-        if kind == 3 && !g.aircraft_range(dst, src) {
+        if kind == u64::from(VEH_AIRCRAFT) && !g.aircraft_range(dst, src) {
             return self.g.error(output, 18);
         }
         if (action == 1 || list.is_null()) && (g.0.list_capacity)() == 0 {
@@ -4575,7 +4612,7 @@ impl Control {
                 for i in 0..length {
                     let order = g.backed_order(ob, i);
                     let mut kind = order.kind();
-                    if kind == 2 && order.action() & 2 != 0 {
+                    if kind == OT_GOTO_DEPOT && order.action() & 2 != 0 {
                         continue;
                     }
                     // SAFETY: The pool traversal supplies a live OrderBackup shell and its saved tile.
@@ -4583,11 +4620,11 @@ impl Control {
                         unsafe { (*g.backup(ob)).tile },
                         crate::newgrf_airport::runtime(),
                     );
-                    if kind == 2 && c != 0 && !hangar {
+                    if kind == OT_GOTO_DEPOT && c != 0 && !hangar {
                         continue;
                     }
-                    if kind == 8 || (hangar && kind == 2 && c == 0) {
-                        kind = 1;
+                    if kind == OT_IMPLICIT || (hangar && kind == OT_GOTO_DEPOT && c == 0) {
+                        kind = OT_GOTO_STATION;
                     }
                     if u64::from(kind) == a && u64::from(order.destination) == b {
                         // SAFETY: The pool entry is deleted once; no owner borrow or subsequent access remains.
@@ -4612,15 +4649,15 @@ impl Control {
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
             let next = ((unsafe { (g.0.vehicle_id)(v) }) as u32).wrapping_add(1);
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-            let aircraft = unsafe { (g.0.vehicle_type)(v) } == 3;
+            let aircraft = unsafe { (g.0.vehicle_type)(v) } == u64::from(VEH_AIRCRAFT);
             let mut current = g.current(v);
-            let current_kind = if aircraft && current.kind() == 2 && !hangar {
-                1
+            let current_kind = if aircraft && current.kind() == OT_GOTO_DEPOT && !hangar {
+                OT_GOTO_STATION
             } else {
                 current.kind()
             };
             if current_kind == kind && (!hangar || aircraft) && current.destination == destination {
-                current.kind = 5;
+                current.kind = OT_DUMMY;
                 current.flags = 0;
                 g.put_current(v, current);
                 (g.maintenance().view_dirty)(native_vehicle(v));
@@ -4632,12 +4669,13 @@ impl Control {
                     let list = g.orders(v);
                     let mut order = g.order(list, index).unwrap();
                     let mut ty = order.kind();
-                    if !(ty == 2 && (order.action() & 2 != 0 || (hangar && !aircraft))) {
-                        if ty == 8 || (aircraft && ty == 2 && !hangar) {
-                            ty = 1;
+                    if !(ty == OT_GOTO_DEPOT && (order.action() & 2 != 0 || (hangar && !aircraft)))
+                    {
+                        if ty == OT_IMPLICIT || (aircraft && ty == OT_GOTO_DEPOT && !hangar) {
+                            ty = OT_GOTO_STATION;
                         }
                         if ty == kind && order.destination == destination {
-                            if order.kind() == 8 {
+                            if order.kind() == OT_IMPLICIT {
                                 self.delete(v, index);
                                 next = index;
                             } else {
@@ -4658,7 +4696,7 @@ impl Control {
                                 }
                                 order.wait = 0;
                                 let travel = order.travel_timetabled();
-                                order.kind = 5;
+                                order.kind = OT_DUMMY;
                                 order.flags = 0;
                                 order.set_travel_timetabled(travel);
                                 g.put_order(list, index, order);
@@ -4709,17 +4747,17 @@ impl Control {
         if !list.is_null() {
             for i in 0..g.stored_count(list) {
                 let order = g.stored_order(list, i);
-                if order.kind() == 5 {
+                if order.kind() == OT_DUMMY {
                     message = 1;
                     break;
                 }
-                if order.kind() == 1 {
+                if order.kind() == OT_GOTO_STATION {
                     stations = stations.wrapping_add(1);
                     // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
                     if unsafe { order_can_use_station(v, order.destination) } == 0 {
                         message = 2;
                     // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-                    } else if unsafe { (g.0.vehicle_type)(v) } == 3
+                    } else if unsafe { (g.0.vehicle_type)(v) } == u64::from(VEH_AIRCRAFT)
                         // SAFETY: The source branch has established that this live vehicle is an aircraft.
                         && unsafe { (g.0.fast_aircraft)(v) } != 0
                         // SAFETY: The source branch supplies a live destination of the required pool type.
@@ -4760,10 +4798,10 @@ impl Control {
         let current = g.current(v);
         // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
         let last = (unsafe { (g.0.last_station)(v) }) as u16;
-        if current.kind() == 1 && current.destination == last {
+        if current.kind() == OT_GOTO_STATION && current.destination == last {
             self.delete_implicit(v);
             let mut current = g.current(v);
-            current.kind = 3;
+            current.kind = OT_LOADING;
             g.put_current(v, current);
             g.update_timetable(v, true);
             let mut current = g.current(v);
@@ -4776,8 +4814,8 @@ impl Control {
         let implicit = unsafe { (*state).implicit };
         let in_list = g.vehicle_order(v, implicit);
         // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
-        if unsafe { (g.0.vehicle_type)(v) } < 2
-            && !in_list.is_some_and(|o| o.kind() == 8 && o.destination == last)
+        if unsafe { (g.0.vehicle_type)(v) } < u64::from(VEH_SHIP)
+            && !in_list.is_some_and(|o| o.kind() == OT_IMPLICIT && o.destination == last)
         {
             // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
             let suppress = unsafe { (g.0.suppress_implicit)(v) } != 0;
@@ -4788,7 +4826,9 @@ impl Control {
             } else {
                 None
             };
-            if !previous.is_some_and(|o| matches!(o.kind(), 1 | 8) && o.destination == last) {
+            if !previous.is_some_and(|o| {
+                matches!(o.kind(), OT_GOTO_STATION | OT_IMPLICIT) && o.destination == last
+            }) {
                 let mut target = i32::from(implicit);
                 let mut found = false;
                 // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
@@ -4796,7 +4836,7 @@ impl Control {
                     let Some(order) = g.vehicle_order(v, target as u8) else {
                         break;
                     };
-                    if order.kind() == 8 && order.destination == last {
+                    if order.kind() == OT_IMPLICIT && order.destination == last {
                         found = true;
                         break;
                     }
@@ -4826,10 +4866,10 @@ impl Control {
                         loop {
                             // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
                             let order = g.vehicle_order(v, unsafe { (*state).implicit }).unwrap();
-                            if order.kind() == 8 && order.destination == last {
+                            if order.kind() == OT_IMPLICIT && order.destination == last {
                                 break;
                             }
-                            if order.kind() == 8 {
+                            if order.kind() == OT_IMPLICIT {
                                 // SAFETY: Scalar read of a live serialized owner; no borrow survives the statement.
                                 self.delete(v, unsafe { (*state).implicit });
                             } else {
@@ -4855,7 +4895,7 @@ impl Control {
                     })
                 {
                     let order = Order {
-                        kind: 8,
+                        kind: OT_IMPLICIT,
                         flags: 0,
                         destination: last,
                         refit: 0xfe,
@@ -4880,7 +4920,7 @@ impl Control {
             }
         }
         let mut current = g.current(v);
-        current.kind = 3;
+        current.kind = OT_LOADING;
         current.flags = 0;
         g.put_current(v, current);
     }
