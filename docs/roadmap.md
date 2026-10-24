@@ -4,15 +4,15 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-24, code at `8b3dd5ebef`)
+## Where the fork stands (2026-10-24, code at `103ee7cff8`)
 
-- Sixty ownership ports. Original retirement:61,606 /470,612 C/C++ src lines (13.09%); simulation52,782 /102,615 (51.44%). Whole-fork Rust/tooling/glue:112,487 /40,407 /39,939. Source-line measures include comments/data, not completed behavior percentages.
-- Since the seventeenth steering:22 owners and11,970 original lines retired. #437 integrated common Action2 #425 and property-boundary coverage #435 after a warning-only retry; previous #434 integrated house/town and reviewed maintenance. No regression or rollback.
-- Latest completed profile at156915 passed6/6 semantic/end/log/identity comparisons. Under SAME quiet09eda anchors both tips' projections remain at floors: TGP1.138746x, Opus1.428848x, Grok1.416843x, P1996 1.321550x, P2000 1.381829x, P2016 1.463012x; counts fell0.238-1.663%, no >3% rise. This profile precedes common437; the next merged-tip profile is due after one more integration.
-- New quiet156915 whole pass completed144 exits/72 equal pairs, four interleaved three-pair medians: TGP1.110315x, Opus1.396654x, Grok1.401286x, P1996 1.317390x, P2000 1.380024x, P2016 1.460536x. All below ceilings, onlyP2016 in band. Proposed complete anchors/baseline are ready maintenance; both09eda/156915 recomputed under them show no rise. No causal savings claim; collection hold ended before assessment. No hold is active.
-- Current retained-only P2016 net attribution conserves3,064,970,050 excess Ir, preserving unexplained original raw/cache-5,691,628. Root selected aircraft counted/plain specialization and four direct controller-to-orders routes. Repaired track/deferred-order/occupancy families are not recycled; necessary scheduler/pixel costs have no further bounded defect established. Ready owners proceed while repairs are prepared.
-- Exact-current-base Full remains strict:42 requests since steering,23 successful,12 failed,7 cancelled. #437's only failed attempt was one MSVC assertion-only unused parameter; all builds/native/shards passed, then the warning fix passed fresh Full. Due macOS Debug/Release both passed at8b3; next macOS is due after five more integrations. CI_ON_DEMAND stays true, broader infrastructure unselected.
-- Six component branches: reviewed airport428, generic436 and object438; reviewed statue441; whole quiet156915 anchors443; speed source repairs442. Next439 engine cargo-capability/articulated queries, then440 rail/road introduction/admission are root-selected from fresh Astra research and source checks, queued after430. Cleanup count99; protected speed inputs remain until consumed.
+- Sixty-three ownership ports. Original retirement:62,169 /470,612 C/C++ src lines (13.21%); simulation53,345 /102,615 (51.99%). Whole-fork Rust/tooling/glue:114,035 /41,163 /40,566. Source-line measures include comments/data, not completed behavior percentages.
+- Since the seventeenth steering:25 owners and12,533 original lines retired. #444 integrated reviewed airport428/generic436/object438 with statue441 and whole quiet156915 anchors443, plus the19-line concrete-animation ABI test repair. Exact-current-base Full passed; no regression/rollback.
+- Latest103ee merged-tip profile passed6/6 semantic/end/log/identity comparisons. SAME156915-anchor projections: TGP1.403021x, Opus1.406031x, Grok1.411097x, P1996 1.368669x, P2000 1.421772x, P2016 1.501579x. TGP work+13.181%/projection+26.362%, P1996 projection+3.892%, P2000+3.025% trigger retained per-function/PR attribution. These are projections, not wall results; prior156915 counts remain preserved.
+- Quiet103ee whole pass:144 exits/72 equal pairs, four interleaved three-pair medians, no contaminated samples. TGP1.209077x, Opus1.419874x, Grok1.414493x, P1996 1.343712x, P2000 1.412774x, P2016 1.483781x. All below ceilings; onlyP2016 remains in band. Workers resumed before assessment. Whole anchors448 are ready; re-anchoring does not repair or erase growth. Retained-only attribution selects the next bounded maintenance repair; ready owners proceed while it is prepared.
+- Reviewed442 aircraft counted/plain specialization and four direct ProcessOrders routes adopted actual103ee and passed affected checks; root spot-check passed. Prior track/deferred-order repairs are not recycled. Raw/cache differences remain explicit and family exposure is not promised savings. No hold is active; no new timing or raw-access permission.
+- Exact-current-base Full remains strict:44 requests since steering,24 successful,12 failed,8 cancelled. #444's first Full repeated a stale ABI regression-test assumption and was cancelled; the reviewed test-only repair passed fresh Full. macOS Debug/Release passed at8b3; next macOS after four further integrations. CI_ON_DEMAND true, broader infrastructure unselected.
+- Five component branches: reviewed442; reviewed coverage445; active engine/articulated446(#439), type-introduction447(#440); whole quiet103ee anchors448. Reserve the sixth for the attributed growth repair. Cleanup111; protected speed inputs remain while consumers use them. Fresh Astra next-owner proposals await root selection; no draft dependency or future maintenance-base gate.
 
 ## Eighteenth steering review (2026-10-23, remove accidental gates and close shared-layer debt)
 
@@ -135,9 +135,11 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #410 | Road-stop resolver and spec associations | #422 via #427 | `445ce4f30c` | 876 / 187 / 319 / 369; net glue 285 |
 | #409 | House/shared-town NewGRF resolver runtime | #416 via #434 | `1569158485` | 927 / 215 / 303 / 430; net glue 209 |
 | #417 | Complete common Action2 execution and invocation | #425 via #437 | `8b3dd5ebef` | 1120 /213 /520 /458; net glue479 |
+| #418 | Airport/airport-tile runtime and live spec selection | #428 via #444 | `103ee7cff8` | 1087 /245 /496 /264; net glue337 |
+| #429 | Generic callback registry, AI and ambient runtime | #436 via #444 | `103ee7cff8` | 349 /188 /164 /248; net glue138 |
+| #430 | Object invocation and complete eligibility | #438 via #444 | `103ee7cff8` | 334 /178 /182 /51; net glue152 |
 
-Harness/process #72/#84/#97/#88/#75/#90 and maintenance #209-#302 retain evidence in their PRs.
-Rows below use original retirement and net glue (#223).
+Maintenance rows use original retirement and net glue (#223); evidence stays in PRs.
 
 | Issues | Maintenance PRs | Integration | Commit | Metrics |
 | --- | --- | --- | --- | --- |
@@ -157,6 +159,7 @@ Rows below use original retirement and net glue (#223).
 | #261 station/spec metadata; #156 vehicle real groups; MSVC animation return | #424, #426; #427 repair | #427 | `445ce4f30c` | in PRs; combined with #422: 880 / 305 / 362 / 369, net glue 286 |
 | #156 wagon overrides; #275 track/orders and quiet anchors | #431, #432, #433 | #434 | `1569158485` | combined with #416: 966 / 308 / 303 / 430, net glue 209 |
 | #156 property sign/failure boundaries; MSVC assertion-only warning | #435; #437 repair | #437 | `8b3dd5ebef` | combined with425:1120 /290 /520 /458, net glue479 |
+| #156 statue search; #275 whole anchors; concrete animation ABI test | #441, #443; #444 repair | #444 | `103ee7cff8` | combined owners:1768 /800 /840 /563, net glue627 |
 
 ## Phase 1: selected maintenance and coverage
 
@@ -169,37 +172,32 @@ new tooling stream is introduced. Keep one worker closing the coverage backlog.
 
 Integrate ready reviewed work first. Keep at most six component branches.
 
-1. **Ready owner batch428/436/438:** whole and actual8b fixing reviews passed. Root spot-checked strict/nullable lookups, canonical state pointers, direct common/scope/variable/random/PSA dispatch and shared house/frame composition. Combine all three with reviewed maintenance, review substantive combination resolutions, then strict current-base Full. No renewed cost gate or future speed-base wait.
-2. **#156/#275 ready maintenance:** statue441 and whole quiet156915 anchors443 join that concrete owner batch. Complete measured baseline stays together; no new median review or per-PR speed run.
-3. **Speed source repairs442:** exactly counted/plain aircraft specialization and four direct ProcessOrders routes using canonical ownership. Focused checks are active, then fresh fixing review and next ready maintenance combination. Preserve raw/cache discrepancy and rank net costs; exposure is not promised savings.
-4. **Next439 then440:** whole engine cargo-capability/articulated-query runtime first, paired rail/road introduction/admission second. Root source-checks confirm native bodies over existing Rust state. Scope/evidence/checkpoints are in the issues; start independently from integrated main only when capacity frees, with one concrete necessary-cost/bounded-repair disposition each.
+1. **#275 growth repair next maintenance:** retained103ee-versus156915 function accounts attribute the TGP/P1996/P2000 >3% projection rise to437/444. Keep the new quiet anchors448 and raw/cache discrepancies intact. Root selects concrete source/boundary repairs from current proof; no gross-cost or recoverable-savings claim. Ready ownership proceeds independently.
+2. **Ready maintenance442/445/448:**442 current-base fixing review/root spot-check pass;445 order-flag coverage reviewed;448 whole median record exempt new review. Batch ready work with the selected growth repair for one current-base Full, removing an item that fails review/CI. No per-PR speed or extra local full suite.
+3. **Owners439/440 in progress:**446 owns engine cargo/articulated-query runtime;447 owns rail/road introduction/admission. Both start actual103ee, preserve complete control/state and direct consumers, and report one concrete boundary/evidence cost checkpoint. Canonical single-owner metadata stays in its shared header; actual multi-draft needs land once through root.
+4. **Next-owner queue:** fresh Astra proposals are whole vehicle effect-emission/cache policy, then cargo registry/translation/callback lifecycle. Root source-checks and creates selected issues before implementation. Preserve exact native sorting/loader phase boundaries and give no second existing-owner credit.
 
-Shared operations land once and drafts adopt them at final validation. Core owners
-receive concrete repairs or necessary-cost explanations, not circular deferral.
-Catchment, #64/#68/#69, vendored/GUI/platform expansion remain unselected. Finishing
-the queued owners triggers fresh planning; it does not end development.
+Shared operations land once and drafts adopt them for final validation. Catchment,
+#64/#68/#69, vendored/GUI/platform expansion stay unselected. No circular deferral.
 
 ## Resume checkpoint
 
-Development active; common437 merged and due macOS passed. Ready NewGRF batch in preparation; no timing hold.
+Development active;444 merged, profile/quiet pass complete and released.
 
 | Item | Saved head | Resume action | Jobs / CI |
 | --- | --- | --- | --- |
-| #428 airport | `f099371635` | Final fixing commits spot-checked; combine reviewed runtime. | Cargo4/build/ABI and eight affected defaults pass. |
-| #436 generic | `cb6ba96e0b` | Direct common adoption and observer fix spot-checked; combine. | Cargo4/build/ABI and seven affected defaults pass. |
-| #438 object | `9a76a9707f` | Whole review/common context adoption spot-checked; combine. | Cargo4/build/ABI and eight selected defaults pass. |
-| #441 statue / #443 quiet anchors | `17b808c0b7` / `433f453614` | Ready fragments included with owners. | Coverage reviewed; median-only record exempt; combination Full pending. |
-| #442 speed repairs | `5700049e8d` | Aircraft witness/direct orders; finish checks, fresh review. | Cargo4 passed; native/semantic pipeline active; no speed run. |
-| #439 / #440 | selected | Engine capabilities/articulated queries, then rail/road introduction/admission. | Queued, not started. |
+| #442 speed repairs | `af29f9521a` | Root spot-check pass; next ready maintenance preparation. | Whole/scoped reviews and affected checks pass. |
+| #445 coverage / #448 anchors | `0486abc627` / `01bbc69578` | Ready maintenance, no new implementation scope. | Coverage reviewed; median record exempt; Full not requested. |
+| #439 / #446 | `e96e45c240` | Complete paired capability/aircraft evidence, once-only cost checkpoint. | Build/Cargo4/native pass; first defaults active. |
+| #440 / #447 | `70a7473b67` | Complete actual type/reload evidence and once-only cost checkpoint. | Build/Cargo4/native pass; fixture retry active. |
+| #275 growth attribution | code `103ee7cff8` | Retained-only TGP/P1996/P2000 growth and P2016 net account. | Analysis active; no new game/profile. |
+| Next owners | proposals | Root source-check/select effect-emission and cargo lifecycle. | Planning complete; implementations not started. |
 
-Protected profiles/quiet inputs stay until #275 consumers finish; pinned reference
-stays unchanged. RootSol xhigh, implementation/reviewSol high, planningAstra high.
-CI_ON_DEMAND true; next macOS after five integrations. Old wind-down messages bind
-only their stopped session. Exact-head CI/commands remain in PRs, not this table.
+Protected inputs stay while #275 consumers use them; pinned reference unchanged.
+RootSol xhigh, implementation/reviewSol high, planningAstra high. CI_ON_DEMAND true;
+next macOS after four integrations. Exact-head CI/commands stay in PRs, not this table.
 
 ## Progress metric
 
-Every port PR records `python3 tools/port-metrics.py`; `--whole-fork` gives totals
-and simulation share. Retire more original C++ than net glue plus tooling or
-explain the necessary cost after boundary review. Data tables inflate retirement;
-judge game logic owned. AGENTS.md governs cost disposition and evidence scope.
+PRs record `tools/port-metrics.py`; whole-fork source totals do not measure behavioral
+completion. Decide necessary boundary/evidence cost once under AGENTS.md.

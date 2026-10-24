@@ -1270,7 +1270,7 @@ transient groups/specs before saving. Reload explicitly reinstalls them. These
 checks and generation scenarios compare full semantic saves and named witnesses.
 Build/Cargo4, native ABI and focused object/generation checks pass (PR #438).
 External GRF loading and historical layouts remain #156 gaps; this fixture does
-not establish loader equivalence. Root owns exact-combination Full.
+not establish loader equivalence. Exact-combination Full and integration: #444.
 
 ### Shared tile ownership dispatch (#331)
 
@@ -2416,7 +2416,7 @@ leaves a deleted PSA pointer; the retained airport's PSA is saved and reloaded.
 Build/Cargo4, native ABI, affected defaults and callee/shared/orphan audit are
 recorded in #428. Necessary selected-spec support cost was accepted once (#418).
 External loading, historical saves, GUI scheduling and the exact native removal
-setup limitation remain on #156. Fixing review passed; combination Full follows.
+setup limitation remain on #156. Fixing review and exact-combination Full: #444.
 
 ### Generic NewGRF callbacks (#429, PR #436)
 
@@ -2445,4 +2445,4 @@ registrations are cleared before graph destruction and rebuilt after native relo
 Build/Cargo4, native ABI/table completeness, focused ground/vehicle/animation checks
 and exact commands are recorded on #436. External-GRF loading, script station-build
 integration, other feature registrations, arbitrary programs, historical saves and
-GUI scheduling remain #156 gaps. Fixing review passed; root owns combination Full.
+GUI scheduling remain #156 gaps. Fixing review and exact-combination Full: #444.
