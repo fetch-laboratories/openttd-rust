@@ -546,7 +546,7 @@ impl World<'_> {
     }
     /// `CalculateDesertLine`: coverage is scanned from top to bottom.
     fn calculate_desert_line(&self, coverage: u8) -> u8 {
-        self.coverage_line(100 - u32::from(coverage), 4) as u8
+        self.coverage_line(100_u32.wrapping_sub(u32::from(coverage)), 4) as u8
     }
     fn coverage_line(&self, coverage: u32, edge_multiplier: u32) -> u32 {
         if edge_multiplier != 0 {
