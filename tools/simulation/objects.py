@@ -148,6 +148,13 @@ def check(scenario, run, mode, role, result):
     ):
         if sum(x.startswith("OBJECT " + marker + " ") for x in run["log"]) != 1:
             raise RuntimeError(f"{mode}/{role}: missing {marker}")
+    for name in (
+        "invocation-slope-reject-test",
+        "invocation-slope-reject-execute",
+        "invocation-autoslope-disabled",
+    ):
+        if sum(x.startswith("OBJECT cost " + name + " ") for x in run["log"]) != 1:
+            raise RuntimeError(f"{mode}/{role}: missing real callback result {name}")
     admissions = [
         tuple(x.split()[2:5])
         for x in run["log"]

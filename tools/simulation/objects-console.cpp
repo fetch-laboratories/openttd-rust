@@ -174,7 +174,7 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 	std::vector<SpriteGroup *> groups;
 	auto result = [&](uint16_t value) { ObjectNeed(SpriteGroup::CanAllocateItem(), __LINE__); auto *g = new CallbackResultSpriteGroup(value); groups.push_back(g); return g; };
 	auto program = [&](VarSpriteGroupScope scope, const SpriteGroup *end) { ObjectNeed(SpriteGroup::CanAllocateItem(), __LINE__); auto *g = new DeterministicSpriteGroup(); groups.push_back(g); g->size = DSG_SIZE_DWORD; g->var_scope = scope; g->default_result = {false, end}; return g; };
-	auto *slope = result(0x400), *frame = result(1), *autoslope = result(0), *procedure_result = result(0x77);
+	auto *slope = result(0x400), *frame = result(1), *next_frame = result(2), *autoslope = result(0), *procedure_result = result(0x77);
 	auto *procedure = program(VSG_SCOPE_SELF, procedure_result);
 	procedure->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x48, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}, {.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101}, {.operation = DSGA_OP_RST, .variable = 0x18, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x102}};
 	ObjectNeed(SpriteGroup::CanAllocateItem(), __LINE__); auto *random = new RandomizedSpriteGroup(); groups.push_back(random);
@@ -182,9 +182,15 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 	auto *live_root = program(VSG_SCOPE_SELF, frame), *purchase_root = program(VSG_SCOPE_SELF, frame);
 	for (auto *root : {live_root, purchase_root}) {
 		root->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x7E, .and_mask = UINT32_MAX, .subroutine = procedure}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x103}, {.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = root == live_root ? 111U : 222U}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x104}, {.operation = DSGA_OP_RST, .variable = 0x0C, .and_mask = UINT32_MAX}};
-		root->ranges = {{{false, slope}, CBID_OBJECT_LAND_SLOPE_CHECK, CBID_OBJECT_LAND_SLOPE_CHECK}, {{false, random}, CBID_OBJECT_COLOUR, CBID_OBJECT_COLOUR}, {{false, autoslope}, CBID_OBJECT_AUTOSLOPE, CBID_OBJECT_AUTOSLOPE}};
+		root->ranges = {{{false, slope}, CBID_OBJECT_LAND_SLOPE_CHECK, CBID_OBJECT_LAND_SLOPE_CHECK}, {{false, next_frame}, CBID_OBJECT_ANIMATION_NEXT_FRAME, CBID_OBJECT_ANIMATION_NEXT_FRAME}, {{false, random}, CBID_OBJECT_COLOUR, CBID_OBJECT_COLOUR}, {{false, autoslope}, CBID_OBJECT_AUTOSLOPE, CBID_OBJECT_AUTOSLOPE}};
 	}
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, live_root); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, purchase_root);
+	slope->result = 0x401;
+	for (bool execute : {false, true}) {
+		auto rejected = Command<CMD_BUILD_OBJECT>::Do(execute ? DoCommandFlags{DoCommandFlag::Execute} : DoCommandFlags{}, tile, kind, 3);
+		ObjectNeed(rejected.Failed() && IsTileType(tile, MP_CLEAR), __LINE__); Result(execute ? "invocation-slope-reject-execute" : "invocation-slope-reject-test", rejected);
+	}
+	slope->result = 0x400;
 	auto tested = Command<CMD_BUILD_OBJECT>::Do({}, tile, kind, 3); Result("invocation-test", tested); ObjectNeed(tested.Succeeded(), __LINE__);
 	auto built = Command<CMD_BUILD_OBJECT>::Do(DoCommandFlag::Execute, tile, kind, 3); Result("invocation-build", built); ObjectNeed(built.Succeeded(), __LINE__);
 	Object *object = Object::GetByTile(tile);
@@ -220,13 +226,16 @@ static void ObjectInvocationProbe(TileIndex tile, bool reloaded)
 	fmt::print(stderr, "OBJECT invocation-parent {} {}\n", town->index.base(), regs[1]);
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, live_root); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, purchase_root);
 	Backup<bool> autosloping(_settings_game.construction.autoslope, true);
-	Result("invocation-autoslope", TerraformTile_Object(tile, {}, GetTileZ(tile), GetTileSlope(tile)));
+	auto allowed = TerraformTile_Object(tile, {}, GetTileZ(tile), GetTileSlope(tile)); Result("invocation-autoslope", allowed);
+	autoslope->result = 1; auto disabled = TerraformTile_Object(tile, {}, GetTileZ(tile), GetTileSlope(tile)); Result("invocation-autoslope-disabled", disabled);
+	ObjectNeed(allowed.Succeeded() && disabled.Succeeded() && allowed.GetCost() != disabled.GetCost(), __LINE__); autoslope->result = 0;
 	spec->flags.Set(ObjectFlag::Animation); spec->animation.frames = 3; spec->animation.status = AnimationStatus::Looping; spec->animation.speed = 0;
 	spec->animation.triggers = {ObjectAnimationTrigger::Built};
 	ObjectNeed(TriggerObjectAnimation(object, ObjectAnimationTrigger::Built, spec) && GetAnimationFrame(tile) == 1, __LINE__);
 	spec->callback_mask.Set({ObjectCallbackMask::AnimationSpeed, ObjectCallbackMask::AnimationNextFrame});
 	Backup<uint64_t> ticks(TimerGameTick::counter, 0);
-	SetAnimationFrame(tile, 0); AnimateNewObjectTile(tile); ObjectNeed(GetAnimationFrame(tile) == 1, __LINE__);
+	TimerGameTick::counter = 1; SetAnimationFrame(tile, 0); AnimateNewObjectTile(tile); ObjectNeed(GetAnimationFrame(tile) == 0, __LINE__);
+	TimerGameTick::counter = 0; AnimateNewObjectTile(tile); ObjectNeed(GetAnimationFrame(tile) == 2, __LINE__);
 	fmt::print(stderr, "OBJECT invocation-animation {}\n", GetAnimationFrame(tile));
 	/* Eligibility is observed through actual command test and execute admission.
 	 * The temporary editor/world-generation modes use the original owner rules. */
