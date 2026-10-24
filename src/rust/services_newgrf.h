@@ -10,6 +10,7 @@
 #define RUST_SERVICES_NEWGRF_H
 #include "../command_type.h"
 #include "../newgrf_commons.h"
+#include "../newgrf.h"
 #include "../newgrf_debug.h"
 #include "../newgrf_house.h"
 #include "../industrytype.h"
@@ -18,6 +19,8 @@
  * A town shell is live for resolution (or null for a prototype); no Rust
  * owner borrow spans it. No C++ exception crosses Rust; environmental
  * failures terminate. */
+inline uint8_t RustGRFCargoMap(const GRFFile *grf, CargoType cargo) noexcept { return grf->cargo_map[cargo]; }
+inline uint8_t RustGRFVersion(const GRFFile *grf) noexcept { return grf->grf_version; }
 inline bool OpenTTDConvertBooleanCallback(const GRFFile *grf, uint16_t callback, uint16_t result) noexcept { return ConvertBooleanCallback(grf, callback, result); }
 inline bool OpenTTDConvert8bitBooleanCallback(const GRFFile *grf, uint16_t callback, uint16_t result) noexcept { return Convert8bitBooleanCallback(grf, callback, result); }
 inline uint16_t OpenTTDHouseCallback(CallbackID callback, uint32_t param1, uint32_t param2, HouseID house, Town *town, TileIndex tile, bool not_yet_constructed, uint8_t initial_random = 0) noexcept

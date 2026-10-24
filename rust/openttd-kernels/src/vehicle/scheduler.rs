@@ -159,7 +159,13 @@ unsafe fn day<const COUNTED: bool>(
                     crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
                 }
                 let vs = unsafe { &*s.vehicle };
-                let callback = svc!(COUNTED, vs.callback, vehicle, CBID_VEHICLE_32DAY_CALLBACK);
+                let callback = svc!(
+                    COUNTED,
+                    vs.callback,
+                    (vs.newgrf)(),
+                    vehicle,
+                    CBID_VEHICLE_32DAY_CALLBACK
+                );
                 if callback != CALLBACK_FAILED {
                     if callback & 1 != 0 {
                         svc!(COUNTED, s.randomise_callback, vehicle);

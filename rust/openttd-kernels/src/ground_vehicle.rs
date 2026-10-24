@@ -219,6 +219,7 @@ fn power_owned(s: &Services, v: VehicleRef, o: Owner) -> u16 {
         return 0;
     }
     let p = (s.vehicle.property)(
+        (s.vehicle.newgrf)(),
         v,
         if o.rail() {
             PROP_TRAIN_POWER
@@ -271,6 +272,7 @@ fn weight_owned(s: &Services, v: VehicleRef, o: Owner, full: bool) -> u16 {
     } as u16;
     if !is_articulated_part(true, (s.vehicle.subtype)(v)) {
         let w = (s.vehicle.property)(
+            (s.vehicle.newgrf)(),
             v,
             if o.rail() {
                 PROP_TRAIN_WEIGHT
@@ -291,6 +293,7 @@ fn weight_owned(s: &Services, v: VehicleRef, o: Owner, full: bool) -> u16 {
 }
 fn tractive_effort_owned(s: &Services, v: VehicleRef, o: Owner) -> u8 {
     (s.vehicle.property)(
+        (s.vehicle.newgrf)(),
         v,
         if o.rail() {
             PROP_TRAIN_TRACTIVE_EFFORT

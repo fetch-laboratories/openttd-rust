@@ -99,6 +99,7 @@ struct OpenTTDVehicleMovementObservations {
 };
 struct OpenTTDVehicleAltitudeInputs { uint16_t max_speed; uint8_t direction; };
 struct OpenTTDVehicleMaintenanceServices;
+struct OpenTTDVehicleResolverServices;
 struct OpenTTDVehicleVisits;
 struct OpenTTDVehicleServices {
 	OpenTTDVehicleTileLinks *(OPENTTD_VEHICLE_CALL *tile_links)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tile_links);
@@ -114,8 +115,9 @@ struct OpenTTDVehicleServices {
 	OpenTTDVehicleNewPosition (OPENTTD_VEHICLE_CALL *new_position)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(new_position);
 	void (OPENTTD_VEHICLE_CALL *write_xy)(OpenTTDVehicle *, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(write_xy);
 	void (OPENTTD_VEHICLE_CALL *base_viewport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(base_viewport);
-	int32_t (OPENTTD_VEHICLE_CALL *property)(OpenTTDVehicle *, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(property);
-	uint16_t (OPENTTD_VEHICLE_CALL *callback)(OpenTTDVehicle *, CallbackID) noexcept OPENTTD_SERVICE_DEFAULT(callback);
+	const OpenTTDVehicleResolverServices *(*newgrf)() noexcept OPENTTD_SERVICE_DEFAULT(newgrf);
+	int32_t (OPENTTD_VEHICLE_CALL *property)(const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(property);
+	uint16_t (OPENTTD_VEHICLE_CALL *callback)(const OpenTTDVehicleResolverServices *, OpenTTDVehicle *, CallbackID) noexcept OPENTTD_SERVICE_DEFAULT(callback);
 	void (OPENTTD_VEHICLE_CALL *unknown_callback_result)(const OpenTTDEngine *, CallbackID, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(unknown_callback_result);
 	void (OPENTTD_VEHICLE_CALL *length_changed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(length_changed);
 	bool (OPENTTD_VEHICLE_CALL *play_vehicle_sound)(OpenTTDVehicle *, VehicleSoundEvent) noexcept OPENTTD_SERVICE_DEFAULT(play_vehicle_sound);

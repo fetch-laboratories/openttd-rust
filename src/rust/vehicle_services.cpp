@@ -319,6 +319,7 @@ constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.new_position = VehicleSvcNewPosition,
 	.write_xy = VehicleSvcWriteXY,
 	.base_viewport = VehicleSvcBaseViewport,
+	.newgrf = []() noexcept { return &GetRustVehicleResolverServices(); },
 	.property = openttd_rust_vehicle_shell_property,
 	.callback = openttd_rust_vehicle_shell_callback,
 	.unknown_callback_result = VehicleSvcUnknownCallbackResult,

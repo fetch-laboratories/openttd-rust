@@ -5,6 +5,7 @@
 #include "vehicle_services.h"
 #include "engine_services.h"
 #include "services_ffi.h"
+#include "services_cargo.h"
 #include "../newgrf_engine.h"
 #include "../newgrf.h"
 #include "../company_base.h"
@@ -33,10 +34,10 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.previous = [](OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehiclePrevious(VehicleOf(v))); },
 		.cargo = [](OpenTTDVehicle *v) noexcept -> OpenTTDVehicleCargoQuery { return {RustVehicleCargoType(v), RustVehicleCargoSubtype(VehicleOf(v)), RustVehicleGetEngine(v)}; },
 		.can_carry = Engine_can_carry,
-		.cargo_classes = [](uint8_t cargo) noexcept { return CargoSpec::Get(cargo)->classes.base(); },
+		.cargo_classes = RustCargoClasses,
 		.cargo_bitnum = [](uint8_t cargo) noexcept { return CargoSpec::Get(cargo)->bitnum; },
-		.cargo_translation = [](const GRFFile *grf, uint8_t cargo) noexcept { return grf->cargo_map[cargo]; },
-		.grf_version = [](const GRFFile *grf) noexcept { return grf->grf_version; },
+		.cargo_translation = RustGRFCargoMap,
+		.grf_version = RustGRFVersion,
 		.get_register = [](const ResolverObject *ro, uint16_t reg) noexcept { return ro->GetRegister(reg); },
 		.current_company = RustCurrentCompanyID,
 		.valid_company = OpenTTDCompanyIsValid,
@@ -64,8 +65,4 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 	return services;
 }
 
-extern "C" const OpenTTDVehicleResolverServices *openttd_vehicle_resolver_services() noexcept
-{
-	return &GetRustVehicleResolverServices();
-}
 #endif /* RUST_VEHICLE_SERVICES_NEWGRF_H */

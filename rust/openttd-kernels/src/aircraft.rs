@@ -522,7 +522,7 @@ impl World<'_> {
         nearest_depot_order(self; v: Vehicle) => unsafe { (self.leaves.nearest_depot_order)(v) };
         part_of_orders(self; v: Vehicle) => unsafe { (self.leaves.part_of_orders)(v) };
         next_stopping_station(self; vehicle: Vehicle) => unsafe { (self.leaves.next_stopping_station)(vehicle) };
-        speed_property(self; v: Vehicle) => (self.vs.property)(v.base(), PROP_AIRCRAFT_SPEED, 0) as u32;
+        speed_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), PROP_AIRCRAFT_SPEED, 0) as u32;
         cargo_age_property(self; v: Vehicle) => unsafe { (self.leaves.cargo_age_property)(v) };
         range_property(self; v: Vehicle) => unsafe { (self.leaves.range_property)(v) };
         start_sound(self; v: Vehicle) => (self.vs.play_vehicle_sound)(v.base(), VSE_START);

@@ -214,7 +214,7 @@ inline bool RustVehicleHasArticulated(OpenTTDVehicle *handle) noexcept { return 
 inline uint8_t RustEngineGRFVersion(const Engine *engine) noexcept
 {
 	const GRFFile *grf = engine->GetGRF();
-	return grf == nullptr ? uint8_t(0) : grf->grf_version;
+	return grf == nullptr ? uint8_t(0) : RustGRFVersion(grf);
 }
 
 template <class T>

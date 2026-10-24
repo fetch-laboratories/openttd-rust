@@ -629,29 +629,24 @@ pub unsafe extern "C" fn openttd_rust_vehicle_randomise(s: &Services, v: V, trig
         openttd_rust_vehicle_grf_invalidate(s, v, true);
     }
 }
-// Native getter resolves the immutable table once; the property/callback table
-// entries point directly to these Rust functions, avoiding an owner bounce.
-unsafe extern "C" {
-    fn openttd_vehicle_resolver_services() -> *const Services;
-}
+// Vehicle property/callback table entries point directly to Rust. The caller
+// obtains the immutable resolver table once through the native getter.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_shell_property(
+    s: &Services,
     v: V,
     property: u8,
     fallback: i32,
 ) -> i32 {
-    unsafe {
-        let s = &*openttd_vehicle_resolver_services();
-        openttd_rust_vehicle_property(s, engine(s, v), property, fallback, v, false)
-    }
+    unsafe { openttd_rust_vehicle_property(s, engine(s, v), property, fallback, v, false) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_shell_callback(
+    s: &Services,
     v: V,
     callback: crate::newgrf_callbacks::CallbackID,
 ) -> u16 {
     unsafe {
-        let s = &*openttd_vehicle_resolver_services();
         openttd_rust_vehicle_callback(
             s,
             callback.0,

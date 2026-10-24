@@ -1032,7 +1032,12 @@ impl Game<'_> {
             let engine = service!(self.vs.engine_for_length)(u);
             let mut length = VEHICLE_LENGTH;
             let mut factor = if engine.grf_version >= 8 {
-                let value = service!(self.vs.property)(u, 0x23, i32::from(CALLBACK_FAILED)) as u16;
+                let value = service!(self.vs.property)(
+                    (self.vs.newgrf)(),
+                    u,
+                    0x23,
+                    i32::from(CALLBACK_FAILED),
+                ) as u16;
                 if value != CALLBACK_FAILED && value >= u16::from(VEHICLE_LENGTH) {
                     service!(self.vs.unknown_callback_result)(
                         engine.engine,
@@ -1042,7 +1047,7 @@ impl Game<'_> {
                 }
                 value
             } else {
-                service!(self.vs.callback)(u, CBID_VEHICLE_LENGTH)
+                service!(self.vs.callback)((self.vs.newgrf)(), u, CBID_VEHICLE_LENGTH)
             };
             if factor == CALLBACK_FAILED {
                 factor = u16::from(service!(self.l.shorten_factor)(engine.engine));
@@ -1061,7 +1066,7 @@ impl Game<'_> {
             };
             u = next;
         }
-        let speed = service!(self.vs.property)(v.v, 0x15, 0) as u32;
+        let speed = service!(self.vs.property)((self.vs.newgrf)(), v.v, 0x15, 0) as u32;
         service!(self.vs.write_max_speed)(
             v.v,
             if speed != 0 {
@@ -1789,7 +1794,8 @@ impl Game<'_> {
         if r.cost_class == INVALID_PRICE {
             return 0;
         }
-        let factor = service!(self.vs.property)(v.v, 9, i32::from(r.cost_factor)) as u32;
+        let factor =
+            service!(self.vs.property)((self.vs.newgrf)(), v.v, 9, i32::from(r.cost_factor)) as u32;
         if factor == 0 {
             return 0;
         }
