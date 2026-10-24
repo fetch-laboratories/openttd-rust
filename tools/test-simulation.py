@@ -775,5 +775,62 @@ class InstructionSpeedTests(unittest.TestCase):
                 self.assertEqual(configured(build, build, [], {}), not expected)
 
 
+class SpeedPassTests(unittest.TestCase):
+    def test_anchor_is_median_of_group_medians(self):
+        from simulation import speed
+
+        names = ["play-a", "generate-b"]
+        groups = ([1.0, 1.25], [2.0, 1.5], [3.0, 1.75], [4.0, 2.0])
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            profile = out / "profile.json"
+            results = [
+                {"scenario": name, "instruction_speed": {"candidate": {"Ir": 10 + i}}}
+                for i, name in enumerate(names)
+            ]
+            profile.write_text(json.dumps({"results": results}))
+            manifest = {
+                "head": "0123456789abcdef",
+                "profile": str(profile),
+                "identities": {name: name + "-id" for name in names},
+            }
+            (out / "observations.jsonl").write_text(
+                json.dumps({"load": [0.5, 0, 0], "unheld": []}) + "\n"
+            )
+
+            def write(group, ratios, passed=True):
+                results = [
+                    {
+                        "scenario": name,
+                        "passed": passed,
+                        "plain_speed": {
+                            "samples": [{}] * speed.PAIRS,
+                            "median_candidate_reference_ratio": ratio,
+                        },
+                    }
+                    for name, ratio in zip(names, ratios, strict=True)
+                ]
+                path = out / f"group-{group}.json"
+                path.write_text(json.dumps({"results": results}))
+
+            for group, ratios in enumerate(groups):
+                write(group, ratios)
+            with contextlib.redirect_stdout(io.StringIO()) as printed:
+                speed.summarize(out, manifest, names, len(groups))
+            rows = json.loads((out / "anchors.json").read_text())["rows"]
+            self.assertEqual(
+                rows,
+                [
+                    ["play-a", 2.5, 10, "play-a-id"],
+                    ["generate-b", 1.625, 11, "generate-b-id"],
+                ],
+            )
+            self.assertIn('    ("play-a", 2.5, 10, "play-a-id"),', printed.getvalue())
+            for incomplete in (3, len(groups)):
+                with self.subTest(groups=incomplete), self.assertRaises(SystemExit):
+                    write(3, groups[3], passed=incomplete == 3)
+                    speed.summarize(out, manifest, names, incomplete)
+
+
 if __name__ == "__main__":
     unittest.main()

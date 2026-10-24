@@ -454,6 +454,26 @@ def benchmark_run(command, *, timeout, **kwargs):
         return subprocess.CompletedProcess(command, code)
 
 
+def prepare_run_dir(scenario, build, run_dir):
+    """Write a game's configuration, module files and console script."""
+    shutil.rmtree(run_dir, ignore_errors=True)
+    run_dir.mkdir(parents=True)
+    write_config(scenario, build, run_dir)
+    for module in scenario_modules():
+        if install := getattr(module, "install", None):
+            install(scenario, run_dir)
+    if "console" in scenario:
+        (run_dir / "scripts").mkdir()
+        (run_dir / "scripts/game_start.scr").write_text(
+            "".join(f"{line}\n" for line in scenario["console"])
+        )
+
+
+def pair_order(repetition):
+    """Launch order of one pair; a speed pass alternates it (speed.py)."""
+    return ("reference", "candidate")
+
+
 def run_game(
     scenario,
     binary,
@@ -471,17 +491,7 @@ def run_game(
     desync=3 writes the 32-day snapshots but also checks and rebuilds caches
     every tick and switches YAPF rail to its uncached path, so every scenario
     also has a plain run without it whose exit save is compared."""
-    shutil.rmtree(run_dir, ignore_errors=True)
-    run_dir.mkdir(parents=True)
-    write_config(scenario, build, run_dir)
-    for module in scenario_modules():
-        if install := getattr(module, "install", None):
-            install(scenario, run_dir)
-    if "console" in scenario:
-        (run_dir / "scripts").mkdir()
-        (run_dir / "scripts/game_start.scr").write_text(
-            "".join(f"{line}\n" for line in scenario["console"])
-        )
+    prepare_run_dir(scenario, build, run_dir)
     if scenario["kind"] == "save":
         # A saved AI or GameScript missing from the runtime is replaced by the
         # idle dummy AI or dropped; the logs show it in both runs.
@@ -887,8 +897,8 @@ def run_scenario(
             if benchmark_repetitions
             else (("snapshots", True), ("plain", False))
         )
-        for mode, desync in modes:
-            runs = {
+        for repetition, (mode, desync) in enumerate(modes):
+            launched = {
                 role: run_game(
                     dict(
                         scenario,
@@ -904,8 +914,9 @@ def run_scenario(
                     isolate=bool(benchmark_repetitions),
                     **({"instructions": True} if instructions else {}),
                 )
-                for role in ("reference", "candidate")
+                for role in pair_order(repetition)
             }
+            runs = {role: launched[role] for role in ("reference", "candidate")}
             exits = [
                 runs[role]["snapshots"][-1]
                 if runs[role]["snapshots"]

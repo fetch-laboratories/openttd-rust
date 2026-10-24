@@ -268,7 +268,17 @@ full-log comparisons still run, including on reference-count cache hits. Profile
 never enter `plain_speed` samples. Only reference Ir is cached; identity covers executable,
 runtime files (not their CMake bookkeeping)/libraries, resolved inputs, build/profile settings,
 architecture and Valgrind version. Candidate executable identity stays separate from the
-compatibility identity checked against anchors.
+compatibility identity checked against anchors. Identity hashes the `ldd` libraries, so the
+current anchors match only with the main checkout's pinned zlib and lzma runtime: prefix profiles
+and speed passes with
+`LD_LIBRARY_PATH=<main>/.local/tip-profile-anchored-runtime-zlib-20261023/runtime/usr/lib/x86_64-linux-gnu`.
+
+A speed pass runs `tools/simulation/speed.py` from a clean checkout of the head it anchors.
+Build and profile with `simulate --instructions`, then run `python3 tools/simulate.py speed
+prepare DIR --profile REPORT` (frozen runtimes and identity proof, no games) and `python3
+tools/simulate.py speed collect DIR`. Collection stops other builds, links, profiles and games
+only while its 144 interleaved timed games run, records load and process observations without a
+CPU threshold, and prints the `SPEED_PASS` rows after release.
 
 `SPEED_ANCHORS` in `tools/simulation/instructions.py` holds each measured anchor `{head, ratio, Ir,
 identity}` and a separate `integrated` record with its head and Ir. Empty anchors mean
