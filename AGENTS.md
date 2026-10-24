@@ -143,8 +143,9 @@ fork; the remaining upstream documentation explains behavior and architecture.
 - Compare semantic state. Screenshots alone and compressed-save byte equality
   cannot establish equivalent simulation. Retain small failures and explain
   discrepancies before accepting changes.
-- Record changes, reproducible checks, and remaining limits in PRs and migration
-  documentation. Scaffolding does not complete a subsystem.
+- Record changes, checks and remaining limits in PRs. Migration documentation
+  records design decisions and open limits, not evidence or review history.
+  Scaffolding does not complete a subsystem.
 
 ## Evidence budget
 
@@ -158,7 +159,9 @@ checks that run; do not restate them in paragraphs.
   metric). About 60 lines at most. Integration PRs link the component PRs
   instead of re-describing them. `.github/PULL_REQUEST_TEMPLATE.md` and the
   migration issue form follow this budget.
-- Component entry in `docs/rust-migration.md`: about 25 lines at most.
+- Component entry in `docs/rust-migration.md`: about 25 lines at most, saying
+  what Rust owns, what stays in C++, open limits and the PR. Review status,
+  witness counts and costs stay in the PR.
 - Roadmap: forward-looking, about 200 lines at most. A completed item becomes
   one table row (issue, PR, commit, metrics); its evidence stays in the PR. The
   resume checkpoint is a short status table, not a log: CI run IDs, executable
@@ -166,6 +169,8 @@ checks that run; do not restate them in paragraphs.
 - Evidence is the exact-head CI runs plus the commands recorded in the PR.
   Comments and docs carry no receipt bundles, executable hashes or `.local/`
   paths, which nobody else can check; #283 retires the receipt tooling.
+  Tooling that a rule depends on, such as the speed-pass collector, is tracked
+  in `tools/`; no script is copied from one `.local/` run to the next.
 - Harness tooling for a port goes in that component's scenario module. Tooling
   is code to maintain; keep it proportionate to the C++ the port retires.
 - Decide an ownership port's cost at its first concrete boundary/evidence
@@ -195,8 +200,8 @@ checks that run; do not restate them in paragraphs.
 - One PR per ownership port, targeting `rust-migration` directly. Small
   maintenance work (cleanups, coverage additions, speed fixes, tooling and
   fidelity fixes) is batched instead: one PR carries every ready item, listed
-  as a checklist on its tracking issue (#261, #156, #275) rather than one issue
-  each, with one reviewer and one Full run. An item that fails review or CI
+  as a checklist on its tracking issue (#156, #275, #449-#452) rather than one
+  issue each, with one reviewer and one Full run. An item that fails review or CI
   leaves the batch for the next one rather than holding it. A fix that a draft
   or a live crash needs may go alone. Batch ready, reviewed components in one
   integration PR when that avoids serial Full runs; validate and merge the
@@ -241,7 +246,9 @@ work. Keep its PR draft and state what is incomplete, which checks are pending
 or failed, and the next action. A checkpoint is not integration evidence.
 Each task keeps one status comment on its PR (or on its issue before the
 PR), edited in place when it starts, reaches a milestone or stops. A PR's other
-comments are review reports and root's integration note.
+comments are review reports and root's integration note. A tracker issue's body
+is its current list, edited when an item opens or closes; a task with a PR does
+not also post its status on the tracker.
 A review that stops before recording findings and a disposition counts as no
 review.
 
@@ -347,6 +354,22 @@ Use ASCII without tabs in commit messages, including their bodies. Integration
 merge titles also need a supported prefix; `Merge:` is rejected by inherited CI.
 Python tools use `uvx --from ruff==0.16.8 ruff check tools/` and
 `uvx --from ruff==0.16.8 ruff format --check tools/`.
+
+Comments say what the code cannot: a quirk of the original, an outside
+constraint (MSVC ABI, random-draw order) or a measurement, in one line where
+possible. Name the original callee or file; cite an issue only for an open gap.
+Code carries no review defense, history or process words ("not a second X",
+"no longer", "reviewed", dates). State a safety or lifetime contract once per
+module or type; call sites note only what differs. Docs, issues, comments and
+commit messages use full sentences, a space after every colon and between a
+word and a number ("totals 99", not "totals99"), and "X of Y", not "X /Y".
+
+A test fails when the behavior it names breaks: it runs production code against
+an independent expectation (the original, a fixture or a table). Tests do not
+match substrings of source, workflow or documentation text (parse it when its
+structure is the behavior, as for workflow permissions), count incidental
+structure, or check results at fixed historical commits, and `cfg(test)` never
+changes a production layout or body. Prefer one table-driven test to copies.
 
 `python3 tools/migration.py verify` builds and tests the pinned original and fork,
 checks that the candidate retains reference test names, and keeps its logs under
