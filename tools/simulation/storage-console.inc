@@ -55,7 +55,13 @@ static bool StorageScenario(std::span<std::string_view> args)
 	preview.StorePSA(0, 7); readonly.StorePSA(0, 7); no_grf.StorePSA(0, 7);
 	ro.SetRegister(0x100, 123); writable.StorePSA(0, 7);
 	ind.StorePSA(0, 0); airport.StorePSA(0, 0);
+	{ Backup<IndustryID> invalid(industry->index, IndustryID::Invalid()); ind.StorePSA(0, 7); }
 	Require(town->psa_list.empty() && industry->psa == nullptr && station->airport.psa == nullptr);
+	/* Airports without a GRF create the default-GRF array. */
+	AirportScopeResolver default_airport(anonymous, station->airport.tile, station, nullptr, 0);
+	default_airport.StorePSA(256, 7);
+	Require(station->airport.psa != nullptr && station->airport.psa->grfid == 0);
+	delete station->airport.psa; station->airport.psa = nullptr;
 	/* Nonzero out-of-range writes allocate industry/airport, town even for zero. */
 	ro.SetRegister(0x100, -1); writable.StorePSA(256, 0); ind.StorePSA(256, 7); airport.StorePSA(256, 7);
 	Require(town->psa_list.size() == 1 && industry->psa != nullptr && station->airport.psa != nullptr);
@@ -66,6 +72,8 @@ static bool StorageScenario(std::span<std::string_view> args)
 	TownResolverObject second(&other, town, false); second.SetRegister(0x100, -1); second.town_scope.StorePSA(0, 99);
 	ro.SetRegister(0x100, other.grfid); writable.StorePSA(0, 77);
 	Require(writable.GetVariable(0x7C, 0, available) == 99);
+	anonymous.SetRegister(0x100, grf.grfid); Require(no_grf.GetVariable(0x7C, 0, available) == 0x80000000);
+	anonymous.SetRegister(0x100, -1); Require(no_grf.GetVariable(0x7C, 0, available) == 0);
 	ro.SetRegister(0x100, -1); Require(writable.GetVariable(0x7C, 0, available) == 0x80000000);
 	BasePersistentStorageArray::SwitchMode(PSM_LEAVE_COMMAND);
 	BasePersistentStorageArray::SwitchMode(PSM_ENTER_TESTMODE);
