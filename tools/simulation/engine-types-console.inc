@@ -31,6 +31,10 @@ static void InstallTypeInputs()
 	for (uint i = 4; i < RAILTYPE_END; ++i) if (AllocateRailType(0x54520000 + i) != i) FixtureAbort(__LINE__);
 	for (uint i = 2; i < ROADTYPE_END; ++i) if (AllocateRoadType(0x54520000 + i, i == 61 ? RTT_TRAM : RTT_ROAD) != i) FixtureAbort(__LINE__);
 	const auto date = TimerGameCalendar::date;
+	/* Default type zero otherwise date-introduces itself from an empty mask.
+	 * These declared inputs isolate engine publication and explicit mask seeds. */
+	_railtypes[RAILTYPE_RAIL].introduction_date = CalendarTime::INVALID_DATE;
+	_roadtypes[ROADTYPE_ROAD].introduction_date = CalendarTime::INVALID_DATE;
 	for (uint i = 50; i < 64; ++i) {
 		RailTypeInfo &r = _railtypes[i];
 		r.introduction_date = date; r.introduction_required_railtypes = RailTypes{RAILTYPE_RAIL};
