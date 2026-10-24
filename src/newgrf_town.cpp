@@ -53,9 +53,6 @@ static uint16_t TownHistoryHelper(const Town *t, CargoLabel label, uint period, 
 
 		/* Get a variable from the persistent storage */
 		case 0x7C: {
-#ifdef WITH_RUST
-			return openttd_rust_storage_town_get(&GetRustStorageServices(), this->t, this->ro.grffile, parameter);
-#else
 			/* Check the persistent storage for the GrfID stored in register 100h. */
 			uint32_t grfid = static_cast<uint32_t>(this->ro.GetRegister(0x100));
 			if (grfid == 0xFFFFFFFF) {
@@ -68,7 +65,6 @@ static uint16_t TownHistoryHelper(const Town *t, CargoLabel label, uint period, 
 			}
 
 			return 0;
-#endif
 		}
 
 		/* Town properties */
