@@ -184,7 +184,6 @@ pub struct CommandServicesTable {
     pub southern_bridge_end: extern "C" fn(u32) -> u32,
     pub train_area: unsafe extern "C" fn(*const BaseStation) -> Area,
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
-    pub road_spec: extern "C" fn(u32) -> *const RoadSpec,
     pub links: *const crate::station_service::Links,
     pub bounds: extern "C" fn(*mut BaseStation) -> Bounds,
     pub location: extern "C" fn(*const BaseStation) -> u32,
@@ -610,7 +609,9 @@ pub unsafe extern "C" fn openttd_rust_station_build_above(
             }
         }
         2 | 3 | 8 => {
-            let spec = (c.s.road_spec)(tile);
+            let spec = unsafe {
+                crate::newgrf_roadstop::openttd_rust_roadstop_spec(tile, c.s.roadstop_resolver)
+            };
             if !spec.is_null() {
                 info = unsafe { (c.s.road_bridge_info)(spec) };
             }
@@ -2577,7 +2578,9 @@ impl Ctx<'_> {
                 return;
             }
         }
-        let spec = (self.s.road_spec)(tile);
+        let spec = unsafe {
+            crate::newgrf_roadstop::openttd_rust_roadstop_spec(tile, self.s.roadstop_resolver)
+        };
         if flags & 1 != 0 {
             if !waypoint {
                 let head = (self.stops().head)(st, truck);
@@ -4141,7 +4144,6 @@ crate::abi::layouts! {
         southern_bridge_end,
         train_area,
         rail_spec,
-        road_spec,
         links,
         bounds,
         location,
