@@ -65,7 +65,10 @@ struct OpenTTDBlake2bLayout {
  * alignment. One-shot hash output may overlap message or key, partially too, because inputs are
  * consumed first, unlike cipher text. init keeps the supplied hash_size; final writes
  * min(hash_size, 64). Keys up to 128 bytes reproduce the source storage, though documented usage
- * is up to 64; larger keys overrun the original storage. */
+ * is up to 64; larger keys overrun the original storage.
+ * Layouts and leaves are live, initialized and immutable; contexts exclude message, key and hash.
+ * Readable/writable spans are <= PTRDIFF_MAX; empty message/key allow NULL, and update(NULL, 0)
+ * accesses no context or layout. Calls are serialized; final wipes the actual context storage. */
 void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_keyed_init(const struct OpenTTDBlake2bLayout *, void *, size_t, const uint8_t *, size_t);
 void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_init(const struct OpenTTDBlake2bLayout *, void *, size_t);
 void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_update(const struct OpenTTDBlake2bLayout *, void *, const uint8_t *, size_t);

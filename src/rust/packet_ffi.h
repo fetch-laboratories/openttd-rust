@@ -32,7 +32,8 @@ typedef struct {
 /* Stack scalar state copies with Packet bytes. State, byte storage and outputs are disjoint, and no
  * borrow survives vector allocation, external handler or transfer calls, or copying. Original
  * bounds, span and count preconditions apply, with no new clamping or maximum length. The
- * persistent cursor narrows to uint16 after each consumption and each positive post-callback result. */
+ * persistent cursor narrows to uint16 after each consumption and each positive post-callback result.
+ * Pointers are live and aligned, exclusive for writes; bytes occupy one allocation <= PTRDIFF_MAX. */
 void OPENTTD_PACKET_CALL openttd_rust_packet_init(OpenTTDPacketState *, size_t limit);
 uint8_t OPENTTD_PACKET_CALL openttd_rust_packet_boolean(uint8_t value);
 uint8_t OPENTTD_PACKET_CALL openttd_rust_packet_can_write(const OpenTTDPacketState *, size_t size, size_t amount);

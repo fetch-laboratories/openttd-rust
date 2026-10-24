@@ -888,7 +888,8 @@ impl Job {
 /// # Safety
 /// Input arrays are readable, aligned, disjoint and live for this call, with edge ranges and
 /// destinations satisfying the original graph invariants; empty arrays permit null. Destroy
-/// the returned owner once.
+/// the returned owner once. Arrays and readable, aligned settings follow `linkgraph_ffi.h`;
+/// the abort callback is nonthrowing, atomic-only and cannot reenter Rust.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_linkgraph_run(

@@ -81,7 +81,10 @@ struct OpenTTDAeadLayout {
  * C++, which supplies its actual size and offsets; only initialized fields are read, and final
  * wipes cover the whole caller context. Text input and output are disjoint or identical, and key
  * and nonce loads precede cipher writes, including Elligator's overlapping key. Empty spans may be
- * NULL; raw cipher plaintext may also be NULL for a nonempty keystream. */
+ * NULL; raw cipher plaintext may also be NULL for a nonempty keystream.
+ * Tables and layouts are live, aligned, initialized and immutable; calls are serialized and spans
+ * have their original readable/writable extents <= PTRDIFF_MAX and vendor context/output alias rules.
+ * Init preserves unwritten chunk and padding bytes; compiler spills need not be erased. */
 void OPENTTD_CRYPTO_CALL openttd_rust_chacha_h(const struct OpenTTDCryptoLeaves *, uint8_t *, const uint8_t *, const uint8_t *);
 uint64_t OPENTTD_CRYPTO_CALL openttd_rust_chacha_djb(const struct OpenTTDCryptoLeaves *, uint8_t *, const uint8_t *, size_t, const uint8_t *, const uint8_t *, uint64_t);
 uint32_t OPENTTD_CRYPTO_CALL openttd_rust_chacha_ietf(const struct OpenTTDCryptoLeaves *, uint8_t *, const uint8_t *, size_t, const uint8_t *, const uint8_t *, uint32_t);

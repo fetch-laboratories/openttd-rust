@@ -15,7 +15,8 @@ extern "C" {
 /* State and the opaque destination are exclusive and disjoint during each call; world, VM and
  * iterator calls and C++ exceptions occur between Rust returns. The destination outlives the
  * collector, and finalize flushes once, also on early return or unwinding. uint32 runs and share
- * differences wrap; original signed result and token overflow is outside defined input. */
+ * differences wrap; original signed result and token overflow is outside defined input.
+ * State and destination are live and aligned for each call. */
 typedef struct {
 	uint32_t amount;
 	uint32_t previous;

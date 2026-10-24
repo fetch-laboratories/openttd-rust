@@ -39,7 +39,8 @@ enum OpenTTDRustAdminOperation {
  * int64 SQInteger even on i686; depth is the original 32-bit int. C++ executes each action after
  * advance returns, so VM, metamethod, JSON and log exceptions never cross a Rust frame; destroy on
  * an exception runs no pending VM pops, rollback or diagnostics. Reentrant calls own separate
- * engines. */
+ * engines. Handles are live, nonnull and exclusive, use original valid VM indices and are destroyed
+ * once; additional control allocations change resource-exhaustion timing. */
 OpenTTDRustAdminConversion *openttd_rust_admin_conversion_create(uint8_t direction, int64_t index, int32_t depth);
 
 /**

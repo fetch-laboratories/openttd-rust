@@ -24,7 +24,7 @@ typedef struct OpenTTDTownNameResult OpenTTDTownNameResult;
 /* lang is an original valid built-in ID (0..20), seed any uint32_t. Generate owns its output in an
  * opaque Rust allocation. Data returns immutable bytes (not NUL terminated), valid until destroy;
  * length is a writable size_t. Copy or append in C++ before destroying once, also on a C++
- * allocation exception. */
+ * allocation exception. Rust allocation failure timing differs from the original. */
 OpenTTDTownNameResult *OPENTTD_TOWNNAME_CALL openttd_rust_townname_generate(size_t lang, uint32_t seed);
 const char *OPENTTD_TOWNNAME_CALL openttd_rust_townname_data(const OpenTTDTownNameResult *, size_t *length);
 void OPENTTD_TOWNNAME_CALL openttd_rust_townname_destroy(OpenTTDTownNameResult *);

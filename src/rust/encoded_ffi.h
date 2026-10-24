@@ -51,7 +51,8 @@ typedef struct {
  * (MSVC i686). Tags are 0/1/2. Rust owns intermediate and output storage; destroy the result once
  * with encoded_destroy, also when C++ copying or logging throws. Keep the encoded input live until
  * ordered diagnostics are replayed: replay them before the first enabled assertion and commit no
- * output after it. */
+ * output after it. Nonempty spans and initialized parameter arrays occupy live immutable allocations
+ * of byte size <= PTRDIFF_MAX; getters never mutate or reallocate the returned storage. */
 OpenTTDRustEncodedResult *openttd_rust_encoded_serialize(uint32_t id, const OpenTTDRustEncodedParameter *parameters, size_t count, uint8_t string_assertions);
 OpenTTDRustEncodedResult *openttd_rust_encoded_legacy(const uint8_t *data, size_t length, uint8_t fix_code);
 OpenTTDRustEncodedResult *openttd_rust_encoded_negatives(const uint8_t *data, size_t length);

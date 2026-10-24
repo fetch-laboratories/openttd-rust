@@ -58,7 +58,9 @@ struct OpenTTDAuthStream;
  * fixed state like the original member assignment. Fixed owner views keep their address until
  * destruction. Exchange extra payload may alias derived-key bytes: hashing completes before
  * replacement. Fixed buffers are 32-byte keys, 24-byte nonces, 16-byte MACs and 8-byte auth
- * messages; MAC and message regions are disjoint, and encryption is in place. */
+ * messages; MAC and message regions are disjoint, and encryption is in place.
+ * Calls are serialized; live initialized buffers have lengths <= PTRDIFF_MAX (NULL only if empty),
+ * output excludes owner storage, and owner views cannot be accessed during mutation. */
 struct OpenTTDAuthKeys *OPENTTD_AUTH_CALL openttd_rust_auth_keys_new(const struct OpenTTDAuthPrimitives *);
 struct OpenTTDAuthKeys *OPENTTD_AUTH_CALL openttd_rust_auth_keys_clone(const struct OpenTTDAuthKeys *);
 void OPENTTD_AUTH_CALL openttd_rust_auth_keys_assign(struct OpenTTDAuthKeys *, const struct OpenTTDAuthKeys *);

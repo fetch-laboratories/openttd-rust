@@ -32,7 +32,9 @@ typedef struct {
 /** Mode 0 update, 1 first-child validity, 2 rotation, 3 OR-validity query. Tokens are opaque
  * uintptr_t identities that only C++ round-trips; the identified HistoryRange objects form a live
  * acyclic chain until destroy. Typed history operations and exceptions run between calls. Age and
- * phase use native uint32 arithmetic. Each engine and frame is destroyed once by its function. */
+ * phase use native uint32 arithmetic. Each engine and frame is destroyed once by its function.
+ * Handles are live, nonnull and exclusive; the chain is immutable with the original valid-index,
+ * divisor and bit-shift preconditions. */
 OpenTTDRustHistoryEngine *openttd_rust_history_create(uint8_t mode, uintptr_t root, uint64_t mask, uint32_t age, uint32_t month);
 
 /**

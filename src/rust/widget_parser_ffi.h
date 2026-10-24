@@ -37,7 +37,9 @@ uint8_t openttd_rust_widget_part_classify(uint8_t type);
 /** Window mode is 0 MakeNWidgets or 1 MakeWindowNWidgetTree; trailing_check is the C++ WITH_ASSERT
  * policy. Typed C++ operations and callbacks run only after advance returns, so reentrant parsers
  * own independent engines and exceptions never cross a Rust frame. Supplied unique_ptr&& stays a
- * C++ reference until the final return; destroying on an exception performs no pending actions. */
+ * C++ reference until the final return; destroying on an exception performs no pending actions.
+ * Descriptor lengths and iterators satisfy the original preconditions; handles are live, nonnull,
+ * exclusive and destroyed once. Extra control and slot allocations change resource-failure timing. */
 OpenTTDRustWidgetParser *openttd_rust_widget_parser_create(uint64_t length, uint8_t window, uint8_t trailing_check);
 
 /**

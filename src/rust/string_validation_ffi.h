@@ -38,7 +38,8 @@ uint8_t OPENTTD_VALIDATION_CALL openttd_rust_validation_valid(const uint8_t *, s
  * bytes are readable and dest[position..position+length] writable. Output start lies outside a
  * nonempty input range; defined left overlap is allowed, and raw reads precede writes. Zero length
  * accesses neither pointer. Overtake leaves output and position unchanged; C++ fatal dispatch
- * happens only after return. */
+ * happens only after return. Each span lies in one live allocation <= PTRDIFF_MAX, without
+ * concurrent access while writing; raw reads and writes create no overlapping Rust references. */
 OpenTTDInplaceWrite OPENTTD_VALIDATION_CALL openttd_rust_inplace_write(uint8_t *dest, size_t position, size_t consumed, const uint8_t *source, size_t length);
 #ifdef __cplusplus
 }

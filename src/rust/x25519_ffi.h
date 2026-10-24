@@ -67,7 +67,9 @@ struct OpenTTDX25519Leaves {
  * spans; output may overlap secret, scalar or point, partially too, because all inputs are read
  * first. Trim keeps the literal forward byte copy, which propagates forward overlaps (not memmove).
  * Coarse ladder callers supply 255/256 bits; internal ten-limb storage keeps the signed bounds,
- * carries and shifts. Original wipe points and order remain. */
+ * carries and shifts. Original wipe points and order remain; compiler spills need not be erased.
+ * Tables are initialized, live and immutable; calls are serialized and buffers are readable/writable
+ * for their declared extents. */
 void OPENTTD_CRYPTO_CALL openttd_rust_x25519_trim(uint8_t *, const uint8_t *);
 void OPENTTD_CRYPTO_CALL openttd_rust_x25519_ladder(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *, const uint8_t *, int32_t);
 void OPENTTD_CRYPTO_CALL openttd_rust_x25519(const struct OpenTTDX25519Leaves *, uint8_t *, const uint8_t *, const uint8_t *);

@@ -24,7 +24,8 @@ typedef struct {
 /** Read-only spans are initialized bytes in one live allocation each, empty spans permit NULL, and
  * shared spans may overlap. Case mapping keeps native toupper(char), including negative chars
  * outside portable C's domain; signed_char is the native char sign. mode: 0 compare, 1 equal,
- * 2 prefix, 3 suffix, 4 contains. length_order supplies the C++ library's equal-prefix result. */
+ * 2 prefix, 3 suffix, 4 contains. length_order supplies the C++ library's equal-prefix result.
+ * Spans are immutable for the call and <= PTRDIFF_MAX; the native locale cannot change concurrently. */
 int32_t openttd_rust_bytes_case(const uint8_t *left, size_t left_length, const uint8_t *right, size_t right_length, uint8_t mode, uint8_t signed_char, int32_t length_order);
 
 /** Exclusive initialized writable span; offset <= length. Empty permits NULL. */

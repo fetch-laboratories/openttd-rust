@@ -155,7 +155,8 @@ pub use widget_parser::Action as WidgetAction;
 /// Height at a coordinate within a tile, preserving `OpenTTD`'s slope rounding.
 ///
 /// `u64::MAX` denotes only an unsupported base slope after half-tile handling, so the C++
-/// adapter can reach its original `NOT_REACHED`; `u32::MAX` is a valid height.
+/// adapter can reach its original `NOT_REACHED`; `u32::MAX` is a valid height. Unsigned
+/// arithmetic wraps and signed results narrow as in C++; signed overflow has no equivalence guarantee.
 #[allow(unsafe_code)] // Only the exported symbol attribute; the function is safe Rust.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_get_partial_pixel_z(x: i32, y: i32, corners: u8) -> u64 {
@@ -166,7 +167,8 @@ pub extern "C" fn openttd_rust_get_partial_pixel_z(x: i32, y: i32, corners: u8) 
 ///
 /// # Safety
 /// For nonzero length, `src` points to `length` readable bytes for the call; zero length
-/// permits null. Base is 0/8/10/16 and width 1..=64 (see `ffi.h`).
+/// permits null. The span follows `ffi.h`: one live immutable allocation <= `isize::MAX`.
+/// Base is 0/8/10/16 and width 1..=64; signed/clamp are 0/1.
 #[allow(unsafe_code)] // Export and the one borrowed-slice construction only.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_parse_integer(

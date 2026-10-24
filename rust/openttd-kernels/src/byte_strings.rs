@@ -216,7 +216,8 @@ pub unsafe extern "C" fn openttd_rust_bytes_hex_encode(
 /// # Safety
 /// Nonempty hex is initialized readable bytes; output is writable and may be uninitialized
 /// except bytes also read through overlapping input. Both nibbles are read before each write,
-/// and later reads see earlier writes, as in C++. Empty spans permit null.
+/// and later reads see earlier writes, as in C++. Empty spans permit null; spans follow
+/// `byte_strings_ffi.h`'s live-allocation, extent and exclusive-access contract.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_bytes_hex_decode(

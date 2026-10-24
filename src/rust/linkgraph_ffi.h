@@ -43,7 +43,9 @@ typedef struct {
 typedef struct OpenTTDLinkGraphResult OpenTTDLinkGraphResult;
 /* The call copies plain input arrays into Rust-owned state; empty arrays permit null. Only the
  * nonthrowing abort callback reads the job's atomic flag. Result arrays borrow the opaque owner;
- * C++ copies them before destroying it once, also on allocation exceptions. */
+ * C++ copies them before destroying it once, also on allocation exceptions.
+ * Inputs and settings are live, aligned and readable; array extents are <= PTRDIFF_MAX and obey
+ * the original graph invariants. The abort callback cannot reenter Rust or mutate the snapshot. */
 OpenTTDLinkGraphResult *OPENTTD_LINKGRAPH_CALL openttd_rust_linkgraph_run(const OpenTTDLinkGraphNode *, size_t, const OpenTTDLinkGraphEdge *, size_t, const OpenTTDLinkGraphSettings *, const void *, uint8_t (OPENTTD_LINKGRAPH_CALL *)(const void *));
 const OpenTTDLinkGraphShare *OPENTTD_LINKGRAPH_CALL openttd_rust_linkgraph_shares(const OpenTTDLinkGraphResult *, size_t *);
 const uint32_t *OPENTTD_LINKGRAPH_CALL openttd_rust_linkgraph_edges(const OpenTTDLinkGraphResult *);

@@ -35,7 +35,7 @@ typedef struct OpenTTDRustIntegerResult {
 
 /** Borrow readable bytes for this call only; zero length permits NULL, and arbitrary bytes and
  * embedded NULs are accepted. Base is 0/8/10/16; width is the native integer bit width (at most
- * 64). Signed/clamp are 0/1. */
+ * 64). Signed/clamp are 0/1. The span is one live immutable allocation of length <= PTRDIFF_MAX. */
 OpenTTDRustIntegerResult openttd_rust_parse_integer(const uint8_t *src, size_t length, uint8_t base, uint8_t width, uint8_t is_signed, uint8_t clamp);
 
 /** Independent lexical skip, with the same byte-borrow/base contract. */
