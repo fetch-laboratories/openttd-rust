@@ -105,6 +105,15 @@ crash/flood callbacks may mutate links but do not delete that current shell.
 No link borrow spans reentry. Reset ends all cursors before load/pool reset and
 clears only current-bucket pointers and buckets, retaining source stale links.
 
+#275's normal-update observation resolves one shell for its link carrier and
+tile; removal still acquires links alone. Near filtering observes x/y and the
+carrier together, reads next only on rejection, and reacquires live links after
+visitors. No field address beyond #377's links is exposed. Aircraft and road
+reuse existing call-local map dimensions: their synchronous controller callbacks
+(orders, GRF/sound, movement, crash, viewport) cannot reset/load the map or yield
+the game-state mutex. Nested entries own fresh metadata; train/ship and other
+entries still read dimensions per update. No map allocation descriptor is added.
+
 Per-field callbacks inside tile or vehicle loops may dominate runtime. Prefer
 copied records for fields observed together and batches only where the original
 has no intervening observable operation. Do not batch RNG or defer writes across
