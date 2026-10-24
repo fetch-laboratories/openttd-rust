@@ -82,7 +82,6 @@ jobs:
       run: |
         # Git Bash prepends its unrelated link.exe; use the configured MSVC tools.
         export PATH="$(dirname "$(command -v cl.exe)"):$PATH"
-        python tools/test-windows-rust-evidence.py
         cargo fmt --all -- --check
         cargo check --workspace --all-targets --locked --target "$RUST_TARGET"
         cargo clippy --workspace --all-targets --locked --target "$RUST_TARGET" -- -D warnings
@@ -221,14 +220,7 @@ jobs:
         VCPKG_BINARY_SOURCES: clear
       run: |
         export PATH="$(dirname "$(command -v cl.exe)"):$PATH"
-        python tools/check-windows-rust-configurations.py --tools .local/build-tools-windows --output .local/windows-evidence
-
-    - name: Record native CRT ABI linkage and fresh outputs
-      if: inputs.rust && !inputs.cache-only
-      shell: bash
-      run: |
-        export PATH="$(dirname "$(command -v cl.exe)"):$PATH"
-        python tools/windows-rust-evidence.py --target "$RUST_TARGET" --build build --tools .local/build-tools-windows --output .local/windows-evidence
+        python tools/check-rust-platform.py --target "$RUST_TARGET" --build build --tools .local/build-tools-windows --output .local/windows-evidence
 
     - name: Retain native Windows Rust and test evidence
       if: always() && inputs.rust && !inputs.cache-only

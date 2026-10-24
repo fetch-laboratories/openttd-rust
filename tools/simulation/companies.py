@@ -28,6 +28,8 @@ def command_gap():
     """Unchanged native financial commands for deity/network/Money boundaries."""
     import importlib.util
 
+    import probe
+
     spec = importlib.util.spec_from_file_location(
         "migration", ROOT / "tools/migration.py"
     )
@@ -42,19 +44,8 @@ def command_gap():
         for name in ("misc_cmd.cpp", "company_cmd.cpp")
     }
 
-    def function(file, signature):
-        source = sources[file]
-        start = source.index(signature)
-        opening = source.index("{", start)
-        depth = 1
-        end = opening + 1
-        while depth:
-            depth += (source[end] == "{") - (source[end] == "}")
-            end += 1
-        return source[start:end]
-
     bodies = [
-        function("company_cmd.cpp", signature)
+        probe.body(sources["company_cmd.cpp"], signature)
         for signature in (
             "Money Company::GetMaxLoan() const",
             "Money GetAvailableMoney(CompanyID company)",
@@ -63,7 +54,7 @@ def command_gap():
         )
     ]
     bodies += [
-        function("misc_cmd.cpp", "CommandCost " + name + "(")
+        probe.body(sources["misc_cmd.cpp"], "CommandCost " + name + "(")
         for name in (
             "CmdIncreaseLoan",
             "CmdDecreaseLoan",
@@ -71,7 +62,7 @@ def command_gap():
             "CmdChangeBankBalance",
         )
     ]
-    bodies.append(function("company_cmd.cpp", "CommandCost CmdGiveMoney("))
+    bodies.append(probe.body(sources["company_cmd.cpp"], "CommandCost CmdGiveMoney("))
     (out / "company-command-reference.inc").write_text("\n".join(bodies))
     subprocess.run(
         [

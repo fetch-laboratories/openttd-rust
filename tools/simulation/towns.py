@@ -209,6 +209,8 @@ _TUNNEL_REPORTS = {}
 
 def tunnel_reference_gap(out, archive=None):
     """Compare unchanged pinned tunnel control with Rust over controlled services."""
+    import probe
+
     import migration
 
     out.mkdir(parents=True, exist_ok=True)
@@ -229,32 +231,15 @@ def tunnel_reference_gap(out, archive=None):
         "CheckforTownRating": "CommandCost CheckforTownRating(",
     }
     for name, signature in signatures.items():
-        start = source.index(signature)
-        end = source.index("{", start) + 1
-        depth = 1
-        # These pinned bodies have balanced braces, including their comments.
-        while depth:
-            depth += (source[end] == "{") - (source[end] == "}")
-            end += 1
-        bodies[name] = source[start:end]
+        bodies[name] = probe.body(source, signature)
     header = (migration.REFERENCE / "src/town.h").read_text()
-    start = header.index("uint8_t PctTransported() const")
-    end = header.index("{", start) + 1
-    depth = 1
-    while depth:
-        depth += (header[end] == "{") - (header[end] == "}")
-        end += 1
-    percent_body = header[start:end]
+    percent_body = probe.body(header, "uint8_t PctTransported() const")
     (out / "town-percent-original.hpp").write_text(percent_body + "\n")
     (out / "town-tunnel-original.hpp").write_text("\n\n".join(bodies.values()) + "\n")
     build = ROOT / "build-rust"
     configuration = migration.rust_configuration(build)
     archive = archive or migration.rust_archive(build)
-    compiler = next(
-        line.split("=", 1)[1]
-        for line in (build / "CMakeCache.txt").read_text().splitlines()
-        if line.startswith("CMAKE_CXX_COMPILER:FILEPATH=")
-    )
+    compiler = probe.compiler(build)
     fixture = Path(__file__).with_name("town-reference-gaps.cpp")
     binary = out / "town-reference-gaps"
     command = [
@@ -609,17 +594,14 @@ def growth_scenarios(soak):
 
 
 def adapter(build, folder, env):
+    import probe
+
     import migration
 
     folder.mkdir(parents=True, exist_ok=True)
     migration.ensure_reference()
     source = (migration.REFERENCE / "src/town_cmd.cpp").read_text()
-    start = source.index("bool GenerateTowns(")
-    end, depth = source.index("{", start) + 1, 1
-    while depth:
-        depth += (source[end] == "{") - (source[end] == "}")
-        end += 1
-    original = source[start:end] + "\n"
+    original = probe.body(source, "bool GenerateTowns(") + "\n"
     (folder / "town-generation-original.hpp").write_text(original)
     local = folder / "towns-console.cpp"
     local.write_bytes((ROOT / "tools/simulation/towns-console.cpp").read_bytes())

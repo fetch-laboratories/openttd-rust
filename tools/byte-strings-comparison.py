@@ -1,16 +1,9 @@
 #!/usr/bin/env python3
 """Compare concrete byte-string gaps with the pristine native original APIs."""
 
-import difflib
-import hashlib
-import json
-import runpy
 import subprocess
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = runpy.run_path(str(ROOT / "tools/migration.py"))
-OUT = ROOT / ".local/byte-strings-comparison"
+import probe
 
 
 def token(value):
@@ -111,187 +104,93 @@ def corpus():
 
 
 def main():
-    MIGRATION["ensure_reference"]()
-    reference = MIGRATION["REFERENCE"].resolve()
-    # #22 owns this validated CMake-cache archive locator for every probe.
-    archive = MIGRATION["rust_archive"](ROOT / "build-rust")
-    env = MIGRATION["environment"]()
-    OUT.mkdir(parents=True, exist_ok=True)
+    out = probe.output("byte-strings-comparison")
     records = list(dict.fromkeys(corpus()))
     data = ("\n".join(records) + "\n").encode()
-    (OUT / "corpus.txt").write_bytes(data)
-    locales = subprocess.check_output(["locale", "-a"], env=env, text=True).splitlines()
+    (out / "corpus.txt").write_bytes(data)
+    locales = subprocess.check_output(
+        ["locale", "-a"], env=probe.ENV, text=True
+    ).splitlines()
     if "C" not in locales:
         raise RuntimeError("Native C locale is unavailable")
-    report = {
-        "baseline": MIGRATION["BASELINE"],
-        "candidate_commit": MIGRATION["git"]("rev-parse", "HEAD"),
-        "candidate_status": MIGRATION["git"](
-            "status", "--porcelain", "--untracked-files=all"
-        ),
-        "cases": len(records),
-        "archive": str(archive),
-        "locales": locales,
-        "commands": [],
-        "reference_sources_sha256": {},
-        "results": {},
-        "passed": False,
-    }
-    for name in (
-        "src/string.cpp",
-        "src/string_func.h",
-        "src/core/string_consumer.cpp",
-        "src/tests/string_func.cpp",
-    ):
-        report["reference_sources_sha256"][name] = hashlib.sha256(
-            (reference / name).read_bytes()
-        ).hexdigest()
+    fixture = probe.ROOT / "tools/migration/byte-strings-comparison.cpp"
     outputs = {}
-
-    def run(command, name, input_=None, extra_env=None):
-        result = subprocess.run(
-            command,
-            cwd=ROOT,
-            env=extra_env or env,
-            input=input_,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        (OUT / f"{name}.stdout").write_bytes(result.stdout)
-        (OUT / f"{name}.stderr").write_bytes(result.stderr)
-        report["commands"].append(
-            {
-                "name": name,
-                "argv": list(map(str, command)),
-                "exit_code": result.returncode,
-            }
-        )
-        if result.returncode:
-            raise RuntimeError(f"{name} failed; see {OUT / (name + '.stderr')}")
-        return result.stdout
-
-    try:
-        for signedness, flags in (
-            ("native", []),
-            ("unsigned-char", ["-funsigned-char"]),
-        ):
-            for label, source in (
-                ("reference", reference),
-                ("candidate", ROOT),
-                ("candidate-cpp", ROOT),
-            ):
-                binary = OUT / f"{label}-{signedness}"
-                command = [
-                    "c++",
-                    "-std=c++20",
-                    "-O2",
-                    "-DFMT_HEADER_ONLY",
-                    "-ffunction-sections",
-                    "-fdata-sections",
-                    "-I",
-                    str(source / "src"),
-                    str(ROOT / "tools/migration/byte-strings-comparison.cpp"),
-                    str(source / "src/string.cpp"),
-                    str(source / "src/core/string_consumer.cpp"),
-                    "-Wl,--gc-sections",
-                    "-o",
-                    str(binary),
-                    *flags,
-                ]
-                if label == "candidate":
-                    command.extend(
-                        [
-                            "-DWITH_RUST",
-                            str(archive),
-                            *MIGRATION["rust_configuration"](ROOT / "build-rust")[
-                                "native_libraries"
-                            ],
-                        ]
-                    )
-                run(command, f"compile-{binary.name}")
-                for index, locale in enumerate(locales):
-                    name = f"{binary.name}-locale-{index}"
-                    output = run([str(binary), locale], name, data)
-                    outputs[label, signedness, locale] = output
-                    if (
-                        label != "reference"
-                        and output != outputs["reference", signedness, locale]
-                    ):
-                        diff = "".join(
-                            difflib.unified_diff(
-                                outputs["reference", signedness, locale]
-                                .decode()
-                                .splitlines(True),
-                                output.decode().splitlines(True),
-                                fromfile="reference",
-                                tofile=label,
-                            )
-                        )
-                        (OUT / f"{name}.diff").write_text(diff)
-                        raise RuntimeError(
-                            f"Byte-string mismatch: {OUT / (name + '.diff')}"
-                        )
-                    report["results"][name] = {
-                        "stdout_sha256": hashlib.sha256(output).hexdigest(),
-                        "lines": len(output.splitlines()),
-                        "wide_length_result": output.splitlines()[1].decode(),
-                    }
-        report["locale_mapping_differs_from_C"] = {
-            locale: any(
-                outputs["reference", sign, locale].split(b"\n", 1)[1]
-                != outputs["reference", sign, "C"].split(b"\n", 1)[1]
-                for sign in ("native", "unsigned-char")
+    for signedness, flags in (
+        ("native", []),
+        ("unsigned-char", ["-funsigned-char"]),
+    ):
+        for label, source in probe.LABELS:
+            binary = out / f"{label}-{signedness}"
+            command = [
+                probe.compiler(),
+                "-std=c++20",
+                "-O2",
+                "-DFMT_HEADER_ONLY",
+                "-ffunction-sections",
+                "-fdata-sections",
+                "-I",
+                source / "src",
+                fixture,
+                source / "src/string.cpp",
+                source / "src/core/string_consumer.cpp",
+                "-Wl,--gc-sections",
+                "-o",
+                binary,
+                *flags,
+            ]
+            if label == "candidate":
+                command += probe.rust()
+            probe.compile(command, f"{binary}.log")
+            for index, locale in enumerate(locales):
+                name = f"{binary.name}-locale-{index}"
+                output = probe.execute(
+                    [binary, locale], out / name, input=data, stderr="allowed"
+                )
+                outputs[label, signedness, locale] = output
+                probe.same(outputs["reference", signedness, locale], output, name, out)
+    sanitizer = out / "candidate-sanitized"
+    command = [
+        probe.compiler(),
+        "-std=c++20",
+        "-O1",
+        "-DFMT_HEADER_ONLY",
+        "-ffunction-sections",
+        "-fdata-sections",
+        "-I",
+        probe.ROOT / "src",
+        fixture,
+        *(
+            probe.ROOT / "src" / name
+            for name in (
+                "string.cpp",
+                "core/string_consumer.cpp",
+                "core/string_builder.cpp",
+                "core/string_inplace.cpp",
+                "core/utf8.cpp",
             )
-            for locale in locales
-        }
-        sanitizer = OUT / "candidate-sanitized"
-        command = [
-            "c++",
-            "-std=c++20",
-            "-O1",
-            "-DFMT_HEADER_ONLY",
-            "-ffunction-sections",
-            "-fdata-sections",
-            "-I",
-            str(ROOT / "src"),
-            str(ROOT / "tools/migration/byte-strings-comparison.cpp"),
-            str(ROOT / "src/string.cpp"),
-            str(ROOT / "src/core/string_consumer.cpp"),
-            str(ROOT / "src/core/string_builder.cpp"),
-            str(ROOT / "src/core/string_inplace.cpp"),
-            str(ROOT / "src/core/utf8.cpp"),
-            "-Wl,--gc-sections",
-            "-DWITH_RUST",
-            str(archive),
-            *MIGRATION["rust_configuration"](ROOT / "build-rust")["native_libraries"],
-            "-fsanitize=address,undefined",
-            "-fno-omit-frame-pointer",
-            "-no-pie",
-            "-o",
-            str(sanitizer),
-        ]
-        run(command, "compile-sanitized")
-        sanitizer_env = env | {
-            "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
-            "UBSAN_OPTIONS": "halt_on_error=1",
-        }
-        actual = run([str(sanitizer), "C"], "sanitized-C", data, sanitizer_env)
-        if actual != outputs["reference", "native", "C"]:
-            raise RuntimeError("Sanitized byte-string corpus output differs")
-        report["sanitizer_scope"] = {
-            "cpp_fixture_and_facade_instrumented": True,
-            "rust_memory_accesses_instrumented": False,
-            "passed": True,
-        }
-        if MIGRATION["git"](
-            "status", "--porcelain", "--untracked-files=all", cwd=reference
-        ):
-            raise RuntimeError("Reference became dirty during byte-string comparison")
-        report["passed"] = True
-    finally:
-        (OUT / "report.json").write_text(json.dumps(report, indent=2) + "\n")
-    print(
-        f"Byte-string comparison passed: {len(records)} cases, {len(locales)} locales, native/unsigned char; {OUT / 'report.json'}"
+        ),
+        "-Wl,--gc-sections",
+        *probe.rust(),
+        "-fsanitize=address,undefined",
+        "-fno-omit-frame-pointer",
+        "-no-pie",
+        "-o",
+        sanitizer,
+    ]
+    probe.compile(command, f"{sanitizer}.log")
+    env = probe.ENV | {
+        "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
+        "UBSAN_OPTIONS": "halt_on_error=1",
+    }
+    actual = probe.execute(
+        [sanitizer, "C"], out / "sanitized-C", input=data, env=env, stderr="allowed"
+    )
+    probe.same(outputs["reference", "native", "C"], actual, "sanitized-C", out)
+    probe.passed(
+        "Byte-string comparison",
+        cases=len(records),
+        locales=len(locales),
+        char_signedness_modes=2,
     )
 
 

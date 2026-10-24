@@ -61,15 +61,7 @@ jobs:
     - name: Freeze runtime and scenario adapters, then partition the complete inventory
       id: pack
       if: needs.policy.outputs.covered != 'true'
-      run: |
-        python3 tools/ci_native.py pack --shards 3
-        python3 - <<'PY'
-        import json, os
-        from pathlib import Path
-        plan = json.loads(Path('.local/native-runtimes/shard-plan.json').read_text())
-        with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-            output.write('shards=' + json.dumps([s['id'] for s in plan['shards']]) + '\n')
-        PY
+      run: python3 tools/ci_native.py pack --shards 3
     - name: Export frozen runtime and probe build inputs
       if: needs.policy.outputs.covered != 'true'
       uses: actions/upload-artifact@v4
