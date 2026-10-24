@@ -29,7 +29,7 @@ use crate::witness;
 use std::cell::{Cell, OnceCell};
 use std::ffi::c_void;
 
-const NEW_HOUSE_OFFSET: u16 = 110;
+use crate::house::NEW_HOUSE_OFFSET;
 const PRODUCE_END: u16 = 0x20FF;
 // Building flags.
 const NOT_SLOPED: u8 = 1 << 1;

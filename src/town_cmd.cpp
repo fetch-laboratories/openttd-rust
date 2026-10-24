@@ -4956,6 +4956,7 @@ std::span<const DrawBuildingsTileStruct> GetTownDrawTileData()
 #include "abi-visit-OpenTTDTownFoundingServices.hpp"
 #include "abi-visit-OpenTTDTownAuthorityServices.hpp"
 #include "abi-visit-OpenTTDHouseServices.hpp"
+#include "abi-visit-OpenTTDHouseResolverServices.hpp"
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
 bool CheckAbi_town_cmd()
 {
@@ -4963,6 +4964,6 @@ bool CheckAbi_town_cmd()
 		AbiServicesComplete(GetRustTownServices()) &&
 		AbiServicesComplete(GetRustTownFoundingServices()) &&
 		AbiServicesComplete(GetRustTownAuthorityServices()) &&
-		AbiServicesComplete(*GetRustTownServices().houses);
+		AbiServicesComplete(*GetRustTownServices().houses) && AbiServicesComplete(GetHouseResolverServices());
 }
 #endif

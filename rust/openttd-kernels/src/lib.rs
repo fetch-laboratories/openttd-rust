@@ -45,6 +45,7 @@ mod ground_vehicle;
 mod heightmap;
 mod history;
 mod history_type;
+mod house;
 mod integer;
 mod landscape;
 mod landscape_generation;

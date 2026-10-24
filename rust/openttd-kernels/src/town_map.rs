@@ -16,3 +16,6 @@ pub fn increment_house_age(h: &HouseServices, t: u32) {
         (h.set_age)(t, house.age + 1);
     }
 }
+
+/// Completed construction stage from `town_map.h`.
+pub const TOWN_HOUSE_COMPLETED: u32 = 3;

@@ -818,6 +818,31 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
         )
     if scenario["town_founding"] == "houses":
         mode = scenario["house_mode"]
+        if scenario.get("house_reload"):
+            from .rails import normalize
+
+            save = folder / "reference" / "house-resolver.sav"
+            setup = dict(
+                scenario, console=[f'towns_scenario houses recession "{save}"'], ticks=1
+            )
+            run = run_game(
+                setup,
+                executables["reference"],
+                builds["reference"],
+                folder / "capture",
+                timeout,
+                env,
+                False,
+            )
+            if (
+                run["exit"]
+                or not save.is_file()
+                or "HOUSE_RESOLVER construction-production-var44-var64-var65 true"
+                not in run["log"]
+            ):
+                raise RuntimeError("house resolver reload capture failed")
+            save, result["house_reload_input"] = normalize(save, folder / "normalized")
+            scenario = dict(scenario, kind="save", save=str(save))
         return dict(
             scenario,
             console=[
@@ -936,6 +961,7 @@ def house_scenarios(soak):
             ticks=(90 if soak else 60) * TICKS_PER_DAY + SNAPSHOT_TICKS,
         )
         cases.append(scenario)
+    cases.append(dict(cases[0], name="town-houses-reload", house_reload=True))
     return cases
 
 

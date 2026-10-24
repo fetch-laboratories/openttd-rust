@@ -209,6 +209,7 @@ static bool HousesScenario(std::span<std::string_view> args)
 	}
 	money.Restore(); place.Restore(); owner.Restore();
 	fmt::print(stderr, "TOWN house-done {}\n", cleared);
+	if (args.size() == 4) SaveOrLoad(std::string(args[3]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
 	return true;
 }
 /* Commands use the unchanged native bodies in the reference. The explicit pool

@@ -50,6 +50,7 @@ inline uint32_t RustTerrainType(uint32_t tile) noexcept { return GetTerrainType(
 inline HouseZone RustTownRadiusGroup(const Town *town, uint32_t tile) noexcept { return GetTownRadiusGroup(town, TileIndex(tile)); }
 template <typename Spec>
 inline uint32_t RustSpecBadges(const ResolverObject *resolver, const Spec *spec, uint32_t parameter) noexcept { return GetBadgeVariableResult(*resolver->grffile, spec->badges, parameter); }
+inline uint32_t RustHouseBadges(const ResolverObject *resolver, uint16_t house, uint32_t parameter) noexcept { return RustSpecBadges(resolver, RustHouseSpec(house), parameter); }
 
 /* Preserve native default-livery and nullable-file translation behavior. */
 inline uint32_t RustCompanyInfo(uint8_t owner, const Livery *livery) noexcept { return GetCompanyInfo(CompanyID(owner), livery); }
@@ -61,10 +62,6 @@ inline uint8_t RustReverseRailTypeTranslation(RailType railtype, const GRFFile *
  * failures terminate. */
 inline bool OpenTTDConvertBooleanCallback(const GRFFile *grf, uint16_t callback, uint16_t result) noexcept { return ConvertBooleanCallback(grf, callback, result); }
 inline bool OpenTTDConvert8bitBooleanCallback(const GRFFile *grf, uint16_t callback, uint16_t result) noexcept { return Convert8bitBooleanCallback(grf, callback, result); }
-inline uint16_t OpenTTDHouseCallback(CallbackID callback, uint32_t param1, uint32_t param2, HouseID house, Town *town, TileIndex tile, bool not_yet_constructed, uint8_t initial_random = 0) noexcept
-{
-	return GetHouseCallback(callback, param1, param2, house, town, tile, {}, not_yet_constructed, initial_random);
-}
 inline void RustCloseNewGRFInspect(GrfSpecFeature feature, uint32_t index) noexcept { DeleteNewGRFInspectWindow(feature, index); }
 /* Typed adapters retain the existing per-component table signatures. */
 inline void OpenTTDDeleteRailInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_RAILTYPES, tile); }

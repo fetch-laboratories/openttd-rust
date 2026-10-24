@@ -8,12 +8,15 @@ use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::newgrf_storage;
 use crate::services::{Map, Services, TownHandle};
 use crate::tile_type::{INVALID_TILE, MP_HOUSE};
-use std::{cell::UnsafeCell, ffi::c_void};
+use std::{
+    cell::{OnceCell, UnsafeCell},
+    ffi::c_void,
+};
 
-const NEW_HOUSE_OFFSET: u16 = 110;
-const INVALID_HOUSE_ID: u16 = 0xFFFF;
+use crate::house::{HOUSE_NO_CLASS, INVALID_HOUSE_ID, NEW_HOUSE_OFFSET};
 use crate::newgrf_callbacks::{CBID_HOUSE_ALLOW_CONSTRUCTION, CBID_HOUSE_DRAW_FOUNDATIONS};
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
+use crate::town_map::TOWN_HOUSE_COMPLETED;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct TownScope {
@@ -43,6 +46,12 @@ pub struct SearchSpec {
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct FileIdentity {
+    grfid: u32,
+    has_file: bool,
+}
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct NearbySpec {
     file: *const c_void,
     local: u16,
@@ -66,9 +75,9 @@ pub struct ResolverServices {
     age: extern "C" fn(u32) -> u8,
     random_bits: extern "C" fn(u32) -> u8,
     random_triggers: extern "C" fn(u32) -> u8,
-    animation: extern "C" fn(u32) -> u8,
     search_spec: extern "C" fn(u16) -> SearchSpec,
     nearby_spec: extern "C" fn(u16) -> NearbySpec,
+    file_identity: extern "C" fn(u16) -> FileIdentity,
     house_id: extern "C" fn(u16, u32) -> u16,
     house_grfid: extern "C" fn(u16) -> u32,
     badges: extern "C" fn(*const c_void, u16, u32) -> u32,
@@ -388,7 +397,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
     let shared = unsafe { &*s.shared };
     if scope.tile == INVALID_TILE {
         return match variable {
-            0x40 => 3 | (scope.view as u32).wrapping_shl(2),
+            0x40 => TOWN_HOUSE_COMPLETED | (scope.view as u32).wrapping_shl(2),
             0x41..=0x44 | 0x46 | 0x47 | 0x60..=0x65 | 0x67 => 0,
             0x45 => u32::from((l.generating_world)()),
             0x66 => u32::MAX,
@@ -400,8 +409,11 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             }
         };
     }
-    let map = Map {
-        log_x: (l.map_log_x)() as u8,
+    let dimensions = OnceCell::new();
+    let map = || {
+        *dimensions.get_or_init(|| Map {
+            log_x: (l.map_log_x)() as u8,
+        })
     };
     let tile = scope.tile;
     match variable {
@@ -411,7 +423,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             } else {
                 0
             };
-            stage | crate::tile_map::tile_hash_2bit(map.tile_x(tile), map.tile_y(tile)) << 2
+            stage | crate::tile_map::tile_hash_2bit(map().tile_x(tile), map().tile_y(tile)) << 2
         }
         0x41 => {
             if (shared.tile_type)(tile) == MP_HOUSE {
@@ -425,7 +437,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             u32::from(super::radius_group(
                 state.growth.funding != 0,
                 &state.simulation.radius,
-                map.distance_square(tile, state.simulation.xy),
+                map().distance_square(tile, state.simulation.xy),
             ))
         },
         0x43 => (s.terrain)(tile),
@@ -433,12 +445,15 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
         0x45 => u32::from((l.generating_world)()),
         0x46 => {
             if (shared.tile_type)(tile) == MP_HOUSE {
-                u32::from((s.animation)(tile))
+                u32::from(crate::animated_tile_map::animation_frame(
+                    crate::animated_tile::services(),
+                    tile,
+                ))
             } else {
                 0
             }
         }
-        0x47 => map.tile_y(tile) << 16 | map.tile_x(tile),
+        0x47 => map().tile_y(tile) << 16 | map().tile_x(tile),
         0x60 => {
             if parameter < u32::from(NEW_HOUSE_OFFSET) {
                 unsafe {
@@ -453,7 +468,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             }
         }
         0x61 => {
-            let spec = (s.search_spec)(scope.house);
+            let spec = (s.file_identity)(scope.house);
             if !spec.has_file {
                 return 0;
             }
@@ -471,14 +486,17 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
         0x63 => {
             let tile = (s.nearby)(parameter as u8, tile);
             if (shared.tile_type)(tile) == MP_HOUSE {
-                u32::from((s.animation)(tile))
+                u32::from(crate::animated_tile_map::animation_frame(
+                    crate::animated_tile::services(),
+                    tile,
+                ))
             } else {
                 0
             }
         }
         // Shared GoodsEntry::ConvertState is pending root's integrated landing.
-        0x64 => unsafe { acceptance_history(s, scope, ro, parameter, map) },
-        0x65 => unsafe { distance(s, scope, parameter as u8, map) },
+        0x64 => unsafe { acceptance_history(s, scope, ro, parameter, map()) },
+        0x65 => unsafe { distance(s, scope, parameter as u8, map()) },
         0x66 => {
             let tile = (s.nearby)(parameter as u8, tile);
             if (shared.tile_type)(tile) != MP_HOUSE {
@@ -488,7 +506,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
             let spec = (s.nearby_spec)(house);
             let file = (s.file)(ro);
             let same_file = if spec.file == file { 1 } else { 2 };
-            let class = if spec.house_class == 0 {
+            let class = if spec.house_class == HOUSE_NO_CLASS {
                 0
             } else {
                 let local_class = CLASSES
@@ -571,14 +589,15 @@ unsafe fn acceptance_history(
 
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDTownScope" ["town"] => TownScope { town, owner, id, readonly };
-    "OpenTTDHouseScope" ["town"] => HouseScope { town, watched, tile, view, house, initial_random, prospective };
-    "OpenTTDHouseSearchSpec" ["town"] => SearchSpec { grfid, local, house_class, has_file };
-    "OpenTTDHouseNearbySpec" ["town"] => NearbySpec { file, local, house_class };
-    "OpenTTDHouseResolverServices" ["town"] => ResolverServices {
+    "OpenTTDTownScope" ["probe"] => TownScope { town, owner, id, readonly };
+    "OpenTTDHouseScope" ["probe"] => HouseScope { town, watched, tile, view, house, initial_random, prospective };
+    "OpenTTDHouseSearchSpec" ["probe"] => SearchSpec { grfid, local, house_class, has_file };
+    "OpenTTDHouseFileIdentity" ["probe"] => FileIdentity { grfid, has_file };
+    "OpenTTDHouseNearbySpec" ["probe"] => NearbySpec { file, local, house_class };
+    "OpenTTDHouseResolverServices" ["probe"] => ResolverServices {
         towns, shared, storage, larger_towns, cargo_by_label, get_register, file, version,
         cargo_translation, nearby, nearby_info, terrain, stage, age, random_bits,
-        random_triggers, animation, search_spec, nearby_spec, house_id, house_grfid,
+        random_triggers, search_spec, nearby_spec, file_identity, house_id, house_grfid,
         badges, stations, town_by_id, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,
     };
 }
@@ -732,7 +751,7 @@ pub extern "C" fn openttd_rust_town_scope(
 }
 crate::abi::layouts! {
     fn abi_args;
-    "OpenTTDHouseCallbackArgs" ["town"] => CallbackArgs { town, watched, param1, param2, tile, view, house, callback, initial_random, prospective };
+    "OpenTTDHouseCallbackArgs" ["probe"] => CallbackArgs { town, watched, param1, param2, tile, view, house, callback, initial_random, prospective };
 }
 
 #[unsafe(no_mangle)]

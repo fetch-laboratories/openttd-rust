@@ -30,7 +30,7 @@
 #include "rust/services_newgrf.h"
 #include "rust/services_cargo.h"
 #include "rust/settings_services.h"
-#include "rust/tile_animation_services.h"
+#include "rust/environment_services.h"
 #endif
 
 #include "safeguards.h"
@@ -77,12 +77,12 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.age = RustHouseAge,
 		.random_bits = RustHouseRandomBits,
 		.random_triggers = RustHouseRandomTriggers,
-		.animation = OpenTTDAnimationFrame,
 		.search_spec = HouseSearchSpec,
 		.nearby_spec = HouseNearbySpec,
+		.file_identity = [](uint16_t house) noexcept -> OpenTTDHouseFileIdentity { const auto *spec = RustHouseSpec(house); return {.grfid = spec->grf_prop.grfid, .has_file = spec->grf_prop.HasGrfFile()}; },
 		.house_id = [](uint16_t local, uint32_t grfid) noexcept { return _house_mngr.GetID(local, grfid); },
 		.house_grfid = [](uint16_t house) noexcept { return _house_mngr.GetGRFID(house); },
-		.badges = [](const ResolverObject *r, uint16_t house, uint32_t parameter) noexcept { return RustSpecBadges(r, RustHouseSpec(house), parameter); },
+		.badges = RustHouseBadges,
 		.stations = [](uint32_t tile, void *context, void (*visit)(void *, const Station *)) noexcept {
 			StationFinder finder(TileArea(TileIndex{tile}, 1, 1));
 			for (const Station *station : finder.GetStations()) visit(context, station);

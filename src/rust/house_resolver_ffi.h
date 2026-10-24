@@ -1,5 +1,10 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-/** @file house_resolver_ffi.h Stack contexts for house and shared-town resolution. */
+/** @file house_resolver_ffi.h Stack contexts for house and shared-town resolution.
+ * Native game-state serialization pins these stack facades and their town/spec
+ * identities across synchronous Action2/storage reentry. No entry loads/resets
+ * the map or pools, or yields. Rust ends owner borrows before every native leaf.
+ * Native leaves are noexcept; allocation/debug failures terminate, and no
+ * ordinary-play throwing leaf is used. SlObject/SlError remain outside Rust. */
 #ifndef RUST_HOUSE_RESOLVER_FFI_H
 #define RUST_HOUSE_RESOLVER_FFI_H
 #include "town_ffi.h"
@@ -27,6 +32,7 @@ struct OpenTTDHouseScope {
 	bool prospective;
 };
 struct OpenTTDHouseSearchSpec { uint32_t grfid; uint16_t local, house_class; bool has_file; };
+struct OpenTTDHouseFileIdentity { uint32_t grfid; bool has_file; };
 struct OpenTTDHouseNearbySpec { const GRFFile *file; uint16_t local, house_class; };
 struct OpenTTDHouseCallbackArgs {
 	Town *town;
@@ -54,9 +60,9 @@ struct OpenTTDHouseResolverServices {
 	uint8_t (*age)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(age);
 	uint8_t (*random_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
 	uint8_t (*random_triggers)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random_triggers);
-	uint8_t (*animation)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(animation);
 	OpenTTDHouseSearchSpec (*search_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(search_spec);
 	OpenTTDHouseNearbySpec (*nearby_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(nearby_spec);
+	OpenTTDHouseFileIdentity (*file_identity)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(file_identity);
 	uint16_t (*house_id)(uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(house_id);
 	uint32_t (*house_grfid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_grfid);
 	uint32_t (*badges)(const ResolverObject *, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);

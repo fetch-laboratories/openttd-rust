@@ -18,3 +18,10 @@ crate::abi::layouts! {
     fn abi_layout;
     "AnimatedTileState" ["probe"] => AnimatedTileState {};
 }
+
+/// Canonical `GetAnimationFrame` service, shared with the animation owner.
+pub(crate) fn animation_frame(services: &crate::animated_tile::Services, tile: u32) -> u8 {
+    // SAFETY: InitializeAnimatedTiles installs this immutable native service
+    // before map use. The callback reads no Rust owner or borrowed world view.
+    unsafe { ((*services.industry_tiles).frame)(tile) }
+}

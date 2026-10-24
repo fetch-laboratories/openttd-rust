@@ -75,10 +75,21 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 		require(available && distance == 0);
 	}
 	run("origin-exclusion", CBID_HOUSE_PRODUCE_CARGO, 0x65, 0x83, false, tile);
+	for (TileIndex nearby : SpiralTileSequence(tile, 9)) {
+		if (!IsTileType(nearby, MP_HOUSE) || std::ranges::find(parts, nearby) != parts.end()) continue;
+		HouseID old = GetHouseType(nearby); SetHouseType(nearby, first);
+		require(run("nearest-match", CBID_HOUSE_PRODUCE_CARGO, 0x65, 0x84, false, tile) == DistanceManhattan(tile, nearby));
+		SetHouseType(nearby, old); break;
+	}
+	town->cache.building_counts.id_count[first] = UINT16_MAX;
+	town->cache.building_counts.class_count[2] = UINT16_MAX;
+	require(run("count-clamps", CBID_HOUSE_PRODUCE_CARGO, 0x44, 0, false, tile) == 0x04FF01FF);
+
 	/* Ordered StationFinder must OR canonical acceptance histories. It is
 	 * call-local, independent of TileLoop_Town's static finder. */
 	std::vector<Station *> stations;
 	for (uint8_t state : {4, 8, 16, 32}) {
+		require(Station::CanAllocateItem());
 		Station *station = new Station(tile); _station_kdtree.Insert(station->index); station->town = town; station->owner = OWNER_NONE;
 		station->goods[cargo].status = GoodsEntry::States{state};
 		station->catchment_tiles.Initialize(TileArea(tile, 2, 2));
