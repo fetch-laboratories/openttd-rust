@@ -35,17 +35,15 @@
  * @param grf_version8 True, if we are dealing with a new NewGRF which uses GRF version >= 8.
  * @return a construction of bits obeying the newgrf format
  */
+#ifndef WITH_RUST
 uint32_t GetNearbyIndustryTileInformation(uint8_t parameter, TileIndex tile, IndustryID index, bool signed_offsets, bool grf_version8)
 {
-#ifdef WITH_RUST
-	return openttd_rust_industry_nearby_information(parameter, tile.base(), index.base(), signed_offsets, grf_version8, &GetIndustryResolverServices());
-#else
 	if (parameter != 0) tile = GetNearbyTile(parameter, tile, signed_offsets); // only perform if it is required
 	bool is_same_industry = (IsTileType(tile, MP_INDUSTRY) && GetIndustryIndex(tile) == index);
 
 	return GetNearbyTileInformation(tile, grf_version8) | (is_same_industry ? 1 : 0) << 8;
-#endif
 }
+#endif
 
 /**
  * This is the position of the tile relative to the northernmost tile of the industry.

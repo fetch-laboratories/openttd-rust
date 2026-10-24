@@ -796,30 +796,6 @@ pub unsafe extern "C" fn openttd_rust_industry_map_type(
 ) -> u8 {
     map_type(kind, grfid, unsafe { &*s })
 }
-/// # Safety
-/// Original valid map/industry context and stable native specs.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_id_at_offset(
-    tile: u32,
-    id: u16,
-    grfid: u32,
-    s: *const ResolverServices,
-) -> u32 {
-    id_at_offset(tile, id, grfid, unsafe { &*s })
-}
-/// # Safety
-/// Original tile and nearby-offset preconditions, live native map services.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_industry_nearby_information(
-    parameter: u8,
-    tile: u32,
-    id: u16,
-    signed: bool,
-    version8: bool,
-    s: *const ResolverServices,
-) -> u32 {
-    nearby_information(parameter, tile, id, signed, version8, unsafe { &*s })
-}
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_industry_relative_position(tile: u32, north: u32, log_x: u8) -> u32 {
     relative_position(tile, north, crate::map_func::Map { log_x })

@@ -123,7 +123,8 @@ static bool TileIdentityCases(Industry *i, Industry *temporary, TileIndex tile, 
 		s->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, groups ? group : nullptr);
 		old_spec->grf_prop.override_id = groups ? replacement : INVALID_INDUSTRYTILE;
 		override_spec->grf_prop.grfid = grfid; override_spec->grf_prop.local_id = 21;
-		uint32_t value = GetIndustryIDAtOffset(tile, i, file.grfid);
+		ResolverObject resolver(&file); IndustryTileScopeResolver scope(resolver, i, tile); bool available = true;
+		uint32_t value = scope.GetVariable(0x62, 0, available);
 		uint32_t expected = gfx == original && !groups ? 0xFF00U | original : !groups ? 0xFF11U : grfid != file.grfid ? 0xFFFEU : gfx == original ? 21U : 19U;
 		equal &= value == expected;
 		fmt::print(stderr, "INDUSTRY-RESOLVER tile-id {} {} {} {}\n", gfx, groups, grfid, value);
@@ -133,7 +134,8 @@ static bool TileIdentityCases(Industry *i, Industry *temporary, TileIndex tile, 
 	temporary->location.tile = tile + 1;
 	IndustryTileResolverObject negative(original, tile, temporary); bool available = true;
 	fmt::print(stderr, "INDUSTRY-RESOLVER relative-negative {}\n", negative.indtile_scope.GetVariable(0x43, 0, available));
-	equal &= GetIndustryIDAtOffset(tile + TileDiffXY(20, 20), i, file.grfid) == 0xFFFF;
+	ResolverObject resolver(&file); IndustryTileScopeResolver outside(resolver, i, tile + TileDiffXY(20, 20));
+	equal &= outside.GetVariable(0x62, 0, available) == 0xFFFF;
 	fmt::print(stderr, "INDUSTRY-RESOLVER tile-identities {}\n", equal);
 	return equal;
 }

@@ -71,11 +71,9 @@ IndustryType MapNewGRFIndustryType(IndustryType grf_type, uint32_t grf_id)
  * @param cur_grfid GRFID of the current callback chain
  * @return value encoded as per NFO specs
  */
+#ifndef WITH_RUST
 uint32_t GetIndustryIDAtOffset(TileIndex tile, const Industry *i, uint32_t cur_grfid)
 {
-#ifdef WITH_RUST
-	return openttd_rust_industry_id_at_offset(tile.base(), i->index.base(), cur_grfid, &GetIndustryResolverServices());
-#else
 	if (!i->TileBelongsToIndustry(tile)) {
 		/* No industry and/or the tile does not have the same industry as the one we match it with */
 		return 0xFFFF;
@@ -108,8 +106,8 @@ uint32_t GetIndustryIDAtOffset(TileIndex tile, const Industry *i, uint32_t cur_g
 	}
 	/* The tile has no spritegroup */
 	return 0xFF << 8 | indtsp->grf_prop.subst_id; // so just give it the substitute
-#endif
 }
+#endif
 
 #ifndef WITH_RUST
 static uint32_t GetClosestIndustry(TileIndex tile, IndustryType type, const Industry *current)

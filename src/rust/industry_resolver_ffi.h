@@ -80,8 +80,6 @@ TownScopeResolver *openttd_rust_industry_resolver_town(const OpenTTDIndustryReso
 ScopeResolver *openttd_rust_industry_resolver_scope(const OpenTTDIndustryResolverContext *, ResolverObject *, ScopeResolver *, uint8_t, uint8_t, const OpenTTDIndustryResolverServices *);
 ScopeResolver *openttd_rust_industry_tile_scope(ResolverObject *, ScopeResolver *, ScopeResolver *, uint8_t, uint8_t, const OpenTTDIndustryResolverServices *);
 uint8_t openttd_rust_industry_map_type(uint8_t, uint32_t, const OpenTTDIndustryResolverServices *);
-uint32_t openttd_rust_industry_id_at_offset(uint32_t, uint16_t, uint32_t, const OpenTTDIndustryResolverServices *);
-uint32_t openttd_rust_industry_nearby_information(uint8_t, uint32_t, uint16_t, bool, bool, const OpenTTDIndustryResolverServices *);
 uint32_t openttd_rust_industry_relative_position(uint32_t, uint32_t, uint8_t);
 uint32_t openttd_rust_industry_probability(uint8_t, uint8_t, uint32_t, const OpenTTDIndustryResolverServices *);
 bool openttd_rust_industry_refuses(Industry *, OpenTTDIndustry *, uint8_t, const OpenTTDIndustryResolverServices *);
