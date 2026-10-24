@@ -84,7 +84,7 @@ static OpenTTDAircraftNode OPENTTD_AIRCRAFT_CALL Aircraft_fta(const void * node)
 static OpenTTDAircraftMoving OPENTTD_AIRCRAFT_CALL Aircraft_moving(const void * airport, uint8_t pos) noexcept
 {
 	const auto *m = static_cast<const AirportFTAClass *>(airport)->MovingData(pos);
-	return {.x = m->x, .y = m->y, .flags = m->flags.base(), .direction = m->direction};
+	return {.x = m->x, .y = m->y, .flags = RustAirportMovingFlags(m), .direction = m->direction};
 }
 
 static uint16_t OPENTTD_AIRCRAFT_CALL Aircraft_engine_speed(OpenTTDAircraftVehicle vehicle) noexcept

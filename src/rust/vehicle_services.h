@@ -87,7 +87,6 @@ inline void RustVehicleSetServiceInterval(Vehicle *v, uint16_t interval) noexcep
 inline void RustVehicleSetSubtype(Vehicle *v, uint8_t subtype) noexcept { v->subtype = subtype; }
 inline void RustVehicleInvalidateNewGRFCache(Vehicle *v) noexcept { v->InvalidateNewGRFCache(); }
 inline uint16_t RustVehicleUnitNumber(const Vehicle *v) noexcept { return v->unitnumber; }
-inline uint64_t RustVehicleLegacyUnitNumber(void *v) noexcept { return RustVehicleUnitNumber(static_cast<Vehicle *>(v)); }
 inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNumber(); }
 inline uint16_t RustGroundFirstEngine(const Vehicle *v) noexcept { return v->GetGroundVehicleCache()->first_engine.base(); }
 #ifdef WITH_RUST
@@ -100,6 +99,15 @@ inline uint32_t RustVehicleTile(const Vehicle *v) noexcept { return v->tile.base
 inline uint32_t RustVehicleDestTile(const Vehicle *v) noexcept { return v->dest_tile.base(); }
 inline OrderType RustVehicleOrderType(const Vehicle *v) noexcept { return v->current_order.GetType(); }
 inline uint16_t RustVehicleOrderDestination(const Vehicle *v) noexcept { return v->current_order.GetDestination().base(); }
+inline OrderUnloadType RustVehicleOrderUnloadType(const Vehicle *v) noexcept { return v->current_order.GetUnloadType(); }
+inline OrderLoadType RustVehicleOrderLoadType(const Vehicle *v) noexcept { return v->current_order.GetLoadType(); }
+inline TimerGameCalendar::Date RustVehicleCalendarService(const Vehicle *v) noexcept { return v->date_of_last_service_newgrf; }
+inline TimerGameCalendar::Year RustVehicleBuildYear(const Vehicle *v) noexcept { return v->build_year; }
+inline uint8_t RustVehicleSprite(const Vehicle *v) noexcept { return v->spritenum; }
+inline uint8_t RustVehicleNumOrders(const Vehicle *v) noexcept { return v->GetNumOrders(); }
+inline uint8_t RustVehicleRealOrderIndex(const Vehicle *v) noexcept { return v->cur_real_order_index; }
+inline uint16_t RustVehicleServiceInterval(const Vehicle *v) noexcept { return v->GetServiceInterval(); }
+inline int64_t RustVehicleDisplayProfitLastYear(const Vehicle *v) noexcept { return v->GetDisplayProfitLastYear().base(); }
 inline uint16_t RustVehicleOrderMaxSpeed(const Vehicle *v) noexcept { return v->current_order.GetMaxSpeed(); }
 template <class T> inline int RustVehicleDisplayMaxSpeed(const T *v) noexcept { return v->GetDisplayMaxSpeed(); }
 inline int32_t RustVehicleDisplaySpeed(OpenTTDVehicle *v) noexcept { return RustVehicleDisplayMaxSpeed(VehicleOf(v)); }
@@ -191,6 +199,11 @@ inline VehicleType RustVehicleVehicleType(const Vehicle *v) noexcept { return *R
 inline const uint16_t *RustVehicleCargoPeriodAddress(const Vehicle *v) noexcept { return &v->vcache.cached_cargo_age_period; }
 inline uint16_t *RustVehicleCargoCounterAddress(Vehicle *v) noexcept { return &v->cargo_age_counter; }
 inline uint32_t *RustVehicleMotionAddress(Vehicle *v) noexcept { return &v->motion_counter; }
+
+/** Typed shell adapter; canonical reads keep their actual return types.
+ * Result also preserves existing wider legacy table signatures. */
+template <typename Result, auto Read>
+static Result OPENTTD_VEHICLE_CALL RustVehicleRead(OpenTTDVehicle *shell) noexcept { return static_cast<Result>(Read(VehicleOf(shell))); }
 
 /** Shared legacy opaque-owner adapter; the actual typed read is defined once. */
 template <typename Result, auto Read>

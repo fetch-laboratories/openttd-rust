@@ -387,11 +387,6 @@ static void TrainOrderFree(OpenTTDTrainHandle id) noexcept
 	Train *v = static_cast<Train *>(id.shell);
 	v->current_order.Free();
 }
-static uint64_t TrainOrderMaxSpeed(OpenTTDTrainHandle id) noexcept
-{
-	Train *v = static_cast<Train *>(id.shell);
-	return RustVehicleOrderMaxSpeed(v);
-}
 
 static void TrainPayRunning(OpenTTDTrainHandle id, int64_t a) noexcept
 {
@@ -705,11 +700,6 @@ static uint8_t TrainReadFront(OpenTTDTrainHandle id) noexcept
 {
 	const Train *v=static_cast<Train *>(id.shell);
 	return v->IsFrontEngine();
-}
-static uint8_t TrainReadArticulated(OpenTTDTrainHandle id) noexcept
-{
-	const Train *v=static_cast<Train *>(id.shell);
-	return RustVehicleArticulated(v);
 }
 static uint8_t TrainReadMultiheaded(OpenTTDTrainHandle id) noexcept
 {

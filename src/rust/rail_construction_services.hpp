@@ -107,7 +107,7 @@ static void *RailNewRear(void *front) noexcept
 	u->SetTrack(TRACK_BIT_DEPOT);
 	u->vehstatus = v->vehstatus;
 	u->vehstatus.Reset(VehState::Stopped);
-	u->spritenum = v->spritenum + 1;
+	u->spritenum = RustVehicleSprite(v) + 1;
 	u->cargo_type = v->cargo_type;
 	u->cargo_subtype = v->cargo_subtype;
 	u->cargo_cap = v->cargo_cap;
@@ -115,8 +115,8 @@ static void *RailNewRear(void *front) noexcept
 	u->SetRailTypes(v->GetRailTypes());
 	u->engine_type = v->engine_type;
 	u->date_of_last_service = v->date_of_last_service;
-	u->date_of_last_service_newgrf = v->date_of_last_service_newgrf;
-	u->build_year = v->build_year;
+	u->date_of_last_service_newgrf = RustVehicleCalendarService(v);
+	u->build_year = RustVehicleBuildYear(v);
 	u->sprite_cache.sprite_seq.Set(SPR_IMG_QUERY);
 	return u;
 }

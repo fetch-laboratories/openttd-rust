@@ -1497,8 +1497,8 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		return {
 			.ticks = RustVehicleLoadUnloadTicks(handle),
 			.vehicle_type = v->type,
-			.unload_type = to_underlying(v->current_order.GetUnloadType()),
-			.load_type = to_underlying(v->current_order.GetLoadType()),
+			.unload_type = to_underlying(RustVehicleOrderUnloadType(v)),
+			.load_type = to_underlying(RustVehicleOrderLoadType(v)),
 			.refit_cargo = refit ? v->current_order.GetRefitCargo() : uint8_t(0),
 			.refit = refit,
 			.full_load = v->current_order.IsFullLoadOrder(),
@@ -1610,10 +1610,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 		Vehicle *v = VehicleOf(handle);
 		return v->cargo.ActionCount(VehicleCargoList::MTA_LOAD);
 	},
-	.unload_type = [](OpenTTDVehicle *handle) noexcept -> uint8_t {
-		Vehicle *v = VehicleOf(handle);
-		return to_underlying(v->current_order.GetUnloadType());
-	},
+	.unload_type = RustVehicleRead<uint8_t, RustVehicleOrderUnloadType>,
 	.has_orders = [](OpenTTDVehicle *handle) noexcept -> bool {
 		Vehicle *v = VehicleOf(handle); return v->orders != nullptr;
 	},

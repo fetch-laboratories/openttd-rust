@@ -36,7 +36,7 @@ inline OpenTTDMovementVehicle RustMovementResolve(OpenTTDVehicle *handle) noexce
 		.road = v->type == VEH_ROAD ? RoadStateOf(RoadVehicle::From(v)) : nullptr,
 		.ship = v->type == VEH_SHIP ? Ship::From(v)->GetRustState() : nullptr, .kind = v->type};
 }
-inline RoadTramType RustMovementRoadKind(OpenTTDVehicle *handle) noexcept { return RustRoadTramType(RoadVehicle::From(VehicleOf(handle))->roadtype); }
+inline RoadTramType RustMovementRoadKind(OpenTTDVehicle *handle) noexcept { return RustRoadTramType(RustRoadVehicleType(RoadVehicle::From(VehicleOf(handle)))); }
 inline OpenTTDMovementPose RustMovementPose(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);

@@ -448,7 +448,6 @@ static bool OPENTTD_VEHICLE_CALL VehicleSchedulerTick(OpenTTDVehicle *shell, Ope
 }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerCalendarDay(OpenTTDVehicle *shell) noexcept { VehicleOf(shell)->OnNewCalendarDay(); }
 static void OPENTTD_VEHICLE_CALL VehicleSchedulerEconomyDay(OpenTTDVehicle *shell) noexcept { VehicleOf(shell)->OnNewEconomyDay(); }
-static OpenTTDCargoList *OPENTTD_VEHICLE_CALL VehicleSchedulerCargoOwner(OpenTTDVehicle *shell) noexcept { return RustVehicleCargoOwner(VehicleOf(shell)); }
 static OpenTTDVehicleDayCallback OPENTTD_VEHICLE_CALL VehicleSchedulerDayCallbackRead(OpenTTDVehicle *shell) noexcept
 {
 	const Vehicle *v = VehicleOf(shell);
@@ -482,7 +481,7 @@ const OpenTTDVehicleSchedulerServices &GetRustVehicleSchedulerServices() noexcep
 		.economy_day = VehicleSchedulerEconomyDay,
 		.day_callback_read = VehicleSchedulerDayCallbackRead,
 		.first_dirty = VehicleSchedulerFirstDirty,
-		.cargo_owner = VehicleSchedulerCargoOwner,
+		.cargo_owner = RustVehicleRead<OpenTTDCargoList *, RustVehicleCargoOwner>,
 		.vehicle = &_rust_vehicle_services,
 		.shared = &GetRustSharedServices(),
 		.with_loading_timer = VehicleSchedulerWithLoadingTimer,
@@ -511,7 +510,7 @@ static OpenTTDVehicleMaintenanceInterval OPENTTD_VEHICLE_CALL MaintenanceInterva
 {
 	const Vehicle *v = VehicleOf(handle);
 	const Company *company = Company::Get(v->owner);
-	return {.company = company, .last_service = MaintenanceDate(RustVehicleLastService(v)), .now = MaintenanceDate(TimerGameEconomy::date), .interval = v->GetServiceInterval(), .reliability = RustVehicleReliability(v), .percent = v->ServiceIntervalIsPercent(), .wallclock = TimerGameEconomy::UsingWallclockUnits(), .no_service = _settings_game.order.no_servicing_if_no_breakdowns, .breakdowns = _settings_game.difficulty.vehicle_breakdowns};
+	return {.company = company, .last_service = MaintenanceDate(RustVehicleLastService(v)), .now = MaintenanceDate(TimerGameEconomy::date), .interval = RustVehicleServiceInterval(v), .reliability = RustVehicleReliability(v), .percent = v->ServiceIntervalIsPercent(), .wallclock = TimerGameEconomy::UsingWallclockUnits(), .no_service = _settings_game.order.no_servicing_if_no_breakdowns, .breakdowns = _settings_game.difficulty.vehicle_breakdowns};
 }
 static uint16_t OPENTTD_VEHICLE_CALL MaintenanceEngineReliability(OpenTTDVehicle *handle) noexcept { return RustEngineReliability(VehicleOf(handle)->GetEngine()); }
 static OpenTTDVehicleMaintenanceBudget OPENTTD_VEHICLE_CALL MaintenanceBudget(const Company *company) noexcept { return {.needed = RustCompanyRenewReserve(company), .available = GetAvailableMoney(company->index).base()}; }
@@ -553,7 +552,6 @@ static void OPENTTD_VEHICLE_CALL MaintenanceTrigger(OpenTTDVehicle *handle, uint
 	v->breakdown_delay = delay;
 	v->breakdown_chance = 0;
 }
-static uint8_t OPENTTD_VEHICLE_CALL MaintenanceBreakdownCounter(OpenTTDVehicle *handle) noexcept { return RustVehicleBreakdownCounter(VehicleOf(handle)); }
 static OpenTTDVehicleMaintenanceBreakdownProbe OPENTTD_VEHICLE_CALL MaintenanceBreakdownProbe(OpenTTDVehicle *handle) noexcept
 {
 	const Vehicle *v = VehicleOf(handle);
@@ -628,7 +626,6 @@ static void OPENTTD_VEHICLE_CALL MaintenanceOldNews(OpenTTDVehicle *handle, Stri
 static OpenTTDEconomyDate OPENTTD_VEHICLE_CALL MaintenanceEconomyAge(OpenTTDVehicle *handle) noexcept { return MaintenanceDate(RustVehicleEconomyAge(VehicleOf(handle))); }
 static void OPENTTD_VEHICLE_CALL MaintenanceEconomyAgeWrite(OpenTTDVehicle *handle, OpenTTDEconomyDate age) noexcept { VehicleOf(handle)->economy_age = TimerGameEconomy::Date{age.value}; }
 static void OPENTTD_VEHICLE_CALL MaintenanceReachedMinAge(OpenTTDVehicle *handle) noexcept { GroupStatistics::VehicleReachedMinAge(VehicleOf(handle)); }
-static int64_t OPENTTD_VEHICLE_CALL MaintenanceValue(OpenTTDVehicle *handle) noexcept { return RustVehicleValue(VehicleOf(handle)); }
 static void OPENTTD_VEHICLE_CALL MaintenanceValueWrite(OpenTTDVehicle *handle, int64_t value) noexcept { VehicleOf(handle)->value = Money(value); }
 static_assert(to_underlying(LandscapeType::Toyland) == 3);
 static_assert(EconomyTime::DAYS_IN_ECONOMY_MONTH == 30 && CalendarTime::DAYS_IN_LEAP_YEAR == 366 && NUM_CARGO == 64);
@@ -653,7 +650,7 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.breakdown_trigger = MaintenanceBreakdownTrigger,
 	.chance_write = MaintenanceChanceWrite,
 	.trigger = MaintenanceTrigger,
-	.breakdown_counter = MaintenanceBreakdownCounter,
+	.breakdown_counter = RustVehicleRead<uint8_t, RustVehicleBreakdownCounter>,
 	.breakdown_probe = MaintenanceBreakdownProbe,
 	.breakdown_start = MaintenanceBreakdownStart,
 	.breakdown_start_write = MaintenanceBreakdownStartWrite,
@@ -679,7 +676,7 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 	.economy_age = MaintenanceEconomyAge,
 	.economy_age_write = MaintenanceEconomyAgeWrite,
 	.reached_min_age = MaintenanceReachedMinAge,
-	.value = MaintenanceValue,
+	.value = RustVehicleRead<int64_t, RustVehicleValue>,
 	.value_write = MaintenanceValueWrite,
 	.max_calendar_date = MaintenanceDate(CalendarTime::MAX_DATE),
 	.max_economy_date = MaintenanceDate(EconomyTime::MAX_DATE),
@@ -692,12 +689,6 @@ const OpenTTDVehicleMaintenanceServices _rust_vehicle_maintenance_services{
 };
 
 /* Existing order ABI adapters share the canonical typed observations here. */
-extern "C" uint64_t openttd_orders_reliability(void *ctx) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return RustVehicleReliability(v);
-}
-
 extern "C" uint64_t openttd_orders_age_years(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);

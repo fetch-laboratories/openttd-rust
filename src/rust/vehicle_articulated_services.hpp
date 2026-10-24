@@ -1,10 +1,11 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 /** @file vehicle_articulated_services.hpp Native specification, pool and shell leaves. */
+#include "services_road.h"
 static uint16_t VehicleArticNext(uint32_t index, uint16_t engine, void *v, bool *flip) noexcept { return GetNextArticulatedPart(index, EngineID(engine), static_cast<Vehicle *>(v), flip).base(); }
 static void *VehicleArticPreparePrevious(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); auto *cache = v->GetGroundVehicleCache(); RustGroundSetFirstEngine(cache, v->engine_type); return cache; }
 template <class T> static void *VehicleArticNew(void *previous) noexcept { T *v = new T(); RustVehicleSetNext(static_cast<Vehicle *>(previous), v); RustVehicleSetSubtype(v, 0); return v; }
 static void VehicleArticRoadLength(void *cache) noexcept { static_cast<GroundVehicleCache *>(cache)->cached_veh_length = VEHICLE_LENGTH; }
-static void VehicleArticCopyRoadtype(void *shell, void *head) noexcept { RoadVehicle *v = static_cast<RoadVehicle *>(shell); const auto *first = static_cast<const RoadVehicle *>(head); v->roadtype = first->roadtype; v->compatible_roadtypes = first->compatible_roadtypes; }
+static void VehicleArticCopyRoadtype(void *shell, void *head) noexcept { RoadVehicle *v = static_cast<RoadVehicle *>(shell); const auto *first = static_cast<const RoadVehicle *>(head); v->roadtype = RustRoadVehicleType(first); v->compatible_roadtypes = first->compatible_roadtypes; }
 template <class T> static OpenTTDArticulatedPart VehicleArticInfo(const OpenTTDEngine *engine, bool carry) noexcept { const auto &info = EngineOf(engine)->VehInfo<T>(); return {.image = info.image_index, .capacity = static_cast<uint16_t>(carry ? info.capacity : 0)}; }
 static void VehicleArticSetPart(void *shell, uint8_t image, uint8_t cargo, uint16_t capacity, bool validate) noexcept
 {
@@ -23,8 +24,8 @@ static void VehicleArticCopyCommon(void *shell, void *head, uint16_t engine) noe
 	v->direction = first->direction; v->owner = first->owner; v->tile = first->tile;
 	v->x_pos = first->x_pos; v->y_pos = first->y_pos; v->z_pos = first->z_pos;
 	v->date_of_last_service = first->date_of_last_service;
-	v->date_of_last_service_newgrf = first->date_of_last_service_newgrf;
-	v->build_year = first->build_year;
+	v->date_of_last_service_newgrf = RustVehicleCalendarService(first);
+	v->build_year = RustVehicleBuildYear(first);
 	v->vehstatus = first->vehstatus; v->vehstatus.Reset(VehState::Stopped);
 	RustVehicleSetCargoSubtype(RustVehicle(v), 0);
 	v->max_age = CalendarTime::MIN_DATE; v->engine_type = EngineID(engine); v->value = 0;
