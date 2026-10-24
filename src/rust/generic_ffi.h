@@ -11,6 +11,8 @@ enum class WaterClass : uint8_t;
 struct GRFFile;
 struct SpriteGroup;
 struct ResolverObject;
+struct OpenTTDResolverState;
+struct OpenTTDSpriteGroupServices;
 struct ScopeResolver;
 struct OpenTTDGenericScope {
 	uint8_t cargo, selection, source, destination, distance, event, count, station_size, feature;
@@ -31,7 +33,7 @@ struct OpenTTDGenericServices {
 	uint8_t (*cargo_bitnum)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_bitnum);
 	uint16_t (*industry_substitute)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_substitute);
 	uint16_t (*evaluate)(const OpenTTDGenericInvocation *, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(evaluate);
-	ScopeResolver *(*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);
+	const OpenTTDSpriteGroupServices *common;
 	bool (*enabled)() noexcept OPENTTD_SERVICE_DEFAULT(enabled);
 	bool (*ambient)() noexcept OPENTTD_SERVICE_DEFAULT(ambient);
 	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);
@@ -45,6 +47,7 @@ void openttd_rust_generic_reset(const OpenTTDGenericServices *);
 void openttd_rust_generic_add(uint8_t, const GRFFile *, const SpriteGroup *);
 OpenTTDGenericResult openttd_rust_generic_ai(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t);
 uint32_t openttd_rust_generic_variable(const OpenTTDGenericInvocation *, uint8_t, bool *);
-ScopeResolver *openttd_rust_generic_scope(ResolverObject *, ScopeResolver *, uint8_t, uint8_t);
+ScopeResolver *openttd_rust_generic_scope(ScopeResolver *, ScopeResolver *, uint8_t);
+uint16_t openttd_rust_generic_evaluate(const OpenTTDGenericInvocation *, ResolverObject *, OpenTTDResolverState *, int32_t *, size_t);
 }
 #endif

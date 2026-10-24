@@ -49,7 +49,7 @@ pub struct Services {
     cargo_bitnum: extern "C" fn(u8) -> u8,
     industry_substitute: extern "C" fn(u8) -> u16,
     evaluate: extern "C" fn(*const Invocation, *mut i32, usize) -> u16,
-    base_scope: extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
+    common: *const crate::newgrf_spritegroup::Services,
     enabled: extern "C" fn() -> bool,
     ambient: extern "C" fn() -> bool,
     terrain: extern "C" fn(u32) -> u32,
@@ -164,15 +164,39 @@ pub unsafe extern "C" fn openttd_rust_generic_variable(
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_generic_scope(
-    resolver: *mut c_void,
     scope: *mut c_void,
+    default_scope: *mut c_void,
     which: u8,
-    relative: u8,
 ) -> *mut c_void {
     if which == VSG_SCOPE_SELF {
         scope
     } else {
-        (services().base_scope)(resolver, which, relative)
+        default_scope
+    }
+}
+/// The native leaf supplies only the live polymorphic frame and its canonical
+/// common carrier. Callback reset/register behavior stays in the common owner.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_generic_evaluate(
+    invocation: *const Invocation,
+    resolver: *mut c_void,
+    state: *mut crate::newgrf_spritegroup::State,
+    regs: *mut i32,
+    count: usize,
+) -> u16 {
+    // SAFETY: the frame and invocation outlive this synchronous call. Copy only
+    // handles before evaluation; no owner/registry borrow crosses reentry.
+    let (root, file) = unsafe { ((*invocation).root, (*invocation).file) };
+    unsafe {
+        crate::newgrf_spritegroup::openttd_rust_resolver_callback(
+            &*services().common,
+            root,
+            resolver,
+            state,
+            file,
+            regs,
+            count,
+        )
     }
 }
 fn substitute(industry: u8) -> u8 {
@@ -283,5 +307,5 @@ crate::abi::layouts! {
     "OpenTTDGenericScope" ["probe"] => Scope { cargo, selection, source, destination, distance, event, count, station_size, feature, ai };
     "OpenTTDGenericInvocation" ["probe"] => Invocation { scope, callback, param1, file, root };
     "OpenTTDGenericResult" ["probe"] => Result { file, result };
-    "OpenTTDGenericServices" ["probe"] => Services { shared, version, cargo_map, cargo_bitnum, industry_substitute, evaluate, base_scope, enabled, ambient, terrain, water_class, sound, unsupported, unhandled };
+    "OpenTTDGenericServices" ["probe"] => Services { shared, version, cargo_map, cargo_bitnum, industry_substitute, evaluate, common, enabled, ambient, terrain, water_class, sound, unsupported, unhandled };
 }

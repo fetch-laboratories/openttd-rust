@@ -211,6 +211,7 @@ pub union ScopeData {
     airport: Resolver,
     house: *const crate::town::resolver::HouseScope,
     roadstop: *const crate::newgrf_roadstop::State,
+    generic: *const crate::newgrf_generic::Invocation,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -302,6 +303,9 @@ impl<'a> Invocation<'a> {
                     self.ro, b.own, b.parent, kind, relative,
                 ),
                 8 => crate::town::resolver::openttd_rust_town_scope(self.ro, b.own, kind, relative),
+                11 => {
+                    crate::newgrf_generic::openttd_rust_generic_scope(b.own, b.default_scope, kind)
+                }
                 _ => (self.s.scope)(self.ro, kind, relative),
             };
             let mut binding = std::mem::MaybeUninit::uninit();
@@ -400,6 +404,11 @@ impl<'a> Invocation<'a> {
                     available,
                     self.s.roadstop,
                 ),
+                12 => crate::newgrf_generic::openttd_rust_generic_variable(
+                    b.data.generic,
+                    variable,
+                    available,
+                ),
                 _ => (self.s.variable)(scope.native, variable, parameter, available),
             }
         }
@@ -407,7 +416,7 @@ impl<'a> Invocation<'a> {
     unsafe fn random_bits(self, scope: Scope) -> u32 {
         unsafe {
             match scope.binding.kind {
-                0 | 6 => 0,
+                0 | 6 | 12 => 0,
                 1 => crate::newgrf_vehicle::openttd_rust_vehicle_scope_random(
                     &*self.s.vehicle,
                     scope.binding.data.vehicle,
@@ -447,7 +456,7 @@ impl<'a> Invocation<'a> {
     unsafe fn random_triggers(self, scope: Scope) -> u32 {
         unsafe {
             match scope.binding.kind {
-                0 | 3 | 5 | 6 | 7 => 0,
+                0 | 3 | 5 | 6 | 7 | 12 => 0,
                 1 => crate::newgrf_vehicle::openttd_rust_vehicle_scope_random(
                     &*self.s.vehicle,
                     scope.binding.data.vehicle,
@@ -481,7 +490,7 @@ impl<'a> Invocation<'a> {
         crate::witness::hit(crate::witness::ACTION2_STORAGE);
         unsafe {
             match scope.binding.kind {
-                0..=2 | 4 | 5 | 9 | 10 => {}
+                0..=2 | 4 | 5 | 9 | 10 | 12 => {}
                 3 => {
                     let industry = (*scope.binding.data.industry).industry;
                     crate::newgrf_storage::openttd_rust_storage_industry(

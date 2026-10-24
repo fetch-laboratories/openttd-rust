@@ -2377,8 +2377,11 @@ ambient enable/chance/parameter/playback policy. Registration alone allocates;
 resolution copies one pointer pair at a time, with no registry snapshot. Native
 load phases exclude registration/reset during callbacks. Context/container
 borrows end before Action2 or sound reentry; nested entries own their stack state.
-C++ retains files, parsed graphs, common Action2, specifications, map, loading
-callers and sound playback. Typed noexcept leaves have no ordinary-play throwing
+Common Action2 evaluation and generic scope/variable dispatch call their Rust
+owners directly. The native evaluation leaf constructs only the required stack
+virtual/profiler frame, exposing the actual invocation and common carrier through
+typed bindings (resolver11/scope12); no mirrored state or virtual forwarding.
+C++ retains files, parsed graphs, specifications, map, loading callers and playback. Typed noexcept leaves have no ordinary-play throwing
 operation; script commands run after the callback returns. Portable originals stay.
 Clear/tree/water call Rust directly; tree retains its post-call feature observation
 before refresh. Cargo bitnum and GRF-aware playback have canonical shared leaves

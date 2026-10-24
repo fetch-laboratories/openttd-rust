@@ -16,7 +16,7 @@
 #include "water_map.h"
 
 #ifdef WITH_RUST
-#include "rust/generic_ffi.h"
+#include "rust/generic_resolver.h"
 #include "rust/services_newgrf.h"
 #include "rust/services_cargo.h"
 #include "rust/services_landscape.h"
@@ -30,22 +30,12 @@
 static_assert(GSF_SOUNDFX == 12 && GSF_END == 22);
 static_assert(CBID_GENERIC_AI_PURCHASE_SELECTION == 0x18 && CBID_SOUNDS_AMBIENT_EFFECT == 0x144);
 static_assert(IT_AI_UNKNOWN == 0xFE && IT_AI_TOWN == 0xFF);
-struct GenericScopeResolver final : ScopeResolver {
-	const OpenTTDGenericInvocation &invocation;
-	GenericScopeResolver(ResolverObject &ro, const OpenTTDGenericInvocation &invocation) : ScopeResolver(ro), invocation(invocation) {}
-	uint32_t GetVariable(uint8_t variable, uint32_t, bool &available) const override { return openttd_rust_generic_variable(&this->invocation, variable, &available); }
-};
-struct GenericResolverObject final : ResolverObject {
-	GenericScopeResolver generic_scope;
-	GenericResolverObject(const OpenTTDGenericInvocation &invocation) : ResolverObject(invocation.file, static_cast<CallbackID>(invocation.callback), invocation.param1), generic_scope(*this, invocation) { this->root_spritegroup = invocation.root; }
-	ScopeResolver *GetScope(VarSpriteGroupScope scope, uint8_t relative) override { return openttd_rust_generic_scope(this, &this->generic_scope, scope, relative); }
-	GrfSpecFeature GetFeature() const override { return static_cast<GrfSpecFeature>(this->generic_scope.invocation.scope.feature); }
-	uint32_t GetDebugID() const override { return 0; }
-};
 static uint16_t EvaluateGeneric(const OpenTTDGenericInvocation *invocation, int32_t *regs, size_t count) noexcept
 {
 	GenericResolverObject object(*invocation);
-	return object.ResolveCallback({regs, count});
+	// This leaf constructs the required native virtual/profiler frame only.
+	// Evaluation and all generic dispatch return directly to their Rust owners.
+	return openttd_rust_generic_evaluate(invocation, &object, object.CommonState(), regs, count);
 }
 static const OpenTTDGenericServices &GenericServices() noexcept
 {
@@ -56,7 +46,7 @@ static const OpenTTDGenericServices &GenericServices() noexcept
 		.cargo_bitnum = RustCargoBitnum,
 		.industry_substitute = RustIndustrySubstitute,
 		.evaluate = EvaluateGeneric,
-		.base_scope = RustResolverBaseScope,
+		.common = &GetRustSpriteGroupServices(),
 		.enabled = RustAmbientSoundEnabled,
 		.ambient = OpenTTDAmbientSound,
 		.terrain = RustTerrainType,
