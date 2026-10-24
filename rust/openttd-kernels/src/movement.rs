@@ -1386,7 +1386,9 @@ pub(crate) fn table(shared: &Services) -> &MovementServices {
     // SAFETY: Native registry returns its immutable process-lifetime table.
     unsafe { &*(shared.movement_services)() }
 }
-#[inline]
+// Forward literal transport/side arguments through this registry facade too.
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn track_status(shared: &Services, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
     table(shared).track_status(tile, mode, sub, side)
 }
