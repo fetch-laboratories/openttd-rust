@@ -572,6 +572,10 @@ impl MovementServices {
         }
         bits
     }
+    // Keep one policy body visible to constant propagation at literal Rust callers.
+    // The native facade below still supplies dynamic transport/subtype/side values.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     pub(crate) fn track_status(&self, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
         let mut bits = TRACK_BIT_NONE;
         let mut red = 0;
@@ -1381,6 +1385,9 @@ pub(crate) fn table(shared: &Services) -> &MovementServices {
     // SAFETY: Native registry returns its immutable process-lifetime table.
     unsafe { &*(shared.movement_services)() }
 }
+// Forward literal transport/side arguments through this registry facade too.
+#[allow(clippy::inline_always)]
+#[inline(always)]
 pub(crate) fn track_status(shared: &Services, tile: u32, mode: u8, sub: u32, side: u8) -> u32 {
     table(shared).track_status(tile, mode, sub, side)
 }
