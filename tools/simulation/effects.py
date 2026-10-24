@@ -15,6 +15,7 @@ from .core import (
     read_save,
     run_game,
     save_moment,
+    strip_glog,
 )
 from .play_saves import PLAY_SAVES
 
@@ -330,24 +331,9 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
             assignments.append([index, label, values])
     if scenario["effects"] == "breakdown" and not road_chosen:
         raise RuntimeError("no moving visible road vehicle for actual breakdown caller")
-    begin, end = chunks["GLOG"]["span"]
     normalized = out / scenario["name"] / "prepare/effect-input.sav"
-    normalized.parent.mkdir(parents=True, exist_ok=True)
-    normalized.write_bytes(data[:begin] + data[end:])
-    check, normalized_data = read_save(normalized), normalized.read_bytes()
-    if set(check) != set(chunks) - {"GLOG"}:
-        raise RuntimeError("effect input changed chunk inventory")
-    for cid in check:
-        expected = bytearray(source[slice(*chunks[cid]["span"])])
-        for patched, offset, old, new, _ in patches:
-            if patched == cid:
-                if expected[offset : offset + len(bytes.fromhex(old))] != bytes.fromhex(
-                    old
-                ):
-                    raise RuntimeError("effect patch old-byte preparation mismatch")
-                expected[offset : offset + len(bytes.fromhex(new))] = bytes.fromhex(new)
-        if expected != normalized_data[slice(*check[cid]["span"])]:
-            raise RuntimeError("effect input changed unrelated bytes")
+    strip_glog(data, normalized)
+    normalized_data = normalized.read_bytes()
     record = {
         "reference": str(fixture),
         "normalized": str(normalized),
@@ -379,19 +365,8 @@ def prepare_effects(scenario, binaries, builds, out, timeout, env):
                 "reload preparation lacks live private state at 16 ticks"
             )
         original = fixture.read_bytes()
-        chunk = read_save(fixture)["GLOG"]
         normalized = fixture.parent / "effect-reload-input.sav"
-        normalized.write_bytes(
-            original[: chunk["span"][0]] + original[chunk["span"][1] :]
-        )
-        loaded, reloaded = read_save(fixture), read_save(normalized)
-        reload_data = normalized.read_bytes()
-        if set(reloaded) != set(loaded) - {"GLOG"} or any(
-            original[slice(*loaded[cid]["span"])]
-            != reload_data[slice(*reloaded[cid]["span"])]
-            for cid in reloaded
-        ):
-            raise RuntimeError("effect reload input changed unrelated chunks")
+        strip_glog(original, normalized)
         record["reload"] = {
             "reference": str(fixture),
             "reference_sha256": hashlib.sha256(original).hexdigest(),

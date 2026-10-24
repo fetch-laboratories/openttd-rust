@@ -9,7 +9,8 @@ save, other chunks byte by byte) and reports differences as
 
 Run it through `python3 tools/migration.py simulate`, which builds both games
 first. Use `--self` to compare the reference with itself (determinism and mask
-check) and `--soak` for the larger scenario set.
+check) and `--soak` for the larger scenario set. `speed prepare|collect DIR`
+runs a quiet speed pass (simulation/speed.py).
 """
 
 import sys
@@ -17,4 +18,8 @@ import sys
 from simulation.core import main
 
 if __name__ == "__main__":
+    if sys.argv[1:2] == ["speed"]:
+        from simulation.speed import main as speed
+
+        sys.exit(speed(sys.argv[2:]))
     sys.exit(main())

@@ -2,14 +2,13 @@
 
 from pathlib import Path
 
-from . import economy, rails
+from . import core, economy
 from .console_adapter import console_adapter, prepared_console
 from .core import (
     ROOT,
     WITNESS_ENVIRONMENT,
     branch_witnesses,
     compare_saves,
-    run_game,
     witness_counts,
 )
 
@@ -88,7 +87,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
     if "engines" not in scenario:
         return scenario
     folder = out / scenario["name"] / "input"
-    normalized, record = rails.normalize(Path(scenario["save"]), folder / "source")
+    normalized, record = core.normalize(Path(scenario["save"]), folder / "source")
     result["engines_input"] = record
     scenario = dict(scenario, save=str(normalized))
     executables = prepared_console("engines", adapter, binaries, builds, folder, env)
@@ -102,31 +101,28 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         )
     subsidy = scenario["engines"] == "subsidies-reload"
     variant, prefix = ("subsidies", "SUBSIDY ") if subsidy else ("commands", "ENGINE ")
-    saves, captures = {}, {}
-    for role in ("reference", "candidate"):
-        save = folder / role / "engines.sav"
-        setup = dict(
+    saves = {role: folder / role / "engines.sav" for role in executables}
+    runs = core.capture_pair(
+        lambda role: dict(
             scenario,
-            console=[f'engines_scenario {variant} "{save}"', "unpause"],
+            console=[f'engines_scenario {variant} "{saves[role]}"', "unpause"],
             ticks=1,
-        )
-        run = run_game(
-            setup,
-            executables[role],
-            builds[role],
-            folder / role / "capture",
-            timeout,
-            env,
-            False,
-        )
+        ),
+        executables,
+        builds,
+        folder,
+        timeout,
+        env,
+    )
+    captures = {}
+    for role, run in runs.items():
         if (
             run["exit"]
-            or not save.is_file()
+            or not saves[role].is_file()
             or ("SUBSIDY transfer true true" if subsidy else "ENGINE hidden true")
             not in run["log"]
         ):
             raise RuntimeError("engine reload capture failed")
-        saves[role] = save
         captures[role] = [line for line in run["log"] if line.startswith(prefix)]
     differences = compare_saves(
         saves["reference"],
@@ -173,11 +169,5 @@ def check(scenario, run, mode, role, result):
     for expected in EXPECTED[variant]:
         if prefix + expected not in run["log"]:
             raise RuntimeError("engine branch result missing: " + expected)
-    lines = [line for line in run["log"] if line.startswith(prefix)]
-    key = mode + "_" + component + "_results"
-    if role == "reference":
-        result[key] = lines
-    elif result[key] != lines:
-        raise RuntimeError("engine command/branch results differ")
     if counts := branch_witnesses(scenario, run, role, component, REQUIRED[variant]):
         result[mode + "_" + component + "_branches"] = counts

@@ -16,7 +16,9 @@ import argparse
 import concurrent.futures
 import contextlib
 import fnmatch
+import hashlib
 import json
+import lzma
 import os
 import re
 import shutil
@@ -120,6 +122,11 @@ def scenario_modules():
     )
 
 
+def adapter_modules():
+    """Families whose console adapter relinks the game; runtime bundles carry each."""
+    return [module for module in scenario_modules() if hasattr(module, "adapter")]
+
+
 def scenario_list(soak):
     return [
         scenario for module in scenario_modules() for scenario in module.scenarios(soak)
@@ -219,9 +226,12 @@ def read_object(reader, fields, prefix, out):
 
 def read_save(path):
     """Return {chunk id: chunk} for an uncompressed OTTN save."""
-    data = path.read_bytes()
+    return parse_save(path.read_bytes(), path.name)
+
+
+def parse_save(data, name="save"):
     if data[:4] != b"OTTN":
-        raise Corrupt(f"{path.name} is not an uncompressed save")
+        raise Corrupt(f"{name} is not an uncompressed save")
     reader, chunks = Reader(data, 8), {}
     while True:
         chunk_start = reader.pos
@@ -405,7 +415,7 @@ GAME_LOCK = None  # Set by main to the clone-wide game coordination file.
 
 
 @contextlib.contextmanager
-def game_slot(isolate):
+def game_slot():
     """All games share coordination; timed games never reserve a quiet host."""
     path = GAME_LOCK
     if path is None:
@@ -444,6 +454,31 @@ def benchmark_run(command, *, timeout, **kwargs):
         return subprocess.CompletedProcess(command, code)
 
 
+def prepare_run_dir(scenario, build, run_dir):
+    """Write a game's configuration, module files and console script."""
+    shutil.rmtree(run_dir, ignore_errors=True)
+    run_dir.mkdir(parents=True)
+    write_config(scenario, build, run_dir)
+    for module in scenario_modules():
+        if install := getattr(module, "install", None):
+            install(scenario, run_dir)
+    if "console" in scenario:
+        (run_dir / "scripts").mkdir()
+        (run_dir / "scripts/game_start.scr").write_text(
+            "".join(f"{line}\n" for line in scenario["console"])
+        )
+
+
+def prepare_scenario(scenario, binaries, builds, out, timeout, env, result):
+    """Module preparation hooks in PREPARE_ORDER, not scenario-list order."""
+    for module in sorted(
+        scenario_modules(), key=lambda m: getattr(m, "PREPARE_ORDER", 4)
+    ):
+        if prepare := getattr(module, "prepare", None):
+            scenario = prepare(scenario, binaries, builds, out, timeout, env, result)
+    return scenario
+
+
 def run_game(
     scenario,
     binary,
@@ -461,17 +496,37 @@ def run_game(
     desync=3 writes the 32-day snapshots but also checks and rebuilds caches
     every tick and switches YAPF rail to its uncached path, so every scenario
     also has a plain run without it whose exit save is compared."""
-    shutil.rmtree(run_dir, ignore_errors=True)
-    run_dir.mkdir(parents=True)
-    write_config(scenario, build, run_dir)
-    for module in scenario_modules():
-        if install := getattr(module, "install", None):
-            install(scenario, run_dir)
-    if "console" in scenario:
-        (run_dir / "scripts").mkdir()
-        (run_dir / "scripts/game_start.scr").write_text(
-            "".join(f"{line}\n" for line in scenario["console"])
+    return read_game(
+        execute_game(
+            prepare_game(
+                scenario,
+                binary,
+                build,
+                run_dir,
+                timeout,
+                base_env,
+                desync,
+                isolate=isolate,
+                instructions=instructions,
+            )
         )
+    )
+
+
+def prepare_game(
+    scenario,
+    binary,
+    build,
+    run_dir,
+    timeout,
+    base_env=None,
+    desync=True,
+    *,
+    isolate=False,
+    instructions=False,
+):
+    """Prepare a launch without executing or decoding a game."""
+    prepare_run_dir(scenario, build, run_dir)
     if scenario["kind"] == "save":
         # A saved AI or GameScript missing from the runtime is replaced by the
         # idle dummy AI or dropped; the logs show it in both runs.
@@ -512,28 +567,54 @@ def run_game(
         command, instruction_info = profiler.prepare(
             scenario, command, binary, build, run_dir, env, run_dir.name == "reference"
         )
+    return dict(
+        dir=run_dir,
+        command=command,
+        env=env,
+        build=build,
+        timeout=timeout,
+        isolate=isolate,
+        instructions=instruction_info,
+    )
+
+
+def execute_game(plan):
+    """Execute an already prepared game; leave output decoding to read_game."""
+    run_dir, command = plan["dir"], plan["command"]
     with (
-        game_slot(isolate),
+        game_slot(),
         open(run_dir / "stdout.log", "wb") as out,
         open(run_dir / "stderr.log", "wb") as err,
     ):
         started = time.monotonic()
         try:
-            code = (benchmark_run if isolate else subprocess.run)(
+            code = (benchmark_run if plan["isolate"] else subprocess.run)(
                 [
                     sys.executable,
                     str(ROOT / "tools/simulation/game_launcher.py"),
                     *command,
                 ],
-                cwd=build,
-                env=env,
+                cwd=plan["build"],
+                env=plan["env"],
                 stdout=out,
                 stderr=err,
-                timeout=timeout,
+                timeout=plan["timeout"],
             ).returncode
         except subprocess.TimeoutExpired:
             code = "timeout"
         seconds = round(time.monotonic() - started, 3)
+    return {
+        "instructions": plan["instructions"],
+        "dir": run_dir,
+        "exit": code,
+        "seconds": seconds,
+        "command": command,
+    }
+
+
+def read_game(run):
+    """Decode a completed game's logs and discover its snapshots."""
+    run_dir = run["dir"]
     autosave = run_dir / "save/autosave"
     snapshots = sorted(
         path
@@ -543,14 +624,28 @@ def run_game(
     if (autosave / "exit.sav").is_file():
         snapshots.append(autosave / "exit.sav")
     return {
-        "instructions": instruction_info,
-        "dir": run_dir,
-        "exit": code,
-        "seconds": seconds,
-        "command": command,
+        **run,
         "snapshots": snapshots,
         "log": log_lines(run_dir),
         "stdout": (run_dir / "stdout.log").read_bytes(),
+    }
+
+
+def capture_pair(scenario, executables, builds, folder, timeout, env, name="capture"):
+    """One plain preparation game per role in folder/role/name.
+
+    `scenario` is a dictionary or a function of the role."""
+    return {
+        role: run_game(
+            scenario(role) if callable(scenario) else scenario,
+            executables[role],
+            builds[role],
+            folder / role / name,
+            timeout,
+            env,
+            False,
+        )
+        for role in ("reference", "candidate")
     }
 
 
@@ -640,6 +735,170 @@ def field_spans(body, header):
     return spans
 
 
+def gamma(value):
+    """Saveload SlWriteSimpleGamma, the inverse of Reader.gamma."""
+    for size, limit, prefix in (
+        (1, 128, 0),
+        (2, 16384, 0x8000),
+        (3, 2097152, 0xC00000),
+        (4, 268435456, 0xE0000000),
+    ):
+        if value < limit:
+            return (value | prefix).to_bytes(size, "big")
+    return b"\xf0" + value.to_bytes(4, "big")
+
+
+def rows(source, cid="VEHS"):
+    """Decoded table elements by index from a save path or its read_save chunks."""
+    chunk = (source if isinstance(source, dict) else read_save(source))[cid]
+    result = {index: decode_element(chunk, body) for index, body in chunk["elements"]}
+    if any(row is None for row in result.values()):
+        raise RuntimeError(f"undecodable {cid} element")
+    return result
+
+
+def strip_glog(data, target):
+    """Write save bytes without optional GLOG history; other chunks keep every byte.
+
+    Input fixtures only: a reference-produced revision log would make only the
+    candidate append a load-revision event. Output GLOG is compared normally."""
+    chunks = parse_save(data)
+    begin, end = chunks["GLOG"]["span"] if "GLOG" in chunks else (0, 0)
+    normalized = bytes(data[:begin] + data[end:])
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(normalized)
+    check = read_save(target)
+    if set(check) != set(chunks) - {"GLOG"} or any(
+        data[slice(*chunks[cid]["span"])] != normalized[slice(*check[cid]["span"])]
+        for cid in check
+    ):
+        raise RuntimeError(f"{target.name} changed outside optional GLOG history")
+    return check
+
+
+def normalize(source, directory):
+    """Keep every original chunk byte except optional GLOG history."""
+    packed = source.read_bytes()
+    data = (
+        b"OTTN" + packed[4:8] + lzma.decompress(packed[8:])
+        if packed[:4] == b"OTTX"
+        else packed
+    )
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "owner-uncompressed.sav").write_bytes(data)
+    normalized = directory / "rail-input.sav"
+    check = strip_glog(data, normalized)
+    return normalized, {
+        "source": str(source),
+        "source_sha256": hashlib.sha256(packed).hexdigest(),
+        "normalized_sha256": hashlib.sha256(normalized.read_bytes()).hexdigest(),
+        "removed_chunk": "GLOG",
+        "typed_edits": [],
+        "unchanged_chunks": sorted(check),
+    }
+
+
+EMPTY_AI = b"\0\0\xff\xff\xff\xff"  # AIPL slot without a configured AI
+
+
+def ai_config(name):
+    """AIPL configuration prefix: script name, empty settings, version 1."""
+    return gamma(len(name)) + name + b"\0" + struct.pack(">I", 1)
+
+
+def set_ai_slots(data, slots):
+    """Replace AIPL elements by company index; other chunks keep every byte."""
+    chunks = parse_save(data)
+    chunk = chunks["AIPL"]
+    if chunk["kind"] != 3 or chunk["header"] != [
+        {"type": 26, "key": "name"},
+        {"type": 26, "key": "settings"},
+        {"type": 6, "key": "version"},
+    ]:
+        raise RuntimeError("unexpected AIPL schema")
+    elements = dict(chunk["elements"]) | slots
+    reader = Reader(data, chunk["span"][0] + 5)
+    reader.take(reader.gamma() - 1)
+    body = b"".join(
+        gamma(len(elements.get(index, b"")) + 1) + elements.get(index, b"")
+        for index in range(max(elements) + 1)
+    )
+    prepared = bytes(data[: reader.pos] + body + b"\0" + data[chunk["span"][1] :])
+    after = parse_save(prepared)
+    if set(after) != set(chunks) or any(
+        data[slice(*chunks[cid]["span"])] != prepared[slice(*after[cid]["span"])]
+        for cid in set(chunks) - {"AIPL"}
+    ):
+        raise RuntimeError("AI configuration changed another chunk")
+    return prepared
+
+
+def patch(source, target, changes, ai=None):
+    """Only declared typed input fields, AIPL company 1 and optional GLOG change."""
+    original, chunks = source.read_bytes(), read_save(source)
+    work, allowed, assignments = bytearray(original), set(), []
+    for cid, byindex in changes.items():
+        chunk = chunks[cid]
+        if chunk["kind"] not in (3, 4):
+            raise RuntimeError(f"unexpected input table {cid}")
+        reader = Reader(original, chunk["span"][0] + 5)
+        reader.take(reader.gamma() - 1)
+        index, seen = 0, set()
+        while length := reader.gamma():
+            end = reader.pos + length - 1
+            if chunk["kind"] == 4:
+                index = reader.gamma()
+            begin = reader.pos
+            body = reader.take(end - begin)
+            if index in byindex:
+                fields, locations = (
+                    decode_element(chunk, body),
+                    field_spans(body, chunk["header"]),
+                )
+                for key, value in byindex[index].items():
+                    lo, hi, kind = locations[key]
+                    fmt, width = FILE_TYPES[kind & 15]
+                    vals = value if kind & HAS_LENGTH else (value,)
+                    at = begin + lo
+                    if kind & HAS_LENGTH:
+                        array = Reader(body, lo)
+                        if array.gamma() != len(vals):
+                            raise RuntimeError("input array size differs")
+                        at = begin + array.pos
+                    if at + len(vals) * width != begin + hi:
+                        raise RuntimeError("input field width differs")
+                    for value_index, scalar in enumerate(vals):
+                        struct.pack_into(fmt, work, at + value_index * width, scalar)
+                    allowed.update(range(at, begin + hi))
+                    assignments.append([cid, index, key, fields.get(key), value])
+                seen.add(index)
+            index += 1
+        if seen != set(byindex):
+            raise RuntimeError("input omitted edited element")
+    if any(
+        a != b and index not in allowed
+        for index, (a, b) in enumerate(zip(original, work, strict=True))
+    ):
+        raise RuntimeError("input changed undeclared bytes")
+    if ai is not None:
+        if ai == "human" and dict(chunks["AIPL"]["elements"])[0] != EMPTY_AI:
+            raise RuntimeError("company zero is not an empty human AI slot")
+        config = ai_config(b"MigrationDisasters") * 2 + b"\0"
+        work = set_ai_slots(work, {1: EMPTY_AI if ai == "human" else config})
+        assignments.append(["AIPL", 1, "configuration", ai])
+    after, patched = strip_glog(work, target), target.read_bytes()
+    for cid in set(after) - set(changes) - ({"AIPL"} if ai is not None else set()):
+        if original[slice(*chunks[cid]["span"])] != patched[slice(*after[cid]["span"])]:
+            raise RuntimeError(f"input changed unrelated {cid}")
+    return {
+        "source": str(source),
+        "source_sha256": hashlib.sha256(original).hexdigest(),
+        "sha256": hashlib.sha256(patched).hexdigest(),
+        "assignments": assignments,
+        "removed_chunk": "GLOG",
+    }
+
+
 def run_scenario(
     scenario,
     binaries,
@@ -650,6 +909,9 @@ def run_scenario(
     env,
     benchmark_repetitions=0,
     instructions=False,
+    *,
+    game_runner=None,
+    prepared=False,
 ):
     """Run both binaries twice (with and without desync snapshots) and compare.
 
@@ -673,8 +935,8 @@ def run_scenario(
 
     def compare(mode, snapshot):
         records = compare_saves(
-            out / name / mode / "reference/save/autosave" / snapshot,
-            out / name / mode / "candidate/save/autosave" / snapshot,
+            next(p for p in runs["reference"]["snapshots"] if p.name == snapshot),
+            next(p for p in runs["candidate"]["snapshots"] if p.name == snapshot),
             name,
             limit,
             result["stats"],
@@ -686,14 +948,10 @@ def run_scenario(
             )
 
     try:
-        # Preserve preparation order independently of scenario-list order.
-        for module in sorted(
-            scenario_modules(), key=lambda m: getattr(m, "PREPARE_ORDER", 4)
-        ):
-            if prepare := getattr(module, "prepare", None):
-                scenario = prepare(
-                    scenario, binaries, builds, out, timeout, env, result
-                )
+        if not prepared:
+            scenario = prepare_scenario(
+                scenario, binaries, builds, out, timeout, env, result
+            )
         result["requested_ticks"] = scenario["ticks"]
         # Only a distinct candidate counts branches; timed runs keep counters off.
         scenario = dict(
@@ -708,7 +966,7 @@ def run_scenario(
         )
         for mode, desync in modes:
             runs = {
-                role: run_game(
+                role: (game_runner or run_game)(
                     dict(
                         scenario,
                         **scenario.get("role_inputs", {}).get(role, {}),
@@ -826,7 +1084,7 @@ def run_scenario(
                     )
             if instructions:
                 from . import instructions as profiler
-                from .roads import SPEED_ANCHORS
+                from .instructions import SPEED_ANCHORS
 
                 result["instruction_speed"] = profiler.finish(runs, result)
                 if name in SPEED_ANCHORS:
@@ -876,7 +1134,7 @@ def run_scenario(
             ratios
         )
     if benchmark_repetitions:
-        from .roads import speed_budget
+        from .instructions import speed_budget
 
         result["plain_speed"]["budget"] = speed_budget(
             scenario["name"],
@@ -884,20 +1142,7 @@ def run_scenario(
         )
     result["passed"] = not result["differences"] and not result["problems"]
     if result["passed"] and not benchmark_repetitions:
-        if (
-            "reload_input" in result
-            or "town_name_input" in result
-            or "tree_input" in result
-            or "effect_input" in result
-            or "economy_input" in result
-            or "company_input" in result
-            or "station_input" in result
-            or "disaster_input" in result
-        ):
-            for mode in ("snapshots", "plain"):
-                shutil.rmtree(out / name / mode, ignore_errors=True)
-        else:
-            shutil.rmtree(out / name, ignore_errors=True)  # Keep only failing runs.
+        shutil.rmtree(out / name, ignore_errors=True)  # Keep only failing runs.
     result["seconds"] = round(time.monotonic() - started, 3)
     return result
 
@@ -1016,7 +1261,7 @@ def main():
         parser.error("--instructions conflicts with --benchmark/--soak")
     every = scenario_list(args.soak)
     if args.instructions:
-        from .roads import SPEED_BUDGETS
+        from .instructions import SPEED_BUDGETS
 
         every = [s for s in every if s["name"] in SPEED_BUDGETS]
     # An exact scenario name selects only that scenario; anything else is a substring filter.
@@ -1093,18 +1338,8 @@ def run_simulation(args, scenarios, migration, out, parser, stamp):
                 / ("openttd" if role == "reference" else "openttd-rust")
             )
             binaries[role] = copy_runtime(source.parent, source, builds[role])
-            for name in (
-                "fleet",
-                "orders",
-                "engines",
-                "industries",
-                "objects",
-                "rails",
-                "ships",
-                "signals",
-                "stations",
-                "towns",
-            ):
+            for module in adapter_modules():
+                name = module.__name__.rsplit(".", 1)[1]
                 shutil.copytree(source.parent / name, builds[role] / name)
     else:
         # The game finds its data next to the executable, so copy the shared

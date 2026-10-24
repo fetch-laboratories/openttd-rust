@@ -14,11 +14,12 @@ from .core import (
     TICKS_PER_DAY,
     copy_runtime,
     decode_element,
+    patch,
     read_save,
+    rows,
     run_game,
     save_moment,
 )
-from .disasters import patch, rows
 from .effects import effect_rows
 from .play_saves import DISTRIBUTIONS
 
@@ -186,16 +187,8 @@ def prepare_aircraft_save(migration, out, timeout):
         )
     raw = run["snapshots"][-1]
     data, chunks = raw.read_bytes(), read_save(raw)
-    begin, end = chunks["GLOG"]["span"]
     destination = ROOT / "migration/saves/aircraft-route.sav"
-    destination.write_bytes(data[:begin] + data[end:])
-    normalized = read_save(destination)
-    if set(normalized) != set(chunks) - {"GLOG"} or any(
-        data[slice(*chunks[cid]["span"])]
-        != destination.read_bytes()[slice(*normalized[cid]["span"])]
-        for cid in normalized
-    ):
-        raise RuntimeError("aircraft input changed outside optional GLOG history")
+    core.strip_glog(data, destination)
     if destination.stat().st_size >= 1_000_000:
         raise RuntimeError("aircraft fixture exceeds committed-save budget")
     if core.read_value(core.Reader(chunks["GSDT"]["elements"][0][1]), 10):
@@ -929,7 +922,7 @@ def check_control(scenario, run, mode, role, result):
         rows(Path(scenario["save"]), "STNN"),
         *[rows(path, "STNN") for path in run["snapshots"]],
     ]
-    states, pads, groups, waiting = set(), set(), set(), 0
+    states, pads, groups = set(), set(), set()
     rotor_states, shadow_positions = set(), set()
     service, plane_service = False, False
     waiting_details = []
@@ -969,7 +962,6 @@ def check_control(scenario, run, mode, role, result):
                 groups.add(0 if state < 5 else 1)
             prefix = "aircraft[0]/common[0]/"
             if row[prefix + "cur_speed"] == 0 and state in (1, 10, 16, 18):
-                waiting += 1
                 target = row["aircraft[0]/targetairport"]
                 station = stations[sample][target]
                 mask = station["normal[0]/airport.flags"]
