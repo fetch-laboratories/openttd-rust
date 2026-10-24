@@ -29,6 +29,22 @@ TEST_CASE("Station service - scalar ABI layouts")
 #include "abi-layout-station_service.inc"
 
 }
+TEST_CASE("Station service - goods state conversion reads canonical status")
+{
+	OpenTTDStationCargo cargo{};
+	GoodsEntry goods(&cargo);
+	for (uint16_t status = 0; status <= UINT8_MAX; ++status) {
+		goods.status = GoodsEntry::States(static_cast<uint8_t>(status));
+		uint8_t expected = 0;
+		if (goods.status.Test(GoodsEntry::State::EverAccepted))    SetBit(expected, 0);
+		if (goods.status.Test(GoodsEntry::State::LastMonth))       SetBit(expected, 1);
+		if (goods.status.Test(GoodsEntry::State::CurrentMonth))    SetBit(expected, 2);
+		if (goods.status.Test(GoodsEntry::State::AcceptedBigtick)) SetBit(expected, 3);
+		CHECK(cargo.status == status);
+		CHECK(goods.ConvertState() == expected);
+	}
+}
+
 struct StationLoadingProbe {
 	OpenTTDStationService *owner;
 	int vehicle, payment;

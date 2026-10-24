@@ -61,6 +61,9 @@ inline uint32_t RustSpecBadges(const ResolverObject *resolver, const Spec *spec,
 inline uint32_t RustCompanyInfo(uint8_t owner, const Livery *livery) noexcept { return GetCompanyInfo(CompanyID(owner), livery); }
 inline uint8_t RustReverseRailTypeTranslation(RailType railtype, const GRFFile *file) noexcept { return GetReverseRailTypeTranslation(railtype, file); }
 
+/* Qualified base operation: Rust retains feature-specific scope selection. */
+inline ScopeResolver *RustResolverBaseScope(ResolverObject *resolver, uint8_t scope, uint8_t relative) noexcept { return resolver->ResolverObject::GetScope(static_cast<VarSpriteGroupScope>(scope), relative); }
+
 inline uint16_t RustResolverCallback(const ResolverObject *resolver) noexcept { return resolver->callback; }
 template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
 template <typename Spec> inline uint16_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }

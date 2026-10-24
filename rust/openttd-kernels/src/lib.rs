@@ -94,6 +94,7 @@ mod slope_func;
 mod sound_type;
 mod sprites;
 mod station;
+mod station_base;
 mod station_cargo;
 mod station_cmd;
 mod station_map;

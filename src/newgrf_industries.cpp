@@ -857,7 +857,7 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 			else Debug(grf, 1, "Unhandled industry variable 0x{:X}", variable);
 		},
 		.pointer_magic = []() noexcept { Debug(grf, 0, "NewGRFs shouldn't be doing pointer magic"); },
-		.base_scope = [](ResolverObject *r, uint8_t scope, uint8_t relative) noexcept { return r->ResolverObject::GetScope(static_cast<VarSpriteGroupScope>(scope), relative); },
+		.base_scope = RustResolverBaseScope,
 		.existing_town = [](ResolverObject *r) noexcept -> TownScopeResolver * { auto &town = static_cast<IndustriesResolverObject *>(r)->town_scope; return town.has_value() ? &*town : nullptr; },
 		.make_town = [](ResolverObject *r, Town *t, bool readonly) noexcept -> TownScopeResolver * { return &static_cast<IndustriesResolverObject *>(r)->town_scope.emplace(*r, t, readonly); },
 		.callback = [](uint16_t cb, uint32_t p1, uint32_t p2, Industry *i, uint8_t type, uint32_t tile) noexcept { return GetIndustryCallback(static_cast<CallbackID>(cb), p1, p2, i, type, TileIndex(tile)); },
