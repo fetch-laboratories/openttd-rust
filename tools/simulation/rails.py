@@ -482,7 +482,7 @@ def depot_input(source, directory):
 
 def controller_input(source, directory, scenario):
     """Declare company/AI inputs and source-derived placement; no expected edits."""
-    from .core import gamma, patch, rows
+    from .core import patch, rows
 
     changes = {"PLYR": {0: {"is_ai": 1}}}
     if scenario["rail_control"] == "collision":
@@ -552,26 +552,11 @@ def controller_input(source, directory, scenario):
         ):
             raise RuntimeError("rail reservations changed undeclared input bytes")
         target.write_bytes(work)
-    data, chunks = target.read_bytes(), read_save(target)
-    chunk = chunks["AIPL"]
-    elements = dict(chunk["elements"])
-    if elements[0] != b"\0\0\xff\xff\xff\xff":
+    if dict(read_save(target)["AIPL"]["elements"])[0] != core.EMPTY_AI:
         raise RuntimeError("rail controller source company already has an AI")
-    name = b"MigrationRails"
-    config = gamma(len(name)) + name + b"\0" + struct.pack(">I", 1)
-    elements[0] = config * 2 + b"\0"
-    reader = core.Reader(data, chunk["span"][0] + 5)
-    reader.take(reader.gamma() - 1)
-    begin, end = reader.pos, chunk["span"][1]
-    body = (
-        b"".join(gamma(len(value) + 1) + value for value in elements.values()) + b"\0"
-    )
-    prepared = data[:begin] + body + data[end:]
+    config = core.ai_config(b"MigrationRails") * 2 + b"\0"
+    prepared = core.set_ai_slots(target.read_bytes(), {0: config})
     target.write_bytes(prepared)
-    after = read_save(target)
-    for cid in set(chunks) - {"AIPL"}:
-        if data[slice(*chunks[cid]["span"])] != prepared[slice(*after[cid]["span"])]:
-            raise RuntimeError(f"rail AI configuration changed unrelated {cid}")
     record["assignments"].append(["AIPL", 0, "configuration", "MigrationRails"])
     record["sha256"] = hashlib.sha256(prepared).hexdigest()
     return target, record

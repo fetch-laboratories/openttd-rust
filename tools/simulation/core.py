@@ -469,6 +469,16 @@ def prepare_run_dir(scenario, build, run_dir):
         )
 
 
+def prepare_scenario(scenario, binaries, builds, out, timeout, env, result):
+    """Module preparation hooks in PREPARE_ORDER, not scenario-list order."""
+    for module in sorted(
+        scenario_modules(), key=lambda m: getattr(m, "PREPARE_ORDER", 4)
+    ):
+        if prepare := getattr(module, "prepare", None):
+            scenario = prepare(scenario, binaries, builds, out, timeout, env, result)
+    return scenario
+
+
 def pair_order(repetition):
     """Launch order of one pair; a speed pass alternates it (speed.py)."""
     return ("reference", "candidate")
@@ -741,6 +751,41 @@ def normalize(source, directory):
     }
 
 
+EMPTY_AI = b"\0\0\xff\xff\xff\xff"  # AIPL slot without a configured AI
+
+
+def ai_config(name):
+    """AIPL configuration prefix: script name, empty settings, version 1."""
+    return gamma(len(name)) + name + b"\0" + struct.pack(">I", 1)
+
+
+def set_ai_slots(data, slots):
+    """Replace AIPL elements by company index; other chunks keep every byte."""
+    chunks = parse_save(data)
+    chunk = chunks["AIPL"]
+    if chunk["kind"] != 3 or chunk["header"] != [
+        {"type": 26, "key": "name"},
+        {"type": 26, "key": "settings"},
+        {"type": 6, "key": "version"},
+    ]:
+        raise RuntimeError("unexpected AIPL schema")
+    elements = dict(chunk["elements"]) | slots
+    reader = Reader(data, chunk["span"][0] + 5)
+    reader.take(reader.gamma() - 1)
+    body = b"".join(
+        gamma(len(elements.get(index, b"")) + 1) + elements.get(index, b"")
+        for index in range(max(elements) + 1)
+    )
+    prepared = bytes(data[: reader.pos] + body + b"\0" + data[chunk["span"][1] :])
+    after = parse_save(prepared)
+    if set(after) != set(chunks) or any(
+        data[slice(*chunks[cid]["span"])] != prepared[slice(*after[cid]["span"])]
+        for cid in set(chunks) - {"AIPL"}
+    ):
+        raise RuntimeError("AI configuration changed another chunk")
+    return prepared
+
+
 def patch(source, target, changes, ai=None):
     """Only declared typed input fields, AIPL company 1 and optional GLOG change."""
     original, chunks = source.read_bytes(), read_save(source)
@@ -789,34 +834,10 @@ def patch(source, target, changes, ai=None):
     ):
         raise RuntimeError("input changed undeclared bytes")
     if ai is not None:
-        chunk = chunks["AIPL"]
-        if chunk["kind"] != 3 or chunk["header"] != [
-            {"type": 26, "key": "name"},
-            {"type": 26, "key": "settings"},
-            {"type": 6, "key": "version"},
-        ]:
-            raise RuntimeError("unexpected AIPL schema")
-        elements = dict(chunk["elements"])
-        if ai == "human":
-            payload = elements[0]
-            if payload != b"\0\0\xff\xff\xff\xff":
-                raise RuntimeError("company zero is not an empty human AI slot")
-        else:
-            name = b"MigrationDisasters"
-            config = gamma(len(name)) + name + b"\0" + struct.pack(">I", 1)
-            payload = config * 2 + b"\0"
-        elements[1] = payload
-        reader = Reader(original, chunk["span"][0] + 5)
-        reader.take(reader.gamma() - 1)
-        begin, end = reader.pos, chunk["span"][1]
-        body = (
-            b"".join(
-                gamma(len(elements.get(index, b"")) + 1) + elements.get(index, b"")
-                for index in range(max(elements) + 1)
-            )
-            + b"\0"
-        )
-        work = work[:begin] + body + work[end:]
+        if ai == "human" and dict(chunks["AIPL"]["elements"])[0] != EMPTY_AI:
+            raise RuntimeError("company zero is not an empty human AI slot")
+        config = ai_config(b"MigrationDisasters") * 2 + b"\0"
+        work = set_ai_slots(work, {1: EMPTY_AI if ai == "human" else config})
         assignments.append(["AIPL", 1, "configuration", ai])
     after, patched = strip_glog(work, target), target.read_bytes()
     for cid in set(after) - set(changes) - ({"AIPL"} if ai is not None else set()):
@@ -877,14 +898,9 @@ def run_scenario(
             )
 
     try:
-        # Preserve preparation order independently of scenario-list order.
-        for module in sorted(
-            scenario_modules(), key=lambda m: getattr(m, "PREPARE_ORDER", 4)
-        ):
-            if prepare := getattr(module, "prepare", None):
-                scenario = prepare(
-                    scenario, binaries, builds, out, timeout, env, result
-                )
+        scenario = prepare_scenario(
+            scenario, binaries, builds, out, timeout, env, result
+        )
         result["requested_ticks"] = scenario["ticks"]
         # Only a distinct candidate counts branches; timed runs keep counters off.
         scenario = dict(

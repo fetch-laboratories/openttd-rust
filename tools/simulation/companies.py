@@ -9,14 +9,16 @@ import subprocess
 from pathlib import Path
 
 from .core import (
+    EMPTY_AI,
     ROOT,
     SNAPSHOT_TICKS,
     Reader,
-    gamma,
+    ai_config,
     patch,
     read_save,
     rows,
     run_game,
+    set_ai_slots,
 )
 
 AI_FOLDER = "company-scenario-ai"
@@ -142,37 +144,16 @@ def install(scenario, run_dir):
 
 def configure_competitors(path, record):
     """Declare fixed local scripts for vacant slots; preserve running AI data."""
-    original, chunks = path.read_bytes(), read_save(path)
-    chunk = chunks["AIPL"]
-    if chunk["kind"] != 3 or chunk["header"] != [
-        {"type": 26, "key": "name"},
-        {"type": 26, "key": "settings"},
-        {"type": 6, "key": "version"},
-    ]:
-        raise RuntimeError("unexpected company AI configuration schema")
-    elements = dict(chunk["elements"])
-    name = b"MigrationCompanies"
-    config = gamma(len(name)) + name + b"\0" + struct.pack(">I", 1)
+    elements = dict(read_save(path)["AIPL"]["elements"])
     for index in (3, 4):
-        if elements[index] != b"\0\0\xff\xff\xff\xff":
+        if elements[index] != EMPTY_AI:
             raise RuntimeError("competitor input slot already has an AI configured")
-        elements[index] = config
-        record["assignments"].append(["AIPL", index, "configuration", name.decode()])
-    reader = Reader(original, chunk["span"][0] + 5)
-    reader.take(reader.gamma() - 1)
-    begin, end = reader.pos, chunk["span"][1]
-    body = (
-        b"".join(gamma(len(value) + 1) + value for value in elements.values()) + b"\0"
-    )
-    prepared = original[:begin] + body + original[end:]
+        record["assignments"].append(
+            ["AIPL", index, "configuration", "MigrationCompanies"]
+        )
+    config = ai_config(b"MigrationCompanies")
+    prepared = set_ai_slots(path.read_bytes(), {3: config, 4: config})
     path.write_bytes(prepared)
-    after = read_save(path)
-    for cid in set(chunks) - {"AIPL"}:
-        if (
-            original[slice(*chunks[cid]["span"])]
-            != prepared[slice(*after[cid]["span"])]
-        ):
-            raise RuntimeError(f"competitor configuration changed unrelated {cid}")
     record["sha256"] = hashlib.sha256(prepared).hexdigest()
 
 
