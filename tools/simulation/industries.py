@@ -720,6 +720,8 @@ def lifecycle_gap():
     import importlib.util
     import subprocess
 
+    import probe
+
     from .core import ROOT
 
     spec = importlib.util.spec_from_file_location(
@@ -746,32 +748,16 @@ def lifecycle_gap():
     )
     bodies = []
     for signature in signatures:
-        start = source.index(signature)
-        end = source.index("{", start) + 1
-        depth = 1
-        while depth:
-            if source[end] == "{":
-                depth += 1
-            elif source[end] == "}":
-                depth -= 1
-            end += 1
-        bodies.append(source[start:end])
+        bodies.append(probe.body(source, signature))
     (out / "industry-lifecycle-reference.inc").write_text("\n\n".join(bodies))
     tile_source = subprocess.check_output(
         ["git", "show", migration.BASELINE["commit"] + ":src/industry_cmd.cpp"],
         cwd=ROOT,
         text=True,
     )
-    start = tile_source.index("static void AddAcceptedCargo_Industry(")
-    end = tile_source.index("{", start) + 1
-    depth = 1
-    while depth:
-        if tile_source[end] == "{":
-            depth += 1
-        elif tile_source[end] == "}":
-            depth -= 1
-        end += 1
-    (out / "industry-acceptance-reference.inc").write_text(tile_source[start:end])
+    (out / "industry-acceptance-reference.inc").write_text(
+        probe.body(tile_source, "static void AddAcceptedCargo_Industry(")
+    )
     animation = []
     for name in (
         "AnimateSugarSieve",
@@ -784,16 +770,7 @@ def lifecycle_gap():
         "AnimateMineTower",
         "AnimateTile_Industry",
     ):
-        start = tile_source.index("static void " + name + "(")
-        end = tile_source.index("{", start) + 1
-        depth = 1
-        while depth:
-            if tile_source[end] == "{":
-                depth += 1
-            elif tile_source[end] == "}":
-                depth -= 1
-            end += 1
-        animation.append(tile_source[start:end])
+        animation.append(probe.body(tile_source, "static void " + name + "("))
     drawing = subprocess.check_output(
         ["git", "show", migration.BASELINE["commit"] + ":src/table/industry_land.h"],
         cwd=ROOT,

@@ -47,6 +47,8 @@ _SCHEDULER_REPORTS = {}
 
 def scheduler_reference(out):
     """Default fixture for worker states unavailable with deterministic thread fallback."""
+    import probe
+
     import migration
 
     out.mkdir(parents=True, exist_ok=True)
@@ -80,13 +82,7 @@ def scheduler_reference(out):
         )
         bodies.clear()
         for signature in signatures:
-            start = source.index(signature)
-            end = source.index("{", start) + 1
-            depth = 1
-            while depth:
-                depth += (source[end] == "{") - (source[end] == "}")
-                end += 1
-            bodies.append(source[start:end])
+            bodies.append(probe.body(source, signature))
         (out / destination).write_text("\n".join(bodies))
     build = ROOT / "build-rust"
     binary = out / "scheduler-reference"
