@@ -29,7 +29,6 @@ struct OpenTTDVehicleResolverServices {
 	NewGRFCache *(*cache)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cache);
 	OpenTTDVehicle *(*first)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(first);
 	OpenTTDVehicle *(*move)(OpenTTDVehicle *, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(move);
-	uint8_t (*user_data)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(user_data);
 	OpenTTDVehicle *(*previous)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(previous);
 	OpenTTDVehicleCargoQuery (*cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(cargo);
 	bool (*can_carry)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(can_carry);

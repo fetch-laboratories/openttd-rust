@@ -80,7 +80,6 @@ pub struct Services {
     cache: unsafe extern "C" fn(V) -> *mut Cache,
     first: unsafe extern "C" fn(V) -> V,
     move_vehicle: unsafe extern "C" fn(V, i32) -> V,
-    user_data: unsafe extern "C" fn(V) -> u8,
     previous: unsafe extern "C" fn(V) -> V,
     cargo: unsafe extern "C" fn(V) -> CargoQuery,
     can_carry: unsafe extern "C" fn(*const OpenTTDEngine) -> bool,
@@ -201,7 +200,8 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                     let mut u = v;
                     while !u.is_null() {
                         if (s.vehicle.vehicle_type)(handle(v)) == 0 {
-                            user_data |= (s.user_data)(u);
+                            user_data |=
+                                (s.vehicle.train_handle)(handle(u)).get_user_def_data() as u8;
                         }
                         let c = (s.cargo)(u);
                         if (s.can_carry)(c.engine) {
@@ -675,7 +675,7 @@ crate::abi::layouts! {
     "OpenTTDVehicleOverride" ["vehicle_resolver"] => Override { group, cargo, count };
     "OpenTTDVehicleOverrides" ["vehicle_resolver"] => Overrides { engine, count };
     "OpenTTDVehicleResolverServices" ["vehicle_resolver"] => Services {
-        vehicle, shared, cache, first, move_vehicle => move, user_data, previous, cargo, can_carry,
+        vehicle, shared, cache, first, move_vehicle => move, previous, cargo, can_carry,
         cargo_classes, cargo_bitnum, cargo_translation, grf_version, get_register, current_company,
         valid_company, livery, company_info, first_engine, articulated, has_articulated,
         overrides, override_at, override_engine, cached_override, spritegroup, random_fields,

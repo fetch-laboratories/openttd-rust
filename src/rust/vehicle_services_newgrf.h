@@ -30,7 +30,6 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.cache = [](OpenTTDVehicle *v) noexcept { return &VehicleOf(v)->grf_cache; },
 		.first = [](OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehicleFirst(VehicleOf(v))); },
 		.move = [](OpenTTDVehicle *v, int32_t count) noexcept { return RustVehicle(VehicleOf(v)->Move(count)); },
-		.user_data = [](OpenTTDVehicle *v) noexcept { return Train::From(VehicleOf(v))->GetUserDefData(); },
 		.previous = [](OpenTTDVehicle *v) noexcept { return RustVehicle(RustVehiclePrevious(VehicleOf(v))); },
 		.cargo = [](OpenTTDVehicle *v) noexcept -> OpenTTDVehicleCargoQuery { return {RustVehicleCargoType(v), RustVehicleCargoSubtype(VehicleOf(v)), RustVehicleGetEngine(v)}; },
 		.can_carry = Engine_can_carry,
@@ -60,7 +59,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.cargo_capacity = RustVehicleCargoCap,
 		.real_count = [](const RealSpriteGroup *group, bool motion) noexcept { return static_cast<uint32_t>(motion ? group->loaded.size() : group->loading.size()); },
 		.real_at = [](const RealSpriteGroup *group, bool motion, uint32_t index) noexcept { return motion ? group->loaded[index] : group->loading[index]; },
-		.check = [](bool value) noexcept { assert(value); },
+		.check = []([[maybe_unused]] bool value) noexcept { assert(value); },
 	};
 	return services;
 }

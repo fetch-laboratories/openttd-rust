@@ -26,12 +26,6 @@
 #include "newgrf_roadtype.h"
 #include "ship.h"
 
-#ifdef WITH_RUST
-#include "rust/vehicle_services.h"
-#include "rust/engine_services.h"
-#include "rust/services_ffi.h"
-#endif
-
 #include "safeguards.h"
 
 void SetWagonOverrideSprites(EngineID engine, CargoType cargo, const SpriteGroup *group, std::span<EngineID> engine_ids)
