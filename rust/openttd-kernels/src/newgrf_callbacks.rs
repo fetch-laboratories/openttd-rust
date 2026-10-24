@@ -39,3 +39,6 @@ crate::abi::layouts! {
     "CallbackID" ["maintenance"] => CallbackID {
     };
 }
+
+/// `CBID_STATION_LAND_SLOPE_CHECK`.
+pub const CBID_STATION_LAND_SLOPE_CHECK: CallbackID = CallbackID(0x149);

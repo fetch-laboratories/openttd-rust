@@ -58,6 +58,7 @@ mod math;
 mod movement;
 mod newgrf_animation_base;
 mod newgrf_callbacks;
+mod newgrf_commons;
 mod newgrf_properties;
 mod newgrf_sound;
 mod newgrf_station;

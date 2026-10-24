@@ -10,25 +10,31 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec)
 	auto *st = Station::GetByTile(tile);
 	GRFFile file; file.grfid = 0x52533939; file.grf_version = 8;
 	StationSpec spec; spec.grf_prop.grffile = &file; spec.grf_prop.grfid = file.grfid; spec.grf_prop.local_id = 19;
+	StationNeed(SpriteGroup::CanAllocateItem(3), __LINE__);
 	auto *result = new CallbackResultSpriteGroup(0x400);
 	auto *det = new DeterministicSpriteGroup(); det->var_scope = VSG_SCOPE_SELF; det->size = DSG_SIZE_DWORD;
 	det->default_result = {false, result};
 	spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
+	StationNeed(CargoPacket::CanAllocateItem(), __LINE__);
 	st->goods[0].GetOrCreateData().cargo.Append(new CargoPacket(37, 5, st->index, tile, 0), StationID::Invalid());
 	spec.grf_prop.SetSpriteGroup(0, det);
 	StationResolverObject object(&spec, st, tile);
 	StationNeed(object.station_scope.cargo_type == 0, __LINE__);
 	for (uint8_t var : {0x40, 0x41, 0x45, 0x46, 0x47, 0x49}) {
 		det->adjusts = {{.operation = DSGA_OP_RST, .variable = var, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
-		std::array<int32_t, 1> regs;
+		std::array<int32_t, 1> regs{};
 		StationNeed(object.ResolveCallback(regs) == 0x400, __LINE__); auto first = regs[0];
 		/* A persistent object retains all six caches across independent DoResolve calls. */
+		auto gfx = GetStationGfx(tile);
+		SetStationGfx(tile, gfx ^ 2);
 		object.ResolveCallback(regs); StationNeed(regs[0] == first, __LINE__);
+		if (var != 0x45) { StationResolverObject fresh(&spec, st, tile); std::array<int32_t, 1> other{}; StationNeed(fresh.ResolveCallback(other) == 0x400, __LINE__); StationNeed(other[0] != first, __LINE__); }
+		SetStationGfx(tile, gfx);
 		fmt::print(stderr, "STCMD resolver-cache {:x} {} {}\n", var, first, regs[0]);
 	}
 	StationNeed(GetStationCallback(CBID_STATION_LAND_SLOPE_CHECK, 1, 2, &spec, st, tile) == 0x400, __LINE__);
 	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
-	for (uint16_t value : {0x400, 0, CALLBACK_FAILED}) {
+	for (uint16_t value : std::array<uint16_t, 3>{0x400, 0x401, CALLBACK_FAILED}) {
 		result->result = value;
 		StationCost("resolver-slope", PerformStationTileSlopeCheck(tile, tile, &spec, AXIS_X, 3, 2));
 	}

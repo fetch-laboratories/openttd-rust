@@ -1,5 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Station/waypoint resolver policy. State lives in the native resolver's stack
+//! Station/waypoint resolver policy. State lives in the native resolver'native stack
 //! carrier for its whole lifetime, including repeated common Action2 resolutions.
 //! Calls run under the game-state mutex. Native aliases and evaluator reentry
 //! require field-sized reads/writes; no state borrow crosses a service call.
@@ -11,7 +11,11 @@
     clippy::cast_sign_loss,
     clippy::too_many_arguments
 )]
+use crate::cargo_type::{INVALID_CARGO, NUM_CARGO, is_valid_cargo_type};
 use crate::direction_type::{AXIS_X, AXIS_Y, INVALID_AXIS, INVALID_DIAGDIR};
+use crate::newgrf_commons::{SG_DEFAULT, SG_DEFAULT_NA, SG_PURCHASE};
+use crate::slope_func::{SLOPE_E, SLOPE_EW, SLOPE_W};
+use crate::station_type::SRT_CARGO_TAKEN;
 use crate::{
     map_func::Map,
     services::{CommandCost, Services as Shared},
@@ -19,6 +23,8 @@ use crate::{
     station_cmd::RailSpec,
 };
 use std::{cell::UnsafeCell, ffi::c_void, ptr};
+const TA_PLATFORM: u8 = 1;
+const TA_WHOLE: u8 = 2;
 #[repr(C)]
 pub struct State {
     station: *mut BaseStation,
@@ -87,11 +93,11 @@ unsafe impl Sync for Registry {}
 static REGISTRY: Registry = Registry(UnsafeCell::new(ptr::null()));
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_resolver_exchange(
-    s: *const Services,
+    native: *const Services,
 ) -> *const Services {
     unsafe {
         let old = *REGISTRY.0.get();
-        *REGISTRY.0.get() = s;
+        *REGISTRY.0.get() = native;
         old
     }
 }
@@ -125,7 +131,7 @@ impl Services {
         }
     }
     fn empty_mask(&self, st: *mut BaseStation) -> u64 {
-        (0..64).fold(0, |mask, c| {
+        (0..NUM_CARGO).fold(0, |mask, c| {
             if self.count(st, c) == 0 {
                 mask | 1_u64 << c
             } else {
@@ -141,35 +147,35 @@ pub unsafe extern "C" fn openttd_rust_station_resolver_init(
     st: *mut BaseStation,
     tile: u32,
 ) -> *const c_void {
-    let s = services();
+    let native = services();
     unsafe {
         state.write(State {
             station: st,
             spec,
             town: ptr::null(),
             tile,
-            cargo: 66,
+            cargo: SG_DEFAULT_NA,
             axis: INVALID_AXIS,
             valid: 0,
             cache: [0; 6],
         });
     }
-    let mut cargo = 66;
+    let mut cargo = SG_DEFAULT_NA;
     if st.is_null() {
-        cargo = 65;
-    } else if (s.world().is_station)(st) {
-        for i in 0..(s.group_count)(spec) {
-            let c = (s.group_cargo)(spec, i);
-            if c < 64 && s.count(st, c) > 0 {
+        cargo = SG_PURCHASE;
+    } else if (native.world().is_station)(st) {
+        for i in 0..(native.group_count)(spec) {
+            let c = (native.group_cargo)(spec, i);
+            if c < NUM_CARGO && native.count(st, c) > 0 {
                 cargo = c;
                 break;
             }
         }
     }
-    let mut root = (s.group)(spec, cargo);
+    let mut root = (native.group)(spec, cargo);
     if root.is_null() {
-        cargo = 64;
-        root = (s.group)(spec, cargo);
+        cargo = SG_DEFAULT;
+        root = (native.group)(spec, cargo);
     }
     unsafe {
         (&raw mut (*state).cargo).write(cargo);
@@ -206,90 +212,106 @@ pub extern "C" fn openttd_rust_platform_info(
         | ((platforms.min(15) as u32 & 15) << 20)
         | (u32::from(tile) << 24)
 }
-fn find_end(s: &Services, mut tile: u32, delta: i32, check_type: bool, check_axis: bool) -> u32 {
-    let sid = (s.shared().station_index)(tile);
+fn find_end(
+    native: &Services,
+    mut tile: u32,
+    delta: i32,
+    check_type: bool,
+    check_axis: bool,
+) -> u32 {
+    let sid = (native.shared().station_index)(tile);
     let kind = if check_type {
-        (s.commands().custom_rail_index)(tile)
+        (native.commands().custom_rail_index)(tile)
     } else {
         0
     };
-    let axis = if check_axis { (s.axis)(tile).0 } else { AXIS_X };
+    let axis = if check_axis {
+        (native.axis)(tile).0
+    } else {
+        AXIS_X
+    };
     loop {
-        let next = (s.tile_add)(tile, delta);
-        if (s.shared().tile_type)(next) != crate::tile_type::MP_STATION
-            || (s.shared().station_index)(next) != sid
+        let next = (native.tile_add)(tile, delta);
+        if (native.shared().tile_type)(next) != crate::tile_type::MP_STATION
+            || (native.shared().station_index)(next) != sid
         {
             break;
         }
-        if !(s.rail().has_station_rail)(next) {
+        if !(native.rail().has_station_rail)(next) {
             break;
         }
-        if check_type && (s.commands().custom_rail_index)(next) != kind {
+        if check_type && (native.commands().custom_rail_index)(next) != kind {
             break;
         }
-        if check_axis && (s.axis)(next).0 != axis {
+        if check_axis && (native.axis)(next).0 != axis {
             break;
         }
         tile = next;
     }
     tile
 }
-fn platform(s: &Services, tile: u32, check_type: bool, check_axis: bool, centred: bool) -> u32 {
-    let m = s.map();
-    let sx = m.tile_x(find_end(
-        s,
+fn platform(
+    native: &Services,
+    tile: u32,
+    check_type: bool,
+    check_axis: bool,
+    centred: bool,
+) -> u32 {
+    let map = native.map();
+    let sx = map.tile_x(find_end(
+        native,
         tile,
-        m.diff(-1, 0) as i32,
+        map.diff(-1, 0) as i32,
         check_type,
         check_axis,
     ));
-    let sy = m.tile_y(find_end(
-        s,
+    let sy = map.tile_y(find_end(
+        native,
         tile,
-        m.diff(0, -1) as i32,
+        map.diff(0, -1) as i32,
         check_type,
         check_axis,
     ));
-    let ex = m
+    let ex = map
         .tile_x(find_end(
-            s,
+            native,
             tile,
-            m.diff(1, 0) as i32,
+            map.diff(1, 0) as i32,
             check_type,
             check_axis,
         ))
         .wrapping_add(1);
-    let ey = m
+    let ey = map
         .tile_y(find_end(
-            s,
+            native,
             tile,
-            m.diff(0, 1) as i32,
+            map.diff(0, 1) as i32,
             check_type,
             check_axis,
         ))
         .wrapping_add(1);
     openttd_rust_platform_info(
-        (s.axis)(tile).0,
-        (s.shared().station_gfx)(tile),
+        (native.axis)(tile).0,
+        (native.shared().station_gfx)(tile),
         ex.wrapping_sub(sx) as i32,
         ey.wrapping_sub(sy) as i32,
-        m.tile_x(tile).wrapping_sub(sx) as i32,
-        m.tile_y(tile).wrapping_sub(sy) as i32,
+        map.tile_x(tile).wrapping_sub(sx) as i32,
+        map.tile_y(tile).wrapping_sub(sy) as i32,
         centred,
     )
 }
-fn continuation(s: &Services, tile: u32) -> u32 {
-    let (dirs, exits) = if (s.axis)(tile).0 == AXIS_X {
+fn continuation(native: &Services, tile: u32) -> u32 {
+    let (dirs, exits) = if (native.axis)(tile).0 == AXIS_X {
         ([5, 1, 3, 7, 4, 2, 6, 0], [2, 0, 1, 3, 2, 0, 2, 0])
     } else {
         ([3, 7, 5, 1, 4, 6, 2, 0], [1, 3, 2, 0, 1, 3, 1, 3])
     };
-    let m = s.map();
+    let map = native.map();
     let mut result = 0;
     for i in 0..8 {
-        let neighbour = m.add_dir(tile, dirs[i]);
+        let neighbour = map.add_dir(tile, dirs[i]);
         let bits = crate::track_func::track_status_to_track_bits(crate::movement::track_status(
-            s.shared(),
+            native.shared(),
             neighbour,
             crate::transport_type::TRANSPORT_RAIL,
             0,
@@ -297,8 +319,8 @@ fn continuation(s: &Services, tile: u32) -> u32 {
         ));
         if bits != 0 {
             result |= 1 << (i + 8);
-            if (s.shared().tile_type)(neighbour) == crate::tile_type::MP_TUNNELBRIDGE
-                && (s.shared().tunnel_bridge_direction)(neighbour) != exits[i]
+            if (native.shared().tile_type)(neighbour) == crate::tile_type::MP_TUNNELBRIDGE
+                && (native.shared().tunnel_bridge_direction)(neighbour) != exits[i]
             {
                 continue;
             }
@@ -324,13 +346,13 @@ pub unsafe extern "C" fn openttd_rust_station_cached_variable(
         0x49 => (5, false, true, false),
         _ => return false,
     };
-    let s = services();
+    let native = services();
     if unsafe { (*state).valid } & (1 << slot) == 0 {
         let tile = unsafe { (*state).tile };
         let value = if var == 0x45 {
-            continuation(s, tile)
+            continuation(native, tile)
         } else {
-            platform(s, tile, typed, axis, centred)
+            platform(native, tile, typed, axis, centred)
         };
         unsafe {
             (&raw mut (*state).cache)
@@ -350,65 +372,65 @@ pub unsafe extern "C" fn openttd_rust_station_resolve_real(
     state: *const State,
     group: *const c_void,
 ) -> *const c_void {
-    let s = services();
+    let native = services();
     let st = unsafe { (*state).station };
-    let loading = (s.loading_count)(group);
-    if st.is_null() || !(s.world().is_station)(st) {
+    let loading = (native.loading_count)(group);
+    if st.is_null() || !(native.world().is_station)(st) {
         return if loading > 0 {
-            (s.loading)(group, 0)
+            (native.loading)(group, 0)
         } else {
             ptr::null()
         };
     }
     let c = unsafe { (*state).cargo };
     let mut cargo = match c {
-        255 | 65 | 66 => 0,
-        64 => (0..64).fold(0_u32, |n, c| n.wrapping_add(s.count(st, c))),
-        _ => s.count(st, c),
+        INVALID_CARGO | SG_PURCHASE | SG_DEFAULT_NA => 0,
+        SG_DEFAULT => (0..NUM_CARGO).fold(0_u32, |n, c| n.wrapping_add(native.count(st, c))),
+        _ => native.count(st, c),
     };
-    let spec = (s.spec)(unsafe { (*state).spec });
+    let spec = (native.spec)(unsafe { (*state).spec });
     if spec.divide {
-        let a = unsafe { (s.commands().train_area)(st) };
+        let a = unsafe { (native.commands().train_area)(st) };
         cargo /= u32::from(a.w) + u32::from(a.h);
     }
     cargo = cargo.min(0xfff);
     let threshold = u32::from(spec.threshold);
     if cargo > threshold {
         if loading > 0 {
-            return (s.loading)(
+            return (native.loading)(
                 group,
                 (cargo.wrapping_sub(threshold).wrapping_mul(loading as u32)
                     / (4096_u32.wrapping_sub(threshold))) as usize,
             );
         }
     } else {
-        let loaded = (s.loaded_count)(group);
+        let loaded = (native.loaded_count)(group);
         if loaded > 0 {
-            return (s.loaded)(
+            return (native.loaded)(
                 group,
                 (cargo.wrapping_mul(loaded as u32) / threshold.wrapping_add(1)) as usize,
             );
         }
     }
     if loading > 0 {
-        (s.loading)(group, 0)
+        (native.loading)(group, 0)
     } else {
         ptr::null()
     }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_station_random_bits(state: *const State) -> u32 {
-    let s = services();
+    let native = services();
     let st = unsafe { (*state).station };
     let tile = unsafe { (*state).tile };
     (if st.is_null() {
         0
     } else {
-        u32::from((s.station_random)(st))
+        u32::from((native.station_random)(st))
     }) | if tile == u32::MAX {
         0
     } else {
-        u32::from((s.tile_random)(tile)) << 16
+        u32::from((native.tile_random)(tile)) << 16
     }
 }
 #[unsafe(no_mangle)]
@@ -427,21 +449,36 @@ pub extern "C" fn openttd_rust_station_randomisation(
     trigger: u8,
     cargo: u8,
 ) {
-    let s = services();
-    let mask = (s.cached_cargo)(st);
-    if mask == 0 || cargo < 64 && mask & (1_u64 << cargo) == 0 {
+    let native = services();
+    let mask = (native.cached_cargo)(st);
+    if mask == 0 || is_valid_cargo_type(cargo) && mask & 1_u64.wrapping_shl(u32::from(cargo)) == 0 {
         return;
     }
-    let empty = if trigger == 1 { s.empty_mask(st) } else { 0 };
-    (s.set_waiting)(st, (s.waiting)(st) | (1 << trigger));
+    let empty = if trigger == SRT_CARGO_TAKEN {
+        native.empty_mask(st)
+    } else {
+        0
+    };
+    (native.set_waiting)(
+        st,
+        (native.waiting)(st) | (1_u8.wrapping_shl(u32::from(trigger))),
+    );
     let a = crate::animated_tile::services();
-    let area = (a.rail_area)(st, tile, if trigger < 2 { 2 } else { 1 });
-    let m = s.map();
+    let area = (a.rail_area)(
+        st,
+        tile,
+        if trigger <= SRT_CARGO_TAKEN {
+            TA_WHOLE
+        } else {
+            TA_PLATFORM
+        },
+    );
+    let map = native.map();
     let mut whole = 0;
     let mut used = 0;
     for y in 0..area.height {
         for x in 0..area.width {
-            let t = area.tile.wrapping_add(m.diff(i32::from(x), i32::from(y)));
+            let t = area.tile.wrapping_add(map.diff(i32::from(x), i32::from(y)));
             if !(a.rail_belongs)(st, t) {
                 continue;
             }
@@ -449,27 +486,29 @@ pub extern "C" fn openttd_rust_station_randomisation(
             if spec.is_null() {
                 continue;
             }
-            let triggers = (s.spec_cargo)(spec);
-            if trigger == 1 && triggers & !empty != 0 {
+            let triggers = (native.spec_cargo)(spec);
+            if trigger == SRT_CARGO_TAKEN && triggers & !empty != 0 {
                 continue;
             }
-            if cargo >= 64 || triggers & (1_u64 << cargo) != 0 {
-                let r = (s.resolve_random)(spec, st, t, (s.waiting)(st));
+            if !is_valid_cargo_type(cargo) || triggers & 1_u64.wrapping_shl(u32::from(cargo)) != 0 {
+                let r = (native.resolve_random)(spec, st, t, (native.waiting)(st));
                 used |= r.used;
                 if r.reseed != 0 {
                     whole |= r.reseed;
                     let bits = r.reseed >> 16;
-                    let random = u32::from((s.tile_random)(t)) & !bits | s.shared().random() & bits;
-                    (s.commands().set_random_bits)(t, random as u8);
-                    (s.shared().mark_dirty)(t);
+                    let random = u32::from((native.tile_random)(t)) & !bits
+                        | native.shared().random() & bits;
+                    (native.commands().set_random_bits)(t, random as u8);
+                    (native.shared().mark_dirty)(t);
                 }
             }
         }
     }
-    (s.set_waiting)(st, (s.waiting)(st) & !(used as u8));
+    (native.set_waiting)(st, (native.waiting)(st) & !(used as u8));
     if whole & 0xffff != 0 {
-        let random = u32::from((s.station_random)(st)) & !whole | s.shared().random() & whole;
-        (s.set_random)(st, random as u16);
+        let random =
+            u32::from((native.station_random)(st)) & !whole | native.shared().random() & whole;
+        (native.set_random)(st, random as u16);
     }
 }
 #[unsafe(no_mangle)]
@@ -495,28 +534,29 @@ pub unsafe extern "C" fn openttd_rust_station_slope_check(
     length: u8,
     tracks: u8,
 ) {
-    let s = services();
+    let native = services();
     unsafe {
-        ((*s.commands().cost).zero)(out);
+        ((*native.commands().cost).zero)(out);
     }
-    let m = s.map();
+    let map = native.map();
     let diff = tile.wrapping_sub(north);
-    let slope = u32::from((s.shared().tile_slope)(tile));
-    let swap = axis == AXIS_Y && (slope & 1 != 0) != (slope & 4 != 0);
-    let p1 = (slope << 4) | (slope ^ if swap { 5 } else { 0 });
+    let slope = u32::from((native.shared().tile_slope)(tile));
+    let swap =
+        axis == AXIS_Y && (slope & u32::from(SLOPE_W) != 0) != (slope & u32::from(SLOPE_E) != 0);
+    let p1 = (slope << 4) | (slope ^ if swap { u32::from(SLOPE_EW) } else { 0 });
     let p2 = u32::from(tracks) << 24
         | u32::from(length) << 16
         | if axis == AXIS_Y {
-            m.tile_x(diff) << 8 | m.tile_y(diff)
+            map.tile_x(diff) << 8 | map.tile_y(diff)
         } else {
-            m.tile_y(diff) << 8 | m.tile_x(diff)
+            map.tile_y(diff) << 8 | map.tile_x(diff)
         };
     let mut r = SlopeResult {
         callback: 0,
         registers: [0; 16],
     };
-    r.callback = (s.resolve_callback)(
-        0x149,
+    r.callback = (native.resolve_callback)(
+        crate::newgrf_callbacks::CBID_STATION_LAND_SLOPE_CHECK.0,
         p1,
         p2,
         spec,
@@ -534,10 +574,10 @@ pub unsafe extern "C" fn openttd_rust_station_slope_check(
     if !(b.version8)(spec) {
         r.callback ^= 1 << 10;
     }
-    (s.slope_error)(out, &raw const r, spec);
+    (native.slope_error)(out, &raw const r, spec);
 }
 crate::abi::layouts! {
- fn abi_layout;
+    fn abi_layout;
  "OpenTTDStationResolverState" ["station_service"] => State { station, spec, town, tile, cargo, axis, valid, cache };
  "OpenTTDStationReseed" ["station_service"] => Reseed { reseed, used };
  "OpenTTDStationResolverSpec" ["station_service"] => Spec { threshold, divide };
@@ -547,4 +587,28 @@ crate::abi::layouts! {
  loading, loaded, axis, tile_add, tile_random, station_random, waiting, set_waiting, set_random,
  cached_cargo, spec_cargo, resolve_random, resolve_callback, slope_error
  };
+}
+
+/// Direct caller with no result-register span.
+pub(crate) fn callback(
+    cb: u16,
+    p1: u32,
+    p2: u32,
+    spec: *const RailSpec,
+    st: *mut BaseStation,
+    tile: u32,
+) -> u16 {
+    openttd_rust_station_callback(cb, p1, p2, spec, st, tile, ptr::null_mut(), 0)
+}
+/// Command callers use the original fixed X axis and platform ordering.
+pub(crate) fn platform_info(gfx: u8, length: u8, tracks: u8, x: u8, y: u8) -> u32 {
+    openttd_rust_platform_info(
+        AXIS_X,
+        gfx,
+        i32::from(length),
+        i32::from(tracks),
+        i32::from(x),
+        i32::from(y),
+        false,
+    )
 }

@@ -104,10 +104,7 @@ struct OpenTTDStationCommandServices {
 	uint32_t (*rail_spec_count)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec_count);
 	const StationSpec *(*class_rail_spec)(uint16_t, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(class_rail_spec);
 	OpenTTDRailStationSpecInfo (*rail_spec_info)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec_info);
-	void (*station_slope_check)(OpenTTDCommandCost *, uint32_t, uint32_t, const StationSpec *, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_slope_check);
 	OpenTTDByteSpan (*rail_layout)(const StationSpec *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_layout);
-	uint16_t (*rail_callback)(uint16_t, uint32_t, uint32_t, const StationSpec *, BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_callback);
-	uint32_t (*platform_info)(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(platform_info);
 	OpenTTDStationSpecIndex (*allocate_rail_spec)(const StationSpec *, BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(allocate_rail_spec);
 	void (*assign_rail_spec)(const StationSpec *, BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(assign_rail_spec);
 	void (*deallocate_rail_spec)(BaseStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(deallocate_rail_spec);

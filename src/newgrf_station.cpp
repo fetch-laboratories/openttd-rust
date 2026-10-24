@@ -42,41 +42,44 @@
 
 #ifdef WITH_RUST
 const OpenTTDCargoStorageServices *CargoStorageServices();
+static uint16_t RustEvaluateStationCallback(uint16_t cb, uint32_t p1, uint32_t p2, const StationSpec *s, BaseStation *st, uint32_t t, uint8_t axis, int32_t *regs, size_t count) noexcept
+{
+	StationResolverObject object(s, st, TileIndex{t}, static_cast<CallbackID>(cb), p1, p2);
+	object.station_scope.axis = static_cast<Axis>(axis);
+	return object.ResolveCallback({regs, count});
+}
+
 const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 {
 	static const OpenTTDStationResolverServices services{
-	 .shared = &GetRustSharedServices(),
-	 .cargo = CargoStorageServices(),
-	 .cargo_owner = [](BaseStation *base, uint8_t cargo) noexcept -> const OpenTTDCargoList * { const auto &ge = Station::From(base)->goods[cargo]; return ge.HasData() ? ge.GetData().cargo.RustOwner() : nullptr; },
-	 .group_count = [](const StationSpec *s) noexcept { return s->grf_prop.spritegroups.size(); },
-	 .group_cargo = [](const StationSpec *s, size_t i) noexcept { return s->grf_prop.spritegroups[i].first; },
-	 .group = [](const StationSpec *s, uint8_t c) noexcept { return s->grf_prop.GetSpriteGroup(c); },
-	 .spec = [](const StationSpec *s) noexcept { return OpenTTDStationResolverSpec{s->cargo_threshold, s->flags.Test(StationSpecFlag::DivByStationSize)}; },
-	 .loading_count = [](const RealSpriteGroup *g) noexcept { return g->loading.size(); },
-	 .loaded_count = [](const RealSpriteGroup *g) noexcept { return g->loaded.size(); },
-	 .loading = [](const RealSpriteGroup *g, size_t i) noexcept { return g->loading[i]; },
-	 .loaded = [](const RealSpriteGroup *g, size_t i) noexcept { return g->loaded[i]; },
-	 .axis = RustRailStationAxis,
-	 .tile_add = [](uint32_t t, int32_t d) noexcept { return TileAdd(TileIndex{t}, d).base(); },
-	 .tile_random = [](uint32_t t) noexcept { return GetStationTileRandomBits(TileIndex{t}); },
-	 .station_random = [](BaseStation *s) noexcept { return s->random_bits; },
-	 .waiting = [](BaseStation *s) noexcept { return s->waiting_random_triggers.base(); },
-	 .set_waiting = [](BaseStation *s, uint8_t v) noexcept { s->waiting_random_triggers = StationRandomTriggers(v); },
-	 .set_random = [](BaseStation *s, uint16_t v) noexcept { s->random_bits = v; },
-	 .cached_cargo = [](BaseStation *s) noexcept { return s->cached_cargo_triggers; },
-	 .spec_cargo = [](const StationSpec *s) noexcept { return s->cargo_triggers; },
-	 .resolve_random = [](const StationSpec *s, BaseStation *st, uint32_t t, uint8_t waiting) noexcept {
-	  StationResolverObject object(s, st, TileIndex{t}, CBID_RANDOM_TRIGGER, 0);
-	  object.SetWaitingRandomTriggers(StationRandomTriggers(waiting));
-	  object.ResolveRerandomisation();
-	  return OpenTTDStationReseed{object.GetReseedSum(), object.GetUsedRandomTriggers().base()};
-	 },
-	 .resolve_callback = [](uint16_t cb, uint32_t p1, uint32_t p2, const StationSpec *s, BaseStation *st, uint32_t t, uint8_t axis, int32_t *regs, size_t count) noexcept {
-	  StationResolverObject object(s, st, TileIndex{t}, static_cast<CallbackID>(cb), p1, p2);
-	  object.station_scope.axis = static_cast<Axis>(axis);
-	  return object.ResolveCallback({regs, count});
-	 },
-	 .slope_error = RustLocationCallbackError<StationSpec, StationSpec, OpenTTDStationSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
+		.shared = &GetRustSharedServices(),
+		.cargo = CargoStorageServices(),
+		.cargo_owner = [](BaseStation *base, uint8_t cargo) noexcept -> const OpenTTDCargoList * { const auto &ge = Station::From(base)->goods[cargo]; return ge.HasData() ? ge.GetData().cargo.RustOwner() : nullptr; },
+		.group_count = [](const StationSpec *s) noexcept { return s->grf_prop.spritegroups.size(); },
+		.group_cargo = [](const StationSpec *s, size_t i) noexcept { return s->grf_prop.spritegroups[i].first; },
+		.group = [](const StationSpec *s, uint8_t c) noexcept { return s->grf_prop.GetSpriteGroup(c); },
+		.spec = [](const StationSpec *s) noexcept { return OpenTTDStationResolverSpec{s->cargo_threshold, s->flags.Test(StationSpecFlag::DivByStationSize)}; },
+		.loading_count = [](const RealSpriteGroup *g) noexcept { return g->loading.size(); },
+		.loaded_count = [](const RealSpriteGroup *g) noexcept { return g->loaded.size(); },
+		.loading = [](const RealSpriteGroup *g, size_t i) noexcept { return g->loading[i]; },
+		.loaded = [](const RealSpriteGroup *g, size_t i) noexcept { return g->loaded[i]; },
+		.axis = RustRailStationAxis,
+		.tile_add = RustTileAdd,
+		.tile_random = RustStationTileRandomBits,
+		.station_random = RustStationRandomBits,
+		.waiting = RustStationWaitingTriggers,
+		.set_waiting = RustStationSetWaitingTriggers,
+		.set_random = RustStationSetRandomBits,
+		.cached_cargo = RustStationCachedCargoTriggers,
+		.spec_cargo = [](const StationSpec *s) noexcept { return s->cargo_triggers; },
+		.resolve_random = [](const StationSpec *s, BaseStation *st, uint32_t t, uint8_t waiting) noexcept {
+			StationResolverObject object(s, st, TileIndex{t}, CBID_RANDOM_TRIGGER, 0);
+			object.SetWaitingRandomTriggers(StationRandomTriggers(waiting));
+			object.ResolveRerandomisation();
+			return OpenTTDStationReseed{object.GetReseedSum(), object.GetUsedRandomTriggers().base()};
+		},
+		.resolve_callback = RustEvaluateStationCallback,
+		.slope_error = RustLocationCallbackError<StationSpec, StationSpec, OpenTTDStationSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
 	};
 	return services;
 }
@@ -980,7 +983,11 @@ const StationSpec *GetStationSpec(TileIndex t)
 /** Wrapper for animation control, see GetStationCallback. */
 uint16_t GetAnimStationCallback(CallbackID callback, uint32_t param1, uint32_t param2, const StationSpec *statspec, BaseStation *st, TileIndex tile, int)
 {
+#ifdef WITH_RUST
+	return RustEvaluateStationCallback(callback, param1, param2, statspec, st, tile.base(), INVALID_AXIS, nullptr, 0);
+#else
 	return GetStationCallback(callback, param1, param2, statspec, st, tile);
+#endif
 }
 
 /** Helper class for animation control. */

@@ -46,3 +46,6 @@ pub const SRT_CARGO_TAKEN: u8 = 1;
 pub const SRT_VEHICLE_ARRIVES: u8 = 2;
 pub const SRT_VEHICLE_DEPARTS: u8 = 3;
 pub const SRT_VEHICLE_LOADS: u8 = 4;
+
+/// `StationRandomTrigger::PathReservation`.
+pub const SRT_PATH_RESERVATION: u8 = 5;

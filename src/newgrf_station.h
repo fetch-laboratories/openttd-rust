@@ -37,9 +37,9 @@ struct StationScopeResolver : public ScopeResolver {
 	CargoType &cargo_type;
 	Axis &axis;
 	StationScopeResolver(ResolverObject &ro, const StationSpec *spec, BaseStation *station, TileIndex tile)
-	 : ScopeResolver(ro), tile(state.tile), st(state.station), statspec(state.spec), cargo_type(state.cargo), axis(state.axis)
+		: ScopeResolver(ro), tile(state.tile), st(state.station), statspec(state.spec), cargo_type(state.cargo), axis(state.axis)
 	{
-	 ro.root_spritegroup = openttd_rust_station_resolver_init(&state, spec, station, tile.base());
+		ro.root_spritegroup = openttd_rust_station_resolver_init(&state, spec, station, tile.base());
 	}
 #else
 	TileIndex tile;                     ///< %Tile of the station.
