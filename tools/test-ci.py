@@ -343,8 +343,8 @@ class GateTests(unittest.TestCase):
 
     def test_write_jobs_never_check_out_or_run_candidate_code(self):
         # Structure is the behavior here: pull_request_target and workflow_run jobs,
-        # and every job granted a write permission, execute only the reviewed
-        # github-script body of the protected definition.
+        # and every job granted a write permission, execute only the github-script
+        # body of the protected definition.
         privileged = []
         for path in sorted(WORKFLOWS.glob("*.yml")):
             definition = yaml.safe_load(path.read_text())

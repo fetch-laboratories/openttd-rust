@@ -24,8 +24,7 @@ SPEED_PASS = (
     ("play-padhattan-ridge-2000-manual", 1.4127744708994707, 7577139998, "17e34235425021ca2f96c739312d9f15ca167ac5f579617d6c9eb1047e8c2627"),
     ("play-padhattan-ridge-2016-manual", 1.48378114088101, 13656219325, "602255e34b6a04367a3aea9749e289d8efe8bdd921ba2f2a58e9bc57d11ed7b6"),
 )
-# Loop Ir at the anchor, in SPEED_PASS order. PRs record no counts: root profiles
-# the integrated tip against these anchors (AGENTS.md).
+# Loop Ir at the anchor, in SPEED_PASS order, for projecting instruction-count growth.
 SPEED_INTEGRATED = SPEED_HEAD, tuple(ir for _, _, ir, _ in SPEED_PASS)
 # fmt: on
 SPEED_ANCHORS = {
