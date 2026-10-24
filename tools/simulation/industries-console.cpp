@@ -275,7 +275,11 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	equal &= live.root_spritegroup == filtered && missing.root_spritegroup == location;
 	equal &= live.GetFeature() == GSF_INDUSTRIES && live.GetDebugID() == 17 && live_tile.GetFeature() == GSF_INDUSTRYTILES && live_tile.GetDebugID() == 19;
 	equal &= live_tile.root_spritegroup == relative && temporary_tile.root_spritegroup == one;
+#ifdef WITH_RUST
+	equal &= live.GetTown() == live.GetTown() && !live.GetTown()->context.readonly && construction.GetTown()->context.readonly && nearby.GetTown()->context.readonly && missing.GetTown() == nullptr;
+#else
 	equal &= live.GetTown() == live.GetTown() && !live.GetTown()->readonly && construction.GetTown()->readonly && nearby.GetTown()->readonly && missing.GetTown() == nullptr;
+#endif
 	equal &= live.GetScope(VSG_SCOPE_SELF) == &live.industries_scope && live.GetScope(VSG_SCOPE_PARENT) == live.GetTown();
 	equal &= live_tile.GetScope(VSG_SCOPE_SELF) == &live_tile.indtile_scope && live_tile.GetScope(VSG_SCOPE_PARENT) == &live_tile.ind_scope;
 	result = GetIndustryTileCallback(CBID_INDTILE_SHAPE_CHECK, 0, 0, gfx, i, tile, regs);
