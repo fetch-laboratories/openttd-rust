@@ -110,7 +110,9 @@ impl Callback<crate::animated_tile::AirportSpec, crate::station::Station> for Ai
         tile: u32,
     ) -> Entry<crate::animated_tile::AirportSpec, crate::station::Station> {
         let spec = crate::newgrf_airport::tile_spec_by_tile(tile, unsafe { &*a.airport_runtime });
-        let station = (a.as_station)((a.station_base)((a.shared().station_index)(tile)));
+        let station = (a.as_station)(crate::station_map::station_by_tile(tile, unsafe {
+            &*a.airport_runtime
+        }));
         Entry {
             spec,
             object: station,
