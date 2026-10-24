@@ -18,6 +18,9 @@
 
 /** Scope resolver for houses. */
 struct HouseScopeResolver : public ScopeResolver {
+#ifdef WITH_RUST
+	OpenTTDHouseScope context;
+#else
 	HouseID house_id;              ///< Type of house being queried.
 	TileIndex tile;                ///< Tile of this house.
 	Town *town;                    ///< Town of this house.
@@ -25,6 +28,7 @@ struct HouseScopeResolver : public ScopeResolver {
 	uint16_t initial_random_bits;    ///< Random bits during construction checks.
 	CargoTypes watched_cargo_triggers; ///< Cargo types that triggered the watched cargo callback.
 	int view; ///< View when house does yet exist.
+#endif
 
 	/**
 	 * Constructor of a house scope resolver.
@@ -37,11 +41,7 @@ struct HouseScopeResolver : public ScopeResolver {
 	 * @param watched_cargo_triggers Cargo types that triggered the watched cargo callback.
 	 */
 	HouseScopeResolver(ResolverObject &ro, HouseID house_id, TileIndex tile, Town *town,
-			bool not_yet_constructed, uint8_t initial_random_bits, CargoTypes watched_cargo_triggers, int view)
-		: ScopeResolver(ro), house_id(house_id), tile(tile), town(town), not_yet_constructed(not_yet_constructed),
-		initial_random_bits(initial_random_bits), watched_cargo_triggers(watched_cargo_triggers), view(view)
-	{
-	}
+			bool not_yet_constructed, uint8_t initial_random_bits, CargoTypes watched_cargo_triggers, int view);
 
 	uint32_t GetRandomBits() const override;
 	uint32_t GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const override;

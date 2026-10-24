@@ -1108,7 +1108,6 @@ static_assert(RATING_MAXIMUM == 1000 && RATING_HOUSE_MINIMUM == -1000 && PH_ALLO
 /* Canonical packed-map readers shared by the narrow phase observations below. */
 static uint16_t RustHouseType(uint32_t tile) noexcept { return GetHouseType(TileIndex{tile}); }
 static bool RustHouseCompleted(uint32_t tile) noexcept { return IsHouseCompleted(TileIndex{tile}); }
-static uint8_t RustHouseAge(uint32_t tile) noexcept { return static_cast<uint8_t>(GetHouseAge(TileIndex{tile}).base()); }
 static bool RustHouseLiftHasDestination(uint32_t tile) noexcept { return LiftHasDestination(TileIndex{tile}); }
 static OpenTTDTownRef RustHouseTown(uint32_t tile) noexcept
 {
@@ -1128,7 +1127,7 @@ static OpenTTDHouseLift RustHouseLift(uint32_t tile) noexcept
 }
 static OpenTTDHouseRandom RustHouseRandom(uint32_t tile) noexcept
 {
-	return {.bits = GetHouseRandomBits(TileIndex{tile}), .triggers = GetHouseRandomTriggers(TileIndex{tile}).base()};
+	return {.bits = RustHouseRandomBits(tile), .triggers = RustHouseRandomTriggers(tile)};
 }
 static OpenTTDHouseConstruction RustHouseConstruction(uint32_t tile) noexcept
 {

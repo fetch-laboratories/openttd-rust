@@ -27,16 +27,66 @@
 #include "station_base.h"
 #ifdef WITH_RUST
 #include "rust/house_ffi.h"
+#include "rust/services_newgrf.h"
+#include "rust/services_cargo.h"
+#include "rust/settings_services.h"
+#include "rust/tile_animation_services.h"
 #endif
 
 #include "safeguards.h"
 
 #ifdef WITH_RUST
+static OpenTTDHouseSearchSpec HouseSearchSpec(uint16_t house) noexcept
+{
+	const auto *s = RustHouseSpec(house);
+	return {.grfid = s->grf_prop.grfid, .local = s->grf_prop.local_id, .house_class = s->class_id, .has_file = s->grf_prop.HasGrfFile()};
+}
+static OpenTTDHouseNearbySpec HouseNearbySpec(uint16_t house) noexcept
+{
+	const auto *s = RustHouseSpec(house);
+	return {.file = s->grf_prop.grffile, .local = s->grf_prop.local_id, .house_class = s->class_id};
+}
+const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
+{
+	static const OpenTTDHouseResolverServices services{
+		.towns = &GetRustTownServices(),
+		.shared = &GetRustSharedServices(),
+		.storage = &GetRustStorageServices(),
+		.larger_towns = OpenTTDLargerTowns,
+		.cargo_by_label = OpenTTDCargoByLabel,
+		.get_register = RustResolverRegister,
+		.file = [](const ResolverObject *r) noexcept { return r->grffile; },
+		.version = RustGRFFileVersion,
+		.cargo_translation = OpenTTDCargoTranslation,
+		.nearby = RustSignedNearbyTile,
+		.nearby_info = RustNearbyTileInformation,
+		.terrain = RustTerrainType,
+		.stage = [](uint32_t tile) noexcept { return GetHouseBuildingStage(TileIndex{tile}); },
+		.age = RustHouseAge,
+		.random_bits = RustHouseRandomBits,
+		.random_triggers = RustHouseRandomTriggers,
+		.animation = OpenTTDAnimationFrame,
+		.search_spec = HouseSearchSpec,
+		.nearby_spec = HouseNearbySpec,
+		.house_id = [](uint16_t local, uint32_t grfid) noexcept { return _house_mngr.GetID(local, grfid); },
+		.house_grfid = [](uint16_t house) noexcept { return _house_mngr.GetGRFID(house); },
+		.badges = [](const ResolverObject *r, uint16_t house, uint32_t parameter) noexcept { return RustSpecBadges(r, RustHouseSpec(house), parameter); },
+		.stations = [](uint32_t tile, void *context, void (*visit)(void *, const Station *)) noexcept {
+			StationFinder finder(TileArea(TileIndex{tile}, 1, 1));
+			for (const Station *station : finder.GetStations()) visit(context, station);
+		},
+		.unhandled_house = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled house variable 0x{:X}", variable); },
+		.unhandled_town = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled town variable 0x{:X}", variable); },
+	};
+	return services;
+}
 static RustTownBuildingCounts<uint32_t> _building_counts{};
 #else
 static BuildingCounts<uint32_t> _building_counts{};
 #endif
+#ifndef WITH_RUST
 static std::vector<HouseClassMapping> _class_mapping{};
+#endif
 
 HouseOverrideManager _house_mngr(NEW_HOUSE_OFFSET, NUM_HOUSES, INVALID_HOUSE_ID);
 
@@ -114,6 +164,16 @@ void ResetHouses()
  * @param initial_random_bits Random bits during construction checks.
  * @param watched_cargo_triggers Cargo types that triggered the watched cargo callback.
  */
+HouseScopeResolver::HouseScopeResolver(ResolverObject &ro, HouseID house_id, TileIndex tile, Town *town,
+		bool not_yet_constructed, uint8_t initial_random_bits, CargoTypes watched_cargo_triggers, int view)
+#ifdef WITH_RUST
+	: ScopeResolver(ro), context{{town, town == nullptr ? nullptr : town->growth_owner.get(), town == nullptr ? uint16_t{} : town->index.base(), not_yet_constructed}, watched_cargo_triggers, tile.base(), view, house_id, initial_random_bits, not_yet_constructed}
+#else
+	: ScopeResolver(ro), house_id(house_id), tile(tile), town(town), not_yet_constructed(not_yet_constructed), initial_random_bits(initial_random_bits), watched_cargo_triggers(watched_cargo_triggers), view(view)
+#endif
+{
+}
+
 HouseResolverObject::HouseResolverObject(HouseID house_id, TileIndex tile, Town *town,
 		CallbackID callback, uint32_t param1, uint32_t param2,
 		bool not_yet_constructed, uint8_t initial_random_bits, CargoTypes watched_cargo_triggers, int view)
@@ -134,9 +194,19 @@ GrfSpecFeature HouseResolverObject::GetFeature() const
 
 uint32_t HouseResolverObject::GetDebugID() const
 {
+#ifdef WITH_RUST
+	return HouseSpec::Get(this->house_scope.context.house)->grf_prop.local_id;
+#else
 	return HouseSpec::Get(this->house_scope.house_id)->grf_prop.local_id;
+#endif
 }
 
+#ifdef WITH_RUST
+void ResetHouseClassIDs() { openttd_rust_house_classes_reset(); }
+HouseClassID AllocateHouseClassID(uint8_t grf_class_id, uint32_t grfid) { return openttd_rust_house_class_allocate(grf_class_id, grfid); }
+void InitializeBuildingCounts(Town *t) { openttd_rust_house_counts_init(&GetRustTownServices(), &GetRustSharedServices(), t->growth_owner.get(), HouseSpec::Specs().size()); }
+void InitializeBuildingCounts() { openttd_rust_house_counts_init(&GetRustTownServices(), &GetRustSharedServices(), nullptr, HouseSpec::Specs().size()); }
+#else
 void ResetHouseClassIDs()
 {
 	_class_mapping.clear();
@@ -182,6 +252,8 @@ void InitializeBuildingCounts()
 		InitializeBuildingCounts(t);
 	}
 }
+
+#endif
 
 /**
  * Get read-only span of total HouseID building counts.
@@ -232,6 +304,14 @@ void DecreaseBuildingCount(Town *t, HouseID house_id)
 }
 #endif
 
+#ifdef WITH_RUST
+uint32_t HouseScopeResolver::GetRandomBits() const { return openttd_rust_house_random(&GetHouseResolverServices(), &this->context, false); }
+uint32_t HouseScopeResolver::GetRandomTriggers() const { return openttd_rust_house_random(&GetHouseResolverServices(), &this->context, true); }
+uint32_t HouseScopeResolver::GetVariable(uint8_t variable, uint32_t parameter, bool &available) const
+{
+	return openttd_rust_house_variable(&GetHouseResolverServices(), &this->context, &this->ro, variable, parameter, &available);
+}
+#else
 /* virtual */ uint32_t HouseScopeResolver::GetRandomBits() const
 {
 	/* Note: Towns build houses over houses. So during construction checks 'tile' may be a valid but unrelated house. */
@@ -464,6 +544,8 @@ static uint32_t GetDistanceFromNearbyHouse(uint8_t parameter, TileIndex start_ti
 	available = false;
 	return UINT_MAX;
 }
+
+#endif
 
 uint16_t GetHouseCallback(CallbackID callback, uint32_t param1, uint32_t param2, HouseID house_id, Town *town, TileIndex tile, std::span<int32_t> regs100,
 		bool not_yet_constructed, uint8_t initial_random_bits, CargoTypes watched_cargo_triggers, int view)

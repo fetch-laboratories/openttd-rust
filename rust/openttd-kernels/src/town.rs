@@ -26,6 +26,7 @@ pub mod commands;
 pub mod founding;
 pub mod house;
 pub mod names;
+pub mod resolver;
 
 use crate::history_type::LAST_MONTH;
 use crate::services::{Map, Services, chance16_i};

@@ -163,3 +163,8 @@ pub unsafe extern "C" fn openttd_rust_map_read_probe(
 pub fn is_tile_owner(s: &crate::services::Services, tile: u32, owner: u8) -> bool {
     (s.tile_owner)(tile) == owner
 }
+
+/// `TileHash2Bit`, including the unsigned subtraction in `TileHash`.
+pub(crate) fn tile_hash_2bit(x: u32, y: u32) -> u32 {
+    ((x >> 4) ^ (x >> 6) ^ (y >> 4)).wrapping_sub(y >> 6) & 3
+}

@@ -288,6 +288,26 @@ fn house<'a>(leaves: *const Leaves, services: *const Services) -> House<'a> {
         map: OnceCell::new(),
     }
 }
+/// Canonical `GetHouseNorthPart`, shared by lifecycle and resolver queries.
+pub(super) fn north_part(leaves: &Leaves, house: &mut u16, map: Map) -> u32 {
+    if *house >= 3 {
+        let previous_flags = (leaves.house_flags)(*house - 1);
+        if previous_flags & SIZE_2X1 != 0 {
+            *house -= 1;
+            return map.diff(-1, 0);
+        } else if previous_flags & TILES_Y != 0 {
+            *house -= 1;
+            return map.diff(0, -1);
+        } else if (leaves.house_flags)(*house - 2) & SIZE_2X2 != 0 {
+            *house -= 2;
+            return map.diff(-1, 0);
+        } else if (leaves.house_flags)(*house - 3) & SIZE_2X2 != 0 {
+            *house -= 3;
+            return map.diff(-1, -1);
+        }
+    }
+    0
+}
 impl House<'_> {
     fn map(&self) -> Map {
         *self.map.get_or_init(|| Map {
@@ -312,25 +332,8 @@ impl House<'_> {
     fn dirty(&self, tile: u32) {
         (self.s.mark_dirty)(tile);
     }
-    /// `GetHouseNorthPart`: house IDs 0..2 are single-tile by definition.
     fn north_part(&self, house: &mut u16, map: Map) -> u32 {
-        if *house >= 3 {
-            let previous_flags = (self.l.house_flags)(*house - 1);
-            if previous_flags & SIZE_2X1 != 0 {
-                *house -= 1;
-                return map.diff(-1, 0);
-            } else if previous_flags & TILES_Y != 0 {
-                *house -= 1;
-                return map.diff(0, -1);
-            } else if (self.l.house_flags)(*house - 2) & SIZE_2X2 != 0 {
-                *house -= 2;
-                return map.diff(-1, 0);
-            } else if (self.l.house_flags)(*house - 3) & SIZE_2X2 != 0 {
-                *house -= 3;
-                return map.diff(-1, -1);
-            }
-        }
-        0
+        north_part(self.l, house, map)
     }
     /// `TriggerHouseAnimation_ConstructionStageChanged`.
     fn stage_changed(&self, town: TownRef, tile: u32, house: u16, first: bool) {

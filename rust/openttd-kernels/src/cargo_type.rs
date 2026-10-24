@@ -28,3 +28,7 @@ pub(crate) unsafe fn cargo_array_count(data: *const u32) -> u32 {
         .try_into()
         .unwrap()
 }
+
+/// Native cargo labels, in their four-character wire encoding.
+pub const CT_PASSENGERS: u32 = u32::from_be_bytes(*b"PASS");
+pub const CT_MAIL: u32 = u32::from_be_bytes(*b"MAIL");
