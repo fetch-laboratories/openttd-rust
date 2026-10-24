@@ -10,6 +10,7 @@
 
 /** @file road_services.h Typed road services; each resolves its vehicle once and reads only what it returns. */
 #include "services_map.h"
+#include "engine_services.h"
 #include "services_road.h"
 #include "services_station.h"
 
@@ -221,7 +222,6 @@ static uint16_t OPENTTD_VEHICLE_CALL RoadSvcDefaultMaxSpeed(OpenTTDVehicle *v) n
 }
 static uint16_t OPENTTD_VEHICLE_CALL RoadSvcCargoAgeDefault(OpenTTDVehicle *v) noexcept
 {
-	RoadVehicle *u = RoadOf(v);
 	return RustEngineCargoAge(RustVehicleGetEngine(v));
 }
 static OpenTTDRoadCostRead OPENTTD_VEHICLE_CALL RoadSvcCostRead(OpenTTDVehicle *v) noexcept

@@ -328,6 +328,37 @@ static void ResolverProbe()
 		ro.SetRegister(0x100, 1);
 		auto *scope = ro.GetScope(VSG_SCOPE_RELATIVE, 0);
 		fmt::print(stderr, "FLEET resolver-relative {}\n", scope->GetVariable(0x84, 0, available) == v->Next()->index.base());
+		uint64_t relative_digest = 0;
+		uint relative_cases = 0;
+		for (int32_t reg : {INT32_MIN, -1, 0, 1, INT32_MAX}) for (uint8_t selector : {0, 1, 0x40, 0x41, 0x80, 0x81, 0xC0, 0xC1}) {
+			ro.SetRegister(0x100, reg);
+			bool valid = true;
+			uint32_t value = ro.GetScope(VSG_SCOPE_RELATIVE, selector)->GetVariable(0x84, 0, valid);
+			relative_digest = relative_digest * 31337 + value + valid;
+			++relative_cases;
+		}
+		fmt::print(stderr, "FLEET resolver-relative-matrix {} {}\n", relative_cases, relative_digest);
+		ro.GetScope(VSG_SCOPE_RELATIVE, 1);
+		ro.self_scope.SetVehicle(v->Next());
+		bool valid = true;
+		uint32_t fresh = ro.GetScope(VSG_SCOPE_RELATIVE, 1)->GetVariable(0x84, 0, valid);
+		const Vehicle *expected = v->Next()->Next();
+		fmt::print(stderr, "FLEET resolver-relative-uncached {}\n", fresh == (expected == nullptr ? UINT_MAX : expected->index.base()) && valid == (expected != nullptr));
+		ro.self_scope.SetVehicle(v);
+		uint64_t policy_digest = 0;
+		uint policy_cases = 0;
+		for (CallbackID cb : {CBID_NO_CALLBACK, CBID_RANDOM_TRIGGER, CBID_TRAIN_ALLOW_WAGON_ATTACH, CBID_VEHICLE_START_STOP_CHECK, CBID_VEHICLE_32DAY_CALLBACK, CBID_VEHICLE_COLOUR_MAPPING, CBID_VEHICLE_SPAWN_VISUAL_EFFECT, CBID_VEHICLE_MODIFY_PROPERTY}) {
+			ro.callback = cb;
+			for (uint32_t parameter : {0x5FU, 0x61U, 0x84U}) {
+				bool allowed = true;
+				uint32_t value = ro.self_scope.GetVariable(0x61, parameter, allowed);
+				policy_digest = policy_digest * 31337 + value + allowed;
+				++policy_cases;
+			}
+		}
+		ro.callback = CBID_NO_CALLBACK;
+		fmt::print(stderr, "FLEET resolver-var61-policy {} {}\n", policy_cases, policy_digest);
+
 		/* Nested deterministic procedure changes relative scope, then returns to self.
 		 * Output registers are copied by ResolveCallback after the nested evaluation. */
 		auto *procedure = new DeterministicSpriteGroup();

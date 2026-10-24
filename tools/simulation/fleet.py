@@ -267,6 +267,7 @@ def check(scenario, run, mode, role, result):
             "FLEET resolver-checkpoint complete",
             "FLEET resolver-parent true",
             "FLEET resolver-relative true",
+            "FLEET resolver-relative-uncached true",
             "FLEET resolver-caller-grf true true true",
             "FLEET resolver-wide-badge true true",
             "FLEET resolver-reentry true true true",
@@ -367,6 +368,16 @@ def check(scenario, run, mode, role, result):
             result["problems"].append(
                 f"{mode}/{role}: missing loaded/loading real groups"
             )
+        for label, count in (("relative-matrix", 40), ("var61-policy", 24)):
+            lines = [
+                line.split()
+                for line in run["log"]
+                if line.startswith(f"FLEET resolver-{label} ")
+            ]
+            if len(lines) != 1 or int(lines[0][2]) != count:
+                result["problems"].append(
+                    f"{mode}/{role}: missing complete resolver {label}"
+                )
         for label in ("cache", "translation", "var61", "grf-reload"):
             lines = [
                 line
