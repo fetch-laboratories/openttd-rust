@@ -1941,9 +1941,9 @@ north-part normalisation, `ClearTile_Town`/`ClearTownHouse`/`RemoveNearbyStation
 `TerraformTile_Town`, `CmdPlaceHouse`, cache rebuild/repair traversals, yearly aging and the
 NewGRF house tile loop, `CanDeleteHouse`, animation triggers and rerandomisation. It writes the
 sole Rust town owner directly and ends each owner access before any callback, command or station
-service. C++ keeps thin facades, the generic `HouseResolverObject`/reseed sum,
-`HouseAnimationBase`, `StationFinder`/`MoveGoodsToStation` and `GetHouseNorthPart` for resolver
-variables; original bodies compile only portably. Narrow phase observations replace whole
+service. #409 extends ownership to house/shared-town resolution and shares its
+north-part helper with lifecycle. C++ keeps stack virtual facades, common Action2,
+`StationFinder`/`MoveGoodsToStation`; original bodies compile only portably. Narrow phase observations replace whole
 tile/spec copies; projections compose canonical spec-field readers. Each entry reuses its town
 and map context, including construction triggers and rebuilds. Town count, recession, autoslope,
 foundation price, tick counter and animated-tile removal are shared services; house clearing
@@ -1953,8 +1953,31 @@ inspect-window deletion, share canonical typed native leaves with industry consu
 `python3 tools/migration.py simulate town-houses- --jobs 2` places every original house through
 `CmdPlaceHouse`, compares error histograms, occupied/replace, protected clears, autoslope
 terraform, company clearance until refusal and aged-house rebuild in both cargo modes, and
-requires candidate `house.*` witnesses. NewGRF house callbacks and station removal on house
-clearance remain #156 gaps.
+requires candidate `house.*` witnesses. #409 adds real house resolver groups; station
+removal on house clearance remains a #156 gap.
+
+### House and shared-town NewGRF resolution (#409, PR #416)
+
+`town/resolver.rs` owns HouseScope/HouseResolver and TownScope/TownResolver query
+policy, root/scope selection, process-wide ordered house classes and count reset.
+Count/history/radius and north-part queries call canonical Rust town/house owners.
+Lifecycle, construction, foundation and animation enter the resolver directly;
+displaced table callbacks and native helper bodies are excluded with WITH_RUST.
+C++ retains stack virtual facades, Action2, specs/override managers, map/pool
+shells and one ordered call-local StationFinder. Var64 reads canonical Rust cargo
+status and uses the shared GoodsEntry conversion. No new map view is exposed.
+Native leaves are noexcept; no ordinary-play throwing service is used. Save/load
+exceptions stay native. Contexts end before load/reset/yield; owner/container
+borrows end before evaluator, storage and station reentry.
+Default `town-houses-` scenarios install real deterministic/randomized groups:
+construction over existing houses, production/prototype, parent readonly/null,
+class reset/reuse, count clamps, signed var64 offsets/acceptance histories and
+var65 multipart-origin exclusion/nearest match. Reload reinstalls transient
+groups. Callback/register outcomes, CITY/map/cargo state, logs and RNG compare.
+Focused founding/growth, storage reload, native callback reentry and ABI checks
+cover the changed routes. External-GRF badge/content combinations, historical
+save adapters and GUI-thread integration remain tracked under #156. Independent
+whole-owner review and current-base exact-combination Full remain root gates.
 
 ### Industry periodic production and builder ownership (#129)
 
@@ -2322,3 +2345,25 @@ Arbitrary external GRFs/loader conditionals, historical saves, remaining native
 feature combinations and GUI scheduling remain #156 gaps. Native signed dword
 MIN/-1 division overflow has a compiler/platform-dependent undefined result;
 the cross-game fixture excludes it and Rust uses explicit wrapping division.
+### Road-stop NewGRF runtime and associations (#410, #422 via #427)
+
+Rust owns road-stop/road-waypoint stack context, root/cargo selection, lazy parent
+and variable policy, callback and randomisation control, spec-slot selection,
+assignment/removal and trigger-cache reconstruction. Native station shells retain
+shared spec/tile vectors, saved bits and serialization; specs, parsed Action2 and
+rendering remain native. Thin virtual/evaluator frames keep portable callers.
+Station variables, existing-cargo counts, empty masks and storage use their Rust
+owners directly; station/spec metadata has one shared native definition. Displaced
+command/animation/cargo callback slots and orphan declarations are removed.
+
+Ordinary road-stop randomisation constructs CBID_NO_CALLBACK in the original;
+real groups preserve waiting publication/retention, gates and zero new draws.
+Explicit CBID_RANDOM_TRIGGER fixtures establish resolver masks, without claiming
+ordinary execution of the otherwise-unreachable reseed/consumption branches.
+Default command/reload cases compare actual groups, slot/cache lifecycle, full
+semantic saves, map/STNN/registers and both RNG streams. Transient spec/group
+reattachment after load does not establish arbitrary external-GRF loading.
+Build/Cargo4, affected native/ABI and default scenarios, callee/duplicate/orphan
+review and exact-current-base Full are recorded in #427. Remaining historical,
+external-GRF and named unreachable branches remain on #156. Necessary typed
+native vector/spec/evaluator boundary cost was accepted once at the checkpoint.

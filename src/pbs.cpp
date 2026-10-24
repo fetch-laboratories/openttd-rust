@@ -42,7 +42,7 @@ const OpenTTDPbsServices &GetPbsServices() noexcept
 		.compatible_station = RustCompatibleStationTiles,
 		.show_reservation = RustShowTrackReservation,
 		.assert_platform = []([[maybe_unused]] uint32_t tile, [[maybe_unused]] uint8_t dir) noexcept { assert(IsRailStationTile(TileIndex{tile})); assert(GetRailStationAxis(TileIndex{tile}) == DiagDirToAxis(static_cast<DiagDirection>(dir))); },
-		.station = [](uint32_t t) noexcept { return BaseStation::GetByTile(TileIndex{t}); },
+		.station = RustBaseStationByTile,
 
 		.is_crossing = MapSvcRoadIsLevelCrossing,
 		.read_train_on_res = [](const OpenTTDPbsTrainOutput *slot) noexcept -> OpenTTDTrainHandle { return {*reinterpret_cast<Vehicle *const *>(slot), nullptr}; },

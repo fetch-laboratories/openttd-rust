@@ -111,7 +111,6 @@ inline OpenTTDMovementFoundation RustHouseFoundation(uint32_t tile) noexcept
 	const auto *spec = kind >= NEW_HOUSE_OFFSET ? HouseSpec::Get(kind) : nullptr;
 	return {.spec = spec, .kind = kind, .callback = spec != nullptr && spec->callback_mask.Test(HouseCallbackMask::DrawFoundations)};
 }
-inline uint16_t RustHouseFoundationCallback(uint32_t tile, uint16_t kind) noexcept { return OpenTTDHouseCallback(CBID_HOUSE_DRAW_FOUNDATIONS, 0, 0, kind, Town::GetByTile(TileIndex{tile}), TileIndex{tile}, false); }
 inline bool RustHouseFoundationBoolean(const void *spec, uint16_t result) noexcept { return RustSpecBooleanCallback(static_cast<const HouseSpec *>(spec), CBID_HOUSE_DRAW_FOUNDATIONS, result); }
 inline OpenTTDMovementFoundation RustIndustryFoundation(uint32_t tile) noexcept
 {

@@ -351,6 +351,114 @@ static void ResolverAircraft(Aircraft *v)
 	fmt::print(stderr, "FLEET resolver-aircraft {} {}\n", count, digest);
 }
 
+/* Empty real-group vectors and capacity boundaries are absent from the stock
+ * traffic. Exercise the real public callback/property paths, restoring the
+ * canonical cargo list, capacity, order and engine root before returning. */
+static void ResolverRealBoundaries(Train *v, Engine *engine)
+{
+	if (v->cargo.TotalCount() != 0 || !SpriteGroup::CanAllocateItem(7)) FixtureAbort(__LINE__);
+	Backup<decltype(engine->grf_prop.spritegroups)> sprites(engine->grf_prop.spritegroups);
+	Backup<uint16_t> capacity(v->cargo_cap);
+	Backup<Order> order(v->First()->current_order);
+	const uint16_t original_capacity = v->cargo_cap;
+	const Order original_order = v->First()->current_order;
+	Backup<Randomizer> interactive(_interactive_random);
+	_interactive_random.SetSeed(12345);
+	SavedRandomSeeds before, after;
+	SaveRandomSeeds(&before);
+	std::array<const SpriteGroup *, 3> loaded, loading;
+	for (uint i = 0; i < 3; ++i) {
+		loaded[i] = new CallbackResultSpriteGroup(101 + i);
+		loading[i] = new CallbackResultSpriteGroup(211 + i);
+	}
+	auto *real = new RealSpriteGroup();
+	engine->grf_prop.spritegroups.clear();
+	engine->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, real);
+	for (uint mask = 0; mask < 4; ++mask) {
+		real->loaded.clear(); real->loading.clear();
+		if (mask & 1) real->loaded.assign(loaded.begin(), loaded.end());
+		if (mask & 2) real->loading.assign(loading.begin(), loading.end());
+		fmt::print(stderr, "FLEET resolver-real-purchase {} {}\n", mask, GetEngineProperty(v->engine_type, PROP_TRAIN_SPEED, 17));
+		for (uint state = 0; state < 3; ++state) {
+			if (state == 0) v->First()->current_order.MakeDummy(); else v->First()->current_order.MakeLoading(false);
+			if (state == 2) {
+				v->First()->current_order.SetLoadType(OrderLoadType::NoLoad);
+				v->First()->current_order.SetUnloadType(OrderUnloadType::NoUnload);
+			}
+			for (auto [cap, count] : {std::pair{0, 0}, {0, 1}, {8, 0}, {8, 1}, {8, 2}, {8, 3}, {8, 5}, {8, 6}, {8, 7}, {8, 8}, {8, 9}}) {
+				capacity.Change(cap);
+				if (count != 0) {
+					if (!CargoPacket::CanAllocateItem()) FixtureAbort(__LINE__);
+					v->cargo.Append(new CargoPacket(count, 3, StationID::Invalid(), v->tile, Money(133)));
+				}
+				fmt::print(stderr, "FLEET resolver-real-selection {} {} {} {} {} {}\n", mask, state, cap, count, v->cargo.StoredCount(), GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, v->engine_type, v));
+				v->cargo.Truncate();
+			}
+		}
+	}
+	capacity.Restore(); order.Restore(); sprites.Restore();
+	delete real;
+	for (auto *group : loaded) delete group;
+	for (auto *group : loading) delete group;
+	SaveRandomSeeds(&after);
+	fmt::print(stderr, "FLEET resolver-real-restored {} {} {} {} {} {}\n", v->cargo.TotalCount() == 0 && v->cargo_cap == original_capacity && v->First()->current_order.Equals(original_order), SameRandom(before, after), after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
+	interactive.Restore();
+}
+/* Override registration order is observable: a default entry can win before a
+ * cargo-specific one. Use actual engine registrations and the uncached callback
+ * path, without editing either resolver's original selection body. */
+static void ResolverOverrideOrder(Train *wagon)
+{
+	Engine *engine = Engine::Get(wagon->engine_type);
+	if (wagon->gcache.first_engine == EngineID::Invalid() || !SpriteGroup::CanAllocateItem(3)) FixtureAbort(__LINE__);
+	Backup<decltype(engine->overrides)> overrides(engine->overrides);
+	Backup<decltype(engine->grf_prop.spritegroups)> sprites(engine->grf_prop.spritegroups);
+	Backup<CargoType> cargo(wagon->cargo_type);
+	const CargoType original_cargo = wagon->cargo_type;
+	const CargoType other_cargo = (original_cargo + 1) % NUM_CARGO;
+	Backup<Randomizer> interactive(_interactive_random);
+	_interactive_random.SetSeed(12345);
+	SavedRandomSeeds before, after;
+	SaveRandomSeeds(&before);
+	auto *first = new CallbackResultSpriteGroup(311);
+	auto *second = new CallbackResultSpriteGroup(419);
+	auto *ordinary = new CallbackResultSpriteGroup(523);
+	engine->grf_prop.spritegroups.clear();
+	engine->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, ordinary);
+	std::array<EngineID, 2> matching{EngineID::Invalid(), wagon->gcache.first_engine};
+	std::array<EngineID, 1> rejected{EngineID::Invalid()};
+	for (uint test = 0; test < 6; ++test) {
+		engine->overrides.clear();
+		/* Neither a wrong engine nor a wrong cargo may steal the match. */
+		SetWagonOverrideSprites(wagon->engine_type, CargoGRFFileProps::SG_DEFAULT, second, rejected);
+		SetWagonOverrideSprites(wagon->engine_type, (original_cargo + 2) % NUM_CARGO, second, matching);
+		if (test == 0) {
+			SetWagonOverrideSprites(wagon->engine_type, CargoGRFFileProps::SG_DEFAULT, first, matching);
+			SetWagonOverrideSprites(wagon->engine_type, original_cargo, second, matching);
+		} else if (test == 1) {
+			SetWagonOverrideSprites(wagon->engine_type, original_cargo, second, matching);
+			SetWagonOverrideSprites(wagon->engine_type, CargoGRFFileProps::SG_DEFAULT, first, matching);
+		} else if (test == 2) {
+			SetWagonOverrideSprites(wagon->engine_type, original_cargo, first, matching);
+			SetWagonOverrideSprites(wagon->engine_type, original_cargo, second, matching);
+		} else if (test == 3) {
+			SetWagonOverrideSprites(wagon->engine_type, original_cargo, nullptr, matching);
+			SetWagonOverrideSprites(wagon->engine_type, CargoGRFFileProps::SG_DEFAULT, second, matching);
+		} else if (test == 4) {
+			SetWagonOverrideSprites(wagon->engine_type, original_cargo, first, matching);
+		}
+		for (uint input = 0; input < 2; ++input) {
+			cargo.Change(input == 0 ? original_cargo : other_cargo);
+			fmt::print(stderr, "FLEET resolver-override-order {} {} {}\n", test, input, GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, 0, 0, wagon->engine_type, wagon));
+		}
+	}
+	cargo.Restore(); sprites.Restore(); overrides.Restore();
+	delete ordinary; delete second; delete first;
+	SaveRandomSeeds(&after);
+	fmt::print(stderr, "FLEET resolver-override-restored {} {} {} {} {} {}\n", wagon->cargo_type == original_cargo, SameRandom(before, after), after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
+	interactive.Restore();
+}
+
 /* Exercise real Action2 groups through the unchanged public native API on both
  * runtimes. Cache values are captured before any diagnostic rebuild can hide them. */
 static void ResolverProbe()
@@ -366,6 +474,8 @@ static void ResolverProbe()
 	grf.grf_version = 8;
 	for (uint i = 0; i < NUM_CARGO; ++i) grf.cargo_map[i] = NUM_CARGO - 1 - i;
 	file.Change(&grf);
+	ResolverRealBoundaries(v, e);
+	ResolverOverrideOrder(v->GetNextVehicle());
 	if (!SpriteGroup::CanAllocateItem(8)) FixtureAbort(__LINE__);
 	auto *det = new DeterministicSpriteGroup();
 	det->size = DSG_SIZE_DWORD;

@@ -554,7 +554,7 @@ bool CheckSubsidised(CargoType cargo_type, CompanyID company, Source src, const 
 {
 #ifdef WITH_RUST
 	RustNearbyIndustryCursor cursor;
-	return openttd_rust_subsidy_check(&GetRustSubsidyServices(), cargo_type, company.base(), src, st->index.base(), &cursor);
+	return openttd_rust_subsidy_check(&GetRustSubsidyServices(), cargo_type, company.base(), src, RustBaseStationID(st), &cursor);
 #else
 	/* If the source isn't subsidised, don't continue */
 	if (!src.IsValid()) return false;

@@ -205,6 +205,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 raise RuntimeError("fleet reload capture lacks live groups/rules")
             saves[role] = run["snapshots"][-1]
             if resolver:
+                check_override_order(run, "capture", role, result)
                 from .disasters import rows
 
                 marker = next(
@@ -257,6 +258,33 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             ],
         )
     return dict(scenario, executables=executables)
+
+
+def check_override_order(run, mode, role, result):
+    # Frozen callback results from the unchanged native first-match policy.
+    overrides = [
+        line.split()[2:]
+        for line in run["log"]
+        if line.startswith("FLEET resolver-override-order ")
+    ]
+    expected_overrides = [
+        [str(test), str(cargo), str(value)]
+        for test, values in enumerate(
+            ((311, 311), (419, 311), (311, 523), (523, 419), (311, 523), (523, 523))
+        )
+        for cargo, value in enumerate(values)
+    ]
+    if overrides != expected_overrides:
+        result["problems"].append(f"{mode}/{role}: wagon override first-match order")
+    restored_overrides = [
+        line
+        for line in run["log"]
+        if line.startswith("FLEET resolver-override-restored ")
+    ]
+    if len(restored_overrides) != 1 or not restored_overrides[0].startswith(
+        "FLEET resolver-override-restored true true "
+    ):
+        result["problems"].append(f"{mode}/{role}: wagon override restoration/RNG")
 
 
 def check(scenario, run, mode, role, result):
@@ -359,6 +387,64 @@ def check(scenario, run, mode, role, result):
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
     if scenario["fleet"] == "resolver":
+        check_override_order(run, mode, role, result)
+        # Real-group policy is observed through normal callback/property entries.
+        # Explicit boundary results distinguish empty-vector fallback and clamps.
+        purchases = [
+            line.split()[2:]
+            for line in run["log"]
+            if line.startswith("FLEET resolver-real-purchase ")
+        ]
+        if purchases != [
+            [str(i), str(value)] for i, value in enumerate((17, 101, 211, 211))
+        ]:
+            result["problems"].append(f"{mode}/{role}: real-group purchase fallback")
+        boundaries = (
+            (0, 0, 0),
+            (0, 1, 2),
+            (8, 0, 0),
+            (8, 1, 0),
+            (8, 2, 0),
+            (8, 3, 1),
+            (8, 5, 1),
+            (8, 6, 2),
+            (8, 7, 2),
+            (8, 8, 2),
+            (8, 9, 2),
+        )
+        expected = []
+        for mask in range(4):
+            for state in range(3):
+                moving = state != 1
+                for cap, count, index in boundaries:
+                    value = (
+                        (101 if moving else 211) + index
+                        if mask & (1 if moving else 2)
+                        else 65535
+                    )
+                    expected.append(
+                        list(map(str, (mask, state, cap, count, count, value)))
+                    )
+        selections = [
+            line.split()[2:]
+            for line in run["log"]
+            if line.startswith("FLEET resolver-real-selection ")
+        ]
+        if selections != expected:
+            result["problems"].append(
+                f"{mode}/{role}: real-group cargo/order selection"
+            )
+        restored = [
+            line
+            for line in run["log"]
+            if line.startswith("FLEET resolver-real-restored ")
+        ]
+        if len(restored) != 1 or not restored[0].startswith(
+            "FLEET resolver-real-restored true true "
+        ):
+            result["problems"].append(
+                f"{mode}/{role}: real-group cargo restoration/RNG"
+            )
         if (
             len(
                 [line for line in run["log"] if line.startswith("FLEET resolver-real ")]

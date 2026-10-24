@@ -76,7 +76,6 @@ src/rust/aircraft_adapter.hpp | Aircraft_had_vehicle(const OpenTTDStation *s) no
 src/rust/aircraft_adapter.hpp | Aircraft_nearest_depot_order(OpenTTDAircraftVehicle vehicle) noexcept | c2837c0411ced584 | 1
 src/rust/aircraft_adapter.hpp | Aircraft_part_of_orders(OpenTTDAircraftVehicle vehicle) noexcept | 42a2fa6130a76f6a | 1
 src/rust/aircraft_adapter.hpp | Aircraft_service_interval(OpenTTDAircraftVehicle vehicle) noexcept | 0841847ee09aa8ff | 1
-src/rust/aircraft_adapter.hpp | UpdateAirplanesOnNewStation(const Station *st) | 3385f4a0c2f65978 | 1
 src/rust/company_adapter.cpp | Co_aircraft_is_normal(uint32_t id) noexcept | 83a0e1036f160164 | 1
 src/rust/company_adapter.cpp | Co_company_is_ai(uint8_t id) noexcept | 0931792824cde127 | 1
 src/rust/company_adapter.cpp | Co_map_size() noexcept | b49ebe1aff917479 | 1
@@ -136,7 +135,6 @@ src/station_cmd.cpp | []() noexcept -> int32_t | b7b2717268568730 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> OpenTTDStationService * | d36f25ba0331f630 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 204197618397b80a | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> bool | 525f6f2cbe8d180f | 1
-src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> uint8_t | 06dab3257089f706 | 1
 src/station_cmd.cpp | [](OpenTTDBaseStation *handle) noexcept -> void | 13c7c5aa49806d75 | 1
 src/town_cmd.cpp | RustTownAuthorityDistance() noexcept | e43037648def52db | 1
 src/town_cmd.cpp | RustTownCouncilTolerance() noexcept | cddd8d4718f9a2cd | 1

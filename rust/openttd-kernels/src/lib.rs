@@ -45,6 +45,7 @@ mod ground_vehicle;
 mod heightmap;
 mod history;
 mod history_type;
+mod house;
 mod industry_type;
 mod integer;
 mod landscape;
@@ -1413,10 +1414,12 @@ pub(crate) mod tree_map;
 pub(crate) mod water_map;
 
 mod cargo_type;
+mod cargotype;
 mod source_type;
 mod subsidy_base;
 mod tilearea;
 mod timer_game_common;
+mod timer_game_tick;
 
 mod subsidy_type;
 
@@ -1431,3 +1434,4 @@ pub mod rail_type;
 pub mod base_bitset_type;
 
 mod newgrf_airport;
+mod newgrf_roadstop;

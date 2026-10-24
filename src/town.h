@@ -460,7 +460,9 @@ enum TownDirectoryInvalidateWindowData {
 CommandCost CheckforTownRating(DoCommandFlags flags, Town *t, TownRatingCheckType type);
 
 
+#ifndef WITH_RUST
 TileIndexDiff GetHouseNorthPart(HouseID &house);
+#endif
 
 Town *CalcClosestTownFromTile(TileIndex tile, uint threshold = UINT_MAX);
 
