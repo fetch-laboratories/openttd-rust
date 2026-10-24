@@ -12,7 +12,8 @@
 static uint32_t StorageGRFID(const GRFFile *grf) noexcept { return grf->grfid; }
 static OpenTTDIndustryStorage StorageIndustry(Industry *industry) noexcept
 {
-	return {industry->psa == nullptr ? nullptr : industry->psa->rust_storage, industry->index != IndustryID::Invalid()};
+	if (industry->index == IndustryID::Invalid()) return {nullptr, false};
+	return {industry->psa == nullptr ? nullptr : industry->psa->rust_storage, true};
 }
 static OpenTTDStorage256 *StorageCreateIndustry(Industry *industry) noexcept
 {
