@@ -27,27 +27,25 @@ they meant in your note.
 Root is gpt-6.1-sol at xhigh effort, running in Codex from `$start-development`
 (docs/skills/start-development/SKILL.md). It orchestrates up to five
 subagents. Each component has its own worktree and a draft PR that targets
-`rust-migration`. Read AGENTS.md and docs/roadmap.md first. Root already
-follows AGENTS.md, so the message says only what to finish and what to leave.
-It does not restate process steps (base updates, count runs, records, review
-rounds) or add any that AGENTS.md does not require: root reads a restated step
-as a new rule.
+`rust-migration`. Read AGENTS.md and docs/roadmap.md first.
 
-The default is the action-based wind-down in AGENTS.md. There is no time
-estimate or deadline. Finish only the edit or review already underway; save
-unfinished implementation and record review findings without a new fix round.
-Start no new work, reviews, builds, simulations, CI requests or retries, and
-never wait on CI. Merge only already-reviewed combinations that already passed
-Full and still meet strict protection. Anything needing a base update stays
-unmerged for resume. Apply an eligible automatic rollback without asking,
-record the result, and stop; no fix PR or post-reset CI wait is required.
+The wind-down rules are the two paragraphs under `### Automatic rollback and
+wind-down` in AGENTS.md: wind-down is bounded by actions, with no time estimate
+or deadline, and an eligible rollback is applied without asking. The message
+quotes those paragraphs verbatim from the current base (step 4), so root has
+one version whether or not it rereads the file, and this skill cannot drift
+from it. Do not paraphrase them, restate other process steps (base updates,
+count runs, records, review rounds) or add any that AGENTS.md does not require:
+root reads a restated step as a new rule.
 
-Include these action limits in the message root receives. They replace the
-normal development loop, including the reviewer's usual fix-and-recheck loop.
-Do not turn an unfinished item into a requirement to reach a passing milestone.
-Pending CI and later notifications are recorded for resume, not reasons to
-restart work. A user's explicit alternative, such as "one CI run, no repairs",
-changes only that action allowance, not the merge checks or automatic rollback.
+The rest of the message applies those rules to this session: what to finish,
+what to hand off, what can merge, and the rollback target. The rules replace
+the normal development loop, including the reviewer's usual fix-and-recheck
+loop. Do not turn an unfinished item into a requirement to reach a passing
+milestone. Pending CI and later notifications are recorded for resume, not
+reasons to restart work. A user's explicit alternative, such as "one CI run, no
+repairs", changes only that action allowance, not the merge checks or automatic
+rollback.
 
 Stopping preserves worktrees, uncommitted changes and branches for resume.
 Remove only verified merged work; do not close unfinished PRs just to stop.
@@ -113,30 +111,44 @@ Do not weaken validation to fit the wind-down: leave the change unmerged.
 
 ## 4. Write the message
 
-Write it in the user's voice, in plain ASCII, inside one code block. Aim for
-about 20 lines. It goes into a long thread close to compaction, so every line
-is about this session: name the PRs, agents and heads, and choose your own
-wording.
+Write it in the user's voice, in plain ASCII, inside one code block, in three
+parts:
 
-It needs to get across:
+1. One opening line: wind down now, or when the user's trigger fires (normal
+   work continues until then), plus any explicit user scope.
+2. The rules, copied exactly. After `git fetch`, print them from the current
+   base:
 
-- The action limits above, plus any explicit user override. If the user gave a
-  trigger, normal work continues until it; the limits apply when it fires.
-- The current action or handoff for each item from step 3. Start no new
-  components, planners or repair rounds. Due speed/planning work stays due in
-  the checkpoint, not a new gate on resume.
-- Merge only eligible tested combinations; do not wait on pending checks.
-- Perform an eligible automatic rollback without asking and report afterwards;
-  retain the removed work for a replacement PR on resume. Never demand that
-  root fix a red tip through another PR/CI cycle before stopping.
-- Record changed facts if root's state has moved on. Preserve unfinished work.
-- One docs-only roadmap commit within its budget, updating "Where the fork
-  stands" and a checkpoint opening "Paused at the user's request", with each
-  remaining draft, its head, next action and any running jobs or CI.
-- A final report: integrations and rollbacks, current progress metrics if
-  available, remaining work and next actions, and CI state (including pending
-  or unknown). Do not launch measurement work to fill the report. Report an
-  unperformed or failed recovery honestly; do not wait for a green report.
+   ```sh
+   git show origin/rust-migration:AGENTS.md | perl -00 -ne \
+     'if (/^### Automatic rollback and wind-down/) { $f = 1; next } print if $f && $n++ < 2'
+   ```
+
+   Check that it printed the rollback paragraph and the wind-down paragraph;
+   if the section has been restructured, quote the paragraphs that now define
+   them. Put the text between `--- AGENTS.md at <short SHA of
+   origin/rust-migration>: Automatic rollback and wind-down ---` and
+   `--- end ---`, with no edits, summary or additions.
+3. About 20 tailored lines. They go into a long thread close to compaction, so
+   every line is about this session: name the PRs, agents and heads, and
+   choose your own wording. Apply the quoted rules rather than repeating them:
+   - The current action or handoff for each item from step 3. Name any
+     component, planner or repair round root was about to start; it stays
+     unstarted. Due speed/planning work stays due in the checkpoint, not a new
+     gate on resume.
+   - Which tested combinations can merge now, or that none can.
+   - The rollback target, if step 3 found one; root retains the removed work
+     for a replacement PR on resume. Never demand that root fix a red tip
+     through another PR/CI cycle before stopping.
+   - Changed facts, if root's state has moved on. Preserve unfinished work.
+   - One docs-only roadmap commit within its budget, updating "Where the fork
+     stands" and a checkpoint opening "Paused at the user's request", with
+     each remaining draft, its head, next action and any running jobs or CI.
+   - A final report: integrations and rollbacks, current progress metrics if
+     available, remaining work and next actions, and CI state (including
+     pending or unknown). Do not launch measurement work to fill the report.
+     Report an unperformed or failed recovery honestly; do not wait for a
+     green report.
 
 ## 5. Send it to root
 
