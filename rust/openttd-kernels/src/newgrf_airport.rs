@@ -43,7 +43,7 @@ pub struct Services {
     shared: *const crate::services::Services,
     storage: *const crate::newgrf_storage::Services,
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
-    pub(crate) by_tile: extern "C" fn(u32) -> *mut BaseStation,
+    pub(crate) by_tile: extern "C" fn(u32) -> *mut crate::station::Station,
     station_id: extern "C" fn(*const BaseStation) -> u16,
     facilities: extern "C" fn(*const BaseStation) -> u8,
     pub(crate) get_station: extern "C" fn(u16) -> *mut BaseStation,

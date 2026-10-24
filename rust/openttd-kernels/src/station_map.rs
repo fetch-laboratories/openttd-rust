@@ -57,12 +57,12 @@ pub(crate) fn get_airport_gfx(
     crate::newgrf_airport::translate_tile((s.station_gfx)(tile), airport)
 }
 
-/// `Station::GetByTile` using its named station-index and strict pool operations.
+/// `Station::GetByTile`, retaining its valid-station-or-null lookup.
 pub(crate) fn station_by_tile(
     tile: u32,
     s: &crate::newgrf_airport::Services,
 ) -> *mut crate::station::BaseStation {
-    (s.by_tile)(tile)
+    (s.by_tile)(tile).cast()
 }
 /// Original `IsHangar`, retaining its assertion and airport gate before lookup.
 pub(crate) fn is_hangar(tile: u32, s: &crate::newgrf_airport::Services) -> bool {

@@ -44,7 +44,7 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.shared = &GetRustSharedServices(),
 		.storage = &GetRustStorageServices(),
 		.vehicles = &GetRustVehicleServices(),
-		.by_tile = RustBaseStationByTile,
+		.by_tile = RustStationByTile,
 		.station_id = RustBaseStationID<const BaseStation>,
 		.facilities = RustStationFacilities,
 		.get_station = RustStationGet<Station *>,
