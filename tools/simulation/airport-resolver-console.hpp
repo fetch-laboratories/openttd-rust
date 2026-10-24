@@ -102,7 +102,11 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 	AirportResolverObject airport(tile, st, spec, 0); auto *town = airport.GetTown(); StationNeed(town != nullptr, __LINE__);
 	auto *original_town = st->town; st->town = nullptr; StationNeed(airport.GetTown() == town, __LINE__);
 	AirportResolverObject retry(tile, st, spec, 0); StationNeed(retry.GetTown() == nullptr, __LINE__); st->town = original_town;
+#ifdef WITH_RUST
+	StationNeed(retry.GetTown() != nullptr && preview.GetTown()->context.readonly && nowhere.GetTown() == nullptr, __LINE__);
+#else
 	StationNeed(retry.GetTown() != nullptr && preview.GetTown()->readonly && nowhere.GetTown() == nullptr, __LINE__);
+#endif
 	det->var_scope = VSG_SCOPE_PARENT; det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}, {.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x418}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 7}, {.operation = DSGA_OP_RST, .variable = 0x7C, .parameter = 7, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
 	std::array<int32_t, 1> town_regs{}; StationNeed(airport.ResolveCallback(town_regs) == 3 && town_regs[0] == 0x418, __LINE__);
 	det->adjusts[2].and_mask = 0x419; StationNeed(preview.ResolveCallback(town_regs) == 3 && town_regs[0] == 0x418, __LINE__);
