@@ -479,11 +479,6 @@ def prepare_scenario(scenario, binaries, builds, out, timeout, env, result):
     return scenario
 
 
-def pair_order(repetition):
-    """Launch order of one pair; a speed pass alternates it (speed.py)."""
-    return ("reference", "candidate")
-
-
 def run_game(
     scenario,
     binary,
@@ -501,6 +496,36 @@ def run_game(
     desync=3 writes the 32-day snapshots but also checks and rebuilds caches
     every tick and switches YAPF rail to its uncached path, so every scenario
     also has a plain run without it whose exit save is compared."""
+    return read_game(
+        execute_game(
+            prepare_game(
+                scenario,
+                binary,
+                build,
+                run_dir,
+                timeout,
+                base_env,
+                desync,
+                isolate=isolate,
+                instructions=instructions,
+            )
+        )
+    )
+
+
+def prepare_game(
+    scenario,
+    binary,
+    build,
+    run_dir,
+    timeout,
+    base_env=None,
+    desync=True,
+    *,
+    isolate=False,
+    instructions=False,
+):
+    """Prepare a launch without executing or decoding a game."""
     prepare_run_dir(scenario, build, run_dir)
     if scenario["kind"] == "save":
         # A saved AI or GameScript missing from the runtime is replaced by the
@@ -542,6 +567,20 @@ def run_game(
         command, instruction_info = profiler.prepare(
             scenario, command, binary, build, run_dir, env, run_dir.name == "reference"
         )
+    return dict(
+        dir=run_dir,
+        command=command,
+        env=env,
+        build=build,
+        timeout=timeout,
+        isolate=isolate,
+        instructions=instruction_info,
+    )
+
+
+def execute_game(plan):
+    """Execute an already prepared game; leave output decoding to read_game."""
+    run_dir, command = plan["dir"], plan["command"]
     with (
         game_slot(),
         open(run_dir / "stdout.log", "wb") as out,
@@ -549,21 +588,33 @@ def run_game(
     ):
         started = time.monotonic()
         try:
-            code = (benchmark_run if isolate else subprocess.run)(
+            code = (benchmark_run if plan["isolate"] else subprocess.run)(
                 [
                     sys.executable,
                     str(ROOT / "tools/simulation/game_launcher.py"),
                     *command,
                 ],
-                cwd=build,
-                env=env,
+                cwd=plan["build"],
+                env=plan["env"],
                 stdout=out,
                 stderr=err,
-                timeout=timeout,
+                timeout=plan["timeout"],
             ).returncode
         except subprocess.TimeoutExpired:
             code = "timeout"
         seconds = round(time.monotonic() - started, 3)
+    return {
+        "instructions": plan["instructions"],
+        "dir": run_dir,
+        "exit": code,
+        "seconds": seconds,
+        "command": command,
+    }
+
+
+def read_game(run):
+    """Decode a completed game's logs and discover its snapshots."""
+    run_dir = run["dir"]
     autosave = run_dir / "save/autosave"
     snapshots = sorted(
         path
@@ -573,11 +624,7 @@ def run_game(
     if (autosave / "exit.sav").is_file():
         snapshots.append(autosave / "exit.sav")
     return {
-        "instructions": instruction_info,
-        "dir": run_dir,
-        "exit": code,
-        "seconds": seconds,
-        "command": command,
+        **run,
         "snapshots": snapshots,
         "log": log_lines(run_dir),
         "stdout": (run_dir / "stdout.log").read_bytes(),
@@ -862,6 +909,9 @@ def run_scenario(
     env,
     benchmark_repetitions=0,
     instructions=False,
+    *,
+    game_runner=None,
+    prepared=False,
 ):
     """Run both binaries twice (with and without desync snapshots) and compare.
 
@@ -885,8 +935,8 @@ def run_scenario(
 
     def compare(mode, snapshot):
         records = compare_saves(
-            out / name / mode / "reference/save/autosave" / snapshot,
-            out / name / mode / "candidate/save/autosave" / snapshot,
+            next(p for p in runs["reference"]["snapshots"] if p.name == snapshot),
+            next(p for p in runs["candidate"]["snapshots"] if p.name == snapshot),
             name,
             limit,
             result["stats"],
@@ -898,9 +948,10 @@ def run_scenario(
             )
 
     try:
-        scenario = prepare_scenario(
-            scenario, binaries, builds, out, timeout, env, result
-        )
+        if not prepared:
+            scenario = prepare_scenario(
+                scenario, binaries, builds, out, timeout, env, result
+            )
         result["requested_ticks"] = scenario["ticks"]
         # Only a distinct candidate counts branches; timed runs keep counters off.
         scenario = dict(
@@ -913,9 +964,9 @@ def run_scenario(
             if benchmark_repetitions
             else (("snapshots", True), ("plain", False))
         )
-        for repetition, (mode, desync) in enumerate(modes):
-            launched = {
-                role: run_game(
+        for mode, desync in modes:
+            runs = {
+                role: (game_runner or run_game)(
                     dict(
                         scenario,
                         **scenario.get("role_inputs", {}).get(role, {}),
@@ -930,9 +981,8 @@ def run_scenario(
                     isolate=bool(benchmark_repetitions),
                     **({"instructions": True} if instructions else {}),
                 )
-                for role in pair_order(repetition)
+                for role in ("reference", "candidate")
             }
-            runs = {role: launched[role] for role in ("reference", "candidate")}
             exits = [
                 runs[role]["snapshots"][-1]
                 if runs[role]["snapshots"]

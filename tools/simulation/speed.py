@@ -10,7 +10,6 @@ scenario as `SPEED_PASS` rows for instructions.py.
 import argparse
 import json
 import os
-import shutil
 import signal
 import statistics
 import sys
@@ -72,10 +71,30 @@ def prepare(out, profile, migration):
     manifest = dict(
         head=head,
         ld_library_path=env.get("LD_LIBRARY_PATH", ""),
-        profile=str(profile) if profile else None,
-        executables={r: instructions.digest(binaries[r].read_bytes()) for r in ROLES},
-        identities={},
+        profile=str(profile.resolve()) if profile else None,
+        profile_sha256=instructions.digest(profile.read_bytes()) if profile else None,
     )
+    _, identities = prepare_inputs(out, binaries, builds, env)
+    if profile and any(
+        records[name][role]["identity"] != identity[role]
+        for name, identity in identities.items()
+        for role in ROLES
+    ):
+        sys.exit(f"frozen runtimes differ from {profile}")
+    manifest["runtime_identities"] = identities
+    manifest["identities"] = {
+        name: identity["candidate"]["compatible"]
+        for name, identity in identities.items()
+    }
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    proved = "matching the profile" if profile else "without a profile"
+    print(f"Prepared {len(identities)} scenarios {proved}, no games: {out}")
+    return 0
+
+
+def prepare_inputs(out, binaries, builds, env):
+    """Resolve the exact profiled inputs without running any preparation game."""
+    scenarios, identities = [], {}
 
     def no_game(*args, **kwargs):
         raise RuntimeError("speed preparation runs no game")
@@ -106,18 +125,12 @@ def prepare(out, profile, migration):
             identity["candidate"]["compatible"] = instructions.digest(
                 [identity["candidate"]["compatible"], identity["reference"]]
             )
-            manifest["identities"][name] = identity["candidate"]["compatible"]
-            if profile and any(
-                records[name][role]["identity"] != identity[role] for role in ROLES
-            ):
-                sys.exit(f"{name}: frozen runtimes differ from {profile}")
+            identities[name] = identity
+            scenarios.append(scenario)
     finally:
         for module, run_game in zip(games, saved, strict=True):
             module.run_game = run_game
-    (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    proved = "matching the profile" if profile else "without a profile"
-    print(f"Prepared {len(manifest['identities'])} scenarios {proved}, no games: {out}")
-    return 0
+    return scenarios, identities
 
 
 def processes():
@@ -145,6 +158,7 @@ class Hold:
     def __init__(self, log):
         self.log, self.stopped, self.done = log, set(), threading.Event()
         self.hz, self.thread = os.sysconf("SC_CLK_TCK"), None
+        self.error = None
 
     def scan(self, before, elapsed):
         table = processes()
@@ -187,11 +201,17 @@ class Hold:
         return table
 
     def start(self):
+        before, started = self.scan({}, 1), time.monotonic()
+
         def watch():
-            before, started = self.scan({}, 1), time.monotonic()
-            while not self.done.wait(2):
-                now = time.monotonic()
-                before, started = self.scan(before, now - started), now
+            nonlocal before, started
+            try:
+                while not self.done.wait(2):
+                    now = time.monotonic()
+                    before, started = self.scan(before, now - started), now
+                self.scan(before, max(time.monotonic() - started, 0.001))
+            except Exception as error:
+                self.error = error
 
         self.thread = threading.Thread(target=watch, daemon=True)
         self.thread.start()
@@ -200,59 +220,107 @@ class Hold:
         if self.done.is_set():
             return
         self.done.set()
-        self.thread.join()
+        if self.thread is not None:
+            self.thread.join()
         for pid in self.stopped:
             try:
                 os.kill(pid, signal.SIGCONT)
             except ProcessLookupError:
                 pass
         print(f"Released {len(self.stopped)} held processes", flush=True)
+        if self.error is not None:
+            raise RuntimeError("speed-pass process observation failed") from self.error
 
 
 def collect(out, migration):
     manifest = json.loads((out / "manifest.json").read_text())
     if not manifest["profile"]:
         sys.exit("collect needs a bundle prepared with --profile for anchor Ir")
-    if (
-        migration.environment().get("LD_LIBRARY_PATH", "")
-        != manifest["ld_library_path"]
+    if migration.git("rev-parse", "HEAD") != manifest["head"] or migration.git(
+        "status", "--short"
     ):
+        sys.exit("collect requires the clean checkout used by prepare")
+    if (
+        instructions.digest(Path(manifest["profile"]).read_bytes())
+        != manifest["profile_sha256"]
+    ):
+        sys.exit("instruction profile changed after preparation")
+    env = migration.environment()
+    if env.get("LD_LIBRARY_PATH", "") != manifest["ld_library_path"]:
         sys.exit("LD_LIBRARY_PATH differs from preparation")
     bundle = out / "frozen"
-    for role in ROLES:
-        binary = bundle / f"{role}-runtime" / NAMES[role]
-        if instructions.digest(binary.read_bytes()) != manifest["executables"][role]:
-            sys.exit(f"frozen {role} executable changed")
-    names = [s["name"] for s in speed_scenarios()]
-    remaining = [GROUPS * len(names) * PAIRS * len(ROLES)]
-    hold, group, run_game = Hold(out / "observations.jsonl"), 0, core.run_game
+    builds = {role: bundle / f"{role}-runtime" for role in ROLES}
+    binaries = {role: builds[role] / NAMES[role] for role in ROLES}
+    scenarios, identities = prepare_inputs(out, binaries, builds, env)
+    if identities != manifest["runtime_identities"]:
+        sys.exit("runtime, libraries or inputs changed after preparation")
+    collect_games(out, scenarios, binaries, builds, env)
+    return summarize(out, manifest, [s["name"] for s in scenarios], GROUPS)
 
-    def timed(*args, **kwargs):
-        result = run_game(*args, **kwargs)
-        remaining[0] -= 1
-        if not remaining[0]:
-            hold.release()  # The last timed game has exited.
-        return result
 
-    simulation = migration.LOCAL / "simulation"
-    core.run_game, core.prune_simulation_runs = timed, lambda root: None
-    # Each scenario gets six pairs launched in each order.
-    core.pair_order = lambda repetition: ROLES[:: 1 - 2 * ((group + repetition) % 2)]
-    hold.start()
+def collect_games(out, scenarios, binaries, builds, env):
+    """Prepare every launch before the hold; compare every pair after release."""
+    plans = {}
+    for group in range(GROUPS):
+        for scenario in scenarios:
+            for pair in range(PAIRS):
+                for role in ROLES:
+                    setup = dict(
+                        scenario,
+                        **scenario.get("role_inputs", {}).get(role, {}),
+                        witnesses=False,
+                    )
+                    folder = (
+                        out / f"group-{group}" / scenario["name"] / str(pair) / role
+                    )
+                    plans[group, scenario["name"], pair, role] = core.prepare_game(
+                        setup,
+                        binaries[role],
+                        builds[role],
+                        folder,
+                        1200,
+                        env,
+                        False,
+                        isolate=True,
+                    )
+    hold, runs = Hold(out / "observations.jsonl"), {}
     try:
+        hold.start()
         for group in range(GROUPS):
-            before = set(simulation.glob("*/report.json"))
-            sys.argv = ["simulate.py", *names, "--benchmark", str(PAIRS), "--jobs", "1"]
-            sys.argv += ["--frozen-runtimes", str(bundle)]
-            code = core.main()
-            (report,) = set(simulation.glob("*/report.json")) - before
-            shutil.copy2(report, out / f"group-{group}.json")
-            if code:
-                break
+            for scenario in scenarios:
+                for pair in range(PAIRS):
+                    for role in ROLES[:: 1 - 2 * ((group + pair) % 2)]:
+                        key = group, scenario["name"], pair, role
+                        runs[key] = core.execute_game(plans[key])
     finally:
-        hold.release()
-        core.run_game = run_game
-    return summarize(out, manifest, names, group + 1)
+        hold.release()  # The final timed game exits before any output is decoded.
+    for group in range(GROUPS):
+        results = []
+        for scenario in scenarios:
+            recorded = iter(
+                core.read_game(runs[group, scenario["name"], pair, role])
+                for pair in range(PAIRS)
+                for role in ROLES
+            )
+            results.append(
+                core.run_scenario(
+                    scenario,
+                    binaries,
+                    builds,
+                    out,
+                    20,
+                    1200,
+                    env,
+                    PAIRS,
+                    game_runner=lambda *args, recorded=recorded, **kwargs: next(
+                        recorded
+                    ),
+                    prepared=True,
+                )
+            )
+        (out / f"group-{group}.json").write_text(
+            json.dumps({"results": results}, indent=2) + "\n"
+        )
 
 
 def summarize(out, manifest, names, groups):
@@ -270,6 +338,12 @@ def summarize(out, manifest, names, groups):
             )
     if any(len(values) != GROUPS for values in medians.values()):
         sys.exit(f"only {groups} of {GROUPS} groups completed; no anchors")
+    loads = [
+        json.loads(line)
+        for line in (out / "observations.jsonl").read_text().splitlines()
+    ]
+    if any(entry["unheld"] for entry in loads):
+        sys.exit("other builds, profiles or games ran during collection; no anchors")
     rows = [
         (
             n,
@@ -283,7 +357,6 @@ def summarize(out, manifest, names, groups):
         json.dumps(dict(head=manifest["head"], medians=medians, rows=rows), indent=2)
         + "\n"
     )
-    loads = [json.loads(line) for line in (out / "observations.jsonl").open()]
     print(
         f"{len(loads)} observations: maximum 1-minute load "
         f"{max(entry['load'][0] for entry in loads):.2f}, "
