@@ -31,6 +31,8 @@ inline uint8_t RustResolverGRFVersion(const ResolverObject *resolver) noexcept {
 inline bool RustResolverGRFVersion8(const ResolverObject *resolver) noexcept { return RustResolverGRFVersion(resolver) >= 8; }
 template <typename Spec>
 inline const GRFFile *RustSpecGRFFile(const Spec *spec) noexcept { return spec->grf_prop.grffile; }
+template <typename Spec>
+inline bool RustSpecHasGRFFile(const Spec *spec) noexcept { return RustSpecGRFFile(spec) != nullptr; }
 inline const GRFFile *RustHouseGrf(uint16_t house) noexcept { return RustSpecGRFFile(RustHouseSpec(house)); }
 template <typename Spec, typename Handle = Spec>
 inline uint8_t RustSpecGRFVersion(const Handle *handle) noexcept { return RustGRFFileVersion(RustSpecGRFFile(reinterpret_cast<const Spec *>(handle))); }
