@@ -554,7 +554,11 @@ store on its runners, so the GitHub cache budget above covers only GitHub-hosted
 jobs. Unsetting a variable returns that job to GitHub with no workflow change.
 Profile CI time with the Blacksmith CLI (`blacksmith jobs list|steps|stats`,
 `jobs aggregate`, `jobs diagnose rightsize`) before changing runner sizes or
-sharding: `stats` gives each Blacksmith job's CPU and memory timeseries. Agents
+sharding: `stats` gives each Blacksmith job's CPU and memory timeseries. Pass
+`--job-name` to `aggregate` and `diagnose rightsize`: each full request names its
+run `CI full PR N <hash>`, so grouping by workflow leaves one run per group
+(`insufficient_data`). Size by the busy step, not the job average: compile and
+scenario steps saturate every runner, and setup steps idle at about one core. Agents
 authenticate with an org token (`blacksmith org-token create`, admin only), never
 a copy of a person's `~/.blacksmith/credentials`.
 
