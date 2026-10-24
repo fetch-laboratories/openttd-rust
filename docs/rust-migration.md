@@ -152,8 +152,8 @@ ID.
 Callback declarations inherit signature-correct abort defaults. Fixtures specify only callbacks
 they actually use; data pointers and scalar carriers retain their own initialization rules.
 Generated typed visitors check actual production instances for null callbacks and abort defaults
-in the default native tests. `tools/test-generated-abi.py` checks the historical conversion
-against the deleted lists and tests current generation separately, allowing later ABI changes.
+in the default native tests. `tools/test-generated-abi.py` checks that every generated list and
+visitor names exactly its declared fields, and parses a synthetic tree.
 Cross-language signature assertions are not generated.
 
 ## Compiler cache, shared reference and CI time

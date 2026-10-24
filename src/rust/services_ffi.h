@@ -162,7 +162,6 @@ struct OpenTTDSharedServices {
 	void (*set_tropic_zone)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_tropic_zone);
 	uint8_t (*snow_line)() noexcept OPENTTD_SERVICE_DEFAULT(snow_line);
 	uint16_t (*station_index)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_index);
-	// Registry: station construction (#267).
 	const OpenTTDRoadCommandServices *(*road_commands)() noexcept OPENTTD_SERVICE_DEFAULT(road_commands);
 	const OpenTTDStationCommandServices *(*station_commands)() noexcept OPENTTD_SERVICE_DEFAULT(station_commands);
 	bool (*docking_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(docking_tile);
@@ -195,13 +194,11 @@ struct OpenTTDSharedServices {
 	uint8_t (*tunnel_bridge_direction)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_bridge_direction);
 	uint8_t (*tunnel_transport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tunnel_transport);
 	void (*update_level_crossing)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(update_level_crossing);
-	// Registry: house (#256).
 	void (*rebuild_town_tree)() noexcept OPENTTD_SERVICE_DEFAULT(rebuild_town_tree);
 	bool (*recession)() noexcept OPENTTD_SERVICE_DEFAULT(recession);
 	uint64_t (*tick_counter)() noexcept OPENTTD_SERVICE_DEFAULT(tick_counter);
 	size_t (*town_count)() noexcept OPENTTD_SERVICE_DEFAULT(town_count);
 
-	// Registry: landscape (#212).
 	OpenTTDFoundationSlope (*apply_foundation)(Foundation, Slope) noexcept OPENTTD_SERVICE_DEFAULT(apply_foundation);
 	ClearGround (*clear_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(clear_ground);
 	bool (*has_water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_water_class);
@@ -212,7 +209,6 @@ struct OpenTTDSharedServices {
 	TreeGround (*tree_ground)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(tree_ground);
 	const OpenTTDWaterGroundServices *(*water_services)() noexcept OPENTTD_SERVICE_DEFAULT(water_services); ///< Immutable table; getter avoids recursive static initialization.
 	void (*for_each_station)(void *, void (*)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept OPENTTD_SERVICE_DEFAULT(for_each_station); ///< Live Station::Iterate(); resolves the next slot after each visit, including reentry.
-	// Registry: road stops (#354).
 	RoadStopType (*road_stop_type)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_stop_type);
 	const OpenTTDRoadStopServices *(*road_stops)() noexcept OPENTTD_SERVICE_DEFAULT(road_stops);
 };
@@ -320,13 +316,10 @@ inline OpenTTDSharedServices OpenTTDFixtureSharedServices(void *context, uint32_
 		.industry = industry,
 		.next_company = [](uint8_t) noexcept -> uint8_t { return UINT8_MAX; },
 		.random = random,
-		// Registry: house (#256).
 		.rebuild_town_tree = OpenTTDFixtureMapService<void>,
 		.recession = OpenTTDFixtureMapService<bool>,
 		.tick_counter = OpenTTDFixtureMapService<uint64_t>,
 		.town_count = OpenTTDFixtureMapService<size_t>,
-
-		// Registry: landscape (#212).
 	};
 }
 #endif /* RUST_SERVICES_FFI_H */

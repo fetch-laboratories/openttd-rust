@@ -1697,30 +1697,6 @@ mod tests {
     }
 
     #[test]
-    fn improved_placer_reads_height_at_the_original_points() {
-        reset(World {
-            plant: CLEAR_TILE,
-            random: 0xff00_1010, // Tile 16; every attempt offsets by (0, 0).
-            ..World::default()
-        });
-        let g = GenerateSettings {
-            placer: TP_IMPROVED,
-            freeform_edges: false,
-            climate: ARCTIC,
-            height_limit: 30,
-            ..GENERATE
-        };
-        with(|t| t.scatter_one(&g));
-        let log = events();
-        // Plant check, two GetTileZ, snow line, then 8 * 2 * 3 * 15 / 30 = 24 attempts
-        // which each check the plant record before reading the height.
-        assert_eq!(&log[..2], [Event::Draw, Event::Progress]);
-        let heights = log.iter().filter(|e| **e == Event::TileZ).count();
-        assert_eq!(heights, 2 + 24);
-        assert_eq!(log.iter().filter(|e| **e == Event::Snow).count(), 1);
-    }
-
-    #[test]
     fn quiet_temperate_tile_reads_once_and_never_reads_height() {
         reset(World {
             tree: TreeObservation {

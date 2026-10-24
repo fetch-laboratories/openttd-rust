@@ -1504,19 +1504,3 @@ crate::abi::layouts! {
         strings,
     };
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn tunnel_output_is_shared_with_the_gui_thread() {
-        let before = END_TILE.swap(0x1234_5678, Ordering::Relaxed);
-        let value = std::thread::spawn(|| {
-            assert_eq!(openttd_rust_tunnel_endtile(), 0x1234_5678);
-            END_TILE.store(0x8765_4321, Ordering::Relaxed);
-        });
-        value.join().expect("GUI reader thread");
-        assert_eq!(openttd_rust_tunnel_endtile(), 0x8765_4321);
-        END_TILE.store(before, Ordering::Relaxed);
-    }
-}

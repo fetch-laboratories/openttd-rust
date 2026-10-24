@@ -12,7 +12,7 @@
 #include "abi_layout.hpp"
 TEST_CASE("Link graph schedule - ABI and staging unwind")
 {
-	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
+	ABI_LAYOUT_CHECK;
 #include "abi-layout-linkgraph_schedule.inc"
 	CHECK(AbiServicesComplete(LinkGraphSchedule::services));
 	struct FutureSave : LoadFilter {

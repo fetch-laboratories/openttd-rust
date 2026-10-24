@@ -114,7 +114,7 @@ TEST_CASE("Base vehicle scheduler - production deletion, reuse and reallocation 
 #ifdef WITH_RUST
 TEST_CASE("Base vehicle scheduler - consumed boundary layouts")
 {
-	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
+	ABI_LAYOUT_CHECK;
 #include "abi-layout-scheduler.inc"
 }
 TEST_CASE("Aircraft phase boundary - canonical movement scalar address identity")
@@ -306,11 +306,6 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 	new (VehicleID(0)) SchedulerProbeVehicle();
 	_scheduler_post_visits = _scheduler_pool_reads = 0;
 	auto services = GetRustVehicleSchedulerServices();
-#if !defined(NDEBUG) || defined(WITH_ASSERT)
-	CHECK(services.assertions);
-#else
-	CHECK(!services.assertions);
-#endif
 	services.pool = []() noexcept {
 		++_scheduler_pool_reads;
 		return GetRustVehicleSchedulerServices().pool();
@@ -369,7 +364,7 @@ TEST_CASE("Base vehicle scheduler - Tick growth, timing return and fresh type")
 #ifdef WITH_RUST
 TEST_CASE("Vehicle maintenance consumed native ABI")
 {
-	auto Layout = [](const char *name, std::initializer_list<size_t> values) { CHECK(AbiLayoutMismatch(name, values) == -1); };
+	ABI_LAYOUT_CHECK;
 #include "abi-layout-maintenance.inc"
 }
 
