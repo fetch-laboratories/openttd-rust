@@ -535,9 +535,6 @@ pub unsafe extern "C" fn openttd_rust_station_slope_check(
     tracks: u8,
 ) {
     let native = services();
-    unsafe {
-        ((*native.commands().cost).zero)(out);
-    }
     let map = native.map();
     let diff = tile.wrapping_sub(north);
     let slope = u32::from((native.shared().tile_slope)(tile));
@@ -567,6 +564,9 @@ pub unsafe extern "C" fn openttd_rust_station_slope_check(
         16,
     );
     if r.callback == crate::newgrf_callbacks::CALLBACK_FAILED {
+        unsafe {
+            ((*native.commands().cost).zero)(out);
+        }
         return;
     }
     let a = crate::animated_tile::services();

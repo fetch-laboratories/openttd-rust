@@ -1091,7 +1091,7 @@ def check_commands(scenario, run, mode, role, result):
         for marker in [
             "resolver-cache " + v for v in ("40", "41", "45", "46", "47", "49")
         ] + ["resolver-rng lower", "cost resolver-slope"]:
-            if "STCMD " + marker not in run["log"]:
+            if not any(line.startswith("STCMD " + marker) for line in run["log"]):
                 raise RuntimeError("station resolver witness missing: " + marker)
     if scenario["station_commands"] != "linkgraph":
         core.branch_witnesses(scenario, run, role, "station_command", required)
