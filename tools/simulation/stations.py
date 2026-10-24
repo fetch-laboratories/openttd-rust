@@ -1112,6 +1112,10 @@ def check_commands(scenario, run, mode, role, result):
             "resolver-root",
             "resolver-root-null",
             "resolver-state",
+            "resolver-real-empty",
+            "cost resolver-slope-policy",
+            "resolver-variable terrain-live",
+            "resolver-variable terrain-null",
         ]:
             if not any(line.startswith("STCMD " + marker) for line in run["log"]):
                 raise RuntimeError("station resolver witness missing: " + marker)

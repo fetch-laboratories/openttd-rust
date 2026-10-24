@@ -25,7 +25,7 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	fmt::print(stderr, "STCMD resolver-reconstruction {} {} {} {}\n", reloaded, st->index.base(), st->goods[0].TotalCount(), st->goods[0].GetData().cargo.PeriodsInTransit());
 	GRFFile file; file.grfid = 0x52533939; file.grf_version = 8;
 	StationSpec spec; spec.grf_prop.grffile = &file; spec.grf_prop.grfid = file.grfid; spec.grf_prop.local_id = 19;
-	StationNeed(SpriteGroup::CanAllocateItem(3), __LINE__);
+	StationNeed(SpriteGroup::CanAllocateItem(6), __LINE__);
 	auto *result = new CallbackResultSpriteGroup(0x400);
 	auto *det = new DeterministicSpriteGroup(); det->var_scope = VSG_SCOPE_SELF; det->size = DSG_SIZE_DWORD;
 	det->default_result = {false, result};
@@ -58,16 +58,17 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	auto variables = [&](const char *kind, BaseStation *base, TileIndex t, Axis axis) {
 		StationResolverObject query(&spec, base, t); query.station_scope.axis = axis;
 		for (uint var = 0x40; var <= 0xFA; ++var) {
-			for (uint8_t parameter : {0, 1, 0x10, 0xFF}) {
+			for (uint8_t parameter : {0, 1, 2, 0x10, 0xFF}) {
 				bool available = true; auto value = query.station_scope.GetVariable(var, parameter, available);
 				det->adjusts = {{.operation = DSGA_OP_RST, .variable = static_cast<uint8_t>(var), .parameter = parameter, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
 				std::array<int32_t, 1> registers{}; auto cb = query.ResolveCallback(registers);
 				if (available) StationNeed(cb == 0x400 && static_cast<uint32_t>(registers[0]) == value, __LINE__);
-				fmt::print(stderr, "STCMD resolver-variable {} {:x} {} {} {} {} {}\n", kind, var, parameter, available, value, cb, registers[0]);
+				fmt::print(stderr, "STCMD resolver-variable {} {} {:x} {} {} {} {} {}\n", kind, file.grf_version, var, parameter, available, value, cb, registers[0]);
 			}
 		}
 	};
-	for (uint8_t status : {0, 1, 2, 0x3C, 0x3F}) {
+	for (uint8_t version : {6, 7, 8}) for (uint8_t status : {0, 1, 2, 0x3C, 0x3F}) {
+		file.grf_version = version;
 		auto &ge = st->goods[0]; ge.status = GoodsEntry::States(status); ge.time_since_pickup = 27; ge.rating = 123;
 		ge.last_speed = status == 0 ? 0 : 77; ge.last_age = 11;
 		variables("station", st, tile, INVALID_AXIS);
@@ -105,6 +106,12 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 		StationResolverObject choice(&spec, base, base == nullptr ? INVALID_TILE : waytile);
 		fmt::print(stderr, "STCMD resolver-root-null {} {} {}\n", base == nullptr, choice.station_scope.cargo_type, choice.ResolveCallback({}));
 	}
+	for (uint8_t empty : {0, 1, 2, 3}) {
+		real->loading = (empty & 1) ? std::vector<const SpriteGroup *>{} : std::vector<const SpriteGroup *>{result, other};
+		real->loaded = (empty & 2) ? std::vector<const SpriteGroup *>{} : std::vector<const SpriteGroup *>{other, result};
+		spec.grf_prop.spritegroups.clear(); spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, real); spec.flags.Reset(StationSpecFlag::DivByStationSize);
+		for (uint16_t threshold : {36, 46}) { spec.cargo_threshold = threshold; StationResolverObject choice(&spec, st, tile); fmt::print(stderr, "STCMD resolver-real-empty {} {} {}\n", empty, threshold, choice.ResolveCallback({})); }
+	}
 	spec.grf_prop.spritegroups.clear(); spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det); spec.grf_prop.SetSpriteGroup(0, det);
 	StationNeed(GetStationCallback(CBID_STATION_LAND_SLOPE_CHECK, 1, 2, &spec, st, tile) == 0x400, __LINE__);
 	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
@@ -115,6 +122,22 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 	/* Actual randomized Action2 requests lower-only reseeding: every member draws
 	 * once for its tile even though the upper reseed mask is zero, then the
 	 * station draws once. The state oracle advances a saved native RNG directly. */
+	/* Scratch corner mutations expose slope nibble rotation and the distinct
+	 * live/null nearby-axis rules; restore canonical terrain before simulation. */
+	result->result = 0x400;
+	for (TileIndex corner : {tile + TileDiffXY(1, 0), tile + TileDiffXY(0, 1)}) {
+		auto height = TileHeight(corner); SetTileHeight(corner, height + 1);
+		for (uint8_t version : {6, 7, 8}) for (Axis axis : {AXIS_X, AXIS_Y}) {
+			file.grf_version = version; det->default_result = {false, result}; variables("terrain-live", st, tile, axis);
+			variables("terrain-null", nullptr, tile, axis); det->default_result = {true, nullptr};
+			for (uint8_t var : {0x10, 0x18, 0x67}) for (uint8_t shift : {0, 1, 3, 4, 7, 8}) {
+				det->adjusts = {{.operation = DSGA_OP_RST, .variable = var, .shift_num = shift, .and_mask = 1}, {.operation = DSGA_OP_OR, .variable = 0x1A, .and_mask = 0x400}};
+				StationCost("resolver-slope-policy", PerformStationTileSlopeCheck(tile - TileDiffXY(1, 2), tile, &spec, axis, 3, 2));
+			}
+		}
+		SetTileHeight(corner, height);
+	}
+	det->default_result = {false, result};
 	file.grf_version = 8;
 	auto *random = new RandomizedSpriteGroup(); random->var_scope = VSG_SCOPE_SELF;
 	random->triggers = 1; random->lowest_randbit = 0; random->groups = {result, result};

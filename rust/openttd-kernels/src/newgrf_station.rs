@@ -650,7 +650,7 @@ pub unsafe extern "C" fn openttd_rust_station_variable(
         }
         0x68 | 0x6a | 0x6b => {
             let nearby = (native.nearby)(parameter as u8, tile);
-            if !(native.rail().has_station_rail)(nearby) {
+            if !crate::station_map::has_station_tile_rail(nearby, native.shared(), native.rail()) {
                 return u32::MAX;
             }
             let index = (native.commands().custom_rail_index)(nearby);
