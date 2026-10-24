@@ -159,28 +159,42 @@ def refusals(out, configuration):
 
 
 def freshness(out, tools, configuration):
-    """Unchanged reconfiguration keeps the archive; a profile change and its
+    """Unchanged reconfiguration keeps the archive; a configuration change and its
     restoration each change the stamp and rebuild the archive."""
     archive = migration.rust_archive(tools)
     stamp = tools / "rust-build-configuration.txt"
     original = stamp.read_bytes()
     changed = os.environ | {"CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "2"}
-    for name, env in (("unchanged", None), ("changed", changed), ("restored", None)):
+    minimum = configuration["deployment_target"]
+    darwin = configuration["platform"] == "Darwin"
+    for name in ("unchanged", "changed", "restored", "restored-unchanged"):
+        env = changed if name == "changed" and not darwin else None
+        expected = configuration
+        flags = []
+        if darwin:
+            # Cargo tracks profile flags itself; the deployment minimum also
+            # needs CMake's configuration dependency to invalidate the crate.
+            target = "12.0" if name == "changed" and minimum != "12.0" else minimum
+            if name == "changed" and target == minimum:
+                target = "11.0"
+            flags = [f"-DCMAKE_OSX_DEPLOYMENT_TARGET={target}"]
+            expected = configuration | {"deployment_target": target}
         before = archive.stat().st_mtime_ns
         for step, argv in (
-            ("configure", ["cmake", "-S", migration.ROOT, "-B", tools]),
+            ("configure", ["cmake", "-S", migration.ROOT, "-B", tools, *flags]),
             ("build", ["cmake", "--build", tools, "--target", "tools", "-j", "4"]),
         ):
             if run(argv, out / f"freshness-{name}-{step}.log", env).returncode:
                 raise RuntimeError(f"Freshness {name} {step} failed; see its log")
         current = stamp.read_bytes()
         rebuilt = archive.stat().st_mtime_ns > before
+        unchanged = name in ("unchanged", "restored-unchanged")
         successful = (tools / "rust-build-configuration.txt.successful").read_text()
         if (
             (current == original) == (name == "changed")
-            or rebuilt == (name == "unchanged")
+            or rebuilt == unchanged
             or successful != hashlib.sha256(current).hexdigest()
-            or migration.rust_configuration(tools) != configuration
+            or migration.rust_configuration(tools) != expected
         ):
             raise RuntimeError(f"Freshness {name}: stamp, rebuild or metadata is wrong")
 

@@ -304,7 +304,8 @@ Configuration retains `rust-toolchain.txt` and `rust-native-libs.log`; archive b
 `rust-build.log`. A content-stable `rust-build-configuration.txt` dependency records the
 compiler, target, SDK, minimum and relevant build flags. A changed configuration invalidates
 only that target's release crate; unchanged reconfiguration preserves the archive. Native CI
-checks an unchanged reconfiguration and a Cargo profile change and its restoration.
+checks unchanged reconfiguration and restoration around a deployment-minimum change on macOS
+or a Cargo profile change on Windows.
 
 The macOS ARM jobs activate Rust through the reusable workflow's `rust` input. Debug enables
 `OPTION_USE_ASSERTS`: game/tests get `WITH_ASSERT`, while generators keep ordinary C++
