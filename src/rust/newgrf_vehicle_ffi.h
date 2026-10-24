@@ -14,6 +14,8 @@ struct Livery;
 struct OpenTTDSharedServices;
 struct OpenTTDAircraftState;
 struct OpenTTDAircraftLeaves;
+struct AirportSpec;
+enum TTDPAirportType : uint8_t;
 struct OpenTTDGroundPhysicsServices;
 struct OpenTTDTrainServices;
 struct OpenTTDCargoStorageServices;
@@ -107,7 +109,7 @@ struct OpenTTDVehicleResolverServices {
 	uint16_t (*vehicle_flags)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_flags);
 	OpenTTDAircraftState *(*aircraft)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft);
 	const OpenTTDStation * (*target_airport)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(target_airport);
-	uint8_t (*airport_ttd_type)(const OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);
+	TTDPAirportType (*airport_ttd_type)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);
 	uint16_t (*moving_flags)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(moving_flags);
 	RoadType (*roadtype)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(roadtype);
 	RoadType (*tile_roadtype)(uint32_t, RoadTramType) noexcept OPENTTD_SERVICE_DEFAULT(tile_roadtype);

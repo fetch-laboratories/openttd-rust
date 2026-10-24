@@ -184,11 +184,28 @@ class GeneratedAbiTests(unittest.TestCase):
         self.assertIn("version8", members)
         records = [r for r in GENERATOR["declarations"]() if "Binding<" in r[2]]
         self.assertEqual(len(records), 6)
+        headers = ROOT / "src/rust"
+        aliases = dict(
+            re.findall(
+                r"using\s+(\w+)\s*=\s*([^;]+);",
+                (headers / "animation_ffi.h").read_text(),
+            )
+        )
+        bodies = dict(
+            re.findall(
+                r"struct\s+(\w+)\s*\{([^{}]*)\}",
+                (headers / "animation_types.hpp").read_text(),
+            )
+        )
         fragments = GENERATOR["generate"]()
         for name, _, _, fields, _, _ in records:
-            self.assertEqual([cpp for _, cpp in fields], members)
+            body = bodies[aliases.get(name, name).split("<")[0]]
+            callbacks = re.findall(r"\(\s*(?:\w+\s+)?\*(\w+)\)\s*\(", body)
+            if name in aliases:
+                self.assertEqual(callbacks, members, name)
+            self.assertEqual([cpp for _, cpp in fields], callbacks, name)
             visitor = fragments[f"abi-visit-{name}.hpp"]
-            self.assertEqual(re.findall(r'visit\("(\w+)"', visitor), members)
+            self.assertEqual(re.findall(r'visit\("(\w+)"', visitor), callbacks, name)
 
     def test_generation_is_deterministic_and_build_directory_only(self):
         with tempfile.TemporaryDirectory() as directory:

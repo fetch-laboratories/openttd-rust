@@ -21,10 +21,14 @@
 
 /** Scope resolver for handling the tiles of an airport. */
 struct AirportTileScopeResolver : public ScopeResolver {
+#ifdef WITH_RUST
+	OpenTTDAirportResolverState context;
+#else
 	struct Station *st;  ///< %Station of the airport for which the callback is run, or \c nullptr for build gui.
 	uint8_t airport_id;     ///< Type of airport for which the callback is run.
 	TileIndex tile;      ///< Tile for the callback, only valid for airporttile callbacks.
 	const AirportTileSpec *ats;
+#endif
 
 	/**
 	 * Constructor of the scope resolver specific for airport tiles.
@@ -33,10 +37,18 @@ struct AirportTileScopeResolver : public ScopeResolver {
 	 * @param st Station of the airport for which the callback is run, or \c nullptr for build gui.
 	 */
 	AirportTileScopeResolver(ResolverObject &ro, const AirportTileSpec *ats, TileIndex tile, Station *st)
-		: ScopeResolver(ro), st(st), tile(tile), ats(ats)
+		: ScopeResolver(ro)
+#ifndef WITH_RUST
+		, st(st), tile(tile), ats(ats)
+#endif
 	{
 		assert(st != nullptr);
+#ifndef WITH_RUST
 		this->airport_id = st->airport.type;
+#endif
+#ifdef WITH_RUST
+		openttd_rust_airport_init(&this->context, st, nullptr, ats, tile.base(), 0, &GetAirportResolverServices());
+#endif
 	}
 
 	uint32_t GetRandomBits() const override;
@@ -53,11 +65,15 @@ struct AirportTileResolverObject : public ResolverObject {
 
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
 	{
+#ifdef WITH_RUST
+		return openttd_rust_airport_scope(&this->tiles_scope.context, this, &this->tiles_scope, &this->airport_scope, scope, relative, &GetAirportResolverServices());
+#else
 		switch (scope) {
 			case VSG_SCOPE_SELF: return &tiles_scope;
 			case VSG_SCOPE_PARENT: return &airport_scope;
 			default: return ResolverObject::GetScope(scope, relative);
 		}
+#endif
 	}
 
 	GrfSpecFeature GetFeature() const override;

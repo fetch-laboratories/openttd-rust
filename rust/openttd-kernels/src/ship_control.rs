@@ -174,7 +174,6 @@ pub struct Leaves {
     pub station: extern "C" fn(u32) -> u32,
     pub industry_station: extern "C" fn(u32) -> u32,
     pub oilrig: extern "C" fn(u32) -> bool,
-    pub station_use: extern "C" fn(u32, u32) -> bool,
     pub station_xy: extern "C" fn(u32) -> u32,
     pub station_contains: extern "C" fn(u32, u32) -> bool,
     pub station_dock: extern "C" fn(u32) -> bool,
@@ -1025,6 +1024,7 @@ pub unsafe extern "C" fn openttd_rust_ship_is_destination(
 pub unsafe extern "C" fn openttd_rust_ship_station_destination(
     id: u32,
     station: u32,
+    vehicle: *const crate::vehicle::OpenTTDVehicle,
     leaves: *const Leaves,
     services: *const Services,
 ) -> u32 {
@@ -1039,7 +1039,16 @@ pub unsafe extern "C" fn openttd_rust_ship_station_destination(
         if station == (game.leaves.last_station)(id) {
             (game.leaves.set_last_station)(id, 65535);
         }
-        if (game.leaves.station_use)(id, station) {
+        if unsafe {
+            crate::vehicle_func::can_vehicle_use_station(
+                vehicle,
+                crate::newgrf_airport::station_by_id(
+                    station as u16,
+                    crate::newgrf_airport::runtime(),
+                ),
+                crate::newgrf_airport::runtime(),
+            )
+        } {
             (game.leaves.station_xy)(station)
         } else {
             (game.leaves.order_increment)(id);
@@ -1155,7 +1164,6 @@ crate::abi::layouts! {
         station,
         industry_station,
         oilrig,
-        station_use,
         station_xy,
         station_contains,
         station_dock,

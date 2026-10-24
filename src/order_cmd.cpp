@@ -47,6 +47,7 @@ static_assert(sizeof(DestinationID) >= sizeof(StationID));
 #include "rust/services_map.h"
 #include "rust/vehicle_services.h"
 #include "rust/services_station.h"
+#include "rust/engine_services.h"
 static_assert(sizeof(Order) == sizeof(OpenTTDOrderFields) && alignof(Order) == alignof(OpenTTDOrderFields));
 static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructible_v<Order>);
 static_assert(sizeof(VehicleFlags) == sizeof(uint16_t) && alignof(VehicleFlags) == alignof(uint16_t));
@@ -240,11 +241,7 @@ extern "C" uint64_t openttd_orders_station_owner(uint16_t destination) noexcept
 	return Station::Get(StationID(destination))->owner.base();
 }
 
-extern "C" uint64_t openttd_orders_can_use_station(void *ctx, uint16_t destination) noexcept
-{
-	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return CanVehicleUseStation(v, Station::Get(StationID(destination)));
-}
+
 
 extern "C" uint64_t openttd_orders_owner_check(uint8_t owner, void *result) noexcept
 {
@@ -258,10 +255,7 @@ extern "C" uint64_t openttd_orders_station_error(void *ctx, uint16_t destination
 	return GetVehicleCannotUseStationReason(v, Station::Get(StationID(destination)));
 }
 
-extern "C" uint64_t openttd_orders_has_hangar(uint16_t destination) noexcept
-{
-	return Station::Get(StationID(destination))->airport.HasHangar();
-}
+
 
 extern "C" uint64_t openttd_orders_valid_depot(uint16_t destination) noexcept
 {
@@ -395,10 +389,7 @@ extern "C" uint64_t openttd_orders_unique_backup_name(void *ctx) noexcept
 }
 
 
-extern "C" uint64_t openttd_orders_backup_hangar(void *ctx) noexcept
-{
-	return IsHangarTile(TileIndex(static_cast<OrderBackup *>(ctx)->GetRustState()->tile));
-}
+
 
 extern "C" uint64_t openttd_orders_review_setting() noexcept
 {
@@ -414,14 +405,10 @@ extern "C" uint64_t openttd_orders_local_owner(void *ctx) noexcept
 extern "C" uint64_t openttd_orders_fast_aircraft(void *ctx) noexcept
 {
 	const Vehicle *v = static_cast<const Vehicle *>(ctx);
-	return (AircraftVehInfo(v->engine_type)->subtype & AIR_FAST) != 0;
+	return (RustAircraftInfoSubtype(AircraftVehInfo(EngineID(RustVehicleEngineID(v)))) & AIR_FAST) != 0;
 }
 
-extern "C" uint64_t openttd_orders_short_strip(uint16_t destination) noexcept
-{
-	const Station *station = Station::Get(StationID(destination));
-	return RustStationAirportFTA(station)->flags.Test(AirportFTAClass::Flag::ShortStrip);
-}
+
 
 extern "C" uint64_t openttd_orders_no_jet_crash() noexcept
 {
@@ -639,10 +626,8 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.ship_station_tile = openttd_orders_ship_station_tile,
 	.valid_station = openttd_orders_valid_station,
 	.station_owner = openttd_orders_station_owner,
-	.can_use_station = openttd_orders_can_use_station,
 	.owner_check = openttd_orders_owner_check,
 	.station_error = openttd_orders_station_error,
-	.has_hangar = openttd_orders_has_hangar,
 	.valid_depot = openttd_orders_valid_depot,
 	.depot_owner = openttd_orders_depot_owner,
 	.rail_depot = openttd_orders_rail_depot,
@@ -667,11 +652,9 @@ static const OpenTTDOrdersLeaves _rust_orders_leaves{
 	.vehicle_tile = openttd_orders_vehicle_tile,
 	.vehicle_group = openttd_orders_vehicle_group,
 	.unique_backup_name = openttd_orders_unique_backup_name,
-	.backup_hangar = openttd_orders_backup_hangar,
 	.review_setting = openttd_orders_review_setting,
 	.local_owner = openttd_orders_local_owner,
 	.fast_aircraft = openttd_orders_fast_aircraft,
-	.short_strip = openttd_orders_short_strip,
 	.no_jet_crash = openttd_orders_no_jet_crash,
 	.append_station = openttd_orders_append_station,
 	.invalidate_station_list = openttd_orders_invalidate_station_list,

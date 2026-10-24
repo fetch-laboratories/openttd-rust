@@ -25,7 +25,7 @@ static OpenTTDEngineRef Engine_next(uint32_t from) noexcept
 	for (Engine *e : Engine::Iterate(from)) return EngineRef(e);
 	return EngineRef(nullptr);
 }
-static OpenTTDEngineRef Engine_resolve(uint16_t id) noexcept { return EngineRef(Engine::GetIfValid(id)); }
+static OpenTTDEngineRef Engine_resolve(uint16_t id) noexcept { return EngineRef(EngineOf(RustEngineByIDIfValid(id))); }
 static OpenTTDEngineRef EnginePrototype(const Engine *e) noexcept
 {
 	/* Unpooled prototypes may not initialize PoolItem::index. Read that field

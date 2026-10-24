@@ -12,6 +12,7 @@
 #include "../newgrf.h"
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
+#include "../newgrf_sound.h"
 #include "../debug.h"
 #include "../newgrf_house.h"
 #include "../house.h"
@@ -24,6 +25,8 @@
 #include "../town.h"
 #include "../newgrf_config.h"
 #include "../rev.h"
+inline void RustGRFPlayTileSound(const GRFFile *file, uint16_t sound, uint32_t tile) noexcept { PlayTileSound(file, sound, TileIndex{tile}); }
+inline uint16_t RustIndustrySubstitute(uint8_t industry) noexcept { return GetIndustrySpec(industry)->grf_prop.subst_id; }
 inline int32_t RustHouseAge(uint32_t tile) noexcept { return GetHouseAge(TileIndex{tile}).base(); }
 inline uint8_t RustHouseRandomBits(uint32_t tile) noexcept { return GetHouseRandomBits(TileIndex{tile}); }
 inline uint8_t RustHouseRandomTriggers(uint32_t tile) noexcept { return GetHouseRandomTriggers(TileIndex{tile}).base(); }
@@ -43,6 +46,8 @@ inline uint8_t RustResolverGRFVersion(const ResolverObject *resolver) noexcept {
 inline bool RustResolverGRFVersion8(const ResolverObject *resolver) noexcept { return RustResolverGRFVersion(resolver) >= 8; }
 template <typename Spec>
 inline const GRFFile *RustSpecGRFFile(const Spec *spec) noexcept { return spec->grf_prop.grffile; }
+template <typename Spec>
+inline void RustSpecPlayTileSound(const Spec *spec, uint8_t sound, uint32_t tile) noexcept { RustGRFPlayTileSound(RustSpecGRFFile(spec), sound, tile); }
 template <typename Spec>
 inline bool RustSpecHasGRFFile(const Spec *spec) noexcept { return RustSpecGRFFile(spec) != nullptr; }
 inline const GRFFile *RustHouseGrf(uint16_t house) noexcept { return RustSpecGRFFile(RustHouseSpec(house)); }
@@ -94,10 +99,20 @@ inline uint8_t RustSpecReverseRailTypeTranslation(RailType railtype, const Spec 
 
 /* Native frame address only; Rust retains common/feature scope selection. */
 inline ScopeResolver *RustResolverBaseScope(ResolverObject *resolver, uint8_t, uint8_t) noexcept { return &resolver->default_scope; }
+/* Optional facade construction only; successful parent selection belongs to the
+ * Rust feature owner. The town/storage implementation is shared by all features. */
+template <typename Resolver>
+inline TownScopeResolver *RustResolverTownScope(Resolver *resolver, const Town *town, bool readonly) noexcept
+{
+	if (!resolver->town_scope.has_value()) resolver->town_scope.emplace(*resolver, const_cast<Town *>(town), readonly);
+	return &*resolver->town_scope;
+}
 template <typename Resolver>
 inline ScopeResolver *RustResolverBaseScopeFor(Resolver *resolver, uint8_t scope, uint8_t relative) noexcept { return RustResolverBaseScope(resolver, scope, relative); }
 
 inline uint16_t RustResolverCallback(const ResolverObject *resolver) noexcept { return resolver->callback; }
+template <typename Spec> inline uint16_t RustSpecOverride(const Spec *spec) noexcept { return spec->grf_prop.override_id; }
+template <typename Spec> inline uint16_t RustSpecSubstitute(const Spec *spec) noexcept { return spec->grf_prop.subst_id; }
 template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
 template <typename Spec> inline uint16_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }
 template <typename Spec> inline const SpriteGroup *RustSpecSpriteGroup(const Spec *spec, bool live) noexcept { return spec->grf_prop.GetSpriteGroup(live); }

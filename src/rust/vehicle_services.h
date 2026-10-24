@@ -47,6 +47,7 @@ void RustVehicleSetName(void *shell, OpenTTDByteSpan name) noexcept;
 inline OpenTTDVehicle *RustVehicle(const Vehicle *v) noexcept { return reinterpret_cast<OpenTTDVehicle *>(const_cast<Vehicle *>(v)); }
 /** The vehicle behind a Rust handle. */
 inline Vehicle *VehicleOf(OpenTTDVehicle *v) noexcept { return reinterpret_cast<Vehicle *>(v); }
+inline const Vehicle *VehicleOf(const OpenTTDVehicle *v) noexcept { return reinterpret_cast<const Vehicle *>(v); }
 
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine; }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }

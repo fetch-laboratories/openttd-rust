@@ -47,7 +47,6 @@ struct OpenTTDShipLeaves {
 	uint32_t (*station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station);
 	uint32_t (*industry_station)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_station);
 	bool (*oilrig)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(oilrig);
-	bool (*station_use)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_use);
 	uint32_t (*station_xy)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_xy);
 	bool (*station_contains)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_contains);
 	bool (*station_dock)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(station_dock);
@@ -178,7 +177,7 @@ void openttd_rust_ship_cache(OpenTTDVehicle *, uint32_t, const OpenTTDShipLeaves
 void openttd_rust_ship_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 OpenTTDShipDepotResult openttd_rust_ship_find_depot(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 bool openttd_rust_ship_is_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
-uint32_t openttd_rust_ship_station_destination(uint32_t, uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
+uint32_t openttd_rust_ship_station_destination(uint32_t, uint32_t, const OpenTTDVehicle *, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 uint8_t openttd_rust_ship_trackdir(uint32_t, const OpenTTDShipLeaves *, const OpenTTDSharedServices *);
 }
 #endif

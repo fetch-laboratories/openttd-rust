@@ -192,7 +192,6 @@ const OpenTTDClearServices &GetRustClearServices() noexcept
 		.field = [](uint32_t index) noexcept { Tile t{TileIndex{index}}; return OpenTTDFieldGround{.industry = RustFieldIndustry(t).base(), .type = GetFieldType(t)}; },
 		.set_field = [](uint32_t t, uint32_t f) noexcept { SetFieldType(TileIndex{t}, f); },
 		.water_class = RustWaterClass,
-		.ambient = RustAmbientSound,
 	};
 	return services;
 }

@@ -825,6 +825,7 @@ def prepare_founding(scenario, binaries, builds, out, timeout, env, result):
             or "TOWN deletion-reuse true" not in run["log"]
         ):
             raise RuntimeError("town authority reload capture failed")
+        check_statue_search(scenario, run, "capture", "reference", result)
         from .rails import normalize
 
         save, result["town_reload_input"] = normalize(save, folder / "normalized")
@@ -1182,6 +1183,104 @@ def check_action_money(scenario, run, mode, role, result):
     result[mode + "_town_money_saves"] = captures
 
 
+def check_statue_search(scenario, run, mode, role, result):
+    """No suitable statue site versus the sole opening at search position 81."""
+    rows = [
+        line.split()[2:] for line in run["log"] if line.startswith("TOWN statue-input ")
+    ]
+    if (
+        len(rows) != 2
+        or [row[0] for row in rows] != ["false", "true"]
+        or rows[0][1:] != rows[1][1:]
+        or rows[0][4] != "81"
+        or int(rows[0][5]) <= 0
+    ):
+        raise RuntimeError("town statue blocked/last-opening inputs missing")
+    _, town, company, tile, _, price = rows[0]
+    errors = [
+        line.split()[2:] for line in run["log"] if line.startswith("TOWN statue-error ")
+    ]
+    rng = [
+        line.split()[2:] for line in run["log"] if line.startswith("TOWN statue-rng ")
+    ]
+    expected = [[a, b] for a in ("false", "true") for b in ("false", "true")]
+    if errors != [row + [str(row[0] == "false").lower()] for row in expected]:
+        raise RuntimeError("town statue native no-suitable-place error missing")
+    if len(rng) != 4 or any(
+        row[:2] != wanted or len(row) != 7 or row[-1] != "true"
+        for row, wanted in zip(rng, expected, strict=True)
+    ):
+        raise RuntimeError("town statue simulation/interactive RNG sequence differs")
+    states = [line for line in run["log"] if line.startswith("TOWN statue-state ")]
+    if (
+        states
+        != [
+            "TOWN statue-state false false 0 false",
+            "TOWN statue-state true true 1 true",
+        ]
+        or "TOWN statue-cleanup true true" not in run["log"]
+    ):
+        raise RuntimeError("town statue exact placement/owner/town/bit missing")
+    for label in ("test", "exec"):
+        costs = [
+            line.split()[3:5]
+            for line in run["log"]
+            if line.startswith(f"TOWN cost statue-{label} ")
+        ]
+        if costs != [["false", "0"], ["true", price]]:
+            raise RuntimeError("town statue blocked/open command outcome differs")
+    captures = []
+    for opening in ("false", "true"):
+        saves = {
+            phase: run["dir"] / f"statue-{opening}-{phase}.sav"
+            for phase in ("before", "test", "after")
+        }
+        if not all(path.is_file() for path in saves.values()):
+            raise RuntimeError("town statue immediate semantic save missing")
+        for phase in ("test", "after") if opening == "false" else ("test",):
+            if differences := core.compare_saves(
+                saves["before"], saves[phase], scenario["name"], 10, result["stats"]
+            ):
+                raise RuntimeError(
+                    f"town statue refusal/test mutated state: {differences}"
+                )
+        before = dict(read_save(saves["before"])["OBJS"]["elements"])
+        for phase, path in saves.items():
+            chunks = read_save(path)
+            city = decode_element(
+                chunks["CITY"], dict(chunks["CITY"]["elements"])[int(town)]
+            )
+            built = opening == "true" and phase == "after"
+            if bool(city["statues"] & (1 << int(company))) != built:
+                raise RuntimeError("town statue saved company bit differs")
+            objects = dict(chunks["OBJS"]["elements"])
+            added = objects.keys() - before.keys()
+            if len(added) != int(built):
+                raise RuntimeError("town statue saved object count differs")
+            if built:
+                obj = decode_element(chunks["OBJS"], objects[added.pop()])
+                if (obj["location.tile"], obj["town"], obj["type"]) != (
+                    int(tile),
+                    int(town) + 1,
+                    2,
+                ):
+                    raise RuntimeError("town statue saved location/town/type differs")
+            if role == "candidate" and (
+                differences := core.compare_saves(
+                    run["dir"].with_name("reference") / path.name,
+                    path,
+                    scenario["name"],
+                    10,
+                    result["stats"],
+                )
+            ):
+                raise RuntimeError(
+                    f"town statue immediate semantic state differs: {differences}"
+                )
+            captures.append(path.name)
+    result[mode + "_town_statue_saves"] = captures
+
+
 def check_bribes(scenario, run, mode, role, result):
     """Require real threshold/filter inputs and compare their immediate saves."""
     inputs = [
@@ -1303,6 +1402,7 @@ def check(scenario, run, mode, role, result):
     elif scenario.get("town_founding") == "authority" and not run["exit"]:
         if not scenario["town_commands_reload"]:
             check_action_money(scenario, run, mode, role, result)
+            check_statue_search(scenario, run, mode, role, result)
             check_bribes(scenario, run, mode, role, result)
         required = (
             ()

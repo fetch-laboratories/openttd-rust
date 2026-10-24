@@ -53,6 +53,7 @@ extern bool CheckAbi_animated_tile();
 extern bool CheckAbi_cargomonitor();
 extern bool CheckAbi_spritegroup();
 extern bool CheckAbi_storage();
+extern bool CheckAbi_generic();
 
 TEST_CASE("Rust ABI - actual production callback tables are complete")
 {
@@ -99,6 +100,7 @@ TEST_CASE("Rust ABI - actual production callback tables are complete")
 	CHECK(CheckAbi_cargomonitor());
 	CHECK(CheckAbi_spritegroup());
 	CHECK(CheckAbi_storage());
+	CHECK(CheckAbi_generic());
 }
 TEST_CASE("Rust ABI - omitted and explicit null callbacks fail completeness")
 {

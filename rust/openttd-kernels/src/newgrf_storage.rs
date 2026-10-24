@@ -269,7 +269,7 @@ pub struct Services {
     grfid: extern "C" fn(*const c_void) -> u32,
     industry: extern "C" fn(*mut c_void) -> IndustryStorage,
     create_industry: extern "C" fn(*mut c_void) -> *mut Payload<256>,
-    airport: extern "C" fn(*mut c_void) -> *mut Payload<256>,
+    pub(crate) airport: extern "C" fn(*mut c_void) -> *mut Payload<256>,
     create_airport: extern "C" fn(*mut c_void, u32) -> *mut Payload<256>,
     town_count: extern "C" fn(*const c_void) -> usize,
     town_storage: extern "C" fn(*const c_void, usize) -> StorageReference,

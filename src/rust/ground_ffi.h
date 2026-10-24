@@ -8,6 +8,7 @@
 /** @file ground_ffi.h Consumed terrain fields and direct synchronous leaves. */
 #ifndef RUST_GROUND_FFI_H
 #define RUST_GROUND_FFI_H
+struct AirportFTAClass;
 #include "service_defaults.hpp"
 #include "services_ffi.h"
 #include "water_regions_ffi.h"
@@ -55,7 +56,6 @@ struct OpenTTDClearServices {
 	OpenTTDFieldGround (*field)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(field);
 	void (*set_field)(uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(set_field);
 	WaterClass (*water_class)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(water_class);
-	void (*ambient)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ambient);
 };
 struct OpenTTDRailSnowGround { int32_t z; Slope slope; TrackBits tracks; bool plain; };
 struct OpenTTDRailFenceGround { TrackBits tracks; uint8_t owner; bool plain; };
@@ -136,7 +136,7 @@ struct OpenTTDWaterGroundServices {
 	bool (*airport_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_tile);
 	OpenTTDAirportGround (*airport)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport);
 	bool (*airport_member)(const OpenTTDStation *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_member);
-	int32_t (*airport_z)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_z);
+	int32_t (*airport_z)(const AirportFTAClass *) noexcept OPENTTD_SERVICE_DEFAULT(airport_z);
 	OpenTTDFloodVictim (*victim)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(victim);
 	OpenTTDAircraftFloodPose (*aircraft_pose)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(aircraft_pose);
 	OpenTTDGroundFloodPose (*ground_pose)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(ground_pose);
@@ -147,7 +147,7 @@ struct OpenTTDWaterGroundServices {
 };
 const OpenTTDWaterGroundServices &GetRustWaterGroundServices() noexcept;
 extern "C" {
-void openttd_rust_water_tile_loop(uint32_t, uint32_t, uint32_t, bool, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
+void openttd_rust_water_tile_loop(uint32_t, uint32_t, uint32_t, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 bool openttd_rust_flood_halftile(uint32_t, OpenTTDGroundCall *, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 FloodingBehaviour openttd_rust_flooding_behaviour(uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);
 void openttd_rust_clear_neighbour_flooding(uint32_t, uint32_t, uint32_t, const OpenTTDWaterGroundServices *, const OpenTTDSharedServices *);

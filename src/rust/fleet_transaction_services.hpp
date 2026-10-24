@@ -50,7 +50,7 @@ static bool FleetTransaction_engine_valid(uint16_t id) noexcept { return Engine:
 static bool FleetTransaction_company_valid(uint8_t id) noexcept { return GetRustSharedServices().company_valid(id); }
 static bool FleetTransaction_engine_buildable(uint16_t id, uint8_t type, uint8_t company) noexcept { return IsEngineBuildable(EngineID(id), static_cast<VehicleType>(type), CompanyID(company)); }
 static bool FleetTransaction_tram(uint16_t id) noexcept { return Engine::Get(EngineID(id))->info.misc_flags.Test(EngineMiscFlag::RoadIsTram); }
-static uint8_t FleetTransaction_plane(uint16_t id) noexcept { return AircraftVehInfo(EngineID(id))->subtype & AIR_CTOL; }
+static uint8_t FleetTransaction_plane(uint16_t id) noexcept { return RustAircraftInfoSubtype(AircraftVehInfo(EngineID(id))) & AIR_CTOL; }
 static void FleetTransaction_refit_masks(uint16_t id, uint64_t *union_mask, uint64_t *available) noexcept { GetArticulatedRefitMasks(EngineID(id), true, union_mask, available); }
 static uint64_t FleetTransaction_vehicle_cargo(void *shell, uint8_t *cargo) noexcept { return GetCargoTypesOfArticulatedVehicle(static_cast<Vehicle *>(shell), cargo); }
 static uint64_t FleetTransaction_default_cargo(uint16_t id) noexcept { return GetCargoTypesOfArticulatedParts(EngineID(id)); }

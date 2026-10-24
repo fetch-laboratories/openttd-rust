@@ -5,9 +5,12 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-/** @file sound_services.h Shared actual-width sound settings. */
-#ifndef RUST_SOUND_SERVICES_H
-#define RUST_SOUND_SERVICES_H
+/** @file services_sound.h Shared actual-width sound settings. */
+#ifndef RUST_SERVICES_SOUND_H
+#define RUST_SERVICES_SOUND_H
 #include "../settings_type.h"
 inline bool OpenTTDAmbientSound() noexcept { return _settings_client.sound.ambient; }
+/* Existing train callback retains its unused handle and legacy result width. */
+template <typename Context>
+inline uint64_t RustAmbientSoundLegacy(Context) noexcept { return OpenTTDAmbientSound(); }
 #endif
