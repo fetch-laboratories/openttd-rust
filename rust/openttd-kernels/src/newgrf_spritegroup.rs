@@ -13,6 +13,7 @@
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
     clippy::many_single_char_names,
+    clippy::match_same_arms, // Native unknown adjustments and RST both return value.
     clippy::comparison_chain, // Preserve native signed/unsigned comparison branches.
     clippy::too_many_lines
 )]
@@ -25,6 +26,36 @@ use std::ptr;
 pub const VSG_SCOPE_SELF: u8 = 0;
 pub const VSG_SCOPE_PARENT: u8 = 1;
 pub const VSG_SCOPE_RELATIVE: u8 = 2;
+// Header enum values stay byte carriers: unnamed adjustment operations retain
+// the original default-to-value behavior rather than becoming an FFI enum guard.
+const DSG_SIZE_BYTE: u8 = 0;
+const DSG_SIZE_WORD: u8 = 1;
+const DSGA_TYPE_DIV: u8 = 1;
+const DSGA_TYPE_MOD: u8 = 2;
+const RSG_CMP_ANY: u8 = 0;
+const DSGA_OP_ADD: u8 = 0;
+const DSGA_OP_SUB: u8 = 1;
+const DSGA_OP_SMIN: u8 = 2;
+const DSGA_OP_SMAX: u8 = 3;
+const DSGA_OP_UMIN: u8 = 4;
+const DSGA_OP_UMAX: u8 = 5;
+const DSGA_OP_SDIV: u8 = 6;
+const DSGA_OP_SMOD: u8 = 7;
+const DSGA_OP_UDIV: u8 = 8;
+const DSGA_OP_UMOD: u8 = 9;
+const DSGA_OP_MUL: u8 = 10;
+const DSGA_OP_AND: u8 = 11;
+const DSGA_OP_OR: u8 = 12;
+const DSGA_OP_XOR: u8 = 13;
+const DSGA_OP_STO: u8 = 14;
+const DSGA_OP_RST: u8 = 15;
+const DSGA_OP_STOP: u8 = 16;
+const DSGA_OP_ROR: u8 = 17;
+const DSGA_OP_SCMP: u8 = 18;
+const DSGA_OP_UCMP: u8 = 19;
+const DSGA_OP_SHL: u8 = 20;
+const DSGA_OP_SHR: u8 = 21;
+const DSGA_OP_SAR: u8 = 22;
 type Handle = *const c_void;
 type Resolver = *mut c_void;
 #[repr(C)]
@@ -121,33 +152,33 @@ pub struct Range {
 }
 #[repr(C)]
 pub struct Services {
-    vehicle: *const crate::newgrf_vehicle::Services,
-    industry: *const crate::industry::resolver::ResolverServices,
-    object: *const crate::objects::ObjectServices,
-    storage: *const crate::newgrf_storage::Services,
-    resolver_binding: unsafe extern "C" fn(Resolver, *mut ResolverBinding),
-    scope_binding: unsafe extern "C" fn(Resolver, *mut ScopeBinding),
-    industry_builder: unsafe extern "C" fn() -> *mut crate::industry::Builder,
-    tile_random_check: unsafe extern "C" fn(*const crate::industry::resolver::ResolverContext),
-    loaded_count: unsafe extern "C" fn(Handle) -> usize,
-    loading_count: unsafe extern "C" fn(Handle) -> usize,
-    loaded: unsafe extern "C" fn(Handle, usize) -> Handle,
-    loading: unsafe extern "C" fn(Handle, usize) -> Handle,
-    node: unsafe extern "C" fn(Handle, *mut Node),
     adjust: unsafe extern "C" fn(Handle, usize) -> Adjust,
-    range: unsafe extern "C" fn(Handle, usize) -> Range,
-    random_group: unsafe extern "C" fn(Handle, usize) -> Handle,
-    scope: unsafe extern "C" fn(Resolver, u8, u8) -> Resolver,
-    variable: unsafe extern "C" fn(Handle, u8, u32, *mut bool) -> u32,
-    random_bits: unsafe extern "C" fn(Handle) -> u32,
-    random_triggers: unsafe extern "C" fn(Handle) -> u32,
-    store_psa: unsafe extern "C" fn(Resolver, u32, i32),
-    native: unsafe extern "C" fn(Handle, Resolver) -> ResultValue,
-    unhandled_scope: unsafe extern "C" fn(u8),
-    parameter: unsafe extern "C" fn(Handle, u32) -> u32,
     global: *const crate::newgrf::Services,
-    profile_enter: unsafe extern "C" fn(Resolver, bool) -> Resolver,
+    industry: *const crate::industry::resolver::ResolverServices,
+    industry_builder: unsafe extern "C" fn() -> *mut crate::industry::Builder,
+    loaded: unsafe extern "C" fn(Handle, usize) -> Handle,
+    loaded_count: unsafe extern "C" fn(Handle) -> usize,
+    loading: unsafe extern "C" fn(Handle, usize) -> Handle,
+    loading_count: unsafe extern "C" fn(Handle) -> usize,
+    native: unsafe extern "C" fn(Handle, Resolver) -> ResultValue,
+    node: unsafe extern "C" fn(Handle, *mut Node),
+    object: *const crate::objects::ObjectServices,
+    parameter: unsafe extern "C" fn(Handle, u32) -> u32,
     profile_end: unsafe extern "C" fn(Resolver, *const ResultValue),
+    profile_enter: unsafe extern "C" fn(Resolver, bool) -> Resolver,
+    random_bits: unsafe extern "C" fn(Handle) -> u32,
+    random_group: unsafe extern "C" fn(Handle, usize) -> Handle,
+    random_triggers: unsafe extern "C" fn(Handle) -> u32,
+    range: unsafe extern "C" fn(Handle, usize) -> Range,
+    resolver_binding: unsafe extern "C" fn(Resolver, *mut ResolverBinding),
+    scope: unsafe extern "C" fn(Resolver, u8, u8) -> Resolver,
+    scope_binding: unsafe extern "C" fn(Resolver, *mut ScopeBinding),
+    storage: *const crate::newgrf_storage::Services,
+    store_psa: unsafe extern "C" fn(Resolver, u32, i32),
+    tile_random_check: unsafe extern "C" fn(*const crate::industry::resolver::ResolverContext),
+    unhandled_scope: unsafe extern "C" fn(u8),
+    variable: unsafe extern "C" fn(Handle, u8, u32, *mut bool) -> u32,
+    vehicle: *const crate::newgrf_vehicle::Services,
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -602,7 +633,7 @@ impl<'a> Invocation<'a> {
             let scope = self.scope(node.scope, node.count);
             if (*self.state).callback == CBID_RANDOM_TRIGGER.0 {
                 let matched = node.triggers & (*self.state).waiting_random_triggers as u8;
-                let triggered = if node.compare == 0 {
+                let triggered = if node.compare == RSG_CMP_ANY {
                     matched != 0
                 } else {
                     matched == node.triggers
@@ -626,24 +657,24 @@ impl<'a> Invocation<'a> {
         // Byte/word signed operands promote to int before adjustment arithmetic;
         // only dword addition wraps at 32 bits. The returned U truncates last.
         let unsigned = |v: u32| match size {
-            0 => u32::from(v as u8),
-            1 => u32::from(v as u16),
+            DSG_SIZE_BYTE => u32::from(v as u8),
+            DSG_SIZE_WORD => u32::from(v as u16),
             _ => v,
         };
         let signed = |v: u32| match size {
-            0 => i32::from(v as i8),
-            1 => i32::from(v as i16),
+            DSG_SIZE_BYTE => i32::from(v as i8),
+            DSG_SIZE_WORD => i32::from(v as i16),
             _ => v as i32,
         };
         let last = unsigned(last);
         value = (value >> a.shift_num) & a.and_mask;
         match a.kind {
-            1 => {
+            DSGA_TYPE_DIV => {
                 value = signed(value)
                     .wrapping_add(signed(a.add_val))
                     .wrapping_div(signed(a.divmod_val)) as u32;
             }
-            2 => {
+            DSGA_TYPE_MOD => {
                 value = signed(value)
                     .wrapping_add(signed(a.add_val))
                     .wrapping_rem(signed(a.divmod_val)) as u32;
@@ -651,58 +682,58 @@ impl<'a> Invocation<'a> {
             _ => {}
         }
         let result = match a.operation {
-            0 => last.wrapping_add(value),
-            1 => last.wrapping_sub(value),
-            2 => signed(last).min(signed(value)) as u32,
-            3 => signed(last).max(signed(value)) as u32,
-            4 => last.min(unsigned(value)),
-            5 => last.max(unsigned(value)),
-            6 => {
+            DSGA_OP_ADD => last.wrapping_add(value),
+            DSGA_OP_SUB => last.wrapping_sub(value),
+            DSGA_OP_SMIN => signed(last).min(signed(value)) as u32,
+            DSGA_OP_SMAX => signed(last).max(signed(value)) as u32,
+            DSGA_OP_UMIN => last.min(unsigned(value)),
+            DSGA_OP_UMAX => last.max(unsigned(value)),
+            DSGA_OP_SDIV => {
                 (if value == 0 {
                     signed(last)
                 } else {
                     signed(last).wrapping_div(signed(value))
                 }) as u32
             }
-            7 => {
+            DSGA_OP_SMOD => {
                 (if value == 0 {
                     signed(last)
                 } else {
                     signed(last).wrapping_rem(signed(value))
                 }) as u32
             }
-            8 => {
+            DSGA_OP_UDIV => {
                 if value == 0 {
                     last
                 } else {
                     last / unsigned(value)
                 }
             }
-            9 => {
+            DSGA_OP_UMOD => {
                 if value == 0 {
                     last
                 } else {
                     last % unsigned(value)
                 }
             }
-            10 => last.wrapping_mul(value),
-            11 => last & value,
-            12 => last | value,
-            13 => last ^ value,
-            14 => {
+            DSGA_OP_MUL => last.wrapping_mul(value),
+            DSGA_OP_AND => last & value,
+            DSGA_OP_OR => last | value,
+            DSGA_OP_XOR => last ^ value,
+            DSGA_OP_STO => {
                 unsafe {
                     openttd_rust_storage_temp_store(unsigned(value), signed(last));
                 }
                 last
             }
-            16 => {
+            DSGA_OP_STOP => {
                 unsafe {
                     self.store_psa(scope, unsigned(value), signed(last));
                 }
                 last
             }
-            17 => last.rotate_right(unsigned(value) & 0x1F),
-            18 => {
+            DSGA_OP_ROR => last.rotate_right(unsigned(value) & 0x1F),
+            DSGA_OP_SCMP => {
                 if signed(last) == signed(value) {
                     1
                 } else if signed(last) < signed(value) {
@@ -711,7 +742,7 @@ impl<'a> Invocation<'a> {
                     2
                 }
             }
-            19 => {
+            DSGA_OP_UCMP => {
                 if last == unsigned(value) {
                     1
                 } else if last < unsigned(value) {
@@ -720,9 +751,10 @@ impl<'a> Invocation<'a> {
                     2
                 }
             }
-            20 => last << (unsigned(value) & 0x1F),
-            21 => last >> (unsigned(value) & 0x1F),
-            22 => (signed(last) >> (unsigned(value) & 0x1F)) as u32,
+            DSGA_OP_SHL => last << (unsigned(value) & 0x1F),
+            DSGA_OP_SHR => last >> (unsigned(value) & 0x1F),
+            DSGA_OP_SAR => (signed(last) >> (unsigned(value) & 0x1F)) as u32,
+            DSGA_OP_RST => value,
             _ => value,
         };
         unsigned(result)
@@ -856,5 +888,5 @@ crate::abi::layouts! {
     "OpenTTDGroupNode" ["storage"] => Node { data, kind };
     "OpenTTDGroupAdjust" ["storage"] => Adjust { subroutine, and_mask, add_val, divmod_val, operation, kind => type, variable, parameter, shift_num };
     "OpenTTDGroupRange" ["storage"] => Range { result, low, high };
-    "OpenTTDSpriteGroupServices" ["storage"] => Services { vehicle, industry, object, storage, resolver_binding, scope_binding, industry_builder, tile_random_check, loaded_count, loading_count, loaded, loading, node, adjust, range, random_group, scope, variable, random_bits, random_triggers, store_psa, native, unhandled_scope, parameter, global, profile_enter, profile_end };
+    "OpenTTDSpriteGroupServices" ["storage"] => Services { adjust, global, industry, industry_builder, loaded, loaded_count, loading, loading_count, native, node, object, parameter, profile_end, profile_enter, random_bits, random_group, random_triggers, range, resolver_binding, scope, scope_binding, storage, store_psa, tile_random_check, unhandled_scope, variable, vehicle };
 }

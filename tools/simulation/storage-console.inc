@@ -8,12 +8,13 @@
 #include "newgrf_industrytiles.h"
 #include "newgrf_config.h"
 #include "newgrf_profiling.h"
+#include <source_location>
 /* Executable native parsed groups, rebuilt for both initial and post-load runs.
  * The normal resolver methods provide results and storage effects; neither
  * implementation is replaced by a tracing evaluator. */
 static void CommonAction2(Industry *industry, GRFFile &grf)
 {
-	auto Require = [](bool good) { if (!good) std::abort(); };
+	auto Require = [](bool good, const std::source_location line = std::source_location::current()) { if (!good) { fmt::print(stderr, "STORAGE assertion {}\n", line.line()); std::abort(); } };
 	std::array<int32_t, 256> saved;
 	for (uint i = 0; i < saved.size(); ++i) saved[i] = industry->psa->GetValue(i);
 	std::vector<std::unique_ptr<SpriteGroup>> nodes;
@@ -63,14 +64,15 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 		}
 	}
 	/* All arithmetic operations/types at each width, including zero division,
-	 * signed promotions, full-width wrapping and masked shift/rotate counts. */
+	 * signed promotions, full-width wrapping and masked shift/rotate counts.
+	 * Native signed MIN/-1 division overflow is undefined and excluded. */
 	auto *arithmetic = Det();
 	for (auto size : {DSG_SIZE_BYTE, DSG_SIZE_WORD, DSG_SIZE_DWORD}) {
 		arithmetic->size = size;
 		uint32_t mask = size == DSG_SIZE_BYTE ? UINT8_MAX : size == DSG_SIZE_WORD ? UINT16_MAX : UINT32_MAX;
 		for (uint type = DSGA_TYPE_NONE; type <= DSGA_TYPE_MOD; ++type) {
 			for (uint op = DSGA_OP_ADD; op <= DSGA_OP_SAR; ++op) {
-				for (auto [last, value] : std::array<std::pair<uint32_t, uint32_t>, 5>{{{0x7F, 0x80}, {UINT32_MAX, 0}, {0x80000000, 0xFFFFFFFD}, {123, 31}, {0xFFFF, 0x1001}}}) {
+				for (auto [last, value] : std::array<std::pair<uint32_t, uint32_t>, 7>{{{0x7F, 0x80}, {UINT32_MAX, 0}, {0x80000000, 0xFFFFFFFD}, {123, 31}, {0xFFFF, 0x1001}, {mask >> 1, 1}, {(mask >> 1) + 1, 3}}}) {
 					ro.callback_param1 = value; ro.callback_param2 = last;
 					auto a = Adjust(0x10, static_cast<DeterministicSpriteGroupAdjustOperation>(op), mask);
 					a.type = static_cast<DeterministicSpriteGroupAdjustType>(type); a.add_val = 127; a.divmod_val = 3;
@@ -80,6 +82,8 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 			}
 		}
 	}
+	ro.callback_param1 = UINT32_MAX; auto shifted = Adjust(0x10); shifted.shift_num = 31;
+	arithmetic->size = DSG_SIZE_DWORD; arithmetic->adjusts = {shifted}; ro.root_spritegroup = arithmetic; Require(ro.ResolveCallback({}) == 1);
 	/* Callback-only register copying and all terminal alternatives, including
 	 * real loaded/loading fallback and null. */
 	auto *sprite = Keep(new ResultSpriteGroup(17, 1));
@@ -93,10 +97,10 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 	real->loaded = {production}; Require(base.Resolve<IndustryProductionSpriteGroup>() == production);
 	base.root_spritegroup = sprite; regs[0] = -77;
 	Require(base.ResolveCallback(regs) == CALLBACK_FAILED && regs[0] == -77);
-	/* ANY/ALL, zero-trigger ALL, scope OR masks, uint8 result indexing and no
+	/* ANY/ALL, zero-trigger ALL, scope OR masks, result indexing and no
 	 * RNG draws. Town parent scopes have no random bits; industry SELF does. */
 	auto *random = Keep(new RandomizedSpriteGroup()); random->var_scope = VSG_SCOPE_SELF; random->lowest_randbit = 2; random->triggers = 3;
-	random->groups = {error, error, error, error};
+	random->groups = {Keep(new CallbackResultSpriteGroup(200)), Keep(new CallbackResultSpriteGroup(201)), Keep(new CallbackResultSpriteGroup(202)), Keep(new CallbackResultSpriteGroup(203))};
 	/* Use an actual industry resolver for defined self/parent scopes even if
 	 * the industry's rectangular origin is not one of its industry tiles. */
 	struct TriggerResolver : IndustriesResolverObject {
@@ -105,6 +109,11 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 		uint32_t Used() const { return this->used_random_triggers; }
 	} trigger(industry->location.tile, industry, industry->type, 0, CBID_RANDOM_TRIGGER);
 	trigger.grffile = &grf; trigger.root_spritegroup = random;
+	Backup<uint16_t> random_bits(industry->random);
+	for (uint16_t bits : {0, 4, 8, 12, 0xFFFF}) {
+		industry->random = bits;
+		Require(trigger.ResolveCallback({}) == 200 + ((bits & 12) >> 2));
+	}
 	std::array<uint32_t, 4> rng{_random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]};
 	for (auto mode : {RSG_CMP_ANY, RSG_CMP_ALL}) {
 		random->cmp_mode = mode;
@@ -116,9 +125,24 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 	}
 	random->cmp_mode = RSG_CMP_ALL; random->triggers = 0; trigger.Waiting(0);
 	trigger.ResolveRerandomisation(); Require(trigger.Used() == 0 && trigger.reseed[VSG_SCOPE_SELF] == 12);
-	random->var_scope = VSG_SCOPE_PARENT; random->lowest_randbit = 6;
-	SpriteGroup::Resolve(random, trigger, false); Require(trigger.reseed[VSG_SCOPE_SELF] == 12 && trigger.reseed[VSG_SCOPE_PARENT] == 192 && trigger.GetReseedSum() == 204);
+	random->lowest_randbit = 6;
+	SpriteGroup::Resolve(random, trigger, false); Require(trigger.reseed[VSG_SCOPE_SELF] == 204);
+	random->var_scope = VSG_SCOPE_PARENT; random->lowest_randbit = 8;
+	SpriteGroup::Resolve(random, trigger, false); Require(trigger.reseed[VSG_SCOPE_SELF] == 204 && trigger.reseed[VSG_SCOPE_PARENT] == 768 && trigger.GetReseedSum() == 972);
+	auto *seed_procedure = Det(); auto seed_call = Adjust(0x7E); seed_call.subroutine = random; seed_procedure->adjusts = {seed_call};
+	trigger.root_spritegroup = seed_procedure;
+	Require(trigger.ResolveCallback({}) == 200 && trigger.reseed[VSG_SCOPE_SELF] == 0 && trigger.reseed[VSG_SCOPE_PARENT] == 768);
 	Require(_random.state[0] == rng[0] && _random.state[1] == rng[1] && _interactive_random.state[0] == rng[2] && _interactive_random.state[1] == rng[3]);
+	/* Procedure alternatives and callback failure are distinct from monostate. */
+	auto non_callback = Adjust(0x7E); non_callback.subroutine = sprite;
+	arithmetic->size = DSG_SIZE_DWORD; arithmetic->adjusts = {non_callback}; base.root_spritegroup = arithmetic;
+	Require(base.ResolveCallback({}) == 0x7FFF && base.last_value == UINT16_MAX);
+	non_callback.subroutine = nullptr; arithmetic->adjusts = {non_callback}; Require(base.ResolveCallback({}) == 0x7FFF);
+	base.root_spritegroup = Keep(new CallbackResultSpriteGroup(CALLBACK_FAILED)); regs[0] = -77;
+	Require(base.ResolveCallback(regs) == CALLBACK_FAILED && regs[0] == 0);
+	grf.param = {0xFEDCBA98}; arithmetic->adjusts = {Adjust(0x7F)}; base.root_spritegroup = arithmetic;
+	Require(base.ResolveCallback({}) == 0x3A98 && base.last_value == 0xFEDCBA98);
+	ResolverObject no_file(nullptr); no_file.root_spritegroup = arithmetic; Require(no_file.ResolveCallback({}) == 0);
 	/* Complete globals, including Action7/9's public shared entry, all dates,
 	 * old/new snow scaling, rail-cost selection and native palette preconditions. */
 	_grfconfig.push_back(std::make_unique<GRFConfig>("common-action2")); _grfconfig.back()->ident.grfid = grf.grfid;
@@ -126,6 +150,11 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 		grf.grf_version = version;
 		for (uint8_t climate : {0, 1, 2, 3}) {
 			Backup<LandscapeType> landscape(_settings_game.game_creation.landscape, static_cast<LandscapeType>(climate));
+			Backup<uint> width(grf.traininfo_vehicle_width, climate & 1 ? 32 : 29);
+			Backup<int> pitch(grf.traininfo_vehicle_pitch, climate & 1 ? -12 : 255);
+			Backup<bool> elrails(_settings_game.vehicle.disable_elrails, (climate & 1) != 0);
+			Backup<uint8_t> road_side(_settings_game.vehicle.road_side, climate & 1);
+			_grfconfig.back()->palette = (climate & 1) | GRFP_GRF_ANY | GRFP_BLT_32BPP;
 			for (int32_t year : {0, 1900, 1920, 2000, 2090, 2400}) {
 				Backup<TimerGameCalendar::Year> current_year(TimerGameCalendar::year, TimerGameCalendar::Year{year});
 				Backup<TimerGameCalendar::Date> date(TimerGameCalendar::date, TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{year}, 1, 28));
@@ -140,6 +169,7 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 	}
 	_grfconfig.pop_back();
 	uint32_t version; Require(GetGlobalVariable(0x21, &version, &grf) && version == _openttd_newgrf_version);
+	arithmetic->adjusts = {Adjust(0x21)}; Require(base.ResolveCallback({}) == (version & 0x7FFF) && base.last_value == version);
 	uint32_t unknown = 417; Require(!GetGlobalVariable(0xFF, &unknown, &grf) && unknown == 417);
 	for (uint i = 0; i < saved.size(); ++i) industry->psa->StoreValue(i, saved[i]);
 	fmt::print(stderr, "STORAGE action2 nested ranges arithmetic terminals reseed globals {}\n", digest);

@@ -476,6 +476,7 @@ public:
 
 	virtual ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0);
 
+#ifndef WITH_RUST
 	/**
 	 * Used by RandomizedSpriteGroup: Triggers for rerandomisation
 	 */
@@ -491,6 +492,8 @@ public:
 	{
 		this->used_random_triggers |= triggers;
 	}
+
+#endif
 
 	/**
 	 * Returns the OR-sum of all bits that need reseeding

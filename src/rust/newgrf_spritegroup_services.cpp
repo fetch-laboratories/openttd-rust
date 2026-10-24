@@ -7,9 +7,10 @@
 #include "../newgrf.h"
 #include "../debug.h"
 #include "newgrf_global_ffi.h"
-#include "timer_services.h"
+#include "services_timer.h"
 #include "settings_services.h"
 #include "services_rail.h"
+#include "services_industry.h"
 #include "environment_services.h"
 #include "services_newgrf.h"
 #include "../newgrf_engine.h"
@@ -23,6 +24,15 @@
 #include "object_ffi.h"
 #include "newgrf_storage_ffi.h"
 #include "../safeguards.h"
+
+static_assert(VSG_SCOPE_SELF == 0 && VSG_SCOPE_PARENT == 1 && VSG_SCOPE_RELATIVE == 2 && VSG_END == 3);
+static_assert(DSG_SIZE_BYTE == 0 && DSG_SIZE_WORD == 1 && DSG_SIZE_DWORD == 2);
+static_assert(DSGA_TYPE_NONE == 0 && DSGA_TYPE_DIV == 1 && DSGA_TYPE_MOD == 2);
+static_assert(DSGA_OP_ADD == 0 && DSGA_OP_SUB == 1 && DSGA_OP_SMIN == 2 && DSGA_OP_SMAX == 3 && DSGA_OP_UMIN == 4 && DSGA_OP_UMAX == 5);
+static_assert(DSGA_OP_SDIV == 6 && DSGA_OP_SMOD == 7 && DSGA_OP_UDIV == 8 && DSGA_OP_UMOD == 9 && DSGA_OP_MUL == 10 && DSGA_OP_AND == 11 && DSGA_OP_OR == 12 && DSGA_OP_XOR == 13);
+static_assert(DSGA_OP_STO == 14 && DSGA_OP_RST == 15 && DSGA_OP_STOP == 16 && DSGA_OP_ROR == 17 && DSGA_OP_SCMP == 18 && DSGA_OP_UCMP == 19 && DSGA_OP_SHL == 20 && DSGA_OP_SHR == 21 && DSGA_OP_SAR == 22);
+static_assert(RSG_CMP_ANY == 0 && RSG_CMP_ALL == 1 && SP_CUSTOM == 3 && VEHICLEINFO_FULL_VEHICLE_WIDTH == 32);
+static_assert(RAILTYPE_RAIL == 0 && RAILTYPE_ELECTRIC == 1 && RAILTYPE_MONO == 2 && RAILTYPE_MAGLEV == 3 && to_underlying(GrfMiscBit::TrainWidth32Pixels) == 3);
 
 static ResolverResult NativeResult(const OpenTTDResolverResult &result)
 {
@@ -110,58 +120,55 @@ static void ScopeBinding(ScopeResolver *scope, OpenTTDScopeBinding *out) noexcep
 const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
 {
 	static const OpenTTDSpriteGroupServices services{
-		.vehicle = &GetRustVehicleResolverServices(),
-		.industry = &GetIndustryResolverServices(),
-		.object = &GetRustObjectServices(),
-		.storage = &GetRustStorageServices(),
-		.resolver_binding = ResolverBinding,
-		.scope_binding = ScopeBinding,
-		.industry_builder = []() noexcept { return _industry_builder.owner.get(); },
-		.tile_random_check = [](const OpenTTDIndustryResolverContext *c) noexcept {
-			assert(c->industry != nullptr && IsValidTile(TileIndex(c->tile)));
-			assert(c->id == IndustryID::Invalid().base() || IsTileType(TileIndex(c->tile), MP_INDUSTRY));
-		},
-		.loaded_count = RustRealLoadedCount,
-		.loading_count = RustRealLoadingCount,
-		.loaded = RustRealLoaded,
-		.loading = RustRealLoading,
-		.node = GroupNode,
 		.adjust = GroupAdjust,
-		.range = GroupRange,
-		.random_group = [](const SpriteGroup *g, size_t index) noexcept { return static_cast<const RandomizedSpriteGroup *>(g)->groups[index]; },
-		.scope = [](ResolverObject *ro, uint8_t scope, uint8_t relative) noexcept { return ro->GetScope(static_cast<VarSpriteGroupScope>(scope), relative); },
-		.variable = [](const ScopeResolver *s, uint8_t var, uint32_t param, bool *available) noexcept { return s->GetVariable(var, param, *available); },
-		.random_bits = [](const ScopeResolver *s) noexcept { return s->GetRandomBits(); },
-		.random_triggers = [](const ScopeResolver *s) noexcept { return s->GetRandomTriggers(); },
-		.store_psa = [](ScopeResolver *s, uint32_t reg, int32_t value) noexcept { s->StorePSA(reg, value); },
-		.native = RustNativeSpriteGroup,
-		.unhandled_scope = RustUnhandledScopeVariable,
-		.parameter = RustGRFParameter,
 		.global = &GetRustGlobalVariableServices(),
-		.profile_enter = ProfileEnter,
+		.industry = &GetIndustryResolverServices(),
+		.industry_builder = RustIndustryBuilderState,
+		.loaded = RustRealLoaded,
+		.loaded_count = RustRealLoadedCount,
+		.loading = RustRealLoading,
+		.loading_count = RustRealLoadingCount,
+		.native = RustNativeSpriteGroup,
+		.node = GroupNode,
+		.object = &GetRustObjectServices(),
+		.parameter = RustGRFParameter,
 		.profile_end = ProfileEnd,
+		.profile_enter = ProfileEnter,
+		.random_bits = [](const ScopeResolver *s) noexcept { return s->GetRandomBits(); },
+		.random_group = [](const SpriteGroup *g, size_t index) noexcept { return static_cast<const RandomizedSpriteGroup *>(g)->groups[index]; },
+		.random_triggers = [](const ScopeResolver *s) noexcept { return s->GetRandomTriggers(); },
+		.range = GroupRange,
+		.resolver_binding = ResolverBinding,
+		.scope = [](ResolverObject *ro, uint8_t scope, uint8_t relative) noexcept { return ro->GetScope(static_cast<VarSpriteGroupScope>(scope), relative); },
+		.scope_binding = ScopeBinding,
+		.storage = &GetRustStorageServices(),
+		.store_psa = [](ScopeResolver *s, uint32_t reg, int32_t value) noexcept { s->StorePSA(reg, value); },
+		.tile_random_check = RustIndustryTileRandomCheck,
+		.unhandled_scope = RustUnhandledScopeVariable,
+		.variable = [](const ScopeResolver *s, uint8_t var, uint32_t param, bool *available) noexcept { return s->GetVariable(var, param, *available); },
+		.vehicle = &GetRustVehicleResolverServices(),
 	};
 	return services;
 }
 const OpenTTDGlobalVariableServices &GetRustGlobalVariableServices() noexcept
 {
 	static const OpenTTDGlobalVariableServices services{
-		.shared = &GetRustSharedServices(),
-		.date_to_ymd = RustCalendarDateToYMD,
-		.ymd_to_date = RustCalendarYMDToDate,
-		.date_fraction = RustCalendarDateFraction,
 		.climate = OpenTTDLandscapeValue,
-		.road_side = RustRoadSide,
+		.date_fraction = RustCalendarDateFraction,
+		.date_to_ymd = RustCalendarDateToYMD,
+		.disable_elrails = RustDisableElrails,
+		.file_version = RustGRFFileVersion,
+		.game_mode = RustGameMode,
+		.height_limit = RustMapHeightLimit,
+		.misc_bits = RustGRFMiscBits,
+		.newgrf_version = RustNewGRFVersion,
 		.palette = RustGRFPalette,
 		.pitch = RustGRFTrainPitch,
-		.disable_elrails = RustDisableElrails,
 		.rail_cost = RustRailCostMultiplier,
-		.game_mode = RustGameMode,
-		.misc_bits = RustGRFMiscBits,
+		.road_side = RustRoadSide,
+		.shared = &GetRustSharedServices(),
 		.width = RustGRFTrainWidth,
-		.height_limit = RustMapHeightLimit,
-		.file_version = RustGRFFileVersion,
-		.newgrf_version = RustNewGRFVersion,
+		.ymd_to_date = RustCalendarYMDToDate,
 	};
 	return services;
 }

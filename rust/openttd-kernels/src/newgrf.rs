@@ -20,22 +20,22 @@ use std::ffi::c_void;
 pub const TRAIN_WIDTH_32_PIXELS: u8 = 3;
 #[repr(C)]
 pub struct Services {
-    shared: *const Shared,
-    date_to_ymd: unsafe extern "C" fn(i32) -> CalendarYmd,
-    ymd_to_date: unsafe extern "C" fn(i32, u8, u8) -> i32,
-    date_fraction: unsafe extern "C" fn() -> u16,
     climate: unsafe extern "C" fn() -> u8,
-    road_side: unsafe extern "C" fn() -> u8,
+    date_fraction: unsafe extern "C" fn() -> u16,
+    date_to_ymd: unsafe extern "C" fn(i32) -> CalendarYmd,
+    disable_elrails: unsafe extern "C" fn() -> bool,
+    file_version: unsafe extern "C" fn(*const c_void) -> u8,
+    game_mode: unsafe extern "C" fn() -> u8,
+    height_limit: unsafe extern "C" fn() -> u8,
+    misc_bits: unsafe extern "C" fn() -> u8,
+    newgrf_version: unsafe extern "C" fn() -> u32,
     palette: unsafe extern "C" fn(*const c_void) -> u8,
     pitch: unsafe extern "C" fn(*const c_void) -> i32,
-    disable_elrails: unsafe extern "C" fn() -> bool,
     rail_cost: unsafe extern "C" fn(u8) -> u16,
-    game_mode: unsafe extern "C" fn() -> u8,
-    misc_bits: unsafe extern "C" fn() -> u8,
+    road_side: unsafe extern "C" fn() -> u8,
+    shared: *const Shared,
     width: unsafe extern "C" fn(*const c_void) -> u32,
-    height_limit: unsafe extern "C" fn() -> u8,
-    file_version: unsafe extern "C" fn(*const c_void) -> u8,
-    newgrf_version: unsafe extern "C" fn() -> u32,
+    ymd_to_date: unsafe extern "C" fn(i32, u8, u8) -> i32,
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_global_variable(
@@ -118,5 +118,5 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
 }
 crate::abi::layouts! {
     fn abi_layout;
-    "OpenTTDGlobalVariableServices" ["storage"] => Services { shared, date_to_ymd, ymd_to_date, date_fraction, climate, road_side, palette, pitch, disable_elrails, rail_cost, game_mode, misc_bits, width, height_limit, file_version, newgrf_version };
+    "OpenTTDGlobalVariableServices" ["storage"] => Services { climate, date_fraction, date_to_ymd, disable_elrails, file_version, game_mode, height_limit, misc_bits, newgrf_version, palette, pitch, rail_cost, road_side, shared, width, ymd_to_date };
 }

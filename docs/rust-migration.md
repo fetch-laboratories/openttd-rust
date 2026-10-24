@@ -2295,3 +2295,30 @@ map/cargo/save/register/ordered effects and both RNG streams compare in both mod
 Transient groups are reconstructed after native load; arbitrary external-GRF,
 historical and GUI paths remain #156. Commands, accepted cost, fixing reviews
 and root's final current-base combination evidence are linked from #411.
+
+### Common Action2 execution and invocation state (#417, PR #425)
+
+`newgrf_spritegroup.rs` owns complete group dispatch, deterministic adjustments,
+variables/procedures/ranges/errors/defaults, randomized selection and common
+resolver reset/callback/rerandomisation state. `newgrf.rs` owns every shared global
+variable, including Action7/9/D's public entry. Each native resolver embeds one
+canonical Rust stack carrier for its full lifetime; compatibility aliases address
+those fields. Parsed graphs/specs, pools, terminal payloads and profiler output
+remain native. Node observations copy only consumed metadata; no graph mirror,
+per-call allocation, execution continuation or recursion guard is introduced.
+Rust directly calls integrated register, feature-variable/real and PSA owners.
+Remaining native feature scopes retain their original shared behavior. All raw
+state accesses end before scope/procedure/storage reentry. Native facade and
+profiler ordering remain synchronous, with noexcept leaves and aborting panics.
+Shared calendar converters replace the engine-local copies; displaced register
+callback slots, wrappers and unused native trigger methods retire.
+Default `town-storage-reload` constructs actual groups before saving and after
+reload, checking nested 7E/7B/STOP, three widths/all operations, inclusive linear
+and binary ranges, unavailable/default/null/terminal alternatives, callback-only
+register copying, ANY/ALL/zero triggers, scope OR masks, profiler order, globals,
+PSAC/CITY/map/save state and both RNG streams. Missing cases/witnesses fail.
+Native layouts and actual table visitors supplement Cargo4 and semantic checks.
+Arbitrary external GRFs/loader conditionals, historical saves, remaining native
+feature combinations and GUI scheduling remain #156 gaps. Native signed dword
+MIN/-1 division overflow has a compiler/platform-dependent undefined result;
+the cross-game fixture excludes it and Rust uses explicit wrapping division.

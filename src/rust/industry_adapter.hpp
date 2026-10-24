@@ -79,11 +79,11 @@ public:
 	}
 	iterator erase(iterator first, [[maybe_unused]] iterator last) { auto n = first - this->begin(); assert(last == this->end()); this->resize(n); return this->end(); }
 };
+OpenTTDIndustryBuilder *RustIndustryBuilderState() noexcept;
 /** Nonowning facade for the canonical ascending IndustryID registry. */
 struct RustIndustryRegistry {
 	uint8_t type = 0;
-	OpenTTDIndustryBuilder *Owner() const;
-	OpenTTDIndustrySlots View() const { return openttd_rust_industry_registry_view(this->Owner(), this->type); }
+	OpenTTDIndustrySlots View() const { return openttd_rust_industry_registry_view(RustIndustryBuilderState(), this->type); }
 	struct Iterator {
 		const uint16_t *pointer;
 		IndustryID operator*() const { return IndustryID(*this->pointer); }
@@ -93,8 +93,8 @@ struct RustIndustryRegistry {
 	Iterator begin() const { return {static_cast<const uint16_t *>(this->View().data)}; }
 	Iterator end() const { auto view = this->View(); return {static_cast<const uint16_t *>(view.data) + view.size}; }
 	size_t size() const { return this->View().size; }
-	void insert(IndustryID id) { openttd_rust_industry_registry_insert(this->Owner(), this->type, id.base()); }
-	void erase(IndustryID id) { openttd_rust_industry_registry_erase(this->Owner(), this->type, id.base()); }
-	void clear() { openttd_rust_industry_registry_clear(this->Owner(), this->type); }
+	void insert(IndustryID id) { openttd_rust_industry_registry_insert(RustIndustryBuilderState(), this->type, id.base()); }
+	void erase(IndustryID id) { openttd_rust_industry_registry_erase(RustIndustryBuilderState(), this->type, id.base()); }
+	void clear() { openttd_rust_industry_registry_clear(RustIndustryBuilderState(), this->type); }
 };
 #endif

@@ -13,7 +13,7 @@
 #include "engine_services.h"
 #include "presentation_services.h"
 #include "environment_services.h"
-#include "timer_services.h"
+#include "services_timer.h"
 static_assert(MAX_COMPANIES == 15 && OWNER_DEITY.base() == 18 && MAX_LENGTH_ENGINE_NAME_CHARS == 32);
 static OpenTTDEngineRef EngineRef(const Engine *e) noexcept
 {

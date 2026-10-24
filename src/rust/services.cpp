@@ -37,6 +37,7 @@
 #include "../airport.h"
 #include "../engine_type.h"
 #include "../industry_map.h"
+#include "../industry.h"
 #include "../bridge_map.h"
 #include "services_rail.h"
 #include "services_road.h"
@@ -82,6 +83,8 @@
 #include "../economy_func.h"
 #include "orders_ffi.h"
 #include "tile_animation_services.h"
+
+OpenTTDIndustryBuilder *RustIndustryBuilderState() noexcept { return _industry_builder.owner.get(); }
 
 extern "C" uint64_t openttd_orders_tick_counter() noexcept
 {
