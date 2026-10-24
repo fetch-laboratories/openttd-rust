@@ -320,7 +320,7 @@ static void CapabilitiesProbe()
 		e->info.callback_mask = {VehicleCallbackMask::ArticEngine, VehicleCallbackMask::RefitCapacity};
 		part->info.cargo_type = mail; part->info.refit_mask = CargoTypes{1} << mail; part->info.callback_mask = {};
 		for (uint8_t version : {7, 8}) for (bool fail : {false, true}) for (bool purchase : {false, true}) {
-			p.grf.grf_version = version; p.part->result = part->grf_prop.local_id | (version < 8 ? 0x80 : 0x4000); p.stop->result = fail ? CALLBACK_FAILED : version < 8 ? 0xFF : 0x7FFF;
+			p.grf.grf_version = version; p.part->result = part->grf_prop.local_id | (version < 8 ? 0x180 : 0x4000); p.stop->result = fail ? CALLBACK_FAILED : version < 8 ? 0x1FF : 0x7FFF;
 			p.observer->Reset();
 			size_t items = Vehicle::GetNumItems();
 			uint count = CountArticulatedParts(e->index, purchase);

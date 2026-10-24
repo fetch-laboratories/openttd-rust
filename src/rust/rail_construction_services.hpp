@@ -11,7 +11,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	Train *v = new Train();
 	v->spritenum = rvi->image_index;
 
-	v->engine_type = e->index;
+	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
 
 	DiagDirection dir = RustRailDepotDirection(tile.base());
@@ -25,7 +25,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 	v->x_pos = x;
 	v->y_pos = y;
 	v->z_pos = SharedSlopePixelZ(x, y, true);
-	v->owner = _current_company;
+	RustVehicleSetOwner(RustVehicle(v), RustCurrentCompanyID());
 	v->SetTrack(TRACK_BIT_DEPOT);
 	v->vehstatus = {VehState::Hidden, VehState::DefaultPalette};
 
@@ -36,7 +36,7 @@ static void *RailNewWagon(uint32_t tile_index, const OpenTTDEngine *engine) noex
 
 	v->cargo_type = RustEngineDefaultCargo(engine);
 	assert(IsValidCargoType(v->cargo_type));
-	v->cargo_cap = rvi->capacity;
+	RustVehicleSetCargoCap(RustVehicle(v), RustEngineRailCapacity(engine));
 	v->refit_cap = 0;
 
 	v->SetRailTypes(rvi->railtypes);
@@ -60,7 +60,7 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	Train *v = new Train();
 	v->direction = DiagDirToDir(dir);
 	v->tile = tile;
-	v->owner = _current_company;
+	RustVehicleSetOwner(RustVehicle(v), RustCurrentCompanyID());
 	v->x_pos = x;
 	v->y_pos = y;
 	v->z_pos = SharedSlopePixelZ(x, y, true);
@@ -69,12 +69,12 @@ static void *RailNewEngine(uint32_t tile_index, const OpenTTDEngine *engine) noe
 	v->spritenum = rvi->image_index;
 	v->cargo_type = RustEngineDefaultCargo(engine);
 	assert(IsValidCargoType(v->cargo_type));
-	v->cargo_cap = rvi->capacity;
+	RustVehicleSetCargoCap(RustVehicle(v), RustEngineRailCapacity(engine));
 	v->refit_cap = 0;
 	v->last_station_visited = StationID::Invalid();
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
 
-	v->engine_type = e->index;
+	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	RustGroundSetFirstEngine(&v->gcache, EngineID::Invalid()); // needs to be set before first callback
 
 	v->reliability = e->reliability;

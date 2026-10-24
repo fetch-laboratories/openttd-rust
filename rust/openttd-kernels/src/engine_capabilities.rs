@@ -41,6 +41,7 @@ pub struct Services {
     engine: extern "C" fn(u16) -> E,
     engine_if_valid: extern "C" fn(u16) -> E,
     kind: extern "C" fn(E) -> VehicleType,
+    ground: extern "C" fn(E) -> bool,
     id: extern "C" fn(E) -> u16,
     default_cargo: extern "C" fn(E) -> u8,
     callbacks: extern "C" fn(E) -> u16,
@@ -65,6 +66,7 @@ pub struct Services {
     set_owner: extern "C" fn(V, u8),
     current_company: extern "C" fn() -> u8,
     vehicle_engine: extern "C" fn(V) -> u16,
+    vehicle_engine_object: extern "C" fn(V) -> E,
     vehicle_cargo: extern "C" fn(V) -> u8,
     vehicle_subtype: extern "C" fn(V) -> u8,
     has_articulated: extern "C" fn(V) -> bool,
@@ -347,7 +349,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_count(
 }
 /// A live base shell, retained by its fleet/transaction caller.
 pub(crate) unsafe fn can_carry_vehicle(s: &Services, v: V) -> bool {
-    unsafe { openttd_rust_engine_can_carry(s, (s.engine)((s.vehicle_engine)(v))) }
+    unsafe { openttd_rust_engine_can_carry(s, (s.vehicle_engine_object)(v)) }
 }
 /// Original helper narrows the display uint result to uint16 before aggregation.
 unsafe fn default_capacity(s: &Services, engine: u16) -> (u8, u16) {
@@ -381,13 +383,10 @@ pub(crate) unsafe fn available_cargo(s: &Services, engine: u16, initial: bool) -
         cargoes
     }
 }
-fn ground(s: &Services, e: E) -> bool {
-    matches!((s.kind)(e), VehicleType::TRAIN | VehicleType::ROAD)
-}
 /// Complete query traversal; each caller preserves its original early return.
 unsafe fn parts(s: &Services, e: E, engine: u16, mut visit: impl FnMut(u16) -> bool) {
     unsafe {
-        if !ground(s, e) || (s.callbacks)(e) & VEHICLE_ARTIC_ENGINE == 0 {
+        if !(s.ground)(e) || (s.callbacks)(e) & VEHICLE_ARTIC_ENGINE == 0 {
             return;
         }
         for i in 1..MAX_ARTICULATED_PARTS {
@@ -514,7 +513,7 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
         loop {
             let cargo = (s.vehicle_cargo)(v);
             if is_valid_cargo_type(cargo)
-                && openttd_rust_engine_can_carry(s, (s.engine)((s.vehicle_engine)(v)))
+                && openttd_rust_engine_can_carry(s, (s.vehicle_engine_object)(v))
             {
                 cargoes |= 1_u64.wrapping_shl(u32::from(cargo));
                 if !is_valid_cargo_type(first) {
@@ -543,10 +542,10 @@ pub unsafe extern "C" fn openttd_rust_articulated_live_cargoes(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDEngineCapabilitiesServices" ["probe"] => Services {
-        resolver, engine, engine_if_valid, kind, id, default_cargo, callbacks, misc, refit_mask,
+        resolver, engine, engine_if_valid, kind, ground, id, default_cargo, callbacks, misc, refit_mask,
         rail_capacity, road_capacity, ship_capacity, passenger_capacity, mail_capacity, rail_kind,
         grf, version, new_engine, cargo_classes, multiplier, cargo_by_label, pool_available,
         new_temporary, destroy_temporary, set_engine, set_owner, current_company, vehicle_engine,
-        vehicle_cargo, vehicle_subtype, has_articulated, next_articulated, check, assertions,
+        vehicle_engine_object, vehicle_cargo, vehicle_subtype, has_articulated, next_articulated, check, assertions,
     };
 }

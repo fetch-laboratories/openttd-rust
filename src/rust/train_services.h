@@ -334,7 +334,7 @@ static void TrainLeaveUnbunch(OpenTTDTrainHandle id) noexcept
 static uint64_t TrainLengthCallback(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return EngineOf(RustVehicleGetEngine(RustVehicle(v)))->info.callback_mask.Test(VehicleCallbackMask::Length);
+	return VehicleCallbackMasks(RustEngineCallbackMask(RustVehicleGetEngine(RustVehicle(v)))).Test(VehicleCallbackMask::Length);
 }
 static uint64_t TrainLengthDefault(OpenTTDTrainHandle id) noexcept
 {
@@ -415,7 +415,7 @@ static uint64_t TrainRailvehWagon(OpenTTDTrainHandle id) noexcept
 static uint64_t TrainRailTilt(OpenTTDTrainHandle id) noexcept
 {
 	Train *v = static_cast<Train *>(id.shell);
-	return EngineOf(RustVehicleGetEngine(RustVehicle(v)))->info.misc_flags.Test(EngineMiscFlag::RailTilts);
+	return EngineMiscFlags(RustEngineMiscFlags(RustVehicleGetEngine(RustVehicle(v)))).Test(EngineMiscFlag::RailTilts);
 }
 static uint64_t TrainRailTypes(OpenTTDTrainHandle id) noexcept
 {

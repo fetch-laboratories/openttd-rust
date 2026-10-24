@@ -8,7 +8,7 @@ static void *VehicleConstructNewRoad(uint32_t tile) noexcept
 {
 	RoadVehicle *v = new RoadVehicle();
 	v->direction = DiagDirToDir(static_cast<DiagDirection>(Shared_road_depot_direction(tile)));
-	v->owner = _current_company;
+	RustVehicleSetOwner(RustVehicle(v), RustCurrentCompanyID());
 	v->tile = TileIndex(tile);
 	int x = TileX(v->tile) * TILE_SIZE + TILE_SIZE / 2;
 	int y = TileY(v->tile) * TILE_SIZE + TILE_SIZE / 2;
@@ -40,7 +40,7 @@ static void VehicleConstructAircraftPlace(void *aircraft, void *shadow, uint32_t
 	Aircraft *v = static_cast<Aircraft *>(aircraft);
 	Aircraft *u = static_cast<Aircraft *>(shadow);
 	v->direction = DIR_SE;
-	v->owner = u->owner = _current_company;
+	RustVehicleSetOwner(RustVehicle(u), RustCurrentCompanyID()); RustVehicleSetOwner(RustVehicle(v), RustVehicleOwner(u));
 	v->tile = TileIndex(tile);
 	uint x = TileX(v->tile) * TILE_SIZE + 5;
 	uint y = TileY(v->tile) * TILE_SIZE + 3;
@@ -54,14 +54,14 @@ static void VehicleConstructAircraftPlace(void *aircraft, void *shadow, uint32_t
 static OpenTTDAircraftInfo VehicleConstructAircraftInfo(const OpenTTDEngine *e) noexcept
 {
 	const AircraftVehicleInfo &avi = EngineOf(e)->VehInfo<AircraftVehicleInfo>();
-	return {.image = avi.image_index, .passengers = avi.passenger_capacity, .mail = avi.mail_capacity, .subtype = RustAircraftInfoSubtype(&avi)};
+	return {.image = avi.image_index, .passengers = RustEnginePassengerCapacity(e), .mail = RustEngineMailCapacity(e), .subtype = RustAircraftInfoSubtype(&avi)};
 }
 static void VehicleConstructAircraftProperties(void *aircraft, void *shadow, const OpenTTDEngine *e, uint8_t subtype) noexcept
 {
 	Aircraft *v = static_cast<Aircraft *>(aircraft);
 	Aircraft *u = static_cast<Aircraft *>(shadow);
 	v->acceleration = EngineOf(e)->VehInfo<AircraftVehicleInfo>().acceleration;
-	u->engine_type = EngineOf(e)->index;
+	RustVehicleSetEngine(RustVehicle(u), RustEngineID(e));
 	RustVehicleSetSubtype(v, subtype);
 	RustVehicleSetSubtype(u, AIR_SHADOW);
 	v->vehicle_flags = {};
@@ -71,9 +71,9 @@ static void VehicleConstructRotor(void *rotor, void *aircraft, void *shadow) noe
 {
 	Aircraft *w = static_cast<Aircraft *>(rotor);
 	const Aircraft *v = static_cast<Aircraft *>(aircraft);
-	w->engine_type = v->engine_type;
+	RustVehicleSetEngine(RustVehicle(w), RustVehicleEngineID(v));
 	w->direction = DIR_N;
-	w->owner = _current_company;
+	RustVehicleSetOwner(RustVehicle(w), RustCurrentCompanyID());
 	w->x_pos = v->x_pos;
 	w->y_pos = v->y_pos;
 	w->z_pos = v->z_pos + ROTOR_Z_OFFSET;
@@ -98,7 +98,7 @@ static void VehicleConstructEngineCommon(void *shell, const OpenTTDEngine *engin
 	const Engine *e = EngineOf(engine);
 	v->last_station_visited = StationID::Invalid();
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
-	v->engine_type = e->index;
+	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	v->reliability = RustEngineReliability(e);
 	v->reliability_spd_dec = e->reliability_spd_dec;
 	v->max_age = RustEngineLifeLength(e);

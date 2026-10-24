@@ -164,6 +164,7 @@ inline void RustVehicleSetOwner(OpenTTDVehicle *v, uint8_t owner) noexcept { Veh
 inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->engine_type.base(); }
 inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return reinterpret_cast<const OpenTTDEngine *>(e); }
 inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return reinterpret_cast<const Engine *>(e); }
+inline const GRFFile *RustEngineGRF(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetGRF(); }
 inline const OpenTTDEngine *RustVehicleGetEngine(OpenTTDVehicle *v) noexcept { return RustEngine(VehicleOf(v)->GetEngine()); }
 /** Shared engine observation for a live base shell, resolved once. */
 template <typename Result, auto Read>
@@ -245,7 +246,7 @@ inline bool RustVehicleHasArticulated(OpenTTDVehicle *handle) noexcept { return 
 /** GRF version of a live engine; the original default-engine value is zero. */
 inline uint8_t RustEngineGRFVersion(const Engine *engine) noexcept
 {
-	const GRFFile *grf = engine->GetGRF();
+	const GRFFile *grf = RustEngineGRF(RustEngine(engine));
 	return grf == nullptr ? uint8_t(0) : RustGRFFileVersion(grf);
 }
 

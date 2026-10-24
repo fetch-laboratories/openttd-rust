@@ -5,7 +5,7 @@ static void *VehicleArticPreparePrevious(void *shell) noexcept { Vehicle *v = st
 template <class T> static void *VehicleArticNew(void *previous) noexcept { T *v = new T(); RustVehicleSetNext(static_cast<Vehicle *>(previous), v); RustVehicleSetSubtype(v, 0); return v; }
 static void VehicleArticRoadLength(void *cache) noexcept { static_cast<GroundVehicleCache *>(cache)->cached_veh_length = VEHICLE_LENGTH; }
 static void VehicleArticCopyRoadtype(void *shell, void *head) noexcept { RoadVehicle *v = static_cast<RoadVehicle *>(shell); const auto *first = static_cast<const RoadVehicle *>(head); v->roadtype = RustRoadVehicleType(first); v->compatible_roadtypes = first->compatible_roadtypes; }
-template <class T> static OpenTTDArticulatedPart VehicleArticInfo(const OpenTTDEngine *engine, bool carry) noexcept { const auto &info = EngineOf(engine)->VehInfo<T>(); return {.image = info.image_index, .capacity = static_cast<uint16_t>(carry ? info.capacity : 0)}; }
+template <class T, auto Capacity> static OpenTTDArticulatedPart VehicleArticInfo(const OpenTTDEngine *engine, bool carry) noexcept { const auto &info = EngineOf(engine)->VehInfo<T>(); return {.image = info.image_index, .capacity = static_cast<uint16_t>(carry ? Capacity(engine) : 0)}; }
 static void VehicleArticSetPart(void *shell, uint8_t image, uint8_t cargo, uint16_t capacity, bool validate) noexcept
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
@@ -20,14 +20,14 @@ static void VehicleArticCopyCommon(void *shell, void *head, uint16_t engine) noe
 {
 	Vehicle *v = static_cast<Vehicle *>(shell);
 	const Vehicle *first = static_cast<Vehicle *>(head);
-	v->direction = first->direction; v->owner = first->owner; v->tile = first->tile;
+	v->direction = first->direction; RustVehicleSetOwner(RustVehicle(v), RustVehicleOwner(first)); v->tile = first->tile;
 	v->x_pos = first->x_pos; v->y_pos = first->y_pos; v->z_pos = first->z_pos;
 	v->date_of_last_service = first->date_of_last_service;
 	v->date_of_last_service_newgrf = RustVehicleCalendarService(first);
 	v->build_year = RustVehicleBuildYear(first);
 	v->vehstatus = first->vehstatus; v->vehstatus.Reset(VehState::Stopped);
 	RustVehicleSetCargoSubtype(RustVehicle(v), 0);
-	v->max_age = CalendarTime::MIN_DATE; v->engine_type = EngineID(engine); v->value = 0;
+	v->max_age = CalendarTime::MIN_DATE; RustVehicleSetEngine(RustVehicle(v), engine); v->value = 0;
 	v->sprite_cache.sprite_seq.Set(SPR_IMG_QUERY);
 }
 static void VehicleArticFlip(void *shell) noexcept { ++static_cast<Vehicle *>(shell)->spritenum; }
@@ -39,7 +39,7 @@ const OpenTTDVehicleArticulatedServices &GetRustVehicleArticulatedServices() noe
 		.pool_available = RustVehicleCanAllocate,
 		.prepare_previous = VehicleArticPreparePrevious, .new_train = VehicleArticNew<Train>, .new_road = VehicleArticNew<RoadVehicle>,
 		.road_length = VehicleArticRoadLength, .copy_roadtype = VehicleArticCopyRoadtype,
-		.train_info = VehicleArticInfo<RailVehicleInfo>, .road_info = VehicleArticInfo<RoadVehicleInfo>,
+		.train_info = VehicleArticInfo<RailVehicleInfo, RustEngineRailCapacity>, .road_info = VehicleArticInfo<RoadVehicleInfo, RustEngineRoadCapacity>,
 		.set_part = VehicleArticSetPart, .mark_train = VehicleArticMark<Train>, .mark_road = VehicleArticMark<RoadVehicle>,
 		.copy_common = VehicleArticCopyCommon, .random_bits = RustOpaqueVehicleInvoke<RustVehicleSetRandomBits, uint16_t>,
 		.flip_image = VehicleArticFlip,

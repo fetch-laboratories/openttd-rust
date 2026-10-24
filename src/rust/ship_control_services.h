@@ -223,7 +223,7 @@ static OpenTTDShipTrackResult Ship_yapf_choose(uint32_t id, uint32_t tile) noexc
 
 static void Ship_update_delta(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->UpdateDeltaXY(); }
 
-static void Ship_build_owner(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->owner = _current_company; }
+static void Ship_build_owner(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); RustVehicleSetOwner(RustVehicle(v), RustCurrentCompanyID()); }
 
 static void Ship_build_z(uint32_t id) noexcept { Ship *v = Ship::Get(VehicleID(id)); v->z_pos = SharedSlopePixelZ(RustVehicleX(v), RustVehicleY(v), false); }
 
@@ -236,11 +236,11 @@ static void Ship_build_properties(uint32_t id, uint32_t engine) noexcept
 	v->spritenum = svi.image_index;
 	RustVehicleSetCargoType(RustVehicle(v), RustEngineDefaultCargo(RustEngine(e)));
 	assert(OpenTTDIsValidCargo(RustVehicleCargoType(RustVehicle(v))));
-	RustVehicleSetCargoCap(RustVehicle(v), svi.capacity);
+	RustVehicleSetCargoCap(RustVehicle(v), RustEngineShipCapacity(RustEngine(e)));
 	RustVehicleSetRefitCap(RustVehicle(v), 0);
 	v->last_station_visited = StationID::Invalid();
 	RustVehicleSetLastLoadingStation(RustVehicle(v), StationID::Invalid().base());
-	v->engine_type = e->index;
+	RustVehicleSetEngine(RustVehicle(v), e->index.base());
 	v->reliability = RustEngineReliability(e);
 	v->reliability_spd_dec = e->reliability_spd_dec;
 	v->max_age = RustEngineLifeLength(e);

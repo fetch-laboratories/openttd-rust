@@ -49,7 +49,7 @@ static bool FleetTransaction_needs_renew(void *shell, bool settings) noexcept { 
 static bool FleetTransaction_engine_valid(uint16_t id) noexcept { return Engine::IsValidID(EngineID(id)); }
 static bool FleetTransaction_company_valid(uint8_t id) noexcept { return GetRustSharedServices().company_valid(id); }
 static bool FleetTransaction_engine_buildable(uint16_t id, uint8_t type, uint8_t company) noexcept { return IsEngineBuildable(EngineID(id), static_cast<VehicleType>(type), CompanyID(company)); }
-static bool FleetTransaction_tram(uint16_t id) noexcept { return Engine::Get(EngineID(id))->info.misc_flags.Test(EngineMiscFlag::RoadIsTram); }
+static bool FleetTransaction_tram(uint16_t id) noexcept { return EngineMiscFlags(RustEngineMiscFlags(RustEngineByID(id))).Test(EngineMiscFlag::RoadIsTram); }
 static uint8_t FleetTransaction_plane(uint16_t id) noexcept { return RustAircraftInfoSubtype(AircraftVehInfo(EngineID(id))) & AIR_CTOL; }
 static void * FleetTransaction_orders(void *shell) noexcept { return static_cast<Vehicle *>(shell)->orders; }
 static size_t FleetTransaction_order_count(void *orders) noexcept { return static_cast<OrderList *>(orders)->GetOrders().size(); }
