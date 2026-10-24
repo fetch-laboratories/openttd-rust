@@ -95,7 +95,7 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.version = RustResolverGRFVersion,
 		.grfid = RustResolverGRFFileID,
 		.base_scope = RustResolverBaseScope,
-		.town_scope = [](AirportResolverObject *object, Town *town, bool readonly) noexcept -> TownScopeResolver * { if (!object->town_scope.has_value()) object->town_scope.emplace(*object, town, readonly); return &*object->town_scope; },
+		.town_scope = RustResolverTownScope<AirportResolverObject>,
 		.evaluate_tile = RustEvaluateAirportTile,
 		.unhandled = [](uint8_t var) noexcept { Debug(grf, 1, "Unhandled airport tile variable 0x{:X}", var); },
 	};

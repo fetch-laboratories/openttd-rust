@@ -101,7 +101,7 @@ pub struct Services {
     version: extern "C" fn(*const c_void) -> u8,
     grfid: extern "C" fn(*const c_void) -> u32,
     base_scope: extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
-    town_scope: extern "C" fn(*mut c_void, *mut crate::services::TownHandle, bool) -> *mut c_void,
+    town_scope: extern "C" fn(*mut c_void, *const crate::services::TownHandle, bool) -> *mut c_void,
     evaluate_tile: extern "C" fn(
         u16,
         u32,
