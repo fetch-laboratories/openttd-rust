@@ -67,6 +67,8 @@ inline uint8_t RustSpecReverseRailTypeTranslation(RailType railtype, const Spec 
 
 /* Qualified base operation: Rust retains feature-specific scope selection. */
 inline ScopeResolver *RustResolverBaseScope(ResolverObject *resolver, uint8_t scope, uint8_t relative) noexcept { return resolver->ResolverObject::GetScope(static_cast<VarSpriteGroupScope>(scope), relative); }
+template <typename Resolver>
+inline ScopeResolver *RustResolverBaseScopeFor(Resolver *resolver, uint8_t scope, uint8_t relative) noexcept { return RustResolverBaseScope(resolver, scope, relative); }
 
 inline uint16_t RustResolverCallback(const ResolverObject *resolver) noexcept { return resolver->callback; }
 template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }

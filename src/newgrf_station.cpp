@@ -103,7 +103,7 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		/* Only shared native ScopeResolver frames are materialized here; Rust
 		 * selects and caches the owner before either synchronous shell call. */
 		.town_scope = [](StationResolverObject *object, const Town *town, bool readonly) noexcept -> TownScopeResolver * { if (!object->town_scope.has_value()) object->town_scope.emplace(*object, const_cast<Town *>(town), readonly); return &*object->town_scope; },
-		.default_scope = [](StationResolverObject *object, uint8_t scope, uint8_t relative) noexcept { return RustResolverBaseScope(object, scope, relative); },
+		.default_scope = RustResolverBaseScopeFor<StationResolverObject>,
 		.unhandled = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled station variable 0x{:X}", variable); },
 		.slope_error = RustLocationCallbackError<StationSpec, StationSpec, OpenTTDStationSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
 	};

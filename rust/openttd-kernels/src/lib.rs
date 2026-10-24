@@ -1421,7 +1421,6 @@ pub mod landscape_cmd;
 
 mod newgrf_vehicle;
 
-
 pub mod vehicle_func;
 
 pub mod rail_type;
