@@ -64,7 +64,6 @@ pub struct ResolverServices {
     storage: *const newgrf_storage::Services,
     larger_towns: extern "C" fn() -> u8,
     cargo_by_label: extern "C" fn(u32) -> u8,
-    get_register: extern "C" fn(*const c_void, u16) -> i32,
     file: extern "C" fn(*const c_void) -> *const c_void,
     version: extern "C" fn(*const c_void) -> u8,
     cargo_translation: extern "C" fn(u8, *const c_void) -> u8,
@@ -582,7 +581,9 @@ unsafe fn acceptance_history(
     if !is_valid_cargo_type(cargo) {
         return 0;
     }
-    let register = (s.get_register)(ro, 0x100) as u32;
+    // ResolverObject::GetRegister uses this process-wide canonical temporary
+    // storage. The fixed 0x100 index satisfies its original <0x110 precondition.
+    let register = unsafe { newgrf_storage::openttd_rust_storage_temp_get(0x100) } as u32;
     let offset = map.diff(i32::from(register as i8), i32::from((register >> 8) as i8));
     let shared = unsafe { &*s.shared };
     let tile = map.wrap_to_map(scope.tile.wrapping_add(offset), (shared.map_max_y)() + 1);
@@ -607,7 +608,7 @@ crate::abi::layouts! {
     "OpenTTDHouseFileIdentity" ["probe"] => FileIdentity { grfid, has_file };
     "OpenTTDHouseNearbySpec" ["probe"] => NearbySpec { file, local, house_class };
     "OpenTTDHouseResolverServices" ["probe"] => ResolverServices {
-        towns, shared, storage, larger_towns, cargo_by_label, get_register, file, version,
+        towns, shared, storage, larger_towns, cargo_by_label, file, version,
         cargo_translation, nearby, nearby_info, terrain, stage, age, random_bits,
         random_triggers, search_spec, nearby_spec, file_identity, house_id, house_grfid,
         badges, stations, town_by_id, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,

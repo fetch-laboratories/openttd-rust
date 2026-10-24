@@ -66,7 +66,6 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.storage = &GetRustStorageServices(),
 		.larger_towns = OpenTTDLargerTowns,
 		.cargo_by_label = [](uint32_t label) noexcept { return OpenTTDCargoByLabel(CargoLabel{label}); },
-		.get_register = RustResolverRegister,
 		.file = [](const ResolverObject *r) noexcept { return r->grffile; },
 		.version = RustGRFFileVersion,
 		.cargo_translation = OpenTTDCargoTranslation,
