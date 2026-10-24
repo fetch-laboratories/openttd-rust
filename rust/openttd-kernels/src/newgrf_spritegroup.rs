@@ -866,10 +866,13 @@ pub unsafe extern "C" fn openttd_rust_resolver_callback(
         if result.kind != 1 {
             return CALLBACK_FAILED;
         }
-        for i in 0..count {
+        // Native uses uint for both the loop counter and register-index addition.
+        let mut i = 0_u32;
+        while (i as usize) < count {
             registers
-                .add(i)
-                .write(openttd_rust_storage_temp_get(0x100 + i as u32));
+                .add(i as usize)
+                .write(openttd_rust_storage_temp_get(0x100_u32.wrapping_add(i)));
+            i = i.wrapping_add(1);
         }
         result.callback
     }
