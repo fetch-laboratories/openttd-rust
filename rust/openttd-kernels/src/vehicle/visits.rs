@@ -1228,7 +1228,7 @@ mod tests {
             allow_merge: true,
             full_loading: true,
             prediction: Prediction {
-                loading_tick: 123456,
+                loading_tick: 123_456,
                 last_loading: 17,
                 last_station: 31,
                 ticks: 4095,
