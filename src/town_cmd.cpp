@@ -1176,7 +1176,7 @@ static OpenTTDHouseAcceptance RustHouseAcceptance(uint16_t house) noexcept
 	std::copy(std::begin(hs->cargo_acceptance), std::end(hs->cargo_acceptance), result.amounts);
 	return result;
 }
-static const GRFFile *RustHouseGrf(uint16_t house) noexcept { return HouseSpec::Get(house)->grf_prop.grffile; }
+static const GRFFile *RustHouseGrf(uint16_t house) noexcept { return RustSpecGRFFile(HouseSpec::Get(house)); }
 static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 {
 	static const OpenTTDHouseServices services{
