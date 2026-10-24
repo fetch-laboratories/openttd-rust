@@ -61,6 +61,7 @@ inline uint32_t RustOtherTunnelBridgeEnd(uint32_t tile) noexcept { return GetOth
 inline RailType RustInvalidRailType() noexcept { return INVALID_RAILTYPE; }
 inline VehicleAccelerationModel RustRailAccelerationType(RailType type) noexcept { return GetRailTypeInfo(type)->acceleration_type; }
 inline uint16_t RustRailMaxSpeed(RailType type) noexcept { return GetRailTypeInfo(type)->max_speed; }
+inline uint16_t RustRailCostMultiplier(RailType type) noexcept { return GetRailTypeInfo(type)->cost_multiplier; }
 inline RailType RustRailType(uint32_t tile) noexcept { return GetRailType(TileIndex(tile)); }
 inline void RustSetRailType(uint32_t tile, uint8_t rt) noexcept { SetRailType(TileIndex(tile), static_cast<RailType>(rt)); }
 inline RailTileType RustRailTileType(uint32_t tile) noexcept { return GetRailTileType(TileIndex(tile)); }

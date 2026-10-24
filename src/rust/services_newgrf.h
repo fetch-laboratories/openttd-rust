@@ -12,6 +12,7 @@
 #include "../newgrf.h"
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
+#include "../debug.h"
 #include "../newgrf_house.h"
 #include "../house.h"
 #include "../town_map.h"
@@ -21,12 +22,16 @@
 #include "../newgrf_railtype.h"
 #include "../newgrf_roadtype.h"
 #include "../town.h"
+#include "../newgrf_config.h"
+#include "../rev.h"
 inline int32_t RustHouseAge(uint32_t tile) noexcept { return GetHouseAge(TileIndex{tile}).base(); }
 inline uint8_t RustHouseRandomBits(uint32_t tile) noexcept { return GetHouseRandomBits(TileIndex{tile}); }
 inline uint8_t RustHouseRandomTriggers(uint32_t tile) noexcept { return GetHouseRandomTriggers(TileIndex{tile}).base(); }
 inline const HouseSpec *RustHouseSpec(uint16_t house) noexcept { return HouseSpec::Get(house); }
 inline uint16_t RustTownHouseClass(const HouseSpec *spec) noexcept { return spec->class_id; }
 inline uint16_t RustTownHouseClass(uint16_t house) noexcept { return RustTownHouseClass(RustHouseSpec(house)); }
+
+inline void RustUnhandledScopeVariable(uint8_t variable) noexcept { Debug(grf, 1, "Unhandled scope variable 0x{:X}", variable); }
 
 /* These synchronous field reads borrow live native objects. Callers retain
  * the original non-null resolver/file preconditions; nothing is cached. */
@@ -45,10 +50,6 @@ template <typename Spec, typename Handle = Spec>
 inline uint8_t RustSpecGRFVersion(const Handle *handle) noexcept { return RustGRFFileVersion(RustSpecGRFFile(reinterpret_cast<const Spec *>(handle))); }
 template <typename Spec>
 inline bool RustSpecGRFVersion8(const Spec *spec) noexcept { return RustSpecGRFVersion<Spec>(spec) >= 8; }
-/* GetRegister retains its native register-range precondition (reg < 0x110). */
-inline int32_t RustResolverRegister(const ResolverObject *resolver, uint16_t reg) noexcept { return resolver->GetRegister(reg); }
-inline int32_t RustResolverRegister100(const ResolverObject *resolver) noexcept { return RustResolverRegister(resolver, 0x100); }
-
 /* Container reads retain the native index preconditions and full size_t width.
  * Selection and narrowing belong to the caller; these leaves allocate nothing. */
 inline size_t RustRealLoadingCount(const RealSpriteGroup *group) noexcept { return group->loading.size(); }
@@ -58,6 +59,18 @@ inline const SpriteGroup *RustRealLoaded(const RealSpriteGroup *group, size_t in
 template <typename Spec>
 inline bool RustSpecHasSpriteGroups(const Spec *spec) noexcept { return spec->grf_prop.HasSpriteGroups(); }
 inline bool RustHouseHasSpriteGroups(uint16_t house) noexcept { return RustSpecHasSpriteGroups(RustHouseSpec(house)); }
+
+inline uint32_t RustGRFParameter(const GRFFile *file, uint32_t parameter) noexcept { return file->GetParam(parameter); }
+inline uint8_t RustGRFPalette(const GRFFile *file) noexcept { return GetGRFConfig(file->grfid)->palette & GRFP_USE_MASK; }
+inline int32_t RustGRFTrainPitch(const GRFFile *file) noexcept { return file->traininfo_vehicle_pitch; }
+inline uint32_t RustGRFTrainWidth(const GRFFile *file) noexcept { return file->traininfo_vehicle_width; }
+inline uint8_t RustGRFMiscBits() noexcept
+{
+	extern GrfMiscBits _misc_grf_features;
+	assert(!_misc_grf_features.Test(GrfMiscBit::TrainWidth32Pixels));
+	return _misc_grf_features.base();
+}
+inline uint32_t RustNewGRFVersion() noexcept { return _openttd_newgrf_version; }
 
 /* Keep the native map wrapping, station-axis handling and signed-offset default. */
 inline uint32_t RustNearbyTileWithAxis(uint8_t parameter, uint32_t tile, bool signed_offsets, Axis axis) noexcept { return GetNearbyTile(parameter, TileIndex(tile), signed_offsets, axis).base(); }
@@ -79,8 +92,8 @@ template <typename Spec>
 inline uint8_t RustSpecReverseRailTypeTranslation(RailType railtype, const Spec *spec) noexcept { return RustReverseRailTypeTranslation(railtype, RustSpecGRFFile(spec)); }
 
 
-/* Qualified base operation: Rust retains feature-specific scope selection. */
-inline ScopeResolver *RustResolverBaseScope(ResolverObject *resolver, uint8_t scope, uint8_t relative) noexcept { return resolver->ResolverObject::GetScope(static_cast<VarSpriteGroupScope>(scope), relative); }
+/* Native frame address only; Rust retains common/feature scope selection. */
+inline ScopeResolver *RustResolverBaseScope(ResolverObject *resolver, uint8_t, uint8_t) noexcept { return &resolver->default_scope; }
 template <typename Resolver>
 inline ScopeResolver *RustResolverBaseScopeFor(Resolver *resolver, uint8_t scope, uint8_t relative) noexcept { return RustResolverBaseScope(resolver, scope, relative); }
 

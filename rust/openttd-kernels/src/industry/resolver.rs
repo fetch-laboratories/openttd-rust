@@ -74,7 +74,6 @@ pub struct ResolverServices {
     pub grfid: unsafe extern "C" fn(*const c_void) -> u32,
     pub version: unsafe extern "C" fn(*const c_void) -> u8,
     pub callback_id: unsafe extern "C" fn(*const c_void) -> u16,
-    pub register_value: unsafe extern "C" fn(*const c_void, u16) -> i32,
     pub cargo_translation: unsafe extern "C" fn(*const c_void, u8) -> u8,
     pub cargo_map: unsafe extern "C" fn(*const SpecHandle, u8) -> u8,
     pub badges: unsafe extern "C" fn(*const c_void, *const SpecHandle, u32) -> u32,
@@ -208,7 +207,6 @@ fn closest(
     best
 }
 fn count_and_distance(
-    ro: *const c_void,
     mut parameter: u8,
     layout: u8,
     town: bool,
@@ -216,7 +214,7 @@ fn count_and_distance(
     builder: *const Builder,
     s: &ResolverServices,
 ) -> u32 {
-    let mut grfid = unsafe { (s.register_value)(ro, 0x100) } as u32;
+    let mut grfid = unsafe { crate::newgrf_storage::openttd_rust_storage_temp_get(0x100) } as u32;
     let kind = if grfid == 0 {
         parameter
     } else {
@@ -423,19 +421,11 @@ fn variable(
         }
         0x67 | 0x68 => {
             let reg = if variable == 0x68 {
-                (unsafe { (s.register_value)(ro, 0x101) }) as u32
+                (unsafe { crate::newgrf_storage::openttd_rust_storage_temp_get(0x101) }) as u32
             } else {
                 0
             };
-            count_and_distance(
-                ro,
-                parameter as u8,
-                reg as u8,
-                reg & 0x100 != 0,
-                c,
-                builder,
-                s,
-            )
+            count_and_distance(parameter as u8, reg as u8, reg & 0x100 != 0, c, builder, s)
         }
         0x69..=0x6d | 0x70 | 0x71 => {
             let cargo = unsafe { (s.cargo_translation)(ro, parameter as u8) };
@@ -923,7 +913,6 @@ crate::abi::layouts! {
         grfid,
         version,
         callback_id,
-        register_value,
         cargo_translation,
         cargo_map,
         badges,

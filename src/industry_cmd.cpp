@@ -125,9 +125,6 @@ std::array<FlatSet<IndustryID>, NUM_INDUSTRYTYPES> Industry::industries;
 IndustrySpec _industry_specs[NUM_INDUSTRYTYPES];
 IndustryTileSpec _industry_tile_specs[NUM_INDUSTRYTILES];
 IndustryBuildData _industry_builder; ///< In-game manager of industries.
-#ifdef WITH_RUST
-OpenTTDIndustryBuilder *RustIndustryRegistry::Owner() const { return _industry_builder.owner.get(); }
-#endif
 
 static int WhoCanServiceIndustry(Industry *ind);
 
@@ -203,7 +200,7 @@ const IndustryTileSpec *GetIndustryTileSpec(IndustryGfx gfx)
 Industry::~Industry()
 {
 #ifdef WITH_RUST
-	openttd_rust_industry_cleanup(this, this->production_owner.get(), _industry_builder.owner.get(), this->index.base(), CleaningPool(), {Map::SizeX(), Map::SizeY(), 0}, &GetIndustryRustServices(), &GetIndustryLifecycleRustServices());
+	openttd_rust_industry_cleanup(this, this->production_owner.get(), RustIndustryBuilderState(), this->index.base(), CleaningPool(), {Map::SizeX(), Map::SizeY(), 0}, &GetIndustryRustServices(), &GetIndustryLifecycleRustServices());
 #else
 	if (CleaningPool()) return;
 
@@ -1349,7 +1346,7 @@ void OnTick_Industry()
 	/* Values the original reads inline; none changes during the tick. */
 	const OpenTTDIndustryTickRecord record{TimerGameTick::counter, {Map::SizeX(), Map::SizeY(), to_underlying(_settings_game.game_creation.landscape)},
 		ScaleByInverseCargoScale(Ticks::INDUSTRY_PRODUCE_TICKS, false), _settings_client.sound.ambient, _game_mode == GM_EDITOR};
-	openttd_rust_industry_tick(_industry_builder.owner.get(), &record, &GetIndustryRustServices());
+	openttd_rust_industry_tick(RustIndustryBuilderState(), &record, &GetIndustryRustServices());
 #else
 	if (_industry_sound_ctr != 0) {
 		_industry_sound_ctr++;
@@ -2688,7 +2685,7 @@ void GenerateIndustries()
 {
 #ifdef WITH_RUST
 	OpenTTDIndustryGenerationContext context;
-	if (!openttd_rust_industry_generate(_industry_builder.owner.get(), &context, &GetIndustryRustServices(), &GetIndustryGenerationServices())) std::rethrow_exception(context.cancellation);
+	if (!openttd_rust_industry_generate(RustIndustryBuilderState(), &context, &GetIndustryRustServices(), &GetIndustryGenerationServices())) std::rethrow_exception(context.cancellation);
 #else
 	if (_game_mode != GM_EDITOR && _settings_game.difficulty.industry_density == ID_FUND_ONLY) return; // No industries in the game.
 
@@ -3316,7 +3313,7 @@ static void ChangeIndustryProduction(Industry *i, bool monthly)
 static const IntervalTimer<TimerGameEconomy> _economy_industries_daily({TimerGameEconomy::DAY, TimerGameEconomy::Priority::INDUSTRY}, [](auto)
 {
 #ifdef WITH_RUST
-	openttd_rust_industry_daily(_industry_builder.owner.get(), &GetIndustryRustServices());
+	openttd_rust_industry_daily(RustIndustryBuilderState(), &GetIndustryRustServices());
 #else
 	_economy.industry_daily_change_counter += _economy.industry_daily_increment;
 
@@ -3365,7 +3362,7 @@ static const IntervalTimer<TimerGameEconomy> _economy_industries_daily({TimerGam
 static const IntervalTimer<TimerGameEconomy> _economy_industries_monthly({TimerGameEconomy::MONTH, TimerGameEconomy::Priority::INDUSTRY}, [](auto)
 {
 #ifdef WITH_RUST
-	openttd_rust_industry_monthly(_industry_builder.owner.get(), &GetIndustryRustServices());
+	openttd_rust_industry_monthly(RustIndustryBuilderState(), &GetIndustryRustServices());
 #else
 	Backup<CompanyID> cur_company(_current_company, OWNER_NONE);
 
@@ -4030,7 +4027,7 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 	};
 	return {
 		.map = {Map::SizeX(), Map::SizeY(), to_underlying(_settings_game.game_creation.landscape)},
-		.builder = _industry_builder.owner.get(),
+		.builder = RustIndustryBuilderState(),
 		.production = &GetIndustryRustServices(),
 		.generation = &GetIndustryGenerationServices(),
 		.construction = &GetIndustryConstructionServices(),
