@@ -216,7 +216,8 @@ def boundary_hits(files, wrappers, originals):
     )
     counts = Counter(re.findall(r"\bopenttd_rust_\w+\b", combined))
     prototype = (
-        r"(?m)^\s*(?!return\b|else\b)\w[\w *&]*[\s*&](openttd_rust_\w+)\([^{};]*\);"
+        r'(?m)^\s*(?:extern\s+"C"\s+)?(?!return\b|else\b)\w[\w *&]*[\s*&]'
+        r"(openttd_rust_\w+)\([^{};]*\);"
     )
     declarations = Counter(re.findall(prototype, combined))
     for path, source in files.items():
