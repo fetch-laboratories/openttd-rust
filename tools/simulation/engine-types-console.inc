@@ -115,7 +115,7 @@ static void TypeEngineInputs(Company *c)
 	TypeRequire(GetCompanyRailTypes(c->index, false).None() && GetCompanyRoadTypes(c->index, false).None(), "before-release");
 	TypeRequire(GetRailTypes(false) == e->VehInfo<RailVehicleInfo>().railtypes && GetRoadTypes(false) == RoadTypes{static_cast<RoadType>(62)}, "all-multirail");
 	e->company_avail.Set(c->index); r->company_avail.Set(c->index);
-	TypeRequire(GetCompanyRailTypes(c->index, false) == GetRailTypes(false) && GetCompanyRoadTypes(c->index, false) == GetRoadTypes(false), "preview-owner");
+	TypeRequire(GetCompanyRailTypes(c->index, false) == GetRailTypes(false) && GetCompanyRoadTypes(c->index, false) == GetRoadTypes(false) && GetCompanyRailTypes(CompanyID{static_cast<uint8_t>(c->index.base() ^ 1)}, false).None() && GetCompanyRoadTypes(CompanyID{static_cast<uint8_t>(c->index.base() ^ 1)}, false).None(), "preview-owner");
 	e->company_avail = {}; r->company_avail = {}; e->intro_date -= 1; r->intro_date -= 1;
 	TypeRequire(GetCompanyRailTypes(c->index, false) == GetRailTypes(false) && GetCompanyRoadTypes(c->index, false) == GetRoadTypes(false), "one-year");
 	e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_WAGON;
@@ -162,11 +162,17 @@ static bool TypesScenario(std::span<std::string_view> args)
 		/* Native daily timer calls the actual engine lifecycle publication path. */
 		TimerGameCalendar::SetDate(date, 73); TimerManager<TimerGameCalendar>::Elapsed(1);
 		TypeRequire(c->avail_railtypes.All(railchain) && c->avail_roadtypes.All(roadchain), "daily-publication");
+		fmt::print(stderr, "ENGINE types-masks daily {:016x} {:016x}\n", c->avail_railtypes.base(), c->avail_roadtypes.base());
 		TypeConstruction(c, tile, 0, 60, true, "rail-after"); TypeConstruction(c, tile + TileDiffXY(2, 0), 1, 60, true, "road-after"); TypeConstruction(c, tile + TileDiffXY(4, 0), 1, 61, true, "tram-after");
 		TypeRequire(!HasRailTypeAvail(c->index, static_cast<RailType>(62)) && HasAnyRailTypesAvail(c->index) && HasAnyRoadTypesAvail(c->index, RTT_ROAD) && HasAnyRoadTypesAvail(c->index, RTT_TRAM), "hidden-and-masks");
 		TypeRequire(!HasRoadTypeAvail(CompanyID::Invalid(), static_cast<RoadType>(59)) && !HasRoadTypeAvail(c->index, static_cast<RoadType>(59)), "company-hidden");
 		TypeConstruction(c, tile + TileDiffXY(6, 0), 1, 59, false, "hidden-company");
-		for (CompanyID owner : {OWNER_TOWN, OWNER_DEITY}) { actor.Change(owner); TypeRequire(HasRoadTypeAvail(owner, static_cast<RoadType>(59)) && !HasRoadTypeAvail(owner, static_cast<RoadType>(58)), "town-deity"); }
+		for (CompanyID owner : {OWNER_TOWN, OWNER_DEITY}) {
+			actor.Change(owner);
+			/* Move future-date input two days ahead: the actual daily tick passed one day. */
+			_roadtypes[53].introduction_date = TimerGameCalendar::date + 1;
+			TypeRequire(HasRoadTypeAvail(owner, static_cast<RoadType>(59)) && !HasRoadTypeAvail(owner, static_cast<RoadType>(58)) && !HasRoadTypeAvail(owner, static_cast<RoadType>(53)) && !HasRoadTypeAvail(owner, static_cast<RoadType>(54)) && HasRoadTypeAvail(owner, static_cast<RoadType>(50)) && HasRoadTypeAvail(owner, static_cast<RoadType>(52)), owner == OWNER_TOWN ? "town" : "deity");
+		}
 		actor.Change(OWNER_TOWN); TypeConstruction(c, tile + TileDiffXY(6, 0), 1, 59, true, "hidden-town");
 		actor.Change(c->index);
 		{ Backup<GameMode> mode(_game_mode, GM_EDITOR); TypeRequire(HasRoadTypeAvail(c->index, static_cast<RoadType>(59)) && !HasRoadTypeAvail(c->index, static_cast<RoadType>(58)), "editor"); mode.Restore(); }
