@@ -18,6 +18,7 @@
 #include "../industrytype.h"
 #include "../newgrf_badge.h"
 #include "../newgrf_railtype.h"
+#include "../newgrf_roadtype.h"
 #include "../town.h"
 inline const HouseSpec *RustHouseSpec(uint16_t house) noexcept { return HouseSpec::Get(house); }
 
@@ -65,6 +66,12 @@ inline uint16_t RustResolverCallback(const ResolverObject *resolver) noexcept { 
 template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
 template <typename Spec> inline uint16_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }
 template <typename Spec> inline const SpriteGroup *RustSpecSpriteGroup(const Spec *spec, bool live) noexcept { return spec->grf_prop.GetSpriteGroup(live); }
+
+template <typename Spec> inline size_t RustSpecCargoGroupCount(const Spec *spec) noexcept { return spec->grf_prop.spritegroups.size(); }
+template <typename Spec> inline uint8_t RustSpecCargoGroupCargo(const Spec *spec, size_t index) noexcept { return spec->grf_prop.spritegroups[index].first; }
+template <typename Spec> inline const SpriteGroup *RustSpecCargoSpriteGroup(const Spec *spec, uint8_t cargo) noexcept { return spec->grf_prop.GetSpriteGroup(cargo); }
+template <typename Spec> inline const GRFFile *RustSpecGRFFile(const Spec *spec) noexcept { return spec->grf_prop.grffile; }
+inline uint8_t RustReverseRoadTypeTranslation(RoadType roadtype, const GRFFile *file) noexcept { return GetReverseRoadTypeTranslation(roadtype, file); }
 
 /* Borrowed GRF files remain native and live for the synchronous conversion.
  * A town shell is live for resolution (or null for a prototype); no Rust

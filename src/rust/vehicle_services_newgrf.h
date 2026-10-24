@@ -68,7 +68,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.override_engine = [](const OpenTTDEngine *engine, size_t i, size_t j) noexcept { return EngineOf(engine)->overrides[i].engines[j].base(); },
 		.cached_override = [](OpenTTDVehicle *v) noexcept { return Train::From(VehicleOf(v))->tcache.cached_override; },
 		.write_override = [](OpenTTDVehicle *v, const SpriteGroup *group) noexcept { Train::From(VehicleOf(v))->tcache.cached_override = group; },
-		.spritegroup = [](uint16_t engine, uint8_t cargo) noexcept { return Engine::Get(EngineID(engine))->grf_prop.GetSpriteGroup(cargo); },
+		.spritegroup = [](uint16_t engine, uint8_t cargo) noexcept { return RustSpecCargoSpriteGroup(Engine::Get(EngineID(engine)), cargo); },
 		.random_bits = [](OpenTTDVehicle *v) noexcept { return VehicleOf(v)->random_bits; },
 		.waiting = [](OpenTTDVehicle *v) noexcept { return VehicleOf(v)->waiting_random_triggers.base(); },
 		.write_random = [](OpenTTDVehicle *v, uint16_t bits) noexcept { RustVehicleSetRandomBits(VehicleOf(v), bits); },

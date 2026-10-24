@@ -8,7 +8,8 @@
 #include "town_ffi.h"
 #include "industry_ffi.h"
 struct HouseSpec; struct Town; struct IndustryTileSpec; struct Industry;
-struct StationSpec; struct BaseStation; struct AirportTileSpec; struct Station;
+struct StationSpec; struct BaseStation;
+struct OpenTTDRoadStopResolverServices; struct AirportTileSpec; struct Station;
 struct ObjectSpec; struct Object; struct RoadStopSpec;
 struct OpenTTDAnimationInfo { uint8_t speed, frames; bool looping, speed_callback, next_callback, random, enabled; };
 template <typename Spec, typename Obj> struct OpenTTDAnimationEntry { const Spec *spec; Obj *object; };
@@ -33,7 +34,7 @@ struct OpenTTDAnimationServices {
 	uint32_t (*location)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(location);
 	bool (*is_station)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(is_station);
 	void (*rail_randomisation)(BaseStation *, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_randomisation);
-	void (*road_randomisation)(BaseStation *, uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_randomisation);
+	const OpenTTDRoadStopResolverServices *roadstop_resolver;
 	const OpenTTDTownLeaves *town;
 	const OpenTTDIndustryServices *industries;
 	const OpenTTDIndustryConstructionServices *construction;

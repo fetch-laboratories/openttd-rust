@@ -36,7 +36,7 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 	static const OpenTTDAnimationServices services{
 		.shared = &GetRustSharedServices(),
 		.station_base = RustStationGet<BaseStation *>, .as_station = RustAnimationStation, .location = RustStationLocation,
-		.is_station = GetRustStationServices().is_station, .rail_randomisation = RustStationRandomisationAt, .road_randomisation = RustRoadStopRandomisationAt,
+		.is_station = GetRustStationServices().is_station, .rail_randomisation = RustStationRandomisationAt, .roadstop_resolver = &GetRoadStopResolverServices(),
 		.town = &GetRustTownServices(), .industries = &GetIndustryRustServices(),
 		.construction = &GetIndustryConstructionServices(), .industry_tiles = &GetIndustryTileServices(),
 		.house = &GetHouseAnimationBinding(), .industry = &GetIndustryAnimationBinding(), .station = &GetStationAnimationBinding(),
@@ -44,7 +44,7 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.state = [](uint32_t t) noexcept { return GetAnimatedTileState(TileIndex{t}); },
 		.set_state = [](uint32_t t, AnimatedTileState s) noexcept { SetAnimatedTileState(TileIndex{t}, s); },
 		.house_spec = RustHouseSpec,
-		.road_frame = [](BaseStation *s, uint32_t t) noexcept { return s->GetRoadStopAnimationFrame(TileIndex{t}); },
+		.road_frame = RustRoadStopAnimationFrame,
 		.set_road_frame = [](BaseStation *s, uint32_t t, uint8_t f) noexcept { return s->SetRoadStopAnimationFrame(TileIndex{t}, f); },
 		.rail_area = OpenTTDAnimationRailArea,
 		.rail_belongs = [](BaseStation *s, uint32_t t) noexcept { return s->TileBelongsToRailStation(TileIndex{t}); },
@@ -53,7 +53,7 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.rail_spec = RustAnimationRailSpec, .road_spec = RustAnimationRoadSpec, .airport_spec = RustAnimationAirportSpec,
 		.industry_object = RustIndustryByTile,
 		.rail_spec_triggers = [](const StationSpec *s) noexcept { return s->animation.triggers.base(); },
-		.road_spec_triggers = [](const RoadStopSpec *s) noexcept { return s->animation.triggers.base(); },
+		.road_spec_triggers = RustRoadStopAnimationTriggers,
 		.airport_spec_triggers = [](const AirportTileSpec *s) noexcept { return s->animation.triggers.base(); },
 		.rail_cargo = RustSpecCargoMap<StationSpec>,
 		.road_cargo = RustSpecCargoMap<RoadStopSpec>,
@@ -72,6 +72,7 @@ void AnimateAnimatedTiles() { PerformanceAccumulator landscape_framerate(PFE_GL_
 void InitializeAnimatedTiles() { openttd_rust_animation_exchange(&GetRustAnimationServices()); openttd_rust_animation_initialize(); }
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDAnimationServices.hpp"
+#include "abi-visit-OpenTTDRoadStopResolverServices.hpp"
 #include "abi-visit-OpenTTDHouseAnimation.hpp"
 #include "abi-visit-OpenTTDIndustryAnimation.hpp"
 #include "abi-visit-OpenTTDStationAnimation.hpp"
@@ -81,7 +82,7 @@ void InitializeAnimatedTiles() { openttd_rust_animation_exchange(&GetRustAnimati
 bool CheckAbi_animated_tile()
 {
 	const auto &s = GetRustAnimationServices();
-	return AbiServicesComplete(s) && AbiServicesComplete(*s.house) && AbiServicesComplete(*s.industry) &&
+	return AbiServicesComplete(s) && AbiServicesComplete(*s.roadstop_resolver) && AbiServicesComplete(*s.house) && AbiServicesComplete(*s.industry) &&
 		AbiServicesComplete(*s.station) && AbiServicesComplete(*s.airport) && AbiServicesComplete(*s.object) && AbiServicesComplete(*s.roadstop);
 }
 

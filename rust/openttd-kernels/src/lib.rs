@@ -1424,3 +1424,6 @@ pub mod vehicle_func;
 pub mod rail_type;
 
 pub mod base_bitset_type;
+
+#[allow(unsafe_code)]
+mod newgrf_roadstop;
