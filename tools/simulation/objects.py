@@ -139,11 +139,18 @@ def check(scenario, run, mode, role, result):
         branch_witnesses(scenario, run, role, "object", branches)
     if "objects" not in scenario:
         return
-    for marker in ("invocation-roots", "invocation-parent", "invocation-animation", "invocation-complete"):
+    for marker in (
+        "invocation-roots",
+        "invocation-parent",
+        "invocation-animation",
+        "invocation-complete",
+    ):
         if sum(x.startswith("OBJECT " + marker + " ") for x in run["log"]) != 1:
             raise RuntimeError(f"{mode}/{role}: missing {marker}")
     if sum(x.startswith("OBJECT invocation-eligibility ") for x in run["log"]) != 32:
-        raise RuntimeError(f"{mode}/{role}: missing actual availability admission boundaries")
+        raise RuntimeError(
+            f"{mode}/{role}: missing actual availability admission boundaries"
+        )
     required = {
         "commands": ("hq-cargo 5 2 1", "id-reused true", "water-clear 1 16 2 17 0 17"),
         "gaps": (

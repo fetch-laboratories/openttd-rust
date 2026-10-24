@@ -50,7 +50,6 @@ const GRFFile *openttd_rust_object_file(const ObjectSpec *);
 const SpriteGroup *openttd_rust_object_root(const OpenTTDObjectScope *);
 uint32_t openttd_rust_object_debug_id(const OpenTTDObjectScope *);
 uint8_t openttd_rust_object_feature();
-TownScopeResolver *openttd_rust_object_town(OpenTTDObjectScope *, ObjectResolverObject *);
 ScopeResolver *openttd_rust_object_scope(OpenTTDObjectScope *, ObjectResolverObject *, ScopeResolver *, uint8_t, uint8_t);
 uint16_t openttd_rust_object_callback(const OpenTTDObjectServices *, uint16_t, uint32_t, uint32_t, const ObjectSpec *, Object *, uint32_t, int32_t *, size_t, uint8_t);
 uint16_t openttd_rust_object_animation_callback(uint16_t, uint32_t, uint32_t, const ObjectSpec *, Object *, uint32_t, int32_t) noexcept;

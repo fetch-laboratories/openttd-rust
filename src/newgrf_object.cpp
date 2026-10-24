@@ -740,10 +740,7 @@ const OpenTTDObjectResolverServices &GetObjectResolverServices() noexcept
 		.eligibility = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectEligibility { return {RustObjectSpecFlags(spec), spec->climate.base(), RustObjectViews(spec)}; },
 		.introduction = [](const ObjectSpec *spec) noexcept -> int32_t { return spec->introduction_date.base(); },
 		.lifetime = [](const ObjectSpec *spec) noexcept -> OpenTTDObjectLifetime { return {spec->introduction_date.base(), spec->end_of_life_date.base()}; },
-		.town_scope = [](ObjectResolverObject *ro, const Town *town, bool readonly) noexcept -> TownScopeResolver * {
-			if (!ro->town_scope.has_value()) ro->town_scope.emplace(*ro, const_cast<Town *>(town), readonly);
-			return &*ro->town_scope;
-		},
+		.town_scope = RustResolverTownScope<ObjectResolverObject>,
 		.base_scope = RustResolverBaseScope,
 		.evaluate = [](const OpenTTDObjectScope *context, uint16_t callback, uint32_t param1, uint32_t param2, int32_t *regs, size_t count) noexcept -> uint16_t {
 			ObjectResolverObject ro(context->spec, context->object, TileIndex{context->tile}, context->view, static_cast<CallbackID>(callback), param1, param2);

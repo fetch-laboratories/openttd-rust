@@ -81,6 +81,14 @@ inline uint8_t RustSpecReverseRailTypeTranslation(RailType railtype, const Spec 
 
 /* Qualified base operation: Rust retains feature-specific scope selection. */
 inline ScopeResolver *RustResolverBaseScope(ResolverObject *resolver, uint8_t scope, uint8_t relative) noexcept { return resolver->ResolverObject::GetScope(static_cast<VarSpriteGroupScope>(scope), relative); }
+/* Optional facade construction only; successful parent selection belongs to the
+ * Rust feature owner. The town/storage implementation is shared by all features. */
+template <typename Resolver>
+inline TownScopeResolver *RustResolverTownScope(Resolver *resolver, const Town *town, bool readonly) noexcept
+{
+	if (!resolver->town_scope.has_value()) resolver->town_scope.emplace(*resolver, const_cast<Town *>(town), readonly);
+	return &*resolver->town_scope;
+}
 template <typename Resolver>
 inline ScopeResolver *RustResolverBaseScopeFor(Resolver *resolver, uint8_t scope, uint8_t relative) noexcept { return RustResolverBaseScope(resolver, scope, relative); }
 

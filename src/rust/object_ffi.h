@@ -135,7 +135,6 @@ struct OpenTTDObjectServices {
 	uint8_t (*mail)() noexcept OPENTTD_SERVICE_DEFAULT(mail);
 	uint32_t (*scale_cargo)(uint32_t amount) noexcept OPENTTD_SERVICE_DEFAULT(scale_cargo);
 };
-const OpenTTDObjectServices &GetRustObjectServices() noexcept;
 /* All calls are serialized by the game-state mutex, including across the GUI and
  * game threads. Indices survive append. No element pointer or allocation escapes;
  * callbacks may reenter only after every Rust state borrow has ended. */

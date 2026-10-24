@@ -1980,11 +1980,7 @@ pub unsafe extern "C" fn openttd_rust_object_debug_id(context: *const ObjectScop
 pub extern "C" fn openttd_rust_object_feature() -> u8 {
     0x0f
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_object_town(
-    context: *mut ObjectScope,
-    ro: *mut Resolver,
-) -> *mut std::ffi::c_void {
+unsafe fn object_town(context: *mut ObjectScope, ro: *mut Resolver) -> *mut std::ffi::c_void {
     let s = invocation_services();
     let ObjectScope {
         object,
@@ -2025,7 +2021,7 @@ pub unsafe extern "C" fn openttd_rust_object_scope(
         return own;
     }
     if scope == VSG_SCOPE_PARENT {
-        let town = unsafe { openttd_rust_object_town(context, ro) };
+        let town = unsafe { object_town(context, ro) };
         if !town.is_null() {
             return town;
         }
@@ -2084,12 +2080,15 @@ pub unsafe extern "C" fn openttd_rust_object_animation_callback(
         )
     }
 }
+fn is_enabled(views: u8) -> bool {
+    views > 0
+}
 fn enabled(s: &ObjectServices, spec: *const Spec) -> bool {
-    unsafe { (resolver_services(s).views)(spec) > 0 }
+    is_enabled(unsafe { (resolver_services(s).views)(spec) })
 }
 fn ever_available(s: &ObjectServices, spec: *const Spec) -> bool {
     let policy = unsafe { (resolver_services(s).eligibility)(spec) };
-    policy.views > 0
+    is_enabled(policy.views)
         && policy.climate & (1 << (unsafe { &*s.town }.climate)()) != 0
         && policy.flags
             & if !(unsafe { &*s.town }.environment.editor)()
