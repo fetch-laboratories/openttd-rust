@@ -1,0 +1,123 @@
+/* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
+/** @file airport-resolver-console.hpp Actual transient Action2 programs on both games. */
+#include "newgrf_airporttiles.h"
+static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoCommandFlags exec, bool reloaded = false)
+{
+	GRFFile file; file.grfid = 0x41503418; file.grf_version = 8;
+	auto *spec = AirportSpec::GetWithoutOverride(AT_SMALL); AirportSpec saved = *spec;
+	spec->grf_prop.grffile = &file; spec->grf_prop.grfid = file.grfid; spec->grf_prop.local_id = 41;
+	auto gfx = spec->layouts[0].tiles.front().gfx;
+	auto *ats = const_cast<AirportTileSpec *>(AirportTileSpec::Get(gfx)); AirportTileSpec saved_tile = *ats;
+	ats->grf_prop.grffile = &file; ats->grf_prop.grfid = file.grfid; ats->grf_prop.local_id = 18;
+	StationNeed(SpriteGroup::CanAllocateItem(6), __LINE__);
+	auto *result = new CallbackResultSpriteGroup(3), *other = new CallbackResultSpriteGroup(4);
+	auto *parent = new DeterministicSpriteGroup(); parent->var_scope = VSG_SCOPE_PARENT; parent->size = DSG_SIZE_DWORD;
+	parent->default_result = {true, nullptr};
+	parent->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x418}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 7}, {.operation = DSGA_OP_RST, .variable = 0x7C, .parameter = 7, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
+	auto *det = new DeterministicSpriteGroup(); det->var_scope = VSG_SCOPE_SELF; det->size = DSG_SIZE_DWORD; det->default_result = {false, result};
+	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x7E, .and_mask = UINT32_MAX, .subroutine = parent}, {.operation = DSGA_OP_RST, .variable = 0x60, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101}, {.operation = DSGA_OP_RST, .variable = 0x61, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x102}, {.operation = DSGA_OP_RST, .variable = 0x62, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x103}};
+	ats->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, det);
+	ats->animation.triggers.Set(AirportAnimationTrigger::Built); ats->animation.speed = 0; ats->animation.frames = 8;
+	ats->callback_mask.Set({AirportTileCallbackMask::AnimationSpeed, AirportTileCallbackMask::AnimationNextFrame});
+	Station *st = nullptr;
+	if (reloaded) { for (Station *s : Station::Iterate()) if (s->name == "Airport resolver") st = s; StationNeed(st != nullptr, __LINE__); }
+	else {
+		auto check = [&](const char *label, DoCommandFlags flags, TileIndex tile, uint8_t layout, bool success) { auto cost = Command<CMD_BUILD_AIRPORT>::Do(flags, tile, AT_SMALL, layout, NEW_STATION, true); StationCost(label, cost); StationNeed(cost.Succeeded() == success, __LINE__); };
+		TileIndex tile = origin + TileDiffXY(3, 3);
+		for (bool enabled : {false, true}) for (int offset : {-1, 0, 1}) for (bool never : {false, true}) {
+			spec->enabled = enabled; spec->min_year = TimerGameCalendar::year + offset; spec->max_year = TimerGameCalendar::year - 1; _settings_game.station.never_expire_airports = never;
+			for (DoCommandFlags flags : {test, exec}) check("airport-admission", flags, tile, 0, enabled && offset <= 0 && never);
+			if (enabled && offset <= 0 && never) { StationNeed(Command<CMD_LANDSCAPE_CLEAR>::Do(exec, tile).Succeeded(), __LINE__); }
+		}
+		spec->enabled = true; spec->min_year = TimerGameCalendar::year; spec->max_year = TimerGameCalendar::year; _settings_game.station.never_expire_airports = false;
+		for (Direction rotation : {DIR_N, DIR_E, DIR_S, DIR_W}) {
+			spec->layouts[0].rotation = rotation;
+			for (uint8_t layout : {0, 1, 255}) for (uint x : {Map::SizeX() - 5, Map::SizeX() - 4, Map::SizeX() - 3}) {
+				TileIndex edge = TileXY(x, Map::SizeY() - 5); fmt::print(stderr, "STCMD airport-bounds {} {} {} {}\n", rotation, layout, x, spec->IsWithinMapBounds(layout, edge));
+				if (!spec->IsWithinMapBounds(layout, edge)) for (DoCommandFlags flags : {test, exec}) check("airport-bounds-reject", flags, edge, layout, false);
+			}
+		}
+		spec->layouts[0].rotation = saved.layouts[0].rotation;
+		check("airport-build-test", test, tile, 0, true); check("airport-build", exec, tile, 0, true);
+		st = Station::GetByTile(tile); st->name = "Airport resolver";
+		StationNeed(st->airport.psa != nullptr && st->airport.psa->GetValue(7) == 0x418, __LINE__);
+	}
+	TileIndex tile = st->airport.tile + ToTileIndexDiff(spec->layouts[0].tiles.front().ti);
+	/* A real Built event after reload reinstalls the transient program. This is
+	 * runtime evidence, not proof of loading an external GRF file. */
+	StationNeed(TriggerAirportTileAnimation(st, tile, AirportAnimationTrigger::Built), __LINE__);
+	AirportTileResolverObject callback(ats, tile, st, CBID_AIRPTILE_ANIMATION_TRIGGER);
+	std::array<int32_t, 4> registers{}; StationNeed(callback.ResolveCallback(registers) == 3 && registers[0] == 0x418, __LINE__);
+	fmt::print(stderr, "STCMD airport-built {} {} {} {} {}\n", reloaded, registers[0], registers[1], registers[2], registers[3]);
+	AnimateAirportTile(tile); fmt::print(stderr, "STCMD airport-animation {} {}\n", GetAnimationFrame(tile), st->airport.psa->GetValue(7));
+	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, det); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, other);
+	/* Native direct availability and actual deterministic Action2 agree. Logs,
+	 * output registers and the final semantic saves are compared across games. */
+	auto variables = [&](const char *label, ResolverObject &object, ScopeResolver &scope) {
+		for (uint var = 0x40; var <= 0xFA; ++var) for (uint8_t parameter : {0, 1, 7, 0x10, 0xFF}) {
+			bool available = true; auto value = scope.GetVariable(var, parameter, available);
+			det->adjusts = {{.operation = DSGA_OP_RST, .variable = static_cast<uint8_t>(var), .parameter = parameter, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
+			std::array<int32_t, 1> regs{}; auto cb = object.ResolveCallback(regs);
+			if (available) StationNeed(cb == 3 && static_cast<uint32_t>(regs[0]) == value, __LINE__);
+			fmt::print(stderr, "STCMD airport-variable {} {:x} {} {} {} {} {}\n", label, var, parameter, available, value, cb, regs[0]);
+		}
+	};
+	for (uint8_t version : {7, 8}) {
+		file.grf_version = version; AirportResolverObject airport(tile, st, spec, st->airport.layout); AirportTileResolverObject tiles(ats, tile, st);
+		variables("airport", airport, airport.airport_scope); variables("tile", tiles, tiles.tiles_scope);
+	}
+	file.grf_version = 8;
+	/* Null purchase roots, layout/badges before the null gate, station parameter
+	 * narrowing and the signed build-date clamp. */
+	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, det);
+	AirportResolverObject preview(tile, nullptr, spec, 2), nowhere(INVALID_TILE, nullptr, spec, 3);
+	variables("preview", preview, preview.airport_scope); variables("nowhere", nowhere, nowhere.airport_scope);
+	for (int32_t date : {0, CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR - 1, CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR + 65536}) {
+		auto old = st->build_date; st->build_date = TimerGameCalendar::Date(date); AirportResolverObject query(tile, st, spec, 0); bool ok = true;
+		fmt::print(stderr, "STCMD airport-date {} {}\n", date, query.airport_scope.GetVariable(0xFA, 0, ok)); st->build_date = old;
+	}
+	AirportResolverObject airport(tile, st, spec, 0); auto *town = airport.GetTown(); StationNeed(town != nullptr, __LINE__);
+	auto *original_town = st->town; st->town = nullptr; StationNeed(airport.GetTown() == town, __LINE__);
+	AirportResolverObject retry(tile, st, spec, 0); StationNeed(retry.GetTown() == nullptr, __LINE__); st->town = original_town;
+	StationNeed(retry.GetTown() != nullptr && preview.GetTown()->readonly && nowhere.GetTown() == nullptr, __LINE__);
+	det->var_scope = VSG_SCOPE_PARENT; det->adjusts = parent->adjusts;
+	std::array<int32_t, 1> town_regs{}; StationNeed(airport.ResolveCallback(town_regs) == 3 && town_regs[0] == 0x418, __LINE__);
+	det->adjusts[0].and_mask = 0x419; StationNeed(preview.ResolveCallback(town_regs) == 3 && town_regs[0] == 0x418, __LINE__);
+	StationNeed(nowhere.ResolveCallback({}) == CALLBACK_FAILED, __LINE__);
+	det->var_scope = VSG_SCOPE_RELATIVE; StationNeed(airport.ResolveCallback({}) == CALLBACK_FAILED, __LINE__);
+	fmt::print(stderr, "STCMD airport-town readonly retry default {}\n", town_regs[0]); det->var_scope = VSG_SCOPE_SELF;
+	/* Actual randomized groups select station and tile-packed bits without RNG. */
+	auto *random = new RandomizedSpriteGroup(); random->var_scope = VSG_SCOPE_SELF; random->groups = {result, other};
+	auto rng = _random;
+	for (uint8_t bit : {0, 7, 16, 17}) {
+		random->lowest_randbit = bit; ats->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, random); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, random);
+		AirportResolverObject a(tile, st, spec, 0); AirportTileResolverObject t(ats, tile, st);
+		fmt::print(stderr, "STCMD airport-random {} {} {} {} {}\n", bit, a.airport_scope.GetRandomBits(), t.tiles_scope.GetRandomBits(), a.ResolveCallback({}), t.ResolveCallback({}));
+	}
+	StationNeed(rng.state[0] == _random.state[0] && rng.state[1] == _random.state[1], __LINE__);
+	ats->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, det); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, det);
+	/* IDs: nonmember, original, overridden same/foreign, custom with/without
+	 * groups. Restore tile/spec metadata before saving. */
+	auto *custom = const_cast<AirportTileSpec *>(AirportTileSpec::Get(NEW_AIRPORTTILE_OFFSET)); AirportTileSpec saved_custom = *custom;
+	custom->grf_prop = ats->grf_prop; custom->grf_prop.subst_id = 12; custom->grf_prop.override_id = INVALID_AIRPORTTILE;
+	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x62, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
+	for (bool foreign : {false, true}) for (bool groups : {false, true}) for (bool over : {false, true}) {
+		custom->grf_prop.grfid = file.grfid + foreign; custom->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, groups ? result : nullptr); ats->grf_prop.override_id = over ? NEW_AIRPORTTILE_OFFSET : INVALID_AIRPORTTILE;
+		for (StationGfx id : {gfx, StationGfx{NEW_AIRPORTTILE_OFFSET}}) { SetStationGfx(tile, id); AirportTileResolverObject query(ats, tile, st); std::array<int32_t, 1> regs{}; query.ResolveCallback(regs); fmt::print(stderr, "STCMD airport-id {} {} {} {} {} {}\n", id, foreign, groups, over, GetTranslatedAirportTileID(id), regs[0]); }
+	}
+	SetStationGfx(tile, gfx); *custom = std::move(saved_custom);
+	for (uint8_t offset : {0, 0x11, 0x88, 0xFF}) for (uint8_t var : {0x43, 0x60, 0x61, 0x62}) {
+		det->adjusts[0].variable = var; det->adjusts[0].parameter = offset; AirportTileResolverObject query(ats, tile, st); std::array<int32_t, 1> regs{}; query.ResolveCallback(regs);
+		fmt::print(stderr, "STCMD airport-offset {} {} {}\n", var, offset, regs[0]);
+	}
+	/* Live selection: missing/disabled custom, substitute and its override. */
+	auto mappings = _airport_mngr.mappings; auto *new_spec = AirportSpec::GetWithoutOverride(NEW_AIRPORT_OFFSET); AirportSpec saved_new = *new_spec;
+	for (bool enabled : {false, true}) for (uint32_t grfid : {0U, file.grfid}) for (uint16_t substitute : {uint16_t{AT_INVALID}, uint16_t{AT_SMALL}}) {
+		new_spec->enabled = enabled; new_spec->grf_prop.override_id = AT_INVALID; _airport_mngr.mappings[NEW_AIRPORT_OFFSET] = {grfid, 0, substitute};
+		for (uint16_t over : {uint16_t{AT_INVALID}, uint16_t{AT_LARGE}}) { spec->grf_prop.override_id = over; fmt::print(stderr, "STCMD airport-selection {} {} {} {} {}\n", enabled, grfid, substitute, over, AirportSpec::Get(NEW_AIRPORT_OFFSET)->GetIndex()); }
+	}
+	_airport_mngr.mappings = std::move(mappings); *new_spec = std::move(saved_new);
+	fmt::print(stderr, "STCMD airport-state {} {} {} {} {}\n", st->index.base(), st->random_bits, st->airport.psa->GetValue(7), _random.state[0], _random.state[1]);
+	*ats = std::move(saved_tile); *spec = std::move(saved);
+	delete random; delete det; delete parent; delete other; delete result;
+}

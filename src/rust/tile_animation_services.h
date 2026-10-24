@@ -8,11 +8,10 @@
 /** @file tile_animation_services.h Shared packed animation and tile height leaves. */
 #ifndef RUST_TILE_ANIMATION_SERVICES_H
 #define RUST_TILE_ANIMATION_SERVICES_H
-#include "../animated_tile_func.h"
+#include "services_map.h"
 #include "../tile_cmd.h"
 #include "../map_func.h"
 #include "../landscape.h"
-inline uint8_t OpenTTDAnimationFrame(uint32_t tile) noexcept { return GetAnimationFrame(TileIndex(tile)); }
 inline void OpenTTDSetAnimationFrame(uint32_t tile, uint8_t frame) noexcept { SetAnimationFrame(TileIndex(tile), frame); }
 inline int32_t OpenTTDTileMaxPixelZ(uint32_t tile) noexcept { return GetTileMaxPixelZ(TileIndex(tile)); }
 inline int OpenTTDTileMaxZ(TileIndex tile) noexcept { return GetTileMaxZ(tile); }

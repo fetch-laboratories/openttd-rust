@@ -5,6 +5,7 @@
     clippy::missing_safety_doc,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
+    clippy::if_not_else, // preserve source branch order
     clippy::too_many_arguments
 )]
 /// `TTDPatch` large airport classification.
@@ -51,7 +52,7 @@ pub struct Services {
     availability: extern "C" fn(*const AirportSpec) -> Availability,
     override_id: extern "C" fn(*const AirportSpec) -> u16,
     manager_grfid: extern "C" fn(u8) -> u32,
-    substitute: extern "C" fn(u8) -> u8,
+    substitute: extern "C" fn(u8) -> u16,
     never_expire: extern "C" fn() -> bool,
     random: extern "C" fn(*mut BaseStation) -> u16,
     build_date: extern "C" fn(*mut BaseStation) -> i32,
@@ -107,7 +108,7 @@ pub(crate) fn get(kind: u8, s: &Services) -> *const AirportSpec {
         if (s.manager_grfid)(kind) == 0 {
             return spec;
         }
-        let substitute = (s.substitute)(kind);
+        let substitute = (s.substitute)(kind) as u8;
         if u16::from(substitute) == AT_INVALID {
             return spec;
         }
@@ -178,8 +179,8 @@ pub unsafe extern "C" fn openttd_rust_airport_init(
     tile_spec: *const TileSpec,
     tile: u32,
     layout: u8,
-    s: *const Services,
-) -> *const c_void {
+    _s: *const Services,
+) {
     unsafe {
         state.write(State {
             station,
@@ -190,11 +191,18 @@ pub unsafe extern "C" fn openttd_rust_airport_init(
             town: ptr::null_mut(),
         });
     }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_root(
+    state: *const State,
+    s: *const Services,
+) -> *const c_void {
+    let c = unsafe { *state };
     let s = unsafe { &*s };
-    if tile_spec.is_null() {
-        (s.root)(spec, !station.is_null())
+    if c.tile_spec.is_null() {
+        (s.root)(c.spec, !c.station.is_null())
     } else {
-        (s.tile_root)(tile_spec, !station.is_null())
+        (s.tile_root)(c.tile_spec, !c.station.is_null())
     }
 }
 #[unsafe(no_mangle)]
@@ -300,7 +308,7 @@ fn id_at_offset(tile: u32, st: *mut BaseStation, grfid: u32, s: &Services) -> u3
     if !(s.belongs)(st, tile) {
         return 0xffff;
     }
-    let gfx = (s.shared().station_gfx)(tile);
+    let gfx = crate::station_map::get_airport_gfx(tile, s.shared(), s);
     let spec = (s.tile_spec)(gfx);
     if gfx < NEW_AIRPORTTILE_OFFSET {
         let over = (s.tile_override)(spec);
@@ -340,9 +348,7 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
         0x42 => {
             let town = (s.shared().closest_town)(c.tile, u32::MAX);
             let owner = (s.shared().town_owner)(town);
-            u32::from(
-                unsafe { crate::town::road_context(owner, c.tile, (s.shared().map_max_x)() + 1) }.1,
-            )
+            u32::from(unsafe { crate::town::get_radius_group(owner, c.tile, s.map()) })
         }
         0x43 => crate::industry::resolver::relative_position(
             c.tile,
@@ -406,9 +412,7 @@ pub unsafe extern "C" fn openttd_rust_airport_random(
             0
         }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_airport_translate_tile(gfx: u8, s: *const Services) -> u8 {
-    let s = unsafe { &*s };
+pub(crate) fn translate_tile(gfx: u8, s: &Services) -> u8 {
     let over = (s.tile_override)((s.tile_spec)(gfx));
     if over == INVALID_AIRPORTTILE {
         gfx
@@ -416,7 +420,14 @@ pub unsafe extern "C" fn openttd_rust_airport_translate_tile(gfx: u8, s: *const 
         over as u8
     }
 }
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_translate_tile(gfx: u8, s: *const Services) -> u8 {
+    translate_tile(gfx, unsafe { &*s })
+}
 /// Direct entry from the Rust animation owner; native common evaluator only.
+pub(crate) fn tile_spec_by_tile(tile: u32, s: &Services) -> *const TileSpec {
+    (s.tile_spec)(crate::station_map::get_airport_gfx(tile, s.shared(), s))
+}
 pub(crate) fn tile_callback(
     callback: u16,
     p1: u32,

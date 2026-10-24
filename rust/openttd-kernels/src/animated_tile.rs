@@ -78,7 +78,6 @@ pub struct Services {
     pub road_triggers: extern "C" fn(*mut BaseStation, u8) -> bool,
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
     pub road_spec: extern "C" fn(u32) -> *const RoadSpec,
-    pub airport_spec: extern "C" fn(u32) -> *const AirportSpec,
     pub industry_object: extern "C" fn(u32) -> *mut IndustryShell,
     pub rail_spec_triggers: extern "C" fn(*const RailSpec) -> u16,
     pub road_spec_triggers: extern "C" fn(*const RoadSpec) -> u16,
@@ -270,7 +269,7 @@ macro_rules! animate {
         pub extern "C" fn $fn(tile: u32) {
             let a = services();
             let b = unsafe { &*a.$field };
-            let e = (b.entry)(tile);
+            let e = <$feature as crate::newgrf_animation_base::Feature>::entry(a, b, tile);
             if !e.spec.is_null() {
                 crate::newgrf_animation_base::animate::<$feature>(a, b, e, tile);
             }
@@ -474,7 +473,7 @@ fn airport_trigger(
     extra: u8,
 ) -> bool {
     let b = unsafe { &*a.airport };
-    let spec = (a.airport_spec)(tile);
+    let spec = crate::newgrf_airport::tile_spec_by_tile(tile, unsafe { &*a.airport_runtime });
     if (a.airport_spec_triggers)(spec) & (1 << trigger) == 0 {
         return false;
     }
@@ -512,7 +511,7 @@ pub extern "C" fn openttd_rust_trigger_airport(st: *mut Station, trigger: u8, ca
         if !(a.airport_belongs)(st, t) {
             return;
         }
-        let spec = (a.airport_spec)(t);
+        let spec = crate::newgrf_airport::tile_spec_by_tile(t, unsafe { &*a.airport_runtime });
         if !(a.airport_grf)(spec) {
             return;
         }
@@ -555,7 +554,7 @@ crate::abi::layouts! {
         rail_belongs,
         station_triggers,
         road_triggers,
-        rail_spec, road_spec, airport_spec, industry_object,
+        rail_spec, road_spec, industry_object,
         rail_spec_triggers,
         road_spec_triggers,
         airport_spec_triggers,
@@ -572,13 +571,12 @@ crate::abi::layouts! {
     "OpenTTDHouseAnimation" ["probe"] => Binding<HouseSpec, TownHandle, u64> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDIndustryAnimation" ["probe"] => Binding<IndustrySpec, IndustryShell, i32> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDStationAnimation" ["probe"] => Binding<RailSpec, BaseStation, i32> { entry, info, callback, sound, version8, speed_error };
-    "OpenTTDAirportAnimation" ["probe"] => Binding<AirportSpec, Station, crate::newgrf_animation_base::AirportExtra> { entry, info, sound, version8, speed_error };
+    "OpenTTDAirportAnimation" ["probe"] => Binding<AirportSpec, Station, crate::newgrf_animation_base::AirportExtra> { info, sound, version8, speed_error };
     "OpenTTDObjectAnimation" ["probe"] => Binding<ObjectSpec, Object, i32> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDRoadStopAnimation" ["probe"] => Binding<RoadSpec, BaseStation, i32> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDHouseAnimationEntry" ["probe"] => Entry<HouseSpec, TownHandle> { spec, object };
     "OpenTTDIndustryAnimationEntry" ["probe"] => Entry<IndustrySpec, IndustryShell> { spec, object };
     "OpenTTDStationAnimationEntry" ["probe"] => Entry<RailSpec, BaseStation> { spec, object };
-    "OpenTTDAirportAnimationEntry" ["probe"] => Entry<AirportSpec, Station> { spec, object };
     "OpenTTDObjectAnimationEntry" ["probe"] => Entry<ObjectSpec, Object> { spec, object };
     "OpenTTDRoadStopAnimationEntry" ["probe"] => Entry<RoadSpec, BaseStation> { spec, object };
 }

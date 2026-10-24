@@ -23,11 +23,12 @@
 struct AirportTileScopeResolver : public ScopeResolver {
 #ifdef WITH_RUST
 	OpenTTDAirportResolverState context;
-#endif
+#else
 	struct Station *st;  ///< %Station of the airport for which the callback is run, or \c nullptr for build gui.
 	uint8_t airport_id;     ///< Type of airport for which the callback is run.
 	TileIndex tile;      ///< Tile for the callback, only valid for airporttile callbacks.
 	const AirportTileSpec *ats;
+#endif
 
 	/**
 	 * Constructor of the scope resolver specific for airport tiles.
@@ -36,12 +37,17 @@ struct AirportTileScopeResolver : public ScopeResolver {
 	 * @param st Station of the airport for which the callback is run, or \c nullptr for build gui.
 	 */
 	AirportTileScopeResolver(ResolverObject &ro, const AirportTileSpec *ats, TileIndex tile, Station *st)
-		: ScopeResolver(ro), st(st), tile(tile), ats(ats)
+		: ScopeResolver(ro)
+#ifndef WITH_RUST
+		, st(st), tile(tile), ats(ats)
+#endif
 	{
 		assert(st != nullptr);
+#ifndef WITH_RUST
 		this->airport_id = st->airport.type;
+#endif
 #ifdef WITH_RUST
-		ro.root_spritegroup = openttd_rust_airport_init(&this->context, st, nullptr, ats, tile.base(), 0, &GetAirportResolverServices());
+		openttd_rust_airport_init(&this->context, st, nullptr, ats, tile.base(), 0, &GetAirportResolverServices());
 #endif
 	}
 

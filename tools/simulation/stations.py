@@ -87,6 +87,8 @@ def scenarios(soak):
             "waypoints-reload",
             "resolver",
             "resolver-reload",
+            "airport",
+            "airport-reload",
         )
     ]
 
@@ -600,6 +602,7 @@ static bool StationCommands(std::span<std::string_view> args)
 	_settings_game.construction.road_stop_on_competitor_road = true;
 	const DoCommandFlags test{DoCommandFlag::NoTestTownRating};
 	const DoCommandFlags exec{DoCommandFlag::Execute, DoCommandFlag::NoTestTownRating};
+	if (args[1] == "airport-inspect") { StationAirportFixture(INVALID_TILE, test, exec, true); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true; }
 	if (args[1] == "resolver-inspect") { StationResolverFixture(INVALID_TILE, exec, true); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true; }
 	if (args[1] == "waypoints-inspect") {
 		uint found = 0;
@@ -620,6 +623,7 @@ static bool StationCommands(std::span<std::string_view> args)
 	} else {
 		TileIndex origin = StationPatch();
 		auto tile = [origin](int x, int y) { return origin + TileDiffXY(x, y); };
+		if (args[1] == "airport") { StationAirportFixture(origin, test, exec); fmt::print(stderr, "STCMD complete\n"); if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false); current.Restore(); return true; }
 		if (args[1] == "resolver") { StationResolverFixture(origin, exec); fmt::print(stderr, "STCMD complete\n"); if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false); current.Restore(); return true; }
 		if (args[1] == "waypoints") {
 			StationWaypoints(origin, company, test, exec); fmt::print(stderr, "STCMD complete\n");
@@ -885,6 +889,7 @@ RELOADS = {
     "reload": ("commands", "inspect"),
     "road-stops-reload": ("road-stops", "road-stops-inspect"),
     "resolver-reload": ("resolver", "resolver-inspect"),
+    "airport-reload": ("airport", "airport-inspect"),
     "waypoints-reload": ("waypoints", "waypoints-inspect"),
 }
 # #354 road stop owner branches; cache checks run only with desync snapshots.
@@ -903,7 +908,8 @@ def adapter(build, folder, env):
     source.write_text(
         COMMAND_SOURCE.replace(
             "// OWNER399",
-            (ROOT / "tools/simulation/station-resolver-console.hpp").read_text(),
+            (ROOT / "tools/simulation/station-resolver-console.hpp").read_text()
+            + (ROOT / "tools/simulation/airport-resolver-console.hpp").read_text(),
         )
     )
     return console_adapter(
@@ -1089,6 +1095,35 @@ def check_commands(scenario, run, mode, role, result):
             ]
         )
         core.branch_witnesses(scenario, run, role, "waypoint_command", branches)
+    if scenario["station_commands"].startswith("airport"):
+        required = (
+            [] if scenario["station_commands"].endswith("reload") else ["build_airport"]
+        )
+        markers = [
+            "airport-built",
+            "airport-animation",
+            "airport-variable airport",
+            "airport-variable tile",
+            "airport-variable preview",
+            "airport-variable nowhere",
+            "airport-date",
+            "airport-town",
+            "airport-random",
+            "airport-id",
+            "airport-offset",
+            "airport-selection",
+            "airport-state",
+        ]
+        if not scenario["station_commands"].endswith("reload"):
+            markers += [
+                "cost airport-admission",
+                "airport-bounds",
+                "cost airport-build-test",
+                "cost airport-build",
+            ]
+        for marker in markers:
+            if not any(line.startswith("STCMD " + marker) for line in run["log"]):
+                raise RuntimeError("airport runtime witness missing: " + marker)
     if scenario["station_commands"].startswith("resolver"):
         required = (
             [] if scenario["station_commands"].endswith("reload") else ["build_rail"]

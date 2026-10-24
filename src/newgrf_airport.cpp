@@ -23,6 +23,7 @@
 #ifdef WITH_RUST
 #include "rust/services_station.h"
 #include "rust/tile_animation_services.h"
+#include "rust/settings_services.h"
 #include "rust/airport_resolver_ffi.h"
 #endif
 #include "safeguards.h"
@@ -45,7 +46,7 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.override_id = RustSpecOverride<AirportSpec>,
 		.manager_grfid = [](uint8_t type) noexcept { return _airport_mngr.GetGRFID(type); },
 		.substitute = [](uint8_t type) noexcept { return _airport_mngr.GetSubstituteID(type); },
-		.never_expire = []() noexcept { return _settings_game.station.never_expire_airports; },
+		.never_expire = RustNeverExpireAirports,
 		.random = RustStationRandomBits,
 		.build_date = RustStationBuildDate,
 		.root = RustSpecSpriteGroup<AirportSpec>,
@@ -258,7 +259,11 @@ GrfSpecFeature AirportResolverObject::GetFeature() const
 
 uint32_t AirportResolverObject::GetDebugID() const
 {
+#ifdef WITH_RUST
+	return RustSpecLocalID(this->airport_scope.context.spec);
+#else
 	return this->airport_scope.spec->grf_prop.local_id;
+#endif
 }
 
 /* virtual */ uint32_t AirportScopeResolver::GetRandomBits() const
@@ -278,7 +283,7 @@ uint32_t AirportResolverObject::GetDebugID() const
 /* virtual */ void AirportScopeResolver::StorePSA(uint pos, int32_t value)
 {
 #ifdef WITH_RUST
-	openttd_rust_storage_airport(&GetRustStorageServices(), this->st, this->ro.grffile, pos, value);
+	openttd_rust_storage_airport(&GetRustStorageServices(), this->context.station, this->ro.grffile, pos, value);
 #else
 	if (this->st == nullptr) return;
 
@@ -333,7 +338,9 @@ AirportResolverObject::AirportResolverObject(TileIndex tile, Station *st, const 
 		CallbackID callback, uint32_t param1, uint32_t param2)
 	: ResolverObject(spec->grf_prop.grffile, callback, param1, param2), airport_scope(*this, tile, st, spec, layout)
 {
-#ifndef WITH_RUST
+#ifdef WITH_RUST
+	this->root_spritegroup = openttd_rust_airport_root(&this->airport_scope.context, &GetAirportResolverServices());
+#else
 	this->root_spritegroup = spec->grf_prop.GetSpriteGroup(st != nullptr);
 #endif
 }

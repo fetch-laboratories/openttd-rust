@@ -44,3 +44,14 @@ pub(crate) fn is_station_road_stop_tile(s: &Services, tile: u32) -> bool {
     (s.tile_type)(tile) == MP_STATION
         && matches!((s.station_type)(tile).0, STATION_TRUCK | STATION_BUS)
 }
+
+/// `GetAirportGfx`: airport membership is established by each caller before
+/// this read, proving its native IsAirport assertion. GetStationGfx retains its
+/// native station assertion; translation calls the Rust owner directly.
+pub(crate) fn get_airport_gfx(
+    tile: u32,
+    s: &Services,
+    airport: &crate::newgrf_airport::Services,
+) -> u8 {
+    crate::newgrf_airport::translate_tile((s.station_gfx)(tile), airport)
+}

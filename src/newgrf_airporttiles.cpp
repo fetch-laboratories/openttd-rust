@@ -177,6 +177,7 @@ static uint32_t GetAirportTileIDAtOffset(TileIndex tile, const Station *st, uint
 /* virtual */ uint32_t AirportTileScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
 #ifdef WITH_RUST
+	assert(this->context.station != nullptr);
 	return openttd_rust_airport_tile_variable(&this->context, &this->ro, variable, parameter, &available, &GetAirportResolverServices());
 #else
 	assert(this->st != nullptr);
@@ -245,7 +246,7 @@ AirportTileResolverObject::AirportTileResolverObject(const AirportTileSpec *ats,
 {
 #ifdef WITH_RUST
 	/* The parent scope initializes last; publish the tile invocation root. */
-	this->root_spritegroup = openttd_rust_airport_init(&this->tiles_scope.context, st, nullptr, ats, tile.base(), 0, &GetAirportResolverServices());
+	this->root_spritegroup = openttd_rust_airport_root(&this->tiles_scope.context, &GetAirportResolverServices());
 #else
 	this->root_spritegroup = ats->grf_prop.GetSpriteGroup(st != nullptr);
 #endif
@@ -258,7 +259,11 @@ GrfSpecFeature AirportTileResolverObject::GetFeature() const
 
 uint32_t AirportTileResolverObject::GetDebugID() const
 {
+#ifdef WITH_RUST
+	return RustSpecLocalID(this->tiles_scope.context.tile_spec);
+#else
 	return this->tiles_scope.ats->grf_prop.local_id;
+#endif
 }
 
 static uint16_t GetAirportTileCallback(CallbackID callback, uint32_t param1, uint32_t param2, const AirportTileSpec *ats, Station *st, TileIndex tile, std::span<int32_t> regs100 = {})
@@ -322,8 +327,6 @@ static uint16_t GetSimpleAirportTileCallback(CallbackID callback, uint32_t param
 const OpenTTDAirportAnimation &GetAirportAnimationBinding() noexcept
 {
 	static const OpenTTDAirportAnimation binding{
-		.entry =
-		[](uint32_t t) noexcept -> OpenTTDAirportAnimationEntry { const auto *s = RustAnimationAirportSpec(t); if (s == nullptr) return {nullptr, nullptr}; return {s, Station::GetByTile(TileIndex{t})}; },
 		.info = [](const AirportTileSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(AirportTileCallbackMask::AnimationSpeed), s->callback_mask.Test(AirportTileCallbackMask::AnimationNextFrame), HasBit(s->animation_special_flags, 0), true}; },
 		.sound = [](const AirportTileSpec *s, uint8_t sound, uint32_t t) noexcept { PlayTileSound(s->grf_prop.grffile, sound, TileIndex{t}); },
 		.version8 = RustSpecGRFVersion8<AirportTileSpec>,

@@ -22,7 +22,6 @@ using OpenTTDRoadStopAnimation = OpenTTDAnimationBinding<RoadStopSpec, BaseStati
 using OpenTTDHouseAnimationEntry = OpenTTDAnimationEntry<HouseSpec, Town>;
 using OpenTTDIndustryAnimationEntry = OpenTTDAnimationEntry<IndustryTileSpec, Industry>;
 using OpenTTDStationAnimationEntry = OpenTTDAnimationEntry<StationSpec, BaseStation>;
-using OpenTTDAirportAnimationEntry = OpenTTDAnimationEntry<AirportTileSpec, Station>;
 using OpenTTDObjectAnimationEntry = OpenTTDAnimationEntry<ObjectSpec, Object>;
 using OpenTTDRoadStopAnimationEntry = OpenTTDAnimationEntry<RoadStopSpec, BaseStation>;
 struct OpenTTDAnimationArea { uint32_t tile; uint16_t width, height; };
@@ -55,7 +54,6 @@ struct OpenTTDAnimationServices {
 	bool (*road_triggers)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(road_triggers);
 	const StationSpec *(*rail_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec);
 	const RoadStopSpec *(*road_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(road_spec);
-	const AirportTileSpec *(*airport_spec)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_spec);
 	Industry *(*industry_object)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_object);
 	uint16_t (*rail_spec_triggers)(const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(rail_spec_triggers);
 	uint16_t (*road_spec_triggers)(const RoadStopSpec *) noexcept OPENTTD_SERVICE_DEFAULT(road_spec_triggers);

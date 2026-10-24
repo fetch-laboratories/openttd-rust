@@ -48,7 +48,7 @@ impl<S, O> Clone for Entry<S, O> {
 }
 #[repr(C)]
 pub struct Binding<S, O, E: Callback<S, O>> {
-    pub entry: extern "C" fn(u32) -> Entry<S, O>,
+    pub entry: E::NativeEntry,
     pub info: extern "C" fn(*const S) -> Info,
     pub callback: E::Native,
     pub sound: extern "C" fn(*const S, u8, u32),
@@ -59,6 +59,8 @@ pub struct Binding<S, O, E: Callback<S, O>> {
 /// Native callbacks remain only for features whose runtime is still native.
 pub trait Callback<S, O>: Sized {
     type Native;
+    type NativeEntry;
+    fn entry(a: &Services, b: &Binding<S, O, Self>, tile: u32) -> Entry<S, O>;
     fn resolve(
         a: &Services,
         b: &Binding<S, O, Self>,
@@ -74,6 +76,10 @@ pub trait Callback<S, O>: Sized {
 macro_rules! native_callback {
     ($e:ty) => {
         impl<S, O> Callback<S, O> for $e {
+            type NativeEntry = extern "C" fn(u32) -> Entry<S, O>;
+            fn entry(_: &Services, b: &Binding<S, O, Self>, tile: u32) -> Entry<S, O> {
+                (b.entry)(tile)
+            }
             type Native = extern "C" fn(u16, u32, u32, *const S, *mut O, u32, Self) -> u16;
             fn resolve(
                 _: &Services,
@@ -97,6 +103,19 @@ native_callback!(u64);
 pub struct AirportExtra;
 impl Callback<crate::animated_tile::AirportSpec, crate::station::Station> for AirportExtra {
     type Native = ();
+    type NativeEntry = ();
+    fn entry(
+        a: &Services,
+        _: &Binding<crate::animated_tile::AirportSpec, crate::station::Station, Self>,
+        tile: u32,
+    ) -> Entry<crate::animated_tile::AirportSpec, crate::station::Station> {
+        let spec = crate::newgrf_airport::tile_spec_by_tile(tile, unsafe { &*a.airport_runtime });
+        let station = (a.as_station)((a.station_base)((a.shared().station_index)(tile)));
+        Entry {
+            spec,
+            object: station,
+        }
+    }
     fn resolve(
         a: &Services,
         _: &Binding<crate::animated_tile::AirportSpec, crate::station::Station, Self>,
@@ -122,6 +141,13 @@ pub trait Feature {
     type Frame: Frame<Self::Owner>;
     const SPEED: CallbackID;
     const NEXT: CallbackID;
+    fn entry(
+        a: &Services,
+        b: &Binding<Self::Spec, Self::Owner, Self::Extra>,
+        tile: u32,
+    ) -> Entry<Self::Spec, Self::Owner> {
+        Self::Extra::entry(a, b, tile)
+    }
 }
 macro_rules! feature {
     ($name:ident, $spec:ty, $owner:ty, $extra:ty, $frame:ty, $speed:ident, $next:ident) => {

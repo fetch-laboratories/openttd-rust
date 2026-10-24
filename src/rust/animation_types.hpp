@@ -12,7 +12,6 @@ template <typename Spec, typename Obj, typename Extra> struct OpenTTDAnimationBi
 };
 
 struct OpenTTDAirportAnimation {
-	OpenTTDAnimationEntry<AirportTileSpec, Station> (*entry)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(entry);
 	OpenTTDAnimationInfo (*info)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(info);
 	void (*sound)(const AirportTileSpec *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(sound);
 	bool (*version8)(const AirportTileSpec *) noexcept OPENTTD_SERVICE_DEFAULT(version8);

@@ -187,6 +187,20 @@ fn radius_group(funded: bool, radii: &[u32; 5], distance: u32) -> u8 {
     }
     zone
 }
+/// `GetTownRadiusGroup` over live canonical town fields. No owner borrow crosses
+/// a callback. The caller supplies the original live town and valid tile.
+pub(crate) unsafe fn get_radius_group(
+    state: *const State,
+    tile: u32,
+    map: crate::map_func::Map,
+) -> u8 {
+    let state = unsafe { &*state };
+    radius_group(
+        state.growth.funding != 0,
+        &state.simulation.radius,
+        map.distance_square(tile, state.simulation.xy),
+    )
+}
 /// Copied canonical road-work policy inputs; no owner reference spans a service.
 /// SAFETY: Caller supplies a live, serialized owner.
 pub(crate) unsafe fn road_context(state: *const State, tile: u32, size_x: u32) -> (u8, u8, u32) {
@@ -198,12 +212,8 @@ pub(crate) unsafe fn road_context(state: *const State, tile: u32, size_x: u32) -
     let shift = size_x.trailing_zeros();
     let dx = (tile & mask).abs_diff(xy & mask);
     let dy = (tile >> shift).abs_diff(xy >> shift);
-    let distance = dx * dx + dy * dy;
-    let zone = radius_group(
-        state.growth.funding != 0,
-        &state.simulation.radius,
-        distance,
-    );
+    let zone =
+        unsafe { get_radius_group(state, tile, crate::map_func::Map { log_x: shift as u8 }) };
     (state.growth.road, zone, dx + dy)
 }
 static GENERATING_TOWN: GameState<bool> = GameState::new(false);
