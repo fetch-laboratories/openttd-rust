@@ -431,6 +431,7 @@ def check(scenario, run, mode, role, result):
             "refusal true",
             "location 0 2271560481",
             "checkpoint true",
+            "unavailable-fallback true",
             "count-wrap true",
             "tile-identities true",
             "production-params true",

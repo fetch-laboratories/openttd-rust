@@ -242,6 +242,14 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	tile_spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, relative);
 	tile_spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, one);
 	bool equal = true;
+	SpriteGroup::CanAllocateItem(); auto *unavailable = Query(0xFF, 0, zero); unavailable->error_group = one;
+	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, unavailable);
+	std::array<int32_t, 4> unavailable_regs{};
+	bool fallback = GetIndustryCallback(CBID_INDUSTRY_REFUSE_CARGO, 0, 0, i, i->type, tile, unavailable_regs) == 1;
+	equal &= fallback;
+	fmt::print(stderr, "INDUSTRY-RESOLVER unavailable-fallback {}\n", fallback);
+	delete unavailable;
+	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, count);
 	std::array<int32_t, 4> regs{};
 	const auto rng = _random;
 	auto result = GetIndustryCallback(CBID_INDUSTRY_REFUSE_CARGO, 0, 0, i, i->type, tile, regs);
@@ -263,6 +271,7 @@ static bool IndustriesScenario(std::span<std::string_view>)
 	IndustriesResolverObject live(tile, i, i->type), missing(INVALID_TILE, nullptr, i->type), nearby(tile, nullptr, i->type);
 	IndustryTileResolverObject live_tile(gfx, tile, i), temporary_tile(gfx, tile, &temporary);
 	equal &= live.root_spritegroup == filtered && missing.root_spritegroup == location;
+	equal &= live.GetFeature() == GSF_INDUSTRIES && live.GetDebugID() == 17 && live_tile.GetFeature() == GSF_INDUSTRYTILES && live_tile.GetDebugID() == 19;
 	equal &= live_tile.root_spritegroup == relative && temporary_tile.root_spritegroup == one;
 	equal &= live.GetTown() == live.GetTown() && !live.GetTown()->readonly && construction.GetTown()->readonly && nearby.GetTown()->readonly && missing.GetTown() == nullptr;
 	equal &= live.GetScope(VSG_SCOPE_SELF) == &live.industries_scope && live.GetScope(VSG_SCOPE_PARENT) == live.GetTown();
