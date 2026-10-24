@@ -95,7 +95,7 @@ static void TypeConstruction(Company *c, TileIndex tile, int kind, uint8_t type,
 	for (DoCommandFlags flags : {DoCommandFlags{DoCommandFlag::Auto}, DoCommandFlags{DoCommandFlag::Auto, DoCommandFlag::Execute}}) {
 		auto before = TypeTileState(tile); auto rail = c->infrastructure.rail; auto road = c->infrastructure.road;
 		SavedRandomSeeds rng, after; SaveRandomSeeds(&rng);
-		auto result = kind == 0 ? Command<CMD_BUILD_SINGLE_RAIL>::Do(flags, tile, static_cast<RailType>(type), TRACK_X, false) : Command<CMD_BUILD_ROAD>::Do(flags, tile, ROAD_X, static_cast<RoadType>(type), DRD_NONE, TownID{0});
+		auto result = kind == 0 ? Command<CMD_BUILD_SINGLE_RAIL>::Do(flags, tile, static_cast<RailType>(type), TRACK_X, false) : Command<CMD_BUILD_ROAD>::Do(flags, tile, ROAD_X, static_cast<RoadType>(type), DRD_NONE, _current_company == OWNER_TOWN ? TownID{0} : TownID::Invalid());
 		SaveRandomSeeds(&after);
 		bool unchanged = TypeTileState(tile) == before && rail == c->infrastructure.rail && road == c->infrastructure.road;
 		fmt::print(stderr, "ENGINE types-command {} {} {} {} {} {} {}\n", label, flags.Test(DoCommandFlag::Execute), result.Succeeded(), result.GetCost(), result.GetErrorMessage(), unchanged, TypeSameRng(rng, after));
