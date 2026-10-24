@@ -25,6 +25,7 @@
 #include "table/strings.h"
 
 #ifdef WITH_RUST
+#include "rust/services_industry.h"
 #include "rust/industry_resolver_ffi.h"
 #include "rust/services_newgrf.h"
 #include "rust/services_cargo.h"
@@ -187,7 +188,7 @@ static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &objec
 /* virtual */ uint32_t IndustriesScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
 #ifdef WITH_RUST
-	return openttd_rust_industry_variable(&this->context, &this->ro, variable, parameter, &available, _industry_builder.owner.get(), &GetIndustryResolverServices());
+	return openttd_rust_industry_variable(&this->context, &this->ro, variable, parameter, &available, RustIndustryBuilderState(), &GetIndustryResolverServices());
 #else
 	if (this->ro.callback == CBID_INDUSTRY_LOCATION) {
 		/* Variables available during construction check. */
@@ -845,7 +846,6 @@ const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
 		.grfid = RustResolverGRFFileID,
 		.version = RustResolverGRFVersion,
 		.callback_id = RustResolverCallback,
-		.register_value = RustResolverRegister,
 		.cargo_translation = RustResolverCargoTranslation,
 		.cargo_map = RustSpecCargoMap<IndustrySpec>,
 		.badges = RustSpecBadges<IndustrySpec>,

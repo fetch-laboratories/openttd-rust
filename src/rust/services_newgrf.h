@@ -12,22 +12,34 @@
 #include "../newgrf.h"
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
+#include "../debug.h"
 #include "../newgrf_house.h"
 #include "../house.h"
+#include "../town_map.h"
 #include "../newgrf_spritegroup.h"
 #include "../industrytype.h"
 #include "../newgrf_badge.h"
 #include "../newgrf_railtype.h"
 #include "../newgrf_roadtype.h"
 #include "../town.h"
+#include "../newgrf_config.h"
+#include "../rev.h"
+inline int32_t RustHouseAge(uint32_t tile) noexcept { return GetHouseAge(TileIndex{tile}).base(); }
+inline uint8_t RustHouseRandomBits(uint32_t tile) noexcept { return GetHouseRandomBits(TileIndex{tile}); }
+inline uint8_t RustHouseRandomTriggers(uint32_t tile) noexcept { return GetHouseRandomTriggers(TileIndex{tile}).base(); }
 inline const HouseSpec *RustHouseSpec(uint16_t house) noexcept { return HouseSpec::Get(house); }
+inline uint16_t RustTownHouseClass(const HouseSpec *spec) noexcept { return spec->class_id; }
+inline uint16_t RustTownHouseClass(uint16_t house) noexcept { return RustTownHouseClass(RustHouseSpec(house)); }
+
+inline void RustUnhandledScopeVariable(uint8_t variable) noexcept { Debug(grf, 1, "Unhandled scope variable 0x{:X}", variable); }
 
 /* These synchronous field reads borrow live native objects. Callers retain
  * the original non-null resolver/file preconditions; nothing is cached. */
+inline const GRFFile *RustResolverGRFFile(const ResolverObject *resolver) noexcept { return resolver->grffile; }
 inline uint32_t RustGRFFileID(const GRFFile *file) noexcept { return file->grfid; }
-inline uint32_t RustResolverGRFFileID(const ResolverObject *resolver) noexcept { return RustGRFFileID(resolver->grffile); }
+inline uint32_t RustResolverGRFFileID(const ResolverObject *resolver) noexcept { return RustGRFFileID(RustResolverGRFFile(resolver)); }
 inline uint8_t RustGRFFileVersion(const GRFFile *file) noexcept { return file->grf_version; }
-inline uint8_t RustResolverGRFVersion(const ResolverObject *resolver) noexcept { return RustGRFFileVersion(resolver->grffile); }
+inline uint8_t RustResolverGRFVersion(const ResolverObject *resolver) noexcept { return RustGRFFileVersion(RustResolverGRFFile(resolver)); }
 inline bool RustResolverGRFVersion8(const ResolverObject *resolver) noexcept { return RustResolverGRFVersion(resolver) >= 8; }
 template <typename Spec>
 inline const GRFFile *RustSpecGRFFile(const Spec *spec) noexcept { return spec->grf_prop.grffile; }
@@ -38,10 +50,6 @@ template <typename Spec, typename Handle = Spec>
 inline uint8_t RustSpecGRFVersion(const Handle *handle) noexcept { return RustGRFFileVersion(RustSpecGRFFile(reinterpret_cast<const Spec *>(handle))); }
 template <typename Spec>
 inline bool RustSpecGRFVersion8(const Spec *spec) noexcept { return RustSpecGRFVersion<Spec>(spec) >= 8; }
-/* GetRegister retains its native register-range precondition (reg < 0x110). */
-inline int32_t RustResolverRegister(const ResolverObject *resolver, uint16_t reg) noexcept { return resolver->GetRegister(reg); }
-inline int32_t RustResolverRegister100(const ResolverObject *resolver) noexcept { return RustResolverRegister(resolver, 0x100); }
-
 /* Container reads retain the native index preconditions and full size_t width.
  * Selection and narrowing belong to the caller; these leaves allocate nothing. */
 inline size_t RustRealLoadingCount(const RealSpriteGroup *group) noexcept { return group->loading.size(); }
@@ -52,6 +60,18 @@ template <typename Spec>
 inline bool RustSpecHasSpriteGroups(const Spec *spec) noexcept { return spec->grf_prop.HasSpriteGroups(); }
 inline bool RustHouseHasSpriteGroups(uint16_t house) noexcept { return RustSpecHasSpriteGroups(RustHouseSpec(house)); }
 
+inline uint32_t RustGRFParameter(const GRFFile *file, uint32_t parameter) noexcept { return file->GetParam(parameter); }
+inline uint8_t RustGRFPalette(const GRFFile *file) noexcept { return GetGRFConfig(file->grfid)->palette & GRFP_USE_MASK; }
+inline int32_t RustGRFTrainPitch(const GRFFile *file) noexcept { return file->traininfo_vehicle_pitch; }
+inline uint32_t RustGRFTrainWidth(const GRFFile *file) noexcept { return file->traininfo_vehicle_width; }
+inline uint8_t RustGRFMiscBits() noexcept
+{
+	extern GrfMiscBits _misc_grf_features;
+	assert(!_misc_grf_features.Test(GrfMiscBit::TrainWidth32Pixels));
+	return _misc_grf_features.base();
+}
+inline uint32_t RustNewGRFVersion() noexcept { return _openttd_newgrf_version; }
+
 /* Keep the native map wrapping, station-axis handling and signed-offset default. */
 inline uint32_t RustNearbyTileWithAxis(uint8_t parameter, uint32_t tile, bool signed_offsets, Axis axis) noexcept { return GetNearbyTile(parameter, TileIndex(tile), signed_offsets, axis).base(); }
 inline uint32_t RustNearbyTile(uint8_t parameter, uint32_t tile, bool signed_offsets) noexcept { return RustNearbyTileWithAxis(parameter, tile, signed_offsets, INVALID_AXIS); }
@@ -61,7 +81,8 @@ inline uint32_t RustNearbyTileInformation(uint32_t tile, bool version8) noexcept
 inline uint32_t RustTerrainType(uint32_t tile) noexcept { return GetTerrainType(TileIndex(tile)); }
 inline HouseZone RustTownRadiusGroup(const Town *town, uint32_t tile) noexcept { return GetTownRadiusGroup(town, TileIndex(tile)); }
 template <typename Spec>
-inline uint32_t RustSpecBadges(const ResolverObject *resolver, const Spec *spec, uint32_t parameter) noexcept { return GetBadgeVariableResult(*resolver->grffile, spec->badges, parameter); }
+inline uint32_t RustSpecBadges(const ResolverObject *resolver, const Spec *spec, uint32_t parameter) noexcept { return GetBadgeVariableResult(*RustResolverGRFFile(resolver), spec->badges, parameter); }
+inline uint32_t RustHouseBadges(const ResolverObject *resolver, uint16_t house, uint32_t parameter) noexcept { return RustSpecBadges(resolver, RustHouseSpec(house), parameter); }
 
 /* Preserve native default-livery and nullable-file translation behavior. */
 inline uint32_t RustCompanyInfo(uint8_t owner, const Livery *livery) noexcept { return GetCompanyInfo(CompanyID(owner), livery); }
@@ -71,8 +92,8 @@ template <typename Spec>
 inline uint8_t RustSpecReverseRailTypeTranslation(RailType railtype, const Spec *spec) noexcept { return RustReverseRailTypeTranslation(railtype, RustSpecGRFFile(spec)); }
 
 
-/* Qualified base operation: Rust retains feature-specific scope selection. */
-inline ScopeResolver *RustResolverBaseScope(ResolverObject *resolver, uint8_t scope, uint8_t relative) noexcept { return resolver->ResolverObject::GetScope(static_cast<VarSpriteGroupScope>(scope), relative); }
+/* Native frame address only; Rust retains common/feature scope selection. */
+inline ScopeResolver *RustResolverBaseScope(ResolverObject *resolver, uint8_t, uint8_t) noexcept { return &resolver->default_scope; }
 template <typename Resolver>
 inline ScopeResolver *RustResolverBaseScopeFor(Resolver *resolver, uint8_t scope, uint8_t relative) noexcept { return RustResolverBaseScope(resolver, scope, relative); }
 
@@ -82,6 +103,8 @@ template <typename Spec> inline uint16_t RustSpecSubstitute(const Spec *spec) no
 template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
 template <typename Spec> inline uint16_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }
 template <typename Spec> inline const SpriteGroup *RustSpecSpriteGroup(const Spec *spec, bool live) noexcept { return spec->grf_prop.GetSpriteGroup(live); }
+inline const SpriteGroup *RustHouseSpriteGroup(uint16_t house, bool live) noexcept { return RustSpecSpriteGroup(RustHouseSpec(house), live); }
+inline uint16_t RustHouseLocalID(uint16_t house) noexcept { return RustSpecLocalID(RustHouseSpec(house)); }
 
 template <typename Spec> inline size_t RustSpecCargoGroupCount(const Spec *spec) noexcept { return spec->grf_prop.spritegroups.size(); }
 template <typename Spec> inline uint8_t RustSpecCargoGroupCargo(const Spec *spec, size_t index) noexcept { return spec->grf_prop.spritegroups[index].first; }
@@ -96,10 +119,6 @@ inline bool OpenTTDConvertBooleanCallback(const GRFFile *grf, uint16_t callback,
 inline bool OpenTTDConvert8bitBooleanCallback(const GRFFile *grf, uint16_t callback, uint16_t result) noexcept { return Convert8bitBooleanCallback(grf, callback, result); }
 inline bool RustHouseConvertBoolean(uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvertBooleanCallback(RustHouseGrf(house), callback, result); }
 inline bool RustHouseConvert8bitBoolean(uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvert8bitBooleanCallback(RustHouseGrf(house), callback, result); }
-inline uint16_t OpenTTDHouseCallback(CallbackID callback, uint32_t param1, uint32_t param2, HouseID house, Town *town, TileIndex tile, bool not_yet_constructed, uint8_t initial_random = 0) noexcept
-{
-	return GetHouseCallback(callback, param1, param2, house, town, tile, {}, not_yet_constructed, initial_random);
-}
 inline void RustCloseNewGRFInspect(GrfSpecFeature feature, uint32_t index) noexcept { DeleteNewGRFInspectWindow(feature, index); }
 /* Typed adapters retain the existing per-component table signatures. */
 inline void OpenTTDDeleteRailInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_RAILTYPES, tile); }

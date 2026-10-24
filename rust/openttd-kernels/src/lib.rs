@@ -58,12 +58,15 @@ mod map_func;
 mod map_type;
 mod math;
 mod movement;
+mod newgrf;
 mod newgrf_animation_base;
 mod newgrf_callbacks;
 mod newgrf_commons;
+mod newgrf_engine;
 mod newgrf_properties;
 mod newgrf_sound;
 mod newgrf_spritegroup;
+mod settings_type;
 
 mod newgrf_station;
 mod newgrf_storage;
@@ -1411,10 +1414,12 @@ pub(crate) mod tree_map;
 pub(crate) mod water_map;
 
 mod cargo_type;
+mod cargotype;
 mod source_type;
 mod subsidy_base;
 mod tilearea;
 mod timer_game_common;
+mod timer_game_tick;
 
 mod subsidy_type;
 

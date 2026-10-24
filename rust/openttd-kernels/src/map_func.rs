@@ -47,6 +47,11 @@ impl Map {
             self.tile_xy(x, y)
         }
     }
+    /// `Map::WrapToMap`, preserving the canonical power-of-two tile mask.
+    #[must_use]
+    pub fn wrap_to_map(self, tile: u32, size_y: u32) -> u32 {
+        tile & (self.size_x() * size_y - 1)
+    }
     /// `Map::MaxX`.
     #[must_use]
     pub fn max_x(self) -> u32 {

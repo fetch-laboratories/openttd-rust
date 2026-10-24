@@ -998,7 +998,7 @@ static uint8_t RustTownRoadFlags(uint8_t id) noexcept { return GetRoadTypeInfo(s
 static OpenTTDTownHouseAvailability RustTownHouseAvailability(uint16_t id) noexcept
 {
 	const auto *hs = HouseSpec::Get(id);
-	return {.zones = hs->building_availability.base(), .override_id = RustSpecOverride(hs), .class_id = hs->class_id, .probability = hs->probability, .enabled = hs->enabled};
+	return {.zones = hs->building_availability.base(), .override_id = RustSpecOverride(hs), .class_id = RustTownHouseClass(hs), .probability = hs->probability, .enabled = hs->enabled};
 }
 static OpenTTDTownHousePlacement RustTownHousePlacement(uint16_t id) noexcept
 {
@@ -1036,7 +1036,6 @@ static uint32_t RustTown_exchange_company(uint32_t company) noexcept
 	OpenTTDSetCurrentCompany(CompanyID(company));
 	return old.base();
 }
-static uint16_t RustTownHouseClass(uint16_t house) noexcept { return HouseSpec::Get(house)->class_id; }
 static void RustTown_make_house(uint32_t tile, uint32_t town, uint32_t house, uint32_t construction) noexcept
 {
 	MakeHouseTile(TileIndex{tile}, TownID(town), construction & 0xFF, (construction >> 8) & 0xFF, house, (construction >> 16) & 0xFF, construction >> 24);
@@ -1086,12 +1085,6 @@ static bool RustTown_build_tunnel(uint32_t tile, uint32_t road_type, uint32_t ex
 	return Command<CMD_BUILD_TUNNEL>::Do(flags, TileIndex{tile}, TRANSPORT_ROAD, static_cast<RoadType>(road_type)).Succeeded();
 }
 static void RustTown_assert_clear_house([[maybe_unused]] bool success) noexcept { assert(success); }
-static bool RustTown_allow_construction(uint32_t town, uint32_t tile, uint32_t house, uint32_t random) noexcept
-{
-	const auto *hs = HouseSpec::Get(house);
-	uint16_t cb = OpenTTDHouseCallback(CBID_HOUSE_ALLOW_CONSTRUCTION, 0, 0, house, Town::Get(TownID(town)), TileIndex{tile}, true, random);
-	return cb == CALLBACK_FAILED || OpenTTDConvert8bitBooleanCallback(RustSpecGRFFile(hs), CBID_HOUSE_ALLOW_CONSTRUCTION, cb);
-}
 static void RustTownStations(uint32_t tile, uint32_t radius, void *context, void (*visit)(void *, const OpenTTDStation *, uint32_t)) noexcept
 {
 	struct Context { void *context; void (*visit)(void *, const OpenTTDStation *, uint32_t); } state{context, visit};
@@ -1109,7 +1102,6 @@ static_assert(RATING_MAXIMUM == 1000 && RATING_HOUSE_MINIMUM == -1000 && PH_ALLO
 /* Canonical packed-map readers shared by the narrow phase observations below. */
 static uint16_t RustHouseType(uint32_t tile) noexcept { return GetHouseType(TileIndex{tile}); }
 static bool RustHouseCompleted(uint32_t tile) noexcept { return IsHouseCompleted(TileIndex{tile}); }
-static uint8_t RustHouseAge(uint32_t tile) noexcept { return static_cast<uint8_t>(GetHouseAge(TileIndex{tile}).base()); }
 static bool RustHouseLiftHasDestination(uint32_t tile) noexcept { return LiftHasDestination(TileIndex{tile}); }
 static OpenTTDTownRef RustHouseTown(uint32_t tile) noexcept
 {
@@ -1121,7 +1113,7 @@ static OpenTTDHouseEntry RustHouseEntry(uint32_t tile) noexcept
 }
 static OpenTTDHouseLoopTile RustHouseLoopTile(uint32_t tile) noexcept
 {
-	return {.age = RustHouseAge(tile), .completed = RustHouseCompleted(tile), .lift_has_destination = RustHouseLiftHasDestination(tile)};
+	return {.age = static_cast<uint8_t>(RustHouseAge(tile)), .completed = RustHouseCompleted(tile), .lift_has_destination = RustHouseLiftHasDestination(tile)};
 }
 static OpenTTDHouseLift RustHouseLift(uint32_t tile) noexcept
 {
@@ -1129,7 +1121,7 @@ static OpenTTDHouseLift RustHouseLift(uint32_t tile) noexcept
 }
 static OpenTTDHouseRandom RustHouseRandom(uint32_t tile) noexcept
 {
-	return {.bits = GetHouseRandomBits(TileIndex{tile}), .triggers = GetHouseRandomTriggers(TileIndex{tile}).base()};
+	return {.bits = RustHouseRandomBits(tile), .triggers = RustHouseRandomTriggers(tile)};
 }
 static OpenTTDHouseConstruction RustHouseConstruction(uint32_t tile) noexcept
 {
@@ -1141,7 +1133,7 @@ static OpenTTDHouseCache RustHouseCache(uint32_t tile) noexcept
 }
 static OpenTTDHouseAge RustHouseAgeObservation(uint32_t tile) noexcept
 {
-	return {.age = RustHouseAge(tile), .completed = RustHouseCompleted(tile)};
+	return {.age = static_cast<uint8_t>(RustHouseAge(tile)), .completed = RustHouseCompleted(tile)};
 }
 /* These phase projections call each field's single typed reader. Keep field
  * definitions here rather than repeating HouseSpec reads in a projection. */
@@ -1218,13 +1210,9 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.set_type = [](uint32_t tile, uint16_t house) noexcept { SetHouseType(TileIndex{tile}, house); },
 
 		.delete_inspect = OpenTTDDeleteHouseInspect,
-		.callback = [](uint16_t callback, uint32_t param1, uint32_t param2, uint16_t house, Town *town, uint32_t tile, bool not_yet_constructed) noexcept -> uint16_t {
-			return OpenTTDHouseCallback(static_cast<CallbackID>(callback), param1, param2, house, town, TileIndex{tile}, not_yet_constructed);
-		},
 		.cargo_translation = RustHouseCargoTranslation,
 		.convert_boolean = RustHouseConvertBoolean,
 		.convert_8bit = RustHouseConvert8bitBoolean,
-		.resolve_reseed = OpenTTDHouseResolveReseed,
 
 		.next_near_station = [](Town *t, Station *previous) noexcept -> Station * {
 			auto next = previous == nullptr ? t->stations_near.begin() : t->stations_near.upper_bound(previous);
@@ -1248,7 +1236,6 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.cargogen_mode = OpenTTDTownCargoGenMode,
 		.place_houses = OpenTTDPlaceHouses,
 		.company_human = OpenTTDCompanyIsValidHuman,
-		.init_counts = []() noexcept { InitializeBuildingCounts(); },
 		.errors = {STR_ERROR_BUILDING_MUST_BE_DEMOLISHED, STR_ERROR_BUILDING_IS_PROTECTED, STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
 			STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_FLAT_LAND_REQUIRED, STR_ERROR_MUST_FOUND_TOWN_FIRST},
 	};
@@ -1298,7 +1285,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.build_bridge = RustTown_build_bridge,
 		.build_tunnel = RustTown_build_tunnel,
 		.assert_clear_house = RustTown_assert_clear_house,
-		.allow_construction = RustTown_allow_construction,
 		.houses = &GetRustHouseServices(),
 	};
 	return services;
@@ -2474,7 +2460,6 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.larger_towns = OpenTTDLargerTowns,
 		.parameters = [](OpenTTDTownFoundingFrame *frame) noexcept -> const TownNameParams * { return &frame->parameters.emplace(OpenTTDTownNameStyle()); },
 		.metadata = [](const TownNameParams *params) noexcept -> OpenTTDTownNameMetadata { return {.grfid = params->grfid, .type = params->type}; },
-		.initialize_counts = [](Town *town) noexcept { InitializeBuildingCounts(town); },
 		.insert_town = [](Town *town) noexcept { town->show_zone = false; _town_kdtree.Insert(town->index); },
 		.cargo_effect_exists = [](TownAcceptanceEffect effect) noexcept { return FindFirstCargoWithTownAcceptanceEffect(effect) != nullptr; },
 		.prepare_rename = [](Town *town) noexcept { town->cached_name.clear(); },
@@ -3461,6 +3446,7 @@ static bool TryBuildTownHouse(Town *t, TileIndex tile, TownExpandModes modes)
  * @param house Is changed to the HouseID of the north tile of the same house
  * @return TileDiff from the tile of the given HouseID to the north tile
  */
+#ifndef WITH_RUST
 TileIndexDiff GetHouseNorthPart(HouseID &house)
 {
 	if (house >= 3) { // house id 0,1,2 MUST be single tile houses, or this code breaks.
@@ -3480,6 +3466,8 @@ TileIndexDiff GetHouseNorthPart(HouseID &house)
 	}
 	return TileDiffXY(0, 0);
 }
+
+#endif
 
 /**
  * Place an individual house.
@@ -4970,6 +4958,7 @@ std::span<const DrawBuildingsTileStruct> GetTownDrawTileData()
 #include "abi-visit-OpenTTDTownFoundingServices.hpp"
 #include "abi-visit-OpenTTDTownAuthorityServices.hpp"
 #include "abi-visit-OpenTTDHouseServices.hpp"
+#include "abi-visit-OpenTTDHouseResolverServices.hpp"
 #include "abi-visit-OpenTTDEnvironmentServices.hpp"
 bool CheckAbi_town_cmd()
 {
@@ -4977,6 +4966,6 @@ bool CheckAbi_town_cmd()
 		AbiServicesComplete(GetRustTownServices()) &&
 		AbiServicesComplete(GetRustTownFoundingServices()) &&
 		AbiServicesComplete(GetRustTownAuthorityServices()) &&
-		AbiServicesComplete(*GetRustTownServices().houses);
+		AbiServicesComplete(*GetRustTownServices().houses) && AbiServicesComplete(GetHouseResolverServices());
 }
 #endif

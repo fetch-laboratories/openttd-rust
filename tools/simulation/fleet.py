@@ -205,6 +205,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 raise RuntimeError("fleet reload capture lacks live groups/rules")
             saves[role] = run["snapshots"][-1]
             if resolver:
+                check_override_order(run, "capture", role, result)
+                check_property_boundaries(run, "capture", role, result)
                 from .disasters import rows
 
                 marker = next(
@@ -257,6 +259,76 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             ],
         )
     return dict(scenario, executables=executables)
+
+
+def check_override_order(run, mode, role, result):
+    # Frozen callback results from the unchanged native first-match policy.
+    overrides = [
+        line.split()[2:]
+        for line in run["log"]
+        if line.startswith("FLEET resolver-override-order ")
+    ]
+    expected_overrides = [
+        [str(test), str(cargo), str(value)]
+        for test, values in enumerate(
+            ((311, 311), (419, 311), (311, 523), (523, 419), (311, 523), (523, 523))
+        )
+        for cargo, value in enumerate(values)
+    ]
+    if overrides != expected_overrides:
+        result["problems"].append(f"{mode}/{role}: wagon override first-match order")
+    restored_overrides = [
+        line
+        for line in run["log"]
+        if line.startswith("FLEET resolver-override-restored ")
+    ]
+    if len(restored_overrides) != 1 or not restored_overrides[0].startswith(
+        "FLEET resolver-override-restored true true "
+    ):
+        result["problems"].append(f"{mode}/{role}: wagon override restoration/RNG")
+
+
+def check_property_boundaries(run, mode, role, result):
+    # Explicit native callback-36 results; failure preserves the full int default.
+    expected = []
+    for value, signed in (
+        (0, 0),
+        (1, 1),
+        (0x3FFE, 16382),
+        (0x3FFF, 16383),
+        (0x4000, -16384),
+        (0x4001, -16383),
+        (0x7FFE, -2),
+        (0x7FFF, -1),
+        (0xFFFF, None),
+    ):
+        for fallback in (-(2**31), -17, 0, 17, 2**31 - 1):
+            for is_signed in (False, True):
+                output = fallback if signed is None else signed if is_signed else value
+                expected.append(
+                    list(
+                        map(
+                            str,
+                            (value, fallback, str(is_signed).lower(), output, output),
+                        )
+                    )
+                )
+    actual = [
+        line.split()[2:]
+        for line in run["log"]
+        if line.startswith("FLEET resolver-property-boundary ")
+    ]
+    if actual != expected:
+        result["problems"].append(f"{mode}/{role}: signed property boundary/fallback")
+    restored = [
+        line
+        for line in run["log"]
+        if line.startswith("FLEET resolver-property-restored ")
+    ]
+    if len(restored) != 1 or not restored[0].startswith(
+        "FLEET resolver-property-restored true true "
+    ):
+        result["problems"].append(f"{mode}/{role}: property restoration/RNG")
 
 
 def check(scenario, run, mode, role, result):
@@ -359,6 +431,8 @@ def check(scenario, run, mode, role, result):
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
     if scenario["fleet"] == "resolver":
+        check_override_order(run, mode, role, result)
+        check_property_boundaries(run, mode, role, result)
         # Real-group policy is observed through normal callback/property entries.
         # Explicit boundary results distinguish empty-vector fallback and clamps.
         purchases = [

@@ -61,13 +61,8 @@ template <typename T, bool Class> class RustTownCountsVector {
 	OpenTTDTownState *owner;
 	OpenTTDTownSlots View() const
 	{
-		if constexpr (sizeof(T) == 4) {
-			if constexpr (Class) return openttd_rust_town_global_class_counts();
-			else return openttd_rust_town_global_id_counts();
-		} else {
-			if constexpr (Class) return openttd_rust_town_class_counts(this->owner);
-			else return openttd_rust_town_id_counts(this->owner);
-		}
+		if constexpr (Class) return openttd_rust_town_class_counts(this->owner);
+		else return openttd_rust_town_id_counts(this->owner);
 	}
 public:
 	using value_type = T;
@@ -81,17 +76,7 @@ public:
 	const T *end() const { const auto v = this->View(); return static_cast<const T *>(v.data) + v.size; }
 	T &operator[](size_t at) { return this->data()[at]; }
 	const T &operator[](size_t at) const { return this->data()[at]; }
-	void resize(size_t count)
-	{
-		if constexpr (sizeof(T) == 4) {
-			if constexpr (Class) openttd_rust_town_global_class_counts_resize(count);
-			else openttd_rust_town_global_id_counts_resize(count);
-		} else {
-			if constexpr (Class) openttd_rust_town_class_counts_resize(this->owner, count);
-			else openttd_rust_town_id_counts_resize(this->owner, count);
-		}
-	}
-	void clear() { this->resize(0); }
+
 };
 
 template <typename T> struct RustTownBuildingCounts {

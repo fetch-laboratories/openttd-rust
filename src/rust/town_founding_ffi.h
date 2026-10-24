@@ -54,7 +54,6 @@ struct OpenTTDTownFoundingServices {
 	uint8_t (*larger_towns)() noexcept OPENTTD_SERVICE_DEFAULT(larger_towns);
 	const TownNameParams *(*parameters)(OpenTTDTownFoundingFrame *) noexcept OPENTTD_SERVICE_DEFAULT(parameters);
 	OpenTTDTownNameMetadata (*metadata)(const TownNameParams *) noexcept OPENTTD_SERVICE_DEFAULT(metadata);
-	void (*initialize_counts)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(initialize_counts);
 	void (*insert_town)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(insert_town);
 	bool (*cargo_effect_exists)(TownAcceptanceEffect) noexcept OPENTTD_SERVICE_DEFAULT(cargo_effect_exists);
 	void (*prepare_rename)(Town *) noexcept OPENTTD_SERVICE_DEFAULT(prepare_rename);

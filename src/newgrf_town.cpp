@@ -15,6 +15,16 @@
 
 #include "safeguards.h"
 
+TownScopeResolver::TownScopeResolver(ResolverObject &ro, Town *t, bool readonly)
+#ifdef WITH_RUST
+	: ScopeResolver(ro), context{t, t == nullptr ? nullptr : t->growth_owner.get(), t == nullptr ? uint16_t{} : t->index.base(), readonly}
+#else
+	: ScopeResolver(ro), t(t), readonly(readonly)
+#endif
+{
+}
+
+#ifndef WITH_RUST
 template <typename Tproj>
 static uint16_t TownHistoryHelper(const Town *t, CargoLabel label, uint period, Tproj proj)
 {
@@ -43,9 +53,6 @@ static uint16_t TownHistoryHelper(const Town *t, CargoLabel label, uint period, 
 
 		/* Get a variable from the persistent storage */
 		case 0x7C: {
-#ifdef WITH_RUST
-			return openttd_rust_storage_town_get(&GetRustStorageServices(), this->t, this->ro.grffile, parameter);
-#else
 			/* Check the persistent storage for the GrfID stored in register 100h. */
 			uint32_t grfid = static_cast<uint32_t>(this->ro.GetRegister(0x100));
 			if (grfid == 0xFFFFFFFF) {
@@ -58,7 +65,6 @@ static uint16_t TownHistoryHelper(const Town *t, CargoLabel label, uint period, 
 			}
 
 			return 0;
-#endif
 		}
 
 		/* Town properties */
@@ -135,10 +141,17 @@ static uint16_t TownHistoryHelper(const Town *t, CargoLabel label, uint period, 
 	return UINT_MAX;
 }
 
+#else
+uint32_t TownScopeResolver::GetVariable(uint8_t variable, uint32_t parameter, bool &available) const
+{
+	return openttd_rust_town_variable(&GetHouseResolverServices(), &this->context, &this->ro, variable, parameter, &available);
+}
+#endif
+
 /* virtual */ void TownScopeResolver::StorePSA(uint pos, int32_t value)
 {
 #ifdef WITH_RUST
-	openttd_rust_storage_town(&GetRustStorageServices(), this->t, this->readonly, this->ro.grffile, pos, value);
+	openttd_rust_town_scope_store(&GetHouseResolverServices(), &this->context, &this->ro, pos, value);
 #else
 	if (this->readonly) return;
 

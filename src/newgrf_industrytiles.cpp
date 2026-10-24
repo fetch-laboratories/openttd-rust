@@ -120,8 +120,7 @@ uint32_t GetRelativePosition(TileIndex tile, TileIndex ind_tile)
 /* virtual */ uint32_t IndustryTileScopeResolver::GetRandomBits() const
 {
 #ifdef WITH_RUST
-	assert(this->context.industry != nullptr && IsValidTile(TileIndex(this->context.tile)));
-	assert(this->context.id == IndustryID::Invalid().base() || IsTileType(TileIndex(this->context.tile), MP_INDUSTRY));
+	RustIndustryTileRandomCheck(&this->context);
 	return openttd_rust_industry_tile_random(&this->context, &GetIndustryResolverServices());
 #else
 	assert(this->industry != nullptr && IsValidTile(this->tile));
@@ -134,8 +133,7 @@ uint32_t GetRelativePosition(TileIndex tile, TileIndex ind_tile)
 /* virtual */ uint32_t IndustryTileScopeResolver::GetRandomTriggers() const
 {
 #ifdef WITH_RUST
-	assert(this->context.industry != nullptr && IsValidTile(TileIndex(this->context.tile)));
-	assert(this->context.id == IndustryID::Invalid().base() || IsTileType(TileIndex(this->context.tile), MP_INDUSTRY));
+	RustIndustryTileRandomCheck(&this->context);
 	return openttd_rust_industry_tile_triggers(&this->context, &GetIndustryResolverServices());
 #else
 	assert(this->industry != nullptr && IsValidTile(this->tile));

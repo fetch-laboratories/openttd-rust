@@ -223,10 +223,10 @@ pub trait Frame<O> {
 pub struct TileFrame;
 impl<O> Frame<O> for TileFrame {
     fn get(a: &Services, _: *mut O, t: u32) -> u8 {
-        unsafe { ((*a.industry_tiles).frame)(t) }
+        crate::animated_tile_map::animation_frame(a, t)
     }
     fn set(a: &Services, _: *mut O, t: u32, f: u8) -> bool {
-        if unsafe { ((*a.industry_tiles).frame)(t) } == f {
+        if crate::animated_tile_map::animation_frame(a, t) == f {
             return false;
         }
         (a.shared().tile_animation_set_frame)(t, f);

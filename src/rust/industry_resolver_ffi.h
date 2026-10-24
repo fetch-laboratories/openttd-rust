@@ -53,7 +53,6 @@ struct OpenTTDIndustryResolverServices {
 	uint32_t (*grfid)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);
 	uint8_t (*version)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(version);
 	uint16_t (*callback_id)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(callback_id);
-	int32_t (*register_value)(const ResolverObject *, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(register_value);
 	uint8_t (*cargo_translation)(const ResolverObject *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_translation);
 	uint8_t (*cargo_map)(const IndustrySpec *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(cargo_map);
 	uint32_t (*badges)(const ResolverObject *, const IndustrySpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
