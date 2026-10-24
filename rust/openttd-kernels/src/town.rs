@@ -47,25 +47,8 @@ pub struct TownRef {
     pub state: *mut State,
     pub id: TownId,
 }
-use std::{
-    cell::{OnceCell, UnsafeCell},
-    ffi::c_void,
-};
-
-// Original C++ globals are shared by GUI commands on the main thread and the
-// simulation on ottd:game. The native game-state mutex serializes both; startup
-// accesses occur before the game thread starts. No borrow crosses a callback.
-struct GameState<T>(UnsafeCell<T>);
-// SAFETY: Every access is serialized by the native game-state mutex (or startup).
-unsafe impl<T: Send> Sync for GameState<T> {}
-impl<T> GameState<T> {
-    const fn new(value: T) -> Self {
-        Self(UnsafeCell::new(value))
-    }
-    fn with<R>(&self, access: impl FnOnce(&UnsafeCell<T>) -> R) -> R {
-        access(&self.0)
-    }
-}
+use crate::game_state::GameState;
+use std::{cell::OnceCell, ffi::c_void};
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -235,10 +218,8 @@ pub(crate) unsafe fn road_context(state: *const State, tile: u32, size_x: u32) -
 }
 static GENERATING_TOWN: GameState<bool> = GameState::new(false);
 pub extern "C" fn openttd_rust_town_generating_exchange(generating: bool) -> bool {
-    GENERATING_TOWN.with(|flag| {
-        // SAFETY: Serialized native entry; the flag is process-wide.
-        unsafe { std::ptr::replace(flag.get(), generating) }
-    })
+    // SAFETY: Serialized native entry; the flag is process-wide.
+    unsafe { std::ptr::replace(GENERATING_TOWN.get(), generating) }
 }
 /// Convert original town tick counters, including tick zero, to game ticks.
 fn town_ticks_to_game_ticks(ticks: u16) -> u16 {
@@ -302,10 +283,8 @@ unsafe fn change_population(leaves: &Leaves, state: *mut State, town: u32, amoun
     unsafe {
         (*state).simulation.population = population(state).wrapping_add(amount as u32);
     }
-    if GENERATING_TOWN.with(|flag| {
-        // SAFETY: Immediate serialized read ends before presentation callbacks.
-        unsafe { *flag.get() }
-    }) {
+    // SAFETY: Immediate serialized read ends before presentation callbacks.
+    if unsafe { *GENERATING_TOWN.get() } {
         return;
     }
     (leaves.population_changed)(town);
@@ -480,72 +459,63 @@ pub unsafe extern "C" fn openttd_rust_town_class_counts_resize(state: *mut State
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_global_id_counts() -> Slots {
-    BUILDING_COUNTS.with(|cell| {
-        // SAFETY: Game-state-mutex serialized access; no service call or reentry.
-        let counts = unsafe { &mut (*cell.get()).ids };
-        Slots {
-            data: counts.as_mut_ptr().cast(),
-            size: counts.len(),
-        }
-    })
+    // SAFETY: Game-state-mutex serialized access; no service call or reentry.
+    let counts = unsafe { &mut (*BUILDING_COUNTS.get()).ids };
+    Slots {
+        data: counts.as_mut_ptr().cast(),
+        size: counts.len(),
+    }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_global_id_counts_resize(count: usize) {
     // SAFETY: Game-state-mutex serialized access; no native view survives resizing.
-    BUILDING_COUNTS.with(|cell| unsafe {
-        (*cell.get()).ids.resize(count, 0);
-    });
+    unsafe {
+        (*BUILDING_COUNTS.get()).ids.resize(count, 0);
+    }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_global_class_counts() -> Slots {
-    BUILDING_COUNTS.with(|cell| {
-        // SAFETY: Game-state-mutex serialized access; no service call or reentry.
-        let counts = unsafe { &mut (*cell.get()).classes };
-        Slots {
-            data: counts.as_mut_ptr().cast(),
-            size: counts.len(),
-        }
-    })
+    // SAFETY: Game-state-mutex serialized access; no service call or reentry.
+    let counts = unsafe { &mut (*BUILDING_COUNTS.get()).classes };
+    Slots {
+        data: counts.as_mut_ptr().cast(),
+        size: counts.len(),
+    }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_global_class_counts_resize(count: usize) {
     // SAFETY: Game-state-mutex serialized access; no native view survives resizing.
-    BUILDING_COUNTS.with(|cell| unsafe {
-        (*cell.get()).classes.resize(count, 0);
-    });
+    unsafe {
+        (*BUILDING_COUNTS.get()).classes.resize(count, 0);
+    }
 }
 /// Count one built house part in its town and the process-wide totals.
 unsafe fn increase_building(state: *mut State, house: u16, class: u16) {
     // SAFETY: Original valid spec/count indices; no callback while borrowed.
     let state = unsafe { &mut *state };
-    BUILDING_COUNTS.with(|cell| {
-        // SAFETY: All counters are serialized by the game-state mutex.
-        let global = unsafe { &mut *cell.get() };
-        state.id_counts[usize::from(house)] = state.id_counts[usize::from(house)].wrapping_add(1);
-        global.ids[usize::from(house)] = global.ids[usize::from(house)].wrapping_add(1);
-        if class != 0 {
-            state.class_counts[usize::from(class)] =
-                state.class_counts[usize::from(class)].wrapping_add(1);
-            global.classes[usize::from(class)] = global.classes[usize::from(class)].wrapping_add(1);
-        }
-    });
+    // SAFETY: All counters are serialized by the game-state mutex.
+    let global = unsafe { &mut *BUILDING_COUNTS.get() };
+    state.id_counts[usize::from(house)] = state.id_counts[usize::from(house)].wrapping_add(1);
+    global.ids[usize::from(house)] = global.ids[usize::from(house)].wrapping_add(1);
+    if class != 0 {
+        state.class_counts[usize::from(class)] =
+            state.class_counts[usize::from(class)].wrapping_add(1);
+        global.classes[usize::from(class)] = global.classes[usize::from(class)].wrapping_add(1);
+    }
 }
 /// Saturating removal of one house part from town and process-wide totals.
 unsafe fn decrease_building(state: *mut State, house: u16, class: u16) {
     // SAFETY: Source valid indices and serialized original lifetime preconditions.
     let state = unsafe { &mut *state };
-    BUILDING_COUNTS.with(|cell| {
-        // SAFETY: No callback spans the process-wide global count access.
-        let global = unsafe { &mut *cell.get() };
-        state.id_counts[usize::from(house)] = state.id_counts[usize::from(house)].saturating_sub(1);
-        global.ids[usize::from(house)] = global.ids[usize::from(house)].saturating_sub(1);
-        if class != 0 {
-            state.class_counts[usize::from(class)] =
-                state.class_counts[usize::from(class)].saturating_sub(1);
-            global.classes[usize::from(class)] =
-                global.classes[usize::from(class)].saturating_sub(1);
-        }
-    });
+    // SAFETY: No callback spans the process-wide global count access.
+    let global = unsafe { &mut *BUILDING_COUNTS.get() };
+    state.id_counts[usize::from(house)] = state.id_counts[usize::from(house)].saturating_sub(1);
+    global.ids[usize::from(house)] = global.ids[usize::from(house)].saturating_sub(1);
+    if class != 0 {
+        state.class_counts[usize::from(class)] =
+            state.class_counts[usize::from(class)].saturating_sub(1);
+        global.classes[usize::from(class)] = global.classes[usize::from(class)].saturating_sub(1);
+    }
 }
 struct HouseCandidates {
     slots: [std::mem::MaybeUninit<(u32, u32)>; 4096],
@@ -556,41 +526,37 @@ static HOUSE_CANDIDATES: GameState<HouseCandidates> = GameState::new(HouseCandid
     len: 0,
 });
 fn clear_house_candidates() {
-    HOUSE_CANDIDATES.with(|cell| unsafe {
-        (*cell.get()).len = 0;
-    });
+    unsafe {
+        (*HOUSE_CANDIDATES.get()).len = 0;
+    }
 }
 fn add_house_candidate(house: u32, weight: u32) {
-    HOUSE_CANDIDATES.with(|cell| {
-        // SAFETY: HouseSpec's original maximum is NUM_HOUSES=4096. No callback occurs.
-        let candidates = unsafe { &mut *cell.get() };
-        candidates.slots[candidates.len].write((house, weight));
-        candidates.len += 1;
-    });
+    // SAFETY: HouseSpec's original maximum is NUM_HOUSES=4096. No callback occurs.
+    let candidates = unsafe { &mut *HOUSE_CANDIDATES.get() };
+    candidates.slots[candidates.len].write((house, weight));
+    candidates.len += 1;
 }
 fn take_house_candidate(mut random: u32) -> (u32, u32) {
-    HOUSE_CANDIDATES.with(|cell| {
-        // SAFETY: Source's positive total guarantees an initialized weighted slot.
-        // The source's static probability vector is also replaced by reentrant builds.
-        let candidates = unsafe { &mut *cell.get() };
-        let index = (0..candidates.len)
-            .find(|&at| {
-                // SAFETY: Every slot below len was written while collecting specs.
-                let (_, weight) = unsafe { candidates.slots[at].assume_init() };
-                if weight > random {
-                    true
-                } else {
-                    random -= weight;
-                    false
-                }
-            })
-            .unwrap();
-        // SAFETY: Selected and final slots are occupied. Match source swap/pop order.
-        let selected = unsafe { candidates.slots[index].assume_init() };
-        candidates.len -= 1;
-        candidates.slots[index] = candidates.slots[candidates.len];
-        selected
-    })
+    // SAFETY: Source's positive total guarantees an initialized weighted slot.
+    // The source's static probability vector is also replaced by reentrant builds.
+    let candidates = unsafe { &mut *HOUSE_CANDIDATES.get() };
+    let index = (0..candidates.len)
+        .find(|&at| {
+            // SAFETY: Every slot below len was written while collecting specs.
+            let (_, weight) = unsafe { candidates.slots[at].assume_init() };
+            if weight > random {
+                true
+            } else {
+                random -= weight;
+                false
+            }
+        })
+        .unwrap();
+    // SAFETY: Selected and final slots are occupied. Match source swap/pop order.
+    let selected = unsafe { candidates.slots[index].assume_init() };
+    candidates.len -= 1;
+    candidates.slots[index] = candidates.slots[candidates.len];
+    selected
 }
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -2358,19 +2324,17 @@ static RATING_TEST: GameState<RatingTest> = GameState::new(RatingTest {
 });
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_town_rating_test(mode: bool) {
-    RATING_TEST.with(|cell| {
-        // SAFETY: Game-state-mutex serialized scratch; no callback.
-        let test = unsafe { &mut *cell.get() };
-        if mode {
-            if test.depth == 0 {
-                test.ratings.clear();
-            }
-            test.depth = test.depth.wrapping_add(1);
-        } else {
-            debug_assert!(test.depth > 0);
-            test.depth = test.depth.wrapping_sub(1);
+    // SAFETY: Game-state-mutex serialized scratch; no callback.
+    let test = unsafe { &mut *RATING_TEST.get() };
+    if mode {
+        if test.depth == 0 {
+            test.ratings.clear();
         }
-    });
+        test.depth = test.depth.wrapping_add(1);
+    } else {
+        debug_assert!(test.depth > 0);
+        test.depth = test.depth.wrapping_sub(1);
+    }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_rating(
@@ -2378,17 +2342,15 @@ pub unsafe extern "C" fn openttd_rust_town_rating(
     shell: usize,
     company: u8,
 ) -> i32 {
-    RATING_TEST.with(|cell| {
-        // SAFETY: Serialized immediate accesses; native shell address preserves source map keys and reuse.
-        let test = unsafe { &*cell.get() };
-        if test.depth != 0 {
-            if let Some(rating) = test.ratings.get(&shell) {
-                return *rating;
-            }
+    // SAFETY: Serialized immediate accesses; native shell address preserves source map keys and reuse.
+    let test = unsafe { &*RATING_TEST.get() };
+    if test.depth != 0 {
+        if let Some(rating) = test.ratings.get(&shell) {
+            return *rating;
         }
-        // SAFETY: Original source invokes this only with live owner and valid company.
-        unsafe { i32::from((*state).simulation.ratings[usize::from(company)]) }
-    })
+    }
+    // SAFETY: Original source invokes this only with live owner and valid company.
+    unsafe { i32::from((*state).simulation.ratings[usize::from(company)]) }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_change_rating(
@@ -2420,16 +2382,16 @@ pub unsafe extern "C" fn openttd_rust_town_change_rating(
     } else if rating < maximum {
         rating = rating.wrapping_add(add).min(maximum);
     }
-    let testing = RATING_TEST.with(|cell| {
+    let testing = {
         // SAFETY: No callback during scratch map insertion.
-        let test = unsafe { &mut *cell.get() };
+        let test = unsafe { &mut *RATING_TEST.get() };
         if test.depth == 0 {
             false
         } else {
             test.ratings.insert(shell, rating);
             true
         }
-    });
+    };
     if !testing {
         // SAFETY: Field writes finish before native window invalidation.
         unsafe {
@@ -2621,12 +2583,12 @@ mod tests {
             unsafe {
                 increase_building(owner, 110, 15);
             }
-            RATING_TEST.with(|cell| {
+            {
                 // SAFETY: Serialized access; same process-wide test scratch.
-                let test = unsafe { &mut *cell.get() };
+                let test = unsafe { &mut *RATING_TEST.get() };
                 assert_eq!(test.depth, 1);
                 test.ratings.insert(42, -99);
-            });
+            };
             // SAFETY: The parent does not touch its live owner until this join.
             let rating = unsafe { openttd_rust_town_rating(owner, 42, 0) };
             (

@@ -21,12 +21,14 @@
     clippy::collapsible_else_if,
     clippy::similar_names
 )]
+use crate::game_state::GameState;
 use crate::order_type::{OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::rail_map::is_pbs_signal as pbs;
 use crate::track_func::{
     find_first_trackdir as first, is_diagonal_trackdir as diagonal, trackdir_to_exitdir as exit,
 };
 
+use crate::binaryheap::BinaryHeap;
 use crate::node_hash::NodeMap;
 use crate::witness;
 use std::cell::UnsafeCell;
@@ -255,13 +257,9 @@ struct Globals {
     counter: i32,
     banks: [Bank; 6],
 }
-struct SerializedGlobals(UnsafeCell<Option<Globals>>);
-// SAFETY: the C++ facade enters only on the serialized simulation thread. It
-// never exposes references; synchronous leaves do not reenter this owner.
-unsafe impl Sync for SerializedGlobals {}
-static GLOBALS: SerializedGlobals = SerializedGlobals(UnsafeCell::new(None));
+static GLOBALS: GameState<Option<Globals>> = GameState::new(None);
 unsafe fn globals() -> *mut Globals {
-    let slot = GLOBALS.0.get();
+    let slot = GLOBALS.get();
     if unsafe { (*slot).is_none() } {
         unsafe {
             *slot = Some(Globals {
@@ -330,7 +328,7 @@ struct Search {
     // Lookup-only (never iterated); order never selects a node.
     open: NodeMap<(u32, u8), usize>,
     closed: NodeMap<(u32, u8), usize>,
-    heap: Vec<usize>,
+    heap: BinaryHeap,
     best_dest: Option<usize>,
     intermediate: Option<usize>,
     rounds: u32,
@@ -394,7 +392,7 @@ impl Search {
             scratch: None,
             open: NodeMap::default(),
             closed: NodeMap::default(),
-            heap: vec![usize::MAX],
+            heap: BinaryHeap::new(1),
             best_dest: None,
             intermediate: None,
             rounds: 0,
@@ -472,52 +470,19 @@ impl Search {
             i
         }
     }
-    fn less(&self, a: usize, b: usize) -> bool {
-        self.arena[a].estimate < self.arena[b].estimate
-    }
-    fn up(&mut self, mut gap: usize, item: usize) -> usize {
-        while gap > 1 {
-            let parent = gap / 2;
-            if !self.less(item, self.heap[parent]) {
-                break;
-            }
-            self.heap[gap] = self.heap[parent];
-            gap = parent;
-        }
-        gap
-    }
-    fn down(&mut self, mut gap: usize, item: usize) -> usize {
-        let mut child = gap * 2;
-        while child < self.heap.len() {
-            if child + 1 < self.heap.len() && self.less(self.heap[child + 1], self.heap[child]) {
-                child += 1;
-            }
-            if !self.less(self.heap[child], item) {
-                break;
-            }
-            self.heap[gap] = self.heap[child];
-            gap = child;
-            child = gap * 2;
-        }
-        gap
-    }
     fn include(&mut self, i: usize) {
         self.open.insert((self.arena[i].tile, self.arena[i].td), i);
-        self.heap.push(0);
-        let gap = self.up(self.heap.len() - 1, i);
-        self.heap[gap] = i;
+        let arena = &self.arena;
+        self.heap
+            .include(i, |a, b| arena[a].estimate < arena[b].estimate);
         if self.scratch == Some(i) {
             self.scratch = None;
         }
     }
     fn remove(&mut self, i: usize) {
-        let index = self.heap.iter().position(|n| *n == i).unwrap();
-        let last = self.heap.pop().unwrap();
-        if index < self.heap.len() {
-            let gap = self.up(index, last);
-            let gap = self.down(gap, last);
-            self.heap[gap] = last;
-        }
+        let arena = &self.arena;
+        self.heap
+            .remove(i, |a, b| arena[a].estimate < arena[b].estimate);
         self.open.remove(&(self.arena[i].tile, self.arena[i].td));
     }
     fn startup(&mut self, tile: u32, td: u8, cost: i32) {
@@ -1078,7 +1043,7 @@ impl Search {
     fn find_path(&mut self) -> bool {
         loop {
             self.rounds = self.rounds.wrapping_add(1);
-            let Some(&i) = self.heap.get(1) else {
+            let Some(i) = self.heap.first() else {
                 break;
             };
             let (tile, td) = self.arena[i].last();

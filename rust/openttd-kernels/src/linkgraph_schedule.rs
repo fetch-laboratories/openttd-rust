@@ -1,12 +1,13 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Whole `LinkGraphSchedule` owner. Workers only touch native job snapshots.
 #![allow(unsafe_code)]
+use crate::game_state::GameState;
 use crate::{
     linkgraph::{NativeGraph as Graph, live},
     timer_game_common::SECONDS_PER_DAY,
     witness,
 };
-use std::{cell::UnsafeCell, collections::VecDeque, ffi::c_void};
+use std::{collections::VecDeque, ffi::c_void};
 
 #[repr(C)]
 struct Job {
@@ -58,17 +59,14 @@ struct State {
     schedule: VecDeque<*mut Graph>,
     running: VecDeque<*mut Job>,
 }
-struct Global(UnsafeCell<State>);
-// SAFETY: native game-state mutex serializes main/game-thread entries. Workers
-// cannot access queues. Closures never call native code or expose owner borrows.
-unsafe impl Sync for Global {}
-static STATE: Global = Global(UnsafeCell::new(State {
+// Link graph job workers never access these queues.
+static STATE: GameState<State> = GameState::new(State {
     schedule: VecDeque::new(),
     running: VecDeque::new(),
-}));
+});
 fn access<T>(f: impl FnOnce(&mut State) -> T) -> T {
     // SAFETY: entry contract above; no callback/reentry can occur inside f.
-    unsafe { f(&mut *STATE.0.get()) }
+    unsafe { f(&mut *STATE.get()) }
 }
 // `linkgraphschedule.h`; asserted in native facade.
 const SPAWN_JOIN_TICK: u16 = 21;

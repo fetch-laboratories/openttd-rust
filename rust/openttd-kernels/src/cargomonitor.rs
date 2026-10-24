@@ -19,6 +19,7 @@
     clippy::cast_possible_wrap,
     clippy::too_many_arguments
 )]
+use crate::game_state::GameState;
 use crate::{
     bitmath_func::{gb, has_bit, sb, set_bit},
     company_type::INVALID_OWNER,
@@ -27,7 +28,6 @@ use crate::{
     station::{NearbyIndustryCursor, Station},
 };
 use std::{
-    cell::UnsafeCell,
     collections::BTreeMap,
     ffi::c_void,
     ops::Bound::{Excluded, Unbounded},
@@ -42,11 +42,9 @@ pub const CCB_COMPANY_START: u8 = 25;
 pub const CCB_COMPANY_LENGTH: u8 = 4;
 
 type MonitorMap = BTreeMap<u32, i32>;
-struct Owner(UnsafeCell<MonitorMap>);
-// SAFETY: All accesses hold the native game-state mutex; no reference escapes.
-unsafe impl Sync for Owner {}
-static PICKUPS: Owner = Owner(UnsafeCell::new(BTreeMap::new()));
-static DELIVERIES: Owner = Owner(UnsafeCell::new(BTreeMap::new()));
+struct Owner(GameState<MonitorMap>);
+static PICKUPS: Owner = Owner(GameState::new(BTreeMap::new()));
+static DELIVERIES: Owner = Owner(GameState::new(BTreeMap::new()));
 impl Owner {
     fn clear(&self, company: u8) {
         // SAFETY: Serialized entry; no callback or reentry while borrowed.

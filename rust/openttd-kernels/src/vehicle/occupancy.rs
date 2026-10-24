@@ -14,8 +14,9 @@
     clippy::cast_sign_loss
 )]
 use super::{OpenTTDVehicle, VehicleRef, VehicleServices};
+use crate::game_state::GameState;
 use crate::{map_func::Map, tile_type::TILE_SIZE};
-use std::{cell::UnsafeCell, ptr};
+use std::ptr;
 
 const HASH_BITS: u8 = 7;
 const HASH_RES: u8 = 0;
@@ -44,11 +45,7 @@ pub struct NearObservation {
     pub links: *mut Links,
     pub xy: super::XY,
 }
-struct Buckets(UnsafeCell<[Shell; TOTAL]>);
-// SAFETY: The game-state mutex excludes concurrent index access, including GUI
-// commands. No reference into this static or a shell spans a callback or reset.
-unsafe impl Sync for Buckets {}
-static BUCKETS: Buckets = Buckets(UnsafeCell::new([ptr::null_mut(); TOTAL]));
+static BUCKETS: GameState<[Shell; TOTAL]> = GameState::new([ptr::null_mut(); TOTAL]);
 fn hash_1d(p: u32) -> u32 {
     crate::bitmath_func::gb(p, HASH_RES, HASH_BITS)
 }
@@ -60,7 +57,6 @@ fn compose(x: u32, y: u32) -> usize {
 }
 fn bucket(x: u32, y: u32) -> *mut Shell {
     BUCKETS
-        .0
         .get()
         .cast::<Shell>()
         .wrapping_add(compose(hash_1d(x), hash_1d(y)))
@@ -137,7 +133,7 @@ pub unsafe extern "C" fn openttd_rust_occupancy_reset(s: &super::scheduler::Sche
         }
     }
     unsafe {
-        ptr::write_bytes(BUCKETS.0.get().cast::<Shell>(), 0, TOTAL);
+        ptr::write_bytes(BUCKETS.get().cast::<Shell>(), 0, TOTAL);
     }
 }
 #[unsafe(no_mangle)]

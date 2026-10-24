@@ -16,13 +16,14 @@
     clippy::too_many_arguments,
     clippy::similar_names
 )]
+use crate::binaryheap::BinaryHeap;
+use crate::game_state::GameState;
 use crate::map_func::Map;
 use crate::node_hash::NodeMap;
 use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::road::{PathElement, State};
 use crate::services::Services;
 use crate::track_type::INVALID_TRACKDIR;
-use std::cell::UnsafeCell;
 use std::ffi::c_void;
 
 #[repr(C)]
@@ -147,15 +148,10 @@ struct Scratch {
     arena: Vec<Node>,
     open: NodeMap<(u32, u8), usize>,
     closed: NodeMap<(u32, u8), usize>,
-    heap: Vec<usize>,
+    heap: BinaryHeap,
 }
-struct SerializedScratch(UnsafeCell<Option<Scratch>>);
-// SAFETY: Production searches run under the native game-state mutex. Taking or
-// returning scratch ends its global borrow before any callback; active searches
-// own their storage, so a nested call cannot alias it. Native heap probes keep
-// local storage and do not access this process-wide cache.
-unsafe impl Sync for SerializedScratch {}
-static SCRATCH: SerializedScratch = SerializedScratch(UnsafeCell::new(None));
+// An active search owns the taken scratch; native heap probes never touch this slot.
+static SCRATCH: GameState<Option<Scratch>> = GameState::new(None);
 
 struct Search<'a> {
     movement: crate::movement::CachedTable<'a>,
@@ -172,7 +168,7 @@ struct Search<'a> {
     // Lookup-only (never iterated); order never selects a node.
     open: NodeMap<(u32, u8), usize>,
     closed: NodeMap<(u32, u8), usize>,
-    heap: Vec<usize>,
+    heap: BinaryHeap,
     intermediate: Option<usize>,
     best_dest: Option<usize>,
     rounds: i32,
@@ -208,7 +204,7 @@ impl Search<'_> {
     ) -> Self {
         // SAFETY: Native production entries serialize access. Ownership moves
         // out of the slot before any query; first use has no allocation yet.
-        let scratch = unsafe { (*SCRATCH.0.get()).take().unwrap_or_default() };
+        let scratch = unsafe { (*SCRATCH.get()).take().unwrap_or_default() };
         Self::with_scratch(input, leaves, context, depot, max_cost, scratch, true)
     }
     fn with_scratch(
@@ -223,8 +219,6 @@ impl Search<'_> {
         scratch.arena.clear();
         scratch.open.clear();
         scratch.closed.clear();
-        scratch.heap.clear();
-        scratch.heap.push(usize::MAX);
         Self {
             // SAFETY: The shared registry outlives this synchronous search.
             movement: crate::movement::CachedTable::new(unsafe { &*leaves.shared }),
@@ -240,7 +234,7 @@ impl Search<'_> {
             arena: scratch.arena,
             open: scratch.open,
             closed: scratch.closed,
-            heap: scratch.heap,
+            heap: BinaryHeap::reuse(scratch.heap),
             intermediate: None,
             best_dest: None,
             rounds: 0,
@@ -316,48 +310,15 @@ impl Search<'_> {
             )
         })
     }
-    fn less(&self, a: usize, b: usize) -> bool {
-        self.arena[a].estimate < self.arena[b].estimate
-    }
-    fn up(&mut self, mut gap: usize, item: usize) -> usize {
-        while gap > 1 {
-            let parent = gap / 2;
-            if !self.less(item, self.heap[parent]) {
-                break;
-            }
-            self.heap[gap] = self.heap[parent];
-            gap = parent;
-        }
-        gap
-    }
-    fn down(&mut self, mut gap: usize, item: usize) -> usize {
-        let mut child = gap * 2;
-        while child < self.heap.len() {
-            if child + 1 < self.heap.len() && self.less(self.heap[child + 1], self.heap[child]) {
-                child += 1;
-            }
-            if !self.less(self.heap[child], item) {
-                break;
-            }
-            self.heap[gap] = self.heap[child];
-            gap = child;
-            child = gap * 2;
-        }
-        gap
-    }
     fn include(&mut self, item: usize) {
-        self.heap.push(0);
-        let gap = self.up(self.heap.len() - 1, item);
-        self.heap[gap] = item;
+        let arena = &self.arena;
+        self.heap
+            .include(item, |a, b| arena[a].estimate < arena[b].estimate);
     }
     fn remove(&mut self, item: usize) {
-        let index = self.heap.iter().position(|i| *i == item).unwrap();
-        let last = self.heap.pop().unwrap();
-        if index < self.heap.len() {
-            let gap = self.up(index, last);
-            let gap = self.down(gap, last);
-            self.heap[gap] = last;
-        }
+        let arena = &self.arena;
+        self.heap
+            .remove(item, |a, b| arena[a].estimate < arena[b].estimate);
     }
     fn startup(&mut self, tile: u32, mut dirs: u16) {
         let choice = dirs.count_ones() > 1;
@@ -545,7 +506,7 @@ impl Search<'_> {
     fn find(&mut self) -> bool {
         loop {
             self.rounds = self.rounds.wrapping_add(1);
-            let Some(&best) = self.heap.get(1) else {
+            let Some(best) = self.heap.first() else {
                 break;
             };
             let n = self.arena[best];
@@ -652,7 +613,7 @@ impl Drop for Search<'_> {
             // SAFETY: Only serialized production entries set reuse_scratch.
             // No borrow of the slot spans callbacks, and no native pointer is
             // stored here. An outer search can replace a nested call's cache.
-            unsafe { *SCRATCH.0.get() = Some(scratch) };
+            unsafe { *SCRATCH.get() = Some(scratch) };
         }
     }
 }
@@ -764,7 +725,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_heap_probe(
             0 => search.include(value as usize),
             1 => search.remove(value as usize),
             2 => {
-                let node = search.heap[1];
+                let node = search.heap.first().unwrap();
                 search.remove(node);
                 // SAFETY: output spans count exclusive writable elements.
                 unsafe {
@@ -778,7 +739,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_heap_probe(
         unsafe {
             output
                 .add(i)
-                .write(search.heap.get(1).map_or(u32::MAX, |n| *n as u32));
+                .write(search.heap.first().map_or(u32::MAX, |n| n as u32));
         }
     }
 }

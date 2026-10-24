@@ -10,13 +10,13 @@
 //! owner access ends before a native callback, including occupancy and dirtying.
 //! Native leaves are noexcept; environmental failures terminate, panics abort.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::collapsible_if)]
+use crate::game_state::GameState;
 use crate::rail_map::is_pbs_signal as pbs;
 use crate::tile_type::{MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 
 use crate::company_type::INVALID_OWNER;
 use crate::direction_type::INVALID_DIAGDIR;
 use crate::services::{Map, RailMapServices, Services};
-use std::cell::UnsafeCell;
 use std::ffi::c_uint;
 
 const ENTER_TRACKS: [u8; 4] = [0x25, 0x2a, 0x19, 0x16];
@@ -111,19 +111,15 @@ struct State {
     global: SmallSet<128>,
     last_owner: u8,
 }
-struct ProcessState(UnsafeCell<State>);
-// SAFETY: game-state mutex serializes calls. `access` cannot call native code;
-// all its borrows end before callbacks, allowing same-thread native reentry.
-unsafe impl Sync for ProcessState {}
-static STATE: ProcessState = ProcessState(UnsafeCell::new(State {
+static STATE: GameState<State> = GameState::new(State {
     tbu: SmallSet::new(),
     tbd: SmallSet::new(),
     global: SmallSet::new(),
     last_owner: INVALID_OWNER,
-}));
+});
 fn access<T>(f: impl FnOnce(&mut State) -> T) -> T {
     // SAFETY: caller holds the native game-state mutex; closure never reenters.
-    unsafe { f(&mut *STATE.0.get()) }
+    unsafe { f(&mut *STATE.get()) }
 }
 struct World<'a> {
     shared: &'a Services,

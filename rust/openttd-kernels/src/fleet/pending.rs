@@ -8,7 +8,7 @@
 //! Ascending `VehicleID` tick-end autoreplacement with original overwrite semantics.
 use super::GroupServices;
 use super::transactions::Services as TransactionServices;
-use std::cell::UnsafeCell;
+use crate::game_state::GameState;
 use std::collections::BTreeMap;
 /// Tick-end-only services; vehicle, owner, locality and cost reads reuse the
 /// group and transaction tables.
@@ -31,24 +31,20 @@ pub struct Services {
 /// `INVALID_STRING_ID`.
 const INVALID_STRING: u32 = 0xFFFF;
 
-struct Pending(UnsafeCell<BTreeMap<u32, bool>>);
-// SAFETY: the game thread alone mutates/drains this process-lifetime map. No
-// reference is retained across a callback that may insert/overwrite an entry.
-unsafe impl Sync for Pending {}
-static PENDING: Pending = Pending(UnsafeCell::new(BTreeMap::new()));
+static PENDING: GameState<BTreeMap<u32, bool>> = GameState::new(BTreeMap::new());
 /// Clear pending replacements at the original initialization/tick-start point.
 /// # Safety
 /// Serial game-thread access; no map reference is active during this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_fleet_pending_clear() {
-    unsafe { (&mut *PENDING.0.get()).clear() };
+    unsafe { (&mut *PENDING.get()).clear() };
 }
 /// Record or overwrite the original `VehicleID` key's leave-depot flag.
 /// # Safety
 /// Serial game thread; map accesses end before returning/reentry.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_fleet_pending_add(id: u32, leave: bool) {
-    unsafe { (&mut *PENDING.0.get()).insert(id, leave) };
+    unsafe { (&mut *PENDING.get()).insert(id, leave) };
 }
 /// Drain in ascending IDs; newly inserted later keys remain visible this tick.
 /// # Safety
@@ -68,7 +64,7 @@ pub unsafe extern "C" fn openttd_rust_fleet_pending_drain(
     let mut from = 0;
     loop {
         let item = unsafe {
-            (&*PENDING.0.get())
+            (&*PENDING.get())
                 .range(from..)
                 .next()
                 .map(|(&id, &leave)| (id, leave))

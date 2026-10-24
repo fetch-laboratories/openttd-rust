@@ -4,8 +4,8 @@
 //! Statics have no destructor, outliving native global storage/pool destruction.
 //! Native aliases access only live arrays; no Rust borrow spans a native callback.
 #![allow(unsafe_code, clippy::missing_safety_doc, clippy::cast_sign_loss)]
+use crate::game_state::GameState;
 use std::{
-    cell::UnsafeCell,
     collections::BTreeMap,
     ffi::c_void,
     ops::Bound::{Excluded, Unbounded},
@@ -33,10 +33,7 @@ struct Runtime {
     initialized: [u16; 0x110],
     key: u16,
 }
-struct Owner(UnsafeCell<Runtime>);
-// SAFETY: Native game-state mutex serializes every entry; no reference escapes.
-unsafe impl Sync for Owner {}
-static OWNER: Owner = Owner(UnsafeCell::new(Runtime {
+static OWNER: GameState<Runtime> = GameState::new(Runtime {
     gameloop: false,
     command: false,
     testmode: false,
@@ -44,7 +41,7 @@ static OWNER: Owner = Owner(UnsafeCell::new(Runtime {
     temporary: [0; 0x110],
     initialized: [0; 0x110],
     key: 1,
-}));
+});
 unsafe fn clear<const N: usize>(owner: *mut c_void) {
     let owner = unsafe { &mut *owner.cast::<Payload<N>>() };
     if let Some(previous) = owner.backup.take() {
@@ -57,7 +54,7 @@ unsafe fn store<const N: usize>(owner: *mut Payload<N>, pos: u32, value: i32, ch
         return;
     }
     let persistent = unsafe {
-        let r = &*OWNER.0.get();
+        let r = &*OWNER.get();
         (r.gameloop || r.command) && !r.testmode
     };
     if persistent {
@@ -67,7 +64,7 @@ unsafe fn store<const N: usize>(owner: *mut Payload<N>, pos: u32, value: i32, ch
         unsafe {
             (*owner).backup = Some(previous);
             let shell = (*owner).shell;
-            (*OWNER.0.get()).changed.insert(
+            (*OWNER.get()).changed.insert(
                 shell as usize,
                 Changed {
                     owner: owner.cast(),
@@ -94,7 +91,7 @@ macro_rules! payload_api {
         #[unsafe(no_mangle)]
         pub unsafe extern "C" fn $delete(owner: *mut Payload<$n>) {
             unsafe {
-                (*OWNER.0.get()).changed.remove(&((*owner).shell as usize));
+                (*OWNER.get()).changed.remove(&((*owner).shell as usize));
                 drop(Box::from_raw(owner));
             }
         }
@@ -156,7 +153,7 @@ pub unsafe extern "C" fn openttd_rust_storage_switch_mode(
     discard: extern "C" fn(*mut c_void),
 ) {
     let (gameloop, command, testmode) = unsafe {
-        let r = &*OWNER.0.get();
+        let r = &*OWNER.get();
         (r.gameloop, r.command, r.testmode)
     };
     match mode {
@@ -164,38 +161,38 @@ pub unsafe extern "C" fn openttd_rust_storage_switch_mode(
             check(ignore || !gameloop);
             check(!command && !testmode);
             unsafe {
-                (*OWNER.0.get()).gameloop = true;
+                (*OWNER.get()).gameloop = true;
             }
         }
         1 => {
             check(ignore || gameloop);
             check(!command && !testmode);
             unsafe {
-                (*OWNER.0.get()).gameloop = false;
+                (*OWNER.get()).gameloop = false;
             }
         }
         2 => {
             check((ignore || !command) && !testmode);
             unsafe {
-                (*OWNER.0.get()).command = true;
+                (*OWNER.get()).command = true;
             }
         }
         3 => {
             check(ignore || command);
             unsafe {
-                (*OWNER.0.get()).command = false;
+                (*OWNER.get()).command = false;
             }
         }
         4 => {
             check(!command && (ignore || !testmode));
             unsafe {
-                (*OWNER.0.get()).testmode = true;
+                (*OWNER.get()).testmode = true;
             }
         }
         5 => {
             check(ignore || testmode);
             unsafe {
-                (*OWNER.0.get()).testmode = false;
+                (*OWNER.get()).testmode = false;
             }
         }
         _ => unreachable!(),
@@ -205,7 +202,7 @@ pub unsafe extern "C" fn openttd_rust_storage_switch_mode(
     let mut after = None;
     loop {
         let next = unsafe {
-            let changed = &(*OWNER.0.get()).changed;
+            let changed = &(*OWNER.get()).changed;
             after
                 .map_or_else(
                     || changed.first_key_value(),
@@ -223,12 +220,12 @@ pub unsafe extern "C" fn openttd_rust_storage_switch_mode(
         after = Some(key);
     }
     unsafe {
-        (*OWNER.0.get()).changed.clear();
+        (*OWNER.get()).changed.clear();
     }
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_storage_temp_store(pos: u32, value: i32) {
-    let r = unsafe { &mut *OWNER.0.get() };
+    let r = unsafe { &mut *OWNER.get() };
     if (pos as usize) < r.temporary.len() {
         r.temporary[pos as usize] = value;
         r.initialized[pos as usize] = r.key;
@@ -236,7 +233,7 @@ pub unsafe extern "C" fn openttd_rust_storage_temp_store(pos: u32, value: i32) {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_storage_temp_get(pos: u32) -> i32 {
-    let r = unsafe { &*OWNER.0.get() };
+    let r = unsafe { &*OWNER.get() };
     if (pos as usize) < r.temporary.len() && r.initialized[pos as usize] == r.key {
         r.temporary[pos as usize]
     } else {
@@ -245,7 +242,7 @@ pub unsafe extern "C" fn openttd_rust_storage_temp_get(pos: u32) -> i32 {
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_storage_temp_clear() {
-    let r = unsafe { &mut *OWNER.0.get() };
+    let r = unsafe { &mut *OWNER.get() };
     r.key = r.key.wrapping_add(1);
     if r.key == 0 {
         r.initialized = [0; 0x110];
