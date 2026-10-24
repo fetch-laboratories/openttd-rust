@@ -547,7 +547,7 @@ pub struct TramBuildRead {
 /// Count one actual typed outgoing call; returns the unchanged function pointer.
 macro_rules! service {
     ($function:expr) => {
-        crate::witness::counted!(ROAD_SERVICES, $function)
+        crate::witness::counted!(before ROAD_SERVICES, $function)
     };
 }
 
