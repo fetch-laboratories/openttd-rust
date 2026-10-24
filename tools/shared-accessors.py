@@ -25,6 +25,7 @@ OWNER = r"(?:Vehicle|BaseStation|Station|Company)"
 WORLD = re.compile(
     r"\b(?:_settings_game|_settings_client|_game_mode|_current_company)\b|\bTimerGame\w*::\w+|\bMap::\w+"
 )
+TABLE = r"OpenTTD\w*(?:Services|Leaves)\s+\w+\s*(?:=\s*)?\{(.*?)\n\s*};"
 
 
 def git(*args):
@@ -128,6 +129,77 @@ def sources(revision=None):
     }
 
 
+def callee_copies(files):
+    """Compare simple bound leaves; compound callbacks still require review."""
+    native = {
+        p: s for p, s in files.items() if Path(p).suffix in {".cpp", ".h", ".hpp"}
+    }
+    tables = [(p, t) for p, s in native.items() for t in re.findall(TABLE, s, re.S)]
+    bound = {n for _, t in tables for n in re.findall(r"\.\w+\s*=\s*(\w+)\s*[,}]", t)}
+    candidates = [
+        (p, h, b, line)
+        for p, s in native.items()
+        for h, b, line in definitions(s)
+        if h.split("(")[0].strip() in bound
+    ] + [
+        (p, h, b, line)
+        for p, t in tables
+        for h, b, line in definitions(t)
+        if h.startswith("[]")
+    ]
+    groups, occurrences = {}, Counter()
+    for path, header, body, line in candidates:
+        if "noexcept" not in header:
+            continue
+        parameters = header[header.find("(") + 1 : header.rfind(")")].split(",")
+        replacements = {}
+        for i, parameter in enumerate(parameters):
+            name = re.search(r"\b(\w+)\s*$", parameter)
+            if name:
+                replacements[name[1]] = f"arg{i}"
+        body = re.sub(
+            r"\b\w+\b", lambda m, names=replacements: names.get(m[0], m[0]), body
+        )
+        body = re.sub(
+            r"(?:static|reinterpret|const)_cast<[^>]*\*[^>]*>\((arg\d+)(?:\.(?:shell|handle))?\)",
+            r"\1",
+            body,
+        )
+        body = re.sub(r"\bVehicleOf\((arg\d+)(?:\.handle)?\)", r"\1", body)
+        statements = [s.strip() for s in body.split(";") if s.strip()]
+        while len(statements) > 1:
+            alias = re.fullmatch(
+                r"(?:const )?[\w:<>]+[ *&]+(\w+)\s*=\s*(arg\d+)", statements.pop(0)
+            )
+            if not alias:
+                break
+            statements = [re.sub(rf"\b{alias[1]}\b", alias[2], s) for s in statements]
+        else:
+            if not statements:
+                continue
+            expression = re.sub(r"^return\s+", "", statements[0])
+            call = re.fullmatch(r"([\w:]+|arg\d+->\w+)\(([^()]*)\)", expression)
+            if not call:
+                continue
+            arguments = [a.strip() for a in call[2].split(",") if a.strip()]
+            if any(
+                not re.fullmatch(
+                    r"arg\d+|[A-Z][A-Z_0-9]*|\w+::\w+|\d+|true|false|nullptr", a
+                )
+                for a in arguments
+            ):
+                continue
+            signature = f"{call[1]}({','.join(arguments)})"
+            identity = f"callee | {signature} | {path} | {header}"
+            occurrences[identity] += 1
+            groups.setdefault(signature, {})[
+                f"{identity} | {occurrences[identity]}"
+            ] = line
+    return {
+        k: v for group in groups.values() if len(group) > 1 for k, v in group.items()
+    }
+
+
 def boundary_hits(files, wrappers, originals):
     hits = collect(wrappers, originals, writes=True)
     combined = "\n".join(
@@ -162,7 +234,7 @@ def boundary_hits(files, wrappers, originals):
     functions = set(re.findall(r"\b(\w+)\s*\([^{};]*\)\s*noexcept\s*\{", native))
     bindings = Counter()
     for table in re.findall(
-        r"OpenTTD\w*(?:Services|Leaves)\s+\w+\s*(?:=\s*)?\{(.*?)\n\s*};",
+        TABLE,
         "\n".join(
             s for p, s in files.items() if Path(p).suffix in {".cpp", ".h", ".hpp"}
         ),
@@ -190,7 +262,12 @@ def main():
     }
     tracked = set(git("ls-tree", "-r", "--name-only", pinned, "src").splitlines())
     originals = {p: git("show", f"{pinned}:{p}") for p in files if p in tracked}
-    hits = collect(files, originals) | boundary_hits(sources(), files, originals)
+    all_files = sources()
+    hits = (
+        collect(files, originals)
+        | boundary_hits(all_files, files, originals)
+        | callee_copies(all_files)
+    )
     baseline = set((ROOT / BASELINE).read_text().splitlines())
     previous = baseline
     if args.base_ref:
@@ -217,7 +294,8 @@ def main():
         if key.startswith("binding | "):
             name, count = key.rsplit(" | ", 1)
             previous.update(f"{name} | {n}" for n in range(2, int(count) + 1))
-    new, growth = set(hits) - baseline, baseline - previous
+    inherited_callees = callee_copies(sources(args.base_ref or "origin/rust-migration"))
+    new, growth = set(hits) - baseline - inherited_callees.keys(), baseline - previous
     for key in new:
         print(f"{key.split(' | ')[0]}:{hits[key]}: new shared accessor: {key}")
     stale = baseline - set(hits)
