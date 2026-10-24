@@ -31,6 +31,16 @@
 #include "../station_map.h"
 #include "../pbs.h"
 
+/* Borrowed native station shells; retain strict tile/type/index preconditions.
+ * Const and mutable table receivers share each scalar's actual field read. */
+inline BaseStation *RustBaseStationByTile(uint32_t tile) noexcept { return BaseStation::GetByTile(TileIndex(tile)); }
+template <typename TStation>
+inline uint16_t RustBaseStationID(TStation *st) noexcept { return st->index.base(); }
+inline uint8_t RustStationFacilities(const BaseStation *st) noexcept { return st->facilities.base(); }
+template <class Handle> inline uint8_t RustStationFacilitiesHandle(Handle handle) noexcept { return RustStationFacilities(static_cast<const BaseStation *>(handle)); }
+/** Read existing cargo data only; a missing GoodsEntryData stays unallocated. */
+inline const OpenTTDCargoList *RustStationExistingCargoOwner(BaseStation *st, uint8_t cargo) noexcept { const auto &goods = Station::From(st)->goods[cargo]; return goods.HasData() ? goods.GetData().cargo.RustOwner() : nullptr; }
+
 inline uint16_t RustAirportMovingFlags(const AirportMovingData *moving) noexcept { return moving->flags.base(); }
 
 template <class Handle> inline Handle RustStationGet(uint16_t id) noexcept { return Station::Get(StationID{id}); }
@@ -68,8 +78,8 @@ inline Industry *NextNearbyIndustry(RustNearbyIndustryCursor *cursor) noexcept
 inline const AirportFTAClass *RustAirportFTA(uint8_t type) noexcept { return GetAirport(type); }
 inline const void *RustDummyAirportFTA() noexcept { return RustAirportFTA(AT_DUMMY); }
 inline TileIndex RustStationHangarTile(const BaseStation *st, uint32_t index) noexcept { return Station::From(st)->airport.GetHangarTile(index); }
-inline bool RustStationConvert8bitBoolean(const StationSpec *spec, uint16_t id, uint16_t value) noexcept { return OpenTTDConvert8bitBooleanCallback(spec->grf_prop.grffile, static_cast<CallbackID>(id), value); }
-inline bool RustRoadStopConvert8bitBoolean(const RoadStopSpec *spec, uint16_t value) noexcept { return OpenTTDConvert8bitBooleanCallback(spec->grf_prop.grffile, CBID_STATION_AVAILABILITY, value); }
+inline bool RustStationConvert8bitBoolean(const StationSpec *spec, uint16_t id, uint16_t value) noexcept { return OpenTTDConvert8bitBooleanCallback(RustSpecGRFFile(spec), static_cast<CallbackID>(id), value); }
+inline bool RustRoadStopConvert8bitBoolean(const RoadStopSpec *spec, uint16_t value) noexcept { return OpenTTDConvert8bitBooleanCallback(RustSpecGRFFile(spec), CBID_STATION_AVAILABILITY, value); }
 inline void RustStationCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_STATIONS, tile); }
 inline void RustRoadStopCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_ROADSTOPS, tile); }
 inline void RustAirportTileCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_AIRPORTTILES, tile); }
@@ -115,7 +125,8 @@ inline void RustStationDeleteAirportStorage(BaseStation *st) noexcept { delete S
 inline Industry *RustStationAssociatedIndustry(BaseStation *st) noexcept { return Station::From(st)->industry; }
 inline void RustStationSetStationOwner(BaseStation *st, uint8_t owner) noexcept { st->owner = Owner(owner); }
 inline void RustStationSetFacilities(BaseStation *st, uint8_t facilities) noexcept { st->facilities = StationFacilities(facilities); }
-inline int32_t RustStationBuildDate(BaseStation *st) noexcept { return st->build_date.base(); }
+template <typename TStation>
+inline int32_t RustStationBuildDate(TStation *st) noexcept { return st->build_date.base(); }
 inline void RustStationSetBuildDate(BaseStation *st, int32_t date) noexcept { st->build_date = TimerGameCalendar::Date(date); }
 inline void RustStationListInvalidation(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_LIST, st->owner, data); }
 inline void RustStationClearName(BaseStation *st) noexcept { st->name.clear(); }
@@ -189,8 +200,10 @@ inline void OpenTTDModifyStationRatingAround(uint32_t tile, uint8_t owner, int a
 inline bool RustMovementRailStation(uint32_t tile) noexcept { return IsRailStation(TileIndex{tile}); }
 inline bool RustStationBuoy(uint32_t tile) noexcept { return IsBuoy(TileIndex{tile}); }
 inline uint8_t RustStationTileRandomBits(uint32_t tile) noexcept { return GetStationTileRandomBits(TileIndex{tile}); }
-inline uint16_t RustStationRandomBits(BaseStation *station) noexcept { return station->random_bits; }
-inline uint8_t RustStationWaitingTriggers(BaseStation *station) noexcept { return station->waiting_random_triggers.base(); }
+template <typename TStation>
+inline uint16_t RustStationRandomBits(TStation *st) noexcept { return st->random_bits; }
+template <typename TStation>
+inline uint8_t RustStationWaitingTriggers(TStation *st) noexcept { return st->waiting_random_triggers.base(); }
 inline void RustStationSetWaitingTriggers(BaseStation *station, uint8_t triggers) noexcept { station->waiting_random_triggers = StationRandomTriggers(triggers); }
 inline void RustStationSetRandomBits(BaseStation *station, uint16_t bits) noexcept { station->random_bits = bits; }
 inline uint64_t RustStationCachedCargoTriggers(BaseStation *station) noexcept { return station->cached_cargo_triggers; }
