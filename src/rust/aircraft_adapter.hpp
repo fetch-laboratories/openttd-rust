@@ -336,7 +336,6 @@ static OpenTTDAircraftGeometry OPENTTD_AIRCRAFT_CALL Aircraft_geometry(const Ope
 	return {.tile = tile, .rotation = st->airport.rotation, .width = RustStationAirportWidth(st), .height = RustStationAirportHeight(st), .airport = true};
 }
 static uint64_t OPENTTD_AIRCRAFT_CALL Aircraft_layout_blocks(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].blocks.base(); }
-static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_layout_heading(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].heading; }
 static uint8_t OPENTTD_AIRCRAFT_CALL Aircraft_layout_next_position(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].next_position; }
 static const void *OPENTTD_AIRCRAFT_CALL Aircraft_layout_next(const void *ap, uint8_t pos) noexcept { return static_cast<const AirportFTAClass *>(ap)->layout[pos].next.get(); }
 static OpenTTDAircraftLayoutRoute OPENTTD_AIRCRAFT_CALL Aircraft_layout_route(const void *ap, uint8_t pos) noexcept
@@ -347,7 +346,7 @@ static OpenTTDAircraftLayoutRoute OPENTTD_AIRCRAFT_CALL Aircraft_layout_route(co
 static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.geometry = Aircraft_geometry,
 	.layout_blocks = Aircraft_layout_blocks,
-	.layout_heading = Aircraft_layout_heading,
+	.layout_heading = OpenTTDAirportLayoutHeading,
 	.layout_next_position = Aircraft_layout_next_position,
 	.layout_next = Aircraft_layout_next,
 	.layout_route = Aircraft_layout_route,
