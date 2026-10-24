@@ -42,6 +42,8 @@
 #include "industry_map.h"
 #include "water_map.h"
 #include "road_map.h"
+#include "road_cmd.h"
+#include "object_map.h"
 #include "tunnelbridge_cmd.h"
 #include <map>
 #include <set>
@@ -136,6 +138,56 @@ static void TownActionMoney(Town *town, Company *company, Company *other)
 	}
 	fmt::print(stderr, "TOWN money-rng {} {} {} {} {}\n", _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1], _random.state[0] == random.state[0] && _random.state[1] == random.state[1] && _interactive_random.state[0] == interactive.state[0] && _interactive_random.state[1] == interactive.state[1]);
 	cash.Restore(); funding.Restore(); infinite.Restore(); interactive_seed.Restore();
+}
+/* Block every search position with real roads, then open only the last one.
+ * The normal authority fixture only witnesses a successful early statue. */
+static void TownStatueSearch(Town *town, Company *company)
+{
+	std::vector<TileIndex> tiles;
+	for (TileIndex tile : SpiralTileSequence(town->xy, 9)) tiles.push_back(tile);
+	if (tiles.size() != 81) std::abort();
+	Backup<CompanyID> owner(_current_company, OWNER_DEITY);
+	for (TileIndex tile : tiles) {
+		if (Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, tile).Failed()) std::abort();
+	}
+	/* Canonical fixture terrain: every road tile and all its corners are flat. */
+	for (TileIndex tile : tiles) {
+		for (int dy : {0, 1}) for (int dx : {0, 1}) SetTileHeight(TileAddXY(tile, dx, dy), 4);
+	}
+	owner.Change(company->index);
+	for (TileIndex tile : tiles) {
+		if (Command<CMD_BUILD_ROAD>::Do(DoCommandFlag::Execute, tile, ROAD_X, ROADTYPE_ROAD, DRD_NONE, TownID::Invalid()).Failed()) std::abort();
+	}
+	Backup<Randomizer> interactive_seed(_interactive_random);
+	_interactive_random.SetSeed(12345);
+	const TileIndex last = tiles.back();
+	for (bool open : {false, true}) {
+		if (open && Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, last).Failed()) std::abort();
+		fmt::print(stderr, "TOWN statue-input {} {} {} {} {} {}\n", open, town->index.base(), company->index.base(), last.base(), tiles.size(), _price[PR_TOWN_ACTION] * GetTownActionCost(TownAction::BuildStatue) >> 8);
+		auto save = [&](const char *phase) {
+			std::string path = fmt::format("{}/statue-{}-{}.sav", std::getenv("HOME"), open, phase);
+			if (SaveOrLoad(path, SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) != SL_OK) std::abort();
+		};
+		save("before");
+		const auto random = _random, interactive = _interactive_random;
+		Randomizer expected = random;
+		for (bool execute : {false, true}) {
+			CommandCost cost = CmdDoTownAction(execute ? DoCommandFlags{DoCommandFlag::Execute} : DoCommandFlags{}, town->index, TownAction::BuildStatue);
+			Cost(execute ? "statue-exec" : "statue-test", cost);
+			fmt::print(stderr, "TOWN statue-error {} {} {}\n", open, execute, cost.GetErrorMessage() == STR_ERROR_STATUE_NO_SUITABLE_PLACE);
+			if (open && execute) expected.Next(); // BuildObject's single tile Random().
+			fmt::print(stderr, "TOWN statue-rng {} {} {} {} {} {} {}\n", open, execute, _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1], _random.state[0] == expected.state[0] && _random.state[1] == expected.state[1] && _interactive_random.state[0] == interactive.state[0] && _interactive_random.state[1] == interactive.state[1]);
+			save(execute ? "after" : "test");
+		}
+		bool placed = IsObjectTypeTile(last, OBJECT_STATUE) && GetTileOwner(last) == company->index && Object::GetByTile(last)->town == town;
+		uint statues = 0;
+		for (TileIndex tile : tiles) statues += IsObjectTypeTile(tile, OBJECT_STATUE);
+		fmt::print(stderr, "TOWN statue-state {} {} {} {}\n", open, placed, statues, town->statues.Test(company->index));
+	}
+	owner.Change(OWNER_DEITY);
+	if (Command<CMD_LANDSCAPE_CLEAR>::Do(DoCommandFlag::Execute, last).Failed()) std::abort();
+	fmt::print(stderr, "TOWN statue-cleanup {}\n", !town->statues.Test(company->index) && !IsObjectTypeTile(last, OBJECT_STATUE));
+	owner.Restore(); interactive_seed.Restore();
 }
 /* Real CmdPlaceHouse and animation bodies in both games, with controlled spec
  * overrides. The save corpus has no external NewGRF providing callback 0x1C.
@@ -326,6 +378,7 @@ static bool CommandsScenario(std::span<std::string_view> args)
 	if (!Station::CanAllocateItem()) std::abort();
 	Station *station = new Station(town->xy); _station_kdtree.Insert(station->index); station->town = town; station->owner = company->index;
 	TownActionMoney(town, company, other);
+	TownStatueSearch(town, company);
 	fmt::print(stderr, "TOWN action-mask {} {}\n", GetMaskOfTownActions(company->index, town).base(), GetMaskOfTownActions(COMPANY_SPECTATOR, town).base());
 	for (TownAction action{}; action < TownAction::Bribe; ++action) {
 		Cost("action-test", CmdDoTownAction({}, id, action)); Cost("action-exec", CmdDoTownAction(DoCommandFlag::Execute, id, action));
