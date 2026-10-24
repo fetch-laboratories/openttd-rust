@@ -438,7 +438,7 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
         source_assert(w, access(|s| s.tbu.count == 0));
         source_assert(w, access(|s| s.tbd.count == 0));
         let kind = read!(w, shared, tile_type, tile);
-        if kind == 9 {
+        if kind == MP_TUNNELBRIDGE {
             if w.native.assertions {
                 read!(w, native, assert_wormhole_start, tile, dir);
             }
@@ -457,7 +457,7 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
                     dir: INVALID_DIAGDIR,
                 },
             );
-        } else if kind == 1 && read!(w, rail, is_rail_depot, tile) {
+        } else if kind == MP_RAILWAY && read!(w, rail, is_rail_depot, tile) {
             if w.native.assertions {
                 source_assert(
                     w,
@@ -471,7 +471,7 @@ fn update_buffer(w: &World<'_>, owner: u8) -> u8 {
                     dir: INVALID_DIAGDIR,
                 },
             );
-        } else if (kind == 1 || kind == 5 || kind == 2)
+        } else if (kind == MP_RAILWAY || kind == MP_STATION || kind == MP_ROAD)
             && (track_bits(crate::movement::track_status(
                 w.shared,
                 tile,

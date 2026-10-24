@@ -602,7 +602,7 @@ impl Search {
             return;
         }
         match self.train.order {
-            1 | 6 => {
+            OT_GOTO_STATION | OT_GOTO_WAYPOINT => {
                 if self.train.order == OT_GOTO_WAYPOINT && self.train.complex_waypoint != 0 {
                     self.disabled = true;
                 }

@@ -18,6 +18,7 @@
     clippy::too_many_arguments
 )]
 use crate::direction_type::INVALID_DIAGDIR;
+use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::tile_type::{MP_INDUSTRY, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_WATER};
 use crate::tilearea::TileArea;
 mod waypoint;
@@ -3697,7 +3698,9 @@ impl Ctx<'_> {
             }
             for index in 0..(self.links().order_count)(list) {
                 let order = (self.links().order_destination)(list, index);
-                if order.destination == station && matches!(order.kind.0, 1 | 6) {
+                if order.destination == station
+                    && matches!(order.kind.0, OT_GOTO_STATION | OT_GOTO_WAYPOINT)
+                {
                     return true;
                 }
             }
@@ -4031,13 +4034,13 @@ impl Ctx<'_> {
                     kind == 8,
                 );
             });
-            assert_eq!((self.shared.tile_type)(tile), 2);
+            assert_eq!((self.shared.tile_type)(tile), MP_ROAD);
             // SAFETY: Nested removal has returned; the native slots can be reused.
             unsafe { crate::tile_owner::openttd_rust_tile_change_owner(ownership, tile, old, new) };
         } else {
             crate::landscape_cmd::clear_command(self.command, cost.0, tile, 33);
             let kind = (self.shared.tile_type)(tile);
-            if (kind == 6 || (kind == 5 && (self.shared.station_type)(tile).0 == 6))
+            if (kind == MP_WATER || (kind == MP_STATION && (self.shared.station_type)(tile).0 == 6))
                 && (self.shared.tile_owner)(tile) == old
             {
                 (self.shared.set_tile_owner)(tile, 0x10);

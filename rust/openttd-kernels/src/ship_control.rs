@@ -19,7 +19,9 @@
     clippy::needless_late_init,
     clippy::if_not_else
 )]
-use crate::order_type::{OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION};
+use crate::order_type::{
+    OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION, OT_LOADING,
+};
 use crate::services::Services;
 use crate::tile_type::{MP_INDUSTRY, MP_TUNNELBRIDGE};
 use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
@@ -447,7 +449,7 @@ impl Game<'_> {
             (self.leaves.order_depot)(id, depot.id);
             self.destination(id, depot.tile);
             (self.leaves.start_dirty)(id);
-        } else if (self.leaves.order_type)(id) == 2 {
+        } else if (self.leaves.order_type)(id) == u32::from(OT_GOTO_DEPOT) {
             (self.leaves.order_dummy)(id);
             (self.leaves.start_dirty)(id);
         }
@@ -675,7 +677,7 @@ impl Game<'_> {
             return;
         }
         self.vs().handle_loading(v, false);
-        if (self.leaves.order_type)(id) == 3 {
+        if (self.leaves.order_type)(id) == u32::from(OT_LOADING) {
             return;
         }
         if self.stay_depot(id, v) {

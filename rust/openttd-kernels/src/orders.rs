@@ -1430,12 +1430,12 @@ pub unsafe extern "C" fn openttd_rust_timetable_change(
         }
         if wait != order.wait {
             match order.kind() {
-                1 => {
+                OT_GOTO_STATION => {
                     if order.non_stop() & 2 != 0 {
                         return g.command_error(output, 1);
                     }
                 }
-                7 => {}
+                OT_CONDITIONAL => {}
                 _ => return g.command_error(output, 2),
             }
         }
@@ -2198,7 +2198,7 @@ pub unsafe extern "C" fn openttd_rust_order_convert(p: *mut Order) -> u32 {
     {
         let mut packed = u16::from(order.kind());
         match order.kind() {
-            1 => {
+            OT_GOTO_STATION => {
                 if order.unload() == 1 {
                     packed |= 1 << 5;
                 }
@@ -2210,14 +2210,14 @@ pub unsafe extern "C" fn openttd_rust_order_convert(p: *mut Order) -> u32 {
                 }
                 packed |= (order.destination & 255) << 8;
             }
-            2 => {
+            OT_GOTO_DEPOT => {
                 if order.depot_type() & 2 == 0 {
                     packed |= 1 << 6;
                 }
                 packed |= 1 << 7;
                 packed |= (order.destination & 255) << 8;
             }
-            3 => {
+            OT_LOADING => {
                 if matches!(order.load(), 2 | 3) {
                     packed |= 1 << 6;
                 }
@@ -3148,7 +3148,7 @@ impl Game {
     }
     fn location(self, order: Order, v: *mut c_void, airport: bool) -> u32 {
         match order.kind() {
-            1 | 6 | 8 => {
+            OT_GOTO_STATION | OT_GOTO_WAYPOINT | OT_IMPLICIT => {
                 // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
                 (if airport && unsafe { (self.0.vehicle_type)(v) } == u64::from(VEH_AIRCRAFT) {
                     // SAFETY: The source branch supplies a live destination of the required pool type.
@@ -3158,7 +3158,7 @@ impl Game {
                     unsafe { (self.0.base_station_tile)(order.destination) }
                 }) as u32
             }
-            2 => {
+            OT_GOTO_DEPOT => {
                 if order.destination == u16::MAX {
                     return u32::MAX;
                 }
@@ -3220,7 +3220,7 @@ impl Control {
                 return false;
             }
             match order.kind() {
-                1 => {
+                OT_GOTO_STATION => {
                     // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
                     let tile = unsafe { (g.0.station_location)(v, order.destination) };
                     // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
@@ -3229,7 +3229,7 @@ impl Control {
                     }
                     return true;
                 }
-                2 => {
+                OT_GOTO_DEPOT => {
                     // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
                     if order.depot_type() & 1 != 0 && unsafe { (g.0.needs_service)(v) } == 0 {
                         g.update_timetable(v, true);
@@ -3308,7 +3308,7 @@ impl Control {
                         return true;
                     }
                 }
-                6 => {
+                OT_GOTO_WAYPOINT => {
                     // SAFETY: The source branch supplies a live destination of the required pool type.
                     let tile = unsafe { (g.0.waypoint_tile)(order.destination) };
                     // SAFETY: The entry supplies a live Vehicle shell; no owner borrow crosses this call.
@@ -3317,7 +3317,7 @@ impl Control {
                     }
                     return true;
                 }
-                7 => {
+                OT_CONDITIONAL => {
                     let next = self.g.conditional(order, v);
                     if next != u8::MAX {
                         g.update_timetable(v, false);
@@ -3893,22 +3893,22 @@ impl Control {
         let list = g.orders(v);
         let mut order = g.order(list, index).unwrap();
         match order.kind() {
-            1 => {
+            OT_GOTO_STATION => {
                 if !matches!(field, 0..=3) {
                     return self.g.error(output, 0);
                 }
             }
-            2 => {
+            OT_GOTO_DEPOT => {
                 if !matches!(field, 0 | 4) {
                     return self.g.error(output, 0);
                 }
             }
-            6 => {
+            OT_GOTO_WAYPOINT => {
                 if field != 0 {
                     return self.g.error(output, 0);
                 }
             }
-            7 => {
+            OT_CONDITIONAL => {
                 if !matches!(field, 5..=8) {
                     return self.g.error(output, 0);
                 }
@@ -4237,8 +4237,10 @@ impl Game {
         // SAFETY: The range check receives a live aircraft shell.
         let max = (unsafe { (self.0.aircraft_range_square)(dst) }) as u32;
         for i in 0..self.size(list) {
-            if matches!(self.order(list, i).unwrap().kind(), 1 | 2 | 6)
-                && self.distance(i, self.next_index(list, i), src, 0) > max
+            if matches!(
+                self.order(list, i).unwrap().kind(),
+                OT_GOTO_STATION | OT_GOTO_DEPOT | OT_GOTO_WAYPOINT
+            ) && self.distance(i, self.next_index(list, i), src, 0) > max
             {
                 return false;
             }

@@ -12,9 +12,8 @@ use super::{
 };
 use crate::cargo_type::INVALID_CARGO;
 use crate::command_type::DoCommandFlag;
+use crate::engine_type::INVALID_ENGINE;
 use crate::tile_type::TILE_SIZE;
-/// `EngineID::Invalid()`; shares the 0xFFFF encoding with `GroupID::Invalid()`.
-const INVALID_ENGINE: u16 = INVALID_GROUP;
 use std::ptr;
 #[repr(C)]
 #[derive(Clone, Copy)]

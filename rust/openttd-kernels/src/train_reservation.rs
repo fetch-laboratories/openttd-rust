@@ -17,7 +17,10 @@
     clippy::many_single_char_names,
     clippy::items_after_statements
 )]
-use crate::order_type::{OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING};
+use crate::order_type::{
+    OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION,
+    OT_LOADING, OT_NOTHING,
+};
 use crate::tile_type::INVALID_TILE;
 use crate::track_func::{
     find_first_trackdir as first, track_bits_to_trackdir_bits as dirs,
@@ -1081,7 +1084,7 @@ fn choose(
             return (best, true);
         }
         g.svc_service(id);
-        if matches!(g.read_order(id), 2 | 5 | 7) {
+        if matches!(g.read_order(id), OT_GOTO_DEPOT | OT_DUMMY | OT_CONDITIONAL) {
             (g.leaves.process_orders)(id);
         }
     }
@@ -1256,19 +1259,19 @@ fn check_next(g: &Game, id: Handle) {
     }
     let v = g.read_check_next(id);
     match v.order {
-        2 => {
+        OT_GOTO_DEPOT => {
             if v.tile == v.dest {
                 return;
             }
         }
-        6 => {
+        OT_GOTO_WAYPOINT => {
             if (g.svc_is_waypoint(id, u64::from(v.tile)) != 0)
                 && g.svc_station(id, u64::from(v.tile)) == u64::from(v.destination)
             {
                 (g.leaves.process_orders)(id);
             }
         }
-        0 | 3 | 4 if v.num_orders > 0 => return,
+        OT_NOTHING | OT_LOADING | OT_LEAVESTATION if v.num_orders > 0 => return,
         _ => {}
     }
     let tile = g.read_tile(id);

@@ -32,7 +32,9 @@ use crate::history_type::LAST_MONTH;
 use crate::random_func::chance16_i;
 use crate::services::{Map, Services};
 use crate::slope_func::{is_slope_with_one_corner_raised, is_steep_slope};
-use crate::tile_type::{MP_HOUSE, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
+use crate::tile_type::{
+    MP_HOUSE, MP_INDUSTRY, MP_OBJECT, MP_RAILWAY, MP_ROAD, MP_STATION, MP_TUNNELBRIDGE, MP_VOID,
+};
 use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 
 #[repr(transparent)]
@@ -1234,7 +1236,10 @@ impl Engine<'_> {
         }
         let mut count = 0;
         for dir in 0..4 {
-            if matches!((self.services.tile_type)(self.step(tile, dir)), 3 | 7) {
+            if matches!(
+                (self.services.tile_type)(self.step(tile, dir)),
+                MP_HOUSE | MP_VOID
+            ) {
                 count += 1;
             }
             if count >= 3 {
@@ -1428,10 +1433,10 @@ impl Engine<'_> {
         let bits = self.rb(next);
         if modes & 2 != 0 {
             match (self.services.tile_type)(next) {
-                2 => bits != 0,
-                5 => (self.services.is_drive_through_stop)(next),
-                9 => (self.services.tunnel_transport)(next) == 1,
-                3 | 8 | 10 => false,
+                MP_ROAD => bits != 0,
+                MP_STATION => (self.services.is_drive_through_stop)(next),
+                MP_TUNNELBRIDGE => (self.services.tunnel_transport)(next) == 1,
+                MP_HOUSE | MP_INDUSTRY | MP_OBJECT => false,
                 _ => true,
             }
         } else {
@@ -1477,8 +1482,8 @@ impl Engine<'_> {
                     if dir != reverse(source) {
                         return 1;
                     }
-                    if (self.services.tile_type)(self.step(at, (dir + 1) & 3)) != 3
-                        && (self.services.tile_type)(self.step(at, (dir + 3) & 3)) != 3
+                    if (self.services.tile_type)(self.step(at, (dir + 1) & 3)) != MP_HOUSE
+                        && (self.services.tile_type)(self.step(at, (dir + 3) & 3)) != MP_HOUSE
                     {
                         return 1;
                     }
