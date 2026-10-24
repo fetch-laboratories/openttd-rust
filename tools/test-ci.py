@@ -2,6 +2,7 @@
 """Exercise request identity and the actual privileged full-result publisher."""
 
 import argparse
+import itertools
 import json
 import os
 import re
@@ -12,8 +13,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import ci
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+WORKFLOWS = ROOT / ".github/workflows"
 HEAD = "a" * 40
 BASE = "b" * 40
 MERGE = "d" * 40
@@ -29,25 +32,54 @@ PULL = {
 }
 
 
-def script_for(filename, job):
-    text = (ROOT / ".github/workflows" / filename).read_text()
-    section = text.split(f"  {job}:\n", 1)[1]
-    section = re.split(r"\n  [a-z_]+:\n", section, maxsplit=1)[0]
-    match = re.search(r"        script: \|\n((?:          .*\n|\n)+)", section)
-    if match is None:
-        raise AssertionError(f"No publisher script in {filename}:{job}")
-    return "\n".join(line[10:] for line in match[1].splitlines())
+def workflow(filename):
+    return yaml.safe_load((WORKFLOWS / filename).read_text())
+
+
+def job(filename, name):
+    return workflow(filename)["jobs"][name]
+
+
+def script_for(filename, name):
+    (step,) = [s for s in job(filename, name)["steps"] if "script" in s.get("with", {})]
+    return step["with"]["script"]
 
 
 def node(harness):
     return json.loads(subprocess.check_output(["node", "-e", harness], text=True))
 
 
-def evaluate(expression, **variables):
-    declarations = "\n".join(
-        f"const {key} = {json.dumps(value)};" for key, value in variables.items()
+def javascript(expression):
+    """Translate one GitHub expression; hyphenated properties become subscripts."""
+    if isinstance(expression, bool):
+        return json.dumps(expression)
+    expression = expression.strip().removeprefix("${{").removesuffix("}}")
+    parts = re.split(r"('[^']*')", expression)
+    parts[::2] = [
+        re.sub(r"\.([\w-]+)", lambda match: f"[{json.dumps(match[1])}]", part)
+        for part in parts[::2]
+    ]
+    return "".join(parts)
+
+
+def evaluate(expression, *, cancelled=False, interpolate=False, **contexts):
+    """Evaluate an `if:` expression, or interpolate `${{ }}` into a string."""
+    if interpolate:
+        parts = re.split(r"\$\{\{(.*?)\}\}", expression)
+        parts[::2] = map(json.dumps, parts[::2])
+        parts[1::2] = [f"String({javascript(part)})" for part in parts[1::2]]
+        expression = " + ".join(parts)
+    else:
+        expression = javascript(expression)
+    declarations = "".join(
+        f"const {key} = {json.dumps(value)};\n" for key, value in contexts.items()
     )
-    return node(declarations + f"console.log(JSON.stringify({expression}));")
+    return node(
+        f"const cancelled = () => {json.dumps(cancelled)}, always = () => true;\n"
+        "const success = () => !cancelled(), failure = () => false;\n"
+        + declarations
+        + f"console.log(JSON.stringify({expression}));"
+    )
 
 
 def good_needs():
@@ -67,8 +99,8 @@ def good_needs():
     return needs
 
 
-def execute_script(filename, job, pull, *, env=None, event=None, latest=None):
-    script = script_for(filename, job)
+def execute_script(filename, name, pull, *, env=None, event=None, latest=None):
+    script = script_for(filename, name)
     return node(f"""
 const statuses = [], failures = [], outputs = {{}};
 const context = {{repo: {{owner: 'example', repo: 'fork'}}, actor: 'root',
@@ -89,8 +121,7 @@ Object.assign(process.env, {json.dumps(env or {})});
 def execute_publisher(needs, pull, superseded=False):
     latest = {
         "context": ci.CONTEXT,
-        "target_url": "https://github.com/example/fork/actions/runs/"
-        + ("999" if superseded else "123"),
+        "target_url": RUN.replace("123", "999") if superseded else RUN,
     }
     return execute_script(
         "ci-request.yml",
@@ -107,170 +138,228 @@ def execute_invalidator(event, pull, latest=None):
     )["statuses"]
 
 
+def run_policy(
+    *,
+    event="push",
+    on_demand="true",
+    files=(),
+    trees=None,
+    pulls=(),
+    statuses=(),
+    compare=None,
+):
+    """Run the actual policy script; `trees` maps the base and pushed tree SHAs."""
+    script = script_for("ci-policy.yml", "policy")
+    compare = compare or f"async () => ({{data: {{files: {json.dumps(files)}}}}})"
+    return node(f"""
+process.env.CI_ON_DEMAND = {json.dumps(on_demand)};
+const outputs = {{}}, delays = [], trees = {json.dumps(trees or {})};
+let calls = 0;
+const setTimeout = (resolve, delay) => {{ delays.push(delay); resolve(); }};
+const context = {{eventName: {json.dumps(event)}, repo: {{owner: 'example', repo: 'fork'}},
+  serverUrl: 'https://github.com', sha: 'head',
+  payload: {{before: 'base', pull_request: {{base: {{ref: 'rust-migration'}}}}}}}};
+const core = {{setOutput: (k, v) => outputs[k] = v, info: () => {{}}, warning: () => {{}}}};
+const github = {{paginate: async () => {json.dumps(list(pulls))}, rest: {{
+  git: {{getTree: async args => ({{data: {{sha: args.tree_sha, ...trees[args.tree_sha]}}}})}},
+  repos: {{
+    getCommit: async args => ({{data: {{commit: {{tree: {{sha: args.ref === 'base' ? '{BASE}' : '{TREE}'}}}}}}}}),
+    getCombinedStatusForRef: async () => ({{data: {{statuses: {json.dumps(list(statuses))}}}}}),
+    compareCommitsWithBasehead: {compare}
+  }}
+}}}};
+(async () => {{{script}}})().then(() => console.log(JSON.stringify({{outputs, calls, delays}})))
+  .catch(error => console.log(JSON.stringify({{outputs, calls, delays, error: error.message}})));
+""")
+
+
+def entry(path, sha=HEAD, mode="100644", kind="blob"):
+    return {"path": path, "type": kind, "mode": mode, "sha": sha}
+
+
+def tree(*entries, **fields):
+    return {"truncated": False, "tree": list(entries), **fields}
+
+
+def validation(full="success", marker="success", run=RUN, marker_run=RUN, tree=TREE):
+    """Full validation status and its Validated tree marker on a merged head."""
+    return [
+        {"context": "Full validation", "state": full, "target_url": run},
+        {
+            "context": "Validated tree",
+            "state": marker,
+            "target_url": marker_run,
+            "description": tree,
+        },
+    ]
+
+
+def runs(step, cache_only, steps):
+    """Evaluate a ci-linux or ci-windows step condition on a protected push."""
+    return evaluate(
+        step.get("if", True),
+        inputs={"cache-only": cache_only, "rust": True, "compiler": "gcc"},
+        github={"event_name": "push", "ref": "refs/heads/rust-migration"},
+        steps=steps,
+    )
+
+
 class GateTests(unittest.TestCase):
-    def test_plan_checks_mergeability_and_checks_out_merge_while_status_targets_head(
-        self,
-    ):
-        for mergeable in (True, False, None):
-            pull = dict(PULL, mergeable=mergeable)
-            result = execute_script(
-                "ci-request.yml",
-                "plan",
-                pull,
-                env={"PR": "170", "HEAD": HEAD, "PROFILE": "full"},
-            )
-            if mergeable is True:
-                self.assertEqual(result["outputs"]["merge"], MERGE)
-                self.assertEqual(result["statuses"][0]["sha"], HEAD)
-            else:
-                self.assertIn("unmergeable", result["error"])
-                self.assertEqual(result["statuses"], [])
-        workflow = (ROOT / ".github/workflows/ci-request.yml").read_text()
-        self.assertEqual(workflow.count("ref: ${{ needs.plan.outputs.merge }}"), 4)
-        self.assertNotIn("ref: ${{ needs.plan.outputs.head }}", workflow)
-        quick = (ROOT / ".github/workflows/ci-quick.yml").read_text()
-        self.assertIn("HEAD: ${{ inputs.checkout-ref }}^2", quick)
+    def test_plan_checks_mergeability_and_marks_only_full_requests_pending(self):
+        for mergeable, profile in itertools.product(
+            (True, False, None), ("rust", "full")
+        ):
+            with self.subTest(mergeable=mergeable, profile=profile):
+                env = {"PR": "170", "HEAD": HEAD, "PROFILE": profile}
+                pull = dict(PULL, mergeable=mergeable)
+                result = execute_script("ci-request.yml", "plan", pull, env=env)
+                pending = [(HEAD, "pending")] if profile == "full" else []
+                if mergeable is not True:
+                    self.assertIn("unmergeable", result["error"])
+                    pending = []
+                else:
+                    self.assertEqual(result["outputs"]["merge"], MERGE)
+                states = [(s["sha"], s["state"]) for s in result["statuses"]]
+                self.assertEqual(states, pending)
 
-    def test_full_success(self):
-        result = execute_publisher(good_needs(), PULL)
-        self.assertEqual(result["statuses"][0]["state"], "success")
-        self.assertEqual(result["statuses"][0]["sha"], HEAD)
-        self.assertEqual(result["statuses"][0]["context"], ci.CONTEXT)
-        self.assertFalse(result["failures"])
+    def test_privileged_jobs_run_only_for_protected_full_requests(self):
+        plan = job("ci-request.yml", "plan")["if"]
+        repo = {"repo": {"full_name": "fork"}}
+        same = {"label": {"name": "ci:full"}, "pull_request": {"head": repo}}
+        fork = dict(same, pull_request={"head": {"repo": {"full_name": "other"}}})
+        dispatch, pull_request = "workflow_dispatch", "pull_request"
+        for event, ref, on_demand, payload, expected in (
+            (dispatch, "refs/heads/rust-migration", "true", {}, True),
+            (dispatch, "refs/heads/feature", "true", {}, False),
+            (pull_request, "refs/pull/1/merge", "false", same, True),
+            (pull_request, "refs/pull/1/merge", "true", same, False),
+            (pull_request, "refs/pull/1/merge", "false", fork, False),
+            (pull_request, "refs/pull/1/merge", "false", {**same, "label": {}}, False),
+        ):
+            github = {"event_name": event, "ref": ref, "event": payload}
+            github["repository"] = "fork"
+            variables = {"CI_ON_DEMAND": on_demand}
+            with self.subTest(event=event, ref=ref, on_demand=on_demand):
+                result = evaluate(plan, github=github, vars=variables)
+                self.assertEqual(result, expected)
+        publish = job("ci-request.yml", "publish")["if"]
+        for result, profile, expected in (
+            ("success", "full", True),
+            ("success", "rust", False),
+            ("failure", "full", False),
+        ):
+            needs = {"plan": {"result": result, "outputs": {"profile": profile}}}
+            self.assertEqual(evaluate(publish, needs=needs), expected)
 
-    def test_superseded_request_cannot_overwrite_newer_status(self):
-        result = execute_publisher(good_needs(), PULL, superseded=True)
-        self.assertEqual(result["statuses"], [])
-        self.assertTrue(result["failures"])
+    def test_publisher_requires_every_job_and_the_unchanged_head(self):
+        cases = [("success", good_needs(), PULL, False, "success")]
+        cases.append(("superseded", good_needs(), PULL, True, None))
+        for name in good_needs():
+            for outcome in ("failure", "skipped", "cancelled", "timed_out", ""):
+                needs = good_needs()
+                needs[name]["result"] = outcome
+                cases.append((f"{name} {outcome}", needs, PULL, False, "failure"))
+        for name in ("quick", "native", "platform"):
+            needs = good_needs()
+            del needs[name]
+            cases.append((f"missing {name}", needs, PULL, False, "failure"))
+            if name != "quick":
+                needs = good_needs()
+                needs[name]["outputs"] = {}
+                cases.append((f"unproved {name}", needs, PULL, False, "failure"))
+        for change, expected in (
+            ({"head": {"sha": "c" * 40}}, "failure"),
+            ({"state": "closed"}, "failure"),
+            ({"base": {"ref": "master", "sha": BASE}}, "failure"),
+            # Base advances and pending mergeability keep exact-head validation.
+            ({"base": {"ref": "rust-migration", "sha": "e" * 40}}, "success"),
+            ({"merge_commit_sha": "e" * 40}, "success"),
+            ({"mergeable": None}, "success"),
+            ({"mergeable": False}, "success"),
+        ):
+            pull = dict(PULL, **change)
+            cases.append((str(change), good_needs(), pull, False, expected))
+        for label, needs, pull, superseded, expected in cases:
+            with self.subTest(label):
+                result = execute_publisher(needs, pull, superseded)
+                if expected is None:
+                    self.assertEqual(result["statuses"], [])
+                    self.assertTrue(result["failures"])
+                    continue
+                full, *marker = result["statuses"]
+                observed = (full["state"], full["sha"], full["context"])
+                self.assertEqual(observed, (expected, HEAD, ci.CONTEXT))
+                if expected == "success":
+                    self.assertFalse(result["failures"])
+                    tree = ("Validated tree", TREE, full["target_url"])
+                    observed = [
+                        (m["context"], m["description"], m["target_url"])
+                        for m in marker
+                    ]
+                    self.assertEqual(observed, [tree])
 
     def test_status_writers_share_a_non_cancelling_per_pr_concurrency_group(self):
         groups = []
-        for filename, job in (
+        for filename, name in (
             ("ci-request.yml", "plan"),
             ("ci-request.yml", "publish"),
             ("ci-invalidate.yml", "invalidate"),
         ):
-            workflow = (ROOT / ".github/workflows" / filename).read_text()
-            section = workflow.split(f"  {job}:\n", 1)[1]
-            section = re.split(r"\n  [a-z_]+:\n", section, maxsplit=1)[0]
-            concurrency = re.search(
-                r"    concurrency:\n      group: (.+)\n      cancel-in-progress: (.+)",
-                section,
-            )
-            self.assertIsNotNone(concurrency)
-            self.assertEqual(concurrency[2], "false")
-            expression = re.fullmatch(r"validation-status-\${{ (.+) }}", concurrency[1])
-            self.assertIsNotNone(expression)
+            concurrency = job(filename, name)["concurrency"]
+            self.assertIs(concurrency["cancel-in-progress"], False)
             # Dispatch inputs are strings; pull_request_target provides a number.
+            github = {"event": {"pull_request": {"number": 170}}}
             for inputs in ({"pr": "170"}, {}):
+                group = concurrency["group"]
                 groups.append(
-                    evaluate(
-                        "'validation-status-' + (" + expression[1] + ")",
-                        inputs=inputs,
-                        github={"event": {"pull_request": {"number": 170}}},
-                    )
+                    evaluate(group, interpolate=True, inputs=inputs, github=github)
                 )
         self.assertEqual(groups, ["validation-status-170"] * 6)
 
-    def test_delayed_invalidation_preserves_current_request(self):
-        event = dict(PULL, number=170, updated_at="2026-10-07T12:00:00Z")
-        for timestamp in (event["updated_at"], "2026-10-07T12:00:01Z"):
-            with self.subTest(timestamp=timestamp):
-                latest = {
-                    "context": ci.CONTEXT,
-                    "updated_at": timestamp,
-                    "target_url": "https://github.com/example/fork/actions/runs/123",
-                }
-                self.assertEqual(execute_invalidator(event, PULL, latest), [])
-
     def test_invalidation_only_marks_current_unvalidated_head_pending(self):
         event = dict(PULL, number=170, updated_at="2026-10-07T12:00:00Z")
-        older = {"context": ci.CONTEXT, "updated_at": "2026-10-07T11:59:59Z"}
-        for latest in (None, older):
-            with self.subTest(latest=latest):
-                statuses = execute_invalidator(event, PULL, latest)
-                self.assertEqual(len(statuses), 1)
-                self.assertEqual(statuses[0]["state"], "pending")
-                self.assertEqual(statuses[0]["sha"], HEAD)
-                self.assertEqual(statuses[0]["context"], ci.CONTEXT)
-        pull = dict(PULL, head={"sha": "c" * 40})
-        self.assertEqual(execute_invalidator(event, pull), [])
-
-    def test_each_non_success_result_is_rejected(self):
-        for job in good_needs():
-            for outcome in ("failure", "skipped", "cancelled", "timed_out", ""):
-                with self.subTest(job=job, outcome=outcome):
-                    needs = good_needs()
-                    needs[job]["result"] = outcome
-                    self.assertEqual(
-                        execute_publisher(needs, PULL)["statuses"][0]["state"],
-                        "failure",
-                    )
-
-    def test_missing_job_or_validation_proof_is_rejected(self):
-        for job in ("quick", "native", "platform"):
-            needs = good_needs()
-            del needs[job]
-            self.assertEqual(
-                execute_publisher(needs, PULL)["statuses"][0]["state"], "failure"
-            )
-            if job in ("native", "platform"):
-                needs = good_needs()
-                needs[job]["outputs"] = {}
+        moved = dict(PULL, head={"sha": "c" * 40})
+        # A delayed invalidation preserves a request started at or after the push.
+        for updated, pull, expected in (
+            (None, PULL, [HEAD]),
+            ("2026-10-07T11:59:59Z", PULL, [HEAD]),
+            (event["updated_at"], PULL, []),
+            ("2026-10-07T12:00:01Z", PULL, []),
+            (None, moved, []),
+        ):
+            latest = updated and {"context": ci.CONTEXT, "updated_at": updated}
+            with self.subTest(updated=updated, pull=pull["head"]):
+                statuses = execute_invalidator(event, pull, latest)
+                observed = [(s["sha"], s["state"], s["context"]) for s in statuses]
                 self.assertEqual(
-                    execute_publisher(needs, PULL)["statuses"][0]["state"], "failure"
+                    observed, [(sha, "pending", ci.CONTEXT) for sha in expected]
                 )
 
-    def test_changed_pull_cannot_publish_success(self):
-        for change in (
-            {"head": {"sha": "c" * 40}},
-            {"state": "closed"},
-            {"base": {"ref": "master", "sha": BASE}},
-        ):
-            self.assertEqual(
-                execute_publisher(good_needs(), dict(PULL, **change))["statuses"][0][
-                    "state"
-                ],
-                "failure",
+    def test_write_jobs_never_check_out_or_run_candidate_code(self):
+        # Structure is the behavior here: pull_request_target and workflow_run jobs,
+        # and every job granted a write permission, execute only the reviewed
+        # github-script body of the protected definition.
+        privileged = []
+        for path in sorted(WORKFLOWS.glob("*.yml")):
+            definition = yaml.safe_load(path.read_text())
+            triggers = definition[True]
+            untrusted = isinstance(triggers, dict) and bool(
+                {"pull_request_target", "workflow_run"} & set(triggers)
             )
-
-    def test_base_advances_and_mergeability_pending_preserve_exact_head_validation(
-        self,
-    ):
-        for change in (
-            {"base": {"ref": "rust-migration", "sha": "e" * 40}},
-            {"merge_commit_sha": "e" * 40},
-            {"mergeable": None},
-            {"mergeable": False},
-        ):
-            result = execute_publisher(good_needs(), dict(PULL, **change))
-            self.assertEqual(result["statuses"][0]["state"], "success")
-            marker = result["statuses"][1]
-            self.assertEqual(marker["context"], "Validated tree")
-            self.assertEqual(marker["description"], TREE)
-            self.assertEqual(marker["target_url"], result["statuses"][0]["target_url"])
-
-    def test_no_candidate_execution_in_privileged_jobs(self):
-        workflow = (ROOT / ".github/workflows/ci-request.yml").read_text()
-        for job in ("plan", "publish"):
-            section = workflow.split(f"  {job}:\n", 1)[1]
-            section = re.split(r"\n  [a-z_]+:\n", section, maxsplit=1)[0]
-            self.assertIn("statuses: write", section)
-            self.assertNotIn("actions/checkout", section)
-            self.assertNotIn("run:", section)
-        self.assertIn("github.ref == 'refs/heads/rust-migration'", workflow)
-        self.assertIn("vars.CI_ON_DEMAND != 'true'", workflow)
-        self.assertIn(
-            "needs.plan.outputs.profile == 'full'", workflow.split("  publish:\n", 1)[1]
-        )
-        self.assertIn("if (profile === 'full')", script_for("ci-request.yml", "plan"))
-
-    def test_push_invalidation_has_no_candidate_checkout(self):
-        workflow = (ROOT / ".github/workflows/ci-invalidate.yml").read_text()
-        self.assertIn("pull_request_target:", workflow)
-        self.assertNotIn("actions/checkout", workflow)
-        self.assertIn("state: 'pending'", workflow)
-        self.assertNotIn("state: 'success'", workflow)
+            for name, body in definition["jobs"].items():
+                permissions = body.get("permissions", definition.get("permissions", {}))
+                writes = permissions == "write-all" or (
+                    isinstance(permissions, dict) and "write" in permissions.values()
+                )
+                if not (writes or untrusted):
+                    continue
+                privileged.append((path.name, name))
+                with self.subTest(workflow=path.name, job=name):
+                    self.assertNotIn("uses", body)
+                    for step in body["steps"]:
+                        self.assertNotIn("run", step)
+                        self.assertRegex(step["uses"], r"^actions/github-script@")
+        self.assertTrue(privileged)
 
 
 class CacheTests(unittest.TestCase):
@@ -287,113 +376,93 @@ const github = {{paginate: async () => {json.dumps(caches)}, rest: {{actions: {{
 
     def test_actual_cache_controller_keeps_one_entry_per_prefix_and_eight_gib(self):
         gib = 1024**3
+        prefixes = "compiler-v1-linux compiler-v1-linux ccache-linux-v2-gcc"
+        prefixes += " ccache-macos-v2-arm64 ccache-msvc-v1-x64"
         caches = [
-            {
-                "id": i,
-                "key": prefix + "-" + str(i) * 40,
-                "created_at": f"2026-10-{i:02}",
-                "size_in_bytes": gib,
-            }
-            for i, prefix in enumerate(
-                (
-                    "compiler-v1-linux",
-                    "compiler-v1-linux",
-                    "ccache-linux-v2-gcc",
-                    "ccache-macos-v2-arm64",
-                    "ccache-msvc-v1-x64",
-                ),
-                start=1,
-            )
+            {"id": i, "key": f"{prefix}-{str(i) * 40}", "created_at": f"2026-10-{i:02}"}
+            | {"size_in_bytes": gib}
+            for i, prefix in enumerate(prefixes.split(), start=1)
         ]
-        result = self.prune(caches)
-        self.assertEqual(result["deleted"], [1])
-        self.assertEqual(result["failures"], [])
+        self.assertEqual(self.prune(caches), {"deleted": [1], "failures": []})
         caches[-1]["size_in_bytes"] = 7 * gib
-        result = self.prune(caches)
-        self.assertEqual(result["deleted"], [1, 2, 3])
-        self.assertEqual(result["failures"], [])
-        result = self.prune(
-            [
-                {
-                    "id": 99,
-                    "key": "unmanaged",
-                    "created_at": "date",
-                    "size_in_bytes": 9 * gib,
-                }
-            ]
-        )
-        self.assertEqual(result["deleted"], [])  # Unmanaged caches are never removed.
+        self.assertEqual(self.prune(caches), {"deleted": [1, 2, 3], "failures": []})
+        # Unmanaged caches are never removed.
+        unmanaged = {"id": 99, "key": "unmanaged", "created_at": "date"}
+        result = self.prune([unmanaged | {"size_in_bytes": 9 * gib}])
+        self.assertEqual(result["deleted"], [])
         self.assertTrue(result["failures"])
-        workflow = (ROOT / ".github/workflows/ci-cache.yml").read_text()
-        self.assertIn("actions: write", workflow)
-        self.assertIn("github.event.workflow_run.event == 'push'", workflow)
-        self.assertIn("head_branch == 'rust-migration'", workflow)
-        self.assertNotIn("actions/checkout", workflow)
-        self.assertNotIn("download-artifact", workflow)
-        self.assertNotRegex(workflow, r"(?m)^\s+(?:- )?run:")
+
+    def test_pruning_follows_only_protected_push_runs(self):
+        predicate = job("ci-cache.yml", "prune")["if"]
+        for event, branch, expected in (
+            ("push", "rust-migration", True),
+            ("pull_request", "rust-migration", False),
+            ("push", "feature", False),
+        ):
+            github = {
+                "event": {"workflow_run": {"event": event, "head_branch": branch}}
+            }
+            self.assertEqual(evaluate(predicate, github=github), expected)
 
 
 class PolicyTests(unittest.TestCase):
     def test_platform_cache_refresh_is_only_a_covered_protected_push(self):
-        workflow = (ROOT / ".github/workflows/ci-build.yml").read_text()
-        for job in ("linux", "windows"):
-            section = workflow.split(f"  {job}:\n", 1)[1]
-            section = re.split(r"\n  [a-z_]+:\n", section, maxsplit=1)[0]
-            expression = re.search(r"      cache-only: \${{ (.+) }}", section)[1]
-            expression = expression.replace(
-                "inputs.checkout-ref", 'inputs["checkout-ref"]'
-            )
+        build = workflow("ci-build.yml")["jobs"]
+        protected = "refs/heads/rust-migration"
+        for name in ("linux", "windows"):
             for checkout, event, ref, covered, expected in (
-                ("", "push", "refs/heads/rust-migration", "true", True),
-                ("merge", "push", "refs/heads/rust-migration", "true", False),
-                ("", "pull_request", "refs/heads/rust-migration", "true", False),
+                ("", "push", protected, "true", True),
+                ("merge", "push", protected, "true", False),
+                ("", "pull_request", protected, "true", False),
                 ("", "push", "refs/heads/master", "true", False),
-                ("", "push", "refs/heads/rust-migration", "false", False),
+                ("", "push", protected, "false", False),
             ):
-                self.assertEqual(
-                    evaluate(
-                        expression,
-                        inputs={"checkout-ref": checkout},
-                        github={"event_name": event, "ref": ref},
-                        needs={"policy": {"outputs": {"covered": covered}}},
-                    ),
-                    expected,
+                result = evaluate(
+                    build[name]["with"]["cache-only"],
+                    inputs={"checkout-ref": checkout},
+                    github={"event_name": event, "ref": ref},
+                    needs={"policy": {"outputs": {"covered": covered}}},
                 )
-        excluded = {
-            "ci-linux.yml": ["Test"],
-            "ci-windows.yml": [
-                "Rust checks for actual selected target",
-                "Test",
-                "Fresh Rust native generators",
-                "Validate refusals and actual archive freshness",
-                "Record native CRT ABI linkage and fresh outputs",
-                "Retain native Windows Rust and test evidence",
-            ],
+                self.assertEqual(result, expected)
+
+    def test_cache_refresh_skips_exactly_the_test_and_evidence_steps(self):
+        windows = {
+            "Rust checks for actual selected target",
+            "Test",
+            "Fresh Rust native generators",
+            "Validate refusals and actual archive freshness",
+            "Record native CRT ABI linkage and fresh outputs",
+            "Retain native Windows Rust and test evidence",
         }
-        for filename, labels in excluded.items():
-            child = (ROOT / ".github/workflows" / filename).read_text()
-            for label in labels:
-                step = child.split(f"    - name: {label}\n", 1)[1].split(
-                    "    - name:", 1
-                )[0]
-                self.assertRegex(step, r"      if: .* !inputs.cache-only")
-        self.assertIn(
-            "!inputs.cache-only || inputs.compiler != 'clang'",
-            (ROOT / ".github/workflows/ci-linux.yml").read_text(),
-        )
+        for filename, name, skipped in (
+            ("ci-linux.yml", "linux", {"Test"}),
+            ("ci-windows.yml", "windows", windows),
+        ):
+            steps = job(filename, name)["steps"]
+            outputs = {step["id"]: {"outputs": {}} for step in steps if "id" in step}
+            observed = {
+                step.get("name")
+                for step in steps
+                if runs(step, False, outputs) and not runs(step, True, outputs)
+            }
+            self.assertEqual(observed, skipped, filename)
+        linux = job("ci-linux.yml", "linux")["if"]
+        for cache_only, compiler, expected in (
+            (True, "clang", False),
+            (True, "gcc", True),
+            (False, "clang", True),
+        ):
+            inputs = {"cache-only": cache_only, "compiler": compiler}
+            self.assertEqual(evaluate(linux, inputs=inputs), expected)
 
     def test_heavy_predicates_bypass_skipped_policy_but_respect_cancellation(self):
-        for filename, jobs in (
+        dispatch = "workflow_dispatch"
+        for filename, names in (
             ("ci-build.yml", ("emscripten", "linux", "macos", "windows")),
             ("rust-migration.yml", ("build", "comparisons", "simulation")),
         ):
-            workflow = (ROOT / ".github/workflows" / filename).read_text()
-            for job in jobs:
-                section = workflow.split(f"  {job}:\n", 1)[1]
-                predicate = re.search(r"^    if: (.+)$", section, re.MULTILINE)[1]
-                self.assertNotIn("always()", predicate)
-                self.assertIn("!cancelled()", predicate)
-                expression = predicate.removeprefix("${{ ").removesuffix(" }}")
+            jobs = workflow(filename)["jobs"]
+            for name in names:
                 cases = [
                     (False, "head", "", "full", "push", True),
                     (False, "", "true", "full", "push", True),
@@ -401,9 +470,8 @@ class PolicyTests(unittest.TestCase):
                     (True, "head", "true", "full", "push", False),
                     (True, "", "true", "full", "push", False),
                 ]
-                if job == "macos":
+                if name == "macos":
                     # Full skips macOS; platform, heavy pushes and dispatch run it (#357).
-                    dispatch = "workflow_dispatch"
                     cases = [
                         (False, "head", "", "full", dispatch, False),
                         (False, "head", "", "platform", dispatch, True),
@@ -413,236 +481,140 @@ class PolicyTests(unittest.TestCase):
                         (True, "", "", "", dispatch, False),
                     ]
                 for cancelled, checkout, heavy, profile, event, expected in cases:
-                    inputs = {"checkout-ref": checkout, "profile": profile}
-                    needs = {
-                        "policy": {"outputs": {"heavy": heavy}},
-                        "build": {"result": "success"},
-                    }
-                    with self.subTest(filename=filename, job=job, cancelled=cancelled):
+                    needs = {"policy": {"outputs": {"heavy": heavy}}}
+                    needs["build"] = {"result": "success"}
+                    with self.subTest(filename=filename, job=name, cancelled=cancelled):
                         result = evaluate(
-                            expression.replace(
-                                "inputs.checkout-ref", 'inputs["checkout-ref"]'
-                            ).replace("cancelled()", str(cancelled).lower()),
-                            inputs=inputs,
+                            jobs[name]["if"],
+                            cancelled=cancelled,
+                            inputs={"checkout-ref": checkout, "profile": profile},
                             needs=needs,
                             github={"event_name": event},
                         )
                         self.assertEqual(result, expected)
 
     def test_protected_push_groups(self):
-        def groups(filename):
-            workflow = (ROOT / ".github/workflows" / filename).read_text()
-            expression = re.search(r"^  group: (.+)$", workflow, re.MULTILINE)[1]
-            expression = (
-                expression.rsplit("${{ ", 1)[1]
-                .removesuffix(" }}")
-                .replace("inputs.checkout-ref", 'inputs["checkout-ref"]')
-            )
-            self.assertIn("github.ref != 'refs/heads/rust-migration'", workflow)
-            return workflow, [
+        def groups(filename, event="push"):
+            github = {"workflow": filename, "event_name": event, "run_id": 1}
+            github["ref"] = "refs/heads/rust-migration"
+            group = workflow(filename)["concurrency"]["group"]
+            return [
                 evaluate(
-                    expression,
-                    inputs={},
-                    github={
-                        "ref": "refs/heads/rust-migration",
-                        "sha": sha,
-                        "run_id": 1,
-                    },
+                    group, interpolate=True, inputs={}, github=github | {"sha": sha}
                 )
                 for sha in ("code-merge", "later-merge")
             ]
 
         # Heavy post-merge validation coalesces queued pushes to the newest tip.
-        # Markdown-only pushes never start, so they cannot displace a code push.
         for filename in ("ci-build.yml", "rust-migration.yml"):
-            workflow, (first, second) = groups(filename)
+            first, second = groups(filename)
             self.assertEqual(first, second)
-            push = re.search(r"^  push:\n((?:    .*\n)+)", workflow, re.MULTILINE)[1]
-            self.assertIn("paths-ignore: ['**.md']", push)
-        _, (first, second) = groups("ci-quick.yml")
+        first, second = groups("ci-quick.yml")
         self.assertNotEqual(first, second)
         # A dispatched macOS run never displaces a queued push validation (#357).
-        workflow = (ROOT / ".github/workflows/ci-build.yml").read_text()
-        self.assertIn("-${{ github.event_name }}-build-", workflow)
+        dispatched = groups("ci-build.yml", "workflow_dispatch")
+        self.assertNotEqual(groups("ci-build.yml"), dispatched)
+
+    def test_platform_annotations_run_after_each_platform_and_gate_completion(self):
+        jobs = workflow("ci-build.yml")["jobs"]
+        for platform in ("emscripten", "linux", "macos", "windows"):
+            annotations = jobs[f"annotations_{platform}"]
+            self.assertEqual(annotations["needs"], platform)
+            for result in ("success", "failure", "skipped"):
+                needs = {platform: {"result": result}}
+                inputs = {"checkout-ref": "merge"}
+                ran = evaluate(annotations["if"], needs=needs, inputs=inputs, github={})
+                self.assertEqual(ran, result != "skipped")
+        run = jobs["complete"]["steps"][0]["run"]
+        script = run.split("<<'PY'\n", 1)[1].rsplit("PY\n", 1)[0]
+        required = "linux emscripten windows check_annotations annotations_linux"
+        required += " annotations_emscripten annotations_windows"
+        for failed in (None, "annotations_linux", "windows"):
+            needs = {name: {"result": "success"} for name in required.split()}
+            if failed:
+                needs[failed]["result"] = "failure"
+            with tempfile.TemporaryDirectory() as directory:
+                output = Path(directory) / "output"
+                env = {**os.environ, "PROFILE": "full", "RESULTS": json.dumps(needs)}
+                env["GITHUB_OUTPUT"] = str(output)
+                command = ["python3", "-c", script]
+                result = subprocess.run(command, capture_output=True, env=env)
+                self.assertEqual(result.returncode == 0, failed is None)
+                self.assertEqual(output.exists(), failed is None)
 
     def test_coverage_lookup_retries_transients_and_falls_back_only_after_exhaustion(
         self,
     ):
-        script = script_for("ci-policy.yml", "policy")
+        source = tree(entry("src/main.cpp"))
         for failure, recover, expected_calls, expected in (
             ({"status": 500}, True, 2, {"heavy": "false"}),
             ({"status": 503}, False, 3, {"heavy": "true"}),
             ({"status": 429}, False, 3, {"heavy": "true"}),
             ({"code": "ECONNRESET"}, False, 3, {"heavy": "true"}),
-            *[
-                (dict(status=status), False, 1, {})
-                for status in (400, 401, 403, 404, 422)
-            ],
+            *[({"status": code}, False, 1, {}) for code in (400, 401, 403, 404, 422)],
             ({}, False, 1, {}),
         ):
+            error = f"Object.assign(new Error('API failed'), {json.dumps(failure)})"
+            compare = f"""async () => {{
+              if (++calls === 1 || !{json.dumps(recover)}) throw {error};
+              return {{data: {{files: [{{filename: 'README.md'}}]}}}};
+            }}"""
             with self.subTest(failure=failure, recover=recover):
-                result = node(f"""
-                process.env.CI_ON_DEMAND = 'true';
-                const outputs = {{}}, delays = [];
-                let calls = 0;
-                const context = {{eventName: 'push', repo: {{}}, sha: 'head', payload: {{before: 'base'}}}};
-                const core = {{setOutput: (k,v) => outputs[k] = v, info: () => {{}}, warning: () => {{}}}};
-                const setTimeout = (resolve, delay) => {{ delays.push(delay); resolve(); }};
-                const github = {{rest: {{repos: {{
-                  compareCommitsWithBasehead: async () => {{
-                    if (++calls === 1 || !{json.dumps(recover)}) throw Object.assign(new Error('API failed'), {json.dumps(failure)});
-                    return {{data: {{files: [{{filename: 'README.md'}}]}}}};
-                  }},
-                  getCommit: async () => ({{data: {{commit: {{tree: {{sha: 'tree'}}}}}}}})
-                }}, git: {{getTree: async args => ({{data: {{sha: args.tree_sha, truncated: false,
-                  tree: [{{path: 'src/main.cpp', type: 'blob', mode: '100644', sha: '{HEAD}'}}]}}}})}}}}}};
-                (async () => {{{script}}})().then(() => console.log(JSON.stringify({{outputs, calls, delays}})))
-                  .catch(error => console.log(JSON.stringify({{outputs, calls, delays, error: error.message}})));
-                """)
+                result = run_policy(trees={BASE: source, TREE: source}, compare=compare)
                 self.assertEqual(result["calls"], expected_calls)
                 self.assertEqual(result["outputs"], expected)
                 self.assertEqual(result["delays"], [1000, 2000][: expected_calls - 1])
                 self.assertEqual("error" in result, not expected)
 
-    def test_platform_annotations_run_after_each_platform_and_gate_completion(self):
-        workflow = (ROOT / ".github/workflows/ci-build.yml").read_text()
-        for platform in ("emscripten", "linux", "macos", "windows"):
-            section = (
-                workflow.split(f"  annotations_{platform}:\n")[1]
-                .split("\n  annotations_", 1)[0]
-                .split("\n  check_annotations:", 1)[0]
-            )
-            self.assertIn(f"    needs: {platform}\n", section)
-            self.assertIn(f"needs.{platform}.result != 'skipped'", section)
-            self.assertIn("uses: OpenTTD/actions/annotation-check@v6", section)
-        complete = workflow.split("  complete:\n")[1]
-        script = re.search(
-            r"        python3 - <<'PY'\n(.*?)        PY", complete, re.S
-        )[1]
-        script = "\n".join(line[8:] for line in script.splitlines())
-        results = {
-            name: {"result": "success"}
-            for name in (
-                "linux",
-                "emscripten",
-                "windows",
-                "check_annotations",
-                "annotations_linux",
-                "annotations_emscripten",
-                "annotations_windows",
-            )
-        }
-        for failed in (None, "annotations_linux", "windows"):
-            with tempfile.TemporaryDirectory() as directory:
-                output = Path(directory) / "output"
-                needs = json.loads(json.dumps(results))
-                if failed:
-                    needs[failed]["result"] = "failure"
-                result = subprocess.run(
-                    ["python3", "-c", script],
-                    capture_output=True,
-                    env={
-                        **os.environ,
-                        "PROFILE": "full",
-                        "RESULTS": json.dumps(needs),
-                        "GITHUB_OUTPUT": str(output),
-                    },
-                )
-                self.assertEqual(result.returncode == 0, failed is None)
-                self.assertEqual(output.exists(), failed is None)
-
     def test_bootstrap_on_demand_and_docs_classification(self):
-        script = script_for("ci-policy.yml", "policy")
-        cases = [
+        readme = tree(entry("README.md"))
+        renamed = {"filename": "README.md", "previous_filename": "tools/tool.py"}
+        for on_demand, event, files, expected in (
             ("", "pull_request", [], "true"),
             ("false", "pull_request", [], "true"),
             ("true", "pull_request", [], "false"),
             ("true", "push", [{"filename": "docs/roadmap.md"}], "false"),
             ("true", "push", [{"filename": "tools/ci.py"}], "true"),
-            (
-                "true",
-                "push",
-                [{"filename": "README.md", "previous_filename": "tools/tool.py"}],
-                "true",
-            ),
+            ("true", "push", [renamed], "true"),
             ("true", "push", [{"filename": "docs/new.md"}] * 300, "true"),
             ("true", "push", [], "true"),
             ("true", "push", None, "true"),
-        ]
-        for variable, event, files, expected in cases:
-            with self.subTest(
-                variable=variable,
-                event=event,
-                files=len(files) if files is not None else None,
-            ):
-                harness = f"""
-                process.env.CI_ON_DEMAND = {json.dumps(variable)};
-                const outputs = {{}};
-                const context = {{eventName: {json.dumps(event)}, repo: {{}}, sha: 'head',
-                  payload: {{before: 'base', pull_request: {{base: {{ref: 'rust-migration'}}}}}}}};
-                const core = {{setOutput: (key, value) => outputs[key] = value, info: () => {{}}}};
-                const github = {{paginate: async () => [], rest: {{
-                  git: {{getTree: async args => ({{data: {{sha: args.tree_sha, truncated: false,
-                    tree: [{{path: 'README.md', type: 'blob', mode: '100644', sha: '{HEAD}'}}]}}}})}},
-                  repos: {{
-                  getCommit: async () => ({{data: {{commit: {{tree: {{sha: "tree"}}}}}}}}),
-                  compareCommitsWithBasehead: async () => ({{data: {{files: {json.dumps(files)}}}}})
-                }}}}}};
-                (async () => {{{script}}})().then(() => console.log(JSON.stringify(outputs)));
-                """
-                result = node(harness)
-                self.assertEqual(result["heavy"], expected)
+        ):
+            count = None if files is None else len(files)
+            with self.subTest(on_demand=on_demand, event=event, files=count):
+                trees = {BASE: readme, TREE: readme}
+                result = run_policy(
+                    event=event, on_demand=on_demand, files=files, trees=trees
+                )
+                self.assertEqual(result["outputs"]["heavy"], expected)
 
     def test_docs_fast_path_checks_tree_types_and_complete_inventories(self):
-        script = script_for("ci-policy.yml", "policy")
-        code = {"path": "src/game.cpp", "type": "blob", "mode": "100644", "sha": HEAD}
-        link = {"path": "module.md", "type": "commit", "mode": "160000", "sha": HEAD}
-        doc = dict(link, type="blob", mode="100644")
-        before = {"truncated": False, "tree": [code, link]}
-        after = {"truncated": False, "tree": [code, dict(link, sha=MERGE)]}
+        code = entry("src/game.cpp")
+        link = entry("module.md", mode="160000", kind="commit")
+        doc = entry("module.md")
         files = [{"filename": "module.md"}]
+        renamed = [{"filename": "new.md", "previous_filename": "module.md"}]
+        docs_before, docs_after = tree(code, doc), tree(code, dict(doc, sha=MERGE))
         cases = [
-            (before, after, files, "true"),
-            ({"truncated": False, "tree": [code]}, after, files, "true"),
-            (before, {"truncated": False, "tree": [code]}, files, "true"),
-            (
-                before,
-                {"truncated": False, "tree": [code, dict(link, path="new.md")]},
-                [{"filename": "new.md", "previous_filename": "module.md"}],
-                "true",
-            ),
+            (tree(code, link), tree(code, dict(link, sha=MERGE)), files, "true"),
+            (tree(code), tree(code, dict(link, sha=MERGE)), files, "true"),
+            (tree(code, link), tree(code), files, "true"),
+            (tree(code, link), tree(code, dict(link, path="new.md")), renamed, "true"),
+            (docs_before, docs_after, files, "false"),
         ]
-        docs_before = {"truncated": False, "tree": [code, doc]}
-        docs_after = {"truncated": False, "tree": [code, dict(doc, sha=MERGE)]}
-        cases.append((docs_before, docs_after, files, "false"))
         for bad in (dict(docs_before, truncated=True), dict(docs_before, tree=[{}])):
-            cases.extend(
-                [(bad, docs_after, files, "true"), (docs_before, bad, files, "true")]
-            )
+            cases += [
+                (bad, docs_after, files, "true"),
+                (docs_before, bad, files, "true"),
+            ]
         for left, right, changed, expected in cases:
-            harness = f"""
-            process.env.CI_ON_DEMAND = 'true';
-            const outputs = {{}};
-            const context = {{eventName: 'push', repo: {{owner: 'example', repo: 'fork'}},
-              sha: 'head', payload: {{before: 'base'}}}};
-            const core = {{setOutput: (k,v) => outputs[k] = v, info: () => {{}}}};
-            const github = {{paginate: async () => [], rest: {{
-              git: {{getTree: async args => ({{data: {{sha: args.tree_sha,
-                ...(args.tree_sha === '{BASE}' ? {json.dumps(left)} : {json.dumps(right)})}}}})}},
-              repos: {{
-                getCommit: async args => ({{data: {{commit: {{tree: {{sha: args.ref === 'base' ? '{BASE}' : '{TREE}'}}}}}}}}),
-                compareCommitsWithBasehead: async () => ({{data: {{files: {json.dumps(changed)}}}}})
-              }}
-            }}}};
-            (async () => {{{script}}})().then(() => console.log(JSON.stringify(outputs)));
-            """
             with self.subTest(left=left, right=right, files=changed):
-                self.assertEqual(node(harness)["heavy"], expected)
+                result = run_policy(files=changed, trees={BASE: left, TREE: right})
+                self.assertEqual(result["outputs"]["heavy"], expected)
 
     def test_only_matching_successful_merged_tree_skips_validation(self):
-        script = script_for("ci-policy.yml", "policy")
         bad_runs = (None, "", "run", RUN + "/extra", RUN.replace("fork", "other"))
-        for full, marker, same_run, tree, merged, run, expected in (
+        for full, marker, same_run, tree_sha, merged, run, expected in (
             ("success", "success", True, TREE, True, RUN, "false"),
             ("success", "success", True, "other", True, RUN, "true"),
             ("pending", "success", True, TREE, True, RUN, "true"),
@@ -650,99 +622,54 @@ class PolicyTests(unittest.TestCase):
             ("success", "failure", True, TREE, True, RUN, "true"),
             ("success", "success", False, TREE, True, RUN, "true"),
             ("success", "success", True, TREE, False, RUN, "true"),
-            *(
-                ("success", "success", True, TREE, True, run, "true")
-                for run in bad_runs
-            ),
+            *(("success", "success", True, TREE, True, r, "true") for r in bad_runs),
         ):
-            statuses = [
-                {"context": "Full validation", "state": full, "target_url": run},
-                {
-                    "context": "Validated tree",
-                    "state": marker,
-                    "target_url": run if same_run else "old",
-                    "description": tree,
-                },
-            ]
+            statuses = validation(
+                full, marker, run, run if same_run else "old", tree_sha
+            )
             pull = dict(PULL, merged_at="date" if merged else None)
-            harness = f"""
-            process.env.CI_ON_DEMAND = 'true';
-            const outputs = {{}};
-            const context = {{eventName: 'push', repo: {{owner: 'example', repo: 'fork'}}, serverUrl: 'https://github.com', sha: 'head', payload: {{before: 'base'}}}};
-            const core = {{setOutput: (k, v) => outputs[k] = v, info: () => {{}}}};
-            const github = {{paginate: async () => [{json.dumps(pull)}], rest: {{repos: {{
-              getCommit: async () => ({{data: {{commit: {{tree: {{sha: {json.dumps(TREE)}}}}}}}}}),
-              getCombinedStatusForRef: async () => ({{data: {{statuses: {json.dumps(statuses)}}}}}),
-              compareCommitsWithBasehead: async () => ({{data: {{files: [{{filename: 'src/code.cpp'}}]}}}})
-            }}}}}};
-            (async () => {{{script}}})().then(() => console.log(JSON.stringify(outputs)));
-            """
-            with self.subTest(
-                full=full, marker=marker, same_run=same_run, tree=tree, merged=merged
-            ):
-                self.assertEqual(node(harness)["heavy"], expected)
+            files = [{"filename": "src/code.cpp"}]
+            with self.subTest(full=full, marker=marker, run=run, merged=merged):
+                result = run_policy(files=files, pulls=[pull], statuses=statuses)
+                self.assertEqual(result["outputs"]["heavy"], expected)
 
     def test_markdown_tree_differences_require_complete_inventories(self):
-        script = script_for("ci-policy.yml", "policy")
-        code = {"path": "src/game.cpp", "type": "blob", "mode": "100644", "sha": HEAD}
-        doc = {"path": "README.md", "type": "blob", "mode": "100644", "sha": BASE}
-        before = {"truncated": False, "tree": [code, doc]}
-        changed_doc = dict(doc, sha=MERGE, path="docs/new.md")
-        gitlink = dict(doc, type="commit", mode="160000")
+        code, doc = entry("src/game.cpp"), entry("README.md", BASE)
+        moved_doc = entry("docs/new.md", MERGE)
+        before = tree(code, doc)
         cases = [
-            ({"truncated": False, "tree": [changed_doc, code]}, "false"),
-            ({"truncated": False, "tree": [code]}, "false"),
-            ({"truncated": False, "tree": [dict(code, sha=MERGE)]}, "true"),
-            ({"truncated": False, "tree": [dict(code, mode="100755")]}, "true"),
-            ({"truncated": False, "tree": [dict(code, path="src/other.cpp")]}, "true"),
-            (
-                {
-                    "truncated": False,
-                    "tree": [dict(code, type="commit", mode="160000")],
-                },
-                "true",
-            ),
-            ({"truncated": False, "tree": [changed_doc]}, "true"),
-            ({"truncated": True, "tree": [code]}, "true"),
+            (tree(moved_doc, code), "false"),
+            (tree(code), "false"),
+            (tree(dict(code, sha=MERGE)), "true"),
+            (tree(dict(code, mode="100755")), "true"),
+            (tree(dict(code, path="src/other.cpp")), "true"),
+            (tree(dict(code, type="commit", mode="160000")), "true"),
+            (tree(moved_doc), "true"),
+            (tree(code, truncated=True), "true"),
             ({"tree": [code]}, "true"),
             ({"truncated": False}, "true"),
-            ({"truncated": False, "tree": []}, "true"),
-            ({"truncated": False, "tree": [{}]}, "true"),
-            ({"truncated": False, "tree": [code, dict(doc, sha="bad")]}, "true"),
-            ({"truncated": False, "tree": [code, dict(doc, mode="bad")]}, "true"),
-            ({"truncated": False, "tree": [code, doc, doc]}, "true"),
-            ({"truncated": False, "tree": [code, gitlink]}, "true"),
-            ({"truncated": False, "tree": [code, dict(doc, path="../a.md")]}, "true"),
-            ({"truncated": False, "tree": [code], "sha": None}, "true"),
+            (tree(), "true"),
+            (tree({}), "true"),
+            (tree(code, dict(doc, sha="bad")), "true"),
+            (tree(code, dict(doc, mode="bad")), "true"),
+            (tree(code, doc, doc), "true"),
+            (tree(code, dict(doc, type="commit", mode="160000")), "true"),
+            (tree(code, dict(doc, path="../a.md")), "true"),
+            (tree(code, sha=None), "true"),
         ]
         for after, expected in cases:
             for incomplete_side in (False, True):
                 left, right = (after, before) if incomplete_side else (before, after)
-                harness = f"""
-                process.env.CI_ON_DEMAND = 'true';
-                const outputs = {{}};
-                const context = {{eventName: 'push', repo: {{owner: 'example', repo: 'fork'}}, serverUrl: 'https://github.com', sha: 'head', payload: {{before: 'base'}}}};
-                const core = {{setOutput: (k,v) => outputs[k] = v, info: () => {{}}}};
-                const statuses = [
-                  {{context: 'Full validation', state: 'success', target_url: '{RUN}'}},
-                  {{context: 'Validated tree', state: 'success', target_url: '{RUN}', description: '{BASE}'}}
-                ];
-                const github = {{paginate: async () => [{{...{json.dumps(PULL)}, merged_at: 'date'}}], rest: {{
-                  git: {{getTree: async args => ({{data: {{sha: args.tree_sha, ...(args.tree_sha === '{BASE}' ? {json.dumps(left)} : {json.dumps(right)})}}}})}},
-                  repos: {{
-                    getCommit: async () => ({{data: {{commit: {{tree: {{sha: '{TREE}'}}}}}}}}),
-                    getCombinedStatusForRef: async () => ({{data: {{statuses}}}}),
-                    compareCommitsWithBasehead: async () => ({{data: {{files: [{{filename: 'src/game.cpp'}}]}}}})
-                  }}
-                }}}};
-                (async () => {{{script}}})().then(() => console.log(JSON.stringify(outputs)));
-                """
                 with self.subTest(after=after, incomplete_side=incomplete_side):
-                    outputs = node(harness)
+                    outputs = run_policy(
+                        files=[{"filename": "src/game.cpp"}],
+                        trees={BASE: left, TREE: right},
+                        pulls=[dict(PULL, merged_at="date")],
+                        statuses=validation(tree=BASE),
+                    )["outputs"]
+                    covered = "true" if expected == "false" else None
                     self.assertEqual(outputs["heavy"], expected)
-                    self.assertEqual(
-                        outputs.get("covered"), "true" if expected == "false" else None
-                    )
+                    self.assertEqual(outputs.get("covered"), covered)
 
 
 class RequestTests(unittest.TestCase):
