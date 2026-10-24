@@ -205,7 +205,7 @@ inline bool Aircraft_has_hangar(const OpenTTDStation *s) noexcept
 
 inline void RustStationIndexInsert(BaseStation *st) noexcept { _station_kdtree.Insert(st->index); }
 inline void RustStationClosedWidget(BaseStation *st) noexcept { SetWindowWidgetDirty(WC_STATION_VIEW, st->index, WID_SV_CLOSE_AIRPORT); }
-inline void RustStationCloseAirportInspect(BaseStation *st) noexcept { RustCloseNewGRFInspect(GSF_AIRPORTS, st->index.base()); }
+inline void RustStationCloseAirportInspect(BaseStation *st) noexcept { RustCloseNewGRFInspect(GSF_AIRPORTS, RustBaseStationID(st)); }
 
 inline uint16_t RustStationAirportWidth(const Station *station) noexcept { return station->airport.w; }
 inline uint16_t RustStationAirportHeight(const Station *station) noexcept { return station->airport.h; }
