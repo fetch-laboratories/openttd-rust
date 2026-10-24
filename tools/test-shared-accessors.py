@@ -180,6 +180,18 @@ with tempfile.TemporaryDirectory() as directory:
             result = check()
             assert ("callee | NativeLeaf(arg0,EVENT_A)" in result.stdout) == copied
             assert bool(result.returncode) == copied, result.stdout
+    for kind, copied in [("auto", True), ("uint8_t", False)]:
+        port.write_text(
+            original
+            + seed.replace("Vehicle *v", "Vehicle *v, uint32_t mode").replace(
+                "EVENT_A", "mode"
+            )
+            + f"int Second(Vehicle *v, uint32_t mode) noexcept {{ {kind} value = mode; "
+            "return NativeLeaf(v, value); }\nOpenTTDFixtureServices second{.b = Second,\n};\n"
+        )
+        result = check()
+        assert ("callee |" in result.stdout) == copied, result.stdout
+        assert bool(result.returncode) == copied, result.stdout
     port.write_text(
         original
         + seed

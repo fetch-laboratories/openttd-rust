@@ -168,8 +168,10 @@ def callee_copies(files):
         body = re.sub(r"\bVehicleOf\((arg\d+)(?:\.handle)?\)", r"\1", body)
         statements = [s.strip() for s in body.split(";") if s.strip()]
         while len(statements) > 1:
+            # Scalar declarations can narrow; only fold pointer/auto aliases.
             alias = re.fullmatch(
-                r"(?:const )?[\w:<>]+[ *&]+(\w+)\s*=\s*(arg\d+)", statements.pop(0)
+                r"(?:const )?(?:[\w:<>]+[ *]*\*\s*|auto[ *&]+)(\w+)\s*=\s*(arg\d+)",
+                statements.pop(0),
             )
             if not alias:
                 break
