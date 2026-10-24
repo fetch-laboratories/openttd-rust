@@ -126,6 +126,17 @@ def scenarios(soak):
         }
         for distribution, commands in DISTRIBUTIONS.items()
     ]
+    cases.extend(
+        dict(
+            name="movement-" + route,
+            kind="save",
+            save=str(ROOT / "migration/saves/padhattan-ridge-1996.sav"),
+            movement_structure=route,
+            ticks=10000,
+            console=["movement_structures " + route, "unpause"],
+        )
+        for route in ("train-bridge", "road-tunnel")
+    )
     cases.append(
         dict(
             cases[0],
@@ -262,7 +273,9 @@ def game_args(scenario):
 
 
 def game_environment(scenario):
-    witnessed = scenario.get("rail_fixture") and scenario.get("witnesses")
+    witnessed = (
+        scenario.get("rail_fixture") or scenario.get("movement_structure")
+    ) and scenario.get("witnesses")
     return core.WITNESS_ENVIRONMENT if witnessed else {}
 
 
@@ -342,6 +355,20 @@ def normalize(source, directory):
 
 
 def prepare(scenario, binaries, builds, out, timeout, env, result):
+    if scenario.get("movement_structure"):
+        from . import signals
+
+        prepared = signals.prepare(
+            dict(scenario, signals="movement"),
+            binaries,
+            builds,
+            out,
+            timeout,
+            env,
+            result,
+        )
+        prepared.pop("signals")
+        return prepared
     if not scenario.get("rail_fixture"):
         return scenario
     directory = out / scenario["name"] / "prepare"
@@ -840,6 +867,44 @@ def controller_witnesses(scenario, run, mode):
 
 
 def check(scenario, run, mode, role, result):
+    if route := scenario.get("movement_structure"):
+        markers = [
+            line.split() for line in run["log"] if line.startswith("MOVEMENT route ")
+        ]
+        if len(markers) != 1 or not run["snapshots"]:
+            raise RuntimeError("movement route lacks its vehicle/map fixture")
+        _, _, name, vehicle, depot, station, entrance, exit_tile = markers[0]
+        if name != route:
+            raise RuntimeError("movement route marker differs")
+        vehicle, depot, station, entrance, exit_tile = map(
+            int, (vehicle, depot, station, entrance, exit_tile)
+        )
+        observations = [vehicle_rows(path)[vehicle] for path in run["snapshots"]]
+        if not any(
+            row["tile"] != depot and row["motion_counter"] > 0 for row in observations
+        ):
+            raise RuntimeError("movement vehicle did not leave its depot")
+        if not any(row["last_station_visited"] != 65535 for row in observations):
+            raise RuntimeError("movement vehicle did not visit its ordered station")
+        chunks = read_save(run["snapshots"][-1])
+        transport = 0 if route == "train-bridge" else 1
+        for tile in (entrance, exit_tile):
+            if (
+                chunks["MAPT"]["raw"][tile] >> 4 != 9
+                or (chunks["MAP5"]["raw"][tile] >> 2) & 3 != transport
+                or bool(chunks["MAP5"]["raw"][tile] & 128) != (transport == 0)
+            ):
+                raise RuntimeError("movement route lost its actual structure head")
+        if mode == "snapshots" and not any(
+            station <= row["tile"] < entrance for row in observations
+        ):
+            raise RuntimeError("movement vehicle did not reach the far side")
+        prefix = "train_bridge" if route == "train-bridge" else "road_tunnel"
+        result[f"{mode}_{role}_movement"] = core.branch_witnesses(
+            scenario, run, role, "movement", [prefix + "_enter", prefix + "_exit"]
+        )
+        result[f"{mode}_{role}_route"] = observations
+        return
     if not scenario.get("rail_fixture"):
         return
     ground = ["rail_power", "rail_weight"]
