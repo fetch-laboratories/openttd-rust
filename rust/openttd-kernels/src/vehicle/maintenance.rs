@@ -934,15 +934,17 @@ crate::abi::layouts! {
     };
 }
 impl VehicleServices {
-    /// Run a `vehicle::maintenance` port whose only precondition is the live serialized
-    /// shell `v` that every vehicle entry supplies.
+    /// Run a vehicle-maintenance entry.
+    /// # Safety
+    /// The caller must meet all preconditions of `entry(v, self)`, including a live,
+    /// serialized shell and ending owner borrows before any reentrant callback.
     #[inline]
-    pub(crate) fn maintain<R>(
+    pub(crate) unsafe fn maintain<R>(
         &self,
         v: VehicleRef,
         entry: unsafe fn(VehicleRef, &VehicleServices) -> R,
     ) -> R {
-        // SAFETY: Live serialized shell; no owner borrow spans the call.
+        // SAFETY: The caller satisfies the supplied entry's complete contract.
         unsafe { entry(v, self) }
     }
 }

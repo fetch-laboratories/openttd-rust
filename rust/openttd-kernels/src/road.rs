@@ -8,6 +8,8 @@
 //! Road vehicle movement, consist traversal and private counters and cache. Observations are
 //! copies taken at the original read points and refreshed after every service that can
 //! change them.
+//! Entries keep vehicle shells and their service tables live and serialized through
+//! maintenance calls; no owner borrow spans a callback that can reenter or mutate it.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -1223,7 +1225,7 @@ impl Game<'_> {
             if self.close(v, d.z, x, y, direction, false).is_some() {
                 return true;
             }
-            self.vs.maintain(v.v, maintenance::service_in_depot);
+            unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
             service!(self.vs.leave_unbunching_depot)(v.v);
             self.start_sound(v);
             service!(self.vs.write_speed)(v.v, 0);
@@ -1817,9 +1819,10 @@ impl Game<'_> {
     fn service(&self, v: Part) {
         let r = service!(self.l.service_read)(v.v);
         if r.servint == 0
-            || !self
-                .vs
-                .maintain(v.v, maintenance::needs_automatic_servicing)
+            || !unsafe {
+                self.vs
+                    .maintain(v.v, maintenance::needs_automatic_servicing)
+            }
         {
             return;
         }
@@ -1843,7 +1846,7 @@ impl Game<'_> {
             }
         }
         if all_in_depot {
-            self.vs.maintain(v.v, maintenance::service_in_depot);
+            unsafe { self.vs.maintain(v.v, maintenance::service_in_depot) };
             return;
         }
         let penalty = service!(self.l.max_depot_penalty)();
@@ -1874,14 +1877,14 @@ impl Game<'_> {
     }
     /// `RoadVehicle::OnNewEconomyDay`.
     fn economy_day(&self, v: Part) {
-        self.vs.maintain(v.v, maintenance::economy_age_vehicle);
+        unsafe { self.vs.maintain(v.v, maintenance::economy_age_vehicle) };
         let day = service!(self.vs.day)(v.v).wrapping_add(1);
         service!(self.vs.write_day)(v.v, day);
         if day & 7 == 0 {
-            self.vs.maintain(v.v, maintenance::decrease_vehicle_value);
+            unsafe { self.vs.maintain(v.v, maintenance::decrease_vehicle_value) };
         }
         if v.get(BLOCKED) == 0 {
-            self.vs.maintain(v.v, maintenance::check_vehicle_breakdown);
+            unsafe { self.vs.maintain(v.v, maintenance::check_vehicle_breakdown) };
         }
         self.service(v);
         let running = service!(self.vs.check_orders)(v.v);

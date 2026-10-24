@@ -6,6 +6,8 @@
  */
 
 //! Complete ship controller and canonical private scalars. Shared path stays in `ship_yapf`.
+//! Entries keep vehicle shells and their service tables live and serialized through
+//! maintenance calls; no owner borrow spans a callback that can reenter or mutate it.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
@@ -434,14 +436,15 @@ impl Game<'_> {
     }
     fn service(&self, id: u32, v: VehicleRef) {
         if (self.leaves.servint)(id) == 0
-            || !self
-                .vs()
-                .maintain(v, maintenance::needs_automatic_servicing)
+            || !unsafe {
+                self.vs()
+                    .maintain(v, maintenance::needs_automatic_servicing)
+            }
         {
             return;
         }
         if (self.leaves.chain_depot)(id) {
-            self.vs().maintain(v, maintenance::service_in_depot);
+            unsafe { self.vs().maintain(v, maintenance::service_in_depot) };
             return;
         }
         let distance = (self.leaves.max_distance)();
@@ -516,7 +519,7 @@ impl Game<'_> {
         (self.leaves.set_speed)(id, 0);
         self.viewport(id);
         (self.leaves.depot_dirty)(id);
-        self.vs().maintain(v, maintenance::service_in_depot);
+        unsafe { self.vs().maintain(v, maintenance::service_in_depot) };
         (self.leaves.leave_unbunch)(id);
         (self.leaves.play_sound)(id);
         (self.leaves.depot_invalidate)(id);
@@ -655,7 +658,7 @@ impl Game<'_> {
         let observed_order_time = (self.leaves.order_time)(id);
         (self.leaves.set_tick)(id, observed_tick.wrapping_add(1) as u8);
         (self.leaves.set_order_time)(id, observed_order_time.wrapping_add(1) as i32);
-        let breakdown = self.vs().maintain(v, maintenance::handle_breakdown_status);
+        let breakdown = unsafe { self.vs().maintain(v, maintenance::handle_breakdown_status) };
         if breakdown.broken {
             return;
         }
@@ -929,7 +932,7 @@ pub unsafe extern "C" fn openttd_rust_ship_calendar_day(
     services: *const Services,
 ) {
     let game = entry_game!(leaves, services, (leaves.state_owner)(id));
-    game.vs().maintain(vehicle, maintenance::age_vehicle);
+    unsafe { game.vs().maintain(vehicle, maintenance::age_vehicle) };
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_economy_day(
@@ -940,16 +943,22 @@ pub unsafe extern "C" fn openttd_rust_ship_economy_day(
 ) {
     let game = entry_game!(leaves, services, (leaves.state_owner)(id));
     crate::witness::hit(crate::witness::SHIP_ECONOMY_DAY);
-    game.vs()
-        .maintain(vehicle, maintenance::economy_age_vehicle);
+    unsafe {
+        game.vs()
+            .maintain(vehicle, maintenance::economy_age_vehicle);
+    };
     let day = (game.leaves.day)(id).wrapping_add(1);
     (game.leaves.set_day)(id, day as u8);
     if day & 7 == 0 {
-        game.vs()
-            .maintain(vehicle, maintenance::decrease_vehicle_value);
+        unsafe {
+            game.vs()
+                .maintain(vehicle, maintenance::decrease_vehicle_value);
+        };
     }
-    game.vs()
-        .maintain(vehicle, maintenance::check_vehicle_breakdown);
+    unsafe {
+        game.vs()
+            .maintain(vehicle, maintenance::check_vehicle_breakdown);
+    };
     game.service(id, vehicle);
     (game.leaves.check_orders)(id);
     let ticks = (game.leaves.running)(id);

@@ -643,8 +643,15 @@ impl<'a> Game<'a> {
         unsafe { &*self.leaves.vehicle }
     }
     /// Run one `vehicle::maintenance` entry on this entry's shell.
-    fn maintain<R>(&self, id: Handle, entry: unsafe fn(VehicleRef, &VehicleServices) -> R) -> R {
-        self.vs().maintain(id.vehicle(), entry)
+    /// # Safety
+    /// The caller must satisfy `entry`'s preconditions for this shell and table.
+    unsafe fn maintain<R>(
+        &self,
+        id: Handle,
+        entry: unsafe fn(VehicleRef, &VehicleServices) -> R,
+    ) -> R {
+        // SAFETY: The caller meets the maintenance entry contract.
+        unsafe { self.vs().maintain(id.vehicle(), entry) }
     }
     /// `TryPathReserve`.
     fn try_path_reserve(&self, id: Handle, mark_as_reserved: bool, first_tile_okay: bool) -> bool {
@@ -664,13 +671,16 @@ impl<'a> Game<'a> {
         unsafe { crate::vehicle::occupancy::update(self.vs(), id.vehicle(), false) };
     }
     fn handle_breakdown(&self, id: Handle) -> bool {
-        self.maintain(id, maintenance::vehicle_handle_breakdown)
+        // SAFETY: The live train and unborrowed owner satisfy `vehicle_handle_breakdown`.
+        unsafe { self.maintain(id, maintenance::vehicle_handle_breakdown) }
     }
     fn needs_automatic_servicing(&self, id: Handle) -> bool {
-        self.maintain(id, maintenance::needs_automatic_servicing)
+        // SAFETY: The live train and unborrowed owner satisfy `needs_automatic_servicing`.
+        unsafe { self.maintain(id, maintenance::needs_automatic_servicing) }
     }
     fn service_in_depot(&self, id: Handle) {
-        self.maintain(id, maintenance::service_in_depot);
+        // SAFETY: The live train and unborrowed owner satisfy `service_in_depot`.
+        unsafe { self.maintain(id, maintenance::service_in_depot) };
     }
     /// `SetWindowDirty(WC_VEHICLE_VIEW, v->index)`.
     fn view_dirty(&self, id: Handle) {
@@ -2555,14 +2565,17 @@ impl Game<'_> {
         (self.leaves.start_stop_dirty)(id);
     }
     fn economy_day(&self, id: Handle) {
-        self.maintain(id, maintenance::economy_age_vehicle);
+        // SAFETY: The live train and unborrowed owner satisfy `economy_age_vehicle`.
+        unsafe { self.maintain(id, maintenance::economy_age_vehicle) };
         let day = (self.leaves.read_day)(id).wrapping_add(1);
         (self.leaves.write_day)(id, (u64::from(day)) as u8);
         if day & 7 == 0 {
-            self.maintain(id, maintenance::decrease_vehicle_value);
+            // SAFETY: The live train and unborrowed owner satisfy `decrease_vehicle_value`.
+            unsafe { self.maintain(id, maintenance::decrease_vehicle_value) };
         }
         if (self.leaves.read_front)(id) != 0 {
-            self.maintain(id, maintenance::check_vehicle_breakdown);
+            // SAFETY: The live train and unborrowed owner satisfy `check_vehicle_breakdown`.
+            unsafe { self.maintain(id, maintenance::check_vehicle_breakdown) };
             self.needs_service(id);
             (self.leaves.check_orders)(id);
             if (self.leaves.read_order)(id) == OT_GOTO_STATION {
@@ -2788,7 +2801,8 @@ pub unsafe extern "C" fn openttd_rust_train_calendar_day(
     services: *const Services,
 ) {
     let g = entry_game!(leaves, services);
-    g.maintain(id, maintenance::age_vehicle);
+    // SAFETY: The live train and unborrowed owner satisfy `age_vehicle`.
+    unsafe { g.maintain(id, maintenance::age_vehicle) };
 }
 /// Invoke synchronous train policy with live serialized services.
 /// # Safety
