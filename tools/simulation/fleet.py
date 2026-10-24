@@ -294,6 +294,28 @@ def check(scenario, run, mode, role, result):
     for line in required:
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
+    if scenario["fleet"] == "transaction-rail":
+        cases = [(7, value) for value in (0, 0xFD, 0xFE, 0xFF, 0x100)]
+        cases += [
+            (8, value) for value in (0, 0x400, 0x401, 0x40F, 0x402, 0x403, 0xFFFF)
+        ]
+        lines = [
+            line.split() for line in run["log"] if line.startswith("FLEET attachment ")
+        ]
+        expected = {
+            (str(v), str(r), execute) for v, r in cases for execute in ("false", "true")
+        }
+        if (
+            len(lines) != len(expected)
+            or {tuple(line[2:5]) for line in lines} != expected
+            or any(
+                line[5] != "true" or int(line[6]) < 1 or line[7:] != ["true"] * 3
+                for line in lines
+            )
+        ):
+            raise RuntimeError(
+                "missing real attachment callback outcome/state/RNG evidence"
+            )
     if scenario["fleet"] in ("transaction-build-road", "transaction-rail"):
         kind = "road" if scenario["fleet"] == "transaction-build-road" else "rail"
         probes = [line for line in run["log"] if line.startswith("FLEET ground-probe ")]

@@ -19,6 +19,9 @@
 #include "../newgrf_sound.h"
 #include "abi_layout.hpp"
 #include "../rust/fleet_ffi.h"
+#ifdef WITH_RUST
+#include "../rust/company_adapter.h"
+#endif
 #include "../safeguards.h"
 
 /* Exercise CallVehicleTicks itself, with the original PoolIterator as oracle.
@@ -60,6 +63,21 @@ struct SchedulerLifetimeVehicle final : Vehicle {
 		return true;
 	}
 };
+#ifdef WITH_RUST
+TEST_CASE("Vehicle maintenance previous ID preserves the company sentinel")
+{
+	struct Restore { ~Restore() { _vehicle_pool.CleanPool(); } } restore;
+	_vehicle_pool.CleanPool();
+	REQUIRE(Vehicle::CanAllocateItem(2));
+	auto *head = new (VehicleID(0)) SchedulerLifetimeVehicle();
+	auto *part = new (VehicleID(1)) SchedulerLifetimeVehicle();
+	head->SetNext(part);
+	const auto &services = GetRustCompanyServices();
+	CHECK(services.vehicle_previous(head->index.base()) == UINT32_MAX);
+	CHECK(services.vehicle_previous(part->index.base()) == head->index.base());
+}
+#endif
+
 TEST_CASE("Base vehicle scheduler - production deletion, reuse and reallocation order")
 {
 	struct Restore {
@@ -461,10 +479,23 @@ TEST_CASE("Vehicle occupancy - canonical links, stale removal and copied cursors
 	const auto &s = GetRustVehicleServices();
 	CHECK(s.tile_links(RustVehicle(a)) == &a->tile_links);
 	CHECK(s.tile_links(RustVehicle(b)) == &b->tile_links);
+	const auto update = s.occupancy_update(RustVehicle(a));
+	CHECK(update.links == &a->tile_links);
+	CHECK(update.tile == a->tile.base());
+	a->x_pos = 17; a->y_pos = 29;
+	const auto near = s.occupancy_near(RustVehicle(a));
+	CHECK(near.links == &a->tile_links);
+	CHECK(near.xy.x == 17); CHECK(near.xy.y == 29);
 	CHECK(b->tile_links.next == RustVehicle(a));
 	CHECK(a->tile_links.prev == &b->tile_links.next);
 	auto it = VehiclesOnTile(a->tile).begin(), copy = it;
-	openttd_rust_occupancy_update(&s, RustVehicle(b), true);
+	// Removal must not read tile, dimensions or either normal observation.
+	auto removal = s;
+	removal.tile = [](OpenTTDVehicle *) noexcept -> uint32_t { CHECK(false); return 0; };
+	removal.map_log_x = []() noexcept -> uint32_t { CHECK(false); return 0; };
+	removal.occupancy_update = [](OpenTTDVehicle *) noexcept -> OpenTTDOccupancyUpdateObservation { CHECK(false); return {}; };
+	removal.occupancy_near = [](OpenTTDVehicle *) noexcept -> OpenTTDOccupancyNearObservation { CHECK(false); return {}; };
+	openttd_rust_occupancy_update(&removal, RustVehicle(b), true);
 	CHECK(b->tile_links.current == nullptr);
 	CHECK(b->tile_links.next == RustVehicle(a)); // Source retains stale next.
 	++it; ++copy;

@@ -24,7 +24,7 @@ use crate::{
     cargopacket::MTA_LOAD,
     linkgraph::live,
     linkgraph_schedule::{self, Services as ScheduleServices},
-    linkgraph_type::EdgeUpdateModes,
+    linkgraph_type::{EdgeUpdateModes, INVALID_LINK_GRAPH},
     map_func::Map,
     order_type::{
         INVALID_VEH_ORDER_ID, ODATF_HALT, ODATF_NEAREST_DEPOT, ODTF_PART_OF_ORDERS, OLFB_NO_LOAD,
@@ -183,10 +183,11 @@ pub(crate) fn increase_stats(
     let l = s.links;
     // `Station::Get(next_station_id)`.
     let st2 = (s.station.station)(next).base;
-    let mut graph = live::station_graph(st, cargo, l.graphs);
-    let second = live::station_graph(st2, cargo, l.graphs);
-    if graph.is_null() {
-        if second.is_null() {
+    let first_id = (l.graphs.graph_id)(st, cargo);
+    let second_id = (l.graphs.graph_id)(st2, cargo);
+    let mut graph = std::ptr::null_mut();
+    if first_id == INVALID_LINK_GRAPH {
+        if second_id == INVALID_LINK_GRAPH {
             if (l.graphs.available)() {
                 witness::hit(witness::VISITS_GRAPH_NEW);
                 graph = (l.graphs.allocate)(cargo);
@@ -199,43 +200,49 @@ pub(crate) fn increase_stats(
                 (l.graphs.allocation_failure)();
             }
         } else {
-            graph = second;
+            graph = (l.graphs.get)(second_id);
         }
         if !graph.is_null() {
             unsafe {
                 live::join(graph, (l.graphs.station_id)(st), l.graphs);
             }
         }
-    } else if second.is_null() {
+    } else if second_id == INVALID_LINK_GRAPH {
+        graph = (l.graphs.get)(first_id);
         witness::hit(witness::VISITS_GRAPH_JOIN);
         unsafe {
             live::join(graph, (l.graphs.station_id)(st2), l.graphs);
         }
-    } else if graph != second {
-        if unsafe {
-            (&*live::resolve(graph, l.graphs)).size() < (&*live::resolve(second, l.graphs)).size()
-        } {
-            witness::hit(witness::VISITS_GRAPH_MERGE_SECOND);
-            unsafe {
-                linkgraph_schedule::openttd_rust_schedule_dequeue(graph);
-                live::openttd_rust_live_graph_merge(
-                    second,
-                    graph,
-                    (s.shared.economy_date)(),
-                    l.graphs,
-                );
-            }
-            graph = second;
-        } else {
-            witness::hit(witness::VISITS_GRAPH_MERGE_FIRST);
-            unsafe {
-                linkgraph_schedule::openttd_rust_schedule_dequeue(second);
-                live::openttd_rust_live_graph_merge(
-                    graph,
-                    second,
-                    (s.shared.economy_date)(),
-                    l.graphs,
-                );
+    } else {
+        graph = (l.graphs.get)(first_id);
+        if first_id != second_id {
+            let second = (l.graphs.get)(second_id);
+            if unsafe {
+                (&*live::resolve(graph, l.graphs)).size()
+                    < (&*live::resolve(second, l.graphs)).size()
+            } {
+                witness::hit(witness::VISITS_GRAPH_MERGE_SECOND);
+                unsafe {
+                    linkgraph_schedule::openttd_rust_schedule_dequeue(graph);
+                    live::openttd_rust_live_graph_merge(
+                        second,
+                        graph,
+                        (s.shared.economy_date)(),
+                        l.graphs,
+                    );
+                }
+                graph = second;
+            } else {
+                witness::hit(witness::VISITS_GRAPH_MERGE_FIRST);
+                unsafe {
+                    linkgraph_schedule::openttd_rust_schedule_dequeue(second);
+                    live::openttd_rust_live_graph_merge(
+                        graph,
+                        second,
+                        (s.shared.economy_date)(),
+                        l.graphs,
+                    );
+                }
             }
         }
     }
@@ -318,6 +325,18 @@ struct Refresher {
 type HopSet = BTreeSet<(u8, u8, u8)>;
 
 impl Refresher {
+    /// Original copy-assignment reuses the fixed-length refit vector's storage.
+    /// Prediction changes payloads, never the number of consist parts.
+    fn restore(&mut self, backup: &Self) {
+        self.vehicle = backup.vehicle;
+        self.capacities = backup.capacities;
+        self.refits.clone_from(&backup.refits);
+        self.cargo = backup.cargo;
+        self.allow_merge = backup.allow_merge;
+        self.full_loading = backup.full_loading;
+        self.prediction = backup.prediction;
+    }
+
     fn capacity(&mut self, cargo: u8) -> &mut u32 {
         &mut self.capacities[usize::from(cargo)]
     }
@@ -472,8 +491,7 @@ impl Refresher {
 
             // If not allowed to merge link graphs, the stations must already share one.
             if !self.allow_merge
-                && live::station_graph(st, cargo, s.links.graphs)
-                    != live::station_graph(st_to, cargo, s.links.graphs)
+                && (s.links.graphs.graph_id)(st, cargo) != (s.links.graphs.graph_id)(st_to, cargo)
             {
                 witness::hit(witness::VISITS_MERGE_BLOCKED);
                 continue;
@@ -580,7 +598,7 @@ impl Refresher {
                     for cargo in 0..NUM_CARGO {
                         if (s.station.cargo_valid)(cargo) && self.handle_refit(cargo, s) {
                             self.refresh_links(cur, next, flags, num_hops, seen, s);
-                            self.clone_from(&backup);
+                            self.restore(&backup);
                         }
                     }
                 }
@@ -1181,4 +1199,91 @@ crate::abi::layouts! {
     "OpenTTDVisitPercentStrings" ["probe"] => PercentStrings { up, down, up_down, none, };
     "OpenTTDVisitPrediction" ["probe"] => Prediction { loading_tick, last_loading, last_station, ticks, };
     "OpenTTDVisitCapacity" ["probe"] => Capacity { capacity, remaining, cargo, };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn autorefit_restore_reuses_storage_and_restores_payload() {
+        // These identities are only compared, never dereferenced by restore.
+        let vehicle = VehicleRef(std::ptr::NonNull::dangling());
+        let mut frame = Refresher {
+            vehicle,
+            capacities: [37; NUM_CARGO as usize],
+            refits: vec![
+                RefitDesc {
+                    cargo: 2,
+                    capacity: 113,
+                    remaining: 71,
+                },
+                RefitDesc {
+                    cargo: 9,
+                    capacity: 211,
+                    remaining: 0,
+                },
+            ],
+            cargo: 9,
+            allow_merge: true,
+            full_loading: true,
+            prediction: Prediction {
+                loading_tick: 123_456,
+                last_loading: 17,
+                last_station: 31,
+                ticks: 4095,
+            },
+        };
+        // The original makes one backup allocation, outside the cargo loop.
+        let backup = frame.clone();
+        let storage = frame.refits.as_ptr();
+        let capacity = frame.refits.capacity();
+        for _ in 0..NUM_CARGO {
+            let mut other_identity = 0_u8;
+            frame.vehicle = VehicleRef(std::ptr::NonNull::from(&mut other_identity).cast());
+            frame.capacities.fill(0);
+            frame.refits.fill(RefitDesc {
+                cargo: 0,
+                capacity: 0,
+                remaining: 0,
+            });
+            frame.cargo = 0;
+            frame.allow_merge = false;
+            frame.full_loading = false;
+            frame.prediction = Prediction {
+                loading_tick: 0,
+                last_loading: 0,
+                last_station: 0,
+                ticks: 0,
+            };
+            frame.restore(&backup);
+            assert_eq!(frame.refits.as_ptr(), storage);
+            assert_eq!(frame.refits.capacity(), capacity);
+            assert_eq!(frame.refits.len(), backup.refits.len());
+            assert_eq!(frame.vehicle.0, vehicle.0);
+            assert_eq!(frame.capacities, backup.capacities);
+            for (actual, expected) in frame.refits.iter().zip(&backup.refits) {
+                assert_eq!(
+                    (actual.cargo, actual.capacity, actual.remaining),
+                    (expected.cargo, expected.capacity, expected.remaining)
+                );
+            }
+            assert_eq!(frame.cargo, backup.cargo);
+            assert_eq!(frame.allow_merge, backup.allow_merge);
+            assert_eq!(frame.full_loading, backup.full_loading);
+            assert_eq!(
+                frame.prediction.loading_tick,
+                backup.prediction.loading_tick
+            );
+            assert_eq!(
+                frame.prediction.last_loading,
+                backup.prediction.last_loading
+            );
+            assert_eq!(
+                frame.prediction.last_station,
+                backup.prediction.last_station
+            );
+            assert_eq!(frame.prediction.ticks, backup.prediction.ticks);
+        }
+    }
 }

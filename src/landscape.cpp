@@ -2073,7 +2073,7 @@ const OpenTTDMovementServices &GetRustMovementServices() noexcept
 		.pixel_location = RustPixelLocation,
 		.plain_rail = RustMovementPlainRail,
 		.normal_road = RustMovementNormalRoad,
-		.is_tunnel = RustMovementTunnel,
+		.is_tunnel = RustIsTunnel,
 		.rail_station = RustMovementRailStation,
 		.road_crossing = MapSvcRoadIsLevelCrossing,
 		.tile_flat = GetRustTownFoundingServices().flat,

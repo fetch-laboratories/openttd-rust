@@ -9,10 +9,17 @@
 #ifndef RUST_SERVICES_NEWGRF_H
 #define RUST_SERVICES_NEWGRF_H
 #include "../command_type.h"
+#include "../newgrf.h"
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
 #include "../newgrf_house.h"
+#include "../newgrf_spritegroup.h"
 #include "../industrytype.h"
+
+/* These synchronous field reads borrow live native objects. Callers retain
+ * the original non-null resolver/file preconditions; nothing is cached. */
+inline uint32_t RustGRFFileID(const GRFFile *file) noexcept { return file->grfid; }
+inline uint32_t RustResolverGRFFileID(const ResolverObject *resolver) noexcept { return RustGRFFileID(resolver->grffile); }
 
 /* Borrowed GRF files remain native and live for the synchronous conversion.
  * A town shell is live for resolution (or null for a prototype); no Rust

@@ -1356,6 +1356,12 @@ mod tests {
     extern "C" fn tile(v: VehicleRef) -> u32 {
         unsafe { (*v.0.as_ptr().cast::<Fixture>()).vehicle[TILE] as u32 }
     }
+    extern "C" fn occupancy_update(v: VehicleRef) -> vehicle::occupancy::UpdateObservation {
+        vehicle::occupancy::UpdateObservation {
+            links: links(v),
+            tile: tile(v),
+        }
+    }
     extern "C" fn kind(_: VehicleRef) -> u8 {
         vehicle::VehicleType::DISASTER.0
     }
@@ -1379,6 +1385,8 @@ mod tests {
     }
     const VEHICLES: VehicleServices = VehicleServices {
         tile_links: links,
+        occupancy_update,
+        occupancy_near: unused!(vehicle::VehicleRef ; vehicle::occupancy::NearObservation),
         map_log_x: log_x,
         assertions: true,
         train_handle: unused!(*mut vehicle::OpenTTDVehicle ; crate::train::Handle),

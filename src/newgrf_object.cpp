@@ -29,6 +29,7 @@
 
 #ifdef WITH_RUST
 #include "rust/object_ffi.h"
+#include "rust/services_newgrf.h"
 #include "rust/tile_animation_services.h"
 #include "rust/services_map.h"
 #include "rust/environment_services.h"
@@ -652,7 +653,7 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 		.town_zone = [](const Town *t, uint32_t tile) noexcept { return GetTownRadiusGroup(t, TileIndex(tile)); },
 		.badges = [](const ResolverObject *r, const ObjectSpec *s, uint32_t p) noexcept { return GetBadgeVariableResult(*r->grffile, s->badges, p); },
 		.register_100 = [](const ResolverObject *r) noexcept { return r->GetRegister(0x100); },
-		.grfid = [](const ResolverObject *r) noexcept { return r->grffile->grfid; },
+		.grfid = RustResolverGRFFileID,
 		.version8 = [](const ResolverObject *r) noexcept { return r->grffile->grf_version >= 8; },
 		.override_id = [](uint16_t id, uint32_t grfid) noexcept { return _object_mngr.GetID(id, grfid); },
 		.manhattan = OpenTTDDistanceManhattan,
