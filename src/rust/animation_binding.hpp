@@ -15,7 +15,7 @@ OpenTTDAnimationBinding<Spec, Obj, Extra> MakeRustAnimationBindingDirect(
 	uint16_t (*callback)(uint16_t, uint32_t, uint32_t, const Spec *, Obj *, uint32_t, Extra) noexcept) noexcept
 {
 	return {.entry = entry, .info = info, .callback = callback,
-		.sound = [](const Spec *s, uint8_t sound, uint32_t t) noexcept { RustGRFPlayTileSound(RustSpecGRFFile(s), sound, t); },
+		.sound = RustSpecPlayTileSound<Spec>,
 		.version8 = RustSpecGRFVersion8<Spec>,
 		.speed_error = RustSpecCallbackError<Spec, Spec>};
 }

@@ -263,7 +263,7 @@ fn ambient_callback(tile: u32) {
         | ((random >> 16) & 255) << 16
         | (s.terrain)(tile);
     let v8 = u32::from((shared.tile_type)(tile)) << 24
-        | ((shared.tile_z)(tile) as u32) << 16
+        | (shared.tile_z)(tile).cast_unsigned() << 16
         | ((random >> 16) & 255) << 8
         | (if (shared.has_water_class)(tile) {
             u32::from((s.water_class)(tile).0)

@@ -68,7 +68,7 @@ struct OpenTTDTreeCommand;
 /* Designated, immutable table of noexcept services. Reads are pure. Writes are the
  * same-named tree_map.h/clear_map.h functions. Direct water calls, ambient and
  * landscape_clear can reenter tree entries; Rust holds no borrow across them and
- * reads the tile again afterwards. ambient returns whether its NewGRF callback ran.
+ * reads the tile again afterwards. Rust ambient observes its enable bit after return.
  * progress/progress_total return true when world generation was aborted: the C++
  * wrapper keeps the exception, Rust returns without another draw or write, and the
  * entry's caller rethrows it. No other C++ exception reaches these services. */

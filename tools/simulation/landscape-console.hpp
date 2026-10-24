@@ -113,14 +113,14 @@ static void GenericPrograms()
 	DeterministicSpriteGroup program, failure, procedure;
 	for (auto *p : {&program, &failure, &procedure}) { p->size = DSG_SIZE_DWORD; p->var_scope = VSG_SCOPE_SELF; }
 	procedure.default_result.calculated_result = true;
-	procedure.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x7D, .parameter = 0x10F, .and_mask = UINT32_MAX}};
+	procedure.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x7D, .parameter = 0x0F, .and_mask = UINT32_MAX}};
 	program.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x7E, .and_mask = UINT32_MAX, .subroutine = &procedure}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x10E}};
 	for (uint8_t variable : {0x40, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88}) {
 		program.adjusts.push_back({.operation = DSGA_OP_RST, .variable = variable, .and_mask = UINT32_MAX});
 		program.adjusts.push_back({.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = uint32_t(0x100 + (variable == 0x40 ? 0 : variable - 0x7F))});
 	}
 	program.default_result.group = &yes; program.error_group = &error;
-	failure.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 77}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x10F}};
+	failure.adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 77}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x0F}};
 	failure.default_result.group = &no;
 	ResolverObject registers(nullptr);
 	auto ai = [&](uint8_t source = IT_AI_UNKNOWN, uint8_t destination = IT_AI_TOWN) { return GetAiPurchaseCallbackResult(GSF_STATIONS, cargo, 13, source, destination, 55, AICE_STATION_GET_STATION_ID, 17, 19); };

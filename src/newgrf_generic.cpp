@@ -20,7 +20,7 @@
 #include "rust/services_newgrf.h"
 #include "rust/services_cargo.h"
 #include "rust/services_landscape.h"
-#include "rust/sound_services.h"
+#include "rust/services_sound.h"
 #include "rust/services_water.h"
 #endif
 
@@ -47,7 +47,7 @@ static uint16_t EvaluateGeneric(const OpenTTDGenericInvocation *invocation, int3
 	GenericResolverObject object(*invocation);
 	return object.ResolveCallback({regs, count});
 }
-void ResetGenericCallbacks()
+static const OpenTTDGenericServices &GenericServices() noexcept
 {
 	static const OpenTTDGenericServices services{
 		.shared = &GetRustSharedServices(),
@@ -65,7 +65,11 @@ void ResetGenericCallbacks()
 		.unsupported = [](uint8_t feature) noexcept { GrfMsg(5, "AddGenericCallback: Unsupported feature 0x{:02X}", feature); },
 		.unhandled = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled generic feature variable 0x{:02X}", variable); },
 	};
-	openttd_rust_generic_reset(&services);
+	return services;
+}
+void ResetGenericCallbacks()
+{
+	openttd_rust_generic_reset(&GenericServices());
 }
 void AddGenericCallback(GrfSpecFeature feature, const GRFFile *file, const SpriteGroup *group) { openttd_rust_generic_add(feature, file, group); }
 std::pair<const GRFFile *, uint16_t> GetAiPurchaseCallbackResult(GrfSpecFeature feature, CargoType cargo, uint8_t selection, IndustryType source, IndustryType destination, uint8_t distance, AIConstructionEvent event, uint8_t count, uint8_t station_size)
@@ -316,3 +320,9 @@ void AmbientSoundEffectCallback(TileIndex tile)
 }
 
 #endif /* WITH_RUST */
+
+#ifdef WITH_RUST
+#include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDGenericServices.hpp"
+bool CheckAbi_generic() { return AbiServicesComplete(GenericServices()); }
+#endif

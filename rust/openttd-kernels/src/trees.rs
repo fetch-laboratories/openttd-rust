@@ -220,7 +220,7 @@ pub struct Command {
 
 /// Tree services. Reads are pure. Writes are the named `tree_map.h`/`clear_map.h`
 /// functions. Direct water calls, `ambient` and `landscape_clear` can reenter tree
-/// entries; `ambient` returns whether its `NewGRF` callback ran. `progress` and
+/// entries. The generic owner observes its enable bit after ambient returns. `progress` and
 /// `progress_total` return true when world generation was aborted; C++ then holds
 /// the exception and rethrows it after the entry returns.
 #[repr(C)]

@@ -107,7 +107,6 @@ src/rust/ship_control_services.h | Ship_station_contains(uint32_t station, uint3
 src/rust/ship_control_services.h | Ship_station_dock(uint32_t station) noexcept | 7734a2705170a665 | 1
 src/rust/ship_control_services.h | Ship_station_visits(uint32_t station) noexcept | d145d1722eb9a141 | 1
 src/rust/ship_control_services.h | Ship_station_xy(uint32_t station) noexcept | efc252da0f94199f | 1
-src/rust/sound_services.h | OpenTTDAmbientSound() noexcept | d25b0cbd8aa2d19e | 1
 src/rust/train_reservation_services.h | TrainReservationBackoff(void *, OpenTTDTrainHandle) noexcept | 9313c60aa144dfac | 1
 src/rust/train_reservation_services.h | TrainReservationLineReverse(void *, OpenTTDTrainHandle) noexcept | 1960f2e4194b13e4 | 1
 src/rust/train_reservation_services.h | TrainReservationReservePaths(void *, OpenTTDTrainHandle) noexcept | ca4028cc43e737ca | 1

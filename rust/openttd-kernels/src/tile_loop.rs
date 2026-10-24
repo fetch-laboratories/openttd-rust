@@ -15,8 +15,8 @@
 //! script events, but none changes map dimensions, climate, tree placement, tick
 //! counter, editor mode, road-rebuild or client ambient settings. Generation progress also runs outside this
 //! entry. `_misc_grf_features` is changed by reset and GRF `ActionD` loading,
-//! both excluded from this batch. The ambient callback feature bit is captured
-//! per independent entry, never cached globally or substituted by client audio.
+//! both excluded from this batch. The Rust generic owner observes the feature bit
+//! at the original ambient call site, never substituting client audio.
 //! Enabled callbacks retain their source RNG position; the tree legacy adapter
 //! still rereads the feature bit after its call. Thus settings are entry-local;
 //! tree/map observations still occur inside each owner at original callback sites.

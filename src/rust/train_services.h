@@ -12,7 +12,7 @@
 #include "services_station.h"
 
 /** @file train_services.h Direct shared-world operations; no train policy. */
-#include "sound_services.h"
+#include "services_sound.h"
 
 #include "vehicle_services.h"
 #include "engine_services.h"
