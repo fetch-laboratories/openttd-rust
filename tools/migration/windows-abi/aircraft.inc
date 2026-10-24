@@ -180,7 +180,7 @@ static void AircraftPhaseBoundary()
 	v.base_viewport = [](OpenTTDVehicle *) noexcept {};
 	v.tile_links = [](OpenTTDVehicle *shell) noexcept { return &aircraft_probe.links[shell == aircraft_probe.vehicle.handle ? 0 : 1]; };
 	v.tile = [](OpenTTDVehicle *) noexcept { return uint32_t{0}; };
-	v.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = v.tile_links(shell), .tile = v.tile(shell)}; };
+	v.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = aircraft_probe.vehicle_services.tile_links(shell), .tile = aircraft_probe.vehicle_services.tile(shell)}; };
 	v.map_log_x = []() noexcept { return uint32_t{6}; };
 	CHECK(openttd_rust_aircraft_event(&leaves, p.vehicle, false));
 	CHECK(p.moves == 1 && p.x == 1 && p.y == 0 && p.progress == 1);
