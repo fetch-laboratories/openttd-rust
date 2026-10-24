@@ -19,8 +19,13 @@
     clippy::needless_late_init,
     clippy::if_not_else
 )]
+use crate::order_type::{
+    OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION, OT_LOADING,
+};
 use crate::services::Services;
-use crate::vehicle::{VS_STOPPED, VehicleRef, VehicleServices, maintenance};
+use crate::tile_type::{MP_INDUSTRY, MP_TUNNELBRIDGE};
+use crate::vehicle::{VehicleRef, VehicleServices, maintenance};
+use crate::vehicle_base::VS_STOPPED;
 use crate::water_regions::Patch;
 use std::cell::UnsafeCell;
 use std::collections::{HashSet, VecDeque};
@@ -444,7 +449,7 @@ impl Game<'_> {
             (self.leaves.order_depot)(id, depot.id);
             self.destination(id, depot.tile);
             (self.leaves.start_dirty)(id);
-        } else if (self.leaves.order_type)(id) == 2 {
+        } else if (self.leaves.order_type)(id) == u32::from(OT_GOTO_DEPOT) {
             (self.leaves.order_dummy)(id);
             (self.leaves.start_dirty)(id);
         }
@@ -482,7 +487,7 @@ impl Game<'_> {
         let observed_dest = (self.leaves.dest)(id);
         let observed_order_destination = (self.leaves.order_destination)(id);
         let observed_order_type = (self.leaves.order_type)(id);
-        if observed_order_type == 2
+        if observed_order_type == u32::from(OT_GOTO_DEPOT)
             && (self.leaves.is_depot)(observed_tile)
             && (self.leaves.depot_index)(observed_tile) == observed_order_destination
         {
@@ -627,7 +632,7 @@ impl Game<'_> {
             {
                 return true;
             }
-            if (self.leaves.tile_type)(adjacent) == 8
+            if (self.leaves.tile_type)(adjacent) == u32::from(MP_INDUSTRY)
                 && (self.leaves.industry_station)(adjacent) == station
             {
                 return true;
@@ -672,7 +677,7 @@ impl Game<'_> {
             return;
         }
         self.vs().handle_loading(v, false);
-        if (self.leaves.order_type)(id) == 3 {
+        if (self.leaves.order_type)(id) == u32::from(OT_LOADING) {
             return;
         }
         if self.stay_depot(id, v) {
@@ -724,7 +729,7 @@ impl Game<'_> {
                         let observed_direction = (self.leaves.direction)(id);
                         let observed_order_destination = (self.leaves.order_destination)(id);
                         let observed_order_type = (self.leaves.order_type)(id);
-                        if observed_order_type == 4 {
+                        if observed_order_type == u32::from(OT_LEAVESTATION) {
                             (self.leaves.order_free)(id);
                             (self.leaves.start_dirty)(id);
                             let exit =
@@ -735,20 +740,24 @@ impl Game<'_> {
                                 return;
                             }
                         } else if observed_dest != 0 {
-                            if observed_order_type == 6
+                            if observed_order_type == u32::from(OT_GOTO_WAYPOINT)
                                 && (self.leaves.dist_manhattan)(observed_dest, new_tile) <= 3
                             {
                                 crate::witness::hit(crate::witness::SHIP_BUOY);
                                 (self.leaves.timetable)(id);
                                 (self.leaves.order_increment)(id);
                                 (self.leaves.order_dummy)(id);
-                            } else if observed_order_type == 2 && observed_dest == new_tile {
+                            } else if observed_order_type == u32::from(OT_GOTO_DEPOT)
+                                && observed_dest == new_tile
+                            {
                                 if x & 15 == 8 && y & 15 == 8 {
                                     crate::witness::hit(crate::witness::SHIP_DEPOT_ENTER);
                                     self.vs().enter_depot(v);
                                     return;
                                 }
-                            } else if observed_order_type == 1 && (self.leaves.docking)(new_tile) {
+                            } else if observed_order_type == u32::from(OT_GOTO_STATION)
+                                && (self.leaves.docking)(new_tile)
+                            {
                                 let station = observed_order_destination;
                                 if (self.leaves.station_contains)(station, new_tile)
                                     && self.destination_station(new_tile, station)
@@ -820,7 +829,7 @@ impl Game<'_> {
                 }
             } else {
                 crate::witness::hit(crate::witness::SHIP_AQUEDUCT);
-                if (self.leaves.tile_type)(new_tile) != 9
+                if (self.leaves.tile_type)(new_tile) != u32::from(MP_TUNNELBRIDGE)
                     || u32::from(unsafe {
                         crate::movement::enter(self.services, v, new_tile, x as i32, y as i32)
                     }) & 2

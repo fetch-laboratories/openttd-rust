@@ -653,7 +653,7 @@ pub(crate) unsafe fn road_tile_loop(
                     let empty = unsafe { ((*c.costs).success)(out) };
                     // SAFETY: The command/check has returned; no result access follows.
                     unsafe { (c.release)(call) };
-                    if empty && crate::services::chance16_i(1, 40, (s.random)(s.context)) {
+                    if empty && crate::random_func::chance16_i(1, 40, (s.random)(s.context)) {
                         (r.set_roadside)(tile, Roadside(if side <= 1 { 6 } else { 7 }));
                         hit(Witness::RoadWorkStart);
                         if ambient {

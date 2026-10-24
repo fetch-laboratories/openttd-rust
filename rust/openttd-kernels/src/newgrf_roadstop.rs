@@ -114,9 +114,7 @@ impl Services {
         unsafe { &*self.shared }
     }
     fn map(&self) -> crate::map_func::Map {
-        crate::map_func::Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        }
+        self.shared().map()
     }
     fn random(&self) -> u32 {
         (self.shared().random)(self.shared().context)

@@ -34,6 +34,10 @@ pub const DIAGDIR_SE: u8 = 1;
 pub const DIAGDIR_SW: u8 = 2;
 /// `DIAGDIR_NW`.
 pub const DIAGDIR_NW: u8 = 3;
+/// `DIAGDIR_BEGIN`.
+pub const DIAGDIR_BEGIN: u8 = 0;
+/// `DIAGDIR_END`.
+pub const DIAGDIR_END: u8 = 4;
 /// `INVALID_DIAGDIR`.
 pub const INVALID_DIAGDIR: u8 = 0xFF;
 

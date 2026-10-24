@@ -17,6 +17,11 @@
     clippy::many_single_char_names,
     clippy::items_after_statements
 )]
+use crate::order_type::{
+    OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT, OT_LEAVESTATION,
+    OT_LOADING, OT_NOTHING,
+};
+use crate::tile_type::INVALID_TILE;
 use crate::track_func::{
     find_first_trackdir as first, track_bits_to_trackdir_bits as dirs,
     trackdir_bits_to_track_bits as tracks,
@@ -24,7 +29,6 @@ use crate::track_func::{
 use crate::track_type::{TRACK_BIT_DEPOT as DEPOT, TRACK_BIT_WORMHOLE as WORMHOLE};
 
 use crate::train::Handle;
-const INVALID: u32 = u32::MAX;
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct TrainReservationFreeRead {
@@ -84,8 +88,8 @@ pub struct Follow {
 impl Default for Follow {
     fn default() -> Self {
         Self {
-            old_tile: INVALID,
-            new_tile: INVALID,
+            old_tile: INVALID_TILE,
+            new_tile: INVALID_TILE,
             skipped: 0,
             dirs: 0,
             old_td: 0xff,
@@ -108,7 +112,7 @@ pub struct Pbs {
 impl Default for Pbs {
     fn default() -> Self {
         Self {
-            tile: INVALID,
+            tile: INVALID_TILE,
             other: Handle::NONE,
             td: 0xff,
             okay: 0,
@@ -1020,7 +1024,7 @@ fn choose(
     let mut best = 0xff;
     let mut reserve = g.svc_reserve_paths(id) != 0 || force;
     let mut changed = false;
-    let mut final_dest = INVALID;
+    let mut final_dest = INVALID_TILE;
     let mut got = false;
     let res =
         g.svc_reserved(id, u64::from(tile)) as u8 & g.svc_reach_tracks(id, u64::from(dir)) as u8;
@@ -1058,7 +1062,7 @@ fn choose(
     let mut dest_dir = dir;
     if reserve {
         dest = extend(g, id, &mut available, &mut dest_dir);
-        if dest.tile == INVALID {
+        if dest.tile == INVALID_TILE {
             if mark {
                 g.svc_stuck(id);
             }
@@ -1080,17 +1084,17 @@ fn choose(
             return (best, true);
         }
         g.svc_service(id);
-        if matches!(g.read_order(id), 2 | 5 | 7) {
+        if matches!(g.read_order(id), OT_GOTO_DEPOT | OT_DUMMY | OT_CONDITIONAL) {
             (g.leaves.process_orders)(id);
         }
     }
     let mut orders = Orders::new(g, id);
     let v = g.read_choose(id);
-    if v.order == 4 {
+    if v.order == OT_LEAVESTATION {
         orders.next(false);
-    } else if v.order == 3
-        || (v.order != 2
-            && if v.order == 1 {
+    } else if v.order == OT_LOADING
+        || (v.order != OT_GOTO_DEPOT
+            && if v.order == OT_GOTO_STATION {
                 (g.svc_is_station(id, u64::from(v.tile)) != 0)
                     && u64::from(v.destination) == g.svc_station(id, u64::from(v.tile))
             } else {
@@ -1099,7 +1103,7 @@ fn choose(
     {
         orders.next(true);
     }
-    if dest.tile != INVALID && dest.okay == 0 {
+    if dest.tile != INVALID_TILE && dest.okay == 0 {
         let new_tile = dest.tile;
         let result = g.pathfind(id, new_tile, dest_dir, available, reserve, true);
         dest = pbs(result);
@@ -1112,14 +1116,14 @@ fn choose(
     if !reserve {
         return (best, false);
     }
-    if dest.tile != INVALID && dest.okay == 0 {
+    if dest.tile != INVALID_TILE && dest.okay == 0 {
         if mark {
             g.svc_stuck(id);
         }
         free(g, id);
         return (best, false);
     }
-    if dest.tile == INVALID {
+    if dest.tile == INVALID_TILE {
         let origin = g.origin(id, false);
         if g.safe_track(id, origin.tile, origin.td, false) {
             let res = g.svc_reserved(id, u64::from(tile)) as u8
@@ -1150,7 +1154,7 @@ fn choose(
         }
         if orders.next(true) {
             let current = pbs(g.pathfind(id, next, exit, reachable, true, false));
-            if current.tile != INVALID {
+            if current.tile != INVALID_TILE {
                 dest = current;
                 if dest.okay != 0 {
                     continue;
@@ -1180,9 +1184,9 @@ fn choose(
     }
     orders.restore();
     let v = g.read_choose_4(id);
-    if v.order == 2
+    if v.order == OT_GOTO_DEPOT
         && v.nearest != 0
-        && final_dest != INVALID
+        && final_dest != INVALID_TILE
         && (g.svc_is_depot(id, u64::from(final_dest)) != 0)
     {
         g.svc_set_depot_dest(id, u64::from(final_dest));
@@ -1255,19 +1259,19 @@ fn check_next(g: &Game, id: Handle) {
     }
     let v = g.read_check_next(id);
     match v.order {
-        2 => {
+        OT_GOTO_DEPOT => {
             if v.tile == v.dest {
                 return;
             }
         }
-        6 => {
+        OT_GOTO_WAYPOINT => {
             if (g.svc_is_waypoint(id, u64::from(v.tile)) != 0)
                 && g.svc_station(id, u64::from(v.tile)) == u64::from(v.destination)
             {
                 (g.leaves.process_orders)(id);
             }
         }
-        0 | 3 | 4 if v.num_orders > 0 => return,
+        OT_NOTHING | OT_LOADING | OT_LEAVESTATION if v.num_orders > 0 => return,
         _ => {}
     }
     let tile = g.read_tile(id);
@@ -1892,7 +1896,7 @@ mod tests {
         };
         let mut available = 0;
         let mut dir = 0;
-        assert_eq!(extend(&g, h, &mut available, &mut dir).tile, INVALID);
+        assert_eq!(extend(&g, h, &mut available, &mut dir).tile, INVALID_TILE);
         assert_eq!(
             m.log,
             vec![

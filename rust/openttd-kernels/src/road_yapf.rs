@@ -18,8 +18,10 @@
 )]
 use crate::map_func::Map;
 use crate::node_hash::NodeMap;
+use crate::order_type::{OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::road::{PathElement, State};
 use crate::services::Services;
+use crate::track_type::INVALID_TRACKDIR;
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 
@@ -107,7 +109,6 @@ pub struct Result {
     pub calcs: i32,
     pub distance: i32,
 }
-const INVALID: u8 = 255;
 #[derive(Clone, Copy)]
 struct Node {
     tile: u32,
@@ -271,9 +272,9 @@ impl Search<'_> {
         unsafe { (self.leaves.follow)(self.context, tile, td) }
     }
     fn destination(&mut self) {
-        if self.input.order_type == 1 || self.input.order_type == 6 {
+        if self.input.order_type == OT_GOTO_STATION || self.input.order_type == OT_GOTO_WAYPOINT {
             self.dest_station = Some(self.input.order_destination);
-            self.station_type = if self.input.order_type == 6 {
+            self.station_type = if self.input.order_type == OT_GOTO_WAYPOINT {
                 8
             } else if self.input.bus != 0 {
                 3
@@ -387,9 +388,7 @@ impl Search<'_> {
             if t.drive_through != 0 {
                 cost = cost.wrapping_add(self.input.stop);
                 let dir = crate::track_func::trackdir_to_exitdir(td);
-                let map = Map {
-                    log_x: self.input.map_x.trailing_zeros() as u8,
-                };
+                let map = Map::from_log_x(self.input.map_x.trailing_zeros());
                 if !crate::road_stop::continuation(
                     shared,
                     tile,
@@ -448,9 +447,7 @@ impl Search<'_> {
             // SAFETY: After accepted continuation, observe current/next height,
             // then vehicle and old-tile follower limits, without world mutation.
             let movement = self.movement.get();
-            let map = crate::services::Map {
-                log_x: self.input.map_x.trailing_zeros() as u8,
-            };
+            let map = crate::services::Map::from_log_x(self.input.map_x.trailing_zeros());
             let center_z = |tile| {
                 movement.pixel_z_at(
                     (map.tile_x(tile) * crate::tile_type::TILE_SIZE
@@ -594,7 +591,7 @@ impl Search<'_> {
     }
     unsafe fn reconstruct(&self, state: *mut State) -> u8 {
         let Some(mut index) = self.best() else {
-            return INVALID;
+            return INVALID_TRACKDIR;
         };
         let mut steps = 0;
         let mut cursor = index;
@@ -676,7 +673,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_choose(
 ) -> Result {
     // SAFETY: Caller-owned descriptors remain live and immutable for this call.
     let (input, leaves) = unsafe { (*input, *leaves) };
-    if tile == input.dest_tile && input.order_type != 1 {
+    if tile == input.dest_tile && input.order_type != OT_GOTO_STATION {
         return Result {
             tile,
             cost: 0,
@@ -701,7 +698,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_choose(
     let found = u8::from(search.find());
     // SAFETY: Canonical road owner live and no borrow overlaps world services.
     let mut direction = unsafe { search.reconstruct(state) };
-    if direction == INVALID {
+    if direction == INVALID_TRACKDIR {
         direction = dirs.trailing_zeros() as u8;
     }
     search.result(direction, found)
@@ -724,7 +721,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_depot(
         return Result {
             tile: u32::MAX,
             cost: 0,
-            direction: INVALID,
+            direction: INVALID_TRACKDIR,
             found: 0,
             rounds: 0,
             open: 0,
@@ -735,7 +732,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_depot(
     }
     search.startup(input.tile, 1 << input.trackdir);
     let found = u8::from(search.find());
-    search.result(INVALID, found)
+    search.result(INVALID_TRACKDIR, found)
 }
 
 /// Evidence-only entry for the exact heap tie/removal gap absent from save fields.

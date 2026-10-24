@@ -18,7 +18,8 @@ pub struct State {
     animation: u16,
     substate: u8,
 }
-use crate::services::{Services, chance16_i};
+use crate::random_func::chance16_i;
+use crate::services::Services;
 use std::ffi::c_void;
 
 /// Call-scoped copied observation of canonical C++ fields.

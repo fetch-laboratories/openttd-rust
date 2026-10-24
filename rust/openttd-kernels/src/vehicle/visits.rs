@@ -16,7 +16,8 @@
 // Truncating casts are the original's `uint` to `uint16_t` stores (below the
 // stored value) and its `Map::LogX()` byte; `if_not_else` keeps source order.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::if_not_else)]
-use super::{VS_CRASHED, VS_HIDDEN, VS_STOPPED, VehicleRef, VehicleServices, VehicleType};
+use super::{VehicleRef, VehicleServices, VehicleType};
+use crate::vehicle_base::{VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use crate::{
     base_consist::{VF_LOADING_FINISHED, VF_STOP_LOADING},
     cargo_storage::List,
@@ -25,7 +26,6 @@ use crate::{
     linkgraph::live,
     linkgraph_schedule::{self, Services as ScheduleServices},
     linkgraph_type::{EdgeUpdateModes, INVALID_LINK_GRAPH},
-    map_func::Map,
     order_type::{
         INVALID_VEH_ORDER_ID, ODATF_HALT, ODATF_NEAREST_DEPOT, ODTF_PART_OF_ORDERS, OLFB_NO_LOAD,
         OT_CONDITIONAL, OT_DUMMY, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_IMPLICIT, OT_LOADING,
@@ -474,9 +474,7 @@ impl Refresher {
         }
         let st_to = (s.station.station)(next_station).base;
         let v = self.vehicle;
-        let map = Map {
-            log_x: (s.shared.map_log_x)() as u8,
-        };
+        let map = s.shared.map();
         for cargo in 0..NUM_CARGO {
             // Refresh the link and give it a minimum capacity.
             let cargo_quantity = self.capacities[usize::from(cargo)];

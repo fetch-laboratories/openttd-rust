@@ -8,7 +8,7 @@
 //! Complete waypoint command policy; shared station operations are called directly.
 //! Native pointers are opaque, synchronous and serialized by the game-state mutex.
 use super::{
-    Area, BaseStation, CommandCost, CommandServicesTable, Cost, Ctx, SignSearch, sign_visit,
+    BaseStation, CommandCost, CommandServicesTable, Cost, Ctx, SignSearch, TileArea, sign_visit,
 };
 use crate::base_station_base::{ADD_TEST, ADD_TRY};
 use crate::command_type::DoCommandFlag;
@@ -301,7 +301,7 @@ impl Ctx<'_> {
         {
             return cost.error(INVALID_STRING_ID);
         }
-        let mut area = Area {
+        let mut area = TileArea {
             tile: start,
             w: u16::from(width),
             h: u16::from(height),
@@ -368,7 +368,7 @@ impl Ctx<'_> {
             (self.s.before_add_rect)(
                 ret.0,
                 wp,
-                Area {
+                TileArea {
                     tile: start,
                     w: u16::from(width),
                     h: u16::from(height),
@@ -398,7 +398,7 @@ impl Ctx<'_> {
         (self.s.before_add_rect)(
             ret.0,
             wp,
-            Area {
+            TileArea {
                 tile: start,
                 w: u16::from(width),
                 h: u16::from(height),
@@ -499,7 +499,7 @@ impl Ctx<'_> {
         {
             return cost.error(INVALID_STRING_ID);
         }
-        let area = Area {
+        let area = TileArea {
             tile: start,
             w: u16::from(width),
             h: u16::from(height),

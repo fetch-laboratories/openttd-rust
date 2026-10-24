@@ -85,9 +85,7 @@ struct World<'a> {
 impl<'a> World<'a> {
     unsafe fn new(a: &'a LandscapeServices) -> Self {
         let (s, c, cmd) = unsafe { (&*a.shared, &*a.costs, &*a.commands) };
-        let map = Map {
-            log_x: (s.map_log_x)() as u8,
-        };
+        let map = s.map();
         Self {
             a,
             s,

@@ -28,7 +28,7 @@ use crate::ground::ClearServices;
 use crate::heightmap::{HM_CLOCKWISE, HM_COUNTER_CLOCKWISE};
 use crate::landscape_type::{ARCTIC, TROPIC};
 use crate::node_hash::{NodeMap, NodeSet};
-use crate::services::chance16_i;
+use crate::random_func::chance16_i;
 use crate::services::{ClearGroundType, Map, Services};
 use crate::slope_func::{
     SLOPE_ELEVATED, complement_slope, get_inclined_slope_direction, is_inclined_slope,
@@ -147,9 +147,7 @@ impl<'a> World<'a> {
             a,
             s,
             clear,
-            map: Map {
-                log_x: (s.map_log_x)() as u8,
-            },
+            map: s.map(),
             size_y: (s.map_max_y)() + 1,
         }
     }

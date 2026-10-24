@@ -24,6 +24,7 @@ use crate::station_cmd::{RailSpec, RoadSpec};
 use crate::station_type::{
     AAT_ACCEPTANCE_TICK, AAT_BUILT, SAT_ACCEPTANCE_TICK, SAT_CARGO_TAKEN, SAT_NEW_CARGO,
 };
+use crate::tilearea::TileArea;
 use crate::{
     industry::{ConstructionServices, Services as Industries, TileServices},
     objects::{Object, Spec as ObjectSpec},
@@ -40,13 +41,6 @@ pub struct HouseSpec {
 #[repr(C)]
 pub struct AirportSpec {
     _private: [u8; 0],
-}
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Area {
-    pub tile: u32,
-    pub width: u16,
-    pub height: u16,
 }
 #[repr(C)]
 pub struct Services {
@@ -72,7 +66,7 @@ pub struct Services {
     pub house_spec: extern "C" fn(u16) -> *const HouseSpec,
     pub road_frame: extern "C" fn(*mut BaseStation, u32) -> u8,
     pub set_road_frame: extern "C" fn(*mut BaseStation, u32, u8) -> bool,
-    pub rail_area: extern "C" fn(*mut BaseStation, u32, u8) -> Area,
+    pub rail_area: extern "C" fn(*mut BaseStation, u32, u8) -> TileArea,
     pub rail_belongs: extern "C" fn(*mut BaseStation, u32) -> bool,
     pub station_triggers: extern "C" fn(*mut BaseStation, u8) -> bool,
     pub road_triggers: extern "C" fn(*mut BaseStation, u8) -> bool,
@@ -85,7 +79,7 @@ pub struct Services {
     pub road_cargo: extern "C" fn(*const RoadSpec, u8) -> u8,
     pub airport_cargo: extern "C" fn(*const AirportSpec, u8) -> u8,
     pub airport_grf: extern "C" fn(*const AirportSpec) -> bool,
-    pub airport_area: extern "C" fn(*mut Station) -> Area,
+    pub airport_area: extern "C" fn(*mut Station) -> TileArea,
     pub airport_belongs: extern "C" fn(*const Station, u32) -> bool,
     pub road_count: extern "C" fn(*mut BaseStation) -> usize,
     pub road_tile: extern "C" fn(*mut BaseStation, usize) -> u32,
@@ -371,15 +365,6 @@ pub(crate) unsafe fn object_change(
         0,
     );
 }
-fn tiles(area: Area, log_x: u8, f: impl FnMut(u32)) {
-    crate::tilearea::TileArea {
-        tile: area.tile,
-        w: area.width,
-        h: area.height,
-    }
-    .tiles(crate::map_func::Map { log_x })
-    .for_each(f);
-}
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_trigger_station(
     st: *mut BaseStation,
@@ -395,7 +380,7 @@ pub extern "C" fn openttd_rust_trigger_station(
     let areas = [0, 2, 2, 1, 1, 1, 2, 0, 1];
     let area = (a.rail_area)(st, tile, areas[usize::from(trigger)]);
     let b = unsafe { &*a.station };
-    tiles(area, (a.shared().map_log_x)() as u8, |t| {
+    area.tiles(a.shared().map()).for_each(|t| {
         if !(a.rail_belongs)(st, t) {
             return;
         }
@@ -507,7 +492,7 @@ pub extern "C" fn openttd_rust_trigger_airport(st: *mut Station, trigger: u8, ca
     }
     let mut ret = true;
     let mut random = a.shared().random();
-    tiles(area, (a.shared().map_log_x)() as u8, |t| {
+    area.tiles(a.shared().map()).for_each(|t| {
         if !(a.airport_belongs)(st, t) {
             return;
         }
@@ -567,7 +552,7 @@ crate::abi::layouts! {
         road_count,
         road_tile,
     };
-    "OpenTTDAnimationArea" ["probe"] => Area { tile, width, height };
+    "OpenTTDAnimationArea" ["probe"] => TileArea { tile, w => width, h => height };
     "OpenTTDHouseAnimation" ["probe"] => Binding<HouseSpec, TownHandle, u64> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDIndustryAnimation" ["probe"] => Binding<IndustrySpec, IndustryShell, i32> { entry, info, callback, sound, version8, speed_error };
     "OpenTTDStationAnimation" ["probe"] => Binding<RailSpec, BaseStation, i32> { entry, info, callback, sound, version8, speed_error };

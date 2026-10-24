@@ -10,7 +10,7 @@
 //! callbacks; native station deletion, cargo invalidation and resolver calls can
 //! revisit Rust. Map and pool storage stay native. Panics and native exceptions
 //! cannot unwind through this synchronous boundary.
-use super::{Builder, Industry, Location, Map, Services};
+use super::{Builder, Industry, Map, Services, TileArea};
 use std::{ffi::c_void, ptr};
 
 #[repr(C)]
@@ -65,19 +65,19 @@ pub struct LifecycleServices {
     pub animation_spec: unsafe extern "C" fn(u32) -> AnimationSpec,
 }
 
-pub(super) unsafe fn location(owner: *mut Industry) -> Location {
+pub(super) unsafe fn location(owner: *mut Industry) -> TileArea {
     unsafe {
-        Location {
+        TileArea {
             tile: ptr::read(ptr::addr_of!((*owner).metadata.tile)),
-            width: ptr::read(ptr::addr_of!((*owner).metadata.width)),
-            height: ptr::read(ptr::addr_of!((*owner).metadata.height)),
+            w: ptr::read(ptr::addr_of!((*owner).metadata.width)),
+            h: ptr::read(ptr::addr_of!((*owner).metadata.height)),
         }
     }
 }
-pub(super) fn tiles(area: Location, size_x: u32, mut operation: impl FnMut(u32)) {
-    for y in 0..u32::from(area.height) {
+pub(super) fn tiles(area: TileArea, size_x: u32, mut operation: impl FnMut(u32)) {
+    for y in 0..u32::from(area.h) {
         let row = area.tile.wrapping_add(y.wrapping_mul(size_x));
-        for x in 0..u32::from(area.width) {
+        for x in 0..u32::from(area.w) {
             operation(row.wrapping_add(x));
         }
     }
@@ -109,10 +109,10 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
     }
     let has_neutral_station = !unsafe { (w.neutral_station)(industry) }.is_null();
     let area = unsafe {
-        Location {
+        TileArea {
             tile: ptr::read(ptr::addr_of!((*owner).metadata.tile)),
-            width,
-            height: ptr::read(ptr::addr_of!((*owner).metadata.height)),
+            w: width,
+            h: ptr::read(ptr::addr_of!((*owner).metadata.height)),
         }
     };
     tiles(area, map.size_x, |tile| unsafe {
@@ -146,10 +146,10 @@ pub unsafe extern "C" fn openttd_rust_industry_cleanup(
         let sy = y.saturating_sub(21);
         let ex = x.wrapping_add(21).min(map.size_x);
         let ey = y.wrapping_add(21).min(map.size_y);
-        let fields = Location {
+        let fields = TileArea {
             tile: sy.wrapping_mul(map.size_x).wrapping_add(sx),
-            width: (ex - sx) as u16,
-            height: (ey - sy) as u16,
+            w: (ex - sx) as u16,
+            h: (ey - sy) as u16,
         };
         tiles(fields, map.size_x, |tile| unsafe {
             if (w.industry_field)(tile, id) {

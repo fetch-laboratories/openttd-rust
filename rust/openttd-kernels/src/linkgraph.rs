@@ -14,6 +14,7 @@
 
 pub(crate) mod live;
 
+use crate::timer_game_tick::DAY_TICKS;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// Opaque live native `LinkGraph`; never dereferenced by Rust.
@@ -525,9 +526,9 @@ impl Job {
                 let edge_distance =
                     distance(self.nodes[from].base, self.nodes[to].base).wrapping_add(1);
                 let time = if edge.travel_time != 0 {
-                    edge.travel_time.wrapping_add(74)
+                    edge.travel_time.wrapping_add(DAY_TICKS as u32)
                 } else {
-                    edge_distance.wrapping_mul(74)
+                    edge_distance.wrapping_mul(DAY_TICKS as u32)
                 };
                 let edge_distance = if self.settings.express != 0 {
                     time
