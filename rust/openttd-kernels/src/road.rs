@@ -424,7 +424,6 @@ pub struct Leaves {
     pub ground: *const GroundServices,
     pub shared: *const Services,
     pub max_depot_penalty: extern "C" fn() -> u32,
-    /// `ProcessOrders(v)`.
     pub visual_read: extern "C" fn(VehicleRef) -> VisualRead,
     pub visual_effect_then_speed: extern "C" fn(VehicleRef, u32) -> SpeedRead,
     pub speed_read: extern "C" fn(VehicleRef) -> SpeedRead,

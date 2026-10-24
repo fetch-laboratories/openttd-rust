@@ -2503,7 +2503,7 @@ impl Game<'_> {
                     && (self.leaves.is_station_any)(Handle::NONE, v.tile) != 0
                     && u64::from(v.order_destination) == (self.leaves.station)(Handle::NONE, v.tile)
                 {
-                    // SAFETY: The live shell is reacquired at this source call; no owner borrow remains.
+                    // SAFETY: The orders owner is resolved at this source call; no owner borrow remains.
                     unsafe {
                         crate::orders::openttd_rust_process_orders(
                             id.shell.cast(),
