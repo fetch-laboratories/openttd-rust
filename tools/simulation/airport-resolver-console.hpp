@@ -16,7 +16,7 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 	parent->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x0C, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 9}, {.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x418}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 7}, {.operation = DSGA_OP_RST, .variable = 0x7C, .parameter = 7, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
 	auto *det = new DeterministicSpriteGroup(); det->var_scope = VSG_SCOPE_SELF; det->size = DSG_SIZE_DWORD; det->default_result = {false, result};
 	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x7E, .and_mask = UINT32_MAX, .subroutine = parent}, {.operation = DSGA_OP_RST, .variable = 0x60, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101}, {.operation = DSGA_OP_RST, .variable = 0x61, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x102}, {.operation = DSGA_OP_RST, .variable = 0x62, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x103}};
-	ats->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, det);
+	if (reloaded) ats->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, det);
 	ats->animation.triggers.Set(AirportAnimationTrigger::Built); ats->animation.speed = 0; ats->animation.frames = 8;
 	ats->callback_mask.Set({AirportTileCallbackMask::AnimationSpeed, AirportTileCallbackMask::AnimationNextFrame});
 	Station *st = nullptr;
@@ -38,6 +38,9 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 			}
 		}
 		spec->layouts[0].rotation = saved.layouts[0].rotation;
+		/* Temporary admission builds have no PSA; install the program for the
+		 * retained airport whose storage is saved and reloaded. */
+		ats->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, det);
 		check("airport-build-test", test, tile, 0, true); check("airport-build", exec, tile, 0, true);
 		st = Station::GetByTile(tile); st->name = "Airport resolver";
 		StationNeed(st->airport.psa != nullptr && st->airport.psa->GetValue(7) == 0x418, __LINE__);
