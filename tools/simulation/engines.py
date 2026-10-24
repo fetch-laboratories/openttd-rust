@@ -49,6 +49,7 @@ EXPECTED = {
         "types-case climate true",
         "types-case lifecycle-enable true",
         "types-case lifecycle-disable true",
+        "types-case monthly-publication true",
         "types-case daily-publication true",
         "types-case hidden-and-masks true",
         "types-case company-hidden true",

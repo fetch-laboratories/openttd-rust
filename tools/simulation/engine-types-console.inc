@@ -100,9 +100,9 @@ static void TypeConstruction(Company *c, TileIndex tile, int kind, uint8_t type,
 }
 static void TypeEngineInputs(Company *c)
 {
-	struct Saved { Engine *e; LandscapeTypes climates; CompanyMask avail; TimerGameCalendar::Date intro; };
+	struct Saved { Engine *e; LandscapeTypes climates; CompanyMask avail; TimerGameCalendar::Date intro; EngineFlags flags; };
 	std::vector<Saved> saved;
-	for (Engine *e : Engine::Iterate()) { saved.push_back({e, e->info.climates, e->company_avail, e->intro_date}); e->info.climates = {}; }
+	for (Engine *e : Engine::Iterate()) { saved.push_back({e, e->info.climates, e->company_avail, e->intro_date, e->flags}); e->info.climates = {}; e->flags = {}; }
 	Engine *e = nullptr;
 	for (auto &s : saved) if (s.e->type == VEH_TRAIN && s.e->VehInfo<RailVehicleInfo>().railveh_type != RAILVEH_WAGON) { e = s.e; break; }
 	Engine *r = nullptr; for (auto &s : saved) if (s.e->type == VEH_ROAD) { r = s.e; break; }
@@ -135,8 +135,15 @@ static void TypeEngineInputs(Company *c)
 	auto roadoff = Command<CMD_ENGINE_CTRL>::Do(DoCommandFlag::Execute, r->index, c->index, false);
 	TypeRequire(off.Succeeded() && roadoff.Succeeded() && !c->avail_railtypes.Test(static_cast<RailType>(60)) && !c->avail_roadtypes.Test(static_cast<RoadType>(60)), "lifecycle-disable");
 	actor.Restore();
+	/* Actual general-release path introduces each engine's native types before
+	 * applying the fixed points; empty masks rule out a date-only seed. */
+	e->intro_date = r->intro_date = TimerGameCalendar::date - CalendarTime::DAYS_IN_YEAR;
+	c->avail_railtypes = {}; c->avail_roadtypes = {};
+	CalendarEnginesMonthlyLoop();
+	TypeRequire(e->company_avail.base() == UINT16_MAX && r->company_avail.base() == UINT16_MAX && c->avail_railtypes.Test(static_cast<RailType>(60)) && c->avail_roadtypes.Test(static_cast<RoadType>(60)), "monthly-publication");
+	fmt::print(stderr, "ENGINE types-masks monthly {:016x} {:016x}\n", c->avail_railtypes.base(), c->avail_roadtypes.base());
 	e->VehInfo<RailVehicleInfo>() = railinfo; r->VehInfo<RoadVehicleInfo>() = roadinfo; e->flags = flags;
-	for (auto &s : saved) { s.e->info.climates = s.climates; s.e->company_avail = s.avail; s.e->intro_date = s.intro; }
+	for (auto &s : saved) { s.e->info.climates = s.climates; s.e->company_avail = s.avail; s.e->intro_date = s.intro; s.e->flags = s.flags; }
 }
 static bool TypesScenario(std::span<std::string_view> args)
 {
