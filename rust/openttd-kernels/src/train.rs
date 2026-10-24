@@ -569,9 +569,7 @@ pub struct Leaves {
     pub leave_sound: extern "C" fn(Handle),
     pub leave_unbunch: extern "C" fn(Handle),
     pub length_callback: extern "C" fn(Handle) -> u64,
-    pub length_changed: extern "C" fn(Handle),
     pub length_default: extern "C" fn(Handle) -> u64,
-    pub length_error: extern "C" fn(Handle, u16),
     pub local_company: extern "C" fn(Handle) -> u64,
     pub lost_warn: extern "C" fn(Handle) -> u64,
     pub map_size: extern "C" fn(Handle) -> u64,
@@ -836,7 +834,12 @@ impl Game<'_> {
             if (self.leaves.grf_version)(u) >= 8 {
                 length = self.property(u, PROP_TRAIN_SHORTEN_FACTOR, u64::from(u16::MAX)) as u16;
                 if length != u16::MAX && length >= 8 {
-                    (self.leaves.length_error)(u, length);
+                    let vs = self.vs();
+                    (vs.unknown_callback_result)(
+                        (vs.engine)(u.vehicle()),
+                        crate::newgrf_callbacks::CBID_VEHICLE_LENGTH,
+                        length,
+                    );
                 }
             } else if (self.leaves.length_callback)(u) != 0 {
                 length = (self.vs().callback)(
@@ -852,7 +855,7 @@ impl Game<'_> {
             if allowed & 1 != 0 {
                 (self.leaves.write_length)(u, (u64::from(length)) as u8);
             } else if length != (self.leaves.read_length)(u) {
-                (self.leaves.length_changed)(u);
+                (self.vs().length_changed)(u.vehicle());
             }
             (self.leaves.write_total_length)(
                 id,
@@ -3337,9 +3340,7 @@ crate::abi::layouts! {
         leave_sound,
         leave_unbunch,
         length_callback,
-        length_changed,
         length_default,
-        length_error,
         local_company,
         lost_warn,
         map_size,

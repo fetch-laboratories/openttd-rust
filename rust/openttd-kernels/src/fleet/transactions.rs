@@ -86,7 +86,6 @@ pub struct Services {
     pub(crate) view_window: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) news: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) transfer_cargo: unsafe extern "C" fn(*mut (), *mut (), bool),
-    pub(crate) capacity: unsafe extern "C" fn(*mut ()),
     pub(crate) event: unsafe extern "C" fn(*mut (), *mut ()),
     pub(crate) save_rng: unsafe extern "C" fn(*mut ()),
     pub(crate) restore_rng: unsafe extern "C" fn(*mut ()),
@@ -832,7 +831,17 @@ unsafe fn replace_chain(
                     }
                 }
                 if flags & u32::from(DoCommandFlag::EXECUTE) != 0 {
-                    unsafe { (w.capacity)(new_head) };
+                    // SAFETY: canonical capacity services and live consist; the owner
+                    // completes each native shell read before mutating cargo storage.
+                    unsafe {
+                        crate::cargo_storage::openttd_rust_cargo_capacity(
+                            (w.build_services)().rail.cargo_capacity,
+                            new_head.cast(),
+                            ptr::null_mut(),
+                            0,
+                            0,
+                        );
+                    }
                 }
             }
             if flags & u32::from(DoCommandFlag::EXECUTE) == 0 {
@@ -1191,7 +1200,6 @@ crate::abi::layouts! {
         view_window,
         news,
         transfer_cargo,
-        capacity,
         event,
         save_rng,
         restore_rng,

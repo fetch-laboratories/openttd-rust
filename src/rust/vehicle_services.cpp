@@ -112,7 +112,7 @@ static_assert(EngineID::Invalid().base() == 0xFFFF);
 static_assert(CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS == 365 * 74);
 static_assert(SND_19_DEPARTURE_OLD_RV_1 == 23 && SND_1A_DEPARTURE_OLD_RV_2 == 24);
 static_assert(PROP_AIRCRAFT_SPEED == 0x0C && CBID_VEHICLE_LENGTH == 0x11 && CBID_VEHICLE_32DAY_CALLBACK == 0x32);
-static_assert(VSE_START == 1 && VSE_BREAKDOWN == 3 && VSE_RUNNING == 4 && VSE_RUNNING_16 == 7 && VSE_STOPPED_16 == 8);
+static_assert(VSE_START == 1 && VSE_BREAKDOWN == 3 && VSE_RUNNING == 4 && VSE_TOUCHDOWN == 5 && VSE_RUNNING_16 == 7 && VSE_STOPPED_16 == 8);
 static_assert(HVOT_BUS == 4 && HVOT_TRUCK == 8);
 
 static void OPENTTD_VEHICLE_CALL VehicleSvcWriteCounters(OpenTTDVehicle *v, uint8_t tick, uint8_t running, int32_t order_time) noexcept
@@ -147,6 +147,8 @@ static void OPENTTD_VEHICLE_CALL VehicleSvcWriteXY(OpenTTDVehicle *v, int32_t x,
 
 }
 static void OPENTTD_VEHICLE_CALL VehicleSvcBaseViewport(OpenTTDVehicle *v) noexcept { VehicleOf(v)->Vehicle::UpdateViewport(true); }
+Train *RustTrainGetIfValid(uint32_t id) noexcept { return Train::GetIfValid(VehicleID(id)); }
+
 static void OPENTTD_VEHICLE_CALL VehicleSvcUnknownCallbackResult(const OpenTTDEngine *e, CallbackID callback, uint16_t result) noexcept
 {
 	RustUnknownCallbackResult(EngineOf(e)->GetGRFID(), callback, result);
@@ -298,10 +300,22 @@ const OpenTTDOccupancyCommands *GetRustOccupancyCommands() noexcept
 }
 static_assert(AIR_SHADOW == 4);
 
-static OpenTTDVehicleTileLinks *OPENTTD_VEHICLE_CALL VehicleSvcTileLinks(OpenTTDVehicle *v) noexcept { return &VehicleOf(v)->tile_links; }
+static OpenTTDVehicleTileLinks *OPENTTD_VEHICLE_CALL VehicleSvcTileLinks(OpenTTDVehicle *v) noexcept { return RustVehicleTileLinks(VehicleOf(v)); }
+static OpenTTDOccupancyUpdateObservation OPENTTD_VEHICLE_CALL VehicleSvcOccupancyUpdate(OpenTTDVehicle *shell) noexcept
+{
+	Vehicle *v = VehicleOf(shell);
+	return {.links = RustVehicleTileLinks(v), .tile = RustVehicleTile(v)};
+}
+static OpenTTDOccupancyNearObservation OPENTTD_VEHICLE_CALL VehicleSvcOccupancyNear(OpenTTDVehicle *shell) noexcept
+{
+	Vehicle *v = VehicleOf(shell);
+	return {.links = RustVehicleTileLinks(v), .xy = {.x = RustVehicleX(v), .y = RustVehicleY(v)}};
+}
 
 constinit const OpenTTDVehicleServices _rust_vehicle_services{
 	.tile_links = VehicleSvcTileLinks,
+	.occupancy_update = VehicleSvcOccupancyUpdate,
+	.occupancy_near = VehicleSvcOccupancyNear,
 	.map_log_x = OpenTTDMapLogX,
 #if !defined(NDEBUG) || defined(WITH_ASSERT)
 	.assertions = true,

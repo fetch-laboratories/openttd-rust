@@ -5,8 +5,10 @@ runs:
   steps:
   - shell: bash
     run: |
-      sudo apt-get update
-      sudo apt-get install -y ccache ninja-build libsdl2-dev liblzma-dev libpng-dev \
+      # Recommended desktop packages (GTK, Vulkan drivers) only slow every job.
+      apt='sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30'
+      $apt update
+      $apt install -y --no-install-recommends ccache ninja-build libsdl2-dev liblzma-dev libpng-dev \
         libcurl4-openssl-dev libfreetype-dev libfontconfig-dev libharfbuzz-dev \
         libicu-dev liblzo2-dev openttd-opengfx
       baseline=$(python3 -c 'import json; print(json.load(open("migration/baseline.json"))["commit"])')

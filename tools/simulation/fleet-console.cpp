@@ -32,6 +32,10 @@
 #include "vehiclelist.h"
 #include "console_func.h"
 #include "news_gui.h"
+#include "newgrf.h"
+#include "newgrf_config.h"
+#include "newgrf_engine.h"
+#include "newgrf_text.h"
 #include "table/strings.h"
 #include "newgrf_engine.h"
 #include "newgrf.h"
@@ -39,6 +43,88 @@
 #include "ship.h"
 
 [[noreturn]] static void FixtureAbort(int line) { fmt::print(stderr, "FLEET setup-failure {}\n", line); std::fflush(stderr); std::abort(); }
+static bool SameRandom(const SavedRandomSeeds &a, const SavedRandomSeeds &b);
+
+/* Observe the real resolver at its Action2 entry, then run a normal deterministic
+ * group (including register 100). No callback service or command body is replaced. */
+struct AttachmentObserver : SpriteGroup {
+	AttachmentObserver() : SpriteGroup() {}
+	const SpriteGroup *program = nullptr;
+	mutable uint calls = 0;
+	mutable bool valid = true;
+	ResolverResult Resolve(ResolverObject &object) const override
+	{
+		if (object.callback != CBID_TRAIN_ALLOW_WAGON_ATTACH) return {};
+		const auto &resolver = static_cast<const VehicleResolverObject &>(object);
+		const Train *self = Train::From(resolver.self_scope.v), *head = Train::From(resolver.parent_scope.v);
+		++this->calls;
+		this->valid &= self->Next() == nullptr && self->Previous() == nullptr && self->First() == self;
+		this->valid &= self->gcache.first_engine == EngineID::Invalid() && self->grf_cache.cache_valid == 0 && head->grf_cache.cache_valid == 0;
+		bool available = true;
+		uint length = 0;
+		for (const Train *part = head; part != nullptr; part = part->Next()) ++length;
+		/* var 40 caches the current, temporarily shortened chain, not the final consist. */
+		this->valid &= resolver.self_scope.GetVariable(0x40, 0, available) == 0;
+		this->valid &= resolver.parent_scope.GetVariable(0x40, 0, available) == (length - 1) * 0x10100;
+		this->valid &= available;
+		return SpriteGroup::Resolve(this->program, object, false);
+	}
+};
+
+static void AttachmentCallbacks(Train *head)
+{
+	Engine *engine = Engine::Get(head->engine_type);
+	Backup<CargoGRFFileProps> props(engine->grf_prop);
+	GRFFile grf;
+	grf.grfid = 0x156CA110;
+	auto config = std::make_unique<GRFConfig>("attachment-fixture.grf");
+	config->ident.grfid = grf.grfid;
+	_grfconfig.push_back(std::move(config));
+	engine->grf_prop.grffile = &grf;
+	StringID text = AddGRFString(grf.grfid, GRFSTR_MISC_GRF_TEXT, 0x7F, true, false, "attachment text", STR_UNDEFINED);
+	StringID regtext = AddGRFString(grf.grfid, GRFStringID(0xD042), 0x7F, true, false, "attachment register", STR_UNDEFINED);
+	/* Pool-allocated Action2 inputs stay alive until the engine's original groups
+	 * are restored. The observer delegates to the unchanged Action2 interpreter. */
+	if (!SpriteGroup::CanAllocateItem(3)) FixtureAbort(__LINE__);
+	auto *result = new CallbackResultSpriteGroup(CALLBACK_FAILED);
+	auto *program = new DeterministicSpriteGroup();
+	program->size = DSG_SIZE_DWORD;
+	program->adjusts = {
+		{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0xD042},
+		{.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100},
+	};
+	program->default_result.group = result;
+	auto *observer = new AttachmentObserver();
+	observer->program = program;
+	engine->grf_prop.spritegroups.clear();
+	engine->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer);
+	struct Case { uint8_t version; uint16_t result; StringID error; };
+	const Case cases[] = {
+		{7, 0, text}, {7, 0xFD, STR_ERROR_INCOMPATIBLE_RAIL_TYPES},
+		{7, 0xFE, STR_NULL}, {7, 0xFF, STR_NULL}, {7, 0x100, STR_NULL},
+		{8, 0, text}, {8, 0x400, STR_NULL}, {8, 0x401, STR_NULL},
+		{8, 0x40F, regtext}, {8, 0x402, STR_ERROR_INCOMPATIBLE_RAIL_TYPES},
+		{8, 0x403, STR_ERROR_INCOMPATIBLE_RAIL_TYPES}, {8, CALLBACK_FAILED, STR_NULL},
+	};
+	for (const auto &c : cases) {
+		grf.grf_version = c.version; result->result = c.result;
+		for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
+			Train *wagon = head->GetNextVehicle();
+			EngineID first = wagon->gcache.first_engine;
+			observer->calls = 0; observer->valid = true;
+			SavedRandomSeeds before, after; SaveRandomSeeds(&before);
+			CommandCost cost = Command<CMD_MOVE_RAIL_VEHICLE>::Do(flags, wagon->index, head->Last()->index, false);
+			SaveRandomSeeds(&after);
+			bool restored = wagon->First() == head && wagon->gcache.first_engine == first;
+			bool outcome = c.error == STR_NULL ? cost.Succeeded() : cost.Failed() && cost.GetErrorMessage() == c.error;
+			fmt::print(stderr, "FLEET attachment {} {} {} {} {} {} {} {}\n", c.version, c.result, flags.Test(DoCommandFlag::Execute), outcome, observer->calls, observer->valid, restored, SameRandom(before, after));
+		}
+	}
+	props.Restore();
+	head->InvalidateNewGRFCacheOfChain();
+	delete observer; delete program; delete result;
+	_grfconfig.pop_back();
+}
 
 /* Arithmetic and default-drag inputs absent from stock traffic. The reference
  * calls its unchanged bodies; the candidate calls the production Rust owner. */
@@ -604,6 +690,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		/* Depot consist transactions: free chains, normalisation, same-chain and cross-train moves,
 		 * front promotion/demotion, refusals with restoration, dual heads, sales and ID reuse. */
 		Train *v = Train::From(BuildFixture(VEH_TRAIN));
+		AttachmentCallbacks(v);
 		GroundPhysicsProbe(v, Engine::Get(v->engine_type)->VehInfo<RailVehicleInfo>());
 		TileIndex tile = v->tile;
 		EngineID wagon = v->GetNextVehicle()->engine_type;

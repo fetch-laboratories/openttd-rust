@@ -65,6 +65,16 @@ struct OpenTTDVehicleXY {
 	int32_t x;
 	int32_t y;
 };
+/** Only fields consumed together by normal hash updates / near filtering.
+ * Link fields are read in Rust at the source branches, never prefetched here. */
+struct OpenTTDOccupancyUpdateObservation {
+	OpenTTDVehicleTileLinks *links;
+	uint32_t tile;
+};
+struct OpenTTDOccupancyNearObservation {
+	OpenTTDVehicleTileLinks *links;
+	OpenTTDVehicleXY xy;
+};
 struct OpenTTDVehicleSpeedInputs {
 	uint16_t speed;
 	uint16_t max_speed;
@@ -103,6 +113,8 @@ struct OpenTTDVehicleResolverServices;
 struct OpenTTDVehicleVisits;
 struct OpenTTDVehicleServices {
 	OpenTTDVehicleTileLinks *(OPENTTD_VEHICLE_CALL *tile_links)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(tile_links);
+	OpenTTDOccupancyUpdateObservation (OPENTTD_VEHICLE_CALL *occupancy_update)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(occupancy_update);
+	OpenTTDOccupancyNearObservation (OPENTTD_VEHICLE_CALL *occupancy_near)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(occupancy_near);
 	uint32_t (*map_log_x)() noexcept OPENTTD_SERVICE_DEFAULT(map_log_x);
 	bool assertions;
 	OpenTTDTrainHandle (*train_handle)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(train_handle);

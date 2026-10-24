@@ -540,6 +540,14 @@ impl World<'_> {
             }
         }
     }
+    /// `CalculateSnowLine`: coastal tiles have no snow sprites.
+    fn calculate_snow_line(&self, coverage: u8) {
+        (self.a.set_snow_line)(self.coverage_line(u32::from(coverage), 0).max(2) as u8);
+    }
+    /// `CalculateDesertLine`: coverage is scanned from top to bottom.
+    fn calculate_desert_line(&self, coverage: u8) -> u8 {
+        self.coverage_line(100_u32.wrapping_sub(u32::from(coverage)), 4) as u8
+    }
     fn coverage_line(&self, coverage: u32, edge_multiplier: u32) -> u32 {
         if edge_multiplier != 0 {
             w::hit(w::GENERATION_COVERAGE_EDGE);
@@ -1026,13 +1034,10 @@ impl World<'_> {
         match g.climate {
             ARCTIC => {
                 w::hit(w::GENERATION_SNOW);
-                (self.a.set_snow_line)(
-                    self.coverage_line(u32::from(g.snow_coverage), 0).max(2) as u8
-                );
+                self.calculate_snow_line(g.snow_coverage);
             }
             TROPIC => {
-                let line =
-                    u32::from(self.coverage_line(100 - u32::from(g.desert_coverage), 4) as u8);
+                let line = u32::from(self.calculate_desert_line(g.desert_coverage));
                 if !self.desert_rainforest(frame, line) {
                     return false;
                 }

@@ -126,6 +126,7 @@ static OpenTTDAircraftLeaves RangeLeaves()
 	vehicle.base_viewport = [](OpenTTDVehicle *) noexcept {};
 	vehicle.tile_links = [](OpenTTDVehicle *v) noexcept { return &fixture->links[v == reinterpret_cast<OpenTTDVehicle *>(fixture) ? 0 : 1]; };
 	vehicle.tile = [](OpenTTDVehicle *) noexcept { return uint32_t{0}; };
+	vehicle.occupancy_update = [](OpenTTDVehicle *shell) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = vehicle.tile_links(shell), .tile = vehicle.tile(shell)}; };
 	vehicle.map_log_x = []() noexcept { return uint32_t{6}; };
 	leaves.copy_sprite = [](OpenTTDAircraftVehicle, OpenTTDAircraftVehicle) noexcept {};
 	leaves.next = [](OpenTTDAircraftVehicle v) noexcept { if (v.id == 17) { v.id = 18; v.handle = reinterpret_cast<OpenTTDVehicle *>(uintptr_t{18}); return v; } return OpenTTDAircraftVehicle{nullptr, nullptr, 1048575}; };

@@ -149,7 +149,6 @@ struct OpenTTDFleetTransactionServices {
 	void (*view_window)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(view_window);
 	void (*news)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(news);
 	void (*transfer_cargo)(void *old, void *replacement, bool chain) noexcept OPENTTD_SERVICE_DEFAULT(transfer_cargo);
-	void (*capacity)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(capacity);
 	void (*event)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(event);
 	void (*save_rng)(void *seeds) noexcept OPENTTD_SERVICE_DEFAULT(save_rng);
 	void (*restore_rng)(void *seeds) noexcept OPENTTD_SERVICE_DEFAULT(restore_rng);

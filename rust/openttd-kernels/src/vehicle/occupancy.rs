@@ -31,6 +31,19 @@ pub struct Links {
     pub prev: *mut Shell,
     pub current: *mut Shell,
 }
+/// Normal position update only; removal acquires links without reading tile.
+#[repr(C)]
+pub struct UpdateObservation {
+    pub links: *mut Links,
+    pub tile: u32,
+}
+/// Coordinates observed together for rectangle filtering. The link carrier is
+/// used only on a false match; its next field is not prefetched.
+#[repr(C)]
+pub struct NearObservation {
+    pub links: *mut Links,
+    pub xy: super::XY,
+}
 struct Buckets(UnsafeCell<[Shell; TOTAL]>);
 // SAFETY: The game-state mutex excludes concurrent index access, including GUI
 // commands. No reference into this static or a shell spans a callback or reset.
@@ -52,10 +65,8 @@ fn bucket(x: u32, y: u32) -> *mut Shell {
         .cast::<Shell>()
         .wrapping_add(compose(hash_1d(x), hash_1d(y)))
 }
-fn tile_bucket(s: &VehicleServices, tile: u32) -> *mut Shell {
-    let map = Map {
-        log_x: (s.map_log_x)() as u8,
-    };
+#[inline]
+fn tile_bucket(map: Map, tile: u32) -> *mut Shell {
     bucket(map.tile_x(tile), map.tile_y(tile))
 }
 unsafe fn handle(shell: Shell) -> VehicleRef {
@@ -67,14 +78,28 @@ unsafe fn next(s: &VehicleServices, shell: Shell) -> Shell {
     unsafe { (*((s.tile_links)(handle(shell)))).next }
 }
 /// Complete `UpdateVehicleTileHash`, including stale next/prev after removal.
+#[inline]
 pub(crate) unsafe fn update(s: &VehicleServices, v: VehicleRef, remove: bool) {
-    let links = (s.tile_links)(v);
-    let old = unsafe { (*links).current };
-    let new = if remove {
-        ptr::null_mut()
+    if remove {
+        unsafe { update_bucket(s, v, (s.tile_links)(v), ptr::null_mut()) };
     } else {
-        tile_bucket(s, (s.tile)(v))
-    };
+        let map = Map {
+            log_x: (s.map_log_x)() as u8,
+        };
+        unsafe { update_position(s, v, map) };
+    }
+}
+/// The caller's dimensions cover only a serialized synchronous no-reset/no-yield
+/// interval. No map storage is exposed. Links and tile are observed once here;
+/// the native observation and link accessors neither reenter nor mutate state.
+#[inline]
+pub(crate) unsafe fn update_position(s: &VehicleServices, v: VehicleRef, map: Map) {
+    let o = (s.occupancy_update)(v);
+    unsafe { update_bucket(s, v, o.links, tile_bucket(map, o.tile)) };
+}
+#[inline]
+unsafe fn update_bucket(s: &VehicleServices, v: VehicleRef, links: *mut Links, new: *mut Shell) {
+    let old = unsafe { (*links).current };
     if old == new {
         crate::witness::hit(crate::witness::OCCUPANCY_SAME);
         return;
@@ -136,9 +161,12 @@ pub struct OnTile {
 }
 impl OnTile {
     pub(crate) unsafe fn new(s: &VehicleServices, tile: u32) -> Self {
+        let map = Map {
+            log_x: (s.map_log_x)() as u8,
+        };
         let mut it = Self {
             tile,
-            current: unsafe { *tile_bucket(s, tile) },
+            current: unsafe { *tile_bucket(map, tile) },
         };
         unsafe {
             it.filter(s);
@@ -189,6 +217,7 @@ pub struct Near {
     pub current: Shell,
 }
 impl Near {
+    #[inline]
     pub(crate) unsafe fn new(s: &VehicleServices, x: i32, y: i32, distance: u32) -> Self {
         crate::witness::hit(crate::witness::OCCUPANCY_NEAR);
         let left = (x as u32).wrapping_sub(distance) as i32;
@@ -223,6 +252,7 @@ impl Near {
         }
         it
     }
+    #[inline]
     unsafe fn skip_empty(&mut self) {
         while self.current.is_null() {
             if self.hx != self.hxmax {
@@ -236,39 +266,48 @@ impl Near {
             self.current = unsafe { *bucket(self.hx, self.hy) };
         }
     }
-    unsafe fn increment(&mut self, s: &VehicleServices) {
-        if s.assertions {
-            assert!(!self.current.is_null());
-        }
-        self.current = unsafe { next(s, self.current) };
+    #[inline]
+    unsafe fn increment(&mut self, links: *mut Links) {
+        // filter proves a non-null current; public advancement asserts before
+        // resolving links, as the original Increment does before dereferencing.
+        self.current = unsafe { (*links).next };
         unsafe {
             self.skip_empty();
         }
     }
+    #[inline]
     unsafe fn filter(&mut self, s: &VehicleServices) {
         while let Some(v) = self.get() {
-            let xy = (s.xy)(v);
+            let o = (s.occupancy_near)(v);
             if crate::geometry_type::rect_contains(
                 self.left,
                 self.top,
                 self.right,
                 self.bottom,
-                xy.x,
-                xy.y,
+                o.xy.x,
+                o.xy.y,
             ) {
                 break;
             }
             unsafe {
-                self.increment(s);
+                self.increment(o.links);
             }
         }
     }
+    #[inline]
     pub(crate) unsafe fn advance(&mut self, s: &VehicleServices) {
+        // Resolve afresh AFTER the visitor; never reuse a filter observation
+        // across callbacks that can change the current shell's next link.
+        if s.assertions {
+            assert!(!self.current.is_null());
+        }
+        let links = (s.tile_links)(unsafe { handle(self.current) });
         unsafe {
-            self.increment(s);
+            self.increment(links);
             self.filter(s);
         }
     }
+    #[inline]
     pub(crate) fn get(&self) -> Option<VehicleRef> {
         std::ptr::NonNull::new(self.current).map(VehicleRef)
     }
@@ -292,6 +331,8 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDOccupancyCommands" ["probe"] => Commands { vehicles, max_pixel_z, costs, vehicle_error, };
     "OpenTTDVehicleTileLinks" ["probe"] => Links { next, prev, current, };
+    "OpenTTDOccupancyUpdateObservation" ["probe"] => UpdateObservation { links, tile, };
+    "OpenTTDOccupancyNearObservation" ["probe"] => NearObservation { links, xy, };
     "OpenTTDVehicleOnTile" ["probe"] => OnTile { tile, current, };
     "OpenTTDVehicleNear" ["probe"] => Near { left, top, right, bottom, hxmin, hxmax, hymin, hymax, hx, hy, current, };
 }

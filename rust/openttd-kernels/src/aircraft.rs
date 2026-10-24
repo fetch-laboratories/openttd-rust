@@ -244,7 +244,6 @@ pub struct Leaves {
     pub unreachable: unsafe extern "C" fn(Vehicle),
     pub cargo_age_default: unsafe extern "C" fn(Vehicle) -> u16,
     pub range_default: unsafe extern "C" fn(Vehicle) -> u16,
-    pub touchdown_sound: unsafe extern "C" fn(Vehicle) -> bool,
     pub rotor_image_if_changed: unsafe extern "C" fn(Vehicle) -> bool,
     pub update_rotor_image: unsafe extern "C" fn(Vehicle),
     pub process_orders: unsafe extern "C" fn(Vehicle),
@@ -526,7 +525,6 @@ impl World<'_> {
         cargo_age_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_CARGO_AGE_PERIOD, i32::from(unsafe { (self.leaves.cargo_age_default)(v) })) as u32;
         range_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_RANGE, i32::from(unsafe { (self.leaves.range_default)(v) })) as u32;
         start_sound(self; v: Vehicle) => (self.vs.play_vehicle_sound)(v.base(), VSE_START);
-        touchdown_sound(self; v: Vehicle) => unsafe { (self.leaves.touchdown_sound)(v) };
         rotor_image_if_changed(self; v: Vehicle) => unsafe { (self.leaves.rotor_image_if_changed)(v) };
         vehicle_crash(self; v: Vehicle, flooded: i64) => unsafe { (self.leaves.vehicle_crash)(v, flooded != 0) };
         send_to_depot(self; v: Vehicle, service: i64) => unsafe { (self.leaves.send_to_depot)(v, service != 0) };
@@ -582,10 +580,10 @@ impl World<'_> {
         route_node(self; node: *const c_void) -> RouteNode => unsafe { (self.leaves.route_node)(node) };
         block_node(self; node: *const c_void) -> BlockNode => unsafe { (self.leaves.block_node)(node) };
         fta_next_position(self; node: *const c_void) -> u8 => unsafe { (self.leaves.fta_next_position)(node) };
-        update_position(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update(self.vs, vehicle.base(), false); (self.leaves.viewport)(vehicle); };
+        update_position(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update_position(self.vs, vehicle.base(), self.map()); (self.leaves.viewport)(vehicle); };
         rotor_image(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.rotor_image)(vehicle) };
         copy_sprite(self; vehicle: Vehicle, source: Vehicle) -> () => unsafe { (self.leaves.copy_sprite)(vehicle, source) };
-        position_viewport(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update(self.vs, vehicle.base(), false); (self.vs.base_viewport)(vehicle.base()); };
+        position_viewport(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update_position(self.vs, vehicle.base(), self.map()); (self.vs.base_viewport)(vehicle.base()); };
         create_effect(self; vehicle: Vehicle, kind: i64, x: i64, y: i64, z: i64) -> () => unsafe { (self.leaves.create_effect)(vehicle, kind as u8, x as i32, y as i32, z as i32) };
         dirty_start_stop(self; vehicle: Vehicle) -> () => (self.vs.start_stop_dirty)(vehicle.base());
         play_sound(self; vehicle: Vehicle, sound: i64) -> () => (self.vs.play_sound)(vehicle.base(), sound as u16);
@@ -1767,7 +1765,7 @@ impl World<'_> {
                 self.set_state(id, ENDLANDING);
                 self.update_delta(id);
                 self.touchdown_animation(id, i64::from(self.target(id)));
-                if self.touchdown_sound(id) == 0 {
+                if !(self.vs.play_vehicle_sound)(id.base(), crate::newgrf_sound::VSE_TOUCHDOWN) {
                     self.play_sound(id, SKID_SOUND);
                 }
                 if self.needs_service(id) != 0 {
@@ -2556,7 +2554,6 @@ crate::abi::layouts! {
         unreachable,
         cargo_age_default,
         range_default,
-        touchdown_sound,
         rotor_image_if_changed,
         update_rotor_image,
         process_orders,

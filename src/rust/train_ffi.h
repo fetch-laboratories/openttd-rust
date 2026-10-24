@@ -336,9 +336,7 @@ struct OpenTTDTrainServices {
 	void (*leave_sound)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(leave_sound);
 	void (*leave_unbunch)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(leave_unbunch);
 	uint64_t (*length_callback)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(length_callback);
-	void (*length_changed)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(length_changed);
 	uint64_t (*length_default)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(length_default);
-	void (*length_error)(OpenTTDTrainHandle, uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(length_error);
 	uint64_t (*local_company)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(local_company);
 	uint64_t (*lost_warn)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(lost_warn);
 	uint64_t (*map_size)(OpenTTDTrainHandle) noexcept OPENTTD_SERVICE_DEFAULT(map_size);

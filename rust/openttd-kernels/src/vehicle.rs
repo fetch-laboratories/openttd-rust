@@ -213,6 +213,8 @@ pub struct MovementObservations {
 #[repr(C)]
 pub struct VehicleServices {
     pub tile_links: extern "C" fn(VehicleRef) -> *mut occupancy::Links,
+    pub occupancy_update: extern "C" fn(VehicleRef) -> occupancy::UpdateObservation,
+    pub occupancy_near: extern "C" fn(VehicleRef) -> occupancy::NearObservation,
     pub map_log_x: extern "C" fn() -> u32,
     pub assertions: bool,
     pub train_handle: extern "C" fn(*mut OpenTTDVehicle) -> crate::train::Handle,
@@ -403,6 +405,8 @@ crate::abi::layouts! {
     };
     "OpenTTDVehicleServices" ["probe"] => VehicleServices {
         tile_links,
+        occupancy_update,
+        occupancy_near,
         map_log_x,
         assertions,
         train_handle,
@@ -592,6 +596,7 @@ impl VehicleServices {
         false
     }
     #[allow(unsafe_code)]
+    #[inline]
     pub(crate) fn any_near(
         &self,
         x: i32,
