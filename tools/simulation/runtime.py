@@ -1,5 +1,7 @@
 """Package game runtimes and once-built scenario adapters for CI workers."""
 
+import concurrent.futures
+import os
 import shutil
 import subprocess
 
@@ -44,12 +46,19 @@ def export(destination, migration):
             source = build / ("openttd" if role == "reference" else "openttd-rust")
             runtime = destination / f"{role}-runtime"
             binary = core._copy_runtime(build, source, runtime)
-            for module in adapters:
+
+            def build_adapter(module, build=build, runtime=runtime):
                 folder = runtime / module.__name__.rsplit(".", 1)[1]
                 executable = module.adapter(build, folder, migration.environment())
                 for object_file in folder.glob("*.o"):
                     object_file.unlink()
                 strip_debug(executable)
+
+            # Each adapter compiles one source and relinks the game into its own
+            # folder; the serial loop left all but one core idle (#394).
+            workers = min(len(adapters), os.cpu_count() or 1)
+            with concurrent.futures.ThreadPoolExecutor(workers) as pool:
+                list(pool.map(build_adapter, adapters))
             if not (runtime / "instruction-build.json").is_file():
                 strip_debug(binary)
 
