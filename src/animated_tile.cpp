@@ -74,7 +74,7 @@ void AnimateAnimatedTiles() { PerformanceAccumulator landscape_framerate(PFE_GL_
 /* InitializeGame calls this for generated, intro and loaded worlds before
  * commands, PBS, cargo/visits, animation ticks or purchase/render resolvers run.
  * All direct Rust station entries share this process-wide serialized table. */
-void InitializeAnimatedTiles() { openttd_rust_animation_exchange(&GetRustAnimationServices()); openttd_rust_station_resolver_exchange(&GetStationResolverServices()); openttd_rust_animation_initialize(); }
+void InitializeAnimatedTiles() { openttd_rust_airport_exchange(&GetAirportResolverServices()); openttd_rust_animation_exchange(&GetRustAnimationServices()); openttd_rust_station_resolver_exchange(&GetStationResolverServices()); openttd_rust_animation_initialize(); }
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDAnimationServices.hpp"
 #include "abi-visit-OpenTTDHouseAnimation.hpp"

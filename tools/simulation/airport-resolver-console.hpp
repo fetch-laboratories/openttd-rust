@@ -13,7 +13,7 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 	auto *result = new CallbackResultSpriteGroup(3), *other = new CallbackResultSpriteGroup(4);
 	auto *parent = new DeterministicSpriteGroup(); parent->var_scope = VSG_SCOPE_PARENT; parent->size = DSG_SIZE_DWORD;
 	parent->default_result = {true, nullptr};
-	parent->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x418}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 7}, {.operation = DSGA_OP_RST, .variable = 0x7C, .parameter = 7, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
+	parent->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x0C, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 9}, {.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x418}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 7}, {.operation = DSGA_OP_RST, .variable = 0x7C, .parameter = 7, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
 	auto *det = new DeterministicSpriteGroup(); det->var_scope = VSG_SCOPE_SELF; det->size = DSG_SIZE_DWORD; det->default_result = {false, result};
 	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x7E, .and_mask = UINT32_MAX, .subroutine = parent}, {.operation = DSGA_OP_RST, .variable = 0x60, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x101}, {.operation = DSGA_OP_RST, .variable = 0x61, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x102}, {.operation = DSGA_OP_RST, .variable = 0x62, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x103}};
 	ats->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, det);
@@ -48,8 +48,17 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 	StationNeed(TriggerAirportTileAnimation(st, tile, AirportAnimationTrigger::Built), __LINE__);
 	AirportTileResolverObject callback(ats, tile, st, CBID_AIRPTILE_ANIMATION_TRIGGER);
 	std::array<int32_t, 4> registers{}; StationNeed(callback.ResolveCallback(registers) == 3 && registers[0] == 0x418, __LINE__);
+	StationNeed(st->airport.psa->GetValue(9) == CBID_AIRPTILE_ANIMATION_TRIGGER, __LINE__);
 	fmt::print(stderr, "STCMD airport-built {} {} {} {} {}\n", reloaded, registers[0], registers[1], registers[2], registers[3]);
-	AnimateAirportTile(tile); fmt::print(stderr, "STCMD airport-animation {} {}\n", GetAnimationFrame(tile), st->airport.psa->GetValue(7));
+	result->result = 0; AnimateAirportTile(tile); StationNeed(st->airport.psa->GetValue(9) == CBID_AIRPTILE_ANIMATION_NEXT_FRAME, __LINE__); result->result = 3; fmt::print(stderr, "STCMD airport-animation {} {}\n", GetAnimationFrame(tile), st->airport.psa->GetValue(7));
+
+	/* A real parent-scope zero write must not allocate airport storage. */
+	auto *persistent = st->airport.psa; st->airport.psa = nullptr; auto program = det->adjusts;
+	det->var_scope = VSG_SCOPE_PARENT;
+	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 17}, {.operation = DSGA_OP_RST, .variable = 0x7C, .parameter = 17, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
+	StationNeed(callback.ResolveCallback(registers) == 3 && registers[0] == 0 && st->airport.psa == nullptr, __LINE__);
+	st->airport.psa = persistent; det->adjusts = std::move(program); det->var_scope = VSG_SCOPE_SELF;
+	fmt::print(stderr, "STCMD airport-storage-zero no-allocation\n");
 	spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Default, det); spec->grf_prop.SetSpriteGroup(StandardSpriteGroup::Purchase, other);
 	/* Native direct availability and actual deterministic Action2 agree. Logs,
 	 * output registers and the final semantic saves are compared across games. */
@@ -76,13 +85,21 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 		auto old = st->build_date; st->build_date = TimerGameCalendar::Date(date); AirportResolverObject query(tile, st, spec, 0); bool ok = true;
 		fmt::print(stderr, "STCMD airport-date {} {}\n", date, query.airport_scope.GetVariable(0xFA, 0, ok)); st->build_date = old;
 	}
+
+	AirportResolverObject narrow(tile, st, spec, 0);
+	for (uint8_t var : {0x60, 0x61, 0x64, 0x69, 0x8C}) for (uint32_t parameter : {0U, 1U, 255U, 256U, 257U, UINT32_MAX}) {
+		bool ok = true; auto value = narrow.airport_scope.GetVariable(var, parameter, ok);
+		det->adjusts = {{.operation = DSGA_OP_RST, .variable = var, .parameter = static_cast<uint8_t>(parameter), .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
+		std::array<int32_t, 1> regs{}; auto cb = narrow.ResolveCallback(regs); if (ok) StationNeed(cb == 3 && static_cast<uint32_t>(regs[0]) == value, __LINE__);
+		fmt::print(stderr, "STCMD airport-parameter {} {} {} {}\n", var, parameter, ok, value);
+	}
 	AirportResolverObject airport(tile, st, spec, 0); auto *town = airport.GetTown(); StationNeed(town != nullptr, __LINE__);
 	auto *original_town = st->town; st->town = nullptr; StationNeed(airport.GetTown() == town, __LINE__);
 	AirportResolverObject retry(tile, st, spec, 0); StationNeed(retry.GetTown() == nullptr, __LINE__); st->town = original_town;
 	StationNeed(retry.GetTown() != nullptr && preview.GetTown()->readonly && nowhere.GetTown() == nullptr, __LINE__);
-	det->var_scope = VSG_SCOPE_PARENT; det->adjusts = parent->adjusts;
+	det->var_scope = VSG_SCOPE_PARENT; det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}, {.operation = DSGA_OP_RST, .variable = 0x1A, .and_mask = 0x418}, {.operation = DSGA_OP_STOP, .variable = 0x1A, .and_mask = 7}, {.operation = DSGA_OP_RST, .variable = 0x7C, .parameter = 7, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
 	std::array<int32_t, 1> town_regs{}; StationNeed(airport.ResolveCallback(town_regs) == 3 && town_regs[0] == 0x418, __LINE__);
-	det->adjusts[0].and_mask = 0x419; StationNeed(preview.ResolveCallback(town_regs) == 3 && town_regs[0] == 0x418, __LINE__);
+	det->adjusts[2].and_mask = 0x419; StationNeed(preview.ResolveCallback(town_regs) == 3 && town_regs[0] == 0x418, __LINE__);
 	StationNeed(nowhere.ResolveCallback({}) == CALLBACK_FAILED, __LINE__);
 	det->var_scope = VSG_SCOPE_RELATIVE; StationNeed(airport.ResolveCallback({}) == CALLBACK_FAILED, __LINE__);
 	fmt::print(stderr, "STCMD airport-town readonly retry default {}\n", town_regs[0]); det->var_scope = VSG_SCOPE_SELF;
@@ -110,6 +127,14 @@ static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoComma
 		det->adjusts[0].variable = var; det->adjusts[0].parameter = offset; AirportTileResolverObject query(ats, tile, st); std::array<int32_t, 1> regs{}; query.ResolveCallback(regs);
 		fmt::print(stderr, "STCMD airport-offset {} {} {}\n", var, offset, regs[0]);
 	}
+
+	auto north = st->airport.tile;
+	for (TileIndex base : {tile + TileDiffXY(1, 2), TileXY(Map::SizeX() - 1, Map::SizeY() - 1)}) {
+		st->airport.tile = base; det->adjusts[0].variable = 0x43;
+		AirportTileResolverObject query(ats, tile, st); std::array<int32_t, 1> regs{}; query.ResolveCallback(regs);
+		fmt::print(stderr, "STCMD airport-relative-wrap {} {}\n", base.base(), regs[0]);
+	}
+	st->airport.tile = north;
 	/* Live selection: missing/disabled custom, substitute and its override. */
 	auto mappings = _airport_mngr.mappings; auto *new_spec = AirportSpec::GetWithoutOverride(NEW_AIRPORT_OFFSET); AirportSpec saved_new = *new_spec;
 	for (bool enabled : {false, true}) for (uint32_t grfid : {0U, file.grfid}) for (uint16_t substitute : {uint16_t{AT_INVALID}, uint16_t{AT_SMALL}}) {

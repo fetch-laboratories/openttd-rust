@@ -4,7 +4,7 @@
 #define OPENTTD_AIRCRAFT_BOUNDARY_HPP
 #include "rust/aircraft_ffi.h"
 #include "rust/airport_resolver_ffi.h"
-#include "rust/animation_ffi.h"
+#include "rust/station_command_ffi.h"
 #include "rust/station_service_ffi.h"
 #include <cstdlib>
 #include <cstdio>
@@ -21,7 +21,6 @@ static OpenTTDAircraftLeaves AircraftTestLeaves(OpenTTDVehicleServices &vehicle,
 	shared.context = nullptr;
 	/* Pure airport selection now runs in Rust. These explicit leaves stand in
 	 * for immutable native specs; unexpected services retain abort defaults. */
-	static OpenTTDAnimationServices animation;
 	static int airport_tag;
 	auto &runtime = AircraftTestAirportServices(); runtime = OpenTTDAirportResolverServices{};
 	runtime.shared = &shared; runtime.vehicles = &vehicle;
@@ -33,7 +32,7 @@ static OpenTTDAircraftLeaves AircraftTestLeaves(OpenTTDVehicleServices &vehicle,
 	runtime.fta = [](const AirportSpec *spec) noexcept { return reinterpret_cast<const AirportFTAClass *>(spec); };
 	runtime.check = [](bool condition) noexcept { if (!condition) std::abort(); };
 	runtime.engine_if_valid = [](uint16_t) noexcept { return reinterpret_cast<const OpenTTDEngine *>(&airport_tag); };
-	runtime.engine_kind = [](const OpenTTDEngine *) noexcept { return VEH_AIRCRAFT; };
+	runtime.engine_kind = [](const OpenTTDEngine *) noexcept { return static_cast<VehicleType>(3); };
 	runtime.engine_subtype = [](const OpenTTDEngine *) noexcept { return uint8_t{1}; };
 	runtime.fta_flags = [](const AirportFTAClass *) noexcept { return uint8_t{3}; };
 	auto &commands = AircraftTestAirportCommands(); commands = OpenTTDStationCommandServices{};
@@ -42,11 +41,11 @@ static OpenTTDAircraftLeaves AircraftTestLeaves(OpenTTDVehicleServices &vehicle,
 	commands.station = &world;
 	commands.airport_tile = [](const BaseStation *) noexcept { return uint32_t{7}; };
 	commands.airport_type = [](const BaseStation *) noexcept { return uint8_t{0}; };
-	shared.station_commands = []() noexcept { return &AircraftTestAirportCommands(); };
+	shared.station_commands = []() noexcept -> const OpenTTDStationCommandServices * { return &AircraftTestAirportCommands(); };
 	vehicle.vehicle_type = [](OpenTTDVehicle *) noexcept { return uint8_t{3}; };
 	vehicle.engine_id = [](OpenTTDVehicle *) noexcept { return uint16_t{0}; };
 	leaves.airport_type = [](const OpenTTDStation *) noexcept { return uint8_t{0}; };
-	animation.airport_runtime = &runtime; openttd_rust_animation_exchange(&animation);
+	openttd_rust_airport_exchange(&runtime);
 	return leaves;
 }
 #endif /* OPENTTD_AIRCRAFT_BOUNDARY_HPP */

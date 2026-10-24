@@ -10,7 +10,7 @@
 #define RUST_SERVICES_STATION_H
 #include "../airport.h"
 #include "../station_base.h"
-#include "../roadveh_base.h"
+#include "../roadveh.h"
 #include "../station_func.h"
 #include "../industry.h"
 #include "../waypoint_base.h"

@@ -2,9 +2,12 @@
 /** @file airport_resolver_ffi.h Stack contexts and typed airport runtime services. */
 #ifndef RUST_AIRPORT_RESOLVER_FFI_H
 #define RUST_AIRPORT_RESOLVER_FFI_H
-#include "station_command_ffi.h"
+#include "station_ffi.h"
 #include "newgrf_storage_ffi.h"
 #include "../map_type.h"
+struct OpenTTDSharedServices;
+struct AirportSpec; struct AirportTileSpec;
+enum VehicleType : uint8_t;
 struct AirportResolverObject; struct AirportTileResolverObject; struct ScopeResolver; struct TownScopeResolver; struct ResolverObject; struct SpriteGroup; struct AirportFTAClass; struct OpenTTDVehicleServices; struct OpenTTDEngine; struct RoadStop;
 struct OpenTTDAirportResolverState {
 	Station *station; const AirportSpec *spec; const AirportTileSpec *tile_spec;
@@ -67,6 +70,7 @@ struct OpenTTDAirportResolverServices {
 };
 const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept;
 extern "C" {
+const OpenTTDAirportResolverServices *openttd_rust_airport_exchange(const OpenTTDAirportResolverServices *);
 bool openttd_rust_can_engine_use_station(uint16_t, const Station *, const OpenTTDAirportResolverServices *);
 bool openttd_rust_can_vehicle_use_station(const OpenTTDVehicle *, const Station *, const OpenTTDAirportResolverServices *);
 bool openttd_rust_is_hangar(uint32_t, const OpenTTDAirportResolverServices *);

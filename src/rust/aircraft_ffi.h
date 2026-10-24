@@ -75,9 +75,9 @@ struct OpenTTDAircraftLeaves {
 	uint16_t (OPENTTD_AIRCRAFT_CALL *engine_sound)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(engine_sound);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *airport_entry)(const void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(airport_entry);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *direction_towards)(OpenTTDAircraftVehicle, int32_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(direction_towards);
-	int32_t (OPENTTD_AIRCRAFT_CALL *hangar_height)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(hangar_height);
+	int32_t (OPENTTD_AIRCRAFT_CALL *hangar_height)(const OpenTTDStation *, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_height);
 	uint8_t (OPENTTD_AIRCRAFT_CALL *terminal_count)(const void *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terminal_count);
-	uint8_t (OPENTTD_AIRCRAFT_CALL *hangar_exit)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(hangar_exit);
+	uint8_t (OPENTTD_AIRCRAFT_CALL *hangar_exit)(const OpenTTDStation *, uint32_t, const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(hangar_exit);
 	uint16_t (OPENTTD_AIRCRAFT_CALL *service_interval)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(service_interval);
 	bool (OPENTTD_AIRCRAFT_CALL *chain_in_depot)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(chain_in_depot);
 	bool (OPENTTD_AIRCRAFT_CALL *nearest_depot_order)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(nearest_depot_order);

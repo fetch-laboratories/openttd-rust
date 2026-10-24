@@ -110,8 +110,20 @@ pub struct Services {
     ) -> u16,
     unhandled: extern "C" fn(u8),
 }
+struct Registry(std::cell::UnsafeCell<*const Services>);
+// SAFETY: InitializeGame and every runtime query hold the game-state mutex.
+unsafe impl Sync for Registry {}
+static REGISTRY: Registry = Registry(std::cell::UnsafeCell::new(ptr::null()));
+/// Install the immutable process-lifetime services before game/runtime queries.
+/// SAFETY: Serialized initialization; tables outlive every synchronous call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_airport_exchange(
+    services: *const Services,
+) -> *const Services {
+    unsafe { ptr::replace(REGISTRY.0.get(), services) }
+}
 pub(crate) fn runtime() -> &'static Services {
-    unsafe { &*crate::animated_tile::services().airport_runtime }
+    unsafe { &**REGISTRY.0.get() }
 }
 impl Services {
     pub(crate) fn shared(&self) -> &crate::services::Services {
