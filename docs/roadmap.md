@@ -4,20 +4,22 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-24, code at `103ee7cff8`)
+## Where the fork stands (2026-10-24, code at `951eec41e5`)
 
 - 63 ownership ports. Original C++ retired: 62,169 of 470,612 source lines
   (13.21%); simulation sources: 53,345 of 102,615 (51.99%). Whole-fork Rust,
   tooling and glue (`tools/port-metrics.py`, which does not measure behavior):
-  114,035, 41,163 and 40,566 lines. Since the seventeenth steering: 25 owners
+  114,094, 41,262 and 40,559 lines. Since the seventeenth steering: 25 owners
   and 12,533 original lines; no regression or rollback.
 - Projections at `103ee7cff8` from the 156915 anchor: TGP 1.403x, Opus 1.406x,
   Grok 1.411x, P1996 1.369x, P2000 1.422x, P2016 1.502x. Quiet wall pass: TGP
   1.209x, Opus 1.420x, Grok 1.414x, P1996 1.344x, P2000 1.413x, P2016 1.484x;
   all below ceiling, only P2016 in band. TGP loop work grew 13.2%; #275 holds
   the attribution.
-- Paused at the user's request: ready #442, #445 and #448, unfinished #446 and
-  #447; none has a Full at its current head.
+- #442, #445 and #448 integrated together in #453. Paused at the user's
+  request with two unintegrated branches, #446 and #447; neither has a Full
+  at its current head. The merged tip is unprofiled; #448 commits the complete
+  103ee anchors. The next integration makes the next merged-tip profile due.
 
 ## Nineteenth steering review (2026-10-24, housekeeping)
 
@@ -173,6 +175,7 @@ Maintenance rows use original retirement and net glue (#223); evidence stays in 
 | #156 wagon overrides; #275 track/orders and quiet anchors | #431, #432, #433 | #434 | `1569158485` | combined with #416: 966 / 308 / 303 / 430, net glue 209 |
 | #156 property sign/failure boundaries; MSVC assertion-only warning | #435; #437 repair | #437 | `8b3dd5ebef` | combined with #425: 1120 / 290 / 520 / 458, net glue 479 |
 | #156 statue search; #275 whole anchors; concrete animation ABI test | #441, #443; #444 repair | #444 | `103ee7cff8` | combined owners: 1768 / 800 / 840 / 563, net glue 627 |
+| #275 aircraft witnesses, direct orders and quiet anchors; #156 order flags | #442, #445, #448 | #453 | `951eec41e5` | 189 / 183 / 12 / 0; net glue -7 |
 
 
 ## Phase 1: maintenance and coverage
@@ -183,28 +186,27 @@ async protocol, opcode switches). Housekeeping PRs count toward the six branches
 
 ## Phase 2: work order
 
-1. **First on resume:** update #442, #445 and #448 to base; one Full for the batch.
-2. **#259 local cleanup**, then **#275 growth repair** (the next maintenance PR
+1. **#259 local cleanup**, then **#275 growth repair** (the next maintenance PR
    to integrate; candidates: #436's per-call ambient gate, shared airport
    animation dispatch) alongside **#449-#452** where files do not overlap.
-3. **#446** investigates the refit-cost clone crash; **#447** validates its
+2. **#446** investigates the refit-cost clone crash; **#447** validates its
    TownID fixture repair. Both need cost checkpoints, review and Full.
-4. **Next owners** (planned, unselected): vehicle effect emission and cache
+3. **Next owners** (planned, unselected): vehicle effect emission and cache
    policy, then the cargo registry and callback lifecycle, once the housekeeping
    PRs are open and the branch limit allows. Catchment, #64/#68/#69 and
    vendored, GUI and platform work stay unselected.
 
 ## Resume checkpoint
 
-Paused at the user's request. No jobs run and no draft has a Full at its head.
+Paused after the requested #453 batch. Its merged worktrees and branches are
+removed; unfinished worktrees remain. No local jobs run. Automatic post-merge
+CI was still running at handoff; #453 links it. No draft has a Full at its head.
 
 | Item | Saved head | Next action |
 | --- | --- | --- |
-| #442 speed repairs | `af29f9521a` | Reviewed; batch with #445 and #448. |
-| #445 order-flag coverage | `0486abc627` | Reviewed, no findings; in the batch. |
-| #448 quiet anchors | `01bbc69578` | Median-only record, review-exempt; in the batch. |
 | #446 engine/articulated (#439) | `e96e45c240` | Refit-cost clone crash; simulate passed 1 of 3. |
 | #447 type admission (#440) | `c3fdd2227d` | Validate TownID fixture repair; last pair failed. |
 | #275, #259, #449-#452 | issues | As Phase 2 says; no PRs yet. |
+| Merged-tip profile | `951eec41e5` | Due after the next integration; use the 103ee anchors. |
 
-The next macOS run is due after four more integrations. The user's tar files stay.
+The next macOS run is due after three more integrations. The user's tar files stay.
