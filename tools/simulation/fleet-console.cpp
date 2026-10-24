@@ -279,7 +279,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
 	Backup<CompanyID> company(_current_company);
-	if (args[1] == "resolver") { ResolverProbe(); return true; }
+	if (args[1] == "resolver") { ResolverProbe(); company.Restore(); return true; }
 	if (args[1].starts_with("transaction-mass-")) {
 		VehicleType type = args[1].ends_with("train") ? VEH_TRAIN : args[1].ends_with("road") ? VEH_ROAD : args[1].ends_with("ship") ? VEH_SHIP : VEH_AIRCRAFT;
 		Vehicle *v = BuildFixture(type);

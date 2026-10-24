@@ -75,8 +75,8 @@ def scenarios(soak):
             "console": ["fleet_scenario " + mode, "unpause"],
         }
         for mode in (
-            "resolver",
             "groups",
+            "resolver",
             "transaction-meta",
             "transaction-mass-train",
             "transaction-mass-road",
@@ -130,6 +130,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
 
     folder = out / scenario["name"] / "input"
     if scenario["fleet"].startswith(("train", "drain")) or scenario["fleet"] in (
+        "resolver",
         "transaction-meta",
         "transaction-refit-train",
         "transaction-mass-train",
