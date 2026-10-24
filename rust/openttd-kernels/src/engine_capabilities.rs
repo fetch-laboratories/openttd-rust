@@ -273,8 +273,7 @@ pub unsafe extern "C" fn openttd_rust_engine_refittable(s: &Services, id: u16) -
         is_valid_cargo_type(cargo) && (s.refit_mask)(e) != mask
     }
 }
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_articulated_next(
+pub(crate) unsafe fn openttd_rust_articulated_next(
     s: &Services,
     index: u32,
     engine: u16,

@@ -16,6 +16,7 @@
 #include "autoreplace_cmd.h"
 #include "autoreplace_func.h"
 #include "vehicle_cmd.h"
+#include "articulated_vehicles.h"
 #include "vehicle_func.h"
 #include "roadveh.h"
 #include "train.h"
@@ -240,6 +241,213 @@ static bool SameRandom(const SavedRandomSeeds &a, const SavedRandomSeeds &b)
 {
 	return std::equal(std::begin(a.random.state), std::end(a.random.state), std::begin(b.random.state)) && std::equal(std::begin(a.interactive_random.state), std::end(a.interactive_random.state), std::begin(b.interactive_random.state));
 }
+/* Real Action2 programs for the selected capability/query owner. The observer
+ * records public callback contexts; all results come from deterministic groups. */
+struct CapabilityObserver : SpriteGroup {
+	CapabilityObserver() : SpriteGroup() {}
+	const SpriteGroup *program = nullptr;
+	mutable std::vector<uint32_t> indices;
+	mutable bool purchase = true, pooled = true;
+	mutable VehicleID temporary = VehicleID::Invalid();
+	mutable uint refits = 0;
+	ResolverResult Resolve(ResolverObject &object) const override
+	{
+		if (object.callback == CBID_VEHICLE_REFIT_CAPACITY) ++refits;
+		if (object.callback == CBID_VEHICLE_ARTIC_ENGINE) {
+			indices.push_back(object.callback_param1);
+			const Vehicle *v = static_cast<VehicleResolverObject &>(object).self_scope.v;
+			purchase &= v == nullptr;
+			if (v != nullptr) {
+				pooled &= Vehicle::GetIfValid(v->index) == v && v->owner == _current_company;
+				if (v->type == VEH_INVALID) temporary = v->index;
+			}
+		}
+		return SpriteGroup::Resolve(program, object, false);
+	}
+	void Reset() { indices.clear(); purchase = pooled = true; temporary = VehicleID::Invalid(); refits = 0; }
+};
+struct CapabilityProgram {
+	Engine *engine;
+	Backup<EngineInfo> info;
+	Backup<CargoGRFFileProps> props;
+	GRFFile grf;
+	std::unique_ptr<CallbackResultSpriteGroup> part, stop, capacity, refit, failure;
+	std::unique_ptr<DeterministicSpriteGroup> root, articulated, property;
+	std::unique_ptr<CapabilityObserver> observer;
+	explicit CapabilityProgram(Engine *e) : engine(e), info(e->info), props(e->grf_prop)
+	{
+		if (!SpriteGroup::CanAllocateItem(9)) FixtureAbort(__LINE__);
+		grf.grfid = 0x439CA110; grf.grf_version = 8;
+		for (uint i = 0; i < NUM_CARGO; ++i) grf.cargo_map[i] = i;
+		part = std::make_unique<CallbackResultSpriteGroup>(0);
+		stop = std::make_unique<CallbackResultSpriteGroup>(0x7FFF);
+		capacity = std::make_unique<CallbackResultSpriteGroup>(20);
+		refit = std::make_unique<CallbackResultSpriteGroup>(17);
+		failure = std::make_unique<CallbackResultSpriteGroup>(CALLBACK_FAILED);
+		root = std::make_unique<DeterministicSpriteGroup>(); articulated = std::make_unique<DeterministicSpriteGroup>(); property = std::make_unique<DeterministicSpriteGroup>();
+		for (auto *g : {root.get(), articulated.get(), property.get()}) { g->size = DSG_SIZE_DWORD; g->var_scope = VSG_SCOPE_SELF; g->default_result.group = failure.get(); }
+		root->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x0C, .and_mask = 0xFFFF}};
+		root->ranges = {{{.group = refit.get()}, CBID_VEHICLE_REFIT_CAPACITY, CBID_VEHICLE_REFIT_CAPACITY}, {{.group = articulated.get()}, CBID_VEHICLE_ARTIC_ENGINE, CBID_VEHICLE_ARTIC_ENGINE}, {{.group = property.get()}, CBID_VEHICLE_MODIFY_PROPERTY, CBID_VEHICLE_MODIFY_PROPERTY}};
+		articulated->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = UINT32_MAX}};
+		articulated->ranges = {{{.group = part.get()}, 1, 1}}; articulated->default_result.group = stop.get();
+		property->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = UINT32_MAX}};
+		property->ranges = {{{.group = capacity.get()}, e->type == VEH_TRAIN ? PROP_TRAIN_CARGO_CAPACITY : PROP_AIRCRAFT_PASSENGER_CAPACITY, e->type == VEH_TRAIN ? PROP_TRAIN_CARGO_CAPACITY : PROP_AIRCRAFT_PASSENGER_CAPACITY}};
+		observer = std::make_unique<CapabilityObserver>(); observer->program = root.get();
+		e->grf_prop.grffile = &grf; e->grf_prop.spritegroups.clear(); e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, observer.get());
+	}
+	~CapabilityProgram() { props.Restore(); info.Restore(); }
+};
+static void CapabilityChain(const Vehicle *v, const char *stage)
+{
+	for (; v != nullptr; v = v->Next()) fmt::print(stderr, "FLEET capability-chain {} {} {} {} {} {} {} {}\n", stage, v->index.base(), v->engine_type.base(), v->subtype, v->cargo_type, v->cargo_subtype, v->cargo_cap, v->spritenum);
+}
+static void CapabilitiesProbe()
+{
+	Vehicle *fixture = BuildFixture(VEH_TRAIN);
+	Engine *e = Engine::Get(fixture->engine_type), *part = Engine::Get(fixture->GetNextVehicle()->engine_type);
+	Backup<bool> dynamic(_settings_game.vehicle.dynamic_engines, false);
+	Backup<RailVehicleInfo> rail(e->VehInfo<RailVehicleInfo>()), part_rail(part->VehInfo<RailVehicleInfo>());
+	Backup<EngineInfo> part_info(part->info);
+	const CargoType passengers = GetCargoTypeByLabel(CT_PASSENGERS), mail = GetCargoTypeByLabel(CT_MAIL);
+	if (!IsValidCargoType(passengers) || !IsValidCargoType(mail)) FixtureAbort(__LINE__);
+	SavedRandomSeeds before, after; SaveRandomSeeds(&before);
+	const GRFFile *original_grf = e->GetGRF();
+	{
+		CapabilityProgram p(e);
+		e->VehInfo<RailVehicleInfo>().capacity = 10; e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_SINGLEHEAD;
+		part->VehInfo<RailVehicleInfo>().capacity = 7;
+		e->info.cargo_type = passengers; e->info.refit_mask = CargoTypes{1} << mail; e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier);
+		e->info.callback_mask = {VehicleCallbackMask::ArticEngine, VehicleCallbackMask::RefitCapacity};
+		part->info.cargo_type = mail; part->info.refit_mask = CargoTypes{1} << mail; part->info.callback_mask = {};
+		for (uint8_t version : {7, 8}) for (bool fail : {false, true}) for (bool purchase : {false, true}) {
+			p.grf.grf_version = version; p.part->result = part->grf_prop.local_id | (version < 8 ? 0x80 : 0x4000); p.stop->result = fail ? CALLBACK_FAILED : version < 8 ? 0xFF : 0x7FFF;
+			p.observer->Reset();
+			size_t items = Vehicle::GetNumItems();
+			uint count = CountArticulatedParts(e->index, purchase);
+			if (Vehicle::GetNumItems() != items) FixtureAbort(__LINE__);
+			fmt::print(stderr, "FLEET capability-count {} {} {} {} {} {} {} {}\n", version, fail, purchase, count, p.observer->indices == std::vector<uint32_t>{1, 2}, p.observer->purchase == purchase, p.observer->pooled, purchase || (p.observer->temporary != VehicleID::Invalid() && !Vehicle::IsValidID(p.observer->temporary)));
+		}
+		p.grf.grf_version = 8; p.stop->result = 0x7FFF;
+		p.articulated->ranges[0].high = 99; p.observer->Reset();
+		uint count = CountArticulatedParts(e->index, true);
+		fmt::print(stderr, "FLEET capability-limit {} {} {}\n", count, p.observer->indices.size(), p.observer->indices.back());
+		p.articulated->ranges[0].high = 1;
+		for (bool initial : {false, true}) {
+			CargoTypes u, i; GetArticulatedRefitMasks(e->index, initial, &u, &i);
+			auto cap = GetCapacityOfArticulatedParts(e->index);
+			fmt::print(stderr, "FLEET capability-aggregate {} {} {} {} {} {} {}\n", initial, u, i, cap[passengers], cap[mail], GetCargoTypesOfArticulatedParts(e->index), IsArticulatedVehicleRefittable(e->index));
+		}
+		e->info.refit_mask = CargoTypes{1} << passengers;
+		fmt::print(stderr, "FLEET capability-suffix {} ", IsEngineRefittable(e->index));
+		e->info.callback_mask.Set(VehicleCallbackMask::CargoSuffix);
+		fmt::print(stderr, "{}\n", IsEngineRefittable(e->index));
+		e->info.callback_mask.Reset(VehicleCallbackMask::CargoSuffix); e->info.refit_mask = CargoTypes{1} << mail;
+		p.capacity->result = 0;
+		fmt::print(stderr, "FLEET capability-zero {} {} ", e->CanCarryCargo(), e->DetermineCapacity(nullptr));
+		e->VehInfo<RailVehicleInfo>().capacity = 0;
+		fmt::print(stderr, "{} {}\n", e->CanCarryCargo(), e->DetermineCapacity(nullptr));
+		part->VehInfo<RailVehicleInfo>().capacity = 0;
+		CargoTypes u, i; GetArticulatedRefitMasks(e->index, false, &u, &i);
+		fmt::print(stderr, "FLEET capability-empty {} {}\n", u, i == ALL_CARGOTYPES);
+		e->VehInfo<RailVehicleInfo>().capacity = 10; part->VehInfo<RailVehicleInfo>().capacity = 7; p.capacity->result = 20;
+		e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_MULTIHEAD;
+		fmt::print(stderr, "FLEET capability-multihead {}\n", e->GetDisplayDefaultCapacity());
+		e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_SINGLEHEAD;
+		{
+			Backup<CargoType> cargo(fixture->cargo_type); Backup<uint8_t> subtype(fixture->cargo_subtype);
+			Backup<uint16_t> passenger_multiplier(CargoSpec::Get(passengers)->multiplier), mail_multiplier(CargoSpec::Get(mail)->multiplier);
+			for (bool algorithm : {false, true}) for (bool other : {false, true}) for (uint8_t suffix : {0, 1}) {
+				e->info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier, algorithm); fixture->cargo_type = other ? mail : passengers; fixture->cargo_subtype = suffix;
+				p.observer->Reset(); uint amount = e->DetermineCapacity(fixture);
+				fmt::print(stderr, "FLEET capability-gate {} {} {} {} {}\n", algorithm, other, suffix, amount, p.observer->refits);
+			}
+			e->info.callback_mask.Reset(VehicleCallbackMask::RefitCapacity); fixture->cargo_type = mail;
+			for (bool algorithm : {false, true}) for (uint16_t base : {1, 256, 65535}) for (uint16_t factor : {1, 256, 65535}) {
+				e->info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier, algorithm); CargoSpec::Get(passengers)->multiplier = base; CargoSpec::Get(mail)->multiplier = factor;
+				fmt::print(stderr, "FLEET capability-multiplier {} {} {} {}\n", algorithm, base, factor, e->DetermineCapacity(fixture));
+			}
+			passenger_multiplier.Restore(); mail_multiplier.Restore(); cargo.Restore(); subtype.Restore();
+			e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier); e->info.callback_mask.Set(VehicleCallbackMask::RefitCapacity);
+		}
+		for (Engine *ship : Engine::Iterate()) {
+			if (ship->type != VEH_SHIP) continue;
+			Backup<EngineInfo> ship_info(ship->info); Backup<ShipVehicleInfo> ship_spec(ship->VehInfo<ShipVehicleInfo>());
+			Backup<uint16_t> multiplier(CargoSpec::Get(mail)->multiplier);
+			ship->info.cargo_type = mail; ship->info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier); ship->VehInfo<ShipVehicleInfo>().capacity = UINT16_MAX; CargoSpec::Get(mail)->multiplier = UINT16_MAX;
+			uint amount = ship->GetDisplayDefaultCapacity(); auto caps = GetCapacityOfArticulatedParts(ship->index);
+			fmt::print(stderr, "FLEET capability-ship {} {} {}\n", amount, caps[mail], caps[mail] == static_cast<uint16_t>(amount));
+			multiplier.Restore(); ship_spec.Restore(); ship_info.Restore(); break;
+		}
+		SaveRandomSeeds(&after);
+		fmt::print(stderr, "FLEET capability-query-rng {}\n", SameRandom(before, after));
+		for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
+			SavedRandomSeeds a, b; SaveRandomSeeds(&a);
+			auto [cost, id, cap, secondary, capacities] = Command<CMD_BUILD_VEHICLE>::Do(flags, fixture->tile, e->index, false, INVALID_CARGO, INVALID_CLIENT_ID);
+			Checked("capability-build", cost); SaveRandomSeeds(&b);
+			fmt::print(stderr, "FLEET capability-build {} {} {} {} {}\n", flags.Test(DoCommandFlag::Execute), cap, secondary, SameRandom(a, b), CompanyMoney(Company::Get(_current_company)));
+			Vehicle *built = Vehicle::GetIfValid(id);
+			if (!flags.Test(DoCommandFlag::Execute)) continue;
+			if (built == nullptr || !built->HasArticulatedPart()) FixtureAbort(__LINE__);
+			CapabilityChain(built, "build"); CargoType common = passengers;
+			CargoTypes mixed = GetCargoTypesOfArticulatedVehicle(built, &common);
+			fmt::print(stderr, "FLEET capability-mixed {} {} {}\n", mixed, common == INVALID_CARGO, GetCargoTypesOfArticulatedVehicle(built, nullptr));
+			for (DoCommandFlags refit_flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
+				auto [cost, cap, secondary, caps] = Command<CMD_REFIT_VEHICLE>::Do(refit_flags, id, mail, 1, false, false, 0); Checked("capability-refit", cost);
+				fmt::print(stderr, "FLEET capability-refit {} {} {}\n", refit_flags.Test(DoCommandFlag::Execute), cap, secondary);
+			}
+			CapabilityChain(built, "refit");
+			auto [cloned, clone] = Command<CMD_CLONE_VEHICLE>::Do(DoCommandFlag::Execute, fixture->tile, id, false); Checked("capability-clone", cloned); CapabilityChain(Vehicle::Get(clone), "clone");
+			Checked("capability-sell-clone", Command<CMD_SELL_VEHICLE>::Do(DoCommandFlag::Execute, clone, true, false, INVALID_CLIENT_ID));
+			Checked("capability-renew-rule", Command<CMD_SET_AUTOREPLACE>::Do(DoCommandFlag::Execute, ALL_GROUP, e->index, e->index, true));
+			built->age = TimerGameCalendar::Date(built->max_age.base() + 366);
+			Cost("capability-replace-test", Command<CMD_AUTOREPLACE_VEHICLE>::Do({}, id));
+			Cost("capability-replace", Command<CMD_AUTOREPLACE_VEHICLE>::Do(DoCommandFlag::Execute, id));
+			if (Vehicle::IsValidID(id)) Checked("capability-sell", Command<CMD_SELL_VEHICLE>::Do(DoCommandFlag::Execute, id, true, false, INVALID_CLIENT_ID));
+		}
+	}
+	part_info.Restore(); rail.Restore(); part_rail.Restore(); dynamic.Restore();
+	SaveRandomSeeds(&after);
+	fmt::print(stderr, "FLEET capability-restored {} {} {} {} {}\n", e->GetGRF() == original_grf, after.random.state[0], after.random.state[1], after.interactive_random.state[0], after.interactive_random.state[1]);
+	fmt::print(stderr, "FLEET capability-checkpoint complete\n");
+}
+static void CapabilityAircraft(Vehicle *v)
+{
+	Engine *e = Engine::Get(v->engine_type);
+	Backup<AircraftVehicleInfo> info(e->VehInfo<AircraftVehicleInfo>());
+	Backup<uint8_t> cargo(v->cargo_type), subtype(v->cargo_subtype);
+	Backup<uint16_t> capacity(v->cargo_cap), secondary_capacity(v->Next()->cargo_cap), refit_capacity(v->refit_cap);
+	{
+	CapabilityProgram p(e);
+	e->info.cargo_type = GetCargoTypeByLabel(CT_PASSENGERS); e->info.refit_mask = CargoTypes{1} << GetCargoTypeByLabel(CT_MAIL);
+	e->info.callback_mask = {VehicleCallbackMask::RefitCapacity}; e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier);
+	e->VehInfo<AircraftVehicleInfo>().passenger_capacity = 100; e->VehInfo<AircraftVehicleInfo>().mail_capacity = 11;
+	p.property->ranges.push_back({{.group = p.refit.get()}, PROP_AIRCRAFT_MAIL_CAPACITY, PROP_AIRCRAFT_MAIL_CAPACITY});
+	v->cargo_type = e->info.cargo_type; v->cargo_subtype = 0;
+	uint16_t secondary = 999;
+	uint amount = e->DetermineCapacity(v, &secondary);
+	fmt::print(stderr, "FLEET capability-aircraft {} {}\n", amount, secondary);
+	{
+		Backup<uint16_t> passengers(CargoSpec::Get(e->info.cargo_type)->multiplier), mail(CargoSpec::Get(GetCargoTypeByLabel(CT_MAIL))->multiplier);
+		e->info.callback_mask.Reset(VehicleCallbackMask::RefitCapacity);
+		v->cargo_type = GetCargoTypeByLabel(CT_MAIL);
+		for (bool algorithm : {false, true}) for (uint16_t factor : {1, 256, 65535}) {
+			e->info.misc_flags.Set(EngineMiscFlag::NoDefaultCargoMultiplier, algorithm); CargoSpec::Get(e->info.cargo_type)->multiplier = UINT16_MAX; CargoSpec::Get(v->cargo_type)->multiplier = factor;
+			uint16_t extra = 999; uint amount = e->DetermineCapacity(v, &extra);
+			fmt::print(stderr, "FLEET capability-aircraft-mail {} {} {} {}\n", algorithm, factor, amount, extra);
+		}
+		passengers.Restore(); mail.Restore();
+		e->info.callback_mask.Set(VehicleCallbackMask::RefitCapacity); e->info.misc_flags.Reset(EngineMiscFlag::NoDefaultCargoMultiplier); v->cargo_type = e->info.cargo_type;
+	}
+	for (DoCommandFlags flags : {DoCommandFlags{}, DoCommandFlags{DoCommandFlag::Execute}}) {
+		auto [cost, cap, mail, caps] = Command<CMD_REFIT_VEHICLE>::Do(flags, v->index, GetCargoTypeByLabel(CT_MAIL), 1, false, false, 0); Checked("capability-aircraft-refit", cost);
+		fmt::print(stderr, "FLEET capability-aircraft-refit {} {} {} {}\n", flags.Test(DoCommandFlag::Execute), cap, mail, v->Next()->cargo_cap);
+	}
+	}
+	info.Restore(); cargo.Restore(); subtype.Restore(); capacity.Restore(); secondary_capacity.Restore(); refit_capacity.Restore();
+	v->InvalidateNewGRFCacheOfChain();
+	fmt::print(stderr, "FLEET capability-aircraft-restored true\n");
+}
+
 /* Unchanged public iterator bodies are the reference oracle for inputs absent
  * from traffic: full-bucket threshold, extreme unsigned arithmetic and live next
  * after a callback moves/removes the current shell. No pinned source is edited. */
@@ -713,6 +921,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 {
 	if (args.size() != 2) return false;
 	Backup<CompanyID> company(_current_company);
+	if (args[1] == "capabilities" || args[1] == "capabilities-inspect") { CapabilitiesProbe(); if (args[1] == "capabilities-inspect") fmt::print(stderr, "FLEET capability-reinstalled true\n"); company.Restore(); return true; }
 	if (args[1] == "resolver") { ResolverProbe(); company.Restore(); return true; }
 	if (args[1] == "resolver-inspect") {
 		Train *v = nullptr;
@@ -788,7 +997,7 @@ static bool FleetScenario(std::span<std::string_view> args)
 		Vehicle *v = BuildFixture(type);
 		if (type == VEH_ROAD) GroundPhysicsProbe(RoadVehicle::From(v), Engine::Get(v->engine_type)->VehInfo<RoadVehicleInfo>());
 		ResolverVariables(v);
-		if (type == VEH_AIRCRAFT) ResolverAircraft(Aircraft::From(v));
+		if (type == VEH_AIRCRAFT) { ResolverAircraft(Aircraft::From(v)); CapabilityAircraft(v); }
 		SavedRandomSeeds before, after;
 		bool restored = true;
 		/* Every buildable engine through query, test and execute, then one speculative build for another cargo. */

@@ -42,9 +42,6 @@ static const uint MAX_ARTICULATED_PARTS = 100; ///< Maximum of articulated parts
 #ifndef WITH_RUST
 static EngineID GetNextArticulatedPart(uint index, EngineID front_type, Vehicle *front = nullptr, bool *mirrored = nullptr)
 {
-#ifdef WITH_RUST
-	return EngineID(openttd_rust_articulated_next(&GetRustEngineCapabilitiesServices(), index, front_type.base(), front, mirrored));
-#else
 	assert(front == nullptr || front->engine_type == front_type);
 
 	const Engine *front_engine = Engine::Get(front_type);
@@ -66,7 +63,6 @@ static EngineID GetNextArticulatedPart(uint index, EngineID front_type, Vehicle 
 	}
 
 	return GetNewEngineID(front_engine->GetGRF(), front_engine->type, callback);
-#endif
 }
 #endif
 

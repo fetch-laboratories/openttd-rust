@@ -44,7 +44,6 @@ extern "C" {
 bool openttd_rust_engine_can_carry(const OpenTTDEngineCapabilitiesServices *, const OpenTTDEngine *);
 uint32_t openttd_rust_engine_capacity(const OpenTTDEngineCapabilitiesServices *, const OpenTTDEngine *, const Vehicle *, uint16_t *);
 bool openttd_rust_engine_refittable(const OpenTTDEngineCapabilitiesServices *, uint16_t);
-uint16_t openttd_rust_articulated_next(const OpenTTDEngineCapabilitiesServices *, uint32_t, uint16_t, Vehicle *, bool *);
 bool openttd_rust_articulated_is(const OpenTTDEngineCapabilitiesServices *, uint16_t);
 uint32_t openttd_rust_articulated_count(const OpenTTDEngineCapabilitiesServices *, uint16_t, bool);
 void openttd_rust_articulated_capacity(const OpenTTDEngineCapabilitiesServices *, uint16_t, uint32_t *);
