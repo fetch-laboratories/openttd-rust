@@ -24,7 +24,7 @@ use crate::{
     cargopacket::MTA_LOAD,
     linkgraph::live,
     linkgraph_schedule::{self, Services as ScheduleServices},
-    linkgraph_type::EdgeUpdateModes,
+    linkgraph_type::{EdgeUpdateModes, INVALID_LINK_GRAPH},
     map_func::Map,
     order_type::{
         INVALID_VEH_ORDER_ID, ODATF_HALT, ODATF_NEAREST_DEPOT, ODTF_PART_OF_ORDERS, OLFB_NO_LOAD,
@@ -183,10 +183,11 @@ pub(crate) fn increase_stats(
     let l = s.links;
     // `Station::Get(next_station_id)`.
     let st2 = (s.station.station)(next).base;
-    let mut graph = live::station_graph_strict(st, cargo, l.graphs);
-    let second = live::station_graph_strict(st2, cargo, l.graphs);
-    if graph.is_null() {
-        if second.is_null() {
+    let first_id = (l.graphs.graph_id)(st, cargo);
+    let second_id = (l.graphs.graph_id)(st2, cargo);
+    let mut graph = std::ptr::null_mut();
+    if first_id == INVALID_LINK_GRAPH {
+        if second_id == INVALID_LINK_GRAPH {
             if (l.graphs.available)() {
                 witness::hit(witness::VISITS_GRAPH_NEW);
                 graph = (l.graphs.allocate)(cargo);
@@ -199,43 +200,49 @@ pub(crate) fn increase_stats(
                 (l.graphs.allocation_failure)();
             }
         } else {
-            graph = second;
+            graph = (l.graphs.get)(second_id);
         }
         if !graph.is_null() {
             unsafe {
                 live::join(graph, (l.graphs.station_id)(st), l.graphs);
             }
         }
-    } else if second.is_null() {
+    } else if second_id == INVALID_LINK_GRAPH {
+        graph = (l.graphs.get)(first_id);
         witness::hit(witness::VISITS_GRAPH_JOIN);
         unsafe {
             live::join(graph, (l.graphs.station_id)(st2), l.graphs);
         }
-    } else if graph != second {
-        if unsafe {
-            (&*live::resolve(graph, l.graphs)).size() < (&*live::resolve(second, l.graphs)).size()
-        } {
-            witness::hit(witness::VISITS_GRAPH_MERGE_SECOND);
-            unsafe {
-                linkgraph_schedule::openttd_rust_schedule_dequeue(graph);
-                live::openttd_rust_live_graph_merge(
-                    second,
-                    graph,
-                    (s.shared.economy_date)(),
-                    l.graphs,
-                );
-            }
-            graph = second;
-        } else {
-            witness::hit(witness::VISITS_GRAPH_MERGE_FIRST);
-            unsafe {
-                linkgraph_schedule::openttd_rust_schedule_dequeue(second);
-                live::openttd_rust_live_graph_merge(
-                    graph,
-                    second,
-                    (s.shared.economy_date)(),
-                    l.graphs,
-                );
+    } else {
+        graph = (l.graphs.get)(first_id);
+        if first_id != second_id {
+            let second = (l.graphs.get)(second_id);
+            if unsafe {
+                (&*live::resolve(graph, l.graphs)).size()
+                    < (&*live::resolve(second, l.graphs)).size()
+            } {
+                witness::hit(witness::VISITS_GRAPH_MERGE_SECOND);
+                unsafe {
+                    linkgraph_schedule::openttd_rust_schedule_dequeue(graph);
+                    live::openttd_rust_live_graph_merge(
+                        second,
+                        graph,
+                        (s.shared.economy_date)(),
+                        l.graphs,
+                    );
+                }
+                graph = second;
+            } else {
+                witness::hit(witness::VISITS_GRAPH_MERGE_FIRST);
+                unsafe {
+                    linkgraph_schedule::openttd_rust_schedule_dequeue(second);
+                    live::openttd_rust_live_graph_merge(
+                        graph,
+                        second,
+                        (s.shared.economy_date)(),
+                        l.graphs,
+                    );
+                }
             }
         }
     }
