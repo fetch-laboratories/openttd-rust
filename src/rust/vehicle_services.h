@@ -137,9 +137,12 @@ inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->engin
 inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return reinterpret_cast<const OpenTTDEngine *>(e); }
 inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return reinterpret_cast<const Engine *>(e); }
 inline const OpenTTDEngine *RustVehicleGetEngine(OpenTTDVehicle *v) noexcept { return RustEngine(VehicleOf(v)->GetEngine()); }
+/** Shared engine observation for a live base shell, resolved once. */
+template <typename Result, auto Read>
+static Result RustVehicleEngineRead(OpenTTDVehicle *v) noexcept { return Read(RustVehicleGetEngine(v)); }
 /** Signature adapter for a typed controller handle's shared engine observation. */
 template <typename Result, typename Handle, auto Read>
-static Result RustVehicleEngineObservation(Handle handle) noexcept { return Read(RustVehicleGetEngine(handle.handle)); }
+static Result RustVehicleEngineObservation(Handle handle) noexcept { return RustVehicleEngineRead<Result, Read>(handle.handle); }
 uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept;
 uint16_t RustVehicleCargoCap(OpenTTDVehicle *v) noexcept;
 void RustVehicleSetRefitCap(OpenTTDVehicle *v, uint16_t cap) noexcept;

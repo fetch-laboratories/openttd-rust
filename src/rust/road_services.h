@@ -220,10 +220,7 @@ static uint16_t OPENTTD_VEHICLE_CALL RoadSvcDefaultMaxSpeed(OpenTTDVehicle *v) n
 {
 	return RoadVehInfo(EngineID(RustVehicleEngineID(VehicleOf(v))))->max_speed;
 }
-static uint16_t OPENTTD_VEHICLE_CALL RoadSvcCargoAgeDefault(OpenTTDVehicle *v) noexcept
-{
-	return RustEngineCargoAge(RustVehicleGetEngine(v));
-}
+
 static OpenTTDRoadCostRead OPENTTD_VEHICLE_CALL RoadSvcCostRead(OpenTTDVehicle *v) noexcept
 {
 	const Engine *e = RoadOf(v)->GetEngine();
@@ -314,7 +311,7 @@ static constinit const OpenTTDRoadLeaves _rust_road_leaves{
 	.crash_news = RoadSvcCrashNews,
 	.shorten_factor = RoadSvcShortenFactor,
 	.default_max_speed = RoadSvcDefaultMaxSpeed,
-	.cargo_age_default = RoadSvcCargoAgeDefault,
+	.cargo_age_default = RustVehicleEngineRead<uint16_t, RustEngineCargoAge>,
 	.cost_read = RoadSvcCostRead,
 	.price = RoadSvcPrice,
 	.pay_running = RoadSvcPayRunning,
