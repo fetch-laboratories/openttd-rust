@@ -280,6 +280,7 @@ const OpenTTDStationServices &GetRustStationServices() noexcept;
 const OpenTTDStationLoading &GetRustStationLoading() noexcept;
 const OpenTTDStationLinks &GetRustStationLinks() noexcept;
 extern "C" {
+uint8_t openttd_rust_goods_convert_state(uint8_t status);
 OpenTTDStationService *openttd_rust_station_service_new();
 void openttd_rust_station_service_destroy(OpenTTDStationService *);
 OpenTTDStationFields *openttd_rust_station_service_fields(OpenTTDStationService *);

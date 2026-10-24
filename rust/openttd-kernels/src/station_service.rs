@@ -26,6 +26,18 @@ use crate::vehicle::visits::{Services as Visits, refresh_links};
 use crate::vehicle::{EngineRef, VS_CRASHED, VS_STOPPED, VehicleRef};
 use std::ffi::c_void;
 use std::ptr::NonNull;
+/// `GoodsEntry::ConvertState`: the four history bits keep their native order.
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_goods_convert_state(status: u8) -> u8 {
+    use crate::station_base::{
+        GE_ACCEPTED_BIGTICK, GE_CURRENT_MONTH, GE_EVER_ACCEPTED, GE_LAST_MONTH,
+    };
+    ((status >> GE_EVER_ACCEPTED) & 1)
+        | (((status >> GE_LAST_MONTH) & 1) << 1)
+        | (((status >> GE_CURRENT_MONTH) & 1) << 2)
+        | (((status >> GE_ACCEPTED_BIGTICK) & 1) << 3)
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CargoFields {
@@ -428,17 +440,6 @@ unsafe fn cp(state: *mut Service, cargo: u8) -> *mut CargoFields {
 pub(crate) fn has_rating(state: *mut Service, cargo: u8) -> bool {
     // SAFETY: scalar read of the live serialized owner; no borrow survives.
     unsafe { crate::station_base::has_rating((*cp(state, cargo)).status) }
-}
-/// `GoodsEntry::ConvertState`: the four history bits keep their native order.
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_goods_convert_state(status: u8) -> u8 {
-    use crate::station_base::{
-        GE_ACCEPTED_BIGTICK, GE_CURRENT_MONTH, GE_EVER_ACCEPTED, GE_LAST_MONTH,
-    };
-    ((status >> GE_EVER_ACCEPTED) & 1)
-        | (((status >> GE_LAST_MONTH) & 1) << 1)
-        | (((status >> GE_CURRENT_MONTH) & 1) << 2)
-        | (((status >> GE_ACCEPTED_BIGTICK) & 1) << 3)
 }
 /// Read only the fields consumed by a station `NewGRF` cargo variable. Container
 /// counts, source and periods are queried directly by the resolver's cargo owner.

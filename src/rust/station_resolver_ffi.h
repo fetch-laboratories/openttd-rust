@@ -61,7 +61,6 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept;
 extern "C" {
 const OpenTTDStationResolverServices *openttd_rust_station_resolver_exchange(const OpenTTDStationResolverServices *);
 uint64_t openttd_rust_station_empty_mask(BaseStation *);
-uint8_t openttd_rust_goods_convert_state(uint8_t);
 TownScopeResolver *openttd_rust_station_town_scope(OpenTTDStationResolverState *, StationResolverObject *);
 ScopeResolver *openttd_rust_station_scope(OpenTTDStationResolverState *, StationResolverObject *, ScopeResolver *, uint8_t, uint8_t);
 uint32_t openttd_rust_station_variable(OpenTTDStationResolverState *, const ResolverObject *, const GRFFile *, uint8_t, uint32_t, bool *);
