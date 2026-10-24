@@ -571,11 +571,6 @@ private:
 	 * @return The requested hangar information.
 	 * @pre The \a tile must be at a hangar tile at an airport.
 	 */
-	inline const HangarTileTable *GetHangarDataByTile(TileIndex tile) const
-	{
-		return this->GetHangarDataByTile(tile, this->GetSpec());
-	}
-
 	inline const HangarTileTable *GetHangarDataByTile(TileIndex tile, const AirportSpec *as) const
 	{
 		for (const auto &depot : as->depots) {
