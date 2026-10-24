@@ -118,7 +118,7 @@ static void TypeEngineInputs(Company *c)
 	TypeRequire(GetRailTypes(false) == e->VehInfo<RailVehicleInfo>().railtypes && GetRoadTypes(false) == RoadTypes{static_cast<RoadType>(62)}, "all-multirail");
 	e->company_avail.Set(c->index); r->company_avail.Set(c->index);
 	TypeRequire(GetCompanyRailTypes(c->index, false) == GetRailTypes(false) && GetCompanyRoadTypes(c->index, false) == GetRoadTypes(false) && GetCompanyRailTypes(CompanyID{static_cast<uint8_t>(c->index.base() ^ 1)}, false).None() && GetCompanyRoadTypes(CompanyID{static_cast<uint8_t>(c->index.base() ^ 1)}, false).None(), "preview-owner");
-	e->company_avail = {}; r->company_avail = {}; e->intro_date -= 1; r->intro_date -= 1;
+	e->company_avail = {}; r->company_avail = {}; e->intro_date = r->intro_date = TimerGameCalendar::date - CalendarTime::DAYS_IN_YEAR;
 	TypeRequire(GetCompanyRailTypes(c->index, false) == GetRailTypes(false) && GetCompanyRoadTypes(c->index, false) == GetRoadTypes(false), "one-year");
 	e->VehInfo<RailVehicleInfo>().railveh_type = RAILVEH_WAGON;
 	TypeRequire(GetRailTypes(false).None() && GetCompanyRailTypes(c->index, false).None(), "wagon-only");
