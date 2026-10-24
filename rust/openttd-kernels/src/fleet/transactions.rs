@@ -7,8 +7,8 @@
 
 //! Whole autoreplace transactions. Native costs/seeds live in the caller's stack.
 use super::{
-    ALL_GROUP, DEFAULT_GROUP, ERROR, GroupFields, GroupServices, INVALID_GROUP, add_profit,
-    add_replacement, group, remove_replacement, replacement, update_autoreplace,
+    ALL_GROUP, DEFAULT_GROUP, ERROR, GroupFields, GroupServices, add_profit, add_replacement,
+    group, remove_replacement, replacement, update_autoreplace,
 };
 use crate::cargo_type::INVALID_CARGO;
 use crate::command_type::DoCommandFlag;
