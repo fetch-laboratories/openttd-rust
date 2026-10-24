@@ -4,20 +4,20 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-24, code at `00ab107424`)
+## Where the fork stands (2026-10-24, code at `d4a0700869`)
 
 - 63 ownership ports. Original C++ retired: 62,169 of 470,612 source lines
   (13.21%); simulation sources: 53,345 of 102,615 (51.99%). Whole-fork Rust,
   tooling and glue (`tools/port-metrics.py`, which does not measure behavior):
-  113,870, 39,261 and 40,347 lines. The nineteenth-steering housekeeping so far
-  removed 224 Rust, 2,001 tooling and 212 glue lines; no regression or rollback.
+  112,742, 39,255 and 40,073 lines. The nineteenth-steering housekeeping
+  (#259, #449-#452, five integrations) removed 1,352 Rust, 2,007 tooling and
+  486 glue lines; no regression or rollback.
 - Projections at `00ab107424` from the 103ee anchors: TGP 1.209x, Opus 1.420x,
-  Grok 1.415x, P1996 1.344x, P2000 1.413x, P2016 1.484x, equal to the anchors
-  (`79f6598254` was within 0.5%). P2016 stays in its band; the 103ee quiet pass
-  already measured it and #275 holds its attribution and two repair candidates,
-  so no new pass ran. macOS passed at `79f6598254` and `00ab107424`.
-- Unintegrated branches: paused #446 and #447, plus the #451 structural and
-  #452 code-comment PRs in progress (four of six).
+  Grok 1.415x, P1996 1.344x, P2000 1.413x, P2016 1.484x, equal to the anchors.
+  P2016 stays in its band; #275 holds its attribution and two repair
+  candidates, so no new pass ran. `d4a0700869` (#459, #460: YAPF heaps and
+  shared accessors) is unprofiled; its profile was interrupted at handoff.
+- Unintegrated branches: paused #446 and #447 (two of six).
 
 ## Nineteenth steering review (2026-10-24, housekeeping)
 
@@ -45,13 +45,9 @@ retained evidence; steering verified each claim acted on. No fidelity audit ran.
 
 Actions:
 1. **Local cleanup (#259):** done; #275 received the retained conclusions.
-2. **#449 tests, #450 harness and tooling, #451 Rust and glue, #452 comments
-   and docs.** Each gets the PRs its issue names, with no behavior change;
-   batch integration when several are ready. The user may assign them to a
-   separate Claude Code session: before starting one, root checks the issue
-   for an owner comment or linked PR. #450's collector lands before the next
-   speed pass; #452's code-comment PR follows #451. Line targets are audit
-   estimates (provisional): a PR that misses one explains why, it does not hold.
+2. **#449-#452:** done through #454, #455, #458, #459 and #460, with no
+   behavior change; #450 and #451 missed their line estimates within the
+   recorded margins (PRs explain).
 3. **AGENTS.md** adds comment, prose and test rules, tracked speed tooling,
    evidence-free component entries, and tracker bodies as current lists with
    task status kept on the PR. #261 is closed; batching names #449-#452.
@@ -175,24 +171,26 @@ Maintenance rows use original retirement and net glue (#223); evidence stays in 
 | #450 one comparison driver and one platform check (bootstrap Full) | #455 | direct | `79f6598254` | 0 / 1331 / 0 / 0; net tooling -1,863 |
 | #449 tests that cannot fail and workflow text pins | #454 | direct | `1168de46e6` | 14 / 518 / 89 / 0; net glue -200; net -750 lines |
 | #451 shared header constants; #450 harness helpers and tracked speed collector | #456, #457 | #458 | `00ab107424` | 921 / 1207 / 8 / 0; net glue -12 |
+| #452 comment pass outside the #451 structural files (comments only) | #459 | direct | `e5c8c62a96` | 221 / 49 / 248 / 0; net glue -191 |
+| #451 YAPF heaps, `GameState`, shared macros, raw-access contracts, reservation callbacks | #460 | direct | `d4a0700869` | 2479 / 9 / 968 / 0; net glue -83; net -1,030 lines |
 
 
 ## Phase 1: maintenance and coverage
 
-#275 owns measured speed, #156 missing branches and #451-#452 the remaining
-housekeeping (#259, #449 and #450 are closed). #168 and #199 own the remaining
-boundary conversions (disaster's async protocol, opcode switches). Housekeeping
-PRs count toward the six branches.
+#275 owns measured speed and #156 missing branches; #461 tracks the ship depot
+scratch's `thread_local!` scope. The nineteenth-steering housekeeping is done
+(#259 and #449-#452 closed). #168 and #199 own the remaining boundary
+conversions (disaster's async protocol, opcode switches, the width mismatches
+#456 and #460 left). Maintenance PRs count toward the six branches.
 
 ## Phase 2: work order
 
-1. **#451 structural PR** (YAPF heaps, registries, macros, SAFETY accessors,
-   `train_reservation.rs` forwarders; it applies #452's comment rules to the
-   files it rewrites) and **#452 code-comment PR** (every other file), then
-   review, Full and integration.
+1. **Merged-tip profile of `d4a0700869`** with the 103ee anchors and the pinned
+   zlib runtime; #460 changed the YAPF heaps and many hot accessors.
 2. **#275 growth repair** (#436's per-call ambient gate, the airport animation
-   entry in the shared dispatcher), then the next speed pass with the tracked
-   collector (`python3 tools/simulate.py speed prepare|collect DIR`).
+   entry in the shared dispatcher) batched with **#461**, then the first speed
+   pass with the tracked collector (`python3 tools/simulate.py speed
+   prepare|collect DIR`), since P2016 is in band.
 3. **#446** investigates the refit-cost clone crash; **#447** validates its
    TownID fixture repair. Both need cost checkpoints, review and Full.
 4. **Next owners** (planned, unselected): vehicle effect emission and cache
@@ -202,17 +200,18 @@ PRs count toward the six branches.
 
 ## Resume checkpoint
 
-Three integrations this session (#455, #454, #458). Merged worktrees and
-branches are removed; `.local/` holds only caches, the pinned zlib runtime and
-`.local/speed-collector/` (superseded by `tools/simulation/speed.py`; delete
-after the first tracked pass).
+Wound down after the requested #259 and #449-#452 work: five integrations
+(#455, #454, #458, #459, #460), no draft with a Full at its head, no local jobs
+or agents running. Merged worktrees and branches are removed; `.local/` holds
+caches, the pinned zlib runtime and `.local/speed-collector/` (superseded by
+`tools/simulation/speed.py`; delete after the first tracked pass).
 
 | Item | Saved head | Next action |
 | --- | --- | --- |
+| Merged-tip profile | `d4a0700869` | Interrupted at handoff; rerun first (work order 1). |
 | #446 engine/articulated (#439) | `e96e45c240` | Refit-cost clone crash; simulate passed 1 of 3. |
 | #447 type admission (#440) | `c3fdd2227d` | Validate TownID fixture repair; last pair failed. |
-| #451 structural | `housekeeping-451-structure` | Implementation running; then review and Full. |
-| #452 code comments | `housekeeping-452-comments` | Implementation running; then review and Full. |
-| Merged-tip profile | `00ab107424` | Done; next after two more integrations. |
+| #461 ship depot scratch | issue | Batch with the #275 repair. |
 
-The next macOS run is due after five more integrations. The user's tar files stay.
+macOS passed at `00ab107424`; the next run is due after three more
+integrations. The user's tar files stay.
