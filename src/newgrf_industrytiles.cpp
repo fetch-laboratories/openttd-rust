@@ -459,7 +459,7 @@ OpenTTDIndustryRandomisationSpec IndustryRandomisationSpec(uint32_t index) noexc
 	TileIndex tile(index);
 	assert(IsValidTile(tile) && IsTileType(tile, MP_INDUSTRY));
 	IndustryGfx gfx = GetIndustryGfx(tile);
-	return {gfx, GetIndustryTileSpec(gfx)->grf_prop.HasSpriteGroups()};
+	return {gfx, RustSpecHasSpriteGroups(GetIndustryTileSpec(gfx))};
 }
 OpenTTDIndustryReseed IndustryResolveReseed(uint32_t tile, uint16_t gfx, void *industry, uint8_t waiting) noexcept
 {
