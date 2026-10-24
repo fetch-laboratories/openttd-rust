@@ -7,8 +7,15 @@
 
 //! Shared station predicates from `station_map.h`, through typed map services.
 use crate::services::Services;
-use crate::station_type::{RAIL_WAYPOINT, ROAD_WAYPOINT, STATION_BUS, STATION_TRUCK};
+use crate::station_type::{
+    RAIL_WAYPOINT, ROAD_WAYPOINT, STATION_AIRPORT, STATION_BUS, STATION_TRUCK,
+};
 use crate::tile_type::MP_STATION;
+
+/// `IsAirport`; the station type leaf keeps its native assertion.
+pub(crate) fn is_airport(tile: u32, s: &Services) -> bool {
+    (s.station_type)(tile).0 == STATION_AIRPORT
+}
 
 /// `IsRailWaypoint`; the station type leaf keeps its native assertion.
 pub(crate) fn is_rail_waypoint(tile: u32, s: &Services) -> bool {

@@ -588,14 +588,9 @@ static void OPENTTD_EFFECT_CALL EffectSound(void *context, uint8_t success) noex
 	SndPlayVehicleFx(success == 0 ? SND_2F_BUBBLE_GENERATOR_FAIL : SND_31_BUBBLE_GENERATOR_SUCCESS, static_cast<EffectVehicle *>(context));
 }
 
-static void OPENTTD_EFFECT_CALL EffectAnimated(uint32_t tile) noexcept
-{
-	AddAnimatedTile(TileIndex{tile});
-}
-
 static const OpenTTDEffectLeaves &EffectServices()
 {
-	static const OpenTTDEffectLeaves leaves{EffectObserve, EffectWrite, EffectViewport, EffectSound, EffectAnimated};
+	static const OpenTTDEffectLeaves leaves{EffectObserve, EffectWrite, EffectViewport, EffectSound};
 	return leaves;
 }
 

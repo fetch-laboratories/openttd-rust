@@ -437,7 +437,7 @@ pub struct QueryServices {
     pub manhattan: unsafe extern "C" fn(u32, u32) -> u32,
     pub square: unsafe extern "C" fn(u32, u32) -> u32,
     pub triggers: unsafe extern "C" fn(*const Spec) -> u16,
-    pub change_frame: unsafe extern "C" fn(*const Spec, *mut Object, u32, u32, u32),
+
     pub unhandled: unsafe extern "C" fn(u8),
 }
 
@@ -669,7 +669,7 @@ impl<'a> World<'a> {
             if (self.query().triggers)(spec) & (1_u16 << trigger.0) == 0 {
                 return false;
             }
-            (self.query().change_frame)(spec, obj, tile, random, u32::from(trigger.0));
+            crate::animated_tile::object_change(spec, obj, tile, random, u32::from(trigger.0));
         }
         true
     }
@@ -721,11 +721,12 @@ impl<'a> World<'a> {
         Self::tiles_with_map(a, self.map)
     }
     fn tiles_with_map(a: Area, map: crate::services::Map) -> impl Iterator<Item = u32> {
-        let stride = map.size_x();
-        (0..u32::from(a.height)).flat_map(move |y| {
-            (0..u32::from(a.width))
-                .map(move |x| a.tile.wrapping_add(y.wrapping_mul(stride)).wrapping_add(x))
-        })
+        crate::tilearea::TileArea {
+            tile: a.tile,
+            w: a.width,
+            h: a.height,
+        }
+        .tiles(map)
     }
     fn footprint(tile: u32, shape: Footprint, view: u8) -> Area {
         let (x, y) = if view & 1 == 0 {
@@ -2298,7 +2299,7 @@ crate::abi::layouts! {
         manhattan,
         square,
         triggers,
-        change_frame,
+
         unhandled,
     };
     "OpenTTDObjectServices" ["landscape"] => ObjectServices {

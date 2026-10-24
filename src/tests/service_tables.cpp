@@ -49,11 +49,13 @@ extern bool CheckAbi_object_cmd();
 extern bool CheckAbi_water_cmd();
 extern bool CheckAbi_tunnelbridge_cmd();
 extern bool CheckAbi_subsidy();
+extern bool CheckAbi_animated_tile();
 extern bool CheckAbi_cargomonitor();
 extern bool CheckAbi_storage();
 
 TEST_CASE("Rust ABI - actual production callback tables are complete")
 {
+	CHECK(CheckAbi_animated_tile());
 	CHECK(CheckAbi_industry_cmd());
 	CHECK(CheckAbi_town_cmd());
 	CHECK(CheckAbi_station_cmd());

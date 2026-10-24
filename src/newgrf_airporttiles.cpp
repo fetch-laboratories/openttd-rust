@@ -19,6 +19,10 @@
 #include "company_base.h"
 #include "town.h"
 #include "newgrf_animation_base.h"
+#ifdef WITH_RUST
+#include "rust/animation_binding.hpp"
+#include "rust/services_station.h"
+#endif
 
 #include "table/strings.h"
 #include "table/airporttiles.h"
@@ -289,6 +293,15 @@ static uint16_t GetSimpleAirportTileCallback(CallbackID callback, uint32_t param
 }
 
 /** Helper class for animation control. */
+#ifdef WITH_RUST
+const OpenTTDAirportAnimation &GetAirportAnimationBinding() noexcept
+{
+	static const auto binding = MakeRustAnimationBinding<AirportTileSpec, Station, int, GetSimpleAirportTileCallback>(
+		[](uint32_t t) noexcept -> OpenTTDAirportAnimationEntry { const auto *s = RustAnimationAirportSpec(t); if (s == nullptr) return {nullptr, nullptr}; return {s, Station::GetByTile(TileIndex{t})}; },
+		[](const AirportTileSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(AirportTileCallbackMask::AnimationSpeed), s->callback_mask.Test(AirportTileCallbackMask::AnimationNextFrame), HasBit(s->animation_special_flags, 0), true}; });
+	return binding;
+}
+#else
 struct AirportTileAnimationBase : public AnimationBase<AirportTileAnimationBase, AirportTileSpec, Station, int, GetSimpleAirportTileCallback, TileAnimationFrameAnimationHelper<Station>> {
 	static constexpr CallbackID cb_animation_speed      = CBID_AIRPTILE_ANIMATION_SPEED;
 	static constexpr CallbackID cb_animation_next_frame = CBID_AIRPTILE_ANIMATION_NEXT_FRAME;
@@ -296,15 +309,21 @@ struct AirportTileAnimationBase : public AnimationBase<AirportTileAnimationBase,
 	static constexpr AirportTileCallbackMask cbm_animation_speed      = AirportTileCallbackMask::AnimationSpeed;
 	static constexpr AirportTileCallbackMask cbm_animation_next_frame = AirportTileCallbackMask::AnimationNextFrame;
 };
+#endif
 
 void AnimateAirportTile(TileIndex tile)
 {
+#ifdef WITH_RUST
+	openttd_rust_animate_airport(tile.base());
+#else
 	const AirportTileSpec *ats = AirportTileSpec::GetByTile(tile);
 	if (ats == nullptr) return;
 
 	AirportTileAnimationBase::AnimateTile(ats, Station::GetByTile(tile), tile, HasBit(ats->animation_special_flags, 0));
+#endif
 }
 
+#ifndef WITH_RUST
 static bool DoTriggerAirportTileAnimation(Station *st, TileIndex tile, AirportAnimationTrigger trigger, uint32_t random, uint32_t var18_extra = 0)
 {
 	const AirportTileSpec *ats = AirportTileSpec::GetByTile(tile);
@@ -314,13 +333,22 @@ static bool DoTriggerAirportTileAnimation(Station *st, TileIndex tile, AirportAn
 	return true;
 }
 
+#endif
+
 bool TriggerAirportTileAnimation(Station *st, TileIndex tile, AirportAnimationTrigger trigger)
 {
+#ifdef WITH_RUST
+	return openttd_rust_trigger_airport_tile(st, tile.base(), to_underlying(trigger));
+#else
 	return DoTriggerAirportTileAnimation(st, tile, trigger, Random());
+#endif
 }
 
 bool TriggerAirportAnimation(Station *st, AirportAnimationTrigger trigger, CargoType cargo_type)
 {
+#ifdef WITH_RUST
+	return openttd_rust_trigger_airport(st, to_underlying(trigger), cargo_type);
+#else
 	if (st->airport.tile == INVALID_TILE) return false;
 
 	bool ret = true;
@@ -343,4 +371,5 @@ bool TriggerAirportAnimation(Station *st, AirportAnimationTrigger trigger, Cargo
 		}
 	}
 	return ret;
+#endif
 }

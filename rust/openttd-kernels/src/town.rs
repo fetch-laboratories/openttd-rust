@@ -708,7 +708,7 @@ pub struct Leaves {
     pub exchange_company: extern "C" fn(u32) -> u32,
     pub house_class: extern "C" fn(u16) -> u16,
     pub make_house: extern "C" fn(u32, u32, u32, u32),
-    pub add_animation: extern "C" fn(u32, bool),
+
     pub population_changed: extern "C" fn(u32),
     pub nearby_stations: extern "C" fn(u32, u32, u32),
     pub house_count: extern "C" fn() -> u32,
@@ -1773,7 +1773,7 @@ impl Engine<'_> {
             counter | (stage << 8) | (random << 16) | (u32::from(protected) << 24),
         );
         if u32::from((self.leaves.house_flags)(house as u16)) & 32 != 0 {
-            (self.leaves.add_animation)(tile, false);
+            crate::animated_tile::openttd_rust_animation_add(tile, false);
         }
         (self.services.mark_dirty)(tile);
     }
@@ -2536,7 +2536,7 @@ crate::abi::layouts! {
         exchange_company,
         house_class,
         make_house,
-        add_animation,
+
         population_changed,
         nearby_stations,
         house_count,

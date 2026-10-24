@@ -13,8 +13,10 @@
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
 #include "../newgrf_house.h"
+#include "../house.h"
 #include "../newgrf_spritegroup.h"
 #include "../industrytype.h"
+inline const HouseSpec *RustHouseSpec(uint16_t house) noexcept { return HouseSpec::Get(house); }
 
 /* These synchronous field reads borrow live native objects. Callers retain
  * the original non-null resolver/file preconditions; nothing is cached. */

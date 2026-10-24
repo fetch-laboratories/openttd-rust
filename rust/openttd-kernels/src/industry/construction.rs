@@ -73,7 +73,7 @@ pub struct ConstructionServices {
     pub set_construction_stage: unsafe extern "C" fn(u32, u8),
     pub translated_gfx: unsafe extern "C" fn(u16) -> u16,
     pub animation_enabled: unsafe extern "C" fn(u16) -> bool,
-    pub add_animated: unsafe extern "C" fn(u32, bool),
+
     pub build_window_dirty: unsafe extern "C" fn(),
     pub serve_neutral: unsafe extern "C" fn() -> bool,
     pub insert_near_station: unsafe extern "C" fn(*mut c_void, *mut StationHandle),
@@ -449,9 +449,7 @@ pub unsafe extern "C" fn openttd_rust_industry_initialize(
             }
             let gfx = unsafe { (c.translated_gfx)(layout.gfx) };
             if unsafe { (c.animation_enabled)(gfx) } {
-                unsafe {
-                    (c.add_animated)(tile, true);
-                }
+                crate::animated_tile::openttd_rust_animation_add(tile, true);
             }
         }
     }

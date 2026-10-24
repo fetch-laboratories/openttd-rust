@@ -235,14 +235,14 @@ pub struct HouseServices {
     pub set_random_bits: extern "C" fn(u32, u8),
     pub set_random_triggers: extern "C" fn(u32, u8),
     pub set_type: extern "C" fn(u32, u16),
-    pub animate_new: extern "C" fn(u32),
+
     pub delete_inspect: extern "C" fn(u32),
     pub callback: unsafe extern "C" fn(u16, u32, u32, u16, *mut TownHandle, u32, bool) -> u16,
     pub cargo_translation: extern "C" fn(u16, u8) -> u8,
     pub convert_boolean: extern "C" fn(u16, u16, u16) -> bool,
     pub convert_8bit: extern "C" fn(u16, u16, u16) -> bool,
     pub resolve_reseed: unsafe extern "C" fn(u16, u32, *mut TownHandle, u8) -> HouseReseed,
-    pub change_frame: unsafe extern "C" fn(u16, u16, *mut TownHandle, u32, u32, u32, u64),
+
     pub next_near_station: unsafe extern "C" fn(*mut TownHandle, *mut Station) -> *mut Station,
     pub erase_near_station: unsafe extern "C" fn(*mut TownHandle, *mut Station),
     pub station_catchment: unsafe extern "C" fn(*const Station, u32) -> bool,
@@ -339,7 +339,7 @@ impl House<'_> {
             // SAFETY: The entry resolved this live town shell; no owner borrow
             // spans the synchronous animation callback.
             unsafe {
-                (self.h.change_frame)(
+                crate::animated_tile::house_change(
                     CB_ANIM_STAGE,
                     house,
                     town.shell,
@@ -462,7 +462,15 @@ impl House<'_> {
             // SAFETY: The entry resolved this live town shell; no owner borrow
             // spans the synchronous animation callback.
             unsafe {
-                (self.h.change_frame)(CB_ANIM_LOOP, house, town.shell, tile, param, 0, 0);
+                crate::animated_tile::house_change(
+                    CB_ANIM_LOOP,
+                    house,
+                    town.shell,
+                    tile,
+                    param,
+                    0,
+                    0,
+                );
             }
         }
     }
@@ -701,7 +709,7 @@ impl House<'_> {
             && !rec.lift_has_destination
             && chance16_i(1, 2, self.s.random())
         {
-            (self.l.add_animation)(tile, true);
+            crate::animated_tile::openttd_rust_animation_add(tile, true);
         }
         let r = self.s.random();
         let stations = StationFinder {
@@ -793,14 +801,14 @@ impl House<'_> {
     fn animate(&self, tile: u32) {
         let house = (self.h.house_type)(tile);
         if house >= NEW_HOUSE_OFFSET {
-            (self.h.animate_new)(tile);
+            crate::animated_tile::openttd_rust_animate_house(tile);
             return;
         }
         if (self.s.tick_counter)() & 3 != 0 {
             return;
         }
         if (self.l.house_flags)(house) & ANIMATED == 0 {
-            (self.s.tile_animation_delete)(tile);
+            crate::animated_tile::openttd_rust_animation_delete(tile, false);
             return;
         }
         let rec = (self.h.lift)(tile);
@@ -824,7 +832,7 @@ impl House<'_> {
         if pos == dest {
             witness::hit(W_LIFT_STOP);
             (self.h.halt_lift)(tile);
-            (self.s.tile_animation_delete)(tile);
+            crate::animated_tile::openttd_rust_animation_delete(tile, false);
         }
         self.dirty(tile);
     }
@@ -1139,7 +1147,7 @@ impl House<'_> {
             // SAFETY: The entry resolved this live town shell; no owner borrow
             // spans the synchronous animation callback.
             unsafe {
-                (self.h.change_frame)(
+                crate::animated_tile::house_change(
                     CB_WATCHED,
                     (self.h.house_type)(part),
                     town.shell,
@@ -1498,14 +1506,14 @@ crate::abi::layouts! {
         set_random_bits,
         set_random_triggers,
         set_type,
-        animate_new,
+
         delete_inspect,
         callback,
         cargo_translation,
         convert_boolean,
         convert_8bit,
         resolve_reseed,
-        change_frame,
+
         next_near_station,
         erase_near_station,
         station_catchment,

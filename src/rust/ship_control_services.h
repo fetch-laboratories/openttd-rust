@@ -10,6 +10,7 @@
 #include "services_map.h"
 #include "services_water.h"
 #include "services_cargo.h"
+#include "services_industry.h"
 
 /** @file ship_control_services.h Typed synchronous shared-world services. */
 #include "settings_services.h"
@@ -64,7 +65,7 @@ static uint32_t Ship_station(uint32_t tile) noexcept { return GetRustSharedServi
 
 static uint32_t Ship_industry_station(uint32_t tile) noexcept
 {
-	const Industry *i = Industry::GetByTile(TileIndex(tile));
+	const Industry *i = RustIndustryByTile(tile);
 	const Station *station = RustIndustryNeutralStation(i);
 	return station == nullptr ? UINT32_MAX : station->index.base();
 }

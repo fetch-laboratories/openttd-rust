@@ -459,7 +459,6 @@ pub struct Leaves {
     pub arrival_read: extern "C" fn(VehicleRef, u16) -> ArrivalRead,
     pub arrival_news: extern "C" fn(VehicleRef, u16, u8, u8),
     /// The road stop arrival randomisation and animation triggers.
-    pub arrival_triggers: extern "C" fn(VehicleRef, u16),
     pub overtake_read: extern "C" fn(VehicleRef) -> OvertakeRead,
     pub sound_read: extern "C" fn(VehicleRef) -> SoundRead,
     pub depot_exit_dirty: extern "C" fn(VehicleRef),
@@ -1283,7 +1282,12 @@ impl Game<'_> {
             service!(self.l.arrival_news)(v.v, station, bit, headline);
         }
         crate::vehicle::visits::begin_loading(v.v, self.vs.visits());
-        service!(self.l.arrival_triggers)(v.v, station);
+        crate::animated_tile::road_event(
+            crate::animated_tile::station_base(station),
+            (self.vs.tile)(v.v),
+            crate::station_type::SAT_VEHICLE_ARRIVES,
+            crate::station_type::SRT_VEHICLE_ARRIVES,
+        );
     }
     /// Drive-through stop test shared by the blocked and stop-frame paths.
     fn stops_here(&self, v: Part, tile: u32) -> bool {
@@ -2361,7 +2365,7 @@ crate::abi::layouts! {
         should_stop,
         arrival_read,
         arrival_news,
-        arrival_triggers,
+
         overtake_read,
         sound_read,
         depot_exit,

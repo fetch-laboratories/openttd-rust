@@ -224,10 +224,6 @@ static void OPENTTD_AIRCRAFT_CALL Aircraft_update_delta(OpenTTDAircraftVehicle v
 	VehicleOf(vehicle.handle)->UpdateDeltaXY();
 }
 
-static void OPENTTD_AIRCRAFT_CALL Aircraft_touchdown_animation(OpenTTDAircraftVehicle vehicle, uint16_t station) noexcept
-{
-	Aircraft *v = Aircraft::From(VehicleOf(vehicle.handle)); RustAirportTileAnimation(Station::Get(station), TileIndex{RustTileVirtXY(RustVehicleX(v), RustVehicleY(v))}, AirportAnimationTrigger::AirplaneTouchdown);
-}
 
 static void OPENTTD_AIRCRAFT_CALL Aircraft_destination_too_far(OpenTTDAircraftVehicle vehicle) noexcept
 {
@@ -432,7 +428,6 @@ static const OpenTTDAircraftLeaves _aircraft_leaves{
 	.dirty_depot = Aircraft_dirty_depot,
 	.first_arrival = Aircraft_first_arrival,
 	.update_delta = Aircraft_update_delta,
-	.touchdown_animation = Aircraft_touchdown_animation,
 	.destination_too_far = Aircraft_destination_too_far,
 	.delete_range_news = Aircraft_delete_range_news,
 	.service_order = Aircraft_service_order,

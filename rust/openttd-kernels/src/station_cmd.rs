@@ -243,7 +243,7 @@ pub struct CommandServicesTable {
     pub set_custom_rail_index: extern "C" fn(u32, u8),
     pub set_random_bits: extern "C" fn(u32, u8),
     pub set_gfx: extern "C" fn(u32, u8),
-    pub rail_animation: extern "C" fn(*mut BaseStation, u32),
+
     pub tile_flag_count: extern "C" fn(*const RailSpec) -> usize,
     pub tile_flags: extern "C" fn(*const RailSpec, u8) -> u8,
     pub set_tile_flags: extern "C" fn(u32, bool, bool, bool),
@@ -281,7 +281,7 @@ pub struct CommandServicesTable {
     pub set_custom_road_index: extern "C" fn(u32, u8),
     pub custom_road_index: extern "C" fn(u32) -> u32,
     pub stop_random_bits: extern "C" fn(*mut BaseStation, u32, u8),
-    pub road_animation: extern "C" fn(*mut BaseStation, u32),
+
     pub remove_stop_tile_data: extern "C" fn(*mut BaseStation, u32),
     pub close_stop_inspect: extern "C" fn(u32),
     pub road_waypoint_area: extern "C" fn(*mut BaseStation) -> Area,
@@ -310,7 +310,7 @@ pub struct CommandServicesTable {
     pub make_airport: extern "C" fn(u32, u8, u16, u8, u8),
     pub airport_add: extern "C" fn(*mut BaseStation, u32),
     pub airport_animated: extern "C" fn(u8) -> bool,
-    pub airport_animation: extern "C" fn(*mut BaseStation, u32),
+
     pub airport_infrastructure: extern "C" fn(u8, u32),
     pub station_view_invalidate: extern "C" fn(*mut BaseStation, i32),
     pub town_view_dirty: extern "C" fn(*const crate::services::TownHandle),
@@ -1540,7 +1540,7 @@ impl Ctx<'_> {
                     }
                     (self.s.station_infrastructure)(owner, u32::MAX);
                 }
-                (self.shared.tile_animation_delete)(t);
+                crate::animated_tile::openttd_rust_animation_delete(t, false);
                 let old =
                     if (self.shared.tile_type)(t) == 5 && (self.rail_map().has_station_rail)(t) {
                         (self.s.custom_rail_index)(t) as u8
@@ -1572,7 +1572,12 @@ impl Ctx<'_> {
                             (self.s.rail_callback_error)(spec, 0x24, cb);
                         }
                     }
-                    (self.s.rail_animation)(st, t);
+                    crate::animated_tile::openttd_rust_trigger_station(
+                        st,
+                        t,
+                        crate::station_type::SAT_BUILT,
+                        crate::cargo_type::INVALID_CARGO,
+                    );
                 }
                 self.set_rail_flags(t, spec);
                 if !(self.rail_map().station_blocked)(t) {
@@ -2435,7 +2440,12 @@ impl Ctx<'_> {
                     tile,
                     ((self.shared.random)(self.shared.context) & 255) as u8,
                 );
-                (self.s.road_animation)(st, tile);
+                crate::animated_tile::openttd_rust_trigger_roadstop(
+                    st,
+                    tile,
+                    crate::station_type::SAT_BUILT,
+                    crate::cargo_type::INVALID_CARGO,
+                );
             }
             (self.shared.mark_dirty)(tile);
         }
@@ -2571,7 +2581,7 @@ impl Ctx<'_> {
             (self.s.close_stop_inspect)(tile);
             if !waypoint && (self.shared.is_drive_through_stop)(tile) {
                 crate::road_stop::clear_drive_through(self.shared, tile, stop_state);
-                (self.shared.tile_animation_delete)(tile);
+                crate::animated_tile::openttd_rust_animation_delete(tile, false);
             } else {
                 crate::ground::clear_square(tile, self.shared);
             }
@@ -3046,11 +3056,11 @@ impl Ctx<'_> {
             );
             (self.s.airport_add)(st, t.tile);
             if (self.s.airport_animated)(t.gfx) {
-                (self.shared.tile_animation_add)(t.tile, true);
+                crate::animated_tile::openttd_rust_animation_add(t.tile, true);
             }
         }
         for t in self.airport_tiles(spec, layout, tile) {
-            (self.s.airport_animation)(st, t.tile);
+            crate::animated_tile::airport_built(st, t.tile);
         }
         unsafe {
             crate::aircraft::openttd_rust_aircraft_replacement(self.s.aircraft, id);
@@ -3581,7 +3591,7 @@ impl Ctx<'_> {
         (self.s.set_town)(st, (self.shared.closest_town)(tile, u32::MAX));
         (self.s.default_name)(st, tile, 3);
         (self.s.associate_industry)(st, tile);
-        (self.shared.tile_animation_delete)(tile);
+        crate::animated_tile::openttd_rust_animation_delete(tile, false);
         (self.s.make_oilrig)(
             tile,
             (self.links().graphs.station_id)(st),
@@ -4149,7 +4159,7 @@ crate::abi::layouts! {
         set_custom_rail_index,
         set_random_bits,
         set_gfx,
-        rail_animation,
+
         tile_flag_count,
         tile_flags,
         set_tile_flags,
@@ -4187,7 +4197,7 @@ crate::abi::layouts! {
         set_custom_road_index,
         custom_road_index,
         stop_random_bits,
-        road_animation,
+
         remove_stop_tile_data,
         close_stop_inspect,
         road_waypoint_area,
@@ -4216,7 +4226,7 @@ crate::abi::layouts! {
         make_airport,
         airport_add,
         airport_animated,
-        airport_animation,
+
         airport_infrastructure,
         station_view_invalidate,
         town_view_dirty,

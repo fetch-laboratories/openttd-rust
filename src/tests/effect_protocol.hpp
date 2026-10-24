@@ -12,6 +12,7 @@
 #include <array>
 #include <memory>
 
+#include "../rust/animation_save.hpp"
 struct EffectTestWorld {
 	OpenTTDEffectView view{};
 	uint32_t random = UINT32_MAX, draws = 0, industry = 0, queries = 0, writes = 0, viewports = 0, animated = 0;
@@ -44,7 +45,7 @@ static inline uint32_t OPENTTD_EFFECT_CALL EffectTestIndustry(int32_t, int32_t, 
 	*tile = 123;
 	return w.industry;
 }
-static inline void OPENTTD_EFFECT_CALL EffectTestAnimated(uint32_t tile) noexcept { effect_test_world->animated = tile; }
+
 static inline uint32_t EffectTestRandom(void *context) noexcept
 {
 	auto &w = *static_cast<EffectTestWorld *>(context);
@@ -58,8 +59,17 @@ template <typename Check> void CheckEffectProtocol(Check check)
 	 * observe immediate writes, transient services and RNG short circuit. */
 	EffectTestWorld w;
 	effect_test_world = &w;
-	const OpenTTDEffectLeaves leaves{EffectTestObserve, EffectTestWrite, EffectTestViewport, EffectTestSound, EffectTestAnimated};
+	const OpenTTDEffectLeaves leaves{EffectTestObserve, EffectTestWrite, EffectTestViewport, EffectTestSound};
 	const OpenTTDSharedServices services = OpenTTDFixtureSharedServices(&w, EffectTestRandom, EffectTestIndustry);
+	auto animation_shared = services;
+	animation_shared.mark_dirty = [](uint32_t) noexcept {};
+	const OpenTTDAnimationServices animation{
+		.shared = &animation_shared,
+		.state = [](uint32_t) noexcept -> AnimatedTileState { return AnimatedTileState::Deleted; },
+		.set_state = [](uint32_t tile, AnimatedTileState) noexcept { effect_test_world->animated = tile; },
+	};
+	RustAnimationScope animation_scope(animation);
+
 	auto owner = std::unique_ptr<OpenTTDEffectState, decltype(&openttd_rust_effect_destroy)>(openttd_rust_effect_new(), openttd_rust_effect_destroy);
 	check(openttd_rust_effect_get(owner.get(), 0) == 0 && openttd_rust_effect_get(owner.get(), 1) == 0);
 	openttd_rust_effect_set(owner.get(), 0, 65535);
