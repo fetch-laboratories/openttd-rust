@@ -318,7 +318,7 @@ pub struct VehicleServices {
     pub movement_observations: extern "C" fn(VehicleRef) -> MovementObservations,
     pub max_speed: extern "C" fn(VehicleRef) -> u16,
     pub maintenance: *const maintenance::Services,
-    /// The static station/depot visit table, resolved on use (#349).
+    /// The static station and depot visit table (`vehicle/visits.rs`), resolved on use.
     pub visits: extern "C" fn() -> *const visits::Services,
     /// The same canonical orders table used by visits/refit.
     pub orders: extern "C" fn() -> *const crate::orders::Leaves,

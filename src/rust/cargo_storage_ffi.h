@@ -78,7 +78,7 @@ struct OpenTTDCargoCapacityServices {
 	const OpenTTDCargoStorageServices *cargo;
 };
 const OpenTTDCargoCapacityServices &GetRustCargoCapacityServices() noexcept;
-/* capacity mode0 spreads/shrinks, mode1 transfers. Return1 requires the native
+/* capacity mode 0 spreads/shrinks, mode 1 transfers. Return 1 requires the native
  * ConsistChanged callback after Rust returns (no borrowed part/list survives). */
 extern "C" {
 uint8_t openttd_rust_cargo_capacity(const OpenTTDCargoCapacityServices *, void *, void *, uint8_t, uint8_t);

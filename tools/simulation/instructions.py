@@ -1,4 +1,4 @@
-"""Load-independent loop work; reuse canonical runs and semantic comparisons (#321)."""
+"""Load-independent loop work; reuse canonical runs and semantic comparisons."""
 
 import hashlib
 import json
@@ -93,7 +93,7 @@ def record_build(build, source, role, env):
         [(p.name, digest(p.read_bytes())) for p in inputs if p.is_file()]
     )
     # Longest first: the clone's shared .local stays absolute even under the main
-    # checkout's source path, so every worktree records one identity (#356).
+    # checkout's source path, so every worktree records one identity.
     shared = str(migration.COMMON_LOCAL)
     labels = {str(source): "<source>", str(build): "<build>", shared: "\0"}
     for path in sorted(labels, key=len, reverse=True):

@@ -17,7 +17,7 @@ from .play_saves import DISTRIBUTIONS
 
 ADAPTER = ROOT / "tools/simulation/orders-console.cpp"
 COMMON = "roadveh[0]/common[0]/"
-# Station/depot visits and route prediction (#349) reached by the visits
+# Station/depot visits and route prediction (vehicle/visits.rs) reached by the visits
 # fixture's refit, autorefit, conditional, full-load, cross-graph, depot and
 # unload-only orders. Unreached (#156): graph_failure (exhausted link-graph
 # pool), depot_refit_failed (refit cost beyond cash), depot_elsewhere,

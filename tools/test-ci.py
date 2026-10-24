@@ -476,7 +476,7 @@ class PolicyTests(unittest.TestCase):
                     (True, "", "true", "full", "push", False),
                 ]
                 if name == "macos":
-                    # Full skips macOS; platform, heavy pushes and dispatch run it (#357).
+                    # Full skips macOS; platform, heavy pushes and dispatch run it.
                     cases = [
                         (False, "head", "", "full", dispatch, False),
                         (False, "head", "", "platform", dispatch, True),
@@ -521,7 +521,7 @@ class PolicyTests(unittest.TestCase):
             self.assertEqual(first, second)
         first, second = groups("ci-quick.yml")
         self.assertNotEqual(first, second)
-        # A dispatched macOS run never displaces a queued push validation (#357).
+        # A dispatched macOS run never displaces a queued push validation.
         dispatched = groups("ci-build.yml", "workflow_dispatch")
         self.assertNotEqual(groups("ci-build.yml"), dispatched)
 

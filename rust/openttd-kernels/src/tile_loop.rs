@@ -108,7 +108,7 @@ pub struct Services {
 }
 
 // The measured scheduler budget requires dispatch inside the LFSR loop; an
-// uninlined closure cost 47 instructions/visit versus the native 18 (#212).
+// uninlined closure cost 47 instructions per visit versus the native 18.
 #[allow(clippy::inline_always, clippy::cast_possible_truncation)]
 #[inline(always)]
 unsafe fn dispatch(

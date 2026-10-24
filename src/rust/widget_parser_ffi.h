@@ -31,7 +31,7 @@ enum OpenTTDRustWidgetOperation {
 	OTTD_WIDGET_QUERY_SHADE, OTTD_WIDGET_CREATE_SHADE, OTTD_WIDGET_WRITE_SHADE,
 };
 
-/** Return bit0 attribute / bit1 declared container, using exact raw uint8 tags. */
+/** Return bit 0 attribute / bit 1 declared container, using exact raw uint8 tags. */
 uint8_t openttd_rust_widget_part_classify(uint8_t type);
 
 /**
@@ -50,8 +50,8 @@ OpenTTDRustWidgetParser *openttd_rust_widget_parser_create(uint64_t length, uint
 
 /**
  * Response is the preceding action's raw uint8 part/object tag, boolean, or
- * parent capability bits (bit0 nonnull, bit1 container, bit2 background), else0.
- * Initial response0. C++ keeps RTTI observations and typed owners in stable slots.
+ * parent capability bits (bit 0 nonnull, bit 1 container, bit 2 background), else 0.
+ * Initial response 0. C++ keeps RTTI observations and typed owners in stable slots.
  * Done slot identifies the owner moved only at the final successful return.
  */
 OpenTTDRustWidgetAction openttd_rust_widget_parser_advance(OpenTTDRustWidgetParser *parser, uint8_t response);

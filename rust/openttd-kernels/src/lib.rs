@@ -1187,19 +1187,19 @@ pub extern "C" fn openttd_rust_packet_buffer_size(length: usize) -> usize {
     length.wrapping_add(2)
 }
 
-/// Narrow a length-prefix or MAC skip to the original unsigned16 width.
+/// Narrow a length-prefix or MAC skip to the original unsigned 16-bit width.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_packet_prefix(length: usize) -> u16 {
     packet::prefix(length)
 }
 
-/// Decode width1/2/4/8 with persistent cursor narrowing after every byte.
+/// Decode width 1, 2, 4 or 8 with persistent cursor narrowing after every byte.
 ///
 /// # Safety
 /// State is initialized/aligned/exclusive. Bytes are one readable allocation of
 /// length <= `ISIZE_MAX`; state/bytes are disjoint and no concurrent mutation occurs.
-/// Original scalar-read bounds check succeeded; width is1/2/4/8. Borrows end here.
+/// Original scalar-read bounds check succeeded; width is 1, 2, 4 or 8. Borrows end here.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_packet_recv(
@@ -1257,7 +1257,7 @@ pub unsafe extern "C" fn openttd_rust_packet_parse_size(
     unsafe { &*state }.parse_size(unsafe { utf8::borrow(bytes, length) })
 }
 
-/// Commit read cursor2, before external receive-handler operations or after resize.
+/// Set the read cursor to 2, before external receive-handler operations or after resize.
 ///
 /// # Safety
 /// State is live, aligned and exclusive for this call only.
@@ -1268,7 +1268,7 @@ pub unsafe extern "C" fn openttd_rust_packet_read_start(state: *mut packet::Stat
     unsafe { &mut *state }.read_start();
 }
 
-/// Commit send cursor0 only after Encrypt returns normally, before `shrink_to_fit`.
+/// Set the send cursor to 0 only after Encrypt returns normally, before `shrink_to_fit`.
 ///
 /// # Safety
 /// State is live, aligned and exclusive; all C++ callbacks have returned normally.
@@ -1312,7 +1312,7 @@ pub unsafe extern "C" fn openttd_rust_packet_skip_mac(state: *mut packet::State,
     unsafe { &mut *state }.skip_mac(mac);
 }
 
-/// Write low16 size header bytes before external send-handler calls.
+/// Write the low 16 bits of the size header before external send-handler calls.
 ///
 /// # Safety
 /// Bytes are one exclusive writable allocation >=2 and <= `ISIZE_MAX`; caller has

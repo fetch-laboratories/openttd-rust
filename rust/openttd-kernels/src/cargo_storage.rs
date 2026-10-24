@@ -1003,8 +1003,8 @@ pub unsafe extern "C" fn openttd_rust_cargo_list_stage(
     u8::from(f.action_counts[DELIVER] > 0 || f.action_counts[TRANSFER] > 0)
 }
 
-// Action selectors: 0 return,1 transfer,2 deliver,3 shift,4 remove vehicle,
-// 5 reroute vehicle,6 reserve,7 load,8 reroute station,9 truncate station,
+// Action selectors: 0 return, 1 transfer, 2 deliver, 3 shift, 4 remove vehicle,
+// 5 reroute vehicle, 6 reserve, 7 load, 8 reroute station, 9 truncate station,
 // 10 unload dispatch. Walker tokens reproduce stable source iterator identity.
 unsafe fn action(
     src: *mut List,

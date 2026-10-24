@@ -70,7 +70,7 @@ struct OpenTTDBlake2bLayout {
  * differs from cipher text aliasing. No external buffer becomes a Rust reference.
  * Empty message/key may be NULL; update(NULL, 0) accesses no context/layout.
  * Original readable/writable extents <=isize::MAX apply. No size validation is
- * added: init preserves supplied hash_size; final writes min(hash_size,64).
+ * added: init preserves supplied hash_size; final writes min(hash_size, 64).
  * Keys <=128 reproduce defined source storage, though documented usage is <=64;
  * larger keys overrun original storage and have no compatibility guarantee.
  * No allocation, retained pointers, callback registration or C++ unwinding.

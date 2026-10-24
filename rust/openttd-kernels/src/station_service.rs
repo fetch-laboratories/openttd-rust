@@ -1561,7 +1561,7 @@ pub unsafe extern "C" fn openttd_rust_station_prepare(
 /// `PrepareUnload`.
 pub(crate) fn prepare_unload(front: VehicleRef, w: &World, l: &Loading) {
     // SAFETY: the shared immutable vehicle table outlives this entry. Station
-    // identities and owner are resolved before next-station discovery (#228).
+    // identities and owner are resolved before next-station discovery.
     let vehicle = unsafe { &*l.vehicle };
     let st = (w.station)((vehicle.last_station)(front));
     unsafe {
@@ -1610,7 +1610,7 @@ unsafe fn load_vehicle(
     visits: &Visits,
 ) {
     // SAFETY: the shared immutable vehicle table outlives this entry. Station
-    // identities and owner are resolved before next-station discovery (#228).
+    // identities and owner are resolved before next-station discovery.
     let vehicle = unsafe { &*l.vehicle };
     let st = (w.station)((vehicle.last_station)(front));
     let mut body = |next| {

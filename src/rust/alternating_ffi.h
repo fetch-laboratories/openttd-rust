@@ -47,8 +47,8 @@ OpenTTDRustAlternatingStep openttd_rust_alternating_advance(OpenTTDRustAlternati
 
 /**
  * Complete a requested typed move with its live boundary fact (0/1), in original
- * operation order. For movement1 (++after), boundary means before == first;
- * for movement2 (--before), boundary means std::next(after) != last.
+ * operation order. For movement 1 (++after), boundary means before == first;
+ * for movement 2 (--before), boundary means std::next(after) != last.
  * Never complete a no-movement/end step. Rust selects the subsequent side.
  */
 OpenTTDRustAlternatingState openttd_rust_alternating_complete(OpenTTDRustAlternatingState state, uint8_t boundary);

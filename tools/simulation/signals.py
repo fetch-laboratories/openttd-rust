@@ -1,4 +1,4 @@
-"""Signal traversal, return classifications and transient work-set evidence (#219)."""
+"""Signal traversal, return classifications and transient work-set evidence."""
 
 import hashlib
 import json
@@ -68,7 +68,7 @@ def scenarios(soak):
     return cases
 
 
-# Rail command owner branches (#265) reached by the rail-commands scenario.
+# Rail command owner (rail_cmd.rs) branches reached by the rail-commands scenario.
 RAIL_COMMAND_BRANCHES = (
     "build_rail",
     "build_not_plain",

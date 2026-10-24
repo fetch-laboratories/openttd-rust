@@ -1,4 +1,4 @@
-"""Road controller and YAPF branch witnesses from the committed player saves (#121)."""
+"""Road controller and YAPF branch witnesses from the committed player saves."""
 
 import hashlib
 import json

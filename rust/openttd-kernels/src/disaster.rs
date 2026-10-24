@@ -1156,7 +1156,7 @@ pub unsafe extern "C" fn openttd_rust_disaster_create<'a>(
         future: Box::pin(run(w, operation, id, a, b, c, d)),
     }))
 }
-/// Resume after the prior C++ action completes. Kind0 contains the final result.
+/// Resume after the prior C++ action completes. Kind 0 contains the final result.
 /// # Safety
 /// `owner` is live/exclusive for this call; source-valid callback contracts hold.
 /// Returned actions retain no Rust owner/world references. Panics abort, never unwind.

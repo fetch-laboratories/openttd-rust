@@ -57,7 +57,7 @@ inline Axis RustCrossingRoadAxis(uint32_t tile) noexcept { return GetCrossingRoa
 inline TransportType RustTunnelBridgeTransport(uint32_t tile) noexcept { return GetTunnelBridgeTransportType(TileIndex(tile)); }
 inline uint32_t RustOtherTunnelBridgeEnd(uint32_t tile) noexcept { return GetOtherTunnelBridgeEnd(TileIndex(tile)).base(); }
 
-/* Rail command, depot and crossing leaves (#265): one native definition each. */
+/* Rail command, depot and crossing leaves (rail_cmd.rs). */
 inline RailType RustInvalidRailType() noexcept { return INVALID_RAILTYPE; }
 inline VehicleAccelerationModel RustRailAccelerationType(RailType type) noexcept { return GetRailTypeInfo(type)->acceleration_type; }
 inline uint16_t RustRailMaxSpeed(RailType type) noexcept { return GetRailTypeInfo(type)->max_speed; }

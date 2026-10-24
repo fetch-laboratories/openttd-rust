@@ -55,8 +55,8 @@ OpenTTDTileTypeAllocation GetRustTileTypeAllocation() noexcept;
  * first_tile_okay). pbs_services acquires leaves for direct Rust PBS calls.
  * Train reservation services can reenter the Rust train owners.
  * Random logging still runs, but its debug source location names this wrapper.
- * Industry query returns 0 not industry,1 industry,2 bubble catcher and writes
- * TileVirtXY(x,y). It observes only type and industry graphics.
+ * Industry query returns 0 not industry, 1 industry, 2 bubble catcher and writes
+ * TileVirtXY(x, y). It observes only type and industry graphics.
  * An environmental exception terminates rather than unwinding through Rust. */
 enum ClearGround : uint8_t;
 enum TreeGround : uint8_t;
@@ -268,7 +268,7 @@ struct OpenTTDRailMapServices {
 	SignalState (*signal_state)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_state);
 	void (*set_signal_state)(uint32_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(set_signal_state);
 	uint32_t (*other_tunnel_bridge_end)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(other_tunnel_bridge_end);
-	/* Rail command, depot and level-crossing leaves (#265). */
+	/* Rail command, depot and level-crossing leaves (rail_cmd.rs). */
 	bool (*has_signals)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(has_signals);
 	SignalType (*signal_type)(uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(signal_type);
 	RailType (*invalid_rail_type)() noexcept OPENTTD_SERVICE_DEFAULT(invalid_rail_type);

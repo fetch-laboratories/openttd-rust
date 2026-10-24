@@ -1,4 +1,4 @@
-"""Disaster scheduler, live targets and lifecycle witnesses (#103)."""
+"""Disaster scheduler, live targets and lifecycle witnesses."""
 
 import hashlib
 import json

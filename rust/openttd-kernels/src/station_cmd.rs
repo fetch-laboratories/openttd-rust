@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Station construction, joining and removal policy on the canonical #125 owner.
+//! Station construction, joining and removal policy on the station service owner (`station_service.rs`).
 //! Native shells, map/pools, specs and command result slots remain native. Every
 //! callback is synchronous and noexcept; no owner borrow crosses a callback.
 #![allow(
@@ -690,7 +690,7 @@ impl Ctx<'_> {
         }
         (self.s.facility_widget)(st, kind);
         if adding {
-            // Direct Rust call: acceptance is already owned by #125.
+            // `UpdateStationAcceptance(st, false)`, owned by `station_service.rs`.
             unsafe {
                 crate::station_service::openttd_rust_station_acceptance(st, self.s.station, 0);
             };
