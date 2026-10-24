@@ -1,9 +1,8 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Rail vehicle construction and depot consist transactions: the original
-//! `train_cmd.cpp` bodies from `GetFreeWagonsInDepot` through `CmdSellRailWagon`.
-//! Native shells keep their chain links and fields; Rust owns the control flow,
-//! the temporary backup lists and the free-wagon order. Every shell access is a
-//! short typed service call; none spans a callback, nested move or deletion.
+//! Rail vehicle construction and depot consist transactions: the original `train_cmd.cpp`
+//! bodies from `GetFreeWagonsInDepot` through `CmdSellRailWagon`. Shells keep their chain
+//! links and fields; Rust owns control flow, the temporary backup lists and the free-wagon
+//! order.
 #![allow(clippy::many_single_char_names, clippy::too_many_lines)]
 use super::{CommonServices, ERROR, TransactionServices, build, construct, refit};
 use crate::command_type::DoCommandFlag;

@@ -5,10 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical engine lifecycle state. Native shells own this allocation through
-//! ordinary/indexed construction, temporary staging and vector relocation.
-//! Native scalar aliases carry their real widths. No Rust reference is retained
-//! across a native callback. Allocation failure and panics abort; no unwinding.
+//! Engine lifecycle state. Native shells own this allocation through ordinary and indexed
+//! construction, temporary staging and vector relocation; native scalar aliases carry their
+//! real widths.
 #![allow(
     unsafe_code,
     clippy::cast_ptr_alignment,

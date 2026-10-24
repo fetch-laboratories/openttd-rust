@@ -31,17 +31,11 @@ typedef struct OpenTTDWaterLeaves {
 	void (OPENTTD_WATER_CALL *debug)(uint8_t, int32_t, int32_t) OPENTTD_SERVICE_DEFAULT(debug);
 } OpenTTDWaterLeaves;
 typedef struct OpenTTDWaterRegionContext { OpenTTDWaterRegions *owner; const OpenTTDWaterLeaves *leaves; } OpenTTDWaterRegionContext;
-/* One map-lifetime owner, replaced at Map::Allocate; no map/STL pointer enters
- * Rust. Leaves are synchronous noexcept/nonreentrant shared map/follower queries
- * and debug output. follow returns INVALID_TILE on failure; aqueduct returns its
- * other end or INVALID_TILE. Initialized outputs are exclusive for each call.
- * Visitor cursor owns only traversal progress and copied per-side labels. next
- * returns before arbitrary C++ visitor work; no cache borrow survives it. The
- * next call receives the live caller descriptor and observes live cache changes
- * at the original observation points, retaining the original region origin.
- * Map replacement during a visitor violates the original region-reference
- * lifetime. Destroy each owner/cursor once, including visitor exception paths.
- * Panics/OOM abort; no exception or panic crosses the ABI. */
+/* One map-lifetime owner, replaced at Map::Allocate. follow returns INVALID_TILE on failure;
+ * aqueduct returns its other end or INVALID_TILE. The visitor cursor owns only traversal progress
+ * and copied per-side labels; next returns before C++ visitor work and observes live cache changes
+ * at the original points. Map replacement during a visitor violates the original region-reference
+ * lifetime. Destroy each owner and cursor once, also on visitor exception paths. */
 OpenTTDWaterRegions *OPENTTD_WATER_CALL openttd_rust_water_new(uint32_t, uint32_t);
 void OPENTTD_WATER_CALL openttd_rust_water_destroy(OpenTTDWaterRegions *);
 uint8_t OPENTTD_WATER_CALL openttd_rust_water_label(OpenTTDWaterRegions *, const OpenTTDWaterLeaves *, uint32_t);

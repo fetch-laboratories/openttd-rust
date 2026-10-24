@@ -28,34 +28,11 @@ struct OpenTTDStationFields {
 	uint64_t always_accepted;
 	uint8_t delete_ctr, time_since_load, time_since_unload, last_vehicle_type;
 };
-/* Each BaseStation owns one stable allocation, created for ordinary and indexed
- * allocation and destroyed after its derived shell and cargo storage. Scalar
- * addresses stay valid until owner destruction; native facade references alias
- * this allocation rather than mirror it. All calls are serial. Rust must use
- * raw field-sized access, ending access before a world service; C++ may read or
- * mutate any metadata through callbacks. No reference/slice into state survives
- * a world call. Saving and legacy loading address the same canonical scalars.
- * Cargo status starts a trivially-copyable native EnumBitSet<uint8_t> lifetime
- * at shell construction; the ABI pins size/alignment and Rust accesses only its
- * byte representation through raw pointers. No C++ reference object is saved.
- * Stable queue nodes have std::list identity/erase semantics; first/next/value
- * require live entries, and erase_node requires an entry from that owner.
- * The native save facade alone uses a call-local std::list for partial loading
- * and pointer fixups, committing on native error unwind outside Rust frames.
- * Refitting returns CommandCost/capacities without ordinary exceptions. Its
- * capacity/NewGRF cache updates and command-scope window invalidations may read
- * canonical metadata; no reference to canonical owner fields, cargo metadata or queue spans the call.
- * Cargo Stage/Unload can reenter #117 payment/delivery and later industry owners;
- * copied observations and raw field accesses end before each operation. NewGRF
- * load/house/cargo/vehicle/station/airport/road resolvers execute sprite-group
- * programs, never script VMs or arbitrary game commands. Command-scope window
- * invalidation may read the owner; unrestricted GUI-scope runs later in C++.
- * Opaque world handles obey the original pool lifetimes. Panics and environmental
- * service failures abort. Packet, flow, geometry and map storage remain C++.
- * with_* bodies run synchronously once while native iterator/container frames
- * live on the caller's stack. Immutable engine/GRF handles retain native registry
- * lifetime; conditional fields are observed only at their original read points.
- */
+/* Each BaseStation owns one stable allocation, created for ordinary and indexed allocation and
+ * destroyed after its derived shell and cargo storage; facade references, saving and legacy loading
+ * alias its scalars. Cargo status is a native EnumBitSet<uint8_t> that Rust reads only as bytes.
+ * Queue nodes keep std::list identity and erase semantics; the save facade loads into a call-local
+ * std::list. Cargo Stage/Unload can reenter payment, delivery and industry owners. */
 struct OpenTTDRatingCounts {
 	uint32_t available;
 	uint32_t destinations;

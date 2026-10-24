@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical station cargo-service state. Native scalar aliases and packet
-//! services never overlap Rust references into this owner. Addresses are stable
-//! for the shell lifetime, including indexed loading and retired-station reuse.
+//! Station cargo-service state. Addresses are stable for the shell lifetime, including
+//! indexed loading and retired-station reuse.
 #![allow(
     unsafe_code,
     clippy::missing_safety_doc,

@@ -1,8 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Station/waypoint resolver policy. State lives in the native resolver stack
-//! carrier for its whole lifetime, including repeated common Action2 resolutions.
-//! Calls run under the game-state mutex. Native aliases and evaluator reentry
-//! require field-sized reads/writes; no state borrow crosses a service call.
+//! Station and waypoint resolver policy. State lives in the native resolver stack carrier
+//! for its whole lifetime, including repeated common Action2 resolutions; native aliases and
+//! evaluator reentry require field-sized reads and writes.
 #![allow(
     unsafe_code,
     clippy::missing_safety_doc,

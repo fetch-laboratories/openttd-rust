@@ -5,13 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical industry cargo/history and production/builder control.
-//!
-//! The C++ shell owns one Box handle. Its typed views alias only field-sized raw
-//! accesses here. No reference into an owner survives a world service: construction,
-//! destruction, cargo distribution and `NewGRF` resolution may revisit live state.
-//! Slot growth invalidates views exactly as the original vector; optional history
-//! allocations remain stable until slot removal. Panics abort; no unwind crosses FFI.
+//! Industry cargo, history, production and builder control. The C++ shell owns one boxed
+//! owner; construction, destruction, cargo distribution and `NewGRF` resolution may revisit
+//! it, so no reference survives a world service. Slot growth invalidates views exactly as the
+//! original vector does.
 // Original fixed-width conversion and variable names are retained for audit.
 #![allow(
     unsafe_code,

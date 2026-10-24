@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Flooding ownership, including live vehicle-hash traversal and nested command
-//! results. Native leaves are noexcept. No Rust borrow denotes a native pool/map
-//! object across calls; shared native traversal advances after each callback.
+//! Flooding, including live vehicle-hash traversal and nested command results. Native
+//! traversal advances after each callback.
 #![allow(
     unsafe_code,
     missing_docs,

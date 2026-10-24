@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete industry initialization, tile planting and nearby-station policy.
-//! Native spec/layout handles are immutable. Slot/metadata accesses end before
-//! every world callback; those callbacks can inspect partially initialized owners.
+//! Industry initialization, tile planting and nearby-station policy. World callbacks can
+//! inspect partially initialized owners.
 use super::{
     Accepted, Builder, GenerationServices, Industry, LifecycleServices, Map, Produced, Services,
     SpecHandle, accepted, fields, produced, produced_count, valid,

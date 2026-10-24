@@ -5,11 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical subsidy owners, route searches, expiry and delivery awards.
-//! Native pool shells retain identity and allocation order. The game-state mutex
-//! serializes process-wide registration; no owner reference spans any callback.
-//! Native leaves are noexcept and script events enqueue without entering a VM.
-//! Panics abort. Source arithmetic explicitly retains narrowing and wrapping.
+//! Subsidy owners, route searches, expiry and delivery awards. Pool shells keep identity
+//! and allocation order; script events enqueue without entering a VM. Source arithmetic
+//! keeps its narrowing and wrapping.
 #![allow(
     unsafe_code,
     missing_docs,

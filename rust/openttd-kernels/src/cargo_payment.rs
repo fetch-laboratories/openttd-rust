@@ -5,14 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Payment state, delivery acceptance and the complete production flush.
-//! C++ retains canonical world/pool storage and `NewGRF` resolvers. Leaves
-//! cannot reenter these owners or invalidate handles. No world references cross
-//! calls; C++ save/load and pointer fixing write `Payment::fields` in place
-//! through reference aliases between Rust calls.
-//! Exported pointer operations require the live allocations, exclusive access
-//! and call-scoped buffers documented in `cargo_payment_ffi.h`; no function
-//! retains a buffer or reference. Only cleaning destruction accepts a null table.
+//! Payment state, delivery acceptance and the production flush. C++ keeps world and pool
+//! storage and the `NewGRF` resolvers; save/load and pointer fixing write `Payment::fields`
+//! in place between Rust calls. Pointer contracts are in `cargo_payment_ffi.h`.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,

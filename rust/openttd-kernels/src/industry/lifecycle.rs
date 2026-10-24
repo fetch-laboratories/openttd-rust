@@ -5,11 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Industry destruction and tile/parent trigger traversal. The owner is resolved
-//! once, with field-sized raw access only. Every owner/registry borrow ends before
-//! callbacks; native station deletion, cargo invalidation and resolver calls can
-//! revisit Rust. Map and pool storage stay native. Panics and native exceptions
-//! cannot unwind through this synchronous boundary.
+//! Industry destruction and tile and parent trigger traversal. Station deletion, cargo
+//! invalidation and resolver calls can revisit Rust; map and pool storage stay native.
 use super::{Builder, Industry, Map, Services, TileArea};
 use std::{ffi::c_void, ptr};
 

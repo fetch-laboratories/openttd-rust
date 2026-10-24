@@ -5,35 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete tile scheduler. Native arrays stay canonical; existing Rust owners
-//! dispatch directly without a native trampoline. All panics abort at the C ABI.
-//!
-//! Batch settings are invariant under the original serialized game-state mutex:
-//! map allocation/load, tick advancement, setting commands and AI/Game script VMs
-//! run outside `RunTileLoop`. Ambient callbacks run only the `NewGRF` sound resolver;
-//! tile handlers may mutate tiles/pools, run landscape/road/crash commands or queue
-//! script events, but none changes map dimensions, climate, tree placement, tick
-//! counter, editor mode, road-rebuild or client ambient settings. Generation progress also runs outside this
-//! entry. `_misc_grf_features` is changed by reset and GRF `ActionD` loading,
-//! both excluded from this batch. The Rust generic owner observes the feature bit
-//! at the original ambient call site, never substituting client audio.
-//! Enabled callbacks retain their source RNG position; the tree legacy adapter
-//! still rereads the feature bit after its call. Thus settings are entry-local;
-//! tree/map observations still occur inside each owner at original callback sites.
-//!
-//! Raw map descriptor lifetime: `Map::Allocate` is reached only from game reset
-//! (`InitializeGame`), MAPS/legacy loaders and tests. Mutex yield (`GameLoopPause`)
-//! occurs only in generation progress and GRF scanning; warmup callers place it
-//! outside this entry. `VideoDriver::GameLoop`/GUI input hold the game-state mutex;
-//! bootstrap is serial. House/ambient/animation `NewGRF` resolvers, road/landscape
-//! commands, water foundations/crashes/destruction, cargo and industry callbacks
-//! may mutate later tiles and reenter owners, but never run reset/load/progress or
-//! a script VM. AI/Game event insertion only queues via `InsertEvent`; script VMs
-//! run after this batch. Window invalidation cannot pump GUI commands here.
-//! Therefore only allocation metadata can span dispatch; each field-sized read ends first.
-//! Nested entries acquire independently, and entries after reset reacquire. Link
-//! graph workers own copies; sound/compression do not mutate the arrays. Threaded
-//! and arbitrary `NewGRF` corpus limits remain source-review obligations in #156.
+//! Tile scheduler (`RunTileLoop`): the LFSR walk, tile-zero handling and dispatch to the tile
+//! loop owners. Map arrays stay in C++. Batch settings are read once per entry and only the map
+//! descriptor's allocation metadata spans dispatch; `docs/design/world-state.md` ("Selected
+//! shared map view") gives the interval that permits both.
 #![allow(unsafe_code)]
 
 use crate::{ground, industry, services, town, trees, water};

@@ -5,12 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Road vehicles own their movement, consist traversal and private counters/cache.
-//! Each entry receives a live vehicle handle and its Rust owner; consist links
-//! carry both. Owner scalars are read and written in place through the raw owner
-//! pointer, so no reference into an owner survives a service call. Observations
-//! are copies taken at the original read points and refreshed after every service
-//! that can change them.
+//! Road vehicle movement, consist traversal and private counters and cache. Observations are
+//! copies taken at the original read points and refreshed after every service that can
+//! change them.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,

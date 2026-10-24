@@ -5,11 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical cargo packet fields, ordered lists, metadata and cargo actions.
-//! Pool allocation and identity remain native. All raw owner accesses are short:
-//! payment can call getters, so no reference into an owner survives any service.
-//! Save import stores unresolved shell handles without dereferencing them. The
-//! complete safety/lifetime contract is in `cargo_storage_ffi.h`; panics abort.
+//! Cargo packet fields, ordered lists, metadata and cargo actions; pool allocation and
+//! identity stay native. Payment can call getters, so every raw owner access is short. Save
+//! import stores unresolved shell handles without dereferencing them; the pointer contract is
+//! in `cargo_storage_ffi.h`.
 #![allow(
     unsafe_code,
     clippy::missing_safety_doc,

@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Complete common global-variable policy for Action2 and Action7/9/D.
-//! Serialized synchronous leaves retain source file/config preconditions, including
-//! non-null GRF/config at the variables that require them. No borrow spans a leaf.
+//! Common global-variable policy for Action2 and Action7/9/D. Leaves keep the source
+//! file and config preconditions, including non-null GRF and config where variables need them.
 #![allow(
     unsafe_code,
     missing_docs,

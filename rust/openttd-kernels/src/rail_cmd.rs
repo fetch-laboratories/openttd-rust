@@ -5,12 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Rail track, depot and signal commands and the rail clear/owner/terraform/
-//! build-above tile procs (#265). Rust owns control flow; map, pools, company
-//! counters and every `CommandCost` stay canonical native storage. Nested
-//! commands are ordinary native dispatches that may reenter this module: no
-//! Rust borrow of native state exists, so every callback is a direct call.
-//! No entry draws Random. Native leaves are noexcept; panics abort.
+//! Rail track, depot and signal commands and the rail clear, owner, terraform and build-above
+//! tile procs. Map, pools, company counters and every `CommandCost` stay native. Nested
+//! commands are native dispatches that may reenter this module. No entry draws `Random`.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,

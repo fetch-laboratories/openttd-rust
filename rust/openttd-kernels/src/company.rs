@@ -4,15 +4,10 @@
  * OpenTTD is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
-//! Company finance/history and complete economy lifecycle ownership.
-//!
-//! Every entry is a named synchronous call. Shared services are typed `noexcept`
-//! C++ functions in two borrowed static tables; reentrant services (Post of a
-//! company deletion, tile owner changes, pool deletion, allocation, nested
-//! commands, `StopAI`) run directly after all raw field accesses have ended.
-//! Only the `AI::StartNew` startup path and the `CCA_NEW_AI` Post, which can
-//! raise a script memory-policy `Script_FatalError`, return to C++ through a
-//! caller-owned stack frame (`Startup`, `Control`, `Tick`, competitor timeout).
+//! Company finance, history and economy lifecycle. Reentrant services (company deletion
+//! `Post`, tile owner changes, pool deletion, nested commands, `StopAI`) run directly after
+//! all raw field accesses end. `AI::StartNew` and the `CCA_NEW_AI` `Post` can raise
+//! `Script_FatalError`, so they return to C++ through a caller-owned stack frame.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,

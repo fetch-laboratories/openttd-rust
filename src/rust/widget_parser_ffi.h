@@ -34,18 +34,10 @@ enum OpenTTDRustWidgetOperation {
 /** Return bit 0 attribute / bit 1 declared container, using exact raw uint8 tags. */
 uint8_t openttd_rust_widget_part_classify(uint8_t type);
 
-/**
- * Native descriptor length is representable; original valid span/iterator domain
- * applies. Window mode is 0 MakeNWidgets or 1 MakeWindowNWidgetTree; trailing_check
- * is exactly the C++ WITH_ASSERT policy. Rust borrows no C++ pointers or unions.
- * The live nonnull handle is exclusively used and destroyed exactly once with
- * its matching function. Typed C++ operations and callbacks execute only AFTER
- * advance returns, so reentrant parsers own independent engines and exceptions
- * never cross a Rust frame. Supplied unique_ptr&& stays a C++ reference until
- * final return; destroying control on exceptions performs no pending actions.
- * Rust controls its allocations, C++ its objects; panic/OOM abort, never unwind.
- * Additional control/slot allocations have different resource-failure timing.
- */
+/** Window mode is 0 MakeNWidgets or 1 MakeWindowNWidgetTree; trailing_check is the C++ WITH_ASSERT
+ * policy. Typed C++ operations and callbacks run only after advance returns, so reentrant parsers
+ * own independent engines and exceptions never cross a Rust frame. Supplied unique_ptr&& stays a
+ * C++ reference until the final return; destroying on an exception performs no pending actions. */
 OpenTTDRustWidgetParser *openttd_rust_widget_parser_create(uint64_t length, uint8_t window, uint8_t trailing_check);
 
 /**

@@ -54,16 +54,11 @@ struct OpenTTDAuthKeys;
 struct OpenTTDAuthSession;
 struct OpenTTDAuthStream;
 
-/* All owners allocate/free only in Rust. Clone makes independent stable storage;
- * assignment overwrites fixed state like the original C++ member assignment.
- * Callers serialize operations. Fixed owner views keep their address until
- * destruction and may observe new bytes after completed mutation/assignment;
- * they must not be accessed concurrently with a call. Exchange extra payload
- * may alias existing derived-key bytes: hashing completes before replacement.
- * Output message/MAC regions do not overlap owner state. Fixed buffers are initialized/live (32-byte keys, 24-byte nonces,
- * 16-byte MACs, 8-byte auth messages). Other lengths are <= PTRDIFF_MAX, with null
- * allowed only for an empty span. MAC/message regions are disjoint; encryption
- * is in place and never creates overlapping Rust shared/mutable slices. */
+/* Owners allocate and free only in Rust. Clone makes independent storage; assignment overwrites
+ * fixed state like the original member assignment. Fixed owner views keep their address until
+ * destruction. Exchange extra payload may alias derived-key bytes: hashing completes before
+ * replacement. Fixed buffers are 32-byte keys, 24-byte nonces, 16-byte MACs and 8-byte auth
+ * messages; MAC and message regions are disjoint, and encryption is in place. */
 struct OpenTTDAuthKeys *OPENTTD_AUTH_CALL openttd_rust_auth_keys_new(const struct OpenTTDAuthPrimitives *);
 struct OpenTTDAuthKeys *OPENTTD_AUTH_CALL openttd_rust_auth_keys_clone(const struct OpenTTDAuthKeys *);
 void OPENTTD_AUTH_CALL openttd_rust_auth_keys_assign(struct OpenTTDAuthKeys *, const struct OpenTTDAuthKeys *);

@@ -5,14 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Stable authentication owners. Cryptographic algorithms remain bundled host primitives.
-//!
-//! Every exported call has the common pointer/ownership contract in `auth_ffi.h`:
-//! live initialized fixed buffers, exclusive owner mutation, synchronous nonthrowing
-//! callbacks, disjoint MAC/message regions, and borrowed lengths <= `isize::MAX`.
-//! Owners and secret buffers are initialized directly in their final allocation;
-//! cloning copies heap-to-heap, never through a secret-bearing Rust aggregate.
-//! No Packet, RNG, application logger or C++ allocation callback runs under Rust.
+//! Authentication owners around the bundled cryptographic primitives. The pointer contract is in
+//! `auth_ffi.h`. Owners and secret buffers are initialized in their final allocation, and
+//! cloning copies heap to heap, never through a secret-bearing Rust value.
 #![allow(unsafe_code)] // This module implements the documented raw-pointer owner ABI.
 
 use std::alloc::{Layout, alloc_zeroed, dealloc, handle_alloc_error};

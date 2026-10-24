@@ -1,7 +1,6 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
-//! Road-stop invocation and spec-association policy. Native shells/vectors remain
-//! canonical; all element observations end before resize or Action2 evaluation.
-//! No allocation, map reset, yield or unwind crosses a resolver invocation.
+//! Road-stop invocation and spec-association policy. Shells and vectors stay native; element
+//! observations end before resize or Action2 evaluation.
 // Casts preserve the native uint8/uint16 assignments and accessor narrowing.
 #![allow(
     unsafe_code,

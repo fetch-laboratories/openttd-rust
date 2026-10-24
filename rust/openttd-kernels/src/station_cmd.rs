@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Station construction, joining and removal policy on the station service owner (`station_service.rs`).
-//! Native shells, map/pools, specs and command result slots remain native. Every
-//! callback is synchronous and noexcept; no owner borrow crosses a callback.
+//! Station construction, joining and removal policy on the station service owner
+//! (`station_service.rs`). Shells, map, pools, specs and command result slots stay native.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,

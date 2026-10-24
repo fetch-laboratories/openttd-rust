@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical opaque native station handles. Native code performs inheritance
-//! conversions, preserving the C++ pointer adjustment. A handle is borrowed for
-//! synchronous services until its owner is retired; Rust never dereferences it.
+//! Opaque native station handles. Native code performs inheritance conversions, preserving
+//! the C++ pointer adjustment; Rust never dereferences a handle.
 
 /// A native `Station`, distinct from the shared station/waypoint pool base.
 #[repr(C)]

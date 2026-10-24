@@ -5,10 +5,9 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! `linkgraph.h` contents owner. Native shells/pools retain identity, not contents.
-//! Each job clones this owner before publication and destroys it after joining.
-//! Save/load borrows canonical scalar addresses only between native calls. No
-//! Rust frame or borrow survives `SlObject`, its pointer cleanup or exceptions.
+//! `linkgraph.h` contents; native shells and pools keep identity. Each job clones this owner
+//! before publication and destroys it after joining. Save/load borrows scalar addresses only
+//! between native calls, never across `SlObject`, its pointer cleanup or exceptions.
 #![allow(unsafe_code, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use crate::{

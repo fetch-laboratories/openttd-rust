@@ -61,20 +61,11 @@ extern "C" {
 struct OpenTTDBlake2bLayout {
 	size_t size, alignment, hash, input_offset, input, input_idx, hash_size;
 };
-/* Actual context lifetime starts in C++; immutable initialized layout/leaves
- * are borrowed synchronously. Fieldwise raw access handles actual u64 alignment;
- * no context padding is read and final wipes its complete actual storage.
- * Context is distinct from message/key/hash according to original incremental
- * preconditions. For hashes, one-shot output may overlap message/key, including
- * partial overlap: inputs are consumed before output writes. This deliberately
- * differs from cipher text aliasing. No external buffer becomes a Rust reference.
- * Empty message/key may be NULL; update(NULL, 0) accesses no context/layout.
- * Original readable/writable extents <=isize::MAX apply. No size validation is
- * added: init preserves supplied hash_size; final writes min(hash_size, 64).
- * Keys <=128 reproduce defined source storage, though documented usage is <=64;
- * larger keys overrun original storage and have no compatibility guarantee.
- * No allocation, retained pointers, callback registration or C++ unwinding.
- * Panics abort. Original temporary wipe points are unchanged. */
+/* Context lifetime starts in C++, which supplies the layout; access is fieldwise for the actual u64
+ * alignment. One-shot hash output may overlap message or key, partially too, because inputs are
+ * consumed first, unlike cipher text. init keeps the supplied hash_size; final writes
+ * min(hash_size, 64). Keys up to 128 bytes reproduce the source storage, though documented usage
+ * is up to 64; larger keys overrun the original storage. */
 void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_keyed_init(const struct OpenTTDBlake2bLayout *, void *, size_t, const uint8_t *, size_t);
 void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_init(const struct OpenTTDBlake2bLayout *, void *, size_t);
 void OPENTTD_CRYPTO_CALL openttd_rust_blake2b_update(const struct OpenTTDBlake2bLayout *, void *, const uint8_t *, size_t);

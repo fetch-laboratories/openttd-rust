@@ -35,17 +35,11 @@ enum OpenTTDRustAdminOperation {
 	OTTD_ADMIN_RESTORE_TOP, OTTD_ADMIN_PUSH_NULL,
 };
 
-/**
- * Direction 0 Squirrel->JSON, 1 incoming GetObject including root/rollback policy.
- * index is int64 SQInteger even on i686; depth is the original 32-bit int.
- * Typed C++ frames/VM/JSON/bytes never enter Rust. Original valid VM indices apply.
- * C++ executes actions AFTER advance returns: VM/metamethod/JSON/log exceptions
- * therefore never cross a live Rust call. Destroy on exceptions but do not run
- * pending VM pops, rollback or diagnostics. Reentrant calls own separate engines.
- * Rust owns control allocations, destroyed exactly once by its matching function.
- * Extra control allocation timing is not original resource-exhaustion equivalence.
- * OOM/panic abort; the C ABI never unwinds. Handle is nonnull and exclusively used.
- */
+/** Direction 0 Squirrel->JSON, 1 incoming GetObject including root/rollback policy. index is
+ * int64 SQInteger even on i686; depth is the original 32-bit int. C++ executes each action after
+ * advance returns, so VM, metamethod, JSON and log exceptions never cross a Rust frame; destroy on
+ * an exception runs no pending VM pops, rollback or diagnostics. Reentrant calls own separate
+ * engines. */
 OpenTTDRustAdminConversion *openttd_rust_admin_conversion_create(uint8_t direction, int64_t index, int32_t depth);
 
 /**

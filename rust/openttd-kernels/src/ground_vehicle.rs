@@ -5,9 +5,8 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Canonical ground cache/flags, dynamics and train/road physics callees.
-//! Native shells own one stable allocation. Every raw scalar access ends before
-//! property, viewport, crash or other potentially reentrant services.
+//! Ground vehicle cache and flags, dynamics and the train and road physics callees. Native
+//! shells own one stable allocation.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,

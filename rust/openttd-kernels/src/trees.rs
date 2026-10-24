@@ -5,13 +5,10 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Trees own policy, iteration, grove geometry, commands and the persisted tick byte.
-//! Canonical tiles remain in C++. Each entry is one plain synchronous call that reads
-//! typed tile records and calls typed `noexcept` services at the original call points.
-//! Water flooding, `NewGRF` ambient callbacks and nested landscape clears may reenter
-//! tree code; no Rust borrow of mutable state is live across them, and records read
-//! before them are read again afterwards. World-generation abort is the only C++
-//! exception: its progress service reports it and the entry returns without further work.
+//! Tree policy, iteration, grove geometry, commands and the persisted tick byte; tiles stay in
+//! C++. Flooding, `NewGRF` ambient callbacks and nested clears may reenter, so records read
+//! before them are read again afterwards. World-generation abort is the one C++ exception: its
+//! progress service reports it and the entry returns.
 #![allow(
     unsafe_code,
     clippy::cast_possible_truncation,
