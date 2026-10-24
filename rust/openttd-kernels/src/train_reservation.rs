@@ -229,6 +229,20 @@ struct Game<'a> {
     context: *mut std::ffi::c_void,
 }
 impl Game<'_> {
+    /// # Safety
+    /// `leaves` is the entry's table, live and immutable for the call.
+    unsafe fn entry(
+        vehicle: crate::vehicle::VehicleRef,
+        leaves: *const Leaves,
+        context: *mut std::ffi::c_void,
+    ) -> Self {
+        Self {
+            vehicle: vehicle.0.as_ptr(),
+            // SAFETY: The function contract.
+            leaves: unsafe { &*leaves },
+            context,
+        }
+    }
     fn read_tile(&self, id: Handle) -> u32 {
         (self.leaves.read_tile)(id)
     }
@@ -1006,12 +1020,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_check_next(
     leaves: *const Leaves,
     context: *mut std::ffi::c_void,
 ) {
-    // SAFETY: The native stack owns these immutable services throughout the call.
-    let g = Game {
-        vehicle: vehicle.0.as_ptr(),
-        leaves: unsafe { &*leaves },
-        context,
-    };
+    let g = unsafe { Game::entry(vehicle, leaves, context) };
     check_next(&g, id);
 }
 
@@ -1027,12 +1036,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_clear(
     leaves: *const Leaves,
     context: *mut std::ffi::c_void,
 ) {
-    // SAFETY: The native stack owns these immutable services throughout the call.
-    let g = Game {
-        vehicle: vehicle.0.as_ptr(),
-        leaves: unsafe { &*leaves },
-        context,
-    };
+    let g = unsafe { Game::entry(vehicle, leaves, context) };
     clear(&g, id, tile, td);
 }
 
@@ -1046,12 +1050,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_free(
     leaves: *const Leaves,
     context: *mut std::ffi::c_void,
 ) {
-    // SAFETY: The native stack owns these immutable services throughout the call.
-    let g = Game {
-        vehicle: vehicle.0.as_ptr(),
-        leaves: unsafe { &*leaves },
-        context,
-    };
+    let g = unsafe { Game::entry(vehicle, leaves, context) };
     free(&g, id);
 }
 
@@ -1070,12 +1069,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_choose(
     leaves: *const Leaves,
     context: *mut std::ffi::c_void,
 ) -> Choice {
-    // SAFETY: The native stack owns these immutable services throughout the call.
-    let g = Game {
-        vehicle: vehicle.0.as_ptr(),
-        leaves: unsafe { &*leaves },
-        context,
-    };
+    let g = unsafe { Game::entry(vehicle, leaves, context) };
     let (track, got) = choose(&g, id, tile, dir, tracks, force != 0, mark != 0);
     Choice {
         track,
@@ -1095,12 +1089,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_try_path(
     leaves: *const Leaves,
     context: *mut std::ffi::c_void,
 ) -> u8 {
-    // SAFETY: The native stack owns these immutable services throughout the call.
-    let g = Game {
-        vehicle: vehicle.0.as_ptr(),
-        leaves: unsafe { &*leaves },
-        context,
-    };
+    let g = unsafe { Game::entry(vehicle, leaves, context) };
     u8::from(try_path(&g, id, mark != 0, first_okay != 0))
 }
 
@@ -1114,12 +1103,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_check_reverse(
     leaves: *const Leaves,
     context: *mut std::ffi::c_void,
 ) -> u8 {
-    // SAFETY: The native stack owns these immutable services throughout the call.
-    let g = Game {
-        vehicle: vehicle.0.as_ptr(),
-        leaves: unsafe { &*leaves },
-        context,
-    };
+    let g = unsafe { Game::entry(vehicle, leaves, context) };
     if (g.leaves.line_reverse)(g.context, id) == 0
         && id.get_track() != u64::from(DEPOT)
         && id.get_track() != u64::from(WORMHOLE)
@@ -1142,12 +1126,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_station_location(
     leaves: *const Leaves,
     context: *mut std::ffi::c_void,
 ) -> u32 {
-    // SAFETY: The native stack owns these immutable services throughout the call.
-    let g = Game {
-        vehicle: vehicle.0.as_ptr(),
-        leaves: unsafe { &*leaves },
-        context,
-    };
+    let g = unsafe { Game::entry(vehicle, leaves, context) };
     if station == g.read_last_station(id) {
         (g.leaves.write_last)(g.context, id, u16::MAX);
     }
@@ -1169,12 +1148,7 @@ pub unsafe extern "C" fn openttd_rust_train_reservation_reserve_under(
     leaves: *const Leaves,
     context: *mut std::ffi::c_void,
 ) {
-    // SAFETY: The native stack owns these immutable services throughout the call.
-    let g = Game {
-        vehicle: vehicle.0.as_ptr(),
-        leaves: unsafe { &*leaves },
-        context,
-    };
+    let g = unsafe { Game::entry(vehicle, leaves, context) };
     let mut part = id;
     while part != Handle::NONE {
         let v = g.read_free(part);

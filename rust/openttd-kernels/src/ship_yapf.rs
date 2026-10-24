@@ -6,7 +6,7 @@
  */
 
 //! Complete ship YAPF searches and canonical path storage.
-// Equal estimates deliberately follow CBinaryHeapT rather than a stable queue.
+// Equal estimates follow `CBinaryHeapT`, not a stable queue.
 // Arena indices preserve parent identity when an existing open node is replaced.
 #![allow(
     clippy::cast_possible_truncation,
@@ -877,10 +877,9 @@ pub unsafe extern "C" fn openttd_rust_ship_regions_destroy(p: *mut RegionPath) {
     drop(unsafe { Box::from_raw(p) });
 }
 
-/// Narrow evidence hook for the heap tie/removal gap in saved-state scenarios.
+/// Heap probe for tie and removal order, which no saved state records.
 /// Commands use bits 31..30: include, remove, update; low bits are arena indices.
-/// This calls the actual search heap; the native test independently uses the
-/// unchanged original `CBinaryHeapT`, never a second Rust implementation.
+/// The native test runs the same commands through the original `CBinaryHeapT`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_ship_heap_probe(
     costs: *const i32,

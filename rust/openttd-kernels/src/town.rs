@@ -48,6 +48,7 @@ pub struct TownRef {
     pub id: TownId,
 }
 use crate::game_state::GameState;
+use crate::raw_field::{read_field, write_field};
 use std::{cell::OnceCell, ffi::c_void};
 
 #[repr(C)]
@@ -719,6 +720,7 @@ pub struct CommandResult {
     pub cost: i64,
     pub success: bool,
 }
+/// `owner` is the town's live state for the entry; field accesses end before services.
 #[derive(Clone)]
 struct Engine<'a> {
     road: *const crate::road_cmd::CommandContext,
@@ -742,34 +744,30 @@ impl Engine<'_> {
         unsafe { position(self.owner) }
     }
     fn num_houses(&self) -> u32 {
-        // SAFETY: Stable live owner; each immediate field read ends before services.
-        unsafe { (*self.owner).simulation.num_houses }
+        read_field!(self.owner, simulation.num_houses)
     }
     fn change_house_count(&self, amount: u32) {
-        // SAFETY: Immediate owner mutation ends before every native callback.
-        unsafe {
-            (*self.owner).simulation.num_houses = self.num_houses().wrapping_add(amount);
-        }
+        write_field!(
+            self.owner,
+            simulation.num_houses,
+            self.num_houses().wrapping_add(amount)
+        );
     }
     fn population(&self) -> u32 {
         // SAFETY: Stable live owner; each immediate field read ends before services.
         unsafe { population(self.owner) }
     }
     fn layout(&self) -> u8 {
-        // SAFETY: Stable live owner; each immediate field read ends before services.
-        unsafe { (*self.owner).simulation.layout }
+        read_field!(self.owner, simulation.layout)
     }
     fn is_city(&self) -> bool {
-        // SAFETY: Stable live owner; each immediate field read ends before services.
-        unsafe { (*self.owner).simulation.larger_town }
+        read_field!(self.owner, simulation.larger_town)
     }
     fn radius(&self) -> [u32; 5] {
-        // SAFETY: Stable live owner; each immediate field read ends before services.
-        unsafe { (*self.owner).simulation.radius }
+        read_field!(self.owner, simulation.radius)
     }
     fn goals(&self) -> [u32; 6] {
-        // SAFETY: Stable live owner; each immediate field read ends before services.
-        unsafe { (*self.owner).simulation.goal }
+        read_field!(self.owner, simulation.goal)
     }
     fn old_received(&self, at: usize) -> u32 {
         // SAFETY: Source bounds and immediate owner access before any callback.

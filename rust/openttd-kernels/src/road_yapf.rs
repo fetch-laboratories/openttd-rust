@@ -5,7 +5,7 @@
  * See the GNU General Public License for more details. You should have received a copy of the GNU General Public License along with OpenTTD. If not, see <https://www.gnu.org/licenses/old-licenses/gpl-2.0>.
  */
 
-//! Complete road track/depot searches; #121 retains the sole persistent path.
+//! Complete road track/depot searches; the road vehicle controller keeps the only persistent path.
 //! Lookup maps are never iterated; arena identity survives open-node replacement.
 //! Heap ties follow `CBinaryHeapT`, including removal's upward then downward repair.
 #![allow(
@@ -696,7 +696,7 @@ pub unsafe extern "C" fn openttd_rust_road_yapf_depot(
     search.result(INVALID_TRACKDIR, found)
 }
 
-/// Evidence-only entry for the exact heap tie/removal gap absent from save fields.
+/// Heap probe for tie and removal order, which no saved state records.
 /// Spans are initialized, disjoint, live, and at most `isize::MAX`; indices and
 /// membership follow Include/Remove preconditions. Uses the actual search heap.
 #[unsafe(no_mangle)]
