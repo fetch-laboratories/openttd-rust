@@ -44,6 +44,9 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.shared = &GetRustSharedServices(),
 		.storage = &GetRustStorageServices(),
 		.vehicles = &GetRustVehicleServices(),
+		.by_tile = RustBaseStationByTile,
+		.station_id = RustBaseStationID<const BaseStation>,
+		.facilities = RustStationFacilities,
 		.get_station = RustStationGet<Station *>,
 		.check = RustAssertCondition,
 		.engine_if_valid = RustEngineByIDIfValid,
@@ -71,8 +74,8 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.substitute = [](uint8_t type) noexcept { return _airport_mngr.GetSubstituteID(type); },
 		.never_expire = RustNeverExpireAirports,
 		.station_layout = RustStationAirportLayout,
-		.random = RustStationRandomBits,
-		.build_date = RustStationBuildDate,
+		.random = RustStationRandomBits<BaseStation>,
+		.build_date = RustStationBuildDate<BaseStation>,
 		.root = RustSpecSpriteGroup<AirportSpec>,
 		.tile_root = RustSpecSpriteGroup<AirportTileSpec>,
 		.badges = RustSpecBadges<AirportSpec>,
@@ -360,7 +363,13 @@ TownScopeResolver *AirportResolverObject::GetTown()
  */
 AirportResolverObject::AirportResolverObject(TileIndex tile, Station *st, const AirportSpec *spec, uint8_t layout,
 		CallbackID callback, uint32_t param1, uint32_t param2)
-	: ResolverObject(spec->grf_prop.grffile, callback, param1, param2), airport_scope(*this, tile, st, spec, layout)
+	: ResolverObject(
+#ifdef WITH_RUST
+		RustSpecGRFFile(spec),
+#else
+		spec->grf_prop.grffile,
+#endif
+		callback, param1, param2), airport_scope(*this, tile, st, spec, layout)
 {
 #ifdef WITH_RUST
 	this->root_spritegroup = openttd_rust_airport_root(&this->airport_scope.context, &GetAirportResolverServices());

@@ -62,7 +62,7 @@ pub(crate) fn station_by_tile(
     tile: u32,
     s: &crate::newgrf_airport::Services,
 ) -> *mut crate::station::BaseStation {
-    (s.get_station)((s.shared().station_index)(tile))
+    (s.by_tile)(tile)
 }
 /// Original `IsHangar`, retaining its assertion and airport gate before lookup.
 pub(crate) fn is_hangar(tile: u32, s: &crate::newgrf_airport::Services) -> bool {

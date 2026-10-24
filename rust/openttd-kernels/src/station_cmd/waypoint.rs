@@ -576,7 +576,17 @@ impl Ctx<'_> {
         } else if !(self.s.waypoint_available)() {
             return cost.error(self.s.strings.too_many_stations);
         }
-        let specindex = (self.s.allocate_road_spec)(spec, wp);
+        let index = unsafe {
+            crate::newgrf_roadstop::openttd_rust_roadstop_allocate(
+                spec,
+                wp,
+                self.s.roadstop_resolver,
+            )
+        };
+        let specindex = super::SpecIndex {
+            value: index as u8,
+            valid: index >= 0,
+        };
         if !specindex.valid {
             return cost.error(self.s.strings.too_many_specs);
         }
@@ -592,7 +602,14 @@ impl Ctx<'_> {
         let owner = (self.shared.current_company)();
         (self.s.set_station_owner)(wp, owner);
         (self.s.before_add_rect)(ret.0, wp, area, ADD_TRY);
-        (self.s.assign_road_spec)(spec, wp, specindex.value);
+        unsafe {
+            crate::newgrf_roadstop::openttd_rust_roadstop_assign(
+                spec,
+                wp,
+                specindex.value,
+                self.s.roadstop_resolver,
+            );
+        }
         if !spec.is_null() {
             (self.s.road_triggers)(wp, spec);
         }

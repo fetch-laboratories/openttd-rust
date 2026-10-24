@@ -320,7 +320,7 @@ static void SharedRebuildTownTree() noexcept { RebuildTownKdtree(); }
 static void SharedForEachStation(void *context, void (*visit)(void *, const OpenTTDStation *, OpenTTDStationService *, uint16_t)) noexcept
 {
 	for (Station *st : Station::Iterate()) {
-		visit(context, RustStation(st), st->rust_service.get(), st->index.base());
+		visit(context, RustStation(st), st->rust_service.get(), RustBaseStationID(st));
 	}
 }
 
@@ -634,7 +634,6 @@ static void LiveGraphDelete(OpenTTDLinkGraph *graph) noexcept { delete graph; }
 
 static uint16_t LiveGraphStationNode(OpenTTDBaseStation *station, uint8_t cargo) noexcept { return static_cast<Station *>(station)->goods[cargo].node; }
 static OpenTTDLinkGraph *LiveGraphGetIfValid(uint16_t id) noexcept { return LinkGraph::GetIfValid(LinkGraphID(id)); }
-static uint16_t LiveGraphStationID(const OpenTTDBaseStation *station) noexcept { return station->index.base(); }
 const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 {
 	static const OpenTTDLiveGraphServices services{
@@ -645,7 +644,7 @@ const OpenTTDLiveGraphServices &GetRustLiveGraphServices() noexcept
 #endif
 		.get = RustLinkGraphGet,
 		.get_if_valid = LiveGraphGetIfValid,
-		.station_id = LiveGraphStationID,
+		.station_id = RustBaseStationID<const BaseStation>,
 		.owner = LiveGraphOwner,
 		.access = LiveGraphAccess,
 		.station = LiveGraphStation,

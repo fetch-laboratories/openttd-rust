@@ -359,6 +359,63 @@ def check(scenario, run, mode, role, result):
         if line not in run["log"]:
             result["problems"].append(f"{mode}/{role}: missing {line}")
     if scenario["fleet"] == "resolver":
+        # Real-group policy is observed through normal callback/property entries.
+        # Explicit boundary results distinguish empty-vector fallback and clamps.
+        purchases = [
+            line.split()[2:]
+            for line in run["log"]
+            if line.startswith("FLEET resolver-real-purchase ")
+        ]
+        if purchases != [
+            [str(i), str(value)] for i, value in enumerate((17, 101, 211, 211))
+        ]:
+            result["problems"].append(f"{mode}/{role}: real-group purchase fallback")
+        boundaries = (
+            (0, 0, 0),
+            (0, 1, 2),
+            (8, 0, 0),
+            (8, 1, 0),
+            (8, 2, 0),
+            (8, 3, 1),
+            (8, 5, 1),
+            (8, 6, 2),
+            (8, 7, 2),
+            (8, 8, 2),
+            (8, 9, 2),
+        )
+        expected = []
+        for mask in range(4):
+            for state in range(3):
+                moving = state != 1
+                for cap, count, index in boundaries:
+                    value = (
+                        (101 if moving else 211) + index
+                        if mask & (1 if moving else 2)
+                        else 65535
+                    )
+                    expected.append(
+                        list(map(str, (mask, state, cap, count, count, value)))
+                    )
+        selections = [
+            line.split()[2:]
+            for line in run["log"]
+            if line.startswith("FLEET resolver-real-selection ")
+        ]
+        if selections != expected:
+            result["problems"].append(
+                f"{mode}/{role}: real-group cargo/order selection"
+            )
+        restored = [
+            line
+            for line in run["log"]
+            if line.startswith("FLEET resolver-real-restored ")
+        ]
+        if len(restored) != 1 or not restored[0].startswith(
+            "FLEET resolver-real-restored true true "
+        ):
+            result["problems"].append(
+                f"{mode}/{role}: real-group cargo restoration/RNG"
+            )
         if (
             len(
                 [line for line in run["log"] if line.startswith("FLEET resolver-real ")]

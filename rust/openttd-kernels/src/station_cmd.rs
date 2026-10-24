@@ -183,7 +183,6 @@ pub struct CommandServicesTable {
     pub southern_bridge_end: extern "C" fn(u32) -> u32,
     pub train_area: unsafe extern "C" fn(*const BaseStation) -> Area,
     pub rail_spec: extern "C" fn(u32) -> *const RailSpec,
-    pub road_spec: extern "C" fn(u32) -> *const RoadSpec,
     pub links: *const crate::station_service::Links,
     pub bounds: extern "C" fn(*mut BaseStation) -> Bounds,
     pub location: extern "C" fn(*const BaseStation) -> u32,
@@ -259,10 +258,7 @@ pub struct CommandServicesTable {
     pub road_spec_build_cost: extern "C" fn(*const RoadSpec, u8) -> RoadSpecCost,
     pub road_spec_clear_cost: extern "C" fn(*const RoadSpec, u8) -> RoadSpecCost,
     pub stops_available: extern "C" fn(usize) -> bool,
-    pub allocate_road_spec: extern "C" fn(*const RoadSpec, *mut BaseStation) -> SpecIndex,
-    pub assign_road_spec: extern "C" fn(*const RoadSpec, *mut BaseStation, u8),
-    pub deallocate_road_spec: extern "C" fn(*mut BaseStation, u32),
-    pub road_callback: extern "C" fn(*const RoadSpec, u8, u8) -> u16,
+    pub roadstop_resolver: *const crate::newgrf_roadstop::Services,
     pub road_boolean: extern "C" fn(*const RoadSpec, u16) -> bool,
     pub road_triggers: extern "C" fn(*mut BaseStation, *const RoadSpec),
     pub new_stop: extern "C" fn(u32) -> *mut Stop,
@@ -607,7 +603,9 @@ pub unsafe extern "C" fn openttd_rust_station_build_above(
             }
         }
         2 | 3 | 8 => {
-            let spec = (c.s.road_spec)(tile);
+            let spec = unsafe {
+                crate::newgrf_roadstop::openttd_rust_roadstop_spec(tile, c.s.roadstop_resolver)
+            };
             if !spec.is_null() {
                 info = unsafe { (c.s.road_bridge_info)(spec) };
             }
@@ -2362,12 +2360,37 @@ impl Ctx<'_> {
         if !ret.ok() {
             return cost.take(ret);
         }
-        let specindex = (self.s.allocate_road_spec)(spec, st);
+        let index = unsafe {
+            crate::newgrf_roadstop::openttd_rust_roadstop_allocate(
+                spec,
+                st,
+                self.s.roadstop_resolver,
+            )
+        };
+        let specindex = SpecIndex {
+            value: index as u8,
+            valid: index >= 0,
+        };
         if !specindex.valid {
             return cost.error(self.s.strings.too_many_specs);
         }
         if !spec.is_null() && (self.s.road_spec_info)(spec).availability_callback {
-            let cb = (self.s.road_callback)(spec, rt, kind);
+            let cb = unsafe {
+                crate::newgrf_roadstop::openttd_rust_roadstop_callback(
+                    crate::newgrf_callbacks::CBID_STATION_AVAILABILITY,
+                    0,
+                    0,
+                    spec,
+                    std::ptr::null_mut(),
+                    crate::tile_type::INVALID_TILE,
+                    rt,
+                    kind,
+                    0,
+                    std::ptr::null_mut(),
+                    0,
+                    self.s.roadstop_resolver,
+                )
+            };
             if cb != 0xffff && !(self.s.road_boolean)(spec, cb) {
                 return cost.error(0xffff);
             }
@@ -2375,7 +2398,14 @@ impl Ctx<'_> {
         if flags & 1 == 0 {
             return;
         }
-        (self.s.assign_road_spec)(spec, st, specindex.value);
+        unsafe {
+            crate::newgrf_roadstop::openttd_rust_roadstop_assign(
+                spec,
+                st,
+                specindex.value,
+                self.s.roadstop_resolver,
+            );
+        }
         for tile in area.tiles(self.map()) {
             let mut road = if self.may_have_road(tile) {
                 self.road_type(tile, false)
@@ -2571,7 +2601,9 @@ impl Ctx<'_> {
                 return;
             }
         }
-        let spec = (self.s.road_spec)(tile);
+        let spec = unsafe {
+            crate::newgrf_roadstop::openttd_rust_roadstop_spec(tile, self.s.roadstop_resolver)
+        };
         if flags & 1 != 0 {
             if !waypoint {
                 let head = (self.stops().head)(st, truck);
@@ -2618,7 +2650,13 @@ impl Ctx<'_> {
             }
             (self.s.remove_stop_tile_data)(st, tile);
             if specindex as i32 != replacement {
-                (self.s.deallocate_road_spec)(st, specindex);
+                unsafe {
+                    crate::newgrf_roadstop::openttd_rust_roadstop_deallocate(
+                        st,
+                        specindex as u8,
+                        self.s.roadstop_resolver,
+                    );
+                }
             }
             if waypoint {
                 if replacement < 0 {
@@ -4144,7 +4182,6 @@ crate::abi::layouts! {
         southern_bridge_end,
         train_area,
         rail_spec,
-        road_spec,
         links,
         bounds,
         location,
@@ -4214,10 +4251,7 @@ crate::abi::layouts! {
         road_spec_build_cost,
         road_spec_clear_cost,
         stops_available,
-        allocate_road_spec,
-        assign_road_spec,
-        deallocate_road_spec,
-        road_callback,
+        roadstop_resolver,
         road_boolean,
         road_triggers,
         new_stop,

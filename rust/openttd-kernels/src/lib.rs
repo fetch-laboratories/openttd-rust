@@ -45,6 +45,7 @@ mod ground_vehicle;
 mod heightmap;
 mod history;
 mod history_type;
+mod house;
 mod industry_type;
 mod integer;
 mod landscape;
@@ -1428,3 +1429,4 @@ pub mod rail_type;
 pub mod base_bitset_type;
 
 mod newgrf_airport;
+mod newgrf_roadstop;

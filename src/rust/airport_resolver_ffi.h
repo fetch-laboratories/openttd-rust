@@ -17,6 +17,9 @@ struct OpenTTDAirportResolverServices {
 	const OpenTTDSharedServices *shared;
 	const OpenTTDStorageServices *storage;
 	const OpenTTDVehicleServices *vehicles;
+	BaseStation *(*by_tile)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(by_tile);
+	uint16_t (*station_id)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_id);
+	uint8_t (*facilities)(const BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(facilities);
 	Station *(*get_station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get_station);
 	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
 	const OpenTTDEngine *(*engine_if_valid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_if_valid);

@@ -62,7 +62,7 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 	static const OpenTTDStationResolverServices services{
 		.shared = &GetRustSharedServices(),
 		.cargo = CargoStorageServices(),
-		.cargo_owner = [](BaseStation *base, uint8_t cargo) noexcept -> const OpenTTDCargoList * { const auto &ge = Station::From(base)->goods[cargo]; return ge.HasData() ? ge.GetData().cargo.RustOwner() : nullptr; },
+		.cargo_owner = RustStationExistingCargoOwner,
 		.group_count = [](const StationSpec *s) noexcept { return s->grf_prop.spritegroups.size(); },
 		.group_cargo = [](const StationSpec *s, size_t i) noexcept { return s->grf_prop.spritegroups[i].first; },
 		.group = [](const StationSpec *s, uint8_t c) noexcept { return s->grf_prop.GetSpriteGroup(c); },
@@ -74,8 +74,8 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		.axis = RustRailStationAxis,
 		.tile_add = RustTileAdd,
 		.tile_random = RustStationTileRandomBits,
-		.station_random = RustStationRandomBits,
-		.waiting = RustStationWaitingTriggers,
+		.station_random = RustStationRandomBits<BaseStation>,
+		.waiting = RustStationWaitingTriggers<BaseStation>,
 		.set_waiting = RustStationSetWaitingTriggers,
 		.set_random = RustStationSetRandomBits,
 		.cached_cargo = RustStationCachedCargoTriggers,
@@ -96,7 +96,7 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		.terrain = RustTerrainType,
 		.badges = RustSpecBadges<StationSpec>,
 		.translate = OpenTTDCargoTranslation,
-		.build_date = RustStationBuildDate,
+		.build_date = RustStationBuildDate<BaseStation>,
 		.airport_ttd_type = RustAirportTTDType,
 		.identity = [](BaseStation *st, uint8_t i) noexcept { const auto &sm = st->speclist[i]; return OpenTTDStationSpecIdentity{sm.grfid, sm.localidx}; },
 		/* Only shared native ScopeResolver frames are materialized here; Rust
@@ -1028,7 +1028,7 @@ OpenTTDAnimationArea OpenTTDAnimationRailArea(BaseStation *s, uint32_t t, uint8_
 const OpenTTDStationAnimation &GetStationAnimationBinding() noexcept
 {
 	static const auto binding = MakeRustAnimationBinding<StationSpec, BaseStation, int, GetAnimStationCallback>(
-		[](uint32_t t) noexcept -> OpenTTDStationAnimationEntry { const auto *s = RustAnimationRailSpec(t); if (s == nullptr) return {nullptr, nullptr}; return {s, BaseStation::GetByTile(TileIndex{t})}; },
+		[](uint32_t t) noexcept -> OpenTTDStationAnimationEntry { const auto *s = RustAnimationRailSpec(t); if (s == nullptr) return {nullptr, nullptr}; return {s, RustBaseStationByTile(t)}; },
 		[](const StationSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(StationCallbackMask::AnimationSpeed), s->callback_mask.Test(StationCallbackMask::AnimationNextFrame), s->flags.Test(StationSpecFlag::Cb141RandomBits), true}; });
 	return binding;
 }

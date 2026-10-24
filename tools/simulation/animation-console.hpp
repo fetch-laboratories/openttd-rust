@@ -253,7 +253,13 @@ static void AnimationBindingProbe(const char *name, TileIndex tile, Spec *spec, 
 					t = static_cast<StationResolverObject &>(ro).station_scope.tile;
 #endif
 				}
-				else t = static_cast<RoadStopResolverObject &>(ro).roadstop_scope.tile;
+				else {
+#ifdef WITH_RUST
+					t = TileIndex{static_cast<RoadStopResolverObject &>(ro).roadstop_scope.state.tile};
+#else
+					t = static_cast<RoadStopResolverObject &>(ro).roadstop_scope.tile;
+#endif
+				}
 				fmt::print(stderr, "OBJECT animation-visit {} {} {} {} {} {}\n", name, t.base(), ro.callback_param1, ro.callback_param2, _random.state[0], _random.state[1]);
 				if (phase == 3) spec->animation.triggers.Reset();
 			};

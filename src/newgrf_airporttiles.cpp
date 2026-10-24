@@ -240,7 +240,13 @@ static uint32_t GetAirportTileIDAtOffset(TileIndex tile, const Station *st, uint
  */
 AirportTileResolverObject::AirportTileResolverObject(const AirportTileSpec *ats, TileIndex tile, Station *st,
 		CallbackID callback, uint32_t callback_param1, uint32_t callback_param2)
-	: ResolverObject(ats->grf_prop.grffile, callback, callback_param1, callback_param2),
+	: ResolverObject(
+#ifdef WITH_RUST
+		RustSpecGRFFile(ats),
+#else
+		ats->grf_prop.grffile,
+#endif
+		callback, callback_param1, callback_param2),
 		tiles_scope(*this, ats, tile, st),
 #ifdef WITH_RUST
 		airport_scope(*this, tile, st, nullptr, 0)
@@ -332,7 +338,7 @@ const OpenTTDAirportAnimation &GetAirportAnimationBinding() noexcept
 {
 	static const OpenTTDAirportAnimation binding{
 		.info = [](const AirportTileSpec *s) noexcept -> OpenTTDAnimationInfo { return {s->animation.speed, s->animation.frames, s->animation.status == AnimationStatus::Looping, s->callback_mask.Test(AirportTileCallbackMask::AnimationSpeed), s->callback_mask.Test(AirportTileCallbackMask::AnimationNextFrame), HasBit(s->animation_special_flags, 0), true}; },
-		.sound = [](const AirportTileSpec *s, uint8_t sound, uint32_t t) noexcept { PlayTileSound(s->grf_prop.grffile, sound, TileIndex{t}); },
+		.sound = [](const AirportTileSpec *s, uint8_t sound, uint32_t t) noexcept { PlayTileSound(RustSpecGRFFile(s), sound, TileIndex{t}); },
 		.version8 = RustSpecGRFVersion8<AirportTileSpec>,
 		.speed_error = RustSpecCallbackError<AirportTileSpec, AirportTileSpec>,
 	};

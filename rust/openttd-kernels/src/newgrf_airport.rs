@@ -43,6 +43,9 @@ pub struct Services {
     shared: *const crate::services::Services,
     storage: *const crate::newgrf_storage::Services,
     pub(crate) vehicles: *const crate::vehicle::VehicleServices,
+    pub(crate) by_tile: extern "C" fn(u32) -> *mut BaseStation,
+    station_id: extern "C" fn(*const BaseStation) -> u16,
+    facilities: extern "C" fn(*const BaseStation) -> u8,
     pub(crate) get_station: extern "C" fn(u16) -> *mut BaseStation,
     pub(crate) check: extern "C" fn(bool),
     pub(crate) engine_if_valid: extern "C" fn(u16) -> *const crate::vehicle::OpenTTDEngine,
@@ -378,7 +381,7 @@ pub unsafe extern "C" fn openttd_rust_airport_variable(
                     as u32
             }
         }
-        0xf0 => u32::from(unsafe { ((*s.commands().station).facilities)(c.station) }),
+        0xf0 => u32::from((s.facilities)(c.station)),
         0xfa => (s.build_date)(c.station)
             .wrapping_sub(crate::timer_game_common::DAYS_TILL_ORIGINAL_BASE_YEAR)
             .clamp(0, 65535) as u32,
@@ -453,8 +456,7 @@ pub unsafe extern "C" fn openttd_rust_airport_tile_variable(
             };
             let same = (s.shared().tile_type)(tile) == crate::tile_type::MP_STATION
                 && crate::station_map::is_airport(tile, s.shared())
-                && (s.shared().station_index)(tile)
-                    == unsafe { ((*s.commands().station).graphs.station_id)(c.station) };
+                && (s.shared().station_index)(tile) == (s.station_id)(c.station);
             (s.nearby_info)(tile, (s.version)(resolver) >= 8) | (u32::from(same) << 8)
         }
         0x61 => {
@@ -544,7 +546,7 @@ pub(crate) fn tile_callback(
 crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDAirportResolverState" ["probe"] => State { station, spec, tile_spec, tile, layout, town, };
-    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, primary_road_stop, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, base_spec, enabled, min_year, max_year, override_id, manager_grfid, substitute, never_expire, station_layout, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
+    "OpenTTDAirportResolverServices" ["probe"] => Services { shared, storage, vehicles, by_tile, station_id, facilities, get_station, check, engine_if_valid, engine_id, engine_kind, engine_subtype, primary_road_stop, fta_flags, has_hangar, hangar_tile, depot_count, depot_offset, rotated_offset, fta_heading, fta_position, dummy_spec, dummy_fta, fta, base_spec, enabled, min_year, max_year, override_id, manager_grfid, substitute, never_expire, station_layout, random, build_date, root, tile_root, badges, tile_badges, tile_spec, tile_override, tile_local, tile_grfid, tile_has_groups, tile_substitute, belongs, tile_random, nearby, nearby_info, terrain, frame, version, grfid, base_scope, town_scope, evaluate_tile, unhandled, };
 }
 
 #[unsafe(no_mangle)]

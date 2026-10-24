@@ -674,9 +674,7 @@ static const OpenTTDStationServices _rust_station_services = {
 		return BaseStation::GetPoolSize();
 	},
 	.environment = GetRustEnvironmentServices(),
-	.facilities = [](OpenTTDBaseStation *handle) noexcept -> uint8_t {
-		return static_cast<BaseStation *>(handle)->facilities.base();
-	},
+	.facilities = RustStationFacilitiesHandle<OpenTTDBaseStation *>,
 	.in_use = [](OpenTTDBaseStation *handle) noexcept -> bool {
 		return static_cast<BaseStation *>(handle)->IsInUse();
 	},
