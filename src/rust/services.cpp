@@ -40,6 +40,7 @@
 #include "../industry.h"
 #include "../bridge_map.h"
 #include "services_rail.h"
+#include "services_newgrf.h"
 #include "services_road.h"
 #include "../road_map.h"
 #include "../station_map.h"
@@ -83,6 +84,9 @@
 #include "../economy_func.h"
 #include "orders_ffi.h"
 #include "tile_animation_services.h"
+
+/* The native API exposes its existing frame; all scope selection is Rust-owned. */
+ScopeResolver *ResolverObject::GetScope(VarSpriteGroupScope scope, uint8_t relative) { return RustResolverBaseScope(this, scope, relative); }
 
 OpenTTDIndustryBuilder *RustIndustryBuilderState() noexcept { return _industry_builder.owner.get(); }
 

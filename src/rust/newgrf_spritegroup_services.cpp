@@ -193,7 +193,6 @@ const SpriteGroup *ResolverObject::ResolveReal(const RealSpriteGroup &group) con
 {
 	return openttd_rust_resolver_default_real(&GetRustSpriteGroupServices(), &group);
 }
-ScopeResolver *ResolverObject::GetScope(VarSpriteGroupScope scope, uint8_t relative) { return RustResolverBaseScope(this, scope, relative); }
 #include "service_table_check.hpp"
 #include "abi-visit-OpenTTDSpriteGroupServices.hpp"
 #include "abi-visit-OpenTTDGlobalVariableServices.hpp"
