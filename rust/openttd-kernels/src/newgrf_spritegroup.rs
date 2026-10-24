@@ -622,7 +622,7 @@ impl<'a> Invocation<'a> {
                 }
             }
             if result.calculated_result {
-                ResultValue::callback((value & 0x7FFF) as u16)
+                ResultValue::callback(crate::bitmath_func::gb(value, 0, 15) as u16)
             } else {
                 self.resolve(result.group, false)
             }

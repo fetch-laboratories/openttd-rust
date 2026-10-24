@@ -10,6 +10,7 @@
     clippy::cast_possible_truncation,
     clippy::decimal_bitwise_operands
 )]
+use crate::bitmath_func::{gb, sb};
 use crate::rail_type::{RAILTYPE_ELECTRIC, RAILTYPE_MAGLEV, RAILTYPE_MONO, RAILTYPE_RAIL};
 use crate::services::{CalendarYmd, Services as Shared};
 use crate::timer_game_common::{
@@ -65,20 +66,21 @@ pub unsafe extern "C" fn openttd_rust_global_variable(
             0x03 => u32::from((s.climate)()),
             0x06 => u32::from((s.road_side)()) << 4,
             0x09 => u32::from((s.date_fraction)()) * 885,
-            0x0A => (shared.tick_counter)() as u32 & 0xFFFF,
+            0x0A => gb((shared.tick_counter)() as u32, 0, 16),
             0x0B => (2 << 24) | (6 << 20) | (1 << 16) | 1382,
             0x0D => u32::from((s.palette)(file)),
             0x0E => (s.pitch)(file) as u32,
             0x0F => {
-                let normal = u32::from((s.rail_cost)(RAILTYPE_RAIL)) & 0xFF;
+                let mut costs = 0;
+                sb(&mut costs, 0, 8, u32::from((s.rail_cost)(RAILTYPE_RAIL)));
                 let middle = if (s.disable_elrails)() {
                     RAILTYPE_MONO
                 } else {
                     RAILTYPE_ELECTRIC
                 };
-                normal
-                    | (u32::from((s.rail_cost)(middle)) & 0xFF) << 8
-                    | (u32::from((s.rail_cost)(RAILTYPE_MAGLEV)) & 0xFF) << 16
+                sb(&mut costs, 8, 8, u32::from((s.rail_cost)(middle)));
+                sb(&mut costs, 16, 8, u32::from((s.rail_cost)(RAILTYPE_MAGLEV)));
+                costs
             }
             0x11 => 0,
             0x12 => u32::from((s.game_mode)()),

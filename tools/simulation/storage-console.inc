@@ -8,6 +8,7 @@
 #include "newgrf_industrytiles.h"
 #include "newgrf_config.h"
 #include "newgrf_profiling.h"
+#include "rail.h"
 #include <source_location>
 /* Executable native parsed groups, rebuilt for both initial and post-load runs.
  * The normal resolver methods provide results and storage effects; neither
@@ -145,6 +146,8 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 	ResolverObject no_file(nullptr); no_file.root_spritegroup = arithmetic; Require(no_file.ResolveCallback({}) == 0);
 	/* Complete globals, including Action7/9's public shared entry, all dates,
 	 * old/new snow scaling, rail-cost selection and native palette preconditions. */
+	extern RailTypeInfo _railtypes[RAILTYPE_END];
+	Backup<uint16_t> normal_cost(_railtypes[RAILTYPE_RAIL].cost_multiplier, 0x1234), electric_cost(_railtypes[RAILTYPE_ELECTRIC].cost_multiplier, 0x5678), mono_cost(_railtypes[RAILTYPE_MONO].cost_multiplier, 0x9ABC), maglev_cost(_railtypes[RAILTYPE_MAGLEV].cost_multiplier, 0xDEF0);
 	_grfconfig.push_back(std::make_unique<GRFConfig>("common-action2")); _grfconfig.back()->ident.grfid = grf.grfid;
 	for (uint8_t version : {7, 8}) {
 		grf.grf_version = version;
