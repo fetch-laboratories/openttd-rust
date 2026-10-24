@@ -1169,7 +1169,6 @@ static OpenTTDHouseAcceptance RustHouseAcceptance(uint16_t house) noexcept
 	std::copy(std::begin(hs->cargo_acceptance), std::end(hs->cargo_acceptance), result.amounts);
 	return result;
 }
-static const GRFFile *RustHouseGrf(uint16_t house) noexcept { return HouseSpec::Get(house)->grf_prop.grffile; }
 static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 {
 	static const OpenTTDHouseServices services{
@@ -1212,9 +1211,9 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.set_type = [](uint32_t tile, uint16_t house) noexcept { SetHouseType(TileIndex{tile}, house); },
 
 		.delete_inspect = OpenTTDDeleteHouseInspect,
-		.cargo_translation = [](uint16_t house, uint8_t cargo) noexcept -> uint8_t { return OpenTTDCargoTranslation(cargo, RustHouseGrf(house)); },
-		.convert_boolean = [](uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvertBooleanCallback(RustHouseGrf(house), callback, result); },
-		.convert_8bit = [](uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvert8bitBooleanCallback(RustHouseGrf(house), callback, result); },
+		.cargo_translation = RustHouseCargoTranslation,
+		.convert_boolean = RustHouseConvertBoolean,
+		.convert_8bit = RustHouseConvert8bitBoolean,
 
 		.next_near_station = [](Town *t, Station *previous) noexcept -> Station * {
 			auto next = previous == nullptr ? t->stations_near.begin() : t->stations_near.upper_bound(previous);
@@ -3693,7 +3692,7 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		},
 		.rights_events = [](uint16_t id) noexcept { AI::BroadcastNewEvent(new ScriptEventExclusiveTransportRights(_current_company, TownID(id))); Game::NewEvent(new ScriptEventExclusiveTransportRights(_current_company, TownID(id))); },
 		.station_views_dirty = []() noexcept { SetWindowClassesDirty(WC_STATION_VIEW); },
-		.next_station = [](uint32_t from) noexcept -> OpenTTDTownStationCursor { if (Station *st = OpenTTDNextStation(from)) return {.shell = st, .next = st->index.base() + 1U}; return {.shell = nullptr, .next = UINT32_MAX}; },
+		.next_station = [](uint32_t from) noexcept -> OpenTTDTownStationCursor { if (Station *st = OpenTTDNextStation(from)) return {.shell = st, .next = RustBaseStationID(st) + 1U}; return {.shell = nullptr, .next = UINT32_MAX}; },
 		.station_town = RustStationStationTown,
 		.station_owner = RustStationOwnerByte<const BaseStation>,
 		.station_airport = RustStationHasAirport,
@@ -3702,7 +3701,7 @@ const OpenTTDTownCommandServices &GetRustTownCommandServices() noexcept
 		.station_activity_owner = OpenTTDStationActivityOwner,
 		.local_company = RustIsLocalCompany,
 		.bribe_error = []() noexcept { ShowErrorMessage(GetEncodedString(STR_ERROR_BRIBE_FAILED), {}, WL_INFO); },
-		.next_waypoint = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Waypoint *wp : Waypoint::Iterate(from)) return {.next = wp->index.base() + 1U, .town = OpenTTDBaseStationTown(wp)}; return {.next = UINT32_MAX, .town = nullptr}; },
+		.next_waypoint = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Waypoint *wp : Waypoint::Iterate(from)) return {.next = RustBaseStationID(wp) + 1U, .town = OpenTTDBaseStationTown(wp)}; return {.next = UINT32_MAX, .town = nullptr}; },
 		.next_depot = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { for (const Depot *d : Depot::Iterate(from)) return {.next = d->index.base() + 1U, .town = d->town}; return {.next = UINT32_MAX, .town = nullptr}; },
 		.next_industry = [](uint32_t from) noexcept -> OpenTTDTownPoolRelation { if (const Industry *i = OpenTTDNextIndustry(from)) return {.next = i->index.base() + 1U, .town = OpenTTDIndustryTown(i)}; return {.next = UINT32_MAX, .town = nullptr}; },
 		.set_object_town = OpenTTDSetObjectTown,

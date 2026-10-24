@@ -831,6 +831,11 @@ pub unsafe extern "C" fn openttd_rust_station_random_triggers(state: *const Stat
         u32::from((services().waiting)(st))
     }
 }
+/// Canonical existing-goods count used by other feature root selectors.
+/// The station resolver services are installed before synchronous gameplay.
+pub(crate) fn cargo_count(st: *mut BaseStation, cargo: u8) -> u32 {
+    services().count(st, cargo)
+}
 /// Shared `GetEmptyMask` reducer for remaining native callers.
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_station_empty_mask(st: *mut BaseStation) -> u64 {

@@ -76,7 +76,7 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 				case 1: out[0] = DisasterNext<RoadVehicle>(from); break;
 				case 2: out[0] = DisasterNext<Vehicle>(from); break;
 				case 3: out[0] = DisasterNext<Train>(from); break;
-				case 4: { const Station *st = OpenTTDNextStation(static_cast<uint32_t>(from)); out[0] = st == nullptr ? VehicleID::Invalid().base() : st->index.base(); break; }
+				case 4: { const Station *st = OpenTTDNextStation(static_cast<uint32_t>(from)); out[0] = st == nullptr ? VehicleID::Invalid().base() : RustBaseStationID(st); break; }
 				case 5: { const Industry *i = OpenTTDNextIndustry(static_cast<uint32_t>(from)); out[0] = i == nullptr ? VehicleID::Invalid().base() : i->index.base(); break; }
 				case 6: out[0] = DisasterNext<DisasterVehicle>(from); break;
 			}

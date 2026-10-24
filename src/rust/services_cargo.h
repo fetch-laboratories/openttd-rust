@@ -14,6 +14,7 @@
 #include "../newgrf_spritegroup.h"
 #include "../newgrf.h"
 #include "../industrytype.h"
+#include "services_newgrf.h"
 struct OpenTTDIndustrySpecHandle;
 
 /* Keep native types and source observation points. Scaling may draw Random;
@@ -23,12 +24,13 @@ inline uint16_t RustCargoSpecClasses(const CargoSpec *cs) noexcept { return cs->
 inline uint16_t RustCargoClasses(CargoType cargo) noexcept { return RustCargoSpecClasses(CargoSpec::Get(cargo)); }
 inline uint OpenTTDScaleCargo(uint amount, bool town) noexcept { return ScaleByCargoScale(amount, town); }
 inline CargoType OpenTTDCargoTranslation(uint8_t cargo, const GRFFile *grf) noexcept { return GetCargoTranslation(cargo, grf); }
+inline CargoType RustHouseCargoTranslation(uint16_t house, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, RustHouseGrf(house)); }
 inline CargoType RustResolverCargoTranslation(const ResolverObject *resolver, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, resolver->grffile); }
 /* Raw inverse-map reads retain the native file and cargo-index preconditions;
  * they do not apply GetCargoTranslation's version or nullable-file policy. */
 inline uint8_t RustGRFCargoMap(const GRFFile *file, CargoType cargo) noexcept { return file->cargo_map[cargo]; }
 template <typename Spec>
-inline uint8_t RustSpecCargoMap(const Spec *spec, CargoType cargo) noexcept { return RustGRFCargoMap(spec->grf_prop.grffile, cargo); }
+inline uint8_t RustSpecCargoMap(const Spec *spec, CargoType cargo) noexcept { return RustGRFCargoMap(RustSpecGRFFile(spec), cargo); }
 inline CargoType OpenTTDCargoByLabel(CargoLabel label) noexcept { return GetCargoTypeByLabel(label); }
 inline uint OpenTTDMoveGoodsToStation(CargoType cargo, uint amount, Source source, const StationList &stations, Owner exclusivity = INVALID_OWNER) noexcept
 {
@@ -41,7 +43,7 @@ inline bool OpenTTDIsValidCargo(CargoType cargo) noexcept { return IsValidCargoT
 inline CargoType OpenTTDFoodCargo() noexcept { return OpenTTDCargoByLabel(CT_FOOD); }
 inline CargoType OpenTTDMailCargo() noexcept { return OpenTTDCargoByLabel(CT_MAIL); }
 inline CargoType OpenTTDPassengerCargo() noexcept { return OpenTTDCargoByLabel(CT_PASSENGERS); }
-inline CargoType OpenTTDIndustryCargoTranslation(const OpenTTDIndustrySpecHandle *spec, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, reinterpret_cast<const IndustrySpec *>(spec)->grf_prop.grffile); }
-inline CargoType OpenTTDIndustryTileCargoTranslation(const IndustryTileSpec *spec, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, spec->grf_prop.grffile); }
+inline CargoType OpenTTDIndustryCargoTranslation(const OpenTTDIndustrySpecHandle *spec, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, RustSpecGRFFile(reinterpret_cast<const IndustrySpec *>(spec))); }
+inline CargoType OpenTTDIndustryTileCargoTranslation(const IndustryTileSpec *spec, uint8_t cargo) noexcept { return OpenTTDCargoTranslation(cargo, RustSpecGRFFile(spec)); }
 inline bool OpenTTDCargoSpecValid(CargoType cargo) noexcept { return CargoSpec::Get(cargo)->IsValid(); }
 #endif /* RUST_SERVICES_CARGO_H */

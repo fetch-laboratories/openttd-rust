@@ -5,6 +5,8 @@ use std::ffi::c_void;
 pub(crate) const SG_DEFAULT: u8 = crate::cargo_type::NUM_CARGO;
 /// `CargoGRFFileProps::SG_PURCHASE`.
 pub(crate) const SG_PURCHASE: u8 = crate::cargo_type::NUM_CARGO + 1;
+/// `CargoGRFFileProps::SG_DEFAULT_NA`.
+pub(crate) const SG_DEFAULT_NA: u8 = crate::cargo_type::NUM_CARGO + 2;
 /// `FixedGRFFileProps` / `VariableGRFFileProps::GetFirstSpriteGroupOf`, retaining accessor call order.
 pub(crate) fn first_sprite_group_of<const N: usize>(
     indices: [u8; N],
@@ -18,6 +20,3 @@ pub(crate) fn first_sprite_group_of<const N: usize>(
     }
     std::ptr::null()
 }
-
-/// `CargoGRFFileProps::SG_DEFAULT_NA`.
-pub(crate) const SG_DEFAULT_NA: u8 = crate::cargo_type::NUM_CARGO + 2;

@@ -9,13 +9,13 @@
 /* Configuration is immutable during synchronous Action2 evaluation: resolvers
  * mutate PSA/owner state, not specs. Keep live GRF-version reads branch-local. */
 template <typename Spec, typename Obj, typename Extra>
-OpenTTDAnimationBinding<Spec, Obj, Extra> MakeRustAnimationBinding(
+OpenTTDAnimationBinding<Spec, Obj, Extra> MakeRustAnimationBindingDirect(
 	OpenTTDAnimationEntry<Spec, Obj> (*entry)(uint32_t) noexcept,
 	OpenTTDAnimationInfo (*info)(const Spec *) noexcept,
 	uint16_t (*callback)(uint16_t, uint32_t, uint32_t, const Spec *, Obj *, uint32_t, Extra) noexcept) noexcept
 {
 	return {.entry = entry, .info = info, .callback = callback,
-		.sound = [](const Spec *s, uint8_t sound, uint32_t t) noexcept { PlayTileSound(s->grf_prop.grffile, sound, TileIndex{t}); },
+		.sound = [](const Spec *s, uint8_t sound, uint32_t t) noexcept { PlayTileSound(RustSpecGRFFile(s), sound, TileIndex{t}); },
 		.version8 = RustSpecGRFVersion8<Spec>,
 		.speed_error = RustSpecCallbackError<Spec, Spec>};
 }
@@ -25,7 +25,7 @@ OpenTTDAnimationBinding<Spec, Obj, Extra> MakeRustAnimationBinding(
 	OpenTTDAnimationEntry<Spec, Obj> (*entry)(uint32_t) noexcept,
 	OpenTTDAnimationInfo (*info)(const Spec *) noexcept) noexcept
 {
-	return MakeRustAnimationBinding<Spec, Obj, Extra>(entry, info,
+	return MakeRustAnimationBindingDirect<Spec, Obj, Extra>(entry, info,
 		[](uint16_t cb, uint32_t a, uint32_t b, const Spec *s, Obj *o, uint32_t t, Extra extra) noexcept { return Callback(static_cast<CallbackID>(cb), a, b, s, o, TileIndex{t}, extra); });
 }
 #endif /* RUST_ANIMATION_BINDING_HPP */
