@@ -5,6 +5,188 @@
 #include "newgrf_airport.h"
 #include "industry.h"
 #include "industrytype.h"
+#include "newgrf_industrytiles.h"
+#include "newgrf_config.h"
+#include "newgrf_profiling.h"
+#include "rail.h"
+#include "rev.h"
+#include <source_location>
+/* Executable native parsed groups, rebuilt for both initial and post-load runs.
+ * The normal resolver methods provide results and storage effects; neither
+ * implementation is replaced by a tracing evaluator. */
+static void CommonAction2(Industry *industry, GRFFile &grf)
+{
+	auto Require = [](bool good, const std::source_location line = std::source_location::current()) { if (!good) { fmt::print(stderr, "STORAGE assertion {}\n", line.line()); std::abort(); } };
+	Require(SpriteGroup::CanAllocateItem(32));
+	std::array<int32_t, 256> saved;
+	for (uint i = 0; i < saved.size(); ++i) saved[i] = industry->psa->GetValue(i);
+	std::vector<std::unique_ptr<SpriteGroup>> nodes;
+	auto Keep = [&]<typename T>(T *g) { nodes.emplace_back(g); return g; };
+	auto Adjust = [](uint8_t variable, DeterministicSpriteGroupAdjustOperation operation = DSGA_OP_RST, uint32_t mask = UINT32_MAX, uint8_t parameter = 0) {
+		DeterministicSpriteGroupAdjust a; a.variable = variable; a.operation = operation; a.and_mask = mask; a.parameter = parameter; return a;
+	};
+	auto Det = [&](DeterministicSpriteGroupSize size = DSG_SIZE_DWORD, VarSpriteGroupScope scope = VSG_SCOPE_SELF) {
+		auto *g = Keep(new DeterministicSpriteGroup()); g->size = size; g->var_scope = scope; g->default_result.calculated_result = true; return g;
+	};
+	IndustriesResolverObject ro(industry->location.tile, industry, industry->type);
+	ro.grffile = &grf;
+	int32_t saved_register100 = ro.GetRegister(0x100);
+	ro.callback_param1 = 0x8005; ro.callback_param2 = 9;
+	auto *procedure = Det();
+	procedure->adjusts = {Adjust(0x10), Adjust(0x1A, DSGA_OP_STO, 14), Adjust(0x1A, DSGA_OP_STOP, 15)};
+	auto *outer = Det();
+	auto call = Adjust(0x7E, DSGA_OP_ADD); call.subroutine = procedure;
+	outer->adjusts = {Adjust(0x18), call, Adjust(0x7B, DSGA_OP_RST, UINT32_MAX, 0x7D), Adjust(0x1C, DSGA_OP_ADD), Adjust(0x1A, DSGA_OP_STO, 0x100)};
+	ro.root_spritegroup = outer;
+	std::array<int32_t, 1> regs{-7};
+	outer->nfo_line = 417;
+	_newgrf_profilers.emplace_back(&grf); _newgrf_profilers.back().Start();
+	Require(ro.ResolveCallback(regs) == 10 && regs[0] == 0x1000A && ro.last_value == 0x1000A && ro.GetRegister(14) == 0x8005 && industry->psa->GetValue(15) == 0x8005);
+	const auto &profile = _newgrf_profilers.back();
+	Require(profile.calls.size() == 1 && profile.calls[0].root_sprite == 417 && profile.calls[0].result == 10 && profile.calls[0].subs == 1);
+	_newgrf_profilers.back().Abort(); _newgrf_profilers.pop_back();
+	/* Nested static Resolve shares registers/last; DoResolve alone clears them. */
+	auto *read = Det(); read->adjusts = {Adjust(0x7D, DSGA_OP_RST, UINT32_MAX, 14)};
+	Require(std::get<CallbackResult>(SpriteGroup::Resolve(read, ro, false)) == 5 && ro.last_value == 0x8005);
+	ro.root_spritegroup = read; Require(ro.ResolveCallback({}) == 0 && ro.GetRegister(14) == 0);
+	/* Unavailable variable uses error_group, including the null alternative. */
+	auto *error = Keep(new CallbackResultSpriteGroup(417));
+	auto *missing = Det(); missing->adjusts = {Adjust(0xFF)}; missing->error_group = error;
+	ro.root_spritegroup = missing; Require(ro.ResolveCallback({}) == 417);
+	missing->error_group = nullptr; Require(ro.ResolveCallback({}) == CALLBACK_FAILED);
+	auto *town_storage = Det(); town_storage->adjusts = {Adjust(0x7C)}; town_storage->error_group = error;
+	TownResolverObject absent_town(&grf, nullptr, true); absent_town.root_spritegroup = town_storage;
+	Require(absent_town.ResolveCallback({}) == 417);
+	/* Linear and >4 lower_bound paths: inclusive ends, gaps and default. */
+	auto *ranges = Det(); ranges->adjusts = {Adjust(0x10)}; ranges->default_result = {false, error};
+	uint64_t digest = 0;
+	for (uint count : {4U, 5U}) {
+		ranges->ranges.clear();
+		for (uint i = 0; i < count; ++i) ranges->ranges.push_back({{false, Keep(new CallbackResultSpriteGroup(100 + i))}, i * 3, i * 3 + 1});
+		for (uint value = 0; value <= count * 3; ++value) {
+			ro.callback_param1 = value; ro.root_spritegroup = ranges;
+			uint16_t result = ro.ResolveCallback({});
+			Require(result == (value / 3 < count && value % 3 <= 1 ? 100 + value / 3 : 417));
+			digest = digest * 31337 + result;
+		}
+	}
+	/* All arithmetic operations/types at each width, including zero division,
+	 * signed promotions, full-width wrapping and masked shift/rotate counts.
+	 * Native signed MIN/-1 division overflow is undefined and excluded. */
+	auto *arithmetic = Det();
+	for (auto size : {DSG_SIZE_BYTE, DSG_SIZE_WORD, DSG_SIZE_DWORD}) {
+		arithmetic->size = size;
+		uint32_t mask = size == DSG_SIZE_BYTE ? UINT8_MAX : size == DSG_SIZE_WORD ? UINT16_MAX : UINT32_MAX;
+		for (uint type = DSGA_TYPE_NONE; type <= DSGA_TYPE_MOD; ++type) {
+			for (uint op = DSGA_OP_ADD; op <= DSGA_OP_SAR; ++op) {
+				for (auto [last, value] : std::array<std::pair<uint32_t, uint32_t>, 7>{{{0x7F, 0x80}, {UINT32_MAX, 0}, {0x80000000, 0xFFFFFFFD}, {123, 31}, {0xFFFF, 0x1001}, {mask >> 1, 1}, {(mask >> 1) + 1, 3}}}) {
+					ro.callback_param1 = value; ro.callback_param2 = last;
+					auto a = Adjust(0x10, static_cast<DeterministicSpriteGroupAdjustOperation>(op), mask);
+					a.type = static_cast<DeterministicSpriteGroupAdjustType>(type); a.add_val = 127; a.divmod_val = 3;
+					arithmetic->adjusts = {Adjust(0x18), a}; ro.root_spritegroup = arithmetic;
+					digest = digest * 31337 + ro.ResolveCallback({}) + ro.last_value;
+				}
+			}
+		}
+	}
+	ro.callback_param1 = UINT32_MAX; auto shifted = Adjust(0x10); shifted.shift_num = 31;
+	arithmetic->size = DSG_SIZE_DWORD; arithmetic->adjusts = {shifted}; ro.root_spritegroup = arithmetic; Require(ro.ResolveCallback({}) == 1);
+	/* Callback-only register copying and all terminal alternatives, including
+	 * real loaded/loading fallback and null. */
+	auto *sprite = Keep(new ResultSpriteGroup(17, 1));
+	auto *layout = Keep(new TileLayoutSpriteGroup());
+	auto *production = Keep(new IndustryProductionSpriteGroup());
+	auto *real = Keep(new RealSpriteGroup());
+	ResolverObject base(&grf); base.root_spritegroup = real;
+	Require(base.Resolve<ResultSpriteGroup>() == nullptr);
+	real->loading = {sprite}; Require(base.Resolve<ResultSpriteGroup>() == sprite);
+	real->loaded = {layout}; Require(base.Resolve<TileLayoutSpriteGroup>() == layout);
+	real->loaded = {production}; Require(base.Resolve<IndustryProductionSpriteGroup>() == production);
+	base.root_spritegroup = sprite; regs[0] = -77;
+	Require(base.ResolveCallback(regs) == CALLBACK_FAILED && regs[0] == -77);
+	/* ANY/ALL, zero-trigger ALL, scope OR masks, result indexing and no
+	 * RNG draws. Town parent scopes have no random bits; industry SELF does. */
+	auto *random = Keep(new RandomizedSpriteGroup()); random->var_scope = VSG_SCOPE_SELF; random->lowest_randbit = 2; random->triggers = 3;
+	random->groups = {Keep(new CallbackResultSpriteGroup(200)), Keep(new CallbackResultSpriteGroup(201)), Keep(new CallbackResultSpriteGroup(202)), Keep(new CallbackResultSpriteGroup(203))};
+	/* Use an actual industry resolver for defined self/parent scopes even if
+	 * the industry's rectangular origin is not one of its industry tiles. */
+	struct TriggerResolver : IndustriesResolverObject {
+		using IndustriesResolverObject::IndustriesResolverObject;
+		void Waiting(uint32_t v) { this->waiting_random_triggers = v; }
+		uint32_t Used() const { return this->used_random_triggers; }
+	} trigger(industry->location.tile, industry, industry->type, 0, CBID_RANDOM_TRIGGER);
+	trigger.grffile = &grf; trigger.root_spritegroup = random;
+	Backup<uint16_t> random_bits(industry->random);
+	for (uint16_t bits : {0, 4, 8, 12, 0xFFFF}) {
+		industry->random = bits;
+		Require(trigger.ResolveCallback({}) == 200 + ((bits & 12) >> 2));
+	}
+	std::array<uint32_t, 4> rng{_random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1]};
+	for (auto mode : {RSG_CMP_ANY, RSG_CMP_ALL}) {
+		random->cmp_mode = mode;
+		for (uint waiting : {0U, 1U, 3U}) {
+			trigger.Waiting(waiting); trigger.ResolveRerandomisation();
+			bool matched = mode == RSG_CMP_ANY ? waiting != 0 : waiting == 3;
+			Require(trigger.Used() == (matched ? waiting : 0) && trigger.GetReseedSum() == (matched ? 12U : 0U));
+		}
+	}
+	random->cmp_mode = RSG_CMP_ALL; random->triggers = 0; trigger.Waiting(0);
+	trigger.ResolveRerandomisation(); Require(trigger.Used() == 0 && trigger.reseed[VSG_SCOPE_SELF] == 12);
+	random->lowest_randbit = 6;
+	SpriteGroup::Resolve(random, trigger, false); Require(trigger.reseed[VSG_SCOPE_SELF] == 204);
+	random->var_scope = VSG_SCOPE_PARENT; random->lowest_randbit = 8;
+	SpriteGroup::Resolve(random, trigger, false); Require(trigger.reseed[VSG_SCOPE_SELF] == 204 && trigger.reseed[VSG_SCOPE_PARENT] == 768 && trigger.GetReseedSum() == 972);
+	auto *seed_procedure = Det(); auto seed_call = Adjust(0x7E); seed_call.subroutine = random; seed_procedure->adjusts = {seed_call};
+	trigger.root_spritegroup = seed_procedure;
+	Require(trigger.ResolveCallback({}) == 200 && trigger.reseed[VSG_SCOPE_SELF] == 0 && trigger.reseed[VSG_SCOPE_PARENT] == 768);
+	Require(_random.state[0] == rng[0] && _random.state[1] == rng[1] && _interactive_random.state[0] == rng[2] && _interactive_random.state[1] == rng[3]);
+	/* Procedure alternatives and callback failure are distinct from monostate. */
+	auto non_callback = Adjust(0x7E); non_callback.subroutine = sprite;
+	arithmetic->size = DSG_SIZE_DWORD; arithmetic->adjusts = {non_callback}; base.root_spritegroup = arithmetic;
+	Require(base.ResolveCallback({}) == 0x7FFF && base.last_value == UINT16_MAX);
+	non_callback.subroutine = nullptr; arithmetic->adjusts = {non_callback}; Require(base.ResolveCallback({}) == 0x7FFF);
+	base.root_spritegroup = Keep(new CallbackResultSpriteGroup(CALLBACK_FAILED)); regs[0] = -77;
+	Require(base.ResolveCallback(regs) == CALLBACK_FAILED && regs[0] == 0);
+	grf.param = {0xFEDCBA98}; arithmetic->adjusts = {Adjust(0x7F)}; base.root_spritegroup = arithmetic;
+	Require(base.ResolveCallback({}) == 0x3A98 && base.last_value == 0xFEDCBA98);
+	ResolverObject no_file(nullptr); no_file.root_spritegroup = arithmetic; Require(no_file.ResolveCallback({}) == 0);
+	/* Complete globals, including Action7/9's public shared entry, all dates,
+	 * old/new snow scaling, rail-cost selection and native palette preconditions. */
+	extern RailTypeInfo _railtypes[RAILTYPE_END];
+	Backup<uint16_t> normal_cost(_railtypes[RAILTYPE_RAIL].cost_multiplier, 0x1234), electric_cost(_railtypes[RAILTYPE_ELECTRIC].cost_multiplier, 0x5678), mono_cost(_railtypes[RAILTYPE_MONO].cost_multiplier, 0x9ABC), maglev_cost(_railtypes[RAILTYPE_MAGLEV].cost_multiplier, 0xDEF0);
+	_grfconfig.push_back(std::make_unique<GRFConfig>("common-action2")); _grfconfig.back()->ident.grfid = grf.grfid;
+	for (uint8_t version : {7, 8}) {
+		grf.grf_version = version;
+		for (uint8_t climate : {0, 1, 2, 3}) {
+			Backup<LandscapeType> landscape(_settings_game.game_creation.landscape, static_cast<LandscapeType>(climate));
+			Backup<uint> width(grf.traininfo_vehicle_width, climate & 1 ? 32 : 29);
+			Backup<int> pitch(grf.traininfo_vehicle_pitch, climate & 1 ? -12 : 255);
+			Backup<bool> elrails(_settings_game.vehicle.disable_elrails, (climate & 1) != 0);
+			Backup<uint8_t> road_side(_settings_game.vehicle.road_side, climate & 1);
+			_grfconfig.back()->palette = (climate & 1) | GRFP_GRF_ANY | GRFP_BLT_32BPP;
+			for (int32_t year : {0, 1900, 1920, 2000, 2090, 2400}) {
+				Backup<TimerGameCalendar::Year> current_year(TimerGameCalendar::year, TimerGameCalendar::Year{year});
+				Backup<TimerGameCalendar::Date> date(TimerGameCalendar::date, TimerGameCalendar::ConvertYMDToDate(TimerGameCalendar::Year{year}, 1, 28));
+				for (uint8_t variable : {0x00, 0x01, 0x02, 0x03, 0x06, 0x09, 0x0A, 0x0B, 0x0D, 0x0E, 0x0F, 0x11, 0x12, 0x1A, 0x1B, 0x1D, 0x1E, 0x20, 0x22, 0x23, 0x24}) {
+					uint32_t value = 0; Require(GetGlobalVariable(variable, &value, &grf));
+					arithmetic->size = DSG_SIZE_DWORD; arithmetic->adjusts = {Adjust(variable)}; base.root_spritegroup = arithmetic;
+					Require(base.ResolveCallback({}) == (value & 0x7FFF) && base.last_value == value);
+					digest = digest * 31337 + value;
+				}
+				date.Restore(); current_year.Restore();
+			}
+			road_side.Restore(); elrails.Restore(); pitch.Restore(); width.Restore(); landscape.Restore();
+		}
+	}
+	_grfconfig.pop_back();
+	uint32_t version; Require(GetGlobalVariable(0x21, &version, &grf) && version == _openttd_newgrf_version);
+	arithmetic->adjusts = {Adjust(0x21)}; Require(base.ResolveCallback({}) == (version & 0x7FFF) && base.last_value == version);
+	uint32_t unknown = 417; Require(!GetGlobalVariable(0xFF, &unknown, &grf) && unknown == 417);
+	for (uint i = 0; i < saved.size(); ++i) industry->psa->StoreValue(i, saved[i]);
+	ro.SetRegister(0x100, saved_register100);
+	maglev_cost.Restore(); mono_cost.Restore(); electric_cost.Restore(); normal_cost.Restore(); random_bits.Restore();
+	fmt::print(stderr, "STORAGE action2 nested ranges arithmetic terminals reseed globals {}\n", digest);
+}
 static bool StorageScenario(std::span<std::string_view> args)
 {
 	auto Require = [](bool good) { if (!good) std::abort(); };
@@ -46,6 +228,7 @@ static bool StorageScenario(std::span<std::string_view> args)
 		Require(industry->psa != nullptr && ind.GetVariable(0x7C, 15, available) == static_cast<uint32_t>(-393) && station->airport.psa != nullptr && station->airport.psa->GetValue(255) == 393);
 		Require(industry->psa->feature == GSF_INDUSTRIES && industry->psa->tile == industry->location.tile && station->airport.psa->feature == GSF_AIRPORTS && station->airport.psa->tile == station->airport.tile);
 		for (auto *psa : town->psa_list) Require(psa->feature == GSF_FAKE_TOWNS && psa->tile == town->xy);
+		CommonAction2(industry, grf);
 		fmt::print(stderr, "STORAGE reloaded true\n");
 		return true;
 	}
@@ -96,6 +279,7 @@ static bool StorageScenario(std::span<std::string_view> args)
 	auto *pending = new PersistentStorage(0, GSF_INVALID, TileIndex{}); auto id = pending->index; pending->StoreValue(0, 1); delete pending;
 	Require(PersistentStorage::CanAllocateItem());
 	auto *reused = new PersistentStorage(0, GSF_INVALID, TileIndex{}); Require(reused->index == id); delete reused;
+	CommonAction2(industry, grf);
 	/* Real PSAC saving restores temporary payloads; the next switch still visits them. */
 	writable.StorePSA(0, 4); ind.StorePSA(15, 5); airport.StorePSA(255, 6);
 	Require(args.size() == 3 && SaveOrLoad(args[2], SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false) == SL_OK);

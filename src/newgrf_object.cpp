@@ -713,7 +713,6 @@ const OpenTTDObjectQueryServices &GetRustObjectQueryServices() noexcept
 		.terrain = RustTerrainType,
 		.town_zone = RustTownRadiusGroup,
 		.badges = RustSpecBadges<ObjectSpec>,
-		.register_100 = RustResolverRegister100,
 		.grfid = RustResolverGRFFileID,
 		.version8 = RustResolverGRFVersion8,
 		.override_id = [](uint16_t id, uint32_t grfid) noexcept { return _object_mngr.GetID(id, grfid); },

@@ -5,6 +5,12 @@
 #include "../industry.h"
 #include "../newgrf_industrytiles.h"
 #include "services_ffi.h"
+#include "../industry_map.h"
+inline void RustIndustryTileRandomCheck([[maybe_unused]] const OpenTTDIndustryResolverContext *context) noexcept
+{
+	assert(context->industry != nullptr && IsValidTile(TileIndex(context->tile)));
+	assert(context->id == IndustryID::Invalid().base() || IsTileType(TileIndex(context->tile), MP_INDUSTRY));
+}
 template <typename ID> inline Industry *RustIndustryByID(ID id) noexcept { return Industry::Get(id); }
 inline Industry *RustIndustryByTile(uint32_t tile) noexcept { return Industry::GetByTile(TileIndex{tile}); }
 inline Industry *OpenTTDNextIndustry(uint32_t from) noexcept { auto range = Industry::Iterate(from); return range.empty() ? nullptr : *range.begin(); }

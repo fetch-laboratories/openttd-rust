@@ -423,7 +423,6 @@ pub struct QueryServices {
     pub terrain: unsafe extern "C" fn(u32) -> u32,
     pub town_zone: unsafe extern "C" fn(*const TownHandle, u32) -> HouseZone,
     pub badges: unsafe extern "C" fn(*const Resolver, *const Spec, u32) -> u32,
-    pub register_100: unsafe extern "C" fn(*const Resolver) -> i32,
     pub grfid: unsafe extern "C" fn(*const Resolver) -> u32,
     pub version8: unsafe extern "C" fn(*const Resolver) -> bool,
     pub override_id: unsafe extern "C" fn(u16, u32) -> u16,
@@ -557,18 +556,11 @@ impl<'a> World<'a> {
         }
         best
     }
-    fn count_distance(
-        &self,
-        ro: *const Resolver,
-        local_id: u8,
-        grfid: u32,
-        tile: u32,
-        current: *mut Object,
-    ) -> u32 {
+    fn count_distance(&self, local_id: u8, grfid: u32, tile: u32, current: *mut Object) -> u32 {
         let q = self.query();
         // SAFETY: resolver and override manager are native and remain live.
         let kind = unsafe {
-            match (q.register_100)(ro) as u32 {
+            match crate::newgrf_storage::openttd_rust_storage_temp_get(0x100) as u32 {
                 0 => u16::from(local_id),
                 u32::MAX => (q.override_id)(u16::from(local_id), grfid),
                 other => (q.override_id)(u16::from(local_id), other),
@@ -655,7 +647,7 @@ impl<'a> World<'a> {
                     },
                     (q.version8)(ro),
                 ),
-                0x64 => self.count_distance(ro, parameter as u8, (q.grfid)(ro), tile, obj),
+                0x64 => self.count_distance(parameter as u8, (q.grfid)(ro), tile, obj),
                 0x7a => (q.badges)(ro, spec, parameter),
                 _ => self.unhandled(variable, available),
             }
@@ -2578,7 +2570,6 @@ crate::abi::layouts! {
         terrain,
         town_zone,
         badges,
-        register_100,
         grfid,
         version8,
         override_id,

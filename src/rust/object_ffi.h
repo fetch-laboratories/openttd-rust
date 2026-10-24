@@ -68,7 +68,6 @@ struct OpenTTDObjectQueryServices {
 	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);
 	HouseZone (*town_zone)(const Town *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_zone);
 	uint32_t (*badges)(const ResolverObject *, const ObjectSpec *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
-	int32_t (*register_100)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(register_100);
 	uint32_t (*grfid)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(grfid);
 	bool (*version8)(const ResolverObject *) noexcept OPENTTD_SERVICE_DEFAULT(version8);
 	uint16_t (*override_id)(uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(override_id);

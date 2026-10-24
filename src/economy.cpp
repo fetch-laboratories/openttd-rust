@@ -61,6 +61,7 @@
 #include "table/pricebase.h"
 
 #ifdef WITH_RUST
+#include "rust/services_industry.h"
 #include "rust/company_adapter.h"
 #include "rust/tile_owner_services.h"
 #include "rust/vehicle_services.h"
@@ -979,7 +980,7 @@ void SetPriceBaseMultiplier(Price price, int factor)
 void StartupIndustryDailyChanges(bool init_counter)
 {
 #ifdef WITH_RUST
-	openttd_rust_industry_daily_start(_industry_builder.owner.get(), Map::LogX() + Map::LogY(), init_counter);
+	openttd_rust_industry_daily_start(RustIndustryBuilderState(), Map::LogX() + Map::LogY(), init_counter);
 #else
 	uint map_size = Map::LogX() + Map::LogY();
 	/* After getting map size, it needs to be scaled appropriately and divided by 31,

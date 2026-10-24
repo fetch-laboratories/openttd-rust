@@ -12,12 +12,17 @@
 #include "newgrf_spritegroup.h"
 #include "newgrf_profiling.h"
 #include "core/pool_func.hpp"
+#ifdef WITH_RUST
+#include "rust/newgrf_spritegroup_ffi.h"
+#include "rust/newgrf_storage_ffi.h"
+#endif
 
 #include "safeguards.h"
 
 SpriteGroupPool _spritegroup_pool("SpriteGroup");
 INSTANTIATE_POOL_METHODS(SpriteGroup)
 
+#ifndef WITH_RUST
 /* static */ TemporaryStorageArray<int32_t, 0x110> ResolverObject::temp_store;
 
 
@@ -278,6 +283,8 @@ static bool RangeHighComparator(const DeterministicSpriteGroupRange &range, uint
 	 */
 	return SpriteGroup::Resolve(object.ResolveReal(*this), object, false);
 }
+
+#endif
 
 /**
  * Process registers and the construction stage into the sprite layout.

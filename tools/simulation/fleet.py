@@ -206,6 +206,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             saves[role] = run["snapshots"][-1]
             if resolver:
                 check_override_order(run, "capture", role, result)
+                check_property_boundaries(run, "capture", role, result)
                 from .disasters import rows
 
                 marker = next(
@@ -285,6 +286,49 @@ def check_override_order(run, mode, role, result):
         "FLEET resolver-override-restored true true "
     ):
         result["problems"].append(f"{mode}/{role}: wagon override restoration/RNG")
+
+
+def check_property_boundaries(run, mode, role, result):
+    # Explicit native callback-36 results; failure preserves the full int default.
+    expected = []
+    for value, signed in (
+        (0, 0),
+        (1, 1),
+        (0x3FFE, 16382),
+        (0x3FFF, 16383),
+        (0x4000, -16384),
+        (0x4001, -16383),
+        (0x7FFE, -2),
+        (0x7FFF, -1),
+        (0xFFFF, None),
+    ):
+        for fallback in (-(2**31), -17, 0, 17, 2**31 - 1):
+            for is_signed in (False, True):
+                output = fallback if signed is None else signed if is_signed else value
+                expected.append(
+                    list(
+                        map(
+                            str,
+                            (value, fallback, str(is_signed).lower(), output, output),
+                        )
+                    )
+                )
+    actual = [
+        line.split()[2:]
+        for line in run["log"]
+        if line.startswith("FLEET resolver-property-boundary ")
+    ]
+    if actual != expected:
+        result["problems"].append(f"{mode}/{role}: signed property boundary/fallback")
+    restored = [
+        line
+        for line in run["log"]
+        if line.startswith("FLEET resolver-property-restored ")
+    ]
+    if len(restored) != 1 or not restored[0].startswith(
+        "FLEET resolver-property-restored true true "
+    ):
+        result["problems"].append(f"{mode}/{role}: property restoration/RNG")
 
 
 def check(scenario, run, mode, role, result):
@@ -388,6 +432,7 @@ def check(scenario, run, mode, role, result):
             result["problems"].append(f"{mode}/{role}: missing {line}")
     if scenario["fleet"] == "resolver":
         check_override_order(run, mode, role, result)
+        check_property_boundaries(run, mode, role, result)
         # Real-group policy is observed through normal callback/property entries.
         # Explicit boundary results distinguish empty-vector fallback and clamps.
         purchases = [
