@@ -3,12 +3,12 @@
 #include "newgrf_airporttiles.h"
 static void StationAirportFixture(TileIndex origin, DoCommandFlags test, DoCommandFlags exec, bool reloaded = false)
 {
-	GRFFile file; file.grfid = 0x41503418; file.grf_version = 8;
+	GRFFile file; file.badge_list = {BadgeID{0}, BadgeID{1}}; file.grfid = 0x41503418; file.grf_version = 8;
 	auto *spec = AirportSpec::GetWithoutOverride(AT_SMALL); AirportSpec saved = *spec;
-	spec->grf_prop.grffile = &file; spec->grf_prop.grfid = file.grfid; spec->grf_prop.local_id = 41;
+	spec->badges = {BadgeID{0}}; spec->grf_prop.grffile = &file; spec->grf_prop.grfid = file.grfid; spec->grf_prop.local_id = 41;
 	auto gfx = spec->layouts[0].tiles.front().gfx;
 	auto *ats = const_cast<AirportTileSpec *>(AirportTileSpec::Get(gfx)); AirportTileSpec saved_tile = *ats;
-	ats->grf_prop.grffile = &file; ats->grf_prop.grfid = file.grfid; ats->grf_prop.local_id = 18;
+	ats->badges = {BadgeID{1}}; ats->grf_prop.grffile = &file; ats->grf_prop.grfid = file.grfid; ats->grf_prop.local_id = 18;
 	StationNeed(SpriteGroup::CanAllocateItem(6), __LINE__);
 	auto *result = new CallbackResultSpriteGroup(3), *other = new CallbackResultSpriteGroup(4);
 	auto *parent = new DeterministicSpriteGroup(); parent->var_scope = VSG_SCOPE_PARENT; parent->size = DSG_SIZE_DWORD;

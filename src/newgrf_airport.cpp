@@ -50,7 +50,6 @@ const OpenTTDAirportResolverServices &GetAirportResolverServices() noexcept
 		.get_station = RustStationGet<Station *>,
 		.check = RustAssertCondition,
 		.engine_if_valid = RustEngineByIDIfValid,
-		.engine_id = RustEngineID,
 		.engine_kind = RustEngineType,
 		.engine_subtype = RustEngineAircraftSubtype,
 		.primary_road_stop = RustStationPrimaryRoadStop,

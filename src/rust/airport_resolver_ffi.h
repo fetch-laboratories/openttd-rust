@@ -23,7 +23,6 @@ struct OpenTTDAirportResolverServices {
 	Station *(*get_station)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(get_station);
 	void (*check)(bool) noexcept OPENTTD_SERVICE_DEFAULT(check);
 	const OpenTTDEngine *(*engine_if_valid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(engine_if_valid);
-	uint16_t (*engine_id)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_id);
 	VehicleType (*engine_kind)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_kind);
 	uint8_t (*engine_subtype)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(engine_subtype);
 	RoadStop *(*primary_road_stop)(const OpenTTDVehicle *, const Station *) noexcept OPENTTD_SERVICE_DEFAULT(primary_road_stop);
