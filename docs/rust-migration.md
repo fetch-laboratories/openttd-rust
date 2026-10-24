@@ -2295,3 +2295,11 @@ map/cargo/save/register/ordered effects and both RNG streams compare in both mod
 Transient groups are reconstructed after native load; arbitrary external-GRF,
 historical and GUI paths remain #156. Commands, accepted cost, fixing reviews
 and root's final current-base combination evidence are linked from #411.
+
+### Airport and airport-tile NewGRF runtime (#418, draft)
+
+The selected owner moves stack contexts, scope selection, variables, random bits,
+callback invocation and live airport selection/eligibility into Rust. Native
+spec/layout storage, loading, rendering and text remain. Implementation and
+focused station-fixture evidence are in progress; this entry claims no completed
+migration or validation yet.
