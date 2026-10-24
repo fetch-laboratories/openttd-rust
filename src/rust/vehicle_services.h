@@ -25,6 +25,7 @@ inline uint16_t RustVehicleCallback(CallbackID callback, uint32_t param1, uint32
 uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept;
 OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept;
 bool RustTrainIsEngine(const Vehicle *v) noexcept;
+Train *RustTrainGetIfValid(uint32_t id) noexcept;
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
 uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept;
@@ -141,6 +142,12 @@ inline uint8_t RustVehicleBreakdownCounter(const Vehicle *v) noexcept { return v
 inline int64_t RustVehicleValue(const Vehicle *v) noexcept { return v->value.base(); }
 inline uint16_t RustEngineReliability(const Engine *e) noexcept { return e->reliability; }
 inline uint32_t RustVehicleIndexOpaque(const void *v) noexcept { return static_cast<const Vehicle *>(v)->index.base(); }
+/** The legacy company sentinel is UINT32_MAX, distinct from VehicleID::Invalid(). */
+inline uint32_t RustVehiclePreviousID(const Vehicle *v) noexcept
+{
+	const Vehicle *previous = RustVehiclePrevious(v);
+	return previous == nullptr ? UINT32_MAX : RustVehicleIndexOpaque(previous);
+}
 inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->engine_type.base(); }
 inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return reinterpret_cast<const OpenTTDEngine *>(e); }
 inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return reinterpret_cast<const Engine *>(e); }
