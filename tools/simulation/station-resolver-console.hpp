@@ -18,7 +18,7 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 		StationNeed(Command<CMD_BUILD_RAIL_WAYPOINT>::Do(exec, waytile, AXIS_X, 1, 1, STAT_CLASS_WAYP, 0, StationID::Invalid(), false).Succeeded(), __LINE__);
 		wp = Waypoint::GetByTile(waytile); wp->name = "Resolver waypoint";
 		StationNeed(CargoPacket::CanAllocateItem(2), __LINE__);
-		st->goods[0].GetOrCreateData().cargo.Append(new CargoPacket(37, 5, st->index, tile, 0), StationID::Invalid());
+		st->goods[0].GetOrCreateData().cargo.Append(new CargoPacket(4133, 5, st->index, tile, 0), StationID::Invalid());
 		st->goods[1].GetOrCreateData().cargo.Append(new CargoPacket(9, 13, st->index, tile, 0), StationID::Invalid());
 	}
 	TileIndex tile = st->train_station.tile, waytile = wp->train_station.tile;
@@ -110,9 +110,10 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 		real->loading = (empty & 1) ? std::vector<const SpriteGroup *>{} : std::vector<const SpriteGroup *>{result, other};
 		real->loaded = (empty & 2) ? std::vector<const SpriteGroup *>{} : std::vector<const SpriteGroup *>{other, result};
 		spec.grf_prop.spritegroups.clear(); spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, real); spec.flags.Reset(StationSpecFlag::DivByStationSize);
-		for (uint16_t threshold : {36, 46}) { spec.cargo_threshold = threshold; StationResolverObject choice(&spec, st, tile); fmt::print(stderr, "STCMD resolver-real-empty {} {} {}\n", empty, threshold, choice.ResolveCallback({})); }
+		for (uint16_t threshold : {36, 4095}) { spec.cargo_threshold = threshold; StationResolverObject choice(&spec, st, tile); fmt::print(stderr, "STCMD resolver-real-empty {} {} {}\n", empty, threshold, choice.ResolveCallback({})); }
 	}
 	spec.grf_prop.spritegroups.clear(); spec.grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det); spec.grf_prop.SetSpriteGroup(0, det);
+	det->adjusts.clear();
 	StationNeed(GetStationCallback(CBID_STATION_LAND_SLOPE_CHECK, 1, 2, &spec, st, tile) == 0x400, __LINE__);
 	det->adjusts = {{.operation = DSGA_OP_RST, .variable = 0x10, .and_mask = UINT32_MAX}, {.operation = DSGA_OP_STO, .variable = 0x1A, .and_mask = 0x100}};
 	for (uint8_t version : {6, 7, 8}) for (Axis axis : {AXIS_X, AXIS_Y}) for (uint16_t value : std::array<uint16_t, 3>{0x400, 0x401, CALLBACK_FAILED}) {
