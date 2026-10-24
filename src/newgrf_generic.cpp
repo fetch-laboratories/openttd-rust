@@ -77,7 +77,6 @@ std::pair<const GRFFile *, uint16_t> GetAiPurchaseCallbackResult(GrfSpecFeature 
 	auto result = openttd_rust_generic_ai(feature, cargo, selection, source, destination, distance, event, count, station_size);
 	return {result.file, result.result};
 }
-void AmbientSoundEffectCallback(TileIndex tile) { openttd_rust_generic_ambient_callback(tile.base()); }
 #else
 
 /** Scope resolver for generic objects and properties. */

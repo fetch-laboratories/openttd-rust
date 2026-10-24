@@ -239,14 +239,6 @@ pub fn ambient(tile: u32) {
         ambient_callback(tile);
     }
 }
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_generic_ambient(tile: u32) {
-    ambient(tile);
-}
-#[unsafe(no_mangle)]
-pub extern "C" fn openttd_rust_generic_ambient_callback(tile: u32) {
-    ambient_callback(tile);
-}
 fn ambient_callback(tile: u32) {
     let s = services();
     let shared = unsafe { &*s.shared };

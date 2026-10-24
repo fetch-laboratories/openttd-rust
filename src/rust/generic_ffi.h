@@ -46,7 +46,5 @@ void openttd_rust_generic_add(uint8_t, const GRFFile *, const SpriteGroup *);
 OpenTTDGenericResult openttd_rust_generic_ai(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t);
 uint32_t openttd_rust_generic_variable(const OpenTTDGenericInvocation *, uint8_t, bool *);
 ScopeResolver *openttd_rust_generic_scope(ResolverObject *, ScopeResolver *, uint8_t, uint8_t);
-void openttd_rust_generic_ambient(uint32_t);
-void openttd_rust_generic_ambient_callback(uint32_t);
 }
 #endif
