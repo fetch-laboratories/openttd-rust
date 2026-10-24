@@ -559,9 +559,7 @@ use crate::track_type::{
 use crate::transport_type::{TRANSPORT_RAIL, TRANSPORT_ROAD, TRANSPORT_WATER};
 impl MovementServices {
     fn water_edges(&self, tile: u32, mut bits: u8) -> u8 {
-        let map = crate::services::Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        };
+        let map = self.shared().map();
         if map.tile_x(tile) == 0 {
             w::hit(w::MOVE_WATER_EDGE);
             bits &= !(TRACK_BIT_X | TRACK_BIT_UPPER | TRACK_BIT_RIGHT);
@@ -917,9 +915,9 @@ impl MovementServices {
         (self.vehicle().write_status)(
             v,
             if hidden {
-                status | crate::vehicle::VS_HIDDEN
+                status | crate::vehicle_base::VS_HIDDEN
             } else {
-                status & !crate::vehicle::VS_HIDDEN
+                status & !crate::vehicle_base::VS_HIDDEN
             },
         );
     }

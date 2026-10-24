@@ -14,6 +14,7 @@ from .core import (
     read_object,
     read_save,
     run_game,
+    strip_glog,
 )
 
 
@@ -241,22 +242,9 @@ def prepare_trees(scenario, binaries, builds, out, timeout, env):
         read_object(reader, [field], "", {})
     else:
         raise RuntimeError("missing trees counter")
-    begin, end = chunks["GLOG"]["span"]
-    normalized_data = bytes(data[:begin] + data[end:])
     normalized = fixture.parent / "tree-input.sav"
-    normalized.write_bytes(normalized_data)
-    check = read_save(normalized)
-    if set(check) != set(chunks) - {"GLOG"}:
-        raise RuntimeError("tree input changed chunk inventory")
-    for cid in check:
-        expected = bytearray(source[slice(*chunks[cid]["span"])])
-        for chunk, offset, _, value, _ in patches:
-            if chunk == cid:
-                expected[offset : offset + len(bytes.fromhex(value))] = bytes.fromhex(
-                    value
-                )
-        if bytes(expected) != normalized_data[slice(*check[cid]["span"])]:
-            raise RuntimeError(f"tree input changed unintended {cid} bytes")
+    strip_glog(data, normalized)
+    normalized_data = normalized.read_bytes()
     return dict(scenario, kind="save", save=str(normalized)), {
         "reference": str(fixture),
         "normalized": str(normalized),

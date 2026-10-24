@@ -36,10 +36,19 @@ pub struct State {
 /// `AIR_SHADOW` from `aircraft.h`.
 pub(crate) const AIR_SHADOW: u8 = 4;
 
-use crate::airport::{AT_OILRIG, HANGAR};
+use crate::airport::{
+    AT_OILRIG, ENDLANDING, ENDTAKEOFF, FLYING, HANGAR, HELIENDLANDING, HELILANDING, HELITAKEOFF,
+    LANDING, STARTTAKEOFF, TAKEOFF,
+};
+use crate::company_type::OWNER_NONE;
 use crate::newgrf_sound::VSE_START;
-use crate::services::{Map, Services, chance16_i};
+use crate::order_type::{
+    OT_CONDITIONAL, OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING, OT_NOTHING,
+};
+use crate::random_func::chance16_i;
+use crate::services::{Map, Services};
 use crate::station::Station;
+use crate::station_type::INVALID_STATION;
 use crate::tile_type::INVALID_TILE;
 use crate::vehicle::PROP_AIRCRAFT_SPEED;
 use crate::vehicle::maintenance;
@@ -47,6 +56,7 @@ use crate::vehicle::{
     AltitudeInputs, Coordinates, DayCost, DirectionProgress, MovementObservations, OpenTTDVehicle,
     PositionObservations, SpeedInputs, TickStatus, VehicleRef, VehicleServices, XY, YEAR_TICKS,
 };
+use crate::vehicle_base::{VS_AIRCRAFT_BROKEN, VS_CRASHED, VS_HIDDEN, VS_STOPPED};
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -300,26 +310,10 @@ const SAMPLE_COUNT: i64 = 73;
 const HELICOPTER_SOUND: i64 = 22;
 const EXPLOSION_SOUND: i64 = 16;
 const SKID_SOUND: i64 = 21;
-const TICKS_PER_YEAR: i64 = YEAR_TICKS;
-const INVALID_STATION: u32 = 65535;
-const OWNER_NONE: i64 = 16;
-const HIDDEN: i64 = 1;
-const STOPPED: i64 = 2;
-const BROKEN: i64 = 64;
-const CRASHED: i64 = 128;
 /// `AircraftSubType::AIR_HELICOPTER` from `aircraft.h`.
 pub const AIR_HELICOPTER: u8 = 0;
 /// `AircraftSubType::AIR_AIRCRAFT` from `aircraft.h`.
 pub const AIR_AIRCRAFT: u8 = 2;
-const TAKEOFF: u8 = 10;
-const STARTTAKEOFF: u8 = 11;
-const ENDTAKEOFF: u8 = 12;
-const HELITAKEOFF: u8 = 13;
-const FLYING: u8 = 14;
-const LANDING: u8 = 15;
-const ENDLANDING: u8 = 16;
-const HELILANDING: u8 = 17;
-const HELIENDLANDING: u8 = 18;
 const NOTHING: u64 = 1 << 30;
 const ZEPPELIN: u64 = 1 << 62;
 const CLOSED: u64 = 1 << 63;
@@ -417,7 +411,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.map.get().unwrap_or_else(|| {
             let log_x = (self.ss.map_log_x)();
             Self::service_witness("map_log_x", std::mem::size_of_val(&log_x));
-            let map = Map { log_x: log_x as u8 };
+            let map = Map::from_log_x(log_x);
             self.map.set(Some(map));
             map
         })
@@ -903,10 +897,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.set_subspeed(id, 0);
         self.set_progress(id, 0);
         let shadow = self.next(id);
-        self.status(shadow, HIDDEN, true);
+        self.status(shadow, i64::from(VS_HIDDEN), true);
         let rotor = self.next(shadow);
         if !rotor.handle.is_null() {
-            self.status(rotor, HIDDEN, true);
+            self.status(rotor, i64::from(VS_HIDDEN), true);
             self.set_current_speed(rotor, 0);
         }
         self.position_current(id, None);
@@ -935,11 +929,13 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     fn helicopter_tick(&self, id: Vehicle) {
         let rotor = self.next(self.next(id));
-        if self.vehicle_status(rotor) & HIDDEN != 0 {
+        if self.vehicle_status(rotor) & i64::from(VS_HIDDEN) != 0 {
             return;
         }
         let mut speed = self.current_speed(rotor);
-        if self.order_type(id) == 3 || self.vehicle_status(id) & STOPPED != 0 {
+        if self.order_type(id) == i64::from(OT_LOADING)
+            || self.vehicle_status(id) & i64::from(VS_STOPPED) != 0
+        {
             if speed != 0 {
                 speed = i64::from((speed as u16).wrapping_add(1));
                 self.set_current_speed(rotor, speed);
@@ -981,7 +977,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let mut spd = u32::from(input.acceleration).wrapping_mul(77);
         let factor = self.plane_speed() as u32;
         limit = limit.wrapping_mul(factor);
-        if i64::from(input.status) & BROKEN != 0 {
+        if i64::from(input.status) & i64::from(VS_AIRCRAFT_BROKEN) != 0 {
             if 320 < limit {
                 hard = false;
             }
@@ -1043,7 +1039,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.airport_entry(ap, i64::from(rotated)) as u8
     }
     fn next_airport(&self, id: Vehicle) {
-        if matches!(self.order_type(id), 1 | 2) {
+        if matches!(self.order_type(id), kind if kind == i64::from(OT_GOTO_STATION) || kind == i64::from(OT_GOTO_DEPOT))
+        {
             self.set_target(id, self.order_destination(id) as u16);
         }
         let s = self.target_station(id);
@@ -1248,7 +1245,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         }
         if flags & BRAKE != 0 && observed.speed() > 50 * self.plane_speed() {
             self.maybe_crash(id);
-            if self.vehicle_status(id) & CRASHED != 0 {
+            if self.vehicle_status(id) & i64::from(VS_CRASHED) != 0 {
                 return false;
             }
         }
@@ -1450,11 +1447,11 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         true
     }
     fn smoke(&self, id: Vehicle, mode: bool, status: i64) {
-        if status & BROKEN == 0 {
+        if status & i64::from(VS_AIRCRAFT_BROKEN) == 0 {
             return;
         }
         if self.current_speed(id) < 10 {
-            self.status(id, BROKEN, false);
+            self.status(id, i64::from(VS_AIRCRAFT_BROKEN), false);
             self.set_breakdown_counter(id, 0);
             return;
         }
@@ -1485,7 +1482,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let station = if self.valid_airport(id) {
             u32::from(self.target(id))
         } else {
-            INVALID_STATION
+            u32::from(INVALID_STATION)
         };
         self.crash_news(id, i64::from(station), i64::from(victims));
         let tile = self.tile_virt(
@@ -1525,7 +1522,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             if self.send_to_depot(id, 1) != 0 {
                 self.crash_airplane(id);
             }
-        } else if self.order_type(id) != 2 {
+        } else if self.order_type(id) != i64::from(OT_GOTO_DEPOT) {
             self.free_order(id);
         }
     }
@@ -1534,12 +1531,12 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.set_subspeed(id, 0);
         self.set_progress(id, 0);
         self.set_direction(id, direction);
-        self.status(id, HIDDEN, false);
+        self.status(id, i64::from(VS_HIDDEN), false);
         let shadow = self.next(id);
-        self.status(shadow, HIDDEN, false);
+        self.status(shadow, i64::from(VS_HIDDEN), false);
         let rotor = self.next(shadow);
         if !rotor.handle.is_null() {
-            self.status(rotor, HIDDEN, false);
+            self.status(rotor, i64::from(VS_HIDDEN), false);
             self.set_current_speed(rotor, 80);
         }
         self.service_in_depot(id);
@@ -1548,7 +1545,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.dirty_depot(id);
     }
     fn terminal(&self, id: Vehicle) {
-        if self.order_type(id) == 2 {
+        if self.order_type(id) == i64::from(OT_GOTO_DEPOT) {
             return;
         }
         let station = u32::from(self.target(id));
@@ -1678,17 +1675,20 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     self.set_state(id, self.layout_heading(ap, self.pos(id)));
                     return;
                 }
-                if self.order_type(id) == 2 && self.vehicle_status(id) & STOPPED != 0 {
+                if self.order_type(id) == i64::from(OT_GOTO_DEPOT)
+                    && self.vehicle_status(id) & i64::from(VS_STOPPED) != 0
+                {
                     self.free_order(id);
                     return;
                 }
                 if self.waiting_unbunching(id) != 0 {
                     return;
                 }
-                if !matches!(self.order_type(id), 1 | 2) {
+                if !matches!(self.order_type(id), kind if kind == i64::from(OT_GOTO_STATION) || kind == i64::from(OT_GOTO_DEPOT))
+                {
                     return;
                 }
-                if self.order_type(id) == 2
+                if self.order_type(id) == i64::from(OT_GOTO_DEPOT)
                     && self.order_destination(id) == i64::from(self.target(id))
                 {
                     self.enter_depot(id);
@@ -1735,16 +1735,18 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                     }
                     return;
                 }
-                if self.order_type(id) == 0 {
+                if self.order_type(id) == i64::from(OT_NOTHING) {
                     return;
                 }
                 if self.has_block(id, self.node(ap, self.pos(id)), ap, airport) {
                     return;
                 }
                 let hangar = match self.order_type(id) {
-                    1 => false,
-                    2 => self.order_destination(id) == i64::from(self.target(id)),
-                    7 => return,
+                    kind if kind == i64::from(OT_GOTO_STATION) => false,
+                    kind if kind == i64::from(OT_GOTO_DEPOT) => {
+                        self.order_destination(id) == i64::from(self.target(id))
+                    }
+                    kind if kind == i64::from(OT_CONDITIONAL) => return,
                     _ => {
                         self.free_order(id);
                         true
@@ -1787,7 +1789,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             FLYING => {
                 let s = airport.station;
                 if can_use_station(id, s) != 0
-                    && (self.station_owner(s) == OWNER_NONE
+                    && (self.station_owner(s) == i64::from(OWNER_NONE)
                         || self.station_owner(s) == self.owner(id))
                     && airport.read(self) & CLOSED == 0
                 {
@@ -1847,7 +1849,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 if self.has_block(id, self.node(ap, self.pos(id)), ap, airport) {
                     return;
                 }
-                if self.order_type(id) == 1 && self.find_terminal(id, ap, airport) {
+                if self.order_type(id) == i64::from(OT_GOTO_STATION)
+                    && self.find_terminal(id, ap, airport)
+                {
                     return;
                 }
                 self.set_state(id, HANGAR);
@@ -1856,7 +1860,9 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 if self.has_block(id, self.node(ap, self.pos(id)), ap, airport) {
                     return;
                 }
-                if self.order_type(id) == 1 && self.find_helipad(id, ap, airport) {
+                if self.order_type(id) == i64::from(OT_GOTO_STATION)
+                    && self.find_helipad(id, ap, airport)
+                {
                     return;
                 }
                 self.set_state(
@@ -1957,10 +1963,10 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
     }
     fn event(&self, id: Vehicle, pass: u32) -> bool {
         let status = self.vehicle_status(id);
-        if status & CRASHED != 0 {
+        if status & i64::from(VS_CRASHED) != 0 {
             return self.crashed_tick(id);
         }
-        if status & STOPPED != 0 {
+        if status & i64::from(VS_STOPPED) != 0 {
             return true;
         }
         let status = self.handle_breakdown(id);
@@ -1968,14 +1974,16 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         self.process_orders(id);
         self.handle_loading(id, i64::from(pass));
         let order_type = self.order_type(id);
-        if matches!(order_type, 3 | 4) {
+        if order_type == i64::from(OT_LOADING) || order_type == i64::from(OT_LEAVESTATION) {
             return true;
         }
         if (ENDTAKEOFF..=HELIENDLANDING).contains(&self.state(id)) {
             self.too_far(id, false);
         } else if self.range_sqr(id) != 0 {
             let current = self.target_station(id);
-            let next = if matches!(order_type, 1 | 2) {
+            let next = if order_type == i64::from(OT_GOTO_STATION)
+                || order_type == i64::from(OT_GOTO_DEPOT)
+            {
                 self.station(self.order_destination(id) as u32)
             } else {
                 std::ptr::null()
@@ -2007,7 +2015,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         crate::witness::hit(crate::witness::AIRCRAFT_TICKS);
         let gate = self.tick_status(id);
         self.set_tick_counter(id, i64::from(gate.tick.wrapping_add(1)));
-        if i64::from(gate.status) & STOPPED == 0 {
+        if i64::from(gate.status) & i64::from(VS_STOPPED) == 0 {
             self.set_running_ticks(
                 id,
                 i64::from((self.running_ticks(id) as u8).wrapping_add(1)),
@@ -2032,7 +2040,8 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             self.service_in_depot(id);
             return;
         }
-        if !matches!(self.order_type(id), 1 | 2) {
+        if !matches!(self.order_type(id), kind if kind == i64::from(OT_GOTO_STATION) || kind == i64::from(OT_GOTO_DEPOT))
+        {
             return;
         }
         let station = self.order_destination(id) as u32;
@@ -2040,7 +2049,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         if self.has_hangar(st) != 0 && can_use_station(id, st) != 0 {
             self.service_order(id, i64::from(station));
             self.dirty_start_stop(id);
-        } else if self.order_type(id) == 2 {
+        } else if self.order_type(id) == i64::from(OT_GOTO_DEPOT) {
             self.dummy_order(id);
             self.dirty_start_stop(id);
         }
@@ -2070,7 +2079,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         let cost = self.running_cost(id);
         let inputs = self.day_cost(id);
         let ticks = i64::from(inputs.running);
-        let divisor = TICKS_PER_YEAR;
+        let divisor = YEAR_TICKS;
         // Money's saturating multiplication is provided by the shared Money service.
         let cost = cost.saturating_mul(ticks) / divisor;
         self.set_profit(id, inputs.profit.saturating_sub(cost));
@@ -2084,13 +2093,14 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
             self.y(id).clamp(0, self.map_max_y() * 16),
         );
         let mut best = 0;
-        let mut result = INVALID_STATION;
+        let mut result = u32::from(INVALID_STATION);
         let range = self.range_sqr(id);
-        let mut last = INVALID_STATION;
-        let mut next = INVALID_STATION;
+        let mut last = u32::from(INVALID_STATION);
+        let mut next = u32::from(INVALID_STATION);
         if range != 0 {
-            if self.order_type(id) == 1
-                || (self.order_type(id) == 2 && self.nearest_depot_order(id) == 0)
+            if self.order_type(id) == i64::from(OT_GOTO_STATION)
+                || (self.order_type(id) == i64::from(OT_GOTO_DEPOT)
+                    && self.nearest_depot_order(id) == 0)
             {
                 last = self.last_station(id) as u32;
                 next = self.order_destination(id) as u32;
@@ -2136,7 +2146,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 }
             }
             let distance = self.distance(vtile, self.airport_tile(st) as u32);
-            if distance < best || result == INVALID_STATION {
+            if distance < best || result == u32::from(INVALID_STATION) {
                 best = distance;
                 result = cursor;
             }
@@ -2161,7 +2171,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
                 continue;
             }
             self.assert_flying(cursor);
-            if self.order_type(cursor) == 2
+            if self.order_type(cursor) == i64::from(OT_GOTO_DEPOT)
                 && self.part_of_orders(cursor) == 0
                 && self.order_destination(cursor) == i64::from(station)
                 && (self.has_hangar(st) == 0 || can_use_station(cursor, st) == 0)

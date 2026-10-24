@@ -1589,9 +1589,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 			RustVehicleCargoOwner(v), RustVehicleCargoCap(handle), v->cargo_type
 		};
 	},
-	.vehicle_type = [](OpenTTDVehicle *handle) noexcept -> uint8_t {
-		Vehicle *v = VehicleOf(handle); return v->type;
-	},
+	.vehicle_type = GetRustVehicleServices().vehicle_type,
 	.cargo_type = RustVehicleCargoType,
 	.cargo_cap = RustVehicleCargoCap,
 	.stored_count = [](OpenTTDVehicle *handle) noexcept -> uint32_t {
@@ -1619,9 +1617,7 @@ static const OpenTTDStationLoading _rust_station_loading = {
 	.load_unload_ticks = RustVehicleLoadUnloadTicks,
 	.status = GetRustVehicleServices().status,
 	.has_articulated_part = RustVehicleHasArticulated,
-	.is_articulated_part = [](OpenTTDVehicle *handle) noexcept -> bool {
-		Vehicle *v = VehicleOf(handle); return v->IsArticulatedPart();
-	},
+	.is_articulated_part = RustVehicleRead<bool, RustVehicleArticulated>,
 	.is_rear_dualheaded = [](OpenTTDVehicle *handle) noexcept -> bool {
 		Vehicle *v = VehicleOf(handle);
 		return Train::From(v)->IsRearDualheaded();

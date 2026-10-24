@@ -535,12 +535,12 @@ pub(crate) unsafe fn startstop(
     }
     let handle = unsafe { vehicle_ref(v) };
     let status = (s.vehicles.status)(handle);
-    if status & crate::vehicle::VS_CRASHED != 0 {
+    if status & crate::vehicle_base::VS_CRASHED != 0 {
         return (b.cost.error)(cost, s.strings.destroyed);
     }
     match VehicleType(unsafe { (b.groups.vehicle_type)(v) }) {
         VehicleType::TRAIN => {
-            if status & crate::vehicle::VS_STOPPED != 0 && (s.train_power)(v) == 0 {
+            if status & crate::vehicle_base::VS_STOPPED != 0 && (s.train_power)(v) == 0 {
                 return (b.cost.error)(cost, s.strings.no_power);
             }
         }

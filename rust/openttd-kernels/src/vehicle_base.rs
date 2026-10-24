@@ -39,8 +39,16 @@ pub(crate) const fn is_ground_vehicle(kind: u8) -> bool {
     kind == crate::vehicle_type::VEH_TRAIN || kind == crate::vehicle_type::VEH_ROAD
 }
 
+/// `VehState::Hidden`.
+pub const VS_HIDDEN: u8 = 1 << 0;
+/// `VehState::Stopped`.
+pub const VS_STOPPED: u8 = 1 << 1;
 /// `VehStatus::TrainSlowing`.
 pub const VS_TRAIN_SLOWING: u8 = 1 << 4;
+/// `VehState::AircraftBroken`.
+pub const VS_AIRCRAFT_BROKEN: u8 = 1 << 6;
+/// `VehState::Crashed`.
+pub const VS_CRASHED: u8 = 1 << 7;
 
 /// `NCVV_POSITION_CONSIST_LENGTH`.
 pub const NCVV_POSITION_CONSIST_LENGTH: u8 = 0;

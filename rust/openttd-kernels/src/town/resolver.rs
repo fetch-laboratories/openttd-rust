@@ -416,11 +416,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
         };
     }
     let dimensions = OnceCell::new();
-    let map = || {
-        *dimensions.get_or_init(|| Map {
-            log_x: (l.map_log_x)() as u8,
-        })
-    };
+    let map = || *dimensions.get_or_init(|| Map::from_log_x((l.map_log_x)()));
     let tile = scope.tile;
     match variable {
         0x40 => {

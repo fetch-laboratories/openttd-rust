@@ -330,7 +330,6 @@ fn town_find(s: &Services, town: *const c_void, grfid: u32) -> *mut Payload<256>
     }
     std::ptr::null_mut()
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_storage_town(
     s: &Services,
     town: *mut c_void,
@@ -366,7 +365,6 @@ pub unsafe extern "C" fn openttd_rust_storage_town(
     }
     (s.append_town)(town, unsafe { (*owner).shell });
 }
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_storage_town_get(
     s: &Services,
     town: *const c_void,

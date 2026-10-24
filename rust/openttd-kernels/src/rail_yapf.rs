@@ -21,6 +21,7 @@
     clippy::collapsible_else_if,
     clippy::similar_names
 )]
+use crate::order_type::{OT_GOTO_DEPOT, OT_GOTO_STATION, OT_GOTO_WAYPOINT};
 use crate::rail_map::is_pbs_signal as pbs;
 use crate::track_func::{
     find_first_trackdir as first, is_diagonal_trackdir as diagonal, trackdir_to_exitdir as exit,
@@ -173,8 +174,8 @@ pub struct Leaves {
     pub output: unsafe extern "C" fn(*mut c_void, u8, *const Step),
     pub debug: unsafe extern "C" fn(*mut c_void, u8, *const u32, u32),
 }
+use crate::track_type::INVALID_TRACKDIR;
 const INVALID: u32 = u32::MAX;
-const INVALID_TD: u8 = 255;
 const RAILWAY: u32 = 1;
 const ROAD: u32 = 2;
 const STATION_RAIL: u32 = 4;
@@ -236,7 +237,7 @@ impl Segment {
             last_td: td,
             cost: -1,
             signal_tile: INVALID,
-            signal_td: INVALID_TD,
+            signal_td: INVALID_TRACKDIR,
             reasons: 0,
         }
     }
@@ -520,7 +521,7 @@ impl Search {
         self.open.remove(&(self.arena[i].tile, self.arena[i].td));
     }
     fn startup(&mut self, tile: u32, td: u8, cost: i32) {
-        if tile == INVALID || td == INVALID_TD {
+        if tile == INVALID || td == INVALID_TRACKDIR {
             return;
         }
         let mut node = self.node(None, tile, td, false);
@@ -601,20 +602,20 @@ impl Search {
             return;
         }
         match self.train.order {
-            1 | 6 => {
-                if self.train.order == 6 && self.train.complex_waypoint != 0 {
+            OT_GOTO_STATION | OT_GOTO_WAYPOINT => {
+                if self.train.order == OT_GOTO_WAYPOINT && self.train.complex_waypoint != 0 {
                     self.disabled = true;
                 }
                 self.dest_tile = unsafe {
                     (self.leaves.closest_station)(
                         self.input.context,
-                        u8::from(self.train.order == 1),
+                        u8::from(self.train.order == OT_GOTO_STATION),
                     )
                 };
                 self.dest_station = self.train.order_destination;
             }
             _ => {
-                self.any_depot = self.train.order == 2 && self.train.nearest_depot != 0;
+                self.any_depot = self.train.order == OT_GOTO_DEPOT && self.train.nearest_depot != 0;
                 self.dest_tile = self.train.dest_tile;
                 self.dest_dirs = unsafe {
                     crate::track_func::track_status_to_trackdir_bits(crate::movement::track_status(
@@ -780,7 +781,7 @@ impl Search {
             cur = f.tile;
             max_tiles -= 1;
             if cur == tile || max_tiles == 0 || f.dirs & f.dirs.wrapping_sub(1) != 0 {
-                dir = INVALID_TD;
+                dir = INVALID_TRACKDIR;
                 break;
             }
             dir = first(f.dirs);
@@ -788,7 +789,7 @@ impl Search {
                 break;
             }
         }
-        if dir == INVALID_TD
+        if dir == INVALID_TRACKDIR
             || !self.safe(cur, dir, self.input.forbid90)
             || !self.free(cur, dir, self.input.forbid90)
         {
@@ -805,7 +806,7 @@ impl Search {
         let mut cur_info = self.tile(cur, td);
         let (mut prev, mut prev_td) = n
             .parent
-            .map_or((INVALID, INVALID_TD), |p| self.arena[p].last());
+            .map_or((INVALID, INVALID_TRACKDIR), |p| self.arena[p].last());
         let mut prev_info = if prev == INVALID {
             Tile::default()
         } else {
@@ -894,7 +895,7 @@ impl Search {
             } else if cur_info.flags & DEPOT != 0 {
                 reasons |= E_DEPOT;
             } else if cur_info.flags & WAYPOINT != 0 {
-                if self.train.order == 6
+                if self.train.order == OT_GOTO_WAYPOINT
                     && cur_info.station == self.train.order_destination
                     && self.train.complex_waypoint != 0
                 {
@@ -1364,7 +1365,7 @@ impl Reservation {
             target_td,
             origin: search.arena[node].last().0,
             fail_tile: INVALID,
-            fail_td: INVALID_TD,
+            fail_td: INVALID_TRACKDIR,
             signals: Vec::new(),
             cursor: TileCursor::new(search, target_node),
             resume_callback: false,
@@ -1542,11 +1543,11 @@ fn empty_step() -> Step {
         target_tile: INVALID,
         best_length: u32::MAX,
         action: 0,
-        td: INVALID_TD,
+        td: INVALID_TRACKDIR,
         found: 0,
         reverse: 0,
         value: 0,
-        target_td: INVALID_TD,
+        target_td: INVALID_TRACKDIR,
         target_okay: 0,
     }
 }

@@ -7,21 +7,23 @@
 
 //! Live base-vehicle scheduling prototype. Owners stay opaque and call-local;
 //! no Rust world/owner reference survives a service that can mutate or reenter.
-#![allow(unsafe_code, clippy::too_many_lines, clippy::verbose_bit_mask)]
-use super::{CALLBACK_FAILED, VS_CRASHED, VS_HIDDEN, VS_STOPPED, VehicleRef, VehicleServices};
+#![allow(unsafe_code, clippy::verbose_bit_mask)]
+use super::{CALLBACK_FAILED, VehicleRef, VehicleServices};
+use crate::aircraft::AIR_AIRCRAFT;
 use crate::newgrf_callbacks::CBID_VEHICLE_32DAY_CALLBACK;
 use crate::newgrf_sound::{VSE_RUNNING, VSE_RUNNING_16, VSE_STOPPED_16, VehicleSoundEvent};
+use crate::timer_game_tick::DAY_TICKS;
+use crate::vehicle_base::{
+    GVSF_ENGINE, GVSF_FRONT, VS_CRASHED, VS_HIDDEN, VS_STOPPED, VS_TRAIN_SLOWING,
+};
 use crate::{cargo_storage, fleet, services, station_service};
 
 use super::VehicleType;
 const TRAIN: VehicleType = VehicleType::TRAIN;
 const ROAD: VehicleType = VehicleType::ROAD;
 const AIRCRAFT: VehicleType = VehicleType::AIRCRAFT;
-const FRONT: u8 = 1 << crate::vehicle_base::GVSF_FRONT;
-const ENGINE: u8 = 1 << 3;
-const NORMAL_AIRCRAFT: u8 = 2;
-const TRAIN_SLOWING: u8 = 1 << 4;
-const DAY_TICKS: usize = 74;
+const FRONT: u8 = 1 << GVSF_FRONT;
+const ENGINE: u8 = 1 << GVSF_ENGINE;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -144,7 +146,7 @@ unsafe fn day<const COUNTED: bool>(
     let mut pool = svc!(COUNTED, s.pool);
     while id < unsafe { extent::<COUNTED>(s, &mut pool) } {
         let vehicle = unsafe { scalar_read::<_, COUNTED>(pool.slots.add(id)) };
-        id += DAY_TICKS;
+        id += DAY_TICKS as usize;
         let Some(vehicle) = vehicle else {
             continue;
         };
@@ -313,7 +315,7 @@ unsafe fn post_tick<const COUNTED: bool>(
     match vehicle_type {
         TRAIN if unsafe { scalar_read::<_, COUNTED>(motion.subtype) } & ENGINE == 0 => return,
         ROAD if unsafe { scalar_read::<_, COUNTED>(motion.subtype) } & FRONT == 0 => return,
-        AIRCRAFT if unsafe { scalar_read::<_, COUNTED>(motion.subtype) } > NORMAL_AIRCRAFT => {
+        AIRCRAFT if unsafe { scalar_read::<_, COUNTED>(motion.subtype) } > AIR_AIRCRAFT => {
             return;
         }
         _ => {}
@@ -332,7 +334,7 @@ unsafe fn post_tick<const COUNTED: bool>(
     if unsafe { scalar_read::<_, COUNTED>(motion.tick) } & 15 == 0 {
         let running = unsafe { scalar_read::<_, COUNTED>(motion.speed) } > 0
             && unsafe { scalar_read::<_, COUNTED>(cargo.front_status) }
-                & (VS_STOPPED | TRAIN_SLOWING)
+                & (VS_STOPPED | VS_TRAIN_SLOWING)
                 == 0;
         post_svc!(
             COUNTED,

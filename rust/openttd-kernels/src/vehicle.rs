@@ -20,6 +20,8 @@ pub(crate) mod visits;
 
 use crate::newgrf_callbacks::CallbackID;
 use crate::newgrf_sound::VehicleSoundEvent;
+use crate::timer_game_common::DAYS_IN_YEAR;
+use crate::timer_game_tick::DAY_TICKS;
 use std::ptr::NonNull;
 
 /// Opaque C++ `Vehicle`.
@@ -90,20 +92,12 @@ pub struct EngineForLength {
 
 pub use crate::newgrf_callbacks::CALLBACK_FAILED;
 pub use crate::order_type::{OT_GOTO_DEPOT, OT_GOTO_STATION, OT_LEAVESTATION, OT_LOADING};
-pub use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
-/// `VehState` bits.
-pub const VS_HIDDEN: u8 = 1 << 0;
-pub const VS_STOPPED: u8 = 1 << 1;
-pub const VS_CRASHED: u8 = 1 << 7;
 pub use crate::tile_cmd::CANNOT_ENTER as VETS_CANNOT_ENTER;
 /// `VehicleEnterTileState` bits.
 pub use crate::tile_cmd::ENTERED_WORMHOLE as VETS_ENTERED_WORMHOLE;
+pub use crate::tile_type::{MP_ROAD, MP_STATION, MP_TUNNELBRIDGE};
 /// `AM_REALISTIC`.
 pub const AM_REALISTIC: u8 = 1;
-/// `INVALID_TRACKDIR`.
-pub const INVALID_TRACKDIR: u8 = 0xFF;
-/// `EngineID::Invalid()`.
-pub const INVALID_ENGINE: u16 = 0xFFFF;
 /// `INVALID_PRICE`.
 pub const INVALID_PRICE: u8 = 0xFF;
 /// `PROP_AIRCRAFT_SPEED`.
@@ -111,7 +105,7 @@ pub const PROP_AIRCRAFT_SPEED: u8 = 0x0C;
 /// `VEHICLE_LENGTH`.
 pub const VEHICLE_LENGTH: u8 = 8;
 /// `CalendarTime::DAYS_IN_YEAR * Ticks::DAY_TICKS`.
-pub const YEAR_TICKS: i64 = 365 * 74;
+pub const YEAR_TICKS: i64 = DAYS_IN_YEAR as i64 * DAY_TICKS as i64;
 /// `SND_19_DEPARTURE_OLD_RV_1` and `SND_1A_DEPARTURE_OLD_RV_2`.
 pub const SND_DEPARTURE_OLD_RV_1: u16 = 23;
 pub const SND_DEPARTURE_OLD_RV_2: u16 = 24;

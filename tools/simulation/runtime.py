@@ -17,32 +17,7 @@ def strip_debug(source, destination=None):
 
 def export(destination, migration):
     """Capture under build locks; adapters must come from these exact game objects."""
-    from . import (
-        engines,
-        fleet,
-        industries,
-        objects,
-        orders,
-        rails,
-        ships,
-        signals,
-        stations,
-        towns,
-    )
-
-    adapters = (
-        engines,
-        fleet,
-        industries,
-        objects,
-        orders,
-        rails,
-        ships,
-        signals,
-        stations,
-        towns,
-    )
-
+    adapters = core.adapter_modules()
     destination.mkdir(parents=True)
     builds = {
         "reference": migration.REFERENCE_BUILD.resolve(),

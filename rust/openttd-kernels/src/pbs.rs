@@ -106,9 +106,7 @@ impl<'a> Pbs<'a> {
     }
     pub(crate) fn platform(self, start: u32, dir: u8, reserved: bool) {
         (self.0.assert_platform)(start, dir);
-        let map = crate::map_func::Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        };
+        let map = self.shared().map();
         let diff = map.offs_by_diag_dir(dir);
         let mut tile = start;
         loop {
@@ -314,9 +312,7 @@ impl<'a> Pbs<'a> {
             )
     }
     pub(crate) fn map(self) -> crate::map_func::Map {
-        crate::map_func::Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        }
+        self.shared().map()
     }
     fn follow_reservation(
         self,

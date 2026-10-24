@@ -3,13 +3,13 @@
 import hashlib
 from pathlib import Path
 
+from .console_adapter import prepared_console
 from .core import (
     ROOT,
-    RUNTIME_DIRECTORIES,
     WITNESS_ENVIRONMENT,
     branch_witnesses,
+    capture_pair,
     compare_saves,
-    run_game,
 )
 
 ADAPTER = ROOT / "tools/simulation/fleet-console.cpp"
@@ -128,7 +128,6 @@ def adapter(build, folder, env):
 def prepare(scenario, binaries, builds, out, timeout, env, result):
     if "fleet" not in scenario:
         return scenario
-    import migration
 
     folder = out / scenario["name"] / "input"
     if scenario["fleet"].startswith(("train", "drain")) or scenario["fleet"] in (
@@ -140,37 +139,12 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
         "transaction-clone",
         "transaction-rail",
     ):
-        from .rails import normalize
+        from .core import normalize
 
         source, record = normalize(Path(scenario["save"]), folder / "normalized")
         result["fleet_input"] = record
         scenario = dict(scenario, save=str(source))
-    native_builds = {
-        "reference": migration.REFERENCE_BUILD,
-        "candidate": migration.REFERENCE_BUILD
-        if binaries["reference"] == binaries["candidate"]
-        else ROOT / "build-rust",
-    }
-    executables = {}
-    for role in ("reference", "candidate"):
-        from .runtime import prepared_adapter
-
-        prepared = prepared_adapter("fleet", role, builds, folder / role)
-        if prepared is not None:
-            executables[role] = prepared
-        else:
-            lock = (
-                migration.reference_lock(shared=True)
-                if native_builds[role] == migration.REFERENCE_BUILD
-                else migration.candidate_lock(native_builds[role], shared=True)
-            )
-            with lock:
-                executables[role] = adapter(native_builds[role], folder / role, env)
-        for name in RUNTIME_DIRECTORIES:
-            if (builds[role] / name).is_dir():
-                (folder / role / name).symlink_to(
-                    builds[role] / name, target_is_directory=True
-                )
+    executables = prepared_console("fleet", adapter, binaries, builds, folder, env)
     if scenario["fleet"] in ("reload", "resolver-reload"):
         resolver = scenario["fleet"] == "resolver-reload"
         saves, capture, saved_resolver = {}, {}, {}
@@ -182,16 +156,8 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
             ],
             ticks=1,
         )
-        for role in ("reference", "candidate"):
-            run = run_game(
-                setup,
-                executables[role],
-                builds[role],
-                folder / role / "capture",
-                timeout,
-                env,
-                desync=False,
-            )
+        runs = capture_pair(setup, executables, builds, folder, timeout, env)
+        for role, run in runs.items():
             if (
                 run["exit"]
                 or not run["snapshots"]
@@ -208,7 +174,7 @@ def prepare(scenario, binaries, builds, out, timeout, env, result):
                 check_override_order(run, "capture", role, result)
                 check_property_boundaries(run, "capture", role, result)
                 check_real_boundaries(run, "capture", role, result)
-                from .disasters import rows
+                from .core import rows
 
                 marker = next(
                     (
@@ -622,9 +588,3 @@ def check(scenario, run, mode, role, result):
         result[mode + "_" + role + "_branches"] = branch_witnesses(
             scenario, run, role, "vehicle_transactions", BRANCHES[scenario["fleet"]]
         )
-    witnesses = [line for line in run["log"] if line.startswith("FLEET ")]
-    key = mode + "_fleet_witnesses"
-    if role == "reference":
-        result[key] = witnesses
-    elif result[key] != witnesses:
-        result["problems"].append(f"{mode}: native fleet witnesses differ")

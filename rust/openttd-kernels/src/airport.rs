@@ -38,7 +38,6 @@ pub const AMD_BRAKE: u8 = 5;
 pub const AMD_HELI_RAISE: u8 = 6;
 pub const AMD_HELI_LOWER: u8 = 7;
 pub const AMD_HOLD: u8 = 8;
-pub const ATP_TTDP_LARGE: u8 = 1;
 
 /// First custom airport.
 pub const NEW_AIRPORT_OFFSET: u8 = 10;

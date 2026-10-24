@@ -23,7 +23,8 @@ use crate::orders::NativeOrderList;
 use crate::station::{BaseStation, Station};
 use crate::timer_game_common::INVALID_DATE;
 use crate::vehicle::visits::{Services as Visits, refresh_links};
-use crate::vehicle::{EngineRef, VS_CRASHED, VS_STOPPED, VehicleRef};
+use crate::vehicle::{EngineRef, VehicleRef};
+use crate::vehicle_base::{VS_CRASHED, VS_STOPPED};
 use std::ffi::c_void;
 use std::ptr::NonNull;
 /// `GoodsEntry::ConvertState`: the four history bits keep their native order.
@@ -108,15 +109,6 @@ pub(crate) unsafe fn activity(state: *const Service) -> StationActivity {
             time_since_unload: (&raw const (*state).fields.time_since_unload).read(),
         }
     }
-}
-/// Shared native town observation of the canonical station owner.
-///
-/// # Safety
-/// `state` is live and game-state-mutex serialized; no borrow survives this call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_activity(state: *const Service) -> StationActivity {
-    // SAFETY: Native shared helper supplies the station's live canonical owner.
-    unsafe { activity(state) }
 }
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_station_service_new() -> *mut Service {

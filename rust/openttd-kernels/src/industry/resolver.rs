@@ -106,9 +106,7 @@ impl ResolverServices {
         unsafe { &*self.tile }
     }
     fn map(&self) -> crate::map_func::Map {
-        crate::map_func::Map {
-            log_x: (self.shared().map_log_x)() as u8,
-        }
+        self.shared().map()
     }
     fn is_industry(&self, tile: u32) -> bool {
         (self.shared().tile_type)(tile) == MP_INDUSTRY

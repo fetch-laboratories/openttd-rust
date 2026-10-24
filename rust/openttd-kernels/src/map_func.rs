@@ -15,6 +15,12 @@ pub struct Map {
     pub log_x: u8,
 }
 impl Map {
+    /// Capture a `Map::LogX()` service result; the original dimension is a `uint8`.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn from_log_x(log_x: u32) -> Self {
+        Self { log_x: log_x as u8 }
+    }
     /// `Map::SizeX()`, from the dimension captured at entry.
     #[must_use]
     pub fn size_x(self) -> u32 {

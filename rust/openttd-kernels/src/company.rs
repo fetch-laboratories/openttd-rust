@@ -26,7 +26,7 @@
     clippy::fn_params_excessive_bools,
     clippy::verbose_bit_mask
 )]
-use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE};
+use crate::company_type::{INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE};
 use crate::economy_type::EXPENSES_OTHER;
 use std::ptr::{addr_of, addr_of_mut};
 #[repr(C)]
@@ -417,16 +417,13 @@ pub extern "C" fn openttd_rust_company_tick() -> *mut u32 {
     &raw mut TICK
 }
 const INVALID: u32 = u32::MAX;
-pub(crate) const COMPANIES: u32 = 15;
 const PRICE_COUNT: usize = 71;
 const INITIAL_LOAN: i64 = 100_000;
 const LOAN_INTERVAL: i64 = 10_000;
 const MAX_INFLATION: u64 = (1_u64 << 31) - 1;
 const MAX_LOAN_LIMIT: i64 = 2_000_000_000;
 use crate::timer_game_common::{ORIGINAL_BASE_YEAR, ORIGINAL_MAX_YEAR};
-/// `Ticks::DAY_TICKS` and `Ticks::TICKS_PER_SECOND` (static-asserted in C++).
-const DAY_TICKS: i32 = 74;
-const TICKS_PER_SECOND: i32 = 37;
+use crate::timer_game_tick::{DAY_TICKS, TICKS_PER_SECOND};
 /// `VEHICLE_PROFIT_MIN_AGE` in economy days.
 const PROFIT_MIN_AGE: i32 = 730;
 const EXPENSES_PROPERTY: usize = 6;
@@ -921,7 +918,7 @@ fn fluctuations(s: &Services, m: &Month) {
 fn offer(s: &Services, p: *mut Finances, id: u8) {
     let timeout = get!(p, timeout);
     if timeout != 0 {
-        let next = timeout.wrapping_sub(COMPANIES as i16);
+        let next = timeout.wrapping_sub(i16::from(MAX_COMPANIES));
         put!(p, next, timeout);
         if next <= 0 {
             put!(p, 0, timeout);
@@ -951,7 +948,7 @@ fn offer(s: &Services, p: *mut Finances, id: u8) {
     put!(p, get!(p, asked) | (1 << best), asked);
     put!(
         p,
-        (3 * 30 * DAY_TICKS / (COMPANIES as i32 - 1)) as i16,
+        (3 * 30 * DAY_TICKS / (i32::from(MAX_COMPANIES) - 1)) as i16,
         timeout
     );
     (s.ask_merger)(best, id, get!(p, bankrupt_value));
@@ -1213,7 +1210,7 @@ fn control(s: &Services, ownership: &crate::tile_owner::Context, c: &mut Control
             }
             1 => {
                 let target = c.target;
-                if target != INVALID_OWNER && u32::from(target) >= COMPANIES {
+                if target != INVALID_OWNER && u32::from(target) >= u32::from(MAX_COMPANIES) {
                     c.result = error();
                     return false;
                 }
@@ -1345,7 +1342,7 @@ fn tick(s: &Services, t: &mut Tick) -> bool {
     }
     t.stage = 4;
     unsafe {
-        TICK = TICK.wrapping_add(1) % COMPANIES;
+        TICK = TICK.wrapping_add(1) % u32::from(MAX_COMPANIES);
     }
     false
 }

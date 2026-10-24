@@ -9,20 +9,16 @@ from pathlib import Path
 
 from . import core
 from .core import (
-    FILE_TYPES,
-    HAS_LENGTH,
     ROOT,
-    Reader,
-    decode_element,
-    field_spans,
+    patch,
     read_save,
+    rows,
     run_game,
     save_moment,
 )
 
 AI_FOLDER = "disaster-scenario-ai"
 LOCK = threading.Lock()
-INVALID = 1048575
 SCHEMA = list(
     zip(
         "next subtype tile dest_tile x_pos y_pos z_pos direction owner vehstatus state sprite_cache.sprite_seq.seq[0].sprite age tick_counter image_override big_ufo_destroyer_target flags".split(),
@@ -61,26 +57,6 @@ def game_args(scenario):
     )
 
 
-def gamma(value):
-    for size, limit, prefix in (
-        (1, 128, 0),
-        (2, 16384, 0x8000),
-        (3, 2097152, 0xC00000),
-        (4, 268435456, 0xE0000000),
-    ):
-        if value < limit:
-            return (value | prefix).to_bytes(size, "big")
-    return b"\xf0" + value.to_bytes(4, "big")
-
-
-def rows(path, cid="VEHS"):
-    chunk = read_save(path)[cid]
-    result = {index: decode_element(chunk, body) for index, body in chunk["elements"]}
-    if any(row is None for row in result.values()):
-        raise RuntimeError(f"undecodable disaster evidence {cid}")
-    return result
-
-
 def disasters(path):
     return {
         index: {
@@ -90,106 +66,6 @@ def disasters(path):
         }
         for index, row in rows(path).items()
         if row["type"] == 5
-    }
-
-
-def patch(source, target, changes, ai=None):
-    """Only declared typed input fields, AIPL company 1 and optional GLOG change."""
-    original, chunks = source.read_bytes(), read_save(source)
-    work, allowed, assignments = bytearray(original), set(), []
-    for cid, byindex in changes.items():
-        chunk = chunks[cid]
-        if chunk["kind"] not in (3, 4):
-            raise RuntimeError(f"unexpected disaster input table {cid}")
-        reader = Reader(original, chunk["span"][0] + 5)
-        reader.take(reader.gamma() - 1)
-        index, seen = 0, set()
-        while length := reader.gamma():
-            end = reader.pos + length - 1
-            if chunk["kind"] == 4:
-                index = reader.gamma()
-            begin = reader.pos
-            body = reader.take(end - begin)
-            if index in byindex:
-                fields, locations = (
-                    decode_element(chunk, body),
-                    field_spans(body, chunk["header"]),
-                )
-                for key, value in byindex[index].items():
-                    lo, hi, kind = locations[key]
-                    fmt, width = FILE_TYPES[kind & 15]
-                    vals = value if kind & HAS_LENGTH else (value,)
-                    at = begin + lo
-                    if kind & HAS_LENGTH:
-                        array = Reader(body, lo)
-                        if array.gamma() != len(vals):
-                            raise RuntimeError("disaster input array size differs")
-                        at = begin + array.pos
-                    if at + len(vals) * width != begin + hi:
-                        raise RuntimeError("disaster input field width differs")
-                    for value_index, scalar in enumerate(vals):
-                        struct.pack_into(fmt, work, at + value_index * width, scalar)
-                    allowed.update(range(at, begin + hi))
-                    assignments.append([cid, index, key, fields.get(key), value])
-                seen.add(index)
-            index += 1
-        if seen != set(byindex):
-            raise RuntimeError("disaster input omitted edited element")
-    if any(
-        a != b and index not in allowed
-        for index, (a, b) in enumerate(zip(original, work, strict=True))
-    ):
-        raise RuntimeError("disaster input changed undeclared bytes")
-    if ai is not None:
-        chunk = chunks["AIPL"]
-        if chunk["kind"] != 3 or chunk["header"] != [
-            {"type": 26, "key": "name"},
-            {"type": 26, "key": "settings"},
-            {"type": 6, "key": "version"},
-        ]:
-            raise RuntimeError("unexpected AIPL schema")
-        elements = dict(chunk["elements"])
-        if ai == "human":
-            payload = elements[0]
-            if payload != b"\0\0\xff\xff\xff\xff":
-                raise RuntimeError("company zero is not an empty human AI slot")
-        else:
-            name = b"MigrationDisasters"
-            config = gamma(len(name)) + name + b"\0" + struct.pack(">I", 1)
-            payload = config * 2 + b"\0"
-        elements[1] = payload
-        reader = Reader(original, chunk["span"][0] + 5)
-        reader.take(reader.gamma() - 1)
-        begin, end = reader.pos, chunk["span"][1]
-        body = (
-            b"".join(
-                gamma(len(elements.get(index, b"")) + 1) + elements.get(index, b"")
-                for index in range(max(elements) + 1)
-            )
-            + b"\0"
-        )
-        work = work[:begin] + body + work[end:]
-        assignments.append(["AIPL", 1, "configuration", ai])
-    target.write_bytes(work)
-    patched = read_save(target)
-    if "GLOG" in patched:
-        begin, end = patched["GLOG"]["span"]
-        work = work[:begin] + work[end:]
-        target.write_bytes(work)
-    after = read_save(target)
-    if set(after) != set(chunks) - {"GLOG"}:
-        raise RuntimeError("disaster input changed chunk set")
-    for cid in set(after) - set(changes) - {"AIPL" if ai is not None else "GLOG"}:
-        if original[slice(*chunks[cid]["span"])] != bytes(
-            work[slice(*after[cid]["span"])]
-        ):
-            raise RuntimeError(f"disaster input changed unrelated {cid}")
-    return {
-        "source": str(source),
-        "source_sha256": hashlib.sha256(original).hexdigest(),
-        "sha256": hashlib.sha256(work).hexdigest(),
-        "assignments": assignments,
-        "removed_chunk": "GLOG",
     }
 
 

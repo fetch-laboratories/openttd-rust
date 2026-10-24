@@ -20,8 +20,9 @@
     clippy::fn_params_excessive_bools
 )]
 use crate::command_type::DoCommandFlag;
-use crate::company::COMPANIES as MAX_COMPANIES;
-use crate::company_type::{INVALID_OWNER, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER};
+use crate::company_type::{
+    INVALID_OWNER, MAX_COMPANIES, OWNER_DEITY, OWNER_NONE, OWNER_TOWN, OWNER_WATER,
+};
 use crate::rail_cmd::{
     CROSSING_SLOPES, ConvertFrame as Area, CrossingRoad, LEVELCROSSING_TRACKBIT_FACTOR,
     RailCommandServices, TUNNELBRIDGE_TRACKBIT_FACTOR,
@@ -251,9 +252,7 @@ impl<'a> Ctx<'a> {
             commands: unsafe { &*r.command },
             town: unsafe { &*s.town },
             authority: unsafe { &*s.authority },
-            map: Map {
-                log_x: (shared.map_log_x)() as u8,
-            },
+            map: shared.map(),
         }
     }
     fn command(&self, cost: Cost<'_>, flags: u16, tile: u32, body: impl FnMut(u16) -> i64) -> i64 {
@@ -1713,8 +1712,8 @@ impl<'a> Ctx<'a> {
     }
     fn convert_owner(&self, tile: u32, num: u32, owner: u8, from: u8, to: u8) {
         let company = (self.shared.current_company)();
-        if u32::from(company) >= MAX_COMPANIES
-            || (u32::from(owner) >= MAX_COMPANIES && owner != OWNER_NONE)
+        if u32::from(company) >= u32::from(MAX_COMPANIES)
+            || (u32::from(owner) >= u32::from(MAX_COMPANIES) && owner != OWNER_NONE)
         {
             return;
         }
@@ -1948,7 +1947,6 @@ impl<'a> Ctx<'a> {
 /// # Safety
 /// Immutable tables and live native cost/frame slots outlive this synchronous
 /// invocation. Slots are distinct; no native borrow survives reentrant calls.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_allow_remove(
     services: *const RoadCommandServices,
     out: *mut CommandCost,
@@ -2222,10 +2220,9 @@ pub unsafe extern "C" fn openttd_rust_road_build_above(
     c.build_above(c.c(out), flags, tile);
 }
 
-/// Removal entry also used by the native road tile loop pending #212.
+/// Original `RemoveRoad` entry.
 /// # Safety
 /// Immutable tables and distinct live cost slots outlive this synchronous call.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_remove(
     services: *const RoadCommandServices,
     out: *mut CommandCost,
