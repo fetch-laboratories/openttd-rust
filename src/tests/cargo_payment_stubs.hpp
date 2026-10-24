@@ -13,20 +13,20 @@
 inline OpenTTDCargoServices CargoTestServices()
 {
 	return {
-		[](uint8_t, OpenTTDCargoSpec *) noexcept { std::abort(); },
-		[](uint8_t, uint32_t) noexcept -> uint16_t { std::abort(); },
-		[](uint16_t, uint8_t, uint8_t) noexcept -> uint32_t { std::abort(); },
-		[](void *, uint8_t, uint32_t) noexcept -> uint32_t { std::abort(); },
-		[](void *, uint8_t, uint32_t, uint32_t) noexcept { std::abort(); },
-		[](void *, uint8_t) noexcept -> uint8_t { std::abort(); },
-		[](void *, uint32_t, uint32_t) noexcept { std::abort(); },
-		[](uint16_t, uint8_t, uint8_t, uint32_t, uint8_t) noexcept { std::abort(); },
-		[]() noexcept -> const OpenTTDSubsidyServices * { std::abort(); },
-		[](void *, uint8_t) noexcept { std::abort(); },
-		[](void *, uint8_t) noexcept -> uint32_t { std::abort(); },
-		[](void *, uint8_t, int64_t, int64_t) noexcept -> uint32_t { std::abort(); },
-		[](const void *, uint32_t) noexcept -> int64_t { std::abort(); },
-		[](uint8_t) noexcept -> uint32_t { std::abort(); },
+		.spec = [](uint8_t, OpenTTDCargoSpec *) noexcept { std::abort(); },
+		.callback = [](uint8_t, uint32_t) noexcept -> uint16_t { std::abort(); },
+		.station_read = [](uint16_t, uint8_t, uint8_t) noexcept -> uint32_t { std::abort(); },
+		.industry_read = [](void *, uint8_t, uint32_t) noexcept -> uint32_t { std::abort(); },
+		.industry_write = [](void *, uint8_t, uint32_t, uint32_t) noexcept { std::abort(); },
+		.resolver = nullptr,
+		.accept = [](void *, uint32_t, uint32_t) noexcept { std::abort(); },
+		.statistics = [](uint16_t, uint8_t, uint8_t, uint32_t, uint8_t) noexcept { std::abort(); },
+		.subsidies = []() noexcept -> const OpenTTDSubsidyServices * { std::abort(); },
+		.industry_effect = [](void *, uint8_t) noexcept { std::abort(); },
+		.vehicle_read = [](void *, uint8_t) noexcept -> uint32_t { std::abort(); },
+		.settle = [](void *, uint8_t, int64_t, int64_t) noexcept -> uint32_t { std::abort(); },
+		.feeder = [](const void *, uint32_t) noexcept -> int64_t { std::abort(); },
+		.setting = [](uint8_t) noexcept -> uint32_t { std::abort(); },
 	};
 }
 #endif /* CARGO_PAYMENT_STUBS_HPP */

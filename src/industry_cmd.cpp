@@ -65,6 +65,7 @@
 #include "rust/environment_services.h"
 #include "rust/services_cargo.h"
 #include "rust/services_newgrf.h"
+#include "rust/industry_resolver_ffi.h"
 #include "rust/command_cost_native_services.h"
 #include "rust/services_map.h"
 #include "rust/sound_services.h"
@@ -91,6 +92,7 @@ static bool IndustryCommandDeity() noexcept { return OpenTTDCurrentCompany() == 
 
 #ifdef WITH_RUST
 #include "rust/services_newgrf.h"
+#include "rust/industry_resolver_ffi.h"
 #endif
 
 #include "safeguards.h"
@@ -3728,7 +3730,7 @@ static const OpenTTDIndustryServices _industry_services = {
 		const IndustrySpec *spec = GetIndustrySpec(type);
 		return {spec->behaviour.base(), spec->enabled, !spec->layouts.empty(), spec->appear_ingame[to_underlying(_settings_game.game_creation.landscape)]};
 	},
-	.probability_callback = [](uint8_t type, uint8_t creation, uint32_t chance) noexcept -> uint32_t { return GetIndustryProbabilityCallback(type, static_cast<IndustryAvailabilityCallType>(creation), chance); },
+	.resolver = &GetIndustryResolverServices(),
 	.scale_by_map_size = OpenTTDMapScaleSize,
 	.company_none = []() noexcept -> uint8_t {
 		CompanyID old = OpenTTDCurrentCompany();
@@ -3984,7 +3986,7 @@ static const OpenTTDIndustryTransactionServices &GetIndustryTransactionServices(
 		.town = OpenTTDIndustryTownHandle,
 		.population = [](const OpenTTDTownHandle *town) noexcept -> uint32_t { return reinterpret_cast<const Town *>(town)->cache.population; },
 		.town_position = OpenTTDTownTile,
-		.industry = [](uint16_t id) noexcept -> Industry * { return Industry::Get(IndustryID(id)); },
+		.industry = RustIndustryByID<uint16_t>,
 		.highest_snow_line = OpenTTDHighestSnowLine,
 		.edge_distance = [](uint32_t tile, uint8_t direction) noexcept -> uint32_t { return DistanceFromEdgeDir(TileIndex(tile), static_cast<DiagDirection>(direction)); },
 		.refinery_limit = []() noexcept -> uint8_t { return _settings_game.game_creation.oil_refinery_limit; },
@@ -4046,6 +4048,7 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 
 #ifdef WITH_RUST
 #include "rust/service_table_check.hpp"
+#include "abi-visit-OpenTTDIndustryResolverServices.hpp"
 #include "abi-visit-OpenTTDIndustryServices.hpp"
 #include "abi-visit-OpenTTDIndustryLifecycleServices.hpp"
 #include "abi-visit-OpenTTDIndustryGenerationServices.hpp"
@@ -4059,6 +4062,7 @@ static OpenTTDIndustryTransactionContext GetIndustryTransactionContext()
 bool CheckAbi_industry_cmd()
 {
 	return AbiServicesComplete(GetIndustryGenerationServices().environment) &&
+		AbiServicesComplete(GetIndustryResolverServices()) &&
 		AbiServicesComplete(GetIndustryRustServices()) &&
 		AbiServicesComplete(GetIndustryLifecycleRustServices()) &&
 		AbiServicesComplete(GetIndustryGenerationServices()) &&

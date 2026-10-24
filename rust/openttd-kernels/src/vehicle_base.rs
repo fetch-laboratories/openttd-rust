@@ -41,3 +41,16 @@ pub(crate) const fn is_ground_vehicle(kind: u8) -> bool {
 
 /// `VehStatus::TrainSlowing`.
 pub const VS_TRAIN_SLOWING: u8 = 1 << 4;
+
+/// `NCVV_POSITION_CONSIST_LENGTH`.
+pub const NCVV_POSITION_CONSIST_LENGTH: u8 = 0;
+/// `NCVV_POSITION_SAME_ID_LENGTH`.
+pub const NCVV_POSITION_SAME_ID_LENGTH: u8 = 1;
+/// `NCVV_CONSIST_CARGO_INFORMATION`.
+pub const NCVV_CONSIST_CARGO_INFORMATION: u8 = 2;
+/// `NCVV_COMPANY_INFORMATION`.
+pub const NCVV_COMPANY_INFORMATION: u8 = 3;
+/// `NCVV_POSITION_IN_VEHICLE`.
+pub const NCVV_POSITION_IN_VEHICLE: u8 = 4;
+/// `NCVV_END`.
+pub const NCVV_END: u8 = 5;

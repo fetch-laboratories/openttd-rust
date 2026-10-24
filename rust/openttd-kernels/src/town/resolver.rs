@@ -497,7 +497,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
                 0
             }
         }
-        // Shared GoodsEntry::ConvertState is pending root's integrated landing.
+        // Use the canonical GoodsEntry::ConvertState helper.
         0x64 => unsafe { acceptance_history(s, scope, ro, parameter, map()) },
         0x65 => unsafe { distance(s, scope, parameter as u8, map()) },
         0x66 => {
@@ -574,7 +574,7 @@ unsafe fn acceptance_history(
             crate::station_service::openttd_rust_station_service_cargo(owner.cast_mut(), cargo)
         };
         let status = unsafe { (*fields).status };
-        // Root lands this one canonical pure helper independently.
+        // Read only canonical status, then use the shared pure conversion.
         let state = crate::station_service::openttd_rust_goods_convert_state(status);
         unsafe { (*context.cast::<Context>()).result |= u32::from(state) };
     }

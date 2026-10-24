@@ -58,7 +58,6 @@ pub struct SchedulerServices {
     pub calendar_day: extern "C" fn(VehicleRef),
     pub economy_day: extern "C" fn(VehicleRef),
     pub day_callback_read: extern "C" fn(VehicleRef) -> DayCallback,
-    pub randomise_callback: extern "C" fn(VehicleRef),
     pub first_dirty: extern "C" fn(VehicleRef),
     pub cargo_owner: extern "C" fn(VehicleRef) -> *mut cargo_storage::List,
     /// Base vehicle and shared tables, immutable for the process.
@@ -159,10 +158,22 @@ unsafe fn day<const COUNTED: bool>(
                     crate::witness::hit(crate::witness::VEHICLE_CALLBACK32);
                 }
                 let vs = unsafe { &*s.vehicle };
-                let callback = svc!(COUNTED, vs.callback, vehicle, CBID_VEHICLE_32DAY_CALLBACK);
+                let callback = svc!(
+                    COUNTED,
+                    vs.callback,
+                    (vs.newgrf)(),
+                    vehicle,
+                    CBID_VEHICLE_32DAY_CALLBACK
+                );
                 if callback != CALLBACK_FAILED {
                     if callback & 1 != 0 {
-                        svc!(COUNTED, s.randomise_callback, vehicle);
+                        unsafe {
+                            crate::newgrf_vehicle::trigger(
+                                vs,
+                                vehicle,
+                                crate::newgrf_vehicle::Trigger::Callback32,
+                            );
+                        };
                     }
                     if callback != 0 {
                         svc!(COUNTED, s.first_dirty, vehicle);
@@ -386,7 +397,7 @@ unsafe extern "C" fn load_stations<const COUNTED: bool>(tables: *const Tables) {
             crate::witness::hit(crate::witness::VEHICLE_STATIONS);
         }
         unsafe {
-            station_service::openttd_rust_station_load(
+            station_service::load_station(
                 service,
                 tables.station,
                 tables.loading,
@@ -497,7 +508,6 @@ crate::abi::layouts! {
         calendar_day,
         economy_day,
         day_callback_read,
-        randomise_callback,
         first_dirty,
         cargo_owner,
         vehicle,

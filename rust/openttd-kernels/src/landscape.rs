@@ -10,6 +10,7 @@ use crate::tile_type::{TILE_HEIGHT, TILE_SIZE};
 
 /// `landscape.h::ApplyPixelFoundationToSlope`, using the canonical native
 /// `ApplyFoundationToSlope` leaf and preserving unsigned pixel multiplication.
+#[inline]
 pub(crate) fn apply_pixel_foundation_to_slope(
     services: &crate::services::Services,
     foundation: crate::services::Foundation,
@@ -30,6 +31,7 @@ pub(crate) fn apply_pixel_foundation_to_slope(
     clippy::cast_possible_wrap,
     clippy::too_many_lines
 )]
+#[inline]
 pub(super) fn partial_pixel_z(x: i32, y: i32, corners: u8) -> Option<u32> {
     let sum = x.wrapping_add(y);
     if is_halftile_slope(corners) {

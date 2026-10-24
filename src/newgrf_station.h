@@ -22,9 +22,26 @@
 #include "rail_type.h"
 #include "newgrf_spritegroup.h"
 #include "newgrf_town.h"
+#ifdef WITH_RUST
+#include "rust/station_resolver_ffi.h"
+#endif
 
 /** Scope resolver for stations. */
 struct StationScopeResolver : public ScopeResolver {
+#ifdef WITH_RUST
+	mutable OpenTTDStationResolverState state{};
+	/* Compatibility aliases refer to the one canonical Rust stack state. */
+	uint32_t &tile;
+	BaseStation *&st;
+	const StationSpec *&statspec;
+	CargoType &cargo_type;
+	Axis &axis;
+	StationScopeResolver(ResolverObject &ro, const StationSpec *spec, BaseStation *station, TileIndex tile)
+		: ScopeResolver(ro), tile(state.tile), st(state.station), statspec(state.spec), cargo_type(state.cargo), axis(state.axis)
+	{
+		ro.root_spritegroup = openttd_rust_station_resolver_init(&state, spec, station, tile.base());
+	}
+#else
 	TileIndex tile;                     ///< %Tile of the station.
 	struct BaseStation *st;             ///< Instance of the station.
 	const struct StationSpec *statspec; ///< Station (type) specification.
@@ -58,6 +75,8 @@ struct StationScopeResolver : public ScopeResolver {
 	{
 	}
 
+#endif
+
 	uint32_t GetRandomBits() const override;
 	uint32_t GetRandomTriggers() const override;
 
@@ -76,6 +95,9 @@ struct StationResolverObject : public SpecializedResolverObject<StationRandomTri
 
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
 	{
+#ifdef WITH_RUST
+		return openttd_rust_station_scope(&this->station_scope.state, this, &this->station_scope, scope, relative);
+#else
 		switch (scope) {
 			case VSG_SCOPE_SELF:
 				return &this->station_scope;
@@ -89,6 +111,7 @@ struct StationResolverObject : public SpecializedResolverObject<StationRandomTri
 			default:
 				return ResolverObject::GetScope(scope, relative);
 		}
+#endif
 	}
 
 	const SpriteGroup *ResolveReal(const RealSpriteGroup &group) const override;

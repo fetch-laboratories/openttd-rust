@@ -82,9 +82,9 @@ PBS_WRAPS = (
 
 
 def pbs_wraps(build):
-    # Animation moved into Rust; its C++ facade no longer sees owner-to-owner calls.
+    # Rust owners call each other directly, bypassing both native trigger facades.
     if (build / "openttd-rust").exists():
-        return (PBS_WRAPS[0], "openttd_rust_trigger_station")
+        return ("openttd_rust_station_randomisation", "openttd_rust_trigger_station")
     return PBS_WRAPS
 
 

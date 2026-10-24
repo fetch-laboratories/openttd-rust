@@ -2189,6 +2189,31 @@ coverage gaps. Independent fixing review and the separate root cost disposition
 are recorded on #388; #391 integrated the frozen owners on the routing base after
 scoped reconciliation review and exact-combination Full passed.
 
+### Vehicle NewGRF resolver and canonical query cache (#392, PR #397)
+
+`newgrf_vehicle.rs` owns the five-value cache/validity allocation and lifetime,
+cache fill/invalidation, stack self/parent/relative/root selection, wagon overrides,
+real-group selection, complete vehicle/purchase variable control, callback/property/
+probability entries and trigger recursion. Native virtual facades keep the portable
+originals excluded from `WITH_RUST`; common Action2 evaluation, specifications,
+pools, saved vehicle random/waiting fields and rendering stay native.
+Existing train/road/aircraft/ship, cargo, command and loading owners enter Rust
+properties/callbacks/randomisation directly. Typed observations read consumed
+fields only; neither cache/state borrows nor references into native storage cross
+common evaluation. Invocation paths allocate nothing; each native shell owns one
+canonical cache allocation with native aliases, including indexed construction.
+Default fleet resolver evidence uses actual deterministic/procedure/randomized/
+real groups, cache miss/hit/caller-v7/v8 translation, wide badge IDs, unavailable
+variables, signed properties, probability RNG, output registers, parent/relative
+reentry, all five triggers and zero-bit reseeding. Stock road/ship/aircraft fixtures
+compare public vehicle/purchase variables; aircraft mappings use all byte states
+at the fixture airport's positions. Native GRF reload destroys the synthetic groups
+and reinstalls fresh groups; it compares transient cache observations separately
+from nonempty random/waiting fields decoded from a saved fleet and loaded again.
+PR #397 records focused commands and metrics. Arbitrary external GRF programs,
+historical saves, GUI scheduling and remaining branch combinations are #156 gaps;
+the fixtures do not claim persistent synthetic sprite groups or whole-game equivalence.
+
 ### NewGRF transactional storage (#393)
 
 `newgrf_storage.rs` owns process-wide modes, the pointer-ordered changed registry,
@@ -2211,7 +2236,7 @@ save-registry retention, pending destruction and temporary-key rollover.
 External NewGRF programs, complete pre-161 conversion saves and GUI thread
 scheduling remain #156 limits. PR validation and metrics carry the exact evidence.
 
-### Vehicle NewGRF resolver runtime (#392, PR #397; integration #415 pending)
+### Vehicle NewGRF resolver runtime (#392, #397 via #415)
 
 Rust owns the canonical stack cache, self/parent/relative scopes, root and real-group
 selection, complete variable dispatch including 0x61 and purchase contexts,
@@ -2228,9 +2253,9 @@ semantic vehicle/cargo/save state plus both RNG streams. Native ABI and existing
 aircraft comparison probes supplement these cases. Exact commands, inventories,
 necessary-cost disposition and two function-group fixing reviews are on #397.
 Unreached external-GRF, historical and GUI paths remain on #156. Final shared
-adoption/current-base combination evidence belongs to #415.
+adoption/current-base combination passed exact-head Full in #415.
 
-### Industry and industry-tile NewGRF resolvers (#398, PR #407; #415 pending)
+### Industry and industry-tile NewGRF resolvers (#398, #407 via #415)
 
 Rust owns both stack feature contexts, roots/lazy town, variables, count/search
 and tile-relative helpers, probability/refusal and feature resolution policy.
@@ -2248,4 +2273,25 @@ caller-file cargo, legacy version/location rules and tile identities. Semantic
 INDY/map/save/log and RNG comparisons accompany existing production/lifecycle/
 animation/acceptance and cargo probes. Commands, metrics, accepted boundary cost
 and fixing/adoption reviews are on #407; external/historical limits are on #156.
-Final exact-current-base combination validation belongs to #415.
+The final exact-current-base combination passed Full in #415.
+
+### Rail-station and waypoint NewGRF resolution (#399, PR #411)
+
+Rust owns stack scope/root/cargo/lazy-town state, complete station/waypoint
+variables, real-group selection, platform/end/continuation, slope callbacks and
+randomisation. All six optional caches follow the resolver object's lifetime,
+including repeated DoResolve. Native specs/association vectors, map/station shells,
+saved random/waiting bits, common Action2 and optional TownScope frames remain.
+Direct cargo/station/movement owners replace displaced command/animation/PBS
+callback bounces. Shared goods conversion, scope fallback, container/airport and
+metadata helpers retain native types, narrowing and original GetSpec behavior.
+No owner/cache/container borrow spans evaluation/storage; setters remain immediate.
+Original portable bodies and native callback CommandCost/error frames retain order.
+Default resolver/reload fixtures install actual deterministic/randomized groups,
+require all variables/availability, cache reuse/fresh-owner contrasts, roots/parent
+readonly/retry, slope outcomes, trigger gating and lower/upper/combined reseeding.
+Lower-only reseeding proves six tile draws plus one station draw. Semantic STNN/
+map/cargo/save/register/ordered effects and both RNG streams compare in both modes.
+Transient groups are reconstructed after native load; arbitrary external-GRF,
+historical and GUI paths remain #156. Commands, accepted cost, fixing reviews
+and root's final current-base combination evidence are linked from #411.

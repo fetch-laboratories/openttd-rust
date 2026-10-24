@@ -28,6 +28,7 @@ struct OpenTTDTownState;
 struct OpenTTDTownRef;
 struct OpenTTDTownHandle;
 struct Town;
+inline uint16_t RustTownAuthorityIndex(const OpenTTDTownHandle *town) noexcept { return reinterpret_cast<const Town *>(town)->index.base(); }
 inline uint32_t OpenTTDTownTile(const OpenTTDTownHandle *town) noexcept { return reinterpret_cast<const Town *>(town)->xy.base(); }
 Town *OpenTTDTownShellByID(uint32_t id) noexcept;
 OpenTTDTownState *OpenTTDTownOwnerByID(uint32_t id) noexcept;

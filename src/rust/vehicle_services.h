@@ -21,13 +21,20 @@
 #include "../window_func.h"
 #include "../texteff.hpp"
 
-inline uint16_t RustVehicleCallback(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, std::span<int32_t> registers = {}) noexcept { return GetVehicleCallback(callback, param1, param2, engine, v, registers); }
-uint16_t RustVehicleStartstopCallback(Vehicle *v, int32_t *reg) noexcept;
+struct OpenTTDShipState;
+struct OpenTTDAircraftState;
+OpenTTDAircraftState *RustVehicleAircraftOwner(const Vehicle *v) noexcept;
+OpenTTDShipState *RustVehicleShipOwner(const Vehicle *v) noexcept;
+
 OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept;
 bool RustTrainIsEngine(const Vehicle *v) noexcept;
 Train *RustTrainGetIfValid(uint32_t id) noexcept;
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
+inline uint32_t RustVehicleGRFID(const Vehicle *v) noexcept { return v->GetGRFID(); }
+/** Fixed callback-error adapter for a live native vehicle shell. */
+template <CallbackID Callback>
+inline void RustVehicleCallbackError(void *shell, uint16_t result) noexcept { RustUnknownCallbackResult(RustVehicleGRFID(static_cast<const Vehicle *>(shell)), Callback, result); }
 uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept;
 void RustVehicleFlipStopped(Vehicle *v) noexcept;
 
@@ -41,18 +48,12 @@ inline OpenTTDVehicle *RustVehicle(const Vehicle *v) noexcept { return reinterpr
 /** The vehicle behind a Rust handle. */
 inline Vehicle *VehicleOf(OpenTTDVehicle *v) noexcept { return reinterpret_cast<Vehicle *>(v); }
 
-inline std::optional<bool> RustVehicleBuildProbability(Vehicle *v, EngineID engine, BuildProbabilityType type) noexcept { return TestVehicleBuildProbability(v, engine, type); }
-inline bool RustVehicleHasReverseProbability(void *shell) noexcept { Vehicle *v = static_cast<Vehicle *>(shell); return RustVehicleBuildProbability(v, v->engine_type, BuildProbabilityType::Reversed).has_value(); }
 inline void RustGroundSetFirstEngine(GroundVehicleCache *cache, EngineID engine) noexcept { cache->first_engine = engine; }
 inline void RustVehicleSetRandomBits(Vehicle *v, uint16_t bits) noexcept { v->random_bits = bits; }
 inline uint16_t RustVehicleLastStationVisited(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->last_station_visited.base(); }
 inline uint16_t RustVehicleLoadUnloadTicks(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->load_unload_ticks; }
 inline void RustVehicleSetLastLoadingStation(OpenTTDVehicle *v, uint16_t station) noexcept { VehicleOf(v)->last_loading_station = StationID(station); }
 inline void RustVehicleSetLastLoadingTick(OpenTTDVehicle *v, uint64_t tick) noexcept { VehicleOf(v)->last_loading_tick = tick; }
-inline void RustVehicleRandomisation(Vehicle *v, VehicleRandomTrigger trigger) noexcept { TriggerVehicleRandomisation(v, trigger); }
-inline void RustVehicleDepotRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::Depot); }
-inline void RustVehicleNewCargoRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::NewCargo); }
-inline void RustVehicleEmptyRandomisation(OpenTTDVehicle *v) noexcept { RustVehicleRandomisation(VehicleOf(v), VehicleRandomTrigger::Empty); }
 inline void RustVehicleDirtyDepot(const Vehicle *v) noexcept { SetWindowDirty(WC_VEHICLE_DEPOT, v->tile); }
 inline void RustVehicleDirtyDepotOpaque(void *v) noexcept { RustVehicleDirtyDepot(static_cast<Vehicle *>(v)); }
 inline void RustVehicleInvalidateDepotTile(TileIndex tile) noexcept { InvalidateWindowData(WC_VEHICLE_DEPOT, tile); }
@@ -95,7 +96,6 @@ inline void RustVehicleSetServiceInterval(Vehicle *v, uint16_t interval) noexcep
 inline void RustVehicleSetSubtype(Vehicle *v, uint8_t subtype) noexcept { v->subtype = subtype; }
 inline void RustVehicleInvalidateNewGRFCache(Vehicle *v) noexcept { v->InvalidateNewGRFCache(); }
 inline uint16_t RustVehicleUnitNumber(const Vehicle *v) noexcept { return v->unitnumber; }
-inline uint64_t RustVehicleLegacyUnitNumber(void *v) noexcept { return RustVehicleUnitNumber(static_cast<Vehicle *>(v)); }
 inline void RustVehicleReleaseUnitNumber(Vehicle *v) noexcept { v->ReleaseUnitNumber(); }
 inline uint16_t RustGroundFirstEngine(const Vehicle *v) noexcept { return v->GetGroundVehicleCache()->first_engine.base(); }
 #ifdef WITH_RUST
@@ -108,6 +108,15 @@ inline uint32_t RustVehicleTile(const Vehicle *v) noexcept { return v->tile.base
 inline uint32_t RustVehicleDestTile(const Vehicle *v) noexcept { return v->dest_tile.base(); }
 inline OrderType RustVehicleOrderType(const Vehicle *v) noexcept { return v->current_order.GetType(); }
 inline uint16_t RustVehicleOrderDestination(const Vehicle *v) noexcept { return v->current_order.GetDestination().base(); }
+inline OrderUnloadType RustVehicleOrderUnloadType(const Vehicle *v) noexcept { return v->current_order.GetUnloadType(); }
+inline OrderLoadType RustVehicleOrderLoadType(const Vehicle *v) noexcept { return v->current_order.GetLoadType(); }
+inline TimerGameCalendar::Date RustVehicleCalendarService(const Vehicle *v) noexcept { return v->date_of_last_service_newgrf; }
+inline TimerGameCalendar::Year RustVehicleBuildYear(const Vehicle *v) noexcept { return v->build_year; }
+inline uint8_t RustVehicleSprite(const Vehicle *v) noexcept { return v->spritenum; }
+inline uint8_t RustVehicleNumOrders(const Vehicle *v) noexcept { return v->GetNumOrders(); }
+inline uint8_t RustVehicleRealOrderIndex(const Vehicle *v) noexcept { return v->cur_real_order_index; }
+inline uint16_t RustVehicleServiceInterval(const Vehicle *v) noexcept { return v->GetServiceInterval(); }
+inline int64_t RustVehicleDisplayProfitLastYear(const Vehicle *v) noexcept { return v->GetDisplayProfitLastYear().base(); }
 inline uint16_t RustVehicleOrderMaxSpeed(const Vehicle *v) noexcept { return v->current_order.GetMaxSpeed(); }
 template <class T> inline int RustVehicleDisplayMaxSpeed(const T *v) noexcept { return v->GetDisplayMaxSpeed(); }
 inline int32_t RustVehicleDisplaySpeed(OpenTTDVehicle *v) noexcept { return RustVehicleDisplayMaxSpeed(VehicleOf(v)); }
@@ -153,6 +162,12 @@ inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->engin
 inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return reinterpret_cast<const OpenTTDEngine *>(e); }
 inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return reinterpret_cast<const Engine *>(e); }
 inline const OpenTTDEngine *RustVehicleGetEngine(OpenTTDVehicle *v) noexcept { return RustEngine(VehicleOf(v)->GetEngine()); }
+/** Shared engine observation for a live base shell, resolved once. */
+template <typename Result, auto Read>
+static Result RustVehicleEngineRead(OpenTTDVehicle *v) noexcept { return Read(RustVehicleGetEngine(v)); }
+/** Signature adapter for a typed controller handle's shared engine observation. */
+template <typename Result, typename Handle, auto Read>
+static Result RustVehicleEngineObservation(Handle handle) noexcept { return RustVehicleEngineRead<Result, Read>(handle.handle); }
 uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept;
 uint16_t RustVehicleCargoCap(OpenTTDVehicle *v) noexcept;
 void RustVehicleSetRefitCap(OpenTTDVehicle *v, uint16_t cap) noexcept;
@@ -194,6 +209,11 @@ inline const uint16_t *RustVehicleCargoPeriodAddress(const Vehicle *v) noexcept 
 inline uint16_t *RustVehicleCargoCounterAddress(Vehicle *v) noexcept { return &v->cargo_age_counter; }
 inline uint32_t *RustVehicleMotionAddress(Vehicle *v) noexcept { return &v->motion_counter; }
 
+/** Typed shell adapter; canonical reads keep their actual return types.
+ * Result also preserves existing wider legacy table signatures. */
+template <typename Result, auto Read>
+static Result OPENTTD_VEHICLE_CALL RustVehicleRead(OpenTTDVehicle *shell) noexcept { return static_cast<Result>(Read(VehicleOf(shell))); }
+
 /** Shared legacy opaque-owner adapter; the actual typed read is defined once. */
 template <typename Result, auto Read>
 static Result RustOpaqueVehicleRead(void *shell) noexcept { return Read(static_cast<Vehicle *>(shell)); }
@@ -212,6 +232,8 @@ template <typename Result, auto Read>
 static Result RustIndexedVehicleRead(uint32_t id) noexcept { return Read(Vehicle::Get(VehicleID(id))); }
 
 /** Base vehicle cargo and articulated fields shared by loading and link refresh. */
+inline bool RustVehicleArticulated(const Vehicle *v) noexcept { return v->IsArticulatedPart(); }
+inline uint8_t RustVehicleCargoSubtype(const Vehicle *v) noexcept { return v->cargo_subtype; }
 inline uint8_t RustVehicleCargoType(OpenTTDVehicle *handle) noexcept { return VehicleOf(handle)->cargo_type; }
 inline uint8_t RustVehicleOwnerOf(OpenTTDVehicle *handle) noexcept { return RustVehicleOwner(VehicleOf(handle)); }
 inline bool RustVehicleHasArticulated(OpenTTDVehicle *handle) noexcept { return RustGroundHasArticulated(VehicleOf(handle)); }

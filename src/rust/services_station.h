@@ -8,6 +8,7 @@
 /** @file services_station.h Canonical station fields and opaque handles for Rust ports. */
 #ifndef RUST_SERVICES_STATION_H
 #define RUST_SERVICES_STATION_H
+#include "../airport.h"
 #include "../station_base.h"
 #include "../station_func.h"
 #include "../industry.h"
@@ -25,9 +26,12 @@
 #include "vehicle_services.h"
 #include "services_ffi.h"
 #include "services_newgrf.h"
+#include "environment_services.h"
 #include "../base_station_base.h"
 #include "../station_map.h"
 #include "../pbs.h"
+
+inline uint16_t RustAirportMovingFlags(const AirportMovingData *moving) noexcept { return moving->flags.base(); }
 
 template <class Handle> inline Handle RustStationGet(uint16_t id) noexcept { return Station::Get(StationID{id}); }
 inline Station *RustAnimationStation(BaseStation *st) noexcept { return Station::From(st); }
@@ -71,12 +75,16 @@ inline void RustRoadStopCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFIn
 inline void RustAirportTileCloseInspect(uint32_t tile) noexcept { RustCloseNewGRFInspect(GSF_AIRPORTTILES, tile); }
 inline uint32_t RustStationHangarTileValue(BaseStation *st, uint32_t index) noexcept { return RustStationHangarTile(st, index).base(); }
 inline void RustStationMarkTilesDirty(BaseStation *st, bool cargo) noexcept { Station::From(st)->MarkTilesDirty(cargo); }
-inline void RustStationRandomisation(BaseStation *st, TileIndex tile, StationRandomTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerStationRandomisation(st, tile, trigger, cargo); }
 inline void RustRoadStopRandomisation(Station *st, TileIndex tile, StationRandomTrigger trigger, CargoType cargo = INVALID_CARGO) noexcept { TriggerRoadStopRandomisation(st, tile, trigger, cargo); }
-inline void RustStationRandomisationAt(BaseStation *st, uint32_t tile, uint8_t trigger, uint8_t cargo) noexcept { RustStationRandomisation(st, TileIndex{tile}, static_cast<StationRandomTrigger>(trigger), cargo); }
 inline void RustRoadStopRandomisationAt(BaseStation *st, uint32_t tile, uint8_t trigger, uint8_t cargo) noexcept { RustRoadStopRandomisation(Station::From(st), TileIndex{tile}, static_cast<StationRandomTrigger>(trigger), cargo); }
 inline const OpenTTDStation *RustStation(const Station *s) noexcept { return reinterpret_cast<const OpenTTDStation *>(s); }
 inline const Station *StationOf(const OpenTTDStation *s) noexcept { return reinterpret_cast<const Station *>(s); }
+/* GetSpec preserves the native dummy-airport fallback. Resolver-specific tile
+ * gates remain with their callers; all handles are borrowed synchronously. */
+inline const AirportSpec *RustStationAirportSpec(const Station *st) noexcept { return st->airport.GetSpec(); }
+inline const AirportSpec *RustBaseStationAirportSpec(BaseStation *st) noexcept { return RustStationAirportSpec(Station::From(st)); }
+inline TTDPAirportType RustAirportTTDType(const AirportSpec *spec) noexcept { return spec->ttd_airport_type; }
+inline uint8_t RustStationAirportTTDType(const OpenTTDStation *st) noexcept { return RustAirportTTDType(RustStationAirportSpec(StationOf(st))); }
 inline uint32_t RustStationAirportTile(const BaseStation *s) noexcept { return Station::From(s)->airport.tile.base(); }
 inline uint8_t RustStationAirportType(const BaseStation *s) noexcept { return Station::From(s)->airport.type; }
 inline Direction RustStationAirportRotation(const BaseStation *s) noexcept { return Station::From(s)->airport.rotation; }
@@ -88,6 +96,7 @@ inline void RustStationRadius(uint32_t tile, uint32_t radius, void *context, voi
 inline Owner OpenTTDStationOwner(const BaseStation *station) noexcept { return station->owner; }
 const OpenTTDStationService *OpenTTDStationActivityOwner(const OpenTTDStation *station) noexcept;
 inline Town *OpenTTDBaseStationTown(const BaseStation *st) noexcept { return st->town; }
+inline uint16_t RustStationTownID(const Station *station) noexcept { return RustTownAuthorityIndex(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(station))); }
 inline Station *OpenTTDNextStation(uint32_t from) noexcept { auto range = Station::Iterate(from); return range.empty() ? nullptr : *range.begin(); }
 inline bool RustStationHasAirport(const Station *s) noexcept { return s->facilities.Test(StationFacility::Airport); }
 inline bool RustStationHasHangar(const Station *s) noexcept { return s->airport.HasHangar(); }
@@ -106,6 +115,7 @@ inline void RustStationDeleteAirportStorage(BaseStation *st) noexcept { delete S
 inline Industry *RustStationAssociatedIndustry(BaseStation *st) noexcept { return Station::From(st)->industry; }
 inline void RustStationSetStationOwner(BaseStation *st, uint8_t owner) noexcept { st->owner = Owner(owner); }
 inline void RustStationSetFacilities(BaseStation *st, uint8_t facilities) noexcept { st->facilities = StationFacilities(facilities); }
+inline int32_t RustStationBuildDate(BaseStation *st) noexcept { return st->build_date.base(); }
 inline void RustStationSetBuildDate(BaseStation *st, int32_t date) noexcept { st->build_date = TimerGameCalendar::Date(date); }
 inline void RustStationListInvalidation(BaseStation *st, int32_t data) noexcept { InvalidateWindowData(WC_STATION_LIST, st->owner, data); }
 inline void RustStationClearName(BaseStation *st) noexcept { st->name.clear(); }
@@ -178,4 +188,10 @@ inline uint8_t OpenTTDAirportDeltaZ(const void *airport) noexcept { return RustA
 inline void OpenTTDModifyStationRatingAround(uint32_t tile, uint8_t owner, int amount, uint radius) noexcept { ModifyStationRatingAround(TileIndex(tile), CompanyID(owner), amount, radius); }
 inline bool RustMovementRailStation(uint32_t tile) noexcept { return IsRailStation(TileIndex{tile}); }
 inline bool RustStationBuoy(uint32_t tile) noexcept { return IsBuoy(TileIndex{tile}); }
+inline uint8_t RustStationTileRandomBits(uint32_t tile) noexcept { return GetStationTileRandomBits(TileIndex{tile}); }
+inline uint16_t RustStationRandomBits(BaseStation *station) noexcept { return station->random_bits; }
+inline uint8_t RustStationWaitingTriggers(BaseStation *station) noexcept { return station->waiting_random_triggers.base(); }
+inline void RustStationSetWaitingTriggers(BaseStation *station, uint8_t triggers) noexcept { station->waiting_random_triggers = StationRandomTriggers(triggers); }
+inline void RustStationSetRandomBits(BaseStation *station, uint16_t bits) noexcept { station->random_bits = bits; }
+inline uint64_t RustStationCachedCargoTriggers(BaseStation *station) noexcept { return station->cached_cargo_triggers; }
 #endif /* RUST_SERVICES_STATION_H */

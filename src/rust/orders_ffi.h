@@ -251,7 +251,6 @@ void *openttd_orders_allocate_list() noexcept;
 uint64_t openttd_orders_suppress_implicit(void *ctx) noexcept;
 uint64_t openttd_orders_shared_window(void *ctx, void *first) noexcept;
 uint64_t openttd_orders_vehicle_id(void *ctx) noexcept;
-uint64_t openttd_orders_reliability(void *ctx) noexcept;
 uint64_t openttd_orders_display_speed(void *ctx) noexcept;
 uint64_t openttd_orders_age_years(void *ctx) noexcept;
 uint64_t openttd_orders_needs_service(void *ctx) noexcept;

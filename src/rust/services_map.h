@@ -16,6 +16,7 @@
 #include "../road_map.h"
 #include "../station_map.h"
 
+inline uint RustClosestWaterDistance(uint32_t tile, bool water) noexcept { return GetClosestWaterDistance(TileIndex(tile), water); }
 inline uint32_t RustTileAddByDiagDir(uint32_t tile, uint8_t dir) noexcept { return TileAddByDiagDir(TileIndex{tile}, static_cast<DiagDirection>(dir)).base(); }
 inline bool SharedIsDepotTile(uint32_t tile) noexcept { return IsDepotTile(TileIndex(tile)); }
 inline uint32_t SharedTileAddWrap(uint32_t tile, int32_t x, int32_t y) noexcept { return TileAddWrap(TileIndex(tile), x, y).base(); }
@@ -45,4 +46,5 @@ inline uint32_t OpenTTDDistanceManhattan(uint32_t from, uint32_t to) noexcept { 
 inline uint32_t OpenTTDDistanceSquare(uint32_t from, uint32_t to) noexcept { return DistanceSquare(TileIndex(from), TileIndex(to)); }
 /* Retain the existing orders-table carrier while sharing the typed leaves. */
 inline uint64_t OpenTTDLegacyOrderDistance(uint32_t from, uint32_t to, uint8_t square) noexcept { return square ? OpenTTDDistanceSquare(from, to) : OpenTTDDistanceManhattan(from, to); }
+inline uint32_t RustTileAdd(uint32_t tile, int32_t delta) noexcept { return TileAdd(TileIndex{tile}, delta).base(); }
 #endif

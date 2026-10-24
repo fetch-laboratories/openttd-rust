@@ -11,10 +11,14 @@
 #include "town_services.h"
 #include "../safeguards.h"
 
+OpenTTDStorage256 *RustIndustryStorageOwner(Industry *industry) noexcept
+{
+	return industry->psa == nullptr ? nullptr : industry->psa->rust_storage;
+}
 static OpenTTDIndustryStorage StorageIndustry(Industry *industry) noexcept
 {
 	if (industry->index == IndustryID::Invalid()) return {nullptr, false};
-	return {industry->psa == nullptr ? nullptr : industry->psa->rust_storage, true};
+	return {RustIndustryStorageOwner(industry), true};
 }
 static OpenTTDStorage256 *StorageCreateIndustry(Industry *industry) noexcept
 {

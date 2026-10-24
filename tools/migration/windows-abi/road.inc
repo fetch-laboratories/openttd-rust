@@ -129,8 +129,10 @@ static void RoadBoundary()
 		return 99;
 	};
 	t.ground.write_first_engine = [](OpenTTDVehicle *, uint16_t engine) noexcept { CHECK(engine == 0xFFFF || (road_abi_probe->fallback_cache && engine == 9)); };
-	t.vehicle.property = [](OpenTTDVehicle *u, uint8_t property, int32_t fallback) noexcept -> int32_t {
+	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return nullptr; };
+	t.vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *u, uint8_t property, int32_t fallback) noexcept -> int32_t {
 		auto &p = *road_abi_probe;
+		if (property == 0x22) return fallback;
 		++p.cache_properties;
 		if (p.fallback_cache) {
 			p.engine_replaced = true;
@@ -148,7 +150,8 @@ static void RoadBoundary()
 	t.ground.write_length = [](OpenTTDVehicle *u, uint8_t length, OpenTTDVehicle *, uint16_t total) noexcept {
 		CHECK(road_abi_probe->fallback_cache ? (u == RoadAbiHandle() ? length == 6 && total == 6 : length == 1 && total == 7) : length == 8 && total == 8);
 	};
-	t.leaves.update_cargo_age = [](OpenTTDVehicle *) noexcept { ++road_abi_probe->cargo_ages; };
+	t.leaves.cargo_age_default = [](OpenTTDVehicle *) noexcept { return uint16_t{0}; };
+	t.vehicle.write_cargo_age = [](OpenTTDVehicle *, uint16_t) noexcept { ++road_abi_probe->cargo_ages; };
 	t.vehicle.write_max_speed = [](OpenTTDVehicle *, uint16_t speed) noexcept { CHECK(speed == (road_abi_probe->fallback_cache ? 99 : 80)); };
 	openttd_rust_road_update_cache(v, probe.state, false, &t.leaves);
 	CHECK(probe.nested == 2 && probe.dest == 144 && openttd_rust_road_path_get(probe.state, 0).tile == 10815);
@@ -167,7 +170,8 @@ static void RoadBoundary()
 		CHECK(u == RoadAbiHandle() && !road_abi_probe->engine_replaced);
 		return {.engine = reinterpret_cast<const OpenTTDEngine *>(&road_abi_engine), .cost_class = 1, .cost_factor = 3};
 	};
-	t.vehicle.property = [](OpenTTDVehicle *u, uint8_t property, int32_t value) noexcept -> int32_t {
+	t.vehicle.newgrf = []() noexcept -> const OpenTTDVehicleResolverServices * { return nullptr; };
+	t.vehicle.property = [](const OpenTTDVehicleResolverServices *, OpenTTDVehicle *u, uint8_t property, int32_t value) noexcept -> int32_t {
 		CHECK(u == RoadAbiHandle() && property == 9 && value == 3);
 		road_abi_probe->engine_replaced = true;
 		return 4;

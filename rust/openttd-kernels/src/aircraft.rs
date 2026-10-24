@@ -219,7 +219,7 @@ pub struct Leaves {
     pub next_aircraft: unsafe extern "C" fn(u32) -> Vehicle,
     pub viewport: unsafe extern "C" fn(Vehicle),
     pub rotor_image: unsafe extern "C" fn(Vehicle),
-    pub copy_sprite: unsafe extern "C" fn(Vehicle, Vehicle),
+    pub copy_sprite: unsafe extern "C" fn(VehicleRef, VehicleRef),
     pub create_effect: unsafe extern "C" fn(Vehicle, u8, i32, i32, i32),
     pub truncate_cargo: unsafe extern "C" fn(Vehicle),
     pub crash_news: unsafe extern "C" fn(Vehicle, u16, u32),
@@ -242,8 +242,8 @@ pub struct Leaves {
     pub invalid_position: unsafe extern "C" fn(Vehicle, *const c_void),
     pub invalid_scheme: unsafe extern "C" fn(Vehicle),
     pub unreachable: unsafe extern "C" fn(Vehicle),
-    pub cargo_age_property: unsafe extern "C" fn(Vehicle) -> u32,
-    pub range_property: unsafe extern "C" fn(Vehicle) -> u32,
+    pub cargo_age_default: unsafe extern "C" fn(Vehicle) -> u16,
+    pub range_default: unsafe extern "C" fn(Vehicle) -> u16,
     pub rotor_image_if_changed: unsafe extern "C" fn(Vehicle) -> bool,
     pub update_rotor_image: unsafe extern "C" fn(Vehicle),
     pub process_orders: unsafe extern "C" fn(Vehicle),
@@ -299,6 +299,7 @@ struct World<'a> {
     movement: crate::movement::CachedTable<'a>,
     map: Cell<Option<Map>>,
     map_bounds: Cell<Option<(u32, u32)>>,
+    counted: bool,
 }
 const SAMPLE_COUNT: i64 = 73;
 const HELICOPTER_SOUND: i64 = 22;
@@ -358,7 +359,7 @@ macro_rules! scalar_services {
         fn $name(&$receiver, $($arg:$ty),*) -> i64 {
             // SAFETY: No canonical owner borrow survives this noexcept callback.
             let result = $call;
-            service_witness(stringify!($name), std::mem::size_of_val(&result));
+            $receiver.service_witness(stringify!($name), std::mem::size_of_val(&result));
             i64::from(result)
         }
     )*};
@@ -368,29 +369,30 @@ macro_rules! direct_services {
         fn $name(&$receiver, $($arg:$ty),*) -> $ret {
             // SAFETY: No canonical owner borrow survives this noexcept callback.
             let result = $call;
-            service_witness(stringify!($name), std::mem::size_of_val(&result));
+            $receiver.service_witness(stringify!($name), std::mem::size_of_val(&result));
             result
         }
     )*};
 }
-/// Count the actual boundary return type before integer promotion. Writes return
-/// unit (zero observation bytes). Names affect instrumentation only; the native
-/// services remain distinct typed calls.
-fn service_witness(name: &str, bytes: usize) {
-    use crate::witness;
-    if !witness::enabled() {
-        return;
-    }
-    witness::hit(witness::AIRCRAFT_SERVICES);
-    witness::add(witness::AIRCRAFT_BYTES, bytes as u64);
-    if matches!(
-        name,
-        "station" | "hangar_height" | "hangar_exit" | "landing_rating" | "first_arrival"
-    ) {
-        witness::hit(witness::AIRCRAFT_STATIONS);
-    }
-}
 impl World<'_> {
+    /// Count the actual boundary return type before integer promotion. The only
+    /// production enable call is `WitnessWriter`'s process-start constructor;
+    /// callbacks cannot change it during this synchronous World invocation.
+    #[inline]
+    fn service_witness(&self, name: &str, bytes: usize) {
+        use crate::witness;
+        if !self.counted {
+            return;
+        }
+        witness::hit(witness::AIRCRAFT_SERVICES);
+        witness::add(witness::AIRCRAFT_BYTES, bytes as u64);
+        if matches!(
+            name,
+            "station" | "hangar_height" | "hangar_exit" | "landing_rating" | "first_arrival"
+        ) {
+            witness::hit(witness::AIRCRAFT_STATIONS);
+        }
+    }
     unsafe fn new(leaves: *const Leaves) -> Self {
         // SAFETY: Immutable tables outlive this synchronous entry. No copied
         // vehicle/station observations or owner borrows survive callbacks.
@@ -402,6 +404,7 @@ impl World<'_> {
             movement: crate::movement::CachedTable::new(unsafe { &*leaves.shared }),
             map: Cell::new(None),
             map_bounds: Cell::new(None),
+            counted: crate::witness::enabled(),
         }
     }
     // Dimensions are runtime observations captured once when this entry first
@@ -410,7 +413,7 @@ impl World<'_> {
     fn map(&self) -> Map {
         self.map.get().unwrap_or_else(|| {
             let log_x = (self.ss.map_log_x)();
-            service_witness("map_log_x", std::mem::size_of_val(&log_x));
+            self.service_witness("map_log_x", std::mem::size_of_val(&log_x));
             let map = Map { log_x: log_x as u8 };
             self.map.set(Some(map));
             map
@@ -419,9 +422,9 @@ impl World<'_> {
     fn map_bounds(&self) -> (u32, u32) {
         self.map_bounds.get().unwrap_or_else(|| {
             let bounds = (self.ss.map_max_x)();
-            service_witness("map_max_x", 4);
+            self.service_witness("map_max_x", 4);
             let y = (self.ss.map_max_y)();
-            service_witness("map_max_y", 4);
+            self.service_witness("map_max_y", 4);
             self.map_bounds.set(Some((bounds, y)));
             (bounds, y)
         })
@@ -457,7 +460,7 @@ impl World<'_> {
     }
     fn random(&self) -> u32 {
         let word = self.ss.random();
-        service_witness("random", 4);
+        self.service_witness("random", 4);
         word
     }
 
@@ -516,9 +519,9 @@ impl World<'_> {
         nearest_depot_order(self; v: Vehicle) => unsafe { (self.leaves.nearest_depot_order)(v) };
         part_of_orders(self; v: Vehicle) => unsafe { (self.leaves.part_of_orders)(v) };
         next_stopping_station(self; vehicle: Vehicle) => unsafe { (self.leaves.next_stopping_station)(vehicle) };
-        speed_property(self; v: Vehicle) => (self.vs.property)(v.base(), PROP_AIRCRAFT_SPEED, 0) as u32;
-        cargo_age_property(self; v: Vehicle) => unsafe { (self.leaves.cargo_age_property)(v) };
-        range_property(self; v: Vehicle) => unsafe { (self.leaves.range_property)(v) };
+        speed_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), PROP_AIRCRAFT_SPEED, 0) as u32;
+        cargo_age_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_CARGO_AGE_PERIOD, i32::from(unsafe { (self.leaves.cargo_age_default)(v) })) as u32;
+        range_property(self; v: Vehicle) => (self.vs.property)((self.vs.newgrf)(), v.base(), crate::newgrf_properties::PROP_AIRCRAFT_RANGE, i32::from(unsafe { (self.leaves.range_default)(v) })) as u32;
         start_sound(self; v: Vehicle) => (self.vs.play_vehicle_sound)(v.base(), VSE_START);
         rotor_image_if_changed(self; v: Vehicle) => unsafe { (self.leaves.rotor_image_if_changed)(v) };
         vehicle_crash(self; v: Vehicle, flooded: i64) => unsafe { (self.leaves.vehicle_crash)(v, flooded != 0) };
@@ -544,8 +547,9 @@ impl World<'_> {
         tick_status(self; v: Vehicle) -> TickStatus => (self.vs.tick_status)(v.base());
         day_cost(self; v: Vehicle) -> DayCost => (self.vs.day_cost)(v.base());
 
-        set_x(self; v: Vehicle, value: i64) -> () => (self.vs.write_x)(v.base(), value as i32);
-        set_y(self; v: Vehicle, value: i64) -> () => (self.vs.write_y)(v.base(), value as i32);
+        set_x(self; v: VehicleRef, value: i64) -> () => (self.vs.write_x)(v, value as i32);
+        set_y(self; v: VehicleRef, value: i64) -> () => (self.vs.write_y)(v, value as i32);
+        set_base_z(self; v: VehicleRef, value: i64) -> () => (self.vs.write_z)(v, value as i32);
         set_z(self; v: Vehicle, value: i64) -> () => (self.vs.write_z)(v.base(), value as i32);
         set_tile(self; v: Vehicle, value: i64) -> () => (self.vs.write_tile)(v.base(), value as u32);
         set_direction(self; v: Vehicle, value: i64) -> () => (self.vs.write_direction)(v.base(), value as u8);
@@ -577,8 +581,11 @@ impl World<'_> {
         fta_next_position(self; node: *const c_void) -> u8 => unsafe { (self.leaves.fta_next_position)(node) };
         update_position(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update_position(self.vs, vehicle.base(), self.map()); (self.leaves.viewport)(vehicle); };
         rotor_image(self; vehicle: Vehicle) -> () => unsafe { (self.leaves.rotor_image)(vehicle) };
-        copy_sprite(self; vehicle: Vehicle, source: Vehicle) -> () => unsafe { (self.leaves.copy_sprite)(vehicle, source) };
-        position_viewport(self; vehicle: Vehicle) -> () => unsafe { crate::vehicle::occupancy::update_position(self.vs, vehicle.base(), self.map()); (self.vs.base_viewport)(vehicle.base()); };
+        copy_sprite(self; vehicle: VehicleRef, source: VehicleRef) -> () => unsafe { (self.leaves.copy_sprite)(vehicle, source) };
+        position_next(self; vehicle: VehicleRef) -> Option<VehicleRef> => (self.vs.next)(vehicle);
+        position_y(self; vehicle: VehicleRef) -> i32 => (self.vs.y)(vehicle);
+        position_coordinates(self; vehicle: VehicleRef, x: i64, y: i64, z: i64) -> () => (self.vs.write_coordinates)(vehicle, x as i32, y as i32, z as i32);
+        position_viewport(self; vehicle: VehicleRef) -> () => unsafe { crate::vehicle::occupancy::update_position(self.vs, vehicle, self.map()); (self.vs.base_viewport)(vehicle); };
         create_effect(self; vehicle: Vehicle, kind: i64, x: i64, y: i64, z: i64) -> () => unsafe { (self.leaves.create_effect)(vehicle, kind as u8, x as i32, y as i32, z as i32) };
         dirty_start_stop(self; vehicle: Vehicle) -> () => (self.vs.start_stop_dirty)(vehicle.base());
         play_sound(self; vehicle: Vehicle, sound: i64) -> () => (self.vs.play_sound)(vehicle.base(), sound as u16);
@@ -617,14 +624,14 @@ impl World<'_> {
     fn next(&self, v: Vehicle) -> Vehicle {
         {
             let result = unsafe { (self.leaves.next)(v) };
-            service_witness("next", std::mem::size_of_val(&result));
+            self.service_witness("next", std::mem::size_of_val(&result));
             result
         }
     }
     fn station(&self, id: u32) -> *const Station {
         {
             let result = unsafe { (self.leaves.station)(id as u16) };
-            service_witness("station", std::mem::size_of_val(&result));
+            self.service_witness("station", std::mem::size_of_val(&result));
             result
         }
     }
@@ -632,7 +639,7 @@ impl World<'_> {
         // SAFETY: Synchronous noexcept service; no owner borrow spans this call.
         {
             let m = unsafe { (self.leaves.moving)(airport, pos as u8) };
-            service_witness("moving", std::mem::size_of_val(&m));
+            self.service_witness("moving", std::mem::size_of_val(&m));
             Movement {
                 x: i64::from(m.x),
                 y: i64::from(m.y),
@@ -645,7 +652,7 @@ impl World<'_> {
         // SAFETY: Synchronous noexcept service; no owner borrow spans this call.
         {
             let p = (self.vs.new_position)(v.base());
-            service_witness("new_position", std::mem::size_of_val(&p));
+            self.service_witness("new_position", std::mem::size_of_val(&p));
             NewPosition {
                 x: i64::from(p.x),
                 y: i64::from(p.y),
@@ -656,12 +663,12 @@ impl World<'_> {
     fn next_aircraft(&self, last: u32) -> Vehicle {
         {
             let result = unsafe { (self.leaves.next_aircraft)(last) };
-            service_witness("next_aircraft", std::mem::size_of_val(&result));
+            self.service_witness("next_aircraft", std::mem::size_of_val(&result));
             result
         }
     }
     fn station_rating(&self, tile: i64, owner: i64, amount: i64, radius: i64) {
-        service_witness("station_rating", 0);
+        self.service_witness("station_rating", 0);
         // SAFETY: Synchronous noexcept service; no owner borrow spans this call.
         unsafe {
             (self.leaves.station_rating)(tile as u32, owner as u8, amount as i32, radius as u32);
@@ -808,7 +815,10 @@ impl World<'_> {
         if observed.subtype() == 0 {
             self.rotor_image(id);
         }
-        let shadow = self.next(id);
+        // Positioning consumes base shell services only. Do not resolve an
+        // aircraft owner or ID for the shadow/rotor successors.
+        // SAFETY: The original unconditionally dereferences the live shadow.
+        let shadow = unsafe { self.position_next(id.base()).unwrap_unchecked() };
         let safe_x = x.clamp(0, self.map_max_x() * 16);
         let mut safe_y = (y - 1).clamp(0, self.map_max_y() * 16);
         self.set_x(shadow, x);
@@ -816,13 +826,12 @@ impl World<'_> {
             shadow,
             y - ((observed.z() - self.slope(safe_x, safe_y)) >> 3),
         );
-        safe_y = self.y(shadow).clamp(0, self.map_max_y() * 16);
-        self.set_z(shadow, self.slope(safe_x, safe_y));
-        self.copy_sprite(shadow, id);
+        safe_y = i64::from(self.position_y(shadow)).clamp(0, self.map_max_y() * 16);
+        self.set_base_z(shadow, self.slope(safe_x, safe_y));
+        self.copy_sprite(shadow, id.base());
         self.position_viewport(shadow);
-        let rotor = self.next(shadow);
-        if !rotor.handle.is_null() {
-            self.write_coordinates(rotor, x, y, z + 5);
+        if let Some(rotor) = self.position_next(shadow) {
+            self.position_coordinates(rotor, x, y, z + 5);
             self.position_viewport(rotor);
         }
     }
@@ -909,7 +918,7 @@ impl World<'_> {
         } else {
             return;
         }
-        self.position_viewport(rotor);
+        self.position_viewport(rotor.base());
     }
     fn speed(&self, id: Vehicle, mut limit: u32, mut hard: bool) -> u32 {
         let input = self.speed_inputs(id);
@@ -1990,7 +1999,7 @@ impl World<'_> {
         }
         unsafe { maintenance::economy_age_vehicle(id.base(), self.vs) };
         let day = (self.vs.day)(id.base());
-        service_witness("day", 1);
+        self.service_witness("day", 1);
         let day = day.wrapping_add(1);
         self.set_day_counter(id, i64::from(day));
         if day & 7 == 0 {
@@ -2040,7 +2049,7 @@ impl World<'_> {
         let next = self.station(next);
         let engine_subtype = self.engine_subtype(id);
         let owner = self.owner(id) as u8;
-        service_witness("for_each_station", 0);
+        self.service_witness("for_each_station", 0);
         self.ss.for_each_station(|st, _, cursor| {
             let cursor = u32::from(cursor);
             let candidate = self.hangar_candidate(st, owner);
@@ -2554,8 +2563,8 @@ crate::abi::layouts! {
         invalid_position,
         invalid_scheme,
         unreachable,
-        cargo_age_property,
-        range_property,
+        cargo_age_default,
+        range_default,
         rotor_image_if_changed,
         update_rotor_image,
         process_orders,
@@ -2599,4 +2608,14 @@ crate::abi::layouts! {
         airport,
         hangar,
     };
+}
+
+/// `Aircraft::GetSpeedOldUnits` applied to `cached_max_speed`.
+pub(crate) fn speed_old_units(speed: u32) -> u32 {
+    speed * 10 / 128
+}
+
+/// `Aircraft::IsNormalAircraft`.
+pub(crate) const fn is_normal_aircraft(subtype: u8) -> bool {
+    subtype <= AIR_AIRCRAFT
 }

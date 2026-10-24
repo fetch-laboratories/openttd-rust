@@ -18,10 +18,12 @@
 
 #ifdef WITH_RUST
 #include "rust/animation_ffi.h"
+#include "rust/station_resolver_ffi.h"
 #include "rust/tile_animation_services.h"
 #include "rust/sound_services.h"
 #include "rust/services_station.h"
 #include "rust/services_industry.h"
+#include "rust/services_cargo.h"
 #include "rust/station_service_ffi.h"
 #include "station_base.h"
 #include "newgrf_station.h"
@@ -35,7 +37,7 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 	static const OpenTTDAnimationServices services{
 		.shared = &GetRustSharedServices(),
 		.station_base = RustStationGet<BaseStation *>, .as_station = RustAnimationStation, .location = RustStationLocation,
-		.is_station = GetRustStationServices().is_station, .rail_randomisation = RustStationRandomisationAt, .road_randomisation = RustRoadStopRandomisationAt,
+		.is_station = GetRustStationServices().is_station, .road_randomisation = RustRoadStopRandomisationAt,
 		.town = &GetRustTownServices(), .industries = &GetIndustryRustServices(),
 		.construction = &GetIndustryConstructionServices(), .industry_tiles = &GetIndustryTileServices(),
 		.house = &GetHouseAnimationBinding(), .industry = &GetIndustryAnimationBinding(), .station = &GetStationAnimationBinding(),
@@ -54,9 +56,9 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 		.rail_spec_triggers = [](const StationSpec *s) noexcept { return s->animation.triggers.base(); },
 		.road_spec_triggers = [](const RoadStopSpec *s) noexcept { return s->animation.triggers.base(); },
 		.airport_spec_triggers = [](const AirportTileSpec *s) noexcept { return s->animation.triggers.base(); },
-		.rail_cargo = [](const StationSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },
-		.road_cargo = [](const RoadStopSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },
-		.airport_cargo = [](const AirportTileSpec *s, uint8_t c) noexcept { return s->grf_prop.grffile->cargo_map[c]; },
+		.rail_cargo = RustSpecCargoMap<StationSpec>,
+		.road_cargo = RustSpecCargoMap<RoadStopSpec>,
+		.airport_cargo = RustSpecCargoMap<AirportTileSpec>,
 		.airport_grf = [](const AirportTileSpec *s) noexcept { return s->grf_prop.grffile != nullptr; },
 		.airport_area = [](Station *s) noexcept -> OpenTTDAnimationArea { return {s->airport.tile.base(), s->airport.w, s->airport.h}; },
 		.airport_belongs = RustStationAirportMember,
@@ -68,7 +70,10 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 void AddAnimatedTile(TileIndex tile, bool dirty) { openttd_rust_animation_add(tile.base(), dirty); }
 void DeleteAnimatedTile(TileIndex tile, bool immediate) { openttd_rust_animation_delete(tile.base(), immediate); }
 void AnimateAnimatedTiles() { PerformanceAccumulator landscape_framerate(PFE_GL_LANDSCAPE); openttd_rust_animation_run(); }
-void InitializeAnimatedTiles() { openttd_rust_animation_exchange(&GetRustAnimationServices()); openttd_rust_animation_initialize(); }
+/* InitializeGame calls this for generated, intro and loaded worlds before
+ * commands, PBS, cargo/visits, animation ticks or purchase/render resolvers run.
+ * All direct Rust station entries share this process-wide serialized table. */
+void InitializeAnimatedTiles() { openttd_rust_animation_exchange(&GetRustAnimationServices()); openttd_rust_station_resolver_exchange(&GetStationResolverServices()); openttd_rust_animation_initialize(); }
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDAnimationServices.hpp"
 #include "abi-visit-OpenTTDHouseAnimation.hpp"

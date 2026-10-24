@@ -143,7 +143,6 @@ struct OpenTTDFleetTransactionServices {
 	bool (*local)() noexcept OPENTTD_SERVICE_DEFAULT(local);
 	void (*refit_news)(void *shell, int32_t order) noexcept OPENTTD_SERVICE_DEFAULT(refit_news);
 	uint8_t (*subtype)(void *old, void *replacement, uint8_t cargo) noexcept OPENTTD_SERVICE_DEFAULT(subtype);
-	bool (*reverse_probability)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(reverse_probability);
 	void (*reverse)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(reverse);
 	void (*copy_configuration)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(copy_configuration);
 	void (*viewports)(void *old, void *replacement) noexcept OPENTTD_SERVICE_DEFAULT(viewports);

@@ -145,7 +145,6 @@ const OpenTTDVehicleCommonServices &GetRustVehicleCommonServices() noexcept
 		},
 		.train_power = RustOpaqueVehicleRead<uint32_t, RustTrainCachedPower>,
 		.aircraft_start = VehicleTransactionAircraftStart,
-		.startstop_callback = RustOpaqueVehicleInvoke<RustVehicleStartstopCallback, int32_t *>,
 		.grf_version = RustOpaqueVehicleRead<uint8_t, RustVehicleGRFVersion>,
 		.grf_string = RustOpaqueVehicleInvoke<RustVehicleGRFString, uint32_t>,
 		.waiting_news = VehicleTransactionWaitingNews,

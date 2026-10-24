@@ -50,7 +50,7 @@ static uint32_t rng, self_mask, parent_mask;
 static bool IsValidTile(TileIndex tile) { return tile < tiles.size(); }
 static bool IsTileType(TileIndex tile, int) { return tiles[tile].belongs; }
 static IndustryGfx GetIndustryGfx(TileIndex tile) { return builtin_mode ? builtin.gfx : tile; }
-static const IndustryTileSpec *GetIndustryTileSpec(IndustryGfx gfx) { return builtin_mode ? &builtin_spec : &specs[gfx]; }
+static const IndustryTileSpec *GetIndustryTileSpec(IndustryGfx gfx) noexcept { return builtin_mode ? &builtin_spec : &specs[gfx]; }
 static uint32_t Random() { rng = rng * 1664525U + 1013904223U; trace.push_back({0, rng, 0, 0}); return rng; }
 static Bits GetIndustryRandomTriggers(TileIndex tile) { return {tiles[tile].triggers}; }
 static void SetIndustryRandomTriggers(TileIndex tile, Bits bits) { tiles[tile].triggers = bits.value; trace.push_back({1, tile, bits.value, 0}); }

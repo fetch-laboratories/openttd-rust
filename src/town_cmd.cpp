@@ -54,6 +54,7 @@
 #include "rust/services_landscape.h"
 #include "rust/settings_services.h"
 #include "rust/town_founding_ffi.h"
+#include "rust/services_map.h"
 #include "rust/generation_services.hpp"
 #include "rust/house_ffi.h"
 #include "rust/town_command_ffi.h"
@@ -1193,7 +1194,7 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.animation_spec = RustHouseAnimationSpec,
 		.new_spec = RustHouseNewSpec,
 		.production = RustHouseProduction,
-		.sprite_groups = [](uint16_t house) noexcept { return HouseSpec::Get(house)->grf_prop.HasSpriteGroups(); },
+		.sprite_groups = RustHouseHasSpriteGroups,
 		.removal = [](uint16_t house) noexcept -> OpenTTDHouseRemoval { const HouseSpec *hs = HouseSpec::Get(house); return {static_cast<int64_t>(hs->GetRemovalCost()), hs->remove_rating_decrease}; },
 		.acceptance = RustHouseAcceptance,
 		.watched = [](uint16_t house) noexcept -> uint64_t { return HouseSpec::Get(house)->watched_cargoes; },
@@ -2450,7 +2451,7 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.can_allocate = []() noexcept { return Town::CanAllocateItem(); },
 		.close_to_town = [](uint32_t tile, uint distance) noexcept { return IsCloseToTown(TileIndex(tile), distance); },
 		.flat = OpenTTDIsTileFlat,
-		.water_distance = [](uint32_t tile, bool water) noexcept { return GetClosestWaterDistance(TileIndex(tile), water); },
+		.water_distance = RustClosestWaterDistance,
 		.scale_size = OpenTTDMapScaleSize,
 		.scale_land = OpenTTDMapScaleLandProportion,
 		.found_setting = OpenTTDTownFoundingSetting,

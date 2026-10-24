@@ -141,6 +141,18 @@ witness_blocks! {
         HOUSE_PROTECTED = 16 => "house.protected",
     }
     // Registry: landscape (#212).
+    industry_resolver {
+        INDUSTRY_RESOLVER_VARIABLE = 0 => "industry_resolver.variable",
+        INDUSTRY_RESOLVER_TILE_VARIABLE = 1 => "industry_resolver.tile_variable",
+        INDUSTRY_RESOLVER_COUNT = 2 => "industry_resolver.count",
+        INDUSTRY_RESOLVER_FILTERED_COUNT = 3 => "industry_resolver.filtered_count",
+        INDUSTRY_RESOLVER_LOCATION = 4 => "industry_resolver.location",
+        INDUSTRY_RESOLVER_ROOT = 5 => "industry_resolver.root",
+        INDUSTRY_RESOLVER_TILE_ROOT = 6 => "industry_resolver.tile_root",
+        INDUSTRY_RESOLVER_TOWN = 7 => "industry_resolver.town",
+        INDUSTRY_RESOLVER_PROBABILITY = 8 => "industry_resolver.probability",
+        INDUSTRY_RESOLVER_REFUSAL = 9 => "industry_resolver.refusal",
+    }
     landscape {
         LANDSCAPE = 0 => "landscape.snow_start",
         LANDSCAPE_SNOW_CHANGE = 1 => "landscape.snow_change",

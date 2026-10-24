@@ -42,6 +42,9 @@ void SetWagonOverrideSprites(EngineID engine, CargoType cargo, const SpriteGroup
 
 const SpriteGroup *GetWagonOverrideSpriteSet(EngineID engine, CargoType cargo, EngineID overriding_engine)
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_wagon_override(&GetRustVehicleResolverServices(), engine.base(), cargo, overriding_engine.base());
+#else
 	const Engine *e = Engine::Get(engine);
 
 	for (const WagonOverride &wo : e->overrides) {
@@ -49,6 +52,7 @@ const SpriteGroup *GetWagonOverrideSpriteSet(EngineID engine, CargoType cargo, E
 		if (std::ranges::find(wo.engines, overriding_engine) != wo.engines.end()) return wo.group;
 	}
 	return nullptr;
+#endif
 }
 
 void SetCustomEngineSprites(EngineID engine, CargoType cargo, const SpriteGroup *group)
@@ -75,6 +79,7 @@ void SetEngineGRF(EngineID engine, const GRFFile *file)
 }
 
 
+#ifndef WITH_RUST
 static int MapOldSubType(const Vehicle *v)
 {
 	switch (v->type) {
@@ -304,19 +309,37 @@ static uint8_t MapAircraftMovementAction(const Aircraft *v)
 }
 
 
+#endif
+
 /* virtual */ uint32_t VehicleScopeResolver::GetRandomBits() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_scope_random(&GetRustVehicleResolverServices(), &this->state, false);
+#else
 	return this->v == nullptr ? 0 : this->v->random_bits;
+#endif
 }
 
 /* virtual */ uint32_t VehicleScopeResolver::GetRandomTriggers() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_scope_random(&GetRustVehicleResolverServices(), &this->state, true);
+#else
 	return this->v == nullptr ? 0 : this->v->waiting_random_triggers.base();
+#endif
 }
 
 
 /* virtual */ ScopeResolver *VehicleResolverObject::GetScope(VarSpriteGroupScope scope, uint8_t relative)
 {
+#ifdef WITH_RUST
+	switch (openttd_rust_vehicle_resolver_scope(&GetRustVehicleResolverServices(), &this->state, this, scope, relative)) {
+		case VSG_SCOPE_SELF: return &this->self_scope;
+		case VSG_SCOPE_PARENT: return &this->parent_scope;
+		case VSG_SCOPE_RELATIVE: return &this->relative_scope;
+		default: return ResolverObject::GetScope(scope, relative);
+	}
+#else
 	switch (scope) {
 		case VSG_SCOPE_SELF:   return &this->self_scope;
 		case VSG_SCOPE_PARENT: return &this->parent_scope;
@@ -359,6 +382,7 @@ static uint8_t MapAircraftMovementAction(const Aircraft *v)
 		}
 		default: return ResolverObject::GetScope(scope, relative);
 	}
+#endif
 }
 
 /**
@@ -370,6 +394,7 @@ static uint8_t MapAircraftMovementAction(const Aircraft *v)
  * @param v Vehicle, nullptr in purchase list.
  * @return Livery to use
  */
+#ifndef WITH_RUST
 static const Livery *LiveryHelper(EngineID engine, const Vehicle *v)
 {
 	const Livery *l;
@@ -969,15 +994,20 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 	return UINT_MAX;
 }
 
+#endif
+
 /* virtual */ uint32_t VehicleScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_scope_variable(&GetRustVehicleResolverServices(), &this->state, &this->ro, this->ro.grffile, this->ro.callback, variable, parameter, &available);
+#else
 	if (this->v == nullptr) {
 		/* Vehicle does not exist, so we're in a purchase list */
 		switch (variable) {
-			case 0x43: return GetCompanyInfo(_current_company, LiveryHelper(this->self_type, nullptr)); // Owner information
+			case 0x43: return GetCompanyInfo(_current_company, LiveryHelper(EngineID(this->self_type), nullptr)); // Owner information
 			case 0x46: return 0;               // Motion counter
 			case 0x47: { // Vehicle cargo info
-				const Engine *e = Engine::Get(this->self_type);
+				const Engine *e = Engine::Get(EngineID(this->self_type));
 				CargoType cargo_type = e->GetDefaultCargoType();
 				if (IsValidCargoType(cargo_type)) {
 					const CargoSpec *cs = CargoSpec::Get(cargo_type);
@@ -986,17 +1016,17 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 					return 0x000000FF;
 				}
 			}
-			case 0x48: return Engine::Get(this->self_type)->flags.base(); // Vehicle Type Info
+			case 0x48: return Engine::Get(EngineID(this->self_type))->flags.base(); // Vehicle Type Info
 			case 0x49: return TimerGameCalendar::year.base(); // 'Long' format build year
 			case 0x4B: return TimerGameCalendar::date.base(); // Long date of last service
 
-			case 0x7A: return GetBadgeVariableResult(*this->ro.grffile, Engine::Get(this->self_type)->badges, parameter);
+			case 0x7A: return GetBadgeVariableResult(*this->ro.grffile, Engine::Get(EngineID(this->self_type))->badges, parameter);
 
 			case 0x92: return ClampTo<uint16_t>(TimerGameCalendar::date - CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR); // Date of last service
 			case 0x93: return GB(ClampTo<uint16_t>(TimerGameCalendar::date - CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR), 8, 8);
 			case 0xC4: return (Clamp(TimerGameCalendar::year, CalendarTime::ORIGINAL_BASE_YEAR, CalendarTime::ORIGINAL_MAX_YEAR) - CalendarTime::ORIGINAL_BASE_YEAR).base(); // Build year
-			case 0xC6: return Engine::Get(this->self_type)->grf_prop.local_id;
-			case 0xC7: return GB(Engine::Get(this->self_type)->grf_prop.local_id, 8, 8);
+			case 0xC6: return Engine::Get(EngineID(this->self_type))->grf_prop.local_id;
+			case 0xC7: return GB(Engine::Get(EngineID(this->self_type))->grf_prop.local_id, 8, 8);
 			case 0xDA: return VehicleID::Invalid().base(); // Next vehicle
 			case 0xF2: return 0; // Cargo subtype
 		}
@@ -1006,11 +1036,15 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 	}
 
 	return VehicleGetVariable(const_cast<Vehicle*>(this->v), this, variable, parameter, available);
+#endif
 }
 
 
 /* virtual */ const SpriteGroup *VehicleResolverObject::ResolveReal(const RealSpriteGroup &group) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_resolve_real(&GetRustVehicleResolverServices(), &this->state, &group);
+#else
 	const Vehicle *v = this->self_scope.v;
 
 	if (v == nullptr) {
@@ -1031,11 +1065,12 @@ static uint32_t VehicleGetVariable(Vehicle *v, const VehicleScopeResolver *objec
 	set = std::min(set, totalsets - 1);
 
 	return in_motion ? group.loaded[set] : group.loading[set];
+#endif
 }
 
 GrfSpecFeature VehicleResolverObject::GetFeature() const
 {
-	switch (Engine::Get(this->self_scope.self_type)->type) {
+	switch (Engine::Get(EngineID(this->self_scope.self_type))->type) {
 		case VEH_TRAIN: return GSF_TRAINS;
 		case VEH_ROAD: return GSF_ROADVEHICLES;
 		case VEH_SHIP: return GSF_SHIPS;
@@ -1046,7 +1081,7 @@ GrfSpecFeature VehicleResolverObject::GetFeature() const
 
 uint32_t VehicleResolverObject::GetDebugID() const
 {
-	return Engine::Get(this->self_scope.self_type)->grf_prop.local_id;
+	return Engine::Get(EngineID(this->self_scope.self_type))->grf_prop.local_id;
 }
 
 /**
@@ -1073,6 +1108,20 @@ static const GRFFile *GetEngineGrfFile(EngineID engine_type)
 VehicleResolverObject::VehicleResolverObject(EngineID engine_type, const Vehicle *v, WagonOverride wagon_override, bool rotor_in_gui,
 		CallbackID callback, uint32_t callback_param1, uint32_t callback_param2)
 	: SpecializedResolverObject<VehicleRandomTriggers>(GetEngineGrfFile(engine_type), callback, callback_param1, callback_param2),
+#ifdef WITH_RUST
+	state(this->owned_state), self_scope(*this, this->state.self_), parent_scope(*this, this->state.parent), relative_scope(*this, this->state.relative)
+{
+	openttd_rust_vehicle_resolver_init(&GetRustVehicleResolverServices(), &this->state, engine_type.base(), v, wagon_override, rotor_in_gui);
+	this->root_spritegroup = this->state.root;
+}
+
+VehicleResolverObject::VehicleResolverObject(OpenTTDVehicleResolverState &state, EngineID engine, CallbackID callback, uint32_t p1, uint32_t p2)
+	: SpecializedResolverObject<VehicleRandomTriggers>(GetEngineGrfFile(engine), callback, p1, p2),
+	state(state), self_scope(*this, state.self_), parent_scope(*this, state.parent), relative_scope(*this, state.relative)
+{
+	this->root_spritegroup = state.root;
+}
+#else
 	self_scope(*this, engine_type, v, rotor_in_gui),
 	parent_scope(*this, engine_type, ((v != nullptr) ? v->First() : v), rotor_in_gui),
 	relative_scope(*this, engine_type, v, rotor_in_gui),
@@ -1101,6 +1150,7 @@ VehicleResolverObject::VehicleResolverObject(EngineID engine_type, const Vehicle
 		}
 	}
 }
+#endif
 
 static void GetCustomEngineSprite(EngineID engine, const Vehicle *v, Direction direction, EngineImageType image_type, VehicleSpriteSeq *result)
 {
@@ -1197,8 +1247,12 @@ bool UsesWagonOverride(const Vehicle *v)
  */
 uint16_t GetVehicleCallback(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, std::span<int32_t> regs100)
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_callback(&GetRustVehicleResolverServices(), callback, param1, param2, engine.base(), v, nullptr, false, regs100.data(), regs100.size());
+#else
 	VehicleResolverObject object(engine, v, VehicleResolverObject::WO_UNCACHED, false, callback, param1, param2);
 	return object.ResolveCallback(regs100);
+#endif
 }
 
 /**
@@ -1214,9 +1268,13 @@ uint16_t GetVehicleCallback(CallbackID callback, uint32_t param1, uint32_t param
  */
 uint16_t GetVehicleCallbackParent(CallbackID callback, uint32_t param1, uint32_t param2, EngineID engine, const Vehicle *v, const Vehicle *parent, std::span<int32_t> regs100)
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_callback(&GetRustVehicleResolverServices(), callback, param1, param2, engine.base(), v, parent, true, regs100.data(), regs100.size());
+#else
 	VehicleResolverObject object(engine, v, VehicleResolverObject::WO_NONE, false, callback, param1, param2);
 	object.parent_scope.SetVehicle(parent);
 	return object.ResolveCallback(regs100);
+#endif
 }
 
 
@@ -1229,6 +1287,9 @@ int GetVehicleProperty(const Vehicle *v, PropertyID property, int orig_value, bo
 
 int GetEngineProperty(EngineID engine, PropertyID property, int orig_value, const Vehicle *v, bool is_signed)
 {
+#ifdef WITH_RUST
+	return openttd_rust_vehicle_property(&GetRustVehicleResolverServices(), engine.base(), property, orig_value, v, is_signed);
+#else
 	uint16_t callback = GetVehicleCallback(CBID_VEHICLE_MODIFY_PROPERTY, property, 0, engine, v);
 	if (callback != CALLBACK_FAILED) {
 		if (is_signed) {
@@ -1240,6 +1301,7 @@ int GetEngineProperty(EngineID engine, PropertyID property, int orig_value, cons
 	}
 
 	return orig_value;
+#endif
 }
 
 /**
@@ -1250,13 +1312,19 @@ int GetEngineProperty(EngineID engine, PropertyID property, int orig_value, cons
  */
 std::optional<bool> TestVehicleBuildProbability(Vehicle *v, EngineID engine, BuildProbabilityType type)
 {
+#ifdef WITH_RUST
+	int8_t result = openttd_rust_vehicle_build_probability(&GetRustVehicleResolverServices(), v, engine.base(), to_underlying(type));
+	return result < 0 ? std::nullopt : std::optional<bool>(result != 0);
+#else
 	uint16_t p = GetVehicleCallback(CBID_VEHICLE_BUILD_PROBABILITY, to_underlying(type), 0, engine, v);
 	if (p == CALLBACK_FAILED) return std::nullopt;
 
 	const uint16_t PROBABILITY_RANGE = 100;
 	return p + RandomRange(PROBABILITY_RANGE) >= PROBABILITY_RANGE;
+#endif
 }
 
+#ifndef WITH_RUST
 static void DoTriggerVehicleRandomisation(Vehicle *v, VehicleRandomTrigger trigger, uint16_t base_random_bits, bool first)
 {
 	/* We can't trigger a non-existent vehicle... */
@@ -1317,12 +1385,17 @@ static void DoTriggerVehicleRandomisation(Vehicle *v, VehicleRandomTrigger trigg
 			break;
 	}
 }
+#endif
 
 void TriggerVehicleRandomisation(Vehicle *v, VehicleRandomTrigger trigger)
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_randomise(&GetRustVehicleResolverServices(), v, to_underlying(trigger));
+#else
 	v->InvalidateNewGRFCacheOfChain();
 	DoTriggerVehicleRandomisation(v, trigger, 0, true);
 	v->InvalidateNewGRFCacheOfChain();
+#endif
 }
 
 /* Functions for changing the order of vehicle purchase lists */
@@ -1418,6 +1491,9 @@ void CommitVehicleListOrderChanges()
  */
 void FillNewGRFVehicleCache(const Vehicle *v)
 {
+#ifdef WITH_RUST
+	openttd_rust_vehicle_grf_fill(&GetRustVehicleResolverServices(), v);
+#else
 	VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
 
 	/* These variables we have to check; these are the ones with a cache. */
@@ -1440,4 +1516,9 @@ void FillNewGRFVehicleCache(const Vehicle *v)
 
 	/* Make sure really all bits are set. */
 	assert(v->grf_cache.cache_valid == (1 << NCVV_END) - 1);
+#endif
 }
+
+#ifdef WITH_RUST
+#include "rust/vehicle_services_newgrf.h"
+#endif

@@ -46,6 +46,7 @@ mod heightmap;
 mod history;
 mod history_type;
 mod house;
+mod industry_type;
 mod integer;
 mod landscape;
 mod landscape_generation;
@@ -59,8 +60,12 @@ mod math;
 mod movement;
 mod newgrf_animation_base;
 mod newgrf_callbacks;
+mod newgrf_commons;
 mod newgrf_properties;
 mod newgrf_sound;
+mod newgrf_spritegroup;
+
+mod newgrf_station;
 mod newgrf_storage;
 mod node_hash;
 mod object_type;
@@ -93,6 +98,7 @@ mod slope_func;
 mod sound_type;
 mod sprites;
 mod station;
+mod station_base;
 mod station_cargo;
 mod station_cmd;
 mod station_map;
@@ -1414,3 +1420,13 @@ mod timer_game_tick;
 mod subsidy_type;
 
 pub mod landscape_cmd;
+
+mod newgrf_vehicle;
+
+pub mod vehicle_func;
+
+pub mod rail_type;
+
+pub mod base_bitset_type;
+
+mod newgrf_airport;

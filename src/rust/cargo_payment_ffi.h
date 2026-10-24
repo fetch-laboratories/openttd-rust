@@ -10,6 +10,7 @@
 #define RUST_CARGO_PAYMENT_FFI_H
 #include "service_defaults.hpp"
 struct OpenTTDSubsidyServices;
+struct OpenTTDIndustryResolverServices;
 struct OpenTTDCargoMonitorServices;
 struct RustNearbyIndustryCursor;
 
@@ -73,7 +74,7 @@ struct OpenTTDCargoServices {
 	uint32_t (OPENTTD_CARGO_CALL *station_read)(uint16_t, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_read);
 	uint32_t (OPENTTD_CARGO_CALL *industry_read)(void *, uint8_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_read);
 	void (OPENTTD_CARGO_CALL *industry_write)(void *, uint8_t, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(industry_write);
-	uint8_t (OPENTTD_CARGO_CALL *refuses)(void *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(refuses);
+	const OpenTTDIndustryResolverServices *resolver;
 	void (OPENTTD_CARGO_CALL *accept)(void *, uint32_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(accept);
 	void (OPENTTD_CARGO_CALL *statistics)(uint16_t, uint8_t, uint8_t, uint32_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(statistics);
 	const OpenTTDSubsidyServices *(OPENTTD_CARGO_CALL *subsidies)() noexcept OPENTTD_SERVICE_DEFAULT(subsidies);

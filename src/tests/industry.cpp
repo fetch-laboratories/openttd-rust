@@ -15,9 +15,16 @@
 #include "abi_layout.hpp"
 #include "../rust/industry_generation_adapter.hpp"
 #include "../rust/industry_shell_services.h"
+#include "../rust/industry_resolver_ffi.h"
 #include "../object_base.h"
 #include "../industrytype.h"
 #include "../water_map.h"
+static_assert(NUM_INDUSTRYTYPES == 240 && IT_INVALID == 0xFF && IndustryID::Invalid().base() == 0xFFFF);
+static_assert(NEW_INDUSTRYTILEOFFSET == 175 && INVALID_INDUSTRYTILE == 512);
+static_assert(VSG_SCOPE_SELF == 0 && VSG_SCOPE_PARENT == 1 && TILE_HEIGHT == 8);
+static_assert(CalendarTime::ORIGINAL_BASE_YEAR.base() == 1920 && EconomyTime::ORIGINAL_BASE_YEAR.base() == 1920);
+static_assert(CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() == 701265 && EconomyTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() == 701265);
+static_assert(CBID_INDUSTRY_PROBABILITY == 0x22 && CBID_INDUSTRY_LOCATION == 0x28 && CBID_INDUSTRY_REFUSE_CARGO == 0x3D);
 static_assert(EV_CHIMNEY_SMOKE == 0 && EV_BUBBLE == 9 && EV_COPPER_MINE_SMOKE == 11);
 static_assert(SND_0B_MINE == 9 && SND_0C_POWER_STATION == 10 && SND_29_SUGAR_MINE_2 == 41);
 static_assert(SND_2A_TOY_FACTORY_3 == 42 && SND_2B_TOY_FACTORY_2 == 43 && SND_2C_TOY_FACTORY_1 == 44);
@@ -139,7 +146,11 @@ struct IndustryGenerationFixture {
 		world.create = [](uint8_t, uint8_t creation) noexcept -> void * { CHECK(creation == 0); ++created; return &shell; };
 		world.type_count = [](uint8_t) noexcept -> uint16_t { return 0; };
 		world.total = []() noexcept -> uint32_t { return 0; };
-		world.probability_callback = [](uint8_t, uint8_t creation, uint32_t chance) noexcept -> uint32_t { CHECK(creation == 0); return chance; };
+		static auto resolver = GetIndustryResolverServices();
+		static auto construction = GetIndustryConstructionServices();
+		construction.callback_mask = [](const OpenTTDIndustrySpecHandle *) noexcept -> uint16_t { return 0; };
+		resolver.construction = &construction;
+		world.resolver = &resolver;
 		world.scale_by_map_size = [](uint32_t n) noexcept -> uint32_t { return n; };
 		static auto shared = GetRustSharedServices();
 		shared.random = [](void *) noexcept -> uint32_t { ++draws; return 0; };

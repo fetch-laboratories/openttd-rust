@@ -19,6 +19,7 @@
 #include "orders_ffi.h"
 #include "cargo_payment_ffi.h"
 struct OpenTTDStationService;
+extern "C" uint64_t openttd_rust_station_acceptance_mask(OpenTTDStationService *);
 struct OpenTTDStationCargo {
 	uint32_t max_waiting_cargo;
 	uint8_t status, time_since_pickup, rating, last_speed, last_age, amount_fract;
@@ -268,15 +269,10 @@ struct OpenTTDStationLoading {
 	uint32_t (*platform_length)(OpenTTDStation *, OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(platform_length);
 	uint32_t (*vehicle_tile)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_tile);
 	uint32_t (*station_cargo_total)(OpenTTDStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(station_cargo_total);
-	uint16_t (*load_property)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_property);
-	uint16_t (*load_callback)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(load_callback);
 	OpenTTDNativeCargoPayment * (*get_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(get_payment);
 	OpenTTDNativeCargoPayment * (*create_payment)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(create_payment);
 	void (*delete_payment)(OpenTTDNativeCargoPayment *) noexcept OPENTTD_SERVICE_DEFAULT(delete_payment);
 	void (*flush_delivery)() noexcept OPENTTD_SERVICE_DEFAULT(flush_delivery);
-	void (*vehicle_new_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_new_cargo);
-
-	void (*vehicle_empty)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_empty);
 	void (*station_dirty)(OpenTTDStation *) noexcept OPENTTD_SERVICE_DEFAULT(station_dirty);
 };
 
@@ -284,6 +280,7 @@ const OpenTTDStationServices &GetRustStationServices() noexcept;
 const OpenTTDStationLoading &GetRustStationLoading() noexcept;
 const OpenTTDStationLinks &GetRustStationLinks() noexcept;
 extern "C" {
+uint8_t openttd_rust_goods_convert_state(uint8_t status);
 OpenTTDStationService *openttd_rust_station_service_new();
 void openttd_rust_station_service_destroy(OpenTTDStationService *);
 OpenTTDStationFields *openttd_rust_station_service_fields(OpenTTDStationService *);

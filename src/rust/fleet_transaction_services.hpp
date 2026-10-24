@@ -31,7 +31,6 @@ static bool FleetTransaction_success(void *out) noexcept { return GetRustCommand
 static uint32_t FleetTransaction_error(void *out) noexcept { return GetRustCommandCostServices().error_message(RustCommandCost(static_cast<CommandCost *>(out))); }
 static int64_t FleetTransaction_money(void *out) noexcept { return GetRustCommandCostServices().money(RustCommandCost(static_cast<CommandCost *>(out))); }
 static bool FleetTransaction_rear(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return Train::From(v)->IsRearDualheaded(); }
-static bool FleetTransaction_articulated(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsArticulatedPart(); }
 static bool FleetTransaction_crashed(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->vehstatus.Test(VehState::Crashed); }
 static bool FleetTransaction_stopped(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->vehstatus.Test(VehState::Stopped); }
 static bool FleetTransaction_chain_depot(void *shell) noexcept { auto *v = static_cast<Vehicle *>(shell); return v->IsChainInDepot(); }
@@ -89,7 +88,7 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.money = FleetTransaction_money,
 	.commands = &GetRustCommandServices(),
 	.rear = FleetTransaction_rear,
-	.articulated = FleetTransaction_articulated,
+	.articulated = RustOpaqueVehicleRead<bool, RustVehicleArticulated>,
 	.crashed = FleetTransaction_crashed,
 	.stopped = FleetTransaction_stopped,
 	.chain_depot = FleetTransaction_chain_depot,
@@ -125,7 +124,6 @@ static const OpenTTDFleetTransactionServices _fleet_transaction_services{
 	.local = RustIsLocalCompany,
 	.refit_news = FleetTransaction_refit_news,
 	.subtype = FleetTransaction_subtype,
-	.reverse_probability = RustVehicleHasReverseProbability,
 	.reverse = FleetTransaction_reverse,
 	.copy_configuration = FleetTransaction_copy_configuration,
 	.viewports = FleetTransaction_viewports,

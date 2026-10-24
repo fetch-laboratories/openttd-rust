@@ -231,10 +231,13 @@ pub struct VehicleServices {
     pub write_xy: extern "C" fn(VehicleRef, i32, i32),
     /// `Vehicle::UpdateViewport(true)`.
     pub base_viewport: extern "C" fn(VehicleRef),
-    /// `GetVehicleProperty(v, property, fallback)`.
-    pub property: extern "C" fn(VehicleRef, u8, i32) -> i32,
+    /// Immutable process-wide vehicle resolver services.
+    pub newgrf: extern "C" fn() -> *const crate::newgrf_vehicle::Services,
+    /// Direct Rust `GetVehicleProperty(v, property, fallback)` entry.
+    pub property: extern "C" fn(*const crate::newgrf_vehicle::Services, VehicleRef, u8, i32) -> i32,
     /// `GetVehicleCallback(callback, 0, 0, v->engine_type, v)`.
-    pub callback: extern "C" fn(VehicleRef, CallbackID) -> u16,
+    pub callback:
+        extern "C" fn(*const crate::newgrf_vehicle::Services, VehicleRef, CallbackID) -> u16,
     /// `ErrorUnknownCallbackResult(e->GetGRFID(), callback, result)`.
     pub unknown_callback_result: extern "C" fn(EngineRef, CallbackID, u16),
     pub length_changed: extern "C" fn(VehicleRef),
@@ -416,6 +419,7 @@ crate::abi::layouts! {
         new_position,
         write_xy,
         base_viewport,
+        newgrf,
         property,
         callback,
         unknown_callback_result,
