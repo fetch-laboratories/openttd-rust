@@ -10,6 +10,9 @@ extern "C" void __real__Z31IncreaseGeneratingWorldProgress16GenWorldProgress(Gen
 extern "C" void __real__Z29GenerateWorldSetAbortCallbackPFvvE(GWAbortProc *);
 static int generation_cancel = -1, generation_events = 0, generation_cleanup = 0;
 static GWAbortProc *generation_abort = nullptr;
+static bool generation_heightmap = false;
+static uint generation_landscape_steps = 0, generation_river_steps = 0;
+static void GenerationSnapshot(std::string_view name);
 static void GenerationCleanup() { generation_cleanup++; generation_abort(); }
 extern "C" void __wrap__Z29GenerateWorldSetAbortCallbackPFvvE(GWAbortProc *callback)
 {
@@ -22,10 +25,21 @@ static void GenerationProgress(GenWorldProgress stage)
 }
 extern "C" void __wrap__Z26SetGeneratingWorldProgress16GenWorldProgressj(GenWorldProgress stage, uint total)
 {
+	if (generation_heightmap) {
+		fmt::print(stderr, "GENERATION progress set {} {}\n", stage, total);
+		if (stage == GWP_RIVER) GenerationSnapshot("heightmap-climate");
+	}
 	GenerationProgress(stage); __real__Z26SetGeneratingWorldProgress16GenWorldProgressj(stage, total);
 }
 extern "C" void __wrap__Z31IncreaseGeneratingWorldProgress16GenWorldProgress(GenWorldProgress stage)
 {
+	if (generation_heightmap) {
+		if (stage == GWP_LANDSCAPE) {
+			++generation_landscape_steps;
+			GenerationSnapshot("heightmap-progress");
+		}
+		if (stage == GWP_RIVER) ++generation_river_steps;
+	}
 	GenerationProgress(stage); __real__Z31IncreaseGeneratingWorldProgress16GenWorldProgress(stage);
 }
 static void GenerationCancellation()
@@ -70,6 +84,25 @@ static bool GenerationScenario(std::span<std::string_view> args)
 		GenerationSnapshot("heightmap");
 	}
 	bool loaded = LoadHeightmap(DFT_HEIGHTMAP_BMP, "generation-missing.bmp");
+	{
+		/* Successful LoadHeightmap alone misses GenerateLandscape's continuation:
+		 * slope repair, watering, climate policy and the complete river pass. */
+		AutoRestoreBackup<std::string> filename(_file_to_saveload.name, std::string(std::getenv("HOME")) + "/wide.bmp");
+		AutoRestoreBackup<DetailedFileType> type(_file_to_saveload.ftype.detailed, DFT_HEIGHTMAP_BMP);
+		AutoRestoreBackup<LandscapeType> climate(_settings_game.game_creation.landscape, LandscapeType::Temperate);
+		AutoRestoreBackup<uint8_t> rivers(_settings_game.game_creation.amount_of_rivers, 2), length(_settings_game.game_creation.min_river_length, 4);
+		AutoRestoreBackup<uint8_t> snow(_settings_game.game_creation.snow_line_height, _settings_game.game_creation.snow_line_height);
+		for (LandscapeType landscape : {LandscapeType::Temperate, LandscapeType::Arctic, LandscapeType::Tropic, LandscapeType::Toyland}) {
+			_settings_game.game_creation.landscape = landscape;
+			InitializeLandscape();
+			generation_landscape_steps = generation_river_steps = 0;
+			generation_heightmap = true;
+			bool generated = GenerateLandscape(GWM_HEIGHTMAP);
+			generation_heightmap = false;
+			fmt::print(stderr, "GENERATION success {} {} {} {}\n", landscape, generated, generation_landscape_steps, generation_river_steps);
+			GenerationSnapshot("heightmap-generated");
+		}
+	}
 	{
 		AutoRestoreBackup<std::string> filename(_file_to_saveload.name, "generation-missing.bmp");
 		AutoRestoreBackup<DetailedFileType> type(_file_to_saveload.ftype.detailed, DFT_HEIGHTMAP_BMP);
