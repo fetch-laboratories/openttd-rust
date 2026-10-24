@@ -96,9 +96,7 @@ struct StationResolverObject : public SpecializedResolverObject<StationRandomTri
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
 	{
 #ifdef WITH_RUST
-		if (scope == VSG_SCOPE_SELF) return &this->station_scope;
-		if (openttd_rust_station_scope_is_parent(&this->station_scope.state, scope)) return this->GetTown();
-		return ResolverObject::GetScope(scope, relative);
+		return openttd_rust_station_scope(&this->station_scope.state, this, &this->station_scope, scope, relative);
 #else
 		switch (scope) {
 			case VSG_SCOPE_SELF:

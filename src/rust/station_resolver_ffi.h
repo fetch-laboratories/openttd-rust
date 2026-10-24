@@ -6,7 +6,7 @@
 #include "animation_ffi.h"
 #include "cargo_storage_ffi.h"
 #include "../newgrf_airport.h"
-struct Livery; struct AirportSpec; struct ResolverObject; struct RealSpriteGroup; struct SpriteGroup; struct GRFFile;
+struct ScopeResolver; struct TownScopeResolver; struct StationResolverObject; struct Livery; struct AirportSpec; struct ResolverObject; struct RealSpriteGroup; struct SpriteGroup; struct GRFFile;
 struct OpenTTDStationResolverState {
 	BaseStation *station; const StationSpec *spec; const Town *town;
 	uint32_t tile; uint8_t cargo; Axis axis; uint8_t valid; uint32_t cache[6];
@@ -52,6 +52,8 @@ struct OpenTTDStationResolverServices {
 	const AirportSpec *(*airport_spec)(BaseStation *) noexcept OPENTTD_SERVICE_DEFAULT(airport_spec);
 	TTDPAirportType (*airport_ttd_type)(const AirportSpec *) noexcept OPENTTD_SERVICE_DEFAULT(airport_ttd_type);
 	OpenTTDStationSpecIdentity (*identity)(BaseStation *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(identity);
+	TownScopeResolver *(*town_scope)(StationResolverObject *, const Town *, bool) noexcept OPENTTD_SERVICE_DEFAULT(town_scope);
+	ScopeResolver *(*default_scope)(StationResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(default_scope);
 	void (*unhandled)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled);
 	void (*slope_error)(OpenTTDCommandCost *, const OpenTTDStationSlopeResult *, const StationSpec *) noexcept OPENTTD_SERVICE_DEFAULT(slope_error);
 };
@@ -60,8 +62,8 @@ extern "C" {
 const OpenTTDStationResolverServices *openttd_rust_station_resolver_exchange(const OpenTTDStationResolverServices *);
 uint64_t openttd_rust_station_empty_mask(BaseStation *);
 uint8_t openttd_rust_goods_convert_state(uint8_t);
-const Town *openttd_rust_station_resolver_town(OpenTTDStationResolverState *);
-bool openttd_rust_station_scope_is_parent(OpenTTDStationResolverState *, uint8_t);
+TownScopeResolver *openttd_rust_station_town_scope(OpenTTDStationResolverState *, StationResolverObject *);
+ScopeResolver *openttd_rust_station_scope(OpenTTDStationResolverState *, StationResolverObject *, ScopeResolver *, uint8_t, uint8_t);
 uint32_t openttd_rust_station_variable(OpenTTDStationResolverState *, const ResolverObject *, const GRFFile *, uint8_t, uint32_t, bool *);
 uint32_t openttd_rust_station_base_variable(BaseStation *, const GRFFile *, uint8_t, uint8_t, bool *);
 const SpriteGroup *openttd_rust_station_resolver_init(OpenTTDStationResolverState *, const StationSpec *, BaseStation *, uint32_t);

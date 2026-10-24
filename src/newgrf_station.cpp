@@ -44,7 +44,7 @@
 #ifdef WITH_RUST
 static_assert(INITIAL_STATION_RATING == 175 && HVOT_WAYPOINT == (1 << 6));
 static_assert(ATP_TTDP_LARGE == 1 && CalendarTime::DAYS_TILL_ORIGINAL_BASE_YEAR.base() == 701265);
-static_assert(VSG_SCOPE_PARENT == 1);
+static_assert(VSG_SCOPE_SELF == 0 && VSG_SCOPE_PARENT == 1);
 const OpenTTDCargoStorageServices *CargoStorageServices();
 static uint16_t RustEvaluateStationCallback(uint16_t cb, uint32_t p1, uint32_t p2, const StationSpec *s, BaseStation *st, uint32_t t, uint8_t axis, int32_t *regs, size_t count) noexcept
 {
@@ -96,6 +96,10 @@ const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
 		.airport_spec = [](BaseStation *st) noexcept { return Station::From(st)->airport.GetSpec(); },
 		.airport_ttd_type = [](const AirportSpec *s) noexcept { return s->ttd_airport_type; },
 		.identity = [](BaseStation *st, uint8_t i) noexcept { const auto &sm = st->speclist[i]; return OpenTTDStationSpecIdentity{sm.grfid, sm.localidx}; },
+		/* Only shared native ScopeResolver frames are materialized here; Rust
+		 * selects and caches the owner before either synchronous shell call. */
+		.town_scope = [](StationResolverObject *object, const Town *town, bool readonly) noexcept -> TownScopeResolver * { if (!object->town_scope.has_value()) object->town_scope.emplace(*object, const_cast<Town *>(town), readonly); return &*object->town_scope; },
+		.default_scope = [](StationResolverObject *object, uint8_t scope, uint8_t relative) noexcept { return object->ResolverObject::GetScope(static_cast<VarSpriteGroupScope>(scope), relative); },
 		.unhandled = [](uint8_t variable) noexcept { Debug(grf, 1, "Unhandled station variable 0x{:X}", variable); },
 		.slope_error = RustLocationCallbackError<StationSpec, StationSpec, OpenTTDStationSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
 	};
@@ -346,10 +350,7 @@ static uint32_t GetRailContinuationInfo(TileIndex tile)
 TownScopeResolver *StationResolverObject::GetTown()
 {
 #ifdef WITH_RUST
-	const Town *town = openttd_rust_station_resolver_town(&this->station_scope.state);
-	if (town == nullptr) return nullptr;
-	if (!this->town_scope.has_value()) this->town_scope.emplace(*this, const_cast<Town *>(town), this->station_scope.st == nullptr);
-	return &*this->town_scope;
+	return openttd_rust_station_town_scope(&this->station_scope.state, this);
 #else
 	if (!this->town_scope.has_value()) {
 		Town *t = nullptr;

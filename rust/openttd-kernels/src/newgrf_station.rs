@@ -107,6 +107,8 @@ pub struct Services {
         *const crate::station_cmd::AirportSpec,
     ) -> crate::newgrf_airport::TtdpAirportType,
     identity: extern "C" fn(*mut BaseStation, u8) -> SpecIdentity,
+    town_scope: extern "C" fn(*mut c_void, *const crate::services::TownHandle, bool) -> *mut c_void,
+    default_scope: extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
     unhandled: extern "C" fn(u8),
     slope_error: extern "C" fn(*mut CommandCost, *const SlopeResult, *const RailSpec),
 }
@@ -388,10 +390,7 @@ unsafe fn cached_variable(state: *mut State, var: u8, out: *mut u32) -> bool {
 /// Canonical lazy parent selection. A null result is retried on the next call,
 /// just as the native optional scope is absent until successful construction.
 /// Scope storage remains a native common-Action2 shell; Rust owns its selection.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_resolver_town(
-    state: *mut State,
-) -> *const crate::services::TownHandle {
+unsafe fn resolver_town(state: *mut State) -> *const crate::services::TownHandle {
     let town = unsafe { (*state).town };
     if !town.is_null() {
         return town;
@@ -411,15 +410,40 @@ pub unsafe extern "C" fn openttd_rust_station_resolver_town(
     }
     town
 }
+/// Materialize the common native parent frame after ending every owner read.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_scope_is_parent(
+pub unsafe extern "C" fn openttd_rust_station_town_scope(
     state: *mut State,
+    resolver: *mut c_void,
+) -> *mut c_void {
+    let town = unsafe { resolver_town(state) };
+    if town.is_null() {
+        return ptr::null_mut();
+    }
+    let readonly = unsafe { (*state).station.is_null() };
+    (services().town_scope)(resolver, town, readonly)
+}
+/// Complete self/parent/default selection; native services retain only the
+/// existing common evaluator's scope frames and base resolver operation.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_station_scope(
+    state: *mut State,
+    resolver: *mut c_void,
+    station_scope: *mut c_void,
     scope: u8,
-) -> bool {
-    // VSG_SCOPE_PARENT: parent selection ends all state borrows before the native
-    // TownScopeResolver is entered, including persistent-storage callbacks.
-    scope == crate::newgrf_spritegroup::VSG_SCOPE_PARENT
-        && !unsafe { openttd_rust_station_resolver_town(state) }.is_null()
+    relative: u8,
+) -> *mut c_void {
+    match scope {
+        crate::newgrf_spritegroup::VSG_SCOPE_SELF => return station_scope,
+        crate::newgrf_spritegroup::VSG_SCOPE_PARENT => {
+            let town = unsafe { openttd_rust_station_town_scope(state, resolver) };
+            if !town.is_null() {
+                return town;
+            }
+        }
+        _ => {}
+    }
+    (services().default_scope)(resolver, scope, relative)
 }
 fn unhandled(native: &Services, variable: u8, available: *mut bool) -> u32 {
     (native.unhandled)(variable);
@@ -933,7 +957,7 @@ crate::abi::layouts! {
  "OpenTTDStationResolverServices" ["station_service"] => Services {
  shared, cargo, cargo_owner, group_count, group_cargo, group, spec, loading_count, loaded_count,
  loading, loaded, axis, tile_add, tile_random, station_random, waiting, set_waiting, set_random,
- cached_cargo, spec_cargo, resolve_random, resolve_callback, file_version, company, spec_reverse_rail, nearby, nearby_station, nearby_info, terrain, badges, translate, build_date, airport_spec, airport_ttd_type, identity, unhandled, slope_error
+ cached_cargo, spec_cargo, resolve_random, resolve_callback, file_version, company, spec_reverse_rail, nearby, nearby_station, nearby_info, terrain, badges, translate, build_date, airport_spec, airport_ttd_type, identity, town_scope, default_scope, unhandled, slope_error
  };
 }
 
