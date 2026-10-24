@@ -419,6 +419,7 @@ static void ResolverProbe()
 	grf.grf_version = 8;
 	for (uint i = 0; i < NUM_CARGO; ++i) grf.cargo_map[i] = NUM_CARGO - 1 - i;
 	file.Change(&grf);
+	ResolverRealBoundaries(v, e);
 	if (!SpriteGroup::CanAllocateItem(8)) FixtureAbort(__LINE__);
 	auto *det = new DeterministicSpriteGroup();
 	det->size = DSG_SIZE_DWORD;
@@ -551,7 +552,6 @@ static void ResolverProbe()
 		e->grf_prop.spritegroups.clear();
 		delete real; delete high; delete low;
 	}
-	ResolverRealBoundaries(v, e);
 	auto *result = new CallbackResultSpriteGroup(7);
 	auto *random = new RandomizedSpriteGroup();
 	random->var_scope = VSG_SCOPE_SELF;
