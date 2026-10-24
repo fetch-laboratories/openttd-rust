@@ -142,8 +142,8 @@ pub struct Services {
     random_bits: unsafe extern "C" fn(Handle) -> u32,
     random_triggers: unsafe extern "C" fn(Handle) -> u32,
     store_psa: unsafe extern "C" fn(Resolver, u32, i32),
-    real: unsafe extern "C" fn(Resolver, Handle) -> Handle,
     native: unsafe extern "C" fn(Handle, Resolver) -> ResultValue,
+    unhandled_scope: unsafe extern "C" fn(u8),
     parameter: unsafe extern "C" fn(Handle, u32) -> u32,
     global: *const crate::newgrf::Services,
     profile_enter: unsafe extern "C" fn(Resolver, bool) -> Resolver,
@@ -284,6 +284,7 @@ impl<'a> Invocation<'a> {
         unsafe {
             let b = scope.binding;
             match b.kind {
+                0 => openttd_rust_scope_default_variable(self.s, variable, available),
                 1 => crate::newgrf_vehicle::openttd_rust_vehicle_scope_variable(
                     &*self.s.vehicle,
                     b.data.vehicle,
@@ -446,8 +447,7 @@ impl<'a> Invocation<'a> {
                     group,
                 ),
                 // Native features without a ResolveReal override use the common policy.
-                0 | 3 | 4 => default_real(self.s, group),
-                _ => (self.s.real)(self.ro, group),
+                _ => default_real(self.s, group),
             }
         }
     }
@@ -762,7 +762,14 @@ pub extern "C" fn openttd_rust_scope_default_random() -> u32 {
     0
 }
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_scope_default_variable(available: *mut bool) -> u32 {
+pub unsafe extern "C" fn openttd_rust_scope_default_variable(
+    s: &Services,
+    variable: u8,
+    available: *mut bool,
+) -> u32 {
+    unsafe {
+        (s.unhandled_scope)(variable);
+    }
     unsafe {
         available.write(false);
     }
@@ -849,5 +856,5 @@ crate::abi::layouts! {
     "OpenTTDGroupNode" ["storage"] => Node { data, kind };
     "OpenTTDGroupAdjust" ["storage"] => Adjust { subroutine, and_mask, add_val, divmod_val, operation, kind => type, variable, parameter, shift_num };
     "OpenTTDGroupRange" ["storage"] => Range { result, low, high };
-    "OpenTTDSpriteGroupServices" ["storage"] => Services { vehicle, industry, object, storage, resolver_binding, scope_binding, industry_builder, tile_random_check, loaded_count, loading_count, loaded, loading, node, adjust, range, random_group, scope, variable, random_bits, random_triggers, store_psa, real, native, parameter, global, profile_enter, profile_end };
+    "OpenTTDSpriteGroupServices" ["storage"] => Services { vehicle, industry, object, storage, resolver_binding, scope_binding, industry_builder, tile_random_check, loaded_count, loading_count, loaded, loading, node, adjust, range, random_group, scope, variable, random_bits, random_triggers, store_psa, native, unhandled_scope, parameter, global, profile_enter, profile_end };
 }

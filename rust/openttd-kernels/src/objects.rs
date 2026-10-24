@@ -545,14 +545,7 @@ impl<'a> World<'a> {
         }
         best
     }
-    fn count_distance(
-        &self,
-        ro: *const Resolver,
-        local_id: u8,
-        grfid: u32,
-        tile: u32,
-        current: *mut Object,
-    ) -> u32 {
+    fn count_distance(&self, local_id: u8, grfid: u32, tile: u32, current: *mut Object) -> u32 {
         let q = self.query();
         // SAFETY: resolver and override manager are native and remain live.
         let kind = unsafe {
@@ -643,7 +636,7 @@ impl<'a> World<'a> {
                     },
                     (q.version8)(ro),
                 ),
-                0x64 => self.count_distance(ro, parameter as u8, (q.grfid)(ro), tile, obj),
+                0x64 => self.count_distance(parameter as u8, (q.grfid)(ro), tile, obj),
                 0x7a => (q.badges)(ro, spec, parameter),
                 _ => self.unhandled(variable, available),
             }

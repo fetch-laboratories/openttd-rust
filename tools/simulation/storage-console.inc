@@ -7,6 +7,7 @@
 #include "industrytype.h"
 #include "newgrf_industrytiles.h"
 #include "newgrf_config.h"
+#include "newgrf_profiling.h"
 /* Executable native parsed groups, rebuilt for both initial and post-load runs.
  * The normal resolver methods provide results and storage effects; neither
  * implementation is replaced by a tracing evaluator. */
@@ -33,7 +34,12 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 	outer->adjusts = {Adjust(0x18), call, Adjust(0x7B, DSGA_OP_RST, UINT32_MAX, 0x7D), Adjust(0x1C, DSGA_OP_ADD), Adjust(0x1A, DSGA_OP_STO, 0x100)};
 	ro.root_spritegroup = outer;
 	std::array<int32_t, 1> regs{-7};
+	outer->nfo_line = 417;
+	_newgrf_profilers.emplace_back(&grf); _newgrf_profilers.back().Start();
 	Require(ro.ResolveCallback(regs) == 10 && regs[0] == 0x1000A && ro.last_value == 0x1000A && ro.GetRegister(14) == 0x8005 && industry->psa->GetValue(15) == 0x8005);
+	const auto &profile = _newgrf_profilers.back();
+	Require(profile.calls.size() == 1 && profile.calls[0].root_sprite == 417 && profile.calls[0].result == 10 && profile.calls[0].subs == 1);
+	_newgrf_profilers.back().Abort(); _newgrf_profilers.pop_back();
 	/* Nested static Resolve shares registers/last; DoResolve alone clears them. */
 	auto *read = Det(); read->adjusts = {Adjust(0x7D, DSGA_OP_RST, UINT32_MAX, 14)};
 	Require(std::get<CallbackResult>(SpriteGroup::Resolve(read, ro, false)) == 5 && ro.last_value == 0x8005);

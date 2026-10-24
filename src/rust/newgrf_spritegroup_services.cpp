@@ -134,8 +134,8 @@ const OpenTTDSpriteGroupServices &GetRustSpriteGroupServices() noexcept
 		.random_bits = [](const ScopeResolver *s) noexcept { return s->GetRandomBits(); },
 		.random_triggers = [](const ScopeResolver *s) noexcept { return s->GetRandomTriggers(); },
 		.store_psa = [](ScopeResolver *s, uint32_t reg, int32_t value) noexcept { s->StorePSA(reg, value); },
-		.real = [](ResolverObject *ro, const SpriteGroup *g) noexcept { return ro->ResolveReal(*static_cast<const RealSpriteGroup *>(g)); },
 		.native = RustNativeSpriteGroup,
+		.unhandled_scope = RustUnhandledScopeVariable,
 		.parameter = RustGRFParameter,
 		.global = &GetRustGlobalVariableServices(),
 		.profile_enter = ProfileEnter,
@@ -177,8 +177,7 @@ uint32_t ScopeResolver::GetRandomBits() const { return openttd_rust_scope_defaul
 uint32_t ScopeResolver::GetRandomTriggers() const { return openttd_rust_scope_default_random(); }
 uint32_t ScopeResolver::GetVariable(uint8_t variable, uint32_t, bool &available) const
 {
-	Debug(grf, 1, "Unhandled scope variable 0x{:X}", variable);
-	return openttd_rust_scope_default_variable(&available);
+	return openttd_rust_scope_default_variable(&GetRustSpriteGroupServices(), variable, &available);
 }
 void ScopeResolver::StorePSA(uint, int32_t) {}
 const SpriteGroup *ResolverObject::ResolveReal(const RealSpriteGroup &group) const

@@ -207,7 +207,6 @@ fn closest(
     best
 }
 fn count_and_distance(
-    ro: *const c_void,
     mut parameter: u8,
     layout: u8,
     town: bool,
@@ -426,15 +425,7 @@ fn variable(
             } else {
                 0
             };
-            count_and_distance(
-                ro,
-                parameter as u8,
-                reg as u8,
-                reg & 0x100 != 0,
-                c,
-                builder,
-                s,
-            )
+            count_and_distance(parameter as u8, reg as u8, reg & 0x100 != 0, c, builder, s)
         }
         0x69..=0x6d | 0x70 | 0x71 => {
             let cargo = unsafe { (s.cargo_translation)(ro, parameter as u8) };

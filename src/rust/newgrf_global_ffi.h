@@ -4,6 +4,7 @@
 #define RUST_NEWGRF_GLOBAL_FFI_H
 #include "services_ffi.h"
 struct GRFFile;
+enum GameMode : uint8_t;
 struct OpenTTDGlobalVariableServices {
 	const OpenTTDSharedServices *shared;
 	OpenTTDCalendarYMD (*date_to_ymd)(int32_t) noexcept OPENTTD_SERVICE_DEFAULT(date_to_ymd);
@@ -15,7 +16,7 @@ struct OpenTTDGlobalVariableServices {
 	int32_t (*pitch)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(pitch);
 	bool (*disable_elrails)() noexcept OPENTTD_SERVICE_DEFAULT(disable_elrails);
 	uint16_t (*rail_cost)(RailType) noexcept OPENTTD_SERVICE_DEFAULT(rail_cost);
-	uint8_t (*game_mode)() noexcept OPENTTD_SERVICE_DEFAULT(game_mode);
+	GameMode (*game_mode)() noexcept OPENTTD_SERVICE_DEFAULT(game_mode);
 	uint8_t (*misc_bits)() noexcept OPENTTD_SERVICE_DEFAULT(misc_bits);
 	uint32_t (*width)(const GRFFile *) noexcept OPENTTD_SERVICE_DEFAULT(width);
 	uint8_t (*height_limit)() noexcept OPENTTD_SERVICE_DEFAULT(height_limit);

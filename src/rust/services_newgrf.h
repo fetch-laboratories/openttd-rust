@@ -12,6 +12,7 @@
 #include "../newgrf.h"
 #include "../newgrf_commons.h"
 #include "../newgrf_debug.h"
+#include "../debug.h"
 #include "../newgrf_house.h"
 #include "../house.h"
 #include "../newgrf_spritegroup.h"
@@ -22,6 +23,8 @@
 #include "../newgrf_config.h"
 #include "../rev.h"
 inline const HouseSpec *RustHouseSpec(uint16_t house) noexcept { return HouseSpec::Get(house); }
+
+inline void RustUnhandledScopeVariable(uint8_t variable) noexcept { Debug(grf, 1, "Unhandled scope variable 0x{:X}", variable); }
 
 /* These synchronous field reads borrow live native objects. Callers retain
  * the original non-null resolver/file preconditions; nothing is cached. */
