@@ -54,6 +54,9 @@ static void CommonAction2(Industry *industry, GRFFile &grf)
 	auto *missing = Det(); missing->adjusts = {Adjust(0xFF)}; missing->error_group = error;
 	ro.root_spritegroup = missing; Require(ro.ResolveCallback({}) == 417);
 	missing->error_group = nullptr; Require(ro.ResolveCallback({}) == CALLBACK_FAILED);
+	auto *town_storage = Det(); town_storage->adjusts = {Adjust(0x7C)}; town_storage->error_group = error;
+	TownResolverObject absent_town(&grf, nullptr, true); absent_town.root_spritegroup = town_storage;
+	Require(absent_town.ResolveCallback({}) == 417);
 	/* Linear and >4 lower_bound paths: inclusive ends, gaps and default. */
 	auto *ranges = Det(); ranges->adjusts = {Adjust(0x10)}; ranges->default_result = {false, error};
 	uint64_t digest = 0;

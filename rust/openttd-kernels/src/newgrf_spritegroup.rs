@@ -366,12 +366,16 @@ impl<'a> Invocation<'a> {
                     )
                 }
                 // Town variables are still shared native behavior at the selected base.
-                6 if variable == 0x7C => crate::newgrf_storage::openttd_rust_storage_town_get(
-                    &*self.s.storage,
-                    b.data.town.town,
-                    self.file,
-                    parameter,
-                ),
+                // Retain TownScopeResolver's null-town availability policy in its
+                // remaining native variable body; only an available PSA read is owned.
+                6 if variable == 0x7C && !b.data.town.town.is_null() => {
+                    crate::newgrf_storage::openttd_rust_storage_town_get(
+                        &*self.s.storage,
+                        b.data.town.town,
+                        self.file,
+                        parameter,
+                    )
+                }
                 _ => (self.s.variable)(scope.native, variable, parameter, available),
             }
         }
