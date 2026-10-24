@@ -29,6 +29,7 @@ enum Direction : uint8_t;
 struct OpenTTDTrainState;
 struct OpenTTDTrainHandle { void *shell; OpenTTDTrainState *owner; };
 struct OpenTTDVehicle;
+struct OpenTTDOrdersLeaves;
 /** Canonical stable NOSAVE links; only the Rust occupancy owner mutates them. */
 struct OpenTTDVehicleTileLinks {
 	OpenTTDVehicle *next = nullptr;
@@ -207,6 +208,8 @@ struct OpenTTDVehicleServices {
 	uint16_t (OPENTTD_VEHICLE_CALL *max_speed)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(max_speed);
 	const OpenTTDVehicleMaintenanceServices *maintenance;
 	const OpenTTDVehicleVisits *(*visits)() noexcept OPENTTD_SERVICE_DEFAULT(visits);
+	const OpenTTDOrdersLeaves *(*orders)() noexcept OPENTTD_SERVICE_DEFAULT(orders);
+	OpenTTDVehicle *(*ship_get)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(ship_get);
 };
 struct OpenTTDGroundViewportNext {
 	OpenTTDVehicle *next;

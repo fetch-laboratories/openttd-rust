@@ -4701,7 +4701,6 @@ const OpenTTDTrainServices &GetTrainServices() noexcept
 		.platform_length = TrainPlatformLength,
 		.pow_wag_power = TrainPowWagPower,
 		.price = TrainPrice,
-		.process_orders = TrainProcessOrders,
 		.railveh_wagon = TrainRailvehWagon,
 		.rail_tilt = TrainRailTilt,
 		.rail_type = OpenTTDLegacyMapQuery<uint64_t, RustRailType, OpenTTDTrainHandle, uint32_t>,
