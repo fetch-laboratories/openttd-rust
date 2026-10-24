@@ -79,7 +79,7 @@ static OpenTTDRoadStopRebuildRead OPENTTD_VEHICLE_CALL RoadStopRebuildRead(OpenT
 static constinit const OpenTTDRoadStopServices _rust_road_stop_services{
 	.vehicle = &_rust_vehicle_services,
 	.ground = &_rust_ground_services<RoadVehicle>,
-	.primary = [](uint32_t tile, RoadStopType type) noexcept { return Station::GetByTile(TileIndex{tile})->GetPrimaryRoadStop(type); },
+	.primary = [](uint32_t tile, RoadStopType type) noexcept { return RustStationByTile(tile)->GetPrimaryRoadStop(type); },
 	.head = [](BaseStation *st, bool truck) noexcept { return truck ? Station::From(st)->truck_stops : Station::From(st)->bus_stops; },
 	.next = [](const RoadStop *stop) noexcept { return stop->next; },
 	.tile = [](const RoadStop *stop) noexcept { return stop->xy.base(); },

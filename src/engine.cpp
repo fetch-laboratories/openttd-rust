@@ -1065,7 +1065,7 @@ void ClearEnginesHiddenFlagOfCompany(CompanyID cid)
 CommandCost CmdSetVehicleVisibility(DoCommandFlags flags, EngineID engine_id, bool hide)
 {
 #ifdef WITH_RUST
-	return openttd_rust_engine_visibility(&EngineServices(), EngineRef(Engine::GetIfValid(engine_id)), hide, flags.Test(DoCommandFlag::Execute)) == 0 ? CommandCost() : CMD_ERROR;
+	return openttd_rust_engine_visibility(&EngineServices(), Engine_resolve(engine_id.base()), hide, flags.Test(DoCommandFlag::Execute)) == 0 ? CommandCost() : CMD_ERROR;
 #else
 	Engine *e = Engine::GetIfValid(engine_id);
 	if (e == nullptr || _current_company >= MAX_COMPANIES) return CMD_ERROR;
@@ -1090,7 +1090,7 @@ CommandCost CmdSetVehicleVisibility(DoCommandFlags flags, EngineID engine_id, bo
 CommandCost CmdWantEnginePreview(DoCommandFlags flags, EngineID engine_id)
 {
 #ifdef WITH_RUST
-	return openttd_rust_engine_want_preview(&EngineServices(), EngineRef(Engine::GetIfValid(engine_id)), flags.Test(DoCommandFlag::Execute)) == 0 ? CommandCost() : CMD_ERROR;
+	return openttd_rust_engine_want_preview(&EngineServices(), Engine_resolve(engine_id.base()), flags.Test(DoCommandFlag::Execute)) == 0 ? CommandCost() : CMD_ERROR;
 #else
 	Engine *e = Engine::GetIfValid(engine_id);
 	if (e == nullptr || !e->flags.Test(EngineFlag::ExclusivePreview) || e->preview_company != _current_company) return CMD_ERROR;
@@ -1112,7 +1112,7 @@ CommandCost CmdWantEnginePreview(DoCommandFlags flags, EngineID engine_id)
 CommandCost CmdEngineCtrl(DoCommandFlags flags, EngineID engine_id, CompanyID company_id, bool allow)
 {
 #ifdef WITH_RUST
-	return openttd_rust_engine_control(&EngineServices(), EngineRef(Engine::GetIfValid(engine_id)), company_id.base(), allow, flags.Test(DoCommandFlag::Execute)) == 0 ? CommandCost() : CMD_ERROR;
+	return openttd_rust_engine_control(&EngineServices(), Engine_resolve(engine_id.base()), company_id.base(), allow, flags.Test(DoCommandFlag::Execute)) == 0 ? CommandCost() : CMD_ERROR;
 #else
 	if (_current_company != OWNER_DEITY) return CMD_ERROR;
 
@@ -1279,7 +1279,7 @@ static bool IsUniqueEngineName(const std::string &name)
 CommandCost CmdRenameEngine(DoCommandFlags flags, EngineID engine_id, const std::string &text)
 {
 #ifdef WITH_RUST
-	uint8_t result = openttd_rust_engine_rename(&EngineServices(), EngineRef(Engine::GetIfValid(engine_id)), {reinterpret_cast<const uint8_t *>(text.data()), text.size()}, flags.Test(DoCommandFlag::Execute));
+	uint8_t result = openttd_rust_engine_rename(&EngineServices(), Engine_resolve(engine_id.base()), {reinterpret_cast<const uint8_t *>(text.data()), text.size()}, flags.Test(DoCommandFlag::Execute));
 	return result == 0 ? CommandCost() : result == 2 ? CommandCost(STR_ERROR_NAME_MUST_BE_UNIQUE) : CMD_ERROR;
 #else
 	Engine *e = Engine::GetIfValid(engine_id);
@@ -1318,7 +1318,7 @@ CommandCost CmdRenameEngine(DoCommandFlags flags, EngineID engine_id, const std:
 bool IsEngineBuildable(EngineID engine, VehicleType type, CompanyID company)
 {
 #ifdef WITH_RUST
-	return openttd_rust_engine_buildable(&EngineServices(), EngineRef(Engine::GetIfValid(engine)), type, company.base());
+	return openttd_rust_engine_buildable(&EngineServices(), Engine_resolve(engine.base()), type, company.base());
 #else
 	const Engine *e = Engine::GetIfValid(engine);
 

@@ -55,7 +55,7 @@ static void VehicleConstructAircraftPlace(void *aircraft, void *shadow, uint32_t
 static OpenTTDAircraftInfo VehicleConstructAircraftInfo(const OpenTTDEngine *e) noexcept
 {
 	const AircraftVehicleInfo &avi = EngineOf(e)->VehInfo<AircraftVehicleInfo>();
-	return {.image = avi.image_index, .passengers = avi.passenger_capacity, .mail = avi.mail_capacity, .subtype = avi.subtype};
+	return {.image = avi.image_index, .passengers = avi.passenger_capacity, .mail = avi.mail_capacity, .subtype = RustAircraftInfoSubtype(&avi)};
 }
 static void VehicleConstructAircraftProperties(void *aircraft, void *shadow, const OpenTTDEngine *e, uint8_t subtype) noexcept
 {

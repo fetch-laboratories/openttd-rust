@@ -736,11 +736,9 @@ impl World<'_> {
         }
     }
     fn hangar_height(&self, station: i64) -> i64 {
-        let st = crate::newgrf_airport::station_by_id(
-            station as u16,
-            crate::newgrf_airport::runtime(),
-        )
-        .cast();
+        let st =
+            crate::newgrf_airport::station_by_id(station as u16, crate::newgrf_airport::runtime())
+                .cast();
         let result = unsafe { (self.leaves.hangar_height)(st, self.airport_spec(st)) };
         self.service_witness("hangar_height", std::mem::size_of_val(&result));
         i64::from(result)

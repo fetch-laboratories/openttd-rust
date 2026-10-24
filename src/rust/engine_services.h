@@ -17,7 +17,8 @@
 #include "services_rail.h"
 #include "../road.h"
 inline const OpenTTDEngine *RustEngineByIDIfValid(uint16_t id) noexcept { return RustEngine(Engine::GetIfValid(EngineID(id))); }
-inline uint8_t RustEngineAircraftSubtype(const OpenTTDEngine *e) noexcept { return EngineOf(e)->VehInfo<AircraftVehicleInfo>().subtype; }
+inline uint8_t RustAircraftInfoSubtype(const AircraftVehicleInfo *info) noexcept { return info->subtype; }
+inline uint8_t RustEngineAircraftSubtype(const OpenTTDEngine *e) noexcept { return RustAircraftInfoSubtype(&EngineOf(e)->VehInfo<AircraftVehicleInfo>()); }
 inline const OpenTTDEngine *RustEngineByID(uint16_t id) noexcept { return RustEngine(Engine::Get(EngineID(id))); }
 inline bool RustEngineHasArticulatedCallback(uint16_t engine) noexcept { return EngInfo(EngineID(engine))->callback_mask.Test(VehicleCallbackMask::ArticEngine); }
 inline void RustArticulatedCapacity(uint16_t engine, uint32_t *out) noexcept { auto capacity = GetCapacityOfArticulatedParts(EngineID(engine)); std::copy(capacity.begin(), capacity.end(), out); }
