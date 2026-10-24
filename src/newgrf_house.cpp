@@ -51,12 +51,12 @@ static OpenTTDHouseReseed EvaluateHouseReseed(uint16_t house, uint32_t tile, Tow
 static OpenTTDHouseSearchSpec HouseSearchSpec(uint16_t house) noexcept
 {
 	const auto *s = RustHouseSpec(house);
-	return {.grfid = s->grf_prop.grfid, .local = s->grf_prop.local_id, .house_class = s->class_id, .has_file = s->grf_prop.HasGrfFile()};
+	return {.grfid = RustSpecGRFID(s), .local = RustSpecLocalID(s), .house_class = RustTownHouseClass(s), .has_file = RustSpecHasGRFFile(s)};
 }
 static OpenTTDHouseNearbySpec HouseNearbySpec(uint16_t house) noexcept
 {
 	const auto *s = RustHouseSpec(house);
-	return {.file = s->grf_prop.grffile, .local = s->grf_prop.local_id, .house_class = s->class_id};
+	return {.file = RustSpecGRFFile(s), .local = RustSpecLocalID(s), .house_class = RustTownHouseClass(s)};
 }
 const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 {
@@ -66,7 +66,7 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.storage = &GetRustStorageServices(),
 		.larger_towns = OpenTTDLargerTowns,
 		.cargo_by_label = [](uint32_t label) noexcept { return OpenTTDCargoByLabel(CargoLabel{label}); },
-		.file = [](const ResolverObject *r) noexcept { return r->grffile; },
+		.file = RustResolverGRFFile,
 		.version = RustGRFFileVersion,
 		.cargo_translation = OpenTTDCargoTranslation,
 		.nearby = RustSignedNearbyTile,
@@ -78,7 +78,7 @@ const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept
 		.random_triggers = RustHouseRandomTriggers,
 		.search_spec = HouseSearchSpec,
 		.nearby_spec = HouseNearbySpec,
-		.file_identity = [](uint16_t house) noexcept -> OpenTTDHouseFileIdentity { const auto *spec = RustHouseSpec(house); return {.grfid = spec->grf_prop.grfid, .has_file = spec->grf_prop.HasGrfFile()}; },
+		.file_identity = [](uint16_t house) noexcept -> OpenTTDHouseFileIdentity { const auto *spec = RustHouseSpec(house); return {.grfid = RustSpecGRFID(spec), .has_file = RustSpecHasGRFFile(spec)}; },
 		.house_id = [](uint16_t local, uint32_t grfid) noexcept { return _house_mngr.GetID(local, grfid); },
 		.house_grfid = [](uint16_t house) noexcept { return _house_mngr.GetGRFID(house); },
 		.badges = RustHouseBadges,
@@ -114,8 +114,13 @@ HouseOverrideManager _house_mngr(NEW_HOUSE_OFFSET, NUM_HOUSES, INVALID_HOUSE_ID)
  */
 static const GRFFile *GetHouseSpecGrf(HouseID house_id)
 {
+#ifdef WITH_RUST
+	const HouseSpec *hs = RustHouseSpec(house_id);
+	return (hs != nullptr) ? RustSpecGRFFile(hs) : nullptr;
+#else
 	const HouseSpec *hs  = HouseSpec::Get(house_id);
 	return (hs != nullptr) ? hs->grf_prop.grffile : nullptr;
+#endif
 }
 
 extern const HouseSpec _original_house_specs[NEW_HOUSE_OFFSET];

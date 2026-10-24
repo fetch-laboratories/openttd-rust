@@ -998,7 +998,7 @@ static uint8_t RustTownRoadFlags(uint8_t id) noexcept { return GetRoadTypeInfo(s
 static OpenTTDTownHouseAvailability RustTownHouseAvailability(uint16_t id) noexcept
 {
 	const auto *hs = HouseSpec::Get(id);
-	return {.zones = hs->building_availability.base(), .override_id = hs->grf_prop.override_id, .class_id = hs->class_id, .probability = hs->probability, .enabled = hs->enabled};
+	return {.zones = hs->building_availability.base(), .override_id = hs->grf_prop.override_id, .class_id = RustTownHouseClass(hs), .probability = hs->probability, .enabled = hs->enabled};
 }
 static OpenTTDTownHousePlacement RustTownHousePlacement(uint16_t id) noexcept
 {
@@ -1036,7 +1036,6 @@ static uint32_t RustTown_exchange_company(uint32_t company) noexcept
 	OpenTTDSetCurrentCompany(CompanyID(company));
 	return old.base();
 }
-static uint16_t RustTownHouseClass(uint16_t house) noexcept { return HouseSpec::Get(house)->class_id; }
 static void RustTown_make_house(uint32_t tile, uint32_t town, uint32_t house, uint32_t construction) noexcept
 {
 	MakeHouseTile(TileIndex{tile}, TownID(town), construction & 0xFF, (construction >> 8) & 0xFF, house, (construction >> 16) & 0xFF, construction >> 24);
