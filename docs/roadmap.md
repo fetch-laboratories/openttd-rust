@@ -4,14 +4,14 @@ Root owns selection here; `AGENTS.md` and `docs/rust-migration.md` define proces
 If an issue conflicts, follow this roadmap and report it to root. Keep this
 forward-looking, about 200 lines; completed work is one row, with evidence in PRs.
 
-## Where the fork stands (2026-10-24, code at `09eda66766`)
+## Where the fork stands (2026-10-24, code at `1569158485`)
 
-- Fifty-seven ownership ports. Original retirement: 60,349 / 470,612 C/C++ src lines (12.82%); simulation 51,983 / 102,615 (50.66%). Whole-fork Rust/tooling/glue: 109,657 / 39,527 / 38,965. Source-line measures include comments/data, not completed behavior percentages.
-- Since the seventeenth steering: 19 owners, 10,713 original lines retired, 4,568 net glue and 7,436 tooling lines added. #423 integrates station #411, goods/base-scope/anchors #419, affordability coverage #420 and boundary repairs #421. Earlier batches remain below. No rollback.
-- Latest completed profile at 09eda passed all six semantic/end-moment/compatibility comparisons. BOTH 6bb and 09eda use quiet-6bb anchors: TGP 1.132006x; Opus 1.408100x; Grok 1.403127x; P1996 1.321189x; P2000 1.377896x; P2016 1.455912x. TGP count rose 0.272% and its projection 0.544%; play counts fell 0.145-1.148%, with projections at the same anchor floors. No >3% rise; these are not wall savings. Next profile is due after two more integrations.
-- Quiet 6bb used four interleaved three-pair medians; all 144 exits/72 semantic pairs passed. Only P2016 remains in band. Its three net-ranked repairs are integrated, and 09eda runtimes are prepared for six-ratio remeasurement. Initial preflight detected a concurrent compile before any timed game; zero samples accepted and hold released. Retry after explicit worker readiness; no timing hold is active. Necessary excess costs are not promised savings.
-- Integrated combinations passed exact-current-base Full. Since steering: 37 Full requests, 20 successful, ten failed and seven cancelled. #423's PBS observer repair passed fresh review and final Full; map/RNG had already matched. Strict protection is enabled. Both due macOS configurations passed at 6bb; next run is due after three integrations. CI maintenance observation reached 10/10; broader infrastructure remains unselected. CI_ON_DEMAND stays true.
-- Six unintegrated components: house/town #416 completion, road-stop #422 and shared #424 prepared in #427, common Action2 #425, coverage #426 and airport #418. Generic callbacks #429 and object invocation/eligibility #430 are selected next. Completed checkouts are removed under #259; protected speed inputs remain until consumed.
+- Fifty-nine ownership ports. Original retirement: 61,148 / 470,612 C/C++ src lines (12.99%); simulation 52,782 / 102,615 (51.44%). Whole-fork Rust/tooling/glue: 111,409 / 40,125 / 39,460. Source-line measures include comments/data, not completed behavior percentages.
+- Since the seventeenth steering: 21 owners and 11,512 original lines retired; current glue/tooling totals are above. #427 integrated road-stop #422/shared #424/coverage #426; #434 integrated house/town #416, wagon coverage #431, track/orders #432 and anchors #433. No rollback.
+- Latest completed six-count profile is 09eda. Recomputed BOTH 6bb and 09eda under the new quiet-09eda anchors, projections fell 0.290-2.271% on play scenarios; TGP stayed at its floor. At 09eda: TGP 1.138746x, Opus 1.428848x, Grok 1.416843x, P1996 1.321550x, P2000 1.381829x, P2016 1.463012x. No >3% rise; count decreases are not wall savings. The second-integration profile at 156915 is running in the background.
+- Quiet 09eda completed four interleaved three-pair medians: 144 exits/72 semantic pairs passed. Opus/P2016 remain in band, all ratios below ceilings. Only the accepted collection held heavy work; no timing hold is active. Current net attribution selected track status and ProcessOrders, now integrated #432; no savings claim before remeasurement. Original raw/cache differences remain explicit: Opus +84,032 Ir, P2016 -5,691,628 Ir.
+- Integrated combinations passed exact-current-base Full. Since steering: 40 Full requests, 22 successful, eleven failed and seven cancelled. #427's MSVC class-return fix and #434 both passed; strict protection remains enabled. Both due macOS configurations passed at 6bb; next macOS is due after one more integration. CI observation reached 10/10; broader infrastructure remains unselected. CI_ON_DEMAND stays true.
+- Four unintegrated components: common Action2 #425 final-base adoption, airport #428 final validation, generic callbacks #429 implementation and #156 property-boundary coverage #435. Object invocation/eligibility #430 is selected next; fresh Astra planning is selecting following owners. Completed checkout cleanup is 87; protected speed inputs remain until consumed.
 
 ## Eighteenth steering review (2026-10-23, remove accidental gates and close shared-layer debt)
 
@@ -127,12 +127,12 @@ Metrics are `tools/port-metrics.py`: Rust / tooling / C++ glue / C++ retired.
 | #377 | Vehicle tile occupancy and queries | #384 via #391 | `ac7d2b60f2` | 1061 / 161 / 222 / 233; net glue 17 |
 | #386 | Cargo-monitor maps and lifecycle | #388 via #391 | `ac7d2b60f2` | 371 / 240 / 157 / 196; net glue 117; acceptance basis 193 |
 | #385 | Complete animated tiles and NewGRF animation | #389 via #406 | `77b8e663f2` | 1154 / 633 / 594 / 472; net glue 429; acceptance basis 415 |
-
 | #393 | NewGRF transactional storage and feature policies | #400 via #412 | `6bb78266d2` | 399 / 221 / 249 / 258; net glue 247 |
-
 | #392 | Complete vehicle NewGRF resolver/cache runtime | #397 via #415 | `268c7c140d` | 2047 / 442 / 599 / 1076; net glue 378 |
 | #398 | Industry/industry-tile NewGRF resolver runtime | #407 via #415 | `268c7c140d` | 1076 / 436 / 364 / 516; net glue 329 |
 | #399 | Complete station/waypoint NewGRF resolver runtime | #411 via #423 | `09eda66766` | 1207 / 261 / 267 / 561; net glue 254 |
+| #410 | Road-stop resolver and spec associations | #422 via #427 | `445ce4f30c` | 876 / 187 / 319 / 369; net glue 285 |
+| #409 | House/shared-town NewGRF resolver runtime | #416 via #434 | `1569158485` | 927 / 215 / 303 / 430; net glue 209 |
 
 Harness/process #72/#84/#97/#88/#75/#90 and maintenance #209-#302 retain evidence in their PRs.
 Rows below use original retirement and net glue (#223).
@@ -149,11 +149,11 @@ Rows below use original retirement and net glue (#223).
 | #394 CI idle-time trims | #395 | direct | `cb4a01e86f` | 0 / 10 / 0 / 0; net glue 0 |
 | #261/#281/#156 source, checker, coverage; #275 repairs/shared leaf | #396, #401, #402 | #403 | `6a2416df4e` | 301 / 399 / 91 / 4; net glue 40 |
 | #275 complete quiet-ac7 six anchors | #404 | #406 | `77b8e663f2` | 0 / 8 / 0 / 0; net glue 0 |
-
 | #156 structure coverage; #261 shared resolver metadata | #405, #408 | #412 | `6bb78266d2` | 0 / 136 / 40 / 0; net glue 28 |
-
 | #261 shared metadata; #156 bribe coverage and frozen industry loader | #413, #414; #415 repair | #415 | `268c7c140d` | in PRs; combined 3120 / 1099 / 979 / 1592, net glue 723 |
 | #261 goods/base scope; #275 anchors and repairs; #156 affordability/PBS observation | #419, #420, #421; #423 repair | #423 | `09eda66766` | in PRs; combined with #411: 1297 / 439 / 350 / 561, net glue 329 |
+| #261 station/spec metadata; #156 vehicle real groups; MSVC animation return | #424, #426; #427 repair | #427 | `445ce4f30c` | in PRs; combined with #422: 880 / 305 / 362 / 369, net glue 286 |
+| #156 wagon overrides; #275 track/orders and quiet anchors | #431, #432, #433 | #434 | `1569158485` | combined with #416: 966 / 308 / 303 / 430, net glue 209 |
 
 ## Phase 1: selected maintenance and coverage
 
@@ -166,40 +166,37 @@ new tooling stream is introduced. Keep one worker closing the coverage backlog.
 
 Integrate ready reviewed work first. Keep at most six component branches.
 
-1. **#409 / #416 house/shared-town resolver:** whole source/default fixtures preserved at 2e7d2e665c; cost accepted once. Fresh completion worker adopts actual integrated helpers, finishes candidate build/Cargo4/default comparisons/audit, then fresh fixing review and Full. Reference-only success is not candidate evidence.
-2. **#410 / #422 road-stop resolver/spec associations:** whole review/root spot-check pass at bcd9567c87; necessary boundary cost accepted once. Root promotes common station/spec metadata independently. Adopt it and integrated #411 common variables/cargo reducers directly, delete temporary facades/copies, then scoped adoption review/current-base Full. Preserve ordinary CBID_NO_CALLBACK zero reseeds; explicit-callback fixtures do not claim otherwise-unreachable ordinary draws.
-3. **Shared #261, speed #275, coverage #156 and cleanup #259:** #424/#427 canonical metadata and direct station adoption are in scoped fixing review. Batch ready coverage #426 after its fresh review; do not delay a ready owner. The three speed repairs are integrated and six-count assessment passed; complete prepared quiet remeasurement. Preserve protected inputs; no new infrastructure follows automatically from observation 10/10.
-4. **#417 / #425 common Action2 and #418 airport/airport-tile resolution:** both whole owners are assigned from integrated main, with separate canonical state/fidelity/default evidence scopes. Root makes each cost disposition once at its passing concrete checkpoint. No utility/GUI fallback or draft-service dependency.
-5. **Next #429 generic callbacks, then #430 object invocation/eligibility:** fresh Astra/high planning and root source spot-check select the remaining ordered registry/execution and object stack/root/parent/availability owners. Root assigns by readiness/capacity; no second credit for already-owned object variables/animation, no parser/rendering scope expansion.
+1. **#417 / #425 common Action2:** assigned-base whole fidelity review passed. Fresh scoped fixing review merges actual156915 once and adopts integrated road-stop/house/shared-town variables, scopes and PSA directly; remove stale baseline/API leftovers, fix current consumers, run affected checks, then root spot-check/current-base Full. No dependency on airport's draft.
+2. **#418 / #428 airport/airport-tile runtime:** first actual-program airport/reload comparison passed, including admission, Built/animation, parent PSA and both RNG streams. Necessary selected-spec helper/cross-owner cost accepted once. Finish exact-callee/duplicate/orphan audit and final affected checks, then fresh whole-owner review/current-base Full. Native hangar/rotation bodies accept selected specs; original gates remain.
+3. **#156 coverage, #275 speed, #259 cleanup:** one worker closes integrated vehicle property-boundary gap in #435 using existing fleet scenarios and independent sensitivity checks. Track/orders repairs and complete anchors have integrated; profile156915 and compare09eda under those SAME anchors, attribute only demonstrated >3% rises and run a quiet pass only under AGENTS.md. Ready owners do not wait for future maintenance. Preserve protected inputs; no new infrastructure follows from CI observation10/10.
+4. **#429 generic callbacks:** assigned from actual156915; whole ordered registry, AI and ambient runtime, direct tile routes and real default evidence. First concrete boundary/evidence checkpoint gets one cost disposition. Common evaluator remains its currently integrated owner; no draft-service dependency.
+5. **#430 object invocation/eligibility next:** whole stack/root/parent/availability owner, without second credit for already-owned variables/animation. Root assigns by readiness/capacity. Fresh Astra planning selects the following two whole simulation owners; root records selection before implementation.
 
 New owners start from integrated rust-migration, never draft services. Root lands
-a shared service once, and other drafts adopt it when preparing final validation.
-Core owners receive concrete boundary repair or a necessary-cost explanation,
-not circular deferral. Catchment, #64/#68/#69, vendored libraries, GUI rendering
-and platform expansion remain unselected. Plan the next whole simulation owners
-when the existing restart loop calls for it; completing this list does not stop work.
+a shared service once; other drafts adopt it at final validation. Core owners
+receive a concrete boundary repair or necessary-cost explanation, not circular
+deferral. Catchment, #64/#68/#69, vendored libraries, GUI rendering and platform
+expansion remain unselected. Completing the list triggers further planning.
 
 ## Resume checkpoint
 
-Development is active. #423 merged after repaired exact-current-base Full.
-Integrated goods/base-scope helpers unblock house candidate validation;
-road-stop adoption, whole Action2 and standing coverage proceed independently.
+Development is active. #434 merged after exact-current-base Full. No timing
+hold is active; builds and semantic checks continue alongside merged-tip counts.
 
 | Item | Saved head | Resume action | Jobs / CI |
 | --- | --- | --- | --- |
-| #416 house/town | `2e7d2e665c` | Integrated helper adoption, candidate checks, fresh review. | Fresh continuation active; original preserved. |
-| #424 / #427 metadata+road-stop | component `19fa4495e7` / `bcd9567c87` | Direct shared/station adoption; scoped fixes, focused checks, Full. | Root and fresh fixing review active. |
-| #275 merged-tip profile | `09eda66766` | Counts complete; prepared quiet-six retry after explicit readiness. | No timed games accepted; no hold active. |
-| #156 / #426 coverage | `88985612cc` | Finish restored-head sensitivity/default checks, fresh review. | Vehicle real-group/root-selection gap only. |
-| #417 / #425 | `1e7e02297b` WIP | Complete common state/evaluator/globals and actual default evidence. | Fresh implementation active. |
-| #418 airport runtime | base `e064d5eb88` | Whole paired scope/eligibility owner; first concrete checkpoint. | Fresh implementation active. |
-| #429 / #430 | selected | Generic callbacks first, object invocation/availability second. | Queued, not started. |
+| #425 common Action2 | `1330f4b53d` | Actual156915 adopted; finish scoped direct-owner checks/review, root spot-check and Full. | Fresh fixing review active. |
+| #428 airport runtime | `e398d4b2e7` | Final exact-callee/ABI/default checks, then fresh whole review. | Build passed; final focused driver active. |
+| #429 generic callbacks | base `1569158485` | Whole registry/AI/ambient ownership and first real default checkpoint. | Fresh implementation active. |
+| #156 / #435 | `54f264cc86` | Finish property-boundary sensitivity, restore/check exact head, fresh review. | Initial build/native8/default2 passed. |
+| #275 merged-tip profile | `1569158485` | Compare all six projections to09eda under shared new anchors. | Background instruction driver active. |
+| #430 / following owners | selected / planning | Object invocation next; root selects two following whole owners from fresh research. | Object queued; Astra/high planning active. |
 
-Preserve speed checkouts `af1fea6a`, `bf961767`, `72a1223d`, `7ece2878`, `2a35b1c0`
-and their exact runtime until #275 consumes them. Keep the pinned reference
-unchanged. Current root is gpt-6.1-sol xhigh; implementation/review workers use
-Sol high and planning uses Astra high. CI_ON_DEMAND stays true; macOS is due
-after three integrations. Old wind-down messages bind only the stopped session.
+Preserve protected speed checkouts and exact runtimes until #275 consumes them;
+keep the pinned reference unchanged. Root is gpt-6.1-sol xhigh; implementation/
+review workers use Sol high, planning Astra high. CI_ON_DEMAND stays true;
+macOS is due after one more integration. Old wind-down messages bind only the
+stopped session. No current work is paused by them.
 
 ## Progress metric
 
