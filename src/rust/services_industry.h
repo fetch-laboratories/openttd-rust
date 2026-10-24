@@ -6,7 +6,7 @@
 #include "../newgrf_industrytiles.h"
 #include "services_ffi.h"
 #include "../industry_map.h"
-inline void RustIndustryTileRandomCheck(const OpenTTDIndustryResolverContext *context) noexcept
+inline void RustIndustryTileRandomCheck([[maybe_unused]] const OpenTTDIndustryResolverContext *context) noexcept
 {
 	assert(context->industry != nullptr && IsValidTile(TileIndex(context->tile)));
 	assert(context->id == IndustryID::Invalid().base() || IsTileType(TileIndex(context->tile), MP_INDUSTRY));
