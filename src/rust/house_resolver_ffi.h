@@ -57,7 +57,7 @@ struct OpenTTDHouseResolverServices {
 	uint32_t (*nearby_info)(uint32_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(nearby_info);
 	uint32_t (*terrain)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(terrain);
 	uint8_t (*stage)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(stage);
-	uint8_t (*age)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(age);
+	int32_t (*age)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(age);
 	uint8_t (*random_bits)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random_bits);
 	uint8_t (*random_triggers)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(random_triggers);
 	OpenTTDHouseSearchSpec (*search_spec)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(search_spec);

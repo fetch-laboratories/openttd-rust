@@ -1114,7 +1114,7 @@ static OpenTTDHouseEntry RustHouseEntry(uint32_t tile) noexcept
 }
 static OpenTTDHouseLoopTile RustHouseLoopTile(uint32_t tile) noexcept
 {
-	return {.age = RustHouseAge(tile), .completed = RustHouseCompleted(tile), .lift_has_destination = RustHouseLiftHasDestination(tile)};
+	return {.age = static_cast<uint8_t>(RustHouseAge(tile)), .completed = RustHouseCompleted(tile), .lift_has_destination = RustHouseLiftHasDestination(tile)};
 }
 static OpenTTDHouseLift RustHouseLift(uint32_t tile) noexcept
 {
@@ -1134,7 +1134,7 @@ static OpenTTDHouseCache RustHouseCache(uint32_t tile) noexcept
 }
 static OpenTTDHouseAge RustHouseAgeObservation(uint32_t tile) noexcept
 {
-	return {.age = RustHouseAge(tile), .completed = RustHouseCompleted(tile)};
+	return {.age = static_cast<uint8_t>(RustHouseAge(tile)), .completed = RustHouseCompleted(tile)};
 }
 /* These phase projections call each field's single typed reader. Keep field
  * definitions here rather than repeating HouseSpec reads in a projection. */

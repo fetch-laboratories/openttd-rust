@@ -20,7 +20,7 @@
 #include "../newgrf_badge.h"
 #include "../newgrf_railtype.h"
 #include "../town.h"
-inline uint8_t RustHouseAge(uint32_t tile) noexcept { return static_cast<uint8_t>(GetHouseAge(TileIndex{tile}).base()); }
+inline int32_t RustHouseAge(uint32_t tile) noexcept { return GetHouseAge(TileIndex{tile}).base(); }
 inline uint8_t RustHouseRandomBits(uint32_t tile) noexcept { return GetHouseRandomBits(TileIndex{tile}); }
 inline uint8_t RustHouseRandomTriggers(uint32_t tile) noexcept { return GetHouseRandomTriggers(TileIndex{tile}).base(); }
 inline const HouseSpec *RustHouseSpec(uint16_t house) noexcept { return HouseSpec::Get(house); }

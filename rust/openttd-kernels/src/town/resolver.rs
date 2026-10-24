@@ -72,7 +72,7 @@ pub struct ResolverServices {
     nearby_info: extern "C" fn(u32, bool) -> u32,
     terrain: extern "C" fn(u32) -> u32,
     stage: extern "C" fn(u32) -> u8,
-    age: extern "C" fn(u32) -> u8,
+    age: extern "C" fn(u32) -> i32,
     random_bits: extern "C" fn(u32) -> u8,
     random_triggers: extern "C" fn(u32) -> u8,
     search_spec: extern "C" fn(u16) -> SearchSpec,
@@ -239,7 +239,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
         } else {
             CT_MAIL
         });
-        return u32::from(unsafe { super::percent_transported(scope.owner, cargo) });
+        return u32::from(unsafe { super::subsidy_percent_transported(scope.owner, cargo) });
     }
     let value = unsafe {
         let state = &*scope.owner;
@@ -269,7 +269,12 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
             0xB9 => u32::from(state.growth.rate / TOWN_GROWTH_TICKS),
             0xCC..=0xD3 => {
                 let index = variable - 0xCC;
-                let received = state.simulation.received[if index & 2 == 0 { 5 } else { 4 }];
+                let effect = if index & 2 == 0 {
+                    crate::cargotype::TAE_FOOD
+                } else {
+                    crate::cargotype::TAE_WATER
+                };
+                let received = state.simulation.received[usize::from(effect)];
                 let value = if index < 4 {
                     received.new_act
                 } else {
@@ -306,6 +311,9 @@ pub unsafe extern "C" fn openttd_rust_town_scope_store(
     value: i32,
 ) {
     let scope = unsafe { *scope };
+    if scope.readonly {
+        return;
+    }
     let file = (s.file)(ro);
     unsafe {
         newgrf_storage::openttd_rust_storage_town(
@@ -427,7 +435,7 @@ pub unsafe extern "C" fn openttd_rust_house_variable(
         }
         0x41 => {
             if (shared.tile_type)(tile) == MP_HOUSE {
-                u32::from((s.age)(tile))
+                (s.age)(tile) as u32
             } else {
                 0
             }

@@ -176,12 +176,6 @@ unsafe fn supplied_history(state: *const State, cargo: u8, period: u8) -> Option
         rows.get(index).map(|s| s.history[usize::from(period)])
     }
 }
-/// Canonical `Town::GetPercentTransported`, without a native owner bounce.
-unsafe fn percent_transported(state: *const State, cargo: u8) -> u8 {
-    unsafe { supplied_history(state, cargo, LAST_MONTH) }.map_or(0, |history| unsafe {
-        openttd_rust_town_percent_transported(&raw const history)
-    })
-}
 /// Read only the canonical position at the original observation point.
 /// SAFETY: The caller supplies a live owner; this immediate copied read retains no borrow.
 pub(crate) unsafe fn position(state: *const State) -> u32 {
