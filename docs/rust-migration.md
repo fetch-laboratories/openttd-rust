@@ -2341,3 +2341,29 @@ Build/Cargo4, affected native/ABI and default scenarios, callee/duplicate/orphan
 review and exact-current-base Full are recorded in #427. Remaining historical,
 external-GRF and named unreachable branches remain on #156. Necessary typed
 native vector/spec/evaluator boundary cost was accepted once at the checkpoint.
+
+
+### Generic NewGRF callbacks (#429, PR #436)
+
+`newgrf_generic.rs` owns the process-wide ordered feature registry, reverse
+candidate traversal, stack invocation/root/scope/variables, AI selection and
+ambient enable/chance/parameter/playback policy. Registration alone allocates;
+resolution copies one pointer pair at a time, with no registry snapshot. Native
+load phases exclude registration/reset during callbacks. Context/container
+borrows end before Action2 or sound reentry; nested entries own their stack state.
+C++ retains files, parsed graphs, common Action2, specifications, map, loading
+callers and sound playback. Typed noexcept leaves have no ordinary-play throwing
+operation; script commands run after the callback returns. Portable originals stay.
+Clear/tree/water call Rust directly; tree retains its post-call feature observation
+before refresh. Cargo bitnum and GRF-aware playback have canonical shared leaves
+adopted by vehicle/animation consumers; displaced ambient callbacks are removed.
+Default `landscape-generic-callbacks` uses deterministic/procedure groups and two
+files, requiring reset/duplicates/priority/fallback/failure, variables/industry
+substitution/narrowing, v7/v8, per-attempt register reset, and all ambient gates.
+Real scheduler routes compare nonzero height/random/terrain/water parameters,
+selected sound/file, exact RNG and semantic saves in plain/desync modes. Transient
+registrations are cleared before graph destruction and rebuilt after native reload.
+Build/Cargo4, native ABI/table completeness, focused ground/vehicle/animation checks
+and exact commands are recorded on #436. External-GRF loading, script station-build
+integration, other feature registrations, arbitrary programs, historical saves and
+GUI scheduling remain #156 gaps. Root owns fixing review and combination Full.
