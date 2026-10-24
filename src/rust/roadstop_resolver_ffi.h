@@ -3,6 +3,7 @@
 #ifndef RUST_ROADSTOP_RESOLVER_FFI_H
 #define RUST_ROADSTOP_RESOLVER_FFI_H
 #include "services_ffi.h"
+#include "../cargo_type.h"
 struct RoadStopSpec;
 struct SpriteGroup;
 struct ResolverObject;

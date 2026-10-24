@@ -508,7 +508,7 @@ static void RoadResolverQueries(BaseStation *st, TileIndex tile, bool waypoint)
 	StationNeed(root() == 13, __LINE__);
 	if (!waypoint) {
 		Station *station = Station::From(st);
-		for (CargoType c : {1, 0}) { StationNeed(CargoPacket::CanAllocateItem(), __LINE__); station->goods[c].GetOrCreateData().cargo.Append(new CargoPacket(st->index, 7, Source{SourceType::Town, st->town->index.base()}), StationID::Invalid()); }
+		for (CargoType c : {1, 0}) { StationNeed(CargoPacket::CanAllocateItem(), __LINE__); station->goods[c].GetOrCreateData().cargo.Append(new CargoPacket(st->index, 7, Source{st->town->index, SourceType::Town}), StationID::Invalid()); }
 		StationNeed(root() == 17, __LINE__);
 		station->goods[0].GetData().cargo.Truncate(); StationNeed(root() == 23, __LINE__);
 		station->goods[1].GetData().cargo.Truncate(); StationNeed(root() == 13, __LINE__);
@@ -520,25 +520,29 @@ static void RoadResolverQueries(BaseStation *st, TileIndex tile, bool waypoint)
 static void RoadResolverRandom(BaseStation *st, TileIndex tile, bool waypoint)
 {
 	auto &f = RoadResolverSpecs(waypoint); auto *spec = &f.specs[0];
-	SpriteGroup::CanAllocateItem(2); auto *lower = new RandomizedSpriteGroup(), *upper = new RandomizedSpriteGroup();
+	SpriteGroup::CanAllocateItem(3); auto *lower = new RandomizedSpriteGroup(), *upper = new RandomizedSpriteGroup(); auto *publication = new DeterministicSpriteGroup();
+	publication->var_scope = VSG_SCOPE_SELF; publication->size = DSG_SIZE_DWORD;
+	for (auto [var, reg] : {std::pair<uint8_t, uint32_t>{0x5F, 0x105}, {0x0C, 0x106}}) {
+		publication->adjusts.push_back({.operation = DSGA_OP_RST, .type = DSGA_TYPE_NONE, .variable = var, .and_mask = 0xFF});
+		publication->adjusts.push_back({.operation = DSGA_OP_STO, .type = DSGA_TYPE_NONE, .variable = 0x1A, .and_mask = reg});
+	}
 	lower->var_scope = upper->var_scope = VSG_SCOPE_SELF; lower->lowest_randbit = 3; upper->lowest_randbit = 18;
 	lower->groups = {f.one, f.one}; upper->groups = {lower, lower};
 	for (uint8_t mask : {1, 2, 3}) for (StationRandomTrigger trigger : {StationRandomTrigger::NewCargo, StationRandomTrigger::CargoTaken, StationRandomTrigger::VehicleArrives, StationRandomTrigger::VehicleDeparts, StationRandomTrigger::VehicleLoads}) {
 		if (waypoint && (trigger == StationRandomTrigger::NewCargo || trigger == StationRandomTrigger::CargoTaken)) continue;
 		lower->triggers = mask & 1 ? 1 << to_underlying(trigger) : 0; upper->triggers = mask & 2 ? 1 << to_underlying(trigger) : 0;
-		spec->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA, mask == 1 ? lower : upper);
+		publication->default_result.group = mask == 1 ? lower : upper;
+		spec->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA, publication);
 		st->waiting_random_triggers = {}; st->random_bits = 0xA55A; st->SetRoadStopRandomBits(tile, 0x69);
 		RoadStopUpdateCachedTriggers(st);
-		RoadStopResolverObject object(spec, st, tile, INVALID_ROADTYPE, GetStationType(tile), GetStationGfx(tile)); object.SetWaitingRandomTriggers(StationRandomTriggers(1 << to_underlying(trigger))); object.ResolveRerandomisation();
+		RoadStopResolverObject object(spec, st, tile, INVALID_ROADTYPE, GetStationType(tile), GetStationGfx(tile), CBID_RANDOM_TRIGGER); object.SetWaitingRandomTriggers(StationRandomTriggers(1 << to_underlying(trigger))); object.ResolveRerandomisation();
 		uint32_t expected_mask = (mask & 1 ? 8 : 0) | (mask & 2 ? 1 << 18 : 0);
 		StationNeed(object.GetReseedSum() == expected_mask && object.GetUsedRandomTriggers().Test(trigger), __LINE__);
-		Randomizer expected = _random; uint16_t station_bits = st->random_bits; uint8_t tile_bits = st->GetRoadStopRandomBits(tile);
-		size_t count = trigger == StationRandomTrigger::NewCargo || trigger == StationRandomTrigger::CargoTaken ? st->custom_roadstop_tile_data.size() : 1;
-		for (size_t i = 0; i < count; i++) { uint32_t draw = expected.Next(); if (i == 0) tile_bits = (tile_bits & ~(expected_mask >> 16)) | (draw & (expected_mask >> 16)); }
-		if (expected_mask & 0xFFFF) station_bits = (station_bits & ~expected_mask) | (expected.Next() & expected_mask);
-		TriggerRoadStopRandomisation(st, tile, trigger, INVALID_CARGO);
-		StationNeed(std::ranges::equal(_random.state, expected.state) && st->random_bits == station_bits && st->GetRoadStopRandomBits(tile) == tile_bits && !st->waiting_random_triggers.Test(trigger), __LINE__);
-		fmt::print(stderr, "STCMD resolver-reseed {} {} {} {} {} {} {}\n", waypoint, mask, to_underlying(trigger), station_bits, tile_bits, _random.state[0], _random.state[1]);
+		Randomizer unarmed = _random; TriggerRoadStopRandomisation(st, tile, trigger, INVALID_CARGO);
+		StationNeed(std::ranges::equal(_random.state, unarmed.state) && st->waiting_random_triggers.Test(trigger) && st->random_bits == 0xA55A && st->GetRoadStopRandomBits(tile) == 0x69, __LINE__);
+		ResolverObject registers(&f.file); StationNeed(registers.GetRegister(0x105) == (1 << to_underlying(trigger)) && registers.GetRegister(0x106) == CBID_NO_CALLBACK, __LINE__);
+		fmt::print(stderr, "STCMD resolver-unarmed {} {} {} no-reseed waiting-retained published\n", waypoint, mask, to_underlying(trigger));
+		fmt::print(stderr, "STCMD resolver-mask {} {} {} {} {} {}\n", waypoint, mask, to_underlying(trigger), object.GetReseedSum(), object.GetUsedRandomTriggers().base(), object.roadstop_scope.GetRandomBits());
 	}
 	Randomizer before = _random;
 	st->waiting_random_triggers = {}; spec->cargo_triggers = 0; RoadStopUpdateCachedTriggers(st); TriggerRoadStopRandomisation(st, tile, StationRandomTrigger::VehicleArrives);
@@ -546,12 +550,12 @@ static void RoadResolverRandom(BaseStation *st, TileIndex tile, bool waypoint)
 	spec->cargo_triggers = 3; RoadStopUpdateCachedTriggers(st); TriggerRoadStopRandomisation(st, tile, StationRandomTrigger::NewCargo, 2);
 	StationNeed(st->waiting_random_triggers.None() && std::ranges::equal(_random.state, before.state), __LINE__);
 	if (!waypoint) {
-		auto &cargo = Station::From(st)->goods[1].GetOrCreateData().cargo; StationNeed(CargoPacket::CanAllocateItem(), __LINE__); cargo.Append(new CargoPacket(st->index, 1, Source{SourceType::Town, st->town->index.base()}), StationID::Invalid());
+		auto &cargo = Station::From(st)->goods[1].GetOrCreateData().cargo; StationNeed(CargoPacket::CanAllocateItem(), __LINE__); cargo.Append(new CargoPacket(st->index, 1, Source{st->town->index, SourceType::Town}), StationID::Invalid());
 		TriggerRoadStopRandomisation(st, tile, StationRandomTrigger::CargoTaken, 0);
 		StationNeed(st->waiting_random_triggers.Test(StationRandomTrigger::CargoTaken) && std::ranges::equal(_random.state, before.state), __LINE__); cargo.Truncate();
 	}
 	st->waiting_random_triggers = {}; spec->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT_NA, f.empty);
-	delete upper; delete lower;
+	delete publication; delete upper; delete lower;
 	fmt::print(stderr, "STCMD resolver-gating {} cached cargo all-empty\n", waypoint);
 }
 static void StationRoadResolver(TileIndex tile, bool waypoint, DoCommandFlags test, DoCommandFlags exec)
@@ -1234,22 +1238,23 @@ def check_commands(scenario, run, mode, role, result):
         )
         core.branch_witnesses(scenario, run, role, "waypoint_command", branches)
     if scenario["station_commands"].startswith(("road-stops", "waypoints")):
-        waypoint = int(scenario["station_commands"].startswith("waypoints"))
+        waypoint = scenario["station_commands"].startswith("waypoints")
+        kind = str(waypoint).lower()
         reload = scenario["station_commands"].endswith("reload")
         markers = (
-            [f"STCMD resolver-reload {waypoint} missing reattached cache"]
+            [f"STCMD resolver-reload {kind} missing reattached cache"]
             if reload
             else [
-                f"STCMD resolver-roots {waypoint} ordered purchase default",
-                f"STCMD resolver-gating {waypoint} cached cargo all-empty",
-                f"STCMD resolver-lifecycle {waypoint} test execute reuse full partial clear shrink",
+                f"STCMD resolver-roots {kind} ordered purchase default",
+                f"STCMD resolver-gating {kind} cached cargo all-empty",
+                f"STCMD resolver-lifecycle {kind} test execute reuse full partial clear shrink",
             ]
         )
         for marker in markers:
             if marker not in run["log"]:
                 raise RuntimeError("road-stop owner evidence missing: " + marker)
         if not reload and sum(
-            line.startswith("STCMD resolver-reseed ")
+            line.startswith("STCMD resolver-mask ")
             for line in run["log"].splitlines()
         ) != (9 if waypoint else 15):
             raise RuntimeError("road-stop owner reseed matrix incomplete")
