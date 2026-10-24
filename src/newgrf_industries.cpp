@@ -24,6 +24,19 @@
 
 #include "table/strings.h"
 
+#ifdef WITH_RUST
+#include "rust/industry_resolver_ffi.h"
+#include "rust/services_newgrf.h"
+#include "rust/services_cargo.h"
+#include "rust/services_map.h"
+#include "rust/industry_shell_services.h"
+#include "rust/industry_generation_adapter.hpp"
+#include "rust/town_services.h"
+#include "rust/environment_services.h"
+#include "rust/tile_animation_services.h"
+#include "newgrf_industrytiles.h"
+#include "rust/company_services.h"
+#endif
 #include "safeguards.h"
 
 /* Since the industry IDs defined by the GRF file don't necessarily correlate
@@ -40,10 +53,14 @@ IndustryTileOverrideManager _industile_mngr(NEW_INDUSTRYTILEOFFSET, NUM_INDUSTRY
  */
 IndustryType MapNewGRFIndustryType(IndustryType grf_type, uint32_t grf_id)
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_map_type(grf_type, grf_id, &GetIndustryResolverServices());
+#else
 	if (grf_type == IT_INVALID) return IT_INVALID;
 	if (!HasBit(grf_type, 7)) return GB(grf_type, 0, 7);
 
 	return _industry_mngr.GetID(GB(grf_type, 0, 7), grf_id);
+#endif
 }
 
 /**
@@ -54,6 +71,7 @@ IndustryType MapNewGRFIndustryType(IndustryType grf_type, uint32_t grf_id)
  * @param cur_grfid GRFID of the current callback chain
  * @return value encoded as per NFO specs
  */
+#ifndef WITH_RUST
 uint32_t GetIndustryIDAtOffset(TileIndex tile, const Industry *i, uint32_t cur_grfid)
 {
 	if (!i->TileBelongsToIndustry(tile)) {
@@ -89,7 +107,9 @@ uint32_t GetIndustryIDAtOffset(TileIndex tile, const Industry *i, uint32_t cur_g
 	/* The tile has no spritegroup */
 	return 0xFF << 8 | indtsp->grf_prop.subst_id; // so just give it the substitute
 }
+#endif
 
+#ifndef WITH_RUST
 static uint32_t GetClosestIndustry(TileIndex tile, IndustryType type, const Industry *current)
 {
 	uint32_t best_dist = UINT32_MAX;
@@ -162,8 +182,13 @@ static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &objec
 	return count << 16 | GB(closest_dist, 0, 16);
 }
 
+#endif
+
 /* virtual */ uint32_t IndustriesScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_variable(&this->context, &this->ro, variable, parameter, &available, _industry_builder.owner.get(), &GetIndustryResolverServices());
+#else
 	if (this->ro.callback == CBID_INDUSTRY_LOCATION) {
 		/* Variables available during construction check. */
 
@@ -425,11 +450,16 @@ static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &objec
 
 	available = false;
 	return UINT_MAX;
+#endif
 }
 
 /* virtual */ uint32_t IndustriesScopeResolver::GetRandomBits() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_resolver_random(&this->context);
+#else
 	return this->industry != nullptr ? this->industry->random : 0;
+#endif
 }
 
 /* virtual */ uint32_t IndustriesScopeResolver::GetRandomTriggers() const
@@ -440,7 +470,7 @@ static uint32_t GetCountAndDistanceOfClosestInstance(const ResolverObject &objec
 /* virtual */ void IndustriesScopeResolver::StorePSA(uint pos, int32_t value)
 {
 #ifdef WITH_RUST
-	openttd_rust_storage_industry(&GetRustStorageServices(), this->industry, pos, value);
+	openttd_rust_storage_industry(&GetRustStorageServices(), this->context.industry, pos, value);
 #else
 	if (this->industry->index == IndustryID::Invalid()) return;
 
@@ -484,7 +514,11 @@ IndustriesResolverObject::IndustriesResolverObject(TileIndex tile, Industry *ind
 	: ResolverObject(GetGrffile(type), callback, callback_param1, callback_param2),
 	industries_scope(*this, tile, indus, type, random_bits)
 {
+#ifdef WITH_RUST
+	this->root_spritegroup = openttd_rust_industry_resolver_root(&this->industries_scope.context, &GetIndustryResolverServices());
+#else
 	this->root_spritegroup = GetIndustrySpec(type)->grf_prop.GetSpriteGroup(indus != nullptr && indus->index != IndustryID::Invalid());
+#endif
 }
 
 /**
@@ -493,6 +527,9 @@ IndustriesResolverObject::IndustriesResolverObject(TileIndex tile, Industry *ind
  */
 TownScopeResolver *IndustriesResolverObject::GetTown()
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_resolver_town(&this->industries_scope.context, this, &GetIndustryResolverServices());
+#else
 	if (!this->town_scope.has_value()) {
 		Town *t = nullptr;
 		bool readonly = true;
@@ -506,6 +543,7 @@ TownScopeResolver *IndustriesResolverObject::GetTown()
 		this->town_scope.emplace(*this, t, readonly);
 	}
 	return &*this->town_scope;
+#endif
 }
 
 GrfSpecFeature IndustriesResolverObject::GetFeature() const
@@ -515,7 +553,11 @@ GrfSpecFeature IndustriesResolverObject::GetFeature() const
 
 uint32_t IndustriesResolverObject::GetDebugID() const
 {
+#ifdef WITH_RUST
+	return RustSpecLocalID(GetIndustrySpec(this->industries_scope.context.type));
+#else
 	return GetIndustrySpec(this->industries_scope.type)->grf_prop.local_id;
+#endif
 }
 
 /**
@@ -592,6 +634,9 @@ extern "C" OpenTTDIndustryLocationResult openttd_industry_resolve_location(Indus
  */
 uint32_t GetIndustryProbabilityCallback(IndustryType type, IndustryAvailabilityCallType creation_type, uint32_t default_prob)
 {
+#ifdef WITH_RUST
+	return openttd_rust_industry_probability(type, creation_type, default_prob, &GetIndustryResolverServices());
+#else
 	const IndustrySpec *indspec = GetIndustrySpec(type);
 
 	if (indspec->callback_mask.Test(IndustryCallbackMask::Probability)) {
@@ -611,6 +656,7 @@ uint32_t GetIndustryProbabilityCallback(IndustryType type, IndustryAvailabilityC
 		}
 	}
 	return default_prob;
+#endif
 }
 
 /**
@@ -733,6 +779,10 @@ void IndustryProductionCallback(Industry *ind, int reason)
  */
 bool IndustryTemporarilyRefusesCargo(Industry *ind, CargoType cargo_type)
 {
+#ifdef WITH_RUST
+	assert(ind->IsCargoAccepted(cargo_type));
+	return openttd_rust_industry_refuses(ind, ind->production_owner.get(), cargo_type, &GetIndustryResolverServices());
+#else
 	assert(ind->IsCargoAccepted(cargo_type));
 
 	const IndustrySpec *indspec = GetIndustrySpec(ind->type);
@@ -743,4 +793,77 @@ bool IndustryTemporarilyRefusesCargo(Industry *ind, CargoType cargo_type)
 		if (res != CALLBACK_FAILED) return !ConvertBooleanCallback(indspec->grf_prop.grffile, CBID_INDUSTRY_REFUSE_CARGO, res);
 	}
 	return false;
+#endif
 }
+
+#ifdef WITH_RUST
+IndustriesScopeResolver::IndustriesScopeResolver(ResolverObject &ro, TileIndex tile, Industry *industry, IndustryType type, uint32_t random_bits)
+	: ScopeResolver(ro), context{industry == nullptr ? nullptr : industry->production_owner.get(), industry, industry == nullptr ? nullptr : industry->town, tile.base(), random_bits, industry == nullptr ? IndustryID::Invalid().base() : industry->index.base(), type}
+{
+}
+ScopeResolver *IndustriesResolverObject::GetScope(VarSpriteGroupScope scope, uint8_t relative)
+{
+	return openttd_rust_industry_resolver_scope(&this->industries_scope.context, this, &this->industries_scope, scope, relative, &GetIndustryResolverServices());
+}
+#endif
+
+#ifdef WITH_RUST
+/* Spec, Action2 and native associations remain live for synchronous resolution.
+ * No ordinary-play leaf throws; debug/allocation failures terminate in noexcept.
+ * Action2 and town/storage operations may reenter Rust; no owner borrow spans them. */
+const OpenTTDIndustryResolverServices &GetIndustryResolverServices() noexcept
+{
+	static const OpenTTDIndustryResolverServices services{
+		.shared = &GetRustSharedServices(),
+		.generation = &GetIndustryGenerationServices(),
+		.construction = &GetIndustryConstructionServices(),
+		.lifecycle = &GetIndustryLifecycleRustServices(),
+		.tile = &GetIndustryTileServices(),
+		.get = [](uint16_t id) noexcept -> OpenTTDIndustryResolverRef { Industry *i = RustIndustryByID(id); return {RustIndustryCanonicalOwner(i), OpenTTDIndustryTown(i)}; },
+		.map_type = [](uint8_t local, uint32_t grfid) noexcept { return _industry_mngr.GetID(local, grfid); },
+		.spec_grfid = RustSpecGRFID<IndustrySpec>,
+		.spec_local_id = RustSpecLocalID<IndustrySpec>,
+		.root = RustSpecSpriteGroup<IndustrySpec>,
+		.tile_root = RustSpecSpriteGroup<IndustryTileSpec>,
+		.tile_local_id = RustSpecLocalID<IndustryTileSpec>,
+		.tile_override = [](const IndustryTileSpec *spec) noexcept { return spec->grf_prop.override_id; },
+		.tile_grfid = RustSpecGRFID<IndustryTileSpec>,
+		.tile_has_groups = RustSpecHasSpriteGroups<IndustryTileSpec>,
+		.tile_substitute = [](const IndustryTileSpec *spec) noexcept { return spec->grf_prop.subst_id; },
+		.clean_gfx = [](uint32_t tile) noexcept { return GetCleanIndustryGfx(TileIndex(tile)); },
+		.nearby = RustNearbyTile,
+		.nearby_info = RustNearbyTileInformation,
+		.terrain = RustTerrainType,
+		.town_zone = RustTownRadiusGroup,
+		.water_distance = RustClosestWaterDistance,
+		.town_tile = OpenTTDTownTile,
+		.town_id = RustTownAuthorityIndex,
+		.founder_info = [](uint8_t founder) noexcept -> OpenTTDIndustryFounderInfo {
+			const Company *company = Company::GetIfValid(CompanyID(founder));
+			return {company == nullptr ? uint8_t{0} : RustCompanyRecolour(company, true), company != nullptr && company->is_ai};
+		},
+		.grfid = RustResolverGRFFileID,
+		.version = RustResolverGRFVersion,
+		.callback_id = RustResolverCallback,
+		.register_value = RustResolverRegister,
+		.cargo_translation = RustResolverCargoTranslation,
+		.cargo_map = RustSpecCargoMap<IndustrySpec>,
+		.badges = RustSpecBadges<IndustrySpec>,
+		.tile_badges = RustSpecBadges<IndustryTileSpec>,
+		.storage_owner = RustIndustryStorageOwner,
+		.unhandled = [](uint8_t variable, bool tile, bool missing, uint16_t callback) noexcept {
+			if (missing) Debug(grf, 1, "Unhandled variable 0x{:X} (no available industry) in callback 0x{:x}", variable, callback);
+			else if (tile) Debug(grf, 1, "Unhandled industry tile variable 0x{:X}", variable);
+			else Debug(grf, 1, "Unhandled industry variable 0x{:X}", variable);
+		},
+		.pointer_magic = []() noexcept { Debug(grf, 0, "NewGRFs shouldn't be doing pointer magic"); },
+		.base_scope = [](ResolverObject *r, uint8_t scope, uint8_t relative) noexcept { return r->ResolverObject::GetScope(static_cast<VarSpriteGroupScope>(scope), relative); },
+		.existing_town = [](ResolverObject *r) noexcept -> TownScopeResolver * { auto &town = static_cast<IndustriesResolverObject *>(r)->town_scope; return town.has_value() ? &*town : nullptr; },
+		.make_town = [](ResolverObject *r, Town *t, bool readonly) noexcept -> TownScopeResolver * { return &static_cast<IndustriesResolverObject *>(r)->town_scope.emplace(*r, t, readonly); },
+		.callback = [](uint16_t cb, uint32_t p1, uint32_t p2, Industry *i, uint8_t type, uint32_t tile) noexcept { return GetIndustryCallback(static_cast<CallbackID>(cb), p1, p2, i, type, TileIndex(tile)); },
+		.boolean = RustSpecBooleanCallback<IndustrySpec>,
+		.callback_error = [](const IndustrySpec *spec, uint16_t cb, uint16_t result) noexcept { RustSpecCallbackError<IndustrySpec, IndustrySpec>(spec, cb, result); },
+	};
+	return services;
+}
+#endif

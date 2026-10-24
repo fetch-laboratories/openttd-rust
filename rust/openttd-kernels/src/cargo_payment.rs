@@ -55,7 +55,7 @@ pub struct Services {
     pub(crate) station_read: extern "C" fn(u16, u8, u8) -> u32,
     pub(crate) industry_read: extern "C" fn(*mut c_void, u8, u32) -> u32,
     pub(crate) industry_write: extern "C" fn(*mut c_void, u8, u32, u32),
-    pub(crate) refuses: extern "C" fn(*mut c_void, u8) -> u8,
+    pub(crate) resolver: *const crate::industry::resolver::ResolverServices,
     pub(crate) accept: extern "C" fn(*mut c_void, u32, u32),
     pub(crate) statistics: extern "C" fn(u16, u8, u8, u32, u8),
     pub(crate) subsidies: extern "C" fn() -> *const crate::subsidy::Services,
@@ -153,7 +153,14 @@ fn deliver(
         if slot == u32::MAX {
             continue;
         }
-        if (s.refuses)(ind, cargo) != 0 {
+        if unsafe {
+            crate::industry::resolver::refuses(
+                ind,
+                (subsidies.industry_owner)(ind),
+                cargo,
+                &*s.resolver,
+            )
+        } {
             continue;
         }
         let supplier = (s.industry_read)(ind, 2, 0);
@@ -439,7 +446,7 @@ crate::abi::layouts! {
         station_read,
         industry_read,
         industry_write,
-        refuses,
+        resolver,
         accept,
         statistics,
         subsidies,

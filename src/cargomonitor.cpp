@@ -22,7 +22,7 @@
 const OpenTTDCargoMonitorServices &GetRustCargoMonitorServices() noexcept
 {
 	static const OpenTTDCargoMonitorServices services = {
-		.station_town = [](const Station *st) noexcept { return RustTownAuthorityIndex(reinterpret_cast<const OpenTTDTownHandle *>(OpenTTDBaseStationTown(st))); },
+		.station_town = RustStationTownID,
 		.begin_nearby = BeginNearbyIndustries, .next_nearby = NextNearbyIndustry,
 		.industry_id = RustIndustryID, .check = RustAssertCondition,
 	};

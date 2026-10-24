@@ -51,11 +51,17 @@ inline uint32_t RustSpecBadges(const ResolverObject *resolver, const Spec *spec,
 inline uint32_t RustCompanyInfo(uint8_t owner, const Livery *livery) noexcept { return GetCompanyInfo(CompanyID(owner), livery); }
 inline uint8_t RustReverseRailTypeTranslation(RailType railtype, const GRFFile *file) noexcept { return GetReverseRailTypeTranslation(railtype, file); }
 
+inline uint16_t RustResolverCallback(const ResolverObject *resolver) noexcept { return resolver->callback; }
+template <typename Spec> inline uint32_t RustSpecGRFID(const Spec *spec) noexcept { return spec->grf_prop.grfid; }
+template <typename Spec> inline uint16_t RustSpecLocalID(const Spec *spec) noexcept { return spec->grf_prop.local_id; }
+template <typename Spec> inline const SpriteGroup *RustSpecSpriteGroup(const Spec *spec, bool live) noexcept { return spec->grf_prop.GetSpriteGroup(live); }
+template <typename Spec> inline bool RustSpecHasSpriteGroups(const Spec *spec) noexcept { return spec->grf_prop.HasSpriteGroups(); }
+inline bool RustHouseHasSpriteGroups(uint16_t house) noexcept { return RustSpecHasSpriteGroups(RustHouseSpec(house)); }
+
 /* Borrowed GRF files remain native and live for the synchronous conversion.
  * A town shell is live for resolution (or null for a prototype); no Rust
  * owner borrow spans it. No C++ exception crosses Rust; environmental
  * failures terminate. */
-inline uint8_t RustGRFCargoMap(const GRFFile *grf, CargoType cargo) noexcept { return grf->cargo_map[cargo]; }
 inline bool OpenTTDConvertBooleanCallback(const GRFFile *grf, uint16_t callback, uint16_t result) noexcept { return ConvertBooleanCallback(grf, callback, result); }
 inline bool OpenTTDConvert8bitBooleanCallback(const GRFFile *grf, uint16_t callback, uint16_t result) noexcept { return Convert8bitBooleanCallback(grf, callback, result); }
 inline uint16_t OpenTTDHouseCallback(CallbackID callback, uint32_t param1, uint32_t param2, HouseID house, Town *town, TileIndex tile, bool not_yet_constructed, uint8_t initial_random = 0) noexcept

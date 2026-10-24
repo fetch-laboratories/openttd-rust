@@ -32,6 +32,8 @@ struct OpenTTDStorageServices {
 	void (*append_town)(Town *, BasePersistentStorageArray *) noexcept OPENTTD_SERVICE_DEFAULT(append_town);
 };
 const OpenTTDStorageServices &GetRustStorageServices() noexcept;
+/** Native shell association only; the caller retains the original scope gates. */
+OpenTTDStorage256 *RustIndustryStorageOwner(Industry *) noexcept;
 extern "C" {
 #define OPENTTD_STORAGE_API(N) \
 OpenTTDStorage##N *openttd_rust_storage##N##_new(void *); \

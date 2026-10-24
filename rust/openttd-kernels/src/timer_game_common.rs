@@ -14,6 +14,8 @@ pub const SECONDS_PER_DAY: i32 = 2;
 /// `TimerGameConst::INVALID_DATE`, inherited by `EconomyTime`/`CalendarTime`.
 pub const INVALID_DATE: i32 = -1;
 
+/// `EconomyTime::ORIGINAL_BASE_YEAR` / `CalendarTime::ORIGINAL_BASE_YEAR`.
 pub const ORIGINAL_BASE_YEAR: i32 = 1920;
 pub const ORIGINAL_MAX_YEAR: i32 = 2090;
+/// `TimerGameConst::DAYS_TILL_ORIGINAL_BASE_YEAR` (Gregorian date at 1920).
 pub const DAYS_TILL_ORIGINAL_BASE_YEAR: i32 = 701_265;

@@ -53,7 +53,7 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 			break;
 		}
 		case 2: {
-			const Industry *i = Industry::Get(id); const auto &behaviour = GetIndustrySpec(i->type)->behaviour;
+			const Industry *i = RustIndustryByID(id); const auto &behaviour = GetIndustrySpec(i->type)->behaviour;
 			out[0] = i->location.tile.base(); out[1] = i->type; out[2] = behaviour.Test(IndustryBehaviour::AirplaneAttacks);
 			out[3] = behaviour.Test(IndustryBehaviour::ChopperAttacks); out[4] = behaviour.Test(IndustryBehaviour::CanSubsidence); out[5] = OpenTTDIndustryTown(i)->index.base();
 			break;
@@ -85,7 +85,7 @@ static void OPENTTD_DISASTER_CALL DisasterRead(void *, uint32_t kind, uint32_t i
 		case 7: out[0] = reinterpret_cast<intptr_t>(DisasterVehicle::Get(id)->rust_state.get()); break;
 		case 9: out[0] = GetDirectionTowards(Vehicle::Get(id), a, b); break;
 		case 10: { auto gp = GetNewVehiclePos(Vehicle::Get(id)); out[0] = gp.x; out[1] = gp.y; break; }
-		case 11: out[0] = Industry::Get(id)->TileBelongsToIndustry(TileIndex{static_cast<uint32_t>(a)}); break;
+		case 11: out[0] = RustIndustryByID(id)->TileBelongsToIndustry(TileIndex{static_cast<uint32_t>(a)}); break;
 		case 12: out[0] = SharedTileAddWrap(id, a, b); break;
 		case 13: out[0] = TileOffsByDiagDir(static_cast<DiagDirection>(a)); break;
 		case 14: out[0] = DisasterVehicle::GetIfValid(id) != nullptr; break;

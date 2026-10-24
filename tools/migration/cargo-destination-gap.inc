@@ -22,6 +22,7 @@ enum class PartOfSubsidy : uint8_t { Source, Destination };
 #define OPENTTD_SUBSIDY_FIXTURE_TYPES
 #include "rust/subsidy_ffi.h"
 #include "rust/cargomonitor_ffi.h"
+#include "rust/industry_resolver_ffi.h"
 struct TimerGameEconomy { static constexpr int date = 123; };
 enum class IndustryCallbackMask { ProductionCargoArrival, Production256Ticks };
 struct IndustryCallbackMasks {
@@ -70,6 +71,7 @@ static std::vector<DestinationEvent> destination_events;
 static std::array<IndustrySpec, 8> destination_specs;
 static std::array<Industry, 8> destination_industries;
 static Station destination_station;
+static std::array<OpenTTDIndustry *, 8> destination_owners;
 static const IndustrySpec *GetIndustrySpec(uint8_t type) { return &destination_specs[type]; }
 static bool IndustryTemporarilyRefusesCargo(Industry *i, CargoType) { return i->refuses; }
 static bool IsValidCargoType(CargoType cargo) { return cargo != 255; }
@@ -106,7 +108,19 @@ static int CheckCargoDestinationGap(OpenTTDCargoServices s)
 		auto *i = static_cast<Industry *>(p);
 		if (field == 0) i->produced[slot].waiting = value; else i->accepted[slot].waiting = value;
 	};
-	s.refuses = [](void *p, uint8_t) noexcept -> uint8_t { return static_cast<Industry *>(p)->refuses; };
+	struct Owners {
+		Owners() { for (size_t n = 0; n < destination_owners.size(); ++n) { destination_owners[n] = openttd_rust_industry_new(); openttd_rust_industry_metadata(destination_owners[n])->type = n; } }
+		~Owners() { for (auto *owner : destination_owners) openttd_rust_industry_destroy(owner); }
+	} owners;
+	static const OpenTTDIndustryGenerationServices generation{.spec = [](uint8_t type) noexcept -> const OpenTTDIndustrySpecHandle * { return reinterpret_cast<const OpenTTDIndustrySpecHandle *>(&destination_specs[type]); }};
+	static const OpenTTDIndustryConstructionServices construction{.callback_mask = [](const OpenTTDIndustrySpecHandle *) noexcept -> uint16_t { return 1U << 10; }};
+	static const OpenTTDIndustryResolverServices resolver{
+		.generation = &generation, .construction = &construction,
+		.cargo_map = [](const IndustrySpec *, uint8_t cargo) noexcept { return cargo; },
+		.callback = [](uint16_t cb, uint32_t, uint32_t, Industry *i, uint8_t, uint32_t) noexcept -> uint16_t { if (cb != 0x3D) std::abort(); return i->refuses ? 0 : 1; },
+		.boolean = [](const IndustrySpec *, uint16_t, uint16_t result) noexcept { return result != 0; },
+	};
+	s.resolver = &resolver;
 	s.accept = [](void *p, uint32_t slot, uint32_t amount) noexcept {
 		auto &a = static_cast<Industry *>(p)->accepted[slot];
 		a.waiting += amount;
@@ -117,6 +131,7 @@ static int CheckCargoDestinationGap(OpenTTDCargoServices s)
 	};
 	s.statistics = [](uint16_t, uint8_t, uint8_t, uint32_t, uint8_t) noexcept {};
 	s.subsidies = []() noexcept -> const OpenTTDSubsidyServices * { static const OpenTTDSubsidyServices empty{
+		.industry_owner = [](void *p) noexcept { return destination_owners[static_cast<Industry *>(p)->type]; },
 		.industry_id = [](void *p) noexcept -> uint16_t { return static_cast<Industry *>(p)->index; },
 		.has_source_flag = [](Source, PartOfSubsidy) noexcept { return false; },
 		.station = [](uint16_t) noexcept -> const Station * { return &destination_station; },

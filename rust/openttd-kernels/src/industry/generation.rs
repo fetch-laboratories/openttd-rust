@@ -59,7 +59,14 @@ fn probability(
         *forced = false;
         return 0;
     }
-    let chance = unsafe { (s.probability_callback)(kind, 0, u32::from(info.appear)) };
+    let chance = unsafe {
+        super::resolver::openttd_rust_industry_probability(
+            kind,
+            0,
+            u32::from(info.appear),
+            s.resolver,
+        )
+    };
     if chance == 0 {
         *forced = false;
         return 0;

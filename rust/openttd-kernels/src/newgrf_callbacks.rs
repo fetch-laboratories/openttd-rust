@@ -15,6 +15,9 @@ pub struct CallbackID(pub u16);
 pub const CBID_VEHICLE_LENGTH: CallbackID = CallbackID(0x11);
 pub const CBID_VEHICLE_32DAY_CALLBACK: CallbackID = CallbackID(0x32);
 
+pub const CBID_INDUSTRY_PROBABILITY: u16 = 0x22;
+pub const CBID_INDUSTRY_LOCATION: u16 = 0x28;
+pub const CBID_INDUSTRY_REFUSE_CARGO: u16 = 0x3d;
 pub const CBID_INDTILE_ANIMATION_TRIGGER: CallbackID = CallbackID(0x25);
 pub const CBID_STATION_ANIMATION_TRIGGER: CallbackID = CallbackID(0x140);
 pub const CBID_AIRPTILE_ANIMATION_TRIGGER: CallbackID = CallbackID(0x152);
@@ -52,3 +55,9 @@ pub const CBID_VEHICLE_SPAWN_VISUAL_EFFECT: CallbackID = CallbackID(0x160);
 
 pub const CBID_VEHICLE_REFIT_COST: CallbackID = CallbackID(0x15e);
 pub const CBID_VEHICLE_LOAD_AMOUNT: CallbackID = CallbackID(0x12);
+
+/// Masks from `newgrf_callbacks.h::IndustryCallbackMask`.
+pub const INDUSTRY_PROBABILITY: u16 = 1 << 0;
+pub const INDUSTRY_PRODUCTION_CARGO_ARRIVAL: u16 = 1 << 1;
+pub const INDUSTRY_PRODUCTION_256_TICKS: u16 = 1 << 2;
+pub const INDUSTRY_REFUSE_CARGO: u16 = 1 << 10;

@@ -20,6 +20,7 @@ def export(destination, migration):
     from . import (
         engines,
         fleet,
+        industries,
         objects,
         orders,
         rails,
@@ -29,7 +30,18 @@ def export(destination, migration):
         towns,
     )
 
-    adapters = (engines, fleet, objects, orders, rails, ships, signals, stations, towns)
+    adapters = (
+        engines,
+        fleet,
+        industries,
+        objects,
+        orders,
+        rails,
+        ships,
+        signals,
+        stations,
+        towns,
+    )
 
     destination.mkdir(parents=True)
     builds = {

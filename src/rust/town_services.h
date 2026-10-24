@@ -4,6 +4,7 @@
 #define OPENTTD_RUST_TOWN_SERVICES_H
 #include "../town.h"
 #include "town_ffi.h"
+#include "environment_services.h"
 
 inline Town *RustCalcClosestTown(TileIndex tile, uint threshold) noexcept
 {
@@ -12,5 +13,4 @@ inline Town *RustCalcClosestTown(TileIndex tile, uint threshold) noexcept
 /** One definition for const resolver scans and mutable town destruction tables. */
 template <typename TTown>
 inline size_t RustTownStorageCount(TTown *town) noexcept { return town->psa_list.size(); }
-inline uint16_t RustTownAuthorityIndex(const OpenTTDTownHandle *town) noexcept { return reinterpret_cast<const Town *>(town)->index.base(); }
 #endif /* OPENTTD_RUST_TOWN_SERVICES_H */

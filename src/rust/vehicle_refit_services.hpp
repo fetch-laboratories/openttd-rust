@@ -7,6 +7,7 @@
 
 /** @file vehicle_refit_services.hpp Native refit observations, scalar stores and UI leaves. */
 #include "services_road.h"
+#include "services_cargo.h"
 
 static OpenTTDRefitCargo VehicleRefitCargo(const OpenTTDEngine *e, uint8_t cargo) noexcept { return {.classes = RustCargoClasses(cargo), .local = RustGRFCargoMap(EngineOf(e)->GetGRF(), cargo)}; }
 static OpenTTDRefitEngine VehicleRefitEngine(const OpenTTDEngine *e) noexcept { return {.mask = EngineOf(e)->info.refit_mask, .automatic = EngineOf(e)->info.misc_flags.Test(EngineMiscFlag::AutoRefit)}; }

@@ -10,6 +10,7 @@
 #define RUST_INDUSTRY_FFI_H
 #include "service_defaults.hpp"
 struct OpenTTDSubsidyServices;
+struct OpenTTDIndustryResolverServices;
 #include "command_services_ffi.h"
 #include <stddef.h>
 #include <stdbool.h>
@@ -165,7 +166,7 @@ typedef struct OpenTTDIndustryServices {
 	uint16_t (*type_count)(uint8_t type) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(type_count);
 	uint32_t (*total)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(total);
 	OpenTTDIndustryTypeInfo (*type_info)(uint8_t type) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(type_info);
-	uint32_t (*probability_callback)(uint8_t type, uint8_t creation, uint32_t chance) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(probability_callback);
+	const struct OpenTTDIndustryResolverServices *resolver;
 	uint32_t (*scale_by_map_size)(uint32_t n) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(scale_by_map_size);
 	uint8_t (*company_none)(void) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(company_none);
 	void (*restore_company)(uint8_t company) OPENTTD_INDUSTRY_NOEXCEPT OPENTTD_SERVICE_DEFAULT(restore_company);
@@ -466,5 +467,6 @@ const OpenTTDIndustryTileServices &GetIndustryTileServices() noexcept;
 const OpenTTDIndustryTilePolicyServices &GetIndustryTilePolicyServices() noexcept;
 const OpenTTDIndustryCostServices &GetIndustryCostServices() noexcept;
 const OpenTTDIndustryGenerationServices &GetIndustryGenerationServices();
+const OpenTTDIndustryConstructionServices &GetIndustryConstructionServices();
 #endif
 #endif
