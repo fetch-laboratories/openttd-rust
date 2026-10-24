@@ -160,7 +160,7 @@ static void GenericPrograms()
 		ResetGenericCallbacks(); first.grf_version = version;
 		AddGenericCallback(GSF_SOUNDFX, &first, &program); AddGenericCallback(GSF_SOUNDFX, &second, &failure);
 		if (kind == MP_CLEAR) MakeClear(tile, CLEAR_GRASS, 3);
-		if (kind == MP_TREES) MakeTree(tile, 0, 1, TreeGrowthStage::Grown, TREE_GROUND_GRASS, 3);
+		if (kind == MP_TREES) MakeTree(tile, TreeType{0}, 1, TreeGrowthStage::Grown, TREE_GROUND_GRASS, 3);
 		if (kind == MP_WATER) { MakeCanal(tile, OWNER_NONE, 0); SetNonFloodingWaterTile(tile, true); }
 		SetTileHeight(tile, 19); SetTropicZone(tile, TROPICZONE_DESERT);
 		_misc_grf_features = mode == 0 ? GrfMiscBits{} : GrfMiscBits{GrfMiscBit::AmbientSoundCallback};
