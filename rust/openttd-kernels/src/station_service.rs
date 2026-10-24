@@ -110,15 +110,6 @@ pub(crate) unsafe fn activity(state: *const Service) -> StationActivity {
         }
     }
 }
-/// Shared native town observation of the canonical station owner.
-///
-/// # Safety
-/// `state` is live and game-state-mutex serialized; no borrow survives this call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn openttd_rust_station_activity(state: *const Service) -> StationActivity {
-    // SAFETY: Native shared helper supplies the station's live canonical owner.
-    unsafe { activity(state) }
-}
 #[unsafe(no_mangle)]
 pub extern "C" fn openttd_rust_station_service_new() -> *mut Service {
     Box::into_raw(Box::new(Service {

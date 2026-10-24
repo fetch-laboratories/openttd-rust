@@ -242,7 +242,6 @@ int32_t OPENTTD_VEHICLE_CALL openttd_rust_road_max_speed(OpenTTDVehicle *, OpenT
 void OPENTTD_VEHICLE_CALL openttd_rust_road_set_dest(OpenTTDVehicle *, OpenTTDRoadState *, uint32_t, uint32_t, const OpenTTDRoadLeaves *);
 bool OPENTTD_VEHICLE_CALL openttd_rust_road_turn(OpenTTDVehicle *, OpenTTDRoadState *, bool, const OpenTTDRoadLeaves *);
 uint8_t OPENTTD_VEHICLE_CALL openttd_rust_road_trackdir(OpenTTDVehicle *, OpenTTDRoadState *, const OpenTTDRoadLeaves *);
-bool OPENTTD_VEHICLE_CALL openttd_rust_road_slope_pixel(OpenTTDVehicle *, OpenTTDVehicle *, OpenTTDRoadState *, uint8_t, const OpenTTDRoadLeaves *);
 /* Each ordinary or indexed-load shell owns one zero-created state. Destruction
  * follows PreDestructor and occurs exactly once, also during pool cleanup.
  * Scalars 0..6: state:u8, frame:u8, blocked:u16, overtaking:u8,

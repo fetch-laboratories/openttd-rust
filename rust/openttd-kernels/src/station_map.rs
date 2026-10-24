@@ -6,7 +6,6 @@
  */
 
 //! Shared station predicates from `station_map.h`, through typed map services.
-#![allow(unsafe_code)]
 use crate::services::Services;
 use crate::station_type::{
     RAIL_WAYPOINT, ROAD_WAYPOINT, STATION_AIRPORT, STATION_BUS, STATION_TRUCK,

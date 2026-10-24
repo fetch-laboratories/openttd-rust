@@ -1,6 +1,5 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Depot and list command dispatch with retained, transaction-local selection.
-#![allow(clippy::too_many_lines)]
 use super::{CommonServices, ERROR, SelectionServices, depot_list, generate_list};
 use crate::command_type::DoCommandFlag;
 use crate::services::{CommandCost, Cost};

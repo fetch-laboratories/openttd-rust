@@ -7,7 +7,7 @@
 
 //! Live base-vehicle scheduling prototype. Owners stay opaque and call-local;
 //! no Rust world/owner reference survives a service that can mutate or reenter.
-#![allow(unsafe_code, clippy::too_many_lines, clippy::verbose_bit_mask)]
+#![allow(unsafe_code, clippy::verbose_bit_mask)]
 use super::{CALLBACK_FAILED, VehicleRef, VehicleServices};
 use crate::aircraft::AIR_AIRCRAFT;
 use crate::newgrf_callbacks::CBID_VEHICLE_32DAY_CALLBACK;

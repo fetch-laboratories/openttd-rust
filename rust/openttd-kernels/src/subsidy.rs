@@ -16,8 +16,7 @@
     clippy::missing_safety_doc,
     clippy::cast_possible_truncation,
     clippy::comparison_chain,
-    clippy::if_not_else,
-    clippy::too_many_lines
+    clippy::if_not_else
 )]
 pub use crate::source_type::Source;
 use crate::station::{NearbyIndustryCursor, Station};

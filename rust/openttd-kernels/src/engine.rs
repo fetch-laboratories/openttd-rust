@@ -15,7 +15,6 @@
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
-    clippy::too_many_lines,
     clippy::struct_field_names,
     clippy::struct_excessive_bools,
     clippy::fn_params_excessive_bools

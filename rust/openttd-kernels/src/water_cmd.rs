@@ -14,7 +14,6 @@
     unsafe_code,
     missing_docs,
     clippy::too_many_arguments,
-    clippy::too_many_lines,
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
