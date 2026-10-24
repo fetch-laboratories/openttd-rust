@@ -115,7 +115,6 @@ struct OpenTTDAircraftLeaves {
 	void (OPENTTD_AIRCRAFT_CALL *unreachable)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(unreachable);
 	uint32_t (OPENTTD_AIRCRAFT_CALL *cargo_age_property)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(cargo_age_property);
 	uint32_t (OPENTTD_AIRCRAFT_CALL *range_property)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(range_property);
-	bool (OPENTTD_AIRCRAFT_CALL *touchdown_sound)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(touchdown_sound);
 	bool (OPENTTD_AIRCRAFT_CALL *rotor_image_if_changed)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(rotor_image_if_changed);
 	void (OPENTTD_AIRCRAFT_CALL *update_rotor_image)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(update_rotor_image);
 	void (OPENTTD_AIRCRAFT_CALL *process_orders)(OpenTTDAircraftVehicle) noexcept OPENTTD_SERVICE_DEFAULT(process_orders);

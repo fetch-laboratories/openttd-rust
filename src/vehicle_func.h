@@ -335,7 +335,9 @@ void ReleaseDisasterVehicle(VehicleID vehicle);
 typedef std::vector<VehicleID> VehicleSet;
 void GetVehicleSet(VehicleSet &set, Vehicle *v, uint8_t num_vehicles);
 
+#ifndef WITH_RUST
 void CheckCargoCapacity(Vehicle *v);
+#endif
 
 bool VehiclesHaveSameEngineList(const Vehicle *v1, const Vehicle *v2);
 bool VehiclesHaveSameOrderList(const Vehicle *v1, const Vehicle *v2);

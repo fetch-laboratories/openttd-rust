@@ -309,11 +309,6 @@ static OpenTTDCompanyVehicleProfit Co_vehicle_profit(uint32_t id) noexcept
 	const Vehicle *v = Vehicle::Get(id);
 	return {v->profit_last_year.base(), RustVehicleEconomyAge(v).base()};
 }
-static uint32_t Co_vehicle_previous(uint32_t id) noexcept
-{
-	const Vehicle *u = Vehicle::Get(id)->Previous();
-	return u == nullptr ? UINT32_MAX : u->index.base();
-}
 static OpenTTDCompanyVehicleGroupFlags Co_vehicle_group_flags(uint32_t id) noexcept
 {
 	const Vehicle *v = Vehicle::Get(id);
@@ -443,7 +438,7 @@ const OpenTTDCompanyServices &GetRustCompanyServices() noexcept
 		.set_town_rating = Co_set_town_rating, .set_town_exclusivity = Co_set_town_exclusivity,
 		.vehicle_next_owned = Co_vehicle_next_owned, .aircraft_is_normal = Co_aircraft_is_normal,
 		.vehicle_value = RustIndexedVehicleRead<int64_t, RustVehicleValue>, .vehicle_is_primary = Co_vehicle_is_primary,
-		.vehicle_profit = Co_vehicle_profit, .vehicle_previous = Co_vehicle_previous,
+		.vehicle_profit = Co_vehicle_profit, .vehicle_previous = RustIndexedVehicleRead<uint32_t, RustVehiclePreviousID>,
 		.vehicle_group_flags = Co_vehicle_group_flags, .vehicle_service_interval_is_custom = Co_vehicle_service_interval_is_custom,
 		.delete_vehicle = Co_delete_vehicle, .count_group_engine = Co_count_group_engine,
 		.count_group_vehicle = Co_count_group_vehicle, .reset_service_interval = Co_reset_service_interval,

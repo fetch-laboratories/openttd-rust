@@ -93,7 +93,7 @@ const OpenTTDTunnelBridgeServices &GetRustTunnelBridgeServices() noexcept
 		.other_bridge_end = [](uint32_t t) noexcept -> uint32_t { return GetOtherBridgeEnd(TileIndex{t}).base(); },
 		.northern_bridge_end = [](uint32_t t) noexcept -> uint32_t { return GetNorthernBridgeEnd(TileIndex{t}).base(); },
 		.bridge_type = RustBridgeType,
-		.is_tunnel = [](uint32_t t) noexcept -> bool { return IsTunnel(TileIndex{t}); },
+		.is_tunnel = RustIsTunnel,
 		.tunnel_in_way = [](uint32_t t, int32_t z, DiagDirection d) noexcept -> bool { return IsTunnelInWayDir(TileIndex{t}, z, d); },
 		.set_middle = [](uint32_t t, Axis a) noexcept -> void { SetBridgeMiddle(TileIndex{t}, a); },
 		.clear_middle = RustClearBridgeMiddle,

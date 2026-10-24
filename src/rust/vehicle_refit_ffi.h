@@ -127,6 +127,7 @@ struct OpenTTDRailConstructionStrings { uint32_t rear_follow, depot_only, no_ord
 struct OpenTTDRailConstructionServices {
 	const OpenTTDCargoCapacityServices *cargo_capacity;
 	OpenTTDRailConstructionStrings strings;
+	Train *(*train_if_valid)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(train_if_valid);
 	bool (*compatible)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(compatible);
 	bool (*powered)(const OpenTTDEngine *, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(powered);
 	void *(*new_wagon)(uint32_t, const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(new_wagon);

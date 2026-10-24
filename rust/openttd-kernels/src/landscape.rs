@@ -8,6 +8,18 @@
 use crate::slope_func::{get_slope_max_pixel_z, is_halftile_slope};
 use crate::tile_type::{TILE_HEIGHT, TILE_SIZE};
 
+/// `landscape.h::ApplyPixelFoundationToSlope`, using the canonical native
+/// `ApplyFoundationToSlope` leaf and preserving unsigned pixel multiplication.
+pub(crate) fn apply_pixel_foundation_to_slope(
+    services: &crate::services::Services,
+    foundation: crate::services::Foundation,
+    slope: &mut crate::services::Slope,
+) -> u32 {
+    let applied = (services.apply_foundation)(foundation, *slope);
+    *slope = applied.slope;
+    applied.z.cast_unsigned().wrapping_mul(TILE_HEIGHT)
+}
+
 /// Preserve C++'s unsigned `TILE_SIZE`/`TILE_HEIGHT` promotions and logical shifts.
 /// Signed expressions use wrapping operations to avoid adding a panic path;
 /// equivalence covers inputs whose executed signed C++ operations are defined.

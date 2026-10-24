@@ -303,16 +303,53 @@ def check(scenario, run, mode, role, result):
             != 8
         ):
             raise RuntimeError("missing heightmap rotation/aspect/edge cases")
-        if sum(line.startswith("GENERATION map ") for line in lines) != 10:
+        successful = [
+            line.split() for line in lines if line.startswith("GENERATION success ")
+        ]
+        if (
+            len(successful) != 4
+            or {line[2] for line in successful} != {"0", "1", "2", "3"}
+            or any(
+                line[3] != "true"
+                or int(line[4]) != (15 if line[2] == "2" else 3)
+                or int(line[5]) < 5
+                for line in successful
+            )
+            or lines.count("GENERATION progress set 1 3") != 3
+            or lines.count("GENERATION progress set 1 15") != 1
+            or sum(line.startswith("GENERATION progress set 2 ") for line in lines) != 4
+        ):
+            raise RuntimeError(
+                "missing successful heightmap landscape/climate/river progress"
+            )
+        if sum(line.startswith("GENERATION map ") for line in lines) != 42:
             raise RuntimeError("missing early/heightmap/flat map and RNG snapshots")
         counts = branch_witnesses(
             scenario,
             run,
             role,
             "generation",
-            ["heightmap_ccw", "heightmap_cw", "flat", "load_failure", "tgp_abort"],
+            [
+                "heightmap_ccw",
+                "heightmap_cw",
+                "fix_slopes",
+                "watering",
+                "flat",
+                "load_failure",
+                "tgp_abort",
+                "snow",
+                "coverage_edge",
+                "rainforest",
+                "long_attempt",
+                "short_attempt",
+            ],
         )
         if counts is not None:
+            # One initial world + eight direct loads + two slope passes for
+            # each complete heightmap world + FlatEmptyWorld. In particular,
+            # a no-op second slope pass must not hide an early continuation exit.
+            if counts["fix_slopes"] < 18 or counts["watering"] < 11:
+                raise RuntimeError("missing downstream heightmap slope/watering passes")
             result.setdefault("generation_witnesses", {})[mode] = counts
         return
 

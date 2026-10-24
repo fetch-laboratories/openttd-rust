@@ -36,6 +36,7 @@ static void Disasters()
 	DisasterProbe probe;
 	OpenTTDVehicleServices vehicles{};
 	vehicles.tile_links = [](OpenTTDVehicle *v) noexcept { return &reinterpret_cast<DisasterProbe *>(v)->links; };
+	vehicles.occupancy_update = [](OpenTTDVehicle *v) noexcept -> OpenTTDOccupancyUpdateObservation { return {.links = &reinterpret_cast<DisasterProbe *>(v)->links, .tile = 0}; };
 	vehicles.map_log_x = []() noexcept { return 6U; };
 	vehicles.tile = [](OpenTTDVehicle *) noexcept { return 0U; };
 	vehicles.vehicle_type = [](OpenTTDVehicle *v) noexcept { return static_cast<uint8_t>(reinterpret_cast<DisasterProbe *>(v)->type); };
