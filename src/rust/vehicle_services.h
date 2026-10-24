@@ -159,9 +159,12 @@ inline uint32_t RustVehiclePreviousID(const Vehicle *v) noexcept
 	const Vehicle *previous = RustVehiclePrevious(v);
 	return previous == nullptr ? UINT32_MAX : RustVehicleIndexOpaque(previous);
 }
+inline void RustVehicleSetEngine(OpenTTDVehicle *v, uint16_t engine) noexcept { VehicleOf(v)->engine_type = EngineID(engine); }
+inline void RustVehicleSetOwner(OpenTTDVehicle *v, uint8_t owner) noexcept { VehicleOf(v)->owner = Owner(owner); }
 inline uint16_t RustVehicleEngineID(const Vehicle *v) noexcept { return v->engine_type.base(); }
 inline const OpenTTDEngine *RustEngine(const Engine *e) noexcept { return reinterpret_cast<const OpenTTDEngine *>(e); }
 inline const Engine *EngineOf(const OpenTTDEngine *e) noexcept { return reinterpret_cast<const Engine *>(e); }
+inline const GRFFile *RustEngineGRF(const OpenTTDEngine *e) noexcept { return EngineOf(e)->GetGRF(); }
 inline const OpenTTDEngine *RustVehicleGetEngine(OpenTTDVehicle *v) noexcept { return RustEngine(VehicleOf(v)->GetEngine()); }
 /** Shared engine observation for a live base shell, resolved once. */
 template <typename Result, auto Read>
@@ -207,6 +210,7 @@ inline const VehicleType *RustVehicleVehicleTypeAddress(const Vehicle *v) noexce
 inline VehicleType RustVehicleVehicleType(const Vehicle *v) noexcept { return *RustVehicleVehicleTypeAddress(v); }
 
 inline const uint16_t *RustVehicleCargoPeriodAddress(const Vehicle *v) noexcept { return &v->vcache.cached_cargo_age_period; }
+inline uint16_t *RustVehicleCargoCapacityAddress(Vehicle *v) noexcept { return &v->cargo_cap; }
 inline uint16_t *RustVehicleCargoCounterAddress(Vehicle *v) noexcept { return &v->cargo_age_counter; }
 inline uint32_t *RustVehicleMotionAddress(Vehicle *v) noexcept { return &v->motion_counter; }
 
@@ -242,7 +246,7 @@ inline bool RustVehicleHasArticulated(OpenTTDVehicle *handle) noexcept { return 
 /** GRF version of a live engine; the original default-engine value is zero. */
 inline uint8_t RustEngineGRFVersion(const Engine *engine) noexcept
 {
-	const GRFFile *grf = engine->GetGRF();
+	const GRFFile *grf = RustEngineGRF(RustEngine(engine));
 	return grf == nullptr ? uint8_t(0) : RustGRFFileVersion(grf);
 }
 

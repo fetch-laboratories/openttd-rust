@@ -508,7 +508,7 @@ pub struct Leaves {
     pub backoff: extern "C" fn(Handle) -> u64,
     pub base_viewport: extern "C" fn(Handle, u8),
     pub bridge_speed: extern "C" fn(Handle, u32) -> u64,
-    pub capacity: extern "C" fn(Handle) -> u64,
+    pub(crate) capabilities: &'static crate::engine_capabilities::Services,
     pub capacity_error: extern "C" fn(Handle),
     pub cargo_age_default: extern "C" fn(Handle) -> u64,
     pub check_next: extern "C" fn(Handle),
@@ -808,7 +808,15 @@ impl Game<'_> {
                     }
                 }
             }
-            let cap = (self.leaves.capacity)(u) as u16;
+            // SAFETY: the current consist retains this shell during capacity callbacks.
+            let cap = unsafe {
+                crate::engine_capabilities::openttd_rust_engine_capacity(
+                    self.leaves.capabilities,
+                    (self.vs().engine)(u.vehicle()).0.as_ptr(),
+                    u.shell.cast(),
+                    std::ptr::null_mut(),
+                )
+            } as u16;
             let part = (self.leaves.read_consist_changed_2)(u);
             if allowed & 2 != 0 {
                 if part.cargo_cap > cap {
@@ -3284,7 +3292,7 @@ crate::abi::layouts! {
         backoff,
         base_viewport,
         bridge_speed,
-        capacity,
+        capabilities,
         capacity_error,
         cargo_age_default,
         check_next,

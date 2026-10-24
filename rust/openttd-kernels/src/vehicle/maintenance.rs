@@ -340,12 +340,12 @@ unsafe fn replacement_needed<const C: bool>(
     let t = unsafe { &*s.transaction };
     let (mut union, mut available) = (0_u64, 0_u64);
     unsafe {
-        svc!(
-            C,
-            t.refit_masks,
+        crate::engine_capabilities::openttd_rust_articulated_refit_masks(
+            t.capabilities,
             replacement.engine,
+            true,
             &raw mut union,
-            &raw mut available
+            &raw mut available,
         );
     };
     if C {
@@ -356,7 +356,13 @@ unsafe fn replacement_needed<const C: bool>(
     }
     if union != 0 {
         let mut cargo_type = 0;
-        let cargo = unsafe { svc!(C, t.vehicle_cargo, v.0.as_ptr().cast(), &raw mut cargo_type) };
+        let cargo = unsafe {
+            crate::engine_capabilities::openttd_rust_articulated_live_cargoes(
+                t.capabilities,
+                v.0.as_ptr(),
+                &raw mut cargo_type,
+            )
+        };
         if C {
             crate::witness::add(
                 crate::witness::VEHICLE_MAINT_BYTES,
@@ -364,7 +370,12 @@ unsafe fn replacement_needed<const C: bool>(
             );
         }
         if cargo & cargo.wrapping_sub(1) != 0 {
-            let defaults = unsafe { svc!(C, t.default_cargo, replacement.engine) };
+            let defaults = unsafe {
+                crate::engine_capabilities::openttd_rust_articulated_cargoes(
+                    t.capabilities,
+                    replacement.engine,
+                )
+            };
             if cargo & defaults != cargo {
                 return false;
             }

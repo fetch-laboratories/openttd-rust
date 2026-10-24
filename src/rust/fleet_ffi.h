@@ -1,3 +1,4 @@
+struct OpenTTDEngineCapabilitiesServices;
 /*
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
@@ -116,7 +117,7 @@ struct OpenTTDFleetTransactionServices {
 	void * (*prev_unit)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(prev_unit);
 	uint16_t (*length)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(length);
 	uint8_t (*cargo_type)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(cargo_type);
-	bool (*can_carry)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(can_carry);
+	const OpenTTDEngineCapabilitiesServices *capabilities;
 	bool (*stopped_in_depot)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(stopped_in_depot);
 	uint8_t (*max_length)() noexcept OPENTTD_SERVICE_DEFAULT(max_length);
 	void (*check)(bool condition) noexcept OPENTTD_SERVICE_DEFAULT(check);
@@ -129,10 +130,6 @@ struct OpenTTDFleetTransactionServices {
 	bool (*wagon)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(wagon);
 	bool (*tram)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(tram);
 	uint8_t (*plane)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(plane);
-	uint64_t (*refit_mask)(uint16_t id, bool initial) noexcept OPENTTD_SERVICE_DEFAULT(refit_mask);
-	void (*refit_masks)(uint16_t id, uint64_t *union_mask, uint64_t *available) noexcept OPENTTD_SERVICE_DEFAULT(refit_masks);
-	uint64_t (*vehicle_cargo)(void *shell, uint8_t *cargo) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);
-	uint64_t (*default_cargo)(uint16_t id) noexcept OPENTTD_SERVICE_DEFAULT(default_cargo);
 	void * (*orders)(void *shell) noexcept OPENTTD_SERVICE_DEFAULT(orders);
 	size_t (*order_count)(void *orders) noexcept OPENTTD_SERVICE_DEFAULT(order_count);
 	uint8_t (*order_count_id)(void *orders) noexcept OPENTTD_SERVICE_DEFAULT(order_count_id);

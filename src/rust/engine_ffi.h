@@ -1,3 +1,4 @@
+struct OpenTTDEngineCapabilitiesServices;
 /*
  * This file is part of OpenTTD.
  * OpenTTD is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, version 2.
@@ -72,8 +73,7 @@ struct OpenTTDEngineServices {
 	OpenTTDEngineCompanyPreview (*company_preview)(const Company *) noexcept OPENTTD_SERVICE_DEFAULT(company_preview);
 	OpenTTDEngineVehicle (*vehicle_next)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_next);
 	OpenTTDEngineVehicleCargo (*vehicle_cargo)(OpenTTDVehicle *) noexcept OPENTTD_SERVICE_DEFAULT(vehicle_cargo);
-	bool (*can_carry)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(can_carry);
-	uint64_t (*refit_mask)(const OpenTTDEngine *) noexcept OPENTTD_SERVICE_DEFAULT(refit_mask);
+	const OpenTTDEngineCapabilitiesServices *capabilities;
 	void (*update_railtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(update_railtypes);
 	void (*update_roadtypes)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(update_roadtypes);
 	void (*date_company_types)(uint8_t, int32_t) noexcept OPENTTD_SERVICE_DEFAULT(date_company_types);

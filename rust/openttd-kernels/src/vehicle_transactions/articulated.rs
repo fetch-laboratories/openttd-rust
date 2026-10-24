@@ -13,10 +13,7 @@ pub struct Part {
 pub struct Services {
     pub refit: &'static refit::Services,
     pub default_cargo: extern "C" fn(*const OpenTTDEngine) -> u8,
-    pub capacity: extern "C" fn(u16, *mut u32),
     pub pool_available: extern "C" fn(usize) -> bool,
-    pub has_callback: extern "C" fn(u16) -> bool,
-    pub next_part: extern "C" fn(u32, u16, *mut (), *mut bool) -> u16,
     pub prepare_previous: extern "C" fn(*mut ()) -> *mut (),
     pub new_train: extern "C" fn(*mut ()) -> *mut (),
     pub new_road: extern "C" fn(*mut ()) -> *mut (),
@@ -30,12 +27,9 @@ pub struct Services {
     pub copy_common: extern "C" fn(*mut (), *mut (), u16),
     pub random_bits: extern "C" fn(*mut (), u16),
     pub flip_image: extern "C" fn(*mut ()),
-    pub available_cargo: extern "C" fn(u16, bool) -> u64,
     pub warning: extern "C" fn(*const OpenTTDEngine),
     pub has_articulated: extern "C" fn(*mut ()) -> bool,
     pub next_articulated: extern "C" fn(*mut ()) -> *mut (),
-    pub max_parts: u32,
-    pub all_cargo: u64,
 }
 impl Services {
     /// Caller retains the live native shell through this synchronous update.
@@ -58,18 +52,26 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
     let c = r.common;
     let g = c.base.groups;
     let kind = VehicleType(unsafe { (g.vehicle_type)(first) });
-    if !(s.has_callback)(unsafe { (g.vehicle_engine)(first) }) {
+    if !unsafe {
+        crate::engine_capabilities::openttd_rust_articulated_is(
+            r.capabilities,
+            (g.vehicle_engine)(first),
+        )
+    } {
         return;
     }
     let mut previous = first;
-    for index in 1..s.max_parts {
+    for index in 1..crate::engine_capabilities::MAX_ARTICULATED_PARTS {
         let mut flip = MaybeUninit::uninit();
-        let engine = (s.next_part)(
-            index,
-            unsafe { (g.vehicle_engine)(first) },
-            first,
-            flip.as_mut_ptr(),
-        );
+        let engine = unsafe {
+            crate::engine_capabilities::openttd_rust_articulated_next(
+                r.capabilities,
+                index,
+                (g.vehicle_engine)(first),
+                first.cast(),
+                flip.as_mut_ptr(),
+            )
+        };
         if engine == crate::vehicle::INVALID_ENGINE {
             return;
         }
@@ -97,7 +99,8 @@ pub(crate) unsafe fn add(s: &Services, first: *mut ()) {
             }
             _ => unreachable!("articulated vehicles are ground vehicles"),
         };
-        let can_carry = (r.can_carry)(e);
+        let can_carry =
+            unsafe { crate::engine_capabilities::openttd_rust_engine_can_carry(r.capabilities, e) };
         let info = if kind == VehicleType::TRAIN {
             (s.train_info)(e, can_carry)
         } else {
@@ -154,22 +157,33 @@ pub(crate) unsafe fn consistency(s: &Services, mut v: *mut ()) {
     let mut purchase_union = 0;
     let mut purchase_intersection = 0;
     unsafe {
-        (c.transactions.refit_masks)(
+        crate::engine_capabilities::openttd_rust_articulated_refit_masks(
+            r.capabilities,
             (c.base.groups.vehicle_engine)(v),
+            true,
             &raw mut purchase_union,
             &raw mut purchase_intersection,
         );
     };
     let mut purchase_capacity = [0_u32; 64];
-    (s.capacity)(
-        unsafe { (c.base.groups.vehicle_engine)(v) },
-        purchase_capacity.as_mut_ptr(),
-    );
+    unsafe {
+        crate::engine_capabilities::openttd_rust_articulated_capacity(
+            r.capabilities,
+            (c.base.groups.vehicle_engine)(v),
+            purchase_capacity.as_mut_ptr(),
+        );
+    };
     let mut real_union = 0;
-    let mut real_intersection = s.all_cargo;
+    let mut real_intersection = crate::cargo_type::ALL_CARGOTYPES;
     let mut real_cargo = 0_u64;
     loop {
-        let mask = (s.available_cargo)(unsafe { (c.base.groups.vehicle_engine)(v) }, true);
+        let mask = unsafe {
+            crate::engine_capabilities::available_cargo(
+                r.capabilities,
+                (c.base.groups.vehicle_engine)(v),
+                true,
+            )
+        };
         real_union |= mask;
         if mask != 0 {
             real_intersection &= mask;
@@ -223,9 +237,9 @@ crate::abi::layouts! {
     fn abi_layout;
     "OpenTTDArticulatedPart" ["probe"] => Part { image, capacity, };
     "OpenTTDVehicleArticulatedServices" ["probe"] => Services {
-        refit, default_cargo, capacity, pool_available, has_callback, next_part, prepare_previous,
+        refit, default_cargo, pool_available, prepare_previous,
         new_train, new_road, road_length, copy_roadtype, train_info, road_info, set_part, mark_train,
-        mark_road, copy_common, random_bits, flip_image, available_cargo, warning,
-        has_articulated, next_articulated, max_parts, all_cargo,
+        mark_road, copy_common, random_bits, flip_image, warning,
+        has_articulated, next_articulated,
     };
 }

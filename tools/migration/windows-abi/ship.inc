@@ -1,5 +1,6 @@
 #pragma once
 #include "rust/ship_control_ffi.h"
+#include "rust/engine_capabilities_ffi.h"
 
 /* Saves cannot observe NOSAVE rotation coordinates. Compare their full bit domain
  * with native C++ narrowing, and exercise real nested owner mutation in a callback. */
@@ -41,6 +42,7 @@ static void ShipBoundary()
 	static int ship_shell; ///< Its address is the opaque vehicle handle.
 	auto *shell = reinterpret_cast<OpenTTDVehicle *>(&ship_shell);
 	/* Initialize every function pointer, including paths unused in this concrete gap. */
+	static const OpenTTDEngineCapabilitiesServices capabilities{};
 	OpenTTDShipLeaves leaves{
 		.depot_dir = ShipProbeUnused<uint32_t, uint32_t>, .depot_axis = ShipProbeUnused<uint32_t, uint32_t>,
 		.is_depot = ShipProbeUnused<bool, uint32_t>, .depot_index = ShipProbeUnused<uint32_t, uint32_t>,
@@ -71,7 +73,7 @@ static void ShipBoundary()
 		.pay_running = ShipProbeUnused<void, uint32_t, int64_t>, .speed_default = ShipProbeUnused<uint32_t, uint32_t>,
 		.age_default = ShipProbeUnused<uint32_t, uint32_t>, .speed_frac = ShipProbeUnused<uint32_t, uint32_t, bool>,
 		.update_visual = ShipProbeUnused<void, uint32_t>, .cache_invalidate = ShipProbeUnused<void, uint32_t>,
-		.capacity = ShipProbeUnused<uint32_t, uint32_t>, .sprite_direction = ShipProbeUnused<void, uint32_t>,
+		.capabilities = &capabilities, .sprite_direction = ShipProbeUnused<void, uint32_t>,
 		.tile_x = ShipProbeUnused<uint32_t, uint32_t>, .tile_y = ShipProbeUnused<uint32_t, uint32_t>,
 		.build_flag = ShipProbeUnused<bool, uint32_t>, .build_random = ShipProbeUnused<void, uint32_t, uint16_t>,
 		.new_position = ShipProbeUnused<OpenTTDShipPosition, uint32_t>, .exit_dir = ShipProbeUnused<uint32_t, uint32_t, uint32_t>,

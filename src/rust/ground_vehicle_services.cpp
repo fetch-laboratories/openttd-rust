@@ -53,7 +53,7 @@ const OpenTTDGroundPhysicsServices &GetRustGroundPhysicsServices() noexcept
 		.weight_input = GroundWeightInput,
 		.acceleration_input = GroundAccelerationInput,
 		.speed_input = GroundSpeedInput,
-		.capacity = RustEngineDetermineCapacity,
+		.capabilities = &GetRustEngineCapabilitiesServices(),
 		.cargo_weight = GroundCargoWeight,
 		.train_cargo_weight = GroundTrainCargoWeight,
 		.engine_power = RustGroundEnginePower,
