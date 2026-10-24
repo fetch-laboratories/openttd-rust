@@ -15,6 +15,7 @@
 #include "tile_type.h"
 #ifdef WITH_RUST
 #include "rust/newgrf_storage_ffi.h"
+#include "rust/services_assert.h"
 #endif
 
 /**
@@ -82,7 +83,7 @@ struct PersistentStorageArray : BasePersistentStorageArray {
 	PersistentStorageArray(const PersistentStorageArray &) = delete;
 	PersistentStorageArray &operator=(const PersistentStorageArray &) = delete;
 	~PersistentStorageArray() override { RustStorageDelete(this->rust_storage); }
-	void StoreValue(uint pos, int32_t value) { RustStorageStore(this->rust_storage, pos, value, RustStorageCheck); }
+	void StoreValue(uint pos, int32_t value) { RustStorageStore(this->rust_storage, pos, value, RustAssertCondition); }
 	TYPE GetValue(uint pos) const { return RustStorageGet(this->rust_storage, pos); }
 	void ClearChanges() { RustStorageClear(this->rust_storage); }
 #else

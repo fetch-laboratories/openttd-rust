@@ -44,7 +44,7 @@ static void StorageAppendTown(Town *town, BasePersistentStorageArray *storage) n
 const OpenTTDStorageServices &GetRustStorageServices() noexcept
 {
 	static const OpenTTDStorageServices services{
-		.check = RustStorageCheck,
+		.check = RustAssertCondition,
 		.grfid = RustGRFFileID,
 		.industry = StorageIndustry,
 		.create_industry = StorageCreateIndustry,

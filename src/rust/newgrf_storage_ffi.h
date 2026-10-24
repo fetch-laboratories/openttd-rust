@@ -32,7 +32,6 @@ struct OpenTTDStorageServices {
 	void (*append_town)(Town *, BasePersistentStorageArray *) noexcept OPENTTD_SERVICE_DEFAULT(append_town);
 };
 const OpenTTDStorageServices &GetRustStorageServices() noexcept;
-void RustStorageCheck(bool) noexcept;
 extern "C" {
 #define OPENTTD_STORAGE_API(N) \
 OpenTTDStorage##N *openttd_rust_storage##N##_new(void *); \

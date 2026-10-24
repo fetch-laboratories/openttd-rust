@@ -19,7 +19,6 @@ INSTANTIATE_POOL_METHODS(PersistentStorage)
 
 #ifdef WITH_RUST
 BasePersistentStorageArray::~BasePersistentStorageArray() = default;
-void RustStorageCheck([[maybe_unused]] bool valid) noexcept { assert(valid); }
 static void StorageDiscard(void *shell) noexcept
 {
 	auto *it = static_cast<BasePersistentStorageArray *>(shell);
@@ -27,7 +26,7 @@ static void StorageDiscard(void *shell) noexcept
 }
 void BasePersistentStorageArray::SwitchMode(PersistentStorageMode mode, bool ignore_prev_mode)
 {
-	openttd_rust_storage_switch_mode(mode, ignore_prev_mode, RustStorageCheck, StorageDiscard);
+	openttd_rust_storage_switch_mode(mode, ignore_prev_mode, RustAssertCondition, StorageDiscard);
 }
 #else
 /** The changed storage arrays */

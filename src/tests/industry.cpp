@@ -354,7 +354,7 @@ TEST_CASE("NewGRF storage canonical aliases and complete transaction lifetime", 
 #ifdef WITH_RUST
 	static uint discarded;
 	discarded = 0;
-	openttd_rust_storage_switch_mode(PSM_LEAVE_GAMELOOP, true, RustStorageCheck, [](void *) noexcept { ++discarded; });
+	openttd_rust_storage_switch_mode(PSM_LEAVE_GAMELOOP, true, RustAssertCondition, [](void *) noexcept { ++discarded; });
 	CHECK(discarded == 1); // Saving rolls back but retains registry membership.
 #endif
 	{ auto pending = std::make_unique<Modern>(); pending->StoreValue(0, 1); }
