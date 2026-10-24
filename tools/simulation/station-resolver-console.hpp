@@ -27,7 +27,7 @@ static void StationResolverFixture(TileIndex origin, DoCommandFlags exec, bool r
 		st->goods[1].GetOrCreateData().cargo.Append(new CargoPacket(9, 13, st->index, tile, 0), StationID::Invalid());
 	}
 	TileIndex tile = st->train_station.tile, waytile = wp->train_station.tile;
-	st->truck_stops->status.Reset(RoadStopStatusFlag::Bay0Free);
+	st->truck_stops->status.Reset(RoadStop::RoadStopStatusFlag::Bay0Free);
 	st->airport.blocks.Set({AirportBlock::Term1, AirportBlock::RunwayIn, AirportBlock::AirportClosed});
 
 	fmt::print(stderr, "STCMD resolver-reconstruction {} {} {} {}\n", reloaded, st->index.base(), st->goods[0].TotalCount(), st->goods[0].GetData().cargo.PeriodsInTransit());
