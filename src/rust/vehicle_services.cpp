@@ -94,7 +94,7 @@ OpenTTDTrainHandle RustVehicleTrain(OpenTTDVehicle *v) noexcept { return TrainHa
 bool RustTrainIsEngine(const Vehicle *v) noexcept { return Train::From(v)->IsEngine(); }
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept { return Train::From(v)->gcache.cached_power; }
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept { return RustEngineGRFVersion(EngineOf(RustVehicleGetEngine(RustVehicle(v)))); }
-uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept { return GetGRFStringID(v->GetGRFID(), GRFStringID(string)); }
+uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept { return GetGRFStringID(RustVehicleGRFID(v), GRFStringID(string)); }
 void RustVehicleFlipStopped(Vehicle *v) noexcept { v->vehstatus.Flip(VehState::Stopped); }
 
 uint16_t RustVehicleRefitCap(OpenTTDVehicle *v) noexcept { return VehicleOf(v)->refit_cap; }

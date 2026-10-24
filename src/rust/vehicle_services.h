@@ -31,6 +31,10 @@ bool RustTrainIsEngine(const Vehicle *v) noexcept;
 Train *RustTrainGetIfValid(uint32_t id) noexcept;
 uint32_t RustTrainCachedPower(const Vehicle *v) noexcept;
 uint8_t RustVehicleGRFVersion(const Vehicle *v) noexcept;
+inline uint32_t RustVehicleGRFID(const Vehicle *v) noexcept { return v->GetGRFID(); }
+/** Fixed callback-error adapter for a live native vehicle shell. */
+template <CallbackID Callback>
+inline void RustVehicleCallbackError(void *shell, uint16_t result) noexcept { RustUnknownCallbackResult(RustVehicleGRFID(static_cast<const Vehicle *>(shell)), Callback, result); }
 uint32_t RustVehicleGRFString(Vehicle *v, uint32_t string) noexcept;
 void RustVehicleFlipStopped(Vehicle *v) noexcept;
 

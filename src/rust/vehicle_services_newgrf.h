@@ -79,7 +79,7 @@ const OpenTTDVehicleResolverServices &GetRustVehicleResolverServices() noexcept
 		.cargo_capacity = RustVehicleCargoCap,
 		.real_count = [](const RealSpriteGroup *group, bool motion) noexcept { return static_cast<uint32_t>(motion ? group->loaded.size() : group->loading.size()); },
 		.real_at = [](const RealSpriteGroup *group, bool motion, uint32_t index) noexcept { return motion ? group->loaded[index] : group->loading[index]; },
-		.vehicle_grfid = [](OpenTTDVehicle * v) noexcept -> uint32_t { return VehicleOf(v)->GetGRFID(); },
+		.vehicle_grfid = RustVehicleRead<uint32_t, RustVehicleGRFID>,
 		.engine_by_id = RustEngineByID,
 		.default_cargo = RustEngineDefaultCargo,
 		.engine_flags = [](const OpenTTDEngine * e) noexcept -> uint8_t { return EngineOf(e)->flags.base(); },
