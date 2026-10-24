@@ -85,6 +85,7 @@ def scenarios(soak):
             "road-stops-reload",
             "waypoints",
             "waypoints-reload",
+            "resolver",
         )
     ]
 
@@ -577,6 +578,7 @@ static void StationGraphs()
 	}
 	fmt::print(stderr, "STCMD complete\n");
 }
+// OWNER399
 static bool StationCommands(std::span<std::string_view> args)
 {
 	if (args.size() < 2) return false;
@@ -616,6 +618,7 @@ static bool StationCommands(std::span<std::string_view> args)
 	} else {
 		TileIndex origin = StationPatch();
 		auto tile = [origin](int x, int y) { return origin + TileDiffXY(x, y); };
+		if (args[1] == "resolver") { StationResolverFixture(origin, exec); fmt::print(stderr, "STCMD complete\n"); current.Restore(); return true; }
 		if (args[1] == "waypoints") {
 			StationWaypoints(origin, company, test, exec); fmt::print(stderr, "STCMD complete\n");
 			if (args.size() == 3) SaveOrLoad(std::string(args[2]), SLO_SAVE, DFT_GAME_FILE, NO_DIRECTORY, false);
@@ -894,7 +897,12 @@ def adapter(build, folder, env):
 
     folder.mkdir(parents=True, exist_ok=True)
     source = folder / "station-commands.cpp"
-    source.write_text(COMMAND_SOURCE)
+    source.write_text(
+        COMMAND_SOURCE.replace(
+            "// OWNER399",
+            (ROOT / "tools/simulation/station-resolver-console.hpp").read_text(),
+        )
+    )
     return console_adapter(
         build,
         folder,
@@ -1078,6 +1086,13 @@ def check_commands(scenario, run, mode, role, result):
             ]
         )
         core.branch_witnesses(scenario, run, role, "waypoint_command", branches)
+    if scenario["station_commands"] == "resolver":
+        required = ["build_rail"]
+        for marker in [
+            "resolver-cache " + v for v in ("40", "41", "45", "46", "47", "49")
+        ] + ["resolver-rng lower", "cost resolver-slope"]:
+            if "STCMD " + marker not in run["log"]:
+                raise RuntimeError("station resolver witness missing: " + marker)
     if scenario["station_commands"] != "linkgraph":
         core.branch_witnesses(scenario, run, role, "station_command", required)
     lines = [line for line in run["log"] if line.startswith("STCMD ")]

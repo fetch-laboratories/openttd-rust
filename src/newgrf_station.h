@@ -22,9 +22,26 @@
 #include "rail_type.h"
 #include "newgrf_spritegroup.h"
 #include "newgrf_town.h"
+#ifdef WITH_RUST
+#include "rust/station_resolver_ffi.h"
+#endif
 
 /** Scope resolver for stations. */
 struct StationScopeResolver : public ScopeResolver {
+#ifdef WITH_RUST
+	mutable OpenTTDStationResolverState state{};
+	/* Compatibility aliases refer to the one canonical Rust stack state. */
+	TileIndex &tile;
+	BaseStation *&st;
+	const StationSpec *&statspec;
+	CargoType &cargo_type;
+	Axis &axis;
+	StationScopeResolver(ResolverObject &ro, const StationSpec *spec, BaseStation *station, TileIndex tile)
+	 : ScopeResolver(ro), tile(state.tile), st(state.station), statspec(state.spec), cargo_type(state.cargo), axis(state.axis)
+	{
+	 ro.root_spritegroup = openttd_rust_station_resolver_init(&state, spec, station, tile.base());
+	}
+#else
 	TileIndex tile;                     ///< %Tile of the station.
 	struct BaseStation *st;             ///< Instance of the station.
 	const struct StationSpec *statspec; ///< Station (type) specification.
@@ -57,6 +74,8 @@ struct StationScopeResolver : public ScopeResolver {
 		: ScopeResolver(ro), tile(tile), st(st), statspec(statspec), cargo_type(INVALID_CARGO), axis(INVALID_AXIS)
 	{
 	}
+
+#endif
 
 	uint32_t GetRandomBits() const override;
 	uint32_t GetRandomTriggers() const override;

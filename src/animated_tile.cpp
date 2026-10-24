@@ -18,6 +18,7 @@
 
 #ifdef WITH_RUST
 #include "rust/animation_ffi.h"
+#include "rust/station_resolver_ffi.h"
 #include "rust/tile_animation_services.h"
 #include "rust/sound_services.h"
 #include "rust/services_station.h"
@@ -68,7 +69,7 @@ static const OpenTTDAnimationServices &GetRustAnimationServices() noexcept
 void AddAnimatedTile(TileIndex tile, bool dirty) { openttd_rust_animation_add(tile.base(), dirty); }
 void DeleteAnimatedTile(TileIndex tile, bool immediate) { openttd_rust_animation_delete(tile.base(), immediate); }
 void AnimateAnimatedTiles() { PerformanceAccumulator landscape_framerate(PFE_GL_LANDSCAPE); openttd_rust_animation_run(); }
-void InitializeAnimatedTiles() { openttd_rust_animation_exchange(&GetRustAnimationServices()); openttd_rust_animation_initialize(); }
+void InitializeAnimatedTiles() { openttd_rust_animation_exchange(&GetRustAnimationServices()); openttd_rust_station_resolver_exchange(&GetStationResolverServices()); openttd_rust_animation_initialize(); }
 #include "rust/service_table_check.hpp"
 #include "abi-visit-OpenTTDAnimationServices.hpp"
 #include "abi-visit-OpenTTDHouseAnimation.hpp"

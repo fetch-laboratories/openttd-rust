@@ -26,6 +26,9 @@
 #ifdef WITH_RUST
 #include "rust/animation_binding.hpp"
 #include "rust/services_station.h"
+#include "rust/station_resolver_ffi.h"
+#include "rust/services_rail.h"
+#include "rust/services_map.h"
 #endif
 #include "timer/timer_game_calendar.h"
 
@@ -35,6 +38,49 @@
 
 #include "safeguards.h"
 
+
+
+#ifdef WITH_RUST
+const OpenTTDCargoStorageServices *CargoStorageServices();
+const OpenTTDStationResolverServices &GetStationResolverServices() noexcept
+{
+	static const OpenTTDStationResolverServices services{
+	 .shared = &GetRustSharedServices(),
+	 .cargo = CargoStorageServices(),
+	 .cargo_owner = [](BaseStation *base, uint8_t cargo) noexcept -> const OpenTTDCargoList * { const auto &ge = Station::From(base)->goods[cargo]; return ge.HasData() ? ge.GetData().cargo.RustOwner() : nullptr; },
+	 .group_count = [](const StationSpec *s) noexcept { return s->grf_prop.spritegroups.size(); },
+	 .group_cargo = [](const StationSpec *s, size_t i) noexcept { return s->grf_prop.spritegroups[i].first; },
+	 .group = [](const StationSpec *s, uint8_t c) noexcept { return s->grf_prop.GetSpriteGroup(c); },
+	 .spec = [](const StationSpec *s) noexcept { return OpenTTDStationResolverSpec{s->cargo_threshold, s->flags.Test(StationSpecFlag::DivByStationSize)}; },
+	 .loading_count = [](const RealSpriteGroup *g) noexcept { return g->loading.size(); },
+	 .loaded_count = [](const RealSpriteGroup *g) noexcept { return g->loaded.size(); },
+	 .loading = [](const RealSpriteGroup *g, size_t i) noexcept { return g->loading[i]; },
+	 .loaded = [](const RealSpriteGroup *g, size_t i) noexcept { return g->loaded[i]; },
+	 .axis = RustRailStationAxis,
+	 .tile_add = [](uint32_t t, int32_t d) noexcept { return TileAdd(TileIndex{t}, d).base(); },
+	 .tile_random = [](uint32_t t) noexcept { return GetStationTileRandomBits(TileIndex{t}); },
+	 .station_random = [](BaseStation *s) noexcept { return s->random_bits; },
+	 .waiting = [](BaseStation *s) noexcept { return s->waiting_random_triggers.base(); },
+	 .set_waiting = [](BaseStation *s, uint8_t v) noexcept { s->waiting_random_triggers = StationRandomTriggers(v); },
+	 .set_random = [](BaseStation *s, uint16_t v) noexcept { s->random_bits = v; },
+	 .cached_cargo = [](BaseStation *s) noexcept { return s->cached_cargo_triggers; },
+	 .spec_cargo = [](const StationSpec *s) noexcept { return s->cargo_triggers; },
+	 .resolve_random = [](const StationSpec *s, BaseStation *st, uint32_t t, uint8_t waiting) noexcept {
+	  StationResolverObject object(s, st, TileIndex{t}, CBID_RANDOM_TRIGGER, 0);
+	  object.SetWaitingRandomTriggers(StationRandomTriggers(waiting));
+	  object.ResolveRerandomisation();
+	  return OpenTTDStationReseed{object.GetReseedSum(), object.GetUsedRandomTriggers().base()};
+	 },
+	 .resolve_callback = [](uint16_t cb, uint32_t p1, uint32_t p2, const StationSpec *s, BaseStation *st, uint32_t t, uint8_t axis, int32_t *regs, size_t count) noexcept {
+	  StationResolverObject object(s, st, TileIndex{t}, static_cast<CallbackID>(cb), p1, p2);
+	  object.station_scope.axis = static_cast<Axis>(axis);
+	  return object.ResolveCallback({regs, count});
+	 },
+	 .slope_error = RustLocationCallbackError<StationSpec, StationSpec, OpenTTDStationSlopeResult, OpenTTDCommandCost, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION>,
+	};
+	return services;
+}
+#endif
 
 template <>
 /* static */ void StationClass::InsertDefaults()
@@ -123,6 +169,9 @@ TileArea GetRailTileArea(const BaseStation *st, TileIndex tile, TriggerArea ta)
  */
 uint32_t GetPlatformInfo(Axis axis, uint8_t tile, int platforms, int length, int x, int y, bool centred)
 {
+#ifdef WITH_RUST
+	return openttd_rust_platform_info(axis, tile, platforms, length, x, y, centred);
+#else
 	uint32_t retval = 0;
 
 	if (axis == AXIS_X) {
@@ -148,6 +197,7 @@ uint32_t GetPlatformInfo(Axis axis, uint8_t tile, int platforms, int length, int
 	SB(retval, 24, 8, tile);
 
 	return retval;
+#endif
 }
 
 
@@ -159,6 +209,7 @@ uint32_t GetPlatformInfo(Axis axis, uint8_t tile, int platforms, int length, int
  * @param check_axis Stop when the station direction changes.
  * @return Found end of the railway station.
  */
+#ifndef WITH_RUST
 static TileIndex FindRailStationEnd(TileIndex tile, TileIndexDiff delta, bool check_type, bool check_axis)
 {
 	uint8_t orig_type = 0;
@@ -239,16 +290,26 @@ static uint32_t GetRailContinuationInfo(TileIndex tile)
 }
 
 
+#endif
+
 /* Station Resolver Functions */
 /* virtual */ uint32_t StationScopeResolver::GetRandomBits() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_random_bits(&this->state);
+#else
 	return (this->st == nullptr ? 0 : this->st->random_bits) | (this->tile == INVALID_TILE ? 0 : GetStationTileRandomBits(this->tile) << 16);
+#endif
 }
 
 
 /* virtual */ uint32_t StationScopeResolver::GetRandomTriggers() const
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_random_triggers(&this->state);
+#else
 	return this->st == nullptr ? 0 : this->st->waiting_random_triggers.base();
+#endif
 }
 
 
@@ -274,6 +335,11 @@ TownScopeResolver *StationResolverObject::GetTown()
 
 /* virtual */ uint32_t StationScopeResolver::GetVariable(uint8_t variable, [[maybe_unused]] uint32_t parameter, bool &available) const
 {
+#ifdef WITH_RUST
+	uint32_t value;
+	if (this->st != nullptr && openttd_rust_station_cached_variable(&this->state, variable, &value)) return value;
+#endif
+
 	if (this->st == nullptr) {
 		/* Station does not exist, so we're in a purchase list or the land slope check callback. */
 		switch (variable) {
@@ -308,32 +374,44 @@ TownScopeResolver *StationResolverObject::GetTown()
 
 	switch (variable) {
 		/* Calculated station variables */
+#ifndef WITH_RUST
 		case 0x40:
 			if (!this->cache.v40.has_value()) this->cache.v40 = GetPlatformInfoHelper(this->tile, false, false, false);
 			return *this->cache.v40;
+#endif
 
+#ifndef WITH_RUST
 		case 0x41:
 			if (!this->cache.v41.has_value()) this->cache.v41 = GetPlatformInfoHelper(this->tile, true,  false, false);
 			return *this->cache.v41;
+#endif
 
 		case 0x42: return GetTerrainType(this->tile) | (GetReverseRailTypeTranslation(GetRailType(this->tile), this->statspec->grf_prop.grffile) << 8);
 		case 0x43: return GetCompanyInfo(this->st->owner); // Station owner
 		case 0x44: return HasStationReservation(this->tile) ? 7 : 4; // PBS status
+#ifndef WITH_RUST
 		case 0x45:
 			if (!this->cache.v45.has_value()) this->cache.v45 = GetRailContinuationInfo(this->tile);
 			return *this->cache.v45;
+#endif
 
+#ifndef WITH_RUST
 		case 0x46:
 			if (!this->cache.v46.has_value()) this->cache.v46 = GetPlatformInfoHelper(this->tile, false, false, true);
 			return *this->cache.v46;
+#endif
 
+#ifndef WITH_RUST
 		case 0x47:
 			if (!this->cache.v47.has_value()) this->cache.v47 = GetPlatformInfoHelper(this->tile, true,  false, true);
 			return *this->cache.v47;
+#endif
 
+#ifndef WITH_RUST
 		case 0x49:
 			if (!this->cache.v49.has_value()) this->cache.v49 = GetPlatformInfoHelper(this->tile, false, true, false);
 			return *this->cache.v49;
+#endif
 
 		case 0x4A: // Animation frame of tile
 			return GetAnimationFrame(this->tile);
@@ -508,6 +586,9 @@ uint32_t Waypoint::GetNewGRFVariable(const ResolverObject &, uint8_t variable, [
 
 /* virtual */ const SpriteGroup *StationResolverObject::ResolveReal(const RealSpriteGroup &group) const
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_resolve_real(&this->station_scope.state, &group);
+#else
 	if (this->station_scope.st == nullptr || !Station::IsExpected(this->station_scope.st)) {
 		if (!group.loading.empty()) return group.loading[0];
 		return nullptr;
@@ -553,6 +634,7 @@ uint32_t Waypoint::GetNewGRFVariable(const ResolverObject &, uint8_t variable, [
 
 	if (!group.loading.empty()) return group.loading[0];
 	return nullptr;
+#endif
 }
 
 GrfSpecFeature StationResolverObject::GetFeature() const
@@ -579,6 +661,9 @@ StationResolverObject::StationResolverObject(const StationSpec *statspec, BaseSt
 	: SpecializedResolverObject<StationRandomTriggers>(statspec->grf_prop.grffile, callback, callback_param1, callback_param2),
 	station_scope(*this, statspec, base_station, tile)
 {
+#ifdef WITH_RUST
+	/* StationScopeResolver initialized the canonical Rust state and published its root. */
+#else
 	CargoType ctype = CargoGRFFileProps::SG_DEFAULT_NA;
 
 	if (this->station_scope.st == nullptr) {
@@ -603,6 +688,7 @@ StationResolverObject::StationResolverObject(const StationSpec *statspec, BaseSt
 
 	/* Remember the cargo type we've picked */
 	this->station_scope.cargo_type = ctype;
+#endif
 }
 
 /**
@@ -663,8 +749,12 @@ SpriteID GetCustomStationFoundationRelocation(const StationSpec *statspec, BaseS
 
 uint16_t GetStationCallback(CallbackID callback, uint32_t param1, uint32_t param2, const StationSpec *statspec, BaseStation *st, TileIndex tile, std::span<int32_t> regs100)
 {
+#ifdef WITH_RUST
+	return openttd_rust_station_callback(callback, param1, param2, statspec, st, tile.base(), regs100.data(), regs100.size());
+#else
 	StationResolverObject object(statspec, st, tile, callback, param1, param2);
 	return object.ResolveCallback(regs100);
+#endif
 }
 
 /**
@@ -679,6 +769,11 @@ uint16_t GetStationCallback(CallbackID callback, uint32_t param1, uint32_t param
  */
 CommandCost PerformStationTileSlopeCheck(TileIndex north_tile, TileIndex cur_tile, const StationSpec *statspec, Axis axis, uint8_t plat_len, uint8_t numtracks)
 {
+#ifdef WITH_RUST
+	CommandCost result;
+	openttd_rust_station_slope_check(reinterpret_cast<OpenTTDCommandCost *>(&result), north_tile.base(), cur_tile.base(), statspec, axis, plat_len, numtracks);
+	return result;
+#else
 	TileIndex diff = cur_tile - north_tile;
 	Slope slope = GetTileSlope(cur_tile);
 
@@ -696,6 +791,7 @@ CommandCost PerformStationTileSlopeCheck(TileIndex north_tile, TileIndex cur_til
 	/* The meaning of bit 10 is inverted for a grf version < 8. */
 	if (statspec->grf_prop.grffile->grf_version < 8) ToggleBit(cb_res, 10);
 	return GetErrorMessageFromLocationCallbackResult(cb_res, regs100, statspec->grf_prop.grffile, STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION);
+#endif
 }
 
 
@@ -971,6 +1067,10 @@ void TriggerStationAnimation(BaseStation *st, TileIndex trigger_tile, StationAni
  */
 void TriggerStationRandomisation(BaseStation *st, TileIndex trigger_tile, StationRandomTrigger trigger, CargoType cargo_type)
 {
+#ifdef WITH_RUST
+	assert(st != nullptr);
+	openttd_rust_station_randomisation(st, trigger_tile.base(), static_cast<uint8_t>(trigger), cargo_type);
+#else
 	/* List of coverage areas for each animation trigger */
 	static const TriggerArea tas[] = {
 		TA_WHOLE, TA_WHOLE, TA_PLATFORM, TA_PLATFORM, TA_PLATFORM, TA_PLATFORM
@@ -1039,6 +1139,7 @@ void TriggerStationRandomisation(BaseStation *st, TileIndex trigger_tile, Statio
 		st->random_bits &= ~whole_reseed;
 		st->random_bits |= Random() & whole_reseed;
 	}
+#endif
 }
 
 /**

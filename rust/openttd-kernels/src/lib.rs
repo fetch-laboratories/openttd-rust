@@ -60,6 +60,7 @@ mod newgrf_animation_base;
 mod newgrf_callbacks;
 mod newgrf_properties;
 mod newgrf_sound;
+mod newgrf_station;
 mod node_hash;
 mod object_type;
 mod objects;
