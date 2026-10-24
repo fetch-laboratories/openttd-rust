@@ -105,6 +105,9 @@ static void TownActionMoney(Town *town, Company *company, Company *other)
 		for (int delta : {-1, 0, 1}) balances.insert(price + delta);
 		fmt::print(stderr, "TOWN money-price {} {}\n", to_underlying(action), price);
 	}
+	/* Interactive randomness starts from process-specific state, not the map seed. */
+	Backup<Randomizer> interactive_seed(_interactive_random);
+	_interactive_random.SetSeed(12345);
 	const auto random = _random, interactive = _interactive_random;
 	for (bool foreign : {false, true}) {
 		for (Money balance : balances) {
@@ -132,7 +135,7 @@ static void TownActionMoney(Town *town, Company *company, Company *other)
 		fmt::print(stderr, "TOWN money-funded {} {}\n", delta, town->fund_buildings_months);
 	}
 	fmt::print(stderr, "TOWN money-rng {} {} {} {} {}\n", _random.state[0], _random.state[1], _interactive_random.state[0], _interactive_random.state[1], _random.state[0] == random.state[0] && _random.state[1] == random.state[1] && _interactive_random.state[0] == interactive.state[0] && _interactive_random.state[1] == interactive.state[1]);
-	cash.Restore(); funding.Restore(); infinite.Restore();
+	cash.Restore(); funding.Restore(); infinite.Restore(); interactive_seed.Restore();
 }
 /* Real CmdPlaceHouse and animation bodies in both games, with controlled spec
  * overrides. The save corpus has no external NewGRF providing callback 0x1C.
