@@ -1945,7 +1945,6 @@ impl<'a> Ctx<'a> {
 /// # Safety
 /// Immutable tables and live native cost/frame slots outlive this synchronous
 /// invocation. Slots are distinct; no native borrow survives reentrant calls.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_allow_remove(
     services: *const RoadCommandServices,
     out: *mut CommandCost,
@@ -2219,10 +2218,9 @@ pub unsafe extern "C" fn openttd_rust_road_build_above(
     c.build_above(c.c(out), flags, tile);
 }
 
-/// Removal entry also used by the native road tile loop pending #212.
+/// Original `RemoveRoad` entry.
 /// # Safety
 /// Immutable tables and distinct live cost slots outlive this synchronous call.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_remove(
     services: *const RoadCommandServices,
     out: *mut CommandCost,

@@ -2147,7 +2147,6 @@ pub unsafe extern "C" fn openttd_rust_road_trackdir(
 }
 /// # Safety
 /// As `openttd_rust_road_tick`; `first` is the live first part of `v`'s consist.
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_road_slope_pixel(
     v: VehicleRef,
     first: VehicleRef,
