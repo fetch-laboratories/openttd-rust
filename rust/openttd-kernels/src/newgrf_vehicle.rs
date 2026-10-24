@@ -38,6 +38,12 @@ pub struct Scope {
     self_type: u16,
     rotor_in_gui: bool,
 }
+impl Scope {
+    /// `VehicleScopeResolver::SetVehicle`.
+    fn set_vehicle(&mut self, v: V) {
+        self.v = v;
+    }
+}
 #[repr(C)]
 pub struct State {
     self_scope: Scope,
@@ -192,7 +198,7 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
             _ => unreachable!(),
         };
         let cache = (s.cache)(v);
-        if (*cache).cache_valid & (1 << bit) == 0 {
+        if !crate::bitmath_func::has_bit((*cache).cache_valid, bit) {
             let value = match variable {
                 0x40 | 0x41 => position(s, v, variable == 0x41),
                 0x42 => {
@@ -253,7 +259,9 @@ unsafe fn cached_variable(s: &Services, v: V, variable: u8, grf: *const c_void) 
                 3 => (*cache).company_information = value,
                 _ => (*cache).position_in_vehicle = value,
             }
-            (*cache).cache_valid |= 1 << bit;
+            let mut valid = u32::from((*cache).cache_valid);
+            crate::bitmath_func::set_bit(&mut valid, bit);
+            (*cache).cache_valid = valid as u8;
         }
         let value = match field {
             0 => (*cache).position_consist_length,
@@ -406,7 +414,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_resolver_init(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_vehicle_scope_set(scope: *mut Scope, v: V) {
     unsafe {
-        (*scope).v = v;
+        (*scope).set_vehicle(v);
     }
 }
 #[unsafe(no_mangle)]
@@ -467,7 +475,8 @@ pub unsafe extern "C" fn openttd_rust_vehicle_resolver_scope(
                 }
             };
             // Original initializes cached_relative_count but never updates it.
-            (*state).relative.v = (s.move_vehicle)(v, count);
+            let relative_v = (s.move_vehicle)(v, count);
+            (*state).relative.set_vehicle(relative_v);
         }
         scope
     }
@@ -518,7 +527,7 @@ pub unsafe extern "C" fn openttd_rust_vehicle_callback(
     unsafe {
         let mut state = init(s, id, v, u8::from(!override_parent), false);
         if override_parent {
-            state.parent.v = parent;
+            state.parent.set_vehicle(parent);
         }
         // No Rust reference into state is retained while generic Action2 reenters.
         (s.resolve_callback)(&raw mut state, id, callback, p1, p2, regs, count)

@@ -275,6 +275,7 @@ TEST_CASE("NewGRF cache - canonical native aliases, snapshots and indexed reuse"
 	check(new (VehicleID(37)) Train());
 	_vehicle_pool.CleanPool();
 	/* The base Effect shell has no engine/company pre-destructor requirements. */
+	REQUIRE(Vehicle::CanAllocateItem());
 	auto *effect = new Vehicle(VEH_EFFECT);
 	id = effect->index;
 	check(effect);

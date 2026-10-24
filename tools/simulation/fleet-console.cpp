@@ -218,12 +218,14 @@ static void ResolverProbe()
 	grf.grf_version = 8;
 	for (uint i = 0; i < NUM_CARGO; ++i) grf.cargo_map[i] = NUM_CARGO - 1 - i;
 	file.Change(&grf);
+	if (!SpriteGroup::CanAllocateItem(3)) FixtureAbort(__LINE__);
 	auto *det = new DeterministicSpriteGroup();
 	det->size = DSG_SIZE_DWORD;
 	det->var_scope = VSG_SCOPE_SELF;
 	det->default_result.calculated_result = true;
 	det->adjusts.push_back({.operation = DSGA_OP_RST, .variable = 0x42, .and_mask = UINT32_MAX});
-	e->grf_prop.spritegroups.fill(det);
+	e->grf_prop.spritegroups.clear();
+	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, det);
 	v->InvalidateNewGRFCacheOfChain();
 	VehicleResolverObject ro(v->engine_type, v, VehicleResolverObject::WO_NONE);
 	bool available = true;
@@ -254,7 +256,8 @@ static void ResolverProbe()
 	random->triggers = 1 << to_underlying(VehicleRandomTrigger::Depot);
 	random->lowest_randbit = 3;
 	random->groups = {result, result};
-	e->grf_prop.spritegroups.fill(random);
+	e->grf_prop.spritegroups.clear();
+	e->grf_prop.SetSpriteGroup(CargoGRFFileProps::SG_DEFAULT, random);
 	Backup<const SpriteGroup *> wagon(v->tcache.cached_override);
 	wagon.Change(random);
 	SavedRandomSeeds seed;
