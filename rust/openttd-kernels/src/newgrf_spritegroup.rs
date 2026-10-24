@@ -416,7 +416,8 @@ impl<'a> Invocation<'a> {
     unsafe fn random_bits(self, scope: Scope) -> u32 {
         unsafe {
             match scope.binding.kind {
-                0 | 6 | 12 => 0,
+                0 | 6 => 0,
+                12 => openttd_rust_scope_default_random(),
                 1 => crate::newgrf_vehicle::openttd_rust_vehicle_scope_random(
                     &*self.s.vehicle,
                     scope.binding.data.vehicle,
@@ -456,7 +457,8 @@ impl<'a> Invocation<'a> {
     unsafe fn random_triggers(self, scope: Scope) -> u32 {
         unsafe {
             match scope.binding.kind {
-                0 | 3 | 5 | 6 | 7 | 12 => 0,
+                0 | 3 | 5 | 6 | 7 => 0,
+                12 => openttd_rust_scope_default_random(),
                 1 => crate::newgrf_vehicle::openttd_rust_vehicle_scope_random(
                     &*self.s.vehicle,
                     scope.binding.data.vehicle,
