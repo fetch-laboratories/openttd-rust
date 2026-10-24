@@ -3,8 +3,12 @@
 #ifndef RUST_HOUSE_RESOLVER_FFI_H
 #define RUST_HOUSE_RESOLVER_FFI_H
 #include "town_ffi.h"
+#include "house_ffi.h"
 #include "newgrf_storage_ffi.h"
 struct ResolverObject;
+struct ScopeResolver;
+struct SpriteGroup;
+struct HouseSpec;
 struct GRFFile;
 struct Station;
 struct OpenTTDTownScope {
@@ -24,6 +28,15 @@ struct OpenTTDHouseScope {
 };
 struct OpenTTDHouseSearchSpec { uint32_t grfid; uint16_t local, house_class; bool has_file; };
 struct OpenTTDHouseNearbySpec { const GRFFile *file; uint16_t local, house_class; };
+struct OpenTTDHouseCallbackArgs {
+	Town *town;
+	uint64_t watched;
+	uint32_t param1, param2, tile;
+	int32_t view;
+	uint16_t house, callback;
+	uint8_t initial_random;
+	bool prospective;
+};
 struct OpenTTDHouseResolverServices {
 	const OpenTTDTownLeaves *towns;
 	const OpenTTDSharedServices *shared;
@@ -48,11 +61,25 @@ struct OpenTTDHouseResolverServices {
 	uint32_t (*house_grfid)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(house_grfid);
 	uint32_t (*badges)(const ResolverObject *, uint16_t, uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(badges);
 	void (*stations)(uint32_t, void *, void (*)(void *, const Station *)) noexcept OPENTTD_SERVICE_DEFAULT(stations);
+	Town *(*town_by_id)(uint32_t) noexcept OPENTTD_SERVICE_DEFAULT(town_by_id);
+	const SpriteGroup *(*root)(uint16_t, bool) noexcept OPENTTD_SERVICE_DEFAULT(root);
+	uint16_t (*spec_house)(const HouseSpec *) noexcept OPENTTD_SERVICE_DEFAULT(spec_house);
+	uint16_t (*local_id)(uint16_t) noexcept OPENTTD_SERVICE_DEFAULT(local_id);
+	ScopeResolver *(*base_scope)(ResolverObject *, uint8_t, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(base_scope);
+	uint16_t (*evaluate)(const OpenTTDHouseCallbackArgs *, int32_t *, size_t) noexcept OPENTTD_SERVICE_DEFAULT(evaluate);
+	OpenTTDHouseReseed (*reseed)(uint16_t, uint32_t, Town *, uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(reseed);
 	void (*unhandled_house)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled_house);
 	void (*unhandled_town)(uint8_t) noexcept OPENTTD_SERVICE_DEFAULT(unhandled_town);
 };
 const OpenTTDHouseResolverServices &GetHouseResolverServices() noexcept;
 extern "C" {
+void openttd_rust_house_resolver_install(const OpenTTDHouseResolverServices *);
+uint16_t openttd_rust_house_animation_callback(uint16_t, uint32_t, uint32_t, const HouseSpec *, Town *, uint32_t, uint64_t) noexcept;
+uint16_t openttd_rust_house_callback(const OpenTTDHouseCallbackArgs *, int32_t *, size_t);
+const SpriteGroup *openttd_rust_house_root(const OpenTTDHouseScope *);
+uint32_t openttd_rust_house_debug_id(const OpenTTDHouseScope *);
+ScopeResolver *openttd_rust_house_scope(ResolverObject *, ScopeResolver *, ScopeResolver *, uint8_t, uint8_t);
+ScopeResolver *openttd_rust_town_scope(ResolverObject *, ScopeResolver *, uint8_t, uint8_t);
 void openttd_rust_house_classes_reset();
 uint16_t openttd_rust_house_class_allocate(uint8_t, uint32_t);
 void openttd_rust_house_counts_init(const OpenTTDTownLeaves *, const OpenTTDSharedServices *, OpenTTDTownState *, size_t);

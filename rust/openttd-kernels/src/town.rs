@@ -164,6 +164,25 @@ pub struct State {
     class_counts: Vec<u16>,
     growth: GrowthFields,
 }
+/// `Town::GetCargoSupplied` followed by the original history-period lookup.
+/// SAFETY: Live serialized canonical owner; the returned value is a copy.
+unsafe fn supplied_history(state: *const State, cargo: u8, period: u8) -> Option<SuppliedHistory> {
+    if !crate::cargo_type::is_valid_cargo_type(cargo) {
+        return None;
+    }
+    let index = unsafe { openttd_rust_town_supplied_find(state, cargo) };
+    unsafe {
+        (&(*state).supplied)
+            .get(index)
+            .map(|s| s.history[usize::from(period)])
+    }
+}
+/// Canonical `Town::GetPercentTransported`, without a native owner bounce.
+unsafe fn percent_transported(state: *const State, cargo: u8) -> u8 {
+    unsafe { supplied_history(state, cargo, LAST_MONTH) }.map_or(0, |history| unsafe {
+        openttd_rust_town_percent_transported(&raw const history)
+    })
+}
 /// Read only the canonical position at the original observation point.
 /// SAFETY: The caller supplies a live owner; this immediate copied read retains no borrow.
 pub(crate) unsafe fn position(state: *const State) -> u32 {
@@ -719,7 +738,6 @@ pub struct Leaves {
     pub build_bridge: extern "C" fn(u32, u32, u32, u32, u32) -> bool,
     pub build_tunnel: extern "C" fn(u32, u32, u32) -> bool,
     pub assert_clear_house: extern "C" fn(bool),
-    pub allow_construction: extern "C" fn(u32, u32, u32, u32) -> bool,
     pub houses: *const house::HouseServices,
 }
 pub type StationActivity = crate::station_service::StationActivity;
@@ -1979,7 +1997,15 @@ impl Engine<'_> {
             }
             let random = u32::from(self.services.random() as u8);
             if (self.leaves.house_callbacks)(house as u16) & 1 != 0
-                && !(self.leaves.allow_construction)(town, tile, house, random)
+                && !unsafe {
+                    resolver::allow_construction(
+                        self.leaves,
+                        town as u16,
+                        tile,
+                        house as u16,
+                        random as u8,
+                    )
+                }
             {
                 continue;
             }
@@ -2547,7 +2573,6 @@ crate::abi::layouts! {
         build_bridge,
         build_tunnel,
         assert_clear_house,
-        allow_construction,
         houses,
     };
 }

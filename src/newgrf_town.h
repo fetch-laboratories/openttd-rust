@@ -50,10 +50,14 @@ struct TownResolverObject : public ResolverObject {
 
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
 	{
+#ifdef WITH_RUST
+		return openttd_rust_town_scope(this, &this->town_scope, scope, relative);
+#else
 		switch (scope) {
 			case VSG_SCOPE_SELF: return &town_scope;
 			default: return ResolverObject::GetScope(scope, relative);
 		}
+#endif
 	}
 };
 

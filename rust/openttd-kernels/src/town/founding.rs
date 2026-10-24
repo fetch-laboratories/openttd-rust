@@ -75,7 +75,6 @@ pub struct FoundingServices {
     pub larger_towns: extern "C" fn() -> u8,
     pub parameters: extern "C" fn(*mut Frame) -> *const names::NameParams,
     pub metadata: extern "C" fn(*const names::NameParams) -> Metadata,
-    pub initialize_counts: extern "C" fn(*mut TownHandle),
     pub insert_town: extern "C" fn(*mut TownHandle),
     pub cargo_effect_exists: extern "C" fn(AcceptanceEffect) -> bool,
     pub prepare_rename: extern "C" fn(*mut TownHandle),
@@ -296,7 +295,15 @@ impl<'a> Founding<'a> {
             (*town.state).growth.flags = 0;
             (*town.state).simulation.population = 0;
         }
-        observed!((self.s.initialize_counts)(town.shell));
+        // SAFETY: Fresh canonical owner; no count view exists yet.
+        unsafe {
+            super::resolver::openttd_rust_house_counts_init(
+                self.leaves,
+                self.shared,
+                town.state,
+                (self.leaves.house_count)() as usize,
+            )
+        };
         unsafe {
             (*town.state).growth.counter = town.id.0 % 70;
             (*town.state).growth.rate = town_ticks_to_game_ticks(250);
@@ -772,7 +779,6 @@ crate::abi::layouts! {
         larger_towns,
         parameters,
         metadata,
-        initialize_counts,
         insert_town,
         cargo_effect_exists,
         prepare_rename,

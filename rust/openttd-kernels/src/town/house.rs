@@ -237,11 +237,9 @@ pub struct HouseServices {
     pub set_type: extern "C" fn(u32, u16),
 
     pub delete_inspect: extern "C" fn(u32),
-    pub callback: unsafe extern "C" fn(u16, u32, u32, u16, *mut TownHandle, u32, bool) -> u16,
     pub cargo_translation: extern "C" fn(u16, u8) -> u8,
     pub convert_boolean: extern "C" fn(u16, u16, u16) -> bool,
     pub convert_8bit: extern "C" fn(u16, u16, u16) -> bool,
-    pub resolve_reseed: unsafe extern "C" fn(u16, u32, *mut TownHandle, u8) -> HouseReseed,
 
     pub next_near_station: unsafe extern "C" fn(*mut TownHandle, *mut Station) -> *mut Station,
     pub erase_near_station: unsafe extern "C" fn(*mut TownHandle, *mut Station),
@@ -257,7 +255,6 @@ pub struct HouseServices {
     pub cargogen_mode: extern "C" fn() -> u8,
     pub place_houses: extern "C" fn() -> u8,
     pub company_human: extern "C" fn(u8) -> bool,
-    pub init_counts: extern "C" fn(),
     pub errors: HouseErrors,
 }
 
@@ -367,7 +364,8 @@ impl House<'_> {
         }
         if (self.l.house_callbacks)(house) & CBM_DENY != 0 {
             // SAFETY: The entry resolved the live town; no owner borrow spans resolution.
-            let res = unsafe { (self.h.callback)(CB_DENY, 0, 0, house, town.shell, tile, false) };
+            let res =
+                unsafe { super::resolver::callback(CB_DENY, 0, 0, house, town.shell, tile, false) };
             res == CALLBACK_FAILED || !(self.h.convert_boolean)(house, CB_DENY, res)
         } else {
             !(self.h.protected)(tile)
@@ -487,7 +485,7 @@ impl House<'_> {
         let waiting = rec.triggers | (1 << trigger);
         (self.h.set_random_triggers)(tile, waiting);
         // SAFETY: The entry resolved the live town; no owner borrow spans resolution.
-        let reseed = unsafe { (self.h.resolve_reseed)(house, tile, town.shell, waiting) };
+        let reseed = unsafe { super::resolver::reseed(house, tile, town.shell, waiting) };
         (self.h.set_random_triggers)(tile, waiting & !reseed.used);
         let new_random = self.s.random() as u8;
         let mut bits = (u32::from(rec.bits) & !reseed.reseed) as u8;
@@ -559,8 +557,9 @@ impl House<'_> {
         if spec.callbacks & CBM_DESTRUCTION != 0 {
             let house = (self.h.house_type)(tile);
             // SAFETY: Live town; the destruction command follows resolution.
-            let res =
-                unsafe { (self.h.callback)(CB_DESTRUCTION, 0, 0, house, town.shell, tile, false) };
+            let res = unsafe {
+                super::resolver::callback(CB_DESTRUCTION, 0, 0, house, town.shell, tile, false)
+            };
             if res != CALLBACK_FAILED && (self.h.convert_8bit)(house, CB_DESTRUCTION, res) {
                 self.clear_town_house(town, tile, house);
                 return false;
@@ -722,8 +721,9 @@ impl House<'_> {
         if spec.callbacks & CBM_PRODUCE != 0 {
             for i in 0..256 {
                 // SAFETY: Live town; no owner borrow spans the callback.
-                let cb =
-                    unsafe { (self.h.callback)(CB_PRODUCE, i, r, house, town.shell, tile, false) };
+                let cb = unsafe {
+                    super::resolver::callback(CB_PRODUCE, i, r, house, town.shell, tile, false)
+                };
                 if cb == CALLBACK_FAILED || cb == PRODUCE_END {
                     break;
                 }
@@ -912,7 +912,15 @@ impl House<'_> {
                     let town = (self.h.town)(tile);
                     // SAFETY: Live town; no owner borrow spans the callback.
                     let res = unsafe {
-                        (self.h.callback)(CB_AUTOSLOPE, 0, 0, house, town.shell, tile, false)
+                        super::resolver::callback(
+                            CB_AUTOSLOPE,
+                            0,
+                            0,
+                            house,
+                            town.shell,
+                            tile,
+                            false,
+                        )
                     };
                     if res != CALLBACK_FAILED && (self.h.convert_boolean)(house, CB_AUTOSLOPE, res)
                     {
@@ -1061,7 +1069,8 @@ impl House<'_> {
         let prototype = tile == INVALID_TILE;
         if callbacks & CBM_ACCEPT != 0 {
             // SAFETY: The caller supplies a live town, or null for a prototype.
-            let cb = unsafe { (self.h.callback)(CB_ACCEPT, 0, 0, house, town, tile, prototype) };
+            let cb =
+                unsafe { super::resolver::callback(CB_ACCEPT, 0, 0, house, town, tile, prototype) };
             if cb != CALLBACK_FAILED {
                 accepts[0] = (self.h.cargo_translation)(house, (cb & 31) as u8);
                 accepts[1] = (self.h.cargo_translation)(house, ((cb >> 5) & 31) as u8);
@@ -1070,8 +1079,9 @@ impl House<'_> {
         }
         if callbacks & CBM_ACCEPTANCE != 0 {
             // SAFETY: The caller supplies a live town, or null for a prototype.
-            let cb =
-                unsafe { (self.h.callback)(CB_ACCEPTANCE, 0, 0, house, town, tile, prototype) };
+            let cb = unsafe {
+                super::resolver::callback(CB_ACCEPTANCE, 0, 0, house, town, tile, prototype)
+            };
             if cb != CALLBACK_FAILED {
                 self.add_acceptance(ctx, always, accepts[0], u32::from(cb & 15));
                 self.add_acceptance(ctx, always, accepts[1], u32::from((cb >> 4) & 15));
@@ -1101,8 +1111,9 @@ impl House<'_> {
         if spec.callbacks & CBM_PRODUCE != 0 {
             for i in 0..256 {
                 // SAFETY: Live town; no owner borrow spans the callback.
-                let cb =
-                    unsafe { (self.h.callback)(CB_PRODUCE, i, 0, house, town.shell, tile, false) };
+                let cb = unsafe {
+                    super::resolver::callback(CB_PRODUCE, i, 0, house, town.shell, tile, false)
+                };
                 if cb == CALLBACK_FAILED || cb == PRODUCE_END {
                     break;
                 }
@@ -1186,7 +1197,15 @@ impl House<'_> {
     }
     /// `RebuildTownCaches`: canonical counts, population and houses in map order.
     fn rebuild_caches(&self) {
-        (self.h.init_counts)();
+        // SAFETY: Rebuild entry is serialized; no native count view survives reset.
+        unsafe {
+            super::resolver::openttd_rust_house_counts_init(
+                self.l,
+                self.s,
+                std::ptr::null_mut(),
+                (self.l.house_count)() as usize,
+            )
+        };
         (self.s.rebuild_town_tree)();
         // SAFETY: Immediate owner writes; no service runs while accessed.
         self.towns(|state| unsafe {
@@ -1511,11 +1530,9 @@ crate::abi::layouts! {
         set_type,
 
         delete_inspect,
-        callback,
         cargo_translation,
         convert_boolean,
         convert_8bit,
-        resolve_reseed,
 
         next_near_station,
         erase_near_station,
@@ -1530,7 +1547,6 @@ crate::abi::layouts! {
         cargogen_mode,
         place_houses,
         company_human,
-        init_counts,
         errors,
     };
 }

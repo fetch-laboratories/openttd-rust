@@ -94,6 +94,13 @@ static void HouseResolverScenario(const std::vector<std::pair<TileIndex, HouseID
 	/* Preserve signed ratings, high-byte aliases, transported percentages,
 	 * native history periods and null/unavailable parent behavior. */
 	const auto old_rating = town->ratings[0]; town->ratings[0] = -1234;
+	for (CargoLabel label : {CT_PASSENGERS, CT_MAIL}) {
+		CargoType type = GetCargoTypeByLabel(label); if (!IsValidCargoType(type)) continue;
+		auto &supply = town->GetOrCreateCargoSupplied(type);
+		supply.history[THIS_MONTH].production = 100000; supply.history[THIS_MONTH].transported = 45678;
+		supply.history[LAST_MONTH].production = 456; supply.history[LAST_MONTH].transported = 123;
+	}
+
 	for (uint8_t var : {0x40, 0x41, 0x80, 0x81, 0x82, 0x83, 0x8A, 0x92, 0x93, 0x94, 0x95, 0x9C, 0x9D, 0x9E, 0x9F, 0xAE, 0xB2, 0xB6, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF, 0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF, 0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xFF}) {
 		run("parent", CBID_HOUSE_ALLOW_CONSTRUCTION, var, 0, true, tile, 0, VSG_SCOPE_PARENT);
 	}

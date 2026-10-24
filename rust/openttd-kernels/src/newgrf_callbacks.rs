@@ -31,6 +31,9 @@ pub const CBID_AIRPTILE_ANIMATION_SPEED: CallbackID = CallbackID(0x154);
 pub const CBID_OBJECT_ANIMATION_NEXT_FRAME: CallbackID = CallbackID(0x158);
 pub const CBID_OBJECT_ANIMATION_SPEED: CallbackID = CallbackID(0x15A);
 
+pub const CBID_HOUSE_ALLOW_CONSTRUCTION: CallbackID = CallbackID(0x17);
+pub const CBID_HOUSE_DRAW_FOUNDATIONS: CallbackID = CallbackID(0x14E);
+
 /// `CALLBACK_FAILED`.
 pub const CALLBACK_FAILED: u16 = 0xFFFF;
 

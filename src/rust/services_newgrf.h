@@ -14,6 +14,7 @@
 #include "../newgrf_debug.h"
 #include "../newgrf_house.h"
 #include "../house.h"
+#include "../town_map.h"
 #include "../newgrf_spritegroup.h"
 #include "../industrytype.h"
 #include "../newgrf_badge.h"

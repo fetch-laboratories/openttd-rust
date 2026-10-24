@@ -59,11 +59,15 @@ struct HouseResolverObject : public SpecializedResolverObject<HouseRandomTrigger
 
 	ScopeResolver *GetScope(VarSpriteGroupScope scope = VSG_SCOPE_SELF, uint8_t relative = 0) override
 	{
+#ifdef WITH_RUST
+		return openttd_rust_house_scope(this, &this->house_scope, &this->town_scope, scope, relative);
+#else
 		switch (scope) {
 			case VSG_SCOPE_SELF:   return &this->house_scope;
 			case VSG_SCOPE_PARENT: return &this->town_scope;
 			default: return ResolverObject::GetScope(scope, relative);
 		}
+#endif
 	}
 
 	GrfSpecFeature GetFeature() const override;

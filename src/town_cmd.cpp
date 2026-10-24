@@ -1085,12 +1085,6 @@ static bool RustTown_build_tunnel(uint32_t tile, uint32_t road_type, uint32_t ex
 	return Command<CMD_BUILD_TUNNEL>::Do(flags, TileIndex{tile}, TRANSPORT_ROAD, static_cast<RoadType>(road_type)).Succeeded();
 }
 static void RustTown_assert_clear_house([[maybe_unused]] bool success) noexcept { assert(success); }
-static bool RustTown_allow_construction(uint32_t town, uint32_t tile, uint32_t house, uint32_t random) noexcept
-{
-	const auto *hs = HouseSpec::Get(house);
-	uint16_t cb = OpenTTDHouseCallback(CBID_HOUSE_ALLOW_CONSTRUCTION, 0, 0, house, Town::Get(TownID(town)), TileIndex{tile}, true, random);
-	return cb == CALLBACK_FAILED || OpenTTDConvert8bitBooleanCallback(hs->grf_prop.grffile, CBID_HOUSE_ALLOW_CONSTRUCTION, cb);
-}
 static void RustTownStations(uint32_t tile, uint32_t radius, void *context, void (*visit)(void *, const OpenTTDStation *, uint32_t)) noexcept
 {
 	struct Context { void *context; void (*visit)(void *, const OpenTTDStation *, uint32_t); } state{context, visit};
@@ -1217,13 +1211,9 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.set_type = [](uint32_t tile, uint16_t house) noexcept { SetHouseType(TileIndex{tile}, house); },
 
 		.delete_inspect = OpenTTDDeleteHouseInspect,
-		.callback = [](uint16_t callback, uint32_t param1, uint32_t param2, uint16_t house, Town *town, uint32_t tile, bool not_yet_constructed) noexcept -> uint16_t {
-			return OpenTTDHouseCallback(static_cast<CallbackID>(callback), param1, param2, house, town, TileIndex{tile}, not_yet_constructed);
-		},
 		.cargo_translation = [](uint16_t house, uint8_t cargo) noexcept -> uint8_t { return OpenTTDCargoTranslation(cargo, RustHouseGrf(house)); },
 		.convert_boolean = [](uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvertBooleanCallback(RustHouseGrf(house), callback, result); },
 		.convert_8bit = [](uint16_t house, uint16_t callback, uint16_t result) noexcept { return OpenTTDConvert8bitBooleanCallback(RustHouseGrf(house), callback, result); },
-		.resolve_reseed = OpenTTDHouseResolveReseed,
 
 		.next_near_station = [](Town *t, Station *previous) noexcept -> Station * {
 			auto next = previous == nullptr ? t->stations_near.begin() : t->stations_near.upper_bound(previous);
@@ -1247,7 +1237,6 @@ static const OpenTTDHouseServices &GetRustHouseServices() noexcept
 		.cargogen_mode = OpenTTDTownCargoGenMode,
 		.place_houses = OpenTTDPlaceHouses,
 		.company_human = OpenTTDCompanyIsValidHuman,
-		.init_counts = []() noexcept { InitializeBuildingCounts(); },
 		.errors = {STR_ERROR_BUILDING_MUST_BE_DEMOLISHED, STR_ERROR_BUILDING_IS_PROTECTED, STR_ERROR_LOCAL_AUTHORITY_REFUSES_TO_ALLOW_THIS,
 			STR_ERROR_LAND_SLOPED_IN_WRONG_DIRECTION, STR_ERROR_MUST_DEMOLISH_BRIDGE_FIRST, STR_ERROR_FLAT_LAND_REQUIRED, STR_ERROR_MUST_FOUND_TOWN_FIRST},
 	};
@@ -1297,7 +1286,6 @@ const OpenTTDTownLeaves &GetRustTownServices() noexcept
 		.build_bridge = RustTown_build_bridge,
 		.build_tunnel = RustTown_build_tunnel,
 		.assert_clear_house = RustTown_assert_clear_house,
-		.allow_construction = RustTown_allow_construction,
 		.houses = &GetRustHouseServices(),
 	};
 	return services;
@@ -2473,7 +2461,6 @@ const OpenTTDTownFoundingServices &GetRustTownFoundingServices() noexcept
 		.larger_towns = OpenTTDLargerTowns,
 		.parameters = [](OpenTTDTownFoundingFrame *frame) noexcept -> const TownNameParams * { return &frame->parameters.emplace(OpenTTDTownNameStyle()); },
 		.metadata = [](const TownNameParams *params) noexcept -> OpenTTDTownNameMetadata { return {.grfid = params->grfid, .type = params->type}; },
-		.initialize_counts = [](Town *town) noexcept { InitializeBuildingCounts(town); },
 		.insert_town = [](Town *town) noexcept { town->show_zone = false; _town_kdtree.Insert(town->index); },
 		.cargo_effect_exists = [](TownAcceptanceEffect effect) noexcept { return FindFirstCargoWithTownAcceptanceEffect(effect) != nullptr; },
 		.prepare_rename = [](Town *town) noexcept { town->cached_name.clear(); },

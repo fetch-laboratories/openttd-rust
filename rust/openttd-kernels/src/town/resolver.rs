@@ -8,11 +8,12 @@ use crate::history_type::{LAST_MONTH, THIS_MONTH};
 use crate::newgrf_storage;
 use crate::services::{Map, Services, TownHandle};
 use crate::tile_type::{INVALID_TILE, MP_HOUSE};
-use std::ffi::c_void;
+use std::{cell::UnsafeCell, ffi::c_void};
 
 const NEW_HOUSE_OFFSET: u16 = 110;
 const INVALID_HOUSE_ID: u16 = 0xFFFF;
-const TOWN_GROWTH_TICKS: u16 = 70;
+use crate::newgrf_callbacks::{CBID_HOUSE_ALLOW_CONSTRUCTION, CBID_HOUSE_DRAW_FOUNDATIONS};
+use crate::timer_game_tick::TOWN_GROWTH_TICKS;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct TownScope {
@@ -73,6 +74,13 @@ pub struct ResolverServices {
     badges: extern "C" fn(*const c_void, u16, u32) -> u32,
     stations:
         extern "C" fn(u32, *mut c_void, extern "C" fn(*mut c_void, *const crate::station::Station)),
+    town_by_id: extern "C" fn(u32) -> *mut TownHandle,
+    root: extern "C" fn(u16, bool) -> *const c_void,
+    spec_house: extern "C" fn(*const c_void) -> u16,
+    local_id: extern "C" fn(u16) -> u16,
+    base_scope: extern "C" fn(*mut c_void, u8, u8) -> *mut c_void,
+    evaluate: extern "C" fn(*const CallbackArgs, *mut i32, usize) -> u16,
+    reseed: extern "C" fn(u16, u32, *mut TownHandle, u8) -> house::HouseReseed,
     unhandled_house: extern "C" fn(u8),
     unhandled_town: extern "C" fn(u8),
 }
@@ -159,20 +167,14 @@ unsafe fn num_houses(owner: *const State, house: u16, class: u16) -> u32 {
 }
 /// `TownHistoryHelper`: lookup is performed after the shared label translation.
 unsafe fn history(owner: *const State, cargo: u8, period: u8, transported: bool) -> u32 {
-    unsafe {
-        let index = super::openttd_rust_town_supplied_find(owner, cargo);
-        let rows = &(*owner).supplied;
-        if index == rows.len() {
-            return 0;
-        }
-        let h = rows[index].history[usize::from(period)];
+    unsafe { super::supplied_history(owner, cargo, period) }.map_or(0, |h| {
         (if transported {
             h.transported
         } else {
             h.production
         })
         .min(u32::from(u16::MAX))
-    }
+    })
 }
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_town_variable(
@@ -228,16 +230,7 @@ pub unsafe extern "C" fn openttd_rust_town_variable(
         } else {
             CT_MAIL
         });
-        let h = unsafe {
-            (*scope.owner)
-                .supplied
-                .iter()
-                .find(|s| s.cargo == cargo)
-                .map(|s| s.history[usize::from(LAST_MONTH)])
-        };
-        return h.map_or(0, |h| {
-            u32::from(unsafe { super::openttd_rust_town_percent_transported(&raw const h) })
-        });
+        return u32::from(unsafe { super::percent_transported(scope.owner, cargo) });
     }
     let value = unsafe {
         let state = &*scope.owner;
@@ -543,8 +536,7 @@ unsafe fn acceptance_history(
     let register = (s.get_register)(ro, 0x100) as u32;
     let offset = map.diff(i32::from(register as i8), i32::from((register >> 8) as i8));
     let shared = unsafe { &*s.shared };
-    let count = map.size_x() * ((shared.map_max_y)() + 1);
-    let tile = scope.tile.wrapping_add(offset) & (count - 1);
+    let tile = map.wrap_to_map(scope.tile.wrapping_add(offset), (shared.map_max_y)() + 1);
     struct Context {
         leaves: *const Leaves,
         cargo: u8,
@@ -587,6 +579,184 @@ crate::abi::layouts! {
         towns, shared, storage, larger_towns, cargo_by_label, get_register, file, version,
         cargo_translation, nearby, nearby_info, terrain, stage, age, random_bits,
         random_triggers, animation, search_spec, nearby_spec, house_id, house_grfid,
-        badges, stations, unhandled_house, unhandled_town,
+        badges, stations, town_by_id, root, spec_house, local_id, base_scope, evaluate, reseed, unhandled_house, unhandled_town,
     };
+}
+
+/// Immutable process-lifetime native leaves, installed on house-class reset
+/// before any callback. The native table contains no mutable world-state mirror.
+struct Registry(UnsafeCell<*const ResolverServices>);
+// SAFETY: Installation and all reads hold the native game-state mutex.
+unsafe impl Sync for Registry {}
+static REGISTRY: Registry = Registry(UnsafeCell::new(std::ptr::null()));
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_house_resolver_install(s: *const ResolverServices) {
+    unsafe { *REGISTRY.0.get() = s };
+}
+fn services<'a>() -> &'a ResolverServices {
+    // SAFETY: ResetHouses installs before use. Table is immutable and process-live.
+    unsafe { &**REGISTRY.0.get() }
+}
+#[repr(C)]
+pub struct CallbackArgs {
+    town: *mut TownHandle,
+    watched: u64,
+    param1: u32,
+    param2: u32,
+    tile: u32,
+    view: i32,
+    house: u16,
+    callback: u16,
+    initial_random: u8,
+    prospective: bool,
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_house_callback(
+    args: *const CallbackArgs,
+    registers: *mut i32,
+    count: usize,
+) -> u16 {
+    // Native leaf constructs only the stack virtual facade and enters common
+    // Action2. No Rust owner/context reference spans its evaluation or reentry.
+    (services().evaluate)(args, registers, count)
+}
+/// Direct owner entry for lifecycle, production, acceptance and animation.
+pub(super) unsafe fn callback(
+    callback: u16,
+    param1: u32,
+    param2: u32,
+    house: u16,
+    town: *mut TownHandle,
+    tile: u32,
+    prospective: bool,
+) -> u16 {
+    let args = CallbackArgs {
+        town,
+        watched: 0,
+        param1,
+        param2,
+        tile,
+        view: 0,
+        house,
+        callback,
+        initial_random: 0,
+        prospective,
+    };
+    unsafe { openttd_rust_house_callback(&raw const args, std::ptr::null_mut(), 0) }
+}
+pub(super) unsafe fn reseed(
+    house: u16,
+    tile: u32,
+    town: *mut TownHandle,
+    waiting: u8,
+) -> house::HouseReseed {
+    (services().reseed)(house, tile, town, waiting)
+}
+pub(super) unsafe fn allow_construction(
+    l: &Leaves,
+    town: u16,
+    tile: u32,
+    house: u16,
+    initial_random: u8,
+) -> bool {
+    let town = (services().town_by_id)(u32::from(town));
+    let args = CallbackArgs {
+        town,
+        watched: 0,
+        param1: 0,
+        param2: 0,
+        tile,
+        view: 0,
+        house,
+        callback: CBID_HOUSE_ALLOW_CONSTRUCTION.0,
+        initial_random,
+        prospective: true,
+    };
+    let result = unsafe { openttd_rust_house_callback(&raw const args, std::ptr::null_mut(), 0) };
+    result == crate::newgrf_callbacks::CALLBACK_FAILED
+        || (unsafe { &*l.houses }.convert_8bit)(house, CBID_HOUSE_ALLOW_CONSTRUCTION.0, result)
+}
+pub(crate) unsafe fn foundation(tile: u32, house: u16) -> u16 {
+    let l = unsafe { &*services().towns };
+    let town = (unsafe { &*l.houses }.town_shell)(u32::from(
+        (unsafe { &*services().shared }.town_index)(tile)
+    ));
+    unsafe {
+        callback(
+            CBID_HOUSE_DRAW_FOUNDATIONS.0,
+            0,
+            0,
+            house,
+            town,
+            tile,
+            false,
+        )
+    }
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_house_root(scope: *const HouseScope) -> *const c_void {
+    let scope = unsafe { *scope };
+    (services().root)(scope.house, !scope.prospective)
+}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_house_debug_id(scope: *const HouseScope) -> u32 {
+    let house = unsafe { (*scope).house };
+    u32::from((services().local_id)(house))
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_house_scope(
+    ro: *mut c_void,
+    house: *mut c_void,
+    town: *mut c_void,
+    scope: u8,
+    relative: u8,
+) -> *mut c_void {
+    match scope {
+        0 => house,
+        1 => town,
+        _ => (services().base_scope)(ro, scope, relative),
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn openttd_rust_town_scope(
+    ro: *mut c_void,
+    town: *mut c_void,
+    scope: u8,
+    relative: u8,
+) -> *mut c_void {
+    if scope == 0 {
+        town
+    } else {
+        (services().base_scope)(ro, scope, relative)
+    }
+}
+crate::abi::layouts! {
+    fn abi_args;
+    "OpenTTDHouseCallbackArgs" ["town"] => CallbackArgs { town, watched, param1, param2, tile, view, house, callback, initial_random, prospective };
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn openttd_rust_house_animation_callback(
+    callback: u16,
+    param1: u32,
+    param2: u32,
+    spec: *const c_void,
+    town: *mut TownHandle,
+    tile: u32,
+    watched: u64,
+) -> u16 {
+    let house = (services().spec_house)(spec);
+    let args = CallbackArgs {
+        town,
+        watched,
+        param1,
+        param2,
+        tile,
+        view: 0,
+        house,
+        callback,
+        initial_random: 0,
+        prospective: false,
+    };
+    unsafe { openttd_rust_house_callback(&raw const args, std::ptr::null_mut(), 0) }
 }
