@@ -7,10 +7,11 @@ import tarfile
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import ci_native
-from simulation import runtime
+from simulation import core, industries, runtime
 
 
 class ShardTests(unittest.TestCase):
@@ -107,6 +108,50 @@ class ShardTests(unittest.TestCase):
 
 
 class FrozenRuntimeTests(unittest.TestCase):
+    def test_frozen_industry_console_needs_no_native_build_tree(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            bundle, output = root / "bundle", root / "output"
+            output.mkdir()
+            builds = {}
+            for role in ("reference", "candidate"):
+                build = bundle / f"{role}-runtime"
+                build.mkdir(parents=True)
+                (build / ("openttd" if role == "reference" else "openttd-rust")).touch()
+                for module in core.scenario_modules():
+                    if hasattr(module, "adapter"):
+                        (build / module.__name__.rsplit(".", 1)[1]).mkdir()
+                (build / "industries/openttd-industries").write_bytes(role.encode())
+                builds[role] = output / build.name
+            args = SimpleNamespace(
+                frozen_runtimes=bundle,
+                self=False,
+                candidate=None,
+                jobs=1,
+                limit=20,
+                timeout=10,
+                benchmark=None,
+                instructions=False,
+            )
+            scenario = next(
+                s for s in industries.scenarios(False) if s["industry"] == "resolver"
+            )
+            with (
+                patch.object(ci_native.migration, "git", return_value="head"),
+                patch.object(ci_native.migration, "environment", return_value={}),
+                patch.object(ci_native.migration, "REFERENCE_BUILD", root / "absent"),
+            ):
+                core.run_simulation(args, [], ci_native.migration, output, None, "test")
+                binaries = {
+                    role: build / ("openttd" if role == "reference" else "openttd-rust")
+                    for role, build in builds.items()
+                }
+                prepared = industries.prepare(
+                    scenario, binaries, builds, output, 10, {}, {}
+                )
+            for role, executable in prepared["executables"].items():
+                self.assertEqual(executable.read_bytes(), role.encode())
+
     def test_native_metadata_relocates_without_touching_binary_bytes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
