@@ -39,7 +39,8 @@ struct OpenTTDShipYapfLeaves {
 };
 /* Search owns its arena, hashes, heap and copied world observations; the ship context is opaque
  * and live for the call. Region calls may enter the distinct water-cache owner. The path owner
- * belongs to its Ship facade, and save errors occur outside Rust frames. */
+ * belongs to its Ship facade, and save errors occur outside Rust frames.
+ * Leaves cannot reenter the search or path owner; no reference to its Vec escapes. */
 OpenTTDShipPath *openttd_rust_ship_path_new();
 OpenTTDShipPath *openttd_rust_ship_path_clone(const OpenTTDShipPath *);
 void openttd_rust_ship_path_destroy(OpenTTDShipPath *);

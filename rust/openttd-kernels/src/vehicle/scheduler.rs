@@ -237,7 +237,8 @@ macro_rules! post_svc {
 /// Tick survived. Shells are separately allocated, so pool growth cannot move their members;
 /// cargo packet lookup and `NewGRF` sound resolution may reenter but cannot destroy these
 /// shells, reset the pool or yield the mutex. Never retain a descriptor across Tick,
-/// traversal, loading, day or fleet work. `cargo` is the bundle the surviving Tick filled.
+/// traversal, loading, day or fleet work. `cargo` is the bundle the surviving Tick filled; only
+/// addresses span callbacks, and field loads and stores end first so subsequent values are fresh.
 unsafe fn post_tick<const COUNTED: bool>(
     schedule: &PostTickServices,
     vehicle: VehicleRef,

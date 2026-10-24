@@ -177,7 +177,9 @@ but never reset, load, report progress or run a script VM, and none changes map
 dimensions, climate, tree placement, the tick counter, editor mode or the
 road-rebuild and ambient settings; `_misc_grf_features` changes only on reset and
 GRF `ActionD` loading. So a batch reads those settings once and keeps only
-descriptor metadata across dispatch, ending each field-sized read first.
+descriptor metadata across dispatch, ending each field-sized read first. Ambient
+callbacks keep their original RNG position, and the tree adapter rereads the
+feature bit after the call.
 Threaded and arbitrary NewGRF corpus limits are open in #156.
 
 Extending the view requires default mutation/reallocation checks and semantic

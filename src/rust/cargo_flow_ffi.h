@@ -42,7 +42,9 @@ typedef struct OpenTTDCargoFlowServices {
  * maps are private to their worker until join, and rerouting cannot delete graph shells.
  * Read selectors: 0 graph valid, 3 live station valid, 4 edge count, 5 edge flow, 6 destination node,
  * 8 manual distribution, 9 live data empty, 10 live graph ID, 11 live node ID, 12 job graph ID.
- * finish clears data when requested, then invalidates the station window, after the thread join. */
+ * finish clears data when requested, then invalidates the station window, after the thread join.
+ * Calls are serial; clone and insertion copy into independent owners, destroyed once. Graph owners
+ * stay live under the game-state mutex during application, and callbacks retain no owner references. */
 OpenTTDCargoFlow *openttd_rust_flow_new(uint16_t, uint32_t, uint8_t);
 OpenTTDCargoFlow *openttd_rust_flow_clone(const OpenTTDCargoFlow *);
 void openttd_rust_flow_destroy(OpenTTDCargoFlow *);

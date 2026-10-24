@@ -42,7 +42,10 @@ struct OpenTTDCargoPayment {
 /* Leaves cannot reenter payment or delivery owners or destroy the supplied world objects. Entry frames
  * own unbound nearby-industry cursors that begin binds per scan; delivery finishes its scan before
  * subsidy checks reuse it. Money add, sub, neg and multiply saturate. Each shell owns one payment;
- * the delivery owner lives for the process. Destroy accepts a null table only when cleaning. */
+ * the delivery owner lives for the process. Destroy accepts a null table only when cleaning.
+ * Owner, table and outputs are live, nonnull and exclusive; all table entries have the declared ABI.
+ * Resolvers cannot run script VMs or mutate payment/destination storage; callbacks retain no pointers,
+ * and unresolved front handles are not dereferenced before load fixup. */
 /* Leaf selectors. Station read: 0 owner, 1 always-accepted(cargo). Industry read: 1 accepted-slot(cargo)
  * or UINT32_MAX, 2 supplier, 3 accepted-waiting, 4 production callback bits (arrival=1, periodic=2),
  * 5/6 input/output counts, 7/8 input/output cargo, 9 output-waiting, 10 multiplier(input<<16|output).

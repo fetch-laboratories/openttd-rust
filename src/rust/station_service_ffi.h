@@ -32,7 +32,10 @@ struct OpenTTDStationFields {
  * destroyed after its derived shell and cargo storage; facade references, saving and legacy loading
  * alias its scalars. Cargo status is a native EnumBitSet<uint8_t> that Rust reads only as bytes.
  * Queue nodes keep std::list identity and erase semantics; the save facade loads into a call-local
- * std::list. Cargo Stage/Unload can reenter payment, delivery and industry owners. */
+ * std::list. Cargo Stage/Unload can reenter payment, delivery and industry owners.
+ * Queue reads require live entries and erase requires an entry from that owner; with_* callbacks
+ * run once while native iterator frames live. GRF/engine handles keep their registry lifetime,
+ * and native scalar aliases cannot overlap Rust references during world callbacks. */
 struct OpenTTDRatingCounts {
 	uint32_t available;
 	uint32_t destinations;

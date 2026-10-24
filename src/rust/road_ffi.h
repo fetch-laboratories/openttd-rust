@@ -246,7 +246,8 @@ uint8_t OPENTTD_VEHICLE_CALL openttd_rust_road_trackdir(OpenTTDVehicle *, OpenTT
  * PreDestructor, also during pool cleanup. Scalars 0..6: state:u8, frame:u8, blocked:u16,
  * overtaking:u8, overtaking-counter:u8, crashed:u16, reverse:u8; set narrows to source widths.
  * Save/load stages fields and path outside Rust frames and commits partial loads on unwind.
- * Path access has std::vector's index preconditions; replacement copies in forward order. */
+ * Path access has std::vector's index/nonempty preconditions; replacement copies in forward order,
+ * with a null input allowed for zero count. */
 OpenTTDRoadState *OPENTTD_VEHICLE_CALL openttd_rust_road_new();
 void OPENTTD_VEHICLE_CALL openttd_rust_road_destroy(OpenTTDRoadState *);
 uint16_t OPENTTD_VEHICLE_CALL openttd_rust_road_get(const OpenTTDRoadState *, uint8_t);

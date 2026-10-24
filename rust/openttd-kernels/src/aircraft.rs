@@ -1071,7 +1071,7 @@ impl<const COUNTED: bool> World<'_, COUNTED> {
         // Acquired after the event's orders and loading, never in the deleting crashed_tick.
         // The movement callbacks keep this shell and chain (pool growth does not move shells;
         // MaybeCrash destroys only on a later crashed_tick). The descriptor ends before
-        // airport_next's state-handler and depot work.
+        // airport_next's state-handler and depot work; callbacks cannot load, reset or yield.
         let observed = self.movement_observations(id);
         let s = self.target_station(id);
         let valid = !s.is_null();

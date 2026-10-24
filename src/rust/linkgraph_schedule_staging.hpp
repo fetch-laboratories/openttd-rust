@@ -7,7 +7,9 @@
 /* DoSave calls SlSaveChunks before it starts the asynchronous compression writer, and workers never
  * touch these queues. Discard exported spans before SlObject, which may recurse through
  * SlError/SlNullPointers. Nested fixup uses active itself and publishes nulls before returning, so
- * the outer destructor publishes the same cleaned vectors; partial decoded state commits on unwind. */
+ * the outer destructor publishes the same cleaned vectors; partial decoded state commits on unwind.
+ * VideoDriver::game_state_mutex serializes access; export and both copies cannot call back, yield
+ * or reset pools, so their borrowed spans remain valid until the copies finish. */
 struct ScheduleStaging {
 	inline static ScheduleStaging *active = nullptr;
 	std::vector<LinkGraph *> schedule;

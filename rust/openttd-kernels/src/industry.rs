@@ -8,7 +8,7 @@
 //! Industry cargo, history, production and builder control. The C++ shell owns one boxed
 //! owner; construction, destruction, cargo distribution and `NewGRF` resolution may revisit
 //! it, so no reference survives a world service. Slot growth invalidates views exactly as the
-//! original vector does.
+//! original vector does; history allocations stay stable until their slot is removed.
 // Original fixed-width conversion and variable names are retained for audit.
 #![allow(
     unsafe_code,

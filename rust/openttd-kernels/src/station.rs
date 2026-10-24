@@ -6,7 +6,8 @@
  */
 
 //! Opaque native station handles. Native code performs inheritance conversions, preserving
-//! the C++ pointer adjustment; Rust never dereferences a handle.
+//! the C++ pointer adjustment; Rust never dereferences a handle. Handles stay live until their
+//! owner is retired.
 
 /// A native `Station`, distinct from the shared station/waypoint pool base.
 #[repr(C)]

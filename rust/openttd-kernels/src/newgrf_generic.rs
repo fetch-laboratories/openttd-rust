@@ -1,6 +1,7 @@
 /* This file is part of OpenTTD and is licensed under the GNU General Public License version 2. */
 //! Generic callback registry and invocation policy. Only registration allocates; each
-//! candidate copies one pointer pair before Action2, and invocations are stack values.
+//! candidate copies one pointer pair before Action2, and invocations are stack values. Load
+//! and reset cannot run during resolution, so files and graphs stay live.
 #![allow(unsafe_code, missing_docs, clippy::cast_possible_truncation)]
 use crate::industry_type::IT_INVALID;
 use crate::newgrf::{GSF_END, GSF_SOUNDFX};

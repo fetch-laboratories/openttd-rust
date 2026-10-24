@@ -7,7 +7,8 @@
 
 //! Process-wide animated-tile queue, dispatch and animation-trigger traversal. Scheduled
 //! animation callbacks change only frames, sounds and deferred deletion; they cannot add or
-//! erase queue entries.
+//! erase queue entries. Specs and pool shells stay live across resolver calls, which cannot
+//! reset specs or the map, yield, or destroy the animated shell.
 #![allow(unsafe_code, missing_docs, clippy::cast_possible_truncation)]
 use crate::animated_tile_map::AnimatedTileState;
 use crate::cargo_type::{INVALID_CARGO, NUM_CARGO};

@@ -68,7 +68,8 @@ struct OpenTTDRailLeaves {
  * banks flush lazily. Searches keep private arenas and queues and call the PBS owner directly.
  * step returns action=1 before the platform and waypoint triggers, in their original order (a
  * waypoint keeps its second trigger), and the next step resumes. Destroy once, also when an
- * ordinary station callback unwinds. */
+ * ordinary station callback unwinds. Calls are serialized; map replacement is excluded during
+ * traversal, and owner borrows end before platform and waypoint triggers. */
 OpenTTDRailYapf *openttd_rust_rail_new(const OpenTTDRailInput *, const OpenTTDRailLeaves *);
 OpenTTDRailStep openttd_rust_rail_step(OpenTTDRailYapf *);
 void openttd_rust_rail_destroy(OpenTTDRailYapf *);

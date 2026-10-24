@@ -471,7 +471,8 @@ pub unsafe extern "C" fn openttd_rust_effect_get(owner: *const State, field: u8)
 /// # Safety
 /// Owner is live and exclusive for this invocation and context is its live C++ shell; tables
 /// stay live and immutable until return. Leaves may allocate but cannot destroy the owner.
-/// False requests deletion after return. Save/load uses the get/set exports instead.
+/// False requests deletion after return. Save/load uses the get/set exports instead. The
+/// alignment, disjointness, callback and source-index requirements are in `effect_ffi.h`.
 #[allow(unsafe_code)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_effect_run(

@@ -34,7 +34,9 @@ typedef struct {
  * destruction. Keep the shared service and occupancy tables live and immutable through run
  * destruction, including suspended actions. Only delete (2), RoadVehicle::Crash (14) and
  * CMD_LANDSCAPE_CLEAR (17) return actions, for lifetime, NewGRF and nested release hooks; C++
- * completes them and owns continuation cleanup on exceptions. */
+ * completes them and owns continuation cleanup on exceptions.
+ * Read/write leaves cannot reenter; occupancy pointees stay live and immutable through suspension
+ * and nested World clones. Shared flight helpers access flags only within their call. */
 OpenTTDDisasterState *OPENTTD_DISASTER_CALL openttd_rust_disaster_state_create(uint32_t);
 void OPENTTD_DISASTER_CALL openttd_rust_disaster_state_destroy(OpenTTDDisasterState *);
 uint16_t *OPENTTD_DISASTER_CALL openttd_rust_disaster_delay(void);

@@ -39,7 +39,9 @@ struct OpenTTDCargoListFields {
  * in source order after them. Save/load writes packet fields in place; import never dereferences
  * unresolved IDs. Next-hop buffers borrow the caller's StationID span for one call. Flow mode:
  * 0 normal/restricted, 1 forced transfer (excludes current and next reverse), 2 reroute (excludes
- * avoid/avoid2); selector 3 asks for the first flow origin, selector 4 whether any flows exist. */
+ * avoid/avoid2); selector 3 asks for the first flow origin, selector 4 whether any flows exist.
+ * Handles are live and serially accessed, create/destroy match once, and callbacks retain no arguments;
+ * next-hop storage stays live and stable for the call, with snapshot output confined to local exports. */
 struct OpenTTDCargoStorageServices {
 	uint8_t (*can_allocate)() noexcept OPENTTD_SERVICE_DEFAULT(can_allocate);
 	void *(*create)(const OpenTTDCargoPacketFields *) noexcept OPENTTD_SERVICE_DEFAULT(create);
