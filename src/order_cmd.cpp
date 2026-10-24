@@ -47,6 +47,7 @@ static_assert(sizeof(DestinationID) >= sizeof(StationID));
 #include "rust/services_map.h"
 #include "rust/vehicle_services.h"
 #include "rust/services_station.h"
+#include "rust/engine_services.h"
 static_assert(sizeof(Order) == sizeof(OpenTTDOrderFields) && alignof(Order) == alignof(OpenTTDOrderFields));
 static_assert(std::is_trivially_copyable_v<Order> && std::is_trivially_destructible_v<Order>);
 static_assert(sizeof(VehicleFlags) == sizeof(uint16_t) && alignof(VehicleFlags) == alignof(uint16_t));
