@@ -265,26 +265,26 @@ impl AirportAccess {
             blocks: Cell::new(None),
         }
     }
-    fn pointer(&self, world: &World<'_>) -> *mut u64 {
+    fn pointer<const COUNTED: bool>(&self, world: &World<'_, COUNTED>) -> *mut u64 {
         self.blocks.get().unwrap_or_else(|| {
             let pointer = world.airport_blocks(self.station);
             self.blocks.set(Some(pointer));
             pointer
         })
     }
-    fn read(&self, world: &World<'_>) -> u64 {
+    fn read<const COUNTED: bool>(&self, world: &World<'_, COUNTED>) -> u64 {
         // SAFETY: One field-sized access to the live canonical mask, ending
         // before any native callback. Reentry observes/mutates the same scalar.
         unsafe { self.pointer(world).read() }
     }
-    fn reserve(&self, world: &World<'_>, bits: u64) {
+    fn reserve<const COUNTED: bool>(&self, world: &World<'_, COUNTED>, bits: u64) {
         let pointer = self.pointer(world);
         // SAFETY: Serial game-state interval; no Rust world reference is formed.
         unsafe {
             pointer.write(pointer.read() | bits);
         }
     }
-    fn release(&self, world: &World<'_>, bits: u64) {
+    fn release<const COUNTED: bool>(&self, world: &World<'_, COUNTED>, bits: u64) {
         let pointer = self.pointer(world);
         // SAFETY: Same short canonical scalar access as reserve.
         unsafe {
@@ -292,14 +292,13 @@ impl AirportAccess {
         }
     }
 }
-struct World<'a> {
+struct World<'a, const COUNTED: bool> {
     leaves: &'a Leaves,
     vs: &'a VehicleServices,
     ss: &'a Services,
     movement: crate::movement::CachedTable<'a>,
     map: Cell<Option<Map>>,
     map_bounds: Cell<Option<(u32, u32)>>,
-    counted: bool,
 }
 const SAMPLE_COUNT: i64 = 73;
 const HELICOPTER_SOUND: i64 = 22;
@@ -374,14 +373,14 @@ macro_rules! direct_services {
         }
     )*};
 }
-impl World<'_> {
+impl<const COUNTED: bool> World<'_, COUNTED> {
     /// Count the actual boundary return type before integer promotion. The only
     /// production enable call is `WitnessWriter`'s process-start constructor;
     /// callbacks cannot change it during this synchronous World invocation.
     #[inline]
     fn service_witness(&self, name: &str, bytes: usize) {
         use crate::witness;
-        if !self.counted {
+        if !COUNTED {
             return;
         }
         witness::hit(witness::AIRCRAFT_SERVICES);
@@ -404,7 +403,6 @@ impl World<'_> {
             movement: crate::movement::CachedTable::new(unsafe { &*leaves.shared }),
             map: Cell::new(None),
             map_bounds: Cell::new(None),
-            counted: crate::witness::enabled(),
         }
     }
     // Dimensions are runtime observations captured once when this entry first
@@ -2169,6 +2167,21 @@ pub unsafe extern "C" fn openttd_rust_airport_blocks_destroy(blocks: *mut u64) {
         drop(Box::from_raw(blocks));
     }
 }
+// Witness enablement is fixed by the process-start writer. Select once per
+// synchronous entry; both variants use the same World and service bodies.
+macro_rules! with_world {
+    ($leaves:expr, |$world:ident| $body:block) => {{
+        if crate::witness::enabled() {
+            // SAFETY: The entry supplies live immutable tables for this call.
+            let $world = unsafe { World::<true>::new($leaves) };
+            $body
+        } else {
+            // SAFETY: Same tables and lifetime as the counted specialization.
+            let $world = unsafe { World::<false>::new($leaves) };
+            $body
+        }
+    }};
+}
 /// Run the original controller synchronously over live handles.
 /// # Safety
 /// Handles/state and immutable services satisfy the source lifetime preconditions.
@@ -2176,8 +2189,7 @@ pub unsafe extern "C" fn openttd_rust_airport_blocks_destroy(blocks: *mut u64) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_tick(leaves: *const Leaves, id: Vehicle) -> bool {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.tick(id)
+    with_world!(leaves, |w| { w.tick(id) })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2186,8 +2198,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_tick(leaves: *const Leaves, id: V
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_calendar_day(leaves: *const Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.day(id, true);
+    with_world!(leaves, |w| {
+        w.day(id, true);
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2196,8 +2209,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_calendar_day(leaves: *const Leave
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_economy_day(leaves: *const Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.day(id, false);
+    with_world!(leaves, |w| {
+        w.day(id, false);
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2212,8 +2226,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_position(
     z: i32,
 ) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.position(id, i64::from(x), i64::from(y), i64::from(z));
+    with_world!(leaves, |w| {
+        w.position(id, i64::from(x), i64::from(y), i64::from(z));
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2221,8 +2236,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_position(
 /// Raw scalar accesses end before noexcept callbacks; no borrow survives reentry.
 pub(crate) unsafe fn enter_hangar(leaves: &Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.enter_hangar(id);
+    with_world!(leaves, |w| {
+        w.enter_hangar(id);
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2236,8 +2252,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_cache(
 ) {
     crate::witness::hit(crate::witness::AIRCRAFT_CACHE_ENTRIES);
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.cache(id, range);
+    with_world!(leaves, |w| {
+        w.cache(id, range);
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2254,20 +2271,21 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_bounds(
         crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
     }
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    {
-        let (lo, hi) = w.bounds(id, None);
-        if !min.is_null() {
-            unsafe {
-                min.write(lo as i32);
+    with_world!(leaves, |w| {
+        {
+            let (lo, hi) = w.bounds(id, None);
+            if !min.is_null() {
+                unsafe {
+                    min.write(lo as i32);
+                }
+            }
+            if !max.is_null() {
+                unsafe {
+                    max.write(hi as i32);
+                }
             }
         }
-        if !max.is_null() {
-            unsafe {
-                max.write(hi as i32);
-            }
-        }
-    }
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2284,8 +2302,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
         crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
     }
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.flight_flags(id, flags, takeoff, None) as i32
+    with_world!(leaves, |w| {
+        w.flight_flags(id, flags, takeoff, None) as i32
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2294,8 +2313,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_flight_level(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_height(leaves: *const Leaves, id: Vehicle) -> i32 {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.height(id, None) as i32
+    with_world!(leaves, |w| { w.height(id, None) as i32 })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2310,8 +2328,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_hold_altitude(
         crate::witness::hit(crate::witness::AIRCRAFT_DISASTER_ENTRIES);
     }
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    (w.height(id, None) + if w.subtype(id) == 0 { 184 } else { 150 }) as i32
+    with_world!(leaves, |w| {
+        (w.height(id, None) + if w.subtype(id) == 0 { 184 } else { 150 }) as i32
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2320,8 +2339,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_hold_altitude(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_missing_orders(leaves: *const Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.missing_orders(id);
+    with_world!(leaves, |w| {
+        w.missing_orders(id);
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2334,8 +2354,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_crash(
     flooded: bool,
 ) -> u32 {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.crash(id, flooded)
+    with_world!(leaves, |w| { w.crash(id, flooded) })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2344,8 +2363,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_crash(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_next_airport(leaves: *const Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.next_airport(id);
+    with_world!(leaves, |w| {
+        w.next_airport(id);
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2358,8 +2378,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_leave_hangar(
     direction: u8,
 ) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.leave_hangar(id, i64::from(direction));
+    with_world!(leaves, |w| {
+        w.leave_hangar(id, i64::from(direction));
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2368,10 +2389,11 @@ pub unsafe extern "C" fn openttd_rust_aircraft_leave_hangar(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_order_location(leaves: *const Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    if w.state(id) == FLYING {
-        w.next_airport(id);
-    }
+    with_world!(leaves, |w| {
+        if w.state(id) == FLYING {
+            w.next_airport(id);
+        }
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2380,8 +2402,9 @@ pub unsafe extern "C" fn openttd_rust_aircraft_order_location(leaves: *const Lea
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_replacement(leaves: *const Leaves, station: u16) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.replacement(u32::from(station));
+    with_world!(leaves, |w| {
+        w.replacement(u32::from(station));
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2393,19 +2416,20 @@ pub unsafe extern "C" fn openttd_rust_aircraft_closest_depot(
     id: Vehicle,
 ) -> u16 {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    {
-        let st = w.target_station(id);
-        if !st.is_null()
-            && w.airport_tile(st) as u32 != INVALID_TILE
-            && w.can_use_station(id, st) != 0
-            && w.has_hangar(st) != 0
+    with_world!(leaves, |w| {
         {
-            w.target(id)
-        } else {
-            w.nearest_hangar(id) as u16
+            let st = w.target_station(id);
+            if !st.is_null()
+                && w.airport_tile(st) as u32 != INVALID_TILE
+                && w.can_use_station(id, st) != 0
+                && w.has_hangar(st) != 0
+            {
+                w.target(id)
+            } else {
+                w.nearest_hangar(id) as u16
+            }
         }
-    }
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2418,8 +2442,7 @@ pub unsafe extern "C" fn openttd_rust_aircraft_event(
     pass: bool,
 ) -> bool {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    w.event(id, u32::from(pass))
+    with_world!(leaves, |w| { w.event(id, u32::from(pass)) })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2428,13 +2451,14 @@ pub unsafe extern "C" fn openttd_rust_aircraft_event(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn openttd_rust_aircraft_release_blocks(leaves: *const Leaves, id: Vehicle) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    let station = w.target_station(id);
-    if !station.is_null() && w.airport_tile(station) as u32 != INVALID_TILE {
-        let ap = w.airport_fta(station);
-        let bits = w.layout_blocks(ap, w.previous(id)) | w.layout_blocks(ap, w.pos(id));
-        AirportAccess::new(station).release(&w, bits);
-    }
+    with_world!(leaves, |w| {
+        let station = w.target_station(id);
+        if !station.is_null() && w.airport_tile(station) as u32 != INVALID_TILE {
+            let ap = w.airport_fta(station);
+            let bits = w.layout_blocks(ap, w.previous(id)) | w.layout_blocks(ap, w.pos(id));
+            AirportAccess::new(station).release(&w, bits);
+        }
+    })
 }
 /// Run the original controller synchronously over live handles.
 /// # Safety
@@ -2446,19 +2470,20 @@ pub unsafe extern "C" fn openttd_rust_aircraft_invalidate_target(
     station: u16,
 ) {
     crate::witness::hit(crate::witness::AIRCRAFT_ENTRIES);
-    let w = unsafe { World::new(leaves) };
-    {
-        let mut cursor = Vehicle::invalid();
-        loop {
-            cursor = w.next_aircraft(cursor.id);
-            if cursor.handle.is_null() {
-                break;
-            }
-            if w.subtype(cursor) <= 2 && w.target(cursor) == station {
-                w.set_target(cursor, 65535);
+    with_world!(leaves, |w| {
+        {
+            let mut cursor = Vehicle::invalid();
+            loop {
+                cursor = w.next_aircraft(cursor.id);
+                if cursor.handle.is_null() {
+                    break;
+                }
+                if w.subtype(cursor) <= 2 && w.target(cursor) == station {
+                    w.set_target(cursor, 65535);
+                }
             }
         }
-    }
+    })
 }
 
 crate::abi::layouts! {
